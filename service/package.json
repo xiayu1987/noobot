@@ -6,6 +6,7 @@
     "#agent/config": "./deps/agent-config.js",
     "#agent/connectors": "./deps/agent-connectors.js",
     "#agent/bot-manage": "./deps/agent-bot-manage.js",
+    "#agent/model": "./deps/agent-model.js",
     "#agent/tracking": "./deps/agent-tracking.js",
     "#agent/constants": "./deps/agent-constants.js",
     "#agent/utils": "./deps/agent-utils.js",

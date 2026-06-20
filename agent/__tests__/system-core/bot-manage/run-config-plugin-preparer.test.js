@@ -162,6 +162,47 @@ test("RunConfigPluginPreparer resolves agent plugin options via generic runtime 
   assert.equal(options.miniRunnerMaxTurns, 2);
 });
 
+test("RunConfigPluginPreparer merges agent plugin model config by generic plugin key", () => {
+  const preparer = createPreparer({
+    pluginRuntime: {
+      agentPluginKey: "assistant-driver",
+      agentPluginSelectors: new Set(["assistant-driver"]),
+    },
+  });
+
+  const options = preparer.resolveAgentPluginOptions({
+    userId: "u1",
+    runConfig: {
+      selectedPlugins: ["assistant-driver"],
+      config: {
+        pluginModelConfig: {
+          "assistant-driver": {
+            stepModels: {
+              planning: "planner_run",
+              guidance: "guidance_run",
+              empty: "",
+            },
+          },
+        },
+      },
+      plugins: {
+        "assistant-driver": {
+          stepModels: {
+            planning: "planner_default",
+            acceptance: "acceptance_default",
+          },
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(options.stepModels, {
+    planning: "planner_run",
+    acceptance: "acceptance_default",
+    guidance: "guidance_run",
+  });
+});
+
 test("RunConfigPluginPreparer registers agent plugin once", () => {
   let registerCount = 0;
   const loadedDynamicPlugins = createLoadedPlugins({
@@ -268,6 +309,33 @@ test("RunConfigPluginPreparer resolves bot plugin options via generic runtime se
   assert.equal(options.enabled, true);
   assert.equal(options.mode, "on");
   assert.equal(options.semanticMode, "inline");
+});
+
+test("RunConfigPluginPreparer applies bot plugin model config by generic plugin key", () => {
+  const preparer = createPreparer({
+    pluginRuntime: {
+      botPluginKey: "task-orchestrator",
+      botPluginSelectors: new Set(["task-orchestrator"]),
+    },
+  });
+
+  const options = preparer.resolveBotPluginOptions({
+    runConfig: {
+      selectedPlugins: ["task-orchestrator"],
+      pluginModelConfig: {
+        "task-orchestrator": {
+          semanticModel: "semantic_run",
+        },
+      },
+      plugins: {
+        "task-orchestrator": {
+          semanticModel: "semantic_default",
+        },
+      },
+    },
+  });
+
+  assert.equal(options.semanticModel, "semantic_run");
 });
 
 test("RunConfigPluginPreparer prepares bot plugin botHookManager", () => {

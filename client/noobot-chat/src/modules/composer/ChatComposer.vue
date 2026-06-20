@@ -27,6 +27,9 @@ const props = defineProps({
   streamOutput: { type: Boolean, default: true },
   botScenario: { type: String, default: "" },
   scenarioOptions: { type: Array, default: () => [] },
+  selectedModel: { type: String, default: "" },
+  modelOptions: { type: Array, default: () => [] },
+  pluginModelConfig: { type: Object, default: () => ({}) },
   availablePlugins: { type: Array, default: () => [] },
   selectedPlugins: { type: Array, default: () => [] },
   interactionActive: { type: Boolean, default: false },
@@ -40,6 +43,8 @@ const emit = defineEmits([
   "update:forceTool",
   "update:streamOutput",
   "update:botScenario",
+  "update:selectedModel",
+  "update:pluginModelConfig",
   "update:selectedPlugins",
   "update:morePanelVisible",
   "upload-change",
@@ -206,6 +211,9 @@ defineExpose({
                 :force-tool="forceTool"
                 :stream-output="streamOutput"
                 :bot-scenario="botScenario"
+                :selected-model="selectedModel"
+                :model-options="modelOptions"
+                :plugin-model-config="pluginModelConfig"
                 :normalized-scenario-options="normalizedScenarioOptions"
                 :selected-scenario-description="selectedScenarioDescription"
                 :normalized-plugin-options="normalizedPluginOptions"
@@ -214,6 +222,8 @@ defineExpose({
                 @update:allow-user-interaction="onAllowUserInteractionChange"
                 @update:force-tool="onForceToolChange"
                 @update:stream-output="onStreamOutputChange"
+                @update:selected-model="emit('update:selectedModel', $event)"
+                @update:plugin-model-config="emit('update:pluginModelConfig', $event)"
                 @select-scenario="onScenarioSelect"
                 @toggle-programming-scenario="onProgrammingScenarioToggle"
                 @toggle-plugin="onPluginToggle"

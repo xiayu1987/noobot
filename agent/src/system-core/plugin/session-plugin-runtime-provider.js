@@ -36,18 +36,30 @@ function resolvePluginKeyByCapability({ loadedPlugins = null, descriptor = {} } 
   return String(matched?.manifest?.pluginKey || matched?.manifest?.id || "").trim();
 }
 
+function resolvePluginModelConfigKeysByCapability({ loadedPlugins = null, descriptor = {} } = {}) {
+  const matched = resolveFirstLoadedNoobotPluginByCapability(
+    loadedPlugins,
+    descriptor.capability,
+  );
+  return [matched?.manifest?.pluginKey, matched?.manifest?.id];
+}
+
 const SESSION_PLUGIN_DESCRIPTORS = Object.freeze([
   Object.freeze({
     keyProperty: PLUGIN_RUNTIME_PROPERTY.AGENT_PLUGIN_KEY,
     selectorsProperty: PLUGIN_RUNTIME_PROPERTY.AGENT_PLUGIN_SELECTORS,
+    modelConfigKeysProperty: "agentPluginModelConfigKeys",
     capability: PLUGIN_CAPABILITY.AGENT_REGISTER,
     fallbackKey: PLUGIN_SLOT_KEY.AGENT,
+    resolveModelConfigKeys: resolvePluginModelConfigKeysByCapability,
   }),
   Object.freeze({
     keyProperty: PLUGIN_RUNTIME_PROPERTY.BOT_PLUGIN_KEY,
     selectorsProperty: PLUGIN_RUNTIME_PROPERTY.BOT_PLUGIN_SELECTORS,
+    modelConfigKeysProperty: "botPluginModelConfigKeys",
     capability: PLUGIN_CAPABILITY.BOT_REGISTER,
     fallbackKey: PLUGIN_SLOT_KEY.BOT,
+    resolveModelConfigKeys: resolvePluginModelConfigKeysByCapability,
   }),
 ]);
 

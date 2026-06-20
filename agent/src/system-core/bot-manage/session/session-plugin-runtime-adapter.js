@@ -16,6 +16,7 @@ export function createSessionPluginRuntime({
     if (!descriptor || typeof descriptor !== "object") continue;
     const keyProperty = String(descriptor.keyProperty || "").trim();
     const selectorsProperty = String(descriptor.selectorsProperty || "").trim();
+    const modelConfigKeysProperty = String(descriptor.modelConfigKeysProperty || "").trim();
     if (!keyProperty || !selectorsProperty) continue;
 
     const fallbackKey = String(descriptor.fallbackKey || "").trim();
@@ -30,6 +31,18 @@ export function createSessionPluginRuntime({
       fallbackKey,
       ...(Array.isArray(descriptor.selectors) ? descriptor.selectors : []),
     ]);
+    if (modelConfigKeysProperty) {
+      const resolvedModelConfigKeys =
+        typeof descriptor.resolveModelConfigKeys === "function"
+          ? descriptor.resolveModelConfigKeys({ loadedPlugins, descriptor, pluginKey })
+          : [];
+      runtime[modelConfigKeysProperty] = normalizePluginSelectorSet([
+        pluginKey,
+        fallbackKey,
+        ...(Array.isArray(resolvedModelConfigKeys) ? resolvedModelConfigKeys : []),
+        ...(Array.isArray(descriptor.modelConfigKeys) ? descriptor.modelConfigKeys : []),
+      ]);
+    }
   }
   return Object.freeze(runtime);
 }

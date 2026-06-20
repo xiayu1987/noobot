@@ -8,6 +8,7 @@ const frontendPluginStore = {
   plugins: new Map(),
   messageCards: [],
   messageActions: [],
+  composerModelExtensions: [],
 };
 
 function logRegistryWarning(message = "") {
@@ -90,6 +91,30 @@ function normalizeMessageActionEntry(entry = {}, pluginId = "", pluginCapabiliti
   };
 }
 
+function normalizeComposerModelExtensionEntry(entry = {}, pluginId = "", pluginCapabilities = []) {
+  const id = normalizeString(entry?.id) || `${pluginId}:composer-model-extension`;
+  return {
+    id,
+    pluginId,
+    capability:
+      normalizeString(entry?.capability) ||
+      pluginCapabilities[0] ||
+      "composer.model-extension",
+    priority: Number.isFinite(Number(entry?.priority))
+      ? Number(entry.priority)
+      : 100,
+    component: entry?.component || null,
+    match:
+      typeof entry?.match === "function"
+        ? entry.match
+        : (context = {}) => context?.selectedPluginKeySet?.has?.(pluginId) === true,
+    resolveProps:
+      typeof entry?.resolveProps === "function"
+        ? entry.resolveProps
+        : () => ({}),
+  };
+}
+
 export function registerFrontendPlugin(definition = {}) {
   const pluginId = normalizeString(definition?.id);
   if (!pluginId) throw new Error("frontend plugin id is required");
@@ -99,6 +124,9 @@ export function registerFrontendPlugin(definition = {}) {
     : [];
   const messageActions = Array.isArray(definition?.messageActions)
     ? definition.messageActions
+    : [];
+  const composerModelExtensions = Array.isArray(definition?.composerModelExtensions)
+    ? definition.composerModelExtensions
     : [];
   if (frontendPluginStore.plugins.has(pluginId)) {
     logRegistryWarning(`plugin "${pluginId}" already registered, overriding metadata`);
@@ -152,6 +180,18 @@ export function registerFrontendPlugin(definition = {}) {
       );
     }
     frontendPluginStore.messageActions.push(normalized);
+  }
+  for (const item of composerModelExtensions) {
+    const normalized = normalizeComposerModelExtensionEntry(item, pluginId, capabilities);
+    if (!normalized.component) continue;
+    const duplicatedById = frontendPluginStore.composerModelExtensions.some(
+      (existing) => existing.id === normalized.id,
+    );
+    if (duplicatedById) {
+      logRegistryWarning(`composer model extension "${normalized.id}" duplicated, skipped`);
+      continue;
+    }
+    frontendPluginStore.composerModelExtensions.push(normalized);
   }
 }
 
@@ -210,5 +250,21 @@ export function resolveMessageActionRenderers(messageItem = {}, options = {}) {
 }
 
 export function resolveMessageActionProps(renderer = {}, context = {}) {
+  return resolveMessageCardProps(renderer, context);
+}
+
+export function resolveComposerModelExtensionRenderers(context = {}) {
+  return frontendPluginStore.composerModelExtensions
+    .filter((item) => {
+      try {
+        return item.match(context) === true;
+      } catch {
+        return false;
+      }
+    })
+    .sort((a, b) => a.priority - b.priority);
+}
+
+export function resolveComposerModelExtensionProps(renderer = {}, context = {}) {
   return resolveMessageCardProps(renderer, context);
 }

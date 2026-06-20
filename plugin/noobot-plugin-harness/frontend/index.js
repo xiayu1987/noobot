@@ -9,6 +9,7 @@ import MonotonicMessageActions from "./components/MonotonicMessageActions.vue";
 import MessageStatusRow from "./components/MessageStatusRow.vue";
 import MessageWrittenFiles from "./components/MessageWrittenFiles.vue";
 import MessageAttachments from "./components/MessageAttachments.vue";
+import HarnessModelExtension from "./components/HarnessModelExtension.vue";
 
 export const FRONTEND_PLUGIN_API_VERSION = "1";
 
@@ -175,6 +176,19 @@ export function registerFrontendPlugin(ctx = {}) {
   if (typeof register !== "function") {
     throw new Error("frontend register API is required");
   }
+  register({
+    id: "harness",
+    name: "harness-model-extension",
+    capabilities: ["composer.model-extension"],
+    composerModelExtensions: [
+      {
+        id: "harness-model-extension",
+        capability: "composer.model-extension",
+        priority: 10,
+        component: HarnessModelExtension,
+      },
+    ],
+  });
   register({
     id: "message-status",
     name: "message-status-row",

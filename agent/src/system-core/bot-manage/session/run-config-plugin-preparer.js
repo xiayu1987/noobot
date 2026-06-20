@@ -123,6 +123,19 @@ export class RunConfigPluginPreparer {
           ? this.workspaceService.getWorkspacePath(userId)
           : "";
     const next = { ...options, enabled: true, mode: "on", basePath };
+    const pluginScopedModelConfig = resolvePluginScopedModelConfig({
+      runConfig,
+      pluginKey: resolveAgentPluginKey(this.pluginRuntime),
+      slotKey: PLUGIN_SLOT_KEY.AGENT,
+      modelConfigKeys: resolveAgentPluginModelConfigKeys(this.pluginRuntime),
+    });
+    const scopedStepModels = normalizePluginStepModels(pluginScopedModelConfig?.stepModels);
+    if (Object.keys(scopedStepModels).length) {
+      next.stepModels = {
+        ...(next?.stepModels && typeof next.stepModels === "object" ? next.stepModels : {}),
+        ...scopedStepModels,
+      };
+    }
     next.resolveModelMessages = this.createAgentPluginResolveModelMessages({
       agentPluginOptions: next,
     });
@@ -220,6 +233,16 @@ export class RunConfigPluginPreparer {
       ...(runBotPlugin && typeof runBotPlugin === "object" ? runBotPlugin : {}),
     };
     const next = { ...options, enabled: true, mode: "on" };
+    const pluginScopedModelConfig = resolvePluginScopedModelConfig({
+      runConfig,
+      pluginKey: resolveBotPluginKey(this.pluginRuntime),
+      slotKey: PLUGIN_SLOT_KEY.BOT,
+      modelConfigKeys: resolveBotPluginModelConfigKeys(this.pluginRuntime),
+    });
+    const scopedSemanticModel = normalizePluginModelName(pluginScopedModelConfig?.semanticModel);
+    if (scopedSemanticModel) {
+      next.semanticModel = scopedSemanticModel;
+    }
     next.resolveModelMessages = this.createAgentPluginResolveModelMessages({
       botPluginOptions: next,
     });
@@ -429,4 +452,63 @@ function resolveAgentPluginSelectors(pluginRuntime = {}) {
 function resolveBotPluginSelectors(pluginRuntime = {}) {
   return pluginRuntime?.[PLUGIN_RUNTIME_PROPERTY.BOT_PLUGIN_SELECTORS] ||
     createPluginSelectorSet(PLUGIN_SLOT_KEY.BOT);
+}
+
+function resolveAgentPluginModelConfigKeys(pluginRuntime = {}) {
+  return pluginRuntime?.agentPluginModelConfigKeys || createPluginSelectorSet(PLUGIN_SLOT_KEY.AGENT);
+}
+
+function resolveBotPluginModelConfigKeys(pluginRuntime = {}) {
+  return pluginRuntime?.botPluginModelConfigKeys || createPluginSelectorSet(PLUGIN_SLOT_KEY.BOT);
+}
+
+function resolvePluginModelConfig(runConfig = {}) {
+  const directConfig = runConfig?.pluginModelConfig;
+  if (directConfig && typeof directConfig === "object" && !Array.isArray(directConfig)) {
+    return directConfig;
+  }
+  const nestedConfig = runConfig?.config?.pluginModelConfig;
+  if (nestedConfig && typeof nestedConfig === "object" && !Array.isArray(nestedConfig)) {
+    return nestedConfig;
+  }
+  return {};
+}
+
+function resolvePluginScopedModelConfig({
+  runConfig = {},
+  pluginKey = "",
+  slotKey = "",
+  modelConfigKeys = [],
+} = {}) {
+  const modelConfig = resolvePluginModelConfig(runConfig);
+  const candidates = [
+    pluginKey,
+    slotKey,
+    ...(modelConfigKeys && typeof modelConfigKeys[Symbol.iterator] === "function"
+      ? Array.from(modelConfigKeys)
+      : []),
+  ]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .filter((item, index, list) => list.indexOf(item) === index);
+  for (const candidate of candidates) {
+    const value = modelConfig?.[candidate];
+    if (value && typeof value === "object" && !Array.isArray(value)) return value;
+  }
+  return {};
+}
+
+function normalizePluginModelName(value = "") {
+  return String(value || "").trim();
+}
+
+function normalizePluginStepModels(stepModels = {}) {
+  const source = stepModels && typeof stepModels === "object" && !Array.isArray(stepModels)
+    ? stepModels
+    : {};
+  return Object.fromEntries(
+    Object.entries(source)
+      .map(([key, value]) => [String(key || "").trim(), normalizePluginModelName(value)])
+      .filter(([key, value]) => key && value),
+  );
 }

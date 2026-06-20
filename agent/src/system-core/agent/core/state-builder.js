@@ -58,7 +58,12 @@ export function createStateBuilder({
 
     normalizeSystemRuntimeCountersFn(sys, userMessage);
 
-    const selectedModelSpec = resolveEffectiveModelSpecFn({ globalConfig, userConfig });
+    const selectedModelSpec = resolveEffectiveModelSpecFn({
+      globalConfig,
+      userConfig,
+      selectedModel: runtime?.runConfig?.config?.selectedModel,
+      scenario: runtime?.runConfig?.config?.scenario,
+    });
     const maxToolLoopTurns = resolveMaxToolLoopTurnsFn({
       systemRuntime: sys,
       effectiveConfig,
@@ -69,7 +74,7 @@ export function createStateBuilder({
     const helpPromptLoopTurns = resolveHelpPromptLoopTurnsFn(effectiveConfig);
     const toolFailureHelpCount = resolveToolFailureHelpCountFn(effectiveConfig);
 
-    const llm = createChatModelFn({
+    const llm = createChatModelFn(selectedModelSpec, {
       globalConfig,
       userConfig,
       streaming: false,

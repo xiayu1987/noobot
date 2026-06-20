@@ -21,6 +21,7 @@ export function useComposerOptions(props, emit, translate) {
         key: String(scenarioItem?.key || "").trim(),
         label: String(scenarioItem?.label || "").trim(),
         description: String(scenarioItem?.description || "").trim(),
+        model: String(scenarioItem?.model || "").trim(),
       }))
       .filter((scenarioItem) => Boolean(scenarioItem.key));
   });
