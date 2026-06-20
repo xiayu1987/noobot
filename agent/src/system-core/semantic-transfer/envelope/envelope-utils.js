@@ -13,6 +13,8 @@ function isPlainObject(value) {
 export function extractTransferEnvelopeFromPersisted(persisted = null) {
   if (!isPlainObject(persisted)) return null;
   const candidates = [
+    // @deprecated compat: persisted transfer records used to expose singular `transferEnvelope`.
+    // Prefer `transferEnvelopes` in new code; this helper only recovers legacy records.
     persisted.transferEnvelope,
     persisted.envelope,
     persisted?.result?.envelope,

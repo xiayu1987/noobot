@@ -138,6 +138,8 @@ export class SessionTurnPersister {
     pluginMessage = false,
     pluginMeta = null,
     transferResult = null,
+    // @deprecated compat: accepted only as a legacy input; session persistence writes
+    // canonical `transferEnvelopes` and no longer mirrors the singular field.
     transferEnvelope = null,
     transferEnvelopes = [],
     isMonotonic = false,
@@ -339,6 +341,8 @@ export class SessionTurnPersister {
           !Array.isArray(messageItem.transferResult)
             ? messageItem.transferResult
             : null,
+        // @deprecated compat: pass through old message items only so SessionMessageService can
+        // merge them into canonical `transferEnvelopes`; do not persist singular output fields.
         transferEnvelope:
           messageItem.transferEnvelope &&
           typeof messageItem.transferEnvelope === "object" &&

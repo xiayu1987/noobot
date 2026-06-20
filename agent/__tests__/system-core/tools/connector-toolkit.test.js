@@ -486,6 +486,7 @@ test("connector-toolkit/access_connector(email): 邮件附件保存不提升为 
           ], {
             generationSource: "email_connector_read",
           });
+          assert.equal("transferEnvelope" in saved, false);
           return {
             ok: true,
             connector: {
@@ -498,7 +499,6 @@ test("connector-toolkit/access_connector(email): 邮件附件保存不提升为 
                 action: "read",
                 attachment_metas: saved?.attachmentMetas || [],
                 transferResult: saved?.transferResult || null,
-                transferEnvelope: saved?.transferEnvelope || null,
                 transferEnvelopes: saved?.transferEnvelopes || [],
               }),
               stderr: "",

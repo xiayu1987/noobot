@@ -394,7 +394,6 @@ function buildAccessConnectorTool(context = {}) {
       return {
         attachmentMetas,
         transferResult: null,
-        transferEnvelope: null,
         transferEnvelopes: [],
       };
     };

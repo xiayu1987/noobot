@@ -310,7 +310,6 @@ async function persistMedia2DataTextAttachment({
   const attachmentMetas = getTransferAttachmentMetas(materialized.transferEnvelopes);
   return {
     attachmentMetas,
-    transferEnvelope: materialized.transferEnvelope,
     transferEnvelopes: materialized.transferEnvelopes,
     resultFields: materialized.resultFields,
   };

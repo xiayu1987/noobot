@@ -12,6 +12,14 @@ import {
 } from "./meta-ops.js";
 import { DEFAULT_MIME_TYPE } from "./constants.js";
 
+function appendUniqueTransferEnvelope(target = [], envelope = null, seen = new Set()) {
+  if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) return;
+  const key = JSON.stringify(envelope);
+  if (seen.has(key)) return;
+  seen.add(key);
+  target.push(envelope);
+}
+
 /**
  * 将附件元数据追加到运行时上下文和当前 turn 中
  */
@@ -63,26 +71,32 @@ export function appendAttachmentMetasToRuntimeAndTurn(
   );
 
   const applyAttachmentPayload = (target = {}) => {
-    const existingEnvelope = target?.transferEnvelope && typeof target.transferEnvelope === "object"
-      ? target.transferEnvelope
-      : target?.transferResult?.envelope && typeof target.transferResult.envelope === "object"
-        ? target.transferResult.envelope
-        : null;
-    const existingEnvelopes = Array.isArray(target?.transferEnvelopes)
-      ? target.transferEnvelopes
-      : existingEnvelope
-        ? [existingEnvelope]
-        : [];
-    const mergedEnvelopes = [...existingEnvelopes, ...transferPayload.transferEnvelopes];
-    const primaryEnvelope = existingEnvelope || transferPayload.transferEnvelope || mergedEnvelopes[0] || null;
+    const { transferEnvelope: _legacyTransferEnvelope, ...targetWithoutLegacyTransferEnvelope } = target || {};
+    void _legacyTransferEnvelope;
+    const mergedEnvelopes = [];
+    const seenEnvelopeKeys = new Set();
+    if (Array.isArray(target?.transferEnvelopes)) {
+      for (const envelope of target.transferEnvelopes) {
+        appendUniqueTransferEnvelope(mergedEnvelopes, envelope, seenEnvelopeKeys);
+      }
+    }
+    // @deprecated compat: merge legacy singular `transferEnvelope` from existing runtime/message
+    // state, then remove it from the updated target so new output stays canonical.
+    appendUniqueTransferEnvelope(mergedEnvelopes, target?.transferEnvelope, seenEnvelopeKeys);
+    appendUniqueTransferEnvelope(mergedEnvelopes, target?.transferResult?.envelope, seenEnvelopeKeys);
+    if (Array.isArray(transferPayload.transferEnvelopes)) {
+      for (const envelope of transferPayload.transferEnvelopes) {
+        appendUniqueTransferEnvelope(mergedEnvelopes, envelope, seenEnvelopeKeys);
+      }
+    }
     return {
-      ...(target || {}),
+      ...targetWithoutLegacyTransferEnvelope,
+      transferEnvelope: undefined,
       ...(target?.transferResult
         ? { transferResult: target.transferResult }
         : transferPayload.transferResult
           ? { transferResult: transferPayload.transferResult }
           : {}),
-      ...(primaryEnvelope ? { transferEnvelope: primaryEnvelope } : {}),
       ...(mergedEnvelopes.length ? { transferEnvelopes: mergedEnvelopes } : {}),
       ...(ordinaryAttachmentMetas.length
         ? {

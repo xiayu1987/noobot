@@ -142,7 +142,39 @@ test("state-committer stores compact LLM-facing tool result content", async () =
   assert.equal("attachmentMetas" in payload, false);
   assert.equal(payload.transferFiles[0].attachmentId, "att_compact");
   assert.equal("transferEnvelope" in turnMessageStore.items[0], false);
-  assert.equal("transferEnvelopes" in turnMessageStore.items[0], false);
+  assert.equal("transferEnvelopes" in turnMessageStore.items[0], true);
+  assert.deepEqual(turnMessageStore.items[0].transferEnvelopes, [envelope]);
+});
+
+test("state-committer merges legacy transferEnvelope into transferEnvelopes without persisting the singular field", async () => {
+  const turnMessageStore = createInMemoryTurnStore();
+  const envelope = {
+    protocol: "noobot.semantic-transfer",
+    version: 1,
+    direction: "output",
+    transport: "file",
+    filePath: "/workspace/legacy.txt",
+  };
+  const committer = createStateCommitter({
+    messages: [],
+    traces: [],
+    turnMessageStore,
+    dialogProcessId: "dp_legacy_transfer",
+    runtime: {},
+  });
+
+  await committer.pushToolResult({
+    call: { id: "call_legacy_transfer", name: "legacy_transfer_tool", args: {} },
+    toolResultText: JSON.stringify({
+      ok: true,
+      transferResult: { ok: true, status: "file", envelope },
+      transferEnvelope: envelope,
+      transferEnvelopes: [envelope],
+    }),
+  });
+
+  assert.equal("transferEnvelope" in turnMessageStore.items[0], false);
+  assert.deepEqual(turnMessageStore.items[0].transferEnvelopes, [envelope]);
 });
 
 test("state-committer emits before/after hooks for attachment meta commit", async () => {
