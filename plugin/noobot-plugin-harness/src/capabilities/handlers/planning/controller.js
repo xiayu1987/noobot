@@ -71,10 +71,11 @@ function resolvePlanningTurnThresholds(ctx = {}) {
   const thresholdMode = resolveWorkflowThresholdModeFromContext(ctx);
   const scopedMode = modeThresholds[thresholdMode] || modeThresholds.full;
   const scoped = scopedMode?.planning || {};
+  const scopedGuidance = scopedMode?.guidance || {};
   return {
     mode: modeThresholds[thresholdMode] ? thresholdMode : "full",
     summaryTurnsThreshold: normalizePositiveInteger(
-      scoped?.summary?.turnsThreshold,
+      scopedGuidance?.summary?.turnsThreshold,
       DEFAULT_LLM_SUMMARY_THRESHOLD,
     ),
     planUpdateTriggerTurnsThreshold: normalizePositiveInteger(

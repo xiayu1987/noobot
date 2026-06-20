@@ -124,10 +124,12 @@ export const WORKFLOW_PARAMS = deepFreeze({
   },
   modeThresholds: {
     full: {
-      planning: {
+      guidance: {
         summary: {
           turnsThreshold: 10,
         },
+      },
+      planning: {
         planUpdate: {
           triggerTurnsThreshold: 8,
         },
@@ -142,10 +144,12 @@ export const WORKFLOW_PARAMS = deepFreeze({
       },
     },
     programming: {
-      planning: {
+      guidance: {
         summary: {
           turnsThreshold: 16,
         },
+      },
+      planning: {
         planUpdate: {
           triggerTurnsThreshold: 17,
         },
@@ -160,10 +164,12 @@ export const WORKFLOW_PARAMS = deepFreeze({
       },
     },
     text: {
-      planning: {
+      guidance: {
         summary: {
           turnsThreshold: 15,
         },
+      },
+      planning: {
         planUpdate: {
           triggerTurnsThreshold: 4,
         },
@@ -180,7 +186,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
   },
   planning: {
     summary: {
-      // Fallback defaults. Mode-specific planning thresholds live in top-level modeThresholds.<mode>.planning.
+      // Fallback defaults. Mode-specific summary thresholds live in top-level modeThresholds.<mode>.guidance.summary.
       turnsThreshold: 8,
       messageCharsThreshold: 150000,
       overflowPolicy: {
