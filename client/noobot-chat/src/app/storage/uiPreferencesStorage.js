@@ -8,6 +8,7 @@ export const UI_PREFERENCE_STORAGE_KEYS = Object.freeze({
   selectedModelByScenario: "noobot_selected_model_by_scenario",
   selectedModelSelectionByScenario: "noobot_selected_model_selection_by_scenario_v2",
   pluginModelConfig: "noobot_plugin_model_config",
+  pluginModelConfigByScenario: "noobot_plugin_model_config_by_scenario_v2",
 });
 
 function getStorage() {
@@ -105,6 +106,17 @@ export function normalizePluginModelConfig(value = {}) {
   return normalizeNode(value) || {};
 }
 
+export function normalizePluginModelConfigByScenarioPreference(value = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const nextValue = {};
+  for (const [rawScenarioKey, rawConfig] of Object.entries(value)) {
+    const scenarioKey = normalizeScenarioPreferenceKey(rawScenarioKey);
+    if (!scenarioKey) continue;
+    nextValue[scenarioKey] = normalizePluginModelConfig(rawConfig);
+  }
+  return nextValue;
+}
+
 export function readJsonStorageValue(key, fallback = {}) {
   try {
     const rawValue = readStorageValue(key, "");
@@ -141,9 +153,7 @@ export function loadUiPreferences() {
     botScenario,
     selectedModel: readSelectedModelPreference(botScenario),
     selectedModelByScenario,
-    pluginModelConfig: normalizePluginModelConfig(
-      readJsonStorageValue(UI_PREFERENCE_STORAGE_KEYS.pluginModelConfig, {}),
-    ),
+    pluginModelConfig: readPluginModelConfigPreference(botScenario),
   };
 }
 
@@ -197,6 +207,42 @@ export function persistPluginModelConfigPreference(value = {}) {
   return writeJsonStorageValue(
     UI_PREFERENCE_STORAGE_KEYS.pluginModelConfig,
     normalizePluginModelConfig(value),
+  );
+}
+
+export function loadPluginModelConfigByScenarioPreference() {
+  return normalizePluginModelConfigByScenarioPreference(
+    readJsonStorageValue(UI_PREFERENCE_STORAGE_KEYS.pluginModelConfigByScenario, {}),
+  );
+}
+
+export function hasStoredPluginModelConfigPreference(scenarioKey = "") {
+  return Object.prototype.hasOwnProperty.call(
+    loadPluginModelConfigByScenarioPreference(),
+    normalizeScenarioPreferenceKey(scenarioKey),
+  );
+}
+
+export function readLegacyPluginModelConfigPreference() {
+  return normalizePluginModelConfig(
+    readJsonStorageValue(UI_PREFERENCE_STORAGE_KEYS.pluginModelConfig, {}),
+  );
+}
+
+export function readPluginModelConfigPreference(scenarioKey = "") {
+  const pluginModelConfigByScenario = loadPluginModelConfigByScenarioPreference();
+  const normalizedScenarioKey = normalizeScenarioPreferenceKey(scenarioKey);
+  return Object.prototype.hasOwnProperty.call(pluginModelConfigByScenario, normalizedScenarioKey)
+    ? normalizePluginModelConfig(pluginModelConfigByScenario[normalizedScenarioKey])
+    : readLegacyPluginModelConfigPreference();
+}
+
+export function persistPluginModelConfigPreferenceByScenario(value = {}, scenarioKey = "") {
+  const pluginModelConfigByScenario = loadPluginModelConfigByScenarioPreference();
+  pluginModelConfigByScenario[normalizeScenarioPreferenceKey(scenarioKey)] = normalizePluginModelConfig(value);
+  return writeJsonStorageValue(
+    UI_PREFERENCE_STORAGE_KEYS.pluginModelConfigByScenario,
+    pluginModelConfigByScenario,
   );
 }
 
@@ -385,11 +431,12 @@ export function updateSelectedModelPreference({ preferenceRef, value = "", scena
   return nextModel;
 }
 
-export function updatePluginModelConfigPreference({ preferenceRef, value = {} } = {}) {
+export function updatePluginModelConfigPreference({ preferenceRef, value = {}, scenarioKey } = {}) {
   const nextConfig = normalizePluginModelConfig(value);
   if (preferenceRef && typeof preferenceRef === "object" && "value" in preferenceRef) {
     preferenceRef.value = nextConfig;
   }
-  persistPluginModelConfigPreference(nextConfig);
+  if (typeof scenarioKey === "undefined") persistPluginModelConfigPreference(nextConfig);
+  else persistPluginModelConfigPreferenceByScenario(nextConfig, scenarioKey);
   return nextConfig;
 }

@@ -79,6 +79,7 @@ import {
   loadUiPreferences,
   normalizeAvailableBotScenarios,
   normalizeModelOptionsFromEnabledModels,
+  readPluginModelConfigPreference,
   readSelectedModelPreference,
   syncBotScenarioWithConfig as syncBotScenarioWithConfigState,
   updateAllowUserInteractionPreference,
@@ -745,6 +746,11 @@ function syncSelectedModelWithConfig() {
   selectedModel.value = defaultModelValue;
 }
 
+function syncPluginModelConfigWithPreference() {
+  const currentScenarioKey = String(botScenario.value || "").trim();
+  pluginModelConfig.value = readPluginModelConfigPreference(currentScenarioKey);
+}
+
 function onAppUnmounted() {
   removePseudoRoutePopStateListener();
   unbindChatMessageScrollSync();
@@ -762,6 +768,7 @@ watch(
     syncBotScenarioWithConfig();
     syncSelectedPluginsWithConfig();
     syncSelectedModelWithConfig();
+    syncPluginModelConfigWithPreference();
   },
   { deep: true, immediate: true },
 );
@@ -770,6 +777,7 @@ watch(
   () => botScenario.value,
   () => {
     syncSelectedModelWithConfig();
+    syncPluginModelConfigWithPreference();
   },
 );
 
@@ -848,7 +856,7 @@ function onSelectedModelUpdate(value = "") {
 }
 
 function onPluginModelConfigUpdate(value = {}) {
-  updatePluginModelConfigPreference({ preferenceRef: pluginModelConfig, value });
+  updatePluginModelConfigPreference({ preferenceRef: pluginModelConfig, value, scenarioKey: botScenario.value });
 }
 
 function onSelectedPluginsUpdate(value = []) {
