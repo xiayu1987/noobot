@@ -65,6 +65,22 @@ export function createChatRunService({
     return normalizedPlugins;
   }
 
+  function normalizeSelectedModel(input = "") {
+    return String(input || "").trim();
+  }
+
+  function normalizePluginModelConfig(input = {}) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
+    const normalized = {};
+    for (const [scopeKey, scopeValue] of Object.entries(input)) {
+      const normalizedScopeKey = String(scopeKey || "").trim();
+      if (!normalizedScopeKey) continue;
+      if (!scopeValue || typeof scopeValue !== "object" || Array.isArray(scopeValue)) continue;
+      normalized[normalizedScopeKey] = { ...scopeValue };
+    }
+    return Object.keys(normalized).length ? normalized : undefined;
+  }
+
   function normalizeRunConfig(input = {}) {
     const source = input && typeof input === "object" ? input : {};
     const allowUserInteractionRaw = input?.allowUserInteraction;
@@ -91,12 +107,22 @@ export function createChatRunService({
           min: 1,
         })
       : 0;
+    const selectedModel = normalizeSelectedModel(source?.selectedModel);
+    const pluginModelConfig = normalizePluginModelConfig(source?.pluginModelConfig);
+    const compatConfig = {
+      ...(hasScenarioField ? { scenario } : {}),
+      ...(selectedModel ? { selectedModel } : {}),
+      ...(pluginModelConfig ? { pluginModelConfig } : {}),
+    };
     return {
       allowUserInteraction,
       forceTool,
       ...(hasStreamingField ? { streaming } : {}),
       locale,
       scenario,
+      ...(selectedModel ? { selectedModel } : {}),
+      ...(pluginModelConfig ? { pluginModelConfig } : {}),
+      ...(Object.keys(compatConfig).length ? { config: compatConfig } : {}),
       ...(Number.isFinite(runTimeoutMs) && runTimeoutMs > 0
         ? { runTimeoutMs: Math.floor(runTimeoutMs) }
         : {}),

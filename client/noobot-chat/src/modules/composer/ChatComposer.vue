@@ -397,7 +397,38 @@ defineExpose({
     padding: 10px 12px; 
     border-radius: 12px; 
   }
-  .more-panel-overlay { left: 12px; right: 12px; }
+  .more-panel-overlay {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: calc(84px + env(safe-area-inset-bottom));
+    max-height: calc(100dvh - 112px - env(safe-area-inset-bottom));
+  }
+  .more-panel {
+    max-height: inherit;
+    border-radius: 14px;
+  }
+  .more-panel-content {
+    padding: 12px;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .more-panel-overlay {
+    left: 8px;
+    right: 8px;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    max-height: calc(100dvh - 96px - env(safe-area-inset-bottom));
+  }
+
+  .more-actions-row {
+    padding: 9px 12px;
+  }
+
+  .more-panel-content {
+    padding: 10px;
+  }
 }
 
 </style>
