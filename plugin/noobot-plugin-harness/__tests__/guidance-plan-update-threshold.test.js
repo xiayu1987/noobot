@@ -16,9 +16,9 @@ const LLM_SUMMARY_THRESHOLD = WORKFLOW_PARAMS.planning.summary.turnsThreshold;
 const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.planning.summary.messageCharsThreshold;
 const MAX_PLAN_UPDATE_ATTEMPTS = WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts;
 const FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD =
-  WORKFLOW_PARAMS.modeThresholds.full.planning.summary.turnsThreshold;
+  WORKFLOW_PARAMS.modeThresholds.full.guidance.summary.turnsThreshold;
 const PROGRAMMING_SUMMARY_TRIGGER_TURNS_THRESHOLD =
-  WORKFLOW_PARAMS.modeThresholds.programming.planning.summary.turnsThreshold;
+  WORKFLOW_PARAMS.modeThresholds.programming.guidance.summary.turnsThreshold;
 const FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD =
   WORKFLOW_PARAMS.modeThresholds.full.planning.planUpdate.triggerTurnsThreshold;
 const PROGRAMMING_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD =
@@ -28,7 +28,7 @@ const FULL_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
 const PROGRAMMING_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
   WORKFLOW_PARAMS.modeThresholds.programming.acceptance.phase.triggerTurnsThreshold;
 const TEXT_SUMMARY_TRIGGER_TURNS_THRESHOLD =
-  WORKFLOW_PARAMS.modeThresholds.text.planning.summary.turnsThreshold;
+  WORKFLOW_PARAMS.modeThresholds.text.guidance.summary.turnsThreshold;
 const TEXT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD =
   WORKFLOW_PARAMS.modeThresholds.text.planning.planUpdate.triggerTurnsThreshold;
 const TEXT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
@@ -432,6 +432,8 @@ test("revision and refinement have independent MAX_PLAN_UPDATE_ATTEMPTS budgets"
 });
 
 test("planning thresholds use full-mode defaults from modeThresholds", async () => {
+  assert.equal(WORKFLOW_PARAMS.modeThresholds.full.planning.summary, undefined);
+  assert.equal(WORKFLOW_PARAMS.modeThresholds.full.guidance.summary.turnsThreshold, FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD);
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext({
     scenario: "full",
