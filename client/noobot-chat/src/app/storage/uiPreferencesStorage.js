@@ -6,6 +6,7 @@ export const UI_PREFERENCE_STORAGE_KEYS = Object.freeze({
   botScenario: "noobot_bot_scenario",
   selectedModel: "noobot_selected_model",
   selectedModelByScenario: "noobot_selected_model_by_scenario",
+  selectedModelSelectionByScenario: "noobot_selected_model_selection_by_scenario_v2",
   pluginModelConfig: "noobot_plugin_model_config",
 });
 
@@ -46,6 +47,22 @@ export function normalizeSelectedModelByScenarioPreference(value = {}) {
     const scenarioKey = normalizeScenarioPreferenceKey(rawScenarioKey);
     if (!scenarioKey) continue;
     nextValue[scenarioKey] = normalizePreferenceString(rawModel);
+  }
+  return nextValue;
+}
+
+export function normalizeSelectedModelSelectionByScenarioPreference(value = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const nextValue = {};
+  for (const [rawScenarioKey, rawSelection] of Object.entries(value)) {
+    const scenarioKey = normalizeScenarioPreferenceKey(rawScenarioKey);
+    if (!scenarioKey) continue;
+    if (typeof rawSelection === "string") continue;
+    if (!rawSelection || typeof rawSelection !== "object" || Array.isArray(rawSelection)) continue;
+    nextValue[scenarioKey] = {
+      value: normalizePreferenceString(rawSelection.value),
+      source: normalizePreferenceString(rawSelection.source) || "user",
+    };
   }
   return nextValue;
 }
@@ -135,8 +152,17 @@ export function persistBotScenarioPreference(value = "") {
 }
 
 export function loadSelectedModelByScenarioPreference() {
-  return normalizeSelectedModelByScenarioPreference(
-    readJsonStorageValue(UI_PREFERENCE_STORAGE_KEYS.selectedModelByScenario, {}),
+  const selectedModelSelectionByScenario = loadSelectedModelSelectionByScenarioPreference();
+  const selectedModelByScenario = {};
+  for (const [scenarioKey, selection] of Object.entries(selectedModelSelectionByScenario)) {
+    selectedModelByScenario[scenarioKey] = normalizePreferenceString(selection?.value);
+  }
+  return selectedModelByScenario;
+}
+
+export function loadSelectedModelSelectionByScenarioPreference() {
+  return normalizeSelectedModelSelectionByScenarioPreference(
+    readJsonStorageValue(UI_PREFERENCE_STORAGE_KEYS.selectedModelSelectionByScenario, {}),
   );
 }
 
@@ -156,11 +182,14 @@ export function readSelectedModelPreference(scenarioKey = "") {
 }
 
 export function persistSelectedModelPreference(value = "", scenarioKey = "") {
-  const selectedModelByScenario = loadSelectedModelByScenarioPreference();
-  selectedModelByScenario[normalizeScenarioPreferenceKey(scenarioKey)] = normalizePreferenceString(value);
+  const selectedModelSelectionByScenario = loadSelectedModelSelectionByScenarioPreference();
+  selectedModelSelectionByScenario[normalizeScenarioPreferenceKey(scenarioKey)] = {
+    value: normalizePreferenceString(value),
+    source: "user",
+  };
   return writeJsonStorageValue(
-    UI_PREFERENCE_STORAGE_KEYS.selectedModelByScenario,
-    selectedModelByScenario,
+    UI_PREFERENCE_STORAGE_KEYS.selectedModelSelectionByScenario,
+    selectedModelSelectionByScenario,
   );
 }
 
