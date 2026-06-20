@@ -34,6 +34,12 @@ function isUserMessage(messageItem = {}) {
   return normalizeText(messageItem?.role) === "user";
 }
 
+function isPlainUserMessage(messageItem = {}) {
+  if (!isUserMessage(messageItem)) return false;
+  const type = normalizeText(messageItem?.type || messageItem?.messageType);
+  return !type || type === "message" || type === "user";
+}
+
 function getMessageRoundId(messageItem = {}) {
   return normalizeText(messageItem?.dialogProcessId || messageItem?.dialogId);
 }
@@ -146,6 +152,24 @@ function getMonotonicSourceForUser(userMessage = {}, allMessages = []) {
   return null;
 }
 
+function isTailOrphanUserMessage(userMessage = {}, allMessages = []) {
+  if (!isPlainUserMessage(userMessage) || isMonotonicMessage(userMessage)) return false;
+  const messages = Array.isArray(allMessages) ? allMessages : [];
+  if (!messages.length) return true;
+
+  const userIndex = findMessageIndex(userMessage, messages);
+  if (userIndex < 0) return false;
+
+  const userRoundId = getMessageRoundId(userMessage);
+  for (let index = userIndex + 1; index < messages.length; index += 1) {
+    const nextMessage = messages[index];
+    if (userRoundId && getMessageRoundId(nextMessage) !== userRoundId) continue;
+    return false;
+  }
+
+  return true;
+}
+
 export function registerFrontendPlugin(ctx = {}) {
   const register = ctx?.registerFrontendPlugin;
   if (typeof register !== "function") {
@@ -255,7 +279,8 @@ export function registerFrontendPlugin(ctx = {}) {
             isUserMessage(messageItem) &&
             Boolean(monotonicUserTarget) &&
             isSameMessage(messageItem, monotonicUserTarget) &&
-            Boolean(getMonotonicSourceForUser(messageItem, allMessages));
+            (Boolean(getMonotonicSourceForUser(messageItem, allMessages)) ||
+              isTailOrphanUserMessage(messageItem, allMessages));
           return {
             visible: shouldMountOnCurrentUser && (canDelete || canResend),
             disabled: context?.sending === true,
