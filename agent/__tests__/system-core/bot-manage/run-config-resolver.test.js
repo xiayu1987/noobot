@@ -160,8 +160,9 @@ test("resolveScenarioRunConfig should use builtin programming shape and only acc
 
   const resolved = resolver.resolveScenarioRunConfig({ scenario: "programming" }, {});
 
-  assert.equal(resolved.runtimeModel, "code-model");
+  assert.equal(resolved.runtimeModel, undefined);
   assert.equal(resolved.scenarioProfile.name, "编程");
+  assert.equal(resolved.scenarioProfile.model, "code-model");
   assert.deepEqual(resolved.scenarioProfile.tools, [
     "read_file",
     "write_file",
@@ -183,7 +184,7 @@ test("resolveScenarioRunConfig should use builtin programming shape and only acc
   assert.deepEqual(resolved.scenarioProfile.services, ["web_search_service"]);
 });
 
-test("resolveScenarioRunConfig should prefer selectedModel over scenario model", () => {
+test("resolveScenarioRunConfig should keep selectedModel separate from runtimeModel", () => {
   const resolver = new RunConfigResolver({
     globalConfig: {
       scenarios: {
@@ -205,5 +206,35 @@ test("resolveScenarioRunConfig should prefer selectedModel over scenario model",
     {},
   );
 
-  assert.equal(resolved.runtimeModel, "config-selected-model");
+  assert.equal(resolved.selectedModel, "user-selected-model");
+  assert.equal(resolved.config?.selectedModel, "config-selected-model");
+  assert.equal(resolved.scenarioProfile?.model, "code-model");
+  assert.equal(resolved.runtimeModel, undefined);
+});
+
+test("resolveScenarioRunConfig should preserve explicit runtimeModel", () => {
+  const resolver = new RunConfigResolver({
+    globalConfig: {
+      scenarios: {
+        definitions: {
+          programming: {
+            model: "code-model",
+          },
+        },
+      },
+    },
+  });
+
+  const resolved = resolver.resolveScenarioRunConfig(
+    {
+      scenario: "programming",
+      runtimeModel: " explicit-runtime-model ",
+      selectedModel: "frontend-model",
+      config: { selectedModel: "frontend-model" },
+    },
+    {},
+  );
+
+  assert.equal(resolved.runtimeModel, "explicit-runtime-model");
+  assert.equal(resolved.selectedModel, "frontend-model");
 });

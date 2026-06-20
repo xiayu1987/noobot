@@ -231,3 +231,36 @@ test("SessionExecutionRunner does not let currentSessionModelAlias override sele
   assert.equal(capturedRunConfig?.config?.selectedModel, "frontend-model");
   assert.equal(capturedRunConfig?.runtimeModel, undefined);
 });
+
+test("SessionExecutionRunner restores currentSessionModelAlias when selectedModel is absent", async () => {
+  let capturedRunConfig = null;
+  const runner = createRunner({
+    initializeRunSessionRuntime: async ({ eventListener = null } = {}) => ({
+      usedSessionId: "s1",
+      dialogProcessId: "dp1",
+      isContinue: true,
+      userConfig: {},
+      currentSessionModelAlias: "history-model",
+      executionStartIndex: 0,
+      runtimeEventListener: eventListener,
+    }),
+    resolveScenarioRunConfig: (runConfig = {}) => runConfig,
+    prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
+      capturedRunConfig = buildContextPayload.runConfig;
+      const runtimeAgentContext = {
+        payload: { messages: { history: [] } },
+        execution: { controllers: { runtime: { attachmentMetas: [] } } },
+      };
+      return { agentContext: runtimeAgentContext, runtimeAgentContext };
+    },
+  });
+
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "hello",
+    runConfig: {},
+  });
+
+  assert.equal(capturedRunConfig?.runtimeModel, "history-model");
+});
