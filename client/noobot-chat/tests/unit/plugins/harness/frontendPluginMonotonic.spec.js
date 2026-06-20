@@ -92,7 +92,7 @@ describe("harness frontend monotonic message action registration", () => {
     expectVisibleOnUserOnly(action, { userMessage, sourceMessage: stoppedAssistant, allMessages });
   });
 
-  it("does not depend on non-persisted single user fallback after reload", () => {
+  it("keeps actions on the tail orphan user message when backend fails before assistant reply", () => {
     const action = getMonotonicAction();
     const deleteMonotonicMessage = vi.fn();
     const userMessage = {
@@ -104,6 +104,27 @@ describe("harness frontend monotonic message action registration", () => {
     expect(action.resolveProps({
       messageItem: userMessage,
       allMessages: [userMessage],
+      deleteMonotonicMessage,
+    }).visible).toBe(true);
+  });
+
+  it("does not show orphan fallback actions on non-tail user messages", () => {
+    const action = getMonotonicAction();
+    const deleteMonotonicMessage = vi.fn();
+    const userMessage = {
+      id: "u-no-source-middle",
+      role: "user",
+      content: "你好",
+    };
+    const assistantMessage = {
+      id: "a-after-orphan",
+      role: "assistant",
+      content: "later reply",
+    };
+
+    expect(action.resolveProps({
+      messageItem: userMessage,
+      allMessages: [userMessage, assistantMessage],
       deleteMonotonicMessage,
     }).visible).toBe(false);
   });
