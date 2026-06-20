@@ -177,15 +177,6 @@ export function createWaitAsyncTaskResultTool({
             !Array.isArray(persistedAttachments.transferResult)
               ? persistedAttachments.transferResult
               : null;
-          const transferEnvelope =
-            persistedAttachments &&
-            typeof persistedAttachments === "object" &&
-            !Array.isArray(persistedAttachments) &&
-            persistedAttachments.transferEnvelope &&
-            typeof persistedAttachments.transferEnvelope === "object" &&
-            !Array.isArray(persistedAttachments.transferEnvelope)
-              ? persistedAttachments.transferEnvelope
-              : null;
           const transferEnvelopes = [];
           const seenTransferEnvelopeKeys = new Set();
           const appendTransferEnvelope = (envelope = null) => {
@@ -205,10 +196,6 @@ export function createWaitAsyncTaskResultTool({
               appendTransferEnvelope(envelope);
             }
           }
-          // @deprecated compat: legacy input only; merge into `transferEnvelopes` without
-          // re-exposing the singular field.
-          appendTransferEnvelope(transferEnvelope);
-
           return {
             id: containerId,
             parentSessionId: normalizedParentSessionId,

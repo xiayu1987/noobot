@@ -28,8 +28,6 @@ function normalizeTransferEnvelopesFromPayload(payload = null) {
       appendUniqueTransferEnvelope(transferEnvelopes, envelope, seenKeys);
     }
   }
-  // @deprecated compat: legacy input only; do not re-expose `transferEnvelope` as a new output field.
-  appendUniqueTransferEnvelope(transferEnvelopes, payload?.transferEnvelope, seenKeys);
   return transferEnvelopes;
 }
 

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { SessionMessageService } from "../../../src/system-core/session/services/session-message-service.js";
 
-test("SessionMessageService.appendTurn persists transferEnvelopes and merges legacy transferEnvelope", async () => {
+test("SessionMessageService.appendTurn persists transferEnvelopes", async () => {
   const saved = [];
   const sessionRepo = {
     async resolveParentSessionId() {
@@ -25,7 +25,7 @@ test("SessionMessageService.appendTurn persists transferEnvelopes and merges leg
     sessionRepo,
     now: () => "2026-06-07T00:00:00.000Z",
   });
-  const transferEnvelope = {
+  const envelope = {
     protocol: "noobot.semantic-transfer",
     version: 1,
     direction: "output",
@@ -47,8 +47,7 @@ test("SessionMessageService.appendTurn persists transferEnvelopes and merges leg
     role: "assistant",
     content: "done",
     attachmentMetas: [{ attachmentId: "att_1", name: "a.md" }],
-    transferEnvelope,
-    transferEnvelopes: [transferEnvelope],
+    transferEnvelopes: [envelope],
   });
 
   assert.equal(saved.length, 1);
@@ -56,6 +55,6 @@ test("SessionMessageService.appendTurn persists transferEnvelopes and merges leg
   assert.equal(Array.isArray(lastMessage?.attachmentMetas), true);
   assert.equal(lastMessage?.attachmentMetas?.length, 1);
   assert.equal("transferEnvelope" in lastMessage, false);
-  assert.deepEqual(lastMessage?.transferEnvelopes, [transferEnvelope]);
+  assert.deepEqual(lastMessage?.transferEnvelopes, [envelope]);
 });
 

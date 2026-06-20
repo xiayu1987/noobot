@@ -69,30 +69,32 @@ test("extractAttachmentMetasFromToolResult ignores non-runtime-attach transfer f
   const toolResultText = JSON.stringify({
     toolName: "overflow_tool",
     ok: true,
-    transferEnvelope: {
-      protocol: "noobot.semantic-transfer",
-      version: 1,
-      direction: "output",
-      transport: "file",
-      filePath: "/workspace/overflow.json",
-      attachmentMeta: {
-        name: "overflow.json",
-        mimeType: "application/json",
-        path: "/host/overflow.json",
-        relativePath: "runtime/overflow.json",
-      },
-      files: [
-        {
-          filePath: "/workspace/overflow.json",
-          attachmentMeta: {
-            name: "overflow.json",
-            mimeType: "application/json",
-            path: "/host/overflow.json",
-            relativePath: "runtime/overflow.json",
-          },
+    transferEnvelopes: [
+      {
+        protocol: "noobot.semantic-transfer",
+        version: 1,
+        direction: "output",
+        transport: "file",
+        filePath: "/workspace/overflow.json",
+        attachmentMeta: {
+          name: "overflow.json",
+          mimeType: "application/json",
+          path: "/host/overflow.json",
+          relativePath: "runtime/overflow.json",
         },
-      ],
-    },
+        files: [
+          {
+            filePath: "/workspace/overflow.json",
+            attachmentMeta: {
+              name: "overflow.json",
+              mimeType: "application/json",
+              path: "/host/overflow.json",
+              relativePath: "runtime/overflow.json",
+            },
+          },
+        ],
+      },
+    ],
   });
 
   const metas = extractAttachmentMetasFromToolResult("overflow_tool", toolResultText);

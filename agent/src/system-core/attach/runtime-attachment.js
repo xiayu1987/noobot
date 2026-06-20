@@ -71,8 +71,6 @@ export function appendAttachmentMetasToRuntimeAndTurn(
   );
 
   const applyAttachmentPayload = (target = {}) => {
-    const { transferEnvelope: _legacyTransferEnvelope, ...targetWithoutLegacyTransferEnvelope } = target || {};
-    void _legacyTransferEnvelope;
     const mergedEnvelopes = [];
     const seenEnvelopeKeys = new Set();
     if (Array.isArray(target?.transferEnvelopes)) {
@@ -80,9 +78,6 @@ export function appendAttachmentMetasToRuntimeAndTurn(
         appendUniqueTransferEnvelope(mergedEnvelopes, envelope, seenEnvelopeKeys);
       }
     }
-    // @deprecated compat: merge legacy singular `transferEnvelope` from existing runtime/message
-    // state, then remove it from the updated target so new output stays canonical.
-    appendUniqueTransferEnvelope(mergedEnvelopes, target?.transferEnvelope, seenEnvelopeKeys);
     appendUniqueTransferEnvelope(mergedEnvelopes, target?.transferResult?.envelope, seenEnvelopeKeys);
     if (Array.isArray(transferPayload.transferEnvelopes)) {
       for (const envelope of transferPayload.transferEnvelopes) {
@@ -90,8 +85,7 @@ export function appendAttachmentMetasToRuntimeAndTurn(
       }
     }
     return {
-      ...targetWithoutLegacyTransferEnvelope,
-      transferEnvelope: undefined,
+      ...(target || {}),
       ...(target?.transferResult
         ? { transferResult: target.transferResult }
         : transferPayload.transferResult

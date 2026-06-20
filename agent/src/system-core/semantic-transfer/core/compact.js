@@ -79,9 +79,6 @@ function normalizeTransferEnvelopeList(payload = {}) {
   if (!isPlainObject(payload)) return [];
   const transferResult = isPlainObject(payload?.transferResult) ? payload.transferResult : null;
   return [
-    // @deprecated compat: accept legacy singular `transferEnvelope` as input for model compaction,
-    // but normalized payloads should expose only `transferEnvelopes`.
-    isPlainObject(payload?.transferEnvelope) ? payload.transferEnvelope : null,
     isPlainObject(transferResult?.envelope) ? transferResult.envelope : null,
     ...(Array.isArray(payload?.transferEnvelopes) ? payload.transferEnvelopes : []),
   ].filter(isPlainObject);
@@ -177,7 +174,6 @@ export function compactToolResultPayloadForModel(payload = {}) {
   if (!isPlainObject(payload)) return payload;
   const compactPayload = { ...payload };
   delete compactPayload.transferResult;
-  delete compactPayload.transferEnvelope;
   delete compactPayload.transferEnvelopes;
   delete compactPayload.attachmentMetas;
   delete compactPayload.compactTransferPayload;

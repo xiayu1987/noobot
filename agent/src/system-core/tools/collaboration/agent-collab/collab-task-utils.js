@@ -127,7 +127,6 @@ export function buildWaitAsyncTaskResultPayload({
   taskStats = {},
   attachmentMetas = [],
   transferResult = null,
-  transferEnvelope = null,
   transferEnvelopes = [],
 } = {}) {
   void attachmentMetas;
@@ -143,9 +142,6 @@ export function buildWaitAsyncTaskResultPayload({
   if (Array.isArray(transferEnvelopes)) {
     for (const envelope of transferEnvelopes) appendEnvelope(envelope);
   }
-  // @deprecated compat: accept singular `transferEnvelope` from old callers, but emit only
-  // canonical `transferEnvelopes` in the wait-async task result payload.
-  appendEnvelope(transferEnvelope);
   const normalizedTransferResult =
     transferResult && typeof transferResult === "object" && !Array.isArray(transferResult)
       ? transferResult

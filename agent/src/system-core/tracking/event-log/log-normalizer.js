@@ -23,8 +23,7 @@ function buildToolText(tool = "", suffix = "") {
 
 function hasSemanticTransferInfo(value = {}) {
   return Boolean(
-    value?.transferEnvelope ||
-      (Array.isArray(value?.transferEnvelopes) && value.transferEnvelopes.length > 0) ||
+    (Array.isArray(value?.transferEnvelopes) && value.transferEnvelopes.length > 0) ||
       (Array.isArray(value?.transferFiles) && value.transferFiles.length > 0) ||
       value?.resultTransfer ||
       value?.toolResultTransfer,

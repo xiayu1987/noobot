@@ -104,7 +104,6 @@ test("ScopedArtifactPersistenceHelpers normalizes detached sub-session messages 
       parentDialogProcessId: "pd1",
       tool_call_id: "tc1",
       attachmentMetas: [{ attachmentId: "a1", mimeType: "text/plain" }],
-      transferEnvelope: { envelopeId: "e1" },
       transferResult: { envelope: { envelopeId: "e2" } },
       transferEnvelopes: [{ envelopeId: "e3" }],
       injectedMessage: true,

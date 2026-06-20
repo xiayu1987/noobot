@@ -60,7 +60,6 @@ test("appendAttachmentMetasToRuntimeAndTurn merges with existing transfer envelo
     {
       role: "assistant",
       content: "done",
-      transferEnvelope: existingEnvelope,
       transferEnvelopes: [existingEnvelope],
       attachmentMetas: [{ attachmentId: "legacy_should_be_removed" }],
     },

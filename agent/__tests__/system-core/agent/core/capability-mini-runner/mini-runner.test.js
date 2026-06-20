@@ -362,7 +362,6 @@ test("mini-runner compacts semantic-transfer tool messages before model invoke",
         role: "tool",
         content: JSON.stringify({
           ok: true,
-          transferEnvelope: envelope,
           transferEnvelopes: [envelope],
           attachmentMetas: [attachmentMeta],
         }),

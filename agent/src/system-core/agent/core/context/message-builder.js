@@ -125,13 +125,8 @@ function toLangChainToolCalls(toolCalls = []) {
 function resolveAttachmentMetas(msg = {}, fallbackAttachmentMetas = []) {
   const transferAttachmentMetas = getTransferAttachmentMetas(
     [
-      // @deprecated compat: legacy messages may carry singular `transferEnvelope`; use it only
-      // as an input source for attachment meta extraction, not as an output protocol field.
-      msg?.transferEnvelope,
       msg?.transferResult?.envelope,
       ...(Array.isArray(msg?.transferEnvelopes) ? msg.transferEnvelopes : []),
-      // @deprecated compat: same legacy field may be nested in LangChain kwargs.
-      msg?.lc_kwargs?.transferEnvelope,
       msg?.lc_kwargs?.transferResult?.envelope,
       ...(Array.isArray(msg?.lc_kwargs?.transferEnvelopes) ? msg.lc_kwargs.transferEnvelopes : []),
     ].filter(Boolean),

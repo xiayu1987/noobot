@@ -48,18 +48,14 @@ function parseTransferPayloadFromToolResultText(toolResultText = "") {
   const parsed = parseJsonObjectSafely(String(toolResultText || ""));
   if (!isPlainObject(parsed)) return null;
   const transferResult = isPlainObject(parsed.transferResult) ? parsed.transferResult : null;
-  // @deprecated compat: tool results produced before the protocol-unification migration may
-  // include singular `transferEnvelope`; persist only canonical `transferEnvelopes` below.
-  const transferEnvelope = isPlainObject(parsed.transferEnvelope)
-    ? parsed.transferEnvelope
-    : isPlainObject(transferResult?.envelope)
-      ? transferResult.envelope
-      : null;
+  const transferResultEnvelope = isPlainObject(transferResult?.envelope)
+    ? transferResult.envelope
+    : null;
   const transferEnvelopes = dedupeTransferEnvelopes([
-    transferEnvelope,
+    transferResultEnvelope,
     ...(Array.isArray(parsed.transferEnvelopes) ? parsed.transferEnvelopes : []),
   ]);
-  if (!transferResult && !transferEnvelope && !transferEnvelopes.length) return null;
+  if (!transferResult && !transferEnvelopes.length) return null;
   return {
     ...(transferResult ? { transferResult } : {}),
     ...(transferEnvelopes.length ? { transferEnvelopes } : {}),

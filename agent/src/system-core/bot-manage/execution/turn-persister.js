@@ -138,9 +138,6 @@ export class SessionTurnPersister {
     pluginMessage = false,
     pluginMeta = null,
     transferResult = null,
-    // @deprecated compat: accepted only as a legacy input; session persistence writes
-    // canonical `transferEnvelopes` and no longer mirrors the singular field.
-    transferEnvelope = null,
     transferEnvelopes = [],
     isMonotonic = false,
     monotonic = false,
@@ -158,17 +155,11 @@ export class SessionTurnPersister {
     const shouldPersistTransferPayload = role !== MESSAGE_ROLE.TOOL;
     const sessionTransferResult =
       shouldPersistTransferPayload && isPlainObject(transferResult) ? transferResult : null;
-    const sessionTransferEnvelope =
-      shouldPersistTransferPayload && isPlainObject(transferEnvelope)
-        ? transferEnvelope
-        : shouldPersistTransferPayload && isPlainObject(sessionTransferResult?.envelope)
-          ? sessionTransferResult.envelope
-          : null;
     const sessionTransferEnvelopes =
       shouldPersistTransferPayload && Array.isArray(transferEnvelopes)
         ? transferEnvelopes.filter(isPlainObject)
-        : sessionTransferEnvelope
-          ? [sessionTransferEnvelope]
+        : shouldPersistTransferPayload && isPlainObject(sessionTransferResult?.envelope)
+          ? [sessionTransferResult.envelope]
           : [];
     const shouldOmitAttachmentMetasMirror =
       shouldPersistTransferPayload && sessionTransferEnvelopes.length > 0;
@@ -340,14 +331,6 @@ export class SessionTurnPersister {
           typeof messageItem.transferResult === "object" &&
           !Array.isArray(messageItem.transferResult)
             ? messageItem.transferResult
-            : null,
-        // @deprecated compat: pass through old message items only so SessionMessageService can
-        // merge them into canonical `transferEnvelopes`; do not persist singular output fields.
-        transferEnvelope:
-          messageItem.transferEnvelope &&
-          typeof messageItem.transferEnvelope === "object" &&
-          !Array.isArray(messageItem.transferEnvelope)
-            ? messageItem.transferEnvelope
             : null,
         transferEnvelopes: Array.isArray(messageItem.transferEnvelopes)
           ? messageItem.transferEnvelopes

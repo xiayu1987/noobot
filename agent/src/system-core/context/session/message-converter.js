@@ -5,12 +5,7 @@
  */
 function normalizeTransferEnvelopesFromRecord(item = {}) {
   const seen = new Set();
-  return [
-    ...(Array.isArray(item?.transferEnvelopes) ? item.transferEnvelopes : []),
-    // @deprecated compat: legacy session records may still contain singular `transferEnvelope`.
-    // Convert it to the canonical `transferEnvelopes` list only.
-    item?.transferEnvelope,
-  ].filter((envelope) => {
+  return (Array.isArray(item?.transferEnvelopes) ? item.transferEnvelopes : []).filter((envelope) => {
     if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) return false;
     const key = JSON.stringify(envelope);
     if (seen.has(key)) return false;
