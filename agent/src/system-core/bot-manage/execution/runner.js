@@ -33,6 +33,14 @@ import {
 } from "../../context/compatibility-deprecation.js";
 import { PLUGIN_SLOT_KEY } from "../../plugin/plugin-constants.js";
 
+function readSelectedModelValue(modelConfig = "") {
+  if (typeof modelConfig === "string") return modelConfig.trim();
+  if (!modelConfig || typeof modelConfig !== "object" || Array.isArray(modelConfig)) return "";
+  return String(
+    modelConfig?.value || modelConfig?.alias || modelConfig?.key || modelConfig?.model || "",
+  ).trim();
+}
+
 /**
  * Main execution runner (pipeline orchestration).
  *
@@ -195,6 +203,9 @@ export class SessionExecutionRunner {
           : scenarioResolvedRunConfig;
       if (
         !String(resolvedRunConfig?.runtimeModel || "").trim() &&
+        !readSelectedModelValue(
+          resolvedRunConfig?.config?.selectedModel ?? resolvedRunConfig?.selectedModel,
+        ) &&
         String(currentSessionModelAlias || "").trim()
       ) {
         resolvedRunConfig.runtimeModel = String(currentSessionModelAlias || "").trim();

@@ -60,7 +60,7 @@ export function resolveLlmForTurn(modelState) {
             sessionId: String(runtime?.systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
           },
         })
-      : createChatModel({
+      : createChatModel(targetSpec, {
           globalConfig,
           userConfig,
           streaming: false,

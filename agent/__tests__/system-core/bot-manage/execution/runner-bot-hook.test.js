@@ -24,6 +24,16 @@ function createRunner({
       execution: { controllers: { runtime: { attachmentMetas: [] } } },
     },
   }),
+  initializeRunSessionRuntime = async ({ eventListener = null } = {}) => ({
+    usedSessionId: "s1",
+    dialogProcessId: "dp1",
+    isContinue: false,
+    userConfig: {},
+    currentSessionModelAlias: "",
+    executionStartIndex: 0,
+    runtimeEventListener: eventListener,
+  }),
+  resolveScenarioRunConfig = (runConfig = {}) => runConfig,
 } = {}) {
   return new SessionExecutionRunner({
     agentRunner,
@@ -32,16 +42,8 @@ function createRunner({
     validateRunInput() {},
     ensureParentAsyncResultContainer: ({ parentAsyncResultContainer = null } = {}) =>
       parentAsyncResultContainer,
-    initializeRunSessionRuntime: async ({ eventListener = null } = {}) => ({
-      usedSessionId: "s1",
-      dialogProcessId: "dp1",
-      isContinue: false,
-      userConfig: {},
-      currentSessionModelAlias: "",
-      executionStartIndex: 0,
-      runtimeEventListener: eventListener,
-    }),
-    resolveScenarioRunConfig: (runConfig = {}) => runConfig,
+    initializeRunSessionRuntime,
+    resolveScenarioRunConfig,
     prepareRunConfig: (payload = {}) => ({
       ...(payload?.runConfig || {}),
       botHookManager,
@@ -190,4 +192,42 @@ test("SessionExecutionRunner emits compat field hit stats event", async () => {
   assert.equal(compatEvent?.data?.sessionId, "s1");
   assert.equal(compatEvent?.data?.dialogProcessId, "dp1");
   assert.equal(compatEvent?.data?.fields?.["test.compat.field"], 1);
+});
+
+test("SessionExecutionRunner does not let currentSessionModelAlias override selectedModel", async () => {
+  let capturedRunConfig = null;
+  const runner = createRunner({
+    initializeRunSessionRuntime: async ({ eventListener = null } = {}) => ({
+      usedSessionId: "s1",
+      dialogProcessId: "dp1",
+      isContinue: false,
+      userConfig: {},
+      currentSessionModelAlias: "history-model",
+      executionStartIndex: 0,
+      runtimeEventListener: eventListener,
+    }),
+    resolveScenarioRunConfig: (runConfig = {}) => runConfig,
+    prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
+      capturedRunConfig = buildContextPayload.runConfig;
+      const runtimeAgentContext = {
+        payload: { messages: { history: [] } },
+        execution: { controllers: { runtime: { attachmentMetas: [] } } },
+      };
+      return { agentContext: runtimeAgentContext, runtimeAgentContext };
+    },
+  });
+
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "hello",
+    runConfig: {
+      selectedModel: "frontend-model",
+      config: { selectedModel: "frontend-model" },
+    },
+  });
+
+  assert.equal(capturedRunConfig?.selectedModel, "frontend-model");
+  assert.equal(capturedRunConfig?.config?.selectedModel, "frontend-model");
+  assert.equal(capturedRunConfig?.runtimeModel, undefined);
 });

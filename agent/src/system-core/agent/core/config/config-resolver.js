@@ -31,7 +31,7 @@ export function resolveEffectiveModelSpec({
   selectedModel = "",
   scenario = "",
 } = {}) {
-  const normalizedSelectedModel = String(selectedModel || "").trim();
+  const normalizedSelectedModel = normalizeModelCandidate(readModelValue(selectedModel));
   if (normalizedSelectedModel) {
     const selectedModelSpec = resolveModelSpecByName({
       name: normalizedSelectedModel,
