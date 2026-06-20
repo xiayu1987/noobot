@@ -47,14 +47,14 @@ const TASK_SUMMARY_TOOL_NAME = WORKFLOW_PARAMS.planning.tools.summaryToolName;
 const PLANNING_DECISION = WORKFLOW_PARAMS.planning.decisions;
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
-const DEFAULT_LLM_SUMMARY_THRESHOLD = WORKFLOW_PARAMS.planning.summary.turnsThreshold;
-const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.planning.summary.messageCharsThreshold;
+const DEFAULT_LLM_SUMMARY_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.turnsThreshold;
+const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.messageCharsThreshold;
 const LLM_SUMMARY_OVERFLOW_POLICY = Object.freeze({
-  ENABLE_PRUNE_AFTER_SUMMARY: WORKFLOW_PARAMS.planning.summary.overflowPolicy.enablePruneAfterSummary,
+  ENABLE_PRUNE_AFTER_SUMMARY: WORKFLOW_PARAMS.guidance.summary.overflowPolicy.enablePruneAfterSummary,
   PRUNE_TRIGGER_AFTER_CHAR_SUMMARY_ROUNDS:
-    WORKFLOW_PARAMS.planning.summary.overflowPolicy.pruneTriggerAfterCharSummaryRounds,
+    WORKFLOW_PARAMS.guidance.summary.overflowPolicy.pruneTriggerAfterCharSummaryRounds,
   FORCE_ACCEPTANCE_WHEN_STILL_OVERFLOW:
-    WORKFLOW_PARAMS.planning.summary.overflowPolicy.forceAcceptanceWhenStillOverflow,
+    WORKFLOW_PARAMS.guidance.summary.overflowPolicy.forceAcceptanceWhenStillOverflow,
 });
 const DEFAULT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD = WORKFLOW_PARAMS.planning.planUpdate.triggerTurnsThreshold;
 const DEFAULT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =

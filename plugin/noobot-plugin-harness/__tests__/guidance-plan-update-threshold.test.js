@@ -12,8 +12,8 @@ import { canAttemptPlanRevision } from "../src/capabilities/handlers/planning/re
 import { runPlanUpdateAfterSummary } from "../src/capabilities/handlers/guidance/model-runner.js";
 import { WORKFLOW_PARAMS } from "../src/core/workflow-params.js";
 
-const LLM_SUMMARY_THRESHOLD = WORKFLOW_PARAMS.planning.summary.turnsThreshold;
-const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.planning.summary.messageCharsThreshold;
+const LLM_SUMMARY_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.turnsThreshold;
+const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.messageCharsThreshold;
 const MAX_PLAN_UPDATE_ATTEMPTS = WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts;
 const FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD =
   WORKFLOW_PARAMS.modeThresholds.full.guidance.summary.turnsThreshold;
@@ -432,6 +432,8 @@ test("revision and refinement have independent MAX_PLAN_UPDATE_ATTEMPTS budgets"
 });
 
 test("planning thresholds use full-mode defaults from modeThresholds", async () => {
+  assert.equal(WORKFLOW_PARAMS.planning.summary, undefined);
+  assert.equal(WORKFLOW_PARAMS.guidance.summary.turnsThreshold, LLM_SUMMARY_THRESHOLD);
   assert.equal(WORKFLOW_PARAMS.modeThresholds.full.planning.summary, undefined);
   assert.equal(WORKFLOW_PARAMS.modeThresholds.full.guidance.summary.turnsThreshold, FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD);
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
