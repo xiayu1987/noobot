@@ -224,9 +224,6 @@ export class RunConfigResolver {
     const scenarioName = (scenarioDefinition?.name ?? "").trim();
     const scenarioDescription = (scenarioDefinition?.description ?? "").trim();
     const scenarioModelName = (scenarioDefinition?.model ?? "").trim();
-    const selectedModelName = this.readModelSelectionValue(
-      normalizedRunConfig?.config?.selectedModel ?? normalizedRunConfig?.selectedModel,
-    );
     const resolvedRunConfig = {
       ...normalizedRunConfig,
       scenario: resolvedScenarioKey,
@@ -244,10 +241,8 @@ export class RunConfigResolver {
     const requestedRuntimeModel = String(
       normalizedRunConfig?.runtimeModel || "",
     ).trim();
-    if (!requestedRuntimeModel && selectedModelName) {
-      resolvedRunConfig.runtimeModel = selectedModelName;
-    } else if (!requestedRuntimeModel && scenarioModelName) {
-      resolvedRunConfig.runtimeModel = scenarioModelName;
+    if (requestedRuntimeModel) {
+      resolvedRunConfig.runtimeModel = requestedRuntimeModel;
     }
     if (scenarioToolNames.length && !hasAllTools) {
       const currentToolPolicy = isPlainObject(normalizedRunConfig?.toolPolicy)

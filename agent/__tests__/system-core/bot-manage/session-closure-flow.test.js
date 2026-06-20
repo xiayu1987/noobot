@@ -73,8 +73,8 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
       assert.equal(userMessage, "请切换模型并输出附件");
       assert.equal(
         agentContext?.execution?.controllers?.runtime?.runtimeModel,
-        "gpt-4.1-mini",
-        "场景应把 runtimeModel 切到目标模型",
+        "",
+        "场景默认模型不应写入 runtimeModel",
       );
       assert.equal(
         Array.isArray(agentContext?.payload?.messages?.system),
@@ -232,7 +232,8 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   });
 
   assert.equal(capturedBuildContextInput?.runConfig?.scenario, "programming");
-  assert.equal(capturedBuildContextInput?.runConfig?.runtimeModel, "gpt-4.1-mini");
+  assert.equal(capturedBuildContextInput?.runConfig?.runtimeModel, undefined);
+  assert.equal(capturedBuildContextInput?.runConfig?.scenarioProfile?.model, "gpt-4.1-mini");
   assert.deepEqual(
     capturedBuildContextInput?.runConfig?.contextPolicy?.includeContextKeys,
     ["scenario", "system_runtime", "base_prompt", "services", "mcp_servers"],

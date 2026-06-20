@@ -67,6 +67,43 @@ test("resolveEffectiveModelSpec falls back to scenario default when selectedMode
   assert.equal(spec.model, "scenario-default-model");
 });
 
+test("resolveEffectiveModelSpec uses scenario model as initial model fallback", () => {
+  const spec = resolveEffectiveModelSpec({
+    globalConfig: {
+      providers: {
+        scenario_model_alias: {
+          enabled: true,
+          type: "openai_compatible",
+          model: "scenario-model",
+          apiKey: "test-key",
+          baseUrl: "http://localhost/scenario-model",
+        },
+        system_default: {
+          enabled: true,
+          type: "openai_compatible",
+          model: "system-default-model",
+          apiKey: "test-key",
+          baseUrl: "http://localhost/system",
+        },
+      },
+      scenarios: {
+        definitions: {
+          programming: {
+            model: "scenario_model_alias",
+          },
+        },
+      },
+      defaultModelAlias: "system_default",
+    },
+    userConfig: {},
+    selectedModel: "",
+    scenario: "programming",
+  });
+
+  assert.equal(spec.alias, "scenario_model_alias");
+  assert.equal(spec.model, "scenario-model");
+});
+
 function buildStateWithRunConfig(runConfig) {
   let received = null;
   const builder = createStateBuilder({
