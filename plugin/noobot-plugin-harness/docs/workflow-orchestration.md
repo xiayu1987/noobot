@@ -126,7 +126,7 @@ Unified observation/lifecycle entry:
 - Hook point: `before_llm_call`
 - Summary trigger:
   - Turn-based: `state.counters.llmTurns > LLM_SUMMARY_THRESHOLD` (`8`)
-  - Char-based: `unsummarized_chars > LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD` (`150000`)
+  - Char-based: `unsummarized_chars > LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD` (`200000`)
 - Overflow prune policy (`SUMMARY_POLICY.OVERFLOW_POLICY`):
   - `ENABLE_PRUNE_AFTER_SUMMARY`
   - `PRUNE_TRIGGER_AFTER_CHAR_SUMMARY_ROUNDS`

@@ -232,7 +232,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
     summary: {
       // Fallback defaults. Mode-specific summary thresholds live in top-level modeThresholds.<mode>.guidance.summary.
       turnsThreshold: 8,
-      messageCharsThreshold: 150000,
+      messageCharsThreshold: 200000,
       overflowPolicy: {
         enablePruneAfterSummary: true,
         pruneTriggerAfterCharSummaryRounds: 1,

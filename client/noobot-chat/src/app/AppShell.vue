@@ -262,8 +262,18 @@ const availableBotScenarios = computed(() => normalizeAvailableBotScenarios(
   scenarioConfig?.value?.definitions,
 ));
 
+const activeScenarioDefinition = computed(() => {
+  const scenarioKey = String(botScenario.value || "").trim();
+  const definitions = scenarioConfig?.value?.definitions;
+  return scenarioKey && definitions && typeof definitions === "object"
+    ? definitions[scenarioKey] || {}
+    : {};
+});
+
 const availableModelOptions = computed(() => normalizeModelOptionsFromEnabledModels(
-  scenarioConfig?.value?.enabledModels || [],
+  Array.isArray(activeScenarioDefinition.value?.enabledModels) && activeScenarioDefinition.value.enabledModels.length
+    ? activeScenarioDefinition.value.enabledModels
+    : scenarioConfig?.value?.enabledModels || [],
   selectedModel.value,
   pluginModelConfig.value,
 ));
