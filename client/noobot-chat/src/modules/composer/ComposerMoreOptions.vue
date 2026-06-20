@@ -157,23 +157,25 @@ function resolveComposerExtensionProps(renderer = {}) {
       @update:model-value="emit('update:streamOutput', $event)"
     />
 
-    <div class="scenario-selector">
+    <div class="option-selector scenario-selector">
       <span class="scenario-selector-label">{{ translate("composer.botScenario") }}</span>
-      <template v-if="normalizedScenarioOptions.length">
+      <div v-if="normalizedScenarioOptions.length" class="option-button-group scenario-button-group">
         <el-button
           v-for="scenarioItem in normalizedScenarioOptions"
           :key="scenarioItem.key"
           size="small"
+          class="composer-option-button scenario-option-button"
           :type="String(botScenario || '').trim() === scenarioItem.key ? 'primary' : 'default'"
           :title="scenarioItem.description || resolveScenarioLabel(scenarioItem)"
           @click="emit('select-scenario', scenarioItem.key)"
         >
           {{ resolveScenarioLabel(scenarioItem) }}
         </el-button>
-      </template>
+      </div>
       <el-button
         v-else
         size="small"
+        class="composer-option-button scenario-option-button"
         :type="String(botScenario || '').trim().toLowerCase() === 'programming' ? 'primary' : 'default'"
         @click="emit('toggle-programming-scenario')"
       >
@@ -181,13 +183,14 @@ function resolveComposerExtensionProps(renderer = {}) {
       </el-button>
     </div>
 
-    <div class="plugin-selector">
+    <div class="option-selector plugin-selector">
       <span class="scenario-selector-label">{{ translate("composer.availablePlugins") }}</span>
-      <div v-if="normalizedPluginOptions.length" class="plugin-button-group">
+      <div v-if="normalizedPluginOptions.length" class="option-button-group plugin-button-group">
         <el-button
           v-for="pluginItem in normalizedPluginOptions"
           :key="pluginItem.key"
           size="small"
+          class="composer-option-button plugin-option-button"
           :type="selectedPluginKeySet.has(pluginItem.key) ? 'primary' : 'default'"
           :disabled="pluginItem.enabled === false"
           :title="pluginItem.description || pluginItem.label"
@@ -218,10 +221,11 @@ function resolveComposerExtensionProps(renderer = {}) {
           :model-value="selectedModel"
           size="small"
           clearable
-          filterable
+          :filterable="false"
+          popper-class="noobot-composer-select-popper noobot-model-select-popper"
           :disabled="!hasModelOptions"
           :placeholder="translate('composer.useDefaultModel')"
-          class="model-select"
+          class="composer-select model-select noobot-model-select-control"
           @update:model-value="emit('update:selectedModel', String($event || '').trim())"
         >
           <el-option
@@ -229,6 +233,7 @@ function resolveComposerExtensionProps(renderer = {}) {
             :key="modelItem.value"
             :label="modelItem.label"
             :value="modelItem.value"
+            class="model-select-option"
           >
             <div class="model-option-content">
               <span class="model-option-label">{{ modelItem.label }}</span>
@@ -276,22 +281,115 @@ function resolveComposerExtensionProps(renderer = {}) {
   --el-switch-off-color: var(--noobot-status-idle, #d4d4d8);
 }
 
-.scenario-selector,
-.plugin-selector {
+.option-selector {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  min-height: 30px;
+  min-width: 0;
 }
 
 .scenario-selector-label {
-  font-size: 13px;
+  flex: 0 0 auto;
+  font-size: 12px;
+  line-height: 18px;
   color: var(--noobot-text-secondary, var(--el-text-color-regular));
 }
 
-.plugin-button-group {
+.option-button-group {
   display: inline-flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
+}
+
+.composer-option-button {
+  min-height: 28px;
+  box-sizing: border-box;
+  margin: 0 !important;
+  padding: 4px 9px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.composer-option-button.el-button--default {
+  color: var(--noobot-text-main, var(--el-text-color-primary));
+  border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 82%, transparent);
+  background: var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--noobot-base-black, #000000) 5%, transparent);
+}
+
+.composer-option-button.el-button--default:hover,
+.composer-option-button.el-button--default:focus {
+  color: var(--el-color-primary);
+  border-color: color-mix(in srgb, var(--el-color-primary) 48%, var(--noobot-panel-border, var(--el-border-color)));
+  background: color-mix(in srgb, var(--el-color-primary) 9%, var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))));
+}
+
+.composer-option-button.el-button--primary {
+  border-color: color-mix(in srgb, var(--el-color-primary) 72%, var(--noobot-panel-border, var(--el-border-color)));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--el-color-primary) 92%, var(--noobot-panel-bg, var(--el-bg-color-overlay))),
+    color-mix(in srgb, var(--el-color-primary) 76%, var(--noobot-cyber-cyan, #0ea5e9))
+  );
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--el-color-primary) 14%, transparent);
+}
+
+.composer-option-button.is-disabled,
+.composer-option-button.is-disabled:hover,
+.composer-option-button.is-disabled:focus {
+  color: var(--noobot-text-muted, var(--el-text-color-placeholder));
+  border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 58%, transparent);
+  background: color-mix(in srgb, var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 72%, transparent);
+  box-shadow: none;
+}
+
+.composer-select {
+  width: 100%;
+  min-width: 0;
+}
+
+.composer-select :deep(.el-select__wrapper) {
+  min-height: 38px;
+  height: 38px;
+  box-sizing: border-box;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 94%, var(--el-color-primary));
+  border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 78%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 78%, transparent) inset,
+    0 1px 0 color-mix(in srgb, var(--noobot-base-black, #000000) 5%, transparent);
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.composer-select :deep(.el-select__wrapper.is-focused),
+.composer-select :deep(.el-select__wrapper:hover) {
+  border-color: color-mix(in srgb, var(--el-color-primary) 50%, var(--noobot-panel-border, var(--el-border-color)));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--el-color-primary) 42%, transparent) inset,
+    0 8px 20px color-mix(in srgb, var(--el-color-primary) 12%, transparent);
+}
+
+.composer-select :deep(.el-select__selected-item),
+.composer-select :deep(.el-select__placeholder) {
+  min-width: 0;
+  color: var(--noobot-text-main, var(--el-text-color-primary));
+}
+
+.composer-select :deep(.el-select__placeholder.is-transparent) {
+  color: var(--noobot-text-muted, var(--el-text-color-placeholder));
 }
 
 .plugin-empty-text {
@@ -304,11 +402,19 @@ function resolveComposerExtensionProps(renderer = {}) {
   flex-direction: column;
   gap: 12px;
   width: 100%;
-  padding: 14px;
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 78%, transparent);
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--noobot-panel-bg, var(--el-bg-color-overlay)) 94%, var(--noobot-surface-sidebar, var(--el-fill-color-light)));
-  box-shadow: 0 10px 28px color-mix(in srgb, var(--el-color-primary) 8%, transparent);
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--el-color-primary) 22%, var(--noobot-panel-border, var(--el-border-color)));
+  border-radius: 18px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--noobot-panel-bg, var(--el-bg-color-overlay)) 96%, var(--el-color-primary)),
+      color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 92%, var(--noobot-cyber-cyan, #0ea5e9))
+    );
+  box-shadow:
+    0 14px 34px color-mix(in srgb, var(--el-color-primary) 10%, transparent),
+    0 1px 0 color-mix(in srgb, var(--noobot-base-white, #ffffff) 45%, transparent) inset;
 }
 
 .model-config-heading,
@@ -317,6 +423,7 @@ function resolveComposerExtensionProps(renderer = {}) {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
 }
 
 .model-config-header,
@@ -345,19 +452,31 @@ function resolveComposerExtensionProps(renderer = {}) {
 }
 
 .model-select-card {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 360px);
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 70%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 88%, var(--el-fill-color-light));
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 68%, transparent);
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 94%, var(--el-fill-color-light)),
+      color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 86%, var(--el-color-primary))
+    );
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--noobot-base-white, #ffffff) 42%, transparent) inset;
 }
 
 .model-field-copy {
   display: flex;
   flex-direction: column;
   min-width: 150px;
+  flex: 1 1 180px;
+  overflow-wrap: anywhere;
 }
 
 .model-field-label {
@@ -367,7 +486,8 @@ function resolveComposerExtensionProps(renderer = {}) {
 }
 
 .model-select {
-  width: min(360px, 100%);
+  width: 100%;
+  min-width: 0;
 }
 
 .model-option-content {
@@ -375,6 +495,9 @@ function resolveComposerExtensionProps(renderer = {}) {
   flex-direction: column;
   gap: 2px;
   padding: 4px 0;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .model-option-label {
@@ -397,6 +520,7 @@ function resolveComposerExtensionProps(renderer = {}) {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
 }
 
 .scenario-description {
@@ -417,21 +541,184 @@ function resolveComposerExtensionProps(renderer = {}) {
     align-items: flex-start;
   }
 
+  .composer-options {
+    gap: 10px;
+  }
+
+  .model-config-panel {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
   .model-select-card,
   .model-config-heading,
   .plugin-extension-heading {
+    display: flex;
     flex-direction: column;
+  }
+
+  .model-status-tag {
+    max-width: 100%;
+    min-height: 24px;
+  }
+
+  .model-field-copy {
+    width: 100%;
+    min-width: 0;
+    flex-basis: auto;
   }
 
   .model-select {
     width: 100%;
+    flex-basis: auto;
   }
 
-  .plugin-button-group {
-    max-width: 100%;
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    padding-bottom: 2px;
+  .model-select :deep(.el-select__wrapper) {
+    min-height: 38px;
+    height: 38px;
+  }
+
+  .option-selector {
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .option-button-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+    width: 100%;
+    gap: 6px;
+  }
+
+  .composer-option-button {
+    width: 100%;
+    min-height: 32px;
+    padding: 5px 8px;
+    justify-content: center;
+  }
+
+  .composer-select {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .model-config-panel {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .model-select-card {
+    display: flex;
+    padding: 10px;
+  }
+
+  .model-config-description,
+  .model-field-hint,
+  .scenario-description {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+}
+
+:global(.noobot-composer-select-popper) {
+  width: auto !important;
+  max-width: calc(100vw - 32px);
+  border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 82%, transparent);
+  background: var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) !important;
+  overflow: hidden !important;
+  border-radius: 12px;
+  box-shadow: 0 16px 36px color-mix(in srgb, var(--noobot-base-black, #000000) 18%, transparent);
+}
+
+:global(.noobot-composer-select-popper .el-select-dropdown),
+:global(.noobot-composer-select-popper .el-popper__content),
+:global(.noobot-composer-select-popper .el-scrollbar),
+:global(.noobot-composer-select-popper .el-scrollbar__view),
+:global(.noobot-composer-select-popper .el-select-dropdown__list) {
+  background: var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) !important;
+}
+
+:global(.noobot-composer-select-popper .el-select-dropdown__wrap) {
+  max-height: min(40vh, 300px);
+  background: var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) !important;
+}
+
+:global(.noobot-composer-select-popper .el-select-dropdown__list) {
+  box-sizing: border-box;
+  padding: 4px;
+}
+
+:global(.noobot-composer-select-popper .el-select-dropdown__item) {
+  height: auto;
+  min-height: 44px;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  line-height: 1.35;
+  color: var(--noobot-text-main, var(--el-text-color-primary));
+  background: transparent !important;
+  white-space: normal;
+}
+
+:global(.noobot-composer-select-popper .el-select-dropdown__item.hover),
+:global(.noobot-composer-select-popper .el-select-dropdown__item:hover) {
+  color: var(--noobot-text-strong, var(--el-text-color-primary)) !important;
+  background: color-mix(in srgb, var(--el-color-primary) 10%, var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)))) !important;
+}
+
+:global(.noobot-composer-select-popper .el-select-dropdown__item.is-selected) {
+  color: var(--el-color-primary) !important;
+  background: color-mix(in srgb, var(--el-color-primary) 14%, var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)))) !important;
+}
+
+:global(.noobot-composer-select-popper .el-select-dropdown__item.is-selected.hover),
+:global(.noobot-composer-select-popper .el-select-dropdown__item.is-selected:hover) {
+  background: color-mix(in srgb, var(--el-color-primary) 18%, var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)))) !important;
+}
+
+:global(.noobot-composer-select-popper .el-select-dropdown__empty) {
+  color: var(--noobot-text-muted, var(--el-text-color-secondary));
+  background: var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) !important;
+}
+
+:global(.noobot-composer-select-popper .el-popper__arrow::before) {
+  background: var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) !important;
+  border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 82%, transparent) !important;
+}
+
+@media (max-width: 768px) {
+  :global(.noobot-composer-select-popper) {
+    min-width: 0 !important;
+    max-width: calc(100vw - 32px) !important;
+    max-height: min(44vh, 320px) !important;
+    border-radius: 12px !important;
+    overflow: hidden auto !important;
+    overscroll-behavior: contain;
+    box-shadow: 0 12px 30px color-mix(in srgb, var(--noobot-base-black, #000000) 20%, transparent) !important;
+  }
+
+  :global(.noobot-composer-select-popper[data-popper-placement^="bottom"]) {
+    margin-top: 6px !important;
+  }
+
+  :global(.noobot-composer-select-popper[data-popper-placement^="top"]) {
+    margin-bottom: 6px !important;
+  }
+
+  :global(.noobot-composer-select-popper .el-select-dropdown__wrap) {
+    max-height: min(36vh, 280px);
+    overscroll-behavior: contain;
+  }
+
+  :global(.noobot-composer-select-popper .el-select-dropdown__item) {
+    min-height: 42px;
+    padding: 8px 10px;
+  }
+
+  :global(.noobot-composer-select-popper .el-popper__arrow) {
+    display: none;
   }
 }
 </style>

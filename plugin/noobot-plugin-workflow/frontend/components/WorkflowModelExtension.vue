@@ -58,10 +58,11 @@ function onWorkflowSemanticModelChange(value = "") {
         :model-value="getWorkflowSemanticModel()"
         size="small"
         clearable
-        filterable
+        :filterable="false"
+        popper-class="noobot-composer-select-popper noobot-model-select-popper"
         :disabled="!hasModelOptions"
         :placeholder="TEXT.placeholder"
-        class="model-select"
+        class="composer-select model-select noobot-model-select-control"
         @update:model-value="onWorkflowSemanticModelChange"
       >
         <el-option
@@ -86,11 +87,17 @@ function onWorkflowSemanticModelChange(value = "") {
 .plugin-model-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 74%, transparent);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 90%, var(--el-fill-color-light));
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--el-color-primary) 18%, var(--noobot-panel-border, var(--el-border-color)));
+  border-radius: 16px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 95%, var(--el-fill-color-light)),
+      color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 88%, var(--el-color-primary))
+    );
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--noobot-base-white, #ffffff) 42%, transparent) inset;
 }
 
 .plugin-model-title {
@@ -108,19 +115,59 @@ function onWorkflowSemanticModelChange(value = "") {
 
 .plugin-model-field {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 7px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 64%, transparent);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 88%, transparent);
 }
 
 .plugin-model-label {
-  min-width: 132px;
   font-size: 12px;
   font-weight: 650;
   color: var(--noobot-text-main, var(--el-text-color-primary));
 }
 
 .model-select {
-  width: min(300px, 100%);
+  width: 100%;
+  min-width: 0;
+}
+
+.composer-select :deep(.el-select__wrapper) {
+  min-height: 38px;
+  height: 38px;
+  box-sizing: border-box;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 94%, var(--el-color-primary));
+  border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 78%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 78%, transparent) inset,
+    0 1px 0 color-mix(in srgb, var(--noobot-base-black, #000000) 5%, transparent);
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.composer-select :deep(.el-select__wrapper.is-focused),
+.composer-select :deep(.el-select__wrapper:hover) {
+  border-color: color-mix(in srgb, var(--el-color-primary) 50%, var(--noobot-panel-border, var(--el-border-color)));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--el-color-primary) 42%, transparent) inset,
+    0 8px 20px color-mix(in srgb, var(--el-color-primary) 12%, transparent);
+}
+
+.composer-select :deep(.el-select__selected-item),
+.composer-select :deep(.el-select__placeholder) {
+  min-width: 0;
+  color: var(--noobot-text-main, var(--el-text-color-primary));
+}
+
+.composer-select :deep(.el-select__placeholder.is-transparent) {
+  color: var(--noobot-text-muted, var(--el-text-color-placeholder));
 }
 
 .model-option-content {
@@ -149,13 +196,13 @@ function onWorkflowSemanticModelChange(value = "") {
 }
 
 @media (max-width: 768px) {
-  .plugin-model-field {
-    align-items: flex-start;
-    flex-direction: column;
+  .plugin-model-card {
+    padding: 12px;
   }
 
-  .model-select {
-    width: 100%;
+  .composer-select :deep(.el-select__wrapper) {
+    min-height: 38px;
+    height: 38px;
   }
 }
 </style>
