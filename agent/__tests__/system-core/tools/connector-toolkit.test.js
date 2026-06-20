@@ -581,7 +581,6 @@ test("connector-toolkit/access_connector(email): stdout 里的 transfer-like 字
               stdout: JSON.stringify({
                 action: "read",
                 transferResult: { ok: true, status: "file", envelope: transferEnvelope },
-                transferEnvelope,
                 transferEnvelopes: [transferEnvelope],
               }),
               stderr: "",

@@ -310,7 +310,6 @@ test("executeToolCall: overflow length is measured after compacting transfer wra
           envelope,
           debugPayloadShouldNotCountAsModelResult: "x".repeat(3000),
         },
-        transferEnvelope: envelope,
         transferEnvelopes: [envelope],
       }),
   };
@@ -374,7 +373,6 @@ test("executeToolCall: overflow keeps original semantic-transfer artifact and co
         text: "x".repeat(500),
         attachmentMetas: [attachmentMeta],
         transferResult: { ok: true, status: "file", envelope },
-        transferEnvelope: envelope,
         transferEnvelopes: [envelope],
       }),
   };

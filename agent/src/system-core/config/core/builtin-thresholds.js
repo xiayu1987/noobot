@@ -13,7 +13,7 @@
  */
 export const BUILTIN_THRESHOLDS = Object.freeze({
   memoryMaxItems: 30,
-  maxToolLoopTurns: 250,
+  maxToolLoopTurns: 300,
   mainModelRecentWindow: true,
   mainModelRecentLimit: 15,
   sessionRecentMessageLimit: 15,

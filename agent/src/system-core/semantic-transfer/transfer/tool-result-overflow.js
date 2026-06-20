@@ -177,7 +177,6 @@ function extractOriginalTransferPayload(parsed = null) {
   if (!isPlainObject(parsed)) return {};
   const transferResult = isPlainObject(parsed?.transferResult) ? parsed.transferResult : null;
   const transferEnvelopes = dedupeTransferEnvelopes([
-    isPlainObject(parsed?.transferEnvelope) ? parsed.transferEnvelope : null,
     isPlainObject(transferResult?.envelope) ? transferResult.envelope : null,
     ...(Array.isArray(parsed?.transferEnvelopes) ? parsed.transferEnvelopes : []),
   ]);
@@ -195,7 +194,6 @@ function compactParsedToolResultForOverflow(parsed = null) {
   }
   delete compact.stdout;
   delete compact.transferResult;
-  delete compact.transferEnvelope;
   delete compact.transferEnvelopes;
   // Drop legacy top-level transfer compatibility fields in overflow payloads.
   delete compact.attachmentMeta;

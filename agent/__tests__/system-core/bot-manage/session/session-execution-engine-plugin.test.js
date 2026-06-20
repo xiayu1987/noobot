@@ -509,7 +509,6 @@ test("SessionExecutionEngine resolveModelMessages compacts semantic-transfer too
         tool_call_id: "c1",
         content: JSON.stringify({
           ok: true,
-          transferEnvelope: envelope,
           transferEnvelopes: [envelope],
           attachmentMetas: [attachmentMeta],
         }),

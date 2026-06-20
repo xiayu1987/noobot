@@ -51,15 +51,11 @@ function isPlainObject(value) {
 
 function resolveTransferEnvelopesFromMessage(messageItem = {}) {
   const transferResult = isPlainObject(messageItem?.transferResult) ? messageItem.transferResult : null;
-  const transferEnvelope = isPlainObject(messageItem?.transferEnvelope)
-    ? messageItem.transferEnvelope
-    : isPlainObject(transferResult?.envelope)
-      ? transferResult.envelope
-      : null;
+  const transferResultEnvelope = isPlainObject(transferResult?.envelope) ? transferResult.envelope : null;
   const transferEnvelopes = Array.isArray(messageItem?.transferEnvelopes)
     ? messageItem.transferEnvelopes.filter(isPlainObject)
-    : transferEnvelope
-      ? [transferEnvelope]
+    : transferResultEnvelope
+      ? [transferResultEnvelope]
       : [];
   return transferEnvelopes;
 }
@@ -134,12 +130,10 @@ function promoteGeneratedTransfersToFinalAssistant(messages = []) {
     ...generatedTransferEnvelopes,
     ...generatedAttachmentTransferEnvelopes,
   ]);
-  const transferEnvelope = mergedTransferEnvelopes[0] || null;
   const nextFinalAssistant = {
     ...finalAssistant,
     ...(mergedTransferEnvelopes.length ? { transferEnvelopes: mergedTransferEnvelopes } : {}),
   };
-  delete nextFinalAssistant.transferEnvelope;
   if (mergedTransferEnvelopes.length) {
     delete nextFinalAssistant.attachmentMetas;
   }

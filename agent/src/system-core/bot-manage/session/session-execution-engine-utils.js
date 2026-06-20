@@ -92,22 +92,14 @@ export function isPlainObject(value) {
 }
 
 export function resolveTransferEnvelopesFromMessage(message = {}) {
-  const transferEnvelope = resolveTransferEnvelopeFromMessage(message);
   const transferResult = resolveTransferResultFromMessage(message);
   const transferResultEnvelope = isPlainObject(transferResult?.envelope)
     ? transferResult.envelope
     : null;
   return [
-    transferEnvelope,
     transferResultEnvelope,
     ...resolveTransferEnvelopeListFromMessage(message),
   ].filter(isPlainObject);
-}
-
-export function resolveTransferEnvelopeFromMessage(message = {}) {
-  if (isPlainObject(message?.transferEnvelope)) return message.transferEnvelope;
-  if (isPlainObject(message?.lc_kwargs?.transferEnvelope)) return message.lc_kwargs.transferEnvelope;
-  return null;
 }
 
 export function resolveTransferResultFromMessage(message = {}) {

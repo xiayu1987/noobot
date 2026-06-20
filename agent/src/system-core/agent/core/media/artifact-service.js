@@ -219,9 +219,6 @@ export function extractAttachmentMetasFromToolResult(toolName = "", toolResultTe
     const parsedResult = JSON.parse(normalizedToolResultText);
     const transferAttachmentMetas = getTransferAttachmentMetas(
       [
-        // @deprecated compat: old tool results may expose singular `transferEnvelope`; consume it
-        // only to recover attachment metadata while canonical outputs use `transferEnvelopes`.
-        parsedResult?.transferEnvelope,
         parsedResult?.transferResult?.envelope,
         ...(Array.isArray(parsedResult?.transferEnvelopes) ? parsedResult.transferEnvelopes : []),
       ].filter(Boolean),

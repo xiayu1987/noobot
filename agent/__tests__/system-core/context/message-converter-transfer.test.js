@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 
 import { toConversationMessages } from "../../../src/system-core/context/session/message-converter.js";
 
-test("toConversationMessages keeps transferEnvelopes and merges legacy transferEnvelope", () => {
-  const transferEnvelope = {
+test("toConversationMessages keeps transferEnvelopes", () => {
+  const envelope = {
     protocol: "noobot.semantic-transfer",
     version: 1,
     direction: "output",
@@ -16,14 +16,13 @@ test("toConversationMessages keeps transferEnvelopes and merges legacy transferE
       role: "assistant",
       content: "ok",
       attachmentMetas: [{ attachmentId: "att_1" }],
-      transferEnvelope,
-      transferEnvelopes: [transferEnvelope],
+      transferEnvelopes: [envelope],
     },
   ]);
 
   assert.equal(messages.length, 1);
   assert.equal("transferEnvelope" in messages[0], false);
-  assert.deepEqual(messages[0].transferEnvelopes, [transferEnvelope]);
+  assert.deepEqual(messages[0].transferEnvelopes, [envelope]);
   assert.deepEqual(messages[0].attachmentMetas, [{ attachmentId: "att_1" }]);
 });
 

@@ -137,7 +137,6 @@ function buildExistingArtifactPersistedOutput({
   const transferEnvelopes = [transferEnvelope];
   return {
     attachmentMetas: [attachmentMeta],
-    transferEnvelope,
     transferEnvelopes,
     resultFields: buildTextResultFields({
       text,

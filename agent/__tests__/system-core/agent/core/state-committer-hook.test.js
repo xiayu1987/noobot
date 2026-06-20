@@ -130,7 +130,6 @@ test("state-committer stores compact LLM-facing tool result content", async () =
       ok: true,
       attachmentMetas: [attachmentMeta],
       transferResult: { ok: true, status: "file", envelope },
-      transferEnvelope: envelope,
       transferEnvelopes: [envelope],
     }),
   });
@@ -146,7 +145,7 @@ test("state-committer stores compact LLM-facing tool result content", async () =
   assert.deepEqual(turnMessageStore.items[0].transferEnvelopes, [envelope]);
 });
 
-test("state-committer merges legacy transferEnvelope into transferEnvelopes without persisting the singular field", async () => {
+test("state-committer persists transferEnvelopes without persisting the singular field", async () => {
   const turnMessageStore = createInMemoryTurnStore();
   const envelope = {
     protocol: "noobot.semantic-transfer",
@@ -168,7 +167,6 @@ test("state-committer merges legacy transferEnvelope into transferEnvelopes with
     toolResultText: JSON.stringify({
       ok: true,
       transferResult: { ok: true, status: "file", envelope },
-      transferEnvelope: envelope,
       transferEnvelopes: [envelope],
     }),
   });

@@ -14,7 +14,6 @@ import {
   resolveMessageBlockDialogProcessId,
   resolvePluginOptionsFromConfig,
   resolvePreferredAttachmentMetas,
-  resolveTransferEnvelopeFromMessage,
   resolveTransferEnvelopeListFromMessage,
   resolveTransferEnvelopesFromMessage,
   resolveTransferResultFromMessage,
@@ -104,10 +103,12 @@ test("session-execution-engine-utils applies normalized message flags", () => {
 test("session-execution-engine-utils resolves transfer envelopes and preferred attachment metas", () => {
   const message = {
     attachmentMetas: [{ attachmentId: "fallback" }],
-    transferEnvelope: {
-      envelopeId: "e1",
-      attachmentMeta: { attachmentId: "att-1" },
-    },
+    transferEnvelopes: [
+      {
+        envelopeId: "e1",
+        attachmentMeta: { attachmentId: "att-1" },
+      },
+    ],
     lc_kwargs: {
       transferResult: {
         envelope: {
@@ -126,17 +127,16 @@ test("session-execution-engine-utils resolves transfer envelopes and preferred a
 
   assert.equal(isPlainObject({}), true);
   assert.equal(isPlainObject([]), false);
-  assert.deepEqual(resolveTransferEnvelopeFromMessage(message).envelopeId, "e1");
   assert.deepEqual(resolveTransferResultFromMessage(message).envelope.envelopeId, "e2");
-  assert.deepEqual(resolveTransferEnvelopeListFromMessage(message).map((item) => item.envelopeId), ["e3"]);
+  assert.deepEqual(resolveTransferEnvelopeListFromMessage(message).map((item) => item.envelopeId), ["e1", "e3"]);
   assert.deepEqual(resolveTransferEnvelopesFromMessage(message).map((item) => item.envelopeId), [
-    "e1",
     "e2",
+    "e1",
     "e3",
   ]);
   assert.deepEqual(
     resolvePreferredAttachmentMetas(message).map((item) => item.attachmentId),
-    ["att-1", "att-2", "att-3"],
+    ["att-2", "att-1", "att-3"],
   );
   assert.deepEqual(resolvePreferredAttachmentMetas({ attachmentMetas: [{ attachmentId: "fallback" }] }), [
     { attachmentId: "fallback" },
