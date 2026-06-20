@@ -2,13 +2,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   UI_PREFERENCE_STORAGE_KEYS,
   loadUiPreferences,
+  persistBotScenarioPreference,
+  persistPluginModelConfigPreference,
+  persistPluginModelConfigPreferenceByScenario,
+  persistSelectedModelPreference,
   normalizeAvailableBotScenarios,
+  readPluginModelConfigPreference,
+  readSelectedModelPreference,
   readStorageValue,
   resolveBotScenarioWithConfig,
   syncBotScenarioWithConfig,
   updateAllowUserInteractionPreference,
   updateBotScenarioPreference,
   updateForceToolPreference,
+  updatePluginModelConfigPreference,
   updateStreamOutputPreference,
   writeStorageValue,
 } from "../../../src/app/storage/uiPreferencesStorage";
@@ -31,6 +38,9 @@ describe("ui preferences storage", () => {
       forceTool: false,
       streamOutput: true,
       botScenario: "",
+      selectedModel: "",
+      selectedModelByScenario: {},
+      pluginModelConfig: {},
     });
 
     storage.set(UI_PREFERENCE_STORAGE_KEYS.userId, "admin");
@@ -45,6 +55,9 @@ describe("ui preferences storage", () => {
       forceTool: true,
       streamOutput: false,
       botScenario: "workflow",
+      selectedModel: "",
+      selectedModelByScenario: {},
+      pluginModelConfig: {},
     });
   });
 
@@ -74,6 +87,10 @@ describe("ui preferences storage", () => {
         key: "workflow",
         label: "Workflow",
         description: "Run workflow",
+        model: "",
+        defaultModel: undefined,
+        defaultModelAlias: "",
+        enabledModels: [],
       },
     ]);
     expect(normalizeAvailableBotScenarios(null)).toEqual([]);
@@ -160,4 +177,122 @@ describe("ui preferences storage", () => {
     expect(preferenceRef.value).toBe("");
     expect(localStorage.getItem(UI_PREFERENCE_STORAGE_KEYS.botScenario)).toBe("");
   });
+
+  it("stores selectedModel by scenario", () => {
+    persistSelectedModelPreference("main-programming", "programming");
+    persistSelectedModelPreference("main-writing", "writing");
+
+    expect(readSelectedModelPreference("programming")).toBe("main-programming");
+    expect(readSelectedModelPreference("writing")).toBe("main-writing");
+  });
+
+  it("stores harness and workflow plugin model config by scenario without cross-use", () => {
+    persistPluginModelConfigPreferenceByScenario(
+      {
+        harness: { stepModels: { planning: "harness-plan-a", execution: "harness-exec-a" } },
+        workflow: { semanticModel: "workflow-a" },
+      },
+      "programming",
+    );
+    persistPluginModelConfigPreferenceByScenario(
+      {
+        harness: { stepModels: { planning: "harness-plan-b" } },
+        workflow: { semanticModel: "workflow-b" },
+      },
+      "writing",
+    );
+
+    expect(readPluginModelConfigPreference("programming")).toEqual({
+      harness: { stepModels: { planning: "harness-plan-a", execution: "harness-exec-a" } },
+      workflow: { semanticModel: "workflow-a" },
+    });
+    expect(readPluginModelConfigPreference("writing")).toEqual({
+      harness: { stepModels: { planning: "harness-plan-b" } },
+      workflow: { semanticModel: "workflow-b" },
+    });
+  });
+
+  it("falls back to legacy global pluginModelConfig when scenario preference is absent", () => {
+    persistPluginModelConfigPreference({
+      harness: { stepModels: { planning: "legacy-harness" } },
+      workflow: { semanticModel: "legacy-workflow" },
+    });
+
+    expect(readPluginModelConfigPreference("programming")).toEqual({
+      harness: { stepModels: { planning: "legacy-harness" } },
+      workflow: { semanticModel: "legacy-workflow" },
+    });
+
+    persistPluginModelConfigPreferenceByScenario(
+      { workflow: { semanticModel: "scenario-workflow" } },
+      "programming",
+    );
+
+    expect(readPluginModelConfigPreference("programming")).toEqual({
+      workflow: { semanticModel: "scenario-workflow" },
+    });
+    expect(readPluginModelConfigPreference("writing")).toEqual({
+      harness: { stepModels: { planning: "legacy-harness" } },
+      workflow: { semanticModel: "legacy-workflow" },
+    });
+  });
+
+  it("loadUiPreferences restores selectedModel and pluginModelConfig for current scenario", () => {
+    persistBotScenarioPreference("programming");
+    persistSelectedModelPreference("main-programming", "programming");
+    persistSelectedModelPreference("main-writing", "writing");
+    persistPluginModelConfigPreferenceByScenario(
+      {
+        harness: { stepModels: { planning: "harness-programming" } },
+        workflow: { semanticModel: "workflow-programming" },
+      },
+      "programming",
+    );
+    persistPluginModelConfigPreferenceByScenario(
+      {
+        harness: { stepModels: { planning: "harness-writing" } },
+        workflow: { semanticModel: "workflow-writing" },
+      },
+      "writing",
+    );
+
+    const preferences = loadUiPreferences();
+
+    expect(preferences.selectedModel).toBe("main-programming");
+    expect(preferences.pluginModelConfig).toEqual({
+      harness: { stepModels: { planning: "harness-programming" } },
+      workflow: { semanticModel: "workflow-programming" },
+    });
+  });
+
+  it("updates plugin model config by current scenario", () => {
+    const preferenceRef = { value: {} };
+
+    updatePluginModelConfigPreference({
+      preferenceRef,
+      scenarioKey: "programming",
+      value: {
+        harness: { stepModels: { planning: "harness-programming" } },
+        workflow: { semanticModel: "workflow-programming" },
+      },
+    });
+    updatePluginModelConfigPreference({
+      preferenceRef,
+      scenarioKey: "writing",
+      value: {
+        harness: { stepModels: { planning: "harness-writing" } },
+        workflow: { semanticModel: "workflow-writing" },
+      },
+    });
+
+    expect(readPluginModelConfigPreference("programming")).toEqual({
+      harness: { stepModels: { planning: "harness-programming" } },
+      workflow: { semanticModel: "workflow-programming" },
+    });
+    expect(readPluginModelConfigPreference("writing")).toEqual({
+      harness: { stepModels: { planning: "harness-writing" } },
+      workflow: { semanticModel: "workflow-writing" },
+    });
+  });
+
 });
