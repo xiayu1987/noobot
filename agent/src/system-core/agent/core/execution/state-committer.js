@@ -31,24 +31,37 @@ function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+function dedupeTransferEnvelopes(envelopes = []) {
+  const output = [];
+  const seen = new Set();
+  for (const envelope of Array.isArray(envelopes) ? envelopes : []) {
+    if (!isPlainObject(envelope)) continue;
+    const key = JSON.stringify(envelope);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push(envelope);
+  }
+  return output;
+}
+
 function parseTransferPayloadFromToolResultText(toolResultText = "") {
   const parsed = parseJsonObjectSafely(String(toolResultText || ""));
   if (!isPlainObject(parsed)) return null;
   const transferResult = isPlainObject(parsed.transferResult) ? parsed.transferResult : null;
+  // @deprecated compat: tool results produced before the protocol-unification migration may
+  // include singular `transferEnvelope`; persist only canonical `transferEnvelopes` below.
   const transferEnvelope = isPlainObject(parsed.transferEnvelope)
     ? parsed.transferEnvelope
     : isPlainObject(transferResult?.envelope)
       ? transferResult.envelope
       : null;
-  const transferEnvelopes = Array.isArray(parsed.transferEnvelopes)
-    ? parsed.transferEnvelopes.filter(isPlainObject)
-    : transferEnvelope
-      ? [transferEnvelope]
-      : [];
+  const transferEnvelopes = dedupeTransferEnvelopes([
+    transferEnvelope,
+    ...(Array.isArray(parsed.transferEnvelopes) ? parsed.transferEnvelopes : []),
+  ]);
   if (!transferResult && !transferEnvelope && !transferEnvelopes.length) return null;
   return {
     ...(transferResult ? { transferResult } : {}),
-    ...(transferEnvelope ? { transferEnvelope } : {}),
     ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
   };
 }
@@ -137,6 +150,7 @@ export function createStateCommitter({
     async pushToolResult({ call = {}, toolResultText = "" } = {}) {
       const resolvedCallId = resolveCallId(call);
       const resolvedCallName = resolveCallName(call);
+      const rawTransferPayload = parseTransferPayloadFromToolResultText(toolResultText);
       const compactedToolResultText = compactToolResultTextForModel(toolResultText);
       const toolResultPayload = {
         role: "tool",
@@ -146,7 +160,7 @@ export function createStateCommitter({
         tool_call_id: resolvedCallId,
         toolName: resolvedCallName,
       };
-      const transferPayload = parseTransferPayloadFromToolResultText(compactedToolResultText);
+      const transferPayload = rawTransferPayload || parseTransferPayloadFromToolResultText(compactedToolResultText);
       if (transferPayload) {
         if (transferPayload.transferResult) {
           toolResultPayload.transferResult = transferPayload.transferResult;

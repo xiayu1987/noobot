@@ -36,7 +36,6 @@
 跨模块传递优先使用：
 
 - `transferResult`
-- `transferEnvelope`
 - `transferEnvelopes`
 
-legacy/compat 输出仍在迁移期逐步收敛，不作为新增标准输出协议。普通附件场景不适用本段，不允许为了统一输出而越权生成 `noobot.semantic-transfer` envelope。
+`transferEnvelope` 为 legacy/compat 兼容读取字段，仅用于合并旧数据或旧调用输入；新增/对外主输出统一使用 `transferEnvelopes`。普通附件场景不适用本段，不允许为了统一输出而越权生成 `noobot.semantic-transfer` envelope。

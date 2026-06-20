@@ -131,11 +131,21 @@ export function buildWaitAsyncTaskResultPayload({
   transferEnvelopes = [],
 } = {}) {
   void attachmentMetas;
-  const normalizedTransferEnvelopes = Array.isArray(transferEnvelopes) ? transferEnvelopes : [];
-  const normalizedTransferEnvelope =
-    transferEnvelope && typeof transferEnvelope === "object" && !Array.isArray(transferEnvelope)
-      ? transferEnvelope
-      : normalizedTransferEnvelopes[0] || null;
+  const normalizedTransferEnvelopes = [];
+  const seenEnvelopeKeys = new Set();
+  const appendEnvelope = (envelope = null) => {
+    if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) return;
+    const key = JSON.stringify(envelope);
+    if (seenEnvelopeKeys.has(key)) return;
+    seenEnvelopeKeys.add(key);
+    normalizedTransferEnvelopes.push(envelope);
+  };
+  if (Array.isArray(transferEnvelopes)) {
+    for (const envelope of transferEnvelopes) appendEnvelope(envelope);
+  }
+  // @deprecated compat: accept singular `transferEnvelope` from old callers, but emit only
+  // canonical `transferEnvelopes` in the wait-async task result payload.
+  appendEnvelope(transferEnvelope);
   const normalizedTransferResult =
     transferResult && typeof transferResult === "object" && !Array.isArray(transferResult)
       ? transferResult
@@ -152,7 +162,6 @@ export function buildWaitAsyncTaskResultPayload({
       container_statuses: containerStatuses,
       task_stats: taskStats,
       ...(normalizedTransferResult ? { transferResult: normalizedTransferResult } : {}),
-      ...(normalizedTransferEnvelope ? { transferEnvelope: normalizedTransferEnvelope } : {}),
       ...(normalizedTransferEnvelopes.length ? { transferEnvelopes: normalizedTransferEnvelopes } : {}),
     },
     true,

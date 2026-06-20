@@ -95,6 +95,8 @@ export class SessionMessageService {
     frontendUserMessage = false,
     pluginMessage = false,
     pluginMeta = null,
+    // @deprecated compat: callers should pass `transferEnvelopes`; this singular field is
+    // accepted only to merge old/new boundary payloads into canonical session messages.
     transferEnvelope = null,
     transferEnvelopes = [],
     isMonotonic = false,
@@ -158,6 +160,8 @@ export class SessionMessageService {
         !Array.isArray(pluginMeta)
           ? pluginMeta
           : null,
+      // @deprecated compat: normalizeMessageEntity merges this singular legacy input into
+      // `transferEnvelopes` and never stores it as a new session output field.
       transferEnvelope:
         transferEnvelope && typeof transferEnvelope === "object" && !Array.isArray(transferEnvelope)
           ? transferEnvelope

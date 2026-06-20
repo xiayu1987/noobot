@@ -93,6 +93,7 @@ function collectTransferEnvelopes(value = null) {
   if (Array.isArray(value)) return dedupe(value);
   if (!isPlainObject(value)) return [];
   return dedupe([
+    // @deprecated compat: accept legacy singular `transferEnvelope` as an input alias only.
     value.transferEnvelope,
     value?.transferResult?.envelope,
     ...(Array.isArray(value.transferEnvelopes) ? value.transferEnvelopes : []),

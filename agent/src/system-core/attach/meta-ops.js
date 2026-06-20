@@ -125,7 +125,7 @@ export function buildTransferPayloadFromAttachmentMetas(attachmentMetas = []) {
   const metas = (Array.isArray(attachmentMetas) ? attachmentMetas : [])
     .filter((item) => item && typeof item === "object" && !Array.isArray(item));
   if (!metas.length) {
-    return { transferResult: null, transferEnvelope: null, transferEnvelopes: [] };
+    return { transferResult: null, transferEnvelopes: [] };
   }
   const files = metas.map((meta = {}, index) => ({
     filePath: safeStr(
@@ -148,7 +148,6 @@ export function buildTransferPayloadFromAttachmentMetas(attachmentMetas = []) {
   };
   return {
     transferResult: { ok: true, status: "file", envelope: transferEnvelope },
-    transferEnvelope,
     transferEnvelopes: [transferEnvelope],
   };
 }

@@ -84,7 +84,7 @@ test("appendAttachmentMetasToRuntimeAndTurn merges with existing transfer envelo
 
   const [message] = turnStore.toArray();
   assert.equal(message.attachmentMetas, undefined);
-  assert.equal(message.transferEnvelope, existingEnvelope);
+  assert.equal("transferEnvelope" in message, false);
   assert.equal(message.transferEnvelopes.length, 2);
   assert.equal(message.transferEnvelopes[0]?.files?.[0]?.attachmentMeta?.attachmentId, "att_existing");
   assert.equal(message.transferEnvelopes[1]?.files?.[0]?.attachmentMeta?.attachmentId, "att_new");

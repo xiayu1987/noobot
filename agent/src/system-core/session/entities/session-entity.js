@@ -10,6 +10,8 @@ function normalizeTransferEnvelopesFromMessage(message = {}) {
   const seen = new Set();
   return [
     ...(Array.isArray(message?.transferEnvelopes) ? message.transferEnvelopes : []),
+    // @deprecated compat: `transferEnvelope` is the legacy singular input field.
+    // Merge it into `transferEnvelopes` for old session records; do not emit it as new output.
     message?.transferEnvelope,
   ].filter((item) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return false;

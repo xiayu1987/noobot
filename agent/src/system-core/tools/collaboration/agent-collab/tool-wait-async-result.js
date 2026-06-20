@@ -186,15 +186,28 @@ export function createWaitAsyncTaskResultTool({
             !Array.isArray(persistedAttachments.transferEnvelope)
               ? persistedAttachments.transferEnvelope
               : null;
-          const transferEnvelopes =
+          const transferEnvelopes = [];
+          const seenTransferEnvelopeKeys = new Set();
+          const appendTransferEnvelope = (envelope = null) => {
+            if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) return;
+            const key = JSON.stringify(envelope);
+            if (seenTransferEnvelopeKeys.has(key)) return;
+            seenTransferEnvelopeKeys.add(key);
+            transferEnvelopes.push(envelope);
+          };
+          if (
             persistedAttachments &&
             typeof persistedAttachments === "object" &&
             !Array.isArray(persistedAttachments) &&
             Array.isArray(persistedAttachments.transferEnvelopes)
-              ? persistedAttachments.transferEnvelopes
-              : transferEnvelope
-                ? [transferEnvelope]
-                : [];
+          ) {
+            for (const envelope of persistedAttachments.transferEnvelopes) {
+              appendTransferEnvelope(envelope);
+            }
+          }
+          // @deprecated compat: legacy input only; merge into `transferEnvelopes` without
+          // re-exposing the singular field.
+          appendTransferEnvelope(transferEnvelope);
 
           return {
             id: containerId,
@@ -204,7 +217,6 @@ export function createWaitAsyncTaskResultTool({
             tasks: taskResults,
             attachmentMetas,
             transferResult,
-            transferEnvelope,
             transferEnvelopes,
           };
         }),
@@ -245,12 +257,8 @@ export function createWaitAsyncTaskResultTool({
         if (Array.isArray(item?.transferEnvelopes) && item.transferEnvelopes.length) {
           return item.transferEnvelopes;
         }
-        if (item?.transferEnvelope && typeof item.transferEnvelope === "object" && !Array.isArray(item.transferEnvelope)) {
-          return [item.transferEnvelope];
-        }
         return [];
       });
-      const transferEnvelope = transferEnvelopes[0] || null;
       const transferResult = containerResults.find(
         (item) => item?.transferResult && typeof item.transferResult === "object" && !Array.isArray(item.transferResult),
       )?.transferResult || null;
@@ -273,7 +281,6 @@ export function createWaitAsyncTaskResultTool({
           taskStats,
           attachmentMetas,
           transferResult,
-          transferEnvelope,
           transferEnvelopes,
         });
       }
@@ -291,7 +298,6 @@ export function createWaitAsyncTaskResultTool({
           taskStats,
           attachmentMetas,
           transferResult,
-          transferEnvelope,
           transferEnvelopes,
         });
       }
@@ -309,7 +315,6 @@ export function createWaitAsyncTaskResultTool({
           taskStats,
           attachmentMetas,
           transferResult,
-          transferEnvelope,
           transferEnvelopes,
         });
       }
@@ -323,7 +328,6 @@ export function createWaitAsyncTaskResultTool({
         taskStats,
         attachmentMetas,
         transferResult,
-        transferEnvelope,
         transferEnvelopes,
       });
     },

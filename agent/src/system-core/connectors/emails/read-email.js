@@ -12,6 +12,27 @@ const INLINE_ATTACHMENT_BLOCK_START = "[INLINE_ATTACHMENTS]";
 const INLINE_ATTACHMENT_BLOCK_END = "[/INLINE_ATTACHMENTS]";
 const INLINE_ATTACHMENT_TITLE_TEXT = "INLINE_ATTACHMENTS";
 
+function appendUniqueTransferEnvelope(target = [], envelope = null, seenKeys = new Set()) {
+  if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) return;
+  const key = JSON.stringify(envelope);
+  if (seenKeys.has(key)) return;
+  seenKeys.add(key);
+  target.push(envelope);
+}
+
+function normalizeTransferEnvelopesFromPayload(payload = null) {
+  const transferEnvelopes = [];
+  const seenKeys = new Set();
+  if (Array.isArray(payload?.transferEnvelopes)) {
+    for (const envelope of payload.transferEnvelopes) {
+      appendUniqueTransferEnvelope(transferEnvelopes, envelope, seenKeys);
+    }
+  }
+  // @deprecated compat: legacy input only; do not re-expose `transferEnvelope` as a new output field.
+  appendUniqueTransferEnvelope(transferEnvelopes, payload?.transferEnvelope, seenKeys);
+  return transferEnvelopes;
+}
+
 async function saveEmailAttachments({
   attachmentHandler = null,
   parsedEmail = null,
@@ -20,7 +41,6 @@ async function saveEmailAttachments({
     return {
       attachmentMetas: [],
       transferResult: null,
-      transferEnvelope: null,
       transferEnvelopes: [],
     };
   }
@@ -57,7 +77,6 @@ async function saveEmailAttachments({
     return {
       attachmentMetas: [],
       transferResult: null,
-      transferEnvelope: null,
       transferEnvelopes: [],
     };
   }
@@ -68,7 +87,6 @@ async function saveEmailAttachments({
     return {
       attachmentMetas: savedOutput,
       transferResult: null,
-      transferEnvelope: null,
       transferEnvelopes: [],
     };
   }
@@ -76,7 +94,6 @@ async function saveEmailAttachments({
     return {
       attachmentMetas: [],
       transferResult: null,
-      transferEnvelope: null,
       transferEnvelopes: [],
     };
   }
@@ -88,15 +105,7 @@ async function saveEmailAttachments({
       !Array.isArray(savedOutput.transferResult)
         ? savedOutput.transferResult
         : null,
-    transferEnvelope:
-      savedOutput?.transferEnvelope &&
-      typeof savedOutput.transferEnvelope === "object" &&
-      !Array.isArray(savedOutput.transferEnvelope)
-        ? savedOutput.transferEnvelope
-        : null,
-    transferEnvelopes: Array.isArray(savedOutput?.transferEnvelopes)
-      ? savedOutput.transferEnvelopes
-      : [],
+    transferEnvelopes: normalizeTransferEnvelopesFromPayload(savedOutput),
   };
 }
 
@@ -280,7 +289,6 @@ export async function executeReadEmail({
         html: htmlWithInlineAttachmentHint,
         attachment_metas: attachmentMetas,
         ...(persistedAttachments?.transferResult ? { transferResult: persistedAttachments.transferResult } : {}),
-        ...(persistedAttachments?.transferEnvelope ? { transferEnvelope: persistedAttachments.transferEnvelope } : {}),
         ...(Array.isArray(persistedAttachments?.transferEnvelopes) && persistedAttachments.transferEnvelopes.length
           ? { transferEnvelopes: persistedAttachments.transferEnvelopes }
           : {}),

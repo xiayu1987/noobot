@@ -96,7 +96,6 @@ function createDirectTextTransfer({ text = "", scenario = "", strategy = "", met
   const transferEnvelopes = [envelope];
   return {
     transferResult,
-    transferEnvelope: envelope,
     transferEnvelopes,
     compactTransferPayload: compactTransferPayloadForModel({ transferResult, transferEnvelopes }),
   };
