@@ -275,6 +275,16 @@ export const enUSMessages = {
     "cameraStartFailed": "Failed to open camera",
     "cameraFrameNotReady": "Camera frame is not ready, please try again",
     "cameraCanvasUnavailable": "Camera rendering is not supported",
+    "modelSelection": "Model selection",
+    "modelSelectionDescription": "Only enabled models marked for conversation are shown. The system default is selected when nothing is saved.",
+    "mainFlowModel": "Main flow",
+    "mainFlowModelHint": "Each scenario will prefer the model selected here.",
+    "useDefaultModel": "Use system default model",
+    "modelUsingDefault": "System default model",
+    "pluginModelExtensions": "Plugin model extensions",
+    "pluginModelExtensionsDescription": "Plugins such as Harness and Workflow can load their own non-main-flow model settings here.",
+    "noPluginModelExtensions": "Enable plugins with model extensions to configure their non-main-flow models here.",
+    "noAvailableModels": "No enabled conversation models available",
     "cameraCaptureFailed": "Failed to capture photo"
   }
 };

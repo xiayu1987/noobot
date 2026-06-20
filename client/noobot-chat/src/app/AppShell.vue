@@ -75,12 +75,17 @@ import {
   updateDrawerModelVisibility,
 } from "./appShellEventHandlers";
 import {
+  hasStoredSelectedModelPreference,
   loadUiPreferences,
   normalizeAvailableBotScenarios,
+  normalizeModelOptionsFromEnabledModels,
+  readSelectedModelPreference,
   syncBotScenarioWithConfig as syncBotScenarioWithConfigState,
   updateAllowUserInteractionPreference,
   updateBotScenarioPreference,
   updateForceToolPreference,
+  updatePluginModelConfigPreference,
+  updateSelectedModelPreference,
   updateStreamOutputPreference,
 } from "./storage/uiPreferencesStorage";
 
@@ -116,6 +121,8 @@ const allowUserInteraction = ref(uiPreferences.allowUserInteraction);
 const forceTool = ref(uiPreferences.forceTool);
 const streamOutput = ref(uiPreferences.streamOutput);
 const botScenario = ref(uiPreferences.botScenario);
+const selectedModel = ref(uiPreferences.selectedModel);
+const pluginModelConfig = ref(uiPreferences.pluginModelConfig);
 const hasStoredSelectedPlugins = ref(hasStoredSelectedPluginKeys());
 const selectedPlugins = ref(loadSelectedPluginKeys());
 const composerRef = ref();
@@ -255,6 +262,12 @@ const availableBotScenarios = computed(() => normalizeAvailableBotScenarios(
   scenarioConfig?.value?.definitions,
 ));
 
+const availableModelOptions = computed(() => normalizeModelOptionsFromEnabledModels(
+  scenarioConfig?.value?.enabledModels || [],
+  selectedModel.value,
+  pluginModelConfig.value,
+));
+
 const availablePlugins = computed(() => {
   const definitions =
     scenarioConfig?.value?.plugins && typeof scenarioConfig.value.plugins === "object"
@@ -380,6 +393,8 @@ const {
   forceTool,
   streamOutput,
   botScenario,
+  selectedModel,
+  pluginModelConfig,
   selectedPlugins,
   connected,
   ensureConnected,
@@ -677,6 +692,49 @@ async function onAppMounted() {
   replacePseudoRoute();
 }
 
+function resolveDefaultSelectedModelFromConfig(config = {}) {
+  const defaultModel = config?.defaultModel;
+  const currentScenarioKey = String(botScenario.value || "").trim();
+  const scenarioDefinition = currentScenarioKey && config?.definitions && typeof config.definitions === "object"
+    ? config.definitions[currentScenarioKey] || {}
+    : {};
+  const scenarioDefaultModel = scenarioDefinition?.defaultModel;
+  const candidates = [
+    scenarioDefinition?.defaultModelAlias,
+    typeof scenarioDefaultModel === "string" ? scenarioDefaultModel : "",
+    scenarioDefaultModel?.value,
+    scenarioDefaultModel?.alias,
+    scenarioDefaultModel?.key,
+    scenarioDefaultModel?.model,
+    scenarioDefinition?.model,
+    Array.isArray(scenarioDefinition?.enabledModels) ? scenarioDefinition.enabledModels[0]?.value : "",
+    Array.isArray(scenarioDefinition?.enabledModels) ? scenarioDefinition.enabledModels[0]?.alias : "",
+    Array.isArray(scenarioDefinition?.enabledModels) ? scenarioDefinition.enabledModels[0]?.key : "",
+    Array.isArray(scenarioDefinition?.enabledModels) ? scenarioDefinition.enabledModels[0]?.model : "",
+    config?.defaultModelAlias,
+    typeof defaultModel === "string" ? defaultModel : "",
+    defaultModel?.value,
+    defaultModel?.alias,
+    defaultModel?.key,
+    defaultModel?.model,
+    Array.isArray(config?.enabledModels) ? config.enabledModels[0]?.value : "",
+    Array.isArray(config?.enabledModels) ? config.enabledModels[0]?.alias : "",
+    Array.isArray(config?.enabledModels) ? config.enabledModels[0]?.key : "",
+    Array.isArray(config?.enabledModels) ? config.enabledModels[0]?.model : "",
+  ];
+  return candidates.map((item) => String(item || "").trim()).find(Boolean) || "";
+}
+
+function syncSelectedModelWithConfig() {
+  const currentScenarioKey = String(botScenario.value || "").trim();
+  if (hasStoredSelectedModelPreference(currentScenarioKey)) {
+    selectedModel.value = readSelectedModelPreference(currentScenarioKey);
+    return;
+  }
+  const defaultModelValue = resolveDefaultSelectedModelFromConfig(scenarioConfig.value || {});
+  selectedModel.value = defaultModelValue;
+}
+
 function onAppUnmounted() {
   removePseudoRoutePopStateListener();
   unbindChatMessageScrollSync();
@@ -693,8 +751,16 @@ watch(
   () => {
     syncBotScenarioWithConfig();
     syncSelectedPluginsWithConfig();
+    syncSelectedModelWithConfig();
   },
   { deep: true, immediate: true },
+);
+
+watch(
+  () => botScenario.value,
+  () => {
+    syncSelectedModelWithConfig();
+  },
 );
 
 watch(
@@ -765,6 +831,14 @@ function onBotScenarioUpdate(value = "") {
     value,
     availableBotScenarios: availableBotScenarios.value,
   });
+}
+
+function onSelectedModelUpdate(value = "") {
+  updateSelectedModelPreference({ preferenceRef: selectedModel, value, scenarioKey: botScenario.value });
+}
+
+function onPluginModelConfigUpdate(value = {}) {
+  updatePluginModelConfigPreference({ preferenceRef: pluginModelConfig, value });
 }
 
 function onSelectedPluginsUpdate(value = []) {
@@ -969,6 +1043,9 @@ const drawerPanels = computed(() =>
           :force-tool="forceTool"
           :stream-output="streamOutput"
           :bot-scenario="botScenario"
+          :selected-model="selectedModel"
+          :model-options="availableModelOptions"
+          :plugin-model-config="pluginModelConfig"
           :scenario-options="availableBotScenarios"
           :available-plugins="availablePlugins"
           :selected-plugins="selectedPlugins"
@@ -979,6 +1056,8 @@ const drawerPanels = computed(() =>
           @update:force-tool="onForceToolUpdate"
           @update:stream-output="onStreamOutputUpdate"
           @update:bot-scenario="onBotScenarioUpdate"
+          @update:selected-model="onSelectedModelUpdate"
+          @update:plugin-model-config="onPluginModelConfigUpdate"
           @update:selected-plugins="onSelectedPluginsUpdate"
           @update:more-panel-visible="handleComposerMorePanelVisibleUpdate"
           @clear-uploads="clearUploads"

@@ -21,6 +21,9 @@ export function useApiConnection({
     default: "",
     definitions: {},
     plugins: {},
+    enabledModels: [],
+    defaultModel: null,
+    defaultModelAlias: "",
   });
   const permissions = ref({
     canUseIDE: false,
@@ -75,6 +78,9 @@ export function useApiConnection({
       default: "",
       definitions: {},
       plugins: {},
+      enabledModels: [],
+      defaultModel: null,
+      defaultModelAlias: "",
     };
     permissions.value = {
       canUseIDE: false,
@@ -84,6 +90,35 @@ export function useApiConnection({
 
   function isPlainObject(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value);
+  }
+
+
+  function normalizeEnabledModels(input = []) {
+    const optionMap = new Map();
+    const addModel = (rawItem = {}) => {
+      const value = String(
+        typeof rawItem === "string"
+          ? rawItem
+          : rawItem?.value || rawItem?.alias || rawItem?.key || rawItem?.model || "",
+      ).trim();
+      if (!value || optionMap.has(value)) return;
+      const label = String(
+        typeof rawItem === "string"
+          ? rawItem
+          : rawItem?.label || rawItem?.name || rawItem?.alias || rawItem?.model || value,
+      ).trim() || value;
+      optionMap.set(value, {
+        value,
+        alias: String(typeof rawItem === "string" ? rawItem : rawItem?.alias || value).trim() || value,
+        key: String(typeof rawItem === "string" ? rawItem : rawItem?.key || rawItem?.alias || value).trim() || value,
+        label,
+        name: String(typeof rawItem === "string" ? label : rawItem?.name || label).trim() || label,
+        model: String(typeof rawItem === "string" ? "" : rawItem?.model || "").trim(),
+        description: String(typeof rawItem === "string" ? "" : rawItem?.description || "").trim(),
+      });
+    };
+    (Array.isArray(input) ? input : []).forEach(addModel);
+    return Array.from(optionMap.values());
   }
 
   function normalizeScenarioConfig(input = {}) {
@@ -149,6 +184,9 @@ export function useApiConnection({
       default: String(source?.default || "").trim(),
       definitions: normalizedDefinitions,
       plugins: normalizedPlugins,
+      enabledModels: normalizeEnabledModels(source?.enabledModels || source?.models || []),
+      defaultModel: normalizeEnabledModels([source?.defaultModel]).at(0) || null,
+      defaultModelAlias: String(source?.defaultModelAlias || source?.defaultModel?.alias || source?.defaultModel?.value || "").trim(),
     };
   }
 
@@ -203,6 +241,9 @@ export function useApiConnection({
       scenarioConfig.value = normalizeScenarioConfig({
         ...(data?.scenarios || {}),
         plugins: data?.plugins || data?.scenarios?.plugins || {},
+        enabledModels: data?.enabledModels || data?.models || data?.scenarios?.enabledModels || [],
+        defaultModel: data?.defaultModel || data?.scenarios?.defaultModel || null,
+        defaultModelAlias: data?.defaultModelAlias || data?.scenarios?.defaultModelAlias || "",
       });
       permissions.value = {
         canUseIDE:

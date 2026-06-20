@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import WorkflowMessageCard from "./components/WorkflowMessageCard.vue";
+import WorkflowModelExtension from "./components/WorkflowModelExtension.vue";
 
 export const FRONTEND_PLUGIN_API_VERSION = "1";
 
@@ -28,8 +29,16 @@ export function registerFrontendPlugin(ctx = {}) {
   }
   register({
     id: "workflow",
-    name: "workflow-message-card",
+    name: "workflow-frontend",
     capabilities: ["message.card.workflow"],
+    composerModelExtensions: [
+      {
+        id: "workflow-model-extension",
+        capability: "composer.model-extension",
+        priority: 20,
+        component: WorkflowModelExtension,
+      },
+    ],
     messageCards: [
       {
         id: "workflow-card",

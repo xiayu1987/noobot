@@ -15,11 +15,15 @@ export function buildChatPayload({
   forceTool,
   requestedTextStreaming = true,
   botScenario,
+  selectedModel,
+  pluginModelConfig,
   locale,
   selectedPlugins,
   uploadHint = "",
 } = {}) {
   const normalizedScenario = normalizeTrimmedString(botScenario?.value ?? botScenario);
+  const normalizedSelectedModel = normalizeTrimmedString(selectedModel?.value ?? selectedModel);
+  const normalizedPluginModelConfig = pluginModelConfig?.value ?? pluginModelConfig;
   return {
     userId: userId?.value ?? userId,
     sessionId: activeSession?.value?.backendSessionId || activeSession?.value?.id,
@@ -30,6 +34,10 @@ export function buildChatPayload({
       forceTool: forceTool?.value === true,
       streaming: requestedTextStreaming,
       ...(normalizedScenario ? { scenario: normalizedScenario } : {}),
+      ...(normalizedSelectedModel ? { selectedModel: normalizedSelectedModel } : {}),
+      ...(normalizedPluginModelConfig && typeof normalizedPluginModelConfig === "object" && !Array.isArray(normalizedPluginModelConfig)
+        ? { pluginModelConfig: normalizedPluginModelConfig }
+        : {}),
       locale: normalizeTrimmedString(locale?.value ?? locale),
       selectedConnectors: normalizeSelectedConnectors(
         activeSession?.value?.connectorPanelState?.selectedConnectors || {},

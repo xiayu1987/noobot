@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveBuiltinScenarios } from "#agent/config";
+import { getProviders, resolveDefaultModelSpec } from "#agent/model";
 import { logError } from "#agent/tracking";
 import { withJsonError } from "./route-wrapper.js";
 
@@ -43,6 +44,62 @@ function resolveMergedPlugins(globalPlugins = {}, userPlugins = {}) {
     };
   }
   return mergedPlugins;
+}
+
+function isConversationProvider(provider = {}) {
+  if (!provider || typeof provider !== "object") return false;
+  return provider?.enabled === true && provider?.used_for_conversation === true;
+}
+
+function buildClientModelOption(alias = "", provider = {}) {
+  const normalizedAlias = String(alias || provider?.alias || "").trim();
+  const model = String(provider?.model || "").trim();
+  const name = String(provider?.name || provider?.label || normalizedAlias || model).trim();
+  const value = normalizedAlias || model;
+  if (!value) return null;
+  return {
+    value,
+    alias: normalizedAlias || value,
+    key: normalizedAlias || value,
+    label: name || value,
+    name: name || value,
+    model,
+    description: String(provider?.description || "").trim(),
+  };
+}
+
+function buildClientEnabledModels(globalConfig = {}, userConfig = {}) {
+  const providers = getProviders(globalConfig, userConfig);
+  return Object.entries(providers)
+    .filter(([, provider]) => isConversationProvider(provider))
+    .map(([alias, provider]) => buildClientModelOption(alias, provider))
+    .filter(Boolean);
+}
+
+function buildClientDefaultModel(globalConfig = {}, userConfig = {}, enabledModels = []) {
+  const safeEnabledModels = Array.isArray(enabledModels) ? enabledModels : [];
+  const enabledModelKeySet = new Set(
+    safeEnabledModels
+      .flatMap((modelItem) => [modelItem?.value, modelItem?.alias, modelItem?.key, modelItem?.model])
+      .map((modelKey) => String(modelKey || "").trim())
+      .filter(Boolean),
+  );
+  const defaultSpec = resolveDefaultModelSpec({ globalConfig, userConfig });
+  const defaultOption = isConversationProvider(defaultSpec)
+    ? buildClientModelOption(defaultSpec?.alias, defaultSpec)
+    : null;
+  const defaultKeys = [
+    defaultOption?.value,
+    defaultOption?.alias,
+    defaultOption?.key,
+    defaultOption?.model,
+  ]
+    .map((modelKey) => String(modelKey || "").trim())
+    .filter(Boolean);
+  if (defaultOption && defaultKeys.some((modelKey) => enabledModelKeySet.has(modelKey))) {
+    return defaultOption;
+  }
+  return safeEnabledModels[0] || null;
 }
 
 function buildClientPermissions(role = "user", { canUseIDE = false } = {}) {
@@ -118,6 +175,15 @@ export function registerAuthRoutes(
           globalConfig?.plugins,
           loadedSuperAdminConfig?.plugins,
         );
+        const superAdminEnabledModels = buildClientEnabledModels(
+          globalConfig,
+          loadedSuperAdminConfig,
+        );
+        const superAdminDefaultModel = buildClientDefaultModel(
+          globalConfig,
+          loadedSuperAdminConfig,
+          superAdminEnabledModels,
+        );
         const apiKey = issueApiKey({ userId, role: "super_admin" });
         res.json({
           ok: true,
@@ -127,6 +193,9 @@ export function registerAuthRoutes(
           permissions: buildClientPermissions("super_admin", { canUseIDE: true }),
           scenarios: superAdminScenarios,
           plugins: superAdminPlugins,
+          enabledModels: superAdminEnabledModels,
+          defaultModel: superAdminDefaultModel,
+          defaultModelAlias: String(superAdminDefaultModel?.alias || superAdminDefaultModel?.value || "").trim(),
         });
         return;
       }
@@ -155,6 +224,8 @@ export function registerAuthRoutes(
         globalConfig?.plugins,
         loadedUserConfig?.plugins,
       );
+      const enabledModels = buildClientEnabledModels(globalConfig, loadedUserConfig);
+      const defaultModel = buildClientDefaultModel(globalConfig, loadedUserConfig, enabledModels);
       const apiKey = issueApiKey({ userId, role: "user" });
       res.json({
         ok: true,
@@ -166,6 +237,9 @@ export function registerAuthRoutes(
         }),
         scenarios: mergedScenarios,
         plugins: mergedPlugins,
+        enabledModels,
+        defaultModel,
+        defaultModelAlias: String(defaultModel?.alias || defaultModel?.value || "").trim(),
       });
       },
       { fallbackErrorKey: "connect.failed", translateText },

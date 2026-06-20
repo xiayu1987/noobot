@@ -275,6 +275,16 @@ export const zhCNMessages = {
     "cameraStartFailed": "打开摄像头失败",
     "cameraFrameNotReady": "摄像头画面未就绪，请稍后重试",
     "cameraCanvasUnavailable": "当前环境不支持拍照渲染",
+    "modelSelection": "模型选择",
+    "modelSelectionDescription": "仅展示已启用且可用于对话的模型；未保存时默认选中系统默认模型。",
+    "mainFlowModel": "场景主流程",
+    "mainFlowModelHint": "各个场景会优先使用这里选择的模型。",
+    "useDefaultModel": "使用系统默认模型",
+    "modelUsingDefault": "系统默认模型",
+    "pluginModelExtensions": "插件模型扩展",
+    "pluginModelExtensionsDescription": "Harness、Workflow 等插件可在这里加载自己的非主流程模型配置。",
+    "noPluginModelExtensions": "启用带模型扩展的插件后，可在这里配置插件非主流程模型。",
+    "noAvailableModels": "暂无可用于对话的启用模型",
     "cameraCaptureFailed": "拍照失败"
   }
 };

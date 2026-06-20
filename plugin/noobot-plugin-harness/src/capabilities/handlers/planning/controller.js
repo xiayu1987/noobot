@@ -59,6 +59,7 @@ const LLM_SUMMARY_OVERFLOW_POLICY = Object.freeze({
 const DEFAULT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD = WORKFLOW_PARAMS.planning.planUpdate.triggerTurnsThreshold;
 const DEFAULT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
   WORKFLOW_PARAMS.acceptance.phase.triggerTurnsThreshold;
+const PLANNING_THRESHOLD_SNAPSHOT_EVENT = "planning_threshold_snapshot";
 
 function normalizePositiveInteger(value = 0, fallback = 0) {
   const num = Number(value);
@@ -87,6 +88,10 @@ function resolvePlanningTurnThresholds(ctx = {}) {
       DEFAULT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
     ),
   };
+}
+
+function isPlanningThresholdDebugEnabled() {
+  return globalThis?.process?.env?.HARNESS_DEBUG_THRESHOLDS === "1";
 }
 const PLANNING_REASON_LABEL_KEY = Object.freeze({
   [PLANNING_DECISION.reason.idle]: "planningReasonIdle",
@@ -300,6 +305,32 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
           holder.state.counters.planUpdateTurns >= planUpdateTriggerTurnsThreshold;
         const reachedPhaseAcceptanceTurns =
           holder.state.counters.phaseAcceptanceTurns >= phaseAcceptanceTriggerTurnsThreshold;
+
+        if (isPlanningThresholdDebugEnabled()) {
+          appendCapabilityLog(ctx, {
+            domain: CAPABILITY_DOMAIN.PLANNING,
+            event: PLANNING_THRESHOLD_SNAPSHOT_EVENT,
+            detail: {
+              thresholdMode: planningThresholds.mode,
+              counters: {
+                llmTurns: holder.state.counters.llmTurns,
+                planUpdateTurns: holder.state.counters.planUpdateTurns,
+                phaseAcceptanceTurns: holder.state.counters.phaseAcceptanceTurns,
+              },
+              thresholds: {
+                summaryTurnsThreshold,
+                planUpdateTriggerTurnsThreshold,
+                phaseAcceptanceTriggerTurnsThreshold,
+              },
+              reached: {
+                summaryTurns: reachedTurnsSummary,
+                summaryChars: reachedCharsSummary,
+                planUpdateTurns: reachedPlanUpdateTurns,
+                phaseAcceptanceTurns: reachedPhaseAcceptanceTurns,
+              },
+            },
+          });
+        }
 
         const pruneEnabled = LLM_SUMMARY_OVERFLOW_POLICY.ENABLE_PRUNE_AFTER_SUMMARY === true;
         const pruneTriggerRounds = Number(
