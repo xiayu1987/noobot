@@ -22,7 +22,7 @@ test("normalizeMessageEntity does not persist heavy raw model fields", () => {
   assert.equal("modelResponseMetadata" in normalized, false);
 });
 
-test("normalizeMessageEntity preserves transfer envelopes", () => {
+test("normalizeMessageEntity merges legacy transferEnvelope into transferEnvelopes", () => {
   const transferEnvelope = {
     protocol: "noobot.semantic-transfer",
     version: 1,
@@ -36,7 +36,7 @@ test("normalizeMessageEntity preserves transfer envelopes", () => {
     transferEnvelope,
     transferEnvelopes: [transferEnvelope],
   });
-  assert.deepEqual(normalized.transferEnvelope, transferEnvelope);
+  assert.equal("transferEnvelope" in normalized, false);
   assert.deepEqual(normalized.transferEnvelopes, [transferEnvelope]);
 });
 

@@ -137,9 +137,9 @@ function promoteGeneratedTransfersToFinalAssistant(messages = []) {
   const transferEnvelope = mergedTransferEnvelopes[0] || null;
   const nextFinalAssistant = {
     ...finalAssistant,
-    ...(transferEnvelope ? { transferEnvelope } : {}),
     ...(mergedTransferEnvelopes.length ? { transferEnvelopes: mergedTransferEnvelopes } : {}),
   };
+  delete nextFinalAssistant.transferEnvelope;
   if (mergedTransferEnvelopes.length) {
     delete nextFinalAssistant.attachmentMetas;
   }

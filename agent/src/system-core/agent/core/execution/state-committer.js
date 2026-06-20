@@ -151,9 +151,6 @@ export function createStateCommitter({
         if (transferPayload.transferResult) {
           toolResultPayload.transferResult = transferPayload.transferResult;
         }
-        if (transferPayload.transferEnvelope) {
-          toolResultPayload.transferEnvelope = transferPayload.transferEnvelope;
-        }
         if (Array.isArray(transferPayload.transferEnvelopes) && transferPayload.transferEnvelopes.length) {
           toolResultPayload.transferEnvelopes = transferPayload.transferEnvelopes;
         }

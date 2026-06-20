@@ -58,7 +58,7 @@ test("SessionExecutionFinalizer promotes semantic-transfer attachment metas as t
 
   const finalAssistant = result.messages.find((item = {}) => item.role === "assistant") || {};
   assert.equal(finalAssistant.attachmentMetas, undefined);
-  assert.equal(typeof finalAssistant.transferEnvelope, "object");
+  assert.equal("transferEnvelope" in finalAssistant, false);
   assert.equal(Array.isArray(finalAssistant.transferEnvelopes), true);
   assert.equal(
     finalAssistant.transferEnvelopes[0]?.files?.[0]?.attachmentMeta?.attachmentId,

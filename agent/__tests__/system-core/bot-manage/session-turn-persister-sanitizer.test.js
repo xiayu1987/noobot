@@ -69,7 +69,8 @@ test("SessionTurnPersister persists final assistant transfer envelopes without a
 
   assert.equal(appendedTurns.length, 1);
   assert.equal(appendedTurns[0].attachmentMetas, undefined);
-  assert.equal(appendedTurns[0].transferEnvelope?.files?.[0]?.attachmentMeta?.attachmentId, "att-final");
+  assert.equal("transferEnvelope" in appendedTurns[0], false);
+  assert.equal(appendedTurns[0].transferEnvelopes?.[0]?.files?.[0]?.attachmentMeta?.attachmentId, "att-final");
   assert.equal(appendedTurns[0].transferEnvelopes?.length, 1);
 });
 
