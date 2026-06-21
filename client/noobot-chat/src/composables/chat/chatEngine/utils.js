@@ -5,6 +5,7 @@
  */
 import { RoleEnum } from "../../../shared/constants/chatConstants";
 import { messages } from "noobot-i18n/client/messages";
+import { foldConversationMessages } from "../../infra/messageModel";
 
 export function normalizeTrimmedString(value) {
   return String(value || "").trim();
@@ -254,7 +255,11 @@ export function patchAssistantFromWorkflowMessage(targetMessage = null, workflow
     : [];
   const previousExecutionLogTotal = Number(targetMessage.executionLogTotal || 0);
   const previousHasFirstStreamEvent = targetMessage.hasFirstStreamEvent === true;
-  Object.assign(targetMessage, workflowMessageItem);
+  const [normalizedWorkflowMessage] = foldConversationMessages(
+    [workflowMessageItem],
+    (messageItem = {}) => ({ ...messageItem }),
+  );
+  Object.assign(targetMessage, normalizedWorkflowMessage || workflowMessageItem);
   targetMessage.content = stripInternalEventPlaceholderLines(targetMessage.content);
   targetMessage.pending = previousPending;
   targetMessage.statusLabel = previousStatusLabel;

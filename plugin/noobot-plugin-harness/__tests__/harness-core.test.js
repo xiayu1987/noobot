@@ -570,8 +570,12 @@ test("harness policy prompt matrix exposes scenario without workflow mode", asyn
   );
   assert.match(programmingPrompt, /scenario = programming/);
     assert.match(programmingPrompt, /policy_prompt = harness_policy\/programming/);
-  assert.match(programmingPrompt, /最小切片可逆动作/);
-  assert.match(programmingPrompt, /循环执行 -> 验证\/反馈 -> 修正 -> 继续，不断推进任务/);
+  assert.match(programmingPrompt, /快速定位问题与影响范围/);
+  assert.match(programmingPrompt, /复用现有结构、方法、字段/);
+  assert.match(programmingPrompt, /面对复杂任务时/);
+  assert.match(programmingPrompt, /连续多个最小切片推进任务/);
+  assert.match(programmingPrompt, /不是临时补丁式绕过/);
+  assert.match(programmingPrompt, /不只做一个小改就停下/);
   assert.match(programmingPrompt, /相关测试、lint、类型检查或构建/);
 
   const defaultPrompt = await buildInjectedPolicy();
@@ -620,8 +624,12 @@ test("dynamic policy prompt protocol instruction is localized", () => {
   assert.match(zh, /建议每轮推进一个可交付单元/);
   assert.match(zh, /编程示例：/);
   assert.match(zh, /编程场景动态策略/);
-  assert.match(zh, /做最小切片可逆动作/);
-  assert.match(zh, /循环执行 -> 验证\/反馈 -> 修正 -> 继续，不断推进任务/);
+  assert.match(zh, /快速定位问题与影响范围/);
+  assert.match(zh, /复用现有结构、方法、字段/);
+  assert.match(zh, /面对复杂任务时/);
+  assert.match(zh, /连续多个最小切片推进任务/);
+  assert.match(zh, /不做临时补丁式绕过/);
+  assert.match(zh, /不只做一个小改就停下/);
   assert.doesNotMatch(zh, /Optional dynamic policy prompt protocol/);
 
   const en = buildDynamicPolicyPromptProtocolInstruction("en-US");
@@ -641,8 +649,12 @@ test("dynamic policy prompt protocol instruction is localized", () => {
   assert.match(en, /recommended to advance one deliverable unit each turn/);
   assert.match(en, /Programming example:/);
   assert.match(en, /Programming-scenario dynamic policy/);
-  assert.match(en, /smallest-slice reversible action/);
-  assert.match(en, /loop execute -> verify\/feedback -> fix -> continue/);
+  assert.match(en, /quickly locate the issue and impact scope/);
+  assert.match(en, /reusing existing structures, methods, fields/);
+  assert.match(en, /for complex tasks/);
+  assert.match(en, /multiple smallest slices/);
+  assert.match(en, /temporary patch-style bypasses/);
+  assert.match(en, /do not stop after only one tiny change/);
   assert.doesNotMatch(en, /可选动态策略提示词协议/);
 });
 

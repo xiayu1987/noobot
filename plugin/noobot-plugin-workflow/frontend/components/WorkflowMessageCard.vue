@@ -559,55 +559,12 @@ const semanticPreviewCollapsible = computed(
   () => semanticPreviewLineCount.value > 8 || String(semanticPreview.value || "").length > 900,
 );
 
-function isInjectedMessage(messageItem = {}) {
-  if (messageItem?.injectedMessage === true) return true;
-  const injectedBy = String(messageItem?.injectedBy || "").trim().toLowerCase();
-  if (injectedBy) return true;
-  return false;
-}
-
-function isToolRelatedMessage(messageItem = {}) {
-  const role = String(messageItem?.role || "").trim().toLowerCase();
-  const type = String(messageItem?.type || "").trim().toLowerCase();
-  const toolCalls = Array.isArray(messageItem?.tool_calls) ? messageItem.tool_calls : [];
-  if (toolCalls.length) return true;
-  if (role === "tool") return true;
-  if (type === "tool_call" || type === "tool_result") return true;
-  return false;
-}
-
-function isPrimaryCandidateMessage(messageItem = {}) {
-  const role = String(messageItem?.role || "").trim().toLowerCase();
-  return !isInjectedMessage(messageItem) && !isToolRelatedMessage(messageItem) && (role === "user" || role === "assistant");
-}
-
-const primaryNodeMessages = computed(() => {
-  const source = Array.isArray(normalizedNodeSessionMessages.value) ? normalizedNodeSessionMessages.value : [];
-  const firstUser = source.find((messageItem = {}) => {
-    if (!isPrimaryCandidateMessage(messageItem)) return false;
-    return String(messageItem?.role || "").trim().toLowerCase() === "user";
-  }) || null;
-  let lastAssistant = null;
-  for (let index = source.length - 1; index >= 0; index -= 1) {
-    const messageItem = source[index] || {};
-    if (!isPrimaryCandidateMessage(messageItem)) continue;
-    if (String(messageItem?.role || "").trim().toLowerCase() !== "assistant") continue;
-    lastAssistant = messageItem;
-    break;
-  }
-  const result = [];
-  if (firstUser) result.push(firstUser);
-  if (lastAssistant && lastAssistant !== firstUser) result.push(lastAssistant);
-  return result;
-});
-
 function normalizeNodeMessageForDisplay(messageItem = {}) {
   const item = messageItem && typeof messageItem === "object" ? messageItem : {};
-  const content = String(item?.content || "").trim();
   return {
     ...item,
     pluginMessage: false,
-    content: content || renderableMessageContent(item),
+    content: String(item?.content || ""),
   };
 }
 
@@ -661,39 +618,6 @@ const displayNodeMessages = computed(() =>
 const nodeSessionAllMessages = computed(() =>
   Array.isArray(rawNodeSessionMessages.value) ? rawNodeSessionMessages.value : [],
 );
-
-function stringifyJson(value = null) {
-  if (value === undefined) return "";
-  if (typeof value === "string") return value;
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value ?? "");
-  }
-}
-
-function buildToolCallsPreview(messageItem = {}) {
-  const toolCalls = Array.isArray(messageItem?.tool_calls) ? messageItem.tool_calls : [];
-  if (!toolCalls.length) return "";
-  return toolCalls
-    .map((toolCall = {}, index) => {
-      const name = String(toolCall?.function?.name || toolCall?.name || `tool_${index + 1}`).trim();
-      const args = stringifyJson(toolCall?.function?.arguments ?? toolCall?.args ?? "");
-      return [name, args].filter(Boolean).join("\n");
-    })
-    .filter(Boolean)
-    .join("\n\n");
-}
-
-function renderableMessageContent(messageItem = {}) {
-  const direct = String(messageItem?.content || "").trim();
-  if (direct) return direct;
-  if (isToolRelatedMessage(messageItem)) {
-    const toolCallsPreview = buildToolCallsPreview(messageItem);
-    if (toolCallsPreview) return `\`\`\`json\n${toolCallsPreview}\n\`\`\``;
-  }
-  return translate("workflow.empty");
-}
 
 function buildWorkflowDrawerRoute(nodeItem = {}, patch = {}) {
   const dialogId = String(
@@ -1103,6 +1027,8 @@ watch(
   position: relative;
   flex: 1 1 auto;
   min-height: 260px;
+  padding: 12px;
+  box-sizing: border-box;
 }
 
 .workflow-node-session-content .el-loading-mask {
