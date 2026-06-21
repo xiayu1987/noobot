@@ -48,7 +48,7 @@ export function buildWorkflowNodeSessions({
         ...(item?.nodeResultTransferResult && typeof item.nodeResultTransferResult === "object"
           ? { transferResult: item.nodeResultTransferResult }
           : {}),
-        stepStatus: String(item?.stepStatus || "").trim(),
+        stepStatus: String(item?.stepFailure ? "failed" : item?.stepStatus || "success").trim(),
         stepFailure:
           item?.stepFailure && typeof item.stepFailure === "object"
             ? item.stepFailure
@@ -57,7 +57,15 @@ export function buildWorkflowNodeSessions({
         waveOrder: Number(item?.waveOrder || 0),
       };
     })
-    .filter((item) => item.dialogId || item.sessionId);
+    .filter(
+      (item) =>
+        item.dialogId ||
+        item.sessionId ||
+        item.stepId ||
+        item.actionNodeStateId ||
+        item.nodeId ||
+        item.nodeName,
+    );
 }
 
 export function resolveWorkflowAttachmentMetasFromNodeRuns({

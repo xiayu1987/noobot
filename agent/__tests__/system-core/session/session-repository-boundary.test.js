@@ -259,9 +259,51 @@ test("session display summary should keep chat view lightweight and rebuild stal
       {
         id: "w1",
         role: "assistant",
+        type: "workflow",
         content: longWorkflowContent,
         pluginMessage: true,
-        pluginMeta: { pluginId: "p1", source: "plugin-test", kind: "flow", nodeName: "Done", internalState: { huge: true } },
+        pluginMeta: {
+          pluginId: "p1",
+          source: "workflow-plugin",
+          kind: "workflow",
+          phase: "final",
+          nodeName: "Done",
+          internalState: { huge: true },
+          payload: {
+            semantic: {
+              nodes: [
+                { id: "start", type: "state", stateType: "start", name: "Start" },
+                { id: "act", type: "action", name: "Action", task: "Do work" },
+              ],
+              flowtos: [{ from: "start", to: "act", extra: { keep: true } }],
+            },
+            execution: {
+              completed: true,
+              status: "success",
+              nodeAgentRuns: [
+                {
+                  stepId: "step-act",
+                  nodeDialogId: "dialog-act",
+                  nodeSessionId: "session-act",
+                  stepStatus: "success",
+                  step: { nodeId: "act", nodeName: "Action", type: "action" },
+                  nodeResultText: "large node result should be dropped".repeat(80),
+                },
+              ],
+            },
+            nodeSessions: [
+              {
+                nodeId: "act",
+                nodeName: "Action",
+                dialogId: "dialog-act",
+                sessionId: "session-act",
+                stepStatus: "success",
+                nodeResultText: "large node session result should be dropped".repeat(80),
+              },
+            ],
+            diagnostics: { huge: "debug detail should be dropped" },
+          },
+        },
         transferEnvelopes: [{ id: "tr-1", status: "done", payload: { huge: true } }],
       },
       {
@@ -299,7 +341,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     const scopeB = await runtime.repositories.sessionRepository.resolveSessionScope(userId, "B", "A");
     const summaryFile = path.join(scopeB.sessionDir, "session-summary.json");
     let summary = JSON.parse(await readFile(summaryFile, "utf8"));
-    assert.equal(summary.schemaVersion, 1);
+    assert.equal(summary.schemaVersion, 2);
     assert.equal(summary.sessionId, "B");
     assert.equal(summary.messages.length, 5);
     assert.equal(summary.stats.messageCount, 10);
@@ -348,9 +390,19 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(workflowMessage.content, longWorkflowContent);
     assert.equal(workflowMessage.content.endsWith(workflowContentTail), true);
     assert.equal(workflowMessage.content.includes(`${workflowContentTail}…`), false);
-    assert.equal(workflowMessage.pluginMeta.source, "plugin-test");
+    assert.equal(workflowMessage.pluginMeta.source, "workflow-plugin");
     assert.equal(workflowMessage.pluginMeta.nodeName, "Done");
     assert.equal("internalState" in workflowMessage.pluginMeta, false);
+    assert.equal(workflowMessage.pluginMeta.payload.execution.completed, true);
+    assert.equal(workflowMessage.pluginMeta.payload.execution.status, "success");
+    assert.equal(workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].stepStatus, "success");
+    assert.equal(workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].step.nodeId, "act");
+    assert.equal(workflowMessage.pluginMeta.payload.nodeSessions[0].stepStatus, "success");
+    assert.equal(workflowMessage.pluginMeta.payload.nodeSessions[0].nodeId, "act");
+    assert.equal(workflowMessage.pluginMeta.payload.semantic.nodes.length, 2);
+    assert.equal("nodeResultText" in workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0], false);
+    assert.equal("nodeResultText" in workflowMessage.pluginMeta.payload.nodeSessions[0], false);
+    assert.equal("diagnostics" in workflowMessage.pluginMeta.payload, false);
     assert.equal("transferEnvelopes" in workflowMessage, true);
     assert.equal(Array.isArray(workflowMessage.transferEnvelopes), true);
     assert.equal(workflowMessage.transferEnvelopes[0].id, "tr-1");
@@ -364,7 +416,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(displayData.sessions[0].depth, 2);
     assert.equal(displayData.sessions[0].toolLogSummaries.every((item) => item.depth === 2), true);
     summary = JSON.parse(await readFile(summaryFile, "utf8"));
-    assert.equal(summary.schemaVersion, 1);
+    assert.equal(summary.schemaVersion, 2);
     assert.equal(summary.sessionId, "B");
     assert.equal(summary.depth, 2);
   });
