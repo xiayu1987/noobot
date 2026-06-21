@@ -150,7 +150,7 @@ describe("chatWebSocketClient", () => {
     expect(resolved).toBe(true);
   });
 
-  it("rejects ERROR events", async () => {
+  it("delivers ERROR events before rejecting", async () => {
     const client = createChatWebSocketClient({
       resolveWebSocketUrl: () => "ws://test",
       terminalChannelStateGraceMs: 20,
@@ -158,10 +158,15 @@ describe("chatWebSocketClient", () => {
     });
     client.connect();
     const socket = MockWebSocket.instances[0];
+    const onEvent = vi.fn();
 
-    const streamPromise = client.stream({ action: "chat" }, vi.fn());
-    socket.emit(StreamEventEnum.ERROR, { error: "boom" });
+    const streamPromise = client.stream({ action: "chat" }, onEvent);
+    const errorData = { error: "boom", sessionId: "s-1", dialogProcessId: "dp-1", seq: 4 };
+    socket.emit(StreamEventEnum.ERROR, errorData);
 
     await expect(streamPromise).rejects.toThrow("boom");
+    expect(onEvent).toHaveBeenCalledWith({ event: StreamEventEnum.ERROR, data: errorData });
+    expect(client.getLastReceivedSeqMap()).toEqual({ "dp-1": 4 });
+    socket.close(1011, "server_error");
   });
 });

@@ -890,4 +890,38 @@ describe("useChatEngine", () => {
     expect(input.value).toBe("draft before resend");
   });
 
+  it("consumes stream ERROR event and refreshes session detail before cleanup", async () => {
+    const errorData = {
+      error: "invalid tool input",
+      sessionId: "s-error",
+      dialogProcessId: "dp-error",
+    };
+    const stream = vi.fn(async (_payload, onEvent) => {
+      onEvent({ event: StreamEventEnum.ERROR, data: errorData });
+      const error = new Error(errorData.error);
+      error.data = errorData;
+      throw error;
+    });
+    const fetchSessionDetail = vi.fn(async (sessionId) => ({ sessionId, messages: [] }));
+    const applySessionDetail = vi.fn();
+    const { engine, activeSession, sending, deps } = createHarness({
+      sessionId: "s-error",
+      stream,
+      deps: { fetchSessionDetail, applySessionDetail },
+    });
+
+    await expect(engine.send()).resolves.toBe(false);
+
+    const botMessage = assistantMessage(activeSession);
+    expect(botMessage.dialogProcessId).toBe("dp-error");
+    expect(botMessage.pending).toBe(false);
+    expect(botMessage.error).toBe("invalid tool input");
+    expect(fetchSessionDetail).toHaveBeenCalledWith("s-error");
+    expect(applySessionDetail).toHaveBeenCalledWith({ sessionId: "s-error", messages: [] }, {
+      preserveCurrentMessages: true,
+    });
+    expect(deps.clearPendingInteraction).toHaveBeenCalled();
+    expect(sending.value).toBe(false);
+  });
+
 });

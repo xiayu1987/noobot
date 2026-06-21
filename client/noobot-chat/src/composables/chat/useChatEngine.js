@@ -383,6 +383,7 @@ export function useChatEngine({
       scrollBottom,
     });
 
+    let lastStreamErrorEventData = null;
     try {
       clearUploads();
       const attachments = await serializeAttachments(filesToSend);
@@ -411,6 +412,10 @@ export function useChatEngine({
           fallbackDialogProcessId: normalizeTrimmedString(botMsg.dialogProcessId),
         });
         if (event === StreamEventEnum.CHANNEL_STATE) {
+          return;
+        }
+        if (event === StreamEventEnum.ERROR) {
+          lastStreamErrorEventData = data || {};
           return;
         }
         if (
@@ -500,12 +505,22 @@ export function useChatEngine({
       }
       applySendErrorState({
         error,
+        errorEventData: lastStreamErrorEventData || error?.data || null,
         activeSession,
         botMessage: botMsg,
         applyConversationState,
         clearPendingInteraction,
         notify,
         translate,
+      });
+      await finalizeDoneSessionDetail({
+        activeSession,
+        activeSessionId,
+        botMessage: botMsg,
+        finalDoneEventData: lastStreamErrorEventData || error?.data || null,
+        fetchSessionDetail,
+        applySessionDetail,
+        refreshSessionConnectorsAsync,
       });
       return false;
     } finally {
