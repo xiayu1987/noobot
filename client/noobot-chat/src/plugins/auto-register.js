@@ -12,7 +12,7 @@ function normalizeApiVersion(input = "") {
   return String(input || "").trim() || REQUIRED_FRONTEND_PLUGIN_API_VERSION;
 }
 
-export function registerExternalFrontendPlugins() {
+export async function registerExternalFrontendPlugins() {
   for (const item of externalFrontendPluginEntries) {
     const pluginId = String(item?.pluginId || "").trim();
     const pluginName = String(item?.name || pluginId).trim();
@@ -23,9 +23,18 @@ export function registerExternalFrontendPlugins() {
       );
       continue;
     }
+    let pluginModule = null;
+    try {
+      pluginModule = typeof item?.loadModule === "function" ? await item.loadModule() : item?.module;
+    } catch (error) {
+      console.warn(
+        `[frontend-plugin] failed to load ${pluginName}: ${String(error?.message || error)}`,
+      );
+      continue;
+    }
     const registerFn =
-      typeof item?.module?.registerFrontendPlugin === "function"
-        ? item.module.registerFrontendPlugin
+      typeof pluginModule?.registerFrontendPlugin === "function"
+        ? pluginModule.registerFrontendPlugin
         : null;
     if (typeof registerFn !== "function") {
       console.warn(
@@ -53,4 +62,3 @@ export function registerExternalFrontendPlugins() {
     }
   }
 }
-

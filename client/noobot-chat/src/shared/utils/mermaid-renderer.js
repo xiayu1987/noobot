@@ -1,22 +1,24 @@
-import mermaid from "mermaid";
+import { loadMermaid } from "../../app/entrypoints";
 
 let mermaidInitialized = false;
 
-function ensureMermaidInitialized() {
-  if (mermaidInitialized) return;
+async function ensureMermaidInitialized() {
+  const mermaid = await loadMermaid();
+  if (mermaidInitialized) return mermaid;
   mermaid.initialize({
     startOnLoad: false,
     theme: "default",
     securityLevel: "loose",
   });
   mermaidInitialized = true;
+  return mermaid;
 }
 
 export async function renderMermaidInElement(containerElement = null) {
   if (!containerElement) return;
   const mermaidNodes = containerElement.querySelectorAll(".mermaid");
   if (!mermaidNodes.length) return;
-  ensureMermaidInitialized();
+  const mermaid = await ensureMermaidInitialized();
   await mermaid.run({ nodes: mermaidNodes });
   const renderedSvgs = containerElement.querySelectorAll(".mermaid svg");
   for (const svgElement of renderedSvgs) {
