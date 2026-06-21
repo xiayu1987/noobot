@@ -143,74 +143,8 @@ describe("ChatMessageListPanel", () => {
     expect(counters.unmounted).toBe(0);
   });
 
-  it("remounts assistant item when messageRoundId changes to avoid reusing previous turn state", async () => {
-    const counters = reactive({ mounted: 0, unmounted: 0 });
-    chatMessageItemMock.field = "messageRoundId";
-    chatMessageItemMock.mounted = () => {
-      counters.mounted += 1;
-    };
-    chatMessageItemMock.unmounted = () => {
-      counters.unmounted += 1;
-    };
 
-    const activeSession = reactive({
-      messages: [
-        {
-          role: RoleEnum.ASSISTANT,
-          dialogProcessId: "dp-1",
-          messageRoundId: "round-1",
-          content: "first",
-        },
-      ],
-    });
-    const wrapper = mount(ChatMessageListPanel, {
-      props: {
-        loadingSessionDetail: false,
-        activeSession,
-        shouldRenderMessageInChat: () => true,
-        userId: "u-1",
-        authFetch: null,
-        renderMarkdown: (v) => v,
-        formatTime: (v) => String(v || ""),
-        formatFileSize: (v) => String(v || ""),
-        isImageMime: () => false,
-        emptyLogoSrc: "",
-      },
-      global: {
-        stubs: {
-          "el-scrollbar": defineComponent({
-            name: "ElScrollbarStub",
-            template: "<div><slot /></div>",
-          }),
-          "el-skeleton": true,
-        },
-      },
-    });
-
-    expect(counters.mounted).toBe(1);
-    expect(counters.unmounted).toBe(0);
-    expect(wrapper.find(".chat-message-item-stub").text()).toBe("round-1");
-
-    await wrapper.setProps({
-      activeSession: {
-        messages: [
-          {
-            role: RoleEnum.ASSISTANT,
-            dialogProcessId: "dp-1",
-            messageRoundId: "round-2",
-            content: "second pending",
-          },
-        ],
-      },
-    });
-    await nextTick();
-
-    expect(counters.mounted).toBe(2);
-    expect(counters.unmounted).toBe(1);
-    expect(wrapper.find(".chat-message-item-stub").text()).toBe("round-2");
-  });
-
-  it("keeps assistant item mounted when dialogProcessId arrives for the same messageRoundId", async () => {
+  it("keeps assistant item mounted when dialogProcessId arrives for the same placeholder", async () => {
     const counters = reactive({ mounted: 0, unmounted: 0 });
     chatMessageItemMock.field = "dialogProcessId";
     chatMessageItemMock.mounted = () => {
@@ -225,7 +159,6 @@ describe("ChatMessageListPanel", () => {
         {
           role: RoleEnum.ASSISTANT,
           dialogProcessId: "",
-          messageRoundId: "round-live",
           content: "",
         },
       ],
@@ -262,7 +195,6 @@ describe("ChatMessageListPanel", () => {
           {
             role: RoleEnum.ASSISTANT,
             dialogProcessId: "dp-live",
-            messageRoundId: "round-live",
             content: "streaming",
           },
         ],
@@ -297,11 +229,10 @@ describe("ChatMessageListPanel", () => {
         {
           role: RoleEnum.ASSISTANT,
           dialogProcessId: "dp-assistant",
-          messageRoundId: "round-1",
         },
         1,
       ),
-    ).toBe("chat-message-assistant-round-1-1");
+    ).toBe("chat-message-assistant-dp-assistant-1");
     expect(typeof wrapper.vm.scrollToMessageAnchor).toBe("function");
   });
 });

@@ -209,7 +209,6 @@ describe("ThinkingPanel", () => {
         role: "assistant",
         pending: false,
         dialogProcessId: "dialog-1",
-        messageRoundId: "assistant-round",
         hasThinkingDetails: true,
         thinkingDetailCount: 1,
         completedToolLogs: [{ event: "tool_call", text: "read_file" }],
@@ -348,13 +347,12 @@ describe("ThinkingPanel", () => {
     expect(wrapper.find("button").text()).toContain("12");
   });
 
-  it("does not backfill injected messages from previous round while current assistant is pending", () => {
+  it("does not backfill injected messages while current assistant is pending before streaming starts", () => {
     const wrapper = mountThinkingPanel(
       {
         role: "assistant",
         pending: true,
         dialogProcessId: "dialog-1",
-        messageRoundId: "round-2",
         hasFirstStreamEvent: false,
         realtimeLogs: [],
         completedToolLogs: [],
@@ -365,16 +363,15 @@ describe("ThinkingPanel", () => {
           {
             role: "user",
             dialogProcessId: "dialog-1",
-            messageRoundId: "round-1",
             injectedMessage: true,
             injectedBy: "harness-plugin",
-            content: "previous injected context",
+            content: "injected context",
           },
         ],
       },
     );
 
-    expect(wrapper.text()).not.toContain("previous injected context");
+    expect(wrapper.text()).not.toContain("injected context");
   });
 
   it("does not backfill previous tool logs while current assistant is pending", () => {
@@ -408,13 +405,12 @@ describe("ThinkingPanel", () => {
     expect(wrapper.findAll(".execution-log-line")).toHaveLength(0);
   });
 
-  it("does not backfill previous round tool logs after current round starts streaming", () => {
+  it("shows tool logs for the same dialogProcessId after current dialog starts streaming", () => {
     const wrapper = mountThinkingPanel(
       {
         role: "assistant",
         pending: false,
         dialogProcessId: "dialog-1",
-        messageRoundId: "round-2",
         realtimeLogs: [],
         completedToolLogs: [],
         executionLogTotal: 0,
@@ -425,26 +421,23 @@ describe("ThinkingPanel", () => {
             role: "assistant",
             pending: false,
             dialogProcessId: "dialog-1",
-            messageRoundId: "round-1",
             tool_calls: [{ function: { name: "previous_tool" } }],
           },
           {
             role: "tool",
             dialogProcessId: "dialog-1",
-            messageRoundId: "round-1",
             content: JSON.stringify({ toolName: "previous_tool", ok: true }),
           },
           {
             role: "tool",
             dialogProcessId: "dialog-1",
-            messageRoundId: "round-2",
             content: JSON.stringify({ toolName: "current_tool", ok: true }),
           },
         ],
       },
     );
 
-    expect(wrapper.text()).not.toContain("previous_tool");
+    expect(wrapper.text()).toContain("previous_tool");
     expect(wrapper.text()).toContain("current_tool");
   });
 });

@@ -58,27 +58,6 @@ describe("chatEngine utils", () => {
     expect(targetMessage.content).not.toContain("[session_turn_full]");
   });
 
-  it("preserves client round identity when workflow message patches active bot message", () => {
-    const targetMessage = {
-      pending: true,
-      statusLabel: "执行中",
-      realtimeLogs: [{ text: "running" }],
-      executionLogTotal: 1,
-      messageRoundId: "round-live",
-      hasFirstStreamEvent: true,
-      content: "",
-    };
-
-    patchAssistantFromWorkflowMessage(targetMessage, {
-      role: "assistant",
-      content: "workflow done",
-      messageRoundId: "",
-      hasFirstStreamEvent: false,
-    });
-
-    expect(targetMessage.messageRoundId).toBe("round-live");
-    expect(targetMessage.hasFirstStreamEvent).toBe(true);
-  });
 
   it("sanitizes internal placeholders from execution logs", () => {
     const samples = [

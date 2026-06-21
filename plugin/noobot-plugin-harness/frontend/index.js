@@ -41,7 +41,7 @@ function isPlainUserMessage(messageItem = {}) {
   return !type || type === "message" || type === "user";
 }
 
-function getMessageRoundId(messageItem = {}) {
+function getDialogProcessId(messageItem = {}) {
   return normalizeText(messageItem?.dialogProcessId || messageItem?.dialogId);
 }
 
@@ -63,12 +63,12 @@ function resolveMonotonicUserTarget(messageItem = {}, allMessages = []) {
   if (directIndex >= 0 && isUserMessage(messages[directIndex])) {
     return messages[directIndex];
   }
-  const targetRoundId = getMessageRoundId(messageItem);
-  if (targetRoundId) {
-    const sameRoundUserMessage = messages.find(
-      (item) => isUserMessage(item) && getMessageRoundId(item) === targetRoundId,
+  const targetDialogProcessId = getDialogProcessId(messageItem);
+  if (targetDialogProcessId) {
+    const sameDialogProcessUserMessage = messages.find(
+      (item) => isUserMessage(item) && getDialogProcessId(item) === targetDialogProcessId,
     );
-    if (sameRoundUserMessage) return sameRoundUserMessage;
+    if (sameDialogProcessUserMessage) return sameDialogProcessUserMessage;
   }
   if (directIndex >= 0) {
     for (let index = directIndex - 1; index >= 0; index -= 1) {
@@ -106,13 +106,13 @@ function buildMonotonicSourceMap(allMessages = []) {
     const sourceMessage = messages[index];
     if (isUserMessage(sourceMessage) || !isMonotonicMessage(sourceMessage)) continue;
 
-    const sourceRoundId = getMessageRoundId(sourceMessage);
-    if (sourceRoundId) {
-      const sameRoundUserMessage = messages.find(
-        (item) => isUserMessage(item) && getMessageRoundId(item) === sourceRoundId,
+    const sourceDialogProcessId = getDialogProcessId(sourceMessage);
+    if (sourceDialogProcessId) {
+      const sameDialogProcessUserMessage = messages.find(
+        (item) => isUserMessage(item) && getDialogProcessId(item) === sourceDialogProcessId,
       );
-      if (sameRoundUserMessage) {
-        attachMonotonicSource(sourceMap, sameRoundUserMessage, sourceMessage);
+      if (sameDialogProcessUserMessage) {
+        attachMonotonicSource(sourceMap, sameDialogProcessUserMessage, sourceMessage);
         continue;
       }
     }
@@ -161,10 +161,10 @@ function isTailOrphanUserMessage(userMessage = {}, allMessages = []) {
   const userIndex = findMessageIndex(userMessage, messages);
   if (userIndex < 0) return false;
 
-  const userRoundId = getMessageRoundId(userMessage);
+  const userDialogProcessId = getDialogProcessId(userMessage);
   for (let index = userIndex + 1; index < messages.length; index += 1) {
     const nextMessage = messages[index];
-    if (userRoundId && getMessageRoundId(nextMessage) !== userRoundId) continue;
+    if (userDialogProcessId && getDialogProcessId(nextMessage) !== userDialogProcessId) continue;
     return false;
   }
 

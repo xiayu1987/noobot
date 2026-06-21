@@ -238,7 +238,7 @@ function buildToolLogSummaries(session = {}, { depth = 0 } = {}) {
 
 function collectMessageCorrelationKeys(message = {}) {
   const keys = [];
-  for (const key of ["dialogProcessId", "parentDialogProcessId", "messageRoundId", "roundId"]) {
+  for (const key of ["dialogProcessId", "parentDialogProcessId"]) {
     const value = String(message?.[key] || "").trim();
     if (value && !keys.includes(value)) keys.push(value);
   }

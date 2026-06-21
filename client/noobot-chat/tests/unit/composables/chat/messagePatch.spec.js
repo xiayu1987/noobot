@@ -2,10 +2,9 @@ import { describe, expect, it } from "vitest";
 import { applyDoneMessagesPatch } from "../../../../src/composables/chat/chatEngine/messagePatch";
 
 describe("messagePatch", () => {
-  it("stamps current-turn raw messages with client messageRoundId without touching previous turns", () => {
+  it("applies done raw messages without adding legacy dialog identity", () => {
     const botMessage = {
       role: "assistant",
-      messageRoundId: "round-current",
       dialogProcessId: "dp-current",
       content: "",
       attachmentMetas: [],
@@ -17,26 +16,16 @@ describe("messagePatch", () => {
       },
     };
     const dataMessages = [
-      { role: "user", content: "previous user" },
-      { role: "assistant", dialogProcessId: "dp-prev", content: "previous assistant" },
-      { role: "user", content: "current user" },
-      {
-        role: "user",
-        injectedMessage: true,
-        injectedBy: "harness-plugin",
-        dialogProcessId: "dp-current",
-        content: "current injected context",
-      },
-      {
-        role: "tool",
-        dialogProcessId: "dp-current",
-        content: JSON.stringify({ toolName: "write_file", state: "OK" }),
-      },
-      { role: "assistant", dialogProcessId: "dp-current", content: "current assistant" },
+      { role: "user", content: "previous", dialogProcessId: "dp-prev" },
+      { role: "assistant", content: "previous answer", dialogProcessId: "dp-prev" },
+      { role: "user", content: "current", dialogProcessId: "dp-current" },
+      { role: "assistant", content: "tool call", type: "tool_call", dialogProcessId: "dp-current" },
+      { role: "tool", content: "tool result", dialogProcessId: "dp-current" },
+      { role: "assistant", content: "current assistant", dialogProcessId: "dp-current" },
     ];
 
     applyDoneMessagesPatch({
-      data: { dialogProcessId: "dp-current", messages: dataMessages },
+      data: { messages: dataMessages, dialogProcessId: "dp-current" },
       botMessage,
       activeSession,
       makeViewMessage: (messageItem) => ({ ...messageItem }),
@@ -45,15 +34,15 @@ describe("messagePatch", () => {
       mergeAssistantAttachmentMetas: () => {},
     });
 
-    expect(activeSession.value.rawMessages[0].messageRoundId || "").toBe("");
-    expect(activeSession.value.rawMessages[1].messageRoundId || "").toBe("");
-    expect(activeSession.value.rawMessages.slice(2).map((messageItem) => messageItem.messageRoundId)).toEqual([
-      "round-current",
-      "round-current",
-      "round-current",
-      "round-current",
+    expect(activeSession.value.rawMessages.map((messageItem) => messageItem.legacyDialogIdentity)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
     ]);
-    expect(botMessage.messageRoundId).toBe("round-current");
+    expect(botMessage.legacyDialogIdentity).toBeUndefined();
     expect(botMessage.content).toBe("current assistant");
   });
 });

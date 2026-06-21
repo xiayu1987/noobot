@@ -128,11 +128,6 @@ function getScopedMessagesForMessage(messageItem = {}) {
     if (dialogProcessId && String(item?.dialogProcessId || "").trim() !== dialogProcessId) {
       return false;
     }
-    if (hasExplicitThinkingDetailPayload) return true;
-    const rootRoundId = String(messageItem?.messageRoundId || "").trim();
-    if (rootRoundId) {
-      return String(item?.messageRoundId || "").trim() === rootRoundId;
-    }
     return true;
   });
 }
@@ -701,6 +696,10 @@ onBeforeUnmount(() => {
   overflow: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+}
+
+.thinking-details-injected-body :deep(.base-note-block__content) {
+  font-size: var(--noobot-msg-caption-font-size);
 }
 
 </style>

@@ -353,10 +353,10 @@ test("session-routes: thinking-detail 仅按 dialogProcessId 返回本次对话�
             sessions: [{
               sessionId: "s1",
               rawMessages: [
-                { id: "a1", role: "assistant", type: "message", dialogProcessId: "dp-1", messageRoundId: "round-a", content: "answer" },
+                { id: "a1", role: "assistant", type: "message", dialogProcessId: "dp-1", content: "answer" },
                 { id: "i1", role: "system", dialogProcessId: "dp-1", injectedMessage: true, injectedBy: "harness-plugin", content: "injected without round" },
                 { id: "t1", role: "assistant", type: "tool_call", dialogProcessId: "dp-1", content: "tool call" },
-                { id: "t2", role: "tool", type: "tool_result", dialogProcessId: "dp-1", roundId: "different-round", content: "tool result" },
+                { id: "t2", role: "tool", type: "tool_result", dialogProcessId: "dp-1", content: "tool result" },
                 { id: "a2", role: "assistant", type: "message", dialogProcessId: "dp-2", content: "other answer" },
                 { id: "t3", role: "assistant", type: "tool_call", dialogProcessId: "dp-2", content: "other tool" },
               ],
@@ -376,7 +376,7 @@ test("session-routes: thinking-detail 仅按 dialogProcessId 返回本次对话�
   });
 
   await withTestServer(app, async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/internal/session/u1/s1/thinking-detail?dialogProcessId=dp-1&messageRoundId=round-a&roundId=round-a`);
+    const response = await fetch(`${baseUrl}/internal/session/u1/s1/thinking-detail?dialogProcessId=dp-1`);
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);

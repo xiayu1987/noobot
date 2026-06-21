@@ -253,14 +253,12 @@ export function patchAssistantFromWorkflowMessage(targetMessage = null, workflow
     ? targetMessage.realtimeLogs
     : [];
   const previousExecutionLogTotal = Number(targetMessage.executionLogTotal || 0);
-  const previousMessageRoundId = normalizeTrimmedString(targetMessage.messageRoundId);
   const previousHasFirstStreamEvent = targetMessage.hasFirstStreamEvent === true;
   Object.assign(targetMessage, workflowMessageItem);
   targetMessage.content = stripInternalEventPlaceholderLines(targetMessage.content);
   targetMessage.pending = previousPending;
   targetMessage.statusLabel = previousStatusLabel;
   targetMessage.realtimeLogs = previousRealtimeLogs;
-  targetMessage.messageRoundId = previousMessageRoundId || normalizeTrimmedString(workflowMessageItem?.messageRoundId);
   targetMessage.hasFirstStreamEvent = previousHasFirstStreamEvent || workflowMessageItem?.hasFirstStreamEvent === true;
   targetMessage.executionLogTotal = Math.max(
     previousExecutionLogTotal,

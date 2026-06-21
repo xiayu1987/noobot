@@ -82,22 +82,21 @@ function getMessageAttachmentMetas(messageItem = {}) {
   return transferMetas.length ? mergeAttachmentMetas(transferMetas, base) : base;
 }
 
-function getMessageRoundId(messageItem = {}) {
-  return String(messageItem?.messageRoundId || "").trim();
-}
-
-function isSameMessageRound(rootMessage = {}, candidateMessage = {}) {
-  const rootRoundId = getMessageRoundId(rootMessage);
-  if (!rootRoundId) return true;
-  return getMessageRoundId(candidateMessage) === rootRoundId;
-}
-
 function isFreshPendingAssistant(messageItem = {}) {
   return (
     String(messageItem?.role || "").trim() === "assistant" &&
     messageItem?.pending === true &&
     messageItem?.hasFirstStreamEvent !== true
   );
+}
+
+function isSameMessageRound(targetMessage = {}, candidateMessage = {}) {
+  const targetDialogProcessId = String(targetMessage?.dialogProcessId || "").trim();
+  const candidateDialogProcessId = String(candidateMessage?.dialogProcessId || "").trim();
+  if (targetDialogProcessId && candidateDialogProcessId) {
+    return targetDialogProcessId === candidateDialogProcessId;
+  }
+  return true;
 }
 
 function isHarnessPluginInjectedMessage(messageItem = {}) {
