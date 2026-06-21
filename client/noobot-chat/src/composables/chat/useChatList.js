@@ -168,6 +168,80 @@ export function useChatList({
     return true;
   }
 
+  function normalizeMessageContent(value = "") {
+    return String(value || "").trim();
+  }
+
+  function normalizeMessageRole(messageItem = {}) {
+    return normalizeMessageContent(messageItem?.role);
+  }
+
+  function buildMessageIdentity(messageItem = {}) {
+    return [
+      normalizeMessageRole(messageItem),
+      normalizeMessageContent(messageItem?.dialogProcessId || messageItem?.dialogId),
+      normalizeMessageContent(messageItem?.content),
+    ].join("|");
+  }
+
+  function findExistingMessageIndexForDetailMessage(existingMessages = [], detailMessageItem = {}) {
+    const detailRole = normalizeMessageRole(detailMessageItem);
+    const detailDialogProcessId = normalizeMessageContent(
+      detailMessageItem?.dialogProcessId || detailMessageItem?.dialogId,
+    );
+    const detailContent = normalizeMessageContent(detailMessageItem?.content);
+    if (!detailRole || (!detailDialogProcessId && !detailContent)) return -1;
+    const identity = buildMessageIdentity(detailMessageItem);
+    const exactIndex = existingMessages.findIndex(
+      (messageItem) => buildMessageIdentity(messageItem) === identity,
+    );
+    if (exactIndex >= 0) return exactIndex;
+    if (detailDialogProcessId) {
+      const dialogIndex = existingMessages.findIndex(
+        (messageItem) =>
+          normalizeMessageRole(messageItem) === detailRole &&
+          normalizeMessageContent(messageItem?.dialogProcessId || messageItem?.dialogId) ===
+            detailDialogProcessId,
+      );
+      if (dialogIndex >= 0) return dialogIndex;
+    }
+    if (detailRole === RoleEnum.USER && detailContent) {
+      for (let index = existingMessages.length - 1; index >= 0; index -= 1) {
+        const messageItem = existingMessages[index];
+        if (normalizeMessageRole(messageItem) !== RoleEnum.USER) continue;
+        if (normalizeMessageContent(messageItem?.content) !== detailContent) continue;
+        return index;
+      }
+    }
+    return -1;
+  }
+
+  function mergePreservedDetailMessages(existingMessages = [], detailMessages = []) {
+    if (!Array.isArray(existingMessages) || !Array.isArray(detailMessages) || !detailMessages.length) {
+      return;
+    }
+    const appendedIdentities = new Set(existingMessages.map((messageItem) => buildMessageIdentity(messageItem)));
+    for (const detailMessageItem of detailMessages) {
+      if (detailMessageItem?.workflowMessage === true) continue;
+      const detailIdentity = buildMessageIdentity(detailMessageItem);
+      const existingIndex = findExistingMessageIndexForDetailMessage(existingMessages, detailMessageItem);
+      if (existingIndex >= 0) {
+        const existingMessage = existingMessages[existingIndex];
+        const thinkingOpenNames = Array.isArray(existingMessage?.thinkingOpenNames)
+          ? existingMessage.thinkingOpenNames
+          : [];
+        Object.assign(existingMessage, detailMessageItem);
+        if (thinkingOpenNames.length) existingMessage.thinkingOpenNames = thinkingOpenNames;
+        existingMessage.pending = false;
+        appendedIdentities.add(detailIdentity);
+        continue;
+      }
+      if (!detailIdentity || appendedIdentities.has(detailIdentity)) continue;
+      existingMessages.push(detailMessageItem);
+      appendedIdentities.add(detailIdentity);
+    }
+  }
+
   function buildChildAttachmentMetasByParentDialogProcessId(
     sessionDocs = [],
     rootSessionId = "",
@@ -442,13 +516,14 @@ export function useChatList({
       const foldedDetailMessages = isSummaryDetail
         ? detailMessages.map((messageItem) => makeViewMessage(messageItem))
         : foldMessagesForView(detailMessages);
+      const existingMessages = Array.isArray(sessionItem.messages) ? sessionItem.messages : [];
+      mergePreservedDetailMessages(existingMessages, foldedDetailMessages);
       const workflowMessages = foldedDetailMessages.filter(
         (messageItem) =>
           String(messageItem?.role || "").trim() === RoleEnum.ASSISTANT &&
           messageItem?.workflowMessage === true,
       );
       if (workflowMessages.length) {
-        const existingMessages = Array.isArray(sessionItem.messages) ? sessionItem.messages : [];
         const existingWorkflowSignatures = new Set(
           existingMessages
             .filter((messageItem) => messageItem?.workflowMessage === true)
