@@ -51,6 +51,7 @@ export function applyStopRequestedState({
 
 export function applySendErrorState({
   error,
+  errorEventData,
   activeSession,
   botMessage,
   applyConversationState,
@@ -61,8 +62,11 @@ export function applySendErrorState({
   applyConversationState(
     {
       state: "error",
-      sessionId: String(activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
-      dialogProcessId: String(botMessage?.dialogProcessId || ""),
+      sessionId: String(
+        errorEventData?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || "",
+      ),
+      dialogProcessId: String(errorEventData?.dialogProcessId || botMessage?.dialogProcessId || ""),
+      sourceEvent: errorEventData ? "stream_error" : undefined,
     },
     { botMessage },
   );

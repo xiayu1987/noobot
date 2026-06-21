@@ -484,7 +484,11 @@ export function registerChatWebSocketServer(
 
         if (abortSignal?.aborted) {
           if (currentRunTimedOut) {
-            sendEvent("error", { error: `run timeout after ${runTimeoutMs}ms` });
+            sendEvent("error", {
+              error: `run timeout after ${runTimeoutMs}ms`,
+              sessionId: currentRunMeta?.sessionId || "",
+              dialogProcessId: currentRunMeta?.dialogProcessId || "",
+            });
             webSocket.close(1011, "timeout");
           } else {
             sendEvent("stopped", { message: translateText("ws.dialogStoppedByUser", currentLocale) });
@@ -505,7 +509,11 @@ export function registerChatWebSocketServer(
       } catch (error) {
         if (abortSignal?.aborted) {
           if (currentRunTimedOut) {
-            sendEvent("error", { error: error?.message || "run timeout" });
+            sendEvent("error", {
+              error: error?.message || "run timeout",
+              sessionId: currentRunMeta?.sessionId || "",
+              dialogProcessId: currentRunMeta?.dialogProcessId || "",
+            });
             webSocket.close(1011, "timeout");
           } else {
             sendEvent("stopped", { message: translateText("ws.dialogStoppedByUser", currentLocale) });
@@ -520,7 +528,11 @@ export function registerChatWebSocketServer(
           dialogProcessId: currentRunMeta?.dialogProcessId || "",
           error: error?.message || String(error),
         });
-        sendEvent("error", { error: error.message || translateText("ws.unknownError", currentLocale) });
+        sendEvent("error", {
+          error: error.message || translateText("ws.unknownError", currentLocale),
+          sessionId: currentRunMeta?.sessionId || "",
+          dialogProcessId: currentRunMeta?.dialogProcessId || "",
+        });
         webSocket.close(1011, "error");
       } finally {
         if (currentRunTimeoutTimer) {

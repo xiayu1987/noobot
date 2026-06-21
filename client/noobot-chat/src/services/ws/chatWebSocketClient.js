@@ -107,6 +107,13 @@ export function createChatWebSocketClient({
     }
   }
 
+  function createStreamEventError(data = {}) {
+    const error = new Error(data?.error || translateText("infra.websocketStreamError"));
+    error.event = StreamEventEnum.ERROR;
+    error.data = data || {};
+    return error;
+  }
+
   function trackReconnectData(data = {}) {
     const sessions = Array.isArray(data?.sessions) ? data.sessions : [];
     for (const sessionEntry of sessions) {
@@ -258,11 +265,6 @@ export function createChatWebSocketClient({
             const parsed = JSON.parse(String(messageEvent?.data || "{}"));
             const event = String(parsed?.event || "message");
             const data = parsed?.data || {};
-            if (event === StreamEventEnum.ERROR) {
-              throw new Error(
-                data?.error || translateText("infra.websocketStreamError"),
-              );
-            }
             trackIncomingEvent(data);
             // Clear seq on done/stopped
             if (event === StreamEventEnum.DONE || event === StreamEventEnum.STOPPED) {
@@ -271,6 +273,10 @@ export function createChatWebSocketClient({
               }
             }
             onEvent({ event, data });
+            if (event === StreamEventEnum.ERROR) {
+              finalize(() => reject(createStreamEventError(data)));
+              return;
+            }
             if (event === StreamEventEnum.DONE) {
               doneReceived = true;
               finalize(() => resolve());
