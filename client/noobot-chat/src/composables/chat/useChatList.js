@@ -408,10 +408,22 @@ export function useChatList({
     sessionItem.createdAt = mainSessionDoc.createdAt || sessionItem.createdAt;
     sessionItem.updatedAt = mainSessionDoc.updatedAt || sessionItem.updatedAt;
 
-    if (!preserveCurrentMessages) {
+    const currentRenderedMessages = Array.isArray(sessionItem.messages)
+      ? sessionItem.messages
+      : [];
+    const detailMessages = Array.isArray(mainSessionDoc.messages)
+      ? mainSessionDoc.messages
+      : [];
+    const shouldKeepCurrentMessagesForEmptyDetail =
+      !preserveCurrentMessages &&
+      currentRenderedMessages.length > 0 &&
+      detailMessages.length === 0 &&
+      isSameSessionIdentity(detailSessionId, activeSessionId.value);
+
+    if (!preserveCurrentMessages && !shouldKeepCurrentMessagesForEmptyDetail) {
       sessionItem.messages = isSummaryDetail
-        ? (mainSessionDoc.messages || []).map((messageItem) => makeViewMessage(messageItem))
-        : foldMessagesForView(mainSessionDoc.messages || []);
+        ? detailMessages.map((messageItem) => makeViewMessage(messageItem))
+        : foldMessagesForView(detailMessages);
       if (!isSummaryDetail) {
         mergeChildTurnAttachmentsIntoRootMessages({
           rootMessages: sessionItem.messages,
@@ -426,10 +438,10 @@ export function useChatList({
           messageItem.thinkingOpenNames = ["thinking-panel"];
         }
       }
-    } else {
+    } else if (preserveCurrentMessages) {
       const foldedDetailMessages = isSummaryDetail
-        ? (mainSessionDoc.messages || []).map((messageItem) => makeViewMessage(messageItem))
-        : foldMessagesForView(mainSessionDoc.messages || []);
+        ? detailMessages.map((messageItem) => makeViewMessage(messageItem))
+        : foldMessagesForView(detailMessages);
       const workflowMessages = foldedDetailMessages.filter(
         (messageItem) =>
           String(messageItem?.role || "").trim() === RoleEnum.ASSISTANT &&
@@ -463,6 +475,11 @@ export function useChatList({
           existingWorkflowSignatures.add(signature);
         }
       }
+    } else {
+      // The backend detail endpoint can be briefly stale right after a DONE event.
+      // Do not replace a non-empty active chat with an empty snapshot; otherwise
+      // the whole visible conversation disappears for one completed turn.
+      sessionItem.messages = currentRenderedMessages;
     }
 
     if (isSummaryDetail) {

@@ -55,6 +55,7 @@ export function useChatSession({
   isImageMime,
   classifyRealtimeLog,
   scrollBottom,
+  locateDoneMessage,
   notify = () => {},
   clearUploadSelection = () => {},
 }) {
@@ -209,6 +210,7 @@ export function useChatSession({
     isImageMime,
     classifyRealtimeLog,
     scrollBottom,
+    locateDoneMessage,
     activeSession,
     activeSessionId,
     sending,

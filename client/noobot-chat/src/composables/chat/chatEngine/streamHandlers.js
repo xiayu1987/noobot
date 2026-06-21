@@ -117,7 +117,7 @@ export function handleDoneStreamEvent({
   makeViewMessage,
   foldMessagesForView,
   mergeAssistantAttachmentMetas,
-  scrollBottom,
+  locateDoneMessage,
 }) {
   clearPendingInteraction();
   markFirstStreamEvent(botMessage);
@@ -175,7 +175,7 @@ export function handleDoneStreamEvent({
     foldMessagesForView,
     mergeAssistantAttachmentMetas,
   });
-  scrollBottom();
+  locateDoneMessage?.();
 }
 
 export function handleBasicStreamEvent(event, context = {}) {

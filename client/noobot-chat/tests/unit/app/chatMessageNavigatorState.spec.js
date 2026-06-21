@@ -69,6 +69,57 @@ describe("chatMessageNavigatorState", () => {
     });
   });
 
+  it("selects the last navigator item anchor and pushes its pseudo route", () => {
+    const navItems = [
+      { id: "chat-message-1" },
+      { id: "chat-message-2" },
+      { id: "chat-message-5" },
+    ];
+    const scrollToMessageAnchor = vi.fn();
+    const pushPseudoRoute = vi.fn();
+
+    selectChatMessageNavigatorItem({
+      item: navItems[navItems.length - 1],
+      currentMessageAnchorId: ref(""),
+      messageListPanelRef: ref({ getWrapRef: vi.fn(() => ({})), scrollToMessageAnchor }),
+      isMobile: ref(false),
+      mobileChatNavigatorVisible: ref(false),
+      activeSessionId: ref("session-last"),
+      pushPseudoRoute,
+    });
+
+    expect(scrollToMessageAnchor).toHaveBeenCalledWith("chat-message-5");
+    expect(pushPseudoRoute).toHaveBeenCalledWith({
+      sessionId: "session-last",
+      panel: "",
+      anchor: "chat-message-5",
+    });
+  });
+
+  it("safely handles an empty navigator item without throwing", () => {
+    const currentMessageAnchorId = ref("previous-anchor");
+    const scrollToMessageAnchor = vi.fn();
+    const pushPseudoRoute = vi.fn();
+
+    expect(() => selectChatMessageNavigatorItem({
+      item: null,
+      currentMessageAnchorId,
+      messageListPanelRef: ref({ scrollToMessageAnchor }),
+      isMobile: ref(false),
+      mobileChatNavigatorVisible: ref(false),
+      activeSessionId: ref("session-empty"),
+      pushPseudoRoute,
+    })).not.toThrow();
+
+    expect(currentMessageAnchorId.value).toBe("");
+    expect(scrollToMessageAnchor).toHaveBeenCalledWith("");
+    expect(pushPseudoRoute).toHaveBeenCalledWith({
+      sessionId: "session-empty",
+      panel: "",
+      anchor: "",
+    });
+  });
+
   it("opens mobile navigator and keeps the current anchor in the pseudo route", () => {
     const mobileChatNavigatorVisible = ref(false);
     const pushPseudoRoute = vi.fn();

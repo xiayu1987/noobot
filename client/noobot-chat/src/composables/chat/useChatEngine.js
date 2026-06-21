@@ -46,6 +46,7 @@ export function useChatEngine({
   isImageMime,
   classifyRealtimeLog,
   scrollBottom,
+  locateDoneMessage,
   activeSession,
   activeSessionId,
   sending,
@@ -449,7 +450,7 @@ export function useChatEngine({
             makeViewMessage,
             foldMessagesForView,
             mergeAssistantAttachmentMetas,
-            scrollBottom,
+            locateDoneMessage,
           });
         }
       });
