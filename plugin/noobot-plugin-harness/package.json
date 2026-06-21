@@ -13,7 +13,7 @@
     "check": "node -e \"import('./src/index.js').then(()=>console.log('ok')).catch(e=>{console.error(e);process.exit(1);})\""
   },
   "dependencies": {
-    "@langchain/core": "^1.1.48",
+    "@langchain/core": "^1.2.0",
     "zod": "^4.4.3"
   }
 }

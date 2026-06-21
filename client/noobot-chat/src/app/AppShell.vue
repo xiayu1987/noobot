@@ -7,18 +7,20 @@
 import { ref, watch, computed, nextTick, onMounted, onBeforeUnmount } from "vue";
 import { Tickets } from "@element-plus/icons-vue";
 import noobotLogo from "../shared/assets/noobot.svg";
-import WorkspacePanel from "../modules/settings/WorkspacePanel.vue";
-import UserSettingsPanel from "../modules/settings/UserSettingsPanel.vue";
-import ConfigParamsPanel from "../modules/settings/ConfigParamsPanel.vue";
-import UserInteractionForm from "../modules/composer/UserInteractionForm.vue";
-import ChatComposer from "../modules/composer/ChatComposer.vue";
-import ConversationStateDebugPanel from "../modules/debug/ConversationStateDebugPanel.vue";
 import ChatMainHeader from "./ChatMainHeader.vue";
-import ChatMessageListPanel from "./ChatMessageListPanel.vue";
 import ChatMessageNavigator from "./ChatMessageNavigator.vue";
 import { buildAppShellDrawerPanels } from "./state/drawerPanelsState";
 import ThinkingPanel from "../shared/message/ThinkingPanel.vue";
-import SessionSidebar from "../modules/session/SessionSidebar.vue";
+import {
+  ChatComposer,
+  ChatMessageListPanel,
+  ConfigParamsPanel,
+  ConversationStateDebugPanel,
+  SessionSidebar,
+  UserInteractionForm,
+  UserSettingsPanel,
+  WorkspacePanel,
+} from "./entrypoints";
 import { useApiConnection } from "../composables/infra/useApiConnection";
 import { useChatSession } from "../composables/chat/useChatSession";
 import { useUiFeedback } from "../composables/infra/useUiFeedback";
