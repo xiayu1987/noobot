@@ -52,6 +52,10 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
   channel.updatedAtMs = nowMs();
 
   upstreamSocket.on("open", () => {
+    if (isTerminalStatus(channel.status)) {
+      this.closeUpstreamChannel(channel, 1000, UPSTREAM_CLOSE_REASON.CLOSED);
+      return;
+    }
     channel.status = CHANNEL_STATUS.RUNNING;
     channel.updatedAtMs = nowMs();
     const payloadToSend =
@@ -85,7 +89,7 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
         this.markChannelTerminal(channel, CHANNEL_STATUS.STOPPED);
       } else if (eventName === CHANNEL_EVENT.ERROR) {
         this.markChannelTerminal(channel, CHANNEL_STATUS.ERROR);
-      } else {
+      } else if (!isTerminalStatus(channel.status)) {
         channel.status = CHANNEL_STATUS.RUNNING;
       }
     } catch (error) {
