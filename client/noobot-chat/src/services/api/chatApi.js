@@ -98,6 +98,17 @@ export async function getSessionFullDetailApi(
   );
 }
 
+export async function getSessionThinkingDetailApi(
+  { userId = "", sessionId = "", dialogProcessId = "" },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  const query = `dialogProcessId=${encodeURIComponent(String(dialogProcessId || "").trim())}`;
+  return runFetch(
+    `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/thinking-detail?${query}`,
+  );
+}
+
 export async function getWorkflowSessionDetailApi(
   { userId = "", sessionId = "", dialogId = "" },
   { fetcher } = {},

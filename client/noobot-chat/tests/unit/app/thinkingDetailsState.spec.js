@@ -32,6 +32,14 @@ describe("thinking details state", () => {
     })).toBe(2);
   });
 
+  it("counts summary thinking details when full log arrays are absent", () => {
+    expect(getThinkingDetailsCount({
+      role: "assistant",
+      hasThinkingDetails: true,
+      thinkingDetailCount: 4,
+    })).toBe(4);
+  });
+
   it("builds a translated title with the derived count", () => {
     const translate = vi.fn((key, params) => `${key}:${params.count}`);
 
@@ -52,6 +60,24 @@ describe("thinking details state", () => {
 
     expect(resolveFallbackThinkingDetailsPayload({ rawMessages: messages })).toEqual({
       messageItem: thinkingAssistant,
+      allMessages: messages,
+    });
+  });
+
+  it("resolves summary thinking placeholder messages from session-summary data", () => {
+    const summaryThinkingAssistant = {
+      role: "assistant",
+      content: "done",
+      hasThinkingDetails: true,
+      thinkingDetailCount: 3,
+    };
+    const messages = [
+      { role: "user", content: "hi" },
+      summaryThinkingAssistant,
+    ];
+
+    expect(resolveFallbackThinkingDetailsPayload({ messages })).toEqual({
+      messageItem: summaryThinkingAssistant,
       allMessages: messages,
     });
   });

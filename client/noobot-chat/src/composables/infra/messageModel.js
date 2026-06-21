@@ -142,6 +142,10 @@ function createMessageModel(messageItem = {}) {
         normalizeArray(messageItem.realtimeLogs).length,
     ),
     completedToolLogs: normalizeArray(messageItem.completedToolLogs),
+    hasThinkingDetails: messageItem.hasThinkingDetails === true,
+    thinkingDetailCount: Number(
+      messageItem?.thinkingDetailCount ?? messageItem?.thinking_detail_count ?? 0,
+    ),
     thinkingOpenNames: normalizeArray(messageItem.thinkingOpenNames),
     expandedDetailLogKeys: normalizeArray(messageItem.expandedDetailLogKeys),
     error: messageItem.error || "",
@@ -279,6 +283,12 @@ function foldConversationMessages(messages = [], buildView) {
       Number(currentMessage?.executionLogTotal || 0),
       normalizeArray(previousMessage?.realtimeLogs).length,
       normalizeArray(currentMessage?.realtimeLogs).length,
+    );
+    previousMessage.hasThinkingDetails =
+      previousMessage.hasThinkingDetails === true || currentMessage.hasThinkingDetails === true;
+    previousMessage.thinkingDetailCount = Math.max(
+      Number(previousMessage?.thinkingDetailCount || 0),
+      Number(currentMessage?.thinkingDetailCount || 0),
     );
     const currentAttachmentMetas = normalizeArray(currentMessage?.attachmentMetas);
     const previousAttachmentMetas = normalizeArray(previousMessage?.attachmentMetas);

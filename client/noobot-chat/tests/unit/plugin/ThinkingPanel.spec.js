@@ -140,12 +140,11 @@ describe("ThinkingPanel", () => {
       realtimeLogs: [],
       completedToolLogs,
     });
-    const executionPane = wrapper.findAll("el-tab-pane")[0];
-    const lines = executionPane.findAll(".execution-log-line");
+    const lines = wrapper.findAll(".execution-log-line");
     expect(lines).toHaveLength(10);
     expect(lines[0].text()).toBe("完成：执行命令：cmd-3");
     expect(lines[9].text()).toBe("完成：执行命令：cmd-12");
-    expect(executionPane.attributes("label")).toContain("12");
+    expect(wrapper.find("button").text()).toContain("12");
   });
 
   it("emits thinking details event from execution process detail button", async () => {
@@ -175,7 +174,98 @@ describe("ThinkingPanel", () => {
       allMessages: [],
     });
     expect(wrapper.find(".thinking-detail-drawer").exists()).toBe(false);
-    expect(wrapper.findAll("el-tab-pane")).toHaveLength(2);
+    expect(wrapper.findAll("el-tab-pane")).toHaveLength(0);
+  });
+
+  it("renders thinking entry for summary placeholder without inlined detail logs", async () => {
+    const messageItem = {
+      role: "assistant",
+      pending: false,
+      content: "done",
+      hasThinkingDetails: true,
+      thinkingDetailCount: 5,
+    };
+
+    const wrapper = mountThinkingPanel(messageItem);
+
+    expect(wrapper.findAll("el-tab-pane")).toHaveLength(0);
+    expect(wrapper.text()).toContain("Expand Thinking");
+    expect(wrapper.text()).toContain("Thinking Details (5)");
+    expect(wrapper.find("button").text()).toContain("5");
+    expect(wrapper.findAll(".execution-log-line")).toHaveLength(0);
+
+    const detailButton = wrapper.find("button");
+    await detailButton.trigger("click");
+
+    expect(wrapper.emitted("open-thinking-details")?.[0]?.[0]).toMatchObject({
+      messageItem,
+      allMessages: [],
+    });
+  });
+
+  it("shows injected messages from thinking-detail payload by dialogProcessId only", () => {
+    const wrapper = mountThinkingPanel(
+      {
+        role: "assistant",
+        pending: false,
+        dialogProcessId: "dialog-1",
+        messageRoundId: "assistant-round",
+        hasThinkingDetails: true,
+        thinkingDetailCount: 1,
+        completedToolLogs: [{ event: "tool_call", text: "read_file" }],
+      },
+      {
+        variant: "details",
+        allMessages: [
+          {
+            role: "user",
+            dialogProcessId: "dialog-1",
+            injectedMessage: true,
+            injectedBy: "harness-plugin",
+            content: "current injected context without round",
+          },
+          {
+            role: "user",
+            dialogProcessId: "dialog-2",
+            injectedMessage: true,
+            injectedBy: "harness-plugin",
+            content: "other dialog injected context",
+          },
+        ],
+      },
+    );
+
+    const detailPanes = wrapper.findAll("el-tab-pane");
+    expect(detailPanes).toHaveLength(2);
+    expect(detailPanes[1].attributes("label")).toContain("Injected Messages (1)");
+    expect(wrapper.text()).toContain("current injected context without round");
+    expect(wrapper.text()).not.toContain("other dialog injected context");
+  });
+
+  it("does not render injected messages as an outer tab in compact panel", () => {
+    const wrapper = mountThinkingPanel(
+      {
+        role: "assistant",
+        pending: false,
+        dialogProcessId: "dialog-1",
+        completedToolLogs: [{ event: "tool_call", text: "read_file" }],
+      },
+      {
+        allMessages: [
+          {
+            role: "user",
+            dialogProcessId: "dialog-1",
+            injectedMessage: true,
+            injectedBy: "harness-plugin",
+            content: "outer injected context",
+          },
+        ],
+      },
+    );
+
+    expect(wrapper.findAll("el-tab-pane")).toHaveLength(0);
+    expect(wrapper.text()).not.toContain("outer injected context");
+    expect(wrapper.text()).toContain("Expand Thinking");
   });
 
   it("renders all thinking logs in details variant without local drawer", () => {
@@ -193,14 +283,45 @@ describe("ThinkingPanel", () => {
     }, { variant: "details" });
 
     expect(wrapper.find(".thinking-detail-drawer").exists()).toBe(false);
-    expect(wrapper.findAll(".tab-pane")).toHaveLength(0);
-    expect(wrapper.find("header").text()).toContain("12");
-    expect(wrapper.find("header").text()).not.toContain("({count})");
+    const detailPanes = wrapper.findAll("el-tab-pane");
+    expect(detailPanes).toHaveLength(2);
+    expect(detailPanes[0].attributes("label")).toContain("12");
+    expect(detailPanes[0].attributes("label")).not.toContain("({count})");
     const detailLines = wrapper.findAll(".execution-log-line");
     expect(detailLines).toHaveLength(12);
     expect(detailLines[0].text()).toBe("完成：执行命令：cmd-1");
     expect(detailLines[11].text()).toBe("完成：执行命令：cmd-12");
     expect(wrapper.text()).not.toContain("思考明细 ({count})");
+  });
+
+  it("keeps details tabs header outside the scrollable tab pane bodies", () => {
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: false,
+      dialogProcessId: "dialog-1",
+      completedToolLogs: [{ event: "tool_call", text: "read_file" }],
+    }, {
+      variant: "details",
+      allMessages: [
+        {
+          role: "user",
+          dialogProcessId: "dialog-1",
+          injectedMessage: true,
+          injectedBy: "harness-plugin",
+          content: "injected context",
+        },
+      ],
+    });
+
+    expect(wrapper.find(".thinking-details-panel").exists()).toBe(true);
+    expect(wrapper.find(".thinking-details-tabs").exists()).toBe(true);
+
+    const panes = wrapper.findAll("el-tab-pane");
+    expect(panes).toHaveLength(2);
+    expect(panes[0].find(".thinking-details-scroll-body.thinking-details-log-body").exists()).toBe(true);
+    expect(panes[1].find(".thinking-details-scroll-body.thinking-details-injected-body").exists()).toBe(true);
+    expect(panes[0].find(".execution-log-line").text()).toContain("read_file");
+    expect(panes[1].text()).toContain("injected context");
   });
 
   it("shows cumulative execution count while rendering only latest ten realtime logs", () => {
@@ -219,13 +340,12 @@ describe("ThinkingPanel", () => {
       completedToolLogs: [],
     });
 
-    const executionPane = wrapper.findAll("el-tab-pane")[0];
-    const lines = executionPane.findAll(".execution-log-line");
+    const lines = wrapper.findAll(".execution-log-line");
 
     expect(lines).toHaveLength(10);
     expect(lines[0].text()).toBe("log-3");
     expect(lines[9].text()).toBe("log-12");
-    expect(executionPane.attributes("label")).toContain("12");
+    expect(wrapper.find("button").text()).toContain("12");
   });
 
   it("does not backfill injected messages from previous round while current assistant is pending", () => {
