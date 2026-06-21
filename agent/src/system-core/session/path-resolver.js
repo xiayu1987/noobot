@@ -33,6 +33,10 @@ export class PathResolver {
     return path.join(this.sessionRoot(basePath), "session-tree.json");
   }
 
+  sessionsSummaryFile(basePath = "") {
+    return path.join(this.sessionRoot(basePath), "sessions.json");
+  }
+
   deletedSessionMarkerFile(basePath = "") {
     return path.join(this.sessionRoot(basePath), ".deleted-sessions.json");
   }

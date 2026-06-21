@@ -9,6 +9,94 @@ import { ERROR_CODE } from "../../error/constants.js";
 import { fsMkdir, fsReaddir, fsRm } from "../../store/fs-adapter.js";
 import { normalizeSessionEntity } from "../entities/session-entity.js";
 
+function buildSessionSummary(session = {}, { depth = 0 } = {}) {
+  const sessionId = String(session?.sessionId || "").trim();
+  const messages = Array.isArray(session?.messages) ? session.messages : [];
+  const firstUserMessage = messages.find(
+    (messageItem) =>
+      messageItem?.injectedMessage !== true &&
+      String(messageItem?.role || "").trim().toLowerCase() === "user" &&
+      String(messageItem?.content || "").trim(),
+  );
+  const lastMessage = messages.length ? buildMessageSummary(messages[messages.length - 1]) : null;
+  return {
+    sessionId,
+    parentSessionId: String(session?.parentSessionId || "").trim(),
+    caller: String(session?.caller || "user").trim() || "user",
+    currentTaskId: String(session?.currentTaskId || "").trim(),
+    createdAt: String(session?.createdAt || "").trim(),
+    updatedAt: String(session?.updatedAt || "").trim(),
+    depth: Number.isFinite(Number(depth)) ? Number(depth) : 0,
+    title: firstUserMessage
+      ? String(firstUserMessage.content || "").slice(0, 20)
+      : sessionId.slice(0, 8),
+    messageCount: messages.length,
+    lastMessage,
+  };
+}
+
+function buildMessageSummary(message = {}) {
+  if (!message || typeof message !== "object" || Array.isArray(message)) return null;
+  const summary = {
+    role: String(message?.role || "").trim(),
+    content: message?.content || "",
+    type: String(message?.type || "").trim(),
+    dialogProcessId: String(message?.dialogProcessId || "").trim(),
+    parentDialogProcessId: String(message?.parentDialogProcessId || "").trim(),
+    taskId: String(message?.taskId || "").trim(),
+    taskStatus: String(message?.taskStatus || "").trim(),
+    modelAlias: String(message?.modelAlias || "").trim(),
+    modelName: String(message?.modelName || "").trim(),
+    summarized: message?.summarized === true,
+    ts: String(message?.ts || "").trim(),
+  };
+  for (const key of [
+    "injectedMessage",
+    "injectedBy",
+    "injectedMessageType",
+    "frontendUserMessage",
+    "isMonotonic",
+    "monotonic",
+    "monotonicState",
+    "stopState",
+    "state",
+    "status",
+    "channelState",
+    "pluginMessage",
+    "tool_call_id",
+    "toolName",
+  ]) {
+    if (message?.[key] !== undefined) summary[key] = message[key];
+  }
+  return Object.fromEntries(Object.entries(summary).filter(([, value]) => value !== ""));
+}
+
+function normalizeSessionsSummaryPayload(payload = {}, now = () => new Date().toISOString()) {
+  const source = Array.isArray(payload?.sessions) ? payload.sessions : [];
+  const sessions = source
+    .filter((item) => item && typeof item === "object" && !Array.isArray(item))
+    .map((item) => ({
+      sessionId: String(item?.sessionId || "").trim(),
+      parentSessionId: String(item?.parentSessionId || "").trim(),
+      caller: String(item?.caller || "user").trim() || "user",
+      currentTaskId: String(item?.currentTaskId || "").trim(),
+      createdAt: String(item?.createdAt || "").trim(),
+      updatedAt: String(item?.updatedAt || "").trim(),
+      depth: Number.isFinite(Number(item?.depth)) ? Number(item.depth) : 0,
+      title: String(item?.title || "").trim() || String(item?.sessionId || "").trim().slice(0, 8),
+      messageCount: Number.isFinite(Number(item?.messageCount)) ? Number(item.messageCount) : 0,
+      lastMessage:
+        item?.lastMessage && typeof item.lastMessage === "object" && !Array.isArray(item.lastMessage)
+          ? item.lastMessage
+          : null,
+    }))
+    .filter((item) => item.sessionId);
+  return {
+    sessions,
+    updatedAt: String(payload?.updatedAt || "").trim() || now(),
+  };
+}
+
 export class FileSystemSessionRepository {
   constructor({
     pathResolver,
@@ -45,6 +133,98 @@ export class FileSystemSessionRepository {
       return this.pathResolver.deletedSessionMarkerFile(this._basePath(userId));
     }
     return `${this._sessionRoot(userId)}/.deleted-sessions.json`;
+  }
+
+  _sessionsSummaryFile(userId = "") {
+    if (typeof this.pathResolver?.sessionsSummaryFile === "function") {
+      return this.pathResolver.sessionsSummaryFile(this._basePath(userId));
+    }
+    return `${this._sessionRoot(userId)}/sessions.json`;
+  }
+
+  _sortSummaries(sessions = []) {
+    return [...sessions].sort(
+      (leftSession, rightSession) =>
+        new Date(rightSession.updatedAt || 0).getTime() -
+        new Date(leftSession.updatedAt || 0).getTime(),
+    );
+  }
+
+  _withSummaryDepth(session = {}, sessionTree = null) {
+    const sessionId = String(session?.sessionId || "").trim();
+    if (!sessionId || !sessionTree?.nodes?.[sessionId]) return buildSessionSummary(session, { depth: 0 });
+    const visited = new Set();
+    let depth = 0;
+    let currentId = sessionId;
+    while (currentId && !visited.has(currentId) && sessionTree?.nodes?.[currentId]) {
+      visited.add(currentId);
+      depth += 1;
+      currentId = String(sessionTree.nodes[currentId]?.parentSessionId || "").trim();
+    }
+    return buildSessionSummary(session, { depth });
+  }
+
+  async readSessionsSummary(userId = "") {
+    const normalizedUserId = String(userId || "").trim();
+    if (!normalizedUserId) return { sessions: [], updatedAt: this.now() };
+    const payload = await this.storageService.readJson(
+      this._sessionsSummaryFile(normalizedUserId),
+      { sessions: [], updatedAt: this.now() },
+    );
+    return normalizeSessionsSummaryPayload(payload, this.now);
+  }
+
+  async writeSessionsSummary(userId = "", sessions = []) {
+    const normalizedUserId = String(userId || "").trim();
+    if (!normalizedUserId) return { sessions: [], updatedAt: this.now() };
+    await this.storageService.ensureRuntimeDirsByBasePath(this._basePath(normalizedUserId));
+    const payload = normalizeSessionsSummaryPayload(
+      { sessions: this._sortSummaries(sessions), updatedAt: this.now() },
+      this.now,
+    );
+    await this.storageService.writeJsonAtomic(
+      this._sessionsSummaryFile(normalizedUserId),
+      payload,
+    );
+    return payload;
+  }
+
+  async upsertSessionSummary(userId = "", session = {}, { sessionTree = null } = {}) {
+    const summary = this._withSummaryDepth(session, sessionTree);
+    if (!summary.sessionId) return null;
+    const current = await this.readSessionsSummary(userId);
+    const nextMap = new Map(current.sessions.map((item) => [item.sessionId, item]));
+    nextMap.set(summary.sessionId, summary);
+    await this.writeSessionsSummary(userId, Array.from(nextMap.values()));
+    return summary;
+  }
+
+  async removeSessionSummaries(userId = "", sessionIds = []) {
+    const ids = new Set(
+      (Array.isArray(sessionIds) ? sessionIds : [sessionIds])
+        .map((item) => String(item || "").trim())
+        .filter(Boolean),
+    );
+    if (!ids.size) return 0;
+    const current = await this.readSessionsSummary(userId);
+    const next = current.sessions.filter((item) => !ids.has(item.sessionId));
+    if (next.length === current.sessions.length) return 0;
+    await this.writeSessionsSummary(userId, next);
+    return current.sessions.length - next.length;
+  }
+
+  async rebuildSessionsSummary(userId = "", { sessionTree = null } = {}) {
+    const tree = sessionTree || null;
+    const treeSessionIds = Object.keys(tree?.nodes || {});
+    const sessionIds = treeSessionIds.length ? treeSessionIds : await this.listSessionIds(userId);
+    const summaries = [];
+    for (const sessionId of sessionIds) {
+      const parentSessionId = String(tree?.nodes?.[sessionId]?.parentSessionId || "").trim();
+      const session = await this.findById(userId, sessionId, parentSessionId);
+      if (!session) continue;
+      summaries.push(this._withSummaryDepth(session, tree));
+    }
+    return this.writeSessionsSummary(userId, summaries);
   }
 
   async _readDeletedSessions(userId = "") {
@@ -123,6 +303,7 @@ export class FileSystemSessionRepository {
       marked += 1;
     }
     await this._writeDeletedSessions(normalizedUserId, nextSessions);
+    await this.removeSessionSummaries(normalizedUserId, ids);
     return marked;
   }
 
@@ -184,22 +365,21 @@ export class FileSystemSessionRepository {
     await fsMkdir(sessionDir, { recursive: true });
 
     if (!(await this.storageService.exists(sessionFile))) {
-      await this.storageService.writeJson(
-        sessionFile,
-        normalizeSessionEntity(
-          {
-            sessionId,
-            parentSessionId: resolvedParentSessionId || "",
-            caller: meta?.caller || "user",
-            modelAlias: meta?.modelAlias || "",
-            currentTaskId: "",
-            shortMemoryCheckpoint: 0,
-            messages: [],
-            selectedConnectors: {},
-          },
-          { now: this.now, sessionId, parentSessionId: resolvedParentSessionId || "" },
-        ),
+      const payload = normalizeSessionEntity(
+        {
+          sessionId,
+          parentSessionId: resolvedParentSessionId || "",
+          caller: meta?.caller || "user",
+          modelAlias: meta?.modelAlias || "",
+          currentTaskId: "",
+          shortMemoryCheckpoint: 0,
+          messages: [],
+          selectedConnectors: {},
+        },
+        { now: this.now, sessionId, parentSessionId: resolvedParentSessionId || "" },
       );
+      await this.storageService.writeJson(sessionFile, payload);
+      await this.upsertSessionSummary(userId, payload);
     }
     return true;
   }
@@ -252,6 +432,7 @@ export class FileSystemSessionRepository {
       { now: this.now, sessionId, parentSessionId: resolvedParentSessionId || "" },
     );
     await this.storageService.writeJson(sessionFile, payload);
+    await this.upsertSessionSummary(userId, payload);
     return true;
   }
 
@@ -262,6 +443,7 @@ export class FileSystemSessionRepository {
       parentSessionId,
     );
     await fsRm(sessionDir, { recursive: true, force: true });
+    await this.removeSessionSummaries(userId, [sessionId]);
     return true;
   }
 }

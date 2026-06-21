@@ -177,6 +177,10 @@ export function createSessionFacade(runtime = {}) {
       return sessionCrudService.getAllSessionsData({ userId });
     },
 
+    async getAllSessionSummaries({ userId }) {
+      return sessionCrudService.getAllSessionSummaries({ userId });
+    },
+
     async listSessionIds({ userId }) {
       return sessionCrudService.listSessionIds({ userId });
     },

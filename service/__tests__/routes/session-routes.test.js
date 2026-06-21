@@ -207,6 +207,56 @@ test("session-routes: 插件诊断接口返回发现/加载/错误信息", async
   });
 });
 
+test("session-routes: sessions 列表只读取并返回概要", async () => {
+  const app = express();
+  let fullDataCalled = false;
+  registerSessionRoutes(app, {
+    bot: {
+      session: {
+        getSessionData: async () => ({}),
+        getRootSessionId: async () => "",
+        deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
+        getAllSessionsData: async () => {
+          fullDataCalled = true;
+          return [{ sessionId: "full", messages: [{ role: "user", content: "full" }] }];
+        },
+        getAllSessionSummaries: async () => [
+          {
+            sessionId: "s1",
+            parentSessionId: "",
+            caller: "user",
+            currentTaskId: "t1",
+            createdAt: "2026-05-14T00:00:00.000Z",
+            updatedAt: "2026-05-14T00:01:00.000Z",
+            depth: 1,
+            title: "hello",
+            messageCount: 2,
+            lastMessage: { role: "assistant", content: "ok" },
+          },
+        ],
+      },
+      getAttachmentById: async () => null,
+    },
+    handleChat: (_req, res) => res.json({ ok: true }),
+    getConnectorChannelStore: () => ({}),
+    getConnectorHistoryStore: () => ({}),
+    translateText: () => "",
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/internal/sessions/u1`);
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+    assert.equal(fullDataCalled, false);
+    assert.equal(payload.sessions.length, 1);
+    assert.equal(payload.sessions[0].sessionId, "s1");
+    assert.equal("messages" in payload.sessions[0], false);
+    assert.equal("sessionDocs" in payload.sessions[0], false);
+    assert.equal("rawMessages" in payload.sessions[0], false);
+  });
+});
+
 test("session-routes: 删除 session 时清理 harness 运行记录", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-session-route-harness-"));
   const runsDir = path.join(basePath, "runtime", "harness", "runs");

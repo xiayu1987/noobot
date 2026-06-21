@@ -183,7 +183,7 @@ export function registerSessionRoutes(
     "/internal/sessions/:userId",
     jsonRoute(async (req, res) => {
       const { userId } = req.params;
-      const sessions = await bot.session.getAllSessionsData({ userId });
+      const sessions = await bot.session.getAllSessionSummaries({ userId });
       res.json({ ok: true, userId, sessions });
     }),
   );
