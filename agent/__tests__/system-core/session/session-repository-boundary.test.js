@@ -209,9 +209,12 @@ test("session display summary should keep chat view lightweight and rebuild stal
     });
     await runtime.sessionCrudService.ensureSession(userId, "B", "A");
 
-    const longUserContent = `show attachment ${"user-long-content-".repeat(400)}`;
-    const longAssistantContent = `final answer ${"assistant-long-content-".repeat(400)}`;
-    const longWorkflowContent = `workflow final ${"workflow-long-content-".repeat(400)}`;
+    const userContentTail = "__USER_CONTENT_COMPLETE_TAIL__";
+    const assistantContentTail = "__ASSISTANT_CONTENT_COMPLETE_TAIL__";
+    const workflowContentTail = "__WORKFLOW_CONTENT_COMPLETE_TAIL__";
+    const longUserContent = `show attachment ${"user-long-content-".repeat(400)}${userContentTail}`;
+    const longAssistantContent = `final answer ${"assistant-long-content-".repeat(400)}${assistantContentTail}`;
+    const longWorkflowContent = `workflow final ${"workflow-long-content-".repeat(400)}${workflowContentTail}`;
 
     const sessionB = await runtime.repositories.sessionRepository.findById(userId, "B", "A");
     sessionB.messages = [
@@ -291,11 +294,15 @@ test("session display summary should keep chat view lightweight and rebuild stal
 
     const userMessage = summary.messages.find((item) => item.id === "u1");
     assert.equal(userMessage.content, longUserContent);
+    assert.equal(userMessage.content.endsWith(userContentTail), true);
+    assert.equal(userMessage.content.includes(`${userContentTail}…`), false);
     assert.deepEqual(userMessage.attachmentMetas, [
       { id: "att-1", name: "a.txt", type: "text/plain", size: 12, owner: "", url: "", previewUrl: "" },
     ]);
     const assistantMessage = summary.messages.find((item) => item.id === "a1");
     assert.equal(assistantMessage.content, longAssistantContent);
+    assert.equal(assistantMessage.content.endsWith(assistantContentTail), true);
+    assert.equal(assistantMessage.content.includes(`${assistantContentTail}…`), false);
     assert.equal(assistantMessage.hasThinkingDetails, true);
     assert.equal(assistantMessage.thinkingDetailCount, 2);
     assert.equal("realtimeLogs" in assistantMessage, false);
@@ -303,6 +310,8 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal("rawMessages" in assistantMessage, false);
     const workflowMessage = summary.messages.find((item) => item.id === "w1");
     assert.equal(workflowMessage.content, longWorkflowContent);
+    assert.equal(workflowMessage.content.endsWith(workflowContentTail), true);
+    assert.equal(workflowMessage.content.includes(`${workflowContentTail}…`), false);
     assert.equal(workflowMessage.pluginMeta.source, "plugin-test");
     assert.equal(workflowMessage.pluginMeta.nodeName, "Done");
     assert.equal("internalState" in workflowMessage.pluginMeta, false);
