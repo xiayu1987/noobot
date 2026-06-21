@@ -13,7 +13,29 @@ import { DEFAULT_WORKFLOW_DENY_TOOL_NAMES, normalizeOptions } from "../src/core/
 import { createRegisterNoobotPlugin } from "../src/core/plugin.js";
 import { createRegisterWorkflowHooks } from "../src/core/hooks.js";
 import { PLUGIN_NAME, WORKFLOW_BOT_HOOK_POINTS, WORKFLOW_PLUGIN_DEFAULTS } from "../src/core/constants.js";
+import { getWorkflowDefaultSemanticPrompt } from "../src/core/i18n.js";
 import { parseWorkflowDslText } from "../src/protocol/text-protocol.js";
+
+
+test("default semantic prompt documents closed state-node constructs", () => {
+  const zh = getWorkflowDefaultSemanticPrompt("zh-CN");
+  assert.match(zh, /结构约束/);
+  assert.match(zh, /流程边界与并发控制状态节点必须形成闭合结构/);
+  assert.match(zh, /stateType=start 与 stateType=end 作为起止边界/);
+  assert.match(zh, /stateType=branch 并发分叉/);
+  assert.match(zh, /stateType=merge 汇聚/);
+  assert.match(zh, /branch -> actions -> merge 的闭合并发段/);
+  assert.match(zh, /避免悬空 branch 或 merge/);
+
+  const en = getWorkflowDefaultSemanticPrompt("en-US");
+  assert.match(en, /Structural constraints/);
+  assert.match(en, /must form closed constructs/);
+  assert.match(en, /stateType=start and stateType=end as start\/end boundaries/);
+  assert.match(en, /stateType=branch parallel split/);
+  assert.match(en, /stateType=merge/);
+  assert.match(en, /closed branch -> actions -> merge segment/);
+  assert.match(en, /dangling branch or merge/);
+});
 
 function createMockBotHookManager() {
   const listeners = new Map();
