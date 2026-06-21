@@ -278,6 +278,77 @@ describe("useChatList", () => {
     expect(session.messages[0].content).toBe("pending local");
   });
 
+  it("applySessionDetail with preserveCurrentMessages replaces matching local user instead of duplicating it", () => {
+    const { api, refs } = createUseChatListFixture();
+    const localUserMessage = {
+      role: RoleEnum.USER,
+      content: "edited question",
+      pending: true,
+    };
+    const localAssistantMessage = {
+      role: RoleEnum.ASSISTANT,
+      content: "pending answer",
+      dialogProcessId: "dp-edited",
+      pending: true,
+    };
+    const session = {
+      id: "local-edited",
+      backendSessionId: "backend-edited",
+      title: "session",
+      isLocal: true,
+      loaded: true,
+      messages: [localUserMessage, localAssistantMessage],
+      rawMessages: [],
+      sessionDocs: [],
+      connectorPanelState: { selectedConnectors: {} },
+      createdAt: "2026-05-14T00:00:00.000Z",
+      updatedAt: "2026-05-14T00:00:00.000Z",
+      currentTaskId: "",
+      currentTaskStatus: "idle",
+      messageCount: 2,
+      lastMessage: localAssistantMessage,
+    };
+    refs.sessions.value.push(session);
+    refs.activeSessionId.value = "local-edited";
+
+    api.applySessionDetail(
+      {
+        sessionId: "backend-edited",
+        sessions: [
+          {
+            sessionId: "backend-edited",
+            currentTaskId: "",
+            createdAt: "2026-05-14T00:00:00.000Z",
+            updatedAt: "2026-05-14T00:02:00.000Z",
+            messages: [
+              {
+                role: RoleEnum.USER,
+                content: "edited question",
+                dialogProcessId: "dp-edited",
+              },
+              {
+                role: RoleEnum.ASSISTANT,
+                content: "final answer",
+                dialogProcessId: "dp-edited",
+              },
+            ],
+          },
+        ],
+      },
+      { preserveCurrentMessages: true },
+    );
+
+    const userMessages = session.messages.filter((message) => message.role === RoleEnum.USER);
+    expect(userMessages).toHaveLength(1);
+    expect(userMessages[0]).toBe(localUserMessage);
+    expect(userMessages[0].dialogProcessId).toBe("dp-edited");
+    expect(userMessages[0].pending).toBe(false);
+    expect(session.messages).toHaveLength(2);
+    expect(session.messages[1]).toBe(localAssistantMessage);
+    expect(session.messages[1].content).toBe("final answer");
+    expect(session.messageCount).toBe(2);
+  });
+
   it("applySessionDetail keeps active messages when backend detail is briefly empty", () => {
     const { api, refs } = createUseChatListFixture();
     const currentMessages = [

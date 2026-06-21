@@ -191,10 +191,24 @@ export function useChatEngine({
   function findMessageIndex(targetMessage = {}, messages = []) {
     const targetId = normalizeTrimmedString(targetMessage?.id || targetMessage?.messageId);
     const targetTs = targetMessage?.ts;
+    const targetDialogProcessId = getDialogProcessId(targetMessage);
+    const targetRole = normalizeTrimmedString(targetMessage?.role).toLowerCase();
+    const targetContent = normalizeTrimmedString(targetMessage?.content);
     return messages.findIndex((message) => {
       if (message === targetMessage) return true;
       if (targetId && normalizeTrimmedString(message?.id || message?.messageId) === targetId) return true;
-      return targetTs !== undefined && message?.ts === targetTs;
+      if (targetTs !== undefined && message?.ts === targetTs) return true;
+      if (
+        targetDialogProcessId &&
+        getDialogProcessId(message) === targetDialogProcessId &&
+        (!targetRole || normalizeTrimmedString(message?.role).toLowerCase() === targetRole)
+      ) return true;
+      return Boolean(
+        targetRole &&
+        targetContent &&
+        normalizeTrimmedString(message?.role).toLowerCase() === targetRole &&
+        normalizeTrimmedString(message?.content) === targetContent,
+      );
     });
   }
 
@@ -234,6 +248,164 @@ export function useChatEngine({
       : [];
     if (!isUserMessage(targetMessage)) return -1;
     return findMessageIndex(targetMessage, messages);
+  }
+
+  function createRemovedTurnPredicate(anchorMessage = {}, removedMessages = []) {
+    const anchorId = normalizeTrimmedString(anchorMessage?.id || anchorMessage?.messageId);
+    const anchorTs = anchorMessage?.ts;
+    const anchorDialogProcessId = getDialogProcessId(anchorMessage);
+    const anchorContent = normalizeTrimmedString(anchorMessage?.content);
+    const anchorRole = normalizeTrimmedString(anchorMessage?.role).toLowerCase();
+    const removedIds = new Set(
+      removedMessages
+        .map((message) => normalizeTrimmedString(message?.id || message?.messageId))
+        .filter(Boolean),
+    );
+    const removedDialogProcessIds = new Set(
+      removedMessages
+        .map((message) => getDialogProcessId(message))
+        .filter(Boolean),
+    );
+    return (message = {}) => {
+      if (message === anchorMessage) return true;
+      const messageId = normalizeTrimmedString(message?.id || message?.messageId);
+      if (messageId && (messageId === anchorId || removedIds.has(messageId))) return true;
+      if (anchorTs !== undefined && message?.ts === anchorTs) return true;
+      const messageDialogProcessId = getDialogProcessId(message);
+      if (
+        messageDialogProcessId &&
+        (messageDialogProcessId === anchorDialogProcessId || removedDialogProcessIds.has(messageDialogProcessId))
+      ) return true;
+      return Boolean(
+        anchorRole &&
+        anchorContent &&
+        normalizeTrimmedString(message?.role).toLowerCase() === anchorRole &&
+        normalizeTrimmedString(message?.content) === anchorContent
+      );
+    };
+  }
+
+  function createStableRemovedTurnPredicate(anchorMessage = {}, removedMessages = []) {
+    const anchorId = normalizeTrimmedString(anchorMessage?.id || anchorMessage?.messageId);
+    const anchorTs = anchorMessage?.ts;
+    const anchorDialogProcessId = getDialogProcessId(anchorMessage);
+    const removedIds = new Set(
+      removedMessages
+        .map((message) => normalizeTrimmedString(message?.id || message?.messageId))
+        .filter(Boolean),
+    );
+    const removedDialogProcessIds = new Set(
+      removedMessages
+        .map((message) => getDialogProcessId(message))
+        .filter(Boolean),
+    );
+    return (message = {}) => {
+      if (message === anchorMessage) return true;
+      const messageId = normalizeTrimmedString(message?.id || message?.messageId);
+      if (messageId && (messageId === anchorId || removedIds.has(messageId))) return true;
+      if (anchorTs !== undefined && message?.ts === anchorTs) return true;
+      const messageDialogProcessId = getDialogProcessId(message);
+      return Boolean(
+        messageDialogProcessId &&
+        (messageDialogProcessId === anchorDialogProcessId || removedDialogProcessIds.has(messageDialogProcessId))
+      );
+    };
+  }
+
+  function createFinalRemovedTurnPredicate(anchorMessage = {}, removedMessages = []) {
+    const anchorId = normalizeTrimmedString(anchorMessage?.id || anchorMessage?.messageId);
+    const anchorTs = anchorMessage?.ts;
+    const removedIds = new Set(
+      removedMessages
+        .map((message) => normalizeTrimmedString(message?.id || message?.messageId))
+        .filter(Boolean),
+    );
+    const removedTsValues = new Set(
+      removedMessages
+        .map((message) => message?.ts)
+        .filter((value) => value !== undefined && value !== null),
+    );
+    const removedReferences = new Set(removedMessages.filter(Boolean));
+    return (message = {}) => {
+      if (message === anchorMessage || removedReferences.has(message)) return true;
+      const messageId = normalizeTrimmedString(message?.id || message?.messageId);
+      if (messageId && (messageId === anchorId || removedIds.has(messageId))) return true;
+      if (anchorTs !== undefined && anchorTs !== null && message?.ts === anchorTs) return true;
+      return removedTsValues.has(message?.ts);
+    };
+  }
+
+  function pruneStaleMessagesAfterResend(
+    anchorMessage = {},
+    originalStartIndex = -1,
+    removedMessages = [],
+    options = {},
+  ) {
+    const session = activeSession.value;
+    if (!session || originalStartIndex < 0) return false;
+    const messages = Array.isArray(session.messages) ? session.messages : [];
+    const isRemovedTurnMessage = createRemovedTurnPredicate(anchorMessage, removedMessages);
+    const finalOnly = options.finalOnly === true;
+    const isStableRemovedTurnMessage = finalOnly
+      ? createFinalRemovedTurnPredicate(anchorMessage, removedMessages)
+      : createStableRemovedTurnPredicate(anchorMessage, removedMessages);
+    const findAppendedResendStartIndex = (sourceMessages = []) => {
+      if (!Array.isArray(sourceMessages) || sourceMessages.length <= originalStartIndex) return -1;
+      for (let index = originalStartIndex; index < sourceMessages.length; index += 1) {
+        const message = sourceMessages[index];
+        if (isUserMessage(message) && !isRemovedTurnMessage(message)) {
+          return index;
+        }
+      }
+      return -1;
+    };
+    const pruneMessages = (sourceMessages = []) => {
+      const appendedResendStartIndex = findAppendedResendStartIndex(sourceMessages);
+      const kept = [];
+      let changed = false;
+      sourceMessages.forEach((message, index) => {
+        if (
+          index >= originalStartIndex &&
+          (
+            appendedResendStartIndex < 0 ||
+            index < appendedResendStartIndex ||
+            isStableRemovedTurnMessage(message)
+          ) &&
+          (finalOnly ? isStableRemovedTurnMessage(message) : isRemovedTurnMessage(message))
+        ) {
+          changed = true;
+          return;
+        }
+        kept.push(message);
+      });
+      return { kept, changed };
+    };
+    const messagesResult = pruneMessages(messages);
+    if (messagesResult.changed) session.messages = messagesResult.kept;
+    let rawMessagesChanged = false;
+    if (Array.isArray(session.rawMessages)) {
+      const rawMessagesResult = pruneMessages(session.rawMessages);
+      if (rawMessagesResult.changed) session.rawMessages = rawMessagesResult.kept;
+      rawMessagesChanged = rawMessagesResult.changed;
+    }
+    if (messagesResult.changed || rawMessagesChanged) {
+      syncSessionMessageSummary(session);
+      clearPendingInteraction?.();
+    }
+    return messagesResult.changed || rawMessagesChanged;
+  }
+
+  function removeMessageFromListByReference(messages = [], targetMessage = null) {
+    if (!Array.isArray(messages) || !targetMessage) return { kept: messages, removed: false };
+    let removed = false;
+    const kept = messages.filter((message) => {
+      if (message === targetMessage) {
+        removed = true;
+        return false;
+      }
+      return true;
+    });
+    return { kept, removed };
   }
 
   function buildMonotonicMessageAnchor(targetMessage = {}) {
@@ -293,10 +465,15 @@ export function useChatEngine({
     const removedMessages = messages.slice(startIndex);
     session.messages = messages.slice(0, startIndex);
     if (Array.isArray(session.rawMessages)) {
-      const removedSet = new Set(removedMessages);
-      session.rawMessages = session.rawMessages.filter((message) => !removedSet.has(message));
-      if (session.rawMessages.length > session.messages.length) {
-        session.rawMessages = session.rawMessages.slice(0, session.messages.length);
+      const rawStartIndex = findMessageIndex(userTargetMessage, session.rawMessages);
+      if (rawStartIndex >= 0) {
+        session.rawMessages = session.rawMessages.slice(0, rawStartIndex);
+      } else {
+        const removedSet = new Set(removedMessages);
+        session.rawMessages = session.rawMessages.filter((message) => !removedSet.has(message));
+        if (session.rawMessages.length > session.messages.length) {
+          session.rawMessages = session.rawMessages.slice(0, session.messages.length);
+        }
       }
     }
     syncSessionMessageSummary(session);
@@ -343,10 +520,27 @@ export function useChatEngine({
     const previousLastMessage = session?.lastMessage;
     const previousUpdatedAt = session?.updatedAt;
     const previousInput = input.value;
+    const originalCascadeStartIndex = findMessageCascadeStartIndex(userTargetMessage);
+    const removedMessagesBeforeResend = Array.isArray(session?.messages) && originalCascadeStartIndex >= 0
+      ? session.messages.slice(originalCascadeStartIndex)
+      : [];
     const deleted = await deleteMonotonicMessage(userTargetMessage, { ...options, timeoutMs: 0 });
     if (!deleted) return false;
+    if (session) {
+      session.pendingResendStalePrune = {
+        anchorMessage: userTargetMessage,
+        originalStartIndex: originalCascadeStartIndex,
+        removedMessages: removedMessagesBeforeResend,
+      };
+      pruneStaleMessagesAfterResend(
+        userTargetMessage,
+        originalCascadeStartIndex,
+        removedMessagesBeforeResend,
+      );
+    }
     input.value = text;
     const sent = await send();
+    if (session?.pendingResendStalePrune) delete session.pendingResendStalePrune;
     if (!sent) {
       if (session && previousMessages && previousRawMessages) {
         session.messages = previousMessages;
@@ -370,6 +564,7 @@ export function useChatEngine({
     const {
       text,
       filesToSend,
+      userMessage,
       botMessage: botMsg,
       scrollOnFirstResponseOnce,
     } = prepareChatSend({
@@ -491,6 +686,15 @@ export function useChatEngine({
         applySessionDetail,
         refreshSessionConnectorsAsync,
       });
+      if (activeSession.value?.pendingResendStalePrune) {
+        pruneStaleMessagesAfterResend(
+          activeSession.value.pendingResendStalePrune.anchorMessage,
+          activeSession.value.pendingResendStalePrune.originalStartIndex,
+          activeSession.value.pendingResendStalePrune.removedMessages,
+          { finalOnly: true },
+        );
+        delete activeSession.value.pendingResendStalePrune;
+      }
       return true;
     } catch (error) {
       if (

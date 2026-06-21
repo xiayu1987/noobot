@@ -29,7 +29,7 @@ export function prepareChatSend({
       ? URL.createObjectURL(fileItem.raw)
       : "",
   }));
-  appendMessage(RoleEnum.USER, text || translate("chat.uploadOnly"), userAttachments);
+  const userMessage = appendMessage(RoleEnum.USER, text || translate("chat.uploadOnly"), userAttachments);
   if (
     [
       String(translate("chat.newSession") || "").trim(),
@@ -68,6 +68,7 @@ export function prepareChatSend({
   return {
     text,
     filesToSend,
+    userMessage,
     botMessage,
     scrollOnFirstResponseOnce,
   };

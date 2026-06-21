@@ -698,6 +698,28 @@ describe("useChatEngine", () => {
     expect(activeSession.value.updatedAt).toBeTruthy();
   });
 
+  it("cascadeDeleteMessagesFrom removes matching rawMessages even when they are not the same objects", () => {
+    const { engine, activeSession } = createHarness({ sessionId: "local-cascade-raw-copy" });
+    const first = { id: "m1", role: RoleEnum.USER, content: "first", dialogProcessId: "dp-1" };
+    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target", dialogProcessId: "dp-1" };
+    const tail = { id: "m3", role: RoleEnum.USER, content: "tail", dialogProcessId: "dp-2" };
+    activeSession.value.messages = [first, target, tail];
+    activeSession.value.rawMessages = [
+      { ...first },
+      { ...target },
+      { ...tail },
+    ];
+    activeSession.value.messageCount = 3;
+    activeSession.value.lastMessage = tail;
+
+    expect(engine.cascadeDeleteMessagesFrom(target)).toBe(true);
+
+    expect(activeSession.value.messages).toEqual([]);
+    expect(activeSession.value.rawMessages).toEqual([]);
+    expect(activeSession.value.messageCount).toBe(0);
+    expect(activeSession.value.lastMessage).toBe(null);
+  });
+
   it("deleteMonotonicMessage stops before cascading deletion from resolved user message", async () => {
     const { engine, activeSession, sending, deps } = createHarness({ sessionId: "local-delete" });
     const first = { id: "m1", role: RoleEnum.USER, content: "first" };
@@ -742,6 +764,233 @@ describe("useChatEngine", () => {
       content: "edited question",
     }));
     expect(input.value).toBe("");
+  });
+
+  it("resendMonotonicMessage removes stale target again when backend delete snapshot keeps the old turn", async () => {
+    const stream = vi.fn(async (_payload, onEvent) => {
+      onEvent({
+        event: StreamEventEnum.DONE,
+        data: {
+          sessionId: "local-resend-stale-snapshot",
+          dialogProcessId: "dp-edited",
+          messages: [
+            staleFirst,
+            staleTarget,
+            { role: RoleEnum.USER, content: "edited question", dialogProcessId: "dp-edited" },
+            { role: RoleEnum.ASSISTANT, content: "edited answer", dialogProcessId: "dp-edited" },
+          ],
+        },
+      });
+    });
+    const staleFirst = { id: "m1", role: RoleEnum.USER, content: "first" };
+    const staleTarget = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
+    const deleteSessionMessagesFromApi = vi.fn(async () => ({
+      ok: true,
+      session: makeSession("local-resend-stale-snapshot", {
+        messages: [staleFirst, staleTarget],
+        rawMessages: [staleFirst, staleTarget],
+      }),
+    }));
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value.messages = [...(mainSession.messages || [])];
+      activeSession.value.rawMessages = [...(mainSession.messages || [])];
+    });
+    const fetchSessionDetail = vi.fn(async () => ({
+      sessionId: "local-resend-stale-snapshot",
+      sessions: [{
+        sessionId: "local-resend-stale-snapshot",
+        messages: [
+          staleFirst,
+          staleTarget,
+          { role: RoleEnum.USER, content: "edited question", dialogProcessId: "dp-edited" },
+          { role: RoleEnum.ASSISTANT, content: "edited answer", dialogProcessId: "dp-edited" },
+        ],
+      }],
+    }));
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-resend-stale-snapshot",
+      stream,
+      deps: { deleteSessionMessagesFromApi, applySessionDetail, fetchSessionDetail },
+    });
+    const first = { id: "m1", role: RoleEnum.USER, content: "first" };
+    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
+    activeSession.value.messages = [first, target];
+    activeSession.value.rawMessages = [first, target];
+
+    await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(true);
+
+    const userMessages = activeSession.value.rawMessages.filter((message) => message.role === RoleEnum.USER);
+    expect(userMessages).toHaveLength(1);
+    expect(userMessages[0].content).toBe("edited question");
+    expect(activeSession.value.rawMessages.find((message) => message.content === "first")).toBeUndefined();
+    expect(activeSession.value.rawMessages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: RoleEnum.ASSISTANT, content: "edited answer" }),
+    ]));
+    expect(stream).toHaveBeenCalledTimes(1);
+  });
+
+  it("resendMonotonicMessage keeps edited assistant after final stale prune", async () => {
+    const stream = vi.fn(async (_payload, onEvent) => {
+      onEvent({
+        event: StreamEventEnum.DONE,
+        data: {
+          sessionId: "local-resend-keep-assistant",
+          dialogProcessId: "dp-edited",
+          messages: [
+            { role: RoleEnum.USER, content: "edited question", dialogProcessId: "dp-edited" },
+            { role: RoleEnum.ASSISTANT, content: "edited answer", dialogProcessId: "dp-edited" },
+          ],
+        },
+      });
+    });
+    const staleFirst = { id: "m1", role: RoleEnum.USER, content: "first", dialogProcessId: "dp-old" };
+    const staleTarget = { id: "m2", role: RoleEnum.ASSISTANT, content: "target", dialogProcessId: "dp-old" };
+    const deleteSessionMessagesFromApi = vi.fn(async () => ({
+      ok: true,
+      session: makeSession("local-resend-keep-assistant", {
+        messages: [staleFirst, staleTarget],
+      }),
+    }));
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value.messages = [...(mainSession.messages || [])];
+      activeSession.value.rawMessages = [...(mainSession.messages || [])];
+    });
+    const fetchSessionDetail = vi.fn(async () => ({
+      sessionId: "local-resend-keep-assistant",
+      sessions: [{
+        sessionId: "local-resend-keep-assistant",
+        messages: [
+          staleFirst,
+          staleTarget,
+          { role: RoleEnum.USER, content: "edited question", dialogProcessId: "dp-edited" },
+          { role: RoleEnum.ASSISTANT, content: "edited answer", dialogProcessId: "dp-edited" },
+        ],
+      }],
+    }));
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-resend-keep-assistant",
+      stream,
+      deps: { deleteSessionMessagesFromApi, applySessionDetail, fetchSessionDetail },
+    });
+    const first = { ...staleFirst };
+    const target = { ...staleTarget };
+    activeSession.value.messages = [first, target];
+    activeSession.value.rawMessages = [first, target];
+
+    await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(true);
+
+    expect(activeSession.value.messages.find((message) => message.content === "first")).toBeUndefined();
+    expect(activeSession.value.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: RoleEnum.USER, content: "edited question" }),
+      expect.objectContaining({ role: RoleEnum.ASSISTANT, content: "edited answer" }),
+    ]));
+    expect(activeSession.value.rawMessages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: RoleEnum.USER, content: "edited question" }),
+      expect.objectContaining({ role: RoleEnum.ASSISTANT, content: "edited answer" }),
+    ]));
+  });
+
+  it("resendMonotonicMessage keeps the edited turn when final detail reuses the old dialogProcessId", async () => {
+    const stream = vi.fn(async (_payload, onEvent) => {
+      onEvent({
+        event: StreamEventEnum.DONE,
+        data: {
+          sessionId: "local-resend-reused-dialog",
+          dialogProcessId: "dp-old",
+          messages: [
+            { role: RoleEnum.USER, content: "edited question", dialogProcessId: "dp-old" },
+            { role: RoleEnum.ASSISTANT, content: "edited answer", dialogProcessId: "dp-old" },
+          ],
+        },
+      });
+    });
+    const staleFirst = { id: "m1", role: RoleEnum.USER, content: "first", dialogProcessId: "dp-old" };
+    const staleTarget = { id: "m2", role: RoleEnum.ASSISTANT, content: "target", dialogProcessId: "dp-old" };
+    const deleteSessionMessagesFromApi = vi.fn(async () => ({
+      ok: true,
+      session: makeSession("local-resend-reused-dialog", {
+        messages: [staleFirst, staleTarget],
+      }),
+    }));
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value.messages = [...(mainSession.messages || [])];
+      activeSession.value.rawMessages = [...(mainSession.messages || [])];
+    });
+    const fetchSessionDetail = vi.fn(async () => ({
+      sessionId: "local-resend-reused-dialog",
+      sessions: [{
+        sessionId: "local-resend-reused-dialog",
+        messages: [
+          staleFirst,
+          staleTarget,
+          { role: RoleEnum.USER, content: "edited question", dialogProcessId: "dp-old" },
+          { role: RoleEnum.ASSISTANT, content: "edited answer", dialogProcessId: "dp-old" },
+        ],
+      }],
+    }));
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-resend-reused-dialog",
+      stream,
+      deps: { deleteSessionMessagesFromApi, applySessionDetail, fetchSessionDetail },
+    });
+    activeSession.value.messages = [{ ...staleFirst }, { ...staleTarget }];
+    activeSession.value.rawMessages = [{ ...staleFirst }, { ...staleTarget }];
+
+    await expect(engine.resendMonotonicMessage(staleTarget, "edited question")).resolves.toBe(true);
+
+    expect(activeSession.value.messages.map((message) => message.content)).toEqual([
+      "edited question",
+      "edited answer",
+    ]);
+    expect(activeSession.value.rawMessages.map((message) => message.content)).toEqual([
+      "edited question",
+      "edited answer",
+    ]);
+  });
+
+  it("resendMonotonicMessage prunes stale backend snapshot before appending edited message", async () => {
+    let observedMessagesAtStream = null;
+    let observedRawMessagesAtStream = null;
+    const stream = vi.fn(async () => {
+      observedMessagesAtStream = [...activeSession.value.messages];
+      observedRawMessagesAtStream = [...activeSession.value.rawMessages];
+    });
+    const staleFirst = { id: "m1", role: RoleEnum.USER, content: "first" };
+    const staleTarget = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
+    const deleteSessionMessagesFromApi = vi.fn(async () => ({
+      ok: true,
+      session: makeSession("local-resend-no-flicker", {
+        messages: [staleFirst, staleTarget],
+        rawMessages: [staleFirst, staleTarget],
+      }),
+    }));
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value.messages = [...(mainSession.messages || [])];
+      activeSession.value.rawMessages = [...(mainSession.messages || [])];
+    });
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-resend-no-flicker",
+      stream,
+      deps: { deleteSessionMessagesFromApi, applySessionDetail },
+    });
+    const first = { id: "m1", role: RoleEnum.USER, content: "first" };
+    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
+    activeSession.value.messages = [first, target];
+    activeSession.value.rawMessages = [first, target];
+
+    await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(true);
+
+    expect(observedMessagesAtStream).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: RoleEnum.USER, content: "edited question" }),
+    ]));
+    expect(observedMessagesAtStream.find((message) => message.content === "first")).toBeUndefined();
+    expect(observedRawMessagesAtStream.find((message) => message.content === "first")).toBeUndefined();
+    expect(observedMessagesAtStream.filter((message) => message.role === RoleEnum.USER)).toHaveLength(1);
+    expect(observedRawMessagesAtStream.filter((message) => message.role === RoleEnum.USER)).toHaveLength(1);
   });
 
 

@@ -10,10 +10,14 @@ function markLatestUserMessageStopped(activeSession, pendingAssistantMessage = n
   const messages = Array.isArray(activeSession?.value?.messages)
     ? activeSession.value.messages
     : [];
+  const rawMessages = Array.isArray(activeSession?.value?.rawMessages)
+    ? activeSession.value.rawMessages
+    : [];
   const pendingDialogProcessId = normalizeTrimmedString(pendingAssistantMessage?.dialogProcessId);
-  const latestUserMessage = [...messages]
+  const latestUserMessageIndex = messages
+    .map((messageItem, index) => ({ messageItem, index }))
     .reverse()
-    .find((messageItem) => {
+    .find(({ messageItem }) => {
       if (normalizeTrimmedString(messageItem?.role) !== RoleEnum.USER) return false;
       if (!pendingDialogProcessId) return true;
       const userDialogProcessId = normalizeTrimmedString(
@@ -21,14 +25,34 @@ function markLatestUserMessageStopped(activeSession, pendingAssistantMessage = n
       );
       return !userDialogProcessId || userDialogProcessId === pendingDialogProcessId;
     });
+  const latestUserMessage = latestUserMessageIndex?.messageItem;
   if (!latestUserMessage) return;
-  if (pendingDialogProcessId && !normalizeTrimmedString(latestUserMessage?.dialogProcessId || latestUserMessage?.dialogId)) {
-    latestUserMessage.dialogProcessId = pendingDialogProcessId;
+  const markStopped = (messageItem) => {
+    if (!messageItem || typeof messageItem !== "object") return;
+    if (pendingDialogProcessId && !normalizeTrimmedString(messageItem?.dialogProcessId || messageItem?.dialogId)) {
+      messageItem.dialogProcessId = pendingDialogProcessId;
+    }
+    messageItem.stopState = "stopped";
+    messageItem.monotonicState = "monotonic";
+    messageItem.isMonotonic = true;
+    messageItem.monotonic = true;
+  };
+  markStopped(latestUserMessage);
+  const rawCandidate = rawMessages[latestUserMessageIndex.index];
+  if (rawCandidate && normalizeTrimmedString(rawCandidate?.role) === RoleEnum.USER) {
+    markStopped(rawCandidate);
+    return;
   }
-  latestUserMessage.stopState = "stopped";
-  latestUserMessage.monotonicState = "monotonic";
-  latestUserMessage.isMonotonic = true;
-  latestUserMessage.monotonic = true;
+  const latestUserContent = normalizeTrimmedString(latestUserMessage?.content);
+  for (let index = rawMessages.length - 1; index >= 0; index -= 1) {
+    const rawMessage = rawMessages[index];
+    if (normalizeTrimmedString(rawMessage?.role) !== RoleEnum.USER) continue;
+    const rawDialogProcessId = normalizeTrimmedString(rawMessage?.dialogProcessId || rawMessage?.dialogId);
+    if (pendingDialogProcessId && rawDialogProcessId && rawDialogProcessId !== pendingDialogProcessId) continue;
+    if (!pendingDialogProcessId && latestUserContent && normalizeTrimmedString(rawMessage?.content) !== latestUserContent) continue;
+    markStopped(rawMessage);
+    return;
+  }
 }
 
 export function forceStopUiFinalize({

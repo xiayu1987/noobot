@@ -3,6 +3,65 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { RoleEnum } from "../../../shared/constants/chatConstants";
+
+function normalizeTrimmedString(value = "") {
+  return String(value || "").trim();
+}
+
+function markLatestUserMessageStopped(activeSession, botMessage = null) {
+  const messages = Array.isArray(activeSession?.value?.messages)
+    ? activeSession.value.messages
+    : [];
+  const rawMessages = Array.isArray(activeSession?.value?.rawMessages)
+    ? activeSession.value.rawMessages
+    : [];
+  if (!messages.length) return false;
+  const botDialogProcessId = normalizeTrimmedString(botMessage?.dialogProcessId || botMessage?.dialogId);
+  const botIndex = botMessage ? messages.findIndex((messageItem) => messageItem === botMessage) : -1;
+  const startIndex = botIndex >= 0 ? botIndex - 1 : messages.length - 1;
+  const markStopped = (messageItem) => {
+    if (!messageItem || typeof messageItem !== "object") return;
+    const userDialogProcessId = normalizeTrimmedString(
+      messageItem?.dialogProcessId || messageItem?.dialogId,
+    );
+    if (botDialogProcessId && !userDialogProcessId) {
+      messageItem.dialogProcessId = botDialogProcessId;
+    }
+    messageItem.stopState = "stopped";
+    messageItem.monotonicState = "monotonic";
+    messageItem.isMonotonic = true;
+    messageItem.monotonic = true;
+  };
+  for (let index = startIndex; index >= 0; index -= 1) {
+    const messageItem = messages[index];
+    if (normalizeTrimmedString(messageItem?.role) !== RoleEnum.USER) continue;
+    const userDialogProcessId = normalizeTrimmedString(
+      messageItem?.dialogProcessId || messageItem?.dialogId,
+    );
+    if (botDialogProcessId && userDialogProcessId && userDialogProcessId !== botDialogProcessId) {
+      return false;
+    }
+    markStopped(messageItem);
+    const rawCandidate = rawMessages[index];
+    if (rawCandidate && normalizeTrimmedString(rawCandidate?.role) === RoleEnum.USER) {
+      markStopped(rawCandidate);
+      return true;
+    }
+    const userContent = normalizeTrimmedString(messageItem?.content);
+    for (let rawIndex = rawMessages.length - 1; rawIndex >= 0; rawIndex -= 1) {
+      const rawMessage = rawMessages[rawIndex];
+      if (normalizeTrimmedString(rawMessage?.role) !== RoleEnum.USER) continue;
+      const rawDialogProcessId = normalizeTrimmedString(rawMessage?.dialogProcessId || rawMessage?.dialogId);
+      if (botDialogProcessId && rawDialogProcessId && rawDialogProcessId !== botDialogProcessId) continue;
+      if (!botDialogProcessId && userContent && normalizeTrimmedString(rawMessage?.content) !== userContent) continue;
+      markStopped(rawMessage);
+      return true;
+    }
+    return true;
+  }
+  return false;
+}
 
 export function applyStreamCompletedFallback({
   sending,
@@ -38,6 +97,7 @@ export function applyStopRequestedState({
   applyConversationState,
 } = {}) {
   if (!chatWebSocketClient?.isStopRequested?.()) return false;
+  markLatestUserMessageStopped(activeSession, botMessage);
   applyConversationState(
     {
       state: "stopped",
