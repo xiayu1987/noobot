@@ -48,16 +48,6 @@ function getAllRealtimeLogs(messageItem = {}) {
   return Array.isArray(messageItem?.realtimeLogs) ? messageItem.realtimeLogs : [];
 }
 
-function getMessageRoundId(messageItem = {}) {
-  return String(messageItem?.messageRoundId || "").trim();
-}
-
-function isSameMessageRound(rootMessage = {}, candidateMessage = {}) {
-  const rootRoundId = getMessageRoundId(rootMessage);
-  if (!rootRoundId) return true;
-  return getMessageRoundId(candidateMessage) === rootRoundId;
-}
-
 function isFreshPendingAssistant(messageItem = {}) {
   return (
     String(messageItem?.role || "").trim() === "assistant" &&
@@ -84,6 +74,9 @@ function getExecutionLogCount(messageItem = {}) {
   const completedToolLogs = getCompletedToolLogsForMessage(messageItem);
   if (completedToolLogs.length > 0) return completedToolLogs.length;
 
+  const summaryThinkingDetailCount = getSummaryThinkingDetailCount(messageItem);
+  if (summaryThinkingDetailCount > 0) return summaryThinkingDetailCount;
+
   return getExecutionLogs(messageItem).length;
 }
 
@@ -92,9 +85,19 @@ function toValidExecutionLogTotal(value) {
   return Number.isFinite(total) && total >= 0 ? total : null;
 }
 
+function getSummaryThinkingDetailCount(messageItem = {}) {
+  const count = Number(messageItem?.thinkingDetailCount ?? messageItem?.thinking_detail_count);
+  return Number.isFinite(count) && count > 0 ? count : 0;
+}
+
+function hasSummaryThinkingDetails(messageItem = {}) {
+  return messageItem?.hasThinkingDetails === true || getSummaryThinkingDetailCount(messageItem) > 0;
+}
+
 function hasThinkingLogs(messageItem = {}) {
   if (!messageItem || messageItem.role !== "assistant") return false;
   if (messageItem.pending) return true;
+  if (hasSummaryThinkingDetails(messageItem)) return true;
   const hasRealtimeLogs = Array.isArray(messageItem.realtimeLogs)
     ? getRealtimeLogs(messageItem).length > 0
     : false;
@@ -110,7 +113,6 @@ function getInjectedMessagesForMessage(messageItem = {}) {
   const candidateMessages = Array.isArray(props.allMessages) ? props.allMessages : [];
   return candidateMessages.filter((item = {}) => {
     if (!isHarnessInjectedMessage(item)) return false;
-    if (!isSameMessageRound(messageItem, item)) return false;
     if (!dialogProcessId) return true;
     return String(item?.dialogProcessId || "").trim() === dialogProcessId;
   });
@@ -119,12 +121,19 @@ function getInjectedMessagesForMessage(messageItem = {}) {
 function getScopedMessagesForMessage(messageItem = {}) {
   if (isFreshPendingAssistant(messageItem)) return [];
   const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+  const hasExplicitThinkingDetailPayload =
+    Array.isArray(messageItem?.completedToolLogs) && messageItem.completedToolLogs.length > 0;
   const candidateMessages = Array.isArray(props.allMessages) ? props.allMessages : [];
   return candidateMessages.filter((item = {}) => {
     if (dialogProcessId && String(item?.dialogProcessId || "").trim() !== dialogProcessId) {
       return false;
     }
-    return isSameMessageRound(messageItem, item);
+    if (hasExplicitThinkingDetailPayload) return true;
+    const rootRoundId = String(messageItem?.messageRoundId || "").trim();
+    if (rootRoundId) {
+      return String(item?.messageRoundId || "").trim() === rootRoundId;
+    }
+    return true;
   });
 }
 
@@ -331,7 +340,15 @@ function toggleThinkingDetailExpanded(messageItem = {}, detailItemKey = "") {
 
 
 function getThinkingDetailCount(messageItem = {}) {
-  return getCompletedToolLogsForMessage(messageItem).length;
+  const completedToolLogCount = getCompletedToolLogsForMessage(messageItem).length;
+  if (completedToolLogCount > 0) return completedToolLogCount;
+  const explicitExecutionLogTotal = toValidExecutionLogTotal(
+    messageItem.executionLogTotal ?? messageItem.execution_log_total,
+  );
+  if (explicitExecutionLogTotal !== null && explicitExecutionLogTotal > 0) {
+    return explicitExecutionLogTotal;
+  }
+  return getSummaryThinkingDetailCount(messageItem);
 }
 
 function getThinkingDetailLabel(messageItem = {}) {
@@ -462,9 +479,7 @@ onBeforeUnmount(() => {
             </template>
           </BaseSectionHeader>
         </template>
-        <el-tabs>
-          <el-tab-pane :label="translate('message.executionProcess', { count: getExecutionLogCount(messageItem) })">
-            <BaseTabPanelBody>
+        <BaseTabPanelBody>
               <div
                 v-for="(logItem, logIndex) in getExecutionLogs(messageItem)"
                 :key="`realtime-${logIndex}`"
@@ -489,23 +504,7 @@ onBeforeUnmount(() => {
                   @click="openThinkingDetailDrawer"
                 />
               </div>
-            </BaseTabPanelBody>
-          </el-tab-pane>
-          <el-tab-pane :label="translate('message.injectedMessages', { count: getInjectedMessageCount() })">
-            <BaseTabPanelBody>
-              <BaseNoteBlock
-                v-for="(injectedMessage, injectedMessageIndex) in injectedMessages"
-                :key="`injected-${injectedMessageIndex}-${String(injectedMessage.ts || '')}`"
-                :title="formatInjectedMessageTitle(injectedMessage, injectedMessageIndex)"
-                :content="String(injectedMessage.content || '')"
-              />
-              <BaseEmptyHint
-                v-if="!getInjectedMessageCount()"
-                :text="translate('message.noInjectedMessages')"
-              />
-            </BaseTabPanelBody>
-          </el-tab-pane>
-        </el-tabs>
+        </BaseTabPanelBody>
         <template #footer>
           <BasePillButton
             :label="translate('message.collapse')"
@@ -514,49 +513,65 @@ onBeforeUnmount(() => {
         </template>
       </BaseThinkingPanelShell>
   </template>
-  <BaseTabPanelBody v-else-if="hasThinking">
+  <BaseTabPanelBody v-else-if="hasThinking" class="thinking-details-panel">
           <template v-if="!messageItem.pending">
-            <BaseSectionHeader
-              class="thinking-detail-title-row"
-              :title="getThinkingDetailLabel(messageItem)"
-            />
-            <div
-              v-for="(groupedToolLogs, groupedToolLogsIndex) in groupCompletedToolLogs(messageItem)"
-              :key="`tool-group-${groupedToolLogsIndex}`"
-              class="thinking-group"
-            >
-              <BaseMetaLabel class="thinking-group-title" :text="groupedToolLogs.label" />
-              <div
-                v-for="(toolLogItem, toolLogIndex) in groupedToolLogs.items"
-                :key="`tool-log-${groupedToolLogsIndex}-${toolLogIndex}`"
-              >
-                <BaseThinkingLogLine
-                  :indent="Number(toolLogItem.indent || 0)"
-                  :prefix-text="getThinkingTreePrefix(toolLogItem)"
-                  :event-text="toolLogItem.type || toolLogItem.event"
-                  :content-text="toolLogItem.text"
-                  :tool="true"
-                  :expandable="true"
-                  :expanded="
-                    isThinkingDetailExpanded(
-                      messageItem,
-                      getThinkingDetailItemKey(groupedToolLogs, toolLogItem, toolLogIndex),
-                    )
-                  "
-                  :title-text="toolLogItem.text || ''"
-                  @toggle="
-                    toggleThinkingDetailExpanded(
-                      messageItem,
-                      getThinkingDetailItemKey(groupedToolLogs, toolLogItem, toolLogIndex),
-                    )
-                  "
-                />
-              </div>
-            </div>
-            <BaseEmptyHint
-              v-if="!getThinkingDetailCount(messageItem)"
-              :text="translate('message.noToolCalls')"
-            />
+            <el-tabs class="thinking-details-tabs">
+              <el-tab-pane :label="getThinkingDetailLabel(messageItem)">
+                <BaseTabPanelBody class="thinking-details-scroll-body thinking-details-log-body">
+                  <div
+                    v-for="(groupedToolLogs, groupedToolLogsIndex) in groupCompletedToolLogs(messageItem)"
+                    :key="`tool-group-${groupedToolLogsIndex}`"
+                    class="thinking-group"
+                  >
+                    <BaseMetaLabel class="thinking-group-title" :text="groupedToolLogs.label" />
+                    <div
+                      v-for="(toolLogItem, toolLogIndex) in groupedToolLogs.items"
+                      :key="`tool-log-${groupedToolLogsIndex}-${toolLogIndex}`"
+                    >
+                      <BaseThinkingLogLine
+                        :indent="Number(toolLogItem.indent || 0)"
+                        :prefix-text="getThinkingTreePrefix(toolLogItem)"
+                        :event-text="toolLogItem.type || toolLogItem.event"
+                        :content-text="toolLogItem.text"
+                        :tool="true"
+                        :expandable="true"
+                        :expanded="
+                          isThinkingDetailExpanded(
+                            messageItem,
+                            getThinkingDetailItemKey(groupedToolLogs, toolLogItem, toolLogIndex),
+                          )
+                        "
+                        :title-text="toolLogItem.text || ''"
+                        @toggle="
+                          toggleThinkingDetailExpanded(
+                            messageItem,
+                            getThinkingDetailItemKey(groupedToolLogs, toolLogItem, toolLogIndex),
+                          )
+                        "
+                      />
+                    </div>
+                  </div>
+                  <BaseEmptyHint
+                    v-if="!getThinkingDetailCount(messageItem)"
+                    :text="translate('message.noToolCalls')"
+                  />
+                </BaseTabPanelBody>
+              </el-tab-pane>
+              <el-tab-pane :label="translate('message.injectedMessages', { count: getInjectedMessageCount() })">
+                <BaseTabPanelBody class="thinking-details-scroll-body thinking-details-injected-body">
+                  <BaseNoteBlock
+                    v-for="(injectedMessage, injectedMessageIndex) in injectedMessages"
+                    :key="`detail-injected-${injectedMessageIndex}-${String(injectedMessage.ts || '')}`"
+                    :title="formatInjectedMessageTitle(injectedMessage, injectedMessageIndex)"
+                    :content="String(injectedMessage.content || '')"
+                  />
+                  <BaseEmptyHint
+                    v-if="!getInjectedMessageCount()"
+                    :text="translate('message.noInjectedMessages')"
+                  />
+                </BaseTabPanelBody>
+              </el-tab-pane>
+            </el-tabs>
           </template>
           <BaseEmptyHint v-else :text="translate('message.detailsAfterDone')" />
   </BaseTabPanelBody>
@@ -644,6 +659,48 @@ onBeforeUnmount(() => {
 
 .thinking-group-title {
   margin: 8px 0 6px;
+}
+
+.thinking-details-panel {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.thinking-details-tabs {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.thinking-details-tabs :deep(.el-tabs__header) {
+  flex: 0 0 auto;
+  margin-bottom: 8px;
+  background: var(--noobot-panel-bg);
+  z-index: 1;
+}
+
+.thinking-details-tabs :deep(.el-tabs__content) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.thinking-details-tabs :deep(.el-tab-pane) {
+  height: 100%;
+  min-height: 0;
+}
+
+.thinking-details-scroll-body {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 </style>

@@ -11,7 +11,16 @@ export function getThinkingDetailsCount(messageItem = {}) {
       return event.includes("tool") || event.includes("function");
     }).length;
   }
-  return 0;
+  return getSummaryThinkingDetailsCount(messageItem);
+}
+
+function getSummaryThinkingDetailsCount(messageItem = {}) {
+  const count = Number(messageItem?.thinkingDetailCount ?? messageItem?.thinking_detail_count);
+  return Number.isFinite(count) && count > 0 ? count : 0;
+}
+
+function hasThinkingDetails(messageItem = {}) {
+  return messageItem?.hasThinkingDetails === true || getSummaryThinkingDetailsCount(messageItem) > 0;
 }
 
 export function getThinkingDetailsTitle(messageItem = {}, translate) {
@@ -21,7 +30,7 @@ export function getThinkingDetailsTitle(messageItem = {}, translate) {
 export function resolveFallbackThinkingDetailsPayload(activeSession = {}) {
   const messages = activeSession?.rawMessages || activeSession?.messages || [];
   const messageItem = [...messages].reverse().find((item = {}) =>
-    item?.role === "assistant" && (item?.pending || Array.isArray(item?.realtimeLogs) || Array.isArray(item?.completedToolLogs))
+    item?.role === "assistant" && (item?.pending || Array.isArray(item?.realtimeLogs) || Array.isArray(item?.completedToolLogs) || hasThinkingDetails(item))
   );
   return { messageItem: messageItem || null, allMessages: messages };
 }

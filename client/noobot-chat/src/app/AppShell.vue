@@ -377,7 +377,7 @@ const {
   loadingSessionDetail,
   newSession,
   fetchSessions,
-  fetchSessionFullDetail,
+  fetchThinkingDetail,
   selectSession,
   deleteSession,
   send,
@@ -669,6 +669,16 @@ function getThinkingDetailsTitle(messageItem = {}) {
   return getThinkingDetailsTitleState(messageItem, translate);
 }
 
+function normalizeDialogProcessId(messageItem = {}) {
+  return String(messageItem?.dialogProcessId || "").trim();
+}
+
+async function fetchThinkingDetailForMessage(messageItem = {}) {
+  const dialogProcessId = normalizeDialogProcessId(messageItem);
+  if (!dialogProcessId || typeof fetchThinkingDetail !== "function") return null;
+  return fetchThinkingDetail(activeSessionId.value, { dialogProcessId });
+}
+
 async function openThinkingDetailsPanel(payload = {}) {
   let fallbackPayload = resolveFallbackThinkingDetailsPayload();
   const initialPayload = resolveThinkingDetailsPanelPayload(payload, fallbackPayload);
@@ -677,15 +687,18 @@ async function openThinkingDetailsPanel(payload = {}) {
     initialMessageItem &&
     (initialMessageItem.hasThinkingDetails === true || Number(initialMessageItem.thinkingDetailCount || 0) > 0) &&
     !Array.isArray(initialMessageItem.realtimeLogs);
-  if (needsFullDetail && typeof fetchSessionFullDetail === "function") {
+  let loadedThinkingDetail = null;
+  if (needsFullDetail) {
     try {
-      await fetchSessionFullDetail(activeSessionId.value, { preserveCurrentMessages: false });
-      fallbackPayload = resolveFallbackThinkingDetailsPayload();
+      loadedThinkingDetail = await fetchThinkingDetailForMessage(initialMessageItem);
     } catch (error) {
       notifyUi({ type: "warning", message: error?.message || translate("chat.loadSessionDetailFailed") });
     }
   }
-  const { messageItem, allMessages } = resolveThinkingDetailsPanelPayload(payload, fallbackPayload);
+  const detailPayload = loadedThinkingDetail
+    ? { messageItem: loadedThinkingDetail.messageItem, allMessages: loadedThinkingDetail.allMessages }
+    : payload;
+  const { messageItem, allMessages } = resolveThinkingDetailsPanelPayload(detailPayload, fallbackPayload);
   if (!messageItem) return;
   closeAllDrawers();
   closeMobileSidebar();
@@ -697,6 +710,36 @@ async function openThinkingDetailsPanel(payload = {}) {
     pushPseudoRoute(buildThinkingDetailsRoute(activeSessionId.value, PSEUDO_PANEL.THINKING_DETAILS));
   }
 }
+
+watch(
+  () => {
+    if (!thinkingDetailsVisible.value) return "";
+    const dialogProcessId = normalizeDialogProcessId(thinkingDetailsMessageItem.value);
+    if (!dialogProcessId) return "";
+    const sourceMessage = (activeSession.value?.messages || [])
+      .find((item = {}) => normalizeDialogProcessId(item) === dialogProcessId && item?.role === "assistant") || {};
+    return [
+      activeSessionId.value,
+      dialogProcessId,
+      sourceMessage?.pending === true ? "pending" : "done",
+      Number(sourceMessage?.thinkingDetailCount || 0),
+    ].join("::");
+  },
+  async () => {
+    if (!thinkingDetailsVisible.value) return;
+    const currentMessage = thinkingDetailsMessageItem.value;
+    const dialogProcessId = normalizeDialogProcessId(currentMessage);
+    if (!dialogProcessId) return;
+    try {
+      const detail = await fetchThinkingDetailForMessage(currentMessage);
+      if (!detail || normalizeDialogProcessId(thinkingDetailsMessageItem.value) !== dialogProcessId) return;
+      thinkingDetailsMessageItem.value = detail.messageItem || currentMessage;
+      thinkingDetailsAllMessages.value = Array.isArray(detail.allMessages) ? detail.allMessages : [];
+    } catch {
+      // Keep the already opened panel stable; explicit open still reports load errors.
+    }
+  },
+);
 
 function handleDrawerModelUpdate(drawer = {}, value = false) {
   const { closed } = updateDrawerModelVisibility({ drawer, value });

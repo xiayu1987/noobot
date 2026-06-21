@@ -339,6 +339,57 @@ test("session-routes: session 详情默认返回展示概要，full 模式按需
   });
 });
 
+test("session-routes: thinking-detail 仅按 dialogProcessId 返回本次对话明细", async () => {
+  const app = express();
+  let fullCalled = false;
+  registerSessionRoutes(app, {
+    bot: {
+      session: {
+        getSessionData: async () => {
+          fullCalled = true;
+          return {
+            exists: true,
+            sessionId: "s1",
+            sessions: [{
+              sessionId: "s1",
+              rawMessages: [
+                { id: "a1", role: "assistant", type: "message", dialogProcessId: "dp-1", messageRoundId: "round-a", content: "answer" },
+                { id: "i1", role: "system", dialogProcessId: "dp-1", injectedMessage: true, injectedBy: "harness-plugin", content: "injected without round" },
+                { id: "t1", role: "assistant", type: "tool_call", dialogProcessId: "dp-1", content: "tool call" },
+                { id: "t2", role: "tool", type: "tool_result", dialogProcessId: "dp-1", roundId: "different-round", content: "tool result" },
+                { id: "a2", role: "assistant", type: "message", dialogProcessId: "dp-2", content: "other answer" },
+                { id: "t3", role: "assistant", type: "tool_call", dialogProcessId: "dp-2", content: "other tool" },
+              ],
+            }],
+          };
+        },
+        getRootSessionId: async () => "",
+        deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
+        getAllSessionsData: async () => [],
+      },
+      getAttachmentById: async () => null,
+    },
+    handleChat: (_req, res) => res.json({ ok: true }),
+    getConnectorChannelStore: () => ({}),
+    getConnectorHistoryStore: () => ({}),
+    translateText: () => "",
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/internal/session/u1/s1/thinking-detail?dialogProcessId=dp-1&messageRoundId=round-a&roundId=round-a`);
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.exists, true);
+    assert.equal(fullCalled, true);
+    assert.equal(payload.messageItem.dialogProcessId, "dp-1");
+    assert.equal(payload.messageItem.hasThinkingDetails, true);
+    assert.equal(payload.counts.executionLogCount, 2);
+    assert.equal(payload.counts.injectedMessageCount, 1);
+    assert.deepEqual(payload.allMessages.map((item) => item.id).sort(), ["a1", "i1", "t1", "t2"]);
+  });
+});
+
 test("session-routes: 删除 session 时清理 harness 运行记录", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-session-route-harness-"));
   const runsDir = path.join(basePath, "runtime", "harness", "runs");

@@ -41,6 +41,104 @@ export function registerSessionRoutes(
     return fallback ? [fallback] : [];
   }
 
+  function normalizeRouteText(value = "") {
+    return String(value || "").trim();
+  }
+
+  function isHarnessInjectedMessage(messageItem = {}) {
+    return (
+      messageItem?.injectedMessage === true &&
+      normalizeRouteText(messageItem?.injectedBy) === "harness-plugin"
+    );
+  }
+
+  function isToolOrThinkingMessage(messageItem = {}) {
+    const role = normalizeRouteText(messageItem?.role).toLowerCase();
+    const type = normalizeRouteText(messageItem?.type).toLowerCase();
+    return (
+      role === "tool" ||
+      type === "tool_call" ||
+      type === "tool_result" ||
+      Array.isArray(messageItem?.realtimeLogs) ||
+      Array.isArray(messageItem?.completedToolLogs)
+    );
+  }
+
+  function isSameThinkingRound(rootMessage = {}, candidateMessage = {}, filters = {}) {
+    const dialogProcessId = normalizeRouteText(filters.dialogProcessId || rootMessage?.dialogProcessId);
+    if (dialogProcessId && normalizeRouteText(candidateMessage?.dialogProcessId) !== dialogProcessId) {
+      return false;
+    }
+    return true;
+  }
+
+  function buildToolLogFromMessage(messageItem = {}, fallbackIndex = 0) {
+    const role = normalizeRouteText(messageItem?.role).toLowerCase();
+    const type = normalizeRouteText(messageItem?.type).toLowerCase();
+    const event = type === "tool_result" || role === "tool" ? "tool_result" : "tool_call";
+    return {
+      sessionId: normalizeRouteText(messageItem?.sessionId),
+      depth: Number(messageItem?.depth || 1),
+      dialogProcessId: normalizeRouteText(messageItem?.dialogProcessId),
+      type: event,
+      event,
+      text: typeof messageItem?.content === "string"
+        ? messageItem.content
+        : JSON.stringify(messageItem?.content ?? `tool_${fallbackIndex + 1}`),
+      ts: messageItem?.ts || messageItem?.createdAt || "",
+    };
+  }
+
+  function buildThinkingDetailPayload(fullResult = {}, filters = {}) {
+    const sessions = Array.isArray(fullResult?.sessions) ? fullResult.sessions : [];
+    const sessionItem = sessions[0] || {};
+    const messages = Array.isArray(sessionItem?.rawMessages)
+      ? sessionItem.rawMessages
+      : Array.isArray(sessionItem?.messages)
+        ? sessionItem.messages
+        : [];
+    const messageId = normalizeRouteText(filters.messageId);
+    const dialogProcessId = normalizeRouteText(filters.dialogProcessId);
+    const rootMessage = messages.find((item = {}) => {
+      if (messageId && normalizeRouteText(item?.messageId || item?.id) === messageId) return true;
+      if (normalizeRouteText(item?.role) !== "assistant") return false;
+      if (normalizeRouteText(item?.type || "message") !== "message") return false;
+      return isSameThinkingRound({ dialogProcessId }, item, filters);
+    }) || {};
+    const scopedMessages = messages.filter((item = {}) =>
+      isSameThinkingRound(rootMessage, item, filters) &&
+      (isHarnessInjectedMessage(item) || isToolOrThinkingMessage(item) || item === rootMessage)
+    );
+    const toolLogs = scopedMessages
+      .filter((item = {}) => isToolOrThinkingMessage(item))
+      .flatMap((item = {}, index) => {
+        const completed = Array.isArray(item?.completedToolLogs) ? item.completedToolLogs : [];
+        if (completed.length) return completed;
+        const realtime = Array.isArray(item?.realtimeLogs) ? item.realtimeLogs : [];
+        if (realtime.length) return realtime;
+        return [buildToolLogFromMessage(item, index)];
+      });
+    const injectedMessages = scopedMessages.filter((item = {}) => isHarnessInjectedMessage(item));
+    const messageItem = {
+      ...rootMessage,
+      hasThinkingDetails: toolLogs.length > 0 || injectedMessages.length > 0,
+      thinkingDetailCount: toolLogs.length,
+      executionLogTotal: toolLogs.length,
+      completedToolLogs: toolLogs,
+    };
+    return {
+      exists: Boolean(rootMessage?.role || scopedMessages.length),
+      sessionId: fullResult?.sessionId || sessionItem?.sessionId || "",
+      messageItem,
+      allMessages: scopedMessages,
+      counts: {
+        executionLogCount: toolLogs.length,
+        injectedMessageCount: injectedMessages.length,
+        messageCount: scopedMessages.length,
+      },
+    };
+  }
+
   app.get(
     "/internal/plugins",
     jsonRoute(async (req, res) => {
@@ -67,6 +165,24 @@ export function registerSessionRoutes(
         sessionId,
       });
       res.json({ ok: true, ...result });
+    }),
+  );
+
+  app.get(
+    "/internal/session/:userId/:sessionId/thinking-detail",
+    jsonRoute(async (req, res) => {
+      const { userId, sessionId } = req.params;
+      const dialogProcessId = normalizeRouteText(req.query?.dialogProcessId);
+      if (!dialogProcessId) {
+        const error = new Error("dialogProcessId is required");
+        error.statusCode = HTTP_STATUS.BAD_REQUEST;
+        throw error;
+      }
+      const result = await bot.session.getSessionData({ userId, sessionId });
+      const detail = buildThinkingDetailPayload(result, {
+        dialogProcessId,
+      });
+      res.json({ ok: true, ...detail });
     }),
   );
 

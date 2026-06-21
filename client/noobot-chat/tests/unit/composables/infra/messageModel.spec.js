@@ -114,6 +114,18 @@ describe("messageModel semantic transfer", () => {
     expect(message.parentDialogProcessId).toBe("root-dp");
   });
 
+  it("preserves summary thinking entry fields on view messages", () => {
+    const message = buildViewMessage({
+      role: "assistant",
+      content: "done",
+      hasThinkingDetails: true,
+      thinkingDetailCount: 2,
+    });
+
+    expect(message.hasThinkingDetails).toBe(true);
+    expect(message.thinkingDetailCount).toBe(2);
+  });
+
 });
 
 describe("messageModel workflow messages", () => {
@@ -224,6 +236,27 @@ describe("messageModel execution logs", () => {
     expect(messages[0].realtimeLogs).toHaveLength(2);
     expect(messages[0].tool_calls).toHaveLength(1);
     expect(messages[0].executionLogTotal).toBe(2);
+  });
+
+  it("keeps summary thinking entry fields when merging assistant messages", () => {
+    const messages = foldConversationMessages([
+      {
+        role: "assistant",
+        content: "part 1",
+        dialogProcessId: "dp-summary-thinking",
+      },
+      {
+        role: "assistant",
+        content: "part 2",
+        dialogProcessId: "dp-summary-thinking",
+        hasThinkingDetails: true,
+        thinkingDetailCount: 3,
+      },
+    ], buildViewMessage);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0].hasThinkingDetails).toBe(true);
+    expect(messages[0].thinkingDetailCount).toBe(3);
   });
 
   it("keeps only latest 10 realtime logs when merging completed assistant messages", () => {

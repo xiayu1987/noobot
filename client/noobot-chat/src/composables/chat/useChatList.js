@@ -35,6 +35,7 @@ export function useChatList({
   getSessionsApi,
   getSessionDetailApi,
   getSessionFullDetailApi = null,
+  getSessionThinkingDetailApi = null,
   deleteSessionApi,
   makeViewMessage,
   foldMessagesForView,
@@ -547,6 +548,27 @@ export function useChatList({
     return data;
   }
 
+  async function fetchThinkingDetail(sessionId, { dialogProcessId = "" } = {}) {
+    const normalizedSessionId = normalizeSessionId(sessionId);
+    const normalizedDialogProcessId = String(dialogProcessId || "").trim();
+    if (!normalizedDialogProcessId) throw new Error("dialogProcessId is required");
+    if (typeof getSessionThinkingDetailApi !== "function") {
+      throw new Error("thinking detail api is unavailable");
+    }
+    const res = await getSessionThinkingDetailApi(
+      {
+        userId: userId.value,
+        sessionId: normalizedSessionId || sessionId,
+        dialogProcessId: normalizedDialogProcessId,
+      },
+      { fetcher: authFetch },
+    );
+    if (!res.ok) throw new Error(translate("chat.getSessionFailed", { status: res.status }));
+    const data = await res.json();
+    if (!data.ok || !data.exists) throw new Error(data.error || translate("chat.sessionNotFound"));
+    return data;
+  }
+
   async function fetchSessions(preferredActiveId = "", options = {}) {
     const { silent = false, preserveCurrentMessages = true } = options;
     if (!ensureConnected()) return false;
@@ -730,6 +752,7 @@ export function useChatList({
     selectSession,
     fetchSessionDetail,
     fetchSessionFullDetail,
+    fetchThinkingDetail,
     applySessionDetail,
     releaseAllPreviewUrls,
     initSessionsAfterMount,

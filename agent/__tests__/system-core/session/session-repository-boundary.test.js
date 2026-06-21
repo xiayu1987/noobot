@@ -264,6 +264,35 @@ test("session display summary should keep chat view lightweight and rebuild stal
         pluginMeta: { pluginId: "p1", source: "plugin-test", kind: "flow", nodeName: "Done", internalState: { huge: true } },
         transferEnvelopes: [{ id: "tr-1", status: "done", payload: { huge: true } }],
       },
+      {
+        id: "u2",
+        role: "user",
+        type: "message",
+        dialogProcessId: "dp-tool-only",
+        content: "run tool only thinking details",
+      },
+      {
+        id: "tool-display-assistant",
+        role: "assistant",
+        type: "message",
+        dialogProcessId: "dp-tool-only",
+        content: "tool only final answer",
+      },
+      {
+        role: "assistant",
+        type: "tool_call",
+        dialogProcessId: "dp-tool-only",
+        tool_calls: [
+          { id: "call-tool-only", function: { name: "search", arguments: { q: "demo" } } },
+        ],
+      },
+      {
+        role: "tool",
+        type: "tool_result",
+        dialogProcessId: "dp-tool-only",
+        tool_call_id: "call-tool-only",
+        content: "tool only result detail should not be in summary",
+      },
     ];
     await runtime.repositories.sessionRepository.save(userId, sessionB, "A");
 
@@ -272,13 +301,13 @@ test("session display summary should keep chat view lightweight and rebuild stal
     let summary = JSON.parse(await readFile(summaryFile, "utf8"));
     assert.equal(summary.schemaVersion, 1);
     assert.equal(summary.sessionId, "B");
-    assert.equal(summary.messages.length, 3);
-    assert.equal(summary.stats.messageCount, 6);
-    assert.equal(summary.stats.displayMessageCount, 3);
+    assert.equal(summary.messages.length, 5);
+    assert.equal(summary.stats.messageCount, 10);
+    assert.equal(summary.stats.displayMessageCount, 5);
     assert.equal(summary.stats.injectedMessageCount, 1);
-    assert.equal(summary.stats.thinkingMessageCount, 1);
+    assert.equal(summary.stats.thinkingMessageCount, 2);
     assert.equal(summary.stats.attachmentCount, 1);
-    assert.equal(summary.stats.toolLogCount, 3);
+    assert.equal(summary.stats.toolLogCount, 5);
     assert.equal(summary.stats.displayToolLogCount, 1);
     assert.equal(summary.stats.hasToolDetails, true);
     assert.equal(summary.toolLogSummaries.length, 1);
@@ -308,6 +337,13 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal("realtimeLogs" in assistantMessage, false);
     assert.equal("completedToolLogs" in assistantMessage, false);
     assert.equal("rawMessages" in assistantMessage, false);
+    const toolOnlyAssistantMessage = summary.messages.find((item) => item.id === "tool-display-assistant");
+    assert.equal(toolOnlyAssistantMessage.content, "tool only final answer");
+    assert.equal(toolOnlyAssistantMessage.hasThinkingDetails, true);
+    assert.equal(toolOnlyAssistantMessage.thinkingDetailCount, 2);
+    assert.equal("realtimeLogs" in toolOnlyAssistantMessage, false);
+    assert.equal("completedToolLogs" in toolOnlyAssistantMessage, false);
+    assert.equal(JSON.stringify(summary.messages).includes("tool only result detail"), false);
     const workflowMessage = summary.messages.find((item) => item.id === "w1");
     assert.equal(workflowMessage.content, longWorkflowContent);
     assert.equal(workflowMessage.content.endsWith(workflowContentTail), true);

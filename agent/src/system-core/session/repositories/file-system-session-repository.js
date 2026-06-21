@@ -236,13 +236,70 @@ function buildToolLogSummaries(session = {}, { depth = 0 } = {}) {
   return { logs, totalCount };
 }
 
+function collectMessageCorrelationKeys(message = {}) {
+  const keys = [];
+  for (const key of ["dialogProcessId", "parentDialogProcessId", "messageRoundId", "roundId"]) {
+    const value = String(message?.[key] || "").trim();
+    if (value && !keys.includes(value)) keys.push(value);
+  }
+  return keys;
+}
+
+function countMessageThinkingDetails(message = {}) {
+  if (!message || typeof message !== "object" || Array.isArray(message)) return 0;
+  const role = String(message?.role || "").trim();
+  const type = String(message?.type || "").trim();
+  let count = 0;
+  if (Array.isArray(message?.realtimeLogs)) count += message.realtimeLogs.length;
+  if (Array.isArray(message?.completedToolLogs)) count += message.completedToolLogs.length;
+  if (type === "tool_call") count += Math.max(1, Array.isArray(message?.tool_calls) ? message.tool_calls.length : 0);
+  if (role === "tool" || type === "tool_result") count += 1;
+  return count;
+}
+
+function buildThinkingDetailCountsByCorrelationKey(messages = []) {
+  const counts = new Map();
+  for (const message of messages) {
+    const role = String(message?.role || "").trim();
+    const type = String(message?.type || "").trim();
+    const isDisplayMessage = ["user", "assistant"].includes(role) && !["tool_call", "tool_result"].includes(type) && message?.injectedMessage !== true;
+    if (isDisplayMessage) continue;
+    const count = countMessageThinkingDetails(message);
+    if (!count) continue;
+    for (const key of collectMessageCorrelationKeys(message)) {
+      counts.set(key, (counts.get(key) || 0) + count);
+    }
+  }
+  return counts;
+}
+
+function resolveThinkingDetailCountForDisplayMessage(message = {}, countsByKey = new Map()) {
+  let count = countMessageThinkingDetails(message);
+  for (const key of collectMessageCorrelationKeys(message)) {
+    count += countsByKey.get(key) || 0;
+  }
+  return count;
+}
+
 function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
   const messages = Array.isArray(session?.messages) ? session.messages : [];
-  const displayMessages = messages.map(buildDisplayMessageSummary).filter(Boolean);
+  const thinkingDetailCountsByKey = buildThinkingDetailCountsByCorrelationKey(messages);
+  const displayMessages = messages
+    .map((message) => {
+      const summary = buildDisplayMessageSummary(message);
+      if (!summary) return null;
+      if (String(message?.role || "").trim() === "assistant") {
+        const thinkingDetailCount = resolveThinkingDetailCountForDisplayMessage(message, thinkingDetailCountsByKey);
+        if (thinkingDetailCount > 0) {
+          summary.hasThinkingDetails = true;
+          summary.thinkingDetailCount = thinkingDetailCount;
+        }
+      }
+      return summary;
+    })
+    .filter(Boolean);
   const injectedCount = messages.filter((message) => message?.injectedMessage === true).length;
-  const thinkingCount = messages.filter(
-    (message) => Array.isArray(message?.realtimeLogs) || Array.isArray(message?.completedToolLogs),
-  ).length;
+  const thinkingCount = displayMessages.filter((message) => message?.hasThinkingDetails === true).length;
   const { logs: toolLogSummaries, totalCount: toolLogCount } = buildToolLogSummaries(session, { depth });
   const attachmentCount = displayMessages.reduce(
     (count, message) => count + (Array.isArray(message?.attachmentMetas) ? message.attachmentMetas.length : 0),

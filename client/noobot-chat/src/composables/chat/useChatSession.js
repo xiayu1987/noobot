@@ -19,6 +19,7 @@ import {
   getSessionConnectorsApi,
   getSessionDetailApi,
   getSessionFullDetailApi,
+  getSessionThinkingDetailApi,
   getSessionsApi,
 } from "../../services/api/chatApi";
 import { encryptPayloadBySessionId } from "../../shared/utils/sessionCrypto";
@@ -185,6 +186,7 @@ export function useChatSession({
     getSessionsApi,
     getSessionDetailApi,
     getSessionFullDetailApi,
+    getSessionThinkingDetailApi,
     deleteSessionApi,
   deleteSessionMessagesFromApi,
     makeViewMessage,
@@ -312,6 +314,7 @@ export function useChatSession({
     deleteSession: chatList.deleteSession,
     fetchSessions: chatList.fetchSessions,
     fetchSessionFullDetail: chatList.fetchSessionFullDetail,
+    fetchThinkingDetail: chatList.fetchThinkingDetail,
     selectSession: chatList.selectSession,
     send: chatEngine.send,
     stopSending: chatEngine.stopSending,
