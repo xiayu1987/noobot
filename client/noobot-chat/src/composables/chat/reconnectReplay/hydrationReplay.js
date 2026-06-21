@@ -52,7 +52,12 @@ export async function renderActiveSessionBeforeReplay({
   }
   const hydrationPromise = (async () => {
     try {
-      const detail = await chatList.fetchSessionDetail(backendSessionId);
+      const detail = await chatList.fetchSessionDetail(backendSessionId, {
+        source: "reconnectHydration",
+        reuseRecentlyLoaded: true,
+        allowLoadedSnapshot: true,
+      });
+      if (!detail) return false;
       chatList.applySessionDetail(detail, { preserveCurrentMessages: false });
       return true;
     } catch (error) {

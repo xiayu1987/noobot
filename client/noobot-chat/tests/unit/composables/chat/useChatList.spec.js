@@ -162,6 +162,77 @@ describe("useChatList", () => {
     expect(fixture.refs.loadingSessions.value).toBe(false);
   });
 
+  it("fetchSessionDetail can reuse a just-loaded detail snapshot for initialization replay", async () => {
+    const getSessionDetailApi = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        exists: true,
+        sessionId: "backend-cache",
+        sessions: [{ sessionId: "backend-cache", messages: [] }],
+      }),
+    }));
+    const { api } = createUseChatListFixture({ getSessionDetailApi });
+
+    const first = await api.fetchSessionDetail("backend-cache");
+    const second = await api.fetchSessionDetail("backend-cache", { reuseRecentlyLoaded: true });
+
+    expect(first).toBe(second);
+    expect(getSessionDetailApi).toHaveBeenCalledTimes(1);
+  });
+
+  it("session detail arbiter waits for an in-flight request for the same session", async () => {
+    let resolveResponse;
+    const getSessionDetailApi = vi.fn(
+      () => new Promise((resolve) => {
+        resolveResponse = () => resolve({
+          ok: true,
+          json: async () => ({
+            ok: true,
+            exists: true,
+            sessionId: "backend-pending",
+            sessions: [{ sessionId: "backend-pending", messages: [] }],
+          }),
+        });
+      }),
+    );
+    const { api } = createUseChatListFixture({ getSessionDetailApi });
+
+    const firstPromise = api.fetchSessionDetail("backend-pending", { source: "selectSession" });
+    const secondPromise = api.fetchSessionDetail("backend-pending", { source: "reconnectHydration" });
+    resolveResponse();
+    const [first, second] = await Promise.all([firstPromise, secondPromise]);
+
+    expect(first).toBe(second);
+    expect(getSessionDetailApi).toHaveBeenCalledTimes(1);
+  });
+
+  it("session detail arbiter reuses the active loaded session snapshot for hydration intent", async () => {
+    const getSessionDetailApi = vi.fn();
+    const { api, refs } = createUseChatListFixture({ getSessionDetailApi });
+    refs.sessions.value = [{
+      id: "s-loaded",
+      backendSessionId: "s-loaded",
+      title: "loaded",
+      isLocal: false,
+      loaded: true,
+      messages: [{ role: RoleEnum.USER, content: "hi" }],
+      rawMessages: [],
+      sessionDocs: [{ sessionId: "s-loaded", messages: [{ role: RoleEnum.USER, content: "hi" }] }],
+      connectorPanelState: { selectedConnectors: {} },
+    }];
+    refs.activeSessionId.value = "s-loaded";
+
+    const detail = await api.fetchSessionDetail("s-loaded", {
+      source: "reconnectHydration",
+      allowLoadedSnapshot: true,
+    });
+
+    expect(detail.sessionId).toBe("s-loaded");
+    expect(detail.sessions).toBe(refs.sessions.value[0].sessionDocs);
+    expect(getSessionDetailApi).not.toHaveBeenCalled();
+  });
+
   it("applySessionDetail with preserveCurrentMessages keeps current rendered messages", () => {
     const { api, refs } = createUseChatListFixture();
     const originalMessages = [{ role: RoleEnum.ASSISTANT, content: "pending local" }];
