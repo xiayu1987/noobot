@@ -134,6 +134,59 @@ test("deleteSessionBranch should remove descendant directories and tree nodes", 
     assert.equal(Boolean(tree.nodes.B), false);
     assert.equal(Boolean(tree.nodes.C), false);
     assert.deepEqual(tree.nodes.A.children, []);
+
+    const summary = await runtime.repositories.sessionRepository.readSessionsSummary(userId);
+    assert.deepEqual(summary.sessions.map((item) => item.sessionId), ["A"]);
+  });
+});
+
+test("session summaries should be maintained and rebuilt for list API", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u1";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+
+    const runtime = createSessionServices(
+      { workspaceRoot },
+      { now: () => "2026-05-14T00:00:00.000Z" },
+    );
+
+    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "A" });
+    await runtime.sessionCrudService.ensureSession(userId, "A", "");
+    await runtime.sessionTreeService.upsertSessionTree({
+      userId,
+      sessionId: "B",
+      parentSessionId: "A",
+    });
+    await runtime.sessionCrudService.ensureSession(userId, "B", "A");
+
+    const sessionB = await runtime.repositories.sessionRepository.findById(userId, "B", "A");
+    sessionB.messages = [
+      { role: "system", content: "ignored" },
+      { role: "user", content: "1234567890123456789012345" },
+      { role: "assistant", content: "done", attachmentMetas: [{ id: "big" }] },
+    ];
+    sessionB.currentTaskId = "task-b";
+    await runtime.repositories.sessionRepository.save(userId, sessionB, "A");
+
+    let summary = await runtime.repositories.sessionRepository.readSessionsSummary(userId);
+    const writtenB = summary.sessions.find((item) => item.sessionId === "B");
+    assert.equal(writtenB.title, "12345678901234567890");
+    assert.equal(writtenB.messageCount, 3);
+    assert.equal(writtenB.depth, 0);
+    assert.equal(Array.isArray(writtenB.messages), false);
+    assert.equal(writtenB.lastMessage.role, "assistant");
+    assert.equal("attachmentMetas" in writtenB.lastMessage, false);
+
+    const list = await runtime.sessionCrudService.getAllSessionSummaries({ userId });
+    const listedB = list.find((item) => item.sessionId === "B");
+    assert.equal(list.length, 2);
+    assert.equal(listedB.depth, 2);
+    assert.equal("messages" in listedB, false);
+
+    summary = JSON.parse(
+      await readFile(path.join(workspaceRoot, userId, "runtime", "session", "sessions.json"), "utf8"),
+    );
+    assert.equal(summary.sessions.find((item) => item.sessionId === "B").depth, 2);
   });
 });
 

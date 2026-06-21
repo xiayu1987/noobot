@@ -185,16 +185,26 @@ export function useChatList({
 
   function mapSummaryToSession(item) {
     const messages = Array.isArray(item.messages) ? item.messages : [];
-    const lastMessage = messages.length ? messages[messages.length - 1] : null;
+    const titleFallback = item.sessionId.slice(0, 8);
+    const title = String(item.title || "").trim()
+      || sessionTitleFromMessages(messages, titleFallback);
+    const messageCount = Number.isFinite(Number(item.messageCount))
+      ? Number(item.messageCount)
+      : messages.length || 0;
+    const lastMessage = item.lastMessage && typeof item.lastMessage === "object"
+      ? item.lastMessage
+      : messages.length
+        ? messages[messages.length - 1]
+        : null;
     return {
       id: item.sessionId,
-      title: sessionTitleFromMessages(messages, item.sessionId.slice(0, 8)),
+      title,
       isLocal: false,
       loaded: false,
       backendSessionId: item.sessionId,
       currentTaskId: item.currentTaskId || "",
       currentTaskStatus: "idle",
-      messageCount: messages.length || 0,
+      messageCount,
       lastMessage,
       messages: [],
       rawMessages: [],
