@@ -3,7 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { buildAttachmentUrl } from "../../services/api/chatApi";
+import {
+  buildAttachmentUrl,
+  resolveAttachmentId,
+  resolveAttachmentSessionId,
+  resolveAttachmentSource,
+} from "../../services/api/chatApi";
 import { mergeAttachmentMetas } from "./dialogProcessChain";
 import {
   getMessageTransferAttachmentMetas,
@@ -36,12 +41,12 @@ function normalizeAttachment(
   attachmentItem = {},
   { userId = "", isImageMime = () => false } = {},
 ) {
-  const attachmentId = String(attachmentItem?.attachmentId || "").trim();
+  const attachmentId = resolveAttachmentId(attachmentItem);
   const mimeType = String(
     attachmentItem?.mimeType || "application/octet-stream",
   );
-  const sessionId = String(attachmentItem?.sessionId || "").trim();
-  const attachmentSource = String(attachmentItem?.attachmentSource || "").trim();
+  const sessionId = resolveAttachmentSessionId(attachmentItem);
+  const attachmentSource = resolveAttachmentSource(attachmentItem);
   const attachmentUrl = attachmentId
     ? buildAttachmentUrl({
         userId,
@@ -69,9 +74,11 @@ function normalizeAttachment(
     "";
   return {
     ...attachmentItem,
+    attachmentId,
     sessionId,
     attachmentSource,
     mimeType,
+    url: attachmentUrl,
     previewUrl:
       String(attachmentItem?.previewUrl || ""),
     parsedResultAttachmentId,

@@ -8,6 +8,9 @@ import {
   buildAttachmentUrl,
   downloadWorkspaceFileApi,
   getWorkspaceFileApi,
+  resolveAttachmentId,
+  resolveAttachmentSessionId,
+  resolveAttachmentSource,
 } from "../../services/api/chatApi";
 import {
   copyMarkdownRichAsHtmlPage,
@@ -209,13 +212,15 @@ export function useMessagePreview({
   }
 
   function resolveAttachmentUrl(attachmentItem = {}) {
+    const attachmentId = resolveAttachmentId(attachmentItem);
+    if (!attachmentId) return String(attachmentItem?.previewUrl || "").trim();
     return String(
       attachmentItem?.previewUrl ||
         buildAttachmentUrl({
           userId: String(userId || "").trim(),
-          attachmentId: String(attachmentItem?.attachmentId || "").trim(),
-          sessionId: String(attachmentItem?.sessionId || "").trim(),
-          attachmentSource: String(attachmentItem?.attachmentSource || "").trim(),
+          attachmentId,
+          sessionId: resolveAttachmentSessionId(attachmentItem),
+          attachmentSource: resolveAttachmentSource(attachmentItem),
         }) || "",
     ).trim();
   }
