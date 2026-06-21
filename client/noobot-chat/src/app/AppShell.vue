@@ -308,6 +308,13 @@ function handleSelectChatMessageNavItem(item = {}) {
   });
 }
 
+function locateDoneMessage() {
+  const items = Array.isArray(chatMessageNavItems.value) ? chatMessageNavItems.value : [];
+  const lastItem = items[items.length - 1] || null;
+  if (!String(lastItem?.id || "").trim()) return;
+  handleSelectChatMessageNavItem(lastItem);
+}
+
 function openChatMessageNavigator() {
   openChatMessageNavigatorState({
     mobileChatNavigatorVisible,
@@ -416,6 +423,7 @@ const {
   isImageMime,
   classifyRealtimeLog,
   scrollBottom,
+  locateDoneMessage,
   notify: notifyUi,
   clearUploadSelection: () => composerRef.value?.clearUploadSelection?.(),
 });

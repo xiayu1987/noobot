@@ -278,6 +278,52 @@ describe("useChatList", () => {
     expect(session.messages[0].content).toBe("pending local");
   });
 
+  it("applySessionDetail keeps active messages when backend detail is briefly empty", () => {
+    const { api, refs } = createUseChatListFixture();
+    const currentMessages = [
+      { role: RoleEnum.USER, content: "hello" },
+      { role: RoleEnum.ASSISTANT, content: "final answer", dialogProcessId: "dp-1" },
+    ];
+    const session = {
+      id: "local-empty-detail",
+      backendSessionId: "backend-empty-detail",
+      title: "session",
+      isLocal: true,
+      loaded: false,
+      messages: currentMessages,
+      rawMessages: currentMessages,
+      sessionDocs: [],
+      connectorPanelState: { selectedConnectors: {} },
+      createdAt: "2026-05-14T00:00:00.000Z",
+      updatedAt: "2026-05-14T00:00:00.000Z",
+      currentTaskId: "",
+      currentTaskStatus: "idle",
+      messageCount: currentMessages.length,
+      lastMessage: currentMessages[currentMessages.length - 1],
+    };
+    refs.sessions.value.push(session);
+    refs.activeSessionId.value = "local-empty-detail";
+
+    api.applySessionDetail({
+      sessionId: "backend-empty-detail",
+      sessions: [
+        {
+          sessionId: "backend-empty-detail",
+          currentTaskId: "",
+          createdAt: "2026-05-14T00:00:00.000Z",
+          updatedAt: "2026-05-14T00:02:00.000Z",
+          messages: [],
+        },
+      ],
+    });
+
+    expect(session.id).toBe("backend-empty-detail");
+    expect(refs.activeSessionId.value).toBe("backend-empty-detail");
+    expect(session.messages).toBe(currentMessages);
+    expect(session.messageCount).toBe(2);
+    expect(session.lastMessage).toBe(currentMessages[1]);
+  });
+
   it("selectSession blocks noisy user switch while sending but allows silent internal switch", async () => {
     const { api, refs, mocks } = createUseChatListFixture();
     refs.sessions.value = [

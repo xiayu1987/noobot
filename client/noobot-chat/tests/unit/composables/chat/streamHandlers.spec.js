@@ -108,6 +108,7 @@ describe("chatEngine streamHandlers", () => {
   it("shows done execution log with same concrete command priority", () => {
     const botMessage = makeBotMessage();
     const scrollOnFirstResponseOnce = vi.fn();
+    const locateDoneMessage = vi.fn();
 
     handleDoneStreamEvent({
       data: {
@@ -131,12 +132,38 @@ describe("chatEngine streamHandlers", () => {
       makeViewMessage: (messageItem) => messageItem,
       foldMessagesForView: (messages) => messages,
       mergeAssistantAttachmentMetas: vi.fn(),
-      scrollBottom: vi.fn(),
+      locateDoneMessage,
     });
 
     expect(botMessage.realtimeLogs).toEqual([
       expect.objectContaining({ text: "完成：执行命令：cd /project/agent && npm test" }),
     ]);
+    expect(locateDoneMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("locates the done message through navigator callback instead of direct bottom scroll", () => {
+    const botMessage = makeBotMessage();
+    const locateDoneMessage = vi.fn();
+    const scrollBottom = vi.fn();
+
+    handleDoneStreamEvent({
+      data: { dialogProcessId: "dp-1" },
+      requestedTextStreaming: true,
+      botMessage,
+      activeSession: { value: {} },
+      activeSessionId: { value: "local-1" },
+      clearPendingInteraction: vi.fn(),
+      classifyRealtimeLog: (data) => data,
+      scrollOnFirstResponseOnce: vi.fn(),
+      makeViewMessage: (messageItem) => messageItem,
+      foldMessagesForView: (messages) => messages,
+      mergeAssistantAttachmentMetas: vi.fn(),
+      scrollBottom,
+      locateDoneMessage,
+    });
+
+    expect(locateDoneMessage).toHaveBeenCalledTimes(1);
+    expect(scrollBottom).not.toHaveBeenCalled();
   });
 
 
