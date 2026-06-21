@@ -1,0 +1,246 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import { StreamEventEnum } from "../../../shared/constants/chatConstants";
+import { buildChatPayload } from "./payload";
+import {
+  applySendErrorState,
+  applyStopRequestedState,
+  applyStreamCompletedFallback,
+  finalizeSendCleanup,
+} from "./sendFinalize";
+import { prepareChatSend } from "./sendPrepare";
+import { finalizeDoneSessionDetail } from "./sessionFinalize";
+import {
+  handleBasicStreamEvent,
+  handleDoneStreamEvent,
+  handleInteractionRequestStreamEvent,
+} from "./streamHandlers";
+import { normalizeTrimmedString } from "./utils";
+
+export function createChatEngineSender({
+  activeSession,
+  activeSessionId,
+  allowUserInteraction,
+  applyConversationState,
+  applyConversationStateFromEvent,
+  applySessionDetail,
+  appendMessage,
+  botScenario,
+  chatWebSocketClient,
+  classifyRealtimeLog,
+  clearMissingInteractionPayloadTimer,
+  clearPendingInteraction,
+  clearUploads,
+  connectorTypeSet,
+  upsertConnectedConnectorInPanelState,
+  ensureConnected,
+  fetchSessionDetail,
+  foldMessagesForView,
+  forceTool,
+  input,
+  interactionSubmitting,
+  isImageMime,
+  locale,
+  locateDoneMessage,
+  makeViewMessage,
+  mergeAssistantAttachmentMetas,
+  notify,
+  pendingInteractionRequest,
+  pluginModelConfig,
+  refreshSessionConnectorsAsync,
+  scrollBottom,
+  selectedModel,
+  selectedPlugins,
+  sending,
+  serializeAttachments,
+  streamOutput,
+  translate,
+  tryAutoResolveInteraction,
+  setPendingInteractionRequest,
+  uploadFiles,
+  userId,
+  getPruneStaleMessagesAfterResend,
+}) {
+  return async function send() {
+    if (!ensureConnected()) return false;
+    if (sending.value || !activeSession.value) return false;
+    if (!input.value.trim() && uploadFiles.value.length === 0) return false;
+
+    sending.value = true;
+    const {
+      text,
+      filesToSend,
+      botMessage: botMsg,
+      scrollOnFirstResponseOnce,
+    } = prepareChatSend({
+      input,
+      uploadFiles,
+      isImageMime,
+      appendMessage,
+      activeSession,
+      applyConversationState,
+      translate,
+      scrollBottom,
+    });
+
+    let lastStreamErrorEventData = null;
+    try {
+      clearUploads();
+      const attachments = await serializeAttachments(filesToSend);
+      let finalDoneEventData = null;
+      const requestedTextStreaming = streamOutput?.value !== false;
+
+      const payload = buildChatPayload({
+        userId,
+        activeSession,
+        message: text,
+        attachments,
+        allowUserInteraction,
+        forceTool,
+        requestedTextStreaming,
+        botScenario,
+        selectedModel,
+        pluginModelConfig,
+        locale,
+        selectedPlugins,
+        uploadHint: translate("chat.uploadHint"),
+      });
+
+      await chatWebSocketClient.stream(payload, ({ event, data }) => {
+        applyConversationStateFromEvent(event, data || {}, {
+          botMessage: botMsg,
+          fallbackDialogProcessId: normalizeTrimmedString(botMsg.dialogProcessId),
+        });
+        if (event === StreamEventEnum.CHANNEL_STATE) {
+          return;
+        }
+        if (event === StreamEventEnum.ERROR) {
+          lastStreamErrorEventData = data || {};
+          return;
+        }
+        if (
+          handleBasicStreamEvent(event, {
+            data,
+            botMessage: botMsg,
+            classifyRealtimeLog,
+            scrollOnFirstResponseOnce,
+            activeSession,
+            connectorTypeSet,
+            upsertConnectedConnectorInPanelState,
+            refreshSessionConnectorsAsync,
+            mergeAssistantAttachmentMetas,
+          })
+        ) {
+          return;
+        }
+        if (event === StreamEventEnum.INTERACTION_REQUEST) {
+          handleInteractionRequestStreamEvent({
+            data,
+            clearMissingInteractionPayloadTimer,
+            scrollOnFirstResponseOnce,
+            tryAutoResolveInteraction,
+            setPendingInteractionRequest,
+          });
+        } else if (event === StreamEventEnum.DONE) {
+          finalDoneEventData = data || {};
+          handleDoneStreamEvent({
+            data,
+            requestedTextStreaming,
+            botMessage: botMsg,
+            activeSession,
+            activeSessionId,
+            clearPendingInteraction,
+            classifyRealtimeLog,
+            scrollOnFirstResponseOnce,
+            makeViewMessage,
+            foldMessagesForView,
+            mergeAssistantAttachmentMetas,
+            locateDoneMessage,
+          });
+        }
+      });
+
+      // Safety net: if terminal channel_state is delayed/lost, avoid sticky "stop" UI.
+      // Primary source of truth remains channel_state; this fallback only runs when
+      // stream is already ended and UI is still in-flight.
+      applyStreamCompletedFallback({
+        sending,
+        finalDoneEventData,
+        activeSession,
+        botMessage: botMsg,
+        applyConversationState,
+      });
+
+      if (
+        applyStopRequestedState({
+          chatWebSocketClient,
+          activeSession,
+          botMessage: botMsg,
+          applyConversationState,
+        })
+      ) {
+        return;
+      }
+
+      await finalizeDoneSessionDetail({
+        activeSession,
+        activeSessionId,
+        botMessage: botMsg,
+        finalDoneEventData,
+        fetchSessionDetail,
+        applySessionDetail,
+        refreshSessionConnectorsAsync,
+      });
+      if (activeSession.value?.pendingResendStalePrune) {
+        getPruneStaleMessagesAfterResend()?.(
+          activeSession.value.pendingResendStalePrune.anchorMessage,
+          activeSession.value.pendingResendStalePrune.originalStartIndex,
+          activeSession.value.pendingResendStalePrune.removedMessages,
+          { finalOnly: true },
+        );
+        delete activeSession.value.pendingResendStalePrune;
+      }
+      return true;
+    } catch (error) {
+      if (
+        applyStopRequestedState({
+          chatWebSocketClient,
+          activeSession,
+          botMessage: botMsg,
+          applyConversationState,
+        })
+      ) {
+        return false;
+      }
+      applySendErrorState({
+        error,
+        errorEventData: lastStreamErrorEventData || error?.data || null,
+        activeSession,
+        botMessage: botMsg,
+        applyConversationState,
+        clearPendingInteraction,
+        notify,
+        translate,
+      });
+      await finalizeDoneSessionDetail({
+        activeSession,
+        activeSessionId,
+        botMessage: botMsg,
+        finalDoneEventData: lastStreamErrorEventData || error?.data || null,
+        fetchSessionDetail,
+        applySessionDetail,
+        refreshSessionConnectorsAsync,
+      });
+      return false;
+    } finally {
+      finalizeSendCleanup({
+        chatWebSocketClient,
+        pendingInteractionRequest,
+        interactionSubmitting,
+      });
+    }
+  };
+}
