@@ -5,10 +5,30 @@
  */
 import { StreamEventEnum } from "../../shared/constants/chatConstants";
 
+const TERMINAL_CHANNEL_STATES = Object.freeze([
+  "stopped",
+  "completed",
+  "error",
+  "no_conversation",
+  "expired",
+]);
+
+function normalizeTrimmedString(value = "") {
+  return String(value || "").trim();
+}
+
+function isTerminalChannelStateEvent(event = "", data = {}) {
+  return (
+    normalizeTrimmedString(event) === StreamEventEnum.CHANNEL_STATE &&
+    TERMINAL_CHANNEL_STATES.includes(normalizeTrimmedString(data?.state))
+  );
+}
+
 export function createChatWebSocketClient({
   resolveWebSocketUrl = () => "",
   stopCloseDelayMs = 300,
   forceStopFinalizeMs = 5000,
+  terminalChannelStateGraceMs = 250,
   translateText = (key = "") => String(key || ""),
 } = {}) {
   let activeSocket = null;
@@ -162,12 +182,30 @@ export function createChatWebSocketClient({
       stopRequested = false;
       let settled = false;
       let doneReceived = false;
+      let terminalChannelStateTimer = null;
       const finalize = (fn) => {
         if (settled) return;
         settled = true;
+        if (terminalChannelStateTimer) {
+          clearTimeout(terminalChannelStateTimer);
+          terminalChannelStateTimer = null;
+        }
         clearTimers();
         resolveCurrentStream = null;
         fn();
+      };
+
+      const scheduleTerminalChannelStateFinalize = (data = {}) => {
+        if (settled || doneReceived || terminalChannelStateTimer) return;
+        terminalChannelStateTimer = setTimeout(() => {
+          terminalChannelStateTimer = null;
+          if (settled || doneReceived) return;
+          if (data?.dialogProcessId) {
+            removeLastReceivedSeq(data.dialogProcessId);
+          }
+          doneReceived = true;
+          finalize(() => resolve());
+        }, Math.max(0, Number(terminalChannelStateGraceMs || 0)));
       };
 
       // 复用已有连接，如果没有则新建
@@ -239,10 +277,12 @@ export function createChatWebSocketClient({
             } else if (event === StreamEventEnum.STOPPED) {
               doneReceived = true;
               finalize(() => resolve());
+            } else if (isTerminalChannelStateEvent(event, data)) {
+              scheduleTerminalChannelStateFinalize(data);
             }
           } catch (error) {
-            streamSocket.close(1011, "invalid_event");
             finalize(() => reject(error));
+            streamSocket.close(1011, "invalid_event");
           }
         };
 

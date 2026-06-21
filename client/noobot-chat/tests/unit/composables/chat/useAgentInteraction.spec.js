@@ -55,6 +55,44 @@ describe("useAgentInteraction", () => {
     expect(interaction.pendingInteractionRequest.value).toBeNull();
   });
 
+  it("does not block a later interaction with a new requestId when the visible signature is unchanged", () => {
+    const sendJson = vi.fn();
+    const interaction = useAgentInteraction({
+      encryptPayloadBySessionId: (payload) => payload,
+      sendJson,
+    });
+    const sharedInteractionFields = {
+      sessionId: "s-1",
+      dialogProcessId: "dp-1",
+      interactionType: "user_interaction",
+      toolName: "user_interaction",
+      connectorType: "agent",
+      connectorName: "agent-proxy",
+      content: "Please provide input",
+    };
+
+    interaction.setPendingInteractionRequest({
+      ...sharedInteractionFields,
+      requestId: "req-first",
+    });
+    interaction.submitInteractionResponse({ value: "first" });
+
+    interaction.setPendingInteractionRequest({
+      ...sharedInteractionFields,
+      requestId: "req-second",
+    });
+
+    expect(sendJson).toHaveBeenCalledWith({
+      action: "interaction_response",
+      requestId: "req-first",
+      response: { value: "first" },
+    });
+    expect(interaction.pendingInteractionRequest.value?.requestId).toBe("req-second");
+    expect(interaction.pendingInteractionRequests.value.map((request) => request.requestId)).toEqual([
+      "req-second",
+    ]);
+  });
+
   it("queues concurrent interactions and advances after submitting current request", () => {
     const sendJson = vi.fn();
     const interaction = useAgentInteraction({
