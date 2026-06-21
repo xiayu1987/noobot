@@ -405,6 +405,52 @@ describe("useChatEngine", () => {
     expect(assistant?.statusLabel).toBe("chat.generated");
   });
 
+  it("terminal channel_state without DONE still lets send finalize and refresh detail", async () => {
+    const fetchSessionDetail = vi.fn(async () => ({
+      sessionId: "local-state-only",
+      sessions: [
+        {
+          sessionId: "local-state-only",
+          messages: [
+            { role: RoleEnum.USER, content: "hello" },
+            {
+              role: RoleEnum.ASSISTANT,
+              dialogProcessId: "dp-state-only",
+              content: "detail answer",
+            },
+          ],
+        },
+      ],
+    }));
+    const applySessionDetail = vi.fn();
+    const stream = vi.fn(async (_payload, onEvent) => {
+      emitChannelState(onEvent, "local-state-only", "dp-state-only", "completed", {
+        seq: 2,
+      });
+    });
+    const { engine, activeSession, sending, deps } = createHarness({
+      sessionId: "local-state-only",
+      stream,
+      deps: {
+        fetchSessionDetail,
+        applySessionDetail,
+      },
+    });
+
+    await expect(engine.send()).resolves.toBe(true);
+
+    const assistant = assistantMessage(activeSession);
+    expect(sending.value).toBe(false);
+    expect(assistant?.pending).toBe(false);
+    expect(assistant?.statusLabel).toBe("chat.generated");
+    expect(fetchSessionDetail).toHaveBeenCalledWith("local-state-only");
+    expect(applySessionDetail).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: "local-state-only" }),
+      { preserveCurrentMessages: true },
+    );
+    expect(deps.chatWebSocketClient.clearStopRequested).toHaveBeenCalledTimes(1);
+  });
+
   it("interaction_pending without pendingInteraction falls back to error state", async () => {
     vi.useFakeTimers();
     const notify = vi.fn();

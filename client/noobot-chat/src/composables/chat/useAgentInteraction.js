@@ -65,6 +65,7 @@ export function useAgentInteraction({
       if (!requestItem || typeof requestItem !== "object") return false;
       const requestItemId = normalizeRequestId(requestItem?.requestId || "");
       if (normalizedRequestId && requestItemId === normalizedRequestId) return true;
+      if (normalizedRequestId) return false;
       if (!hasUsableSignature(targetSignature)) return false;
       return buildInteractionRequestSignature(requestItem) === targetSignature;
     });
@@ -112,6 +113,7 @@ export function useAgentInteraction({
     if (requestOrId && typeof requestOrId === "object") {
       const normalizedRequestId = normalizeRequestId(requestOrId?.requestId || "");
       if (normalizedRequestId && handledInteractionRequestIds.has(normalizedRequestId)) return true;
+      if (normalizedRequestId) return false;
       const signature = buildInteractionRequestSignature(requestOrId);
       return Boolean(hasUsableSignature(signature) && handledInteractionRequestSignatures.has(signature));
     }
