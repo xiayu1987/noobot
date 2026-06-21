@@ -85,17 +85,21 @@ export class WsRouter {
         seq: Number(targetChannel?.eventSequence || 0),
       });
       const forwarded = this.channelManager.forwardToUpstream(targetChannel, payload);
-      if (!forwarded) {
-        const stoppedEnvelope = this.channelManager.pushChannelEvent(
-          targetChannel,
-          CHANNEL_EVENT.STOPPED,
-          {
-            message: AGENT_PROXY_ERROR.UPSTREAM_NOT_RUNNING,
-          },
-        );
-        this.channelManager.markChannelTerminal(targetChannel, CHANNEL_STATUS.STOPPED);
-        this.channelManager.broadcastChannelEvent(targetChannel, stoppedEnvelope);
-      }
+      const stoppedEnvelope = this.channelManager.pushChannelEvent(
+        targetChannel,
+        CHANNEL_EVENT.STOPPED,
+        forwarded
+          ? {
+              sessionId: String(payload?.sessionId || "").trim(),
+              dialogProcessId: String(payload?.dialogProcessId || "").trim(),
+              message: "stop requested",
+            }
+          : {
+              message: AGENT_PROXY_ERROR.UPSTREAM_NOT_RUNNING,
+            },
+      );
+      this.channelManager.markChannelTerminal(targetChannel, CHANNEL_STATUS.STOPPED);
+      this.channelManager.broadcastChannelEvent(targetChannel, stoppedEnvelope);
     },
 
     [WS_ACTION.INTERACTION_RESPONSE](socket, payload) {

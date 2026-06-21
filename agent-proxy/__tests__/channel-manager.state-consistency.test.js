@@ -456,6 +456,67 @@ test("stop action should broadcast stopping state before terminal", () => {
   assert.equal(stateEvents.some((item) => item?.data?.state === "stopped"), true);
 });
 
+test("accepted stop should immediately make reconnect non-running", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-stop" });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId: "session-stop",
+  });
+  channel.status = "running";
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  const upstreamMessages = [];
+  channel.upstreamSocket = {
+    readyState: 1,
+    send(raw) {
+      upstreamMessages.push(JSON.parse(String(raw || "{}")));
+    },
+  };
+
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.attachSubscriber(channel, client);
+
+  manager.updateConversationState(channel, {
+    sessionId: "session-stop",
+    dialogProcessId: "dp-stop",
+    state: "stopping",
+    sourceEvent: "stop",
+    seq: Number(channel?.eventSequence || 0),
+  });
+  const forwarded = manager.forwardToUpstream(channel, {
+    action: "stop",
+    userId: "user-1",
+    sessionId: "session-stop",
+    dialogProcessId: "dp-stop",
+  });
+  assert.equal(forwarded, true);
+  const stoppedEnvelope = manager.pushChannelEvent(channel, "stopped", {
+    sessionId: "session-stop",
+    dialogProcessId: "dp-stop",
+    message: "stop requested",
+  });
+  manager.markChannelTerminal(channel, "stopped");
+  manager.broadcastChannelEvent(channel, stoppedEnvelope);
+
+  assert.equal(upstreamMessages.length, 1);
+  assert.equal(channel.status, "stopped");
+  const reconnectClient = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.handleReconnect(reconnectClient, { currentSessionId: "session-stop", lastReceivedSeqMap: {} });
+
+  const reconnectData = getEvent(reconnectClient, "reconnect_data");
+  const sessionEntry = (reconnectData?.data?.sessions || []).find(
+    (entry) => String(entry?.sessionId || "") === "session-stop",
+  );
+  assert.ok(sessionEntry);
+  assert.equal(sessionEntry.hasRunningTask, false);
+  assert.equal(Array.isArray(sessionEntry.dialogProcesses) ? sessionEntry.dialogProcesses.length : 0, 0);
+  assert.equal(
+    (sessionEntry.conversationStates || []).some((item) => item?.state === "stopped"),
+    true,
+  );
+});
+
 test("channel_state snapshot should carry pendingInteraction payload for interaction_pending", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
