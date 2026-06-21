@@ -48,8 +48,8 @@ describe("messageModel semantic transfer", () => {
     });
 
     expect(message.transferResult?.ok).toBe(true);
-    expect(message.transferEnvelope?.protocol).toBe("noobot.semantic-transfer");
     expect(message.transferEnvelopes).toHaveLength(1);
+    expect(message.transferEnvelopes[0]?.protocol).toBe("noobot.semantic-transfer");
     expect(message.attachmentMetas).toHaveLength(1);
     expect(message.attachmentMetas[0]).toMatchObject({
       attachmentId: "att-1",

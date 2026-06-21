@@ -257,6 +257,88 @@ test("session-routes: sessions 列表只读取并返回概要", async () => {
   });
 });
 
+test("session-routes: session 详情默认返回展示概要，full 模式按需返回完整数据", async () => {
+  const app = express();
+  let summaryCalled = false;
+  let fullCalled = false;
+  registerSessionRoutes(app, {
+    bot: {
+      session: {
+        getSessionDisplayData: async () => {
+          summaryCalled = true;
+          return {
+            exists: true,
+            sessionId: "s1",
+            summary: true,
+            sessions: [{
+              sessionId: "s1",
+              messages: [{
+                id: "a1",
+                role: "assistant",
+                content: "summary answer",
+                hasThinkingDetails: true,
+                thinkingDetailCount: 2,
+              }],
+              toolLogSummaries: [{ event: "tool_call", text: "read_file /tmp/a" }],
+              stats: { messageCount: 4, injectedMessageCount: 1, thinkingMessageCount: 1 },
+            }],
+          };
+        },
+        getSessionData: async () => {
+          fullCalled = true;
+          return {
+            exists: true,
+            sessionId: "s1",
+            sessions: [{
+              sessionId: "s1",
+              messages: [{
+                id: "a1",
+                role: "assistant",
+                content: "full answer",
+                realtimeLogs: [{ event: "thinking", text: "full thinking" }],
+                injectedMessage: true,
+              }],
+              sessionDocs: [{ id: "doc-1" }],
+              rawMessages: [{ role: "assistant", content: "raw" }],
+            }],
+          };
+        },
+        getRootSessionId: async () => "",
+        deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
+        getAllSessionsData: async () => [],
+      },
+      getAttachmentById: async () => null,
+    },
+    handleChat: (_req, res) => res.json({ ok: true }),
+    getConnectorChannelStore: () => ({}),
+    getConnectorHistoryStore: () => ({}),
+    translateText: () => "",
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    let response = await fetch(`${baseUrl}/internal/session/u1/s1`);
+    let payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.summary, true);
+    assert.equal(summaryCalled, true);
+    assert.equal(fullCalled, false);
+    assert.equal(payload.sessions[0].messages[0].hasThinkingDetails, true);
+    assert.equal("realtimeLogs" in payload.sessions[0].messages[0], false);
+    assert.equal("sessionDocs" in payload.sessions[0], false);
+    assert.equal("rawMessages" in payload.sessions[0], false);
+
+    response = await fetch(`${baseUrl}/internal/session/u1/s1?mode=full`);
+    payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+    assert.equal(fullCalled, true);
+    assert.equal(payload.sessions[0].messages[0].realtimeLogs.length, 1);
+    assert.equal(payload.sessions[0].sessionDocs.length, 1);
+    assert.equal(payload.sessions[0].rawMessages.length, 1);
+  });
+});
+
 test("session-routes: 删除 session 时清理 harness 运行记录", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-session-route-harness-"));
   const runsDir = path.join(basePath, "runtime", "harness", "runs");

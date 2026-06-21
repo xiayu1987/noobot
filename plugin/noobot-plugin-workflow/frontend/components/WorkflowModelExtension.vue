@@ -4,6 +4,8 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
+import { useWorkflowLocale } from "../i18n";
+
 const props = defineProps({
   modelOptions: { type: Array, default: () => [] },
   pluginModelConfig: { type: Object, default: () => ({}) },
@@ -11,13 +13,7 @@ const props = defineProps({
   updatePluginModelConfig: { type: Function, default: null },
 });
 
-const TEXT = Object.freeze({
-  title: "Workflow 插件",
-  description: "为工作流非主流程语义理解请求单独指定模型。",
-  field: "非主流程语义模型",
-  placeholder: "使用主流程/默认模型",
-  empty: "暂无可用于对话的启用模型",
-});
+const { translate } = useWorkflowLocale();
 
 function getWorkflowSemanticModel() {
   return String(props.pluginModelConfig?.workflow?.semanticModel || "").trim();
@@ -49,11 +45,11 @@ function onWorkflowSemanticModelChange(value = "") {
 <template>
   <div class="plugin-model-card">
     <div class="plugin-model-heading">
-      <div class="plugin-model-title">{{ TEXT.title }}</div>
-      <p class="plugin-model-description">{{ TEXT.description }}</p>
+      <div class="plugin-model-title">{{ translate("modelExtension.title") }}</div>
+      <p class="plugin-model-description">{{ translate("modelExtension.description") }}</p>
     </div>
     <label class="plugin-model-field workflow-model-field">
-      <span class="plugin-model-label">{{ TEXT.field }}</span>
+      <span class="plugin-model-label">{{ translate("modelExtension.field") }}</span>
       <el-select
         :model-value="getWorkflowSemanticModel()"
         size="small"
@@ -61,7 +57,7 @@ function onWorkflowSemanticModelChange(value = "") {
         :filterable="false"
         popper-class="noobot-composer-select-popper noobot-model-select-popper"
         :disabled="!hasModelOptions"
-        :placeholder="TEXT.placeholder"
+        :placeholder="translate('modelExtension.placeholder')"
         class="composer-select model-select noobot-model-select-control"
         @update:model-value="onWorkflowSemanticModelChange"
       >
@@ -79,7 +75,7 @@ function onWorkflowSemanticModelChange(value = "") {
         </el-option>
       </el-select>
     </label>
-    <span v-if="!hasModelOptions" class="plugin-empty-text">{{ TEXT.empty }}</span>
+    <span v-if="!hasModelOptions" class="plugin-empty-text">{{ translate("modelExtension.empty") }}</span>
   </div>
 </template>
 

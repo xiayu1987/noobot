@@ -173,6 +173,10 @@ export function createSessionFacade(runtime = {}) {
       return sessionCrudService.getSessionData({ userId, sessionId });
     },
 
+    async getSessionDisplayData({ userId, sessionId }) {
+      return sessionCrudService.getSessionDisplayData({ userId, sessionId });
+    },
+
     async getAllSessionsData({ userId }) {
       return sessionCrudService.getAllSessionsData({ userId });
     },

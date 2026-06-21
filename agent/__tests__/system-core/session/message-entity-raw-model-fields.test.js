@@ -35,8 +35,18 @@ test("normalizeMessageEntity persists transferEnvelopes", () => {
     content: "done",
     transferEnvelopes: [envelope],
   });
-  assert.equal("transferEnvelope" in normalized, false);
+  assert.equal("transferEnvelopes" in normalized, true);
   assert.deepEqual(normalized.transferEnvelopes, [envelope]);
+});
+
+test("normalizeMessageEntity ignores non-array transferEnvelopes", () => {
+  const normalized = normalizeMessageEntity({
+    role: "assistant",
+    content: "done",
+    transferEnvelopes: { protocol: "noobot.semantic-transfer" },
+  });
+
+  assert.equal("transferEnvelopes" in normalized, false);
 });
 
 test("normalizeMessageEntity omits empty attachmentMetas", () => {

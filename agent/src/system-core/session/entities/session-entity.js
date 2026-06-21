@@ -8,7 +8,8 @@ import { resolveMessageDialogProcessId } from "../../context/session/dialog-proc
 
 function normalizeTransferEnvelopesFromMessage(message = {}) {
   const seen = new Set();
-  return (Array.isArray(message?.transferEnvelopes) ? message.transferEnvelopes : []).filter((item) => {
+  const source = Array.isArray(message?.transferEnvelopes) ? message.transferEnvelopes : [];
+  return source.filter((item) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return false;
     const key = JSON.stringify(item);
     if (seen.has(key)) return false;
@@ -96,6 +97,15 @@ export function normalizeMessageEntity(
     !Array.isArray(message.pluginMeta)
   ) {
     normalizedMessage.pluginMeta = message.pluginMeta;
+  }
+  if (Array.isArray(message?.realtimeLogs)) {
+    normalizedMessage.realtimeLogs = message.realtimeLogs;
+  }
+  if (Array.isArray(message?.completedToolLogs)) {
+    normalizedMessage.completedToolLogs = message.completedToolLogs;
+  }
+  for (const key of ["id", "messageId", "done", "pending", "error"]) {
+    if (message?.[key] !== undefined) normalizedMessage[key] = message[key];
   }
   const toolCallId = String(message?.tool_call_id || "").trim();
   const toolName = String(message?.toolName || message?.tool_name || "").trim();

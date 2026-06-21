@@ -30,7 +30,6 @@ test("SessionTurnPersister does not persist intermediate tool transfer envelopes
   });
 
   assert.equal(appendedTurns.length, 1);
-  assert.equal("transferEnvelope" in appendedTurns[0], false);
   assert.equal("transferEnvelopes" in appendedTurns[0], false);
 });
 
@@ -67,7 +66,7 @@ test("SessionTurnPersister persists final assistant transfer envelopes without a
 
   assert.equal(appendedTurns.length, 1);
   assert.equal(appendedTurns[0].attachmentMetas, undefined);
-  assert.equal("transferEnvelope" in appendedTurns[0], false);
+  assert.equal("transferEnvelopes" in appendedTurns[0], true);
   assert.equal(appendedTurns[0].transferEnvelopes?.[0]?.files?.[0]?.attachmentMeta?.attachmentId, "att-final");
   assert.equal(appendedTurns[0].transferEnvelopes?.length, 1);
 });

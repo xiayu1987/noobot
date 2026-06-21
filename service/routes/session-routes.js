@@ -58,7 +58,11 @@ export function registerSessionRoutes(
     "/internal/session/:userId/:sessionId",
     jsonRoute(async (req, res) => {
       const { userId, sessionId } = req.params;
-      const result = await bot.session.getSessionData({
+      const mode = String(req.query?.mode || "summary").trim().toLowerCase();
+      const readSessionData = mode === "full"
+        ? bot.session.getSessionData.bind(bot.session)
+        : (bot.session.getSessionDisplayData || bot.session.getSessionData).bind(bot.session);
+      const result = await readSessionData({
         userId,
         sessionId,
       });

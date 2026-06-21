@@ -9,7 +9,7 @@ import {
   flattenSessionMessages,
   mergeAttachmentMetas,
 } from "../infra/dialogProcessChain";
-import { getMessageTransferAttachmentMetas } from "../infra/transferEnvelope";
+import { getMessageTransferAttachmentMetas } from "../infra/transferEnvelopes";
 
 function tryParseJsonContent(content = "") {
   try {
@@ -276,6 +276,23 @@ export function useMessageFiles({
     if (!dialogProcessId) return [];
     const out = [];
     const seen = new Set();
+    for (const logItem of Array.isArray(messageItem?.completedToolLogs) ? messageItem.completedToolLogs : []) {
+      for (const fileItem of Array.isArray(logItem?.writtenFiles) ? logItem.writtenFiles : []) {
+        if (!fileItem?.fileName && !fileItem?.resolvedPath) continue;
+        const normalizedFileItem = {
+          toolName: fileItem?.toolName || "write_file",
+          resolvedPath: fileItem?.resolvedPath || "",
+          fileName: fileItem?.fileName || resolveBaseName(fileItem?.resolvedPath || ""),
+          relativePath: fileItem?.relativePath || resolveRelativeWorkspacePath(fileItem?.resolvedPath || ""),
+          sourceType: fileItem?.sourceType || "tool",
+          recognized: fileItem?.recognized === true,
+        };
+        const fileKey = toWrittenFileKey(normalizedFileItem);
+        if (fileKey && seen.has(fileKey)) continue;
+        if (fileKey) seen.add(fileKey);
+        out.push(normalizedFileItem);
+      }
+    }
     const candidateMessages = [
       ...(Array.isArray(getAllMessages()) ? getAllMessages() : []),
       ...flattenSessionMessages(getSessionDocs()),
@@ -333,11 +350,20 @@ export function useMessageFiles({
   const displayedAttachmentMetas = computed(() => {
     const messageItem = getMessageItem() || {};
     const baseAttachmentMetas = getMessageAttachmentMetas(messageItem);
+    const toolLogAttachmentMetas = [];
+    for (const logItem of Array.isArray(messageItem?.completedToolLogs) ? messageItem.completedToolLogs : []) {
+      toolLogAttachmentMetas.push(
+        ...(Array.isArray(logItem?.attachmentMetas) ? logItem.attachmentMetas : []),
+      );
+    }
+    const mergedBaseAttachmentMetas = toolLogAttachmentMetas.length
+      ? mergeAttachmentMetas(baseAttachmentMetas, toolLogAttachmentMetas)
+      : baseAttachmentMetas;
     if (String(messageItem?.role || "").trim() !== "assistant") {
-      return baseAttachmentMetas;
+      return mergedBaseAttachmentMetas;
     }
     if (isFreshPendingAssistant(messageItem)) {
-      return baseAttachmentMetas;
+      return mergedBaseAttachmentMetas;
     }
     const rootDialogProcessId = String(messageItem?.dialogProcessId || "").trim();
     if (!rootDialogProcessId) return baseAttachmentMetas;
@@ -350,7 +376,7 @@ export function useMessageFiles({
       candidateMessages,
       rootDialogProcessId,
     );
-    const baseSplit = splitAttachmentMetasByOwner(baseAttachmentMetas);
+    const baseSplit = splitAttachmentMetasByOwner(mergedBaseAttachmentMetas);
     let mainFlowAttachmentMetas = [...baseSplit.agent];
     let pluginAttachmentMetas = [...baseSplit.plugin];
     for (const sessionMessage of candidateMessages) {

@@ -58,7 +58,7 @@ test("SessionExecutionFinalizer promotes semantic-transfer attachment metas as t
 
   const finalAssistant = result.messages.find((item = {}) => item.role === "assistant") || {};
   assert.equal(finalAssistant.attachmentMetas, undefined);
-  assert.equal("transferEnvelope" in finalAssistant, false);
+  assert.equal("transferEnvelopes" in finalAssistant, true);
   assert.equal(Array.isArray(finalAssistant.transferEnvelopes), true);
   assert.equal(
     finalAssistant.transferEnvelopes[0]?.files?.[0]?.attachmentMeta?.attachmentId,
@@ -121,8 +121,7 @@ test("SessionExecutionFinalizer does not promote ordinary generated attachments 
   });
 
   const finalAssistant = result.messages.find((item = {}) => item.role === "assistant") || {};
-  assert.equal("transferEnvelope" in finalAssistant, false);
   assert.equal("transferEnvelopes" in finalAssistant, false);
   assert.equal(finalAssistant.attachmentMetas, undefined);
-  assert.equal(appendedMessages.find((item = {}) => item.role === "assistant")?.transferEnvelope, undefined);
+  assert.equal(appendedMessages.find((item = {}) => item.role === "assistant")?.transferEnvelopes, undefined);
 });

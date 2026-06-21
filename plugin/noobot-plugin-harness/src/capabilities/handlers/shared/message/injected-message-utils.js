@@ -29,7 +29,6 @@ export function buildHarnessInjectedMessage(
     attachmentMetas = [],
     legacyAttachmentMetasMirror = false,
     transferResult = null,
-    transferEnvelope = null,
     transferEnvelopes = [],
     dialogProcessId = "",
     injectedMessageType = "",
@@ -82,21 +81,17 @@ export function buildHarnessInjectedMessage(
     message.attachmentMetas = attachmentMetas;
   }
   const normalizedTransferResult = isPlainObject(transferResult) ? transferResult : null;
-  const normalizedTransferEnvelope = isPlainObject(transferEnvelope)
-    ? transferEnvelope
-    : isPlainObject(normalizedTransferResult?.envelope)
-      ? normalizedTransferResult.envelope
-      : null;
+  const resultEnvelope = isPlainObject(normalizedTransferResult?.envelope)
+    ? normalizedTransferResult.envelope
+    : null;
   const normalizedTransferEnvelopes = Array.isArray(transferEnvelopes)
     ? transferEnvelopes.filter(isPlainObject)
-    : normalizedTransferEnvelope
-      ? [normalizedTransferEnvelope]
-      : [];
+    : [];
+  if (resultEnvelope && !normalizedTransferEnvelopes.includes(resultEnvelope)) {
+    normalizedTransferEnvelopes.push(resultEnvelope);
+  }
   if (normalizedTransferResult) {
     message.transferResult = normalizedTransferResult;
-  }
-  if (normalizedTransferEnvelope) {
-    message.transferEnvelope = normalizedTransferEnvelope;
   }
   if (normalizedTransferEnvelopes.length) {
     message.transferEnvelopes = normalizedTransferEnvelopes;

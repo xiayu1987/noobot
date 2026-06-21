@@ -372,7 +372,6 @@ test("mini-runner compacts semantic-transfer tool messages before model invoke",
   });
 
   const compactedToolPayload = JSON.parse(firstInvokeMessages.find((item) => item.role === "tool").content);
-  assert.equal("transferEnvelope" in compactedToolPayload, false);
   assert.equal("transferEnvelopes" in compactedToolPayload, false);
   assert.equal("attachmentMetas" in compactedToolPayload, false);
   assert.equal(compactedToolPayload.transferFiles[0].attachmentId, "att-mini");

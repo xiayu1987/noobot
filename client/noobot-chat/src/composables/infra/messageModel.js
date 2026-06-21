@@ -8,8 +8,7 @@ import { mergeAttachmentMetas } from "./dialogProcessChain";
 import {
   getMessageTransferAttachmentMetas,
   getMessageTransferEnvelopes,
-  normalizeTransferEnvelope,
-} from "./transferEnvelope";
+} from "./transferEnvelopes";
 
 function normalizeArray(value) {
   return Array.isArray(value) ? value : [];
@@ -111,9 +110,6 @@ function createMessageModel(messageItem = {}) {
   const normalizedAttachmentMetas = Array.isArray(messageItem?.attachmentMetas)
     ? messageItem.attachmentMetas
     : [];
-  const transferEnvelope =
-    normalizeTransferEnvelope(messageItem?.transferEnvelope) ||
-    normalizeTransferEnvelope(messageItem?.transferResult?.envelope);
   const transferResult =
     messageItem?.transferResult &&
     typeof messageItem.transferResult === "object" &&
@@ -138,7 +134,6 @@ function createMessageModel(messageItem = {}) {
     modelRuns: normalizeArray(messageItem.modelRuns),
     attachmentMetas: normalizeArray(normalizedAttachmentMetas),
     transferResult,
-    transferEnvelope,
     transferEnvelopes,
     realtimeLogs: normalizeArray(messageItem.realtimeLogs),
     executionLogTotal: Number(
@@ -296,9 +291,6 @@ function foldConversationMessages(messages = [], buildView) {
     }
     if (!previousMessage.transferResult && currentMessage.transferResult) {
       previousMessage.transferResult = currentMessage.transferResult;
-    }
-    if (!previousMessage.transferEnvelope && currentMessage.transferEnvelope) {
-      previousMessage.transferEnvelope = currentMessage.transferEnvelope;
     }
     const previousTransferEnvelopes = normalizeArray(previousMessage?.transferEnvelopes);
     const currentTransferEnvelopes = getMessageTransferEnvelopes(currentMessage);

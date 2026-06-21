@@ -34,6 +34,7 @@ export function useChatList({
   applyCompletedToolLogsToMessages,
   getSessionsApi,
   getSessionDetailApi,
+  getSessionFullDetailApi = null,
   deleteSessionApi,
   makeViewMessage,
   foldMessagesForView,
@@ -395,6 +396,7 @@ export function useChatList({
       sessionDocs.find((doc) => doc.sessionId === detail.sessionId) ||
       sessionDocs[0] ||
       {};
+    const isSummaryDetail = detail?.summary === true;
     sessionItem.rawMessages = (mainSessionDoc.messages || []).map((messageItem) =>
       makeViewMessage(messageItem),
     );
@@ -406,12 +408,16 @@ export function useChatList({
     sessionItem.updatedAt = mainSessionDoc.updatedAt || sessionItem.updatedAt;
 
     if (!preserveCurrentMessages) {
-      sessionItem.messages = foldMessagesForView(mainSessionDoc.messages || []);
-      mergeChildTurnAttachmentsIntoRootMessages({
-        rootMessages: sessionItem.messages,
-        sessionDocs,
-        rootSessionId: detail.sessionId,
-      });
+      sessionItem.messages = isSummaryDetail
+        ? (mainSessionDoc.messages || []).map((messageItem) => makeViewMessage(messageItem))
+        : foldMessagesForView(mainSessionDoc.messages || []);
+      if (!isSummaryDetail) {
+        mergeChildTurnAttachmentsIntoRootMessages({
+          rootMessages: sessionItem.messages,
+          sessionDocs,
+          rootSessionId: detail.sessionId,
+        });
+      }
       for (const messageItem of sessionItem.messages || []) {
         const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
         if (!dialogProcessId) continue;
@@ -420,7 +426,9 @@ export function useChatList({
         }
       }
     } else {
-      const foldedDetailMessages = foldMessagesForView(mainSessionDoc.messages || []);
+      const foldedDetailMessages = isSummaryDetail
+        ? (mainSessionDoc.messages || []).map((messageItem) => makeViewMessage(messageItem))
+        : foldMessagesForView(mainSessionDoc.messages || []);
       const workflowMessages = foldedDetailMessages.filter(
         (messageItem) =>
           String(messageItem?.role || "").trim() === RoleEnum.ASSISTANT &&
@@ -456,7 +464,26 @@ export function useChatList({
       }
     }
 
-    applyCompletedToolLogsToMessages(sessionItem.messages, sessionDocs);
+    if (isSummaryDetail) {
+      const logsByDialogProcessId = new Map();
+      for (const sessionDoc of sessionDocs) {
+        for (const logItem of Array.isArray(sessionDoc?.toolLogSummaries) ? sessionDoc.toolLogSummaries : []) {
+          const dialogProcessId = String(logItem?.dialogProcessId || "").trim();
+          if (!dialogProcessId) continue;
+          logsByDialogProcessId.set(dialogProcessId, [
+            ...(logsByDialogProcessId.get(dialogProcessId) || []),
+            logItem,
+          ]);
+        }
+      }
+      for (const messageItem of sessionItem.messages || []) {
+        if (String(messageItem?.role || "") !== RoleEnum.ASSISTANT) continue;
+        const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+        messageItem.completedToolLogs = logsByDialogProcessId.get(dialogProcessId) || [];
+      }
+    } else {
+      applyCompletedToolLogsToMessages(sessionItem.messages, sessionDocs);
+    }
     sessionItem.messageCount = sessionItem.messages.length;
     sessionItem.lastMessage = sessionItem.messages.length
       ? sessionItem.messages[sessionItem.messages.length - 1]
@@ -504,6 +531,20 @@ export function useChatList({
     } finally {
       pendingSessionDetailRequests.delete(normalizedSessionId || sessionId);
     }
+  }
+
+  async function fetchSessionFullDetail(sessionId, options = {}) {
+    const normalizedSessionId = normalizeSessionId(sessionId);
+    const readFullDetail = getSessionFullDetailApi || getSessionDetailApi;
+    const res = await readFullDetail(
+      { userId: userId.value, sessionId: normalizedSessionId || sessionId },
+      { fetcher: authFetch },
+    );
+    if (!res.ok) throw new Error(translate("chat.getSessionFailed", { status: res.status }));
+    const data = await res.json();
+    if (!data.ok || !data.exists) throw new Error(data.error || translate("chat.sessionNotFound"));
+    applySessionDetail(data, options);
+    return data;
   }
 
   async function fetchSessions(preferredActiveId = "", options = {}) {
@@ -688,6 +729,7 @@ export function useChatList({
     fetchSessions,
     selectSession,
     fetchSessionDetail,
+    fetchSessionFullDetail,
     applySessionDetail,
     releaseAllPreviewUrls,
     initSessionsAfterMount,

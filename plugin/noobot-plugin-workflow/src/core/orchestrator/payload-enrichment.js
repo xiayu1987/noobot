@@ -42,15 +42,9 @@ export function buildWorkflowNodeSessions({
         rootSessionId: String(ctx?.sessionId || "").trim(),
         dialogId: String(item?.nodeDialogId || "").trim(),
         sessionId: String(item?.nodeSessionId || "").trim(),
-        transferEnvelope:
-          item?.nodeResultTransferEnvelope && typeof item.nodeResultTransferEnvelope === "object"
-            ? item.nodeResultTransferEnvelope
-            : null,
         transferEnvelopes: Array.isArray(item?.nodeResultTransferEnvelopes)
           ? item.nodeResultTransferEnvelopes
-          : item?.nodeResultTransferEnvelope && typeof item.nodeResultTransferEnvelope === "object"
-            ? [item.nodeResultTransferEnvelope]
-            : [],
+          : [],
         ...(item?.nodeResultTransferResult && typeof item.nodeResultTransferResult === "object"
           ? { transferResult: item.nodeResultTransferResult }
           : {}),
@@ -73,8 +67,7 @@ export function resolveWorkflowAttachmentMetasFromNodeRuns({
   return (Array.isArray(nodeAgentRuns) ? nodeAgentRuns : []).reduce((acc, item = {}) => {
     const transferPayload = normalizeWorkflowTransferPayload({
       transferResult: item?.nodeResultTransferResult || null,
-      transferEnvelope: item?.nodeResultTransferEnvelope || null,
-      transferEnvelopes: item?.nodeResultTransferEnvelopes || [],
+      transferEnvelopes: Array.isArray(item?.nodeResultTransferEnvelopes) ? item.nodeResultTransferEnvelopes : [],
     });
     const metas = resolveWorkflowAttachmentMetasFromTransferPayload(transferPayload, ctx);
     return mergeAttachmentMetas(
@@ -93,9 +86,7 @@ export function resolveWorkflowTransferEnvelopesFromNodeRuns(nodeAgentRuns = [])
     if (Array.isArray(item?.nodeResultTransferEnvelopes) && item.nodeResultTransferEnvelopes.length) {
       return item.nodeResultTransferEnvelopes;
     }
-    return item?.nodeResultTransferEnvelope && typeof item.nodeResultTransferEnvelope === "object"
-      ? [item.nodeResultTransferEnvelope]
-      : [];
+    return [];
   });
 }
 
@@ -118,7 +109,6 @@ export function enrichWorkflowPayload({
     nodeAgentRuns,
   });
   workflowPayload.transferEnvelopes = resolveWorkflowTransferEnvelopesFromNodeRuns(nodeAgentRuns);
-  workflowPayload.transferEnvelope = workflowPayload.transferEnvelopes[0] || null;
   return {
     workflowPayload,
     workflowAttachmentMetas,

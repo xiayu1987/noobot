@@ -85,7 +85,6 @@ function buildNodeAgentRunRecord({
       4000,
     ),
     nodeResultAttachmentMetas: resolveNodeResultAttachmentMetas(item, ctx),
-    nodeResultTransferEnvelope: resultTransferPayload.transferEnvelope,
     nodeResultTransferEnvelopes: resultTransferPayload.transferEnvelopes,
     nodeResultTransferResult: resultTransferPayload.transferResult,
     stepStatus: item?.action?.stepFailure ? "failed" : "",
@@ -148,7 +147,6 @@ function rememberCompletedStepResult({
         ? item.action.stepFailure
         : null,
     attachmentMetas: resolveNodeResultAttachmentMetas(item, ctx),
-    transferEnvelope: resultTransferPayload.transferEnvelope,
     transferEnvelopes: resultTransferPayload.transferEnvelopes,
     transferResult: resultTransferPayload.transferResult,
   });

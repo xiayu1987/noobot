@@ -11,7 +11,7 @@
 
 统一方法：语义信息传递  
 输入：场景类型、策略、待转换信息、附件/注入目标等上下文。  
-输出：标准 semantic-transfer 语义返回（如 transferResult / transferEnvelope / transferEnvelopes），由调用方按场景回填。
+输出：标准 semantic-transfer 语义返回（如 transferResult / transferEnvelopes），由调用方按场景回填。
 
 ## 1. 工具信息传递
 
@@ -85,4 +85,4 @@
 
 - 工作流插件在“工作流规划 + 执行完成”后的最终返回，会拼接各个子agent附件消息（附件路径/摘要块）。
 - 这一步拼接结果必须走 semantic-transfer 统一方法（按授权场景，策略归到“子agent 信息传递”或“workflow 最终返回拼接”），不能绕过 semantic-transfer 直接裸拼接返回。
-- 如果当前实现没有走 semantic-transfer，需要补齐：由 semantic-transfer 产出标准 transferResult / transferEnvelope / transferEnvelopes，再回填到 workflow 最终消息与 payload。
+- 如果当前实现没有走 semantic-transfer，需要补齐：由 semantic-transfer 产出标准 transferResult / transferEnvelopes，再回填到 workflow 最终消息与 payload。

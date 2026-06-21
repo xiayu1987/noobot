@@ -517,7 +517,6 @@ test("SessionExecutionEngine resolveModelMessages compacts semantic-transfer too
   });
 
   const compactedToolPayload = JSON.parse(resolved.find((item) => item.role === "tool").content);
-  assert.equal("transferEnvelope" in compactedToolPayload, false);
   assert.equal("transferEnvelopes" in compactedToolPayload, false);
   assert.equal("attachmentMetas" in compactedToolPayload, false);
   assert.equal(compactedToolPayload.transferFiles[0].attachmentId, "att-agent-plugin");

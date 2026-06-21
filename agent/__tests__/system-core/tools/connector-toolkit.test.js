@@ -486,7 +486,8 @@ test("connector-toolkit/access_connector(email): 邮件附件保存不提升为 
           ], {
             generationSource: "email_connector_read",
           });
-          assert.equal("transferEnvelope" in saved, false);
+          assert.equal("transferEnvelopes" in saved, true);
+          assert.equal(Array.isArray(saved.transferEnvelopes), true);
           return {
             ok: true,
             connector: {
@@ -525,7 +526,6 @@ test("connector-toolkit/access_connector(email): 邮件附件保存不提升为 
   assert.equal(payload.ok, true);
   assert.equal("attachmentMetas" in payload, false);
   assert.equal("transferResult" in payload, false);
-  assert.equal("transferEnvelope" in payload, false);
   assert.equal("transferEnvelopes" in payload, false);
   assert.equal(ingestCalls.length, 1);
 });
@@ -552,7 +552,7 @@ test("connector-toolkit/access_connector(email): stdout 里的 transfer-like 字
           };
         },
         async executeConnectorCommand() {
-          const transferEnvelope = {
+          const envelope = {
             protocol: "noobot.semantic-transfer",
             version: 1,
             direction: "output",
@@ -580,8 +580,8 @@ test("connector-toolkit/access_connector(email): stdout 里的 transfer-like 字
               code: 0,
               stdout: JSON.stringify({
                 action: "read",
-                transferResult: { ok: true, status: "file", envelope: transferEnvelope },
-                transferEnvelopes: [transferEnvelope],
+                transferResult: { ok: true, status: "file", envelope },
+                transferEnvelopes: [envelope],
               }),
               stderr: "",
             },
@@ -606,7 +606,6 @@ test("connector-toolkit/access_connector(email): stdout 里的 transfer-like 字
 
   assert.equal(payload.ok, true);
   assert.equal("transferResult" in payload, false);
-  assert.equal("transferEnvelope" in payload, false);
   assert.equal("transferEnvelopes" in payload, false);
   assert.equal("attachmentMetas" in payload, false);
 });
@@ -666,6 +665,5 @@ test("connector-toolkit/access_connector(email): stdout 非 JSON 时不应注入
   assert.equal(payload.ok, true);
   assert.equal(Array.isArray(payload.attachmentMetas), false);
   assert.equal("transferResult" in payload, false);
-  assert.equal("transferEnvelope" in payload, false);
   assert.equal("transferEnvelopes" in payload, false);
 });

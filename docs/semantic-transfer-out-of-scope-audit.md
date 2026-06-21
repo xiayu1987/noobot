@@ -677,7 +677,7 @@ attachmentMetas
 不要为了统一结构把它包装成：
 
 ```js
-transferEnvelope
+transferEnvelopes
 ```
 
 除非它确实是三类语义转换的结果。
@@ -689,7 +689,7 @@ transferEnvelope
 semantic-transfer 可以返回：
 
 ```js
-transferEnvelope.files[*].attachmentMeta
+transferEnvelopes[*].files[*].attachmentMeta
 ```
 
 但这表示：
@@ -701,7 +701,7 @@ transferEnvelope.files[*].attachmentMeta
 不是说：
 
 ```text
-所有附件都应该变成 transferEnvelope.files
+所有附件都应该变成 transferEnvelopes[*].files
 ```
 
 ---
@@ -765,7 +765,7 @@ allowedReasons = [
 
 - 禁止业务层直接调用 `semanticTransfer.persistTransfer*`。
 - 禁止非白名单文件 import `persistTransferArtifacts`。
-- 禁止普通附件场景输出 `transferEnvelope`。
+- 禁止普通附件场景输出 `transferEnvelopes`。
 
 ---
 

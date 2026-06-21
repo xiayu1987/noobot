@@ -377,6 +377,7 @@ const {
   loadingSessionDetail,
   newSession,
   fetchSessions,
+  fetchSessionFullDetail,
   selectSession,
   deleteSession,
   send,
@@ -668,8 +669,22 @@ function getThinkingDetailsTitle(messageItem = {}) {
   return getThinkingDetailsTitleState(messageItem, translate);
 }
 
-function openThinkingDetailsPanel(payload = {}) {
-  const fallbackPayload = resolveFallbackThinkingDetailsPayload();
+async function openThinkingDetailsPanel(payload = {}) {
+  let fallbackPayload = resolveFallbackThinkingDetailsPayload();
+  const initialPayload = resolveThinkingDetailsPanelPayload(payload, fallbackPayload);
+  const initialMessageItem = initialPayload.messageItem;
+  const needsFullDetail =
+    initialMessageItem &&
+    (initialMessageItem.hasThinkingDetails === true || Number(initialMessageItem.thinkingDetailCount || 0) > 0) &&
+    !Array.isArray(initialMessageItem.realtimeLogs);
+  if (needsFullDetail && typeof fetchSessionFullDetail === "function") {
+    try {
+      await fetchSessionFullDetail(activeSessionId.value, { preserveCurrentMessages: false });
+      fallbackPayload = resolveFallbackThinkingDetailsPayload();
+    } catch (error) {
+      notifyUi({ type: "warning", message: error?.message || translate("chat.loadSessionDetailFailed") });
+    }
+  }
   const { messageItem, allMessages } = resolveThinkingDetailsPanelPayload(payload, fallbackPayload);
   if (!messageItem) return;
   closeAllDrawers();
