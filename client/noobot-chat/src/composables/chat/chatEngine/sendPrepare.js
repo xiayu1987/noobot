@@ -7,12 +7,6 @@ import { RoleEnum } from "../../../shared/constants/chatConstants";
 import { zhCNMessages } from "noobot-i18n/client/locales/zh-CN";
 import { enUSMessages } from "noobot-i18n/client/locales/en-US";
 
-function buildMessageRoundId() {
-  const randomId = globalThis.crypto?.randomUUID?.();
-  if (randomId) return `round-${randomId}`;
-  return `round-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
 export function prepareChatSend({
   input,
   uploadFiles,
@@ -47,9 +41,7 @@ export function prepareChatSend({
     activeSession.value.title = text.slice(0, 20);
   }
 
-  const botMessage = appendMessage(RoleEnum.ASSISTANT, "", [], {
-    messageRoundId: buildMessageRoundId(),
-  });
+  const botMessage = appendMessage(RoleEnum.ASSISTANT, "", []);
   botMessage.pending = true;
   botMessage.hasFirstStreamEvent = false;
   botMessage.statusLabel = "";

@@ -183,7 +183,7 @@ export function useChatEngine({
     return normalizeTrimmedString(message?.role).toLowerCase() === "user";
   }
 
-  function getMessageRoundId(message = {}) {
+  function getDialogProcessId(message = {}) {
     return normalizeTrimmedString(message?.dialogProcessId || message?.dialogId);
   }
 
@@ -209,12 +209,12 @@ export function useChatEngine({
       return messages[directIndex];
     }
 
-    const targetRoundId = getMessageRoundId(targetMessage);
-    if (targetRoundId) {
-      const sameRoundUserMessage = messages.find(
-        (message) => isUserMessage(message) && getMessageRoundId(message) === targetRoundId,
+    const targetDialogProcessId = getDialogProcessId(targetMessage);
+    if (targetDialogProcessId) {
+      const sameDialogProcessUserMessage = messages.find(
+        (message) => isUserMessage(message) && getDialogProcessId(message) === targetDialogProcessId,
       );
-      if (sameRoundUserMessage) return sameRoundUserMessage;
+      if (sameDialogProcessUserMessage) return sameDialogProcessUserMessage;
     }
 
     const targetIndex = directIndex;

@@ -42,6 +42,8 @@ const messageItemSharedProps = computed(() => ({
   resendMonotonicMessage: props.resendMonotonicMessage,
 }));
 
+const pendingAssistantRenderKeys = new Map();
+
 function setScrollTop(top = 0) {
   listRef.value?.setScrollTop?.(Number(top || 0));
 }
@@ -54,18 +56,24 @@ function getMessageRenderKey(messageItem = {}, messageIndex = 0) {
   const stableIndex = Number.isFinite(Number(messageIndex)) ? Number(messageIndex) : 0;
   const role = String(messageItem?.role || "").trim();
   const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
-  const messageRoundId = String(messageItem?.messageRoundId || "").trim();
   const taskId = String(messageItem?.taskId || "").trim();
   const toolCallId = String(messageItem?.tool_call_id || "").trim();
   // Do not include content or ts in the key: both can change when backend
   // snapshots/replay patch an existing message. If the key changes Vue remounts
   // the message component, which looks like the AI message flashes and can also
   // make the previous message blink when a DONE snapshot is folded back.
-  const stablePrimaryId = dialogProcessId || taskId || toolCallId || String(stableIndex);
-  if (role === "assistant" && messageRoundId) {
-    return [role, messageRoundId, stableIndex]
+  let stablePrimaryId = dialogProcessId || taskId || toolCallId || String(stableIndex);
+  if (role === "assistant" && !taskId && !toolCallId) {
+    const pendingKey = [role, stableIndex, stableIndex]
       .map((item) => String(item ?? "").replaceAll("|", "/"))
       .join("|");
+    if (!dialogProcessId) {
+      pendingAssistantRenderKeys.set(stableIndex, pendingKey);
+      stablePrimaryId = String(stableIndex);
+    } else {
+      const sameSlotPlaceholderKey = pendingAssistantRenderKeys.get(stableIndex);
+      if (sameSlotPlaceholderKey) return sameSlotPlaceholderKey;
+    }
   }
   return [role, stablePrimaryId, stableIndex]
     .map((item) => String(item ?? "").replaceAll("|", "/"))

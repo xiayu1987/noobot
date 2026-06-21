@@ -128,7 +128,6 @@ function createMessageModel(messageItem = {}) {
     tool_call_id: messageItem.tool_call_id || "",
     dialogProcessId: messageItem.dialogProcessId || "",
     parentDialogProcessId: messageItem.parentDialogProcessId || "",
-    messageRoundId: messageItem.messageRoundId || "",
     modelAlias: messageItem.modelAlias || "",
     modelName: messageItem.modelName || messageItem.model || "",
     modelRuns: normalizeArray(messageItem.modelRuns),
@@ -175,7 +174,6 @@ function buildAppendMessage(role, content = "", attachmentMetas = [], options = 
     content,
     type: "message",
     attachmentMetas,
-    messageRoundId: options?.messageRoundId || "",
     ts: Date.now(),
   });
 }

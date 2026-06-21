@@ -230,19 +230,17 @@ describe("useMessageFiles", () => {
     expect(displayedAttachmentMetas.value).toEqual([]);
   });
 
-  it("does not backfill previously written files while current assistant is pending", () => {
+  it("does not backfill written files while current assistant is pending before streaming starts", () => {
     const messageItem = {
       role: "assistant",
       pending: true,
       dialogProcessId: "dp-1",
-      messageRoundId: "round-2",
       hasFirstStreamEvent: false,
       content: "",
     };
     const previousToolMessage = {
       role: "tool",
       dialogProcessId: "dp-1",
-      messageRoundId: "round-1",
       content: JSON.stringify({
         toolName: "write_file",
         state: "OK",
@@ -260,18 +258,16 @@ describe("useMessageFiles", () => {
     expect(writtenFiles.value).toEqual([]);
   });
 
-  it("does not backfill written files from a previous assistant round after current round starts streaming", () => {
+  it("collects written files for the same dialogProcessId after current dialog starts streaming", () => {
     const messageItem = {
       role: "assistant",
       pending: false,
       dialogProcessId: "dp-1",
-      messageRoundId: "round-2",
       content: "",
     };
     const previousToolMessage = {
       role: "tool",
       dialogProcessId: "dp-1",
-      messageRoundId: "round-1",
       content: JSON.stringify({
         toolName: "write_file",
         state: "OK",
@@ -282,7 +278,6 @@ describe("useMessageFiles", () => {
     const currentToolMessage = {
       role: "tool",
       dialogProcessId: "dp-1",
-      messageRoundId: "round-2",
       content: JSON.stringify({
         toolName: "write_file",
         state: "OK",
@@ -297,7 +292,7 @@ describe("useMessageFiles", () => {
       getUserId: () => "admin",
     });
 
-    expect(writtenFiles.value.map((item) => item.fileName)).toEqual(["current.md"]);
+    expect(writtenFiles.value.map((item) => item.fileName)).toEqual(["previous.md", "current.md"]);
   });
 
   it("does not backfill previous assistant attachments while current assistant is pending", () => {
@@ -325,19 +320,17 @@ describe("useMessageFiles", () => {
     expect(displayedAttachmentMetas.value).toEqual([]);
   });
 
-  it("does not backfill attachments from a previous assistant round after current round starts streaming", () => {
+  it("collects attachments for the same dialogProcessId after current dialog starts streaming", () => {
     const messageItem = {
       role: "assistant",
       pending: false,
       dialogProcessId: "dp-1",
-      messageRoundId: "round-2",
       attachmentMetas: [],
     };
     const previousAssistantMessage = {
       role: "assistant",
       pending: false,
       dialogProcessId: "dp-1",
-      messageRoundId: "round-1",
       attachmentMetas: [
         { attachmentId: "prev-1", name: "previous-result.md" },
       ],
@@ -349,7 +342,9 @@ describe("useMessageFiles", () => {
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toEqual([]);
+    expect(displayedAttachmentMetas.value).toEqual([
+      { attachmentId: "prev-1", attachmentOwnerType: "agent", name: "previous-result.md" },
+    ]);
   });
 
 });
