@@ -9,6 +9,8 @@ import { ERROR_CODE } from "../../error/constants.js";
 import { fsMkdir, fsReaddir, fsRm } from "../../store/fs-adapter.js";
 import { normalizeSessionEntity } from "../entities/session-entity.js";
 
+const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 2;
+
 function buildSessionSummary(session = {}, { depth = 0 } = {}) {
   const sessionId = String(session?.sessionId || "").trim();
   const messages = Array.isArray(session?.messages) ? session.messages : [];
@@ -136,11 +138,131 @@ function pickLightObject(source = {}, allowedKeys = []) {
   return Object.keys(picked).length ? picked : null;
 }
 
+function clonePlainJson(value, { maxStringLength = 2000 } = {}) {
+  if (value === undefined || value === null) return value;
+  if (["number", "boolean"].includes(typeof value)) return value;
+  if (typeof value === "string") return truncateText(value, maxStringLength);
+  if (Array.isArray(value)) return value.map((item) => clonePlainJson(item, { maxStringLength }));
+  if (typeof value !== "object") return undefined;
+  const cloned = {};
+  for (const [key, itemValue] of Object.entries(value)) {
+    const nextValue = clonePlainJson(itemValue, { maxStringLength });
+    if (nextValue !== undefined) cloned[key] = nextValue;
+  }
+  return cloned;
+}
+
+function pickPlainFields(source = {}, allowedKeys = [], options = {}) {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return null;
+  const picked = {};
+  for (const key of allowedKeys) {
+    if (source?.[key] === undefined || source?.[key] === null || source?.[key] === "") continue;
+    const value = clonePlainJson(source[key], options);
+    if (value !== undefined) picked[key] = value;
+  }
+  return Object.keys(picked).length ? picked : null;
+}
+
+function pickLightWorkflowTransferEnvelopes(value = []) {
+  return (Array.isArray(value) ? value : [])
+    .filter((item) => item && typeof item === "object" && !Array.isArray(item))
+    .slice(0, 50)
+    .map((item) => pickPlainFields(item, [
+      "id", "type", "from", "to", "status", "state", "title", "label", "createdAt", "updatedAt",
+    ], { maxStringLength: 500 }))
+    .filter(Boolean);
+}
+
+function pickWorkflowStepFailure(value) {
+  if (!value) return null;
+  if (typeof value === "string") return truncateText(value, 1000);
+  if (typeof value !== "object" || Array.isArray(value)) return null;
+  return pickPlainFields(value, ["message", "error", "code", "name", "stack"], { maxStringLength: 1000 });
+}
+
+function pickWorkflowSemantic(semantic = {}) {
+  if (!semantic || typeof semantic !== "object" || Array.isArray(semantic)) return null;
+  return pickPlainFields(semantic, ["nodes", "flowtos", "edges", "attachments"], { maxStringLength: 2000 });
+}
+
+function pickWorkflowNodeRun(item = {}) {
+  if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+  const picked = pickPlainFields(item, [
+    "transition", "stepId", "stepIndex", "actionNodeStateId", "nodeDialogId", "dialogId",
+    "nodeSessionId", "sessionId", "rootSessionId", "stepStatus", "status", "parallelWave", "waveOrder",
+  ], { maxStringLength: 1000 }) || {};
+  const step = pickPlainFields(item?.step, [
+    "nodeId", "nodeName", "nodeType", "type", "stateType", "stepId", "stepIndex", "actionNodeStateId",
+  ], { maxStringLength: 1000 });
+  if (step) picked.step = step;
+  const stepFailure = pickWorkflowStepFailure(item?.stepFailure);
+  if (stepFailure) picked.stepFailure = stepFailure;
+  const envelopes = pickLightWorkflowTransferEnvelopes(item?.nodeResultTransferEnvelopes || item?.transferEnvelopes);
+  if (envelopes.length) picked.nodeResultTransferEnvelopes = envelopes;
+  return Object.keys(picked).length ? picked : null;
+}
+
+function pickWorkflowNodeSession(item = {}) {
+  if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+  const picked = pickPlainFields(item, [
+    "transition", "nodeName", "nodeId", "nodeType", "actionNodeStateId", "stepId", "stepIndex",
+    "type", "stateType", "rootSessionId", "dialogId", "sessionId", "stepStatus", "status",
+    "parallelWave", "waveOrder",
+  ], { maxStringLength: 1000 }) || {};
+  const stepFailure = pickWorkflowStepFailure(item?.stepFailure);
+  if (stepFailure) picked.stepFailure = stepFailure;
+  const envelopes = pickLightWorkflowTransferEnvelopes(item?.transferEnvelopes || item?.nodeResultTransferEnvelopes);
+  if (envelopes.length) picked.transferEnvelopes = envelopes;
+  return Object.keys(picked).length ? picked : null;
+}
+
+function pickWorkflowPayloadSnapshot(payload = {}) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const picked = pickPlainFields(payload, ["status", "phase", "phaseStatus"], { maxStringLength: 500 }) || {};
+  const semantic = pickWorkflowSemantic(payload?.semantic);
+  if (semantic) picked.semantic = semantic;
+  if (payload?.execution && typeof payload.execution === "object" && !Array.isArray(payload.execution)) {
+    const execution = pickPlainFields(payload.execution, ["completed", "status", "startedAt", "endedAt", "error"], { maxStringLength: 1000 }) || {};
+    const runs = (Array.isArray(payload.execution?.nodeAgentRuns) ? payload.execution.nodeAgentRuns : [])
+      .slice(0, 100)
+      .map((item) => pickWorkflowNodeRun(item))
+      .filter(Boolean);
+    if (runs.length) execution.nodeAgentRuns = runs;
+    if (Object.keys(execution).length) picked.execution = execution;
+  }
+  const nodeSessions = (Array.isArray(payload?.nodeSessions) ? payload.nodeSessions : [])
+    .slice(0, 100)
+    .map((item) => pickWorkflowNodeSession(item))
+    .filter(Boolean);
+  if (nodeSessions.length) picked.nodeSessions = nodeSessions;
+  const planningDialog = pickPlainFields(payload?.planningDialog, ["sessionId", "dialogId", "parentSessionId"], { maxStringLength: 1000 });
+  if (planningDialog) picked.planningDialog = planningDialog;
+  const runMeta = pickPlainFields(payload?.runMeta, ["sessionId", "dialogId", "parentSessionId", "workflowRunId"], { maxStringLength: 1000 });
+  if (runMeta) picked.runMeta = runMeta;
+  const interaction = pickPlainFields(payload?.interaction, ["semanticTextPreview"], { maxStringLength: 4000 });
+  if (interaction) picked.interaction = interaction;
+  return Object.keys(picked).length ? picked : null;
+}
+
+function isWorkflowPluginMeta(message = {}) {
+  const pluginMeta = message?.pluginMeta;
+  if (!pluginMeta || typeof pluginMeta !== "object" || Array.isArray(pluginMeta)) return false;
+  const type = String(message?.type || "").trim().toLowerCase();
+  const source = String(pluginMeta?.source || "").trim().toLowerCase();
+  const kind = String(pluginMeta?.kind || "").trim().toLowerCase();
+  return type === "workflow" || (source === "workflow-plugin" && kind === "workflow");
+}
+
 function pickLightPluginMeta(message = {}) {
-  return pickLightObject(message?.pluginMeta, [
+  const pluginMeta = pickLightObject(message?.pluginMeta, [
     "pluginId", "pluginName", "pluginKey", "name", "title", "status", "state", "icon", "color",
     "source", "kind", "phase", "nodeId", "nodeName", "nodeType", "stepId", "stepName",
   ]);
+  if (pluginMeta && isWorkflowPluginMeta(message)) {
+    const payload = pickWorkflowPayloadSnapshot(message?.pluginMeta?.payload);
+    if (payload) pluginMeta.payload = payload;
+  }
+  return pluginMeta;
 }
 
 function pickLightTransferEnvelopes(message = {}) {
@@ -306,7 +428,7 @@ function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
     0,
   );
   return {
-    schemaVersion: 1,
+    schemaVersion: SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
     sessionId: String(session?.sessionId || "").trim(),
     parentSessionId: String(session?.parentSessionId || "").trim(),
     caller: String(session?.caller || "user").trim() || "user",
@@ -613,7 +735,7 @@ export class FileSystemSessionRepository {
       null,
     );
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-    if (Number(payload?.schemaVersion || 0) !== 1) return null;
+    if (Number(payload?.schemaVersion || 0) !== SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION) return null;
     if (String(payload?.sessionId || "").trim() !== normalizedSessionId) return null;
     return payload;
   }

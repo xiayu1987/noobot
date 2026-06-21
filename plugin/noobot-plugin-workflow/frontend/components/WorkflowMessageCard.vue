@@ -136,6 +136,116 @@ const nodeSessions = computed(() => {
   return fromPayload;
 });
 
+function makeNodeSessionFromRun(item = {}) {
+  const step = item?.step && typeof item.step === "object" ? item.step : {};
+  return {
+    transition: Number(item?.transition || 0),
+    nodeName: String(step?.nodeName || item?.nodeName || "").trim(),
+    nodeId: String(step?.nodeId || item?.nodeId || "").trim(),
+    nodeType: Number.isFinite(Number(step?.nodeType ?? item?.nodeType))
+      ? Number(step?.nodeType ?? item?.nodeType)
+      : undefined,
+    actionNodeStateId: String(item?.actionNodeStateId || step?.actionNodeStateId || "").trim(),
+    stepId: String(item?.stepId || step?.stepId || "").trim(),
+    stepIndex: Number.isFinite(Number(item?.stepIndex ?? step?.stepIndex))
+      ? Number(item?.stepIndex ?? step?.stepIndex)
+      : undefined,
+    type: String(step?.type || item?.type || "").trim(),
+    stateType: Number.isFinite(Number(step?.stateType ?? item?.stateType))
+      ? Number(step?.stateType ?? item?.stateType)
+      : undefined,
+    rootSessionId: String(
+      item?.rootSessionId ||
+        workflowPayload.value?.planningDialog?.sessionId ||
+        workflowPayload.value?.runMeta?.sessionId ||
+        "",
+    ).trim(),
+    dialogId: String(item?.nodeDialogId || item?.dialogId || "").trim(),
+    sessionId: String(item?.nodeSessionId || item?.sessionId || "").trim(),
+    transferEnvelopes: Array.isArray(item?.nodeResultTransferEnvelopes)
+      ? item.nodeResultTransferEnvelopes
+      : Array.isArray(item?.transferEnvelopes)
+        ? item.transferEnvelopes
+        : [],
+    ...(item?.nodeResultTransferResult && typeof item.nodeResultTransferResult === "object"
+      ? { transferResult: item.nodeResultTransferResult }
+      : item?.transferResult && typeof item.transferResult === "object"
+        ? { transferResult: item.transferResult }
+        : {}),
+    stepStatus: String(item?.stepStatus || item?.status || "").trim(),
+    stepFailure:
+      item?.stepFailure && typeof item.stepFailure === "object"
+        ? item.stepFailure
+        : null,
+    parallelWave: Number(item?.parallelWave || 0),
+    waveOrder: Number(item?.waveOrder || 0),
+  };
+}
+
+function makeRuntimeEntryKey(item = {}) {
+  return String(
+    item?.dialogId ||
+      item?.nodeDialogId ||
+      item?.sessionId ||
+      item?.nodeSessionId ||
+      item?.stepId ||
+      item?.actionNodeStateId ||
+      "",
+  ).trim();
+}
+
+const runtimeNodeSessions = computed(() => {
+  const entries = [];
+  const entryIndexByKey = new Map();
+  const rememberEntryKeys = (item = {}, index = entries.length - 1) => {
+    const keys = [
+      item?.dialogId,
+      item?.nodeDialogId,
+      item?.sessionId,
+      item?.nodeSessionId,
+      item?.stepId,
+      item?.actionNodeStateId,
+    ]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean);
+    for (const key of keys) {
+      if (!entryIndexByKey.has(key)) entryIndexByKey.set(key, index);
+    }
+  };
+  const mergeRuntimeEntry = (base = {}, fallback = {}) => ({
+    ...fallback,
+    ...base,
+    stepStatus: String(base?.stepStatus || base?.status || fallback?.stepStatus || fallback?.status || "").trim(),
+    stepFailure:
+      base?.stepFailure && typeof base.stepFailure === "object"
+        ? base.stepFailure
+        : fallback?.stepFailure && typeof fallback.stepFailure === "object"
+          ? fallback.stepFailure
+          : null,
+  });
+  for (const item of nodeSessions.value) {
+    entries.push(item);
+    rememberEntryKeys(item, entries.length - 1);
+  }
+  const runs = Array.isArray(executionMeta.value?.nodeAgentRuns)
+    ? executionMeta.value.nodeAgentRuns
+    : [];
+  for (const runItem of runs) {
+    const fallback = makeNodeSessionFromRun(runItem);
+    if (!fallback.dialogId && !fallback.sessionId && !fallback.stepId) continue;
+    const key = makeRuntimeEntryKey(fallback);
+    if (key && entryIndexByKey.has(key)) {
+      const index = entryIndexByKey.get(key);
+      entries[index] = mergeRuntimeEntry(entries[index], fallback);
+      rememberEntryKeys(entries[index], index);
+      continue;
+    }
+    entries.push(fallback);
+    rememberEntryKeys(fallback, entries.length - 1);
+  }
+  return entries;
+});
+
 const semanticFlowtos = computed(() =>
   Array.isArray(workflowPayload.value?.semantic?.flowtos)
     ? workflowPayload.value.semantic.flowtos
@@ -277,7 +387,7 @@ const actionRuntimeBySemanticKey = computed(() => {
     return map.get(primaryKey);
   };
 
-  nodeSessions.value.forEach((item = {}, index) => {
+  runtimeNodeSessions.value.forEach((item = {}, index) => {
     const runtime = ensureNodeRuntime(item);
     if (!runtime) return;
     const stateKey = makeActionStateKey(item, index);
@@ -383,6 +493,15 @@ function buildFlowNodeFromSemantic(nodeItem = {}, index = 0) {
   const nodeType = String(nodeItem?.type || "").trim().toLowerCase();
   const isAction = nodeType === "action";
   const runtimeStatus = resolveActionRuntimeStatus(cleanRuntime.actionNodeStates);
+  const restoredStatus = isAction
+    ? runtimeStatus !== "pending"
+      ? runtimeStatus
+      : completed
+        ? "success"
+        : "pending"
+    : completed
+      ? "success"
+      : "pending";
   return {
     ...firstStep,
     nodeId,
@@ -400,11 +519,7 @@ function buildFlowNodeFromSemantic(nodeItem = {}, index = 0) {
     ).trim(),
     actionNodeStates: isAction ? cleanRuntime.actionNodeStates : [],
     runtimeBoxes: isAction ? cleanRuntime.actionNodeStates : [],
-    status: isAction
-      ? runtimeStatus
-      : completed
-        ? "success"
-        : "pending",
+    status: restoredStatus,
     _order: Number.isFinite(Number(firstStep?.transition))
       ? Number(firstStep.transition)
       : index + 1,

@@ -57,6 +57,17 @@ function resolveNodeResultAttachmentMetas(item = {}, ctx = {}) {
     : [];
 }
 
+function resolveItemStepFailure(item = {}) {
+  const candidates = [item?.effectiveAction, item?.action];
+  for (const action of candidates) {
+    const failure = action?.stepFailure;
+    if (failure && typeof failure === "object") return failure;
+    const message = String(failure || "").trim();
+    if (message) return { message };
+  }
+  return null;
+}
+
 function buildNodeAgentRunRecord({
   item = {},
   snapshot = {},
@@ -66,6 +77,7 @@ function buildNodeAgentRunRecord({
   ctx = {},
 } = {}) {
   const resultTransferPayload = getWorkflowTransferPayloadFromResult(item?.subSession?.result || {});
+  const stepFailure = resolveItemStepFailure(item);
   return {
     transition: transitions,
     step: item?.step || null,
@@ -87,11 +99,12 @@ function buildNodeAgentRunRecord({
     nodeResultAttachmentMetas: resolveNodeResultAttachmentMetas(item, ctx),
     nodeResultTransferEnvelopes: resultTransferPayload.transferEnvelopes,
     nodeResultTransferResult: resultTransferPayload.transferResult,
-    stepStatus: item?.action?.stepFailure ? "failed" : "",
-    stepFailure:
-      item?.action?.stepFailure && typeof item.action.stepFailure === "object"
-        ? item.action.stepFailure
-        : null,
+    // Persist an explicit terminal status for every executed node step.
+    // The workflow card is rendered again from the saved session message after a page refresh;
+    // relying on the presence of session/dialog ids to infer success makes the persisted payload
+    // non-self-describing and can make refreshed graph nodes fall back to pending.
+    stepStatus: stepFailure ? "failed" : "success",
+    stepFailure,
     upstreamNodeResults: Array.isArray(item?.upstreamNodeResults)
       ? item.upstreamNodeResults
       : [],
@@ -127,6 +140,7 @@ function rememberCompletedStepResult({
       "",
   ).trim();
   const resultTransferPayload = getWorkflowTransferPayloadFromResult(item?.subSession?.result || {});
+  const stepFailure = resolveItemStepFailure(item);
   completedStepResults.set(completedStepId, {
     transition: transitions,
     nodeId: completedNodeId,
@@ -141,11 +155,8 @@ function rememberCompletedStepResult({
       : -1,
     nodeDialogId: String(item?.nodeDialogId || "").trim(),
     nodeSessionId: String(item?.subSession?.sessionId || "").trim(),
-    stepStatus: item?.action?.stepFailure ? "failed" : "",
-    stepFailure:
-      item?.action?.stepFailure && typeof item.action.stepFailure === "object"
-        ? item.action.stepFailure
-        : null,
+    stepStatus: stepFailure ? "failed" : "success",
+    stepFailure,
     attachmentMetas: resolveNodeResultAttachmentMetas(item, ctx),
     transferEnvelopes: resultTransferPayload.transferEnvelopes,
     transferResult: resultTransferPayload.transferResult,
