@@ -58,6 +58,33 @@ describe("chatEngine utils", () => {
     expect(targetMessage.content).not.toContain("[session_turn_full]");
   });
 
+  it("patches workflow assistant through the shared folded message shape", () => {
+    const targetMessage = {
+      pending: false,
+      statusLabel: "",
+      realtimeLogs: [],
+      executionLogTotal: 0,
+      content: "",
+    };
+    const workflowMessageItem = {
+      role: "assistant",
+      type: "tool_call",
+      content: "工作流节点回复",
+      tool_calls: [{ id: "call-1", name: "read_file" }],
+      tool_call_id: "call-1",
+    };
+
+    patchAssistantFromWorkflowMessage(targetMessage, workflowMessageItem);
+
+    expect(targetMessage.content).toBe("工作流节点回复");
+    expect(targetMessage.tool_calls).toEqual([{ id: "call-1", name: "read_file" }]);
+    expect(targetMessage.tool_call_id).toBe("call-1");
+    expect(targetMessage.type).toBe("tool_call");
+    expect(workflowMessageItem.tool_calls).toEqual([{ id: "call-1", name: "read_file" }]);
+    expect(workflowMessageItem.tool_call_id).toBe("call-1");
+    expect(workflowMessageItem.type).toBe("tool_call");
+  });
+
 
   it("sanitizes internal placeholders from execution logs", () => {
     const samples = [
