@@ -7,16 +7,52 @@ function resolveFetcher(fetcher) {
   return fetcher || fetch;
 }
 
+function firstNormalizedString(...values) {
+  for (const value of values) {
+    const normalized = String(value || "").trim();
+    if (normalized) return normalized;
+  }
+  return "";
+}
+
+export function resolveAttachmentId(attachmentItem = {}) {
+  return firstNormalizedString(
+    attachmentItem?.attachmentId,
+    attachmentItem?.attachment_id,
+    attachmentItem?.fileId,
+    attachmentItem?.file_id,
+    attachmentItem?.id,
+    attachmentItem?.uuid,
+  );
+}
+
+export function resolveAttachmentSessionId(attachmentItem = {}) {
+  return firstNormalizedString(
+    attachmentItem?.sessionId,
+    attachmentItem?.session_id,
+    attachmentItem?.backendSessionId,
+  );
+}
+
+export function resolveAttachmentSource(attachmentItem = {}) {
+  return firstNormalizedString(
+    attachmentItem?.attachmentSource,
+    attachmentItem?.attachment_source,
+    attachmentItem?.source,
+  );
+}
+
 export function buildAttachmentUrl({
   userId = "",
   attachmentId = "",
   sessionId = "",
   attachmentSource = "",
 }) {
-  const normalizedUserId = encodeURIComponent(String(userId || "").trim());
-  const normalizedAttachmentId = encodeURIComponent(
-    String(attachmentId || "").trim(),
-  );
+  const normalizedUserIdValue = String(userId || "").trim();
+  const normalizedAttachmentIdValue = String(attachmentId || "").trim();
+  if (!normalizedUserIdValue || !normalizedAttachmentIdValue) return "";
+  const normalizedUserId = encodeURIComponent(normalizedUserIdValue);
+  const normalizedAttachmentId = encodeURIComponent(normalizedAttachmentIdValue);
   const queryParams = [];
   if (sessionId)
     queryParams.push(`sessionId=${encodeURIComponent(String(sessionId || "").trim())}`);

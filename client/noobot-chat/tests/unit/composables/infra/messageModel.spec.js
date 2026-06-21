@@ -88,6 +88,33 @@ describe("messageModel semantic transfer", () => {
     expect(message.attachmentMetas[0].parsedResultUrl).toContain("parsed-1");
   });
 
+  it("normalizes attachment url from compatible id/session/source fields", () => {
+    const message = buildViewMessage(
+      {
+        role: "assistant",
+        content: "generated file",
+        attachmentMetas: [
+          {
+            id: "att-alias-1",
+            name: "result.md",
+            session_id: "session-1",
+            source: "model",
+          },
+        ],
+      },
+      { userId: "admin" },
+    );
+
+    expect(message.attachmentMetas[0]).toMatchObject({
+      attachmentId: "att-alias-1",
+      sessionId: "session-1",
+      attachmentSource: "model",
+    });
+    expect(message.attachmentMetas[0].url).toBe(
+      "/api/internal/attachment/admin/att-alias-1?sessionId=session-1&attachmentSource=model",
+    );
+  });
+
   it("does not fall back to legacy attachments", () => {
     const message = buildViewMessage({
       role: "user",
