@@ -43,6 +43,97 @@ export function useChatList({
   notify = () => {},
 } = {}) {
   const { translate } = useLocale();
+  const RECENT_SESSION_DETAIL_REUSE_MS = 2000;
+  let recentSessionDetail = null;
+  const pendingSessionDetailRequests = new Map();
+
+  function normalizeSessionId(value = "") {
+    return String(value || "").trim();
+  }
+
+  function collectSessionIdentityIds(sessionItem = null) {
+    return [
+      sessionItem?.id,
+      sessionItem?.backendSessionId,
+      sessionItem?.sessionId,
+    ].map(normalizeSessionId).filter(Boolean);
+  }
+
+  function isSameSessionIdentity(leftSessionId = "", rightSessionId = "") {
+    const leftId = normalizeSessionId(leftSessionId);
+    const rightId = normalizeSessionId(rightSessionId);
+    if (!leftId || !rightId) return false;
+    if (leftId === rightId) return true;
+    const leftSession = findSessionByAnyIdInList(sessions.value, leftId);
+    const rightSession = findSessionByAnyIdInList(sessions.value, rightId);
+    if (leftSession && rightSession && leftSession === rightSession) return true;
+    const leftIds = collectSessionIdentityIds(leftSession);
+    const rightIds = collectSessionIdentityIds(rightSession);
+    return leftIds.some((id) => rightIds.includes(id));
+  }
+
+  function buildLoadedSessionDetailSnapshot(sessionId = "") {
+    const normalizedSessionId = normalizeSessionId(sessionId);
+    if (!normalizedSessionId) return null;
+    const sessionItem = findSessionByAnyIdInList(sessions.value, normalizedSessionId);
+    if (!sessionItem?.loaded) return null;
+    const sessionDocs = Array.isArray(sessionItem.sessionDocs) ? sessionItem.sessionDocs : [];
+    if (!sessionDocs.length) return null;
+    const backendSessionId = normalizeSessionId(
+      sessionItem.backendSessionId || sessionItem.id || normalizedSessionId,
+    );
+    return {
+      ok: true,
+      exists: true,
+      sessionId: backendSessionId,
+      sessions: sessionDocs,
+    };
+  }
+
+  function createSessionDetailRequestState(sessionId = "") {
+    const normalizedSessionId = normalizeSessionId(sessionId);
+    const targetSession = findSessionByAnyIdInList(sessions.value, normalizedSessionId);
+    const activeId = normalizeSessionId(activeSessionId.value);
+    const pendingEntry = pendingSessionDetailRequests.get(normalizedSessionId);
+    const recentMatches =
+      normalizedSessionId &&
+      recentSessionDetail?.sessionId &&
+      isSameSessionIdentity(recentSessionDetail.sessionId, normalizedSessionId) &&
+      Date.now() - recentSessionDetail.loadedAt <= RECENT_SESSION_DETAIL_REUSE_MS;
+    return {
+      sessionId: normalizedSessionId,
+      activeSessionId: activeId,
+      targetSession,
+      targetLoaded: targetSession?.loaded === true,
+      sameAsActive: isSameSessionIdentity(normalizedSessionId, activeId),
+      pendingPromise: pendingEntry?.promise || null,
+      recentDetail: recentMatches ? recentSessionDetail.detail : null,
+    };
+  }
+
+  function arbitrateSessionDetailRequest(sessionId = "", intent = {}) {
+    const state = createSessionDetailRequestState(sessionId);
+    const source = normalizeSessionId(intent.source || intent.reason || "direct");
+    const force = intent.force === true;
+    const requireFresh = intent.requireFresh === true;
+    const allowLoadedSnapshot = intent.allowLoadedSnapshot === true;
+    const reuseRecentlyLoaded = intent.reuseRecentlyLoaded === true;
+    if (!state.sessionId) return { action: "skip", state, source };
+    if (state.pendingPromise) return { action: "wait", promise: state.pendingPromise, state, source };
+    if (!requireFresh && reuseRecentlyLoaded && state.recentDetail) {
+      return { action: "reuse", detail: state.recentDetail, state, source };
+    }
+    if (
+      !requireFresh &&
+      allowLoadedSnapshot &&
+      state.targetLoaded &&
+      (!force || state.sameAsActive)
+    ) {
+      const detail = buildLoadedSessionDetailSnapshot(state.sessionId);
+      if (detail) return { action: "reuse", detail, state, source };
+    }
+    return { action: "fetch", state, source };
+  }
 
   function buildWorkflowMessageSignature(messageItem = {}) {
     const workflowMeta =
@@ -380,15 +471,39 @@ export function useChatList({
     }
   }
 
-  async function fetchSessionDetail(sessionId) {
-    const res = await getSessionDetailApi(
-      { userId: userId.value, sessionId },
-      { fetcher: authFetch },
-    );
-    if (!res.ok) throw new Error(translate("chat.getSessionFailed", { status: res.status }));
-    const data = await res.json();
-    if (!data.ok || !data.exists) throw new Error(data.error || translate("chat.sessionNotFound"));
-    return data;
+  async function fetchSessionDetail(sessionId, options = {}) {
+    const normalizedSessionId = normalizeSessionId(sessionId);
+    const decision = arbitrateSessionDetailRequest(normalizedSessionId || sessionId, options);
+    if (decision.action === "skip") return null;
+    if (decision.action === "reuse") return decision.detail;
+    if (decision.action === "wait") return decision.promise;
+
+    const requestPromise = (async () => {
+      const res = await getSessionDetailApi(
+        { userId: userId.value, sessionId: normalizedSessionId || sessionId },
+        { fetcher: authFetch },
+      );
+      if (!res.ok) throw new Error(translate("chat.getSessionFailed", { status: res.status }));
+      const data = await res.json();
+      if (!data.ok || !data.exists) throw new Error(data.error || translate("chat.sessionNotFound"));
+      recentSessionDetail = {
+        sessionId: normalizeSessionId(data.sessionId || normalizedSessionId || sessionId),
+        loadedAt: Date.now(),
+        detail: data,
+      };
+      return data;
+    })();
+
+    pendingSessionDetailRequests.set(normalizedSessionId || sessionId, {
+      promise: requestPromise,
+      source: decision.source,
+      startedAt: Date.now(),
+    });
+    try {
+      return await requestPromise;
+    } finally {
+      pendingSessionDetailRequests.delete(normalizedSessionId || sessionId);
+    }
   }
 
   async function fetchSessions(preferredActiveId = "", options = {}) {
@@ -488,13 +603,19 @@ export function useChatList({
     if (!silent) loadingSessionDetail.value = true;
     try {
       const detailSessionId = String(target.backendSessionId || target.id || sessionId || "").trim();
-      const detail = await fetchSessionDetail(detailSessionId);
-      applySessionDetail(detail, {
-        preserveCurrentMessages:
-          Boolean(preserveCurrentMessages) &&
-          Array.isArray(target?.messages) &&
-          target.messages.length > 0,
+      const detail = await fetchSessionDetail(detailSessionId, {
+        source: "selectSession",
+        force,
+        allowLoadedSnapshot: true,
       });
+      if (detail) {
+        applySessionDetail(detail, {
+          preserveCurrentMessages:
+            Boolean(preserveCurrentMessages) &&
+            Array.isArray(target?.messages) &&
+            target.messages.length > 0,
+        });
+      }
       refreshSessionConnectorsAsync(targetPrimaryId);
     } catch (error) {
       notify({ type: "error", message: error.message || translate("chat.loadSessionDetailFailed") });

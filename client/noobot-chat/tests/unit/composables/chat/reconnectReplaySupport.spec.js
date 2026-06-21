@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { disposeReconnectReplayTimers } from "../../../../src/composables/chat/reconnectReplay/cleanup";
 import { scheduleCacheExpiredSessionRefresh } from "../../../../src/composables/chat/reconnectReplay/cacheExpiredRefresh";
+import { renderActiveSessionBeforeReplay } from "../../../../src/composables/chat/reconnectReplay/hydrationReplay";
 import { createReconnectReplayPublicApi } from "../../../../src/composables/chat/reconnectReplay/publicApi";
 
 describe("reconnectReplay support modules", () => {
@@ -83,6 +84,26 @@ describe("reconnectReplay support modules", () => {
       preserveCurrentMessages: true,
     });
     vi.useRealTimers();
+  });
+
+  it("reuses recently loaded session detail when hydrating active session before replay", async () => {
+    const detail = { sessionId: "s-1", sessions: [{ sessionId: "s-1", messages: [] }] };
+    const fetchSessionDetail = vi.fn(async () => detail);
+    const applySessionDetail = vi.fn();
+
+    const result = await renderActiveSessionBeforeReplay({
+      activeSession: { value: { id: "s-1", backendSessionId: "s-1", messages: [] } },
+      activeSessionId: { value: "s-1" },
+      chatList: { fetchSessionDetail, applySessionDetail },
+    });
+
+    expect(result).toBe(true);
+    expect(fetchSessionDetail).toHaveBeenCalledWith("s-1", {
+      source: "reconnectHydration",
+      reuseRecentlyLoaded: true,
+      allowLoadedSnapshot: true,
+    });
+    expect(applySessionDetail).toHaveBeenCalledWith(detail, { preserveCurrentMessages: false });
   });
 
   it("reports expired refresh failure when session refresh fails", async () => {

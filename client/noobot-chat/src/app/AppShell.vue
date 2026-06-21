@@ -464,12 +464,24 @@ function resolveActivePseudoPanel() {
   });
 }
 
+function isLoadedActiveSessionRouteTarget(sessionId = "") {
+  const targetSessionId = String(sessionId || "").trim();
+  const currentSession = activeSession.value || null;
+  if (!targetSessionId || !currentSession?.loaded) return false;
+  const currentIds = [
+    activeSessionId.value,
+    currentSession.id,
+    currentSession.backendSessionId,
+  ].map((value) => String(value || "").trim()).filter(Boolean);
+  return currentIds.includes(targetSessionId);
+}
+
 async function applyPseudoRouteToUi(route = {}) {
   const targetSessionId = String(route.sessionId || "").trim();
   const targetPanel = String(route.panel || "").trim();
   const targetAnchor = String(route.anchor || "").trim();
   closeAllPseudoPanels();
-  if (targetSessionId) {
+  if (targetSessionId && !isLoadedActiveSessionRouteTarget(targetSessionId)) {
     await handleSelectSession(targetSessionId, {
       fromHistory: true,
       force: true,
