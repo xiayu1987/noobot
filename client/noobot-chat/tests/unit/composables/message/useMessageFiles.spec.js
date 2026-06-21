@@ -95,7 +95,7 @@ describe("useMessageFiles", () => {
           path: "/legacy-only/result.md",
         },
       ],
-      transferEnvelope: envelope,
+      transferEnvelopes: [envelope],
     };
     const { displayedAttachmentMetas } = useMessageFiles({
       getMessageItem: () => messageItem,

@@ -35,7 +35,6 @@ test("appendAttachmentMetasToRuntimeAndTurn keeps ordinary attachments out of se
   assert.equal(Array.isArray(messages[1]?.attachmentMetas), true);
   assert.equal(messages[1].attachmentMetas.length, 1);
   assert.equal(messages[1].attachmentMetas[0]?.attachmentId, "att_1");
-  assert.equal("transferEnvelope" in messages[1], false);
   assert.equal("transferEnvelopes" in messages[1], false);
   assert.equal("attachmentMetas" in messages[0], false);
 });
@@ -83,7 +82,7 @@ test("appendAttachmentMetasToRuntimeAndTurn merges with existing transfer envelo
 
   const [message] = turnStore.toArray();
   assert.equal(message.attachmentMetas, undefined);
-  assert.equal("transferEnvelope" in message, false);
+  assert.equal("transferEnvelopes" in message, true);
   assert.equal(message.transferEnvelopes.length, 2);
   assert.equal(message.transferEnvelopes[0]?.files?.[0]?.attachmentMeta?.attachmentId, "att_existing");
   assert.equal(message.transferEnvelopes[1]?.files?.[0]?.attachmentMeta?.attachmentId, "att_new");

@@ -4,7 +4,7 @@ import {
   getMessageTransferEnvelopes,
   getTransferDisplayPath,
   normalizeTransferEnvelope,
-} from "../../../../src/composables/infra/transferEnvelope";
+} from "../../../../src/composables/infra/transferEnvelopes";
 
 const envelope = {
   protocol: "noobot.semantic-transfer",
@@ -31,14 +31,14 @@ const envelope = {
   ],
 };
 
-describe("transferEnvelope", () => {
+describe("transferEnvelopes", () => {
   it("normalizes semantic-transfer envelopes only", () => {
     expect(normalizeTransferEnvelope(envelope)).toBe(envelope);
     expect(normalizeTransferEnvelope({ protocol: "legacy" })).toBeNull();
   });
 
   it("extracts attachment-like metas from transfer files", () => {
-    const metas = getMessageTransferAttachmentMetas({ transferEnvelope: envelope });
+    const metas = getMessageTransferAttachmentMetas({ transferEnvelopes: [envelope] });
 
     expect(metas).toHaveLength(1);
     expect(metas[0]).toMatchObject({
@@ -54,14 +54,16 @@ describe("transferEnvelope", () => {
 
   it("uses legacy shortcut fields when files are absent", () => {
     const metas = getMessageTransferAttachmentMetas({
-      transferEnvelope: {
-        protocol: "noobot.semantic-transfer",
-        version: 1,
-        direction: "output",
-        transport: "file",
-        filePath: "/workspace/user/out/legacy.txt",
-        attachmentMeta: { name: "legacy.txt", mimeType: "text/plain" },
-      },
+      transferEnvelopes: [
+        {
+          protocol: "noobot.semantic-transfer",
+          version: 1,
+          direction: "output",
+          transport: "file",
+          filePath: "/workspace/user/out/legacy.txt",
+          attachmentMeta: { name: "legacy.txt", mimeType: "text/plain" },
+        },
+      ],
     });
 
     expect(metas[0]).toMatchObject({
@@ -73,12 +75,11 @@ describe("transferEnvelope", () => {
 
   it("collects envelopes from direct, array, and result fields", () => {
     const envelopes = getMessageTransferEnvelopes({
-      transferEnvelope: envelope,
       transferEnvelopes: [envelope],
       transferResult: { envelope },
     });
 
-    expect(envelopes).toHaveLength(3);
+    expect(envelopes).toHaveLength(2);
   });
 
   it("resolves display path by semantic path view precedence", () => {

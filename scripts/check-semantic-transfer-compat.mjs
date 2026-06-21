@@ -125,7 +125,7 @@ const LEGACY_FIELD_ALLOWED_FILES = new Map(Object.entries({
   "agent/src/system-core/tools/collaboration/agent-collab/tool-wait-async-result.js": "agent-collab wait result compatibility",
 
   "client/noobot-chat/src/composables/infra/messageModel.js": "frontend message model keeps legacy fallback but consumes transfer first",
-  "client/noobot-chat/src/composables/infra/transferEnvelope.js": "frontend semantic-transfer adapter maps envelope files to legacy display metas",
+  "client/noobot-chat/src/composables/infra/transferEnvelopes.js": "frontend semantic-transfer adapter maps envelope files to legacy display metas",
   "client/noobot-chat/src/composables/message/useMessageFiles.js": "frontend message file list consumes attachmentMetas compatibility after transfer-first extraction",
 
   "plugin/noobot-plugin-harness/src/capabilities/handlers/acceptance/output-finalizer.js": "harness final output legacy fallback with transfer payload",

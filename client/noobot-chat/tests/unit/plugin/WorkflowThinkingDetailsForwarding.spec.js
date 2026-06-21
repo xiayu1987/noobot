@@ -1,6 +1,26 @@
 import { mount } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import WorkflowSessionMessageItem from "../../../../../plugin/noobot-plugin-workflow/frontend/components/WorkflowSessionMessageItem.vue";
+
+vi.mock("/project/client/noobot-chat/src/shared/message/SharedChatMessageItem.vue", async () => {
+  const { defineComponent, h } = await import("vue");
+  return {
+    default: defineComponent({
+      name: "SharedChatMessageItem",
+      emits: ["open-thinking-details"],
+      setup(_, { emit }) {
+        const payload = {
+          messageItem: requiredProps.messageItem,
+          allMessages: requiredProps.allMessages,
+        };
+        return () => h("button", {
+          class: "open-thinking-details",
+          onClick: () => emit("open-thinking-details", payload),
+        }, "open");
+      },
+    }),
+  };
+});
 
 const requiredProps = {
   messageItem: { role: "assistant", pending: false, completedToolLogs: [] },
@@ -23,17 +43,6 @@ describe("workflow thinking details forwarding", () => {
 
     const wrapper = mount(WorkflowSessionMessageItem, {
       props: requiredProps,
-      global: {
-        stubs: {
-          SharedChatMessageItem: {
-            emits: ["open-thinking-details"],
-            template: '<button class="open-thinking-details" @click="$emit(\'open-thinking-details\', payload)">open</button>',
-            data() {
-              return { payload };
-            },
-          },
-        },
-      },
     });
 
     await wrapper.find(".open-thinking-details").trigger("click");

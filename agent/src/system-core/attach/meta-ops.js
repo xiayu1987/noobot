@@ -118,7 +118,7 @@ export function mapAttachmentRecordsToMetas(
 
 /**
  * 将附件元数据转换为标准 semantic-transfer payload。
- * 仅用于把 legacy attachmentMetas 适配进标准 transferEnvelope(s) 流转；
+ * 仅用于把 legacy attachmentMetas 适配进标准 transferEnvelopes(s) 流转；
  * 调用方不应再把 attachmentMetas 作为新的标准输出 mirror。
  */
 export function buildTransferPayloadFromAttachmentMetas(attachmentMetas = []) {
@@ -138,7 +138,7 @@ export function buildTransferPayloadFromAttachmentMetas(attachmentMetas = []) {
     attachmentMeta: meta,
     role: index === 0 ? "primary" : "secondary",
   }));
-  const transferEnvelope = {
+  const envelope = {
     protocol: "noobot.semantic-transfer",
     version: 1,
     direction: "output",
@@ -147,7 +147,7 @@ export function buildTransferPayloadFromAttachmentMetas(attachmentMetas = []) {
     files,
   };
   return {
-    transferResult: { ok: true, status: "file", envelope: transferEnvelope },
-    transferEnvelopes: [transferEnvelope],
+    transferResult: { ok: true, status: "file", envelope },
+    transferEnvelopes: [envelope],
   };
 }

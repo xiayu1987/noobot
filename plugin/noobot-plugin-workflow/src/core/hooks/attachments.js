@@ -172,27 +172,23 @@ export function normalizeWorkflowTransferPayload(payload = {}) {
     : isPlainObject(source.result)
       ? source.result
       : null;
-  const transferEnvelope = isPlainObject(source.transferEnvelope)
-    ? source.transferEnvelope
-    : isPlainObject(source.envelope)
-      ? source.envelope
-      : isPlainObject(transferResult?.envelope)
-        ? transferResult.envelope
-        : null;
+  const resultEnvelope = isPlainObject(transferResult?.envelope) ? transferResult.envelope : null;
+  const sourceEnvelope = isPlainObject(source.envelope) ? source.envelope : null;
   const transferEnvelopes = Array.isArray(source.transferEnvelopes)
     ? source.transferEnvelopes.filter(isPlainObject)
-    : transferEnvelope
-      ? [transferEnvelope]
-      : [];
-  return { transferResult, transferEnvelope, transferEnvelopes };
+    : [];
+  for (const envelope of [sourceEnvelope, resultEnvelope].filter(isPlainObject)) {
+    if (!transferEnvelopes.includes(envelope)) transferEnvelopes.push(envelope);
+  }
+  return { transferResult, transferEnvelopes };
 }
 
 export function getWorkflowTransferPayloadFromResult(result = {}) {
   if (!isPlainObject(result)) return normalizeWorkflowTransferPayload();
   return normalizeWorkflowTransferPayload({
     transferResult: result.transferResult || result.result || null,
-    transferEnvelope: result.transferEnvelope || result.envelope || null,
     transferEnvelopes: result.transferEnvelopes || [],
+    envelope: result.envelope || null,
   });
 }
 
@@ -201,9 +197,6 @@ export function applyWorkflowTransferPayload(target = {}, payload = {}) {
   const transferPayload = normalizeWorkflowTransferPayload(payload);
   if (transferPayload.transferResult) {
     target.transferResult = transferPayload.transferResult;
-  }
-  if (transferPayload.transferEnvelope) {
-    target.transferEnvelope = transferPayload.transferEnvelope;
   }
   if (transferPayload.transferEnvelopes.length) {
     const existing = Array.isArray(target.transferEnvelopes) ? target.transferEnvelopes : [];
@@ -232,7 +225,7 @@ export function buildWorkflowTransferPayloadFromAttachmentMetas(attachmentMetas 
     attachmentMeta: meta,
     role: index === 0 ? "primary" : "secondary",
   }));
-  const transferEnvelope = {
+  const primaryEnvelope = {
     protocol: "noobot.semantic-transfer",
     version: 1,
     direction: "output",
@@ -241,18 +234,15 @@ export function buildWorkflowTransferPayloadFromAttachmentMetas(attachmentMetas 
     files,
   };
   return normalizeWorkflowTransferPayload({
-    transferResult: { ok: true, status: "file", envelope: transferEnvelope },
-    transferEnvelope,
-    transferEnvelopes: [transferEnvelope],
+    transferResult: { ok: true, status: "file", envelope: primaryEnvelope },
+    transferEnvelopes: [primaryEnvelope],
   });
 }
 
 export function resolveWorkflowTransferFilesFromPayload(payload = {}, ctx = {}) {
   const transferPayload = normalizeWorkflowTransferPayload(payload);
-  if (!transferPayload.transferEnvelopes.length && !transferPayload.transferEnvelope) return [];
-  const source = transferPayload.transferEnvelopes.length
-    ? transferPayload.transferEnvelopes
-    : [transferPayload.transferEnvelope];
+  if (!transferPayload.transferEnvelopes.length) return [];
+  const source = transferPayload.transferEnvelopes;
   return source.flatMap((envelope = {}) => {
     if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) return [];
     if (Array.isArray(envelope.files) && envelope.files.length) {

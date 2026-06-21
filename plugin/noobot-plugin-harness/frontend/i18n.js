@@ -28,6 +28,12 @@ const HARNESS_FRONTEND_MESSAGES = Object.freeze({
       monotonicEdit: "编辑",
       monotonicDelete: "删除",
     }),
+    modelExtension: Object.freeze({
+      title: "Harness 插件",
+      description: "为 planning / guidance / acceptance 等非主流程步骤单独指定模型。",
+      placeholder: "使用主流程/默认模型",
+      empty: "暂无可用于对话的启用模型",
+    }),
   }),
   "en-US": Object.freeze({
     common: Object.freeze({
@@ -47,6 +53,12 @@ const HARNESS_FRONTEND_MESSAGES = Object.freeze({
       monotonicSendEdited: "Send",
       monotonicEdit: "Edit",
       monotonicDelete: "Delete",
+    }),
+    modelExtension: Object.freeze({
+      title: "Harness Plugin",
+      description: "Configure separate models for non-main-flow steps such as planning, guidance, and acceptance.",
+      placeholder: "Use main/default model",
+      empty: "No enabled chat models are available",
     }),
   }),
 });

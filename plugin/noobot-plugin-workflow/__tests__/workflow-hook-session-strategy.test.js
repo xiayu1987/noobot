@@ -109,7 +109,7 @@ function createSemanticTransferTool({ prefix = "att", counterRef = { value: 0 } 
   return {
     async transferSemanticContent({ scenario = "", strategy = "", messages = [] } = {}) {
       if (String(scenario || "") !== "bot_plugin" || !String(strategy || "").startsWith("bot_plugin_")) {
-        return { transferResult: { ok: false, status: "failed" }, transferEnvelope: null, transferEnvelopes: [] };
+        return { transferResult: { ok: false, status: "failed" }, transferEnvelopes: [] };
       }
       counterRef.value += 1;
       const nodeName = String(messages?.[0]?.nodeName || `节点${counterRef.value}`).trim();
@@ -132,7 +132,7 @@ function createSemanticTransferTool({ prefix = "att", counterRef = { value: 0 } 
           pathView: { displayPath: `/workspace/${fileName}` },
         }],
       };
-      return { transferResult: { ok: true, status: "file", envelope }, transferEnvelope: envelope, transferEnvelopes: [envelope] };
+      return { transferResult: { ok: true, status: "file", envelope }, transferEnvelopes: [envelope] };
     },
   };
 }
@@ -435,11 +435,10 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
               semanticTransfer: {
                 async transferSemanticContent({ scenario = "", strategy = "" } = {}) {
                   if (String(scenario || "") !== "bot_plugin" || String(strategy || "") !== "bot_plugin_subagent_result") {
-                    return { transferResult: { ok: false, status: "failed" }, transferEnvelope: null, transferEnvelopes: [] };
+                    return { transferResult: { ok: false, status: "failed" }, transferEnvelopes: [] };
                   }
                   return {
                     transferResult: { ok: true, status: "file", envelope },
-                    transferEnvelope: envelope,
                     transferEnvelopes: [envelope],
                   };
                 },
@@ -455,14 +454,14 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
   const agentResult = ctx.overrideAgentResult;
   assert.ok(agentResult?.workflow);
   assert.equal(fallbackArtifactCalls.length, 0);
-  assert.equal(agentResult.workflow?.transferEnvelope?.protocol, "noobot.semantic-transfer");
   assert.equal(agentResult.workflow?.transferEnvelopes?.length, 1);
-  assert.equal(agentResult.workflow?.nodeSessions?.[0]?.transferEnvelope?.protocol, "noobot.semantic-transfer");
+  assert.equal(agentResult.workflow?.transferEnvelopes?.[0]?.protocol, "noobot.semantic-transfer");
   assert.equal(agentResult.workflow?.nodeSessions?.[0]?.transferEnvelopes?.length, 1);
+  assert.equal(agentResult.workflow?.nodeSessions?.[0]?.transferEnvelopes?.[0]?.protocol, "noobot.semantic-transfer");
   const workflowTurnMessage = workflowTurn(agentResult);
-  assert.equal(workflowTurnMessage?.transferEnvelope?.protocol, "noobot.semantic-transfer");
   assert.equal(workflowTurnMessage?.transferEnvelopes?.length, 1);
-  assert.equal(workflowTurnMessage?.transferEnvelope?.files?.[0]?.attachmentMeta?.attachmentId, "wf-semantic-result-1");
+  assert.equal(workflowTurnMessage?.transferEnvelopes?.[0]?.protocol, "noobot.semantic-transfer");
+  assert.equal(workflowTurnMessage?.transferEnvelopes?.[0]?.files?.[0]?.attachmentMeta?.attachmentId, "wf-semantic-result-1");
 });
 
 test("workflow hook routes final attachment summary composition through semantic-transfer", async () => {
@@ -539,7 +538,6 @@ test("workflow hook routes final attachment summary composition through semantic
                   };
                   return {
                     transferResult: { ok: true, status: "file", envelope },
-                    transferEnvelope: envelope,
                     transferEnvelopes: [envelope],
                   };
                 },
@@ -575,18 +573,10 @@ test("workflow hook routes final attachment summary composition through semantic
     true,
   );
   assert.equal(
-    String(workflowTurnMessage?.transferEnvelope?.files?.[0]?.attachmentMeta?.attachmentId || "").trim(),
-    "wf-semantic-final-1",
-  );
-  assert.equal(
     workflowPayloadTransferEnvelopes.some(
       (item = {}) => String(item?.files?.[0]?.attachmentMeta?.attachmentId || "").trim() === "wf-semantic-final-1",
     ),
     true,
-  );
-  assert.equal(
-    String(agentResult?.workflow?.transferEnvelope?.files?.[0]?.attachmentMeta?.attachmentId || "").trim(),
-    "wf-semantic-final-1",
   );
   const workflowContent = String(workflowTurnMessage?.content || "");
   assert.match(workflowContent, /final-summary\.md/);
@@ -680,7 +670,6 @@ test("workflow hook injects upstream node result attachments into downstream sub
                   if (String(scenario || "") !== "bot_plugin" || !String(strategy || "").startsWith("bot_plugin_")) {
                     return {
                       transferResult: { ok: false, status: "failed" },
-                      transferEnvelope: null,
                       transferEnvelopes: [],
                     };
                   }
@@ -711,7 +700,6 @@ test("workflow hook injects upstream node result attachments into downstream sub
                   };
                   return {
                     transferResult: { ok: true, status: "file", envelope },
-                    transferEnvelope: envelope,
                     transferEnvelopes: [envelope],
                     injectionMessage: String(payload?.content || ""),
                   };
@@ -826,7 +814,6 @@ test("workflow hook injects one upstream action attachments into multiple direct
                   if (String(scenario || "") !== "bot_plugin" || !String(strategy || "").startsWith("bot_plugin_")) {
                     return {
                       transferResult: { ok: false, status: "failed" },
-                      transferEnvelope: null,
                       transferEnvelopes: [],
                     };
                   }
@@ -857,7 +844,6 @@ test("workflow hook injects one upstream action attachments into multiple direct
                   };
                   return {
                     transferResult: { ok: true, status: "file", envelope },
-                    transferEnvelope: envelope,
                     transferEnvelopes: [envelope],
                   };
                 },

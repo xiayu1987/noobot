@@ -46,6 +46,13 @@ const WORKFLOW_FRONTEND_MESSAGES = Object.freeze({
       loadingNodeSession: "正在加载节点会话...",
       noNodeSessionContent: "暂无节点会话内容",
     }),
+    modelExtension: Object.freeze({
+      title: "Workflow 插件",
+      description: "为工作流非主流程语义理解请求单独指定模型。",
+      field: "非主流程语义模型",
+      placeholder: "使用主流程/默认模型",
+      empty: "暂无可用于对话的启用模型",
+    }),
   }),
   "en-US": Object.freeze({
     workflow: Object.freeze({
@@ -83,6 +90,13 @@ const WORKFLOW_FRONTEND_MESSAGES = Object.freeze({
       nodeSessionTitle: "Node Session {sessionId}",
       loadingNodeSession: "Loading node session...",
       noNodeSessionContent: "No node session content",
+    }),
+    modelExtension: Object.freeze({
+      title: "Workflow Plugin",
+      description: "Configure a separate model for non-main-flow workflow semantic requests.",
+      field: "Non-main-flow semantic model",
+      placeholder: "Use main/default model",
+      empty: "No enabled chat models are available",
     }),
   }),
 });

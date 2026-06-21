@@ -362,7 +362,7 @@ test("relaySeparateModelOutputAsUserMessage preserves oversized relay content wh
   const relayContent = String(message?.content || "");
   assert.equal(relayContent, `[来自harness外部模型输出/planning_refinement]\n${content}`);
   assert.equal(relayContent.includes("-TAIL"), true);
-  assert.equal(typeof message?.transferEnvelope, "object");
+  assert.equal(typeof message?.transferEnvelopes, "object");
   assert.equal(Array.isArray(message?.transferEnvelopes), true);
   assert.equal(message.transferEnvelopes.length > 0, true);
   assert.equal(message?.attachmentMetas, undefined);

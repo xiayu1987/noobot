@@ -114,13 +114,13 @@ export async function materializeTextForToolResult({
     });
   }
 
-  const transferEnvelope =
+  const envelope =
     persisted?.envelope && typeof persisted.envelope === "object" && !Array.isArray(persisted.envelope)
       ? persisted.envelope
       : persisted?.result?.envelope && typeof persisted.result.envelope === "object" && !Array.isArray(persisted.result.envelope)
         ? persisted.result.envelope
         : null;
-  const transferEnvelopes = transferEnvelope ? [transferEnvelope] : [];
+  const transferEnvelopes = envelope ? [envelope] : [];
   const resultFields = buildTextResultFields({
     text: normalizedText,
     transferEnvelopes,

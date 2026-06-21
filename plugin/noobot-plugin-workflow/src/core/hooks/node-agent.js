@@ -78,7 +78,6 @@ export function buildWorkflowUpstreamAttachmentResults({
       const upstreamStepId = String(upstreamStep?.stepId || "").trim();
       const completed = completedStepResults.get(upstreamStepId) || {};
       const transferPayload = getWorkflowTransferPayloadFromResult(completed);
-      const transferEnvelope = transferPayload.transferEnvelope;
       const transferEnvelopes = transferPayload.transferEnvelopes;
       const stepStatus = String(completed?.stepStatus || upstreamStep?.stepStatus || "").trim();
       const stepFailure =
@@ -88,7 +87,7 @@ export function buildWorkflowUpstreamAttachmentResults({
             ? upstreamStep.stepFailure
             : null;
       const transferFiles = resolveWorkflowTransferFilesFromPayload(
-        { transferEnvelope, transferEnvelopes },
+        { transferEnvelopes },
         {},
       );
       if (!transferFiles.length && stepStatus !== "failed" && !stepFailure) return null;
@@ -108,7 +107,6 @@ export function buildWorkflowUpstreamAttachmentResults({
         nodeSessionId: String(completed?.nodeSessionId || "").trim(),
         stepStatus,
         stepFailure,
-        transferEnvelope,
         transferEnvelopes,
         ...(transferPayload.transferResult ? { transferResult: transferPayload.transferResult } : {}),
       };
@@ -132,7 +130,6 @@ export async function buildWorkflowUpstreamAttachmentSystemMessage({
     resolveWorkflowTransferFilesFromPayload(
       {
         transferResult: item?.transferResult || null,
-        transferEnvelope: item?.transferEnvelope || item?.transferResult?.envelope || null,
         transferEnvelopes: Array.isArray(item?.transferEnvelopes) ? item.transferEnvelopes : [],
       },
       ctx,
@@ -189,7 +186,6 @@ export async function buildWorkflowUpstreamAttachmentSystemMessage({
     const transferFiles = resolveWorkflowTransferFilesFromPayload(
       {
         transferResult: result?.transferResult || null,
-        transferEnvelope: result?.transferEnvelope || result?.transferResult?.envelope || null,
         transferEnvelopes: Array.isArray(result?.transferEnvelopes) ? result.transferEnvelopes : [],
       },
       ctx,
@@ -382,8 +378,7 @@ export async function runNodeAgent({
   hookPayload.workflow.upstreamAttachmentMetas = upstreamNodeResults.reduce((acc, item = {}) => {
     const transferPayload = normalizeWorkflowTransferPayload({
       transferResult: item?.transferResult || null,
-      transferEnvelope: item?.transferEnvelope || null,
-      transferEnvelopes: item?.transferEnvelopes || [],
+      transferEnvelopes: Array.isArray(item?.transferEnvelopes) ? item.transferEnvelopes : [],
     });
     const metas = resolveWorkflowAttachmentMetasFromTransferPayload(transferPayload, ctx);
     return mergeAttachmentMetas(acc, metas.length ? metas : item?.attachmentMetas || []);

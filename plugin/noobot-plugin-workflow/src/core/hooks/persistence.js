@@ -290,7 +290,6 @@ export async function appendWorkflowPlanningMessage({
   }
   const mergedTransferPayload = normalizeWorkflowTransferPayload({
     transferResult: composedTransferPayload.transferResult || baseTransferPayload.transferResult || null,
-    transferEnvelope: composedTransferPayload.transferEnvelope || baseTransferPayload.transferEnvelope || null,
     transferEnvelopes: [
       ...(Array.isArray(baseTransferPayload.transferEnvelopes) ? baseTransferPayload.transferEnvelopes : []),
       ...(Array.isArray(composedTransferPayload.transferEnvelopes)
@@ -308,7 +307,7 @@ export async function appendWorkflowPlanningMessage({
     (finalTransferAttempted
       ? ""
       : buildWorkflowTransferPathBlockWithContext(mergedTransferPayload, ctx) ||
-        (composedTransferPayload.transferEnvelopes.length || composedTransferPayload.transferEnvelope
+        (composedTransferPayload.transferEnvelopes.length
           ? ""
           : buildWorkflowAttachmentPathBlockWithContext(compatAttachmentMetas, ctx)));
   const content = [semanticText || sourceText || "", attachmentPathBlock]
@@ -326,7 +325,6 @@ export async function appendWorkflowPlanningMessage({
     modelName: String(semanticResolution?.model || options?.semanticModel || "").trim(),
     summarized: false,
     ...(mergedTransferPayload.transferResult ? { transferResult: mergedTransferPayload.transferResult } : {}),
-    ...(mergedTransferPayload.transferEnvelope ? { transferEnvelope: mergedTransferPayload.transferEnvelope } : {}),
     ...(mergedTransferPayload.transferEnvelopes.length
       ? { transferEnvelopes: mergedTransferPayload.transferEnvelopes }
       : {}),

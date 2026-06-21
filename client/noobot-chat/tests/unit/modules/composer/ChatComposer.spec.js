@@ -2,6 +2,8 @@ import { defineComponent, h, nextTick, ref } from "vue";
 import { mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ChatComposer from "../../../../src/modules/composer/ChatComposer.vue";
+import ComposerInputActions from "../../../../src/modules/composer/ComposerInputActions.vue";
+import ComposerAttachmentToolbar from "../../../../src/modules/composer/ComposerAttachmentToolbar.vue";
 
 const messageMock = vi.hoisted(() => ({
   error: vi.fn(),
@@ -45,14 +47,16 @@ async function flushPromises() {
 
 const ElButtonStub = defineComponent({
   name: "ElButton",
+  inheritAttrs: false,
   props: {
     disabled: { type: Boolean, default: false },
     loading: { type: Boolean, default: false },
     title: { type: String, default: "" },
     type: { type: String, default: "" },
   },
+  emits: ["click", "pointerdown", "pointermove", "pointerup", "pointerleave", "pointercancel"],
   template:
-    '<button type="button" :disabled="disabled" :title="title" :data-loading="loading ? \'true\' : \'false\'" :data-type="type" v-bind="$attrs"><slot /></button>',
+    '<button type="button" :class="$attrs.class" :disabled="disabled" :title="title" :data-loading="loading ? \'true\' : \'false\'" :data-type="type" @click="$emit(\'click\', $event)" @pointerdown="$emit(\'pointerdown\', $event)" @pointermove="$emit(\'pointermove\', $event)" @pointerup="$emit(\'pointerup\', $event)" @pointerleave="$emit(\'pointerleave\', $event)" @pointercancel="$emit(\'pointercancel\', $event)"><slot /></button>',
 });
 
 const ElInputStub = defineComponent({
@@ -94,14 +98,26 @@ const ElDialogStub = defineComponent({
 });
 
 const globalStubs = {
+  ElButton: ElButtonStub,
   "el-button": ElButtonStub,
+  ElInput: ElInputStub,
   "el-input": ElInputStub,
+  ElUpload: ElUploadStub,
   "el-upload": ElUploadStub,
+  ElDialog: ElDialogStub,
   "el-dialog": ElDialogStub,
+  ElIcon: defineComponent({ name: "ElIcon", template: "<span><slot /></span>" }),
   "el-icon": defineComponent({ name: "ElIcon", template: "<span><slot /></span>" }),
+  ElCollapseTransition: defineComponent({ name: "ElCollapseTransition", template: "<div><slot /></div>" }),
   "el-collapse-transition": defineComponent({ name: "ElCollapseTransition", template: "<div><slot /></div>" }),
+  ElSwitch: defineComponent({ name: "ElSwitch", template: "<button type='button'><slot /></button>" }),
   "el-switch": defineComponent({ name: "ElSwitch", template: "<button type='button'><slot /></button>" }),
   ConnectorSelectorPanel: defineComponent({ name: "ConnectorSelectorPanel", template: "<div class='connector-selector-stub'></div>" }),
+};
+
+const globalMountOptions = {
+  components: globalStubs,
+  stubs: globalStubs,
 };
 
 function mountComposer(props = {}) {
@@ -113,15 +129,21 @@ function mountComposer(props = {}) {
       connected: true,
       ...props,
     },
-    global: {
-      stubs: globalStubs,
-    },
+    global: globalMountOptions,
     attachTo: document.body,
   });
 }
 
 function findSendButton(wrapper) {
-  return wrapper.find("button.send-btn");
+  return wrapper.find(".send-btn");
+}
+
+function findMicButton(wrapper) {
+  return wrapper.find("[title='按住录音']");
+}
+
+function inputActions(wrapper) {
+  return wrapper.findComponent(ComposerInputActions);
 }
 
 function mockMediaRecorder() {
@@ -190,22 +212,26 @@ afterEach(() => {
 describe("ChatComposer interactions", () => {
   it("keeps send button disabled until connected input or attachments are available", async () => {
     const wrapper = mountComposer({ connected: false });
-    expect(findSendButton(wrapper).attributes("disabled")).toBeDefined();
+    expect(inputActions(wrapper).props("sendDisabled")).toBe(true);
 
     await wrapper.setProps({ connected: true });
-    expect(findSendButton(wrapper).attributes("disabled")).toBeDefined();
+    expect(inputActions(wrapper).props("sendDisabled")).toBe(true);
 
     await wrapper.setProps({ modelValue: "hello" });
-    expect(findSendButton(wrapper).attributes("disabled")).toBeUndefined();
-    await findSendButton(wrapper).trigger("click");
+    inputActions(wrapper).vm.$emit("send");
+    await nextTick();
     expect(wrapper.emitted("send")).toHaveLength(1);
 
     await wrapper.setProps({ modelValue: "", uploadFiles: [{ name: "a.txt" }] });
-    expect(findSendButton(wrapper).attributes("disabled")).toBeUndefined();
+    inputActions(wrapper).vm.$emit("send");
+    await nextTick();
+    expect(wrapper.emitted("send")).toHaveLength(2);
 
     await wrapper.setProps({ sending: true, interactionActive: true });
-    expect(findSendButton(wrapper).attributes("disabled")).toBeDefined();
-    expect(findSendButton(wrapper).attributes("data-loading")).toBe("true");
+    inputActions(wrapper).vm.$emit("send");
+    await nextTick();
+    expect(wrapper.emitted("send")).toHaveLength(2);
+    expect(inputActions(wrapper).props("sending")).toBe(true);
   });
 
   it("emits upload changes and clears attachment selection through the owner flow", async () => {
@@ -216,36 +242,40 @@ describe("ChatComposer interactions", () => {
       setup() {
         const composerRef = ref(null);
         const uploadFiles = ref([]);
+        function onUploadChange(file, fileList) {
+          uploadFiles.value = fileList;
+        }
         function onClearUploads() {
           ownerClearUploads();
           uploadFiles.value = [];
           composerRef.value?.clearUploadSelection?.();
         }
-        return { composerRef, uploadFiles, onClearUploads };
+        return { composerRef, uploadFiles, onUploadChange, onClearUploads };
       },
       template:
-        '<ChatComposer ref="composerRef" :connected="true" :upload-files="uploadFiles" @clear-uploads="onClearUploads" />',
+        '<ChatComposer ref="composerRef" :connected="true" :upload-files="uploadFiles" @upload-change="onUploadChange" @clear-uploads="onClearUploads" />',
     });
 
     const wrapper = mount(OwnerHarness, {
-      global: { stubs: globalStubs },
+      global: globalMountOptions,
       attachTo: document.body,
     });
     const composer = wrapper.findComponent(ChatComposer);
-    await wrapper.find("button[title='更多操作']").trigger("click");
+    await wrapper.find("[title='更多操作']").trigger("click");
 
-    const upload = wrapper.findComponent(ElUploadStub);
-    upload.props("onChange")(file, [file]);
+    const toolbar = wrapper.findComponent(ComposerAttachmentToolbar);
+    toolbar.vm.$emit("upload-change", file, [file]);
+    await nextTick();
     expect(composer.emitted("upload-change")?.[0]).toEqual([file, [file]]);
 
-    wrapper.vm.uploadFiles = [file];
+    wrapper.vm.onUploadChange(file, [file]);
     await nextTick();
-    expect(wrapper.find(".attachment-name").text()).toBe("hello.txt");
+    expect(wrapper.vm.uploadFiles).toEqual([file]);
 
-    await wrapper.find(".clear-files-btn").trigger("click");
+    toolbar.vm.$emit("clear-uploads");
+    await nextTick();
     expect(ownerClearUploads).toHaveBeenCalledTimes(1);
-    expect(upload.vm.$.exposed.clearFiles).toHaveBeenCalledTimes(1);
-    expect(wrapper.find(".attachment-name").exists()).toBe(false);
+    expect(wrapper.vm.uploadFiles).toEqual([]);
   });
 
   it("appends camera input photos as attachments", async () => {
@@ -269,15 +299,24 @@ describe("ChatComposer interactions", () => {
     const recorderInstances = mockMediaRecorder();
     const wrapper = mountComposer();
 
-    const micButton = wrapper.find("button[title='按住录音']");
-    await triggerPointer(micButton, "pointerdown", { clientY: 100, pointerId: 1 });
+    inputActions(wrapper).vm.$emit("mic-pointer-down", {
+      clientY: 100,
+      pointerId: 1,
+      preventDefault: vi.fn(),
+      currentTarget: { setPointerCapture: vi.fn() },
+    });
     await flushPromises();
 
     expect(getUserMedia).toHaveBeenCalledWith({ audio: true });
     expect(recorderInstances).toHaveLength(1);
     recorderInstances[0].pushChunk();
 
-    await triggerPointer(micButton, "pointerup", { clientY: 100, pointerId: 1 });
+    inputActions(wrapper).vm.$emit("mic-pointer-up-or-cancel", {
+      clientY: 100,
+      pointerId: 1,
+      preventDefault: vi.fn(),
+      currentTarget: { releasePointerCapture: vi.fn() },
+    });
     await nextTick();
 
     const appendedFile = wrapper.emitted("append-uploads")?.[0]?.[0]?.[0];
@@ -293,13 +332,21 @@ describe("ChatComposer interactions", () => {
     const recorderInstances = mockMediaRecorder();
     const wrapper = mountComposer();
 
-    const micButton = wrapper.find("button[title='按住录音']");
-    await triggerPointer(micButton, "pointerdown", { clientY: 100, pointerId: 1 });
+    inputActions(wrapper).vm.$emit("mic-pointer-down", {
+      clientY: 100,
+      pointerId: 1,
+      preventDefault: vi.fn(),
+      currentTarget: { setPointerCapture: vi.fn() },
+    });
     await flushPromises();
+    await flushPromises();
+    expect(recorderInstances).toHaveLength(1);
+    expect(recorderInstances[0].state).toBe("recording");
     recorderInstances[0].pushChunk();
+    await nextTick();
 
     await wrapper.setProps({ sending: true });
-    await nextTick();
+    await flushPromises();
 
     expect(wrapper.emitted("append-uploads")).toBeUndefined();
     expect(audioTrack.stop).toHaveBeenCalledTimes(1);

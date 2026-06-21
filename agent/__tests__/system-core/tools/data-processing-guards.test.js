@@ -75,7 +75,7 @@ test("doc_to_data: direct text result stores content in file and returns text wh
   assert.equal("textPreview" in payload, false);
   assert.equal(payload.textLength, 3000);
   assert.equal(payload.contentStoredInFile, true);
-  assert.equal("transferEnvelope" in payload, false);
+  assert.equal("transferEnvelopes" in payload, true);
   assert.equal(Array.isArray(payload.transferEnvelopes), true);
   assert.equal(payload.transferEnvelopes.length, 1);
 });
@@ -128,7 +128,7 @@ test("doc_to_data: direct text result returns preview when over semantic-transfe
   assert.equal(payload.textPreviewTruncated, true);
   assert.equal(payload.textLength, 3000);
   assert.equal(payload.contentStoredInFile, true);
-  assert.equal("transferEnvelope" in payload, false);
+  assert.equal("transferEnvelopes" in payload, true);
   assert.equal(Array.isArray(payload.transferEnvelopes), true);
   assert.equal(payload.transferEnvelopes.length, 1);
 });

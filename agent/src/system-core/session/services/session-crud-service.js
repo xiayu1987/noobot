@@ -116,6 +116,74 @@ export class SessionCrudService {
     };
   }
 
+  async getSessionDisplayData({ userId, sessionId }) {
+    const normalizedSessionId = String(sessionId || "").trim();
+    const sessionBundle = await this.getSessionBundle({
+      userId,
+      sessionId: normalizedSessionId,
+    });
+    if (!sessionBundle.exists) {
+      return { exists: false, sessionId: normalizedSessionId, sessions: [], summary: true };
+    }
+
+    const sessionTree = await this.treeRepo.getTree(userId);
+    const allSessionIds = [];
+    const queue = [normalizedSessionId];
+    const visited = new Set();
+    while (queue.length) {
+      const currentSessionId = queue.shift();
+      if (!currentSessionId || visited.has(currentSessionId)) continue;
+      visited.add(currentSessionId);
+      allSessionIds.push(currentSessionId);
+      const children = Array.isArray(sessionTree?.nodes?.[currentSessionId]?.children)
+        ? sessionTree.nodes[currentSessionId].children
+        : [];
+      for (const childSessionId of children) queue.push(childSessionId);
+    }
+
+    const sessions = [];
+    for (const currentSessionId of allSessionIds) {
+      const currentParentSessionId = String(
+        sessionTree?.nodes?.[currentSessionId]?.parentSessionId || "",
+      );
+      const depth = this.sessionTreeService
+        ? await this.sessionTreeService.getSessionDepth({ userId, sessionId: currentSessionId })
+        : this._getDepthFromTree(currentSessionId, sessionTree);
+      let summary = typeof this.sessionRepo?.readSessionDisplaySummary === "function"
+        ? await this.sessionRepo.readSessionDisplaySummary(userId, currentSessionId, currentParentSessionId)
+        : null;
+      const needsRebuild = !summary ||
+        Number(summary?.depth || 0) !== Number(depth || 0) ||
+        (Array.isArray(summary?.toolLogSummaries) &&
+          summary.toolLogSummaries.some((item) => Number(item?.depth || 0) !== Number(depth || 0)));
+      if (needsRebuild && typeof this.sessionRepo?.rebuildSessionDisplaySummary === "function") {
+        summary = await this.sessionRepo.rebuildSessionDisplaySummary(
+          userId,
+          currentSessionId,
+          currentParentSessionId,
+          { depth },
+        );
+      }
+      if (!summary) continue;
+      sessions.push({
+        ...summary,
+        sessionId: currentSessionId,
+        parentSessionId: currentParentSessionId,
+        depth,
+        toolLogSummaries: Array.isArray(summary?.toolLogSummaries)
+          ? summary.toolLogSummaries.map((item) => ({ ...item, depth }))
+          : [],
+      });
+    }
+
+    return {
+      exists: true,
+      sessionId: normalizedSessionId,
+      summary: true,
+      sessions,
+    };
+  }
+
   async getAllSessionsData({ userId }) {
     const sessionTree = this.sessionTreeService
       ? await this.sessionTreeService.getSessionTree({ userId })

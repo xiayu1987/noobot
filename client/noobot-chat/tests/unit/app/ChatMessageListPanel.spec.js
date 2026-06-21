@@ -1,8 +1,34 @@
-import { defineComponent, onMounted, onUnmounted, reactive } from "vue";
+import { defineComponent, nextTick, onMounted, onUnmounted, reactive } from "vue";
 import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import ChatMessageListPanel from "../../../src/app/ChatMessageListPanel.vue";
 import { RoleEnum } from "../../../src/shared/constants/chatConstants";
+
+const chatMessageItemMock = vi.hoisted(() => ({
+  field: "content",
+  mounted: null,
+  unmounted: null,
+}));
+
+vi.mock("../../../src/modules/message/ChatMessageItem.vue", async () => {
+  const { defineComponent: defineVueComponent, h, onMounted: onVueMounted, onUnmounted: onVueUnmounted } = await import("vue");
+  return {
+    default: defineVueComponent({
+      name: "ChatMessageItem",
+      props: {
+        messageItem: { type: Object, required: true },
+      },
+      setup(props) {
+        onVueMounted(() => chatMessageItemMock.mounted?.());
+        onVueUnmounted(() => chatMessageItemMock.unmounted?.());
+        return () => {
+          const messageItem = props.messageItem || {};
+          return h("div", { class: "chat-message-item-stub" }, String(messageItem?.[chatMessageItemMock.field] || ""));
+        };
+      },
+    }),
+  };
+});
 
 vi.mock("../../../src/shared/i18n/useLocale", () => ({
   useLocale: () => ({
@@ -11,6 +37,16 @@ vi.mock("../../../src/shared/i18n/useLocale", () => ({
 }));
 
 function mountPanel(props = {}) {
+  chatMessageItemMock.field = "content";
+  chatMessageItemMock.mounted = null;
+  chatMessageItemMock.unmounted = null;
+  const ChatMessageItemStub = defineComponent({
+    name: "ChatMessageItem",
+    props: {
+      messageItem: { type: Object, required: true },
+    },
+    template: "<div class='chat-message-item-stub'>{{ messageItem.content }}</div>",
+  });
   return mount(ChatMessageListPanel, {
     props: {
       loadingSessionDetail: false,
@@ -27,6 +63,8 @@ function mountPanel(props = {}) {
     },
     global: {
       stubs: {
+        ChatMessageItem: ChatMessageItemStub,
+        "chat-message-item": ChatMessageItemStub,
         "el-scrollbar": defineComponent({
           name: "ElScrollbarStub",
           template: "<div class='el-scrollbar-stub'><slot /></div>",
@@ -56,22 +94,13 @@ describe("ChatMessageListPanel", () => {
 
   it("message item key remains stable when only content changes", async () => {
     const counters = reactive({ mounted: 0, unmounted: 0 });
-    const ChatMessageItemStub = defineComponent({
-      name: "ChatMessageItem",
-      props: {
-        messageItem: { type: Object, required: true },
-      },
-      setup() {
-        onMounted(() => {
-          counters.mounted += 1;
-        });
-        onUnmounted(() => {
-          counters.unmounted += 1;
-        });
-        return {};
-      },
-      template: "<div class='chat-message-item-stub'>{{ messageItem.content }}</div>",
-    });
+    chatMessageItemMock.field = "content";
+    chatMessageItemMock.mounted = () => {
+      counters.mounted += 1;
+    };
+    chatMessageItemMock.unmounted = () => {
+      counters.unmounted += 1;
+    };
 
     const activeSession = reactive({
       messages: [{ role: RoleEnum.ASSISTANT, dialogProcessId: "dp-1", content: "v1", ts: 1 }],
@@ -91,7 +120,6 @@ describe("ChatMessageListPanel", () => {
       },
       global: {
         stubs: {
-          ChatMessageItem: ChatMessageItemStub,
           "el-scrollbar": defineComponent({
             name: "ElScrollbarStub",
             template: "<div><slot /></div>",
@@ -104,10 +132,12 @@ describe("ChatMessageListPanel", () => {
     expect(counters.mounted).toBe(1);
     expect(counters.unmounted).toBe(0);
 
-    activeSession.messages = [
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-1", content: "v2", ts: 2 },
-    ];
-    await wrapper.vm.$nextTick();
+    await wrapper.setProps({
+      activeSession: {
+        messages: [{ role: RoleEnum.ASSISTANT, dialogProcessId: "dp-1", content: "v2", ts: 2 }],
+      },
+    });
+    await nextTick();
 
     expect(counters.mounted).toBe(1);
     expect(counters.unmounted).toBe(0);
@@ -115,22 +145,13 @@ describe("ChatMessageListPanel", () => {
 
   it("remounts assistant item when messageRoundId changes to avoid reusing previous turn state", async () => {
     const counters = reactive({ mounted: 0, unmounted: 0 });
-    const ChatMessageItemStub = defineComponent({
-      name: "ChatMessageItem",
-      props: {
-        messageItem: { type: Object, required: true },
-      },
-      setup() {
-        onMounted(() => {
-          counters.mounted += 1;
-        });
-        onUnmounted(() => {
-          counters.unmounted += 1;
-        });
-        return {};
-      },
-      template: "<div class='chat-message-item-stub'>{{ messageItem.messageRoundId }}</div>",
-    });
+    chatMessageItemMock.field = "messageRoundId";
+    chatMessageItemMock.mounted = () => {
+      counters.mounted += 1;
+    };
+    chatMessageItemMock.unmounted = () => {
+      counters.unmounted += 1;
+    };
 
     const activeSession = reactive({
       messages: [
@@ -157,7 +178,6 @@ describe("ChatMessageListPanel", () => {
       },
       global: {
         stubs: {
-          ChatMessageItem: ChatMessageItemStub,
           "el-scrollbar": defineComponent({
             name: "ElScrollbarStub",
             template: "<div><slot /></div>",
@@ -171,15 +191,19 @@ describe("ChatMessageListPanel", () => {
     expect(counters.unmounted).toBe(0);
     expect(wrapper.find(".chat-message-item-stub").text()).toBe("round-1");
 
-    activeSession.messages = [
-      {
-        role: RoleEnum.ASSISTANT,
-        dialogProcessId: "dp-1",
-        messageRoundId: "round-2",
-        content: "second pending",
+    await wrapper.setProps({
+      activeSession: {
+        messages: [
+          {
+            role: RoleEnum.ASSISTANT,
+            dialogProcessId: "dp-1",
+            messageRoundId: "round-2",
+            content: "second pending",
+          },
+        ],
       },
-    ];
-    await wrapper.vm.$nextTick();
+    });
+    await nextTick();
 
     expect(counters.mounted).toBe(2);
     expect(counters.unmounted).toBe(1);
@@ -188,22 +212,13 @@ describe("ChatMessageListPanel", () => {
 
   it("keeps assistant item mounted when dialogProcessId arrives for the same messageRoundId", async () => {
     const counters = reactive({ mounted: 0, unmounted: 0 });
-    const ChatMessageItemStub = defineComponent({
-      name: "ChatMessageItem",
-      props: {
-        messageItem: { type: Object, required: true },
-      },
-      setup() {
-        onMounted(() => {
-          counters.mounted += 1;
-        });
-        onUnmounted(() => {
-          counters.unmounted += 1;
-        });
-        return {};
-      },
-      template: "<div class='chat-message-item-stub'>{{ messageItem.dialogProcessId }}</div>",
-    });
+    chatMessageItemMock.field = "dialogProcessId";
+    chatMessageItemMock.mounted = () => {
+      counters.mounted += 1;
+    };
+    chatMessageItemMock.unmounted = () => {
+      counters.unmounted += 1;
+    };
 
     const activeSession = reactive({
       messages: [
@@ -230,7 +245,6 @@ describe("ChatMessageListPanel", () => {
       },
       global: {
         stubs: {
-          ChatMessageItem: ChatMessageItemStub,
           "el-scrollbar": defineComponent({
             name: "ElScrollbarStub",
             template: "<div><slot /></div>",
@@ -242,15 +256,19 @@ describe("ChatMessageListPanel", () => {
 
     expect(counters.mounted).toBe(1);
 
-    activeSession.messages = [
-      {
-        role: RoleEnum.ASSISTANT,
-        dialogProcessId: "dp-live",
-        messageRoundId: "round-live",
-        content: "streaming",
+    await wrapper.setProps({
+      activeSession: {
+        messages: [
+          {
+            role: RoleEnum.ASSISTANT,
+            dialogProcessId: "dp-live",
+            messageRoundId: "round-live",
+            content: "streaming",
+          },
+        ],
       },
-    ];
-    await wrapper.vm.$nextTick();
+    });
+    await nextTick();
 
     expect(counters.mounted).toBe(1);
     expect(counters.unmounted).toBe(0);

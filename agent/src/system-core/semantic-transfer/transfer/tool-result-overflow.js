@@ -320,7 +320,7 @@ function normalizeReadFileOverflowResult({
     : contentText.length;
   const measuredLength = String(measuredText || rawText || "").length;
   const fileName = String(parsed?.fileName || path.basename(sourcePath)).trim();
-  const transferEnvelope = createTransferEnvelope({
+  const envelope = createTransferEnvelope({
     direction: TRANSFER_DIRECTION.OUTPUT,
     transport: TRANSFER_TRANSPORT.FILE,
     filePath: fileAddress,
@@ -365,7 +365,7 @@ function normalizeReadFileOverflowResult({
     overflowed: true,
     overflow_reason: `read_file result length ${measuredLength} exceeds limit ${maxChars}`,
     overflow_strategy: "original_file_reference",
-    transferEnvelopes: [transferEnvelope],
+    transferEnvelopes: [envelope],
     summary: {
       original_length: measuredLength,
       max_length: maxChars,

@@ -31,7 +31,7 @@ function buildTransferPayloadFromAttachmentMetas(attachmentMetas = []) {
     attachmentMeta: meta,
     role: index === 0 ? "primary" : "secondary",
   }));
-  const transferEnvelope = {
+  const primaryEnvelope = {
     protocol: "noobot.semantic-transfer",
     version: 1,
     direction: "output",
@@ -40,19 +40,14 @@ function buildTransferPayloadFromAttachmentMetas(attachmentMetas = []) {
     files,
   };
   return normalizeTransferPayload({
-    transferResult: { ok: true, status: "file", envelope: transferEnvelope },
-    transferEnvelope,
-    transferEnvelopes: [transferEnvelope],
+    transferResult: { ok: true, status: "file", envelope: primaryEnvelope },
+    transferEnvelopes: [primaryEnvelope],
   });
 }
 
 function extractAttachmentMetasFromTransferPayload(payload = {}) {
   const source = normalizeTransferPayload(payload || {});
-  const envelopes = Array.isArray(source.transferEnvelopes)
-    ? source.transferEnvelopes
-    : source.transferEnvelope
-      ? [source.transferEnvelope]
-      : [];
+  const envelopes = source.transferEnvelopes;
   const metas = [];
   for (const envelope of envelopes) {
     if (!envelope || typeof envelope !== "object") continue;
@@ -71,21 +66,16 @@ function extractAttachmentMetasFromTransferPayload(payload = {}) {
 function normalizeTransferPayload(payload = {}) {
   const source = isPlainObject(payload) ? payload : {};
   const transferResult = isPlainObject(source.transferResult) ? source.transferResult : null;
-  const transferEnvelope = isPlainObject(source.transferEnvelope)
-    ? source.transferEnvelope
-    : isPlainObject(source.envelope)
-      ? source.envelope
-      : isPlainObject(transferResult?.envelope)
-        ? transferResult.envelope
-        : null;
+  const resultEnvelope = isPlainObject(transferResult?.envelope) ? transferResult.envelope : null;
+  const sourceEnvelope = isPlainObject(source.envelope) ? source.envelope : null;
   const transferEnvelopes = Array.isArray(source.transferEnvelopes)
     ? source.transferEnvelopes.filter(isPlainObject)
-    : transferEnvelope
-      ? [transferEnvelope]
-      : [];
+    : [];
+  for (const envelope of [sourceEnvelope, resultEnvelope].filter(isPlainObject)) {
+    if (!transferEnvelopes.includes(envelope)) transferEnvelopes.push(envelope);
+  }
   return {
     transferResult,
-    transferEnvelope,
     transferEnvelopes,
   };
 }
@@ -93,7 +83,7 @@ function normalizeTransferPayload(payload = {}) {
 export function getTransferPayloadFromAttachmentMetas(attachmentMetas = [], payload = null) {
   void attachmentMetas;
   const payloadTransfer = normalizeTransferPayload(payload || {});
-  if (payloadTransfer.transferResult || payloadTransfer.transferEnvelope || payloadTransfer.transferEnvelopes.length) {
+  if (payloadTransfer.transferResult || payloadTransfer.transferEnvelopes.length) {
     return payloadTransfer;
   }
   return buildTransferPayloadFromAttachmentMetas(attachmentMetas);
@@ -105,8 +95,8 @@ export function applyTransferPayloadToMessage(message = {}, payload = {}) {
   if (transferPayload.transferResult) {
     message.transferResult = transferPayload.transferResult;
   }
-  if (transferPayload.transferEnvelope) {
-    message.transferEnvelope = transferPayload.transferEnvelope;
+  if (transferPayload.transferEnvelopes) {
+    message.transferEnvelopes = transferPayload.transferEnvelopes;
   }
   if (transferPayload.transferEnvelopes.length) {
     const existing = Array.isArray(message.transferEnvelopes) ? message.transferEnvelopes : [];
@@ -188,12 +178,9 @@ function markHarnessPluginTransferEnvelope(envelope = null) {
 
 export function markHarnessPluginTransferPayload(payload = {}) {
   const source = normalizeTransferPayload(payload || {});
-  const transferEnvelope = source.transferEnvelope
-    ? markHarnessPluginTransferEnvelope(source.transferEnvelope)
-    : null;
-  const transferEnvelopes = Array.isArray(source.transferEnvelopes)
-    ? source.transferEnvelopes.map((item) => markHarnessPluginTransferEnvelope(item)).filter(Boolean)
-    : [];
+  const transferEnvelopes = source.transferEnvelopes
+    .map((item) => markHarnessPluginTransferEnvelope(item))
+    .filter(Boolean);
   const transferResult = source.transferResult
     ? {
       ...source.transferResult,
@@ -204,7 +191,6 @@ export function markHarnessPluginTransferPayload(payload = {}) {
     : null;
   return {
     transferResult,
-    transferEnvelope,
     transferEnvelopes,
   };
 }

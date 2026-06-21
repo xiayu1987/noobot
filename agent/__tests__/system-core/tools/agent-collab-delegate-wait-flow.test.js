@@ -108,7 +108,6 @@ test("delegate_task_async + wait_async_task_result: completed flow persists atta
   assert.equal(waitCalls.length, 1);
   assert.equal(ingestCalls.length, 1);
   assert.equal("transferResult" in waitPayload, false);
-  assert.equal("transferEnvelope" in waitPayload, false);
   assert.equal("transferEnvelopes" in waitPayload, false);
 
   const artifact = ingestCalls[0]?.artifacts?.[0];

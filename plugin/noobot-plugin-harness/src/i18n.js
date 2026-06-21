@@ -459,7 +459,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     acceptanceDigestSummaryDetailPathsLabel: "小结明细路径",
     acceptanceDigestNoDetailPaths: "（无）",
     acceptanceChecklistArtifactsGeneratedNotice:
-      "已生成 harness 清单附件，详见 transferEnvelope(s)。",
+      "已生成 harness 清单附件，详见 transferEnvelopes(s)。",
     acceptanceForcedReasonRebuiltArtifacts:
       "补建验收报告_用于附件生成",
     acceptanceForcedReasonOverflowFallback:
@@ -718,7 +718,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     acceptanceDigestSummaryDetailPathsLabel: "Summary Detail Paths",
     acceptanceDigestNoDetailPaths: "-",
     acceptanceChecklistArtifactsGeneratedNotice:
-      "Harness checklist artifacts generated. See transferEnvelope(s) for details.",
+      "Harness checklist artifacts generated. See transferEnvelopes(s) for details.",
     acceptanceForcedReasonRebuiltArtifacts:
       "Rebuilt acceptance report for artifact generation",
     acceptanceForcedReasonOverflowFallback:

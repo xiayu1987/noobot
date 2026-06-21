@@ -114,7 +114,7 @@ function buildExistingArtifactPersistedOutput({
     purpose: "reuse_data_processing_artifact",
     role: "primary",
   });
-  const transferEnvelope = createTransferEnvelope({
+  const envelope = createTransferEnvelope({
     direction: "output",
     transport: "file",
     filePath: file?.filePath || "",
@@ -134,7 +134,7 @@ function buildExistingArtifactPersistedOutput({
       mimeType: String(attachmentMeta?.mimeType || MIME_TYPE.TEXT_MARKDOWN),
     },
   });
-  const transferEnvelopes = [transferEnvelope];
+  const transferEnvelopes = [envelope];
   return {
     attachmentMetas: [attachmentMeta],
     transferEnvelopes,

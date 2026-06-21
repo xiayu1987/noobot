@@ -136,11 +136,9 @@ test("state-committer stores compact LLM-facing tool result content", async () =
 
   const payload = JSON.parse(messages[0].content);
   assert.equal("transferResult" in payload, false);
-  assert.equal("transferEnvelope" in payload, false);
   assert.equal("transferEnvelopes" in payload, false);
   assert.equal("attachmentMetas" in payload, false);
   assert.equal(payload.transferFiles[0].attachmentId, "att_compact");
-  assert.equal("transferEnvelope" in turnMessageStore.items[0], false);
   assert.equal("transferEnvelopes" in turnMessageStore.items[0], true);
   assert.deepEqual(turnMessageStore.items[0].transferEnvelopes, [envelope]);
 });
@@ -171,7 +169,7 @@ test("state-committer persists transferEnvelopes without persisting the singular
     }),
   });
 
-  assert.equal("transferEnvelope" in turnMessageStore.items[0], false);
+  assert.equal("transferEnvelopes" in turnMessageStore.items[0], true);
   assert.deepEqual(turnMessageStore.items[0].transferEnvelopes, [envelope]);
 });
 

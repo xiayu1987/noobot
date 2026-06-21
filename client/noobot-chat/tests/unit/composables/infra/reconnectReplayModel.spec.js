@@ -76,7 +76,7 @@ describe("reconnectReplayModel", () => {
   });
 
   it("patchMessageObjectPreservingUiState keeps non-degrading fields and UI state", () => {
-    const transferEnvelope = {
+    const envelope = {
       protocol: "noobot.semantic-transfer",
       version: 1,
       direction: "output",
@@ -89,8 +89,7 @@ describe("reconnectReplayModel", () => {
       modelRuns: [{ id: 1 }],
       completedToolLogs: [{ id: 1 }],
       realtimeLogs: [{ id: 1 }],
-      transferEnvelope,
-      transferEnvelopes: [transferEnvelope],
+      transferEnvelopes: [envelope],
       thinkingOpenNames: ["thinking-panel"],
       expandedDetailLogKeys: ["k1"],
       statusLabel: "pending",
@@ -110,8 +109,7 @@ describe("reconnectReplayModel", () => {
     expect(target.modelRuns).toHaveLength(1);
     expect(target.completedToolLogs).toHaveLength(1);
     expect(target.realtimeLogs).toHaveLength(1);
-    expect(target.transferEnvelope).toBe(transferEnvelope);
-    expect(target.transferEnvelopes).toEqual([transferEnvelope]);
+    expect(target.transferEnvelopes).toEqual([envelope]);
     expect(target.thinkingOpenNames).toEqual(["thinking-panel"]);
     expect(target.expandedDetailLogKeys).toEqual(["k1"]);
     expect(target.statusLabel).toBe("generated");
@@ -134,17 +132,14 @@ describe("reconnectReplayModel", () => {
     };
     const target = {
       role: RoleEnum.ASSISTANT,
-      transferEnvelope: existingTransferEnvelope,
       transferEnvelopes: [existingTransferEnvelope],
     };
 
     patchMessageObjectPreservingUiState(target, {
       role: RoleEnum.ASSISTANT,
-      transferEnvelope: incomingTransferEnvelope,
       transferEnvelopes: [incomingTransferEnvelope],
     });
 
-    expect(target.transferEnvelope).toBe(incomingTransferEnvelope);
     expect(target.transferEnvelopes).toEqual([existingTransferEnvelope, incomingTransferEnvelope]);
   });
 

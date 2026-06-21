@@ -334,7 +334,6 @@ test("executeToolCall: overflow length is measured after compacting transfer wra
   assert.equal(payload.overflowed, undefined);
   assert.equal(payload.transferEnvelopes, undefined);
   assert.equal("transferResult" in payload, false);
-  assert.equal("transferEnvelope" in payload, false);
   assert.equal("transferEnvelopes" in payload, false);
   assert.equal("attachmentMetas" in payload, false);
   assert.equal(Array.isArray(payload.transferFiles), true);
@@ -410,7 +409,7 @@ test("executeToolCall: overflow keeps original semantic-transfer artifact and co
   assert.equal(Array.isArray(overflowPayload.result.transferEnvelopes), true);
   assert.equal(overflowPayload.result.transferEnvelopes.length >= 1, true);
   assert.equal("transferResult" in overflowPayload.result, false);
-  assert.equal("transferEnvelope" in overflowPayload.result, false);
+  assert.equal("transferEnvelopes" in overflowPayload.result, true);
   assert.equal("attachmentMetas" in overflowPayload.result, false);
   const compactEnvelope = overflowPayload.result.transferEnvelopes.find(
     (item = {}) => Array.isArray(item?.files) && item.files.some((f = {}) => f?.attachmentMeta?.attachmentId === "att_real_1"),

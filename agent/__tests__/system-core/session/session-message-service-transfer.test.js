@@ -54,7 +54,7 @@ test("SessionMessageService.appendTurn persists transferEnvelopes", async () => 
   const lastMessage = saved[0]?.messages?.[0];
   assert.equal(Array.isArray(lastMessage?.attachmentMetas), true);
   assert.equal(lastMessage?.attachmentMetas?.length, 1);
-  assert.equal("transferEnvelope" in lastMessage, false);
+  assert.equal("transferEnvelopes" in lastMessage, true);
   assert.deepEqual(lastMessage?.transferEnvelopes, [envelope]);
 });
 

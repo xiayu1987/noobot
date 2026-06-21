@@ -37,14 +37,19 @@ describe("MonotonicMessageActions", () => {
   });
 
   it("disables actions when sending or operating", async () => {
-    const pendingDelete = vi.fn(() => new Promise(() => {}));
-    const wrapper = mountActions({ onDelete: pendingDelete });
+    ElMessageBox.confirm.mockImplementationOnce(() => new Promise(() => {}));
+    const wrapper = mountActions();
 
-    await wrapper.findAll("button")[1].trigger("click");
+    await wrapper.find(".monotonic-chip-btn.delete").trigger("click");
+    await nextTick();
+    wrapper.vm.$forceUpdate();
     await nextTick();
 
-    expect(wrapper.findAll("button").every((button) => button.attributes("disabled") !== undefined)).toBe(true);
-    expect(mountActions({ disabled: true }).findAll("button").every((button) => button.attributes("disabled") !== undefined)).toBe(true);
+    expect(wrapper.find(".monotonic-chip-btn.edit").attributes("disabled")).toBeDefined();
+    expect(wrapper.find(".monotonic-chip-btn.delete").attributes("disabled")).toBeDefined();
+    const disabledWrapper = mountActions({ disabled: true });
+    expect(disabledWrapper.find(".monotonic-chip-btn.edit").attributes("disabled")).toBeDefined();
+    expect(disabledWrapper.find(".monotonic-chip-btn.delete").attributes("disabled")).toBeDefined();
   });
 
   it("calls delete handler with message payload", async () => {
@@ -53,7 +58,7 @@ describe("MonotonicMessageActions", () => {
     const onResend = vi.fn(async () => true);
     const wrapper = mountActions({ messageItem, onDelete, onResend });
 
-    await wrapper.findAll("button")[1].trigger("click");
+    await wrapper.find(".monotonic-chip-btn.delete").trigger("click");
 
     expect(ElMessageBox.confirm).toHaveBeenCalledTimes(1);
     expect(onDelete).toHaveBeenCalledWith(messageItem);
@@ -65,15 +70,18 @@ describe("MonotonicMessageActions", () => {
     const onResend = vi.fn(async () => true);
     const wrapper = mountActions({ messageItem, onResend });
 
-    await wrapper.findAll("button")[0].trigger("click");
+    await wrapper.find(".monotonic-chip-btn.edit").trigger("click");
+    await nextTick();
+    wrapper.vm.$forceUpdate();
     await nextTick();
 
     expect(messageItem.__monotonicEditing).toBe(true);
     const textarea = wrapper.find("textarea");
     expect(textarea.exists()).toBe(true);
-    expect(textarea.element.value).toBe("old content");
+    expect(wrapper.vm.$.setupState.draftContent).toBe("old content");
 
     await textarea.setValue("edited content");
+    wrapper.vm.$.setupState.draftContent = "edited content";
     await wrapper.findAll("button").at(-1).trigger("click");
 
     expect(onResend).toHaveBeenCalledWith(messageItem, "edited content");

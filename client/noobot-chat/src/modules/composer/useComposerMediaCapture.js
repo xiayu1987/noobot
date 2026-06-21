@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onUpdated, ref, watchEffect } from "vue";
 import { ElMessage } from "element-plus";
 
 const MIC_MAX_DURATION_SECONDS = 60;
@@ -90,6 +90,12 @@ export function useComposerMediaCapture(props, emitAppendUploads, translate) {
         micRecording.value = false;
       };
       mediaRecorder.start();
+      if (captureActionsDisabled.value) {
+        micCancelBySendingRef.value = true;
+        micRecorderRef.value = mediaRecorder;
+        stopMicRecording();
+        return;
+      }
       micDurationTimerRef.value = setInterval(() => {
         micDurationSeconds.value += 1;
       }, 1000);
@@ -108,9 +114,11 @@ export function useComposerMediaCapture(props, emitAppendUploads, translate) {
   }
 
   function stopMicRecording() {
-    if (!micRecording.value) return;
     const mediaRecorder = micRecorderRef.value;
-    if (!mediaRecorder) return;
+    if (!mediaRecorder) {
+      micRecording.value = false;
+      return;
+    }
     if (mediaRecorder.state !== "inactive") {
       mediaRecorder.stop();
       return;
@@ -227,17 +235,17 @@ export function useComposerMediaCapture(props, emitAppendUploads, translate) {
     if (inputElement) inputElement.value = "";
   }
 
-  watch(
-    () => props.sending,
-    (sendingNow) => {
-      if (!sendingNow) return;
-      if (cameraDialogVisible.value) stopCameraPreview();
-      if (micRecording.value) {
-        micCancelBySendingRef.value = true;
-        stopMicRecording();
-      }
-    },
-  );
+  function stopActiveCaptureWhenSending() {
+    if (!props.sending) return;
+    if (cameraDialogVisible.value) stopCameraPreview();
+    if (micRecording.value || micRecorderRef.value) {
+      micCancelBySendingRef.value = true;
+      stopMicRecording();
+    }
+  }
+
+  watchEffect(stopActiveCaptureWhenSending, { flush: "sync" });
+  onUpdated(stopActiveCaptureWhenSending);
 
   onBeforeUnmount(() => {
     stopCameraPreview();

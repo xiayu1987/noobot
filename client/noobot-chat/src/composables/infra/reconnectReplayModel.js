@@ -7,9 +7,8 @@ import { RoleEnum, StreamEventEnum } from "../../shared/constants/chatConstants"
 import {
   getMessageTransferAttachmentMetas,
   getMessageTransferEnvelopes,
-  normalizeTransferEnvelope,
   normalizeTransferEnvelopes,
-} from "./transferEnvelope";
+} from "./transferEnvelopes";
 
 function isReconnectTerminalEvent(eventName = "") {
   return [
@@ -325,9 +324,7 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
     !Array.isArray(sourceMessage.transferResult)
       ? sourceMessage.transferResult
       : null;
-  const existingTransferEnvelope = normalizeTransferEnvelope(targetMessage?.transferEnvelope);
   const existingTransferEnvelopes = getMessageTransferEnvelopes(targetMessage);
-  const sourceTransferEnvelope = normalizeTransferEnvelope(sourceMessage?.transferEnvelope);
   const sourceTransferEnvelopes = getMessageTransferEnvelopes(sourceMessage);
 
   Object.assign(targetMessage, sourceMessage);
@@ -352,18 +349,12 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   if (!sourceTransferResult && existingTransferResult) {
     targetMessage.transferResult = existingTransferResult;
   }
-  if (!sourceTransferEnvelope && existingTransferEnvelope) {
-    targetMessage.transferEnvelope = existingTransferEnvelope;
-  }
   const mergedTransferEnvelopes = mergeTransferEnvelopes(
     existingTransferEnvelopes,
     sourceTransferEnvelopes,
   );
   if (mergedTransferEnvelopes.length) {
     targetMessage.transferEnvelopes = mergedTransferEnvelopes;
-    if (!targetMessage.transferEnvelope) {
-      targetMessage.transferEnvelope = mergedTransferEnvelopes[0];
-    }
   }
   if (thinkingOpenNames) targetMessage.thinkingOpenNames = thinkingOpenNames;
   if (expandedDetailLogKeys) targetMessage.expandedDetailLogKeys = expandedDetailLogKeys;

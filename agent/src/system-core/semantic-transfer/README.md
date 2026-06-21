@@ -38,4 +38,4 @@
 - `transferResult`
 - `transferEnvelopes`
 
-`transferEnvelope` 为 legacy/compat 兼容读取字段，仅用于合并旧数据或旧调用输入；新增/对外主输出统一使用 `transferEnvelopes`。普通附件场景不适用本段，不允许为了统一输出而越权生成 `noobot.semantic-transfer` envelope。
+传输 envelope 字段统一使用 `transferEnvelopes` 数组；普通附件场景不适用本段，不允许为了统一输出而越权生成 `noobot.semantic-transfer` envelope。

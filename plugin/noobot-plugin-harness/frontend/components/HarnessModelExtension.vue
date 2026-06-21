@@ -4,6 +4,8 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
+import { useHarnessLocale } from "../i18n";
+
 const props = defineProps({
   modelOptions: { type: Array, default: () => [] },
   pluginModelConfig: { type: Object, default: () => ({}) },
@@ -18,12 +20,7 @@ const HARNESS_MODEL_STEPS = [
   { key: "default", label: "Default" },
 ];
 
-const TEXT = Object.freeze({
-  title: "Harness 插件",
-  description: "为 planning / guidance / acceptance 等非主流程步骤单独指定模型。",
-  placeholder: "使用主流程/默认模型",
-  empty: "暂无可用于对话的启用模型",
-});
+const { translate } = useHarnessLocale();
 
 function getHarnessStepModel(stepKey = "") {
   return String(props.pluginModelConfig?.harness?.stepModels?.[stepKey] || "").trim();
@@ -62,8 +59,8 @@ function onHarnessStepModelChange(stepKey = "", value = "") {
 <template>
   <div class="plugin-model-card">
     <div class="plugin-model-heading">
-      <div class="plugin-model-title">{{ TEXT.title }}</div>
-      <p class="plugin-model-description">{{ TEXT.description }}</p>
+      <div class="plugin-model-title">{{ translate("modelExtension.title") }}</div>
+      <p class="plugin-model-description">{{ translate("modelExtension.description") }}</p>
     </div>
     <div class="plugin-model-grid">
       <label
@@ -79,7 +76,7 @@ function onHarnessStepModelChange(stepKey = "", value = "") {
           :filterable="false"
           popper-class="noobot-composer-select-popper noobot-model-select-popper"
           :disabled="!hasModelOptions"
-          :placeholder="TEXT.placeholder"
+          :placeholder="translate('modelExtension.placeholder')"
           class="composer-select model-select noobot-model-select-control"
           @update:model-value="onHarnessStepModelChange(stepItem.key, $event)"
         >
@@ -98,7 +95,7 @@ function onHarnessStepModelChange(stepKey = "", value = "") {
         </el-select>
       </label>
     </div>
-    <span v-if="!hasModelOptions" class="plugin-empty-text">{{ TEXT.empty }}</span>
+    <span v-if="!hasModelOptions" class="plugin-empty-text">{{ translate("modelExtension.empty") }}</span>
   </div>
 </template>
 

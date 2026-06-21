@@ -262,7 +262,7 @@ test("transferSemanticContent dispatches by scenario", async () => {
     text: "small text",
   });
   assert.equal(toolTransferred?.transferResult?.ok, true);
-  assert.equal("transferEnvelope" in toolTransferred, false);
+  assert.equal("transferEnvelopes" in toolTransferred, true);
   assert.equal(toolTransferred?.transferEnvelopes?.[0]?.transport, "direct");
 
   const stageTransferred = await transferSemanticContent({
@@ -376,7 +376,7 @@ test("persistTransferArtifacts saves through attachment service and returns tran
   assert.equal(calls.length, 1);
   assert.equal(calls[0].generationSource, "unit_test");
   assert.equal(persisted.transferResult?.status, "file");
-  assert.equal("transferEnvelope" in persisted, false);
+  assert.equal("transferEnvelopes" in persisted, true);
   assert.equal(persisted.transferEnvelopes?.[0]?.filePath, "attachments/a.txt");
   assert.equal(getTransferAttachmentMetas(persisted.transferEnvelopes).length, 1);
   assert.equal(getTransferAttachmentMetas(persisted.transferEnvelopes)[0].attachmentId, "att-1");

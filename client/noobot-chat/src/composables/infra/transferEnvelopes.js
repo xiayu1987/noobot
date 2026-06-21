@@ -30,7 +30,6 @@ function normalizeTransferEnvelopes(value = null) {
 
 function getMessageTransferEnvelopes(messageItem = {}) {
   return [
-    ...normalizeTransferEnvelopes(messageItem?.transferEnvelope),
     ...normalizeTransferEnvelopes(messageItem?.transferEnvelopes),
     ...normalizeTransferEnvelopes(messageItem?.transferResult?.envelope),
   ];
@@ -60,7 +59,6 @@ function getTransferFiles(value = null) {
   if (isPlainObject(value)) {
     if (Array.isArray(value.files)) return value.files.filter(isPlainObject);
     if (Array.isArray(value.transferEnvelopes)) return getTransferFiles(value.transferEnvelopes);
-    if (isTransferEnvelope(value.transferEnvelope)) return getTransferFiles(value.transferEnvelope);
     if (isTransferEnvelope(value.transferResult?.envelope)) return getTransferFiles(value.transferResult.envelope);
   }
   return [];
