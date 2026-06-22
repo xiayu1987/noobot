@@ -38,6 +38,7 @@ import { useChatList } from "./useChatList";
 import { useChatEngine } from "./useChatEngine";
 import { useReconnectReplay } from "./useReconnectReplay";
 import { useChatStore } from "../../shared/stores/useChatStore";
+import { useProcessStore } from "../../shared/stores/useProcessStore";
 import { useLocale } from "../../shared/i18n/useLocale";
 
 export function useChatSession({
@@ -62,6 +63,7 @@ export function useChatSession({
 }) {
   const { translate } = useLocale();
   const chatStore = useChatStore();
+  const processStore = useProcessStore();
   const {
     sending,
     sessions,
@@ -197,6 +199,7 @@ export function useChatSession({
     refreshSessionConnectorsAsync: connectorPanel.refreshSessionConnectorsAsync,
     clearUploads,
     notify,
+    processStore,
   });
 
   const chatEngine = useChatEngine({
@@ -242,6 +245,7 @@ export function useChatSession({
     chatWebSocketClient,
     ensureConnected,
     notify,
+    processStore,
   });
 
   const reconnectReplay = useReconnectReplay({

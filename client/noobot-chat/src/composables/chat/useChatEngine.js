@@ -59,6 +59,7 @@ export function useChatEngine({
   chatWebSocketClient,
   ensureConnected,
   notify = () => {},
+  processStore = null,
   monotonicActionStopTimeoutMs = DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS,
   monotonicActionStopPollIntervalMs = DEFAULT_MONOTONIC_ACTION_STOP_POLL_INTERVAL_MS,
 } = {}) {
@@ -161,6 +162,7 @@ export function useChatEngine({
     setPendingInteractionRequest,
     uploadFiles,
     userId,
+    processStore,
     finalizePendingResendOperation: (...args) => monotonicMessageActions?.finalizePendingResendOperation?.(...args),
   });
 
