@@ -4,6 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { RoleEnum, StreamEventEnum } from "../../../shared/constants/chatConstants";
+import {
+  createProcessEventFromLog,
+  createProcessEventsFromDonePayload,
+} from "../../../shared/process/aggregator";
+import {
+  PROCESS_COMPAT_LOG_LIMIT,
+  ProcessEventSource,
+} from "../../../shared/process/protocol";
 import { sanitizeExecutionLogForDisplay } from "../chatEngine/utils";
 import {
   findReconnectDoneEnvelopeWithMessages,
@@ -51,6 +59,145 @@ export function shouldSkipReconnectBatchAfterTerminal({
       terminalDialogProcessIdSet?.has?.(normalizedDpId) &&
       !isReconnectTerminalBatch?.(nextMessages),
   );
+}
+
+function resolveReconnectProcessId({ targetMessage, normalizedDpId = "", logItem = null, eventData = null } = {}) {
+  return _trimStr(logItem?.processId) ||
+    _trimStr(logItem?.dialogProcessId) ||
+    _trimStr(eventData?.processId) ||
+    _trimStr(eventData?.dialogProcessId) ||
+    _trimStr(normalizedDpId) ||
+    _trimStr(targetMessage?.processId) ||
+    _trimStr(targetMessage?.dialogProcessId);
+}
+
+function getProcessLogMergeKey(logItem = {}) {
+  const explicitKey = _trimStr(
+    logItem.eventId ||
+      logItem.id ||
+      logItem.nodeId ||
+      logItem.toolCallId ||
+      logItem.tool_call_id,
+  );
+  if (explicitKey) return `id:${explicitKey}`;
+  const sequence = Number(logItem.sequence ?? logItem.seq);
+  const processId = _trimStr(logItem.processId || logItem.dialogProcessId);
+  if (Number.isFinite(sequence) && sequence > 0) {
+    return `seq:${processId}:${sequence}`;
+  }
+  try {
+    return `json:${JSON.stringify({
+      event: logItem.event,
+      type: logItem.type,
+      text: logItem.text,
+      displayText: logItem.displayText,
+      ts: logItem.ts,
+      timestamp: logItem.timestamp,
+      processId,
+    })}`;
+  } catch {
+    return "";
+  }
+}
+
+function mergeProcessCompatLogs(existingLogs = [], nextLogs = [], { limit = 0 } = {}) {
+  const mergedLogs = [];
+  const seenKeys = new Set();
+  for (const logItem of [
+    ...(Array.isArray(existingLogs) ? existingLogs : []),
+    ...(Array.isArray(nextLogs) ? nextLogs : []),
+  ]) {
+    if (!logItem) continue;
+    const mergeKey = getProcessLogMergeKey(logItem);
+    if (mergeKey && seenKeys.has(mergeKey)) continue;
+    if (mergeKey) seenKeys.add(mergeKey);
+    mergedLogs.push(logItem);
+  }
+  return limit > 0 ? mergedLogs.slice(-limit) : mergedLogs;
+}
+
+function applyProcessCompatViewToReconnectMessage({ targetMessage, processStore, processId = "" } = {}) {
+  if (!targetMessage || !processStore || !_trimStr(processId)) return;
+  const compatView = processStore.getCompatView?.(processId);
+  if (!compatView) return;
+  targetMessage.processId = processId;
+  targetMessage.processLastSequence = compatView.lastSequence;
+  targetMessage.processRealtimeLogs = mergeProcessCompatLogs(
+    targetMessage.processRealtimeLogs,
+    compatView.realtimeLogs,
+    { limit: PROCESS_COMPAT_LOG_LIMIT },
+  );
+  targetMessage.processCompletedToolLogs = mergeProcessCompatLogs(
+    targetMessage.processCompletedToolLogs,
+    compatView.completedToolLogs,
+  );
+  targetMessage.processExecutionLogTotal = Math.max(
+    Number(compatView.executionLogTotal || 0),
+    Number(targetMessage.executionLogTotal || 0),
+    Number(targetMessage.processExecutionLogTotal || 0),
+  );
+}
+
+function applyReconnectProcessEvents({ processStore, processId = "", events = [], targetMessage } = {}) {
+  if (!processStore || !_trimStr(processId) || !events.length) return;
+  if (typeof processStore.applyEventBatch === "function") {
+    processStore.applyEventBatch(events);
+  } else {
+    events.forEach((event) => processStore.applyEvent?.(event));
+  }
+  applyProcessCompatViewToReconnectMessage({ targetMessage, processStore, processId });
+}
+
+function applyReconnectThinkingProcessEvent({
+  eventData = {},
+  logItem,
+  targetMessage,
+  normalizedDpId = "",
+  processStore,
+} = {}) {
+  const processId = resolveReconnectProcessId({ targetMessage, normalizedDpId, logItem, eventData });
+  if (!_trimStr(processId)) return;
+  const sequence = Number(eventData?.sequence ?? eventData?.seq ?? targetMessage?.executionLogTotal ?? 0);
+  const processEvent = createProcessEventFromLog(logItem, {
+    processId,
+    source: ProcessEventSource.STREAM,
+    sequence,
+    fallbackSequence: Number(targetMessage?.executionLogTotal || 0),
+  });
+  applyReconnectProcessEvents({
+    processStore,
+    processId,
+    events: processEvent ? [processEvent] : [],
+    targetMessage,
+  });
+}
+
+function applyReconnectDoneProcessEvents({
+  eventData = {},
+  targetMessage,
+  normalizedDpId = "",
+  processStore,
+} = {}) {
+  const processId = resolveReconnectProcessId({ targetMessage, normalizedDpId, eventData });
+  if (!_trimStr(processId)) return;
+  const baseSequence = Number(
+    eventData?.sequence ??
+      eventData?.seq ??
+      targetMessage?.processLastSequence ??
+      targetMessage?.executionLogTotal ??
+      0,
+  );
+  const processEvents = createProcessEventsFromDonePayload(eventData, {
+    processId,
+    source: ProcessEventSource.STREAM,
+    baseSequence,
+  });
+  applyReconnectProcessEvents({
+    processStore,
+    processId,
+    events: processEvents,
+    targetMessage,
+  });
 }
 
 export function prepareReconnectReplayBatchPlan({
@@ -153,6 +300,7 @@ export function applyReconnectEnvelopeToTargetMessage({
   onConnectorStatus,
   onAttachmentMetas,
   onDoneMessages,
+  processStore,
 } = {}) {
   if (!targetMessage) return false;
   const eventName = _trimStr(envelope?.event);
@@ -173,8 +321,19 @@ export function applyReconnectEnvelopeToTargetMessage({
     if (logItem?.dialogProcessId && !_trimStr(targetMessage?.dialogProcessId)) {
       targetMessage.dialogProcessId = _trimStr(logItem.dialogProcessId);
     }
-    targetMessage.executionLogTotal = Number(targetMessage.executionLogTotal || 0) + 1;
+    const previousExecutionLogTotal = Math.max(
+      Number(targetMessage.executionLogTotal || 0),
+      Number(targetMessage.processExecutionLogTotal || 0),
+    );
+    targetMessage.executionLogTotal = previousExecutionLogTotal + 1;
     mergeRealtimeLogs(targetMessage, [logItem]);
+    applyReconnectThinkingProcessEvent({
+      eventData,
+      logItem,
+      targetMessage,
+      normalizedDpId,
+      processStore,
+    });
   } else if (eventName === StreamEventEnum.INTERACTION_REQUEST) {
     onInteractionRequest?.(eventData);
   } else if (eventName === StreamEventEnum.CONNECTOR_STATUS) {
@@ -217,6 +376,12 @@ export function applyReconnectEnvelopeToTargetMessage({
         }
       }
     }
+    applyReconnectDoneProcessEvents({
+      eventData,
+      targetMessage,
+      normalizedDpId,
+      processStore,
+    });
     if (Array.isArray(eventData?.messages) && eventData.messages.length) {
       onDoneMessages?.(eventData);
     }
@@ -224,6 +389,12 @@ export function applyReconnectEnvelopeToTargetMessage({
     terminalDialogProcessIdSet?.add?.(normalizedDpId);
   } else if (eventName === StreamEventEnum.ERROR) {
     targetMessage.error = String(eventData?.error || targetMessage?.error || "");
+    applyReconnectDoneProcessEvents({
+      eventData,
+      targetMessage,
+      normalizedDpId,
+      processStore,
+    });
     terminalDialogProcessIdSet?.add?.(normalizedDpId);
   }
   return true;
@@ -242,6 +413,7 @@ export function applyReconnectEnvelopeBatchToTargetMessage({
   onConnectorStatus,
   onAttachmentMetas,
   onDoneMessages,
+  processStore,
 } = {}) {
   let maxAppliedSeq = Number(lastAppliedSeq || 0);
   for (const envelope of _ensureArray(messages)) {
@@ -258,6 +430,7 @@ export function applyReconnectEnvelopeBatchToTargetMessage({
       onConnectorStatus,
       onAttachmentMetas,
       onDoneMessages,
+      processStore,
     });
   }
   return maxAppliedSeq;
@@ -311,6 +484,7 @@ export async function applyReconnectReplayBatchToActiveSession({
   envelopeCallbacks = {},
   markReconnectSequenceApplied,
   scrollBottom,
+  processStore,
 } = {}) {
   if (!activeSession?.value) return false;
   const normalizedDpId = _trimStr(dialogProcessId);
@@ -392,6 +566,7 @@ export async function applyReconnectReplayBatchToActiveSession({
     classifyRealtimeLog,
     normalizeExecutionLogForRealtime,
     ...envelopeCallbacks,
+    processStore,
   });
   finalizeReconnectReplayBatch({
     normalizedDpId,

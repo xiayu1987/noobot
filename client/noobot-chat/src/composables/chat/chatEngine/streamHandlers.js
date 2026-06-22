@@ -23,6 +23,7 @@ import {
   normalizeInteractionRequestPayload,
   resolveConnectorStatusPayload,
 } from "../interactionPayload";
+import { bindThinkingDialogProcess, rememberThinkingFinished } from "../thinkingTimingRegistry";
 
 function markFirstStreamEvent(botMessage) {
   if (!botMessage) return;
@@ -38,11 +39,16 @@ function applyProcessCompatViewToMessage({ botMessage, processStore, processId }
   if (!botMessage || !processStore || !processId) return;
   const compatView = processStore.getCompatView?.(processId);
   if (!compatView || compatView.executionLogTotal <= 0) return;
+  const executionLogTotal = Math.max(
+    Number(compatView.executionLogTotal || 0),
+    Number(botMessage.executionLogTotal || 0),
+    Number(botMessage.processExecutionLogTotal || 0),
+  );
   botMessage.processId = processId;
   botMessage.processLastSequence = compatView.lastSequence;
   botMessage.processRealtimeLogs = compatView.realtimeLogs;
   botMessage.processCompletedToolLogs = compatView.completedToolLogs;
-  botMessage.processExecutionLogTotal = compatView.executionLogTotal;
+  botMessage.processExecutionLogTotal = executionLogTotal;
 }
 
 function applyProcessEventsToMessage({ botMessage, processStore, events = [] }) {
@@ -66,14 +72,23 @@ export function handleThinkingStreamEvent({
   }
   if (!item.subAgentCall && item.dialogProcessId) {
     botMessage.dialogProcessId = item.dialogProcessId;
+    bindThinkingDialogProcess({
+      sessionId: item.sessionId || botMessage.sessionId || botMessage.session_id,
+      clientTurnId: botMessage.clientTurnId,
+      dialogProcessId: item.dialogProcessId,
+    });
   }
   notifySendingStartedWhenDialogReady({ botMessage, locateSendingStartedMessageOnce });
   markFirstStreamEvent(botMessage);
-  botMessage.executionLogTotal = Number(botMessage.executionLogTotal || 0) + 1;
+  const previousExecutionLogTotal = Math.max(
+    Number(botMessage.executionLogTotal || 0),
+    Number(botMessage.processExecutionLogTotal || 0),
+  );
+  botMessage.executionLogTotal = previousExecutionLogTotal + 1;
   botMessage.realtimeLogs = [...(botMessage.realtimeLogs || []), item].slice(-10);
   const processEvent = createProcessEventFromLog(item, {
     source: ProcessEventSource.STREAM,
-    sequence: data?.sequence ?? data?.seq,
+    sequence: data?.sequence ?? data?.seq ?? botMessage.executionLogTotal,
     dialogProcessId: item.dialogProcessId || data?.dialogProcessId || botMessage.dialogProcessId,
     sessionId: item.sessionId || data?.sessionId,
   });
@@ -92,6 +107,11 @@ export function handleDeltaStreamEvent({
   const chunkText = stripInternalEventPlaceholderLines(data?.text || "");
   if (data?.dialogProcessId && !normalizeTrimmedString(botMessage.dialogProcessId)) {
     botMessage.dialogProcessId = normalizeTrimmedString(data.dialogProcessId);
+    bindThinkingDialogProcess({
+      sessionId: data?.sessionId || botMessage.sessionId || botMessage.session_id,
+      clientTurnId: botMessage.clientTurnId,
+      dialogProcessId: botMessage.dialogProcessId,
+    });
   }
   notifySendingStartedWhenDialogReady({ botMessage, locateSendingStartedMessageOnce });
   botMessage.content += chunkText;
@@ -172,6 +192,19 @@ export function handleDoneStreamEvent({
   clearPendingInteraction();
   markFirstStreamEvent(botMessage);
   botMessage.dialogProcessId = data?.dialogProcessId || botMessage.dialogProcessId || "";
+  if (botMessage.dialogProcessId) {
+    bindThinkingDialogProcess({
+      sessionId: data?.sessionId || botMessage.sessionId || botMessage.session_id,
+      clientTurnId: botMessage.clientTurnId,
+      dialogProcessId: botMessage.dialogProcessId,
+    });
+    rememberThinkingFinished({
+      sessionId: data?.sessionId || botMessage.sessionId || botMessage.session_id,
+      clientTurnId: botMessage.clientTurnId,
+      dialogProcessId: botMessage.dialogProcessId,
+      finishedAtMs: Date.now(),
+    });
+  }
   notifySendingStartedWhenDialogReady({ botMessage, locateSendingStartedMessageOnce });
   const executionSummarySteps = Array.isArray(data?.executionSummary?.steps)
     ? data.executionSummary.steps

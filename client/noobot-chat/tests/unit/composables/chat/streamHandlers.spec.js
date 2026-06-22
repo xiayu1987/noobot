@@ -228,6 +228,39 @@ describe("chatEngine streamHandlers", () => {
     expect(scrollOnFirstResponseOnce).toHaveBeenCalledTimes(12);
   });
 
+  it("continues execution count after refresh hydrated process fields", () => {
+    const botMessage = {
+      ...makeBotMessage(),
+      dialogProcessId: "dp-1",
+      processExecutionLogTotal: 12,
+    };
+    const scrollOnFirstResponseOnce = vi.fn();
+    const appliedEvents = [];
+    const processStore = {
+      applyEventBatch: vi.fn((events) => appliedEvents.push(...events)),
+      getCompatView: vi.fn(() => ({
+        lastSequence: 13,
+        realtimeLogs: botMessage.realtimeLogs,
+        completedToolLogs: botMessage.realtimeLogs,
+        executionLogTotal: appliedEvents.length,
+      })),
+    };
+
+    handleThinkingStreamEvent({
+      data: { event: "tool_call", command: "cmd-13", dialogProcessId: "dp-1" },
+      botMessage,
+      classifyRealtimeLog: (data) => ({ ...data, type: "tool_call", category: "tool" }),
+      scrollOnFirstResponseOnce,
+      processStore,
+    });
+
+    expect(botMessage.executionLogTotal).toBe(13);
+    expect(botMessage.processExecutionLogTotal).toBe(13);
+    expect(appliedEvents[0]).toMatchObject({ sequence: 13, processId: "dp-1" });
+    expect(appliedEvents[0].payload.node.id).toBe("dp-1:seq:13");
+    expect(scrollOnFirstResponseOnce).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps only the latest ten done execution logs", () => {
     const botMessage = makeBotMessage();
     const scrollOnFirstResponseOnce = vi.fn();

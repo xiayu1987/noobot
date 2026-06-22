@@ -32,6 +32,31 @@ const envelope = {
 };
 
 describe("messageModel semantic transfer", () => {
+  it("preserves thinking timing fields from backend messages after refresh", () => {
+    const message = buildViewMessage({
+      role: "assistant",
+      content: "running",
+      thinking_started_at: "2026-06-22T10:00:00.000Z",
+      thinking_finished_at: "2026-06-22T10:00:12.000Z",
+    });
+
+    expect(message.thinkingStartedAt).toBe("2026-06-22T10:00:00.000Z");
+    expect(message.thinking_started_at).toBe("2026-06-22T10:00:00.000Z");
+    expect(message.thinkingFinishedAt).toBe("2026-06-22T10:00:12.000Z");
+    expect(message.thinking_finished_at).toBe("2026-06-22T10:00:12.000Z");
+  });
+
+  it("uses backend createdAt as message timestamp so pending thinking elapsed does not reset after refresh", () => {
+    const message = buildViewMessage({
+      role: "assistant",
+      content: "running",
+      pending: true,
+      createdAt: "2026-06-22T10:00:00.000Z",
+    });
+
+    expect(message.ts).toBe("2026-06-22T10:00:00.000Z");
+  });
+
   it("preserves backend turn and message identity aliases for monotonic resend anchors", () => {
     const message = buildViewMessage({
       role: "user",

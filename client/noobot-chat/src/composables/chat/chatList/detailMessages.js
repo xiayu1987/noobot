@@ -11,6 +11,46 @@ import {
   resolveRootDialogProcessIdByChain,
 } from "../../infra/dialogProcessChain";
 
+const IN_FLIGHT_CHANNEL_STATES = new Set([
+  "sending",
+  "reconnecting",
+  "interaction_pending",
+  "stopping",
+]);
+
+function preserveRunningThinkingState(existingMessage = {}, detailMessageItem = {}) {
+  const existingChannelState =
+    existingMessage?.channelState &&
+    typeof existingMessage.channelState === "object" &&
+    !Array.isArray(existingMessage.channelState)
+      ? existingMessage.channelState
+      : null;
+  const existingThinkingStartedAt = String(
+    existingMessage?.thinkingStartedAt || existingMessage?.thinking_started_at || "",
+  ).trim();
+  const existingThinkingFinishedAt = String(
+    existingMessage?.thinkingFinishedAt || existingMessage?.thinking_finished_at || "",
+  ).trim();
+  const existingPending = existingMessage?.pending === true;
+  return () => {
+    if (existingChannelState && !detailMessageItem?.channelState) {
+      existingMessage.channelState = existingChannelState;
+    }
+    if (existingThinkingStartedAt && !String(detailMessageItem?.thinkingStartedAt || detailMessageItem?.thinking_started_at || "").trim()) {
+      existingMessage.thinkingStartedAt = existingThinkingStartedAt;
+      existingMessage.thinking_started_at = existingThinkingStartedAt;
+    }
+    if (existingThinkingFinishedAt && !String(detailMessageItem?.thinkingFinishedAt || detailMessageItem?.thinking_finished_at || "").trim()) {
+      existingMessage.thinkingFinishedAt = existingThinkingFinishedAt;
+      existingMessage.thinking_finished_at = existingThinkingFinishedAt;
+    }
+    const channelState = String(existingMessage?.channelState?.state || "").trim();
+    if (existingPending && IN_FLIGHT_CHANNEL_STATES.has(channelState)) {
+      existingMessage.pending = true;
+    }
+  };
+}
+
 export function buildWorkflowMessageSignature(messageItem = {}) {
   const workflowMeta =
     messageItem?.workflowMeta &&
@@ -104,9 +144,14 @@ export function mergePreservedDetailMessages(existingMessages = [], detailMessag
       const thinkingOpenNames = Array.isArray(existingMessage?.thinkingOpenNames)
         ? existingMessage.thinkingOpenNames
         : [];
+      const restoreRunningThinkingState = preserveRunningThinkingState(
+        existingMessage,
+        detailMessageItem,
+      );
       Object.assign(existingMessage, detailMessageItem);
       if (thinkingOpenNames.length) existingMessage.thinkingOpenNames = thinkingOpenNames;
       existingMessage.pending = false;
+      restoreRunningThinkingState();
       appendedIdentities.add(detailIdentity);
       continue;
     }

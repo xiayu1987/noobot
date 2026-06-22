@@ -20,6 +20,32 @@ import {
   SESSION_RUN_EVENT,
   clearRememberedStopRequests,
 } from "../sessionRunStateMachine";
+import {
+  bindThinkingDialogProcess,
+  rememberThinkingFinished,
+  rememberThinkingStarted,
+} from "../thinkingTimingRegistry";
+
+function parseThinkingTimingMs(value) {
+  if (value === null || value === undefined || value === "") return 0;
+  const asNumber = Number(value);
+  if (Number.isFinite(asNumber) && asNumber > 0) return asNumber > 1e11 ? asNumber : asNumber * 1000;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function applyEarliestThinkingStartedAt(targetAssistantMessage = null, nextStartedAt = "") {
+  if (!targetAssistantMessage) return;
+  const nextStartedAtMs = parseThinkingTimingMs(nextStartedAt);
+  if (nextStartedAtMs <= 0) return;
+  const currentStartedAtMs = parseThinkingTimingMs(
+    targetAssistantMessage?.thinkingStartedAt || targetAssistantMessage?.thinking_started_at,
+  );
+  if (currentStartedAtMs > 0 && currentStartedAtMs <= nextStartedAtMs) return;
+  const normalizedStartedAt = new Date(nextStartedAtMs).toISOString();
+  targetAssistantMessage.thinkingStartedAt = normalizedStartedAt;
+  targetAssistantMessage.thinking_started_at = normalizedStartedAt;
+}
 
 export function createChatEngineConversationState({
   activeSession,
@@ -367,10 +393,36 @@ export function createChatEngineConversationState({
       botMessage,
       dialogProcessId,
     });
+    const channelStateView = {
+      ...(targetAssistantMessage?.channelState &&
+      typeof targetAssistantMessage.channelState === "object" &&
+      !Array.isArray(targetAssistantMessage.channelState)
+        ? targetAssistantMessage.channelState
+        : {}),
+      state,
+      sessionId,
+      dialogProcessId,
+      clientTurnId,
+      sourceEvent: String(statePayload?.sourceEvent || "").trim(),
+      seq: Number(statePayload?.seq || 0),
+      createdAtMs:
+        createdAtMs ||
+        Number(targetAssistantMessage?.channelState?.createdAtMs || 0),
+      updatedAtMs,
+      createdAt:
+        createdAt ||
+        String(targetAssistantMessage?.channelState?.createdAt || targetAssistantMessage?.thinkingStartedAt || ""),
+      updatedAt,
+    };
+    if (targetAssistantMessage && sessionId) {
+      targetAssistantMessage.sessionId = targetAssistantMessage.sessionId || sessionId;
+      targetAssistantMessage.session_id = targetAssistantMessage.session_id || sessionId;
+    }
     if (dialogProcessId && targetAssistantMessage) {
       if (!String(targetAssistantMessage?.dialogProcessId || "").trim()) {
         targetAssistantMessage.dialogProcessId = dialogProcessId;
       }
+      bindThinkingDialogProcess({ sessionId, dialogProcessId, clientTurnId });
       markUserMessageDialogProcessId({ targetAssistantMessage, dialogProcessId });
     }
     if (isInFlightConversationState(state)) {
@@ -448,7 +500,16 @@ export function createChatEngineConversationState({
           return;
         }
       }
+      rememberThinkingStarted({
+        sessionId,
+        dialogProcessId,
+        clientTurnId,
+        startedAtMs: createdAtMs || targetAssistantMessage?.thinkingStartedAt || targetAssistantMessage?.channelState?.createdAtMs || Date.now(),
+        updatedAtMs,
+      });
       if (targetAssistantMessage) {
+        targetAssistantMessage.channelState = channelStateView;
+        applyEarliestThinkingStartedAt(targetAssistantMessage, channelStateView.createdAt || channelStateView.createdAtMs);
         targetAssistantMessage.pending = true;
         if (state === "stopping") {
           targetAssistantMessage.statusLabel = translate("chat.stopping");
@@ -462,6 +523,13 @@ export function createChatEngineConversationState({
     }
     if (!isTerminalConversationState(state)) return;
     clearRememberedStopRequests({ sessionId, dialogProcessId });
+    rememberThinkingFinished({
+      sessionId,
+      dialogProcessId,
+      clientTurnId,
+      finishedAtMs: updatedAtMs || Date.now(),
+      finishedAt: updatedAt,
+    });
     if (applyRunStateEvent) {
       applyRunStateEvent({
         type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
@@ -496,6 +564,11 @@ export function createChatEngineConversationState({
       return;
     }
     if (!targetAssistantMessage) return;
+    targetAssistantMessage.channelState = channelStateView;
+    applyEarliestThinkingStartedAt(targetAssistantMessage, channelStateView.createdAt || channelStateView.createdAtMs);
+    const finishedAt = updatedAt || createdAt || new Date().toISOString();
+    targetAssistantMessage.thinkingFinishedAt = targetAssistantMessage.thinkingFinishedAt || finishedAt;
+    targetAssistantMessage.thinking_finished_at = targetAssistantMessage.thinking_finished_at || finishedAt;
     targetAssistantMessage.pending = false;
     if (state === "completed") {
       targetAssistantMessage.statusLabel = translate("chat.generated");

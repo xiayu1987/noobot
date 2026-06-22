@@ -304,6 +304,7 @@ export function useChatSession({
     translate,
     onConversationState: trackConversationState,
     notify,
+    processStore,
   });
 
   async function handleReconnect() {

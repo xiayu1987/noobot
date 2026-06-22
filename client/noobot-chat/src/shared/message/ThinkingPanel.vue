@@ -8,6 +8,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useLocale } from "../i18n/useLocale";
 import { isHarnessInjectedMessage } from "../../composables/infra/messageModel";
 import { sanitizeExecutionLogForDisplay } from "../../composables/chat/chatEngine/utils";
+import { resolveThinkingTiming } from "../../composables/chat/thinkingTimingRegistry";
 import {
   BaseEmptyHint,
   BaseMetaLabel,
@@ -377,6 +378,14 @@ function parseTimeMs(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function parseAnyTimeMs(...values) {
+  for (const value of values) {
+    const parsed = parseTimeMs(value);
+    if (parsed > 0) return parsed;
+  }
+  return 0;
+}
+
 function formatDuration(ms = 0) {
   const total = Math.max(0, Math.floor(Number(ms || 0) / 1000));
   const hourValue = Math.floor(total / 3600);
@@ -401,16 +410,62 @@ function getThinkingDurationMs(messageItem = {}) {
     return Math.max(0, endMs - startMs);
   }
 
-  const msgTs = parseTimeMs(messageItem?.ts);
-  const startedAt = parseTimeMs(messageItem?.thinkingStartedAt);
-  const finishedAt = parseTimeMs(messageItem?.thinkingFinishedAt);
+  const channelState =
+    messageItem?.channelState &&
+    typeof messageItem.channelState === "object" &&
+    !Array.isArray(messageItem.channelState)
+      ? messageItem.channelState
+      : {};
+  const msgTs = parseAnyTimeMs(
+    messageItem?.ts,
+    messageItem?.timestamp,
+    messageItem?.createdAt,
+    messageItem?.created_at,
+    messageItem?.updatedAt,
+    messageItem?.updated_at,
+  );
+  const channelStartedAt = parseAnyTimeMs(
+    channelState?.createdAt,
+    channelState?.createdAtMs,
+  );
+  const channelUpdatedAt = parseAnyTimeMs(
+    channelState?.updatedAt,
+    channelState?.updatedAtMs,
+    channelState?.timestamp,
+  );
+  const startedAt = parseAnyTimeMs(
+    messageItem?.thinkingStartedAt,
+    messageItem?.thinking_started_at,
+  );
+  const finishedAt = parseAnyTimeMs(
+    messageItem?.thinkingFinishedAt,
+    messageItem?.thinking_finished_at,
+  );
+  const persistedTiming = resolveThinkingTiming({
+    sessionId: messageItem?.sessionId || messageItem?.session_id || channelState?.sessionId,
+    dialogProcessId: messageItem?.dialogProcessId || channelState?.dialogProcessId,
+    clientTurnId: messageItem?.clientTurnId || messageItem?.client_turn_id || channelState?.clientTurnId,
+  }) || {};
+  const persistedStartedAt = parseAnyTimeMs(persistedTiming?.startedAtMs, persistedTiming?.startedAt);
+  const persistedFinishedAt = parseAnyTimeMs(persistedTiming?.finishedAtMs, persistedTiming?.finishedAt);
   const realtimeLogs = getAllRealtimeLogs(messageItem);
   const completedToolLogs = getCompletedToolLogsForMessage(messageItem);
   const logTimes = [...realtimeLogs, ...completedToolLogs]
-    .map((logItem) => parseTimeMs(logItem?.ts))
+    .map((logItem) =>
+      parseAnyTimeMs(
+        logItem?.ts,
+        logItem?.timestamp,
+        logItem?.createdAt,
+        logItem?.created_at,
+        logItem?.updatedAt,
+        logItem?.updated_at,
+      ),
+    )
     .filter((timeValue) => timeValue > 0);
   const startCandidates = [
     startedAt,
+    persistedStartedAt,
+    channelStartedAt,
     ...(logTimes.length ? [Math.min(...logTimes)] : []),
     msgTs,
   ].filter((timeValue) => timeValue > 0);
@@ -421,6 +476,8 @@ function getThinkingDurationMs(messageItem = {}) {
     : Math.max(
         startMs,
         finishedAt,
+        persistedFinishedAt,
+        channelUpdatedAt,
         ...(logTimes.length ? [Math.max(...logTimes)] : []),
         msgTs,
       );

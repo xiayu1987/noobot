@@ -90,6 +90,7 @@ export function useReconnectReplay({
   translate,
   onConversationState,
   notify = () => {},
+  processStore,
 } = {}) {
   const reconnectReplayContext = createReconnectReplayContext();
   const { replayCache, appliedReconnectSeqByDialogProcessId, terminalDialogProcessIdSet, missingInteractionPayloadTimers } =
@@ -233,6 +234,7 @@ export function useReconnectReplay({
       onConversationState,
       isCurrentActiveSession,
       findAssistantMessageByDialogProcessId,
+      findFallbackAssistantMessage: findReconnectChannelStateFallbackAssistant,
       sending,
       canStop,
       applyRunStateEvent,
@@ -318,6 +320,19 @@ export function useReconnectReplay({
     return hasAssistantMessageWithContentWithContext(activeSession, content);
   }
 
+  function findReconnectChannelStateFallbackAssistant() {
+    const messages = Array.isArray(activeSession.value?.messages)
+      ? activeSession.value.messages
+      : [];
+    return (
+      findLatestPendingAssistantAfterLastUser(messages) ||
+      [...messages]
+        .reverse()
+        .find((messageItem) => String(messageItem?.role || "").trim() === RoleEnum.ASSISTANT) ||
+      null
+    );
+  }
+
   function applyFoldedMessagesToActiveSession(foldedMessages = []) {
     return applyFoldedMessagesToActiveSessionWithContext(activeSession, foldedMessages);
   }
@@ -378,6 +393,7 @@ export function useReconnectReplay({
       envelopeCallbacks: createReconnectReplayEnvelopeCallbacks(),
       markReconnectSequenceApplied,
       scrollBottom,
+      processStore,
     });
   }
 
@@ -387,6 +403,8 @@ export function useReconnectReplay({
       data,
       replayCache,
       isCurrentActiveSession,
+      isCurrentActiveDialogProcess: (dialogProcessId) =>
+        Boolean(findAssistantMessageByDialogProcessId(dialogProcessId)),
       consumeReplayCacheForSession,
       applyReconnectMessagesToActiveSession,
       applyChannelState,

@@ -101,4 +101,14 @@ describe("process model", () => {
     expect(firstEvent.eventId).toBe(secondEvent.eventId);
     expect(firstEvent.timestamp).toBeTruthy();
   });
+
+  it("uses fallback sequence for stable node id when stream log has no explicit sequence", () => {
+    const event = createProcessEventFromLog(
+      { dialogProcessId: "dialog-fallback", event: "tool_call", text: "cmd-1" },
+      { source: ProcessEventSource.STREAM, fallbackSequence: 13 },
+    );
+
+    expect(event.sequence).toBe(13);
+    expect(event.payload.node.id).toBe("dialog-fallback:seq:13");
+  });
 });

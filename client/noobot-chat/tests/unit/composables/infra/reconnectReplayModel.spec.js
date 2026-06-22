@@ -75,6 +75,31 @@ describe("reconnectReplayModel", () => {
     expect(findReconnectDoneEnvelopeWithMessages(envelopes)?.event).toBe(StreamEventEnum.DONE);
   });
 
+  it("patchMessageObjectPreservingUiState preserves running thinking timing fields", () => {
+    const startedAt = "2026-06-22T10:00:00.000Z";
+    const target = {
+      role: "assistant",
+      dialogProcessId: "dp-time",
+      content: "partial",
+      pending: true,
+      channelState: { state: "sending", createdAt: startedAt, createdAtMs: Date.parse(startedAt) },
+      thinkingStartedAt: startedAt,
+      thinking_started_at: startedAt,
+    };
+
+    patchMessageObjectPreservingUiState(target, {
+      role: "assistant",
+      dialogProcessId: "dp-time",
+      content: "partial from detail",
+      pending: false,
+    });
+
+    expect(target.channelState).toMatchObject({ state: "sending", createdAt: startedAt });
+    expect(target.thinkingStartedAt).toBe(startedAt);
+    expect(target.thinking_started_at).toBe(startedAt);
+    expect(target.pending).toBe(true);
+  });
+
   it("patchMessageObjectPreservingUiState keeps non-degrading fields and UI state", () => {
     const envelope = {
       protocol: "noobot.semantic-transfer",

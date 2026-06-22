@@ -207,6 +207,38 @@ describe("ChatMessageListPanel", () => {
     expect(wrapper.find(".chat-message-item-stub").text()).toBe("dp-live");
   });
 
+  it("hydrates latest assistant running time from conversationStateSnapshot during render", () => {
+    const startedAt = "2026-06-22T10:00:00.000Z";
+    const activeSession = {
+      id: "s-1",
+      backendSessionId: "s-1",
+      messages: [
+        { role: RoleEnum.USER, content: "edited orphan" },
+        { role: RoleEnum.ASSISTANT, content: "partial after refresh", pending: false },
+      ],
+    };
+
+    mountPanel({
+      activeSession,
+      conversationStateSnapshot: {
+        "s-1::__session__": {
+          sessionId: "s-1",
+          dialogProcessId: "",
+          state: "sending",
+          createdAt: startedAt,
+          createdAtMs: Date.parse(startedAt),
+          updatedAt: startedAt,
+          updatedAtMs: Date.parse(startedAt),
+        },
+      },
+    });
+
+    const assistant = activeSession.messages[1];
+    expect(assistant.pending).toBe(true);
+    expect(assistant.channelState).toMatchObject({ state: "sending", createdAt: startedAt });
+    expect(assistant.thinkingStartedAt).toBe(startedAt);
+  });
+
   it("renders stable anchors and exposes scrollToMessageAnchor", () => {
     const wrapper = mountPanel({
       activeSession: {

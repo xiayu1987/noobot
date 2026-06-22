@@ -228,6 +228,58 @@ describe("useChatEngine", () => {
     expect(sending.value).toBe(false);
   });
 
+  it("channel_state sending preserves thinking elapsed start on assistant message", async () => {
+    const startedAt = "2026-06-22T10:00:00.000Z";
+    const stream = vi.fn(async (_payload, onEvent) => {
+      onEvent({
+        event: StreamEventEnum.CHANNEL_STATE,
+        data: {
+          sessionId: "local-time",
+          dialogProcessId: "dp-time",
+          state: "sending",
+          createdAt: startedAt,
+          createdAtMs: Date.parse(startedAt),
+          updatedAt: startedAt,
+          updatedAtMs: Date.parse(startedAt),
+        },
+      });
+      onEvent({
+        event: StreamEventEnum.DELTA,
+        data: { sessionId: "local-time", dialogProcessId: "dp-time", text: "partial" },
+      });
+      onEvent({
+        event: StreamEventEnum.CHANNEL_STATE,
+        data: {
+          sessionId: "local-time",
+          dialogProcessId: "dp-time",
+          state: "completed",
+          createdAt: startedAt,
+          createdAtMs: Date.parse(startedAt),
+          updatedAt: "2026-06-22T10:00:12.000Z",
+          updatedAtMs: Date.parse("2026-06-22T10:00:12.000Z"),
+        },
+      });
+      onEvent({
+        event: StreamEventEnum.DONE,
+        data: { sessionId: "local-time", dialogProcessId: "dp-time" },
+      });
+    });
+    const { engine, activeSession } = createHarness({ sessionId: "local-time", stream });
+
+    await engine.send();
+
+    const assistant = assistantMessage(activeSession);
+    expect(assistant?.channelState).toMatchObject({
+      state: "completed",
+      createdAt: startedAt,
+      createdAtMs: Date.parse(startedAt),
+      updatedAt: "2026-06-22T10:00:12.000Z",
+    });
+    expect(assistant?.thinkingStartedAt).toBe(startedAt);
+    expect(assistant?.thinking_started_at).toBe(startedAt);
+    expect(assistant?.thinkingFinishedAt).toBe("2026-06-22T10:00:12.000Z");
+  });
+
   it("channel_state drives assistant status transition", async () => {
     const stream = vi.fn(async (_payload, onEvent) => {
       emitChannelState(onEvent, "local-2", "dp-state", "sending");

@@ -218,7 +218,9 @@ handleReconnect(socket, payload = {}) {
         sessionEntry.dialogProcesses.push({
           dialogProcessId: dpId,
           parentDialogProcessId: String(payload?.parentDialogProcessId || "").trim(),
-          messages: replayEvents.slice(0, config.maxReplayEvents),
+          messages: replayEvents
+            .slice(0, config.maxReplayEvents)
+            .map((eventEnvelope) => this._withChannelSessionScope(channel, eventEnvelope)),
         });
       } else if (lastSeq > 0) {
         // DialogProcessId was known but no events found - may be expired

@@ -22,7 +22,27 @@ function createSession(id) {
   };
 }
 
-function createFixture({ activeId = "s-1" } = {}) {
+
+function createFakeProcessStore() {
+  const events = [];
+  return {
+    events,
+    applyEventBatch: vi.fn((nextEvents = []) => {
+      events.push(...nextEvents);
+    }),
+    getCompatView: vi.fn(() => {
+      const logs = events.map((event) => event?.payload?.log).filter(Boolean);
+      return {
+        realtimeLogs: logs,
+        completedToolLogs: logs,
+        executionLogTotal: logs.length,
+        lastSequence: Math.max(0, ...events.map((event) => Number(event?.sequence || 0))),
+      };
+    }),
+  };
+}
+
+function createFixture({ activeId = "s-1", processStore = null } = {}) {
   const s1 = createSession("s-1");
   const s2 = createSession("s-2");
   const sessions = ref([s1, s2]);
@@ -92,6 +112,7 @@ function createFixture({ activeId = "s-1" } = {}) {
     scrollBottom,
     translate: (key) => key,
     notify,
+    processStore,
   });
 
   return {
@@ -127,6 +148,128 @@ afterEach(() => {
 });
 
 describe("useReconnectReplay", () => {
+  it("session scoped reconnect channel_state restores elapsed on latest assistant even when refresh did not mark it pending", async () => {
+    const { api, refs } = createFixture();
+    const startedAt = "2026-06-22T10:00:00.000Z";
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "q" },
+      { role: RoleEnum.ASSISTANT, content: "partial from refreshed detail", pending: false },
+    ];
+
+    await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1",
+      dialogProcessId: "",
+      state: "sending",
+      createdAt: startedAt,
+      createdAtMs: Date.parse(startedAt),
+      updatedAt: startedAt,
+      updatedAtMs: Date.parse(startedAt),
+    });
+
+    const assistant = refs.activeSession.value.messages[1];
+    expect(assistant.pending).toBe(true);
+    expect(assistant.channelState).toMatchObject({
+      state: "sending",
+      createdAt: startedAt,
+      createdAtMs: Date.parse(startedAt),
+    });
+    expect(assistant.thinkingStartedAt).toBe(startedAt);
+  });
+
+  it("session scoped reconnect channel_state preserves thinking elapsed on latest pending assistant", async () => {
+    const { api, refs } = createFixture();
+    const startedAt = "2026-06-22T10:00:00.000Z";
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "q" },
+      { role: RoleEnum.ASSISTANT, content: "", pending: true },
+    ];
+
+    await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1",
+      dialogProcessId: "",
+      state: "sending",
+      createdAt: startedAt,
+      createdAtMs: Date.parse(startedAt),
+      updatedAt: startedAt,
+      updatedAtMs: Date.parse(startedAt),
+    });
+
+    const assistant = refs.activeSession.value.messages[1];
+    expect(assistant.channelState).toMatchObject({
+      state: "sending",
+      createdAt: startedAt,
+      createdAtMs: Date.parse(startedAt),
+    });
+    expect(assistant.thinkingStartedAt).toBe(startedAt);
+  });
+
+  it("reconnect channel_state preserves thinking elapsed start on active assistant", async () => {
+    const { api, refs } = createFixture();
+    const startedAt = "2026-06-22T10:00:00.000Z";
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "q" },
+      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-reconnect-time", content: "", pending: true },
+    ];
+
+    await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-reconnect-time",
+      state: "sending",
+      createdAt: startedAt,
+      createdAtMs: Date.parse(startedAt),
+      updatedAt: startedAt,
+      updatedAtMs: Date.parse(startedAt),
+    });
+
+    const assistant = refs.activeSession.value.messages[1];
+    expect(assistant.channelState).toMatchObject({
+      state: "sending",
+      createdAt: startedAt,
+      createdAtMs: Date.parse(startedAt),
+    });
+    expect(assistant.thinkingStartedAt).toBe(startedAt);
+    expect(assistant.thinking_started_at).toBe(startedAt);
+  });
+
+  it("applies live reconnect thinking without sessionId to active process items", async () => {
+    const processStore = createFakeProcessStore();
+    const { api, refs } = createFixture({ processStore });
+    const hydratedLogs = Array.from({ length: 2 }, (_, index) => ({
+      event: "tool_call",
+      text: `old step ${index + 1}`,
+      sequence: index + 1,
+    }));
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "q" },
+      {
+        role: RoleEnum.ASSISTANT,
+        dialogProcessId: "dp-live",
+        content: "",
+        pending: true,
+        executionLogTotal: 0,
+        processExecutionLogTotal: 2,
+        processLastSequence: 2,
+        processRealtimeLogs: hydratedLogs,
+        processCompletedToolLogs: hydratedLogs,
+      },
+    ];
+
+    await api.applyReconnectEvent(StreamEventEnum.THINKING, {
+      dialogProcessId: "dp-live",
+      text: "tool still running",
+      event: "tool_call",
+    });
+
+    const assistant = refs.activeSession.value.messages[1];
+    expect(processStore.applyEventBatch).toHaveBeenCalledTimes(1);
+    expect(assistant.executionLogTotal).toBe(3);
+    expect(assistant.processExecutionLogTotal).toBe(3);
+    expect(assistant.processRealtimeLogs).toHaveLength(3);
+    expect(assistant.processRealtimeLogs[2].text).toContain("tool still running");
+    expect(assistant.processCompletedToolLogs).toHaveLength(3);
+    expect(assistant.processCompletedToolLogs[2].text).toContain("tool still running");
+  });
+
   it("RT-01: applyReconnectData routes active to replay and non-active to replayCache", async () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [{ role: RoleEnum.USER, content: "q" }];

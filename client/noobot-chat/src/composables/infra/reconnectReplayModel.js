@@ -151,6 +151,12 @@ function getArrayItems(value = null) {
 }
 
 const EXECUTION_LOG_DISPLAY_LIMIT = 10;
+const IN_FLIGHT_CHANNEL_STATES = new Set([
+  "sending",
+  "reconnecting",
+  "interaction_pending",
+  "stopping",
+]);
 
 function hasArrayItems(value = null) {
   return Array.isArray(value) && value.length > 0;
@@ -312,6 +318,19 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   const existingRealtimeLogs = Array.isArray(targetMessage?.realtimeLogs)
     ? targetMessage.realtimeLogs
     : [];
+  const existingChannelState =
+    targetMessage?.channelState &&
+    typeof targetMessage.channelState === "object" &&
+    !Array.isArray(targetMessage.channelState)
+      ? targetMessage.channelState
+      : null;
+  const existingThinkingStartedAt = String(
+    targetMessage?.thinkingStartedAt || targetMessage?.thinking_started_at || "",
+  ).trim();
+  const existingThinkingFinishedAt = String(
+    targetMessage?.thinkingFinishedAt || targetMessage?.thinking_finished_at || "",
+  ).trim();
+  const existingPending = targetMessage?.pending === true;
   const existingTransferResult =
     targetMessage?.transferResult &&
     typeof targetMessage.transferResult === "object" &&
@@ -358,6 +377,21 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   }
   if (thinkingOpenNames) targetMessage.thinkingOpenNames = thinkingOpenNames;
   if (expandedDetailLogKeys) targetMessage.expandedDetailLogKeys = expandedDetailLogKeys;
+  if (existingChannelState && !sourceMessage?.channelState) {
+    targetMessage.channelState = existingChannelState;
+  }
+  if (existingThinkingStartedAt && !String(sourceMessage?.thinkingStartedAt || sourceMessage?.thinking_started_at || "").trim()) {
+    targetMessage.thinkingStartedAt = existingThinkingStartedAt;
+    targetMessage.thinking_started_at = existingThinkingStartedAt;
+  }
+  if (existingThinkingFinishedAt && !String(sourceMessage?.thinkingFinishedAt || sourceMessage?.thinking_finished_at || "").trim()) {
+    targetMessage.thinkingFinishedAt = existingThinkingFinishedAt;
+    targetMessage.thinking_finished_at = existingThinkingFinishedAt;
+  }
+  const channelState = String(targetMessage?.channelState?.state || "").trim();
+  if (existingPending && IN_FLIGHT_CHANNEL_STATES.has(channelState)) {
+    targetMessage.pending = true;
+  }
   return targetMessage;
 }
 
