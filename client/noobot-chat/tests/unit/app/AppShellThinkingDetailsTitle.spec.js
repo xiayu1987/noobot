@@ -12,6 +12,10 @@ const thinkingDetailsStateSource = readFileSync(
   resolve(__dirname, "../../../src/app/state/thinkingDetailsState.js"),
   "utf8",
 );
+const useThinkingDetailsPanelSource = readFileSync(
+  resolve(__dirname, "../../../src/app/useThinkingDetailsPanel.js"),
+  "utf8",
+);
 const drawerPanelsStateSource = readFileSync(
   resolve(__dirname, "../../../src/app/state/drawerPanelsState.js"),
   "utf8",
@@ -19,7 +23,7 @@ const drawerPanelsStateSource = readFileSync(
 
 describe("AppShell thinking details drawer title", () => {
   it("injects count into the thinking details drawer title instead of rendering the raw placeholder", () => {
-    expect(appShellSource).toContain("getThinkingDetailsTitle as getThinkingDetailsTitleState");
+    expect(useThinkingDetailsPanelSource).toContain("getThinkingDetailsTitle as getThinkingDetailsTitleState");
     expect(thinkingDetailsStateSource).toContain("export function getThinkingDetailsTitle(messageItem = {}, translate)");
     expect(thinkingDetailsStateSource).toContain(
       'translate("message.thinkingDetails", { count: getThinkingDetailsCount(messageItem) })',
