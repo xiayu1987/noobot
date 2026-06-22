@@ -10,6 +10,13 @@ function createInMemoryTurnStore() {
     push(item = {}) {
       this.items.push(item);
     },
+    updateLast(item = {}) {
+      if (!this.items.length) {
+        this.items.push(item);
+        return;
+      }
+      this.items[this.items.length - 1] = item;
+    },
     toArray() {
       return this.items.slice();
     },
@@ -214,4 +221,48 @@ test("state-committer emits before/after hooks for attachment meta commit", asyn
     runtime.attachmentMetas.map((item) => item.attachmentId),
     ["att_1", "att_2"],
   );
+});
+
+test("state-committer annotates attachment metas with explicit turn ownership", async () => {
+  const events = [];
+  const runtime = {
+    attachmentMetas: [],
+    systemRuntime: {
+      sessionId: "session-1",
+      turnScopeId: "turn-scope-1",
+      dialogProcessId: "dp_owned",
+    },
+    eventListener: {
+      onEvent(eventPayload = {}) {
+        events.push(eventPayload);
+      },
+    },
+  };
+  const turnMessageStore = createInMemoryTurnStore();
+  turnMessageStore.push({ role: "tool", content: "{}", dialogProcessId: "dp_owned" });
+
+  const committer = createStateCommitter({
+    turnMessageStore,
+    dialogProcessId: "dp_owned",
+    runtime,
+  });
+
+  await committer.appendAttachmentMetas([
+    {
+      attachmentId: "att_owned",
+      name: "owned.png",
+      mimeType: "image/png",
+    },
+  ]);
+
+  assert.deepEqual(runtime.attachmentMetas[0].turnScope, {
+    turnScopeId: "turn-scope-1",
+    dialogProcessId: "dp_owned",
+  });
+  assert.deepEqual(turnMessageStore.items[0].attachmentMetas[0].turnScope, {
+    turnScopeId: "turn-scope-1",
+    dialogProcessId: "dp_owned",
+  });
+  const attachmentEvent = events.find((eventPayload) => eventPayload?.event === "attachment_metas_saved");
+  assert.equal(attachmentEvent?.data?.attachmentMetas?.[0]?.turnScope?.turnScopeId, "turn-scope-1");
 });

@@ -195,7 +195,7 @@ export function applyReconnectChannelState({
       state: _trimStr(stateData?.state),
       sessionId,
       dialogProcessId: _trimStr(stateData?.dialogProcessId),
-      clientTurnId: _trimStr(stateData?.clientTurnId),
+      clientTurnId: _trimStr(stateData?.clientTurnId || stateData?.turnScopeId || stateData?.client_turn_id),
       sourceEvent: _trimStr(stateData?.sourceEvent),
       seq: Number(stateData?.seq || 0),
       createdAtMs: timing.createdAtMs,
@@ -208,7 +208,7 @@ export function applyReconnectChannelState({
   if (!forActiveSession) return;
   const state = _trimStr(stateData?.state);
   const dialogProcessId = _trimStr(stateData?.dialogProcessId);
-  const clientTurnId = _trimStr(stateData?.clientTurnId);
+  const clientTurnId = _trimStr(stateData?.clientTurnId || stateData?.turnScopeId || stateData?.client_turn_id);
   const targetAssistantMessage =
     findAssistantMessageByDialogProcessId(dialogProcessId) ||
     (typeof findFallbackAssistantMessage === "function"

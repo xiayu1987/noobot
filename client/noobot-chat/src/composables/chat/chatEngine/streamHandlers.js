@@ -272,7 +272,7 @@ export function handleDoneStreamEvent({
         state: "completed",
         sessionId: String(data?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
         dialogProcessId: String(getMessageDialogProcessId(botMessage) || data?.dialogProcessId || ""),
-        clientTurnId: String(getMessageClientTurnId(botMessage) || data?.clientTurnId || ""),
+        clientTurnId: String(getMessageClientTurnId(botMessage) || data?.clientTurnId || data?.turnScopeId || data?.client_turn_id || ""),
         sourceEvent: "done",
         updatedAtMs: Date.now(),
       },

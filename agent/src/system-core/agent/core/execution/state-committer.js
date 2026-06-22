@@ -31,6 +31,48 @@ function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+function resolveTurnOwnership(runtime = {}, dialogProcessId = "") {
+  const systemRuntime = runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
+    ? runtime.systemRuntime
+    : {};
+  const runConfig = runtime?.runConfig && typeof runtime.runConfig === "object"
+    ? runtime.runConfig
+    : systemRuntime?.runConfig && typeof systemRuntime.runConfig === "object"
+      ? systemRuntime.runConfig
+      : {};
+  const turnScopeId = String(
+    systemRuntime?.turnScopeId ||
+      systemRuntime?.config?.turnScopeId ||
+      runConfig?.turnScopeId ||
+      "",
+  ).trim();
+  const resolvedDialogProcessId = String(
+    dialogProcessId ||
+      systemRuntime?.dialogProcessId ||
+      systemRuntime?.currentDialogProcessId ||
+      "",
+  ).trim();
+  const sessionId = String(systemRuntime?.sessionId || "").trim();
+  return { turnScopeId, dialogProcessId: resolvedDialogProcessId, sessionId };
+}
+
+function annotateAttachmentMetas(attachmentMetas = [], ownership = {}) {
+  const turnScopeId = String(ownership?.turnScopeId || "").trim();
+  const dialogProcessId = String(ownership?.dialogProcessId || "").trim();
+  const sessionId = String(ownership?.sessionId || "").trim();
+  return (Array.isArray(attachmentMetas) ? attachmentMetas : []).map((attachmentItem = {}) => {
+    const turnScope = {
+      ...(turnScopeId ? { turnScopeId } : {}),
+      ...(dialogProcessId ? { dialogProcessId } : {}),
+    };
+    return {
+      ...(attachmentItem && typeof attachmentItem === "object" ? attachmentItem : {}),
+      ...(sessionId && !String(attachmentItem?.sessionId || "").trim() ? { sessionId } : {}),
+      ...(Object.keys(turnScope).length ? { turnScope } : {}),
+    };
+  });
+}
+
 function dedupeTransferEnvelopes(envelopes = []) {
   const output = [];
   const seen = new Set();
@@ -82,6 +124,8 @@ export function createStateCommitter({
   const resolveCallName = (call = {}) =>
     String(call?.name ?? call?.tool_name ?? call?.toolName ?? "").trim();
 
+  const ownership = resolveTurnOwnership(runtime, dialogProcessId);
+
   return {
     async pushAssistantMessage({
       content = "",
@@ -99,6 +143,7 @@ export function createStateCommitter({
         content: String(content || ""),
         type,
         dialogProcessId,
+        ...(ownership.turnScopeId ? { turnScopeId: ownership.turnScopeId } : {}),
         tool_calls: Array.isArray(toolCalls) ? toolCalls : [],
         modelAlias: String(modelAlias || "").trim(),
         modelName: String(modelName || "").trim(),
@@ -153,6 +198,7 @@ export function createStateCommitter({
         content: compactedToolResultText,
         type: "tool_result",
         dialogProcessId,
+        ...(ownership.turnScopeId ? { turnScopeId: ownership.turnScopeId } : {}),
         tool_call_id: resolvedCallId,
         toolName: resolvedCallName,
       };
@@ -211,6 +257,7 @@ export function createStateCommitter({
     },
     async appendAttachmentMetas(attachmentMetas = []) {
       if (!Array.isArray(attachmentMetas) || !attachmentMetas.length) return;
+      const ownedAttachmentMetas = annotateAttachmentMetas(attachmentMetas, ownership);
       await runAgentRuntimeHook({
         runtime,
         point: AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT,
@@ -218,16 +265,17 @@ export function createStateCommitter({
           phase: "state_commit",
           commitType: "attachment_metas",
           status: "start",
-          payload: { attachmentMetas },
+          payload: { attachmentMetas: ownedAttachmentMetas },
           agentContext,
         }),
       });
+      const committedAttachmentMetas = annotateAttachmentMetas(ownedAttachmentMetas, ownership);
       appendAttachmentMetasToRuntimeAndTurn({
         runtime,
         turnMessageStore,
-        attachmentMetas,
+        attachmentMetas: committedAttachmentMetas,
       });
-      const displayableAttachmentMetas = filterDisplayableAttachmentMetas(attachmentMetas);
+      const displayableAttachmentMetas = filterDisplayableAttachmentMetas(committedAttachmentMetas);
       if (displayableAttachmentMetas.length) {
         emitEvent(runtime?.eventListener || null, "attachment_metas_saved", {
           dialogProcessId,
@@ -241,7 +289,7 @@ export function createStateCommitter({
           phase: "state_commit",
           commitType: "attachment_metas",
           status: "success",
-          payload: { attachmentMetas },
+          payload: { attachmentMetas: committedAttachmentMetas },
           agentContext,
         }),
       });

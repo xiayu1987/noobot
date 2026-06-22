@@ -67,6 +67,7 @@ function buildMessageSummary(message = {}) {
     "pluginMessage",
     "tool_call_id",
     "toolName",
+    "turnScopeId",
   ]) {
     if (message?.[key] !== undefined) summary[key] = message[key];
   }
@@ -88,6 +89,9 @@ function pickLightAttachmentMetas(message = {}) {
     owner: item?.owner || item?.source || "",
     url: item?.url || item?.downloadUrl || "",
     previewUrl: item?.previewUrl || "",
+    ...(item?.turnScope && typeof item.turnScope === "object" && !Array.isArray(item.turnScope)
+      ? { turnScope: item.turnScope }
+      : {}),
   })).filter((item) => item.id || item.name || item.url || item.previewUrl);
 }
 

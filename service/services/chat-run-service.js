@@ -109,6 +109,7 @@ export function createChatRunService({
       : 0;
     const selectedModel = normalizeSelectedModel(source?.selectedModel);
     const pluginModelConfig = normalizePluginModelConfig(source?.pluginModelConfig);
+    const normalizedTurnScopeId = String(source?.turnScopeId || "").trim();
     const compatConfig = {
       ...(hasScenarioField ? { scenario } : {}),
       ...(selectedModel ? { selectedModel } : {}),
@@ -129,6 +130,7 @@ export function createChatRunService({
       selectedConnectors: normalizeSelectedConnectors(input?.selectedConnectors),
       selectedPlugins: normalizeStringArray(input?.selectedPlugins),
       plugins: normalizePlugins(source?.plugins, input?.selectedPlugins),
+      ...(normalizedTurnScopeId ? { turnScopeId: normalizedTurnScopeId } : {}),
       ...(source?.reuseExistingUserTurn === true ? {
         reuseExistingUserTurn: true,
         existingUserTurnId: String(source?.existingUserTurnId || "").trim(),
@@ -147,6 +149,7 @@ export function createChatRunService({
         message,
         attachments = [],
         config = {},
+        turnScopeId = "",
       } = req.body;
       if (!userId || !sessionId || !message) {
         throw new Error(translateText("common.userSessionMessageRequired", req.locale));
@@ -160,7 +163,10 @@ export function createChatRunService({
         caller: "user",
         message,
         attachments,
-        runConfig: normalizeRunConfig(config),
+        runConfig: {
+          ...normalizeRunConfig(config),
+          turnScopeId: String(turnScopeId || config?.turnScopeId || "").trim(),
+        },
       });
       res.json({ ok: true, ...result });
     } catch (error) {

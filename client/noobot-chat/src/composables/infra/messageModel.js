@@ -158,7 +158,6 @@ function createMessageModel(messageItem = {}) {
     sessionId,
     session_id: sessionId,
     clientTurnId,
-    client_turn_id: clientTurnId,
     role: getMessageRole(messageItem) || "assistant",
     content: messageItem.content || "",
     type: messageItem.type || "message",

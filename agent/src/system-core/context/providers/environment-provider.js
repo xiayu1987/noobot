@@ -200,6 +200,7 @@ export function buildDynamicInfo({
   now = new Date().toISOString(),
 } = {}) {
   const forceTool = resolveForceToolCall(runConfig);
+  const normalizedTurnScopeId = String(runConfig?.turnScopeId || "").trim();
   const toolPolicy =
     runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object"
       ? { ...runConfig.toolPolicy }
@@ -232,8 +233,12 @@ export function buildDynamicInfo({
     rootSessionId: String(rootSessionId || "").trim(),
     caller: String(caller || "user").trim(),
     dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
+    turnScopeId: normalizedTurnScopeId,
     sessionTree,
     now,
-    config,
+    config: {
+      ...config,
+      ...(normalizedTurnScopeId ? { turnScopeId: normalizedTurnScopeId } : {}),
+    },
   };
 }

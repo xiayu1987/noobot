@@ -80,7 +80,7 @@ export function applyStreamCompletedFallback({
       dialogProcessId: String(
         getMessageDialogProcessId(botMessage) || finalDoneEventData?.dialogProcessId || "",
       ),
-      clientTurnId: String(getMessageClientTurnId(botMessage) || finalDoneEventData?.clientTurnId || ""),
+      clientTurnId: String(getMessageClientTurnId(botMessage) || finalDoneEventData?.clientTurnId || finalDoneEventData?.turnScopeId || finalDoneEventData?.client_turn_id || ""),
       sourceEvent: "stream_finalize_fallback",
     },
     { botMessage },

@@ -91,3 +91,12 @@ test("chat-run-service: normalizeRunConfig should omit empty selected model and 
   assert.equal(Object.prototype.hasOwnProperty.call(normalized, "pluginModelConfig"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(normalized, "config"), false);
 });
+
+test("chat-run-service: normalizeRunConfig should preserve neutral turnScopeId", () => {
+  const service = createService();
+
+  const normalized = service.normalizeRunConfig({ turnScopeId: "  turn-scope:abc  " });
+
+  assert.equal(normalized.turnScopeId, "turn-scope:abc");
+});
+

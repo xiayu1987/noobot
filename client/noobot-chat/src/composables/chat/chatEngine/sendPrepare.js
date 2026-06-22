@@ -40,7 +40,6 @@ export function prepareChatSend({
     : appendMessage(RoleEnum.USER, text || translate("chat.uploadOnly"), userAttachments);
   if (userMessage && clientTurnId) {
     userMessage.clientTurnId = String(clientTurnId || "").trim();
-    userMessage.client_turn_id = String(clientTurnId || "").trim();
   }
   if (
     [

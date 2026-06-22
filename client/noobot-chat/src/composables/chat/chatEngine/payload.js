@@ -31,7 +31,7 @@ export function buildChatPayload({
   return {
     userId: userId?.value ?? userId,
     sessionId: activeSession?.value?.backendSessionId || activeSession?.value?.sessionId || activeSession?.value?.id,
-    clientTurnId: normalizeTrimmedString(clientTurnId),
+    turnScopeId: normalizeTrimmedString(clientTurnId),
     message: message || uploadHint,
     attachments,
     config: {

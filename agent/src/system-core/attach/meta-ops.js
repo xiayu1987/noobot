@@ -36,6 +36,15 @@ export function filterSemanticTransferAttachmentMetas(attachmentMetas = []) {
   );
 }
 
+function normalizeTurnScope(value = null) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const turnScope = {
+    turnScopeId: safeStr(value?.turnScopeId),
+    dialogProcessId: safeStr(value?.dialogProcessId || value?.dialog_process_id),
+  };
+  return Object.fromEntries(Object.entries(turnScope).filter(([, item]) => item));
+}
+
 /**
  * 合并附件元数据（去重）
  */
@@ -113,6 +122,7 @@ export function mapAttachmentRecordsToMetas(
     parsedResultRelativePath: safeStr(item?.parsedResultRelativePath),
     parsedResultTool: safeStr(item?.parsedResultTool),
     parsedResultUpdatedAt: safeStr(item?.parsedResultUpdatedAt),
+    ...(normalizeTurnScope(item?.turnScope) ? { turnScope: normalizeTurnScope(item.turnScope) } : {}),
   }));
 }
 
