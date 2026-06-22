@@ -203,6 +203,23 @@ export function registerSessionRoutes(
     }),
   );
 
+  app.post(
+    "/internal/session/:userId/:sessionId/messages/replace-turn",
+    jsonRoute(async (req, res) => {
+      const { userId, sessionId } = req.params;
+      const result = await bot.session.replaceTurn({
+        userId,
+        sessionId,
+        parentSessionId: String(req.body?.parentSessionId || "").trim(),
+        anchor: req.body?.anchor || {},
+        newContent: String(req.body?.newContent || "").trim(),
+        expectedVersion: req.body?.expectedVersion,
+        idempotencyKey: String(req.body?.idempotencyKey || "").trim(),
+      });
+      res.json({ ok: true, ...result });
+    }),
+  );
+
   app.delete(
     "/internal/session/:userId/:sessionId",
     jsonRoute(

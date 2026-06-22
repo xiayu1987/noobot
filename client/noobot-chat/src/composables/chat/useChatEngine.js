@@ -13,6 +13,7 @@ import {
 } from "./chatEngine/stop";
 import { createMonotonicMessageActions } from "./chatEngine/monotonicMessageActions";
 import { createChatEngineSender } from "./chatEngine/sendFlow";
+import { createPendingMessageOperationStore } from "./chatEngine/messageOperationStore";
 
 const DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS = 3000;
 const DEFAULT_MONOTONIC_ACTION_STOP_POLL_INTERVAL_MS = 50;
@@ -43,6 +44,7 @@ export function useChatEngine({
   applySessionDetail,
   refreshSessionConnectorsAsync,
   deleteSessionMessagesFromApi,
+  replaceSessionTurnApi,
   authFetch,
   connectorTypeSet,
   upsertConnectedConnectorInPanelState,
@@ -116,6 +118,7 @@ export function useChatEngine({
   }
 
   let monotonicMessageActions;
+  const messageOperationStore = createPendingMessageOperationStore();
   const send = createChatEngineSender({
     activeSession,
     activeSessionId,
@@ -158,7 +161,7 @@ export function useChatEngine({
     setPendingInteractionRequest,
     uploadFiles,
     userId,
-    getPruneStaleMessagesAfterResend: () => monotonicMessageActions?.pruneStaleMessagesAfterResend,
+    finalizePendingResendOperation: (...args) => monotonicMessageActions?.finalizePendingResendOperation?.(...args),
   });
 
 
@@ -168,6 +171,7 @@ export function useChatEngine({
     authFetch,
     clearPendingInteraction,
     deleteSessionMessagesFromApi,
+    replaceSessionTurnApi,
     input,
     notify,
     send,
@@ -176,6 +180,7 @@ export function useChatEngine({
     translate,
     userId,
     applySessionDetail,
+    messageOperationStore,
     monotonicActionStopTimeoutMs,
     monotonicActionStopPollIntervalMs,
   });
@@ -190,6 +195,7 @@ export function useChatEngine({
   if (getCurrentScope()) {
     onScopeDispose(() => {
       disposeConversationState();
+      messageOperationStore.clearSession(activeSessionId?.value);
     });
   }
 

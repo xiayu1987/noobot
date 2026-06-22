@@ -104,7 +104,7 @@ export function normalizeMessageEntity(
   if (Array.isArray(message?.completedToolLogs)) {
     normalizedMessage.completedToolLogs = message.completedToolLogs;
   }
-  for (const key of ["id", "messageId", "done", "pending", "error"]) {
+  for (const key of ["id", "messageId", "turnId", "done", "pending", "error"]) {
     if (message?.[key] !== undefined) normalizedMessage[key] = message[key];
   }
   const toolCallId = String(message?.tool_call_id || "").trim();

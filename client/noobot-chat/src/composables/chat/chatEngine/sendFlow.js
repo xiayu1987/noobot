@@ -62,7 +62,7 @@ export function createChatEngineSender({
   setPendingInteractionRequest,
   uploadFiles,
   userId,
-  getPruneStaleMessagesAfterResend,
+  finalizePendingResendOperation,
 }) {
   return async function send() {
     if (!ensureConnected()) return false;
@@ -194,15 +194,7 @@ export function createChatEngineSender({
         applySessionDetail,
         refreshSessionConnectorsAsync,
       });
-      if (activeSession.value?.pendingResendStalePrune) {
-        getPruneStaleMessagesAfterResend()?.(
-          activeSession.value.pendingResendStalePrune.anchorMessage,
-          activeSession.value.pendingResendStalePrune.originalStartIndex,
-          activeSession.value.pendingResendStalePrune.removedMessages,
-          { finalOnly: true },
-        );
-        delete activeSession.value.pendingResendStalePrune;
-      }
+      finalizePendingResendOperation?.({ finalOnly: true });
       return true;
     } catch (error) {
       if (

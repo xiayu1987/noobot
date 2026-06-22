@@ -28,10 +28,28 @@ function normalizeAnchorValue(value = "") {
   return String(value || "").trim();
 }
 
+function resolveTurnId(message = {}) {
+  return normalizeAnchorValue(message?.turnId || message?.turn_id || "");
+}
+
 function resolveMessageId(message = {}) {
   return normalizeAnchorValue(
     message?.messageId || message?.id || message?.message_id || "",
   );
+}
+
+function resolveAnchorMessageId(anchor = {}) {
+  return normalizeAnchorValue(anchor?.messageId || anchor?.id || anchor?.message_id || "");
+}
+
+function createMessageId(prefix = "msg") {
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function resolveAnchorDialogProcessId(anchor = {}) {
+  return resolveDialogProcessIdFromContext({
+    dialogProcessId: anchor?.dialogProcessId || anchor?.dialogId,
+  });
 }
 
 function resolveSessionVersion(session = {}) {
@@ -40,13 +58,15 @@ function resolveSessionVersion(session = {}) {
 }
 
 function createMessageAnchorMatcher(anchor = {}) {
-  const messageId = normalizeAnchorValue(anchor?.messageId);
+  const turnId = normalizeAnchorValue(anchor?.turnId || anchor?.turn_id);
+  if (turnId) {
+    return (messageItem) => resolveTurnId(messageItem) === turnId;
+  }
+  const messageId = resolveAnchorMessageId(anchor);
   if (messageId) {
     return (messageItem) => resolveMessageId(messageItem) === messageId;
   }
-  const dialogProcessId = resolveDialogProcessIdFromContext({
-    dialogProcessId: anchor?.dialogProcessId,
-  });
+  const dialogProcessId = resolveAnchorDialogProcessId(anchor);
   if (dialogProcessId) {
     return (messageItem) => resolveMessageDialogProcessId(messageItem) === dialogProcessId;
   }
@@ -55,6 +75,14 @@ function createMessageAnchorMatcher(anchor = {}) {
     return (messageItem) => normalizeAnchorValue(messageItem?.ts) === ts;
   }
   return null;
+}
+
+function resolveUserTurnStartIndex(messages = [], anchorIndex = -1) {
+  if (anchorIndex < 0) return -1;
+  for (let index = anchorIndex; index >= 0; index -= 1) {
+    if (normalizeAnchorValue(messages[index]?.role) === "user") return index;
+  }
+  return anchorIndex;
 }
 
 export class SessionMessageService {
@@ -251,6 +279,117 @@ export class SessionMessageService {
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
     await this.sessionRepo.save(userId, session, resolvedParentSessionId);
     return { session, deletedCount, anchorIndex, version: session.version, idempotencyKey };
+  }
+
+  async replaceTurn({
+    userId,
+    sessionId,
+    parentSessionId = "",
+    anchor = {},
+    newContent = "",
+    expectedVersion = null,
+    idempotencyKey = "",
+  } = {}) {
+    if (!userId || !sessionId) {
+      const error = new Error("userId and sessionId are required");
+      error.statusCode = 400;
+      throw error;
+    }
+    const normalizedNewContent = String(newContent || "").trim();
+    if (!normalizedNewContent) {
+      const error = new Error("newContent is required");
+      error.statusCode = 400;
+      throw error;
+    }
+    const matcher = createMessageAnchorMatcher(anchor);
+    if (!matcher) {
+      const error = new Error("message anchor is required");
+      error.statusCode = 400;
+      throw error;
+    }
+    const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+      userId,
+      sessionId,
+      parentSessionId,
+    );
+    const session = await this.sessionRepo.findById(
+      userId,
+      sessionId,
+      resolvedParentSessionId,
+    );
+    if (!session) {
+      const error = new Error("session not found");
+      error.statusCode = 404;
+      throw error;
+    }
+    const currentVersion = resolveSessionVersion(session);
+    if (expectedVersion !== null && expectedVersion !== undefined && expectedVersion !== "") {
+      const normalizedExpectedVersion = Number(expectedVersion);
+      if (!Number.isFinite(normalizedExpectedVersion) || normalizedExpectedVersion !== currentVersion) {
+        const error = new Error("session version conflict");
+        error.statusCode = 409;
+        error.currentVersion = currentVersion;
+        throw error;
+      }
+    }
+    const messages = Array.isArray(session.messages) ? session.messages : [];
+    const anchorIndex = messages.findIndex((messageItem) => matcher(messageItem));
+    if (anchorIndex < 0) {
+      const error = new Error("message anchor not found");
+      error.statusCode = 404;
+      throw error;
+    }
+    const turnStartIndex = resolveUserTurnStartIndex(messages, anchorIndex);
+    const replacedMessages = messages.slice(turnStartIndex);
+    const anchorMessage = messages[anchorIndex] || {};
+    const replacedUserMessage = messages[turnStartIndex] || anchorMessage;
+    const nextVersion = currentVersion + 1;
+    const nowValue = this.now();
+    const newTurnId = `turn_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+    const newMessage = normalizeMessageEntity({
+      ...replacedUserMessage,
+      role: "user",
+      type: "message",
+      content: normalizedNewContent,
+      turnId: newTurnId,
+      messageId: createMessageId("msg"),
+      id: createMessageId("m"),
+      dialogProcessId: resolveMessageDialogProcessId(replacedUserMessage) ||
+        resolveMessageDialogProcessId(anchorMessage) ||
+        resolveAnchorDialogProcessId(anchor),
+      pending: false,
+      error: false,
+      done: true,
+      isMonotonic: true,
+      monotonic: true,
+      monotonicState: "monotonic",
+      ts: nowValue,
+    }, () => nowValue);
+    session.messages = [...messages.slice(0, turnStartIndex), newMessage];
+    session.updatedAt = nowValue;
+    session.version = nextVersion;
+    session.revision = nextVersion;
+    if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
+    await this.sessionRepo.save(userId, session, resolvedParentSessionId);
+    return {
+      session,
+      replacedTurn: {
+        anchorIndex,
+        turnStartIndex,
+        deletedCount: replacedMessages.length,
+        messages: replacedMessages,
+      },
+      newTurn: {
+        turnId: newTurnId,
+        messageId: newMessage.messageId || newMessage.id || "",
+        message: newMessage,
+      },
+      anchorIndex,
+      turnStartIndex,
+      deletedCount: replacedMessages.length,
+      version: session.version,
+      idempotencyKey,
+    };
   }
 
   async markUserMessageMonotonic({

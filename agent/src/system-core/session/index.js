@@ -209,6 +209,10 @@ export function createSessionFacade(runtime = {}) {
       return sessionMessageService.deleteFromMessage(payload);
     },
 
+    async replaceTurn(payload = {}) {
+      return sessionMessageService.replaceTurn(payload);
+    },
+
     async markUserMessageMonotonic(payload = {}) {
       return sessionMessageService.markUserMessageMonotonic(payload);
     },
