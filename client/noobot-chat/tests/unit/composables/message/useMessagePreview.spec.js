@@ -14,6 +14,14 @@ function createBlobResponse() {
   };
 }
 
+function createTextResponse(text = "content") {
+  return {
+    ok: true,
+    status: 200,
+    text: vi.fn(async () => text),
+  };
+}
+
 describe("useMessagePreview attachment downloads", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -66,5 +74,43 @@ describe("useMessagePreview attachment downloads", () => {
     expect(authFetch).toHaveBeenCalledWith(
       "/api/internal/attachment/admin/ae2d2a3b-8d28-4cc5-b4d8-a819bfd26563?sessionId=8d83a95d-5ab9-413b-b73b-39b90e1ad558&attachmentSource=model",
     );
+  });
+
+  it("previews image attachments by extension when mime type is missing", async () => {
+    const authFetch = vi.fn(async () => createBlobResponse());
+    const preview = useMessagePreview({ userId: "admin", authFetch });
+    const attachment = {
+      previewUrl: "/api/internal/attachment/admin/generated-image",
+      name: "generated.jfif",
+      mimeType: "",
+    };
+
+    expect(preview.canPreviewAttachment(attachment)).toBe(true);
+
+    await preview.openAttachmentPreview(attachment);
+
+    expect(authFetch).toHaveBeenCalledWith("/api/internal/attachment/admin/generated-image");
+    expect(preview.attachmentPreviewVisible.value).toBe(true);
+    expect(preview.attachmentPreviewType.value).toBe("image");
+    expect(preview.attachmentPreviewUrl.value).toBe("blob:attachment");
+  });
+
+  it("previews text attachments by extension when mime type is octet-stream", async () => {
+    const authFetch = vi.fn(async () => createTextResponse("hello\nworld"));
+    const preview = useMessagePreview({ userId: "admin", authFetch });
+    const attachment = {
+      previewUrl: "/api/internal/attachment/admin/report-log",
+      name: "report.log",
+      mimeType: "application/octet-stream",
+    };
+
+    expect(preview.canPreviewAttachment(attachment)).toBe(true);
+
+    await preview.openAttachmentPreview(attachment);
+
+    expect(authFetch).toHaveBeenCalledWith("/api/internal/attachment/admin/report-log");
+    expect(preview.attachmentPreviewVisible.value).toBe(true);
+    expect(preview.attachmentPreviewType.value).toBe("text");
+    expect(preview.attachmentPreviewTextContent.value).toBe("hello\nworld");
   });
 });
