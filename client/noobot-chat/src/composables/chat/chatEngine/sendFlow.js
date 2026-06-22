@@ -56,6 +56,7 @@ export function createChatEngineSender({
   selectedModel,
   selectedPlugins,
   sending,
+  canStop,
   serializeAttachments,
   streamOutput,
   translate,
@@ -84,6 +85,7 @@ export function createChatEngineSender({
     if (!hasTextToSend && uploadFiles.value.length === 0) return false;
 
     sending.value = true;
+    if (canStop) canStop.value = true;
     const {
       text,
       filesToSend,

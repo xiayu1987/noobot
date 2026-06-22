@@ -40,6 +40,7 @@ export function scheduleMissingInteractionPayloadFailure({
   dialogProcessId = "",
   targetAssistantMessage = null,
   sending,
+  canStop,
   interactionSubmitting,
   clearPendingInteraction,
   translate,
@@ -56,6 +57,7 @@ export function scheduleMissingInteractionPayloadFailure({
     missingInteractionPayloadTimers.delete(key);
     if (hasPendingInteractionForDialog(pendingInteractionRequest, dialogProcessId)) return;
     sending.value = false;
+    if (canStop) canStop.value = false;
     interactionSubmitting.value = false;
     clearPendingInteraction();
     const missingInteractionError = translate("chat.interactionPayloadMissing");
@@ -79,6 +81,7 @@ export function applyReconnectChannelState({
   isCurrentActiveSession,
   findAssistantMessageByDialogProcessId,
   sending,
+  canStop,
   interactionSubmitting,
   clearPendingInteractionIfObsolete,
   pendingInteractionRequest,
@@ -113,6 +116,7 @@ export function applyReconnectChannelState({
   const targetAssistantMessage = findAssistantMessageByDialogProcessId(dialogProcessId);
   if (isInFlightConversationState(state)) {
     sending.value = true;
+    if (canStop) canStop.value = state === "sending" || state === "reconnecting";
     if (
       state === "sending" &&
       _trimStr(stateData?.sourceEvent).toLowerCase() === "interaction_response" &&
@@ -184,6 +188,7 @@ export function applyReconnectChannelState({
       scheduleCacheExpiredSessionRefresh({ sessionId, dialogProcessId, targetAssistantMessage });
     }
     sending.value = false;
+    if (canStop) canStop.value = false;
     if (typeof clearPendingInteractionIfObsolete === "function") {
       clearPendingInteractionIfObsolete({ sessionId, dialogProcessId });
     }

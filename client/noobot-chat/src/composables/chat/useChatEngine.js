@@ -33,6 +33,7 @@ export function useChatEngine({
   activeSession,
   activeSessionId,
   sending,
+  canStop,
   input,
   uploadFiles,
   clearUploads,
@@ -83,6 +84,7 @@ export function useChatEngine({
     activeSession,
     activeSessionId,
     sending,
+    canStop,
     interactionSubmitting,
     pendingInteractionRequest,
     clearPendingInteraction,
@@ -102,6 +104,7 @@ export function useChatEngine({
   function forceStopUiFinalize() {
     return finalizeForceStopUi({
       sending,
+      canStop,
       activeSession,
       findTargetAssistantMessage,
       applyConversationState,
@@ -112,6 +115,8 @@ export function useChatEngine({
   function stopSending() {
     return requestStopSending({
       sending,
+      canStop,
+      userId,
       activeSession,
       chatWebSocketClient,
       onForceStopUiFinalize: forceStopUiFinalize,
@@ -155,6 +160,7 @@ export function useChatEngine({
     selectedModel,
     selectedPlugins,
     sending,
+    canStop,
     serializeAttachments,
     streamOutput,
     translate,

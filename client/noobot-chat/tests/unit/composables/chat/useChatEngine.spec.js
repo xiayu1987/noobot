@@ -49,6 +49,7 @@ const createHarness = ({
   const activeSessionId = ref(sessionId);
   const activeSession = ref(makeSession(sessionId));
   const sending = ref(false);
+  const canStop = ref(false);
   const input = ref("hello");
   const uploadFiles = ref([]);
   const pendingInteractionRequest = ref(pendingInteraction);
@@ -74,6 +75,7 @@ const createHarness = ({
     activeSession,
     activeSessionId,
     sending,
+    canStop,
     input,
     uploadFiles,
     clearUploads: vi.fn(),
@@ -116,6 +118,7 @@ const createHarness = ({
     activeSession,
     activeSessionId,
     sending,
+    canStop,
     input,
     uploadFiles,
     pendingInteractionRequest,
@@ -329,7 +332,7 @@ describe("useChatEngine", () => {
         data: { sessionId: "local-flight", dialogProcessId: "dp-flight" },
       });
     });
-    const { engine, activeSession, sending } = createHarness({
+    const { engine, activeSession, sending, canStop } = createHarness({
       sessionId: "local-flight",
       stream,
     });
@@ -340,6 +343,22 @@ describe("useChatEngine", () => {
     expect(assistant?.statusLabel).toBe("chat.stopped");
     expect(assistant?.pending).toBe(false);
     expect(sending.value).toBe(false);
+    expect(canStop.value).toBe(false);
+  });
+
+  it("channel_state stopping keeps in-flight UI but disables repeated stop", async () => {
+    const stream = vi.fn(async (_payload, onEvent) => {
+      emitChannelState(onEvent, "local-stopping", "dp-stopping", "stopping");
+    });
+    const { engine, sending, canStop } = createHarness({
+      sessionId: "local-stopping",
+      stream,
+    });
+
+    await engine.send();
+
+    expect(sending.value).toBe(true);
+    expect(canStop.value).toBe(false);
   });
 
   it("channel_state completed/error/no_conversation terminal behaviors are covered", async () => {
@@ -348,7 +367,7 @@ describe("useChatEngine", () => {
       emitChannelState(onEvent, "local-terminal", "dp-terminal", "error");
       emitChannelState(onEvent, "local-terminal", "dp-terminal", "no_conversation");
     });
-    const { engine, activeSession, sending, interactionSubmitting, deps } = createHarness({
+    const { engine, activeSession, sending, canStop, interactionSubmitting, deps } = createHarness({
       sessionId: "local-terminal",
       stream,
       pendingInteraction: {
@@ -368,6 +387,7 @@ describe("useChatEngine", () => {
     expect(assistant?.statusLabel).toBe("chat.failed");
     expect(assistant?.pending).toBe(false);
     expect(sending.value).toBe(false);
+    expect(canStop.value).toBe(false);
     expect(interactionSubmitting.value).toBe(false);
     expect(deps.clearPendingInteraction).toHaveBeenCalled();
   });
@@ -387,7 +407,7 @@ describe("useChatEngine", () => {
         },
       });
     });
-    const { engine, activeSession, sending } = createHarness({
+    const { engine, activeSession, sending, canStop } = createHarness({
       sessionId: "local-x",
       stream,
       deps: {
@@ -459,7 +479,7 @@ describe("useChatEngine", () => {
         seq: 2,
       });
     });
-    const { engine, activeSession, sending } = createHarness({
+    const { engine, activeSession, sending, canStop } = createHarness({
       sessionId: "local-missing",
       stream,
       deps: { notify },
@@ -469,12 +489,14 @@ describe("useChatEngine", () => {
 
     const assistant = assistantMessage(activeSession);
     expect(sending.value).toBe(true);
+    expect(canStop.value).toBe(false);
     expect(assistant?.pending).toBe(true);
     expect(notify).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1200);
 
     expect(sending.value).toBe(false);
+    expect(canStop.value).toBe(false);
     expect(assistant?.pending).toBe(false);
     expect(assistant?.statusLabel).toBe("chat.failed");
     expect(assistant?.error).toBe("chat.interactionPayloadMissing");
@@ -493,7 +515,7 @@ describe("useChatEngine", () => {
         seq: 2,
       });
     });
-    const { engine, activeSession, sending } = createHarness({
+    const { engine, activeSession, sending, canStop } = createHarness({
       sessionId: "local-expired-fail",
       stream,
       deps: {
@@ -507,6 +529,7 @@ describe("useChatEngine", () => {
 
     const assistant = assistantMessage(activeSession);
     expect(sending.value).toBe(false);
+    expect(canStop.value).toBe(false);
     expect(assistant?.statusLabel).toBe("chat.failed");
     expect(assistant?.error).toBe("chat.expiredRefreshFailed");
     expect(notify).toHaveBeenCalledWith({
@@ -620,9 +643,67 @@ describe("useChatEngine", () => {
     });
   });
 
+  it("send enables stop while stream is active", async () => {
+    let releaseStream;
+    const stream = vi.fn(() => new Promise((resolve) => {
+      releaseStream = resolve;
+    }));
+    const { engine, sending, canStop } = createHarness({
+      sessionId: "local-active-stop",
+      stream,
+    });
+
+    const sendPromise = engine.send();
+    await Promise.resolve();
+
+    expect(sending.value).toBe(true);
+    expect(canStop.value).toBe(true);
+
+    releaseStream();
+    await sendPromise;
+  });
+
+  it("stopSending disables repeated stop and sends stable channel identity payload", async () => {
+    const { engine, deps, sending, canStop, activeSession } = createHarness({
+      sessionId: "local-stop-payload",
+    });
+    activeSession.value.backendSessionId = "backend-stop-payload";
+    activeSession.value.parentSessionId = "parent-session";
+    activeSession.value.messages.push({
+      role: RoleEnum.ASSISTANT,
+      content: "partial answer",
+      pending: true,
+      dialogProcessId: "dp-stop-payload",
+      parentDialogProcessId: "parent-dp",
+      modelAlias: "alias-a",
+      modelName: "model-a",
+    });
+    sending.value = true;
+    canStop.value = true;
+    deps.chatWebSocketClient.requestStop.mockReturnValue(true);
+
+    expect(engine.stopSending()).toBe(true);
+    expect(canStop.value).toBe(false);
+    expect(engine.stopSending()).toBe(false);
+    expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledTimes(1);
+    expect(deps.chatWebSocketClient.requestStop.mock.calls[0][0]).toMatchObject({
+      userId: "u-1",
+      sessionId: "backend-stop-payload",
+      dialogProcessId: "dp-stop-payload",
+      parentSessionId: "parent-session",
+      parentDialogProcessId: "parent-dp",
+      partialAssistant: {
+        content: "partial answer",
+        dialogProcessId: "dp-stop-payload",
+        modelAlias: "alias-a",
+        modelName: "model-a",
+      },
+    });
+  });
+
   it("prepareMonotonicMessageAction stops first and waits until sending settles", async () => {
     vi.useFakeTimers();
-    const { engine, deps, sending, activeSession } = createHarness({
+    const { engine, deps, sending, canStop, activeSession } = createHarness({
       sessionId: "local-monotonic-stop",
       deps: {
         monotonicActionStopTimeoutMs: 500,
@@ -636,6 +717,7 @@ describe("useChatEngine", () => {
       dialogProcessId: "dp-stop",
     });
     sending.value = true;
+    canStop.value = true;
     deps.chatWebSocketClient.requestStop.mockImplementation((_payload, onForceStop) => {
       setTimeout(onForceStop, 20);
       return true;
@@ -721,12 +803,13 @@ describe("useChatEngine", () => {
   });
 
   it("deleteMonotonicMessage stops before cascading deletion from resolved user message", async () => {
-    const { engine, activeSession, sending, deps } = createHarness({ sessionId: "local-delete" });
+    const { engine, activeSession, sending, canStop, deps } = createHarness({ sessionId: "local-delete" });
     const first = { id: "m1", role: RoleEnum.USER, content: "first" };
     const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
     sending.value = true;
+    canStop.value = true;
     deps.chatWebSocketClient.requestStop.mockImplementation((_payload, onForceStop) => {
       onForceStop();
       return true;
@@ -740,7 +823,7 @@ describe("useChatEngine", () => {
 
   it("resendMonotonicMessage stops, cascades deletion, then sends edited content", async () => {
     const stream = vi.fn(async () => {});
-    const { engine, activeSession, sending, deps, input } = createHarness({
+    const { engine, activeSession, sending, canStop, deps, input } = createHarness({
       sessionId: "local-resend",
       stream,
     });
@@ -749,6 +832,7 @@ describe("useChatEngine", () => {
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
     sending.value = true;
+    canStop.value = true;
     deps.chatWebSocketClient.requestStop.mockImplementation((_payload, onForceStop) => {
       onForceStop();
       return true;
