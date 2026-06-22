@@ -129,12 +129,15 @@ function createMessageModel(messageItem = {}) {
     messageItem?.messageId || messageItem?.message_id || messageItem?.id || "",
   ).trim();
   const turnId = String(messageItem?.turnId || messageItem?.turn_id || "").trim();
+  const clientTurnId = String(messageItem?.clientTurnId || messageItem?.client_turn_id || "").trim();
   return {
     id: messageItem.id || "",
     messageId,
     message_id: messageId,
     turnId,
     turn_id: turnId,
+    clientTurnId,
+    client_turn_id: clientTurnId,
     role: messageItem.role || "assistant",
     content: messageItem.content || "",
     type: messageItem.type || "message",

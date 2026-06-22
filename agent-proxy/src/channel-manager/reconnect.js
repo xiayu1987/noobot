@@ -15,7 +15,7 @@ class ReconnectMethods {
 handleReconnect(socket, payload = {}) {
   const lastReceivedSeqMap = payload?.lastReceivedSeqMap || {};
   const currentSessionId = String(payload?.currentSessionId || "").trim();
-  const reconnectChannelKeys = this._resolveReconnectChannelKeys(socket, currentSessionId);
+  const reconnectChannelKeys = this._resolveReconnectChannelKeys(socket, currentSessionId, payload);
   if (!reconnectChannelKeys.length) {
     this.sendSocketEvent(socket, {
       event: CHANNEL_EVENT.RECONNECT_DATA,
@@ -43,10 +43,30 @@ handleReconnect(socket, payload = {}) {
   for (const channelKey of reconnectChannelKeys) {
     const channel = this.channelStore.get(channelKey);
     if (!channel) continue;
-    this.attachSubscriber(channel, socket);
 
     const channelSessionId = this._extractSessionIdFromChannelKey(channelKey);
     if (!channelSessionId) continue;
+
+    const preAttachSessionState =
+      channel.status === CHANNEL_STATUS.CONNECTING
+        ? CONVERSATION_STATE.RECONNECTING
+        : channel.status === CHANNEL_STATUS.RUNNING
+        ? CONVERSATION_STATE.SENDING
+        : "";
+    if (preAttachSessionState) {
+      this.updateConversationState(channel, {
+        sessionId: channelSessionId,
+        dialogProcessId: "",
+        clientTurnId: String(channel?.startPayload?.clientTurnId || "").trim(),
+        state: preAttachSessionState,
+        sourceEvent: CONVERSATION_SOURCE_EVENT.CHANNEL_STATUS,
+        seq: Number(channel?.eventSequence || 0),
+        createdAtMs: Number(channel?.createdAtMs || channel?.updatedAtMs || nowMs()),
+        broadcast: false,
+      });
+    }
+
+    this.attachSubscriber(channel, socket);
 
     if (!sessionsMap.has(channelSessionId)) {
       sessionsMap.set(channelSessionId, {
@@ -101,6 +121,8 @@ handleReconnect(socket, payload = {}) {
     const derivedSessionState =
       channel.status === CHANNEL_STATUS.CONNECTING
         ? CONVERSATION_STATE.RECONNECTING
+        : channel.status === CHANNEL_STATUS.RUNNING
+        ? CONVERSATION_STATE.SENDING
         : channel.status === CHANNEL_STATUS.IDLE
         ? CONVERSATION_STATE.NO_CONVERSATION
         : "";
@@ -111,7 +133,7 @@ handleReconnect(socket, payload = {}) {
       const nextSessionScopeState = {
         sessionId: channelSessionId,
         dialogProcessId: "",
-        clientTurnId: "",
+        clientTurnId: String(channel?.startPayload?.clientTurnId || "").trim(),
         state: derivedSessionState,
         sourceEvent: CONVERSATION_SOURCE_EVENT.CHANNEL_STATUS,
         seq: Number(channel?.eventSequence || 0),
@@ -238,7 +260,7 @@ handleReconnect(socket, payload = {}) {
   });
 }
 
-_resolveReconnectChannelKeys(socket, currentSessionId = "") {
+_resolveReconnectChannelKeys(socket, currentSessionId = "", payload = {}) {
   const currentSocketChannelKeys = Array.from(
     socket?.__agentProxyChannelKeys instanceof Set ? socket.__agentProxyChannelKeys : [],
   ).filter(Boolean);
@@ -247,7 +269,7 @@ _resolveReconnectChannelKeys(socket, currentSessionId = "") {
   }
   const normalizedCurrentSessionId = String(currentSessionId || "").trim();
   const requesterApiKey = String(socket?.__agentProxyApiKey || "").trim();
-  const requesterUserId = String(socket?.__agentProxyUserId || "").trim();
+  const requesterUserId = String(socket?.__agentProxyUserId || payload?.userId || "").trim();
   const resolvedChannelKeys = [];
   for (const [channelKey, channel] of this.channelStore.entries()) {
     if (!channel) continue;

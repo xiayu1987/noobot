@@ -325,6 +325,63 @@ describe("useMessageFiles", () => {
       role: "assistant",
       pending: false,
       dialogProcessId: "dp-1",
+      clientTurnId: "turn-1",
+      attachmentMetas: [],
+    };
+    const previousAssistantMessage = {
+      role: "assistant",
+      pending: false,
+      dialogProcessId: "dp-1",
+      clientTurnId: "turn-1",
+      attachmentMetas: [
+        { attachmentId: "prev-1", name: "previous-result.md" },
+      ],
+    };
+    const { displayedAttachmentMetas } = useMessageFiles({
+      getMessageItem: () => messageItem,
+      getAllMessages: () => [previousAssistantMessage, messageItem],
+      getSessionDocs: () => [],
+      getUserId: () => "admin",
+    });
+
+    expect(displayedAttachmentMetas.value).toEqual([
+      { attachmentId: "prev-1", attachmentOwnerType: "agent", name: "previous-result.md" },
+    ]);
+  });
+
+  it("does not collect previous assistant attachments from a different client turn", () => {
+    const messageItem = {
+      role: "assistant",
+      pending: false,
+      dialogProcessId: "dp-1",
+      clientTurnId: "turn-current",
+      attachmentMetas: [],
+    };
+    const previousAssistantMessage = {
+      role: "assistant",
+      pending: false,
+      dialogProcessId: "dp-1",
+      clientTurnId: "turn-previous",
+      attachmentMetas: [
+        { attachmentId: "prev-1", name: "previous-result.md" },
+      ],
+    };
+    const { displayedAttachmentMetas } = useMessageFiles({
+      getMessageItem: () => messageItem,
+      getAllMessages: () => [previousAssistantMessage, messageItem],
+      getSessionDocs: () => [],
+      getUserId: () => "admin",
+    });
+
+    expect(displayedAttachmentMetas.value).toEqual([]);
+  });
+
+  it("does not fall back to dialogProcessId when current message has a client turn", () => {
+    const messageItem = {
+      role: "assistant",
+      pending: false,
+      dialogProcessId: "dp-1",
+      clientTurnId: "turn-current",
       attachmentMetas: [],
     };
     const previousAssistantMessage = {
@@ -342,9 +399,7 @@ describe("useMessageFiles", () => {
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toEqual([
-      { attachmentId: "prev-1", attachmentOwnerType: "agent", name: "previous-result.md" },
-    ]);
+    expect(displayedAttachmentMetas.value).toEqual([]);
   });
 
 });

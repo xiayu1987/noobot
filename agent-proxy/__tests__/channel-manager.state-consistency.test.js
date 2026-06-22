@@ -78,6 +78,112 @@ test("channel_state inherits clientTurnId from start payload when upstream omits
   assert.equal(channelState?.data?.clientTurnId, "client-turn-1");
 });
 
+
+
+test("reconnect subscriber snapshot must not emit stale no_conversation before running state", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-snapshot-running" });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId: "session-snapshot-running",
+    clientTurnId: "client-turn-snapshot-running",
+  });
+  channel.status = "running";
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.handleReconnect(client, {
+    currentSessionId: "session-snapshot-running",
+    lastReceivedSeqMap: {},
+  });
+
+  const firstState = client.sentEvents.find((eventItem) => eventItem?.event === "channel_state");
+  assert.equal(firstState?.data?.state, "sending");
+  assert.equal(firstState?.data?.clientTurnId, "client-turn-snapshot-running");
+  assert.equal(
+    client.sentEvents.some(
+      (eventItem) =>
+        eventItem?.event === "channel_state" &&
+        eventItem?.data?.state === "no_conversation",
+    ),
+    false,
+  );
+});
+
+test("reconnect replaces initial no_conversation with sending for running channel before upstream events", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-running-empty" });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId: "session-running-empty",
+    clientTurnId: "client-turn-running",
+  });
+  channel.status = "running";
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.handleReconnect(client, {
+    currentSessionId: "session-running-empty",
+    lastReceivedSeqMap: {},
+  });
+
+  const reconnectData = getEvent(client, "reconnect_data");
+  assert.ok(reconnectData);
+  const sessionEntry = (reconnectData?.data?.sessions || []).find(
+    (item) => String(item?.sessionId || "") === "session-running-empty",
+  );
+  assert.equal(sessionEntry?.hasRunningTask, true);
+  const stateList = Array.isArray(sessionEntry?.conversationStates)
+    ? sessionEntry.conversationStates
+    : [];
+  assert.equal(stateList.some((stateItem) => stateItem?.state === "no_conversation"), false);
+  assert.equal(
+    stateList.some(
+      (stateItem) =>
+        stateItem?.state === "sending" &&
+        String(stateItem?.clientTurnId || "") === "client-turn-running",
+    ),
+    true,
+  );
+});
+
+
+test("reconnect can recover same-user running channel when socket identity is not hydrated", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-user-fallback" });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId: "session-user-fallback",
+    clientTurnId: "client-turn-user-fallback",
+  });
+  channel.status = "running";
+  channel.ownerApiKey = "api-key-old";
+  channel.ownerUserId = "user-1";
+
+  const reconnectClient = createMockSocket({ apiKey: "api-key-new", userId: "" });
+  manager.handleReconnect(reconnectClient, {
+    userId: "user-1",
+    currentSessionId: "session-user-fallback",
+    lastReceivedSeqMap: {},
+  });
+
+  const reconnectData = getEvent(reconnectClient, "reconnect_data");
+  const sessionEntry = (reconnectData?.data?.sessions || []).find(
+    (item) => String(item?.sessionId || "") === "session-user-fallback",
+  );
+  assert.equal(sessionEntry?.hasRunningTask, true);
+  assert.equal(
+    (sessionEntry?.conversationStates || []).some(
+      (stateItem) =>
+        stateItem?.state === "sending" &&
+        String(stateItem?.clientTurnId || "") === "client-turn-user-fallback",
+    ),
+    true,
+  );
+});
+
 test("reconnect state should be consistent for all same-user clients across channel statuses", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const statusMatrix = [

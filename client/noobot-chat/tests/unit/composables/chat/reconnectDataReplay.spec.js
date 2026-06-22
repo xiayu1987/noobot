@@ -94,6 +94,46 @@ describe("applyReconnectDataReplay", () => {
     expect(fixture.scheduleCacheExpiredSessionRefresh).toHaveBeenCalledTimes(1);
   });
 
+
+  it("restores running channel with only session-scope clientTurnId state as stoppable", async () => {
+    let fixture;
+    const applyRunStateEvents = vi.fn((events) => {
+      const latest = events.at(-1);
+      fixture.sending.value = latest?.state === "sending" || latest?.state === "reconnecting";
+      fixture.canStop.value = latest?.state === "sending" || latest?.state === "reconnecting";
+    });
+    fixture = createFixture({ applyRunStateEvents });
+
+    await applyReconnectDataReplay({
+      reconnectData: {
+        sessions: [
+          {
+            sessionId: "s-1",
+            hasRunningTask: true,
+            conversationStates: [
+              { sessionId: "s-1", dialogProcessId: "", clientTurnId: "client-turn-r", state: "sending", seq: 0 },
+            ],
+            dialogProcesses: [],
+          },
+        ],
+      },
+      ...fixture,
+    });
+
+    expect(fixture.ensureReconnectSessionActive).toHaveBeenCalledWith("s-1");
+    expect(applyRunStateEvents).toHaveBeenLastCalledWith(expect.arrayContaining([
+      expect.objectContaining({
+        type: "backend_channel_state",
+        state: "sending",
+        sessionId: "s-1",
+        dialogProcessId: "",
+        clientTurnId: "client-turn-r",
+      }),
+    ]));
+    expect(fixture.sending.value).toBe(true);
+    expect(fixture.canStop.value).toBe(true);
+  });
+
   it("restores stopped state after recoverable reconnect data replay", async () => {
     const fixture = createFixture();
 
