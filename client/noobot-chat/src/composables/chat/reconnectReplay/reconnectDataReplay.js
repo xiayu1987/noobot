@@ -49,6 +49,7 @@ function createReconnectRunStateEvents(reconnectSessions = [], recoverableSessio
         state: _trimStr(stateEntry?.state),
         sessionId,
         dialogProcessId: _trimStr(stateEntry?.dialogProcessId),
+        clientTurnId: _trimStr(stateEntry?.clientTurnId),
         source: "reconnect_data",
         sourceEvent: _trimStr(stateEntry?.sourceEvent),
         seq: Number(stateEntry?.seq || 0),

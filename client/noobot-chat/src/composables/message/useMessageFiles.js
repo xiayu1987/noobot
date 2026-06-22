@@ -91,6 +91,15 @@ function isFreshPendingAssistant(messageItem = {}) {
 }
 
 function isSameMessageRound(targetMessage = {}, candidateMessage = {}) {
+  const targetClientTurnId = String(targetMessage?.clientTurnId || "").trim();
+  const candidateClientTurnId = String(candidateMessage?.clientTurnId || "").trim();
+  if (targetClientTurnId && candidateClientTurnId) {
+    return targetClientTurnId === candidateClientTurnId;
+  }
+  if (targetClientTurnId) {
+    return false;
+  }
+
   const targetDialogProcessId = String(targetMessage?.dialogProcessId || "").trim();
   const candidateDialogProcessId = String(candidateMessage?.dialogProcessId || "").trim();
   if (targetDialogProcessId && candidateDialogProcessId) {

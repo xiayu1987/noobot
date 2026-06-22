@@ -316,7 +316,7 @@ export function createChatWebSocketClient({
     });
   }
 
-  async function reconnect({ currentSessionId = "", onReconnectData = () => {} } = {}) {
+  async function reconnect({ currentSessionId = "", userId = "", onReconnectData = () => {} } = {}) {
     return new Promise((resolve, reject) => {
       if (reconnecting) {
         reject(new Error(translateText("infra.reconnectInProgress")));
@@ -345,6 +345,7 @@ export function createChatWebSocketClient({
           action: "reconnect",
           lastReceivedSeqMap: { ...lastReceivedSeqMap },
           currentSessionId: String(currentSessionId || "").trim(),
+          userId: String(userId || "").trim(),
         }));
       };
 

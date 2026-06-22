@@ -313,6 +313,7 @@ export function useChatSession({
     };
     return chatWebSocketClient.reconnect({
       currentSessionId: String(activeSession.value?.backendSessionId || activeSessionId.value || ""),
+      userId: String(userId?.value || userId || ""),
       onReconnectData: (reconnectPayload) => {
         if (reconnectPayload?.sessions) {
           trackReconnectReplay(reconnectReplay.applyReconnectData(reconnectPayload));

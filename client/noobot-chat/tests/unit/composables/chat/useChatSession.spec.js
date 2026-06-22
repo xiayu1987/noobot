@@ -146,6 +146,55 @@ describe("useChatSession reconnect replay", () => {
     expect(store.interactionSubmitting).toBe(false);
   });
 
+
+  it("passes current userId to reconnect websocket request", async () => {
+    const store = useChatStore();
+    store.sessions = [
+      {
+        id: "s-reconnect-user",
+        backendSessionId: "s-reconnect-user",
+        title: "session",
+        isLocal: false,
+        loaded: true,
+        messages: [],
+        rawMessages: [],
+        sessionDocs: [],
+        connectorPanelState: { selectedConnectors: {} },
+        currentTaskId: "",
+        currentTaskStatus: "idle",
+        messageCount: 0,
+        lastMessage: null,
+        createdAt: "",
+        updatedAt: "",
+      },
+    ];
+    store.activeSessionId = "s-reconnect-user";
+
+    const session = useChatSession({
+      userId: ref("u-reconnect"),
+      apiKey: ref(""),
+      allowUserInteraction: ref(true),
+      forceTool: ref(false),
+      streamOutput: ref(true),
+      botScenario: ref(""),
+      connected: ref(true),
+      ensureConnected: vi.fn(() => true),
+      authFetch: null,
+      isImageMime: () => false,
+      classifyRealtimeLog: (item) => item,
+      scrollBottom: vi.fn(),
+      notify: vi.fn(),
+      clearUploadSelection: vi.fn(),
+    });
+
+    await session.handleReconnect();
+
+    expect(wsClientMock.reconnect).toHaveBeenCalledWith(expect.objectContaining({
+      currentSessionId: "s-reconnect-user",
+      userId: "u-reconnect",
+    }));
+  });
+
   it("send marks the current turn as stoppable through the session store", async () => {
     const store = useChatStore();
     store.sessions = [

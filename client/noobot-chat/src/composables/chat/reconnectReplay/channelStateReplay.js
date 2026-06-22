@@ -111,6 +111,7 @@ export function applyReconnectChannelState({
       state: _trimStr(stateData?.state),
       sessionId,
       dialogProcessId: _trimStr(stateData?.dialogProcessId),
+      clientTurnId: _trimStr(stateData?.clientTurnId),
       sourceEvent: _trimStr(stateData?.sourceEvent),
       seq: Number(stateData?.seq || 0),
       applied: forActiveSession,
@@ -119,6 +120,7 @@ export function applyReconnectChannelState({
   if (!forActiveSession) return;
   const state = _trimStr(stateData?.state);
   const dialogProcessId = _trimStr(stateData?.dialogProcessId);
+  const clientTurnId = _trimStr(stateData?.clientTurnId);
   const targetAssistantMessage = findAssistantMessageByDialogProcessId(dialogProcessId);
   if (isInFlightConversationState(state)) {
     if (applyRunStateEvent) {
@@ -127,6 +129,7 @@ export function applyReconnectChannelState({
         state,
         sessionId,
         dialogProcessId,
+        clientTurnId,
         source: "reconnect",
         sourceEvent: _trimStr(stateData?.sourceEvent),
         seq: Number(stateData?.seq || 0),
@@ -212,6 +215,7 @@ export function applyReconnectChannelState({
         state,
         sessionId,
         dialogProcessId,
+        clientTurnId,
         source: "reconnect",
         sourceEvent: _trimStr(stateData?.sourceEvent),
         seq: Number(stateData?.seq || 0),

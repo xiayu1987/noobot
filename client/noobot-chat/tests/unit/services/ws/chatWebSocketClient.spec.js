@@ -51,6 +51,30 @@ describe("chatWebSocketClient", () => {
     vi.useRealTimers();
   });
 
+
+  it("sends userId in reconnect payload", async () => {
+    const client = createChatWebSocketClient({
+      resolveWebSocketUrl: () => "ws://test",
+    });
+    const reconnectPromise = client.reconnect({
+      currentSessionId: "s-1",
+      userId: "u-1",
+      onReconnectData: vi.fn(),
+    });
+    const socket = MockWebSocket.instances[0];
+
+    socket.onopen?.();
+
+    expect(JSON.parse(socket.sent[0])).toEqual(expect.objectContaining({
+      action: "reconnect",
+      currentSessionId: "s-1",
+      userId: "u-1",
+    }));
+
+    socket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 0, cacheExpired: false });
+    await reconnectPromise;
+  });
+
   it("resolves after terminal channel_state when DONE/STOPPED is missing", async () => {
     const client = createChatWebSocketClient({
       resolveWebSocketUrl: () => "ws://test",
