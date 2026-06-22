@@ -19,6 +19,7 @@ function createUseChatListFixture(overrides = {}) {
   const loadingSessionDetail = ref(false);
   const sending = ref(false);
   const notify = vi.fn();
+  const scrollBottom = vi.fn();
 
   const getSessionsApi = overrides.getSessionsApi || vi.fn();
   const getSessionDetailApi = overrides.getSessionDetailApi || vi.fn();
@@ -43,7 +44,7 @@ function createUseChatListFixture(overrides = {}) {
     deleteSessionApi: vi.fn(),
     makeViewMessage: (message) => ({ ...message }),
     foldMessagesForView: (messages) => [...messages],
-    scrollBottom: vi.fn(),
+    scrollBottom,
     refreshSessionConnectorsAsync: vi.fn(),
     clearUploads: vi.fn(),
     notify,
@@ -58,7 +59,7 @@ function createUseChatListFixture(overrides = {}) {
       loadingSessionDetail,
       sending,
     },
-    mocks: { getSessionsApi, getSessionDetailApi, notify },
+    mocks: { getSessionsApi, getSessionDetailApi, notify, scrollBottom },
   };
 }
 
@@ -393,6 +394,54 @@ describe("useChatList", () => {
     expect(session.messages).toBe(currentMessages);
     expect(session.messageCount).toBe(2);
     expect(session.lastMessage).toBe(currentMessages[1]);
+  });
+
+  it("applySessionDetail can skip scrolling when session detail is restored on reload", () => {
+    const { api, refs, mocks } = createUseChatListFixture();
+    const session = {
+      id: "reload-local",
+      backendSessionId: "reload-backend",
+      title: "old title",
+      isLocal: true,
+      loaded: false,
+      messages: [],
+      rawMessages: [],
+      sessionDocs: [],
+      connectorPanelState: { selectedConnectors: {} },
+      createdAt: "2026-05-14T00:00:00.000Z",
+      updatedAt: "2026-05-14T00:00:00.000Z",
+      currentTaskId: "",
+      currentTaskStatus: "idle",
+      messageCount: 0,
+      lastMessage: null,
+    };
+    refs.sessions.value.push(session);
+    refs.activeSessionId.value = "reload-local";
+
+    api.applySessionDetail(
+      {
+        sessionId: "reload-backend",
+        sessions: [
+          {
+            sessionId: "reload-backend",
+            currentTaskId: "",
+            createdAt: "2026-05-14T00:00:00.000Z",
+            updatedAt: "2026-05-14T00:02:00.000Z",
+            messages: [
+              { role: RoleEnum.USER, content: "restored question" },
+              { role: RoleEnum.ASSISTANT, content: "restored answer" },
+            ],
+          },
+        ],
+      },
+      { scrollToBottom: false },
+    );
+
+    expect(refs.activeSessionId.value).toBe("reload-backend");
+    expect(session.loaded).toBe(true);
+    expect(session.messages).toHaveLength(2);
+    expect(session.title).toBe("restored question");
+    expect(mocks.scrollBottom).not.toHaveBeenCalled();
   });
 
   it("selectSession blocks noisy user switch while sending but allows silent internal switch", async () => {

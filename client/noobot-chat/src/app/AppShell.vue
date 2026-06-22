@@ -253,7 +253,7 @@ const {
   notify: notifyUi,
   onConnected: async () => {
     const route = parsePseudoRouteFromLocation();
-    await fetchSessions(route.sessionId || "");
+    await fetchSessions(route.sessionId || "", { scrollToBottom: false });
     await applyPseudoRoute(route);
     chatWebSocketClient.connect();
     reconnectActiveSession({ force: true });
@@ -799,7 +799,7 @@ async function onAppMounted() {
     replacePseudoRoute();
     return;
   }
-  initSessionsAfterMount();
+  initSessionsAfterMount({ scrollToBottom: false });
   replacePseudoRoute();
 }
 

@@ -193,7 +193,7 @@ export function createSessionDetailApplicator({
         sessionItem.messages,
         sessionItem.title || detail.sessionId.slice(0, 8),
       );
-      scrollBottom();
+      if (options.scrollToBottom !== false) scrollBottom();
     }
   }
 
