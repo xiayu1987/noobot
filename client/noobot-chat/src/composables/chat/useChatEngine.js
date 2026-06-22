@@ -14,6 +14,7 @@ import {
 import { createMonotonicMessageActions } from "./chatEngine/monotonicMessageActions";
 import { createChatEngineSender } from "./chatEngine/sendFlow";
 import { createPendingMessageOperationStore } from "./chatEngine/messageOperationStore";
+import { applySessionRunStateEvent } from "./sessionRunStateMachine";
 
 const DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS = 3000;
 const DEFAULT_MONOTONIC_ACTION_STOP_POLL_INTERVAL_MS = 50;
@@ -34,6 +35,7 @@ export function useChatEngine({
   activeSessionId,
   sending,
   canStop,
+  runStateSnapshot,
   input,
   uploadFiles,
   clearUploads,
@@ -65,6 +67,12 @@ export function useChatEngine({
   monotonicActionStopPollIntervalMs = DEFAULT_MONOTONIC_ACTION_STOP_POLL_INTERVAL_MS,
 } = {}) {
   const { translate, locale } = useLocale();
+  const applyRunStateEvent = (event) => applySessionRunStateEvent({
+    stateRef: runStateSnapshot,
+    sending,
+    canStop,
+    event,
+  });
   const {
     applyAssistantFailureState,
     mergeAssistantAttachmentMetas,
@@ -85,6 +93,7 @@ export function useChatEngine({
     activeSessionId,
     sending,
     canStop,
+    applyRunStateEvent,
     interactionSubmitting,
     pendingInteractionRequest,
     clearPendingInteraction,
@@ -105,6 +114,8 @@ export function useChatEngine({
     return finalizeForceStopUi({
       sending,
       canStop,
+      runStateSnapshot,
+      applyRunStateEvent,
       activeSession,
       findTargetAssistantMessage,
       applyConversationState,
@@ -120,6 +131,7 @@ export function useChatEngine({
       activeSession,
       chatWebSocketClient,
       onForceStopUiFinalize: forceStopUiFinalize,
+      applyRunStateEvent,
     });
   }
 
@@ -161,6 +173,7 @@ export function useChatEngine({
     selectedPlugins,
     sending,
     canStop,
+    applyRunStateEvent,
     serializeAttachments,
     streamOutput,
     translate,

@@ -5,6 +5,10 @@
  */
 import { RoleEnum } from "../../../shared/constants/chatConstants";
 import { normalizeTrimmedString } from "./utils";
+import {
+  SESSION_RUN_EVENT,
+  rememberStopRequestedEvent,
+} from "../sessionRunStateMachine";
 
 function markLatestUserMessageStopped(activeSession, pendingAssistantMessage = null) {
   const messages = Array.isArray(activeSession?.value?.messages)
@@ -58,6 +62,7 @@ function markLatestUserMessageStopped(activeSession, pendingAssistantMessage = n
 export function forceStopUiFinalize({
   sending,
   canStop,
+  applyRunStateEvent,
   activeSession,
   findTargetAssistantMessage,
   applyConversationState,
@@ -77,8 +82,18 @@ export function forceStopUiFinalize({
     },
     { botMessage: pendingAssistantMessage },
   );
-  sending.value = false;
-  if (canStop) canStop.value = false;
+  if (applyRunStateEvent) {
+    applyRunStateEvent({
+      type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
+      state: "stopped",
+      sessionId: String(activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
+      dialogProcessId: fallbackDialogProcessId,
+      source: "force_stop_finalize",
+    });
+  } else {
+    sending.value = false;
+    if (canStop) canStop.value = false;
+  }
   chatWebSocketClient?.clearLastReceivedSeqMap?.();
   chatWebSocketClient?.dispose?.();
 }
@@ -118,6 +133,7 @@ export function stopSending({
   userId,
   chatWebSocketClient,
   onForceStopUiFinalize,
+  applyRunStateEvent,
 } = {}) {
   if (!sending?.value) return false;
   if (canStop && canStop.value === false) return false;
@@ -129,9 +145,19 @@ export function stopSending({
         Boolean(messageItem?.pending),
     );
   markLatestUserMessageStopped(activeSession, pendingAssistantMessage);
-  if (canStop) canStop.value = false;
+  const stopPayload = buildStopPayload({ userId, activeSession, pendingAssistantMessage });
+  const stopEvent = rememberStopRequestedEvent({
+    sessionId: stopPayload.sessionId,
+    dialogProcessId: stopPayload.dialogProcessId,
+    source: "stop_sending",
+  });
+  if (applyRunStateEvent) {
+    applyRunStateEvent(stopEvent);
+  } else if (canStop) {
+    canStop.value = false;
+  }
   return chatWebSocketClient?.requestStop?.(
-    buildStopPayload({ userId, activeSession, pendingAssistantMessage }),
+    stopPayload,
     onForceStopUiFinalize,
   );
 }

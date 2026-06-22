@@ -60,6 +60,7 @@ import {
 } from "./reconnectReplay/doneReplay";
 import { createReconnectReplayPublicApi } from "./reconnectReplay/publicApi";
 import { registerReconnectReplayLifecycleCleanup } from "./reconnectReplay/lifecycle";
+import { applySessionRunStateEvent, applySessionRunStateEvents } from "./sessionRunStateMachine";
 
 export function useReconnectReplay({
   sessions,
@@ -67,6 +68,7 @@ export function useReconnectReplay({
   activeSessionId,
   sending,
   canStop,
+  runStateSnapshot,
   interactionSubmitting,
   chatList,
   chatWebSocketClient,
@@ -93,6 +95,20 @@ export function useReconnectReplay({
   const { replayCache, appliedReconnectSeqByDialogProcessId, terminalDialogProcessIdSet, missingInteractionPayloadTimers } =
     reconnectReplayContext;
   let { cacheExpiredRefreshTimer, replayHydrationPromise } = reconnectReplayContext;
+
+  const applyRunStateEvent = (event) => applySessionRunStateEvent({
+    stateRef: runStateSnapshot,
+    sending,
+    canStop,
+    event,
+  });
+
+  const applyRunStateEvents = (events) => applySessionRunStateEvents({
+    stateRef: runStateSnapshot,
+    sending,
+    canStop,
+    events,
+  });
 
   function applyAssistantFailureState(targetAssistantMessage, errorMessage = "") {
     return applyAssistantFailureStateWithContext({ targetAssistantMessage, errorMessage, translate });
@@ -201,6 +217,7 @@ export function useReconnectReplay({
       ensureReconnectSessionActive,
       sending,
       canStop,
+      applyRunStateEvents,
       isCurrentActiveSession,
       resolveReconnectTargetAssistantMessage,
       replayCache,
@@ -218,6 +235,7 @@ export function useReconnectReplay({
       findAssistantMessageByDialogProcessId,
       sending,
       canStop,
+      applyRunStateEvent,
       interactionSubmitting,
       clearPendingInteractionIfObsolete,
       pendingInteractionRequest,

@@ -5,12 +5,14 @@
  */
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
+import { createInitialSessionRunState } from "../../composables/chat/sessionRunStateMachine";
 
 export const useChatStore = defineStore("chat", () => {
   const input = ref("");
   const uploadFiles = ref([]);
   const sending = ref(false);
   const canStop = ref(false);
+  const runStateSnapshot = ref(createInitialSessionRunState());
   const sessions = ref([]);
   const activeSessionId = ref("");
   const loadingSessions = ref(false);
@@ -28,6 +30,7 @@ export const useChatStore = defineStore("chat", () => {
     uploadFiles.value = [];
     sending.value = false;
     canStop.value = false;
+    runStateSnapshot.value = createInitialSessionRunState();
     sessions.value = [];
     activeSessionId.value = "";
     loadingSessions.value = false;
@@ -42,6 +45,7 @@ export const useChatStore = defineStore("chat", () => {
     uploadFiles,
     sending,
     canStop,
+    runStateSnapshot,
     sessions,
     activeSessionId,
     activeSession,

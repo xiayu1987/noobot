@@ -14,6 +14,49 @@ import {
   isTerminalConversationState,
 } from "./conversationState";
 import { _trimStr } from "./utils";
+import {
+  SESSION_RUN_EVENT,
+  resolveRememberedStopRequestedEvent,
+} from "../sessionRunStateMachine";
+
+function createReconnectRunStateEvents(reconnectSessions = [], recoverableSessionId = "") {
+  const events = [];
+  if (recoverableSessionId) {
+    const rememberedStopEvent = resolveRememberedStopRequestedEvent({
+      sessionId: recoverableSessionId,
+    });
+    if (rememberedStopEvent) events.push(rememberedStopEvent);
+    events.push({
+      type: SESSION_RUN_EVENT.BACKEND_RECOVERABLE_RUNNING,
+      state: "reconnecting",
+      sessionId: recoverableSessionId,
+      source: "reconnect_data",
+    });
+  }
+  reconnectSessions.forEach((sessionEntry) => {
+    const sessionId = _trimStr(sessionEntry?.sessionId);
+    const stateEntries = Array.isArray(sessionEntry?.conversationStates)
+      ? sessionEntry.conversationStates
+      : [];
+    stateEntries.forEach((stateEntry) => {
+      const rememberedStopEvent = resolveRememberedStopRequestedEvent({
+        sessionId,
+        dialogProcessId: _trimStr(stateEntry?.dialogProcessId),
+      });
+      if (rememberedStopEvent) events.push(rememberedStopEvent);
+      events.push({
+        type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+        state: _trimStr(stateEntry?.state),
+        sessionId,
+        dialogProcessId: _trimStr(stateEntry?.dialogProcessId),
+        source: "reconnect_data",
+        sourceEvent: _trimStr(stateEntry?.sourceEvent),
+        seq: Number(stateEntry?.seq || 0),
+      });
+    });
+  });
+  return events;
+}
 
 function resolveReconnectSessionRunningStateFromStates(sessionEntry = null) {
   const stateEntries = Array.isArray(sessionEntry?.conversationStates)
@@ -41,6 +84,7 @@ export async function applyReconnectDataReplay({
   ensureReconnectSessionActive,
   sending,
   canStop,
+  applyRunStateEvents,
   isCurrentActiveSession,
   resolveReconnectTargetAssistantMessage,
   replayCache,
@@ -52,10 +96,17 @@ export async function applyReconnectDataReplay({
     ? reconnectData.sessions
     : [];
   const recoverableSessionId = findRecoverableReconnectSessionId(reconnectSessions);
+  const applyReconnectRunState = () => applyRunStateEvents?.(
+    createReconnectRunStateEvents(reconnectSessions, recoverableSessionId),
+  );
   if (recoverableSessionId) {
     await ensureReconnectSessionActive(recoverableSessionId);
-    sending.value = true;
-    if (canStop) canStop.value = true;
+    if (applyRunStateEvents) {
+      applyReconnectRunState();
+    } else {
+      sending.value = true;
+      if (canStop) canStop.value = true;
+    }
     const recoverableSessionEntry = reconnectSessions.find(
       (sessionEntry) => _trimStr(sessionEntry?.sessionId) === recoverableSessionId,
     );
@@ -118,7 +169,9 @@ export async function applyReconnectDataReplay({
       (sessionEntry) => _trimStr(sessionEntry?.sessionId) === recoverableSessionId,
     );
     const restoredState = resolveReconnectSessionRunningStateFromStates(recoverableSessionEntry);
-    if (restoredState !== null) {
+    if (applyRunStateEvents) {
+      applyReconnectRunState();
+    } else if (restoredState !== null) {
       sending.value = restoredState.sending;
       if (canStop) canStop.value = restoredState.canStop;
     }

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
-import { ref } from "vue";
+import { nextTick, ref } from "vue";
 import { useChatStore } from "../../../../src/shared/stores/useChatStore";
 import { useChatSession } from "../../../../src/composables/chat/useChatSession";
 import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
@@ -144,5 +144,57 @@ describe("useChatSession reconnect replay", () => {
     expect(store.sending).toBe(false);
     expect(store.pendingInteractionRequest).toBeNull();
     expect(store.interactionSubmitting).toBe(false);
+  });
+
+  it("send marks the current turn as stoppable through the session store", async () => {
+    const store = useChatStore();
+    store.sessions = [
+      {
+        id: "s-send",
+        backendSessionId: "s-send",
+        title: "session",
+        isLocal: false,
+        loaded: true,
+        messages: [],
+        rawMessages: [],
+        sessionDocs: [],
+        connectorPanelState: { selectedConnectors: {} },
+        currentTaskId: "",
+        currentTaskStatus: "idle",
+        messageCount: 0,
+        lastMessage: null,
+        createdAt: "",
+        updatedAt: "",
+      },
+    ];
+    store.activeSessionId = "s-send";
+    store.input = "hello";
+    wsClientMock.stream.mockReturnValue(new Promise(() => {}));
+
+    const session = useChatSession({
+      userId: ref("u-1"),
+      apiKey: ref(""),
+      allowUserInteraction: ref(true),
+      forceTool: ref(false),
+      streamOutput: ref(true),
+      botScenario: ref(""),
+      connected: ref(true),
+      ensureConnected: vi.fn(() => true),
+      authFetch: null,
+      isImageMime: () => false,
+      classifyRealtimeLog: (item) => item,
+      scrollBottom: vi.fn(),
+      notify: vi.fn(),
+      clearUploadSelection: vi.fn(),
+    });
+
+    session.send();
+    await nextTick();
+
+    expect(store.sending).toBe(true);
+    expect(store.canStop).toBe(true);
+    expect(store.runStateSnapshot.state).toBe("sending");
+    expect(session.sending.value).toBe(true);
+    expect(session.canStop.value).toBe(true);
   });
 });
