@@ -72,4 +72,29 @@ describe("applyReconnectEventReplay", () => {
       },
     });
   });
+
+  it("applies active dialog process events even when live reconnect payload lacks sessionId", async () => {
+    const replayCache = {};
+    const consumeReplayCacheForSession = vi.fn(async () => {});
+    const applyReconnectMessagesToActiveSession = vi.fn(async () => {});
+
+    await applyReconnectEventReplay({
+      event: StreamEventEnum.THINKING,
+      data: { dialogProcessId: "dp-1", text: "tool running" },
+      replayCache,
+      isCurrentActiveSession: vi.fn(() => false),
+      isCurrentActiveDialogProcess: vi.fn((dialogProcessId) => dialogProcessId === "dp-1"),
+      consumeReplayCacheForSession,
+      applyReconnectMessagesToActiveSession,
+      applyChannelState: vi.fn(),
+    });
+
+    expect(consumeReplayCacheForSession).not.toHaveBeenCalled();
+    expect(applyReconnectMessagesToActiveSession).toHaveBeenCalledWith(
+      [{ event: StreamEventEnum.THINKING, data: { dialogProcessId: "dp-1", text: "tool running" } }],
+      "dp-1",
+    );
+    expect(replayCache).toEqual({});
+  });
+
 });

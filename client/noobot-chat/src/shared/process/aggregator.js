@@ -21,11 +21,17 @@ import {
   sanitizeExecutionLogForDisplay,
 } from "../../composables/chat/chatEngine/utils";
 
-function stableNodeId({ processId = "", logItem = {}, index = 0, source = ProcessEventSource.UNKNOWN }) {
+function stableNodeId({
+  processId = "",
+  logItem = {},
+  index = 0,
+  source = ProcessEventSource.UNKNOWN,
+  sequence = 0,
+}) {
   const toolCallId = normalizeProcessString(logItem.toolCallId || logItem.tool_call_id);
   if (toolCallId) return `${processId}:tool:${toolCallId}:${normalizeProcessString(logItem.event || logItem.type) || "event"}`;
-  const sequence = toProcessSequence(logItem.sequence ?? logItem.seq, 0);
-  if (sequence > 0) return `${processId}:seq:${sequence}`;
+  const resolvedSequence = toProcessSequence(sequence || logItem.sequence || logItem.seq, 0);
+  if (resolvedSequence > 0) return `${processId}:seq:${resolvedSequence}`;
   return `${processId}:${source}:${normalizeProcessString(logItem.event || logItem.type) || "event"}:${index}`;
 }
 
@@ -61,6 +67,7 @@ export function createProcessEventFromLog(rawLog = {}, options = {}) {
     logItem,
     index: options.index || 0,
     source,
+    sequence,
   });
   const type = options.terminal ? ProcessEventType.NODE_FINISHED : ProcessEventType.NODE_UPSERTED;
   const eventId = normalizeProcessString(logItem.eventId || logItem.id || options.eventId) || buildProcessEventId({

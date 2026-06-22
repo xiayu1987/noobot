@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import ChatMessageItem from "../modules/message/ChatMessageItem.vue";
 import { useLocale } from "../shared/i18n/useLocale";
 
@@ -23,8 +23,16 @@ const props = defineProps({
   sending: { type: Boolean, default: false },
   deleteMonotonicMessage: { type: Function, default: null },
   resendMonotonicMessage: { type: Function, default: null },
+  conversationStateSnapshot: { type: Object, default: () => ({}) },
   emptyLogoSrc: { type: String, default: "" },
 });
+
+const IN_FLIGHT_CHANNEL_STATES = new Set([
+  "sending",
+  "reconnecting",
+  "interaction_pending",
+  "stopping",
+]);
 
 const listRef = ref(null);
 const { translate } = useLocale();
@@ -79,6 +87,104 @@ function getMessageRenderKey(messageItem = {}, messageIndex = 0) {
     .map((item) => String(item ?? "").replaceAll("|", "/"))
     .join("|");
 }
+
+function normalizeStateTime(stateItem = {}) {
+  const createdAtMs = Number(stateItem?.createdAtMs || 0);
+  const updatedAtMs = Number(stateItem?.updatedAtMs || stateItem?.timestamp || createdAtMs || 0);
+  const createdAt = String(
+    stateItem?.createdAt || (createdAtMs > 0 ? new Date(createdAtMs).toISOString() : ""),
+  ).trim();
+  const updatedAt = String(
+    stateItem?.updatedAt || (updatedAtMs > 0 ? new Date(updatedAtMs).toISOString() : ""),
+  ).trim();
+  return { createdAtMs, updatedAtMs, createdAt, updatedAt };
+}
+
+function isCurrentSessionState(stateItem = {}) {
+  const stateSessionId = String(stateItem?.sessionId || "").trim();
+  if (!stateSessionId) return true;
+  const activeIds = [
+    props.activeSession?.id,
+    props.activeSession?.backendSessionId,
+  ].map((item) => String(item || "").trim()).filter(Boolean);
+  return !activeIds.length || activeIds.includes(stateSessionId);
+}
+
+function getLatestInFlightConversationStateForMessage(messageItem = {}) {
+  if (String(messageItem?.role || "").trim() !== "assistant") return null;
+  const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+  const states = Object.values(props.conversationStateSnapshot || {})
+    .filter((stateItem = {}) =>
+      IN_FLIGHT_CHANNEL_STATES.has(String(stateItem?.state || "").trim()) &&
+      isCurrentSessionState(stateItem),
+    )
+    .sort((left, right) => Number(right?.updatedAtMs || right?.createdAtMs || 0) - Number(left?.updatedAtMs || left?.createdAtMs || 0));
+  if (dialogProcessId) {
+    const exactState = states.find(
+      (stateItem) => String(stateItem?.dialogProcessId || "").trim() === dialogProcessId,
+    );
+    if (exactState) return exactState;
+  }
+  const messageList = Array.isArray(props.activeSession?.messages)
+    ? props.activeSession.messages
+    : [];
+  const latestAssistant = [...messageList]
+    .reverse()
+    .find((item) => String(item?.role || "").trim() === "assistant");
+  if (latestAssistant !== messageItem) return null;
+  return states.find((stateItem) => !String(stateItem?.dialogProcessId || "").trim()) || null;
+}
+
+function applyConversationStateRuntimeToMessage(messageItem = {}) {
+  const stateItem = getLatestInFlightConversationStateForMessage(messageItem);
+  if (!stateItem) return messageItem;
+  const timing = normalizeStateTime(stateItem);
+  const channelState =
+    messageItem.channelState &&
+    typeof messageItem.channelState === "object" &&
+    !Array.isArray(messageItem.channelState)
+      ? messageItem.channelState
+      : {};
+  messageItem.channelState = {
+    ...channelState,
+    state: String(stateItem?.state || "").trim(),
+    sessionId: String(stateItem?.sessionId || "").trim(),
+    dialogProcessId: String(stateItem?.dialogProcessId || "").trim(),
+    clientTurnId: String(stateItem?.clientTurnId || "").trim(),
+    sourceEvent: String(stateItem?.sourceEvent || "").trim(),
+    seq: Number(stateItem?.seq || 0),
+    createdAtMs: timing.createdAtMs || Number(channelState?.createdAtMs || 0),
+    updatedAtMs: timing.updatedAtMs || Number(channelState?.updatedAtMs || 0),
+    createdAt: timing.createdAt || String(channelState?.createdAt || "").trim(),
+    updatedAt: timing.updatedAt || String(channelState?.updatedAt || "").trim(),
+  };
+  const startedAt = messageItem.channelState.createdAt ||
+    (messageItem.channelState.createdAtMs > 0 ? new Date(messageItem.channelState.createdAtMs).toISOString() : "");
+  if (startedAt && !String(messageItem?.thinkingStartedAt || messageItem?.thinking_started_at || "").trim()) {
+    messageItem.thinkingStartedAt = startedAt;
+    messageItem.thinking_started_at = startedAt;
+  }
+  messageItem.pending = true;
+  return messageItem;
+}
+
+function applyConversationStateRuntimeToMessages() {
+  const messageList = Array.isArray(props.activeSession?.messages)
+    ? props.activeSession.messages
+    : [];
+  messageList.forEach((messageItem) => applyConversationStateRuntimeToMessage(messageItem));
+}
+
+watch(
+  () => [
+    props.activeSession?.id,
+    props.activeSession?.backendSessionId,
+    Array.isArray(props.activeSession?.messages) ? props.activeSession.messages.length : 0,
+    props.conversationStateSnapshot,
+  ],
+  () => applyConversationStateRuntimeToMessages(),
+  { deep: true, immediate: true },
+);
 
 function getMessageAnchorId(messageItem = {}, messageIndex = 0) {
   return `chat-message-${getMessageRenderKey(messageItem, messageIndex)

@@ -181,6 +181,7 @@ defineExpose({
           :is-image-mime="isImageMime"
           :empty-logo-src="emptyLogoSrc"
           :sending="sending"
+          :conversation-state-snapshot="conversationStateSnapshot"
           :delete-monotonic-message="deleteMonotonicMessage"
           :resend-monotonic-message="resendMonotonicMessage"
           @open-thinking-details="emit('open-thinking-details', $event)"

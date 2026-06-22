@@ -441,6 +441,54 @@ test("reconnect state should be isolated between different users", () => {
   assert.deepEqual(reconnectData?.data?.sessions || [], []);
 });
 
+test("live business event broadcast should include channel sessionId without overriding upstream sessionId", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
+  const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
+  channel.status = "running";
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.attachSubscriber(channel, client);
+
+  const thinkingEnvelope = manager.pushChannelEvent(channel, "thinking", {
+    dialogProcessId: "dp-1",
+    seq: 1,
+  });
+  manager.broadcastChannelEvent(channel, thinkingEnvelope);
+
+  const deltaEnvelope = manager.pushChannelEvent(channel, "delta", {
+    sessionId: "upstream-session",
+    dialogProcessId: "dp-1",
+    seq: 2,
+  });
+  manager.broadcastChannelEvent(channel, deltaEnvelope);
+
+  const businessEvents = client.sentEvents.filter((item) => item?.event !== "channel_state");
+  assert.equal(businessEvents[0]?.data?.sessionId, "session-1");
+  assert.equal(businessEvents[1]?.data?.sessionId, "upstream-session");
+  assert.equal(thinkingEnvelope?.data?.sessionId, undefined);
+});
+
+test("event replay should include channel sessionId without mutating cached envelope", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
+  const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
+  channel.status = "running";
+
+  const envelope = manager.pushChannelEvent(channel, "thinking", {
+    dialogProcessId: "dp-1",
+    seq: 1,
+  });
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+
+  manager.replayChannelEvents(channel, client, 0);
+
+  assert.equal(client.sentEvents[0]?.data?.sessionId, "session-1");
+  assert.equal(envelope?.data?.sessionId, undefined);
+});
+
 test("broadcast event order should be identical across same-channel clients", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });

@@ -59,6 +59,7 @@ export async function applyReconnectMessagesToActiveSessionReplay({
   envelopeCallbacks,
   markReconnectSequenceApplied: markSequenceApplied,
   scrollBottom,
+  processStore,
 } = {}) {
   return applyReconnectReplayBatchToActiveSession({
     activeSession,
@@ -81,5 +82,6 @@ export async function applyReconnectMessagesToActiveSessionReplay({
     envelopeCallbacks,
     markReconnectSequenceApplied: markSequenceApplied,
     scrollBottom,
+    processStore,
   });
 }

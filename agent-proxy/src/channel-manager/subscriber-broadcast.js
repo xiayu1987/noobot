@@ -38,6 +38,23 @@ detachSocketFromAllChannels(socket) {
 
 // ---- Replay & Broadcast ----
 
+_withChannelSessionScope(channel, envelope = {}) {
+  if (!channel || !envelope?.data || typeof envelope.data !== "object") {
+    return envelope;
+  }
+  const existingSessionId = String(envelope?.data?.sessionId || "").trim();
+  if (existingSessionId) return envelope;
+  const channelSessionId = this._extractSessionIdFromChannelKey?.(channel.key);
+  if (!channelSessionId) return envelope;
+  return {
+    ...envelope,
+    data: {
+      sessionId: channelSessionId,
+      ...envelope.data,
+    },
+  };
+}
+
 replayChannelEvents(channel, targetSocket, lastSequence = 0) {
   if (!channel || !targetSocket) return;
   const expectedSequence = Math.max(0, Number(lastSequence || 0));
@@ -45,7 +62,7 @@ replayChannelEvents(channel, targetSocket, lastSequence = 0) {
     (eventEnvelope) => Number(eventEnvelope?.sequence || 0) > expectedSequence,
   );
   for (const eventEnvelope of replayEvents) {
-    this.sendSocketEvent(targetSocket, eventEnvelope);
+    this.sendSocketEvent(targetSocket, this._withChannelSessionScope(channel, eventEnvelope));
   }
   targetSocket.__agentProxyLastSequenceByChannel =
     targetSocket.__agentProxyLastSequenceByChannel || {};
@@ -63,8 +80,9 @@ syncSocketToChannelTail(channel, targetSocket) {
 
 broadcastChannelEvent(channel, envelope) {
   if (!channel || !envelope) return;
+  const scopedEnvelope = this._withChannelSessionScope(channel, envelope);
   for (const subscriberSocket of channel.subscribers) {
-    this.sendSocketEvent(subscriberSocket, envelope);
+    this.sendSocketEvent(subscriberSocket, scopedEnvelope);
     subscriberSocket.__agentProxyLastSequenceByChannel =
       subscriberSocket.__agentProxyLastSequenceByChannel || {};
     subscriberSocket.__agentProxyLastSequenceByChannel[channel.key] = Number(

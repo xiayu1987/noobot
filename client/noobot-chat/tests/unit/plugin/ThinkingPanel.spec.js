@@ -1,6 +1,7 @@
 import { mount } from "@vue/test-utils";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ThinkingPanel from "../../../src/shared/message/ThinkingPanel.vue";
+import { rememberThinkingStarted } from "../../../src/composables/chat/thinkingTimingRegistry";
 
 vi.mock("../../../src/shared/ui", async () => {
   const { defineComponent, h } = await import("vue");
@@ -126,6 +127,54 @@ function mountThinkingPanel(messageItem, props = {}) {
 }
 
 describe("ThinkingPanel", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("keeps pending elapsed time after orphan edit-resend refresh from persisted client turn start", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-22T10:00:12.000Z"));
+    rememberThinkingStarted({
+      sessionId: "local-session-before-promotion",
+      clientTurnId: "client-turn-orphan-resend",
+      startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
+    });
+
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: true,
+      sessionId: "backend-session-after-refresh",
+      clientTurnId: "client-turn-orphan-resend",
+      // This mirrors the refresh path: the assistant is still running, but the
+      // refreshed message does not carry backend timing fields yet.
+      ts: "2026-06-22T10:00:12.000Z",
+      channelState: { state: "sending" },
+    });
+
+    expect(wrapper.text()).toContain("00:12");
+  });
+
+  it("keeps pending elapsed time after refresh from channel state createdAt", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-22T10:00:12.000Z"));
+
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: true,
+      channelState: {
+        state: "sending",
+        createdAt: "2026-06-22T10:00:00.000Z",
+        createdAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
+      },
+    });
+
+    expect(wrapper.text()).toContain("00:12");
+  });
+
   it("prefers process-derived execution fields while keeping legacy fallback", () => {
     const wrapper = mountThinkingPanel({
       role: "assistant",

@@ -6,6 +6,7 @@
 import { RoleEnum } from "../../../shared/constants/chatConstants";
 import { zhCNMessages } from "noobot-i18n/client/locales/zh-CN";
 import { enUSMessages } from "noobot-i18n/client/locales/en-US";
+import { rememberThinkingStarted } from "../thinkingTimingRegistry";
 
 export function prepareChatSend({
   input,
@@ -49,6 +50,13 @@ export function prepareChatSend({
   }
 
   const botMessage = appendMessage(RoleEnum.ASSISTANT, "", []);
+  const sessionId = String(activeSession.value?.backendSessionId || activeSession.value?.id || "");
+  const thinkingStartedAtMs = Date.now();
+  const thinkingStartedAt = new Date(thinkingStartedAtMs).toISOString();
+  botMessage.sessionId = sessionId;
+  botMessage.session_id = sessionId;
+  botMessage.thinkingStartedAt = thinkingStartedAt;
+  botMessage.thinking_started_at = thinkingStartedAt;
   botMessage.pending = true;
   botMessage.hasFirstStreamEvent = false;
   botMessage.statusLabel = "";
@@ -58,11 +66,18 @@ export function prepareChatSend({
   botMessage.tool_calls = [];
   botMessage.executionLogTotal = 0;
   botMessage.clientTurnId = String(clientTurnId || "").trim();
+  rememberThinkingStarted({
+    sessionId,
+    clientTurnId: botMessage.clientTurnId,
+    startedAtMs: thinkingStartedAtMs,
+  });
   applyConversationState(
     {
       state: "sending",
-      sessionId: String(activeSession.value?.backendSessionId || activeSession.value?.id || ""),
+      sessionId,
       clientTurnId: botMessage.clientTurnId,
+      createdAtMs: thinkingStartedAtMs,
+      createdAt: thinkingStartedAt,
     },
     { botMessage },
   );

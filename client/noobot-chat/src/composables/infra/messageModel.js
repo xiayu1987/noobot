@@ -129,13 +129,28 @@ function createMessageModel(messageItem = {}) {
     messageItem?.messageId || messageItem?.message_id || messageItem?.id || "",
   ).trim();
   const turnId = String(messageItem?.turnId || messageItem?.turn_id || "").trim();
+  const sessionId = String(messageItem?.sessionId || messageItem?.session_id || "").trim();
   const clientTurnId = String(messageItem?.clientTurnId || messageItem?.client_turn_id || "").trim();
+  const thinkingStartedAt =
+    messageItem?.thinkingStartedAt || messageItem?.thinking_started_at || "";
+  const thinkingFinishedAt =
+    messageItem?.thinkingFinishedAt || messageItem?.thinking_finished_at || "";
+  const messageTimestamp =
+    messageItem.ts ||
+    messageItem.timestamp ||
+    messageItem.createdAt ||
+    messageItem.created_at ||
+    messageItem.updatedAt ||
+    messageItem.updated_at ||
+    "";
   return {
     id: messageItem.id || "",
     messageId,
     message_id: messageId,
     turnId,
     turn_id: turnId,
+    sessionId,
+    session_id: sessionId,
     clientTurnId,
     client_turn_id: clientTurnId,
     role: messageItem.role || "assistant",
@@ -162,6 +177,10 @@ function createMessageModel(messageItem = {}) {
     thinkingDetailCount: Number(
       messageItem?.thinkingDetailCount ?? messageItem?.thinking_detail_count ?? 0,
     ),
+    thinkingStartedAt,
+    thinking_started_at: thinkingStartedAt,
+    thinkingFinishedAt,
+    thinking_finished_at: thinkingFinishedAt,
     thinkingOpenNames: normalizeArray(messageItem.thinkingOpenNames),
     expandedDetailLogKeys: normalizeArray(messageItem.expandedDetailLogKeys),
     error: messageItem.error || "",
@@ -171,7 +190,7 @@ function createMessageModel(messageItem = {}) {
     channelState: messageItem.channelState || "",
     statusLabel: messageItem.statusLabel || "",
     hasFirstStreamEvent: messageItem.hasFirstStreamEvent === true,
-    ts: messageItem.ts || new Date().toISOString(),
+    ts: messageTimestamp || new Date().toISOString(),
     monotonicState: messageItem.monotonicState || "",
     stopState: messageItem.stopState || "",
     isMonotonic: messageItem.isMonotonic === true || messageItem.monotonic === true,

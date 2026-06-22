@@ -12,6 +12,7 @@ export async function applyReconnectEventReplay({
   data,
   replayCache,
   isCurrentActiveSession,
+  isCurrentActiveDialogProcess,
   consumeReplayCacheForSession,
   applyReconnectMessagesToActiveSession,
   applyChannelState,
@@ -25,6 +26,11 @@ export async function applyReconnectEventReplay({
   const sessionId = _trimStr(data?.sessionId);
   if (sessionId && isCurrentActiveSession(sessionId)) {
     await consumeReplayCacheForSession(sessionId);
+    await applyReconnectMessagesToActiveSession([{ event, data }], dialogProcessId);
+    return;
+  }
+
+  if (!sessionId && dialogProcessId && isCurrentActiveDialogProcess?.(dialogProcessId)) {
     await applyReconnectMessagesToActiveSession([{ event, data }], dialogProcessId);
     return;
   }

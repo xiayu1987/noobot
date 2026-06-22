@@ -117,6 +117,34 @@ test("reconnect should replay unresolved interaction_request with pending marker
   assert.equal(pendingInteractionEnvelope?.data?.__agentProxyPendingInteraction, true);
 });
 
+test("reconnect_data replay messages should include channel sessionId", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
+  const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
+  channel.status = "running";
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+
+  const envelope = manager.pushChannelEvent(channel, "thinking", {
+    dialogProcessId: "dp-1",
+    seq: 1,
+  });
+
+  const socket = createMockSocket();
+  socket.__agentProxyChannelKeys.add(channelKey);
+
+  manager.handleReconnect(socket, {
+    currentSessionId: "session-1",
+    lastReceivedSeqMap: { "dp-1": 0 },
+  });
+
+  const reconnectDataEvent = getReconnectDataEvent(socket);
+  assert.ok(reconnectDataEvent, "should send reconnect_data event");
+  const replayMessages = listReplayMessages(reconnectDataEvent);
+  assert.equal(replayMessages[0]?.data?.sessionId, "session-1");
+  assert.equal(envelope?.data?.sessionId, undefined);
+});
+
 test("reconnect should replay only events with seq greater than lastReceivedSeq", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
