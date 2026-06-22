@@ -29,6 +29,11 @@ function markFirstStreamEvent(botMessage) {
   botMessage.hasFirstStreamEvent = true;
 }
 
+function notifySendingStartedWhenDialogReady({ botMessage, locateSendingStartedMessageOnce }) {
+  if (!normalizeTrimmedString(botMessage?.dialogProcessId)) return;
+  locateSendingStartedMessageOnce?.();
+}
+
 function applyProcessCompatViewToMessage({ botMessage, processStore, processId }) {
   if (!botMessage || !processStore || !processId) return;
   const compatView = processStore.getCompatView?.(processId);
@@ -53,6 +58,7 @@ export function handleThinkingStreamEvent({
   classifyRealtimeLog,
   scrollOnFirstResponseOnce,
   processStore,
+  locateSendingStartedMessageOnce,
 }) {
   const item = sanitizeExecutionLogForDisplay(classifyRealtimeLog(data));
   if (!item || !normalizeTrimmedString(item.text)) {
@@ -61,6 +67,7 @@ export function handleThinkingStreamEvent({
   if (!item.subAgentCall && item.dialogProcessId) {
     botMessage.dialogProcessId = item.dialogProcessId;
   }
+  notifySendingStartedWhenDialogReady({ botMessage, locateSendingStartedMessageOnce });
   markFirstStreamEvent(botMessage);
   botMessage.executionLogTotal = Number(botMessage.executionLogTotal || 0) + 1;
   botMessage.realtimeLogs = [...(botMessage.realtimeLogs || []), item].slice(-10);
@@ -76,11 +83,17 @@ export function handleThinkingStreamEvent({
   scrollOnFirstResponseOnce();
 }
 
-export function handleDeltaStreamEvent({ data, botMessage, scrollOnFirstResponseOnce }) {
+export function handleDeltaStreamEvent({
+  data,
+  botMessage,
+  scrollOnFirstResponseOnce,
+  locateSendingStartedMessageOnce,
+}) {
   const chunkText = stripInternalEventPlaceholderLines(data?.text || "");
   if (data?.dialogProcessId && !normalizeTrimmedString(botMessage.dialogProcessId)) {
     botMessage.dialogProcessId = normalizeTrimmedString(data.dialogProcessId);
   }
+  notifySendingStartedWhenDialogReady({ botMessage, locateSendingStartedMessageOnce });
   botMessage.content += chunkText;
   if (chunkText) {
     markFirstStreamEvent(botMessage);
@@ -154,10 +167,12 @@ export function handleDoneStreamEvent({
   mergeAssistantAttachmentMetas,
   locateDoneMessage,
   processStore,
+  locateSendingStartedMessageOnce,
 }) {
   clearPendingInteraction();
   markFirstStreamEvent(botMessage);
   botMessage.dialogProcessId = data?.dialogProcessId || botMessage.dialogProcessId || "";
+  notifySendingStartedWhenDialogReady({ botMessage, locateSendingStartedMessageOnce });
   const executionSummarySteps = Array.isArray(data?.executionSummary?.steps)
     ? data.executionSummary.steps
     : [];
@@ -188,6 +203,7 @@ export function handleDoneStreamEvent({
           .find(Boolean);
         if (latestDialogProcessId) {
           botMessage.dialogProcessId = latestDialogProcessId;
+          notifySendingStartedWhenDialogReady({ botMessage, locateSendingStartedMessageOnce });
         }
       }
       const processEvents = createProcessEventsFromDonePayload(data, {
