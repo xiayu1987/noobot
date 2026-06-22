@@ -184,10 +184,8 @@ export function applyReconnectChannelState({
       scheduleCacheExpiredSessionRefresh({ sessionId, dialogProcessId, targetAssistantMessage });
     }
     sending.value = false;
-    if (["completed", "stopped", "error", "no_conversation", "expired"].includes(state)) {
-      if (typeof clearPendingInteractionIfObsolete === "function") {
-        clearPendingInteractionIfObsolete({ sessionId, dialogProcessId });
-      }
+    if (typeof clearPendingInteractionIfObsolete === "function") {
+      clearPendingInteractionIfObsolete({ sessionId, dialogProcessId });
     }
     clearMissingInteractionPayloadTimer(missingInteractionPayloadTimers, { sessionId, dialogProcessId });
     if (state === "no_conversation" || state === "expired") {
@@ -201,6 +199,8 @@ export function applyReconnectChannelState({
       if (state === "completed") {
         targetAssistantMessage.statusLabel = translate("chat.generated");
       } else if (state === "stopped") {
+        targetAssistantMessage.statusLabel = translate("chat.stopped");
+      } else if (state === "cancelled" || state === "canceled") {
         targetAssistantMessage.statusLabel = translate("chat.stopped");
       } else if (state === "error") {
         targetAssistantMessage.statusLabel = translate("chat.failed");

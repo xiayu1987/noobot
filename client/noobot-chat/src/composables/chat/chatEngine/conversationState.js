@@ -395,7 +395,7 @@ export function createChatEngineConversationState({
       targetAssistantMessage.statusLabel = translate("chat.generated");
       return;
     }
-    if (state === "stopped") {
+    if (state === "stopped" || state === "cancelled" || state === "canceled") {
       targetAssistantMessage.statusLabel = translate("chat.stopped");
       if (!String(targetAssistantMessage.content || "").trim()) {
         targetAssistantMessage.content = translate("chat.stoppedContent");
