@@ -72,6 +72,12 @@ function envList(name, fileKey, defaultValue = "") {
     .filter(Boolean);
 }
 
+function normalizePathPrefix(value) {
+  const normalizedValue = String(value || "").trim();
+  if (!normalizedValue || normalizedValue === "/") return "";
+  return normalizedValue.startsWith("/") ? normalizedValue : `/${normalizedValue}`;
+}
+
 export const config = {
   proxyPort: envNumber("AGENT_PROXY_PORT", "proxyPort", 10062, 1),
   proxyHost: envString("AGENT_PROXY_HOST", "proxyHost", "0.0.0.0"),
@@ -207,6 +213,9 @@ export const config = {
   ),
   replayOnReconnect: envBoolean("AGENT_PROXY_REPLAY_ON_RECONNECT", "replayOnReconnect", false),
   maxReplayEvents: envNumber("AGENT_PROXY_MAX_REPLAY_EVENTS", "maxReplayEvents", 5000, 100),
+  upstreamHttpStripPrefix: normalizePathPrefix(
+    envString("AGENT_PROXY_UPSTREAM_HTTP_STRIP_PREFIX", "upstreamHttpStripPrefix", "/api"),
+  ),
   wsPaths: ["/chat/ws", "/api/chat/ws", "/agent-proxy/ws", "/api/agent-proxy/ws"],
   connectPaths: ["/internal/connect", "/api/internal/connect"],
 };

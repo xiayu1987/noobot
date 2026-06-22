@@ -231,6 +231,54 @@ test("session-routes: replace-turn 路由透传请求体并返回后端快照", 
   });
 });
 
+test("session-routes: replace-turn 兼容 /api/internal 前缀", async () => {
+  const calls = [];
+  const app = express();
+  app.use(express.json());
+  registerSessionRoutes(app, {
+    bot: {
+      session: {
+        getSessionData: async () => ({}),
+        getRootSessionId: async () => "",
+        deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
+        getAllSessionsData: async () => [],
+        replaceTurn: async (payload) => {
+          calls.push(payload);
+          return {
+            session: { sessionId: payload.sessionId, messages: [], version: 5 },
+            newTurn: { turnId: "turn-api", messageId: "msg-api" },
+            version: 5,
+          };
+        },
+      },
+      getAttachmentById: async () => null,
+    },
+    handleChat: (_req, res) => res.json({ ok: true }),
+    getConnectorChannelStore: () => ({}),
+    getConnectorHistoryStore: () => ({}),
+    translateText: () => "",
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/internal/session/admin/93606d58-60eb-4ca4-bccf-c926e67e1fed/messages/replace-turn`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        anchor: { turnId: "turn_mqonamla_4ydpk150" },
+        newContent: "edited content",
+        expectedVersion: 2,
+      }),
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].userId, "admin");
+    assert.equal(calls[0].sessionId, "93606d58-60eb-4ca4-bccf-c926e67e1fed");
+    assert.deepEqual(calls[0].anchor, { turnId: "turn_mqonamla_4ydpk150" });
+  });
+});
+
 test("session-routes: replace-turn 保留服务层 404/409 状态码", async () => {
   const app = express();
   app.use(express.json());

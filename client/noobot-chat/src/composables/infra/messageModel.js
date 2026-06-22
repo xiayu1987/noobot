@@ -125,9 +125,16 @@ function createMessageModel(messageItem = {}) {
       : null;
   const transferEnvelopes = getMessageTransferEnvelopes(messageItem);
   const workflowMeta = normalizeWorkflowMeta(messageItem);
+  const messageId = String(
+    messageItem?.messageId || messageItem?.message_id || messageItem?.id || "",
+  ).trim();
+  const turnId = String(messageItem?.turnId || messageItem?.turn_id || "").trim();
   return {
     id: messageItem.id || "",
-    messageId: messageItem.messageId || messageItem.id || "",
+    messageId,
+    message_id: messageId,
+    turnId,
+    turn_id: turnId,
     role: messageItem.role || "assistant",
     content: messageItem.content || "",
     type: messageItem.type || "message",
@@ -186,7 +193,9 @@ function buildAppendMessage(role, content = "", attachmentMetas = [], options = 
 }
 
 function resolveStableMessageIdentity(messageItem = {}) {
-  return String(messageItem?.messageId || messageItem?.id || "").trim();
+  return String(
+    messageItem?.messageId || messageItem?.message_id || messageItem?.id || "",
+  ).trim();
 }
 
 function buildViewMessage(

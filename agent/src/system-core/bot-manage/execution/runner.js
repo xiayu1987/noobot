@@ -283,19 +283,28 @@ export class SessionExecutionRunner {
         ? runtimeAgentContext.payload.messages.history
         : [];
 
-      await this.appendSessionTurn({
-        userId,
-        sessionId: usedSessionId,
-        parentSessionId,
-        role: MESSAGE_ROLE.USER,
-        content: normalizedMessage,
-        type: MESSAGE_TYPE.MESSAGE,
-        frontendUserMessage: true,
-        attachmentMetas: userMessageAttachmentMetas,
-        dialogProcessId,
-        parentDialogProcessId,
-        eventListener: runtimeEventListener,
-      });
+      if (resolvedRunConfig?.reuseExistingUserTurn !== true) {
+        await this.appendSessionTurn({
+          userId,
+          sessionId: usedSessionId,
+          parentSessionId,
+          role: MESSAGE_ROLE.USER,
+          content: normalizedMessage,
+          type: MESSAGE_TYPE.MESSAGE,
+          frontendUserMessage: true,
+          attachmentMetas: userMessageAttachmentMetas,
+          dialogProcessId,
+          parentDialogProcessId,
+          eventListener: runtimeEventListener,
+        });
+      } else {
+        emitEvent(runtimeEventListener, "user_message_reused", {
+          sessionId: usedSessionId,
+          dialogProcessId,
+          turnId: String(resolvedRunConfig?.existingUserTurnId || "").trim(),
+          messageId: String(resolvedRunConfig?.existingUserMessageId || "").trim(),
+        });
+      }
 
       const beforeAgentDispatchContext = {
         ...botHookBase,

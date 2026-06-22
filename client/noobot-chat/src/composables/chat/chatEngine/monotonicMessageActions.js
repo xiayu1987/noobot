@@ -20,14 +20,24 @@ function getDialogProcessId(message = {}) {
 }
 
 function findMessageIndex(targetMessage = {}, messages = []) {
-  const targetId = normalizeTrimmedString(targetMessage?.id || targetMessage?.messageId);
+  const targetTurnId = normalizeTrimmedString(targetMessage?.turnId || targetMessage?.turn_id);
+  const targetId = normalizeTrimmedString(
+    targetMessage?.messageId || targetMessage?.message_id || targetMessage?.id,
+  );
   const targetTs = targetMessage?.ts;
   const targetDialogProcessId = getDialogProcessId(targetMessage);
   const targetRole = normalizeTrimmedString(targetMessage?.role).toLowerCase();
   const targetContent = normalizeTrimmedString(targetMessage?.content);
   return messages.findIndex((message) => {
     if (message === targetMessage) return true;
-    if (targetId && normalizeTrimmedString(message?.id || message?.messageId) === targetId) return true;
+    if (
+      targetTurnId &&
+      normalizeTrimmedString(message?.turnId || message?.turn_id) === targetTurnId
+    ) return true;
+    if (
+      targetId &&
+      normalizeTrimmedString(message?.messageId || message?.message_id || message?.id) === targetId
+    ) return true;
     if (targetTs !== undefined && message?.ts === targetTs) return true;
     if (
       targetDialogProcessId &&
@@ -44,9 +54,11 @@ function findMessageIndex(targetMessage = {}, messages = []) {
 }
 
 function buildMonotonicMessageAnchor(targetMessage = {}) {
-  const turnId = normalizeTrimmedString(targetMessage?.turnId);
+  const turnId = normalizeTrimmedString(targetMessage?.turnId || targetMessage?.turn_id);
   if (turnId) return { turnId };
-  const messageId = normalizeTrimmedString(targetMessage?.id || targetMessage?.messageId);
+  const messageId = normalizeTrimmedString(
+    targetMessage?.messageId || targetMessage?.message_id || targetMessage?.id,
+  );
   if (messageId) return { messageId };
   const dialogProcessId = normalizeTrimmedString(
     targetMessage?.dialogProcessId || targetMessage?.dialogId,
@@ -202,7 +214,7 @@ export function createMonotonicMessageActions({
     if (!userTargetMessage) return false;
     if (typeof deleteSessionMessagesFromApi === "function") {
       const sessionId = normalizeTrimmedString(
-        activeSession.value?.backendSessionId || activeSessionId.value,
+        activeSession.value?.backendSessionId || activeSession.value?.sessionId || activeSessionId.value,
       );
       const result = await deleteSessionMessagesFromApi({
         userId: userId?.value || userId,
