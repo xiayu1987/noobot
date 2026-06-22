@@ -59,6 +59,16 @@ const STOP_LOCK_STATES = Object.freeze([
   SESSION_RUN_STATE.CANCELED,
 ]);
 
+const UNBOUND_LOCAL_SEND_BINDING_STATES = Object.freeze([
+  SESSION_RUN_STATE.SENDING,
+  SESSION_RUN_STATE.RECONNECTING,
+]);
+
+const UNBOUND_LOCAL_SEND_IGNORED_UNSCOPED_CHANNEL_STATES = Object.freeze([
+  ...TERMINAL_STATES,
+  SESSION_RUN_STATE.STOPPING,
+]);
+
 const STATE_PRIORITY = Object.freeze({
   [SESSION_RUN_STATE.IDLE]: 0,
   [SESSION_RUN_STATE.SENDING]: 40,
@@ -128,12 +138,30 @@ function shouldIgnoreEventForUnboundLocalSend(current = {}, event = {}) {
   if (event.type === SESSION_RUN_EVENT.LOCAL_SEND_STARTED) return false;
   if (event.type === SESSION_RUN_EVENT.LOCAL_STOP_REQUESTED) return false;
   const eventDialogProcessId = trim(event.dialogProcessId);
-  if ([SESSION_RUN_STATE.SENDING, SESSION_RUN_STATE.RECONNECTING].includes(event.state)) return false;
+  if (UNBOUND_LOCAL_SEND_BINDING_STATES.includes(event.state)) return false;
   if (!eventDialogProcessId && event.type === SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE) {
-    return isTerminalSessionRunState(event.state) || event.state === SESSION_RUN_STATE.STOPPING;
+    return UNBOUND_LOCAL_SEND_IGNORED_UNSCOPED_CHANNEL_STATES.includes(event.state);
   }
   if (!eventDialogProcessId) return false;
   return true;
+}
+
+function resolveNextDialogProcessId(current = {}, event = {}) {
+  return trim(event.dialogProcessId) || trim(current.dialogProcessId);
+}
+
+function resolveNextDialogProcessBound(current = {}, event = {}, { startsNewTurn = false } = {}) {
+  if (event.type === SESSION_RUN_EVENT.LOCAL_SEND_STARTED) return Boolean(trim(event.dialogProcessId));
+  const currentDialogProcessBound = current.dialogProcessBound ?? Boolean(trim(current.dialogProcessId));
+  return Boolean(trim(event.dialogProcessId)) || (!startsNewTurn && Boolean(currentDialogProcessBound));
+}
+
+function resolveNextLocalSendUnbound(current = {}, event = {}, { nextDialogProcessBound = false } = {}) {
+  if (event.type === SESSION_RUN_EVENT.LOCAL_SEND_STARTED) return !Boolean(trim(event.dialogProcessId));
+  return !Boolean(trim(event.dialogProcessId)) &&
+    !nextDialogProcessBound &&
+    event.state === SESSION_RUN_STATE.SENDING &&
+    current.localSendUnbound === true;
 }
 
 export function isTerminalSessionRunState(state = "") {
@@ -204,10 +232,9 @@ export function transitionSessionRunState(currentState = createInitialSessionRun
   const eventSeq = Number(event.seq || 0);
   const staleSeq = eventSeq > 0 && currentSeq > 0 && eventSeq < currentSeq;
   const startsNewTurn = shouldStartNewTurn(current, event);
-  const currentDialogProcessBound = current.dialogProcessBound ?? Boolean(trim(current.dialogProcessId));
   const wouldReopenStop = isStopLockedSessionRunState(current.state) &&
     !startsNewTurn &&
-    [SESSION_RUN_STATE.SENDING, SESSION_RUN_STATE.RECONNECTING].includes(event.state);
+    UNBOUND_LOCAL_SEND_BINDING_STATES.includes(event.state);
   const wouldLeaveTerminal = isTerminalSessionRunState(current.state) &&
     !startsNewTurn &&
     !isTerminalSessionRunState(event.state);
@@ -216,18 +243,9 @@ export function transitionSessionRunState(currentState = createInitialSessionRun
   if (staleSeq && nextPriority <= currentPriority) return current;
   if (nextPriority < currentPriority && !startsNewTurn) return current;
 
-  const nextDialogProcessId = startsNewTurn
-    ? event.dialogProcessId || trim(current.dialogProcessId)
-    : event.dialogProcessId || trim(current.dialogProcessId);
-  const nextDialogProcessBound = event.type === SESSION_RUN_EVENT.LOCAL_SEND_STARTED
-    ? Boolean(event.dialogProcessId)
-    : Boolean(event.dialogProcessId) || (!startsNewTurn && Boolean(currentDialogProcessBound));
-  const nextLocalSendUnbound = event.type === SESSION_RUN_EVENT.LOCAL_SEND_STARTED
-    ? !Boolean(event.dialogProcessId)
-    : !Boolean(event.dialogProcessId) &&
-      !nextDialogProcessBound &&
-      normalizeState(event.state) === SESSION_RUN_STATE.SENDING &&
-      current.localSendUnbound === true;
+  const nextDialogProcessId = resolveNextDialogProcessId(current, event);
+  const nextDialogProcessBound = resolveNextDialogProcessBound(current, event, { startsNewTurn });
+  const nextLocalSendUnbound = resolveNextLocalSendUnbound(current, event, { nextDialogProcessBound });
 
   return {
     state: event.state,
@@ -352,8 +370,9 @@ export function resolveRememberedStopRequestedEvent({ sessionId = "", dialogProc
   const normalizedDialogProcessId = trim(dialogProcessId);
   if (!normalizedSessionId) return null;
   const timestamp = nowMs();
-  const freshEntries = readStopRequests().filter((entry) => isFreshStopRequest(entry, timestamp));
-  if (freshEntries.length !== readStopRequests().length) writeStopRequests(freshEntries);
+  const entries = readStopRequests();
+  const freshEntries = entries.filter((entry) => isFreshStopRequest(entry, timestamp));
+  if (freshEntries.length !== entries.length) writeStopRequests(freshEntries);
   const match = freshEntries.find((entry) => {
     if (trim(entry.sessionId) !== normalizedSessionId) return false;
     const entryDialogProcessId = trim(entry.dialogProcessId);
