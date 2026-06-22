@@ -9,7 +9,25 @@ import {
   resolveDialogProcessIdFromReplay,
   splitReconnectMessagesByDialogProcessId,
 } from "../../infra/reconnectReplayModel";
+import {
+  isInFlightConversationState,
+  isTerminalConversationState,
+} from "./conversationState";
 import { _trimStr } from "./utils";
+
+function resolveReconnectSessionSendingFromStates(sessionEntry = null) {
+  const stateEntries = Array.isArray(sessionEntry?.conversationStates)
+    ? sessionEntry.conversationStates
+    : [];
+  if (!stateEntries.length) return null;
+  let restoredSending = null;
+  for (const stateEntry of stateEntries) {
+    const state = _trimStr(stateEntry?.state);
+    if (isInFlightConversationState(state)) restoredSending = true;
+    if (isTerminalConversationState(state)) restoredSending = false;
+  }
+  return restoredSending;
+}
 
 export async function applyReconnectDataReplay({
   reconnectData,
@@ -85,6 +103,14 @@ export async function applyReconnectDataReplay({
       applyChannelState(stateEntry);
     });
   });
+
+  if (recoverableSessionId && isCurrentActiveSession(recoverableSessionId)) {
+    const recoverableSessionEntry = reconnectSessions.find(
+      (sessionEntry) => _trimStr(sessionEntry?.sessionId) === recoverableSessionId,
+    );
+    const restoredSending = resolveReconnectSessionSendingFromStates(recoverableSessionEntry);
+    if (restoredSending !== null) sending.value = restoredSending;
+  }
 
   if (reconnectData?.cacheExpired) {
     scheduleCacheExpiredSessionRefresh();

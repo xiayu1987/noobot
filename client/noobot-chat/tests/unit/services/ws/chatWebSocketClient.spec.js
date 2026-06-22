@@ -121,6 +121,34 @@ describe("chatWebSocketClient", () => {
     expect(settled).toBe(false);
   });
 
+  it.each(["cancelled", "canceled"])(
+    "resolves after %s terminal channel_state",
+    async (state) => {
+      const client = createChatWebSocketClient({
+        resolveWebSocketUrl: () => "ws://test",
+        terminalChannelStateGraceMs: 20,
+      });
+      client.connect();
+      const socket = MockWebSocket.instances[0];
+      let resolved = false;
+
+      const streamPromise = client.stream({ action: "chat" }, vi.fn()).then(() => {
+        resolved = true;
+      });
+
+      socket.emit(StreamEventEnum.CHANNEL_STATE, {
+        sessionId: "s-1",
+        dialogProcessId: "dp-1",
+        state,
+        seq: 2,
+      });
+
+      await vi.advanceTimersByTimeAsync(20);
+      await streamPromise;
+      expect(resolved).toBe(true);
+    },
+  );
+
   it("keeps DONE as the immediate stream terminator", async () => {
     const client = createChatWebSocketClient({
       resolveWebSocketUrl: () => "ws://test",

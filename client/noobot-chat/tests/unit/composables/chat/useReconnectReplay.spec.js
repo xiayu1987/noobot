@@ -287,6 +287,39 @@ describe("useReconnectReplay", () => {
     expect(mocks.clearPendingInteraction).toHaveBeenCalled();
   });
 
+  it.each(["cancelled", "canceled"])(
+    "RT-06b: %s state clears pending interaction and stops sending",
+    async (state) => {
+      const { api, refs, mocks } = createFixture();
+      refs.sending.value = true;
+      refs.interactionSubmitting.value = true;
+
+      await api.applyReconnectData({
+        sessions: [
+          {
+            sessionId: "s-1",
+            conversationStates: [
+              {
+                sessionId: "s-1",
+                dialogProcessId: `dp-${state}`,
+                state,
+                seq: 12,
+              },
+            ],
+            dialogProcesses: [],
+          },
+        ],
+      });
+
+      expect(refs.sending.value).toBe(false);
+      expect(refs.interactionSubmitting.value).toBe(false);
+      expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
+        sessionId: "s-1",
+        dialogProcessId: `dp-${state}`,
+      });
+    },
+  );
+
   it("SQ-02/SQ-03: out-of-order and duplicate sequence are deduplicated", async () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [

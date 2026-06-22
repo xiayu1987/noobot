@@ -13,7 +13,13 @@ export function isInFlightConversationState(state = "") {
 }
 
 export function isTerminalConversationState(state = "") {
-  return ["stopped", "completed", "error", "no_conversation", "expired"].includes(
-    _trimStr(state),
-  );
+  return [
+    "stopped",
+    "completed",
+    "error",
+    "no_conversation",
+    "expired",
+    "cancelled",
+    "canceled",
+  ].includes(_trimStr(state));
 }

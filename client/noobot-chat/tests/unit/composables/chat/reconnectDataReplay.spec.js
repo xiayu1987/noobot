@@ -92,4 +92,28 @@ describe("applyReconnectDataReplay", () => {
     expect(fixture.applyChannelState).toHaveBeenCalledWith(stateEntry);
     expect(fixture.scheduleCacheExpiredSessionRefresh).toHaveBeenCalledTimes(1);
   });
+
+  it("restores stopped state after recoverable reconnect data replay", async () => {
+    const fixture = createFixture();
+
+    await applyReconnectDataReplay({
+      reconnectData: {
+        sessions: [
+          {
+            sessionId: "s-1",
+            hasRunningTask: true,
+            conversationStates: [
+              { sessionId: "s-1", dialogProcessId: "dp-stop", state: "sending", seq: 11 },
+              { sessionId: "s-1", dialogProcessId: "dp-stop", state: "stopped", seq: 12 },
+            ],
+            dialogProcesses: [],
+          },
+        ],
+      },
+      ...fixture,
+    });
+
+    expect(fixture.ensureReconnectSessionActive).toHaveBeenCalledWith("s-1");
+    expect(fixture.sending.value).toBe(false);
+  });
 });

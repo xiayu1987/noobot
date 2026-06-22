@@ -320,8 +320,14 @@ export function isInFlightConversationState(state = "") {
 }
 
 export function isTerminalConversationState(state = "") {
-  return ["stopped", "completed", "error", "no_conversation", "expired"].includes(
-    normalizeTrimmedString(state),
-  );
+  return [
+    "stopped",
+    "completed",
+    "error",
+    "no_conversation",
+    "expired",
+    "cancelled",
+    "canceled",
+  ].includes(normalizeTrimmedString(state));
 }
 
