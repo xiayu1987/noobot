@@ -122,6 +122,76 @@ function splitAttachmentMetasByOwner(attachmentMetas = []) {
   return { agent, plugin };
 }
 
+function normalizeMessageText(value = "") {
+  return String(value || "").trim();
+}
+
+function findMessageIndexInLinearTurn(messages = [], targetMessage = {}) {
+  const messageList = Array.isArray(messages) ? messages : [];
+  const objectIndex = messageList.findIndex((messageItem) => messageItem === targetMessage);
+  if (objectIndex >= 0) return objectIndex;
+
+  const targetRole = getMessageRole(targetMessage);
+  const targetDialogProcessId = getMessageDialogProcessId(targetMessage);
+  const targetClientTurnId = String(targetMessage?.clientTurnId || targetMessage?.client_turn_id || "").trim();
+  const targetContent = normalizeMessageText(targetMessage?.content);
+
+  if (targetClientTurnId) {
+    const clientTurnIndex = messageList.findIndex(
+      (messageItem) =>
+        getMessageRole(messageItem) === targetRole &&
+        String(messageItem?.clientTurnId || messageItem?.client_turn_id || "").trim() === targetClientTurnId,
+    );
+    if (clientTurnIndex >= 0) return clientTurnIndex;
+  }
+  if (targetDialogProcessId) {
+    const dialogIndex = messageList.findIndex(
+      (messageItem) =>
+        getMessageRole(messageItem) === targetRole &&
+        getMessageDialogProcessId(messageItem) === targetDialogProcessId,
+    );
+    if (dialogIndex >= 0) return dialogIndex;
+  }
+  if (targetContent) {
+    const contentIndex = messageList.findIndex(
+      (messageItem) =>
+        getMessageRole(messageItem) === targetRole &&
+        normalizeMessageText(messageItem?.content) === targetContent,
+    );
+    if (contentIndex >= 0) return contentIndex;
+  }
+  return -1;
+}
+
+function getLinearTurnBounds(messages = [], targetMessage = {}) {
+  const messageList = Array.isArray(messages) ? messages : [];
+  const targetIndex = findMessageIndexInLinearTurn(messageList, targetMessage);
+  if (targetIndex < 0) return null;
+  let previousUserIndex = -1;
+  for (let index = targetIndex; index >= 0; index -= 1) {
+    if (getMessageRole(messageList[index]) === "user") {
+      previousUserIndex = index;
+      break;
+    }
+  }
+  let nextUserIndex = messageList.length;
+  for (let index = targetIndex + 1; index < messageList.length; index += 1) {
+    if (getMessageRole(messageList[index]) === "user") {
+      nextUserIndex = index;
+      break;
+    }
+  }
+  return { targetIndex, previousUserIndex, nextUserIndex };
+}
+
+function isMessageInsideLinearTurn(messages = [], bounds = null, candidateMessage = {}) {
+  if (!bounds) return true;
+  const messageList = Array.isArray(messages) ? messages : [];
+  const candidateIndex = messageList.findIndex((messageItem) => messageItem === candidateMessage);
+  if (candidateIndex < 0) return true;
+  return candidateIndex > bounds.previousUserIndex && candidateIndex < bounds.nextUserIndex;
+}
+
 function toAttachmentKey(attachmentItem = {}) {
   return String(
     attachmentItem?.attachmentId ||
@@ -365,10 +435,14 @@ export function useMessageFiles({
     const rootDialogProcessId = getMessageDialogProcessId(messageItem);
     if (!rootDialogProcessId) return baseAttachmentMetas;
 
+    const allMessages = Array.isArray(getAllMessages()) ? getAllMessages() : [];
+    const sessionDocMessages = flattenSessionMessages(getSessionDocs());
     const candidateMessages = [
-      ...(Array.isArray(getAllMessages()) ? getAllMessages() : []),
-      ...flattenSessionMessages(getSessionDocs()),
+      ...allMessages,
+      ...sessionDocMessages,
     ];
+    const allMessagesTurnBounds = getLinearTurnBounds(allMessages, messageItem);
+    const sessionDocTurnBounds = getLinearTurnBounds(sessionDocMessages, messageItem);
     const relatedDialogProcessIdSet = collectRelatedDialogProcessIds(
       candidateMessages,
       rootDialogProcessId,
@@ -380,6 +454,16 @@ export function useMessageFiles({
       const messageRole = getMessageRole(sessionMessage);
       const messageDialogProcessId = getMessageDialogProcessId(sessionMessage);
       const messageParentDialogProcessId = getMessageParentDialogProcessId(sessionMessage);
+      // During a live turn, rawMessages can still contain tool attachment events
+      // from previous turns while the current assistant message is being patched.
+      // Keep attachment collection inside the target user->assistant turn window
+      // whenever we can locate both messages in the same linear message list.
+      if (
+        !isMessageInsideLinearTurn(allMessages, allMessagesTurnBounds, sessionMessage) ||
+        !isMessageInsideLinearTurn(sessionDocMessages, sessionDocTurnBounds, sessionMessage)
+      ) {
+        continue;
+      }
       if (!isSameMessageRound(messageItem, sessionMessage)) {
         continue;
       }

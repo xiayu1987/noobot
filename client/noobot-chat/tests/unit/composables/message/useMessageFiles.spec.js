@@ -427,4 +427,71 @@ describe("useMessageFiles", () => {
     expect(displayedAttachmentMetas.value).toEqual([]);
   });
 
+  it("does not collect previous turn tool attachments for a later assistant before refresh", () => {
+    const firstUser = { role: "user", dialogProcessId: "dp-first", content: "生成一张小鸟图" };
+    const firstTool = {
+      role: "tool",
+      dialogProcessId: "dp-first",
+      attachmentMetas: [
+        { attachmentId: "bird-1", name: "generated_image_1.png" },
+      ],
+    };
+    const firstAssistant = {
+      role: "assistant",
+      dialogProcessId: "dp-first",
+      content: "小鸟图片已生成",
+      attachmentMetas: [],
+    };
+    const secondUser = { role: "user", dialogProcessId: "dp-second", content: "你好" };
+    const secondAssistant = {
+      role: "assistant",
+      pending: false,
+      hasFirstStreamEvent: true,
+      dialogProcessId: "dp-second",
+      content: "你好！",
+      attachmentMetas: [],
+    };
+    const allMessages = [firstUser, firstTool, firstAssistant, secondUser, secondAssistant];
+
+    const { displayedAttachmentMetas } = useMessageFiles({
+      getMessageItem: () => secondAssistant,
+      getAllMessages: () => allMessages,
+      getSessionDocs: () => [],
+      getUserId: () => "admin",
+    });
+
+    expect(displayedAttachmentMetas.value).toEqual([]);
+  });
+
+  it("still collects tool attachments from the same linear turn", () => {
+    const firstUser = { role: "user", dialogProcessId: "dp-first", content: "生成一张小鸟图" };
+    const firstTool = {
+      role: "tool",
+      dialogProcessId: "dp-first",
+      attachmentMetas: [
+        { attachmentId: "bird-1", name: "generated_image_1.png" },
+      ],
+    };
+    const firstAssistant = {
+      role: "assistant",
+      dialogProcessId: "dp-first",
+      content: "小鸟图片已生成",
+      attachmentMetas: [],
+    };
+    const secondUser = { role: "user", dialogProcessId: "dp-second", content: "你好" };
+    const secondAssistant = { role: "assistant", dialogProcessId: "dp-second", content: "你好！" };
+    const allMessages = [firstUser, firstTool, firstAssistant, secondUser, secondAssistant];
+
+    const { displayedAttachmentMetas } = useMessageFiles({
+      getMessageItem: () => firstAssistant,
+      getAllMessages: () => allMessages,
+      getSessionDocs: () => [],
+      getUserId: () => "admin",
+    });
+
+    expect(displayedAttachmentMetas.value).toEqual([
+      { attachmentId: "bird-1", attachmentOwnerType: "agent", name: "generated_image_1.png" },
+    ]);
+  });
+
 });

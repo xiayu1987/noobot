@@ -22,7 +22,93 @@ import { enUSMessages } from "noobot-i18n/client/locales/en-US";
 
 // --- 常量集合（避免每次调用 new Set） ---
 const MARKDOWN_EXTS = new Set(["md", "markdown", "mdx"]);
-const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "ico", "avif"]);
+const IMAGE_EXTS = new Set([
+  "png",
+  "jpg",
+  "jpeg",
+  "jfif",
+  "pjpeg",
+  "pjp",
+  "gif",
+  "webp",
+  "bmp",
+  "svg",
+  "ico",
+  "avif",
+  "apng",
+  "tif",
+  "tiff",
+  "heic",
+  "heif",
+]);
+const TEXT_PREVIEW_EXTS = new Set([
+  "txt",
+  "text",
+  "log",
+  "csv",
+  "tsv",
+  "json",
+  "jsonl",
+  "ndjson",
+  "xml",
+  "yaml",
+  "yml",
+  "toml",
+  "ini",
+  "conf",
+  "config",
+  "env",
+  "properties",
+  "gitignore",
+  "gitattributes",
+  "editorconfig",
+  "npmrc",
+  "yarnrc",
+  "dockerignore",
+  "sql",
+  "graphql",
+  "gql",
+  "html",
+  "htm",
+  "css",
+  "scss",
+  "sass",
+  "less",
+  "js",
+  "jsx",
+  "mjs",
+  "cjs",
+  "ts",
+  "tsx",
+  "vue",
+  "svelte",
+  "py",
+  "rb",
+  "php",
+  "java",
+  "c",
+  "cc",
+  "cpp",
+  "cxx",
+  "h",
+  "hpp",
+  "cs",
+  "go",
+  "rs",
+  "swift",
+  "kt",
+  "kts",
+  "scala",
+  "sh",
+  "bash",
+  "zsh",
+  "fish",
+  "ps1",
+  "bat",
+  "cmd",
+  "dockerfile",
+  "makefile",
+]);
 const OFFICE_EXTS = new Set([
   "doc",
   "docx",
@@ -68,6 +154,14 @@ function isImageFile(fileName = "") {
   return IMAGE_EXTS.has(getFileExtension(fileName));
 }
 
+function isTextPreviewFile(fileName = "") {
+  const normalized = String(fileName || "").trim().toLowerCase();
+  if (!normalized) return false;
+  if (isMarkdownFile(normalized)) return true;
+  if (["dockerfile", "makefile", "license", "readme", "changelog"].includes(normalized)) return true;
+  return TEXT_PREVIEW_EXTS.has(getFileExtension(normalized));
+}
+
 function isOfficeFile(fileName = "") {
   return OFFICE_EXTS.has(getFileExtension(fileName));
 }
@@ -80,7 +174,28 @@ function isMarkdownMime(mimeType = "", fileName = "") {
 
 function isTextPreviewMime(mimeType = "") {
   const mime = String(mimeType || "").trim().toLowerCase();
-  return mime.startsWith("text/") || ["json", "xml", "yaml", "javascript"].some((kw) => mime.includes(kw));
+  if (!mime) return false;
+  return mime.startsWith("text/") || [
+    "json",
+    "xml",
+    "yaml",
+    "yml",
+    "toml",
+    "csv",
+    "javascript",
+    "ecmascript",
+    "typescript",
+    "x-sh",
+    "shellscript",
+    "sql",
+    "graphql",
+    "x-www-form-urlencoded",
+  ].some((kw) => mime.includes(kw));
+}
+
+function isImagePreviewType(mimeType = "", fileName = "", isImageMimeChecker = () => false) {
+  const mime = String(mimeType || "").trim().toLowerCase();
+  return Boolean(isImageMimeChecker(mime)) || mime.startsWith("image/") || isImageFile(fileName);
 }
 
 function isAudioPreviewMime(mimeType = "") {
@@ -380,11 +495,12 @@ export function useMessagePreview({
     if (officeLike) return hasParsedResult(attachmentItem);
     // Source preview is allowed for image/audio/video/text.
     return (
-      isImageMime(mimeType) ||
+      isImagePreviewType(mimeType, name, isImageMime) ||
       mimeType.startsWith("video/") ||
       isAudioPreviewMime(mimeType) ||
       isTextPreviewMime(mimeType) ||
-      isMarkdownMime(mimeType, name)
+      isMarkdownMime(mimeType, name) ||
+      isTextPreviewFile(name)
     );
   }
 
@@ -398,7 +514,7 @@ export function useMessagePreview({
     const targetUrl = officeLike ? parsedResultUrl : sourceUrl;
     if (!targetUrl) return;
 
-    const isImage = !officeLike && isImageMime(mimeType);
+    const isImage = !officeLike && isImagePreviewType(mimeType, name, isImageMime);
     const isVideo = !officeLike && mimeType.startsWith("video/");
     const isAudio = !officeLike && isAudioPreviewMime(mimeType);
     if (isImage || isVideo || isAudio) {
@@ -425,7 +541,7 @@ export function useMessagePreview({
     const markdownMode = officeLike
       ? true
       : isMarkdownMime(mimeType, name);
-    if (!markdownMode && !isTextPreviewMime(mimeType)) return;
+    if (!markdownMode && !isTextPreviewMime(mimeType) && !isTextPreviewFile(name)) return;
 
     attachmentPreview.visible.value = true;
     attachmentPreview.loading.value = true;
