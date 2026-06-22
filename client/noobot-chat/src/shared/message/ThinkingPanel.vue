@@ -628,20 +628,21 @@ onBeforeUnmount(() => {
   background: linear-gradient(135deg, color-mix(in srgb, var(--noobot-primary, #409eff) 14%, transparent), color-mix(in srgb, var(--noobot-primary, #409eff) 6%, transparent));
   color: var(--noobot-primary, #409eff);
   font-weight: 600;
-  box-shadow: 0 6px 18px color-mix(in srgb, var(--noobot-primary, #409eff) 14%, transparent);
-  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+  filter: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--noobot-primary, #409eff) 6%, transparent);
+  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
 }
 
 .thinking-detail-action-button:hover {
-  transform: translateY(-1px);
+  filter: none;
   border-color: color-mix(in srgb, var(--noobot-primary, #409eff) 62%, transparent);
   background: linear-gradient(135deg, color-mix(in srgb, var(--noobot-primary, #409eff) 20%, transparent), color-mix(in srgb, var(--noobot-primary, #409eff) 10%, transparent));
-  box-shadow: 0 10px 24px color-mix(in srgb, var(--noobot-primary, #409eff) 18%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--noobot-primary, #409eff) 12%, transparent);
 }
 
 .thinking-detail-action-button:active {
-  transform: translateY(0);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--noobot-primary, #409eff) 14%, transparent);
+  filter: none;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--noobot-primary, #409eff) 16%, transparent), color-mix(in srgb, var(--noobot-primary, #409eff) 8%, transparent));
 }
 
 @media (max-width: 720px) {
