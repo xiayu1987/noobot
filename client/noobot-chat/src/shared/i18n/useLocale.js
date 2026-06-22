@@ -6,7 +6,8 @@ const FALLBACK_LOCALE = "zh-CN";
 const SUPPORTED = new Set(["zh-CN", "en-US"]);
 
 function resolveInitialLocale() {
-  const saved = String(localStorage.getItem(STORAGE_KEY) || "").trim();
+  const storage = globalThis?.localStorage;
+  const saved = String(storage?.getItem?.(STORAGE_KEY) || "").trim();
   if (SUPPORTED.has(saved)) return saved;
   const nav = String(globalThis?.navigator?.language || "").toLowerCase();
   if (nav.startsWith("zh")) return "zh-CN";
@@ -18,7 +19,7 @@ const locale = ref(resolveInitialLocale());
 function setLocale(nextLocale = "") {
   const resolved = SUPPORTED.has(nextLocale) ? nextLocale : FALLBACK_LOCALE;
   locale.value = resolved;
-  localStorage.setItem(STORAGE_KEY, resolved);
+  globalThis?.localStorage?.setItem?.(STORAGE_KEY, resolved);
 }
 
 function translateKey(source = {}, key = "") {

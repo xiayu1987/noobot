@@ -132,6 +132,8 @@ _findLatestPendingInteractionByDialogProcessId(channel, dialogProcessId = "") {
 _buildConversationStatePayload(channel, stateItem = {}, overrides = {}) {
   const state = String(stateItem?.state || "").trim();
   const dialogProcessId = String(stateItem?.dialogProcessId || "").trim();
+  const createdAtMs = Number(stateItem?.createdAtMs || stateItem?.updatedAtMs || nowMs());
+  const updatedAtMs = Number(overrides?.updatedAtMs ?? stateItem?.updatedAtMs ?? nowMs());
   const pendingInteractions =
     state === CONVERSATION_STATE.INTERACTION_PENDING
       ? this._findPendingInteractionsByDialogProcessId(channel, dialogProcessId)
@@ -140,10 +142,13 @@ _buildConversationStatePayload(channel, stateItem = {}, overrides = {}) {
   return {
     sessionId: String(stateItem?.sessionId || ""),
     dialogProcessId,
+    clientTurnId: String(stateItem?.clientTurnId || "").trim(),
     state,
     sourceEvent: String(stateItem?.sourceEvent || ""),
     seq: Number(stateItem?.seq || 0),
-    updatedAtMs: Number(overrides?.updatedAtMs ?? stateItem?.updatedAtMs ?? nowMs()),
+    createdAtMs,
+    createdAt: new Date(createdAtMs).toISOString(),
+    updatedAtMs,
     ...(String(stateItem?.requestId || "").trim()
       ? { requestId: String(stateItem.requestId).trim() }
       : {}),

@@ -51,6 +51,33 @@ function sortReconnectSessions(payload = {}) {
     .sort((left, right) => left.sessionId.localeCompare(right.sessionId));
 }
 
+
+test("channel_state inherits clientTurnId from start payload when upstream omits it", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-client-turn" });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId: "session-client-turn",
+    clientTurnId: "client-turn-1",
+  });
+  channel.status = "running";
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.attachSubscriber(channel, client);
+  client.sentEvents = [];
+
+  manager.pushChannelEvent(channel, "thinking", {
+    sessionId: "session-client-turn",
+    dialogProcessId: "dp-client-turn",
+    seq: 1,
+  });
+
+  const channelState = listEvents(client, "channel_state").at(-1);
+  assert.equal(channelState?.data?.dialogProcessId, "dp-client-turn");
+  assert.equal(channelState?.data?.clientTurnId, "client-turn-1");
+});
+
 test("reconnect state should be consistent for all same-user clients across channel statuses", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const statusMatrix = [

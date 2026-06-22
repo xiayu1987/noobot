@@ -22,6 +22,12 @@ import {
 import { normalizeTrimmedString } from "./utils";
 import { SESSION_RUN_EVENT } from "../sessionRunStateMachine";
 
+function createClientTurnId() {
+  const randomUuid = globalThis?.crypto?.randomUUID?.();
+  if (randomUuid) return `client-turn:${randomUuid}`;
+  return `client-turn:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export function createChatEngineSender({
   activeSession,
   activeSessionId,
@@ -86,10 +92,11 @@ export function createChatEngineSender({
     if (sending.value || !activeSession.value) return false;
     if (!hasTextToSend && uploadFiles.value.length === 0) return false;
 
+    const clientTurnId = createClientTurnId();
     applyRunStateEvent?.({
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId: String(activeSession.value?.backendSessionId || activeSession.value?.id || activeSessionId?.value || ""),
-      dialogProcessId: normalizeTrimmedString(options?.existingUserTurnId || options?.existingUserMessageId || ""),
+      clientTurnId,
       source: "send_flow",
     });
     if (!applyRunStateEvent) {
@@ -113,6 +120,7 @@ export function createChatEngineSender({
       skipUserMessageAppend: options?.skipUserMessageAppend === true,
       existingUserMessage: options?.existingUserMessage || null,
       messageText: explicitMessageText,
+      clientTurnId,
     });
 
     let lastStreamErrorEventData = null;
@@ -135,6 +143,7 @@ export function createChatEngineSender({
         pluginModelConfig,
         locale,
         selectedPlugins,
+        clientTurnId,
         uploadHint: translate("chat.uploadHint"),
         reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
         existingUserTurnId: options?.existingUserTurnId || "",
@@ -146,6 +155,7 @@ export function createChatEngineSender({
         applyConversationStateFromEvent(event, data || {}, {
           botMessage: botMsg,
           fallbackDialogProcessId: normalizeTrimmedString(botMsg.dialogProcessId),
+          fallbackClientTurnId: normalizeTrimmedString(botMsg.clientTurnId),
         });
         if (event === StreamEventEnum.CHANNEL_STATE) {
           return;

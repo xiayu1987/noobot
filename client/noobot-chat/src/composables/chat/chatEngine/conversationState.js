@@ -302,11 +302,24 @@ export function createChatEngineConversationState({
 
   function applyConversationState(
     statePayload = {},
-    { botMessage = null, fallbackDialogProcessId = "" } = {},
+    {
+      botMessage = null,
+      fallbackDialogProcessId = "",
+      fallbackClientTurnId = "",
+      allowMessageClientTurnFallback = true,
+    } = {},
   ) {
     const state = String(statePayload?.state || "").trim();
     if (!state) return;
     const sessionId = String(statePayload?.sessionId || "").trim();
+    const createdAtMs = Number(statePayload?.createdAtMs || 0);
+    const updatedAtMs = Number(statePayload?.updatedAtMs || statePayload?.timestamp || createdAtMs || 0);
+    const createdAt = String(
+      statePayload?.createdAt || (createdAtMs > 0 ? new Date(createdAtMs).toISOString() : ""),
+    ).trim();
+    const updatedAt = String(
+      statePayload?.updatedAt || (updatedAtMs > 0 ? new Date(updatedAtMs).toISOString() : ""),
+    ).trim();
     const messageList = Array.isArray(activeSession.value?.messages)
       ? activeSession.value.messages
       : [];
@@ -317,6 +330,12 @@ export function createChatEngineConversationState({
     );
     const forActiveSession = isStateForActiveSession(sessionId) || botMessageInActiveSession;
     if (typeof onConversationState === "function") {
+      const clientTurnId = String(
+        statePayload?.clientTurnId ||
+          (allowMessageClientTurnFallback ? botMessage?.clientTurnId : "") ||
+          (allowMessageClientTurnFallback ? fallbackClientTurnId : "") ||
+          "",
+      ).trim();
       onConversationState({
         source: "stream",
         state,
@@ -324,14 +343,25 @@ export function createChatEngineConversationState({
         dialogProcessId: String(
           statePayload?.dialogProcessId || fallbackDialogProcessId || "",
         ).trim(),
+        clientTurnId,
         sourceEvent: String(statePayload?.sourceEvent || "").trim(),
         seq: Number(statePayload?.seq || 0),
+        createdAtMs,
+        updatedAtMs,
+        createdAt,
+        updatedAt,
         applied: forActiveSession,
       });
     }
     if (!forActiveSession) return;
     const dialogProcessId = String(
       statePayload?.dialogProcessId || fallbackDialogProcessId || "",
+    ).trim();
+    const clientTurnId = String(
+      statePayload?.clientTurnId ||
+        (allowMessageClientTurnFallback ? botMessage?.clientTurnId : "") ||
+        (allowMessageClientTurnFallback ? fallbackClientTurnId : "") ||
+        "",
     ).trim();
     const targetAssistantMessage = findTargetAssistantMessage({
       botMessage,
@@ -350,13 +380,18 @@ export function createChatEngineConversationState({
           state,
           sessionId,
           dialogProcessId,
+          clientTurnId,
           source: "stream",
           sourceEvent: String(statePayload?.sourceEvent || "").trim(),
           seq: Number(statePayload?.seq || 0),
+          createdAtMs,
+          updatedAtMs,
+          createdAt,
+          updatedAt,
         });
       } else {
         sending.value = true;
-        if (canStop) canStop.value = state === "sending" || state === "reconnecting";
+        if (canStop) canStop.value = ["sending", "reconnecting", "interaction_pending"].includes(state);
       }
       if (
         state === "sending" &&
@@ -433,9 +468,14 @@ export function createChatEngineConversationState({
         state,
         sessionId,
         dialogProcessId,
+        clientTurnId,
         source: "stream",
         sourceEvent: String(statePayload?.sourceEvent || "").trim(),
         seq: Number(statePayload?.seq || 0),
+        createdAtMs,
+        updatedAtMs,
+        createdAt,
+        updatedAt,
       });
     } else {
       sending.value = false;
@@ -476,11 +516,16 @@ export function createChatEngineConversationState({
   function applyConversationStateFromEvent(
     eventName = "",
     eventData = {},
-    { botMessage = null, fallbackDialogProcessId = "" } = {},
+    { botMessage = null, fallbackDialogProcessId = "", fallbackClientTurnId = "" } = {},
   ) {
     const normalizedEvent = String(eventName || "").trim();
     if (normalizedEvent !== StreamEventEnum.CHANNEL_STATE) return;
-    applyConversationState(eventData, { botMessage, fallbackDialogProcessId });
+    applyConversationState(eventData, {
+      botMessage,
+      fallbackDialogProcessId,
+      fallbackClientTurnId,
+      allowMessageClientTurnFallback: Boolean(String(eventData?.dialogProcessId || "").trim()),
+    });
   }
 
   function disposeConversationState() {

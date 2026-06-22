@@ -82,7 +82,17 @@ export function useChatSession({
     if (!state) return;
     const sessionId = String(stateEntry?.sessionId || "").trim();
     const dialogProcessId = String(stateEntry?.dialogProcessId || "").trim();
-    const stateKey = `${sessionId || "__session__"}::${dialogProcessId || "__session__"}`;
+    const clientTurnId = String(stateEntry?.clientTurnId || "").trim();
+    const stateScope = dialogProcessId || clientTurnId;
+    const stateKey = `${sessionId || "__session__"}::${stateScope || "__session__"}`;
+    const createdAtMs = Number(stateEntry?.createdAtMs || 0);
+    const updatedAtMs = Number(stateEntry?.updatedAtMs || stateEntry?.timestamp || createdAtMs || 0);
+    const createdAt = String(
+      stateEntry?.createdAt || (createdAtMs > 0 ? new Date(createdAtMs).toISOString() : ""),
+    ).trim();
+    const updatedAt = String(
+      stateEntry?.updatedAt || (updatedAtMs > 0 ? new Date(updatedAtMs).toISOString() : new Date().toISOString()),
+    ).trim();
     conversationStateSnapshot.value = {
       ...conversationStateSnapshot.value,
       [stateKey]: {
@@ -91,9 +101,13 @@ export function useChatSession({
         state,
         sessionId,
         dialogProcessId,
+        clientTurnId,
         seq: Number(stateEntry?.seq || 0),
         applied: stateEntry?.applied !== false,
-        updatedAt: new Date().toISOString(),
+        createdAtMs,
+        updatedAtMs,
+        createdAt,
+        updatedAt,
       },
     };
     conversationStateTimeline.value = [
@@ -104,9 +118,14 @@ export function useChatSession({
         state,
         sessionId,
         dialogProcessId,
+        clientTurnId,
         seq: Number(stateEntry?.seq || 0),
         applied: stateEntry?.applied !== false,
-        ts: new Date().toISOString(),
+        createdAtMs,
+        updatedAtMs,
+        createdAt,
+        updatedAt,
+        ts: updatedAt,
       },
     ].slice(-80);
   }
