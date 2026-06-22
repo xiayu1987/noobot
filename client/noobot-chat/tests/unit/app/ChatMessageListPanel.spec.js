@@ -207,7 +207,7 @@ describe("ChatMessageListPanel", () => {
     expect(wrapper.find(".chat-message-item-stub").text()).toBe("dp-live");
   });
 
-  it("hydrates latest assistant running time from conversationStateSnapshot during render", () => {
+  it("hydrates latest assistant running time from runStateSnapshot during render", () => {
     const startedAt = "2026-06-22T10:00:00.000Z";
     const activeSession = {
       id: "s-1",
@@ -220,16 +220,14 @@ describe("ChatMessageListPanel", () => {
 
     mountPanel({
       activeSession,
-      conversationStateSnapshot: {
-        "s-1::__session__": {
-          sessionId: "s-1",
-          dialogProcessId: "",
-          state: "sending",
-          createdAt: startedAt,
-          createdAtMs: Date.parse(startedAt),
-          updatedAt: startedAt,
-          updatedAtMs: Date.parse(startedAt),
-        },
+      runStateSnapshot: {
+        sessionId: "s-1",
+        dialogProcessId: "",
+        state: "sending",
+        createdAtIso: startedAt,
+        createdAtMs: Date.parse(startedAt),
+        updatedAtIso: startedAt,
+        updatedAtMs: Date.parse(startedAt),
       },
     });
 

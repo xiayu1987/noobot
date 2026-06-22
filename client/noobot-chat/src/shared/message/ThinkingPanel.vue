@@ -342,17 +342,25 @@ function toggleThinkingDetailExpanded(messageItem = {}, detailItemKey = "") {
 
 
 function getThinkingDetailCount(messageItem = {}) {
-  const explicitExecutionLogTotal = toValidExecutionLogTotal(
-    messageItem.processExecutionLogTotal
-      ?? messageItem.executionLogTotal
-      ?? messageItem.execution_log_total,
-  );
-  if (explicitExecutionLogTotal !== null && explicitExecutionLogTotal > 0) {
-    return explicitExecutionLogTotal;
-  }
   const completedToolLogCount = getCompletedToolLogsForMessage(messageItem).length;
   if (completedToolLogCount > 0) return completedToolLogCount;
-  return getSummaryThinkingDetailCount(messageItem);
+  const summaryThinkingDetailCount = getSummaryThinkingDetailCount(messageItem);
+  if (summaryThinkingDetailCount > 0) return summaryThinkingDetailCount;
+  const toolCalls = Array.isArray(messageItem?.toolCalls)
+    ? messageItem.toolCalls
+    : Array.isArray(messageItem?.tool_calls)
+    ? messageItem.tool_calls
+    : [];
+  if (toolCalls.length > 0) return toolCalls.length;
+  const realtimeLogs = Array.isArray(messageItem?.processRealtimeLogs)
+    ? messageItem.processRealtimeLogs
+    : Array.isArray(messageItem?.realtimeLogs)
+    ? messageItem.realtimeLogs
+    : [];
+  return realtimeLogs.filter((logItem = {}) => {
+    const event = String(logItem?.event || logItem?.type || "").toLowerCase();
+    return event.includes("tool") || event.includes("function");
+  }).length;
 }
 
 function getThinkingDetailLabel(messageItem = {}) {

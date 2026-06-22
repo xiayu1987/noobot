@@ -9,6 +9,12 @@ import {
   flattenSessionMessages,
   mergeAttachmentMetas,
 } from "../infra/dialogProcessChain";
+import {
+  getMessageDialogProcessId,
+  getMessageParentDialogProcessId,
+  isSameMessageRound,
+  shouldCollectAttachmentMetasFromMessage,
+} from "../infra/messageIdentity";
 import { getMessageTransferAttachmentMetas } from "../infra/transferEnvelopes";
 
 function tryParseJsonContent(content = "") {
@@ -88,24 +94,6 @@ function isFreshPendingAssistant(messageItem = {}) {
     messageItem?.pending === true &&
     messageItem?.hasFirstStreamEvent !== true
   );
-}
-
-function isSameMessageRound(targetMessage = {}, candidateMessage = {}) {
-  const targetClientTurnId = String(targetMessage?.clientTurnId || "").trim();
-  const candidateClientTurnId = String(candidateMessage?.clientTurnId || "").trim();
-  if (targetClientTurnId && candidateClientTurnId) {
-    return targetClientTurnId === candidateClientTurnId;
-  }
-  if (targetClientTurnId) {
-    return false;
-  }
-
-  const targetDialogProcessId = String(targetMessage?.dialogProcessId || "").trim();
-  const candidateDialogProcessId = String(candidateMessage?.dialogProcessId || "").trim();
-  if (targetDialogProcessId && candidateDialogProcessId) {
-    return targetDialogProcessId === candidateDialogProcessId;
-  }
-  return true;
 }
 
 function isHarnessPluginInjectedMessage(messageItem = {}) {
@@ -389,10 +377,8 @@ export function useMessageFiles({
     let pluginAttachmentMetas = [...baseSplit.plugin];
     for (const sessionMessage of candidateMessages) {
       const messageRole = String(sessionMessage?.role || "").trim();
-      const messageDialogProcessId = String(sessionMessage?.dialogProcessId || "").trim();
-      const messageParentDialogProcessId = String(
-        sessionMessage?.parentDialogProcessId || "",
-      ).trim();
+      const messageDialogProcessId = getMessageDialogProcessId(sessionMessage);
+      const messageParentDialogProcessId = getMessageParentDialogProcessId(sessionMessage);
       if (!isSameMessageRound(messageItem, sessionMessage)) {
         continue;
       }
@@ -400,6 +386,9 @@ export function useMessageFiles({
         !relatedDialogProcessIdSet.has(messageDialogProcessId) &&
         !relatedDialogProcessIdSet.has(messageParentDialogProcessId)
       ) {
+        continue;
+      }
+      if (!shouldCollectAttachmentMetasFromMessage(messageItem, sessionMessage)) {
         continue;
       }
       const currentAttachmentMetas = getMessageAttachmentMetas(sessionMessage);

@@ -376,6 +376,31 @@ describe("useMessageFiles", () => {
     expect(displayedAttachmentMetas.value).toEqual([]);
   });
 
+  it("does not collect previous assistant attachments when explicit turn identity is missing", () => {
+    const messageItem = {
+      role: "assistant",
+      pending: false,
+      dialogProcessId: "dp-1",
+      attachmentMetas: [],
+    };
+    const previousAssistantMessage = {
+      role: "assistant",
+      pending: false,
+      dialogProcessId: "dp-1",
+      attachmentMetas: [
+        { attachmentId: "prev-1", name: "previous-result.md" },
+      ],
+    };
+    const { displayedAttachmentMetas } = useMessageFiles({
+      getMessageItem: () => messageItem,
+      getAllMessages: () => [previousAssistantMessage, messageItem],
+      getSessionDocs: () => [],
+      getUserId: () => "admin",
+    });
+
+    expect(displayedAttachmentMetas.value).toEqual([]);
+  });
+
   it("does not fall back to dialogProcessId when current message has a client turn", () => {
     const messageItem = {
       role: "assistant",

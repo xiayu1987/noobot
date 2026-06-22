@@ -330,6 +330,9 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   const existingThinkingFinishedAt = String(
     targetMessage?.thinkingFinishedAt || targetMessage?.thinking_finished_at || "",
   ).trim();
+  const existingClientTurnId = String(
+    targetMessage?.clientTurnId || targetMessage?.client_turn_id || "",
+  ).trim();
   const existingPending = targetMessage?.pending === true;
   const existingTransferResult =
     targetMessage?.transferResult &&
@@ -387,6 +390,10 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   if (existingThinkingFinishedAt && !String(sourceMessage?.thinkingFinishedAt || sourceMessage?.thinking_finished_at || "").trim()) {
     targetMessage.thinkingFinishedAt = existingThinkingFinishedAt;
     targetMessage.thinking_finished_at = existingThinkingFinishedAt;
+  }
+  if (existingClientTurnId && !String(sourceMessage?.clientTurnId || sourceMessage?.client_turn_id || "").trim()) {
+    targetMessage.clientTurnId = existingClientTurnId;
+    targetMessage.client_turn_id = existingClientTurnId;
   }
   const channelState = String(targetMessage?.channelState?.state || "").trim();
   if (existingPending && IN_FLIGHT_CHANNEL_STATES.has(channelState)) {

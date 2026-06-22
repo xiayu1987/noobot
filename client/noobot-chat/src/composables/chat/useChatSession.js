@@ -94,38 +94,29 @@ export function useChatSession({
     const updatedAt = String(
       stateEntry?.updatedAt || (updatedAtMs > 0 ? new Date(updatedAtMs).toISOString() : new Date().toISOString()),
     ).trim();
+    const applied = stateEntry?.applied !== false;
+    const normalizedEntry = {
+      source: String(stateEntry?.source || "").trim(),
+      sourceEvent: String(stateEntry?.sourceEvent || "").trim(),
+      state,
+      sessionId,
+      dialogProcessId,
+      clientTurnId,
+      seq: Number(stateEntry?.seq || 0),
+      applied,
+      createdAtMs,
+      updatedAtMs,
+      createdAt,
+      updatedAt,
+    };
     conversationStateSnapshot.value = {
       ...conversationStateSnapshot.value,
-      [stateKey]: {
-        source: String(stateEntry?.source || "").trim(),
-        sourceEvent: String(stateEntry?.sourceEvent || "").trim(),
-        state,
-        sessionId,
-        dialogProcessId,
-        clientTurnId,
-        seq: Number(stateEntry?.seq || 0),
-        applied: stateEntry?.applied !== false,
-        createdAtMs,
-        updatedAtMs,
-        createdAt,
-        updatedAt,
-      },
+      [stateKey]: normalizedEntry,
     };
     conversationStateTimeline.value = [
       ...conversationStateTimeline.value,
       {
-        source: String(stateEntry?.source || "").trim(),
-        sourceEvent: String(stateEntry?.sourceEvent || "").trim(),
-        state,
-        sessionId,
-        dialogProcessId,
-        clientTurnId,
-        seq: Number(stateEntry?.seq || 0),
-        applied: stateEntry?.applied !== false,
-        createdAtMs,
-        updatedAtMs,
-        createdAt,
-        updatedAt,
+        ...normalizedEntry,
         ts: updatedAt,
       },
     ].slice(-80);
@@ -348,6 +339,7 @@ export function useChatSession({
     sessions,
     activeSessionId,
     activeSession,
+    runStateSnapshot,
     loadingSessions,
     loadingSessionDetail,
     newSession: chatList.newSession,

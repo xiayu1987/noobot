@@ -186,6 +186,7 @@ export function handleDoneStreamEvent({
   foldMessagesForView,
   mergeAssistantAttachmentMetas,
   locateDoneMessage,
+  applyConversationState,
   processStore,
   locateSendingStartedMessageOnce,
 }) {
@@ -264,6 +265,19 @@ export function handleDoneStreamEvent({
     foldMessagesForView,
     mergeAssistantAttachmentMetas,
   });
+  if (botMessage?.pending !== false) {
+    applyConversationState?.(
+      {
+        state: "completed",
+        sessionId: String(data?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
+        dialogProcessId: String(botMessage?.dialogProcessId || data?.dialogProcessId || ""),
+        clientTurnId: String(botMessage?.clientTurnId || data?.clientTurnId || ""),
+        sourceEvent: "done",
+        updatedAtMs: Date.now(),
+      },
+      { botMessage },
+    );
+  }
   locateDoneMessage?.();
 }
 

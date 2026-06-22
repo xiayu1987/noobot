@@ -1,17 +1,35 @@
 export function getThinkingDetailsCount(messageItem = {}) {
-  if (Array.isArray(messageItem?.completedToolLogs)) {
-    return messageItem.completedToolLogs.length;
+  const completedToolLogs = Array.isArray(messageItem?.processCompletedToolLogs)
+    ? messageItem.processCompletedToolLogs
+    : Array.isArray(messageItem?.completedToolLogs)
+    ? messageItem.completedToolLogs
+    : [];
+  if (completedToolLogs.length > 0) {
+    return completedToolLogs.length;
   }
-  if (Array.isArray(messageItem?.toolCalls)) {
-    return messageItem.toolCalls.length;
+  const summaryThinkingDetailsCount = getSummaryThinkingDetailsCount(messageItem);
+  if (summaryThinkingDetailsCount > 0) return summaryThinkingDetailsCount;
+  const toolCalls = Array.isArray(messageItem?.toolCalls)
+    ? messageItem.toolCalls
+    : Array.isArray(messageItem?.tool_calls)
+    ? messageItem.tool_calls
+    : [];
+  if (toolCalls.length > 0) {
+    return toolCalls.length;
   }
-  if (Array.isArray(messageItem?.realtimeLogs)) {
-    return messageItem.realtimeLogs.filter((logItem = {}) => {
+  const realtimeLogs = Array.isArray(messageItem?.processRealtimeLogs)
+    ? messageItem.processRealtimeLogs
+    : Array.isArray(messageItem?.realtimeLogs)
+    ? messageItem.realtimeLogs
+    : [];
+  if (realtimeLogs.length > 0) {
+    const realtimeThinkingDetailCount = realtimeLogs.filter((logItem = {}) => {
       const event = String(logItem?.event || logItem?.type || "").toLowerCase();
       return event.includes("tool") || event.includes("function");
     }).length;
+    if (realtimeThinkingDetailCount > 0) return realtimeThinkingDetailCount;
   }
-  return getSummaryThinkingDetailsCount(messageItem);
+  return 0;
 }
 
 function getSummaryThinkingDetailsCount(messageItem = {}) {

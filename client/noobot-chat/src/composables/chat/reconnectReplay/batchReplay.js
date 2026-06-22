@@ -342,6 +342,11 @@ export function applyReconnectEnvelopeToTargetMessage({
     onAttachmentMetas?.(targetMessage, eventData?.attachmentMetas || []);
   } else if (eventName === StreamEventEnum.DONE) {
     terminalDialogProcessIdSet?.add?.(normalizedDpId);
+    targetMessage.pending = false;
+    targetMessage.statusLabel = "chat.generated";
+    const finishedAt = new Date().toISOString();
+    targetMessage.thinkingFinishedAt = targetMessage.thinkingFinishedAt || finishedAt;
+    targetMessage.thinking_finished_at = targetMessage.thinking_finished_at || finishedAt;
     const executionSummarySteps = Array.isArray(eventData?.executionSummary?.steps)
       ? eventData.executionSummary.steps
       : [];

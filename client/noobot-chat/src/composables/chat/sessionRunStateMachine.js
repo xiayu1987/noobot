@@ -3,6 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  getMessageClientTurnId,
+  getMessageDialogProcessId,
+  getMessageRole,
+} from "../infra/messageIdentity";
 
 const STOP_REQUEST_STORAGE_KEY = "noobot:session-run-state-machine:stop-requests:v1";
 const STOP_REQUEST_TTL_MS = 5 * 60 * 1000;
@@ -392,6 +397,10 @@ export function createInitialSessionRunState(overrides = {}) {
     sourceEvent: "",
     seq: 0,
     priority: 0,
+    createdAtMs: 0,
+    updatedAtMs: 0,
+    createdAtIso: "",
+    updatedAtIso: "",
     updatedAt: 0,
     stopRequestedAt: 0,
     lastEventType: "",
@@ -436,6 +445,8 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
     timestamp,
     createdAtMs: Number(rawEvent?.createdAtMs || 0),
     updatedAtMs: Number(rawEvent?.updatedAtMs || 0),
+    createdAt: trim(rawEvent?.createdAt),
+    updatedAt: trim(rawEvent?.updatedAt),
     raw: rawEvent,
   };
 }
@@ -458,6 +469,22 @@ export function transitionSessionRunState(currentState = createInitialSessionRun
     sourceEvent: event.sourceEvent,
     seq: Math.max(currentSeq, eventSeq),
     priority: nextPriority,
+    createdAtMs:
+      event.createdAtMs ||
+      (startsNewTurn ? event.timestamp : Number(current.createdAtMs || 0)),
+    updatedAtMs: event.updatedAtMs || event.timestamp,
+    createdAtIso:
+      event.createdAt ||
+      (event.createdAtMs > 0
+        ? new Date(event.createdAtMs).toISOString()
+        : startsNewTurn
+          ? new Date(event.timestamp).toISOString()
+          : trim(current.createdAtIso)),
+    updatedAtIso:
+      event.updatedAt ||
+      (event.updatedAtMs > 0
+        ? new Date(event.updatedAtMs).toISOString()
+        : new Date(event.timestamp).toISOString()),
     updatedAt: event.timestamp,
     stopRequestedAt:
       event.state === SESSION_RUN_STATE.STOP_REQUESTED
@@ -465,6 +492,55 @@ export function transitionSessionRunState(currentState = createInitialSessionRun
         : Number(current.stopRequestedAt || 0),
     lastEventType: event.type,
   };
+}
+
+function isRunStateForActiveSession(stateSnapshot = {}, activeSession = {}) {
+  const stateSessionId = trim(stateSnapshot?.sessionId);
+  if (!stateSessionId) return true;
+  const activeIds = [
+    activeSession?.id,
+    activeSession?.backendSessionId,
+  ].map((item) => trim(item)).filter(Boolean);
+  return !activeIds.length || activeIds.includes(stateSessionId);
+}
+
+function getLatestAssistantMessage(activeSession = {}) {
+  const messages = Array.isArray(activeSession?.messages) ? activeSession.messages : [];
+  return [...messages].reverse().find((item = {}) => getMessageRole(item) === "assistant") || null;
+}
+
+export function resolveSessionRunStateForMessage({
+  stateSnapshot = createInitialSessionRunState(),
+  messageItem = {},
+  activeSession = {},
+} = {}) {
+  const normalizedState = normalizeState(stateSnapshot?.state);
+  if (!isInFlightSessionRunState(normalizedState)) return null;
+  if (getMessageRole(messageItem) !== "assistant") return null;
+  if (!isRunStateForActiveSession(stateSnapshot, activeSession)) return null;
+
+  const runDialogProcessId = trim(stateSnapshot?.dialogProcessId);
+  const runClientTurnId = trim(stateSnapshot?.clientTurnId);
+  const messageDialogProcessId = getMessageDialogProcessId(messageItem);
+  const messageClientTurnId = getMessageClientTurnId(messageItem);
+
+  if (runDialogProcessId && messageDialogProcessId && runDialogProcessId === messageDialogProcessId) {
+    return stateSnapshot;
+  }
+  if (runClientTurnId && messageClientTurnId && runClientTurnId === messageClientTurnId) {
+    return stateSnapshot;
+  }
+
+  const latestAssistant = getLatestAssistantMessage(activeSession);
+  if (latestAssistant !== messageItem) return null;
+
+  // Fallback for reconnect/session refresh windows where one side has not
+  // received the backend dialogProcessId/clientTurnId yet. Terminal and stale
+  // state consistency is still owned by this state machine before this helper
+  // returns an in-flight state.
+  if (!runDialogProcessId && !runClientTurnId) return stateSnapshot;
+  if (!messageDialogProcessId && !messageClientTurnId) return stateSnapshot;
+  return null;
 }
 
 export function reduceSessionRunEvents(initialState = createInitialSessionRunState(), rawEvents = []) {

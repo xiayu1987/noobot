@@ -27,11 +27,28 @@ export async function applyReconnectEventReplay({
   if (sessionId && isCurrentActiveSession(sessionId)) {
     await consumeReplayCacheForSession(sessionId);
     await applyReconnectMessagesToActiveSession([{ event, data }], dialogProcessId);
+    if (_trimStr(event) === StreamEventEnum.DONE) {
+      applyChannelState({
+        ...(data || {}),
+        sessionId,
+        dialogProcessId,
+        state: "completed",
+        sourceEvent: "done",
+      });
+    }
     return;
   }
 
   if (!sessionId && dialogProcessId && isCurrentActiveDialogProcess?.(dialogProcessId)) {
     await applyReconnectMessagesToActiveSession([{ event, data }], dialogProcessId);
+    if (_trimStr(event) === StreamEventEnum.DONE) {
+      applyChannelState({
+        ...(data || {}),
+        dialogProcessId,
+        state: "completed",
+        sourceEvent: "done",
+      });
+    }
     return;
   }
 
