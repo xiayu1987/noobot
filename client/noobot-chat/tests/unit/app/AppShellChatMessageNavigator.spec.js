@@ -16,6 +16,10 @@ const appShellDrawersSource = readFileSync(
   resolve(__dirname, "../../../src/app/AppShellDrawers.vue"),
   "utf8",
 );
+const chatMessageNavigatorPanelSource = readFileSync(
+  resolve(__dirname, "../../../src/app/useChatMessageNavigatorPanel.js"),
+  "utf8",
+);
 const mobileChatNavigatorTriggerPositionSource = readFileSync(
   resolve(__dirname, "../../../src/app/mobileChatNavigatorTriggerPosition.js"),
   "utf8",
@@ -39,26 +43,26 @@ const chatMessageNavItemsStateSource = readFileSync(
 
 describe("AppShell chat message navigator", () => {
   it("builds navigator items from active session messages and delegates selection to the message list", () => {
-    expect(appShellSource).toContain("const chatMessageNavItems = computed(() =>");
-    expect(appShellSource).toContain("buildChatMessageNavItems({");
-    expect(appShellSource).toContain("messages: activeSession.value?.messages || []");
-    expect(appShellSource).toContain("getMessageAnchorId: messageListPanelRef.value?.getMessageAnchorId");
+    expect(chatMessageNavigatorPanelSource).toContain("const chatMessageNavItems = computed(() =>");
+    expect(chatMessageNavigatorPanelSource).toContain("buildChatMessageNavItems({");
+    expect(chatMessageNavigatorPanelSource).toContain("messages: activeSession?.value?.messages || []");
+    expect(chatMessageNavigatorPanelSource).toContain("getMessageAnchorId: messageListPanelRef?.value?.getMessageAnchorId");
     expect(chatMessageNavItemsStateSource).toContain("export function buildChatMessageNavItems({");
     expect(chatMessageNavItemsStateSource).toContain("shouldRenderMessageInChat");
     expect(chatMessageNavItemsStateSource).toContain("getMessageAnchorId(messageItem, messageIndex)");
     expect(chatMessageNavItemsStateSource).toContain("content.slice(0, 28)");
-    expect(appShellSource).toContain("function handleSelectChatMessageNavItem(item = {})");
-    expect(appShellSource).toContain("selectChatMessageNavigatorItem({");
+    expect(chatMessageNavigatorPanelSource).toContain("function handleSelectChatMessageNavItem(item = {})");
+    expect(chatMessageNavigatorPanelSource).toContain("selectChatMessageNavigatorItem({");
     expect(chatMessageNavigatorStateSource).toContain("function normalizeChatMessageNavigatorAnchor(item = {})");
     expect(chatMessageNavigatorStateSource).toContain("return String(item?.id || \"\").trim();");
     expect(chatMessageNavigatorStateSource).toContain("messageListPanelRef.value?.scrollToMessageAnchor?.(anchor)");
   });
 
   it("syncs the highlighted navigator item from scroll position", () => {
-    expect(appShellSource).toContain('import { createChatMessageScrollSync } from "./chatMessageScrollSync";');
-    expect(appShellSource).toContain("} = createChatMessageScrollSync({");
-    expect(appShellSource).toContain("currentMessageAnchorId,");
-    expect(appShellSource).toContain("messageListPanelRef,");
+    expect(chatMessageNavigatorPanelSource).toContain('import { createChatMessageScrollSync } from "./chatMessageScrollSync";');
+    expect(chatMessageNavigatorPanelSource).toContain("} = createChatMessageScrollSync({");
+    expect(chatMessageNavigatorPanelSource).toContain("currentMessageAnchorId,");
+    expect(chatMessageNavigatorPanelSource).toContain("messageListPanelRef,");
     expect(chatMessageScrollSyncSource).toContain("function syncCurrentMessageAnchorId()");
     expect(chatMessageScrollSyncSource).toContain('querySelectorAll?.("[data-chat-message-anchor]")');
     expect(chatMessageScrollSyncSource).toContain("const nextAnchorId = getAnchorId(currentAnchor);");
@@ -67,7 +71,7 @@ describe("AppShell chat message navigator", () => {
     expect(chatMessageScrollSyncSource).toContain("function bindChatMessageScrollSync()");
     expect(chatMessageScrollSyncSource).toContain('wrapRef.addEventListener?.("scroll", syncCurrentMessageAnchorId, { passive: true })');
     expect(chatMessageScrollSyncSource).toContain("function unbindChatMessageScrollSync()");
-    expect(appShellSource).toContain("nextTick(bindChatMessageScrollSync)");
+    expect(chatMessageNavigatorPanelSource).toContain("nextTick(bindChatMessageScrollSync)");
     expect(appShellSource).toContain("unbindChatMessageScrollSync();");
   });
 
@@ -115,12 +119,12 @@ describe("AppShell chat message navigator", () => {
     expect(appShellLayoutSource).toContain('import { Tickets } from "@element-plus/icons-vue"');
     expect(appShellLayoutSource).toContain("<el-icon><Tickets /></el-icon>");
     expect(appShellLayoutSource).toContain("<el-icon class=\"mobile-chat-message-nav-trigger-icon\"><Tickets /></el-icon>");
-    expect(appShellSource).toContain("} from \"./state/chatMessageNavigatorState\";");
-    expect(appShellSource).toContain("function openChatMessageNavigator()");
-    expect(appShellSource).toContain("openChatMessageNavigatorState({");
+    expect(chatMessageNavigatorPanelSource).toContain("} from \"./state/chatMessageNavigatorState\";");
+    expect(chatMessageNavigatorPanelSource).toContain("function openChatMessageNavigator()");
+    expect(chatMessageNavigatorPanelSource).toContain("openChatMessageNavigatorState({");
     expect(appShellSource).toContain("chatNavigatorPanel: PSEUDO_PANEL.CHAT_NAVIGATOR");
-    expect(appShellSource).toContain("function handleMobileChatNavigatorClosed()");
-    expect(appShellSource).toContain("closeChatMessageNavigator({");
+    expect(chatMessageNavigatorPanelSource).toContain("function handleMobileChatNavigatorClosed()");
+    expect(chatMessageNavigatorPanelSource).toContain("closeChatMessageNavigator({");
     expect(appShellDrawersSource).toContain("@closed=\"emit('mobile-chat-navigator-closed')\"");
     expect(appShellSource).toContain("@mobile-chat-navigator-closed=\"handleMobileChatNavigatorClosed\"");
     expect(chatMessageNavigatorStateSource).toContain("replacePseudoRoute(buildChatMessageNavigatorCloseRoute({");

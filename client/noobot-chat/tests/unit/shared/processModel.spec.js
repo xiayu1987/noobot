@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createProcessEventFromLog,
   createProcessSnapshotFromLogs,
@@ -88,18 +88,26 @@ describe("process model", () => {
   });
 
   it("keeps eventId stable for equivalent logs without explicit timestamp", () => {
-    const firstEvent = createProcessEventFromLog(
-      { sequence: 1, dialogProcessId: "dialog-stable", event: "tool_call", text: "same" },
-      { source: ProcessEventSource.STREAM },
-    );
-    const secondEvent = createProcessEventFromLog(
-      { sequence: 1, dialogProcessId: "dialog-stable", event: "tool_call", text: "same" },
-      { source: ProcessEventSource.STREAM },
-    );
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-06-22T00:00:00.000Z"));
+      const firstEvent = createProcessEventFromLog(
+        { sequence: 1, dialogProcessId: "dialog-stable", event: "tool_call", text: "same" },
+        { source: ProcessEventSource.STREAM },
+      );
+      vi.setSystemTime(new Date("2026-06-22T00:00:01.000Z"));
+      const secondEvent = createProcessEventFromLog(
+        { sequence: 1, dialogProcessId: "dialog-stable", event: "tool_call", text: "same" },
+        { source: ProcessEventSource.STREAM },
+      );
 
-    expect(resolveExplicitProcessTimestamp({})).toBe("");
-    expect(firstEvent.eventId).toBe(secondEvent.eventId);
-    expect(firstEvent.timestamp).toBeTruthy();
+      expect(resolveExplicitProcessTimestamp({})).toBe("");
+      expect(firstEvent.eventId).toBe(secondEvent.eventId);
+      expect(firstEvent.timestamp).toBe("2026-06-22T00:00:00.000Z");
+      expect(secondEvent.timestamp).toBe("2026-06-22T00:00:01.000Z");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("uses fallback sequence for stable node id when stream log has no explicit sequence", () => {
