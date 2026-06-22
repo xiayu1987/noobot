@@ -1,6 +1,7 @@
 import { ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import { useChatEngine } from "../../../../src/composables/chat/useChatEngine";
+import { SESSION_RUN_STATE } from "../../../../src/composables/chat/sessionRunStateMachine";
 import {
   RoleEnum,
   StreamEventEnum,
@@ -50,6 +51,7 @@ const createHarness = ({
   const activeSession = ref(makeSession(sessionId));
   const sending = ref(false);
   const canStop = ref(false);
+  const runStateSnapshot = ref(null);
   const input = ref("hello");
   const uploadFiles = ref([]);
   const pendingInteractionRequest = ref(pendingInteraction);
@@ -76,6 +78,7 @@ const createHarness = ({
     activeSessionId,
     sending,
     canStop,
+    runStateSnapshot,
     input,
     uploadFiles,
     clearUploads: vi.fn(),
@@ -119,6 +122,7 @@ const createHarness = ({
     activeSessionId,
     sending,
     canStop,
+    runStateSnapshot,
     input,
     uploadFiles,
     pendingInteractionRequest,
@@ -138,6 +142,36 @@ const emitChannelState = (onEvent, sessionId, dialogProcessId, state, data = {})
 };
 
 describe("useChatEngine", () => {
+
+  it("send carries clientTurnId through payload and ignores stale unscoped terminal state", async () => {
+    let capturedPayload = null;
+    const stream = vi.fn(async (payload, onEvent) => {
+      capturedPayload = payload;
+      emitChannelState(onEvent, "local-client-turn", "", "sending", {
+        clientTurnId: payload.clientTurnId,
+      });
+      emitChannelState(onEvent, "local-client-turn", "", "completed");
+    });
+    const { engine, activeSession, sending, canStop, runStateSnapshot } = createHarness({
+      sessionId: "local-client-turn",
+      stream,
+    });
+
+    await engine.send();
+
+    const assistant = assistantMessage(activeSession);
+    expect(capturedPayload).toEqual(expect.objectContaining({
+      clientTurnId: expect.stringMatching(/^client-turn:/),
+    }));
+    expect(assistant?.clientTurnId).toBe(capturedPayload.clientTurnId);
+    expect(runStateSnapshot.value).toEqual(expect.objectContaining({
+      state: SESSION_RUN_STATE.SENDING,
+      dialogProcessId: "",
+      clientTurnId: capturedPayload.clientTurnId,
+    }));
+    expect(sending.value).toBe(true);
+    expect(canStop.value).toBe(true);
+  });
   it("DONE patches current assistant turn and promotes session identity", async () => {
     const stream = vi.fn(async (_payload, onEvent) => {
       onEvent({
@@ -489,7 +523,7 @@ describe("useChatEngine", () => {
 
     const assistant = assistantMessage(activeSession);
     expect(sending.value).toBe(true);
-    expect(canStop.value).toBe(false);
+    expect(canStop.value).toBe(true);
     expect(assistant?.pending).toBe(true);
     expect(notify).not.toHaveBeenCalled();
 
@@ -1151,7 +1185,7 @@ describe("useChatEngine", () => {
       activeSession.value = { ...activeSession.value, ...mainSession };
       input.value = "";
     });
-    const { engine, activeSession, input, appendMessage } = createHarness({
+    const { engine, activeSession, input, appendMessage, sending, canStop, runStateSnapshot } = createHarness({
       sessionId: "local-resend-replace-success",
       stream,
       deps: { replaceSessionTurnApi, deleteSessionMessagesFromApi, applySessionDetail },
@@ -1185,6 +1219,13 @@ describe("useChatEngine", () => {
       reuseExistingUserTurn: true,
       existingUserTurnId: "turn-new",
       existingUserMessageId: "m3",
+    }));
+    expect(sending.value).toBe(true);
+    expect(canStop.value).toBe(true);
+    expect(runStateSnapshot.value).toEqual(expect.objectContaining({
+      state: SESSION_RUN_STATE.SENDING,
+      dialogProcessId: "",
+      clientTurnId: expect.any(String),
     }));
     expect(appendMessage).toHaveBeenCalledTimes(1);
     expect(appendMessage).toHaveBeenCalledWith(RoleEnum.ASSISTANT, "", []);

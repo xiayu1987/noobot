@@ -1,6 +1,10 @@
 import { effectScope, ref } from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useReconnectReplay } from "../../../../src/composables/chat/useReconnectReplay";
+import {
+  createInitialSessionRunState,
+  SESSION_RUN_STATE,
+} from "../../../../src/composables/chat/sessionRunStateMachine";
 import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
 
 function createSession(id) {
@@ -25,6 +29,8 @@ function createFixture({ activeId = "s-1" } = {}) {
   const activeSessionId = ref(activeId);
   const activeSession = ref(sessions.value.find((s) => s.id === activeId));
   const sending = ref(true);
+  const canStop = ref(true);
+  const runStateSnapshot = ref(createInitialSessionRunState());
   const interactionSubmitting = ref(true);
   const pendingInteractionRequest = ref(null);
 
@@ -64,6 +70,8 @@ function createFixture({ activeId = "s-1" } = {}) {
     activeSession,
     activeSessionId,
     sending,
+    canStop,
+    runStateSnapshot,
     interactionSubmitting,
     chatList,
     chatWebSocketClient,
@@ -93,6 +101,8 @@ function createFixture({ activeId = "s-1" } = {}) {
       activeSession,
       activeSessionId,
       sending,
+      canStop,
+      runStateSnapshot,
       interactionSubmitting,
       pendingInteractionRequest,
     },
@@ -532,6 +542,32 @@ describe("useReconnectReplay", () => {
     expect(refs.sending.value).toBe(true);
     expect(assistant?.statusLabel).toBe("chat.stopping");
     expect(assistant?.pending).toBe(true);
+  });
+
+  it("EV-01g: stale terminal channel_state does not clear current local client turn", async () => {
+    const { api, refs } = createFixture();
+    refs.sending.value = true;
+    refs.canStop.value = true;
+    refs.runStateSnapshot.value = createInitialSessionRunState({
+      state: SESSION_RUN_STATE.SENDING,
+      sessionId: "s-1",
+      dialogProcessId: "",
+      clientTurnId: "client-current",
+      source: "local",
+    });
+
+    await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-stale",
+      state: "completed",
+      seq: 99,
+    });
+
+    expect(refs.sending.value).toBe(true);
+    expect(refs.canStop.value).toBe(true);
+    expect(refs.runStateSnapshot.value.state).toBe(SESSION_RUN_STATE.SENDING);
+    expect(refs.runStateSnapshot.value.clientTurnId).toBe("client-current");
+    expect(refs.runStateSnapshot.value.dialogProcessId).toBe("");
   });
 
   it("EV-02b: replay in-flight THINKING does not restore sending without channel_state", async () => {

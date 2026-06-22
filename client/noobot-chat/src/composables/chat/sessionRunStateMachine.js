@@ -59,30 +59,83 @@ const STOP_LOCK_STATES = Object.freeze([
   SESSION_RUN_STATE.CANCELED,
 ]);
 
-const UNBOUND_LOCAL_SEND_BINDING_STATES = Object.freeze([
+const STOP_LOCK_REOPEN_STATES = Object.freeze([
   SESSION_RUN_STATE.SENDING,
   SESSION_RUN_STATE.RECONNECTING,
 ]);
 
-const UNBOUND_LOCAL_SEND_IGNORED_UNSCOPED_CHANNEL_STATES = Object.freeze([
-  ...TERMINAL_STATES,
-  SESSION_RUN_STATE.STOPPING,
+const SESSION_RUN_TRANSITION_RULE = Object.freeze({
+  PRIORITY_FORWARD: "priority_forward",
+  STOP_LOCKED: "stop_locked",
+  TERMINAL_LOCKED: "terminal_locked",
+});
+
+const SESSION_RUN_TRANSITION_GUARD_ID = Object.freeze({
+  HAS_EVENT_STATE: "has_event_state",
+  SAME_CONVERSATION_SCOPE_OR_NEW_TURN: "same_conversation_scope_or_new_turn",
+  STOP_LOCK_NOT_REOPENED: "stop_lock_not_reopened",
+  TERMINAL_NOT_REOPENED: "terminal_not_reopened",
+  NO_STALE_SEQ_REGRESSION: "no_stale_seq_regression",
+  PRIORITY_FORWARD_OR_NEW_TURN: "priority_forward_or_new_turn",
+});
+
+export const SESSION_RUN_TRANSITION_DECISION_REASON = Object.freeze({
+  APPLIED: "applied",
+  LOCAL_RESET: "local_reset",
+  MISSING_EVENT_STATE: "missing_event_state",
+  DIFFERENT_SCOPE: "different_scope",
+  STOP_LOCK_REOPEN: "stop_lock_reopen",
+  TERMINAL_LOCK_REOPEN: "terminal_lock_reopen",
+  STALE_SEQ_REGRESSION: "stale_seq_regression",
+  PRIORITY_REGRESSION: "priority_regression",
+});
+
+const COMMON_TRANSITION_GUARD_IDS = Object.freeze([
+  SESSION_RUN_TRANSITION_GUARD_ID.HAS_EVENT_STATE,
+  SESSION_RUN_TRANSITION_GUARD_ID.SAME_CONVERSATION_SCOPE_OR_NEW_TURN,
 ]);
 
-const STATE_PRIORITY = Object.freeze({
-  [SESSION_RUN_STATE.IDLE]: 0,
-  [SESSION_RUN_STATE.SENDING]: 40,
-  [SESSION_RUN_STATE.RECONNECTING]: 40,
-  [SESSION_RUN_STATE.INTERACTION_PENDING]: 50,
-  [SESSION_RUN_STATE.STOP_REQUESTED]: 70,
-  [SESSION_RUN_STATE.STOPPING]: 80,
-  [SESSION_RUN_STATE.COMPLETED]: 100,
-  [SESSION_RUN_STATE.ERROR]: 100,
-  [SESSION_RUN_STATE.EXPIRED]: 100,
-  [SESSION_RUN_STATE.NO_CONVERSATION]: 100,
-  [SESSION_RUN_STATE.STOPPED]: 110,
-  [SESSION_RUN_STATE.CANCELLED]: 110,
-  [SESSION_RUN_STATE.CANCELED]: 110,
+const FINAL_TRANSITION_GUARD_IDS = Object.freeze([
+  SESSION_RUN_TRANSITION_GUARD_ID.NO_STALE_SEQ_REGRESSION,
+  SESSION_RUN_TRANSITION_GUARD_ID.PRIORITY_FORWARD_OR_NEW_TURN,
+]);
+
+const SESSION_RUN_TRANSITION_RULE_GUARDS = Object.freeze({
+  [SESSION_RUN_TRANSITION_RULE.PRIORITY_FORWARD]: Object.freeze([]),
+  [SESSION_RUN_TRANSITION_RULE.STOP_LOCKED]: Object.freeze([
+    SESSION_RUN_TRANSITION_GUARD_ID.STOP_LOCK_NOT_REOPENED,
+  ]),
+  [SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED]: Object.freeze([
+    SESSION_RUN_TRANSITION_GUARD_ID.TERMINAL_NOT_REOPENED,
+  ]),
+});
+
+function createTransitionConfig(priority, rule = SESSION_RUN_TRANSITION_RULE.PRIORITY_FORWARD) {
+  return Object.freeze({
+    priority,
+    rule,
+    guards: Object.freeze([
+      ...COMMON_TRANSITION_GUARD_IDS,
+      ...(SESSION_RUN_TRANSITION_RULE_GUARDS[rule] || []),
+      ...FINAL_TRANSITION_GUARD_IDS,
+    ]),
+  });
+}
+
+export const SESSION_RUN_TRANSITION_TABLE = Object.freeze({
+  [SESSION_RUN_STATE.IDLE]: createTransitionConfig(0),
+  [SESSION_RUN_STATE.SENDING]: createTransitionConfig(40),
+  [SESSION_RUN_STATE.RECONNECTING]: createTransitionConfig(40),
+  [SESSION_RUN_STATE.INTERACTION_PENDING]: createTransitionConfig(50),
+  [SESSION_RUN_STATE.STOP_REQUESTED]: createTransitionConfig(70, SESSION_RUN_TRANSITION_RULE.STOP_LOCKED),
+  [SESSION_RUN_STATE.STOPPING]: createTransitionConfig(80, SESSION_RUN_TRANSITION_RULE.STOP_LOCKED),
+  [SESSION_RUN_STATE.COMPLETED]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
+  [SESSION_RUN_STATE.ERROR]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
+  [SESSION_RUN_STATE.EXPIRED]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
+  [SESSION_RUN_STATE.NO_CONVERSATION]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
+  [SESSION_RUN_STATE.STOPPED]: createTransitionConfig(110, SESSION_RUN_TRANSITION_RULE.STOP_LOCKED),
+  [SESSION_RUN_STATE.CANCELLED]: createTransitionConfig(110, SESSION_RUN_TRANSITION_RULE.STOP_LOCKED),
+  [SESSION_RUN_STATE.CANCELED]: createTransitionConfig(110, SESSION_RUN_TRANSITION_RULE.STOP_LOCKED),
 });
 
 function trim(value = "") {
@@ -101,67 +154,220 @@ function normalizeState(state = "") {
   return Object.values(SESSION_RUN_STATE).includes(value) ? value : "";
 }
 
-function statePriority(state = "") {
-  return STATE_PRIORITY[normalizeState(state)] ?? 0;
+function transitionPriority(state = "") {
+  return SESSION_RUN_TRANSITION_TABLE[normalizeState(state)]?.priority ?? 0;
+}
+
+function transitionRule(state = "") {
+  return SESSION_RUN_TRANSITION_TABLE[normalizeState(state)]?.rule || SESSION_RUN_TRANSITION_RULE.PRIORITY_FORWARD;
+}
+
+export function resolveEventScope(value = {}) {
+  return trim(value.dialogProcessId) || trim(value.clientTurnId);
 }
 
 function sameConversationScope(current = {}, event = {}) {
   const currentSessionId = trim(current.sessionId);
   const eventSessionId = trim(event.sessionId);
   if (currentSessionId && eventSessionId && currentSessionId !== eventSessionId) return false;
-  if (isUnboundLocalSendingState(current)) return true;
   const currentDialogProcessId = trim(current.dialogProcessId);
   const eventDialogProcessId = trim(event.dialogProcessId);
   if (currentDialogProcessId && eventDialogProcessId && currentDialogProcessId !== eventDialogProcessId) {
     return false;
   }
+  const currentClientTurnId = trim(current.clientTurnId);
+  const eventClientTurnId = trim(event.clientTurnId);
+  if (currentClientTurnId && eventClientTurnId) return currentClientTurnId === eventClientTurnId;
+  const currentScope = currentDialogProcessId || currentClientTurnId;
+  const eventScope = eventDialogProcessId || eventClientTurnId;
+  if (currentScope && eventScope) return currentScope === eventScope;
   return true;
+}
+
+function canBindBackendDialogProcessIdByClientTurn(current = {}, event = {}) {
+  if (trim(current.dialogProcessId)) return false;
+  const currentClientTurnId = trim(current.clientTurnId);
+  const eventClientTurnId = trim(event.clientTurnId);
+  return Boolean(currentClientTurnId && eventClientTurnId && currentClientTurnId === eventClientTurnId && trim(event.dialogProcessId));
 }
 
 function shouldStartNewTurn(current = {}, event = {}) {
   if (event.type !== SESSION_RUN_EVENT.LOCAL_SEND_STARTED) return false;
   if (isTerminalSessionRunState(current.state)) return true;
-  const eventDialogProcessId = trim(event.dialogProcessId);
-  const currentDialogProcessId = trim(current.dialogProcessId);
-  if (!eventDialogProcessId || !currentDialogProcessId) return true;
-  return eventDialogProcessId !== currentDialogProcessId;
+  const eventScope = resolveEventScope(event);
+  const currentScope = resolveEventScope(current);
+  if (!eventScope || !currentScope) return true;
+  return eventScope !== currentScope;
 }
 
-function isUnboundLocalSendingState(current = {}) {
-  return normalizeState(current.state) === SESSION_RUN_STATE.SENDING &&
-    current.dialogProcessBound === false &&
-    current.localSendUnbound === true;
+function hasEventState(event = {}) {
+  return Boolean(event.state);
 }
 
-function shouldIgnoreEventForUnboundLocalSend(current = {}, event = {}) {
-  if (!isUnboundLocalSendingState(current)) return false;
-  if (event.type === SESSION_RUN_EVENT.LOCAL_SEND_STARTED) return false;
-  if (event.type === SESSION_RUN_EVENT.LOCAL_STOP_REQUESTED) return false;
-  const eventDialogProcessId = trim(event.dialogProcessId);
-  if (UNBOUND_LOCAL_SEND_BINDING_STATES.includes(event.state)) return false;
-  if (!eventDialogProcessId && event.type === SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE) {
-    return UNBOUND_LOCAL_SEND_IGNORED_UNSCOPED_CHANNEL_STATES.includes(event.state);
+function isSameConversationScopeOrNewTurn({ current = {}, event = {}, startsNewTurn = false } = {}) {
+  if (isUnscopedLocalFailureForScopedTurn({ current, event, startsNewTurn })) return false;
+  if (isUnscopedBackendStateForScopedTurn({ current, event, startsNewTurn })) return false;
+  return sameConversationScope(current, event) || startsNewTurn || canBindBackendDialogProcessIdByClientTurn(current, event);
+}
+
+function isNotReopeningStopLock({ event = {}, startsNewTurn = false, currentRule = "" } = {}) {
+  if (currentRule !== SESSION_RUN_TRANSITION_RULE.STOP_LOCKED) return true;
+  if (startsNewTurn) return true;
+  return !STOP_LOCK_REOPEN_STATES.includes(event.state);
+}
+
+function isNotLeavingTerminal({ event = {}, startsNewTurn = false, currentRule = "" } = {}) {
+  if (currentRule !== SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED) return true;
+  if (startsNewTurn) return true;
+  return isTerminalSessionRunState(event.state);
+}
+
+function isNotStaleSeqRegression({ currentPriority = 0, nextPriority = 0, staleSeq = false } = {}) {
+  return !(staleSeq && nextPriority <= currentPriority);
+}
+
+function isPriorityForwardOrNewTurn({ currentPriority = 0, nextPriority = 0, startsNewTurn = false } = {}) {
+  return startsNewTurn || nextPriority >= currentPriority;
+}
+
+function isBackendRunStateEvent(event = {}) {
+  return [
+    SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+    SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
+    SESSION_RUN_EVENT.BACKEND_RECOVERABLE_RUNNING,
+  ].includes(event.type);
+}
+
+function isUnscopedBackendProtectedState(state = "") {
+  return [
+    SESSION_RUN_STATE.STOPPING,
+    ...TERMINAL_STATES,
+  ].includes(normalizeState(state));
+}
+
+function isUnscopedBackendStateForScopedTurn({ current = {}, event = {}, startsNewTurn = false } = {}) {
+  if (startsNewTurn) return false;
+  if (!isBackendRunStateEvent(event)) return false;
+  if (!resolveEventScope(current)) return false;
+  if (resolveEventScope(event)) return false;
+  return isUnscopedBackendProtectedState(event.state);
+}
+
+function isUnscopedLocalFailureForScopedTurn({ current = {}, event = {}, startsNewTurn = false } = {}) {
+  if (startsNewTurn) return false;
+  if (event.type !== SESSION_RUN_EVENT.LOCAL_FAILURE) return false;
+  if (!resolveEventScope(current)) return false;
+  return !resolveEventScope(event);
+}
+
+export const SESSION_RUN_TRANSITION_GUARDS = Object.freeze([
+  Object.freeze({
+    id: SESSION_RUN_TRANSITION_GUARD_ID.HAS_EVENT_STATE,
+    reason: SESSION_RUN_TRANSITION_DECISION_REASON.MISSING_EVENT_STATE,
+    passes: ({ event = {} } = {}) => hasEventState(event),
+  }),
+  Object.freeze({
+    id: SESSION_RUN_TRANSITION_GUARD_ID.SAME_CONVERSATION_SCOPE_OR_NEW_TURN,
+    reason: SESSION_RUN_TRANSITION_DECISION_REASON.DIFFERENT_SCOPE,
+    passes: isSameConversationScopeOrNewTurn,
+  }),
+  Object.freeze({
+    id: SESSION_RUN_TRANSITION_GUARD_ID.STOP_LOCK_NOT_REOPENED,
+    reason: SESSION_RUN_TRANSITION_DECISION_REASON.STOP_LOCK_REOPEN,
+    passes: isNotReopeningStopLock,
+  }),
+  Object.freeze({
+    id: SESSION_RUN_TRANSITION_GUARD_ID.TERMINAL_NOT_REOPENED,
+    reason: SESSION_RUN_TRANSITION_DECISION_REASON.TERMINAL_LOCK_REOPEN,
+    passes: isNotLeavingTerminal,
+  }),
+  Object.freeze({
+    id: SESSION_RUN_TRANSITION_GUARD_ID.NO_STALE_SEQ_REGRESSION,
+    reason: SESSION_RUN_TRANSITION_DECISION_REASON.STALE_SEQ_REGRESSION,
+    passes: isNotStaleSeqRegression,
+  }),
+  Object.freeze({
+    id: SESSION_RUN_TRANSITION_GUARD_ID.PRIORITY_FORWARD_OR_NEW_TURN,
+    reason: SESSION_RUN_TRANSITION_DECISION_REASON.PRIORITY_REGRESSION,
+    passes: isPriorityForwardOrNewTurn,
+  }),
+]);
+
+const SESSION_RUN_TRANSITION_GUARD_BY_ID = Object.freeze(Object.fromEntries(
+  SESSION_RUN_TRANSITION_GUARDS.map((guard) => [guard.id, guard]),
+));
+
+function resolveTransitionGuards(state = "") {
+  return (SESSION_RUN_TRANSITION_TABLE[normalizeState(state)]?.guards || COMMON_TRANSITION_GUARD_IDS)
+    .map((guardId) => SESSION_RUN_TRANSITION_GUARD_BY_ID[guardId])
+    .filter(Boolean);
+}
+
+function normalizeTransitionInputs(currentState = createInitialSessionRunState(), rawEvent = {}) {
+  const current = currentState || createInitialSessionRunState();
+  const event = normalizeSessionRunEvent(rawEvent);
+  const startsNewTurn = shouldStartNewTurn(current, event);
+  const currentPriority = transitionPriority(current.state);
+  const nextPriority = transitionPriority(event.state);
+  const currentSeq = Number(current.seq || 0);
+  const eventSeq = Number(event.seq || 0);
+
+  return {
+    current,
+    event,
+    startsNewTurn,
+    currentPriority,
+    nextPriority,
+    currentSeq,
+    eventSeq,
+    currentRule: transitionRule(current.state),
+    staleSeq: eventSeq > 0 && currentSeq > 0 && eventSeq < currentSeq,
+  };
+}
+
+function resolveNormalizedTransitionDecision(transition = {}) {
+  const { current = createInitialSessionRunState(), event = {} } = transition;
+  const currentState = normalizeState(current.state) || SESSION_RUN_STATE.IDLE;
+
+  function decision(canApply, reason, nextState = currentState) {
+    return { canApply, reason, nextState };
   }
-  if (!eventDialogProcessId) return false;
-  return true;
+
+  if (event.type === SESSION_RUN_EVENT.LOCAL_RESET) {
+    return decision(true, SESSION_RUN_TRANSITION_DECISION_REASON.LOCAL_RESET, SESSION_RUN_STATE.IDLE);
+  }
+  for (const guard of resolveTransitionGuards(currentState)) {
+    if (!guard.passes(transition)) {
+      return decision(false, guard.reason);
+    }
+  }
+  return decision(true, SESSION_RUN_TRANSITION_DECISION_REASON.APPLIED, event.state);
 }
 
-function resolveNextDialogProcessId(current = {}, event = {}) {
+function canApplyNormalizedEvent(transition = {}) {
+  return resolveNormalizedTransitionDecision(transition).canApply;
+}
+
+export function canApplyEvent(currentState = createInitialSessionRunState(), rawEvent = {}) {
+  return canApplyNormalizedEvent(normalizeTransitionInputs(currentState, rawEvent));
+}
+
+export function resolveTransitionDecision(currentState = createInitialSessionRunState(), rawEvent = {}) {
+  return resolveNormalizedTransitionDecision(normalizeTransitionInputs(currentState, rawEvent));
+}
+
+export function resolveNextStateByTransitionTable(currentState = createInitialSessionRunState(), rawEvent = {}) {
+  return resolveTransitionDecision(currentState, rawEvent).nextState;
+}
+
+function resolveNextDialogProcessId(current = {}, event = {}, { startsNewTurn = false } = {}) {
+  if (startsNewTurn) return trim(event.dialogProcessId);
   return trim(event.dialogProcessId) || trim(current.dialogProcessId);
 }
 
-function resolveNextDialogProcessBound(current = {}, event = {}, { startsNewTurn = false } = {}) {
-  if (event.type === SESSION_RUN_EVENT.LOCAL_SEND_STARTED) return Boolean(trim(event.dialogProcessId));
-  const currentDialogProcessBound = current.dialogProcessBound ?? Boolean(trim(current.dialogProcessId));
-  return Boolean(trim(event.dialogProcessId)) || (!startsNewTurn && Boolean(currentDialogProcessBound));
-}
-
-function resolveNextLocalSendUnbound(current = {}, event = {}, { nextDialogProcessBound = false } = {}) {
-  if (event.type === SESSION_RUN_EVENT.LOCAL_SEND_STARTED) return !Boolean(trim(event.dialogProcessId));
-  return !Boolean(trim(event.dialogProcessId)) &&
-    !nextDialogProcessBound &&
-    event.state === SESSION_RUN_STATE.SENDING &&
-    current.localSendUnbound === true;
+function resolveNextClientTurnId(current = {}, event = {}, { startsNewTurn = false } = {}) {
+  if (startsNewTurn) return trim(event.clientTurnId);
+  return trim(event.clientTurnId) || trim(current.clientTurnId);
 }
 
 export function isTerminalSessionRunState(state = "") {
@@ -181,6 +387,7 @@ export function createInitialSessionRunState(overrides = {}) {
     state: SESSION_RUN_STATE.IDLE,
     sessionId: "",
     dialogProcessId: "",
+    clientTurnId: "",
     source: "initial",
     sourceEvent: "",
     seq: 0,
@@ -188,10 +395,20 @@ export function createInitialSessionRunState(overrides = {}) {
     updatedAt: 0,
     stopRequestedAt: 0,
     lastEventType: "",
-    dialogProcessBound: false,
-    localSendUnbound: false,
     ...overrides,
   };
+}
+
+function normalizeTimestamp(rawEvent = {}) {
+  const numericTimestamp = Number(
+    rawEvent?.timestamp || rawEvent?.updatedAtMs || rawEvent?.createdAtMs || 0,
+  );
+  if (Number.isFinite(numericTimestamp) && numericTimestamp > 0) return numericTimestamp;
+  const parsedUpdatedAt = rawEvent?.updatedAt ? Date.parse(rawEvent.updatedAt) : 0;
+  if (Number.isFinite(parsedUpdatedAt) && parsedUpdatedAt > 0) return parsedUpdatedAt;
+  const parsedCreatedAt = rawEvent?.createdAt ? Date.parse(rawEvent.createdAt) : 0;
+  if (Number.isFinite(parsedCreatedAt) && parsedCreatedAt > 0) return parsedCreatedAt;
+  return nowMs();
 }
 
 export function normalizeSessionRunEvent(rawEvent = {}) {
@@ -204,53 +421,39 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
     if (type === SESSION_RUN_EVENT.LOCAL_FAILURE) state = SESSION_RUN_STATE.ERROR;
     if (type === SESSION_RUN_EVENT.LOCAL_RESET) state = SESSION_RUN_STATE.IDLE;
   }
-  const timestamp = Number(rawEvent?.timestamp || rawEvent?.updatedAt || nowMs());
+  const timestamp = normalizeTimestamp(rawEvent);
   return {
     type,
     state,
     sessionId: trim(rawEvent?.sessionId),
-    dialogProcessId: trim(rawEvent?.dialogProcessId),
+    dialogProcessId: type === SESSION_RUN_EVENT.LOCAL_SEND_STARTED
+      ? ""
+      : trim(rawEvent?.dialogProcessId),
+    clientTurnId: trim(rawEvent?.clientTurnId),
     source: trim(rawEvent?.source || type),
     sourceEvent: trim(rawEvent?.sourceEvent),
     seq: Number(rawEvent?.seq || 0),
     timestamp,
+    createdAtMs: Number(rawEvent?.createdAtMs || 0),
+    updatedAtMs: Number(rawEvent?.updatedAtMs || 0),
     raw: rawEvent,
   };
 }
 
 export function transitionSessionRunState(currentState = createInitialSessionRunState(), rawEvent = {}) {
-  const current = currentState || createInitialSessionRunState();
-  const event = normalizeSessionRunEvent(rawEvent);
-  if (!event.state) return current;
+  const transition = normalizeTransitionInputs(currentState, rawEvent);
+  const { current, event, startsNewTurn, currentSeq, eventSeq, nextPriority } = transition;
+  if (!canApplyNormalizedEvent(transition)) return current;
   if (event.type === SESSION_RUN_EVENT.LOCAL_RESET) return createInitialSessionRunState({ updatedAt: event.timestamp });
-  if (!sameConversationScope(current, event) && !shouldStartNewTurn(current, event)) return current;
-  if (shouldIgnoreEventForUnboundLocalSend(current, event)) return current;
 
-  const nextPriority = statePriority(event.state);
-  const currentPriority = statePriority(current.state);
-  const currentSeq = Number(current.seq || 0);
-  const eventSeq = Number(event.seq || 0);
-  const staleSeq = eventSeq > 0 && currentSeq > 0 && eventSeq < currentSeq;
-  const startsNewTurn = shouldStartNewTurn(current, event);
-  const wouldReopenStop = isStopLockedSessionRunState(current.state) &&
-    !startsNewTurn &&
-    UNBOUND_LOCAL_SEND_BINDING_STATES.includes(event.state);
-  const wouldLeaveTerminal = isTerminalSessionRunState(current.state) &&
-    !startsNewTurn &&
-    !isTerminalSessionRunState(event.state);
-
-  if (wouldReopenStop || wouldLeaveTerminal) return current;
-  if (staleSeq && nextPriority <= currentPriority) return current;
-  if (nextPriority < currentPriority && !startsNewTurn) return current;
-
-  const nextDialogProcessId = resolveNextDialogProcessId(current, event);
-  const nextDialogProcessBound = resolveNextDialogProcessBound(current, event, { startsNewTurn });
-  const nextLocalSendUnbound = resolveNextLocalSendUnbound(current, event, { nextDialogProcessBound });
+  const nextDialogProcessId = resolveNextDialogProcessId(current, event, { startsNewTurn });
+  const nextClientTurnId = resolveNextClientTurnId(current, event, { startsNewTurn });
 
   return {
     state: event.state,
     sessionId: event.sessionId || trim(current.sessionId),
     dialogProcessId: nextDialogProcessId,
+    clientTurnId: nextClientTurnId,
     source: event.source,
     sourceEvent: event.sourceEvent,
     seq: Math.max(currentSeq, eventSeq),
@@ -261,8 +464,6 @@ export function transitionSessionRunState(currentState = createInitialSessionRun
         ? event.timestamp
         : Number(current.stopRequestedAt || 0),
     lastEventType: event.type,
-    dialogProcessBound: nextDialogProcessBound,
-    localSendUnbound: nextLocalSendUnbound,
   };
 }
 
@@ -278,7 +479,11 @@ export function evaluateSessionRunState(stateSnapshot = createInitialSessionRunS
   return {
     state,
     sending: isInFlightSessionRunState(state),
-    canStop: [SESSION_RUN_STATE.SENDING, SESSION_RUN_STATE.RECONNECTING].includes(state),
+    canStop: [
+      SESSION_RUN_STATE.SENDING,
+      SESSION_RUN_STATE.RECONNECTING,
+      SESSION_RUN_STATE.INTERACTION_PENDING,
+    ].includes(state),
     interactionSubmitting: state === SESSION_RUN_STATE.INTERACTION_PENDING ? false : undefined,
     pendingInteractionPolicy: state === SESSION_RUN_STATE.INTERACTION_PENDING ? "await_payload" : "unchanged",
     assistantStatus:
@@ -358,6 +563,7 @@ export function rememberStopRequestedEvent(rawEvent = {}) {
   entries.push({
     sessionId: event.sessionId,
     dialogProcessId: event.dialogProcessId,
+    clientTurnId: event.clientTurnId,
     seq: event.seq,
     timestamp: event.timestamp,
   });
@@ -384,6 +590,7 @@ export function resolveRememberedStopRequestedEvent({ sessionId = "", dialogProc
     state: SESSION_RUN_STATE.STOP_REQUESTED,
     sessionId: normalizedSessionId,
     dialogProcessId: normalizedDialogProcessId || trim(match.dialogProcessId),
+    clientTurnId: trim(match.clientTurnId),
     seq: Number(match.seq || 0),
     timestamp: Number(match.timestamp || timestamp),
     source: "remembered_stop_request",

@@ -111,9 +111,11 @@ handleReconnect(socket, payload = {}) {
       const nextSessionScopeState = {
         sessionId: channelSessionId,
         dialogProcessId: "",
+        clientTurnId: "",
         state: derivedSessionState,
         sourceEvent: CONVERSATION_SOURCE_EVENT.CHANNEL_STATUS,
         seq: Number(channel?.eventSequence || 0),
+        createdAtMs: Number(channel?.createdAtMs || channel?.updatedAtMs || nowMs()),
         updatedAtMs: Number(channel?.updatedAtMs || nowMs()),
       };
       if (existingSessionScopeStateIndex < 0) {

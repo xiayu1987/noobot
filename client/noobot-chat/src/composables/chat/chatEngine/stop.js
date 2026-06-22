@@ -74,11 +74,18 @@ export function forceStopUiFinalize({
   const fallbackDialogProcessId = normalizeTrimmedString(
     pendingAssistantMessage?.dialogProcessId,
   );
+  const fallbackClientTurnId = normalizeTrimmedString(
+    pendingAssistantMessage?.clientTurnId,
+  );
+  const finalizedAtMs = Date.now();
   applyConversationState?.(
     {
       state: "stopped",
       sessionId: String(activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
       dialogProcessId: fallbackDialogProcessId,
+      clientTurnId: fallbackClientTurnId,
+      createdAtMs: finalizedAtMs,
+      updatedAtMs: finalizedAtMs,
     },
     { botMessage: pendingAssistantMessage },
   );
@@ -88,6 +95,9 @@ export function forceStopUiFinalize({
       state: "stopped",
       sessionId: String(activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
       dialogProcessId: fallbackDialogProcessId,
+      clientTurnId: fallbackClientTurnId,
+      createdAtMs: finalizedAtMs,
+      updatedAtMs: finalizedAtMs,
       source: "force_stop_finalize",
     });
   } else {
@@ -103,10 +113,14 @@ function buildStopPayload({ userId, activeSession, pendingAssistantMessage } = {
   const dialogProcessId = normalizeTrimmedString(
     pendingAssistantMessage?.dialogProcessId || pendingAssistantMessage?.dialogId,
   );
+  const clientTurnId = normalizeTrimmedString(pendingAssistantMessage?.clientTurnId);
+  const createdAtMs = Date.now();
   const payload = {
     userId: String(userId?.value ?? userId ?? ""),
     sessionId: String(session.backendSessionId || session.sessionId || session.id || ""),
     dialogProcessId,
+    clientTurnId,
+    createdAtMs,
     parentSessionId: String(
       session.parentSessionId || pendingAssistantMessage?.parentSessionId || "",
     ),
@@ -116,6 +130,8 @@ function buildStopPayload({ userId, activeSession, pendingAssistantMessage } = {
     partialAssistant: {
       content: String(pendingAssistantMessage?.content || ""),
       dialogProcessId,
+      clientTurnId,
+      createdAtMs,
       modelAlias: String(pendingAssistantMessage?.modelAlias || ""),
       modelName: String(pendingAssistantMessage?.modelName || ""),
     },
@@ -149,6 +165,8 @@ export function stopSending({
   const stopEvent = rememberStopRequestedEvent({
     sessionId: stopPayload.sessionId,
     dialogProcessId: stopPayload.dialogProcessId,
+    clientTurnId: stopPayload.clientTurnId,
+    createdAtMs: stopPayload.createdAtMs,
     source: "stop_sending",
   });
   if (applyRunStateEvent) {

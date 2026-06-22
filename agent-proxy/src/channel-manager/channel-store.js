@@ -103,6 +103,8 @@ updateConversationState(
     seq = 0,
     broadcast = true,
     sessionId = "",
+    clientTurnId = "",
+    createdAtMs = 0,
     requestId = "",
   } = {},
 ) {
@@ -113,20 +115,27 @@ updateConversationState(
   const stateKey = normalizedDialogProcessId || CONVERSATION_SCOPE_KEY;
   const normalizedSessionId =
     String(sessionId || "").trim() || this._extractSessionIdFromChannelKey(channel.key);
+  const normalizedClientTurnId = String(clientTurnId || "").trim();
   const previousStateItem = channel.conversationStateByDialogProcessId.get(stateKey) || null;
   if (
     previousStateItem &&
     previousStateItem.state === normalizedState &&
-    Number(previousStateItem.seq || 0) === Number(seq || 0)
+    Number(previousStateItem.seq || 0) === Number(seq || 0) &&
+    (!normalizedClientTurnId || String(previousStateItem?.clientTurnId || "").trim() === normalizedClientTurnId)
   ) {
     return previousStateItem;
   }
+  const nextCreatedAtMs = Number(
+    createdAtMs || previousStateItem?.createdAtMs || previousStateItem?.updatedAtMs || nowMs(),
+  );
   const stateItem = {
     sessionId: normalizedSessionId,
     dialogProcessId: normalizedDialogProcessId,
+    clientTurnId: normalizedClientTurnId || String(previousStateItem?.clientTurnId || "").trim(),
     state: normalizedState,
     sourceEvent: String(sourceEvent || "").trim(),
     seq: Number(seq || 0),
+    createdAtMs: Number.isFinite(nextCreatedAtMs) ? nextCreatedAtMs : nowMs(),
     updatedAtMs: nowMs(),
     requestId: String(requestId || "").trim(),
   };
@@ -142,8 +151,17 @@ _applyConversationStateFromEnvelope(channel, envelope = {}) {
   const eventName = String(envelope?.event || "").trim();
   const eventData = envelope?.data || {};
   const dialogProcessId = String(eventData?.dialogProcessId || "").trim();
+  const clientTurnId = String(
+    eventData?.clientTurnId || channel?.startPayload?.clientTurnId || "",
+  ).trim();
   const sessionId = String(eventData?.sessionId || "").trim();
   const seq = Number(eventData?.seq || envelope?.sequence || 0);
+  const createdAtMs = Number(
+    eventData?.createdAtMs ||
+      eventData?.timestamp ||
+      (eventData?.createdAt ? Date.parse(eventData.createdAt) : 0) ||
+      0,
+  );
   let nextState = "";
   if (eventName === CHANNEL_EVENT.THINKING || eventName === CHANNEL_EVENT.DELTA) {
     nextState = CONVERSATION_STATE.SENDING;
@@ -159,9 +177,11 @@ _applyConversationStateFromEnvelope(channel, envelope = {}) {
   if (!nextState) return;
   this.updateConversationState(channel, {
     dialogProcessId,
+    clientTurnId,
     state: nextState,
     sourceEvent: eventName,
     seq,
+    createdAtMs,
     sessionId,
   });
 }

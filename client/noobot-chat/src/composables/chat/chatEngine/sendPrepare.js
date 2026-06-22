@@ -19,6 +19,7 @@ export function prepareChatSend({
   skipUserMessageAppend = false,
   existingUserMessage = null,
   messageText = "",
+  clientTurnId = "",
 }) {
   const explicitText = typeof messageText === "string" ? messageText.trim() : "";
   const text = explicitText || input.value.trim();
@@ -56,10 +57,12 @@ export function prepareChatSend({
   botMessage.completedToolLogs = [];
   botMessage.tool_calls = [];
   botMessage.executionLogTotal = 0;
+  botMessage.clientTurnId = String(clientTurnId || "").trim();
   applyConversationState(
     {
       state: "sending",
       sessionId: String(activeSession.value?.backendSessionId || activeSession.value?.id || ""),
+      clientTurnId: botMessage.clientTurnId,
     },
     { botMessage },
   );
