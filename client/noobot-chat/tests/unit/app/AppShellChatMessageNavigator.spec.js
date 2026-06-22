@@ -8,8 +8,20 @@ const appShellSource = readFileSync(
   resolve(__dirname, "../../../src/app/AppShell.vue"),
   "utf8",
 );
+const appShellLayoutSource = readFileSync(
+  resolve(__dirname, "../../../src/app/AppShellLayout.vue"),
+  "utf8",
+);
+const appShellDrawersSource = readFileSync(
+  resolve(__dirname, "../../../src/app/AppShellDrawers.vue"),
+  "utf8",
+);
 const mobileChatNavigatorTriggerPositionSource = readFileSync(
   resolve(__dirname, "../../../src/app/mobileChatNavigatorTriggerPosition.js"),
+  "utf8",
+);
+const mobileChatNavigatorTriggerSource = readFileSync(
+  resolve(__dirname, "../../../src/app/useMobileChatNavigatorTrigger.js"),
   "utf8",
 );
 const chatMessageScrollSyncSource = readFileSync(
@@ -60,62 +72,64 @@ describe("AppShell chat message navigator", () => {
   });
 
   it("uses Element Plus anchor on desktop and drawer on mobile", () => {
-    expect(appShellSource).toContain("<el-affix :offset=\"80\">");
-    expect(appShellSource).toContain("<ChatMessageNavigator");
-    expect(appShellSource).toContain("v-model=\"mobileChatNavigatorVisible\"");
-    expect(appShellSource).toContain("class=\"chat-message-nav-drawer noobot-side-drawer\"");
-    expect(appShellSource).toContain("if (isMobile.value) {");
-    expect(appShellSource).toContain("mobileChatNavigatorVisible.value = false;");
+    expect(appShellLayoutSource).toContain("<el-affix :offset=\"80\">");
+    expect(appShellLayoutSource).toContain("<ChatMessageNavigator");
+    expect(appShellSource).toContain(":mobile-chat-navigator-visible=\"mobileChatNavigatorVisible\"");
+    expect(appShellSource).toContain("@update:mobile-chat-navigator-visible=\"mobileChatNavigatorVisible = $event\"");
+    expect(appShellDrawersSource).toContain("class=\"chat-message-nav-drawer noobot-side-drawer\"");
+    expect(chatMessageNavigatorStateSource).toContain("if (isMobile.value) {");
+    expect(chatMessageNavigatorStateSource).toContain("mobileChatNavigatorVisible.value = false;");
   });
 
   it("reserves desktop navigator space only inside the chat content body", () => {
-    expect(appShellSource).toContain('<main class="main-content">');
-    expect(appShellSource).toContain("<ChatMainHeader");
-    expect(appShellSource).toContain('<div class="chat-content-body">');
-    expect(appShellSource).toContain('<div class="chat-composer-body">');
-    expect(appShellSource.indexOf("<ChatMainHeader")).toBeLessThan(appShellSource.indexOf('<div class="chat-content-body">'));
-    expect(appShellSource.indexOf('<div class="chat-content-body">')).toBeLessThan(appShellSource.indexOf('<div class="chat-composer-body">'));
-    expect(appShellSource.indexOf('<div class="chat-composer-body">')).toBeLessThan(appShellSource.indexOf('<ChatComposer'));
-    expect(appShellSource).toContain(".chat-content-body {\n  position: relative;");
-    expect(appShellSource).toContain(".chat-content-body,\n  .chat-composer-body {\n    padding-right: 268px;");
-    expect(appShellSource).toContain(".chat-composer-body {\n  flex-shrink: 0;");
-    expect(appShellSource).not.toContain(".main-content {\n    padding-right: 268px;");
-    expect(appShellSource).toContain("top: 18px;");
+    expect(appShellLayoutSource).toContain('<main class="main-content">');
+    expect(appShellLayoutSource).toContain("<ChatMainHeader");
+    expect(appShellLayoutSource).toContain('<div class="chat-content-body">');
+    expect(appShellLayoutSource).toContain('<div class="chat-composer-body">');
+    expect(appShellLayoutSource.indexOf("<ChatMainHeader")).toBeLessThan(appShellLayoutSource.indexOf('<div class="chat-content-body">'));
+    expect(appShellLayoutSource.indexOf('<div class="chat-content-body">')).toBeLessThan(appShellLayoutSource.indexOf('<div class="chat-composer-body">'));
+    expect(appShellLayoutSource.indexOf('<div class="chat-composer-body">')).toBeLessThan(appShellLayoutSource.indexOf('<ChatComposer'));
+    expect(appShellLayoutSource).toContain(".chat-content-body {\n  position: relative;");
+    expect(appShellLayoutSource).toContain(".chat-content-body,\n  .chat-composer-body {\n    padding-right: 268px;");
+    expect(appShellLayoutSource).toContain(".chat-composer-body {\n  flex-shrink: 0;");
+    expect(appShellLayoutSource).not.toContain(".main-content {\n    padding-right: 268px;");
+    expect(appShellLayoutSource).toContain("top: 18px;");
   });
 
   it("keeps the navigator polished and the mobile trigger reachable", () => {
-    expect(appShellSource).toContain("chat-message-nav-title-group");
-    expect(appShellSource).toContain("{{ chatMessageNavItems.length }}");
-    expect(appShellSource).toContain("position: fixed;");
+    expect(appShellLayoutSource).toContain("chat-message-nav-title-group");
+    expect(appShellLayoutSource).toContain("{{ chatMessageNavItems.length }}");
+    expect(appShellLayoutSource).toContain("position: fixed;");
     expect(mobileChatNavigatorTriggerPositionSource).toContain(
       "DEFAULT_MOBILE_CHAT_NAVIGATOR_TRIGGER_POSITION = { right: 16, bottom: 112 }",
     );
-    expect(appShellSource).toContain(":style=\"mobileChatNavigatorTriggerStyle\"");
-    expect(appShellSource).toContain("@pointerdown=\"handleMobileChatNavigatorTriggerPointerDown\"");
-    expect(appShellSource).toContain("@pointermove=\"handleMobileChatNavigatorTriggerPointerMove\"");
-    expect(appShellSource).toContain("touch-action: none;");
-    expect(appShellSource).toContain("overscroll-behavior: none;");
-    expect(appShellSource).toContain(":aria-label=\"translate('common.chatNavigator')\"");
+    expect(appShellLayoutSource).toContain(":style=\"mobileChatNavigatorTriggerStyle\"");
+    expect(appShellLayoutSource).toContain("@pointerdown=\"emit('mobile-chat-navigator-trigger-pointer-down', $event)\"");
+    expect(appShellLayoutSource).toContain("@pointermove=\"emit('mobile-chat-navigator-trigger-pointer-move', $event)\"");
+    expect(appShellLayoutSource).toContain("touch-action: none;");
+    expect(appShellLayoutSource).toContain("overscroll-behavior: none;");
+    expect(appShellLayoutSource).toContain(":aria-label=\"translate('common.chatNavigator')\"");
   });
 
   it("uses Element Plus icons, theme variables, and pseudo route for the mobile navigator", () => {
-    expect(appShellSource).toContain('import { Tickets } from "@element-plus/icons-vue"');
-    expect(appShellSource).toContain("<el-icon><Tickets /></el-icon>");
-    expect(appShellSource).toContain("<el-icon class=\"mobile-chat-message-nav-trigger-icon\"><Tickets /></el-icon>");
+    expect(appShellLayoutSource).toContain('import { Tickets } from "@element-plus/icons-vue"');
+    expect(appShellLayoutSource).toContain("<el-icon><Tickets /></el-icon>");
+    expect(appShellLayoutSource).toContain("<el-icon class=\"mobile-chat-message-nav-trigger-icon\"><Tickets /></el-icon>");
     expect(appShellSource).toContain("} from \"./state/chatMessageNavigatorState\";");
     expect(appShellSource).toContain("function openChatMessageNavigator()");
     expect(appShellSource).toContain("openChatMessageNavigatorState({");
     expect(appShellSource).toContain("chatNavigatorPanel: PSEUDO_PANEL.CHAT_NAVIGATOR");
     expect(appShellSource).toContain("function handleMobileChatNavigatorClosed()");
     expect(appShellSource).toContain("closeChatMessageNavigator({");
-    expect(appShellSource).toContain("@closed=\"handleMobileChatNavigatorClosed\"");
+    expect(appShellDrawersSource).toContain("@closed=\"emit('mobile-chat-navigator-closed')\"");
+    expect(appShellSource).toContain("@mobile-chat-navigator-closed=\"handleMobileChatNavigatorClosed\"");
     expect(chatMessageNavigatorStateSource).toContain("replacePseudoRoute(buildChatMessageNavigatorCloseRoute({");
-    expect(appShellSource).toContain("background: var(--noobot-panel-bg);");
-    expect(appShellSource).toContain("border: 1px solid var(--noobot-border-soft);");
+    expect(appShellLayoutSource).toContain("background: var(--noobot-panel-bg);");
+    expect(appShellLayoutSource).toContain("border: 1px solid var(--noobot-border-soft);");
   });
 
   it("lets users drag and persist the mobile navigator trigger position", () => {
-    expect(appShellSource).toContain("} from \"./mobileChatNavigatorTriggerPosition\";");
+    expect(mobileChatNavigatorTriggerSource).toContain("} from \"./mobileChatNavigatorTriggerPosition\";");
     expect(mobileChatNavigatorTriggerPositionSource).toContain(
       "function loadMobileChatNavigatorTriggerPosition()",
     );
@@ -128,33 +142,33 @@ describe("AppShell chat message navigator", () => {
     expect(mobileChatNavigatorTriggerPositionSource).toContain(
       "function persistMobileChatNavigatorTriggerPosition(position = {})",
     );
-    expect(appShellSource).toContain("function handleMobileChatNavigatorTriggerPointerDown(event)");
-    expect(appShellSource).toContain("function handleMobileChatNavigatorTriggerPointerMove(event)");
-    expect(appShellSource).toContain("function handleMobileChatNavigatorTriggerPointerUp(event)");
-    expect(appShellSource).toContain("function preventMobileChatNavigatorTriggerGesture(event)");
-    expect(appShellSource).toContain("if (event?.cancelable) event.preventDefault?.();");
-    expect(appShellSource).toContain("function preventMobileChatNavigatorDocumentTouch(event)");
-    expect(appShellSource).toContain("function setMobileChatNavigatorDragLock(locked)");
-    expect(appShellSource).toContain("window?.addEventListener?.(\"touchmove\", preventMobileChatNavigatorDocumentTouch, { passive: false })");
-    expect(appShellSource).toContain("setMobileChatNavigatorDragLock(true)");
-    expect(appShellSource).toContain("setMobileChatNavigatorDragLock(false)");
-    expect(appShellSource).toContain("function handleMobileChatNavigatorTriggerClick()");
-    expect(appShellSource).toContain("@click=\"handleMobileChatNavigatorTriggerClick\"");
-    expect(appShellSource).toContain("@pointercancel=\"handleMobileChatNavigatorTriggerPointerUp\"");
-    expect(appShellSource).toContain("openChatMessageNavigator();\n}");
-    expect(appShellSource).toContain("@touchstart.stop.prevent");
-    expect(appShellSource).toContain("@touchmove.stop.prevent");
-    expect(appShellSource).toContain("@touchend.stop.prevent");
-    expect(appShellSource).toContain("@touchcancel.stop.prevent");
-    expect(appShellSource).toContain(".mobile-chat-message-nav-trigger.is-dragging");
-    expect(appShellSource).toContain(":global(html.noobot-mobile-chat-navigator-dragging)");
-    expect(appShellSource).toContain("overscroll-behavior-y: none;");
-    expect(appShellSource).toContain("overflow: hidden;");
-    expect(appShellSource).toContain(".app-shell-root,\n.chat-content-body,\n.chat-composer-body {\n  overscroll-behavior: none;");
-    expect(appShellSource).toContain(".main-content {\n  flex: 1;");
-    expect(appShellSource).toContain("min-height: 0;\n  overscroll-behavior: none;");
-    expect(appShellSource).toContain(":global(body.noobot-mobile-chat-navigator-dragging) .main-content");
-    expect(appShellSource).toContain(":global(body.noobot-mobile-chat-navigator-dragging) .chat-content-body");
+    expect(mobileChatNavigatorTriggerSource).toContain("function handleMobileChatNavigatorTriggerPointerDown(event)");
+    expect(mobileChatNavigatorTriggerSource).toContain("function handleMobileChatNavigatorTriggerPointerMove(event)");
+    expect(mobileChatNavigatorTriggerSource).toContain("function handleMobileChatNavigatorTriggerPointerUp(event)");
+    expect(mobileChatNavigatorTriggerSource).toContain("function preventMobileChatNavigatorTriggerGesture(event)");
+    expect(mobileChatNavigatorTriggerSource).toContain("if (event?.cancelable) event.preventDefault?.();");
+    expect(mobileChatNavigatorTriggerSource).toContain("function preventMobileChatNavigatorDocumentTouch(event)");
+    expect(mobileChatNavigatorTriggerSource).toContain("function setMobileChatNavigatorDragLock(locked)");
+    expect(mobileChatNavigatorTriggerSource).toContain("window?.addEventListener?.(\"touchmove\", preventMobileChatNavigatorDocumentTouch, { passive: false })");
+    expect(mobileChatNavigatorTriggerSource).toContain("setMobileChatNavigatorDragLock(true)");
+    expect(mobileChatNavigatorTriggerSource).toContain("setMobileChatNavigatorDragLock(false)");
+    expect(mobileChatNavigatorTriggerSource).toContain("function handleMobileChatNavigatorTriggerClick()");
+    expect(appShellLayoutSource).toContain("@click=\"emit('mobile-chat-navigator-trigger-click')\"");
+    expect(appShellLayoutSource).toContain("@pointercancel=\"emit('mobile-chat-navigator-trigger-pointer-cancel', $event)\"");
+    expect(mobileChatNavigatorTriggerSource).toContain("openChatMessageNavigator?.();\n  }");
+    expect(appShellLayoutSource).toContain("@touchstart.stop.prevent");
+    expect(appShellLayoutSource).toContain("@touchmove.stop.prevent");
+    expect(appShellLayoutSource).toContain("@touchend.stop.prevent");
+    expect(appShellLayoutSource).toContain("@touchcancel.stop.prevent");
+    expect(appShellLayoutSource).toContain(".mobile-chat-message-nav-trigger.is-dragging");
+    expect(appShellLayoutSource).toContain(":global(html.noobot-mobile-chat-navigator-dragging)");
+    expect(appShellLayoutSource).toContain("overscroll-behavior-y: none;");
+    expect(appShellLayoutSource).toContain("overflow: hidden;");
+    expect(appShellLayoutSource).toContain(".chat-content-body,\n.chat-composer-body {\n  overscroll-behavior: none;");
+    expect(appShellLayoutSource).toContain(".main-content {\n  flex: 1;");
+    expect(appShellLayoutSource).toContain("min-height: 0;\n  overscroll-behavior: none;");
+    expect(appShellLayoutSource).toContain(":global(body.noobot-mobile-chat-navigator-dragging) .main-content");
+    expect(appShellLayoutSource).toContain(":global(body.noobot-mobile-chat-navigator-dragging) .chat-content-body");
   });
 
 });
