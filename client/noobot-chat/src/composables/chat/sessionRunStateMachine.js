@@ -438,7 +438,7 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
     dialogProcessId: type === SESSION_RUN_EVENT.LOCAL_SEND_STARTED
       ? ""
       : trim(rawEvent?.dialogProcessId),
-    clientTurnId: trim(rawEvent?.clientTurnId),
+    clientTurnId: trim(rawEvent?.clientTurnId || rawEvent?.turnScopeId || rawEvent?.client_turn_id),
     source: trim(rawEvent?.source || type),
     sourceEvent: trim(rawEvent?.sourceEvent),
     seq: Number(rawEvent?.seq || 0),

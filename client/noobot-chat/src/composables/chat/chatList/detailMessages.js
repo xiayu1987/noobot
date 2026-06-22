@@ -52,7 +52,6 @@ function preserveRunningThinkingState(existingMessage = {}, detailMessageItem = 
     }
     if (existingClientTurnId && !getMessageClientTurnId(detailMessageItem)) {
       existingMessage.clientTurnId = existingClientTurnId;
-      existingMessage.client_turn_id = existingClientTurnId;
     }
     const channelState = String(existingMessage?.channelState?.state || "").trim();
     if (existingPending && IN_FLIGHT_CHANNEL_STATES.has(channelState)) {

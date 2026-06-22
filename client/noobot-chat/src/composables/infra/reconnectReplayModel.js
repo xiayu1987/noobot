@@ -396,7 +396,6 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   }
   if (existingClientTurnId && !getMessageClientTurnId(sourceMessage)) {
     targetMessage.clientTurnId = existingClientTurnId;
-    targetMessage.client_turn_id = existingClientTurnId;
   }
   const channelState = String(targetMessage?.channelState?.state || "").trim();
   if (existingPending && IN_FLIGHT_CHANNEL_STATES.has(channelState)) {

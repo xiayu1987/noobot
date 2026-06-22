@@ -21,7 +21,7 @@ export function getMessageParentDialogProcessId(messageItem = {}) {
 }
 
 export function getMessageClientTurnId(messageItem = {}) {
-  return trim(messageItem?.clientTurnId || messageItem?.client_turn_id);
+  return trim(messageItem?.clientTurnId || messageItem?.turnScopeId || messageItem?.client_turn_id);
 }
 
 export function getMessageTurnId(messageItem = {}) {

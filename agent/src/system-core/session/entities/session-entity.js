@@ -46,6 +46,7 @@ export function normalizeMessageEntity(
     type: String(message?.type || "").trim(),
     dialogProcessId: resolveMessageDialogProcessId(message),
     parentDialogProcessId: String(message?.parentDialogProcessId || "").trim(),
+    turnScopeId: String(message?.turnScopeId || "").trim(),
     taskId: String(message?.taskId || "").trim(),
     taskStatus: String(message?.taskStatus || "").trim(),
     modelAlias: String(message?.modelAlias || "").trim(),

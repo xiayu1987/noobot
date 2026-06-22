@@ -89,6 +89,67 @@ function getMessageAttachmentMetas(messageItem = {}) {
   return transferMetas.length ? mergeAttachmentMetas(transferMetas, base) : base;
 }
 
+function trim(value = "") {
+  return String(value || "").trim();
+}
+
+function getMessageTurnIdentity(messageItem = {}) {
+  return {
+    clientTurnId: trim(messageItem?.clientTurnId || messageItem?.turnScopeId || messageItem?.client_turn_id),
+    turnId: trim(messageItem?.turnId || messageItem?.turn_id),
+    dialogProcessId: getMessageDialogProcessId(messageItem),
+  };
+}
+
+function getAttachmentOwnership(attachmentItem = {}) {
+  const turnScope = attachmentItem?.turnScope &&
+    typeof attachmentItem.turnScope === "object" &&
+    !Array.isArray(attachmentItem.turnScope)
+      ? attachmentItem.turnScope
+      : {};
+  return {
+    clientTurnId: trim(turnScope?.turnScopeId || turnScope?.clientTurnId || turnScope?.client_turn_id),
+    turnId: trim(turnScope?.turnId || turnScope?.turn_id),
+    dialogProcessId: trim(turnScope?.dialogProcessId || turnScope?.dialog_process_id),
+  };
+}
+
+function hasExplicitAttachmentOwnership(attachmentItem = {}) {
+  const ownership = getAttachmentOwnership(attachmentItem);
+  return Boolean(ownership.clientTurnId || ownership.turnId || ownership.dialogProcessId);
+}
+
+function isAttachmentOwnedByMessage(attachmentItem = {}, messageItem = {}) {
+  if (!hasExplicitAttachmentOwnership(attachmentItem)) return true;
+  const attachmentOwnership = getAttachmentOwnership(attachmentItem);
+  const messageIdentity = getMessageTurnIdentity(messageItem);
+
+  if (attachmentOwnership.clientTurnId) {
+    return Boolean(
+      messageIdentity.clientTurnId &&
+        attachmentOwnership.clientTurnId === messageIdentity.clientTurnId,
+    );
+  }
+  if (attachmentOwnership.turnId) {
+    return Boolean(
+      messageIdentity.turnId && attachmentOwnership.turnId === messageIdentity.turnId,
+    );
+  }
+  if (attachmentOwnership.dialogProcessId) {
+    return Boolean(
+      messageIdentity.dialogProcessId &&
+        attachmentOwnership.dialogProcessId === messageIdentity.dialogProcessId,
+    );
+  }
+  return true;
+}
+
+function filterAttachmentMetasForMessage(attachmentMetas = [], messageItem = {}) {
+  return (Array.isArray(attachmentMetas) ? attachmentMetas : []).filter((attachmentItem) =>
+    isAttachmentOwnedByMessage(attachmentItem, messageItem),
+  );
+}
+
 function isFreshPendingAssistant(messageItem = {}) {
   return (
     getMessageRole(messageItem) === "assistant" &&
@@ -133,14 +194,14 @@ function findMessageIndexInLinearTurn(messages = [], targetMessage = {}) {
 
   const targetRole = getMessageRole(targetMessage);
   const targetDialogProcessId = getMessageDialogProcessId(targetMessage);
-  const targetClientTurnId = String(targetMessage?.clientTurnId || targetMessage?.client_turn_id || "").trim();
+  const targetClientTurnId = String(targetMessage?.clientTurnId || targetMessage?.turnScopeId || targetMessage?.client_turn_id || "").trim();
   const targetContent = normalizeMessageText(targetMessage?.content);
 
   if (targetClientTurnId) {
     const clientTurnIndex = messageList.findIndex(
       (messageItem) =>
         getMessageRole(messageItem) === targetRole &&
-        String(messageItem?.clientTurnId || messageItem?.client_turn_id || "").trim() === targetClientTurnId,
+        String(messageItem?.clientTurnId || messageItem?.turnScopeId || messageItem?.client_turn_id || "").trim() === targetClientTurnId,
     );
     if (clientTurnIndex >= 0) return clientTurnIndex;
   }
@@ -476,7 +537,10 @@ export function useMessageFiles({
       if (!shouldCollectAttachmentMetasFromMessage(messageItem, sessionMessage)) {
         continue;
       }
-      const currentAttachmentMetas = getMessageAttachmentMetas(sessionMessage);
+      const currentAttachmentMetas = filterAttachmentMetasForMessage(
+        getMessageAttachmentMetas(sessionMessage),
+        messageItem,
+      );
       if (!currentAttachmentMetas.length) continue;
       const splitCurrentAttachmentMetas = splitAttachmentMetasByOwner(currentAttachmentMetas);
       if (

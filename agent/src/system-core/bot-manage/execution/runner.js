@@ -173,6 +173,7 @@ export class SessionExecutionRunner {
         parentSessionId,
         parentDialogProcessId,
       });
+      const resolvedTurnScopeId = String(resolvedRunConfig?.turnScopeId || "").trim();
 
       const {
         usedSessionId,
@@ -295,6 +296,7 @@ export class SessionExecutionRunner {
           attachmentMetas: userMessageAttachmentMetas,
           dialogProcessId,
           parentDialogProcessId,
+          turnScopeId: resolvedTurnScopeId,
           eventListener: runtimeEventListener,
         });
       } else {
@@ -393,6 +395,7 @@ export class SessionExecutionRunner {
         parentDialogProcessId,
         caller,
         dialogProcessId,
+        turnScopeId: resolvedTurnScopeId,
         agentResult,
         executionStartIndex,
         runtimeEventListener,

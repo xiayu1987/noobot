@@ -143,12 +143,12 @@ const emitChannelState = (onEvent, sessionId, dialogProcessId, state, data = {})
 
 describe("useChatEngine", () => {
 
-  it("send carries clientTurnId through payload and ignores stale unscoped terminal state", async () => {
+  it("send carries turnScopeId through backend payload and ignores stale unscoped terminal state", async () => {
     let capturedPayload = null;
     const stream = vi.fn(async (payload, onEvent) => {
       capturedPayload = payload;
       emitChannelState(onEvent, "local-client-turn", "", "sending", {
-        clientTurnId: payload.clientTurnId,
+        turnScopeId: payload.turnScopeId,
       });
       emitChannelState(onEvent, "local-client-turn", "", "completed");
     });
@@ -161,13 +161,13 @@ describe("useChatEngine", () => {
 
     const assistant = assistantMessage(activeSession);
     expect(capturedPayload).toEqual(expect.objectContaining({
-      clientTurnId: expect.stringMatching(/^client-turn:/),
+      turnScopeId: expect.stringMatching(/^client-turn:/),
     }));
-    expect(assistant?.clientTurnId).toBe(capturedPayload.clientTurnId);
+    expect(assistant?.clientTurnId).toBe(capturedPayload.turnScopeId);
     expect(runStateSnapshot.value).toEqual(expect.objectContaining({
       state: SESSION_RUN_STATE.SENDING,
       dialogProcessId: "",
-      clientTurnId: capturedPayload.clientTurnId,
+      clientTurnId: capturedPayload.turnScopeId,
     }));
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);

@@ -203,6 +203,7 @@ export function registerChatWebSocketServer(
         seq: eventSequence,
         dialogProcessId: String(data?.dialogProcessId || "").trim(),
         sessionId: String(data?.sessionId || "").trim(),
+        turnScopeId: String(data?.turnScopeId || currentRunMeta?.turnScopeId || "").trim(),
       };
       try {
         webSocket.send(JSON.stringify({ event: eventName, data: enrichedData }));
@@ -364,6 +365,7 @@ export function registerChatWebSocketServer(
           message,
           attachments = [],
           config = {},
+          turnScopeId = "",
         } = payload || {};
         currentLocale = normalizeLocale(config?.locale || currentLocale);
 
@@ -373,7 +375,10 @@ export function registerChatWebSocketServer(
         if (isForbiddenUserScope(authInfo, userId)) {
           throw new Error(translateText("auth.forbiddenUserScope", currentLocale));
         }
-        const normalizedRunConfig = normalizeRunConfig(config);
+        const normalizedRunConfig = {
+          ...normalizeRunConfig(config),
+          turnScopeId: String(turnScopeId || config?.turnScopeId || "").trim(),
+        };
         const activeBot = resolveBot();
         const runTimeoutMs = await resolveEffectiveRunTimeoutMs({
           bot: activeBot,
@@ -396,6 +401,7 @@ export function registerChatWebSocketServer(
           parentSessionId: String(parentSessionId || "").trim(),
           parentDialogProcessId: String(parentDialogProcessId || "").trim(),
           dialogProcessId: "",
+          turnScopeId: String(normalizedRunConfig?.turnScopeId || "").trim(),
         };
 
         const textStreamingEnabled = await resolveEffectiveStreamingEnabled({

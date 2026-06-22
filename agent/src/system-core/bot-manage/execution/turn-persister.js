@@ -130,6 +130,7 @@ export class SessionTurnPersister {
     dialogProcessId = "",
     parentDialogProcessId = "",
     parentSessionId = "",
+    turnScopeId = "",
     eventListener,
     injectedMessage = false,
     injectedBy = "",
@@ -148,6 +149,7 @@ export class SessionTurnPersister {
     channelState = "",
   }) {
     const sessionAttachmentMetas = filterSessionAttachmentMetas(attachmentMetas);
+    const normalizedTurnScopeId = String(turnScopeId || "").trim();
     const sessionContent =
       role === MESSAGE_ROLE.TOOL
         ? sanitizeToolContentForSession(content, toolName)
@@ -171,6 +173,7 @@ export class SessionTurnPersister {
       taskStatus: taskStatus ?? "",
       dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
       parentDialogProcessId: parentDialogProcessId || "",
+      turnScopeId: normalizedTurnScopeId,
       tool_calls: Array.isArray(tool_calls) ? tool_calls : [],
       tool_call_id: tool_call_id || "",
       ...(!shouldOmitAttachmentMetasMirror ? { attachmentMetas: sessionAttachmentMetas } : {}),
@@ -240,6 +243,7 @@ export class SessionTurnPersister {
       taskStatus,
       dialogProcessId,
       parentDialogProcessId,
+      turnScopeId: normalizedTurnScopeId,
       tool_calls,
       tool_call_id,
       ...(!shouldOmitAttachmentMetasMirror ? { attachmentMetas: sessionAttachmentMetas } : {}),
@@ -276,6 +280,7 @@ export class SessionTurnPersister {
     messages = [],
     dialogProcessId = "",
     parentDialogProcessId = "",
+    turnScopeId = "",
     eventListener,
   }) {
     for (const messageItem of messages) {
@@ -341,6 +346,7 @@ export class SessionTurnPersister {
           !Array.isArray(messageItem.modelResponseMetadata)
             ? messageItem.modelResponseMetadata
             : null,
+        turnScopeId: String(messageItem.turnScopeId || turnScopeId || "").trim(),
         eventListener,
       });
     }
@@ -387,6 +393,7 @@ export class SessionTurnPersister {
       type: MESSAGE_TYPE.MESSAGE,
       dialogProcessId,
       parentDialogProcessId,
+      turnScopeId: String(partialAssistant?.turnScopeId || "").trim(),
       modelAlias: (partialAssistant?.modelAlias ?? "").trim(),
       modelName: (partialAssistant?.modelName ?? "").trim(),
       isMonotonic: true,

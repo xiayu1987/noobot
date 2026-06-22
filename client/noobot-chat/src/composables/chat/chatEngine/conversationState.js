@@ -357,6 +357,8 @@ export function createChatEngineConversationState({
     if (typeof onConversationState === "function") {
       const clientTurnId = String(
         statePayload?.clientTurnId ||
+          statePayload?.turnScopeId ||
+          statePayload?.client_turn_id ||
           (allowMessageClientTurnFallback ? getMessageClientTurnId(botMessage) : "") ||
           (allowMessageClientTurnFallback ? fallbackClientTurnId : "") ||
           "",
@@ -384,6 +386,8 @@ export function createChatEngineConversationState({
     ).trim();
     const clientTurnId = String(
       statePayload?.clientTurnId ||
+        statePayload?.turnScopeId ||
+        statePayload?.client_turn_id ||
         (allowMessageClientTurnFallback ? getMessageClientTurnId(botMessage) : "") ||
         (allowMessageClientTurnFallback ? fallbackClientTurnId : "") ||
         "",

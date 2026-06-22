@@ -120,6 +120,46 @@ export async function fetchRemoteMediaArtifact(
   }
 }
 
+function resolveGeneratedArtifactOwnership(runtime = {}, dialogProcessId = "") {
+  const systemRuntime = runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
+    ? runtime.systemRuntime
+    : {};
+  const runConfig = runtime?.runConfig && typeof runtime.runConfig === "object"
+    ? runtime.runConfig
+    : systemRuntime?.runConfig && typeof systemRuntime.runConfig === "object"
+      ? systemRuntime.runConfig
+      : {};
+  const turnScopeId = String(
+    systemRuntime?.turnScopeId ||
+      systemRuntime?.config?.turnScopeId ||
+      runConfig?.turnScopeId ||
+      "",
+  ).trim();
+  const resolvedDialogProcessId = resolveDialogProcessIdFromContext({
+    dialogProcessId: dialogProcessId || systemRuntime?.dialogProcessId || systemRuntime?.currentDialogProcessId || "",
+  });
+  const sessionId = String(systemRuntime?.sessionId || systemRuntime?.rootSessionId || "").trim();
+  return { turnScopeId, dialogProcessId: resolvedDialogProcessId, sessionId };
+}
+
+function annotateGeneratedAttachmentMetas(attachmentMetas = [], ownership = {}) {
+  const turnScopeId = String(ownership?.turnScopeId || "").trim();
+  const dialogProcessId = String(ownership?.dialogProcessId || "").trim();
+  const sessionId = String(ownership?.sessionId || "").trim();
+  return (Array.isArray(attachmentMetas) ? attachmentMetas : []).map((attachmentItem = {}) => {
+    const turnScope = {
+      ...(turnScopeId ? { turnScopeId } : {}),
+      ...(dialogProcessId ? { dialogProcessId } : {}),
+    };
+    return {
+      ...(attachmentItem && typeof attachmentItem === "object" ? attachmentItem : {}),
+      ...(sessionId && !String(attachmentItem?.sessionId || "").trim() ? { sessionId } : {}),
+      ...(Object.keys(turnScope).length ? { turnScope } : {}),
+    };
+  });
+}
+
+
 export async function persistModelGeneratedArtifacts({
   aiContent,
   runtime = {},
@@ -198,17 +238,21 @@ export async function persistModelGeneratedArtifacts({
     return true;
   });
   if (!attachmentMetas.length) return [];
+  const ownedAttachmentMetas = annotateGeneratedAttachmentMetas(
+    attachmentMetas,
+    resolveGeneratedArtifactOwnership(runtime, dialogProcessId),
+  );
   appendAttachmentMetasToRuntimeAndTurn({
     runtime,
     turnMessageStore,
-    attachmentMetas,
+    attachmentMetas: ownedAttachmentMetas,
   });
   emitEvent(eventListener, "model_generated_attachments_saved", {
     dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
-    count: attachmentMetas.length,
-    attachmentMetas,
+    count: ownedAttachmentMetas.length,
+    attachmentMetas: ownedAttachmentMetas,
   });
-  return attachmentMetas;
+  return ownedAttachmentMetas;
 }
 
 export function extractAttachmentMetasFromToolResult(toolName = "", toolResultText = "") {

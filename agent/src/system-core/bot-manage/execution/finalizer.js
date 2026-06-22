@@ -170,6 +170,7 @@ export class SessionExecutionFinalizer {
     parentDialogProcessId = "",
     caller = CALLER_ROLE.USER,
     dialogProcessId = "",
+    turnScopeId = "",
     agentResult = {},
     executionStartIndex = 0,
     runtimeEventListener = null,
@@ -194,6 +195,7 @@ export class SessionExecutionFinalizer {
       messages: turnMessages,
       dialogProcessId,
       parentDialogProcessId,
+      turnScopeId: String(turnScopeId || "").trim(),
       eventListener: runtimeEventListener,
     });
     await this.session.saveCurrentTurnTasks({
@@ -285,6 +287,7 @@ export class SessionExecutionFinalizer {
           executionLogs,
           executionSummary,
           dialogProcessId,
+          turnScopeId: String(turnScopeId || "").trim(),
         },
       },
     });
@@ -301,6 +304,7 @@ export class SessionExecutionFinalizer {
       executionLogs,
       executionSummary,
       dialogProcessId,
+      turnScopeId: String(turnScopeId || "").trim(),
       ...(resolvedParentAsyncResultContainer
         ? { parentAsyncResultContainer: resolvedParentAsyncResultContainer }
         : {}),

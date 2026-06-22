@@ -494,4 +494,71 @@ describe("useMessageFiles", () => {
     ]);
   });
 
+  it("prefers explicit attachment turnScopeId ownership over dialogProcessId fallback", () => {
+    const messageItem = {
+      role: "assistant",
+      dialogProcessId: "dp-reused",
+      clientTurnId: "turn-current",
+      attachmentMetas: [],
+    };
+    const previousTool = {
+      role: "tool",
+      dialogProcessId: "dp-reused",
+      clientTurnId: "turn-previous",
+      attachmentMetas: [
+        {
+          attachmentId: "prev-explicit",
+          name: "previous.png",
+          turnScope: { turnScopeId: "turn-previous", dialogProcessId: "dp-reused" },
+        },
+      ],
+    };
+
+    const { displayedAttachmentMetas } = useMessageFiles({
+      getMessageItem: () => messageItem,
+      getAllMessages: () => [previousTool, messageItem],
+      getSessionDocs: () => [],
+      getUserId: () => "admin",
+    });
+
+    expect(displayedAttachmentMetas.value).toEqual([]);
+  });
+
+  it("collects explicitly owned tool attachments for the current client turn", () => {
+    const messageItem = {
+      role: "assistant",
+      dialogProcessId: "dp-current",
+      clientTurnId: "turn-current",
+      attachmentMetas: [],
+    };
+    const currentTool = {
+      role: "tool",
+      dialogProcessId: "dp-current",
+      clientTurnId: "turn-current",
+      attachmentMetas: [
+        {
+          attachmentId: "current-explicit",
+          name: "current.png",
+          turnScope: { turnScopeId: "turn-current", dialogProcessId: "dp-current" },
+        },
+      ],
+    };
+
+    const { displayedAttachmentMetas } = useMessageFiles({
+      getMessageItem: () => messageItem,
+      getAllMessages: () => [currentTool, messageItem],
+      getSessionDocs: () => [],
+      getUserId: () => "admin",
+    });
+
+    expect(displayedAttachmentMetas.value).toEqual([
+      {
+        attachmentId: "current-explicit",
+        attachmentOwnerType: "agent",
+        name: "current.png",
+        turnScope: { turnScopeId: "turn-current", dialogProcessId: "dp-current" },
+      },
+    ]);
+  });
+
 });
