@@ -35,6 +35,17 @@ function stableNodeId({
   return `${processId}:${source}:${normalizeProcessString(logItem.event || logItem.type) || "event"}:${index}`;
 }
 
+
+function resolveRawLogExplicitTimestamp(rawLog = {}) {
+  const data = rawLog?.data && typeof rawLog.data === "object" ? rawLog.data : {};
+  return resolveExplicitProcessTimestamp({
+    timestamp: data?.timestamp || rawLog?.timestamp,
+    ts: data?.ts || rawLog?.ts,
+    createdAt: data?.createdAt || rawLog?.createdAt,
+    updatedAt: data?.updatedAt || rawLog?.updatedAt,
+  });
+}
+
 function statusFromLog(logItem = {}, terminal = false) {
   const status = normalizeProcessString(logItem.status).toLowerCase();
   const event = normalizeProcessString(logItem.event || logItem.type).toLowerCase();
@@ -60,7 +71,10 @@ export function createProcessEventFromLog(rawLog = {}, options = {}) {
     logItem.sequence ?? logItem.seq ?? options.sequence,
     options.fallbackSequence,
   );
-  const explicitTimestamp = resolveExplicitProcessTimestamp(logItem);
+  // normalizeProcessLog fills a missing ts with Date.now() for display.
+  // Do not use that generated timestamp as part of eventId, otherwise two
+  // equivalent logs created in different milliseconds dedupe as different events.
+  const explicitTimestamp = resolveRawLogExplicitTimestamp(rawLog);
   const timestamp = resolveProcessTimestamp(logItem);
   const nodeId = normalizeProcessString(options.nodeId) || stableNodeId({
     processId,
