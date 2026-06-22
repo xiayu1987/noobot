@@ -123,9 +123,9 @@ export function useChatList({
     }
   }
 
-  function initSessionsAfterMount() {
+  function initSessionsAfterMount(options = {}) {
     if (connected.value) {
-      fetchSessions();
+      fetchSessions("", options);
     } else {
       createLocalSession();
     }

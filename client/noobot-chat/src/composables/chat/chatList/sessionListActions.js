@@ -36,7 +36,12 @@ export function createSessionListActions({
   notify = () => {},
 } = {}) {
   async function selectSession(sessionId, options = {}) {
-    const { force = false, preserveCurrentMessages = false, silent = false } = options;
+    const {
+      force = false,
+      preserveCurrentMessages = false,
+      scrollToBottom = true,
+      silent = false,
+    } = options;
     if (!sessionId) return;
     const target = findSessionByAnyIdInList(sessions.value, sessionId);
     if (!target) return;
@@ -75,6 +80,7 @@ export function createSessionListActions({
             Boolean(preserveCurrentMessages) &&
             Array.isArray(target?.messages) &&
             target.messages.length > 0,
+          scrollToBottom,
         });
       }
       refreshSessionConnectorsAsync(targetPrimaryId);
@@ -86,7 +92,11 @@ export function createSessionListActions({
   }
 
   async function fetchSessions(preferredActiveId = "", options = {}) {
-    const { silent = false, preserveCurrentMessages = true } = options;
+    const {
+      silent = false,
+      preserveCurrentMessages = true,
+      scrollToBottom = true,
+    } = options;
     if (!ensureConnected()) return false;
     if (!silent) loadingSessions.value = true;
     try {
@@ -143,6 +153,7 @@ export function createSessionListActions({
           Boolean(existingNextSession) &&
           Array.isArray(existingNextSession?.messages) &&
           existingNextSession.messages.length > 0,
+        scrollToBottom,
       });
       return true;
     } catch (error) {
