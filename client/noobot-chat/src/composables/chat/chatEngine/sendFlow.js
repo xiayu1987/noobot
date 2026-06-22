@@ -20,6 +20,7 @@ import {
   handleInteractionRequestStreamEvent,
 } from "./streamHandlers";
 import { normalizeTrimmedString } from "./utils";
+import { SESSION_RUN_EVENT } from "../sessionRunStateMachine";
 
 export function createChatEngineSender({
   activeSession,
@@ -57,6 +58,7 @@ export function createChatEngineSender({
   selectedPlugins,
   sending,
   canStop,
+  applyRunStateEvent,
   serializeAttachments,
   streamOutput,
   translate,
@@ -84,8 +86,16 @@ export function createChatEngineSender({
     if (sending.value || !activeSession.value) return false;
     if (!hasTextToSend && uploadFiles.value.length === 0) return false;
 
-    sending.value = true;
-    if (canStop) canStop.value = true;
+    applyRunStateEvent?.({
+      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+      sessionId: String(activeSession.value?.backendSessionId || activeSession.value?.id || activeSessionId?.value || ""),
+      dialogProcessId: normalizeTrimmedString(options?.existingUserTurnId || options?.existingUserMessageId || ""),
+      source: "send_flow",
+    });
+    if (!applyRunStateEvent) {
+      sending.value = true;
+      if (canStop) canStop.value = true;
+    }
     const {
       text,
       filesToSend,

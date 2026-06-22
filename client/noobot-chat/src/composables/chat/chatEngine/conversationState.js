@@ -16,12 +16,17 @@ import {
   normalizePendingInteractionPayloads,
   normalizeTrimmedString,
 } from "./utils";
+import {
+  SESSION_RUN_EVENT,
+  clearRememberedStopRequests,
+} from "../sessionRunStateMachine";
 
 export function createChatEngineConversationState({
   activeSession,
   activeSessionId,
   sending,
   canStop,
+  applyRunStateEvent,
   interactionSubmitting,
   pendingInteractionRequest,
   clearPendingInteraction,
@@ -135,8 +140,18 @@ export function createChatEngineConversationState({
     const timer = setTimeout(() => {
       missingInteractionPayloadTimers.delete(key);
       if (hasPendingInteractionForDialog(dialogProcessId)) return;
-      sending.value = false;
-      if (canStop) canStop.value = false;
+      if (applyRunStateEvent) {
+        applyRunStateEvent({
+          type: SESSION_RUN_EVENT.LOCAL_FAILURE,
+          state: "error",
+          sessionId,
+          dialogProcessId,
+          source: "interaction_payload_missing",
+        });
+      } else {
+        sending.value = false;
+        if (canStop) canStop.value = false;
+      }
       clearPendingInteraction();
       const missingInteractionError = translate("chat.interactionPayloadMissing");
       applyAssistantFailureState(targetAssistantMessage, missingInteractionError);
@@ -167,8 +182,18 @@ export function createChatEngineConversationState({
       )
         .then((ok) => {
           if (ok !== false) return;
-          sending.value = false;
-          if (canStop) canStop.value = false;
+          if (applyRunStateEvent) {
+            applyRunStateEvent({
+              type: SESSION_RUN_EVENT.LOCAL_FAILURE,
+              state: "error",
+              sessionId: normalizeTrimmedString(sessionId || activeSession.value?.id),
+              dialogProcessId,
+              source: "expired_refresh_failed",
+            });
+          } else {
+            sending.value = false;
+            if (canStop) canStop.value = false;
+          }
           interactionSubmitting.value = false;
           clearPendingInteraction();
           const expiredErrorMessage = translate("chat.expiredRefreshFailed");
@@ -181,8 +206,18 @@ export function createChatEngineConversationState({
           notify({ type: "error", message: expiredErrorMessage });
         })
         .catch(() => {
-          sending.value = false;
-          if (canStop) canStop.value = false;
+          if (applyRunStateEvent) {
+            applyRunStateEvent({
+              type: SESSION_RUN_EVENT.LOCAL_FAILURE,
+              state: "error",
+              sessionId: normalizeTrimmedString(sessionId || activeSession.value?.id),
+              dialogProcessId,
+              source: "expired_refresh_failed",
+            });
+          } else {
+            sending.value = false;
+            if (canStop) canStop.value = false;
+          }
           interactionSubmitting.value = false;
           clearPendingInteraction();
           const expiredErrorMessage = translate("chat.expiredRefreshFailed");
@@ -309,8 +344,20 @@ export function createChatEngineConversationState({
       markUserMessageDialogProcessId({ targetAssistantMessage, dialogProcessId });
     }
     if (isInFlightConversationState(state)) {
-      sending.value = true;
-      if (canStop) canStop.value = state === "sending" || state === "reconnecting";
+      if (applyRunStateEvent) {
+        applyRunStateEvent({
+          type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+          state,
+          sessionId,
+          dialogProcessId,
+          source: "stream",
+          sourceEvent: String(statePayload?.sourceEvent || "").trim(),
+          seq: Number(statePayload?.seq || 0),
+        });
+      } else {
+        sending.value = true;
+        if (canStop) canStop.value = state === "sending" || state === "reconnecting";
+      }
       if (
         state === "sending" &&
         String(statePayload?.sourceEvent || "").trim().toLowerCase() === "interaction_response" &&
@@ -379,8 +426,21 @@ export function createChatEngineConversationState({
       return;
     }
     if (!isTerminalConversationState(state)) return;
-    sending.value = false;
-    if (canStop) canStop.value = false;
+    clearRememberedStopRequests({ sessionId, dialogProcessId });
+    if (applyRunStateEvent) {
+      applyRunStateEvent({
+        type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+        state,
+        sessionId,
+        dialogProcessId,
+        source: "stream",
+        sourceEvent: String(statePayload?.sourceEvent || "").trim(),
+        seq: Number(statePayload?.seq || 0),
+      });
+    } else {
+      sending.value = false;
+      if (canStop) canStop.value = false;
+    }
     if (typeof clearPendingInteractionIfObsolete === "function") {
       clearPendingInteractionIfObsolete({ sessionId, dialogProcessId });
     }
