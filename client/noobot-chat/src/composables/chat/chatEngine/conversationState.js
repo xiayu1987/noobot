@@ -25,6 +25,7 @@ import {
   rememberThinkingFinished,
   rememberThinkingStarted,
 } from "../thinkingTimingRegistry";
+import { getMessageClientTurnId, getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity";
 
 function parseThinkingTimingMs(value) {
   if (value === null || value === undefined || value === "") return 0;
@@ -278,10 +279,8 @@ export function createChatEngineConversationState({
     const startIndex = assistantIndex >= 0 ? assistantIndex - 1 : messages.length - 1;
     for (let index = startIndex; index >= 0; index -= 1) {
       const messageItem = messages[index];
-      if (normalizeTrimmedString(messageItem?.role) !== RoleEnum.USER) continue;
-      const currentDialogProcessId = normalizeTrimmedString(
-        messageItem?.dialogProcessId || messageItem?.dialogId,
-      );
+      if (getMessageRole(messageItem) !== RoleEnum.USER) continue;
+      const currentDialogProcessId = getMessageDialogProcessId(messageItem);
       if (currentDialogProcessId && currentDialogProcessId !== normalizedDialogProcessId) {
         return false;
       }
@@ -292,7 +291,7 @@ export function createChatEngineConversationState({
       const rawUserMessage = rawMessages.find((rawMessage) => rawMessage === messageItem) ||
         rawMessages.find(
           (rawMessage) =>
-            normalizeTrimmedString(rawMessage?.role) === RoleEnum.USER &&
+            getMessageRole(rawMessage) === RoleEnum.USER &&
             rawMessage?.ts !== undefined &&
             messageItem?.ts !== undefined &&
             rawMessage.ts === messageItem.ts,
@@ -304,7 +303,7 @@ export function createChatEngineConversationState({
   }
 
   function findTargetAssistantMessage({ botMessage = null, dialogProcessId = "" } = {}) {
-    if (botMessage && String(botMessage?.role || "").trim() === RoleEnum.ASSISTANT) {
+    if (botMessage && getMessageRole(botMessage) === RoleEnum.ASSISTANT) {
       return botMessage;
     }
     const messageList = Array.isArray(activeSession.value?.messages)
@@ -313,11 +312,11 @@ export function createChatEngineConversationState({
     const normalizedDpId = normalizeTrimmedString(dialogProcessId);
     for (let messageIndex = messageList.length - 1; messageIndex >= 0; messageIndex -= 1) {
       const messageItem = messageList[messageIndex];
-      if (normalizeTrimmedString(messageItem?.role) !== RoleEnum.ASSISTANT) continue;
+      if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) continue;
       if (
         normalizedDpId &&
-        normalizeTrimmedString(messageItem?.dialogProcessId) &&
-        normalizeTrimmedString(messageItem?.dialogProcessId) !== normalizedDpId
+        getMessageDialogProcessId(messageItem) &&
+        getMessageDialogProcessId(messageItem) !== normalizedDpId
       ) {
         continue;
       }
@@ -351,14 +350,14 @@ export function createChatEngineConversationState({
       : [];
     const botMessageInActiveSession = Boolean(
       botMessage &&
-      String(botMessage?.role || "").trim() === RoleEnum.ASSISTANT &&
+      getMessageRole(botMessage) === RoleEnum.ASSISTANT &&
       messageList.includes(botMessage),
     );
     const forActiveSession = isStateForActiveSession(sessionId) || botMessageInActiveSession;
     if (typeof onConversationState === "function") {
       const clientTurnId = String(
         statePayload?.clientTurnId ||
-          (allowMessageClientTurnFallback ? botMessage?.clientTurnId : "") ||
+          (allowMessageClientTurnFallback ? getMessageClientTurnId(botMessage) : "") ||
           (allowMessageClientTurnFallback ? fallbackClientTurnId : "") ||
           "",
       ).trim();
@@ -385,7 +384,7 @@ export function createChatEngineConversationState({
     ).trim();
     const clientTurnId = String(
       statePayload?.clientTurnId ||
-        (allowMessageClientTurnFallback ? botMessage?.clientTurnId : "") ||
+        (allowMessageClientTurnFallback ? getMessageClientTurnId(botMessage) : "") ||
         (allowMessageClientTurnFallback ? fallbackClientTurnId : "") ||
         "",
     ).trim();
@@ -419,7 +418,7 @@ export function createChatEngineConversationState({
       targetAssistantMessage.session_id = targetAssistantMessage.session_id || sessionId;
     }
     if (dialogProcessId && targetAssistantMessage) {
-      if (!String(targetAssistantMessage?.dialogProcessId || "").trim()) {
+      if (!getMessageDialogProcessId(targetAssistantMessage)) {
         targetAssistantMessage.dialogProcessId = dialogProcessId;
       }
       bindThinkingDialogProcess({ sessionId, dialogProcessId, clientTurnId });

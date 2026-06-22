@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { RoleEnum } from "../../../shared/constants/chatConstants";
+import { getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity";
 
 export function _trimStr(x) {
   return String(x || "").trim();
@@ -14,11 +15,11 @@ export function _ensureArray(x) {
 }
 
 export function _isAssistantRole(msg) {
-  return _trimStr(msg?.role) === RoleEnum.ASSISTANT;
+  return getMessageRole(msg) === RoleEnum.ASSISTANT;
 }
 
 export function _matchesDialogProcessId(msg, dpId) {
-  return _trimStr(msg?.dialogProcessId) === _trimStr(dpId);
+  return getMessageDialogProcessId(msg) === _trimStr(dpId);
 }
 
 export function normalizeExecutionLogForRealtime(logItem = {}) {

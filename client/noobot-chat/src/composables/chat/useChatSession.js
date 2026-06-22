@@ -40,6 +40,7 @@ import { useReconnectReplay } from "./useReconnectReplay";
 import { useChatStore } from "../../shared/stores/useChatStore";
 import { useProcessStore } from "../../shared/stores/useProcessStore";
 import { useLocale } from "../../shared/i18n/useLocale";
+import { getMessageRole } from "../infra/messageIdentity";
 
 export function useChatSession({
   userId,
@@ -327,7 +328,7 @@ export function useChatSession({
   }
 
   function shouldRenderMessageInChat(messageItem) {
-    const messageRole = String(messageItem?.role || "");
+    const messageRole = getMessageRole(messageItem);
     return messageRole !== RoleEnum.TOOL && !isHarnessInjectedMessage(messageItem);
   }
 

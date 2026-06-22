@@ -10,6 +10,7 @@ import {
   mergeCurrentUserMessagesIntoFoldedMessages,
   patchMessageObjectPreservingUiState,
 } from "../../infra/reconnectReplayModel";
+import { getMessageDialogProcessId } from "../../infra/messageIdentity";
 import { _ensureArray, _isAssistantRole, _matchesDialogProcessId, _trimStr } from "./utils";
 import {
   findAssistantMessageByDialogProcessId,
@@ -119,7 +120,7 @@ export function applyFoldedMessagesForDialogProcess(activeSession, foldedMessage
     let reusableMessage = findReusableMessageObject(nextMessage, existingMessages);
     if (!reusableMessage) {
       reusableMessage = findLatestPendingAssistantAfterLastUser(existingMessages);
-      if (reusableMessage && _trimStr(reusableMessage?.dialogProcessId)) {
+      if (reusableMessage && getMessageDialogProcessId(reusableMessage)) {
         reusableMessage = null;
       }
     }

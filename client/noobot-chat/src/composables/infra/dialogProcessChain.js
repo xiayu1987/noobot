@@ -3,6 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  getMessageDialogProcessId,
+  getMessageParentDialogProcessId,
+} from "./messageIdentity";
+
 export function mergeAttachmentMetas(existing = [], incoming = []) {
   const existingList = Array.isArray(existing) ? existing : [];
   const incomingList = Array.isArray(incoming) ? incoming : [];
@@ -34,11 +39,9 @@ export function flattenSessionMessages(sessionDocs = []) {
 export function buildDialogProcessParentMap(messages = []) {
   const parentByDialogProcessId = new Map();
   for (const messageItem of Array.isArray(messages) ? messages : []) {
-    const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+    const dialogProcessId = getMessageDialogProcessId(messageItem);
     if (!dialogProcessId) continue;
-    const parentDialogProcessId = String(
-      messageItem?.parentDialogProcessId || "",
-    ).trim();
+    const parentDialogProcessId = getMessageParentDialogProcessId(messageItem);
     if (!parentDialogProcessId) continue;
     if (!parentByDialogProcessId.has(dialogProcessId)) {
       parentByDialogProcessId.set(dialogProcessId, parentDialogProcessId);
@@ -78,12 +81,8 @@ export function collectRelatedDialogProcessIds(messages = [], rootDialogProcessI
   while (changed) {
     changed = false;
     for (const sessionMessage of Array.isArray(messages) ? messages : []) {
-      const parentDialogProcessId = String(
-        sessionMessage?.parentDialogProcessId || "",
-      ).trim();
-      const childDialogProcessId = String(
-        sessionMessage?.dialogProcessId || "",
-      ).trim();
+      const parentDialogProcessId = getMessageParentDialogProcessId(sessionMessage);
+      const childDialogProcessId = getMessageDialogProcessId(sessionMessage);
       if (!parentDialogProcessId || !childDialogProcessId) continue;
       if (!relatedDialogProcessIdSet.has(parentDialogProcessId)) continue;
       if (relatedDialogProcessIdSet.has(childDialogProcessId)) continue;

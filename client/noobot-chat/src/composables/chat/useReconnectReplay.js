@@ -10,6 +10,7 @@ import {
   findLatestPendingAssistantAfterLastUser,
 } from "../infra/reconnectReplayModel";
 import { RoleEnum } from "../../shared/constants/chatConstants";
+import { getMessageRole } from "../infra/messageIdentity";
 import {
   isAutoResolvedInteraction,
   normalizeInteractionRequestPayload,
@@ -328,7 +329,7 @@ export function useReconnectReplay({
       findLatestPendingAssistantAfterLastUser(messages) ||
       [...messages]
         .reverse()
-        .find((messageItem) => String(messageItem?.role || "").trim() === RoleEnum.ASSISTANT) ||
+        .find((messageItem) => getMessageRole(messageItem) === RoleEnum.ASSISTANT) ||
       null
     );
   }

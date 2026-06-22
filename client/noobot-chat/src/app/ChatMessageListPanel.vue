@@ -8,6 +8,7 @@ import { computed, ref, watch } from "vue";
 import ChatMessageItem from "../modules/message/ChatMessageItem.vue";
 import { useLocale } from "../shared/i18n/useLocale";
 import { resolveSessionRunStateForMessage } from "../composables/chat/sessionRunStateMachine";
+import { getMessageDialogProcessId, getMessageRole } from "../composables/infra/messageIdentity";
 
 defineEmits(["open-thinking-details"]);
 
@@ -56,8 +57,8 @@ function getWrapRef() {
 
 function getMessageRenderKey(messageItem = {}, messageIndex = 0) {
   const stableIndex = Number.isFinite(Number(messageIndex)) ? Number(messageIndex) : 0;
-  const role = String(messageItem?.role || "").trim();
-  const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+  const role = getMessageRole(messageItem);
+  const dialogProcessId = getMessageDialogProcessId(messageItem);
   const taskId = String(messageItem?.taskId || "").trim();
   const toolCallId = String(messageItem?.tool_call_id || "").trim();
   // Do not include content or ts in the key: both can change when backend

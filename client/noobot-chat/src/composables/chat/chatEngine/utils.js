@@ -6,6 +6,7 @@
 import { RoleEnum } from "../../../shared/constants/chatConstants";
 import { messages } from "noobot-i18n/client/messages";
 import { foldConversationMessages } from "../../infra/messageModel";
+import { getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity";
 
 export function normalizeTrimmedString(value) {
   return String(value || "").trim();
@@ -196,7 +197,7 @@ export function pickAssistantMessagesForCurrentTurn({ foldedMessages = [], dialo
   const messageList = Array.isArray(foldedMessages) ? foldedMessages : [];
   const lastUserMessageIndex = (() => {
     for (let messageIndex = messageList.length - 1; messageIndex >= 0; messageIndex -= 1) {
-      if (String(messageList[messageIndex]?.role || "") === RoleEnum.USER) {
+      if (getMessageRole(messageList[messageIndex]) === RoleEnum.USER) {
         return messageIndex;
       }
     }
@@ -205,13 +206,13 @@ export function pickAssistantMessagesForCurrentTurn({ foldedMessages = [], dialo
   const assistantMessagesAfterLastUser = messageList.filter(
     (messageItem, messageIndex) =>
       messageIndex > lastUserMessageIndex &&
-      String(messageItem?.role || "") === RoleEnum.ASSISTANT,
+      getMessageRole(messageItem) === RoleEnum.ASSISTANT,
   );
   if (!assistantMessagesAfterLastUser.length) return [];
   if (!normalizedDialogProcessId) return assistantMessagesAfterLastUser;
   const matchedMessages = assistantMessagesAfterLastUser.filter(
     (messageItem) =>
-      normalizeTrimmedString(messageItem?.dialogProcessId) === normalizedDialogProcessId,
+      getMessageDialogProcessId(messageItem) === normalizedDialogProcessId,
   );
   return matchedMessages.length ? matchedMessages : assistantMessagesAfterLastUser;
 }
@@ -240,7 +241,7 @@ export function buildWorkflowMessageSignature(messageItem = {}) {
       "",
   ).trim();
   return [
-    normalizeTrimmedString(messageItem?.dialogProcessId),
+    getMessageDialogProcessId(messageItem),
     normalizeTrimmedString(messageItem?.content),
     semanticPreview,
   ].join("|");
@@ -330,4 +331,3 @@ export function isTerminalConversationState(state = "") {
     "canceled",
   ].includes(normalizeTrimmedString(state));
 }
-

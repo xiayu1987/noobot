@@ -5,6 +5,7 @@
  */
 import { RoleEnum, StreamEventEnum } from "../../../shared/constants/chatConstants";
 import { findLatestPendingAssistantAfterLastUser } from "../../infra/reconnectReplayModel";
+import { getMessageRole } from "../../infra/messageIdentity";
 import { _ensureArray, _trimStr } from "./utils";
 import { findAssistantMessageByDialogProcessId } from "./messageLookup";
 
@@ -22,7 +23,7 @@ export function shouldHydrateSessionBeforeReplay({
     : [];
   if (findLatestPendingAssistantAfterLastUser(messageList)) return false;
   const lastMessage = messageList.length ? messageList[messageList.length - 1] : null;
-  if (_trimStr(lastMessage?.role) === RoleEnum.USER) return false;
+  if (getMessageRole(lastMessage) === RoleEnum.USER) return false;
   return (_ensureArray(messages)).some((envelope) => {
     const eventName = _trimStr(envelope?.event);
     return eventName === StreamEventEnum.DELTA || eventName === StreamEventEnum.THINKING;

@@ -10,6 +10,11 @@ import {
   mergeAttachmentMetas,
   resolveRootDialogProcessIdByChain,
 } from "../../infra/dialogProcessChain";
+import {
+  getMessageClientTurnId,
+  getMessageDialogProcessId,
+  getMessageRole,
+} from "../../infra/messageIdentity";
 
 const IN_FLIGHT_CHANNEL_STATES = new Set([
   "sending",
@@ -31,9 +36,7 @@ function preserveRunningThinkingState(existingMessage = {}, detailMessageItem = 
   const existingThinkingFinishedAt = String(
     existingMessage?.thinkingFinishedAt || existingMessage?.thinking_finished_at || "",
   ).trim();
-  const existingClientTurnId = String(
-    existingMessage?.clientTurnId || existingMessage?.client_turn_id || "",
-  ).trim();
+  const existingClientTurnId = getMessageClientTurnId(existingMessage);
   const existingPending = existingMessage?.pending === true;
   return () => {
     if (existingChannelState && !detailMessageItem?.channelState) {
@@ -47,7 +50,7 @@ function preserveRunningThinkingState(existingMessage = {}, detailMessageItem = 
       existingMessage.thinkingFinishedAt = existingThinkingFinishedAt;
       existingMessage.thinking_finished_at = existingThinkingFinishedAt;
     }
-    if (existingClientTurnId && !String(detailMessageItem?.clientTurnId || detailMessageItem?.client_turn_id || "").trim()) {
+    if (existingClientTurnId && !getMessageClientTurnId(detailMessageItem)) {
       existingMessage.clientTurnId = existingClientTurnId;
       existingMessage.client_turn_id = existingClientTurnId;
     }
@@ -71,7 +74,7 @@ export function buildWorkflowMessageSignature(messageItem = {}) {
       "",
   ).trim();
   return [
-    String(messageItem?.dialogProcessId || "").trim(),
+    getMessageDialogProcessId(messageItem),
     String(messageItem?.content || "").trim(),
     semanticPreview,
   ].join("|");
@@ -94,22 +97,20 @@ export function normalizeMessageContent(value = "") {
 }
 
 export function normalizeMessageRole(messageItem = {}) {
-  return normalizeMessageContent(messageItem?.role);
+  return getMessageRole(messageItem);
 }
 
 export function buildMessageIdentity(messageItem = {}) {
   return [
     normalizeMessageRole(messageItem),
-    normalizeMessageContent(messageItem?.dialogProcessId || messageItem?.dialogId),
+    getMessageDialogProcessId(messageItem),
     normalizeMessageContent(messageItem?.content),
   ].join("|");
 }
 
 export function findExistingMessageIndexForDetailMessage(existingMessages = [], detailMessageItem = {}) {
   const detailRole = normalizeMessageRole(detailMessageItem);
-  const detailDialogProcessId = normalizeMessageContent(
-    detailMessageItem?.dialogProcessId || detailMessageItem?.dialogId,
-  );
+  const detailDialogProcessId = getMessageDialogProcessId(detailMessageItem);
   const detailContent = normalizeMessageContent(detailMessageItem?.content);
   if (!detailRole || (!detailDialogProcessId && !detailContent)) return -1;
   const identity = buildMessageIdentity(detailMessageItem);
@@ -121,8 +122,7 @@ export function findExistingMessageIndexForDetailMessage(existingMessages = [], 
     const dialogIndex = existingMessages.findIndex(
       (messageItem) =>
         normalizeMessageRole(messageItem) === detailRole &&
-        normalizeMessageContent(messageItem?.dialogProcessId || messageItem?.dialogId) ===
-          detailDialogProcessId,
+        getMessageDialogProcessId(messageItem) === detailDialogProcessId,
     );
     if (dialogIndex >= 0) return dialogIndex;
   }
@@ -177,8 +177,8 @@ export function buildChildAttachmentMetasByParentDialogProcessId({
   const output = new Map();
   const rootDialogProcessIdSet = new Set(
     (Array.isArray(rootMessages) ? rootMessages : [])
-      .filter((messageItem) => String(messageItem?.role || "") === RoleEnum.ASSISTANT)
-      .map((messageItem) => String(messageItem?.dialogProcessId || "").trim())
+      .filter((messageItem) => getMessageRole(messageItem) === RoleEnum.ASSISTANT)
+      .map((messageItem) => getMessageDialogProcessId(messageItem))
       .filter(Boolean),
   );
   if (!rootDialogProcessIdSet.size) return output;
@@ -234,8 +234,8 @@ export function mergeChildTurnAttachmentsIntoRootMessages({
   if (!childAttachmentMetasByParentDialogProcessId.size) return messages;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const messageItem = messages[index];
-    if (String(messageItem?.role || "") !== RoleEnum.ASSISTANT) continue;
-    const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+    if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) continue;
+    const dialogProcessId = getMessageDialogProcessId(messageItem);
     if (!dialogProcessId) continue;
     const childAttachmentMetas =
       childAttachmentMetasByParentDialogProcessId.get(dialogProcessId) || [];
@@ -252,7 +252,7 @@ export function applySummaryToolLogs(sessionItem, sessionDocs = []) {
   const logsByDialogProcessId = new Map();
   for (const sessionDoc of sessionDocs) {
     for (const logItem of Array.isArray(sessionDoc?.toolLogSummaries) ? sessionDoc.toolLogSummaries : []) {
-      const dialogProcessId = String(logItem?.dialogProcessId || "").trim();
+      const dialogProcessId = getMessageDialogProcessId(logItem);
       if (!dialogProcessId) continue;
       logsByDialogProcessId.set(dialogProcessId, [
         ...(logsByDialogProcessId.get(dialogProcessId) || []),
@@ -261,8 +261,8 @@ export function applySummaryToolLogs(sessionItem, sessionDocs = []) {
     }
   }
   for (const messageItem of sessionItem.messages || []) {
-    if (String(messageItem?.role || "") !== RoleEnum.ASSISTANT) continue;
-    const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+    if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) continue;
+    const dialogProcessId = getMessageDialogProcessId(messageItem);
     messageItem.completedToolLogs = logsByDialogProcessId.get(dialogProcessId) || [];
   }
 }

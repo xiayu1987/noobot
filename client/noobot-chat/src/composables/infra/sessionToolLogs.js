@@ -3,6 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  getMessageDialogProcessId,
+  getMessageParentDialogProcessId,
+  getMessageRole,
+} from "./messageIdentity";
+
 function logKey(item = {}) {
   return `${item.sessionId || ""}|${item.toolCallId || ""}|${item.type || ""}|${item.event || ""}|${item.text || ""}|${item.ts || ""}`;
 }
@@ -195,13 +201,11 @@ function buildToolLogsFromSessions(sessionDocuments = []) {
     const toolNameByCallId = new Map();
 
     for (const messageItem of messageList) {
-      const messageRole = String(messageItem?.role || "");
+      const messageRole = getMessageRole(messageItem);
       const messageType = String(messageItem?.type || "");
       const messageTime = String(messageItem?.ts || new Date().toISOString());
-      const dialogProcessId = String(messageItem?.dialogProcessId || "");
-      const parentDialogProcessId = String(
-        messageItem?.parentDialogProcessId || "",
-      );
+      const dialogProcessId = getMessageDialogProcessId(messageItem);
+      const parentDialogProcessId = getMessageParentDialogProcessId(messageItem);
 
       if (
         messageType === "tool_call" ||
@@ -308,10 +312,8 @@ function buildToolLogsByDialogProcessId(sessionDocuments = []) {
   const logsByDialogProcessId = new Map();
   const childDialogIdsByParentDialogId = new Map();
   for (const toolLog of relevantLogs) {
-    const dialogProcessId = String(toolLog?.dialogProcessId || "").trim();
-    const parentDialogProcessId = String(
-      toolLog?.parentDialogProcessId || "",
-    ).trim();
+    const dialogProcessId = getMessageDialogProcessId(toolLog);
+    const parentDialogProcessId = getMessageParentDialogProcessId(toolLog);
     if (dialogProcessId) {
       const existingLogs = logsByDialogProcessId.get(dialogProcessId) || [];
       logsByDialogProcessId.set(dialogProcessId, [...existingLogs, toolLog]);
@@ -326,8 +328,8 @@ function buildToolLogsByDialogProcessId(sessionDocuments = []) {
 
   const rootDialogProcessIds = new Set();
   for (const messageItem of rootSessionMessages) {
-    if (String(messageItem?.role || "") !== "assistant") continue;
-    const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+    if (getMessageRole(messageItem) !== "assistant") continue;
+    const dialogProcessId = getMessageDialogProcessId(messageItem);
     if (dialogProcessId) rootDialogProcessIds.add(dialogProcessId);
   }
 
@@ -372,8 +374,8 @@ function applyCompletedToolLogsToMessages(messages = [], sessionDocuments = []) 
   const rootSessionDocument = pickRootSessionDocument(sessionDocuments);
   const rootSessionId = String(rootSessionDocument?.sessionId || "");
   for (const messageItem of messages || []) {
-    if (String(messageItem?.role || "") !== "assistant") continue;
-    const dialogProcessId = String(messageItem?.dialogProcessId || "");
+    if (getMessageRole(messageItem) !== "assistant") continue;
+    const dialogProcessId = getMessageDialogProcessId(messageItem);
     const matchedToolLogs = (groupedLogs.get(dialogProcessId) || []).filter(
       (toolLogItem) =>
         String(toolLogItem?.sessionId || "") !== rootSessionId ||

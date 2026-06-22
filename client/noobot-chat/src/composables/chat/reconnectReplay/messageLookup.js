@@ -5,6 +5,7 @@
  */
 import { RoleEnum } from "../../../shared/constants/chatConstants";
 import { _isAssistantRole, _matchesDialogProcessId, _trimStr } from "./utils";
+import { getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity";
 
 export function findAssistantMessageByDialogProcessId(activeSession, dialogProcessId = "") {
   const normalizedDpId = _trimStr(dialogProcessId);
@@ -42,9 +43,9 @@ export function findLatestAssistantMessageForRealtimeLogs({
     ? activeSession.value.messages
     : [];
   return [...messageList].reverse().find((messageItem) => {
-    if (_trimStr(messageItem?.role) !== RoleEnum.ASSISTANT) return false;
+    if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) return false;
     if (!normalizedDpId) return true;
-    const itemDpId = _trimStr(messageItem?.dialogProcessId);
+    const itemDpId = getMessageDialogProcessId(messageItem);
     return !itemDpId || itemDpId === normalizedDpId;
   }) || null;
 }
