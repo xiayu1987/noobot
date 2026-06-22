@@ -52,6 +52,7 @@ export function createChatEngineSender({
   interactionSubmitting,
   isImageMime,
   locale,
+  locateSendingStartedMessage,
   locateDoneMessage,
   makeViewMessage,
   mergeAssistantAttachmentMetas,
@@ -150,6 +151,12 @@ export function createChatEngineSender({
         existingUserMessageId: options?.existingUserMessageId || "",
       });
       const activeProcessStore = getResolvedProcessStore();
+      let locatedSendingStartedMessage = false;
+      const locateSendingStartedMessageOnce = () => {
+        if (locatedSendingStartedMessage) return;
+        locatedSendingStartedMessage = true;
+        locateSendingStartedMessage?.();
+      };
 
       await chatWebSocketClient.stream(payload, ({ event, data }) => {
         applyConversationStateFromEvent(event, data || {}, {
@@ -176,6 +183,7 @@ export function createChatEngineSender({
             refreshSessionConnectorsAsync,
             mergeAssistantAttachmentMetas,
             processStore: activeProcessStore,
+            locateSendingStartedMessageOnce,
           })
         ) {
           return;
@@ -204,6 +212,7 @@ export function createChatEngineSender({
             mergeAssistantAttachmentMetas,
             locateDoneMessage,
             processStore: activeProcessStore,
+            locateSendingStartedMessageOnce,
           });
         }
       });

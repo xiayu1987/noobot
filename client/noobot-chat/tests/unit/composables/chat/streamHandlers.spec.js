@@ -55,6 +55,7 @@ describe("chatEngine streamHandlers", () => {
   it("keeps visible thinking logs with readable text", () => {
     const botMessage = makeBotMessage();
     const scrollOnFirstResponseOnce = vi.fn();
+    const locateSendingStartedMessageOnce = vi.fn();
 
     handleThinkingStreamEvent({
       data: { event: "tool_call", dialogProcessId: "dp-1" },
@@ -67,6 +68,7 @@ describe("chatEngine streamHandlers", () => {
         dialogProcessId: "dp-1",
       }),
       scrollOnFirstResponseOnce,
+      locateSendingStartedMessageOnce,
     });
 
     expect(botMessage.dialogProcessId).toBe("dp-1");
@@ -74,6 +76,7 @@ describe("chatEngine streamHandlers", () => {
     expect(botMessage.realtimeLogs).toEqual([
       expect.objectContaining({ event: "tool_call", text: "开始：执行命令：npm test" }),
     ]);
+    expect(locateSendingStartedMessageOnce).toHaveBeenCalledTimes(1);
     expect(scrollOnFirstResponseOnce).toHaveBeenCalledTimes(1);
   });
 
@@ -144,6 +147,7 @@ describe("chatEngine streamHandlers", () => {
   it("locates the done message through navigator callback instead of direct bottom scroll", () => {
     const botMessage = makeBotMessage();
     const locateDoneMessage = vi.fn();
+    const locateSendingStartedMessageOnce = vi.fn();
     const scrollBottom = vi.fn();
 
     handleDoneStreamEvent({
@@ -160,10 +164,47 @@ describe("chatEngine streamHandlers", () => {
       mergeAssistantAttachmentMetas: vi.fn(),
       scrollBottom,
       locateDoneMessage,
+      locateSendingStartedMessageOnce,
     });
 
+    expect(locateSendingStartedMessageOnce).toHaveBeenCalledTimes(1);
     expect(locateDoneMessage).toHaveBeenCalledTimes(1);
     expect(scrollBottom).not.toHaveBeenCalled();
+  });
+
+  it("locates sending-started before done when non-streaming done logs provide dialogProcessId", () => {
+    const botMessage = makeBotMessage();
+    const callOrder = [];
+    const locateSendingStartedMessageOnce = vi.fn(() => callOrder.push("started"));
+    const locateDoneMessage = vi.fn(() => callOrder.push("done"));
+
+    handleDoneStreamEvent({
+      data: {
+        executionLogs: [
+          {
+            event: "tool_result",
+            type: "tool_result",
+            displayText: "npm test",
+            dialogProcessId: "dp-from-log",
+          },
+        ],
+      },
+      requestedTextStreaming: false,
+      botMessage,
+      activeSession: { value: {} },
+      activeSessionId: { value: "local-1" },
+      clearPendingInteraction: vi.fn(),
+      classifyRealtimeLog: (data) => data,
+      scrollOnFirstResponseOnce: vi.fn(),
+      makeViewMessage: (messageItem) => messageItem,
+      foldMessagesForView: (messages) => messages,
+      mergeAssistantAttachmentMetas: vi.fn(),
+      locateSendingStartedMessageOnce,
+      locateDoneMessage,
+    });
+
+    expect(botMessage.dialogProcessId).toBe("dp-from-log");
+    expect(callOrder).toEqual(["started", "done"]);
   });
 
 
@@ -222,6 +263,7 @@ describe("chatEngine streamHandlers", () => {
   it("does not append pure internal event placeholders from delta chunks", () => {
     const botMessage = { content: "", dialogProcessId: "" };
     const scrollOnFirstResponseOnce = vi.fn();
+    const locateSendingStartedMessageOnce = vi.fn();
 
     handleDeltaStreamEvent({
       data: {
@@ -236,10 +278,12 @@ describe("chatEngine streamHandlers", () => {
       },
       botMessage,
       scrollOnFirstResponseOnce,
+      locateSendingStartedMessageOnce,
     });
 
     expect(botMessage.dialogProcessId).toBe("dp-1");
     expect(botMessage.content).toBe("");
+    expect(locateSendingStartedMessageOnce).toHaveBeenCalledTimes(1);
     expect(scrollOnFirstResponseOnce).not.toHaveBeenCalled();
   });
 

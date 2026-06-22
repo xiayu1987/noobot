@@ -71,7 +71,6 @@ export function prepareChatSend({
   const scrollOnFirstResponseOnce = () => {
     if (scrolledOnFirstResponse) return;
     scrolledOnFirstResponse = true;
-    scrollBottom();
   };
 
   return {

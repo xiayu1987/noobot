@@ -308,11 +308,29 @@ function handleSelectChatMessageNavItem(item = {}) {
   });
 }
 
+function locateLastChatMessageNavItem() {
+  nextTick(() => {
+    const items = Array.isArray(chatMessageNavItems.value) ? chatMessageNavItems.value : [];
+    const lastItem = items[items.length - 1] || null;
+    if (!String(lastItem?.id || "").trim()) return;
+    selectChatMessageNavigatorItem({
+      item: lastItem,
+      currentMessageAnchorId,
+      messageListPanelRef,
+      isMobile,
+      mobileChatNavigatorVisible,
+      activeSessionId,
+      pushPseudoRoute,
+    });
+  });
+}
+
+function locateSendingStartedMessage() {
+  locateLastChatMessageNavItem();
+}
+
 function locateDoneMessage() {
-  const items = Array.isArray(chatMessageNavItems.value) ? chatMessageNavItems.value : [];
-  const lastItem = items[items.length - 1] || null;
-  if (!String(lastItem?.id || "").trim()) return;
-  handleSelectChatMessageNavItem(lastItem);
+  locateLastChatMessageNavItem();
 }
 
 function openChatMessageNavigator() {
@@ -424,6 +442,7 @@ const {
   isImageMime,
   classifyRealtimeLog,
   scrollBottom,
+  locateSendingStartedMessage,
   locateDoneMessage,
   notify: notifyUi,
   clearUploadSelection: () => composerRef.value?.clearUploadSelection?.(),
