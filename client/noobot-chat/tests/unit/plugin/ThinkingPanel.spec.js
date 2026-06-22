@@ -189,7 +189,24 @@ describe("ThinkingPanel", () => {
 
     expect(wrapper.find(".execution-log-line").text()).toContain("process-live");
     expect(wrapper.text()).not.toContain("legacy-live");
-    expect(wrapper.find("button").text()).toContain("6");
+    expect(wrapper.find("button").text()).toContain("1");
+  });
+
+  it("uses thinking detail count rather than execution total for detail action label", () => {
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: false,
+      hasThinkingDetails: true,
+      thinkingDetailCount: 2,
+      executionLogTotal: 9,
+      realtimeLogs: [
+        { event: "thinking", type: "thinking", text: "plan" },
+        { event: "tool_result", type: "tool_result", text: "cmd" },
+      ],
+    });
+
+    expect(wrapper.find("button").text()).toContain("2");
+    expect(wrapper.find("button").text()).not.toContain("9");
   });
 
   it("shows only latest ten completed tool logs in execution process after reload", () => {
@@ -410,7 +427,7 @@ describe("ThinkingPanel", () => {
     expect(lines).toHaveLength(10);
     expect(lines[0].text()).toBe("log-3");
     expect(lines[9].text()).toBe("log-12");
-    expect(wrapper.find("button").text()).toContain("12");
+    expect(wrapper.find("button").text()).toContain("0");
   });
 
   it("does not backfill injected messages while current assistant is pending before streaming starts", () => {

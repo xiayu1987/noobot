@@ -40,6 +40,16 @@ describe("thinking details state", () => {
     })).toBe(4);
   });
 
+  it("falls through empty normalized log arrays to summary thinking detail count", () => {
+    expect(getThinkingDetailsCount({
+      role: "assistant",
+      hasThinkingDetails: true,
+      completedToolLogs: [],
+      realtimeLogs: [],
+      thinkingDetailCount: 4,
+    })).toBe(4);
+  });
+
   it("builds a translated title with the derived count", () => {
     const translate = vi.fn((key, params) => `${key}:${params.count}`);
 

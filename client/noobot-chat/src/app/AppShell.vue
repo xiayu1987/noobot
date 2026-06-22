@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { ref, watch, computed, nextTick, onMounted, onBeforeUnmount } from "vue";
+import { ref, computed, nextTick, onMounted, onBeforeUnmount } from "vue";
 import noobotLogo from "../shared/assets/noobot.svg";
 import AppShellDrawers from "./AppShellDrawers.vue";
 import AppShellLayout from "./AppShellLayout.vue";
@@ -26,15 +26,11 @@ import { frontendConfig } from "../shared/config/frontendConfig";
 import { PSEUDO_PANEL, useAppShellPseudoRoute } from "./useAppShellPseudoRoute";
 import { useAppShellPreferences } from "./useAppShellPreferences";
 import { useThinkingDetailsPanel } from "./useThinkingDetailsPanel";
-import { useMobileChatNavigatorTrigger } from "./useMobileChatNavigatorTrigger";
 import { useOpenVSCodeAction } from "./useOpenVSCodeAction";
-import { createChatMessageScrollSync } from "./chatMessageScrollSync";
-import {
-  closeChatMessageNavigator,
-  openChatMessageNavigator as openChatMessageNavigatorState,
-  selectChatMessageNavigatorItem,
-} from "./state/chatMessageNavigatorState";
-import { buildChatMessageNavItems } from "./state/chatMessageNavItemsState";
+import { useChatMessageNavigatorPanel } from "./useChatMessageNavigatorPanel";
+import { useAppShellPanelActions } from "./useAppShellPanelActions";
+import { useAppShellSessionActions } from "./useAppShellSessionActions";
+import { useAppShellInteractionActions } from "./useAppShellInteractionActions";
 import {
   classifyRealtimeLog,
   formatFileSize,
@@ -42,11 +38,6 @@ import {
   hasActiveSessionForReconnect as hasActiveSessionForReconnectState,
   isImageMime,
 } from "./state/sessionMessageState";
-import {
-  submitInteractionCancel,
-  submitInteractionConfirm,
-  updateDrawerModelVisibility,
-} from "./appShellEventHandlers";
 
 // --- Markdown rendering (module-level singleton) ---
 const { renderMarkdown } = useMarkdownRenderer();
@@ -77,9 +68,16 @@ const layoutRef = ref();
 const composerRef = computed(() => layoutRef.value?.composerRef || null);
 const messageListPanelRef = computed(() => layoutRef.value?.messageListPanelRef || null);
 const composerMorePanelVisible = ref(false);
-const chatNavigatorVisible = ref(true);
-const mobileChatNavigatorVisible = ref(false);
-const currentMessageAnchorId = ref("");
+let chatMessageNavigatorPanel = null;
+let appShellPanelActions = null;
+
+function locateSendingStartedMessage() {
+  chatMessageNavigatorPanel?.locateSendingStartedMessage?.();
+}
+
+function locateDoneMessage() {
+  chatMessageNavigatorPanel?.locateDoneMessage?.();
+}
 
 const {
   userId,
@@ -131,89 +129,6 @@ const {
 });
 bindScenarioConfig(scenarioConfig);
 
-const chatMessageNavItems = computed(() => buildChatMessageNavItems({
-  messages: activeSession.value?.messages || [],
-  shouldRenderMessageInChat,
-  getMessageAnchorId: messageListPanelRef.value?.getMessageAnchorId,
-  translateSession: () => translate("common.session"),
-}));
-
-function handleSelectChatMessageNavItem(item = {}) {
-  selectChatMessageNavigatorItem({
-    item,
-    currentMessageAnchorId,
-    messageListPanelRef,
-    isMobile,
-    mobileChatNavigatorVisible,
-    activeSessionId,
-    pushPseudoRoute,
-  });
-}
-
-function locateLastChatMessageNavItem() {
-  nextTick(() => {
-    const items = Array.isArray(chatMessageNavItems.value) ? chatMessageNavItems.value : [];
-    const lastItem = items[items.length - 1] || null;
-    if (!String(lastItem?.id || "").trim()) return;
-    selectChatMessageNavigatorItem({
-      item: lastItem,
-      currentMessageAnchorId,
-      messageListPanelRef,
-      isMobile,
-      mobileChatNavigatorVisible,
-      activeSessionId,
-      pushPseudoRoute,
-    });
-  });
-}
-
-function locateSendingStartedMessage() {
-  locateLastChatMessageNavItem();
-}
-
-function locateDoneMessage() {
-  locateLastChatMessageNavItem();
-}
-
-function openChatMessageNavigator() {
-  openChatMessageNavigatorState({
-    mobileChatNavigatorVisible,
-    activeSessionId,
-    currentMessageAnchorId,
-    chatNavigatorPanel: PSEUDO_PANEL.CHAT_NAVIGATOR,
-    pushPseudoRoute,
-  });
-}
-
-const {
-  mobileChatNavigatorTriggerStyle,
-  mobileChatNavigatorTriggerDragging,
-  handleMobileChatNavigatorTriggerClick,
-  handleMobileChatNavigatorTriggerPointerDown,
-  handleMobileChatNavigatorTriggerPointerMove,
-  handleMobileChatNavigatorTriggerPointerUp,
-  releaseMobileChatNavigatorTrigger,
-} = useMobileChatNavigatorTrigger({
-  isMobile,
-  openChatMessageNavigator,
-});
-
-function handleMobileChatNavigatorClosed() {
-  closeChatMessageNavigator({
-    activeSessionId,
-    currentMessageAnchorId,
-    replacePseudoRoute,
-  });
-}
-
-const {
-  bindChatMessageScrollSync,
-  unbindChatMessageScrollSync,
-} = createChatMessageScrollSync({
-  currentMessageAnchorId,
-  messageListPanelRef,
-});
-
 function scrollBottom() {
   nextTick(() => {
     const panel = messageListPanelRef.value;
@@ -234,6 +149,7 @@ const {
   sessions,
   activeSessionId,
   activeSession,
+  runStateSnapshot,
   loadingSessions,
   loadingSessionDetail,
   newSession,
@@ -287,6 +203,35 @@ const showConversationStateDebugPanel = computed(
   () => frontendConfig.debug.showConversationStatePanel,
 );
 
+chatMessageNavigatorPanel = useChatMessageNavigatorPanel({
+  activeSession,
+  activeSessionId,
+  shouldRenderMessageInChat,
+  messageListPanelRef,
+  isMobile,
+  translate,
+  chatNavigatorPanel: PSEUDO_PANEL.CHAT_NAVIGATOR,
+  pushPseudoRoute: (route) => pushPseudoRoute(route),
+  replacePseudoRoute: (route) => replacePseudoRoute(route),
+});
+
+const {
+  chatNavigatorVisible,
+  mobileChatNavigatorVisible,
+  currentMessageAnchorId,
+  chatMessageNavItems,
+  handleSelectChatMessageNavItem,
+  handleMobileChatNavigatorClosed,
+  mobileChatNavigatorTriggerStyle,
+  mobileChatNavigatorTriggerDragging,
+  handleMobileChatNavigatorTriggerClick,
+  handleMobileChatNavigatorTriggerPointerDown,
+  handleMobileChatNavigatorTriggerPointerMove,
+  handleMobileChatNavigatorTriggerPointerUp,
+  releaseMobileChatNavigatorTrigger,
+  unbindChatMessageScrollSync,
+} = chatMessageNavigatorPanel;
+
 // --- Reconnect ---
 function hasActiveSessionForReconnect() {
   return hasActiveSessionForReconnectState({
@@ -313,7 +258,7 @@ const { openOpenVSCode } = useOpenVSCodeAction({
 });
 
 function closeComposerMorePanel() {
-  composerMorePanelVisible.value = false;
+  appShellPanelActions?.closeComposerMorePanel?.();
 }
 
 const {
@@ -375,112 +320,62 @@ const {
   selectSession,
 });
 
-// --- Session handlers ---
+// --- Panel, interaction & session handlers ---
+appShellPanelActions = useAppShellPanelActions({
+  activeSessionId,
+  userId,
+  apiRole,
+  isSuperAdmin,
+  isMobile,
+  mobileSidebarOpen,
+  composerMorePanelVisible,
+  ensureConnected,
+  notify: notifyUi,
+  translate,
+  closeAllDrawers,
+  toggleSidebar,
+  closeMobileSidebar,
+  openWorkspaceRaw,
+  openUserSettingsRaw,
+  openConfigParamsRaw,
+  pushPanelPseudoRoute,
+  pushPanelVisibilityPseudoRoute,
+  pushClosePseudoPanelRoute,
+});
 
-async function handleDeleteSession(sessionId) {
-  try {
-    await confirmDeleteSession();
-  } catch {
-    return;
-  }
-  try {
-    const deleted = await deleteSession(sessionId);
-    if (deleted) {
-      notifyUi({ type: "success", message: translate("common.deleteSessionSuccess") });
-    }
-  } catch (error) {
-    notifyUi({ type: "error", message: error.message || translate("common.deleteSessionFailed") });
-  }
-}
+const {
+  openWorkspace,
+  openUserSettings,
+  openConfigParams,
+  handleToggleSidebar,
+  handleCloseMobileSidebar,
+  handleComposerMorePanelVisibleUpdate,
+  handleDrawerModelUpdate,
+} = appShellPanelActions;
 
-// --- Panel open handlers (with guard logic) ---
-function openWorkspace() {
-  if (!ensureConnected()) return;
-  if (!userId.value?.trim()) {
-    notifyUi({ type: "warning", message: translate("common.userIdRequired") });
-    return;
-  }
-  closeComposerMorePanel();
-  openWorkspaceRaw();
-  pushPanelPseudoRoute(activeSessionId.value, PSEUDO_PANEL.WORKSPACE);
-}
+const {
+  handleInteractionConfirm,
+  handleInteractionCancel,
+} = useAppShellInteractionActions({
+  submitInteractionResponse,
+  notify: notifyUi,
+  translate,
+});
 
-async function openUserSettings() {
-  if (!ensureConnected()) return;
-  if (!isSuperAdmin.value) {
-    const currentRole = String(apiRole.value || "user").trim() || "user";
-    notifyUi({
-      type: "warning",
-      message: `${translate("common.superAdminOnly")} (role=${currentRole})`,
-    });
-    return;
-  }
-  closeComposerMorePanel();
-  openUserSettingsRaw();
-  pushPanelPseudoRoute(activeSessionId.value, PSEUDO_PANEL.USER_SETTINGS);
-}
-
-function openConfigParams() {
-  if (!ensureConnected()) return;
-  closeComposerMorePanel();
-  openConfigParamsRaw();
-  pushPanelPseudoRoute(activeSessionId.value, PSEUDO_PANEL.CONFIG_PARAMS);
-}
-
-function handleToggleSidebar() {
-  toggleSidebar();
-  if (isMobile.value) {
-    if (mobileSidebarOpen.value) closeComposerMorePanel();
-    pushPanelVisibilityPseudoRoute({
-      sessionId: activeSessionId.value,
-      visible: mobileSidebarOpen.value,
-      panel: PSEUDO_PANEL.SIDEBAR,
-    });
-  }
-}
-
-function handleCloseMobileSidebar() {
-  closeMobileSidebar();
-  pushClosePseudoPanelRoute();
-}
-
-function handleComposerMorePanelVisibleUpdate(value) {
-  const nextVisible = Boolean(value);
-  if (composerMorePanelVisible.value === nextVisible) return;
-  if (nextVisible) {
-    closeAllDrawers();
-    closeMobileSidebar();
-  }
-  composerMorePanelVisible.value = nextVisible;
-  pushPanelVisibilityPseudoRoute({
-    sessionId: activeSessionId.value,
-    visible: nextVisible,
-    panel: PSEUDO_PANEL.COMPOSER,
-  });
-}
-
-function handleDrawerModelUpdate(drawer = {}, value = false) {
-  const { closed } = updateDrawerModelVisibility({ drawer, value });
-  if (closed) pushClosePseudoPanelRoute();
-}
-
-// --- Interaction handlers ---
-function handleInteractionConfirm(payload = {}) {
-  submitInteractionConfirm({
-    payload,
-    submitInteractionResponse,
-    notify: notifyUi,
-    translate,
-  });
-}
-
-function handleInteractionCancel() {
-  submitInteractionCancel({
-    submitInteractionResponse,
-    notify: notifyUi,
-    translate,
-  });
-}
+const {
+  handleDeleteSession,
+  handleWorkspaceReset,
+  onConnectorSelected,
+} = useAppShellSessionActions({
+  activeSessionId,
+  confirmDeleteSession,
+  deleteSession,
+  fetchSessions,
+  refreshSessionConnectorsAsync,
+  updateSessionSelectedConnector,
+  notify: notifyUi,
+  translate,
+});
 
 async function onAppMounted() {
   addPseudoRoutePopStateListener();
@@ -503,43 +398,8 @@ function onAppUnmounted() {
 onMounted(onAppMounted);
 onBeforeUnmount(onAppUnmounted);
 
-// --- Watchers ---
-watch(
-  chatMessageNavItems,
-  () => {
-    nextTick(bindChatMessageScrollSync);
-  },
-  { flush: "post", immediate: true },
-);
-
-watch(
-  () => activeSessionId.value,
-  () => {
-    currentMessageAnchorId.value = "";
-    nextTick(bindChatMessageScrollSync);
-  },
-);
-
 function onConnectCodeUpdate(value = "") {
   connectCode.value = String(value || "");
-}
-
-async function handleWorkspaceReset() {
-  await fetchSessions();
-  if (activeSessionId.value) {
-    refreshSessionConnectorsAsync(activeSessionId.value);
-  }
-}
-
-async function onConnectorSelected({
-  connectorType = "",
-  connectorName = "",
-} = {}) {
-  try {
-    await updateSessionSelectedConnector({ connectorType, connectorName });
-  } catch (error) {
-    notifyUi({ type: "error", message: error.message || translate("common.updateConnectorFailed") });
-  }
 }
 
 const drawerPanels = computed(() =>
@@ -616,6 +476,7 @@ const drawerPanels = computed(() =>
       :pending-interaction-request="pendingInteractionRequest"
       :interaction-submitting="interactionSubmitting"
       :show-conversation-state-debug-panel="showConversationStateDebugPanel"
+      :run-state-snapshot="runStateSnapshot"
       :conversation-state-snapshot="conversationStateSnapshot"
       :conversation-state-timeline="conversationStateTimeline"
       :translate="translate"

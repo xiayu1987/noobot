@@ -7,6 +7,7 @@
 import { computed, ref, watch } from "vue";
 import ChatMessageItem from "../modules/message/ChatMessageItem.vue";
 import { useLocale } from "../shared/i18n/useLocale";
+import { resolveSessionRunStateForMessage } from "../composables/chat/sessionRunStateMachine";
 
 defineEmits(["open-thinking-details"]);
 
@@ -23,16 +24,9 @@ const props = defineProps({
   sending: { type: Boolean, default: false },
   deleteMonotonicMessage: { type: Function, default: null },
   resendMonotonicMessage: { type: Function, default: null },
-  conversationStateSnapshot: { type: Object, default: () => ({}) },
+  runStateSnapshot: { type: Object, default: () => ({}) },
   emptyLogoSrc: { type: String, default: "" },
 });
-
-const IN_FLIGHT_CHANNEL_STATES = new Set([
-  "sending",
-  "reconnecting",
-  "interaction_pending",
-  "stopping",
-]);
 
 const listRef = ref(null);
 const { translate } = useLocale();
@@ -89,50 +83,35 @@ function getMessageRenderKey(messageItem = {}, messageIndex = 0) {
 }
 
 function normalizeStateTime(stateItem = {}) {
-  const createdAtMs = Number(stateItem?.createdAtMs || 0);
-  const updatedAtMs = Number(stateItem?.updatedAtMs || stateItem?.timestamp || createdAtMs || 0);
+  const rawCreatedAtMs = Number(stateItem?.createdAtMs || 0);
+  const rawUpdatedAtMs = Number(
+    stateItem?.updatedAtMs ||
+      stateItem?.timestamp ||
+      (typeof stateItem?.updatedAt === "number" ? stateItem.updatedAt : 0) ||
+      rawCreatedAtMs ||
+      0,
+  );
+  const createdAtMs = rawCreatedAtMs;
+  const updatedAtMs = rawUpdatedAtMs;
   const createdAt = String(
-    stateItem?.createdAt || (createdAtMs > 0 ? new Date(createdAtMs).toISOString() : ""),
+    stateItem?.createdAt ||
+      stateItem?.createdAtIso ||
+      (createdAtMs > 0 ? new Date(createdAtMs).toISOString() : ""),
   ).trim();
   const updatedAt = String(
-    stateItem?.updatedAt || (updatedAtMs > 0 ? new Date(updatedAtMs).toISOString() : ""),
+    (typeof stateItem?.updatedAt === "string" ? stateItem.updatedAt : "") ||
+      stateItem?.updatedAtIso ||
+      (updatedAtMs > 0 ? new Date(updatedAtMs).toISOString() : ""),
   ).trim();
   return { createdAtMs, updatedAtMs, createdAt, updatedAt };
 }
 
-function isCurrentSessionState(stateItem = {}) {
-  const stateSessionId = String(stateItem?.sessionId || "").trim();
-  if (!stateSessionId) return true;
-  const activeIds = [
-    props.activeSession?.id,
-    props.activeSession?.backendSessionId,
-  ].map((item) => String(item || "").trim()).filter(Boolean);
-  return !activeIds.length || activeIds.includes(stateSessionId);
-}
-
 function getLatestInFlightConversationStateForMessage(messageItem = {}) {
-  if (String(messageItem?.role || "").trim() !== "assistant") return null;
-  const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
-  const states = Object.values(props.conversationStateSnapshot || {})
-    .filter((stateItem = {}) =>
-      IN_FLIGHT_CHANNEL_STATES.has(String(stateItem?.state || "").trim()) &&
-      isCurrentSessionState(stateItem),
-    )
-    .sort((left, right) => Number(right?.updatedAtMs || right?.createdAtMs || 0) - Number(left?.updatedAtMs || left?.createdAtMs || 0));
-  if (dialogProcessId) {
-    const exactState = states.find(
-      (stateItem) => String(stateItem?.dialogProcessId || "").trim() === dialogProcessId,
-    );
-    if (exactState) return exactState;
-  }
-  const messageList = Array.isArray(props.activeSession?.messages)
-    ? props.activeSession.messages
-    : [];
-  const latestAssistant = [...messageList]
-    .reverse()
-    .find((item) => String(item?.role || "").trim() === "assistant");
-  if (latestAssistant !== messageItem) return null;
-  return states.find((stateItem) => !String(stateItem?.dialogProcessId || "").trim()) || null;
+  return resolveSessionRunStateForMessage({
+    stateSnapshot: props.runStateSnapshot,
+    messageItem,
+    activeSession: props.activeSession,
+  });
 }
 
 function applyConversationStateRuntimeToMessage(messageItem = {}) {
@@ -180,7 +159,7 @@ watch(
     props.activeSession?.id,
     props.activeSession?.backendSessionId,
     Array.isArray(props.activeSession?.messages) ? props.activeSession.messages.length : 0,
-    props.conversationStateSnapshot,
+    props.runStateSnapshot,
   ],
   () => applyConversationStateRuntimeToMessages(),
   { deep: true, immediate: true },

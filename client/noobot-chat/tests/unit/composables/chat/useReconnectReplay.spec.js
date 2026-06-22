@@ -945,6 +945,32 @@ describe("useReconnectReplay", () => {
     expect(mocks.chatWebSocketClient.clearStopRequested).toHaveBeenCalledTimes(1);
   });
 
+  it("EV-04a: DONE without channel_state still finalizes terminal ui fields", async () => {
+    const { api, refs, mocks } = createFixture();
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "q" },
+      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-done-only", content: "A", pending: true },
+    ];
+
+    await api.applyReconnectEvent(StreamEventEnum.DONE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-done-only",
+      seq: 2,
+    });
+
+    const assistant = refs.activeSession.value.messages.find(
+      (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-done-only",
+    );
+    expect(assistant?.pending).toBe(false);
+    expect(assistant?.statusLabel).toBe("chat.generated");
+    expect(refs.sending.value).toBe(false);
+    expect(refs.interactionSubmitting.value).toBe(false);
+    expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
+      sessionId: "s-1",
+      dialogProcessId: "dp-done-only",
+    });
+  });
+
   it("EV-04: channel_state completed sets terminal ui fields", async () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [

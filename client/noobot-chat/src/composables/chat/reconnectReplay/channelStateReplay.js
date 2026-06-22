@@ -314,7 +314,9 @@ export function applyReconnectChannelState({
   }
   if (isTerminalConversationState(state)) {
     if (dialogProcessId) terminalDialogProcessIdSet.add(dialogProcessId);
-    chatWebSocketClient.clearStopRequested();
+    if (_trimStr(stateData?.sourceEvent) !== "done") {
+      chatWebSocketClient.clearStopRequested();
+    }
     clearRememberedStopRequests({ sessionId, dialogProcessId });
     rememberThinkingFinished({
       sessionId,

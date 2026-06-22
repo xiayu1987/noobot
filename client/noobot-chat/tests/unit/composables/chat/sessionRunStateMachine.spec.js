@@ -18,6 +18,7 @@ import {
   resolveEventScope,
   resolveNextStateByTransitionTable,
   resolveRememberedStopRequestedEvent,
+  resolveSessionRunStateForMessage,
   resolveTransitionDecision,
   transitionSessionRunState,
 } from "../../../../src/composables/chat/sessionRunStateMachine";
@@ -594,5 +595,52 @@ describe("sessionRunStateMachine", () => {
     expect(resolveRememberedStopRequestedEvent({ sessionId: "s1", dialogProcessId: "d1" })?.state).toBe(SESSION_RUN_STATE.STOP_REQUESTED);
     clearRememberedStopRequests({ sessionId: "s1", dialogProcessId: "d1" });
     expect(resolveRememberedStopRequestedEvent({ sessionId: "s1", dialogProcessId: "d1" })).toBeNull();
+  });
+
+  it("resolves in-flight state for a matching assistant message", () => {
+    const assistant = { role: "assistant", dialogProcessId: "d1", content: "" };
+    const activeSession = {
+      id: "s1",
+      backendSessionId: "s1",
+      messages: [{ role: "user", content: "q" }, assistant],
+    };
+    const stateSnapshot = createInitialSessionRunState({
+      state: SESSION_RUN_STATE.SENDING,
+      sessionId: "s1",
+      dialogProcessId: "d1",
+      priority: 40,
+    });
+
+    expect(resolveSessionRunStateForMessage({ stateSnapshot, messageItem: assistant, activeSession })).toBe(stateSnapshot);
+  });
+
+  it("does not resolve terminal or different-session run state for a message", () => {
+    const assistant = { role: "assistant", dialogProcessId: "d1", content: "" };
+    const activeSession = {
+      id: "s1",
+      backendSessionId: "s1",
+      messages: [{ role: "user", content: "q" }, assistant],
+    };
+
+    expect(resolveSessionRunStateForMessage({
+      stateSnapshot: createInitialSessionRunState({
+        state: SESSION_RUN_STATE.COMPLETED,
+        sessionId: "s1",
+        dialogProcessId: "d1",
+        priority: 100,
+      }),
+      messageItem: assistant,
+      activeSession,
+    })).toBeNull();
+    expect(resolveSessionRunStateForMessage({
+      stateSnapshot: createInitialSessionRunState({
+        state: SESSION_RUN_STATE.SENDING,
+        sessionId: "s2",
+        dialogProcessId: "d1",
+        priority: 40,
+      }),
+      messageItem: assistant,
+      activeSession,
+    })).toBeNull();
   });
 });

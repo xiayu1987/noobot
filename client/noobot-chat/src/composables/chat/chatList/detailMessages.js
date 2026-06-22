@@ -31,6 +31,9 @@ function preserveRunningThinkingState(existingMessage = {}, detailMessageItem = 
   const existingThinkingFinishedAt = String(
     existingMessage?.thinkingFinishedAt || existingMessage?.thinking_finished_at || "",
   ).trim();
+  const existingClientTurnId = String(
+    existingMessage?.clientTurnId || existingMessage?.client_turn_id || "",
+  ).trim();
   const existingPending = existingMessage?.pending === true;
   return () => {
     if (existingChannelState && !detailMessageItem?.channelState) {
@@ -43,6 +46,10 @@ function preserveRunningThinkingState(existingMessage = {}, detailMessageItem = 
     if (existingThinkingFinishedAt && !String(detailMessageItem?.thinkingFinishedAt || detailMessageItem?.thinking_finished_at || "").trim()) {
       existingMessage.thinkingFinishedAt = existingThinkingFinishedAt;
       existingMessage.thinking_finished_at = existingThinkingFinishedAt;
+    }
+    if (existingClientTurnId && !String(detailMessageItem?.clientTurnId || detailMessageItem?.client_turn_id || "").trim()) {
+      existingMessage.clientTurnId = existingClientTurnId;
+      existingMessage.client_turn_id = existingClientTurnId;
     }
     const channelState = String(existingMessage?.channelState?.state || "").trim();
     if (existingPending && IN_FLIGHT_CHANNEL_STATES.has(channelState)) {

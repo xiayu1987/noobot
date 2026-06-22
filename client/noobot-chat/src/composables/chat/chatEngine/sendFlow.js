@@ -211,6 +211,7 @@ export function createChatEngineSender({
             foldMessagesForView,
             mergeAssistantAttachmentMetas,
             locateDoneMessage,
+            applyConversationState,
             processStore: activeProcessStore,
             locateSendingStartedMessageOnce,
           });

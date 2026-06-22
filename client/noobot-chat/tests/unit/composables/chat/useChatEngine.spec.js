@@ -172,6 +172,47 @@ describe("useChatEngine", () => {
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
   });
+  it("DONE immediately finalizes assistant UI even if stream promise stays open", async () => {
+    let releaseStream;
+    const stream = vi.fn(async (_payload, onEvent) => {
+      onEvent({
+        event: StreamEventEnum.DONE,
+        data: {
+          sessionId: "local-done-open",
+          dialogProcessId: "dp-done-open",
+          messages: [
+            { role: RoleEnum.USER, content: "hello" },
+            { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-done-open", content: "final answer" },
+          ],
+        },
+      });
+      await new Promise((resolve) => {
+        releaseStream = resolve;
+      });
+    });
+    const { engine, activeSession, sending, canStop } = createHarness({
+      sessionId: "local-done-open",
+      stream,
+      deps: {
+        fetchSessionDetail: vi.fn(async () => {
+          throw new Error("ignore detail fetch in this unit test");
+        }),
+      },
+    });
+
+    const sendPromise = engine.send();
+    await Promise.resolve();
+
+    const assistant = assistantMessage(activeSession);
+    expect(assistant?.pending).toBe(false);
+    expect(assistant?.statusLabel).toBe("chat.generated");
+    expect(sending.value).toBe(false);
+    expect(canStop.value).toBe(false);
+
+    releaseStream();
+    await sendPromise;
+  });
+
   it("DONE patches current assistant turn and promotes session identity", async () => {
     const stream = vi.fn(async (_payload, onEvent) => {
       onEvent({
