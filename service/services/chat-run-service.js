@@ -129,6 +129,11 @@ export function createChatRunService({
       selectedConnectors: normalizeSelectedConnectors(input?.selectedConnectors),
       selectedPlugins: normalizeStringArray(input?.selectedPlugins),
       plugins: normalizePlugins(source?.plugins, input?.selectedPlugins),
+      ...(source?.reuseExistingUserTurn === true ? {
+        reuseExistingUserTurn: true,
+        existingUserTurnId: String(source?.existingUserTurnId || "").trim(),
+        existingUserMessageId: String(source?.existingUserMessageId || "").trim(),
+      } : {}),
     };
   }
 

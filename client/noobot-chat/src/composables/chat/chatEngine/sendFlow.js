@@ -66,11 +66,22 @@ export function createChatEngineSender({
   finalizePendingResendOperation,
   processStore = null,
 }) {
-  const resolvedProcessStore = processStore || useProcessStore();
-  return async function send() {
+  let resolvedProcessStore = processStore || null;
+  function getResolvedProcessStore() {
+    if (resolvedProcessStore) return resolvedProcessStore;
+    try {
+      resolvedProcessStore = useProcessStore();
+    } catch {
+      resolvedProcessStore = null;
+    }
+    return resolvedProcessStore;
+  }
+  return async function send(options = {}) {
+    const explicitMessageText = typeof options?.messageText === "string" ? options.messageText.trim() : "";
+    const hasTextToSend = Boolean(explicitMessageText || input.value.trim());
     if (!ensureConnected()) return false;
     if (sending.value || !activeSession.value) return false;
-    if (!input.value.trim() && uploadFiles.value.length === 0) return false;
+    if (!hasTextToSend && uploadFiles.value.length === 0) return false;
 
     sending.value = true;
     const {
@@ -87,6 +98,9 @@ export function createChatEngineSender({
       applyConversationState,
       translate,
       scrollBottom,
+      skipUserMessageAppend: options?.skipUserMessageAppend === true,
+      existingUserMessage: options?.existingUserMessage || null,
+      messageText: explicitMessageText,
     });
 
     let lastStreamErrorEventData = null;
@@ -110,7 +124,11 @@ export function createChatEngineSender({
         locale,
         selectedPlugins,
         uploadHint: translate("chat.uploadHint"),
+        reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
+        existingUserTurnId: options?.existingUserTurnId || "",
+        existingUserMessageId: options?.existingUserMessageId || "",
       });
+      const activeProcessStore = getResolvedProcessStore();
 
       await chatWebSocketClient.stream(payload, ({ event, data }) => {
         applyConversationStateFromEvent(event, data || {}, {
@@ -135,7 +153,7 @@ export function createChatEngineSender({
             upsertConnectedConnectorInPanelState,
             refreshSessionConnectorsAsync,
             mergeAssistantAttachmentMetas,
-            processStore: resolvedProcessStore,
+            processStore: activeProcessStore,
           })
         ) {
           return;
@@ -163,7 +181,7 @@ export function createChatEngineSender({
             foldMessagesForView,
             mergeAssistantAttachmentMetas,
             locateDoneMessage,
-            processStore: resolvedProcessStore,
+            processStore: activeProcessStore,
           });
         }
       });

@@ -20,13 +20,16 @@ export function buildChatPayload({
   locale,
   selectedPlugins,
   uploadHint = "",
+  reuseExistingUserTurn = false,
+  existingUserTurnId = "",
+  existingUserMessageId = "",
 } = {}) {
   const normalizedScenario = normalizeTrimmedString(botScenario?.value ?? botScenario);
   const normalizedSelectedModel = normalizeTrimmedString(selectedModel?.value ?? selectedModel);
   const normalizedPluginModelConfig = pluginModelConfig?.value ?? pluginModelConfig;
   return {
     userId: userId?.value ?? userId,
-    sessionId: activeSession?.value?.backendSessionId || activeSession?.value?.id,
+    sessionId: activeSession?.value?.backendSessionId || activeSession?.value?.sessionId || activeSession?.value?.id,
     message: message || uploadHint,
     attachments,
     config: {
@@ -45,6 +48,11 @@ export function buildChatPayload({
       selectedPlugins: (Array.isArray(selectedPlugins?.value) ? selectedPlugins.value : [])
         .map((pluginKey) => normalizeTrimmedString(pluginKey))
         .filter(Boolean),
+      ...(reuseExistingUserTurn ? {
+        reuseExistingUserTurn: true,
+        existingUserTurnId: normalizeTrimmedString(existingUserTurnId),
+        existingUserMessageId: normalizeTrimmedString(existingUserMessageId),
+      } : {}),
     },
   };
 }

@@ -75,12 +75,24 @@ export function collectRequestBody(request) {
   });
 }
 
+export function normalizeProxyPathname(pathname = "/", stripPrefix = config.upstreamHttpStripPrefix) {
+  const normalizedPathname = String(pathname || "/").trim() || "/";
+  const normalizedStripPrefix = String(stripPrefix || "").trim();
+  if (!normalizedStripPrefix || normalizedStripPrefix === "/") return normalizedPathname;
+  if (normalizedPathname === normalizedStripPrefix) return "/";
+  if (normalizedPathname.startsWith(`${normalizedStripPrefix}/`)) {
+    return normalizedPathname.slice(normalizedStripPrefix.length) || "/";
+  }
+  return normalizedPathname;
+}
+
 export function proxyHttpRequest(request, response) {
   const locale = resolveLocaleFromRequest(request);
   const method = String(request?.method || "GET").trim().toUpperCase() || "GET";
   let targetUrl = null;
   try {
     targetUrl = new URL(request?.url || "/", config.upstreamHttpBase);
+    targetUrl.pathname = normalizeProxyPathname(targetUrl.pathname);
   } catch {
     writeProxyError(response, 400, AGENT_PROXY_ERROR.INVALID_REQUEST_URL, locale);
     return;

@@ -16,8 +16,12 @@ export function prepareChatSend({
   applyConversationState,
   translate,
   scrollBottom,
+  skipUserMessageAppend = false,
+  existingUserMessage = null,
+  messageText = "",
 }) {
-  const text = input.value.trim();
+  const explicitText = typeof messageText === "string" ? messageText.trim() : "";
+  const text = explicitText || input.value.trim();
   input.value = "";
 
   const filesToSend = [...uploadFiles.value];
@@ -29,7 +33,9 @@ export function prepareChatSend({
       ? URL.createObjectURL(fileItem.raw)
       : "",
   }));
-  const userMessage = appendMessage(RoleEnum.USER, text || translate("chat.uploadOnly"), userAttachments);
+  const userMessage = skipUserMessageAppend
+    ? existingUserMessage
+    : appendMessage(RoleEnum.USER, text || translate("chat.uploadOnly"), userAttachments);
   if (
     [
       String(translate("chat.newSession") || "").trim(),

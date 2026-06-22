@@ -59,12 +59,41 @@ function normalizeSessionDetailSnapshot(payload = {}, fallbackSessionId = "") {
   };
 }
 
+function resolveHttpStatus(value = {}) {
+  return Number(
+    value?.status
+    || value?.statusCode
+    || value?.response?.status
+    || value?.response?.statusCode
+    || value?.data?.status
+    || value?.data?.statusCode
+    || value?.cause?.status
+    || value?.cause?.statusCode
+    || 0,
+  );
+}
+
 function isReplaceTurnUnsupported(result = {}, payload = {}) {
-  const status = Number(result?.status || payload?.status || 0);
+  const status = resolveHttpStatus(result) || resolveHttpStatus(payload);
   return Boolean(
     payload?.unsupported === true ||
+    payload?.data?.unsupported === true ||
+    payload?.response?.data?.unsupported === true ||
+    result?.unsupported === true ||
+    result?.data?.unsupported === true ||
+    result?.response?.data?.unsupported === true ||
     payload?.code === "UNSUPPORTED" ||
+    payload?.data?.code === "UNSUPPORTED" ||
+    payload?.response?.data?.code === "UNSUPPORTED" ||
+    result?.code === "UNSUPPORTED" ||
+    result?.data?.code === "UNSUPPORTED" ||
+    result?.response?.data?.code === "UNSUPPORTED" ||
     payload?.error === "unsupported" ||
+    payload?.data?.error === "unsupported" ||
+    payload?.response?.data?.error === "unsupported" ||
+    result?.error === "unsupported" ||
+    result?.data?.error === "unsupported" ||
+    result?.response?.data?.error === "unsupported" ||
     [404, 405, 501].includes(status),
   );
 }
@@ -78,6 +107,49 @@ function operationSeed({ sessionId, userTargetMessage, originalCascadeStartIndex
     originalStartIndex: originalCascadeStartIndex,
     removedMessages: removedMessagesBeforeResend,
   };
+}
+
+function normalizeMessageRole(message = {}) {
+  return String(message?.role || message?.type || "").trim().toLowerCase();
+}
+
+function getMessageText(message = {}) {
+  return String(message?.content || message?.text || message?.message || "");
+}
+
+function getMessageId(message = {}) {
+  return normalizeTrimmedString(message?.messageId || message?.id || message?.message_id);
+}
+
+function getTurnId(message = {}) {
+  return normalizeTrimmedString(message?.turnId || message?.turn_id);
+}
+
+function findReplacementUserMessage({ session, payload, text }) {
+  const messages = Array.isArray(session?.messages) ? session.messages : [];
+  const newTurn = payload?.newTurn && typeof payload.newTurn === "object" && !Array.isArray(payload.newTurn)
+    ? payload.newTurn
+    : null;
+  const expectedTurnId = getTurnId(newTurn);
+  const expectedMessageId = getMessageId(newTurn);
+  const expectedText = String(text || "");
+  return [...messages].reverse().find((message) => {
+    if (normalizeMessageRole(message) !== "user") return false;
+    if (expectedTurnId && getTurnId(message) === expectedTurnId) return true;
+    if (expectedMessageId && getMessageId(message) === expectedMessageId) return true;
+    return expectedText && getMessageText(message) === expectedText;
+  }) || null;
+}
+
+function hasCompletedAssistantAfterReplacementUser({ session, replacementUserMessage }) {
+  const messages = Array.isArray(session?.messages) ? session.messages : [];
+  const userIndex = messages.indexOf(replacementUserMessage);
+  if (userIndex < 0) return false;
+  return messages.slice(userIndex + 1).some((message) => {
+    if (normalizeMessageRole(message) !== "assistant") return false;
+    if (message?.pending === true) return false;
+    return getMessageText(message).trim() || message?.done === true || message?.completed === true;
+  });
 }
 
 /**
@@ -179,17 +251,57 @@ export function createResendMessageTransaction({
           const sessionDetail = normalizeSessionDetailSnapshot(payload, sessionId);
           if (sessionDetail) {
             applySessionDetail?.(sessionDetail, { preserveCurrentMessages: false });
+            if (Array.isArray(activeSession?.value?.messages)) {
+              activeSession.value.messages = [...activeSession.value.messages];
+            }
+            if (Array.isArray(activeSession?.value?.rawMessages)) {
+              activeSession.value.rawMessages = [...activeSession.value.rawMessages];
+            }
           }
           if (operation) applyResendReconcile(messageOperationStore?.getOperation(operation.opId) || operation, { finalOnly: true });
-          if (operation) messageOperationStore?.completeOperation(operation.opId);
-          input.value = "";
+          const replacementUserMessage = findReplacementUserMessage({
+            session: activeSession?.value,
+            payload,
+            text,
+          });
+          const completedAssistantReturned = hasCompletedAssistantAfterReplacementUser({
+            session: activeSession?.value,
+            replacementUserMessage,
+          });
+          if (completedAssistantReturned || payload?.generation === "completed" || payload?.generated === true) {
+            if (operation) messageOperationStore?.completeOperation(operation.opId);
+            input.value = "";
+            return true;
+          }
+          if (operation) messageOperationStore?.updateOperation(operation.opId, { status: "sending" });
+          const sent = await send?.({
+            skipUserMessageAppend: true,
+            existingUserMessage: replacementUserMessage,
+            messageText: text,
+            reuseExistingUserTurn: true,
+            existingUserTurnId: getTurnId(replacementUserMessage || payload?.newTurn || {}),
+            existingUserMessageId: getMessageId(replacementUserMessage || payload?.newTurn || {}),
+          });
+          if (!sent) {
+            if (operation) messageOperationStore?.completeOperation(operation.opId);
+            restoreSessionSnapshot(activeSession?.value, snapshot);
+            input.value = snapshot.inputValue;
+            return false;
+          }
+          if (operation && messageOperationStore?.getOperation(operation.opId)) {
+            messageOperationStore.completeOperation(operation.opId);
+          }
           return true;
         }
       } catch (error) {
-        if (operation) messageOperationStore?.completeOperation(operation.opId);
-        restoreSessionSnapshot(activeSession?.value, snapshot);
-        input.value = snapshot.inputValue;
-        return false;
+        if (isReplaceTurnUnsupported(error)) {
+          if (operation) messageOperationStore?.completeOperation(operation.opId);
+        } else {
+          if (operation) messageOperationStore?.completeOperation(operation.opId);
+          restoreSessionSnapshot(activeSession?.value, snapshot);
+          input.value = snapshot.inputValue;
+          return false;
+        }
       }
     }
 

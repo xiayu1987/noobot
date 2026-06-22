@@ -1048,25 +1048,26 @@ describe("useChatEngine", () => {
 
 
 
-  it("resendMonotonicMessage prefers atomic replace-turn and applies returned snapshot", async () => {
+  it("resendMonotonicMessage continues generation after atomic replace-turn returns user-only snapshot", async () => {
     const stream = vi.fn(async () => {});
     const deleteSessionMessagesFromApi = vi.fn();
     const replacementUser = { id: "m3", turnId: "turn-new", role: RoleEnum.USER, content: "edited question" };
-    const replacementAssistant = { id: "m4", turnId: "turn-new", role: RoleEnum.ASSISTANT, content: "edited answer" };
     const replaceSessionTurnApi = vi.fn(async () => ({
       ok: true,
+      newTurn: replacementUser,
       session: makeSession("local-resend-replace-success", {
-        messages: [replacementUser, replacementAssistant],
-        rawMessages: [replacementUser, replacementAssistant],
-        messageCount: 2,
+        messages: [replacementUser],
+        rawMessages: [replacementUser],
+        messageCount: 1,
         version: 4,
       }),
     }));
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value = { ...activeSession.value, ...mainSession };
+      input.value = "";
     });
-    const { engine, activeSession, input } = createHarness({
+    const { engine, activeSession, input, appendMessage } = createHarness({
       sessionId: "local-resend-replace-success",
       stream,
       deps: { replaceSessionTurnApi, deleteSessionMessagesFromApi, applySessionDetail },
@@ -1090,8 +1091,56 @@ describe("useChatEngine", () => {
     }), expect.any(Object));
     expect(applySessionDetail).toHaveBeenCalledWith(expect.objectContaining({
       sessionId: "local-resend-replace-success",
-      sessions: [expect.objectContaining({ messages: [replacementUser, replacementAssistant] })],
+      sessions: [expect.objectContaining({ messages: [replacementUser] })],
     }), { preserveCurrentMessages: false });
+    expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(stream.mock.calls[0][0].message).toBe("edited question");
+    expect(stream.mock.calls[0][0].sessionId).toBe("local-resend-replace-success");
+    expect(stream.mock.calls[0][0].config).toEqual(expect.objectContaining({
+      reuseExistingUserTurn: true,
+      existingUserTurnId: "turn-new",
+      existingUserMessageId: "m3",
+    }));
+    expect(appendMessage).toHaveBeenCalledTimes(1);
+    expect(appendMessage).toHaveBeenCalledWith(RoleEnum.ASSISTANT, "", []);
+    expect(activeSession.value.messages.filter((message) => message.role === RoleEnum.USER)).toHaveLength(1);
+    expect(activeSession.value.messages.map((message) => message.content)).toEqual(["edited question", ""]);
+    expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
+    expect(input.value).toBe("");
+  });
+
+  it("resendMonotonicMessage does not generate again when replace-turn returns completed assistant snapshot", async () => {
+    const stream = vi.fn(async () => {});
+    const deleteSessionMessagesFromApi = vi.fn();
+    const replacementUser = { id: "m3", turnId: "turn-new", role: RoleEnum.USER, content: "edited question" };
+    const replacementAssistant = { id: "m4", turnId: "turn-new", role: RoleEnum.ASSISTANT, content: "edited answer" };
+    const replaceSessionTurnApi = vi.fn(async () => ({
+      ok: true,
+      session: makeSession("local-resend-replace-completed", {
+        messages: [replacementUser, replacementAssistant],
+        rawMessages: [replacementUser, replacementAssistant],
+        messageCount: 2,
+        version: 4,
+      }),
+    }));
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value = { ...activeSession.value, ...mainSession };
+    });
+    const { engine, activeSession, input } = createHarness({
+      sessionId: "local-resend-replace-completed",
+      stream,
+      deps: { replaceSessionTurnApi, deleteSessionMessagesFromApi, applySessionDetail },
+    });
+    const first = { id: "m1", turnId: "turn-old", role: RoleEnum.USER, content: "first" };
+    const target = { id: "m2", turnId: "turn-old", role: RoleEnum.ASSISTANT, content: "target" };
+    activeSession.value.messages = [first, target];
+    activeSession.value.rawMessages = [first, target];
+    input.value = "draft before replace";
+
+    await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(true);
+
     expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
     expect(stream).not.toHaveBeenCalled();
     expect(activeSession.value.messages.map((message) => message.content)).toEqual(["edited question", "edited answer"]);
@@ -1128,6 +1177,41 @@ describe("useChatEngine", () => {
     expect(stream).toHaveBeenCalledTimes(1);
     expect(stream.mock.calls[0][0].message).toBe("edited through fallback");
     expect(activeSession.value.messages).toHaveLength(0);
+    expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
+  });
+
+  it("resendMonotonicMessage falls back when replace-turn throws an HTTP 404 error", async () => {
+    const stream = vi.fn(async () => {});
+    const notFoundError = new Error("Cannot POST /api/internal/session/u1/s1/messages/replace-turn");
+    notFoundError.response = { status: 404 };
+    const replaceSessionTurnApi = vi.fn(async () => {
+      throw notFoundError;
+    });
+    const deleteSessionMessagesFromApi = vi.fn(async () => ({
+      ok: true,
+      session: makeSession("local-resend-replace-throw-404", { messages: [], rawMessages: [] }),
+    }));
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value.messages = [...(mainSession.messages || [])];
+      activeSession.value.rawMessages = [...(mainSession.rawMessages || mainSession.messages || [])];
+    });
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-resend-replace-throw-404",
+      stream,
+      deps: { replaceSessionTurnApi, deleteSessionMessagesFromApi, applySessionDetail },
+    });
+    const first = { id: "m1", role: RoleEnum.USER, content: "first" };
+    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
+    activeSession.value.messages = [first, target];
+    activeSession.value.rawMessages = [first, target];
+
+    await expect(engine.resendMonotonicMessage(target, "edited after route 404")).resolves.toBe(true);
+
+    expect(replaceSessionTurnApi).toHaveBeenCalledTimes(1);
+    expect(deleteSessionMessagesFromApi).toHaveBeenCalledTimes(1);
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(stream.mock.calls[0][0].message).toBe("edited after route 404");
     expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
   });
 

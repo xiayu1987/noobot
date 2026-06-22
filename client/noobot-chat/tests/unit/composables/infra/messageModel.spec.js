@@ -32,6 +32,22 @@ const envelope = {
 };
 
 describe("messageModel semantic transfer", () => {
+  it("preserves backend turn and message identity aliases for monotonic resend anchors", () => {
+    const message = buildViewMessage({
+      role: "user",
+      content: "edit me",
+      id: "storage-id-1",
+      message_id: "backend-message-1",
+      turn_id: "backend-turn-1",
+    });
+
+    expect(message.id).toBe("storage-id-1");
+    expect(message.messageId).toBe("backend-message-1");
+    expect(message.message_id).toBe("backend-message-1");
+    expect(message.turnId).toBe("backend-turn-1");
+    expect(message.turn_id).toBe("backend-turn-1");
+  });
+
   it("prefers transfer-derived attachment metadata over legacy attachmentMetas", () => {
     const message = buildViewMessage({
       role: "assistant",

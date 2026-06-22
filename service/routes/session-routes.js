@@ -203,9 +203,7 @@ export function registerSessionRoutes(
     }),
   );
 
-  app.post(
-    "/internal/session/:userId/:sessionId/messages/replace-turn",
-    jsonRoute(async (req, res) => {
+  const replaceTurnHandler = jsonRoute(async (req, res) => {
       const { userId, sessionId } = req.params;
       const result = await bot.session.replaceTurn({
         userId,
@@ -217,7 +215,15 @@ export function registerSessionRoutes(
         idempotencyKey: String(req.body?.idempotencyKey || "").trim(),
       });
       res.json({ ok: true, ...result });
-    }),
+    });
+
+  app.post(
+    "/internal/session/:userId/:sessionId/messages/replace-turn",
+    replaceTurnHandler,
+  );
+  app.post(
+    "/api/internal/session/:userId/:sessionId/messages/replace-turn",
+    replaceTurnHandler,
   );
 
   app.delete(
