@@ -38,13 +38,14 @@ let timer = null;
 const EXECUTION_LOG_DISPLAY_LIMIT = 10;
 
 function getRealtimeLogs(messageItem = {}) {
-  return (messageItem.realtimeLogs || [])
+  return getAllRealtimeLogs(messageItem)
     .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
     .filter(Boolean)
     .slice(-EXECUTION_LOG_DISPLAY_LIMIT);
 }
 
 function getAllRealtimeLogs(messageItem = {}) {
+  if (Array.isArray(messageItem?.processRealtimeLogs)) return messageItem.processRealtimeLogs;
   return Array.isArray(messageItem?.realtimeLogs) ? messageItem.realtimeLogs : [];
 }
 
@@ -64,7 +65,9 @@ function getExecutionLogs(messageItem = {}) {
 
 function getExecutionLogCount(messageItem = {}) {
   const explicitTotal = toValidExecutionLogTotal(
-    messageItem.executionLogTotal ?? messageItem.execution_log_total,
+    messageItem.processExecutionLogTotal
+      ?? messageItem.executionLogTotal
+      ?? messageItem.execution_log_total,
   );
   if (explicitTotal !== null) return explicitTotal;
 
@@ -98,7 +101,7 @@ function hasThinkingLogs(messageItem = {}) {
   if (!messageItem || messageItem.role !== "assistant") return false;
   if (messageItem.pending) return true;
   if (hasSummaryThinkingDetails(messageItem)) return true;
-  const hasRealtimeLogs = Array.isArray(messageItem.realtimeLogs)
+  const hasRealtimeLogs = Array.isArray(messageItem.processRealtimeLogs) || Array.isArray(messageItem.realtimeLogs)
     ? getRealtimeLogs(messageItem).length > 0
     : false;
   if (hasRealtimeLogs) return true;
@@ -122,7 +125,8 @@ function getScopedMessagesForMessage(messageItem = {}) {
   if (isFreshPendingAssistant(messageItem)) return [];
   const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
   const hasExplicitThinkingDetailPayload =
-    Array.isArray(messageItem?.completedToolLogs) && messageItem.completedToolLogs.length > 0;
+    (Array.isArray(messageItem?.processCompletedToolLogs) && messageItem.processCompletedToolLogs.length > 0)
+    || (Array.isArray(messageItem?.completedToolLogs) && messageItem.completedToolLogs.length > 0);
   const candidateMessages = Array.isArray(props.allMessages) ? props.allMessages : [];
   return candidateMessages.filter((item = {}) => {
     if (dialogProcessId && String(item?.dialogProcessId || "").trim() !== dialogProcessId) {
@@ -225,7 +229,9 @@ function buildFallbackCompletedToolLogs(messageItem = {}) {
 }
 
 function getCompletedToolLogsForMessage(messageItem = {}) {
-  const completedToolLogs = Array.isArray(messageItem?.completedToolLogs)
+  const completedToolLogs = Array.isArray(messageItem?.processCompletedToolLogs)
+    ? messageItem.processCompletedToolLogs
+    : Array.isArray(messageItem?.completedToolLogs)
     ? messageItem.completedToolLogs
     : [];
   const sourceToolLogs = completedToolLogs.length > 0
@@ -335,14 +341,16 @@ function toggleThinkingDetailExpanded(messageItem = {}, detailItemKey = "") {
 
 
 function getThinkingDetailCount(messageItem = {}) {
-  const completedToolLogCount = getCompletedToolLogsForMessage(messageItem).length;
-  if (completedToolLogCount > 0) return completedToolLogCount;
   const explicitExecutionLogTotal = toValidExecutionLogTotal(
-    messageItem.executionLogTotal ?? messageItem.execution_log_total,
+    messageItem.processExecutionLogTotal
+      ?? messageItem.executionLogTotal
+      ?? messageItem.execution_log_total,
   );
   if (explicitExecutionLogTotal !== null && explicitExecutionLogTotal > 0) {
     return explicitExecutionLogTotal;
   }
+  const completedToolLogCount = getCompletedToolLogsForMessage(messageItem).length;
+  if (completedToolLogCount > 0) return completedToolLogCount;
   return getSummaryThinkingDetailCount(messageItem);
 }
 

@@ -4,6 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { StreamEventEnum } from "../../../shared/constants/chatConstants";
+import {
+  ProcessEventSource,
+} from "../../../shared/process/protocol";
+import {
+  createProcessEventFromLog,
+  createProcessEventsFromDonePayload,
+} from "../../../shared/process/aggregator";
 import { promoteSessionIdentityToBackendId } from "../../infra/sessionIdentity";
 import { applyDoneMessagesPatch } from "./messagePatch";
 import {
@@ -22,11 +29,30 @@ function markFirstStreamEvent(botMessage) {
   botMessage.hasFirstStreamEvent = true;
 }
 
+function applyProcessCompatViewToMessage({ botMessage, processStore, processId }) {
+  if (!botMessage || !processStore || !processId) return;
+  const compatView = processStore.getCompatView?.(processId);
+  if (!compatView || compatView.executionLogTotal <= 0) return;
+  botMessage.processId = processId;
+  botMessage.processLastSequence = compatView.lastSequence;
+  botMessage.processRealtimeLogs = compatView.realtimeLogs;
+  botMessage.processCompletedToolLogs = compatView.completedToolLogs;
+  botMessage.processExecutionLogTotal = compatView.executionLogTotal;
+}
+
+function applyProcessEventsToMessage({ botMessage, processStore, events = [] }) {
+  if (!botMessage || !processStore || !events.length) return;
+  processStore.applyEventBatch?.(events);
+  const processId = events[events.length - 1]?.processId || botMessage.dialogProcessId || "";
+  applyProcessCompatViewToMessage({ botMessage, processStore, processId });
+}
+
 export function handleThinkingStreamEvent({
   data,
   botMessage,
   classifyRealtimeLog,
   scrollOnFirstResponseOnce,
+  processStore,
 }) {
   const item = sanitizeExecutionLogForDisplay(classifyRealtimeLog(data));
   if (!item || !normalizeTrimmedString(item.text)) {
@@ -38,6 +64,15 @@ export function handleThinkingStreamEvent({
   markFirstStreamEvent(botMessage);
   botMessage.executionLogTotal = Number(botMessage.executionLogTotal || 0) + 1;
   botMessage.realtimeLogs = [...(botMessage.realtimeLogs || []), item].slice(-10);
+  const processEvent = createProcessEventFromLog(item, {
+    source: ProcessEventSource.STREAM,
+    sequence: data?.sequence ?? data?.seq,
+    dialogProcessId: item.dialogProcessId || data?.dialogProcessId || botMessage.dialogProcessId,
+    sessionId: item.sessionId || data?.sessionId,
+  });
+  if (processEvent) {
+    applyProcessEventsToMessage({ botMessage, processStore, events: [processEvent] });
+  }
   scrollOnFirstResponseOnce();
 }
 
@@ -118,6 +153,7 @@ export function handleDoneStreamEvent({
   foldMessagesForView,
   mergeAssistantAttachmentMetas,
   locateDoneMessage,
+  processStore,
 }) {
   clearPendingInteraction();
   markFirstStreamEvent(botMessage);
@@ -154,6 +190,10 @@ export function handleDoneStreamEvent({
           botMessage.dialogProcessId = latestDialogProcessId;
         }
       }
+      const processEvents = createProcessEventsFromDonePayload(data, {
+        source: ProcessEventSource.STREAM,
+      });
+      applyProcessEventsToMessage({ botMessage, processStore, events: processEvents });
       scrollOnFirstResponseOnce();
     }
   }

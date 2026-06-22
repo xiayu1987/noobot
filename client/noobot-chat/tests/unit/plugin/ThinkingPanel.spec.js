@@ -126,6 +126,23 @@ function mountThinkingPanel(messageItem, props = {}) {
 }
 
 describe("ThinkingPanel", () => {
+  it("prefers process-derived execution fields while keeping legacy fallback", () => {
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: false,
+      processRealtimeLogs: [{ event: "tool_result", type: "tool_result", text: "process-live" }],
+      processCompletedToolLogs: [{ event: "tool_result", type: "tool_result", text: "process-done" }],
+      processExecutionLogTotal: 6,
+      realtimeLogs: [{ event: "tool_result", type: "tool_result", text: "legacy-live" }],
+      completedToolLogs: [{ event: "tool_result", type: "tool_result", text: "legacy-done" }],
+      executionLogTotal: 1,
+    });
+
+    expect(wrapper.find(".execution-log-line").text()).toContain("process-live");
+    expect(wrapper.text()).not.toContain("legacy-live");
+    expect(wrapper.find("button").text()).toContain("6");
+  });
+
   it("shows only latest ten completed tool logs in execution process after reload", () => {
     const completedToolLogs = Array.from({ length: 12 }, (_, index) => ({
       event: "tool_result",

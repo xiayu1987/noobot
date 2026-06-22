@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { StreamEventEnum } from "../../../shared/constants/chatConstants";
+import { useProcessStore } from "../../../shared/stores/useProcessStore";
 import { buildChatPayload } from "./payload";
 import {
   applySendErrorState,
@@ -63,7 +64,9 @@ export function createChatEngineSender({
   uploadFiles,
   userId,
   finalizePendingResendOperation,
+  processStore = null,
 }) {
+  const resolvedProcessStore = processStore || useProcessStore();
   return async function send() {
     if (!ensureConnected()) return false;
     if (sending.value || !activeSession.value) return false;
@@ -132,6 +135,7 @@ export function createChatEngineSender({
             upsertConnectedConnectorInPanelState,
             refreshSessionConnectorsAsync,
             mergeAssistantAttachmentMetas,
+            processStore: resolvedProcessStore,
           })
         ) {
           return;
@@ -159,6 +163,7 @@ export function createChatEngineSender({
             foldMessagesForView,
             mergeAssistantAttachmentMetas,
             locateDoneMessage,
+            processStore: resolvedProcessStore,
           });
         }
       });

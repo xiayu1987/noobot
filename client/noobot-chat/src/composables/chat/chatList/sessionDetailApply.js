@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { RoleEnum } from "../../../shared/constants/chatConstants";
+import { ProcessEventSource, ProcessStatus } from "../../../shared/process/protocol";
+import { createProcessSnapshotFromLogs } from "../../../shared/process/aggregator";
 import {
   findSessionByAnyId as findSessionByAnyIdInList,
   promoteSessionIdentityToBackendId,
@@ -26,7 +28,35 @@ export function createSessionDetailApplicator({
   applyCompletedToolLogsToMessages,
   scrollBottom,
   isSameSessionIdentity,
+  processStore = null,
 } = {}) {
+  function hydrateProcessSnapshotsFromMessages(messages = []) {
+    if (!processStore) return;
+    for (const messageItem of messages || []) {
+      if (String(messageItem?.role || "") !== RoleEnum.ASSISTANT) continue;
+      const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+      if (!dialogProcessId) continue;
+      const completedToolLogs = Array.isArray(messageItem?.completedToolLogs)
+        ? messageItem.completedToolLogs
+        : [];
+      if (!completedToolLogs.length) continue;
+      const snapshot = createProcessSnapshotFromLogs({
+        processId: dialogProcessId,
+        logs: completedToolLogs,
+        status: ProcessStatus.SUCCEEDED,
+        source: ProcessEventSource.SESSION_DETAIL,
+      });
+      processStore.hydrateSnapshot?.(snapshot);
+      const compatView = processStore.getCompatView?.(dialogProcessId);
+      if (!compatView || compatView.executionLogTotal <= 0) continue;
+      messageItem.processId = dialogProcessId;
+      messageItem.processLastSequence = compatView.lastSequence;
+      messageItem.processRealtimeLogs = compatView.realtimeLogs;
+      messageItem.processCompletedToolLogs = compatView.completedToolLogs;
+      messageItem.processExecutionLogTotal = compatView.executionLogTotal;
+    }
+  }
+
   function applySessionDetail(detail, options = {}) {
     const preserveCurrentMessages = Boolean(options.preserveCurrentMessages);
     const sessionItem = findSessionByAnyIdInList(sessions.value, detail.sessionId);
@@ -152,6 +182,7 @@ export function createSessionDetailApplicator({
     } else {
       applyCompletedToolLogsToMessages(sessionItem.messages, sessionDocs);
     }
+    hydrateProcessSnapshotsFromMessages(sessionItem.messages);
     sessionItem.messageCount = sessionItem.messages.length;
     sessionItem.lastMessage = sessionItem.messages.length
       ? sessionItem.messages[sessionItem.messages.length - 1]

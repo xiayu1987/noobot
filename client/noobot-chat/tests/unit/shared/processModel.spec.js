@@ -1,0 +1,104 @@
+import { describe, expect, it } from "vitest";
+import {
+  createProcessEventFromLog,
+  createProcessSnapshotFromLogs,
+} from "../../../src/shared/process/aggregator";
+import {
+  applyProcessEvents,
+  createEmptyProcessState,
+  hydrateProcessSnapshot,
+  selectProcessCompatView,
+} from "../../../src/shared/process/reducer";
+import {
+  PROCESS_EVENT_VERSION,
+  ProcessEventSource,
+  resolveExplicitProcessTimestamp,
+} from "../../../src/shared/process/protocol";
+
+describe("process model", () => {
+  it("normalizes seq into unified ProcessEvent metadata", () => {
+    const event = createProcessEventFromLog(
+      {
+        seq: 7,
+        dialogProcessId: "dialog-1",
+        sessionId: "session-1",
+        event: "tool_call",
+        text: "read_file",
+        ts: "2026-06-22T00:00:00.000Z",
+      },
+      { source: ProcessEventSource.STREAM },
+    );
+
+    expect(event).toMatchObject({
+      version: PROCESS_EVENT_VERSION,
+      sequence: 7,
+      processId: "dialog-1",
+      meta: {
+        sequence: 7,
+        version: PROCESS_EVENT_VERSION,
+        processId: "dialog-1",
+        sessionId: "session-1",
+        source: ProcessEventSource.STREAM,
+      },
+    });
+    expect(event.eventId).toBeTruthy();
+    expect(event.payload.node.processId).toBe("dialog-1");
+  });
+
+  it("applies events by sequence and ignores duplicate eventId", () => {
+    const state = createEmptyProcessState();
+    const later = createProcessEventFromLog(
+      { sequence: 2, dialogProcessId: "dialog-2", event: "tool_result", text: "second" },
+      { eventId: "same-event", source: ProcessEventSource.STREAM },
+    );
+    const earlier = createProcessEventFromLog(
+      { sequence: 1, dialogProcessId: "dialog-2", event: "tool_call", text: "first" },
+      { source: ProcessEventSource.STREAM },
+    );
+    const duplicateLater = { ...later };
+
+    applyProcessEvents(state, [later, duplicateLater, earlier]);
+    const view = selectProcessCompatView(state, "dialog-2");
+
+    expect(view.lastSequence).toBe(2);
+    expect(view.executionLogTotal).toBe(2);
+    expect(view.completedToolLogs.map((item) => item.text)).toEqual([
+      "开始：执行命令：first",
+      "完成：执行命令：second",
+    ]);
+  });
+
+  it("hydrates snapshot and exposes compat view fields", () => {
+    const state = createEmptyProcessState();
+    const snapshot = createProcessSnapshotFromLogs({
+      processId: "dialog-3",
+      logs: [
+        { event: "tool_call", text: "read_file", seq: 1 },
+        { event: "tool_result", text: "ok", seq: 2 },
+      ],
+    });
+
+    hydrateProcessSnapshot(state, snapshot);
+    const view = selectProcessCompatView(state, "dialog-3");
+
+    expect(view.lastSequence).toBe(2);
+    expect(view.executionLogTotal).toBe(2);
+    expect(view.realtimeLogs).toHaveLength(2);
+    expect(view.completedToolLogs[1].text).toBe("完成：执行命令：ok");
+  });
+
+  it("keeps eventId stable for equivalent logs without explicit timestamp", () => {
+    const firstEvent = createProcessEventFromLog(
+      { sequence: 1, dialogProcessId: "dialog-stable", event: "tool_call", text: "same" },
+      { source: ProcessEventSource.STREAM },
+    );
+    const secondEvent = createProcessEventFromLog(
+      { sequence: 1, dialogProcessId: "dialog-stable", event: "tool_call", text: "same" },
+      { source: ProcessEventSource.STREAM },
+    );
+
+    expect(resolveExplicitProcessTimestamp({})).toBe("");
+    expect(firstEvent.eventId).toBe(secondEvent.eventId);
+    expect(firstEvent.timestamp).toBeTruthy();
+  });
+});
