@@ -174,6 +174,104 @@ test("session-routes: delete-from 保留服务层 404/409 状态码", async () =
   });
 });
 
+test("session-routes: replace-turn 路由透传请求体并返回后端快照", async () => {
+  const calls = [];
+  const app = express();
+  app.use(express.json());
+  registerSessionRoutes(app, {
+    bot: {
+      session: {
+        getSessionData: async () => ({}),
+        getRootSessionId: async () => "",
+        deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
+        getAllSessionsData: async () => [],
+        replaceTurn: async (payload) => {
+          calls.push(payload);
+          return {
+            session: { sessionId: payload.sessionId, messages: [{ messageId: "m-new" }], version: 4 },
+            replacedTurn: { deletedCount: 2 },
+            newTurn: { turnId: "turn-new", messageId: "m-new" },
+            version: 4,
+          };
+        },
+      },
+      getAttachmentById: async () => null,
+    },
+    handleChat: (_req, res) => res.json({ ok: true }),
+    getConnectorChannelStore: () => ({}),
+    getConnectorHistoryStore: () => ({}),
+    translateText: () => "",
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/internal/session/u1/s1/messages/replace-turn`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        parentSessionId: " parent-1 ",
+        anchor: { turnId: "turn-old" },
+        newContent: " edited content ",
+        expectedVersion: 3,
+        idempotencyKey: " idem-2 ",
+      }),
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.newTurn.turnId, "turn-new");
+    assert.deepEqual(calls[0], {
+      userId: "u1",
+      sessionId: "s1",
+      parentSessionId: "parent-1",
+      anchor: { turnId: "turn-old" },
+      newContent: "edited content",
+      expectedVersion: 3,
+      idempotencyKey: "idem-2",
+    });
+  });
+});
+
+test("session-routes: replace-turn 保留服务层 404/409 状态码", async () => {
+  const app = express();
+  app.use(express.json());
+  const errors = [404, 409];
+  registerSessionRoutes(app, {
+    bot: {
+      session: {
+        getSessionData: async () => ({}),
+        getRootSessionId: async () => "",
+        deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
+        getAllSessionsData: async () => [],
+        replaceTurn: async () => {
+          const statusCode = errors.shift();
+          const error = new Error(`replace-turn-${statusCode}`);
+          error.statusCode = statusCode;
+          throw error;
+        },
+      },
+      getAttachmentById: async () => null,
+    },
+    handleChat: (_req, res) => res.json({ ok: true }),
+    getConnectorChannelStore: () => ({}),
+    getConnectorHistoryStore: () => ({}),
+    translateText: () => "",
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    for (const statusCode of [404, 409]) {
+      const response = await fetch(`${baseUrl}/internal/session/u1/s1/messages/replace-turn`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ anchor: { messageId: "m-missing" }, newContent: "edit" }),
+      });
+      const payload = await response.json();
+      assert.equal(response.status, statusCode);
+      assert.equal(payload.ok, false);
+      assert.equal(payload.error, `replace-turn-${statusCode}`);
+    }
+  });
+});
+
 test("session-routes: 插件诊断接口返回发现/加载/错误信息", async () => {
   const app = express();
   registerSessionRoutes(app, {

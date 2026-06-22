@@ -763,6 +763,7 @@ describe("useChatEngine", () => {
       role: RoleEnum.USER,
       content: "edited question",
     }));
+    expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
     expect(input.value).toBe("");
   });
 
@@ -827,6 +828,7 @@ describe("useChatEngine", () => {
     expect(activeSession.value.rawMessages).toEqual(expect.arrayContaining([
       expect.objectContaining({ role: RoleEnum.ASSISTANT, content: "edited answer" }),
     ]));
+    expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
     expect(stream).toHaveBeenCalledTimes(1);
   });
 
@@ -951,6 +953,57 @@ describe("useChatEngine", () => {
     ]);
   });
 
+  it("resendMonotonicMessage keeps duplicate edited content during final reconcile", async () => {
+    const staleFirst = { id: "m1", role: RoleEnum.USER, content: "repeat", dialogProcessId: "dp-old" };
+    const staleTarget = { id: "m2", role: RoleEnum.ASSISTANT, content: "old answer", dialogProcessId: "dp-old" };
+    const editedUser = { role: RoleEnum.USER, content: "repeat", dialogProcessId: "dp-old" };
+    const editedAssistant = { role: RoleEnum.ASSISTANT, content: "new answer", dialogProcessId: "dp-old" };
+    const stream = vi.fn(async (_payload, onEvent) => {
+      onEvent({
+        event: StreamEventEnum.DONE,
+        data: {
+          sessionId: "local-resend-duplicate-content",
+          dialogProcessId: "dp-old",
+          messages: [editedUser, editedAssistant],
+        },
+      });
+    });
+    const deleteSessionMessagesFromApi = vi.fn(async () => ({
+      ok: true,
+      session: makeSession("local-resend-duplicate-content", {
+        messages: [staleFirst, staleTarget],
+      }),
+    }));
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value.messages = [...(mainSession.messages || [])];
+      activeSession.value.rawMessages = [...(mainSession.messages || [])];
+    });
+    const fetchSessionDetail = vi.fn(async () => ({
+      sessionId: "local-resend-duplicate-content",
+      sessions: [{
+        sessionId: "local-resend-duplicate-content",
+        messages: [staleFirst, staleTarget, editedUser, editedAssistant],
+      }],
+    }));
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-resend-duplicate-content",
+      stream,
+      deps: { deleteSessionMessagesFromApi, applySessionDetail, fetchSessionDetail },
+    });
+    activeSession.value.messages = [{ ...staleFirst }, { ...staleTarget }];
+    activeSession.value.rawMessages = [{ ...staleFirst }, { ...staleTarget }];
+
+    await expect(engine.resendMonotonicMessage(staleTarget, "repeat")).resolves.toBe(true);
+
+    expect(activeSession.value.messages.map((message) => message.content)).toEqual([
+      "repeat",
+      "new answer",
+    ]);
+    expect(activeSession.value.messages.filter((message) => message.role === RoleEnum.USER)).toHaveLength(1);
+    expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
+  });
+
   it("resendMonotonicMessage prunes stale backend snapshot before appending edited message", async () => {
     let observedMessagesAtStream = null;
     let observedRawMessagesAtStream = null;
@@ -993,6 +1046,156 @@ describe("useChatEngine", () => {
     expect(observedRawMessagesAtStream.filter((message) => message.role === RoleEnum.USER)).toHaveLength(1);
   });
 
+
+
+  it("resendMonotonicMessage prefers atomic replace-turn and applies returned snapshot", async () => {
+    const stream = vi.fn(async () => {});
+    const deleteSessionMessagesFromApi = vi.fn();
+    const replacementUser = { id: "m3", turnId: "turn-new", role: RoleEnum.USER, content: "edited question" };
+    const replacementAssistant = { id: "m4", turnId: "turn-new", role: RoleEnum.ASSISTANT, content: "edited answer" };
+    const replaceSessionTurnApi = vi.fn(async () => ({
+      ok: true,
+      session: makeSession("local-resend-replace-success", {
+        messages: [replacementUser, replacementAssistant],
+        rawMessages: [replacementUser, replacementAssistant],
+        messageCount: 2,
+        version: 4,
+      }),
+    }));
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value = { ...activeSession.value, ...mainSession };
+    });
+    const { engine, activeSession, input } = createHarness({
+      sessionId: "local-resend-replace-success",
+      stream,
+      deps: { replaceSessionTurnApi, deleteSessionMessagesFromApi, applySessionDetail },
+    });
+    const first = { id: "m1", turnId: "turn-old", role: RoleEnum.USER, content: "first" };
+    const target = { id: "m2", turnId: "turn-old", role: RoleEnum.ASSISTANT, content: "target" };
+    activeSession.value.messages = [first, target];
+    activeSession.value.rawMessages = [first, target];
+    activeSession.value.version = 3;
+    input.value = "draft before replace";
+
+    await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(true);
+
+    expect(replaceSessionTurnApi).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: "local-resend-replace-success",
+      parentSessionId: "",
+      anchor: { turnId: "turn-old" },
+      newContent: "edited question",
+      expectedVersion: 3,
+      idempotencyKey: expect.any(String),
+    }), expect.any(Object));
+    expect(applySessionDetail).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: "local-resend-replace-success",
+      sessions: [expect.objectContaining({ messages: [replacementUser, replacementAssistant] })],
+    }), { preserveCurrentMessages: false });
+    expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
+    expect(stream).not.toHaveBeenCalled();
+    expect(activeSession.value.messages.map((message) => message.content)).toEqual(["edited question", "edited answer"]);
+    expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
+    expect(input.value).toBe("");
+  });
+
+  it("resendMonotonicMessage falls back to delete and send when replace-turn is unsupported", async () => {
+    const stream = vi.fn(async () => {});
+    const replaceSessionTurnApi = vi.fn(async () => ({ ok: false, status: 404 }));
+    const deleteSessionMessagesFromApi = vi.fn(async () => ({
+      ok: true,
+      session: makeSession("local-resend-replace-fallback", { messages: [], rawMessages: [] }),
+    }));
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value.messages = [...(mainSession.messages || [])];
+      activeSession.value.rawMessages = [...(mainSession.rawMessages || mainSession.messages || [])];
+    });
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-resend-replace-fallback",
+      stream,
+      deps: { replaceSessionTurnApi, deleteSessionMessagesFromApi, applySessionDetail },
+    });
+    const first = { id: "m1", role: RoleEnum.USER, content: "first" };
+    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
+    activeSession.value.messages = [first, target];
+    activeSession.value.rawMessages = [first, target];
+
+    await expect(engine.resendMonotonicMessage(target, "edited through fallback")).resolves.toBe(true);
+
+    expect(replaceSessionTurnApi).toHaveBeenCalledTimes(1);
+    expect(deleteSessionMessagesFromApi).toHaveBeenCalledTimes(1);
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(stream.mock.calls[0][0].message).toBe("edited through fallback");
+    expect(activeSession.value.messages).toHaveLength(0);
+    expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
+  });
+
+  it("resendMonotonicMessage rolls back and does not fallback when replace-turn fails with conflict", async () => {
+    const stream = vi.fn(async () => {});
+    const replaceSessionTurnApi = vi.fn(async () => ({ ok: false, status: 409 }));
+    const deleteSessionMessagesFromApi = vi.fn();
+    const { engine, activeSession, input } = createHarness({
+      sessionId: "local-resend-replace-conflict",
+      stream,
+      deps: { replaceSessionTurnApi, deleteSessionMessagesFromApi },
+    });
+    const first = { id: "m1", role: RoleEnum.USER, content: "first" };
+    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
+    activeSession.value.messages = [first, target];
+    activeSession.value.rawMessages = [first, target];
+    activeSession.value.messageCount = 2;
+    activeSession.value.lastMessage = target;
+    input.value = "draft before conflict";
+
+    await expect(engine.resendMonotonicMessage(target, "edited conflict")).resolves.toBe(false);
+
+    expect(replaceSessionTurnApi).toHaveBeenCalledTimes(1);
+    expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
+    expect(stream).not.toHaveBeenCalled();
+    expect(activeSession.value.messages).toEqual([first, target]);
+    expect(activeSession.value.rawMessages).toEqual([first, target]);
+    expect(activeSession.value.messageCount).toBe(2);
+    expect(activeSession.value.lastMessage).toStrictEqual(target);
+    expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
+    expect(input.value).toBe("draft before conflict");
+  });
+
+  it("resendMonotonicMessage does not treat reused dialogId as stable turnId after replace-turn snapshot", async () => {
+    const staleFirst = { id: "m1", dialogId: "dp-reused", role: RoleEnum.USER, content: "repeat" };
+    const staleTarget = { id: "m2", dialogId: "dp-reused", role: RoleEnum.ASSISTANT, content: "old answer" };
+    const editedUser = { dialogId: "dp-reused", role: RoleEnum.USER, content: "repeat" };
+    const editedAssistant = { dialogId: "dp-reused", role: RoleEnum.ASSISTANT, content: "new answer" };
+    const stream = vi.fn(async () => {});
+    const deleteSessionMessagesFromApi = vi.fn();
+    const replaceSessionTurnApi = vi.fn(async () => ({
+      ok: true,
+      session: makeSession("local-resend-replace-reused-dialog", {
+        messages: [staleFirst, staleTarget, editedUser, editedAssistant],
+        rawMessages: [staleFirst, staleTarget, editedUser, editedAssistant],
+      }),
+    }));
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value.messages = [...(mainSession.messages || [])];
+      activeSession.value.rawMessages = [...(mainSession.rawMessages || mainSession.messages || [])];
+    });
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-resend-replace-reused-dialog",
+      stream,
+      deps: { replaceSessionTurnApi, deleteSessionMessagesFromApi, applySessionDetail },
+    });
+    activeSession.value.messages = [{ ...staleFirst }, { ...staleTarget }];
+    activeSession.value.rawMessages = [{ ...staleFirst }, { ...staleTarget }];
+
+    await expect(engine.resendMonotonicMessage(staleTarget, "repeat")).resolves.toBe(true);
+
+    expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
+    expect(stream).not.toHaveBeenCalled();
+    expect(activeSession.value.messages.map((message) => message.content)).toEqual(["repeat", "new answer"]);
+    expect(activeSession.value.messages.filter((message) => message.role === RoleEnum.USER)).toHaveLength(1);
+    expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
+  });
 
   it("deleteMonotonicMessage resolves assistant dialogId to user anchor and applies backend snapshot", async () => {
     const backendSession = makeSession("local-delete-api", {
@@ -1136,6 +1339,7 @@ describe("useChatEngine", () => {
     expect(activeSession.value.messageCount).toBe(2);
     expect(activeSession.value.lastMessage).toStrictEqual(target);
     expect(activeSession.value.updatedAt).toBe("before");
+    expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
     expect(input.value).toBe("draft before resend");
   });
 

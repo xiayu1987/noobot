@@ -185,6 +185,38 @@ export async function deleteSessionMessagesFromApi(
   );
 }
 
+export async function replaceSessionTurnApi(
+  {
+    userId = "",
+    sessionId = "",
+    parentSessionId = "",
+    anchor = {},
+    newContent = "",
+    expectedVersion = undefined,
+    idempotencyKey = "",
+  },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  const body = {
+    parentSessionId: String(parentSessionId || "").trim(),
+    anchor: anchor && typeof anchor === "object" && !Array.isArray(anchor) ? anchor : {},
+    newContent: String(newContent || "").trim(),
+    idempotencyKey: String(idempotencyKey || "").trim(),
+  };
+  if (expectedVersion !== undefined && expectedVersion !== null && expectedVersion !== "") {
+    body.expectedVersion = expectedVersion;
+  }
+  return runFetch(
+    `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/messages/replace-turn`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+}
+
 export async function deleteSessionApi(
   { userId = "", sessionId = "" },
   { fetcher } = {},

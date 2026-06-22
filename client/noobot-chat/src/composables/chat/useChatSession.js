@@ -21,6 +21,7 @@ import {
   getSessionFullDetailApi,
   getSessionThinkingDetailApi,
   getSessionsApi,
+  replaceSessionTurnApi,
 } from "../../services/api/chatApi";
 import { encryptPayloadBySessionId } from "../../shared/utils/sessionCrypto";
 import { RoleEnum, StreamEventEnum } from "../../shared/constants/chatConstants";
@@ -224,6 +225,7 @@ export function useChatSession({
     fetchSessionDetail: chatList.fetchSessionDetail,
     applySessionDetail: chatList.applySessionDetail,
     deleteSessionMessagesFromApi,
+    replaceSessionTurnApi,
     authFetch,
     refreshSessionConnectorsAsync: connectorPanel.refreshSessionConnectorsAsync,
     connectorTypeSet: connectorPanel.connectorTypeSet,

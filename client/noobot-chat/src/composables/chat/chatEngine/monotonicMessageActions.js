@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeTrimmedString } from "./utils";
+import { createResendMessageTransaction } from "./resendTransaction";
+import { syncSessionMessageSummary } from "./resendReconciler";
 
 const delay = (ms) => new Promise((resolve) => {
   setTimeout(resolve, ms);
@@ -41,92 +43,9 @@ function findMessageIndex(targetMessage = {}, messages = []) {
   });
 }
 
-function createRemovedTurnPredicate(anchorMessage = {}, removedMessages = []) {
-  const anchorId = normalizeTrimmedString(anchorMessage?.id || anchorMessage?.messageId);
-  const anchorTs = anchorMessage?.ts;
-  const anchorDialogProcessId = getDialogProcessId(anchorMessage);
-  const anchorContent = normalizeTrimmedString(anchorMessage?.content);
-  const anchorRole = normalizeTrimmedString(anchorMessage?.role).toLowerCase();
-  const removedIds = new Set(
-    removedMessages
-      .map((message) => normalizeTrimmedString(message?.id || message?.messageId))
-      .filter(Boolean),
-  );
-  const removedDialogProcessIds = new Set(
-    removedMessages
-      .map((message) => getDialogProcessId(message))
-      .filter(Boolean),
-  );
-  return (message = {}) => {
-    if (message === anchorMessage) return true;
-    const messageId = normalizeTrimmedString(message?.id || message?.messageId);
-    if (messageId && (messageId === anchorId || removedIds.has(messageId))) return true;
-    if (anchorTs !== undefined && message?.ts === anchorTs) return true;
-    const messageDialogProcessId = getDialogProcessId(message);
-    if (
-      messageDialogProcessId &&
-      (messageDialogProcessId === anchorDialogProcessId || removedDialogProcessIds.has(messageDialogProcessId))
-    ) return true;
-    return Boolean(
-      anchorRole &&
-      anchorContent &&
-      normalizeTrimmedString(message?.role).toLowerCase() === anchorRole &&
-      normalizeTrimmedString(message?.content) === anchorContent
-    );
-  };
-}
-
-function createStableRemovedTurnPredicate(anchorMessage = {}, removedMessages = []) {
-  const anchorId = normalizeTrimmedString(anchorMessage?.id || anchorMessage?.messageId);
-  const anchorTs = anchorMessage?.ts;
-  const anchorDialogProcessId = getDialogProcessId(anchorMessage);
-  const removedIds = new Set(
-    removedMessages
-      .map((message) => normalizeTrimmedString(message?.id || message?.messageId))
-      .filter(Boolean),
-  );
-  const removedDialogProcessIds = new Set(
-    removedMessages
-      .map((message) => getDialogProcessId(message))
-      .filter(Boolean),
-  );
-  return (message = {}) => {
-    if (message === anchorMessage) return true;
-    const messageId = normalizeTrimmedString(message?.id || message?.messageId);
-    if (messageId && (messageId === anchorId || removedIds.has(messageId))) return true;
-    if (anchorTs !== undefined && message?.ts === anchorTs) return true;
-    const messageDialogProcessId = getDialogProcessId(message);
-    return Boolean(
-      messageDialogProcessId &&
-      (messageDialogProcessId === anchorDialogProcessId || removedDialogProcessIds.has(messageDialogProcessId))
-    );
-  };
-}
-
-function createFinalRemovedTurnPredicate(anchorMessage = {}, removedMessages = []) {
-  const anchorId = normalizeTrimmedString(anchorMessage?.id || anchorMessage?.messageId);
-  const anchorTs = anchorMessage?.ts;
-  const removedIds = new Set(
-    removedMessages
-      .map((message) => normalizeTrimmedString(message?.id || message?.messageId))
-      .filter(Boolean),
-  );
-  const removedTsValues = new Set(
-    removedMessages
-      .map((message) => message?.ts)
-      .filter((value) => value !== undefined && value !== null),
-  );
-  const removedReferences = new Set(removedMessages.filter(Boolean));
-  return (message = {}) => {
-    if (message === anchorMessage || removedReferences.has(message)) return true;
-    const messageId = normalizeTrimmedString(message?.id || message?.messageId);
-    if (messageId && (messageId === anchorId || removedIds.has(messageId))) return true;
-    if (anchorTs !== undefined && anchorTs !== null && message?.ts === anchorTs) return true;
-    return removedTsValues.has(message?.ts);
-  };
-}
-
 function buildMonotonicMessageAnchor(targetMessage = {}) {
+  const turnId = normalizeTrimmedString(targetMessage?.turnId);
+  if (turnId) return { turnId };
   const messageId = normalizeTrimmedString(targetMessage?.id || targetMessage?.messageId);
   if (messageId) return { messageId };
   const dialogProcessId = normalizeTrimmedString(
@@ -164,20 +83,13 @@ function normalizeSessionDetailSnapshot(payload = {}, fallbackSessionId = "") {
   };
 }
 
-function syncSessionMessageSummary(session) {
-  if (!session) return;
-  const messages = Array.isArray(session.messages) ? session.messages : [];
-  session.messageCount = messages.length;
-  session.lastMessage = messages.length ? messages[messages.length - 1] : null;
-  session.updatedAt = new Date().toISOString();
-}
-
 export function createMonotonicMessageActions({
   activeSession,
   activeSessionId,
   authFetch,
   clearPendingInteraction,
   deleteSessionMessagesFromApi,
+  replaceSessionTurnApi,
   input,
   notify,
   send,
@@ -186,6 +98,7 @@ export function createMonotonicMessageActions({
   translate,
   userId,
   applySessionDetail,
+  messageOperationStore,
   monotonicActionStopTimeoutMs,
   monotonicActionStopPollIntervalMs,
 }) {
@@ -256,66 +169,6 @@ export function createMonotonicMessageActions({
     return findMessageIndex(targetMessage, messages);
   }
 
-  function pruneStaleMessagesAfterResend(
-    anchorMessage = {},
-    originalStartIndex = -1,
-    removedMessages = [],
-    options = {},
-  ) {
-    const session = activeSession.value;
-    if (!session || originalStartIndex < 0) return false;
-    const messages = Array.isArray(session.messages) ? session.messages : [];
-    const isRemovedTurnMessage = createRemovedTurnPredicate(anchorMessage, removedMessages);
-    const finalOnly = options.finalOnly === true;
-    const isStableRemovedTurnMessage = finalOnly
-      ? createFinalRemovedTurnPredicate(anchorMessage, removedMessages)
-      : createStableRemovedTurnPredicate(anchorMessage, removedMessages);
-    const findAppendedResendStartIndex = (sourceMessages = []) => {
-      if (!Array.isArray(sourceMessages) || sourceMessages.length <= originalStartIndex) return -1;
-      for (let index = originalStartIndex; index < sourceMessages.length; index += 1) {
-        const message = sourceMessages[index];
-        if (isUserMessage(message) && !isRemovedTurnMessage(message)) {
-          return index;
-        }
-      }
-      return -1;
-    };
-    const pruneMessages = (sourceMessages = []) => {
-      const appendedResendStartIndex = findAppendedResendStartIndex(sourceMessages);
-      const kept = [];
-      let changed = false;
-      sourceMessages.forEach((message, index) => {
-        if (
-          index >= originalStartIndex &&
-          (
-            appendedResendStartIndex < 0 ||
-            index < appendedResendStartIndex ||
-            isStableRemovedTurnMessage(message)
-          ) &&
-          (finalOnly ? isStableRemovedTurnMessage(message) : isRemovedTurnMessage(message))
-        ) {
-          changed = true;
-          return;
-        }
-        kept.push(message);
-      });
-      return { kept, changed };
-    };
-    const messagesResult = pruneMessages(messages);
-    if (messagesResult.changed) session.messages = messagesResult.kept;
-    let rawMessagesChanged = false;
-    if (Array.isArray(session.rawMessages)) {
-      const rawMessagesResult = pruneMessages(session.rawMessages);
-      if (rawMessagesResult.changed) session.rawMessages = rawMessagesResult.kept;
-      rawMessagesChanged = rawMessagesResult.changed;
-    }
-    if (messagesResult.changed || rawMessagesChanged) {
-      syncSessionMessageSummary(session);
-      clearPendingInteraction?.();
-    }
-    return messagesResult.changed || rawMessagesChanged;
-  }
-
   function cascadeDeleteMessagesFrom(targetMessage = {}) {
     const session = activeSession.value;
     if (!session) return false;
@@ -369,60 +222,31 @@ export function createMonotonicMessageActions({
     return cascadeDeleteMessagesFrom(userTargetMessage);
   }
 
-  async function resendMonotonicMessage(targetMessage = {}, editedContent = "", options = {}) {
-    const text = String(editedContent || "").trim();
-    if (!text) return false;
-    await prepareMonotonicMessageAction(options);
-    const userTargetMessage = resolveMonotonicUserTarget(targetMessage);
-    if (!userTargetMessage) return false;
-    const session = activeSession.value;
-    const previousMessages = Array.isArray(session?.messages) ? [...session.messages] : null;
-    const previousRawMessages = Array.isArray(session?.rawMessages) ? [...session.rawMessages] : null;
-    const previousMessageCount = session?.messageCount;
-    const previousLastMessage = session?.lastMessage;
-    const previousUpdatedAt = session?.updatedAt;
-    const previousInput = input.value;
-    const originalCascadeStartIndex = findMessageCascadeStartIndex(userTargetMessage);
-    const removedMessagesBeforeResend = Array.isArray(session?.messages) && originalCascadeStartIndex >= 0
-      ? session.messages.slice(originalCascadeStartIndex)
-      : [];
-    const deleted = await deleteMonotonicMessage(userTargetMessage, { ...options, timeoutMs: 0 });
-    if (!deleted) return false;
-    if (session) {
-      session.pendingResendStalePrune = {
-        anchorMessage: userTargetMessage,
-        originalStartIndex: originalCascadeStartIndex,
-        removedMessages: removedMessagesBeforeResend,
-      };
-      pruneStaleMessagesAfterResend(
-        userTargetMessage,
-        originalCascadeStartIndex,
-        removedMessagesBeforeResend,
-      );
-    }
-    input.value = text;
-    const sent = await send();
-    if (session?.pendingResendStalePrune) delete session.pendingResendStalePrune;
-    if (!sent) {
-      if (session && previousMessages && previousRawMessages) {
-        session.messages = previousMessages;
-        session.rawMessages = previousRawMessages;
-        session.messageCount = previousMessageCount;
-        session.lastMessage = previousLastMessage;
-        session.updatedAt = previousUpdatedAt;
-      }
-      input.value = previousInput;
-      return false;
-    }
-    return true;
-  }
+  const resendTransaction = createResendMessageTransaction({
+    activeSession,
+    activeSessionId,
+    applySessionDetail,
+    authFetch,
+    buildMonotonicMessageAnchor,
+    clearPendingInteraction,
+    deleteMonotonicMessage,
+    findMessageCascadeStartIndex,
+    input,
+    messageOperationStore,
+    prepareMonotonicMessageAction,
+    replaceSessionTurnApi,
+    resolveMonotonicUserTarget,
+    send,
+    userId,
+  });
 
   return {
     prepareMonotonicMessageAction,
     resolveMonotonicUserTarget,
     cascadeDeleteMessagesFrom,
     deleteMonotonicMessage,
-    resendMonotonicMessage,
-    pruneStaleMessagesAfterResend,
+    resendMonotonicMessage: resendTransaction.resendMonotonicMessage,
+    pruneStaleMessagesAfterResend: resendTransaction.pruneStaleMessagesAfterResend,
+    finalizePendingResendOperation: resendTransaction.finalizePendingResendOperation,
   };
 }
