@@ -9,6 +9,12 @@ import {
   SESSION_RUN_EVENT,
   rememberStopRequestedEvent,
 } from "../sessionRunStateMachine";
+import {
+  getMessageClientTurnId,
+  getMessageDialogProcessId,
+  getMessageParentDialogProcessId,
+  getMessageRole,
+} from "../../infra/messageIdentity";
 
 function markLatestUserMessageStopped(activeSession, pendingAssistantMessage = null) {
   const messages = Array.isArray(activeSession?.value?.messages)
@@ -17,23 +23,21 @@ function markLatestUserMessageStopped(activeSession, pendingAssistantMessage = n
   const rawMessages = Array.isArray(activeSession?.value?.rawMessages)
     ? activeSession.value.rawMessages
     : [];
-  const pendingDialogProcessId = normalizeTrimmedString(pendingAssistantMessage?.dialogProcessId);
+  const pendingDialogProcessId = getMessageDialogProcessId(pendingAssistantMessage);
   const latestUserMessageIndex = messages
     .map((messageItem, index) => ({ messageItem, index }))
     .reverse()
     .find(({ messageItem }) => {
-      if (normalizeTrimmedString(messageItem?.role) !== RoleEnum.USER) return false;
+      if (getMessageRole(messageItem) !== RoleEnum.USER) return false;
       if (!pendingDialogProcessId) return true;
-      const userDialogProcessId = normalizeTrimmedString(
-        messageItem?.dialogProcessId || messageItem?.dialogId,
-      );
+      const userDialogProcessId = getMessageDialogProcessId(messageItem);
       return !userDialogProcessId || userDialogProcessId === pendingDialogProcessId;
     });
   const latestUserMessage = latestUserMessageIndex?.messageItem;
   if (!latestUserMessage) return;
   const markStopped = (messageItem) => {
     if (!messageItem || typeof messageItem !== "object") return;
-    if (pendingDialogProcessId && !normalizeTrimmedString(messageItem?.dialogProcessId || messageItem?.dialogId)) {
+    if (pendingDialogProcessId && !getMessageDialogProcessId(messageItem)) {
       messageItem.dialogProcessId = pendingDialogProcessId;
     }
     messageItem.stopState = "stopped";
@@ -43,15 +47,15 @@ function markLatestUserMessageStopped(activeSession, pendingAssistantMessage = n
   };
   markStopped(latestUserMessage);
   const rawCandidate = rawMessages[latestUserMessageIndex.index];
-  if (rawCandidate && normalizeTrimmedString(rawCandidate?.role) === RoleEnum.USER) {
+  if (rawCandidate && getMessageRole(rawCandidate) === RoleEnum.USER) {
     markStopped(rawCandidate);
     return;
   }
   const latestUserContent = normalizeTrimmedString(latestUserMessage?.content);
   for (let index = rawMessages.length - 1; index >= 0; index -= 1) {
     const rawMessage = rawMessages[index];
-    if (normalizeTrimmedString(rawMessage?.role) !== RoleEnum.USER) continue;
-    const rawDialogProcessId = normalizeTrimmedString(rawMessage?.dialogProcessId || rawMessage?.dialogId);
+    if (getMessageRole(rawMessage) !== RoleEnum.USER) continue;
+    const rawDialogProcessId = getMessageDialogProcessId(rawMessage);
     if (pendingDialogProcessId && rawDialogProcessId && rawDialogProcessId !== pendingDialogProcessId) continue;
     if (!pendingDialogProcessId && latestUserContent && normalizeTrimmedString(rawMessage?.content) !== latestUserContent) continue;
     markStopped(rawMessage);
@@ -71,12 +75,8 @@ export function forceStopUiFinalize({
   if (!sending?.value) return;
   const pendingAssistantMessage = findTargetAssistantMessage?.();
   markLatestUserMessageStopped(activeSession, pendingAssistantMessage);
-  const fallbackDialogProcessId = normalizeTrimmedString(
-    pendingAssistantMessage?.dialogProcessId,
-  );
-  const fallbackClientTurnId = normalizeTrimmedString(
-    pendingAssistantMessage?.clientTurnId,
-  );
+  const fallbackDialogProcessId = getMessageDialogProcessId(pendingAssistantMessage);
+  const fallbackClientTurnId = getMessageClientTurnId(pendingAssistantMessage);
   const finalizedAtMs = Date.now();
   applyConversationState?.(
     {
@@ -110,10 +110,8 @@ export function forceStopUiFinalize({
 
 function buildStopPayload({ userId, activeSession, pendingAssistantMessage } = {}) {
   const session = activeSession?.value || {};
-  const dialogProcessId = normalizeTrimmedString(
-    pendingAssistantMessage?.dialogProcessId || pendingAssistantMessage?.dialogId,
-  );
-  const clientTurnId = normalizeTrimmedString(pendingAssistantMessage?.clientTurnId);
+  const dialogProcessId = getMessageDialogProcessId(pendingAssistantMessage);
+  const clientTurnId = getMessageClientTurnId(pendingAssistantMessage);
   const createdAtMs = Date.now();
   const payload = {
     userId: String(userId?.value ?? userId ?? ""),
@@ -125,7 +123,7 @@ function buildStopPayload({ userId, activeSession, pendingAssistantMessage } = {
       session.parentSessionId || pendingAssistantMessage?.parentSessionId || "",
     ),
     parentDialogProcessId: String(
-      pendingAssistantMessage?.parentDialogProcessId || session.parentDialogProcessId || "",
+      getMessageParentDialogProcessId(pendingAssistantMessage) || session.parentDialogProcessId || "",
     ),
     partialAssistant: {
       content: String(pendingAssistantMessage?.content || ""),
@@ -157,7 +155,7 @@ export function stopSending({
     .reverse()
     .find(
       (messageItem) =>
-        normalizeTrimmedString(messageItem?.role) === RoleEnum.ASSISTANT &&
+        getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
         Boolean(messageItem?.pending),
     );
   markLatestUserMessageStopped(activeSession, pendingAssistantMessage);

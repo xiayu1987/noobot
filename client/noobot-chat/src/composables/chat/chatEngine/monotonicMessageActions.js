@@ -6,63 +6,59 @@
 import { normalizeTrimmedString } from "./utils";
 import { createResendMessageTransaction } from "./resendTransaction";
 import { syncSessionMessageSummary } from "./resendReconciler";
+import {
+  getMessageDialogProcessId,
+  getMessageRole,
+  getMessageStableId,
+  getMessageTurnId,
+} from "../../infra/messageIdentity";
 
 const delay = (ms) => new Promise((resolve) => {
   setTimeout(resolve, ms);
 });
 
 function isUserMessage(message = {}) {
-  return normalizeTrimmedString(message?.role).toLowerCase() === "user";
-}
-
-function getDialogProcessId(message = {}) {
-  return normalizeTrimmedString(message?.dialogProcessId || message?.dialogId);
+  return getMessageRole(message).toLowerCase() === "user";
 }
 
 function findMessageIndex(targetMessage = {}, messages = []) {
-  const targetTurnId = normalizeTrimmedString(targetMessage?.turnId || targetMessage?.turn_id);
-  const targetId = normalizeTrimmedString(
-    targetMessage?.messageId || targetMessage?.message_id || targetMessage?.id,
-  );
+  const targetTurnId = getMessageTurnId(targetMessage);
+  const targetId = getMessageStableId(targetMessage);
   const targetTs = targetMessage?.ts;
-  const targetDialogProcessId = getDialogProcessId(targetMessage);
-  const targetRole = normalizeTrimmedString(targetMessage?.role).toLowerCase();
+  const targetDialogProcessId = getMessageDialogProcessId(targetMessage);
+  const targetRole = getMessageRole(targetMessage).toLowerCase();
   const targetContent = normalizeTrimmedString(targetMessage?.content);
   return messages.findIndex((message) => {
     if (message === targetMessage) return true;
     if (
       targetTurnId &&
-      normalizeTrimmedString(message?.turnId || message?.turn_id) === targetTurnId
+      getMessageTurnId(message) === targetTurnId
     ) return true;
     if (
       targetId &&
-      normalizeTrimmedString(message?.messageId || message?.message_id || message?.id) === targetId
+      getMessageStableId(message) === targetId
     ) return true;
     if (targetTs !== undefined && message?.ts === targetTs) return true;
     if (
       targetDialogProcessId &&
-      getDialogProcessId(message) === targetDialogProcessId &&
-      (!targetRole || normalizeTrimmedString(message?.role).toLowerCase() === targetRole)
+      getMessageDialogProcessId(message) === targetDialogProcessId &&
+      (!targetRole || getMessageRole(message).toLowerCase() === targetRole)
     ) return true;
     return Boolean(
       targetRole &&
       targetContent &&
-      normalizeTrimmedString(message?.role).toLowerCase() === targetRole &&
+      getMessageRole(message).toLowerCase() === targetRole &&
       normalizeTrimmedString(message?.content) === targetContent,
     );
   });
 }
 
 function buildMonotonicMessageAnchor(targetMessage = {}) {
-  const turnId = normalizeTrimmedString(targetMessage?.turnId || targetMessage?.turn_id);
+  const turnId = getMessageTurnId(targetMessage);
   if (turnId) return { turnId };
-  const messageId = normalizeTrimmedString(
-    targetMessage?.messageId || targetMessage?.message_id || targetMessage?.id,
-  );
+  const messageId = getMessageStableId(targetMessage);
   if (messageId) return { messageId };
-  const dialogProcessId = normalizeTrimmedString(
-    targetMessage?.dialogProcessId || targetMessage?.dialogId,
-  );
+  const dialogProcessId = getMessageDialogProcessId(targetMessage);
   if (dialogProcessId) return { dialogProcessId };
   if (targetMessage?.ts !== undefined && targetMessage?.ts !== null) {
     return { ts: targetMessage.ts };
@@ -155,10 +151,10 @@ export function createMonotonicMessageActions({
       return messages[directIndex];
     }
 
-    const targetDialogProcessId = getDialogProcessId(targetMessage);
+    const targetDialogProcessId = getMessageDialogProcessId(targetMessage);
     if (targetDialogProcessId) {
       const sameDialogProcessUserMessage = messages.find(
-        (message) => isUserMessage(message) && getDialogProcessId(message) === targetDialogProcessId,
+        (message) => isUserMessage(message) && getMessageDialogProcessId(message) === targetDialogProcessId,
       );
       if (sameDialogProcessUserMessage) return sameDialogProcessUserMessage;
     }

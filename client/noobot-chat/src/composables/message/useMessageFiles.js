@@ -12,6 +12,7 @@ import {
 import {
   getMessageDialogProcessId,
   getMessageParentDialogProcessId,
+  getMessageRole,
   isSameMessageRound,
   shouldCollectAttachmentMetasFromMessage,
 } from "../infra/messageIdentity";
@@ -90,7 +91,7 @@ function getMessageAttachmentMetas(messageItem = {}) {
 
 function isFreshPendingAssistant(messageItem = {}) {
   return (
-    String(messageItem?.role || "").trim() === "assistant" &&
+    getMessageRole(messageItem) === "assistant" &&
     messageItem?.pending === true &&
     messageItem?.hasFirstStreamEvent !== true
   );
@@ -268,7 +269,7 @@ export function useMessageFiles({
   const writtenFiles = computed(() => {
     const messageItem = getMessageItem() || {};
     if (isFreshPendingAssistant(messageItem)) return [];
-    const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+    const dialogProcessId = getMessageDialogProcessId(messageItem);
     if (!dialogProcessId) return [];
     const out = [];
     const seen = new Set();
@@ -299,10 +300,10 @@ export function useMessageFiles({
     );
 
     for (const sessionMessage of candidateMessages) {
-      if (String(sessionMessage?.role || "") !== "tool") continue;
+      if (getMessageRole(sessionMessage) !== "tool") continue;
       if (!isSameMessageRound(messageItem, sessionMessage)) continue;
-      const currentDialogId = String(sessionMessage?.dialogProcessId || "").trim();
-      const parentId = String(sessionMessage?.parentDialogProcessId || "").trim();
+      const currentDialogId = getMessageDialogProcessId(sessionMessage);
+      const parentId = getMessageParentDialogProcessId(sessionMessage);
       if (!relatedDialogIds.has(currentDialogId) && !relatedDialogIds.has(parentId)) {
         continue;
       }
@@ -323,7 +324,7 @@ export function useMessageFiles({
       out.push(fileItem);
     }
 
-    if (String(messageItem?.role || "").trim() === "assistant") {
+    if (getMessageRole(messageItem) === "assistant") {
       const recognizedPathTokens = extractCandidatePathsFromText(messageItem?.content || "");
       for (const pathToken of recognizedPathTokens) {
         const normalizedFileItem = normalizeRecognizedFilePath(pathToken);
@@ -355,13 +356,13 @@ export function useMessageFiles({
     const mergedBaseAttachmentMetas = toolLogAttachmentMetas.length
       ? mergeAttachmentMetas(baseAttachmentMetas, toolLogAttachmentMetas)
       : baseAttachmentMetas;
-    if (String(messageItem?.role || "").trim() !== "assistant") {
+    if (getMessageRole(messageItem) !== "assistant") {
       return mergedBaseAttachmentMetas;
     }
     if (isFreshPendingAssistant(messageItem)) {
       return mergedBaseAttachmentMetas;
     }
-    const rootDialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+    const rootDialogProcessId = getMessageDialogProcessId(messageItem);
     if (!rootDialogProcessId) return baseAttachmentMetas;
 
     const candidateMessages = [
@@ -376,7 +377,7 @@ export function useMessageFiles({
     let mainFlowAttachmentMetas = [...baseSplit.agent];
     let pluginAttachmentMetas = [...baseSplit.plugin];
     for (const sessionMessage of candidateMessages) {
-      const messageRole = String(sessionMessage?.role || "").trim();
+      const messageRole = getMessageRole(sessionMessage);
       const messageDialogProcessId = getMessageDialogProcessId(sessionMessage);
       const messageParentDialogProcessId = getMessageParentDialogProcessId(sessionMessage);
       if (!isSameMessageRound(messageItem, sessionMessage)) {

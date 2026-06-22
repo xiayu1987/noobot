@@ -10,6 +10,7 @@ import {
   resolveFallbackThinkingDetailsPayload as resolveFallbackThinkingDetailsPayloadState,
   resolveThinkingDetailsPanelPayload,
 } from "./state/thinkingDetailsState";
+import { getMessageDialogProcessId, getMessageRole } from "../composables/infra/messageIdentity";
 
 export function useThinkingDetailsPanel({
   activeSession,
@@ -40,7 +41,7 @@ export function useThinkingDetailsPanel({
   }
 
   function normalizeDialogProcessId(messageItem = {}) {
-    return String(messageItem?.dialogProcessId || "").trim();
+    return getMessageDialogProcessId(messageItem);
   }
 
   async function fetchThinkingDetailForMessage(messageItem = {}) {
@@ -87,7 +88,7 @@ export function useThinkingDetailsPanel({
       const dialogProcessId = normalizeDialogProcessId(thinkingDetailsMessageItem.value);
       if (!dialogProcessId) return "";
       const sourceMessage = (activeSession?.value?.messages || [])
-        .find((item = {}) => normalizeDialogProcessId(item) === dialogProcessId && item?.role === "assistant") || {};
+        .find((item = {}) => normalizeDialogProcessId(item) === dialogProcessId && getMessageRole(item) === "assistant") || {};
       return [
         activeSessionId?.value,
         dialogProcessId,

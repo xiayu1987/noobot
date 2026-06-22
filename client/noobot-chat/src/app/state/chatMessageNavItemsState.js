@@ -1,3 +1,5 @@
+import { getMessageRole } from "../../composables/infra/messageIdentity";
+
 export function normalizeChatMessageNavContent(messageItem = {}) {
   return String(messageItem?.content || messageItem?.text || "")
     .replace(/\s+/g, " ")
@@ -14,7 +16,7 @@ export function buildChatMessageNavItem({
     ? getMessageAnchorId(messageItem, messageIndex)
     : "";
   const fallbackRole = typeof translateSession === "function" ? translateSession() : "session";
-  const role = String(messageItem?.role || fallbackRole).trim();
+  const role = getMessageRole(messageItem) || fallbackRole;
   const content = normalizeChatMessageNavContent(messageItem);
   return {
     id: anchorId || `chat-message-${messageIndex}`,

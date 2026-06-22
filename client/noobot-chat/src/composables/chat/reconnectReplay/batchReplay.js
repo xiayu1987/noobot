@@ -19,6 +19,7 @@ import {
   getReconnectMaxSequence,
   isPendingInteractionReplay,
 } from "../../infra/reconnectReplayModel";
+import { getMessageDialogProcessId } from "../../infra/messageIdentity";
 import { _ensureArray, _trimStr } from "./utils";
 import {
   hydrateSessionBeforeReconnectReplayIfNeeded,
@@ -68,7 +69,7 @@ function resolveReconnectProcessId({ targetMessage, normalizedDpId = "", logItem
     _trimStr(eventData?.dialogProcessId) ||
     _trimStr(normalizedDpId) ||
     _trimStr(targetMessage?.processId) ||
-    _trimStr(targetMessage?.dialogProcessId);
+    getMessageDialogProcessId(targetMessage);
 }
 
 function getProcessLogMergeKey(logItem = {}) {
@@ -318,7 +319,7 @@ export function applyReconnectEnvelopeToTargetMessage({
     if (!logItem || !_trimStr(logItem.text)) {
       return true;
     }
-    if (logItem?.dialogProcessId && !_trimStr(targetMessage?.dialogProcessId)) {
+    if (logItem?.dialogProcessId && !getMessageDialogProcessId(targetMessage)) {
       targetMessage.dialogProcessId = _trimStr(logItem.dialogProcessId);
     }
     const previousExecutionLogTotal = Math.max(
@@ -370,7 +371,7 @@ export function applyReconnectEnvelopeToTargetMessage({
           Number(eventData?.executionLogs?.length || 0),
         );
         mergeRealtimeLogs(targetMessage, doneRealtimeLogs);
-        if (!_trimStr(targetMessage?.dialogProcessId)) {
+        if (!getMessageDialogProcessId(targetMessage)) {
           const latestDialogProcessId = [...doneRealtimeLogs]
             .reverse()
             .map((logItem) => _trimStr(logItem?.dialogProcessId))

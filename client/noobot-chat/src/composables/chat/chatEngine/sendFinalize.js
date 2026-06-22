@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { RoleEnum } from "../../../shared/constants/chatConstants";
+import { getMessageClientTurnId, getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity";
 
 function normalizeTrimmedString(value = "") {
   return String(value || "").trim();
@@ -17,14 +18,12 @@ function markLatestUserMessageStopped(activeSession, botMessage = null) {
     ? activeSession.value.rawMessages
     : [];
   if (!messages.length) return false;
-  const botDialogProcessId = normalizeTrimmedString(botMessage?.dialogProcessId || botMessage?.dialogId);
+  const botDialogProcessId = getMessageDialogProcessId(botMessage);
   const botIndex = botMessage ? messages.findIndex((messageItem) => messageItem === botMessage) : -1;
   const startIndex = botIndex >= 0 ? botIndex - 1 : messages.length - 1;
   const markStopped = (messageItem) => {
     if (!messageItem || typeof messageItem !== "object") return;
-    const userDialogProcessId = normalizeTrimmedString(
-      messageItem?.dialogProcessId || messageItem?.dialogId,
-    );
+    const userDialogProcessId = getMessageDialogProcessId(messageItem);
     if (botDialogProcessId && !userDialogProcessId) {
       messageItem.dialogProcessId = botDialogProcessId;
     }
@@ -35,24 +34,22 @@ function markLatestUserMessageStopped(activeSession, botMessage = null) {
   };
   for (let index = startIndex; index >= 0; index -= 1) {
     const messageItem = messages[index];
-    if (normalizeTrimmedString(messageItem?.role) !== RoleEnum.USER) continue;
-    const userDialogProcessId = normalizeTrimmedString(
-      messageItem?.dialogProcessId || messageItem?.dialogId,
-    );
+    if (getMessageRole(messageItem) !== RoleEnum.USER) continue;
+    const userDialogProcessId = getMessageDialogProcessId(messageItem);
     if (botDialogProcessId && userDialogProcessId && userDialogProcessId !== botDialogProcessId) {
       return false;
     }
     markStopped(messageItem);
     const rawCandidate = rawMessages[index];
-    if (rawCandidate && normalizeTrimmedString(rawCandidate?.role) === RoleEnum.USER) {
+    if (rawCandidate && getMessageRole(rawCandidate) === RoleEnum.USER) {
       markStopped(rawCandidate);
       return true;
     }
     const userContent = normalizeTrimmedString(messageItem?.content);
     for (let rawIndex = rawMessages.length - 1; rawIndex >= 0; rawIndex -= 1) {
       const rawMessage = rawMessages[rawIndex];
-      if (normalizeTrimmedString(rawMessage?.role) !== RoleEnum.USER) continue;
-      const rawDialogProcessId = normalizeTrimmedString(rawMessage?.dialogProcessId || rawMessage?.dialogId);
+      if (getMessageRole(rawMessage) !== RoleEnum.USER) continue;
+      const rawDialogProcessId = getMessageDialogProcessId(rawMessage);
       if (botDialogProcessId && rawDialogProcessId && rawDialogProcessId !== botDialogProcessId) continue;
       if (!botDialogProcessId && userContent && normalizeTrimmedString(rawMessage?.content) !== userContent) continue;
       markStopped(rawMessage);
@@ -81,9 +78,9 @@ export function applyStreamCompletedFallback({
           "",
       ),
       dialogProcessId: String(
-        botMessage?.dialogProcessId || finalDoneEventData?.dialogProcessId || "",
+        getMessageDialogProcessId(botMessage) || finalDoneEventData?.dialogProcessId || "",
       ),
-      clientTurnId: String(botMessage?.clientTurnId || finalDoneEventData?.clientTurnId || ""),
+      clientTurnId: String(getMessageClientTurnId(botMessage) || finalDoneEventData?.clientTurnId || ""),
       sourceEvent: "stream_finalize_fallback",
     },
     { botMessage },
@@ -103,7 +100,7 @@ export function applyStopRequestedState({
     {
       state: "stopped",
       sessionId: String(activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
-      dialogProcessId: String(botMessage?.dialogProcessId || ""),
+      dialogProcessId: String(getMessageDialogProcessId(botMessage) || ""),
     },
     { botMessage },
   );
@@ -126,7 +123,7 @@ export function applySendErrorState({
       sessionId: String(
         errorEventData?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || "",
       ),
-      dialogProcessId: String(errorEventData?.dialogProcessId || botMessage?.dialogProcessId || ""),
+      dialogProcessId: String(errorEventData?.dialogProcessId || getMessageDialogProcessId(botMessage) || ""),
       sourceEvent: errorEventData ? "stream_error" : undefined,
     },
     { botMessage },

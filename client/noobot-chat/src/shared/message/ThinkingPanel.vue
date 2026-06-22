@@ -7,6 +7,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useLocale } from "../i18n/useLocale";
 import { isHarnessInjectedMessage } from "../../composables/infra/messageModel";
+import { getMessageClientTurnId, getMessageDialogProcessId, getMessageRole } from "../../composables/infra/messageIdentity";
 import { sanitizeExecutionLogForDisplay } from "../../composables/chat/chatEngine/utils";
 import { resolveThinkingTiming } from "../../composables/chat/thinkingTimingRegistry";
 import {
@@ -52,7 +53,7 @@ function getAllRealtimeLogs(messageItem = {}) {
 
 function isFreshPendingAssistant(messageItem = {}) {
   return (
-    String(messageItem?.role || "").trim() === "assistant" &&
+    getMessageRole(messageItem) === "assistant" &&
     messageItem?.pending === true &&
     messageItem?.hasFirstStreamEvent !== true
   );
@@ -99,7 +100,7 @@ function hasSummaryThinkingDetails(messageItem = {}) {
 }
 
 function hasThinkingLogs(messageItem = {}) {
-  if (!messageItem || messageItem.role !== "assistant") return false;
+  if (!messageItem || getMessageRole(messageItem) !== "assistant") return false;
   if (messageItem.pending) return true;
   if (hasSummaryThinkingDetails(messageItem)) return true;
   const hasRealtimeLogs = Array.isArray(messageItem.processRealtimeLogs) || Array.isArray(messageItem.realtimeLogs)
@@ -111,26 +112,26 @@ function hasThinkingLogs(messageItem = {}) {
 
 
 function getInjectedMessagesForMessage(messageItem = {}) {
-  if (!messageItem || messageItem.role !== "assistant") return [];
+  if (!messageItem || getMessageRole(messageItem) !== "assistant") return [];
   if (isFreshPendingAssistant(messageItem)) return [];
-  const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+  const dialogProcessId = getMessageDialogProcessId(messageItem);
   const candidateMessages = Array.isArray(props.allMessages) ? props.allMessages : [];
   return candidateMessages.filter((item = {}) => {
     if (!isHarnessInjectedMessage(item)) return false;
     if (!dialogProcessId) return true;
-    return String(item?.dialogProcessId || "").trim() === dialogProcessId;
+    return getMessageDialogProcessId(item) === dialogProcessId;
   });
 }
 
 function getScopedMessagesForMessage(messageItem = {}) {
   if (isFreshPendingAssistant(messageItem)) return [];
-  const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+  const dialogProcessId = getMessageDialogProcessId(messageItem);
   const hasExplicitThinkingDetailPayload =
     (Array.isArray(messageItem?.processCompletedToolLogs) && messageItem.processCompletedToolLogs.length > 0)
     || (Array.isArray(messageItem?.completedToolLogs) && messageItem.completedToolLogs.length > 0);
   const candidateMessages = Array.isArray(props.allMessages) ? props.allMessages : [];
   return candidateMessages.filter((item = {}) => {
-    if (dialogProcessId && String(item?.dialogProcessId || "").trim() !== dialogProcessId) {
+    if (dialogProcessId && getMessageDialogProcessId(item) !== dialogProcessId) {
       return false;
     }
     return true;
@@ -138,7 +139,7 @@ function getScopedMessagesForMessage(messageItem = {}) {
 }
 
 function isToolRelatedMessage(messageItem = {}) {
-  const role = String(messageItem?.role || "").trim().toLowerCase();
+  const role = getMessageRole(messageItem).toLowerCase();
   const type = String(messageItem?.type || "").trim().toLowerCase();
   const toolCalls = Array.isArray(messageItem?.tool_calls) ? messageItem.tool_calls : [];
   if (toolCalls.length > 0) return true;
@@ -190,12 +191,10 @@ function buildFallbackCompletedToolLogs(messageItem = {}) {
   for (const item of scopedMessages) {
     if (!isToolRelatedMessage(item)) continue;
     const sessionId = String(item?.sessionId || messageItem?.sessionId || "");
-    const dialogProcessId = String(
-      item?.dialogProcessId || messageItem?.dialogProcessId || "",
-    ).trim();
+    const dialogProcessId = getMessageDialogProcessId(item) || getMessageDialogProcessId(messageItem);
     const timestamp = item?.ts || messageItem?.ts || "";
     const itemType = String(item?.type || "").trim().toLowerCase();
-    const itemRole = String(item?.role || "").trim().toLowerCase();
+    const itemRole = getMessageRole(item).toLowerCase();
     const itemToolCalls = Array.isArray(item?.tool_calls) ? item.tool_calls : [];
 
     if (itemToolCalls.length > 0 || itemType === "tool_call") {
@@ -451,8 +450,8 @@ function getThinkingDurationMs(messageItem = {}) {
   );
   const persistedTiming = resolveThinkingTiming({
     sessionId: messageItem?.sessionId || messageItem?.session_id || channelState?.sessionId,
-    dialogProcessId: messageItem?.dialogProcessId || channelState?.dialogProcessId,
-    clientTurnId: messageItem?.clientTurnId || messageItem?.client_turn_id || channelState?.clientTurnId,
+    dialogProcessId: getMessageDialogProcessId(messageItem) || channelState?.dialogProcessId,
+    clientTurnId: getMessageClientTurnId(messageItem) || channelState?.clientTurnId,
   }) || {};
   const persistedStartedAt = parseAnyTimeMs(persistedTiming?.startedAtMs, persistedTiming?.startedAt);
   const persistedFinishedAt = parseAnyTimeMs(persistedTiming?.finishedAtMs, persistedTiming?.finishedAt);

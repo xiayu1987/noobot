@@ -5,6 +5,7 @@
  */
 import { RoleEnum } from "../../../shared/constants/chatConstants";
 import { normalizeTrimmedString } from "./utils";
+import { getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity";
 
 export async function finalizeDoneSessionDetail({
   activeSession,
@@ -20,7 +21,7 @@ export async function finalizeDoneSessionDetail({
   );
   const finalExecutionLogTotal = Number(botMessage?.executionLogTotal || 0);
   const finalDialogProcessId = normalizeTrimmedString(
-    botMessage?.dialogProcessId || finalDoneEventData?.dialogProcessId,
+    getMessageDialogProcessId(botMessage) || finalDoneEventData?.dialogProcessId,
   );
 
   if (!doneSessionId) return false;
@@ -38,8 +39,8 @@ export async function finalizeDoneSessionDetail({
     if (finalExecutionLogTotal > 0 && finalDialogProcessId) {
       const patchExecutionTotal = (messages = []) => {
         for (const messageItem of Array.isArray(messages) ? messages : []) {
-          if (normalizeTrimmedString(messageItem?.role) !== RoleEnum.ASSISTANT) continue;
-          if (normalizeTrimmedString(messageItem?.dialogProcessId) !== finalDialogProcessId) {
+          if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) continue;
+          if (getMessageDialogProcessId(messageItem) !== finalDialogProcessId) {
             continue;
           }
           messageItem.executionLogTotal = Math.max(

@@ -4,36 +4,30 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeTrimmedString } from "./utils";
+import {
+  getMessageDialogProcessId,
+  getMessageRole,
+  getMessageStableId,
+  getMessageTurnId,
+} from "../../infra/messageIdentity";
 
 function isUserMessage(message = {}) {
-  return normalizeTrimmedString(message?.role).toLowerCase() === "user";
-}
-
-function getDialogProcessId(message = {}) {
-  return normalizeTrimmedString(message?.dialogProcessId || message?.dialogId);
-}
-
-function getTurnId(message = {}) {
-  return normalizeTrimmedString(message?.turnId);
-}
-
-function getMessageId(message = {}) {
-  return normalizeTrimmedString(message?.id || message?.messageId);
+  return getMessageRole(message).toLowerCase() === "user";
 }
 
 function createRemovedIdentitySnapshot(anchorMessage = {}, removedMessages = []) {
   const removedReferences = new Set(removedMessages.filter(Boolean));
-  const removedTurnIds = new Set(removedMessages.map(getTurnId).filter(Boolean));
-  const removedIds = new Set(removedMessages.map(getMessageId).filter(Boolean));
-  const removedDialogProcessIds = new Set(removedMessages.map(getDialogProcessId).filter(Boolean));
+  const removedTurnIds = new Set(removedMessages.map(getMessageTurnId).filter(Boolean));
+  const removedIds = new Set(removedMessages.map(getMessageStableId).filter(Boolean));
+  const removedDialogProcessIds = new Set(removedMessages.map(getMessageDialogProcessId).filter(Boolean));
   const removedTsValues = new Set(
     removedMessages
       .map((message) => message?.ts)
       .filter((value) => value !== undefined && value !== null),
   );
-  const anchorId = getMessageId(anchorMessage);
-  const anchorTurnId = getTurnId(anchorMessage);
-  const anchorDialogProcessId = getDialogProcessId(anchorMessage);
+  const anchorId = getMessageStableId(anchorMessage);
+  const anchorTurnId = getMessageTurnId(anchorMessage);
+  const anchorDialogProcessId = getMessageDialogProcessId(anchorMessage);
   const anchorTs = anchorMessage?.ts;
   if (anchorTurnId) removedTurnIds.add(anchorTurnId);
   if (anchorId) removedIds.add(anchorId);
@@ -44,7 +38,7 @@ function createRemovedIdentitySnapshot(anchorMessage = {}, removedMessages = [])
     anchorId,
     anchorDialogProcessId,
     anchorTs,
-    anchorRole: normalizeTrimmedString(anchorMessage?.role).toLowerCase(),
+    anchorRole: getMessageRole(anchorMessage).toLowerCase(),
     anchorContent: normalizeTrimmedString(anchorMessage?.content),
     removedTurnIds,
     removedReferences,
@@ -57,22 +51,22 @@ function createRemovedIdentitySnapshot(anchorMessage = {}, removedMessages = [])
 function matchesStableRemovedIdentity(message = {}, identity) {
   if (!message || typeof message !== "object") return false;
   if (identity.removedReferences.has(message)) return true;
-  const messageTurnId = getTurnId(message);
+  const messageTurnId = getMessageTurnId(message);
   if (messageTurnId && identity.removedTurnIds.has(messageTurnId)) return true;
-  const messageId = getMessageId(message);
+  const messageId = getMessageStableId(message);
   if (messageId && identity.removedIds.has(messageId)) return true;
   const messageTs = message?.ts;
   if (messageTs !== undefined && messageTs !== null && identity.removedTsValues.has(messageTs)) return true;
-  const messageDialogProcessId = getDialogProcessId(message);
+  const messageDialogProcessId = getMessageDialogProcessId(message);
   return Boolean(messageDialogProcessId && identity.removedDialogProcessIds.has(messageDialogProcessId));
 }
 
 function matchesFinalRemovedIdentity(message = {}, identity) {
   if (!message || typeof message !== "object") return false;
   if (identity.removedReferences.has(message)) return true;
-  const messageTurnId = getTurnId(message);
+  const messageTurnId = getMessageTurnId(message);
   if (messageTurnId && identity.removedTurnIds.has(messageTurnId)) return true;
-  const messageId = getMessageId(message);
+  const messageId = getMessageStableId(message);
   if (messageId && identity.removedIds.has(messageId)) return true;
   const messageTs = message?.ts;
   // Final session detail may legitimately reuse the old dialogProcessId for the
@@ -90,7 +84,7 @@ function matchesImmediateCompatIdentity(message = {}, identity) {
   return Boolean(
     identity.anchorRole &&
     identity.anchorContent &&
-    normalizeTrimmedString(message?.role).toLowerCase() === identity.anchorRole &&
+    getMessageRole(message).toLowerCase() === identity.anchorRole &&
     normalizeTrimmedString(message?.content) === identity.anchorContent,
   );
 }

@@ -14,6 +14,14 @@ import {
   getMessageTransferAttachmentMetas,
   getMessageTransferEnvelopes,
 } from "./transferEnvelopes";
+import {
+  getMessageClientTurnId,
+  getMessageDialogProcessId,
+  getMessageParentDialogProcessId,
+  getMessageRole,
+  getMessageStableId,
+  getMessageTurnId,
+} from "./messageIdentity";
 
 function normalizeArray(value) {
   return Array.isArray(value) ? value : [];
@@ -125,12 +133,10 @@ function createMessageModel(messageItem = {}) {
       : null;
   const transferEnvelopes = getMessageTransferEnvelopes(messageItem);
   const workflowMeta = normalizeWorkflowMeta(messageItem);
-  const messageId = String(
-    messageItem?.messageId || messageItem?.message_id || messageItem?.id || "",
-  ).trim();
-  const turnId = String(messageItem?.turnId || messageItem?.turn_id || "").trim();
+  const messageId = getMessageStableId(messageItem);
+  const turnId = getMessageTurnId(messageItem);
   const sessionId = String(messageItem?.sessionId || messageItem?.session_id || "").trim();
-  const clientTurnId = String(messageItem?.clientTurnId || messageItem?.client_turn_id || "").trim();
+  const clientTurnId = getMessageClientTurnId(messageItem);
   const thinkingStartedAt =
     messageItem?.thinkingStartedAt || messageItem?.thinking_started_at || "";
   const thinkingFinishedAt =
@@ -153,13 +159,13 @@ function createMessageModel(messageItem = {}) {
     session_id: sessionId,
     clientTurnId,
     client_turn_id: clientTurnId,
-    role: messageItem.role || "assistant",
+    role: getMessageRole(messageItem) || "assistant",
     content: messageItem.content || "",
     type: messageItem.type || "message",
     tool_calls: normalizeArray(messageItem.tool_calls),
     tool_call_id: messageItem.tool_call_id || "",
-    dialogProcessId: messageItem.dialogProcessId || "",
-    parentDialogProcessId: messageItem.parentDialogProcessId || "",
+    dialogProcessId: getMessageDialogProcessId(messageItem),
+    parentDialogProcessId: getMessageParentDialogProcessId(messageItem),
     modelAlias: messageItem.modelAlias || "",
     modelName: messageItem.modelName || messageItem.model || "",
     modelRuns: normalizeArray(messageItem.modelRuns),
@@ -215,9 +221,7 @@ function buildAppendMessage(role, content = "", attachmentMetas = [], options = 
 }
 
 function resolveStableMessageIdentity(messageItem = {}) {
-  return String(
-    messageItem?.messageId || messageItem?.message_id || messageItem?.id || "",
-  ).trim();
+  return getMessageStableId(messageItem);
 }
 
 function buildViewMessage(
@@ -244,7 +248,7 @@ function foldConversationMessages(messages = [], buildView) {
   const foldedMessages = normalizeArray(messages)
     .filter((messageItem) => {
       if (isHarnessInjectedMessage(messageItem)) return false;
-      const role = String(messageItem?.role || "");
+      const role = getMessageRole(messageItem);
       return role === "assistant" || role === "user";
     })
     .map((messageItem) => buildView(messageItem));
@@ -260,14 +264,10 @@ function foldConversationMessages(messages = [], buildView) {
     }
 
     const previousMessage = mergedMessages[mergedMessages.length - 1] || null;
-    const currentRole = String(currentMessage?.role || "");
-    const previousRole = String(previousMessage?.role || "");
-    const currentDialogProcessId = String(
-      currentMessage?.dialogProcessId || "",
-    ).trim();
-    const previousDialogProcessId = String(
-      previousMessage?.dialogProcessId || "",
-    ).trim();
+    const currentRole = getMessageRole(currentMessage);
+    const previousRole = getMessageRole(previousMessage);
+    const currentDialogProcessId = getMessageDialogProcessId(currentMessage);
+    const previousDialogProcessId = getMessageDialogProcessId(previousMessage);
     const currentStableMessageIdentity = resolveStableMessageIdentity(currentMessage);
     const previousStableMessageIdentity = resolveStableMessageIdentity(previousMessage);
     const hasDifferentStableMessageIdentity =

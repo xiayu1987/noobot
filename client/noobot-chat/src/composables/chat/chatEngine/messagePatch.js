@@ -10,6 +10,7 @@ import {
   patchAssistantFromWorkflowMessage,
   pickAssistantMessagesForCurrentTurn,
 } from "./utils";
+import { getMessageDialogProcessId } from "../../infra/messageIdentity";
 
 export function applyDoneMessagesPatch({
   data = {},
@@ -28,7 +29,7 @@ export function applyDoneMessagesPatch({
   const folded = foldMessagesForView(rawMessagesForView);
   const assistantMessagesForCurrentTurn = pickAssistantMessagesForCurrentTurn({
     foldedMessages: folded,
-    dialogProcessId: botMessage.dialogProcessId || data.dialogProcessId,
+    dialogProcessId: getMessageDialogProcessId(botMessage) || data.dialogProcessId,
   });
   const workflowAssistants = assistantMessagesForCurrentTurn.filter(
     (messageItem) => messageItem?.workflowMessage === true,
@@ -56,7 +57,7 @@ export function applyDoneMessagesPatch({
       botMessage.tool_calls = Array.isArray(lastAssistant.tool_calls)
         ? lastAssistant.tool_calls
         : [];
-      botMessage.dialogProcessId = lastAssistant.dialogProcessId || botMessage.dialogProcessId;
+      botMessage.dialogProcessId = getMessageDialogProcessId(lastAssistant) || getMessageDialogProcessId(botMessage);
       botMessage.content = String(mergedAssistantContent || botMessage.content || "");
       botMessage.modelAlias = normalizeTrimmedString(lastAssistant.modelAlias);
       botMessage.modelName = normalizeTrimmedString(lastAssistant.modelName);

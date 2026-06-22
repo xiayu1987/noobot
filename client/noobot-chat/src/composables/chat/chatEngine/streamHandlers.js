@@ -11,6 +11,7 @@ import {
   createProcessEventFromLog,
   createProcessEventsFromDonePayload,
 } from "../../../shared/process/aggregator";
+import { getMessageClientTurnId, getMessageDialogProcessId } from "../../infra/messageIdentity";
 import { promoteSessionIdentityToBackendId } from "../../infra/sessionIdentity";
 import { applyDoneMessagesPatch } from "./messagePatch";
 import {
@@ -31,7 +32,7 @@ function markFirstStreamEvent(botMessage) {
 }
 
 function notifySendingStartedWhenDialogReady({ botMessage, locateSendingStartedMessageOnce }) {
-  if (!normalizeTrimmedString(botMessage?.dialogProcessId)) return;
+  if (!getMessageDialogProcessId(botMessage)) return;
   locateSendingStartedMessageOnce?.();
 }
 
@@ -54,7 +55,7 @@ function applyProcessCompatViewToMessage({ botMessage, processStore, processId }
 function applyProcessEventsToMessage({ botMessage, processStore, events = [] }) {
   if (!botMessage || !processStore || !events.length) return;
   processStore.applyEventBatch?.(events);
-  const processId = events[events.length - 1]?.processId || botMessage.dialogProcessId || "";
+  const processId = events[events.length - 1]?.processId || getMessageDialogProcessId(botMessage) || "";
   applyProcessCompatViewToMessage({ botMessage, processStore, processId });
 }
 
@@ -74,7 +75,7 @@ export function handleThinkingStreamEvent({
     botMessage.dialogProcessId = item.dialogProcessId;
     bindThinkingDialogProcess({
       sessionId: item.sessionId || botMessage.sessionId || botMessage.session_id,
-      clientTurnId: botMessage.clientTurnId,
+      clientTurnId: getMessageClientTurnId(botMessage),
       dialogProcessId: item.dialogProcessId,
     });
   }
@@ -89,7 +90,7 @@ export function handleThinkingStreamEvent({
   const processEvent = createProcessEventFromLog(item, {
     source: ProcessEventSource.STREAM,
     sequence: data?.sequence ?? data?.seq ?? botMessage.executionLogTotal,
-    dialogProcessId: item.dialogProcessId || data?.dialogProcessId || botMessage.dialogProcessId,
+    dialogProcessId: item.dialogProcessId || data?.dialogProcessId || getMessageDialogProcessId(botMessage),
     sessionId: item.sessionId || data?.sessionId,
   });
   if (processEvent) {
@@ -105,12 +106,12 @@ export function handleDeltaStreamEvent({
   locateSendingStartedMessageOnce,
 }) {
   const chunkText = stripInternalEventPlaceholderLines(data?.text || "");
-  if (data?.dialogProcessId && !normalizeTrimmedString(botMessage.dialogProcessId)) {
+  if (data?.dialogProcessId && !getMessageDialogProcessId(botMessage)) {
     botMessage.dialogProcessId = normalizeTrimmedString(data.dialogProcessId);
     bindThinkingDialogProcess({
       sessionId: data?.sessionId || botMessage.sessionId || botMessage.session_id,
-      clientTurnId: botMessage.clientTurnId,
-      dialogProcessId: botMessage.dialogProcessId,
+      clientTurnId: getMessageClientTurnId(botMessage),
+      dialogProcessId: getMessageDialogProcessId(botMessage),
     });
   }
   notifySendingStartedWhenDialogReady({ botMessage, locateSendingStartedMessageOnce });
@@ -192,17 +193,17 @@ export function handleDoneStreamEvent({
 }) {
   clearPendingInteraction();
   markFirstStreamEvent(botMessage);
-  botMessage.dialogProcessId = data?.dialogProcessId || botMessage.dialogProcessId || "";
-  if (botMessage.dialogProcessId) {
+  botMessage.dialogProcessId = data?.dialogProcessId || getMessageDialogProcessId(botMessage) || "";
+  if (getMessageDialogProcessId(botMessage)) {
     bindThinkingDialogProcess({
       sessionId: data?.sessionId || botMessage.sessionId || botMessage.session_id,
-      clientTurnId: botMessage.clientTurnId,
-      dialogProcessId: botMessage.dialogProcessId,
+      clientTurnId: getMessageClientTurnId(botMessage),
+      dialogProcessId: getMessageDialogProcessId(botMessage),
     });
     rememberThinkingFinished({
       sessionId: data?.sessionId || botMessage.sessionId || botMessage.session_id,
-      clientTurnId: botMessage.clientTurnId,
-      dialogProcessId: botMessage.dialogProcessId,
+      clientTurnId: getMessageClientTurnId(botMessage),
+      dialogProcessId: getMessageDialogProcessId(botMessage),
       finishedAtMs: Date.now(),
     });
   }
@@ -230,7 +231,7 @@ export function handleDoneStreamEvent({
         Number(data?.executionSummary?.returned || 0),
         Number(data?.executionLogs?.length || 0),
       );
-      if (!normalizeTrimmedString(botMessage.dialogProcessId)) {
+      if (!getMessageDialogProcessId(botMessage)) {
         const latestDialogProcessId = [...doneRealtimeLogs]
           .reverse()
           .map((logItem) => normalizeTrimmedString(logItem?.dialogProcessId))
@@ -270,8 +271,8 @@ export function handleDoneStreamEvent({
       {
         state: "completed",
         sessionId: String(data?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
-        dialogProcessId: String(botMessage?.dialogProcessId || data?.dialogProcessId || ""),
-        clientTurnId: String(botMessage?.clientTurnId || data?.clientTurnId || ""),
+        dialogProcessId: String(getMessageDialogProcessId(botMessage) || data?.dialogProcessId || ""),
+        clientTurnId: String(getMessageClientTurnId(botMessage) || data?.clientTurnId || ""),
         sourceEvent: "done",
         updatedAtMs: Date.now(),
       },

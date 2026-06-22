@@ -1,3 +1,5 @@
+import { getMessageRole } from "../../composables/infra/messageIdentity";
+
 export function getThinkingDetailsCount(messageItem = {}) {
   const completedToolLogs = Array.isArray(messageItem?.processCompletedToolLogs)
     ? messageItem.processCompletedToolLogs
@@ -48,7 +50,7 @@ export function getThinkingDetailsTitle(messageItem = {}, translate) {
 export function resolveFallbackThinkingDetailsPayload(activeSession = {}) {
   const messages = activeSession?.rawMessages || activeSession?.messages || [];
   const messageItem = [...messages].reverse().find((item = {}) =>
-    item?.role === "assistant" && (item?.pending || Array.isArray(item?.realtimeLogs) || Array.isArray(item?.completedToolLogs) || hasThinkingDetails(item))
+    getMessageRole(item) === "assistant" && (item?.pending || Array.isArray(item?.realtimeLogs) || Array.isArray(item?.completedToolLogs) || hasThinkingDetails(item))
   );
   return { messageItem: messageItem || null, allMessages: messages };
 }

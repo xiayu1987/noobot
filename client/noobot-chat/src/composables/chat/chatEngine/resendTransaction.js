@@ -8,6 +8,11 @@ import {
   syncSessionMessageSummary,
 } from "./resendReconciler";
 import { normalizeTrimmedString } from "./utils";
+import {
+  getMessageRole,
+  getMessageStableId,
+  getMessageTurnId,
+} from "../../infra/messageIdentity";
 
 function resolveSessionId(activeSession, activeSessionId) {
   return normalizeTrimmedString(
@@ -110,33 +115,26 @@ function operationSeed({ sessionId, userTargetMessage, originalCascadeStartIndex
 }
 
 function normalizeMessageRole(message = {}) {
-  return String(message?.role || message?.type || "").trim().toLowerCase();
+  return String(getMessageRole(message) || message?.type || "").trim().toLowerCase();
 }
 
 function getMessageText(message = {}) {
   return String(message?.content || message?.text || message?.message || "");
 }
 
-function getMessageId(message = {}) {
-  return normalizeTrimmedString(message?.messageId || message?.id || message?.message_id);
-}
-
-function getTurnId(message = {}) {
-  return normalizeTrimmedString(message?.turnId || message?.turn_id);
-}
 
 function findReplacementUserMessage({ session, payload, text }) {
   const messages = Array.isArray(session?.messages) ? session.messages : [];
   const newTurn = payload?.newTurn && typeof payload.newTurn === "object" && !Array.isArray(payload.newTurn)
     ? payload.newTurn
     : null;
-  const expectedTurnId = getTurnId(newTurn);
-  const expectedMessageId = getMessageId(newTurn);
+  const expectedTurnId = getMessageTurnId(newTurn);
+  const expectedMessageId = getMessageStableId(newTurn);
   const expectedText = String(text || "");
   return [...messages].reverse().find((message) => {
     if (normalizeMessageRole(message) !== "user") return false;
-    if (expectedTurnId && getTurnId(message) === expectedTurnId) return true;
-    if (expectedMessageId && getMessageId(message) === expectedMessageId) return true;
+    if (expectedTurnId && getMessageTurnId(message) === expectedTurnId) return true;
+    if (expectedMessageId && getMessageStableId(message) === expectedMessageId) return true;
     return expectedText && getMessageText(message) === expectedText;
   }) || null;
 }
@@ -279,8 +277,8 @@ export function createResendMessageTransaction({
             existingUserMessage: replacementUserMessage,
             messageText: text,
             reuseExistingUserTurn: true,
-            existingUserTurnId: getTurnId(replacementUserMessage || payload?.newTurn || {}),
-            existingUserMessageId: getMessageId(replacementUserMessage || payload?.newTurn || {}),
+            existingUserTurnId: getMessageTurnId(replacementUserMessage || payload?.newTurn || {}),
+            existingUserMessageId: getMessageStableId(replacementUserMessage || payload?.newTurn || {}),
           });
           if (!sent) {
             if (operation) messageOperationStore?.completeOperation(operation.opId);

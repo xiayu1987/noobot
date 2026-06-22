@@ -10,6 +10,7 @@ import {
   findSessionByAnyId as findSessionByAnyIdInList,
   promoteSessionIdentityToBackendId,
 } from "../../infra/sessionIdentity";
+import { getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity";
 import {
   applySummaryToolLogs,
   buildWorkflowMessageSignature,
@@ -33,8 +34,8 @@ export function createSessionDetailApplicator({
   function hydrateProcessSnapshotsFromMessages(messages = []) {
     if (!processStore) return;
     for (const messageItem of messages || []) {
-      if (String(messageItem?.role || "") !== RoleEnum.ASSISTANT) continue;
-      const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+      if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) continue;
+      const dialogProcessId = getMessageDialogProcessId(messageItem);
       if (!dialogProcessId) continue;
       const completedToolLogs = Array.isArray(messageItem?.completedToolLogs)
         ? messageItem.completedToolLogs
@@ -65,12 +66,12 @@ export function createSessionDetailApplicator({
       (sessionItem.messages || [])
         .filter(
           (messageItem) =>
-            String(messageItem?.role || "") === RoleEnum.ASSISTANT &&
+            getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
             Array.isArray(messageItem?.thinkingOpenNames) &&
             messageItem.thinkingOpenNames.includes("thinking-panel") &&
-            String(messageItem?.dialogProcessId || "").trim(),
+            getMessageDialogProcessId(messageItem),
         )
-        .map((messageItem) => String(messageItem.dialogProcessId || "").trim()),
+        .map((messageItem) => getMessageDialogProcessId(messageItem)),
     );
     if (!preserveCurrentMessages) {
       revokeMessagePreviewUrls(sessionItem.messages || []);
@@ -126,7 +127,7 @@ export function createSessionDetailApplicator({
         });
       }
       for (const messageItem of sessionItem.messages || []) {
-        const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+        const dialogProcessId = getMessageDialogProcessId(messageItem);
         if (!dialogProcessId) continue;
         if (openThinkingDialogProcessIds.has(dialogProcessId)) {
           messageItem.thinkingOpenNames = ["thinking-panel"];
@@ -140,7 +141,7 @@ export function createSessionDetailApplicator({
       mergePreservedDetailMessages(existingMessages, foldedDetailMessages);
       const workflowMessages = foldedDetailMessages.filter(
         (messageItem) =>
-          String(messageItem?.role || "").trim() === RoleEnum.ASSISTANT &&
+          getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
           messageItem?.workflowMessage === true,
       );
       if (workflowMessages.length) {
@@ -152,15 +153,13 @@ export function createSessionDetailApplicator({
         for (const workflowMessageItem of workflowMessages) {
           const signature = buildWorkflowMessageSignature(workflowMessageItem);
           if (!signature || existingWorkflowSignatures.has(signature)) continue;
-          const workflowDialogProcessId = String(
-            workflowMessageItem?.dialogProcessId || "",
-          ).trim();
+          const workflowDialogProcessId = getMessageDialogProcessId(workflowMessageItem);
           const existingAssistantForDialog = existingMessages.find(
             (messageItem) =>
-              String(messageItem?.role || "").trim() === RoleEnum.ASSISTANT &&
+              getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
               messageItem?.workflowMessage !== true &&
               workflowDialogProcessId &&
-              String(messageItem?.dialogProcessId || "").trim() === workflowDialogProcessId,
+              getMessageDialogProcessId(messageItem) === workflowDialogProcessId,
           );
           if (patchExistingWorkflowMessage(existingAssistantForDialog, workflowMessageItem)) {
             existingWorkflowSignatures.add(signature);

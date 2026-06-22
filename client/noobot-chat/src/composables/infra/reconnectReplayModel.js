@@ -9,6 +9,11 @@ import {
   getMessageTransferEnvelopes,
   normalizeTransferEnvelopes,
 } from "./transferEnvelopes";
+import {
+  getMessageClientTurnId,
+  getMessageDialogProcessId,
+  getMessageRole,
+} from "./messageIdentity";
 
 function isReconnectTerminalEvent(eventName = "") {
   return [
@@ -60,7 +65,7 @@ function findRecoverableReconnectSessionId(sessionsPayload = []) {
 
 function getLastUserMessageIndex(messages = []) {
   for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
-    if (String(messages[messageIndex]?.role || "").trim() === RoleEnum.USER) {
+    if (getMessageRole(messages[messageIndex]) === RoleEnum.USER) {
       return messageIndex;
     }
   }
@@ -75,7 +80,7 @@ function findLatestPendingAssistantAfterLastUser(messages = []) {
     messageIndex -= 1
   ) {
     const messageItem = messages[messageIndex];
-    if (String(messageItem?.role || "").trim() !== RoleEnum.ASSISTANT) continue;
+    if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) continue;
     if (!messageItem?.pending) continue;
     return messageItem;
   }
@@ -210,8 +215,8 @@ function mergeTransferEnvelopes(...values) {
 }
 
 function messageCompareKey(messageItem = {}) {
-  const role = String(messageItem?.role || "").trim();
-  const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+  const role = getMessageRole(messageItem);
+  const dialogProcessId = getMessageDialogProcessId(messageItem);
   const content = normalizeMessageContentForCompare(messageItem?.content || "");
   if (role === RoleEnum.USER) {
     const attachmentKey = [
@@ -253,7 +258,7 @@ function mergeCurrentUserMessagesIntoFoldedMessages({
   const currentMessages = Array.isArray(existingMessages) ? existingMessages : [];
   const existingKeys = new Set(outputMessages.map((messageItem) => messageCompareKey(messageItem)));
   for (const currentMessage of currentMessages) {
-    if (String(currentMessage?.role || "").trim() !== RoleEnum.USER) continue;
+    if (getMessageRole(currentMessage) !== RoleEnum.USER) continue;
     const currentKey = messageCompareKey(currentMessage);
     if (existingKeys.has(currentKey)) continue;
     outputMessages.push(currentMessage);
@@ -264,14 +269,14 @@ function mergeCurrentUserMessagesIntoFoldedMessages({
     const rightTime = parseMessageTimeMs(rightMessage?.ts);
     if (leftTime && rightTime && leftTime !== rightTime) return leftTime - rightTime;
     if (
-      String(leftMessage?.role || "") === RoleEnum.USER &&
-      String(rightMessage?.role || "") === RoleEnum.ASSISTANT
+      getMessageRole(leftMessage) === RoleEnum.USER &&
+      getMessageRole(rightMessage) === RoleEnum.ASSISTANT
     ) {
       return -1;
     }
     if (
-      String(leftMessage?.role || "") === RoleEnum.ASSISTANT &&
-      String(rightMessage?.role || "") === RoleEnum.USER
+      getMessageRole(leftMessage) === RoleEnum.ASSISTANT &&
+      getMessageRole(rightMessage) === RoleEnum.USER
     ) {
       return 1;
     }
@@ -281,13 +286,13 @@ function mergeCurrentUserMessagesIntoFoldedMessages({
 }
 
 function findReusableMessageObject(nextMessage = {}, existingMessages = []) {
-  const nextRole = String(nextMessage?.role || "").trim();
-  const nextDialogProcessId = String(nextMessage?.dialogProcessId || "").trim();
+  const nextRole = getMessageRole(nextMessage);
+  const nextDialogProcessId = getMessageDialogProcessId(nextMessage);
   if (nextRole === RoleEnum.ASSISTANT && nextDialogProcessId) {
     const byDialogProcessId = existingMessages.find(
       (existingMessage) =>
-        String(existingMessage?.role || "").trim() === RoleEnum.ASSISTANT &&
-        String(existingMessage?.dialogProcessId || "").trim() === nextDialogProcessId,
+        getMessageRole(existingMessage) === RoleEnum.ASSISTANT &&
+        getMessageDialogProcessId(existingMessage) === nextDialogProcessId,
     );
     if (byDialogProcessId) return byDialogProcessId;
   }
@@ -330,9 +335,7 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   const existingThinkingFinishedAt = String(
     targetMessage?.thinkingFinishedAt || targetMessage?.thinking_finished_at || "",
   ).trim();
-  const existingClientTurnId = String(
-    targetMessage?.clientTurnId || targetMessage?.client_turn_id || "",
-  ).trim();
+  const existingClientTurnId = getMessageClientTurnId(targetMessage);
   const existingPending = targetMessage?.pending === true;
   const existingTransferResult =
     targetMessage?.transferResult &&
@@ -391,7 +394,7 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
     targetMessage.thinkingFinishedAt = existingThinkingFinishedAt;
     targetMessage.thinking_finished_at = existingThinkingFinishedAt;
   }
-  if (existingClientTurnId && !String(sourceMessage?.clientTurnId || sourceMessage?.client_turn_id || "").trim()) {
+  if (existingClientTurnId && !getMessageClientTurnId(sourceMessage)) {
     targetMessage.clientTurnId = existingClientTurnId;
     targetMessage.client_turn_id = existingClientTurnId;
   }

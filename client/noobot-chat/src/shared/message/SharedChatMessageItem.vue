@@ -9,6 +9,7 @@ import { ElMessage } from "element-plus";
 import { useMessagePreview } from "../../composables/message/useMessagePreview";
 import { useMessageFiles } from "../../composables/message/useMessageFiles";
 import { useMessageMeta } from "../../composables/message/useMessageMeta";
+import { getMessageRole } from "../../composables/infra/messageIdentity";
 import { useLocale } from "../i18n/useLocale";
 import {
   BaseMarkdownContent,
@@ -118,7 +119,7 @@ const postContentMessageActionRenderers = computed(() =>
   resolveMessageActionRenderers(props.messageItem, { placement: "post-content" }),
 );
 const hideMessageMarkdownForInlineEditor = computed(() =>
-  props.messageItem?.role === "user" && props.messageItem?.__monotonicEditing === true,
+  getMessageRole(props.messageItem) === "user" && props.messageItem?.__monotonicEditing === true,
 );
 
 function resolveRendererProps(renderer = {}) {
@@ -184,7 +185,7 @@ async function handleCopyAssistantMessageText() {
 
 <template>
   <BaseMessageShell
-    :role="messageItem.role"
+    :role="getMessageRole(messageItem)"
     :ts="messageItem.ts"
     :format-time="formatTime"
     :model-label="messageModelLabel"
