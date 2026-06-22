@@ -15,24 +15,32 @@ import {
 } from "./conversationState";
 import { _trimStr } from "./utils";
 
-function resolveReconnectSessionSendingFromStates(sessionEntry = null) {
+function resolveReconnectSessionRunningStateFromStates(sessionEntry = null) {
   const stateEntries = Array.isArray(sessionEntry?.conversationStates)
     ? sessionEntry.conversationStates
     : [];
   if (!stateEntries.length) return null;
-  let restoredSending = null;
+  let restoredState = null;
   for (const stateEntry of stateEntries) {
     const state = _trimStr(stateEntry?.state);
-    if (isInFlightConversationState(state)) restoredSending = true;
-    if (isTerminalConversationState(state)) restoredSending = false;
+    if (isInFlightConversationState(state)) {
+      restoredState = {
+        sending: true,
+        canStop: state === "sending" || state === "reconnecting",
+      };
+    }
+    if (isTerminalConversationState(state)) {
+      restoredState = { sending: false, canStop: false };
+    }
   }
-  return restoredSending;
+  return restoredState;
 }
 
 export async function applyReconnectDataReplay({
   reconnectData,
   ensureReconnectSessionActive,
   sending,
+  canStop,
   isCurrentActiveSession,
   resolveReconnectTargetAssistantMessage,
   replayCache,
@@ -47,6 +55,7 @@ export async function applyReconnectDataReplay({
   if (recoverableSessionId) {
     await ensureReconnectSessionActive(recoverableSessionId);
     sending.value = true;
+    if (canStop) canStop.value = true;
     const recoverableSessionEntry = reconnectSessions.find(
       (sessionEntry) => _trimStr(sessionEntry?.sessionId) === recoverableSessionId,
     );
@@ -108,8 +117,11 @@ export async function applyReconnectDataReplay({
     const recoverableSessionEntry = reconnectSessions.find(
       (sessionEntry) => _trimStr(sessionEntry?.sessionId) === recoverableSessionId,
     );
-    const restoredSending = resolveReconnectSessionSendingFromStates(recoverableSessionEntry);
-    if (restoredSending !== null) sending.value = restoredSending;
+    const restoredState = resolveReconnectSessionRunningStateFromStates(recoverableSessionEntry);
+    if (restoredState !== null) {
+      sending.value = restoredState.sending;
+      if (canStop) canStop.value = restoredState.canStop;
+    }
   }
 
   if (reconnectData?.cacheExpired) {

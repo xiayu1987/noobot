@@ -11,6 +11,7 @@ export function scheduleCacheExpiredSessionRefresh({
   setCacheExpiredRefreshTimer,
   replayCache,
   sending,
+  canStop,
   interactionSubmitting,
   clearPendingInteraction,
   translate,
@@ -38,6 +39,7 @@ export function scheduleCacheExpiredSessionRefresh({
       targetAssistantMessage: failedTargetAssistantMessage = null,
     } = {}) {
       sending.value = false;
+      if (canStop) canStop.value = false;
       interactionSubmitting.value = false;
       clearPendingInteraction?.();
       const expiredErrorMessage = translate("chat.expiredRefreshFailed");

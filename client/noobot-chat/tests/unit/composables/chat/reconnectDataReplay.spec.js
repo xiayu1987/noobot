@@ -5,6 +5,7 @@ function createFixture(overrides = {}) {
   return {
     ensureReconnectSessionActive: vi.fn(async () => {}),
     sending: { value: false },
+    canStop: { value: false },
     isCurrentActiveSession: vi.fn((sessionId) => sessionId === "s-1"),
     resolveReconnectTargetAssistantMessage: vi.fn(),
     replayCache: {},
@@ -115,5 +116,57 @@ describe("applyReconnectDataReplay", () => {
 
     expect(fixture.ensureReconnectSessionActive).toHaveBeenCalledWith("s-1");
     expect(fixture.sending.value).toBe(false);
+    expect(fixture.canStop.value).toBe(false);
   });
+
+  it("restores stopping as in-flight but not stoppable after recoverable replay", async () => {
+    const fixture = createFixture();
+
+    await applyReconnectDataReplay({
+      reconnectData: {
+        sessions: [
+          {
+            sessionId: "s-1",
+            hasRunningTask: true,
+            conversationStates: [
+              { sessionId: "s-1", dialogProcessId: "dp-stop", state: "stopping", seq: 12 },
+            ],
+            dialogProcesses: [],
+          },
+        ],
+      },
+      ...fixture,
+    });
+
+    expect(fixture.ensureReconnectSessionActive).toHaveBeenCalledWith("s-1");
+    expect(fixture.sending.value).toBe(true);
+    expect(fixture.canStop.value).toBe(false);
+  });
+
+  it.each(["cancelled", "canceled", "completed", "error", "expired", "no_conversation"])(
+    "restores terminal %s as not sending and not stoppable",
+    async (terminalState) => {
+      const fixture = createFixture();
+
+      await applyReconnectDataReplay({
+        reconnectData: {
+          sessions: [
+            {
+              sessionId: "s-1",
+              hasRunningTask: true,
+              conversationStates: [
+                { sessionId: "s-1", dialogProcessId: "dp-stop", state: "sending", seq: 11 },
+                { sessionId: "s-1", dialogProcessId: "dp-stop", state: terminalState, seq: 12 },
+              ],
+              dialogProcesses: [],
+            },
+          ],
+        },
+        ...fixture,
+      });
+
+      expect(fixture.sending.value).toBe(false);
+      expect(fixture.canStop.value).toBe(false);
+    },
+  );
 });

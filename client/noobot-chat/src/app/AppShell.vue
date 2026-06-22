@@ -377,6 +377,7 @@ const {
   input,
   uploadFiles,
   sending,
+  canStop,
   sessions,
   activeSessionId,
   activeSession,
@@ -1135,7 +1136,7 @@ const drawerPanels = computed(() =>
           :upload-files="uploadFiles"
           :connector-panel-state="activeSession?.connectorPanelState || {}"
           :sending="sending"
-          :can-stop="sending"
+          :can-stop="canStop"
           :connected="connected"
           :allow-user-interaction="allowUserInteraction"
           :force-tool="forceTool"

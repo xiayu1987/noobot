@@ -21,6 +21,7 @@ export function createChatEngineConversationState({
   activeSession,
   activeSessionId,
   sending,
+  canStop,
   interactionSubmitting,
   pendingInteractionRequest,
   clearPendingInteraction,
@@ -135,6 +136,7 @@ export function createChatEngineConversationState({
       missingInteractionPayloadTimers.delete(key);
       if (hasPendingInteractionForDialog(dialogProcessId)) return;
       sending.value = false;
+      if (canStop) canStop.value = false;
       clearPendingInteraction();
       const missingInteractionError = translate("chat.interactionPayloadMissing");
       applyAssistantFailureState(targetAssistantMessage, missingInteractionError);
@@ -166,6 +168,7 @@ export function createChatEngineConversationState({
         .then((ok) => {
           if (ok !== false) return;
           sending.value = false;
+          if (canStop) canStop.value = false;
           interactionSubmitting.value = false;
           clearPendingInteraction();
           const expiredErrorMessage = translate("chat.expiredRefreshFailed");
@@ -179,6 +182,7 @@ export function createChatEngineConversationState({
         })
         .catch(() => {
           sending.value = false;
+          if (canStop) canStop.value = false;
           interactionSubmitting.value = false;
           clearPendingInteraction();
           const expiredErrorMessage = translate("chat.expiredRefreshFailed");
@@ -306,6 +310,7 @@ export function createChatEngineConversationState({
     }
     if (isInFlightConversationState(state)) {
       sending.value = true;
+      if (canStop) canStop.value = state === "sending" || state === "reconnecting";
       if (
         state === "sending" &&
         String(statePayload?.sourceEvent || "").trim().toLowerCase() === "interaction_response" &&
@@ -375,6 +380,7 @@ export function createChatEngineConversationState({
     }
     if (!isTerminalConversationState(state)) return;
     sending.value = false;
+    if (canStop) canStop.value = false;
     if (typeof clearPendingInteractionIfObsolete === "function") {
       clearPendingInteractionIfObsolete({ sessionId, dialogProcessId });
     }

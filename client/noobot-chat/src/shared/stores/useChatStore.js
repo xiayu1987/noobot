@@ -10,6 +10,7 @@ export const useChatStore = defineStore("chat", () => {
   const input = ref("");
   const uploadFiles = ref([]);
   const sending = ref(false);
+  const canStop = ref(false);
   const sessions = ref([]);
   const activeSessionId = ref("");
   const loadingSessions = ref(false);
@@ -26,6 +27,7 @@ export const useChatStore = defineStore("chat", () => {
     input.value = "";
     uploadFiles.value = [];
     sending.value = false;
+    canStop.value = false;
     sessions.value = [];
     activeSessionId.value = "";
     loadingSessions.value = false;
@@ -39,6 +41,7 @@ export const useChatStore = defineStore("chat", () => {
     input,
     uploadFiles,
     sending,
+    canStop,
     sessions,
     activeSessionId,
     activeSession,

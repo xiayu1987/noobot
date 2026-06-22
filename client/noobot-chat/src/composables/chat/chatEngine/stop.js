@@ -57,6 +57,7 @@ function markLatestUserMessageStopped(activeSession, pendingAssistantMessage = n
 
 export function forceStopUiFinalize({
   sending,
+  canStop,
   activeSession,
   findTargetAssistantMessage,
   applyConversationState,
@@ -77,17 +78,49 @@ export function forceStopUiFinalize({
     { botMessage: pendingAssistantMessage },
   );
   sending.value = false;
+  if (canStop) canStop.value = false;
   chatWebSocketClient?.clearLastReceivedSeqMap?.();
   chatWebSocketClient?.dispose?.();
 }
 
+function buildStopPayload({ userId, activeSession, pendingAssistantMessage } = {}) {
+  const session = activeSession?.value || {};
+  const dialogProcessId = normalizeTrimmedString(
+    pendingAssistantMessage?.dialogProcessId || pendingAssistantMessage?.dialogId,
+  );
+  const payload = {
+    userId: String(userId?.value ?? userId ?? ""),
+    sessionId: String(session.backendSessionId || session.sessionId || session.id || ""),
+    dialogProcessId,
+    parentSessionId: String(
+      session.parentSessionId || pendingAssistantMessage?.parentSessionId || "",
+    ),
+    parentDialogProcessId: String(
+      pendingAssistantMessage?.parentDialogProcessId || session.parentDialogProcessId || "",
+    ),
+    partialAssistant: {
+      content: String(pendingAssistantMessage?.content || ""),
+      dialogProcessId,
+      modelAlias: String(pendingAssistantMessage?.modelAlias || ""),
+      modelName: String(pendingAssistantMessage?.modelName || ""),
+    },
+  };
+  Object.keys(payload).forEach((key) => {
+    if (key !== "partialAssistant" && !normalizeTrimmedString(payload[key])) delete payload[key];
+  });
+  return payload;
+}
+
 export function stopSending({
   sending,
+  canStop,
   activeSession,
+  userId,
   chatWebSocketClient,
   onForceStopUiFinalize,
 } = {}) {
   if (!sending?.value) return false;
+  if (canStop && canStop.value === false) return false;
   const pendingAssistantMessage = [...(activeSession?.value?.messages || [])]
     .reverse()
     .find(
@@ -96,15 +129,9 @@ export function stopSending({
         Boolean(messageItem?.pending),
     );
   markLatestUserMessageStopped(activeSession, pendingAssistantMessage);
+  if (canStop) canStop.value = false;
   return chatWebSocketClient?.requestStop?.(
-    {
-      partialAssistant: {
-        content: String(pendingAssistantMessage?.content || ""),
-        dialogProcessId: String(pendingAssistantMessage?.dialogProcessId || ""),
-        modelAlias: String(pendingAssistantMessage?.modelAlias || ""),
-        modelName: String(pendingAssistantMessage?.modelName || ""),
-      },
-    },
+    buildStopPayload({ userId, activeSession, pendingAssistantMessage }),
     onForceStopUiFinalize,
   );
 }
