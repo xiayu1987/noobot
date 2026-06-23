@@ -19,7 +19,7 @@ const props = defineProps({
   selectedDialogId: { type: String, default: "" },
 });
 
-const emit = defineEmits(["node-click", "step-click", "update:selectedDialogId"]);
+const emit = defineEmits(["node-click", "step-click", "update:selected-dialog-id"]);
 const { translate } = useWorkflowLocale();
 
 const hostRef = ref(null);
@@ -552,7 +552,7 @@ function handleStepClick(stepItem = {}) {
   const dialogId = String(stepItem?.dialogId || "").trim();
   if (dialogId) {
     innerSelectedDialogId.value = dialogId;
-    emit("update:selectedDialogId", dialogId);
+    emit("update:selected-dialog-id", dialogId);
   }
   emit("step-click", stepItem);
 }
