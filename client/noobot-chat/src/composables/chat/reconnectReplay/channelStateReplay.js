@@ -18,6 +18,7 @@ import {
   SESSION_RUN_EVENT,
   clearRememberedStopRequests,
 } from "../sessionRunStateMachine";
+import { normalizeTurnMeta } from "../../infra/messageIdentity";
 import {
   bindThinkingDialogProcess,
   rememberThinkingFinished,
@@ -80,7 +81,7 @@ function applyReconnectChannelTimingToMessage({
   state = "",
   sessionId = "",
   dialogProcessId = "",
-  clientTurnId = "",
+  turnScopeId = "",
   stateData = {},
   terminal = false,
 } = {}) {
@@ -89,7 +90,9 @@ function applyReconnectChannelTimingToMessage({
     targetAssistantMessage.sessionId = targetAssistantMessage.sessionId || sessionId;
     targetAssistantMessage.session_id = targetAssistantMessage.session_id || sessionId;
   }
-  if (dialogProcessId) bindThinkingDialogProcess({ sessionId, dialogProcessId, clientTurnId });
+  if (dialogProcessId) {
+    bindThinkingDialogProcess({ sessionId, dialogProcessId, turnScopeId });
+  }
   const timing = normalizeReconnectChannelTiming(stateData);
   const previousChannelState =
     targetAssistantMessage.channelState &&
@@ -102,7 +105,7 @@ function applyReconnectChannelTimingToMessage({
     state,
     sessionId,
     dialogProcessId,
-    clientTurnId,
+    turnScopeId,
     sourceEvent: _trimStr(stateData?.sourceEvent),
     seq: Number(stateData?.seq || 0),
     createdAtMs: timing.createdAtMs || Number(previousChannelState?.createdAtMs || 0),
@@ -186,6 +189,7 @@ export function applyReconnectChannelState({
   clearPendingInteraction,
   translate,
 } = {}) {
+  const turnMeta = normalizeTurnMeta(stateData);
   const sessionId = _trimStr(stateData?.sessionId);
   const forActiveSession = !sessionId || isCurrentActiveSession(sessionId);
   const timing = normalizeReconnectChannelTiming(stateData);
@@ -195,7 +199,7 @@ export function applyReconnectChannelState({
       state: _trimStr(stateData?.state),
       sessionId,
       dialogProcessId: _trimStr(stateData?.dialogProcessId),
-      clientTurnId: _trimStr(stateData?.clientTurnId || stateData?.turnScopeId || stateData?.client_turn_id),
+      turnScopeId: turnMeta.turnScopeId,
       sourceEvent: _trimStr(stateData?.sourceEvent),
       seq: Number(stateData?.seq || 0),
       createdAtMs: timing.createdAtMs,
@@ -208,7 +212,7 @@ export function applyReconnectChannelState({
   if (!forActiveSession) return;
   const state = _trimStr(stateData?.state);
   const dialogProcessId = _trimStr(stateData?.dialogProcessId);
-  const clientTurnId = _trimStr(stateData?.clientTurnId || stateData?.turnScopeId || stateData?.client_turn_id);
+  const turnScopeId = turnMeta.turnScopeId;
   const targetAssistantMessage =
     findAssistantMessageByDialogProcessId(dialogProcessId) ||
     (typeof findFallbackAssistantMessage === "function"
@@ -218,8 +222,8 @@ export function applyReconnectChannelState({
     rememberThinkingStarted({
       sessionId,
       dialogProcessId,
-      clientTurnId,
-      startedAtMs: timing.createdAtMs || targetAssistantMessage?.thinkingStartedAt || targetAssistantMessage?.channelState?.createdAtMs || Date.now(),
+      turnScopeId,
+        startedAtMs: timing.createdAtMs || targetAssistantMessage?.thinkingStartedAt || targetAssistantMessage?.channelState?.createdAtMs || Date.now(),
       updatedAtMs: timing.updatedAtMs,
     });
     if (applyRunStateEvent) {
@@ -228,8 +232,8 @@ export function applyReconnectChannelState({
         state,
         sessionId,
         dialogProcessId,
-        clientTurnId,
-        source: "reconnect",
+        turnScopeId,
+            source: "reconnect",
         sourceEvent: _trimStr(stateData?.sourceEvent),
         seq: Number(stateData?.seq || 0),
         createdAtMs: timing.createdAtMs,
@@ -298,8 +302,8 @@ export function applyReconnectChannelState({
         state,
         sessionId,
         dialogProcessId,
-        clientTurnId,
-        stateData,
+        turnScopeId,
+            stateData,
       });
       targetAssistantMessage.pending = true;
       if (state === "stopping") {
@@ -321,8 +325,8 @@ export function applyReconnectChannelState({
     rememberThinkingFinished({
       sessionId,
       dialogProcessId,
-      clientTurnId,
-      finishedAtMs: timing.updatedAtMs || Date.now(),
+      turnScopeId,
+        finishedAtMs: timing.updatedAtMs || Date.now(),
       finishedAt: timing.updatedAt,
     });
     interactionSubmitting.value = false;
@@ -335,8 +339,8 @@ export function applyReconnectChannelState({
         state,
         sessionId,
         dialogProcessId,
-        clientTurnId,
-        source: "reconnect",
+        turnScopeId,
+            source: "reconnect",
         sourceEvent: _trimStr(stateData?.sourceEvent),
         seq: Number(stateData?.seq || 0),
         createdAtMs: timing.createdAtMs,
@@ -364,8 +368,8 @@ export function applyReconnectChannelState({
         state,
         sessionId,
         dialogProcessId,
-        clientTurnId,
-        stateData,
+        turnScopeId,
+            stateData,
         terminal: true,
       });
       targetAssistantMessage.pending = false;

@@ -32,6 +32,10 @@ function resolveTurnId(message = {}) {
   return normalizeAnchorValue(message?.turnId || message?.turn_id || "");
 }
 
+function resolveTurnScopeId(message = {}) {
+  return normalizeAnchorValue(message?.turnScopeId || message?.turn_scope_id || "");
+}
+
 function resolveMessageId(message = {}) {
   return normalizeAnchorValue(
     message?.messageId || message?.id || message?.message_id || "",
@@ -58,6 +62,10 @@ function resolveSessionVersion(session = {}) {
 }
 
 function createMessageAnchorMatcher(anchor = {}) {
+  const turnScopeId = normalizeAnchorValue(anchor?.turnScopeId || anchor?.turn_scope_id);
+  if (turnScopeId) {
+    return (messageItem) => resolveTurnScopeId(messageItem) === turnScopeId;
+  }
   const turnId = normalizeAnchorValue(anchor?.turnId || anchor?.turn_id);
   if (turnId) {
     return (messageItem) => resolveTurnId(messageItem) === turnId;

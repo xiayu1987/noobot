@@ -8,24 +8,67 @@ function trim(value = "") {
   return String(value || "").trim();
 }
 
+function isPlainObject(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function hasTurnOwner(owner = {}) {
+  return Boolean(owner.sessionId || owner.turnScopeId || owner.dialogProcessId || owner.role);
+}
+
+export function getMessageSessionId(messageItem = {}) {
+  return trim(messageItem?.sessionId || messageItem?.session_id || messageItem?.backendSessionId);
+}
+
+export function normalizeTurnOwner(raw = {}) {
+  const owner = isPlainObject(raw?.owner) ? raw.owner : {};
+  return {
+    sessionId: getMessageSessionId(owner) || getMessageSessionId(raw),
+    turnScopeId: trim(owner?.turnScopeId || owner?.turn_scope_id),
+    dialogProcessId: trim(owner?.dialogProcessId || owner?.dialog_process_id || raw?.ownerDialogProcessId),
+    role: trim(owner?.role),
+  };
+}
+
+export function normalizeTurnMeta(raw = {}) {
+  const owner = normalizeTurnOwner(raw);
+  const normalized = {
+    sessionId: getMessageSessionId(raw),
+    turnScopeId: trim(raw?.turnScopeId || raw?.turn_scope_id),
+    turnId: trim(raw?.turnId || raw?.turn_id),
+    dialogProcessId: trim(raw?.dialogProcessId || raw?.dialog_process_id || raw?.dialogId),
+    parentDialogProcessId: trim(
+      raw?.parentDialogProcessId || raw?.parent_dialog_process_id || raw?.parentDialogId,
+    ),
+  };
+  if (hasTurnOwner(owner)) normalized.owner = owner;
+  return normalized;
+}
+
 export function getMessageRole(messageItem = {}) {
   return trim(messageItem?.role);
 }
 
 export function getMessageDialogProcessId(messageItem = {}) {
-  return trim(messageItem?.dialogProcessId || messageItem?.dialogId);
+  return normalizeTurnMeta(messageItem).dialogProcessId;
 }
 
 export function getMessageParentDialogProcessId(messageItem = {}) {
-  return trim(messageItem?.parentDialogProcessId || messageItem?.parentDialogId);
+  return normalizeTurnMeta(messageItem).parentDialogProcessId;
 }
 
-export function getMessageClientTurnId(messageItem = {}) {
-  return trim(messageItem?.clientTurnId || messageItem?.turnScopeId || messageItem?.client_turn_id);
+export function getMessageTurnScopeId(messageItem = {}) {
+  return normalizeTurnMeta(messageItem).turnScopeId;
+}
+
+export function getMessageTurnScopeKey(messageItem = {}) {
+  const sessionId = getMessageSessionId(messageItem);
+  const turnScopeId = getMessageTurnScopeId(messageItem);
+  return sessionId && turnScopeId ? `${sessionId}::${turnScopeId}` : "";
 }
 
 export function getMessageTurnId(messageItem = {}) {
-  return trim(messageItem?.turnId || messageItem?.turn_id);
+  return normalizeTurnMeta(messageItem).turnId;
 }
 
 export function getMessageStableId(messageItem = {}) {
@@ -34,19 +77,28 @@ export function getMessageStableId(messageItem = {}) {
 
 export function getMessageExplicitTurnIdentity(messageItem = {}) {
   return trim(
-    getMessageClientTurnId(messageItem) ||
+    getMessageTurnScopeId(messageItem) ||
       getMessageTurnId(messageItem) ||
       getMessageStableId(messageItem),
   );
 }
 
 export function isSameMessageRound(targetMessage = {}, candidateMessage = {}) {
-  const targetClientTurnId = getMessageClientTurnId(targetMessage);
-  const candidateClientTurnId = getMessageClientTurnId(candidateMessage);
-  if (targetClientTurnId && candidateClientTurnId) {
-    return targetClientTurnId === candidateClientTurnId;
+  const targetTurnScopeKey = getMessageTurnScopeKey(targetMessage);
+  const candidateTurnScopeKey = getMessageTurnScopeKey(candidateMessage);
+  if (targetTurnScopeKey && candidateTurnScopeKey) {
+    return targetTurnScopeKey === candidateTurnScopeKey;
   }
-  if (targetClientTurnId) {
+
+  const targetTurnScopeId = getMessageTurnScopeId(targetMessage);
+  const candidateTurnScopeId = getMessageTurnScopeId(candidateMessage);
+  if (targetTurnScopeId && candidateTurnScopeId) {
+    const targetSessionId = getMessageSessionId(targetMessage);
+    const candidateSessionId = getMessageSessionId(candidateMessage);
+    if (targetSessionId && candidateSessionId && targetSessionId !== candidateSessionId) return false;
+    return targetTurnScopeId === candidateTurnScopeId;
+  }
+  if (targetTurnScopeId) {
     return false;
   }
 
@@ -71,7 +123,7 @@ export function shouldCollectAttachmentMetasFromMessage(targetMessage = {}, cand
   }
 
   // Avoid leaking the previous assistant's generated attachments into a newly
-  // sent assistant turn when snapshots do not carry clientTurnId/turnId yet.
+  // sent assistant turn when snapshots do not carry turnScopeId/turnId yet.
   // Tool/child messages are still collected through dialogProcess relation.
   return isSameExplicitMessageTurn(targetMessage, candidateMessage);
 }

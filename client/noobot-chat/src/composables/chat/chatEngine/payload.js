@@ -23,15 +23,16 @@ export function buildChatPayload({
   reuseExistingUserTurn = false,
   existingUserTurnId = "",
   existingUserMessageId = "",
-  clientTurnId = "",
+  turnScopeId = "",
 } = {}) {
   const normalizedScenario = normalizeTrimmedString(botScenario?.value ?? botScenario);
   const normalizedSelectedModel = normalizeTrimmedString(selectedModel?.value ?? selectedModel);
   const normalizedPluginModelConfig = pluginModelConfig?.value ?? pluginModelConfig;
+  const normalizedTurnScopeId = normalizeTrimmedString(turnScopeId);
   return {
     userId: userId?.value ?? userId,
     sessionId: activeSession?.value?.backendSessionId || activeSession?.value?.sessionId || activeSession?.value?.id,
-    turnScopeId: normalizeTrimmedString(clientTurnId),
+    turnScopeId: normalizedTurnScopeId,
     message: message || uploadHint,
     attachments,
     config: {

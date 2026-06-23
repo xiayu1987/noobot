@@ -7,7 +7,12 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useLocale } from "../i18n/useLocale";
 import { isHarnessInjectedMessage } from "../../composables/infra/messageModel";
-import { getMessageClientTurnId, getMessageDialogProcessId, getMessageRole } from "../../composables/infra/messageIdentity";
+import {
+  getMessageDialogProcessId,
+  getMessageRole,
+  getMessageSessionId,
+  getMessageTurnScopeId,
+} from "../../composables/infra/messageIdentity";
 import { sanitizeExecutionLogForDisplay } from "../../composables/chat/chatEngine/utils";
 import { resolveThinkingTiming } from "../../composables/chat/thinkingTimingRegistry";
 import {
@@ -111,6 +116,20 @@ function hasThinkingLogs(messageItem = {}) {
 }
 
 
+function isSameFrontendTurnScope(target = {}, candidate = {}) {
+  const targetTurnScopeId = getMessageTurnScopeId(target);
+  const candidateTurnScopeId = getMessageTurnScopeId(candidate);
+  if (targetTurnScopeId && candidateTurnScopeId) {
+    const targetSessionId = getMessageSessionId(target);
+    const candidateSessionId = getMessageSessionId(candidate);
+    return (
+      targetTurnScopeId === candidateTurnScopeId &&
+      (!targetSessionId || !candidateSessionId || targetSessionId === candidateSessionId)
+    );
+  }
+  return false;
+}
+
 function getInjectedMessagesForMessage(messageItem = {}) {
   if (!messageItem || getMessageRole(messageItem) !== "assistant") return [];
   if (isFreshPendingAssistant(messageItem)) return [];
@@ -118,19 +137,21 @@ function getInjectedMessagesForMessage(messageItem = {}) {
   const candidateMessages = Array.isArray(props.allMessages) ? props.allMessages : [];
   return candidateMessages.filter((item = {}) => {
     if (!isHarnessInjectedMessage(item)) return false;
-    if (!dialogProcessId) return true;
-    return getMessageDialogProcessId(item) === dialogProcessId;
+    if (isSameFrontendTurnScope(messageItem, item)) return true;
+    if (!getMessageTurnScopeId(messageItem) && dialogProcessId) {
+      return getMessageDialogProcessId(item) === dialogProcessId;
+    }
+    return !getMessageTurnScopeId(messageItem) && !dialogProcessId;
   });
 }
 
 function getScopedMessagesForMessage(messageItem = {}) {
   if (isFreshPendingAssistant(messageItem)) return [];
   const dialogProcessId = getMessageDialogProcessId(messageItem);
-  const hasExplicitThinkingDetailPayload =
-    (Array.isArray(messageItem?.processCompletedToolLogs) && messageItem.processCompletedToolLogs.length > 0)
-    || (Array.isArray(messageItem?.completedToolLogs) && messageItem.completedToolLogs.length > 0);
+  const targetTurnScopeId = getMessageTurnScopeId(messageItem);
   const candidateMessages = Array.isArray(props.allMessages) ? props.allMessages : [];
   return candidateMessages.filter((item = {}) => {
+    if (targetTurnScopeId) return isSameFrontendTurnScope(messageItem, item);
     if (dialogProcessId && getMessageDialogProcessId(item) !== dialogProcessId) {
       return false;
     }
@@ -253,22 +274,22 @@ function formatInjectedMessageTitle(messageItem = {}, messageIndex = 0) {
 function formatSessionGroupLabel(
   sessionId = "",
   depth = 0,
-  dialogProcessId = "",
+  turnScopeId = "",
 ) {
   const shortSessionId = String(sessionId || "").slice(0, 8) || translate("message.unknownShort");
-  const shortDialogProcessId =
-    String(dialogProcessId || "").slice(0, 8) || translate("message.unknownShort");
+  const shortTurnScopeId =
+    String(turnScopeId || "").replace(/^client-turn:/, "").slice(0, 8) || translate("message.unknownShort");
   const levelText = translate("message.depthLabel", { depth: Math.max(1, Number(depth || 1)) });
   if (Number(depth || 0) <= 1) {
     return translate("message.mainTaskGroup", {
       sessionId: shortSessionId,
-      dialogId: shortDialogProcessId,
+      turnScopeId: shortTurnScopeId,
       level: levelText,
     });
   }
   return translate("message.subTaskGroup", {
     sessionId: shortSessionId,
-    dialogId: shortDialogProcessId,
+    turnScopeId: shortTurnScopeId,
     level: levelText,
   });
 }
@@ -281,15 +302,15 @@ function groupCompletedToolLogs(messageItem = {}) {
   for (const logItem of toolLogs) {
     const sessionId = String(logItem?.sessionId || "");
     const depth = Number(logItem?.depth || 0);
-    const dialogProcessId = String(logItem?.dialogProcessId || "");
-    const groupKey = `${sessionId}|${depth}|${dialogProcessId}`;
+    const turnScopeId = String(logItem?.turnScopeId || logItem?.dialogProcessId || "");
+    const groupKey = `${sessionId}|${depth}|${turnScopeId}`;
     let group = groupedMap.get(groupKey);
     if (!group) {
       group = {
         key: groupKey,
         sessionId,
         depth,
-        label: formatSessionGroupLabel(sessionId, depth, dialogProcessId),
+        label: formatSessionGroupLabel(sessionId, depth, turnScopeId),
         items: [],
       };
       groupedMap.set(groupKey, group);
@@ -451,7 +472,7 @@ function getThinkingDurationMs(messageItem = {}) {
   const persistedTiming = resolveThinkingTiming({
     sessionId: messageItem?.sessionId || messageItem?.session_id || channelState?.sessionId,
     dialogProcessId: getMessageDialogProcessId(messageItem) || channelState?.dialogProcessId,
-    clientTurnId: getMessageClientTurnId(messageItem) || channelState?.clientTurnId,
+    turnScopeId: getMessageTurnScopeId(messageItem) || channelState?.turnScopeId,
   }) || {};
   const persistedStartedAt = parseAnyTimeMs(persistedTiming?.startedAtMs, persistedTiming?.startedAt);
   const persistedFinishedAt = parseAnyTimeMs(persistedTiming?.finishedAtMs, persistedTiming?.finishedAt);

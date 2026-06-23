@@ -2,7 +2,7 @@ import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import WorkflowSessionMessageItem from "../../../../../plugin/noobot-plugin-workflow/frontend/components/WorkflowSessionMessageItem.vue";
 
-vi.mock("/project/client/noobot-chat/src/shared/message/SharedChatMessageItem.vue", async () => {
+vi.mock("../../../../../client/noobot-chat/src/shared/message/SharedChatMessageItem.vue", async () => {
   const { defineComponent, h } = await import("vue");
   return {
     default: defineComponent({

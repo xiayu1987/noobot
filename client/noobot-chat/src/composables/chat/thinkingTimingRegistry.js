@@ -41,7 +41,7 @@ function normalizeEntry(entry = {}) {
   return {
     sessionId: trim(entry.sessionId),
     dialogProcessId: trim(entry.dialogProcessId),
-    clientTurnId: trim(entry.clientTurnId),
+    turnScopeId: trim(entry.turnScopeId),
     startedAtMs,
     startedAt: trim(entry.startedAt) || new Date(startedAtMs).toISOString(),
     updatedAtMs: parseTimeMs(entry.updatedAtMs) || startedAtMs,
@@ -75,18 +75,23 @@ function writeEntries(entries = []) {
 function identityScore(entry = {}, scope = {}) {
   const sessionId = trim(scope.sessionId);
   const dialogProcessId = trim(scope.dialogProcessId);
-  const clientTurnId = trim(scope.clientTurnId);
+  const turnScopeId = trim(scope.turnScopeId);
   const entrySessionId = trim(entry.sessionId);
   const entryDialogProcessId = trim(entry.dialogProcessId);
-  const entryClientTurnId = trim(entry.clientTurnId);
+  const entryTurnScopeId = trim(entry.turnScopeId);
 
   const sameSession = Boolean(sessionId && entrySessionId && entrySessionId === sessionId);
+  const turnIdentityConflict = Boolean(
+    turnScopeId && entryTurnScopeId && entryTurnScopeId !== turnScopeId,
+  );
+  const processIdentityConflict = Boolean(
+    dialogProcessId && entryDialogProcessId && entryDialogProcessId !== dialogProcessId,
+  );
+  if (turnIdentityConflict || processIdentityConflict) return 0;
   if (dialogProcessId && entryDialogProcessId === dialogProcessId) return sameSession ? 40 : 30;
-  if (clientTurnId && entryClientTurnId === clientTurnId) return sameSession ? 35 : 25;
-  if (dialogProcessId && entryDialogProcessId && entryDialogProcessId !== dialogProcessId) return 0;
-  if (clientTurnId && entryClientTurnId && entryClientTurnId !== clientTurnId) return 0;
+  if (turnScopeId && entryTurnScopeId === turnScopeId) return sameSession ? 38 : 28;
   if (sessionId && entrySessionId && entrySessionId !== sessionId) return 0;
-  if (sessionId && entrySessionId === sessionId && !dialogProcessId && !clientTurnId) return 5;
+  if (sessionId && entrySessionId === sessionId && !dialogProcessId && !turnScopeId) return 5;
   return 0;
 }
 
@@ -113,7 +118,7 @@ function mergeEntry(existing = null, patch = {}) {
   return {
     sessionId: trim(patch.sessionId) || trim(existing?.sessionId),
     dialogProcessId: trim(patch.dialogProcessId) || trim(existing?.dialogProcessId),
-    clientTurnId: trim(patch.clientTurnId) || trim(existing?.clientTurnId),
+    turnScopeId: trim(patch.turnScopeId) || trim(existing?.turnScopeId),
     startedAtMs,
     startedAt: new Date(startedAtMs).toISOString(),
     updatedAtMs: parseTimeMs(patch.updatedAtMs) || nowMs(),
@@ -125,14 +130,14 @@ function mergeEntry(existing = null, patch = {}) {
 export function rememberThinkingStarted(scope = {}) {
   const sessionId = trim(scope.sessionId);
   const dialogProcessId = trim(scope.dialogProcessId);
-  const clientTurnId = trim(scope.clientTurnId);
-  if (!sessionId && !dialogProcessId && !clientTurnId) return null;
+  const turnScopeId = trim(scope.turnScopeId);
+  if (!sessionId && !dialogProcessId && !turnScopeId) return null;
   const entries = readEntries();
-  const existing = findBestEntry(entries, { sessionId, dialogProcessId, clientTurnId });
+  const existing = findBestEntry(entries, { sessionId, dialogProcessId, turnScopeId });
   const nextEntry = mergeEntry(existing, {
     sessionId,
     dialogProcessId,
-    clientTurnId,
+    turnScopeId,
     startedAtMs: parseTimeMs(scope.startedAtMs || scope.startedAt) || nowMs(),
     updatedAtMs: scope.updatedAtMs,
   });
@@ -144,11 +149,11 @@ export function rememberThinkingStarted(scope = {}) {
 export function bindThinkingDialogProcess(scope = {}) {
   const sessionId = trim(scope.sessionId);
   const dialogProcessId = trim(scope.dialogProcessId);
-  const clientTurnId = trim(scope.clientTurnId);
-  if (!dialogProcessId || (!sessionId && !clientTurnId)) return null;
+  const turnScopeId = trim(scope.turnScopeId);
+  if (!dialogProcessId || (!sessionId && !turnScopeId)) return null;
   const entries = readEntries();
-  const existing = findBestEntry(entries, { sessionId, clientTurnId }) || findBestEntry(entries, { sessionId, dialogProcessId });
-  const nextEntry = mergeEntry(existing, { sessionId, dialogProcessId, clientTurnId });
+  const existing = findBestEntry(entries, { sessionId, turnScopeId }) || findBestEntry(entries, { sessionId, dialogProcessId });
+  const nextEntry = mergeEntry(existing, { sessionId, dialogProcessId, turnScopeId });
   const nextEntries = existing ? entries.map((entry) => (entry === existing ? nextEntry : entry)) : [...entries, nextEntry];
   writeEntries(nextEntries);
   return nextEntry;
@@ -157,13 +162,13 @@ export function bindThinkingDialogProcess(scope = {}) {
 export function rememberThinkingFinished(scope = {}) {
   const sessionId = trim(scope.sessionId);
   const dialogProcessId = trim(scope.dialogProcessId);
-  const clientTurnId = trim(scope.clientTurnId);
-  if (!sessionId && !dialogProcessId && !clientTurnId) return null;
+  const turnScopeId = trim(scope.turnScopeId);
+  if (!sessionId && !dialogProcessId && !turnScopeId) return null;
   const entries = readEntries();
-  const existing = findBestEntry(entries, { sessionId, dialogProcessId, clientTurnId });
+  const existing = findBestEntry(entries, { sessionId, dialogProcessId, turnScopeId });
   if (!existing) return null;
   const finishedAtMs = parseTimeMs(scope.finishedAtMs || scope.finishedAt) || nowMs();
-  const nextEntry = mergeEntry(existing, { sessionId, dialogProcessId, clientTurnId, finishedAtMs, updatedAtMs: finishedAtMs });
+  const nextEntry = mergeEntry(existing, { sessionId, dialogProcessId, turnScopeId, finishedAtMs, updatedAtMs: finishedAtMs });
   writeEntries(entries.map((entry) => (entry === existing ? nextEntry : entry)));
   return nextEntry;
 }
@@ -172,7 +177,7 @@ export function resolveThinkingTiming(scope = {}) {
   const entry = findBestEntry(readEntries(), {
     sessionId: trim(scope.sessionId),
     dialogProcessId: trim(scope.dialogProcessId),
-    clientTurnId: trim(scope.clientTurnId),
+    turnScopeId: trim(scope.turnScopeId),
   });
   return entry ? { ...entry } : null;
 }

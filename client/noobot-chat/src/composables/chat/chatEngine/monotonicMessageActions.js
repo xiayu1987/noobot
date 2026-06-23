@@ -11,6 +11,7 @@ import {
   getMessageRole,
   getMessageStableId,
   getMessageTurnId,
+  getMessageTurnScopeId,
 } from "../../infra/messageIdentity";
 
 const delay = (ms) => new Promise((resolve) => {
@@ -22,6 +23,7 @@ function isUserMessage(message = {}) {
 }
 
 function findMessageIndex(targetMessage = {}, messages = []) {
+  const targetTurnScopeId = getMessageTurnScopeId(targetMessage);
   const targetTurnId = getMessageTurnId(targetMessage);
   const targetId = getMessageStableId(targetMessage);
   const targetTs = targetMessage?.ts;
@@ -30,6 +32,10 @@ function findMessageIndex(targetMessage = {}, messages = []) {
   const targetContent = normalizeTrimmedString(targetMessage?.content);
   return messages.findIndex((message) => {
     if (message === targetMessage) return true;
+    if (
+      targetTurnScopeId &&
+      getMessageTurnScopeId(message) === targetTurnScopeId
+    ) return true;
     if (
       targetTurnId &&
       getMessageTurnId(message) === targetTurnId
@@ -54,6 +60,8 @@ function findMessageIndex(targetMessage = {}, messages = []) {
 }
 
 function buildMonotonicMessageAnchor(targetMessage = {}) {
+  const turnScopeId = getMessageTurnScopeId(targetMessage);
+  if (turnScopeId) return { turnScopeId };
   const turnId = getMessageTurnId(targetMessage);
   if (turnId) return { turnId };
   const messageId = getMessageStableId(targetMessage);

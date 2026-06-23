@@ -95,7 +95,7 @@ describe("applyReconnectDataReplay", () => {
   });
 
 
-  it("restores running channel with only session-scope clientTurnId state as stoppable", async () => {
+  it("restores running channel with only session-scope turnScopeId state as stoppable", async () => {
     let fixture;
     const applyRunStateEvents = vi.fn((events) => {
       const latest = events.at(-1);
@@ -111,7 +111,7 @@ describe("applyReconnectDataReplay", () => {
             sessionId: "s-1",
             hasRunningTask: true,
             conversationStates: [
-              { sessionId: "s-1", dialogProcessId: "", clientTurnId: "client-turn-r", state: "sending", seq: 0 },
+              { sessionId: "s-1", dialogProcessId: "", turnScopeId: "client-turn-r", state: "sending", seq: 0 },
             ],
             dialogProcesses: [],
           },
@@ -127,7 +127,7 @@ describe("applyReconnectDataReplay", () => {
         state: "sending",
         sessionId: "s-1",
         dialogProcessId: "",
-        clientTurnId: "client-turn-r",
+        turnScopeId: "client-turn-r",
       }),
     ]));
     expect(fixture.sending.value).toBe(true);

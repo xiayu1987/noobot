@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  getMessageClientTurnId,
   getMessageDialogProcessId,
+  getMessageTurnScopeId,
   getMessageExplicitTurnIdentity,
   isSameExplicitMessageTurn,
   isSameMessageRound,
@@ -10,27 +10,27 @@ import {
 
 describe("messageIdentity", () => {
   it("normalizes compatible message identity fields", () => {
-    expect(getMessageClientTurnId({ client_turn_id: " c1 " })).toBe("c1");
+    expect(getMessageTurnScopeId({ turn_scope_id: " c1 " })).toBe("c1");
     expect(getMessageDialogProcessId({ dialogId: " d1 " })).toBe("d1");
     expect(getMessageExplicitTurnIdentity({ turn_id: " t1 " })).toBe("t1");
     expect(getMessageExplicitTurnIdentity({ message_id: " m1 " })).toBe("m1");
   });
 
-  it("matches same message round by client turn before dialog id", () => {
+  it("matches same message round by turn scope before dialog id", () => {
     expect(isSameMessageRound(
-      { clientTurnId: "client-1", dialogProcessId: "dp-1" },
-      { client_turn_id: "client-1", dialogProcessId: "dp-2" },
+      { turnScopeId: "client-1", dialogProcessId: "dp-1" },
+      { turn_scope_id: "client-1", dialogProcessId: "dp-2" },
     )).toBe(true);
     expect(isSameMessageRound(
-      { clientTurnId: "client-1", dialogProcessId: "dp-1" },
-      { clientTurnId: "client-2", dialogProcessId: "dp-1" },
+      { turnScopeId: "client-1", dialogProcessId: "dp-1" },
+      { turnScopeId: "client-2", dialogProcessId: "dp-1" },
     )).toBe(false);
   });
 
   it("matches explicit assistant turns without falling back to dialog id", () => {
     expect(isSameExplicitMessageTurn(
-      { role: "assistant", dialogProcessId: "dp-1", clientTurnId: "client-1" },
-      { role: "assistant", dialogProcessId: "dp-1", client_turn_id: "client-1" },
+      { role: "assistant", dialogProcessId: "dp-1", turnScopeId: "client-1" },
+      { role: "assistant", dialogProcessId: "dp-1", turn_scope_id: "client-1" },
     )).toBe(true);
     expect(isSameExplicitMessageTurn(
       { role: "assistant", dialogProcessId: "dp-1" },
@@ -44,8 +44,8 @@ describe("messageIdentity", () => {
       { role: "assistant", dialogProcessId: "dp-1" },
     )).toBe(false);
     expect(shouldCollectAttachmentMetasFromMessage(
-      { role: "assistant", dialogProcessId: "dp-1", clientTurnId: "client-1" },
-      { role: "assistant", dialogProcessId: "dp-1", clientTurnId: "client-1" },
+      { role: "assistant", dialogProcessId: "dp-1", turnScopeId: "client-1" },
+      { role: "assistant", dialogProcessId: "dp-1", turnScopeId: "client-1" },
     )).toBe(true);
     expect(shouldCollectAttachmentMetasFromMessage(
       { role: "assistant", dialogProcessId: "dp-1" },

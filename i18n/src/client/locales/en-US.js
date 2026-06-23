@@ -232,8 +232,8 @@ export const enUSMessages = {
     "detailsAfterDone": "Thinking details are available after completion",
     "collapse": "Collapse",
     "depthLabel": "Level#{depth}",
-    "mainTaskGroup": "Main#{sessionId} · Turn#{dialogId} · {level}",
-    "subTaskGroup": "Sub#{sessionId} · Turn#{dialogId} · {level}"
+    "mainTaskGroup": "Main#{sessionId} · Turn#{turnScopeId} · {level}",
+    "subTaskGroup": "Sub#{sessionId} · Turn#{turnScopeId} · {level}"
   },
   "composer": {
     "stop": "Stop",

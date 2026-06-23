@@ -687,7 +687,7 @@ describe("useReconnectReplay", () => {
     expect(assistant?.pending).toBe(true);
   });
 
-  it("EV-01g: stale terminal channel_state does not clear current local client turn", async () => {
+  it("EV-01g: stale terminal channel_state does not clear current local turn scope", async () => {
     const { api, refs } = createFixture();
     refs.sending.value = true;
     refs.canStop.value = true;
@@ -695,7 +695,7 @@ describe("useReconnectReplay", () => {
       state: SESSION_RUN_STATE.SENDING,
       sessionId: "s-1",
       dialogProcessId: "",
-      clientTurnId: "client-current",
+      turnScopeId: "client-current",
       source: "local",
     });
 
@@ -709,7 +709,7 @@ describe("useReconnectReplay", () => {
     expect(refs.sending.value).toBe(true);
     expect(refs.canStop.value).toBe(true);
     expect(refs.runStateSnapshot.value.state).toBe(SESSION_RUN_STATE.SENDING);
-    expect(refs.runStateSnapshot.value.clientTurnId).toBe("client-current");
+    expect(refs.runStateSnapshot.value.turnScopeId).toBe("client-current");
     expect(refs.runStateSnapshot.value.dialogProcessId).toBe("");
   });
 

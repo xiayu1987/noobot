@@ -160,7 +160,7 @@ _buildConversationStatePayload(channel, stateItem = {}, overrides = {}) {
   return {
     sessionId: String(stateItem?.sessionId || ""),
     dialogProcessId,
-    clientTurnId: String(stateItem?.clientTurnId || "").trim(),
+    turnScopeId: String(stateItem?.turnScopeId || "").trim(),
     state,
     sourceEvent: String(stateItem?.sourceEvent || ""),
     seq: Number(stateItem?.seq || 0),

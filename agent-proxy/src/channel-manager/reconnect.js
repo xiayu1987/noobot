@@ -57,7 +57,7 @@ handleReconnect(socket, payload = {}) {
       this.updateConversationState(channel, {
         sessionId: channelSessionId,
         dialogProcessId: "",
-        clientTurnId: String(channel?.startPayload?.clientTurnId || "").trim(),
+        turnScopeId: String(channel?.startPayload?.turnScopeId || "").trim(),
         state: preAttachSessionState,
         sourceEvent: CONVERSATION_SOURCE_EVENT.CHANNEL_STATUS,
         seq: Number(channel?.eventSequence || 0),
@@ -133,7 +133,7 @@ handleReconnect(socket, payload = {}) {
       const nextSessionScopeState = {
         sessionId: channelSessionId,
         dialogProcessId: "",
-        clientTurnId: String(channel?.startPayload?.clientTurnId || "").trim(),
+        turnScopeId: String(channel?.startPayload?.turnScopeId || "").trim(),
         state: derivedSessionState,
         sourceEvent: CONVERSATION_SOURCE_EVENT.CHANNEL_STATUS,
         seq: Number(channel?.eventSequence || 0),

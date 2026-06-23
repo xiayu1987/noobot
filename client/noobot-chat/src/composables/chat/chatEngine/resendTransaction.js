@@ -12,6 +12,7 @@ import {
   getMessageRole,
   getMessageStableId,
   getMessageTurnId,
+  getMessageTurnScopeId,
 } from "../../infra/messageIdentity";
 
 function resolveSessionId(activeSession, activeSessionId) {
@@ -277,6 +278,7 @@ export function createResendMessageTransaction({
             existingUserMessage: replacementUserMessage,
             messageText: text,
             reuseExistingUserTurn: true,
+            turnScopeId: getMessageTurnScopeId(replacementUserMessage || payload?.newTurn || {}),
             existingUserTurnId: getMessageTurnId(replacementUserMessage || payload?.newTurn || {}),
             existingUserMessageId: getMessageStableId(replacementUserMessage || payload?.newTurn || {}),
           });

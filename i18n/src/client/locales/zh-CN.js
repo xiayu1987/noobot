@@ -232,8 +232,8 @@ export const zhCNMessages = {
     "detailsAfterDone": "执行完成后可查看思考明细",
     "collapse": "收起",
     "depthLabel": "层级#{depth}",
-    "mainTaskGroup": "主任务#{sessionId} · 轮次#{dialogId} · {level}",
-    "subTaskGroup": "子任务#{sessionId} · 轮次#{dialogId} · {level}"
+    "mainTaskGroup": "主任务#{sessionId} · 轮次#{turnScopeId} · {level}",
+    "subTaskGroup": "子任务#{sessionId} · 轮次#{turnScopeId} · {level}"
   },
   "composer": {
     "stop": "停止",

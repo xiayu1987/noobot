@@ -44,11 +44,11 @@ describe("sessionRunStateMachine", () => {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: "running",
       sessionId: " s1 ",
-      clientTurnId: " c1 ",
+      turnScopeId: " c1 ",
     });
     expect(event.state).toBe(SESSION_RUN_STATE.SENDING);
     expect(event.sessionId).toBe("s1");
-    expect(event.clientTurnId).toBe("c1");
+    expect(event.turnScopeId).toBe("c1");
     expect(evaluateSessionRunState({ state: SESSION_RUN_STATE.STOPPING })).toMatchObject({
       sending: true,
       canStop: false,
@@ -57,23 +57,23 @@ describe("sessionRunStateMachine", () => {
     });
   });
 
-  it("scopes local turns by clientTurnId and binds backend dialogProcessId", () => {
+  it("scopes local turns by turnScopeId and binds backend dialogProcessId", () => {
     const firstTurn = transitionSessionRunState(createInitialSessionRunState(), {
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId: "s1",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
     });
     expect(firstTurn).toMatchObject({
       state: SESSION_RUN_STATE.SENDING,
       dialogProcessId: "",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
     });
 
     const staleScopedTerminal = transitionSessionRunState(firstTurn, {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: "completed",
       sessionId: "s1",
-      clientTurnId: "client-old",
+      turnScopeId: "client-old",
     });
     expect(staleScopedTerminal).toBe(firstTurn);
 
@@ -81,52 +81,52 @@ describe("sessionRunStateMachine", () => {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: "sending",
       sessionId: "s1",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
     });
     expect(sameClientRunning).toMatchObject({
       state: SESSION_RUN_STATE.SENDING,
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
     });
 
     const bound = transitionSessionRunState(sameClientRunning, {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: "sending",
       sessionId: "s1",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
       dialogProcessId: "dialog-1",
       seq: 2,
       createdAtMs: 1710000000000,
     });
     expect(bound).toMatchObject({
       state: SESSION_RUN_STATE.SENDING,
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
       dialogProcessId: "dialog-1",
       seq: 2,
       updatedAt: 1710000000000,
     });
   });
 
-  it("keeps local send active by clientTurnId until real dialog id binds", () => {
+  it("keeps local send active by turnScopeId until real dialog id binds", () => {
     const localStarted = transitionSessionRunState(createInitialSessionRunState(), {
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId: "s1",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
     });
     expect(localStarted).toMatchObject({
       state: SESSION_RUN_STATE.SENDING,
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
     });
 
     const localSendingEcho = transitionSessionRunState(localStarted, {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: "sending",
       sessionId: "s1",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
     });
     expect(localSendingEcho).toMatchObject({
       state: SESSION_RUN_STATE.SENDING,
       lastEventType: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
     });
 
     const unscopedCompleted = transitionSessionRunState(localSendingEcho, {
@@ -149,13 +149,13 @@ describe("sessionRunStateMachine", () => {
       state: "sending",
       sessionId: "s1",
       dialogProcessId: "dialog-1",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
       seq: 2,
     });
     expect(bound).toMatchObject({
       state: SESSION_RUN_STATE.SENDING,
       dialogProcessId: "dialog-1",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
     });
 
     const completed = transitionSessionRunState(bound, {
@@ -168,27 +168,27 @@ describe("sessionRunStateMachine", () => {
     expect(completed).toMatchObject({
       state: SESSION_RUN_STATE.COMPLETED,
       dialogProcessId: "dialog-1",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
     });
   });
 
-  it("does not let unscoped local failures clear an unbound client turn", () => {
+  it("does not let unscoped local failures clear an unbound turn scope", () => {
     const localStarted = transitionSessionRunState(createInitialSessionRunState(), {
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId: "s1",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
     });
 
     const localSendingEcho = transitionSessionRunState(localStarted, {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: "sending",
       sessionId: "s1",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
     });
     expect(localSendingEcho).toMatchObject({
       state: SESSION_RUN_STATE.SENDING,
       dialogProcessId: "",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
       lastEventType: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
     });
 
@@ -208,12 +208,12 @@ describe("sessionRunStateMachine", () => {
       type: SESSION_RUN_EVENT.LOCAL_FAILURE,
       state: "error",
       sessionId: "s1",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
       source: "interaction_payload_missing",
     });
     expect(sameClientFailure).toMatchObject({
       state: SESSION_RUN_STATE.ERROR,
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
     });
   });
 
@@ -221,20 +221,20 @@ describe("sessionRunStateMachine", () => {
     const started = transitionSessionRunState(createInitialSessionRunState(), {
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId: "session-int",
-      clientTurnId: "client-int",
+      turnScopeId: "client-int",
     });
 
     const interactionPending = transitionSessionRunState(started, {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: "interaction_pending",
       sessionId: "session-int",
-      clientTurnId: "client-int",
+      turnScopeId: "client-int",
       seq: 2,
     });
 
     expect(interactionPending).toMatchObject({
       state: SESSION_RUN_STATE.INTERACTION_PENDING,
-      clientTurnId: "client-int",
+      turnScopeId: "client-int",
     });
     expect(evaluateSessionRunState(interactionPending)).toMatchObject({
       sending: true,
@@ -242,17 +242,17 @@ describe("sessionRunStateMachine", () => {
     });
   });
 
-  it("ignores accidental dialogProcessId on local send start and keeps clientTurnId as the unbound scope", () => {
+  it("ignores accidental dialogProcessId on local send start and keeps turnScopeId as the unbound scope", () => {
     const localStarted = transitionSessionRunState(createInitialSessionRunState(), {
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId: "s1",
       dialogProcessId: "existing-user-message-id",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
     });
     expect(localStarted).toMatchObject({
       state: SESSION_RUN_STATE.SENDING,
       dialogProcessId: "",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
     });
     expect(evaluateSessionRunState(localStarted)).toMatchObject({ sending: true, canStop: true });
 
@@ -260,12 +260,12 @@ describe("sessionRunStateMachine", () => {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: "sending",
       sessionId: "s1",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
     });
     expect(localSendingEcho).toMatchObject({
       state: SESSION_RUN_STATE.SENDING,
       dialogProcessId: "",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
     });
 
     const staleStopping = transitionSessionRunState(localSendingEcho, {
@@ -281,40 +281,41 @@ describe("sessionRunStateMachine", () => {
       state: "sending",
       sessionId: "s1",
       dialogProcessId: "dialog-1",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
     });
     expect(bound).toMatchObject({
       state: SESSION_RUN_STATE.SENDING,
       dialogProcessId: "dialog-1",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
     });
   });
 
-  it("resolves event scope from dialogProcessId before clientTurnId", () => {
-    expect(resolveEventScope({ dialogProcessId: " dialog-1 ", clientTurnId: " client-1 " })).toBe("dialog-1");
-    expect(resolveEventScope({ clientTurnId: " client-1 " })).toBe("client-1");
-    expect(resolveEventScope({ dialogProcessId: " ", clientTurnId: " " })).toBe("");
+  it("resolves event scope from turn identity only", () => {
+    expect(resolveEventScope({ dialogProcessId: " dialog-1 ", turnScopeId: " client-1 " })).toBe("client-1");
+    expect(resolveEventScope({ turnScopeId: " turn-1 " })).toBe("turn-1");
+    expect(resolveEventScope({ dialogProcessId: " dialog-1 " })).toBe("");
+    expect(resolveEventScope({ dialogProcessId: " ", turnScopeId: " " })).toBe("");
   });
 
   it.each([
     {
       name: "applies local send from idle",
       current: { state: SESSION_RUN_STATE.IDLE, sessionId: "s1" },
-      event: { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED, sessionId: "s1", clientTurnId: "c1" },
+      event: { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED, sessionId: "s1", turnScopeId: "c1" },
       canApply: true,
       nextState: SESSION_RUN_STATE.SENDING,
     },
     {
       name: "ignores event from another session",
-      current: { state: SESSION_RUN_STATE.SENDING, sessionId: "s1", clientTurnId: "c1" },
-      event: { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "completed", sessionId: "s2", clientTurnId: "c1" },
+      current: { state: SESSION_RUN_STATE.SENDING, sessionId: "s1", turnScopeId: "c1" },
+      event: { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "completed", sessionId: "s2", turnScopeId: "c1" },
       canApply: false,
       nextState: SESSION_RUN_STATE.SENDING,
     },
     {
-      name: "ignores event from another client turn",
-      current: { state: SESSION_RUN_STATE.SENDING, sessionId: "s1", clientTurnId: "c1" },
-      event: { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "completed", sessionId: "s1", clientTurnId: "c2" },
+      name: "ignores event from another turn scope",
+      current: { state: SESSION_RUN_STATE.SENDING, sessionId: "s1", turnScopeId: "c1" },
+      event: { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "completed", sessionId: "s1", turnScopeId: "c2" },
       canApply: false,
       nextState: SESSION_RUN_STATE.SENDING,
     },
@@ -335,7 +336,7 @@ describe("sessionRunStateMachine", () => {
     {
       name: "allows new local turn after terminal state",
       current: { state: SESSION_RUN_STATE.COMPLETED, sessionId: "s1", dialogProcessId: "d1" },
-      event: { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED, sessionId: "s1", clientTurnId: "c2" },
+      event: { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED, sessionId: "s1", turnScopeId: "c2" },
       canApply: true,
       nextState: SESSION_RUN_STATE.SENDING,
     },
@@ -372,8 +373,8 @@ describe("sessionRunStateMachine", () => {
     },
     {
       name: "different scope",
-      current: { state: SESSION_RUN_STATE.SENDING, sessionId: "s1", clientTurnId: "c1" },
-      event: { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "completed", sessionId: "s1", clientTurnId: "c2" },
+      current: { state: SESSION_RUN_STATE.SENDING, sessionId: "s1", turnScopeId: "c1" },
+      event: { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "completed", sessionId: "s1", turnScopeId: "c2" },
       reason: SESSION_RUN_TRANSITION_DECISION_REASON.DIFFERENT_SCOPE,
       canApply: false,
       nextState: SESSION_RUN_STATE.SENDING,
@@ -493,24 +494,24 @@ describe("sessionRunStateMachine", () => {
     expect(transitionSessionRunState(current, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED, sessionId: "s1" }).state).toBe(SESSION_RUN_STATE.SENDING);
   });
 
-  it("keeps a new local send scoped by clientTurnId until backend binds dialog id", () => {
+  it("keeps a new local send scoped by turnScopeId until backend binds dialog id", () => {
     const current = createInitialSessionRunState({
       state: SESSION_RUN_STATE.STOP_REQUESTED,
       sessionId: "s1",
       dialogProcessId: "old-dialog",
-      clientTurnId: "client-old",
+      turnScopeId: "client-old",
       priority: 70,
     });
     const next = transitionSessionRunState(current, {
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId: "s1",
-      clientTurnId: "client-new",
+      turnScopeId: "client-new",
     });
 
     expect(next).toMatchObject({
       state: SESSION_RUN_STATE.SENDING,
       dialogProcessId: "",
-      clientTurnId: "client-new",
+      turnScopeId: "client-new",
     });
     expect(evaluateSessionRunState(next)).toMatchObject({ sending: true, canStop: true });
 
@@ -519,7 +520,7 @@ describe("sessionRunStateMachine", () => {
       state: "stopped",
       sessionId: "s1",
       dialogProcessId: "old-dialog",
-      clientTurnId: "client-old",
+      turnScopeId: "client-old",
     });
     expect(staleTerminal).toBe(next);
 
@@ -528,26 +529,26 @@ describe("sessionRunStateMachine", () => {
       state: "reconnecting",
       sessionId: "s1",
       dialogProcessId: "new-dialog",
-      clientTurnId: "client-new",
+      turnScopeId: "client-new",
       seq: 3,
       createdAt: "2026-06-22T08:00:00.000Z",
     });
     expect(bound).toMatchObject({
       state: SESSION_RUN_STATE.RECONNECTING,
       dialogProcessId: "new-dialog",
-      clientTurnId: "client-new",
+      turnScopeId: "client-new",
       seq: 3,
       updatedAt: Date.parse("2026-06-22T08:00:00.000Z"),
     });
     expect(evaluateSessionRunState(bound)).toMatchObject({ sending: true, canStop: true });
   });
 
-  it("requires matching clientTurnId after backend dialogProcessId is bound", () => {
+  it("requires matching turnScopeId after backend dialogProcessId is bound", () => {
     const bound = createInitialSessionRunState({
       state: SESSION_RUN_STATE.SENDING,
       sessionId: "s1",
       dialogProcessId: "new-dialog",
-      clientTurnId: "client-new",
+      turnScopeId: "client-new",
       priority: 40,
     });
 
@@ -556,7 +557,7 @@ describe("sessionRunStateMachine", () => {
       state: "completed",
       sessionId: "s1",
       dialogProcessId: "new-dialog",
-      clientTurnId: "client-old",
+      turnScopeId: "client-old",
     });
     expect(staleSameDialogDifferentTurn).toBe(bound);
 
@@ -565,16 +566,39 @@ describe("sessionRunStateMachine", () => {
       state: "completed",
       sessionId: "s1",
       dialogProcessId: "new-dialog",
-      clientTurnId: "client-new",
+      turnScopeId: "client-new",
       updatedAtMs: 1710000005000,
     });
     expect(realCompleted).toMatchObject({
       state: SESSION_RUN_STATE.COMPLETED,
       dialogProcessId: "new-dialog",
-      clientTurnId: "client-new",
+      turnScopeId: "client-new",
       updatedAt: 1710000005000,
     });
     expect(evaluateSessionRunState(realCompleted)).toMatchObject({ sending: false, canStop: false, terminal: true });
+  });
+
+  it("does not treat dialogProcessId and turnScopeId as interchangeable scopes", () => {
+    const current = createInitialSessionRunState({
+      state: SESSION_RUN_STATE.SENDING,
+      sessionId: "s1",
+      dialogProcessId: "dialog-1",
+      priority: 40,
+    });
+
+    const event = {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: "completed",
+      sessionId: "s1",
+      turnScopeId: "client-1",
+    };
+
+    expect(resolveTransitionDecision(current, event)).toMatchObject({
+      canApply: false,
+      reason: SESSION_RUN_TRANSITION_DECISION_REASON.DIFFERENT_SCOPE,
+      nextState: SESSION_RUN_STATE.SENDING,
+    });
+    expect(transitionSessionRunState(current, event)).toBe(current);
   });
 
   it("applies events to refs from the state machine only", () => {

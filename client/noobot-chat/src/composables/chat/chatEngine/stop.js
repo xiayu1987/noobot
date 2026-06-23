@@ -10,10 +10,10 @@ import {
   rememberStopRequestedEvent,
 } from "../sessionRunStateMachine";
 import {
-  getMessageClientTurnId,
   getMessageDialogProcessId,
   getMessageParentDialogProcessId,
   getMessageRole,
+  getMessageTurnScopeId,
 } from "../../infra/messageIdentity";
 
 function markLatestUserMessageStopped(activeSession, pendingAssistantMessage = null) {
@@ -76,14 +76,14 @@ export function forceStopUiFinalize({
   const pendingAssistantMessage = findTargetAssistantMessage?.();
   markLatestUserMessageStopped(activeSession, pendingAssistantMessage);
   const fallbackDialogProcessId = getMessageDialogProcessId(pendingAssistantMessage);
-  const fallbackClientTurnId = getMessageClientTurnId(pendingAssistantMessage);
+  const fallbackTurnScopeId = getMessageTurnScopeId(pendingAssistantMessage);
   const finalizedAtMs = Date.now();
   applyConversationState?.(
     {
       state: "stopped",
       sessionId: String(activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
       dialogProcessId: fallbackDialogProcessId,
-      clientTurnId: fallbackClientTurnId,
+      turnScopeId: fallbackTurnScopeId,
       createdAtMs: finalizedAtMs,
       updatedAtMs: finalizedAtMs,
     },
@@ -95,7 +95,7 @@ export function forceStopUiFinalize({
       state: "stopped",
       sessionId: String(activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
       dialogProcessId: fallbackDialogProcessId,
-      clientTurnId: fallbackClientTurnId,
+      turnScopeId: fallbackTurnScopeId,
       createdAtMs: finalizedAtMs,
       updatedAtMs: finalizedAtMs,
       source: "force_stop_finalize",
@@ -111,13 +111,13 @@ export function forceStopUiFinalize({
 function buildStopPayload({ userId, activeSession, pendingAssistantMessage } = {}) {
   const session = activeSession?.value || {};
   const dialogProcessId = getMessageDialogProcessId(pendingAssistantMessage);
-  const clientTurnId = getMessageClientTurnId(pendingAssistantMessage);
+  const turnScopeId = getMessageTurnScopeId(pendingAssistantMessage);
   const createdAtMs = Date.now();
   const payload = {
     userId: String(userId?.value ?? userId ?? ""),
     sessionId: String(session.backendSessionId || session.sessionId || session.id || ""),
     dialogProcessId,
-    clientTurnId,
+    turnScopeId,
     createdAtMs,
     parentSessionId: String(
       session.parentSessionId || pendingAssistantMessage?.parentSessionId || "",
@@ -128,8 +128,8 @@ function buildStopPayload({ userId, activeSession, pendingAssistantMessage } = {
     partialAssistant: {
       content: String(pendingAssistantMessage?.content || ""),
       dialogProcessId,
-      clientTurnId,
-      createdAtMs,
+      turnScopeId,
+        createdAtMs,
       modelAlias: String(pendingAssistantMessage?.modelAlias || ""),
       modelName: String(pendingAssistantMessage?.modelName || ""),
     },
@@ -163,7 +163,7 @@ export function stopSending({
   const stopEvent = rememberStopRequestedEvent({
     sessionId: stopPayload.sessionId,
     dialogProcessId: stopPayload.dialogProcessId,
-    clientTurnId: stopPayload.clientTurnId,
+    turnScopeId: stopPayload.turnScopeId,
     createdAtMs: stopPayload.createdAtMs,
     source: "stop_sending",
   });

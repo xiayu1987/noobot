@@ -52,13 +52,13 @@ function sortReconnectSessions(payload = {}) {
 }
 
 
-test("channel_state inherits clientTurnId from start payload when upstream omits it", () => {
+test("channel_state inherits turnScopeId from start payload when upstream omits it", () => {
   const manager = new ChannelManager({ OPEN: 1 });
-  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-client-turn" });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-turn-scope" });
   const channel = manager.ensureChannel(channelKey, {
     userId: "user-1",
-    sessionId: "session-client-turn",
-    clientTurnId: "client-turn-1",
+    sessionId: "session-turn-scope",
+    turnScopeId: "turn-scope-1",
   });
   channel.status = "running";
   channel.ownerApiKey = "api-key-1";
@@ -68,14 +68,14 @@ test("channel_state inherits clientTurnId from start payload when upstream omits
   client.sentEvents = [];
 
   manager.pushChannelEvent(channel, "thinking", {
-    sessionId: "session-client-turn",
-    dialogProcessId: "dp-client-turn",
+    sessionId: "session-turn-scope",
+    dialogProcessId: "dp-turn-scope",
     seq: 1,
   });
 
   const channelState = listEvents(client, "channel_state").at(-1);
-  assert.equal(channelState?.data?.dialogProcessId, "dp-client-turn");
-  assert.equal(channelState?.data?.clientTurnId, "client-turn-1");
+  assert.equal(channelState?.data?.dialogProcessId, "dp-turn-scope");
+  assert.equal(channelState?.data?.turnScopeId, "turn-scope-1");
 });
 
 
@@ -86,7 +86,7 @@ test("reconnect subscriber snapshot must not emit stale no_conversation before r
   const channel = manager.ensureChannel(channelKey, {
     userId: "user-1",
     sessionId: "session-snapshot-running",
-    clientTurnId: "client-turn-snapshot-running",
+    turnScopeId: "turn-scope-snapshot-running",
   });
   channel.status = "running";
   channel.ownerApiKey = "api-key-1";
@@ -100,7 +100,7 @@ test("reconnect subscriber snapshot must not emit stale no_conversation before r
 
   const firstState = client.sentEvents.find((eventItem) => eventItem?.event === "channel_state");
   assert.equal(firstState?.data?.state, "sending");
-  assert.equal(firstState?.data?.clientTurnId, "client-turn-snapshot-running");
+  assert.equal(firstState?.data?.turnScopeId, "turn-scope-snapshot-running");
   assert.equal(
     client.sentEvents.some(
       (eventItem) =>
@@ -117,7 +117,7 @@ test("reconnect replaces initial no_conversation with sending for running channe
   const channel = manager.ensureChannel(channelKey, {
     userId: "user-1",
     sessionId: "session-running-empty",
-    clientTurnId: "client-turn-running",
+    turnScopeId: "turn-scope-running",
   });
   channel.status = "running";
   channel.ownerApiKey = "api-key-1";
@@ -143,7 +143,7 @@ test("reconnect replaces initial no_conversation with sending for running channe
     stateList.some(
       (stateItem) =>
         stateItem?.state === "sending" &&
-        String(stateItem?.clientTurnId || "") === "client-turn-running",
+        String(stateItem?.turnScopeId || "") === "turn-scope-running",
     ),
     true,
   );
@@ -156,7 +156,7 @@ test("reconnect can recover same-user running channel when socket identity is no
   const channel = manager.ensureChannel(channelKey, {
     userId: "user-1",
     sessionId: "session-user-fallback",
-    clientTurnId: "client-turn-user-fallback",
+    turnScopeId: "turn-scope-user-fallback",
   });
   channel.status = "running";
   channel.ownerApiKey = "api-key-old";
@@ -178,7 +178,7 @@ test("reconnect can recover same-user running channel when socket identity is no
     (sessionEntry?.conversationStates || []).some(
       (stateItem) =>
         stateItem?.state === "sending" &&
-        String(stateItem?.clientTurnId || "") === "client-turn-user-fallback",
+        String(stateItem?.turnScopeId || "") === "turn-scope-user-fallback",
     ),
     true,
   );

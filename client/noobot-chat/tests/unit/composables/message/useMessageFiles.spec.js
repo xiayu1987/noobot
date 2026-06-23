@@ -325,14 +325,14 @@ describe("useMessageFiles", () => {
       role: "assistant",
       pending: false,
       dialogProcessId: "dp-1",
-      clientTurnId: "turn-1",
+      turnScopeId: "turn-1",
       attachmentMetas: [],
     };
     const previousAssistantMessage = {
       role: "assistant",
       pending: false,
       dialogProcessId: "dp-1",
-      clientTurnId: "turn-1",
+      turnScopeId: "turn-1",
       attachmentMetas: [
         { attachmentId: "prev-1", name: "previous-result.md" },
       ],
@@ -349,19 +349,19 @@ describe("useMessageFiles", () => {
     ]);
   });
 
-  it("does not collect previous assistant attachments from a different client turn", () => {
+  it("does not collect previous assistant attachments from a different turn scope", () => {
     const messageItem = {
       role: "assistant",
       pending: false,
       dialogProcessId: "dp-1",
-      clientTurnId: "turn-current",
+      turnScopeId: "turn-current",
       attachmentMetas: [],
     };
     const previousAssistantMessage = {
       role: "assistant",
       pending: false,
       dialogProcessId: "dp-1",
-      clientTurnId: "turn-previous",
+      turnScopeId: "turn-previous",
       attachmentMetas: [
         { attachmentId: "prev-1", name: "previous-result.md" },
       ],
@@ -401,12 +401,12 @@ describe("useMessageFiles", () => {
     expect(displayedAttachmentMetas.value).toEqual([]);
   });
 
-  it("does not fall back to dialogProcessId when current message has a client turn", () => {
+  it("does not fall back to dialogProcessId when current message has a turn scope", () => {
     const messageItem = {
       role: "assistant",
       pending: false,
       dialogProcessId: "dp-1",
-      clientTurnId: "turn-current",
+      turnScopeId: "turn-current",
       attachmentMetas: [],
     };
     const previousAssistantMessage = {
@@ -498,13 +498,13 @@ describe("useMessageFiles", () => {
     const messageItem = {
       role: "assistant",
       dialogProcessId: "dp-reused",
-      clientTurnId: "turn-current",
+      turnScopeId: "turn-current",
       attachmentMetas: [],
     };
     const previousTool = {
       role: "tool",
       dialogProcessId: "dp-reused",
-      clientTurnId: "turn-previous",
+      turnScopeId: "turn-previous",
       attachmentMetas: [
         {
           attachmentId: "prev-explicit",
@@ -524,17 +524,17 @@ describe("useMessageFiles", () => {
     expect(displayedAttachmentMetas.value).toEqual([]);
   });
 
-  it("collects explicitly owned tool attachments for the current client turn", () => {
+  it("collects explicitly owned tool attachments for the current turn scope", () => {
     const messageItem = {
       role: "assistant",
       dialogProcessId: "dp-current",
-      clientTurnId: "turn-current",
+      turnScopeId: "turn-current",
       attachmentMetas: [],
     };
     const currentTool = {
       role: "tool",
       dialogProcessId: "dp-current",
-      clientTurnId: "turn-current",
+      turnScopeId: "turn-current",
       attachmentMetas: [
         {
           attachmentId: "current-explicit",

@@ -180,6 +180,26 @@ describe("reconnectReplayModel", () => {
     expect(reusable).toBe(existing[1]);
   });
 
+  it("findReusableMessageObject rejects dialogProcessId reuse when turn identity conflicts", () => {
+    const existing = [
+      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-1", turnScopeId: "client-old", content: "old" },
+      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-2", turnScopeId: "turn-old", content: "other" },
+    ];
+
+    expect(
+      findReusableMessageObject(
+        { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-1", turnScopeId: "client-new", content: "new" },
+        existing,
+      ),
+    ).toBeNull();
+    expect(
+      findReusableMessageObject(
+        { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-2", turnScopeId: "turn-new", content: "new" },
+        existing,
+      ),
+    ).toBeNull();
+  });
+
   it("mergeCurrentUserMessagesIntoFoldedMessages keeps missing user messages", () => {
     const currentUser = { role: RoleEnum.USER, content: "local user", ts: 2000 };
     const merged = mergeCurrentUserMessagesIntoFoldedMessages({

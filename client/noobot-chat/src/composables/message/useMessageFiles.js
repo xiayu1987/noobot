@@ -13,7 +13,11 @@ import {
   getMessageDialogProcessId,
   getMessageParentDialogProcessId,
   getMessageRole,
+  getMessageSessionId,
+  getMessageTurnScopeId,
+  getMessageTurnId,
   isSameMessageRound,
+  normalizeTurnMeta,
   shouldCollectAttachmentMetasFromMessage,
 } from "../infra/messageIdentity";
 import { getMessageTransferAttachmentMetas } from "../infra/transferEnvelopes";
@@ -95,28 +99,42 @@ function trim(value = "") {
 
 function getMessageTurnIdentity(messageItem = {}) {
   return {
-    clientTurnId: trim(messageItem?.clientTurnId || messageItem?.turnScopeId || messageItem?.client_turn_id),
-    turnId: trim(messageItem?.turnId || messageItem?.turn_id),
+    sessionId: getMessageSessionId(messageItem),
+    turnScopeId: getMessageTurnScopeId(messageItem),
+    turnId: getMessageTurnId(messageItem),
     dialogProcessId: getMessageDialogProcessId(messageItem),
   };
 }
 
+function isPlainObject(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
 function getAttachmentOwnership(attachmentItem = {}) {
-  const turnScope = attachmentItem?.turnScope &&
-    typeof attachmentItem.turnScope === "object" &&
-    !Array.isArray(attachmentItem.turnScope)
-      ? attachmentItem.turnScope
-      : {};
+  const attachmentOwner = isPlainObject(attachmentItem?.attachment?.owner)
+    ? attachmentItem.attachment.owner
+    : null;
+  const owner = isPlainObject(attachmentItem?.owner) ? attachmentItem.owner : null;
+  const turnScope = isPlainObject(attachmentItem?.turnScope) ? attachmentItem.turnScope : {};
+  const ownershipSource = attachmentOwner || owner || turnScope;
+  const normalized = normalizeTurnMeta(ownershipSource);
   return {
-    clientTurnId: trim(turnScope?.turnScopeId || turnScope?.clientTurnId || turnScope?.client_turn_id),
-    turnId: trim(turnScope?.turnId || turnScope?.turn_id),
-    dialogProcessId: trim(turnScope?.dialogProcessId || turnScope?.dialog_process_id),
+    ...normalized,
+    sessionId: trim(
+      normalized.sessionId ||
+        ownershipSource?.sessionId ||
+        ownershipSource?.session_id ||
+        turnScope?.sessionId ||
+        turnScope?.session_id ||
+        attachmentItem?.sessionId ||
+        attachmentItem?.session_id,
+    ),
   };
 }
 
 function hasExplicitAttachmentOwnership(attachmentItem = {}) {
   const ownership = getAttachmentOwnership(attachmentItem);
-  return Boolean(ownership.clientTurnId || ownership.turnId || ownership.dialogProcessId);
+  return Boolean(ownership.turnScopeId || ownership.turnId || ownership.dialogProcessId);
 }
 
 function isAttachmentOwnedByMessage(attachmentItem = {}, messageItem = {}) {
@@ -124,11 +142,16 @@ function isAttachmentOwnedByMessage(attachmentItem = {}, messageItem = {}) {
   const attachmentOwnership = getAttachmentOwnership(attachmentItem);
   const messageIdentity = getMessageTurnIdentity(messageItem);
 
-  if (attachmentOwnership.clientTurnId) {
-    return Boolean(
-      messageIdentity.clientTurnId &&
-        attachmentOwnership.clientTurnId === messageIdentity.clientTurnId,
+  if (attachmentOwnership.turnScopeId) {
+    const sameTurnScope = Boolean(
+      messageIdentity.turnScopeId &&
+        attachmentOwnership.turnScopeId === messageIdentity.turnScopeId,
     );
+    if (!sameTurnScope) return false;
+    if (attachmentOwnership.sessionId && messageIdentity.sessionId) {
+      return attachmentOwnership.sessionId === messageIdentity.sessionId;
+    }
+    return true;
   }
   if (attachmentOwnership.turnId) {
     return Boolean(
@@ -194,16 +217,18 @@ function findMessageIndexInLinearTurn(messages = [], targetMessage = {}) {
 
   const targetRole = getMessageRole(targetMessage);
   const targetDialogProcessId = getMessageDialogProcessId(targetMessage);
-  const targetClientTurnId = String(targetMessage?.clientTurnId || targetMessage?.turnScopeId || targetMessage?.client_turn_id || "").trim();
   const targetContent = normalizeMessageText(targetMessage?.content);
 
-  if (targetClientTurnId) {
-    const clientTurnIndex = messageList.findIndex(
-      (messageItem) =>
-        getMessageRole(messageItem) === targetRole &&
-        String(messageItem?.clientTurnId || messageItem?.turnScopeId || messageItem?.client_turn_id || "").trim() === targetClientTurnId,
-    );
-    if (clientTurnIndex >= 0) return clientTurnIndex;
+  const targetTurnScopeId = getMessageTurnScopeId(targetMessage);
+  const targetSessionId = getMessageSessionId(targetMessage);
+  if (targetTurnScopeId) {
+    const turnScopeIndex = messageList.findIndex((messageItem) => {
+      if (getMessageRole(messageItem) !== targetRole) return false;
+      if (getMessageTurnScopeId(messageItem) !== targetTurnScopeId) return false;
+      const candidateSessionId = getMessageSessionId(messageItem);
+      return !targetSessionId || !candidateSessionId || targetSessionId === candidateSessionId;
+    });
+    if (turnScopeIndex >= 0) return turnScopeIndex;
   }
   if (targetDialogProcessId) {
     const dialogIndex = messageList.findIndex(
@@ -400,8 +425,9 @@ export function useMessageFiles({
   const writtenFiles = computed(() => {
     const messageItem = getMessageItem() || {};
     if (isFreshPendingAssistant(messageItem)) return [];
+    const turnScopeId = getMessageTurnScopeId(messageItem);
     const dialogProcessId = getMessageDialogProcessId(messageItem);
-    if (!dialogProcessId) return [];
+    if (!turnScopeId && !dialogProcessId) return [];
     const out = [];
     const seen = new Set();
     for (const logItem of Array.isArray(messageItem?.completedToolLogs) ? messageItem.completedToolLogs : []) {
@@ -425,18 +451,22 @@ export function useMessageFiles({
       ...(Array.isArray(getAllMessages()) ? getAllMessages() : []),
       ...flattenSessionMessages(getSessionDocs()),
     ];
-    const relatedDialogIds = collectRelatedDialogProcessIds(
-      candidateMessages,
-      dialogProcessId,
-    );
+    const relatedDialogIds = turnScopeId
+      ? new Set()
+      : collectRelatedDialogProcessIds(
+          candidateMessages,
+          dialogProcessId,
+        );
 
     for (const sessionMessage of candidateMessages) {
       if (getMessageRole(sessionMessage) !== "tool") continue;
       if (!isSameMessageRound(messageItem, sessionMessage)) continue;
-      const currentDialogId = getMessageDialogProcessId(sessionMessage);
-      const parentId = getMessageParentDialogProcessId(sessionMessage);
-      if (!relatedDialogIds.has(currentDialogId) && !relatedDialogIds.has(parentId)) {
-        continue;
+      if (!turnScopeId) {
+        const currentDialogId = getMessageDialogProcessId(sessionMessage);
+        const parentId = getMessageParentDialogProcessId(sessionMessage);
+        if (!relatedDialogIds.has(currentDialogId) && !relatedDialogIds.has(parentId)) {
+          continue;
+        }
       }
       const parsed = parseToolFileResult(sessionMessage?.content || "");
       if (!parsed) continue;
@@ -493,8 +523,9 @@ export function useMessageFiles({
     if (isFreshPendingAssistant(messageItem)) {
       return mergedBaseAttachmentMetas;
     }
+    const rootTurnScopeId = getMessageTurnScopeId(messageItem);
     const rootDialogProcessId = getMessageDialogProcessId(messageItem);
-    if (!rootDialogProcessId) return baseAttachmentMetas;
+    if (!rootTurnScopeId && !rootDialogProcessId) return baseAttachmentMetas;
 
     const allMessages = Array.isArray(getAllMessages()) ? getAllMessages() : [];
     const sessionDocMessages = flattenSessionMessages(getSessionDocs());
@@ -504,10 +535,12 @@ export function useMessageFiles({
     ];
     const allMessagesTurnBounds = getLinearTurnBounds(allMessages, messageItem);
     const sessionDocTurnBounds = getLinearTurnBounds(sessionDocMessages, messageItem);
-    const relatedDialogProcessIdSet = collectRelatedDialogProcessIds(
-      candidateMessages,
-      rootDialogProcessId,
-    );
+    const relatedDialogProcessIdSet = rootTurnScopeId
+      ? new Set()
+      : collectRelatedDialogProcessIds(
+          candidateMessages,
+          rootDialogProcessId,
+        );
     const baseSplit = splitAttachmentMetasByOwner(mergedBaseAttachmentMetas);
     let mainFlowAttachmentMetas = [...baseSplit.agent];
     let pluginAttachmentMetas = [...baseSplit.plugin];
@@ -528,11 +561,13 @@ export function useMessageFiles({
       if (!isSameMessageRound(messageItem, sessionMessage)) {
         continue;
       }
-      if (
-        !relatedDialogProcessIdSet.has(messageDialogProcessId) &&
-        !relatedDialogProcessIdSet.has(messageParentDialogProcessId)
-      ) {
-        continue;
+      if (!rootTurnScopeId) {
+        if (
+          !relatedDialogProcessIdSet.has(messageDialogProcessId) &&
+          !relatedDialogProcessIdSet.has(messageParentDialogProcessId)
+        ) {
+          continue;
+        }
       }
       if (!shouldCollectAttachmentMetasFromMessage(messageItem, sessionMessage)) {
         continue;

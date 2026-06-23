@@ -11,7 +11,11 @@ import {
   createProcessEventFromLog,
   createProcessEventsFromDonePayload,
 } from "../../../shared/process/aggregator";
-import { getMessageClientTurnId, getMessageDialogProcessId } from "../../infra/messageIdentity";
+import {
+  getMessageDialogProcessId,
+  getMessageTurnScopeId,
+  normalizeTurnMeta,
+} from "../../infra/messageIdentity";
 import { promoteSessionIdentityToBackendId } from "../../infra/sessionIdentity";
 import { applyDoneMessagesPatch } from "./messagePatch";
 import {
@@ -75,7 +79,7 @@ export function handleThinkingStreamEvent({
     botMessage.dialogProcessId = item.dialogProcessId;
     bindThinkingDialogProcess({
       sessionId: item.sessionId || botMessage.sessionId || botMessage.session_id,
-      clientTurnId: getMessageClientTurnId(botMessage),
+      turnScopeId: getMessageTurnScopeId(botMessage),
       dialogProcessId: item.dialogProcessId,
     });
   }
@@ -110,7 +114,7 @@ export function handleDeltaStreamEvent({
     botMessage.dialogProcessId = normalizeTrimmedString(data.dialogProcessId);
     bindThinkingDialogProcess({
       sessionId: data?.sessionId || botMessage.sessionId || botMessage.session_id,
-      clientTurnId: getMessageClientTurnId(botMessage),
+      turnScopeId: getMessageTurnScopeId(botMessage),
       dialogProcessId: getMessageDialogProcessId(botMessage),
     });
   }
@@ -197,12 +201,12 @@ export function handleDoneStreamEvent({
   if (getMessageDialogProcessId(botMessage)) {
     bindThinkingDialogProcess({
       sessionId: data?.sessionId || botMessage.sessionId || botMessage.session_id,
-      clientTurnId: getMessageClientTurnId(botMessage),
+      turnScopeId: getMessageTurnScopeId(botMessage),
       dialogProcessId: getMessageDialogProcessId(botMessage),
     });
     rememberThinkingFinished({
       sessionId: data?.sessionId || botMessage.sessionId || botMessage.session_id,
-      clientTurnId: getMessageClientTurnId(botMessage),
+      turnScopeId: getMessageTurnScopeId(botMessage),
       dialogProcessId: getMessageDialogProcessId(botMessage),
       finishedAtMs: Date.now(),
     });
@@ -267,12 +271,13 @@ export function handleDoneStreamEvent({
     mergeAssistantAttachmentMetas,
   });
   if (botMessage?.pending !== false) {
+    const turnMeta = normalizeTurnMeta(data);
     applyConversationState?.(
       {
         state: "completed",
         sessionId: String(data?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
         dialogProcessId: String(getMessageDialogProcessId(botMessage) || data?.dialogProcessId || ""),
-        clientTurnId: String(getMessageClientTurnId(botMessage) || data?.clientTurnId || data?.turnScopeId || data?.client_turn_id || ""),
+        turnScopeId: String(getMessageTurnScopeId(botMessage) || turnMeta.turnScopeId || ""),
         sourceEvent: "done",
         updatedAtMs: Date.now(),
       },

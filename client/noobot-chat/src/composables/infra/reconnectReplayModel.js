@@ -10,9 +10,9 @@ import {
   normalizeTransferEnvelopes,
 } from "./transferEnvelopes";
 import {
-  getMessageClientTurnId,
   getMessageDialogProcessId,
   getMessageRole,
+  getMessageTurnScopeId,
 } from "./messageIdentity";
 
 function isReconnectTerminalEvent(eventName = "") {
@@ -216,6 +216,7 @@ function mergeTransferEnvelopes(...values) {
 
 function messageCompareKey(messageItem = {}) {
   const role = getMessageRole(messageItem);
+  const turnScopeId = getMessageTurnScopeId(messageItem);
   const dialogProcessId = getMessageDialogProcessId(messageItem);
   const content = normalizeMessageContentForCompare(messageItem?.content || "");
   if (role === RoleEnum.USER) {
@@ -236,8 +237,15 @@ function messageCompareKey(messageItem = {}) {
       .join(",");
     return `${role}|${content}|${attachmentKey}`;
   }
-  return `${role}|${dialogProcessId}|${content}`;
+  return `${role}|${turnScopeId}|${dialogProcessId}|${content}`;
 }
+
+function hasTurnIdentityConflict(leftMessage = {}, rightMessage = {}) {
+  const leftTurnScopeId = getMessageTurnScopeId(leftMessage);
+  const rightTurnScopeId = getMessageTurnScopeId(rightMessage);
+  return Boolean(leftTurnScopeId && rightTurnScopeId && leftTurnScopeId !== rightTurnScopeId);
+}
+
 
 function parseMessageTimeMs(value) {
   if (value === null || value === undefined || value === "") return 0;
@@ -287,12 +295,23 @@ function mergeCurrentUserMessagesIntoFoldedMessages({
 
 function findReusableMessageObject(nextMessage = {}, existingMessages = []) {
   const nextRole = getMessageRole(nextMessage);
+  const nextTurnScopeId = getMessageTurnScopeId(nextMessage);
+  if (nextRole === RoleEnum.ASSISTANT && nextTurnScopeId) {
+    const byTurnScopeId = existingMessages.find(
+      (existingMessage) =>
+        getMessageRole(existingMessage) === RoleEnum.ASSISTANT &&
+        getMessageTurnScopeId(existingMessage) === nextTurnScopeId,
+    );
+    if (byTurnScopeId) return byTurnScopeId;
+  }
+
   const nextDialogProcessId = getMessageDialogProcessId(nextMessage);
   if (nextRole === RoleEnum.ASSISTANT && nextDialogProcessId) {
     const byDialogProcessId = existingMessages.find(
       (existingMessage) =>
         getMessageRole(existingMessage) === RoleEnum.ASSISTANT &&
-        getMessageDialogProcessId(existingMessage) === nextDialogProcessId,
+        getMessageDialogProcessId(existingMessage) === nextDialogProcessId &&
+        !hasTurnIdentityConflict(existingMessage, nextMessage),
     );
     if (byDialogProcessId) return byDialogProcessId;
   }
@@ -335,7 +354,7 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   const existingThinkingFinishedAt = String(
     targetMessage?.thinkingFinishedAt || targetMessage?.thinking_finished_at || "",
   ).trim();
-  const existingClientTurnId = getMessageClientTurnId(targetMessage);
+  const existingTurnScopeId = getMessageTurnScopeId(targetMessage);
   const existingPending = targetMessage?.pending === true;
   const existingTransferResult =
     targetMessage?.transferResult &&
@@ -394,8 +413,8 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
     targetMessage.thinkingFinishedAt = existingThinkingFinishedAt;
     targetMessage.thinking_finished_at = existingThinkingFinishedAt;
   }
-  if (existingClientTurnId && !getMessageClientTurnId(sourceMessage)) {
-    targetMessage.clientTurnId = existingClientTurnId;
+  if (existingTurnScopeId && !getMessageTurnScopeId(sourceMessage)) {
+    targetMessage.turnScopeId = existingTurnScopeId;
   }
   const channelState = String(targetMessage?.channelState?.state || "").trim();
   if (existingPending && IN_FLIGHT_CHANNEL_STATES.has(channelState)) {

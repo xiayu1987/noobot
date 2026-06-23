@@ -83,10 +83,14 @@ export function useChatSession({
     const state = String(stateEntry?.state || "").trim();
     if (!state) return;
     const sessionId = String(stateEntry?.sessionId || "").trim();
+    const turnScopeId = String(stateEntry?.turnScopeId || "").trim();
     const dialogProcessId = String(stateEntry?.dialogProcessId || "").trim();
-    const clientTurnId = String(stateEntry?.clientTurnId || "").trim();
-    const stateScope = dialogProcessId || clientTurnId;
-    const stateKey = `${sessionId || "__session__"}::${stateScope || "__session__"}`;
+    const stateIdentity = turnScopeId
+      ? `turnScope:${turnScopeId}`
+      : dialogProcessId
+        ? `dialogProcess:${dialogProcessId}`
+        : "";
+    const stateKey = `${sessionId || "__session__"}::${stateIdentity || "__session__"}`;
     const createdAtMs = Number(stateEntry?.createdAtMs || 0);
     const updatedAtMs = Number(stateEntry?.updatedAtMs || stateEntry?.timestamp || createdAtMs || 0);
     const createdAt = String(
@@ -101,8 +105,8 @@ export function useChatSession({
       sourceEvent: String(stateEntry?.sourceEvent || "").trim(),
       state,
       sessionId,
+      turnScopeId,
       dialogProcessId,
-      clientTurnId,
       seq: Number(stateEntry?.seq || 0),
       applied,
       createdAtMs,
