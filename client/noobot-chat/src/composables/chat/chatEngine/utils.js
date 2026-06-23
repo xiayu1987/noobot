@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { nowIso } from "../../infra/timeFields";
 import { RoleEnum } from "../../../shared/constants/chatConstants";
 import { messages } from "noobot-i18n/client/messages";
 import { foldConversationMessages } from "../../infra/messageModel";
@@ -293,7 +294,7 @@ export function normalizeExecutionLogForRealtime(logItem = {}) {
     type: normalizeTrimmedString(data?.type || logItem?.type || "execution") || "execution",
     category: normalizeTrimmedString(data?.category || logItem?.category || "execution") || "execution",
     dialogProcessId: normalizeTrimmedString(data?.dialogProcessId || logItem?.dialogProcessId),
-    ts: normalizeTrimmedString(data?.ts || logItem?.ts) || new Date().toISOString(),
+    ts: normalizeTrimmedString(data?.ts || logItem?.ts) || nowIso(),
     text,
   };
 }

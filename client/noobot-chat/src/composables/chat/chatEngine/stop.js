@@ -15,6 +15,7 @@ import {
   getMessageRole,
   getMessageTurnScopeId,
 } from "../../infra/messageIdentity";
+import { nowMs } from "../../infra/timeFields";
 
 function markLatestUserMessageStopped(activeSession, pendingAssistantMessage = null) {
   const messages = Array.isArray(activeSession?.value?.messages)
@@ -77,7 +78,7 @@ export function forceStopUiFinalize({
   markLatestUserMessageStopped(activeSession, pendingAssistantMessage);
   const fallbackDialogProcessId = getMessageDialogProcessId(pendingAssistantMessage);
   const fallbackTurnScopeId = getMessageTurnScopeId(pendingAssistantMessage);
-  const finalizedAtMs = Date.now();
+  const finalizedAtMs = nowMs();
   applyConversationState?.(
     {
       state: "stopped",
@@ -112,7 +113,7 @@ function buildStopPayload({ userId, activeSession, pendingAssistantMessage } = {
   const session = activeSession?.value || {};
   const dialogProcessId = getMessageDialogProcessId(pendingAssistantMessage);
   const turnScopeId = getMessageTurnScopeId(pendingAssistantMessage);
-  const createdAtMs = Date.now();
+  const createdAtMs = nowMs();
   const payload = {
     userId: String(userId?.value ?? userId ?? ""),
     sessionId: String(session.backendSessionId || session.sessionId || session.id || ""),

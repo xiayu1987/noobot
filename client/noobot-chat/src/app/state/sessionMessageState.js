@@ -1,4 +1,5 @@
 import { sanitizeExecutionLogText } from "../../composables/chat/chatEngine/utils";
+import { formatLocalTime, nowIso } from "../../composables/infra/timeFields";
 
 const TOOL_LOG_TYPES = new Set(["tool_call", "tool_result"]);
 
@@ -20,7 +21,7 @@ export function classifyRealtimeLog(data = {}) {
     type: type || (isTool ? "tool_call" : "system"),
     text,
     dialogProcessId: String(data.dialogProcessId || ""),
-    ts: String(data.ts || new Date().toISOString()),
+    ts: String(data.ts || nowIso()),
     category: isTool ? "tool" : "system",
     subAgentCall: Boolean(data.subAgentCall),
     subAgentSessionId: String(data.subAgentSessionId || ""),
@@ -40,10 +41,7 @@ export function formatFileSize(size = 0) {
 }
 
 export function formatTime(ts) {
-  return new Date(ts).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatLocalTime(ts);
 }
 
 export function hasActiveSessionForReconnect({ activeSession = {}, activeSessionId = "" } = {}) {

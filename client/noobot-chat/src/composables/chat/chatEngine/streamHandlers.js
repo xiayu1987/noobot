@@ -16,6 +16,7 @@ import {
   getMessageTurnScopeId,
   normalizeTurnMeta,
 } from "../../infra/messageIdentity";
+import { nowMs } from "../../infra/timeFields";
 import { promoteSessionIdentityToBackendId } from "../../infra/sessionIdentity";
 import { applyDoneMessagesPatch } from "./messagePatch";
 import {
@@ -208,7 +209,7 @@ export function handleDoneStreamEvent({
       sessionId: data?.sessionId || botMessage.sessionId || botMessage.session_id,
       turnScopeId: getMessageTurnScopeId(botMessage),
       dialogProcessId: getMessageDialogProcessId(botMessage),
-      finishedAtMs: Date.now(),
+      finishedAtMs: nowMs(),
     });
   }
   notifySendingStartedWhenDialogReady({ botMessage, locateSendingStartedMessageOnce });
@@ -279,7 +280,7 @@ export function handleDoneStreamEvent({
         dialogProcessId: String(getMessageDialogProcessId(botMessage) || data?.dialogProcessId || ""),
         turnScopeId: String(getMessageTurnScopeId(botMessage) || turnMeta.turnScopeId || ""),
         sourceEvent: "done",
-        updatedAtMs: Date.now(),
+        updatedAtMs: nowMs(),
       },
       { botMessage },
     );

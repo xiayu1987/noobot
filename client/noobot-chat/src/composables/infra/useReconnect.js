@@ -5,6 +5,7 @@
  */
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { frontendConfig } from "../../shared/config/frontendConfig";
+import { nowMs } from "./timeFields";
 
 export function useReconnect({
   connected,
@@ -19,7 +20,7 @@ export function useReconnect({
     if (!connected?.value) return;
     if (!hasActiveSession?.()) return;
     if (reconnectPromise.value) return;
-    const now = Date.now();
+    const now = nowMs();
     if (!force && now - lastReconnectAttemptAt.value < cooldownMs) return;
     lastReconnectAttemptAt.value = now;
     reconnectPromise.value = handleReconnect?.();

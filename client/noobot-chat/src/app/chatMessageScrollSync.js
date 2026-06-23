@@ -1,3 +1,4 @@
+import { nowMs } from "../composables/infra/timeFields";
 const CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_KEY = "__noobotChatNavPendingAnchor";
 export const CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_MS = 1400;
 
@@ -10,14 +11,14 @@ export function lockChatMessageScrollSyncToAnchor(wrapRef, anchor = "") {
   if (!wrapRef || !normalizedAnchor) return;
   wrapRef[CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_KEY] = {
     anchor: normalizedAnchor,
-    expiresAt: Date.now() + CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_MS,
+    expiresAt: nowMs() + CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_MS,
   };
 }
 
 function shouldKeepNavigatorScrollLock(wrapRef, nextAnchorId = "") {
   const lock = wrapRef?.[CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_KEY];
   if (!lock) return false;
-  if (Date.now() > Number(lock.expiresAt || 0)) {
+  if (nowMs() > Number(lock.expiresAt || 0)) {
     delete wrapRef[CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_KEY];
     return false;
   }

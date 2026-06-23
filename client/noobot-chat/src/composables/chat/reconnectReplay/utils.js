@@ -5,6 +5,7 @@
  */
 import { RoleEnum } from "../../../shared/constants/chatConstants";
 import { getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity";
+import { nowIso } from "../../infra/timeFields";
 
 export function _trimStr(x) {
   return String(x || "").trim();
@@ -34,7 +35,7 @@ export function normalizeExecutionLogForRealtime(logItem = {}) {
     dialogProcessId: String(
       data?.dialogProcessId || logItem?.dialogProcessId || "",
     ).trim(),
-    ts: _trimStr(data?.ts || logItem?.ts) || new Date().toISOString(),
+    ts: _trimStr(data?.ts || logItem?.ts) || nowIso(),
     text,
   };
 }

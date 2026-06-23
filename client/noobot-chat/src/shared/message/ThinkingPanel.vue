@@ -16,6 +16,14 @@ import {
 import { sanitizeExecutionLogForDisplay } from "../../composables/chat/chatEngine/utils";
 import { resolveThinkingTiming } from "../../composables/chat/thinkingTimingRegistry";
 import {
+  getMessageTimestamp,
+  getThinkingFinishedAt,
+  getThinkingStartedAt,
+  nowMs,
+  parseTimeMs,
+  resolveTimeMs,
+} from "../../composables/infra/timeFields";
+import {
   BaseEmptyHint,
   BaseMetaLabel,
   BaseNoteBlock,
@@ -39,7 +47,7 @@ const hasThinking = computed(
   () => hasThinkingLogs(props.messageItem) || injectedMessages.value.length > 0,
 );
 const { translate } = useLocale();
-const nowTick = ref(Date.now());
+const nowTick = ref(nowMs());
 const detailExpansionTick = ref(0);
 let timer = null;
 const EXECUTION_LOG_DISPLAY_LIMIT = 10;
@@ -393,26 +401,10 @@ function getThinkingTreePrefix(toolLogItem = {}) {
   return `${"│  ".repeat(Math.max(0, depth - 2))}└─`;
 }
 
-function parseTimeMs(value) {
-  if (value === null || value === undefined || value === "") return 0;
-  if (typeof value === "number") {
-    return value > 1e11 ? value : value * 1000;
-  }
-  const asNumber = Number(value);
-  if (Number.isFinite(asNumber) && asNumber > 0) {
-    return asNumber > 1e11 ? asNumber : asNumber * 1000;
-  }
-  const parsed = new Date(value).getTime();
-  return Number.isFinite(parsed) ? parsed : 0;
+function parseAnyTimeMs(...values) {
+  return resolveTimeMs(...values);
 }
 
-function parseAnyTimeMs(...values) {
-  for (const value of values) {
-    const parsed = parseTimeMs(value);
-    if (parsed > 0) return parsed;
-  }
-  return 0;
-}
 
 function formatDuration(ms = 0) {
   const total = Math.max(0, Math.floor(Number(ms || 0) / 1000));
@@ -444,14 +436,7 @@ function getThinkingDurationMs(messageItem = {}) {
     !Array.isArray(messageItem.channelState)
       ? messageItem.channelState
       : {};
-  const msgTs = parseAnyTimeMs(
-    messageItem?.ts,
-    messageItem?.timestamp,
-    messageItem?.createdAt,
-    messageItem?.created_at,
-    messageItem?.updatedAt,
-    messageItem?.updated_at,
-  );
+  const msgTs = parseAnyTimeMs(getMessageTimestamp(messageItem));
   const channelStartedAt = parseAnyTimeMs(
     channelState?.createdAt,
     channelState?.createdAtMs,
@@ -461,14 +446,8 @@ function getThinkingDurationMs(messageItem = {}) {
     channelState?.updatedAtMs,
     channelState?.timestamp,
   );
-  const startedAt = parseAnyTimeMs(
-    messageItem?.thinkingStartedAt,
-    messageItem?.thinking_started_at,
-  );
-  const finishedAt = parseAnyTimeMs(
-    messageItem?.thinkingFinishedAt,
-    messageItem?.thinking_finished_at,
-  );
+  const startedAt = parseAnyTimeMs(getThinkingStartedAt(messageItem));
+  const finishedAt = parseAnyTimeMs(getThinkingFinishedAt(messageItem));
   const persistedTiming = resolveThinkingTiming({
     sessionId: messageItem?.sessionId || messageItem?.session_id || channelState?.sessionId,
     dialogProcessId: getMessageDialogProcessId(messageItem) || channelState?.dialogProcessId,
@@ -480,14 +459,7 @@ function getThinkingDurationMs(messageItem = {}) {
   const completedToolLogs = getCompletedToolLogsForMessage(messageItem);
   const logTimes = [...realtimeLogs, ...completedToolLogs]
     .map((logItem) =>
-      parseAnyTimeMs(
-        logItem?.ts,
-        logItem?.timestamp,
-        logItem?.createdAt,
-        logItem?.created_at,
-        logItem?.updatedAt,
-        logItem?.updated_at,
-      ),
+      parseAnyTimeMs(getMessageTimestamp(logItem)),
     )
     .filter((timeValue) => timeValue > 0);
   const startCandidates = [
@@ -519,7 +491,7 @@ function getThinkingDurationLabel(messageItem = {}) {
 function startTimer() {
   if (timer) return;
   timer = setInterval(() => {
-    nowTick.value = Date.now();
+    nowTick.value = nowMs();
   }, 1000);
 }
 

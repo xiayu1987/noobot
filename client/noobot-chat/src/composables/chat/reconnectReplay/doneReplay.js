@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { promoteSessionIdentityToBackendId } from "../../infra/sessionIdentity";
+import { nowIso } from "../../infra/timeFields";
 import { findReconnectDoneEnvelopeWithMessages } from "../../infra/reconnectReplayModel";
 import { sanitizeExecutionLogForDisplay } from "../chatEngine/utils";
 import { _trimStr } from "./utils";
@@ -62,7 +63,7 @@ export function applyDoneMessagesFromReconnect({
     activeSession.value.messages,
     activeSession.value.title || returnedSessionId.slice(0, 8),
   );
-  activeSession.value.updatedAt = new Date().toISOString();
+  activeSession.value.updatedAt = nowIso();
   return true;
 }
 

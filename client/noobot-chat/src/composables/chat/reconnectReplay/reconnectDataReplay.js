@@ -9,6 +9,7 @@ import {
   resolveDialogProcessIdFromReplay,
   splitReconnectMessagesByDialogProcessId,
 } from "../../infra/reconnectReplayModel";
+import { nowMs } from "../../infra/timeFields";
 import {
   isInFlightConversationState,
   isTerminalConversationState,
@@ -146,7 +147,7 @@ export async function applyReconnectDataReplay({
         );
         if (!messages.length) continue;
         if (!isCurrentActiveSession(sessionId)) {
-          const replayKey = dpId || `__unknown_${Date.now()}_${Math.random()}`;
+          const replayKey = dpId || `__unknown_${nowMs()}_${Math.random()}`;
           if (!replayCache[sessionId]) replayCache[sessionId] = {};
           replayCache[sessionId][replayKey] = messages;
         } else {

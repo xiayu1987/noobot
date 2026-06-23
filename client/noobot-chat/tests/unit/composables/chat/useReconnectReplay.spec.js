@@ -228,7 +228,7 @@ describe("useReconnectReplay", () => {
       createdAtMs: Date.parse(startedAt),
     });
     expect(assistant.thinkingStartedAt).toBe(startedAt);
-    expect(assistant.thinking_started_at).toBe(startedAt);
+    expect(assistant.thinking_started_at).toBeUndefined();
   });
 
   it("applies live reconnect thinking without sessionId to active process items", async () => {

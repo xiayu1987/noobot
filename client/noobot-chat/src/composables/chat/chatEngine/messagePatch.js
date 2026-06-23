@@ -11,6 +11,7 @@ import {
   pickAssistantMessagesForCurrentTurn,
 } from "./utils";
 import { getMessageDialogProcessId } from "../../infra/messageIdentity";
+import { nowIso } from "../../infra/timeFields";
 
 export function applyDoneMessagesPatch({
   data = {},
@@ -88,7 +89,7 @@ export function applyDoneMessagesPatch({
     if (appendedCount > 0) {
       activeSession.value.messageCount = sessionMessages.length;
       activeSession.value.lastMessage = sessionMessages[sessionMessages.length - 1] || null;
-      activeSession.value.updatedAt = new Date().toISOString();
+      activeSession.value.updatedAt = nowIso();
     }
   }
 

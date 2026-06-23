@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { nowIso } from "../../composables/infra/timeFields";
 
 export const PROCESS_EVENT_VERSION = 1;
 
@@ -62,7 +63,7 @@ export function resolveProcessId(input = {}) {
 }
 
 export function resolveProcessTimestamp(input = {}) {
-  return normalizeProcessString(input.timestamp || input.ts || input.createdAt || input.updatedAt) || new Date().toISOString();
+  return normalizeProcessString(input.timestamp || input.ts || input.createdAt || input.updatedAt) || nowIso();
 }
 
 export function resolveExplicitProcessTimestamp(input = {}) {

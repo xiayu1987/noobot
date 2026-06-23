@@ -11,6 +11,7 @@ import {
   getMessageTurnId,
   getMessageTurnScopeId,
 } from "../../infra/messageIdentity";
+import { nowIso } from "../../infra/timeFields";
 
 function isUserMessage(message = {}) {
   return getMessageRole(message).toLowerCase() === "user";
@@ -173,5 +174,5 @@ export function syncSessionMessageSummary(session) {
   const messages = Array.isArray(session.messages) ? session.messages : [];
   session.messageCount = messages.length;
   session.lastMessage = messages.length ? messages[messages.length - 1] : null;
-  session.updatedAt = new Date().toISOString();
+  session.updatedAt = nowIso();
 }

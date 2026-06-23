@@ -9,6 +9,7 @@ import {
   getMessageTurnScopeId,
   normalizeTurnMeta,
 } from "../infra/messageIdentity";
+import { nowMs, toIsoTime } from "../infra/timeFields";
 
 const STOP_REQUEST_STORAGE_KEY = "noobot:session-run-state-machine:stop-requests:v1";
 const STOP_REQUEST_TTL_MS = 5 * 60 * 1000;
@@ -146,10 +147,6 @@ export const SESSION_RUN_TRANSITION_TABLE = Object.freeze({
 
 function trim(value = "") {
   return String(value || "").trim();
-}
-
-function nowMs() {
-  return Date.now();
 }
 
 function normalizeState(state = "") {
@@ -521,15 +518,15 @@ export function transitionSessionRunState(currentState = createInitialSessionRun
     createdAtIso:
       event.createdAt ||
       (event.createdAtMs > 0
-        ? new Date(event.createdAtMs).toISOString()
+        ? toIsoTime(event.createdAtMs)
         : startsNewTurn
-          ? new Date(event.timestamp).toISOString()
+          ? toIsoTime(event.timestamp)
           : trim(current.createdAtIso)),
     updatedAtIso:
       event.updatedAt ||
       (event.updatedAtMs > 0
-        ? new Date(event.updatedAtMs).toISOString()
-        : new Date(event.timestamp).toISOString()),
+        ? toIsoTime(event.updatedAtMs)
+        : toIsoTime(event.timestamp)),
     updatedAt: event.timestamp,
     stopRequestedAt:
       event.state === SESSION_RUN_STATE.STOP_REQUESTED

@@ -5,6 +5,7 @@
  */
 import { CONNECTOR_TYPES } from "../constants/chatConstants";
 import { messages } from "noobot-i18n/client/messages";
+import { getConnectorTimestamp, nowIso, parseTimeMs } from "../../composables/infra/timeFields";
 
 export function normalizeSelectedConnectors(selectedConnectors = {}) {
   const source =
@@ -36,7 +37,7 @@ export function createConnectorPanelState(overrides = {}) {
         : [],
     },
     selectedConnectors: normalizedSelectedConnectors,
-    updatedAt: new Date().toISOString(),
+    updatedAt: nowIso(),
   };
 }
 
@@ -95,18 +96,7 @@ export function resolveSelectedConnectorsWithDefaults({
 function pickDefaultConnectorName(groupItems = []) {
   const sourceItems = Array.isArray(groupItems) ? groupItems : [];
   if (!sourceItems.length) return "";
-  const parseTime = (connectorItem = {}) => {
-    const checkedTime = new Date(
-      String(
-        connectorItem?.checkedAt ||
-          connectorItem?.checked_at ||
-          connectorItem?.connectedAt ||
-          connectorItem?.connected_at ||
-          0,
-      ),
-    ).getTime();
-    return Number.isFinite(checkedTime) ? checkedTime : 0;
-  };
+  const parseTime = (connectorItem = {}) => parseTimeMs(getConnectorTimestamp(connectorItem));
   const connectedItems = sourceItems.filter(
     (connectorItem) =>
       String(connectorItem?.status || "").trim().toLowerCase() === "connected",

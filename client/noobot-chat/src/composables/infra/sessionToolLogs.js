@@ -9,6 +9,7 @@ import {
   getMessageRole,
   getMessageTurnScopeId,
 } from "./messageIdentity";
+import { getMessageTimestamp, nowIso, parseTimeMs } from "./timeFields";
 
 function logKey(item = {}) {
   return `${item.sessionId || ""}|${item.turnScopeId || ""}|${item.toolCallId || ""}|${item.type || ""}|${item.event || ""}|${item.text || ""}|${item.ts || ""}`;
@@ -81,8 +82,8 @@ function buildSessionTreeOrder(sessionDocuments = []) {
     return [...(sessionIds || [])].sort((leftSessionId, rightSessionId) => {
       const leftSessionDocument = sessionById.get(leftSessionId) || {};
       const rightSessionDocument = sessionById.get(rightSessionId) || {};
-      const leftCreatedAt = new Date(leftSessionDocument?.createdAt || 0).getTime();
-      const rightCreatedAt = new Date(rightSessionDocument?.createdAt || 0).getTime();
+      const leftCreatedAt = parseTimeMs(leftSessionDocument?.createdAt);
+      const rightCreatedAt = parseTimeMs(rightSessionDocument?.createdAt);
       if (leftCreatedAt !== rightCreatedAt) return leftCreatedAt - rightCreatedAt;
       return String(leftSessionId || "").localeCompare(String(rightSessionId || ""));
     });
@@ -150,8 +151,8 @@ function sortLogsBySessionTree(logs = [], sessionOrderById = new Map()) {
       return normalizedLeftSessionOrder - normalizedRightSessionOrder;
     }
 
-    const leftTime = new Date(leftLog?.ts || 0).getTime();
-    const rightTime = new Date(rightLog?.ts || 0).getTime();
+    const leftTime = parseTimeMs(leftLog?.ts);
+    const rightTime = parseTimeMs(rightLog?.ts);
     if (leftTime !== rightTime) return leftTime - rightTime;
 
     const leftType = String(leftLog?.type || "").trim();
@@ -212,7 +213,7 @@ function buildToolLogsFromSessions(sessionDocuments = []) {
     for (const messageItem of messageList) {
       const messageRole = getMessageRole(messageItem);
       const messageType = String(messageItem?.type || "");
-      const messageTime = String(messageItem?.ts || new Date().toISOString());
+      const messageTime = String(getMessageTimestamp(messageItem) || nowIso());
       const dialogProcessId = getMessageDialogProcessId(messageItem);
       const parentDialogProcessId = getMessageParentDialogProcessId(messageItem);
       const turnScopeId = getMessageTurnScopeId(messageItem);
@@ -269,8 +270,8 @@ function buildToolLogsFromSessions(sessionDocuments = []) {
   }
   collectedLogs.sort(
     (leftLog, rightLog) =>
-      new Date(leftLog.ts || 0).getTime() -
-      new Date(rightLog.ts || 0).getTime(),
+      parseTimeMs(leftLog.ts) -
+      parseTimeMs(rightLog.ts),
   );
   return collectedLogs;
 }

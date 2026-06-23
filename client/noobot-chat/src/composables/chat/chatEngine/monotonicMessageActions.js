@@ -12,6 +12,7 @@ import {
   getMessageDialogProcessId,
   getMessageRole,
 } from "../../infra/messageIdentity";
+import { nowMs } from "../../infra/timeFields";
 
 const delay = (ms) => new Promise((resolve) => {
   setTimeout(resolve, ms);
@@ -70,11 +71,11 @@ export function createMonotonicMessageActions({
     pollIntervalMs = monotonicActionStopPollIntervalMs,
   } = {}) {
     if (!sending?.value) return true;
-    const startedAt = Date.now();
+    const startedAt = nowMs();
     const normalizedTimeoutMs = Math.max(0, Number(timeoutMs) || 0);
     const normalizedPollIntervalMs = Math.max(1, Number(pollIntervalMs) || 1);
     while (sending.value) {
-      if (Date.now() - startedAt >= normalizedTimeoutMs) {
+      if (nowMs() - startedAt >= normalizedTimeoutMs) {
         return false;
       }
       await delay(normalizedPollIntervalMs);
