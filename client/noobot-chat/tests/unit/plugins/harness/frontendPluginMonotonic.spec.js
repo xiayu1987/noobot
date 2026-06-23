@@ -129,7 +129,7 @@ describe("harness frontend monotonic message action registration", () => {
     }).visible).toBe(false);
   });
 
-  it("keeps actions on the same-round user in multi-turn sessions", () => {
+  it("keeps actions only on the latest same-round user in multi-turn sessions", () => {
     const action = getMonotonicAction();
     const firstUser = {
       id: "u-1",
@@ -158,7 +158,7 @@ describe("harness frontend monotonic message action registration", () => {
     const allMessages = [firstUser, firstAssistant, targetUser, targetAssistant];
     const deleteMonotonicMessage = vi.fn();
 
-    expect(action.resolveProps({ messageItem: firstUser, allMessages, deleteMonotonicMessage }).visible).toBe(true);
+    expect(action.resolveProps({ messageItem: firstUser, allMessages, deleteMonotonicMessage }).visible).toBe(false);
     expect(action.resolveProps({ messageItem: targetUser, allMessages, deleteMonotonicMessage }).visible).toBe(true);
     expect(action.resolveProps({ messageItem: firstAssistant, allMessages, deleteMonotonicMessage }).visible).toBe(false);
     expect(action.resolveProps({ messageItem: targetAssistant, allMessages, deleteMonotonicMessage }).visible).toBe(false);

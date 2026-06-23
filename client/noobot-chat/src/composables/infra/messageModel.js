@@ -20,6 +20,7 @@ import {
   getMessageRole,
   getMessageStableId,
   getMessageTurnId,
+  getMessageTurnScopeId,
 } from "./messageIdentity";
 
 function normalizeArray(value) {
@@ -134,6 +135,7 @@ function createMessageModel(messageItem = {}) {
   const workflowMeta = normalizeWorkflowMeta(messageItem);
   const messageId = getMessageStableId(messageItem);
   const turnId = getMessageTurnId(messageItem);
+  const turnScopeId = getMessageTurnScopeId(messageItem);
   const sessionId = String(messageItem?.sessionId || messageItem?.session_id || "").trim();
   const thinkingStartedAt =
     messageItem?.thinkingStartedAt || messageItem?.thinking_started_at || "";
@@ -153,6 +155,7 @@ function createMessageModel(messageItem = {}) {
     message_id: messageId,
     turnId,
     turn_id: turnId,
+    turnScopeId,
     sessionId,
     session_id: sessionId,
     role: getMessageRole(messageItem) || "assistant",

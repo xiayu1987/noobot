@@ -1323,6 +1323,7 @@ describe("useChatEngine", () => {
       parentSessionId: "",
       anchor: { turnId: "turn-old" },
       newContent: "edited question",
+      turnScopeId: expect.stringMatching(/^client-turn:/),
       expectedVersion: 3,
       idempotencyKey: expect.any(String),
     }), expect.any(Object));
@@ -1334,6 +1335,7 @@ describe("useChatEngine", () => {
     expect(stream).toHaveBeenCalledTimes(1);
     expect(stream.mock.calls[0][0].message).toBe("edited question");
     expect(stream.mock.calls[0][0].sessionId).toBe("local-resend-replace-success");
+    expect(stream.mock.calls[0][0].turnScopeId).toEqual(expect.stringMatching(/^client-turn:/));
     expect(stream.mock.calls[0][0].config).toEqual(expect.objectContaining({
       reuseExistingUserTurn: true,
       existingUserTurnId: "turn-new",
@@ -1352,6 +1354,72 @@ describe("useChatEngine", () => {
     expect(activeSession.value.messages.map((message) => message.content)).toEqual(["edited question", ""]);
     expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
     expect(input.value).toBe("");
+  });
+
+  it("resendMonotonicMessage keeps previous duplicate-content turn when resending latest scoped user", async () => {
+    let observedMessagesAtStream = null;
+    const stream = vi.fn(async () => {
+      observedMessagesAtStream = [...activeSession.value.messages];
+    });
+    const deleteSessionMessagesFromApi = vi.fn();
+    const previousUser = {
+      id: "u-old",
+      role: RoleEnum.USER,
+      content: "same question",
+      turnScopeId: "client-turn:old",
+    };
+    const previousAssistant = {
+      id: "a-old",
+      role: RoleEnum.ASSISTANT,
+      content: "old answer",
+      turnScopeId: "client-turn:old",
+    };
+    const replacementUser = {
+      id: "u-new",
+      role: RoleEnum.USER,
+      content: "same question",
+      turnScopeId: "client-turn:new",
+    };
+    const replaceSessionTurnApi = vi.fn(async () => ({
+      ok: true,
+      newTurn: replacementUser,
+      session: makeSession("local-resend-duplicate-scoped-latest", {
+        messages: [previousUser, previousAssistant, replacementUser],
+        rawMessages: [previousUser, previousAssistant, replacementUser],
+        version: 4,
+      }),
+    }));
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value.messages = [...(mainSession.messages || [])];
+      activeSession.value.rawMessages = [...(mainSession.rawMessages || mainSession.messages || [])];
+    });
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-resend-duplicate-scoped-latest",
+      stream,
+      deps: { replaceSessionTurnApi, deleteSessionMessagesFromApi, applySessionDetail },
+    });
+    const latestUser = {
+      id: "u-latest",
+      role: RoleEnum.USER,
+      content: "same question",
+      turnScopeId: "client-turn:latest",
+    };
+    activeSession.value.messages = [previousUser, previousAssistant, latestUser];
+    activeSession.value.rawMessages = [previousUser, previousAssistant, latestUser];
+    activeSession.value.version = 3;
+
+    await expect(engine.resendMonotonicMessage(latestUser, "same question")).resolves.toBe(true);
+
+    expect(replaceSessionTurnApi).toHaveBeenCalledWith(expect.objectContaining({
+      anchor: { turnScopeId: "client-turn:latest" },
+    }), expect.any(Object));
+    expect(observedMessagesAtStream.map((message) => message.id)).toEqual([
+      "u-old",
+      "a-old",
+      "u-new",
+      undefined,
+    ]);
   });
 
   it("resendMonotonicMessage does not generate again when replace-turn returns completed assistant snapshot", async () => {

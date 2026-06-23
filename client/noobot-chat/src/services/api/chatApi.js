@@ -192,6 +192,7 @@ export async function replaceSessionTurnApi(
     parentSessionId = "",
     anchor = {},
     newContent = "",
+    turnScopeId = "",
     expectedVersion = undefined,
     idempotencyKey = "",
   },
@@ -202,6 +203,7 @@ export async function replaceSessionTurnApi(
     parentSessionId: String(parentSessionId || "").trim(),
     anchor: anchor && typeof anchor === "object" && !Array.isArray(anchor) ? anchor : {},
     newContent: String(newContent || "").trim(),
+    turnScopeId: String(turnScopeId || "").trim(),
     idempotencyKey: String(idempotencyKey || "").trim(),
   };
   if (expectedVersion !== undefined && expectedVersion !== null && expectedVersion !== "") {

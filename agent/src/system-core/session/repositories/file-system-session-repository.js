@@ -10,6 +10,15 @@ import { fsMkdir, fsReaddir, fsRm } from "../../store/fs-adapter.js";
 import { normalizeSessionEntity } from "../entities/session-entity.js";
 
 const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 2;
+const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
+
+function compactMessageSummary(summary = {}) {
+  return Object.fromEntries(
+    Object.entries(summary).filter(
+      ([key, value]) => REQUIRED_MESSAGE_SUMMARY_KEYS.has(key) || value !== "",
+    ),
+  );
+}
 
 function buildSessionSummary(session = {}, { depth = 0 } = {}) {
   const sessionId = String(session?.sessionId || "").trim();
@@ -71,7 +80,7 @@ function buildMessageSummary(message = {}) {
   ]) {
     if (message?.[key] !== undefined) summary[key] = message[key];
   }
-  return Object.fromEntries(Object.entries(summary).filter(([, value]) => value !== ""));
+  return compactMessageSummary(summary);
 }
 
 function truncateText(value = "", maxLength = 4000) {
@@ -311,7 +320,7 @@ function buildDisplayMessageSummary(message = {}) {
       name: String(toolCall?.function?.name || toolCall?.name || "").trim(),
     })).filter((item) => item.id || item.name);
   }
-  return Object.fromEntries(Object.entries(summary).filter(([, value]) => value !== ""));
+  return compactMessageSummary(summary);
 }
 
 function buildToolLogSummaries(session = {}, { depth = 0 } = {}) {
@@ -326,6 +335,7 @@ function buildToolLogSummaries(session = {}, { depth = 0 } = {}) {
     const ts = String(message?.ts || "").trim();
     const dialogProcessId = String(message?.dialogProcessId || "").trim();
     const parentDialogProcessId = String(message?.parentDialogProcessId || "").trim();
+    const turnScopeId = String(message?.turnScopeId || "").trim();
     if (type === "tool_call" || (role === "assistant" && Array.isArray(message?.tool_calls))) {
       for (const toolCall of Array.isArray(message?.tool_calls) ? message.tool_calls : []) {
         const toolCallId = String(toolCall?.id || "").trim();
@@ -346,7 +356,7 @@ function buildToolLogSummaries(session = {}, { depth = 0 } = {}) {
         role: "tool",
         toolName,
         text: writtenFile ? `${writtenFile.toolName} ${writtenFile.fileName}` : truncateText(`${toolName}`.trim(), 200),
-        ts, sessionId, depth, toolCallId, dialogProcessId, parentDialogProcessId,
+        ts, sessionId, depth, toolCallId, dialogProcessId, parentDialogProcessId, turnScopeId,
       };
       if (attachmentMetas.length) summary.attachmentMetas = attachmentMetas;
       if (writtenFile) {
@@ -360,7 +370,7 @@ function buildToolLogSummaries(session = {}, { depth = 0 } = {}) {
 
 function collectMessageCorrelationKeys(message = {}) {
   const keys = [];
-  for (const key of ["dialogProcessId", "parentDialogProcessId"]) {
+  for (const key of ["turnScopeId", "dialogProcessId", "parentDialogProcessId"]) {
     const value = String(message?.[key] || "").trim();
     if (value && !keys.includes(value)) keys.push(value);
   }

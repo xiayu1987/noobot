@@ -151,6 +151,12 @@ function hasCompletedAssistantAfterReplacementUser({ session, replacementUserMes
   });
 }
 
+function createTurnScopeId() {
+  const randomUuid = globalThis?.crypto?.randomUUID?.();
+  if (randomUuid) return `client-turn:${randomUuid}`;
+  return `client-turn:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
+}
+
 /**
  * Frontend resend transaction for replace-turn first, delete + send fallback.
  *
@@ -219,6 +225,7 @@ export function createResendMessageTransaction({
       ? originalSession.messages.slice(originalCascadeStartIndex)
       : [];
     const sessionId = resolveSessionId(activeSession, activeSessionId);
+    const resendTurnScopeId = normalizeTrimmedString(options?.turnScopeId) || createTurnScopeId();
 
     if (typeof replaceSessionTurnApi === "function") {
       const operation = messageOperationStore?.registerOperation(operationSeed({
@@ -234,6 +241,7 @@ export function createResendMessageTransaction({
           parentSessionId: normalizeTrimmedString(originalSession?.parentSessionId),
           anchor: buildMonotonicMessageAnchor?.(userTargetMessage) || {},
           newContent: text,
+          turnScopeId: resendTurnScopeId,
           expectedVersion: originalSession?.version ?? originalSession?.revision,
           idempotencyKey: operation?.opId || "",
         }, { fetcher: authFetch });
@@ -278,7 +286,7 @@ export function createResendMessageTransaction({
             existingUserMessage: replacementUserMessage,
             messageText: text,
             reuseExistingUserTurn: true,
-            turnScopeId: getMessageTurnScopeId(replacementUserMessage || payload?.newTurn || {}),
+            turnScopeId: resendTurnScopeId || getMessageTurnScopeId(replacementUserMessage || payload?.newTurn || {}),
             existingUserTurnId: getMessageTurnId(replacementUserMessage || payload?.newTurn || {}),
             existingUserMessageId: getMessageStableId(replacementUserMessage || payload?.newTurn || {}),
           });
@@ -324,7 +332,7 @@ export function createResendMessageTransaction({
     }
 
     input.value = text;
-    const sent = await send?.();
+    const sent = await send?.({ turnScopeId: resendTurnScopeId });
     if (!sent) {
       if (operation) messageOperationStore?.completeOperation(operation.opId);
       restoreSessionSnapshot(activeSession?.value, snapshot);

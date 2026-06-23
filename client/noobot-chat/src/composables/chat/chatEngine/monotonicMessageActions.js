@@ -7,11 +7,10 @@ import { normalizeTrimmedString } from "./utils";
 import { createResendMessageTransaction } from "./resendTransaction";
 import { syncSessionMessageSummary } from "./resendReconciler";
 import {
+  buildMessageAnchor,
+  findMessageIdentityIndex,
   getMessageDialogProcessId,
   getMessageRole,
-  getMessageStableId,
-  getMessageTurnId,
-  getMessageTurnScopeId,
 } from "../../infra/messageIdentity";
 
 const delay = (ms) => new Promise((resolve) => {
@@ -20,58 +19,6 @@ const delay = (ms) => new Promise((resolve) => {
 
 function isUserMessage(message = {}) {
   return getMessageRole(message).toLowerCase() === "user";
-}
-
-function findMessageIndex(targetMessage = {}, messages = []) {
-  const targetTurnScopeId = getMessageTurnScopeId(targetMessage);
-  const targetTurnId = getMessageTurnId(targetMessage);
-  const targetId = getMessageStableId(targetMessage);
-  const targetTs = targetMessage?.ts;
-  const targetDialogProcessId = getMessageDialogProcessId(targetMessage);
-  const targetRole = getMessageRole(targetMessage).toLowerCase();
-  const targetContent = normalizeTrimmedString(targetMessage?.content);
-  return messages.findIndex((message) => {
-    if (message === targetMessage) return true;
-    if (
-      targetTurnScopeId &&
-      getMessageTurnScopeId(message) === targetTurnScopeId
-    ) return true;
-    if (
-      targetTurnId &&
-      getMessageTurnId(message) === targetTurnId
-    ) return true;
-    if (
-      targetId &&
-      getMessageStableId(message) === targetId
-    ) return true;
-    if (targetTs !== undefined && message?.ts === targetTs) return true;
-    if (
-      targetDialogProcessId &&
-      getMessageDialogProcessId(message) === targetDialogProcessId &&
-      (!targetRole || getMessageRole(message).toLowerCase() === targetRole)
-    ) return true;
-    return Boolean(
-      targetRole &&
-      targetContent &&
-      getMessageRole(message).toLowerCase() === targetRole &&
-      normalizeTrimmedString(message?.content) === targetContent,
-    );
-  });
-}
-
-function buildMonotonicMessageAnchor(targetMessage = {}) {
-  const turnScopeId = getMessageTurnScopeId(targetMessage);
-  if (turnScopeId) return { turnScopeId };
-  const turnId = getMessageTurnId(targetMessage);
-  if (turnId) return { turnId };
-  const messageId = getMessageStableId(targetMessage);
-  if (messageId) return { messageId };
-  const dialogProcessId = getMessageDialogProcessId(targetMessage);
-  if (dialogProcessId) return { dialogProcessId };
-  if (targetMessage?.ts !== undefined && targetMessage?.ts !== null) {
-    return { ts: targetMessage.ts };
-  }
-  return {};
 }
 
 function normalizeSessionDetailSnapshot(payload = {}, fallbackSessionId = "") {
@@ -154,7 +101,7 @@ export function createMonotonicMessageActions({
     if (!targetMessage || typeof targetMessage !== "object") return null;
     if (isUserMessage(targetMessage)) return targetMessage;
 
-    const directIndex = findMessageIndex(targetMessage, messages);
+    const directIndex = findMessageIdentityIndex(targetMessage, messages);
     if (directIndex >= 0 && isUserMessage(messages[directIndex])) {
       return messages[directIndex];
     }
@@ -182,7 +129,7 @@ export function createMonotonicMessageActions({
       ? activeSession.value.messages
       : [];
     if (!isUserMessage(targetMessage)) return -1;
-    return findMessageIndex(targetMessage, messages);
+    return findMessageIdentityIndex(targetMessage, messages);
   }
 
   function cascadeDeleteMessagesFrom(targetMessage = {}) {
@@ -196,7 +143,7 @@ export function createMonotonicMessageActions({
     const removedMessages = messages.slice(startIndex);
     session.messages = messages.slice(0, startIndex);
     if (Array.isArray(session.rawMessages)) {
-      const rawStartIndex = findMessageIndex(userTargetMessage, session.rawMessages);
+      const rawStartIndex = findMessageIdentityIndex(userTargetMessage, session.rawMessages);
       if (rawStartIndex >= 0) {
         session.rawMessages = session.rawMessages.slice(0, rawStartIndex);
       } else {
@@ -224,7 +171,7 @@ export function createMonotonicMessageActions({
         userId: userId?.value || userId,
         sessionId,
         parentSessionId: normalizeTrimmedString(activeSession.value?.parentSessionId),
-        anchor: buildMonotonicMessageAnchor(userTargetMessage),
+        anchor: buildMessageAnchor(userTargetMessage),
         expectedVersion: activeSession.value?.version ?? activeSession.value?.revision,
       }, { fetcher: authFetch });
       const payload = typeof result?.json === "function" ? await result.json() : result;
@@ -243,7 +190,7 @@ export function createMonotonicMessageActions({
     activeSessionId,
     applySessionDetail,
     authFetch,
-    buildMonotonicMessageAnchor,
+    buildMonotonicMessageAnchor: buildMessageAnchor,
     clearPendingInteraction,
     deleteMonotonicMessage,
     findMessageCascadeStartIndex,

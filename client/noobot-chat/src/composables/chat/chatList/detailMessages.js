@@ -11,6 +11,8 @@ import {
   resolveRootDialogProcessIdByChain,
 } from "../../infra/dialogProcessChain";
 import {
+  buildMessageIdentityKey,
+  findMessageIdentityIndex,
   getMessageDialogProcessId,
   getMessageRole,
 } from "../../infra/messageIdentity";
@@ -95,11 +97,7 @@ export function normalizeMessageRole(messageItem = {}) {
 }
 
 export function buildMessageIdentity(messageItem = {}) {
-  return [
-    normalizeMessageRole(messageItem),
-    getMessageDialogProcessId(messageItem),
-    normalizeMessageContent(messageItem?.content),
-  ].join("|");
+  return buildMessageIdentityKey(messageItem);
 }
 
 export function findExistingMessageIndexForDetailMessage(existingMessages = [], detailMessageItem = {}) {
@@ -107,10 +105,7 @@ export function findExistingMessageIndexForDetailMessage(existingMessages = [], 
   const detailDialogProcessId = getMessageDialogProcessId(detailMessageItem);
   const detailContent = normalizeMessageContent(detailMessageItem?.content);
   if (!detailRole || (!detailDialogProcessId && !detailContent)) return -1;
-  const identity = buildMessageIdentity(detailMessageItem);
-  const exactIndex = existingMessages.findIndex(
-    (messageItem) => buildMessageIdentity(messageItem) === identity,
-  );
+  const exactIndex = findMessageIdentityIndex(detailMessageItem, existingMessages);
   if (exactIndex >= 0) return exactIndex;
   if (detailDialogProcessId) {
     const dialogIndex = existingMessages.findIndex(

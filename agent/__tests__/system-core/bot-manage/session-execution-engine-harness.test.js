@@ -255,6 +255,7 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
     sessionId,
     message: "hello plugin",
     runConfig: {
+      turnScopeId: "turn-scope-smoke",
       selectedPlugins: ["agentPlugin"],
       plugins: {
         harness: {
@@ -269,8 +270,16 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
   assert.equal(capturedAgentUserMessage, "hello plugin");
   assert.ok(capturedRuntime?.hookManager);
   assert.equal(savedCurrentTurnTasksPayload?.currentTurnTasks?.[0]?.taskId, "t1");
-  assert.ok(persistedTurns.some((turn) => turn.role === "user" && turn.content === "hello plugin"));
-  assert.ok(persistedTurns.some((turn) => turn.role === "assistant" && turn.content === "ok from fake agent"));
+  assert.ok(persistedTurns.some((turn) =>
+    turn.role === "user" &&
+    turn.content === "hello plugin" &&
+    turn.turnScopeId === "turn-scope-smoke",
+  ));
+  assert.ok(persistedTurns.some((turn) =>
+    turn.role === "assistant" &&
+    turn.content === "ok from fake agent" &&
+    turn.turnScopeId === "turn-scope-smoke",
+  ));
 
   const runDir = path.join(
     tempRoot,

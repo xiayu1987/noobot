@@ -33,7 +33,7 @@ function resolveTurnId(message = {}) {
 }
 
 function resolveTurnScopeId(message = {}) {
-  return normalizeAnchorValue(message?.turnScopeId || message?.turn_scope_id || "");
+  return normalizeAnchorValue(message?.turnScopeId || "");
 }
 
 function resolveMessageId(message = {}) {
@@ -62,7 +62,7 @@ function resolveSessionVersion(session = {}) {
 }
 
 function createMessageAnchorMatcher(anchor = {}) {
-  const turnScopeId = normalizeAnchorValue(anchor?.turnScopeId || anchor?.turn_scope_id);
+  const turnScopeId = normalizeAnchorValue(anchor?.turnScopeId);
   if (turnScopeId) {
     return (messageItem) => resolveTurnScopeId(messageItem) === turnScopeId;
   }
@@ -297,6 +297,7 @@ export class SessionMessageService {
     parentSessionId = "",
     anchor = {},
     newContent = "",
+    turnScopeId = "",
     expectedVersion = null,
     idempotencyKey = "",
   } = {}) {
@@ -353,6 +354,12 @@ export class SessionMessageService {
     const replacedMessages = messages.slice(turnStartIndex);
     const anchorMessage = messages[anchorIndex] || {};
     const replacedUserMessage = messages[turnStartIndex] || anchorMessage;
+    const normalizedTurnScopeId = String(
+      turnScopeId ||
+        anchor?.turnScopeId ||
+        replacedUserMessage?.turnScopeId ||
+        "",
+    ).trim();
     const nextVersion = currentVersion + 1;
     const nowValue = this.now();
     const newTurnId = `turn_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
@@ -364,6 +371,7 @@ export class SessionMessageService {
       turnId: newTurnId,
       messageId: createMessageId("msg"),
       id: createMessageId("m"),
+      turnScopeId: normalizedTurnScopeId,
       dialogProcessId: resolveMessageDialogProcessId(replacedUserMessage) ||
         resolveMessageDialogProcessId(anchorMessage) ||
         resolveAnchorDialogProcessId(anchor),

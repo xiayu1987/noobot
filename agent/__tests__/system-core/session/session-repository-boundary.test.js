@@ -221,6 +221,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
       {
         id: "u1",
         role: "user",
+        turnScopeId: "turn-scope-u1",
         content: longUserContent,
         attachmentMetas: [{ id: "att-1", name: "a.txt", type: "text/plain", size: 12, raw: "large" }],
       },
@@ -242,6 +243,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
       {
         role: "tool",
         type: "tool_result",
+        turnScopeId: "turn-scope-u1",
         tool_call_id: "call-1",
         content: JSON.stringify({
           toolName: "write_file",
@@ -340,10 +342,13 @@ test("session display summary should keep chat view lightweight and rebuild stal
 
     const scopeB = await runtime.repositories.sessionRepository.resolveSessionScope(userId, "B", "A");
     const summaryFile = path.join(scopeB.sessionDir, "session-summary.json");
+    const persistedSession = JSON.parse(await readFile(scopeB.sessionFile, "utf8"));
+    assert.equal(persistedSession.messages.every((item) => "turnScopeId" in item), true);
     let summary = JSON.parse(await readFile(summaryFile, "utf8"));
     assert.equal(summary.schemaVersion, 2);
     assert.equal(summary.sessionId, "B");
     assert.equal(summary.messages.length, 5);
+    assert.equal(summary.messages.every((item) => "turnScopeId" in item), true);
     assert.equal(summary.stats.messageCount, 10);
     assert.equal(summary.stats.displayMessageCount, 5);
     assert.equal(summary.stats.injectedMessageCount, 1);
@@ -354,6 +359,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(summary.stats.hasToolDetails, true);
     assert.equal(summary.toolLogSummaries.length, 1);
     assert.equal(summary.toolLogSummaries[0].type, "tool_result");
+    assert.equal(summary.toolLogSummaries[0].turnScopeId, "turn-scope-u1");
     assert.deepEqual(summary.toolLogSummaries[0].writtenFiles, [{
       toolName: "write_file",
       resolvedPath: "/workspace/u1/project/a.txt",
@@ -364,6 +370,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(JSON.stringify(summary.toolLogSummaries).includes("ordinary tool result"), false);
 
     const userMessage = summary.messages.find((item) => item.id === "u1");
+    assert.equal(userMessage.turnScopeId, "turn-scope-u1");
     assert.equal(userMessage.content, longUserContent);
     assert.equal(userMessage.content.endsWith(userContentTail), true);
     assert.equal(userMessage.content.includes(`${userContentTail}…`), false);

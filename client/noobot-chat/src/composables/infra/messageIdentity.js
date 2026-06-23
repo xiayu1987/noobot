@@ -8,6 +8,10 @@ function trim(value = "") {
   return String(value || "").trim();
 }
 
+function lower(value = "") {
+  return trim(value).toLowerCase();
+}
+
 function isPlainObject(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
@@ -24,7 +28,7 @@ export function normalizeTurnOwner(raw = {}) {
   const owner = isPlainObject(raw?.owner) ? raw.owner : {};
   return {
     sessionId: getMessageSessionId(owner) || getMessageSessionId(raw),
-    turnScopeId: trim(owner?.turnScopeId || owner?.turn_scope_id),
+    turnScopeId: trim(owner?.turnScopeId),
     dialogProcessId: trim(owner?.dialogProcessId || owner?.dialog_process_id || raw?.ownerDialogProcessId),
     role: trim(owner?.role),
   };
@@ -34,7 +38,7 @@ export function normalizeTurnMeta(raw = {}) {
   const owner = normalizeTurnOwner(raw);
   const normalized = {
     sessionId: getMessageSessionId(raw),
-    turnScopeId: trim(raw?.turnScopeId || raw?.turn_scope_id),
+    turnScopeId: trim(raw?.turnScopeId),
     turnId: trim(raw?.turnId || raw?.turn_id),
     dialogProcessId: trim(raw?.dialogProcessId || raw?.dialog_process_id || raw?.dialogId),
     parentDialogProcessId: trim(
@@ -73,6 +77,95 @@ export function getMessageTurnId(messageItem = {}) {
 
 export function getMessageStableId(messageItem = {}) {
   return trim(messageItem?.messageId || messageItem?.message_id || messageItem?.id);
+}
+
+export function getMessageContentIdentity(messageItem = {}) {
+  return trim(messageItem?.content);
+}
+
+export function buildMessageIdentityKey(messageItem = {}) {
+  return [
+    getMessageRole(messageItem),
+    getMessageTurnScopeId(messageItem),
+    getMessageDialogProcessId(messageItem),
+    getMessageContentIdentity(messageItem),
+  ].join("|");
+}
+
+export function hasMessageTurnScopeConflict(leftMessage = {}, rightMessage = {}) {
+  const leftTurnScopeId = getMessageTurnScopeId(leftMessage);
+  const rightTurnScopeId = getMessageTurnScopeId(rightMessage);
+  return Boolean(leftTurnScopeId && rightTurnScopeId && leftTurnScopeId !== rightTurnScopeId);
+}
+
+export function hasExplicitMessageIdentity(messageItem = {}) {
+  return Boolean(
+    getMessageTurnScopeId(messageItem) ||
+      getMessageTurnId(messageItem) ||
+      getMessageStableId(messageItem) ||
+      messageItem?.ts !== undefined ||
+      getMessageDialogProcessId(messageItem),
+  );
+}
+
+export function isSameMessageIdentity(targetMessage = {}, candidateMessage = {}) {
+  if (!targetMessage || !candidateMessage) return false;
+  if (targetMessage === candidateMessage) return true;
+
+  const targetTurnScopeId = getMessageTurnScopeId(targetMessage);
+  if (targetTurnScopeId) {
+    return getMessageTurnScopeId(candidateMessage) === targetTurnScopeId;
+  }
+
+  const targetTurnId = getMessageTurnId(targetMessage);
+  if (targetTurnId) {
+    return getMessageTurnId(candidateMessage) === targetTurnId;
+  }
+
+  const targetId = getMessageStableId(targetMessage);
+  if (targetId) {
+    return getMessageStableId(candidateMessage) === targetId;
+  }
+
+  const targetTs = targetMessage?.ts;
+  if (targetTs !== undefined && targetTs !== null) {
+    return candidateMessage?.ts === targetTs;
+  }
+
+  const targetDialogProcessId = getMessageDialogProcessId(targetMessage);
+  const targetRole = lower(getMessageRole(targetMessage));
+  if (targetDialogProcessId) {
+    return (
+      getMessageDialogProcessId(candidateMessage) === targetDialogProcessId &&
+      (!targetRole || lower(getMessageRole(candidateMessage)) === targetRole)
+    );
+  }
+
+  const targetContent = getMessageContentIdentity(targetMessage);
+  return Boolean(
+    targetRole &&
+      targetContent &&
+      lower(getMessageRole(candidateMessage)) === targetRole &&
+      getMessageContentIdentity(candidateMessage) === targetContent
+  );
+}
+
+export function findMessageIdentityIndex(targetMessage = {}, messages = []) {
+  const source = Array.isArray(messages) ? messages : [];
+  return source.findIndex((message) => isSameMessageIdentity(targetMessage, message));
+}
+
+export function buildMessageAnchor(targetMessage = {}) {
+  const turnScopeId = getMessageTurnScopeId(targetMessage);
+  if (turnScopeId) return { turnScopeId };
+  const turnId = getMessageTurnId(targetMessage);
+  if (turnId) return { turnId };
+  const messageId = getMessageStableId(targetMessage);
+  if (messageId) return { messageId };
+  const dialogProcessId = getMessageDialogProcessId(targetMessage);
+  if (dialogProcessId) return { dialogProcessId };
+  if (targetMessage?.ts !== undefined && targetMessage?.ts !== null) return { ts: targetMessage.ts };
+  return {};
 }
 
 export function getMessageExplicitTurnIdentity(messageItem = {}) {
