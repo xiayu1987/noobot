@@ -164,22 +164,22 @@ describe("harness frontend monotonic message action registration", () => {
     expect(action.resolveProps({ messageItem: targetAssistant, allMessages, deleteMonotonicMessage }).visible).toBe(false);
   });
 
-  it("matches persisted sources by messageId when reloaded objects are not identical", () => {
+  it("matches persisted sources by turnScopeId when reloaded objects are not identical", () => {
     const action = getMonotonicAction();
     const userMessage = {
-      messageId: "u-message-id",
+      turnScopeId: "client-turn:message-id",
       role: "user",
       dialogProcessId: "dp-message-id",
       content: "question",
     };
     const sameUserRenderItem = {
-      messageId: "u-message-id",
+      turnScopeId: "client-turn:message-id",
       role: "user",
       dialogProcessId: "dp-message-id",
       content: "question",
     };
     const assistantMessage = {
-      messageId: "a-message-id",
+      turnScopeId: "client-turn:message-id",
       role: "assistant",
       dialogProcessId: "dp-message-id",
       channelState: "stopped",

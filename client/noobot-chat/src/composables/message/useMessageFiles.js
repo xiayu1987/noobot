@@ -5,18 +5,14 @@
  */
 import { computed } from "vue";
 import {
-  collectRelatedDialogProcessIds,
   flattenSessionMessages,
   mergeAttachmentMetas,
 } from "../infra/dialogProcessChain";
 import {
-  getMessageDialogProcessId,
   findMessageIdentityIndex,
-  getMessageParentDialogProcessId,
   getMessageRole,
   getMessageSessionId,
   getMessageTurnScopeId,
-  getMessageTurnId,
   isSameMessageRound,
   normalizeTurnMeta,
   shouldCollectAttachmentMetasFromMessage,
@@ -98,12 +94,10 @@ function trim(value = "") {
   return String(value || "").trim();
 }
 
-function getMessageTurnIdentity(messageItem = {}) {
+function getMessageScopeIdentity(messageItem = {}) {
   return {
     sessionId: getMessageSessionId(messageItem),
     turnScopeId: getMessageTurnScopeId(messageItem),
-    turnId: getMessageTurnId(messageItem),
-    dialogProcessId: getMessageDialogProcessId(messageItem),
   };
 }
 
@@ -135,13 +129,13 @@ function getAttachmentOwnership(attachmentItem = {}) {
 
 function hasExplicitAttachmentOwnership(attachmentItem = {}) {
   const ownership = getAttachmentOwnership(attachmentItem);
-  return Boolean(ownership.turnScopeId || ownership.turnId || ownership.dialogProcessId);
+  return Boolean(ownership.turnScopeId);
 }
 
 function isAttachmentOwnedByMessage(attachmentItem = {}, messageItem = {}) {
   if (!hasExplicitAttachmentOwnership(attachmentItem)) return true;
   const attachmentOwnership = getAttachmentOwnership(attachmentItem);
-  const messageIdentity = getMessageTurnIdentity(messageItem);
+  const messageIdentity = getMessageScopeIdentity(messageItem);
 
   if (attachmentOwnership.turnScopeId) {
     const sameTurnScope = Boolean(
@@ -153,17 +147,6 @@ function isAttachmentOwnedByMessage(attachmentItem = {}, messageItem = {}) {
       return attachmentOwnership.sessionId === messageIdentity.sessionId;
     }
     return true;
-  }
-  if (attachmentOwnership.turnId) {
-    return Boolean(
-      messageIdentity.turnId && attachmentOwnership.turnId === messageIdentity.turnId,
-    );
-  }
-  if (attachmentOwnership.dialogProcessId) {
-    return Boolean(
-      messageIdentity.dialogProcessId &&
-        attachmentOwnership.dialogProcessId === messageIdentity.dialogProcessId,
-    );
   }
   return true;
 }
@@ -205,6 +188,20 @@ function splitAttachmentMetasByOwner(attachmentMetas = []) {
     else agent.push(attachmentItem);
   }
   return { agent, plugin };
+}
+
+function withAttachmentOwnerTypes(attachmentMetas = []) {
+  const split = splitAttachmentMetasByOwner(attachmentMetas);
+  return [
+    ...split.agent.map((attachmentItem) => ({
+      ...attachmentItem,
+      attachmentOwnerType: "agent",
+    })),
+    ...split.plugin.map((attachmentItem) => ({
+      ...attachmentItem,
+      attachmentOwnerType: "plugin",
+    })),
+  ];
 }
 
 function findMessageIndexInLinearTurn(messages = [], targetMessage = {}) {
@@ -389,8 +386,6 @@ export function useMessageFiles({
     const messageItem = getMessageItem() || {};
     if (isFreshPendingAssistant(messageItem)) return [];
     const turnScopeId = getMessageTurnScopeId(messageItem);
-    const dialogProcessId = getMessageDialogProcessId(messageItem);
-    if (!turnScopeId && !dialogProcessId) return [];
     const out = [];
     const seen = new Set();
     for (const logItem of Array.isArray(messageItem?.completedToolLogs) ? messageItem.completedToolLogs : []) {
@@ -414,38 +409,26 @@ export function useMessageFiles({
       ...(Array.isArray(getAllMessages()) ? getAllMessages() : []),
       ...flattenSessionMessages(getSessionDocs()),
     ];
-    const relatedDialogIds = turnScopeId
-      ? new Set()
-      : collectRelatedDialogProcessIds(
-          candidateMessages,
-          dialogProcessId,
-        );
-
-    for (const sessionMessage of candidateMessages) {
-      if (getMessageRole(sessionMessage) !== "tool") continue;
-      if (!isSameMessageRound(messageItem, sessionMessage)) continue;
-      if (!turnScopeId) {
-        const currentDialogId = getMessageDialogProcessId(sessionMessage);
-        const parentId = getMessageParentDialogProcessId(sessionMessage);
-        if (!relatedDialogIds.has(currentDialogId) && !relatedDialogIds.has(parentId)) {
-          continue;
-        }
+    if (turnScopeId) {
+      for (const sessionMessage of candidateMessages) {
+        if (getMessageRole(sessionMessage) !== "tool") continue;
+        if (!isSameMessageRound(messageItem, sessionMessage)) continue;
+        const parsed = parseToolFileResult(sessionMessage?.content || "");
+        if (!parsed) continue;
+        const { resolvedPath, fileName, toolName } = parsed;
+        const fileItem = {
+          toolName,
+          resolvedPath,
+          fileName,
+          relativePath: resolveRelativeWorkspacePath(resolvedPath),
+          sourceType: "tool",
+          recognized: false,
+        };
+        const fileKey = toWrittenFileKey(fileItem);
+        if (fileKey && seen.has(fileKey)) continue;
+        if (fileKey) seen.add(fileKey);
+        out.push(fileItem);
       }
-      const parsed = parseToolFileResult(sessionMessage?.content || "");
-      if (!parsed) continue;
-      const { resolvedPath, fileName, toolName } = parsed;
-      const fileItem = {
-        toolName,
-        resolvedPath,
-        fileName,
-        relativePath: resolveRelativeWorkspacePath(resolvedPath),
-        sourceType: "tool",
-        recognized: false,
-      };
-      const fileKey = toWrittenFileKey(fileItem);
-      if (fileKey && seen.has(fileKey)) continue;
-      if (fileKey) seen.add(fileKey);
-      out.push(fileItem);
     }
 
     if (getMessageRole(messageItem) === "assistant") {
@@ -484,11 +467,10 @@ export function useMessageFiles({
       return mergedBaseAttachmentMetas;
     }
     if (isFreshPendingAssistant(messageItem)) {
-      return mergedBaseAttachmentMetas;
+      return withAttachmentOwnerTypes(mergedBaseAttachmentMetas);
     }
     const rootTurnScopeId = getMessageTurnScopeId(messageItem);
-    const rootDialogProcessId = getMessageDialogProcessId(messageItem);
-    if (!rootTurnScopeId && !rootDialogProcessId) return baseAttachmentMetas;
+    if (!rootTurnScopeId) return withAttachmentOwnerTypes(mergedBaseAttachmentMetas);
 
     const allMessages = Array.isArray(getAllMessages()) ? getAllMessages() : [];
     const sessionDocMessages = flattenSessionMessages(getSessionDocs());
@@ -498,19 +480,11 @@ export function useMessageFiles({
     ];
     const allMessagesTurnBounds = getLinearTurnBounds(allMessages, messageItem);
     const sessionDocTurnBounds = getLinearTurnBounds(sessionDocMessages, messageItem);
-    const relatedDialogProcessIdSet = rootTurnScopeId
-      ? new Set()
-      : collectRelatedDialogProcessIds(
-          candidateMessages,
-          rootDialogProcessId,
-        );
     const baseSplit = splitAttachmentMetasByOwner(mergedBaseAttachmentMetas);
     let mainFlowAttachmentMetas = [...baseSplit.agent];
     let pluginAttachmentMetas = [...baseSplit.plugin];
     for (const sessionMessage of candidateMessages) {
       const messageRole = getMessageRole(sessionMessage);
-      const messageDialogProcessId = getMessageDialogProcessId(sessionMessage);
-      const messageParentDialogProcessId = getMessageParentDialogProcessId(sessionMessage);
       // During a live turn, rawMessages can still contain tool attachment events
       // from previous turns while the current assistant message is being patched.
       // Keep attachment collection inside the target user->assistant turn window
@@ -523,14 +497,6 @@ export function useMessageFiles({
       }
       if (!isSameMessageRound(messageItem, sessionMessage)) {
         continue;
-      }
-      if (!rootTurnScopeId) {
-        if (
-          !relatedDialogProcessIdSet.has(messageDialogProcessId) &&
-          !relatedDialogProcessIdSet.has(messageParentDialogProcessId)
-        ) {
-          continue;
-        }
       }
       if (!shouldCollectAttachmentMetasFromMessage(messageItem, sessionMessage)) {
         continue;
@@ -564,16 +530,10 @@ export function useMessageFiles({
         splitCurrentAttachmentMetas.agent,
       );
     }
-    const mergedWithOwnerType = [
-      ...mainFlowAttachmentMetas.map((attachmentItem) => ({
-        ...attachmentItem,
-        attachmentOwnerType: "agent",
-      })),
-      ...pluginAttachmentMetas.map((attachmentItem) => ({
-        ...attachmentItem,
-        attachmentOwnerType: "plugin",
-      })),
-    ];
+    const mergedWithOwnerType = withAttachmentOwnerTypes([
+      ...mainFlowAttachmentMetas,
+      ...pluginAttachmentMetas,
+    ]);
     const dedupedWithOwnerType = [];
     const seenAttachmentKeySet = new Map();
     for (const attachmentItem of mergedWithOwnerType) {

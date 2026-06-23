@@ -21,8 +21,6 @@ export function buildChatPayload({
   selectedPlugins,
   uploadHint = "",
   reuseExistingUserTurn = false,
-  existingUserTurnId = "",
-  existingUserMessageId = "",
   turnScopeId = "",
 } = {}) {
   const normalizedScenario = normalizeTrimmedString(botScenario?.value ?? botScenario);
@@ -53,8 +51,6 @@ export function buildChatPayload({
         .filter(Boolean),
       ...(reuseExistingUserTurn ? {
         reuseExistingUserTurn: true,
-        existingUserTurnId: normalizeTrimmedString(existingUserTurnId),
-        existingUserMessageId: normalizeTrimmedString(existingUserMessageId),
       } : {}),
     },
   };

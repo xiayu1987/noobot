@@ -164,7 +164,7 @@ test("session-routes: delete-from 保留服务层 404/409 状态码", async () =
       const response = await fetch(`${baseUrl}/internal/session/u1/s1/messages/delete-from`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ anchor: { messageId: "m-missing" } }),
+        body: JSON.stringify({ anchor: { turnScopeId: "scope-missing" } }),
       });
       const payload = await response.json();
       assert.equal(response.status, statusCode);
@@ -188,9 +188,9 @@ test("session-routes: replace-turn 路由透传请求体并返回后端快照", 
         replaceTurn: async (payload) => {
           calls.push(payload);
           return {
-            session: { sessionId: payload.sessionId, messages: [{ messageId: "m-new" }], version: 4 },
+            session: { sessionId: payload.sessionId, messages: [{ turnScopeId: "scope-new" }], version: 4 },
             replacedTurn: { deletedCount: 2 },
-            newTurn: { turnId: "turn-new", messageId: "m-new" },
+            newTurn: { turnScopeId: "scope-new" },
             version: 4,
           };
         },
@@ -209,7 +209,7 @@ test("session-routes: replace-turn 路由透传请求体并返回后端快照", 
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         parentSessionId: " parent-1 ",
-        anchor: { turnId: "turn-old" },
+        anchor: { turnScopeId: "scope-old" },
         newContent: " edited content ",
         turnScopeId: " turn-scope-replace ",
         expectedVersion: 3,
@@ -219,12 +219,12 @@ test("session-routes: replace-turn 路由透传请求体并返回后端快照", 
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
-    assert.equal(payload.newTurn.turnId, "turn-new");
+    assert.equal(payload.newTurn.turnScopeId, "scope-new");
     assert.deepEqual(calls[0], {
       userId: "u1",
       sessionId: "s1",
       parentSessionId: "parent-1",
-      anchor: { turnId: "turn-old" },
+      anchor: { turnScopeId: "scope-old" },
       newContent: "edited content",
       turnScopeId: "turn-scope-replace",
       expectedVersion: 3,
@@ -248,7 +248,7 @@ test("session-routes: replace-turn 兼容 /api/internal 前缀", async () => {
           calls.push(payload);
           return {
             session: { sessionId: payload.sessionId, messages: [], version: 5 },
-            newTurn: { turnId: "turn-api", messageId: "msg-api" },
+            newTurn: { turnScopeId: "client-turn:api-new" },
             version: 5,
           };
         },
@@ -266,7 +266,7 @@ test("session-routes: replace-turn 兼容 /api/internal 前缀", async () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        anchor: { turnId: "turn_mqonamla_4ydpk150" },
+        anchor: { turnScopeId: "client-turn:api" },
         newContent: "edited content",
         expectedVersion: 2,
       }),
@@ -277,7 +277,7 @@ test("session-routes: replace-turn 兼容 /api/internal 前缀", async () => {
     assert.equal(calls.length, 1);
     assert.equal(calls[0].userId, "admin");
     assert.equal(calls[0].sessionId, "93606d58-60eb-4ca4-bccf-c926e67e1fed");
-    assert.deepEqual(calls[0].anchor, { turnId: "turn_mqonamla_4ydpk150" });
+    assert.deepEqual(calls[0].anchor, { turnScopeId: "client-turn:api" });
   });
 });
 
@@ -312,7 +312,7 @@ test("session-routes: replace-turn 保留服务层 404/409 状态码", async () 
       const response = await fetch(`${baseUrl}/internal/session/u1/s1/messages/replace-turn`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ anchor: { messageId: "m-missing" }, newContent: "edit" }),
+        body: JSON.stringify({ anchor: { turnScopeId: "scope-missing" }, newContent: "edit" }),
       });
       const payload = await response.json();
       assert.equal(response.status, statusCode);

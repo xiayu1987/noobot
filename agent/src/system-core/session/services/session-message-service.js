@@ -28,26 +28,8 @@ function normalizeAnchorValue(value = "") {
   return String(value || "").trim();
 }
 
-function resolveTurnId(message = {}) {
-  return normalizeAnchorValue(message?.turnId || message?.turn_id || "");
-}
-
 function resolveTurnScopeId(message = {}) {
   return normalizeAnchorValue(message?.turnScopeId || "");
-}
-
-function resolveMessageId(message = {}) {
-  return normalizeAnchorValue(
-    message?.messageId || message?.id || message?.message_id || "",
-  );
-}
-
-function resolveAnchorMessageId(anchor = {}) {
-  return normalizeAnchorValue(anchor?.messageId || anchor?.id || anchor?.message_id || "");
-}
-
-function createMessageId(prefix = "msg") {
-  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function resolveAnchorDialogProcessId(anchor = {}) {
@@ -66,14 +48,6 @@ function createMessageAnchorMatcher(anchor = {}) {
   if (turnScopeId) {
     return (messageItem) => resolveTurnScopeId(messageItem) === turnScopeId;
   }
-  const turnId = normalizeAnchorValue(anchor?.turnId || anchor?.turn_id);
-  if (turnId) {
-    return (messageItem) => resolveTurnId(messageItem) === turnId;
-  }
-  const messageId = resolveAnchorMessageId(anchor);
-  if (messageId) {
-    return (messageItem) => resolveMessageId(messageItem) === messageId;
-  }
   const dialogProcessId = resolveAnchorDialogProcessId(anchor);
   if (dialogProcessId) {
     return (messageItem) => resolveMessageDialogProcessId(messageItem) === dialogProcessId;
@@ -91,6 +65,32 @@ function resolveUserTurnStartIndex(messages = [], anchorIndex = -1) {
     if (normalizeAnchorValue(messages[index]?.role) === "user") return index;
   }
   return anchorIndex;
+}
+
+function uniqueValues(values = []) {
+  return [...new Set(values.map((value) => normalizeAnchorValue(value)).filter(Boolean))];
+}
+
+function buildTurnScopeReplacement({
+  replacedMessages = [],
+  replacementMessages = [],
+  replacementUserMessage = {},
+} = {}) {
+  const pickTurnScopeIds = (messages = []) => uniqueValues(messages.map(resolveTurnScopeId));
+  const pickDialogProcessIds = (messages = []) => uniqueValues(messages.map(resolveMessageDialogProcessId));
+  const replacedDialogProcessIds = pickDialogProcessIds(replacedMessages);
+  const replacementDialogProcessIds = pickDialogProcessIds(replacementMessages)
+    .filter((dialogProcessId) => !replacedDialogProcessIds.includes(dialogProcessId));
+  return {
+    replacedTurnScopeIds: pickTurnScopeIds(replacedMessages),
+    replacementTurnScopeId: resolveTurnScopeId(replacementUserMessage) ||
+      pickTurnScopeIds(replacementMessages)[0] ||
+      "",
+    replacementTurnScopeIds: pickTurnScopeIds(replacementMessages),
+    replacedDialogProcessIds,
+    replacementDialogProcessId: replacementDialogProcessIds[0] || "",
+    replacementDialogProcessIds,
+  };
 }
 
 export class SessionMessageService {
@@ -362,15 +362,17 @@ export class SessionMessageService {
     ).trim();
     const nextVersion = currentVersion + 1;
     const nowValue = this.now();
-    const newTurnId = `turn_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+    const replacementBaseMessage = { ...(replacedUserMessage || {}) };
+    delete replacementBaseMessage.turnId;
+    delete replacementBaseMessage.turn_id;
+    delete replacementBaseMessage.messageId;
+    delete replacementBaseMessage.message_id;
+    delete replacementBaseMessage.id;
     const newMessage = normalizeMessageEntity({
-      ...replacedUserMessage,
+      ...replacementBaseMessage,
       role: "user",
       type: "message",
       content: normalizedNewContent,
-      turnId: newTurnId,
-      messageId: createMessageId("msg"),
-      id: createMessageId("m"),
       turnScopeId: normalizedTurnScopeId,
       dialogProcessId: resolveMessageDialogProcessId(replacedUserMessage) ||
         resolveMessageDialogProcessId(anchorMessage) ||
@@ -389,6 +391,11 @@ export class SessionMessageService {
     session.revision = nextVersion;
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
     await this.sessionRepo.save(userId, session, resolvedParentSessionId);
+    const turnScopeReplacement = buildTurnScopeReplacement({
+      replacedMessages,
+      replacementMessages: [newMessage],
+      replacementUserMessage: newMessage,
+    });
     return {
       session,
       replacedTurn: {
@@ -398,10 +405,11 @@ export class SessionMessageService {
         messages: replacedMessages,
       },
       newTurn: {
-        turnId: newTurnId,
-        messageId: newMessage.messageId || newMessage.id || "",
+        turnScopeId: newMessage.turnScopeId || "",
+        dialogProcessId: resolveMessageDialogProcessId(newMessage),
         message: newMessage,
       },
+      turnScopeReplacement,
       anchorIndex,
       turnStartIndex,
       deletedCount: replacedMessages.length,

@@ -303,8 +303,6 @@ export class SessionExecutionRunner {
         emitEvent(runtimeEventListener, "user_message_reused", {
           sessionId: usedSessionId,
           dialogProcessId,
-          turnId: String(resolvedRunConfig?.existingUserTurnId || "").trim(),
-          messageId: String(resolvedRunConfig?.existingUserMessageId || "").trim(),
         });
       }
 

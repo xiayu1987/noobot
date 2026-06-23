@@ -97,10 +97,8 @@ export function registerSessionRoutes(
       : Array.isArray(sessionItem?.messages)
         ? sessionItem.messages
         : [];
-    const messageId = normalizeRouteText(filters.messageId);
     const dialogProcessId = normalizeRouteText(filters.dialogProcessId);
     const rootMessage = messages.find((item = {}) => {
-      if (messageId && normalizeRouteText(item?.messageId || item?.id) === messageId) return true;
       if (normalizeRouteText(item?.role) !== "assistant") return false;
       if (normalizeRouteText(item?.type || "message") !== "message") return false;
       return isSameThinkingRound({ dialogProcessId }, item, filters);

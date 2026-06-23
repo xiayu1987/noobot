@@ -133,8 +133,6 @@ export function createChatRunService({
       ...(normalizedTurnScopeId ? { turnScopeId: normalizedTurnScopeId } : {}),
       ...(source?.reuseExistingUserTurn === true ? {
         reuseExistingUserTurn: true,
-        existingUserTurnId: String(source?.existingUserTurnId || "").trim(),
-        existingUserMessageId: String(source?.existingUserMessageId || "").trim(),
       } : {}),
     };
   }

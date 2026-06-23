@@ -10,8 +10,6 @@ import {
 import { normalizeTrimmedString } from "./utils";
 import {
   getMessageRole,
-  getMessageStableId,
-  getMessageTurnId,
   getMessageTurnScopeId,
 } from "../../infra/messageIdentity";
 
@@ -129,13 +127,11 @@ function findReplacementUserMessage({ session, payload, text }) {
   const newTurn = payload?.newTurn && typeof payload.newTurn === "object" && !Array.isArray(payload.newTurn)
     ? payload.newTurn
     : null;
-  const expectedTurnId = getMessageTurnId(newTurn);
-  const expectedMessageId = getMessageStableId(newTurn);
+  const expectedTurnScopeId = getMessageTurnScopeId(newTurn);
   const expectedText = String(text || "");
   return [...messages].reverse().find((message) => {
     if (normalizeMessageRole(message) !== "user") return false;
-    if (expectedTurnId && getMessageTurnId(message) === expectedTurnId) return true;
-    if (expectedMessageId && getMessageStableId(message) === expectedMessageId) return true;
+    if (expectedTurnScopeId && getMessageTurnScopeId(message) === expectedTurnScopeId) return true;
     return expectedText && getMessageText(message) === expectedText;
   }) || null;
 }
@@ -149,6 +145,12 @@ function hasCompletedAssistantAfterReplacementUser({ session, replacementUserMes
     if (message?.pending === true) return false;
     return getMessageText(message).trim() || message?.done === true || message?.completed === true;
   });
+}
+
+function resolveTurnScopeReplacement(payload = {}) {
+  return payload?.turnScopeReplacement && typeof payload.turnScopeReplacement === "object" && !Array.isArray(payload.turnScopeReplacement)
+    ? payload.turnScopeReplacement
+    : null;
 }
 import { nowMs } from "../../infra/timeFields";
 
@@ -255,7 +257,11 @@ export function createResendMessageTransaction({
           input.value = snapshot.inputValue;
           return false;
         } else {
-          if (operation) messageOperationStore?.updateOperation(operation.opId, { status: "reconciling" });
+          const replacementPatch = {
+            status: "reconciling",
+            ...(resolveTurnScopeReplacement(payload) ? { turnScopeReplacement: resolveTurnScopeReplacement(payload) } : {}),
+          };
+          if (operation) messageOperationStore?.updateOperation(operation.opId, replacementPatch);
           const sessionDetail = normalizeSessionDetailSnapshot(payload, sessionId);
           if (sessionDetail) {
             applySessionDetail?.(sessionDetail, { preserveCurrentMessages: false });
@@ -288,8 +294,6 @@ export function createResendMessageTransaction({
             messageText: text,
             reuseExistingUserTurn: true,
             turnScopeId: resendTurnScopeId || getMessageTurnScopeId(replacementUserMessage || payload?.newTurn || {}),
-            existingUserTurnId: getMessageTurnId(replacementUserMessage || payload?.newTurn || {}),
-            existingUserMessageId: getMessageStableId(replacementUserMessage || payload?.newTurn || {}),
           });
           if (!sent) {
             if (operation) messageOperationStore?.completeOperation(operation.opId);

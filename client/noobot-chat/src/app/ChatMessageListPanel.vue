@@ -12,7 +12,11 @@ import {
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
   resolveSessionRunMessageRuntimePatch,
 } from "../composables/chat/sessionRunStateMachine";
-import { getMessageDialogProcessId, getMessageRole } from "../composables/infra/messageIdentity";
+import {
+  getMessageSessionId,
+  getMessageTurnScopeId,
+  getMessageRole,
+} from "../composables/infra/messageIdentity";
 import {
   getThinkingFinishedAt,
   getThinkingStartedAt,
@@ -68,19 +72,21 @@ function getWrapRef() {
 function getMessageRenderKey(messageItem = {}, messageIndex = 0) {
   const stableIndex = Number.isFinite(Number(messageIndex)) ? Number(messageIndex) : 0;
   const role = getMessageRole(messageItem);
-  const dialogProcessId = getMessageDialogProcessId(messageItem);
+  const turnScopeId = getMessageTurnScopeId(messageItem);
+  const sessionId = getMessageSessionId(messageItem);
+  const turnScopeKey = turnScopeId ? `${sessionId || "active"}::${turnScopeId}` : "";
   const taskId = String(messageItem?.taskId || "").trim();
   const toolCallId = String(messageItem?.tool_call_id || "").trim();
   // Do not include content or ts in the key: both can change when backend
   // snapshots/replay patch an existing message. If the key changes Vue remounts
   // the message component, which looks like the AI message flashes and can also
   // make the previous message blink when a DONE snapshot is folded back.
-  let stablePrimaryId = dialogProcessId || taskId || toolCallId || String(stableIndex);
+  let stablePrimaryId = turnScopeKey || taskId || toolCallId || String(stableIndex);
   if (role === "assistant" && !taskId && !toolCallId) {
     const pendingKey = [role, stableIndex, stableIndex]
       .map((item) => String(item ?? "").replaceAll("|", "/"))
       .join("|");
-    if (!dialogProcessId) {
+    if (!turnScopeKey) {
       pendingAssistantRenderKeys.set(stableIndex, pendingKey);
       stablePrimaryId = String(stableIndex);
     } else {

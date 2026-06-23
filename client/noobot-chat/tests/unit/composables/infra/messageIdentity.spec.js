@@ -12,8 +12,8 @@ describe("messageIdentity", () => {
   it("normalizes compatible message identity fields", () => {
     expect(getMessageTurnScopeId({ turnScopeId: " c1 " })).toBe("c1");
     expect(getMessageDialogProcessId({ dialogId: " d1 " })).toBe("d1");
-    expect(getMessageExplicitTurnIdentity({ turn_id: " t1 " })).toBe("t1");
-    expect(getMessageExplicitTurnIdentity({ message_id: " m1 " })).toBe("m1");
+    expect(getMessageExplicitTurnIdentity({ turnScopeId: " c1 " })).toBe("c1");
+    expect(getMessageExplicitTurnIdentity({ dialogProcessId: " d1 " })).toBe("");
   });
 
   it("matches same message round by turn scope before dialog id", () => {
@@ -27,7 +27,7 @@ describe("messageIdentity", () => {
     )).toBe(false);
   });
 
-  it("matches explicit assistant turns without falling back to dialog id", () => {
+  it("matches explicit assistant scopes without falling back to dialog id", () => {
     expect(isSameExplicitMessageTurn(
       { role: "assistant", dialogProcessId: "dp-1", turnScopeId: "client-1" },
       { role: "assistant", dialogProcessId: "dp-1", turnScopeId: "client-1" },

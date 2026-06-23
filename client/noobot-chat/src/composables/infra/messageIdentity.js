@@ -39,7 +39,6 @@ export function normalizeTurnMeta(raw = {}) {
   const normalized = {
     sessionId: getMessageSessionId(raw),
     turnScopeId: trim(raw?.turnScopeId),
-    turnId: trim(raw?.turnId || raw?.turn_id),
     dialogProcessId: trim(raw?.dialogProcessId || raw?.dialog_process_id || raw?.dialogId),
     parentDialogProcessId: trim(
       raw?.parentDialogProcessId || raw?.parent_dialog_process_id || raw?.parentDialogId,
@@ -71,12 +70,8 @@ export function getMessageTurnScopeKey(messageItem = {}) {
   return sessionId && turnScopeId ? `${sessionId}::${turnScopeId}` : "";
 }
 
-export function getMessageTurnId(messageItem = {}) {
-  return normalizeTurnMeta(messageItem).turnId;
-}
-
 export function getMessageStableId(messageItem = {}) {
-  return trim(messageItem?.messageId || messageItem?.message_id || messageItem?.id);
+  return trim(messageItem?.id);
 }
 
 export function getMessageContentIdentity(messageItem = {}) {
@@ -101,7 +96,6 @@ export function hasMessageTurnScopeConflict(leftMessage = {}, rightMessage = {})
 export function hasExplicitMessageIdentity(messageItem = {}) {
   return Boolean(
     getMessageTurnScopeId(messageItem) ||
-      getMessageTurnId(messageItem) ||
       getMessageStableId(messageItem) ||
       messageItem?.ts !== undefined ||
       getMessageDialogProcessId(messageItem),
@@ -115,11 +109,6 @@ export function isSameMessageIdentity(targetMessage = {}, candidateMessage = {})
   const targetTurnScopeId = getMessageTurnScopeId(targetMessage);
   if (targetTurnScopeId) {
     return getMessageTurnScopeId(candidateMessage) === targetTurnScopeId;
-  }
-
-  const targetTurnId = getMessageTurnId(targetMessage);
-  if (targetTurnId) {
-    return getMessageTurnId(candidateMessage) === targetTurnId;
   }
 
   const targetId = getMessageStableId(targetMessage);
@@ -158,22 +147,12 @@ export function findMessageIdentityIndex(targetMessage = {}, messages = []) {
 export function buildMessageAnchor(targetMessage = {}) {
   const turnScopeId = getMessageTurnScopeId(targetMessage);
   if (turnScopeId) return { turnScopeId };
-  const turnId = getMessageTurnId(targetMessage);
-  if (turnId) return { turnId };
-  const messageId = getMessageStableId(targetMessage);
-  if (messageId) return { messageId };
-  const dialogProcessId = getMessageDialogProcessId(targetMessage);
-  if (dialogProcessId) return { dialogProcessId };
   if (targetMessage?.ts !== undefined && targetMessage?.ts !== null) return { ts: targetMessage.ts };
   return {};
 }
 
 export function getMessageExplicitTurnIdentity(messageItem = {}) {
-  return trim(
-    getMessageTurnScopeId(messageItem) ||
-      getMessageTurnId(messageItem) ||
-      getMessageStableId(messageItem),
-  );
+  return trim(getMessageTurnScopeId(messageItem));
 }
 
 export function isSameMessageRound(targetMessage = {}, candidateMessage = {}) {
@@ -191,16 +170,7 @@ export function isSameMessageRound(targetMessage = {}, candidateMessage = {}) {
     if (targetSessionId && candidateSessionId && targetSessionId !== candidateSessionId) return false;
     return targetTurnScopeId === candidateTurnScopeId;
   }
-  if (targetTurnScopeId) {
-    return false;
-  }
-
-  const targetDialogProcessId = getMessageDialogProcessId(targetMessage);
-  const candidateDialogProcessId = getMessageDialogProcessId(candidateMessage);
-  if (targetDialogProcessId && candidateDialogProcessId) {
-    return targetDialogProcessId === candidateDialogProcessId;
-  }
-  return true;
+  return false;
 }
 
 export function isSameExplicitMessageTurn(leftMessage = {}, rightMessage = {}) {
@@ -216,7 +186,8 @@ export function shouldCollectAttachmentMetasFromMessage(targetMessage = {}, cand
   }
 
   // Avoid leaking the previous assistant's generated attachments into a newly
-  // sent assistant turn when snapshots do not carry turnScopeId/turnId yet.
-  // Tool/child messages are still collected through dialogProcess relation.
+  // sent assistant turn when snapshots do not carry turnScopeId yet.
+  // Tool/child messages are collected through sessionId + turnScopeId instead
+  // of dialogProcessId; dialogProcessId remains backend execution metadata.
   return isSameExplicitMessageTurn(targetMessage, candidateMessage);
 }
