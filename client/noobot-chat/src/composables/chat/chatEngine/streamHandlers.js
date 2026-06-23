@@ -43,7 +43,6 @@ function notifySendingStartedWhenDialogReady({ botMessage, locateSendingStartedM
 
 function applyProcessCompatViewToMessage({ botMessage, processStore, processId }) {
   if (!botMessage || !processStore || !processId) return;
-  if (!getMessageTurnScopeId(botMessage)) return;
   const compatView = processStore.getCompatView?.(processId);
   if (!compatView || compatView.executionLogTotal <= 0) return;
   const executionLogTotal = Math.max(
@@ -53,8 +52,10 @@ function applyProcessCompatViewToMessage({ botMessage, processStore, processId }
   );
   botMessage.processId = processId;
   botMessage.processLastSequence = compatView.lastSequence;
-  botMessage.processRealtimeLogs = compatView.realtimeLogs;
-  botMessage.processCompletedToolLogs = compatView.completedToolLogs;
+  if (getMessageTurnScopeId(botMessage)) {
+    botMessage.processRealtimeLogs = compatView.realtimeLogs;
+    botMessage.processCompletedToolLogs = compatView.completedToolLogs;
+  }
   botMessage.processExecutionLogTotal = executionLogTotal;
 }
 

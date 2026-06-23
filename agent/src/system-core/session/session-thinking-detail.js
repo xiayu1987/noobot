@@ -8,11 +8,8 @@ export function normalizeRouteText(value = "") {
   return String(value || "").trim();
 }
 
-export function isHarnessInjectedMessage(messageItem = {}) {
-  return (
-    messageItem?.injectedMessage === true &&
-    normalizeRouteText(messageItem?.injectedBy) === "harness-plugin"
-  );
+export function isInjectedMessage(messageItem = {}) {
+  return messageItem?.injectedMessage === true;
 }
 
 export function isToolOrThinkingMessage(messageItem = {}) {
@@ -74,7 +71,7 @@ export function buildThinkingDetailPayload(fullResult = {}, filters = {}) {
   }) || {};
   const scopedMessages = messages.filter((item = {}) =>
     isSameThinkingRound(rootMessage?.role ? rootMessage : { dialogProcessId, turnScopeId }, item, filters) &&
-    (isHarnessInjectedMessage(item) || isToolOrThinkingMessage(item) || item === rootMessage)
+    (isInjectedMessage(item) || isToolOrThinkingMessage(item) || item === rootMessage)
   );
   const toolLogs = scopedMessages
     .filter((item = {}) => isToolOrThinkingMessage(item))
@@ -85,7 +82,7 @@ export function buildThinkingDetailPayload(fullResult = {}, filters = {}) {
       if (realtime.length) return realtime;
       return [buildToolLogFromMessage(item, index)];
     });
-  const injectedMessages = scopedMessages.filter((item = {}) => isHarnessInjectedMessage(item));
+  const injectedMessages = scopedMessages.filter((item = {}) => isInjectedMessage(item));
   const messageItem = {
     ...rootMessage,
     hasThinkingDetails: toolLogs.length > 0 || injectedMessages.length > 0,

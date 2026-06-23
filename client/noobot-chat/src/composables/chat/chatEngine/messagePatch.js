@@ -25,7 +25,6 @@ export function applyDoneMessagesPatch({
     return false;
   }
   const botTurnScopeId = getMessageTurnScopeId(botMessage);
-  if (!botTurnScopeId) return false;
 
   const rawMessagesForView = data.messages.map((messageItem) => makeViewMessage(messageItem));
   activeSession.value.rawMessages = rawMessagesForView;
@@ -53,7 +52,10 @@ export function applyDoneMessagesPatch({
     );
     const lastAssistant = patchAssistants[patchAssistants.length - 1];
     if (lastAssistant) {
-      if (getMessageTurnScopeId(lastAssistant) !== botTurnScopeId) return true;
+      const lastAssistantTurnScopeId = getMessageTurnScopeId(lastAssistant);
+      if (botTurnScopeId && lastAssistantTurnScopeId && lastAssistantTurnScopeId !== botTurnScopeId) {
+        return true;
+      }
       const mergedAssistantContent = mergeAssistantContents(patchAssistants);
       const lastAssistantType = String(lastAssistant.type || "");
       if (lastAssistantType && lastAssistantType !== "tool_call") {
@@ -69,7 +71,9 @@ export function applyDoneMessagesPatch({
       if (Array.isArray(lastAssistant.modelRuns)) {
         botMessage.modelRuns = lastAssistant.modelRuns;
       }
-      mergeAssistantAttachmentMetas(botMessage, lastAssistant.attachmentMetas || []);
+      if (botTurnScopeId && lastAssistantTurnScopeId === botTurnScopeId) {
+        mergeAssistantAttachmentMetas(botMessage, lastAssistant.attachmentMetas || []);
+      }
     }
   }
   if (!patchedWorkflowMessage && workflowAssistants.length && Array.isArray(activeSession.value?.messages)) {
