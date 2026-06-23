@@ -12,6 +12,7 @@ import {
   foldConversationMessages,
   isHarnessInjectedMessage,
 } from "../infra/messageModel";
+import { normalizeTimePair, nowIso } from "../infra/timeFields";
 import {
   buildChatWebSocketUrl,
   deleteSessionApi,
@@ -91,14 +92,7 @@ export function useChatSession({
         ? `dialogProcess:${dialogProcessId}`
         : "";
     const stateKey = `${sessionId || "__session__"}::${stateIdentity || "__session__"}`;
-    const createdAtMs = Number(stateEntry?.createdAtMs || 0);
-    const updatedAtMs = Number(stateEntry?.updatedAtMs || stateEntry?.timestamp || createdAtMs || 0);
-    const createdAt = String(
-      stateEntry?.createdAt || (createdAtMs > 0 ? new Date(createdAtMs).toISOString() : ""),
-    ).trim();
-    const updatedAt = String(
-      stateEntry?.updatedAt || (updatedAtMs > 0 ? new Date(updatedAtMs).toISOString() : new Date().toISOString()),
-    ).trim();
+    const { createdAtMs, updatedAtMs, createdAt, updatedAt } = normalizeTimePair(stateEntry, { nowFallback: true });
     const applied = stateEntry?.applied !== false;
     const normalizedEntry = {
       source: String(stateEntry?.source || "").trim(),
@@ -174,7 +168,7 @@ export function useChatSession({
     activeSession.value.rawMessages.push(msg);
     activeSession.value.messageCount = (activeSession.value.messageCount || 0) + 1;
     activeSession.value.lastMessage = msg;
-    activeSession.value.updatedAt = new Date().toISOString();
+    activeSession.value.updatedAt = nowIso();
     return msg;
   }
 

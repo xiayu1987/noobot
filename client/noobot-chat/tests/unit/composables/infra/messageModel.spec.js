@@ -41,9 +41,9 @@ describe("messageModel semantic transfer", () => {
     });
 
     expect(message.thinkingStartedAt).toBe("2026-06-22T10:00:00.000Z");
-    expect(message.thinking_started_at).toBe("2026-06-22T10:00:00.000Z");
+    expect(message.thinking_started_at).toBeUndefined();
     expect(message.thinkingFinishedAt).toBe("2026-06-22T10:00:12.000Z");
-    expect(message.thinking_finished_at).toBe("2026-06-22T10:00:12.000Z");
+    expect(message.thinking_finished_at).toBeUndefined();
   });
 
   it("uses backend createdAt as message timestamp so pending thinking elapsed does not reset after refresh", () => {

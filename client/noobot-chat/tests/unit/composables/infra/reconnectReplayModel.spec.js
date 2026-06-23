@@ -96,7 +96,7 @@ describe("reconnectReplayModel", () => {
 
     expect(target.channelState).toMatchObject({ state: "sending", createdAt: startedAt });
     expect(target.thinkingStartedAt).toBe(startedAt);
-    expect(target.thinking_started_at).toBe(startedAt);
+    expect(target.thinking_started_at).toBeUndefined();
     expect(target.pending).toBe(true);
   });
 

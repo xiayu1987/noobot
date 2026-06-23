@@ -22,6 +22,13 @@ import {
   getMessageTurnId,
   getMessageTurnScopeId,
 } from "./messageIdentity";
+import {
+  getMessageTimestamp,
+  getThinkingFinishedAt,
+  getThinkingStartedAt,
+  nowIso,
+  nowMs,
+} from "./timeFields";
 
 function normalizeArray(value) {
   return Array.isArray(value) ? value : [];
@@ -137,18 +144,9 @@ function createMessageModel(messageItem = {}) {
   const turnId = getMessageTurnId(messageItem);
   const turnScopeId = getMessageTurnScopeId(messageItem);
   const sessionId = String(messageItem?.sessionId || messageItem?.session_id || "").trim();
-  const thinkingStartedAt =
-    messageItem?.thinkingStartedAt || messageItem?.thinking_started_at || "";
-  const thinkingFinishedAt =
-    messageItem?.thinkingFinishedAt || messageItem?.thinking_finished_at || "";
-  const messageTimestamp =
-    messageItem.ts ||
-    messageItem.timestamp ||
-    messageItem.createdAt ||
-    messageItem.created_at ||
-    messageItem.updatedAt ||
-    messageItem.updated_at ||
-    "";
+  const thinkingStartedAt = getThinkingStartedAt(messageItem);
+  const thinkingFinishedAt = getThinkingFinishedAt(messageItem);
+  const messageTimestamp = getMessageTimestamp(messageItem);
   return {
     id: messageItem.id || "",
     messageId,
@@ -183,9 +181,7 @@ function createMessageModel(messageItem = {}) {
       messageItem?.thinkingDetailCount ?? messageItem?.thinking_detail_count ?? 0,
     ),
     thinkingStartedAt,
-    thinking_started_at: thinkingStartedAt,
     thinkingFinishedAt,
-    thinking_finished_at: thinkingFinishedAt,
     thinkingOpenNames: normalizeArray(messageItem.thinkingOpenNames),
     expandedDetailLogKeys: normalizeArray(messageItem.expandedDetailLogKeys),
     error: messageItem.error || "",
@@ -195,7 +191,7 @@ function createMessageModel(messageItem = {}) {
     channelState: messageItem.channelState || "",
     statusLabel: messageItem.statusLabel || "",
     hasFirstStreamEvent: messageItem.hasFirstStreamEvent === true,
-    ts: messageTimestamp || new Date().toISOString(),
+    ts: messageTimestamp || nowIso(),
     monotonicState: messageItem.monotonicState || "",
     stopState: messageItem.stopState || "",
     isMonotonic: messageItem.isMonotonic === true || messageItem.monotonic === true,
@@ -215,7 +211,7 @@ function buildAppendMessage(role, content = "", attachmentMetas = [], options = 
     content,
     type: "message",
     attachmentMetas,
-    ts: Date.now(),
+    ts: nowMs(),
   });
 }
 

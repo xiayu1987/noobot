@@ -9,6 +9,7 @@ import {
   normalizeSelectedConnectors,
   resolveSelectedConnectorsWithDefaults,
 } from "../../shared/models/sessionModel";
+import { getConnectorTimestamp, nowIso } from "../../composables/infra/timeFields";
 
 function normalizeConnectorType(connectorType = "") {
   return String(connectorType || "").trim();
@@ -28,7 +29,7 @@ function normalizeConnectorGroupItems(connectors = []) {
     statusMessage: String(
       connectorItem?.status_message || connectorItem?.statusMessage || "",
     ).trim(),
-    checkedAt: String(connectorItem?.checked_at || connectorItem?.checkedAt || "").trim(),
+    checkedAt: String(getConnectorTimestamp(connectorItem) || "").trim(),
     connectionMeta:
       connectorItem?.connection_meta && typeof connectorItem.connection_meta === "object"
         ? connectorItem.connection_meta
@@ -118,7 +119,7 @@ export function createConnectorService({
       status: connectorStatus,
       statusCode: connectorStatus === "connected" ? 0 : 1,
       statusMessage: connectorStatus,
-      checkedAt: new Date().toISOString(),
+      checkedAt: nowIso(),
       connectionMeta: {},
     };
     if (hitIndex >= 0) {

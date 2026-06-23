@@ -3,27 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { nowMs, parseTimeMs, toIsoTime } from "../infra/timeFields";
 
 export const THINKING_TIMING_STORAGE_KEY = "noobot_thinking_timing_v1";
 const TIMING_TTL_MS = 48 * 60 * 60 * 1000;
 
 function trim(value) {
   return String(value || "").trim();
-}
-
-function nowMs() {
-  return Date.now();
-}
-
-function parseTimeMs(value) {
-  if (value === null || value === undefined || value === "") return 0;
-  if (typeof value === "number") return Number.isFinite(value) && value > 0
-    ? (value > 1e11 ? value : value * 1000)
-    : 0;
-  const asNumber = Number(value);
-  if (Number.isFinite(asNumber) && asNumber > 0) return asNumber > 1e11 ? asNumber : asNumber * 1000;
-  const parsed = new Date(value).getTime();
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
 function storage() {
@@ -43,10 +29,10 @@ function normalizeEntry(entry = {}) {
     dialogProcessId: trim(entry.dialogProcessId),
     turnScopeId: trim(entry.turnScopeId),
     startedAtMs,
-    startedAt: trim(entry.startedAt) || new Date(startedAtMs).toISOString(),
+    startedAt: trim(entry.startedAt) || toIsoTime(startedAtMs),
     updatedAtMs: parseTimeMs(entry.updatedAtMs) || startedAtMs,
     finishedAtMs: finishedAtMs || 0,
-    finishedAt: finishedAtMs > 0 ? (trim(entry.finishedAt) || new Date(finishedAtMs).toISOString()) : "",
+    finishedAt: finishedAtMs > 0 ? (trim(entry.finishedAt) || toIsoTime(finishedAtMs)) : "",
   };
 }
 
@@ -120,10 +106,10 @@ function mergeEntry(existing = null, patch = {}) {
     dialogProcessId: trim(patch.dialogProcessId) || trim(existing?.dialogProcessId),
     turnScopeId: trim(patch.turnScopeId) || trim(existing?.turnScopeId),
     startedAtMs,
-    startedAt: new Date(startedAtMs).toISOString(),
+    startedAt: toIsoTime(startedAtMs),
     updatedAtMs: parseTimeMs(patch.updatedAtMs) || nowMs(),
     finishedAtMs,
-    finishedAt: finishedAtMs > 0 ? (trim(patch.finishedAt) || trim(existing?.finishedAt) || new Date(finishedAtMs).toISOString()) : "",
+    finishedAt: finishedAtMs > 0 ? (trim(patch.finishedAt) || trim(existing?.finishedAt) || toIsoTime(finishedAtMs)) : "",
   };
 }
 

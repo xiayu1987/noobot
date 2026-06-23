@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { nowMs } from "../../infra/timeFields";
 import { findSessionByAnyId as findSessionByAnyIdInList } from "../../infra/sessionIdentity";
 import { normalizeSessionId } from "./sessionIdentity";
 
@@ -50,7 +51,7 @@ export function createSessionDetailRequests({
       normalizedSessionId &&
       recentSessionDetail?.sessionId &&
       isSameSessionIdentity(recentSessionDetail.sessionId, normalizedSessionId) &&
-      Date.now() - recentSessionDetail.loadedAt <= RECENT_SESSION_DETAIL_REUSE_MS;
+      nowMs() - recentSessionDetail.loadedAt <= RECENT_SESSION_DETAIL_REUSE_MS;
     return {
       sessionId: normalizedSessionId,
       activeSessionId: activeId,
@@ -103,7 +104,7 @@ export function createSessionDetailRequests({
       if (!data.ok || !data.exists) throw new Error(data.error || translate("chat.sessionNotFound"));
       recentSessionDetail = {
         sessionId: normalizeSessionId(data.sessionId || normalizedSessionId || sessionId),
-        loadedAt: Date.now(),
+        loadedAt: nowMs(),
         detail: data,
       };
       return data;
@@ -112,7 +113,7 @@ export function createSessionDetailRequests({
     pendingSessionDetailRequests.set(normalizedSessionId || sessionId, {
       promise: requestPromise,
       source: decision.source,
-      startedAt: Date.now(),
+      startedAt: nowMs(),
     });
     try {
       return await requestPromise;

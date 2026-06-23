@@ -9,6 +9,7 @@ import ChatMessageItem from "../modules/message/ChatMessageItem.vue";
 import { useLocale } from "../shared/i18n/useLocale";
 import { resolveSessionRunStateForMessage } from "../composables/chat/sessionRunStateMachine";
 import { getMessageDialogProcessId, getMessageRole } from "../composables/infra/messageIdentity";
+import { getThinkingStartedAt, normalizeTimePair, setThinkingStartedAt } from "../composables/infra/timeFields";
 
 defineEmits(["open-thinking-details"]);
 
@@ -84,28 +85,9 @@ function getMessageRenderKey(messageItem = {}, messageIndex = 0) {
 }
 
 function normalizeStateTime(stateItem = {}) {
-  const rawCreatedAtMs = Number(stateItem?.createdAtMs || 0);
-  const rawUpdatedAtMs = Number(
-    stateItem?.updatedAtMs ||
-      stateItem?.timestamp ||
-      (typeof stateItem?.updatedAt === "number" ? stateItem.updatedAt : 0) ||
-      rawCreatedAtMs ||
-      0,
-  );
-  const createdAtMs = rawCreatedAtMs;
-  const updatedAtMs = rawUpdatedAtMs;
-  const createdAt = String(
-    stateItem?.createdAt ||
-      stateItem?.createdAtIso ||
-      (createdAtMs > 0 ? new Date(createdAtMs).toISOString() : ""),
-  ).trim();
-  const updatedAt = String(
-    (typeof stateItem?.updatedAt === "string" ? stateItem.updatedAt : "") ||
-      stateItem?.updatedAtIso ||
-      (updatedAtMs > 0 ? new Date(updatedAtMs).toISOString() : ""),
-  ).trim();
-  return { createdAtMs, updatedAtMs, createdAt, updatedAt };
+  return normalizeTimePair(stateItem);
 }
+
 
 function getLatestInFlightConversationStateForMessage(messageItem = {}) {
   return resolveSessionRunStateForMessage({
@@ -137,11 +119,9 @@ function applyConversationStateRuntimeToMessage(messageItem = {}) {
     createdAt: timing.createdAt || String(channelState?.createdAt || "").trim(),
     updatedAt: timing.updatedAt || String(channelState?.updatedAt || "").trim(),
   };
-  const startedAt = messageItem.channelState.createdAt ||
-    (messageItem.channelState.createdAtMs > 0 ? new Date(messageItem.channelState.createdAtMs).toISOString() : "");
-  if (startedAt && !String(messageItem?.thinkingStartedAt || messageItem?.thinking_started_at || "").trim()) {
-    messageItem.thinkingStartedAt = startedAt;
-    messageItem.thinking_started_at = startedAt;
+  const startedAt = messageItem.channelState.createdAt || messageItem.channelState.createdAtMs;
+  if (startedAt && !getThinkingStartedAt(messageItem)) {
+    setThinkingStartedAt(messageItem, startedAt);
   }
   messageItem.pending = true;
   return messageItem;

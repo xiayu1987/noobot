@@ -16,6 +16,12 @@ import {
   getMessageDialogProcessId,
   getMessageRole,
 } from "../../infra/messageIdentity";
+import {
+  getThinkingFinishedAt,
+  getThinkingStartedAt,
+  setThinkingFinishedAt,
+  setThinkingStartedAt,
+} from "../../infra/timeFields";
 
 const IN_FLIGHT_CHANNEL_STATES = new Set([
   "sending",
@@ -31,24 +37,18 @@ function preserveRunningThinkingState(existingMessage = {}, detailMessageItem = 
     !Array.isArray(existingMessage.channelState)
       ? existingMessage.channelState
       : null;
-  const existingThinkingStartedAt = String(
-    existingMessage?.thinkingStartedAt || existingMessage?.thinking_started_at || "",
-  ).trim();
-  const existingThinkingFinishedAt = String(
-    existingMessage?.thinkingFinishedAt || existingMessage?.thinking_finished_at || "",
-  ).trim();
+  const existingThinkingStartedAt = getThinkingStartedAt(existingMessage);
+  const existingThinkingFinishedAt = getThinkingFinishedAt(existingMessage);
   const existingPending = existingMessage?.pending === true;
   return () => {
     if (existingChannelState && !detailMessageItem?.channelState) {
       existingMessage.channelState = existingChannelState;
     }
-    if (existingThinkingStartedAt && !String(detailMessageItem?.thinkingStartedAt || detailMessageItem?.thinking_started_at || "").trim()) {
-      existingMessage.thinkingStartedAt = existingThinkingStartedAt;
-      existingMessage.thinking_started_at = existingThinkingStartedAt;
+    if (existingThinkingStartedAt && !getThinkingStartedAt(detailMessageItem)) {
+      setThinkingStartedAt(existingMessage, existingThinkingStartedAt);
     }
-    if (existingThinkingFinishedAt && !String(detailMessageItem?.thinkingFinishedAt || detailMessageItem?.thinking_finished_at || "").trim()) {
-      existingMessage.thinkingFinishedAt = existingThinkingFinishedAt;
-      existingMessage.thinking_finished_at = existingThinkingFinishedAt;
+    if (existingThinkingFinishedAt && !getThinkingFinishedAt(detailMessageItem)) {
+      setThinkingFinishedAt(existingMessage, existingThinkingFinishedAt);
     }
     const channelState = String(existingMessage?.channelState?.state || "").trim();
     if (existingPending && IN_FLIGHT_CHANNEL_STATES.has(channelState)) {

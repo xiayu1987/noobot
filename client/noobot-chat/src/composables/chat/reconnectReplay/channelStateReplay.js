@@ -20,31 +20,43 @@ import {
 } from "../sessionRunStateMachine";
 import { normalizeTurnMeta } from "../../infra/messageIdentity";
 import {
+  getThinkingFinishedAt,
+  getThinkingStartedAt,
+  normalizeTimePair,
+  nowIso,
+  nowMs,
+  parseTimeMs,
+  setThinkingFinishedAt,
+  setThinkingStartedAt,
+} from "../../infra/timeFields";
+import {
   bindThinkingDialogProcess,
   rememberThinkingFinished,
   rememberThinkingStarted,
 } from "../thinkingTimingRegistry";
 
 function parseThinkingTimingMs(value) {
-  if (value === null || value === undefined || value === "") return 0;
-  const asNumber = Number(value);
-  if (Number.isFinite(asNumber) && asNumber > 0) return asNumber > 1e11 ? asNumber : asNumber * 1000;
-  const parsed = new Date(value).getTime();
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  return parseTimeMs(value);
 }
 
 function applyEarliestThinkingStartedAt(targetAssistantMessage = null, nextStartedAt = "") {
   if (!targetAssistantMessage) return;
   const nextStartedAtMs = parseThinkingTimingMs(nextStartedAt);
   if (nextStartedAtMs <= 0) return;
-  const currentStartedAtMs = parseThinkingTimingMs(
-    targetAssistantMessage?.thinkingStartedAt || targetAssistantMessage?.thinking_started_at,
-  );
+  const currentStartedAtMs = parseThinkingTimingMs(getThinkingStartedAt(targetAssistantMessage));
   if (currentStartedAtMs > 0 && currentStartedAtMs <= nextStartedAtMs) return;
-  const normalizedStartedAt = new Date(nextStartedAtMs).toISOString();
-  targetAssistantMessage.thinkingStartedAt = normalizedStartedAt;
-  targetAssistantMessage.thinking_started_at = normalizedStartedAt;
+  setThinkingStartedAt(targetAssistantMessage, nextStartedAtMs);
 }
+
+function resolveThinkingStartedAtMs(targetAssistantMessage = null, fallbackMs = 0) {
+  return (
+    Number(fallbackMs || 0) ||
+    parseTimeMs(getThinkingStartedAt(targetAssistantMessage)) ||
+    parseTimeMs(targetAssistantMessage?.channelState?.createdAtMs) ||
+    nowMs()
+  );
+}
+
 
 export function emitSyntheticReconnectErrorConversationState({
   onConversationState,
@@ -65,16 +77,9 @@ export function emitSyntheticReconnectErrorConversationState({
 }
 
 function normalizeReconnectChannelTiming(stateData = {}) {
-  const createdAtMs = Number(stateData?.createdAtMs || 0);
-  const updatedAtMs = Number(stateData?.updatedAtMs || stateData?.timestamp || createdAtMs || 0);
-  const createdAt = _trimStr(
-    stateData?.createdAt || (createdAtMs > 0 ? new Date(createdAtMs).toISOString() : ""),
-  );
-  const updatedAt = _trimStr(
-    stateData?.updatedAt || (updatedAtMs > 0 ? new Date(updatedAtMs).toISOString() : ""),
-  );
-  return { createdAtMs, updatedAtMs, createdAt, updatedAt };
+  return normalizeTimePair(stateData);
 }
+
 
 function applyReconnectChannelTimingToMessage({
   targetAssistantMessage = null,
@@ -116,9 +121,10 @@ function applyReconnectChannelTimingToMessage({
   targetAssistantMessage.channelState = channelState;
   applyEarliestThinkingStartedAt(targetAssistantMessage, channelState.createdAt || channelState.createdAtMs);
   if (terminal) {
-    const finishedAt = channelState.updatedAt || channelState.createdAt || new Date().toISOString();
-    targetAssistantMessage.thinkingFinishedAt = targetAssistantMessage.thinkingFinishedAt || finishedAt;
-    targetAssistantMessage.thinking_finished_at = targetAssistantMessage.thinking_finished_at || finishedAt;
+    setThinkingFinishedAt(
+      targetAssistantMessage,
+      getThinkingFinishedAt(targetAssistantMessage) || channelState.updatedAt || channelState.createdAt || nowIso(),
+    );
   }
 }
 
@@ -223,7 +229,7 @@ export function applyReconnectChannelState({
       sessionId,
       dialogProcessId,
       turnScopeId,
-        startedAtMs: timing.createdAtMs || targetAssistantMessage?.thinkingStartedAt || targetAssistantMessage?.channelState?.createdAtMs || Date.now(),
+      startedAtMs: resolveThinkingStartedAtMs(targetAssistantMessage, timing.createdAtMs),
       updatedAtMs: timing.updatedAtMs,
     });
     if (applyRunStateEvent) {
@@ -233,7 +239,7 @@ export function applyReconnectChannelState({
         sessionId,
         dialogProcessId,
         turnScopeId,
-            source: "reconnect",
+          source: "reconnect",
         sourceEvent: _trimStr(stateData?.sourceEvent),
         seq: Number(stateData?.seq || 0),
         createdAtMs: timing.createdAtMs,
@@ -303,7 +309,7 @@ export function applyReconnectChannelState({
         sessionId,
         dialogProcessId,
         turnScopeId,
-            stateData,
+        stateData,
       });
       targetAssistantMessage.pending = true;
       if (state === "stopping") {
@@ -326,7 +332,7 @@ export function applyReconnectChannelState({
       sessionId,
       dialogProcessId,
       turnScopeId,
-        finishedAtMs: timing.updatedAtMs || Date.now(),
+      finishedAtMs: timing.updatedAtMs || nowMs(),
       finishedAt: timing.updatedAt,
     });
     interactionSubmitting.value = false;
@@ -340,7 +346,7 @@ export function applyReconnectChannelState({
         sessionId,
         dialogProcessId,
         turnScopeId,
-            source: "reconnect",
+          source: "reconnect",
         sourceEvent: _trimStr(stateData?.sourceEvent),
         seq: Number(stateData?.seq || 0),
         createdAtMs: timing.createdAtMs,
@@ -369,7 +375,7 @@ export function applyReconnectChannelState({
         sessionId,
         dialogProcessId,
         turnScopeId,
-            stateData,
+        stateData,
         terminal: true,
       });
       targetAssistantMessage.pending = false;

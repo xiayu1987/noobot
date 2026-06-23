@@ -31,26 +31,37 @@ import {
   getMessageTurnScopeId,
   normalizeTurnMeta,
 } from "../../infra/messageIdentity";
+import {
+  getThinkingFinishedAt,
+  getThinkingStartedAt,
+  normalizeTimePair,
+  nowIso,
+  nowMs,
+  parseTimeMs,
+  setThinkingFinishedAt,
+  setThinkingStartedAt,
+} from "../../infra/timeFields";
 
 function parseThinkingTimingMs(value) {
-  if (value === null || value === undefined || value === "") return 0;
-  const asNumber = Number(value);
-  if (Number.isFinite(asNumber) && asNumber > 0) return asNumber > 1e11 ? asNumber : asNumber * 1000;
-  const parsed = new Date(value).getTime();
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  return parseTimeMs(value);
 }
 
 function applyEarliestThinkingStartedAt(targetAssistantMessage = null, nextStartedAt = "") {
   if (!targetAssistantMessage) return;
   const nextStartedAtMs = parseThinkingTimingMs(nextStartedAt);
   if (nextStartedAtMs <= 0) return;
-  const currentStartedAtMs = parseThinkingTimingMs(
-    targetAssistantMessage?.thinkingStartedAt || targetAssistantMessage?.thinking_started_at,
-  );
+  const currentStartedAtMs = parseThinkingTimingMs(getThinkingStartedAt(targetAssistantMessage));
   if (currentStartedAtMs > 0 && currentStartedAtMs <= nextStartedAtMs) return;
-  const normalizedStartedAt = new Date(nextStartedAtMs).toISOString();
-  targetAssistantMessage.thinkingStartedAt = normalizedStartedAt;
-  targetAssistantMessage.thinking_started_at = normalizedStartedAt;
+  setThinkingStartedAt(targetAssistantMessage, nextStartedAtMs);
+}
+
+function resolveThinkingStartedAtMs(targetAssistantMessage = null, fallbackMs = 0) {
+  return (
+    Number(fallbackMs || 0) ||
+    parseTimeMs(getThinkingStartedAt(targetAssistantMessage)) ||
+    parseTimeMs(targetAssistantMessage?.channelState?.createdAtMs) ||
+    nowMs()
+  );
 }
 
 export function createChatEngineConversationState({
@@ -341,14 +352,7 @@ export function createChatEngineConversationState({
     const state = String(statePayload?.state || "").trim();
     if (!state) return;
     const sessionId = String(statePayload?.sessionId || "").trim();
-    const createdAtMs = Number(statePayload?.createdAtMs || 0);
-    const updatedAtMs = Number(statePayload?.updatedAtMs || statePayload?.timestamp || createdAtMs || 0);
-    const createdAt = String(
-      statePayload?.createdAt || (createdAtMs > 0 ? new Date(createdAtMs).toISOString() : ""),
-    ).trim();
-    const updatedAt = String(
-      statePayload?.updatedAt || (updatedAtMs > 0 ? new Date(updatedAtMs).toISOString() : ""),
-    ).trim();
+    const { createdAtMs, updatedAtMs, createdAt, updatedAt } = normalizeTimePair(statePayload);
     const messageList = Array.isArray(activeSession.value?.messages)
       ? activeSession.value.messages
       : [];
@@ -426,7 +430,7 @@ export function createChatEngineConversationState({
           sessionId,
           dialogProcessId,
           turnScopeId,
-            source: "stream",
+          source: "stream",
           sourceEvent: String(statePayload?.sourceEvent || "").trim(),
           seq: Number(statePayload?.seq || 0),
           createdAtMs,
@@ -497,7 +501,7 @@ export function createChatEngineConversationState({
         sessionId,
         dialogProcessId,
         turnScopeId,
-        startedAtMs: createdAtMs || targetAssistantMessage?.thinkingStartedAt || targetAssistantMessage?.channelState?.createdAtMs || Date.now(),
+      startedAtMs: resolveThinkingStartedAtMs(targetAssistantMessage, createdAtMs),
         updatedAtMs,
       });
       if (targetAssistantMessage) {
@@ -520,7 +524,7 @@ export function createChatEngineConversationState({
       sessionId,
       dialogProcessId,
       turnScopeId,
-      finishedAtMs: updatedAtMs || Date.now(),
+      finishedAtMs: updatedAtMs || nowMs(),
       finishedAt: updatedAt,
     });
     if (applyRunStateEvent) {
@@ -559,9 +563,7 @@ export function createChatEngineConversationState({
     if (!targetAssistantMessage) return;
     targetAssistantMessage.channelState = channelStateView;
     applyEarliestThinkingStartedAt(targetAssistantMessage, channelStateView.createdAt || channelStateView.createdAtMs);
-    const finishedAt = updatedAt || createdAt || new Date().toISOString();
-    targetAssistantMessage.thinkingFinishedAt = targetAssistantMessage.thinkingFinishedAt || finishedAt;
-    targetAssistantMessage.thinking_finished_at = targetAssistantMessage.thinking_finished_at || finishedAt;
+    setThinkingFinishedAt(targetAssistantMessage, getThinkingFinishedAt(targetAssistantMessage) || updatedAt || createdAt || nowIso());
     targetAssistantMessage.pending = false;
     if (state === "completed") {
       targetAssistantMessage.statusLabel = translate("chat.generated");

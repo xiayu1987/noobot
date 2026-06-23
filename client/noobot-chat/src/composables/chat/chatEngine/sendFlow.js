@@ -21,11 +21,12 @@ import {
 } from "./streamHandlers";
 import { normalizeTrimmedString } from "./utils";
 import { SESSION_RUN_EVENT } from "../sessionRunStateMachine";
+import { nowMs } from "../../infra/timeFields";
 
 function createTurnScopeId() {
   const randomUuid = globalThis?.crypto?.randomUUID?.();
   if (randomUuid) return `client-turn:${randomUuid}`;
-  return `client-turn:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
+  return `client-turn:${nowMs().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export function createChatEngineSender({

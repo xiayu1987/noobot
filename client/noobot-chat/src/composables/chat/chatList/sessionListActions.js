@@ -9,6 +9,7 @@ import {
   findSessionByAnyId as findSessionByAnyIdInList,
   resolveSessionPrimaryId as resolveSessionPrimaryIdInList,
 } from "../../infra/sessionIdentity";
+import { parseTimeMs } from "../../infra/timeFields";
 import {
   mapSummaryToSession,
   reconcileSessionObject,
@@ -114,8 +115,8 @@ export function createSessionListActions({
         .filter((sessionItem) => String(sessionItem?.caller || "") === RoleEnum.USER)
         .sort(
           (leftSession, rightSession) =>
-            new Date(rightSession.updatedAt || 0).getTime() -
-            new Date(leftSession.updatedAt || 0).getTime(),
+            parseTimeMs(rightSession.updatedAt) -
+            parseTimeMs(leftSession.updatedAt),
         )
         .map((sessionItem) => {
           const mappedSession = mapSummaryToSession(sessionItem, { sessionTitleFromMessages, createConnectorPanelState });

@@ -7,6 +7,7 @@ import { RoleEnum } from "../../../shared/constants/chatConstants";
 import { zhCNMessages } from "noobot-i18n/client/locales/zh-CN";
 import { enUSMessages } from "noobot-i18n/client/locales/en-US";
 import { rememberThinkingStarted } from "../thinkingTimingRegistry";
+import { nowMs, toIsoTime, setThinkingStartedAt } from "../../infra/timeFields";
 
 export function prepareChatSend({
   input,
@@ -55,12 +56,11 @@ export function prepareChatSend({
 
   const botMessage = appendMessage(RoleEnum.ASSISTANT, "", []);
   const sessionId = String(activeSession.value?.backendSessionId || activeSession.value?.id || "");
-  const thinkingStartedAtMs = Date.now();
-  const thinkingStartedAt = new Date(thinkingStartedAtMs).toISOString();
+  const thinkingStartedAtMs = nowMs();
+  const thinkingStartedAt = toIsoTime(thinkingStartedAtMs);
   botMessage.sessionId = sessionId;
   botMessage.session_id = sessionId;
-  botMessage.thinkingStartedAt = thinkingStartedAt;
-  botMessage.thinking_started_at = thinkingStartedAt;
+  setThinkingStartedAt(botMessage, thinkingStartedAt);
   botMessage.pending = true;
   botMessage.hasFirstStreamEvent = false;
   botMessage.statusLabel = "";

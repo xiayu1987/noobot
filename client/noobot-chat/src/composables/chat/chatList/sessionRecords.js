@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { nowIso } from "../../infra/timeFields";
 
 export function createLocalSessionItem({ id, title, createConnectorPanelState }) {
   return {
@@ -19,8 +20,8 @@ export function createLocalSessionItem({ id, title, createConnectorPanelState })
     rawMessages: [],
     sessionDocs: [],
     connectorPanelState: createConnectorPanelState(),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
   };
 }
 

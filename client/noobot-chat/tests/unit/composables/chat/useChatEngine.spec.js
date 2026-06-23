@@ -343,7 +343,7 @@ describe("useChatEngine", () => {
       updatedAt: "2026-06-22T10:00:12.000Z",
     });
     expect(assistant?.thinkingStartedAt).toBe(startedAt);
-    expect(assistant?.thinking_started_at).toBe(startedAt);
+    expect(assistant?.thinking_started_at).toBeUndefined();
     expect(assistant?.thinkingFinishedAt).toBe("2026-06-22T10:00:12.000Z");
   });
 

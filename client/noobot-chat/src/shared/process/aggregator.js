@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { nowIso } from "../../composables/infra/timeFields";
 import {
   PROCESS_EVENT_VERSION,
   ProcessEventSource,
@@ -71,7 +72,7 @@ export function createProcessEventFromLog(rawLog = {}, options = {}) {
     logItem.sequence ?? logItem.seq ?? options.sequence,
     options.fallbackSequence,
   );
-  // normalizeProcessLog fills a missing ts with Date.now() for display.
+  // normalizeProcessLog fills a missing ts with nowMs() for display.
   // Do not use that generated timestamp as part of eventId, otherwise two
   // equivalent logs created in different milliseconds dedupe as different events.
   const explicitTimestamp = resolveRawLogExplicitTimestamp(rawLog);
@@ -172,7 +173,7 @@ export function createProcessSnapshotFromLogs({ processId = "", logs = [], statu
     processId: normalizeProcessString(processId) || resolveProcessId(nodes[0] || {}),
     status,
     lastSequence,
-    updatedAt: nodes.length ? nodes[nodes.length - 1].startedAt : new Date().toISOString(),
+    updatedAt: nodes.length ? nodes[nodes.length - 1].startedAt : nowIso(),
     nodes,
     meta: { source, version: PROCESS_EVENT_VERSION },
   };

@@ -15,6 +15,13 @@ import {
   getMessageTurnScopeId,
   hasMessageTurnScopeConflict,
 } from "./messageIdentity";
+import {
+  getThinkingFinishedAt,
+  getThinkingStartedAt,
+  parseTimeMs,
+  setThinkingFinishedAt,
+  setThinkingStartedAt,
+} from "./timeFields";
 
 function isReconnectTerminalEvent(eventName = "") {
   return [
@@ -242,15 +249,9 @@ function messageCompareKey(messageItem = {}) {
 }
 
 function parseMessageTimeMs(value) {
-  if (value === null || value === undefined || value === "") return 0;
-  if (typeof value === "number") return value > 1e11 ? value : value * 1000;
-  const asNumber = Number(value);
-  if (Number.isFinite(asNumber) && asNumber > 0) {
-    return asNumber > 1e11 ? asNumber : asNumber * 1000;
-  }
-  const parsed = new Date(value).getTime();
-  return Number.isFinite(parsed) ? parsed : 0;
+  return parseTimeMs(value);
 }
+
 
 function mergeCurrentUserMessagesIntoFoldedMessages({
   foldedMessages = [],
@@ -342,12 +343,8 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
     !Array.isArray(targetMessage.channelState)
       ? targetMessage.channelState
       : null;
-  const existingThinkingStartedAt = String(
-    targetMessage?.thinkingStartedAt || targetMessage?.thinking_started_at || "",
-  ).trim();
-  const existingThinkingFinishedAt = String(
-    targetMessage?.thinkingFinishedAt || targetMessage?.thinking_finished_at || "",
-  ).trim();
+  const existingThinkingStartedAt = getThinkingStartedAt(targetMessage);
+  const existingThinkingFinishedAt = getThinkingFinishedAt(targetMessage);
   const existingTurnScopeId = getMessageTurnScopeId(targetMessage);
   const existingPending = targetMessage?.pending === true;
   const existingTransferResult =
@@ -399,13 +396,11 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   if (existingChannelState && !sourceMessage?.channelState) {
     targetMessage.channelState = existingChannelState;
   }
-  if (existingThinkingStartedAt && !String(sourceMessage?.thinkingStartedAt || sourceMessage?.thinking_started_at || "").trim()) {
-    targetMessage.thinkingStartedAt = existingThinkingStartedAt;
-    targetMessage.thinking_started_at = existingThinkingStartedAt;
+  if (existingThinkingStartedAt && !getThinkingStartedAt(sourceMessage)) {
+    setThinkingStartedAt(targetMessage, existingThinkingStartedAt);
   }
-  if (existingThinkingFinishedAt && !String(sourceMessage?.thinkingFinishedAt || sourceMessage?.thinking_finished_at || "").trim()) {
-    targetMessage.thinkingFinishedAt = existingThinkingFinishedAt;
-    targetMessage.thinking_finished_at = existingThinkingFinishedAt;
+  if (existingThinkingFinishedAt && !getThinkingFinishedAt(sourceMessage)) {
+    setThinkingFinishedAt(targetMessage, existingThinkingFinishedAt);
   }
   if (existingTurnScopeId && !getMessageTurnScopeId(sourceMessage)) {
     targetMessage.turnScopeId = existingTurnScopeId;

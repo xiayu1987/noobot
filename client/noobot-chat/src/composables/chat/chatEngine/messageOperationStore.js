@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { nowIso, nowMs } from "../../infra/timeFields";
 
 function normalizeOperationId(value = "") {
   return String(value || "").trim();
@@ -14,7 +15,7 @@ function normalizeSessionId(value = "") {
 
 function createOperationId(type = "op") {
   const randomPart = Math.random().toString(36).slice(2, 10);
-  return `${type}-${Date.now().toString(36)}-${randomPart}`;
+  return `${type}-${nowMs().toString(36)}-${randomPart}`;
 }
 
 /**
@@ -37,8 +38,8 @@ export function createPendingMessageOperationStore() {
       opId,
       sessionId,
       status: operation.status || "pending",
-      createdAt: operation.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: operation.createdAt || nowIso(),
+      updatedAt: nowIso(),
     };
     operationsById.set(opId, normalizedOperation);
     activeOperationIdsBySessionId.set(sessionId, opId);
@@ -54,7 +55,7 @@ export function createPendingMessageOperationStore() {
       ...patch,
       opId: current.opId,
       sessionId: current.sessionId,
-      updatedAt: new Date().toISOString(),
+      updatedAt: nowIso(),
     };
     operationsById.set(normalizedOpId, updated);
     return updated;

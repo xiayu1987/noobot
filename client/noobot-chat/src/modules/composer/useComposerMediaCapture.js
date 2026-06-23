@@ -1,5 +1,6 @@
 import { computed, onBeforeUnmount, onUpdated, ref, watchEffect } from "vue";
 import { ElMessage } from "element-plus";
+import { nowMs } from "../../composables/infra/timeFields";
 
 const MIC_MAX_DURATION_SECONDS = 60;
 const MIC_SLIDE_CANCEL_THRESHOLD = 44;
@@ -78,7 +79,7 @@ export function useComposerMediaCapture(props, emitAppendUploads, translate) {
           const recordingMimeType = mediaRecorder.mimeType || "audio/webm";
           const audioBlob = new Blob(chunks, { type: recordingMimeType });
           const extension = recordingMimeType.includes("ogg") ? "ogg" : "webm";
-          const audioFile = new File([audioBlob], `voice-${Date.now()}.${extension}`, {
+          const audioFile = new File([audioBlob], `voice-${nowMs()}.${extension}`, {
             type: recordingMimeType,
           });
           emitAppendUploads([audioFile]);
@@ -222,7 +223,7 @@ export function useComposerMediaCapture(props, emitAppendUploads, translate) {
       ElMessage.error(translate("composer.cameraCaptureFailed"));
       return;
     }
-    const photoFile = new File([photoBlob], `camera-${Date.now()}.jpg`, { type: "image/jpeg" });
+    const photoFile = new File([photoBlob], `camera-${nowMs()}.jpg`, { type: "image/jpeg" });
     emitAppendUploads([photoFile]);
     stopCameraPreview();
   }

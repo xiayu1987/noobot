@@ -26,6 +26,6 @@ describe("detailMessages", () => {
     expect(assistant.pending).toBe(true);
     expect(assistant.channelState).toMatchObject({ state: "sending", createdAt: startedAt });
     expect(assistant.thinkingStartedAt).toBe(startedAt);
-    expect(assistant.thinking_started_at).toBe(startedAt);
+    expect(assistant.thinking_started_at).toBeUndefined();
   });
 });
