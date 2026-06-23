@@ -19,7 +19,6 @@ function isUserMessage(message = {}) {
 
 function createRemovedIdentitySnapshot(anchorMessage = {}, removedMessages = []) {
   const removedReferences = new Set(removedMessages.filter(Boolean));
-  const removedTurnScopeIds = new Set(removedMessages.map(getMessageTurnScopeId).filter(Boolean));
   const removedTurnIds = new Set(removedMessages.map(getMessageTurnId).filter(Boolean));
   const removedIds = new Set(removedMessages.map(getMessageStableId).filter(Boolean));
   const removedDialogProcessIds = new Set(removedMessages.map(getMessageDialogProcessId).filter(Boolean));
@@ -33,7 +32,6 @@ function createRemovedIdentitySnapshot(anchorMessage = {}, removedMessages = [])
   const anchorTurnId = getMessageTurnId(anchorMessage);
   const anchorDialogProcessId = getMessageDialogProcessId(anchorMessage);
   const anchorTs = anchorMessage?.ts;
-  if (anchorTurnScopeId) removedTurnScopeIds.add(anchorTurnScopeId);
   if (anchorTurnId) removedTurnIds.add(anchorTurnId);
   if (anchorId) removedIds.add(anchorId);
   if (anchorDialogProcessId) removedDialogProcessIds.add(anchorDialogProcessId);
@@ -46,7 +44,6 @@ function createRemovedIdentitySnapshot(anchorMessage = {}, removedMessages = [])
     anchorTs,
     anchorRole: getMessageRole(anchorMessage).toLowerCase(),
     anchorContent: normalizeTrimmedString(anchorMessage?.content),
-    removedTurnScopeIds,
     removedTurnIds,
     removedReferences,
     removedIds,
@@ -58,8 +55,6 @@ function createRemovedIdentitySnapshot(anchorMessage = {}, removedMessages = [])
 function matchesStableRemovedIdentity(message = {}, identity) {
   if (!message || typeof message !== "object") return false;
   if (identity.removedReferences.has(message)) return true;
-  const messageTurnScopeId = getMessageTurnScopeId(message);
-  if (messageTurnScopeId && identity.removedTurnScopeIds.has(messageTurnScopeId)) return true;
   const messageTurnId = getMessageTurnId(message);
   if (messageTurnId && identity.removedTurnIds.has(messageTurnId)) return true;
   const messageId = getMessageStableId(message);
@@ -73,8 +68,6 @@ function matchesStableRemovedIdentity(message = {}, identity) {
 function matchesFinalRemovedIdentity(message = {}, identity) {
   if (!message || typeof message !== "object") return false;
   if (identity.removedReferences.has(message)) return true;
-  const messageTurnScopeId = getMessageTurnScopeId(message);
-  if (messageTurnScopeId && identity.removedTurnScopeIds.has(messageTurnScopeId)) return true;
   const messageTurnId = getMessageTurnId(message);
   if (messageTurnId && identity.removedTurnIds.has(messageTurnId)) return true;
   const messageId = getMessageStableId(message);

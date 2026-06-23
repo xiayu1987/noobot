@@ -29,7 +29,15 @@ const emit = defineEmits(["select"]);
       :title="item.title"
       :class="{ 'is-current': item.id === currentId }"
       @click="emit('select', item)"
-    />
+    >
+      <span
+        class="chat-message-navigator__item"
+        :class="`is-${String(item.role || 'session').trim().toLowerCase() || 'session'}`"
+      >
+        <span class="chat-message-navigator__role">{{ item.roleLabel || item.role }}</span>
+        <span v-if="item.preview" class="chat-message-navigator__content">{{ item.preview }}</span>
+      </span>
+    </el-anchor-link>
   </el-anchor>
 </template>
 
@@ -83,6 +91,29 @@ const emit = defineEmits(["select"]);
     background-color 0.18s ease,
     border-color 0.18s ease,
     transform 0.18s ease;
+}
+
+.chat-message-navigator__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.chat-message-navigator__role {
+  flex: 0 0 auto;
+  font-weight: 700;
+}
+
+.chat-message-navigator__content {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-message-navigator__item.is-user .chat-message-navigator__role {
+  color: var(--noobot-text-strong, var(--el-text-color-primary));
 }
 
 :deep(.el-anchor__link::before) {

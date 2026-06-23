@@ -2,6 +2,9 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { ref } from "vue";
 import {
   SESSION_RUN_EVENT,
+  SESSION_RUN_MESSAGE_RUNTIME_ACTION,
+  SESSION_RUN_MESSAGE_RUNTIME_MARK,
+  SESSION_RUN_MESSAGE_RUNTIME_REASON,
   SESSION_RUN_STATE,
   SESSION_RUN_TRANSITION_DECISION_REASON,
   SESSION_RUN_TRANSITION_GUARDS,
@@ -18,6 +21,7 @@ import {
   resolveEventScope,
   resolveNextStateByTransitionTable,
   resolveRememberedStopRequestedEvent,
+  resolveSessionRunMessageRuntimePatch,
   resolveSessionRunStateForMessage,
   resolveTransitionDecision,
   transitionSessionRunState,
@@ -666,5 +670,96 @@ describe("sessionRunStateMachine", () => {
       messageItem: assistant,
       activeSession,
     })).toBeNull();
+  });
+
+  it("resolves message runtime effects from state machine rules", () => {
+    const assistant = { role: "assistant", dialogProcessId: "d1", content: "" };
+    const activeSession = {
+      id: "s1",
+      backendSessionId: "s1",
+      messages: [{ role: "user", content: "q" }, assistant],
+    };
+    const stateSnapshot = createInitialSessionRunState({
+      state: SESSION_RUN_STATE.SENDING,
+      sessionId: "s1",
+      dialogProcessId: "d1",
+      priority: 40,
+    });
+
+    expect(resolveSessionRunMessageRuntimePatch({
+      stateSnapshot,
+      messageItem: assistant,
+      activeSession,
+    })).toMatchObject({
+      action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
+      reason: SESSION_RUN_MESSAGE_RUNTIME_REASON.IN_FLIGHT_MATCH,
+      patch: {
+        runtimeMark: "sending|s1|d1||",
+        pending: true,
+        channelState: {
+          state: SESSION_RUN_STATE.SENDING,
+          sessionId: "s1",
+          dialogProcessId: "d1",
+        },
+      },
+    });
+
+    assistant[SESSION_RUN_MESSAGE_RUNTIME_MARK] = "sending|s1|d1||0";
+    expect(resolveSessionRunMessageRuntimePatch({
+      stateSnapshot: createInitialSessionRunState({
+        state: SESSION_RUN_STATE.COMPLETED,
+        sessionId: "s1",
+        dialogProcessId: "d1",
+        priority: 100,
+      }),
+      messageItem: assistant,
+      activeSession,
+    })).toMatchObject({
+      action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
+      reason: SESSION_RUN_MESSAGE_RUNTIME_REASON.RUNTIME_STATE_NO_LONGER_MATCHES,
+      patch: {
+        clearRuntimeMark: true,
+        pending: false,
+        channelState: { state: SESSION_RUN_STATE.COMPLETED },
+        statusLabelKey: "chat.generated",
+      },
+    });
+  });
+
+  it("resolves obsolete previous pending assistant as clear_runtime", () => {
+    const oldAssistant = {
+      role: "assistant",
+      pending: true,
+      channelState: { state: "sending" },
+      content: "old",
+    };
+    const latestAssistant = { role: "assistant", pending: false, content: "new" };
+    const activeSession = {
+      id: "s1",
+      backendSessionId: "s1",
+      messages: [
+        { role: "user", content: "old q" },
+        oldAssistant,
+        { role: "user", content: "new q" },
+        latestAssistant,
+      ],
+    };
+
+    expect(resolveSessionRunMessageRuntimePatch({
+      stateSnapshot: createInitialSessionRunState({
+        state: SESSION_RUN_STATE.SENDING,
+        sessionId: "s1",
+      }),
+      messageItem: oldAssistant,
+      activeSession,
+    })).toMatchObject({
+      action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
+      reason: SESSION_RUN_MESSAGE_RUNTIME_REASON.OBSOLETE_PENDING_ASSISTANT,
+      patch: {
+        clearRuntimeMark: true,
+        pending: false,
+        channelState: { state: SESSION_RUN_STATE.COMPLETED },
+      },
+    });
   });
 });

@@ -58,15 +58,27 @@ function writeEntries(entries = []) {
   } catch {}
 }
 
-function identityScore(entry = {}, scope = {}) {
+function hasSameSessionOrMissing(entrySessionId = "", sessionId = "") {
+  return !sessionId || !entrySessionId || entrySessionId === sessionId;
+}
+
+function identityScore(entry = {}, scope = {}, options = {}) {
   const sessionId = trim(scope.sessionId);
   const dialogProcessId = trim(scope.dialogProcessId);
   const turnScopeId = trim(scope.turnScopeId);
+  const allowSessionPromotionByTurnScope = options.allowSessionPromotionByTurnScope === true;
   const entrySessionId = trim(entry.sessionId);
   const entryDialogProcessId = trim(entry.dialogProcessId);
   const entryTurnScopeId = trim(entry.turnScopeId);
 
   const sameSession = Boolean(sessionId && entrySessionId && entrySessionId === sessionId);
+  if (turnScopeId) {
+    if (!entryTurnScopeId || entryTurnScopeId !== turnScopeId) return 0;
+    if (!hasSameSessionOrMissing(entrySessionId, sessionId) && !allowSessionPromotionByTurnScope) {
+      return 0;
+    }
+    return sameSession ? 100 : 60;
+  }
   const turnIdentityConflict = Boolean(
     turnScopeId && entryTurnScopeId && entryTurnScopeId !== turnScopeId,
   );
@@ -75,17 +87,16 @@ function identityScore(entry = {}, scope = {}) {
   );
   if (turnIdentityConflict || processIdentityConflict) return 0;
   if (dialogProcessId && entryDialogProcessId === dialogProcessId) return sameSession ? 40 : 30;
-  if (turnScopeId && entryTurnScopeId === turnScopeId) return sameSession ? 38 : 28;
   if (sessionId && entrySessionId && entrySessionId !== sessionId) return 0;
   if (sessionId && entrySessionId === sessionId && !dialogProcessId && !turnScopeId) return 5;
   return 0;
 }
 
-function findBestEntry(entries = [], scope = {}) {
+function findBestEntry(entries = [], scope = {}, options = {}) {
   let best = null;
   let bestScore = 0;
   for (const entry of entries) {
-    const score = identityScore(entry, scope);
+    const score = identityScore(entry, scope, options);
     if (score > bestScore) {
       best = entry;
       bestScore = score;
@@ -119,7 +130,11 @@ export function rememberThinkingStarted(scope = {}) {
   const turnScopeId = trim(scope.turnScopeId);
   if (!sessionId && !dialogProcessId && !turnScopeId) return null;
   const entries = readEntries();
-  const existing = findBestEntry(entries, { sessionId, dialogProcessId, turnScopeId });
+  const existing = findBestEntry(
+    entries,
+    { sessionId, dialogProcessId, turnScopeId },
+    { allowSessionPromotionByTurnScope: true },
+  );
   const nextEntry = mergeEntry(existing, {
     sessionId,
     dialogProcessId,
@@ -138,7 +153,13 @@ export function bindThinkingDialogProcess(scope = {}) {
   const turnScopeId = trim(scope.turnScopeId);
   if (!dialogProcessId || (!sessionId && !turnScopeId)) return null;
   const entries = readEntries();
-  const existing = findBestEntry(entries, { sessionId, turnScopeId }) || findBestEntry(entries, { sessionId, dialogProcessId });
+  const existing =
+    findBestEntry(
+      entries,
+      { sessionId, turnScopeId },
+      { allowSessionPromotionByTurnScope: true },
+    ) ||
+    findBestEntry(entries, { sessionId, dialogProcessId });
   const nextEntry = mergeEntry(existing, { sessionId, dialogProcessId, turnScopeId });
   const nextEntries = existing ? entries.map((entry) => (entry === existing ? nextEntry : entry)) : [...entries, nextEntry];
   writeEntries(nextEntries);
@@ -151,7 +172,11 @@ export function rememberThinkingFinished(scope = {}) {
   const turnScopeId = trim(scope.turnScopeId);
   if (!sessionId && !dialogProcessId && !turnScopeId) return null;
   const entries = readEntries();
-  const existing = findBestEntry(entries, { sessionId, dialogProcessId, turnScopeId });
+  const existing = findBestEntry(
+    entries,
+    { sessionId, dialogProcessId, turnScopeId },
+    { allowSessionPromotionByTurnScope: true },
+  );
   if (!existing) return null;
   const finishedAtMs = parseTimeMs(scope.finishedAtMs || scope.finishedAt) || nowMs();
   const nextEntry = mergeEntry(existing, { sessionId, dialogProcessId, turnScopeId, finishedAtMs, updatedAtMs: finishedAtMs });

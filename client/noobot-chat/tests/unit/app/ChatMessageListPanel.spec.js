@@ -237,6 +237,83 @@ describe("ChatMessageListPanel", () => {
     expect(assistant.thinkingStartedAt).toBe(startedAt);
   });
 
+  it("clears runtime-applied pending state when runStateSnapshot becomes terminal", async () => {
+    const startedAt = "2026-06-22T10:00:00.000Z";
+    const activeSession = reactive({
+      id: "s-1",
+      backendSessionId: "s-1",
+      messages: [
+        { role: RoleEnum.USER, content: "q" },
+        { role: RoleEnum.ASSISTANT, content: "partial", pending: false },
+      ],
+    });
+    const runStateSnapshot = reactive({
+      sessionId: "s-1",
+      dialogProcessId: "",
+      state: "sending",
+      createdAtIso: startedAt,
+      createdAtMs: Date.parse(startedAt),
+      updatedAtIso: startedAt,
+      updatedAtMs: Date.parse(startedAt),
+    });
+
+    const wrapper = mountPanel({
+      activeSession,
+      runStateSnapshot,
+    });
+
+    const assistant = activeSession.messages[1];
+    expect(assistant.pending).toBe(true);
+    expect(assistant.channelState).toMatchObject({ state: "sending" });
+
+    wrapper.unmount();
+    mountPanel({
+      activeSession,
+      runStateSnapshot: {
+        ...runStateSnapshot,
+        state: "completed",
+        updatedAtIso: "2026-06-22T10:00:05.000Z",
+        updatedAtMs: Date.parse("2026-06-22T10:00:05.000Z"),
+      },
+    });
+    await nextTick();
+
+    expect(assistant.pending).toBe(false);
+    expect(assistant.channelState).toMatchObject({ state: "completed" });
+    expect(assistant.thinkingFinishedAt).toBeTruthy();
+  });
+
+  it("clears obsolete previous pending assistants while keeping the latest run pending", () => {
+    const activeSession = {
+      id: "s-1",
+      backendSessionId: "s-1",
+      messages: [
+        { role: RoleEnum.USER, content: "old q" },
+        {
+          role: RoleEnum.ASSISTANT,
+          content: "old answer",
+          pending: true,
+          channelState: { state: "sending" },
+        },
+        { role: RoleEnum.USER, content: "new q" },
+        { role: RoleEnum.ASSISTANT, content: "new partial", pending: false },
+      ],
+    };
+
+    mountPanel({
+      activeSession,
+      runStateSnapshot: {
+        sessionId: "s-1",
+        dialogProcessId: "",
+        state: "sending",
+      },
+    });
+
+    expect(activeSession.messages[1].pending).toBe(false);
+    expect(activeSession.messages[1].channelState).toMatchObject({ state: "completed" });
+    expect(activeSession.messages[3].pending).toBe(true);
+  });
+
   it("renders stable anchors and exposes scrollToMessageAnchor", () => {
     const wrapper = mountPanel({
       activeSession: {
