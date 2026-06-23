@@ -533,6 +533,7 @@ export class SessionExecutionEngine {
     dialogProcessId = "",
     parentDialogProcessId = "",
     parentSessionId = "",
+    turnScopeId = "",
     eventListener,
   }) {
     await this.turnPersister.appendSessionTurn({
@@ -556,6 +557,7 @@ export class SessionExecutionEngine {
       dialogProcessId,
       parentDialogProcessId,
       parentSessionId,
+      turnScopeId,
       eventListener,
     });
   }
@@ -567,6 +569,7 @@ export class SessionExecutionEngine {
     messages = [],
     dialogProcessId = "",
     parentDialogProcessId = "",
+    turnScopeId = "",
     eventListener,
   }) {
     await this.turnPersister.appendAgentMessages({
@@ -576,6 +579,7 @@ export class SessionExecutionEngine {
       messages,
       dialogProcessId,
       parentDialogProcessId,
+      turnScopeId,
       eventListener,
     });
   }
@@ -619,6 +623,7 @@ export class SessionExecutionEngine {
     parentDialogProcessId = "",
     caller = CALLER_ROLE.USER,
     dialogProcessId = "",
+    turnScopeId = "",
     agentResult = {},
     executionStartIndex = 0,
     runtimeEventListener = null,
@@ -632,6 +637,7 @@ export class SessionExecutionEngine {
       parentDialogProcessId,
       caller,
       dialogProcessId,
+      turnScopeId,
       agentResult,
       executionStartIndex,
       runtimeEventListener,

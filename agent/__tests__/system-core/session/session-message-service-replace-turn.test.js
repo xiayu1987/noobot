@@ -49,6 +49,7 @@ test("SessionMessageService.replaceTurn matches turnId and returns snapshot with
     sessionId: "s1",
     anchor: { turnId: "turn-old" },
     newContent: "edited",
+    turnScopeId: "turn-scope-new",
     expectedVersion: 2,
     idempotencyKey: "idem-1",
   });
@@ -64,6 +65,7 @@ test("SessionMessageService.replaceTurn matches turnId and returns snapshot with
   assert.ok(saved[0].messages[1].turnId);
   assert.notEqual(saved[0].messages[1].turnId, "turn-old");
   assert.ok(saved[0].messages[1].messageId);
+  assert.equal(saved[0].messages[1].turnScopeId, "turn-scope-new");
   assert.equal(saved[0].messages[1].dialogProcessId, "dp-old");
   assert.equal(saved[0].version, 3);
   assert.equal(saved[0].revision, 3);

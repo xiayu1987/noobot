@@ -13,6 +13,7 @@ import {
   getMessageDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,
+  hasMessageTurnScopeConflict,
 } from "./messageIdentity";
 
 function isReconnectTerminalEvent(eventName = "") {
@@ -240,13 +241,6 @@ function messageCompareKey(messageItem = {}) {
   return `${role}|${turnScopeId}|${dialogProcessId}|${content}`;
 }
 
-function hasTurnIdentityConflict(leftMessage = {}, rightMessage = {}) {
-  const leftTurnScopeId = getMessageTurnScopeId(leftMessage);
-  const rightTurnScopeId = getMessageTurnScopeId(rightMessage);
-  return Boolean(leftTurnScopeId && rightTurnScopeId && leftTurnScopeId !== rightTurnScopeId);
-}
-
-
 function parseMessageTimeMs(value) {
   if (value === null || value === undefined || value === "") return 0;
   if (typeof value === "number") return value > 1e11 ? value : value * 1000;
@@ -311,7 +305,7 @@ function findReusableMessageObject(nextMessage = {}, existingMessages = []) {
       (existingMessage) =>
         getMessageRole(existingMessage) === RoleEnum.ASSISTANT &&
         getMessageDialogProcessId(existingMessage) === nextDialogProcessId &&
-        !hasTurnIdentityConflict(existingMessage, nextMessage),
+        !hasMessageTurnScopeConflict(existingMessage, nextMessage),
     );
     if (byDialogProcessId) return byDialogProcessId;
   }

@@ -211,6 +211,7 @@ export function registerSessionRoutes(
         parentSessionId: String(req.body?.parentSessionId || "").trim(),
         anchor: req.body?.anchor || {},
         newContent: String(req.body?.newContent || "").trim(),
+        turnScopeId: String(req.body?.turnScopeId || "").trim(),
         expectedVersion: req.body?.expectedVersion,
         idempotencyKey: String(req.body?.idempotencyKey || "").trim(),
       });

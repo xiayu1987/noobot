@@ -64,6 +64,7 @@ describe("messageModel semantic transfer", () => {
       id: "storage-id-1",
       message_id: "backend-message-1",
       turn_id: "backend-turn-1",
+      turnScopeId: "client-turn:backend-scope-1",
     });
 
     expect(message.id).toBe("storage-id-1");
@@ -71,6 +72,8 @@ describe("messageModel semantic transfer", () => {
     expect(message.message_id).toBe("backend-message-1");
     expect(message.turnId).toBe("backend-turn-1");
     expect(message.turn_id).toBe("backend-turn-1");
+    expect(message.turnScopeId).toBe("client-turn:backend-scope-1");
+    expect(Object.keys(message)).not.toContain(["turn", "scope", "id"].join("_"));
   });
 
   it("prefers transfer-derived attachment metadata over legacy attachmentMetas", () => {
@@ -339,4 +342,3 @@ describe("messageModel execution logs", () => {
     expect(messages[0].executionLogTotal).toBe(12);
   });
 });
-

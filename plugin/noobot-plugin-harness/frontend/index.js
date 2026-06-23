@@ -10,6 +10,12 @@ import MessageStatusRow from "./components/MessageStatusRow.vue";
 import MessageWrittenFiles from "./components/MessageWrittenFiles.vue";
 import MessageAttachments from "./components/MessageAttachments.vue";
 import HarnessModelExtension from "./components/HarnessModelExtension.vue";
+import {
+  findMessageIdentityIndex,
+  getMessageDialogProcessId,
+  getMessageRole,
+  isSameMessageIdentity,
+} from "../../../client/noobot-chat/src/composables/infra/messageIdentity.js";
 
 export const FRONTEND_PLUGIN_API_VERSION = "1";
 
@@ -32,7 +38,7 @@ function isMonotonicMessage(messageItem = {}) {
 }
 
 function isUserMessage(messageItem = {}) {
-  return normalizeText(messageItem?.role) === "user";
+  return normalizeText(getMessageRole(messageItem)) === "user";
 }
 
 function isPlainUserMessage(messageItem = {}) {
@@ -41,18 +47,8 @@ function isPlainUserMessage(messageItem = {}) {
   return !type || type === "message" || type === "user";
 }
 
-function getDialogProcessId(messageItem = {}) {
-  return normalizeText(messageItem?.dialogProcessId || messageItem?.dialogId);
-}
-
 function findMessageIndex(targetMessage = {}, allMessages = []) {
-  const targetId = normalizeText(targetMessage?.id || targetMessage?.messageId);
-  const targetTs = targetMessage?.ts;
-  return allMessages.findIndex((messageItem) => {
-    if (messageItem === targetMessage) return true;
-    if (targetId && normalizeText(messageItem?.id || messageItem?.messageId) === targetId) return true;
-    return targetTs !== undefined && messageItem?.ts === targetTs;
-  });
+  return findMessageIdentityIndex(targetMessage, allMessages);
 }
 
 function resolveMonotonicUserTarget(messageItem = {}, allMessages = []) {
@@ -63,10 +59,10 @@ function resolveMonotonicUserTarget(messageItem = {}, allMessages = []) {
   if (directIndex >= 0 && isUserMessage(messages[directIndex])) {
     return messages[directIndex];
   }
-  const targetDialogProcessId = getDialogProcessId(messageItem);
+  const targetDialogProcessId = getMessageDialogProcessId(messageItem);
   if (targetDialogProcessId) {
     const sameDialogProcessUserMessage = messages.find(
-      (item) => isUserMessage(item) && getDialogProcessId(item) === targetDialogProcessId,
+      (item) => isUserMessage(item) && getMessageDialogProcessId(item) === targetDialogProcessId,
     );
     if (sameDialogProcessUserMessage) return sameDialogProcessUserMessage;
   }
@@ -76,15 +72,6 @@ function resolveMonotonicUserTarget(messageItem = {}, allMessages = []) {
     }
   }
   return null;
-}
-
-function isSameMessage(left = {}, right = {}) {
-  if (!left || !right) return false;
-  if (left === right) return true;
-  const leftId = normalizeText(left?.id || left?.messageId);
-  const rightId = normalizeText(right?.id || right?.messageId);
-  if (leftId && rightId && leftId === rightId) return true;
-  return left?.ts !== undefined && right?.ts !== undefined && left.ts === right.ts;
 }
 
 function attachMonotonicSource(sourceMap, userMessage, sourceMessage) {
@@ -106,10 +93,10 @@ function buildMonotonicSourceMap(allMessages = []) {
     const sourceMessage = messages[index];
     if (isUserMessage(sourceMessage) || !isMonotonicMessage(sourceMessage)) continue;
 
-    const sourceDialogProcessId = getDialogProcessId(sourceMessage);
+    const sourceDialogProcessId = getMessageDialogProcessId(sourceMessage);
     if (sourceDialogProcessId) {
       const sameDialogProcessUserMessage = messages.find(
-        (item) => isUserMessage(item) && getDialogProcessId(item) === sourceDialogProcessId,
+        (item) => isUserMessage(item) && getMessageDialogProcessId(item) === sourceDialogProcessId,
       );
       if (sameDialogProcessUserMessage) {
         attachMonotonicSource(sourceMap, sameDialogProcessUserMessage, sourceMessage);
@@ -148,7 +135,7 @@ function getMonotonicSourceForUser(userMessage = {}, allMessages = []) {
   const userIndex = findMessageIndex(userMessage, messages);
   if (userIndex >= 0) return sourceMap.get(messages[userIndex]) || null;
   for (const [mappedUser, sourceMessage] of sourceMap.entries()) {
-    if (isSameMessage(mappedUser, userMessage)) return sourceMessage;
+    if (isSameMessageIdentity(mappedUser, userMessage)) return sourceMessage;
   }
   return null;
 }
@@ -161,13 +148,24 @@ function isTailOrphanUserMessage(userMessage = {}, allMessages = []) {
   const userIndex = findMessageIndex(userMessage, messages);
   if (userIndex < 0) return false;
 
-  const userDialogProcessId = getDialogProcessId(userMessage);
+  const userDialogProcessId = getMessageDialogProcessId(userMessage);
   for (let index = userIndex + 1; index < messages.length; index += 1) {
     const nextMessage = messages[index];
-    if (userDialogProcessId && getDialogProcessId(nextMessage) !== userDialogProcessId) continue;
+    if (userDialogProcessId && getMessageDialogProcessId(nextMessage) !== userDialogProcessId) continue;
     return false;
   }
 
+  return true;
+}
+
+function isLatestUserMessage(userMessage = {}, allMessages = []) {
+  if (!isPlainUserMessage(userMessage)) return false;
+  const messages = Array.isArray(allMessages) ? allMessages : [];
+  const userIndex = findMessageIndex(userMessage, messages);
+  if (userIndex < 0) return false;
+  for (let index = userIndex + 1; index < messages.length; index += 1) {
+    if (isPlainUserMessage(messages[index])) return false;
+  }
   return true;
 }
 
@@ -292,7 +290,8 @@ export function registerFrontendPlugin(ctx = {}) {
           const shouldMountOnCurrentUser =
             isUserMessage(messageItem) &&
             Boolean(monotonicUserTarget) &&
-            isSameMessage(messageItem, monotonicUserTarget) &&
+            isSameMessageIdentity(messageItem, monotonicUserTarget) &&
+            isLatestUserMessage(messageItem, allMessages) &&
             (Boolean(getMonotonicSourceForUser(messageItem, allMessages)) ||
               isTailOrphanUserMessage(messageItem, allMessages));
           return {

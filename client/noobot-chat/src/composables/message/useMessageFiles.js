@@ -11,6 +11,7 @@ import {
 } from "../infra/dialogProcessChain";
 import {
   getMessageDialogProcessId,
+  findMessageIdentityIndex,
   getMessageParentDialogProcessId,
   getMessageRole,
   getMessageSessionId,
@@ -206,47 +207,9 @@ function splitAttachmentMetasByOwner(attachmentMetas = []) {
   return { agent, plugin };
 }
 
-function normalizeMessageText(value = "") {
-  return String(value || "").trim();
-}
-
 function findMessageIndexInLinearTurn(messages = [], targetMessage = {}) {
   const messageList = Array.isArray(messages) ? messages : [];
-  const objectIndex = messageList.findIndex((messageItem) => messageItem === targetMessage);
-  if (objectIndex >= 0) return objectIndex;
-
-  const targetRole = getMessageRole(targetMessage);
-  const targetDialogProcessId = getMessageDialogProcessId(targetMessage);
-  const targetContent = normalizeMessageText(targetMessage?.content);
-
-  const targetTurnScopeId = getMessageTurnScopeId(targetMessage);
-  const targetSessionId = getMessageSessionId(targetMessage);
-  if (targetTurnScopeId) {
-    const turnScopeIndex = messageList.findIndex((messageItem) => {
-      if (getMessageRole(messageItem) !== targetRole) return false;
-      if (getMessageTurnScopeId(messageItem) !== targetTurnScopeId) return false;
-      const candidateSessionId = getMessageSessionId(messageItem);
-      return !targetSessionId || !candidateSessionId || targetSessionId === candidateSessionId;
-    });
-    if (turnScopeIndex >= 0) return turnScopeIndex;
-  }
-  if (targetDialogProcessId) {
-    const dialogIndex = messageList.findIndex(
-      (messageItem) =>
-        getMessageRole(messageItem) === targetRole &&
-        getMessageDialogProcessId(messageItem) === targetDialogProcessId,
-    );
-    if (dialogIndex >= 0) return dialogIndex;
-  }
-  if (targetContent) {
-    const contentIndex = messageList.findIndex(
-      (messageItem) =>
-        getMessageRole(messageItem) === targetRole &&
-        normalizeMessageText(messageItem?.content) === targetContent,
-    );
-    if (contentIndex >= 0) return contentIndex;
-  }
-  return -1;
+  return findMessageIdentityIndex(targetMessage, messageList);
 }
 
 function getLinearTurnBounds(messages = [], targetMessage = {}) {
