@@ -133,6 +133,26 @@ export function getMessageTurnScopeKey(messageItem = {}) {
   return sessionId && turnScopeId ? `${sessionId}::${turnScopeId}` : "";
 }
 
+export function isAssistantWithoutTurnScope(messageItem = {}) {
+  return getMessageRole(messageItem) === "assistant" && !getMessageTurnScopeId(messageItem);
+}
+
+export function canUseTurnScopedAssets(messageItem = {}) {
+  return !isAssistantWithoutTurnScope(messageItem);
+}
+
+export function clearTurnScopedAssets(messageItem = {}) {
+  if (!messageItem || typeof messageItem !== "object") return messageItem;
+  messageItem.attachmentMetas = [];
+  messageItem.completedToolLogs = [];
+  messageItem.realtimeLogs = [];
+  messageItem.executionLogTotal = 0;
+  messageItem.processRealtimeLogs = [];
+  messageItem.processCompletedToolLogs = [];
+  messageItem.processExecutionLogTotal = 0;
+  return messageItem;
+}
+
 export function getMessageStableId(messageItem = {}) {
   return trim(messageItem?.id);
 }

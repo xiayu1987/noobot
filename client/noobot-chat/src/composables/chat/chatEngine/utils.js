@@ -7,7 +7,7 @@ import { nowIso } from "../../infra/timeFields";
 import { RoleEnum } from "../../../shared/constants/chatConstants";
 import { messages } from "noobot-i18n/client/messages";
 import { foldConversationMessages } from "../../infra/messageModel";
-import { getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity";
+import { getMessageDialogProcessId, getMessageRole, getMessageTurnScopeId } from "../../infra/messageIdentity";
 
 export function normalizeTrimmedString(value) {
   return String(value || "").trim();
@@ -193,8 +193,13 @@ export function isBlankCompatibleSameId(left, right) {
   return !normalizedLeft || !normalizedRight || normalizedLeft === normalizedRight;
 }
 
-export function pickAssistantMessagesForCurrentTurn({ foldedMessages = [], dialogProcessId = "" }) {
+export function pickAssistantMessagesForCurrentTurn({
+  foldedMessages = [],
+  dialogProcessId = "",
+  turnScopeId = "",
+}) {
   const normalizedDialogProcessId = normalizeTrimmedString(dialogProcessId);
+  const normalizedTurnScopeId = normalizeTrimmedString(turnScopeId);
   const messageList = Array.isArray(foldedMessages) ? foldedMessages : [];
   const lastUserMessageIndex = (() => {
     for (let messageIndex = messageList.length - 1; messageIndex >= 0; messageIndex -= 1) {
@@ -210,6 +215,13 @@ export function pickAssistantMessagesForCurrentTurn({ foldedMessages = [], dialo
       getMessageRole(messageItem) === RoleEnum.ASSISTANT,
   );
   if (!assistantMessagesAfterLastUser.length) return [];
+  if (normalizedTurnScopeId) {
+    const matchedTurnMessages = assistantMessagesAfterLastUser.filter(
+      (messageItem) => getMessageTurnScopeId(messageItem) === normalizedTurnScopeId,
+    );
+    if (matchedTurnMessages.length) return matchedTurnMessages;
+    return [];
+  }
   if (!normalizedDialogProcessId) return assistantMessagesAfterLastUser;
   const matchedMessages = assistantMessagesAfterLastUser.filter(
     (messageItem) =>

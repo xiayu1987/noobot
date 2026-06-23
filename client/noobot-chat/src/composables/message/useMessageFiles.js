@@ -11,6 +11,7 @@ import {
   getMessageRole,
   getMessageSessionId,
   getMessageTurnScopeId,
+  isAssistantWithoutTurnScope,
   isSameMessageRound,
   normalizeTurnMeta,
   shouldCollectAttachmentMetasFromMessage,
@@ -374,24 +375,27 @@ export function useMessageFiles({
   const writtenFiles = computed(() => {
     const messageItem = getMessageItem() || {};
     if (isFreshPendingAssistant(messageItem)) return [];
+    const canUseAssociatedTurnArtifacts = !isAssistantWithoutTurnScope(messageItem);
     const turnScopeId = getMessageTurnScopeId(messageItem);
     const out = [];
     const seen = new Set();
-    for (const logItem of Array.isArray(messageItem?.completedToolLogs) ? messageItem.completedToolLogs : []) {
-      for (const fileItem of Array.isArray(logItem?.writtenFiles) ? logItem.writtenFiles : []) {
-        if (!fileItem?.fileName && !fileItem?.resolvedPath) continue;
-        const normalizedFileItem = {
-          toolName: fileItem?.toolName || "write_file",
-          resolvedPath: fileItem?.resolvedPath || "",
-          fileName: fileItem?.fileName || resolveBaseName(fileItem?.resolvedPath || ""),
-          relativePath: fileItem?.relativePath || resolveRelativeWorkspacePath(fileItem?.resolvedPath || ""),
-          sourceType: fileItem?.sourceType || "tool",
-          recognized: fileItem?.recognized === true,
-        };
-        const fileKey = toWrittenFileKey(normalizedFileItem);
-        if (fileKey && seen.has(fileKey)) continue;
-        if (fileKey) seen.add(fileKey);
-        out.push(normalizedFileItem);
+    if (canUseAssociatedTurnArtifacts) {
+      for (const logItem of Array.isArray(messageItem?.completedToolLogs) ? messageItem.completedToolLogs : []) {
+        for (const fileItem of Array.isArray(logItem?.writtenFiles) ? logItem.writtenFiles : []) {
+          if (!fileItem?.fileName && !fileItem?.resolvedPath) continue;
+          const normalizedFileItem = {
+            toolName: fileItem?.toolName || "write_file",
+            resolvedPath: fileItem?.resolvedPath || "",
+            fileName: fileItem?.fileName || resolveBaseName(fileItem?.resolvedPath || ""),
+            relativePath: fileItem?.relativePath || resolveRelativeWorkspacePath(fileItem?.resolvedPath || ""),
+            sourceType: fileItem?.sourceType || "tool",
+            recognized: fileItem?.recognized === true,
+          };
+          const fileKey = toWrittenFileKey(normalizedFileItem);
+          if (fileKey && seen.has(fileKey)) continue;
+          if (fileKey) seen.add(fileKey);
+          out.push(normalizedFileItem);
+        }
       }
     }
     const candidateMessages = [
@@ -446,11 +450,14 @@ export function useMessageFiles({
       getMessageAttachmentMetas(messageItem),
       messageItem,
     );
+    const canUseAssociatedTurnArtifacts = !isAssistantWithoutTurnScope(messageItem);
     const toolLogAttachmentMetas = [];
-    for (const logItem of Array.isArray(messageItem?.completedToolLogs) ? messageItem.completedToolLogs : []) {
-      toolLogAttachmentMetas.push(
-        ...(Array.isArray(logItem?.attachmentMetas) ? logItem.attachmentMetas : []),
-      );
+    if (canUseAssociatedTurnArtifacts) {
+      for (const logItem of Array.isArray(messageItem?.completedToolLogs) ? messageItem.completedToolLogs : []) {
+        toolLogAttachmentMetas.push(
+          ...(Array.isArray(logItem?.attachmentMetas) ? logItem.attachmentMetas : []),
+        );
+      }
     }
     const mergedBaseAttachmentMetas = toolLogAttachmentMetas.length
       ? mergeAttachmentMetas(baseAttachmentMetas, toolLogAttachmentMetas)

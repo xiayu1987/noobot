@@ -10,7 +10,10 @@ import {
   resolveFallbackThinkingDetailsPayload as resolveFallbackThinkingDetailsPayloadState,
   resolveThinkingDetailsPanelPayload,
 } from "./state/thinkingDetailsState";
-import { getMessageDialogProcessId, getMessageRole } from "../composables/infra/messageIdentity";
+import {
+  getMessageDialogProcessId,
+  isAssistantWithoutTurnScope,
+} from "../composables/infra/messageIdentity";
 
 export function useThinkingDetailsPanel({
   activeSession,
@@ -63,6 +66,7 @@ export function useThinkingDetailsPanel({
     const fallbackPayload = resolveFallbackThinkingDetailsPayload();
     const initialPayload = resolveThinkingDetailsPanelPayload(payload, fallbackPayload);
     const initialMessageItem = initialPayload.messageItem;
+    if (isAssistantWithoutTurnScope(initialMessageItem)) return;
     const hasLocalThinkingDetails =
       (Array.isArray(initialMessageItem?.processRealtimeLogs) &&
         initialMessageItem.processRealtimeLogs.length > 0) ||

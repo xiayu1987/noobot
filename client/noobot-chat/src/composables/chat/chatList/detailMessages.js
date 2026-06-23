@@ -12,9 +12,13 @@ import {
 } from "../../infra/dialogProcessChain";
 import {
   buildMessageIdentityKey,
+  canUseTurnScopedAssets,
+  clearTurnScopedAssets,
   findMessageIdentityIndex,
   getMessageDialogProcessId,
   getMessageRole,
+  getMessageTurnScopeId,
+  isAssistantWithoutTurnScope,
 } from "../../infra/messageIdentity";
 import {
   getThinkingFinishedAt,
@@ -166,7 +170,10 @@ export function buildChildAttachmentMetasByParentDialogProcessId({
   const output = new Map();
   const rootDialogProcessIdSet = new Set(
     (Array.isArray(rootMessages) ? rootMessages : [])
-      .filter((messageItem) => getMessageRole(messageItem) === RoleEnum.ASSISTANT)
+      .filter((messageItem) =>
+        getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
+        getMessageTurnScopeId(messageItem),
+      )
       .map((messageItem) => getMessageDialogProcessId(messageItem))
       .filter(Boolean),
   );
@@ -224,6 +231,10 @@ export function mergeChildTurnAttachmentsIntoRootMessages({
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const messageItem = messages[index];
     if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) continue;
+    if (isAssistantWithoutTurnScope(messageItem)) {
+      clearTurnScopedAssets(messageItem);
+      continue;
+    }
     const dialogProcessId = getMessageDialogProcessId(messageItem);
     if (!dialogProcessId) continue;
     const childAttachmentMetas =
@@ -239,8 +250,18 @@ export function mergeChildTurnAttachmentsIntoRootMessages({
 
 export function applySummaryToolLogs(sessionItem, sessionDocs = []) {
   const logsByDialogProcessId = new Map();
+  const logsByTurnScopeId = new Map();
+  let hasTurnScopedLogs = false;
   for (const sessionDoc of sessionDocs) {
     for (const logItem of Array.isArray(sessionDoc?.toolLogSummaries) ? sessionDoc.toolLogSummaries : []) {
+      const turnScopeId = getMessageTurnScopeId(logItem);
+      if (turnScopeId) {
+        hasTurnScopedLogs = true;
+        logsByTurnScopeId.set(turnScopeId, [
+          ...(logsByTurnScopeId.get(turnScopeId) || []),
+          logItem,
+        ]);
+      }
       const dialogProcessId = getMessageDialogProcessId(logItem);
       if (!dialogProcessId) continue;
       logsByDialogProcessId.set(dialogProcessId, [
@@ -251,6 +272,19 @@ export function applySummaryToolLogs(sessionItem, sessionDocs = []) {
   }
   for (const messageItem of sessionItem.messages || []) {
     if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) continue;
+    if (!canUseTurnScopedAssets(messageItem)) {
+      clearTurnScopedAssets(messageItem);
+      continue;
+    }
+    const turnScopeId = getMessageTurnScopeId(messageItem);
+    if (logsByTurnScopeId.has(turnScopeId)) {
+      messageItem.completedToolLogs = logsByTurnScopeId.get(turnScopeId) || [];
+      continue;
+    }
+    if (hasTurnScopedLogs) {
+      messageItem.completedToolLogs = [];
+      continue;
+    }
     const dialogProcessId = getMessageDialogProcessId(messageItem);
     messageItem.completedToolLogs = logsByDialogProcessId.get(dialogProcessId) || [];
   }

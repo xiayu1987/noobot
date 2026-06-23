@@ -43,6 +43,7 @@ function notifySendingStartedWhenDialogReady({ botMessage, locateSendingStartedM
 
 function applyProcessCompatViewToMessage({ botMessage, processStore, processId }) {
   if (!botMessage || !processStore || !processId) return;
+  if (!getMessageTurnScopeId(botMessage)) return;
   const compatView = processStore.getCompatView?.(processId);
   if (!compatView || compatView.executionLogTotal <= 0) return;
   const executionLogTotal = Math.max(
@@ -152,6 +153,7 @@ export function handleAttachmentMetasStreamEvent({
   scrollOnFirstResponseOnce,
 }) {
   markFirstStreamEvent(botMessage);
+  if (!getMessageTurnScopeId(botMessage)) return;
   mergeAssistantAttachmentMetas(botMessage, data?.attachmentMetas || []);
   scrollOnFirstResponseOnce();
 }

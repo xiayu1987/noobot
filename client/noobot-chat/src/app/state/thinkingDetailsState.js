@@ -1,6 +1,7 @@
-import { getMessageRole } from "../../composables/infra/messageIdentity";
+import { getMessageRole, isAssistantWithoutTurnScope } from "../../composables/infra/messageIdentity";
 
 export function getThinkingDetailsCount(messageItem = {}) {
+  if (isAssistantWithoutTurnScope(messageItem)) return 0;
   const completedToolLogs = Array.isArray(messageItem?.processCompletedToolLogs)
     ? messageItem.processCompletedToolLogs
     : Array.isArray(messageItem?.completedToolLogs)
@@ -50,7 +51,9 @@ export function getThinkingDetailsTitle(messageItem = {}, translate) {
 export function resolveFallbackThinkingDetailsPayload(activeSession = {}) {
   const messages = activeSession?.rawMessages || activeSession?.messages || [];
   const messageItem = [...messages].reverse().find((item = {}) =>
-    getMessageRole(item) === "assistant" && (item?.pending || Array.isArray(item?.realtimeLogs) || Array.isArray(item?.completedToolLogs) || hasThinkingDetails(item))
+    getMessageRole(item) === "assistant" &&
+    !isAssistantWithoutTurnScope(item) &&
+    (item?.pending || Array.isArray(item?.realtimeLogs) || Array.isArray(item?.completedToolLogs) || hasThinkingDetails(item))
   );
   return { messageItem: messageItem || null, allMessages: messages };
 }

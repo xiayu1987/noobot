@@ -35,6 +35,7 @@ describe("thinking details state", () => {
   it("counts summary thinking details when full log arrays are absent", () => {
     expect(getThinkingDetailsCount({
       role: "assistant",
+      turnScopeId: "turn-1",
       hasThinkingDetails: true,
       thinkingDetailCount: 4,
     })).toBe(4);
@@ -43,6 +44,7 @@ describe("thinking details state", () => {
   it("falls through empty normalized log arrays to summary thinking detail count", () => {
     expect(getThinkingDetailsCount({
       role: "assistant",
+      turnScopeId: "turn-1",
       hasThinkingDetails: true,
       completedToolLogs: [],
       realtimeLogs: [],
@@ -59,8 +61,8 @@ describe("thinking details state", () => {
 
   it("resolves the latest assistant message with thinking details from the active session", () => {
     const plainAssistant = { role: "assistant", content: "done" };
-    const thinkingAssistant = { role: "assistant", realtimeLogs: [{ event: "tool_call" }] };
-    const pendingAssistant = { role: "assistant", pending: true };
+    const thinkingAssistant = { role: "assistant", turnScopeId: "turn-2", realtimeLogs: [{ event: "tool_call" }] };
+    const pendingAssistant = { role: "assistant", turnScopeId: "turn-1", pending: true };
     const messages = [
       { role: "user", content: "hi" },
       pendingAssistant,
@@ -77,6 +79,7 @@ describe("thinking details state", () => {
   it("resolves summary thinking placeholder messages from session-summary data", () => {
     const summaryThinkingAssistant = {
       role: "assistant",
+      turnScopeId: "turn-1",
       content: "done",
       hasThinkingDetails: true,
       thinkingDetailCount: 3,
@@ -95,6 +98,23 @@ describe("thinking details state", () => {
   it("falls back to session messages and null message item when no thinking message exists", () => {
     const messages = [{ role: "user", content: "hi" }];
 
+    expect(resolveFallbackThinkingDetailsPayload({ messages })).toEqual({
+      messageItem: null,
+      allMessages: messages,
+    });
+  });
+
+  it("does not expose stale thinking details for assistant messages without turn scope", () => {
+    const staleAssistant = {
+      role: "assistant",
+      completedToolLogs: [{ id: 1 }],
+      realtimeLogs: [{ event: "tool_call" }],
+      hasThinkingDetails: true,
+      thinkingDetailCount: 3,
+    };
+    const messages = [{ role: "user", content: "hi" }, staleAssistant];
+
+    expect(getThinkingDetailsCount(staleAssistant)).toBe(0);
     expect(resolveFallbackThinkingDetailsPayload({ messages })).toEqual({
       messageItem: null,
       allMessages: messages,

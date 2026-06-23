@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import {
+  canUseTurnScopedAssets,
+  clearTurnScopedAssets,
   getMessageDialogProcessId,
   getMessageParentDialogProcessId,
   getMessageRole,
@@ -335,6 +337,10 @@ function buildToolLogsByTurnScope(sessionDocuments = []) {
     if (getMessageRole(messageItem) !== "assistant") continue;
     const sessionId = rootSessionId || String(messageItem?.sessionId || messageItem?.session_id || "").trim();
     const turnScopeId = getMessageTurnScopeId(messageItem);
+    if (!turnScopeId) {
+      messageItem.completedToolLogs = [];
+      continue;
+    }
     const turnScopeKey = buildTurnScopeGroupKey(sessionId, turnScopeId);
     if (turnScopeKey) {
       groupedLogs.set(turnScopeKey, sortLogsBySessionTree(
@@ -353,6 +359,10 @@ function applyCompletedToolLogsToMessages(messages = [], sessionDocuments = []) 
   const rootSessionId = String(rootSessionDocument?.sessionId || "");
   for (const messageItem of messages || []) {
     if (getMessageRole(messageItem) !== "assistant") continue;
+    if (!canUseTurnScopedAssets(messageItem)) {
+      clearTurnScopedAssets(messageItem);
+      continue;
+    }
     const sessionId = rootSessionId || String(messageItem?.sessionId || messageItem?.session_id || "").trim();
     const turnScopeId = getMessageTurnScopeId(messageItem);
     const turnScopeKey = buildTurnScopeGroupKey(sessionId, turnScopeId);
