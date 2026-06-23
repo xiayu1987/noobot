@@ -61,6 +61,8 @@ const emit = defineEmits(["select"]);
 
 :deep(.el-anchor__list) {
   padding: 0;
+  padding-left: 0 !important;
+  margin-left: 0;
 }
 
 :deep(.el-anchor__marker) {

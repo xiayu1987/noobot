@@ -75,7 +75,7 @@ describe("chatWebSocketClient", () => {
     await reconnectPromise;
   });
 
-  it("resolves after terminal channel_state when DONE/STOPPED is missing", async () => {
+  it("does not resolve after completed channel_state before DONE", async () => {
     const client = createChatWebSocketClient({
       resolveWebSocketUrl: () => "ws://test",
       terminalChannelStateGraceMs: 20,
@@ -111,6 +111,12 @@ describe("chatWebSocketClient", () => {
     expect(resolved).toBe(false);
 
     await vi.advanceTimersByTimeAsync(1);
+    expect(resolved).toBe(false);
+    socket.emit(StreamEventEnum.DONE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-1",
+      seq: 3,
+    });
     await streamPromise;
     expect(resolved).toBe(true);
     expect(client.getLastReceivedSeqMap()).toEqual({});

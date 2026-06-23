@@ -7,7 +7,6 @@ import { StreamEventEnum } from "../../shared/constants/chatConstants";
 
 const TERMINAL_CHANNEL_STATES = Object.freeze([
   "stopped",
-  "completed",
   "error",
   "no_conversation",
   "expired",

@@ -18,6 +18,7 @@ describe("ChatMessageNavigator theme colors", () => {
     expect(navigatorSource).toContain("border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 72%, transparent);");
     expect(navigatorSource).toContain("--el-anchor-bg-color: transparent;");
     expect(navigatorSource).toContain("--el-anchor-text-color: var(--noobot-text-secondary, var(--el-text-color-secondary));");
+    expect(navigatorSource).toContain("padding-left: 0 !important;");
   });
 
   it("uses theme-aware item container colors for base, hover, and current states", () => {
