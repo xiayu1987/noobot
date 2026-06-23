@@ -195,6 +195,73 @@ describe("useChatSession reconnect replay", () => {
     }));
   });
 
+  it.each([
+    ["手机端发消息，PC 端刷新", "mobile-sender", "pc-refresh"],
+    ["PC 端发消息，手机端刷新", "pc-sender", "mobile-refresh"],
+  ])("%s: reconnect 失败后只提示失败，不强制恢复发送中和停止按钮", async (_label, senderId, refresherId) => {
+    const store = useChatStore();
+    store.sessions = [
+      {
+        id: "s-cross-device",
+        backendSessionId: "s-cross-device",
+        title: "session",
+        isLocal: false,
+        loaded: true,
+        messages: [
+          { role: RoleEnum.USER, content: `hello from ${senderId}` },
+          { role: RoleEnum.ASSISTANT, content: "", pending: false },
+        ],
+        rawMessages: [],
+        sessionDocs: [],
+        connectorPanelState: { selectedConnectors: {} },
+        currentTaskId: "",
+        currentTaskStatus: "idle",
+        messageCount: 2,
+        lastMessage: null,
+        createdAt: "",
+        updatedAt: "",
+      },
+    ];
+    store.activeSessionId = "s-cross-device";
+    store.sending = false;
+    store.canStop = false;
+    wsClientMock.reconnect.mockRejectedValueOnce(new Error("socket reconnect failed"));
+
+    const authFetch = vi.fn();
+    const notify = vi.fn();
+
+    const session = useChatSession({
+      userId: ref(refresherId),
+      apiKey: ref(""),
+      allowUserInteraction: ref(true),
+      forceTool: ref(false),
+      streamOutput: ref(true),
+      botScenario: ref(""),
+      connected: ref(true),
+      ensureConnected: vi.fn(() => true),
+      authFetch,
+      isImageMime: () => false,
+      classifyRealtimeLog: (item) => item,
+      scrollBottom: vi.fn(),
+      notify,
+      clearUploadSelection: vi.fn(),
+    });
+
+    await session.handleReconnect();
+
+    const assistant = store.sessions[0].messages.find(
+      (message) => message.role === RoleEnum.ASSISTANT,
+    );
+    expect(authFetch).not.toHaveBeenCalled();
+    expect(notify).toHaveBeenCalledWith({ type: "warning", message: "infra.reconnectFailed" });
+    expect(assistant.pending).toBe(false);
+    expect(store.sending).toBe(false);
+    expect(store.canStop).toBe(false);
+    expect(store.runStateSnapshot.state).toBe("idle");
+    expect(session.sending.value).toBe(false);
+    expect(session.canStop.value).toBe(false);
+  });
+
   it("keeps dialogProcessId and turnScopeId conversation state keys separate", async () => {
     const store = useChatStore();
     store.sessions = [
