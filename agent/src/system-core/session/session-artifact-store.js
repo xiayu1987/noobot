@@ -75,28 +75,28 @@ export async function readJsonlArtifactFile(filePath = "") {
 
 async function writeJsonWithStorage({
   storageService = null,
-  filePath = "",
+  artifactPath = "",
   payload = {},
   atomic = false,
 } = {}) {
   if (storageService && typeof storageService.writeJsonAtomic === "function" && atomic) {
-    return storageService.writeJsonAtomic(filePath, payload);
+    return storageService.writeJsonAtomic(artifactPath, payload);
   }
   if (storageService && typeof storageService.writeJson === "function") {
-    return storageService.writeJson(filePath, payload);
+    return storageService.writeJson(artifactPath, payload);
   }
-  return writeJsonArtifactFile(filePath, payload);
+  return writeJsonArtifactFile(artifactPath, payload);
 }
 
 async function readJsonWithStorage({
   storageService = null,
-  filePath = "",
+  artifactPath = "",
   fallback = null,
 } = {}) {
   if (storageService && typeof storageService.readJson === "function") {
-    return storageService.readJson(filePath, fallback);
+    return storageService.readJson(artifactPath, fallback);
   }
-  return readJsonArtifactFile(filePath, fallback);
+  return readJsonArtifactFile(artifactPath, fallback);
 }
 
 export async function writeSessionArtifact({
@@ -112,13 +112,13 @@ export async function writeSessionArtifact({
   await Promise.all([
     writeJsonWithStorage({
       storageService,
-      filePath: files.session,
+      artifactPath: files.session,
       payload: sessionPayload,
       atomic,
     }),
     writeJsonWithStorage({
       storageService,
-      filePath: files.sessionSummary,
+      artifactPath: files.sessionSummary,
       payload: summaryPayload,
       atomic: true,
     }),
@@ -138,7 +138,7 @@ export async function readSessionDisplaySummaryArtifact({
   const files = buildSessionArtifactFileMap(sessionDir);
   const payload = await readJsonWithStorage({
     storageService,
-    filePath: files.sessionSummary,
+    artifactPath: files.sessionSummary,
     fallback: null,
   });
   if (!isSessionDisplaySummaryPayload(payload, sessionId)) return null;
@@ -155,7 +155,7 @@ export async function rebuildSessionDisplaySummaryArtifact({
   const summaryPayload = buildSessionDisplaySummary(sessionPayload, { depth });
   await writeJsonWithStorage({
     storageService,
-    filePath: files.sessionSummary,
+    artifactPath: files.sessionSummary,
     payload: summaryPayload,
     atomic: true,
   });
@@ -172,7 +172,7 @@ export async function writeTaskArtifact({
   await mkdir(sessionDir, { recursive: true });
   await writeJsonWithStorage({
     storageService,
-    filePath: files.task,
+    artifactPath: files.task,
     payload: taskPayload,
     atomic,
   });
@@ -189,7 +189,7 @@ export async function writeExecutionArtifact({
   await mkdir(sessionDir, { recursive: true });
   await writeJsonWithStorage({
     storageService,
-    filePath: files.execution,
+    artifactPath: files.execution,
     payload: executionPayload,
     atomic,
   });

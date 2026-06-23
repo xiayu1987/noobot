@@ -220,6 +220,15 @@ export function pickAssistantMessagesForCurrentTurn({
       (messageItem) => getMessageTurnScopeId(messageItem) === normalizedTurnScopeId,
     );
     if (matchedTurnMessages.length) return matchedTurnMessages;
+    const hasAnyExplicitTurnScope = assistantMessagesAfterLastUser.some((messageItem) =>
+      Boolean(getMessageTurnScopeId(messageItem)),
+    );
+    if (!hasAnyExplicitTurnScope && normalizedDialogProcessId) {
+      const legacyDialogMessages = assistantMessagesAfterLastUser.filter(
+        (messageItem) => getMessageDialogProcessId(messageItem) === normalizedDialogProcessId,
+      );
+      if (legacyDialogMessages.length) return legacyDialogMessages;
+    }
     return [];
   }
   if (!normalizedDialogProcessId) return assistantMessagesAfterLastUser;

@@ -12,6 +12,37 @@ import {
   findLatestAssistantMessageForRealtimeLogs,
   mergeRealtimeLogs,
 } from "./messageLookup";
+import { getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity";
+import { RoleEnum } from "../../../shared/constants/chatConstants";
+
+function patchDoneAssistantByDialogProcess({ activeSession, foldedSessionMessages = [], dialogProcessId = "" } = {}) {
+  const normalizedDialogProcessId = _trimStr(dialogProcessId);
+  if (!activeSession?.value || !normalizedDialogProcessId) return;
+  const doneAssistant = [...foldedSessionMessages].reverse().find((messageItem) =>
+    getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
+    getMessageDialogProcessId(messageItem) === normalizedDialogProcessId,
+  );
+  if (!doneAssistant) return;
+  const matchingAssistants = (activeSession.value.messages || []).filter((messageItem) =>
+    getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
+    getMessageDialogProcessId(messageItem) === normalizedDialogProcessId,
+  );
+  const targetAssistant = matchingAssistants.find((messageItem) => !_trimStr(messageItem?.content)) ||
+    matchingAssistants[0] ||
+    null;
+  if (!targetAssistant) return;
+  const content = _trimStr(doneAssistant?.content);
+  if (content) targetAssistant.content = content;
+  targetAssistant.modelAlias = _trimStr(doneAssistant?.modelAlias) || targetAssistant.modelAlias;
+  targetAssistant.modelName = _trimStr(doneAssistant?.modelName) || targetAssistant.modelName;
+  if (Array.isArray(doneAssistant?.modelRuns)) targetAssistant.modelRuns = doneAssistant.modelRuns;
+  targetAssistant.tool_calls = Array.isArray(doneAssistant?.tool_calls) ? doneAssistant.tool_calls : [];
+  activeSession.value.messages = (activeSession.value.messages || []).filter((messageItem) =>
+    messageItem === targetAssistant ||
+    getMessageRole(messageItem) !== RoleEnum.ASSISTANT ||
+    getMessageDialogProcessId(messageItem) !== normalizedDialogProcessId,
+  );
+}
 
 export function applyDoneMessagesFromReconnect({
   activeSession,
@@ -48,6 +79,11 @@ export function applyDoneMessagesFromReconnect({
     activeSession.value.messages.length
   ) {
     applyFoldedMessagesForDialogProcess(activeSession, foldedSessionMessages, doneDialogProcessId);
+    patchDoneAssistantByDialogProcess({
+      activeSession,
+      foldedSessionMessages,
+      dialogProcessId: doneDialogProcessId,
+    });
   } else {
     applyFoldedMessagesToActiveSession(activeSession, foldedSessionMessages);
   }

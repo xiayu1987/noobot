@@ -119,6 +119,14 @@ export function applyFoldedMessagesForDialogProcess(activeSession, foldedMessage
   for (const nextMessage of assistantMessagesForDialogProcess) {
     let reusableMessage = findReusableMessageObject(nextMessage, existingMessages);
     if (!reusableMessage) {
+      reusableMessage = existingMessages.find(
+        (messageItem) =>
+          _isAssistantRole(messageItem) &&
+          messageItem?.pending === true &&
+          _matchesDialogProcessId(messageItem, normalizedDpId),
+      );
+    }
+    if (!reusableMessage) {
       reusableMessage = findLatestPendingAssistantAfterLastUser(existingMessages);
       if (reusableMessage && getMessageDialogProcessId(reusableMessage)) {
         reusableMessage = null;
@@ -133,4 +141,3 @@ export function applyFoldedMessagesForDialogProcess(activeSession, foldedMessage
   }
   return existingMessages;
 }
-

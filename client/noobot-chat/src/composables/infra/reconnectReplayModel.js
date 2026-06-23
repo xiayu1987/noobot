@@ -303,6 +303,15 @@ function findReusableMessageObject(nextMessage = {}, existingMessages = []) {
   }
 
   const nextDialogProcessId = getMessageDialogProcessId(nextMessage);
+  if (nextRole === RoleEnum.ASSISTANT && nextDialogProcessId && !nextTurnScopeId) {
+    const byPendingDialogProcessId = existingMessages.find(
+      (existingMessage) =>
+        getMessageRole(existingMessage) === RoleEnum.ASSISTANT &&
+        existingMessage?.pending === true &&
+        getMessageDialogProcessId(existingMessage) === nextDialogProcessId,
+    );
+    if (byPendingDialogProcessId) return byPendingDialogProcessId;
+  }
   if (nextRole === RoleEnum.ASSISTANT && nextDialogProcessId && nextTurnScopeId) {
     const byDialogProcessId = existingMessages.find(
       (existingMessage) =>

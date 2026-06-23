@@ -373,7 +373,7 @@ export {
 
 export {
   normalizeRouteText as normalizeSessionThinkingRouteText,
-  isHarnessInjectedMessage as isSessionThinkingHarnessInjectedMessage,
+  isInjectedMessage as isSessionThinkingInjectedMessage,
   isToolOrThinkingMessage as isSessionToolOrThinkingMessage,
   isSameThinkingRound as isSameSessionThinkingRound,
   buildToolLogFromMessage as buildSessionThinkingToolLogFromMessage,
