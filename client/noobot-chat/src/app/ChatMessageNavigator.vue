@@ -45,7 +45,7 @@ const emit = defineEmits(["select"]);
 .chat-message-navigator {
   max-height: min(70vh, 560px);
   overflow: auto;
-  padding: 8px 8px 8px 4px;
+  padding: 10px 12px;
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 72%, transparent);
   border-radius: 14px;
   background: color-mix(in srgb, var(--noobot-panel-bg, var(--el-bg-color)) 92%, var(--noobot-surface-sidebar, var(--el-fill-color-lighter)));
@@ -60,7 +60,7 @@ const emit = defineEmits(["select"]);
 }
 
 :deep(.el-anchor__list) {
-  padding-left: 10px;
+  padding: 0;
 }
 
 :deep(.el-anchor__marker) {
@@ -74,9 +74,9 @@ const emit = defineEmits(["select"]);
 
 :deep(.el-anchor__link) {
   position: relative;
-  max-width: 188px;
-  margin: 2px 0;
-  padding: 7px 10px 7px 12px;
+  max-width: 208px;
+  margin: 3px 0;
+  padding: 8px 14px 8px 16px;
   border-radius: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -96,13 +96,25 @@ const emit = defineEmits(["select"]);
 .chat-message-navigator__item {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
   min-width: 0;
+  width: 100%;
 }
 
 .chat-message-navigator__role {
   flex: 0 0 auto;
-  font-weight: 700;
+  min-width: 28px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1.25;
+  font-weight: 800;
+  letter-spacing: 0.035em;
+  text-align: center;
+  color: var(--noobot-text-strong, var(--el-text-color-primary));
+  background: color-mix(in srgb, var(--noobot-fill-soft, var(--el-fill-color-lighter)) 70%, white);
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 70%, transparent);
+  box-shadow: 0 1px 2px color-mix(in srgb, #000 8%, transparent);
 }
 
 .chat-message-navigator__content {
@@ -113,7 +125,15 @@ const emit = defineEmits(["select"]);
 }
 
 .chat-message-navigator__item.is-user .chat-message-navigator__role {
-  color: var(--noobot-text-strong, var(--el-text-color-primary));
+  color: color-mix(in srgb, var(--el-color-primary) 88%, #1f2937);
+  background: color-mix(in srgb, var(--el-color-primary-light-9) 86%, white);
+  border-color: color-mix(in srgb, var(--el-color-primary) 30%, transparent);
+}
+
+.chat-message-navigator__item.is-assistant .chat-message-navigator__role {
+  color: color-mix(in srgb, var(--el-color-success) 78%, #1f2937);
+  background: color-mix(in srgb, var(--el-color-success-light-9) 86%, white);
+  border-color: color-mix(in srgb, var(--el-color-success) 30%, transparent);
 }
 
 :deep(.el-anchor__link::before) {
@@ -154,7 +174,7 @@ const emit = defineEmits(["select"]);
 @media (max-width: 720px) {
   .chat-message-navigator {
     max-height: calc(100dvh - 120px);
-    padding: 2px 4px;
+    padding: 8px 10px;
     border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 58%, transparent);
     background: color-mix(
       in srgb,
@@ -164,7 +184,7 @@ const emit = defineEmits(["select"]);
 
   :deep(.el-anchor__link) {
     max-width: none;
-    padding: 10px 12px;
+    padding: 10px 14px 10px 16px;
     font-size: 13px;
   }
 }

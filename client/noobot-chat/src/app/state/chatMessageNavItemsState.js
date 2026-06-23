@@ -9,13 +9,13 @@ export function normalizeChatMessageNavContent(messageItem = {}) {
 
 export function resolveChatMessageNavRoleLabel(role = "", { translateRole, fallbackRole = "session" } = {}) {
   const normalizedRole = String(role || "").trim().toLowerCase();
+  if (normalizedRole === RoleEnum.USER) return "ME";
+  if (normalizedRole === RoleEnum.ASSISTANT) return "AI";
+  if (normalizedRole === RoleEnum.TOOL) return "Tool";
   if (typeof translateRole === "function") {
     const translatedRole = String(translateRole(normalizedRole) || "").trim();
     if (translatedRole) return translatedRole;
   }
-  if (normalizedRole === RoleEnum.USER) return "Me";
-  if (normalizedRole === RoleEnum.ASSISTANT) return "AI";
-  if (normalizedRole === RoleEnum.TOOL) return "Tool";
   return fallbackRole;
 }
 

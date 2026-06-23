@@ -469,6 +469,103 @@ describe("useMessageFiles", () => {
     expect(displayedAttachmentMetas.value).toEqual([]);
   });
 
+  it("does not collect previous session-doc tool attachments while later assistant is streaming but absent from summary", () => {
+    const sessionDoc = {
+      sessionId: "session-1",
+      messages: [
+        {
+          role: "user",
+          sessionId: "session-1",
+          turnScopeId: "turn-first",
+          dialogProcessId: "dp-first",
+          content: "生成一张小鸟图",
+        },
+        {
+          role: "tool",
+          sessionId: "session-1",
+          turnScopeId: "turn-first",
+          dialogProcessId: "dp-first",
+          attachmentMetas: [
+            {
+              attachmentId: "bird-1",
+              name: "generated_image_1.png",
+              turnScope: { turnScopeId: "turn-first", dialogProcessId: "dp-first" },
+            },
+          ],
+        },
+        {
+          role: "assistant",
+          sessionId: "session-1",
+          turnScopeId: "turn-first",
+          dialogProcessId: "dp-first",
+          content: "小鸟图片已生成",
+        },
+        {
+          role: "user",
+          sessionId: "session-1",
+          turnScopeId: "turn-second",
+          dialogProcessId: "dp-second",
+          content: "测试脚本工具调用3次",
+        },
+      ],
+    };
+    const secondUser = sessionDoc.messages[3];
+    const secondAssistant = {
+      role: "assistant",
+      pending: true,
+      hasFirstStreamEvent: true,
+      sessionId: "session-1",
+      turnScopeId: "turn-second",
+      dialogProcessId: "dp-second",
+      attachmentMetas: [],
+    };
+
+    const { displayedAttachmentMetas } = useMessageFiles({
+      getMessageItem: () => secondAssistant,
+      getAllMessages: () => [sessionDoc.messages[0], sessionDoc.messages[2], secondUser, secondAssistant],
+      getSessionDocs: () => [sessionDoc],
+      getUserId: () => "admin",
+    });
+
+    expect(displayedAttachmentMetas.value).toEqual([]);
+  });
+
+  it("does not collect session-doc attachments from a different session with the same turn scope", () => {
+    const messageItem = {
+      role: "assistant",
+      sessionId: "session-current",
+      turnScopeId: "turn-same",
+      dialogProcessId: "dp-current",
+      attachmentMetas: [],
+    };
+    const otherSessionDoc = {
+      sessionId: "session-other",
+      messages: [
+        {
+          role: "tool",
+          turnScopeId: "turn-same",
+          dialogProcessId: "dp-other",
+          attachmentMetas: [
+            {
+              attachmentId: "other-session-file",
+              name: "other.png",
+              turnScope: { sessionId: "session-other", turnScopeId: "turn-same" },
+            },
+          ],
+        },
+      ],
+    };
+
+    const { displayedAttachmentMetas } = useMessageFiles({
+      getMessageItem: () => messageItem,
+      getAllMessages: () => [messageItem],
+      getSessionDocs: () => [otherSessionDoc],
+      getUserId: () => "admin",
+    });
+
+    expect(displayedAttachmentMetas.value).toEqual([]);
+  });
+
   it("still collects tool attachments from the same linear turn", () => {
     const firstUser = {
       role: "user",

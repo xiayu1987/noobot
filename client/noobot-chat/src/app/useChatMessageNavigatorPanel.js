@@ -34,7 +34,7 @@ export function useChatMessageNavigatorPanel({
     getMessageAnchorId: messageListPanelRef?.value?.getMessageAnchorId,
     translateSession: () => translate?.("common.session") || "session",
     translateRole: (role) => {
-      if (role === "user") return translate?.("message.me") || "Me";
+      if (role === "user") return "ME";
       if (role === "assistant") return translate?.("message.ai") || "AI";
       if (role === "tool") return translate?.("message.tool") || "Tool";
       return "";
