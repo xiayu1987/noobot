@@ -28,6 +28,38 @@ test("buildModelKwargs keeps top_p for non-gpt-5 models", () => {
   assert.equal(kwargs.top_p, 0.9);
 });
 
+test("buildModelKwargs maps explicit prompt_cache_key into modelKwargs", () => {
+  const kwargs = buildModelKwargs({
+    format: "openai_compatible",
+    model: "gpt-4o",
+    prompt_cache_key: "  admin-session-main  ",
+    extra_body: {
+      prompt_cache_key: "fallback",
+    },
+  });
+
+  assert.equal(kwargs.prompt_cache_key, "admin-session-main");
+});
+
+test("buildModelKwargs supports promptCacheKey and filters blank prompt cache keys", () => {
+  const camelCaseKwargs = buildModelKwargs({
+    format: "openai_compatible",
+    model: "gpt-4o",
+    promptCacheKey: "agent-main",
+  });
+  const blankKwargs = buildModelKwargs({
+    format: "openai_compatible",
+    model: "gpt-4o",
+    prompt_cache_key: "   ",
+    extra_body: {
+      prompt_cache_key: "   ",
+    },
+  });
+
+  assert.equal(camelCaseKwargs.prompt_cache_key, "agent-main");
+  assert.equal("prompt_cache_key" in blankKwargs, false);
+});
+
 test("buildModelKwargs sets dashscope enable_thinking default to false", () => {
   const kwargs = buildModelKwargs({
     format: "dashscope",

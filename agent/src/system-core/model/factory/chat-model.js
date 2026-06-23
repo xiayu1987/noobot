@@ -33,6 +33,13 @@ function supportsTopP(modelSpec = {}) {
   return true;
 }
 
+function normalizePromptCacheKey(value) {
+  if (value === undefined || value === null) return "";
+  const normalized = String(value).trim();
+  if (!normalized) return "";
+  return normalized.slice(0, 200);
+}
+
 /**
  * Resolve API key for a model spec from env or explicit config.
  * @param {object} modelSpec
@@ -58,6 +65,19 @@ export function buildModelKwargs(modelSpec = {}) {
   const normalizedSpec = normalizeModelSpecWithDefaults(modelSpec);
   const out = { ...(normalizedSpec.extra_body || {}) };
   const providerFormat = normalizeProviderFormat(normalizedSpec?.format || "");
+  const promptCacheKey = normalizePromptCacheKey(
+    normalizedSpec.prompt_cache_key ?? normalizedSpec.promptCacheKey,
+  );
+  if (promptCacheKey) {
+    out.prompt_cache_key = promptCacheKey;
+  } else if ("prompt_cache_key" in out) {
+    const extraBodyPromptCacheKey = normalizePromptCacheKey(out.prompt_cache_key);
+    if (extraBodyPromptCacheKey) {
+      out.prompt_cache_key = extraBodyPromptCacheKey;
+    } else {
+      delete out.prompt_cache_key;
+    }
+  }
   if (normalizedSpec.reasoning_effort !== undefined)
     out.reasoning_effort = normalizedSpec.reasoning_effort;
   if (
