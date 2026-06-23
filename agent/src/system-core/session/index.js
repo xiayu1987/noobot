@@ -370,3 +370,12 @@ export {
   normalizeTaskEntity,
   normalizeExecutionLogEntity,
 } from "./entities/normalizers.js";
+
+export {
+  normalizeRouteText as normalizeSessionThinkingRouteText,
+  isHarnessInjectedMessage as isSessionThinkingHarnessInjectedMessage,
+  isToolOrThinkingMessage as isSessionToolOrThinkingMessage,
+  isSameThinkingRound as isSameSessionThinkingRound,
+  buildToolLogFromMessage as buildSessionThinkingToolLogFromMessage,
+  buildThinkingDetailPayload,
+} from "./session-thinking-detail.js";

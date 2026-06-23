@@ -27,6 +27,7 @@ export function useThinkingDetailsPanel({
   const thinkingDetailsVisible = ref(false);
   const thinkingDetailsMessageItem = ref(null);
   const thinkingDetailsAllMessages = ref([]);
+  const thinkingDetailsFetchDetail = ref(null);
 
   function resolveFallbackThinkingDetailsPayload() {
     return resolveFallbackThinkingDetailsPayloadState(activeSession?.value);
@@ -34,6 +35,7 @@ export function useThinkingDetailsPanel({
 
   function closeThinkingDetailsPanel() {
     thinkingDetailsVisible.value = false;
+    thinkingDetailsFetchDetail.value = null;
   }
 
   function getThinkingDetailsTitle(messageItem = {}) {
@@ -44,24 +46,49 @@ export function useThinkingDetailsPanel({
     return getMessageDialogProcessId(messageItem);
   }
 
-  async function fetchThinkingDetailForMessage(messageItem = {}) {
+  async function fetchThinkingDetailForMessage(messageItem = {}, fetchDetailOverride = null) {
     const dialogProcessId = normalizeDialogProcessId(messageItem);
-    if (!dialogProcessId || typeof fetchThinkingDetail !== "function") return null;
-    return fetchThinkingDetail(activeSessionId?.value, { dialogProcessId });
+    const turnScopeId = String(messageItem?.turnScopeId || messageItem?.turn_scope_id || "").trim();
+    if (!dialogProcessId && !turnScopeId) return null;
+    const runFetchDetail = typeof fetchDetailOverride === "function"
+      ? fetchDetailOverride
+      : typeof thinkingDetailsFetchDetail.value === "function"
+        ? thinkingDetailsFetchDetail.value
+        : fetchThinkingDetail;
+    if (typeof runFetchDetail !== "function") return null;
+    return runFetchDetail(activeSessionId?.value, { dialogProcessId, turnScopeId });
   }
 
   async function openThinkingDetailsPanel(payload = {}) {
     const fallbackPayload = resolveFallbackThinkingDetailsPayload();
     const initialPayload = resolveThinkingDetailsPanelPayload(payload, fallbackPayload);
     const initialMessageItem = initialPayload.messageItem;
+    const hasLocalThinkingDetails =
+      (Array.isArray(initialMessageItem?.processRealtimeLogs) &&
+        initialMessageItem.processRealtimeLogs.length > 0) ||
+      (Array.isArray(initialMessageItem?.realtimeLogs) &&
+        initialMessageItem.realtimeLogs.length > 0) ||
+      (Array.isArray(initialMessageItem?.processCompletedToolLogs) &&
+        initialMessageItem.processCompletedToolLogs.length > 0) ||
+      (Array.isArray(initialMessageItem?.completedToolLogs) &&
+        initialMessageItem.completedToolLogs.length > 0);
+    const requestFetchDetail = typeof payload?.fetchThinkingDetail === "function"
+      ? payload.fetchThinkingDetail
+      : null;
     const needsFullDetail =
       initialMessageItem &&
-      (initialMessageItem.hasThinkingDetails === true || Number(initialMessageItem.thinkingDetailCount || 0) > 0) &&
-      !Array.isArray(initialMessageItem.realtimeLogs);
+      payload?.skipFetch !== true &&
+      (
+        payload?.forceFetch === true ||
+        (
+          (initialMessageItem.hasThinkingDetails === true || Number(initialMessageItem.thinkingDetailCount || 0) > 0) &&
+          !hasLocalThinkingDetails
+        )
+      );
     let loadedThinkingDetail = null;
     if (needsFullDetail) {
       try {
-        loadedThinkingDetail = await fetchThinkingDetailForMessage(initialMessageItem);
+        loadedThinkingDetail = await fetchThinkingDetailForMessage(initialMessageItem, requestFetchDetail);
       } catch (error) {
         notify?.({ type: "warning", message: error?.message || translate?.("chat.loadSessionDetailFailed") });
       }
@@ -76,6 +103,7 @@ export function useThinkingDetailsPanel({
     closeComposerMorePanel?.();
     thinkingDetailsMessageItem.value = messageItem;
     thinkingDetailsAllMessages.value = allMessages;
+    thinkingDetailsFetchDetail.value = requestFetchDetail;
     thinkingDetailsVisible.value = true;
     if (payload?.pushRoute !== false) {
       pushPseudoRoute?.(buildThinkingDetailsRoute(activeSessionId?.value, thinkingDetailsPanel));

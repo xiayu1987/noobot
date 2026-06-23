@@ -21,7 +21,13 @@ const props = defineProps({
 const emit = defineEmits(["open-thinking-details"]);
 
 function handleOpenThinkingDetails(payload = {}) {
-  emit("open-thinking-details", payload);
+  emit("open-thinking-details", {
+    ...(payload && typeof payload === "object" ? payload : {}),
+    messageItem: payload?.messageItem || props.messageItem,
+    allMessages: Array.isArray(payload?.allMessages) ? payload.allMessages : props.allMessages,
+    sessionDocs: props.sessionDocs,
+    skipFetch: payload?.skipFetch === true,
+  });
 }
 </script>
 

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import readline from "node:readline/promises";
@@ -367,6 +367,17 @@ async function readJsonStrict(filePath = "", label = "JSON") {
 async function writeJson(filePath = "", payload = {}) {
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+}
+
+async function ensureModelProxyConfig({ serviceRoot } = {}) {
+  const modelProxyRoot = path.resolve(serviceRoot, "../model-proxy");
+  const examplePath = path.join(modelProxyRoot, "model-proxy.config.example.json");
+  const configPath = path.join(modelProxyRoot, "model-proxy.config.json");
+
+  if (await fileExists(configPath)) return;
+  if (!(await fileExists(examplePath))) return;
+
+  await copyFile(examplePath, configPath);
 }
 
 function normalizeProviderAlias(modelName = "") {
@@ -1268,6 +1279,8 @@ async function runProjectLauncher() {
   const cliOptions = parseCliOptions(process.argv.slice(2));
   const globalConfigPath = path.resolve(serviceRoot, "./config/global.config.json");
   const globalExamplePath = path.resolve(serviceRoot, "./config/global.config.example.json");
+
+  await ensureModelProxyConfig({ serviceRoot });
 
   if (!(await fileExists(globalConfigPath))) {
     await initializeGlobalConfigWhenMissing({

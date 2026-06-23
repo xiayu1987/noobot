@@ -9,8 +9,9 @@ import { registerConnectorRoutes } from "../routes/connectors-routes.js";
 import { registerSessionRoutes } from "../routes/session-routes.js";
 import { registerWorkspaceRoutes } from "../routes/workspace-routes.js";
 import { registerIdeRoutes } from "../routes/ide-routes.js";
+import { createServicePluginHost } from "../services/service-plugin-host.js";
 
-export function registerHttpModules(
+export async function registerHttpModules(
   app,
   {
     bot,
@@ -129,6 +130,11 @@ export function registerHttpModules(
     handleChat,
     getConnectorChannelStore,
     getConnectorHistoryStore,
+    translateText,
+  });
+
+  await createServicePluginHost().registerServiceRoutes(app, {
+    bot,
     translateText,
   });
 }

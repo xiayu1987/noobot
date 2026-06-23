@@ -1,0 +1,32 @@
+{
+  "proxyHost": "0.0.0.0",
+  "proxies": [
+    {
+      "localPort": 12341,
+      "targetUrl": "https://dashscope.aliyuncs.com"
+    },
+    {
+      "localPort": 12342,
+      "targetUrl": "https://api.poe.com"
+    }
+  ],
+  "logDir": "logs",
+  "logPrefix": "requests",
+  "unknownModelName": "unknown_model",
+  "unknownFlowName": "unknown_flow",
+  "unknownSessionId": "unknown_session",
+  "modelNameHeaderKey": "x-model-name",
+  "flowHeaderKeys": [
+    "x-plugin-flow",
+    "x-harness-flow"
+  ],
+  "sessionIdHeaderKeys": [
+    "x-plugin-session-id",
+    "x-harness-session-id"
+  ],
+  "harnessFlowHeaderKey": "x-harness-flow",
+  "sessionIdHeaderKey": "x-harness-session-id",
+  "parentSessionIdHeaderKey": "parentsessionid",
+  "maxLogFileSizeBytes": 10485760,
+  "retainMs": 3600000
+}

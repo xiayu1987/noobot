@@ -167,6 +167,7 @@ function handleOpenThinkingDetails(payload = {}) {
   emit("open-thinking-details", {
     messageItem: props.messageItem,
     allMessages: props.allMessages,
+    sessionDocs: props.sessionDocs,
     ...(payload && typeof payload === "object" ? payload : {}),
   });
 }

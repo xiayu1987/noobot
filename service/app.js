@@ -55,7 +55,7 @@ registerGlobalMiddlewares(app, {
 initConnectorChannelStore();
 initConnectorHistoryStore({ workspaceRoot: workspaceRootPath() });
 
-registerHttpModules(app, buildHttpModuleDependencies());
+await registerHttpModules(app, buildHttpModuleDependencies());
 
 app.get("/health", (_, res) => res.json({ ok: true }));
 

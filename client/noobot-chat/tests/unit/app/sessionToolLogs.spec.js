@@ -1,0 +1,64 @@
+import { describe, expect, it } from "vitest";
+
+import { applyCompletedToolLogsToMessages } from "../../../src/composables/infra/sessionToolLogs";
+
+describe("session tool logs", () => {
+  it("attaches raw workflow node tool logs to a summary display message by turnScopeId", () => {
+    const turnScopeId = "workflow-node:dialog-1";
+    const displayMessages = [
+      {
+        role: "assistant",
+        type: "message",
+        sessionId: "node-session-1",
+        turnScopeId,
+        hasThinkingDetails: true,
+        thinkingDetailCount: 2,
+      },
+    ];
+    const sessionDocuments = [
+      {
+        sessionId: "node-session-1",
+        parentSessionId: "root-session-1",
+        caller: "bot",
+        depth: 1,
+        messages: [
+          {
+            role: "assistant",
+            type: "message",
+            sessionId: "node-session-1",
+            turnScopeId,
+            content: "done",
+            ts: "2026-06-23T00:00:00.000Z",
+          },
+          {
+            role: "assistant",
+            type: "tool_call",
+            sessionId: "node-session-1",
+            turnScopeId,
+            tool_calls: [
+              { id: "call-1", function: { name: "search", arguments: "{\"q\":\"x\"}" } },
+            ],
+            ts: "2026-06-23T00:00:01.000Z",
+          },
+          {
+            role: "tool",
+            type: "tool_result",
+            sessionId: "node-session-1",
+            turnScopeId,
+            tool_call_id: "call-1",
+            content: "ok",
+            ts: "2026-06-23T00:00:02.000Z",
+          },
+        ],
+      },
+    ];
+
+    applyCompletedToolLogsToMessages(displayMessages, sessionDocuments);
+
+    expect(displayMessages[0].completedToolLogs).toHaveLength(2);
+    expect(displayMessages[0].completedToolLogs.map((item) => item.type)).toEqual([
+      "tool_call",
+      "tool_result",
+    ]);
+  });
+});
