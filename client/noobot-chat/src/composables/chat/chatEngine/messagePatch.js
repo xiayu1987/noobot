@@ -10,7 +10,7 @@ import {
   patchAssistantFromWorkflowMessage,
   pickAssistantMessagesForCurrentTurn,
 } from "./utils";
-import { getMessageDialogProcessId } from "../../infra/messageIdentity";
+import { getMessageDialogProcessId, getMessageTurnScopeId } from "../../infra/messageIdentity";
 import { nowIso } from "../../infra/timeFields";
 
 export function applyDoneMessagesPatch({
@@ -24,6 +24,8 @@ export function applyDoneMessagesPatch({
   if (!botMessage || !activeSession?.value || !Array.isArray(data?.messages) || !data.messages.length) {
     return false;
   }
+  const botTurnScopeId = getMessageTurnScopeId(botMessage);
+  if (!botTurnScopeId) return false;
 
   const rawMessagesForView = data.messages.map((messageItem) => makeViewMessage(messageItem));
   activeSession.value.rawMessages = rawMessagesForView;
@@ -31,6 +33,7 @@ export function applyDoneMessagesPatch({
   const assistantMessagesForCurrentTurn = pickAssistantMessagesForCurrentTurn({
     foldedMessages: folded,
     dialogProcessId: getMessageDialogProcessId(botMessage) || data.dialogProcessId,
+    turnScopeId: botTurnScopeId,
   });
   const workflowAssistants = assistantMessagesForCurrentTurn.filter(
     (messageItem) => messageItem?.workflowMessage === true,
@@ -50,6 +53,7 @@ export function applyDoneMessagesPatch({
     );
     const lastAssistant = patchAssistants[patchAssistants.length - 1];
     if (lastAssistant) {
+      if (getMessageTurnScopeId(lastAssistant) !== botTurnScopeId) return true;
       const mergedAssistantContent = mergeAssistantContents(patchAssistants);
       const lastAssistantType = String(lastAssistant.type || "");
       if (lastAssistantType && lastAssistantType !== "tool_call") {

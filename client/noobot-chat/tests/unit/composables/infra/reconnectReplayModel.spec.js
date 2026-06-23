@@ -168,7 +168,7 @@ describe("reconnectReplayModel", () => {
     expect(target.transferEnvelopes).toEqual([existingTransferEnvelope, incomingTransferEnvelope]);
   });
 
-  it("findReusableMessageObject prefers assistant reuse by dialogProcessId", () => {
+  it("findReusableMessageObject does not reuse assistant by dialogProcessId without turnScopeId", () => {
     const existing = [
       { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-1", content: "old" },
       { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-2", content: "other" },
@@ -177,7 +177,47 @@ describe("reconnectReplayModel", () => {
       { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-2", content: "new" },
       existing,
     );
+    expect(reusable).toBeNull();
+  });
+
+  it("findReusableMessageObject reuses assistant by dialogProcessId when turnScopeId is present", () => {
+    const existing = [
+      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-1", turnScopeId: "turn-1", content: "old" },
+      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-2", turnScopeId: "turn-2", content: "other" },
+    ];
+    const reusable = findReusableMessageObject(
+      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-2", turnScopeId: "turn-2", content: "new" },
+      existing,
+    );
     expect(reusable).toBe(existing[1]);
+  });
+
+  it("patchMessageObjectPreservingUiState clears stale artifacts when source assistant has no turnScopeId", () => {
+    const target = {
+      role: RoleEnum.ASSISTANT,
+      dialogProcessId: "dp-stale",
+      turnScopeId: "turn-old",
+      attachmentMetas: [{ name: "old.txt" }],
+      completedToolLogs: [{ id: "old-tool" }],
+      realtimeLogs: [{ id: "old-realtime" }],
+      processCompletedToolLogs: [{ id: "old-process" }],
+      processRealtimeLogs: [{ id: "old-process-realtime" }],
+      processExecutionLogTotal: 2,
+    };
+
+    patchMessageObjectPreservingUiState(target, {
+      role: RoleEnum.ASSISTANT,
+      dialogProcessId: "dp-stale",
+      content: "new assistant without turn",
+    });
+
+    expect(target.turnScopeId).toBeUndefined();
+    expect(target.attachmentMetas).toEqual([]);
+    expect(target.completedToolLogs).toEqual([]);
+    expect(target.realtimeLogs).toEqual([]);
+    expect(target.processCompletedToolLogs).toEqual([]);
+    expect(target.processRealtimeLogs).toEqual([]);
+    expect(target.processExecutionLogTotal).toBe(0);
   });
 
   it("findReusableMessageObject rejects dialogProcessId reuse when turn identity conflicts", () => {

@@ -10,6 +10,8 @@ import {
   normalizeTransferEnvelopes,
 } from "./transferEnvelopes";
 import {
+  canUseTurnScopedAssets,
+  clearTurnScopedAssets,
   getMessageDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,
@@ -301,7 +303,7 @@ function findReusableMessageObject(nextMessage = {}, existingMessages = []) {
   }
 
   const nextDialogProcessId = getMessageDialogProcessId(nextMessage);
-  if (nextRole === RoleEnum.ASSISTANT && nextDialogProcessId) {
+  if (nextRole === RoleEnum.ASSISTANT && nextDialogProcessId && nextTurnScopeId) {
     const byDialogProcessId = existingMessages.find(
       (existingMessage) =>
         getMessageRole(existingMessage) === RoleEnum.ASSISTANT &&
@@ -318,6 +320,10 @@ function findReusableMessageObject(nextMessage = {}, existingMessages = []) {
 }
 
 function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage = {}) {
+  const sourceRole = getMessageRole(sourceMessage);
+  const sourceTurnScopeId = getMessageTurnScopeId(sourceMessage);
+  const sourceCanUseTurnScopedAssets = canUseTurnScopedAssets(sourceMessage);
+  const sourceAssistantWithoutTurnScope = sourceRole === RoleEnum.ASSISTANT && !sourceTurnScopeId;
   const thinkingOpenNames = Array.isArray(targetMessage?.thinkingOpenNames)
     ? targetMessage.thinkingOpenNames
     : null;
@@ -367,18 +373,26 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   if (existingContent.trim() && !String(sourceMessage?.content || "").trim()) {
     targetMessage.content = existingContent;
   }
-  if (existingAttachmentMetas.length && !hasArrayItems(sourceMessage?.attachmentMetas)) {
+  if (
+    sourceCanUseTurnScopedAssets &&
+    existingAttachmentMetas.length &&
+    !hasArrayItems(sourceMessage?.attachmentMetas)
+  ) {
     targetMessage.attachmentMetas = existingAttachmentMetas;
   }
   if (existingModelRuns.length && !hasArrayItems(sourceMessage?.modelRuns)) {
     targetMessage.modelRuns = existingModelRuns;
   }
-  if (existingCompletedToolLogs.length && !hasArrayItems(sourceMessage?.completedToolLogs)) {
+  if (
+    sourceCanUseTurnScopedAssets &&
+    existingCompletedToolLogs.length &&
+    !hasArrayItems(sourceMessage?.completedToolLogs)
+  ) {
     targetMessage.completedToolLogs = existingCompletedToolLogs;
   }
   if (hasArrayItems(sourceMessage?.realtimeLogs)) {
     targetMessage.realtimeLogs = sourceMessage.realtimeLogs.slice(-EXECUTION_LOG_DISPLAY_LIMIT);
-  } else if (existingRealtimeLogs.length) {
+  } else if (sourceCanUseTurnScopedAssets && existingRealtimeLogs.length) {
     targetMessage.realtimeLogs = existingRealtimeLogs.slice(-EXECUTION_LOG_DISPLAY_LIMIT);
   }
   if (!sourceTransferResult && existingTransferResult) {
@@ -402,8 +416,12 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   if (existingThinkingFinishedAt && !getThinkingFinishedAt(sourceMessage)) {
     setThinkingFinishedAt(targetMessage, existingThinkingFinishedAt);
   }
-  if (existingTurnScopeId && !getMessageTurnScopeId(sourceMessage)) {
+  if (sourceCanUseTurnScopedAssets && existingTurnScopeId && !getMessageTurnScopeId(sourceMessage)) {
     targetMessage.turnScopeId = existingTurnScopeId;
+  }
+  if (sourceAssistantWithoutTurnScope) {
+    clearTurnScopedAssets(targetMessage);
+    delete targetMessage.turnScopeId;
   }
   const channelState = String(targetMessage?.channelState?.state || "").trim();
   if (existingPending && IN_FLIGHT_CHANNEL_STATES.has(channelState)) {

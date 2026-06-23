@@ -12,6 +12,7 @@ import {
   getMessageRole,
   getMessageSessionId,
   getMessageTurnScopeId,
+  isAssistantWithoutTurnScope,
 } from "../../composables/infra/messageIdentity";
 import { sanitizeExecutionLogForDisplay } from "../../composables/chat/chatEngine/utils";
 import { resolveThinkingTiming } from "../../composables/chat/thinkingTimingRegistry";
@@ -258,6 +259,7 @@ function buildFallbackCompletedToolLogs(messageItem = {}) {
 }
 
 function getCompletedToolLogsForMessage(messageItem = {}) {
+  if (isAssistantWithoutTurnScope(messageItem)) return [];
   const completedToolLogs = Array.isArray(messageItem?.processCompletedToolLogs)
     ? messageItem.processCompletedToolLogs
     : Array.isArray(messageItem?.completedToolLogs)
@@ -418,6 +420,7 @@ function formatDuration(ms = 0) {
 }
 
 function getThinkingDurationMs(messageItem = {}) {
+  const hasMessageTurnScopeId = Boolean(getMessageTurnScopeId(messageItem));
   const channelState =
     messageItem?.channelState &&
     typeof messageItem.channelState === "object" &&
@@ -425,24 +428,27 @@ function getThinkingDurationMs(messageItem = {}) {
       ? messageItem.channelState
       : {};
   const msgTs = parseAnyTimeMs(getMessageTimestamp(messageItem));
-  const channelStartedAt = parseAnyTimeMs(
-    channelState?.createdAt,
-    channelState?.createdAtMs,
-  );
-  const channelUpdatedAt = parseAnyTimeMs(
-    channelState?.updatedAt,
-    channelState?.updatedAtMs,
-    channelState?.timestamp,
-  );
+  const canUseAssociatedTurnTiming = !isAssistantWithoutTurnScope(messageItem);
+  const channelStartedAt = canUseAssociatedTurnTiming
+    ? parseAnyTimeMs(
+        channelState?.createdAt,
+        channelState?.createdAtMs,
+      )
+    : 0;
+  const channelUpdatedAt = canUseAssociatedTurnTiming
+    ? parseAnyTimeMs(
+        channelState?.updatedAt,
+        channelState?.updatedAtMs,
+        channelState?.timestamp,
+      )
+    : 0;
   const sessionId = getMessageSessionId(messageItem) || String(channelState?.sessionId || "").trim();
-  const turnScopeId = getMessageTurnScopeId(messageItem) || String(channelState?.turnScopeId || "").trim();
+  const turnScopeId = hasMessageTurnScopeId ? getMessageTurnScopeId(messageItem) : "";
   const dialogProcessId = getMessageDialogProcessId(messageItem) || String(channelState?.dialogProcessId || "").trim();
-  const timingScope = turnScopeId
-    ? { sessionId, turnScopeId }
-    : { sessionId, dialogProcessId };
+  const timingScope = turnScopeId ? { sessionId, turnScopeId } : null;
   const startedAt = parseAnyTimeMs(getThinkingStartedAt(messageItem));
   const finishedAt = parseAnyTimeMs(getThinkingFinishedAt(messageItem));
-  const persistedTiming = resolveThinkingTiming(timingScope) || {};
+  const persistedTiming = timingScope ? resolveThinkingTiming(timingScope) || {} : {};
   const persistedStartedAt = parseAnyTimeMs(persistedTiming?.startedAtMs, persistedTiming?.startedAt);
   const persistedFinishedAt = parseAnyTimeMs(persistedTiming?.finishedAtMs, persistedTiming?.finishedAt);
   const realtimeLogs = getAllRealtimeLogs(messageItem);

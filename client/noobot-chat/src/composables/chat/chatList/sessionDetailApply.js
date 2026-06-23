@@ -10,7 +10,13 @@ import {
   findSessionByAnyId as findSessionByAnyIdInList,
   promoteSessionIdentityToBackendId,
 } from "../../infra/sessionIdentity";
-import { getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity";
+import {
+  clearTurnScopedAssets,
+  getMessageDialogProcessId,
+  getMessageRole,
+  getMessageTurnScopeId,
+  isAssistantWithoutTurnScope,
+} from "../../infra/messageIdentity";
 import {
   applySummaryToolLogs,
   buildWorkflowMessageSignature,
@@ -35,6 +41,10 @@ export function createSessionDetailApplicator({
     if (!processStore) return;
     for (const messageItem of messages || []) {
       if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) continue;
+      if (isAssistantWithoutTurnScope(messageItem)) {
+        clearTurnScopedAssets(messageItem);
+        continue;
+      }
       const dialogProcessId = getMessageDialogProcessId(messageItem);
       if (!dialogProcessId) continue;
       const completedToolLogs = Array.isArray(messageItem?.completedToolLogs)

@@ -215,6 +215,7 @@ describe("ThinkingPanel", () => {
     const wrapper = mountThinkingPanel({
       role: "assistant",
       pending: true,
+      turnScopeId: "client-turn:refresh-created-at",
       channelState: {
         state: "sending",
         createdAt: "2026-06-22T10:00:00.000Z",
@@ -270,6 +271,7 @@ describe("ThinkingPanel", () => {
     const wrapper = mountThinkingPanel({
       role: "assistant",
       pending: false,
+      turnScopeId: "client-turn:completed-list",
       realtimeLogs: [],
       completedToolLogs,
     });
@@ -293,6 +295,7 @@ describe("ThinkingPanel", () => {
     const wrapper = mountThinkingPanel({
       role: "assistant",
       pending: false,
+      turnScopeId: "client-turn:detail-button",
       realtimeLogs: [],
       completedToolLogs,
     });
@@ -410,6 +413,7 @@ describe("ThinkingPanel", () => {
     const wrapper = mountThinkingPanel({
       role: "assistant",
       pending: false,
+      turnScopeId: "client-turn:details-logs",
       realtimeLogs: [],
       completedToolLogs,
     }, { variant: "details" });
@@ -431,6 +435,7 @@ describe("ThinkingPanel", () => {
       role: "assistant",
       pending: false,
       dialogProcessId: "dialog-1",
+      turnScopeId: "client-turn:details-tabs",
       completedToolLogs: [{ event: "tool_call", text: "read_file" }],
     }, {
       variant: "details",
@@ -438,6 +443,7 @@ describe("ThinkingPanel", () => {
         {
           role: "user",
           dialogProcessId: "dialog-1",
+          turnScopeId: "client-turn:details-tabs",
           injectedMessage: true,
           injectedBy: "harness-plugin",
           content: "injected context",
@@ -538,12 +544,71 @@ describe("ThinkingPanel", () => {
     expect(wrapper.findAll(".execution-log-line")).toHaveLength(0);
   });
 
+  it("does not render completed tool logs before assistant turnScopeId is persisted", () => {
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: false,
+      dialogProcessId: "dialog-reused",
+      completedToolLogs: [
+        { event: "tool_call", type: "tool_call", text: "previous completed tool" },
+      ],
+      processCompletedToolLogs: [
+        { event: "tool_result", type: "tool_result", text: "previous process tool" },
+      ],
+    });
+
+    expect(wrapper.text()).not.toContain("previous completed tool");
+    expect(wrapper.text()).not.toContain("previous process tool");
+    expect(wrapper.findAll(".execution-log-line")).toHaveLength(0);
+  });
+
+  it("renders completed tool logs after assistant turnScopeId is persisted", () => {
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: false,
+      turnScopeId: "client-turn:current",
+      dialogProcessId: "dialog-current",
+      completedToolLogs: [
+        { event: "tool_call", type: "tool_call", text: "current completed tool" },
+      ],
+    });
+
+    expect(wrapper.text()).toContain("current completed tool");
+    expect(wrapper.findAll(".execution-log-line")).toHaveLength(1);
+  });
+
+  it("does not use channel turnScopeId timing before assistant turnScopeId is persisted", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-22T10:00:12.000Z"));
+    rememberThinkingStarted({
+      sessionId: "session-current",
+      turnScopeId: "client-turn:previous",
+      startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
+    });
+
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: true,
+      sessionId: "session-current",
+      ts: "2026-06-22T10:00:12.000Z",
+      channelState: {
+        state: "sending",
+        turnScopeId: "client-turn:previous",
+        createdAt: "2026-06-22T10:00:00.000Z",
+      },
+    });
+
+    expect(wrapper.text()).toContain("00:00");
+    expect(wrapper.text()).not.toContain("00:12");
+  });
+
   it("shows tool logs for the same dialogProcessId after current dialog starts streaming", () => {
     const wrapper = mountThinkingPanel(
       {
         role: "assistant",
         pending: false,
         dialogProcessId: "dialog-1",
+        turnScopeId: "client-turn:streaming",
         realtimeLogs: [],
         completedToolLogs: [],
         executionLogTotal: 0,
@@ -554,16 +619,19 @@ describe("ThinkingPanel", () => {
             role: "assistant",
             pending: false,
             dialogProcessId: "dialog-1",
+            turnScopeId: "client-turn:streaming",
             tool_calls: [{ function: { name: "previous_tool" } }],
           },
           {
             role: "tool",
             dialogProcessId: "dialog-1",
+            turnScopeId: "client-turn:streaming",
             content: JSON.stringify({ toolName: "previous_tool", ok: true }),
           },
           {
             role: "tool",
             dialogProcessId: "dialog-1",
+            turnScopeId: "client-turn:streaming",
             content: JSON.stringify({ toolName: "current_tool", ok: true }),
           },
         ],

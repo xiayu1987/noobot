@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { mergePreservedDetailMessages } from "../../../../src/composables/chat/chatList/detailMessages";
+import {
+  applySummaryToolLogs,
+  mergePreservedDetailMessages,
+} from "../../../../src/composables/chat/chatList/detailMessages";
 import { RoleEnum } from "../../../../src/shared/constants/chatConstants";
 
 describe("detailMessages", () => {
@@ -64,5 +67,67 @@ describe("detailMessages", () => {
     expect(assistant.channelState).toMatchObject({ state: "sending", createdAt: startedAt });
     expect(assistant.thinkingStartedAt).toBe(startedAt);
     expect(assistant.thinking_started_at).toBeUndefined();
+  });
+
+  it("does not apply summary tool logs to assistant messages before turnScopeId is persisted", () => {
+    const sessionItem = {
+      messages: [
+        {
+          role: RoleEnum.ASSISTANT,
+          dialogProcessId: "dp-reused",
+          content: "current answer without persisted turn scope",
+        },
+      ],
+    };
+
+    applySummaryToolLogs(sessionItem, [
+      {
+        toolLogSummaries: [
+          {
+            dialogProcessId: "dp-reused",
+            turnScopeId: "client-turn:previous",
+            event: "tool_call",
+            text: "previous tool",
+          },
+        ],
+      },
+    ]);
+
+    expect(sessionItem.messages[0].completedToolLogs).toEqual([]);
+  });
+
+  it("applies summary tool logs by turnScopeId when assistant turnScopeId is available", () => {
+    const sessionItem = {
+      messages: [
+        {
+          role: RoleEnum.ASSISTANT,
+          dialogProcessId: "dp-current",
+          turnScopeId: "client-turn:current",
+          content: "current answer",
+        },
+      ],
+    };
+
+    applySummaryToolLogs(sessionItem, [
+      {
+        toolLogSummaries: [
+          {
+            dialogProcessId: "dp-previous",
+            turnScopeId: "client-turn:previous",
+            event: "tool_call",
+            text: "previous tool",
+          },
+          {
+            dialogProcessId: "dp-current",
+            turnScopeId: "client-turn:current",
+            event: "tool_call",
+            text: "current tool",
+          },
+        ],
+      },
+    ]);
+
+    expect(sessionItem.messages[0].completedToolLogs).toHaveLength(1);
+    expect(sessionItem.messages[0].completedToolLogs[0].text).toBe("current tool");
   });
 });
