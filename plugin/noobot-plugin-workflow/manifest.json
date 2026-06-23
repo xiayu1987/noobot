@@ -6,6 +6,7 @@
   "capabilities": [
     "agent.workflow",
     "service.after_session_delete",
+    "service.http_routes",
     "bot.register"
   ],
   "runtimeOptions": {
@@ -14,6 +15,11 @@
       "mode": "on",
       "priority": 10,
       "timeoutMs": 5000
+    },
+    "service.http_routes": {
+      "enabled": true,
+      "mode": "on",
+      "priority": 10
     }
   },
   "apiVersion": "1",

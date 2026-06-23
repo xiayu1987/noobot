@@ -155,6 +155,26 @@ export async function getWorkflowSessionDetailApi(
   );
 }
 
+export async function getWorkflowSessionThinkingDetailApi(
+  { userId = "", sessionId = "", dialogId = "", dialogProcessId = "", turnScopeId = "" },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  const queryParams = [];
+  const normalizedDialogProcessId = String(dialogProcessId || "").trim();
+  const normalizedTurnScopeId = String(turnScopeId || "").trim();
+  if (normalizedDialogProcessId) {
+    queryParams.push(`dialogProcessId=${encodeURIComponent(normalizedDialogProcessId)}`);
+  }
+  if (normalizedTurnScopeId) {
+    queryParams.push(`turnScopeId=${encodeURIComponent(normalizedTurnScopeId)}`);
+  }
+  const query = queryParams.length ? `?${queryParams.join("&")}` : "";
+  return runFetch(
+    `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(dialogId)}/thinking-detail${query}`,
+  );
+}
+
 export async function deleteSessionMessagesFromApi(
   {
     userId = "",

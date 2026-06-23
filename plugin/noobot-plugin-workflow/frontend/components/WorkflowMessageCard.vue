@@ -6,7 +6,10 @@
 <script setup>
 import { computed, ref, watch, onMounted, onBeforeUnmount } from "vue";
 import { ElMessage } from "element-plus";
-import { getWorkflowSessionDetailApi } from "../../../../client/noobot-chat/src/services/api/chatApi";
+import {
+  getWorkflowSessionDetailApi,
+  getWorkflowSessionThinkingDetailApi,
+} from "../../../../client/noobot-chat/src/services/api/chatApi";
 import { applyCompletedToolLogsToMessages } from "../../../../client/noobot-chat/src/composables/infra/sessionToolLogs";
 import { buildViewMessage, foldConversationMessages } from "../../../../client/noobot-chat/src/composables/infra/messageModel";
 import { useWorkflowLocale } from "../i18n";
@@ -34,6 +37,7 @@ const viewerLoading = ref(false);
 const viewerError = ref("");
 const selectedNode = ref(null);
 const selectedNodeMessages = ref([]);
+const selectedNodeRawMessages = ref([]);
 const selectedNodeSessionSummary = ref(null);
 const selectedNodeSessionId = ref("");
 const selectedGraphDialogId = ref("");
@@ -45,8 +49,37 @@ const PSEUDO_ROUTE_WORKFLOW_PANEL = "workflow-node-session";
 const PSEUDO_ROUTE_WORKFLOW_DIALOG_KEY = "workflowDialogId";
 const PSEUDO_ROUTE_WORKFLOW_ROOT_KEY = "workflowRootSessionId";
 
+async function fetchSelectedNodeThinkingDetail(_sessionId = "", { dialogProcessId = "", turnScopeId = "" } = {}) {
+  const route = buildWorkflowDrawerRoute(selectedNode.value || {});
+  if (!props.userId || !route.rootSessionId || !route.dialogId) {
+    throw new Error(translate("workflow.nodeSessionMissing"));
+  }
+  const response = await getWorkflowSessionThinkingDetailApi(
+    {
+      userId: props.userId,
+      sessionId: route.rootSessionId,
+      dialogId: route.dialogId,
+      dialogProcessId,
+      turnScopeId,
+    },
+    { fetcher: props.authFetch || fetch },
+  );
+  if (!response.ok) {
+    throw new Error(translate("workflow.readNodeSessionFailed"));
+  }
+  const payload = await response.json();
+  if (!payload?.ok || !payload?.exists) {
+    throw new Error(String(payload?.error || translate("workflow.readNodeSessionFailed")));
+  }
+  return payload;
+}
+
 function handleOpenThinkingDetails(payload = {}) {
-  emit("open-thinking-details", payload);
+  emit("open-thinking-details", {
+    ...(payload && typeof payload === "object" ? payload : {}),
+    forceFetch: true,
+    fetchThinkingDetail: fetchSelectedNodeThinkingDetail,
+  });
 }
 
 const workflowMeta = computed(() =>
@@ -621,6 +654,21 @@ const rawNodeSessionMessages = computed(() =>
   ),
 );
 
+const selectedNodeToolSessionDocs = computed(() => {
+  const sessionDocs = selectedNodeSessionDocs.value;
+  const mainSessionDoc = sessionDocs[0] || {};
+  const rawMessages = Array.isArray(selectedNodeRawMessages.value)
+    ? selectedNodeRawMessages.value
+    : [];
+  if (!rawMessages.length) return sessionDocs;
+  return [
+    {
+      ...mainSessionDoc,
+      messages: rawMessages,
+    },
+  ];
+});
+
 const normalizedNodeSessionMessages = computed(() => {
   const sessionDocs = selectedNodeSessionDocs.value;
   const mainSessionDoc = sessionDocs[0] || {};
@@ -628,7 +676,7 @@ const normalizedNodeSessionMessages = computed(() => {
     Array.isArray(mainSessionDoc?.messages) ? mainSessionDoc.messages : [],
     buildNodeViewMessage,
   );
-  applyCompletedToolLogsToMessages(foldedMessages, sessionDocs);
+  applyCompletedToolLogsToMessages(foldedMessages, selectedNodeToolSessionDocs.value);
   return foldedMessages;
 });
 
@@ -639,9 +687,13 @@ const displayNodeMessages = computed(() =>
   ).map((messageItem = {}) => normalizeNodeMessageForDisplay(messageItem)),
 );
 
-const nodeSessionAllMessages = computed(() =>
-  Array.isArray(rawNodeSessionMessages.value) ? rawNodeSessionMessages.value : [],
-);
+const nodeSessionAllMessages = computed(() => {
+  const rawMessages = Array.isArray(selectedNodeRawMessages.value)
+    ? selectedNodeRawMessages.value
+    : [];
+  if (rawMessages.length) return rawMessages.map((messageItem = {}) => buildNodeViewMessage(messageItem));
+  return Array.isArray(rawNodeSessionMessages.value) ? rawNodeSessionMessages.value : [];
+});
 
 function buildWorkflowDrawerRoute(nodeItem = {}, patch = {}) {
   const dialogId = String(
@@ -764,6 +816,7 @@ async function openNodeSession(nodeItem = {}, options = {}) {
   viewerError.value = "";
   selectedNode.value = nodeItem;
   selectedNodeMessages.value = [];
+  selectedNodeRawMessages.value = [];
   selectedNodeSessionSummary.value = null;
   selectedNodeSessionId.value = "";
   try {
@@ -797,6 +850,9 @@ async function openNodeSession(nodeItem = {}, options = {}) {
       : Array.isArray(session?.messages)
         ? session.messages
         : [];
+    selectedNodeRawMessages.value = Array.isArray(session?.messages)
+      ? session.messages
+      : [];
   } catch (error) {
     viewerError.value = String(error?.message || error || translate("workflow.readNodeSessionFailed"));
   } finally {

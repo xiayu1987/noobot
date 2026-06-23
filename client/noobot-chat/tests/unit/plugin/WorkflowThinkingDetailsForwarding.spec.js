@@ -25,7 +25,7 @@ vi.mock("../../../../../client/noobot-chat/src/shared/message/SharedChatMessageI
 const requiredProps = {
   messageItem: { role: "assistant", pending: false, completedToolLogs: [] },
   allMessages: [],
-  sessionDocs: [],
+  sessionDocs: [{ sessionId: "node-session-1" }],
   userId: "user-1",
   authFetch: null,
   renderMarkdown: (value = "") => value,
@@ -39,6 +39,8 @@ describe("workflow thinking details forwarding", () => {
     const payload = {
       messageItem: requiredProps.messageItem,
       allMessages: requiredProps.allMessages,
+      sessionDocs: requiredProps.sessionDocs,
+      skipFetch: false,
     };
 
     const wrapper = mount(WorkflowSessionMessageItem, {

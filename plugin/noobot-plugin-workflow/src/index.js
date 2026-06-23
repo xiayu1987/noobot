@@ -16,3 +16,5 @@ export { buildWorkflowOrchestrationPayload } from "./core/orchestration-payload.
 export { parseWorkflowDslText } from "./protocol/text-protocol.js";
 
 export { createWorkflowPlugin as default } from "./core/plugin.js";
+
+export { registerServiceRoutes } from "./service/routes.js";
