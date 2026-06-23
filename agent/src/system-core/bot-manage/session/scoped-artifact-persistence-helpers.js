@@ -134,6 +134,7 @@ export class ScopedArtifactPersistenceHelpers {
       type: String(message?.type || "").trim(),
       dialogProcessId: String(message?.dialogProcessId || "").trim(),
       parentDialogProcessId: String(message?.parentDialogProcessId || "").trim(),
+      turnScopeId: String(message?.turnScopeId || "").trim(),
       taskId: String(message?.taskId || "").trim(),
       taskStatus: String(message?.taskStatus || "").trim(),
       modelAlias: String(message?.modelAlias || "").trim(),

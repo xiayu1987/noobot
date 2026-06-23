@@ -34,6 +34,7 @@ const viewerLoading = ref(false);
 const viewerError = ref("");
 const selectedNode = ref(null);
 const selectedNodeMessages = ref([]);
+const selectedNodeSessionSummary = ref(null);
 const selectedNodeSessionId = ref("");
 const selectedGraphDialogId = ref("");
 const semanticPreviewExpanded = ref(false);
@@ -578,15 +579,38 @@ function buildNodeViewMessage(messageItem = {}) {
 }
 
 const selectedNodeSessionDocs = computed(() => {
-  const sessionId = String(selectedNodeSessionId.value || selectedNode.value?.sessionId || "").trim();
+  const summary =
+    selectedNodeSessionSummary.value &&
+    typeof selectedNodeSessionSummary.value === "object" &&
+    !Array.isArray(selectedNodeSessionSummary.value)
+      ? selectedNodeSessionSummary.value
+      : {};
+  const sessionId = String(
+    selectedNodeSessionId.value ||
+      summary?.sessionId ||
+      selectedNode.value?.sessionId ||
+      "",
+  ).trim();
   if (!sessionId) return [];
   return [
     {
+      ...summary,
       sessionId,
-      parentSessionId: String(selectedNode.value?.rootSessionId || "").trim(),
-      caller: "bot",
-      depth: 1,
-      messages: Array.isArray(selectedNodeMessages.value) ? selectedNodeMessages.value : [],
+      parentSessionId: String(
+        summary?.parentSessionId ||
+          selectedNode.value?.rootSessionId ||
+          "",
+      ).trim(),
+      caller: String(summary?.caller || "bot").trim() || "bot",
+      depth: Number.isFinite(Number(summary?.depth)) ? Number(summary.depth) : 1,
+      messages: Array.isArray(summary?.messages)
+        ? summary.messages
+        : Array.isArray(selectedNodeMessages.value)
+          ? selectedNodeMessages.value
+          : [],
+      toolLogSummaries: Array.isArray(summary?.toolLogSummaries)
+        ? summary.toolLogSummaries
+        : [],
     },
   ];
 });
@@ -740,6 +764,7 @@ async function openNodeSession(nodeItem = {}, options = {}) {
   viewerError.value = "";
   selectedNode.value = nodeItem;
   selectedNodeMessages.value = [];
+  selectedNodeSessionSummary.value = null;
   selectedNodeSessionId.value = "";
   try {
     const response = await getWorkflowSessionDetailApi(
@@ -755,8 +780,23 @@ async function openNodeSession(nodeItem = {}, options = {}) {
       throw new Error(String(payload?.error || translate("workflow.readNodeSessionFailed")));
     }
     const session = payload?.workflowSession?.session || {};
-    selectedNodeSessionId.value = String(session?.sessionId || "").trim();
-    selectedNodeMessages.value = Array.isArray(session?.messages) ? session.messages : [];
+    const sessionSummary =
+      payload?.workflowSession?.sessionSummary &&
+      typeof payload.workflowSession.sessionSummary === "object" &&
+      !Array.isArray(payload.workflowSession.sessionSummary)
+        ? payload.workflowSession.sessionSummary
+        : null;
+    selectedNodeSessionSummary.value = sessionSummary;
+    selectedNodeSessionId.value = String(
+      sessionSummary?.sessionId ||
+        session?.sessionId ||
+        "",
+    ).trim();
+    selectedNodeMessages.value = Array.isArray(sessionSummary?.messages)
+      ? sessionSummary.messages
+      : Array.isArray(session?.messages)
+        ? session.messages
+        : [];
   } catch (error) {
     viewerError.value = String(error?.message || error || translate("workflow.readNodeSessionFailed"));
   } finally {

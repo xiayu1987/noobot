@@ -212,25 +212,32 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
   const outputDir = path.join(await createTempRoot(), "snapshot");
   const persisted = await persistSnapshotJsonFiles({
     outputDir,
-    sessionPayload: { sessionId: "s1", messages: [] },
+    sessionPayload: { sessionId: "s1", parentSessionId: "p1", messages: [] },
     taskPayload: { sessionId: "s1", tasks: [] },
-    executionPayload: { sessionId: "s1", logs: [] },
+    executionPayload: { sessionId: "s1", logs: [{ event: "started" }] },
     metadata: { node: "n1" },
   });
 
   assert.equal(persisted.outputDir, outputDir);
   assert.deepEqual(JSON.parse(await fs.readFile(persisted.files.session, "utf8")), {
     sessionId: "s1",
+    parentSessionId: "p1",
     messages: [],
   });
+  const sessionSummary = JSON.parse(await fs.readFile(persisted.files.sessionSummary, "utf8"));
+  assert.equal(sessionSummary.schemaVersion, 2);
+  assert.equal(sessionSummary.sessionId, "s1");
+  assert.equal(sessionSummary.parentSessionId, "p1");
+  assert.equal(sessionSummary.stats.messageCount, 0);
   assert.deepEqual(JSON.parse(await fs.readFile(persisted.files.task, "utf8")), {
     sessionId: "s1",
     tasks: [],
   });
   assert.deepEqual(JSON.parse(await fs.readFile(persisted.files.execution, "utf8")), {
     sessionId: "s1",
-    logs: [],
+    logs: [{ event: "started" }],
   });
+  assert.equal(await fs.readFile(persisted.files.executionEvents, "utf8"), "{\"event\":\"started\"}\n");
   assert.deepEqual(JSON.parse(await fs.readFile(persisted.files.meta, "utf8")), {
     node: "n1",
   });

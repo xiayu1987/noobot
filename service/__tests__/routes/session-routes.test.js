@@ -633,3 +633,66 @@ test("session-routes: 删除 session 结果缺失 deletedSessionIds 时仍删除
     sessionIds: ["s-fallback-delete"],
   });
 });
+
+test("session-routes: workflow session returns summary and execution jsonl from scoped path", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workflow-session-route-"));
+  const workflowDir = path.join(workspaceRoot, "runtime/workflow/session/root-s/wf_node_1");
+  await fs.mkdir(workflowDir, { recursive: true });
+  await Promise.all([
+    fs.writeFile(
+      path.join(workflowDir, "session.json"),
+      `${JSON.stringify({ sessionId: "node-s", messages: [{ role: "assistant", content: "done" }] })}\n`,
+      "utf8",
+    ),
+    fs.writeFile(
+      path.join(workflowDir, "session-summary.json"),
+      `${JSON.stringify({
+        schemaVersion: 2,
+        sessionId: "node-s",
+        messages: [{ role: "assistant", content: "done" }],
+        stats: { messageCount: 1 },
+      })}\n`,
+      "utf8",
+    ),
+    fs.writeFile(
+      path.join(workflowDir, "task.json"),
+      `${JSON.stringify({ sessionId: "node-s", tasks: [] })}\n`,
+      "utf8",
+    ),
+    fs.writeFile(
+      path.join(workflowDir, "execution.json"),
+      `${JSON.stringify({ sessionId: "node-s" })}\n`,
+      "utf8",
+    ),
+    fs.writeFile(path.join(workflowDir, "execution.jsonl"), `${JSON.stringify({ event: "x" })}\n`, "utf8"),
+    fs.writeFile(path.join(workflowDir, "meta.json"), `${JSON.stringify({ nodeId: "n1" })}\n`, "utf8"),
+  ]);
+
+  const app = express();
+  registerSessionRoutes(app, {
+    bot: {
+      session: {
+        getSessionData: async () => ({}),
+        getRootSessionId: async () => "",
+        deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
+        getAllSessionsData: async () => [],
+      },
+      getWorkspacePath: () => workspaceRoot,
+      getAttachmentById: async () => null,
+    },
+    handleChat: (_req, res) => res.json({ ok: true }),
+    getConnectorChannelStore: () => ({}),
+    getConnectorHistoryStore: () => ({}),
+    translateText: (key) => key,
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/internal/workflow/session/u1/root-s/wf_node_1`);
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.workflowSession.session.sessionId, "node-s");
+    assert.equal(payload.workflowSession.sessionSummary.sessionId, "node-s");
+    assert.deepEqual(payload.workflowSession.executionLogs, [{ event: "x" }]);
+  });
+});

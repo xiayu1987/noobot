@@ -325,6 +325,7 @@ export async function runNodeAgent({
 } = {}) {
   throwIfWorkflowAborted(ctx);
   const nodeDialogId = `wf_node_${String(instanceId || "inst").replaceAll(/[^a-zA-Z0-9_-]/g, "_")}_${String(transition || 0)}`;
+  const nodeTurnScopeId = `workflow-node:${nodeDialogId}`;
   await emitWorkflowRuntimeEvent({
     options,
     ctx,
@@ -333,6 +334,7 @@ export async function runNodeAgent({
     data: {
       instanceId: String(instanceId || "").trim(),
       transition: Number(transition || 0),
+      turnScopeId: nodeTurnScopeId,
       nodeId: String(pendingStep?.nodeId || "").trim(),
       nodeName: String(pendingStep?.nodeName || "").trim(),
     },
@@ -405,9 +407,11 @@ export async function runNodeAgent({
     const streamingPatch = hasOwnObjectKey(parentRunConfig, "streaming")
       ? { streaming: parentRunConfig.streaming }
       : {};
+    const turnScopePatch = { turnScopeId: nodeTurnScopeId };
     const subSessionRunConfigPatch = parentHarnessEnabled
       ? {
           ...streamingPatch,
+          ...turnScopePatch,
           selectedPlugins: Array.from(new Set([...parentSelectedPlugins, "harness"])),
           plugins: {
             harness: {
@@ -417,7 +421,10 @@ export async function runNodeAgent({
             },
           },
         }
-      : streamingPatch;
+      : {
+          ...streamingPatch,
+          ...turnScopePatch,
+        };
     const relativeDir = buildWorkflowDialogRelativeDir({
       ctx,
       dialogProcessId: nodeDialogId,
@@ -444,6 +451,7 @@ export async function runNodeAgent({
             parentSessionId: String(ctx?.sessionId || "").trim(),
             parentDialogProcessId: String(ctx?.dialogProcessId || "").trim(),
             dialogProcessId: nodeDialogId,
+            turnScopeId: nodeTurnScopeId,
             disabledPlugins: ["workflow"],
             relativeDir,
           },
@@ -453,6 +461,7 @@ export async function runNodeAgent({
             nodeId: String(pendingStep?.nodeId || "").trim(),
             nodeName: String(pendingStep?.nodeName || "").trim(),
             transition: Number(transition || 0),
+            turnScopeId: nodeTurnScopeId,
             workflowSessionId: String(ctx?.sessionId || "").trim(),
             workflowDialogId: nodeDialogId,
             inputAttachmentRefs: normalizeAttachmentRefs(

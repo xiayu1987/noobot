@@ -120,11 +120,13 @@ END
   - `runtime/workflow/planning/<sessionId>/<dialogId>/events.jsonl`（规划与编排事件流）
 - 每个工作流节点 agent 子会话由 agent 统一入口执行（插件只传策略），并落盘到：
   - `runtime/workflow/session/<sessionId>/<nodeDialogId>/session.json`
+  - `runtime/workflow/session/<sessionId>/<nodeDialogId>/session-summary.json`
   - `runtime/workflow/session/<sessionId>/<nodeDialogId>/task.json`
   - `runtime/workflow/session/<sessionId>/<nodeDialogId>/execution.json`
+  - `runtime/workflow/session/<sessionId>/<nodeDialogId>/execution.jsonl`
   - `runtime/workflow/session/<sessionId>/<nodeDialogId>/meta.json`
   - `runtime/workflow/session/<sessionId>/<nodeDialogId>/events.jsonl`（节点事件流）
-- 节点子会话采用 detached 执行与 scoped 落盘，不写入 `runtime/session` 主树。
+- 节点子会话采用 detached 执行与 scoped 落盘，不写入 `runtime/session` 主树；文件结构与主流程 session 落盘保持同构，路径由插件提供。
 - 节点子会话会自动禁用 `workflow` 插件（`mode=off`）避免递归触发。
 
 ## Tool policy 统一字段（与 harness 共用）

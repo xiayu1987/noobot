@@ -100,6 +100,13 @@ export function createDetachedSubSessionRunner({
       userConfig: subSessionUserConfig,
     });
     attachPluginRuntimePatch(effectiveRunConfig, parentSessionId);
+    const subSessionTurnScopeId = String(
+      effectiveRunConfig?.turnScopeId ||
+        runConfigPatch?.turnScopeId ||
+        strategy?.turnScopeId ||
+        metadata?.turnScopeId ||
+        "",
+    ).trim();
 
     const runtimePluginState = buildRuntimePluginState({
       effectiveRunConfig,
@@ -150,6 +157,7 @@ export function createDetachedSubSessionRunner({
       parentDialogProcessId,
       subDialogProcessId,
       dialogProcessId,
+      turnScopeId: subSessionTurnScopeId,
       message,
       systemMessages,
       subSessionAttachmentMetas,
@@ -324,6 +332,7 @@ async function persistPluginSubSessionSnapshot({
   parentDialogProcessId = "",
   subDialogProcessId = "",
   dialogProcessId = "",
+  turnScopeId = "",
   message = "",
   systemMessages = [],
   subSessionAttachmentMetas = [],
@@ -347,8 +356,10 @@ async function persistPluginSubSessionSnapshot({
   if (!resolvedOutputDir) return null;
 
   const timestamp = typeof now === "function" ? now() : new Date().toISOString();
+  const normalizedTurnScopeId = String(turnScopeId || "").trim();
   const pluginRuntimeResolvedLog = {
     dialogProcessId: subDialogProcessId || subSessionId,
+    turnScopeId: normalizedTurnScopeId,
     event: "plugin_runtime_resolved",
     category: "system",
     type: "system",
@@ -356,7 +367,13 @@ async function persistPluginSubSessionSnapshot({
     ts: timestamp,
   };
   const normalizedTurnMessages = turnMessages.map((item = {}) =>
-    normalizeDetachedSubSessionMessage(item, timestamp),
+    normalizeDetachedSubSessionMessage(
+      {
+        ...(item && typeof item === "object" ? item : {}),
+        turnScopeId: String(item?.turnScopeId || normalizedTurnScopeId).trim(),
+      },
+      timestamp,
+    ),
   );
   const userTurn = normalizeDetachedSubSessionMessage(
     {
@@ -365,6 +382,7 @@ async function persistPluginSubSessionSnapshot({
       type: "message",
       dialogProcessId,
       parentDialogProcessId,
+      turnScopeId: normalizedTurnScopeId,
       frontendUserMessage: false,
       ...(subSessionAttachmentMetas.length
         ? { inputAttachmentMetas: subSessionAttachmentMetas }
@@ -383,6 +401,7 @@ async function persistPluginSubSessionSnapshot({
           type: "system",
           dialogProcessId,
           parentDialogProcessId,
+          turnScopeId: normalizedTurnScopeId,
           injectedMessage: true,
           injectedBy: "botPlugin",
           injectedMessageType: "bot_plugin_system_context",
