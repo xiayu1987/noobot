@@ -103,7 +103,7 @@ updateConversationState(
     seq = 0,
     broadcast = true,
     sessionId = "",
-    clientTurnId = "",
+    turnScopeId = "",
     createdAtMs = 0,
     requestId = "",
   } = {},
@@ -115,13 +115,13 @@ updateConversationState(
   const stateKey = normalizedDialogProcessId || CONVERSATION_SCOPE_KEY;
   const normalizedSessionId =
     String(sessionId || "").trim() || this._extractSessionIdFromChannelKey(channel.key);
-  const normalizedClientTurnId = String(clientTurnId || "").trim();
+  const normalizedTurnScopeId = String(turnScopeId || "").trim();
   const previousStateItem = channel.conversationStateByDialogProcessId.get(stateKey) || null;
   if (
     previousStateItem &&
     previousStateItem.state === normalizedState &&
     Number(previousStateItem.seq || 0) === Number(seq || 0) &&
-    (!normalizedClientTurnId || String(previousStateItem?.clientTurnId || "").trim() === normalizedClientTurnId)
+    (!normalizedTurnScopeId || String(previousStateItem?.turnScopeId || "").trim() === normalizedTurnScopeId)
   ) {
     return previousStateItem;
   }
@@ -131,7 +131,7 @@ updateConversationState(
   const stateItem = {
     sessionId: normalizedSessionId,
     dialogProcessId: normalizedDialogProcessId,
-    clientTurnId: normalizedClientTurnId || String(previousStateItem?.clientTurnId || "").trim(),
+    turnScopeId: normalizedTurnScopeId || String(previousStateItem?.turnScopeId || "").trim(),
     state: normalizedState,
     sourceEvent: String(sourceEvent || "").trim(),
     seq: Number(seq || 0),
@@ -151,8 +151,8 @@ _applyConversationStateFromEnvelope(channel, envelope = {}) {
   const eventName = String(envelope?.event || "").trim();
   const eventData = envelope?.data || {};
   const dialogProcessId = String(eventData?.dialogProcessId || "").trim();
-  const clientTurnId = String(
-    eventData?.clientTurnId || channel?.startPayload?.clientTurnId || "",
+  const turnScopeId = String(
+    eventData?.turnScopeId || channel?.startPayload?.turnScopeId || "",
   ).trim();
   const sessionId = String(eventData?.sessionId || "").trim();
   const seq = Number(eventData?.seq || envelope?.sequence || 0);
@@ -177,7 +177,7 @@ _applyConversationStateFromEnvelope(channel, envelope = {}) {
   if (!nextState) return;
   this.updateConversationState(channel, {
     dialogProcessId,
-    clientTurnId,
+    turnScopeId,
     state: nextState,
     sourceEvent: eventName,
     seq,

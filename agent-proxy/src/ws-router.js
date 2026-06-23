@@ -80,7 +80,7 @@ export class WsRouter {
       this.channelManager.updateConversationState(targetChannel, {
         sessionId: String(payload?.sessionId || "").trim(),
         dialogProcessId: String(payload?.dialogProcessId || "").trim(),
-        clientTurnId: String(payload?.clientTurnId || "").trim(),
+        turnScopeId: String(payload?.turnScopeId || "").trim(),
         state: CONVERSATION_STATE.STOPPING,
         sourceEvent: CONVERSATION_SOURCE_EVENT.STOP,
         seq: Number(targetChannel?.eventSequence || 0),
@@ -94,7 +94,7 @@ export class WsRouter {
           ? {
               sessionId: String(payload?.sessionId || "").trim(),
               dialogProcessId: String(payload?.dialogProcessId || "").trim(),
-              clientTurnId: String(payload?.clientTurnId || "").trim(),
+              turnScopeId: String(payload?.turnScopeId || "").trim(),
               createdAtMs: Number(payload?.createdAtMs || payload?.timestamp || 0),
               message: "stop requested",
             }

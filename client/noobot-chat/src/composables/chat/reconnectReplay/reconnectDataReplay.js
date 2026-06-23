@@ -18,6 +18,7 @@ import {
   SESSION_RUN_EVENT,
   resolveRememberedStopRequestedEvent,
 } from "../sessionRunStateMachine";
+import { normalizeTurnMeta } from "../../infra/messageIdentity";
 
 function createReconnectRunStateEvents(reconnectSessions = [], recoverableSessionId = "") {
   const events = [];
@@ -39,6 +40,7 @@ function createReconnectRunStateEvents(reconnectSessions = [], recoverableSessio
       ? sessionEntry.conversationStates
       : [];
     stateEntries.forEach((stateEntry) => {
+      const turnMeta = normalizeTurnMeta(stateEntry);
       const rememberedStopEvent = resolveRememberedStopRequestedEvent({
         sessionId,
         dialogProcessId: _trimStr(stateEntry?.dialogProcessId),
@@ -49,7 +51,7 @@ function createReconnectRunStateEvents(reconnectSessions = [], recoverableSessio
         state: _trimStr(stateEntry?.state),
         sessionId,
         dialogProcessId: _trimStr(stateEntry?.dialogProcessId),
-        clientTurnId: _trimStr(stateEntry?.clientTurnId),
+        turnScopeId: turnMeta.turnScopeId,
         source: "reconnect_data",
         sourceEvent: _trimStr(stateEntry?.sourceEvent),
         seq: Number(stateEntry?.seq || 0),

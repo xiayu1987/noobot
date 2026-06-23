@@ -195,6 +195,79 @@ describe("useChatSession reconnect replay", () => {
     }));
   });
 
+  it("keeps dialogProcessId and turnScopeId conversation state keys separate", async () => {
+    const store = useChatStore();
+    store.sessions = [
+      {
+        id: "s-state",
+        backendSessionId: "s-state",
+        title: "session",
+        isLocal: false,
+        loaded: true,
+        messages: [],
+        rawMessages: [],
+        sessionDocs: [],
+        connectorPanelState: { selectedConnectors: {} },
+        currentTaskId: "",
+        currentTaskStatus: "idle",
+        messageCount: 0,
+        lastMessage: null,
+        createdAt: "",
+        updatedAt: "",
+      },
+    ];
+    store.activeSessionId = "s-state";
+
+    wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
+      onReconnectData({
+        event: StreamEventEnum.CHANNEL_STATE,
+        data: {
+          sessionId: "s-state",
+          dialogProcessId: "same-id",
+          state: "sending",
+          seq: 1,
+        },
+      });
+      onReconnectData({
+        event: StreamEventEnum.CHANNEL_STATE,
+        data: {
+          sessionId: "s-state",
+          turnScopeId: "same-id",
+          state: "completed",
+          seq: 2,
+        },
+      });
+    });
+
+    const session = useChatSession({
+      userId: ref("u-state"),
+      apiKey: ref(""),
+      allowUserInteraction: ref(true),
+      forceTool: ref(false),
+      streamOutput: ref(true),
+      botScenario: ref(""),
+      connected: ref(true),
+      ensureConnected: vi.fn(() => true),
+      authFetch: null,
+      isImageMime: () => false,
+      classifyRealtimeLog: (item) => item,
+      scrollBottom: vi.fn(),
+      notify: vi.fn(),
+      clearUploadSelection: vi.fn(),
+    });
+
+    await session.handleReconnect();
+
+    expect(session.conversationStateSnapshot.value["s-state::dialogProcess:same-id"].state).toBe("sending");
+    expect(session.conversationStateSnapshot.value["s-state::turnScope:same-id"].state).toBe("completed");
+    expect(Object.keys(session.conversationStateSnapshot.value)).toEqual(
+      expect.arrayContaining([
+        "s-state::dialogProcess:same-id",
+        "s-state::turnScope:same-id",
+      ]),
+    );
+  });
+
   it("send marks the current turn as stoppable through the session store", async () => {
     const store = useChatStore();
     store.sessions = [

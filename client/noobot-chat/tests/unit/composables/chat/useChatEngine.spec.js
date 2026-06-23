@@ -40,6 +40,8 @@ const makeMessage = (role, content = "", attachmentMetas = []) => ({
   tool_calls: [],
 });
 
+let currentStreamTurnScopeId = "";
+
 const createHarness = ({
   sessionId,
   stream,
@@ -101,7 +103,26 @@ const createHarness = ({
     submitInteractionResponse: vi.fn(),
     refreshSessionsAsync: vi.fn(),
     chatWebSocketClient: {
-      stream: stream ?? vi.fn(),
+      stream: stream
+        ? vi.fn(async (payload, onEvent) => {
+            currentStreamTurnScopeId = String(payload?.turnScopeId || "").trim();
+            const wrappedOnEvent = (envelope = {}) => {
+              const data = envelope?.data && typeof envelope.data === "object" && !Array.isArray(envelope.data)
+                ? envelope.data
+                : null;
+              if (data && data.turnScopeId === undefined && String(data?.dialogProcessId || "").trim()) {
+                onEvent({ ...envelope, data: { ...data, turnScopeId: currentStreamTurnScopeId } });
+                return;
+              }
+              onEvent(envelope);
+            };
+            try {
+              return await stream(payload, wrappedOnEvent);
+            } finally {
+              currentStreamTurnScopeId = "";
+            }
+          })
+        : vi.fn(),
       requestStop: vi.fn(),
       clearLastReceivedSeqMap: vi.fn(),
       dispose: vi.fn(),
@@ -135,9 +156,14 @@ const assistantMessage = (activeSession) =>
   activeSession.value.messages.find((message) => message.role === RoleEnum.ASSISTANT);
 
 const emitChannelState = (onEvent, sessionId, dialogProcessId, state, data = {}) => {
+  const normalizedDialogProcessId = String(dialogProcessId || "").trim();
+  const turnScopePatch =
+    data?.turnScopeId !== undefined || !normalizedDialogProcessId
+      ? {}
+      : { turnScopeId: currentStreamTurnScopeId };
   onEvent({
     event: StreamEventEnum.CHANNEL_STATE,
-    data: { sessionId, dialogProcessId, state, ...data },
+    data: { sessionId, dialogProcessId, state, ...turnScopePatch, ...data },
   });
 };
 
@@ -163,11 +189,11 @@ describe("useChatEngine", () => {
     expect(capturedPayload).toEqual(expect.objectContaining({
       turnScopeId: expect.stringMatching(/^client-turn:/),
     }));
-    expect(assistant?.clientTurnId).toBe(capturedPayload.turnScopeId);
+    expect(assistant?.turnScopeId).toBe(capturedPayload.turnScopeId);
     expect(runStateSnapshot.value).toEqual(expect.objectContaining({
       state: SESSION_RUN_STATE.SENDING,
       dialogProcessId: "",
-      clientTurnId: capturedPayload.turnScopeId,
+      turnScopeId: capturedPayload.turnScopeId,
     }));
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
@@ -1318,7 +1344,7 @@ describe("useChatEngine", () => {
     expect(runStateSnapshot.value).toEqual(expect.objectContaining({
       state: SESSION_RUN_STATE.SENDING,
       dialogProcessId: "",
-      clientTurnId: expect.any(String),
+      turnScopeId: expect.any(String),
     }));
     expect(appendMessage).toHaveBeenCalledTimes(1);
     expect(appendMessage).toHaveBeenCalledWith(RoleEnum.ASSISTANT, "", []);

@@ -25,7 +25,12 @@ import {
   rememberThinkingFinished,
   rememberThinkingStarted,
 } from "../thinkingTimingRegistry";
-import { getMessageClientTurnId, getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity";
+import {
+  getMessageDialogProcessId,
+  getMessageRole,
+  getMessageTurnScopeId,
+  normalizeTurnMeta,
+} from "../../infra/messageIdentity";
 
 function parseThinkingTimingMs(value) {
   if (value === null || value === undefined || value === "") return 0;
@@ -330,8 +335,7 @@ export function createChatEngineConversationState({
     {
       botMessage = null,
       fallbackDialogProcessId = "",
-      fallbackClientTurnId = "",
-      allowMessageClientTurnFallback = true,
+      fallbackTurnScopeId = "",
     } = {},
   ) {
     const state = String(statePayload?.state || "").trim();
@@ -354,15 +358,9 @@ export function createChatEngineConversationState({
       messageList.includes(botMessage),
     );
     const forActiveSession = isStateForActiveSession(sessionId) || botMessageInActiveSession;
+    const turnMeta = normalizeTurnMeta(statePayload);
+    const turnScopeId = String(turnMeta.turnScopeId || "").trim();
     if (typeof onConversationState === "function") {
-      const clientTurnId = String(
-        statePayload?.clientTurnId ||
-          statePayload?.turnScopeId ||
-          statePayload?.client_turn_id ||
-          (allowMessageClientTurnFallback ? getMessageClientTurnId(botMessage) : "") ||
-          (allowMessageClientTurnFallback ? fallbackClientTurnId : "") ||
-          "",
-      ).trim();
       onConversationState({
         source: "stream",
         state,
@@ -370,7 +368,7 @@ export function createChatEngineConversationState({
         dialogProcessId: String(
           statePayload?.dialogProcessId || fallbackDialogProcessId || "",
         ).trim(),
-        clientTurnId,
+        turnScopeId,
         sourceEvent: String(statePayload?.sourceEvent || "").trim(),
         seq: Number(statePayload?.seq || 0),
         createdAtMs,
@@ -383,14 +381,6 @@ export function createChatEngineConversationState({
     if (!forActiveSession) return;
     const dialogProcessId = String(
       statePayload?.dialogProcessId || fallbackDialogProcessId || "",
-    ).trim();
-    const clientTurnId = String(
-      statePayload?.clientTurnId ||
-        statePayload?.turnScopeId ||
-        statePayload?.client_turn_id ||
-        (allowMessageClientTurnFallback ? getMessageClientTurnId(botMessage) : "") ||
-        (allowMessageClientTurnFallback ? fallbackClientTurnId : "") ||
-        "",
     ).trim();
     const targetAssistantMessage = findTargetAssistantMessage({
       botMessage,
@@ -405,7 +395,7 @@ export function createChatEngineConversationState({
       state,
       sessionId,
       dialogProcessId,
-      clientTurnId,
+      turnScopeId,
       sourceEvent: String(statePayload?.sourceEvent || "").trim(),
       seq: Number(statePayload?.seq || 0),
       createdAtMs:
@@ -425,7 +415,7 @@ export function createChatEngineConversationState({
       if (!getMessageDialogProcessId(targetAssistantMessage)) {
         targetAssistantMessage.dialogProcessId = dialogProcessId;
       }
-      bindThinkingDialogProcess({ sessionId, dialogProcessId, clientTurnId });
+      bindThinkingDialogProcess({ sessionId, dialogProcessId, turnScopeId });
       markUserMessageDialogProcessId({ targetAssistantMessage, dialogProcessId });
     }
     if (isInFlightConversationState(state)) {
@@ -435,8 +425,8 @@ export function createChatEngineConversationState({
           state,
           sessionId,
           dialogProcessId,
-          clientTurnId,
-          source: "stream",
+          turnScopeId,
+            source: "stream",
           sourceEvent: String(statePayload?.sourceEvent || "").trim(),
           seq: Number(statePayload?.seq || 0),
           createdAtMs,
@@ -506,7 +496,7 @@ export function createChatEngineConversationState({
       rememberThinkingStarted({
         sessionId,
         dialogProcessId,
-        clientTurnId,
+        turnScopeId,
         startedAtMs: createdAtMs || targetAssistantMessage?.thinkingStartedAt || targetAssistantMessage?.channelState?.createdAtMs || Date.now(),
         updatedAtMs,
       });
@@ -529,7 +519,7 @@ export function createChatEngineConversationState({
     rememberThinkingFinished({
       sessionId,
       dialogProcessId,
-      clientTurnId,
+      turnScopeId,
       finishedAtMs: updatedAtMs || Date.now(),
       finishedAt: updatedAt,
     });
@@ -539,7 +529,7 @@ export function createChatEngineConversationState({
         state,
         sessionId,
         dialogProcessId,
-        clientTurnId,
+        turnScopeId,
         source: "stream",
         sourceEvent: String(statePayload?.sourceEvent || "").trim(),
         seq: Number(statePayload?.seq || 0),
@@ -592,15 +582,18 @@ export function createChatEngineConversationState({
   function applyConversationStateFromEvent(
     eventName = "",
     eventData = {},
-    { botMessage = null, fallbackDialogProcessId = "", fallbackClientTurnId = "" } = {},
+    {
+      botMessage = null,
+      fallbackDialogProcessId = "",
+      fallbackTurnScopeId = "",
+    } = {},
   ) {
     const normalizedEvent = String(eventName || "").trim();
     if (normalizedEvent !== StreamEventEnum.CHANNEL_STATE) return;
     applyConversationState(eventData, {
       botMessage,
       fallbackDialogProcessId,
-      fallbackClientTurnId,
-      allowMessageClientTurnFallback: Boolean(String(eventData?.dialogProcessId || "").trim()),
+      fallbackTurnScopeId,
     });
   }
 

@@ -58,7 +58,7 @@ forwardToUpstream(channel, payload = {}) {
         channel.pendingInteractionRequests.delete(requestId);
         this.requestChannelMap.delete(requestId);
         const dialogProcessId = String(requestEnvelope?.data?.dialogProcessId || "").trim();
-        const clientTurnId = String(requestEnvelope?.data?.clientTurnId || "").trim();
+        const turnScopeId = String(requestEnvelope?.data?.turnScopeId || "").trim();
         const sessionId = String(requestEnvelope?.data?.sessionId || "").trim();
         const remainingPendingInteractions = this._findPendingInteractionsByDialogProcessId(
           channel,
@@ -69,7 +69,7 @@ forwardToUpstream(channel, payload = {}) {
           channel.conversationStateByDialogProcessId.get(stateKey) || null;
         this.updateConversationState(channel, {
           dialogProcessId,
-          clientTurnId,
+          turnScopeId,
           sessionId,
           state: remainingPendingInteractions.length
             ? CONVERSATION_STATE.INTERACTION_PENDING

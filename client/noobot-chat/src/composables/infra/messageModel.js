@@ -15,7 +15,6 @@ import {
   getMessageTransferEnvelopes,
 } from "./transferEnvelopes";
 import {
-  getMessageClientTurnId,
   getMessageDialogProcessId,
   getMessageParentDialogProcessId,
   getMessageRole,
@@ -136,7 +135,6 @@ function createMessageModel(messageItem = {}) {
   const messageId = getMessageStableId(messageItem);
   const turnId = getMessageTurnId(messageItem);
   const sessionId = String(messageItem?.sessionId || messageItem?.session_id || "").trim();
-  const clientTurnId = getMessageClientTurnId(messageItem);
   const thinkingStartedAt =
     messageItem?.thinkingStartedAt || messageItem?.thinking_started_at || "";
   const thinkingFinishedAt =
@@ -157,7 +155,6 @@ function createMessageModel(messageItem = {}) {
     turn_id: turnId,
     sessionId,
     session_id: sessionId,
-    clientTurnId,
     role: getMessageRole(messageItem) || "assistant",
     content: messageItem.content || "",
     type: messageItem.type || "message",

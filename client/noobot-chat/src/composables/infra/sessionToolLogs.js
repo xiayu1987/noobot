@@ -7,10 +7,19 @@ import {
   getMessageDialogProcessId,
   getMessageParentDialogProcessId,
   getMessageRole,
+  getMessageTurnScopeId,
 } from "./messageIdentity";
 
 function logKey(item = {}) {
-  return `${item.sessionId || ""}|${item.toolCallId || ""}|${item.type || ""}|${item.event || ""}|${item.text || ""}|${item.ts || ""}`;
+  return `${item.sessionId || ""}|${item.turnScopeId || ""}|${item.toolCallId || ""}|${item.type || ""}|${item.event || ""}|${item.text || ""}|${item.ts || ""}`;
+}
+
+function buildTurnScopeGroupKey(sessionId = "", turnScopeId = "") {
+  const normalizedSessionId = String(sessionId || "").trim();
+  const normalizedTurnScopeId = String(turnScopeId || "").trim();
+  return normalizedSessionId && normalizedTurnScopeId
+    ? `${normalizedSessionId}::${normalizedTurnScopeId}`
+    : "";
 }
 
 function mergeUniqueLogs(existing = [], incoming = []) {
@@ -206,6 +215,7 @@ function buildToolLogsFromSessions(sessionDocuments = []) {
       const messageTime = String(messageItem?.ts || new Date().toISOString());
       const dialogProcessId = getMessageDialogProcessId(messageItem);
       const parentDialogProcessId = getMessageParentDialogProcessId(messageItem);
+      const turnScopeId = getMessageTurnScopeId(messageItem);
 
       if (
         messageType === "tool_call" ||
@@ -232,6 +242,7 @@ function buildToolLogsFromSessions(sessionDocuments = []) {
             sessionId,
             depth: sessionDepth,
             toolCallId,
+            turnScopeId,
             dialogProcessId,
             parentDialogProcessId,
           });
@@ -249,6 +260,7 @@ function buildToolLogsFromSessions(sessionDocuments = []) {
           sessionId,
           depth: sessionDepth,
           toolCallId,
+          turnScopeId,
           dialogProcessId,
           parentDialogProcessId,
         });
@@ -263,16 +275,14 @@ function buildToolLogsFromSessions(sessionDocuments = []) {
   return collectedLogs;
 }
 
-function buildToolLogsByDialogProcessId(sessionDocuments = []) {
+function buildToolLogsByTurnScope(sessionDocuments = []) {
   const groupedLogs = new Map();
   const sessionOrderById = buildSessionTreeOrder(sessionDocuments);
-  const sessionById = new Map();
   const childSessionIdsByParentId = new Map();
 
   for (const sessionDocument of sessionDocuments || []) {
     const sessionId = String(sessionDocument?.sessionId || "");
     if (!sessionId) continue;
-    sessionById.set(sessionId, sessionDocument);
     const parentSessionId = String(sessionDocument?.parentSessionId || "");
     if (!parentSessionId) continue;
     const siblingSessionIds =
@@ -309,77 +319,71 @@ function buildToolLogsByDialogProcessId(sessionDocuments = []) {
     return relatedSessionIds.has(sessionId);
   });
 
+  const logsByTurnScopeKey = new Map();
   const logsByDialogProcessId = new Map();
-  const childDialogIdsByParentDialogId = new Map();
   for (const toolLog of relevantLogs) {
+    const sessionId = String(toolLog?.sessionId || "").trim();
+    const turnScopeId = getMessageTurnScopeId(toolLog);
+    const turnScopeKey = buildTurnScopeGroupKey(sessionId, turnScopeId);
+    if (turnScopeKey) {
+      const existingLogs = logsByTurnScopeKey.get(turnScopeKey) || [];
+      logsByTurnScopeKey.set(turnScopeKey, [...existingLogs, toolLog]);
+    }
+
+    // Legacy fallback for old snapshots without turnScopeId.  New ownership is
+    // sessionId + turnScopeId; dialogProcessId is not used when turnScopeId exists.
     const dialogProcessId = getMessageDialogProcessId(toolLog);
-    const parentDialogProcessId = getMessageParentDialogProcessId(toolLog);
-    if (dialogProcessId) {
+    if (!turnScopeKey && dialogProcessId) {
       const existingLogs = logsByDialogProcessId.get(dialogProcessId) || [];
       logsByDialogProcessId.set(dialogProcessId, [...existingLogs, toolLog]);
     }
-    if (parentDialogProcessId && dialogProcessId) {
-      const existingChildren =
-        childDialogIdsByParentDialogId.get(parentDialogProcessId) || new Set();
-      existingChildren.add(dialogProcessId);
-      childDialogIdsByParentDialogId.set(parentDialogProcessId, existingChildren);
-    }
   }
 
-  const rootDialogProcessIds = new Set();
   for (const messageItem of rootSessionMessages) {
     if (getMessageRole(messageItem) !== "assistant") continue;
-    const dialogProcessId = getMessageDialogProcessId(messageItem);
-    if (dialogProcessId) rootDialogProcessIds.add(dialogProcessId);
-  }
-
-  for (const rootDialogProcessId of rootDialogProcessIds) {
-    const visitedDialogIds = new Set();
-    const pendingDialogIds = [rootDialogProcessId];
-    const roundLogs = [];
-    while (pendingDialogIds.length) {
-      const currentDialogProcessId = String(pendingDialogIds.shift() || "").trim();
-      if (!currentDialogProcessId || visitedDialogIds.has(currentDialogProcessId)) {
-        continue;
-      }
-      visitedDialogIds.add(currentDialogProcessId);
-      const currentLogs = logsByDialogProcessId.get(currentDialogProcessId) || [];
-      roundLogs.push(...currentLogs);
-      const childDialogIds =
-        childDialogIdsByParentDialogId.get(currentDialogProcessId) || new Set();
-      for (const childDialogProcessId of childDialogIds) {
-        if (!visitedDialogIds.has(childDialogProcessId)) {
-          pendingDialogIds.push(childDialogProcessId);
-        }
-      }
+    const sessionId = rootSessionId || String(messageItem?.sessionId || messageItem?.session_id || "").trim();
+    const turnScopeId = getMessageTurnScopeId(messageItem);
+    const turnScopeKey = buildTurnScopeGroupKey(sessionId, turnScopeId);
+    if (turnScopeKey) {
+      groupedLogs.set(turnScopeKey, sortLogsBySessionTree(
+        mergeUniqueLogs([], logsByTurnScopeKey.get(turnScopeKey) || []),
+        sessionOrderById,
+      ));
+      continue;
     }
-    groupedLogs.set(rootDialogProcessId, sortLogsBySessionTree(
-      mergeUniqueLogs([], roundLogs),
-      sessionOrderById,
-    ));
-  }
 
-  for (const [dialogProcessId, logs] of groupedLogs.entries()) {
-    groupedLogs.set(
-      dialogProcessId,
-      sortLogsBySessionTree(logs || [], sessionOrderById),
-    );
+    const dialogProcessId = getMessageDialogProcessId(messageItem);
+    if (dialogProcessId) {
+      groupedLogs.set(dialogProcessId, sortLogsBySessionTree(
+        mergeUniqueLogs([], logsByDialogProcessId.get(dialogProcessId) || []),
+        sessionOrderById,
+      ));
+    }
   }
 
   return groupedLogs;
 }
 
 function applyCompletedToolLogsToMessages(messages = [], sessionDocuments = []) {
-  const groupedLogs = buildToolLogsByDialogProcessId(sessionDocuments);
+  const groupedLogs = buildToolLogsByTurnScope(sessionDocuments);
   const rootSessionDocument = pickRootSessionDocument(sessionDocuments);
   const rootSessionId = String(rootSessionDocument?.sessionId || "");
   for (const messageItem of messages || []) {
     if (getMessageRole(messageItem) !== "assistant") continue;
+    const sessionId = rootSessionId || String(messageItem?.sessionId || messageItem?.session_id || "").trim();
+    const turnScopeId = getMessageTurnScopeId(messageItem);
+    const turnScopeKey = buildTurnScopeGroupKey(sessionId, turnScopeId);
     const dialogProcessId = getMessageDialogProcessId(messageItem);
-    const matchedToolLogs = (groupedLogs.get(dialogProcessId) || []).filter(
-      (toolLogItem) =>
-        String(toolLogItem?.sessionId || "") !== rootSessionId ||
-        String(toolLogItem?.dialogProcessId || "") === dialogProcessId,
+    const matchedToolLogs = (groupedLogs.get(turnScopeKey || dialogProcessId) || []).filter(
+      (toolLogItem) => {
+        if (turnScopeKey) {
+          return buildTurnScopeGroupKey(toolLogItem?.sessionId, toolLogItem?.turnScopeId) === turnScopeKey;
+        }
+        return (
+          String(toolLogItem?.sessionId || "") !== rootSessionId ||
+          String(toolLogItem?.dialogProcessId || "") === dialogProcessId
+        );
+      },
     );
     const mergedToolLogs = mergeUniqueLogs([], matchedToolLogs);
     messageItem.completedToolLogs = formatToolLogsTree(mergedToolLogs);

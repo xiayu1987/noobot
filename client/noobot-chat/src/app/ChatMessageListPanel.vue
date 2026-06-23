@@ -130,7 +130,6 @@ function applyConversationStateRuntimeToMessage(messageItem = {}) {
     state: String(stateItem?.state || "").trim(),
     sessionId: String(stateItem?.sessionId || "").trim(),
     dialogProcessId: String(stateItem?.dialogProcessId || "").trim(),
-    clientTurnId: String(stateItem?.clientTurnId || "").trim(),
     sourceEvent: String(stateItem?.sourceEvent || "").trim(),
     seq: Number(stateItem?.seq || 0),
     createdAtMs: timing.createdAtMs || Number(channelState?.createdAtMs || 0),

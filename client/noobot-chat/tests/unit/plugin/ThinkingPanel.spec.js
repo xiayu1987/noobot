@@ -135,12 +135,12 @@ describe("ThinkingPanel", () => {
     vi.useRealTimers();
   });
 
-  it("keeps pending elapsed time after orphan edit-resend refresh from persisted client turn start", () => {
+  it("keeps pending elapsed time after orphan edit-resend refresh from persisted turn scope start", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-22T10:00:12.000Z"));
     rememberThinkingStarted({
       sessionId: "local-session-before-promotion",
-      clientTurnId: "client-turn-orphan-resend",
+      turnScopeId: "client-turn-orphan-resend",
       startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
     });
 
@@ -148,7 +148,7 @@ describe("ThinkingPanel", () => {
       role: "assistant",
       pending: true,
       sessionId: "backend-session-after-refresh",
-      clientTurnId: "client-turn-orphan-resend",
+      turnScopeId: "client-turn-orphan-resend",
       // This mirrors the refresh path: the assistant is still running, but the
       // refreshed message does not carry backend timing fields yet.
       ts: "2026-06-22T10:00:12.000Z",

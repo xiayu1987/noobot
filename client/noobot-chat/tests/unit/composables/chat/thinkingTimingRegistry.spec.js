@@ -27,10 +27,10 @@ describe("thinkingTimingRegistry", () => {
     vi.useRealTimers();
   });
 
-  it("persists a thinking start time and resolves it by clientTurnId after refresh", () => {
+  it("persists a thinking start time and resolves it by turnScopeId after refresh", () => {
     rememberThinkingStarted({
       sessionId: "session-1",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
       startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
     });
 
@@ -38,26 +38,26 @@ describe("thinkingTimingRegistry", () => {
     expect(rawAfterRefresh).toContain("client-1");
 
     expect(
-      resolveThinkingTiming({ sessionId: "session-1", clientTurnId: "client-1" }),
+      resolveThinkingTiming({ sessionId: "session-1", turnScopeId: "client-1" }),
     ).toMatchObject({
       sessionId: "session-1",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
       startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
     });
   });
 
-  it("resolves by clientTurnId when the session id changes after backend promotion", () => {
+  it("resolves by turnScopeId when the session id changes after backend promotion", () => {
     rememberThinkingStarted({
       sessionId: "local-session-before-promotion",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
       startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
     });
 
     expect(
-      resolveThinkingTiming({ sessionId: "backend-session-after-refresh", clientTurnId: "client-1" }),
+      resolveThinkingTiming({ sessionId: "backend-session-after-refresh", turnScopeId: "client-1" }),
     ).toMatchObject({
       sessionId: "local-session-before-promotion",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
       startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
     });
   });
@@ -65,38 +65,64 @@ describe("thinkingTimingRegistry", () => {
   it("does not reset an existing start time when the same running state is replayed later", () => {
     rememberThinkingStarted({
       sessionId: "session-1",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
       startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
     });
     rememberThinkingStarted({
       sessionId: "session-1",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
       startedAtMs: Date.parse("2026-06-22T10:00:12.000Z"),
     });
 
-    expect(resolveThinkingTiming({ sessionId: "session-1", clientTurnId: "client-1" })).toMatchObject({
+    expect(resolveThinkingTiming({ sessionId: "session-1", turnScopeId: "client-1" })).toMatchObject({
       startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
     });
   });
 
-  it("binds a backend dialogProcessId to the existing client turn timing", () => {
+  it("binds a backend dialogProcessId to the existing turn scope timing", () => {
     rememberThinkingStarted({
       sessionId: "session-1",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
       startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
     });
 
     bindThinkingDialogProcess({
       sessionId: "session-1",
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
       dialogProcessId: "dialog-1",
     });
 
     expect(resolveThinkingTiming({ sessionId: "session-1", dialogProcessId: "dialog-1" })).toMatchObject({
-      clientTurnId: "client-1",
+      turnScopeId: "client-1",
       dialogProcessId: "dialog-1",
       startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
     });
+  });
+
+  it("does not resolve by dialogProcessId when the turn identity conflicts", () => {
+    rememberThinkingStarted({
+      sessionId: "session-1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+      turnScopeId: "client-1",
+      startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
+    });
+
+    expect(
+      resolveThinkingTiming({
+        sessionId: "session-1",
+        dialogProcessId: "dialog-1",
+        turnScopeId: "turn-2",
+      }),
+    ).toBe(null);
+
+    expect(
+      resolveThinkingTiming({
+        sessionId: "session-1",
+        dialogProcessId: "dialog-1",
+        turnScopeId: "client-2",
+      }),
+    ).toBe(null);
   });
 
   it("keeps finished timing available for completed render instead of clearing immediately", () => {

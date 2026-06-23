@@ -20,8 +20,9 @@ export function prepareChatSend({
   skipUserMessageAppend = false,
   existingUserMessage = null,
   messageText = "",
-  clientTurnId = "",
+  turnScopeId = "",
 }) {
+  const normalizedTurnScopeId = String(turnScopeId || "").trim();
   const explicitText = typeof messageText === "string" ? messageText.trim() : "";
   const text = explicitText || input.value.trim();
   input.value = "";
@@ -38,8 +39,8 @@ export function prepareChatSend({
   const userMessage = skipUserMessageAppend
     ? existingUserMessage
     : appendMessage(RoleEnum.USER, text || translate("chat.uploadOnly"), userAttachments);
-  if (userMessage && clientTurnId) {
-    userMessage.clientTurnId = String(clientTurnId || "").trim();
+  if (userMessage && normalizedTurnScopeId) {
+    userMessage.turnScopeId = normalizedTurnScopeId;
   }
   if (
     [
@@ -68,18 +69,18 @@ export function prepareChatSend({
   botMessage.completedToolLogs = [];
   botMessage.tool_calls = [];
   botMessage.executionLogTotal = 0;
-  botMessage.clientTurnId = String(clientTurnId || "").trim();
+  botMessage.turnScopeId = normalizedTurnScopeId;
   rememberThinkingStarted({
     sessionId,
-    clientTurnId: botMessage.clientTurnId,
+    turnScopeId: botMessage.turnScopeId,
     startedAtMs: thinkingStartedAtMs,
   });
   applyConversationState(
     {
       state: "sending",
       sessionId,
-      clientTurnId: botMessage.clientTurnId,
-      createdAtMs: thinkingStartedAtMs,
+      turnScopeId: botMessage.turnScopeId,
+        createdAtMs: thinkingStartedAtMs,
       createdAt: thinkingStartedAt,
     },
     { botMessage },

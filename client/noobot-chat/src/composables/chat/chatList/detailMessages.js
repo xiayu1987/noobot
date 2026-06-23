@@ -11,7 +11,6 @@ import {
   resolveRootDialogProcessIdByChain,
 } from "../../infra/dialogProcessChain";
 import {
-  getMessageClientTurnId,
   getMessageDialogProcessId,
   getMessageRole,
 } from "../../infra/messageIdentity";
@@ -36,7 +35,6 @@ function preserveRunningThinkingState(existingMessage = {}, detailMessageItem = 
   const existingThinkingFinishedAt = String(
     existingMessage?.thinkingFinishedAt || existingMessage?.thinking_finished_at || "",
   ).trim();
-  const existingClientTurnId = getMessageClientTurnId(existingMessage);
   const existingPending = existingMessage?.pending === true;
   return () => {
     if (existingChannelState && !detailMessageItem?.channelState) {
@@ -49,9 +47,6 @@ function preserveRunningThinkingState(existingMessage = {}, detailMessageItem = 
     if (existingThinkingFinishedAt && !String(detailMessageItem?.thinkingFinishedAt || detailMessageItem?.thinking_finished_at || "").trim()) {
       existingMessage.thinkingFinishedAt = existingThinkingFinishedAt;
       existingMessage.thinking_finished_at = existingThinkingFinishedAt;
-    }
-    if (existingClientTurnId && !getMessageClientTurnId(detailMessageItem)) {
-      existingMessage.clientTurnId = existingClientTurnId;
     }
     const channelState = String(existingMessage?.channelState?.state || "").trim();
     if (existingPending && IN_FLIGHT_CHANNEL_STATES.has(channelState)) {

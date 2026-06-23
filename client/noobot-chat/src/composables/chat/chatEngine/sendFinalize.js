@@ -4,7 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { RoleEnum } from "../../../shared/constants/chatConstants";
-import { getMessageClientTurnId, getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity";
+import {
+  getMessageDialogProcessId,
+  getMessageRole,
+  getMessageTurnScopeId,
+  normalizeTurnMeta,
+} from "../../infra/messageIdentity";
 
 function normalizeTrimmedString(value = "") {
   return String(value || "").trim();
@@ -68,6 +73,7 @@ export function applyStreamCompletedFallback({
   applyConversationState,
 } = {}) {
   if (!sending?.value || !finalDoneEventData) return false;
+  const turnMeta = normalizeTurnMeta(finalDoneEventData);
   applyConversationState(
     {
       state: "completed",
@@ -80,7 +86,7 @@ export function applyStreamCompletedFallback({
       dialogProcessId: String(
         getMessageDialogProcessId(botMessage) || finalDoneEventData?.dialogProcessId || "",
       ),
-      clientTurnId: String(getMessageClientTurnId(botMessage) || finalDoneEventData?.clientTurnId || finalDoneEventData?.turnScopeId || finalDoneEventData?.client_turn_id || ""),
+      turnScopeId: String(getMessageTurnScopeId(botMessage) || turnMeta.turnScopeId || ""),
       sourceEvent: "stream_finalize_fallback",
     },
     { botMessage },
@@ -101,6 +107,7 @@ export function applyStopRequestedState({
       state: "stopped",
       sessionId: String(activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
       dialogProcessId: String(getMessageDialogProcessId(botMessage) || ""),
+      ...(getMessageTurnScopeId(botMessage) ? { turnScopeId: String(getMessageTurnScopeId(botMessage) || "") } : {}),
     },
     { botMessage },
   );
@@ -124,6 +131,7 @@ export function applySendErrorState({
         errorEventData?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || "",
       ),
       dialogProcessId: String(errorEventData?.dialogProcessId || getMessageDialogProcessId(botMessage) || ""),
+      turnScopeId: String(normalizeTurnMeta(errorEventData).turnScopeId || getMessageTurnScopeId(botMessage) || ""),
       sourceEvent: errorEventData ? "stream_error" : undefined,
     },
     { botMessage },

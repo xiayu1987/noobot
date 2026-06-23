@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  getMessageClientTurnId,
   getMessageDialogProcessId,
   getMessageRole,
+  getMessageTurnScopeId,
+  normalizeTurnMeta,
 } from "../infra/messageIdentity";
 
 const STOP_REQUEST_STORAGE_KEY = "noobot:session-run-state-machine:stop-requests:v1";
@@ -168,7 +169,35 @@ function transitionRule(state = "") {
 }
 
 export function resolveEventScope(value = {}) {
-  return trim(value.dialogProcessId) || trim(value.clientTurnId);
+  return trim(value.turnScopeId);
+}
+
+function resolveEventProcessScope(value = {}) {
+  return trim(value.dialogProcessId);
+}
+
+function hasRunProcessIdentity(value = {}) {
+  return Boolean(resolveEventProcessScope(value));
+}
+
+function hasRunTurnIdentity(value = {}) {
+  return Boolean(resolveEventScope(value));
+}
+
+function hasRunIdentity(value = {}) {
+  return hasRunProcessIdentity(value) || hasRunTurnIdentity(value);
+}
+
+function hasMatchingRunTurnIdentity(current = {}, event = {}) {
+  const currentTurnScopeId = trim(current.turnScopeId);
+  const eventTurnScopeId = trim(event.turnScopeId);
+  return Boolean(currentTurnScopeId && eventTurnScopeId && currentTurnScopeId === eventTurnScopeId);
+}
+
+function hasConflictingRunTurnIdentity(current = {}, event = {}) {
+  const currentTurnScopeId = trim(current.turnScopeId);
+  const eventTurnScopeId = trim(event.turnScopeId);
+  return Boolean(currentTurnScopeId && eventTurnScopeId && currentTurnScopeId !== eventTurnScopeId);
 }
 
 function sameConversationScope(current = {}, event = {}) {
@@ -180,20 +209,36 @@ function sameConversationScope(current = {}, event = {}) {
   if (currentDialogProcessId && eventDialogProcessId && currentDialogProcessId !== eventDialogProcessId) {
     return false;
   }
-  const currentClientTurnId = trim(current.clientTurnId);
-  const eventClientTurnId = trim(event.clientTurnId);
-  if (currentClientTurnId && eventClientTurnId) return currentClientTurnId === eventClientTurnId;
-  const currentScope = currentDialogProcessId || currentClientTurnId;
-  const eventScope = eventDialogProcessId || eventClientTurnId;
-  if (currentScope && eventScope) return currentScope === eventScope;
+  if (hasConflictingRunTurnIdentity(current, event)) return false;
+
+  const processMatched = Boolean(currentDialogProcessId && eventDialogProcessId);
+  const turnMatched = hasMatchingRunTurnIdentity(current, event);
+  if (processMatched || turnMatched) return true;
+
+  const currentHasTurnIdentity = hasRunTurnIdentity(current);
+  const eventHasTurnIdentity = hasRunTurnIdentity(event);
+  if (currentHasTurnIdentity && eventHasTurnIdentity) return false;
+
+  const currentHasProcessIdentity = hasRunProcessIdentity(current);
+  const eventHasProcessIdentity = hasRunProcessIdentity(event);
+  if (
+    (currentHasTurnIdentity && eventHasProcessIdentity) ||
+    (currentHasProcessIdentity && eventHasTurnIdentity)
+  ) {
+    return false;
+  }
   return true;
 }
 
-function canBindBackendDialogProcessIdByClientTurn(current = {}, event = {}) {
+function canBindBackendDialogProcessIdByTurnScope(current = {}, event = {}) {
   if (trim(current.dialogProcessId)) return false;
-  const currentClientTurnId = trim(current.clientTurnId);
-  const eventClientTurnId = trim(event.clientTurnId);
-  return Boolean(currentClientTurnId && eventClientTurnId && currentClientTurnId === eventClientTurnId && trim(event.dialogProcessId));
+  const currentTurnScopeId = trim(current.turnScopeId);
+  const eventTurnScopeId = trim(event.turnScopeId);
+  return Boolean(currentTurnScopeId && eventTurnScopeId && currentTurnScopeId === eventTurnScopeId && trim(event.dialogProcessId));
+}
+
+function resolveRunTurnScopeId(value = {}) {
+  return trim(value.turnScopeId);
 }
 
 function shouldStartNewTurn(current = {}, event = {}) {
@@ -212,7 +257,7 @@ function hasEventState(event = {}) {
 function isSameConversationScopeOrNewTurn({ current = {}, event = {}, startsNewTurn = false } = {}) {
   if (isUnscopedLocalFailureForScopedTurn({ current, event, startsNewTurn })) return false;
   if (isUnscopedBackendStateForScopedTurn({ current, event, startsNewTurn })) return false;
-  return sameConversationScope(current, event) || startsNewTurn || canBindBackendDialogProcessIdByClientTurn(current, event);
+  return sameConversationScope(current, event) || startsNewTurn || canBindBackendDialogProcessIdByTurnScope(current, event);
 }
 
 function isNotReopeningStopLock({ event = {}, startsNewTurn = false, currentRule = "" } = {}) {
@@ -253,16 +298,16 @@ function isUnscopedBackendProtectedState(state = "") {
 function isUnscopedBackendStateForScopedTurn({ current = {}, event = {}, startsNewTurn = false } = {}) {
   if (startsNewTurn) return false;
   if (!isBackendRunStateEvent(event)) return false;
-  if (!resolveEventScope(current)) return false;
-  if (resolveEventScope(event)) return false;
+  if (!hasRunIdentity(current)) return false;
+  if (hasRunIdentity(event)) return false;
   return isUnscopedBackendProtectedState(event.state);
 }
 
 function isUnscopedLocalFailureForScopedTurn({ current = {}, event = {}, startsNewTurn = false } = {}) {
   if (startsNewTurn) return false;
   if (event.type !== SESSION_RUN_EVENT.LOCAL_FAILURE) return false;
-  if (!resolveEventScope(current)) return false;
-  return !resolveEventScope(event);
+  if (!hasRunIdentity(current)) return false;
+  return !hasRunIdentity(event);
 }
 
 export const SESSION_RUN_TRANSITION_GUARDS = Object.freeze([
@@ -370,9 +415,9 @@ function resolveNextDialogProcessId(current = {}, event = {}, { startsNewTurn = 
   return trim(event.dialogProcessId) || trim(current.dialogProcessId);
 }
 
-function resolveNextClientTurnId(current = {}, event = {}, { startsNewTurn = false } = {}) {
-  if (startsNewTurn) return trim(event.clientTurnId);
-  return trim(event.clientTurnId) || trim(current.clientTurnId);
+function resolveNextTurnScopeId(current = {}, event = {}, { startsNewTurn = false } = {}) {
+  if (startsNewTurn) return resolveRunTurnScopeId(event);
+  return resolveRunTurnScopeId(event) || resolveRunTurnScopeId(current);
 }
 
 export function isTerminalSessionRunState(state = "") {
@@ -392,7 +437,7 @@ export function createInitialSessionRunState(overrides = {}) {
     state: SESSION_RUN_STATE.IDLE,
     sessionId: "",
     dialogProcessId: "",
-    clientTurnId: "",
+    turnScopeId: "",
     source: "initial",
     sourceEvent: "",
     seq: 0,
@@ -421,6 +466,7 @@ function normalizeTimestamp(rawEvent = {}) {
 }
 
 export function normalizeSessionRunEvent(rawEvent = {}) {
+  const turnMeta = normalizeTurnMeta(rawEvent);
   const type = trim(rawEvent?.type || rawEvent?.event || SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE);
   let state = normalizeState(rawEvent?.state);
   if (!state) {
@@ -438,7 +484,7 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
     dialogProcessId: type === SESSION_RUN_EVENT.LOCAL_SEND_STARTED
       ? ""
       : trim(rawEvent?.dialogProcessId),
-    clientTurnId: trim(rawEvent?.clientTurnId || rawEvent?.turnScopeId || rawEvent?.client_turn_id),
+    turnScopeId: turnMeta.turnScopeId,
     source: trim(rawEvent?.source || type),
     sourceEvent: trim(rawEvent?.sourceEvent),
     seq: Number(rawEvent?.seq || 0),
@@ -458,13 +504,12 @@ export function transitionSessionRunState(currentState = createInitialSessionRun
   if (event.type === SESSION_RUN_EVENT.LOCAL_RESET) return createInitialSessionRunState({ updatedAt: event.timestamp });
 
   const nextDialogProcessId = resolveNextDialogProcessId(current, event, { startsNewTurn });
-  const nextClientTurnId = resolveNextClientTurnId(current, event, { startsNewTurn });
-
+  const nextTurnScopeId = resolveNextTurnScopeId(current, event, { startsNewTurn });
   return {
     state: event.state,
     sessionId: event.sessionId || trim(current.sessionId),
     dialogProcessId: nextDialogProcessId,
-    clientTurnId: nextClientTurnId,
+    turnScopeId: nextTurnScopeId,
     source: event.source,
     sourceEvent: event.sourceEvent,
     seq: Math.max(currentSeq, eventSeq),
@@ -520,26 +565,25 @@ export function resolveSessionRunStateForMessage({
   if (!isRunStateForActiveSession(stateSnapshot, activeSession)) return null;
 
   const runDialogProcessId = trim(stateSnapshot?.dialogProcessId);
-  const runClientTurnId = trim(stateSnapshot?.clientTurnId);
+  const runTurnScopeId = trim(stateSnapshot?.turnScopeId);
   const messageDialogProcessId = getMessageDialogProcessId(messageItem);
-  const messageClientTurnId = getMessageClientTurnId(messageItem);
+  const messageTurnScopeId = getMessageTurnScopeId(messageItem);
 
   if (runDialogProcessId && messageDialogProcessId && runDialogProcessId === messageDialogProcessId) {
     return stateSnapshot;
   }
-  if (runClientTurnId && messageClientTurnId && runClientTurnId === messageClientTurnId) {
+  if (runTurnScopeId && messageTurnScopeId && runTurnScopeId === messageTurnScopeId) {
     return stateSnapshot;
   }
-
   const latestAssistant = getLatestAssistantMessage(activeSession);
   if (latestAssistant !== messageItem) return null;
 
   // Fallback for reconnect/session refresh windows where one side has not
-  // received the backend dialogProcessId/clientTurnId yet. Terminal and stale
+  // received the backend dialogProcessId/turnScopeId yet. Terminal and stale
   // state consistency is still owned by this state machine before this helper
   // returns an in-flight state.
-  if (!runDialogProcessId && !runClientTurnId) return stateSnapshot;
-  if (!messageDialogProcessId && !messageClientTurnId) return stateSnapshot;
+  if (!runDialogProcessId && !runTurnScopeId) return stateSnapshot;
+  if (!messageDialogProcessId && !messageTurnScopeId) return stateSnapshot;
   return null;
 }
 
@@ -639,7 +683,7 @@ export function rememberStopRequestedEvent(rawEvent = {}) {
   entries.push({
     sessionId: event.sessionId,
     dialogProcessId: event.dialogProcessId,
-    clientTurnId: event.clientTurnId,
+    turnScopeId: event.turnScopeId,
     seq: event.seq,
     timestamp: event.timestamp,
   });
@@ -666,7 +710,7 @@ export function resolveRememberedStopRequestedEvent({ sessionId = "", dialogProc
     state: SESSION_RUN_STATE.STOP_REQUESTED,
     sessionId: normalizedSessionId,
     dialogProcessId: normalizedDialogProcessId || trim(match.dialogProcessId),
-    clientTurnId: trim(match.clientTurnId),
+    turnScopeId: trim(match.turnScopeId),
     seq: Number(match.seq || 0),
     timestamp: Number(match.timestamp || timestamp),
     source: "remembered_stop_request",
