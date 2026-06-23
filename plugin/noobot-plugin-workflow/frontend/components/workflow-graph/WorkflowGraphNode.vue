@@ -131,9 +131,7 @@ function handleClick(nodeItem = {}, clickable = true) {
         v-if="!boundaryType && isActionNode(nodeItem, boundaryType) && Array.isArray(nodeItem?.actionNodeStates) && nodeItem.actionNodeStates.length"
         class="workflow-node-runtime-hint"
       >
-        {{
-          translate(expanded ? "workflow.collapse" : "workflow.expand")
-        }}
+        {{ translate("workflow.runtimeState") }}
         ·
         {{
           translate("workflow.nodeBoxCount", {
@@ -152,7 +150,7 @@ function handleClick(nodeItem = {}, clickable = true) {
     <span
       v-if="!boundaryType && isActionNode(nodeItem, boundaryType) && Array.isArray(nodeItem?.actionNodeStates) && nodeItem.actionNodeStates.length"
       class="workflow-node-expand-icon"
-    >{{ expanded ? "⌃" : "⌄" }}</span>
+    >↗</span>
   </div>
 </template>
 

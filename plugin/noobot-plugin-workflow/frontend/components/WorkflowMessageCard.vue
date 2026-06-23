@@ -36,6 +36,8 @@ const viewerVisible = ref(false);
 const viewerLoading = ref(false);
 const viewerError = ref("");
 const selectedNode = ref(null);
+const selectedRuntimeNode = ref(null);
+const selectedRuntimeStep = ref(null);
 const selectedNodeMessages = ref([]);
 const selectedNodeRawMessages = ref([]);
 const selectedNodeSessionSummary = ref(null);
@@ -695,6 +697,44 @@ const nodeSessionAllMessages = computed(() => {
   return Array.isArray(rawNodeSessionMessages.value) ? rawNodeSessionMessages.value : [];
 });
 
+const selectedRuntimeBoxes = computed(() => {
+  const nodeItem = selectedRuntimeNode.value || selectedNode.value || {};
+  if (Array.isArray(nodeItem?.actionNodeStates)) return nodeItem.actionNodeStates;
+  if (Array.isArray(nodeItem?.runtimeBoxes)) return nodeItem.runtimeBoxes;
+  return [];
+});
+
+function resolveStatusLabel(nodeItem = {}) {
+  const status = String(nodeItem?._status || nodeItem?.status || "").trim().toLowerCase();
+  if (status === "success") return translate("workflow.statusSuccess");
+  if (status === "failed" || status === "error") return translate("workflow.statusFailed");
+  if (status === "running") return translate("workflow.statusRunning");
+  return translate("workflow.statusPending");
+}
+
+function resolveStatusClass(nodeItem = {}) {
+  const status = String(nodeItem?._status || nodeItem?.status || "").trim().toLowerCase();
+  if (status === "success") return "success";
+  if (status === "failed" || status === "error") return "failed";
+  if (status === "running") return "running";
+  return "pending";
+}
+
+function resolveStepLabel(stepItem = {}, stepIndex = 0) {
+  const order = Number.isFinite(Number(stepItem?.stepIndex)) ? Number(stepItem.stepIndex) + 1 : stepIndex + 1;
+  return translate("workflow.stepBoxLabel", { order });
+}
+
+function resolveStateBoxLabel(stateBox = {}, stateIndex = 0) {
+  const id = String(stateBox?.actionNodeStateId || "").trim();
+  if (!id) return translate("workflow.nodeBoxLabelFallback", { index: stateIndex + 1 });
+  return translate("workflow.nodeBoxLabel", { id });
+}
+
+function stepHasSession(stepItem = {}) {
+  return Boolean(String(stepItem?.dialogId || "").trim());
+}
+
 function buildWorkflowDrawerRoute(nodeItem = {}, patch = {}) {
   const dialogId = String(
     Object.prototype.hasOwnProperty.call(patch, "dialogId")
@@ -860,6 +900,26 @@ async function openNodeSession(nodeItem = {}, options = {}) {
   }
 }
 
+function openWorkflowNodePanel(nodeItem = {}) {
+  selectedRuntimeNode.value = nodeItem;
+  selectedRuntimeStep.value = null;
+  selectedNode.value = nodeItem;
+  selectedGraphDialogId.value = "";
+  selectedNodeMessages.value = [];
+  selectedNodeRawMessages.value = [];
+  selectedNodeSessionSummary.value = null;
+  selectedNodeSessionId.value = "";
+  viewerError.value = "";
+  viewerLoading.value = false;
+  viewerVisible.value = true;
+}
+
+async function handleRuntimeStepClick(stepItem = {}) {
+  if (!stepHasSession(stepItem)) return;
+  selectedRuntimeStep.value = stepItem;
+  await openNodeSession(stepItem);
+}
+
 function handleSelectedDialogUpdate(dialogId = "") {
   selectedGraphDialogId.value = String(dialogId || "").trim();
 }
@@ -898,6 +958,8 @@ watch(
   () => viewerVisible.value,
   (visible) => {
     if (visible || applyingWorkflowDrawerHistory.value) return;
+    selectedRuntimeNode.value = null;
+    selectedRuntimeStep.value = null;
     replaceWorkflowDrawerHistory({ dialogId: "", rootSessionId: "" });
   },
 );
@@ -937,6 +999,7 @@ watch(
         :flowtos="semanticFlowtos"
         :selected-dialog-id="selectedGraphDialogId"
         @update:selected-dialog-id="handleSelectedDialogUpdate"
+        @node-click="openWorkflowNodePanel"
         @step-click="openNodeSession"
       />
     </div>
@@ -967,6 +1030,61 @@ watch(
     >
       <BaseMessageErrorAlert :error="viewerError" />
       <template v-if="!viewerError">
+        <div v-if="selectedRuntimeNode" class="workflow-runtime-panel">
+          <div class="workflow-runtime-panel-header">
+            <div>
+              <div class="workflow-runtime-panel-title">
+                {{
+                  selectedRuntimeNode?.nodeName ||
+                  selectedRuntimeNode?.nodeId ||
+                  translate("workflow.actionNode")
+                }}
+                ·
+                {{ translate("workflow.runtimeState") }}
+              </div>
+              <div class="workflow-runtime-panel-subtitle">
+                {{ translate("workflow.runtimeInspectorSubtitle") }}
+              </div>
+            </div>
+          </div>
+          <div class="workflow-runtime-panel-body">
+            <div
+              v-for="(stateBox, stateIndex) in selectedRuntimeBoxes"
+              :key="`${String(selectedRuntimeNode?.nodeId || selectedRuntimeNode?.dialogId || '')}-${String(stateBox?.actionNodeStateId || stateIndex)}`"
+              class="workflow-runtime-state-box"
+            >
+              <div class="workflow-runtime-state-title">
+                <span>{{ resolveStateBoxLabel(stateBox, stateIndex) }}</span>
+                <span class="workflow-runtime-state-count">
+                  {{ translate("workflow.stepCount", { count: (stateBox?.steps || []).length }) }}
+                </span>
+              </div>
+              <button
+                v-for="(stepItem, stepIndex) in (stateBox?.steps || [])"
+                :key="`${String(stepItem?.stepId || stepItem?.dialogId || stepIndex)}-${stepIndex}`"
+                type="button"
+                class="workflow-runtime-step-box"
+                :class="[
+                  resolveStatusClass(stepItem),
+                  {
+                    'is-selected': String(stepItem?.dialogId || '').trim() === selectedGraphDialogId,
+                    'is-disabled': !stepHasSession(stepItem),
+                  },
+                ]"
+                :disabled="!stepHasSession(stepItem)"
+                @click.stop="handleRuntimeStepClick(stepItem)"
+              >
+                <span class="workflow-runtime-step-name">{{ resolveStepLabel(stepItem, stepIndex) }}</span>
+                <span class="workflow-runtime-step-status">{{ resolveStatusLabel(stepItem) }}</span>
+              </button>
+              <BaseEmptyHint
+                v-if="!(stateBox?.steps || []).length"
+                class="workflow-runtime-step-empty"
+                :text="translate('workflow.noStepBox')"
+              />
+            </div>
+          </div>
+        </div>
         <div
           v-for="(messageItem, messageIndex) in displayNodeMessages"
           :key="`thinking-${String(messageItem?.ts || '')}-${messageIndex}`"
@@ -1112,6 +1230,10 @@ watch(
 <style>
 .workflow-node-session-drawer {
   --noobot-text-primary: var(--noobot-text-main);
+  --workflow-accent-rgb: 109, 74, 255;
+  --workflow-accent-strong-rgb: 122, 75, 244;
+  --workflow-success-rgb: 31, 143, 74;
+  --workflow-failed-rgb: 199, 59, 59;
 }
 
 .workflow-node-session-drawer__body {
@@ -1141,5 +1263,140 @@ watch(
 .workflow-node-session-drawer__body .workflow-node-empty {
   color: var(--noobot-text-secondary);
   font-size: 13px;
+}
+
+.workflow-runtime-panel {
+  border: 1px solid color-mix(in srgb, var(--noobot-msg-assistant-border) 78%, rgb(var(--workflow-accent-rgb)) 22%);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 14px;
+  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 94%, rgb(var(--workflow-accent-rgb)) 6%);
+  box-shadow: 0 8px 20px rgba(var(--workflow-accent-rgb), 0.08);
+}
+
+.workflow-runtime-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.workflow-runtime-panel-title {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--noobot-text-primary);
+}
+
+.workflow-runtime-panel-subtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--noobot-text-secondary);
+}
+
+.workflow-runtime-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.workflow-runtime-state-box {
+  border: 1px solid color-mix(in srgb, var(--noobot-msg-assistant-border) 86%, transparent 14%);
+  border-radius: 10px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 98%, #000 2%);
+}
+
+.workflow-runtime-state-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  color: var(--noobot-text-primary);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.workflow-runtime-state-count {
+  flex: 0 0 auto;
+  color: var(--noobot-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.workflow-runtime-step-box {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 34px;
+  padding: 7px 9px;
+  margin-top: 7px;
+  border: 1px solid color-mix(in srgb, var(--noobot-msg-assistant-border) 78%, transparent 22%);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 96%, #000 4%);
+  color: var(--noobot-text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.workflow-runtime-step-box:hover:not(:disabled) {
+  border-color: rgba(var(--workflow-accent-rgb), 0.58);
+  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 90%, rgb(var(--workflow-accent-rgb)) 10%);
+  box-shadow: 0 5px 12px rgba(var(--workflow-accent-rgb), 0.12);
+}
+
+.workflow-runtime-step-box.is-selected {
+  border-color: rgba(var(--workflow-accent-rgb), 0.9);
+  box-shadow: 0 0 0 2px rgba(var(--workflow-accent-rgb), 0.14);
+}
+
+.workflow-runtime-step-box.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.workflow-runtime-step-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.workflow-runtime-step-status {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 11px;
+  color: var(--noobot-text-secondary);
+  background: rgba(127, 127, 127, 0.12);
+}
+
+.workflow-runtime-step-box.success .workflow-runtime-step-status {
+  color: color-mix(in srgb, var(--noobot-status-success) 78%, var(--noobot-text-primary) 22%);
+  background: color-mix(in srgb, var(--noobot-status-success) 14%, transparent 86%);
+}
+
+.workflow-runtime-step-box.failed .workflow-runtime-step-status {
+  color: color-mix(in srgb, rgb(var(--workflow-failed-rgb)) 82%, var(--noobot-text-primary) 18%);
+  background: rgba(var(--workflow-failed-rgb), 0.12);
+}
+
+.workflow-runtime-step-box.running .workflow-runtime-step-status {
+  color: color-mix(in srgb, rgb(var(--workflow-accent-strong-rgb)) 82%, var(--noobot-text-primary) 18%);
+  background: rgba(var(--workflow-accent-strong-rgb), 0.12);
+}
+
+.workflow-runtime-step-empty {
+  margin-top: 6px;
+  color: var(--noobot-text-secondary);
+  font-size: 12px;
 }
 </style>
