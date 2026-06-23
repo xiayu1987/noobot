@@ -164,7 +164,8 @@ function isLatestUserMessage(userMessage = {}, allMessages = []) {
   const userIndex = findMessageIndex(userMessage, messages);
   if (userIndex < 0) return false;
   for (let index = userIndex + 1; index < messages.length; index += 1) {
-    if (isPlainUserMessage(messages[index])) return false;
+    const nextMessage = messages[index];
+    if (isPlainUserMessage(nextMessage)) return false;
   }
   return true;
 }
@@ -287,13 +288,15 @@ export function registerFrontendPlugin(ctx = {}) {
           );
           const canDelete = typeof context?.deleteMonotonicMessage === "function";
           const canResend = typeof context?.resendMonotonicMessage === "function";
+          const monotonicSource = getMonotonicSourceForUser(messageItem, allMessages);
+          const tailOrphanUserMessage = isTailOrphanUserMessage(messageItem, allMessages);
+          const latestUserMessage = isLatestUserMessage(messageItem, allMessages);
           const shouldMountOnCurrentUser =
             isUserMessage(messageItem) &&
             Boolean(monotonicUserTarget) &&
             isSameMessageIdentity(messageItem, monotonicUserTarget) &&
-            isLatestUserMessage(messageItem, allMessages) &&
-            (Boolean(getMonotonicSourceForUser(messageItem, allMessages)) ||
-              isTailOrphanUserMessage(messageItem, allMessages));
+            latestUserMessage &&
+            (Boolean(monotonicSource) || tailOrphanUserMessage);
           return {
             visible: shouldMountOnCurrentUser && (canDelete || canResend),
             disabled: context?.sending === true,
