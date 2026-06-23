@@ -418,18 +418,6 @@ function formatDuration(ms = 0) {
 }
 
 function getThinkingDurationMs(messageItem = {}) {
-  const scopedMessages = getScopedMessagesForMessage(messageItem);
-  const scopedTimes = scopedMessages
-    .map((item) => parseTimeMs(item?.ts))
-    .filter((timeValue) => timeValue > 0);
-  if (scopedTimes.length >= 2) {
-    const startMs = Math.min(...scopedTimes);
-    const endMs = messageItem?.pending
-      ? Math.max(nowTick.value, ...scopedTimes)
-      : Math.max(...scopedTimes);
-    return Math.max(0, endMs - startMs);
-  }
-
   const channelState =
     messageItem?.channelState &&
     typeof messageItem.channelState === "object" &&
@@ -446,13 +434,15 @@ function getThinkingDurationMs(messageItem = {}) {
     channelState?.updatedAtMs,
     channelState?.timestamp,
   );
+  const sessionId = getMessageSessionId(messageItem) || String(channelState?.sessionId || "").trim();
+  const turnScopeId = getMessageTurnScopeId(messageItem) || String(channelState?.turnScopeId || "").trim();
+  const dialogProcessId = getMessageDialogProcessId(messageItem) || String(channelState?.dialogProcessId || "").trim();
+  const timingScope = turnScopeId
+    ? { sessionId, turnScopeId }
+    : { sessionId, dialogProcessId };
   const startedAt = parseAnyTimeMs(getThinkingStartedAt(messageItem));
   const finishedAt = parseAnyTimeMs(getThinkingFinishedAt(messageItem));
-  const persistedTiming = resolveThinkingTiming({
-    sessionId: messageItem?.sessionId || messageItem?.session_id || channelState?.sessionId,
-    dialogProcessId: getMessageDialogProcessId(messageItem) || channelState?.dialogProcessId,
-    turnScopeId: getMessageTurnScopeId(messageItem) || channelState?.turnScopeId,
-  }) || {};
+  const persistedTiming = resolveThinkingTiming(timingScope) || {};
   const persistedStartedAt = parseAnyTimeMs(persistedTiming?.startedAtMs, persistedTiming?.startedAt);
   const persistedFinishedAt = parseAnyTimeMs(persistedTiming?.finishedAtMs, persistedTiming?.finishedAt);
   const realtimeLogs = getAllRealtimeLogs(messageItem);
@@ -463,24 +453,28 @@ function getThinkingDurationMs(messageItem = {}) {
     )
     .filter((timeValue) => timeValue > 0);
   const startCandidates = [
-    startedAt,
     persistedStartedAt,
+    startedAt,
     channelStartedAt,
+  ].filter((timeValue) => timeValue > 0);
+  const fallbackStartCandidates = [
     ...(logTimes.length ? [Math.min(...logTimes)] : []),
     msgTs,
   ].filter((timeValue) => timeValue > 0);
-  if (!startCandidates.length) return 0;
-  const startMs = Math.min(...startCandidates);
+  const startMs = startCandidates[0] || fallbackStartCandidates[0] || 0;
+  if (startMs <= 0) return 0;
+  const completedEndCandidates = [
+    persistedFinishedAt,
+    finishedAt,
+    channelUpdatedAt,
+  ].filter((timeValue) => timeValue > 0);
+  const fallbackEndCandidates = [
+    ...(logTimes.length ? [Math.max(...logTimes)] : []),
+    msgTs,
+  ].filter((timeValue) => timeValue > 0);
   const endMs = messageItem?.pending
     ? nowTick.value
-    : Math.max(
-        startMs,
-        finishedAt,
-        persistedFinishedAt,
-        channelUpdatedAt,
-        ...(logTimes.length ? [Math.max(...logTimes)] : []),
-        msgTs,
-      );
+    : completedEndCandidates[0] || fallbackEndCandidates[0] || startMs;
   return Math.max(0, endMs - startMs);
 }
 

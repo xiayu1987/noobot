@@ -1,3 +1,4 @@
+import { RoleEnum } from "../../shared/constants/chatConstants";
 import { getMessageRole } from "../../composables/infra/messageIdentity";
 
 export function normalizeChatMessageNavContent(messageItem = {}) {
@@ -6,21 +7,40 @@ export function normalizeChatMessageNavContent(messageItem = {}) {
     .trim();
 }
 
+export function resolveChatMessageNavRoleLabel(role = "", { translateRole, fallbackRole = "session" } = {}) {
+  const normalizedRole = String(role || "").trim().toLowerCase();
+  if (typeof translateRole === "function") {
+    const translatedRole = String(translateRole(normalizedRole) || "").trim();
+    if (translatedRole) return translatedRole;
+  }
+  if (normalizedRole === RoleEnum.USER) return "Me";
+  if (normalizedRole === RoleEnum.ASSISTANT) return "AI";
+  if (normalizedRole === RoleEnum.TOOL) return "Tool";
+  return fallbackRole;
+}
+
 export function buildChatMessageNavItem({
   messageItem = {},
   messageIndex = 0,
   getMessageAnchorId,
   translateSession,
+  translateRole,
 } = {}) {
   const anchorId = typeof getMessageAnchorId === "function"
     ? getMessageAnchorId(messageItem, messageIndex)
     : "";
   const fallbackRole = typeof translateSession === "function" ? translateSession() : "session";
-  const role = getMessageRole(messageItem) || fallbackRole;
+  const role = getMessageRole(messageItem);
+  const roleLabel = resolveChatMessageNavRoleLabel(role, { translateRole, fallbackRole });
   const content = normalizeChatMessageNavContent(messageItem);
+  const preview = content ? content.slice(0, 28) : "";
   return {
     id: anchorId || `chat-message-${messageIndex}`,
-    title: `${messageIndex + 1}. ${role}${content ? `：${content.slice(0, 28)}` : ""}`,
+    role,
+    roleLabel,
+    content,
+    preview,
+    title: `${messageIndex + 1}. ${roleLabel}${preview ? `：${preview}` : ""}`,
   };
 }
 
@@ -29,6 +49,7 @@ export function buildChatMessageNavItems({
   shouldRenderMessageInChat,
   getMessageAnchorId,
   translateSession,
+  translateRole,
 } = {}) {
   if (!Array.isArray(messages)) return [];
   const canRender = typeof shouldRenderMessageInChat === "function"
@@ -42,6 +63,7 @@ export function buildChatMessageNavItems({
         messageIndex,
         getMessageAnchorId,
         translateSession,
+        translateRole,
       });
     })
     .filter(Boolean);

@@ -3,6 +3,7 @@ import {
   buildChatMessageNavItem,
   buildChatMessageNavItems,
   normalizeChatMessageNavContent,
+  resolveChatMessageNavRoleLabel,
 } from "../../../src/app/state/chatMessageNavItemsState";
 
 describe("chatMessageNavItemsState", () => {
@@ -24,9 +25,14 @@ describe("chatMessageNavItemsState", () => {
       messageIndex: 2,
       getMessageAnchorId: () => "chat-message-assistant-2",
       translateSession: () => "Session",
+      translateRole: (role) => (role === "assistant" ? "AI" : ""),
     })).toEqual({
       id: "chat-message-assistant-2",
-      title: "3. assistant：abcdefghijklmnopqrstuvwxyz01",
+      role: "assistant",
+      roleLabel: "AI",
+      content: "abcdefghijklmnopqrstuvwxyz0123456789",
+      preview: "abcdefghijklmnopqrstuvwxyz01",
+      title: "3. AI：abcdefghijklmnopqrstuvwxyz01",
     });
 
     expect(buildChatMessageNavItem({
@@ -36,6 +42,10 @@ describe("chatMessageNavItemsState", () => {
       translateSession: () => "Session",
     })).toEqual({
       id: "chat-message-0",
+      role: "",
+      roleLabel: "Session",
+      content: "hello",
+      preview: "hello",
       title: "1. Session：hello",
     });
   });
@@ -53,9 +63,24 @@ describe("chatMessageNavItemsState", () => {
       shouldRenderMessageInChat,
       getMessageAnchorId,
       translateSession: () => "Session",
+      translateRole: (role) => ({ user: "我", assistant: "AI" })[role] || "",
     })).toEqual([
-      { id: "anchor-user-0", title: "1. user：hello" },
-      { id: "anchor-assistant-2", title: "3. assistant：answer" },
+      {
+        id: "anchor-user-0",
+        role: "user",
+        roleLabel: "我",
+        content: "hello",
+        preview: "hello",
+        title: "1. 我：hello",
+      },
+      {
+        id: "anchor-assistant-2",
+        role: "assistant",
+        roleLabel: "AI",
+        content: "answer",
+        preview: "answer",
+        title: "3. AI：answer",
+      },
     ]);
 
     expect(shouldRenderMessageInChat).toHaveBeenCalledTimes(3);
@@ -71,6 +96,21 @@ describe("chatMessageNavItemsState", () => {
       shouldRenderMessageInChat: null,
       getMessageAnchorId: null,
       translateSession: null,
-    })).toEqual([{ id: "chat-message-0", title: "1. session：hello" }]);
+    })).toEqual([{
+      id: "chat-message-0",
+      role: "",
+      roleLabel: "session",
+      content: "hello",
+      preview: "hello",
+      title: "1. session：hello",
+    }]);
+  });
+
+  it("resolves visible user and assistant role labels for navigator items", () => {
+    expect(resolveChatMessageNavRoleLabel("user")).toBe("Me");
+    expect(resolveChatMessageNavRoleLabel("assistant")).toBe("AI");
+    expect(resolveChatMessageNavRoleLabel("user", {
+      translateRole: (role) => (role === "user" ? "我" : ""),
+    })).toBe("我");
   });
 });

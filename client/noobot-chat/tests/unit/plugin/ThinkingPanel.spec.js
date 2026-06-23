@@ -1,7 +1,10 @@
 import { mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ThinkingPanel from "../../../src/shared/message/ThinkingPanel.vue";
-import { rememberThinkingStarted } from "../../../src/composables/chat/thinkingTimingRegistry";
+import {
+  rememberThinkingFinished,
+  rememberThinkingStarted,
+} from "../../../src/composables/chat/thinkingTimingRegistry";
 
 vi.mock("../../../src/shared/ui", async () => {
   const { defineComponent, h } = await import("vue");
@@ -135,11 +138,11 @@ describe("ThinkingPanel", () => {
     vi.useRealTimers();
   });
 
-  it("keeps pending elapsed time after orphan edit-resend refresh from persisted turn scope start", () => {
+  it("keeps pending elapsed time from persisted session plus turn scope start", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-22T10:00:12.000Z"));
     rememberThinkingStarted({
-      sessionId: "local-session-before-promotion",
+      sessionId: "backend-session-after-refresh",
       turnScopeId: "client-turn-orphan-resend",
       startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
     });
@@ -156,6 +159,53 @@ describe("ThinkingPanel", () => {
     });
 
     expect(wrapper.text()).toContain("00:12");
+  });
+
+  it("does not reuse a persisted turn start from another session", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-22T10:00:12.000Z"));
+    rememberThinkingStarted({
+      sessionId: "session-other",
+      turnScopeId: "client-turn-same-id",
+      startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
+    });
+
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: true,
+      sessionId: "session-current",
+      turnScopeId: "client-turn-same-id",
+      ts: "2026-06-22T10:00:12.000Z",
+      channelState: { state: "sending" },
+    });
+
+    expect(wrapper.text()).toContain("00:00");
+    expect(wrapper.text()).not.toContain("00:12");
+  });
+
+  it("uses persisted finish minus start for completed elapsed time by session plus turn scope", () => {
+    rememberThinkingStarted({
+      sessionId: "session-finished",
+      turnScopeId: "client-turn-finished",
+      startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
+    });
+    rememberThinkingFinished({
+      sessionId: "session-finished",
+      turnScopeId: "client-turn-finished",
+      finishedAtMs: Date.parse("2026-06-22T10:00:15.000Z"),
+    });
+
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: false,
+      sessionId: "session-finished",
+      turnScopeId: "client-turn-finished",
+      ts: "2026-06-22T10:05:00.000Z",
+      completedToolLogs: [{ type: "tool_result", text: "done", ts: "2026-06-22T10:05:00.000Z" }],
+    });
+
+    expect(wrapper.text()).toContain("00:15");
+    expect(wrapper.text()).not.toContain("05:00");
   });
 
   it("keeps pending elapsed time after refresh from channel state createdAt", () => {

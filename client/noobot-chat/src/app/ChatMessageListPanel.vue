@@ -4,12 +4,21 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, ref, watch, watchEffect } from "vue";
 import ChatMessageItem from "../modules/message/ChatMessageItem.vue";
 import { useLocale } from "../shared/i18n/useLocale";
-import { resolveSessionRunStateForMessage } from "../composables/chat/sessionRunStateMachine";
+import {
+  SESSION_RUN_MESSAGE_RUNTIME_ACTION,
+  SESSION_RUN_MESSAGE_RUNTIME_MARK,
+  resolveSessionRunMessageRuntimePatch,
+} from "../composables/chat/sessionRunStateMachine";
 import { getMessageDialogProcessId, getMessageRole } from "../composables/infra/messageIdentity";
-import { getThinkingStartedAt, normalizeTimePair, setThinkingStartedAt } from "../composables/infra/timeFields";
+import {
+  getThinkingFinishedAt,
+  getThinkingStartedAt,
+  setThinkingFinishedAt,
+  setThinkingStartedAt,
+} from "../composables/infra/timeFields";
 
 defineEmits(["open-thinking-details"]);
 
@@ -84,65 +93,87 @@ function getMessageRenderKey(messageItem = {}, messageIndex = 0) {
     .join("|");
 }
 
-function normalizeStateTime(stateItem = {}) {
-  return normalizeTimePair(stateItem);
-}
-
-
-function getLatestInFlightConversationStateForMessage(messageItem = {}) {
-  return resolveSessionRunStateForMessage({
-    stateSnapshot: props.runStateSnapshot,
-    messageItem,
-    activeSession: props.activeSession,
-  });
-}
-
-function applyConversationStateRuntimeToMessage(messageItem = {}) {
-  const stateItem = getLatestInFlightConversationStateForMessage(messageItem);
-  if (!stateItem) return messageItem;
-  const timing = normalizeStateTime(stateItem);
+function applyMessageRuntimePatch(messageItem = {}, patch = {}) {
+  if (!messageItem || !patch || typeof patch !== "object") return;
+  if (patch.clearRuntimeMark) {
+    delete messageItem[SESSION_RUN_MESSAGE_RUNTIME_MARK];
+  }
+  if (patch.runtimeMark !== undefined) {
+    messageItem[SESSION_RUN_MESSAGE_RUNTIME_MARK] = String(patch.runtimeMark || "");
+  }
   const channelState =
     messageItem.channelState &&
     typeof messageItem.channelState === "object" &&
     !Array.isArray(messageItem.channelState)
       ? messageItem.channelState
       : {};
-  messageItem.channelState = {
-    ...channelState,
-    state: String(stateItem?.state || "").trim(),
-    sessionId: String(stateItem?.sessionId || "").trim(),
-    dialogProcessId: String(stateItem?.dialogProcessId || "").trim(),
-    sourceEvent: String(stateItem?.sourceEvent || "").trim(),
-    seq: Number(stateItem?.seq || 0),
-    createdAtMs: timing.createdAtMs || Number(channelState?.createdAtMs || 0),
-    updatedAtMs: timing.updatedAtMs || Number(channelState?.updatedAtMs || 0),
-    createdAt: timing.createdAt || String(channelState?.createdAt || "").trim(),
-    updatedAt: timing.updatedAt || String(channelState?.updatedAt || "").trim(),
-  };
-  const startedAt = messageItem.channelState.createdAt || messageItem.channelState.createdAtMs;
-  if (startedAt && !getThinkingStartedAt(messageItem)) {
-    setThinkingStartedAt(messageItem, startedAt);
+  if (patch.channelState && typeof patch.channelState === "object" && !Array.isArray(patch.channelState)) {
+    messageItem.channelState = {
+      ...channelState,
+      ...patch.channelState,
+      createdAtMs: patch.channelState.createdAtMs || Number(channelState?.createdAtMs || 0),
+      updatedAtMs: patch.channelState.updatedAtMs || Number(channelState?.updatedAtMs || 0),
+      createdAt: patch.channelState.createdAt || String(channelState?.createdAt || "").trim(),
+      updatedAt: patch.channelState.updatedAt || String(channelState?.updatedAt || "").trim(),
+    };
   }
-  messageItem.pending = true;
-  return messageItem;
+  if (Object.prototype.hasOwnProperty.call(patch, "pending")) {
+    messageItem.pending = patch.pending === true;
+  }
+  if (
+    patch.thinkingStartedAt &&
+    (patch.thinkingStartedAtPolicy !== "if_missing" || !getThinkingStartedAt(messageItem))
+  ) {
+    setThinkingStartedAt(messageItem, patch.thinkingStartedAt);
+  }
+  if (
+    patch.thinkingFinishedAt &&
+    (patch.thinkingFinishedAtPolicy !== "if_missing" || !getThinkingFinishedAt(messageItem))
+  ) {
+    setThinkingFinishedAt(messageItem, patch.thinkingFinishedAt);
+  }
+  if (
+    patch.statusLabelKey &&
+    (patch.statusLabelPolicy !== "if_empty" || !String(messageItem.statusLabel || "").trim())
+  ) {
+    messageItem.statusLabel = translate(patch.statusLabelKey);
+  }
 }
 
 function applyConversationStateRuntimeToMessages() {
   const messageList = Array.isArray(props.activeSession?.messages)
     ? props.activeSession.messages
     : [];
-  messageList.forEach((messageItem) => applyConversationStateRuntimeToMessage(messageItem));
+  messageList.forEach((messageItem) => {
+    const runtimeEffect = resolveSessionRunMessageRuntimePatch({
+      stateSnapshot: props.runStateSnapshot,
+      messageItem,
+      activeSession: props.activeSession,
+    });
+    if (runtimeEffect.action === SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE) {
+      applyMessageRuntimePatch(messageItem, runtimeEffect.patch);
+    }
+  });
 }
 
+watchEffect(() => {
+  props.activeSession?.id;
+  props.activeSession?.backendSessionId;
+  Array.isArray(props.activeSession?.messages) ? props.activeSession.messages.length : 0;
+  props.runStateSnapshot?.state;
+  props.runStateSnapshot?.sessionId;
+  props.runStateSnapshot?.dialogProcessId;
+  props.runStateSnapshot?.turnScopeId;
+  props.runStateSnapshot?.createdAtMs;
+  props.runStateSnapshot?.updatedAtMs;
+  props.runStateSnapshot?.seq;
+  applyConversationStateRuntimeToMessages();
+});
+
 watch(
-  () => [
-    props.activeSession?.id,
-    props.activeSession?.backendSessionId,
-    Array.isArray(props.activeSession?.messages) ? props.activeSession.messages.length : 0,
-    props.runStateSnapshot,
-  ],
+  () => props.runStateSnapshot?.state,
   () => applyConversationStateRuntimeToMessages(),
-  { deep: true, immediate: true },
+  { flush: "sync" },
 );
 
 function getMessageAnchorId(messageItem = {}, messageIndex = 0) {

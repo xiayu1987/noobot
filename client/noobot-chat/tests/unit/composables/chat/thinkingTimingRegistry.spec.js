@@ -46,20 +46,47 @@ describe("thinkingTimingRegistry", () => {
     });
   });
 
-  it("resolves by turnScopeId when the session id changes after backend promotion", () => {
+  it("keeps turn timing scoped by sessionId and turnScopeId", () => {
+    rememberThinkingStarted({
+      sessionId: "session-1",
+      turnScopeId: "client-1",
+      startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
+    });
+
+    expect(resolveThinkingTiming({ sessionId: "session-2", turnScopeId: "client-1" })).toBe(null);
+    expect(
+      resolveThinkingTiming({ sessionId: "session-1", turnScopeId: "client-1" }),
+    ).toMatchObject({
+      sessionId: "session-1",
+      turnScopeId: "client-1",
+      startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
+    });
+  });
+
+  it("updates the session side of a turn timing when backend promotion replays the same turn", () => {
     rememberThinkingStarted({
       sessionId: "local-session-before-promotion",
       turnScopeId: "client-1",
       startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
     });
+    rememberThinkingStarted({
+      sessionId: "backend-session-after-refresh",
+      turnScopeId: "client-1",
+      startedAtMs: Date.parse("2026-06-22T10:00:03.000Z"),
+    });
 
-    expect(
-      resolveThinkingTiming({ sessionId: "backend-session-after-refresh", turnScopeId: "client-1" }),
-    ).toMatchObject({
-      sessionId: "local-session-before-promotion",
+    expect(resolveThinkingTiming({
+      sessionId: "backend-session-after-refresh",
+      turnScopeId: "client-1",
+    })).toMatchObject({
+      sessionId: "backend-session-after-refresh",
       turnScopeId: "client-1",
       startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
     });
+    expect(resolveThinkingTiming({
+      sessionId: "local-session-before-promotion",
+      turnScopeId: "client-1",
+    })).toBe(null);
   });
 
   it("does not reset an existing start time when the same running state is replayed later", () => {
@@ -103,7 +130,6 @@ describe("thinkingTimingRegistry", () => {
     rememberThinkingStarted({
       sessionId: "session-1",
       dialogProcessId: "dialog-1",
-      turnScopeId: "turn-1",
       turnScopeId: "client-1",
       startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
     });
