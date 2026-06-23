@@ -68,10 +68,10 @@ describe("chatMessageNavItemsState", () => {
       {
         id: "anchor-user-0",
         role: "user",
-        roleLabel: "我",
+        roleLabel: "ME",
         content: "hello",
         preview: "hello",
-        title: "1. 我：hello",
+        title: "1. ME：hello",
       },
       {
         id: "anchor-assistant-2",
@@ -107,10 +107,10 @@ describe("chatMessageNavItemsState", () => {
   });
 
   it("resolves visible user and assistant role labels for navigator items", () => {
-    expect(resolveChatMessageNavRoleLabel("user")).toBe("Me");
+    expect(resolveChatMessageNavRoleLabel("user")).toBe("ME");
     expect(resolveChatMessageNavRoleLabel("assistant")).toBe("AI");
     expect(resolveChatMessageNavRoleLabel("user", {
       translateRole: (role) => (role === "user" ? "我" : ""),
-    })).toBe("我");
+    })).toBe("ME");
   });
 });

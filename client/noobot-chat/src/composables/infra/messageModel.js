@@ -15,6 +15,7 @@ import {
   getMessageTransferEnvelopes,
 } from "./transferEnvelopes";
 import {
+  getMessageContentIdentity,
   getMessageDialogProcessId,
   getMessageParentDialogProcessId,
   getMessageRole,
@@ -126,6 +127,16 @@ function isWorkflowMessageLike(messageItem = {}) {
   return type === "workflow" && source === "workflow-plugin" && kind === "workflow" && Boolean(phase);
 }
 
+function normalizeMessageType(messageItem = {}) {
+  const rawType = String(messageItem?.type || "").trim();
+  const normalizedType = rawType.toLowerCase();
+  if (!rawType || ["constructor", "human", "ai", "assistant", "user"].includes(normalizedType)) {
+    return "message";
+  }
+  if (normalizedType === "tool") return "tool_result";
+  return rawType;
+}
+
 function createMessageModel(messageItem = {}) {
   const normalizedAttachmentMetas = Array.isArray(messageItem?.attachmentMetas)
     ? messageItem.attachmentMetas
@@ -143,14 +154,15 @@ function createMessageModel(messageItem = {}) {
   const thinkingStartedAt = getThinkingStartedAt(messageItem);
   const thinkingFinishedAt = getThinkingFinishedAt(messageItem);
   const messageTimestamp = getMessageTimestamp(messageItem);
+  const messageRole = getMessageRole(messageItem) || "assistant";
   return {
     id: messageItem.id || "",
     turnScopeId,
     sessionId,
     session_id: sessionId,
-    role: getMessageRole(messageItem) || "assistant",
-    content: messageItem.content || "",
-    type: messageItem.type || "message",
+    role: messageRole,
+    content: getMessageContentIdentity(messageItem),
+    type: normalizeMessageType(messageItem),
     tool_calls: normalizeArray(messageItem.tool_calls),
     tool_call_id: messageItem.tool_call_id || "",
     dialogProcessId: getMessageDialogProcessId(messageItem),

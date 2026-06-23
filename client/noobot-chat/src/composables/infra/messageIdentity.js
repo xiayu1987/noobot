@@ -12,8 +12,60 @@ function lower(value = "") {
   return trim(value).toLowerCase();
 }
 
+function stringifyMessageContent(value) {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (!isPlainObject(item)) return "";
+        return trim(item.text || item.content || item.value);
+      })
+      .filter(Boolean)
+      .join("\n");
+  }
+  if (value === undefined || value === null) return "";
+  return JSON.stringify(value);
+}
+
 function isPlainObject(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function hasFrontendUserMarker(messageItem = {}) {
+  return Boolean(
+    messageItem?.frontendUserMessage === true ||
+      messageItem?.additional_kwargs?.frontendUserMessage === true ||
+      messageItem?.lc_kwargs?.frontendUserMessage === true ||
+      messageItem?.lc_kwargs?.additional_kwargs?.frontendUserMessage === true
+  );
+}
+
+function normalizeRoleAlias(value = "") {
+  const normalized = lower(value);
+  if (!normalized) return "";
+  if (["user", "human"].includes(normalized)) return "user";
+  if (["assistant", "ai", "bot"].includes(normalized)) return "assistant";
+  if (["tool", "function"].includes(normalized)) return "tool";
+  return normalized;
+}
+
+function getLangChainMessageKind(messageItem = {}) {
+  const idParts = [];
+  if (Array.isArray(messageItem?.lc_id)) idParts.push(...messageItem.lc_id);
+  if (Array.isArray(messageItem?.id)) idParts.push(...messageItem.id);
+  const serializedName = trim(messageItem?.name || messageItem?.lc_name);
+  if (serializedName) idParts.push(serializedName);
+  const serializedType = trim(
+    messageItem?.type === "constructor" ? "" : messageItem?.type,
+  );
+  if (serializedType) idParts.push(serializedType);
+  const haystack = idParts.map((part) => lower(part)).join("|");
+  if (!haystack) return "";
+  if (haystack.includes("humanmessage") || /\bhuman\b/.test(haystack)) return "user";
+  if (haystack.includes("aimessage") || /\bai\b/.test(haystack)) return "assistant";
+  if (haystack.includes("toolmessage") || /\btool\b/.test(haystack)) return "tool";
+  return "";
 }
 
 function hasTurnOwner(owner = {}) {
@@ -49,7 +101,18 @@ export function normalizeTurnMeta(raw = {}) {
 }
 
 export function getMessageRole(messageItem = {}) {
-  return trim(messageItem?.role);
+  const explicitRole = normalizeRoleAlias(
+    messageItem?.role ||
+      messageItem?.messageRole ||
+      messageItem?.message_role ||
+      messageItem?.authorRole ||
+      messageItem?.author_role ||
+      messageItem?.senderRole ||
+      messageItem?.sender_role,
+  );
+  if (explicitRole) return explicitRole;
+  if (hasFrontendUserMarker(messageItem)) return "user";
+  return getLangChainMessageKind(messageItem);
 }
 
 export function getMessageDialogProcessId(messageItem = {}) {
@@ -75,7 +138,14 @@ export function getMessageStableId(messageItem = {}) {
 }
 
 export function getMessageContentIdentity(messageItem = {}) {
-  return trim(messageItem?.content);
+  return trim(
+    stringifyMessageContent(
+      messageItem?.content ??
+        messageItem?.text ??
+        messageItem?.lc_kwargs?.content ??
+        messageItem?.kwargs?.content,
+    ),
+  );
 }
 
 export function buildMessageIdentityKey(messageItem = {}) {
@@ -106,6 +176,10 @@ export function isSameMessageIdentity(targetMessage = {}, candidateMessage = {})
   if (!targetMessage || !candidateMessage) return false;
   if (targetMessage === candidateMessage) return true;
 
+  const targetRole = lower(getMessageRole(targetMessage));
+  const candidateRole = lower(getMessageRole(candidateMessage));
+  if (targetRole && candidateRole && targetRole !== candidateRole) return false;
+
   const targetTurnScopeId = getMessageTurnScopeId(targetMessage);
   if (targetTurnScopeId) {
     return getMessageTurnScopeId(candidateMessage) === targetTurnScopeId;
@@ -122,11 +196,10 @@ export function isSameMessageIdentity(targetMessage = {}, candidateMessage = {})
   }
 
   const targetDialogProcessId = getMessageDialogProcessId(targetMessage);
-  const targetRole = lower(getMessageRole(targetMessage));
   if (targetDialogProcessId) {
     return (
       getMessageDialogProcessId(candidateMessage) === targetDialogProcessId &&
-      (!targetRole || lower(getMessageRole(candidateMessage)) === targetRole)
+      (!targetRole || candidateRole === targetRole)
     );
   }
 

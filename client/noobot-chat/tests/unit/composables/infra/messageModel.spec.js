@@ -32,6 +32,33 @@ const envelope = {
 };
 
 describe("messageModel semantic transfer", () => {
+  it("renders serialized LangChain human and ai messages as user and assistant", () => {
+    const messages = foldConversationMessages([
+      {
+        lc_id: ["langchain_core", "messages", "human", "HumanMessage"],
+        type: "constructor",
+        kwargs: { content: "question from serialized human" },
+      },
+      {
+        lc_id: ["langchain_core", "messages", "ai", "AIMessage"],
+        type: "constructor",
+        kwargs: { content: "answer from serialized ai" },
+      },
+    ], buildViewMessage);
+
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).toMatchObject({
+      role: "user",
+      content: "question from serialized human",
+      type: "message",
+    });
+    expect(messages[1]).toMatchObject({
+      role: "assistant",
+      content: "answer from serialized ai",
+      type: "message",
+    });
+  });
+
   it("preserves thinking timing fields from backend messages after refresh", () => {
     const message = buildViewMessage({
       role: "assistant",

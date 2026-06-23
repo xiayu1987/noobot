@@ -5,11 +5,9 @@
  */
 import { computed } from "vue";
 import {
-  flattenSessionMessages,
   mergeAttachmentMetas,
 } from "../infra/dialogProcessChain";
 import {
-  findMessageIdentityIndex,
   getMessageRole,
   getMessageSessionId,
   getMessageTurnScopeId,
@@ -101,6 +99,18 @@ function getMessageScopeIdentity(messageItem = {}) {
   };
 }
 
+function flattenSessionMessagesWithSessionId(sessionDocs = []) {
+  return (Array.isArray(sessionDocs) ? sessionDocs : []).flatMap((sessionDoc) => {
+    const sessionId = getMessageSessionId(sessionDoc);
+    const messages = Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : [];
+    return messages.map((messageItem) =>
+      getMessageSessionId(messageItem) || !sessionId
+        ? messageItem
+        : { ...messageItem, sessionId },
+    );
+  });
+}
+
 function isPlainObject(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
@@ -157,6 +167,19 @@ function filterAttachmentMetasForMessage(attachmentMetas = [], messageItem = {})
   );
 }
 
+function isSameExplicitTurnScope(targetMessage = {}, candidateMessage = {}) {
+  const targetTurnScopeId = getMessageTurnScopeId(targetMessage);
+  if (!targetTurnScopeId) return false;
+  const candidateTurnScopeId = getMessageTurnScopeId(candidateMessage);
+  if (candidateTurnScopeId !== targetTurnScopeId) return false;
+  const targetSessionId = getMessageSessionId(targetMessage);
+  const candidateSessionId = getMessageSessionId(candidateMessage);
+  if (targetSessionId && candidateSessionId && targetSessionId !== candidateSessionId) {
+    return false;
+  }
+  return true;
+}
+
 function isFreshPendingAssistant(messageItem = {}) {
   return (
     getMessageRole(messageItem) === "assistant" &&
@@ -202,40 +225,6 @@ function withAttachmentOwnerTypes(attachmentMetas = []) {
       attachmentOwnerType: "plugin",
     })),
   ];
-}
-
-function findMessageIndexInLinearTurn(messages = [], targetMessage = {}) {
-  const messageList = Array.isArray(messages) ? messages : [];
-  return findMessageIdentityIndex(targetMessage, messageList);
-}
-
-function getLinearTurnBounds(messages = [], targetMessage = {}) {
-  const messageList = Array.isArray(messages) ? messages : [];
-  const targetIndex = findMessageIndexInLinearTurn(messageList, targetMessage);
-  if (targetIndex < 0) return null;
-  let previousUserIndex = -1;
-  for (let index = targetIndex; index >= 0; index -= 1) {
-    if (getMessageRole(messageList[index]) === "user") {
-      previousUserIndex = index;
-      break;
-    }
-  }
-  let nextUserIndex = messageList.length;
-  for (let index = targetIndex + 1; index < messageList.length; index += 1) {
-    if (getMessageRole(messageList[index]) === "user") {
-      nextUserIndex = index;
-      break;
-    }
-  }
-  return { targetIndex, previousUserIndex, nextUserIndex };
-}
-
-function isMessageInsideLinearTurn(messages = [], bounds = null, candidateMessage = {}) {
-  if (!bounds) return true;
-  const messageList = Array.isArray(messages) ? messages : [];
-  const candidateIndex = messageList.findIndex((messageItem) => messageItem === candidateMessage);
-  if (candidateIndex < 0) return true;
-  return candidateIndex > bounds.previousUserIndex && candidateIndex < bounds.nextUserIndex;
 }
 
 function toAttachmentKey(attachmentItem = {}) {
@@ -407,7 +396,7 @@ export function useMessageFiles({
     }
     const candidateMessages = [
       ...(Array.isArray(getAllMessages()) ? getAllMessages() : []),
-      ...flattenSessionMessages(getSessionDocs()),
+      ...flattenSessionMessagesWithSessionId(getSessionDocs()),
     ];
     if (turnScopeId) {
       for (const sessionMessage of candidateMessages) {
@@ -453,7 +442,10 @@ export function useMessageFiles({
 
   const displayedAttachmentMetas = computed(() => {
     const messageItem = getMessageItem() || {};
-    const baseAttachmentMetas = getMessageAttachmentMetas(messageItem);
+    const baseAttachmentMetas = filterAttachmentMetasForMessage(
+      getMessageAttachmentMetas(messageItem),
+      messageItem,
+    );
     const toolLogAttachmentMetas = [];
     for (const logItem of Array.isArray(messageItem?.completedToolLogs) ? messageItem.completedToolLogs : []) {
       toolLogAttachmentMetas.push(
@@ -473,31 +465,22 @@ export function useMessageFiles({
     if (!rootTurnScopeId) return withAttachmentOwnerTypes(mergedBaseAttachmentMetas);
 
     const allMessages = Array.isArray(getAllMessages()) ? getAllMessages() : [];
-    const sessionDocMessages = flattenSessionMessages(getSessionDocs());
+    const sessionDocMessages = flattenSessionMessagesWithSessionId(getSessionDocs());
     const candidateMessages = [
       ...allMessages,
       ...sessionDocMessages,
     ];
-    const allMessagesTurnBounds = getLinearTurnBounds(allMessages, messageItem);
-    const sessionDocTurnBounds = getLinearTurnBounds(sessionDocMessages, messageItem);
     const baseSplit = splitAttachmentMetasByOwner(mergedBaseAttachmentMetas);
     let mainFlowAttachmentMetas = [...baseSplit.agent];
     let pluginAttachmentMetas = [...baseSplit.plugin];
     for (const sessionMessage of candidateMessages) {
       const messageRole = getMessageRole(sessionMessage);
-      // During a live turn, rawMessages can still contain tool attachment events
-      // from previous turns while the current assistant message is being patched.
-      // Keep attachment collection inside the target user->assistant turn window
-      // whenever we can locate both messages in the same linear message list.
-      if (
-        !isMessageInsideLinearTurn(allMessages, allMessagesTurnBounds, sessionMessage) ||
-        !isMessageInsideLinearTurn(sessionDocMessages, sessionDocTurnBounds, sessionMessage)
-      ) {
-        continue;
-      }
-      if (!isSameMessageRound(messageItem, sessionMessage)) {
-        continue;
-      }
+      // Newer messages and generated attachments are scoped by sessionId +
+      // turnScopeId.  When the target assistant has a turn scope, treat that as
+      // the source of truth and never fall back to dialogProcessId/linear-window
+      // collection; otherwise a pending assistant can temporarily collect files
+      // from a previous summary/sessionDocs turn.
+      if (!isSameExplicitTurnScope(messageItem, sessionMessage)) continue;
       if (!shouldCollectAttachmentMetasFromMessage(messageItem, sessionMessage)) {
         continue;
       }
