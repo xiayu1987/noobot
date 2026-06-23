@@ -27,7 +27,6 @@ const resizeObserverRef = ref(null);
 const hostWidth = ref(0);
 const zoomScale = ref(1);
 const innerSelectedDialogId = ref("");
-const expandedNodeKey = ref("");
 
 const DESKTOP_NODE_WIDTH = 192;
 const COMPACT_MIN_NODE_WIDTH = 148;
@@ -301,11 +300,6 @@ function resolveNodeKey(nodeItem = {}) {
   ).trim();
 }
 
-function isNodeExpanded(nodeItem = {}) {
-  const key = resolveNodeKey(nodeItem);
-  return Boolean(key && key === expandedNodeKey.value);
-}
-
 function resolveRuntimeBoxes(nodeItem = {}) {
   return Array.isArray(nodeItem?.actionNodeStates)
     ? nodeItem.actionNodeStates
@@ -354,7 +348,6 @@ const positionedNodes = computed(() => {
         _colIndex: colIndex,
         _x: x,
         _y: paddingTop.value + nodeIndex * (nodeHeight.value + nodeGapY.value),
-        _expanded: isNodeExpanded(nodeItem),
       });
       nodeIndex += 1;
     });
@@ -368,10 +361,6 @@ const effectiveSelectedDialogId = computed(
 
 const selectedNode = computed(() =>
   positionedNodes.value.find((nodeItem) => nodeContainsDialogId(nodeItem, effectiveSelectedDialogId.value)) || null,
-);
-
-const expandedRuntimeNode = computed(() =>
-  positionedNodes.value.find((nodeItem) => nodeItem?._expanded && resolveRuntimeBoxes(nodeItem).length) || null,
 );
 
 const hostStyle = computed(() => ({
@@ -547,32 +536,14 @@ function zoomReset() {
   zoomScale.value = 1;
 }
 
-function resolveStepLabel(stepItem = {}, stepIndex = 0) {
-  const order = Number.isFinite(Number(stepItem?.stepIndex)) ? Number(stepItem.stepIndex) + 1 : stepIndex + 1;
-  return translate("workflow.stepBoxLabel", { order });
-}
-
-function resolveStateBoxLabel(stateBox = {}, stateIndex = 0) {
-  const id = String(stateBox?.actionNodeStateId || "").trim();
-  if (!id) return translate("workflow.nodeBoxLabelFallback", { index: stateIndex + 1 });
-  return translate("workflow.nodeBoxLabel", { id });
-}
-
 function stepHasSession(stepItem = {}) {
   return Boolean(String(stepItem?.dialogId || "").trim());
-}
-
-function toggleNodeExpanded(nodeItem = {}) {
-  const key = resolveNodeKey(nodeItem);
-  if (!key) return;
-  expandedNodeKey.value = expandedNodeKey.value === key ? "" : key;
 }
 
 function handleNodeClick(nodeItem = {}) {
   if (nodeItem?._virtualBoundary) return;
   if (!isActionNode(nodeItem)) return;
   if (nodeItem?._hasRuntimeBoxes !== true) return;
-  toggleNodeExpanded(nodeItem);
   emit("node-click", nodeItem);
 }
 
@@ -616,7 +587,7 @@ function handleStepClick(stepItem = {}) {
           :clickable="!nodeItem?._virtualBoundary && isActionNode(nodeItem) && nodeItem?._hasRuntimeBoxes === true"
           :boundary-type="String(nodeItem?._virtualBoundary || '')"
           :selected="nodeContainsDialogId(nodeItem, effectiveSelectedDialogId)"
-          :expanded="nodeItem?._expanded === true"
+          :expanded="false"
           @click="handleNodeClick"
         />
 
@@ -639,64 +610,6 @@ function handleStepClick(stepItem = {}) {
       </div>
     </div>
 
-    <div v-if="expandedRuntimeNode" class="workflow-runtime-inspector">
-      <div class="workflow-runtime-inspector-header">
-        <div>
-          <div class="workflow-runtime-inspector-title">
-            {{
-              expandedRuntimeNode?.nodeName ||
-              expandedRuntimeNode?.nodeId ||
-              translate("workflow.actionNode")
-            }}
-            ·
-            {{ translate("workflow.runtimeState") }}
-          </div>
-          <div class="workflow-runtime-inspector-subtitle">
-            {{ translate("workflow.runtimeInspectorSubtitle") }}
-          </div>
-        </div>
-        <button type="button" class="workflow-runtime-close" @click="expandedNodeKey = ''">
-          {{ translate("workflow.collapse") }}
-        </button>
-      </div>
-      <div class="workflow-runtime-inspector-body">
-        <div
-          v-for="(stateBox, stateIndex) in resolveRuntimeBoxes(expandedRuntimeNode)"
-          :key="`${resolveNodeKey(expandedRuntimeNode)}-${String(stateBox?.actionNodeStateId || stateIndex)}`"
-          class="workflow-runtime-state-box"
-        >
-          <div class="workflow-runtime-state-title">
-            <span>{{ resolveStateBoxLabel(stateBox, stateIndex) }}</span>
-            <span class="workflow-runtime-state-count">
-              {{ translate("workflow.stepCount", { count: (stateBox?.steps || []).length }) }}
-            </span>
-          </div>
-          <button
-            v-for="(stepItem, stepIndex) in (stateBox?.steps || [])"
-            :key="`${String(stepItem?.stepId || stepItem?.dialogId || stepIndex)}-${stepIndex}`"
-            type="button"
-            class="workflow-runtime-step-box"
-            :class="[
-              resolveStatusClass(stepItem),
-              {
-                'is-selected': String(stepItem?.dialogId || '').trim() === effectiveSelectedDialogId,
-                'is-disabled': !stepHasSession(stepItem),
-              },
-            ]"
-            :disabled="!stepHasSession(stepItem)"
-            @click.stop="handleStepClick(stepItem)"
-          >
-            <span class="workflow-runtime-step-name">{{ resolveStepLabel(stepItem, stepIndex) }}</span>
-            <span class="workflow-runtime-step-status">{{ resolveStatusLabel(stepItem) }}</span>
-          </button>
-          <BaseEmptyHint
-            v-if="!(stateBox?.steps || []).length"
-            class="workflow-runtime-step-empty"
-            :text="translate('workflow.noStepBox')"
-          />
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -735,177 +648,6 @@ function handleStepClick(stepItem = {}) {
 :deep(.workflow-canvas) {
   position: relative;
   z-index: 0;
-}
-
-.workflow-runtime-inspector {
-  margin-top: var(--workflow-space-sm);
-  border: 1px solid color-mix(
-    in srgb,
-    var(--noobot-msg-assistant-border) 72%,
-    rgb(var(--workflow-accent-rgb)) 28%
-  );
-  border-radius: var(--workflow-radius-xl);
-  background: color-mix(
-    in srgb,
-    var(--noobot-msg-assistant-bg) 95%,
-    rgb(var(--workflow-accent-rgb)) 5%
-  );
-  box-shadow: var(--workflow-shadow-soft);
-  overflow: hidden;
-  font-size: 11px;
-}
-
-.workflow-runtime-inspector-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 9px var(--workflow-space-md);
-  border-bottom: 1px solid color-mix(
-    in srgb,
-    var(--noobot-msg-assistant-border) 82%,
-    rgb(var(--workflow-accent-rgb)) 18%
-  );
-}
-
-.workflow-runtime-inspector-title {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--noobot-text-primary);
-}
-
-.workflow-runtime-inspector-subtitle {
-  margin-top: 2px;
-  color: var(--noobot-text-secondary);
-}
-
-.workflow-runtime-close {
-  flex: 0 0 auto;
-  height: 24px;
-  padding: 0 var(--workflow-space-sm);
-  border: 1px solid color-mix(
-    in srgb,
-    var(--noobot-msg-assistant-border) 72%,
-    rgb(var(--workflow-accent-rgb)) 28%
-  );
-  border-radius: calc(var(--workflow-radius-sm) + 1px);
-  background: color-mix(
-    in srgb,
-    var(--noobot-msg-assistant-bg) 96%,
-    rgb(var(--workflow-accent-rgb)) 4%
-  );
-  color: var(--noobot-text-primary);
-  cursor: pointer;
-}
-
-.workflow-runtime-inspector-body {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--workflow-space-sm);
-  max-height: 280px;
-  overflow: auto;
-  padding: var(--workflow-space-sm);
-}
-
-.workflow-runtime-state-box {
-  border: 1px solid color-mix(
-    in srgb,
-    var(--noobot-msg-assistant-border) 72%,
-    rgb(var(--workflow-accent-rgb)) 28%
-  );
-  border-radius: var(--workflow-radius-lg);
-  padding: var(--workflow-space-xs);
-  background: color-mix(
-    in srgb,
-    var(--noobot-msg-assistant-bg) 94%,
-    rgb(var(--workflow-accent-rgb)) 6%
-  );
-  box-shadow: var(--workflow-shadow-card);
-}
-
-.workflow-runtime-state-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 18px;
-  margin-bottom: 5px;
-  color: color-mix(in srgb, rgb(var(--workflow-accent-rgb)) 78%, var(--noobot-text-primary) 22%);
-  font-weight: 700;
-}
-
-.workflow-runtime-state-count {
-  flex: 0 0 auto;
-  color: var(--noobot-text-secondary);
-  font-weight: 500;
-}
-
-.workflow-runtime-step-box {
-  width: 100%;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  border: 1px solid var(--noobot-msg-assistant-border);
-  border-radius: var(--workflow-radius-md);
-  padding: 0 var(--workflow-space-sm);
-  margin-top: 5px;
-  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 98%, #000 2%);
-  color: var(--noobot-text-primary);
-  cursor: pointer;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
-}
-
-.workflow-runtime-step-box:hover:not(.is-disabled) {
-  border-color: color-mix(
-    in srgb,
-    rgb(var(--workflow-accent-rgb)) 58%,
-    var(--noobot-msg-assistant-border) 42%
-  );
-  box-shadow: var(--workflow-shadow-hover);
-}
-
-.workflow-runtime-step-box.is-selected {
-  border-color: rgba(var(--workflow-accent-rgb), 0.95);
-  box-shadow: 0 0 0 2px rgba(var(--workflow-accent-rgb), 0.16);
-}
-
-.workflow-runtime-step-box.is-disabled {
-  cursor: default;
-  opacity: 0.62;
-}
-
-.workflow-runtime-step-box.success {
-  border-color: color-mix(in srgb, var(--noobot-status-success) 35%, var(--noobot-msg-assistant-border) 65%);
-}
-
-.workflow-runtime-step-box.failed {
-  border-color: rgba(var(--workflow-failed-rgb), 0.55);
-}
-
-.workflow-runtime-step-box.running {
-  border-color: rgba(var(--workflow-accent-strong-rgb), 0.6);
-}
-
-.workflow-runtime-step-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 600;
-}
-
-.workflow-runtime-step-status {
-  flex: 0 0 auto;
-  color: var(--noobot-text-secondary);
-}
-
-.workflow-runtime-step-empty {
-  padding: 7px var(--workflow-space-sm);
-  color: var(--noobot-text-secondary);
-  border: 1px dashed var(--noobot-msg-assistant-border);
-  border-radius: var(--workflow-radius-md);
 }
 
 
