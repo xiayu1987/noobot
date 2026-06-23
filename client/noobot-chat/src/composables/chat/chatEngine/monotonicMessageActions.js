@@ -168,11 +168,13 @@ export function createMonotonicMessageActions({
       const sessionId = normalizeTrimmedString(
         activeSession.value?.backendSessionId || activeSession.value?.sessionId || activeSessionId.value,
       );
+      const anchor = buildMessageAnchor(userTargetMessage);
+      if (!Object.keys(anchor).length) return false;
       const result = await deleteSessionMessagesFromApi({
         userId: userId?.value || userId,
         sessionId,
         parentSessionId: normalizeTrimmedString(activeSession.value?.parentSessionId),
-        anchor: buildMessageAnchor(userTargetMessage),
+        anchor,
         expectedVersion: activeSession.value?.version ?? activeSession.value?.revision,
       }, { fetcher: authFetch });
       const payload = typeof result?.json === "function" ? await result.json() : result;

@@ -57,23 +57,16 @@ describe("messageModel semantic transfer", () => {
     expect(message.ts).toBe("2026-06-22T10:00:00.000Z");
   });
 
-  it("preserves backend turn and message identity aliases for monotonic resend anchors", () => {
+  it("does not expose backend turn/message identity aliases", () => {
     const message = buildViewMessage({
       role: "user",
       content: "edit me",
       id: "storage-id-1",
-      message_id: "backend-message-1",
-      turn_id: "backend-turn-1",
       turnScopeId: "client-turn:backend-scope-1",
     });
 
     expect(message.id).toBe("storage-id-1");
-    expect(message.messageId).toBe("backend-message-1");
-    expect(message.message_id).toBe("backend-message-1");
-    expect(message.turnId).toBe("backend-turn-1");
-    expect(message.turn_id).toBe("backend-turn-1");
     expect(message.turnScopeId).toBe("client-turn:backend-scope-1");
-    expect(Object.keys(message)).not.toContain(["turn", "scope", "id"].join("_"));
   });
 
   it("prefers transfer-derived attachment metadata over legacy attachmentMetas", () => {
@@ -271,6 +264,7 @@ describe("messageModel execution logs", () => {
       {
         role: "assistant",
         content: "new partial answer",
+        turnScopeId: "client-turn:new-stream",
         dialogProcessId: "dp-new-stream",
         attachmentMetas: [{ attachmentId: "att-new", name: "new.md" }],
         realtimeLogs: [{ text: "new tool log" }],
@@ -280,6 +274,7 @@ describe("messageModel execution logs", () => {
       {
         role: "assistant",
         content: "new continuation",
+        turnScopeId: "client-turn:new-stream",
         dialogProcessId: "dp-new-stream",
         realtimeLogs: [{ text: "new tool log 2" }],
         executionLogTotal: 2,
@@ -296,16 +291,52 @@ describe("messageModel execution logs", () => {
     expect(messages[0].executionLogTotal).toBe(2);
   });
 
+  it("keeps the user message and merges assistant chunks even when storage ids differ", () => {
+    const messages = foldConversationMessages([
+      {
+        id: "storage-user-1",
+        role: "user",
+        content: "question",
+        turnScopeId: "client-turn:render-1",
+      },
+      {
+        id: "storage-assistant-1",
+        role: "assistant",
+        content: "answer part 1",
+        dialogProcessId: "dp-render-1",
+        turnScopeId: "client-turn:render-1",
+      },
+      {
+        id: "storage-assistant-2",
+        role: "assistant",
+        content: "answer part 2",
+        dialogProcessId: "dp-render-1",
+        turnScopeId: "client-turn:render-1",
+      },
+    ], buildViewMessage);
+
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).toEqual(expect.objectContaining({
+      role: "user",
+      content: "question",
+    }));
+    expect(messages[1].role).toBe("assistant");
+    expect(messages[1].content).toContain("answer part 1");
+    expect(messages[1].content).toContain("answer part 2");
+  });
+
   it("keeps summary thinking entry fields when merging assistant messages", () => {
     const messages = foldConversationMessages([
       {
         role: "assistant",
         content: "part 1",
+        turnScopeId: "client-turn:summary-thinking",
         dialogProcessId: "dp-summary-thinking",
       },
       {
         role: "assistant",
         content: "part 2",
+        turnScopeId: "client-turn:summary-thinking",
         dialogProcessId: "dp-summary-thinking",
         hasThinkingDetails: true,
         thinkingDetailCount: 3,
@@ -322,6 +353,7 @@ describe("messageModel execution logs", () => {
       {
         role: "assistant",
         content: "part 1",
+        turnScopeId: "client-turn:logs",
         dialogProcessId: "dp-logs",
         realtimeLogs: Array.from({ length: 6 }, (_, index) => ({ text: `log-${index + 1}` })),
         executionLogTotal: 6,
@@ -329,6 +361,7 @@ describe("messageModel execution logs", () => {
       {
         role: "assistant",
         content: "part 2",
+        turnScopeId: "client-turn:logs",
         dialogProcessId: "dp-logs",
         realtimeLogs: Array.from({ length: 6 }, (_, index) => ({ text: `log-${index + 7}` })),
         executionLogTotal: 12,

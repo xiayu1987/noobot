@@ -33,9 +33,9 @@ test("SessionMessageService.deleteFromMessage deletes from anchor message to ses
       version: 2,
       revision: 2,
       messages: [
-        { messageId: "m1", role: "user", content: "keep" },
-        { messageId: "m2", role: "assistant", content: "delete" },
-        { messageId: "m3", role: "user", content: "delete too" },
+        { turnScopeId: "scope-keep", role: "user", content: "keep" },
+        { turnScopeId: "scope-delete", role: "assistant", content: "delete" },
+        { turnScopeId: "scope-tail", role: "user", content: "delete too" },
       ],
     },
   });
@@ -43,7 +43,7 @@ test("SessionMessageService.deleteFromMessage deletes from anchor message to ses
   const result = await service.deleteFromMessage({
     userId: "u1",
     sessionId: "s1",
-    anchor: { messageId: "m2" },
+    anchor: { turnScopeId: "scope-delete" },
     expectedVersion: 2,
   });
 
@@ -51,7 +51,7 @@ test("SessionMessageService.deleteFromMessage deletes from anchor message to ses
   assert.equal(result.anchorIndex, 1);
   assert.equal(result.version, 3);
   assert.equal(saved.length, 1);
-  assert.deepEqual(saved[0].messages.map((message) => message.messageId), ["m1"]);
+  assert.deepEqual(saved[0].messages.map((message) => message.content), ["keep"]);
   assert.equal(saved[0].version, 3);
   assert.equal(saved[0].revision, 3);
   assert.equal(saved[0].updatedAt, "2026-06-17T00:00:00.000Z");
@@ -63,7 +63,7 @@ test("SessionMessageService.deleteFromMessage returns 404 when anchor is missing
       sessionId: "s1",
       parentSessionId: "",
       version: 1,
-      messages: [{ messageId: "m1", role: "user", content: "keep" }],
+      messages: [{ turnScopeId: "scope-keep", role: "user", content: "keep" }],
     },
   });
 
@@ -71,7 +71,7 @@ test("SessionMessageService.deleteFromMessage returns 404 when anchor is missing
     service.deleteFromMessage({
       userId: "u1",
       sessionId: "s1",
-      anchor: { messageId: "missing" },
+      anchor: { turnScopeId: "missing" },
     }),
     (error) => error?.statusCode === 404 && /anchor not found/.test(error.message),
   );
@@ -86,9 +86,9 @@ test("SessionMessageService.deleteFromMessage matches dialogProcessId against le
       version: 1,
       revision: 1,
       messages: [
-        { messageId: "m1", role: "user", content: "keep" },
+        { turnScopeId: "scope-keep", role: "user", content: "keep" },
         { dialogId: "dp-legacy", role: "assistant", content: "delete" },
-        { messageId: "m3", role: "user", content: "delete too" },
+        { turnScopeId: "scope-tail", role: "user", content: "delete too" },
       ],
     },
   });
@@ -101,7 +101,7 @@ test("SessionMessageService.deleteFromMessage matches dialogProcessId against le
 
   assert.equal(result.deletedCount, 2);
   assert.equal(result.anchorIndex, 1);
-  assert.deepEqual(saved[0].messages.map((message) => message.messageId), ["m1"]);
+  assert.deepEqual(saved[0].messages.map((message) => message.content), ["keep"]);
 });
 
 test("SessionMessageService.deleteFromMessage returns 409 when expectedVersion conflicts", async () => {
@@ -111,7 +111,7 @@ test("SessionMessageService.deleteFromMessage returns 409 when expectedVersion c
       parentSessionId: "",
       version: 5,
       revision: 5,
-      messages: [{ messageId: "m1", role: "user", content: "keep" }],
+      messages: [{ turnScopeId: "scope-keep", role: "user", content: "keep" }],
     },
   });
 
@@ -119,7 +119,7 @@ test("SessionMessageService.deleteFromMessage returns 409 when expectedVersion c
     service.deleteFromMessage({
       userId: "u1",
       sessionId: "s1",
-      anchor: { messageId: "m1" },
+      anchor: { turnScopeId: "scope-keep" },
       expectedVersion: 4,
     }),
     (error) => error?.statusCode === 409 && error?.currentVersion === 5,
@@ -135,9 +135,9 @@ test("SessionMessageService.markUserMessageMonotonic persists stopped monotonic 
       version: 7,
       revision: 7,
       messages: [
-        { messageId: "m1", role: "user", content: "old", dialogProcessId: "dp-old" },
-        { messageId: "m2", role: "assistant", content: "old answer", dialogProcessId: "dp-old" },
-        { messageId: "m3", role: "user", content: "stop me", dialogProcessId: "dp-stop" },
+        { turnScopeId: "scope-old", role: "user", content: "old", dialogProcessId: "dp-old" },
+        { turnScopeId: "scope-old", role: "assistant", content: "old answer", dialogProcessId: "dp-old" },
+        { turnScopeId: "scope-stop", role: "user", content: "stop me", dialogProcessId: "dp-stop" },
       ],
     },
   });

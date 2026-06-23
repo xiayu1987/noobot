@@ -301,7 +301,7 @@ function buildDisplayMessageSummary(message = {}) {
   summary.content = typeof message?.content === "string" ? message.content : JSON.stringify(message?.content ?? "");
   const attachmentMetas = pickLightAttachmentMetas(message);
   if (attachmentMetas.length) summary.attachmentMetas = attachmentMetas;
-  for (const key of ["id", "messageId", "pluginMessage", "done", "pending", "error"]) {
+  for (const key of ["id", "pluginMessage", "done", "pending", "error"]) {
     if (message?.[key] !== undefined) summary[key] = message[key];
   }
   const pluginMeta = pickLightPluginMeta(message);

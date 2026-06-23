@@ -18,8 +18,6 @@ import {
   getMessageDialogProcessId,
   getMessageParentDialogProcessId,
   getMessageRole,
-  getMessageStableId,
-  getMessageTurnId,
   getMessageTurnScopeId,
 } from "./messageIdentity";
 import {
@@ -140,8 +138,6 @@ function createMessageModel(messageItem = {}) {
       : null;
   const transferEnvelopes = getMessageTransferEnvelopes(messageItem);
   const workflowMeta = normalizeWorkflowMeta(messageItem);
-  const messageId = getMessageStableId(messageItem);
-  const turnId = getMessageTurnId(messageItem);
   const turnScopeId = getMessageTurnScopeId(messageItem);
   const sessionId = String(messageItem?.sessionId || messageItem?.session_id || "").trim();
   const thinkingStartedAt = getThinkingStartedAt(messageItem);
@@ -149,10 +145,6 @@ function createMessageModel(messageItem = {}) {
   const messageTimestamp = getMessageTimestamp(messageItem);
   return {
     id: messageItem.id || "",
-    messageId,
-    message_id: messageId,
-    turnId,
-    turn_id: turnId,
     turnScopeId,
     sessionId,
     session_id: sessionId,
@@ -216,7 +208,14 @@ function buildAppendMessage(role, content = "", attachmentMetas = [], options = 
 }
 
 function resolveStableMessageIdentity(messageItem = {}) {
-  return getMessageStableId(messageItem);
+  return "";
+}
+
+function resolveMessageTurnScopeMergeKey(messageItem = {}) {
+  const turnScopeId = getMessageTurnScopeId(messageItem);
+  if (!turnScopeId) return "";
+  const sessionId = String(messageItem?.sessionId || messageItem?.session_id || "").trim();
+  return sessionId ? `${sessionId}::${turnScopeId}` : turnScopeId;
 }
 
 function buildViewMessage(
@@ -261,8 +260,8 @@ function foldConversationMessages(messages = [], buildView) {
     const previousMessage = mergedMessages[mergedMessages.length - 1] || null;
     const currentRole = getMessageRole(currentMessage);
     const previousRole = getMessageRole(previousMessage);
-    const currentDialogProcessId = getMessageDialogProcessId(currentMessage);
-    const previousDialogProcessId = getMessageDialogProcessId(previousMessage);
+    const currentTurnScopeKey = resolveMessageTurnScopeMergeKey(currentMessage);
+    const previousTurnScopeKey = resolveMessageTurnScopeMergeKey(previousMessage);
     const currentStableMessageIdentity = resolveStableMessageIdentity(currentMessage);
     const previousStableMessageIdentity = resolveStableMessageIdentity(previousMessage);
     const hasDifferentStableMessageIdentity =
@@ -280,9 +279,9 @@ function foldConversationMessages(messages = [], buildView) {
       currentMessage?.workflowMessage !== true &&
       previousMessage?.pending !== true &&
       currentMessage?.pending !== true &&
-      currentDialogProcessId &&
-      previousDialogProcessId &&
-      currentDialogProcessId === previousDialogProcessId &&
+      currentTurnScopeKey &&
+      previousTurnScopeKey &&
+      currentTurnScopeKey === previousTurnScopeKey &&
       !hasDifferentStableMessageIdentity &&
       !hasUnpairedStableMessageIdentity;
     if (!canMergeAssistantMessage) {

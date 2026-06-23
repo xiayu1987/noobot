@@ -321,7 +321,6 @@ function buildToolLogsByTurnScope(sessionDocuments = []) {
   });
 
   const logsByTurnScopeKey = new Map();
-  const logsByDialogProcessId = new Map();
   for (const toolLog of relevantLogs) {
     const sessionId = String(toolLog?.sessionId || "").trim();
     const turnScopeId = getMessageTurnScopeId(toolLog);
@@ -329,14 +328,6 @@ function buildToolLogsByTurnScope(sessionDocuments = []) {
     if (turnScopeKey) {
       const existingLogs = logsByTurnScopeKey.get(turnScopeKey) || [];
       logsByTurnScopeKey.set(turnScopeKey, [...existingLogs, toolLog]);
-    }
-
-    // Legacy fallback for old snapshots without turnScopeId.  New ownership is
-    // sessionId + turnScopeId; dialogProcessId is not used when turnScopeId exists.
-    const dialogProcessId = getMessageDialogProcessId(toolLog);
-    if (!turnScopeKey && dialogProcessId) {
-      const existingLogs = logsByDialogProcessId.get(dialogProcessId) || [];
-      logsByDialogProcessId.set(dialogProcessId, [...existingLogs, toolLog]);
     }
   }
 
@@ -348,15 +339,6 @@ function buildToolLogsByTurnScope(sessionDocuments = []) {
     if (turnScopeKey) {
       groupedLogs.set(turnScopeKey, sortLogsBySessionTree(
         mergeUniqueLogs([], logsByTurnScopeKey.get(turnScopeKey) || []),
-        sessionOrderById,
-      ));
-      continue;
-    }
-
-    const dialogProcessId = getMessageDialogProcessId(messageItem);
-    if (dialogProcessId) {
-      groupedLogs.set(dialogProcessId, sortLogsBySessionTree(
-        mergeUniqueLogs([], logsByDialogProcessId.get(dialogProcessId) || []),
         sessionOrderById,
       ));
     }
@@ -374,16 +356,9 @@ function applyCompletedToolLogsToMessages(messages = [], sessionDocuments = []) 
     const sessionId = rootSessionId || String(messageItem?.sessionId || messageItem?.session_id || "").trim();
     const turnScopeId = getMessageTurnScopeId(messageItem);
     const turnScopeKey = buildTurnScopeGroupKey(sessionId, turnScopeId);
-    const dialogProcessId = getMessageDialogProcessId(messageItem);
-    const matchedToolLogs = (groupedLogs.get(turnScopeKey || dialogProcessId) || []).filter(
+    const matchedToolLogs = (groupedLogs.get(turnScopeKey) || []).filter(
       (toolLogItem) => {
-        if (turnScopeKey) {
-          return buildTurnScopeGroupKey(toolLogItem?.sessionId, toolLogItem?.turnScopeId) === turnScopeKey;
-        }
-        return (
-          String(toolLogItem?.sessionId || "") !== rootSessionId ||
-          String(toolLogItem?.dialogProcessId || "") === dialogProcessId
-        );
+        return buildTurnScopeGroupKey(toolLogItem?.sessionId, toolLogItem?.turnScopeId) === turnScopeKey;
       },
     );
     const mergedToolLogs = mergeUniqueLogs([], matchedToolLogs);

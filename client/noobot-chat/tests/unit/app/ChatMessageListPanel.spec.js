@@ -318,28 +318,33 @@ describe("ChatMessageListPanel", () => {
     const wrapper = mountPanel({
       activeSession: {
         messages: [
-          { role: RoleEnum.USER, dialogProcessId: "dp-user", content: "hello" },
-          { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-assistant", content: "hi" },
+          { role: RoleEnum.USER, sessionId: "session-1", turnScopeId: "turn-user", content: "hello" },
+          { role: RoleEnum.ASSISTANT, sessionId: "session-1", turnScopeId: "turn-assistant", content: "hi" },
         ],
       },
     });
 
     const anchors = wrapper.findAll("[data-chat-message-anchor]");
     expect(anchors).toHaveLength(2);
-    expect(anchors[0].attributes("id")).toBe("chat-message-user-dp-user-0");
-    expect(anchors[0].attributes("data-chat-message-anchor")).toBe("chat-message-user-dp-user-0");
-    expect(wrapper.vm.getMessageAnchorId({ role: RoleEnum.ASSISTANT, dialogProcessId: "dp-assistant" }, 1)).toBe(
-      "chat-message-assistant-dp-assistant-1",
+    expect(anchors[0].attributes("id")).toBe("chat-message-user-session-1--turn-user-0");
+    expect(anchors[0].attributes("data-chat-message-anchor")).toBe("chat-message-user-session-1--turn-user-0");
+    expect(wrapper.vm.getMessageAnchorId({
+      role: RoleEnum.ASSISTANT,
+      sessionId: "session-1",
+      turnScopeId: "turn-assistant",
+    }, 1)).toBe(
+      "chat-message-assistant-session-1--turn-assistant-1",
     );
     expect(
       wrapper.vm.getMessageAnchorId(
         {
           role: RoleEnum.ASSISTANT,
-          dialogProcessId: "dp-assistant",
+          sessionId: "session-1",
+          turnScopeId: "turn-assistant",
         },
         1,
       ),
-    ).toBe("chat-message-assistant-dp-assistant-1");
+    ).toBe("chat-message-assistant-session-1--turn-assistant-1");
     expect(typeof wrapper.vm.scrollToMessageAnchor).toBe("function");
   });
 });

@@ -148,8 +148,6 @@ export function createChatEngineSender({
         turnScopeId,
         uploadHint: translate("chat.uploadHint"),
         reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
-        existingUserTurnId: options?.existingUserTurnId || "",
-        existingUserMessageId: options?.existingUserMessageId || "",
       });
       const activeProcessStore = getResolvedProcessStore();
       let locatedSendingStartedMessage = false;

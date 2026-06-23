@@ -258,16 +258,20 @@ describe("useMessageFiles", () => {
     expect(writtenFiles.value).toEqual([]);
   });
 
-  it("collects written files for the same dialogProcessId after current dialog starts streaming", () => {
+  it("collects written files for the same turnScopeId after current turn starts streaming", () => {
     const messageItem = {
       role: "assistant",
       pending: false,
       dialogProcessId: "dp-1",
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
       content: "",
     };
     const previousToolMessage = {
       role: "tool",
       dialogProcessId: "dp-1",
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
       content: JSON.stringify({
         toolName: "write_file",
         state: "OK",
@@ -278,6 +282,8 @@ describe("useMessageFiles", () => {
     const currentToolMessage = {
       role: "tool",
       dialogProcessId: "dp-1",
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
       content: JSON.stringify({
         toolName: "write_file",
         state: "OK",
@@ -464,10 +470,18 @@ describe("useMessageFiles", () => {
   });
 
   it("still collects tool attachments from the same linear turn", () => {
-    const firstUser = { role: "user", dialogProcessId: "dp-first", content: "生成一张小鸟图" };
+    const firstUser = {
+      role: "user",
+      dialogProcessId: "dp-first",
+      sessionId: "session-1",
+      turnScopeId: "turn-first",
+      content: "生成一张小鸟图",
+    };
     const firstTool = {
       role: "tool",
       dialogProcessId: "dp-first",
+      sessionId: "session-1",
+      turnScopeId: "turn-first",
       attachmentMetas: [
         { attachmentId: "bird-1", name: "generated_image_1.png" },
       ],
@@ -475,11 +489,25 @@ describe("useMessageFiles", () => {
     const firstAssistant = {
       role: "assistant",
       dialogProcessId: "dp-first",
+      sessionId: "session-1",
+      turnScopeId: "turn-first",
       content: "小鸟图片已生成",
       attachmentMetas: [],
     };
-    const secondUser = { role: "user", dialogProcessId: "dp-second", content: "你好" };
-    const secondAssistant = { role: "assistant", dialogProcessId: "dp-second", content: "你好！" };
+    const secondUser = {
+      role: "user",
+      dialogProcessId: "dp-second",
+      sessionId: "session-1",
+      turnScopeId: "turn-second",
+      content: "你好",
+    };
+    const secondAssistant = {
+      role: "assistant",
+      dialogProcessId: "dp-second",
+      sessionId: "session-1",
+      turnScopeId: "turn-second",
+      content: "你好！",
+    };
     const allMessages = [firstUser, firstTool, firstAssistant, secondUser, secondAssistant];
 
     const { displayedAttachmentMetas } = useMessageFiles({
