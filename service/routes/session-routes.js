@@ -7,7 +7,7 @@ import { createJsonRouteWrapper } from "./route-wrapper.js";
 import { HTTP_STATUS } from "#agent/constants";
 import { createServicePluginHost } from "../services/service-plugin-host.js";
 import path from "node:path";
-import { readFile } from "node:fs/promises";
+import { readSessionArtifactSnapshot } from "noobot-agent/session";
 
 const servicePluginHost = createServicePluginHost();
 
@@ -22,15 +22,6 @@ export function registerSessionRoutes(
   } = {},
 ) {
   const jsonRoute = createJsonRouteWrapper({ translateText });
-
-  async function readJsonFileSafe(filePath = "") {
-    try {
-      const raw = await readFile(filePath, "utf8");
-      return JSON.parse(raw);
-    } catch {
-      return null;
-    }
-  }
 
   function resolveDeletedSessionIds(result = {}, fallbackSessionId = "") {
     const fromResult = Array.isArray(result?.deletedSessionIds)
@@ -351,12 +342,8 @@ export function registerSessionRoutes(
       ) {
         throw new Error(translateText("common.notFound", req.locale));
       }
-      const [session, task, execution, meta] = await Promise.all([
-        readJsonFileSafe(path.join(workflowDir, "session.json")),
-        readJsonFileSafe(path.join(workflowDir, "task.json")),
-        readJsonFileSafe(path.join(workflowDir, "execution.json")),
-        readJsonFileSafe(path.join(workflowDir, "meta.json")),
-      ]);
+      const { session, sessionSummary, task, execution, executionLogs, meta } =
+        await readSessionArtifactSnapshot({ outputDir: workflowDir });
       res.json({
         ok: true,
         userId: String(userId || "").trim(),
@@ -364,8 +351,10 @@ export function registerSessionRoutes(
         dialogId: String(dialogId || "").trim(),
         workflowSession: {
           session,
+          sessionSummary,
           task,
           execution,
+          executionLogs,
           meta,
           dir: workflowDir,
         },

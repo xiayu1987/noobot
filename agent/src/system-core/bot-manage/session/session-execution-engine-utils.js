@@ -3,8 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import path from "node:path";
-import { mkdir, writeFile } from "node:fs/promises";
+import { persistSessionArtifactSnapshot } from "../../session/session-artifact-store.js";
 import {
   resolveMessageRole,
 } from "../../context/session/message-context-policy.js";
@@ -178,18 +177,13 @@ export async function persistSnapshotJsonFiles({
   executionPayload = {},
   metadata = null,
 } = {}) {
-  await mkdir(outputDir, { recursive: true });
-  const files = buildSnapshotFileMap(outputDir);
-  await Promise.all([
-    writeJsonFile(files.session, sessionPayload),
-    writeJsonFile(files.task, taskPayload),
-    writeJsonFile(files.execution, executionPayload),
-    writeJsonFile(files.meta, metadata && typeof metadata === "object" ? metadata : {}),
-  ]);
-  return {
+  return persistSessionArtifactSnapshot({
     outputDir,
-    files,
-  };
+    sessionPayload,
+    taskPayload,
+    executionPayload,
+    metadata,
+  });
 }
 
 function isInjectedMessageLike(messageItem = {}) {
@@ -222,21 +216,4 @@ function resolveCurrentTurnDialogProcessIdFromMessages(messages = []) {
     if (dialogProcessId) return dialogProcessId;
   }
   return "";
-}
-
-function buildSnapshotFileMap(outputDir = "") {
-  return {
-    session: path.join(outputDir, "session.json"),
-    task: path.join(outputDir, "task.json"),
-    execution: path.join(outputDir, "execution.json"),
-    meta: path.join(outputDir, "meta.json"),
-  };
-}
-
-async function writeJsonFile(filePath = "", payload = {}) {
-  await writeFile(
-    filePath,
-    `${JSON.stringify(payload && typeof payload === "object" ? payload : {}, null, 2)}\n`,
-    "utf8",
-  );
 }

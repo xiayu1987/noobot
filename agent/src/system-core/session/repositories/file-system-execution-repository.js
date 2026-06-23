@@ -3,9 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import path from "node:path";
-import { appendFile, writeFile } from "node:fs/promises";
-import { fsMkdir, fsReadFile } from "../../store/fs-adapter.js";
+import { fsMkdir } from "../../store/fs-adapter.js";
+import {
+  appendExecutionLogArtifact,
+  buildSessionArtifactFileMap,
+  readJsonlArtifactFile,
+  writeExecutionArtifact,
+} from "../session-artifact-store.js";
 
 export class FileSystemExecutionRepository {
   constructor({
@@ -27,25 +31,17 @@ export class FileSystemExecutionRepository {
   async _resolveExecutionScope(userId, sessionId, parentSessionId = "") {
     const basePath = this._basePath(userId);
     await this.storageService.ensureRuntimeDirsByBasePath(basePath);
-    const { sessionDir, executionFile } = await this.sessionPathResolver.resolveSessionScope(
+    const { sessionDir } = await this.sessionPathResolver.resolveSessionScope(
       userId,
       sessionId,
       parentSessionId,
     );
+    const files = buildSessionArtifactFileMap(sessionDir);
     return {
       sessionDir,
-      executionFile,
-      executionEventsFile: path.join(sessionDir, "execution.jsonl"),
+      executionFile: files.execution,
+      executionEventsFile: files.executionEvents,
     };
-  }
-
-  async _readJsonlLogs(executionEventsFile) {
-    try {
-      const raw = await fsReadFile(executionEventsFile, "utf8");
-      return raw.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
-    } catch {
-      return [];
-    }
   }
 
   async getBundle(userId, sessionId, parentSessionId = "") {
@@ -58,7 +54,7 @@ export class FileSystemExecutionRepository {
       sessionId,
       updatedAt: this.now(),
     });
-    const jsonlLogs = await this._readJsonlLogs(executionEventsFile);
+    const jsonlLogs = await readJsonlArtifactFile(executionEventsFile);
     const dialogProcessId = String(bundle?.dialogProcessId || "").trim();
     return {
       sessionId: String(bundle?.sessionId || sessionId || "").trim(),
@@ -69,36 +65,40 @@ export class FileSystemExecutionRepository {
   }
 
   async saveBundle(userId, sessionId, executionBundle = {}, parentSessionId = "") {
-    const { sessionDir, executionFile } = await this._resolveExecutionScope(
+    const { sessionDir } = await this._resolveExecutionScope(
       userId,
       sessionId,
       parentSessionId,
     );
     await fsMkdir(sessionDir, { recursive: true });
-    await this.storageService.writeJsonAtomic(executionFile, {
-      sessionId,
-      ...(executionBundle?.dialogProcessId ? { dialogProcessId: executionBundle.dialogProcessId } : {}),
-      updatedAt: this.now(),
+    await writeExecutionArtifact({
+      storageService: this.storageService,
+      sessionDir,
+      executionPayload: {
+        sessionId,
+        ...(executionBundle?.dialogProcessId ? { dialogProcessId: executionBundle.dialogProcessId } : {}),
+        updatedAt: this.now(),
+      },
     });
   }
 
   async appendLog(userId, sessionId, executionLog = {}, executionBundle = {}, parentSessionId = "") {
-    const { sessionDir, executionFile, executionEventsFile } = await this._resolveExecutionScope(
+    const { sessionDir } = await this._resolveExecutionScope(
       userId,
       sessionId,
       parentSessionId,
     );
     await fsMkdir(sessionDir, { recursive: true });
-    const serializedLog = `${JSON.stringify(executionLog)}\n`;
-    if (executionBundle?.resetExecutionLogs === true) {
-      await writeFile(executionEventsFile, serializedLog, "utf8");
-    } else {
-      await appendFile(executionEventsFile, serializedLog, "utf8");
-    }
-    await this.storageService.writeJsonAtomic(executionFile, {
-      sessionId,
-      ...(executionBundle?.dialogProcessId ? { dialogProcessId: executionBundle.dialogProcessId } : {}),
-      updatedAt: this.now(),
+    await appendExecutionLogArtifact({
+      storageService: this.storageService,
+      sessionDir,
+      executionLog,
+      executionPayload: {
+        sessionId,
+        ...(executionBundle?.dialogProcessId ? { dialogProcessId: executionBundle.dialogProcessId } : {}),
+        updatedAt: this.now(),
+      },
+      resetExecutionLogs: executionBundle?.resetExecutionLogs === true,
     });
   }
 }

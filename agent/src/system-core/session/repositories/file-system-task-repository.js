@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { fsMkdir } from "../../store/fs-adapter.js";
+import { buildSessionArtifactFileMap, writeTaskArtifact } from "../session-artifact-store.js";
 
 export class FileSystemTaskRepository {
   constructor({
@@ -27,12 +28,13 @@ export class FileSystemTaskRepository {
   async _resolveTaskScope(userId, sessionId, parentSessionId = "") {
     const basePath = this._basePath(userId);
     await this.storageService.ensureRuntimeDirsByBasePath(basePath);
-    const { sessionDir, taskFile } = await this.sessionPathResolver.resolveSessionScope(
+    const { sessionDir } = await this.sessionPathResolver.resolveSessionScope(
       userId,
       sessionId,
       parentSessionId,
     );
-    return { sessionDir, taskFile };
+    const files = buildSessionArtifactFileMap(sessionDir);
+    return { sessionDir, taskFile: files.task };
   }
 
   async findBySessionId(userId, sessionId, parentSessionId = "") {
@@ -59,7 +61,7 @@ export class FileSystemTaskRepository {
   }
 
   async save(userId, sessionId, task, parentSessionId = "") {
-    const { sessionDir, taskFile } = await this._resolveTaskScope(
+    const { sessionDir } = await this._resolveTaskScope(
       userId,
       sessionId,
       parentSessionId,
@@ -82,11 +84,15 @@ export class FileSystemTaskRepository {
     bundle.currentTaskId = String(normalizedTask.taskId || "").trim();
     bundle.updatedAt = this.now();
 
-    await this.storageService.writeJson(taskFile, {
-      sessionId,
-      currentTaskId: bundle.currentTaskId,
-      tasks: bundle.tasks,
-      updatedAt: bundle.updatedAt,
+    await writeTaskArtifact({
+      storageService: this.storageService,
+      sessionDir,
+      taskPayload: {
+        sessionId,
+        currentTaskId: bundle.currentTaskId,
+        tasks: bundle.tasks,
+        updatedAt: bundle.updatedAt,
+      },
     });
   }
 
@@ -97,7 +103,7 @@ export class FileSystemTaskRepository {
     parentSessionId = "",
     currentTaskId = "",
   ) {
-    const { sessionDir, taskFile } = await this._resolveTaskScope(
+    const { sessionDir } = await this._resolveTaskScope(
       userId,
       sessionId,
       parentSessionId,
@@ -128,11 +134,15 @@ export class FileSystemTaskRepository {
     bundle.tasks = existingTasks;
     bundle.currentTaskId = String(currentTaskId || "").trim();
     bundle.updatedAt = this.now();
-    await this.storageService.writeJson(taskFile, {
-      sessionId,
-      currentTaskId: bundle.currentTaskId,
-      tasks: bundle.tasks,
-      updatedAt: bundle.updatedAt,
+    await writeTaskArtifact({
+      storageService: this.storageService,
+      sessionDir,
+      taskPayload: {
+        sessionId,
+        currentTaskId: bundle.currentTaskId,
+        tasks: bundle.tasks,
+        updatedAt: bundle.updatedAt,
+      },
     });
   }
 }

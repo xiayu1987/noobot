@@ -150,6 +150,11 @@ test("ScopedArtifactPersistenceHelpers persists detached snapshot json files", a
   const sessionJson = JSON.parse(await fs.readFile(persisted.files.session, "utf8"));
   assert.equal(sessionJson.sessionId, "s1");
   assert.equal(sessionJson.messages[0].content, "done");
+  const sessionSummaryJson = JSON.parse(await fs.readFile(persisted.files.sessionSummary, "utf8"));
+  assert.equal(sessionSummaryJson.schemaVersion, 2);
+  assert.equal(sessionSummaryJson.sessionId, "s1");
+  assert.equal(sessionSummaryJson.stats.messageCount, 1);
+  assert.equal(await fs.readFile(persisted.files.executionEvents, "utf8"), "");
 });
 
 test("ScopedArtifactPersistenceHelpers persists existing sub-session snapshot from session service", async () => {
@@ -185,6 +190,7 @@ test("ScopedArtifactPersistenceHelpers persists existing sub-session snapshot fr
   assert.deepEqual(taskJson.tasks, [{ taskId: "t1" }]);
   assert.equal(taskJson.updatedAt, "2026-01-02T03:04:05.000Z");
   assert.deepEqual(executionJson.logs, [{ event: "x" }]);
+  assert.equal(await fs.readFile(persisted.files.executionEvents, "utf8"), "{\"event\":\"x\"}\n");
 });
 
 test("ScopedArtifactPersistenceHelpers detects detached sub-session isolation leaks", async () => {

@@ -168,7 +168,7 @@ test("createDetachedSubSessionRunner prepares context, runs agent, emits runtime
     },
     message: "  hello bot plugin  ",
     attachmentMetas: [{ attachmentId: "att1" }],
-    runConfigPatch: { patched: true },
+    runConfigPatch: { patched: true, turnScopeId: "workflow-node:sub-dialog" },
     systemMessages: ["sys"],
     strategy: {
       sessionId: "sub1",
@@ -179,7 +179,7 @@ test("createDetachedSubSessionRunner prepares context, runs agent, emits runtime
 
   assert.deepEqual(calls.mergePayload, {
     baseRunConfig: { base: true, selectedPlugins: ["botPlugin"] },
-    runConfigPatch: { patched: true },
+    runConfigPatch: { patched: true, turnScopeId: "workflow-node:sub-dialog" },
     disabledPlugins: ["agentPlugin"],
   });
   assert.equal(calls.loadedWorkspacePath, "/tmp/workspace/u1");
@@ -204,6 +204,7 @@ test("createDetachedSubSessionRunner prepares context, runs agent, emits runtime
   assert.equal(buildContextPayload.runConfig.systemRuntimePatch.childRunParentSessionId, "parent1");
   assert.equal(buildContextPayload.runConfig.systemRuntimePatch.durableParentSessionId, "parent1");
   assert.equal(buildContextPayload.runConfig.systemRuntimePatch.detachedSessionScope, "bot_plugin_node");
+  assert.equal(buildContextPayload.runConfig.turnScopeId, "workflow-node:sub-dialog");
 
   assert.equal(calls.runTurnPayload.errorLogger, deps.errorLogger);
   assert.equal(calls.runTurnPayload.userMessage, "hello bot plugin");
@@ -314,6 +315,7 @@ test("createDetachedSubSessionRunner persists bot plugin sub-session snapshot wh
     strategy: {
       sessionId: "sub1",
       dialogProcessId: "sub-dialog",
+      turnScopeId: "workflow-node:sub-dialog",
       relativeDir: "plugin/sub1",
     },
     metadata: {
@@ -343,6 +345,15 @@ test("createDetachedSubSessionRunner persists bot plugin sub-session snapshot wh
       "2026-03-04T05:06:07.000Z",
     ],
   );
+  assert.deepEqual(
+    calls.persistDetachedSubSessionSnapshotPayload.sessionPayload.messages.map((item = {}) => item.turnScopeId),
+    [
+      "workflow-node:sub-dialog",
+      "workflow-node:sub-dialog",
+      "workflow-node:sub-dialog",
+      "workflow-node:sub-dialog",
+    ],
+  );
   assert.equal(
     calls.persistDetachedSubSessionSnapshotPayload.sessionPayload.messages[2].content,
     "user ask",
@@ -366,6 +377,10 @@ test("createDetachedSubSessionRunner persists bot plugin sub-session snapshot wh
   assert.equal(
     calls.persistDetachedSubSessionSnapshotPayload.executionPayload.logs[0].dialogProcessId,
     "sub-dialog",
+  );
+  assert.equal(
+    calls.persistDetachedSubSessionSnapshotPayload.executionPayload.logs[0].turnScopeId,
+    "workflow-node:sub-dialog",
   );
   assert.equal(result.persisted.outputDir, "/tmp/plugin/sub1");
   assert.deepEqual(result.result.messages, [

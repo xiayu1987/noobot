@@ -339,6 +339,30 @@ export { FileSystemSessionRepository } from "./repositories/file-system-session-
 export { FileSystemTaskRepository } from "./repositories/file-system-task-repository.js";
 export { FileSystemExecutionRepository } from "./repositories/file-system-execution-repository.js";
 export {
+  SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
+  buildSessionDisplaySummary,
+  buildSessionSummary,
+  isSessionDisplaySummaryPayload,
+  normalizeSessionsSummaryPayload,
+} from "./session-summary-builders.js";
+export {
+  SESSION_ARTIFACT_FILE_NAMES,
+  appendExecutionLogArtifact,
+  appendJsonlArtifactLog,
+  buildSessionArtifactFileMap,
+  persistSessionArtifactSnapshot,
+  readJsonArtifactFile,
+  readJsonlArtifactFile,
+  readSessionArtifactSnapshot,
+  readSessionDisplaySummaryArtifact,
+  rebuildSessionDisplaySummaryArtifact,
+  writeExecutionArtifact,
+  writeJsonArtifactFile,
+  writeJsonlArtifactFile,
+  writeSessionArtifact,
+  writeTaskArtifact,
+} from "./session-artifact-store.js";
+export {
   normalizeMessageEntity,
   normalizeMessagesEntity,
   normalizeSelectedConnectors,
