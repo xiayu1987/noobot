@@ -264,5 +264,5 @@ export function markCurrentTurnModelMessagesSummarized(
 }
 
 export function filterSummarizedMessages(messages = []) {
-  return filterForModelContext(messages);
+  return filterForModelContext(messages, { keepLatestInjectedOnly: true });
 }

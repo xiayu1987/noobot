@@ -689,6 +689,7 @@ export class SessionExecutionEngine {
     abortSignal = null,
     userInteractionBridge = null,
     runConfig = {},
+    turnScopeId = "",
     parentAsyncResultContainer = null,
   }) {
     return this.runner.runSession({
@@ -704,6 +705,7 @@ export class SessionExecutionEngine {
       abortSignal,
       userInteractionBridge,
       runConfig,
+      turnScopeId,
       parentAsyncResultContainer,
     });
   }

@@ -5,7 +5,7 @@
 ## 状态
 
 - [x] 1. 删除旧的上下文/模型消息流文档，新增统一规则文档 `docs/model-context-message-rules.md`。
-- [x] 2. 在 agent 侧沉淀主流程上下文筛选/裁剪方法：system 无裁剪、history 每 dialog 首用户+末模型且最近 10、incremental 未小结且无裁剪。
+- [x] 2. 在 agent 侧沉淀主流程上下文筛选/裁剪方法：system 无裁剪、history 按 dialog 构造最近 3 个完整轮次并保留 user 到 assistant 区间所有未小结非 system 消息、incremental 未小结且无裁剪。
 - [x] 3. 主流程 `message-builder` 复用新规则生成最终模型消息，避免 harness 未启用时依赖插件压缩。
 - [x] 4. 注入给 harness 的 `resolveModelMessages/resolveMessageBlock` 复用主流程规则；插件只调用，不自行裁剪 agent 上下文。
 - [x] 5. harness capability 消息转换规则保持不变，但移除“最近 20 条 agent 上下文”的插件侧裁剪路径。
@@ -83,3 +83,13 @@
 ## 增量消息顺序测试记录
 
 - 2026-06-13：`npm -w agent test -- --test __tests__/system-core/session/context-window-normalizer.test.js` 通过（实际 agent test 脚本执行 system-core 测试集，77 tests，0 failed）。
+
+## history / incremental 边界收敛
+
+- [x] 20. 明确 harness 主流程 `messageBlocks.history` 不进入 `conversation` 二次裁剪；`conversation` final compact 只处理 current/incremental 与 prompt 注入。
+- [x] 21. 补充 history 轮次规则：最近 3 个有效历史轮次，保留从第一条实际用户消息到最后一条未小结 assistant 之间的所有 `summarized:false` 非 system 消息。
+
+## history / incremental 边界测试记录
+
+- 2026-06-24：`cd plugin/noobot-plugin-harness && node --test __tests__/register-hooks-factory.test.js __tests__/runtime-message-blocks.test.js` 通过（16 tests，0 failed）。
+- 2026-06-24：`cd plugin/noobot-plugin-harness && npm test` 通过（276 tests，0 failed）。

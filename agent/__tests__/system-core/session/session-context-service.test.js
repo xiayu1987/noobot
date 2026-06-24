@@ -144,6 +144,87 @@ test("getRecentSessionMessages keeps recent complete rounds and all unsummarized
   );
 });
 
+test("getRecentSessionMessages excludes current turn user when reusing an edited turn", async () => {
+  const messages = [
+    {
+      role: "user",
+      content: "上一轮问题",
+      dialogProcessId: "dlg_old",
+      turnScopeId: "client-turn:old",
+    },
+    {
+      role: "assistant",
+      content: "上一轮回答",
+      dialogProcessId: "dlg_old",
+      turnScopeId: "client-turn:old",
+    },
+    {
+      role: "user",
+      content: "全仓回归测试",
+      dialogProcessId: "dlg_current",
+      turnScopeId: "client-turn:mqrt1icf:lxcfigpr",
+    },
+    {
+      role: "assistant",
+      content: "旧的待替换回答",
+      dialogProcessId: "dlg_current",
+      turnScopeId: "client-turn:mqrt1icf:lxcfigpr",
+    },
+  ];
+  const service = createSessionContextService(messages);
+  const result = await service.getRecentSessionMessages({
+    userId: "u1",
+    sessionId: "s1",
+    limit: 3,
+    currentTurnScopeId: "client-turn:mqrt1icf:lxcfigpr",
+  });
+
+  assert.deepEqual(
+    result.map((messageItem) => messageItem.content),
+    ["上一轮问题", "上一轮回答"],
+  );
+});
+
+test("getContextRecords passes current turn filter through recent history", async () => {
+  const messages = [
+    {
+      role: "user",
+      content: "历史问题",
+      dialogProcessId: "dlg_old",
+      turnScopeId: "client-turn:old",
+    },
+    {
+      role: "assistant",
+      content: "历史回答",
+      dialogProcessId: "dlg_old",
+      turnScopeId: "client-turn:old",
+    },
+    {
+      role: "user",
+      content: "全仓回归测试",
+      dialogProcessId: "dlg_current",
+      turnScopeId: "client-turn:mqrt1icf:lxcfigpr",
+    },
+    {
+      role: "assistant",
+      content: "旧回答",
+      dialogProcessId: "dlg_current",
+      turnScopeId: "client-turn:mqrt1icf:lxcfigpr",
+    },
+  ];
+  const service = createSessionContextService(messages);
+  const result = await service.getContextRecords({
+    userId: "u1",
+    sessionId: "s1",
+    currentTurnScopeId: "client-turn:mqrt1icf:lxcfigpr",
+  });
+
+  assert.deepEqual(
+    result.map((messageItem) => messageItem.content),
+    ["历史问题", "历史回答"],
+  );
+});
+
 test("getMessagesSinceLastRunningTask uses the same normalization", async () => {
   const messages = [
     { role: "user", content: "origin user" },

@@ -10,6 +10,7 @@ import {
   resolveMainModelIncrementalMessages,
   resolveModelContextMessages,
 } from "../../../src/system-core/session/utils/context-window-normalizer.js";
+import { filterForModelContext } from "../../../src/system-core/context/session/message-context-policy.js";
 import { markCurrentTurnArraySummarized } from "../../../src/system-core/context/session/summarized-message-policy.js";
 
 test("filterSummarizedMessages removes only summarized messages", () => {
@@ -21,6 +22,32 @@ test("filterSummarizedMessages removes only summarized messages", () => {
   ];
   const result = filterSummarizedMessages(input);
   assert.deepEqual(result.map((item) => item.content), ["a"]);
+});
+
+test("filterForModelContext keeps unsummarized injected history messages without latest-only dedupe", () => {
+  const result = filterForModelContext([
+    { role: "user", content: "下一步", dialogProcessId: "d1" },
+    {
+      role: "user",
+      content: "[来自harness外部模型输出/planning]\nold plan",
+      dialogProcessId: "d1",
+      summarized: false,
+    },
+    {
+      role: "user",
+      content: "[来自harness外部模型输出/planning]\nnewer plan",
+      dialogProcessId: "d2",
+      summarized: false,
+    },
+    { role: "assistant", content: "answer", dialogProcessId: "d1" },
+  ]);
+
+  assert.deepEqual(result.map((item) => item.content), [
+    "下一步",
+    "[来自harness外部模型输出/planning]\nold plan",
+    "[来自harness外部模型输出/planning]\nnewer plan",
+    "answer",
+  ]);
 });
 
 
