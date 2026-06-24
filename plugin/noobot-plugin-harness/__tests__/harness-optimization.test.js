@@ -42,6 +42,7 @@ test("normalizeOptions applies schema defaults and coercion", () => {
   assert.equal(Object.hasOwn(options, "nonProgramming" + "Workflow" + "Strategy"), false);
   assert.equal(Object.hasOwn(options, "nonProgramming" + "Execution" + "First"), false);
   assert.equal(options.summaryOnToolBurstThreshold, false);
+  assert.equal(options.clipNonMainModelContextMessages, false);
   assert.deepEqual(options.denyToolNames, [...DEFAULT_HARNESS_DENY_TOOL_NAMES]);
   assert.equal(options.jsonlFlushStrategy.maxFileBytes, 5 * 1024 * 1024);
   assert.equal(options.jsonlFlushStrategy.maxFiles, 20);
@@ -69,6 +70,11 @@ test("normalizeOptions does not expose workflow strategy options", () => {
 test("normalizeOptions enables optional tool-burst summary trigger", () => {
   const options = normalizeOptions({ enableToolBurstSummary: true });
   assert.equal(options.summaryOnToolBurstThreshold, true);
+});
+
+test("normalizeOptions can explicitly enable non-main model context clipping", () => {
+  const options = normalizeOptions({ clipNonMainModelContextMessages: true });
+  assert.equal(options.clipNonMainModelContextMessages, true);
 });
 
 test("normalizeOptions keeps custom harness denyToolNames", () => {
@@ -396,16 +402,28 @@ test("planning separate_model uses injected resolveModelMessages from harness me
       { role: "user", content: "keep-me" },
       { role: "assistant", content: "drop-me" },
     ],
+    messageBlocks: {
+      system: [],
+      history: [{ role: "assistant", content: "drop-me" }],
+      incremental: [{ role: "user", content: "keep-me" }],
+    },
     agentContext: { payload: {} },
   };
   let capturedMessages = null;
   const meta = {
     harness: {
       planningGuidanceMode: "separate_model",
-      resolveModelMessages: ({ messages = [] } = {}) =>
-        (Array.isArray(messages) ? messages : []).filter((item) =>
+      resolveModelMessages: ({ ctx: resolverCtx = {}, messages = [] } = {}) => {
+        const source = Array.isArray(messages) && messages.length
+          ? messages
+          : [
+              ...(resolverCtx.messageBlocks?.history || []),
+              ...(resolverCtx.messageBlocks?.incremental || []),
+            ];
+        return source.filter((item) =>
           String(item?.content || "").includes("keep-me"),
-        ),
+        );
+      },
       capabilityModelInvoker: async ({ messages = [] } = {}) => {
         capturedMessages = messages;
         return {

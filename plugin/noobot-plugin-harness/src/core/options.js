@@ -37,6 +37,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
   planningGuidanceMode: "separate_model",
   summaryOnToolBurstThreshold: false,
   summaryDetailSaveToAttachment: false,
+  clipNonMainModelContextMessages: false,
   capabilityModelInvoker: null,
   capabilityModelByPurpose: Object.freeze({}),
   stepModels: Object.freeze({}),
@@ -85,6 +86,8 @@ const HarnessOptionsSchema = z
     enableToolBurstSummary: z.boolean().optional(),
     summaryDetailSaveToAttachment: z.boolean().default(DEFAULT_OPTIONS.summaryDetailSaveToAttachment),
     saveSummaryDetailToAttachment: z.boolean().optional(),
+    clipNonMainModelContextMessages: z.boolean().default(DEFAULT_OPTIONS.clipNonMainModelContextMessages),
+    clipNonMainModelContext: z.boolean().optional(),
     capabilityModelInvoker: z.any().optional(),
     capabilityModelByPurpose: z.record(z.any()).default({}),
     stepModels: z.record(z.any()).default({}),
@@ -223,6 +226,8 @@ export function normalizeOptions(userOptions = {}, api = {}) {
       safe.summaryDetailSaveToAttachment === true || safe.saveSummaryDetailToAttachment === true,
     saveSummaryDetailToAttachment:
       safe.summaryDetailSaveToAttachment === true || safe.saveSummaryDetailToAttachment === true,
+    clipNonMainModelContextMessages:
+      safe.clipNonMainModelContextMessages === true || safe.clipNonMainModelContext === true,
     planRefinementEnabled,
     capabilityModelInvoker:
       typeof safe.capabilityModelInvoker === "function" ? safe.capabilityModelInvoker : null,

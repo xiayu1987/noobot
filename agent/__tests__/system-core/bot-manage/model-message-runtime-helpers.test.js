@@ -59,6 +59,63 @@ test("ModelMessageRuntimeHelpers resolveModelMessages uses main-flow blocks", ()
   );
 });
 
+test("ModelMessageRuntimeHelpers does not clip non-main model context by default", () => {
+  const helpers = new ModelMessageRuntimeHelpers();
+  const resolver = helpers.createResolveModelMessages({
+    agentPluginOptions: { contextWindowRecentMessageLimit: 20 },
+  });
+
+  const resolved = resolver({
+    messages: Array.from({ length: 22 }, (_, index) => ({
+      role: "user",
+      content: `m${index + 1}`,
+      dialogProcessId: "dlg-1",
+    })),
+    ctx: {
+      agentContext: {
+        execution: {
+          dialogProcessId: "dlg-1",
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(
+    resolved.map((item = {}) => item.content),
+    Array.from({ length: 22 }, (_, index) => `m${index + 1}`),
+  );
+});
+
+test("ModelMessageRuntimeHelpers clips non-main model context only when explicitly enabled", () => {
+  const helpers = new ModelMessageRuntimeHelpers();
+  const resolver = helpers.createResolveModelMessages({
+    agentPluginOptions: {
+      clipNonMainModelContextMessages: true,
+      contextWindowRecentMessageLimit: 20,
+    },
+  });
+
+  const resolved = resolver({
+    messages: Array.from({ length: 22 }, (_, index) => ({
+      role: "user",
+      content: `m${index + 1}`,
+      dialogProcessId: "dlg-1",
+    })),
+    ctx: {
+      agentContext: {
+        execution: {
+          dialogProcessId: "dlg-1",
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(
+    resolved.map((item = {}) => item.content),
+    Array.from({ length: 20 }, (_, index) => `m${index + 3}`),
+  );
+});
+
 test("ModelMessageRuntimeHelpers resolveModelMessages filters stale injected dialog messages", () => {
   const helpers = new ModelMessageRuntimeHelpers();
   const resolver = helpers.createResolveModelMessages();
