@@ -74,6 +74,39 @@ test("resolveCapabilityModelMessages preserves fallback messages and trusts inje
   assert.deepEqual(resolved.map((item) => item.content), ["keep-resolved", "drop-resolved"]);
 });
 
+test("resolveCapabilityModelMessages lets injected resolver use messageBlocks when messages are not explicit", () => {
+  let capturedPayload = null;
+  const resolved = resolveCapabilityModelMessages(
+    {
+      harness: {
+        resolveModelMessages: (payload = {}) => {
+          capturedPayload = payload;
+          return [
+            ...(payload.ctx?.messageBlocks?.history || []),
+            ...(payload.ctx?.messageBlocks?.incremental || []),
+          ];
+        },
+      },
+    },
+    {
+      ctx: {
+        messages: [{ role: "user", content: "history-only" }],
+        messageBlocks: {
+          history: [{ role: "user", content: "history-from-block" }],
+          incremental: [{ role: "assistant", content: "incremental-from-block" }],
+        },
+      },
+      purpose: "phase_acceptance",
+    },
+  );
+
+  assert.deepEqual(capturedPayload.messages, []);
+  assert.deepEqual(resolved.map((item) => item.content), [
+    "history-from-block",
+    "incremental-from-block",
+  ]);
+});
+
 test("buildModelMessagesWithStructuredEnvelope preserves provided agent messages without plugin-side filtering", () => {
   const output = buildModelMessagesWithStructuredEnvelope({
     locale: "zh-CN",

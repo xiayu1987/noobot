@@ -101,7 +101,8 @@ export function resolveCapabilityModelMessages(
   { ctx = {}, purpose = "", messages = [] } = {},
 ) {
   const includePayloadMessages = shouldUsePayloadMessageFallback(purpose);
-  const sourceMessages = Array.isArray(messages) && messages.length
+  const hasExplicitMessages = Array.isArray(messages) && messages.length > 0;
+  const sourceMessages = hasExplicitMessages
     ? messages
     : resolveContextMessages(ctx, { includePayloadMessages });
   const resolver = meta?.harness?.resolveModelMessages;
@@ -110,7 +111,7 @@ export function resolveCapabilityModelMessages(
       const resolved = resolver({
         ctx,
         purpose: String(purpose || "").trim(),
-        messages: sourceMessages,
+        messages: hasExplicitMessages ? sourceMessages : [],
       });
       if (Array.isArray(resolved)) return resolved;
     } catch {

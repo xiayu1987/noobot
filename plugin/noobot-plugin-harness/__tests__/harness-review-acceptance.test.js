@@ -1052,6 +1052,69 @@ test("phase acceptance separate model drops historical summary relays and passes
   );
 });
 
+test("phase acceptance separate model uses messageBlocks incremental when ctx.messages is history-only", async () => {
+  const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const resolveModelMessages = new ModelMessageRuntimeHelpers().createResolveModelMessages();
+  const invocations = [];
+  const ctx = {
+    messages: [
+      { role: "user", content: "history-only-visible-in-ctx.messages", dialogProcessId: "dlg_old" },
+    ],
+    messageBlocks: {
+      system: [],
+      history: [
+        { role: "user", content: "history-from-message-block", dialogProcessId: "dlg_old" },
+        { role: "assistant", content: "history-assistant-from-message-block", dialogProcessId: "dlg_old" },
+      ],
+      incremental: [
+        { role: "user", content: "current-incremental-context", dialogProcessId: "dlg_current" },
+        { role: "assistant", content: "current-incremental-result", dialogProcessId: "dlg_current" },
+      ],
+    },
+    dialogProcessId: "dlg_current",
+    agentContext: {
+      payload: {
+        messages: { system: [], history: [] },
+        harness: {
+          planText: "1. 核心实现\n2. 验证交付",
+          state: {
+            flags: { planningCaptured: true },
+            counters: {},
+            signals: {},
+            pending: { phaseAcceptance: true },
+          },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+      },
+    },
+  };
+
+  await handler({
+    capability: "acceptance",
+    point: "before_llm_call",
+    ctx,
+    meta: {
+      harness: {
+        planningGuidanceMode: "separate_model",
+        resolveModelMessages,
+        capabilityModelInvoker: async (payload) => {
+          invocations.push(payload);
+          return { content: "ADD A1 plan=1 status=pass risk=low evidence=[ok] [阶段通过]" };
+        },
+      },
+    },
+  });
+
+  assert.equal(invocations.length, 1);
+  const joined = invocations[0].messages
+    .map((item = {}) => String(item.content || ""))
+    .join("\n\n");
+  assert.match(joined, /history-from-message-block/);
+  assert.match(joined, /current-incremental-context/);
+  assert.match(joined, /current-incremental-result/);
+  assert.doesNotMatch(joined, /history-only-visible-in-ctx\.messages/);
+});
+
 test("final acceptance separate model receives revised plan, all phase checklists, then final request", async () => {
   const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const invocations = [];

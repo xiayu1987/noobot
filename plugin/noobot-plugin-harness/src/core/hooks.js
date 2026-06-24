@@ -406,6 +406,7 @@ export function createRegisterHarnessHooks(deps = {}) {
                   summaryOnToolBurstThreshold: options.summaryOnToolBurstThreshold === true,
                   summaryDetailSaveToAttachment: options.summaryDetailSaveToAttachment === true,
                   saveSummaryDetailToAttachment: options.summaryDetailSaveToAttachment === true,
+                  clipNonMainModelContextMessages: options.clipNonMainModelContextMessages === true,
                   capabilityModelInvoker: options.capabilityModelInvoker,
                   capabilityModelByPurpose: options.capabilityModelByPurpose,
                   stepModels: options.stepModels,

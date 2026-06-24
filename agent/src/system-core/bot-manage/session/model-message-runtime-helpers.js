@@ -8,6 +8,7 @@ import {
   resolveMainModelHistoryMessages,
   resolveMainModelIncrementalMessages,
   resolveMainModelSystemMessages,
+  normalizeRecentWindow,
 } from "../../session/utils/context-window-normalizer.js";
 import {
   shouldMarkCurrentTurnSummarizedMessage,
@@ -89,6 +90,19 @@ function normalizeMessagesForModelRuntime(messages = []) {
     .filter(Boolean);
 }
 
+function resolveNonMainModelContextWindowLimit(...items) {
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const shouldClip =
+      item.clipNonMainModelContextMessages === true ||
+      item.clipNonMainModelContext === true;
+    if (!shouldClip) continue;
+    const limit = Number(item.contextWindowRecentMessageLimit);
+    return Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 20;
+  }
+  return 0;
+}
+
 export class ModelMessageRuntimeHelpers {
   constructor({ session = null } = {}) {
     this.session = session;
@@ -123,7 +137,10 @@ export class ModelMessageRuntimeHelpers {
     agentPluginOptions = {},
     botPluginOptions = {},
   } = {}) {
-    void (agentPluginOptions || botPluginOptions);
+    const recentMessageLimit = resolveNonMainModelContextWindowLimit(
+      agentPluginOptions,
+      botPluginOptions,
+    );
     return ({ messages = [], ctx = {}, purpose = "" } = {}) => {
       const includePayloadMessages = shouldUsePayloadMessageFallback(purpose);
       const blocks = resolveContextMessageBlocks(ctx, { includePayloadMessages });
@@ -145,7 +162,9 @@ export class ModelMessageRuntimeHelpers {
           incrementalMessages: normalizeMessagesForModelRuntime(blocks.incremental),
           currentDialogProcessId,
         });
-        return resolved.messages;
+        return recentMessageLimit > 0
+          ? normalizeRecentWindow(resolved.messages, recentMessageLimit)
+          : resolved.messages;
       }
       const system = resolveMainModelSystemMessages({
         sourceMessages: normalizedSource.filter((item) => resolveMessageRole(item) === "system"),
@@ -155,7 +174,10 @@ export class ModelMessageRuntimeHelpers {
         sourceMessages: normalizedSource.filter((item) => resolveMessageRole(item) !== "system"),
         currentDialogProcessId,
       });
-      return [...system, ...conversation];
+      const resolvedMessages = [...system, ...conversation];
+      return recentMessageLimit > 0
+        ? normalizeRecentWindow(resolvedMessages, recentMessageLimit)
+        : resolvedMessages;
     };
   }
 
