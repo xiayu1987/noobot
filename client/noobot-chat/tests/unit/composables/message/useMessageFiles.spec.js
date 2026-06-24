@@ -151,6 +151,107 @@ describe("useMessageFiles", () => {
     });
   });
 
+  it("keeps refreshed harness attachments as plugin-owned without duplicating agent copies", () => {
+    const messageItem = {
+      role: "assistant",
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      dialogProcessId: "dp-1",
+      content: "done",
+      attachmentMetas: [
+        {
+          attachmentId: "plan-1",
+          name: "harness-plan-text.txt",
+          size: 1400,
+          attachmentOwnerType: "plugin",
+          attachmentOwner: "harness-plugin",
+        },
+        {
+          attachmentId: "report-1",
+          name: "harness-acceptance-report.txt",
+          size: 5600,
+          attachmentOwnerType: "plugin",
+          attachmentOwner: "harness-plugin",
+        },
+      ],
+    };
+    const refreshedSessionDoc = {
+      sessionId: "session-1",
+      messages: [
+        {
+          role: "assistant",
+          sessionId: "session-1",
+          turnScopeId: "turn-1",
+          dialogProcessId: "dp-1",
+          content: "done",
+          attachmentMetas: [
+            { attachmentId: "plan-1", name: "harness-plan-text.txt", size: 1400 },
+            { attachmentId: "report-1", name: "harness-acceptance-report.txt", size: 5600 },
+          ],
+        },
+      ],
+    };
+
+    const { displayedAttachmentMetas } = useMessageFiles({
+      getMessageItem: () => messageItem,
+      getAllMessages: () => [messageItem],
+      getSessionDocs: () => [refreshedSessionDoc],
+      getUserId: () => "admin",
+    });
+
+    expect(displayedAttachmentMetas.value).toHaveLength(2);
+    expect(displayedAttachmentMetas.value.map((item) => item.attachmentId)).toEqual([
+      "plan-1",
+      "report-1",
+    ]);
+    expect(displayedAttachmentMetas.value).toEqual([
+      expect.objectContaining({
+        attachmentId: "plan-1",
+        attachmentOwnerType: "plugin",
+        attachmentOwner: "harness-plugin",
+      }),
+      expect.objectContaining({
+        attachmentId: "report-1",
+        attachmentOwnerType: "plugin",
+        attachmentOwner: "harness-plugin",
+      }),
+    ]);
+  });
+
+  it("promotes same-key attachment metadata to plugin ownership when harness metadata arrives later", () => {
+    const messageItem = {
+      role: "assistant",
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      dialogProcessId: "dp-1",
+      content: "done",
+      attachmentMetas: [
+        { attachmentId: "report-1", name: "harness-acceptance-report.txt", size: 5600 },
+        {
+          attachmentId: "report-1",
+          name: "harness-acceptance-report.txt",
+          size: 5600,
+          attachmentOwnerType: "plugin",
+          attachmentOwner: "harness-plugin",
+        },
+      ],
+    };
+
+    const { displayedAttachmentMetas } = useMessageFiles({
+      getMessageItem: () => messageItem,
+      getAllMessages: () => [messageItem],
+      getSessionDocs: () => [],
+      getUserId: () => "admin",
+    });
+
+    expect(displayedAttachmentMetas.value).toHaveLength(1);
+    expect(displayedAttachmentMetas.value[0]).toMatchObject({
+      attachmentId: "report-1",
+      attachmentOwnerType: "plugin",
+      attachmentOwner: "harness-plugin",
+    });
+  });
+
   it("does not infer plugin ownership from harness-like generationSource alone", () => {
     const messageItem = {
       role: "assistant",
