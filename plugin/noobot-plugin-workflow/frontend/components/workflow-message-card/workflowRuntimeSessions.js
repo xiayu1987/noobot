@@ -4,9 +4,11 @@
   SPDX-License-Identifier: MIT
 */
 import { computed } from "vue";
+import { collectWorkflowDialogProcessIds, resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
 
 function makeNodeSessionFromRun(item = {}, workflowPayload) {
   const step = item?.step && typeof item.step === "object" ? item.step : {};
+  const dialogProcessId = resolveWorkflowDialogProcessId(item, step);
   return {
     transition: Number(item?.transition || 0),
     nodeName: String(step?.nodeName || item?.nodeName || "").trim(),
@@ -29,7 +31,7 @@ function makeNodeSessionFromRun(item = {}, workflowPayload) {
         workflowPayload.value?.runMeta?.sessionId ||
         "",
     ).trim(),
-    dialogId: String(item?.nodeDialogId || item?.dialogId || "").trim(),
+    dialogProcessId,
     sessionId: String(item?.nodeSessionId || item?.sessionId || "").trim(),
     transferEnvelopes: Array.isArray(item?.nodeResultTransferEnvelopes)
       ? item.nodeResultTransferEnvelopes
@@ -53,20 +55,20 @@ function makeNodeSessionFromRun(item = {}, workflowPayload) {
 
 function makeRuntimeEntryKey(item = {}) {
   return String(
-    item?.dialogId ||
-      item?.nodeDialogId ||
+    item?.dialogProcessId ||
+      item?.nodeDialogProcessId ||
       item?.sessionId ||
       item?.nodeSessionId ||
       item?.stepId ||
       item?.actionNodeStateId ||
+      resolveWorkflowDialogProcessId(item) ||
       "",
   ).trim();
 }
 
 function rememberRuntimeEntryKeys(entryIndexByKey, item = {}, index = 0) {
   const keys = [
-    item?.dialogId,
-    item?.nodeDialogId,
+    ...collectWorkflowDialogProcessIds(item),
     item?.sessionId,
     item?.nodeSessionId,
     item?.stepId,
@@ -108,7 +110,7 @@ export function createRuntimeNodeSessions({ workflowPayload, nodeSessions, execu
       : [];
     for (const runItem of runs) {
       const fallback = makeNodeSessionFromRun(runItem, workflowPayload);
-      if (!fallback.dialogId && !fallback.sessionId && !fallback.stepId) continue;
+      if (!fallback.dialogProcessId && !fallback.sessionId && !fallback.stepId) continue;
 
       const key = makeRuntimeEntryKey(fallback);
       if (key && entryIndexByKey.has(key)) {

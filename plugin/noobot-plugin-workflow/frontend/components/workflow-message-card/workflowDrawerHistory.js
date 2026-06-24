@@ -4,16 +4,18 @@
   SPDX-License-Identifier: MIT
 */
 
+import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
+
 const PSEUDO_ROUTE_PANEL_KEY = "panel";
 const PSEUDO_ROUTE_WORKFLOW_PANEL = "workflow-node-session";
-const PSEUDO_ROUTE_WORKFLOW_DIALOG_KEY = "workflowDialogId";
+const PSEUDO_ROUTE_WORKFLOW_DIALOG_PROCESS_KEY = "workflowDialogProcessId";
 const PSEUDO_ROUTE_WORKFLOW_ROOT_KEY = "workflowRootSessionId";
 
 export function buildWorkflowDrawerRoute(nodeItem = {}, workflowPayload = {}, patch = {}) {
-  const dialogId = String(
-    Object.prototype.hasOwnProperty.call(patch, "dialogId")
-      ? patch.dialogId
-      : nodeItem?.dialogId || "",
+  const dialogProcessId = String(
+    Object.prototype.hasOwnProperty.call(patch, "dialogProcessId")
+      ? patch.dialogProcessId
+      : resolveWorkflowDialogProcessId(nodeItem),
   ).trim();
   const rootSessionId = String(
     Object.prototype.hasOwnProperty.call(patch, "rootSessionId")
@@ -23,20 +25,20 @@ export function buildWorkflowDrawerRoute(nodeItem = {}, workflowPayload = {}, pa
           workflowPayload?.runMeta?.sessionId ||
           "",
   ).trim();
-  return { dialogId, rootSessionId };
+  return { dialogProcessId, rootSessionId };
 }
 
 export function writeWorkflowDrawerHistory(route = {}, { mode = "replace" } = {}) {
-  const dialogId = String(route?.dialogId || "").trim();
+  const dialogProcessId = String(route?.dialogProcessId || "").trim();
   const rootSessionId = String(route?.rootSessionId || "").trim();
   const params = new URLSearchParams(window.location.search || "");
-  if (dialogId && rootSessionId) {
+  if (dialogProcessId && rootSessionId) {
     params.set(PSEUDO_ROUTE_PANEL_KEY, PSEUDO_ROUTE_WORKFLOW_PANEL);
-    params.set(PSEUDO_ROUTE_WORKFLOW_DIALOG_KEY, dialogId);
+    params.set(PSEUDO_ROUTE_WORKFLOW_DIALOG_PROCESS_KEY, dialogProcessId);
     params.set(PSEUDO_ROUTE_WORKFLOW_ROOT_KEY, rootSessionId);
   } else if (params.get(PSEUDO_ROUTE_PANEL_KEY) === PSEUDO_ROUTE_WORKFLOW_PANEL) {
     params.delete(PSEUDO_ROUTE_PANEL_KEY);
-    params.delete(PSEUDO_ROUTE_WORKFLOW_DIALOG_KEY);
+    params.delete(PSEUDO_ROUTE_WORKFLOW_DIALOG_PROCESS_KEY);
     params.delete(PSEUDO_ROUTE_WORKFLOW_ROOT_KEY);
   }
   const query = params.toString();
@@ -44,7 +46,9 @@ export function writeWorkflowDrawerHistory(route = {}, { mode = "replace" } = {}
   const nextState = {
     ...(history.state && typeof history.state === "object" ? history.state : {}),
     noobotWorkflowNodeSession:
-      dialogId && rootSessionId ? { dialogId, rootSessionId } : null,
+      dialogProcessId && rootSessionId
+        ? { dialogProcessId, rootSessionId }
+        : null,
   };
   if (mode === "push") {
     history.pushState(nextState, "", nextUrl);
@@ -59,16 +63,17 @@ export function parseWorkflowDrawerRoute(eventState = null) {
       ? eventState.noobotWorkflowNodeSession
       : null;
   if (routeFromState && typeof routeFromState === "object") {
-    const dialogId = String(routeFromState?.dialogId || "").trim();
+    const dialogProcessId = String(routeFromState?.dialogProcessId || "").trim();
     const rootSessionId = String(routeFromState?.rootSessionId || "").trim();
-    if (dialogId && rootSessionId) return { dialogId, rootSessionId };
+    if (dialogProcessId && rootSessionId) return { dialogProcessId, rootSessionId };
   }
   const params = new URLSearchParams(window.location.search || "");
   if (params.get(PSEUDO_ROUTE_PANEL_KEY) !== PSEUDO_ROUTE_WORKFLOW_PANEL) {
-    return { dialogId: "", rootSessionId: "" };
+    return { dialogProcessId: "", rootSessionId: "" };
   }
+  const dialogProcessId = String(params.get(PSEUDO_ROUTE_WORKFLOW_DIALOG_PROCESS_KEY) || "").trim();
   return {
-    dialogId: String(params.get(PSEUDO_ROUTE_WORKFLOW_DIALOG_KEY) || "").trim(),
+    dialogProcessId,
     rootSessionId: String(params.get(PSEUDO_ROUTE_WORKFLOW_ROOT_KEY) || "").trim(),
   };
 }
@@ -95,10 +100,10 @@ export function useWorkflowDrawerHistory({
   function collectWorkflowSessionTargets() {
     const targets = [];
     for (const nodeItem of Array.isArray(flowNodes.value) ? flowNodes.value : []) {
-      if (nodeItem?.dialogId) targets.push(nodeItem);
+      if (resolveWorkflowDialogProcessId(nodeItem)) targets.push(nodeItem);
       for (const stateBox of Array.isArray(nodeItem?.actionNodeStates) ? nodeItem.actionNodeStates : []) {
         for (const stepItem of Array.isArray(stateBox?.steps) ? stateBox.steps : []) {
-          if (stepItem?.dialogId) targets.push(stepItem);
+          if (resolveWorkflowDialogProcessId(stepItem)) targets.push(stepItem);
         }
       }
     }
@@ -106,19 +111,19 @@ export function useWorkflowDrawerHistory({
   }
 
   function findWorkflowSessionTarget(route = {}) {
-    const dialogId = String(route?.dialogId || "").trim();
+    const dialogProcessId = String(route?.dialogProcessId || "").trim();
     const rootSessionId = String(route?.rootSessionId || "").trim();
-    if (!dialogId || !rootSessionId) return null;
+    if (!dialogProcessId || !rootSessionId) return null;
     return (
       collectWorkflowSessionTargets().find((target = {}) => {
-        const targetDialogId = String(target?.dialogId || "").trim();
+        const targetDialogProcessId = resolveWorkflowDialogProcessId(target);
         const targetRootSessionId = String(
           target?.rootSessionId ||
             workflowPayload.value?.planningDialog?.sessionId ||
             workflowPayload.value?.runMeta?.sessionId ||
             "",
         ).trim();
-        return targetDialogId === dialogId && targetRootSessionId === rootSessionId;
+        return targetDialogProcessId === dialogProcessId && targetRootSessionId === rootSessionId;
       }) || null
     );
   }

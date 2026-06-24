@@ -6,7 +6,7 @@
 import { computed } from "vue";
 import { makeActionStateKey, makeRuntimeStep } from "./workflowRuntimeSteps.js";
 
-export function createActionRuntimeBySemanticKey({ runtimeNodeSessions, workflowPayload, nodeRunByDialogId, resolveStepStatus }) {
+export function createActionRuntimeBySemanticKey({ runtimeNodeSessions, workflowPayload, nodeRunByDialogProcessId, resolveStepStatus }) {
   return computed(() => {
     const map = new Map();
     const ensureNodeRuntime = (item = {}) => {
@@ -42,7 +42,7 @@ export function createActionRuntimeBySemanticKey({ runtimeNodeSessions, workflow
         runtime.actionNodeStates.push(runtime._stateMap.get(stateKey));
       }
       runtime._stateMap.get(stateKey).steps.push(
-        makeRuntimeStep({ item, index, workflowPayload, nodeRunByDialogId, resolveStepStatus }),
+        makeRuntimeStep({ item, index, workflowPayload, nodeRunByDialogProcessId, resolveStepStatus }),
       );
     });
 

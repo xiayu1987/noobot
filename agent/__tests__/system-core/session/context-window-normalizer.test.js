@@ -362,18 +362,83 @@ test("resolveMainModelHistoryMessages keeps non-system unsummarized messages fro
   );
 });
 
-test("resolveMainModelHistoryMessages excludes injected and user meta from round start selection", () => {
+test("resolveMainModelHistoryMessages starts rounds from actual user and keeps unsummarized injected messages", () => {
   const result = resolveMainModelHistoryMessages({
     sourceMessages: [
-      { role: "user", content: "injected", injectedBy: "agent-plugin", dialogProcessId: "d1" },
+      { role: "user", content: "injected-before-actual", injectedBy: "agent-plugin", dialogProcessId: "d1" },
       { role: "user", content: "meta", additional_kwargs: { noobotInternalMessageType: "user_meta" }, dialogProcessId: "d1" },
       { role: "user", content: "actual", dialogProcessId: "d1" },
+      { role: "user", content: "injected-after-actual", injectedBy: "agent-plugin", dialogProcessId: "d1" },
       { role: "assistant", content: "old", dialogProcessId: "d1" },
       { role: "assistant", content: "latest", dialogProcessId: "d1" },
     ],
   });
 
-  assert.deepEqual(result.map((item) => item.content), ["actual", "old", "latest"]);
+  assert.deepEqual(result.map((item) => item.content), ["actual", "injected-after-actual", "old", "latest"]);
+});
+
+test("resolveMainModelHistoryMessages keeps legacy history rounds without dialogProcessId", () => {
+  const result = resolveMainModelHistoryMessages({
+    sourceMessages: [
+      { role: "user", content: "u1-first" },
+      { role: "system", content: "sys1" },
+      { role: "user", content: "u1-second" },
+      { role: "assistant", content: "a1" },
+      { role: "user", content: "u2" },
+      { role: "assistant", content: "a2" },
+    ],
+  });
+
+  assert.deepEqual(
+    result.map((item) => item.content),
+    ["u1-first", "u1-second", "a1", "u2", "a2"],
+  );
+});
+
+test("resolveMainModelHistoryMessages keeps unsummarized injected messages in ordinary history", () => {
+  const result = resolveMainModelHistoryMessages({
+    sourceMessages: [
+      { role: "user", content: "u1", dialogProcessId: "d1" },
+      {
+        role: "user",
+        content: "latest injected",
+        injectedBy: "agent-plugin",
+        injectedMessageType: "summary",
+        dialogProcessId: "d1",
+      },
+      { role: "assistant", content: "a1", dialogProcessId: "d1" },
+    ],
+  });
+
+  assert.deepEqual(result.map((item) => item.content), ["u1", "latest injected", "a1"]);
+});
+
+test("resolveMainModelHistoryMessages does not dedupe injected messages beyond summarized flag", () => {
+  const result = resolveMainModelHistoryMessages({
+    sourceMessages: [
+      { role: "user", content: "u1", dialogProcessId: "d1" },
+      {
+        role: "user",
+        content: "old injected but unsummarized",
+        injectedBy: "agent-plugin",
+        injectedMessageType: "summary",
+        dialogProcessId: "d1",
+      },
+      {
+        role: "user",
+        content: "new injected",
+        injectedBy: "agent-plugin",
+        injectedMessageType: "summary",
+        dialogProcessId: "d1",
+      },
+      { role: "assistant", content: "a1", dialogProcessId: "d1" },
+    ],
+  });
+
+  assert.deepEqual(
+    result.map((item) => item.content),
+    ["u1", "old injected but unsummarized", "new injected", "a1"],
+  );
 });
 
 test("resolveMainModelIncrementalMessages filters summarized messages without clipping", () => {

@@ -4,29 +4,32 @@
   SPDX-License-Identifier: MIT
 */
 
+import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
+
 export function makeActionStateKey(item = {}, index = 0) {
   return String(
     item?.actionNodeStateId ||
       item?.nodeStateId ||
       item?.actionStateId ||
       item?.nodeBoxId ||
-      item?.dialogId ||
+      item?.dialogProcessId ||
       item?.sessionId ||
+      resolveWorkflowDialogProcessId(item) ||
       `node_box_${index + 1}`,
   ).trim();
 }
 
-export function makeRuntimeStep({ item = {}, index = 0, workflowPayload, nodeRunByDialogId, resolveStepStatus }) {
-  const dialogId = String(item?.dialogId || "").trim();
-  const runItem = dialogId ? nodeRunByDialogId.value.get(dialogId) : null;
-  const stepId = String(item?.stepId || runItem?.stepId || dialogId || item?.sessionId || `step_${index + 1}`).trim();
+export function makeRuntimeStep({ item = {}, index = 0, workflowPayload, nodeRunByDialogProcessId, resolveStepStatus }) {
+  const dialogProcessId = resolveWorkflowDialogProcessId(item);
+  const runItem = dialogProcessId ? nodeRunByDialogProcessId.value.get(dialogProcessId) : null;
+  const stepId = String(item?.stepId || runItem?.stepId || dialogProcessId || item?.sessionId || `step_${index + 1}`).trim();
   const stepIndex = Number.isFinite(Number(item?.stepIndex ?? runItem?.stepIndex))
     ? Number(item?.stepIndex ?? runItem?.stepIndex)
     : index;
   const merged = {
     ...runItem,
     ...item,
-    dialogId,
+    dialogProcessId,
     stepId,
     stepIndex,
     rootSessionId: String(

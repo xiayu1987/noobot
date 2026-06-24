@@ -20,7 +20,7 @@ export function useWorkflowMessageCardState(props, emit, translate) {
   const selectedNodeRawMessages = ref([]);
   const selectedNodeSessionSummary = ref(null);
   const selectedNodeSessionId = ref("");
-  const selectedGraphDialogId = ref("");
+  const selectedGraphDialogProcessId = ref("");
   const semanticPreviewExpanded = ref(false);
   const applyingWorkflowDrawerHistory = ref(false);
 
@@ -67,7 +67,7 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     openNodeSession,
     openWorkflowNodePanel,
     handleRuntimeStepClick,
-    handleSelectedDialogUpdate,
+    handleSelectedDialogProcessUpdate,
   } = useWorkflowNodeSessionViewer({
     props,
     emit,
@@ -84,7 +84,7 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     selectedNodeRawMessages,
     selectedNodeSessionSummary,
     selectedNodeSessionId,
-    selectedGraphDialogId,
+    selectedGraphDialogProcessId,
     applyingWorkflowDrawerHistory,
   });
 
@@ -99,7 +99,7 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     selectedNodeRawMessages,
     selectedNodeSessionSummary,
     selectedNodeSessionId,
-    selectedGraphDialogId,
+    selectedGraphDialogProcessId,
     semanticPreviewExpanded,
     workflowMeta,
     workflowPayload,
@@ -126,6 +126,6 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     openNodeSession,
     openWorkflowNodePanel,
     handleRuntimeStepClick,
-    handleSelectedDialogUpdate,
+    handleSelectedDialogProcessUpdate,
   };
 }

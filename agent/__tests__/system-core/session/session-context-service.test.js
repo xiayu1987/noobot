@@ -14,7 +14,7 @@ function createSessionContextService(messages = [], { globalConfig = {} } = {}) 
   });
 }
 
-test("getRecentSessionMessages drops orphan tool results after window slicing", async () => {
+test("getRecentSessionMessages returns only complete history rounds", async () => {
   const messages = [
     {
       role: "assistant",
@@ -43,12 +43,10 @@ test("getRecentSessionMessages drops orphan tool results after window slicing", 
     limit: 2,
   });
 
-  assert.equal(result.length, 1);
-  assert.equal(result[0]?.role, "user");
-  assert.equal(result.some((messageItem) => messageItem?.role === "tool"), false);
+  assert.deepEqual(result, []);
 });
 
-test("getRecentSessionMessages keeps a recent user anchor when window has no user", async () => {
+test("getRecentSessionMessages keeps complete round content without trailing tool after latest assistant", async () => {
   const messages = [
     { role: "user", content: "please continue" },
     { role: "assistant", content: "" },
@@ -70,15 +68,9 @@ test("getRecentSessionMessages keeps a recent user anchor when window has no use
     limit: 2,
   });
 
-  assert.equal(result[0]?.role, "user");
-  assert.equal(
-    result.some(
-      (messageItem) =>
-        messageItem?.role === "user" &&
-        messageItem?.phaseSummaryMemory === true &&
-        String(messageItem?.original_tool_call_id || "") === "call_1",
-    ),
-    true,
+  assert.deepEqual(
+    result.map((messageItem) => messageItem.role),
+    ["user", "assistant", "assistant"],
   );
 });
 
@@ -101,7 +93,7 @@ test("getRecentSessionMessages respects summarized filter before window normaliz
   );
 });
 
-test("getRecentSessionMessages filters old dialog injected messages before recent window", async () => {
+test("getRecentSessionMessages keeps recent complete rounds and all unsummarized injected messages", async () => {
   const messages = [
     { role: "user", content: "first real question", dialogProcessId: "dlg_1" },
     {
@@ -109,34 +101,45 @@ test("getRecentSessionMessages filters old dialog injected messages before recen
       content: "[Relay from plugin/planning]\nold plan 1",
       dialogProcessId: "dlg_1",
     },
+    { role: "assistant", content: "first real answer", dialogProcessId: "dlg_1" },
+    { role: "user", content: "second real question", dialogProcessId: "dlg_2" },
     {
       role: "user",
       content: "[Relay from plugin/planning_revision]\nold plan 2",
       dialogProcessId: "dlg_2",
     },
+    {
+      role: "user",
+      content: "[Relay from plugin/planning_revision]\nlatest plan 2",
+      dialogProcessId: "dlg_2",
+    },
     { role: "assistant", content: "second real answer", dialogProcessId: "dlg_2" },
+    { role: "user", content: "third real question", dialogProcessId: "dlg_3" },
     {
       role: "user",
       content: "[Relay from plugin/planning]\ncurrent plan",
       dialogProcessId: "dlg_3",
     },
-    { role: "user", content: "third real question", dialogProcessId: "dlg_3" },
+    { role: "assistant", content: "third real answer", dialogProcessId: "dlg_3" },
   ];
   const service = createSessionContextService(messages);
   const result = await service.getRecentSessionMessages({
     userId: "u1",
     sessionId: "s1",
-    limit: 4,
+    limit: 2,
     currentDialogProcessId: "dlg_3",
   });
 
   assert.deepEqual(
     result.map((messageItem) => messageItem.content),
     [
-      "first real question",
+      "second real question",
+      "[Relay from plugin/planning_revision]\nold plan 2",
+      "[Relay from plugin/planning_revision]\nlatest plan 2",
       "second real answer",
-      "[Relay from plugin/planning]\ncurrent plan",
       "third real question",
+      "[Relay from plugin/planning]\ncurrent plan",
+      "third real answer",
     ],
   );
 });

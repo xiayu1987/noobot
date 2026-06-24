@@ -40,7 +40,7 @@ Model Node
         {
           stepId: "...",
           stepIndex: 0,
-          dialogId: "...", // 子 agent 对话ID，用于打开 session
+          dialogProcessId: "...", // 子 agent 对话流程ID，用于打开 session
           sessionId: "...",
           rootSessionId: "...",
           stepStatus: "success",
@@ -60,7 +60,12 @@ Model Node
 
 - `node-click(node)`：点击动作模型节点，仅用于打开/收起运行态检查面板后的通知
 - `step-click(step)`：点击步骤Box，用于打开子 agent session
-- `update:selectedDialogId(dialogId)`：受控选中 step dialogId 回传
+- `update:selectedDialogProcessId(dialogProcessId)`：受控选中 step dialogProcessId 回传
+
+## dialogProcessId / dialogId 收敛约定
+
+- 组件内部与新增数据优先使用 `dialogProcessId`。
+- 读取旧 workflow artifact 或旧节点数据时，内部可兼容 `dialogId`；新增对外 prop/event 不再提供 `dialogId` 命名入口。
 
 ## 扩展建议
 

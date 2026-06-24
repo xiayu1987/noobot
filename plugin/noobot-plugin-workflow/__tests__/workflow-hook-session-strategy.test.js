@@ -8,6 +8,11 @@ import assert from "node:assert/strict";
 
 import { createRegisterWorkflowHooks } from "../src/core/hooks.js";
 import { WORKFLOW_BOT_HOOK_POINTS, WORKFLOW_PLUGIN_DEFAULTS } from "../src/core/constants.js";
+import { resolveWorkflowNodeDialogProcessId } from "../src/core/dialog-process-compat.js";
+import {
+  collectWorkflowDialogProcessIds,
+  resolveWorkflowDialogProcessId,
+} from "../frontend/components/workflow-message-card/workflowDialogProcessIdCompat.js";
 
 function createMockBotHookManager() {
   const listeners = new Map();
@@ -40,6 +45,23 @@ function createMockBotHookManager() {
     },
   };
 }
+
+
+test("workflow dialog process compat helpers keep old dialog fields read-only", () => {
+  assert.equal(resolveWorkflowDialogProcessId({ dialogProcessId: "new-dialog" }), "new-dialog");
+  assert.equal(resolveWorkflowDialogProcessId({ dialogId: "legacy-dialog" }), "legacy-dialog");
+  assert.equal(resolveWorkflowDialogProcessId({ nodeDialogId: "legacy-node-dialog" }), "legacy-node-dialog");
+  assert.equal(
+    resolveWorkflowDialogProcessId({}, { dialogId: "fallback-dialog" }),
+    "fallback-dialog",
+  );
+  assert.deepEqual(
+    collectWorkflowDialogProcessIds({ dialogProcessId: "new-dialog" }, { dialogId: "legacy-dialog" }),
+    ["new-dialog", "legacy-dialog"],
+  );
+  assert.equal(resolveWorkflowNodeDialogProcessId({ nodeDialogProcessId: "new-node-dialog" }), "new-node-dialog");
+  assert.equal(resolveWorkflowNodeDialogProcessId({ nodeDialogId: "legacy-node-dialog" }), "legacy-node-dialog");
+});
 
 
 function workflowDsl(lines = []) {
@@ -328,7 +350,12 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   );
 
   assert.ok(agentResult.workflow);
-  assert.equal(agentResult.workflow?.planningDialog?.dialogId, "d1");
+  assert.equal(agentResult.workflow?.planningDialog?.dialogProcessId, "d1");
+  assert.equal(agentResult.workflow?.planningDialog?.dialogId, undefined);
+  assert.match(String(agentResult.workflow.nodeSessions[0]?.dialogProcessId || ""), /^wf_node_/);
+  assert.equal(agentResult.workflow.nodeSessions[0]?.dialogId, undefined);
+  assert.match(String(agentResult.workflow?.execution?.nodeAgentRuns?.[0]?.nodeDialogProcessId || ""), /^wf_node_/);
+  assert.equal(agentResult.workflow?.execution?.nodeAgentRuns?.[0]?.nodeDialogId, undefined);
   assert.equal(
     String(agentResult.workflow?.planningDialog?.storageFile || "").endsWith("planning.json"),
     true,

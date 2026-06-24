@@ -4,6 +4,8 @@
   SPDX-License-Identifier: MIT
 */
 
+import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
+
 export function useWorkflowNodeSessionLabels(translate) {
   function resolveStatusLabel(nodeItem = {}) {
     const status = String(nodeItem?._status || nodeItem?.status || "").trim().toLowerCase();
@@ -33,7 +35,7 @@ export function useWorkflowNodeSessionLabels(translate) {
   }
 
   function stepHasSession(stepItem = {}) {
-    return Boolean(String(stepItem?.dialogId || "").trim());
+    return Boolean(resolveWorkflowDialogProcessId(stepItem));
   }
 
   return {

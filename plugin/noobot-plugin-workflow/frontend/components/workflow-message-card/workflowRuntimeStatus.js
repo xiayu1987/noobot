@@ -11,7 +11,9 @@ export function normalizeStatus(value = "") {
   return status;
 }
 
-export function createStepStatusResolver({ nodeRunByDialogId }) {
+import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
+
+export function createStepStatusResolver({ nodeRunByDialogProcessId }) {
   return function resolveStepStatus(stepItem = {}) {
     const failure = stepItem?.stepFailure;
     if (failure && typeof failure === "object") {
@@ -23,13 +25,13 @@ export function createStepStatusResolver({ nodeRunByDialogId }) {
     const explicit = normalizeStatus(stepItem?.stepStatus || stepItem?.status || stepItem?._status || "");
     if (explicit) return explicit;
 
-    const dialogId = String(stepItem?.dialogId || "").trim();
-    const runItem = dialogId ? nodeRunByDialogId.value.get(dialogId) : null;
+    const dialogProcessId = resolveWorkflowDialogProcessId(stepItem);
+    const runItem = dialogProcessId ? nodeRunByDialogProcessId.value.get(dialogProcessId) : null;
     if (runItem?.stepFailure) return "failed";
 
     const runStatus = normalizeStatus(runItem?.stepStatus || runItem?.status || "");
     if (runStatus) return runStatus;
-    if (String(stepItem?.sessionId || "").trim() || dialogId) return "success";
+    if (String(stepItem?.sessionId || "").trim() || dialogProcessId) return "success";
     return "pending";
   };
 }

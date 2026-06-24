@@ -12,24 +12,29 @@ import {
 } from "../../../../../client/noobot-chat/src/shared/ui";
 import WorkflowGraphNode from "./WorkflowGraphNode.vue";
 import WorkflowGraphEdges from "./WorkflowGraphEdges.vue";
+import { resolveWorkflowDialogProcessId } from "../workflow-message-card/workflowDialogProcessIdCompat.js";
 
 const props = defineProps({
   nodes: { type: Array, default: () => [] },
   flowtos: { type: Array, default: () => [] },
-  selectedDialogId: { type: String, default: "" },
+  selectedDialogProcessId: { type: String, default: "" },
 });
 
-const emit = defineEmits(["node-click", "step-click", "update:selected-dialog-id"]);
+const emit = defineEmits(["node-click", "step-click", "update:selected-dialog-process-id"]);
 const { translate } = useWorkflowLocale();
 
 const hostRef = ref(null);
 const resizeObserverRef = ref(null);
 const hostWidth = ref(0);
 const zoomScale = ref(1);
-const innerSelectedDialogId = ref("");
+const innerSelectedDialogProcessId = ref("");
 
 const DESKTOP_NODE_WIDTH = 192;
 const COMPACT_MIN_NODE_WIDTH = 148;
+
+function resolveDialogProcessId(item = {}) {
+  return resolveWorkflowDialogProcessId(item);
+}
 
 const isCompactGraph = computed(() => Number(hostWidth.value || 0) > 0 && Number(hostWidth.value || 0) <= 480);
 const nodeHeight = computed(() => (isCompactGraph.value ? 54 : 58));
@@ -56,30 +61,31 @@ const normalizedNodes = computed(() => {
   const baseNodes = (Array.isArray(props.nodes) ? props.nodes : []).map((nodeItem = {}, index) => {
     const status = String(nodeItem?.status || nodeItem?._status || "").trim().toLowerCase();
     const resolvedStatus = status || "pending";
-    const dialogId = String(nodeItem?.dialogId || "").trim();
+    const dialogProcessId = resolveDialogProcessId(nodeItem);
     const sessionId = String(nodeItem?.sessionId || "").trim();
     const actionNodeStates = Array.isArray(nodeItem?.actionNodeStates)
       ? nodeItem.actionNodeStates
       : Array.isArray(nodeItem?.runtimeBoxes)
         ? nodeItem.runtimeBoxes
         : [];
-    const stepDialogIds = [];
+    const stepDialogProcessIds = [];
     for (const stateBox of actionNodeStates) {
       for (const stepItem of Array.isArray(stateBox?.steps) ? stateBox.steps : []) {
-        const stepDialogId = String(stepItem?.dialogId || "").trim();
-        if (stepDialogId) stepDialogIds.push(stepDialogId);
+        const stepDialogProcessId = resolveDialogProcessId(stepItem);
+        if (stepDialogProcessId) stepDialogProcessIds.push(stepDialogProcessId);
       }
     }
-    const hasSessionRef = Boolean(dialogId || sessionId || stepDialogIds.length);
+    const hasSessionRef = Boolean(dialogProcessId || sessionId || stepDialogProcessIds.length);
     return {
       ...nodeItem,
+      dialogProcessId,
       actionNodeStates,
       runtimeBoxes: actionNodeStates,
       _index: index,
       _status: resolvedStatus,
       _hasSession: hasSessionRef,
       _hasRuntimeBoxes: actionNodeStates.length > 0,
-      _stepDialogIds: stepDialogIds,
+      _stepDialogProcessIds: stepDialogProcessIds,
     };
   });
   if (!baseNodes.length) return [];
@@ -104,7 +110,7 @@ const normalizedNodes = computed(() => {
   });
 
   const startNode = {
-    dialogId: "__wf_start__",
+    dialogProcessId: "__wf_start__",
     nodeId: "__wf_start__",
     nodeName: translate("workflow.stateStart"),
     type: "state",
@@ -119,7 +125,7 @@ const normalizedNodes = computed(() => {
     _virtualBoundary: "start",
   };
   const endNode = {
-    dialogId: "__wf_end__",
+    dialogProcessId: "__wf_end__",
     nodeId: "__wf_end__",
     nodeName: translate("workflow.stateEnd"),
     type: "state",
@@ -266,7 +272,7 @@ const layoutRows = computed(() => {
       continue;
     }
     rows.push({
-      key: `serial_${String(nodeItem?.dialogId || nodeItem?.nodeId || nodeItem?._index || rows.length)}`,
+      key: `serial_${String(resolveDialogProcessId(nodeItem) || nodeItem?.nodeId || nodeItem?._index || rows.length)}`,
       nodes: [nodeItem],
     });
   }
@@ -293,7 +299,7 @@ function resolveNodeKey(nodeItem = {}) {
   return String(
     nodeItem?.nodeId ||
       nodeItem?.id ||
-      nodeItem?.dialogId ||
+      resolveDialogProcessId(nodeItem) ||
       nodeItem?.sessionId ||
       nodeItem?._index ||
       "",
@@ -308,14 +314,14 @@ function resolveRuntimeBoxes(nodeItem = {}) {
       : [];
 }
 
-function nodeContainsDialogId(nodeItem = {}, dialogId = "") {
-  const selected = String(dialogId || "").trim();
+function nodeContainsDialogProcessId(nodeItem = {}, dialogProcessId = "") {
+  const selected = String(dialogProcessId || "").trim();
   if (!selected) return false;
-  if (String(nodeItem?.dialogId || "").trim() === selected) return true;
-  if (Array.isArray(nodeItem?._stepDialogIds) && nodeItem._stepDialogIds.includes(selected)) return true;
+  if (resolveDialogProcessId(nodeItem) === selected) return true;
+  if (Array.isArray(nodeItem?._stepDialogProcessIds) && nodeItem._stepDialogProcessIds.includes(selected)) return true;
   for (const stateBox of resolveRuntimeBoxes(nodeItem)) {
     for (const stepItem of Array.isArray(stateBox?.steps) ? stateBox.steps : []) {
-      if (String(stepItem?.dialogId || "").trim() === selected) return true;
+      if (resolveDialogProcessId(stepItem) === selected) return true;
     }
   }
   return false;
@@ -355,12 +361,12 @@ const positionedNodes = computed(() => {
   return positioned;
 });
 
-const effectiveSelectedDialogId = computed(
-  () => String(props.selectedDialogId || innerSelectedDialogId.value || "").trim(),
+const effectiveSelectedDialogProcessId = computed(
+  () => String(props.selectedDialogProcessId || innerSelectedDialogProcessId.value || "").trim(),
 );
 
 const selectedNode = computed(() =>
-  positionedNodes.value.find((nodeItem) => nodeContainsDialogId(nodeItem, effectiveSelectedDialogId.value)) || null,
+  positionedNodes.value.find((nodeItem) => nodeContainsDialogProcessId(nodeItem, effectiveSelectedDialogProcessId.value)) || null,
 );
 
 const hostStyle = computed(() => ({
@@ -537,7 +543,7 @@ function zoomReset() {
 }
 
 function stepHasSession(stepItem = {}) {
-  return Boolean(String(stepItem?.dialogId || "").trim());
+  return Boolean(resolveDialogProcessId(stepItem));
 }
 
 function handleNodeClick(nodeItem = {}) {
@@ -549,10 +555,10 @@ function handleNodeClick(nodeItem = {}) {
 
 function handleStepClick(stepItem = {}) {
   if (!stepHasSession(stepItem)) return;
-  const dialogId = String(stepItem?.dialogId || "").trim();
-  if (dialogId) {
-    innerSelectedDialogId.value = dialogId;
-    emit("update:selected-dialog-id", dialogId);
+  const dialogProcessId = resolveDialogProcessId(stepItem);
+  if (dialogProcessId) {
+    innerSelectedDialogProcessId.value = dialogProcessId;
+    emit("update:selected-dialog-process-id", dialogProcessId);
   }
   emit("step-click", stepItem);
 }
@@ -580,13 +586,13 @@ function handleStepClick(stepItem = {}) {
 
         <WorkflowGraphNode
           v-for="(nodeItem, nodeIndex) in positionedNodes"
-          :key="`${String(nodeItem?.nodeId || nodeItem?.dialogId || nodeItem?.sessionId || '')}-${nodeIndex}`"
+          :key="`${String(nodeItem?.nodeId || resolveDialogProcessId(nodeItem) || nodeItem?.sessionId || '')}-${nodeIndex}`"
           :node-item="nodeItem"
           :node-index="nodeIndex"
           :style-obj="getNodeStyle(nodeItem)"
           :clickable="!nodeItem?._virtualBoundary && isActionNode(nodeItem) && nodeItem?._hasRuntimeBoxes === true"
           :boundary-type="String(nodeItem?._virtualBoundary || '')"
-          :selected="nodeContainsDialogId(nodeItem, effectiveSelectedDialogId)"
+          :selected="nodeContainsDialogProcessId(nodeItem, effectiveSelectedDialogProcessId)"
           :expanded="false"
           @click="handleNodeClick"
         />
@@ -600,7 +606,7 @@ function handleStepClick(stepItem = {}) {
             >
               <span
                 v-for="(nodeItem, colIndex) in row.nodes"
-                :key="`${String(nodeItem?.dialogId || '')}-${colIndex}`"
+                :key="`${String(resolveDialogProcessId(nodeItem))}-${colIndex}`"
                 class="workflow-minimap-node"
                 :class="resolveStatusClass(nodeItem)"
               />

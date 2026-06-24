@@ -3,8 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { BUILTIN_THRESHOLDS, mergeConfig } from "../../config/index.js";
+import { mergeConfig } from "../../config/index.js";
 import {
+  MAIN_MODEL_HISTORY_ROUND_LIMIT,
+  resolveMainModelHistoryMessages,
   resolveModelContextMessages,
 } from "../utils/context-window-normalizer.js";
 
@@ -25,10 +27,11 @@ export class SessionContextService {
         ? effectiveConfig.session
         : {};
     const configuredRecentMessageLimit = Number(sessionConfig.recentMessageLimit);
-    const recentMessageLimit =
+    const hasConfiguredRecentMessageLimit =
       Number.isFinite(configuredRecentMessageLimit) && configuredRecentMessageLimit >= 0
-        ? configuredRecentMessageLimit
-        : BUILTIN_THRESHOLDS.sessionRecentMessageLimit;
+    const recentMessageLimit = hasConfiguredRecentMessageLimit
+      ? configuredRecentMessageLimit
+      : MAIN_MODEL_HISTORY_ROUND_LIMIT;
     return {
       recentMessageLimit,
       useLastRunningTaskRange: sessionConfig.useLastRunningTaskRange === true,
@@ -52,16 +55,6 @@ export class SessionContextService {
     });
   }
 
-  _normalizeRecentWindow(messages = [], limit = BUILTIN_THRESHOLDS.sessionRecentMessageLimit, currentDialogProcessId = "") {
-    return resolveModelContextMessages({
-      sourceMessages: messages,
-      currentDialogProcessId,
-      mode: "agent",
-      useRecentWindow: true,
-      recentLimit: limit,
-    });
-  }
-
   async _getSessionTurns({ userId, sessionId }) {
     return this.sessionMessageService.getSessionTurns({ userId, sessionId });
   }
@@ -71,14 +64,16 @@ export class SessionContextService {
     sessionId,
     limit,
     userConfig = {},
-    currentDialogProcessId = "",
   }) {
     const messages = await this._getSessionTurns({ userId, sessionId });
     const resolvedLimit = Number(
-      limit || this._sessionContextConfig(userConfig).recentMessageLimit || BUILTIN_THRESHOLDS.sessionRecentMessageLimit,
+      limit || this._sessionContextConfig(userConfig).recentMessageLimit || MAIN_MODEL_HISTORY_ROUND_LIMIT,
     );
     if (resolvedLimit <= 0) return [];
-    return this._normalizeRecentWindow(messages, resolvedLimit, currentDialogProcessId);
+    return resolveMainModelHistoryMessages({
+      sourceMessages: messages,
+      historyLimit: resolvedLimit,
+    });
   }
 
   async getMessagesSinceLastRunningTask({ userId, sessionId, currentDialogProcessId = "" }) {
@@ -171,7 +166,6 @@ export class SessionContextService {
       sessionId,
       limit: sessionContextConfig.recentMessageLimit,
       userConfig,
-      currentDialogProcessId,
     });
   }
 }

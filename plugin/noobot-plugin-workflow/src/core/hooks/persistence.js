@@ -361,25 +361,25 @@ export function buildWorkflowDialogRelativeDir({
   scope = "auto",
 } = {}) {
   const sessionId = String(ctx?.sessionId || "").trim();
-  const dialogId = String(dialogProcessId || ctx?.dialogProcessId || "").trim();
-  if (!sessionId || !dialogId) return "";
+  const resolvedDialogProcessId = String(dialogProcessId || ctx?.dialogProcessId || "").trim();
+  if (!sessionId || !resolvedDialogProcessId) return "";
   const normalizedScope = String(scope || "auto").trim().toLowerCase();
   if (normalizedScope === "planning") {
-    return `runtime/workflow/planning/${sessionId}/${dialogId}`;
+    return `runtime/workflow/planning/${sessionId}/${resolvedDialogProcessId}`;
   }
   if (normalizedScope === "node") {
-    return `runtime/workflow/session/${sessionId}/${dialogId}`;
+    return `runtime/workflow/session/${sessionId}/${resolvedDialogProcessId}`;
   }
-  const isNodeDialog = dialogId.startsWith("wf_node_");
+  const isNodeDialog = resolvedDialogProcessId.startsWith("wf_node_");
   return isNodeDialog
-    ? `runtime/workflow/session/${sessionId}/${dialogId}`
-    : `runtime/workflow/planning/${sessionId}/${dialogId}`;
+    ? `runtime/workflow/session/${sessionId}/${resolvedDialogProcessId}`
+    : `runtime/workflow/planning/${sessionId}/${resolvedDialogProcessId}`;
 }
 
 export async function emitWorkflowRuntimeEvent({
   options = {},
   ctx = {},
-  dialogId = "",
+  dialogProcessId = "",
   event = "",
   level = "info",
   data = {},
@@ -387,10 +387,10 @@ export async function emitWorkflowRuntimeEvent({
   if (typeof options?.workflowEventLogger !== "function") return null;
   const userId = String(ctx?.userId || "").trim();
   if (!userId) return null;
-  const resolvedDialogId = String(dialogId || ctx?.dialogProcessId || "").trim();
+  const resolvedDialogProcessId = String(dialogProcessId || ctx?.dialogProcessId || "").trim();
   const relativeDir = buildWorkflowDialogRelativeDir({
     ctx,
-    dialogProcessId: resolvedDialogId,
+    dialogProcessId: resolvedDialogProcessId,
   });
   if (!relativeDir) return null;
   try {
@@ -403,7 +403,7 @@ export async function emitWorkflowRuntimeEvent({
         level: String(level || "info").trim(),
         event: String(event || "").trim(),
         sessionId: String(ctx?.sessionId || "").trim(),
-        dialogId: resolvedDialogId,
+        dialogProcessId: resolvedDialogProcessId,
         ...(data && typeof data === "object" ? data : {}),
       },
     });
@@ -437,7 +437,7 @@ export async function persistWorkflowPlanningDialog({
         scope: "workflow_planning",
         userId,
         sessionId: String(ctx?.sessionId || "").trim(),
-        dialogId: String(ctx?.dialogProcessId || "").trim(),
+        dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
         timestamp: new Date().toISOString(),
         sourceText,
         semanticText,

@@ -146,22 +146,24 @@ export async function getSessionThinkingDetailApi(
 }
 
 export async function getWorkflowSessionDetailApi(
-  { userId = "", sessionId = "", dialogId = "" },
+  { userId = "", sessionId = "", dialogProcessId = "" },
   { fetcher } = {},
 ) {
   const runFetch = resolveFetcher(fetcher);
+  const routeDialogProcessId = String(dialogProcessId || "").trim();
   return runFetch(
-    `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(dialogId)}`,
+    `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(routeDialogProcessId)}`,
   );
 }
 
 export async function getWorkflowSessionThinkingDetailApi(
-  { userId = "", sessionId = "", dialogId = "", dialogProcessId = "", turnScopeId = "" },
+  { userId = "", sessionId = "", dialogProcessId = "", routeDialogProcessId = "", turnScopeId = "" },
   { fetcher } = {},
 ) {
   const runFetch = resolveFetcher(fetcher);
   const queryParams = [];
   const normalizedDialogProcessId = String(dialogProcessId || "").trim();
+  const normalizedRouteDialogProcessId = String(routeDialogProcessId || normalizedDialogProcessId).trim();
   const normalizedTurnScopeId = String(turnScopeId || "").trim();
   if (normalizedDialogProcessId) {
     queryParams.push(`dialogProcessId=${encodeURIComponent(normalizedDialogProcessId)}`);
@@ -171,7 +173,7 @@ export async function getWorkflowSessionThinkingDetailApi(
   }
   const query = queryParams.length ? `?${queryParams.join("&")}` : "";
   return runFetch(
-    `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(dialogId)}/thinking-detail${query}`,
+    `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(normalizedRouteDialogProcessId)}/thinking-detail${query}`,
   );
 }
 

@@ -11,14 +11,14 @@ import {
   normalizeSessionThinkingRouteText as normalizeRouteText,
 } from "noobot-agent/session";
 
-function resolveWorkflowSessionDir({ bot = null, userId = "", sessionId = "", dialogId = "", translateText = null, locale = "" } = {}) {
+function resolveWorkflowSessionDir({ bot = null, userId = "", sessionId = "", dialogProcessId = "", translateText = null, locale = "" } = {}) {
   const workspacePath = String(bot?.getWorkspacePath?.(userId) || "").trim();
   if (!workspacePath) throw new Error(translateText?.("common.notFound", locale) || "not found");
   const workflowDir = path.resolve(
     workspacePath,
     "runtime/workflow/session",
     String(sessionId || "").trim(),
-    String(dialogId || "").trim(),
+    String(dialogProcessId || "").trim(),
   );
   const workspaceResolved = path.resolve(workspacePath);
   const workflowRelative = path.relative(workspaceResolved, workflowDir);
@@ -46,16 +46,16 @@ export function registerServiceRoutes(app, context = {}) {
   const { bot = null, translateText = null } = context;
 
   const sessionDetailPaths = [
-    "/internal/workflow/session/:userId/:sessionId/:dialogId",
-    "/api/internal/workflow/session/:userId/:sessionId/:dialogId",
+    "/internal/workflow/session/:userId/:sessionId/:dialogProcessId",
+    "/api/internal/workflow/session/:userId/:sessionId/:dialogProcessId",
   ];
   registerGet(app, sessionDetailPaths, jsonRoute(async (req, res) => {
-    const { userId, sessionId, dialogId } = req.params;
+    const { userId, sessionId, dialogProcessId } = req.params;
     const workflowDir = resolveWorkflowSessionDir({
       bot,
       userId,
       sessionId,
-      dialogId,
+      dialogProcessId,
       translateText,
       locale: req.locale,
     });
@@ -65,7 +65,7 @@ export function registerServiceRoutes(app, context = {}) {
       ok: true,
       userId: String(userId || "").trim(),
       sessionId: String(sessionId || "").trim(),
-      dialogId: String(dialogId || "").trim(),
+      dialogProcessId: String(dialogProcessId || "").trim(),
       workflowSession: {
         session,
         sessionSummary,
@@ -79,11 +79,11 @@ export function registerServiceRoutes(app, context = {}) {
   }));
 
   const thinkingDetailPaths = [
-    "/internal/workflow/session/:userId/:sessionId/:dialogId/thinking-detail",
-    "/api/internal/workflow/session/:userId/:sessionId/:dialogId/thinking-detail",
+    "/internal/workflow/session/:userId/:sessionId/:dialogProcessId/thinking-detail",
+    "/api/internal/workflow/session/:userId/:sessionId/:dialogProcessId/thinking-detail",
   ];
   registerGet(app, thinkingDetailPaths, jsonRoute(async (req, res) => {
-    const { userId, sessionId, dialogId } = req.params;
+    const { userId, sessionId, dialogProcessId: routeDialogProcessId } = req.params;
     const dialogProcessId = normalizeRouteText(req.query?.dialogProcessId);
     const turnScopeId = normalizeRouteText(req.query?.turnScopeId);
     if (!dialogProcessId && !turnScopeId) {
@@ -95,7 +95,7 @@ export function registerServiceRoutes(app, context = {}) {
       bot,
       userId,
       sessionId,
-      dialogId,
+      dialogProcessId: routeDialogProcessId,
       translateText,
       locale: req.locale,
     });
@@ -115,7 +115,7 @@ export function registerServiceRoutes(app, context = {}) {
       ok: true,
       userId: String(userId || "").trim(),
       rootSessionId: String(sessionId || "").trim(),
-      dialogId: String(dialogId || "").trim(),
+      dialogProcessId: String(routeDialogProcessId || "").trim(),
       ...detail,
     });
   }));

@@ -31,6 +31,7 @@ import {
   stripHarnessReviewAppendix,
   truncateWorkflowResultText,
 } from "../hooks/persistence.js";
+import { resolveWorkflowNodeDialogProcessId } from "../dialog-process-compat.js";
 
 function resolveWorkflowExecutionLimits(options = {}) {
   const maxTransitions = Number.isFinite(Number(options?.maxAutoTransitions))
@@ -82,7 +83,7 @@ function buildNodeAgentRunRecord({
     transition: transitions,
     step: item?.step || null,
     action: item?.effectiveAction || item?.action || null,
-    nodeDialogId: String(item?.nodeDialogId || "").trim(),
+    nodeDialogProcessId: resolveWorkflowNodeDialogProcessId(item),
     nodeSessionId: String(item?.subSession?.sessionId || "").trim(),
     nodeSessionPersistedPath: String(item?.subSession?.persisted?.outputDir || "").trim(),
     actionNodeStateId: String(item?.step?.actionNodeStateId || "").trim(),
@@ -153,7 +154,7 @@ function rememberCompletedStepResult({
     stepIndex: Number.isFinite(Number(item?.step?.stepIndex))
       ? Number(item.step.stepIndex)
       : -1,
-    nodeDialogId: String(item?.nodeDialogId || "").trim(),
+    nodeDialogProcessId: resolveWorkflowNodeDialogProcessId(item),
     nodeSessionId: String(item?.subSession?.sessionId || "").trim(),
     stepStatus: stepFailure ? "failed" : "success",
     stepFailure,
@@ -218,7 +219,7 @@ export async function runWorkflowExecution({
           step,
           action: action?.action || null,
           subSession: action?.subSession || null,
-          nodeDialogId: String(action?.nodeDialogId || "").trim(),
+          nodeDialogProcessId: resolveWorkflowNodeDialogProcessId(action),
           upstreamNodeResults,
           order: idx,
         };

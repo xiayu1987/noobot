@@ -8,6 +8,7 @@ import { createActionRuntimeBySemanticKey } from "./workflowActionRuntimeMap.js"
 import { createFlowNodes } from "./workflowFlowNodes.js";
 import { createRuntimeNodeSessions } from "./workflowRuntimeSessions.js";
 import { createStepStatusResolver } from "./workflowRuntimeStatus.js";
+import { collectWorkflowDialogProcessIds } from "./workflowDialogProcessIdCompat.js";
 
 export function useWorkflowRuntimeState(workflowPayload) {
   const nodeSessions = computed(() => {
@@ -45,26 +46,24 @@ export function useWorkflowRuntimeState(workflowPayload) {
     return map;
   });
 
-  const nodeRunByDialogId = computed(() => {
+  const nodeRunByDialogProcessId = computed(() => {
     const map = new Map();
     const runs = Array.isArray(executionMeta.value?.nodeAgentRuns)
       ? executionMeta.value.nodeAgentRuns
       : [];
     for (const runItem of runs) {
-      const dialogIds = [runItem?.nodeDialogId, runItem?.dialogId]
-        .map((value) => String(value || "").trim())
-        .filter(Boolean);
-      for (const dialogId of dialogIds) map.set(dialogId, runItem);
+      const dialogProcessIds = collectWorkflowDialogProcessIds(runItem);
+      for (const dialogProcessId of dialogProcessIds) map.set(dialogProcessId, runItem);
     }
     return map;
   });
 
-  const resolveStepStatus = createStepStatusResolver({ nodeRunByDialogId });
+  const resolveStepStatus = createStepStatusResolver({ nodeRunByDialogProcessId });
 
   const actionRuntimeBySemanticKey = createActionRuntimeBySemanticKey({
     runtimeNodeSessions,
     workflowPayload,
-    nodeRunByDialogId,
+    nodeRunByDialogProcessId,
     resolveStepStatus,
   });
 

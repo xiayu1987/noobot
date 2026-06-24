@@ -11,6 +11,7 @@ import {
   fetchWorkflowNodeSessionDetail,
   fetchWorkflowNodeThinkingDetail,
 } from "./workflowNodeSessionDetail";
+import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
 
 export function useWorkflowNodeSessionViewer({
   props,
@@ -28,7 +29,7 @@ export function useWorkflowNodeSessionViewer({
   selectedNodeRawMessages,
   selectedNodeSessionSummary,
   selectedNodeSessionId,
-  selectedGraphDialogId,
+  selectedGraphDialogProcessId,
   applyingWorkflowDrawerHistory,
 }) {
   const {
@@ -57,7 +58,7 @@ export function useWorkflowNodeSessionViewer({
       props,
       translate,
       rootSessionId: route.rootSessionId,
-      dialogId: route.dialogId,
+      routeDialogProcessId: route.dialogProcessId,
       dialogProcessId,
       turnScopeId,
     });
@@ -87,15 +88,15 @@ export function useWorkflowNodeSessionViewer({
 
   async function openNodeSession(nodeItem = {}, options = {}) {
     const { fromHistory = false } = options || {};
-    selectedGraphDialogId.value = String(nodeItem?.dialogId || "").trim();
-    const { dialogId, rootSessionId } = buildWorkflowDrawerRoute(nodeItem);
-    if (!props.userId || !rootSessionId || !dialogId) {
+    selectedGraphDialogProcessId.value = resolveWorkflowDialogProcessId(nodeItem);
+    const { dialogProcessId, rootSessionId } = buildWorkflowDrawerRoute(nodeItem);
+    if (!props.userId || !rootSessionId || !dialogProcessId) {
       ElMessage.warning(translate("workflow.nodeSessionMissing"));
       return;
     }
     viewerVisible.value = true;
     if (!fromHistory) {
-      pushWorkflowDrawerHistory({ dialogId, rootSessionId });
+      pushWorkflowDrawerHistory({ dialogProcessId, rootSessionId });
     }
     viewerLoading.value = true;
     viewerError.value = "";
@@ -106,7 +107,7 @@ export function useWorkflowNodeSessionViewer({
         props,
         translate,
         rootSessionId,
-        dialogId,
+        dialogProcessId,
       });
       applySelectedNodeSessionDetail(detail);
     } catch (error) {
@@ -120,7 +121,7 @@ export function useWorkflowNodeSessionViewer({
     selectedRuntimeNode.value = nodeItem;
     selectedRuntimeStep.value = null;
     selectedNode.value = nodeItem;
-    selectedGraphDialogId.value = "";
+    selectedGraphDialogProcessId.value = "";
     resetSelectedNodeSession();
     viewerError.value = "";
     viewerLoading.value = false;
@@ -133,8 +134,8 @@ export function useWorkflowNodeSessionViewer({
     await openNodeSession(stepItem);
   }
 
-  function handleSelectedDialogUpdate(dialogId = "") {
-    selectedGraphDialogId.value = String(dialogId || "").trim();
+  function handleSelectedDialogProcessUpdate(dialogProcessId = "") {
+    selectedGraphDialogProcessId.value = String(dialogProcessId || "").trim();
   }
 
   async function applyWorkflowDrawerRoute(route = {}) {
@@ -158,7 +159,7 @@ export function useWorkflowNodeSessionViewer({
   onMounted(() => {
     window.addEventListener("popstate", handleWorkflowDrawerPopState);
     const initialRoute = parseWorkflowDrawerRoute(history.state);
-    if (initialRoute.dialogId && initialRoute.rootSessionId) {
+    if (initialRoute.dialogProcessId && initialRoute.rootSessionId) {
       applyWorkflowDrawerRoute(initialRoute);
     }
   });
@@ -173,7 +174,7 @@ export function useWorkflowNodeSessionViewer({
       if (visible || applyingWorkflowDrawerHistory.value) return;
       selectedRuntimeNode.value = null;
       selectedRuntimeStep.value = null;
-      replaceWorkflowDrawerHistory({ dialogId: "", rootSessionId: "" });
+      replaceWorkflowDrawerHistory({ dialogProcessId: "", rootSessionId: "" });
     },
   );
 
@@ -187,6 +188,6 @@ export function useWorkflowNodeSessionViewer({
     openNodeSession,
     openWorkflowNodePanel,
     handleRuntimeStepClick,
-    handleSelectedDialogUpdate,
+    handleSelectedDialogProcessUpdate,
   };
 }

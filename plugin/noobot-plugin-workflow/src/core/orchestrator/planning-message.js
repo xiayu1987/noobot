@@ -21,7 +21,7 @@ export function createPlanningExecutionStub() {
 
 export function attachPlanningDialog(payload = {}, ctx = {}, planningPersistResult = null) {
   payload.planningDialog = {
-    dialogId: String(ctx?.dialogProcessId || "").trim(),
+    dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
     sessionId: String(ctx?.sessionId || "").trim(),
     storagePath: String(planningPersistResult?.outputDir || "").trim(),
     storageFile: String(planningPersistResult?.outputFile || "").trim(),
@@ -70,7 +70,7 @@ export async function prepareWorkflowPlanningMessage({
     ctx,
     event: "workflow_planning_message_prepared",
     data: {
-      dialogId: String(ctx?.dialogProcessId || "").trim(),
+      dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
     },
   });
 }

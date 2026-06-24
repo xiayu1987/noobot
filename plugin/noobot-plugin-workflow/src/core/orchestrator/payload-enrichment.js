@@ -10,6 +10,7 @@ import {
   resolveWorkflowAttachmentMetasFromTransferPayload,
 } from "../hooks/attachments.js";
 import { resolveSemanticNodeForPendingStep } from "../hooks/node-agent.js";
+import { resolveWorkflowNodeDialogProcessId } from "../dialog-process-compat.js";
 
 export function buildWorkflowNodeSessions({
   ctx = {},
@@ -40,7 +41,7 @@ export function buildWorkflowNodeSessions({
             ? Number(semanticNode.stateType)
             : undefined,
         rootSessionId: String(ctx?.sessionId || "").trim(),
-        dialogId: String(item?.nodeDialogId || "").trim(),
+        dialogProcessId: resolveWorkflowNodeDialogProcessId(item),
         sessionId: String(item?.nodeSessionId || "").trim(),
         transferEnvelopes: Array.isArray(item?.nodeResultTransferEnvelopes)
           ? item.nodeResultTransferEnvelopes
@@ -59,7 +60,7 @@ export function buildWorkflowNodeSessions({
     })
     .filter(
       (item) =>
-        item.dialogId ||
+        item.dialogProcessId ||
         item.sessionId ||
         item.stepId ||
         item.actionNodeStateId ||
@@ -106,7 +107,7 @@ export function enrichWorkflowPayload({
   planningPersistResult = null,
 } = {}) {
   workflowPayload.planningDialog = {
-    dialogId: String(ctx?.dialogProcessId || "").trim(),
+    dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
     sessionId: String(ctx?.sessionId || "").trim(),
     storagePath: String(planningPersistResult?.outputDir || "").trim(),
     storageFile: String(planningPersistResult?.outputFile || "").trim(),

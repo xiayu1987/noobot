@@ -27,7 +27,7 @@ const {
   viewerError,
   selectedRuntimeNode,
   selectedNodeSessionId,
-  selectedGraphDialogId,
+  selectedGraphDialogProcessId,
   semanticPreviewExpanded,
   semanticFlowtos,
   flowNodes,
@@ -47,7 +47,7 @@ const {
   openNodeSession,
   openWorkflowNodePanel,
   handleRuntimeStepClick,
-  handleSelectedDialogUpdate,
+  handleSelectedDialogProcessUpdate,
 } = useWorkflowMessageCardState(props, emit, translate);
 </script>
 
@@ -60,8 +60,8 @@ const {
     :semantic-preview="semanticPreview"
     :flow-nodes="flowNodes"
     :semantic-flowtos="semanticFlowtos"
-    :selected-graph-dialog-id="selectedGraphDialogId"
-    @update:selected-dialog-id="handleSelectedDialogUpdate"
+    :selected-graph-dialog-process-id="selectedGraphDialogProcessId"
+    @update:selected-dialog-process-id="handleSelectedDialogProcessUpdate"
     @node-click="openWorkflowNodePanel"
     @step-click="openNodeSession"
   />
@@ -74,7 +74,7 @@ const {
     :selected-node-session-id="selectedNodeSessionId"
     :selected-runtime-node="selectedRuntimeNode"
     :selected-runtime-boxes="selectedRuntimeBoxes"
-    :selected-graph-dialog-id="selectedGraphDialogId"
+    :selected-graph-dialog-process-id="selectedGraphDialogProcessId"
     :display-node-messages="displayNodeMessages"
     :node-session-all-messages="nodeSessionAllMessages"
     :selected-node-session-docs="selectedNodeSessionDocs"

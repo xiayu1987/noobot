@@ -96,6 +96,24 @@ test("model-context rules 1.2: historyMessages keeps non-system unsummarized mes
   ]);
 });
 
+test("model-context rules 1.2: historyMessages keeps legacy rounds without dialogProcessId", () => {
+  const result = resolveMainModelHistoryMessages({
+    sourceMessages: [
+      { role: "user", content: "legacy-u1" },
+      { role: "assistant", content: "legacy-a1" },
+      { role: "user", content: "legacy-u2" },
+      { role: "assistant", content: "legacy-a2" },
+    ],
+  });
+
+  assert.deepEqual(contents(result), [
+    "legacy-u1",
+    "legacy-a1",
+    "legacy-u2",
+    "legacy-a2",
+  ]);
+});
+
 test("model-context rules 1.3: incrementalMessages keeps unsummarized tool/plugin/main-flow increments in actual order without clipping", () => {
   const input = [
     { role: "user", content: "current-user", dialogProcessId: "current" },
