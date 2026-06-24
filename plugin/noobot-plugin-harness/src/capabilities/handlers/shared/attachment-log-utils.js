@@ -156,6 +156,11 @@ export function mapAttachmentRecordsToMetas(records = []) {
     relativePath: String(record?.relativePath || "").trim(),
     generatedByModel: record?.generatedByModel === true,
     generationSource: String(record?.generationSource || "").trim(),
+    attachmentOwnerType: String(record?.attachmentOwnerType || "").trim(),
+    attachmentOwner: String(record?.attachmentOwner || "").trim(),
+    ...(record?.owner && typeof record.owner === "object" && !Array.isArray(record.owner)
+      ? { owner: record.owner }
+      : {}),
   }));
 }
 

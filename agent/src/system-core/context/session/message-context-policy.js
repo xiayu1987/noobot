@@ -152,6 +152,8 @@ export function isMessageSummarized(messageItem = {}) {
   if (!messageItem || typeof messageItem !== "object") return false;
   if (messageItem?.summarized === true) return true;
   if (messageItem?.lc_kwargs?.summarized === true) return true;
+  if (messageItem?.additional_kwargs?.summarized === true) return true;
+  if (messageItem?.lc_kwargs?.additional_kwargs?.summarized === true) return true;
   return false;
 }
 

@@ -41,7 +41,10 @@ export function normalizeMessageForModelRuntime(messageItem = {}) {
     role,
     content: role === "tool" ? compactToolResultTextForModel(content) : content,
     summarized:
-      messageItem?.summarized === true || messageItem?.lc_kwargs?.summarized === true,
+      messageItem?.summarized === true ||
+      messageItem?.lc_kwargs?.summarized === true ||
+      messageItem?.additional_kwargs?.summarized === true ||
+      messageItem?.lc_kwargs?.additional_kwargs?.summarized === true,
   };
   const toolCalls = Array.isArray(messageItem?.tool_calls)
     ? messageItem.tool_calls

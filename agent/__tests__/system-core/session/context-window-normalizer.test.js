@@ -512,6 +512,26 @@ test("resolveMainModelIncrementalMessages filters summarized messages without cl
   assert.equal(result.some((item) => item.content === "m6"), false);
 });
 
+test("resolveMainModelIncrementalMessages filters summarized messages from additional kwargs", () => {
+  const result = resolveMainModelIncrementalMessages({
+    sourceMessages: [
+      { role: "user", content: "keep" },
+      { role: "assistant", content: "drop-additional", additional_kwargs: { summarized: true } },
+      {
+        role: "assistant",
+        content: "drop-lc-additional",
+        lc_kwargs: { additional_kwargs: { summarized: true } },
+      },
+      { role: "assistant", content: "keep-assistant" },
+    ],
+  });
+
+  assert.deepEqual(
+    result.map((item) => item.content),
+    ["keep", "keep-assistant"],
+  );
+});
+
 test("resolveMainModelFinalMessages composes system history incremental in order", () => {
   const result = resolveMainModelFinalMessages({
     systemMessages: [{ role: "system", content: "sys" }],
