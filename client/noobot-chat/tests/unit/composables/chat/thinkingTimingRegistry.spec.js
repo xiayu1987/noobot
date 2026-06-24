@@ -152,6 +152,9 @@ describe("thinkingTimingRegistry", () => {
   });
 
   it("keeps finished timing available for completed render instead of clearing immediately", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-22T10:00:16.000Z"));
+
     rememberThinkingStarted({
       sessionId: "session-1",
       dialogProcessId: "dialog-1",

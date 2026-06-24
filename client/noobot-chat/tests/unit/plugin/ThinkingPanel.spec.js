@@ -184,6 +184,9 @@ describe("ThinkingPanel", () => {
   });
 
   it("uses persisted finish minus start for completed elapsed time by session plus turn scope", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-22T10:00:16.000Z"));
+
     rememberThinkingStarted({
       sessionId: "session-finished",
       turnScopeId: "client-turn-finished",
