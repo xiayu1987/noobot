@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-const PLUGIN_RELAY_PATTERN = /^\[(?:Relay from plugin|Relay from agent plugin)\/([^\]]+)\]/;
+const PLUGIN_RELAY_PATTERN = /^\[(?:Relay from plugin|Relay from agent plugin|agent-plugin-relay|来自harness外部模型输出)\/([^\]]+)\]/;
 
 export function resolvePluginRelayPurposeFromContent(content = "") {
   const normalizedContent = String(content || "").trim();

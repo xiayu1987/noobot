@@ -121,6 +121,14 @@ test("toConversationMessages preserves model payload fields and attachment fallb
     {
       role: "assistant",
       content: "x",
+      dialogProcessId: "dlg_1",
+      turnScopeId: "client-turn:1",
+      summarized: false,
+      injectedMessage: true,
+      injectedBy: "harness-plugin",
+      injectedMessageType: "separate_model_relay:planning",
+      frontendUserMessage: true,
+      pluginMessage: true,
       rawModelContent: [{ type: "text", text: "raw" }],
       modelAdditionalKwargs: { k: 1 },
       modelResponseMetadata: { finish_reason: "tool_calls" },
@@ -129,6 +137,14 @@ test("toConversationMessages preserves model payload fields and attachment fallb
   ]);
   assert.equal(output.length, 1);
   assert.deepEqual(output[0].rawModelContent, [{ type: "text", text: "raw" }]);
+  assert.equal(output[0].dialogProcessId, "dlg_1");
+  assert.equal(output[0].turnScopeId, "client-turn:1");
+  assert.equal(output[0].summarized, false);
+  assert.equal(output[0].injectedMessage, true);
+  assert.equal(output[0].injectedBy, "harness-plugin");
+  assert.equal(output[0].injectedMessageType, "separate_model_relay:planning");
+  assert.equal(output[0].frontendUserMessage, true);
+  assert.equal(output[0].pluginMessage, true);
   assert.deepEqual(output[0].modelAdditionalKwargs, { k: 1 });
   assert.deepEqual(output[0].modelResponseMetadata, { finish_reason: "tool_calls" });
   assert.deepEqual(output[0].attachmentMetas, [{ attachmentId: "a1" }]);

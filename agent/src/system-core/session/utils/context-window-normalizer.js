@@ -55,12 +55,12 @@ function resolveHistoryDialogKey(messageItem = {}, index = 0) {
 
 function appendHistoryRoundMessage(roundsByDialog, key, messageItem, index) {
   const current = roundsByDialog.get(key) || {
-    firstUserIndex: -1,
+    startIndex: -1,
     lastAssistantIndex: -1,
     messages: [],
   };
-  if (current.firstUserIndex < 0 && isActualUserMessage(messageItem)) {
-    current.firstUserIndex = index;
+  if (current.startIndex < 0) {
+    current.startIndex = index;
   }
   if (
     resolveMessageRole(messageItem) === "assistant" &&
@@ -123,9 +123,9 @@ export function resolveMainModelHistoryMessages({
 
   const rounds = [];
   for (const value of roundsByDialog.values()) {
-    if (value.firstUserIndex < 0 || value.lastAssistantIndex < value.firstUserIndex) continue;
+    if (value.startIndex < 0 || value.lastAssistantIndex < value.startIndex) continue;
     rounds.push({
-      startIndex: value.firstUserIndex,
+      startIndex: value.startIndex,
       endIndex: value.lastAssistantIndex,
       messages: value.messages,
     });
