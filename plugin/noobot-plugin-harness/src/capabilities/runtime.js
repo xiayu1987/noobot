@@ -61,6 +61,58 @@ function writeMessageBlocksInPlace(
   return target;
 }
 
+function resolveMessageContent(message = {}) {
+  return String(message?.content || message?.lc_kwargs?.content || "").trim();
+}
+
+function resolveMessageMetaField(message = {}, field = "") {
+  const key = String(field || "").trim();
+  if (!key) return "";
+  return String(
+    message?.[key] ||
+      message?.additional_kwargs?.[key] ||
+      message?.lc_kwargs?.[key] ||
+      message?.lc_kwargs?.additional_kwargs?.[key] ||
+      "",
+  ).trim();
+}
+
+function isPlainUserMessage(message = {}) {
+  if (String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase() !== "user") {
+    return false;
+  }
+  const content = resolveMessageContent(message);
+  if (!content) return false;
+  if (content.startsWith("[")) return false;
+  return true;
+}
+
+function resolveCurrentUserIdentity(message = {}) {
+  if (!isPlainUserMessage(message)) return null;
+  const turnScopeId = resolveMessageMetaField(message, "turnScopeId");
+  if (turnScopeId) return { kind: "turnScopeId", value: turnScopeId };
+  const dialogProcessId = resolveMessageMetaField(message, "dialogProcessId");
+  if (dialogProcessId) return { kind: "dialogProcessId", value: dialogProcessId };
+  const content = resolveMessageContent(message);
+  return content ? { kind: "content", value: content } : null;
+}
+
+function filterCurrentUserResidueFromHistory(history = [], incremental = []) {
+  const currentIdentities = new Set(
+    normalizeBlockList(incremental)
+      .map((message) => resolveCurrentUserIdentity(message))
+      .filter(Boolean)
+      .map((identity) => `${identity.kind}:${identity.value}`),
+  );
+  if (!currentIdentities.size) return history;
+  return normalizeBlockList(history).filter((message) => {
+    if (!isPlainUserMessage(message)) return true;
+    const identity = resolveCurrentUserIdentity(message);
+    if (!identity) return true;
+    return !currentIdentities.has(`${identity.kind}:${identity.value}`);
+  });
+}
+
 function applyMessageBlocksForBeforeLlmCall(point = "", ctx = {}, meta = {}) {
   if (String(point || "").trim().toLowerCase() !== "before_llm_call") return;
   const runtime =
@@ -90,7 +142,8 @@ function applyMessageBlocksForBeforeLlmCall(point = "", ctx = {}, meta = {}) {
     messages: blocks.incremental,
     ctx,
   });
-  const composed = [...system, ...history, ...incremental];
+  const effectiveHistory = filterCurrentUserResidueFromHistory(history, incremental);
+  const composed = [...system, ...effectiveHistory, ...incremental];
   const target = Array.isArray(ctx?.messages) ? ctx.messages : [];
   target.splice(0, target.length, ...composed);
   ctx.messages = target;
@@ -98,7 +151,7 @@ function applyMessageBlocksForBeforeLlmCall(point = "", ctx = {}, meta = {}) {
   // this object is shared with loopState.messageBlocks; replacing it would make
   // later hook turns fall back to stale blocks and lose the re-computable source
   // accumulated by final compaction.
-  writeMessageBlocksInPlace(ctx, { system, history, incremental });
+  writeMessageBlocksInPlace(ctx, { system, history: effectiveHistory, incremental });
   if (runtime) runtime.__harnessMessageBlocksApplied = true;
 }
 

@@ -279,12 +279,13 @@ export function shouldKeepForModelContext(messageItem = {}) {
   return !isMessageSummarized(messageItem);
 }
 
-export function filterForModelContext(messages = []) {
-  const source = filterLatestInjectedMessagesByType(
-    (Array.isArray(messages) ? messages : []).filter((messageItem) =>
-      shouldKeepForModelContext(messageItem),
-    ),
+export function filterForModelContext(messages = [], { keepLatestInjectedOnly = false } = {}) {
+  const keptMessages = (Array.isArray(messages) ? messages : []).filter((messageItem) =>
+    shouldKeepForModelContext(messageItem),
   );
+  const source = keepLatestInjectedOnly
+    ? filterLatestInjectedMessagesByType(keptMessages)
+    : keptMessages;
   const assistantCallIds = new Set();
   const toolResultIds = new Set();
 

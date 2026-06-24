@@ -20,8 +20,14 @@ test("buildContextMessages drops orphan tool results without matching assistant 
           system: [],
           history: [
             {
+              role: "user",
+              content: "q-1",
+              dialogProcessId: "dlg-tool",
+            },
+            {
               role: "assistant",
               content: "",
+              dialogProcessId: "dlg-tool",
               tool_calls: [
                 {
                   id: "call_ok_1",
@@ -36,11 +42,18 @@ test("buildContextMessages drops orphan tool results without matching assistant 
               role: "tool",
               content: "{\"ok\":true}",
               tool_call_id: "call_ok_1",
+              dialogProcessId: "dlg-tool",
             },
             {
               role: "tool",
               content: "{\"ok\":true}",
               tool_call_id: "call_orphan_1",
+              dialogProcessId: "dlg-tool",
+            },
+            {
+              role: "assistant",
+              content: "final",
+              dialogProcessId: "dlg-tool",
             },
           ],
         },
@@ -68,9 +81,21 @@ test("buildContextMessages converts orphan task_summary tool result to user summ
           system: [],
           history: [
             {
+              role: "user",
+              content: "q-summary",
+              dialogProcessId: "dlg-summary",
+            },
+            {
               role: "tool",
               content: "{\"toolName\":\"task_summary\",\"ok\":true,\"phaseSummary\":\"孤立小结内容\"}",
               tool_call_id: "call_orphan_summary",
+              dialogProcessId: "dlg-summary",
+              turnScopeId: "turn-summary",
+            },
+            {
+              role: "assistant",
+              content: "done",
+              dialogProcessId: "dlg-summary",
             },
           ],
         },
@@ -80,7 +105,9 @@ test("buildContextMessages converts orphan task_summary tool result to user summ
   );
 
   assert.equal(messages.some((item) => item instanceof ToolMessage), false);
-  const humanMessage = messages.find((item) => item instanceof HumanMessage);
+  const humanMessage = messages.find(
+    (item) => item instanceof HumanMessage && String(item.content || "").includes("[阶段小结]"),
+  );
   assert.ok(humanMessage);
   assert.equal(String(humanMessage.content || "").includes("[阶段小结]"), true);
   assert.equal(String(humanMessage.content || "").includes("孤立小结内容"), true);
@@ -103,6 +130,11 @@ test("buildContextMessages filters injected messages from non-current dialog", (
           system: [],
           history: [
             {
+              role: "user",
+              content: "当前问题",
+              dialogProcessId: "dlg_current",
+            },
+            {
               role: "assistant",
               content: "当前对话注入",
               injectedMessage: true,
@@ -123,15 +155,23 @@ test("buildContextMessages filters injected messages from non-current dialog", (
     { currentUserMessage: "" },
   );
 
-  assert.equal(messages.length, 1);
-  assert.equal(messages[0]?.content, "当前对话注入");
+  assert.equal(messages.some((item) => item?.content === "当前对话注入"), true);
+  assert.equal(messages.some((item) => item?.content === "旧对话注入"), false);
 });
 
-test("buildContextMessages applies main model recent window by default", () => {
-  const history = Array.from({ length: 20 }, (_, index) => ({
-    role: "assistant",
-    content: `m-${index + 1}`,
-  }));
+test("buildContextMessages applies main model recent round window by default", () => {
+  const history = Array.from({ length: 5 }, (_, index) => [
+    {
+      role: "user",
+      content: `u-${index + 1}`,
+      dialogProcessId: `dlg-${index + 1}`,
+    },
+    {
+      role: "assistant",
+      content: `a-${index + 1}`,
+      dialogProcessId: `dlg-${index + 1}`,
+    },
+  ]).flat();
   const messages = buildContextMessages(
     {
       execution: {
@@ -149,16 +189,25 @@ test("buildContextMessages applies main model recent window by default", () => {
     { currentUserMessage: "" },
   );
 
-  assert.equal(messages.length, 15);
-  assert.equal(messages[0]?.content, "m-6");
-  assert.equal(messages[messages.length - 1]?.content, "m-20");
+  assert.deepEqual(
+    messages.map((item) => item?.content),
+    ["u-3", "a-3", "u-4", "a-4", "u-5", "a-5"],
+  );
 });
 
-test("buildContextMessages can disable main model recent window via context config", () => {
-  const history = Array.from({ length: 20 }, (_, index) => ({
-    role: "assistant",
-    content: `m-${index + 1}`,
-  }));
+test("buildContextMessages ignores legacy main model message-count window config", () => {
+  const history = Array.from({ length: 5 }, (_, index) => [
+    {
+      role: "user",
+      content: `u-${index + 1}`,
+      dialogProcessId: `dlg-${index + 1}`,
+    },
+    {
+      role: "assistant",
+      content: `a-${index + 1}`,
+      dialogProcessId: `dlg-${index + 1}`,
+    },
+  ]).flat();
   const messages = buildContextMessages(
     {
       execution: {
@@ -183,16 +232,25 @@ test("buildContextMessages can disable main model recent window via context conf
     { currentUserMessage: "" },
   );
 
-  assert.equal(messages.length, 20);
-  assert.equal(messages[0]?.content, "m-1");
-  assert.equal(messages[messages.length - 1]?.content, "m-20");
+  assert.deepEqual(
+    messages.map((item) => item?.content),
+    ["u-3", "a-3", "u-4", "a-4", "u-5", "a-5"],
+  );
 });
 
-test("buildContextMessages uses plugin history recent limit when harness plugin is enabled", () => {
-  const history = Array.from({ length: 30 }, (_, index) => ({
-    role: "assistant",
-    content: `m-${index + 1}`,
-  }));
+test("buildContextMessages keeps harness plugin history aligned with main recent rounds", () => {
+  const history = Array.from({ length: 5 }, (_, index) => [
+    {
+      role: "user",
+      content: `u-${index + 1}`,
+      dialogProcessId: `dlg-${index + 1}`,
+    },
+    {
+      role: "assistant",
+      content: `a-${index + 1}`,
+      dialogProcessId: `dlg-${index + 1}`,
+    },
+  ]).flat();
   const messages = buildContextMessages(
     {
       execution: {
@@ -220,9 +278,10 @@ test("buildContextMessages uses plugin history recent limit when harness plugin 
     { currentUserMessage: "" },
   );
 
-  assert.equal(messages.length, 20);
-  assert.equal(messages[0]?.content, "m-11");
-  assert.equal(messages[messages.length - 1]?.content, "m-30");
+  assert.deepEqual(
+    messages.map((item) => item?.content),
+    ["u-3", "a-3", "u-4", "a-4", "u-5", "a-5"],
+  );
 });
 
 test("buildContextMessageBlocks splits system/history/incremental and preserves concat order", () => {
@@ -242,7 +301,10 @@ test("buildContextMessageBlocks splits system/history/incremental and preserves 
       payload: {
         messages: {
           system: ["sys-1"],
-          history: [{ role: "assistant", content: "h-1" }],
+          history: [
+            { role: "user", content: "h-u", dialogProcessId: "dlg-history" },
+            { role: "assistant", content: "h-1", dialogProcessId: "dlg-history" },
+          ],
         },
       },
     },
@@ -253,10 +315,207 @@ test("buildContextMessageBlocks splits system/history/incremental and preserves 
   assert.equal(Array.isArray(blocks.history), true);
   assert.equal(Array.isArray(blocks.incremental), true);
   assert.equal(blocks.system.length, 1);
-  assert.equal(blocks.history.length, 1);
+  assert.equal(blocks.history.length, 2);
   assert.equal(blocks.incremental.length, 2);
-  assert.equal(blocks.messages.length, 4);
+  assert.equal(blocks.messages.length, 5);
   assert.equal(blocks.messages[0]?.content, "sys-1");
-  assert.equal(blocks.messages[1]?.content, "h-1");
-  assert.equal(blocks.messages[2]?.content, "u-1");
+  assert.equal(blocks.messages[1]?.content, "h-u");
+  assert.equal(blocks.messages[2]?.content, "h-1");
+  assert.equal(blocks.messages[3]?.content, "u-1");
+});
+
+test("buildContextMessageBlocks removes current turn user residue from history", () => {
+  const blocks = buildContextMessageBlocks(
+    {
+      execution: {
+        controllers: {
+          runtime: {
+            userId: "u1",
+            systemRuntime: {
+              sessionId: "s1",
+              dialogProcessId: "dlg-current",
+              turnScopeId: "client-turn:mqrt1icf:lxcfigpr",
+            },
+          },
+        },
+      },
+      payload: {
+        messages: {
+          system: [],
+          history: [
+            {
+              role: "user",
+              content: "上一轮问题",
+              dialogProcessId: "dlg-old",
+              turnScopeId: "client-turn:old",
+            },
+            {
+              role: "assistant",
+              content: "上一轮回答",
+              dialogProcessId: "dlg-old",
+              turnScopeId: "client-turn:old",
+            },
+            {
+              role: "user",
+              content: "全仓回归测试",
+              dialogProcessId: "dlg-resend-stale",
+              turnScopeId: "client-turn:mqrt1icf:lxcfigpr",
+            },
+          ],
+        },
+      },
+    },
+    { currentUserMessage: "全仓回归测试" },
+  );
+
+  const visibleContents = blocks.messages
+    .map((message) => message?.content)
+    .filter((content) => typeof content === "string");
+
+  assert.equal(
+    visibleContents.filter((content) => content === "全仓回归测试").length,
+    1,
+  );
+  assert.equal(blocks.history.length, 2);
+  assert.equal(blocks.incremental[0]?.content, "全仓回归测试");
+  assert.equal(blocks.incremental[0]?.additional_kwargs?.frontendUserMessage, true);
+  assert.equal(
+    blocks.incremental[0]?.additional_kwargs?.turnScopeId,
+    "client-turn:mqrt1icf:lxcfigpr",
+  );
+  assert.equal(blocks.incremental[0]?.additional_kwargs?.dialogProcessId, "dlg-current");
+  assert.equal(
+    blocks.incremental[1]?.additional_kwargs?.noobotInternalMessageType,
+    "user_meta",
+  );
+  assert.equal(
+    blocks.incremental[1]?.additional_kwargs?.turnScopeId,
+    "client-turn:mqrt1icf:lxcfigpr",
+  );
+});
+
+test("buildContextMessageBlocks does not duplicate frontend current user already in incremental payload", () => {
+  const blocks = buildContextMessageBlocks(
+    {
+      execution: {
+        controllers: {
+          runtime: {
+            userId: "u1",
+            systemRuntime: {
+              sessionId: "s1",
+              dialogProcessId: "dlg-current",
+              turnScopeId: "client-turn:current",
+            },
+          },
+        },
+      },
+      payload: {
+        messages: {
+          system: [],
+          history: [
+            {
+              role: "user",
+              content: "上一轮",
+              dialogProcessId: "dlg-old",
+              turnScopeId: "client-turn:old",
+            },
+            {
+              role: "assistant",
+              content: "上一轮回答",
+              dialogProcessId: "dlg-old",
+              turnScopeId: "client-turn:old",
+            },
+          ],
+          incremental: [
+            {
+              role: "user",
+              content: "全仓回归测试",
+              frontendUserMessage: true,
+              dialogProcessId: "dlg-current",
+              turnScopeId: "client-turn:current",
+            },
+          ],
+        },
+      },
+    },
+    { currentUserMessage: "全仓回归测试" },
+  );
+
+  const visibleContents = blocks.messages
+    .map((message) => message?.content)
+    .filter((content) => typeof content === "string");
+
+  assert.equal(
+    visibleContents.filter((content) => content === "全仓回归测试").length,
+    1,
+  );
+  assert.equal(blocks.incremental[0]?.content, "全仓回归测试");
+  assert.equal(blocks.incremental[0]?.additional_kwargs?.frontendUserMessage, true);
+  assert.equal(blocks.incremental[0]?.additional_kwargs?.turnScopeId, "client-turn:current");
+  assert.equal(
+    blocks.incremental[1]?.additional_kwargs?.noobotInternalMessageType,
+    "user_meta",
+  );
+});
+
+test("buildContextMessageBlocks removes same-text current user from history rounds", () => {
+  const blocks = buildContextMessageBlocks(
+    {
+      execution: {
+        controllers: {
+          runtime: {
+            userId: "u1",
+            systemRuntime: {
+              sessionId: "s1",
+              dialogProcessId: "dlg-current",
+              turnScopeId: "client-turn:current",
+            },
+          },
+        },
+      },
+      payload: {
+        messages: {
+          system: [],
+          history: [
+            {
+              role: "user",
+              content: "全仓回归测试",
+              dialogProcessId: "dlg-old-same-text",
+              turnScopeId: "client-turn:old-same-text",
+            },
+            {
+              role: "assistant",
+              content: "旧同文本回答",
+              dialogProcessId: "dlg-old-same-text",
+              turnScopeId: "client-turn:old-same-text",
+            },
+            {
+              role: "user",
+              content: "项目中 不光工作流插件  其他 的 dialogId  都收敛完了吗",
+              dialogProcessId: "dlg-old-other",
+              turnScopeId: "client-turn:old-other",
+            },
+            {
+              role: "assistant",
+              content: "旧不同文本回答",
+              dialogProcessId: "dlg-old-other",
+              turnScopeId: "client-turn:old-other",
+            },
+          ],
+        },
+      },
+    },
+    { currentUserMessage: "全仓回归测试" },
+  );
+
+  const visibleContents = blocks.messages
+    .map((message) => message?.content)
+    .filter((content) => typeof content === "string");
+
+  assert.equal(
+    visibleContents.filter((content) => content === "全仓回归测试").length,
+    1,
+  );
+  assert.equal(visibleContents.includes("旧同文本回答"), false);
+  assert.equal(visibleContents.includes("旧不同文本回答"), true);
 });

@@ -144,6 +144,7 @@ export class SessionExecutionRunner {
     abortSignal = null,
     userInteractionBridge = null,
     runConfig = {},
+    turnScopeId = "",
     parentAsyncResultContainer = null,
   }) {
     let resolvedParentAsyncResultContainer = parentAsyncResultContainer;
@@ -173,8 +174,6 @@ export class SessionExecutionRunner {
         parentSessionId,
         parentDialogProcessId,
       });
-      const resolvedTurnScopeId = String(resolvedRunConfig?.turnScopeId || "").trim();
-
       const {
         usedSessionId,
         dialogProcessId,
@@ -190,8 +189,15 @@ export class SessionExecutionRunner {
         caller,
         eventListener,
       });
+      const normalizedRequestTurnScopeId = String(turnScopeId || runConfig?.turnScopeId || "").trim();
+      const requestRunConfig = {
+        ...(runConfig && typeof runConfig === "object" && !Array.isArray(runConfig)
+          ? runConfig
+          : {}),
+        ...(normalizedRequestTurnScopeId ? { turnScopeId: normalizedRequestTurnScopeId } : {}),
+      };
       const scenarioResolvedRunConfig = this.resolveScenarioRunConfig(
-        runConfig,
+        requestRunConfig,
         userConfig,
       );
       resolvedRunConfig =
@@ -202,6 +208,7 @@ export class SessionExecutionRunner {
               userConfig,
             })
           : scenarioResolvedRunConfig;
+      const resolvedTurnScopeId = String(resolvedRunConfig?.turnScopeId || "").trim();
       if (
         !String(resolvedRunConfig?.runtimeModel || "").trim() &&
         !readSelectedModelValue(

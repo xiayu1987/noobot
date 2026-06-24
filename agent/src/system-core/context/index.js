@@ -318,6 +318,7 @@ export class ContextBuilder {
       sessionId: resolvedSessionId,
       userConfig: this.userConfig,
       currentDialogProcessId: dialogProcessId,
+      currentTurnScopeId: String(this.runConfig?.turnScopeId || "").trim(),
     });
   }
 

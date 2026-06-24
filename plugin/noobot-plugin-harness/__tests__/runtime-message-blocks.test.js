@@ -80,6 +80,126 @@ test("capability runtime applies message blocks only once per runtime turn conte
   );
 });
 
+test("capability runtime keeps current user once at incremental tail after block composition", async () => {
+  const runtime = createCapabilityRuntime({
+    profile: {
+      planning: { enabled: false },
+      guidance: { enabled: false },
+      acceptance: { enabled: false },
+      review: { enabled: false },
+    },
+  });
+  const ctx = {
+    messages: [],
+    messageBlocks: {
+      system: [
+        { role: "system", content: "sys" },
+        {
+          role: "system",
+          content: "<!-- noobot-harness-current-task-goal -->\n[CURRENT_TASK_GOAL]\n对 `/project` 执行全仓回归测试",
+        },
+      ],
+      history: [
+        { role: "assistant", content: "上一轮回答" },
+        {
+          role: "user",
+          content: "全仓回归测试",
+          additional_kwargs: { turnScopeId: "client-turn:current" },
+        },
+      ],
+      incremental: [
+        {
+          role: "user",
+          content: "全仓回归测试",
+          additional_kwargs: { turnScopeId: "client-turn:current", frontendUserMessage: true },
+        },
+        {
+          role: "user",
+          content: "[用户元信息]\n{}",
+          additional_kwargs: { turnScopeId: "client-turn:current" },
+        },
+        { role: "user", content: "[来自harness外部模型输出/planning]\n[CURRENT_TASK_GOAL]\n对 `/project` 执行全仓回归测试" },
+      ],
+    },
+    agentContext: {
+      execution: {
+        controllers: {
+          runtime: {},
+        },
+      },
+    },
+  };
+
+  await runtime.runHook("before_llm_call", ctx, {
+    harness: { resolveMessageBlock: ({ messages = [] } = {}) => messages },
+  });
+
+  const userTextIndexes = ctx.messages
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => item?.role === "user" && item?.content === "全仓回归测试")
+    .map(({ index }) => index);
+  const userMetaIndex = ctx.messages.findIndex((item) =>
+    String(item?.content || "").startsWith("[用户元信息]"),
+  );
+
+  assert.deepEqual(userTextIndexes, [userMetaIndex - 1]);
+});
+
+test("capability runtime does not remove same-text user from a different turn", async () => {
+  const runtime = createCapabilityRuntime({
+    profile: {
+      planning: { enabled: false },
+      guidance: { enabled: false },
+      acceptance: { enabled: false },
+      review: { enabled: false },
+    },
+  });
+  const ctx = {
+    messages: [],
+    messageBlocks: {
+      system: [{ role: "system", content: "sys" }],
+      history: [
+        {
+          role: "user",
+          content: "全仓回归测试",
+          additional_kwargs: { turnScopeId: "client-turn:old" },
+        },
+        { role: "assistant", content: "历史回答" },
+      ],
+      incremental: [
+        {
+          role: "user",
+          content: "全仓回归测试",
+          additional_kwargs: { turnScopeId: "client-turn:current", frontendUserMessage: true },
+        },
+        {
+          role: "user",
+          content: "[用户元信息]\n{}",
+          additional_kwargs: { turnScopeId: "client-turn:current" },
+        },
+      ],
+    },
+    agentContext: {
+      execution: {
+        controllers: {
+          runtime: {},
+        },
+      },
+    },
+  };
+
+  await runtime.runHook("before_llm_call", ctx, {
+    harness: { resolveMessageBlock: ({ messages = [] } = {}) => messages },
+  });
+
+  const userTextIndexes = ctx.messages
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => item?.role === "user" && item?.content === "全仓回归测试")
+    .map(({ index }) => index);
+
+  assert.deepEqual(userTextIndexes, [1, 3]);
+});
+
 
 test("capability runtime keeps later flows running when one flow fails", async () => {
   const calls = [];

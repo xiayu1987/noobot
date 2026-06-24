@@ -34,6 +34,10 @@ function createRunner({
     runtimeEventListener: eventListener,
   }),
   resolveScenarioRunConfig = (runConfig = {}) => runConfig,
+  prepareRunConfig = (payload = {}) => ({
+    ...(payload?.runConfig || {}),
+    botHookManager,
+  }),
 } = {}) {
   return new SessionExecutionRunner({
     agentRunner,
@@ -44,10 +48,7 @@ function createRunner({
       parentAsyncResultContainer,
     initializeRunSessionRuntime,
     resolveScenarioRunConfig,
-    prepareRunConfig: (payload = {}) => ({
-      ...(payload?.runConfig || {}),
-      botHookManager,
-    }),
+    prepareRunConfig,
     prepareAgentTurnExecution,
     appendSessionTurn: async () => {},
     finalizeRunSession: async () => ({ answer: "ok" }),
@@ -112,6 +113,67 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
     { role: "user", content: "history user" },
     { role: "assistant", content: "history assistant" },
   ]);
+});
+
+test("SessionExecutionRunner passes prepared turnScopeId into context building", async () => {
+  let capturedRunConfig = null;
+  let appendedTurnScopeId = null;
+  const runner = createRunner({
+    prepareRunConfig: (payload = {}) => ({
+      ...(payload?.runConfig || {}),
+      turnScopeId: "client-turn:prepared",
+    }),
+    prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
+      capturedRunConfig = buildContextPayload.runConfig;
+      const runtimeAgentContext = {
+        payload: { messages: { history: [] } },
+        execution: { controllers: { runtime: { attachmentMetas: [] } } },
+      };
+      return { agentContext: runtimeAgentContext, runtimeAgentContext };
+    },
+  });
+  runner.appendSessionTurn = async ({ turnScopeId = "" } = {}) => {
+    appendedTurnScopeId = turnScopeId;
+  };
+
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "hello",
+    runConfig: {},
+  });
+
+  assert.equal(capturedRunConfig?.turnScopeId, "client-turn:prepared");
+  assert.equal(appendedTurnScopeId, "client-turn:prepared");
+});
+
+test("SessionExecutionRunner merges top-level turnScopeId before context building", async () => {
+  let capturedRunConfig = null;
+  let appendedTurnScopeId = null;
+  const runner = createRunner({
+    prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
+      capturedRunConfig = buildContextPayload.runConfig;
+      const runtimeAgentContext = {
+        payload: { messages: { history: [] } },
+        execution: { controllers: { runtime: { attachmentMetas: [] } } },
+      };
+      return { agentContext: runtimeAgentContext, runtimeAgentContext };
+    },
+  });
+  runner.appendSessionTurn = async ({ turnScopeId = "" } = {}) => {
+    appendedTurnScopeId = turnScopeId;
+  };
+
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "hello",
+    turnScopeId: "client-turn:top-level",
+    runConfig: {},
+  });
+
+  assert.equal(capturedRunConfig?.turnScopeId, "client-turn:top-level");
+  assert.equal(appendedTurnScopeId, "client-turn:top-level");
 });
 
 test("SessionExecutionRunner emits bot error hooks", async () => {

@@ -274,6 +274,277 @@ test("createRegisterHarnessHooks compacts by message blocks and preserves fronte
   assert.deepEqual(calls, ["system", "history", "incremental", "conversation"]);
 });
 
+test("createRegisterHarnessHooks compacts message blocks without duplicate current user", async () => {
+  const handlers = new Map();
+  const hookManager = {
+    on(point, handler) {
+      handlers.set(point, handler);
+      return () => {};
+    },
+  };
+  const registerHarnessHooks = createRegisterHarnessHooks({
+    tracePoints: ["before_llm_call"],
+    flushPoints: [],
+    sessionCleanupPoints: [],
+    emitHarnessHookProgress: () => {},
+    shouldInjectPromptAtPoint: () => false,
+    traceHook: async () => ({ fsmState: "planning", fsmRejected: false }),
+  });
+
+  registerHarnessHooks({
+    hookManager,
+    options: {
+      tracePriority: 20,
+      timeoutMs: 1000,
+      planningGuidanceMode: "inject",
+      capabilityModelInvoker: null,
+      capabilityToolAllowlist: [],
+      capabilityToolAllowlistByPurpose: {},
+      acceptance: {},
+      review: {},
+      resolveMessageBlock: ({ messages }) => messages,
+    },
+    capabilityRuntime: { async runHook() {} },
+    plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
+  });
+
+  const staleCurrentUser = {
+    role: "user",
+    content: "全仓回归测试",
+    additional_kwargs: { turnScopeId: "client-turn:current" },
+  };
+  const currentUser = {
+    role: "user",
+    content: "全仓回归测试",
+    additional_kwargs: {
+      frontendUserMessage: true,
+      turnScopeId: "client-turn:current",
+    },
+  };
+  const userMeta = {
+    role: "user",
+    content: "[用户元信息]\n{}",
+    additional_kwargs: { turnScopeId: "client-turn:current" },
+  };
+  const ctx = {
+    messages: [],
+    messageBlocks: {
+      system: [{ role: "system", content: "system context" }],
+      history: [
+        { role: "assistant", content: "上一轮回答" },
+        staleCurrentUser,
+      ],
+      incremental: [
+        currentUser,
+        userMeta,
+        { role: "user", content: "[来自harness外部模型输出/planning]\nplan" },
+      ],
+    },
+  };
+
+  await handlers.get("before_llm_call")(ctx);
+
+  const exactUserIndexes = ctx.messages
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => item?.role === "user" && item?.content === "全仓回归测试")
+    .map(({ index }) => index);
+  const userMetaIndex = ctx.messages.findIndex((item) =>
+    String(item?.content || "").startsWith("[用户元信息]"),
+  );
+
+  assert.deepEqual(exactUserIndexes, [userMetaIndex - 1]);
+});
+
+test("createRegisterHarnessHooks keeps current user once after prompt injection compaction", async () => {
+  const handlers = new Map();
+  const hookManager = {
+    on(point, handler) {
+      handlers.set(point, handler);
+      return () => {};
+    },
+  };
+  const registerHarnessHooks = createRegisterHarnessHooks({
+    tracePoints: ["before_llm_call"],
+    flushPoints: [],
+    sessionCleanupPoints: [],
+    emitHarnessHookProgress: () => {},
+    shouldInjectPromptAtPoint: () => true,
+    injectPrompt: async (_point, ctx) => {
+      ctx.messages.push({
+        role: "user",
+        content: "[来自harness外部模型输出/planning]\n[CURRENT_TASK_GOAL]\n对 `/project` 执行全仓回归测试",
+      });
+    },
+    traceHook: async () => ({ fsmState: "planning", fsmRejected: false }),
+  });
+
+  registerHarnessHooks({
+    hookManager,
+    options: {
+      tracePriority: 20,
+      timeoutMs: 1000,
+      planningGuidanceMode: "inject",
+      capabilityModelInvoker: null,
+      capabilityToolAllowlist: [],
+      capabilityToolAllowlistByPurpose: {},
+      acceptance: {},
+      review: {},
+      resolveMessageBlock: ({ messages }) => messages,
+    },
+    capabilityRuntime: { async runHook() {} },
+    plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
+  });
+
+  const currentUser = {
+    role: "user",
+    content: "全仓回归测试",
+    additional_kwargs: {
+      frontendUserMessage: true,
+      turnScopeId: "client-turn:current",
+    },
+  };
+  const userMeta = {
+    role: "user",
+    content: "[用户元信息]\n{}",
+    additional_kwargs: { turnScopeId: "client-turn:current" },
+  };
+  const ctx = {
+    messages: [],
+    messageBlocks: {
+      system: [
+        { role: "system", content: "system context" },
+        {
+          role: "system",
+          content: "<!-- noobot-harness-current-task-goal -->\n[CURRENT_TASK_GOAL]\n对 `/project` 执行全仓回归测试",
+        },
+      ],
+      history: [
+        { role: "assistant", content: "上一轮回答" },
+        {
+          role: "user",
+          content: "全仓回归测试",
+          additional_kwargs: { turnScopeId: "client-turn:current" },
+        },
+      ],
+      incremental: [currentUser, userMeta],
+    },
+  };
+
+  await handlers.get("before_llm_call")(ctx);
+
+  const exactUserIndexes = ctx.messages
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => item?.role === "user" && item?.content === "全仓回归测试")
+    .map(({ index }) => index);
+  const userMetaIndex = ctx.messages.findIndex((item) =>
+    String(item?.content || "").startsWith("[用户元信息]"),
+  );
+
+  assert.deepEqual(exactUserIndexes, [userMetaIndex - 1]);
+});
+
+test("createRegisterHarnessHooks preserves unsummarized history messages between user and assistant", async () => {
+  const handlers = new Map();
+  const hookManager = {
+    on(point, handler) {
+      handlers.set(point, handler);
+      return () => {};
+    },
+  };
+  const registerHarnessHooks = createRegisterHarnessHooks({
+    tracePoints: ["before_llm_call"],
+    flushPoints: [],
+    sessionCleanupPoints: [],
+    emitHarnessHookProgress: () => {},
+    shouldInjectPromptAtPoint: () => true,
+    injectPrompt: async (_point, ctx) => {
+      ctx.messages.push({ role: "user", content: "current harness prompt" });
+    },
+    traceHook: async () => ({ fsmState: "planning", fsmRejected: false }),
+  });
+
+  registerHarnessHooks({
+    hookManager,
+    options: {
+      tracePriority: 20,
+      timeoutMs: 1000,
+      planningGuidanceMode: "inject",
+      capabilityModelInvoker: null,
+      capabilityToolAllowlist: [],
+      capabilityToolAllowlistByPurpose: {},
+      acceptance: {},
+      review: {},
+      resolveMessageBlock: ({ scope, messages = [] }) => {
+        if (scope === "conversation") {
+          return messages.filter((item = {}) =>
+            ["current user", "current harness prompt"].includes(
+              String(item.content || ""),
+            ),
+          );
+        }
+        return messages.filter((item = {}) => item.summarized !== true);
+      },
+    },
+    capabilityRuntime: { async runHook() {} },
+    plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
+  });
+
+  const ctx = {
+    messages: [],
+    messageBlocks: {
+      system: [{ role: "system", content: "system context" }],
+      history: [
+        {
+          role: "user",
+          content: "下一步",
+          summarized: false,
+          dialogProcessId: "history-dp",
+        },
+        {
+          role: "user",
+          content: "[来自harness外部模型输出/planning]\nplan",
+          summarized: false,
+          dialogProcessId: "history-dp",
+        },
+        {
+          role: "user",
+          content: "[来自harness外部模型输出/planning_followup]\nfollowup",
+          summarized: false,
+          dialogProcessId: "history-dp",
+        },
+        {
+          role: "assistant",
+          content: "assistant answer",
+          summarized: false,
+          dialogProcessId: "history-dp",
+        },
+      ],
+      incremental: [
+        {
+          role: "user",
+          content: "current user",
+          additional_kwargs: { frontendUserMessage: true },
+        },
+      ],
+    },
+  };
+
+  await handlers.get("before_llm_call")(ctx);
+
+  assert.deepEqual(
+    ctx.messages.map((item) => item.content),
+    [
+      "system context",
+      "下一步",
+      "[来自harness外部模型输出/planning]\nplan",
+      "[来自harness外部模型输出/planning_followup]\nfollowup",
+      "assistant answer",
+      "current user",
+      "current harness prompt",
+    ],
+  );
+});
+
 test("createRegisterHarnessHooks can recover current-turn harness injections after summary filtering", async () => {
   const handlers = new Map();
   const hookManager = {

@@ -197,19 +197,43 @@ function buildHumanMessagesForUser(runtime = {}, msg = {}, fallbackMeta = {}) {
       : fallbackMeta?.attachmentMetas || [],
   );
   const isFrontendUserMessage = msg?.frontendUserMessage === true;
+  const identityKwargs = buildModelMessageIdentityKwargs(msg, fallbackMeta);
   const contentMessage = isFrontendUserMessage
     ? new HumanMessage({
         content: contentText,
-        additional_kwargs: { frontendUserMessage: true },
+        additional_kwargs: {
+          ...identityKwargs,
+          frontendUserMessage: true,
+        },
       })
-    : new HumanMessage(contentText);
+    : new HumanMessage({
+        content: contentText,
+        additional_kwargs: identityKwargs,
+      });
   const metaMessage = new HumanMessage({
     content: buildUserMetaInfoContent(runtime, msg, fallbackMeta),
     additional_kwargs: {
+      ...identityKwargs,
       noobotInternalMessageType: "user_meta",
     },
   });
   return [contentMessage, metaMessage];
+}
+
+function buildModelMessageIdentityKwargs(msg = {}, fallbackMeta = {}) {
+  const dialogProcessId = String(
+    msg?.dialogProcessId || fallbackMeta?.dialogProcessId || "",
+  ).trim();
+  const parentDialogProcessId = String(
+    msg?.parentDialogProcessId || fallbackMeta?.parentDialogProcessId || "",
+  ).trim();
+  const turnScopeId = String(msg?.turnScopeId || fallbackMeta?.turnScopeId || "").trim();
+  return {
+    ...(dialogProcessId ? { dialogProcessId } : {}),
+    ...(parentDialogProcessId ? { parentDialogProcessId } : {}),
+    ...(turnScopeId ? { turnScopeId } : {}),
+    ...(msg?.frontendUserMessage === true ? { frontendUserMessage: true } : {}),
+  };
 }
 
 function normalizeUnpairedTaskSummaryToolResults(historyMessages = []) {
@@ -235,9 +259,44 @@ function normalizeUnpairedTaskSummaryToolResults(historyMessages = []) {
       role: MESSAGE_ROLE.USER,
       content: `[阶段小结]
 ${summaryText}`,
+      dialogProcessId: msg?.dialogProcessId,
+      parentDialogProcessId: msg?.parentDialogProcessId,
+      turnScopeId: msg?.turnScopeId,
       summarized: false,
       phaseSummaryMemory: true,
     };
+  });
+}
+
+function filterCurrentTurnUserMessageFromHistory(
+  historyMessages = [],
+  { turnScopeId = "", currentUserMessage = "" } = {},
+) {
+  const normalizedTurnScopeId = String(turnScopeId || "").trim();
+  const normalizedCurrentUserMessage = String(currentUserMessage || "").trim();
+  if (!normalizedTurnScopeId && !normalizedCurrentUserMessage) return historyMessages;
+  const source = Array.isArray(historyMessages) ? historyMessages : [];
+  const blockedDialogProcessIds = new Set();
+  const blockedTurnScopeIds = new Set();
+  for (const msg of source) {
+    if ((msg?.role || "") !== MESSAGE_ROLE.USER) continue;
+    const messageTurnScopeId = String(msg?.turnScopeId || "").trim();
+    const messageDialogProcessId = String(msg?.dialogProcessId || "").trim();
+    const sameTurn = normalizedTurnScopeId && messageTurnScopeId === normalizedTurnScopeId;
+    const sameCurrentText =
+      normalizedCurrentUserMessage &&
+      String(msg?.content || "").trim() === normalizedCurrentUserMessage;
+    if (!sameTurn && !sameCurrentText) continue;
+    if (messageTurnScopeId) blockedTurnScopeIds.add(messageTurnScopeId);
+    if (messageDialogProcessId) blockedDialogProcessIds.add(messageDialogProcessId);
+  }
+  if (!blockedTurnScopeIds.size && !blockedDialogProcessIds.size) return source;
+  return source.filter((msg = {}) => {
+    const messageTurnScopeId = String(msg?.turnScopeId || "").trim();
+    const messageDialogProcessId = String(msg?.dialogProcessId || "").trim();
+    if (messageTurnScopeId && blockedTurnScopeIds.has(messageTurnScopeId)) return false;
+    if (messageDialogProcessId && blockedDialogProcessIds.has(messageDialogProcessId)) return false;
+    return true;
   });
 }
 
@@ -318,7 +377,7 @@ function buildHistoryMessages({
               ? fallbackUserMeta.inputAttachmentMetas
               : fallbackUserMeta?.attachmentMetas || [],
           ),
-          additional_kwargs: msg?.frontendUserMessage === true ? { frontendUserMessage: true } : {},
+          additional_kwargs: buildModelMessageIdentityKwargs(msg, fallbackUserMeta),
         }),
       );
     }
@@ -353,7 +412,17 @@ export function buildContextMessageBlocks(
   const rawHistoryMessages = Array.isArray(agentContext?.payload?.messages?.history)
     ? agentContext.payload.messages.history
     : [];
-  const historyMessages = normalizeUnpairedTaskSummaryToolResults(rawHistoryMessages);
+  const currentTurnScopeId = String(
+    systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || "",
+  ).trim();
+  fallbackUserMeta.turnScopeId = currentTurnScopeId;
+  const historyMessages = filterCurrentTurnUserMessageFromHistory(
+    normalizeUnpairedTaskSummaryToolResults(rawHistoryMessages),
+    {
+      turnScopeId: currentTurnScopeId,
+      currentUserMessage,
+    },
+  );
   const resolvedDialogProcessId = resolveDialogProcessId({
     ctx: {
       agentContext: {
@@ -379,6 +448,7 @@ export function buildContextMessageBlocks(
       parentSessionId: fallbackUserMeta.parentSessionId,
       dialogProcessId: fallbackUserMeta.dialogProcessId,
       parentDialogProcessId: fallbackUserMeta.parentDialogProcessId,
+      turnScopeId: currentTurnScopeId,
     });
   }
 

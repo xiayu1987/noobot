@@ -140,6 +140,56 @@ function mergeUniqueByReference(primary = [], extras = []) {
   return merged;
 }
 
+function resolveMessageContent(message = {}) {
+  return String(message?.content || message?.lc_kwargs?.content || "").trim();
+}
+
+function resolveMessageMetaField(message = {}, field = "") {
+  const key = String(field || "").trim();
+  if (!key) return "";
+  return String(
+    message?.[key] ||
+      message?.additional_kwargs?.[key] ||
+      message?.lc_kwargs?.[key] ||
+      message?.lc_kwargs?.additional_kwargs?.[key] ||
+      "",
+  ).trim();
+}
+
+function isPlainUserMessage(message = {}) {
+  if (resolveMessageRole(message) !== "user") return false;
+  const content = resolveMessageContent(message);
+  if (!content) return false;
+  if (content.startsWith("[")) return false;
+  return true;
+}
+
+function resolveCurrentUserIdentity(message = {}) {
+  if (!isPlainUserMessage(message)) return null;
+  const turnScopeId = resolveMessageMetaField(message, "turnScopeId");
+  if (turnScopeId) return { kind: "turnScopeId", value: turnScopeId };
+  const dialogProcessId = resolveMessageMetaField(message, "dialogProcessId");
+  if (dialogProcessId) return { kind: "dialogProcessId", value: dialogProcessId };
+  const content = resolveMessageContent(message);
+  return content ? { kind: "content", value: content } : null;
+}
+
+function filterCurrentUserResidueFromHistory(history = [], incremental = []) {
+  const currentIdentities = new Set(
+    normalizeMessageBlockList(incremental)
+      .map((message) => resolveCurrentUserIdentity(message))
+      .filter(Boolean)
+      .map((identity) => `${identity.kind}:${identity.value}`),
+  );
+  if (!currentIdentities.size) return history;
+  return normalizeMessageBlockList(history).filter((message) => {
+    if (!isPlainUserMessage(message)) return true;
+    const identity = resolveCurrentUserIdentity(message);
+    if (!identity) return true;
+    return !currentIdentities.has(`${identity.kind}:${identity.value}`);
+  });
+}
+
 
 function readMessageBlockPolicy(message = {}) {
   const policy =
@@ -188,6 +238,16 @@ function resolveFrontendUserAnchoredIncremental(source = [], resolved = []) {
   const anchor = sourceList.find((message) => resolveIsFrontendUserMessage(message));
   if (!anchor) return resolvedList;
   if (resolvedList.includes(anchor)) return resolvedList;
+  const anchorIdentity = resolveCurrentUserIdentity(anchor);
+  if (
+    anchorIdentity &&
+    resolvedList.some((message) => {
+      const identity = resolveCurrentUserIdentity(message);
+      return identity?.kind === anchorIdentity.kind && identity?.value === anchorIdentity.value;
+    })
+  ) {
+    return resolvedList;
+  }
   return [anchor, ...resolvedList];
 }
 
@@ -251,15 +311,15 @@ function compactFinalMessageBlocks(point = "", ctx = {}, options = {}) {
   );
   const conversationResolved = options.resolveMessageBlock({
     scope: "conversation",
-    messages: [...history, ...incrementalBase],
+    messages: incrementalBase,
     ctx,
   });
-  const conversation = resolveFrontendUserAnchoredIncremental(
+  const incrementalConversation = resolveFrontendUserAnchoredIncremental(
     incrementalSource,
-    Array.isArray(conversationResolved)
-      ? conversationResolved
-      : [...history, ...incrementalBase],
+    Array.isArray(conversationResolved) ? conversationResolved : incrementalBase,
   );
+  const historyConversation = filterCurrentUserResidueFromHistory(history, incrementalConversation);
+  const conversation = [...historyConversation, ...incrementalConversation];
   return {
     system,
     history,

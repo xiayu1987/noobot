@@ -207,3 +207,38 @@ test("chat-websocket-server: explicit streaming=false should override global str
     await closeServer(server);
   }
 });
+
+test("chat-websocket-server: edit resend turnScopeId reaches runConfig", async () => {
+  let capturedPayload = null;
+  const server = await startServerWithWs({
+    runSession: async (payload) => {
+      capturedPayload = payload;
+      return {
+        sessionId: "s1",
+        dialogProcessId: "dp-1",
+        answer: "done",
+        messages: [],
+        traces: [],
+        executionLogs: [],
+      };
+    },
+  });
+  try {
+    const { port } = server.address();
+    await callChatWs({
+      port,
+      payload: {
+        userId: "u1",
+        sessionId: "s1",
+        message: "全仓回归测试",
+        turnScopeId: " client-turn:resend ",
+        config: { locale: "zh-CN", reuseExistingUserTurn: true },
+      },
+    });
+
+    assert.equal(capturedPayload?.runConfig?.turnScopeId, "client-turn:resend");
+    assert.equal(capturedPayload?.runConfig?.reuseExistingUserTurn, true);
+  } finally {
+    await closeServer(server);
+  }
+});
