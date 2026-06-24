@@ -116,13 +116,29 @@ export function mergeAttachmentMetas(existing = [], incoming = []) {
   const keyOf = (item = {}) =>
     String(item?.attachmentId || "").trim() ||
     `${String(item?.name || "").trim()}|${String(item?.path || "").trim()}`;
-  const seen = new Set(current.map((item) => keyOf(item)).filter(Boolean));
   const merged = [...current];
+  const indexByKey = new Map();
+  current.forEach((item, index) => {
+    const key = keyOf(item);
+    if (key && !indexByKey.has(key)) indexByKey.set(key, index);
+  });
   for (const item of next) {
     const key = keyOf(item);
-    if (key && seen.has(key)) continue;
+    if (key && indexByKey.has(key)) {
+      const existingIndex = indexByKey.get(key);
+      const existingItem = merged[existingIndex] || {};
+      const incomingOwnerType = String(item?.attachmentOwnerType || "").trim();
+      const existingOwnerType = String(existingItem?.attachmentOwnerType || "").trim();
+      if (incomingOwnerType === "plugin" && existingOwnerType !== "plugin") {
+        merged[existingIndex] = {
+          ...existingItem,
+          ...item,
+        };
+      }
+      continue;
+    }
     merged.push(item);
-    if (key) seen.add(key);
+    if (key) indexByKey.set(key, merged.length - 1);
   }
   return merged;
 }
