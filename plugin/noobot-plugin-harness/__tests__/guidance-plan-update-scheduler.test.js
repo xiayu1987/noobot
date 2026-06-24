@@ -12,7 +12,7 @@ import {
   resolvePendingPlanUpdate,
 } from "../src/capabilities/handlers/planning/plan-update-scheduler.js";
 
-test("scheduler priority: guidance > revision > refinement > summary", () => {
+test("scheduler priority: guidance > revision > refinement > analysis > summary", () => {
   assert.deepEqual(
     resolveNextGuidanceAction({
       flags: { summaryByCharsPrompted: true },
@@ -76,6 +76,19 @@ test("scheduler priority: guidance > revision > refinement > summary", () => {
 
   assert.deepEqual(
     resolveNextGuidanceAction({
+      pending: {
+        summary: true,
+        guidance: null,
+        analysis: true,
+        planRevision: false,
+        planRefinement: false,
+      },
+    }),
+    { action: "analysis", stage: "", reason: "pending_analysis" },
+  );
+
+  assert.deepEqual(
+    resolveNextGuidanceAction({
       pending: { summary: true, guidance: null, planRevision: false, planRefinement: false },
     }),
     { action: "summary", stage: "", reason: "pending_summary_turns" },
@@ -131,6 +144,7 @@ test("priority decision snapshot exposes chosen and blocked actions", () => {
   assert.equal(Array.isArray(decision.blockedReasonLabels), true);
   assert.equal(decision.blockedReasonLabels.length > 0, true);
   assert.equal(decision.pendingSnapshot.summary?.active, true);
+  assert.equal(decision.pendingSnapshot.analysis?.active, false);
   assert.equal(decision.pendingSnapshot.flags?.summaryByCharsPrompted, false);
   assert.equal(decision.pendingSnapshot.phaseAcceptance?.active, true);
 });

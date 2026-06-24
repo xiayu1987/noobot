@@ -17,8 +17,12 @@ const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.mes
 const MAX_PLAN_UPDATE_ATTEMPTS = WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts;
 const FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD =
   WORKFLOW_PARAMS.modeThresholds.full.guidance.summary.turnsThreshold;
+const FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD =
+  WORKFLOW_PARAMS.modeThresholds.full.guidance.analysis.turnsThreshold;
 const PROGRAMMING_SUMMARY_TRIGGER_TURNS_THRESHOLD =
   WORKFLOW_PARAMS.modeThresholds.programming.guidance.summary.turnsThreshold;
+const PROGRAMMING_ANALYSIS_TRIGGER_TURNS_THRESHOLD =
+  WORKFLOW_PARAMS.modeThresholds.programming.guidance.analysis.turnsThreshold;
 const FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD =
   WORKFLOW_PARAMS.modeThresholds.full.planning.planUpdate.triggerTurnsThreshold;
 const PROGRAMMING_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD =
@@ -29,6 +33,8 @@ const PROGRAMMING_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
   WORKFLOW_PARAMS.modeThresholds.programming.acceptance.phase.triggerTurnsThreshold;
 const TEXT_SUMMARY_TRIGGER_TURNS_THRESHOLD =
   WORKFLOW_PARAMS.modeThresholds.text.guidance.summary.turnsThreshold;
+const TEXT_ANALYSIS_TRIGGER_TURNS_THRESHOLD =
+  WORKFLOW_PARAMS.modeThresholds.text.guidance.analysis.turnsThreshold;
 const TEXT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD =
   WORKFLOW_PARAMS.modeThresholds.text.planning.planUpdate.triggerTurnsThreshold;
 const TEXT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
@@ -93,6 +99,72 @@ function createPlanningAgentContext({ counters = {}, scenario = "full" } = {}) {
     },
   };
 }
+
+test("planning schedules guidance analysis by full-mode turn threshold", async () => {
+  const handler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = createPlanningAgentContext({
+    counters: {
+      llmTurns: 0,
+      analysisTurns: FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 1,
+      planUpdateTurns: 0,
+      phaseAcceptanceTurns: 0,
+    },
+  });
+  const ctx = {
+    messages: [{ role: "user", content: "继续" }],
+    agentContext,
+  };
+
+  await handler({ capability: "planning", point: "before_llm_call", ctx, meta: {} });
+
+  assert.equal(agentContext.payload.harness.state.pending.analysis, true);
+  assert.equal(agentContext.payload.harness.state.counters.analysisTurns, 0);
+  const decisionLog = agentContext.payload.harness.logs.planning.find(
+    (item = {}) => item?.event === "workflow_priority_decision",
+  );
+  assert.equal(decisionLog?.detail?.pending?.analysis?.active, true);
+  assert.equal(decisionLog?.detail?.triggeredActions?.includes("analysis"), true);
+});
+
+test("planning schedules guidance analysis by scenario-specific turn threshold", async () => {
+  const handler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const beforeProgrammingThreshold = createPlanningAgentContext({
+    scenario: "programming",
+    counters: {
+      analysisTurns: PROGRAMMING_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 2,
+      planUpdateTurns: 0,
+      phaseAcceptanceTurns: 0,
+    },
+  });
+  await handler({
+    capability: "planning",
+    point: "before_llm_call",
+    ctx: { messages: [{ role: "user", content: "继续" }], agentContext: beforeProgrammingThreshold },
+    meta: {},
+  });
+  assert.equal(beforeProgrammingThreshold.payload.harness.state.pending.analysis, false);
+  assert.equal(
+    beforeProgrammingThreshold.payload.harness.state.counters.analysisTurns,
+    PROGRAMMING_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 1,
+  );
+
+  const atProgrammingThreshold = createPlanningAgentContext({
+    scenario: "programming",
+    counters: {
+      analysisTurns: PROGRAMMING_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 1,
+      planUpdateTurns: 0,
+      phaseAcceptanceTurns: 0,
+    },
+  });
+  await handler({
+    capability: "planning",
+    point: "before_llm_call",
+    ctx: { messages: [{ role: "user", content: "继续" }], agentContext: atProgrammingThreshold },
+    meta: {},
+  });
+  assert.equal(atProgrammingThreshold.payload.harness.state.pending.analysis, true);
+  assert.equal(atProgrammingThreshold.payload.harness.state.counters.analysisTurns, 0);
+});
 
 test("inject mode: when turn-summary and revision are both pending, revision prompt is injected first", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
@@ -174,6 +246,61 @@ test("separate_model mode: when turn-summary and revision are both pending, plan
   assert.equal(
     ctx.messages.some((msg = {}) => String(msg?.content || "").includes("harness-planning-revision")),
     false,
+  );
+});
+
+test("separate_model analysis uses aligned agent context then user request and user responsibility", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  let capturedPayload = null;
+  const agentContext = createAgentContext({
+    pending: {
+      analysis: true,
+    },
+  });
+  const meta = {
+    harness: {
+      planningGuidanceMode: "separate_model",
+      resolveModelMessages: ({ ctx: resolverCtx = {} } = {}) => [
+        ...(resolverCtx.messageBlocks?.history || []),
+        ...(resolverCtx.messageBlocks?.incremental || []),
+      ],
+      capabilityModelInvoker: async (payload = {}) => {
+        capturedPayload = payload;
+        return { content: "疑点：最近用户目标与执行焦点可能不一致。" };
+      },
+    },
+  };
+
+  const ctx = {
+    messages: [{ role: "user", content: "旧ctx消息不应覆盖messageBlocks" }],
+    messageBlocks: {
+      history: [{ role: "user", content: "历史上下文" }],
+      incremental: [{ role: "assistant", content: "当前增量" }],
+    },
+    agentContext,
+  };
+  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+
+  assert.equal(capturedPayload?.purpose, "analysis");
+  assert.deepEqual(
+    capturedPayload.messages.slice(0, 2).map((item = {}) => [item.role, item.content]),
+    [
+      ["user", "历史上下文"],
+      ["assistant", "当前增量"],
+    ],
+  );
+  const tailMessages = capturedPayload.messages.slice(-2);
+  assert.equal(tailMessages[0]?.role, "user");
+  assert.match(String(tailMessages[0]?.content || ""), /只分析疑点|doubt|suspicious/i);
+  assert.equal(tailMessages[1]?.role, "user");
+  assert.match(String(tailMessages[1]?.content || ""), /分析|analysis/i);
+  assert.equal(agentContext.payload.harness.state.pending.analysis, false);
+  assert.equal(
+    ctx.messages.some((item = {}) =>
+      String(item?.injectedMessageType || "").includes("analysis") &&
+      String(item?.content || "").includes("疑点"),
+    ),
+    true,
   );
 });
 
@@ -436,6 +563,12 @@ test("planning thresholds use full-mode defaults from modeThresholds", async () 
   assert.equal(WORKFLOW_PARAMS.guidance.summary.turnsThreshold, LLM_SUMMARY_THRESHOLD);
   assert.equal(WORKFLOW_PARAMS.modeThresholds.full.planning.summary, undefined);
   assert.equal(WORKFLOW_PARAMS.modeThresholds.full.guidance.summary.turnsThreshold, FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD);
+  assert.equal(WORKFLOW_PARAMS.modeThresholds.full.guidance.analysis.turnsThreshold, FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD);
+  assert.equal(
+    WORKFLOW_PARAMS.modeThresholds.programming.guidance.analysis.turnsThreshold,
+    PROGRAMMING_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
+  );
+  assert.equal(WORKFLOW_PARAMS.modeThresholds.text.guidance.analysis.turnsThreshold, TEXT_ANALYSIS_TRIGGER_TURNS_THRESHOLD);
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext({
     scenario: "full",

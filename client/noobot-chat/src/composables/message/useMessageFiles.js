@@ -196,11 +196,48 @@ function isHarnessPluginInjectedMessage(messageItem = {}) {
   );
 }
 
+const HARNESS_PLUGIN_ATTACHMENT_NAMES = new Set([
+  "harness-plan-text.txt",
+  "harness-acceptance-report.txt",
+]);
+
+function isKnownHarnessPluginAttachmentName(attachmentItem = {}) {
+  return HARNESS_PLUGIN_ATTACHMENT_NAMES.has(String(attachmentItem?.name || "").trim());
+}
+
 function isHarnessPluginAttachmentMeta(attachmentItem = {}) {
+  if (isKnownHarnessPluginAttachmentName(attachmentItem)) return true;
   const ownerType = String(attachmentItem?.attachmentOwnerType || "").trim();
   if (ownerType === "plugin") return true;
   const owner = String(attachmentItem?.attachmentOwner || "").trim();
   if (owner === "harness-plugin") return true;
+  const nestedOwner = isPlainObject(attachmentItem?.owner) ? attachmentItem.owner : null;
+  const attachmentOwner = isPlainObject(attachmentItem?.attachment?.owner)
+    ? attachmentItem.attachment.owner
+    : null;
+  const turnScope = isPlainObject(attachmentItem?.turnScope) ? attachmentItem.turnScope : null;
+  for (const ownerSource of [nestedOwner, attachmentOwner, turnScope]) {
+    if (!ownerSource) continue;
+    const nestedOwnerType = String(
+      ownerSource?.attachmentOwnerType ||
+        ownerSource?.ownerType ||
+        ownerSource?.type ||
+        "",
+    ).trim();
+    const nestedOwnerName = String(
+      ownerSource?.attachmentOwner ||
+        ownerSource?.owner ||
+        ownerSource?.ownerId ||
+        ownerSource?.source ||
+        ownerSource?.sourceId ||
+        ownerSource?.plugin ||
+        ownerSource?.pluginId ||
+        ownerSource?.injectedBy ||
+        "",
+    ).trim();
+    if (nestedOwnerType === "plugin") return true;
+    if (nestedOwnerName === "harness-plugin") return true;
+  }
   return false;
 }
 
@@ -233,6 +270,12 @@ function toAttachmentKey(attachmentItem = {}) {
     attachmentItem?.attachmentId ||
       `${attachmentItem?.name || ""}|${attachmentItem?.size || 0}`,
   ).trim();
+}
+
+function toAttachmentContentKey(attachmentItem = {}) {
+  const name = String(attachmentItem?.name || "").trim();
+  if (!name) return "";
+  return `${name}|${Number(attachmentItem?.size) || 0}`;
 }
 
 function sanitizeWorkspaceRelativePath(pathValue = "") {
@@ -526,20 +569,57 @@ export function useMessageFiles({
     ]);
     const dedupedWithOwnerType = [];
     const seenAttachmentKeySet = new Map();
+    const seenAttachmentContentKeySet = new Map();
     for (const attachmentItem of mergedWithOwnerType) {
       const attachmentKey = toAttachmentKey(attachmentItem);
+      const attachmentContentKey = toAttachmentContentKey(attachmentItem);
+      const attachmentKeys = [attachmentKey]
+        .map((key) => String(key || "").trim())
+        .filter(Boolean);
       if (!attachmentKey) {
         dedupedWithOwnerType.push(attachmentItem);
+        if (attachmentContentKey) {
+          seenAttachmentContentKeySet.set(attachmentContentKey, dedupedWithOwnerType.length - 1);
+        }
         continue;
       }
-      const existingIndex = seenAttachmentKeySet.get(attachmentKey);
+      let existingIndex = attachmentKeys
+        .map((key) => seenAttachmentKeySet.get(key))
+        .find((index) => index !== undefined);
+      if (existingIndex === undefined && attachmentContentKey) {
+        const sameContentIndex = seenAttachmentContentKeySet.get(attachmentContentKey);
+        const existingSameContentItem = dedupedWithOwnerType[sameContentIndex] || {};
+        if (
+          attachmentItem?.attachmentOwnerType === "plugin" ||
+          existingSameContentItem?.attachmentOwnerType === "plugin"
+        ) {
+          existingIndex = sameContentIndex;
+        }
+      }
       if (existingIndex === undefined) {
-        seenAttachmentKeySet.set(attachmentKey, dedupedWithOwnerType.length);
+        for (const key of attachmentKeys) {
+          if (!seenAttachmentKeySet.has(key)) {
+            seenAttachmentKeySet.set(key, dedupedWithOwnerType.length);
+          }
+        }
+        if (attachmentContentKey && !seenAttachmentContentKeySet.has(attachmentContentKey)) {
+          seenAttachmentContentKeySet.set(attachmentContentKey, dedupedWithOwnerType.length);
+        }
         dedupedWithOwnerType.push(attachmentItem);
         continue;
       }
-      if (attachmentItem?.attachmentOwnerType === "plugin") {
+      const existingItem = dedupedWithOwnerType[existingIndex] || {};
+      if (
+        attachmentItem?.attachmentOwnerType === "plugin" &&
+        existingItem?.attachmentOwnerType !== "plugin"
+      ) {
         dedupedWithOwnerType[existingIndex] = attachmentItem;
+        for (const key of attachmentKeys) {
+          seenAttachmentKeySet.set(key, existingIndex);
+        }
+        if (attachmentContentKey) {
+          seenAttachmentContentKeySet.set(attachmentContentKey, existingIndex);
+        }
       }
     }
     return dedupedWithOwnerType;

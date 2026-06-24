@@ -19,6 +19,7 @@ const GUIDANCE_REASON_LABEL_KEY = Object.freeze({
   [GUIDANCE_DECISION.reason.pendingGuidance]: "guidanceReasonPendingGuidance",
   [GUIDANCE_DECISION.reason.pendingRevision]: "guidanceReasonPendingRevision",
   [GUIDANCE_DECISION.reason.pendingRefinement]: "guidanceReasonPendingRefinement",
+  [GUIDANCE_DECISION.reason.pendingAnalysis]: "guidanceReasonPendingAnalysis",
   [GUIDANCE_DECISION.reason.idle]: "guidanceReasonIdle",
 });
 const GUIDANCE_BLOCKED_REASON_LABEL_KEY = Object.freeze({
@@ -67,6 +68,9 @@ function guidanceActionFromDecision(decision = {}) {
   if (action === GUIDANCE_DECISION.label.planUpdateRefinement) {
     return { action: GUIDANCE_DECISION.action.planUpdate, stage: GUIDANCE_DECISION.stage.refinement, reason: GUIDANCE_DECISION.reason.pendingRefinement };
   }
+  if (action === GUIDANCE_DECISION.label.analysis) {
+    return { action: GUIDANCE_DECISION.action.analysis, stage: "", reason: GUIDANCE_DECISION.reason.pendingAnalysis };
+  }
   if (action === GUIDANCE_DECISION.label.summaryOverflow) {
     return { action: GUIDANCE_DECISION.action.summary, stage: "", reason: GUIDANCE_DECISION.reason.pendingSummaryOverflow };
   }
@@ -99,6 +103,9 @@ function toPendingSnapshot(state = {}) {
     guidance: {
       active: Boolean(pending.guidance),
       payload: pending.guidance || null,
+    },
+    analysis: {
+      active: pending.analysis === true,
     },
     planUpdate: {
       active: planUpdate.active === true,

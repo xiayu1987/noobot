@@ -11,6 +11,7 @@ import {
   PROMPT_ENVELOPE,
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
+  buildCapabilityModelMessages,
   buildCapabilityProtocolModelMessages,
   ensureHarnessBucket,
   extractRawTextContent,
@@ -52,6 +53,8 @@ import {
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import {
   buildGuidanceSummaryPromptText,
+  buildGuidanceAnalysisPromptText,
+  getGuidanceAnalysisMarker,
   buildPreviousSummaryContextMessages,
   resolveScenarioPolicyFlagsFromContext,
   buildPostPlanUserFollowupPrompt,
@@ -334,6 +337,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
   const requestedAction = String(action || "auto").trim().toLowerCase();
   const allowSummary = requestedAction === "auto" || requestedAction === GUIDANCE_DECISION.action.summary;
   const allowGuidance = requestedAction === "auto" || requestedAction === GUIDANCE_DECISION.action.guidance;
+  const allowAnalysis = requestedAction === "auto" || requestedAction === GUIDANCE_DECISION.action.analysis;
 
   let purpose = "";
   let prompt = "";
@@ -367,6 +371,13 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     setPendingStateWithMeta(state, "guidance", null);
     state.counters.consecutiveToolFailures = 0;
     state.counters.totalToolFailures = 0;
+  } else if (allowAnalysis && state.pending.analysis === true) {
+    purpose = "analysis";
+    prompt = buildGuidanceAnalysisPromptText({
+      locale,
+      marker: getGuidanceAnalysisMarker(locale),
+    });
+    setPendingStateWithMeta(state, "analysis", false);
   } else {
     return false;
   }
@@ -400,21 +411,31 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     textMode,
     dynamicPolicyPrompt,
   });
-  const invokerMessages = buildCapabilityProtocolModelMessages({
-    locale,
-    agentMessages: modelMessagesWithChecklist,
-    protocolPrompt: prompt,
-    workflowPolicyPrompt,
-    responsibilityPrompt:
-      purpose === "summary"
-        ? buildWorkflowResponsibilityConstraintUserPrompt(locale, "summary", {
-            programmingMode,
-            textMode,
-            dynamicPolicyPrompt,
-            includeWorkflowPolicy: false,
-          })
-        : "",
-  });
+  const responsibilityPrompt =
+    purpose === "summary" || purpose === "analysis"
+      ? buildWorkflowResponsibilityConstraintUserPrompt(locale, purpose, {
+          programmingMode,
+          textMode,
+          dynamicPolicyPrompt,
+          includeWorkflowPolicy: false,
+        })
+      : "";
+  const invokerMessages = purpose === "analysis"
+    ? buildCapabilityModelMessages({
+        locale,
+        agentMessages: modelMessagesWithChecklist,
+        task: prompt,
+        taskRole: "user",
+        postTaskMessages: [responsibilityPrompt],
+        postTaskRole: "user",
+      })
+    : buildCapabilityProtocolModelMessages({
+        locale,
+        agentMessages: modelMessagesWithChecklist,
+        protocolPrompt: prompt,
+        workflowPolicyPrompt,
+        responsibilityPrompt,
+      });
 
   let response = null;
   try {
@@ -497,7 +518,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
       formatOperationDirectoryForRelay(resolveOperationDirectoryContext(ctx)),
     ].filter(Boolean).join("\n\n");
     relayAttachmentMetas = summaryDetailAttachmentMetas;
-  } else {
+  } else if (purpose !== "analysis") {
     relayAttachmentMetas = await saveCapabilityOutputAsTransferArtifacts(ctx, {
       purpose,
       content: responseText,
@@ -541,7 +562,9 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     event:
       purpose === "summary"
         ? GUIDANCE_EVENTS.summaryGeneratedBySeparateModel
-        : GUIDANCE_EVENTS.guidanceGeneratedBySeparateModel,
+        : purpose === "analysis"
+          ? GUIDANCE_EVENTS.analysisGeneratedBySeparateModel
+          : GUIDANCE_EVENTS.guidanceGeneratedBySeparateModel,
     detail: { reason: reason || undefined },
   });
   return true;

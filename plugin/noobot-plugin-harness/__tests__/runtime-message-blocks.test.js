@@ -39,6 +39,81 @@ test("capability runtime composes before_llm_call messages from message blocks v
   );
 });
 
+test("capability runtime filters summarized messages from incremental blocks by default", async () => {
+  const runtime = createCapabilityRuntime({
+    profile: {
+      planning: { enabled: false },
+      guidance: { enabled: false },
+      acceptance: { enabled: false },
+      review: { enabled: false },
+    },
+  });
+  const ctx = {
+    messages: [],
+    messageBlocks: {
+      system: [{ role: "system", content: "sys" }],
+      history: [
+        { role: "assistant", content: "summarized-history", summarized: true },
+        { role: "assistant", content: "active-history" },
+      ],
+      incremental: [
+        { role: "assistant", content: "summarized-incremental", summarized: true },
+        { role: "tool", content: "summarized-tool", lc_kwargs: { summarized: true } },
+        { role: "user", content: "current user", additional_kwargs: { frontendUserMessage: true } },
+      ],
+    },
+  };
+
+  await runtime.runHook("before_llm_call", ctx, {});
+
+  assert.deepEqual(
+    ctx.messages.map((item) => item.content),
+    ["sys", "active-history", "current user"],
+  );
+  assert.deepEqual(
+    ctx.messageBlocks.incremental.map((item) => item.content),
+    ["current user"],
+  );
+});
+
+test("capability runtime does not let resolver reintroduce summarized messages", async () => {
+  const runtime = createCapabilityRuntime({
+    profile: {
+      planning: { enabled: false },
+      guidance: { enabled: false },
+      acceptance: { enabled: false },
+      review: { enabled: false },
+    },
+  });
+  const summarized = { role: "assistant", content: "summarized-incremental", summarized: true };
+  const ctx = {
+    messages: [],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [
+        summarized,
+        { role: "user", content: "current user", additional_kwargs: { frontendUserMessage: true } },
+      ],
+    },
+  };
+
+  await runtime.runHook("before_llm_call", ctx, {
+    harness: {
+      resolveMessageBlock: ({ messages = [] } = {}) => [summarized, ...messages],
+    },
+  });
+
+  assert.deepEqual(
+    ctx.messages.map((item) => item.content),
+    ["current user"],
+  );
+  assert.deepEqual(
+    ctx.messageBlocks.incremental.map((item) => item.content),
+    ["current user"],
+  );
+});
+
 test("capability runtime applies message blocks only once per runtime turn context", async () => {
   const runtime = createCapabilityRuntime({
     profile: {

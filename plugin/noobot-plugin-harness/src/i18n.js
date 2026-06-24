@@ -145,6 +145,7 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     RESPONSIBILITY_STAGE_REVISION: "responsibilityStageRevision",
     RESPONSIBILITY_STAGE_REFINEMENT: "responsibilityStageRefinement",
     RESPONSIBILITY_STAGE_SUMMARY: "responsibilityStageSummary",
+    RESPONSIBILITY_STAGE_ANALYSIS: "responsibilityStageAnalysis",
     RESPONSIBILITY_STAGE_PHASE_ACCEPTANCE: "responsibilityStagePhaseAcceptance",
     RESPONSIBILITY_STAGE_FINAL_ACCEPTANCE: "responsibilityStageFinalAcceptance",
     RESPONSIBILITY_CONSTRAINT_TEMPLATE: "responsibilityConstraintTemplate",
@@ -204,6 +205,8 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     GUIDANCE_SUMMARY_TEXT_NEXT_ACTION_SAMPLE: "guidanceSummaryTextNextActionSample",
     GUIDANCE_SUMMARY_TEXT_NEXT_ACTION_RULES: "guidanceSummaryTextNextActionRules",
     GUIDANCE_SUMMARY_RULES: "guidanceSummaryRules",
+    GUIDANCE_ANALYSIS_PROMPT_GOAL: "guidanceAnalysisPromptGoal",
+    GUIDANCE_ANALYSIS_OUTPUT_CONSTRAINT: "guidanceAnalysisOutputConstraint",
     PREVIOUS_SUMMARY_CONTEXT_HEADER: "previousSummaryContextHeader",
     ACCEPTANCE_MAIN_PLAN_CONTEXT_HEADER: "acceptanceMainPlanContextHeader",
     PHASE_ACCEPTANCE_REQUEST_GOAL: "phaseAcceptanceRequestGoal",
@@ -337,6 +340,7 @@ const I18N_TOOL_COPY = Object.freeze({
     guidanceReasonPendingGuidance: "存在待处理的 guidance，优先执行 guidance",
     guidanceReasonPendingRevision: "存在待处理的计划修订，优先执行修订",
     guidanceReasonPendingRefinement: "存在待处理的计划细化，优先执行细化",
+    guidanceReasonPendingAnalysis: "存在待处理的分析，优先执行分析",
     guidanceReasonIdle: "无待处理 guidance 动作",
     guidanceBlockedPhaseAcceptanceDeferred: "阶段验收被 guidance 优先级规则延后",
     planningReasonIdle: "规划触发器空闲",
@@ -385,6 +389,8 @@ const I18N_TOOL_COPY = Object.freeze({
       "Pending plan revision exists; prioritize revision first",
     guidanceReasonPendingRefinement:
       "Pending plan refinement exists; prioritize refinement first",
+    guidanceReasonPendingAnalysis:
+      "Pending analysis exists; prioritize analysis first",
     guidanceReasonIdle: "No pending guidance action",
     guidanceBlockedPhaseAcceptanceDeferred:
       "Phase acceptance is deferred by guidance priority order",
@@ -493,6 +499,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     responsibilityStageRevision: "计划修正",
     responsibilityStageRefinement: "计划细化",
     responsibilityStageSummary: "小结",
+    responsibilityStageAnalysis: "分析",
     responsibilityStagePhaseAcceptance: "阶段验收",
     responsibilityStageFinalAcceptance: "总体验收",
     responsibilityConstraintTemplate:
@@ -504,6 +511,10 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     scenarioPolicyProgramming: HARNESS_DEFAULT_SCENARIO_POLICY_TEXTS[LOCALE.ZH_CN].programming,
     guidanceFailurePromptTemplate:
       "工具失败达到阈值({reason})，请分析工具失败原因，并且给予修复建议。",
+    guidanceAnalysisPromptGoal:
+      "请只分析疑点：当前上下文中的矛盾、遗漏或下一步可能踩坑的地方。",
+    guidanceAnalysisOutputConstraint:
+      "返回非常简短的提示：最多 3 条，每条一句；没有明确疑点就返回“暂无明确疑点”。不要写小结、不要重述上下文、不要输出长原因。",
     dynamicPolicyPromptProtocolInstruction:
       "可选动态策略提示词协议：\n请根据用户实际意图判断是否需要调整处理风格；只有当前任务需要比默认矩阵更合适的场景策略时，才追加且只追加一个 [{block}] 块；否则不要输出该块。scenario 必须符合用户实际意图。\n该 prompt 只描述处理事情的风格/执行策略，不要涉及具体任务本身、任务结论、计划项、文件名或业务内容；尽量简洁，并且可直接作为后续主流程、followup 与 harness 辅助调用的统一场景策略块使用。\n[{block}]\nscenario = general|text|programming\nreason = short reason\nprompt:\n<用于替换默认场景提示词的策略提示词>\n[/{block}]\n文本示例：\n[{block}]\nscenario = text\nreason = task-specific text delivery policy\nprompt:\n文本场景动态策略：复杂任务必须先分文件，按文件拆成交付单元，逐文件产出与维护，禁止把完整内容一次写进单个文件或单次回复；边查/边搜/边核对，边写/边产出，不等资料全部收集完才开始产出；建议每轮推进一个可交付单元，如文件、章节、表格、摘要、清单、对比或阶段稿，并标明来源、假设或待核对项；外部文本到手先保真消费并保留来源；每批检查事实、来源和格式。\n[/{block}]\n编程示例：\n[{block}]\nscenario = programming\nreason = task-specific coding verification policy\nprompt:\n编程场景动态策略：先读取相关代码、配置、测试和上下文，快速定位问题与影响范围；优先复用现有结构、方法、字段、约定和测试入口，避免绕开既有设计另起通道；面对复杂任务时，以连续多个最小切片推进任务，每个切片都应可逆、可验证、能靠近完成，不做临时补丁式绕过，也不只做一个小改就停下；验证是完成条件，优先运行相关测试、lint、类型检查或构建，失败先按反馈修正并重试；最终说明改动文件与验证结果。\n[/{block}]",
     acceptanceMainPlanContextHeader: "计划清单上下文如下（验收时必须完整对齐）：",
@@ -752,6 +763,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     responsibilityStageRevision: "plan revision",
     responsibilityStageRefinement: "plan refinement",
     responsibilityStageSummary: "summary",
+    responsibilityStageAnalysis: "analysis",
     responsibilityStagePhaseAcceptance: "phase acceptance",
     responsibilityStageFinalAcceptance: "final acceptance",
     responsibilityConstraintTemplate:
@@ -763,6 +775,10 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     scenarioPolicyProgramming: HARNESS_DEFAULT_SCENARIO_POLICY_TEXTS[LOCALE.EN_US].programming,
     guidanceFailurePromptTemplate:
       "Guidance triggered by tool failure threshold ({reason}). Please analyze the causes of tool failures and provide suggestions for fixes.",
+    guidanceAnalysisPromptGoal:
+      "Only analyze doubts, contradictions, omissions, or likely next-step pitfalls in the current context.",
+    guidanceAnalysisOutputConstraint:
+      "Return very short hints: at most 3 bullets, one sentence each. If there is no clear doubt, return “No clear doubts.” Do not summarize, restate context, or output long reasons.",
     dynamicPolicyPromptProtocolInstruction:
       "Optional dynamic policy prompt protocol:\nJudge from the user's actual intent whether the handling style should be adjusted. Only if the current task needs a more suitable scenario policy than the default matrix, append exactly one [{block}] block; otherwise omit it. scenario must match the user's actual intent.\nThe prompt should describe only the handling style/execution policy, not the concrete task, task conclusions, plan items, file names, or business content. Keep it concise and directly usable as the unified scenario policy block for the main flow, followups, and auxiliary harness calls.\n[{block}]\nscenario = general|text|programming\nreason = short reason\nprompt:\n<policy prompt replacing the default scenario prompt>\n[/{block}]\nText example:\n[{block}]\nscenario = text\nreason = task-specific text delivery policy\nprompt:\nText-scenario dynamic policy: complex tasks must be split into files first; make each file a deliverable unit and produce/maintain files one by one; do not put the full content into one file or one response; search/check while writing and producing instead of waiting until all material is collected; it is recommended to advance one deliverable unit each turn, such as a file, section, table, summary, checklist, comparison, or stage draft, and mark sources, assumptions, or items to verify; faithfully consume external text and preserve sources; check facts, sources, and format for each batch.\n[/{block}]\nProgramming example:\n[{block}]\nscenario = programming\nreason = task-specific coding verification policy\nprompt:\nProgramming-scenario dynamic policy: read relevant code, configuration, tests, and context to quickly locate the issue and impact scope; prefer reusing existing structures, methods, fields, conventions, and test entry points instead of bypassing the established design with a new path; for complex tasks, advance through multiple smallest slices, each reversible, verifiable, and moving toward completion; do not use temporary patch-style bypasses, and do not stop after only one tiny change; verification is required for completion, so prefer relevant tests, lint, type checks, or builds, fix failures based on feedback, and retry; final response must state changed files and verification results.\n[/{block}]",
     acceptanceMainPlanContextHeader:
