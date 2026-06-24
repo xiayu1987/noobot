@@ -217,6 +217,10 @@ export function createSessionFacade(runtime = {}) {
       return sessionMessageService.markUserMessageMonotonic(payload);
     },
 
+    async stampReusedUserTurnDialogProcessId(payload = {}) {
+      return sessionMessageService.stampReusedUserTurnDialogProcessId(payload);
+    },
+
     async markSessionMessagesSummarized(payload = {}) {
       return sessionMessageService.markSessionMessagesSummarized(payload);
     },

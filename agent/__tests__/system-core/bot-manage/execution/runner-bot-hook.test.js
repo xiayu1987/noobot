@@ -38,6 +38,7 @@ function createRunner({
     ...(payload?.runConfig || {}),
     botHookManager,
   }),
+  stampReusedUserTurnDialogProcessId = async () => {},
 } = {}) {
   return new SessionExecutionRunner({
     agentRunner,
@@ -51,6 +52,7 @@ function createRunner({
     prepareRunConfig,
     prepareAgentTurnExecution,
     appendSessionTurn: async () => {},
+    stampReusedUserTurnDialogProcessId,
     finalizeRunSession: async () => ({ answer: "ok" }),
     upsertParentAsyncTask: () => {},
     now: () => new Date().toISOString(),
@@ -174,6 +176,54 @@ test("SessionExecutionRunner merges top-level turnScopeId before context buildin
 
   assert.equal(capturedRunConfig?.turnScopeId, "client-turn:top-level");
   assert.equal(appendedTurnScopeId, "client-turn:top-level");
+});
+
+test("SessionExecutionRunner stamps reused user with generated dialogProcessId before context building", async () => {
+  const calls = [];
+  let capturedBuildContextPayload = null;
+  const runner = createRunner({
+    initializeRunSessionRuntime: async ({ eventListener = null } = {}) => ({
+      usedSessionId: "s1",
+      dialogProcessId: "dp-new",
+      isContinue: true,
+      userConfig: {},
+      currentSessionModelAlias: "",
+      executionStartIndex: 0,
+      runtimeEventListener: eventListener,
+    }),
+    stampReusedUserTurnDialogProcessId: async (payload = {}) => {
+      calls.push({ type: "stamp", payload });
+    },
+    prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
+      calls.push({ type: "prepare" });
+      capturedBuildContextPayload = buildContextPayload;
+      const runtimeAgentContext = {
+        payload: { messages: { history: [] } },
+        execution: { controllers: { runtime: { attachmentMetas: [] } } },
+      };
+      return { agentContext: runtimeAgentContext, runtimeAgentContext };
+    },
+  });
+
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "edited",
+    runConfig: {
+      reuseExistingUserTurn: true,
+      turnScopeId: "client-turn:edited",
+    },
+  });
+
+  assert.deepEqual(calls.map((item) => item.type), ["stamp", "prepare"]);
+  assert.deepEqual(calls[0].payload, {
+    userId: "u1",
+    sessionId: "s1",
+    parentSessionId: "",
+    turnScopeId: "client-turn:edited",
+    dialogProcessId: "dp-new",
+  });
+  assert.equal(capturedBuildContextPayload?.dialogProcessId, "dp-new");
 });
 
 test("SessionExecutionRunner emits bot error hooks", async () => {

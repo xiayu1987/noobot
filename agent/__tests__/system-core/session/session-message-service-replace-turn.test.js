@@ -140,3 +140,55 @@ test("SessionMessageService.replaceTurn validates required payload", async () =>
   );
   assert.equal(saved.length, 0);
 });
+
+test("SessionMessageService.stampReusedUserTurnDialogProcessId updates the reused real user", async () => {
+  const { service, saved } = createService({
+    initialSession: baseSession({
+      messages: [
+        { role: "user", content: "keep", dialogProcessId: "dp-keep", turnScopeId: "scope-keep" },
+        {
+          role: "user",
+          content: "edited",
+          dialogProcessId: "dp-old",
+          turnScopeId: "scope-edited",
+          frontendUserMessage: true,
+        },
+        {
+          role: "user",
+          content: "plugin relay",
+          dialogProcessId: "dp-old",
+          turnScopeId: "scope-edited",
+          injectedMessage: true,
+        },
+      ],
+    }),
+  });
+
+  const result = await service.stampReusedUserTurnDialogProcessId({
+    userId: "u1",
+    sessionId: "s1",
+    turnScopeId: "scope-edited",
+    dialogProcessId: "dp-new",
+  });
+
+  assert.equal(result.stamped, true);
+  assert.equal(result.messageIndex, 1);
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].messages[0].dialogProcessId, "dp-keep");
+  assert.equal(saved[0].messages[1].dialogProcessId, "dp-new");
+  assert.equal(saved[0].messages[2].dialogProcessId, "dp-old");
+  assert.equal(saved[0].version, 3);
+});
+
+test("SessionMessageService.stampReusedUserTurnDialogProcessId does not stamp without turnScopeId", async () => {
+  const { service, saved } = createService({ initialSession: baseSession() });
+
+  const result = await service.stampReusedUserTurnDialogProcessId({
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp-new",
+  });
+
+  assert.deepEqual(result, { stamped: false, reason: "missing_turn_scope" });
+  assert.equal(saved.length, 0);
+});

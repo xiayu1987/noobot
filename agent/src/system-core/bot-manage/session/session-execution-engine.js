@@ -195,6 +195,8 @@ export class SessionExecutionEngine {
     };
     const runnerPersistenceDeps = {
       appendSessionTurn: (payload = {}) => this._appendSessionTurn(payload),
+      stampReusedUserTurnDialogProcessId: (payload = {}) =>
+        this._stampReusedUserTurnDialogProcessId(payload),
       finalizeRunSession: (payload = {}) => this._finalizeRunSession(payload),
       upsertParentAsyncTask: (payload = {}) => this._upsertParentAsyncTask(payload),
     };
@@ -582,6 +584,10 @@ export class SessionExecutionEngine {
       turnScopeId,
       eventListener,
     });
+  }
+
+  async _stampReusedUserTurnDialogProcessId(payload = {}) {
+    return this.session?.stampReusedUserTurnDialogProcessId?.(payload);
   }
 
   async persistStoppedAssistantMessage({
