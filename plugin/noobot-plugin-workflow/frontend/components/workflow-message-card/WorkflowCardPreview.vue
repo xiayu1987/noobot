@@ -15,12 +15,12 @@ defineProps({
   semanticPreview: { type: String, default: "" },
   flowNodes: { type: Array, default: () => [] },
   semanticFlowtos: { type: Array, default: () => [] },
-  selectedGraphDialogId: { type: String, default: "" },
+  selectedGraphDialogProcessId: { type: String, default: "" },
 });
 
 defineEmits([
   "update:semantic-preview-expanded",
-  "update:selected-dialog-id",
+  "update:selected-dialog-process-id",
   "node-click",
   "step-click",
 ]);
@@ -58,8 +58,8 @@ defineEmits([
       <WorkflowCanvasGraph
         :nodes="flowNodes"
         :flowtos="semanticFlowtos"
-        :selected-dialog-id="selectedGraphDialogId"
-        @update:selected-dialog-id="$emit('update:selected-dialog-id', $event)"
+        :selected-dialog-process-id="selectedGraphDialogProcessId"
+        @update:selected-dialog-process-id="$emit('update:selected-dialog-process-id', $event)"
         @node-click="$emit('node-click', $event)"
         @step-click="$emit('step-click', $event)"
       />

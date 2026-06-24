@@ -12,13 +12,14 @@ export async function fetchWorkflowNodeSessionDetail({
   props,
   translate,
   rootSessionId = "",
-  dialogId = "",
+  dialogProcessId = "",
 }) {
+  const routeDialogProcessId = String(dialogProcessId || "").trim();
   const response = await getWorkflowSessionDetailApi(
     {
       userId: props.userId,
       sessionId: rootSessionId,
-      dialogId,
+      dialogProcessId: routeDialogProcessId,
     },
     { fetcher: props.authFetch || fetch },
   );
@@ -60,18 +61,19 @@ export async function fetchWorkflowNodeThinkingDetail({
   props,
   translate,
   rootSessionId = "",
-  dialogId = "",
   dialogProcessId = "",
+  routeDialogProcessId = "",
   turnScopeId = "",
 }) {
-  if (!props.userId || !rootSessionId || !dialogId) {
+  const normalizedRouteDialogProcessId = String(routeDialogProcessId || dialogProcessId || "").trim();
+  if (!props.userId || !rootSessionId || !normalizedRouteDialogProcessId) {
     throw new Error(translate("workflow.nodeSessionMissing"));
   }
   const response = await getWorkflowSessionThinkingDetailApi(
     {
       userId: props.userId,
       sessionId: rootSessionId,
-      dialogId,
+      routeDialogProcessId: normalizedRouteDialogProcessId,
       dialogProcessId,
       turnScopeId,
     },

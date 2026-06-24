@@ -31,6 +31,7 @@ import {
   throwIfWorkflowAborted,
   withTimeout,
 } from "./runtime.js";
+import { resolveWorkflowNodeDialogProcessId } from "../dialog-process-compat.js";
 
 export function buildWorkflowInputAttachmentSystemMessage({
   ctx = {},
@@ -103,7 +104,7 @@ export function buildWorkflowUpstreamAttachmentResults({
           ? Number(completed?.stepIndex ?? upstreamStep?.stepIndex)
           : -1,
         transition: Number(completed?.transition || 0),
-        nodeDialogId: String(completed?.nodeDialogId || "").trim(),
+        nodeDialogProcessId: resolveWorkflowNodeDialogProcessId(completed),
         nodeSessionId: String(completed?.nodeSessionId || "").trim(),
         stepStatus,
         stepFailure,
@@ -324,12 +325,12 @@ export async function runNodeAgent({
   upstreamNodeResults = [],
 } = {}) {
   throwIfWorkflowAborted(ctx);
-  const nodeDialogId = `wf_node_${String(instanceId || "inst").replaceAll(/[^a-zA-Z0-9_-]/g, "_")}_${String(transition || 0)}`;
-  const nodeTurnScopeId = `workflow-node:${nodeDialogId}`;
+  const nodeDialogProcessId = `wf_node_${String(instanceId || "inst").replaceAll(/[^a-zA-Z0-9_-]/g, "_")}_${String(transition || 0)}`;
+  const nodeTurnScopeId = `workflow-node:${nodeDialogProcessId}`;
   await emitWorkflowRuntimeEvent({
     options,
     ctx,
-    dialogId: nodeDialogId,
+    dialogProcessId: nodeDialogProcessId,
     event: "workflow_node_subsession_started",
     data: {
       instanceId: String(instanceId || "").trim(),
@@ -427,7 +428,7 @@ export async function runNodeAgent({
         };
     const relativeDir = buildWorkflowDialogRelativeDir({
       ctx,
-      dialogProcessId: nodeDialogId,
+      dialogProcessId: nodeDialogProcessId,
       scope: "node",
     });
     try {
@@ -450,7 +451,7 @@ export async function runNodeAgent({
           strategy: {
             parentSessionId: String(ctx?.sessionId || "").trim(),
             parentDialogProcessId: String(ctx?.dialogProcessId || "").trim(),
-            dialogProcessId: nodeDialogId,
+            dialogProcessId: nodeDialogProcessId,
             turnScopeId: nodeTurnScopeId,
             disabledPlugins: ["workflow"],
             relativeDir,
@@ -463,7 +464,7 @@ export async function runNodeAgent({
             transition: Number(transition || 0),
             turnScopeId: nodeTurnScopeId,
             workflowSessionId: String(ctx?.sessionId || "").trim(),
-            workflowDialogId: nodeDialogId,
+            workflowDialogProcessId: nodeDialogProcessId,
             inputAttachmentRefs: normalizeAttachmentRefs(
               semanticNode?.attachments || semanticNode?.inputAttachments || semanticNode?.attachmentIds || [],
             ),
@@ -479,7 +480,7 @@ export async function runNodeAgent({
       await emitWorkflowRuntimeEvent({
         options,
         ctx,
-        dialogId: nodeDialogId,
+        dialogProcessId: nodeDialogProcessId,
         event: "workflow_node_subsession_succeeded",
         data: {
           instanceId: String(instanceId || "").trim(),
@@ -500,7 +501,7 @@ export async function runNodeAgent({
       await emitWorkflowRuntimeEvent({
         options,
         ctx,
-        dialogId: nodeDialogId,
+        dialogProcessId: nodeDialogProcessId,
         event: "workflow_node_subsession_failed",
         level: "error",
         data: {
@@ -531,7 +532,7 @@ export async function runNodeAgent({
         stepFailure: subSessionFailure,
       },
       subSession,
-      nodeDialogId,
+      nodeDialogProcessId,
       stepStatus: "failed",
       stepFailure: subSessionFailure,
     };
@@ -543,7 +544,7 @@ export async function runNodeAgent({
       return {
         action: directAction,
         subSession,
-        nodeDialogId,
+        nodeDialogProcessId,
       };
     }
   }
@@ -557,14 +558,14 @@ export async function runNodeAgent({
       return {
         action,
         subSession,
-        nodeDialogId,
+        nodeDialogProcessId,
       };
     }
   }
   return {
     action: { type: WORKFLOW_ACTION.SUBMIT, stepIndex: Number(pendingStep?.index || 0) },
     subSession,
-    nodeDialogId,
+    nodeDialogProcessId,
   };
 }
 

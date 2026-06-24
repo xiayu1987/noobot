@@ -26,6 +26,7 @@
     "check:plugin-frontend-i18n": "node ./scripts/check-plugin-frontend-i18n.mjs",
     "check:semantic-transfer-compat": "node ./scripts/check-semantic-transfer-compat.mjs",
     "check:parent-sessionid-unification": "node ./scripts/check-parent-sessionid-unification.mjs",
+    "check:workflow-dialog-process-static-guard": "node --test plugin/noobot-plugin-workflow/__tests__/workflow-dialog-process-static-guard.test.js",
     "check:plugin-harness-src-i18n": "node ./scripts/check-plugin-harness-src-i18n.mjs",
     "check:plugin-harness-i18n-keyset": "node ./scripts/check-plugin-harness-i18n-keyset.mjs",
     "check:plugin-workflow-src-i18n": "node ./scripts/check-plugin-workflow-src-i18n.mjs",

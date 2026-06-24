@@ -53,6 +53,31 @@ function resolveHistoryDialogKey(messageItem = {}, index = 0) {
   return `__missing_dialog__:${index}`;
 }
 
+function appendHistoryRoundMessage(roundsByDialog, key, messageItem, index) {
+  const current = roundsByDialog.get(key) || {
+    firstUserIndex: -1,
+    lastAssistantIndex: -1,
+    messages: [],
+  };
+  if (current.firstUserIndex < 0 && isActualUserMessage(messageItem)) {
+    current.firstUserIndex = index;
+  }
+  if (
+    resolveMessageRole(messageItem) === "assistant" &&
+    !isMessageSummarized(messageItem)
+  ) {
+    current.lastAssistantIndex = index;
+  }
+  current.messages.push({ message: messageItem, index });
+  roundsByDialog.set(key, current);
+}
+
+function shouldKeepHistoryMessage(messageItem = {}) {
+  if (resolveMessageRole(messageItem) === "system") return false;
+  if (isMessageSummarized(messageItem)) return false;
+  return true;
+}
+
 export function resolveMainModelSystemMessages({
   sourceMessages = [],
   currentDialogProcessId = "",
@@ -70,22 +95,30 @@ export function resolveMainModelHistoryMessages({
 } = {}) {
   const source = Array.isArray(sourceMessages) ? sourceMessages : [];
   const roundsByDialog = new Map();
+  let missingDialogRoundKey = "";
+  let missingDialogRoundIndex = 0;
 
   source.forEach((messageItem, index) => {
-    const key = resolveHistoryDialogKey(messageItem, index);
-    const current = roundsByDialog.get(key) || {
-      firstUserIndex: -1,
-      lastAssistantIndex: -1,
-      messages: [],
-    };
-    if (current.firstUserIndex < 0 && isActualUserMessage(messageItem)) {
-      current.firstUserIndex = index;
+    const explicitKey = resolveMessageDialogProcessId(messageItem);
+    if (explicitKey) {
+      appendHistoryRoundMessage(roundsByDialog, explicitKey, messageItem, index);
+      return;
     }
-    if (resolveMessageRole(messageItem) === "assistant") {
-      current.lastAssistantIndex = index;
+
+    const currentMissingRound = roundsByDialog.get(missingDialogRoundKey);
+    if (
+      !missingDialogRoundKey ||
+      (isActualUserMessage(messageItem) && currentMissingRound?.lastAssistantIndex >= 0)
+    ) {
+      missingDialogRoundIndex += 1;
+      missingDialogRoundKey = `__missing_dialog_round__:${missingDialogRoundIndex}`;
     }
-    current.messages.push({ message: messageItem, index });
-    roundsByDialog.set(key, current);
+    appendHistoryRoundMessage(
+      roundsByDialog,
+      missingDialogRoundKey || resolveHistoryDialogKey(messageItem, index),
+      messageItem,
+      index,
+    );
   });
 
   const rounds = [];
@@ -104,8 +137,7 @@ export function resolveMainModelHistoryMessages({
     round.messages
       .filter(({ index }) => index >= round.startIndex && index <= round.endIndex)
       .map(({ message }) => message)
-      .filter((messageItem) => resolveMessageRole(messageItem) !== "system")
-      .filter((messageItem) => !isMessageSummarized(messageItem)),
+      .filter((messageItem) => shouldKeepHistoryMessage(messageItem)),
   );
 }
 

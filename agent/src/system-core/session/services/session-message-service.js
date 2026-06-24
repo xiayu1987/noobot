@@ -34,6 +34,8 @@ function resolveTurnScopeId(message = {}) {
 
 function resolveAnchorDialogProcessId(anchor = {}) {
   return resolveDialogProcessIdFromContext({
+    // dialogId is a read-only legacy anchor alias for historical callers.
+    // New anchors must pass dialogProcessId.
     dialogProcessId: anchor?.dialogProcessId || anchor?.dialogId,
   });
 }

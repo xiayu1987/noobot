@@ -6,6 +6,11 @@
 <script setup>
 import { BaseEmptyHint, BaseMessageErrorAlert } from "../../../../../client/noobot-chat/src/shared/ui";
 import WorkflowSessionMessageItem from "../WorkflowSessionMessageItem.vue";
+import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
+
+function resolveDialogProcessId(item = {}) {
+  return resolveWorkflowDialogProcessId(item);
+}
 
 defineProps({
   translate: { type: Function, required: true },
@@ -14,7 +19,7 @@ defineProps({
   selectedNodeSessionId: { type: String, default: "" },
   selectedRuntimeNode: { type: Object, default: null },
   selectedRuntimeBoxes: { type: Array, default: () => [] },
-  selectedGraphDialogId: { type: String, default: "" },
+  selectedGraphDialogProcessId: { type: String, default: "" },
   displayNodeMessages: { type: Array, default: () => [] },
   nodeSessionAllMessages: { type: Array, default: () => [] },
   selectedNodeSessionDocs: { type: Array, default: () => [] },
@@ -77,7 +82,7 @@ defineEmits(["runtime-step-click", "open-thinking-details"]);
           <div class="workflow-runtime-panel-body">
             <div
               v-for="(stateBox, stateIndex) in selectedRuntimeBoxes"
-              :key="`${String(selectedRuntimeNode?.nodeId || selectedRuntimeNode?.dialogId || '')}-${String(stateBox?.actionNodeStateId || stateIndex)}`"
+              :key="`${String(selectedRuntimeNode?.nodeId || resolveDialogProcessId(selectedRuntimeNode) || '')}-${String(stateBox?.actionNodeStateId || stateIndex)}`"
               class="workflow-runtime-state-box"
             >
               <div class="workflow-runtime-state-title">
@@ -88,13 +93,13 @@ defineEmits(["runtime-step-click", "open-thinking-details"]);
               </div>
               <button
                 v-for="(stepItem, stepIndex) in (stateBox?.steps || [])"
-                :key="`${String(stepItem?.stepId || stepItem?.dialogId || stepIndex)}-${stepIndex}`"
+                :key="`${String(stepItem?.stepId || resolveDialogProcessId(stepItem) || stepIndex)}-${stepIndex}`"
                 type="button"
                 class="workflow-runtime-step-box"
                 :class="[
                   resolveStatusClass(stepItem),
                   {
-                    'is-selected': String(stepItem?.dialogId || '').trim() === selectedGraphDialogId,
+                    'is-selected': resolveDialogProcessId(stepItem) === selectedGraphDialogProcessId,
                     'is-disabled': !stepHasSession(stepItem),
                   },
                 ]"

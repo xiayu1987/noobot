@@ -203,8 +203,12 @@ function pickPayloadSemantic(semantic = {}) {
 
 function pickPayloadNodeRun(item = {}) {
   if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+  // Summary snapshots may include legacy plugin payloads. Keep dialogId/nodeDialogId
+  // here only as read-only history fields; new workflow payloads must write
+  // dialogProcessId/nodeDialogProcessId instead.
   const picked = pickPlainFields(item, [
-    "transition", "stepId", "stepIndex", "actionNodeStateId", "nodeDialogId", "dialogId",
+    "transition", "stepId", "stepIndex", "actionNodeStateId", "nodeDialogProcessId", "dialogProcessId",
+    "nodeDialogId", "dialogId",
     "nodeSessionId", "sessionId", "rootSessionId", "stepStatus", "status", "parallelWave", "waveOrder",
   ], { maxStringLength: 1000 }) || {};
   const step = pickPlainFields(item?.step, [
@@ -220,9 +224,11 @@ function pickPayloadNodeRun(item = {}) {
 
 function pickPayloadNodeSession(item = {}) {
   if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+  // dialogId is retained only for summarizing historical plugin payloads.
+  // It is not a new payload write target.
   const picked = pickPlainFields(item, [
     "transition", "nodeName", "nodeId", "nodeType", "actionNodeStateId", "stepId", "stepIndex",
-    "type", "stateType", "rootSessionId", "dialogId", "sessionId", "stepStatus", "status",
+    "type", "stateType", "rootSessionId", "dialogProcessId", "dialogId", "sessionId", "stepStatus", "status",
     "parallelWave", "waveOrder",
   ], { maxStringLength: 1000 }) || {};
   const stepFailure = pickPayloadStepFailure(item?.stepFailure);
@@ -251,9 +257,10 @@ function pickPluginPayloadSnapshot(payload = {}) {
     .map((item) => pickPayloadNodeSession(item))
     .filter(Boolean);
   if (nodeSessions.length) picked.nodeSessions = nodeSessions;
-  const planningDialog = pickPlainFields(payload?.planningDialog, ["sessionId", "dialogId", "parentSessionId"], { maxStringLength: 1000 });
+  // dialogId remains in summary allow-lists only for historical payload snapshots.
+  const planningDialog = pickPlainFields(payload?.planningDialog, ["sessionId", "dialogProcessId", "dialogId", "parentSessionId"], { maxStringLength: 1000 });
   if (planningDialog) picked.planningDialog = planningDialog;
-  const runMeta = pickPlainFields(payload?.runMeta, ["sessionId", "dialogId", "parentSessionId", "runId"], { maxStringLength: 1000 });
+  const runMeta = pickPlainFields(payload?.runMeta, ["sessionId", "dialogProcessId", "dialogId", "parentSessionId", "runId"], { maxStringLength: 1000 });
   if (runMeta) picked.runMeta = runMeta;
   const interaction = pickPlainFields(payload?.interaction, ["semanticTextPreview"], { maxStringLength: 4000 });
   if (interaction) picked.interaction = interaction;
