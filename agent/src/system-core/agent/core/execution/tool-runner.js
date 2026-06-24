@@ -67,12 +67,22 @@ function mergeToolResultWithInputTransferPayload(toolResultText = "", transferPa
   return mergeToolInputTransferPayload(toolResultText, transferPayload);
 }
 
-function compactSemanticTransferProtocolPayload(inputTransfer = {}) {
+function compactSemanticTransferProtocolPayload(inputTransfer = {}, { includeCompatFields = false } = {}) {
   if (!inputTransfer || typeof inputTransfer !== "object" || Array.isArray(inputTransfer)) return {};
   const transferEnvelopes = Array.isArray(inputTransfer.transferEnvelopes)
     ? inputTransfer.transferEnvelopes
     : [];
-  return transferEnvelopes.length ? { transferEnvelopes } : {};
+  const compactToolPayload =
+    includeCompatFields &&
+    inputTransfer.compactToolPayload &&
+    typeof inputTransfer.compactToolPayload === "object" &&
+    !Array.isArray(inputTransfer.compactToolPayload)
+      ? inputTransfer.compactToolPayload
+      : {};
+  return {
+    ...compactToolPayload,
+    ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
+  };
 }
 
 function resolveToolHookMeta(runtime = {}) {
@@ -189,7 +199,10 @@ export async function executeToolCall({
         agentContext,
         sessionId,
       });
-      toolInputTransferPayload = compactSemanticTransferProtocolPayload(inputTransfer);
+      const includeCompatFields = inputTransfer?.exceeded === true;
+      toolInputTransferPayload = compactSemanticTransferProtocolPayload(inputTransfer, {
+        includeCompatFields,
+      });
       if (
         inputTransfer?.exceeded === true &&
         inputTransfer?.toolInputOverflow &&

@@ -83,6 +83,12 @@ function resolveContextMessageBlocks(ctx = {}, { includePayloadMessages = false 
   return null;
 }
 
+function normalizeMessagesForModelRuntime(messages = []) {
+  return (Array.isArray(messages) ? messages : [])
+    .map((item) => normalizeMessageForModelRuntime(item))
+    .filter(Boolean);
+}
+
 export class ModelMessageRuntimeHelpers {
   constructor({ session = null } = {}) {
     this.session = session;
@@ -134,15 +140,9 @@ export class ModelMessageRuntimeHelpers {
         .filter(Boolean);
       if (blocks) {
         const resolved = resolveMainModelFinalMessages({
-          systemMessages: (Array.isArray(blocks.system) ? blocks.system : [])
-            .map((item) => normalizeMessageForModelRuntime(item))
-            .filter(Boolean),
-          historyMessages: (Array.isArray(blocks.history) ? blocks.history : [])
-            .map((item) => normalizeMessageForModelRuntime(item))
-            .filter(Boolean),
-          incrementalMessages: (Array.isArray(blocks.incremental) ? blocks.incremental : [])
-            .map((item) => normalizeMessageForModelRuntime(item))
-            .filter(Boolean),
+          systemMessages: normalizeMessagesForModelRuntime(blocks.system),
+          historyMessages: normalizeMessagesForModelRuntime(blocks.history),
+          incrementalMessages: normalizeMessagesForModelRuntime(blocks.incremental),
           currentDialogProcessId,
         });
         return resolved.messages;
@@ -173,24 +173,24 @@ export class ModelMessageRuntimeHelpers {
       });
       if (normalizedScope === "system") {
         return resolveMainModelSystemMessages({
-          sourceMessages: source,
+          sourceMessages: normalizeMessagesForModelRuntime(source),
           currentDialogProcessId,
         });
       }
       if (normalizedScope === "incremental") {
         return resolveMainModelIncrementalMessages({
-          sourceMessages: source,
+          sourceMessages: normalizeMessagesForModelRuntime(source),
           currentDialogProcessId,
         });
       }
       if (normalizedScope === "conversation" || normalizedScope === "non_system") {
         return resolveMainModelIncrementalMessages({
-          sourceMessages: source,
+          sourceMessages: normalizeMessagesForModelRuntime(source),
           currentDialogProcessId,
         });
       }
       return resolveMainModelHistoryMessages({
-        sourceMessages: source,
+        sourceMessages: normalizeMessagesForModelRuntime(source),
       });
     };
   }
