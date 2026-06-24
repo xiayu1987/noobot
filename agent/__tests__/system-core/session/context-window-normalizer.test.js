@@ -389,7 +389,7 @@ test("resolveMainModelHistoryMessages keeps non-system unsummarized messages fro
   );
 });
 
-test("resolveMainModelHistoryMessages starts rounds from actual user and keeps unsummarized injected messages", () => {
+test("resolveMainModelHistoryMessages keeps original dialog group order and unsummarized injected messages", () => {
   const result = resolveMainModelHistoryMessages({
     sourceMessages: [
       { role: "user", content: "injected-before-actual", injectedBy: "agent-plugin", dialogProcessId: "d1" },
@@ -401,7 +401,36 @@ test("resolveMainModelHistoryMessages starts rounds from actual user and keeps u
     ],
   });
 
-  assert.deepEqual(result.map((item) => item.content), ["actual", "injected-after-actual", "old", "latest"]);
+  assert.deepEqual(result.map((item) => item.content), [
+    "injected-before-actual",
+    "meta",
+    "actual",
+    "injected-after-actual",
+    "old",
+    "latest",
+  ]);
+});
+
+test("resolveMainModelHistoryMessages keeps original dialog group order instead of starting at relay user", () => {
+  const result = resolveMainModelHistoryMessages({
+    sourceMessages: [
+      { role: "user", content: "全仓回归测试", dialogProcessId: "c826" },
+      {
+        role: "user",
+        content: "[来自harness外部模型输出/planning]\nplan",
+        dialogProcessId: "c826",
+        injectedMessage: true,
+        injectedBy: "harness-plugin",
+        injectedMessageType: "separate_model_relay:planning",
+      },
+      { role: "assistant", content: "done", dialogProcessId: "c826" },
+    ],
+  });
+
+  assert.deepEqual(
+    result.map((item) => item.content),
+    ["全仓回归测试", "[来自harness外部模型输出/planning]\nplan", "done"],
+  );
 });
 
 test("resolveMainModelHistoryMessages keeps legacy history rounds without dialogProcessId", () => {

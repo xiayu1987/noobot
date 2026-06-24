@@ -31,6 +31,14 @@ export function toConversationMessages(sessionRecords = []) {
           ? item.rawModelContent
           : null,
       type: item.type || "",
+      dialogProcessId: item.dialogProcessId || item.dialogId || "",
+      turnScopeId: item.turnScopeId || "",
+      summarized: item.summarized === true,
+      injectedMessage: item.injectedMessage === true,
+      injectedBy: item.injectedBy || "",
+      injectedMessageType: item.injectedMessageType || item.injected_message_type || "",
+      frontendUserMessage: item.frontendUserMessage === true,
+      pluginMessage: item.pluginMessage === true,
       tool_calls: Array.isArray(item.tool_calls) ? item.tool_calls : [],
       tool_call_id: item.tool_call_id || "",
       modelAdditionalKwargs:
