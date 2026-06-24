@@ -18,6 +18,7 @@ import { transferSemanticContent } from "../../../semantic-transfer/transfer/sem
 
 const TOOL_INPUT_TRANSFER_TOOL_NAMES = new Set([
   "write_file",
+  "task_summary",
   "execute_script",
   "search",
   "patch_file",
@@ -39,6 +40,39 @@ function mergeToolInputTransferPayload(toolResultText = "", transferPayload = {}
     ...parsed,
     ...normalizedTransferPayload,
   });
+}
+
+function mergeTaskSummaryTransferPayload(toolResultText = "", transferPayload = {}) {
+  const normalizedTransferPayload =
+    transferPayload && typeof transferPayload === "object" && !Array.isArray(transferPayload)
+      ? transferPayload
+      : {};
+  if (!Object.keys(normalizedTransferPayload).length) return String(toolResultText || "");
+  const parsed = parseJsonObjectSafely(toolResultText);
+  if (!parsed) return String(toolResultText || "");
+  return JSON.stringify({
+    toolName: parsed.toolName || "task_summary",
+    ok: parsed.ok !== false,
+    status: parsed.status,
+    message: parsed.message,
+    summarizedMessages: parsed.summarizedMessages,
+    ...normalizedTransferPayload,
+  });
+}
+
+function mergeToolResultWithInputTransferPayload(toolResultText = "", transferPayload = {}, toolName = "") {
+  if (String(toolName || "").trim() === "task_summary") {
+    return mergeTaskSummaryTransferPayload(toolResultText, transferPayload);
+  }
+  return mergeToolInputTransferPayload(toolResultText, transferPayload);
+}
+
+function compactSemanticTransferProtocolPayload(inputTransfer = {}) {
+  if (!inputTransfer || typeof inputTransfer !== "object" || Array.isArray(inputTransfer)) return {};
+  const transferEnvelopes = Array.isArray(inputTransfer.transferEnvelopes)
+    ? inputTransfer.transferEnvelopes
+    : [];
+  return transferEnvelopes.length ? { transferEnvelopes } : {};
 }
 
 function resolveToolHookMeta(runtime = {}) {
@@ -155,12 +189,7 @@ export async function executeToolCall({
         agentContext,
         sessionId,
       });
-      toolInputTransferPayload =
-        inputTransfer?.exceeded === true &&
-        inputTransfer?.compactToolPayload &&
-        typeof inputTransfer.compactToolPayload === "object"
-          ? inputTransfer.compactToolPayload
-          : {};
+      toolInputTransferPayload = compactSemanticTransferProtocolPayload(inputTransfer);
       if (
         inputTransfer?.exceeded === true &&
         inputTransfer?.toolInputOverflow &&
@@ -231,7 +260,11 @@ export async function executeToolCall({
     });
     toolResultText =
       typeof rawResult === "string" ? rawResult : JSON.stringify(rawResult);
-    toolResultText = mergeToolInputTransferPayload(toolResultText, toolInputTransferPayload);
+    toolResultText = mergeToolResultWithInputTransferPayload(
+      toolResultText,
+      toolInputTransferPayload,
+      call?.name,
+    );
     rawToolResultText = toolResultText;
   } catch (error) {
     const isAbort = isAbortError(error);
@@ -316,6 +349,9 @@ export async function executeToolCall({
     sessionId,
   });
   toolResultText = overflowNormalized.toolResultText;
+  if (String(call?.name || "").trim() === "task_summary") {
+    toolResultText = mergeTaskSummaryTransferPayload(toolResultText, toolInputTransferPayload);
+  }
   emitEvent(eventListener, "tool_call_end", {
     turn,
     tool: call?.name,

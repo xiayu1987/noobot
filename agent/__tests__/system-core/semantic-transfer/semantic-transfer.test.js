@@ -668,6 +668,47 @@ test("transferSemanticContent tool_input supports patch_file patch overflow", as
   assert.equal(transferred.compactToolPayload?.message, "补丁内容过长，请分批应用或拆分 patch 后重试");
 });
 
+test("transferSemanticContent tool_input forces task_summary summaryContent into attachment", async () => {
+  const summaryContent = "阶段小结：已完成核心修改，继续验证。";
+  const transferred = await transferSemanticContent({
+    scenario: "tool",
+    strategy: "tool_input",
+    call: {
+      name: "task_summary",
+      args: { summaryContent },
+    },
+    runtime: {
+      attachmentService: {
+        async ingestGeneratedArtifacts(payload) {
+          return payload.artifacts.map((artifact, index) => ({
+            attachmentId: `task-summary-input-${index + 1}`,
+            sessionId: payload.sessionId,
+            attachmentSource: payload.attachmentSource,
+            name: artifact.name,
+            mimeType: artifact.mimeType,
+            size: summaryContent.length,
+            path: `/host/${artifact.name}`,
+            relativePath: `attachments/${artifact.name}`,
+            generatedByModel: true,
+            generationSource: payload.generationSource,
+          }));
+        },
+      },
+      systemRuntime: { userId: "u1", sessionId: "s1" },
+    },
+  });
+
+  assert.equal(transferred.exceeded, false);
+  assert.equal(transferred.toolInputOverflow, undefined);
+  assert.equal(transferred.transferResult?.status, "file");
+  assert.equal(transferred.transferEnvelopes?.[0]?.direction, "input");
+  assert.equal(transferred.compactToolPayload?.toolInputOverflow, undefined);
+  assert.equal(
+    transferred.compactToolPayload?.transferFiles?.[0]?.name,
+    "task-summary-content.tool-input.md",
+  );
+});
+
 test("transferSemanticContent tool_input overflow returns sandbox path view when sandbox is enabled", async () => {
   const attachmentService = {
     async ingestGeneratedArtifacts(payload) {

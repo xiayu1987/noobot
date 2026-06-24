@@ -37,6 +37,7 @@ const TOOL_INPUT_OVERFLOW_LIMITS = Object.freeze({
   EXECUTE_SCRIPT_COMMAND_CHARS: TOOL_INPUT_OVERFLOW_MAX_CHARS,
   SEARCH_TEXT_CHARS: TOOL_INPUT_OVERFLOW_MAX_CHARS,
   PATCH_FILE_PATCH_CHARS: TOOL_INPUT_OVERFLOW_MAX_CHARS,
+  TASK_SUMMARY_CONTENT_CHARS: TOOL_INPUT_OVERFLOW_MAX_CHARS,
 });
 
 function normalizeString(value = "") {
@@ -101,6 +102,14 @@ const TOOL_INPUT_OVERFLOW_POLICIES = Object.freeze([
     reason: TRANSFER_REASON.PATCH_FILE_INPUT_TOO_LONG,
     name: () => "patch-file-patch.tool-input.diff",
   }),
+  Object.freeze({
+    toolName: "task_summary",
+    field: "summaryContent",
+    maxChars: TOOL_INPUT_OVERFLOW_LIMITS.TASK_SUMMARY_CONTENT_CHARS,
+    forceAttachment: true,
+    reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_INPUT,
+    name: () => "task-summary-content.tool-input.md",
+  }),
 ]);
 
 function resolveToolInputOverflowFromCall(call = {}) {
@@ -112,7 +121,10 @@ function resolveToolInputOverflowFromCall(call = {}) {
     return null;
   }
   const text = normalizeRawString(args?.[policy.field]);
-  if (text.length <= Number(policy.maxChars || 0)) return null;
+  const maxChars = Number(policy.maxChars || 0);
+  const exceeded = text.length > maxChars;
+  const forceAttachment = policy.forceAttachment === true;
+  if (!exceeded && !forceAttachment) return null;
   const policyMeta =
     typeof policy.meta === "function" && isPlainObject(policy.meta({ call, args }))
       ? policy.meta({ call, args })
@@ -121,7 +133,9 @@ function resolveToolInputOverflowFromCall(call = {}) {
     toolName,
     field: policy.field,
     text,
-    maxChars: Number(policy.maxChars || 0),
+    maxChars,
+    exceeded,
+    forceAttachment,
     message: policy.message,
     name: typeof policy.name === "function" ? policy.name({ call, args }) : "tool-input.txt",
     mimeType: DEFAULT_TRANSFER_MIME_TYPE,
@@ -334,7 +348,8 @@ export async function transferToolInput({
     ? (callOverflow?.maxChars ?? resolveToolResultInlineTextLimit(runtime))
     : inlineMaxChars;
   const maxInline = toSafePositiveInt(resolvedInlineLimit, resolveToolResultInlineTextLimit(runtime), 0);
-  const shouldPersist = forceAttachment === true || normalizedText.length > maxInline;
+  const shouldPersist =
+    forceAttachment === true || callOverflow?.forceAttachment === true || normalizedText.length > maxInline;
 
   if (!shouldPersist) {
     const envelope = directInput(normalizedText, {
@@ -402,11 +417,11 @@ export async function transferToolInput({
         }),
     transferEnvelopes,
     passthrough: {
-      exceeded: true,
+      exceeded: callOverflow?.exceeded === false ? false : true,
       textLength: normalizedText.length,
       inlineContent: "",
       ...(callOverflow?.message ? { message: callOverflow.message } : {}),
-      ...(callOverflow
+      ...(callOverflow?.exceeded === true
         ? {
             toolInputOverflow: {
               toolName: callOverflow.toolName,

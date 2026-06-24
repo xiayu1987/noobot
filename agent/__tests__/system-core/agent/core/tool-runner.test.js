@@ -423,6 +423,65 @@ test("executeToolCall: overflow keeps original semantic-transfer artifact and co
   assert.equal("size" in compactEnvelope.files[0], false);
 });
 
+test("executeToolCall task_summary returns transfer metadata without phase summary content", async () => {
+  const summaryContent = "阶段小结：敏感小结文本不应出现在工具返回中。";
+  const call = {
+    id: "call_task_summary_transfer",
+    name: "task_summary",
+    args: { summaryContent },
+  };
+  const tool = {
+    invoke: async () => JSON.stringify({
+      toolName: "task_summary",
+      ok: true,
+      status: "completed",
+      message: "小结完毕，请继续当前任务",
+      phaseSummary: summaryContent,
+      summarizedMessages: { currentTurn: 3 },
+      extraField: "should be omitted for task_summary",
+    }),
+  };
+  const runtime = {
+    attachmentService: {
+      async ingestGeneratedArtifacts(payload) {
+        return payload.artifacts.map((artifact, index) => ({
+          attachmentId: `task-summary-runner-${index + 1}`,
+          sessionId: payload.sessionId,
+          attachmentSource: payload.attachmentSource,
+          name: artifact.name,
+          mimeType: artifact.mimeType,
+          size: summaryContent.length,
+          path: `/host/${artifact.name}`,
+          relativePath: `attachments/${artifact.name}`,
+          generatedByModel: true,
+          generationSource: payload.generationSource,
+        }));
+      },
+    },
+    systemRuntime: { userId: "u1", sessionId: "s1" },
+  };
+
+  const result = await executeToolCall({
+    call,
+    tool,
+    runtime,
+    sessionId: "s1",
+    turn: 1,
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(result.toolResultText.includes(summaryContent), false);
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.toolName, "task_summary");
+  assert.equal(payload.ok, true);
+  assert.equal(payload.status, "completed");
+  assert.equal(payload.phaseSummary, undefined);
+  assert.equal(payload.extraField, undefined);
+  assert.equal(payload.toolInputOverflow, undefined);
+  assert.equal(payload.transferFiles, undefined);
+  assert.equal(payload.transferEnvelopes?.[0]?.files?.[0]?.name, "task-summary-content.tool-input.md");
+});
+
 test("executeToolCall: overflow result should include sandbox path when resolver is provided", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-tool-overflow-sandbox-"));
   const tool = {

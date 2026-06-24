@@ -88,7 +88,6 @@ export function createTaskSummaryTool(ctx = {}) {
           ok: true,
           status: TASK_STATUS.COMPLETED,
           message: tTool(runtime, "tools.task_summary.summaryCompletedContinue"),
-          phaseSummary: summaryText,
           summarizedMessages: {
             currentTurn: currentTurnSummarizedCount,
           },
