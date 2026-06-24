@@ -327,14 +327,17 @@ test("resolveModelContextMessages keeps latest injected message per type after d
 });
 
 
-test("resolveMainModelHistoryMessages keeps first actual user and latest assistant per dialog then clips to 10", () => {
+test("resolveMainModelHistoryMessages keeps non-system unsummarized messages from first actual user to latest assistant for latest 3 rounds", () => {
   const input = Array.from({ length: 6 }, (_, index) => {
     const dialogProcessId = `d${index + 1}`;
     return [
       { role: "user", content: `u${index + 1}-first`, dialogProcessId },
+      { role: "system", content: `sys${index + 1}`, dialogProcessId },
       { role: "user", content: `u${index + 1}-second`, dialogProcessId },
       { role: "assistant", content: `a${index + 1}-old`, dialogProcessId },
+      { role: "assistant", content: `a${index + 1}-summarized`, summarized: true, dialogProcessId },
       { role: "assistant", content: `a${index + 1}-latest`, dialogProcessId },
+      { role: "tool", content: `after-latest${index + 1}`, dialogProcessId },
     ];
   }).flat();
 
@@ -343,21 +346,23 @@ test("resolveMainModelHistoryMessages keeps first actual user and latest assista
   assert.deepEqual(
     result.map((item) => item.content),
     [
-      "u2-first",
-      "a2-latest",
-      "u3-first",
-      "a3-latest",
       "u4-first",
+      "u4-second",
+      "a4-old",
       "a4-latest",
       "u5-first",
+      "u5-second",
+      "a5-old",
       "a5-latest",
       "u6-first",
+      "u6-second",
+      "a6-old",
       "a6-latest",
     ],
   );
 });
 
-test("resolveMainModelHistoryMessages excludes injected and user meta from actual user selection", () => {
+test("resolveMainModelHistoryMessages excludes injected and user meta from round start selection", () => {
   const result = resolveMainModelHistoryMessages({
     sourceMessages: [
       { role: "user", content: "injected", injectedBy: "agent-plugin", dialogProcessId: "d1" },
@@ -368,7 +373,7 @@ test("resolveMainModelHistoryMessages excludes injected and user meta from actua
     ],
   });
 
-  assert.deepEqual(result.map((item) => item.content), ["actual", "latest"]);
+  assert.deepEqual(result.map((item) => item.content), ["actual", "old", "latest"]);
 });
 
 test("resolveMainModelIncrementalMessages filters summarized messages without clipping", () => {

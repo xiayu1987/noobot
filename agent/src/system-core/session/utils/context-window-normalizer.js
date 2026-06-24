@@ -7,14 +7,16 @@
 import {
   filterForModelContext,
   filterInjectedMessagesForDialog,
+  isMessageSummarized,
   isInjectedMessage,
   resolveMessageRole,
+  shouldKeepForModelContext,
 } from "../../context/session/message-context-policy.js";
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 
 
 
-export const MAIN_MODEL_HISTORY_MESSAGE_LIMIT = 10;
+export const MAIN_MODEL_HISTORY_ROUND_LIMIT = 3;
 
 function recentSlice(messages = [], limit = Number.POSITIVE_INFINITY) {
   const source = Array.isArray(messages) ? messages : [];
@@ -55,43 +57,55 @@ export function resolveMainModelSystemMessages({
   sourceMessages = [],
   currentDialogProcessId = "",
 } = {}) {
-  return resolveModelContextMessages({
+  const sameDialogMessages = filterInjectedMessagesForDialog(
     sourceMessages,
     currentDialogProcessId,
-    mode: "agent",
-    useRecentWindow: false,
-  });
+  );
+  return sameDialogMessages.filter((messageItem) => shouldKeepForModelContext(messageItem));
 }
 
 export function resolveMainModelHistoryMessages({
   sourceMessages = [],
-  historyLimit = MAIN_MODEL_HISTORY_MESSAGE_LIMIT,
+  historyLimit = MAIN_MODEL_HISTORY_ROUND_LIMIT,
 } = {}) {
-  const source = filterForModelContext(sourceMessages);
-  const selectedByDialog = new Map();
+  const source = Array.isArray(sourceMessages) ? sourceMessages : [];
+  const roundsByDialog = new Map();
 
   source.forEach((messageItem, index) => {
     const key = resolveHistoryDialogKey(messageItem, index);
-    const current = selectedByDialog.get(key) || { firstUser: null, lastAssistant: null };
-    if (!current.firstUser && isActualUserMessage(messageItem)) {
-      current.firstUser = { message: messageItem, index };
+    const current = roundsByDialog.get(key) || {
+      firstUserIndex: -1,
+      lastAssistantIndex: -1,
+      messages: [],
+    };
+    if (current.firstUserIndex < 0 && isActualUserMessage(messageItem)) {
+      current.firstUserIndex = index;
     }
     if (resolveMessageRole(messageItem) === "assistant") {
-      current.lastAssistant = { message: messageItem, index };
+      current.lastAssistantIndex = index;
     }
-    selectedByDialog.set(key, current);
+    current.messages.push({ message: messageItem, index });
+    roundsByDialog.set(key, current);
   });
 
-  const selected = [];
-  for (const value of selectedByDialog.values()) {
-    if (value.firstUser) selected.push(value.firstUser);
-    if (value.lastAssistant) selected.push(value.lastAssistant);
+  const rounds = [];
+  for (const value of roundsByDialog.values()) {
+    if (value.firstUserIndex < 0 || value.lastAssistantIndex < value.firstUserIndex) continue;
+    rounds.push({
+      startIndex: value.firstUserIndex,
+      endIndex: value.lastAssistantIndex,
+      messages: value.messages,
+    });
   }
 
-  selected.sort((left, right) => left.index - right.index);
-  return recentSlice(
-    selected.map((item) => item.message),
-    historyLimit,
+  rounds.sort((left, right) => left.endIndex - right.endIndex);
+  const selectedRounds = recentSlice(rounds, historyLimit);
+  return selectedRounds.flatMap((round) =>
+    round.messages
+      .filter(({ index }) => index >= round.startIndex && index <= round.endIndex)
+      .map(({ message }) => message)
+      .filter((messageItem) => resolveMessageRole(messageItem) !== "system")
+      .filter((messageItem) => !isMessageSummarized(messageItem)),
   );
 }
 
@@ -122,7 +136,7 @@ export function resolveMainModelFinalMessages({
   historyMessages = [],
   incrementalMessages = [],
   currentDialogProcessId = "",
-  historyLimit = MAIN_MODEL_HISTORY_MESSAGE_LIMIT,
+  historyLimit = MAIN_MODEL_HISTORY_ROUND_LIMIT,
 } = {}) {
   const system = resolveMainModelSystemMessages({
     sourceMessages: systemMessages,

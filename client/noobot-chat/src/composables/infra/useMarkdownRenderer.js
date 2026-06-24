@@ -128,6 +128,11 @@ function buildHarnessCollapseHtml({ attrs = {}, innerMarkdown = "" } = {}) {
   ].join("\n");
 }
 
+function shouldHideHarnessCollapse({ attrs = {} } = {}) {
+  const kind = String(attrs.kind || "").trim();
+  return kind === "latest_complete_summary" || kind === "acceptance";
+}
+
 function renderHarnessCollapsibleMarkdown(text = "") {
   const source = String(text || "");
   if (!source.includes(`<<<${HARNESS_COLLAPSE_MARKER_NAME}:start`)) {
@@ -177,10 +182,12 @@ function renderHarnessCollapsibleMarkdown(text = "") {
     }
 
     flushPlain();
-    renderedParts.push(buildHarnessCollapseHtml({
-      attrs,
-      innerMarkdown: innerLines.join("\n"),
-    }));
+    if (!shouldHideHarnessCollapse({ attrs })) {
+      renderedParts.push(buildHarnessCollapseHtml({
+        attrs,
+        innerMarkdown: innerLines.join("\n"),
+      }));
+    }
     index = endIndex;
   }
 

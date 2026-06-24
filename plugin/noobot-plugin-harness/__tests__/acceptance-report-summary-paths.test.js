@@ -28,7 +28,7 @@ test("acceptance report includes summary detail paths", () => {
   assert.match(String(text), /runtime\/summary\/detail-1\.md/);
 });
 
-test("before_final_output appends last acceptance report text to final output once", async () => {
+test("before_final_output keeps last acceptance report off the final output", async () => {
   const report = buildAcceptanceReport({
     bucket: {
       planText: "1. 主计划一",
@@ -61,26 +61,17 @@ test("before_final_output appends last acceptance report text to final output on
     },
   };
   const first = await maybeAppendAcceptanceReportAtFinalOutput(ctx);
-  assert.equal(first, true);
-  assert.match(String(ctx?.result?.output || ""), /\n\n---\n/);
-  assert.match(
-    String(ctx?.result?.output || ""),
-    /NOOBOT_HARNESS_COLLAPSE:start[^>]*kind="acceptance"[^>]*default="closed"/,
-  );
-  assert.match(String(ctx?.result?.output || ""), /\[Harness-验收\]/);
-  assert.match(String(ctx?.result?.output || ""), /#### 完整计划清单/);
-  assert.match(String(ctx?.result?.output || ""), /1\. \[pending\] 主计划一/);
-  assert.match(String(ctx?.result?.output || ""), /#### 汇总/);
+  assert.equal(first, false);
+  assert.equal(String(ctx?.result?.output || ""), "主流程回答");
+  assert.doesNotMatch(String(ctx?.result?.output || ""), /\n\n---\n/);
+  assert.doesNotMatch(String(ctx?.result?.output || ""), /NOOBOT_HARNESS_COLLAPSE/);
+  assert.doesNotMatch(String(ctx?.result?.output || ""), /\[Harness-验收\]/);
+  assert.doesNotMatch(String(ctx?.result?.output || ""), /#### 完整计划清单/);
+  assert.doesNotMatch(String(ctx?.result?.output || ""), /1\. \[pending\] 主计划一/);
+  assert.doesNotMatch(String(ctx?.result?.output || ""), /#### 汇总/);
   assert.doesNotMatch(String(ctx?.result?.output || ""), /小结明细路径|summary detail/i);
   assert.doesNotMatch(String(ctx?.result?.output || ""), /runtime\/summary\/detail-2\.md/);
-  assert.match(
-    String(ctx?.result?.turnMessages?.[1]?.content || ""),
-    /\n\n---\n/,
-  );
-  assert.match(
-    String(ctx?.result?.turnMessages?.[1]?.content || ""),
-    /\[Harness-验收\]/,
-  );
+  assert.equal(String(ctx?.result?.turnMessages?.[1]?.content || ""), "主流程回答");
   const second = await maybeAppendAcceptanceReportAtFinalOutput(ctx);
   assert.equal(second, false);
 });
@@ -257,7 +248,7 @@ test("semantic acceptance fallback keeps phase/signal status when semantic text 
   assert.equal(checklist[0]?.status, "completed");
 });
 
-test("before_final_output prepends latest complete summary before acceptance checklist", async () => {
+test("before_final_output does not append latest complete summary or acceptance checklist", async () => {
   const report = buildAcceptanceReport({
     bucket: {
       planText: "1. 主计划一",
@@ -289,19 +280,18 @@ test("before_final_output prepends latest complete summary before acceptance che
   };
 
   const appended = await maybeAppendAcceptanceReportAtFinalOutput(ctx);
-  assert.equal(appended, true);
+  assert.equal(appended, false);
   const output = String(ctx?.result?.output || "");
   const summaryIndex = output.indexOf("## 最后一次完整小结");
   const acceptanceIndex = output.indexOf("[Harness-验收]");
   const summaryMarkerIndex = output.indexOf('kind="latest_complete_summary"');
   const acceptanceMarkerIndex = output.indexOf('kind="acceptance"');
-  assert.equal(summaryIndex >= 0, true);
-  assert.equal(acceptanceIndex >= 0, true);
-  assert.equal(summaryMarkerIndex >= 0, true);
-  assert.equal(acceptanceMarkerIndex >= 0, true);
-  assert.equal(summaryMarkerIndex < acceptanceMarkerIndex, true);
-  assert.equal(summaryIndex < acceptanceIndex, true);
-  assert.match(output, /完整小结：这是最后一次完整小结内容。/);
-  assert.match(output, /#### 完整计划清单[\s\S]*1\. \[pending\] 主计划一[\s\S]*#### 汇总/);
+  assert.equal(output, "主流程回答");
+  assert.equal(summaryIndex, -1);
+  assert.equal(acceptanceIndex, -1);
+  assert.equal(summaryMarkerIndex, -1);
+  assert.equal(acceptanceMarkerIndex, -1);
+  assert.doesNotMatch(output, /完整小结：这是最后一次完整小结内容。/);
+  assert.doesNotMatch(output, /#### 完整计划清单[\s\S]*1\. \[pending\] 主计划一[\s\S]*#### 汇总/);
   assert.equal(ctx.result.turnMessages[0].content, ctx.result.output);
 });
