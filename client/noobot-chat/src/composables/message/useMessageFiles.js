@@ -196,17 +196,7 @@ function isHarnessPluginInjectedMessage(messageItem = {}) {
   );
 }
 
-const HARNESS_PLUGIN_ATTACHMENT_NAMES = new Set([
-  "harness-plan-text.txt",
-  "harness-acceptance-report.txt",
-]);
-
-function isKnownHarnessPluginAttachmentName(attachmentItem = {}) {
-  return HARNESS_PLUGIN_ATTACHMENT_NAMES.has(String(attachmentItem?.name || "").trim());
-}
-
 function isHarnessPluginAttachmentMeta(attachmentItem = {}) {
-  if (isKnownHarnessPluginAttachmentName(attachmentItem)) return true;
   const ownerType = String(attachmentItem?.attachmentOwnerType || "").trim();
   if (ownerType === "plugin") return true;
   const owner = String(attachmentItem?.attachmentOwner || "").trim();

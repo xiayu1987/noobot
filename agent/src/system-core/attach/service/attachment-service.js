@@ -53,6 +53,9 @@ export class AttachmentService {
     contentBytes = Buffer.alloc(0),
     generatedByModel = false,
     generationSource = "",
+    attachmentOwnerType = "",
+    attachmentOwner = "",
+    owner = null,
   }) {
     const attachmentId = uuidv4();
     const extension = normalizeExtension(name, mimeType);
@@ -73,6 +76,9 @@ export class AttachmentService {
       attachmentSource: scope.attachmentSource,
       generatedByModel,
       generationSource,
+      attachmentOwnerType,
+      attachmentOwner,
+      owner,
     });
 
     attachmentIndex.attachments[attachmentId] = record;
@@ -203,6 +209,9 @@ export class AttachmentService {
     attachmentSource = "model",
     artifacts = [],
     generationSource = "llm_output",
+    attachmentOwnerType = "",
+    attachmentOwner = "",
+    owner = null,
   }) {
     const basePath = resolveBasePath(this.globalConfig, userId);
     const list = Array.isArray(artifacts) ? artifacts : [];
@@ -226,6 +235,11 @@ export class AttachmentService {
         contentBytes: Buffer.from(artifactContent, "base64"),
         generatedByModel: true,
         generationSource,
+        attachmentOwnerType: safeStr(item?.attachmentOwnerType || attachmentOwnerType),
+        attachmentOwner: safeStr(item?.attachmentOwner || attachmentOwner),
+        owner: item?.owner && typeof item.owner === "object" && !Array.isArray(item.owner)
+          ? item.owner
+          : owner,
       });
       saved.push(record);
     }

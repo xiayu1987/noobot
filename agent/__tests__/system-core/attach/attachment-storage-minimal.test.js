@@ -56,6 +56,34 @@ test("AttachmentService.ingest + getAttachmentById keeps core behavior", async (
   });
 });
 
+test("AttachmentService.ingestGeneratedArtifacts preserves attachment owner metadata", async () => {
+  await withTempDir(async (workspaceRoot) => {
+    const service = new AttachmentService({ workspaceRoot });
+    const content = Buffer.from("plugin artifact", "utf8").toString("base64");
+
+    const saved = await service.ingestGeneratedArtifacts({
+      userId: "u1",
+      sessionId: "s1",
+      attachmentSource: "model",
+      generationSource: "harness_checklist",
+      attachmentOwnerType: "plugin",
+      attachmentOwner: "harness-plugin",
+      artifacts: [{ name: "checklist.txt", mimeType: "text/plain", contentBase64: content }],
+    });
+
+    assert.equal(saved.length, 1);
+    assert.equal(saved[0].attachmentOwnerType, "plugin");
+    assert.equal(saved[0].attachmentOwner, "harness-plugin");
+
+    const loaded = await service.getAttachmentById({
+      userId: "u1",
+      attachmentId: saved[0].attachmentId,
+    });
+    assert.equal(loaded.attachmentOwnerType, "plugin");
+    assert.equal(loaded.attachmentOwner, "harness-plugin");
+  });
+});
+
 test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin snapshots", async () => {
   await withTempDir(async (workspaceRoot) => {
     const service = new AttachmentService({ workspaceRoot });

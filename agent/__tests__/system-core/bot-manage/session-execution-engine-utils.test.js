@@ -59,7 +59,7 @@ test("session-execution-engine-utils normalizes plugin messages from plain and l
       },
     },
     role: "tool",
-    summarized: true,
+    additional_kwargs: { summarized: true },
     injectedMessage: true,
     injectedBy: "agentPlugin",
     injectedMessageType: "planning",

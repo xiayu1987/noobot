@@ -33,6 +33,11 @@ export function buildPublicRecord(basePath, record) {
   const parsedResultRelativePath = safeStr(record?.parsedResultRelativePath);
   const parsedResultTool = safeStr(record?.parsedResultTool);
   const parsedResultUpdatedAt = safeStr(record?.parsedResultUpdatedAt);
+  const attachmentOwnerType = safeStr(record?.attachmentOwnerType);
+  const attachmentOwner = safeStr(record?.attachmentOwner);
+  const owner = record?.owner && typeof record.owner === "object" && !Array.isArray(record.owner)
+    ? record.owner
+    : null;
   return {
     attachmentId: safeStr(record.attachmentId),
     name: safeStr(record.name),
@@ -45,6 +50,9 @@ export function buildPublicRecord(basePath, record) {
     attachmentSource: safeStr(record.attachmentSource, DEFAULT_ATTACHMENT_SOURCE),
     generatedByModel: record?.generatedByModel === true,
     generationSource: safeStr(record.generationSource),
+    ...(attachmentOwnerType ? { attachmentOwnerType } : {}),
+    ...(attachmentOwner ? { attachmentOwner } : {}),
+    ...(owner ? { owner } : {}),
     ...(parsedResultAttachmentId
       ? {
           parsedResultAttachmentId,

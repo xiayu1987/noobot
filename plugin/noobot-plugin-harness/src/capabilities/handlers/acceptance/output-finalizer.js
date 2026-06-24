@@ -115,6 +115,8 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
       sessionId,
       attachmentSource: "model",
       generationSource: "harness_checklist",
+      attachmentOwnerType: "plugin",
+      attachmentOwner: "harness-plugin",
       artifacts,
     });
     metas = markHarnessPluginAttachmentMetas(mapAttachmentRecordsToMetas(savedRecords));

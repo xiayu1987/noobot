@@ -159,7 +159,15 @@ test("acceptance checklist attachments are bound to final assistant turn output"
         controllers: {
           runtime: {
             attachmentService: {
-              ingestGeneratedArtifacts: async () => records,
+              ingestGeneratedArtifacts: async (payload = {}) => {
+                assert.equal(payload.attachmentOwnerType, "plugin");
+                assert.equal(payload.attachmentOwner, "harness-plugin");
+                return records.map((record) => ({
+                  ...record,
+                  attachmentOwnerType: payload.attachmentOwnerType,
+                  attachmentOwner: payload.attachmentOwner,
+                }));
+              },
             },
             systemRuntime: {
               userId: "u-attach",
@@ -194,6 +202,13 @@ test("acceptance checklist attachments are bound to final assistant turn output"
     effectiveAttachmentIds.slice().sort(),
     ["att_plan", "att_report"],
   );
+  const transferAttachmentOwners = (Array.isArray(finalAssistant.transferEnvelopes)
+    ? finalAssistant.transferEnvelopes
+    : []
+  )
+    .flatMap((envelope = {}) => (Array.isArray(envelope.files) ? envelope.files : []))
+    .map((file = {}) => file?.attachmentMeta?.attachmentOwnerType);
+  assert.deepEqual(transferAttachmentOwners, ["plugin", "plugin"]);
   assert.equal(finalAssistant.attachmentMetas, undefined);
   const acceptanceLogs = ctx.agentContext.payload.harness.logs.acceptance;
   assert.equal(
