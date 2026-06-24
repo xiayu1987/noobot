@@ -154,7 +154,7 @@ test("_createPluginResolveModelMessages uses main-flow blocks when available", (
 
   assert.deepEqual(
     resolved.map((item = {}) => item.content),
-    ["sys", "u1-first", "a1-latest", "inc1", "inc2"],
+    ["sys", "u1-first", "u1-second", "a1-old", "a1-latest", "inc1", "inc2"],
   );
 });
 

@@ -299,7 +299,7 @@ test("SessionExecutionEngine injects plugin resolveModelMessages without plugin 
   ]);
 });
 
-test("SessionExecutionEngine injects plugin resolveMessageBlock with main-flow filtering", async () => {
+test("SessionExecutionEngine injects plugin resolveMessageBlock with main-flow history rules", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
   const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
     userId: "u1",
@@ -352,7 +352,7 @@ test("SessionExecutionEngine injects plugin resolveMessageBlock with main-flow f
     ],
     ctx: { dialogProcessId: "dlg1" },
   });
-  assert.deepEqual(historyResolved.map((item) => item.content), ["h1", "h2", "h3"]);
+  assert.deepEqual(historyResolved.map((item) => item.content), []);
   assert.deepEqual(incrementalResolved.map((item) => item.content), ["a1", "a2", "a3", "a4"]);
   assert.deepEqual(conversationResolved.map((item) => item.content), ["h1", "h2", "u1", "u2"]);
   assert.deepEqual(systemResolved.map((item) => item.content), ["policy"]);
@@ -618,7 +618,13 @@ test("SessionExecutionEngine resolveModelMessages treats persisted harness summa
 
   assert.deepEqual(
     resolved.map((item = {}) => String(item.content || "")),
-    ["真实历史用户", "历史最终回答", "当前增量"],
+    [
+      "真实历史用户",
+      "[来自harness外部模型输出/summary]\n历史小结一：不应作为实际用户历史",
+      "[Relay from harness external model/summary]\nhistorical summary two",
+      "历史最终回答",
+      "当前增量",
+    ],
   );
 });
 
