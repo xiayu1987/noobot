@@ -37,6 +37,7 @@ const AGENT_COMPAT_ALLOWED_LINES = [
   /\[.*"(?:nodeDialogId|dialogId)"/,
   /"(?:nodeDialogId|dialogId)"/,
   /dialogProcessId:\s*anchor\?\.dialogProcessId\s*\|\|\s*anchor\?\.dialogId/,
+  /delete\s+targetMessage\.dialogId;/,
 ];
 
 async function listSourceFiles(root) {

@@ -476,6 +476,69 @@ export class SessionMessageService {
     };
   }
 
+  async stampReusedUserTurnDialogProcessId({
+    userId,
+    sessionId,
+    parentSessionId = "",
+    turnScopeId = "",
+    dialogProcessId = "",
+  } = {}) {
+    if (!userId || !sessionId) return { stamped: false, reason: "missing_session" };
+    const normalizedTurnScopeId = String(turnScopeId || "").trim();
+    if (!normalizedTurnScopeId) return { stamped: false, reason: "missing_turn_scope" };
+    const normalizedDialogProcessId = resolveDialogProcessIdFromContext({ dialogProcessId });
+    if (!normalizedDialogProcessId) return { stamped: false, reason: "missing_dialog_process_id" };
+    const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+      userId,
+      sessionId,
+      parentSessionId,
+    );
+    const session = await this.sessionRepo.findById(
+      userId,
+      sessionId,
+      resolvedParentSessionId,
+    );
+    if (!session) return { stamped: false, reason: "session_not_found" };
+    const messages = Array.isArray(session.messages) ? session.messages : [];
+    const targetIndex = (() => {
+      for (let index = messages.length - 1; index >= 0; index -= 1) {
+        const messageItem = messages[index];
+        if (String(messageItem?.role || "").trim() !== "user") continue;
+        if (String(messageItem?.turnScopeId || "").trim() !== normalizedTurnScopeId) continue;
+        if (messageItem?.injectedMessage === true || messageItem?.pluginMessage === true) continue;
+        return index;
+      }
+      return -1;
+    })();
+    if (targetIndex < 0) return { stamped: false, reason: "user_message_not_found" };
+
+    const targetMessage = messages[targetIndex];
+    if (resolveMessageDialogProcessId(targetMessage) === normalizedDialogProcessId) {
+      return {
+        stamped: false,
+        reason: "unchanged",
+        session,
+        messageIndex: targetIndex,
+        dialogProcessId: normalizedDialogProcessId,
+      };
+    }
+    targetMessage.dialogProcessId = normalizedDialogProcessId;
+    delete targetMessage.dialogId;
+    session.updatedAt = this.now();
+    const currentVersion = resolveSessionVersion(session);
+    session.version = currentVersion + 1;
+    session.revision = session.version;
+    if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
+    await this.sessionRepo.save(userId, session, resolvedParentSessionId);
+    return {
+      stamped: true,
+      session,
+      messageIndex: targetIndex,
+      version: session.version,
+      dialogProcessId: normalizedDialogProcessId,
+    };
+  }
+
   async markSessionMessagesSummarized({
     userId,
     sessionId,

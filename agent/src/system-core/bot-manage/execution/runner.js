@@ -61,6 +61,7 @@ export class SessionExecutionRunner {
     prepareRunConfig,
     prepareAgentTurnExecution,
     appendSessionTurn,
+    stampReusedUserTurnDialogProcessId,
     finalizeRunSession,
     upsertParentAsyncTask,
     now,
@@ -75,6 +76,7 @@ export class SessionExecutionRunner {
     this.prepareRunConfig = prepareRunConfig;
     this.prepareAgentTurnExecution = prepareAgentTurnExecution;
     this.appendSessionTurn = appendSessionTurn;
+    this.stampReusedUserTurnDialogProcessId = stampReusedUserTurnDialogProcessId;
     this.finalizeRunSession = finalizeRunSession;
     this.upsertParentAsyncTask = upsertParentAsyncTask;
     this.now = now;
@@ -277,6 +279,15 @@ export class SessionExecutionRunner {
         abortSignal,
         parentAsyncResultContainer: resolvedParentAsyncResultContainer,
       };
+      if (resolvedRunConfig?.reuseExistingUserTurn === true) {
+        await this.stampReusedUserTurnDialogProcessId?.({
+          userId,
+          sessionId: usedSessionId,
+          parentSessionId,
+          turnScopeId: resolvedTurnScopeId,
+          dialogProcessId,
+        });
+      }
       if (typeof this.prepareAgentTurnExecution !== "function") {
         throw new Error("prepareAgentTurnExecution is required");
       }
@@ -310,6 +321,7 @@ export class SessionExecutionRunner {
         emitEvent(runtimeEventListener, "user_message_reused", {
           sessionId: usedSessionId,
           dialogProcessId,
+          turnScopeId: resolvedTurnScopeId,
         });
       }
 
