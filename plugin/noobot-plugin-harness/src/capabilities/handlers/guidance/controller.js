@@ -90,6 +90,11 @@ function resolveWorkflowActionName(action = "", stage = "", mode = "inject") {
       ? GUIDANCE_DECISION.requestedAction.guidanceSeparateModel
       : GUIDANCE_DECISION.requestedAction.guidanceInject;
   }
+  if (action === GUIDANCE_DECISION.action.analysis) {
+    return normalizedMode === "separate_model"
+      ? GUIDANCE_DECISION.requestedAction.analysisSeparateModel
+      : GUIDANCE_DECISION.requestedAction.analysisInject;
+  }
   return GUIDANCE_DECISION.requestedAction.none;
 }
 
@@ -109,6 +114,10 @@ async function executeGuidanceWorkflowAction({
       changed = result || changed;
       executedPrimary = result === true;
     } else if (nextAction.action === GUIDANCE_DECISION.action.guidance) {
+      const result = await runGuidanceBySeparateModel(ctx, meta, { action: nextAction.action });
+      changed = result || changed;
+      executedPrimary = result === true;
+    } else if (nextAction.action === GUIDANCE_DECISION.action.analysis) {
       const result = await runGuidanceBySeparateModel(ctx, meta, { action: nextAction.action });
       changed = result || changed;
       executedPrimary = result === true;

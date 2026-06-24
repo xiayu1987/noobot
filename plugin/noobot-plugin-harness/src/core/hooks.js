@@ -92,12 +92,23 @@ function normalizeMessageBlockList(value = []) {
   return Array.isArray(value) ? value : [];
 }
 
+function isMessageSummarized(message = {}) {
+  return message?.summarized === true ||
+    message?.lc_kwargs?.summarized === true ||
+    message?.additional_kwargs?.summarized === true ||
+    message?.lc_kwargs?.additional_kwargs?.summarized === true;
+}
+
+function filterSummarizedMessages(messages = []) {
+  return normalizeMessageBlockList(messages).filter((message = {}) => !isMessageSummarized(message));
+}
+
 function resolveMessageBlocks(ctx = {}) {
   if (!ctx?.messageBlocks || typeof ctx.messageBlocks !== "object") return null;
   return {
-    system: normalizeMessageBlockList(ctx.messageBlocks.system),
-    history: normalizeMessageBlockList(ctx.messageBlocks.history),
-    incremental: normalizeMessageBlockList(ctx.messageBlocks.incremental),
+    system: filterSummarizedMessages(ctx.messageBlocks.system),
+    history: filterSummarizedMessages(ctx.messageBlocks.history),
+    incremental: filterSummarizedMessages(ctx.messageBlocks.incremental),
   };
 }
 
@@ -302,12 +313,12 @@ function compactFinalMessageBlocks(point = "", ctx = {}, options = {}) {
 
   const system = preserveSystemMessagesByPolicy(
     systemSource,
-    Array.isArray(systemResolved) ? systemResolved : systemSource,
+    filterSummarizedMessages(Array.isArray(systemResolved) ? systemResolved : systemSource),
   );
-  const history = Array.isArray(historyResolved) ? historyResolved : historySource;
+  const history = filterSummarizedMessages(Array.isArray(historyResolved) ? historyResolved : historySource);
   const incrementalBase = resolveFrontendUserAnchoredIncremental(
     incrementalSource,
-    Array.isArray(incrementalResolved) ? incrementalResolved : incrementalSource,
+    filterSummarizedMessages(Array.isArray(incrementalResolved) ? incrementalResolved : incrementalSource),
   );
   const conversationResolved = options.resolveMessageBlock({
     scope: "conversation",
@@ -316,7 +327,7 @@ function compactFinalMessageBlocks(point = "", ctx = {}, options = {}) {
   });
   const incrementalConversation = resolveFrontendUserAnchoredIncremental(
     incrementalSource,
-    Array.isArray(conversationResolved) ? conversationResolved : incrementalBase,
+    filterSummarizedMessages(Array.isArray(conversationResolved) ? conversationResolved : incrementalBase),
   );
   const historyConversation = filterCurrentUserResidueFromHistory(history, incrementalConversation);
   const conversation = [...historyConversation, ...incrementalConversation];

@@ -252,6 +252,145 @@ describe("useMessageFiles", () => {
     });
   });
 
+  it("dedupes refreshed harness attachments with different ids by stable file identity and keeps plugin ownership", () => {
+    const messageItem = {
+      role: "assistant",
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      dialogProcessId: "dp-1",
+      content: "done",
+      attachmentMetas: [
+        {
+          attachmentId: "plan-plugin-live",
+          name: "harness-plan-text.txt",
+          size: 1400,
+          attachmentOwnerType: "plugin",
+          attachmentOwner: "harness-plugin",
+        },
+        {
+          attachmentId: "report-plugin-live",
+          name: "harness-acceptance-report.txt",
+          size: 5600,
+          attachmentOwnerType: "plugin",
+          attachmentOwner: "harness-plugin",
+        },
+      ],
+    };
+    const refreshedSessionDoc = {
+      sessionId: "session-1",
+      messages: [
+        {
+          role: "assistant",
+          sessionId: "session-1",
+          turnScopeId: "turn-1",
+          dialogProcessId: "dp-1",
+          content: "done",
+          attachmentMetas: [
+            { attachmentId: "plan-agent-refresh", name: "harness-plan-text.txt", size: 1400 },
+            { attachmentId: "report-agent-refresh", name: "harness-acceptance-report.txt", size: 5600 },
+          ],
+        },
+      ],
+    };
+
+    const { displayedAttachmentMetas } = useMessageFiles({
+      getMessageItem: () => messageItem,
+      getAllMessages: () => [messageItem],
+      getSessionDocs: () => [refreshedSessionDoc],
+      getUserId: () => "admin",
+    });
+
+    expect(displayedAttachmentMetas.value).toHaveLength(2);
+    expect(displayedAttachmentMetas.value.map((item) => item.attachmentId)).toEqual([
+      "plan-plugin-live",
+      "report-plugin-live",
+    ]);
+    expect(displayedAttachmentMetas.value).toEqual([
+      expect.objectContaining({ name: "harness-plan-text.txt", attachmentOwnerType: "plugin" }),
+      expect.objectContaining({ name: "harness-acceptance-report.txt", attachmentOwnerType: "plugin" }),
+    ]);
+  });
+
+  it("recognizes harness plugin ownership restored from nested owner metadata", () => {
+    const messageItem = {
+      role: "assistant",
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      dialogProcessId: "dp-1",
+      content: "done",
+      attachmentMetas: [
+        {
+          attachmentId: "plan-nested-owner",
+          name: "harness-plan-text.txt",
+          size: 1400,
+          owner: { owner: "harness-plugin" },
+        },
+        {
+          attachmentId: "report-nested-owner",
+          name: "harness-acceptance-report.txt",
+          size: 5600,
+          attachment: { owner: { source: "harness-plugin" } },
+        },
+      ],
+    };
+
+    const { displayedAttachmentMetas } = useMessageFiles({
+      getMessageItem: () => messageItem,
+      getAllMessages: () => [messageItem],
+      getSessionDocs: () => [],
+      getUserId: () => "admin",
+    });
+
+    expect(displayedAttachmentMetas.value).toHaveLength(2);
+    expect(displayedAttachmentMetas.value).toEqual([
+      expect.objectContaining({ attachmentId: "plan-nested-owner", attachmentOwnerType: "plugin" }),
+      expect.objectContaining({ attachmentId: "report-nested-owner", attachmentOwnerType: "plugin" }),
+    ]);
+  });
+
+  it("restores persisted harness checklist attachments as plugin-owned and dedupes refreshed copies", () => {
+    const messageItem = {
+      role: "assistant",
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      dialogProcessId: "dp-1",
+      content: "done",
+      attachmentMetas: [
+        { attachmentId: "plan-current", name: "harness-plan-text.txt", size: 1400 },
+        { attachmentId: "report-current", name: "harness-acceptance-report.txt", size: 5600 },
+      ],
+    };
+    const refreshedSessionDoc = {
+      sessionId: "session-1",
+      messages: [
+        {
+          role: "assistant",
+          sessionId: "session-1",
+          turnScopeId: "turn-1",
+          dialogProcessId: "dp-1",
+          content: "done",
+          attachmentMetas: [
+            { attachmentId: "plan-refreshed", name: "harness-plan-text.txt", size: 1400 },
+            { attachmentId: "report-refreshed", name: "harness-acceptance-report.txt", size: 5600 },
+          ],
+        },
+      ],
+    };
+
+    const { displayedAttachmentMetas } = useMessageFiles({
+      getMessageItem: () => messageItem,
+      getAllMessages: () => [messageItem],
+      getSessionDocs: () => [refreshedSessionDoc],
+      getUserId: () => "admin",
+    });
+
+    expect(displayedAttachmentMetas.value).toHaveLength(2);
+    expect(displayedAttachmentMetas.value).toEqual([
+      expect.objectContaining({ name: "harness-plan-text.txt", attachmentOwnerType: "plugin" }),
+      expect.objectContaining({ name: "harness-acceptance-report.txt", attachmentOwnerType: "plugin" }),
+    ]);
+  });
+
   it("does not infer plugin ownership from harness-like generationSource alone", () => {
     const messageItem = {
       role: "assistant",

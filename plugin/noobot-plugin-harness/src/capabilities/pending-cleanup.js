@@ -10,6 +10,7 @@ const DEFAULT_PENDING_TTL_HOOK_TURNS = 8;
 const WARN_COOLDOWN_TURNS = 3;
 const TRACKED_PENDING_KEYS = Object.freeze([
   "guidance",
+  "analysis",
   "summary",
   "planRevision",
   "planRefinement",
@@ -57,6 +58,7 @@ function resolveCurrentHookTurn(state = {}) {
 function isPendingKeyActive(key = "", value = null) {
   if (
     key === "summary" ||
+    key === "analysis" ||
     key === "planRevision" ||
     key === "planRefinement" ||
     key === "phaseAcceptance"
@@ -139,6 +141,7 @@ export function cleanupExpiredPendingOnHook(point = "", ctx = {}, meta = {}) {
       state,
       key,
       key === "summary" ||
+      key === "analysis" ||
       key === "planRevision" ||
       key === "planRefinement" ||
       key === "phaseAcceptance"

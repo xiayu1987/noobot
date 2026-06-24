@@ -92,6 +92,8 @@ function collectWorkflowCandidates(state = {}) {
 
   if (pending.phaseAcceptance === true) candidates.push(ACCEPTANCE_DECISION.action.phaseAcceptance);
 
+  if (pending.analysis === true) candidates.push(GUIDANCE_DECISION.label.analysis);
+
   if (pending.summary === true) {
     candidates.push(
       state?.flags?.summaryByCharsPrompted === true
@@ -131,6 +133,7 @@ function resolveBlockReason(action = "", state = {}) {
     (action === GUIDANCE_DECISION.label.summaryOverflow || action === GUIDANCE_DECISION.label.summaryTurns) &&
     pending.phaseAcceptance === true &&
     !pending.guidance &&
+    pending.analysis !== true &&
     !planUpdate.active &&
     state?.flags?.planningCaptured === true
   ) {
@@ -143,6 +146,7 @@ function reasonForAction(action = "", state = {}) {
   if (action === GUIDANCE_DECISION.label.guidance) return GUIDANCE_DECISION.reason.pendingGuidance;
   if (action === GUIDANCE_DECISION.label.planUpdateRevision) return GUIDANCE_DECISION.reason.pendingRevision;
   if (action === GUIDANCE_DECISION.label.planUpdateRefinement) return GUIDANCE_DECISION.reason.pendingRefinement;
+  if (action === GUIDANCE_DECISION.label.analysis) return GUIDANCE_DECISION.reason.pendingAnalysis;
   if (action === GUIDANCE_DECISION.label.summaryOverflow) return GUIDANCE_DECISION.reason.pendingSummaryOverflow;
   if (action === GUIDANCE_DECISION.label.summaryTurns) return GUIDANCE_DECISION.reason.pendingSummaryTurns;
   if (action === ACCEPTANCE_DECISION.action.phaseAcceptance) return ACCEPTANCE_DECISION.reason.phaseAcceptancePending;

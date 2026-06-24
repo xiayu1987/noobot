@@ -20,6 +20,17 @@ function normalizeBlockList(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function isMessageSummarized(message = {}) {
+  return message?.summarized === true ||
+    message?.lc_kwargs?.summarized === true ||
+    message?.additional_kwargs?.summarized === true ||
+    message?.lc_kwargs?.additional_kwargs?.summarized === true;
+}
+
+function filterSummarizedMessages(messages = []) {
+  return normalizeBlockList(messages).filter((message = {}) => !isMessageSummarized(message));
+}
+
 function resolveMessageBlocks(ctx = {}) {
   const messageBlocks =
     ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : null;
@@ -37,11 +48,11 @@ function resolveFilteredBlock({
   messages = [],
   ctx = {},
 } = {}) {
-  const source = normalizeBlockList(messages);
+  const source = filterSummarizedMessages(messages);
   if (typeof resolver !== "function") return source;
   try {
     const resolved = resolver({ scope, messages: source, ctx });
-    return Array.isArray(resolved) ? resolved : source;
+    return Array.isArray(resolved) ? filterSummarizedMessages(resolved) : source;
   } catch {
     return source;
   }

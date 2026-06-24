@@ -23,6 +23,7 @@ test("workflow scheduler order is described by one flow/subflow config item", ()
       "plan_update:revision:plan_update_revision",
       "plan_update:refinement:plan_update_refinement",
       "phase_acceptance:phase:phase_acceptance",
+      "guidance:analysis:analysis",
       "summary:overflow:summary_overflow",
       "summary:turns:summary_turns",
       "phase_acceptance:semantic_validation:acceptance_semantic_validation",

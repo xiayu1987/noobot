@@ -63,11 +63,22 @@ function collectPayloadMessages(payloadMessages = null) {
   if (!payloadMessages || typeof payloadMessages !== "object" || Array.isArray(payloadMessages)) {
     return [];
   }
-  return [
+  return filterSummarizedMessages([
     ...(Array.isArray(payloadMessages.system) ? payloadMessages.system : []),
     ...(Array.isArray(payloadMessages.history) ? payloadMessages.history : []),
     ...(Array.isArray(payloadMessages.incremental) ? payloadMessages.incremental : []),
-  ];
+  ]);
+}
+
+function isMessageSummarized(message = {}) {
+  return message?.summarized === true ||
+    message?.lc_kwargs?.summarized === true ||
+    message?.additional_kwargs?.summarized === true ||
+    message?.lc_kwargs?.additional_kwargs?.summarized === true;
+}
+
+function filterSummarizedMessages(messages = []) {
+  return (Array.isArray(messages) ? messages : []).filter((message = {}) => !isMessageSummarized(message));
 }
 
 function shouldUsePayloadMessageFallback(purpose = "") {
@@ -80,7 +91,7 @@ function shouldUsePayloadMessageFallback(purpose = "") {
 }
 
 function resolveContextMessages(ctx = {}, { includePayloadMessages = false } = {}) {
-  if (Array.isArray(ctx?.messages) && ctx.messages.length) return ctx.messages;
+  if (Array.isArray(ctx?.messages) && ctx.messages.length) return filterSummarizedMessages(ctx.messages);
   if (!includePayloadMessages) return [];
   const agentPayloadMessages = collectPayloadMessages(ctx?.agentContext?.payload?.messages);
   if (agentPayloadMessages.length) return agentPayloadMessages;
@@ -91,7 +102,7 @@ function resolveContextMessages(ctx = {}, { includePayloadMessages = false } = {
 
 function resolveAgentModelMessages(ctx = {}, fallbackMessages = [], { includePayloadMessages = false } = {}) {
   if (Array.isArray(fallbackMessages) && fallbackMessages.length) {
-    return fallbackMessages;
+    return filterSummarizedMessages(fallbackMessages);
   }
   return resolveContextMessages(ctx, { includePayloadMessages });
 }
@@ -103,7 +114,7 @@ export function resolveCapabilityModelMessages(
   const includePayloadMessages = shouldUsePayloadMessageFallback(purpose);
   const hasExplicitMessages = Array.isArray(messages) && messages.length > 0;
   const sourceMessages = hasExplicitMessages
-    ? messages
+    ? filterSummarizedMessages(messages)
     : resolveContextMessages(ctx, { includePayloadMessages });
   const resolver = meta?.harness?.resolveModelMessages;
   if (typeof resolver === "function") {
@@ -113,7 +124,7 @@ export function resolveCapabilityModelMessages(
         purpose: String(purpose || "").trim(),
         messages: hasExplicitMessages ? sourceMessages : [],
       });
-      if (Array.isArray(resolved)) return resolved;
+      if (Array.isArray(resolved)) return filterSummarizedMessages(resolved);
     } catch {
       // fall through to local compatibility fallback
     }

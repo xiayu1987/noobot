@@ -25,6 +25,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
         { flow: "plan_update", subflow: "revision", action: "plan_update_revision", executor: "guidance", kind: "workflow" },
         { flow: "plan_update", subflow: "refinement", action: "plan_update_refinement", executor: "guidance", kind: "workflow" },
         { flow: "phase_acceptance", subflow: "phase", action: "phase_acceptance", executor: "acceptance", kind: "workflow" },
+        { flow: "guidance", subflow: "analysis", action: "analysis", executor: "guidance", kind: "workflow" },
         { flow: "summary", subflow: "overflow", action: "summary_overflow", executor: "guidance", kind: "workflow" },
         { flow: "summary", subflow: "turns", action: "summary_turns", executor: "guidance", kind: "workflow" },
         { flow: "phase_acceptance", subflow: "semantic_validation", action: "acceptance_semantic_validation", executor: "acceptance", kind: "workflow" },
@@ -80,6 +81,8 @@ export const WORKFLOW_PARAMS = deepFreeze({
         refinementScheduledByInject: "planning_refinement_scheduled_by_inject",
         planUpdateCaptureCompletedInject: "planning_plan_update_capture_completed_inject",
         planUpdateCaptureFailedInject: "planning_plan_update_capture_failed_inject",
+        analysisScheduledByTurnThreshold: "guidance_analysis_scheduled_by_turn_threshold",
+        analysisGeneratedBySeparateModel: "guidance_analysis_generated_by_separate_model",
       },
       acceptance: {
         phaseAcceptanceScheduledByTurnThreshold: "phase_acceptance_scheduled_by_turn_threshold",
@@ -128,6 +131,9 @@ export const WORKFLOW_PARAMS = deepFreeze({
         summary: {
           turnsThreshold: 10,
         },
+        analysis: {
+          turnsThreshold: 10,
+        },
       },
       planning: {
         planUpdate: {
@@ -148,6 +154,9 @@ export const WORKFLOW_PARAMS = deepFreeze({
         summary: {
           turnsThreshold: 23,
         },
+        analysis: {
+          turnsThreshold: 10,
+        },
       },
       planning: {
         planUpdate: {
@@ -167,6 +176,9 @@ export const WORKFLOW_PARAMS = deepFreeze({
       guidance: {
         summary: {
           turnsThreshold: 15,
+        },
+        analysis: {
+          turnsThreshold: 10,
         },
       },
       planning: {
@@ -239,6 +251,9 @@ export const WORKFLOW_PARAMS = deepFreeze({
         forceAcceptanceWhenStillOverflow: true,
       },
     },
+    analysis: {
+      turnsThreshold: 10,
+    },
     failureThreshold: {
       consecutive: 3,
       accumulated: 10,
@@ -248,6 +263,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
         summary: "summary",
         guidance: "guidance",
         planUpdate: "plan_update",
+        analysis: "analysis",
         none: "none",
       },
       label: {
@@ -256,6 +272,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
         planUpdateRevision: "plan_update_revision",
         planUpdateRefinement: "plan_update_refinement",
         guidance: "guidance",
+        analysis: "analysis",
         phaseAcceptance: "phase_acceptance",
         none: "none",
       },
@@ -269,6 +286,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
         pendingGuidance: "pending_guidance",
         pendingRevision: "pending_revision",
         pendingRefinement: "pending_refinement",
+        pendingAnalysis: "pending_analysis",
         idle: "idle",
       },
       requestedAction: {
@@ -277,6 +295,8 @@ export const WORKFLOW_PARAMS = deepFreeze({
         summarySeparateModel: "summary_separate_model",
         guidanceInject: "guidance_inject",
         guidanceSeparateModel: "guidance_separate_model",
+        analysisInject: "analysis_inject",
+        analysisSeparateModel: "analysis_separate_model",
         planUpdateRevisionInject: "plan_update_revision_inject",
         planUpdateRevisionSeparateModel: "plan_update_revision_separate_model",
         planUpdateRefinementInject: "plan_update_refinement_inject",

@@ -191,6 +191,7 @@ export function buildWorkflowResponsibilityConstraintUserPrompt(
   if (normalizedStage.includes("revision")) stageKey = HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_STAGE_REVISION;
   else if (normalizedStage.includes("refinement")) stageKey = HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_STAGE_REFINEMENT;
   else if (normalizedStage.includes("summary")) stageKey = HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_STAGE_SUMMARY;
+  else if (normalizedStage.includes("analysis")) stageKey = HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_STAGE_ANALYSIS;
   else if (normalizedStage.includes("phase_acceptance")) stageKey = HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_STAGE_PHASE_ACCEPTANCE;
   else if (
     normalizedStage.includes("acceptance_semantic_validation") ||
@@ -234,6 +235,22 @@ export function getGuidanceSummaryMarker(locale = LOCALE.ZH_CN) {
 export function getGuidanceMarker(locale = LOCALE.ZH_CN) {
   void locale;
   return "<!-- harness-guidance -->";
+}
+
+export function getGuidanceAnalysisMarker(locale = LOCALE.ZH_CN) {
+  void locale;
+  return "<!-- harness-guidance-analysis -->";
+}
+
+export function buildGuidanceAnalysisPromptText({
+  locale = LOCALE.ZH_CN,
+  marker = "",
+} = {}) {
+  return [
+    String(marker || "").trim(),
+    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_ANALYSIS_PROMPT_GOAL),
+    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_ANALYSIS_OUTPUT_CONSTRAINT),
+  ].filter(Boolean).join("\n");
 }
 
 export function buildGuidanceFailurePromptText({

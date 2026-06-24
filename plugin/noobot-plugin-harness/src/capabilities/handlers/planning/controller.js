@@ -59,6 +59,7 @@ const LLM_SUMMARY_OVERFLOW_POLICY = Object.freeze({
 const DEFAULT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD = WORKFLOW_PARAMS.planning.planUpdate.triggerTurnsThreshold;
 const DEFAULT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
   WORKFLOW_PARAMS.acceptance.phase.triggerTurnsThreshold;
+const ANALYSIS_TRIGGER_TURNS_THRESHOLD = WORKFLOW_PARAMS.guidance.analysis.turnsThreshold;
 const PLANNING_THRESHOLD_SNAPSHOT_EVENT = "planning_threshold_snapshot";
 
 function normalizePositiveInteger(value = 0, fallback = 0) {
@@ -78,6 +79,10 @@ function resolvePlanningTurnThresholds(ctx = {}) {
     summaryTurnsThreshold: normalizePositiveInteger(
       scopedGuidance?.summary?.turnsThreshold,
       DEFAULT_LLM_SUMMARY_THRESHOLD,
+    ),
+    analysisTriggerTurnsThreshold: normalizePositiveInteger(
+      scopedGuidance?.analysis?.turnsThreshold,
+      ANALYSIS_TRIGGER_TURNS_THRESHOLD,
     ),
     planUpdateTriggerTurnsThreshold: normalizePositiveInteger(
       scoped?.planUpdate?.triggerTurnsThreshold,
@@ -122,6 +127,7 @@ function resolvePlanningTriggeredActions({
   summary = false,
   summaryByCharsPrompted = false,
   planUpdate = false,
+  analysis = false,
   phaseAcceptance = false,
 } = {}) {
   const actions = [];
@@ -132,6 +138,9 @@ function resolvePlanningTriggeredActions({
   }
   if (planUpdate) {
     actions.push(PLANNING_DECISION.label.planUpdateRevision);
+  }
+  if (analysis) {
+    actions.push(WORKFLOW_PARAMS.guidance.decisions.label.analysis);
   }
   if (phaseAcceptance) {
     actions.push(PLANNING_DECISION.label.phaseAcceptance);
@@ -284,12 +293,14 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
         summary: false,
         summaryByCharsPrompted: false,
         guidance: null,
+        analysis: false,
         planUpdate: false,
         phaseAcceptance: false,
         planningCaptured: false,
       };
       if (holder) {
         holder.state.counters.llmTurns += 1;
+        holder.state.counters.analysisTurns = Number(holder.state.counters.analysisTurns || 0) + 1;
         holder.state.counters.planUpdateTurns = Number(holder.state.counters.planUpdateTurns || 0) + 1;
         holder.state.counters.phaseAcceptanceTurns =
           Number(holder.state.counters.phaseAcceptanceTurns || 0) + 1;
@@ -297,12 +308,15 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
         const planningThresholds = resolvePlanningTurnThresholds(ctx);
         const summaryTurnsThreshold = planningThresholds.summaryTurnsThreshold;
         const planUpdateTriggerTurnsThreshold = planningThresholds.planUpdateTriggerTurnsThreshold;
+        const analysisTriggerTurnsThreshold = planningThresholds.analysisTriggerTurnsThreshold;
         const phaseAcceptanceTriggerTurnsThreshold =
           planningThresholds.phaseAcceptanceTriggerTurnsThreshold;
         const reachedTurnsSummary = holder.state.counters.llmTurns > summaryTurnsThreshold;
         let reachedCharsSummary = currentChars > LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD;
         const reachedPlanUpdateTurns =
           holder.state.counters.planUpdateTurns >= planUpdateTriggerTurnsThreshold;
+        const reachedAnalysisTurns =
+          holder.state.counters.analysisTurns >= analysisTriggerTurnsThreshold;
         const reachedPhaseAcceptanceTurns =
           holder.state.counters.phaseAcceptanceTurns >= phaseAcceptanceTriggerTurnsThreshold;
 
@@ -314,17 +328,20 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
               thresholdMode: planningThresholds.mode,
               counters: {
                 llmTurns: holder.state.counters.llmTurns,
+                analysisTurns: holder.state.counters.analysisTurns,
                 planUpdateTurns: holder.state.counters.planUpdateTurns,
                 phaseAcceptanceTurns: holder.state.counters.phaseAcceptanceTurns,
               },
               thresholds: {
                 summaryTurnsThreshold,
+                analysisTriggerTurnsThreshold,
                 planUpdateTriggerTurnsThreshold,
                 phaseAcceptanceTriggerTurnsThreshold,
               },
               reached: {
                 summaryTurns: reachedTurnsSummary,
                 summaryChars: reachedCharsSummary,
+                analysisTurns: reachedAnalysisTurns,
                 planUpdateTurns: reachedPlanUpdateTurns,
                 phaseAcceptanceTurns: reachedPhaseAcceptanceTurns,
               },
@@ -410,6 +427,19 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
           }
         }
 
+        if (reachedAnalysisTurns) {
+          setPendingStateWithMeta(holder.state, "analysis", true);
+          holder.state.counters.analysisTurns = 0;
+          appendCapabilityLog(ctx, {
+            domain: CAPABILITY_DOMAIN.GUIDANCE,
+            event: WORKFLOW_PARAMS.logging.events.guidance.analysisScheduledByTurnThreshold,
+            detail: {
+              triggerTurns: analysisTriggerTurnsThreshold,
+              thresholdMode: planningThresholds.mode,
+            },
+          });
+        }
+
         if (reachedPhaseAcceptanceTurns) {
           let phaseAcceptanceScheduled = false;
           if (
@@ -452,6 +482,7 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
           summary: holder.state.pending?.summary === true,
           summaryByCharsPrompted: holder.state.flags?.summaryByCharsPrompted === true,
           guidance: holder.state.pending?.guidance || null,
+          analysis: holder.state.pending?.analysis === true,
           planUpdate: resolvePendingPlanUpdate(holder.state).active === true,
           phaseAcceptance: holder.state.pending?.phaseAcceptance === true,
           planningCaptured: holder.state.flags?.planningCaptured === true,
@@ -460,6 +491,7 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
           summary: pendingSnapshotRaw.summary,
           summaryByCharsPrompted: pendingSnapshotRaw.summaryByCharsPrompted,
           planUpdate: pendingSnapshotRaw.planUpdate,
+          analysis: pendingSnapshotRaw.analysis,
           phaseAcceptance: pendingSnapshotRaw.phaseAcceptance,
         });
       }
@@ -477,6 +509,9 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
         guidance: {
           active: Boolean(pendingSnapshotRaw.guidance),
           payload: pendingSnapshotRaw.guidance || null,
+        },
+        analysis: {
+          active: pendingSnapshotRaw.analysis === true,
         },
         planUpdate: {
           active: planUpdateSnapshot.active === true,
