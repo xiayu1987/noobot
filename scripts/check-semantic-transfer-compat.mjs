@@ -82,6 +82,12 @@ const OUT_OF_SCOPE_SEMANTIC_TRANSFER_REGEXES = [
   { api: "materializeOutput", regex: /\bmaterializeOutput\b/ },
 ];
 
+const HARNESS_FINAL_MESSAGE_COMPOSITION_DIR = "plugin/noobot-plugin-harness/src/";
+const HARNESS_FINAL_MESSAGE_COMPOSITION_REGEXES = [
+  { field: "harness_final_message", regex: /\bharness_final_message\b/ },
+  { field: "NOOBOT_HARNESS_COLLAPSE", regex: /\bNOOBOT_HARNESS_COLLAPSE\b/ },
+];
+
 const REQUIRED_TASK_SUMMARY_TRANSFER_FILE = "agent/src/system-core/agent/core/execution/tool-runner.js";
 const REQUIRED_TASK_SUMMARY_TRANSFER_SNIPPETS = [
   {
@@ -144,7 +150,7 @@ const LEGACY_FIELD_ALLOWED_FILES = new Map(Object.entries({
   "client/noobot-chat/src/composables/infra/transferEnvelopes.js": "frontend semantic-transfer adapter maps envelope files to legacy display metas",
   "client/noobot-chat/src/composables/message/useMessageFiles.js": "frontend message file list consumes attachmentMetas compatibility after transfer-first extraction",
 
-  "plugin/noobot-plugin-harness/src/capabilities/handlers/acceptance/output-finalizer.js": "harness final output legacy fallback with transfer payload",
+  "plugin/noobot-plugin-harness/src/capabilities/handlers/acceptance/output-finalizer.js": "harness final output artifact attachment keeps legacy metas alongside transfer payload",
   "plugin/noobot-plugin-harness/src/capabilities/handlers/guidance/controller.js": "harness relay compatibility",
   "plugin/noobot-plugin-harness/src/capabilities/handlers/guidance/model-runner.js": "harness relay compatibility",
   "plugin/noobot-plugin-harness/src/capabilities/handlers/planning/refinement-runner.js": "harness relay compatibility",
@@ -232,6 +238,20 @@ function detectFile(file) {
     }
 
     if (isCommentOrImportLine(line)) continue;
+
+    if (rel.startsWith(HARNESS_FINAL_MESSAGE_COMPOSITION_DIR)) {
+      for (const item of HARNESS_FINAL_MESSAGE_COMPOSITION_REGEXES) {
+        if (!item.regex.test(line)) continue;
+        violations.push({
+          type: "harness-final-message-composition",
+          field: item.field,
+          file: rel,
+          line: index + 1,
+          text: line.trim(),
+          hint: "Harness final output must not append latest summaries, acceptance checklists, or harness collapse sections to the final assistant message.",
+        });
+      }
+    }
 
     for (const item of OVERFLOW_FIELD_REGEXES) {
       if (!item.regex.test(line)) continue;

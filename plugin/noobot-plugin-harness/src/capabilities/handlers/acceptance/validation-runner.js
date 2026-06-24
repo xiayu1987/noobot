@@ -69,6 +69,23 @@ function buildTextAcceptanceValidationResult(text = "") {
   };
 }
 
+function isSummaryRelayMessage(message = {}) {
+  const injectedType = String(
+    message?.injectedMessageType ||
+      message?.injected_message_type ||
+      message?.lc_kwargs?.injectedMessageType ||
+      message?.lc_kwargs?.injected_message_type ||
+      "",
+  ).trim();
+  if (injectedType === "separate_model_relay:summary") return true;
+  const content = String(message?.content ?? message?.lc_kwargs?.content ?? "").trim();
+  return /^\[(?:harness:summary|来自harness外部模型输出\/summary|from harness external model output\/summary)\]/i.test(content);
+}
+
+function filterHistoricalSummaryRelayMessages(messages = []) {
+  return (Array.isArray(messages) ? messages : []).filter((message) => !isSummaryRelayMessage(message));
+}
+
 function resolveAcceptanceMainPlanContext(
   promptPayload = {},
   bucket = {},
@@ -420,10 +437,10 @@ export async function runPhaseAcceptanceBySeparateModel(
     meta,
     includeWorkflowPolicy: false,
   });
-  const agentMessages = resolveCapabilityModelMessages(meta, {
+  const agentMessages = filterHistoricalSummaryRelayMessages(resolveCapabilityModelMessages(meta, {
     ctx,
     purpose: "phase_acceptance",
-  });
+  }));
   if (shouldRunFromPending) {
     setPendingStateWithMeta(state, "phaseAcceptance", false);
   }
@@ -574,10 +591,10 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
           locale,
           agentMessages: buildCapabilityModelMessages({
             locale,
-            agentMessages: resolveCapabilityModelMessages(meta, {
+            agentMessages: filterHistoricalSummaryRelayMessages(resolveCapabilityModelMessages(meta, {
               ctx,
               purpose: "phase_acceptance_before_final",
-            }),
+            })),
             constraints: [],
             task: "",
           }),

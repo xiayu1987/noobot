@@ -215,10 +215,10 @@ test("harness planning captures checklist and forces acceptance at final output"
     result,
     agentContext,
   });
-  assert.match(String(result.output), /Harness-验收/);
-  assert.match(String(result.output), /#### 完整计划清单/);
-  assert.match(String(result.output), /1\. \[pending\] 解析附件/);
-  assert.match(String(result.output), /#### 汇总/);
+  assert.match(String(result.output), /^done/);
+  assert.doesNotMatch(String(result.output), /Harness-验收|NOOBOT_HARNESS_COLLAPSE|acceptanceReport|完整计划清单/);
+  assert.equal(Array.isArray(agentContext.payload.harness.acceptanceReports), true);
+  assert.equal(agentContext.payload.harness.acceptanceReports.length, 1);
 });
 
 test("harness planning injects refinement tool and tool call runs plugin-side refinement directly", async () => {

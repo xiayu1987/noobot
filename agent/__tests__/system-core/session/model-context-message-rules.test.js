@@ -13,12 +13,19 @@ function contents(messages = []) {
   return messages.map((item = {}) => String(item.content || item.tool_call_id || item.tool_calls?.[0]?.id || ""));
 }
 
-test("model-context rules 1.1: systemMessages keeps main/plugin system, drops summarized non-current, preserves order without clipping", () => {
+test("model-context rules 1.1: systemMessages keeps latest injected system by type, drops summarized non-current, preserves order without clipping", () => {
   const input = [
     { role: "system", content: "main-system-1" },
     {
       role: "system",
-      content: "plugin-system",
+      content: "plugin-system-old",
+      injectedMessage: true,
+      injectedBy: "agent-plugin",
+      injectedMessageType: "policy_patch",
+    },
+    {
+      role: "system",
+      content: "plugin-system-latest",
       injectedMessage: true,
       injectedBy: "agent-plugin",
       injectedMessageType: "policy_patch",
@@ -40,14 +47,14 @@ test("model-context rules 1.1: systemMessages keeps main/plugin system, drops su
 
   assert.deepEqual(contents(result), [
     "main-system-1",
-    "plugin-system",
+    "plugin-system-latest",
     "current-system-context-even-if-summarized",
     ...Array.from({ length: 12 }, (_, index) => `main-system-extra-${index + 1}`),
   ]);
   assert.equal(result.length, 15);
 });
 
-test("model-context rules 1.2: historyMessages groups by dialog id, keeps first actual user and latest assistant, filters auxiliary, then clips to latest 10", () => {
+test("model-context rules 1.2: historyMessages keeps non-system unsummarized messages from first actual user to latest assistant for latest 3 rounds", () => {
   const dialogs = Array.from({ length: 6 }, (_, index) => {
     const number = index + 1;
     const dialogFields = number % 2 === 0
@@ -58,24 +65,33 @@ test("model-context rules 1.2: historyMessages groups by dialog id, keeps first 
       { role: "user", content: `aux-user-meta-${number}`, additional_kwargs: { noobotInternalMessageType: "user_meta" }, ...dialogFields },
       { role: "user", content: `aux-recovered-summary-${number}`, recoveredFromUnpairedTaskSummary: true, ...dialogFields },
       { role: "user", content: `actual-user-${number}-first`, ...dialogFields },
+      { role: "system", content: `system-${number}`, ...dialogFields },
       { role: "user", content: `actual-user-${number}-second`, ...dialogFields },
       { role: "assistant", content: `assistant-${number}-old`, ...dialogFields },
+      { role: "tool", content: `tool-${number}`, ...dialogFields },
+      { role: "assistant", content: `assistant-${number}-summarized`, summarized: true, ...dialogFields },
       { role: "assistant", content: `assistant-${number}-latest`, ...dialogFields },
+      { role: "tool", content: `after-latest-tool-${number}`, ...dialogFields },
     ];
   }).flat();
 
   const result = resolveMainModelHistoryMessages({ sourceMessages: dialogs });
 
   assert.deepEqual(contents(result), [
-    "actual-user-2-first",
-    "assistant-2-latest",
-    "actual-user-3-first",
-    "assistant-3-latest",
     "actual-user-4-first",
+    "actual-user-4-second",
+    "assistant-4-old",
+    "tool-4",
     "assistant-4-latest",
     "actual-user-5-first",
+    "actual-user-5-second",
+    "assistant-5-old",
+    "tool-5",
     "assistant-5-latest",
     "actual-user-6-first",
+    "actual-user-6-second",
+    "assistant-6-old",
+    "tool-6",
     "assistant-6-latest",
   ]);
 });

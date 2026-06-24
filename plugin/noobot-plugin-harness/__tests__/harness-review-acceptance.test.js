@@ -404,7 +404,8 @@ test("harness review attachToFinalOutput false keeps report internal", async () 
   });
 
   assert.doesNotMatch(String(result.output), /Harness-Review/);
-  assert.match(String(result.output), /Harness-验收/);
+  assert.equal(String(result.output), "done");
+  assert.equal(agentContext.payload.harness.acceptanceReports.length, 1);
   assert.equal(agentContext.payload.harness.reviewReports.length, 1);
   assert.equal(
     agentContext.payload.harness.logs.review.filter((item = {}) => item?.event === "review_report_generated").length,
@@ -451,7 +452,7 @@ test("harness resets acceptanceRequested/checklistArtifactsAttached on next turn
   assert.equal(agentContext.payload.harness.state.flags.checklistArtifactsAttached, false);
 });
 
-test("harness forced acceptance is owned by acceptance and appended once", async () => {
+test("harness forced acceptance is owned by acceptance without appending to final output", async () => {
   const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
 
@@ -479,8 +480,10 @@ test("harness forced acceptance is owned by acceptance and appended once", async
     agentContext,
   });
 
-  assert.equal((String(result.output).match(/\[Harness-验收\]/g) || []).length, 1);
-  assert.match(String(result.output), /NOOBOT_HARNESS_COLLAPSE:start[^>]*kind="acceptance"/);
+  assert.match(String(result.output), /^done/);
+  assert.doesNotMatch(String(result.output), /\[Harness-验收\]/);
+  assert.doesNotMatch(String(result.output), /NOOBOT_HARNESS_COLLAPSE/);
+  assert.doesNotMatch(String(result.output), /acceptanceReport|完整计划清单/);
   assert.equal(agentContext.payload.harness.acceptanceReports.length, 1);
   assert.equal(agentContext.payload.harness.logs.acceptance.some((log) => log.event === "forced_acceptance_triggered"), true);
   assert.equal(agentContext.payload.harness.logs.planning.some((log) => log.event === "forced_acceptance_triggered"), false);
@@ -556,7 +559,7 @@ test("harness acceptance semantic validation uses separate model when enabled", 
   assert.equal(agentContext.payload.harness.phaseAcceptanceReports.length, 1);
   assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation.status, "pass");
   assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation.consistent, true);
-  assert.match(String(result.output), /"semanticValidation"/);
+  assert.doesNotMatch(String(result.output), /"semanticValidation"|acceptanceReport|完整计划清单/);
   assert.equal(agentContext.payload.harness.logs.acceptance.some((log) => log.event === "acceptance_semantic_validation_completed"), true);
 });
 

@@ -12,11 +12,14 @@ export function attachReviewReportToFinalOutput(ctx = {}, report = null) {
   const { state } = holder;
   const locale = state?.locale || LOCALE.ZH_CN;
   const original = String(ctx.result.output || "").trim();
+  const publicReport = report && typeof report === "object"
+    ? { ...report, acceptanceReport: undefined }
+    : report;
   ctx.result.output = [
     original,
     "",
     translateI18nText(locale, HARNESS_I18N_KEYSET.REVIEW.HEADER),
-    JSON.stringify(report, null, 2),
+    JSON.stringify(publicReport, null, 2),
   ]
     .filter(Boolean)
     .join("\n");

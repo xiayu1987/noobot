@@ -24,41 +24,6 @@ import { buildAcceptanceReport, renderAcceptanceReportText } from "./report-buil
 import { runAcceptanceBySeparateModel } from "./validation-runner.js";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
-const HARNESS_COLLAPSE_MARKER_NAME = "NOOBOT_HARNESS_COLLAPSE";
-const HARNESS_COLLAPSE_KIND = Object.freeze({
-  latestCompleteSummary: "latest_complete_summary",
-  acceptance: "acceptance",
-});
-
-function escapeMarkerAttribute(value = "") {
-  return String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-function wrapHarnessCollapsibleSection({
-  kind = "",
-  title = "",
-  content = "",
-} = {}) {
-  const body = String(content || "").trim();
-  if (!body) return "";
-  const normalizedKind = String(kind || "").trim();
-  const normalizedTitle = String(title || "").trim();
-  if (!normalizedKind || !normalizedTitle) return body;
-  const attrs = [
-    `kind="${escapeMarkerAttribute(normalizedKind)}"`,
-    `title="${escapeMarkerAttribute(normalizedTitle)}"`,
-    'default="closed"',
-  ].join(" ");
-  return [
-    `<<<${HARNESS_COLLAPSE_MARKER_NAME}:start ${attrs}>>>`,
-    body,
-    `<<<${HARNESS_COLLAPSE_MARKER_NAME}:end kind="${escapeMarkerAttribute(normalizedKind)}">>>`,
-  ].join("\n").trim();
-}
 
 function attachMetasToFinalOutputTurn(ctx = {}, metas = [], transferPayload = null) {
   if (!Array.isArray(metas) || !metas.length) return false;
@@ -78,159 +43,6 @@ function attachMetasToFinalOutputTurn(ctx = {}, metas = [], transferPayload = nu
   applyTransferPayloadToMessage(result, normalizedTransferPayload);
   return true;
 }
-
-function syncFinalOutputToTurnMessages(ctx = {}, nextOutput = "") {
-  const result = ctx?.result && typeof ctx.result === "object" ? ctx.result : null;
-  if (!result) return false;
-  const output = String(nextOutput || "").trim();
-  if (!output) return false;
-  const turnMessages = Array.isArray(result.turnMessages) ? result.turnMessages : [];
-  for (let index = turnMessages.length - 1; index >= 0; index -= 1) {
-    const item = turnMessages[index] || {};
-    if (String(item?.role || "").trim() !== "assistant") continue;
-    turnMessages[index] = {
-      ...item,
-      content: output,
-    };
-    return true;
-  }
-  return false;
-}
-
-
-function formatChecklistIndex(value = "") {
-  const raw = String(value ?? "").trim();
-  if (!raw) return "";
-  if (!/^\d+(?:\.\d+)?$/.test(raw)) return raw;
-  return raw.split(".").map((item) => String(Number(item))).join(".");
-}
-
-function renderFinalChecklistLine(item = {}, fallbackIndex = 1) {
-  const index = formatChecklistIndex(item?.index ?? item?.id) || String(fallbackIndex);
-  const status = String(item?.status || item?.taskStatus || "pending").trim() || "pending";
-  const task = String(item?.task || item?.name || item?.todo || "").trim() || "-";
-  return `${index}. [${status}] ${task}`;
-}
-
-function renderFinalAcceptanceChecklistSummaryText(report = {}, locale = LOCALE.ZH_CN) {
-  const data = report && typeof report === "object" ? report : {};
-  const checklist = Array.isArray(data.finalPlanChecklist)
-    ? data.finalPlanChecklist
-    : Array.isArray(data.taskChecklist)
-      ? data.taskChecklist
-      : [];
-  const summary = data?.summary && typeof data.summary === "object" ? data.summary : {};
-  const title = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_TITLE);
-  const checklistLabel = translateI18nText(
-    locale,
-    HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.COMPLETE_PLAN_CHECKLIST_LABEL,
-  );
-  const summaryLabel = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.SUMMARY_LABEL);
-  const emptyLine = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.EMPTY_LINE);
-  const total = Number(summary?.total || checklist.length || 0);
-  const completed = Number(summary?.completed || 0);
-  const inProgress = Number(summary?.inProgress || 0);
-  const pending = Number(summary?.pending || 0);
-  return [
-    title,
-    "",
-    `#### ${checklistLabel}`,
-    "```text",
-    ...(checklist.length
-      ? checklist.map((item, index) => renderFinalChecklistLine(item, index + 1))
-      : [emptyLine]),
-    "```",
-    "",
-    `#### ${summaryLabel}`,
-    "| total | completed | inProgress | pending |",
-    "| --- | --- | --- | --- |",
-    `| ${total} | ${completed} | ${inProgress} | ${pending} |`,
-  ].join("\n").trim();
-}
-
-function resolveLatestCompleteSummaryText(bucket = {}) {
-  const fullText = String(bucket?.summaryFullText || "").trim();
-  if (fullText) return fullText;
-  const outputs = Array.isArray(bucket?.guidanceOutputs) ? bucket.guidanceOutputs : [];
-  for (let index = outputs.length - 1; index >= 0; index -= 1) {
-    const item = outputs[index] || {};
-    if (String(item?.purpose || "").trim() !== "summary") continue;
-    const content = String(item?.content || "").trim();
-    if (content) return content;
-  }
-  return "";
-}
-
-function buildLatestCompleteSummarySection(bucket = {}, locale = LOCALE.ZH_CN) {
-  const latestCompleteSummary = resolveLatestCompleteSummaryText(bucket);
-  if (!latestCompleteSummary) return "";
-  const title = translateI18nText(
-    locale,
-    HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.LATEST_COMPLETE_SUMMARY_TITLE,
-  );
-  return wrapHarnessCollapsibleSection({
-    kind: HARNESS_COLLAPSE_KIND.latestCompleteSummary,
-    title: title.replace(/^#+\s*/, ""),
-    content: [title, latestCompleteSummary].filter(Boolean).join("\n").trim(),
-  });
-}
-
-function buildFinalHarnessValidationSections({
-  bucket = {},
-  locale = LOCALE.ZH_CN,
-  reportText = "",
-} = {}) {
-  const rendered = String(reportText || "").trim();
-  const summarySection = buildLatestCompleteSummarySection(bucket, locale);
-  const acceptanceTitle = translateI18nText(
-    locale,
-    HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.COLLAPSE_ACCEPTANCE_TITLE,
-  );
-  const acceptanceSection = rendered
-    ? wrapHarnessCollapsibleSection({
-        kind: HARNESS_COLLAPSE_KIND.acceptance,
-        title: acceptanceTitle,
-        content: rendered,
-      })
-    : "";
-  return [summarySection, acceptanceSection].filter(Boolean).join("\n\n").trim();
-}
-
-async function buildOutputWithAcceptanceSection({
-  ctx = {},
-  original = "",
-  locale = LOCALE.ZH_CN,
-  reportText = "",
-  includeForcedHeader = false,
-} = {}) {
-  const originalText = String(original || "").trim();
-  const rendered = String(reportText || "").trim();
-  if (!rendered) return originalText;
-  const divider = "\n\n---\n";
-  const forcedHeader = includeForcedHeader
-    ? translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_HEADER)
-    : "";
-  const acceptanceSection = [forcedHeader, rendered].filter(Boolean).join("\n");
-  const semanticTransferContent =
-    ctx?.agentContext?.execution?.controllers?.runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
-  if (typeof semanticTransferContent === "function") {
-    try {
-      const transferred = await semanticTransferContent({
-        scenario: "harness",
-        strategy: "harness_final_message",
-        resultInfo: originalText,
-        detailRefs: [],
-        validationInfo: acceptanceSection,
-      });
-      const composed = String(transferred?.finalMessage || transferred?.message || "").trim();
-      if (composed) return composed;
-    } catch {
-      // Fall through to local compose fallback.
-    }
-  }
-  return [originalText, acceptanceSection].filter(Boolean).join(divider).trim();
-}
-
 
 export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
@@ -384,22 +196,6 @@ export async function maybeForceAcceptanceAtFinalOutput(ctx = {}, meta = {}) {
   bucket.acceptanceReports.push(report);
   if (ctx?.result && typeof ctx.result === "object") {
     await runAcceptanceBySeparateModel(ctx, meta, report);
-    const original = String(ctx.result.output || "").trim();
-    const compactText = buildFinalHarnessValidationSections({
-      bucket,
-      locale,
-      reportText: renderFinalAcceptanceChecklistSummaryText(report, locale),
-    });
-    const nextOutput = await buildOutputWithAcceptanceSection({
-      ctx,
-      original,
-      locale,
-      reportText: compactText,
-      includeForcedHeader: false,
-    });
-    ctx.result.output = nextOutput;
-    syncFinalOutputToTurnMessages(ctx, nextOutput);
-    state.flags.acceptanceReportAppendedToFinalOutput = true;
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
       event: ACCEPTANCE_EVENTS.forcedAcceptanceTriggered,
@@ -456,29 +252,11 @@ export async function maybeAppendAcceptanceReportAtFinalOutput(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
-  if (state?.flags?.acceptanceReportAppendedToFinalOutput === true) return false;
-  if (!ctx?.result || typeof ctx.result !== "object") return false;
   const report =
     bucket?.lastAcceptanceReport && typeof bucket.lastAcceptanceReport === "object"
       ? bucket.lastAcceptanceReport
       : null;
   if (!report) return false;
-  const locale = state?.locale || LOCALE.ZH_CN;
-  const original = String(ctx.result.output || "").trim();
-  const compactText = buildFinalHarnessValidationSections({
-    bucket,
-    locale,
-    reportText: renderFinalAcceptanceChecklistSummaryText(report, locale),
-  });
-  const nextOutput = await buildOutputWithAcceptanceSection({
-    ctx,
-    original,
-    locale,
-    reportText: compactText,
-    includeForcedHeader: false,
-  });
-  ctx.result.output = nextOutput;
-  syncFinalOutputToTurnMessages(ctx, nextOutput);
-  state.flags.acceptanceReportAppendedToFinalOutput = true;
-  return true;
+  void state;
+  return false;
 }
