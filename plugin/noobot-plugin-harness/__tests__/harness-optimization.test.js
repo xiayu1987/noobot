@@ -600,6 +600,105 @@ test("guidance summary checkpoint marks only messages before checkpoint", async 
   assert.equal(ctx.agentContext.payload.harness.state.pending.summaryCheckpointMessageCount, null);
 });
 
+test("guidance summary checkpoint marks matching messageBlocks instead of flat block prefix", async () => {
+  const oldToolCall = {
+    role: "assistant",
+    content: "",
+    tool_calls: [{ id: "old_call", function: { name: "write_file" } }],
+  };
+  const oldToolResult = {
+    role: "tool",
+    toolName: "write_file",
+    tool_call_id: "old_call",
+    content: '{"toolName":"write_file","ok":true}',
+  };
+  const nextToolCall = {
+    role: "assistant",
+    content: "",
+    tool_calls: [{ id: "next_call", function: { name: "read_file" } }],
+  };
+  const nextToolResult = {
+    role: "tool",
+    toolName: "read_file",
+    tool_call_id: "next_call",
+    content: '{"toolName":"read_file","ok":true}',
+  };
+  const summaryRelay = {
+    role: "user",
+    content: "[来自harness外部模型输出/summary]\nsummary",
+    additional_kwargs: {
+      injectedMessageType: "separate_model_relay:summary",
+      dialogProcessId: "dp-1",
+    },
+  };
+  const messages = [
+    { role: "system", content: "policy" },
+    { role: "user", content: "task" },
+    oldToolCall,
+    oldToolResult,
+    nextToolCall,
+    nextToolResult,
+    summaryRelay,
+  ];
+  const blockOldToolCall = structuredClone(oldToolCall);
+  const blockOldToolResult = structuredClone(oldToolResult);
+  const blockNextToolCall = structuredClone(nextToolCall);
+  const blockNextToolResult = structuredClone(nextToolResult);
+  const ctx = {
+    messages,
+    messageBlocks: {
+      system: [
+        { role: "system", content: "base system 1" },
+        { role: "system", content: "base system 2" },
+      ],
+      history: [],
+      incremental: [
+        { role: "user", content: "task" },
+        blockOldToolCall,
+        blockOldToolResult,
+        blockNextToolCall,
+        blockNextToolResult,
+      ],
+    },
+    agentContext: {
+      payload: {
+        harness: {
+          state: {
+            counters: {},
+            flags: {},
+            signals: {},
+            pending: {
+              summaryCheckpointMessageCount: 6,
+            },
+          },
+          taskChecklist: [],
+          acceptanceReports: [],
+          reviewReports: [],
+          planningRawOutputs: [],
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+        messages: {
+          history: [],
+        },
+      },
+    },
+  };
+
+  const markedCount = await markGuidanceSummarizedMessages(ctx, {});
+
+  assert.equal(markedCount, 8);
+  assert.equal(oldToolCall.summarized, true);
+  assert.equal(oldToolResult.summarized, true);
+  assert.equal(nextToolCall.summarized, true);
+  assert.equal(nextToolResult.summarized, true);
+  assert.equal(blockOldToolCall.summarized, true);
+  assert.equal(blockOldToolResult.summarized, true);
+  assert.equal(blockNextToolCall.summarized, true);
+  assert.equal(blockNextToolResult.summarized, true);
+  assert.equal(ctx.messageBlocks.system.some((message) => message.summarized === true), false);
+  assert.equal(summaryRelay.summarized, undefined);
+});
+
 test("invokeWithReasoningRetry throws error when reasoning-only persists after one retry", async () => {
   let calls = 0;
   const ctx = {
