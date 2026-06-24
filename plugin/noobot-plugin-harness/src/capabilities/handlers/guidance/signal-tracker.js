@@ -18,6 +18,89 @@ const FAILURE_THRESHOLD = Object.freeze({
   ACCUMULATED: WORKFLOW_PARAMS.guidance.failureThreshold.accumulated,
 });
 
+function resolveMessageBlockMarkSource(ctx = {}) {
+  const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" && !Array.isArray(ctx.messageBlocks)
+    ? ctx.messageBlocks
+    : null;
+  if (!blocks) return [];
+  return [
+    ...(Array.isArray(blocks.system) ? blocks.system : []),
+    ...(Array.isArray(blocks.history) ? blocks.history : []),
+    ...(Array.isArray(blocks.incremental) ? blocks.incremental : []),
+  ];
+}
+
+function readMessageField(message = {}, field = "") {
+  return String(
+    message?.[field] ||
+      message?.additional_kwargs?.[field] ||
+      message?.lc_kwargs?.[field] ||
+      message?.lc_kwargs?.additional_kwargs?.[field] ||
+      "",
+  ).trim();
+}
+
+function resolveMessageRole(message = {}) {
+  const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
+  if (role) return role;
+  const type = String(message?.type || message?.lc_kwargs?.type || "").trim().toLowerCase();
+  if (type === "ai") return "assistant";
+  if (type === "human") return "user";
+  return type;
+}
+
+function resolveMessageContent(message = {}) {
+  return String(message?.content ?? message?.lc_kwargs?.content ?? "");
+}
+
+function resolveMessageToolCallId(message = {}) {
+  return String(
+    message?.tool_call_id ||
+      message?.toolCallId ||
+      message?.lc_kwargs?.tool_call_id ||
+      message?.lc_kwargs?.toolCallId ||
+      "",
+  ).trim();
+}
+
+function resolveMessageAssistantToolCallIds(message = {}) {
+  const calls = Array.isArray(message?.tool_calls)
+    ? message.tool_calls
+    : Array.isArray(message?.lc_kwargs?.tool_calls)
+      ? message.lc_kwargs.tool_calls
+      : Array.isArray(message?.additional_kwargs?.tool_calls)
+        ? message.additional_kwargs.tool_calls
+        : [];
+  return calls
+    .map((call = {}) => String(call?.id || call?.tool_call_id || call?.toolCallId || "").trim())
+    .filter(Boolean)
+    .join(",");
+}
+
+function buildMessageMarkKey(message = {}) {
+  return [
+    resolveMessageRole(message),
+    resolveMessageToolCallId(message),
+    resolveMessageAssistantToolCallIds(message),
+    readMessageField(message, "injectedMessageType") || readMessageField(message, "injected_message_type"),
+    readMessageField(message, "dialogProcessId"),
+    readMessageField(message, "turnScopeId"),
+    resolveMessageContent(message),
+  ].join("|||");
+}
+
+function resolveScopedMessageBlockMarkSource(ctx = {}, scopedMessages = []) {
+  const blockMessages = resolveMessageBlockMarkSource(ctx);
+  if (!blockMessages.length) return [];
+  const scopedKeys = new Set(
+    (Array.isArray(scopedMessages) ? scopedMessages : [])
+      .map((message) => buildMessageMarkKey(message))
+      .filter(Boolean),
+  );
+  if (!scopedKeys.size) return blockMessages;
+  return blockMessages.filter((message) => scopedKeys.has(buildMessageMarkKey(message)));
+}
+
 export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   const summaryCheckpointMessageCountValue =
@@ -35,6 +118,9 @@ export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
   const historyMessages = ctx?.agentContext?.payload?.messages?.history;
   const currentMessages = ctx?.messages;
   const injectedSummarizer = resolveInjectedMessageSummarizer(meta);
+  const scopedCurrentMessages = hasUsableSummaryCheckpoint && Array.isArray(currentMessages)
+    ? currentMessages.slice(0, Math.min(currentMessages.length, summaryCheckpointMessageCount))
+    : currentMessages;
   const safeMark = async (messages = []) => {
     if (!Array.isArray(messages)) return 0;
 
@@ -68,10 +154,15 @@ export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
   };
   const currentMarked = await safeMark(currentMessages);
   const historyMarked = await safeMark(historyMessages);
+  const blockMarked = await safeMark(
+    hasUsableSummaryCheckpoint
+      ? resolveScopedMessageBlockMarkSource(ctx, scopedCurrentMessages)
+      : resolveMessageBlockMarkSource(ctx),
+  );
   if (holder?.state?.pending && hasUsableSummaryCheckpoint) {
     holder.state.pending.summaryCheckpointMessageCount = null;
   }
-  return currentMarked + historyMarked;
+  return currentMarked + historyMarked + blockMarked;
 }
 
 export function markToolSignals(ctx = {}) {
