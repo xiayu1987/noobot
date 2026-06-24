@@ -26,6 +26,7 @@
 
 - 主要针对：文件保存工具、脚本执行工具。
 - 如果传入的脚本或文件内容超过限制，就保存到附件，然后直接返回超过限制内容以保存到附件，并且带上附件地址。
+- 小结工具补充：`task_summary.summaryContent` 也属于工具输入语义信息传递场景；小结内容需要强制通过 semantic-transfer 落盘为附件，并返回标准 semantic-transfer 语义字段（如 transferResult / transferEnvelopes）。该强制附件场景不是超长溢出，不应返回 callOverflow / toolInputOverflow。
 - 现状：应该是实现的，但是好像没在 semantic-transfer 层实现。
 - 建议：通过统一方法调用，策略为“工具信息传递”。
 

@@ -71,11 +71,63 @@ export function hasTaskSummaryToolCall(
   );
 }
 
+function getTaskSummaryToolCallIds(
+  messageItem = {},
+  { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
+) {
+  return getMessageToolCalls(messageItem)
+    .filter((toolCall) => {
+      if (!toolCall || typeof toolCall !== "object") return false;
+      const name = toolCall.name
+        ? String(toolCall.name || "").trim()
+        : String(toolCall.function?.name || "").trim();
+      return name === taskSummaryToolName;
+    })
+    .map((toolCall) => String(toolCall.id || toolCall.tool_call_id || "").trim())
+    .filter(Boolean);
+}
+
 export function isTaskSummaryToolMessage(
   messageItem = {},
   { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
 ) {
   return resolveToolNameFromMessage(messageItem) === taskSummaryToolName;
+}
+
+function isTaskSummaryMessage(
+  messageItem = {},
+  { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
+) {
+  return (
+    hasTaskSummaryToolCall(messageItem, { taskSummaryToolName }) ||
+    isTaskSummaryToolMessage(messageItem, { taskSummaryToolName })
+  );
+}
+
+export function collectLatestTaskSummaryMessageIndexes(
+  messages = [],
+  { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
+) {
+  const source = Array.isArray(messages) ? messages : [];
+  const latestIndexes = new Set();
+  for (let index = source.length - 1; index >= 0; index -= 1) {
+    const messageItem = source[index];
+    if (!isTaskSummaryMessage(messageItem, { taskSummaryToolName })) continue;
+    latestIndexes.add(index);
+    const toolCallId = String(messageItem?.tool_call_id || messageItem?.toolCallId || "").trim();
+    if (isTaskSummaryToolMessage(messageItem, { taskSummaryToolName }) && toolCallId) {
+      for (let prevIndex = index - 1; prevIndex >= 0; prevIndex -= 1) {
+        const callIds = getTaskSummaryToolCallIds(source[prevIndex], {
+          taskSummaryToolName,
+        });
+        if (!callIds.includes(toolCallId)) continue;
+        latestIndexes.add(prevIndex);
+        break;
+      }
+    }
+    break;
+  }
+  return latestIndexes;
 }
 
 export function shouldMarkCurrentTurnSummarizedMessage(
@@ -117,11 +169,20 @@ function shouldMarkCurrentTurnSummarizedMessageInScope(
     messages = [],
     index = -1,
     latestInjectedIndexes = null,
+    latestTaskSummaryIndexes = null,
     taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME,
   } = {},
 ) {
   if (shouldPreserveInjectedMessageAtIndex(messages, index, latestInjectedIndexes)) return false;
   if (isInjectedMessage(messageItem)) return true;
+  if (isTaskSummaryMessage(messageItem, { taskSummaryToolName })) {
+    const latestIndexes =
+      latestTaskSummaryIndexes instanceof Set
+        ? latestTaskSummaryIndexes
+        : collectLatestTaskSummaryMessageIndexes(messages, { taskSummaryToolName });
+    if (latestIndexes.has(index)) return false;
+    return shouldMarkCurrentTurnSummarizedByPolicy(messageItem);
+  }
   return shouldMarkCurrentTurnSummarizedMessage(messageItem, { taskSummaryToolName });
 }
 
@@ -135,6 +196,9 @@ export function markCurrentTurnStoreSummarized(
   const scopedMessages =
     typeof turnMessageStore.toArray === "function" ? turnMessageStore.toArray() : [];
   const latestInjectedIndexes = collectLatestInjectedMessageIndexes(scopedMessages);
+  const latestTaskSummaryIndexes = collectLatestTaskSummaryMessageIndexes(scopedMessages, {
+    taskSummaryToolName,
+  });
   return turnMessageStore.updateWhere(
     { summarized: true },
     (messageItem, index) =>
@@ -142,6 +206,7 @@ export function markCurrentTurnStoreSummarized(
         messages: scopedMessages,
         index,
         latestInjectedIndexes,
+        latestTaskSummaryIndexes,
         taskSummaryToolName,
       }),
   );
@@ -153,12 +218,16 @@ export function markCurrentTurnArraySummarized(
 ) {
   const source = Array.isArray(messages) ? messages : [];
   const latestInjectedIndexes = collectLatestInjectedMessageIndexes(source);
+  const latestTaskSummaryIndexes = collectLatestTaskSummaryMessageIndexes(source, {
+    taskSummaryToolName,
+  });
   return source.map((messageItem, index) => {
     if (
       !shouldMarkCurrentTurnSummarizedMessageInScope(messageItem, {
         messages: source,
         index,
         latestInjectedIndexes,
+        latestTaskSummaryIndexes,
         taskSummaryToolName,
       })
     ) {
@@ -173,8 +242,14 @@ export function markCurrentTurnModelMessagesSummarized(
   { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
 ) {
   if (!Array.isArray(messages)) return;
-  for (const messageItem of messages) {
-    if (
+  const latestTaskSummaryIndexes = collectLatestTaskSummaryMessageIndexes(messages, {
+    taskSummaryToolName,
+  });
+  for (const [index, messageItem] of messages.entries()) {
+    if (isTaskSummaryMessage(messageItem, { taskSummaryToolName })) {
+      if (latestTaskSummaryIndexes.has(index)) continue;
+      if (!shouldMarkCurrentTurnModelSummarizedByPolicy(messageItem)) continue;
+    } else if (
       !shouldMarkCurrentTurnSummarizedModelMessage(messageItem, {
         taskSummaryToolName,
       })
