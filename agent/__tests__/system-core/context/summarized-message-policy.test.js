@@ -3,17 +3,18 @@ import assert from "node:assert/strict";
 import {
   filterSummarizedMessages,
   markCurrentTurnArraySummarized,
+  markCurrentTurnModelMessagesSummarized,
   shouldMarkCurrentTurnSummarizedMessage,
   shouldMarkCurrentTurnSummarizedModelMessage,
 } from "../../../src/system-core/context/session/summarized-message-policy.js";
 
-test("task_summary assistant tool_call and tool result are not marked summarized", () => {
-  const assistantMessage = {
+test("markCurrentTurnArraySummarized preserves only latest task_summary call and result", () => {
+  const oldAssistantMessage = {
     role: "assistant",
     content: "",
     tool_calls: [
       {
-        id: "call_task_summary",
+        id: "call_task_summary_old",
         type: "function",
         function: {
           name: "task_summary",
@@ -22,15 +23,49 @@ test("task_summary assistant tool_call and tool result are not marked summarized
       },
     ],
   };
-  const toolMessage = {
+  const oldToolMessage = {
     role: "tool",
     content: JSON.stringify({ toolName: "task_summary", ok: true }),
-    tool_call_id: "call_task_summary",
+    tool_call_id: "call_task_summary_old",
+    toolName: "task_summary",
+  };
+  const latestAssistantMessage = {
+    role: "assistant",
+    content: "",
+    tool_calls: [
+      {
+        id: "call_task_summary_latest",
+        type: "function",
+        function: {
+          name: "task_summary",
+          arguments: "{}",
+        },
+      },
+    ],
+  };
+  const latestToolMessage = {
+    role: "tool",
+    content: JSON.stringify({ toolName: "task_summary", ok: true }),
+    tool_call_id: "call_task_summary_latest",
     toolName: "task_summary",
   };
 
-  assert.equal(shouldMarkCurrentTurnSummarizedMessage(assistantMessage), false);
-  assert.equal(shouldMarkCurrentTurnSummarizedMessage(toolMessage), false);
+  assert.equal(shouldMarkCurrentTurnSummarizedMessage(oldAssistantMessage), false);
+  assert.equal(shouldMarkCurrentTurnSummarizedMessage(oldToolMessage), false);
+
+  const result = markCurrentTurnArraySummarized([
+    oldAssistantMessage,
+    oldToolMessage,
+    { role: "user", content: "next task" },
+    latestAssistantMessage,
+    latestToolMessage,
+  ]);
+
+  assert.equal(result[0].summarized, true);
+  assert.equal(result[1].summarized, true);
+  assert.equal(result[2].summarized, undefined);
+  assert.equal(result[3].summarized, undefined);
+  assert.equal(result[4].summarized, undefined);
 });
 
 test("non-summary empty assistant tool_call can be summarized with its tool result", () => {
@@ -74,6 +109,53 @@ test("LangChain AIMessage-like task_summary tool_call is not marked summarized",
   };
 
   assert.equal(shouldMarkCurrentTurnSummarizedModelMessage(aiMessage), false);
+});
+
+test("markCurrentTurnModelMessagesSummarized preserves only latest LangChain task_summary message", () => {
+  const messages = [
+    {
+      type: "ai",
+      content: "",
+      tool_calls: [
+        {
+          id: "call_task_summary_old",
+          name: "task_summary",
+          args: {},
+          type: "tool_call",
+        },
+      ],
+      lc_kwargs: {},
+    },
+    {
+      type: "tool",
+      content: JSON.stringify({ toolName: "task_summary", ok: true }),
+      tool_call_id: "call_task_summary_old",
+      toolName: "task_summary",
+      lc_kwargs: {},
+    },
+    {
+      type: "ai",
+      content: "",
+      tool_calls: [
+        {
+          id: "call_task_summary_latest",
+          name: "task_summary",
+          args: {},
+          type: "tool_call",
+        },
+      ],
+      lc_kwargs: {},
+    },
+  ];
+
+  markCurrentTurnModelMessagesSummarized(messages);
+
+  assert.equal(messages[0].summarized, true);
+  assert.equal(messages[0].lc_kwargs.summarized, true);
+  assert.equal(messages[1].summarized, true);
+  assert.equal(messages[1].lc_kwargs.summarized, true);
+  assert.equal(messages[2].summarized, undefined);
+  assert.equal(messages[2].lc_kwargs.summarized, undefined);
 });
 
 test("filterSummarizedMessages excludes only summarized in one policy", () => {

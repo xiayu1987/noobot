@@ -82,6 +82,22 @@ const OUT_OF_SCOPE_SEMANTIC_TRANSFER_REGEXES = [
   { api: "materializeOutput", regex: /\bmaterializeOutput\b/ },
 ];
 
+const REQUIRED_TASK_SUMMARY_TRANSFER_FILE = "agent/src/system-core/agent/core/execution/tool-runner.js";
+const REQUIRED_TASK_SUMMARY_TRANSFER_SNIPPETS = [
+  {
+    snippet: "\"task_summary\"",
+    hint: "task_summary.summaryContent must stay in the tool_input semantic-transfer path so summaries are persisted as TransferEnvelope attachments.",
+  },
+  {
+    snippet: "compactSemanticTransferProtocolPayload(inputTransfer)",
+    hint: "task_summary tool-input transfer results must be returned through semantic-transfer protocol fields such as transferEnvelopes, not ad-hoc compact fields.",
+  },
+  {
+    snippet: "mergeTaskSummaryTransferPayload(toolResultText, toolInputTransferPayload)",
+    hint: "task_summary tool results must merge the semantic-transfer protocol payload while filtering the raw summary text.",
+  },
+];
+
 // Files that intentionally bridge semantic-transfer with legacy attachment/file
 // fields, or define existing public message/runtime contracts that still carry
 // attachmentMetas as a compatibility field.
@@ -259,6 +275,33 @@ function detectFile(file) {
   return violations;
 }
 
+function detectRequiredTaskSummaryTransferGuard() {
+  const file = path.join(ROOT, REQUIRED_TASK_SUMMARY_TRANSFER_FILE);
+  let raw = "";
+  try {
+    raw = readFileSync(file, "utf8");
+  } catch (error) {
+    return [{
+      type: "required-task-summary-transfer",
+      field: "tool_input",
+      file: REQUIRED_TASK_SUMMARY_TRANSFER_FILE,
+      line: 1,
+      text: `missing or unreadable file: ${error?.message || String(error)}`,
+      hint: "task_summary.summaryContent must be guarded as a semantic-transfer tool_input scenario.",
+    }];
+  }
+  return REQUIRED_TASK_SUMMARY_TRANSFER_SNIPPETS
+    .filter((item) => !raw.includes(item.snippet))
+    .map((item) => ({
+      type: "required-task-summary-transfer",
+      field: "task_summary.summaryContent",
+      file: REQUIRED_TASK_SUMMARY_TRANSFER_FILE,
+      line: 1,
+      text: `missing required snippet: ${item.snippet}`,
+      hint: item.hint,
+    }));
+}
+
 function run() {
   const files = [];
   for (const dir of TARGET_DIRS) {
@@ -271,7 +314,10 @@ function run() {
     walk(full, files);
   }
 
-  const violations = files.flatMap(detectFile);
+  const violations = [
+    ...files.flatMap(detectFile),
+    ...detectRequiredTaskSummaryTransferGuard(),
+  ];
   if (!violations.length) {
     console.log("[semantic-transfer-compat] OK");
     return;
