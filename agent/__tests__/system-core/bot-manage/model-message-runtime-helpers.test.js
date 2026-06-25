@@ -59,6 +59,34 @@ test("ModelMessageRuntimeHelpers resolveModelMessages uses main-flow blocks", ()
   );
 });
 
+test("ModelMessageRuntimeHelpers resolves non-main history from agent payload blocks", () => {
+  const helpers = new ModelMessageRuntimeHelpers();
+  const resolver = helpers.createResolveModelMessages();
+
+  const resolved = resolver({
+    purpose: "planning",
+    ctx: {
+      agentContext: {
+        payload: {
+          messages: {
+            system: [{ role: "system", content: "sys" }],
+            history: [
+              { role: "user", content: "hist-u", dialogProcessId: "d1" },
+              { role: "assistant", content: "hist-a", dialogProcessId: "d1" },
+            ],
+            incremental: [{ role: "user", content: "inc-u", dialogProcessId: "d2" }],
+          },
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(
+    resolved.map((item = {}) => item.content),
+    ["sys", "hist-u", "hist-a", "inc-u"],
+  );
+});
+
 test("ModelMessageRuntimeHelpers does not clip non-main model context by default", () => {
   const helpers = new ModelMessageRuntimeHelpers();
   const resolver = helpers.createResolveModelMessages({

@@ -217,7 +217,7 @@ test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invo
       return {
         async invoke(messages) {
           capturedMessages = (Array.isArray(messages) ? messages : []).map((item) => ({
-            role: item.role,
+            role: item.role || (typeof item._getType === "function" ? item._getType() : ""),
             content: item.content,
           }));
           return { content: "ok", tool_calls: [], additional_kwargs: {}, response_metadata: {} };
@@ -262,6 +262,79 @@ test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invo
     { role: "user", content: "current-user" },
   ]);
   assert.equal(loopState.messageBlocks.system.at(-1), harnessSystem);
+});
+
+test("invokeWithToolsTurn rehydrates missing system and history blocks from agentContext before llm invoke", async () => {
+  let capturedMessages = [];
+  const runtime = {
+    systemRuntime: { sessionId: "s1", dialogProcessId: "d-current" },
+    hookManager: {
+      async emit() {
+        return [];
+      },
+    },
+  };
+  const llm = {
+    bindTools() {
+      return {
+        async invoke(messages) {
+          capturedMessages = (Array.isArray(messages) ? messages : []).map((item) => ({
+            role: item.role || (typeof item._getType === "function" ? item._getType() : ""),
+            content: item.content,
+          }));
+          return { content: "ok", tool_calls: [], additional_kwargs: {}, response_metadata: {} };
+        },
+      };
+    },
+  };
+  const current = { role: "user", content: "current-user", dialogProcessId: "d-current" };
+  const modelState = {
+    llm,
+    runtime,
+    eventListener: null,
+    abortSignal: null,
+    defaultModelSpec: {},
+    agentContext: {
+      execution: {
+        dialogProcessId: "d-current",
+        controllers: { runtime },
+      },
+      payload: {
+        messages: {
+          system: ["constructed-system"],
+          history: [
+            { role: "user", content: "history-user", dialogProcessId: "d-old" },
+            { role: "assistant", content: "history-assistant", dialogProcessId: "d-old" },
+          ],
+        },
+      },
+    },
+  };
+  const loopState = {
+    messages: [current],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [current],
+    },
+    traces: [],
+    tools: [{ name: "execute_script" }],
+    turnMessages: [],
+    turnTasks: [],
+    currentTurnMessages: null,
+    currentTurnTasks: null,
+    dialogProcessId: "d-current",
+    maxTurns: 1,
+  };
+
+  await invokeWithToolsTurn({ modelState, loopState, turn: 1 });
+
+  assert.deepEqual(capturedMessages, [
+    { role: "system", content: "constructed-system" },
+    { role: "human", content: "history-user" },
+    { role: "ai", content: "history-assistant" },
+    { role: "user", content: "current-user" },
+  ]);
 });
 
 test("invokeWithToolsTurn stores assistant tool-call message in incremental block", async () => {

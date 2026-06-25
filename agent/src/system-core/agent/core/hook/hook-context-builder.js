@@ -29,13 +29,19 @@ function resolveHookMessages(raw = {}) {
   }
 }
 
-function resolveHookMessageBlocks(raw = {}) {
-  if (raw?.messageBlocks && typeof raw.messageBlocks === "object") {
-    return raw.messageBlocks;
-  }
-  if (raw?.loopState?.messageBlocks && typeof raw.loopState.messageBlocks === "object") {
-    return raw.loopState.messageBlocks;
-  }
+function isMessageBlocks(value = null) {
+  return value && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeBlockList(value = []) {
+  return Array.isArray(value) ? value : [];
+}
+
+function hasBlockMessages(blocks = null, blockName = "") {
+  return normalizeBlockList(blocks?.[blockName]).length > 0;
+}
+
+function resolveAgentContextMessageBlocks(raw = {}) {
   if (!raw?.agentContext) return null;
   try {
     return buildContextMessageBlocks(raw.agentContext, {
@@ -44,6 +50,31 @@ function resolveHookMessageBlocks(raw = {}) {
   } catch {
     return null;
   }
+}
+
+function mergeMessageBlocksWithAgentContext(rawBlocks = null, contextBlocks = null) {
+  if (!isMessageBlocks(rawBlocks)) return contextBlocks;
+  if (!isMessageBlocks(contextBlocks)) return rawBlocks;
+  const needsSystem = !hasBlockMessages(rawBlocks, "system") && hasBlockMessages(contextBlocks, "system");
+  const needsHistory = !hasBlockMessages(rawBlocks, "history") && hasBlockMessages(contextBlocks, "history");
+  const needsIncremental = !hasBlockMessages(rawBlocks, "incremental") && hasBlockMessages(contextBlocks, "incremental");
+  if (!needsSystem && !needsHistory && !needsIncremental) return rawBlocks;
+  return {
+    ...rawBlocks,
+    system: needsSystem ? normalizeBlockList(contextBlocks.system) : normalizeBlockList(rawBlocks.system),
+    history: needsHistory ? normalizeBlockList(contextBlocks.history) : normalizeBlockList(rawBlocks.history),
+    incremental: needsIncremental ? normalizeBlockList(contextBlocks.incremental) : normalizeBlockList(rawBlocks.incremental),
+  };
+}
+
+function resolveHookMessageBlocks(raw = {}) {
+  const rawBlocks = isMessageBlocks(raw?.messageBlocks)
+    ? raw.messageBlocks
+    : isMessageBlocks(raw?.loopState?.messageBlocks)
+      ? raw.loopState.messageBlocks
+      : null;
+  const contextBlocks = resolveAgentContextMessageBlocks(raw);
+  return mergeMessageBlocksWithAgentContext(rawBlocks, contextBlocks);
 }
 
 function resolveCalls(raw = {}) {

@@ -35,11 +35,7 @@ const PLUGIN_DEEP_MERGE_KEYS = new Set([
 
 function shouldUsePayloadMessageBlocks(purpose = "") {
   const normalizedPurpose = String(purpose || "").trim().toLowerCase();
-  return (
-    normalizedPurpose.includes("acceptance") ||
-    normalizedPurpose.includes("review") ||
-    normalizedPurpose.includes("final")
-  );
+  return Boolean(normalizedPurpose && normalizedPurpose !== "main_agent");
 }
 
 function resolveContextMessageBlocks(ctx = {}, { includePayloadBlocks = false } = {}) {
