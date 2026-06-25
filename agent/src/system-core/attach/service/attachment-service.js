@@ -53,8 +53,6 @@ export class AttachmentService {
     contentBytes = Buffer.alloc(0),
     generatedByModel = false,
     generationSource = "",
-    attachmentOwnerType = "",
-    attachmentOwner = "",
     owner = null,
     turnScope = null,
     turnScopeId = "",
@@ -79,8 +77,6 @@ export class AttachmentService {
       attachmentSource: scope.attachmentSource,
       generatedByModel,
       generationSource,
-      attachmentOwnerType,
-      attachmentOwner,
       owner,
       turnScope,
       turnScopeId,
@@ -215,8 +211,6 @@ export class AttachmentService {
     attachmentSource = "model",
     artifacts = [],
     generationSource = "llm_output",
-    attachmentOwnerType = "",
-    attachmentOwner = "",
     owner = null,
     turnScope = null,
     turnScopeId = "",
@@ -244,8 +238,6 @@ export class AttachmentService {
         contentBytes: Buffer.from(artifactContent, "base64"),
         generatedByModel: true,
         generationSource,
-        attachmentOwnerType: safeStr(item?.attachmentOwnerType || attachmentOwnerType),
-        attachmentOwner: safeStr(item?.attachmentOwner || attachmentOwner),
         owner: item?.owner && typeof item.owner === "object" && !Array.isArray(item.owner)
           ? item.owner
           : owner,
@@ -464,11 +456,13 @@ export class AttachmentService {
       }
       const nextRecord = {
         ...sourceRecord,
-        parsedResultAttachmentId: safeStr(parsedAttachmentMeta?.attachmentId),
-        parsedResultPath: safeStr(parsedAttachmentMeta?.path),
-        parsedResultRelativePath: safeStr(parsedAttachmentMeta?.relativePath),
-        parsedResultTool: safeStr(toolName),
-        parsedResultUpdatedAt: new Date().toISOString(),
+        parsedResult: {
+          attachmentId: safeStr(parsedAttachmentMeta?.attachmentId),
+          path: safeStr(parsedAttachmentMeta?.path),
+          relativePath: safeStr(parsedAttachmentMeta?.relativePath),
+          tool: safeStr(toolName),
+          updatedAt: new Date().toISOString(),
+        },
       };
       index.attachments[normalizedSourceId] = nextRecord;
       await writeAttachIndex(basePath, index, scope);
@@ -504,13 +498,11 @@ export class AttachmentService {
     });
     if (!sessionJsonFiles.length) return;
 
-    const nextParsedFields = {
-      parsedResultAttachmentId: safeStr(updatedSourceAttachment?.parsedResultAttachmentId),
-      parsedResultPath: safeStr(updatedSourceAttachment?.parsedResultPath),
-      parsedResultRelativePath: safeStr(updatedSourceAttachment?.parsedResultRelativePath),
-      parsedResultTool: safeStr(updatedSourceAttachment?.parsedResultTool),
-      parsedResultUpdatedAt: safeStr(updatedSourceAttachment?.parsedResultUpdatedAt),
-    };
+    const nextParsedResult = updatedSourceAttachment?.parsedResult &&
+      typeof updatedSourceAttachment.parsedResult === "object" &&
+      !Array.isArray(updatedSourceAttachment.parsedResult)
+      ? updatedSourceAttachment.parsedResult
+      : {};
     const normalizedSourcePath = safeStr(sourceAttachmentPath);
 
     for (const sessionJsonFile of sessionJsonFiles) {
@@ -546,10 +538,11 @@ export class AttachmentService {
             });
           if (!isMatchedAttachment) return attachmentItem;
           bucketChanged = true;
-          return {
+          const nextAttachmentItem = {
             ...(attachmentItem || {}),
-            ...nextParsedFields,
+            ...(Object.keys(nextParsedResult).length ? { parsedResult: nextParsedResult } : {}),
           };
+          return nextAttachmentItem;
         });
         return { items: nextItems, changed: bucketChanged };
       };

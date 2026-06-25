@@ -109,32 +109,7 @@ function pickLightAttachmentMetas(message = {}) {
     const mimeType = item?.mimeType || item?.type || item?.mime || "";
     const attachmentSource = item?.attachmentSource || item?.attachment_source || item?.source || "";
     const sessionId = item?.sessionId || item?.session_id || item?.backendSessionId || "";
-    const ownerObject = pickPlainObjectFields(item?.owner, [
-      "attachmentOwnerType",
-      "ownerType",
-      "type",
-      "attachmentOwner",
-      "owner",
-      "ownerId",
-      "source",
-      "sourceId",
-      "plugin",
-      "pluginId",
-      "injectedBy",
-    ]);
-    const attachmentOwnerObject = pickPlainObjectFields(item?.attachment?.owner, [
-      "attachmentOwnerType",
-      "ownerType",
-      "type",
-      "attachmentOwner",
-      "owner",
-      "ownerId",
-      "source",
-      "sourceId",
-      "plugin",
-      "pluginId",
-      "injectedBy",
-    ]);
+    const ownerObject = pickPlainObjectFields(item?.owner, ["type", "id", "source"]);
     return {
       id: attachmentId,
       attachmentId,
@@ -145,16 +120,13 @@ function pickLightAttachmentMetas(message = {}) {
       attachmentSource,
       source: attachmentSource,
       sessionId,
-      owner: ownerObject || (typeof item?.owner === "string" ? item.owner : ""),
-      attachmentOwnerType: item?.attachmentOwnerType || "",
-      attachmentOwner: item?.attachmentOwner || "",
+      ...(ownerObject ? { owner: ownerObject } : {}),
       generationSource: item?.generationSource || "",
       url: item?.url || item?.downloadUrl || "",
       previewUrl: item?.previewUrl || "",
       ...(item?.turnScope && typeof item.turnScope === "object" && !Array.isArray(item.turnScope)
         ? { turnScope: item.turnScope }
         : {}),
-      ...(attachmentOwnerObject ? { attachment: { owner: attachmentOwnerObject } } : {}),
     };
   }).filter((item) => item.id || item.attachmentId || item.name || item.url || item.previewUrl);
 }

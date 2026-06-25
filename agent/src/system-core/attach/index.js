@@ -10,6 +10,7 @@ export {
   normalizeAttachmentMetas,
   mapAttachmentRecordsToMetas,
   normalizeAttachmentOwnerMeta,
+  normalizeAttachmentParsedResultMeta,
   normalizeAttachmentTurnScopeMeta,
 } from "./meta-ops.js";
 export { appendAttachmentMetasToRuntimeAndTurn } from "./runtime-attachment.js";

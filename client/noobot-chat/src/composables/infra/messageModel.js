@@ -69,22 +69,29 @@ function normalizeAttachment(
         attachmentSource,
       })
     : "";
-  const parsedResultAttachmentId = String(
-    attachmentItem?.parsedResultAttachmentId || "",
+  const parsedResult = attachmentItem?.parsedResult &&
+    typeof attachmentItem.parsedResult === "object" &&
+    !Array.isArray(attachmentItem.parsedResult)
+    ? attachmentItem.parsedResult
+    : {};
+  const parsedAttachmentId = String(
+    parsedResult?.attachmentId || parsedResult?.id || "",
   ).trim();
-  const parsedResultPath = String(attachmentItem?.parsedResultPath || "").trim();
-  const parsedResultRelativePath = String(
-    attachmentItem?.parsedResultRelativePath || "",
+  const parsedPath = String(
+    parsedResult?.path || "",
   ).trim();
-  const parsedResultUrl = parsedResultAttachmentId
+  const parsedRelativePath = String(
+    parsedResult?.relativePath || "",
+  ).trim();
+  const parsedResultUrl = parsedAttachmentId
     ? buildAttachmentUrl({
         userId,
-        attachmentId: parsedResultAttachmentId,
+        attachmentId: parsedAttachmentId,
       })
     : "";
   const parsedResultName =
-    resolveBaseName(parsedResultRelativePath) ||
-    resolveBaseName(parsedResultPath) ||
+    resolveBaseName(parsedRelativePath) ||
+    resolveBaseName(parsedPath) ||
     "";
   return {
     ...attachmentItem,
@@ -95,9 +102,14 @@ function normalizeAttachment(
     url: attachmentUrl,
     previewUrl:
       String(attachmentItem?.previewUrl || ""),
-    parsedResultAttachmentId,
-    parsedResultPath,
-    parsedResultRelativePath,
+    parsedResult: parsedAttachmentId
+      ? {
+          ...parsedResult,
+          attachmentId: parsedAttachmentId,
+          ...(parsedPath ? { path: parsedPath } : {}),
+          ...(parsedRelativePath ? { relativePath: parsedRelativePath } : {}),
+        }
+      : attachmentItem?.parsedResult,
     parsedResultUrl,
     parsedResultName,
   };

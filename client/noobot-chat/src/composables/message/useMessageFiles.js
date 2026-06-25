@@ -117,12 +117,9 @@ function isPlainObject(value) {
 }
 
 function getAttachmentOwnership(attachmentItem = {}) {
-  const attachmentOwner = isPlainObject(attachmentItem?.attachment?.owner)
-    ? attachmentItem.attachment.owner
-    : null;
   const owner = isPlainObject(attachmentItem?.owner) ? attachmentItem.owner : null;
   const turnScope = isPlainObject(attachmentItem?.turnScope) ? attachmentItem.turnScope : {};
-  const ownershipSource = attachmentOwner || owner || turnScope;
+  const ownershipSource = owner || turnScope;
   const normalized = normalizeTurnMeta(ownershipSource);
   return {
     ...normalized,
@@ -197,34 +194,12 @@ function isHarnessPluginInjectedMessage(messageItem = {}) {
 }
 
 function isHarnessPluginAttachmentMeta(attachmentItem = {}) {
-  const ownerType = String(attachmentItem?.attachmentOwnerType || "").trim();
-  if (ownerType === "plugin") return true;
-  const owner = String(attachmentItem?.attachmentOwner || "").trim();
-  if (owner === "harness-plugin") return true;
   const nestedOwner = isPlainObject(attachmentItem?.owner) ? attachmentItem.owner : null;
-  const attachmentOwner = isPlainObject(attachmentItem?.attachment?.owner)
-    ? attachmentItem.attachment.owner
-    : null;
   const turnScope = isPlainObject(attachmentItem?.turnScope) ? attachmentItem.turnScope : null;
-  for (const ownerSource of [nestedOwner, attachmentOwner, turnScope]) {
+  for (const ownerSource of [nestedOwner, turnScope]) {
     if (!ownerSource) continue;
-    const nestedOwnerType = String(
-      ownerSource?.attachmentOwnerType ||
-        ownerSource?.ownerType ||
-        ownerSource?.type ||
-        "",
-    ).trim();
-    const nestedOwnerName = String(
-      ownerSource?.attachmentOwner ||
-        ownerSource?.owner ||
-        ownerSource?.ownerId ||
-        ownerSource?.source ||
-        ownerSource?.sourceId ||
-        ownerSource?.plugin ||
-        ownerSource?.pluginId ||
-        ownerSource?.injectedBy ||
-        "",
-    ).trim();
+    const nestedOwnerType = String(ownerSource?.type || "").trim();
+    const nestedOwnerName = String(ownerSource?.id || "").trim();
     if (nestedOwnerType === "plugin") return true;
     if (nestedOwnerName === "harness-plugin") return true;
   }
@@ -241,18 +216,23 @@ function splitAttachmentMetasByOwner(attachmentMetas = []) {
   return { agent, plugin };
 }
 
-function withAttachmentOwnerTypes(attachmentMetas = []) {
+function withAttachmentOwners(attachmentMetas = []) {
   const split = splitAttachmentMetasByOwner(attachmentMetas);
+  const markOwnerType = (attachmentItem = {}, type = "") => ({
+    ...attachmentItem,
+    owner: {
+      ...(isPlainObject(attachmentItem?.owner) ? attachmentItem.owner : {}),
+      type,
+    },
+  });
   return [
-    ...split.agent.map((attachmentItem) => ({
-      ...attachmentItem,
-      attachmentOwnerType: "agent",
-    })),
-    ...split.plugin.map((attachmentItem) => ({
-      ...attachmentItem,
-      attachmentOwnerType: "plugin",
-    })),
+    ...split.agent.map((attachmentItem) => markOwnerType(attachmentItem, "agent")),
+    ...split.plugin.map((attachmentItem) => markOwnerType(attachmentItem, "plugin")),
   ];
+}
+
+function getAttachmentOwnerType(attachmentItem = {}) {
+  return String(attachmentItem?.owner?.type || "").trim();
 }
 
 function toAttachmentKey(attachmentItem = {}) {
@@ -499,10 +479,10 @@ export function useMessageFiles({
       return mergedBaseAttachmentMetas;
     }
     if (isFreshPendingAssistant(messageItem)) {
-      return withAttachmentOwnerTypes(mergedBaseAttachmentMetas);
+      return withAttachmentOwners(mergedBaseAttachmentMetas);
     }
     const rootTurnScopeId = getMessageTurnScopeId(messageItem);
-    if (!rootTurnScopeId) return withAttachmentOwnerTypes(mergedBaseAttachmentMetas);
+    if (!rootTurnScopeId) return withAttachmentOwners(mergedBaseAttachmentMetas);
 
     const allMessages = Array.isArray(getAllMessages()) ? getAllMessages() : [];
     const sessionDocMessages = flattenSessionMessagesWithSessionId(getSessionDocs());
@@ -553,7 +533,7 @@ export function useMessageFiles({
         splitCurrentAttachmentMetas.agent,
       );
     }
-    const mergedWithOwnerType = withAttachmentOwnerTypes([
+    const mergedWithOwnerType = withAttachmentOwners([
       ...mainFlowAttachmentMetas,
       ...pluginAttachmentMetas,
     ]);
@@ -580,8 +560,8 @@ export function useMessageFiles({
         const sameContentIndex = seenAttachmentContentKeySet.get(attachmentContentKey);
         const existingSameContentItem = dedupedWithOwnerType[sameContentIndex] || {};
         if (
-          attachmentItem?.attachmentOwnerType === "plugin" ||
-          existingSameContentItem?.attachmentOwnerType === "plugin"
+          getAttachmentOwnerType(attachmentItem) === "plugin" ||
+          getAttachmentOwnerType(existingSameContentItem) === "plugin"
         ) {
           existingIndex = sameContentIndex;
         }
@@ -600,8 +580,8 @@ export function useMessageFiles({
       }
       const existingItem = dedupedWithOwnerType[existingIndex] || {};
       if (
-        attachmentItem?.attachmentOwnerType === "plugin" &&
-        existingItem?.attachmentOwnerType !== "plugin"
+        getAttachmentOwnerType(attachmentItem) === "plugin" &&
+        getAttachmentOwnerType(existingItem) !== "plugin"
       ) {
         dedupedWithOwnerType[existingIndex] = attachmentItem;
         for (const key of attachmentKeys) {

@@ -24,12 +24,12 @@ export function mergeAttachmentMetas(existing = [], incoming = []) {
     if (attachmentKey && !indexByKey.has(attachmentKey)) indexByKey.set(attachmentKey, index);
   });
   for (const attachmentItem of incomingList) {
-    const attachmentKey = toKey(attachmentItem);
-    if (attachmentKey && indexByKey.has(attachmentKey)) {
-      const existingIndex = indexByKey.get(attachmentKey);
-      const existingItem = merged[existingIndex] || {};
-      const incomingOwnerType = String(attachmentItem?.attachmentOwnerType || "").trim();
-      const existingOwnerType = String(existingItem?.attachmentOwnerType || "").trim();
+      const attachmentKey = toKey(attachmentItem);
+      if (attachmentKey && indexByKey.has(attachmentKey)) {
+        const existingIndex = indexByKey.get(attachmentKey);
+        const existingItem = merged[existingIndex] || {};
+      const incomingOwnerType = String(attachmentItem?.owner?.type || "").trim();
+      const existingOwnerType = String(existingItem?.owner?.type || "").trim();
       if (incomingOwnerType === "plugin" && existingOwnerType !== "plugin") {
         merged[existingIndex] = {
           ...existingItem,

@@ -23,6 +23,33 @@ function normalizeString(value = "") {
   return String(value || "").trim();
 }
 
+function normalizeAttachmentOwnerMeta(attachmentItem = {}) {
+  const explicitOwner = isPlainObject(attachmentItem?.owner) ? attachmentItem.owner : {};
+  const type = normalizeString(explicitOwner?.type);
+  const id = normalizeString(explicitOwner?.id);
+  const owner = {
+    ...explicitOwner,
+    ...(type ? { type } : {}),
+    ...(id ? { id } : {}),
+  };
+  return Object.keys(owner).length ? owner : null;
+}
+
+function resolveAttachmentOwnerType(attachmentItem = {}) {
+  return normalizeString(
+    normalizeAttachmentOwnerMeta(attachmentItem)?.type,
+  );
+}
+
+function withCanonicalAttachmentOwner(attachmentItem = {}) {
+  const source = isPlainObject(attachmentItem) ? { ...attachmentItem } : {};
+  const owner = normalizeAttachmentOwnerMeta(source);
+  return {
+    ...source,
+    ...(owner ? { owner } : {}),
+  };
+}
+
 function buildTransferPayloadFromAttachmentMetas(attachmentMetas = []) {
   const metas = (Array.isArray(attachmentMetas) ? attachmentMetas : []).filter(isPlainObject);
   if (!metas.length) return normalizeTransferPayload();
@@ -127,13 +154,13 @@ export function mergeAttachmentMetas(existing = [], incoming = []) {
     if (key && indexByKey.has(key)) {
       const existingIndex = indexByKey.get(key);
       const existingItem = merged[existingIndex] || {};
-      const incomingOwnerType = String(item?.attachmentOwnerType || "").trim();
-      const existingOwnerType = String(existingItem?.attachmentOwnerType || "").trim();
+      const incomingOwnerType = resolveAttachmentOwnerType(item);
+      const existingOwnerType = resolveAttachmentOwnerType(existingItem);
       if (incomingOwnerType === "plugin" && existingOwnerType !== "plugin") {
-        merged[existingIndex] = {
+        merged[existingIndex] = withCanonicalAttachmentOwner({
           ...existingItem,
           ...item,
-        };
+        });
       }
       continue;
     }
@@ -145,31 +172,34 @@ export function mergeAttachmentMetas(existing = [], incoming = []) {
 
 export function mapAttachmentRecordsToMetas(records = []) {
   const list = Array.isArray(records) ? records : [];
-  return list.map((record = {}) => markHarnessPluginAttachmentMeta({
-    attachmentId: String(record?.attachmentId || "").trim(),
-    sessionId: String(record?.sessionId || "").trim(),
-    attachmentSource: String(record?.attachmentSource || "model").trim(),
-    name: String(record?.name || "").trim(),
-    mimeType: String(record?.mimeType || "application/octet-stream").trim(),
-    size: Number(record?.size) || 0,
-    path: String(record?.path || "").trim(),
-    relativePath: String(record?.relativePath || "").trim(),
-    generatedByModel: record?.generatedByModel === true,
-    generationSource: String(record?.generationSource || "").trim(),
-    attachmentOwnerType: String(record?.attachmentOwnerType || "").trim(),
-    attachmentOwner: String(record?.attachmentOwner || "").trim(),
-    ...(record?.owner && typeof record.owner === "object" && !Array.isArray(record.owner)
-      ? { owner: record.owner }
-      : {}),
-  }));
+  return list.map((record = {}) => {
+    const owner = normalizeAttachmentOwnerMeta(record);
+    return markHarnessPluginAttachmentMeta({
+      attachmentId: normalizeString(record?.attachmentId),
+      sessionId: normalizeString(record?.sessionId),
+      attachmentSource: normalizeString(record?.attachmentSource || "model"),
+      name: normalizeString(record?.name),
+      mimeType: normalizeString(record?.mimeType || "application/octet-stream"),
+      size: Number(record?.size) || 0,
+      path: normalizeString(record?.path),
+      relativePath: normalizeString(record?.relativePath),
+      ...(owner ? { owner } : {}),
+      generatedByModel: record?.generatedByModel === true,
+      generationSource: normalizeString(record?.generationSource),
+    });
+  });
 }
 
 export function markHarnessPluginAttachmentMeta(meta = {}) {
   const source = meta && typeof meta === "object" ? meta : {};
+  const owner = {
+    ...(normalizeAttachmentOwnerMeta(source) || {}),
+    type: "plugin",
+    id: "harness-plugin",
+  };
   return {
     ...source,
-    attachmentOwnerType: "plugin",
-    attachmentOwner: "harness-plugin",
+    owner,
   };
 }
 

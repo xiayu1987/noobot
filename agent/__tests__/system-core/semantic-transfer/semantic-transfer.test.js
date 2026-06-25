@@ -298,7 +298,6 @@ test("compactToolResultTextForModel replaces verbose transfer payload with conci
     relativePath: "runtime/attach/scoped/s1/model/generated.png",
     generatedByModel: true,
     generationSource: "multimodal_generate_tool",
-    parsedResultAttachmentId: "",
   };
   const envelope = {
     protocol: "noobot.semantic-transfer",
@@ -362,14 +361,15 @@ test("persistTransferArtifacts saves through attachment service and returns tran
         relativePath: `attachments/${artifact.name}`,
         generatedByModel: true,
         generationSource: payload.generationSource,
-        owner: {
-          attachmentOwnerType: "turn",
-          attachmentOwner: "turn-1",
-          turnScope: {
-            turnScopeId: "turn-1",
-            dialogProcessId: "dialog-1",
-          },
-        },
+    owner: {
+      type: "turn",
+      id: "turn-1",
+      turnScope: {
+        turnScopeId: "turn-1",
+        dialogProcessId: "dialog-1",
+        sessionId: "s1",
+      },
+    },
       }));
     },
   };
@@ -404,10 +404,8 @@ test("persistTransferArtifacts saves through attachment service and returns tran
   assert.equal(attachmentMeta.attachmentSource, "model");
   assert.equal(attachmentMeta.mimeType, "text/plain");
   assert.equal(attachmentMeta.generationSource, "unit_test");
-  assert.equal(attachmentMeta.owner.attachmentOwnerType, "turn");
-  assert.equal(attachmentMeta.owner.attachmentOwner, "turn-1");
-  assert.equal(attachmentMeta.attachmentOwnerType, "turn");
-  assert.equal(attachmentMeta.attachmentOwner, "turn-1");
+  assert.equal(attachmentMeta.owner.type, "turn");
+  assert.equal(attachmentMeta.owner.id, "turn-1");
   assert.deepEqual(attachmentMeta.turnScope, {
     turnScopeId: "turn-1",
     dialogProcessId: "dialog-1",
@@ -422,51 +420,51 @@ test("persistTransferArtifacts saves through attachment service and returns tran
   assert.equal("filePaths" in persisted, false);
 });
 
-test("attachment metadata normalizes legacy owner and turn scope shapes", async () => {
+test("attachment metadata normalizes owner and turn scope shapes", async () => {
   const { mapAttachmentRecordsToMetas } = await import("../../../src/system-core/attach/index.js");
   const metas = mapAttachmentRecordsToMetas([
     {
-      attachmentId: "legacy-flat",
+      attachmentId: "canonical-owner",
       sessionId: "s-flat",
       attachmentSource: "model",
       name: "flat.txt",
       mimeType: "text/plain",
-      attachmentOwnerType: "turn",
-      attachmentOwner: "flat-turn",
-      turnScopeId: "flat-turn",
-      dialogProcessId: "flat-dialog",
+      owner: { type: "turn", id: "flat-turn" },
+      turnScope: {
+        turnScopeId: "flat-turn",
+        dialogProcessId: "flat-dialog",
+        sessionId: "s-flat",
+      },
     },
     {
-      attachmentId: "legacy-nested",
+      attachmentId: "canonical-nested",
       sessionId: "s-nested",
       attachmentSource: "model",
       name: "nested.txt",
       mimeType: "text/plain",
-      attachment: {
-        owner: {
-          type: "tool",
-          ownerId: "tool-call-1",
-        },
-        turnScope: {
-          turnScopeId: "nested-turn",
-          dialog_process_id: "nested-dialog",
-        },
+      owner: {
+        type: "tool",
+        id: "tool-call-1",
+      },
+      turnScope: {
+        turnScopeId: "nested-turn",
+        dialogProcessId: "nested-dialog",
+        sessionId: "s-nested",
       },
     },
   ]);
 
-  assert.equal(metas[0].owner.attachmentOwnerType, "turn");
-  assert.equal(metas[0].owner.attachmentOwner, "flat-turn");
+  assert.equal(metas[0].owner.type, "turn");
+  assert.equal(metas[0].owner.id, "flat-turn");
   assert.deepEqual(metas[0].turnScope, {
     turnScopeId: "flat-turn",
     dialogProcessId: "flat-dialog",
     sessionId: "s-flat",
   });
-  assert.equal(metas[1].owner.attachmentOwnerType, "tool");
-  assert.equal(metas[1].owner.attachmentOwner, "tool-call-1");
+  assert.equal(metas[1].owner.type, "tool");
+  assert.equal(metas[1].owner.id, "tool-call-1");
   assert.deepEqual(metas[1].turnScope, {
     turnScopeId: "nested-turn",
-    dialog_process_id: "nested-dialog",
     dialogProcessId: "nested-dialog",
     sessionId: "s-nested",
   });

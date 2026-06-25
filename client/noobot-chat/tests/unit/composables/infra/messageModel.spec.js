@@ -134,8 +134,10 @@ describe("messageModel semantic transfer", () => {
             attachmentId: "src-1",
             name: "source.pdf",
             mimeType: "application/pdf",
-            parsedResultAttachmentId: "parsed-1",
-            parsedResultRelativePath: "runtime/attach/parsed/source.md",
+            parsedResult: {
+              attachmentId: "parsed-1",
+              relativePath: "runtime/attach/parsed/source.md",
+            },
           },
         ],
       },
@@ -145,8 +147,10 @@ describe("messageModel semantic transfer", () => {
     expect(message.attachmentMetas).toHaveLength(1);
     expect(message.attachmentMetas[0]).toMatchObject({
       attachmentId: "src-1",
-      parsedResultAttachmentId: "parsed-1",
-      parsedResultRelativePath: "runtime/attach/parsed/source.md",
+      parsedResult: {
+        attachmentId: "parsed-1",
+        relativePath: "runtime/attach/parsed/source.md",
+      },
       parsedResultName: "source.md",
     });
     expect(message.attachmentMetas[0].parsedResultUrl).toContain("parsed-1");

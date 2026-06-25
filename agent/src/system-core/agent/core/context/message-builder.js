@@ -23,6 +23,7 @@ import {
   normalizeParentSessionId,
   resolveParentSessionId,
 } from "../../../context/parent-session-id-resolver.js";
+import { normalizeAttachmentParsedResultMeta } from "../../../attach/index.js";
 
 
 const TASK_SUMMARY_TOOL_NAME = "task_summary";
@@ -167,23 +168,16 @@ function buildUserMetaInfoContent(runtime = {}, msg = {}, fallbackMeta = {}) {
     parentDialogProcessId: String(
       msg?.parentDialogProcessId || fallbackMeta?.parentDialogProcessId || "",
     ).trim(),
-    attachments: attachmentMetas.map((attachmentItem) => ({
-      attachmentId: String(attachmentItem?.attachmentId || "").trim(),
-      name: String(attachmentItem?.name || "").trim(),
-      path: String(attachmentItem?.path || "").trim(),
-      relativePath: String(attachmentItem?.relativePath || "").trim(),
-      parsedResultAttachmentId: String(
-        attachmentItem?.parsedResultAttachmentId || "",
-      ).trim(),
-      parsedResultPath: String(attachmentItem?.parsedResultPath || "").trim(),
-      parsedResultRelativePath: String(
-        attachmentItem?.parsedResultRelativePath || "",
-      ).trim(),
-      parsedResultTool: String(attachmentItem?.parsedResultTool || "").trim(),
-      parsedResultUpdatedAt: String(
-        attachmentItem?.parsedResultUpdatedAt || "",
-      ).trim(),
-    })),
+    attachments: attachmentMetas.map((attachmentItem) => {
+      const parsedResult = normalizeAttachmentParsedResultMeta(attachmentItem);
+      return {
+        attachmentId: String(attachmentItem?.attachmentId || "").trim(),
+        name: String(attachmentItem?.name || "").trim(),
+        path: String(attachmentItem?.path || "").trim(),
+        relativePath: String(attachmentItem?.relativePath || "").trim(),
+        ...(parsedResult ? { parsedResult } : {}),
+      };
+    }),
   };
   const userMetaTag = tEngine(runtime, "agent.userMetaTag");
   return `[${userMetaTag}]\n${JSON.stringify(payload, null, 2)}\n[/${userMetaTag}]`;

@@ -16,13 +16,15 @@ test("mergeAttachmentMetas promotes duplicate attachment metadata to plugin owne
         attachmentId: "report-1",
         name: "harness-acceptance-report.txt",
         path: "/runtime/report.txt",
-        attachmentOwnerType: "plugin",
-        attachmentOwner: "harness-plugin",
+        owner: {
+          type: "plugin",
+          id: "harness-plugin",
+        },
       },
     ],
   );
 
   assert.equal(merged.length, 1);
-  assert.equal(merged[0].attachmentOwnerType, "plugin");
-  assert.equal(merged[0].attachmentOwner, "harness-plugin");
+  assert.equal(merged[0].owner?.type, "plugin");
+  assert.equal(merged[0].owner?.id, "harness-plugin");
 });

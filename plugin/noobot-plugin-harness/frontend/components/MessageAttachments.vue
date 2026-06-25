@@ -29,16 +29,44 @@ const formatFileSize = (...args) => props.formatFileSize(...args);
 const pluginAttachmentsCollapsed = ref(true);
 const normalAttachments = computed(() =>
   attachments.value.filter(
-    (item = {}) => item?.attachmentOwnerType !== "plugin",
+    (item = {}) => resolveAttachmentOwnerType(item) !== "plugin",
   ),
 );
 const pluginAttachments = computed(() =>
   attachments.value.filter(
-    (item = {}) => item?.attachmentOwnerType === "plugin",
+    (item = {}) => resolveAttachmentOwnerType(item) === "plugin",
   ),
 );
 const thumbnailUrlByKey = ref({});
 const thumbnailAttemptedKeys = new Set();
+
+function resolveAttachmentOwnerType(attachmentItem = {}) {
+  return String(
+    attachmentItem?.owner?.type ||
+      "",
+  ).trim();
+}
+
+function resolveParsedResultMeta(attachmentItem = {}) {
+  const parsedResult = attachmentItem?.parsedResult &&
+    typeof attachmentItem.parsedResult === "object" &&
+    !Array.isArray(attachmentItem.parsedResult)
+    ? attachmentItem.parsedResult
+    : {};
+  return {
+    attachmentId: String(
+      parsedResult?.attachmentId ||
+        parsedResult?.id ||
+        "",
+    ).trim(),
+    name: String(
+      parsedResult?.name ||
+        attachmentItem?.parsedResultName ||
+        "",
+    ).trim(),
+    url: String(attachmentItem?.parsedResultUrl || parsedResult?.url || "").trim(),
+  };
+}
 
 function makeAttachmentKey(attachmentItem = {}, attachmentIndex = 0) {
   return String(
@@ -163,13 +191,14 @@ onBeforeUnmount(() => {
 });
 
 function emitPreviewParsedResult(attachmentItem = {}) {
-  const url = String(attachmentItem?.parsedResultUrl || "").trim();
+  const parsedResult = resolveParsedResultMeta(attachmentItem);
+  const url = parsedResult.url;
   if (!url) return;
   emit("preview", {
     ...attachmentItem,
-    attachmentId: String(attachmentItem?.parsedResultAttachmentId || "").trim(),
+    attachmentId: parsedResult.attachmentId,
     name:
-      String(attachmentItem?.parsedResultName || "").trim() ||
+      parsedResult.name ||
       translate("message.parsedResultDefaultName"),
     mimeType: "text/markdown",
     previewUrl: url,
@@ -177,13 +206,14 @@ function emitPreviewParsedResult(attachmentItem = {}) {
 }
 
 function emitDownloadParsedResult(attachmentItem = {}) {
-  const url = String(attachmentItem?.parsedResultUrl || "").trim();
+  const parsedResult = resolveParsedResultMeta(attachmentItem);
+  const url = parsedResult.url;
   if (!url) return;
   emit("download", {
     ...attachmentItem,
-    attachmentId: String(attachmentItem?.parsedResultAttachmentId || "").trim(),
+    attachmentId: parsedResult.attachmentId,
     name:
-      String(attachmentItem?.parsedResultName || "").trim() ||
+      parsedResult.name ||
       translate("message.parsedResultDefaultName"),
     mimeType: "text/markdown",
     previewUrl: url,
