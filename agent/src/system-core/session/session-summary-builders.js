@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 2;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 3;
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
 
 export function isSessionDisplaySummaryPayload(payload = null, sessionId = "") {
@@ -91,20 +91,72 @@ function truncateText(value = "", maxLength = 4000) {
   return text.length > maxLength ? `${text.slice(0, maxLength)}…` : text;
 }
 
+function pickPlainObjectFields(source = null, keys = []) {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return null;
+  const out = {};
+  for (const key of keys) {
+    const value = source?.[key];
+    if (value === undefined || value === null || value === "") continue;
+    if (["string", "number", "boolean"].includes(typeof value)) out[key] = value;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 function pickLightAttachmentMetas(message = {}) {
   const metas = Array.isArray(message?.attachmentMetas) ? message.attachmentMetas : [];
-  return metas.map((item = {}) => ({
-    id: item?.id || item?.attachmentId || item?.fileId || "",
-    name: item?.name || item?.fileName || item?.filename || "",
-    type: item?.type || item?.mimeType || item?.mime || "",
-    size: item?.size || item?.bytes || 0,
-    owner: item?.owner || item?.source || "",
-    url: item?.url || item?.downloadUrl || "",
-    previewUrl: item?.previewUrl || "",
-    ...(item?.turnScope && typeof item.turnScope === "object" && !Array.isArray(item.turnScope)
-      ? { turnScope: item.turnScope }
-      : {}),
-  })).filter((item) => item.id || item.name || item.url || item.previewUrl);
+  return metas.map((item = {}) => {
+    const attachmentId = item?.attachmentId || item?.attachment_id || item?.id || item?.fileId || item?.file_id || "";
+    const mimeType = item?.mimeType || item?.type || item?.mime || "";
+    const attachmentSource = item?.attachmentSource || item?.attachment_source || item?.source || "";
+    const sessionId = item?.sessionId || item?.session_id || item?.backendSessionId || "";
+    const ownerObject = pickPlainObjectFields(item?.owner, [
+      "attachmentOwnerType",
+      "ownerType",
+      "type",
+      "attachmentOwner",
+      "owner",
+      "ownerId",
+      "source",
+      "sourceId",
+      "plugin",
+      "pluginId",
+      "injectedBy",
+    ]);
+    const attachmentOwnerObject = pickPlainObjectFields(item?.attachment?.owner, [
+      "attachmentOwnerType",
+      "ownerType",
+      "type",
+      "attachmentOwner",
+      "owner",
+      "ownerId",
+      "source",
+      "sourceId",
+      "plugin",
+      "pluginId",
+      "injectedBy",
+    ]);
+    return {
+      id: attachmentId,
+      attachmentId,
+      name: item?.name || item?.fileName || item?.filename || "",
+      type: mimeType,
+      mimeType,
+      size: item?.size || item?.bytes || 0,
+      attachmentSource,
+      source: attachmentSource,
+      sessionId,
+      owner: ownerObject || (typeof item?.owner === "string" ? item.owner : ""),
+      attachmentOwnerType: item?.attachmentOwnerType || "",
+      attachmentOwner: item?.attachmentOwner || "",
+      generationSource: item?.generationSource || "",
+      url: item?.url || item?.downloadUrl || "",
+      previewUrl: item?.previewUrl || "",
+      ...(item?.turnScope && typeof item.turnScope === "object" && !Array.isArray(item.turnScope)
+        ? { turnScope: item.turnScope }
+        : {}),
+      ...(attachmentOwnerObject ? { attachment: { owner: attachmentOwnerObject } } : {}),
+    };
+  }).filter((item) => item.id || item.attachmentId || item.name || item.url || item.previewUrl);
 }
 
 function tryParseJsonContent(content = "") {
