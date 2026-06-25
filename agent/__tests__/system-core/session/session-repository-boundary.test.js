@@ -241,6 +241,25 @@ test("session display summary should keep chat view lightweight and rebuild stal
         rawMessages: [{ role: "assistant", content: "raw" }],
       },
       {
+        id: "plugin-attachment-assistant",
+        role: "assistant",
+        turnScopeId: "turn-scope-plugin",
+        content: "plugin attachment result",
+        attachmentMetas: [
+          {
+            attachmentId: "att-plugin-1",
+            sessionId: "B",
+            attachmentSource: "model",
+            name: "harness-plan-text.txt",
+            mimeType: "text/plain",
+            size: 123,
+            attachmentOwnerType: "plugin",
+            attachmentOwner: "harness-plugin",
+            generationSource: "harness_plan",
+          },
+        ],
+      },
+      {
         role: "tool",
         type: "tool_result",
         turnScopeId: "turn-scope-u1",
@@ -345,15 +364,15 @@ test("session display summary should keep chat view lightweight and rebuild stal
     const persistedSession = JSON.parse(await readFile(scopeB.sessionFile, "utf8"));
     assert.equal(persistedSession.messages.every((item) => "turnScopeId" in item), true);
     let summary = JSON.parse(await readFile(summaryFile, "utf8"));
-    assert.equal(summary.schemaVersion, 2);
+    assert.equal(summary.schemaVersion, 3);
     assert.equal(summary.sessionId, "B");
-    assert.equal(summary.messages.length, 5);
+    assert.equal(summary.messages.length, 6);
     assert.equal(summary.messages.every((item) => "turnScopeId" in item), true);
-    assert.equal(summary.stats.messageCount, 10);
-    assert.equal(summary.stats.displayMessageCount, 5);
+    assert.equal(summary.stats.messageCount, 11);
+    assert.equal(summary.stats.displayMessageCount, 6);
     assert.equal(summary.stats.injectedMessageCount, 1);
     assert.equal(summary.stats.thinkingMessageCount, 2);
-    assert.equal(summary.stats.attachmentCount, 1);
+    assert.equal(summary.stats.attachmentCount, 2);
     assert.equal(summary.stats.toolLogCount, 5);
     assert.equal(summary.stats.displayToolLogCount, 1);
     assert.equal(summary.stats.hasToolDetails, true);
@@ -375,7 +394,23 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(userMessage.content.endsWith(userContentTail), true);
     assert.equal(userMessage.content.includes(`${userContentTail}…`), false);
     assert.deepEqual(userMessage.attachmentMetas, [
-      { id: "att-1", name: "a.txt", type: "text/plain", size: 12, owner: "", url: "", previewUrl: "" },
+      {
+        id: "att-1",
+        attachmentId: "att-1",
+        name: "a.txt",
+        type: "text/plain",
+        mimeType: "text/plain",
+        size: 12,
+        attachmentSource: "",
+        source: "",
+        sessionId: "",
+        owner: "",
+        attachmentOwnerType: "",
+        attachmentOwner: "",
+        generationSource: "",
+        url: "",
+        previewUrl: "",
+      },
     ]);
     const assistantMessage = summary.messages.find((item) => item.id === "a1");
     assert.equal(assistantMessage.content, longAssistantContent);
@@ -386,6 +421,26 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal("realtimeLogs" in assistantMessage, false);
     assert.equal("completedToolLogs" in assistantMessage, false);
     assert.equal("rawMessages" in assistantMessage, false);
+    const pluginAttachmentAssistant = summary.messages.find((item) => item.id === "plugin-attachment-assistant");
+    assert.deepEqual(pluginAttachmentAssistant.attachmentMetas, [
+      {
+        id: "att-plugin-1",
+        attachmentId: "att-plugin-1",
+        name: "harness-plan-text.txt",
+        type: "text/plain",
+        mimeType: "text/plain",
+        size: 123,
+        attachmentSource: "model",
+        source: "model",
+        sessionId: "B",
+        owner: "",
+        attachmentOwnerType: "plugin",
+        attachmentOwner: "harness-plugin",
+        generationSource: "harness_plan",
+        url: "",
+        previewUrl: "",
+      },
+    ]);
     const toolOnlyAssistantMessage = summary.messages.find((item) => item.id === "tool-display-assistant");
     assert.equal(toolOnlyAssistantMessage.content, "tool only final answer");
     assert.equal(toolOnlyAssistantMessage.hasThinkingDetails, true);
@@ -423,7 +478,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(displayData.sessions[0].depth, 2);
     assert.equal(displayData.sessions[0].toolLogSummaries.every((item) => item.depth === 2), true);
     summary = JSON.parse(await readFile(summaryFile, "utf8"));
-    assert.equal(summary.schemaVersion, 2);
+    assert.equal(summary.schemaVersion, 3);
     assert.equal(summary.sessionId, "B");
     assert.equal(summary.depth, 2);
   });
