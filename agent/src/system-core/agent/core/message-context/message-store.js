@@ -74,9 +74,7 @@ function buildMessageKey(message = {}) {
 }
 
 function resolveMessageId(message = {}) {
-  return readField(message, "noobotMessageId") ||
-    readField(message, "messageId") ||
-    readField(message, "id");
+  return readField(message, "noobotMessageId") || readField(message, "messageId");
 }
 
 function ensureMessageMetadata(message = {}) {
@@ -141,6 +139,17 @@ function nextMessageId(store = {}) {
   return `am_${next.toString(36)}`;
 }
 
+function bumpNextMessageId(store = {}, id = "") {
+  if (!store || typeof store !== "object") return;
+  const normalizedId = String(id || "").trim();
+  const match = normalizedId.match(/^am_([0-9a-z]+)$/i);
+  if (!match) return;
+  const numeric = Number.parseInt(match[1], 36);
+  if (!Number.isFinite(numeric) || numeric < 1) return;
+  const current = Math.max(1, Math.trunc(Number(store.nextId) || 1));
+  if (current <= numeric) store.nextId = numeric + 1;
+}
+
 function canonicalizeMessage(store = null, message = null) {
   if (!store || !message || typeof message !== "object") return message;
   const existingId = resolveMessageId(message);
@@ -158,6 +167,7 @@ function canonicalizeMessage(store = null, message = null) {
   }
   const id = existingId || nextMessageId(store);
   assignMessageId(message, id);
+  bumpNextMessageId(store, id);
   if (key) store.byKey.set(key, message);
   store.byId.set(id, message);
   store.messages.push(message);
@@ -170,9 +180,9 @@ function canonicalizeList(store = null, messages = []) {
 
 function syncBlockIds(blocks = null) {
   if (!blocks || typeof blocks !== "object" || Array.isArray(blocks)) return blocks;
-  blocks.systemIds = normalizeList(blocks.system).map((message) => resolveMessageId(message)).filter(Boolean);
-  blocks.historyIds = normalizeList(blocks.history).map((message) => resolveMessageId(message)).filter(Boolean);
-  blocks.incrementalIds = normalizeList(blocks.incremental).map((message) => resolveMessageId(message)).filter(Boolean);
+  for (const staleField of ["system", "history", "incremental"].map((name) => `${name}Ids`)) {
+    delete blocks[staleField];
+  }
   return blocks;
 }
 
@@ -208,11 +218,12 @@ export function resolveMessagesByIds(holder = {}, ids = []) {
 
 export function replaceMessages(holder = {}, messages = []) {
   if (!holder || typeof holder !== "object") return [];
-  const store = canonicalizeMessageStore(holder) || resolveStore(holder);
+  const store = holder.messageStore && typeof holder.messageStore === "object"
+    ? resolveStore(holder)
+    : (canonicalizeMessageStore(holder) || resolveStore(holder));
   const canonicalMessages = canonicalizeList(store, messages);
   if (!Array.isArray(holder.messages)) holder.messages = [];
   holder.messages.splice(0, holder.messages.length, ...canonicalMessages);
-  canonicalizeMessageStore(holder);
   return holder.messages;
 }
 
@@ -222,7 +233,9 @@ export function writeMessageBlocks(holder = {}, blocks = {}) {
     holder.messageBlocks && typeof holder.messageBlocks === "object" && !Array.isArray(holder.messageBlocks)
       ? holder.messageBlocks
       : {};
-  const store = canonicalizeMessageStore(holder) || resolveStore(holder);
+  const store = holder.messageStore && typeof holder.messageStore === "object"
+    ? resolveStore(holder)
+    : (canonicalizeMessageStore(holder) || resolveStore(holder));
   for (const blockName of ["system", "history", "incremental"]) {
     if (Object.prototype.hasOwnProperty.call(blocks, blockName)) {
       existing[blockName] = canonicalizeList(store, blocks[blockName]);

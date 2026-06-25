@@ -230,10 +230,9 @@ test("harness ctx message takeover writes through message store views", async ()
   assert.equal(ctx.messages.length, 2);
   assert.match(String(ctx.messages[1]?.content || ""), /harness-store-note/);
   assert.equal(ctx.messageBlocks.incremental[1], ctx.messages[1]);
-  assert.deepEqual(ctx.messageBlocks.incrementalIds, [
-    ctx.messages[0]?.additional_kwargs?.noobotMessageId,
-    ctx.messages[1]?.additional_kwargs?.noobotMessageId,
-  ]);
+  assert.ok(ctx.messages[0]?.additional_kwargs?.noobotMessageId);
+  assert.ok(ctx.messages[1]?.additional_kwargs?.noobotMessageId);
+  assert.equal(ctx.messageBlocks.incrementalIds, undefined);
 });
 
 test("harness agent system takeover does not write ctx message store", async () => {

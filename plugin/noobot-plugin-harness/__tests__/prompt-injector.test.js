@@ -101,12 +101,10 @@ test("injectSystemMessages writes back through message store", () => {
   assert.equal(changed, true);
   assert.ok(ctx.messages[1]?.additional_kwargs?.noobotMessageId);
   assert.equal(ctx.messages[2], ctx.messageBlocks.incremental[0]);
-  assert.deepEqual(ctx.messageBlocks.incrementalIds, [
-    ctx.messages[2].additional_kwargs.noobotMessageId,
-  ]);
+  assert.equal(ctx.messageBlocks.incrementalIds, undefined);
 });
 
-test("injectSystemMessages syncs system block ids through message store", () => {
+test("injectSystemMessages syncs system block arrays through message store", () => {
   const ctx = {
     messages: [{ role: "user", content: "user task" }],
     messageBlocks: {
@@ -125,7 +123,6 @@ test("injectSystemMessages syncs system block ids through message store", () => 
   assert.equal(changed, true);
   assert.equal(ctx.messageBlocks.system.length, 1);
   assert.equal(ctx.messageBlocks.system[0], ctx.messages[0]);
-  assert.deepEqual(ctx.messageBlocks.systemIds, [
-    ctx.messages[0].additional_kwargs.noobotMessageId,
-  ]);
+  assert.ok(ctx.messages[0].additional_kwargs.noobotMessageId);
+  assert.equal(ctx.messageBlocks.systemIds, undefined);
 });

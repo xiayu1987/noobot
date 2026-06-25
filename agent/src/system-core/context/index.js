@@ -37,6 +37,7 @@ import { mapToAgentContextSchema } from "./formatters/agent-context-mapper.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { normalizeParentSessionId } from "./parent-session-id-resolver.js";
 import { normalizeContextWindow } from "../session/utils/context-window-normalizer.js";
+import { emitModelContextTrace, summarizeDiagnosticMessages } from "../agent/core/message-context/context-diagnostics.js";
 
 function normalizeAdditionalSystemMessages(input = []) {
   if (!Array.isArray(input)) return [];
@@ -459,6 +460,13 @@ export class ContextBuilder {
       sessionId: this.sessionId || "",
       dialogProcessId,
     });
+    emitModelContextTrace({ ...(this.runConfig || {}), eventListener: this.eventListener }, "context_records_resolved", {
+      mode: "initial",
+      sessionId: this.sessionId || "",
+      dialogProcessId,
+      currentTurnScopeId: String(this.runConfig?.turnScopeId || "").trim(),
+      records: summarizeDiagnosticMessages(sessionRecords),
+    });
     const {
       systemContext,
       runtimeBasePath,
@@ -479,6 +487,13 @@ export class ContextBuilder {
     const sessionRecords = await this._resolveSessionRecords({
       sessionId: this.sessionId || "",
       dialogProcessId,
+    });
+    emitModelContextTrace({ ...(this.runConfig || {}), eventListener: this.eventListener }, "context_records_resolved", {
+      mode: "continue",
+      sessionId: this.sessionId || "",
+      dialogProcessId,
+      currentTurnScopeId: String(this.runConfig?.turnScopeId || "").trim(),
+      records: summarizeDiagnosticMessages(sessionRecords),
     });
     const longMemory = await resolveLongMemory({
       memoryService: this.memoryService,

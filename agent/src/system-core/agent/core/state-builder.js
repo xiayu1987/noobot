@@ -26,6 +26,11 @@ import {
   resolveToolFailureHelpCount,
 } from "./config/index.js";
 import { canonicalizeMessageStore } from "./message-context/message-store.js";
+import {
+  emitModelContextTrace,
+  summarizeDiagnosticBlocks,
+  summarizeDiagnosticMessages,
+} from "./message-context/context-diagnostics.js";
 
 export function createStateBuilder({
   createChatModelFn = createChatModel,
@@ -149,6 +154,15 @@ export function createStateBuilder({
       errorLogger,
     };
     canonicalizeMessageStore(loopState);
+    emitModelContextTrace(runtime, "agent_state_built", {
+      dialogProcessId,
+      payloadMessages: {
+        systemCount: Array.isArray(agentContext?.payload?.messages?.system) ? agentContext.payload.messages.system.length : 0,
+        historyCount: Array.isArray(agentContext?.payload?.messages?.history) ? agentContext.payload.messages.history.length : 0,
+      },
+      blocks: summarizeDiagnosticBlocks(loopState.messageBlocks),
+      messages: summarizeDiagnosticMessages(loopState.messages),
+    });
 
     return { modelState, loopState };
   };

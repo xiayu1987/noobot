@@ -29,10 +29,10 @@ test("dynamic harness main-flow system injections stay in system block", () => {
   assert.equal(ctx.messages[0]?.injectedMessage, true);
   assert.equal(ctx.messages[0]?.injectedBy, "harness-plugin");
   assert.ok(ctx.messages[0]?.additional_kwargs?.noobotMessageId);
-  assert.deepEqual(ctx.messageBlocks.systemIds, [
-    ctx.messages[0].additional_kwargs.noobotMessageId,
-  ]);
-  assert.deepEqual(ctx.messageBlocks.incrementalIds, []);
+  assert.equal(ctx.messageBlocks.system[0], ctx.messages[0]);
+  assert.deepEqual(ctx.messageBlocks.incremental, []);
+  assert.equal(ctx.messageBlocks.systemIds, undefined);
+  assert.equal(ctx.messageBlocks.incrementalIds, undefined);
 });
 
 test("dynamic harness system injections compose before history", async () => {

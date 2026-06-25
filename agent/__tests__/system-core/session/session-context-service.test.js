@@ -129,7 +129,6 @@ test("getRecentSessionMessages keeps recent complete rounds and all unsummarized
     userId: "u1",
     sessionId: "s1",
     limit: 2,
-    currentDialogProcessId: "dlg_3",
   });
 
   assert.deepEqual(
@@ -224,6 +223,46 @@ test("getContextRecords passes current turn filter through recent history", asyn
   assert.deepEqual(
     result.map((messageItem) => messageItem.content),
     ["历史问题", "历史回答"],
+  );
+});
+
+test("getRecentSessionMessages selects latest 3 previous dialogProcessId rounds", async () => {
+  const messages = [];
+  for (const id of ["dlg_1", "dlg_2", "dlg_3", "dlg_4", "dlg_current"]) {
+    messages.push({
+      role: "user",
+      content: `${id} user`,
+      dialogProcessId: id,
+      turnScopeId: `turn:${id}`,
+    });
+    if (id !== "dlg_current") {
+      messages.push({
+        role: "assistant",
+        content: `${id} assistant`,
+        dialogProcessId: id,
+        turnScopeId: `turn:${id}`,
+      });
+    }
+  }
+  const service = createSessionContextService(messages);
+  const result = await service.getRecentSessionMessages({
+    userId: "u1",
+    sessionId: "s1",
+    limit: 3,
+    currentDialogProcessId: "dlg_current",
+    currentTurnScopeId: "turn:dlg_current",
+  });
+
+  assert.deepEqual(
+    result.map((messageItem) => messageItem.content),
+    [
+      "dlg_2 user",
+      "dlg_2 assistant",
+      "dlg_3 user",
+      "dlg_3 assistant",
+      "dlg_4 user",
+      "dlg_4 assistant",
+    ],
   );
 });
 

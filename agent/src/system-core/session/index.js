@@ -28,6 +28,21 @@ function createNow(now = null) {
   return () => new Date().toISOString();
 }
 
+function normalizeContextServicePayload(payload = {}) {
+  const source = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? payload
+    : {};
+  return {
+    ...source,
+    userConfig:
+      source.userConfig && typeof source.userConfig === "object" && !Array.isArray(source.userConfig)
+        ? source.userConfig
+        : {},
+    currentDialogProcessId: String(source.currentDialogProcessId || "").trim(),
+    currentTurnScopeId: String(source.currentTurnScopeId || "").trim(),
+  };
+}
+
 export function createSessionServices(globalConfig = {}, { now = null } = {}) {
   const nowFn = createNow(now);
   const pathResolver = new PathResolver(globalConfig || {});
@@ -241,58 +256,29 @@ export function createSessionFacade(runtime = {}) {
       return executionLogService.appendExecutionLog(payload);
     },
 
-    async getRecentSessionMessages({
-      userId,
-      sessionId,
-      limit,
-      userConfig = {},
-      currentDialogProcessId = "",
-    }) {
+    async getRecentSessionMessages(payload = {}) {
       return sessionContextService.getRecentSessionMessages({
-        userId,
-        sessionId,
-        limit,
-        userConfig,
-        currentDialogProcessId,
+        limit: payload?.limit,
+        ...normalizeContextServicePayload(payload),
       });
     },
 
-    async getMessagesSinceLastRunningTask({
-      userId,
-      sessionId,
-      currentDialogProcessId = "",
-    }) {
-      return sessionContextService.getMessagesSinceLastRunningTask({
-        userId,
-        sessionId,
-        currentDialogProcessId,
-      });
+    async getMessagesSinceLastRunningTask(payload = {}) {
+      return sessionContextService.getMessagesSinceLastRunningTask(
+        normalizeContextServicePayload(payload),
+      );
     },
 
-    async getMessagesSinceLastCompletedTask({
-      userId,
-      sessionId,
-      currentDialogProcessId = "",
-    }) {
-      return sessionContextService.getMessagesSinceLastCompletedTask({
-        userId,
-        sessionId,
-        currentDialogProcessId,
-      });
+    async getMessagesSinceLastCompletedTask(payload = {}) {
+      return sessionContextService.getMessagesSinceLastCompletedTask(
+        normalizeContextServicePayload(payload),
+      );
     },
 
-    async getContextRecords({
-      userId,
-      sessionId,
-      userConfig = {},
-      currentDialogProcessId = "",
-    }) {
-      return sessionContextService.getContextRecords({
-        userId,
-        sessionId,
-        userConfig,
-        currentDialogProcessId,
-      });
+    async getContextRecords(payload = {}) {
+      return sessionContextService.getContextRecords(
+        normalizeContextServicePayload(payload),
+      );
     },
 
     async startSkillTask(payload = {}) {

@@ -124,9 +124,8 @@ test("state-committer writes tool result through message store when holder is pr
   assert.equal(loopState.messages.length, 1);
   assert.equal(loopState.messages[0]?.content, "store_tool_result");
   assert.equal(loopState.messageBlocks.incremental[0], loopState.messages[0]);
-  assert.ok(loopState.messageBlocks.incrementalIds.includes(
-    loopState.messages[0].additional_kwargs.noobotMessageId,
-  ));
+  assert.ok(loopState.messages[0].additional_kwargs.noobotMessageId);
+  assert.equal(loopState.messageBlocks.incrementalIds, undefined);
   assert.equal(turnMessageStore.items[0]?.content, "store_tool_result");
 });
 

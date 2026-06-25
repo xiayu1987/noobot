@@ -142,10 +142,7 @@ test("normalizeHookContextProtocol canonicalizes messages and messageBlocks thro
     ctx.messages[1].additional_kwargs.noobotMessageId,
     ctx.messageBlocks.incremental[1].additional_kwargs.noobotMessageId,
   );
-  assert.deepEqual(ctx.messageBlocks.incrementalIds, [
-    ctx.messageBlocks.incremental[0].additional_kwargs.noobotMessageId,
-    ctx.messageBlocks.incremental[1].additional_kwargs.noobotMessageId,
-  ]);
+  assert.equal(ctx.messageBlocks.incrementalIds, undefined);
   ctx.messages[1].summarized = true;
   assert.equal(ctx.messageBlocks.incremental[1].summarized, true);
 });

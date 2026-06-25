@@ -44,6 +44,11 @@ import { commitNoToolsTurnState } from "./no-tools-commit-stage.js";
 import { maybeCreateRequiredToolChoiceUnsupportedFallbackAi } from "./tool-choice-fallback-stage.js";
 import { handleRequiredToolChoiceNotFollowed } from "./tool-choice-required-stage.js";
 import { appendMessage } from "../message-context/message-store.js";
+import {
+  emitModelContextTrace,
+  summarizeDiagnosticBlocks,
+  summarizeDiagnosticMessages,
+} from "../message-context/context-diagnostics.js";
 export { normalizeToolResultAttachmentMetas } from "./tool-result-normalizer.js";
 export {
   buildAssistantModelMessageForToolCalls,
@@ -70,6 +75,18 @@ function reconcileHookContextToLoopState(loopState = {}, hookContext = {}) {
     loopState.messages.splice(0, loopState.messages.length, ...hookContext.messages);
   }
   return loopState;
+}
+
+
+function traceLoopStateContext(runtime = {}, stage = "", loopState = {}, extra = {}) {
+  emitModelContextTrace(runtime, stage, {
+    turn: extra.turn,
+    mode: extra.mode,
+    dialogProcessId: loopState?.dialogProcessId || "",
+    blocks: summarizeDiagnosticBlocks(loopState?.messageBlocks),
+    messages: summarizeDiagnosticMessages(loopState?.messages),
+    ...extra,
+  });
 }
 
 function syncMessagesFromBlocks(loopState = {}) {
@@ -110,6 +127,7 @@ export async function invokeNoToolsTurn({
   emitEvent(eventListener, "llm_call_start", { turn, mode: "no_tools" });
   const llmStartedAtMs = Date.now();
   const llmStartedAt = new Date(llmStartedAtMs).toISOString();
+  traceLoopStateContext(runtime, "before_llm_hook_context_input", loopState, { turn, mode: "no_tools" });
   const beforeLlmHookContext = buildHookContext(AGENT_HOOK_POINTS.BEFORE_LLM_CALL, runtime, {
     phase: "llm_call",
     turn,
@@ -118,6 +136,7 @@ export async function invokeNoToolsTurn({
     startedAt: llmStartedAt,
     forceToolChoiceNone,
     messages,
+    messageStore: loopState.messageStore,
     messageBlocks: loopState.messageBlocks,
     maxTurns: Number(loopState?.maxTurns || 0),
     agentContext: modelState?.agentContext || null,
@@ -127,8 +146,15 @@ export async function invokeNoToolsTurn({
     point: AGENT_HOOK_POINTS.BEFORE_LLM_CALL,
     context: beforeLlmHookContext,
   });
+  emitModelContextTrace(runtime, "before_llm_hook_context_output", {
+    turn,
+    mode: "no_tools",
+    hookBlocks: summarizeDiagnosticBlocks(beforeLlmHookContext.messageBlocks),
+    hookMessages: summarizeDiagnosticMessages(beforeLlmHookContext.messages),
+  });
   reconcileHookContextToLoopState(loopState, beforeLlmHookContext);
   syncMessagesFromBlocks(loopState);
+  traceLoopStateContext(runtime, "before_llm_final_composed", loopState, { turn, mode: "no_tools" });
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const locale = String(systemRuntime?.locale || "zh-CN");
   let modelResponse = null;
@@ -137,8 +163,15 @@ export async function invokeNoToolsTurn({
       modelState,
       turn,
       mode: "no_tools",
-      invoke: ({ callbacks }) =>
-        invokeLlm.invoke(filterForModelContext(messages), {
+      invoke: ({ callbacks }) => {
+        const modelMessages = filterForModelContext(messages);
+        emitModelContextTrace(runtime, "llm_invoke_messages", {
+          turn,
+          mode: "no_tools",
+          toolChoice: forceToolChoiceNone ? "none" : "",
+          messages: summarizeDiagnosticMessages(modelMessages),
+        });
+        return invokeLlm.invoke(modelMessages, {
           callbacks,
           signal: abortSignal,
           ...(forceToolChoiceNone ? { tool_choice: "none" } : {}),
@@ -147,7 +180,8 @@ export async function invokeNoToolsTurn({
             forceToolChoiceNone ? "none" : "",
             modelState?.defaultModelSpec || {},
           ),
-        }),
+        });
+      },
     });
   } catch (error) {
     await runAgentRuntimeHook({
@@ -163,6 +197,7 @@ export async function invokeNoToolsTurn({
         durationMs: Date.now() - llmStartedAtMs,
         error,
         messages,
+        messageStore: loopState.messageStore,
         messageBlocks: loopState.messageBlocks,
         maxTurns: Number(loopState?.maxTurns || 0),
         agentContext: modelState?.agentContext || null,
@@ -185,6 +220,7 @@ export async function invokeNoToolsTurn({
       hasToolCalls: false,
       modelResponse,
       messages,
+      messageStore: loopState.messageStore,
       messageBlocks: loopState.messageBlocks,
       maxTurns: Number(loopState?.maxTurns || 0),
       agentContext: modelState?.agentContext || null,
@@ -287,6 +323,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
 
   const llmStartedAtMs = Date.now();
   const llmStartedAt = new Date(llmStartedAtMs).toISOString();
+  traceLoopStateContext(runtime, "before_llm_hook_context_input", loopState, { turn, mode: "with_tools" });
   const beforeLlmHookContext = buildHookContext(AGENT_HOOK_POINTS.BEFORE_LLM_CALL, runtime, {
     phase: "llm_call",
     turn,
@@ -296,6 +333,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     toolChoice: configuredToolChoice || "",
     toolNames: boundTools.map((tool) => String(tool?.name || "").trim()).filter(Boolean),
     messages,
+    messageStore: loopState.messageStore,
     messageBlocks: loopState.messageBlocks,
     maxTurns: Number(loopState?.maxTurns || 0),
     agentContext: modelState?.agentContext || null,
@@ -305,8 +343,15 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     point: AGENT_HOOK_POINTS.BEFORE_LLM_CALL,
     context: beforeLlmHookContext,
   });
+  emitModelContextTrace(runtime, "before_llm_hook_context_output", {
+    turn,
+    mode: "with_tools",
+    hookBlocks: summarizeDiagnosticBlocks(beforeLlmHookContext.messageBlocks),
+    hookMessages: summarizeDiagnosticMessages(beforeLlmHookContext.messages),
+  });
   reconcileHookContextToLoopState(loopState, beforeLlmHookContext);
   syncMessagesFromBlocks(loopState);
+  traceLoopStateContext(runtime, "before_llm_final_composed", loopState, { turn, mode: "with_tools" });
 
   let ai = null;
   try {
@@ -326,6 +371,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
         toolChoice: configuredToolChoice || "",
         error,
         messages,
+        messageStore: loopState.messageStore,
         messageBlocks: loopState.messageBlocks,
         maxTurns: Number(loopState?.maxTurns || 0),
         agentContext: modelState?.agentContext || null,
@@ -384,6 +430,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       ai,
       calls,
       messages,
+      messageStore: loopState.messageStore,
       messageBlocks: loopState.messageBlocks,
       maxTurns: Number(loopState?.maxTurns || 0),
       agentContext: modelState?.agentContext || null,
