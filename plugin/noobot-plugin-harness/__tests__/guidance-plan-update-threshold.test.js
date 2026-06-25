@@ -285,9 +285,13 @@ test("separate_model analysis uses aligned agent context then user request and u
   assert.deepEqual(
     capturedPayload.messages.slice(0, 2).map((item = {}) => [item.role, item.content]),
     [
+      ["system", "<!-- harness-plan-checklist-context -->\n【当前完整计划清单】\n1. 主任务"],
       ["user", "历史上下文"],
-      ["assistant", "当前增量"],
     ],
+  );
+  assert.equal(
+    capturedPayload.messages.some((item = {}) => item.role === "assistant" && item.content === "当前增量"),
+    true,
   );
   const tailMessages = capturedPayload.messages.slice(-2);
   assert.equal(tailMessages[0]?.role, "user");
