@@ -583,7 +583,10 @@ export function useMessageFiles({
         getAttachmentOwnerType(attachmentItem) === "plugin" &&
         getAttachmentOwnerType(existingItem) !== "plugin"
       ) {
-        dedupedWithOwnerType[existingIndex] = attachmentItem;
+        dedupedWithOwnerType[existingIndex] = mergeAttachmentMetas(
+          [existingItem],
+          [attachmentItem],
+        )[0] || attachmentItem;
         for (const key of attachmentKeys) {
           seenAttachmentKeySet.set(key, existingIndex);
         }
