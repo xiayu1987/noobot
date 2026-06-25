@@ -59,16 +59,30 @@ const hasParsedResult = computed(
     Boolean(props.attachmentItem?.parsedResult?.attachmentId) &&
     Boolean(props.attachmentItem?.parsedResultUrl),
 );
+
+function emitPreview() {
+  if (!previewEnabled.value) return;
+  emit("preview", props.attachmentItem);
+}
 </script>
 
 <template>
-  <div class="base-file-card noobot-flat-card">
+  <div
+    class="base-file-card noobot-flat-card"
+    :class="{ 'is-previewable': previewEnabled }"
+    :role="previewEnabled ? 'button' : undefined"
+    :tabindex="previewEnabled ? 0 : undefined"
+    :title="previewEnabled ? translate('message.previewFile', { name: resolvedName || '' }) : undefined"
+    @click="emitPreview"
+    @keydown.enter.prevent="emitPreview"
+    @keydown.space.prevent="emitPreview"
+  >
     <button
       v-if="isImage && hasThumbnail"
       type="button"
       class="attachment-preview-btn"
       :title="translate('message.previewFile', { name: resolvedName || '' })"
-      @click="emit('preview', attachmentItem)"
+      @click.stop="emitPreview"
     >
       <img :src="thumbnailUrl" :alt="resolvedName" class="file-thumb" />
     </button>
@@ -77,7 +91,7 @@ const hasParsedResult = computed(
       type="button"
       class="attachment-preview-btn"
       :title="translate('message.previewFile', { name: resolvedName || '' })"
-      @click="emit('preview', attachmentItem)"
+      @click.stop="emitPreview"
     >
       <video class="file-thumb" :src="thumbnailUrl" muted preload="metadata" />
     </button>
@@ -87,7 +101,7 @@ const hasParsedResult = computed(
         type="button"
         class="attachment-preview-btn file-icon-button"
         :title="translate('message.previewFile', { name: resolvedName || '' })"
-        @click="emit('preview', attachmentItem)"
+        @click.stop="emitPreview"
       >
         <el-icon><component :is="previewIcon" /></el-icon>
       </button>
@@ -123,7 +137,7 @@ const hasParsedResult = computed(
               name: attachmentItem.parsedResultName || translate('message.parsedResultDefaultName'),
             })
           "
-          @click="emit('preview-parsed-result', attachmentItem)"
+          @click.stop="emit('preview-parsed-result', attachmentItem)"
         >
           {{ translate("message.previewParsedResultShort") }}
         </button>
@@ -135,7 +149,7 @@ const hasParsedResult = computed(
               name: attachmentItem.parsedResultName || translate('message.parsedResultDefaultName'),
             })
           "
-          @click="emit('download-parsed-result', attachmentItem)"
+          @click.stop="emit('download-parsed-result', attachmentItem)"
         >
           {{ translate("message.downloadParsedResultShort") }}
         </button>
@@ -147,7 +161,7 @@ const hasParsedResult = computed(
       type="button"
       class="attachment-download-btn noobot-flat-icon-btn"
       :title="translate('message.downloadFile', { name: resolvedName || '' })"
-      @click="emit('download', attachmentItem)"
+      @click.stop="emit('download', attachmentItem)"
     >
       <el-icon><Download /></el-icon>
     </button>

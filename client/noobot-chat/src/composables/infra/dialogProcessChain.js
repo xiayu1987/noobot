@@ -8,6 +8,45 @@ import {
   getMessageParentDialogProcessId,
 } from "./messageIdentity";
 
+export function mergeAttachmentMetaFields(existingItem = {}, incomingItem = {}) {
+  const existing = existingItem && typeof existingItem === "object" ? existingItem : {};
+  const incoming = incomingItem && typeof incomingItem === "object" ? incomingItem : {};
+  const merged = { ...existing, ...incoming };
+
+  // Keep preview/download addressing fields from the richer side.  Some replayed
+  // or plugin-owned metas only carry display fields (name/size/owner); replacing
+  // the original object with those would make canPreviewAttachment true while
+  // openAttachmentPreview cannot resolve a target URL.
+  for (const field of [
+    "attachmentId",
+    "previewUrl",
+    "downloadUrl",
+    "parsedResultUrl",
+    "parsedResultName",
+    "sessionId",
+    "attachmentSource",
+    "source",
+    "mimeType",
+    "name",
+    "path",
+    "relativePath",
+    "transferFilePath",
+  ]) {
+    const incomingValue = incoming[field];
+    const existingValue = existing[field];
+    if (
+      (incomingValue === undefined || incomingValue === null || String(incomingValue).trim() === "") &&
+      existingValue !== undefined &&
+      existingValue !== null &&
+      String(existingValue).trim() !== ""
+    ) {
+      merged[field] = existingValue;
+    }
+  }
+  if (existing.parsedResult && !incoming.parsedResult) merged.parsedResult = existing.parsedResult;
+  return merged;
+}
+
 export function mergeAttachmentMetas(existing = [], incoming = []) {
   const existingList = Array.isArray(existing) ? existing : [];
   const incomingList = Array.isArray(incoming) ? incoming : [];
@@ -30,12 +69,7 @@ export function mergeAttachmentMetas(existing = [], incoming = []) {
         const existingItem = merged[existingIndex] || {};
       const incomingOwnerType = String(attachmentItem?.owner?.type || "").trim();
       const existingOwnerType = String(existingItem?.owner?.type || "").trim();
-      if (incomingOwnerType === "plugin" && existingOwnerType !== "plugin") {
-        merged[existingIndex] = {
-          ...existingItem,
-          ...attachmentItem,
-        };
-      }
+      merged[existingIndex] = mergeAttachmentMetaFields(existingItem, attachmentItem);
       continue;
     }
     merged.push(attachmentItem);
