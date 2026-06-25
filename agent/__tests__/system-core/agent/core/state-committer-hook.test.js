@@ -101,6 +101,35 @@ test("state-committer emits before/after hooks for tool result commit", async ()
   assert.equal(messages[0]?.content, "tool_result_overridden_by_hook");
 });
 
+test("state-committer writes tool result through message store when holder is provided", async () => {
+  const turnMessageStore = createInMemoryTurnStore();
+  const loopState = {
+    messages: [],
+    messageBlocks: { system: [], history: [], incremental: [] },
+  };
+  const committer = createStateCommitter({
+    messages: loopState.messages,
+    messageHolder: loopState,
+    traces: [],
+    turnMessageStore,
+    dialogProcessId: "dp_store_tool",
+    runtime: {},
+  });
+
+  await committer.pushToolResult({
+    call: { id: "call_store", name: "demo_tool", args: {} },
+    toolResultText: "store_tool_result",
+  });
+
+  assert.equal(loopState.messages.length, 1);
+  assert.equal(loopState.messages[0]?.content, "store_tool_result");
+  assert.equal(loopState.messageBlocks.incremental[0], loopState.messages[0]);
+  assert.ok(loopState.messageBlocks.incrementalIds.includes(
+    loopState.messages[0].additional_kwargs.noobotMessageId,
+  ));
+  assert.equal(turnMessageStore.items[0]?.content, "store_tool_result");
+});
+
 test("state-committer stores compact LLM-facing tool result content", async () => {
   const turnMessageStore = createInMemoryTurnStore();
   const messages = [];

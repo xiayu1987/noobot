@@ -93,6 +93,7 @@ markSummarized(ctx, ids)
 - final compaction 与 runtime blocks 应用已迁移到 `replaceMessages`。
 - prompt injector 已改为本地 `nextMessages` 组装后统一 `replaceMessages` 写回；system prompt 同步到 blocks 也改为 `writeMessageBlocks`，同步维护 `systemIds`。
 - 已新增 `message-context-boundary.test.js` 守卫，防止业务路径重新出现 `ctx.messages`/`messageBlocks` 裸写。
+- `core/message-store.js` 已收敛为 agent 通用 message context API 的 wrapper；harness 只保留 `markSummarized` 等 summary/checkpoint 相关策略。
 - 当前 `ctx.messages` 裸写扫描结果只剩 `message-store` 统一入口和 `core/context` 初始化入口；takeover 的剩余数组操作只在 `agent_system` 兼容通道。
 
 ## 当前执行顺序
@@ -100,3 +101,4 @@ markSummarized(ctx, ids)
 1. 阶段 1 已完成：checkpoint 从 count 过渡到 ids。
 2. 阶段 2 已兼容式落地：blocks 同步维护数组视图和 ids 视图。
 3. 阶段 3 主路径已完成：业务主链路写入口已收敛到统一 API；`agent_system` 等兼容通道保留原语义。
+4. agent 通用 API 复用已完成：harness 不再维护独立 message store 实现。

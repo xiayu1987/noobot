@@ -29,6 +29,7 @@ import {
   normalizeMessageForModelRuntime,
   resolveMessageBlockDialogProcessId,
 } from "./session-execution-engine-utils.js";
+import { resolveMessagesByIds } from "../../agent/core/message-context/message-store.js";
 
 const PLUGIN_DEEP_MERGE_KEYS = new Set([
   "stepModels",
@@ -82,6 +83,19 @@ function resolveContextMessageBlocks(ctx = {}, { includePayloadMessages = false 
     return runtimePayloadMessages;
   }
   return null;
+}
+
+function resolveBlockMessagesByIds(ctx = {}, blocks = null, blockName = "") {
+  if (!blocks || typeof blocks !== "object" || Array.isArray(blocks)) return null;
+  const ids = blocks?.[`${blockName}Ids`];
+  if (!Array.isArray(ids) || !ids.length) return null;
+  const resolved = resolveMessagesByIds(ctx, ids);
+  return resolved.length === ids.length ? resolved : null;
+}
+
+function resolveBlockMessages(ctx = {}, blocks = null, blockName = "") {
+  return resolveBlockMessagesByIds(ctx, blocks, blockName) ||
+    (Array.isArray(blocks?.[blockName]) ? blocks[blockName] : []);
 }
 
 function normalizeMessagesForModelRuntime(messages = []) {
@@ -157,9 +171,9 @@ export class ModelMessageRuntimeHelpers {
         .filter(Boolean);
       if (blocks) {
         const resolved = resolveMainModelFinalMessages({
-          systemMessages: normalizeMessagesForModelRuntime(blocks.system),
-          historyMessages: normalizeMessagesForModelRuntime(blocks.history),
-          incrementalMessages: normalizeMessagesForModelRuntime(blocks.incremental),
+          systemMessages: normalizeMessagesForModelRuntime(resolveBlockMessages(ctx, blocks, "system")),
+          historyMessages: normalizeMessagesForModelRuntime(resolveBlockMessages(ctx, blocks, "history")),
+          incrementalMessages: normalizeMessagesForModelRuntime(resolveBlockMessages(ctx, blocks, "incremental")),
           currentDialogProcessId,
         });
         return recentMessageLimit > 0

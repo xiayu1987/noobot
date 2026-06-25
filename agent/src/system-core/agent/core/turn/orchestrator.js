@@ -30,6 +30,7 @@ import { resolveForceToolCall } from "../../../utils/shared-utils.js";
 import { resolveDialogProcessIdFromContext } from "../../../context/session/dialog-process-id-resolver.js";
 import { getSystemRuntimeFromRuntime } from "../../../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../../../context/parent-session-id-resolver.js";
+import { appendMessage } from "../message-context/message-store.js";
 
 export function createTurnOrchestrator({
   resolveLlmForTurnFn = resolveLlmForTurn,
@@ -170,16 +171,12 @@ export function createTurnOrchestrator({
       }
 
       if (isOverMaxTurns && loopState?.loopLimitFinalizePrompted !== true) {
-        if (Array.isArray(loopState?.messages)) {
-          loopState.messages.push(
-            new HumanMessage({
-              content: tEngine(runtime, "toolLoopLimitFinalizePrompt", { maxTurns }),
-              additional_kwargs: {
-                noobotInternalMessageType: "tool_loop_limit_finalize_prompt",
-              },
-            }),
-          );
-        }
+        appendMessage(loopState, new HumanMessage({
+          content: tEngine(runtime, "toolLoopLimitFinalizePrompt", { maxTurns }),
+          additional_kwargs: {
+            noobotInternalMessageType: "tool_loop_limit_finalize_prompt",
+          },
+        }), { block: "incremental" });
         loopState.loopLimitFinalizePrompted = true;
         emitEvent(eventListener, "tool_loop_limit_finalize_prompted", {
           turn,
@@ -276,15 +273,13 @@ export function createTurnOrchestrator({
         }
         if (Array.isArray(loopState?.messages)) {
           removeToolChoiceRequiredRetryPrompts(loopState.messages);
-          loopState.messages.push(
-            new HumanMessage({
-              content: tEngine(runtime, "toolChoiceRequiredRetryPrompt"),
-              additional_kwargs: {
-                noobotInternalMessageType: "tool_choice_required_retry_prompt",
-              },
-            }),
-          );
         }
+        appendMessage(loopState, new HumanMessage({
+          content: tEngine(runtime, "toolChoiceRequiredRetryPrompt"),
+          additional_kwargs: {
+            noobotInternalMessageType: "tool_choice_required_retry_prompt",
+          },
+        }), { block: "incremental" });
         loopState.toolChoiceRetryPrompted = true;
         emitEvent(eventListener, "tool_choice_required_retry_prompted", { turn });
         return runFunctionCallLoop({ modelState, loopState, turn: turn + 1 });

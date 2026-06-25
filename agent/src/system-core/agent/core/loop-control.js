@@ -15,6 +15,7 @@ import {
 } from "./constants/index.js";
 import { REQUEST_HELP_TOOL_NAME } from "../../tools/collaboration/request-help-tool.js";
 import { extractMessageTextContent } from "../../context/session/message-content-utils.js";
+import { appendMessage } from "./message-context/message-store.js";
 
 // ── Helpers ──
 
@@ -265,16 +266,12 @@ export function maybeRequestPhaseSummary({ modelState, loopState, toolCallResult
   if (reachedCharsThreshold) {
     systemRuntime.phaseSummaryByCharsPrompted = true;
   }
-  if (Array.isArray(loopState?.messages)) {
-    loopState.messages.push(
-      new HumanMessage({
-        content: tEngine(runtime, "phaseSummaryPrompt"),
-        additional_kwargs: {
-          noobotInternalMessageType: PHASE_SUMMARY_PROMPT_MARKER,
-        },
-      }),
-    );
-  }
+  appendMessage(loopState, new HumanMessage({
+    content: tEngine(runtime, "phaseSummaryPrompt"),
+    additional_kwargs: {
+      noobotInternalMessageType: PHASE_SUMMARY_PROMPT_MARKER,
+    },
+  }), { block: "incremental" });
   emitEvent(modelState?.eventListener || null, "phase_summary_required", {
     loopCount: nextCount,
     loopThreshold,
@@ -305,20 +302,16 @@ export function maybePromptHelpToolByLoop({ modelState, loopState }) {
   systemRuntime.helpPromptLoopCount = nextCount;
   if (nextCount < threshold) return false;
   systemRuntime.helpPromptLoopCount = 0;
-  if (Array.isArray(loopState?.messages)) {
-    loopState.messages.push(
-      new SystemMessage({
-        content: tEngine(runtime, "helpToolLoopPrompt", {
-          loopCount: nextCount,
-          threshold,
-          helpToolName: REQUEST_HELP_TOOL_NAME,
-        }),
-        additional_kwargs: {
-          noobotInternalMessageType: HELP_TOOL_LOOP_PROMPT_MARKER,
-        },
-      }),
-    );
-  }
+  appendMessage(loopState, new SystemMessage({
+    content: tEngine(runtime, "helpToolLoopPrompt", {
+      loopCount: nextCount,
+      threshold,
+      helpToolName: REQUEST_HELP_TOOL_NAME,
+    }),
+    additional_kwargs: {
+      noobotInternalMessageType: HELP_TOOL_LOOP_PROMPT_MARKER,
+    },
+  }), { block: "incremental" });
   emitEvent(modelState?.eventListener || null, "help_tool_loop_prompted", {
     loopCount: nextCount,
     threshold,
@@ -340,20 +333,16 @@ export function maybePromptHelpToolByFailure({
   if (hasRequestHelpCall) return false;
   const failureCount = Number(loopState?.toolConsecutiveFailureCount || 0);
   if (!Number.isFinite(failureCount) || failureCount < threshold) return false;
-  if (Array.isArray(loopState?.messages)) {
-    loopState.messages.push(
-      new HumanMessage({
-        content: tEngine(runtime, "toolConsecutiveFailureHelpPrompt", {
-          failureCount,
-          threshold,
-          helpToolName: REQUEST_HELP_TOOL_NAME,
-        }),
-        additional_kwargs: {
-          noobotInternalMessageType: HELP_TOOL_FAILURE_PROMPT_MARKER,
-        },
-      }),
-    );
-  }
+  appendMessage(loopState, new HumanMessage({
+    content: tEngine(runtime, "toolConsecutiveFailureHelpPrompt", {
+      failureCount,
+      threshold,
+      helpToolName: REQUEST_HELP_TOOL_NAME,
+    }),
+    additional_kwargs: {
+      noobotInternalMessageType: HELP_TOOL_FAILURE_PROMPT_MARKER,
+    },
+  }), { block: "incremental" });
   loopState.toolConsecutiveFailureCount = 0;
   systemRuntime.toolConsecutiveFailureCount = 0;
   emitEvent(modelState?.eventListener || null, "help_tool_failure_prompted", {

@@ -20,6 +20,7 @@ import { buildHookContext } from "../hook/hook-context-builder.js";
 import { getSystemRuntimeFromRuntime } from "../../../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../../../context/parent-session-id-resolver.js";
 import { appendModelOnlyHumanMessage } from "../context/model-only-message.js";
+import { appendMessage } from "../message-context/message-store.js";
 
 const MULTI_TOOL_CALL_LIMIT = 3;
 
@@ -186,15 +187,11 @@ export async function commitSyntheticToolTurn({
     }),
   });
 
-  if (Array.isArray(loopState?.messages)) {
-    loopState.messages.push(
-      buildAssistantModelMessageForToolCalls({
-        ai: syntheticAi,
-        contentText: assistantPayload.content || "",
-        toolCalls: [call],
-      }),
-    );
-  }
+  appendMessage(loopState, buildAssistantModelMessageForToolCalls({
+    ai: syntheticAi,
+    contentText: assistantPayload.content || "",
+    toolCalls: [call],
+  }), { block: "incremental" });
 
   await stateCommitter.pushAssistantMessage({
     content: assistantPayload.content || "",
