@@ -5,7 +5,13 @@
  */
 
 export { AttachmentService } from "./service/attachment-service.js";
-export { mergeAttachmentMetas, normalizeAttachmentMetas, mapAttachmentRecordsToMetas } from "./meta-ops.js";
+export {
+  mergeAttachmentMetas,
+  normalizeAttachmentMetas,
+  mapAttachmentRecordsToMetas,
+  normalizeAttachmentOwnerMeta,
+  normalizeAttachmentTurnScopeMeta,
+} from "./meta-ops.js";
 export { appendAttachmentMetasToRuntimeAndTurn } from "./runtime-attachment.js";
 export { readAttachIndex, writeAttachIndex } from "./index-manager.js";
 export { validateAttachmentPolicy, resolveAttachmentPolicy, isMimeTypeAllowed, isExtensionAllowed } from "./policy/policy-validator.js";

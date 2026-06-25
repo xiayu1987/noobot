@@ -13,7 +13,6 @@ export const ENGINE_I18N_KEY_MAP = {
     "agent.toolConsecutiveFailureHelpPrompt",
   helpToolLoopPrompt: "agent.helpToolLoopPrompt",
   toolChoiceRequiredRetryPrompt: "agent.toolChoiceRequiredRetryPrompt",
-  toolBatchLimitPrompt: "agent.toolBatchLimitPrompt",
   fetchGeneratedMediaFailed: "agent.fetchGeneratedMediaFailed",
   fetchRemoteMediaArtifactFailed: "agent.fetchRemoteMediaArtifactFailed",
   abortError: "agent.abortError",

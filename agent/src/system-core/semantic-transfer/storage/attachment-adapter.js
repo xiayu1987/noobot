@@ -7,7 +7,7 @@ import { Buffer } from "node:buffer";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { AttachmentService } from "../../attach/service/attachment-service.js";
-import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
+import { mapAttachmentRecordsToMetas, normalizeAttachmentTurnScopeMeta } from "../../attach/index.js";
 import {
   DEFAULT_TRANSFER_MIME_TYPE,
   TRANSFER_DIRECTION,
@@ -47,6 +47,23 @@ function resolveSessionId({ runtime = {}, agentContext = null, sessionId = "" } 
       agentContext?.session?.id ||
       agentContext?.session?.current?.sessionId,
   );
+}
+
+function resolveTurnScope({ runtime = {}, agentContext = null, sessionId = "", meta = {}, producer = null } = {}) {
+  const systemRuntime = runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
+    ? runtime.systemRuntime
+    : {};
+  const runConfig = runtime?.runConfig && typeof runtime.runConfig === "object"
+    ? runtime.runConfig
+    : systemRuntime?.runConfig && typeof systemRuntime.runConfig === "object"
+      ? systemRuntime.runConfig
+      : {};
+  return normalizeAttachmentTurnScopeMeta({
+    sessionId,
+    turnScope: meta?.turnScope || producer?.turnScope || systemRuntime?.turnScope || runtime?.turnScope,
+    turnScopeId: meta?.turnScopeId || producer?.turnScopeId || systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || runConfig?.turnScopeId,
+    dialogProcessId: meta?.dialogProcessId || producer?.dialogProcessId || systemRuntime?.dialogProcessId || systemRuntime?.currentDialogProcessId || agentContext?.dialogProcessId,
+  });
 }
 
 function resolveFallbackSessionId({ runtime = {}, agentContext = null, sessionId = "" } = {}) {
@@ -178,6 +195,7 @@ export async function persistTransferArtifacts({
   const resolvedSessionId = shouldUseLocalToolOverflowFallback({ service, generationSource, reason })
     ? resolveFallbackSessionId({ runtime, agentContext, sessionId })
     : resolveSessionId({ runtime, agentContext, sessionId });
+  const turnScope = resolveTurnScope({ runtime, agentContext, sessionId: resolvedSessionId, meta, producer });
   const artifactList = Array.isArray(artifacts) ? artifacts : [];
   if (!resolvedSessionId || !artifactList.length) {
     return emptyPersistResult();
@@ -200,6 +218,7 @@ export async function persistTransferArtifacts({
       sessionId: resolvedSessionId,
       attachmentSource: firstNormalizedString(attachmentSource, "model"),
       generationSource: resolvedGenerationSource,
+      turnScope,
       artifacts: artifactList,
     });
   } else if (shouldUseLocalToolOverflowFallback({ service, generationSource: resolvedGenerationSource, reason })) {

@@ -56,6 +56,9 @@ export class AttachmentService {
     attachmentOwnerType = "",
     attachmentOwner = "",
     owner = null,
+    turnScope = null,
+    turnScopeId = "",
+    dialogProcessId = "",
   }) {
     const attachmentId = uuidv4();
     const extension = normalizeExtension(name, mimeType);
@@ -79,6 +82,9 @@ export class AttachmentService {
       attachmentOwnerType,
       attachmentOwner,
       owner,
+      turnScope,
+      turnScopeId,
+      dialogProcessId,
     });
 
     attachmentIndex.attachments[attachmentId] = record;
@@ -212,6 +218,9 @@ export class AttachmentService {
     attachmentOwnerType = "",
     attachmentOwner = "",
     owner = null,
+    turnScope = null,
+    turnScopeId = "",
+    dialogProcessId = "",
   }) {
     const basePath = resolveBasePath(this.globalConfig, userId);
     const list = Array.isArray(artifacts) ? artifacts : [];
@@ -240,6 +249,11 @@ export class AttachmentService {
         owner: item?.owner && typeof item.owner === "object" && !Array.isArray(item.owner)
           ? item.owner
           : owner,
+        turnScope: item?.turnScope && typeof item.turnScope === "object" && !Array.isArray(item.turnScope)
+          ? item.turnScope
+          : turnScope,
+        turnScopeId: safeStr(item?.turnScopeId || turnScopeId),
+        dialogProcessId: safeStr(item?.dialogProcessId || item?.dialog_process_id || dialogProcessId),
       });
       saved.push(record);
     }

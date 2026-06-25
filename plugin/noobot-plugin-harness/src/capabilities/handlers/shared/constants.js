@@ -104,6 +104,7 @@ export const HARNESS_BUCKET_VERSION = 4;
 
 export const DEFAULT_HARNESS_COUNTERS = Object.freeze({
   llmTurns: 0,
+  lastPlanningCounterTurn: 0,
   analysisTurns: 0,
   planUpdateTurns: 0,
   phaseAcceptanceTurns: 0,

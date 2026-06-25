@@ -27,8 +27,6 @@ export default {
     `Tool loop has run ${Number(params.loopCount || 0)} turns. Consider calling ${String(params.helpToolName || "request_help")} for extra help.`,
   "agent.toolChoiceRequiredRetryPrompt":
     "Please use tools to execute tasks. If there is no task, the task is finished, or you need to end proactively, call the final_answer tool.",
-  "agent.toolBatchLimitPrompt": (params = {}) =>
-    `This turn returned ${Number(params.observedCalls || 0)} tool results. In subsequent turns, keep it to at most ${Number(params.maxCalls || 2)} tool calls per response (do not return 3 or more at once).`,
   "agent.userMetaTag": "User Metadata",
   "attach.countExceedsLimit": "attachments count exceeds limit",
   "attach.extensionNotAllowed": "attachment extension not allowed",
