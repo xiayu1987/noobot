@@ -360,6 +360,93 @@ test("phaseSummaryNoToolsNextTurn enforces one no-tools round even when tools ar
   assert.equal(modelState.runtime.systemRuntime.phaseSummaryNoToolsNextTurn, false);
 });
 
+test("main flow final-no-tools instruction from before_llm hook skips with-tools model call", async () => {
+  let toolInvokeCount = 0;
+  const tool = {
+    name: "execute_script",
+    async invoke() {
+      toolInvokeCount += 1;
+      return "{\"ok\":true}";
+    },
+  };
+  const { llm, capturedInvocations, capturedNoToolInvokeOptions } = createToolCallingLlm([
+    {
+      content: "final after harness overflow instruction",
+      tool_calls: [{ id: "ignored", name: "execute_script", args: {} }],
+      additional_kwargs: {},
+      response_metadata: {},
+    },
+  ]);
+
+  const modelState = createModelState(llm);
+  const hookManager = createAgentHookManager();
+  hookManager.on("before_llm_call", (ctx = {}) => {
+    if (ctx.mode !== "with_tools") return;
+    modelState.runtime.systemRuntime.mainFlowControlInstruction = {
+      action: "final_no_tools_turn",
+      reason: "context_overflow_after_summary",
+      source: "harness_summary_overflow",
+    };
+  });
+  modelState.runtime.hookManager = hookManager;
+
+  const result = await runFunctionCallLoop({
+    modelState,
+    loopState: createLoopState({ maxTurns: 3, tool }),
+    turn: 1,
+  });
+
+  assert.equal(result.output, "final after harness overflow instruction");
+  assert.equal(toolInvokeCount, 0);
+  assert.equal(capturedInvocations.length, 1, "with-tools LLM call should be skipped");
+  assert.equal(capturedNoToolInvokeOptions[0]?.tool_choice, "none");
+  assert.equal(modelState.runtime.systemRuntime.mainFlowControlInstruction, undefined);
+  assert.equal(modelState.runtime.systemRuntime.mainFlowFinalNoToolsTurnActive, false);
+});
+
+test("post-summary char overflow enters final no-tools before the next with-tools model call", async () => {
+  let toolInvokeCount = 0;
+  const taskSummaryTool = {
+    name: "task_summary",
+    async invoke() {
+      toolInvokeCount += 1;
+      return "{\"ok\":true}";
+    },
+  };
+  const longUserMessage = { role: "user", content: "x".repeat(32), summarized: false };
+  const { llm, capturedInvocations, capturedNoToolInvokeOptions } = createToolCallingLlm([
+    {
+      content: "final after post-summary overflow",
+      tool_calls: [{ id: "ignored", name: "task_summary", args: { summaryContent: "ignored" } }],
+      additional_kwargs: {},
+      response_metadata: {},
+    },
+  ]);
+
+  const loopState = createLoopState({ maxTurns: 3, tool: taskSummaryTool });
+  loopState.phaseSummaryMessageCharsThreshold = 10;
+  loopState.messages.push(longUserMessage);
+  loopState.messageBlocks.incremental.push(longUserMessage);
+
+  const modelState = createModelState(llm);
+  modelState.runtime.systemRuntime.needsPhaseSummary = false;
+  modelState.runtime.systemRuntime.phaseSummaryByCharsPrompted = true;
+  modelState.runtime.systemRuntime.phaseSummaryLoopCount = 0;
+
+  const result = await runFunctionCallLoop({
+    modelState,
+    loopState,
+    turn: 1,
+  });
+
+  assert.equal(result.output, "final after post-summary overflow");
+  assert.equal(toolInvokeCount, 0);
+  assert.equal(capturedInvocations.length, 1, "with-tools LLM call should be skipped");
+  assert.equal(capturedNoToolInvokeOptions[0]?.tool_choice, "none");
+  assert.equal(modelState.runtime.systemRuntime.mainFlowControlInstruction, undefined);
+  assert.equal(modelState.runtime.systemRuntime.phaseSummaryByCharsPrompted, true);
+});
+
 test("loop over max turns: next turn no-tool response returns directly", async () => {
   let toolInvokeCount = 0;
   const tool = {

@@ -16,6 +16,10 @@ import {
 import { REQUEST_HELP_TOOL_NAME } from "../../tools/collaboration/request-help-tool.js";
 import { extractMessageTextContent } from "../../context/session/message-content-utils.js";
 import { appendMessage } from "./message-context/message-store.js";
+import {
+  MAIN_FLOW_CONTROL_REASON,
+  requestMainFlowFinalNoToolsTurn,
+} from "./main-flow-control.js";
 
 // ── Helpers ──
 
@@ -193,6 +197,84 @@ export function removePhaseSummaryPromptMessages(messages = [], runtime = {}) {
   return removedCount;
 }
 
+function handlePostSummaryCharsOverflow({
+  modelState,
+  loopState,
+  loopCount = 0,
+  source = "agent_phase_summary",
+} = {}) {
+  const runtime = modelState?.runtime || {};
+  const systemRuntime = getSystemRuntime(runtime);
+  if (!systemRuntime) return false;
+  if (!hasTaskSummaryTool(loopState?.tools || [])) return false;
+  if (systemRuntime.needsPhaseSummary === true) return false;
+  if (systemRuntime.phaseSummaryByCharsPrompted !== true) return false;
+
+  const charsThreshold = Number(loopState?.phaseSummaryMessageCharsThreshold || 0);
+  if (!Number.isFinite(charsThreshold) || charsThreshold <= 0) return false;
+
+  const messages = loopState?.messages || [];
+  const unsummarizedChars = resolveUnsummarizedMessageChars(messages);
+  if (unsummarizedChars <= charsThreshold) {
+    systemRuntime.phaseSummaryByCharsPrompted = false;
+    return false;
+  }
+
+  const pruneEnabled = PHASE_SUMMARY_OVERFLOW_POLICY.ENABLE_PRUNE_AFTER_SUMMARY === true;
+  const pruneTriggerRounds = Number(
+    PHASE_SUMMARY_OVERFLOW_POLICY.PRUNE_TRIGGER_AFTER_CHAR_SUMMARY_ROUNDS || 1,
+  );
+  const canPruneAfterSummary = pruneEnabled && pruneTriggerRounds <= 1;
+  const pruneResult = canPruneAfterSummary
+    ? discardOldestToolCallPairs(messages, charsThreshold)
+    : { discardedMessages: 0, charsAfter: unsummarizedChars };
+  const stillOverflow = pruneResult.charsAfter > charsThreshold;
+  if (stillOverflow) {
+    if (PHASE_SUMMARY_OVERFLOW_POLICY.ENFORCE_NO_TOOLS_WHEN_STILL_OVERFLOW === true) {
+      requestMainFlowFinalNoToolsTurn(runtime, {
+        reason: MAIN_FLOW_CONTROL_REASON.CONTEXT_OVERFLOW_AFTER_SUMMARY,
+        source,
+        detail: {
+          loopCount,
+          charsThreshold,
+          unsummarizedChars: pruneResult.charsAfter,
+          discardedMessages: pruneResult.discardedMessages,
+        },
+      });
+    }
+    emitEvent(modelState?.eventListener || null, "phase_summary_hard_overflow", {
+      loopCount,
+      charsThreshold,
+      unsummarizedChars: pruneResult.charsAfter,
+      discardedMessages: pruneResult.discardedMessages,
+    });
+    return pruneResult.discardedMessages > 0 ||
+      PHASE_SUMMARY_OVERFLOW_POLICY.ENFORCE_NO_TOOLS_WHEN_STILL_OVERFLOW === true;
+  }
+
+  systemRuntime.phaseSummaryByCharsPrompted = false;
+  emitEvent(modelState?.eventListener || null, "phase_summary_messages_pruned", {
+    loopCount,
+    charsThreshold,
+    unsummarizedCharsBefore: unsummarizedChars,
+    unsummarizedCharsAfter: pruneResult.charsAfter,
+    discardedMessages: pruneResult.discardedMessages,
+  });
+  return pruneResult.discardedMessages > 0;
+}
+
+export function maybeFinalizeNoToolsAfterPhaseSummaryOverflow({ modelState, loopState } = {}) {
+  const runtime = modelState?.runtime || {};
+  const systemRuntime = getSystemRuntime(runtime);
+  const loopCount = Number(systemRuntime?.phaseSummaryLoopCount || 0);
+  return handlePostSummaryCharsOverflow({
+    modelState,
+    loopState,
+    loopCount,
+    source: "agent_phase_summary",
+  });
+}
+
 export function maybeRequestPhaseSummary({ modelState, loopState, toolCallResults = [] }) {
   const runtime = modelState?.runtime || {};
   const systemRuntime = getSystemRuntime(runtime);
@@ -233,32 +315,12 @@ export function maybeRequestPhaseSummary({ modelState, loopState, toolCallResult
   const canPruneAfterSummary =
     systemRuntime.phaseSummaryByCharsPrompted === true && pruneTriggerRounds <= 1;
   if (reachedCharsThreshold && pruneEnabled && canPruneAfterSummary) {
-    const pruneResult = discardOldestToolCallPairs(
-      loopState?.messages || [],
-      charsThreshold,
-    );
-    const stillOverflow = pruneResult.charsAfter > charsThreshold;
-    if (stillOverflow) {
-      if (PHASE_SUMMARY_OVERFLOW_POLICY.ENFORCE_NO_TOOLS_WHEN_STILL_OVERFLOW === true) {
-        systemRuntime.phaseSummaryNoToolsNextTurn = true;
-      }
-      emitEvent(modelState?.eventListener || null, "phase_summary_hard_overflow", {
-        loopCount: nextCount,
-        charsThreshold,
-        unsummarizedChars: pruneResult.charsAfter,
-        discardedMessages: pruneResult.discardedMessages,
-      });
-      return pruneResult.discardedMessages > 0;
-    }
-    systemRuntime.phaseSummaryByCharsPrompted = false;
-    emitEvent(modelState?.eventListener || null, "phase_summary_messages_pruned", {
+    return handlePostSummaryCharsOverflow({
+      modelState,
+      loopState,
       loopCount: nextCount,
-      charsThreshold,
-      unsummarizedCharsBefore: unsummarizedChars,
-      unsummarizedCharsAfter: pruneResult.charsAfter,
-      discardedMessages: pruneResult.discardedMessages,
+      source: "agent_phase_summary",
     });
-    return pruneResult.discardedMessages > 0;
   }
 
   systemRuntime.needsPhaseSummary = true;

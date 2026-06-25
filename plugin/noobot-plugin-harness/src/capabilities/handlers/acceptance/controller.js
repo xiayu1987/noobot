@@ -39,6 +39,7 @@ import {
 import { ACCEPTANCE_PHASE_BLOCKER_KEYS, hasAcceptancePhaseBlockers } from "../shared/workflow/policy.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
 import { buildHarnessInjectedMessage } from "../shared/message/injected-message-utils.js";
+import { hasFinalNoToolsMainFlowInstruction } from "../shared/runtime/main-flow-control-instruction.js";
 
 const ACCEPTANCE_DECISION = WORKFLOW_PARAMS.acceptance.decisions;
 const ACCEPTANCE_REQUESTED_ACTION = ACCEPTANCE_DECISION.requestedAction;
@@ -288,7 +289,9 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
   const invariantChanged = enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.ACCEPTANCE }) === true;
   const holder = ensureHarnessBucket(ctx);
   const mode = resolveWorkflowMode(meta);
+  const blockedByMainFlowFinalNoTools = hasFinalNoToolsMainFlowInstruction(ctx);
   const forceAcceptanceDueToOverflow =
+    blockedByMainFlowFinalNoTools !== true &&
     LLM_SUMMARY_OVERFLOW_POLICY.FORCE_ACCEPTANCE_WHEN_STILL_OVERFLOW === true &&
     holder?.state?.flags?.overflowForceAcceptancePending === true;
   const decision = resolveAcceptanceDecision({

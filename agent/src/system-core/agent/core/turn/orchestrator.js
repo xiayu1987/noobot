@@ -16,6 +16,7 @@ import {
 } from "../constants/index.js";
 import { handleEngineError } from "../error/index.js";
 import {
+  maybeFinalizeNoToolsAfterPhaseSummaryOverflow,
   maybePromptHelpToolByFailure,
   maybePromptHelpToolByLoop,
   maybeRequestPhaseSummary,
@@ -31,6 +32,11 @@ import { resolveDialogProcessIdFromContext } from "../../../context/session/dial
 import { getSystemRuntimeFromRuntime } from "../../../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../../../context/parent-session-id-resolver.js";
 import { appendMessage } from "../message-context/message-store.js";
+import {
+  clearMainFlowFinalNoToolsTurnInstruction,
+  consumeMainFlowFinalNoToolsTurnInstruction,
+  markMainFlowFinalNoToolsTurnActive,
+} from "../main-flow-control.js";
 
 export function createTurnOrchestrator({
   resolveLlmForTurnFn = resolveLlmForTurn,
@@ -42,6 +48,7 @@ export function createTurnOrchestrator({
   buildLoopResultFn = buildLoopResult,
   removePhaseSummaryPromptMessagesFn = removePhaseSummaryPromptMessages,
   maybeRequestPhaseSummaryFn = maybeRequestPhaseSummary,
+  maybeFinalizeNoToolsAfterPhaseSummaryOverflowFn = maybeFinalizeNoToolsAfterPhaseSummaryOverflow,
   maybePromptHelpToolByLoopFn = maybePromptHelpToolByLoop,
   maybePromptHelpToolByFailureFn = maybePromptHelpToolByFailure,
   handleEngineErrorFn = handleEngineError,
@@ -71,6 +78,40 @@ export function createTurnOrchestrator({
     const loopLimitBufferTurns = DEFAULT_TOOL_LOOP_LIMIT_BUFFER_TURNS;
     const isOverMaxTurns = overMaxTurnsCount > 0;
     const isBeyondLoopLimitBuffer = overMaxTurnsCount > loopLimitBufferTurns;
+
+    async function invokeFinalNoToolsTurn({
+      finalTurn = turn,
+      instruction = null,
+      eventName = "main_flow_final_no_tools_turn_enforced",
+    } = {}) {
+      const systemRuntime = getSystemRuntimeFromRuntime(runtime);
+      markMainFlowFinalNoToolsTurnActive(systemRuntime, true);
+      emitEvent(eventListener, eventName, {
+        turn: finalTurn,
+        reason: String(instruction?.reason || "").trim(),
+        source: String(instruction?.source || "").trim(),
+      });
+      try {
+        const noToolsResult = await invokeNoToolsTurnFn({
+          modelState,
+          loopState,
+          turn: finalTurn,
+          forceToolChoiceNone: true,
+        });
+        return buildLoopResultFn({
+          output: noToolsResult.output,
+          traces,
+          loopState,
+          turnTaskStore: noToolsResult.turnTaskStore,
+          turnMessageStore: noToolsResult.turnMessageStore,
+          modelMessages: noToolsResult.modelMessages,
+          finalStreaming: noToolsResult.finalStreaming,
+        });
+      } finally {
+        markMainFlowFinalNoToolsTurnActive(systemRuntime, false);
+        clearMainFlowFinalNoToolsTurnInstruction(systemRuntime);
+      }
+    }
 
     try {
       assertNotAbortedFn(abortSignal, runtime);
@@ -189,23 +230,17 @@ export function createTurnOrchestrator({
       resolveLlmForTurnFn(modelState);
 
       const systemRuntime = getSystemRuntimeFromRuntime(runtime);
-      if (systemRuntime?.phaseSummaryNoToolsNextTurn === true) {
-        systemRuntime.phaseSummaryNoToolsNextTurn = false;
-        emitEvent(eventListener, "phase_summary_no_tools_turn_enforced", { turn });
-        const noToolsResult = await invokeNoToolsTurnFn({
-          modelState,
-          loopState,
-          turn,
-          forceToolChoiceNone: true,
-        });
-        return buildLoopResultFn({
-          output: noToolsResult.output,
-          traces,
-          loopState,
-          turnTaskStore: noToolsResult.turnTaskStore,
-          turnMessageStore: noToolsResult.turnMessageStore,
-          modelMessages: noToolsResult.modelMessages,
-          finalStreaming: noToolsResult.finalStreaming,
+      maybeFinalizeNoToolsAfterPhaseSummaryOverflowFn({ modelState, loopState });
+      const mainFlowFinalNoToolsInstruction =
+        consumeMainFlowFinalNoToolsTurnInstruction(systemRuntime);
+      if (mainFlowFinalNoToolsInstruction) {
+        return invokeFinalNoToolsTurn({
+          finalTurn: turn,
+          instruction: mainFlowFinalNoToolsInstruction,
+          eventName:
+            mainFlowFinalNoToolsInstruction.source === "phase_summary_legacy_flag"
+              ? "phase_summary_no_tools_turn_enforced"
+              : "main_flow_final_no_tools_turn_enforced",
         });
       }
 
@@ -223,6 +258,17 @@ export function createTurnOrchestrator({
       }
 
       const withToolsResult = await invokeWithToolsTurnFn({ modelState, loopState, turn });
+      if (withToolsResult?.mainFlowFinalNoToolsRequested === true) {
+        const instruction =
+          consumeMainFlowFinalNoToolsTurnInstruction(systemRuntime) ||
+          withToolsResult.mainFlowFinalNoToolsInstruction ||
+          null;
+        return invokeFinalNoToolsTurn({
+          finalTurn: turn,
+          instruction,
+          eventName: "main_flow_final_no_tools_turn_enforced",
+        });
+      }
       const {
         aiContentText,
         calls,

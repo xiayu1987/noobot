@@ -28,6 +28,10 @@ import {
 } from "../shared/workflow/pattern.js";
 import { resolveWorkflowThresholdModeFromContext } from "../shared/workflow/prompts.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
+import {
+  HARNESS_MAIN_FLOW_CONTROL_REASON,
+  requestFinalNoToolsMainFlowInstruction,
+} from "../shared/runtime/main-flow-control-instruction.js";
 
 function isMessageSummarized(message = {}) {
   return message?.summarized === true || message?.lc_kwargs?.summarized === true;
@@ -368,8 +372,36 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
             LLM_SUMMARY_OVERFLOW_POLICY.FORCE_ACCEPTANCE_WHEN_STILL_OVERFLOW === true
           ) {
             holder.state.flags.overflowForceAcceptancePending = true;
+            const instruction = requestFinalNoToolsMainFlowInstruction(ctx, {
+              reason: HARNESS_MAIN_FLOW_CONTROL_REASON.CONTEXT_OVERFLOW_AFTER_SUMMARY,
+              source: "harness_summary_overflow",
+              detail: {
+                charsThreshold: LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
+                unsummarizedChars: currentChars,
+                discardedMessages: pruneResult.discardedMessages,
+              },
+            });
+            if (instruction) {
+              appendCapabilityLog(ctx, {
+                domain: CAPABILITY_DOMAIN.PLANNING,
+                event: "main_flow_final_no_tools_instruction_requested",
+                detail: {
+                  action: instruction.action,
+                  reason: instruction.reason,
+                  source: instruction.source,
+                  charsThreshold: LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
+                  unsummarizedChars: currentChars,
+                  discardedMessages: pruneResult.discardedMessages,
+                },
+              });
+            }
+            if (instruction) {
+              holder.state.flags.overflowForceAcceptancePending = false;
+              holder.state.flags.mainFlowFinalNoToolsPending = true;
+            }
           } else {
             holder.state.flags.overflowForceAcceptancePending = false;
+            holder.state.flags.mainFlowFinalNoToolsPending = false;
             holder.state.flags.summaryByCharsPrompted = false;
           }
         } else if (holder.state.flags.overflowForceAcceptancePending !== true) {
@@ -387,6 +419,7 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
         } else {
           holder.state.flags.summaryByCharsPrompted = false;
           holder.state.flags.overflowForceAcceptancePending = false;
+          holder.state.flags.mainFlowFinalNoToolsPending = false;
         }
 
         if (reachedPlanUpdateTurns) {
