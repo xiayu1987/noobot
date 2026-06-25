@@ -30,6 +30,7 @@ import {
   persistHarnessMessageToCurrentTurn,
 } from "../shared/message/injected-message-utils.js";
 import { resolveDialogProcessIdFromContext } from "../shared/runtime/dialog-process-id.js";
+import { appendMessage } from "../../../core/message-store.js";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
@@ -147,7 +148,7 @@ function injectCurrentTaskGoalSystemMessage(ctx = {}, currentTaskGoal = "") {
       injectedMessageType: CURRENT_TASK_GOAL_INJECTED_MESSAGE_TYPE,
     },
   );
-  messages.push(message);
+  appendMessage(ctx, message, { block: "incremental" });
   persistHarnessMessageToCurrentTurn(ctx, message, true);
   return true;
 }

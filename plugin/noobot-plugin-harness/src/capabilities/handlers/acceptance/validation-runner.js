@@ -30,6 +30,7 @@ import {
   captureInjectedResult,
   scheduleInjectTask,
 } from "../inject-fallback.js";
+import { appendMessage } from "../../../core/message-store.js";
 import { setCaptureFlagStateWithMeta, setPendingStateWithMeta } from "../../pending-cleanup.js";
 import {
   applySemanticAcceptanceToReport,
@@ -222,17 +223,19 @@ function buildFinalOutputFallbackPhaseAcceptanceText(locale = LOCALE.ZH_CN, buck
   });
 }
 
-function pushRoleMessage(messages = [], role = "system", content = "") {
+function pushRoleMessage(ctx = {}, messages = [], role = "system", content = "") {
   const normalizedContent = String(content || "").trim();
   if (!Array.isArray(messages) || !normalizedContent) return false;
   // Inject-mode phase acceptance prompts are current-turn dynamic guidance for
   // the main model. Keep them in the non-system/incremental segment so stable
   // system + history prefixes remain provider-cache friendly.
-  messages.push(
+  appendMessage(
+    ctx,
     buildHarnessInjectedMessage(normalizedContent, {
       role: "user",
       injectedMessageType: "acceptance_prompt",
     }),
+    { block: "incremental" },
   );
   void role;
   return true;
@@ -360,14 +363,15 @@ export function maybeInjectPhaseAcceptancePrompt(ctx = {}, meta = {}) {
     meta,
   });
   for (const content of summaryReportsContents) {
-    pushRoleMessage(messages, "system", content);
+    pushRoleMessage(ctx, messages, "system", content);
   }
-  pushRoleMessage(messages, "system", planContextContent);
+  pushRoleMessage(ctx, messages, "system", planContextContent);
   for (const content of phaseReportsContents) {
-    pushRoleMessage(messages, "system", content);
+    pushRoleMessage(ctx, messages, "system", content);
   }
-  pushRoleMessage(messages, "user", requestContent);
+  pushRoleMessage(ctx, messages, "user", requestContent);
   pushRoleMessage(
+    ctx,
     messages,
     "user",
     buildWorkflowResponsibilityConstraintUserPrompt(locale, "phase_acceptance", {

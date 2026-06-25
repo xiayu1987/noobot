@@ -9,6 +9,7 @@ import {
   buildHarnessInjectedMessage,
 } from "./injected-message-utils.js";
 import { resolveDialogProcessIdFromContext } from "../runtime/dialog-process-id.js";
+import { appendMessage, replaceMessages } from "../../../../core/message-store.js";
 
 function hasPendingToolCallPair(messages = []) {
   if (!Array.isArray(messages) || !messages.length) return false;
@@ -152,9 +153,9 @@ export function injectMessageWithPolicy(
   }
 
   if (normalizedInjectAt === "prepend") {
-    messages.unshift(message);
+    replaceMessages(ctx, [message, ...messages]);
   } else {
-    messages.push(message);
+    appendMessage(ctx, message, { block: "incremental" });
   }
   persistHarnessMessageToCurrentTurn(ctx, message, persistToCurrentTurn);
   return { injected: true, target: "ctx_messages" };

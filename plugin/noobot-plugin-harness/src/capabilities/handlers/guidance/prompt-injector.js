@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
+import { getMessageId } from "../../../core/message-store.js";
 import {
   CAPABILITY_DOMAIN,
   LOCALE,
@@ -69,6 +70,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", 
     // Freeze the summary scope at injection time so later tool calls in the same
     // loop are never treated as "already summarized".
     state.pending.summaryCheckpointMessageCount = messages.length;
+    state.pending.summaryCheckpointMessageIds = messages.map((message) => getMessageId(message)).filter(Boolean);
     const checklistContent = buildPlanChecklistSystemContent({
       locale,
       planText: bucket?.planText || "",

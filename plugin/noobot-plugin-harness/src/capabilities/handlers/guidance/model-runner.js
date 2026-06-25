@@ -38,6 +38,7 @@ import { schedulePlanUpdateByInject } from "./revision-injector.js";
 import { buildGuidancePromptContent } from "./prompt-injector.js";
 import { resolvePendingPlanUpdate } from "../planning/plan-update-scheduler.js";
 import { markGuidanceSummarizedMessages } from "./signal-tracker.js";
+import { getMessageId } from "../../../core/message-store.js";
 import {
   applySummaryText,
   recordLatestSummaryFullText,
@@ -349,6 +350,9 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     // this checkpoint newly appended turns may be summarized by mistake.
     state.pending.summaryCheckpointMessageCount = Array.isArray(ctx?.messages)
       ? ctx.messages.length
+      : null;
+    state.pending.summaryCheckpointMessageIds = Array.isArray(ctx?.messages)
+      ? ctx.messages.map((message) => getMessageId(message)).filter(Boolean)
       : null;
     prompt = buildGuidanceSummaryPromptText({
       locale,

@@ -15,6 +15,7 @@ import {
   normalizeHookContextProtocol,
 } from "./context.js";
 import { HARNESS_HOOK_POINTS } from "./constants.js";
+import { replaceMessages, writeMessageBlocks } from "./message-store.js";
 import {
   HARNESS_MESSAGE_BLOCK_POLICY_FIELD,
   HARNESS_MESSAGE_BLOCK_POLICY_PRESERVE_FIELD,
@@ -266,14 +267,7 @@ function writeMessageBlocksInPlace(
   ctx = {},
   { system = [], history = [], incremental = [] } = {},
 ) {
-  const existing =
-    ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : null;
-  const target = existing || {};
-  target.system = Array.isArray(system) ? system : [];
-  target.history = Array.isArray(history) ? history : [];
-  target.incremental = Array.isArray(incremental) ? incremental : [];
-  ctx.messageBlocks = target;
-  return target;
+  return writeMessageBlocks(ctx, { system, history, incremental });
 }
 
 function compactFinalMessageBlocks(point = "", ctx = {}, options = {}) {
@@ -357,7 +351,7 @@ function compactFinalConversationWindow(point = "", ctx = {}, options = {}) {
       ...compactedBlocks.system,
       ...conversation,
     ];
-    ctx.messages.splice(0, ctx.messages.length, ...composed);
+    replaceMessages(ctx, composed);
     // Keep messageBlocks as the re-computable source blocks, not as the final
     // compacted model window. The final ctx.messages window is intentionally
     // lossy; messageBlocks must remain lossless for the current turn so a later
@@ -377,7 +371,7 @@ function compactFinalConversationWindow(point = "", ctx = {}, options = {}) {
     ctx,
   });
   if (!Array.isArray(resolved)) return false;
-  ctx.messages.splice(0, ctx.messages.length, ...system, ...resolved);
+  replaceMessages(ctx, [...system, ...resolved]);
   return true;
 }
 
