@@ -130,6 +130,7 @@ export const DEFAULT_HARNESS_FLAGS = Object.freeze({
   phaseAcceptanceTriggeredThisTurn: false,
   summaryByCharsPrompted: false,
   overflowForceAcceptancePending: false,
+  mainFlowFinalNoToolsPending: false,
   planUpdateCapturePending: false,
   phaseAcceptanceCapturePending: false,
   acceptanceSemanticValidationCapturePending: false,

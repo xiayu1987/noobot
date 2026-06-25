@@ -10,6 +10,11 @@
  * phaseSummaryLoopCount, because phaseSummaryLoopCount falls back to
  * the already-normalized toolLoopExecutionCount value.
  */
+import {
+  MAIN_FLOW_CONTROL_REASON,
+  requestMainFlowFinalNoToolsTurn,
+} from "../main-flow-control.js";
+
 export function normalizeSystemRuntimeCounters(systemRuntime, userMessage) {
   if (!systemRuntime || typeof systemRuntime !== "object") return;
 
@@ -38,7 +43,16 @@ export function normalizeSystemRuntimeCounters(systemRuntime, userMessage) {
   systemRuntime.needsPhaseSummary = systemRuntime.needsPhaseSummary === true;
   systemRuntime.phaseSummaryByCharsPrompted =
     systemRuntime.phaseSummaryByCharsPrompted === true;
-  systemRuntime.phaseSummaryNoToolsNextTurn =
-    systemRuntime.phaseSummaryNoToolsNextTurn === true;
+  if (
+    systemRuntime.phaseSummaryNoToolsNextTurn === true &&
+    String(systemRuntime.mainFlowControlInstruction?.action || "").trim() !== "final_no_tools_turn"
+  ) {
+    requestMainFlowFinalNoToolsTurn({ systemRuntime }, {
+      reason: MAIN_FLOW_CONTROL_REASON.CONTEXT_OVERFLOW_AFTER_SUMMARY,
+      source: "phase_summary_legacy_flag",
+    });
+  }
+  systemRuntime.phaseSummaryNoToolsNextTurn = false;
+  systemRuntime.mainFlowFinalNoToolsTurnActive = false;
   systemRuntime.currentTurnUserMessage = String(userMessage || "").trim();
 }

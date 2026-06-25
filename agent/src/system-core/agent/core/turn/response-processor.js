@@ -19,8 +19,9 @@ import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
 import { getSystemRuntimeFromRuntime } from "../../../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../../../context/parent-session-id-resolver.js";
-import { appendModelOnlyHumanMessage } from "../context/model-only-message.js";
+import { MODEL_ONLY_MESSAGE_MARKER } from "../context/model-only-message.js";
 import { appendMessage } from "../message-context/message-store.js";
+import { HumanMessage } from "@langchain/core/messages";
 
 const MULTI_TOOL_CALL_LIMIT = 3;
 
@@ -80,11 +81,13 @@ function maybeInjectToolBatchLimitPrompt({
     maxCalls: MULTI_TOOL_CALL_LIMIT - 1,
     observedCalls: Number(observedCalls || 0),
   });
-  appendModelOnlyHumanMessage({
-    messages: loopState.messages,
+  appendMessage(loopState, new HumanMessage({
     content: text,
-    reason: "tool_batch_limit_prompt",
-  });
+    additional_kwargs: {
+      [MODEL_ONLY_MESSAGE_MARKER]: true,
+      noobotModelOnlyMessageReason: "tool_batch_limit_prompt",
+    },
+  }), { block: "incremental" });
   emitEvent(eventListener, "tool_batch_limit_prompted", {
     observedCalls: Number(observedCalls || 0),
     maxCalls: MULTI_TOOL_CALL_LIMIT - 1,

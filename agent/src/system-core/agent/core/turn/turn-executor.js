@@ -49,6 +49,7 @@ import {
   summarizeDiagnosticBlocks,
   summarizeDiagnosticMessages,
 } from "../message-context/context-diagnostics.js";
+import { peekMainFlowFinalNoToolsTurnInstruction } from "../main-flow-control.js";
 export { normalizeToolResultAttachmentMetas } from "./tool-result-normalizer.js";
 export {
   buildAssistantModelMessageForToolCalls,
@@ -352,6 +353,23 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   reconcileHookContextToLoopState(loopState, beforeLlmHookContext);
   syncMessagesFromBlocks(loopState);
   traceLoopStateContext(runtime, "before_llm_final_composed", loopState, { turn, mode: "with_tools" });
+
+  const mainFlowFinalNoToolsInstruction =
+    peekMainFlowFinalNoToolsTurnInstruction(systemRuntime);
+  if (mainFlowFinalNoToolsInstruction) {
+    emitEvent(eventListener, "with_tools_llm_call_skipped_for_main_flow_instruction", {
+      turn,
+      action: mainFlowFinalNoToolsInstruction.action,
+      reason: mainFlowFinalNoToolsInstruction.reason,
+      source: mainFlowFinalNoToolsInstruction.source,
+    });
+    return {
+      mainFlowFinalNoToolsRequested: true,
+      mainFlowFinalNoToolsInstruction,
+      traces,
+      toolMap,
+    };
+  }
 
   let ai = null;
   try {

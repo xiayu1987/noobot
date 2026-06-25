@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { HumanMessage } from "@langchain/core/messages";
 
 import {
+  maybeFinalizeNoToolsAfterPhaseSummaryOverflow,
   maybePromptHelpToolByLoop,
   maybePromptHelpToolByFailure,
   maybeRequestPhaseSummary,
@@ -171,8 +172,58 @@ test("maybeRequestPhaseSummary marks no-tools next turn when overflow remains af
     loopState,
     toolCallResults: [],
   });
-  assert.equal(changed, false);
-  assert.equal(modelState.runtime.systemRuntime.phaseSummaryNoToolsNextTurn, true);
+  assert.equal(changed, true);
+  assert.equal(
+    modelState.runtime.systemRuntime.mainFlowControlInstruction?.action,
+    "final_no_tools_turn",
+  );
+  assert.equal(
+    modelState.runtime.systemRuntime.mainFlowControlInstruction?.reason,
+    "context_overflow_after_summary",
+  );
+  assert.equal(
+    modelState.runtime.systemRuntime.mainFlowControlInstruction?.source,
+    "agent_phase_summary",
+  );
+  assert.equal(
+    events.some((item) => item?.event === "phase_summary_hard_overflow"),
+    true,
+  );
+});
+
+test("maybeFinalizeNoToolsAfterPhaseSummaryOverflow catches post-summary overflow before next model call", () => {
+  const events = [];
+  const longUserMessage = { role: "user", content: "0123456789012345", summarized: false };
+  const modelState = {
+    eventListener: {
+      onEvent: (payload = {}) => events.push(payload),
+    },
+    runtime: {
+      systemRuntime: {
+        needsPhaseSummary: false,
+        phaseSummaryByCharsPrompted: true,
+        phaseSummaryLoopCount: 0,
+      },
+    },
+  };
+  const loopState = {
+    tools: [{ name: "task_summary" }],
+    phaseSummaryMessageCharsThreshold: 10,
+    messages: [longUserMessage],
+    messageBlocks: { system: [], history: [], incremental: [longUserMessage] },
+  };
+
+  const changed = maybeFinalizeNoToolsAfterPhaseSummaryOverflow({ modelState, loopState });
+
+  assert.equal(changed, true);
+  assert.equal(
+    modelState.runtime.systemRuntime.mainFlowControlInstruction?.action,
+    "final_no_tools_turn",
+  );
+  assert.equal(
+    modelState.runtime.systemRuntime.mainFlowControlInstruction?.source,
+    "agent_phase_summary",
+  );
   assert.equal(
     events.some((item) => item?.event === "phase_summary_hard_overflow"),
     true,

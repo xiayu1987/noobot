@@ -58,7 +58,7 @@ test("planning handler prunes oldest tool-call pair after second char-overflow s
   );
 });
 
-test("acceptance handler rewrites calls to forced acceptance when overflow remains after pruning", async () => {
+test("overflow after harness summary requests agent main-flow final no-tools instead of local forced acceptance", async () => {
   const planningHandler = createPlanningHandler({
     shouldProcessPrimaryToolHooks: () => true,
   });
@@ -66,6 +66,13 @@ test("acceptance handler rewrites calls to forced acceptance when overflow remai
     shouldProcessPrimaryToolHooks: () => true,
   });
   const agentContext = {
+    execution: {
+      controllers: {
+        runtime: {
+          systemRuntime: {},
+        },
+      },
+    },
     payload: {
       messages: { system: [], history: [] },
       tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
@@ -94,7 +101,20 @@ test("acceptance handler rewrites calls to forced acceptance when overflow remai
     ctx: { messages, agentContext },
     meta: {},
   });
-  assert.equal(agentContext.payload.harness.state.flags.overflowForceAcceptancePending, true);
+  assert.equal(agentContext.payload.harness.state.flags.overflowForceAcceptancePending, false);
+  assert.equal(agentContext.payload.harness.state.flags.mainFlowFinalNoToolsPending, true);
+  assert.equal(
+    agentContext.execution.controllers.runtime.systemRuntime.mainFlowControlInstruction?.action,
+    "final_no_tools_turn",
+  );
+  assert.equal(
+    agentContext.execution.controllers.runtime.systemRuntime.mainFlowControlInstruction?.reason,
+    "context_overflow_after_summary",
+  );
+  assert.equal(
+    agentContext.execution.controllers.runtime.systemRuntime.mainFlowControlInstruction?.source,
+    "harness_summary_overflow",
+  );
 
   const beforeToolCallsCtx = {
     agentContext,
@@ -107,15 +127,15 @@ test("acceptance handler rewrites calls to forced acceptance when overflow remai
     meta: {},
   });
   assert.equal(beforeToolCallsCtx.calls.length, 1);
-  assert.equal(beforeToolCallsCtx.calls[0].name, "request_task_acceptance");
-  assert.deepEqual(beforeToolCallsCtx.calls[0].args, { mode: "forced" });
+  assert.equal(beforeToolCallsCtx.calls[0].name, "read_file");
+  assert.deepEqual(beforeToolCallsCtx.calls[0].args, { path: "a.txt" });
   const acceptanceLogs = agentContext.payload.harness.logs.acceptance;
   const beforeToolCallsExecutionLog = acceptanceLogs.find((item = {}) =>
     item?.event === "workflow_execution_result" && item?.detail?.point === "before_tool_calls"
   );
   assert.equal(
     beforeToolCallsExecutionLog?.detail?.requestedAction,
-    "forced_acceptance_before_tool_calls_rewrite",
+    "acceptance_tool_guard_before_tool_calls",
   );
 
   const beforeToolCallCtx = {
@@ -128,14 +148,14 @@ test("acceptance handler rewrites calls to forced acceptance when overflow remai
     ctx: beforeToolCallCtx,
     meta: {},
   });
-  assert.equal(beforeToolCallCtx.call.name, "request_task_acceptance");
-  assert.deepEqual(beforeToolCallCtx.call.args, { mode: "forced" });
+  assert.equal(beforeToolCallCtx.call.name, "read_file");
+  assert.deepEqual(beforeToolCallCtx.call.args, { path: "b.txt" });
   const beforeToolCallExecutionLog = acceptanceLogs.find((item = {}) =>
     item?.event === "workflow_execution_result" && item?.detail?.point === "before_tool_call"
   );
   assert.equal(
     beforeToolCallExecutionLog?.detail?.requestedAction,
-    "forced_acceptance_before_tool_call_rewrite",
+    "acceptance_tool_guard_before_tool_call",
   );
 
   const beforeLlmCallCtx = {
@@ -149,13 +169,12 @@ test("acceptance handler rewrites calls to forced acceptance when overflow remai
     meta: {},
   });
   assert.equal(beforeLlmCallCtx.messages.at(-1)?.role, "user");
-  assert.equal(beforeLlmCallCtx.messages.at(-1)?.injectedMessage, true);
-  assert.equal(beforeLlmCallCtx.messages.at(-1)?.injectedBy, "harness-plugin");
+  assert.equal(beforeLlmCallCtx.messages.at(-1)?.injectedMessage, undefined);
   const beforeLlmCallExecutionLog = acceptanceLogs.find((item = {}) =>
     item?.event === "workflow_execution_result" && item?.detail?.point === "before_llm_call"
   );
   assert.equal(
     beforeLlmCallExecutionLog?.detail?.requestedAction,
-    "forced_acceptance_before_llm_inject",
+    "none",
   );
 });
