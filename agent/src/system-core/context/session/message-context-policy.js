@@ -148,6 +148,11 @@ export function resolveMessageRole(messageItem = {}) {
   return "";
 }
 
+export function isSystemLikeMessageRole(role = "") {
+  const normalized = String(role || "").trim().toLowerCase();
+  return normalized === "system" || normalized === "developer";
+}
+
 export function isMessageSummarized(messageItem = {}) {
   if (!messageItem || typeof messageItem !== "object") return false;
   if (messageItem?.summarized === true) return true;
@@ -273,7 +278,7 @@ export function filterInjectedMessagesForDialog(
 export function shouldKeepForModelContext(messageItem = {}) {
   if (
     isMessageSummarized(messageItem) &&
-    resolveMessageRole(messageItem) === "system" &&
+    isSystemLikeMessageRole(resolveMessageRole(messageItem)) &&
     isCurrentSystemContextMessage(messageItem)
   ) {
     return true;
@@ -373,7 +378,7 @@ export function shouldMarkCurrentTurnSummarizedByPolicy(messageItem = {}) {
   const role = resolveMessageRole(messageItem);
   if (role === "user") return false;
   if (role === "assistant") return getMessageToolCalls(messageItem).length > 0;
-  if (role === "tool" || role === "system") return true;
+  if (role === "tool" || isSystemLikeMessageRole(role)) return true;
   return false;
 }
 
@@ -381,6 +386,6 @@ export function shouldMarkCurrentTurnModelSummarizedByPolicy(messageItem = {}) {
   const role = resolveMessageRole(messageItem);
   if (role === "user") return false;
   if (role === "assistant") return getMessageToolCalls(messageItem).length > 0;
-  if (role === "tool" || role === "system") return true;
+  if (role === "tool" || isSystemLikeMessageRole(role)) return true;
   return false;
 }

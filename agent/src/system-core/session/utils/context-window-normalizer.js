@@ -6,16 +6,94 @@
 
 import {
   filterForModelContext,
-  filterInjectedMessagesForDialog,
   isMessageSummarized,
+  isSystemLikeMessageRole,
   resolveMessageRole,
-  shouldKeepForModelContext,
 } from "../../context/session/message-context-policy.js";
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 
 
 
 export const MAIN_MODEL_HISTORY_ROUND_LIMIT = 3;
+
+function readMessageField(message = {}, field = "") {
+  const key = String(field || "").trim();
+  if (!key || !message || typeof message !== "object") return "";
+  return String(
+    message?.[key] ??
+      message?.additional_kwargs?.[key] ??
+      message?.lc_kwargs?.[key] ??
+      message?.lc_kwargs?.additional_kwargs?.[key] ??
+      "",
+  ).trim();
+}
+
+function resolveMessageContentText(message = {}) {
+  const content = message?.content ?? message?.lc_kwargs?.content ?? "";
+  if (typeof content === "string") return content;
+  try {
+    return JSON.stringify(content);
+  } catch {
+    return String(content ?? "");
+  }
+}
+
+function resolveMessageToolCallId(message = {}) {
+  return String(
+    message?.tool_call_id ??
+      message?.toolCallId ??
+      message?.lc_kwargs?.tool_call_id ??
+      message?.lc_kwargs?.toolCallId ??
+      "",
+  ).trim();
+}
+
+function resolveAssistantToolCallIds(message = {}) {
+  const calls = Array.isArray(message?.tool_calls)
+    ? message.tool_calls
+    : Array.isArray(message?.lc_kwargs?.tool_calls)
+      ? message.lc_kwargs.tool_calls
+      : Array.isArray(message?.additional_kwargs?.tool_calls)
+        ? message.additional_kwargs.tool_calls
+        : [];
+  return calls
+    .map((call = {}) => String(call?.id || call?.tool_call_id || call?.toolCallId || "").trim())
+    .filter(Boolean)
+    .join(",");
+}
+
+function resolveMessageIdentityKey(message = {}) {
+  const explicitId =
+    readMessageField(message, "noobotMessageId") ||
+    readMessageField(message, "messageId") ||
+    readMessageField(message, "id");
+  if (explicitId) return `id:${explicitId}`;
+  return [
+    resolveMessageRole(message),
+    resolveMessageToolCallId(message),
+    resolveAssistantToolCallIds(message),
+    readMessageField(message, "injectedMessageType") || readMessageField(message, "injected_message_type"),
+    resolveMessageDialogProcessId(message),
+    readMessageField(message, "turnScopeId"),
+    resolveMessageContentText(message),
+  ].join("|||");
+}
+
+function buildIdentitySet(messages = []) {
+  return new Set(
+    (Array.isArray(messages) ? messages : [])
+      .map((message) => resolveMessageIdentityKey(message))
+      .filter(Boolean),
+  );
+}
+
+function filterMessagesNotInIdentitySet(messages = [], blockedKeys = new Set()) {
+  if (!(blockedKeys instanceof Set) || !blockedKeys.size) return messages;
+  return (Array.isArray(messages) ? messages : []).filter((message) => {
+    const key = resolveMessageIdentityKey(message);
+    return !key || !blockedKeys.has(key);
+  });
+}
 
 function recentSlice(messages = [], limit = Number.POSITIVE_INFINITY) {
   const source = Array.isArray(messages) ? messages : [];
@@ -35,21 +113,20 @@ function appendDialogGroupMessage(groupsByDialog, key, messageItem, index) {
   groupsByDialog.set(key, current);
 }
 
+function isSystemLikeMessage(messageItem = {}) {
+  return isSystemLikeMessageRole(resolveMessageRole(messageItem));
+}
+
 function shouldKeepHistoryMessage(messageItem = {}) {
-  if (resolveMessageRole(messageItem) === "system") return false;
+  if (isSystemLikeMessage(messageItem)) return false;
   if (isMessageSummarized(messageItem)) return false;
   return true;
 }
 
 export function resolveMainModelSystemMessages({
   sourceMessages = [],
-  currentDialogProcessId = "",
 } = {}) {
-  const sameDialogMessages = filterInjectedMessagesForDialog(
-    sourceMessages,
-    currentDialogProcessId,
-  );
-  return sameDialogMessages.filter((messageItem) => shouldKeepForModelContext(messageItem));
+  return filterForModelContext(sourceMessages, { keepLatestInjectedOnly: true });
 }
 
 export function resolveMainModelHistoryMessages({
@@ -88,14 +165,8 @@ export function resolveMainModelHistoryMessages({
 
 export function resolveMainModelIncrementalMessages({
   sourceMessages = [],
-  currentDialogProcessId = "",
 } = {}) {
-  return resolveModelContextMessages({
-    sourceMessages,
-    currentDialogProcessId,
-    mode: "agent",
-    useRecentWindow: false,
-  });
+  return filterForModelContext(sourceMessages, { keepLatestInjectedOnly: true });
 }
 
 export function resolveMainModelConversationMessages({
@@ -112,21 +183,29 @@ export function resolveMainModelFinalMessages({
   systemMessages = [],
   historyMessages = [],
   incrementalMessages = [],
-  currentDialogProcessId = "",
   historyLimit = MAIN_MODEL_HISTORY_ROUND_LIMIT,
 } = {}) {
   const system = resolveMainModelSystemMessages({
     sourceMessages: systemMessages,
-    currentDialogProcessId,
   });
-  const history = resolveMainModelHistoryMessages({
-    sourceMessages: historyMessages,
-    historyLimit,
-  });
-  const incremental = resolveMainModelIncrementalMessages({
-    sourceMessages: incrementalMessages,
-    currentDialogProcessId,
-  });
+  const systemKeys = buildIdentitySet(system);
+  const incremental = filterMessagesNotInIdentitySet(
+    resolveMainModelIncrementalMessages({
+      sourceMessages: incrementalMessages,
+    }),
+    systemKeys,
+  );
+  const blockedHistoryKeys = new Set([
+    ...systemKeys,
+    ...buildIdentitySet(incremental),
+  ]);
+  const history = filterMessagesNotInIdentitySet(
+    resolveMainModelHistoryMessages({
+      sourceMessages: historyMessages,
+      historyLimit,
+    }),
+    blockedHistoryKeys,
+  );
   return {
     system,
     history,
@@ -204,7 +283,6 @@ export function normalizeRecentWindow(messages = [], limit = 20) {
 
 export function resolveModelContextMessages({
   sourceMessages = [],
-  currentDialogProcessId = "",
   mode = "agent",
   normalizeMessage = null,
   shouldKeepMessage = null,
@@ -216,16 +294,13 @@ export function resolveModelContextMessages({
   const normalizedMode = String(mode || "agent").trim().toLowerCase();
   const useRecentWindowByMode =
     normalizedMode === "plugin" ? true : useRecentWindow === true;
-  const sameDialogMessages = filterInjectedMessagesForDialog(
-    sourceMessages,
-    currentDialogProcessId,
-  );
+  const source = filterForModelContext(sourceMessages, { keepLatestInjectedOnly: true });
   const mappedMessages =
     typeof normalizeMessage === "function"
-      ? sameDialogMessages
+      ? source
           .map((messageItem) => normalizeMessage(messageItem))
           .filter(Boolean)
-      : sameDialogMessages;
+      : source;
   const filteredMessages =
     typeof shouldKeepMessage === "function"
       ? mappedMessages.filter((messageItem) => shouldKeepMessage(messageItem))

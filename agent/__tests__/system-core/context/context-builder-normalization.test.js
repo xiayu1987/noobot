@@ -47,7 +47,7 @@ function createBuilderForAttachmentRuntimeTest({
     serviceContainer: {
       sessionManager: null,
       memoryService: null,
-      attachmentService: {},
+      attachmentService: { async ingest() { return []; } },
       skillService: null,
       eventListener: null,
       botManager: null,
@@ -183,4 +183,66 @@ test("buildInitialContext keeps input attachments separate from runtime generate
   assert.equal(runtime.inputAttachmentMetas.length, 1);
   assert.equal(runtime.inputAttachmentMetas[0]?.attachmentId, "att_1");
   assert.deepEqual(runtime.attachmentMetas, []);
+});
+
+test("buildInitialContext resolves session history and passes edited turnScopeId", async () => {
+  const calls = [];
+  const builder = new ContextBuilder({
+    config: {
+      globalConfig: { workspaceRoot: "/tmp/noobot-test-workspace" },
+      userConfig: {},
+    },
+    serviceContainer: {
+      sessionManager: {
+        async getContextRecords(payload = {}) {
+          calls.push(payload);
+          return [
+            {
+              role: "user",
+              content: "history user",
+              dialogProcessId: "history-dp",
+              turnScopeId: "client-turn:old",
+            },
+            {
+              role: "assistant",
+              content: "history assistant",
+              dialogProcessId: "history-dp",
+              turnScopeId: "client-turn:old",
+            },
+          ];
+        },
+        async upsertSessionTree() {},
+      },
+      memoryService: null,
+      attachmentService: { async ingest() { return []; } },
+      skillService: null,
+      eventListener: null,
+      botManager: null,
+      userInteractionBridge: null,
+    },
+    sessionContext: {
+      userId: "u1",
+      sessionId: "s1",
+      caller: "user",
+      parentSessionId: "",
+      attachmentMetas: [],
+      runConfig: {
+        turnScopeId: "client-turn:edited",
+        contextPolicy: { includeContextKeys: ["base_prompt", "system_runtime"] },
+      },
+      abortSignal: null,
+      parentAsyncResultContainer: null,
+    },
+  });
+
+  const context = await builder.buildInitialContext({ dialogProcessId: "dp-current" });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.currentDialogProcessId, "dp-current");
+  assert.equal(calls[0]?.currentTurnScopeId, "client-turn:edited");
+  assert.deepEqual(
+    context.payload.messages.history.map((item) => item.content),
+    ["history user", "history assistant"],
+  );
+  assert.equal(context.payload.messages.system.length > 0, true);
 });

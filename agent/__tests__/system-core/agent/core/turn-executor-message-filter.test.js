@@ -135,6 +135,135 @@ test("invokeWithToolsTurn filters only summarized messages before llm invoke", a
   ));
 });
 
+test("invokeWithToolsTurn sends system history incremental order after before_llm_call hooks", async () => {
+  let capturedMessages = [];
+  const runtime = {
+    systemRuntime: {},
+    hookManager: {
+      async emit(point, ctx = {}) {
+        if (point !== "before_llm_call") return [];
+        ctx.messages.splice(0, ctx.messages.length, { role: "user", content: "hook-mutated" });
+        return [];
+      },
+    },
+  };
+  const llm = {
+    bindTools() {
+      return {
+        async invoke(messages) {
+          capturedMessages = (Array.isArray(messages) ? messages : []).map((item) => ({ ...item }));
+          return { content: "ok", tool_calls: [], additional_kwargs: {}, response_metadata: {} };
+        },
+      };
+    },
+  };
+
+  const system = { role: "system", content: "sys" };
+  const history = { role: "assistant", content: "hist", dialogProcessId: "d-old" };
+  const incremental = { role: "user", content: "current", dialogProcessId: "d-current" };
+  const modelState = {
+    llm,
+    runtime,
+    eventListener: null,
+    abortSignal: null,
+    defaultModelSpec: {},
+  };
+  const loopState = {
+    messages: [system, history, incremental],
+    messageBlocks: {
+      system: [system],
+      history: [history],
+      incremental: [incremental],
+    },
+    traces: [],
+    tools: [{ name: "execute_script" }],
+    turnMessages: [],
+    turnTasks: [],
+    currentTurnMessages: null,
+    currentTurnTasks: null,
+    dialogProcessId: "d-current",
+    maxTurns: 1,
+  };
+
+  await invokeWithToolsTurn({ modelState, loopState, turn: 1 });
+
+  assert.deepEqual(
+    capturedMessages.map((item) => `${item.role}:${item.content}`),
+    ["system:sys", "assistant:hist", "user:current"],
+  );
+});
+
+
+test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invoke", async () => {
+  let capturedMessages = [];
+  const harnessSystem = { role: "developer", content: "harness-policy" };
+  const runtime = {
+    systemRuntime: {},
+    hookManager: {
+      async emit(point, ctx = {}) {
+        if (point !== "before_llm_call") return [];
+        ctx.messageBlocks = {
+          system: [...(ctx.messageBlocks?.system || []), harnessSystem],
+          history: [...(ctx.messageBlocks?.history || [])],
+          incremental: [...(ctx.messageBlocks?.incremental || [])],
+        };
+        ctx.messages = [{ role: "user", content: "detached-stale-flat-list" }];
+        return [];
+      },
+    },
+  };
+  const llm = {
+    bindTools() {
+      return {
+        async invoke(messages) {
+          capturedMessages = (Array.isArray(messages) ? messages : []).map((item) => ({
+            role: item.role,
+            content: item.content,
+          }));
+          return { content: "ok", tool_calls: [], additional_kwargs: {}, response_metadata: {} };
+        },
+      };
+    },
+  };
+
+  const system = { role: "system", content: "constructed-system" };
+  const history = { role: "assistant", content: "recent-history", dialogProcessId: "d-old" };
+  const current = { role: "user", content: "current-user", dialogProcessId: "d-current" };
+  const modelState = {
+    llm,
+    runtime,
+    eventListener: null,
+    abortSignal: null,
+    defaultModelSpec: {},
+  };
+  const loopState = {
+    messages: [system, history, current],
+    messageBlocks: {
+      system: [system],
+      history: [history],
+      incremental: [current],
+    },
+    traces: [],
+    tools: [{ name: "execute_script" }],
+    turnMessages: [],
+    turnTasks: [],
+    currentTurnMessages: null,
+    currentTurnTasks: null,
+    dialogProcessId: "d-current",
+    maxTurns: 1,
+  };
+
+  await invokeWithToolsTurn({ modelState, loopState, turn: 1 });
+
+  assert.deepEqual(capturedMessages, [
+    { role: "system", content: "constructed-system" },
+    { role: "developer", content: "harness-policy" },
+    { role: "assistant", content: "recent-history" },
+    { role: "user", content: "current-user" },
+  ]);
+  assert.equal(loopState.messageBlocks.system.at(-1), harnessSystem);
+});
+
 test("invokeWithToolsTurn stores assistant tool-call message in incremental block", async () => {
   const llm = {
     bindTools() {
@@ -336,4 +465,54 @@ test("invokeWithToolsTurn stores reasoning-only retry prompt in incremental bloc
   assert.ok(loopState.messageBlocks.incrementalIds.includes(
     retryPrompt.additional_kwargs.noobotMessageId,
   ));
+});
+
+test("invokeWithToolsTurn normalizes dirty blocks to system history incremental before llm invoke", async () => {
+  let capturedMessages = [];
+  const llm = {
+    bindTools() {
+      return {
+        async invoke(messages) {
+          capturedMessages = (Array.isArray(messages) ? messages : []).map((item) => ({ ...item }));
+          return { content: "ok", tool_calls: [], additional_kwargs: {}, response_metadata: {} };
+        },
+      };
+    },
+  };
+  const system = { role: "system", content: "sys" };
+  const misplacedSystem = { role: "system", content: "misplaced-system", dialogProcessId: "d1" };
+  const duplicateHistoryUser = { role: "user", content: "current", dialogProcessId: "d2", turnScopeId: "t2" };
+  const historyAssistant = { role: "assistant", content: "history", dialogProcessId: "d1" };
+  const incrementalUser = { role: "user", content: "current", dialogProcessId: "d2", turnScopeId: "t2" };
+
+  const modelState = {
+    llm,
+    runtime: { systemRuntime: {} },
+    eventListener: null,
+    abortSignal: null,
+    defaultModelSpec: {},
+  };
+  const loopState = {
+    messages: [duplicateHistoryUser, misplacedSystem, historyAssistant, system, incrementalUser],
+    messageBlocks: {
+      system: [system],
+      history: [duplicateHistoryUser, misplacedSystem, historyAssistant],
+      incremental: [incrementalUser],
+    },
+    traces: [],
+    tools: [{ name: "execute_script" }],
+    turnMessages: [],
+    turnTasks: [],
+    currentTurnMessages: null,
+    currentTurnTasks: null,
+    dialogProcessId: "d2",
+    maxTurns: 1,
+  };
+
+  await invokeWithToolsTurn({ modelState, loopState, turn: 1 });
+
+  assert.deepEqual(
+    capturedMessages.map((item) => `${item.role}:${item.content}`),
+    ["system:sys", "assistant:history", "user:current"],
+  );
 });

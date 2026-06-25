@@ -148,8 +148,7 @@ function injectCurrentTaskGoalSystemMessage(ctx = {}, currentTaskGoal = "") {
       injectedMessageType: CURRENT_TASK_GOAL_INJECTED_MESSAGE_TYPE,
     },
   );
-  appendMessage(ctx, message, { block: "incremental" });
-  persistHarnessMessageToCurrentTurn(ctx, message, true);
+  appendMessage(ctx, message, { block: "system" });
   return true;
 }
 

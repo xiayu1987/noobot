@@ -255,3 +255,22 @@ test("model-context rules 2 note: agent-side summary marking policy remains unch
   assert.equal(marked[3]?.summarized, undefined);
   assert.equal(marked[4]?.summarized, undefined);
 });
+
+test("model-context rules: cross-block duplicate current user stays only in incremental", () => {
+  const result = resolveMainModelFinalMessages({
+    systemMessages: [{ role: "system", content: "sys" }],
+    historyMessages: [
+      { role: "user", content: "same", dialogProcessId: "d-current", turnScopeId: "t-current" },
+      { role: "assistant", content: "old answer", dialogProcessId: "d-old" },
+    ],
+    incrementalMessages: [
+      { role: "user", content: "same", dialogProcessId: "d-current", turnScopeId: "t-current" },
+      { role: "user", content: "[用户元信息]\n{}", dialogProcessId: "d-current", turnScopeId: "t-current" },
+    ],
+  });
+
+  assert.deepEqual(
+    result.messages.map((item) => item.content),
+    ["sys", "old answer", "same", "[用户元信息]\n{}"],
+  );
+});

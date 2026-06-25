@@ -299,7 +299,7 @@ test("SessionExecutionEngine injects plugin resolveModelMessages without plugin 
   ]);
 });
 
-test("SessionExecutionEngine injects plugin resolveMessageBlock with main-flow history rules", async () => {
+test("SessionExecutionEngine no longer injects legacy resolveMessageBlock", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
   const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
     userId: "u1",
@@ -312,50 +312,8 @@ test("SessionExecutionEngine injects plugin resolveMessageBlock with main-flow h
       },
     },
   });
-  const resolver = prepared.plugins.agentPlugin.resolveMessageBlock;
-  assert.equal(typeof resolver, "function");
-
-  const historyResolved = resolver({
-    scope: "history",
-    messages: [
-      { role: "assistant", content: "h1" },
-      { role: "assistant", content: "h2" },
-      { role: "assistant", content: "h3" },
-    ],
-    ctx: { dialogProcessId: "dlg1" },
-  });
-  const incrementalResolved = resolver({
-    scope: "incremental",
-    messages: [
-      { role: "assistant", content: "a1" },
-      { role: "assistant", content: "a2" },
-      { role: "assistant", content: "a3" },
-      { role: "assistant", content: "a4" },
-    ],
-    ctx: { dialogProcessId: "dlg1" },
-  });
-  const conversationResolved = resolver({
-    scope: "conversation",
-    messages: [
-      { role: "assistant", content: "h1" },
-      { role: "assistant", content: "h2" },
-      { role: "user", content: "u1" },
-      { role: "user", content: "u2" },
-    ],
-    ctx: { dialogProcessId: "dlg1" },
-  });
-  const systemResolved = resolver({
-    scope: "system",
-    messages: [
-      { role: "system", content: "policy" },
-      { role: "assistant", content: "a", summarized: true },
-    ],
-    ctx: { dialogProcessId: "dlg1" },
-  });
-  assert.deepEqual(historyResolved.map((item) => item.content), []);
-  assert.deepEqual(incrementalResolved.map((item) => item.content), ["a1", "a2", "a3", "a4"]);
-  assert.deepEqual(conversationResolved.map((item) => item.content), ["h1", "h2", "u1", "u2"]);
-  assert.deepEqual(systemResolved.map((item) => item.content), ["policy"]);
+  assert.equal(prepared.plugins.agentPlugin.resolveMessageBlock, undefined);
+  assert.equal(typeof prepared.plugins.agentPlugin.resolveModelMessages, "function");
 });
 
 test("SessionExecutionEngine injects plugin markMessagesSummarized aligned with agent summary policy", async () => {
@@ -629,7 +587,7 @@ test("SessionExecutionEngine resolveModelMessages treats persisted harness summa
 });
 
 
-test("SessionExecutionEngine resolveMessageBlock prefers current incremental dialog over stale ctx dialog", async () => {
+test("SessionExecutionEngine resolveModelMessages lets incremental current dialog win over history duplicate", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
   const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
     userId: "u1",
@@ -642,63 +600,32 @@ test("SessionExecutionEngine resolveMessageBlock prefers current incremental dia
       },
     },
   });
-  const resolver = prepared.plugins.agentPlugin.resolveMessageBlock;
+  const resolver = prepared.plugins.agentPlugin.resolveModelMessages;
 
-  const incrementalResolved = resolver({
-    scope: "incremental",
-    messages: [
-      {
-        role: "user",
-        content: "old summary",
-        injectedMessage: true,
-        injectedBy: "agent-plugin",
-        dialogProcessId: "dlg_old",
+  const resolved = resolver({
+    ctx: {
+      messageBlocks: {
+        system: [{ role: "system", content: "policy" }],
+        history: [
+          { role: "user", content: "current summary", dialogProcessId: "dlg_current" },
+          { role: "user", content: "normal history", dialogProcessId: "dlg_old" },
+        ],
+        incremental: [
+          {
+            role: "user",
+            content: "current summary",
+            injectedMessage: true,
+            injectedBy: "agent-plugin",
+            dialogProcessId: "dlg_current",
+          },
+        ],
       },
-      {
-        role: "user",
-        content: "current summary",
-        injectedMessage: true,
-        injectedBy: "agent-plugin",
-        dialogProcessId: "dlg_current",
-      },
-    ],
-    ctx: { dialogProcessId: "dlg_old" },
+    },
   });
 
   assert.deepEqual(
-    incrementalResolved.map((item) => item.content),
-    ["current summary"],
-  );
-
-  const conversationResolved = resolver({
-    scope: "conversation",
-    messages: [
-      {
-        role: "user",
-        content: "old summary",
-        injectedMessage: true,
-        injectedBy: "agent-plugin",
-        dialogProcessId: "dlg_old",
-      },
-      {
-        role: "user",
-        content: "normal history",
-        dialogProcessId: "dlg_old",
-      },
-      {
-        role: "user",
-        content: "current planning",
-        injectedMessage: true,
-        injectedBy: "agent-plugin",
-        dialogProcessId: "dlg_current",
-      },
-    ],
-    ctx: { dialogProcessId: "dlg_old" },
-  });
-
-  assert.deepEqual(
-    conversationResolved.map((item) => item.content),
-    ["normal history", "current planning"],
+    resolved.map((item) => item.content),
+    ["policy", "normal history", "current summary"],
   );
 });
 

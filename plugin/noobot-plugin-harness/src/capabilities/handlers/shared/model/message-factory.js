@@ -147,6 +147,11 @@ function normalizeTextList(items = []) {
     .filter(Boolean);
 }
 
+function isSystemLikeRole(role = "") {
+  const normalized = String(role || "").trim().toLowerCase();
+  return normalized === "system" || normalized === "developer";
+}
+
 export function buildCapabilityModelMessages({
   locale = "zh-CN",
   agentMessages = [],
@@ -165,19 +170,28 @@ export function buildCapabilityModelMessages({
     .filter((item) => item && String(item.content || "").trim());
   const constraintMessages = normalizeTextList(constraints)
     .map((content) => ({ role: "system", content }));
-  const output = [...flattenedAgentMessages, ...constraintMessages];
+  const agentSystemMessages = flattenedAgentMessages.filter((item = {}) =>
+    isSystemLikeRole(item.role),
+  );
+  const agentConversationMessages = flattenedAgentMessages.filter((item = {}) =>
+    !isSystemLikeRole(item.role),
+  );
+  const systemMessages = [...agentSystemMessages, ...constraintMessages];
+  const conversationMessages = [...agentConversationMessages];
   const resolvedTaskRole = normalizeModelMessageRole(taskRole, "user");
   const resolvedPostTaskRole = normalizeModelMessageRole(postTaskRole, resolvedTaskRole);
   if (normalizedTask) {
-    output.push({ role: resolvedTaskRole, content: normalizedTask });
+    const target = isSystemLikeRole(resolvedTaskRole) ? systemMessages : conversationMessages;
+    target.push({ role: resolvedTaskRole, content: normalizedTask });
   }
   for (const content of normalizedPostTaskSystemMessages) {
-    output.push({ role: "system", content });
+    systemMessages.push({ role: "system", content });
   }
   for (const content of normalizedPostTaskMessages) {
-    output.push({ role: resolvedPostTaskRole, content });
+    const target = isSystemLikeRole(resolvedPostTaskRole) ? systemMessages : conversationMessages;
+    target.push({ role: resolvedPostTaskRole, content });
   }
-  return output;
+  return [...systemMessages, ...conversationMessages];
 }
 
 

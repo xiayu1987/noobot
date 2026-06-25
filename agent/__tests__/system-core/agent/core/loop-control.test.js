@@ -68,8 +68,8 @@ test("maybePromptHelpToolByLoop injects prompt through message store", () => {
 
   assert.equal(triggered, true);
   assert.equal(loopState.messages.length, 1);
-  assert.equal(loopState.messageBlocks.incremental[0], loopState.messages[0]);
-  assert.deepEqual(loopState.messageBlocks.incrementalIds, [
+  assert.equal(loopState.messageBlocks.system[0], loopState.messages[0]);
+  assert.deepEqual(loopState.messageBlocks.systemIds, [
     loopState.messages[0].additional_kwargs.noobotMessageId,
   ]);
   assert.equal(events.some((item) => item?.event === "help_tool_loop_prompted"), true);

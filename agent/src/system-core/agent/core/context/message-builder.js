@@ -456,7 +456,6 @@ export function buildContextMessageBlocks(
     systemMessages,
     historyMessages,
     incrementalMessages: rawIncrementalMessages,
-    currentDialogProcessId: resolvedDialogProcessId,
   });
 
   const system = [];

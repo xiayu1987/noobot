@@ -116,7 +116,7 @@ test("ModelMessageRuntimeHelpers clips non-main model context only when explicit
   );
 });
 
-test("ModelMessageRuntimeHelpers resolveModelMessages filters stale injected dialog messages", () => {
+test("ModelMessageRuntimeHelpers resolveModelMessages filters stale injected messages in no-block fallback", () => {
   const helpers = new ModelMessageRuntimeHelpers();
   const resolver = helpers.createResolveModelMessages();
 
@@ -150,42 +150,6 @@ test("ModelMessageRuntimeHelpers resolveModelMessages filters stale injected dia
   assert.deepEqual(
     resolved.map((item = {}) => item.content),
     ["new-injected", "normal"],
-  );
-});
-
-test("ModelMessageRuntimeHelpers resolveMessageBlock supports system/incremental/history scopes", () => {
-  const helpers = new ModelMessageRuntimeHelpers();
-  const resolver = helpers.createResolveMessageBlock();
-  const messages = [
-    { role: "system", content: "sys" },
-    { role: "user", content: "old-injected", injectedMessage: true, injectedBy: "agentPlugin", dialogProcessId: "old" },
-    { role: "user", content: "new-injected", injectedMessage: true, injectedBy: "agentPlugin", dialogProcessId: "new" },
-    { role: "assistant", content: "new-normal", dialogProcessId: "new" },
-    { role: "assistant", content: "summarized", summarized: true, dialogProcessId: "new" },
-  ];
-
-  const system = resolver({ scope: "system", messages: [{ role: "system", content: "sys" }] });
-  const incremental = resolver({
-    scope: "incremental",
-    messages,
-    ctx: {
-      agentContext: {
-        execution: {
-          dialogProcessId: "new",
-        },
-      },
-    },
-  });
-  const history = resolver({ scope: "history", messages });
-
-  assert.deepEqual(system.map((item = {}) => item.content), ["sys"]);
-  assert.deepEqual(
-    incremental.map((item = {}) => item.content),
-    ["sys", "new-injected", "new-normal"],
-  );
-  assert.deepEqual(
-    history.map((item = {}) => item.content),
-    ["old-injected", "new-injected", "new-normal"],
   );
 });
 

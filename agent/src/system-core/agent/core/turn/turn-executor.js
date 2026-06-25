@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { filterForModelContext } from "../../../context/session/message-context-policy.js";
+import { resolveMainModelFinalMessages } from "../../../session/utils/context-window-normalizer.js";
 import {
   resolveTurnMessagesStore,
   resolveTurnTasksStore,
@@ -50,6 +51,45 @@ export {
   formatToolCallsForStorage,
 } from "./tool-call-message.js";
 
+function normalizeBlockList(value = []) {
+  return Array.isArray(value) ? value : [];
+}
+
+function isMessageBlocks(value = null) {
+  return value && typeof value === "object" && !Array.isArray(value);
+}
+
+function reconcileHookContextToLoopState(loopState = {}, hookContext = {}) {
+  if (!loopState || typeof loopState !== "object" || !hookContext || typeof hookContext !== "object") {
+    return loopState;
+  }
+  if (isMessageBlocks(hookContext.messageBlocks) && hookContext.messageBlocks !== loopState.messageBlocks) {
+    loopState.messageBlocks = hookContext.messageBlocks;
+  }
+  if (Array.isArray(hookContext.messages) && Array.isArray(loopState.messages) && hookContext.messages !== loopState.messages) {
+    loopState.messages.splice(0, loopState.messages.length, ...hookContext.messages);
+  }
+  return loopState;
+}
+
+function syncMessagesFromBlocks(loopState = {}) {
+  const blocks =
+    loopState?.messageBlocks &&
+    typeof loopState.messageBlocks === "object" &&
+    !Array.isArray(loopState.messageBlocks)
+      ? loopState.messageBlocks
+      : null;
+  if (!blocks || !Array.isArray(loopState?.messages)) return loopState?.messages || [];
+  const resolved = resolveMainModelFinalMessages({
+    systemMessages: normalizeBlockList(blocks.system),
+    historyMessages: normalizeBlockList(blocks.history),
+    incrementalMessages: normalizeBlockList(blocks.incremental),
+  });
+  const composed = Array.isArray(resolved?.messages) ? resolved.messages : [];
+  loopState.messages.splice(0, loopState.messages.length, ...composed);
+  return loopState.messages;
+}
+
 export async function invokeNoToolsTurn({
   modelState,
   loopState,
@@ -58,7 +98,6 @@ export async function invokeNoToolsTurn({
 }) {
   const {
     messages,
-    messageBlocks,
     traces,
     turnMessages,
     currentTurnMessages,
@@ -71,22 +110,25 @@ export async function invokeNoToolsTurn({
   emitEvent(eventListener, "llm_call_start", { turn, mode: "no_tools" });
   const llmStartedAtMs = Date.now();
   const llmStartedAt = new Date(llmStartedAtMs).toISOString();
+  const beforeLlmHookContext = buildHookContext(AGENT_HOOK_POINTS.BEFORE_LLM_CALL, runtime, {
+    phase: "llm_call",
+    turn,
+    mode: "no_tools",
+    status: "start",
+    startedAt: llmStartedAt,
+    forceToolChoiceNone,
+    messages,
+    messageBlocks: loopState.messageBlocks,
+    maxTurns: Number(loopState?.maxTurns || 0),
+    agentContext: modelState?.agentContext || null,
+  });
   await runAgentRuntimeHook({
     runtime,
     point: AGENT_HOOK_POINTS.BEFORE_LLM_CALL,
-    context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_LLM_CALL, runtime, {
-      phase: "llm_call",
-      turn,
-      mode: "no_tools",
-      status: "start",
-      startedAt: llmStartedAt,
-      forceToolChoiceNone,
-      messages,
-      messageBlocks,
-      maxTurns: Number(loopState?.maxTurns || 0),
-      agentContext: modelState?.agentContext || null,
-    }),
+    context: beforeLlmHookContext,
   });
+  reconcileHookContextToLoopState(loopState, beforeLlmHookContext);
+  syncMessagesFromBlocks(loopState);
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const locale = String(systemRuntime?.locale || "zh-CN");
   let modelResponse = null;
@@ -121,7 +163,7 @@ export async function invokeNoToolsTurn({
         durationMs: Date.now() - llmStartedAtMs,
         error,
         messages,
-        messageBlocks,
+        messageBlocks: loopState.messageBlocks,
         maxTurns: Number(loopState?.maxTurns || 0),
         agentContext: modelState?.agentContext || null,
       }),
@@ -143,7 +185,7 @@ export async function invokeNoToolsTurn({
       hasToolCalls: false,
       modelResponse,
       messages,
-      messageBlocks,
+      messageBlocks: loopState.messageBlocks,
       maxTurns: Number(loopState?.maxTurns || 0),
       agentContext: modelState?.agentContext || null,
     }),
@@ -211,7 +253,6 @@ export async function invokeNoToolsTurn({
 export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   const {
     messages,
-    messageBlocks,
     traces,
     tools,
     turnMessages,
@@ -246,23 +287,26 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
 
   const llmStartedAtMs = Date.now();
   const llmStartedAt = new Date(llmStartedAtMs).toISOString();
+  const beforeLlmHookContext = buildHookContext(AGENT_HOOK_POINTS.BEFORE_LLM_CALL, runtime, {
+    phase: "llm_call",
+    turn,
+    mode: "with_tools",
+    status: "start",
+    startedAt: llmStartedAt,
+    toolChoice: configuredToolChoice || "",
+    toolNames: boundTools.map((tool) => String(tool?.name || "").trim()).filter(Boolean),
+    messages,
+    messageBlocks: loopState.messageBlocks,
+    maxTurns: Number(loopState?.maxTurns || 0),
+    agentContext: modelState?.agentContext || null,
+  });
   await runAgentRuntimeHook({
     runtime,
     point: AGENT_HOOK_POINTS.BEFORE_LLM_CALL,
-    context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_LLM_CALL, runtime, {
-      phase: "llm_call",
-      turn,
-      mode: "with_tools",
-      status: "start",
-      startedAt: llmStartedAt,
-      toolChoice: configuredToolChoice || "",
-      toolNames: boundTools.map((tool) => String(tool?.name || "").trim()).filter(Boolean),
-      messages,
-      messageBlocks,
-      maxTurns: Number(loopState?.maxTurns || 0),
-      agentContext: modelState?.agentContext || null,
-    }),
+    context: beforeLlmHookContext,
   });
+  reconcileHookContextToLoopState(loopState, beforeLlmHookContext);
+  syncMessagesFromBlocks(loopState);
 
   let ai = null;
   try {
@@ -282,7 +326,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
         toolChoice: configuredToolChoice || "",
         error,
         messages,
-        messageBlocks,
+        messageBlocks: loopState.messageBlocks,
         maxTurns: Number(loopState?.maxTurns || 0),
         agentContext: modelState?.agentContext || null,
       }),
@@ -340,7 +384,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       ai,
       calls,
       messages,
-      messageBlocks,
+      messageBlocks: loopState.messageBlocks,
       maxTurns: Number(loopState?.maxTurns || 0),
       agentContext: modelState?.agentContext || null,
     }),

@@ -35,11 +35,8 @@ import { resolveScenarioProfile } from "./builders/scenario-resolver.js";
 import { composeSystemInfoSections } from "./formatters/system-prompt-formatter.js";
 import { mapToAgentContextSchema } from "./formatters/agent-context-mapper.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
-import {
-  filterSummarizedMessages,
-  normalizeContextWindow,
-} from "../session/utils/context-window-normalizer.js";
 import { normalizeParentSessionId } from "./parent-session-id-resolver.js";
+import { normalizeContextWindow } from "../session/utils/context-window-normalizer.js";
 
 function normalizeAdditionalSystemMessages(input = []) {
   if (!Array.isArray(input)) return [];
@@ -308,6 +305,17 @@ export class ContextBuilder {
     return agentContext;
   }
 
+  _normalizeSessionRecordsForConversation(
+    messages = [],
+    { startIndex = 0, limit = Number.POSITIVE_INFINITY } = {},
+  ) {
+    return normalizeContextWindow({
+      sourceMessages: Array.isArray(messages) ? messages : [],
+      startIndex,
+      limit,
+    });
+  }
+
   async _resolveSessionRecords({ sessionId, dialogProcessId = "" } = {}) {
     const resolvedSessionId = sessionId || this.sessionId || "";
     const runtimeBasePath = this._resolveRuntimeBasePath();
@@ -319,14 +327,6 @@ export class ContextBuilder {
       userConfig: this.userConfig,
       currentDialogProcessId: dialogProcessId,
       currentTurnScopeId: String(this.runConfig?.turnScopeId || "").trim(),
-    });
-  }
-
-  _normalizeSessionRecordsForConversation(sessionRecords = []) {
-    const filteredRecords = filterSummarizedMessages(sessionRecords);
-    return normalizeContextWindow({
-      sourceMessages: filteredRecords,
-      startIndex: 0,
     });
   }
 
@@ -455,6 +455,10 @@ export class ContextBuilder {
   }
 
   async buildInitialContext({ dialogProcessId = "" } = {}) {
+    const sessionRecords = await this._resolveSessionRecords({
+      sessionId: this.sessionId || "",
+      dialogProcessId,
+    });
     const {
       systemContext,
       runtimeBasePath,
@@ -462,7 +466,7 @@ export class ContextBuilder {
       rootSessionId,
       attachmentMetas,
     } = await this._buildSystemContext({ dialogProcessId });
-    return this._buildAgentContext(systemContext, [], {
+    return this._buildAgentContext(systemContext, toConversationMessages(sessionRecords), {
       runtimeBasePath,
       dialogProcessId,
       sessionTree,
@@ -476,8 +480,6 @@ export class ContextBuilder {
       sessionId: this.sessionId || "",
       dialogProcessId,
     });
-    const normalizedSessionRecords =
-      this._normalizeSessionRecordsForConversation(sessionRecords);
     const longMemory = await resolveLongMemory({
       memoryService: this.memoryService,
       runtimeBasePath: this._resolveRuntimeBasePath(),
@@ -492,7 +494,7 @@ export class ContextBuilder {
     } = await this._buildSystemContext({ dialogProcessId, longMemory });
     return this._buildAgentContext(
       systemContext,
-      toConversationMessages(normalizedSessionRecords),
+      toConversationMessages(sessionRecords),
       {
         runtimeBasePath,
         dialogProcessId,

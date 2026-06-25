@@ -376,7 +376,7 @@ export function createAgentCapabilityModelInvoker({
           : "请基于以上工具结果，立即给出最终规划答案。";
       try {
         const finalAi = await llm.invoke(
-          [...runMessages, { role: "system", content: finalizePrompt }],
+          [{ role: "system", content: finalizePrompt }, ...runMessages],
           { signal: runtime?.abortSignal || null },
         );
         finalizedText = normalizeTextContent(finalAi?.content);

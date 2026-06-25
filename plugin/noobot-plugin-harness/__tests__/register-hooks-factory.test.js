@@ -7,6 +7,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createRegisterHarnessHooks } from "../src/core/hooks.js";
+import { appendMessage } from "../src/core/message-store.js";
+import { resolveMainModelFinalMessages } from "../../../agent/src/system-core/session/utils/context-window-normalizer.js";
+
+function resolveFromBlocks({ ctx = {} } = {}) {
+  const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : {};
+  return resolveMainModelFinalMessages({
+    systemMessages: Array.isArray(blocks.system) ? blocks.system : [],
+    historyMessages: Array.isArray(blocks.history) ? blocks.history : [],
+    incrementalMessages: Array.isArray(blocks.incremental) ? blocks.incremental : [],
+  }).messages;
+}
 
 test("createRegisterHarnessHooks wires trace/flush handlers and executes success flow", async () => {
   const calls = [];
@@ -147,7 +158,7 @@ test("createRegisterHarnessHooks emits hook_error and rethrows when trace handle
   assert.equal(progressEvents.at(-1)?.data?.error, "safe_error");
 });
 
-test("createRegisterHarnessHooks compacts final non-system messages after prompt injection", async () => {
+test("createRegisterHarnessHooks leaves plain messages un-compacted without message blocks", async () => {
   const handlers = new Map();
   const hookManager = {
     on(point, handler) {
@@ -178,8 +189,6 @@ test("createRegisterHarnessHooks compacts final non-system messages after prompt
       capabilityToolAllowlistByPurpose: {},
       acceptance: {},
       review: {},
-      resolveMessageBlock: ({ scope, messages }) =>
-        scope === "conversation" ? messages.slice(-2) : messages,
     },
     capabilityRuntime: { async runHook() {} },
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
@@ -196,12 +205,11 @@ test("createRegisterHarnessHooks compacts final non-system messages after prompt
   await handlers.get("before_llm_call")(ctx);
   assert.deepEqual(
     ctx.messages.map((item) => item.content),
-    ["system context", "h3", "harness prompt"],
+    ["system context", "h1", "h2", "h3", "harness prompt"],
   );
 });
 
-test("createRegisterHarnessHooks compacts by message blocks and preserves frontend incremental anchor", async () => {
-  const calls = [];
+test("createRegisterHarnessHooks composes by system history incremental message blocks", async () => {
   const handlers = new Map();
   const hookManager = {
     on(point, handler) {
@@ -216,7 +224,7 @@ test("createRegisterHarnessHooks compacts by message blocks and preserves fronte
     emitHarnessHookProgress: () => {},
     shouldInjectPromptAtPoint: () => true,
     injectPrompt: async (_point, ctx) => {
-      ctx.messages.push({ role: "user", content: "injected incremental" });
+      appendMessage(ctx, { role: "user", content: "injected incremental" }, { block: "incremental" });
     },
     traceHook: async () => ({ fsmState: "planning", fsmRejected: false }),
   });
@@ -232,12 +240,7 @@ test("createRegisterHarnessHooks compacts by message blocks and preserves fronte
       capabilityToolAllowlistByPurpose: {},
       acceptance: {},
       review: {},
-      resolveMessageBlock: ({ scope, messages }) => {
-        calls.push(scope);
-        if (scope === "history") return messages.slice(-1);
-        if (scope === "incremental") return messages.slice(-1);
-        return messages;
-      },
+      resolveModelMessages: resolveFromBlocks,
     },
     capabilityRuntime: { async runHook() {} },
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
@@ -258,8 +261,8 @@ test("createRegisterHarnessHooks compacts by message blocks and preserves fronte
     messageBlocks: {
       system: [{ role: "system", content: "system context" }],
       history: [
-        { role: "user", content: "history-1" },
-        { role: "assistant", content: "history-2" },
+        { role: "user", content: "history-1", dialogProcessId: "history-dp" },
+        { role: "assistant", content: "history-2", dialogProcessId: "history-dp" },
       ],
       incremental: [frontendUser],
     },
@@ -269,9 +272,8 @@ test("createRegisterHarnessHooks compacts by message blocks and preserves fronte
 
   assert.deepEqual(
     ctx.messages.map((item) => item.content),
-    ["system context", "history-2", "real user message", "injected incremental"],
+    ["system context", "history-1", "history-2", "real user message", "injected incremental"],
   );
-  assert.deepEqual(calls, ["system", "history", "incremental", "conversation"]);
 });
 
 test("createRegisterHarnessHooks keeps compacted messageBlocks as single-store views", async () => {
@@ -305,7 +307,7 @@ test("createRegisterHarnessHooks keeps compacted messageBlocks as single-store v
       capabilityToolAllowlistByPurpose: {},
       acceptance: {},
       review: {},
-      resolveMessageBlock: ({ messages }) => messages,
+      resolveModelMessages: resolveFromBlocks,
     },
     capabilityRuntime: { async runHook() {} },
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
@@ -315,12 +317,14 @@ test("createRegisterHarnessHooks keeps compacted messageBlocks as single-store v
     messages: [
       { role: "system", content: "system" },
       { role: "assistant", content: "", tool_calls: [{ id: "call_1", function: { name: "write_file" } }] },
+      { role: "tool", content: "{\"ok\":true}", tool_call_id: "call_1" },
     ],
     messageBlocks: {
       system: [{ role: "system", content: "system" }],
       history: [],
       incremental: [
         { role: "assistant", content: "", tool_calls: [{ id: "call_1", function: { name: "write_file" } }] },
+        { role: "tool", content: "{\"ok\":true}", tool_call_id: "call_1" },
       ],
     },
   };
@@ -342,7 +346,67 @@ test("createRegisterHarnessHooks keeps compacted messageBlocks as single-store v
   assert.equal(ctx.messageBlocks.incremental[0].summarized, true);
 });
 
-test("createRegisterHarnessHooks compacts message blocks without duplicate current user", async () => {
+test("createRegisterHarnessHooks ignores messages outside agent-provided message blocks", async () => {
+  const handlers = new Map();
+  const hookManager = {
+    on(point, handler) {
+      handlers.set(point, handler);
+      return () => {};
+    },
+  };
+  const registerHarnessHooks = createRegisterHarnessHooks({
+    tracePoints: ["before_llm_call"],
+    flushPoints: [],
+    sessionCleanupPoints: [],
+    emitHarnessHookProgress: () => {},
+    shouldInjectPromptAtPoint: () => true,
+    injectPrompt: async (_point, ctx) => {
+      ctx.messages.push({ role: "system", content: "legacy system extra" });
+      ctx.messages.push({ role: "user", content: "legacy incremental extra" });
+      appendMessage(ctx, { role: "user", content: "block incremental" }, { block: "incremental" });
+    },
+    traceHook: async () => ({ fsmState: "planning", fsmRejected: false }),
+  });
+
+  registerHarnessHooks({
+    hookManager,
+    options: {
+      tracePriority: 20,
+      timeoutMs: 1000,
+      planningGuidanceMode: "inject",
+      capabilityModelInvoker: null,
+      capabilityToolAllowlist: [],
+      capabilityToolAllowlistByPurpose: {},
+      acceptance: {},
+      review: {},
+      resolveModelMessages: resolveFromBlocks,
+    },
+    capabilityRuntime: { async runHook() {} },
+    plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
+  });
+
+  const ctx = {
+    messages: [
+      { role: "system", content: "system" },
+      { role: "user", content: "history" },
+      { role: "user", content: "current" },
+    ],
+    messageBlocks: {
+      system: [{ role: "system", content: "system" }],
+      history: [{ role: "user", content: "history", dialogProcessId: "history-dp" }],
+      incremental: [{ role: "user", content: "current" }],
+    },
+  };
+
+  await handlers.get("before_llm_call")(ctx);
+
+  assert.deepEqual(
+    ctx.messages.map((item) => item.content),
+    ["system", "history", "current", "block incremental"],
+  );
+});
+
+test("createRegisterHarnessHooks keeps message block order and lets incremental current user win", async () => {
   const handlers = new Map();
   const hookManager = {
     on(point, handler) {
@@ -370,7 +434,7 @@ test("createRegisterHarnessHooks compacts message blocks without duplicate curre
       capabilityToolAllowlistByPurpose: {},
       acceptance: {},
       review: {},
-      resolveMessageBlock: ({ messages }) => messages,
+      resolveModelMessages: resolveFromBlocks,
     },
     capabilityRuntime: { async runHook() {} },
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
@@ -399,7 +463,7 @@ test("createRegisterHarnessHooks compacts message blocks without duplicate curre
     messageBlocks: {
       system: [{ role: "system", content: "system context" }],
       history: [
-        { role: "assistant", content: "上一轮回答" },
+        { role: "assistant", content: "上一轮回答", dialogProcessId: "history-dp" },
         staleCurrentUser,
       ],
       incremental: [
@@ -423,7 +487,7 @@ test("createRegisterHarnessHooks compacts message blocks without duplicate curre
   assert.deepEqual(exactUserIndexes, [userMetaIndex - 1]);
 });
 
-test("createRegisterHarnessHooks keeps current user once after prompt injection compaction", async () => {
+test("createRegisterHarnessHooks keeps message block order after prompt injection", async () => {
   const handlers = new Map();
   const hookManager = {
     on(point, handler) {
@@ -438,10 +502,14 @@ test("createRegisterHarnessHooks keeps current user once after prompt injection 
     emitHarnessHookProgress: () => {},
     shouldInjectPromptAtPoint: () => true,
     injectPrompt: async (_point, ctx) => {
-      ctx.messages.push({
-        role: "user",
-        content: "[来自harness外部模型输出/planning]\n[CURRENT_TASK_GOAL]\n对 `/project` 执行全仓回归测试",
-      });
+      appendMessage(
+        ctx,
+        {
+          role: "user",
+          content: "[来自harness外部模型输出/planning]\n[CURRENT_TASK_GOAL]\n对 `/project` 执行全仓回归测试",
+        },
+        { block: "incremental" },
+      );
     },
     traceHook: async () => ({ fsmState: "planning", fsmRejected: false }),
   });
@@ -457,7 +525,7 @@ test("createRegisterHarnessHooks keeps current user once after prompt injection 
       capabilityToolAllowlistByPurpose: {},
       acceptance: {},
       review: {},
-      resolveMessageBlock: ({ messages }) => messages,
+      resolveModelMessages: resolveFromBlocks,
     },
     capabilityRuntime: { async runHook() {} },
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
@@ -487,7 +555,7 @@ test("createRegisterHarnessHooks keeps current user once after prompt injection 
         },
       ],
       history: [
-        { role: "assistant", content: "上一轮回答" },
+        { role: "assistant", content: "上一轮回答", dialogProcessId: "history-dp" },
         {
           role: "user",
           content: "全仓回归测试",
@@ -509,6 +577,17 @@ test("createRegisterHarnessHooks keeps current user once after prompt injection 
   );
 
   assert.deepEqual(exactUserIndexes, [userMetaIndex - 1]);
+  assert.deepEqual(
+    ctx.messages.map((item) => item.content),
+    [
+      "system context",
+      ["<!-- noobot-harness-current-task-goal -->", "[CURRENT_TASK_GOAL]", "对 `/project` 执行全仓回归测试"].join("\n"),
+      "上一轮回答",
+      "全仓回归测试",
+      "[用户元信息]\n{}",
+      ["[来自harness外部模型输出/planning]", "[CURRENT_TASK_GOAL]", "对 `/project` 执行全仓回归测试"].join("\n"),
+    ],
+  );
 });
 
 test("createRegisterHarnessHooks preserves unsummarized history messages between user and assistant", async () => {
@@ -526,7 +605,7 @@ test("createRegisterHarnessHooks preserves unsummarized history messages between
     emitHarnessHookProgress: () => {},
     shouldInjectPromptAtPoint: () => true,
     injectPrompt: async (_point, ctx) => {
-      ctx.messages.push({ role: "user", content: "current harness prompt" });
+      appendMessage(ctx, { role: "user", content: "current harness prompt" }, { block: "incremental" });
     },
     traceHook: async () => ({ fsmState: "planning", fsmRejected: false }),
   });
@@ -542,16 +621,7 @@ test("createRegisterHarnessHooks preserves unsummarized history messages between
       capabilityToolAllowlistByPurpose: {},
       acceptance: {},
       review: {},
-      resolveMessageBlock: ({ scope, messages = [] }) => {
-        if (scope === "conversation") {
-          return messages.filter((item = {}) =>
-            ["current user", "current harness prompt"].includes(
-              String(item.content || ""),
-            ),
-          );
-        }
-        return messages.filter((item = {}) => item.summarized !== true);
-      },
+      resolveModelMessages: resolveFromBlocks,
     },
     capabilityRuntime: { async runHook() {} },
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
@@ -630,9 +700,6 @@ test("createRegisterHarnessHooks can recover current-turn harness injections aft
     traceHook: async () => ({ fsmState: "planning", fsmRejected: false }),
   });
 
-  const filterUnsummaryAndRecent = (messages = [], limit = 2) =>
-    messages.filter((item = {}) => item.summarized !== true).slice(-limit);
-
   registerHarnessHooks({
     hookManager,
     options: {
@@ -644,10 +711,7 @@ test("createRegisterHarnessHooks can recover current-turn harness injections aft
       capabilityToolAllowlistByPurpose: {},
       acceptance: {},
       review: {},
-      resolveMessageBlock: ({ scope, messages = [] }) => {
-        if (scope === "system") return messages.filter((item = {}) => item.summarized !== true);
-        return filterUnsummaryAndRecent(messages, 2);
-      },
+      resolveModelMessages: resolveFromBlocks,
     },
     capabilityRuntime: { async runHook() {} },
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
@@ -679,7 +743,7 @@ test("createRegisterHarnessHooks can recover current-turn harness injections aft
   await handlers.get("before_llm_call")(ctx);
   assert.deepEqual(
     ctx.messages.map((item) => item.content),
-    ["system context", "tool burst 2", "tool burst 3"],
+    ["system context", "harness current-turn injection", "tool burst 1", "tool burst 2", "tool burst 3"],
   );
   assert.deepEqual(
     ctx.messageBlocks.incremental.map((item) => item.content),
@@ -730,7 +794,7 @@ test("createRegisterHarnessHooks keeps multiple empty assistant tool-call messag
       capabilityToolAllowlistByPurpose: {},
       acceptance: {},
       review: {},
-      resolveMessageBlock: ({ messages = [] }) => messages,
+      resolveModelMessages: resolveFromBlocks,
     },
     capabilityRuntime: { async runHook() {} },
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },

@@ -507,12 +507,14 @@ test("harness forced acceptance is owned by acceptance without appending to fina
 test("harness acceptance semantic validation uses separate model when enabled", async () => {
   const hookManager = createAgentHookManager();
   const invocations = [];
+  const runtimeHelpers = new ModelMessageRuntimeHelpers();
   registerNoobotPlugin(
     { hookManager },
     {
       trace: false,
       promptPolicy: false,
       acceptance: { semanticValidation: true },
+      resolveModelMessages: runtimeHelpers.createResolveModelMessages(),
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
         return {
@@ -536,8 +538,8 @@ test("harness acceptance semantic validation uses separate model when enabled", 
       messages: {
         system: [{ role: "system", content: "系统上下文：必须保留" }],
         history: [
-          { role: "user", content: "用户原始需求：执行核心任务", frontendUserMessage: true },
-          { role: "assistant", content: "执行过程上下文：已完成核心任务" },
+          { role: "user", content: "用户原始需求：执行核心任务", frontendUserMessage: true, dialogProcessId: "dp-history" },
+          { role: "assistant", content: "执行过程上下文：已完成核心任务", dialogProcessId: "dp-history" },
         ],
       },
       harness: {
@@ -680,7 +682,7 @@ test("phase acceptance injects context, revised plan checklist, then phase reque
   const responsibilityIndex = ctx.messages.findIndex((item = {}) =>
     /请根据文本协议进行「阶段验收」。/.test(String(item?.content || "")),
   );
-  assert.equal(ctx.messages[planContextIndex].role, "user");
+  assert.equal(ctx.messages[planContextIndex].role, "system");
   assert.match(String(ctx.messages[planContextIndex].content), /计划清单上下文|Plan checklist context/);
   assert.match(String(ctx.messages[planContextIndex].content), /核心实现/);
   assert.equal(ctx.messages[planContextIndex].injectedMessage, true);
@@ -822,7 +824,7 @@ test("phase acceptance separate model receives context, summaries, revised plan,
   assert.equal(messages[phaseIndexes[0]].role, "system");
   assert.equal(messages[requestIndex].role, "system");
   assert.equal(
-    summaryIndexes[0] > 0 &&
+    summaryIndexes[0] >= 0 &&
       planIndex > summaryIndexes[0] &&
       phaseIndexes[0] > planIndex &&
       requestIndex > phaseIndexes[0],
@@ -951,14 +953,15 @@ test("model-context rules 2: phase acceptance separate model uses six ordered co
   assert.equal(messages[phaseReportIndex]?.role, "system");
   assert.equal(messages[requestIndex]?.role, "system");
   assert.equal(messages[responsibilityIndex]?.role, "user");
-  assert.equal(historyUserIndex < historyAssistantIndex, true);
-  assert.equal(historyAssistantIndex < toolCallSemanticIndex, true);
-  assert.equal(toolCallSemanticIndex < toolResultIndex, true);
-  assert.equal(toolResultIndex < summaryIndex, true);
+  assert.equal(agentSystemIndex < summaryIndex, true);
   assert.equal(summaryIndex < planIndex, true);
   assert.equal(planIndex < phaseReportIndex, true);
   assert.equal(phaseReportIndex < requestIndex, true);
-  assert.equal(requestIndex < responsibilityIndex, true);
+  assert.equal(requestIndex < historyUserIndex, true);
+  assert.equal(historyUserIndex < historyAssistantIndex, true);
+  assert.equal(historyAssistantIndex < toolCallSemanticIndex, true);
+  assert.equal(toolCallSemanticIndex < toolResultIndex, true);
+  assert.equal(toolResultIndex < responsibilityIndex, true);
   assert.match(String(messages[summaryIndex]?.content || ""), /最后一次完整小结：用于阶段验收/);
   assert.match(String(messages[phaseReportIndex]?.content || ""), /上一阶段验收：warn/);
 });

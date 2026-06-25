@@ -76,7 +76,7 @@ export function normalizeMessageForModelRuntime(messageItem = {}) {
   return applyNormalizedMessageFlags(normalized, messageItem);
 }
 
-export function resolveMessageBlockDialogProcessId({ scope = "", ctx = {}, messages = [] } = {}) {
+export function resolveScopedMessagesDialogProcessId({ scope = "", ctx = {}, messages = [] } = {}) {
   const normalizedScope = String(scope || "").trim().toLowerCase();
   if (
     normalizedScope === "incremental" ||

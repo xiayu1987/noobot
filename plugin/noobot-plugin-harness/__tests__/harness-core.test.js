@@ -820,10 +820,6 @@ test("harness policy prompt survives agent-side system message compaction", asyn
     {
       basePath,
       trace: false,
-      resolveMessageBlock: ({ scope, messages }) => {
-        if (scope === "system") return [];
-        return messages;
-      },
     },
   );
   const ctx = {
@@ -862,7 +858,7 @@ test("harness policy preservation ignores ordinary system text that only mention
       basePath,
       trace: false,
       promptPolicy: false,
-      resolveMessageBlock: ({ scope }) => scope === "system" ? [] : [],
+      resolveModelMessages: () => [],
     },
   );
   const ctx = {

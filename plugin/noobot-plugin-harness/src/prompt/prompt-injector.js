@@ -169,8 +169,13 @@ function isAnyPromptInjectionMessage(message = {}) {
   );
 }
 
+function isSystemLikeRole(role = "") {
+  const normalized = String(role || "").trim().toLowerCase();
+  return normalized === "system" || normalized === "developer";
+}
+
 function isSystemRoleMessage(message = {}) {
-  return resolveMessageRole(message) === "system";
+  return isSystemLikeRole(resolveMessageRole(message));
 }
 
 function removePromptMessagesFromList(messages = [], id = "", { removeSystem = false } = {}) {
@@ -245,7 +250,7 @@ function resolveMessageRole(message = {}) {
 
 function findAfterLeadingSystemIndex(messages = []) {
   let index = 0;
-  while (index < messages.length && resolveMessageRole(messages[index]) === "system") {
+  while (index < messages.length && isSystemLikeRole(resolveMessageRole(messages[index]))) {
     index += 1;
   }
   return index;
