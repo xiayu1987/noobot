@@ -289,7 +289,6 @@ export async function appendWorkflowPlanningMessage({
     }
   }
   const mergedTransferPayload = normalizeWorkflowTransferPayload({
-    transferResult: composedTransferPayload.transferResult || baseTransferPayload.transferResult || null,
     transferEnvelopes: [
       ...(Array.isArray(baseTransferPayload.transferEnvelopes) ? baseTransferPayload.transferEnvelopes : []),
       ...(Array.isArray(composedTransferPayload.transferEnvelopes)
@@ -324,7 +323,6 @@ export async function appendWorkflowPlanningMessage({
     modelAlias: String(semanticResolution?.model || options?.semanticModel || "").trim(),
     modelName: String(semanticResolution?.model || options?.semanticModel || "").trim(),
     summarized: false,
-    ...(mergedTransferPayload.transferResult ? { transferResult: mergedTransferPayload.transferResult } : {}),
     ...(mergedTransferPayload.transferEnvelopes.length
       ? { transferEnvelopes: mergedTransferPayload.transferEnvelopes }
       : {}),

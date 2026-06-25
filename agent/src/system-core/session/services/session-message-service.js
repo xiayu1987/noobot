@@ -213,14 +213,15 @@ export class SessionMessageService {
     if (Array.isArray(tool_calls) && tool_calls.length) turn.tool_calls = tool_calls;
     const transferAttachmentMetas = getTransferAttachmentMetas(
       [
-        turn?.transferResult?.envelope,
         ...(Array.isArray(transferEnvelopes) ? transferEnvelopes : []),
         ...(Array.isArray(turn?.transferEnvelopes) ? turn.transferEnvelopes : []),
       ].filter(Boolean),
     );
-    const preferredAttachmentMetas = transferAttachmentMetas.length
-      ? dedupeAttachmentMetas(transferAttachmentMetas)
-      : (Array.isArray(attachmentMetas) ? attachmentMetas : []);
+    const preferredAttachmentMetas = Array.isArray(turn?.transferEnvelopes) && turn.transferEnvelopes.length
+      ? []
+      : transferAttachmentMetas.length
+        ? dedupeAttachmentMetas(transferAttachmentMetas)
+        : (Array.isArray(attachmentMetas) ? attachmentMetas : []);
     if (preferredAttachmentMetas.length) {
       turn.attachmentMetas = preferredAttachmentMetas;
     }

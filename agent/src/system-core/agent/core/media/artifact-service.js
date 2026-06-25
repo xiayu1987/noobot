@@ -262,15 +262,11 @@ export function extractAttachmentMetasFromToolResult(toolName = "", toolResultTe
   try {
     const parsedResult = JSON.parse(normalizedToolResultText);
     const transferAttachmentMetas = getTransferAttachmentMetas(
-      [
-        parsedResult?.transferResult?.envelope,
-        ...(Array.isArray(parsedResult?.transferEnvelopes) ? parsedResult.transferEnvelopes : []),
-      ].filter(Boolean),
+      Array.isArray(parsedResult?.transferEnvelopes) ? parsedResult.transferEnvelopes : [],
     );
     const directAttachmentMetas = Array.isArray(parsedResult?.attachmentMetas)
       ? parsedResult.attachmentMetas
       : [];
-    // Transfer contract is primary. Legacy `attachmentMetas` is fallback-only.
     const preferredAttachmentMetas = transferAttachmentMetas.length
       ? transferAttachmentMetas
       : directAttachmentMetas;

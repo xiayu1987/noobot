@@ -131,8 +131,6 @@ test("inject-mode summary can save detail as attachment and inject detail path t
                     files: [{ filePath: "/sandbox/admin/runtime/summary-detail.md", attachmentMeta, role: "primary" }],
                   };
                   return {
-                    transferResult: { ok: true, status: "file", envelope },
-                    envelope,
                     transferEnvelopes: [envelope],
                   };
                 },
@@ -201,7 +199,7 @@ test("inject-mode summary can save detail as attachment and inject detail path t
   assert.equal(Array.isArray(injectedDetailPathMessage?.transferEnvelopes), true);
   assert.equal(injectedDetailPathMessage?.transferEnvelopes?.[0]?.protocol, "noobot.semantic-transfer");
   assert.equal(injectedDetailPathMessage.transferEnvelopes.length, 1);
-  assert.equal(injectedDetailPathMessage?.transferResult?.ok, true);
+  assert.equal(injectedDetailPathMessage?.transferResult, undefined);
 
   assert.doesNotMatch(
     ctx.messages.map((item = {}) => String(item?.content || "")).join("\n"),

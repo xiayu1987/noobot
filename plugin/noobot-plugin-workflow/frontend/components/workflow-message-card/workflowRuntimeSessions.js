@@ -38,11 +38,6 @@ function makeNodeSessionFromRun(item = {}, workflowPayload) {
       : Array.isArray(item?.transferEnvelopes)
         ? item.transferEnvelopes
         : [],
-    ...(item?.nodeResultTransferResult && typeof item.nodeResultTransferResult === "object"
-      ? { transferResult: item.nodeResultTransferResult }
-      : item?.transferResult && typeof item.transferResult === "object"
-        ? { transferResult: item.transferResult }
-        : {}),
     stepStatus: String(item?.stepStatus || item?.status || "").trim(),
     stepFailure:
       item?.stepFailure && typeof item.stepFailure === "object"

@@ -99,7 +99,6 @@ function buildNodeAgentRunRecord({
     ),
     nodeResultAttachmentMetas: resolveNodeResultAttachmentMetas(item, ctx),
     nodeResultTransferEnvelopes: resultTransferPayload.transferEnvelopes,
-    nodeResultTransferResult: resultTransferPayload.transferResult,
     // Persist an explicit terminal status for every executed node step.
     // The workflow card is rendered again from the saved session message after a page refresh;
     // relying on the presence of session/dialog ids to infer success makes the persisted payload
@@ -160,7 +159,6 @@ function rememberCompletedStepResult({
     stepFailure,
     attachmentMetas: resolveNodeResultAttachmentMetas(item, ctx),
     transferEnvelopes: resultTransferPayload.transferEnvelopes,
-    transferResult: resultTransferPayload.transferResult,
   });
 }
 

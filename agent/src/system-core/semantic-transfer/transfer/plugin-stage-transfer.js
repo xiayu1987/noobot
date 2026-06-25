@@ -5,14 +5,12 @@
  */
 import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "../core/constants.js";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
-import { createTransferResult, TRANSFER_RESULT_STATUS } from "../core/result.js";
 import {
-  extractTransferEnvelopeFromPersisted,
   normalizeTransferEnvelopesWithPolicy,
 } from "../envelope/envelope-utils.js";
 import { resolveTransferIntent } from "../core/intent.js";
 import { emitSemanticTransferValidation } from "../core/telemetry.js";
-import { compactTransferPayloadForModel, firstNormalizedString } from "../core/compact.js";
+import { firstNormalizedString } from "../core/compact.js";
 
 function normalizeString(value = "") {
   return String(value || "").trim();
@@ -79,13 +77,7 @@ export async function transferAgentPluginStageMessage({
         enforceProtocol: true,
       },
     });
-    return {
-      summary: normalizedSummary,
-      detail: "",
-      transferResult: createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.SKIPPED }),
-      transferEnvelopes: [],
-      compactTransferPayload: {},
-    };
+    return { transferEnvelopes: [] };
   }
 
   const persisted = await persistTransferFile({
@@ -98,7 +90,11 @@ export async function transferAgentPluginStageMessage({
     generationSource: intent.generationSource,
     source: intent.source,
     reason: intent.reason,
-    meta,
+    meta: {
+      ...(isPlainObject(meta) ? meta : {}),
+      summary: normalizedSummary,
+      detailLength: normalizedDetail.length,
+    },
   });
 
   const transferEnvelopesResult = normalizeTransferEnvelopesWithPolicy(
@@ -111,15 +107,7 @@ export async function transferAgentPluginStageMessage({
     scenario: "agent_plugin_stage_message",
     stats: transferEnvelopesResult?.stats || {},
   });
-  return {
-    summary: normalizedSummary,
-    detail: "",
-    transferResult: transferEnvelopes[0]
-      ? createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.FILE, envelope: transferEnvelopes[0] })
-      : createTransferResult({ ok: false, status: TRANSFER_RESULT_STATUS.FAILED }),
-    transferEnvelopes,
-    compactTransferPayload: compactTransferPayloadForModel({ transferEnvelopes }),
-  };
+  return { transferEnvelopes };
 }
 
 export function composeAgentPluginFinalMessage({

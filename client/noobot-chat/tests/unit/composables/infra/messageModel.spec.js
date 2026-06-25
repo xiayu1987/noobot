@@ -108,10 +108,10 @@ describe("messageModel semantic transfer", () => {
           path: "/legacy-only/report.md",
         },
       ],
-      transferResult: { ok: true, status: "file", envelope },
+      transferEnvelopes: [envelope],
     });
 
-    expect(message.transferResult?.ok).toBe(true);
+    expect(message.transferResult).toBeUndefined();
     expect(message.transferEnvelopes).toHaveLength(1);
     expect(message.transferEnvelopes[0]?.protocol).toBe("noobot.semantic-transfer");
     expect(message.attachmentMetas).toHaveLength(1);

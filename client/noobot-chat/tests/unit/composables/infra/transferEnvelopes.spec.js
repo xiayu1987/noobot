@@ -73,13 +73,12 @@ describe("transferEnvelopes", () => {
     });
   });
 
-  it("collects envelopes from direct, array, and result fields", () => {
+  it("collects envelopes only from transferEnvelopes", () => {
     const envelopes = getMessageTransferEnvelopes({
       transferEnvelopes: [envelope],
-      transferResult: { envelope },
     });
 
-    expect(envelopes).toHaveLength(2);
+    expect(envelopes).toEqual([envelope]);
   });
 
   it("resolves display path by semantic path view precedence", () => {

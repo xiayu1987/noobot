@@ -167,37 +167,22 @@ export function isPlainObject(value) {
 
 export function normalizeWorkflowTransferPayload(payload = {}) {
   const source = isPlainObject(payload) ? payload : {};
-  const transferResult = isPlainObject(source.transferResult)
-    ? source.transferResult
-    : isPlainObject(source.result)
-      ? source.result
-      : null;
-  const resultEnvelope = isPlainObject(transferResult?.envelope) ? transferResult.envelope : null;
-  const sourceEnvelope = isPlainObject(source.envelope) ? source.envelope : null;
   const transferEnvelopes = Array.isArray(source.transferEnvelopes)
     ? source.transferEnvelopes.filter(isPlainObject)
     : [];
-  for (const envelope of [sourceEnvelope, resultEnvelope].filter(isPlainObject)) {
-    if (!transferEnvelopes.includes(envelope)) transferEnvelopes.push(envelope);
-  }
-  return { transferResult, transferEnvelopes };
+  return { transferEnvelopes };
 }
 
 export function getWorkflowTransferPayloadFromResult(result = {}) {
   if (!isPlainObject(result)) return normalizeWorkflowTransferPayload();
   return normalizeWorkflowTransferPayload({
-    transferResult: result.transferResult || result.result || null,
     transferEnvelopes: result.transferEnvelopes || [],
-    envelope: result.envelope || null,
   });
 }
 
 export function applyWorkflowTransferPayload(target = {}, payload = {}) {
   if (!target || typeof target !== "object") return target;
   const transferPayload = normalizeWorkflowTransferPayload(payload);
-  if (transferPayload.transferResult) {
-    target.transferResult = transferPayload.transferResult;
-  }
   if (transferPayload.transferEnvelopes.length) {
     const existing = Array.isArray(target.transferEnvelopes) ? target.transferEnvelopes : [];
     const merged = [...existing];
@@ -234,7 +219,6 @@ export function buildWorkflowTransferPayloadFromAttachmentMetas(attachmentMetas 
     files,
   };
   return normalizeWorkflowTransferPayload({
-    transferResult: { ok: true, status: "file", envelope: primaryEnvelope },
     transferEnvelopes: [primaryEnvelope],
   });
 }

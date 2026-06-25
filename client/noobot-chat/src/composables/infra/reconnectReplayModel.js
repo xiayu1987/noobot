@@ -362,18 +362,6 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   const existingThinkingFinishedAt = getThinkingFinishedAt(targetMessage);
   const existingTurnScopeId = getMessageTurnScopeId(targetMessage);
   const existingPending = targetMessage?.pending === true;
-  const existingTransferResult =
-    targetMessage?.transferResult &&
-    typeof targetMessage.transferResult === "object" &&
-    !Array.isArray(targetMessage.transferResult)
-      ? targetMessage.transferResult
-      : null;
-  const sourceTransferResult =
-    sourceMessage?.transferResult &&
-    typeof sourceMessage.transferResult === "object" &&
-    !Array.isArray(sourceMessage.transferResult)
-      ? sourceMessage.transferResult
-      : null;
   const existingTransferEnvelopes = getMessageTransferEnvelopes(targetMessage);
   const sourceTransferEnvelopes = getMessageTransferEnvelopes(sourceMessage);
 
@@ -403,9 +391,6 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
     targetMessage.realtimeLogs = sourceMessage.realtimeLogs.slice(-EXECUTION_LOG_DISPLAY_LIMIT);
   } else if (sourceCanUseTurnScopedAssets && existingRealtimeLogs.length) {
     targetMessage.realtimeLogs = existingRealtimeLogs.slice(-EXECUTION_LOG_DISPLAY_LIMIT);
-  }
-  if (!sourceTransferResult && existingTransferResult) {
-    targetMessage.transferResult = existingTransferResult;
   }
   const mergedTransferEnvelopes = mergeTransferEnvelopes(
     existingTransferEnvelopes,

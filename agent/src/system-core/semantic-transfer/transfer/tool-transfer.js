@@ -19,12 +19,7 @@ import {
 import { resolveTransferIntent } from "../core/intent.js";
 import { emitSemanticTransferValidation } from "../core/telemetry.js";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
-import { createTransferResult, TRANSFER_RESULT_STATUS } from "../core/result.js";
-import {
-  compactToolResultPayloadForModel,
-  compactTransferPayloadForModel,
-  firstNormalizedString,
-} from "../core/compact.js";
+import { firstNormalizedString } from "../core/compact.js";
 import {
   materializeTextForToolResult,
   resolveToolResultInlineTextLimit,
@@ -158,10 +153,41 @@ function remapEnvelopeDirection(envelope = {}, direction = TRANSFER_DIRECTION.OU
   });
 }
 
+function buildToolInputTransferMeta({
+  baseMeta = {},
+  normalizedText = "",
+  resolvedMimeType = DEFAULT_TRANSFER_MIME_TYPE,
+  intent = {},
+  callOverflow = null,
+  exceeded = false,
+} = {}) {
+  const textLength = String(normalizedText || "").length;
+  const isExceeded = exceeded === true || callOverflow?.exceeded === true;
+  return {
+    ...(baseMeta && typeof baseMeta === "object" && !Array.isArray(baseMeta) ? baseMeta : {}),
+    source: intent.source,
+    reason: intent.reason,
+    mimeType: resolvedMimeType,
+    originalLength: textLength,
+    textLength,
+    exceeded: isExceeded,
+    toolInputOverflow: callOverflow
+      ? {
+          toolName: callOverflow.toolName,
+          field: callOverflow.field,
+          exceeded: callOverflow.exceeded,
+          forceAttachment: callOverflow.forceAttachment,
+          maxChars: callOverflow.maxChars,
+          message: callOverflow.message,
+          textLength,
+        }
+      : undefined,
+    ...(callOverflow?.message ? { message: callOverflow.message } : {}),
+  };
+}
+
 async function buildTransferResponse({
-  transferResult = null,
   transferEnvelopes = [],
-  passthrough = {},
   runtime = {},
   scenario = "tool",
 } = {}) {
@@ -177,34 +203,12 @@ async function buildTransferResponse({
     ? normalizedResult.envelopes
     : [];
   const validationStats = normalizedResult?.stats || {};
-  const transferValidation = {
-    strict: Boolean(validationStats.strict),
-    enforceProtocol: Boolean(validationStats.enforceProtocol),
-    inputCount: Number(validationStats.inputCount || 0),
-    outputCount: Number(validationStats.outputCount || normalizedEnvelopes.length),
-    filteredCount: Number(validationStats.filteredCount || 0),
-    invalidCount: Number(validationStats.invalidCount || 0),
-  };
-  const payload = {
-    transferResult,
-    transferEnvelopes: normalizedEnvelopes,
-    compactTransferPayload: compactTransferPayloadForModel({
-      transferResult,
-      transferEnvelopes: normalizedEnvelopes,
-    }),
-    transferValidation,
-    ...passthrough,
-  };
   await emitSemanticTransferValidation({
     runtime,
     scenario,
     stats: validationStats,
-    transferValidation,
   });
-  return {
-    ...payload,
-    compactToolPayload: compactToolResultPayloadForModel(payload),
-  };
+  return { transferEnvelopes: normalizedEnvelopes };
 }
 
 export async function transferToolOutput({
@@ -266,30 +270,13 @@ export async function transferToolOutput({
     ...meta,
     source: intent.source,
     reason: intent.reason,
+    textLength: normalizedText.length,
+    exceeded: normalizedText.length > maxInline || forceAttachment === true,
   });
-  const persistedEnvelope = persistedTransferEnvelopes[0] || null;
-  const transferEnvelopes = persistedEnvelope ? persistedTransferEnvelopes : [directEnvelope];
+  const transferEnvelopes = persistedTransferEnvelopes[0] ? persistedTransferEnvelopes : [directEnvelope];
 
   return await buildTransferResponse({
-    transferResult: persistedEnvelope
-      ? createTransferResult({
-          ok: true,
-          status: TRANSFER_RESULT_STATUS.FILE,
-          envelope: persistedEnvelope,
-        })
-      : createTransferResult({
-          ok: true,
-          status: TRANSFER_RESULT_STATUS.DIRECT,
-          envelope: directEnvelope,
-        }),
     transferEnvelopes,
-    passthrough: {
-      ...(materialized?.resultFields && typeof materialized.resultFields === "object"
-        ? materialized.resultFields
-        : {}),
-      exceeded: normalizedText.length > maxInline || forceAttachment === true,
-      textLength: normalizedText.length,
-    },
     runtime,
     scenario: "tool_output",
   });
@@ -317,13 +304,7 @@ export async function transferToolInput({
   const callOverflow = !hasExplicitText && call ? resolveToolInputOverflowFromCall(call) : null;
   if (!hasExplicitText && call && !callOverflow) {
     return {
-      transferResult: createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.SKIPPED }),
       transferEnvelopes: [],
-      compactTransferPayload: {},
-      compactToolPayload: {},
-      exceeded: false,
-      skipped: true,
-      textLength: 0,
     };
   }
   const normalizedText = callOverflow ? callOverflow.text : String(text || content || "");
@@ -350,27 +331,23 @@ export async function transferToolInput({
   const maxInline = toSafePositiveInt(resolvedInlineLimit, resolveToolResultInlineTextLimit(runtime), 0);
   const shouldPersist =
     forceAttachment === true || callOverflow?.forceAttachment === true || normalizedText.length > maxInline;
+  const inputExceeded = callOverflow?.exceeded === true || normalizedText.length > maxInline;
 
   if (!shouldPersist) {
+    const envelopeMeta = buildToolInputTransferMeta({
+      baseMeta: resolvedMeta,
+      normalizedText,
+      resolvedMimeType,
+      intent,
+      callOverflow,
+      exceeded: inputExceeded,
+    });
     const envelope = directInput(normalizedText, {
-      ...resolvedMeta,
-      source: intent.source,
-      reason: intent.reason,
-      mimeType: resolvedMimeType,
-      originalLength: normalizedText.length,
+      ...envelopeMeta,
+      inlineContent: normalizedText,
     });
     return await buildTransferResponse({
-      transferResult: createTransferResult({
-        ok: true,
-        status: TRANSFER_RESULT_STATUS.DIRECT,
-        envelope,
-      }),
       transferEnvelopes: [envelope],
-      passthrough: {
-        inlineContent: normalizedText,
-        exceeded: false,
-        textLength: normalizedText.length,
-      },
       runtime,
       scenario: "tool_input",
     });
@@ -389,8 +366,14 @@ export async function transferToolInput({
     storage,
     producer,
     meta: {
-      ...resolvedMeta,
-      originalLength: normalizedText.length,
+      ...buildToolInputTransferMeta({
+        baseMeta: resolvedMeta,
+        normalizedText,
+        resolvedMimeType,
+        intent,
+        callOverflow,
+        exceeded: inputExceeded,
+      }),
     },
   });
 
@@ -398,41 +381,9 @@ export async function transferToolInput({
   const transferEnvelopes = normalizeTransferEnvelopes(
     outputEnvelope ? [remapEnvelopeDirection(outputEnvelope, TRANSFER_DIRECTION.INPUT)] : [],
   );
-  const persistedEnvelope = transferEnvelopes[0] || null;
 
   return await buildTransferResponse({
-    transferResult: persistedEnvelope
-      ? createTransferResult({
-          ok: true,
-          status: TRANSFER_RESULT_STATUS.FILE,
-          envelope: persistedEnvelope,
-        })
-      : createTransferResult({
-          ok: false,
-          status: TRANSFER_RESULT_STATUS.FAILED,
-          error: {
-            code: "TRANSFER_PERSIST_FAILED",
-            message: "failed to persist tool input",
-          },
-        }),
     transferEnvelopes,
-    passthrough: {
-      exceeded: callOverflow?.exceeded === false ? false : true,
-      textLength: normalizedText.length,
-      inlineContent: "",
-      ...(callOverflow?.message ? { message: callOverflow.message } : {}),
-      ...(callOverflow?.exceeded === true
-        ? {
-            toolInputOverflow: {
-              toolName: callOverflow.toolName,
-              field: callOverflow.field,
-              maxChars: maxInline,
-              textLength: normalizedText.length,
-              message: callOverflow.message,
-            },
-          }
-        : {}),
-    },
     runtime,
     scenario: "tool_input",
   });

@@ -75,11 +75,7 @@ function resolveCompactTransferFilePath({ pathView = {}, file = {}, attachmentMe
 
 function normalizeTransferEnvelopeList(payload = {}) {
   if (!isPlainObject(payload)) return [];
-  const transferResult = isPlainObject(payload?.transferResult) ? payload.transferResult : null;
-  return [
-    isPlainObject(transferResult?.envelope) ? transferResult.envelope : null,
-    ...(Array.isArray(payload?.transferEnvelopes) ? payload.transferEnvelopes : []),
-  ].filter(isPlainObject);
+  return (Array.isArray(payload?.transferEnvelopes) ? payload.transferEnvelopes : []).filter(isPlainObject);
 }
 
 function getTransferFilesFromEnvelope(envelope = {}) {
@@ -174,7 +170,6 @@ export function compactTransferPayloadForModel(payload = {}) {
 export function compactToolResultPayloadForModel(payload = {}) {
   if (!isPlainObject(payload)) return payload;
   const compactPayload = { ...payload };
-  delete compactPayload.transferResult;
   delete compactPayload.transferEnvelopes;
   delete compactPayload.attachmentMetas;
   delete compactPayload.compactTransferPayload;

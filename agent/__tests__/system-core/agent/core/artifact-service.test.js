@@ -101,7 +101,7 @@ test("extractAttachmentMetasFromToolResult ignores non-runtime-attach transfer f
   assert.equal(metas.length, 0);
 });
 
-test("extractAttachmentMetasFromToolResult merges transferResult envelope and deduplicates", () => {
+test("extractAttachmentMetasFromToolResult reads transferEnvelopes and deduplicates", () => {
   const toolResultText = JSON.stringify({
     toolName: "multimodal_generate",
     ok: true,
@@ -114,10 +114,8 @@ test("extractAttachmentMetasFromToolResult merges transferResult envelope and de
         relativePath: "runtime/attach/scoped/s1/model/generated.png",
       },
     ],
-    transferResult: {
-      ok: true,
-      status: "file",
-      envelope: {
+    transferEnvelopes: [
+      {
         protocol: "noobot.semantic-transfer",
         version: 1,
         direction: "output",
@@ -145,7 +143,7 @@ test("extractAttachmentMetasFromToolResult merges transferResult envelope and de
           },
         ],
       },
-    },
+    ],
   });
 
   const metas = extractAttachmentMetasFromToolResult("multimodal_generate", toolResultText);

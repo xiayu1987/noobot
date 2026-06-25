@@ -21,7 +21,7 @@
     "dev:service": "npm run -w service dev",
     "dev:agent-proxy": "npm run -w agent-proxy dev",
     "dev:client": "npm run -w client/noobot-chat dev",
-    "test": "npm run -s check:numeric-literal-style && npm run -s check:model-context-convergence && npm run --workspaces --if-present test",
+    "test": "npm run -s check:numeric-literal-style && npm run -s check:semantic-transfer-protocol-fields && npm run -s check:model-context-convergence && npm run --workspaces --if-present test",
     "check:i18n-imports": "npm run --workspaces --if-present check:i18n-imports",
     "check:plugin-frontend-i18n": "node ./scripts/check-plugin-frontend-i18n.mjs",
     "check:semantic-transfer-compat": "node ./scripts/check-semantic-transfer-compat.mjs",
@@ -34,6 +34,7 @@
     "check:plugin-i18n": "npm run -s check:plugin-harness-src-i18n && npm run -s check:plugin-harness-i18n-keyset && npm run -s check:plugin-workflow-src-i18n && npm run -s check:plugin-workflow-i18n-keyset && npm run -s check:plugin-frontend-i18n",
     "check:agent-plugin-decoupling": "node ./scripts/check-agent-plugin-decoupling.mjs",
     "check:numeric-literal-style": "node ./scripts/check-numeric-literal-style.mjs",
+    "check:semantic-transfer-protocol-fields": "node ./scripts/check-semantic-transfer-protocol-fields.mjs",
     "check:model-context-convergence": "node ./scripts/check-model-context-convergence.mjs"
   }
 }

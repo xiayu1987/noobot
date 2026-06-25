@@ -26,6 +26,14 @@ import {
 } from "../../../src/system-core/semantic-transfer/index.js";
 import { materializeOutput } from "../../../src/system-core/semantic-transfer/storage/materializer.js";
 
+function assertTransferProtocolOnly(value = {}) {
+  assert.deepEqual(Object.keys(value).sort(), ["transferEnvelopes"]);
+}
+
+function firstTransferFile(value = {}) {
+  return value?.transferEnvelopes?.[0]?.files?.[0] || {};
+}
+
 test("semantic transfer envelopes keep direct/file semantics", () => {
   const input = directInput("hello", { source: "user" });
   assert.equal(isTransferEnvelope(input), true);
@@ -61,7 +69,7 @@ test("envelope helpers normalize persisted output and filter invalid envelopes",
     transport: "file",
     filePath: "/workspace/a.txt",
   };
-  const persisted = { result: { envelope: validEnvelope } };
+  const persisted = { transferEnvelopes: [validEnvelope] };
   assert.deepEqual(extractTransferEnvelopeFromPersisted(persisted), validEnvelope);
 
   const normalized = normalizeTransferEnvelopes([
@@ -71,16 +79,16 @@ test("envelope helpers normalize persisted output and filter invalid envelopes",
     validEnvelope,
     { files: [{ filePath: "/workspace/b.txt" }] },
   ]);
-  assert.equal(normalized.length, 2);
+  assert.equal(normalized.length, 1);
   assert.equal(normalized[0].filePath, "/workspace/a.txt");
-  assert.equal(Array.isArray(normalized[1].files), true);
 
   const validated = normalizeTransferEnvelopesWithPolicy(
     [validEnvelope, { filePath: "/workspace/legacy.txt" }],
-    { enforceProtocol: true },
+    { enforceProtocol: true, withStats: true },
   );
-  assert.equal(validated.length, 1);
-  assert.equal(validated[0].filePath, "/workspace/a.txt");
+  assert.equal(validated.envelopes.length, 1);
+  assert.equal(validated.envelopes[0].filePath, "/workspace/a.txt");
+  assert.equal(validated.stats.invalidCount, 1);
   assert.throws(
     () =>
       normalizeTransferEnvelopesWithPolicy(
@@ -261,8 +269,7 @@ test("transferSemanticContent dispatches by scenario", async () => {
     strategy: "tool_output",
     text: "small text",
   });
-  assert.equal(toolTransferred?.transferResult?.ok, true);
-  assert.equal("transferEnvelopes" in toolTransferred, true);
+  assertTransferProtocolOnly(toolTransferred);
   assert.equal(toolTransferred?.transferEnvelopes?.[0]?.transport, "direct");
 
   const stageTransferred = await transferSemanticContent({
@@ -271,8 +278,8 @@ test("transferSemanticContent dispatches by scenario", async () => {
     summary: "ok",
     detail: "",
   });
-  assert.equal(stageTransferred?.summary, "ok");
-  assert.equal(stageTransferred?.transferResult?.status, "skipped");
+  assertTransferProtocolOnly(stageTransferred);
+  assert.equal(stageTransferred?.transferEnvelopes?.length, 0);
 
   const finalTransferred = await transferSemanticContent({
     scenario: "agent_plugin",
@@ -281,9 +288,9 @@ test("transferSemanticContent dispatches by scenario", async () => {
     detailRefs: [],
     validationInfo: "pass",
   });
-  assert.equal(finalTransferred?.transferResult?.ok, true);
-  assert.equal(finalTransferred.finalMessage.includes("done"), true);
-  assert.equal(finalTransferred.finalMessage.includes("pass"), true);
+  assertTransferProtocolOnly(finalTransferred);
+  assert.equal(finalTransferred?.transferEnvelopes?.[0]?.content.includes("done"), true);
+  assert.equal(finalTransferred?.transferEnvelopes?.[0]?.content.includes("pass"), true);
 });
 
 test("compactToolResultTextForModel replaces verbose transfer payload with concise transferFiles", () => {
@@ -324,7 +331,6 @@ test("compactToolResultTextForModel replaces verbose transfer payload with conci
         toolName: "multimodal_generate",
         ok: true,
         attachmentMetas: [attachmentMeta],
-        transferResult: { ok: true, status: "file", envelope },
         transferEnvelopes: [envelope],
       }),
     ),
@@ -394,9 +400,9 @@ test("persistTransferArtifacts saves through attachment service and returns tran
     dialogProcessId: "dialog-1",
     sessionId: "s1",
   });
-  assert.equal(persisted.transferResult?.status, "file");
   assert.equal("transferEnvelopes" in persisted, true);
   assert.equal(persisted.transferEnvelopes?.[0]?.filePath, "attachments/a.txt");
+  assertTransferProtocolOnly({ transferEnvelopes: persisted.transferEnvelopes });
   assert.equal(getTransferAttachmentMetas(persisted.transferEnvelopes).length, 1);
   const [attachmentMeta] = getTransferAttachmentMetas(persisted.transferEnvelopes);
   assert.equal(attachmentMeta.attachmentId, "att-1");
@@ -418,6 +424,9 @@ test("persistTransferArtifacts saves through attachment service and returns tran
   assert.equal("attachmentMetas" in persisted, false);
   assert.equal("filePath" in persisted, false);
   assert.equal("filePaths" in persisted, false);
+  assert.equal("result" in persisted, false);
+  assert.equal("transferResult" in persisted, false);
+  assert.equal("envelope" in persisted, false);
 });
 
 test("attachment metadata normalizes owner and turn scope shapes", async () => {
@@ -477,11 +486,13 @@ test("persistTransferArtifacts returns skipped result and empty transfer fields 
     sessionId: "s1",
     artifacts: [{ name: "a.txt", mimeType: "text/plain", contentBase64: "YQ==" }],
   });
-  assert.equal(persisted.result?.status, "skipped");
   assert.deepEqual(persisted.transferEnvelopes, []);
   assert.equal("attachmentMetas" in persisted, false);
   assert.equal("filePath" in persisted, false);
   assert.equal("filePaths" in persisted, false);
+  assert.equal("result" in persisted, false);
+  assert.equal("transferResult" in persisted, false);
+  assert.equal("envelope" in persisted, false);
 });
 
 test("file envelope supports files, pathView, storage and producer", () => {
@@ -587,7 +598,6 @@ test("consumer helpers read envelope files and attachment metas", async () => {
   );
 
   const wrapped = {
-    transferResult: { ok: true, status: "file", envelope },
     transferEnvelopes: [envelope],
   };
   assert.equal(getTransferFiles(wrapped).length, 2);
@@ -642,7 +652,7 @@ test("semantic-transfer public index only exposes unified transfer entry for sce
   assert.equal("materializeOutputResult" in mod, false);
 });
 
-test("transferSemanticContent returns compact transfer payload for long tool input", async () => {
+test("transferSemanticContent returns transfer envelope for long tool input", async () => {
   const transferred = await transferSemanticContent({
     scenario: "tool",
     strategy: "tool_input",
@@ -668,10 +678,11 @@ test("transferSemanticContent returns compact transfer payload for long tool inp
       systemRuntime: { userId: "u1", sessionId: "s1" },
     },
   });
-  assert.equal(transferred.transferResult?.status, "file");
+  assertTransferProtocolOnly(transferred);
   assert.equal(transferred.transferEnvelopes?.[0]?.direction, "input");
-  assert.equal(Array.isArray(transferred.compactToolPayload?.transferFiles), true);
-  assert.equal(transferred.compactToolPayload.transferFiles[0].attachmentId, "tool-input-1");
+  const file = firstTransferFile(transferred);
+  assert.equal(file.attachmentMeta?.attachmentId, "tool-input-1");
+  assert.equal(transferred.transferEnvelopes?.[0]?.meta?.exceeded, true);
 });
 
 test("transferSemanticContent tool_input decides call arg overflow inside semantic-transfer", async () => {
@@ -706,12 +717,11 @@ test("transferSemanticContent tool_input decides call arg overflow inside semant
     },
   });
 
-  assert.equal(transferred.exceeded, true);
-  assert.equal(transferred.message, "文件内容过长，请分批写入");
-  assert.equal(transferred.transferResult?.status, "file");
+  assertTransferProtocolOnly(transferred);
+  assert.equal(transferred.transferEnvelopes?.[0]?.meta?.exceeded, true);
+  assert.equal(transferred.transferEnvelopes?.[0]?.meta?.message, "文件内容过长，请分批写入");
   assert.equal(transferred.transferEnvelopes?.[0]?.direction, "input");
-  assert.equal(transferred.compactToolPayload?.transferFiles?.[0]?.name, "large.txt.tool-input.txt");
-  assert.equal(transferred.compactToolPayload?.message, "文件内容过长，请分批写入");
+  assert.equal(firstTransferFile(transferred).name, "large.txt.tool-input.txt");
 });
 
 test("transferSemanticContent tool_input supports patch_file patch overflow", async () => {
@@ -746,11 +756,11 @@ test("transferSemanticContent tool_input supports patch_file patch overflow", as
     },
   });
 
-  assert.equal(transferred.exceeded, true);
-  assert.equal(transferred.transferResult?.status, "file");
+  assertTransferProtocolOnly(transferred);
+  assert.equal(transferred.transferEnvelopes?.[0]?.meta?.exceeded, true);
   assert.equal(transferred.transferEnvelopes?.[0]?.direction, "input");
-  assert.equal(transferred.compactToolPayload?.transferFiles?.[0]?.name, "patch-file-patch.tool-input.diff");
-  assert.equal(transferred.compactToolPayload?.message, "补丁内容过长，请分批应用或拆分 patch 后重试");
+  assert.equal(firstTransferFile(transferred).name, "patch-file-patch.tool-input.diff");
+  assert.equal(transferred.transferEnvelopes?.[0]?.meta?.message, "补丁内容过长，请分批应用或拆分 patch 后重试");
 });
 
 test("transferSemanticContent tool_input forces task_summary summaryContent into attachment", async () => {
@@ -783,15 +793,11 @@ test("transferSemanticContent tool_input forces task_summary summaryContent into
     },
   });
 
-  assert.equal(transferred.exceeded, false);
-  assert.equal(transferred.toolInputOverflow, undefined);
-  assert.equal(transferred.transferResult?.status, "file");
+  assertTransferProtocolOnly(transferred);
+  assert.equal(transferred.transferEnvelopes?.[0]?.meta?.exceeded, false);
+  assert.equal(transferred.transferEnvelopes?.[0]?.meta?.toolInputOverflow?.exceeded, false);
   assert.equal(transferred.transferEnvelopes?.[0]?.direction, "input");
-  assert.equal(transferred.compactToolPayload?.toolInputOverflow, undefined);
-  assert.equal(
-    transferred.compactToolPayload?.transferFiles?.[0]?.name,
-    "task-summary-content.tool-input.md",
-  );
+  assert.equal(firstTransferFile(transferred).name, "task-summary-content.tool-input.md");
 });
 
 test("transferSemanticContent tool_input overflow returns sandbox path view when sandbox is enabled", async () => {
@@ -832,10 +838,7 @@ test("transferSemanticContent tool_input overflow returns sandbox path view when
   assert.equal(file.pathView?.displayPath, "/workspace/admin/attachments/large.txt.tool-input.txt");
   assert.equal(file.pathView?.sandboxPath, "/workspace/admin/attachments/large.txt.tool-input.txt");
   assert.equal(file.pathView?.hostPath, "/host/users/admin/attachments/large.txt.tool-input.txt");
-  assert.equal(
-    transferred.compactToolPayload?.transferFiles?.[0]?.transferFilePath,
-    "/workspace/admin/attachments/large.txt.tool-input.txt",
-  );
+  assertTransferProtocolOnly(transferred);
 });
 
 test("transferSemanticContent sandbox view prefers default workspace over /project mount", async () => {
@@ -896,10 +899,7 @@ test("transferSemanticContent sandbox view prefers default workspace over /proje
   assert.equal(file.pathView?.displayPath, expectedPath);
   assert.equal(file.pathView?.sandboxPath, expectedPath);
   assert.notEqual(file.filePath, wrongProjectPath);
-  assert.equal(
-    transferred.compactToolPayload?.transferFiles?.[0]?.transferFilePath,
-    expectedPath,
-  );
+  assertTransferProtocolOnly(transferred);
 });
 
 test("transferSemanticContent tool_input overflow returns non-sandbox path view when sandbox is disabled", async () => {
@@ -940,10 +940,7 @@ test("transferSemanticContent tool_input overflow returns non-sandbox path view 
   assert.equal(file.pathView?.displayPath, "attachments/large.txt.tool-input.txt");
   assert.equal(file.pathView?.sandboxPath, undefined);
   assert.equal(file.pathView?.hostPath, "/host/users/admin/attachments/large.txt.tool-input.txt");
-  assert.equal(
-    transferred.compactToolPayload?.transferFiles?.[0]?.transferFilePath,
-    "attachments/large.txt.tool-input.txt",
-  );
+  assertTransferProtocolOnly(transferred);
 });
 
 test("transferSemanticContent keeps bot_plugin sub-agent transfer output focused on conversion", async () => {
@@ -1006,17 +1003,19 @@ test("transferSemanticContent produces agent_plugin stage refs and final output"
     summary: "done",
     detail: "long detail",
   });
-  assert.equal(staged.summary, "done");
-  assert.equal(staged.transferResult?.status, "file");
+  assertTransferProtocolOnly(staged);
+  assert.equal(staged.transferEnvelopes?.[0]?.meta?.summary, "done");
+  assert.equal(staged.transferEnvelopes?.[0]?.transport, "file");
   const finalTransferred = await transferSemanticContent({
     scenario: "agent_plugin",
     strategy: "agent_plugin_final_message",
     resultInfo: "最终结果",
-    detailRefs: staged.compactTransferPayload?.transferFiles || [],
+    detailRefs: staged.transferEnvelopes?.[0]?.files || [],
     validationInfo: "验收通过",
   });
-  assert.equal(finalTransferred.finalMessage.includes("最终结果"), true);
-  assert.equal(finalTransferred.finalMessage.includes("验收通过"), true);
+  assertTransferProtocolOnly(finalTransferred);
+  assert.equal(finalTransferred.transferEnvelopes?.[0]?.content.includes("最终结果"), true);
+  assert.equal(finalTransferred.transferEnvelopes?.[0]?.content.includes("验收通过"), true);
 });
 
 test("materializeOutputResult returns TransferResult and honors policy", async () => {
@@ -1070,12 +1069,14 @@ test("persistTransferFile accepts base64 and bytes and returns transfer envelope
     mimeType: "application/octet-stream",
     contentBase64: "AQID",
   });
-  assert.equal(fromBase64.result.status, "file");
   assert.equal(fromBase64.transferEnvelopes?.[0]?.filePath, "attachments/a.bin");
   assert.equal(calls[0].artifacts[0].contentBase64, "AQID");
   assert.equal("attachmentMetas" in fromBase64, false);
   assert.equal("filePath" in fromBase64, false);
   assert.equal("filePaths" in fromBase64, false);
+  assert.equal("result" in fromBase64, false);
+  assert.equal("transferResult" in fromBase64, false);
+  assert.equal("envelope" in fromBase64, false);
 
   const fromBytes = await persistTransferFile({
     attachmentService,
@@ -1084,7 +1085,7 @@ test("persistTransferFile accepts base64 and bytes and returns transfer envelope
     name: "b.bin",
     bytes: new Uint8Array([4, 5, 6]),
   });
-  assert.equal(fromBytes.result.status, "file");
+  assert.equal(fromBytes.transferEnvelopes?.[0]?.filePath, "attachments/b.bin");
   assert.equal(calls[1].artifacts[0].contentBase64, "BAUG");
 });
 
@@ -1122,10 +1123,11 @@ test("semantic-transfer emits validation event and hook", async () => {
     text: "validation",
     inlineMaxChars: 1024,
   });
-  assert.equal(result.transferValidation.outputCount >= 1, true);
+  assertTransferProtocolOnly(result);
   const validationEvent = events.find((evt = {}) => evt?.event === "semantic_transfer_validation");
   assert.equal(Boolean(validationEvent), true);
   assert.equal(validationEvent?.data?.scenario, "tool_output");
+  assert.equal(validationEvent?.data?.outputCount >= 1, true);
   assert.equal(hooks.length, 1);
   assert.equal(hooks[0].phase, "semantic_transfer");
 });

@@ -499,7 +499,6 @@ test("connector-toolkit/access_connector(email): 邮件附件保存不提升为 
               stdout: JSON.stringify({
                 action: "read",
                 attachment_metas: saved?.attachmentMetas || [],
-                transferResult: saved?.transferResult || null,
                 transferEnvelopes: saved?.transferEnvelopes || [],
               }),
               stderr: "",
@@ -580,7 +579,6 @@ test("connector-toolkit/access_connector(email): stdout 里的 transfer-like 字
               code: 0,
               stdout: JSON.stringify({
                 action: "read",
-                transferResult: { ok: true, status: "file", envelope },
                 transferEnvelopes: [envelope],
               }),
               stderr: "",

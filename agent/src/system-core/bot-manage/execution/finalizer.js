@@ -50,14 +50,9 @@ function isPlainObject(value) {
 }
 
 function resolveTransferEnvelopesFromMessage(messageItem = {}) {
-  const transferResult = isPlainObject(messageItem?.transferResult) ? messageItem.transferResult : null;
-  const transferResultEnvelope = isPlainObject(transferResult?.envelope) ? transferResult.envelope : null;
-  const transferEnvelopes = Array.isArray(messageItem?.transferEnvelopes)
+  return Array.isArray(messageItem?.transferEnvelopes)
     ? messageItem.transferEnvelopes.filter(isPlainObject)
-    : transferResultEnvelope
-      ? [transferResultEnvelope]
-      : [];
-  return transferEnvelopes;
+    : [];
 }
 
 function dedupeTransferEnvelopes(envelopes = []) {

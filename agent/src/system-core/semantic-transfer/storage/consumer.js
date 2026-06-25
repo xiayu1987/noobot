@@ -93,7 +93,6 @@ function collectTransferEnvelopes(value = null) {
   if (Array.isArray(value)) return dedupe(value);
   if (!isPlainObject(value)) return [];
   return dedupe([
-    value?.transferResult?.envelope,
     ...(Array.isArray(value.transferEnvelopes) ? value.transferEnvelopes : []),
     value,
   ]);
