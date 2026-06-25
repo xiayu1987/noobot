@@ -5,9 +5,6 @@
  */
 import {
   resolveMainModelFinalMessages,
-  resolveMainModelHistoryMessages,
-  resolveMainModelIncrementalMessages,
-  resolveMainModelSystemMessages,
   normalizeRecentWindow,
 } from "../../session/utils/context-window-normalizer.js";
 import {
@@ -16,19 +13,16 @@ import {
 } from "../../context/session/summarized-message-policy.js";
 import {
   collectLatestInjectedMessageIndexes,
+  filterForModelContext,
+  filterInjectedMessagesForDialog,
   isInjectedMessage,
-  resolveMessageRole,
 } from "../../context/session/message-context-policy.js";
-import { resolveDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import {
   getRuntimeFromAgentContext,
   getSessionIdsFromAgentContext,
 } from "../../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
-import {
-  normalizeMessageForModelRuntime,
-  resolveMessageBlockDialogProcessId,
-} from "./session-execution-engine-utils.js";
+import { normalizeMessageForModelRuntime } from "./session-execution-engine-utils.js";
 import { resolveMessagesByIds } from "../../agent/core/message-context/message-store.js";
 
 const PLUGIN_DEEP_MERGE_KEYS = new Set([
@@ -39,18 +33,7 @@ const PLUGIN_DEEP_MERGE_KEYS = new Set([
   "review",
 ]);
 
-function collectPayloadMessages(payloadMessages = null) {
-  if (!payloadMessages || typeof payloadMessages !== "object" || Array.isArray(payloadMessages)) {
-    return [];
-  }
-  return [
-    ...(Array.isArray(payloadMessages.system) ? payloadMessages.system : []),
-    ...(Array.isArray(payloadMessages.history) ? payloadMessages.history : []),
-    ...(Array.isArray(payloadMessages.incremental) ? payloadMessages.incremental : []),
-  ];
-}
-
-function shouldUsePayloadMessageFallback(purpose = "") {
+function shouldUsePayloadMessageBlocks(purpose = "") {
   const normalizedPurpose = String(purpose || "").trim().toLowerCase();
   return (
     normalizedPurpose.includes("acceptance") ||
@@ -59,21 +42,11 @@ function shouldUsePayloadMessageFallback(purpose = "") {
   );
 }
 
-function resolveContextSourceMessages(ctx = {}, { includePayloadMessages = false } = {}) {
-  if (Array.isArray(ctx?.messages) && ctx.messages.length) return ctx.messages;
-  if (!includePayloadMessages) return [];
-  const agentPayloadMessages = collectPayloadMessages(ctx?.agentContext?.payload?.messages);
-  if (agentPayloadMessages.length) return agentPayloadMessages;
-  const runtimePayloadMessages = collectPayloadMessages(ctx?.runtimeAgentContext?.payload?.messages);
-  if (runtimePayloadMessages.length) return runtimePayloadMessages;
-  return [];
-}
-
-function resolveContextMessageBlocks(ctx = {}, { includePayloadMessages = false } = {}) {
+function resolveContextMessageBlocks(ctx = {}, { includePayloadBlocks = false } = {}) {
   if (ctx?.messageBlocks && typeof ctx.messageBlocks === "object" && !Array.isArray(ctx.messageBlocks)) {
     return ctx.messageBlocks;
   }
-  if (!includePayloadMessages) return null;
+  if (!includePayloadBlocks) return null;
   const agentPayloadMessages = ctx?.agentContext?.payload?.messages;
   if (agentPayloadMessages && typeof agentPayloadMessages === "object" && !Array.isArray(agentPayloadMessages)) {
     return agentPayloadMessages;
@@ -102,6 +75,15 @@ function normalizeMessagesForModelRuntime(messages = []) {
   return (Array.isArray(messages) ? messages : [])
     .map((item) => normalizeMessageForModelRuntime(item))
     .filter(Boolean);
+}
+
+function resolveRuntimeDialogProcessId(ctx = {}) {
+  return String(
+    ctx?.dialogProcessId ||
+      ctx?.agentContext?.execution?.dialogProcessId ||
+      ctx?.runtimeAgentContext?.execution?.dialogProcessId ||
+      "",
+  ).trim();
 }
 
 function resolveNonMainModelContextWindowLimit(...items) {
@@ -156,16 +138,10 @@ export class ModelMessageRuntimeHelpers {
       botPluginOptions,
     );
     return ({ messages = [], ctx = {}, purpose = "" } = {}) => {
-      const includePayloadMessages = shouldUsePayloadMessageFallback(purpose);
-      const blocks = resolveContextMessageBlocks(ctx, { includePayloadMessages });
+      const includePayloadBlocks = shouldUsePayloadMessageBlocks(purpose);
+      const blocks = resolveContextMessageBlocks(ctx, { includePayloadBlocks });
       const explicitMessages = Array.isArray(messages) ? messages : [];
-      const source = explicitMessages.length
-        ? explicitMessages
-        : resolveContextSourceMessages(ctx, { includePayloadMessages });
-      const currentDialogProcessId = resolveDialogProcessId({
-        ctx,
-        messages: source,
-      });
+      const source = explicitMessages;
       const normalizedSource = source
         .map((item) => normalizeMessageForModelRuntime(item))
         .filter(Boolean);
@@ -174,60 +150,21 @@ export class ModelMessageRuntimeHelpers {
           systemMessages: normalizeMessagesForModelRuntime(resolveBlockMessages(ctx, blocks, "system")),
           historyMessages: normalizeMessagesForModelRuntime(resolveBlockMessages(ctx, blocks, "history")),
           incrementalMessages: normalizeMessagesForModelRuntime(resolveBlockMessages(ctx, blocks, "incremental")),
-          currentDialogProcessId,
         });
         return recentMessageLimit > 0
           ? normalizeRecentWindow(resolved.messages, recentMessageLimit)
           : resolved.messages;
       }
-      const system = resolveMainModelSystemMessages({
-        sourceMessages: normalizedSource.filter((item) => resolveMessageRole(item) === "system"),
-        currentDialogProcessId,
+      const dialogProcessId = resolveRuntimeDialogProcessId(ctx);
+      const fallbackSource = dialogProcessId
+        ? filterInjectedMessagesForDialog(normalizedSource, dialogProcessId)
+        : normalizedSource;
+      const resolvedMessages = filterForModelContext(fallbackSource, {
+        keepLatestInjectedOnly: true,
       });
-      const conversation = resolveMainModelIncrementalMessages({
-        sourceMessages: normalizedSource.filter((item) => resolveMessageRole(item) !== "system"),
-        currentDialogProcessId,
-      });
-      const resolvedMessages = [...system, ...conversation];
       return recentMessageLimit > 0
         ? normalizeRecentWindow(resolvedMessages, recentMessageLimit)
         : resolvedMessages;
-    };
-  }
-
-  createResolveMessageBlock({
-    agentPluginOptions = {},
-  } = {}) {
-    void agentPluginOptions;
-    return ({ scope = "history", messages = [], ctx = {} } = {}) => {
-      const source = Array.isArray(messages) ? messages : [];
-      const normalizedScope = String(scope || "history").trim().toLowerCase();
-      const currentDialogProcessId = resolveMessageBlockDialogProcessId({
-        scope: normalizedScope,
-        ctx,
-        messages: source,
-      });
-      if (normalizedScope === "system") {
-        return resolveMainModelSystemMessages({
-          sourceMessages: normalizeMessagesForModelRuntime(source),
-          currentDialogProcessId,
-        });
-      }
-      if (normalizedScope === "incremental") {
-        return resolveMainModelIncrementalMessages({
-          sourceMessages: normalizeMessagesForModelRuntime(source),
-          currentDialogProcessId,
-        });
-      }
-      if (normalizedScope === "conversation" || normalizedScope === "non_system") {
-        return resolveMainModelIncrementalMessages({
-          sourceMessages: normalizeMessagesForModelRuntime(source),
-          currentDialogProcessId,
-        });
-      }
-      return resolveMainModelHistoryMessages({
-        sourceMessages: normalizeMessagesForModelRuntime(source),
-      });
     };
   }
 

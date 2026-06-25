@@ -3,8 +3,18 @@ import assert from "node:assert/strict";
 
 import { createRegisterHarnessHooks } from "../src/core/hooks.js";
 import { injectMessageWithPolicy } from "../src/capabilities/handlers/shared/message/injection-utils.js";
+import { resolveMainModelFinalMessages } from "../../../agent/src/system-core/session/utils/context-window-normalizer.js";
 
-test("dynamic harness main-flow injections resolve to user/incremental", () => {
+function resolveFromBlocks({ ctx = {} } = {}) {
+  const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : {};
+  return resolveMainModelFinalMessages({
+    systemMessages: Array.isArray(blocks.system) ? blocks.system : [],
+    historyMessages: Array.isArray(blocks.history) ? blocks.history : [],
+    incrementalMessages: Array.isArray(blocks.incremental) ? blocks.incremental : [],
+  }).messages;
+}
+
+test("dynamic harness main-flow system injections stay in system block", () => {
   const ctx = { messages: [] };
   const result = injectMessageWithPolicy(ctx, {
     role: "system",
@@ -15,16 +25,17 @@ test("dynamic harness main-flow injections resolve to user/incremental", () => {
 
   assert.equal(result.injected, true);
   assert.equal(ctx.messages.length, 1);
-  assert.equal(ctx.messages[0]?.role, "user");
+  assert.equal(ctx.messages[0]?.role, "system");
   assert.equal(ctx.messages[0]?.injectedMessage, true);
   assert.equal(ctx.messages[0]?.injectedBy, "harness-plugin");
   assert.ok(ctx.messages[0]?.additional_kwargs?.noobotMessageId);
-  assert.deepEqual(ctx.messageBlocks.incrementalIds, [
+  assert.deepEqual(ctx.messageBlocks.systemIds, [
     ctx.messages[0].additional_kwargs.noobotMessageId,
   ]);
+  assert.deepEqual(ctx.messageBlocks.incrementalIds, []);
 });
 
-test("dynamic harness injections compact after history to preserve stable prefix cache", async () => {
+test("dynamic harness system injections compose before history", async () => {
   const handlers = new Map();
   const hookManager = {
     on(point, handler) {
@@ -60,14 +71,14 @@ test("dynamic harness injections compact after history to preserve stable prefix
       capabilityToolAllowlistByPurpose: {},
       acceptance: {},
       review: {},
-      resolveMessageBlock: ({ messages = [] }) => messages,
+      resolveModelMessages: resolveFromBlocks,
     },
     capabilityRuntime: { async runHook() {} },
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
   });
 
   const system = { role: "system", content: "stable system" };
-  const history = { role: "assistant", content: "stable history" };
+  const history = { role: "assistant", content: "stable history", dialogProcessId: "history-dp" };
   const currentUser = {
     role: "user",
     content: "current user",
@@ -88,10 +99,10 @@ test("dynamic harness injections compact after history to preserve stable prefix
     ctx.messages.map((item) => `${item.role}:${item.content}`),
     [
       "system:stable system",
+      "system:dynamic planning context",
       "assistant:stable history",
       "user:current user",
-      "user:dynamic planning context",
     ],
   );
-  assert.equal(ctx.messageBlocks.incremental.at(-1)?.content, "dynamic planning context");
+  assert.equal(ctx.messageBlocks.system.at(-1)?.content, "dynamic planning context");
 });

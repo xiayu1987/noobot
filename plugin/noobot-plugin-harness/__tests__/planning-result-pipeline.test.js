@@ -175,8 +175,12 @@ test("planning result pipeline extracts current task goal from planning text pro
   assert.equal(injectedGoalMessage?.dialogProcessId, "planning-dp");
   assert.ok(injectedGoalMessage?.additional_kwargs?.noobotMessageId);
   assert.equal(
-    ctx.messageBlocks.incrementalIds.includes(injectedGoalMessage.additional_kwargs.noobotMessageId),
+    ctx.messageBlocks.systemIds.includes(injectedGoalMessage.additional_kwargs.noobotMessageId),
     true,
+  );
+  assert.equal(
+    ctx.messageBlocks.incrementalIds.includes(injectedGoalMessage.additional_kwargs.noobotMessageId),
+    false,
   );
   assert.match(String(injectedGoalMessage?.content || ""), /\[CURRENT_TASK_GOAL\]/);
   assert.match(String(injectedGoalMessage?.content || ""), /由计划模型确认的当前任务目标/);
@@ -184,7 +188,7 @@ test("planning result pipeline extracts current task goal from planning text pro
     persisted.some((item = {}) =>
       String(item?.injectedMessageType || "") === "planning_current_task_goal"
     ),
-    true,
+    false,
   );
   assert.match(String(ctx.agentContext.payload.harness.planText || ""), /^1\. 解析附件/m);
   assert.doesNotMatch(String(ctx.agentContext.payload.harness.planText || ""), /CURRENT_TASK_GOAL/);

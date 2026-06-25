@@ -311,7 +311,7 @@ export function maybePromptHelpToolByLoop({ modelState, loopState }) {
     additional_kwargs: {
       noobotInternalMessageType: HELP_TOOL_LOOP_PROMPT_MARKER,
     },
-  }), { block: "incremental" });
+  }), { block: "system" });
   emitEvent(modelState?.eventListener || null, "help_tool_loop_prompted", {
     loopCount: nextCount,
     threshold,

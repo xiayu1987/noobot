@@ -241,7 +241,7 @@ test("normalizeRecentWindow converts orphan task_summary tool to user after trun
   assert.equal(String(result[1]?.content || "").startsWith("[阶段小结]"), true);
 });
 
-test("resolveModelContextMessages filters injected messages by current dialog", () => {
+test("resolveModelContextMessages does not filter injected messages by current dialog", () => {
   const result = resolveModelContextMessages({
     sourceMessages: [
       { role: "assistant", content: "keep", injectedMessage: true, dialogProcessId: "d1" },
@@ -252,11 +252,11 @@ test("resolveModelContextMessages filters injected messages by current dialog", 
   });
   assert.deepEqual(
     result.map((item) => item.content),
-    ["keep", "normal"],
+    ["drop", "normal"],
   );
 });
 
-test("resolveModelContextMessages filters injected user messages by current dialog", () => {
+test("resolveModelContextMessages keeps latest injected user message by type without dialog filtering", () => {
   const result = resolveModelContextMessages({
     sourceMessages: [
       { role: "user", content: "keep", injectedBy: "agent-plugin", dialogProcessId: "d1" },
@@ -267,11 +267,11 @@ test("resolveModelContextMessages filters injected user messages by current dial
   });
   assert.deepEqual(
     result.map((item) => item.content),
-    ["keep", "normal user"],
+    ["drop", "normal user"],
   );
 });
 
-test("resolveModelContextMessages treats plugin relay message as injected and filters by dialog", () => {
+test("resolveModelContextMessages treats plugin relay message as injected and keeps latest by type", () => {
   const result = resolveModelContextMessages({
     sourceMessages: [
       {
@@ -336,7 +336,7 @@ test("resolveModelContextMessages supports plugin mode with normalize/filter pip
 });
 
 
-test("resolveModelContextMessages keeps latest injected message per type after dialog filtering", () => {
+test("resolveModelContextMessages keeps latest injected message per type without dialog filtering", () => {
   const result = resolveModelContextMessages({
     sourceMessages: [
       { role: "user", content: "old summary", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "guidance_summary_prompt", dialogProcessId: "d1" },
@@ -349,7 +349,7 @@ test("resolveModelContextMessages keeps latest injected message per type after d
   });
   assert.deepEqual(
     result.map((item) => item.content),
-    ["planning", "new summary", "normal"],
+    ["planning", "other dialog newest", "normal"],
   );
 });
 

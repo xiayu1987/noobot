@@ -2,8 +2,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createCapabilityRuntime } from "../src/capabilities/runtime.js";
+import { resolveMainModelFinalMessages } from "../../../agent/src/system-core/session/utils/context-window-normalizer.js";
 
-test("capability runtime composes before_llm_call messages from message blocks via resolver", async () => {
+function resolveFromBlocks({ ctx = {} } = {}) {
+  const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : {};
+  return resolveMainModelFinalMessages({
+    systemMessages: Array.isArray(blocks.system) ? blocks.system : [],
+    historyMessages: Array.isArray(blocks.history) ? blocks.history : [],
+    incrementalMessages: Array.isArray(blocks.incremental) ? blocks.incremental : [],
+  }).messages;
+}
+
+test("capability runtime delegates before_llm_call messages to agent resolver", async () => {
   const runtime = createCapabilityRuntime({
     profile: {
       planning: { enabled: false },
@@ -16,23 +26,26 @@ test("capability runtime composes before_llm_call messages from message blocks v
     messages: [{ role: "assistant", content: "legacy" }],
     messageBlocks: {
       system: [{ role: "system", content: "sys1" }],
-      history: [{ role: "assistant", content: "h1" }],
+      history: [{ role: "assistant", content: "h1", dialogProcessId: "d1" }],
       incremental: [{ role: "user", content: "u1" }],
     },
   };
   const calls = [];
   await runtime.runHook("before_llm_call", ctx, {
     harness: {
-      resolveMessageBlock: ({ scope = "", messages = [] } = {}) => {
-        calls.push(scope);
-        if (scope === "history") return [...messages, { role: "assistant", content: "h2" }];
-        if (scope === "incremental") return messages.filter((item) => item?.role === "user");
-        return messages;
+      resolveModelMessages: ({ ctx: resolverCtx = {} } = {}) => {
+        calls.push("resolveModelMessages");
+        return [
+          ...resolverCtx.messageBlocks.system,
+          ...resolverCtx.messageBlocks.history,
+          { role: "assistant", content: "h2" },
+          ...resolverCtx.messageBlocks.incremental.filter((item) => item?.role === "user"),
+        ];
       },
     },
   });
 
-  assert.deepEqual(calls, ["system", "history", "incremental"]);
+  assert.deepEqual(calls, ["resolveModelMessages"]);
   assert.deepEqual(
     ctx.messages.map((item) => item.content),
     ["sys1", "h1", "h2", "u1"],
@@ -53,8 +66,8 @@ test("capability runtime filters summarized messages from incremental blocks by 
     messageBlocks: {
       system: [{ role: "system", content: "sys" }],
       history: [
-        { role: "assistant", content: "summarized-history", summarized: true },
-        { role: "assistant", content: "active-history" },
+        { role: "assistant", content: "summarized-history", summarized: true, dialogProcessId: "d1" },
+        { role: "assistant", content: "active-history", dialogProcessId: "d1" },
       ],
       incremental: [
         { role: "assistant", content: "summarized-incremental", summarized: true },
@@ -64,7 +77,7 @@ test("capability runtime filters summarized messages from incremental blocks by 
     },
   };
 
-  await runtime.runHook("before_llm_call", ctx, {});
+  await runtime.runHook("before_llm_call", ctx, { harness: { resolveModelMessages: resolveFromBlocks } });
 
   assert.deepEqual(
     ctx.messages.map((item) => item.content),
@@ -72,7 +85,7 @@ test("capability runtime filters summarized messages from incremental blocks by 
   );
   assert.deepEqual(
     ctx.messageBlocks.incremental.map((item) => item.content),
-    ["current user"],
+    ["summarized-incremental", "summarized-tool", "current user"],
   );
 });
 
@@ -99,9 +112,7 @@ test("capability runtime does not let resolver reintroduce summarized messages",
   };
 
   await runtime.runHook("before_llm_call", ctx, {
-    harness: {
-      resolveMessageBlock: ({ messages = [] } = {}) => [summarized, ...messages],
-    },
+    harness: { resolveModelMessages: resolveFromBlocks },
   });
 
   assert.deepEqual(
@@ -110,7 +121,7 @@ test("capability runtime does not let resolver reintroduce summarized messages",
   );
   assert.deepEqual(
     ctx.messageBlocks.incremental.map((item) => item.content),
-    ["current user"],
+    ["summarized-incremental", "current user"],
   );
 });
 
@@ -127,7 +138,7 @@ test("capability runtime applies message blocks only once per runtime turn conte
     messages: [{ role: "assistant", content: "legacy" }],
     messageBlocks: {
       system: [{ role: "system", content: "sys1" }],
-      history: [{ role: "assistant", content: "h1" }],
+      history: [{ role: "assistant", content: "h1", dialogProcessId: "d1" }],
       incremental: [{ role: "user", content: "u1" }],
     },
     agentContext: {
@@ -141,21 +152,21 @@ test("capability runtime applies message blocks only once per runtime turn conte
   const originalMessageBlocks = ctx.messageBlocks;
 
   await runtime.runHook("before_llm_call", ctx, {
-    harness: { resolveMessageBlock: ({ messages = [] } = {}) => messages },
+    harness: { resolveModelMessages: resolveFromBlocks },
   });
   assert.equal(ctx.messageBlocks, originalMessageBlocks);
   ctx.messages.push({ role: "assistant", content: "after-first-call" });
   await runtime.runHook("before_llm_call", ctx, {
-    harness: { resolveMessageBlock: ({ messages = [] } = {}) => messages },
+    harness: { resolveModelMessages: resolveFromBlocks },
   });
 
   assert.deepEqual(
     ctx.messages.map((item) => item.content),
-    ["sys1", "h1", "u1", "after-first-call"],
+    ["sys1", "h1", "u1"],
   );
 });
 
-test("capability runtime keeps current user once at incremental tail after block composition", async () => {
+test("capability runtime preserves history and incremental user messages in block order", async () => {
   const runtime = createCapabilityRuntime({
     profile: {
       planning: { enabled: false },
@@ -175,10 +186,11 @@ test("capability runtime keeps current user once at incremental tail after block
         },
       ],
       history: [
-        { role: "assistant", content: "上一轮回答" },
+        { role: "assistant", content: "上一轮回答", dialogProcessId: "d-old" },
         {
           role: "user",
           content: "全仓回归测试",
+          dialogProcessId: "d-current",
           additional_kwargs: { turnScopeId: "client-turn:current" },
         },
       ],
@@ -186,6 +198,7 @@ test("capability runtime keeps current user once at incremental tail after block
         {
           role: "user",
           content: "全仓回归测试",
+          dialogProcessId: "d-current",
           additional_kwargs: { turnScopeId: "client-turn:current", frontendUserMessage: true },
         },
         {
@@ -206,7 +219,7 @@ test("capability runtime keeps current user once at incremental tail after block
   };
 
   await runtime.runHook("before_llm_call", ctx, {
-    harness: { resolveMessageBlock: ({ messages = [] } = {}) => messages },
+    harness: { resolveModelMessages: resolveFromBlocks },
   });
 
   const userTextIndexes = ctx.messages
@@ -237,9 +250,10 @@ test("capability runtime does not remove same-text user from a different turn", 
         {
           role: "user",
           content: "全仓回归测试",
+          dialogProcessId: "d-old",
           additional_kwargs: { turnScopeId: "client-turn:old" },
         },
-        { role: "assistant", content: "历史回答" },
+        { role: "assistant", content: "历史回答", dialogProcessId: "d-old" },
       ],
       incremental: [
         {
@@ -264,7 +278,7 @@ test("capability runtime does not remove same-text user from a different turn", 
   };
 
   await runtime.runHook("before_llm_call", ctx, {
-    harness: { resolveMessageBlock: ({ messages = [] } = {}) => messages },
+    harness: { resolveModelMessages: resolveFromBlocks },
   });
 
   const userTextIndexes = ctx.messages

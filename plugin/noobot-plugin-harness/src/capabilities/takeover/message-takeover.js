@@ -14,6 +14,7 @@ import {
 import {
   appendMessage,
   replaceMessages,
+  writeMessageBlocks,
 } from "../../core/message-store.js";
 
 function resolveTakeoverTargets(ctx = {}, target = "auto") {
@@ -59,7 +60,7 @@ function findAfterLeadingSystemIndex(messages = []) {
   let index = 0;
   while (
     index < messages.length &&
-    resolveMessageRole(messages[index]) === "system" &&
+    isSystemLikeRole(resolveMessageRole(messages[index])) &&
     messages[index]?.[HARNESS_INJECTED_MESSAGE_FLAG_FIELD] !== HARNESS_INJECTED_MESSAGE_FLAG_VALUE
   ) {
     index += 1;
@@ -120,7 +121,6 @@ function applyAgentSystemTakeover(messages = [], directive = {}, { preserveLeadi
   const dedupe = directive?.dedupe !== false;
   const { id, messageContent, message: nextMessage } = takeoverMessage;
   if (dedupe && isMessageInjected(messages, id, messageContent)) {
-    if (removed) replaceMessages(ctx, messages);
     return removed > 0;
   }
 
@@ -140,6 +140,15 @@ function applyAgentSystemTakeover(messages = [], directive = {}, { preserveLeadi
   return true;
 }
 
+function isSystemLikeRole(role = "") {
+  const normalized = String(role || "").trim().toLowerCase();
+  return normalized === "system" || normalized === "developer";
+}
+
+function resolveBlockForMessage(message = {}) {
+  return isSystemLikeRole(resolveMessageRole(message)) ? "system" : "incremental";
+}
+
 function applyCtxMessagesTakeover(ctx = {}, directive = {}) {
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   if (!messages) return false;
@@ -153,13 +162,28 @@ function applyCtxMessagesTakeover(ctx = {}, directive = {}) {
   const dedupe = directive?.dedupe !== false;
   const { id, messageContent, message: nextMessage } = takeoverMessage;
   if (dedupe && isMessageInjected(messages, id, messageContent)) return false;
+  const block = resolveBlockForMessage(nextMessage);
 
   if (mode === "replace") {
-    replaceMessages(ctx, [nextMessage]);
+    if (block === "system" && ctx?.messageBlocks && typeof ctx.messageBlocks === "object") {
+      writeMessageBlocks(ctx, { system: [nextMessage], history: [], incremental: [] });
+      replaceMessages(ctx, [nextMessage]);
+    } else {
+      replaceMessages(ctx, [nextMessage]);
+    }
     return true;
   }
   if (mode === "append") {
-    appendMessage(ctx, nextMessage, { block: "incremental" });
+    appendMessage(ctx, nextMessage, { block });
+    return true;
+  }
+  if (block === "system" && ctx?.messageBlocks && typeof ctx.messageBlocks === "object") {
+    const blocks = ctx.messageBlocks;
+    writeMessageBlocks(ctx, {
+      system: [nextMessage, ...(Array.isArray(blocks.system) ? blocks.system : [])],
+      history: Array.isArray(blocks.history) ? blocks.history : [],
+      incremental: Array.isArray(blocks.incremental) ? blocks.incremental : [],
+    });
     return true;
   }
   const nextMessages = [...messages];

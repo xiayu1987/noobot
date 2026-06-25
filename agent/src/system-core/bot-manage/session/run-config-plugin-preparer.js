@@ -37,7 +37,6 @@ export class RunConfigPluginPreparer {
     normalizeStringArray = null,
     mergePluginOptions = null,
     createPluginResolveModelMessages = null,
-    createPluginResolveMessageBlock = null,
     createPluginMarkMessagesSummarized = null,
     createDetachedSubSessionRunner = null,
     createBotSubSessionRunner = null,
@@ -58,7 +57,6 @@ export class RunConfigPluginPreparer {
         ? mergePluginOptions
         : (...items) => Object.assign({}, ...items.filter((item) => item && typeof item === "object"));
     this.createAgentPluginResolveModelMessages = createPluginResolveModelMessages;
-    this.createAgentPluginResolveMessageBlock = createPluginResolveMessageBlock;
     this.createAgentPluginMarkMessagesSummarized = createPluginMarkMessagesSummarized;
     this.createBotSubSessionRunner =
       createDetachedSubSessionRunner || createBotSubSessionRunner;
@@ -137,9 +135,6 @@ export class RunConfigPluginPreparer {
       };
     }
     next.resolveModelMessages = this.createAgentPluginResolveModelMessages({
-      agentPluginOptions: next,
-    });
-    next.resolveMessageBlock = this.createAgentPluginResolveMessageBlock({
       agentPluginOptions: next,
     });
     next.markMessagesSummarized = this.createAgentPluginMarkMessagesSummarized();

@@ -166,8 +166,6 @@ export class SessionExecutionEngine {
       mergePluginOptions: (...items) => this._mergePluginOptions(...items),
       createPluginResolveModelMessages: (payload = {}) =>
         this._createPluginResolveModelMessages(payload),
-      createPluginResolveMessageBlock: (payload = {}) =>
-        this._createPluginResolveMessageBlock(payload),
       createPluginMarkMessagesSummarized: () => this._createPluginMarkMessagesSummarized(),
       createDetachedSubSessionRunner: () => this._createDetachedSubSessionRunner(),
       createGeneratedArtifactPersister: () => this._createGeneratedArtifactPersister(),
@@ -659,10 +657,6 @@ export class SessionExecutionEngine {
 
   _createPluginResolveModelMessages(payload = {}) {
     return this.modelMessageRuntimeHelpers.createResolveModelMessages(payload);
-  }
-
-  _createPluginResolveMessageBlock(payload = {}) {
-    return this.modelMessageRuntimeHelpers.createResolveMessageBlock(payload);
   }
 
   _createPluginMarkMessagesSummarized() {

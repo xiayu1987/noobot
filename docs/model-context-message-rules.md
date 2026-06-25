@@ -14,11 +14,12 @@ finalMessages = systemMessages + historyMessages + incrementalMessages
 
 来源：
 
-1. 主流程 system 消息；
+1. 主流程构建的 system 消息；
 2. 插件注入的 system 消息。
 
 规则：
 
+- system 不从 session 历史消息中读取；
 - 筛选：保留未被小结移除的 system 消息；当前轮 system context 即使带有小结标记也保留；
 - 裁剪：无；
 - 顺序：实际顺序。
@@ -29,24 +30,22 @@ finalMessages = systemMessages + historyMessages + incrementalMessages
 
 规则：
 
-- 筛选：按 `dialogProcessId/dialogId` 分组构造历史轮次；没有 dialog id 的旧消息按实际用户消息重新开轮。
-- 每个有效历史轮次必须包含：
-  1. 第一条实际用户消息；
-  2. 位于该实际用户消息之后的最后一条未小结模型返回消息。
-- 每个入选历史轮次保留从“第一条实际用户消息”到“最后一条未小结模型返回消息”之间的所有未小结非 system 消息；中间的插件规划、跟进、工具结果等只要 `summarized !== true`，都属于该历史轮次的一部分，不得被二次裁剪丢弃。
+- 筛选：只读取带 `dialogProcessId/dialogId` 的历史消息，按该 id 分组；没有 dialog id 的消息不进入 history。
+- 每个入选 dialog 组保留组内所有未小结非 system 消息；中间的插件规划、跟进、工具结果等只要 `summarized !== true`，都属于该 history 组的一部分，不得被二次裁剪丢弃。
 - 最终模型发送前的通用过滤只处理 `summarized` 与非法 tool/tool_call 配对，不得对 history 中的未小结注入消息执行“同类型只保留最新一条”去重；该 latest-only 策略只属于小结/压缩标记路径。
-- “实际用户消息”指用户真实输入，不包含用户元信息、插件注入消息、内部恢复消息等辅助上下文。
-- 裁剪：按轮次结束位置排序，只保留最近 3 个有效历史轮次。
-- 顺序：实际顺序。
+- 裁剪：按 dialog 组首次出现顺序，只保留最近 3 个 dialog 组。
+- 顺序：dialog 组之间按首次出现顺序；组内保持原始自然顺序。
 - 执行顺序：先筛选，再裁剪。
 
 ### 1.3 incrementalMessages
 
 来源：当前增量消息，包括：
 
-1. 工具调用增量；
-2. 插件注入增量；
-3. 主流程注入增量。
+1. 当前用户发送消息；
+2. 模型返回；
+3. 工具调用与工具结果；
+4. 插件注入增量；
+5. 主流程注入增量。
 
 规则：
 
@@ -92,14 +91,15 @@ messageBlocks = {
 - `system` 只走 system 规则；
 - `history` 只走 history 规则，必须与第 1.2 节主流程历史规则一致；
 - `incremental` 只走 incremental 规则；
-- `conversation` final compact 只允许处理 `incremental` 及 prompt 注入等当前轮增量，不得接收或重新裁剪 `history`；
+- harness 注入必须按类别写入对应 block：system 注入写 `system`，历史类写 `history`，当前轮注入写 `incremental`；
+- harness 不得把 `history` 与 `incremental` 合并为 conversation 后再裁剪或重排；
 - 最终拼接仍为：
 
 ```text
-finalMessages = system + history + incrementalConversation
+finalMessages = system + history + incremental
 ```
 
-因此，history 中已入选的完整历史轮次不能被插件侧 `conversation` resolver 二次裁剪；特别是 user 到 assistant 之间的 `summarized:false` 中间消息必须保留。history 只允许额外移除当前轮用户残留，避免编辑重发时当前用户同时出现在 history 与 incremental。
+因此，history 中已入选的 dialog 组不能被插件侧二次裁剪；incremental 只允许按现有小结标记过滤，不得改变最终三段大顺序。
 
 ## 4. 未启用 harness 时
 

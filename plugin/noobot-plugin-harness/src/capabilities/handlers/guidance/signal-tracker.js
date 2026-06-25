@@ -19,7 +19,7 @@ const FAILURE_THRESHOLD = Object.freeze({
   ACCUMULATED: WORKFLOW_PARAMS.guidance.failureThreshold.accumulated,
 });
 
-function resolveMessageBlockMarkSource(ctx = {}) {
+function resolveBlockMarkSource(ctx = {}) {
   const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" && !Array.isArray(ctx.messageBlocks)
     ? ctx.messageBlocks
     : null;
@@ -32,7 +32,7 @@ function resolveMessageBlockMarkSource(ctx = {}) {
 }
 
 function resolveScopedMessageBlockMarkSource(ctx = {}, scopedMessages = []) {
-  const blockMessages = resolveMessageBlockMarkSource(ctx);
+  const blockMessages = resolveBlockMarkSource(ctx);
   if (!blockMessages.length) return [];
   const scopedSet = new Set(Array.isArray(scopedMessages) ? scopedMessages : []);
   if (!scopedSet.size) return blockMessages;
@@ -105,7 +105,7 @@ export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
   const blockMarked = await safeMark(
     hasUsableSummaryCheckpointIds || hasUsableSummaryCheckpoint
       ? resolveScopedMessageBlockMarkSource(ctx, scopedCurrentMessages)
-      : resolveMessageBlockMarkSource(ctx),
+      : resolveBlockMarkSource(ctx),
   );
   if (holder?.state?.pending && (hasUsableSummaryCheckpointIds || hasUsableSummaryCheckpoint)) {
     holder.state.pending.summaryCheckpointMessageCount = null;

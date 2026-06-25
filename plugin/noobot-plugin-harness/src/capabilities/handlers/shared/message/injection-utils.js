@@ -55,36 +55,17 @@ function dedupeExists(messages = [], target = {}) {
   });
 }
 
-const CACHE_FRIENDLY_INCREMENTAL_INJECTION_PREFIXES = Object.freeze([
-  "planning_",
-  "guidance_",
-  "acceptance_",
-  "separate_model_relay:",
-]);
-
-function isCacheFriendlyIncrementalInjectionType(injectedMessageType = "", injectionType = "") {
-  const type = String(injectedMessageType || injectionType || "").trim().toLowerCase();
-  if (!type) return false;
-  return CACHE_FRIENDLY_INCREMENTAL_INJECTION_PREFIXES.some((prefix) => type.startsWith(prefix));
-}
-
 function resolveHarnessMainFlowRole({
   role = "system",
-  injectedMessageType = "",
-  injectionType = "",
 } = {}) {
   const requestedRole = String(role || "system").trim().toLowerCase();
-  // Current-turn harness prompts are dynamic. If they are inserted as system
-  // messages before history, provider prefix-cache invalidation makes the
-  // otherwise stable history expensive. Keep stable harness policy prompts in
-  // the real system block (they use prompt-injector, not this helper), but map
-  // dynamic main-flow injections to user/incremental so they are compacted
-  // after history.
-  if (requestedRole === "system" && isCacheFriendlyIncrementalInjectionType(injectedMessageType, injectionType)) {
-    return "user";
-  }
   if (requestedRole === "user") return "user";
   return requestedRole || "system";
+}
+
+function isSystemLikeRole(role = "") {
+  const normalized = String(role || "").trim().toLowerCase();
+  return normalized === "system" || normalized === "developer";
 }
 
 export function injectMessageWithPolicy(
@@ -106,16 +87,15 @@ export function injectMessageWithPolicy(
 ) {
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   // Plugin-to-main-flow injections are tagged so they can be persisted/rendered
-  // separately from real user turns. Dynamic harness prompts are resolved to
-  // user/incremental by injectedMessageType to keep history prefix-cacheable;
-  // stable harness policy prompts are injected through prompt-injector as real
-  // system messages.
+  // separately from real user turns. The message role determines the message
+  // block: system injections must stay in system, current-turn requests stay in
+  // incremental.
   const normalizedContent = String(content || "").trim();
   if (!messages || !normalizedContent) return { injected: false, target: "none" };
   if (isHarnessAgentTurnEnded(ctx)) {
     return { injected: false, target: "none", blockedByTurnEnded: true };
   }
-  const resolvedRole = resolveHarnessMainFlowRole({ role, injectedMessageType, injectionType });
+  const resolvedRole = resolveHarnessMainFlowRole({ role });
   const message = buildHarnessInjectedMessage(normalizedContent, {
     role: resolvedRole,
     attachmentMetas: Array.isArray(attachmentMetas) ? attachmentMetas : [],
@@ -135,7 +115,7 @@ export function injectMessageWithPolicy(
   const normalizedInjectAt = String(injectAt || "append").trim().toLowerCase();
   const shouldProtectContinuity =
     avoidBreakToolCallContinuity === true &&
-    resolvedRole === "system" &&
+    isSystemLikeRole(resolvedRole) &&
     normalizedInjectAt === "append" &&
     hasPendingToolCallPair(messages);
   if (shouldProtectContinuity) {
@@ -155,7 +135,7 @@ export function injectMessageWithPolicy(
   if (normalizedInjectAt === "prepend") {
     replaceMessages(ctx, [message, ...messages]);
   } else {
-    appendMessage(ctx, message, { block: "incremental" });
+    appendMessage(ctx, message, { block: isSystemLikeRole(resolvedRole) ? "system" : "incremental" });
   }
   persistHarnessMessageToCurrentTurn(ctx, message, persistToCurrentTurn);
   return { injected: true, target: "ctx_messages" };

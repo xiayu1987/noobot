@@ -10,7 +10,8 @@
   },
   "scripts": {
     "test": "node --test __tests__/*.test.js",
-    "check": "node -e \"import('./src/index.js').then(()=>console.log('ok')).catch(e=>{console.error(e);process.exit(1);})\""
+    "check": "node -e \"import('./src/index.js').then(()=>console.log('ok')).catch(e=>{console.error(e);process.exit(1);})\"",
+    "check:model-context-convergence": "node ../../scripts/check-model-context-convergence.mjs"
   },
   "dependencies": {
     "@langchain/core": "^1.2.0",

@@ -11,7 +11,7 @@ import {
   normalizePluginSelectorSet,
   normalizeTrimmedStringList,
   persistSnapshotJsonFiles,
-  resolveMessageBlockDialogProcessId,
+  resolveScopedMessagesDialogProcessId,
   resolvePluginOptionsFromConfig,
   resolvePreferredAttachmentMetas,
   resolveTransferEnvelopeListFromMessage,
@@ -144,7 +144,7 @@ test("session-execution-engine-utils resolves transfer envelopes and preferred a
 });
 
 test("session-execution-engine-utils resolves current dialog for incremental blocks", () => {
-  const resolvedFromFrontend = resolveMessageBlockDialogProcessId({
+  const resolvedFromFrontend = resolveScopedMessagesDialogProcessId({
     scope: "incremental",
     ctx: {
       agentContext: {
@@ -158,7 +158,7 @@ test("session-execution-engine-utils resolves current dialog for incremental blo
       { role: "user", content: "new", frontendUserMessage: true, dialogProcessId: "new-dialog" },
     ],
   });
-  const resolvedFromCtx = resolveMessageBlockDialogProcessId({
+  const resolvedFromCtx = resolveScopedMessagesDialogProcessId({
     scope: "history",
     ctx: {
       agentContext: {

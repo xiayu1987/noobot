@@ -42,7 +42,8 @@
     "test:connectors": "node --test --test-force-exit __tests__/system-core/connectors/*.test.js __tests__/system-core/connectors/**/*.test.js",
     "check:i18n-imports": "node ../scripts/check-i18n-imports.mjs --project=agent",
     "pretest": "npm run -s check:i18n-imports",
-    "check:plugin-decoupling": "node ../scripts/check-agent-plugin-decoupling.mjs"
+    "check:plugin-decoupling": "node ../scripts/check-agent-plugin-decoupling.mjs",
+    "check:model-context-convergence": "node ../scripts/check-model-context-convergence.mjs"
   },
   "dependencies": {
     "@langchain/core": "^1.2.0",

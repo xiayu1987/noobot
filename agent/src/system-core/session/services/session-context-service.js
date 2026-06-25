@@ -6,9 +6,28 @@
 import { mergeConfig } from "../../config/index.js";
 import {
   MAIN_MODEL_HISTORY_ROUND_LIMIT,
+  normalizeContextWindow,
   resolveMainModelHistoryMessages,
-  resolveModelContextMessages,
 } from "../utils/context-window-normalizer.js";
+
+function normalizeLimit(value, fallback = MAIN_MODEL_HISTORY_ROUND_LIMIT) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) return fallback;
+  return Math.floor(numeric);
+}
+
+function isTaskStatus(messageItem = {}, statuses = []) {
+  const status = String(messageItem?.taskStatus || messageItem?.task_status || "").trim().toLowerCase();
+  return statuses.includes(status);
+}
+
+function findLastTaskStatusIndex(messages = [], statuses = []) {
+  const source = Array.isArray(messages) ? messages : [];
+  for (let index = source.length - 1; index >= 0; index -= 1) {
+    if (isTaskStatus(source[index], statuses)) return index;
+  }
+  return -1;
+}
 
 export class SessionContextService {
   constructor({
@@ -28,9 +47,9 @@ export class SessionContextService {
         : {};
     const configuredRecentMessageLimit = Number(sessionConfig.recentMessageLimit);
     const hasConfiguredRecentMessageLimit =
-      Number.isFinite(configuredRecentMessageLimit) && configuredRecentMessageLimit >= 0
+      Number.isFinite(configuredRecentMessageLimit) && configuredRecentMessageLimit >= 0;
     const recentMessageLimit = hasConfiguredRecentMessageLimit
-      ? configuredRecentMessageLimit
+      ? Math.floor(configuredRecentMessageLimit)
       : MAIN_MODEL_HISTORY_ROUND_LIMIT;
     return {
       recentMessageLimit,
@@ -40,126 +59,93 @@ export class SessionContextService {
     };
   }
 
-  _normalizeContextWindow({
-    sourceMessages = [],
-    startIndex = 0,
-    limit = Number.POSITIVE_INFINITY,
-    currentDialogProcessId = "",
-  } = {}) {
-    return resolveModelContextMessages({
-      sourceMessages,
-      currentDialogProcessId,
-      mode: "agent",
-      startIndex,
-      limit,
-    });
-  }
-
   async _getSessionTurns({ userId, sessionId }) {
+    if (!this.sessionMessageService?.getSessionTurns) return [];
     return this.sessionMessageService.getSessionTurns({ userId, sessionId });
   }
 
-  _filterCurrentTurnUserMessages(messages = [], { currentTurnScopeId = "" } = {}) {
+  _filterCurrentTurnMessages(messages = [], { currentTurnScopeId = "" } = {}) {
     const normalizedTurnScopeId = String(currentTurnScopeId || "").trim();
-    if (!normalizedTurnScopeId) return messages;
-    return (Array.isArray(messages) ? messages : []).filter((messageItem = {}) => {
-      return String(messageItem?.turnScopeId || "").trim() !== normalizedTurnScopeId;
+    const source = Array.isArray(messages) ? messages : [];
+    if (!normalizedTurnScopeId) return source;
+    return source.filter(
+      (messageItem = {}) => String(messageItem?.turnScopeId || "").trim() !== normalizedTurnScopeId,
+    );
+  }
+
+  _normalizeSessionRecordsForConversation({
+    messages = [],
+    startIndex = 0,
+    limit = Number.POSITIVE_INFINITY,
+  } = {}) {
+    return normalizeContextWindow({
+      sourceMessages: Array.isArray(messages) ? messages : [],
+      startIndex,
+      limit,
     });
   }
 
   async getRecentSessionMessages({
     userId,
     sessionId,
-    limit,
     userConfig = {},
+    limit = null,
     currentTurnScopeId = "",
+    currentDialogProcessId = "",
   }) {
-    const messages = this._filterCurrentTurnUserMessages(
+    void currentDialogProcessId;
+    const config = this._sessionContextConfig(userConfig);
+    const historyLimit = normalizeLimit(
+      limit == null ? config.recentMessageLimit : limit,
+      config.recentMessageLimit,
+    );
+    const messages = this._filterCurrentTurnMessages(
       await this._getSessionTurns({ userId, sessionId }),
       { currentTurnScopeId },
     );
-    const resolvedLimit = Number(
-      limit || this._sessionContextConfig(userConfig).recentMessageLimit || MAIN_MODEL_HISTORY_ROUND_LIMIT,
-    );
-    if (resolvedLimit <= 0) return [];
     return resolveMainModelHistoryMessages({
       sourceMessages: messages,
-      historyLimit: resolvedLimit,
+      historyLimit,
     });
   }
 
   async getMessagesSinceLastRunningTask({
     userId,
     sessionId,
-    currentDialogProcessId = "",
     currentTurnScopeId = "",
   }) {
-    const messages = this._filterCurrentTurnUserMessages(
+    const messages = this._filterCurrentTurnMessages(
       await this._getSessionTurns({ userId, sessionId }),
       { currentTurnScopeId },
     );
-    const filteredMessages = this._normalizeContextWindow({
-      sourceMessages: messages,
-      startIndex: 0,
-      currentDialogProcessId,
-    });
-    if (!filteredMessages.length) return [];
-
-    let startIndex = -1;
-    for (
-      let messageIndex = filteredMessages.length - 1;
-      messageIndex >= 0;
-      messageIndex -= 1
-    ) {
-      if ((filteredMessages[messageIndex]?.taskStatus || "") === "start") {
-        startIndex = messageIndex;
-        break;
-      }
+    const startIndex = findLastTaskStatusIndex(messages, ["start", "running"]);
+    if (startIndex < 0) {
+      return this.getRecentSessionMessages({ userId, sessionId, currentTurnScopeId });
     }
-
-    if (startIndex < 0) return [];
-    return this._normalizeContextWindow({
-      sourceMessages: filteredMessages,
+    return this._normalizeSessionRecordsForConversation({
+      messages,
       startIndex,
-      currentDialogProcessId,
+      limit: Number.POSITIVE_INFINITY,
     });
   }
 
   async getMessagesSinceLastCompletedTask({
     userId,
     sessionId,
-    currentDialogProcessId = "",
     currentTurnScopeId = "",
   }) {
-    const messages = this._filterCurrentTurnUserMessages(
+    const messages = this._filterCurrentTurnMessages(
       await this._getSessionTurns({ userId, sessionId }),
       { currentTurnScopeId },
     );
-    const filteredMessages = this._normalizeContextWindow({
-      sourceMessages: messages,
-      startIndex: 0,
-      currentDialogProcessId,
-    });
-    if (!filteredMessages.length) return [];
-
-    let startIndex = -1;
-    for (
-      let messageIndex = filteredMessages.length - 1;
-      messageIndex >= 0;
-      messageIndex -= 1
-    ) {
-      const status = String(filteredMessages[messageIndex]?.taskStatus || "");
-      if (status === "completed") {
-        startIndex = messageIndex;
-        break;
-      }
+    const startIndex = findLastTaskStatusIndex(messages, ["completed", "complete", "done"]);
+    if (startIndex < 0) {
+      return this.getRecentSessionMessages({ userId, sessionId, currentTurnScopeId });
     }
-
-    if (startIndex < 0) return [];
-    return this._normalizeContextWindow({
-      sourceMessages: filteredMessages,
+    return this._normalizeSessionRecordsForConversation({
+      messages,
       startIndex,
-      currentDialogProcessId,
+      limit: Number.POSITIVE_INFINITY,
     });
   }
 
@@ -167,37 +153,31 @@ export class SessionContextService {
     userId,
     sessionId,
     userConfig = {},
-    currentDialogProcessId = "",
     currentTurnScopeId = "",
+    currentDialogProcessId = "",
   }) {
-    const sessionContextConfig = this._sessionContextConfig(userConfig);
-
-    if (sessionContextConfig.useLastCompletedTaskRange) {
-      const messagesSinceCompletedTask = await this.getMessagesSinceLastCompletedTask({
+    const config = this._sessionContextConfig(userConfig);
+    if (config.useLastRunningTaskRange) {
+      return this.getMessagesSinceLastRunningTask({
         userId,
         sessionId,
-        currentDialogProcessId,
         currentTurnScopeId,
       });
-      if (messagesSinceCompletedTask.length) return messagesSinceCompletedTask;
     }
-
-    if (sessionContextConfig.useLastRunningTaskRange) {
-      const messagesSinceRunningTask = await this.getMessagesSinceLastRunningTask({
+    if (config.useLastCompletedTaskRange) {
+      return this.getMessagesSinceLastCompletedTask({
         userId,
         sessionId,
-        currentDialogProcessId,
         currentTurnScopeId,
       });
-      if (messagesSinceRunningTask.length) return messagesSinceRunningTask;
     }
-
     return this.getRecentSessionMessages({
       userId,
       sessionId,
-      limit: sessionContextConfig.recentMessageLimit,
       userConfig,
+      limit: config.recentMessageLimit,
       currentTurnScopeId,
+      currentDialogProcessId,
     });
   }
 }
