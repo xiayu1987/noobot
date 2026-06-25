@@ -90,18 +90,12 @@ function dedupeTransferEnvelopes(envelopes = []) {
 function parseTransferPayloadFromToolResultText(toolResultText = "") {
   const parsed = parseJsonObjectSafely(String(toolResultText || ""));
   if (!isPlainObject(parsed)) return null;
-  const transferResult = isPlainObject(parsed.transferResult) ? parsed.transferResult : null;
-  const transferResultEnvelope = isPlainObject(transferResult?.envelope)
-    ? transferResult.envelope
-    : null;
-  const transferEnvelopes = dedupeTransferEnvelopes([
-    transferResultEnvelope,
-    ...(Array.isArray(parsed.transferEnvelopes) ? parsed.transferEnvelopes : []),
-  ]);
-  if (!transferResult && !transferEnvelopes.length) return null;
+  const transferEnvelopes = dedupeTransferEnvelopes(
+    Array.isArray(parsed.transferEnvelopes) ? parsed.transferEnvelopes : [],
+  );
+  if (!transferEnvelopes.length) return null;
   return {
-    ...(transferResult ? { transferResult } : {}),
-    ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
+    transferEnvelopes,
   };
 }
 
@@ -206,9 +200,6 @@ export function createStateCommitter({
       };
       const transferPayload = rawTransferPayload || parseTransferPayloadFromToolResultText(compactedToolResultText);
       if (transferPayload) {
-        if (transferPayload.transferResult) {
-          toolResultPayload.transferResult = transferPayload.transferResult;
-        }
         if (Array.isArray(transferPayload.transferEnvelopes) && transferPayload.transferEnvelopes.length) {
           toolResultPayload.transferEnvelopes = transferPayload.transferEnvelopes;
         }

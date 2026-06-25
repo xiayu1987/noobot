@@ -16,7 +16,6 @@ import {
   resolvePreferredAttachmentMetas,
   resolveTransferEnvelopeListFromMessage,
   resolveTransferEnvelopesFromMessage,
-  resolveTransferResultFromMessage,
   selectHookManager,
 } from "../../../src/system-core/bot-manage/session/session-execution-engine-utils.js";
 
@@ -105,19 +104,21 @@ test("session-execution-engine-utils resolves transfer envelopes and preferred a
     attachmentMetas: [{ attachmentId: "fallback" }],
     transferEnvelopes: [
       {
+        protocol: "noobot.semantic-transfer",
+        version: 1,
+        direction: "output",
+        transport: "file",
         envelopeId: "e1",
         attachmentMeta: { attachmentId: "att-1" },
       },
     ],
     lc_kwargs: {
-      transferResult: {
-        envelope: {
-          envelopeId: "e2",
-          files: [{ attachmentMeta: { attachmentId: "att-2" } }],
-        },
-      },
       transferEnvelopes: [
         {
+          protocol: "noobot.semantic-transfer",
+          version: 1,
+          direction: "output",
+          transport: "file",
           envelopeId: "e3",
           attachmentMeta: { attachmentId: "att-3" },
         },
@@ -127,16 +128,14 @@ test("session-execution-engine-utils resolves transfer envelopes and preferred a
 
   assert.equal(isPlainObject({}), true);
   assert.equal(isPlainObject([]), false);
-  assert.deepEqual(resolveTransferResultFromMessage(message).envelope.envelopeId, "e2");
   assert.deepEqual(resolveTransferEnvelopeListFromMessage(message).map((item) => item.envelopeId), ["e1", "e3"]);
   assert.deepEqual(resolveTransferEnvelopesFromMessage(message).map((item) => item.envelopeId), [
-    "e2",
     "e1",
     "e3",
   ]);
   assert.deepEqual(
     resolvePreferredAttachmentMetas(message).map((item) => item.attachmentId),
-    ["att-2", "att-1", "att-3"],
+    ["att-1", "att-3"],
   );
   assert.deepEqual(resolvePreferredAttachmentMetas({ attachmentMetas: [{ attachmentId: "fallback" }] }), [
     { attachmentId: "fallback" },

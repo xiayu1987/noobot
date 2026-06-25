@@ -29,10 +29,7 @@ function normalizeTransferEnvelopes(value = null) {
 }
 
 function getMessageTransferEnvelopes(messageItem = {}) {
-  return [
-    ...normalizeTransferEnvelopes(messageItem?.transferEnvelopes),
-    ...normalizeTransferEnvelopes(messageItem?.transferResult?.envelope),
-  ];
+  return normalizeTransferEnvelopes(messageItem?.transferEnvelopes);
 }
 
 function getTransferFilesFromEnvelope(envelope = null) {
@@ -59,7 +56,6 @@ function getTransferFiles(value = null) {
   if (isPlainObject(value)) {
     if (Array.isArray(value.files)) return value.files.filter(isPlainObject);
     if (Array.isArray(value.transferEnvelopes)) return getTransferFiles(value.transferEnvelopes);
-    if (isTransferEnvelope(value.transferResult?.envelope)) return getTransferFiles(value.transferResult.envelope);
   }
   return [];
 }

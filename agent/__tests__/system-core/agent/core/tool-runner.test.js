@@ -50,7 +50,7 @@ test("executeToolCall extracts attachmentMetas from multimodal tool result", asy
   );
 });
 
-test("executeToolCall extracts attachmentMetas from transferResult envelope", async () => {
+test("executeToolCall extracts attachmentMetas from transferEnvelopes", async () => {
   const call = {
     id: "call_transfer_result",
     name: "multimodal_generate",
@@ -61,10 +61,8 @@ test("executeToolCall extracts attachmentMetas from transferResult envelope", as
       JSON.stringify({
         toolName: "multimodal_generate",
         ok: true,
-        transferResult: {
-          ok: true,
-          status: "file",
-          envelope: {
+        transferEnvelopes: [
+          {
             protocol: "noobot.semantic-transfer",
             version: 1,
             direction: "output",
@@ -87,7 +85,7 @@ test("executeToolCall extracts attachmentMetas from transferResult envelope", as
               },
             ],
           },
-        },
+        ],
       }),
   };
 
@@ -304,12 +302,6 @@ test("executeToolCall: overflow length is measured after compacting transfer wra
         status: "completed",
         text: "短结果",
         attachmentMetas: [attachmentMeta],
-        transferResult: {
-          ok: true,
-          status: "file",
-          envelope,
-          debugPayloadShouldNotCountAsModelResult: "x".repeat(3000),
-        },
         transferEnvelopes: [envelope],
       }),
   };
@@ -371,7 +363,6 @@ test("executeToolCall: overflow keeps original semantic-transfer artifact and co
         status: "completed",
         text: "x".repeat(500),
         attachmentMetas: [attachmentMeta],
-        transferResult: { ok: true, status: "file", envelope },
         transferEnvelopes: [envelope],
       }),
   };

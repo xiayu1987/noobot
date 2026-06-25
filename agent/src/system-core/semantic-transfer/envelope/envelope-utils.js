@@ -12,11 +12,7 @@ function isPlainObject(value) {
 
 export function extractTransferEnvelopeFromPersisted(persisted = null) {
   if (!isPlainObject(persisted)) return null;
-  const candidates = [
-    persisted.envelope,
-    persisted?.result?.envelope,
-    persisted?.transferResult?.envelope,
-  ];
+  const candidates = Array.isArray(persisted.transferEnvelopes) ? persisted.transferEnvelopes : [];
   return candidates.find((item) => isPlainObject(item)) || null;
 }
 
@@ -50,11 +46,8 @@ export function normalizeTransferEnvelopesWithPolicy(
     const hasLegacyShape =
       (Array.isArray(item.files) && item.files.length) || Boolean(item.filePath || item.attachmentMeta || item.pathView);
     const validEnvelope = isTransferEnvelope(item) || validateTransferEnvelope(item).ok;
-    if (enforceProtocol) {
-      if (!validEnvelope && hasLegacyShape) invalidCount += 1;
-      return validEnvelope;
-    }
-    return validEnvelope || hasLegacyShape;
+    if (!validEnvelope && hasLegacyShape) invalidCount += 1;
+    return validEnvelope;
   });
   if (strictMode && invalidCount > 0) {
     throw new Error(`invalid transfer envelopes: ${invalidCount}`);

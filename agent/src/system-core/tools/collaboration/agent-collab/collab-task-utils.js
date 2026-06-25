@@ -126,7 +126,6 @@ export function buildWaitAsyncTaskResultPayload({
   containerStatuses = [],
   taskStats = {},
   attachmentMetas = [],
-  transferResult = null,
   transferEnvelopes = [],
 } = {}) {
   void attachmentMetas;
@@ -142,11 +141,6 @@ export function buildWaitAsyncTaskResultPayload({
   if (Array.isArray(transferEnvelopes)) {
     for (const envelope of transferEnvelopes) appendEnvelope(envelope);
   }
-  const normalizedTransferResult =
-    transferResult && typeof transferResult === "object" && !Array.isArray(transferResult)
-      ? transferResult
-      : null;
-
   return toToolJsonResult(
     TOOL_NAME.WAIT_ASYNC_TASK_RESULT,
     {
@@ -157,7 +151,6 @@ export function buildWaitAsyncTaskResultPayload({
       child_async_result_containers: cloneData(containers),
       container_statuses: containerStatuses,
       task_stats: taskStats,
-      ...(normalizedTransferResult ? { transferResult: normalizedTransferResult } : {}),
       ...(normalizedTransferEnvelopes.length ? { transferEnvelopes: normalizedTransferEnvelopes } : {}),
     },
     true,

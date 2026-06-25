@@ -126,9 +126,7 @@ function toLangChainToolCalls(toolCalls = []) {
 function resolveAttachmentMetas(msg = {}, fallbackAttachmentMetas = []) {
   const transferAttachmentMetas = getTransferAttachmentMetas(
     [
-      msg?.transferResult?.envelope,
       ...(Array.isArray(msg?.transferEnvelopes) ? msg.transferEnvelopes : []),
-      msg?.lc_kwargs?.transferResult?.envelope,
       ...(Array.isArray(msg?.lc_kwargs?.transferEnvelopes) ? msg.lc_kwargs.transferEnvelopes : []),
     ].filter(Boolean),
   );

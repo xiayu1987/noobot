@@ -76,10 +76,9 @@ function resolveFallbackSessionId({ runtime = {}, agentContext = null, sessionId
 }
 
 function emptyPersistResult(status = TRANSFER_RESULT_STATUS.SKIPPED, error = null) {
-  const result = createTransferResult({ ok: status !== TRANSFER_RESULT_STATUS.FAILED, status, error });
+  void status;
+  void error;
   return {
-    result,
-    transferResult: result,
     transferEnvelopes: [],
     records: [],
   };
@@ -276,11 +275,7 @@ export async function persistTransferArtifacts({
       fileCount: files.length,
     },
   });
-  const result = createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.FILE, envelope });
   return {
-    result,
-    transferResult: result,
-    envelope,
     transferEnvelopes: [envelope],
     records,
   };

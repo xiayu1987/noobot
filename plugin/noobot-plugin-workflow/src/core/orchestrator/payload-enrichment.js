@@ -46,9 +46,6 @@ export function buildWorkflowNodeSessions({
         transferEnvelopes: Array.isArray(item?.nodeResultTransferEnvelopes)
           ? item.nodeResultTransferEnvelopes
           : [],
-        ...(item?.nodeResultTransferResult && typeof item.nodeResultTransferResult === "object"
-          ? { transferResult: item.nodeResultTransferResult }
-          : {}),
         stepStatus: String(item?.stepFailure ? "failed" : item?.stepStatus || "success").trim(),
         stepFailure:
           item?.stepFailure && typeof item.stepFailure === "object"
@@ -75,7 +72,6 @@ export function resolveWorkflowAttachmentMetasFromNodeRuns({
 } = {}) {
   return (Array.isArray(nodeAgentRuns) ? nodeAgentRuns : []).reduce((acc, item = {}) => {
     const transferPayload = normalizeWorkflowTransferPayload({
-      transferResult: item?.nodeResultTransferResult || null,
       transferEnvelopes: Array.isArray(item?.nodeResultTransferEnvelopes) ? item.nodeResultTransferEnvelopes : [],
     });
     const metas = resolveWorkflowAttachmentMetasFromTransferPayload(transferPayload, ctx);

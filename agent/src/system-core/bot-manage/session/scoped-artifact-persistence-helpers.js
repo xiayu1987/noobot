@@ -14,7 +14,6 @@ import {
   persistSnapshotJsonFiles,
   resolvePreferredAttachmentMetas,
   resolveTransferEnvelopeListFromMessage,
-  resolveTransferResultFromMessage,
 } from "./session-execution-engine-utils.js";
 
 export class ScopedArtifactPersistenceHelpers {
@@ -148,8 +147,6 @@ export class ScopedArtifactPersistenceHelpers {
     }
     const preferredAttachmentMetas = resolvePreferredAttachmentMetas(message);
     if (preferredAttachmentMetas.length) normalized.attachmentMetas = preferredAttachmentMetas;
-    const transferResult = resolveTransferResultFromMessage(message);
-    if (transferResult) normalized.transferResult = transferResult;
     const transferEnvelopes = resolveTransferEnvelopeListFromMessage(message);
     if (transferEnvelopes.length) normalized.transferEnvelopes = transferEnvelopes;
     return applyNormalizedMessageFlags(normalized, message);

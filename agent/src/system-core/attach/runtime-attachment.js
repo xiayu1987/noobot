@@ -78,7 +78,6 @@ export function appendAttachmentMetasToRuntimeAndTurn(
         appendUniqueTransferEnvelope(mergedEnvelopes, envelope, seenEnvelopeKeys);
       }
     }
-    appendUniqueTransferEnvelope(mergedEnvelopes, target?.transferResult?.envelope, seenEnvelopeKeys);
     if (Array.isArray(transferPayload.transferEnvelopes)) {
       for (const envelope of transferPayload.transferEnvelopes) {
         appendUniqueTransferEnvelope(mergedEnvelopes, envelope, seenEnvelopeKeys);
@@ -86,11 +85,6 @@ export function appendAttachmentMetasToRuntimeAndTurn(
     }
     return {
       ...(target || {}),
-      ...(target?.transferResult
-        ? { transferResult: target.transferResult }
-        : transferPayload.transferResult
-          ? { transferResult: transferPayload.transferResult }
-          : {}),
       ...(mergedEnvelopes.length ? { transferEnvelopes: mergedEnvelopes } : {}),
       ...(ordinaryAttachmentMetas.length
         ? {

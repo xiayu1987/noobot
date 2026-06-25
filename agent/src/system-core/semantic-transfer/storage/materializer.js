@@ -76,9 +76,11 @@ export async function materializeOutputResult({
     meta: outputMeta,
   });
 
-  if (persisted?.result?.envelope) return persisted.result;
-  if (persisted?.envelope) {
-    return createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.FILE, envelope: persisted.envelope });
+  const persistedEnvelope = Array.isArray(persisted?.transferEnvelopes)
+    ? persisted.transferEnvelopes.find((item) => item && typeof item === "object" && !Array.isArray(item))
+    : null;
+  if (persistedEnvelope) {
+    return createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.FILE, envelope: persistedEnvelope });
   }
 
   // Preserve caller-visible behavior when persistence is unavailable: do not drop content unless explicitly disabled later.

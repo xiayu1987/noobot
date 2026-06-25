@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { TRANSFER_REASON, TRANSFER_SOURCE } from "../core/constants.js";
-import { compactTransferPayloadForModel, firstNormalizedString } from "../core/compact.js";
-import { createTransferResult, TRANSFER_RESULT_STATUS } from "../core/result.js";
+import { firstNormalizedString } from "../core/compact.js";
 import { directOutput } from "../envelope/envelope.js";
 import { transferToolInput, transferToolOutput } from "./tool-transfer.js";
 import { normalizeToolResultOverflow } from "./tool-result-overflow.js";
@@ -59,13 +58,7 @@ function normalizeStrategy(value = "") {
 
 function buildInvalidResult({ code = "SEMANTIC_TRANSFER_INVALID_SCENARIO", message = "invalid semantic-transfer request" } = {}) {
   return {
-    transferResult: createTransferResult({
-      ok: false,
-      status: TRANSFER_RESULT_STATUS.FAILED,
-      error: { code, message },
-    }),
     transferEnvelopes: [],
-    compactTransferPayload: {},
   };
 }
 
@@ -88,16 +81,9 @@ function createDirectTextTransfer({ text = "", scenario = "", strategy = "", met
     scenario,
     strategy,
   });
-  const transferResult = createTransferResult({
-    ok: true,
-    status: TRANSFER_RESULT_STATUS.DIRECT,
-    envelope,
-  });
   const transferEnvelopes = [envelope];
   return {
-    transferResult,
     transferEnvelopes,
-    compactTransferPayload: compactTransferPayloadForModel({ transferResult, transferEnvelopes }),
   };
 }
 
@@ -136,15 +122,16 @@ async function transferBotPluginStrategy({ strategy = "", runtime = {}, agentCon
     const content = firstNormalizedString(options?.content, options?.message, options?.text);
     if (!content) {
       return {
-        transferResult: createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.SKIPPED }),
         transferEnvelopes: [],
-        injectionMessage: "",
-        compactTransferPayload: {},
       };
     }
     return {
-      ...createDirectTextTransfer({ text: content, scenario: "bot_plugin", strategy, meta: options?.meta || {} }),
-      injectionMessage: content,
+      ...createDirectTextTransfer({
+        text: content,
+        scenario: "bot_plugin",
+        strategy,
+        meta: { ...(options?.meta || {}), injectionMessage: content },
+      }),
     };
   }
   return buildInvalidResult({
@@ -187,18 +174,11 @@ async function transferAgentPluginSummaryInjection({ strategy = "", runtime = {}
     text: injectionMessage,
     scenario: "agent_plugin",
     strategy,
-    meta: { ...(options?.meta || {}), injectMode },
+    meta: { ...(options?.meta || {}), injectMode, summary: summaryText, detail: detailText },
   });
   const detailEnvelopes = Array.isArray(detailTransfer?.transferEnvelopes) ? detailTransfer.transferEnvelopes : [];
   const transferEnvelopes = [...detailEnvelopes, ...direct.transferEnvelopes];
-  return {
-    ...direct,
-    transferEnvelopes,
-    detailTransferResult: detailTransfer?.transferResult || null,
-    injectionMessage,
-    injectMode,
-    summary: summaryText,
-  };
+  return { transferEnvelopes };
 }
 
 async function transferAgentPluginStrategy({ strategy = "", runtime = {}, agentContext = null, ...options } = {}) {
@@ -217,8 +197,6 @@ async function transferAgentPluginStrategy({ strategy = "", runtime = {}, agentC
         strategy,
         meta: { source: TRANSFER_SOURCE.PLUGIN, reason: "agent_plugin_final_message" },
       }),
-      finalMessage,
-      message: finalMessage,
     };
   }
   return buildInvalidResult({

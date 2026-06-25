@@ -104,7 +104,6 @@ test("ScopedArtifactPersistenceHelpers normalizes detached sub-session messages 
       parentDialogProcessId: "pd1",
       tool_call_id: "tc1",
       attachmentMetas: [{ attachmentId: "a1", mimeType: "text/plain" }],
-      transferResult: { envelope: { envelopeId: "e2" } },
       transferEnvelopes: [{ envelopeId: "e3" }],
       injectedMessage: true,
       injectedBy: "botPlugin",
@@ -119,7 +118,7 @@ test("ScopedArtifactPersistenceHelpers normalizes detached sub-session messages 
   assert.equal(normalized.tool_call_id, "tc1");
   assert.equal(normalized.ts, "2026-02-03T04:05:06.000Z");
   assert.deepEqual(normalized.attachmentMetas, [{ attachmentId: "a1", mimeType: "text/plain" }]);
-  assert.deepEqual(normalized.transferResult, { envelope: { envelopeId: "e2" } });
+  assert.equal("transferResult" in normalized, false);
   assert.deepEqual(normalized.transferEnvelopes, [{ envelopeId: "e3" }]);
   assert.equal(normalized.injectedMessage, true);
   assert.equal(normalized.injectedBy, "botPlugin");

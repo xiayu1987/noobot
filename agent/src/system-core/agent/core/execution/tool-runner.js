@@ -15,6 +15,7 @@ import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
 import { normalizeParentSessionId } from "../../../context/parent-session-id-resolver.js";
 import { transferSemanticContent } from "../../../semantic-transfer/transfer/semantic-transfer.js";
+import { compactToolResultTextForModel } from "../../../semantic-transfer/core/compact.js";
 
 const TOOL_INPUT_TRANSFER_TOOL_NAMES = new Set([
   "write_file",
@@ -67,21 +68,37 @@ function mergeToolResultWithInputTransferPayload(toolResultText = "", transferPa
   return mergeToolInputTransferPayload(toolResultText, transferPayload);
 }
 
-function compactSemanticTransferProtocolPayload(inputTransfer = {}, { includeCompatFields = false } = {}) {
+function compactSemanticTransferProtocolPayload(inputTransfer = {}) {
   if (!inputTransfer || typeof inputTransfer !== "object" || Array.isArray(inputTransfer)) return {};
   const transferEnvelopes = Array.isArray(inputTransfer.transferEnvelopes)
     ? inputTransfer.transferEnvelopes
     : [];
-  const compactToolPayload =
-    includeCompatFields &&
-    inputTransfer.compactToolPayload &&
-    typeof inputTransfer.compactToolPayload === "object" &&
-    !Array.isArray(inputTransfer.compactToolPayload)
-      ? inputTransfer.compactToolPayload
-      : {};
   return {
-    ...compactToolPayload,
     ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
+  };
+}
+
+function deriveToolInputTransferMeta(inputTransfer = {}) {
+  const transferEnvelopes = Array.isArray(inputTransfer?.transferEnvelopes)
+    ? inputTransfer.transferEnvelopes
+    : [];
+  const metas = transferEnvelopes
+    .map((envelope = {}) => envelope?.meta)
+    .filter((meta = null) => meta && typeof meta === "object" && !Array.isArray(meta));
+  const overflowMeta = metas.find((meta = {}) => meta?.toolInputOverflow);
+  const exceededMeta = metas.find((meta = {}) => meta?.exceeded === true);
+  const messageMeta = metas.find((meta = {}) => String(meta?.message || "").trim());
+  const sourceMeta = overflowMeta || exceededMeta || messageMeta || metas[0] || {};
+  const toolInputOverflow =
+    sourceMeta?.toolInputOverflow &&
+    typeof sourceMeta.toolInputOverflow === "object" &&
+    !Array.isArray(sourceMeta.toolInputOverflow)
+      ? sourceMeta.toolInputOverflow
+      : null;
+  return {
+    exceeded: sourceMeta?.exceeded === true || toolInputOverflow?.exceeded === true,
+    message: String(sourceMeta?.message || toolInputOverflow?.message || "").trim(),
+    toolInputOverflow,
   };
 }
 
@@ -199,22 +216,21 @@ export async function executeToolCall({
         agentContext,
         sessionId,
       });
-      const includeCompatFields = inputTransfer?.exceeded === true;
-      toolInputTransferPayload = compactSemanticTransferProtocolPayload(inputTransfer, {
-        includeCompatFields,
-      });
+      const inputTransferMeta = deriveToolInputTransferMeta(inputTransfer);
+      toolInputTransferPayload = compactSemanticTransferProtocolPayload(inputTransfer);
       if (
-        inputTransfer?.exceeded === true &&
-        inputTransfer?.toolInputOverflow &&
-        typeof inputTransfer.toolInputOverflow === "object" &&
-        !Array.isArray(inputTransfer.toolInputOverflow)
+        inputTransferMeta.exceeded === true &&
+        inputTransferMeta.toolInputOverflow &&
+        typeof inputTransferMeta.toolInputOverflow === "object" &&
+        !Array.isArray(inputTransferMeta.toolInputOverflow)
       ) {
         toolResultText = toToolJsonResult(call?.name, {
           ok: false,
-          message: String(inputTransfer?.message || "").trim() || "tool input is too long",
-          toolInputOverflow: inputTransfer.toolInputOverflow,
+          message: inputTransferMeta.message || "tool input is too long",
+          toolInputOverflow: inputTransferMeta.toolInputOverflow,
           ...toolInputTransferPayload,
         });
+        toolResultText = compactToolResultTextForModel(toolResultText);
         emitEvent(eventListener, "tool_call_end", {
           turn,
           tool: call?.name,

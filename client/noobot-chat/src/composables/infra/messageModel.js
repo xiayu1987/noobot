@@ -153,12 +153,6 @@ function createMessageModel(messageItem = {}) {
   const normalizedAttachmentMetas = Array.isArray(messageItem?.attachmentMetas)
     ? messageItem.attachmentMetas
     : [];
-  const transferResult =
-    messageItem?.transferResult &&
-    typeof messageItem.transferResult === "object" &&
-    !Array.isArray(messageItem.transferResult)
-      ? messageItem.transferResult
-      : null;
   const transferEnvelopes = getMessageTransferEnvelopes(messageItem);
   const workflowMeta = normalizeWorkflowMeta(messageItem);
   const turnScopeId = getMessageTurnScopeId(messageItem);
@@ -183,7 +177,6 @@ function createMessageModel(messageItem = {}) {
     modelName: messageItem.modelName || messageItem.model || "",
     modelRuns: normalizeArray(messageItem.modelRuns),
     attachmentMetas: normalizeArray(normalizedAttachmentMetas),
-    transferResult,
     transferEnvelopes,
     realtimeLogs: normalizeArray(messageItem.realtimeLogs),
     executionLogTotal: Number(
@@ -352,9 +345,6 @@ function foldConversationMessages(messages = [], buildView) {
         previousAttachmentMetas,
         currentAttachmentMetas,
       );
-    }
-    if (!previousMessage.transferResult && currentMessage.transferResult) {
-      previousMessage.transferResult = currentMessage.transferResult;
     }
     const previousTransferEnvelopes = normalizeArray(previousMessage?.transferEnvelopes);
     const currentTransferEnvelopes = getMessageTransferEnvelopes(currentMessage);

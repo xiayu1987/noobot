@@ -138,7 +138,6 @@ export class SessionTurnPersister {
     frontendUserMessage = false,
     pluginMessage = false,
     pluginMeta = null,
-    transferResult = null,
     transferEnvelopes = [],
     isMonotonic = false,
     monotonic = false,
@@ -155,14 +154,10 @@ export class SessionTurnPersister {
         ? sanitizeToolContentForSession(content, toolName)
         : String(content || "");
     const shouldPersistTransferPayload = role !== MESSAGE_ROLE.TOOL;
-    const sessionTransferResult =
-      shouldPersistTransferPayload && isPlainObject(transferResult) ? transferResult : null;
     const sessionTransferEnvelopes =
       shouldPersistTransferPayload && Array.isArray(transferEnvelopes)
         ? transferEnvelopes.filter(isPlainObject)
-        : shouldPersistTransferPayload && isPlainObject(sessionTransferResult?.envelope)
-          ? [sessionTransferResult.envelope]
-          : [];
+        : [];
     const shouldOmitAttachmentMetasMirror =
       shouldPersistTransferPayload && sessionTransferEnvelopes.length > 0;
     const fullTurnPayload = {
@@ -202,7 +197,6 @@ export class SessionTurnPersister {
         !Array.isArray(pluginMeta)
           ? pluginMeta
           : null,
-      ...(sessionTransferResult ? { transferResult: sessionTransferResult } : {}),
       ...(sessionTransferEnvelopes.length ? { transferEnvelopes: sessionTransferEnvelopes } : {}),
       isMonotonic: isMonotonic === true,
       monotonic: monotonic === true,
@@ -260,7 +254,6 @@ export class SessionTurnPersister {
       frontendUserMessage,
       pluginMessage,
       pluginMeta,
-      ...(sessionTransferResult ? { transferResult: sessionTransferResult } : {}),
       ...(sessionTransferEnvelopes.length ? { transferEnvelopes: sessionTransferEnvelopes } : {}),
       isMonotonic,
       monotonic,
@@ -330,12 +323,6 @@ export class SessionTurnPersister {
           typeof messageItem.pluginMeta === "object" &&
           !Array.isArray(messageItem.pluginMeta)
             ? messageItem.pluginMeta
-            : null,
-        transferResult:
-          messageItem.transferResult &&
-          typeof messageItem.transferResult === "object" &&
-          !Array.isArray(messageItem.transferResult)
-            ? messageItem.transferResult
             : null,
         transferEnvelopes: Array.isArray(messageItem.transferEnvelopes)
           ? messageItem.transferEnvelopes

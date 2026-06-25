@@ -49,7 +49,6 @@ export function createCollabArtifactPersistor({
 }) {
   const emptyPersistOutput = {
     attachmentMetas: [],
-    transferResult: null,
     transferEnvelopes: [],
   };
   return async function persistCompletedTaskResultsAsAttachments({
@@ -143,7 +142,6 @@ export function createCollabArtifactPersistor({
     }
     return {
       attachmentMetas,
-      transferResult: null,
       transferEnvelopes: [],
     };
   };

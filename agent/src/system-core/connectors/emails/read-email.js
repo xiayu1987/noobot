@@ -38,7 +38,6 @@ async function saveEmailAttachments({
   if (typeof attachmentHandler !== "function" || !Array.isArray(parsedEmail?.attachments)) {
     return {
       attachmentMetas: [],
-      transferResult: null,
       transferEnvelopes: [],
     };
   }
@@ -74,7 +73,6 @@ async function saveEmailAttachments({
   if (!artifacts.length) {
     return {
       attachmentMetas: [],
-      transferResult: null,
       transferEnvelopes: [],
     };
   }
@@ -84,25 +82,17 @@ async function saveEmailAttachments({
   if (Array.isArray(savedOutput)) {
     return {
       attachmentMetas: savedOutput,
-      transferResult: null,
       transferEnvelopes: [],
     };
   }
   if (!savedOutput || typeof savedOutput !== "object") {
     return {
       attachmentMetas: [],
-      transferResult: null,
       transferEnvelopes: [],
     };
   }
   return {
     attachmentMetas: Array.isArray(savedOutput?.attachmentMetas) ? savedOutput.attachmentMetas : [],
-    transferResult:
-      savedOutput?.transferResult &&
-      typeof savedOutput.transferResult === "object" &&
-      !Array.isArray(savedOutput.transferResult)
-        ? savedOutput.transferResult
-        : null,
     transferEnvelopes: normalizeTransferEnvelopesFromPayload(savedOutput),
   };
 }
@@ -286,7 +276,6 @@ export async function executeReadEmail({
         text: textWithInlineAttachmentHint,
         html: htmlWithInlineAttachmentHint,
         attachment_metas: attachmentMetas,
-        ...(persistedAttachments?.transferResult ? { transferResult: persistedAttachments.transferResult } : {}),
         ...(Array.isArray(persistedAttachments?.transferEnvelopes) && persistedAttachments.transferEnvelopes.length
           ? { transferEnvelopes: persistedAttachments.transferEnvelopes }
           : {}),

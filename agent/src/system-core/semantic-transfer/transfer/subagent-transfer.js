@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "../core/constants.js";
-import { createTransferResult, TRANSFER_RESULT_STATUS } from "../core/result.js";
 import { createTransferEnvelope } from "../envelope/envelope.js";
 import {
   extractTransferEnvelopeFromPersisted,
@@ -13,7 +12,7 @@ import {
 import { resolveTransferIntent } from "../core/intent.js";
 import { emitSemanticTransferValidation } from "../core/telemetry.js";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
-import { compactTransferPayloadForModel, firstNormalizedString } from "../core/compact.js";
+import { firstNormalizedString } from "../core/compact.js";
 
 function normalizeString(value = "") {
   return String(value || "").trim();
@@ -97,11 +96,7 @@ export async function transferBotPluginSubagentResult({
           nodeName: item?.nodeName,
         },
       });
-      persistedItems.push({
-        ...item,
-        transferResult: createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.DIRECT, envelope }),
-        transferEnvelopes: [envelope],
-      });
+      persistedItems.push({ ...item, transferEnvelopes: [envelope] });
       continue;
     }
 
@@ -135,14 +130,7 @@ export async function transferBotPluginSubagentResult({
       { runtime, enforceProtocol: true, withStats: true },
     );
     const transferEnvelopes = transferEnvelopesResult?.envelopes || [];
-    persistedItems.push({
-      ...item,
-      transferResult: transferEnvelopes[0]
-        ? createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.FILE, envelope: transferEnvelopes[0] })
-        : createTransferResult({ ok: false, status: TRANSFER_RESULT_STATUS.FAILED }),
-      transferEnvelopes,
-      compactTransferPayload: compactTransferPayloadForModel({ transferEnvelopes }),
-    });
+    persistedItems.push({ ...item, transferEnvelopes });
   }
 
   const transferEnvelopesResult = normalizeTransferEnvelopesWithPolicy(
@@ -158,12 +146,5 @@ export async function transferBotPluginSubagentResult({
     stats: transferEnvelopesResult?.stats || {},
   });
 
-  return {
-    transferResult: transferEnvelopes[0]
-      ? createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.FILE, envelope: transferEnvelopes[0] })
-      : createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.SKIPPED }),
-    transferEnvelopes,
-    nodeTransferResults: persistedItems,
-    compactTransferPayload: compactTransferPayloadForModel({ transferEnvelopes }),
-  };
+  return { transferEnvelopes };
 }

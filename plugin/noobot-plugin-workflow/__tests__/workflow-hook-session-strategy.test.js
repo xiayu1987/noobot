@@ -131,7 +131,7 @@ function createSemanticTransferTool({ prefix = "att", counterRef = { value: 0 } 
   return {
     async transferSemanticContent({ scenario = "", strategy = "", messages = [] } = {}) {
       if (String(scenario || "") !== "bot_plugin" || !String(strategy || "").startsWith("bot_plugin_")) {
-        return { transferResult: { ok: false, status: "failed" }, transferEnvelopes: [] };
+        return { transferEnvelopes: [] };
       }
       counterRef.value += 1;
       const nodeName = String(messages?.[0]?.nodeName || `节点${counterRef.value}`).trim();
@@ -154,7 +154,7 @@ function createSemanticTransferTool({ prefix = "att", counterRef = { value: 0 } 
           pathView: { displayPath: `/workspace/${fileName}` },
         }],
       };
-      return { transferResult: { ok: true, status: "file", envelope }, transferEnvelopes: [envelope] };
+      return { transferEnvelopes: [envelope] };
     },
   };
 }
@@ -475,10 +475,9 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
               semanticTransfer: {
                 async transferSemanticContent({ scenario = "", strategy = "" } = {}) {
                   if (String(scenario || "") !== "bot_plugin" || String(strategy || "") !== "bot_plugin_subagent_result") {
-                    return { transferResult: { ok: false, status: "failed" }, transferEnvelopes: [] };
+                    return { transferEnvelopes: [] };
                   }
                   return {
-                    transferResult: { ok: true, status: "file", envelope },
                     transferEnvelopes: [envelope],
                   };
                 },
@@ -577,7 +576,6 @@ test("workflow hook routes final attachment summary composition through semantic
                     ],
                   };
                   return {
-                    transferResult: { ok: true, status: "file", envelope },
                     transferEnvelopes: [envelope],
                   };
                 },
@@ -709,7 +707,6 @@ test("workflow hook injects upstream node result attachments into downstream sub
                   const { scenario = "", strategy = "", messages = [] } = payload;
                   if (String(scenario || "") !== "bot_plugin" || !String(strategy || "").startsWith("bot_plugin_")) {
                     return {
-                      transferResult: { ok: false, status: "failed" },
                       transferEnvelopes: [],
                     };
                   }
@@ -739,7 +736,6 @@ test("workflow hook injects upstream node result attachments into downstream sub
                     ],
                   };
                   return {
-                    transferResult: { ok: true, status: "file", envelope },
                     transferEnvelopes: [envelope],
                     injectionMessage: String(payload?.content || ""),
                   };
@@ -853,7 +849,6 @@ test("workflow hook injects one upstream action attachments into multiple direct
                 async transferSemanticContent({ scenario = "", strategy = "", messages = [] } = {}) {
                   if (String(scenario || "") !== "bot_plugin" || !String(strategy || "").startsWith("bot_plugin_")) {
                     return {
-                      transferResult: { ok: false, status: "failed" },
                       transferEnvelopes: [],
                     };
                   }
@@ -883,7 +878,6 @@ test("workflow hook injects one upstream action attachments into multiple direct
                     ],
                   };
                   return {
-                    transferResult: { ok: true, status: "file", envelope },
                     transferEnvelopes: [envelope],
                   };
                 },
