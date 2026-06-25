@@ -27,6 +27,8 @@ export default {
     `工具循环已执行 ${Number(params.loopCount || 0)} 轮。你可以考虑调用 ${String(params.helpToolName || "request_help")} 工具获取额外帮助。`,
   "agent.toolChoiceRequiredRetryPrompt":
     "请使用工具执行任务，如没有任务或者任务结束或需要主动结束请调用 final_answer 工具",
+  "agent.taskSummarySingleToolPrompt":
+    "task_summary 必须单独调用，不能和其它工具出现在同一轮工具调用中。",
   "agent.userMetaTag": "用户元信息",
   "attach.countExceedsLimit": "附件数量超出限制",
   "attach.extensionNotAllowed": "附件扩展名不允许",

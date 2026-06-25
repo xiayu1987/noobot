@@ -29,6 +29,15 @@ export function createCurrentTurnMessagesStore(messages = []) {
       }
       return null;
     },
+    removeLast(matcher = null) {
+      for (let index = items.length - 1; index >= 0; index -= 1) {
+        const item = items[index] || {};
+        if (typeof matcher === "function" && !matcher(item)) continue;
+        const [removed] = items.splice(index, 1);
+        return removed ? { ...removed } : null;
+      }
+      return null;
+    },
     updateWhere(patch = {}, matcher = null) {
       let updatedCount = 0;
       for (let index = 0; index < items.length; index += 1) {
@@ -85,6 +94,7 @@ export function resolveTurnMessagesStore(currentTurnMessages, fallbackMessages =
     currentTurnMessages &&
     typeof currentTurnMessages.push === "function" &&
     typeof currentTurnMessages.updateLast === "function" &&
+    typeof currentTurnMessages.removeLast === "function" &&
     typeof currentTurnMessages.toArray === "function";
   if (isValidStore) return currentTurnMessages;
   return createCurrentTurnMessagesStore(fallbackMessages);
