@@ -8,8 +8,12 @@ export function resolveMessageDialogProcessId(messageItem = {}) {
   return String(
     messageItem?.dialogProcessId ||
       messageItem?.dialogId ||
+      messageItem?.additional_kwargs?.dialogProcessId ||
+      messageItem?.additional_kwargs?.dialogId ||
       messageItem?.lc_kwargs?.dialogProcessId ||
       messageItem?.lc_kwargs?.dialogId ||
+      messageItem?.lc_kwargs?.additional_kwargs?.dialogProcessId ||
+      messageItem?.lc_kwargs?.additional_kwargs?.dialogId ||
       "",
   ).trim();
 }

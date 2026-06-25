@@ -321,7 +321,10 @@ function buildHistoryMessages({
     if (shouldSkipSummarizedHistoryMessage(msg)) continue;
     const role = msg.role || "";
     if (role === MESSAGE_ROLE.SYSTEM) {
-      history.push(new SystemMessage(msg.content || ""));
+      history.push(new SystemMessage({
+        content: msg.content || "",
+        additional_kwargs: buildModelMessageIdentityKwargs(msg, fallbackUserMeta),
+      }));
       continue;
     }
     if (role === MESSAGE_ROLE.ASSISTANT) {
@@ -334,6 +337,7 @@ function buildHistoryMessages({
         new AIMessage({
           content: resolvedAssistantContent,
           tool_calls: toolCalls,
+          additional_kwargs: buildModelMessageIdentityKwargs(msg, fallbackUserMeta),
         }),
       );
       continue;
@@ -351,6 +355,7 @@ function buildHistoryMessages({
         new ToolMessage({
           tool_call_id: toolCallId,
           content: compactToolResultTextForModel(msg.content || ""),
+          additional_kwargs: buildModelMessageIdentityKwargs(msg, fallbackUserMeta),
         }),
       );
       continue;
