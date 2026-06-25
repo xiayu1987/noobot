@@ -46,18 +46,20 @@ test("getRecentSessionMessages returns only complete history rounds", async () =
   assert.deepEqual(result, []);
 });
 
-test("getRecentSessionMessages keeps complete round content without trailing tool after latest assistant", async () => {
+test("getRecentSessionMessages keeps explicit dialog group content in original order", async () => {
   const messages = [
-    { role: "user", content: "please continue" },
-    { role: "assistant", content: "" },
+    { role: "user", content: "please continue", dialogProcessId: "dlg_1" },
+    { role: "assistant", content: "", dialogProcessId: "dlg_1" },
     {
       role: "assistant",
       content: "",
+      dialogProcessId: "dlg_1",
       tool_calls: [{ id: "call_1", function: { name: "task_summary", arguments: "{}" } }],
     },
     {
       role: "tool",
       content: "{\"toolName\":\"task_summary\",\"ok\":true}",
+      dialogProcessId: "dlg_1",
       tool_call_id: "call_1",
     },
   ];
@@ -70,15 +72,15 @@ test("getRecentSessionMessages keeps complete round content without trailing too
 
   assert.deepEqual(
     result.map((messageItem) => messageItem.role),
-    ["user", "assistant", "assistant"],
+    ["user", "assistant", "assistant", "tool"],
   );
 });
 
 test("getRecentSessionMessages respects summarized filter before window normalization", async () => {
   const messages = [
-    { role: "user", content: "keep me", summarized: false },
-    { role: "assistant", content: "old", summarized: true },
-    { role: "assistant", content: "new", summarized: false },
+    { role: "user", content: "keep me", summarized: false, dialogProcessId: "dlg_1" },
+    { role: "assistant", content: "old", summarized: true, dialogProcessId: "dlg_1" },
+    { role: "assistant", content: "new", summarized: false, dialogProcessId: "dlg_1" },
   ];
   const service = createSessionContextService(messages);
   const result = await service.getRecentSessionMessages({

@@ -54,7 +54,7 @@ test("model-context rules 1.1: systemMessages keeps latest injected system by ty
   assert.equal(result.length, 15);
 });
 
-test("model-context rules 1.2: historyMessages keeps non-system unsummarized messages from first actual user to latest assistant for latest 3 rounds", () => {
+test("model-context rules 1.2: historyMessages keeps non-system unsummarized messages in natural dialog groups for latest 3 rounds", () => {
   const dialogs = Array.from({ length: 6 }, (_, index) => {
     const number = index + 1;
     const dialogFields = number % 2 === 0
@@ -78,25 +78,37 @@ test("model-context rules 1.2: historyMessages keeps non-system unsummarized mes
   const result = resolveMainModelHistoryMessages({ sourceMessages: dialogs });
 
   assert.deepEqual(contents(result), [
+    "aux-injected-4",
+    "aux-user-meta-4",
+    "aux-recovered-summary-4",
     "actual-user-4-first",
     "actual-user-4-second",
     "assistant-4-old",
     "tool-4",
     "assistant-4-latest",
+    "after-latest-tool-4",
+    "aux-injected-5",
+    "aux-user-meta-5",
+    "aux-recovered-summary-5",
     "actual-user-5-first",
     "actual-user-5-second",
     "assistant-5-old",
     "tool-5",
     "assistant-5-latest",
+    "after-latest-tool-5",
+    "aux-injected-6",
+    "aux-user-meta-6",
+    "aux-recovered-summary-6",
     "actual-user-6-first",
     "actual-user-6-second",
     "assistant-6-old",
     "tool-6",
     "assistant-6-latest",
+    "after-latest-tool-6",
   ]);
 });
 
-test("model-context rules 1.2: historyMessages keeps legacy rounds without dialogProcessId", () => {
+test("model-context rules 1.2: historyMessages ignores messages without dialogProcessId", () => {
   const result = resolveMainModelHistoryMessages({
     sourceMessages: [
       { role: "user", content: "legacy-u1" },
@@ -107,10 +119,6 @@ test("model-context rules 1.2: historyMessages keeps legacy rounds without dialo
   });
 
   assert.deepEqual(contents(result), [
-    "legacy-u1",
-    "legacy-a1",
-    "legacy-u2",
-    "legacy-a2",
   ]);
 });
 

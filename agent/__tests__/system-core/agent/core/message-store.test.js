@@ -56,3 +56,23 @@ test("agent message store append and replace keep block ids synchronized", () =>
     holder.messages[1],
   ]);
 });
+
+test("agent message store partial block writes preserve untouched blocks", () => {
+  const holder = {
+    messages: [],
+    messageBlocks: { system: [], history: [], incremental: [] },
+  };
+  const system = appendMessage(holder, { role: "system", content: "sys" }, { block: "system" });
+
+  writeMessageBlocks(holder, {
+    incremental: [{ role: "user", content: "hello" }],
+  });
+
+  assert.equal(holder.messageBlocks.system[0], system);
+  assert.deepEqual(holder.messageBlocks.systemIds, [getMessageId(system)]);
+  assert.deepEqual(holder.messageBlocks.incremental.map((item = {}) => item.content), ["hello"]);
+
+  writeMessageBlocks(holder, { system: [] });
+  assert.deepEqual(holder.messageBlocks.system, []);
+  assert.deepEqual(holder.messageBlocks.systemIds, []);
+});

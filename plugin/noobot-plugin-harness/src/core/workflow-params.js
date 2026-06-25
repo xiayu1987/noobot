@@ -152,7 +152,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
     programming: {
       guidance: {
         summary: {
-          turnsThreshold: 4,
+          turnsThreshold: 23,
         },
         analysis: {
           turnsThreshold: 10,

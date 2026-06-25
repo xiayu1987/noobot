@@ -63,7 +63,6 @@ export class SessionContextService {
     const normalizedTurnScopeId = String(currentTurnScopeId || "").trim();
     if (!normalizedTurnScopeId) return messages;
     return (Array.isArray(messages) ? messages : []).filter((messageItem = {}) => {
-      if (String(messageItem?.role || "") !== "user") return true;
       return String(messageItem?.turnScopeId || "").trim() !== normalizedTurnScopeId;
     });
   }
