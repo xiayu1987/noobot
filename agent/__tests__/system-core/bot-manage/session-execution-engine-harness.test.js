@@ -75,19 +75,27 @@ test("RunConfigPluginPreparer.prepareAgentPluginRunConfig registers harness plug
   assert.equal(prepared.hookManager.list("after_tool_call").length, 1);
 
   const messages = [{ role: "user", content: "hello" }];
-  await prepared.hookManager.emit("before_llm_call", {
+  const hookCtx = {
     userId: "u1",
     sessionId: "s1",
     dialogProcessId: "d1",
     messages,
-  });
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: messages,
+    },
+  };
+  await prepared.hookManager.emit("before_llm_call", hookCtx);
 
-  assert.equal(messages[0].role, "system");
-  assert.match(messages[0].content, /\[HARNESS_POLICY_SELECTION\]/);
-  assert.match(messages[0].content, /policy_prompt = harness_policy\/general/);
-  assert.doesNotMatch(messages[0].content, /execution_first|risk_first/);
-  assert.equal(messages[1].role, "user");
-  assert.equal(messages[1].content, "hello");
+  assert.equal(hookCtx.messages[0].role, "system");
+  assert.match(hookCtx.messages[0].content, /\[HARNESS_POLICY_SELECTION\]/);
+  assert.match(hookCtx.messages[0].content, /policy_prompt = harness_policy\/general/);
+  assert.doesNotMatch(hookCtx.messages[0].content, /execution_first|risk_first/);
+  assert.equal(hookCtx.messages[1].role, "user");
+  assert.equal(hookCtx.messages[1].content, "hello");
+  assert.equal(hookCtx.messageBlocks.system[0], hookCtx.messages[0]);
+  assert.equal(hookCtx.messageBlocks.incremental[0], hookCtx.messages[1]);
 
   const eventsPath = path.join(tempRoot, "u1", "runtime", "harness", "runs", "d1", "events.jsonl");
   const promptsPath = path.join(tempRoot, "u1", "runtime", "harness", "runs", "d1", "prompts.jsonl");

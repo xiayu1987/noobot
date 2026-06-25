@@ -64,9 +64,9 @@ test("buildCapabilityModelMessages keeps regular messages unchanged", () => {
 
   assert.deepEqual(output, [
     { role: "system", content: "s1" },
+    { role: "system", content: "c1" },
     { role: "user", content: "u1" },
     { role: "assistant", content: "a1" },
-    { role: "system", content: "c1" },
     { role: "user", content: "t1" },
   ]);
 });
@@ -170,9 +170,9 @@ test("buildCapabilityModelMessages orders protocol, scenario policy, then respon
   });
 
   assert.deepEqual(output, [
-    { role: "user", content: "actual user request" },
     { role: "system", content: "protocol prompt" },
     { role: "system", content: "scenario mode policy" },
+    { role: "user", content: "actual user request" },
     { role: "user", content: "responsibility constraint" },
   ]);
 });

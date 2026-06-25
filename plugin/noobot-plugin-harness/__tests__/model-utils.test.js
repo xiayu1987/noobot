@@ -161,7 +161,7 @@ test("resolveCapabilityModelMessages fallback filters summarized messages withou
   );
 });
 
-test("resolveCapabilityModelMessages filters summarized messages for capability model requests", () => {
+test("resolveCapabilityModelMessages filters summarized messages and does not use payload fallback", () => {
   const explicit = resolveCapabilityModelMessages(
     {},
     {
@@ -213,7 +213,7 @@ test("resolveCapabilityModelMessages filters summarized messages for capability 
       purpose: "phase_acceptance",
     },
   );
-  assert.deepEqual(payloadFallback.map((item) => item.content), ["keep-payload"]);
+  assert.deepEqual(payloadFallback.map((item) => item.content), []);
 });
 
 test("buildModelMessagesWithStructuredEnvelope does not clip agent context in plugin structured envelope", () => {
