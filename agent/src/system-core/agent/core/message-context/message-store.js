@@ -223,9 +223,13 @@ export function writeMessageBlocks(holder = {}, blocks = {}) {
       ? holder.messageBlocks
       : {};
   const store = canonicalizeMessageStore(holder) || resolveStore(holder);
-  existing.system = canonicalizeList(store, blocks.system);
-  existing.history = canonicalizeList(store, blocks.history);
-  existing.incremental = canonicalizeList(store, blocks.incremental);
+  for (const blockName of ["system", "history", "incremental"]) {
+    if (Object.prototype.hasOwnProperty.call(blocks, blockName)) {
+      existing[blockName] = canonicalizeList(store, blocks[blockName]);
+    } else if (!Array.isArray(existing[blockName])) {
+      existing[blockName] = [];
+    }
+  }
   syncBlockIds(existing);
   holder.messageBlocks = existing;
   return existing;

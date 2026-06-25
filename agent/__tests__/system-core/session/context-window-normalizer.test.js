@@ -354,7 +354,7 @@ test("resolveModelContextMessages keeps latest injected message per type after d
 });
 
 
-test("resolveMainModelHistoryMessages keeps non-system unsummarized messages from first actual user to latest assistant for latest 3 rounds", () => {
+test("resolveMainModelHistoryMessages keeps non-system unsummarized messages in explicit dialog groups for latest 3 rounds", () => {
   const input = Array.from({ length: 6 }, (_, index) => {
     const dialogProcessId = `d${index + 1}`;
     return [
@@ -377,14 +377,17 @@ test("resolveMainModelHistoryMessages keeps non-system unsummarized messages fro
       "u4-second",
       "a4-old",
       "a4-latest",
+      "after-latest4",
       "u5-first",
       "u5-second",
       "a5-old",
       "a5-latest",
+      "after-latest5",
       "u6-first",
       "u6-second",
       "a6-old",
       "a6-latest",
+      "after-latest6",
     ],
   );
 });
@@ -433,7 +436,35 @@ test("resolveMainModelHistoryMessages keeps original dialog group order instead 
   );
 });
 
-test("resolveMainModelHistoryMessages keeps legacy history rounds without dialogProcessId", () => {
+test("resolveMainModelHistoryMessages orders dialog groups by first natural occurrence", () => {
+  const result = resolveMainModelHistoryMessages({
+    sourceMessages: [
+      { role: "user", content: "d1-user", dialogProcessId: "d1" },
+      { role: "assistant", content: "d1-assistant", dialogProcessId: "d1" },
+      { role: "user", content: "d2-user", dialogProcessId: "d2" },
+      { role: "assistant", content: "d2-assistant", dialogProcessId: "d2" },
+      { role: "user", content: "d3-user", dialogProcessId: "d3" },
+      { role: "assistant", content: "d3-assistant", dialogProcessId: "d3" },
+      { role: "assistant", content: "d1-late-assistant", dialogProcessId: "d1" },
+    ],
+    historyLimit: 3,
+  });
+
+  assert.deepEqual(
+    result.map((item) => item.content),
+    [
+      "d1-user",
+      "d1-assistant",
+      "d1-late-assistant",
+      "d2-user",
+      "d2-assistant",
+      "d3-user",
+      "d3-assistant",
+    ],
+  );
+});
+
+test("resolveMainModelHistoryMessages ignores messages without dialogProcessId", () => {
   const result = resolveMainModelHistoryMessages({
     sourceMessages: [
       { role: "user", content: "u1-first" },
@@ -447,7 +478,7 @@ test("resolveMainModelHistoryMessages keeps legacy history rounds without dialog
 
   assert.deepEqual(
     result.map((item) => item.content),
-    ["u1-first", "u1-second", "a1", "u2", "a2"],
+    [],
   );
 });
 

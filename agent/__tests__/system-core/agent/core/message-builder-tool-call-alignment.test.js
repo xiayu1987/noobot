@@ -113,7 +113,7 @@ test("buildContextMessages converts orphan task_summary tool result to user summ
   assert.equal(String(humanMessage.content || "").includes("孤立小结内容"), true);
 });
 
-test("buildContextMessages filters injected messages from non-current dialog", () => {
+test("buildContextMessages keeps explicit history dialog groups in natural order", () => {
   const messages = buildContextMessages(
     {
       execution: {
@@ -156,7 +156,7 @@ test("buildContextMessages filters injected messages from non-current dialog", (
   );
 
   assert.equal(messages.some((item) => item?.content === "当前对话注入"), true);
-  assert.equal(messages.some((item) => item?.content === "旧对话注入"), false);
+  assert.equal(messages.some((item) => item?.content === "旧对话注入"), true);
 });
 
 test("buildContextMessages applies main model recent round window by default", () => {

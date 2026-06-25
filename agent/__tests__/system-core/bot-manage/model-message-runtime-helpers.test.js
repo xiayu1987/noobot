@@ -185,7 +185,7 @@ test("ModelMessageRuntimeHelpers resolveMessageBlock supports system/incremental
   );
   assert.deepEqual(
     history.map((item = {}) => item.content),
-    ["new-injected", "new-normal"],
+    ["old-injected", "new-injected", "new-normal"],
   );
 });
 

@@ -8,7 +8,6 @@ import {
   filterForModelContext,
   filterInjectedMessagesForDialog,
   isMessageSummarized,
-  isInjectedMessage,
   resolveMessageRole,
   shouldKeepForModelContext,
 } from "../../context/session/message-context-policy.js";
@@ -27,49 +26,13 @@ function recentSlice(messages = [], limit = Number.POSITIVE_INFINITY) {
   return source.length > keepCount ? source.slice(-keepCount) : source;
 }
 
-function resolveInternalMessageType(messageItem = {}) {
-  return String(
-    messageItem?.additional_kwargs?.noobotInternalMessageType ||
-      messageItem?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
-      messageItem?.metadata?.noobotInternalMessageType ||
-      messageItem?.lc_kwargs?.metadata?.noobotInternalMessageType ||
-      "",
-  ).trim();
-}
-
-function isActualUserMessage(messageItem = {}) {
-  if (resolveMessageRole(messageItem) !== "user") return false;
-  if (isInjectedMessage(messageItem)) return false;
-  if (messageItem?.phaseSummaryMemory === true) return false;
-  if (messageItem?.recoveredFromUnpairedTaskSummary === true) return false;
-  const internalType = resolveInternalMessageType(messageItem);
-  if (internalType && internalType !== "frontend_user_message") return false;
-  return true;
-}
-
-function resolveHistoryDialogKey(messageItem = {}, index = 0) {
-  const explicit = resolveMessageDialogProcessId(messageItem);
-  if (explicit) return explicit;
-  return `__missing_dialog__:${index}`;
-}
-
-function appendHistoryRoundMessage(roundsByDialog, key, messageItem, index) {
-  const current = roundsByDialog.get(key) || {
-    startIndex: -1,
-    lastAssistantIndex: -1,
+function appendDialogGroupMessage(groupsByDialog, key, messageItem, index) {
+  const current = groupsByDialog.get(key) || {
+    startIndex: index,
     messages: [],
   };
-  if (current.startIndex < 0) {
-    current.startIndex = index;
-  }
-  if (
-    resolveMessageRole(messageItem) === "assistant" &&
-    !isMessageSummarized(messageItem)
-  ) {
-    current.lastAssistantIndex = index;
-  }
   current.messages.push({ message: messageItem, index });
-  roundsByDialog.set(key, current);
+  groupsByDialog.set(key, current);
 }
 
 function shouldKeepHistoryMessage(messageItem = {}) {
@@ -94,44 +57,26 @@ export function resolveMainModelHistoryMessages({
   historyLimit = MAIN_MODEL_HISTORY_ROUND_LIMIT,
 } = {}) {
   const source = Array.isArray(sourceMessages) ? sourceMessages : [];
-  const roundsByDialog = new Map();
-  let missingDialogRoundKey = "";
-  let missingDialogRoundIndex = 0;
+  const groupsByDialog = new Map();
 
   source.forEach((messageItem, index) => {
     const explicitKey = resolveMessageDialogProcessId(messageItem);
     if (explicitKey) {
-      appendHistoryRoundMessage(roundsByDialog, explicitKey, messageItem, index);
-      return;
+      appendDialogGroupMessage(groupsByDialog, explicitKey, messageItem, index);
     }
-
-    const currentMissingRound = roundsByDialog.get(missingDialogRoundKey);
-    if (
-      !missingDialogRoundKey ||
-      (isActualUserMessage(messageItem) && currentMissingRound?.lastAssistantIndex >= 0)
-    ) {
-      missingDialogRoundIndex += 1;
-      missingDialogRoundKey = `__missing_dialog_round__:${missingDialogRoundIndex}`;
-    }
-    appendHistoryRoundMessage(
-      roundsByDialog,
-      missingDialogRoundKey || resolveHistoryDialogKey(messageItem, index),
-      messageItem,
-      index,
-    );
   });
 
   const rounds = [];
-  for (const value of roundsByDialog.values()) {
-    if (value.startIndex < 0 || value.lastAssistantIndex < value.startIndex) continue;
+  for (const value of groupsByDialog.values()) {
+    if (value.startIndex < 0) continue;
     rounds.push({
       startIndex: value.startIndex,
-      endIndex: value.lastAssistantIndex,
+      endIndex: Number.POSITIVE_INFINITY,
       messages: value.messages,
     });
   }
 
-  rounds.sort((left, right) => left.endIndex - right.endIndex);
+  rounds.sort((left, right) => left.startIndex - right.startIndex);
   const selectedRounds = recentSlice(rounds, historyLimit);
   return selectedRounds.flatMap((round) =>
     round.messages
