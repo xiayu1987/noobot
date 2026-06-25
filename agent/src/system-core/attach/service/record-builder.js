@@ -7,6 +7,7 @@
 import path from "node:path";
 
 import { DEFAULT_ATTACHMENT_SESSION_ID, DEFAULT_ATTACHMENT_SOURCE, DEFAULT_MIME_TYPE, MIME_TO_EXTENSION, MAX_EXTENSION_LENGTH } from "../constants.js";
+import { normalizeAttachmentOwnerMeta, normalizeAttachmentTurnScopeMeta } from "../meta-ops.js";
 import { safeNum, safeStr } from "../../utils/shared-utils.js";
 
 /**
@@ -33,11 +34,10 @@ export function buildPublicRecord(basePath, record) {
   const parsedResultRelativePath = safeStr(record?.parsedResultRelativePath);
   const parsedResultTool = safeStr(record?.parsedResultTool);
   const parsedResultUpdatedAt = safeStr(record?.parsedResultUpdatedAt);
-  const attachmentOwnerType = safeStr(record?.attachmentOwnerType);
-  const attachmentOwner = safeStr(record?.attachmentOwner);
-  const owner = record?.owner && typeof record.owner === "object" && !Array.isArray(record.owner)
-    ? record.owner
-    : null;
+  const owner = normalizeAttachmentOwnerMeta(record);
+  const turnScope = normalizeAttachmentTurnScopeMeta(record, owner);
+  const attachmentOwnerType = safeStr(owner?.attachmentOwnerType || record?.attachmentOwnerType);
+  const attachmentOwner = safeStr(owner?.attachmentOwner || record?.attachmentOwner);
   return {
     attachmentId: safeStr(record.attachmentId),
     name: safeStr(record.name),
@@ -53,6 +53,7 @@ export function buildPublicRecord(basePath, record) {
     ...(attachmentOwnerType ? { attachmentOwnerType } : {}),
     ...(attachmentOwner ? { attachmentOwner } : {}),
     ...(owner ? { owner } : {}),
+    ...(turnScope ? { turnScope } : {}),
     ...(parsedResultAttachmentId
       ? {
           parsedResultAttachmentId,

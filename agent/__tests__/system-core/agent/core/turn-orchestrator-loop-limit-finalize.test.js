@@ -5,6 +5,10 @@ import { HumanMessage } from "@langchain/core/messages";
 import { runFunctionCallLoop } from "../../../../src/system-core/agent/core/turn/orchestrator.js";
 import { createAgentHookManager } from "../../../../src/system-core/hook/index.js";
 
+function delay(ms = 0) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+}
+
 function createToolCallingLlm(responses = []) {
   const capturedInvocations = [];
   const capturedBindOptions = [];
@@ -521,12 +525,16 @@ test("auto tool_choice should not force non-thinking params", async () => {
   assert.equal(result.output, "收尾结果");
 });
 
-test("multiple tool calls are replayed as one assistant/tool pair per loop without extra LLM calls", async () => {
+test("multiple tool calls stay in one tool turn and advance loop turns by tool count", async () => {
   const invokedArgs = [];
+  const toolTimings = [];
   const tool = {
     name: "execute_script",
     async invoke(args = {}) {
+      const startedAt = Date.now();
       invokedArgs.push(args);
+      await delay(args.delayMs);
+      toolTimings.push({ value: args.value, startedAt, endedAt: Date.now() });
       return JSON.stringify({ ok: true, value: args.value });
     },
   };
@@ -534,9 +542,9 @@ test("multiple tool calls are replayed as one assistant/tool pair per loop witho
     {
       content: "检查多个文件",
       tool_calls: [
-        { id: "call_1", name: "execute_script", args: { value: 1 } },
-        { id: "call_2", name: "execute_script", args: { value: 2 } },
-        { id: "call_3", name: "execute_script", args: { value: 3 } },
+        { id: "call_1", name: "execute_script", args: { value: 1, delayMs: 60 } },
+        { id: "call_2", name: "execute_script", args: { value: 2, delayMs: 5 } },
+        { id: "call_3", name: "execute_script", args: { value: 3, delayMs: 20 } },
       ],
       additional_kwargs: {},
       response_metadata: {},
@@ -569,16 +577,34 @@ test("multiple tool calls are replayed as one assistant/tool pair per loop witho
   });
 
   assert.equal(result.output, "完成");
-  assert.deepEqual(invokedArgs, [{ value: 1 }, { value: 2 }, { value: 3 }]);
-  assert.equal(capturedInvocations.length, 2, "synthetic tool turns should not call the LLM");
+  assert.deepEqual(invokedArgs, [
+    { value: 1, delayMs: 60 },
+    { value: 2, delayMs: 5 },
+    { value: 3, delayMs: 20 },
+  ]);
+  assert.equal(
+    Math.max(...toolTimings.map((item) => item.startedAt)) -
+      Math.min(...toolTimings.map((item) => item.startedAt)) < 45,
+    true,
+    "multiple tools should start in parallel",
+  );
+  assert.deepEqual(
+    toolTimings.map((item) => item.value),
+    [2, 3, 1],
+    "shorter tools should be able to finish before earlier calls",
+  );
+  assert.equal(capturedInvocations.length, 2);
 
-  const toolCallMessages = loopState.turnMessages.filter((item) => item.role === "assistant");
+  const toolCallMessages = loopState.turnMessages.filter(
+    (item) => item.role === "assistant" && item.type === "tool_call",
+  );
   const toolResultMessages = loopState.turnMessages.filter((item) => item.role === "tool");
   const userPromptMessages = loopState.turnMessages.filter((item) => item.role === "user");
+  assert.equal(toolCallMessages.length, 1);
   assert.equal(toolResultMessages.length, 3);
   assert.deepEqual(
-    toolCallMessages.slice(0, 3).map((item) => item.tool_calls.map((call) => call.id)),
-    [["call_1"], ["call_2"], ["call_3"]],
+    toolCallMessages[0].tool_calls.map((call) => call.id),
+    ["call_1", "call_2", "call_3"],
   );
   assert.deepEqual(
     toolResultMessages.map((item) => item.tool_call_id),
@@ -594,42 +620,22 @@ test("multiple tool calls are replayed as one assistant/tool pair per loop witho
   );
 
   const secondInvocationMessages = capturedInvocations[1] || [];
-  const toolBatchLimitPromptMessage = [...secondInvocationMessages]
-    .reverse()
-    .find((messageItem) =>
+  assert.equal(
+    secondInvocationMessages.some((messageItem) =>
       messageItem instanceof HumanMessage &&
       /不要一次返回 3 条及以上工具|do not return 3 or more at once/i.test(
         String(messageItem?.content || ""),
-      ));
-  assert.ok(
-    toolBatchLimitPromptMessage,
-    "should inject a user prompt when a split synthetic batch has 3+ tool calls",
-  );
-  assert.equal(
-    toolBatchLimitPromptMessage.additional_kwargs?.noobotInternalMessageType,
-    undefined,
-    "tool-batch-limit prompt must remain visible to plugin before_llm_call cleanup",
-  );
-  assert.equal(
-    toolBatchLimitPromptMessage.additional_kwargs?.noobotModelOnlyMessage,
-    true,
-    "tool-batch-limit prompt should be explicitly marked as model-context-only",
-  );
-  assert.equal(
-    toolBatchLimitPromptMessage.additional_kwargs?.noobotModelOnlyMessageReason,
-    "tool_batch_limit_prompt",
+      )),
+    false,
+    "split synthetic batches should no longer inject tool-batch-limit prompts",
   );
   const assistantToolCallCounts = secondInvocationMessages
     .filter((message) => String(message?._getType?.() || "") === "ai")
     .map((message) => (Array.isArray(message.tool_calls) ? message.tool_calls.length : 0));
-  assert.ok(
-    assistantToolCallCounts.slice(-3).every((count) => count === 1),
-    "each assistant message sent to the next LLM call should contain one tool call",
-  );
+  assert.equal(assistantToolCallCounts.at(-1), 3);
   const incrementalToolCallIds = loopState.messageBlocks.incremental
-    .filter((message) => Array.isArray(message?.tool_calls) && message.tool_calls.length === 1)
-    .map((message) => message.tool_calls[0]?.id)
-    .filter(Boolean);
+    .filter((message) => Array.isArray(message?.tool_calls))
+    .flatMap((message) => message.tool_calls.map((call) => call.id).filter(Boolean));
   assert.deepEqual(incrementalToolCallIds.slice(-3), ["call_1", "call_2", "call_3"]);
   const incrementalToolResultIds = loopState.messageBlocks.incremental
     .filter((message) => String(message?._getType?.() || "") === "tool")
@@ -646,20 +652,16 @@ test("multiple tool calls are replayed as one assistant/tool pair per loop witho
   const syntheticAfterLlm = afterLlmContexts.filter((ctx) => ctx?.fakeTurn === true);
   const syntheticBeforeToolCalls = beforeToolCallContexts.filter((ctx) => ctx?.fakeTurn === true);
   const syntheticAfterToolCalls = afterToolCallContexts.filter((ctx) => ctx?.fakeTurn === true);
-  assert.equal(syntheticBeforeLlm.length, 2);
-  assert.equal(syntheticAfterLlm.length, 2);
-  assert.equal(syntheticBeforeToolCalls.length, 2);
-  assert.equal(syntheticAfterToolCalls.length, 2);
+  assert.equal(syntheticBeforeLlm.length, 0);
+  assert.equal(syntheticAfterLlm.length, 0);
+  assert.equal(syntheticBeforeToolCalls.length, 0);
+  assert.equal(syntheticAfterToolCalls.length, 0);
   assert.deepEqual(
-    syntheticBeforeLlm.map((ctx) => ctx.calls?.[0]?.id),
-    ["call_2", "call_3"],
+    beforeLlmContexts.map((ctx) => ctx.turn),
+    [1, 4],
   );
-  assert.ok(
-    syntheticBeforeLlm.every(
-      (ctx) => ctx.synthetic === true &&
-        ctx.replayedToolTurn === true &&
-        ctx.mode === "synthetic_tool_turn" &&
-        ctx.source === "split_multi_tool_calls",
-    ),
-  );
+  assert.equal(beforeToolCallContexts.length, 1);
+  assert.equal(afterToolCallContexts.length, 1);
+  assert.equal(beforeToolCallContexts[0].toolCallCount, 3);
+  assert.equal(afterToolCallContexts[0].toolCallCount, 3);
 });

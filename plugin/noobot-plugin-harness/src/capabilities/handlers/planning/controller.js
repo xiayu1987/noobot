@@ -210,6 +210,21 @@ function maybeScheduleSummaryByToolBurst(ctx = {}, meta = {}) {
   return true;
 }
 
+function consumePlanningTurnIncrement(state = {}, ctx = {}) {
+  const counters = state?.counters || {};
+  const currentTurn = Number(ctx?.turn);
+  const previousTurn = Number(counters.lastPlanningCounterTurn || 0);
+  let increment = 1;
+  if (Number.isFinite(currentTurn) && currentTurn > 0) {
+    increment =
+      Number.isFinite(previousTurn) && previousTurn > 0
+        ? Math.max(1, Math.trunc(currentTurn) - Math.trunc(previousTurn))
+        : 1;
+    counters.lastPlanningCounterTurn = Math.trunc(currentTurn);
+  }
+  return increment;
+}
+
 function setMessageSummarized(messageItem = {}) {
   if (!messageItem || typeof messageItem !== "object") return false;
   if (messageItem.summarized === true && messageItem?.lc_kwargs?.summarized === true) return false;
@@ -303,11 +318,14 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
         planningCaptured: false,
       };
       if (holder) {
-        holder.state.counters.llmTurns += 1;
-        holder.state.counters.analysisTurns = Number(holder.state.counters.analysisTurns || 0) + 1;
-        holder.state.counters.planUpdateTurns = Number(holder.state.counters.planUpdateTurns || 0) + 1;
+        const turnIncrement = consumePlanningTurnIncrement(holder.state, ctx);
+        holder.state.counters.llmTurns += turnIncrement;
+        holder.state.counters.analysisTurns =
+          Number(holder.state.counters.analysisTurns || 0) + turnIncrement;
+        holder.state.counters.planUpdateTurns =
+          Number(holder.state.counters.planUpdateTurns || 0) + turnIncrement;
         holder.state.counters.phaseAcceptanceTurns =
-          Number(holder.state.counters.phaseAcceptanceTurns || 0) + 1;
+          Number(holder.state.counters.phaseAcceptanceTurns || 0) + turnIncrement;
         let currentChars = resolveUnsummarizedMessageChars(ctx?.messages);
         const planningThresholds = resolvePlanningTurnThresholds(ctx);
         const summaryTurnsThreshold = planningThresholds.summaryTurnsThreshold;

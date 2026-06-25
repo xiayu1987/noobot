@@ -36,13 +36,106 @@ export function filterSemanticTransferAttachmentMetas(attachmentMetas = []) {
   );
 }
 
-function normalizeTurnScope(value = null) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const turnScope = {
-    turnScopeId: safeStr(value?.turnScopeId),
-    dialogProcessId: safeStr(value?.dialogProcessId || value?.dialog_process_id),
+function isPlainObject(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function cleanPlainObject(value = {}) {
+  if (!isPlainObject(value)) return null;
+  const out = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (child === undefined || child === null) continue;
+    if (typeof child === "string") {
+      const normalized = safeStr(child);
+      if (normalized) out[key] = normalized;
+      continue;
+    }
+    if (isPlainObject(child)) {
+      const nested = cleanPlainObject(child);
+      if (nested) out[key] = nested;
+      continue;
+    }
+    if (Array.isArray(child)) {
+      if (child.length) out[key] = child;
+      continue;
+    }
+    out[key] = child;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/**
+ * 归一化附件 owner 元数据。
+ * - owner 是新的统一承载入口；
+ * - attachmentOwnerType/attachmentOwner 是历史扁平字段，仅作为兼容输入补齐到 owner；
+ * - attachment.owner 是历史嵌套形态，也作为兼容输入。
+ */
+export function normalizeAttachmentOwnerMeta(attachmentItem = {}) {
+  const nestedAttachmentOwner = isPlainObject(attachmentItem?.attachment?.owner)
+    ? attachmentItem.attachment.owner
+    : null;
+  const explicitOwner = isPlainObject(attachmentItem?.owner) ? attachmentItem.owner : null;
+  const baseOwner = cleanPlainObject(explicitOwner || nestedAttachmentOwner) || {};
+  const attachmentOwnerType = safeStr(
+    baseOwner.attachmentOwnerType ||
+      baseOwner.ownerType ||
+      baseOwner.type ||
+      attachmentItem?.attachmentOwnerType,
+  );
+  const attachmentOwner = safeStr(
+    baseOwner.attachmentOwner ||
+      baseOwner.owner ||
+      baseOwner.ownerId ||
+      attachmentItem?.attachmentOwner,
+  );
+  const normalized = {
+    ...baseOwner,
+    ...(attachmentOwnerType ? { attachmentOwnerType } : {}),
+    ...(attachmentOwner ? { attachmentOwner } : {}),
   };
-  return Object.fromEntries(Object.entries(turnScope).filter(([, item]) => item));
+  return cleanPlainObject(normalized);
+}
+
+/**
+ * 归一化附件 turn scope 元数据。
+ * - turnScope 是新的统一承载入口；
+ * - turnScopeId/dialogProcessId/sessionId 扁平字段作为兼容输入；
+ * - owner.turnScope / owner 内旧字段、attachment.turnScope 也作为兼容输入。
+ */
+export function normalizeAttachmentTurnScopeMeta(attachmentItem = {}, normalizedOwner = null) {
+  const owner = isPlainObject(normalizedOwner) ? normalizedOwner : normalizeAttachmentOwnerMeta(attachmentItem);
+  const explicitTurnScope = isPlainObject(attachmentItem?.turnScope) ? attachmentItem.turnScope : null;
+  const ownerTurnScope = isPlainObject(owner?.turnScope) ? owner.turnScope : null;
+  const nestedAttachmentTurnScope = isPlainObject(attachmentItem?.attachment?.turnScope)
+    ? attachmentItem.attachment.turnScope
+    : null;
+  const baseTurnScope = cleanPlainObject(explicitTurnScope || ownerTurnScope || nestedAttachmentTurnScope) || {};
+  const normalized = {
+    ...baseTurnScope,
+    turnScopeId: safeStr(
+      baseTurnScope.turnScopeId ||
+        owner?.turnScopeId ||
+        attachmentItem?.turnScopeId ||
+        attachmentItem?.attachment?.turnScopeId,
+    ),
+    dialogProcessId: safeStr(
+      baseTurnScope.dialogProcessId ||
+        baseTurnScope.dialog_process_id ||
+        owner?.dialogProcessId ||
+        owner?.dialog_process_id ||
+        attachmentItem?.dialogProcessId ||
+        attachmentItem?.dialog_process_id ||
+        attachmentItem?.attachment?.dialogProcessId ||
+        attachmentItem?.attachment?.dialog_process_id,
+    ),
+    sessionId: safeStr(
+      baseTurnScope.sessionId ||
+        owner?.sessionId ||
+        attachmentItem?.sessionId ||
+        attachmentItem?.attachment?.sessionId,
+    ),
+  };
+  return cleanPlainObject(normalized);
 }
 
 /**
@@ -106,24 +199,31 @@ export function mapAttachmentRecordsToMetas(
   { fallbackMimeType = DEFAULT_MIME_TYPE, fallbackGenerationSource = "" } = {},
 ) {
   const list = Array.isArray(records) ? records : [];
-  return list.map((item) => ({
-    attachmentId: safeStr(item?.attachmentId),
-    sessionId: safeStr(item?.sessionId, DEFAULT_ATTACHMENT_SESSION_ID),
-    attachmentSource: safeStr(item?.attachmentSource, DEFAULT_ATTACHMENT_SOURCE),
-    name: safeStr(item?.name),
-    mimeType: safeStr(item?.mimeType, fallbackMimeType),
-    size: safeNum(item?.size),
-    path: safeStr(item?.path),
-    relativePath: safeStr(item?.relativePath),
-    generatedByModel: item?.generatedByModel === true,
-    generationSource: safeStr(item?.generationSource, fallbackGenerationSource),
-    parsedResultAttachmentId: safeStr(item?.parsedResultAttachmentId),
-    parsedResultPath: safeStr(item?.parsedResultPath),
-    parsedResultRelativePath: safeStr(item?.parsedResultRelativePath),
-    parsedResultTool: safeStr(item?.parsedResultTool),
-    parsedResultUpdatedAt: safeStr(item?.parsedResultUpdatedAt),
-    ...(normalizeTurnScope(item?.turnScope) ? { turnScope: normalizeTurnScope(item.turnScope) } : {}),
-  }));
+  return list.map((item) => {
+    const owner = normalizeAttachmentOwnerMeta(item);
+    const turnScope = normalizeAttachmentTurnScopeMeta(item, owner);
+    return {
+      attachmentId: safeStr(item?.attachmentId),
+      sessionId: safeStr(item?.sessionId, DEFAULT_ATTACHMENT_SESSION_ID),
+      attachmentSource: safeStr(item?.attachmentSource, DEFAULT_ATTACHMENT_SOURCE),
+      name: safeStr(item?.name),
+      mimeType: safeStr(item?.mimeType, fallbackMimeType),
+      size: safeNum(item?.size),
+      path: safeStr(item?.path),
+      relativePath: safeStr(item?.relativePath),
+      generatedByModel: item?.generatedByModel === true,
+      generationSource: safeStr(item?.generationSource, fallbackGenerationSource),
+      ...(owner ? { owner } : {}),
+      ...(owner?.attachmentOwnerType ? { attachmentOwnerType: owner.attachmentOwnerType } : {}),
+      ...(owner?.attachmentOwner ? { attachmentOwner: owner.attachmentOwner } : {}),
+      parsedResultAttachmentId: safeStr(item?.parsedResultAttachmentId),
+      parsedResultPath: safeStr(item?.parsedResultPath),
+      parsedResultRelativePath: safeStr(item?.parsedResultRelativePath),
+      parsedResultTool: safeStr(item?.parsedResultTool),
+      parsedResultUpdatedAt: safeStr(item?.parsedResultUpdatedAt),
+      ...(turnScope ? { turnScope } : {}),
+    };
+  });
 }
 
 /**

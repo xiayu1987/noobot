@@ -467,12 +467,11 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     ai = finalStreamResult.ai || ai;
     aiContentText = finalStreamResult.text || aiContentText;
   }
-  const committedCalls = calls.length > 1 ? calls.slice(0, 1) : calls;
   appendMessage(loopState, calls.length
     ? buildAssistantModelMessageForToolCalls({
         ai,
         contentText: aiContentText,
-        toolCalls: committedCalls,
+        toolCalls: calls,
       })
     : ai, { block: "incremental" });
 
@@ -496,7 +495,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     modelAdditionalKwargs: ai?.additional_kwargs ?? null,
     modelResponseMetadata: ai?.response_metadata ?? null,
     type: calls.length ? "tool_call" : "message",
-    toolCalls: calls.length ? formatToolCallsForStorage(committedCalls) : [],
+    toolCalls: calls.length ? formatToolCallsForStorage(calls) : [],
     modelAlias: currentModelInfo.modelAlias,
     modelName: currentModelInfo.modelName,
   });
@@ -531,18 +530,6 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     turnMessageStore,
     turnTaskStore,
     traces,
-    syntheticAssistantPayload:
-      calls.length > 1
-        ? {
-            content: aiContentText,
-            rawModelContent: ai?.content ?? null,
-            modelAdditionalKwargs: ai?.additional_kwargs ?? null,
-            modelResponseMetadata: ai?.response_metadata ?? null,
-            type: "tool_call",
-            modelAlias: currentModelInfo.modelAlias,
-            modelName: currentModelInfo.modelName,
-          }
-        : null,
     finalStreaming: finalStreamResult?.streamed
       ? {
           streamed: true,

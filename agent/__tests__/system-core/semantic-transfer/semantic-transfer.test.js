@@ -362,11 +362,25 @@ test("persistTransferArtifacts saves through attachment service and returns tran
         relativePath: `attachments/${artifact.name}`,
         generatedByModel: true,
         generationSource: payload.generationSource,
+        owner: {
+          attachmentOwnerType: "turn",
+          attachmentOwner: "turn-1",
+          turnScope: {
+            turnScopeId: "turn-1",
+            dialogProcessId: "dialog-1",
+          },
+        },
       }));
     },
   };
   const persisted = await persistTransferArtifacts({
     attachmentService,
+    runtime: {
+      systemRuntime: {
+        turnScopeId: "turn-1",
+        dialogProcessId: "dialog-1",
+      },
+    },
     userId: "u1",
     sessionId: "s1",
     attachmentSource: "model",
@@ -375,14 +389,87 @@ test("persistTransferArtifacts saves through attachment service and returns tran
   });
   assert.equal(calls.length, 1);
   assert.equal(calls[0].generationSource, "unit_test");
+  assert.deepEqual(calls[0].turnScope, {
+    turnScopeId: "turn-1",
+    dialogProcessId: "dialog-1",
+    sessionId: "s1",
+  });
   assert.equal(persisted.transferResult?.status, "file");
   assert.equal("transferEnvelopes" in persisted, true);
   assert.equal(persisted.transferEnvelopes?.[0]?.filePath, "attachments/a.txt");
   assert.equal(getTransferAttachmentMetas(persisted.transferEnvelopes).length, 1);
-  assert.equal(getTransferAttachmentMetas(persisted.transferEnvelopes)[0].attachmentId, "att-1");
+  const [attachmentMeta] = getTransferAttachmentMetas(persisted.transferEnvelopes);
+  assert.equal(attachmentMeta.attachmentId, "att-1");
+  assert.equal(attachmentMeta.sessionId, "s1");
+  assert.equal(attachmentMeta.attachmentSource, "model");
+  assert.equal(attachmentMeta.mimeType, "text/plain");
+  assert.equal(attachmentMeta.generationSource, "unit_test");
+  assert.equal(attachmentMeta.owner.attachmentOwnerType, "turn");
+  assert.equal(attachmentMeta.owner.attachmentOwner, "turn-1");
+  assert.equal(attachmentMeta.attachmentOwnerType, "turn");
+  assert.equal(attachmentMeta.attachmentOwner, "turn-1");
+  assert.deepEqual(attachmentMeta.turnScope, {
+    turnScopeId: "turn-1",
+    dialogProcessId: "dialog-1",
+    sessionId: "s1",
+  });
+  assert.equal(persisted.transferEnvelopes?.[0]?.attachmentMeta?.attachmentId, attachmentMeta.attachmentId);
+  assert.equal(persisted.transferEnvelopes?.[0]?.attachmentMeta?.sessionId, attachmentMeta.sessionId);
+  assert.equal(persisted.transferEnvelopes?.[0]?.files?.[0]?.attachmentMeta?.attachmentId, attachmentMeta.attachmentId);
+  assert.equal(persisted.transferEnvelopes?.[0]?.files?.[0]?.attachmentMeta?.sessionId, attachmentMeta.sessionId);
   assert.equal("attachmentMetas" in persisted, false);
   assert.equal("filePath" in persisted, false);
   assert.equal("filePaths" in persisted, false);
+});
+
+test("attachment metadata normalizes legacy owner and turn scope shapes", async () => {
+  const { mapAttachmentRecordsToMetas } = await import("../../../src/system-core/attach/index.js");
+  const metas = mapAttachmentRecordsToMetas([
+    {
+      attachmentId: "legacy-flat",
+      sessionId: "s-flat",
+      attachmentSource: "model",
+      name: "flat.txt",
+      mimeType: "text/plain",
+      attachmentOwnerType: "turn",
+      attachmentOwner: "flat-turn",
+      turnScopeId: "flat-turn",
+      dialogProcessId: "flat-dialog",
+    },
+    {
+      attachmentId: "legacy-nested",
+      sessionId: "s-nested",
+      attachmentSource: "model",
+      name: "nested.txt",
+      mimeType: "text/plain",
+      attachment: {
+        owner: {
+          type: "tool",
+          ownerId: "tool-call-1",
+        },
+        turnScope: {
+          turnScopeId: "nested-turn",
+          dialog_process_id: "nested-dialog",
+        },
+      },
+    },
+  ]);
+
+  assert.equal(metas[0].owner.attachmentOwnerType, "turn");
+  assert.equal(metas[0].owner.attachmentOwner, "flat-turn");
+  assert.deepEqual(metas[0].turnScope, {
+    turnScopeId: "flat-turn",
+    dialogProcessId: "flat-dialog",
+    sessionId: "s-flat",
+  });
+  assert.equal(metas[1].owner.attachmentOwnerType, "tool");
+  assert.equal(metas[1].owner.attachmentOwner, "tool-call-1");
+  assert.deepEqual(metas[1].turnScope, {
+    turnScopeId: "nested-turn",
+    dialog_process_id: "nested-dialog",
+    dialogProcessId: "nested-dialog",
+    sessionId: "s-nested",
+  });
 });
 
 test("persistTransferArtifacts returns skipped result and empty transfer fields when service missing", async () => {

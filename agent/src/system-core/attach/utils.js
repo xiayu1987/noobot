@@ -6,5 +6,11 @@
  * 兼容层（deprecated）：转发至语义化模块，保留旧引用路径可用。
  */
 
-export { mergeAttachmentMetas, normalizeAttachmentMetas, mapAttachmentRecordsToMetas } from "./meta-ops.js";
+export {
+  mergeAttachmentMetas,
+  normalizeAttachmentMetas,
+  mapAttachmentRecordsToMetas,
+  normalizeAttachmentOwnerMeta,
+  normalizeAttachmentTurnScopeMeta,
+} from "./meta-ops.js";
 export { appendAttachmentMetasToRuntimeAndTurn } from "./runtime-attachment.js";

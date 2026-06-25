@@ -126,6 +126,37 @@ test("planning schedules guidance analysis by full-mode turn threshold", async (
   assert.equal(decisionLog?.detail?.triggeredActions?.includes("analysis"), true);
 });
 
+test("planning counters consume skipped agent turns from multi-tool loop turn increments", async () => {
+  const handler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = createPlanningAgentContext({
+    counters: {
+      llmTurns: 1,
+      lastPlanningCounterTurn: 1,
+      analysisTurns: 1,
+      planUpdateTurns: 1,
+      phaseAcceptanceTurns: 1,
+    },
+  });
+
+  await handler({
+    capability: "planning",
+    point: "before_llm_call",
+    ctx: {
+      turn: 4,
+      messages: [{ role: "user", content: "继续" }],
+      agentContext,
+    },
+    meta: {},
+  });
+
+  const counters = agentContext.payload.harness.state.counters;
+  assert.equal(counters.llmTurns, 4);
+  assert.equal(counters.analysisTurns, 4);
+  assert.equal(counters.planUpdateTurns, 4);
+  assert.equal(counters.phaseAcceptanceTurns, 4);
+  assert.equal(counters.lastPlanningCounterTurn, 4);
+});
+
 test("planning schedules guidance analysis by scenario-specific turn threshold", async () => {
   const handler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const beforeProgrammingThreshold = createPlanningAgentContext({
