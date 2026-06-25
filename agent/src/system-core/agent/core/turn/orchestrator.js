@@ -70,6 +70,29 @@ export function createTurnOrchestrator({
     return removedCount;
   }
 
+  function resolveTaskSummaryCall(calls = []) {
+    return (Array.isArray(calls) ? calls : []).find(
+      (call = {}) => String(call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
+    ) || null;
+  }
+
+  function removeLastAssistantToolCallMessage({ loopState: targetLoopState, turnMessageStore = null } = {}) {
+    const lastMessage = Array.isArray(targetLoopState?.messages)
+      ? targetLoopState.messages[targetLoopState.messages.length - 1]
+      : null;
+    const lastToolCalls = Array.isArray(lastMessage?.tool_calls)
+      ? lastMessage.tool_calls
+      : [];
+    if (lastToolCalls.length) {
+      targetLoopState.messages.pop();
+    }
+    if (turnMessageStore && typeof turnMessageStore.removeLast === "function") {
+      turnMessageStore.removeLast(
+        (item = {}) => item?.role === "assistant" && item?.type === "tool_call",
+      );
+    }
+  }
+
   async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
     const { tools, traces, maxTurns } = loopState;
     const { abortSignal, runtime, eventListener } = modelState;
@@ -260,22 +283,25 @@ export function createTurnOrchestrator({
       }
       loopState.toolChoiceRetryPrompted = false;
 
+      const taskSummaryCall = resolveTaskSummaryCall(calls);
+      if (calls.length > 1 && taskSummaryCall) {
+        removeLastAssistantToolCallMessage({ loopState, turnMessageStore });
+        appendMessage(loopState, new HumanMessage({
+          content: tEngine(runtime, "taskSummarySingleToolPrompt"),
+          additional_kwargs: {
+            noobotInternalMessageType: "task_summary_single_tool_retry_prompt",
+          },
+        }), { block: "incremental" });
+        emitEvent(eventListener, "task_summary_multi_tool_call_rejected", {
+          turn,
+          toolCallCount: calls.length,
+          taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
+        });
+        return runFunctionCallLoop({ modelState, loopState, turn: turn + 1 });
+      }
+
       if (isBeyondLoopLimitBuffer) {
-        const lastMessage = Array.isArray(loopState?.messages)
-          ? loopState.messages[loopState.messages.length - 1]
-          : null;
-        const lastToolCalls = Array.isArray(lastMessage?.tool_calls)
-          ? lastMessage.tool_calls
-          : [];
-        if (lastToolCalls.length) {
-          loopState.messages.pop();
-        }
-        if (turnMessageStore && typeof turnMessageStore.updateLast === "function") {
-          turnMessageStore.updateLast(
-            { type: "message", tool_calls: [] },
-            (item = {}) => item?.role === "assistant" && item?.type === "tool_call",
-          );
-        }
+        removeLastAssistantToolCallMessage({ loopState, turnMessageStore });
         emitEvent(eventListener, "tool_loop_limit_reached", {
           turn,
           maxTurns,
