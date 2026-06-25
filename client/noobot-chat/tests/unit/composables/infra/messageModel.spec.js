@@ -124,6 +124,51 @@ describe("messageModel semantic transfer", () => {
     });
   });
 
+  it("restores attachment metadata from refreshed session summary transfer envelopes", () => {
+    const message = buildViewMessage({
+      role: "assistant",
+      content: "done after refresh",
+      transferEnvelopes: [
+        {
+          protocol: "noobot.semantic-transfer",
+          version: 1,
+          direction: "output",
+          transport: "file",
+          filePath: "/workspace/u1/runtime/workflow-result.md",
+          files: [
+            {
+              role: "primary",
+              filePath: "/workspace/u1/runtime/workflow-result.md",
+              attachmentMeta: {
+                attachmentId: "att-workflow-1",
+                sessionId: "s1",
+                attachmentSource: "model",
+                name: "workflow-result.md",
+                mimeType: "text/markdown",
+                relativePath: "runtime/workflow-result.md",
+              },
+              pathView: {
+                sandboxPath: "/sandbox/u1/runtime/workflow-result.md",
+                relativePath: "runtime/workflow-result.md",
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(message.attachmentMetas).toHaveLength(1);
+    expect(message.attachmentMetas[0]).toMatchObject({
+      attachmentId: "att-workflow-1",
+      sessionId: "s1",
+      attachmentSource: "model",
+      name: "workflow-result.md",
+      mimeType: "text/markdown",
+      transferFilePath: "/sandbox/u1/runtime/workflow-result.md",
+      sandboxPath: "/sandbox/u1/runtime/workflow-result.md",
+    });
+  });
+
   it("normalizes parsed result metadata from attachmentMetas", () => {
     const message = buildViewMessage(
       {

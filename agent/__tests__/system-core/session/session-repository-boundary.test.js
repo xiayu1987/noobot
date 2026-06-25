@@ -215,6 +215,36 @@ test("session display summary should keep chat view lightweight and rebuild stal
     const longUserContent = `show attachment ${"user-long-content-".repeat(400)}${userContentTail}`;
     const longAssistantContent = `final answer ${"assistant-long-content-".repeat(400)}${assistantContentTail}`;
     const longWorkflowContent = `workflow final ${"workflow-long-content-".repeat(400)}${workflowContentTail}`;
+    const workflowTransferEnvelope = {
+      protocol: "noobot.semantic-transfer",
+      version: 1,
+      direction: "output",
+      transport: "file",
+      filePath: "/workspace/u1/runtime/workflow-result.md",
+      payload: { huge: true },
+      files: [
+        {
+          role: "primary",
+          filePath: "/workspace/u1/runtime/workflow-result.md",
+          attachmentMeta: {
+            attachmentId: "att-workflow-1",
+            sessionId: "B",
+            attachmentSource: "model",
+            name: "workflow-result.md",
+            mimeType: "text/markdown",
+            size: 321,
+            path: "/host/workflow-result.md",
+            relativePath: "runtime/workflow-result.md",
+          },
+          pathView: {
+            displayPath: "/workspace/u1/runtime/workflow-result.md",
+            sandboxPath: "/sandbox/u1/runtime/workflow-result.md",
+            relativePath: "runtime/workflow-result.md",
+            hostPath: "/host/workflow-result.md",
+          },
+        },
+      ],
+    };
 
     const sessionB = await runtime.repositories.sessionRepository.findById(userId, "B", "A");
     sessionB.messages = [
@@ -307,6 +337,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
                   nodeSessionId: "session-act",
                   stepStatus: "success",
                   step: { nodeId: "act", nodeName: "Action", type: "action" },
+                  nodeResultTransferEnvelopes: [workflowTransferEnvelope],
                   nodeResultText: "large node result should be dropped".repeat(80),
                 },
               ],
@@ -318,13 +349,14 @@ test("session display summary should keep chat view lightweight and rebuild stal
                 dialogId: "dialog-act",
                 sessionId: "session-act",
                 stepStatus: "success",
+                transferEnvelopes: [workflowTransferEnvelope],
                 nodeResultText: "large node session result should be dropped".repeat(80),
               },
             ],
             diagnostics: { huge: "debug detail should be dropped" },
           },
         },
-        transferEnvelopes: [{ id: "tr-1", status: "done", payload: { huge: true } }],
+        transferEnvelopes: [workflowTransferEnvelope],
       },
       {
         id: "u2",
@@ -461,8 +493,19 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal("diagnostics" in workflowMessage.pluginMeta.payload, false);
     assert.equal("transferEnvelopes" in workflowMessage, true);
     assert.equal(Array.isArray(workflowMessage.transferEnvelopes), true);
-    assert.equal(workflowMessage.transferEnvelopes[0].id, "tr-1");
+    assert.equal(workflowMessage.transferEnvelopes[0].protocol, "noobot.semantic-transfer");
+    assert.equal(workflowMessage.transferEnvelopes[0].filePath, "/workspace/u1/runtime/workflow-result.md");
+    assert.equal(workflowMessage.transferEnvelopes[0].files[0].attachmentMeta.attachmentId, "att-workflow-1");
+    assert.equal(workflowMessage.transferEnvelopes[0].files[0].pathView.sandboxPath, "/sandbox/u1/runtime/workflow-result.md");
     assert.equal("payload" in workflowMessage.transferEnvelopes[0], false);
+    assert.equal(
+      workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].nodeResultTransferEnvelopes[0].files[0].attachmentMeta.attachmentId,
+      "att-workflow-1",
+    );
+    assert.equal(
+      workflowMessage.pluginMeta.payload.nodeSessions[0].transferEnvelopes[0].files[0].attachmentMeta.attachmentId,
+      "att-workflow-1",
+    );
     assert.equal(JSON.stringify(summary).includes("injected secret"), false);
 
     await writeFile(summaryFile, JSON.stringify({ schemaVersion: 0, sessionId: "wrong" }), "utf8");

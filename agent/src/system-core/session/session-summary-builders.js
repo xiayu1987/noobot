@@ -203,13 +203,57 @@ function pickPlainFields(source = {}, allowedKeys = [], options = {}) {
   return Object.keys(picked).length ? picked : null;
 }
 
+function pickTransferAttachmentMeta(meta = {}) {
+  return pickPlainFields(meta, [
+    "id", "attachmentId", "attachment_id", "fileId", "file_id",
+    "name", "fileName", "filename", "type", "mimeType", "mime",
+    "size", "bytes", "path", "relativePath", "sandboxPath", "sandboxViewPath",
+    "sessionId", "session_id", "backendSessionId", "attachmentSource", "attachment_source", "source",
+    "generationSource", "url", "downloadUrl", "previewUrl", "owner", "turnScope",
+  ], { maxStringLength: 1000 });
+}
+
+function pickTransferPathView(pathView = {}) {
+  return pickPlainFields(pathView, [
+    "displayPath", "sandboxPath", "relativePath", "hostPath",
+  ], { maxStringLength: 1000 });
+}
+
+function pickTransferFile(file = {}) {
+  if (!file || typeof file !== "object" || Array.isArray(file)) return null;
+  const picked = pickPlainFields(file, [
+    "id", "role", "filePath", "path", "relativePath", "sandboxPath", "name", "fileName", "mimeType", "type", "size",
+  ], { maxStringLength: 1000 }) || {};
+  const attachmentMeta = pickTransferAttachmentMeta(file?.attachmentMeta);
+  if (attachmentMeta) picked.attachmentMeta = attachmentMeta;
+  const pathView = pickTransferPathView(file?.pathView);
+  if (pathView) picked.pathView = pathView;
+  return Object.keys(picked).length ? picked : null;
+}
+
+function pickTransferEnvelope(envelope = {}) {
+  if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) return null;
+  const picked = pickPlainFields(envelope, [
+    "protocol", "version", "direction", "transport", "filePath", "path", "relativePath", "sandboxPath",
+    "id", "type", "from", "to", "status", "state", "title", "label", "createdAt", "updatedAt",
+  ], { maxStringLength: 1000 }) || {};
+  const attachmentMeta = pickTransferAttachmentMeta(envelope?.attachmentMeta);
+  if (attachmentMeta) picked.attachmentMeta = attachmentMeta;
+  const pathView = pickTransferPathView(envelope?.pathView);
+  if (pathView) picked.pathView = pathView;
+  const files = (Array.isArray(envelope?.files) ? envelope.files : [])
+    .slice(0, 20)
+    .map((item) => pickTransferFile(item))
+    .filter(Boolean);
+  if (files.length) picked.files = files;
+  return Object.keys(picked).length ? picked : null;
+}
+
 function pickLightPayloadTransferEnvelopes(value = []) {
   return (Array.isArray(value) ? value : [])
     .filter((item) => item && typeof item === "object" && !Array.isArray(item))
     .slice(0, 50)
-    .map((item) => pickPlainFields(item, [
-      "id", "type", "from", "to", "status", "state", "title", "label", "createdAt", "updatedAt",
-    ], { maxStringLength: 500 }))
+    .map((item) => pickTransferEnvelope(item))
     .filter(Boolean);
 }
 
@@ -312,9 +356,7 @@ function pickLightTransferEnvelopes(message = {}) {
   const seen = new Set();
   return (Array.isArray(message?.transferEnvelopes) ? message.transferEnvelopes : [])
     .filter((item) => item && typeof item === "object" && !Array.isArray(item))
-    .map((envelope) => pickLightObject(envelope, [
-    "id", "type", "from", "to", "status", "state", "title", "label", "createdAt", "updatedAt",
-    ]))
+    .map((envelope) => pickTransferEnvelope(envelope))
     .filter(Boolean)
     .filter((item) => {
       const key = JSON.stringify(item);
