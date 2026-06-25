@@ -23,6 +23,8 @@ test("createSessionFacade should delegate getContextRecords to sessionContextSer
     userId: "u1",
     sessionId: "s1",
     userConfig: { x: 1 },
+    currentTurnScopeId: "turn-current",
+    contractSentinel: "keep-me",
   });
 
   assert.deepEqual(captured, {
@@ -30,8 +32,63 @@ test("createSessionFacade should delegate getContextRecords to sessionContextSer
     sessionId: "s1",
     userConfig: { x: 1 },
     currentDialogProcessId: "",
+    currentTurnScopeId: "turn-current",
+    contractSentinel: "keep-me",
   });
   assert.deepEqual(result, [{ role: "user", content: "hi" }]);
+});
+
+test("createSessionFacade preserves context contract payload fields for session context APIs", async () => {
+  const captured = {};
+  const session = createSessionFacade({
+    sessionTreeService: {},
+    sessionCrudService: {},
+    sessionMessageService: {},
+    sessionContextService: {
+      async getRecentSessionMessages(payload = {}) {
+        captured.getRecentSessionMessages = payload;
+        return [];
+      },
+      async getMessagesSinceLastRunningTask(payload = {}) {
+        captured.getMessagesSinceLastRunningTask = payload;
+        return [];
+      },
+      async getMessagesSinceLastCompletedTask(payload = {}) {
+        captured.getMessagesSinceLastCompletedTask = payload;
+        return [];
+      },
+      async getContextRecords(payload = {}) {
+        captured.getContextRecords = payload;
+        return [];
+      },
+    },
+    taskService: {},
+    executionLogService: {},
+  });
+  const payload = {
+    userId: "u1",
+    sessionId: "s1",
+    limit: 3,
+    userConfig: { session: { recentMessageLimit: 3 } },
+    currentDialogProcessId: "dp-current",
+    currentTurnScopeId: "turn-current",
+    futureContractField: "must-not-drop",
+  };
+
+  await session.getRecentSessionMessages(payload);
+  await session.getMessagesSinceLastRunningTask(payload);
+  await session.getMessagesSinceLastCompletedTask(payload);
+  await session.getContextRecords(payload);
+
+  for (const [name, item] of Object.entries(captured)) {
+    assert.equal(item.userId, "u1", name);
+    assert.equal(item.sessionId, "s1", name);
+    assert.equal(item.currentDialogProcessId, "dp-current", name);
+    assert.equal(item.currentTurnScopeId, "turn-current", name);
+    assert.equal(item.futureContractField, "must-not-drop", name);
+  }
+  assert.equal(captured.getRecentSessionMessages.limit, 3);
+  assert.deepEqual(captured.getContextRecords.userConfig, payload.userConfig);
 });
 
 test("createSessionFacade should delegate appendExecutionLog to executionLogService", async () => {

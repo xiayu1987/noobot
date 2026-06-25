@@ -67,7 +67,5 @@ test("state-builder canonicalizes model messages and block views through one sto
   );
   assert.equal(loopState.messages[2], loopState.messageBlocks.incremental[0]);
   assert.ok(loopState.messages[2].additional_kwargs?.noobotMessageId);
-  assert.deepEqual(loopState.messageBlocks.incrementalIds, [
-    loopState.messages[2].additional_kwargs.noobotMessageId,
-  ]);
+  assert.equal(loopState.messageBlocks.incrementalIds, undefined);
 });

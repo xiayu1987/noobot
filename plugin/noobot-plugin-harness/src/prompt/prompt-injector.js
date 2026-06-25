@@ -206,8 +206,8 @@ function normalizeSystemPromptPlacement(ctx = {}, id = "") {
 function syncSystemPromptMessagesToBlocks(ctx = {}, promptMessages = [], ids = new Set()) {
   const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : null;
   if (!blocks) return 0;
-  const systemIds = ids instanceof Set ? ids : new Set(Array.isArray(ids) ? ids : []);
-  if (!systemIds.size) return 0;
+  const promptIdSet = ids instanceof Set ? ids : new Set(Array.isArray(ids) ? ids : []);
+  if (!promptIdSet.size) return 0;
   const nextBlocks = {
     system: Array.isArray(blocks.system) ? [...blocks.system] : [],
     history: Array.isArray(blocks.history) ? [...blocks.history] : [],
@@ -215,7 +215,7 @@ function syncSystemPromptMessagesToBlocks(ctx = {}, promptMessages = [], ids = n
   };
 
   let changed = 0;
-  for (const id of systemIds) {
+  for (const id of promptIdSet) {
     changed += removePromptMessagesFromList(nextBlocks.history, id, { removeSystem: true });
     changed += removePromptMessagesFromList(nextBlocks.incremental, id, { removeSystem: true });
     const existingSystem = nextBlocks.system.find((message) => isPromptMessage(message, id));

@@ -62,9 +62,6 @@ test("invokeNoToolsTurn filters only summarized messages before llm invoke", asy
   const finalResponse = loopState.messages.at(-1);
   assert.equal(finalResponse.content, "ok");
   assert.equal(loopState.messageBlocks.incremental.at(-1), finalResponse);
-  assert.ok(loopState.messageBlocks.incrementalIds.includes(
-    finalResponse.additional_kwargs.noobotMessageId,
-  ));
 });
 
 test("invokeWithToolsTurn filters only summarized messages before llm invoke", async () => {
@@ -130,9 +127,6 @@ test("invokeWithToolsTurn filters only summarized messages before llm invoke", a
   const finalAssistant = loopState.messages.at(-1);
   assert.equal(finalAssistant.content, "ok-with-tools");
   assert.equal(loopState.messageBlocks.incremental.at(-1), finalAssistant);
-  assert.ok(loopState.messageBlocks.incrementalIds.includes(
-    finalAssistant.additional_kwargs.noobotMessageId,
-  ));
 });
 
 test("invokeWithToolsTurn sends system history incremental order after before_llm_call hooks", async () => {
@@ -379,9 +373,6 @@ test("invokeWithToolsTurn stores assistant tool-call message in incremental bloc
   const assistantToolCall = loopState.messages.at(-1);
   assert.equal(Array.isArray(assistantToolCall.tool_calls), true);
   assert.equal(loopState.messageBlocks.incremental.at(-1), assistantToolCall);
-  assert.ok(loopState.messageBlocks.incrementalIds.includes(
-    assistantToolCall.additional_kwargs.noobotMessageId,
-  ));
 });
 
 test("invokeWithToolsTurn does not final-stream when runConfig disables streaming", async () => {
@@ -477,9 +468,6 @@ test("invokeNoToolsTurn stores reasoning-only retry prompt in incremental block"
     String(message?.content || "").includes("thinking only"),
   );
   assert.ok(retryPrompt);
-  assert.ok(loopState.messageBlocks.incrementalIds.includes(
-    retryPrompt.additional_kwargs.noobotMessageId,
-  ));
 });
 
 test("invokeWithToolsTurn stores reasoning-only retry prompt in incremental block", async () => {
@@ -535,9 +523,6 @@ test("invokeWithToolsTurn stores reasoning-only retry prompt in incremental bloc
     String(message?.content || "").includes("thinking with tools"),
   );
   assert.ok(retryPrompt);
-  assert.ok(loopState.messageBlocks.incrementalIds.includes(
-    retryPrompt.additional_kwargs.noobotMessageId,
-  ));
 });
 
 test("invokeWithToolsTurn normalizes dirty blocks to system history incremental before llm invoke", async () => {

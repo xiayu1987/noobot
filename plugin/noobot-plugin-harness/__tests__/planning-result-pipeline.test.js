@@ -175,11 +175,11 @@ test("planning result pipeline extracts current task goal from planning text pro
   assert.equal(injectedGoalMessage?.dialogProcessId, "planning-dp");
   assert.ok(injectedGoalMessage?.additional_kwargs?.noobotMessageId);
   assert.equal(
-    ctx.messageBlocks.systemIds.includes(injectedGoalMessage.additional_kwargs.noobotMessageId),
+    ctx.messageBlocks.system.includes(injectedGoalMessage),
     true,
   );
   assert.equal(
-    ctx.messageBlocks.incrementalIds.includes(injectedGoalMessage.additional_kwargs.noobotMessageId),
+    ctx.messageBlocks.incremental.includes(injectedGoalMessage),
     false,
   );
   assert.match(String(injectedGoalMessage?.content || ""), /\[CURRENT_TASK_GOAL\]/);

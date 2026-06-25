@@ -6,6 +6,7 @@
 import { filterForModelContext } from "../../../context/session/message-context-policy.js";
 import { invokeLlmWithTransientRetry } from "../llm-invoker.js";
 import { resolveNonThinkingCallOverrides } from "./tool-choice-strategy.js";
+import { emitModelContextTrace, summarizeDiagnosticMessages } from "../message-context/context-diagnostics.js";
 
 export function createBoundLlmToolChoiceInvoker({
   adaptedBinding,
@@ -47,7 +48,14 @@ export function createBoundLlmToolChoiceInvoker({
           effectiveToolChoice,
           modelState?.defaultModelSpec || {},
         );
-        return boundLlm.invoke(filterForModelContext(messages), {
+        const modelMessages = filterForModelContext(messages);
+        emitModelContextTrace(runtime, "llm_invoke_messages", {
+          turn,
+          mode: invokeMode,
+          toolChoice: effectiveToolChoice,
+          messages: summarizeDiagnosticMessages(modelMessages),
+        });
+        return boundLlm.invoke(modelMessages, {
           callbacks,
           signal: abortSignal,
           ...(effectiveToolChoice ? { tool_choice: effectiveToolChoice } : {}),

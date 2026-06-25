@@ -334,14 +334,8 @@ test("createRegisterHarnessHooks keeps compacted messageBlocks as single-store v
   const toolCallMessage = ctx.messages.find((message) => Array.isArray(message?.tool_calls));
   assert.ok(toolCallMessage);
   assert.equal(ctx.messageBlocks.incremental[0], toolCallMessage);
-  assert.equal(
-    ctx.messageBlocks.incrementalIds.includes(toolCallMessage.additional_kwargs.noobotMessageId),
-    true,
-  );
-  assert.deepEqual(
-    ctx.messageBlocks.incrementalIds,
-    ctx.messageBlocks.incremental.map((message) => message.additional_kwargs.noobotMessageId),
-  );
+  assert.ok(toolCallMessage.additional_kwargs.noobotMessageId);
+  assert.equal(ctx.messageBlocks.incrementalIds, undefined);
   toolCallMessage.summarized = true;
   assert.equal(ctx.messageBlocks.incremental[0].summarized, true);
 });

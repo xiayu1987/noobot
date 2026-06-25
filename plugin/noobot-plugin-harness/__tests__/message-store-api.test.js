@@ -13,13 +13,14 @@ import {
   writeMessageBlocks,
 } from "../src/core/message-store.js";
 
-test("message store API appends messages and keeps block id views synchronized", () => {
+test("message store API appends messages and keeps block arrays synchronized", () => {
   const ctx = { messages: [], messageBlocks: { system: [], history: [], incremental: [] } };
   const message = appendMessage(ctx, { role: "user", content: "hello" }, { block: "incremental" });
 
   assert.equal(ctx.messages[0], message);
   assert.equal(ctx.messageBlocks.incremental[0], message);
-  assert.deepEqual(ctx.messageBlocks.incrementalIds, [message.additional_kwargs.noobotMessageId]);
+  assert.ok(message.additional_kwargs.noobotMessageId);
+  assert.equal(ctx.messageBlocks.incrementalIds, undefined);
 });
 
 test("message store API replaces messages and writes canonical block views", () => {
@@ -35,9 +36,8 @@ test("message store API replaces messages and writes canonical block views", () 
   });
 
   assert.equal(ctx.messages[1], ctx.messageBlocks.incremental[0]);
-  assert.deepEqual(ctx.messageBlocks.incrementalIds, [
-    ctx.messages[1].additional_kwargs.noobotMessageId,
-  ]);
+  assert.ok(ctx.messages[1].additional_kwargs.noobotMessageId);
+  assert.equal(ctx.messageBlocks.incrementalIds, undefined);
 });
 
 test("message store API marks summarized by ids", () => {

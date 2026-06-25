@@ -39,9 +39,8 @@ test("maybePromptHelpToolByFailure injects prompt and resets failure counter", (
   assert.equal(loopState.messages.length, 1);
   assert.equal(loopState.messages[0] instanceof HumanMessage, true);
   assert.equal(loopState.messageBlocks.incremental[0], loopState.messages[0]);
-  assert.deepEqual(loopState.messageBlocks.incrementalIds, [
-    loopState.messages[0].additional_kwargs.noobotMessageId,
-  ]);
+  assert.ok(loopState.messages[0].additional_kwargs.noobotMessageId);
+  assert.equal(loopState.messageBlocks.incrementalIds, undefined);
   assert.equal(events.some((item) => item?.event === "help_tool_failure_prompted"), true);
 });
 
@@ -69,9 +68,8 @@ test("maybePromptHelpToolByLoop injects prompt through message store", () => {
   assert.equal(triggered, true);
   assert.equal(loopState.messages.length, 1);
   assert.equal(loopState.messageBlocks.system[0], loopState.messages[0]);
-  assert.deepEqual(loopState.messageBlocks.systemIds, [
-    loopState.messages[0].additional_kwargs.noobotMessageId,
-  ]);
+  assert.ok(loopState.messages[0].additional_kwargs.noobotMessageId);
+  assert.equal(loopState.messageBlocks.systemIds, undefined);
   assert.equal(events.some((item) => item?.event === "help_tool_loop_prompted"), true);
 });
 
@@ -105,9 +103,8 @@ test("maybeRequestPhaseSummary injects summary prompt when threshold reached", (
   assert.equal(loopState.messages.length, 1);
   assert.equal(loopState.messages[0] instanceof HumanMessage, true);
   assert.equal(loopState.messageBlocks.incremental[0], loopState.messages[0]);
-  assert.deepEqual(loopState.messageBlocks.incrementalIds, [
-    loopState.messages[0].additional_kwargs.noobotMessageId,
-  ]);
+  assert.ok(loopState.messages[0].additional_kwargs.noobotMessageId);
+  assert.equal(loopState.messageBlocks.incrementalIds, undefined);
   assert.equal(events.some((item) => item?.event === "phase_summary_required"), true);
 });
 
@@ -142,9 +139,8 @@ test("maybeRequestPhaseSummary injects summary prompt when unsummarized chars ex
   assert.equal(loopState.messages.length, 2);
   assert.equal(loopState.messages[1] instanceof HumanMessage, true);
   assert.equal(loopState.messageBlocks.incremental[0], loopState.messages[1]);
-  assert.deepEqual(loopState.messageBlocks.incrementalIds, [
-    loopState.messages[1].additional_kwargs.noobotMessageId,
-  ]);
+  assert.ok(loopState.messages[1].additional_kwargs.noobotMessageId);
+  assert.equal(loopState.messageBlocks.incrementalIds, undefined);
   const event = events.find((item) => item?.event === "phase_summary_required") || {};
   assert.equal(event.data?.trigger, "message_chars");
 });

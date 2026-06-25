@@ -158,9 +158,8 @@ test("loop over max turns: inject finalize prompt, allow 5-turn buffer, then no-
     (message) => message === finalizePromptMessage,
   );
   assert.equal(promptInBlocks, finalizePromptMessage);
-  assert.ok(loopState.messageBlocks.incrementalIds.includes(
-    finalizePromptMessage.additional_kwargs.noobotMessageId,
-  ));
+  assert.ok(finalizePromptMessage.additional_kwargs.noobotMessageId);
+  assert.equal(loopState.messageBlocks.incrementalIds, undefined);
 });
 
 test("when model returns no tool calls, add a user prompt to use tools and retry", async () => {
@@ -215,9 +214,8 @@ test("when model returns no tool calls, add a user prompt to use tools and retry
     return marker === "tool_choice_required_retry_prompt";
   });
   assert.ok(retryPrompt);
-  assert.ok(loopState.messageBlocks.incrementalIds.includes(
-    retryPrompt.additional_kwargs.noobotMessageId,
-  ));
+  assert.ok(retryPrompt.additional_kwargs.noobotMessageId);
+  assert.equal(loopState.messageBlocks.incrementalIds, undefined);
 });
 
 test("when forceTool is disabled, no-tool response should return directly without retry prompt", async () => {
@@ -554,9 +552,7 @@ test("multiple tool calls are replayed as one assistant/tool pair per loop witho
   assert.ok(
     loopState.messageBlocks.incremental
       .slice(-6)
-      .every((message) => loopState.messageBlocks.incrementalIds.includes(
-        message.additional_kwargs?.noobotMessageId,
-      )),
+      .every((message) => message.additional_kwargs?.noobotMessageId),
   );
 
   const syntheticBeforeLlm = beforeLlmContexts.filter((ctx) => ctx?.fakeTurn === true);

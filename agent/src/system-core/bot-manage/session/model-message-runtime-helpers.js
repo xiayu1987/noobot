@@ -23,7 +23,7 @@ import {
 } from "../../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
 import { normalizeMessageForModelRuntime } from "./session-execution-engine-utils.js";
-import { resolveMessagesByIds } from "../../agent/core/message-context/message-store.js";
+import { emitModelContextTrace, summarizeDiagnosticBlocks, summarizeDiagnosticMessages } from "../../agent/core/message-context/context-diagnostics.js";
 
 const PLUGIN_DEEP_MERGE_KEYS = new Set([
   "stepModels",
@@ -36,6 +36,23 @@ const PLUGIN_DEEP_MERGE_KEYS = new Set([
 function shouldUsePayloadMessageBlocks(purpose = "") {
   const normalizedPurpose = String(purpose || "").trim().toLowerCase();
   return Boolean(normalizedPurpose && normalizedPurpose !== "main_agent");
+}
+
+
+function resolveContextMessageBlocksSource(ctx = {}, { includePayloadBlocks = false } = {}) {
+  if (ctx?.messageBlocks && typeof ctx.messageBlocks === "object" && !Array.isArray(ctx.messageBlocks)) {
+    return "ctx.messageBlocks";
+  }
+  if (!includePayloadBlocks) return "none";
+  const agentPayloadMessages = ctx?.agentContext?.payload?.messages;
+  if (agentPayloadMessages && typeof agentPayloadMessages === "object" && !Array.isArray(agentPayloadMessages)) {
+    return "agentContext.payload.messages";
+  }
+  const runtimePayloadMessages = ctx?.runtimeAgentContext?.payload?.messages;
+  if (runtimePayloadMessages && typeof runtimePayloadMessages === "object" && !Array.isArray(runtimePayloadMessages)) {
+    return "runtimeAgentContext.payload.messages";
+  }
+  return "none";
 }
 
 function resolveContextMessageBlocks(ctx = {}, { includePayloadBlocks = false } = {}) {
@@ -54,17 +71,10 @@ function resolveContextMessageBlocks(ctx = {}, { includePayloadBlocks = false } 
   return null;
 }
 
-function resolveBlockMessagesByIds(ctx = {}, blocks = null, blockName = "") {
-  if (!blocks || typeof blocks !== "object" || Array.isArray(blocks)) return null;
-  const ids = blocks?.[`${blockName}Ids`];
-  if (!Array.isArray(ids) || !ids.length) return null;
-  const resolved = resolveMessagesByIds(ctx, ids);
-  return resolved.length === ids.length ? resolved : null;
-}
-
 function resolveBlockMessages(ctx = {}, blocks = null, blockName = "") {
-  return resolveBlockMessagesByIds(ctx, blocks, blockName) ||
-    (Array.isArray(blocks?.[blockName]) ? blocks[blockName] : []);
+  void ctx;
+  if (Array.isArray(blocks?.[blockName])) return blocks[blockName];
+  return [];
 }
 
 function normalizeMessagesForModelRuntime(messages = []) {
@@ -135,6 +145,7 @@ export class ModelMessageRuntimeHelpers {
     );
     return ({ messages = [], ctx = {}, purpose = "" } = {}) => {
       const includePayloadBlocks = shouldUsePayloadMessageBlocks(purpose);
+      const blockSource = resolveContextMessageBlocksSource(ctx, { includePayloadBlocks });
       const blocks = resolveContextMessageBlocks(ctx, { includePayloadBlocks });
       const explicitMessages = Array.isArray(messages) ? messages : [];
       const source = explicitMessages;
@@ -147,9 +158,17 @@ export class ModelMessageRuntimeHelpers {
           historyMessages: normalizeMessagesForModelRuntime(resolveBlockMessages(ctx, blocks, "history")),
           incrementalMessages: normalizeMessagesForModelRuntime(resolveBlockMessages(ctx, blocks, "incremental")),
         });
-        return recentMessageLimit > 0
+        const outputMessages = recentMessageLimit > 0
           ? normalizeRecentWindow(resolved.messages, recentMessageLimit)
           : resolved.messages;
+        emitModelContextTrace(getRuntimeFromAgentContext(ctx?.agentContext || ctx?.runtimeAgentContext || {}), "resolve_model_messages", {
+          purpose: String(purpose || "").trim(),
+          includePayloadBlocks,
+          blockSource,
+          blocks: summarizeDiagnosticBlocks(blocks),
+          resolvedMessages: summarizeDiagnosticMessages(outputMessages),
+        });
+        return outputMessages;
       }
       const dialogProcessId = resolveRuntimeDialogProcessId(ctx);
       const fallbackSource = dialogProcessId
@@ -158,9 +177,18 @@ export class ModelMessageRuntimeHelpers {
       const resolvedMessages = filterForModelContext(fallbackSource, {
         keepLatestInjectedOnly: true,
       });
-      return recentMessageLimit > 0
+      const outputMessages = recentMessageLimit > 0
         ? normalizeRecentWindow(resolvedMessages, recentMessageLimit)
         : resolvedMessages;
+      emitModelContextTrace(getRuntimeFromAgentContext(ctx?.agentContext || ctx?.runtimeAgentContext || {}), "resolve_model_messages", {
+        purpose: String(purpose || "").trim(),
+        includePayloadBlocks,
+        blockSource,
+        fallback: true,
+        sourceMessages: summarizeDiagnosticMessages(normalizedSource),
+        resolvedMessages: summarizeDiagnosticMessages(outputMessages),
+      });
+      return outputMessages;
     };
   }
 

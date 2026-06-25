@@ -158,6 +158,11 @@ const forbiddenPatterns = [
     pattern: /appendMessage\s*\([\s\S]{0,500}(?:role:\s*["'](?:system|developer)["']|new\s+SystemMessage\s*\()[\s\S]{0,500}block:\s*["']incremental["']/g,
     advice: "role=system/developer/SystemMessage 必须写入 system block，不能写入 incremental。",
   },
+  {
+    name: "message block id view used as context source",
+    pattern: /\b(?:systemIds|historyIds|incrementalIds|resolveBlockMessagesByIds)\b/g,
+    advice: "上下文分块唯一事实源只能是 messageBlocks.system/history/incremental 数组，不能再保留 blockIds 第二事实源。",
+  },
 ];
 
 for (const file of sourceFiles) {
@@ -212,6 +217,7 @@ const helpersText = assertFileContains("agent/src/system-core/bot-manage/session
   { name: "resolves system block", pattern: /resolveBlockMessages\(ctx,\s*blocks,\s*["']system["']\)/ },
   { name: "resolves history block", pattern: /resolveBlockMessages\(ctx,\s*blocks,\s*["']history["']\)/ },
   { name: "resolves incremental block", pattern: /resolveBlockMessages\(ctx,\s*blocks,\s*["']incremental["']\)/ },
+  { name: "explicit block arrays are the only block source", pattern: /function\s+resolveBlockMessages[\s\S]*?Array\.isArray\(blocks\?\.\[blockName\]\)[\s\S]*?return\s+blocks\[blockName\][\s\S]*?return\s+\[\]/ },
 ]);
 if (helpersText && /ctx\?\.agentContext\?\.payload\?\.messages/.test(helpersText)) {
   if (/includePayloadBlocks/.test(helpersText) && /typeof\s+agentPayloadMessages\s*===\s*["']object["']\s*&&\s*!Array\.isArray\(agentPayloadMessages\)/.test(helpersText)) {
@@ -230,10 +236,49 @@ assertFileContains("agent/src/system-core/context/index.js", [
   { name: "context passes current turnScopeId to session history", pattern: /currentTurnScopeId:\s*String\(this\.runConfig\?\.turnScopeId/ },
 ]);
 
+assertFileContains("agent/src/system-core/session/index.js", [
+  { name: "session facade uses context payload normalizer", pattern: /function\s+normalizeContextServicePayload[\s\S]*?currentDialogProcessId[\s\S]*?currentTurnScopeId/ },
+  { name: "session facade passes normalized payload to getContextRecords", pattern: /async\s+getContextRecords\(payload\s*=\s*\{\}\)[\s\S]*?sessionContextService\.getContextRecords\(\s*normalizeContextServicePayload\(payload\)/ },
+]);
+
+assertFileContains("agent/src/system-core/session/services/session-context-service.js", [
+  { name: "session history excludes current turn before recent dialogs", pattern: /_filterCurrentRunMessages[\s\S]*?_filterCurrentDialogMessages[\s\S]*?_filterCurrentTurnMessages/ },
+  { name: "recent history uses current dialog exclusion", pattern: /async\s+getRecentSessionMessages[\s\S]*?currentDialogProcessId[\s\S]*?_filterCurrentRunMessages[\s\S]*?currentTurnScopeId,\s*currentDialogProcessId/ },
+]);
+
 assertFileContains("plugin/noobot-plugin-harness/src/core/model-message-context.js", [
   { name: "harness before_llm_call delegates to resolver", pattern: /applyAgentResolvedModelMessages/ },
   { name: "uses injected resolveModelMessages", pattern: /resolveModelMessages/ },
   { name: "updates through message-store replaceMessages", pattern: /replaceMessages\(ctx,\s*resolved\)/ },
+]);
+
+const messageStoreText = assertFileContains("agent/src/system-core/agent/core/message-context/message-store.js", [
+  { name: "message-store owns noobot ids", pattern: /function\s+resolveMessageId[\s\S]*?readField\(message,\s*["']noobotMessageId["']\)[\s\S]*?readField\(message,\s*["']messageId["']\)/ },
+  { name: "message-store bumps next id for hydrated ids", pattern: /function\s+bumpNextMessageId[\s\S]*?match\(\s*\/\^am_\(\[0-9a-z\]\+\)\$\/i\s*\)[\s\S]*?store\.nextId\s*=\s*numeric\s*\+\s*1/ },
+  { name: "replaceMessages only replaces flat view", pattern: /export\s+function\s+replaceMessages[\s\S]*?holder\.messages\.splice\(0,\s*holder\.messages\.length,\s*\.\.\.canonicalMessages\)[\s\S]*?return\s+holder\.messages/ },
+  { name: "messageBlocks deletes old block id views", pattern: /for\s*\(\s*const\s+staleField\s+of\s+\[[\s\S]*?system[\s\S]*?history[\s\S]*?incremental[\s\S]*?delete\s+blocks\[staleField\]/ },
+]);
+if (messageStoreText) {
+  const resolveIdMatch = messageStoreText.match(/function\s+resolveMessageId[\s\S]*?\n}/);
+  if (resolveIdMatch && /readField\(message,\s*["']id["']\)/.test(resolveIdMatch[0])) {
+    fail("message-store must not use provider id as canonical id", "Only noobotMessageId/messageId are allowed; provider id collisions can cross-wire system/history/incremental blocks.");
+  } else {
+    pass("message-store ignores provider id as canonical id");
+  }
+  const replaceMatch = messageStoreText.match(/export\s+function\s+replaceMessages[\s\S]*?\n}/);
+  if (replaceMatch && /canonicalizeMessageStore\(holder\)\s*;[\s\S]*return\s+holder\.messages/.test(replaceMatch[0])) {
+    fail("replaceMessages re-canonicalizes blocks after replacing flat messages", "replaceMessages must not rewrite messageBlocks; writeMessageBlocks is the only block mutation path.");
+  } else {
+    pass("replaceMessages does not rewrite messageBlocks after flat replacement");
+  }
+}
+
+assertFileContains("agent/src/system-core/agent/core/hook/hook-context-builder.js", [
+  { name: "hook context carries messageStore", pattern: /messageStore:\s*safeRaw\?\.messageStore\s*\?\?\s*safeRaw\?\.loopState\?\.messageStore\s*\?\?\s*null/ },
+]);
+
+assertFileContains("agent/src/system-core/agent/core/turn/turn-executor.js", [
+  { name: "before_llm hook passes messageStore", pattern: /buildHookContext\(AGENT_HOOK_POINTS\.BEFORE_LLM_CALL[\s\S]*?messageStore:\s*loopState\.messageStore/ },
 ]);
 
 assertFileContains("plugin/noobot-plugin-harness/src/capabilities/handlers/shared/model/message-factory.js", [

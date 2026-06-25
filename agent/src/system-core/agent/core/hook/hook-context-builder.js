@@ -9,6 +9,7 @@ import {
   buildContextMessageBlocks,
 } from "../context/message-builder.js";
 import { emitEvent } from "../../../event/index.js";
+import { emitModelContextTrace, summarizeDiagnosticBlocks, summarizeDiagnosticMessages } from "../message-context/context-diagnostics.js";
 
 function asObject(value = null) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -104,6 +105,7 @@ export function buildHookContext(point = "", runtime = {}, raw = {}) {
     endedAt: safeRaw?.endedAt ?? null,
     durationMs: Number.isFinite(Number(safeRaw?.durationMs)) ? Number(safeRaw.durationMs) : null,
     agentContext: safeRaw?.agentContext ?? null,
+    messageStore: safeRaw?.messageStore ?? safeRaw?.loopState?.messageStore ?? null,
     messages: resolveHookMessages(safeRaw),
     messageBlocks: resolveHookMessageBlocks(safeRaw),
     result: safeRaw?.result ?? null,
@@ -119,6 +121,17 @@ export function buildHookContext(point = "", runtime = {}, raw = {}) {
     payload: safeRaw?.payload ?? null,
   };
   const context = withHookRuntimeMeta(runtime, merged);
+  if (String(point || "").trim() === "before_llm_call") {
+    emitModelContextTrace(runtime, "hook_context_built", {
+      point: String(point || "").trim(),
+      mode: context.mode,
+      turn: context.turn,
+      rawHadMessages: Array.isArray(safeRaw?.messages),
+      rawHadMessageBlocks: Boolean(safeRaw?.messageBlocks && typeof safeRaw.messageBlocks === "object"),
+      contextBlocks: summarizeDiagnosticBlocks(context.messageBlocks),
+      contextMessages: summarizeDiagnosticMessages(context.messages),
+    });
+  }
   validateHookContext(point, runtime, context);
   return context;
 }

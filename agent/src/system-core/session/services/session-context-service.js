@@ -73,6 +73,25 @@ export class SessionContextService {
     );
   }
 
+  _filterCurrentDialogMessages(messages = [], { currentDialogProcessId = "" } = {}) {
+    const normalizedDialogProcessId = String(currentDialogProcessId || "").trim();
+    const source = Array.isArray(messages) ? messages : [];
+    if (!normalizedDialogProcessId) return source;
+    return source.filter(
+      (messageItem = {}) => String(messageItem?.dialogProcessId || messageItem?.dialogId || "").trim() !== normalizedDialogProcessId,
+    );
+  }
+
+  _filterCurrentRunMessages(messages = [], {
+    currentTurnScopeId = "",
+    currentDialogProcessId = "",
+  } = {}) {
+    return this._filterCurrentDialogMessages(
+      this._filterCurrentTurnMessages(messages, { currentTurnScopeId }),
+      { currentDialogProcessId },
+    );
+  }
+
   _normalizeSessionRecordsForConversation({
     messages = [],
     startIndex = 0,
@@ -93,15 +112,14 @@ export class SessionContextService {
     currentTurnScopeId = "",
     currentDialogProcessId = "",
   }) {
-    void currentDialogProcessId;
     const config = this._sessionContextConfig(userConfig);
     const historyLimit = normalizeLimit(
       limit == null ? config.recentMessageLimit : limit,
       config.recentMessageLimit,
     );
-    const messages = this._filterCurrentTurnMessages(
+    const messages = this._filterCurrentRunMessages(
       await this._getSessionTurns({ userId, sessionId }),
-      { currentTurnScopeId },
+      { currentTurnScopeId, currentDialogProcessId },
     );
     return resolveMainModelHistoryMessages({
       sourceMessages: messages,
@@ -113,14 +131,15 @@ export class SessionContextService {
     userId,
     sessionId,
     currentTurnScopeId = "",
+    currentDialogProcessId = "",
   }) {
-    const messages = this._filterCurrentTurnMessages(
+    const messages = this._filterCurrentRunMessages(
       await this._getSessionTurns({ userId, sessionId }),
-      { currentTurnScopeId },
+      { currentTurnScopeId, currentDialogProcessId },
     );
     const startIndex = findLastTaskStatusIndex(messages, ["start", "running"]);
     if (startIndex < 0) {
-      return this.getRecentSessionMessages({ userId, sessionId, currentTurnScopeId });
+      return this.getRecentSessionMessages({ userId, sessionId, currentTurnScopeId, currentDialogProcessId });
     }
     return this._normalizeSessionRecordsForConversation({
       messages,
@@ -133,14 +152,15 @@ export class SessionContextService {
     userId,
     sessionId,
     currentTurnScopeId = "",
+    currentDialogProcessId = "",
   }) {
-    const messages = this._filterCurrentTurnMessages(
+    const messages = this._filterCurrentRunMessages(
       await this._getSessionTurns({ userId, sessionId }),
-      { currentTurnScopeId },
+      { currentTurnScopeId, currentDialogProcessId },
     );
     const startIndex = findLastTaskStatusIndex(messages, ["completed", "complete", "done"]);
     if (startIndex < 0) {
-      return this.getRecentSessionMessages({ userId, sessionId, currentTurnScopeId });
+      return this.getRecentSessionMessages({ userId, sessionId, currentTurnScopeId, currentDialogProcessId });
     }
     return this._normalizeSessionRecordsForConversation({
       messages,
@@ -162,6 +182,7 @@ export class SessionContextService {
         userId,
         sessionId,
         currentTurnScopeId,
+        currentDialogProcessId,
       });
     }
     if (config.useLastCompletedTaskRange) {
@@ -169,6 +190,7 @@ export class SessionContextService {
         userId,
         sessionId,
         currentTurnScopeId,
+        currentDialogProcessId,
       });
     }
     return this.getRecentSessionMessages({

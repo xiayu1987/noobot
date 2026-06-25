@@ -139,6 +139,7 @@ export async function commitSyntheticToolTurn({
         .map((tool) => String(tool?.name || "").trim())
         .filter(Boolean),
       messages: Array.isArray(loopState?.messages) ? loopState.messages : [],
+      messageStore: loopState?.messageStore || null,
       messageBlocks: loopState?.messageBlocks || null,
       maxTurns: Number(loopState?.maxTurns || 0),
       agentContext: modelState?.agentContext || null,
@@ -165,6 +166,7 @@ export async function commitSyntheticToolTurn({
       call,
       calls: [call],
       messages: Array.isArray(loopState?.messages) ? loopState.messages : [],
+      messageStore: loopState?.messageStore || null,
       messageBlocks: loopState?.messageBlocks || null,
       maxTurns: Number(loopState?.maxTurns || 0),
       agentContext: modelState?.agentContext || null,
