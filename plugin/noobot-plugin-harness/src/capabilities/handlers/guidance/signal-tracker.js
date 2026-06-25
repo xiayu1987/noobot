@@ -12,6 +12,7 @@ import {
 } from "./deps.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
+import { getMessageId, resolveMessagesByIds } from "../../../core/message-store.js";
 
 const FAILURE_THRESHOLD = Object.freeze({
   CONSECUTIVE: WORKFLOW_PARAMS.guidance.failureThreshold.consecutive,
@@ -30,81 +31,24 @@ function resolveMessageBlockMarkSource(ctx = {}) {
   ];
 }
 
-function readMessageField(message = {}, field = "") {
-  return String(
-    message?.[field] ||
-      message?.additional_kwargs?.[field] ||
-      message?.lc_kwargs?.[field] ||
-      message?.lc_kwargs?.additional_kwargs?.[field] ||
-      "",
-  ).trim();
-}
-
-function resolveMessageRole(message = {}) {
-  const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
-  if (role) return role;
-  const type = String(message?.type || message?.lc_kwargs?.type || "").trim().toLowerCase();
-  if (type === "ai") return "assistant";
-  if (type === "human") return "user";
-  return type;
-}
-
-function resolveMessageContent(message = {}) {
-  return String(message?.content ?? message?.lc_kwargs?.content ?? "");
-}
-
-function resolveMessageToolCallId(message = {}) {
-  return String(
-    message?.tool_call_id ||
-      message?.toolCallId ||
-      message?.lc_kwargs?.tool_call_id ||
-      message?.lc_kwargs?.toolCallId ||
-      "",
-  ).trim();
-}
-
-function resolveMessageAssistantToolCallIds(message = {}) {
-  const calls = Array.isArray(message?.tool_calls)
-    ? message.tool_calls
-    : Array.isArray(message?.lc_kwargs?.tool_calls)
-      ? message.lc_kwargs.tool_calls
-      : Array.isArray(message?.additional_kwargs?.tool_calls)
-        ? message.additional_kwargs.tool_calls
-        : [];
-  return calls
-    .map((call = {}) => String(call?.id || call?.tool_call_id || call?.toolCallId || "").trim())
-    .filter(Boolean)
-    .join(",");
-}
-
-function buildMessageMarkKey(message = {}) {
-  return [
-    resolveMessageRole(message),
-    resolveMessageToolCallId(message),
-    resolveMessageAssistantToolCallIds(message),
-    readMessageField(message, "injectedMessageType") || readMessageField(message, "injected_message_type"),
-    readMessageField(message, "dialogProcessId"),
-    readMessageField(message, "turnScopeId"),
-    resolveMessageContent(message),
-  ].join("|||");
-}
-
 function resolveScopedMessageBlockMarkSource(ctx = {}, scopedMessages = []) {
   const blockMessages = resolveMessageBlockMarkSource(ctx);
   if (!blockMessages.length) return [];
-  const scopedKeys = new Set(
-    (Array.isArray(scopedMessages) ? scopedMessages : [])
-      .map((message) => buildMessageMarkKey(message))
-      .filter(Boolean),
-  );
-  if (!scopedKeys.size) return blockMessages;
-  return blockMessages.filter((message) => scopedKeys.has(buildMessageMarkKey(message)));
+  const scopedSet = new Set(Array.isArray(scopedMessages) ? scopedMessages : []);
+  if (!scopedSet.size) return blockMessages;
+  return blockMessages.filter((message) => scopedSet.has(message));
 }
 
 export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   const summaryCheckpointMessageCountValue =
     holder?.state?.pending?.summaryCheckpointMessageCount;
+  const summaryCheckpointMessageIdsValue =
+    holder?.state?.pending?.summaryCheckpointMessageIds;
+  const summaryCheckpointMessageIds = Array.isArray(summaryCheckpointMessageIdsValue)
+    ? summaryCheckpointMessageIdsValue.map((id) => String(id || "").trim()).filter(Boolean)
+    : [];
+  const hasUsableSummaryCheckpointIds = summaryCheckpointMessageIds.length > 0;
   const summaryCheckpointMessageCountRaw = Number(summaryCheckpointMessageCountValue);
   const hasSummaryCheckpoint = Number.isFinite(summaryCheckpointMessageCountRaw);
   const hasUsableSummaryCheckpoint =
@@ -118,13 +62,17 @@ export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
   const historyMessages = ctx?.agentContext?.payload?.messages?.history;
   const currentMessages = ctx?.messages;
   const injectedSummarizer = resolveInjectedMessageSummarizer(meta);
-  const scopedCurrentMessages = hasUsableSummaryCheckpoint && Array.isArray(currentMessages)
-    ? currentMessages.slice(0, Math.min(currentMessages.length, summaryCheckpointMessageCount))
-    : currentMessages;
+  const scopedCurrentMessages = hasUsableSummaryCheckpointIds
+    ? resolveMessagesByIds(ctx, summaryCheckpointMessageIds)
+    : hasUsableSummaryCheckpoint && Array.isArray(currentMessages)
+      ? currentMessages.slice(0, Math.min(currentMessages.length, summaryCheckpointMessageCount))
+      : currentMessages;
   const safeMark = async (messages = []) => {
     if (!Array.isArray(messages)) return 0;
 
-    const scopedMessages = hasUsableSummaryCheckpoint
+    const scopedMessages = hasUsableSummaryCheckpointIds
+      ? messages.filter((message) => summaryCheckpointMessageIds.includes(getMessageId(message)))
+      : hasUsableSummaryCheckpoint
       ? messages.slice(0, Math.min(messages.length, summaryCheckpointMessageCount))
       : messages;
     if (!Array.isArray(scopedMessages) || !scopedMessages.length) return 0;
@@ -155,12 +103,13 @@ export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
   const currentMarked = await safeMark(currentMessages);
   const historyMarked = await safeMark(historyMessages);
   const blockMarked = await safeMark(
-    hasUsableSummaryCheckpoint
+    hasUsableSummaryCheckpointIds || hasUsableSummaryCheckpoint
       ? resolveScopedMessageBlockMarkSource(ctx, scopedCurrentMessages)
       : resolveMessageBlockMarkSource(ctx),
   );
-  if (holder?.state?.pending && hasUsableSummaryCheckpoint) {
+  if (holder?.state?.pending && (hasUsableSummaryCheckpointIds || hasUsableSummaryCheckpoint)) {
     holder.state.pending.summaryCheckpointMessageCount = null;
+    holder.state.pending.summaryCheckpointMessageIds = null;
   }
   return currentMarked + historyMarked + blockMarked;
 }

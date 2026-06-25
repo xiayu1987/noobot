@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { DEFAULT_HARNESS_DENY_TOOL_NAMES, normalizeOptions } from "../src/core/options.js";
+import { normalizeHookContextProtocol } from "../src/core/context.js";
 import { appendJsonlBuffered, flushAllJsonlBuffers } from "../src/store/store.js";
 import { createCapabilityRuntime } from "../src/capabilities/runtime.js";
 import { HARNESS_HOOK_POINTS } from "../src/core/constants.js";
@@ -684,6 +685,12 @@ test("guidance summary checkpoint marks matching messageBlocks instead of flat b
     },
   };
 
+  normalizeHookContextProtocol("before_llm_call", ctx);
+  assert.equal(ctx.messageBlocks.incremental[1], oldToolCall);
+  assert.equal(ctx.messageBlocks.incremental[2], oldToolResult);
+  assert.equal(ctx.messageBlocks.incremental[3], nextToolCall);
+  assert.equal(ctx.messageBlocks.incremental[4], nextToolResult);
+
   const markedCount = await markGuidanceSummarizedMessages(ctx, {});
 
   assert.equal(markedCount, 8);
@@ -691,12 +698,98 @@ test("guidance summary checkpoint marks matching messageBlocks instead of flat b
   assert.equal(oldToolResult.summarized, true);
   assert.equal(nextToolCall.summarized, true);
   assert.equal(nextToolResult.summarized, true);
-  assert.equal(blockOldToolCall.summarized, true);
-  assert.equal(blockOldToolResult.summarized, true);
-  assert.equal(blockNextToolCall.summarized, true);
-  assert.equal(blockNextToolResult.summarized, true);
+  assert.equal(ctx.messageBlocks.incremental[1].summarized, true);
+  assert.equal(ctx.messageBlocks.incremental[2].summarized, true);
+  assert.equal(ctx.messageBlocks.incremental[3].summarized, true);
+  assert.equal(ctx.messageBlocks.incremental[4].summarized, true);
   assert.equal(ctx.messageBlocks.system.some((message) => message.summarized === true), false);
   assert.equal(summaryRelay.summarized, undefined);
+});
+
+test("guidance summary checkpoint prefers message ids over checkpoint count", async () => {
+  const oldToolCall = {
+    role: "assistant",
+    content: "",
+    tool_calls: [{ id: "old_call", function: { name: "write_file" } }],
+  };
+  const oldToolResult = {
+    role: "tool",
+    toolName: "write_file",
+    tool_call_id: "old_call",
+    content: '{"toolName":"write_file","ok":true}',
+  };
+  const newToolCall = {
+    role: "assistant",
+    content: "",
+    tool_calls: [{ id: "new_call", function: { name: "read_file" } }],
+  };
+  const newToolResult = {
+    role: "tool",
+    toolName: "read_file",
+    tool_call_id: "new_call",
+    content: '{"toolName":"read_file","ok":true}',
+  };
+  const ctx = {
+    messages: [
+      { role: "user", content: "task" },
+      oldToolCall,
+      oldToolResult,
+      newToolCall,
+      newToolResult,
+    ],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [
+        { role: "user", content: "task" },
+        structuredClone(oldToolCall),
+        structuredClone(oldToolResult),
+        structuredClone(newToolCall),
+        structuredClone(newToolResult),
+      ],
+    },
+    agentContext: {
+      payload: {
+        harness: {
+          state: {
+            counters: {},
+            flags: {},
+            signals: {},
+            pending: {
+              summaryCheckpointMessageCount: 5,
+              summaryCheckpointMessageIds: [],
+            },
+          },
+          taskChecklist: [],
+          acceptanceReports: [],
+          reviewReports: [],
+          planningRawOutputs: [],
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+        messages: {
+          history: [],
+        },
+      },
+    },
+  };
+  normalizeHookContextProtocol("before_llm_call", ctx);
+  ctx.agentContext.payload.harness.state.pending.summaryCheckpointMessageIds = [
+    oldToolCall.additional_kwargs.noobotMessageId,
+    oldToolResult.additional_kwargs.noobotMessageId,
+  ];
+
+  const markedCount = await markGuidanceSummarizedMessages(ctx, {});
+
+  assert.equal(markedCount, 4);
+  assert.equal(oldToolCall.summarized, true);
+  assert.equal(oldToolResult.summarized, true);
+  assert.equal(newToolCall.summarized, undefined);
+  assert.equal(newToolResult.summarized, undefined);
+  assert.equal(ctx.messageBlocks.incremental[1].summarized, true);
+  assert.equal(ctx.messageBlocks.incremental[2].summarized, true);
+  assert.equal(ctx.messageBlocks.incremental[3].summarized, undefined);
+  assert.equal(ctx.messageBlocks.incremental[4].summarized, undefined);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.summaryCheckpointMessageIds, null);
 });
 
 test("invokeWithReasoningRetry throws error when reasoning-only persists after one retry", async () => {

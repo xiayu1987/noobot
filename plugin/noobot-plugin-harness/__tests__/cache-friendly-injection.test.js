@@ -18,6 +18,10 @@ test("dynamic harness main-flow injections resolve to user/incremental", () => {
   assert.equal(ctx.messages[0]?.role, "user");
   assert.equal(ctx.messages[0]?.injectedMessage, true);
   assert.equal(ctx.messages[0]?.injectedBy, "harness-plugin");
+  assert.ok(ctx.messages[0]?.additional_kwargs?.noobotMessageId);
+  assert.deepEqual(ctx.messageBlocks.incrementalIds, [
+    ctx.messages[0].additional_kwargs.noobotMessageId,
+  ]);
 });
 
 test("dynamic harness injections compact after history to preserve stable prefix cache", async () => {

@@ -91,14 +91,63 @@ test("normalizeHookContextProtocol exposes agentContext payload messages for bef
   normalizeHookContextProtocol("before_final_output", ctx);
 
   assert.equal(ctx.point, "before_final_output");
-  assert.deepEqual(ctx.messageBlocks.system, [{ role: "system", content: "system ctx" }]);
-  assert.deepEqual(ctx.messageBlocks.history, [{ role: "user", content: "history ctx" }]);
-  assert.deepEqual(ctx.messageBlocks.incremental, [{ role: "assistant", content: "incremental ctx" }]);
+  assert.deepEqual(ctx.messageBlocks.system.map(({ role, content }) => ({ role, content })), [
+    { role: "system", content: "system ctx" },
+  ]);
+  assert.deepEqual(ctx.messageBlocks.history.map(({ role, content }) => ({ role, content })), [
+    { role: "user", content: "history ctx" },
+  ]);
+  assert.deepEqual(ctx.messageBlocks.incremental.map(({ role, content }) => ({ role, content })), [
+    { role: "assistant", content: "incremental ctx" },
+  ]);
+  assert.ok(ctx.messageBlocks.system[0].additional_kwargs?.noobotMessageId);
   assert.deepEqual(ctx.messages.map((item = {}) => item.content), [
     "system ctx",
     "history ctx",
     "incremental ctx",
   ]);
+});
+
+test("normalizeHookContextProtocol canonicalizes messages and messageBlocks through one store", () => {
+  const ctxMessage = {
+    role: "assistant",
+    content: "",
+    tool_calls: [{ id: "call_1", function: { name: "write_file" } }],
+  };
+  const blockCopy = {
+    role: "assistant",
+    content: "",
+    tool_calls: [{ id: "call_1", function: { name: "write_file" } }],
+  };
+  const ctx = {
+    messages: [
+      { role: "user", content: "task" },
+      ctxMessage,
+    ],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [
+        { role: "user", content: "task" },
+        blockCopy,
+      ],
+    },
+  };
+
+  normalizeHookContextProtocol("before_llm_call", ctx);
+
+  assert.equal(ctx.messages[1], ctx.messageBlocks.incremental[1]);
+  assert.ok(ctx.messages[1].additional_kwargs?.noobotMessageId);
+  assert.equal(
+    ctx.messages[1].additional_kwargs.noobotMessageId,
+    ctx.messageBlocks.incremental[1].additional_kwargs.noobotMessageId,
+  );
+  assert.deepEqual(ctx.messageBlocks.incrementalIds, [
+    ctx.messageBlocks.incremental[0].additional_kwargs.noobotMessageId,
+    ctx.messageBlocks.incremental[1].additional_kwargs.noobotMessageId,
+  ]);
+  ctx.messages[1].summarized = true;
+  assert.equal(ctx.messageBlocks.incremental[1].summarized, true);
 });
 
 test("harness plugin writes manifest, events and context snapshot", async () => {

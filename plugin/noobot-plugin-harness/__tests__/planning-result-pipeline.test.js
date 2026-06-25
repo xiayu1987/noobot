@@ -173,6 +173,11 @@ test("planning result pipeline extracts current task goal from planning text pro
   assert.equal(injectedGoalMessage?.injectedMessage, true);
   assert.equal(injectedGoalMessage?.injectedBy, "harness-plugin");
   assert.equal(injectedGoalMessage?.dialogProcessId, "planning-dp");
+  assert.ok(injectedGoalMessage?.additional_kwargs?.noobotMessageId);
+  assert.equal(
+    ctx.messageBlocks.incrementalIds.includes(injectedGoalMessage.additional_kwargs.noobotMessageId),
+    true,
+  );
   assert.match(String(injectedGoalMessage?.content || ""), /\[CURRENT_TASK_GOAL\]/);
   assert.match(String(injectedGoalMessage?.content || ""), /由计划模型确认的当前任务目标/);
   assert.equal(

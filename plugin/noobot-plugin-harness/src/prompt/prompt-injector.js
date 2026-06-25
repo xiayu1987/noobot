@@ -13,6 +13,7 @@ import {
   buildHarnessInjectedMessage,
   persistHarnessMessageToCurrentTurn,
 } from "../capabilities/handlers/shared/message/injected-message-utils.js";
+import { replaceMessages, writeMessageBlocks } from "../core/message-store.js";
 const HARNESS_MARKERS = new Map(); // legacy registry for backward compatibility only
 
 // P2#5: Injected prompt ID cache per messages array reference for O(1) lookup
@@ -202,23 +203,28 @@ function syncSystemPromptMessagesToBlocks(ctx = {}, promptMessages = [], ids = n
   if (!blocks) return 0;
   const systemIds = ids instanceof Set ? ids : new Set(Array.isArray(ids) ? ids : []);
   if (!systemIds.size) return 0;
-  if (!Array.isArray(blocks.system)) blocks.system = [];
-  if (!Array.isArray(blocks.history)) blocks.history = [];
-  if (!Array.isArray(blocks.incremental)) blocks.incremental = [];
+  const nextBlocks = {
+    system: Array.isArray(blocks.system) ? [...blocks.system] : [],
+    history: Array.isArray(blocks.history) ? [...blocks.history] : [],
+    incremental: Array.isArray(blocks.incremental) ? [...blocks.incremental] : [],
+  };
 
   let changed = 0;
   for (const id of systemIds) {
-    removePromptMessagesFromList(blocks.history, id, { removeSystem: true });
-    removePromptMessagesFromList(blocks.incremental, id, { removeSystem: true });
-    const existingSystem = blocks.system.find((message) => isPromptMessage(message, id));
+    changed += removePromptMessagesFromList(nextBlocks.history, id, { removeSystem: true });
+    changed += removePromptMessagesFromList(nextBlocks.incremental, id, { removeSystem: true });
+    const existingSystem = nextBlocks.system.find((message) => isPromptMessage(message, id));
     if (existingSystem) continue;
     const source = (Array.isArray(promptMessages) ? promptMessages : [])
       .find((message) => isPromptMessage(message, id) && isSystemRoleMessage(message));
     if (!source) continue;
-    blocks.system.push(source);
+    nextBlocks.system = [...nextBlocks.system, source];
     changed += 1;
   }
-  if (changed) rebuildInjectedPromptCache(blocks.system);
+  if (changed) {
+    writeMessageBlocks(ctx, nextBlocks);
+    rebuildInjectedPromptCache(ctx.messageBlocks.system);
+  }
   return changed;
 }
 
@@ -260,6 +266,7 @@ function persistPromptMessagesToCurrentTurn(ctx = {}, promptMessages = []) {
 export function injectSystemMessages(ctx = {}, options = {}) {
   const messages = Array.isArray(ctx.messages) ? ctx.messages : null;
   if (!messages) return false;
+  let nextMessages = [...messages];
 
   const promptEntries = normalizePromptEntries(
     Array.isArray(options?.prompts) ? options.prompts : readLegacyPromptEntries(),
@@ -292,11 +299,7 @@ export function injectSystemMessages(ctx = {}, options = {}) {
     const promptContent = content;
     if (mode === "replace") {
       // Replace: remove existing harness prompts and add this one
-      for (let i = messages.length - 1; i >= 0; i--) {
-        if (isAnyPromptInjectionMessage(messages[i])) {
-          messages.splice(i, 1);
-        }
-      }
+      nextMessages = nextMessages.filter((message) => !isAnyPromptInjectionMessage(message));
       prependItems.push(
         buildHarnessInjectedMessage(promptContent, {
           injectedMessageType: `harness_prompt:${id}`,
@@ -335,17 +338,19 @@ export function injectSystemMessages(ctx = {}, options = {}) {
 
   // Apply prepend items (highest priority first)
   for (const item of prependItems.reverse()) {
-    messages.unshift(item);
+    nextMessages.unshift(item);
   }
 
   for (const item of afterSystemItems.reverse()) {
-    messages.splice(findAfterLeadingSystemIndex(messages), 0, item);
+    nextMessages.splice(findAfterLeadingSystemIndex(nextMessages), 0, item);
   }
 
   // Apply append items
   for (const item of appendItems) {
-    messages.push(item);
+    nextMessages.push(item);
   }
+  replaceMessages(ctx, nextMessages);
+  const updatedMessages = Array.isArray(ctx.messages) ? ctx.messages : messages;
 
   const promptMessages = [...prependItems, ...afterSystemItems, ...appendItems];
   if (injected) {
@@ -353,13 +358,13 @@ export function injectSystemMessages(ctx = {}, options = {}) {
       persistPromptMessagesToCurrentTurn(ctx, promptMessages);
     }
     // P2#5: refresh cache once to keep replace/remove semantics consistent
-    rebuildInjectedPromptCache(messages);
+    rebuildInjectedPromptCache(updatedMessages);
   }
 
   if (options.syncMessageBlocksSystem === true && systemBlockIds.size) {
     const syncSource = injected
       ? promptMessages
-      : messages.filter((message) =>
+      : updatedMessages.filter((message) =>
           isSystemRoleMessage(message) &&
           Array.from(systemBlockIds).some((id) => isPromptMessage(message, id)),
         );

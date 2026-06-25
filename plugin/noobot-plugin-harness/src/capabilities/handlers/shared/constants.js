@@ -149,6 +149,7 @@ export const DEFAULT_HARNESS_PENDING = Object.freeze({
   analysis: false,
   summary: false,
   summaryCheckpointMessageCount: null,
+  summaryCheckpointMessageIds: null,
   planRevision: false,
   planRevisionContext: null,
   planRefinement: false,

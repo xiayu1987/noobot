@@ -274,6 +274,74 @@ test("createRegisterHarnessHooks compacts by message blocks and preserves fronte
   assert.deepEqual(calls, ["system", "history", "incremental", "conversation"]);
 });
 
+test("createRegisterHarnessHooks keeps compacted messageBlocks as single-store views", async () => {
+  const handlers = new Map();
+  const hookManager = {
+    on(point, handler) {
+      handlers.set(point, handler);
+      return () => {};
+    },
+  };
+  const registerHarnessHooks = createRegisterHarnessHooks({
+    tracePoints: ["before_llm_call"],
+    flushPoints: [],
+    sessionCleanupPoints: [],
+    emitHarnessHookProgress: () => {},
+    shouldInjectPromptAtPoint: () => true,
+    injectPrompt: async (_point, ctx) => {
+      ctx.messages.push({ role: "user", content: "injected" });
+    },
+    traceHook: async () => ({ fsmState: "planning", fsmRejected: false }),
+  });
+
+  registerHarnessHooks({
+    hookManager,
+    options: {
+      tracePriority: 20,
+      timeoutMs: 1000,
+      planningGuidanceMode: "inject",
+      capabilityModelInvoker: null,
+      capabilityToolAllowlist: [],
+      capabilityToolAllowlistByPurpose: {},
+      acceptance: {},
+      review: {},
+      resolveMessageBlock: ({ messages }) => messages,
+    },
+    capabilityRuntime: { async runHook() {} },
+    plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
+  });
+
+  const ctx = {
+    messages: [
+      { role: "system", content: "system" },
+      { role: "assistant", content: "", tool_calls: [{ id: "call_1", function: { name: "write_file" } }] },
+    ],
+    messageBlocks: {
+      system: [{ role: "system", content: "system" }],
+      history: [],
+      incremental: [
+        { role: "assistant", content: "", tool_calls: [{ id: "call_1", function: { name: "write_file" } }] },
+      ],
+    },
+  };
+
+  await handlers.get("before_llm_call")(ctx);
+
+  const toolCallMessage = ctx.messages.find((message) => Array.isArray(message?.tool_calls));
+  assert.ok(toolCallMessage);
+  assert.equal(ctx.messageBlocks.incremental[0], toolCallMessage);
+  assert.equal(
+    ctx.messageBlocks.incrementalIds.includes(toolCallMessage.additional_kwargs.noobotMessageId),
+    true,
+  );
+  assert.deepEqual(
+    ctx.messageBlocks.incrementalIds,
+    ctx.messageBlocks.incremental.map((message) => message.additional_kwargs.noobotMessageId),
+  );
+  toolCallMessage.summarized = true;
+  assert.equal(ctx.messageBlocks.incremental[0].summarized, true);
+});
+
 test("createRegisterHarnessHooks compacts message blocks without duplicate current user", async () => {
   const handlers = new Map();
   const hookManager = {

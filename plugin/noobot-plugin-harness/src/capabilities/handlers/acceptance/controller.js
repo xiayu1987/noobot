@@ -23,6 +23,7 @@ import {
   maybeInjectPhaseAcceptancePrompt,
   runPhaseAcceptanceBySeparateModel,
 } from "./validation-runner.js";
+import { appendMessage } from "../../../core/message-store.js";
 import {
   maybeAppendAcceptanceReportAtFinalOutput,
   maybeAttachChecklistArtifactsAtFinalOutput,
@@ -372,11 +373,13 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
             WORKFLOW_PARAMS.acceptance.guards.overflowForcedAcceptanceSystemPrompt;
           const overflowPrompt = String(overflowPromptTemplate || "")
             .replaceAll("{tool}", TASK_ACCEPTANCE_TOOL_NAME);
-          ctx.messages.push(
+          appendMessage(
+            ctx,
             buildHarnessInjectedMessage(overflowPrompt, {
               role: "user",
               injectedMessageType: "acceptance_overflow_forced_prompt",
             }),
+            { block: "incremental" },
           );
           changed = true;
           executedPrimary = true;
