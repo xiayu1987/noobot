@@ -22,13 +22,13 @@ vi.mock("../../../../src/shared/ui", () => ({
         <span>{{ attachmentItem.name }}</span>
         <span v-if='showParsedResult'>{{ translate("message.parsedResultLabel") }}</span>
         <button
-          v-if='showParsedResult && attachmentItem.parsedResultAttachmentId && attachmentItem.parsedResultUrl'
+          v-if='showParsedResult && attachmentItem.parsedResult?.attachmentId && attachmentItem.parsedResultUrl'
           type='button'
           :title='translate("message.previewParsedResult", { name: attachmentItem.parsedResultName || translate("message.parsedResultDefaultName") })'
           @click='$emit("preview-parsed-result", attachmentItem)'
         >{{ translate("message.previewParsedResultShort") }}</button>
         <button
-          v-if='showParsedResult && attachmentItem.parsedResultAttachmentId && attachmentItem.parsedResultUrl'
+          v-if='showParsedResult && attachmentItem.parsedResult?.attachmentId && attachmentItem.parsedResultUrl'
           type='button'
           :title='translate("message.downloadParsedResult", { name: attachmentItem.parsedResultName || translate("message.parsedResultDefaultName") })'
           @click='$emit("download-parsed-result", attachmentItem)'
@@ -63,7 +63,7 @@ function mountMessageAttachments(overrides = {}) {
           attachmentId: "src-1",
           name: "source.pdf",
           mimeType: "application/pdf",
-          parsedResultAttachmentId: "parsed-1",
+          parsedResult: { attachmentId: "parsed-1" },
           parsedResultUrl: "/api/attachments/parsed-1",
           parsedResultName: "source.md",
         },

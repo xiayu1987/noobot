@@ -58,11 +58,16 @@ function resolveTurnScope({ runtime = {}, agentContext = null, sessionId = "", m
     : systemRuntime?.runConfig && typeof systemRuntime.runConfig === "object"
       ? systemRuntime.runConfig
       : {};
+  const explicitTurnScope = meta?.turnScope || producer?.turnScope || systemRuntime?.turnScope || runtime?.turnScope;
+  if (explicitTurnScope && typeof explicitTurnScope === "object" && !Array.isArray(explicitTurnScope)) {
+    return normalizeAttachmentTurnScopeMeta({ turnScope: explicitTurnScope });
+  }
   return normalizeAttachmentTurnScopeMeta({
-    sessionId,
-    turnScope: meta?.turnScope || producer?.turnScope || systemRuntime?.turnScope || runtime?.turnScope,
-    turnScopeId: meta?.turnScopeId || producer?.turnScopeId || systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || runConfig?.turnScopeId,
-    dialogProcessId: meta?.dialogProcessId || producer?.dialogProcessId || systemRuntime?.dialogProcessId || systemRuntime?.currentDialogProcessId || agentContext?.dialogProcessId,
+    turnScope: {
+      sessionId,
+      turnScopeId: meta?.turnScopeId || producer?.turnScopeId || systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || runConfig?.turnScopeId,
+      dialogProcessId: meta?.dialogProcessId || producer?.dialogProcessId || systemRuntime?.dialogProcessId || systemRuntime?.currentDialogProcessId || agentContext?.dialogProcessId,
+    },
   });
 }
 

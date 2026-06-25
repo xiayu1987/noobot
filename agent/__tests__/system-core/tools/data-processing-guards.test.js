@@ -171,11 +171,13 @@ test("doc_to_data: backwrites parsed result to source attachment from inputAttac
         sessionId: payload.sourceSessionId,
         attachmentSource: payload.sourceAttachmentSource,
         path: payload.sourceAttachmentPath,
-        parsedResultAttachmentId: payload.parsedAttachmentMeta?.attachmentId,
-        parsedResultPath: payload.parsedAttachmentMeta?.path,
-        parsedResultRelativePath: payload.parsedAttachmentMeta?.relativePath,
-        parsedResultTool: payload.toolName,
-        parsedResultUpdatedAt: "2026-06-15T00:00:00.000Z",
+        parsedResult: {
+          attachmentId: payload.parsedAttachmentMeta?.attachmentId,
+          path: payload.parsedAttachmentMeta?.path,
+          relativePath: payload.parsedAttachmentMeta?.relativePath,
+          tool: payload.toolName,
+          updatedAt: "2026-06-15T00:00:00.000Z",
+        },
       };
     },
   };
@@ -207,8 +209,8 @@ test("doc_to_data: backwrites parsed result to source attachment from inputAttac
   assert.equal(linkCalls.length, 1);
   assert.equal(linkCalls[0]?.sourceAttachmentId, "source-att");
   assert.equal(linkCalls[0]?.parsedAttachmentMeta?.attachmentId, "parsed-1");
-  assert.equal(runtime.inputAttachmentMetas[0]?.parsedResultAttachmentId, "parsed-1");
-  assert.equal(runtime.inputAttachmentMetas[0]?.parsedResultTool, TOOL_NAME.DOC_TO_DATA);
+  assert.equal(runtime.inputAttachmentMetas[0]?.parsedResult?.attachmentId, "parsed-1");
+  assert.equal(runtime.inputAttachmentMetas[0]?.parsedResult?.tool, TOOL_NAME.DOC_TO_DATA);
 });
 
 test("doc_to_data: reuses generated data artifact instead of creating recursive copies", async () => {

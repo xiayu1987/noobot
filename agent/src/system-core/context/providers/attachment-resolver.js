@@ -5,6 +5,7 @@
  */
 import { safeNum } from "../../utils/shared-utils.js";
 import { MIME_TYPE } from "../../constants/index.js";
+import { normalizeAttachmentParsedResultMeta } from "../../attach/index.js";
 
 export async function resolveAttachments({
   attachmentService = null,
@@ -31,29 +32,22 @@ export async function resolveAttachments({
       String(attachmentItem?.path || "").trim(),
   );
   if (hasIngestedRecords) {
-    return sourceAttachmentMetas.map((attachmentItem) => ({
-      attachmentId: String(attachmentItem?.attachmentId || ""),
-      sessionId: String(attachmentItem?.sessionId || sessionId || ""),
-      attachmentSource: String(attachmentItem?.attachmentSource || "user").trim(),
-      name: String(attachmentItem?.name || ""),
-      mimeType: String(
-        attachmentItem?.mimeType || MIME_TYPE.APPLICATION_OCTET_STREAM,
-      ),
-      size: safeNum(attachmentItem?.size),
-      path: String(attachmentItem?.path || ""),
-      relativePath: String(attachmentItem?.relativePath || ""),
-      parsedResultAttachmentId: String(
-        attachmentItem?.parsedResultAttachmentId || "",
-      ).trim(),
-      parsedResultPath: String(attachmentItem?.parsedResultPath || "").trim(),
-      parsedResultRelativePath: String(
-        attachmentItem?.parsedResultRelativePath || "",
-      ).trim(),
-      parsedResultTool: String(attachmentItem?.parsedResultTool || "").trim(),
-      parsedResultUpdatedAt: String(
-        attachmentItem?.parsedResultUpdatedAt || "",
-      ).trim(),
-    }));
+    return sourceAttachmentMetas.map((attachmentItem) => {
+      const parsedResult = normalizeAttachmentParsedResultMeta(attachmentItem);
+      return {
+        attachmentId: String(attachmentItem?.attachmentId || ""),
+        sessionId: String(attachmentItem?.sessionId || sessionId || ""),
+        attachmentSource: String(attachmentItem?.attachmentSource || "user").trim(),
+        name: String(attachmentItem?.name || ""),
+        mimeType: String(
+          attachmentItem?.mimeType || MIME_TYPE.APPLICATION_OCTET_STREAM,
+        ),
+        size: safeNum(attachmentItem?.size),
+        path: String(attachmentItem?.path || ""),
+        relativePath: String(attachmentItem?.relativePath || ""),
+        ...(parsedResult ? { parsedResult } : {}),
+      };
+    });
   }
   return attachmentService.ingest({
     userId,

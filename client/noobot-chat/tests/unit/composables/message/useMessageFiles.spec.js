@@ -110,7 +110,7 @@ describe("useMessageFiles", () => {
       name: "result.md",
       mimeType: "text/markdown",
       transferFilePath: "/workspace/admin/runtime/result.md",
-      attachmentOwnerType: "agent",
+      owner: { type: "agent" },
     });
   });
 
@@ -125,8 +125,7 @@ describe("useMessageFiles", () => {
           name: "harness-acceptance-report.txt",
           mimeType: "text/plain",
           generationSource: "harness_checklist",
-          attachmentOwnerType: "plugin",
-          attachmentOwner: "harness-plugin",
+          owner: { type: "plugin", id: "harness-plugin" },
         },
         {
           attachmentId: "att-agent-1",
@@ -144,10 +143,10 @@ describe("useMessageFiles", () => {
 
     expect(displayedAttachmentMetas.value).toHaveLength(2);
     expect(displayedAttachmentMetas.value.find((item) => item.attachmentId === "att-harness-1")).toMatchObject({
-      attachmentOwnerType: "plugin",
+      owner: { type: "plugin" },
     });
     expect(displayedAttachmentMetas.value.find((item) => item.attachmentId === "att-agent-1")).toMatchObject({
-      attachmentOwnerType: "agent",
+      owner: { type: "agent" },
     });
   });
 
@@ -163,15 +162,13 @@ describe("useMessageFiles", () => {
           attachmentId: "plan-1",
           name: "harness-plan-text.txt",
           size: 1400,
-          attachmentOwnerType: "plugin",
-          attachmentOwner: "harness-plugin",
+          owner: { type: "plugin", id: "harness-plugin" },
         },
         {
           attachmentId: "report-1",
           name: "harness-acceptance-report.txt",
           size: 5600,
-          attachmentOwnerType: "plugin",
-          attachmentOwner: "harness-plugin",
+          owner: { type: "plugin", id: "harness-plugin" },
         },
       ],
     };
@@ -207,13 +204,11 @@ describe("useMessageFiles", () => {
     expect(displayedAttachmentMetas.value).toEqual([
       expect.objectContaining({
         attachmentId: "plan-1",
-        attachmentOwnerType: "plugin",
-        attachmentOwner: "harness-plugin",
+        owner: { type: "plugin", id: "harness-plugin" },
       }),
       expect.objectContaining({
         attachmentId: "report-1",
-        attachmentOwnerType: "plugin",
-        attachmentOwner: "harness-plugin",
+        owner: { type: "plugin", id: "harness-plugin" },
       }),
     ]);
   });
@@ -231,8 +226,7 @@ describe("useMessageFiles", () => {
           attachmentId: "report-1",
           name: "harness-acceptance-report.txt",
           size: 5600,
-          attachmentOwnerType: "plugin",
-          attachmentOwner: "harness-plugin",
+          owner: { type: "plugin", id: "harness-plugin" },
         },
       ],
     };
@@ -247,8 +241,7 @@ describe("useMessageFiles", () => {
     expect(displayedAttachmentMetas.value).toHaveLength(1);
     expect(displayedAttachmentMetas.value[0]).toMatchObject({
       attachmentId: "report-1",
-      attachmentOwnerType: "plugin",
-      attachmentOwner: "harness-plugin",
+      owner: { type: "plugin", id: "harness-plugin" },
     });
   });
 
@@ -264,15 +257,13 @@ describe("useMessageFiles", () => {
           attachmentId: "plan-plugin-live",
           name: "harness-plan-text.txt",
           size: 1400,
-          attachmentOwnerType: "plugin",
-          attachmentOwner: "harness-plugin",
+          owner: { type: "plugin", id: "harness-plugin" },
         },
         {
           attachmentId: "report-plugin-live",
           name: "harness-acceptance-report.txt",
           size: 5600,
-          attachmentOwnerType: "plugin",
-          attachmentOwner: "harness-plugin",
+          owner: { type: "plugin", id: "harness-plugin" },
         },
       ],
     };
@@ -306,12 +297,12 @@ describe("useMessageFiles", () => {
       "report-plugin-live",
     ]);
     expect(displayedAttachmentMetas.value).toEqual([
-      expect.objectContaining({ name: "harness-plan-text.txt", attachmentOwnerType: "plugin" }),
-      expect.objectContaining({ name: "harness-acceptance-report.txt", attachmentOwnerType: "plugin" }),
+      expect.objectContaining({ name: "harness-plan-text.txt", owner: expect.objectContaining({ type: "plugin" }) }),
+      expect.objectContaining({ name: "harness-acceptance-report.txt", owner: expect.objectContaining({ type: "plugin" }) }),
     ]);
   });
 
-  it("recognizes harness plugin ownership restored from nested owner metadata", () => {
+  it("recognizes harness plugin ownership from owner metadata", () => {
     const messageItem = {
       role: "assistant",
       sessionId: "session-1",
@@ -323,13 +314,13 @@ describe("useMessageFiles", () => {
           attachmentId: "plan-nested-owner",
           name: "harness-plan-text.txt",
           size: 1400,
-          owner: { owner: "harness-plugin" },
+          owner: { type: "plugin", id: "harness-plugin" },
         },
         {
           attachmentId: "report-nested-owner",
           name: "harness-acceptance-report.txt",
           size: 5600,
-          attachment: { owner: { source: "harness-plugin" } },
+          owner: { type: "plugin", id: "harness-plugin" },
         },
       ],
     };
@@ -343,8 +334,14 @@ describe("useMessageFiles", () => {
 
     expect(displayedAttachmentMetas.value).toHaveLength(2);
     expect(displayedAttachmentMetas.value).toEqual([
-      expect.objectContaining({ attachmentId: "plan-nested-owner", attachmentOwnerType: "plugin" }),
-      expect.objectContaining({ attachmentId: "report-nested-owner", attachmentOwnerType: "plugin" }),
+      expect.objectContaining({
+        attachmentId: "plan-nested-owner",
+        owner: expect.objectContaining({ type: "plugin" }),
+      }),
+      expect.objectContaining({
+        attachmentId: "report-nested-owner",
+        owner: expect.objectContaining({ type: "plugin" }),
+      }),
     ]);
   });
 
@@ -386,10 +383,10 @@ describe("useMessageFiles", () => {
 
     expect(displayedAttachmentMetas.value).toHaveLength(4);
     expect(displayedAttachmentMetas.value).toEqual([
-      expect.objectContaining({ attachmentId: "plan-current", attachmentOwnerType: "agent" }),
-      expect.objectContaining({ attachmentId: "report-current", attachmentOwnerType: "agent" }),
-      expect.objectContaining({ attachmentId: "plan-refreshed", attachmentOwnerType: "agent" }),
-      expect.objectContaining({ attachmentId: "report-refreshed", attachmentOwnerType: "agent" }),
+      expect.objectContaining({ attachmentId: "plan-current", owner: { type: "agent" } }),
+      expect.objectContaining({ attachmentId: "report-current", owner: { type: "agent" } }),
+      expect.objectContaining({ attachmentId: "plan-refreshed", owner: { type: "agent" } }),
+      expect.objectContaining({ attachmentId: "report-refreshed", owner: { type: "agent" } }),
     ]);
   });
 
@@ -405,15 +402,13 @@ describe("useMessageFiles", () => {
           attachmentId: "plan-current",
           name: "harness-plan-text.txt",
           size: 1400,
-          attachmentOwnerType: "plugin",
-          attachmentOwner: "harness-plugin",
+          owner: { type: "plugin", id: "harness-plugin" },
         },
         {
           attachmentId: "report-current",
           name: "harness-acceptance-report.txt",
           size: 5600,
-          attachmentOwnerType: "plugin",
-          attachmentOwner: "harness-plugin",
+          owner: { type: "plugin", id: "harness-plugin" },
         },
       ],
     };
@@ -431,15 +426,13 @@ describe("useMessageFiles", () => {
               attachmentId: "plan-refreshed",
               name: "harness-plan-text.txt",
               size: 1400,
-              attachmentOwnerType: "plugin",
-              attachmentOwner: "harness-plugin",
+              owner: { type: "plugin", id: "harness-plugin" },
             },
             {
               attachmentId: "report-refreshed",
               name: "harness-acceptance-report.txt",
               size: 5600,
-              attachmentOwnerType: "plugin",
-              attachmentOwner: "harness-plugin",
+              owner: { type: "plugin", id: "harness-plugin" },
             },
           ],
         },
@@ -455,8 +448,14 @@ describe("useMessageFiles", () => {
 
     expect(displayedAttachmentMetas.value).toHaveLength(2);
     expect(displayedAttachmentMetas.value).toEqual([
-      expect.objectContaining({ attachmentId: "plan-current", attachmentOwnerType: "plugin" }),
-      expect.objectContaining({ attachmentId: "report-current", attachmentOwnerType: "plugin" }),
+      expect.objectContaining({
+        attachmentId: "plan-current",
+        owner: expect.objectContaining({ type: "plugin" }),
+      }),
+      expect.objectContaining({
+        attachmentId: "report-current",
+        owner: expect.objectContaining({ type: "plugin" }),
+      }),
     ]);
   });
 
@@ -484,7 +483,7 @@ describe("useMessageFiles", () => {
     expect(displayedAttachmentMetas.value).toHaveLength(1);
     expect(displayedAttachmentMetas.value[0]).toMatchObject({
       attachmentId: "att-legacy-harness-name",
-      attachmentOwnerType: "agent",
+      owner: { type: "agent" },
     });
   });
 
@@ -498,7 +497,7 @@ describe("useMessageFiles", () => {
         {
           attachmentId: "src-1",
           name: "source.pdf",
-          parsedResultAttachmentId: "parsed-1",
+          parsedResult: { attachmentId: "parsed-1" },
           parsedResultUrl: "/api/attachments/parsed-1",
           parsedResultName: "source.md",
         },
@@ -514,7 +513,7 @@ describe("useMessageFiles", () => {
     expect(displayedAttachmentMetas.value).toHaveLength(1);
     expect(displayedAttachmentMetas.value[0]).toMatchObject({
       attachmentId: "src-1",
-      parsedResultAttachmentId: "parsed-1",
+      parsedResult: { attachmentId: "parsed-1" },
       parsedResultUrl: "/api/attachments/parsed-1",
       parsedResultName: "source.md",
     });
@@ -660,7 +659,7 @@ describe("useMessageFiles", () => {
     });
 
     expect(displayedAttachmentMetas.value).toEqual([
-      { attachmentId: "prev-1", attachmentOwnerType: "agent", name: "previous-result.md" },
+      { attachmentId: "prev-1", owner: { type: "agent" }, name: "previous-result.md" },
     ]);
   });
 
@@ -924,7 +923,7 @@ describe("useMessageFiles", () => {
     });
 
     expect(displayedAttachmentMetas.value).toEqual([
-      { attachmentId: "bird-1", attachmentOwnerType: "agent", name: "generated_image_1.png" },
+      { attachmentId: "bird-1", owner: { type: "agent" }, name: "generated_image_1.png" },
     ]);
   });
 
@@ -988,7 +987,7 @@ describe("useMessageFiles", () => {
     expect(displayedAttachmentMetas.value).toEqual([
       {
         attachmentId: "current-explicit",
-        attachmentOwnerType: "agent",
+        owner: { type: "agent" },
         name: "current.png",
         turnScope: { turnScopeId: "turn-current", dialogProcessId: "dp-current" },
       },

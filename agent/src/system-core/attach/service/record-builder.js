@@ -7,7 +7,11 @@
 import path from "node:path";
 
 import { DEFAULT_ATTACHMENT_SESSION_ID, DEFAULT_ATTACHMENT_SOURCE, DEFAULT_MIME_TYPE, MIME_TO_EXTENSION, MAX_EXTENSION_LENGTH } from "../constants.js";
-import { normalizeAttachmentOwnerMeta, normalizeAttachmentTurnScopeMeta } from "../meta-ops.js";
+import {
+  normalizeAttachmentOwnerMeta,
+  normalizeAttachmentParsedResultMeta,
+  normalizeAttachmentTurnScopeMeta,
+} from "../meta-ops.js";
 import { safeNum, safeStr } from "../../utils/shared-utils.js";
 
 /**
@@ -29,15 +33,9 @@ export function normalizeRelativePath(basePath, absolutePath) {
  * @returns {object}
  */
 export function buildPublicRecord(basePath, record) {
-  const parsedResultAttachmentId = safeStr(record?.parsedResultAttachmentId);
-  const parsedResultPath = safeStr(record?.parsedResultPath);
-  const parsedResultRelativePath = safeStr(record?.parsedResultRelativePath);
-  const parsedResultTool = safeStr(record?.parsedResultTool);
-  const parsedResultUpdatedAt = safeStr(record?.parsedResultUpdatedAt);
   const owner = normalizeAttachmentOwnerMeta(record);
   const turnScope = normalizeAttachmentTurnScopeMeta(record, owner);
-  const attachmentOwnerType = safeStr(owner?.attachmentOwnerType || record?.attachmentOwnerType);
-  const attachmentOwner = safeStr(owner?.attachmentOwner || record?.attachmentOwner);
+  const parsedResult = normalizeAttachmentParsedResultMeta(record);
   return {
     attachmentId: safeStr(record.attachmentId),
     name: safeStr(record.name),
@@ -50,19 +48,9 @@ export function buildPublicRecord(basePath, record) {
     attachmentSource: safeStr(record.attachmentSource, DEFAULT_ATTACHMENT_SOURCE),
     generatedByModel: record?.generatedByModel === true,
     generationSource: safeStr(record.generationSource),
-    ...(attachmentOwnerType ? { attachmentOwnerType } : {}),
-    ...(attachmentOwner ? { attachmentOwner } : {}),
     ...(owner ? { owner } : {}),
     ...(turnScope ? { turnScope } : {}),
-    ...(parsedResultAttachmentId
-      ? {
-          parsedResultAttachmentId,
-          parsedResultPath,
-          parsedResultRelativePath,
-          parsedResultTool,
-          parsedResultUpdatedAt,
-        }
-      : {}),
+    ...(parsedResult ? { parsedResult } : {}),
   };
 }
 

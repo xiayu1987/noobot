@@ -45,9 +45,7 @@ export const COMPACT_TRANSFER_FILE_FIELDS = Object.freeze([
   "sandboxPath",
   "generatedByModel",
   "generationSource",
-  "parsedResultAttachmentId",
-  "parsedResultRelativePath",
-  "parsedResultTool",
+  "parsedResult",
   "transferFilePath",
   "role",
 ]);
@@ -111,6 +109,7 @@ function compactLegacyEnvelopeFileForModel(envelope = {}) {
 
 export function compactAttachmentMetaForModel(meta = {}) {
   if (!isPlainObject(meta)) return {};
+  const parsedResult = isPlainObject(meta.parsedResult) ? meta.parsedResult : {};
   return compactObject({
     attachmentId: meta.attachmentId,
     sessionId: meta.sessionId,
@@ -122,9 +121,11 @@ export function compactAttachmentMetaForModel(meta = {}) {
     sandboxPath: firstNormalizedString(meta.sandboxPath, meta.sandboxViewPath),
     generatedByModel: meta.generatedByModel,
     generationSource: meta.generationSource,
-    parsedResultAttachmentId: meta.parsedResultAttachmentId,
-    parsedResultRelativePath: meta.parsedResultRelativePath,
-    parsedResultTool: meta.parsedResultTool,
+    parsedResult: compactObject({
+      attachmentId: parsedResult.attachmentId,
+      relativePath: parsedResult.relativePath,
+      tool: parsedResult.tool,
+    }),
   });
 }
 

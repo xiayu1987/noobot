@@ -66,74 +66,55 @@ function cleanPlainObject(value = {}) {
 
 /**
  * 归一化附件 owner 元数据。
- * - owner 是新的统一承载入口；
- * - attachmentOwnerType/attachmentOwner 是历史扁平字段，仅作为兼容输入补齐到 owner；
- * - attachment.owner 是历史嵌套形态，也作为兼容输入。
+ * owner 是唯一承载入口，结构为 { type, id, ... }。
  */
 export function normalizeAttachmentOwnerMeta(attachmentItem = {}) {
-  const nestedAttachmentOwner = isPlainObject(attachmentItem?.attachment?.owner)
-    ? attachmentItem.attachment.owner
-    : null;
   const explicitOwner = isPlainObject(attachmentItem?.owner) ? attachmentItem.owner : null;
-  const baseOwner = cleanPlainObject(explicitOwner || nestedAttachmentOwner) || {};
-  const attachmentOwnerType = safeStr(
-    baseOwner.attachmentOwnerType ||
-      baseOwner.ownerType ||
-      baseOwner.type ||
-      attachmentItem?.attachmentOwnerType,
-  );
-  const attachmentOwner = safeStr(
-    baseOwner.attachmentOwner ||
-      baseOwner.owner ||
-      baseOwner.ownerId ||
-      attachmentItem?.attachmentOwner,
-  );
+  const baseOwner = cleanPlainObject(explicitOwner) || {};
+  const type = safeStr(baseOwner.type);
+  const id = safeStr(baseOwner.id);
   const normalized = {
     ...baseOwner,
-    ...(attachmentOwnerType ? { attachmentOwnerType } : {}),
-    ...(attachmentOwner ? { attachmentOwner } : {}),
+    ...(type ? { type } : {}),
+    ...(id ? { id } : {}),
   };
   return cleanPlainObject(normalized);
 }
 
 /**
  * 归一化附件 turn scope 元数据。
- * - turnScope 是新的统一承载入口；
- * - turnScopeId/dialogProcessId/sessionId 扁平字段作为兼容输入；
- * - owner.turnScope / owner 内旧字段、attachment.turnScope 也作为兼容输入。
+ * turnScope 是唯一承载入口。
  */
 export function normalizeAttachmentTurnScopeMeta(attachmentItem = {}, normalizedOwner = null) {
   const owner = isPlainObject(normalizedOwner) ? normalizedOwner : normalizeAttachmentOwnerMeta(attachmentItem);
   const explicitTurnScope = isPlainObject(attachmentItem?.turnScope) ? attachmentItem.turnScope : null;
   const ownerTurnScope = isPlainObject(owner?.turnScope) ? owner.turnScope : null;
-  const nestedAttachmentTurnScope = isPlainObject(attachmentItem?.attachment?.turnScope)
-    ? attachmentItem.attachment.turnScope
-    : null;
-  const baseTurnScope = cleanPlainObject(explicitTurnScope || ownerTurnScope || nestedAttachmentTurnScope) || {};
+  const baseTurnScope = cleanPlainObject(explicitTurnScope || ownerTurnScope) || {};
   const normalized = {
     ...baseTurnScope,
-    turnScopeId: safeStr(
-      baseTurnScope.turnScopeId ||
-        owner?.turnScopeId ||
-        attachmentItem?.turnScopeId ||
-        attachmentItem?.attachment?.turnScopeId,
-    ),
-    dialogProcessId: safeStr(
-      baseTurnScope.dialogProcessId ||
-        baseTurnScope.dialog_process_id ||
-        owner?.dialogProcessId ||
-        owner?.dialog_process_id ||
-        attachmentItem?.dialogProcessId ||
-        attachmentItem?.dialog_process_id ||
-        attachmentItem?.attachment?.dialogProcessId ||
-        attachmentItem?.attachment?.dialog_process_id,
-    ),
-    sessionId: safeStr(
-      baseTurnScope.sessionId ||
-        owner?.sessionId ||
-        attachmentItem?.sessionId ||
-        attachmentItem?.attachment?.sessionId,
-    ),
+    turnScopeId: safeStr(baseTurnScope.turnScopeId),
+    dialogProcessId: safeStr(baseTurnScope.dialogProcessId || baseTurnScope.dialog_process_id),
+    sessionId: safeStr(baseTurnScope.sessionId),
+  };
+  return cleanPlainObject(normalized);
+}
+
+/**
+ * 归一化附件解析结果元数据。
+ * parsedResult 是唯一承载入口。
+ */
+export function normalizeAttachmentParsedResultMeta(attachmentItem = {}) {
+  const explicitParsedResult = isPlainObject(attachmentItem?.parsedResult)
+    ? attachmentItem.parsedResult
+    : null;
+  const baseParsedResult = cleanPlainObject(explicitParsedResult) || {};
+  const normalized = {
+    ...baseParsedResult,
+    attachmentId: safeStr(baseParsedResult.attachmentId || baseParsedResult.id),
+    path: safeStr(baseParsedResult.path),
+    relativePath: safeStr(baseParsedResult.relativePath),
+    tool: safeStr(baseParsedResult.tool),
+    updatedAt: safeStr(baseParsedResult.updatedAt || baseParsedResult.updated_at),
   };
   return cleanPlainObject(normalized);
 }
@@ -202,6 +183,7 @@ export function mapAttachmentRecordsToMetas(
   return list.map((item) => {
     const owner = normalizeAttachmentOwnerMeta(item);
     const turnScope = normalizeAttachmentTurnScopeMeta(item, owner);
+    const parsedResult = normalizeAttachmentParsedResultMeta(item);
     return {
       attachmentId: safeStr(item?.attachmentId),
       sessionId: safeStr(item?.sessionId, DEFAULT_ATTACHMENT_SESSION_ID),
@@ -214,14 +196,8 @@ export function mapAttachmentRecordsToMetas(
       generatedByModel: item?.generatedByModel === true,
       generationSource: safeStr(item?.generationSource, fallbackGenerationSource),
       ...(owner ? { owner } : {}),
-      ...(owner?.attachmentOwnerType ? { attachmentOwnerType: owner.attachmentOwnerType } : {}),
-      ...(owner?.attachmentOwner ? { attachmentOwner: owner.attachmentOwner } : {}),
-      parsedResultAttachmentId: safeStr(item?.parsedResultAttachmentId),
-      parsedResultPath: safeStr(item?.parsedResultPath),
-      parsedResultRelativePath: safeStr(item?.parsedResultRelativePath),
-      parsedResultTool: safeStr(item?.parsedResultTool),
-      parsedResultUpdatedAt: safeStr(item?.parsedResultUpdatedAt),
       ...(turnScope ? { turnScope } : {}),
+      ...(parsedResult ? { parsedResult } : {}),
     };
   });
 }

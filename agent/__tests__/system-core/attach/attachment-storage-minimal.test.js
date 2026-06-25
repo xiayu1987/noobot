@@ -66,21 +66,20 @@ test("AttachmentService.ingestGeneratedArtifacts preserves attachment owner meta
       sessionId: "s1",
       attachmentSource: "model",
       generationSource: "harness_checklist",
-      attachmentOwnerType: "plugin",
-      attachmentOwner: "harness-plugin",
+      owner: { type: "plugin", id: "harness-plugin" },
       artifacts: [{ name: "checklist.txt", mimeType: "text/plain", contentBase64: content }],
     });
 
     assert.equal(saved.length, 1);
-    assert.equal(saved[0].attachmentOwnerType, "plugin");
-    assert.equal(saved[0].attachmentOwner, "harness-plugin");
+    assert.equal(saved[0].owner?.type, "plugin");
+    assert.equal(saved[0].owner?.id, "harness-plugin");
 
     const loaded = await service.getAttachmentById({
       userId: "u1",
       attachmentId: saved[0].attachmentId,
     });
-    assert.equal(loaded.attachmentOwnerType, "plugin");
-    assert.equal(loaded.attachmentOwner, "harness-plugin");
+    assert.equal(loaded.owner?.type, "plugin");
+    assert.equal(loaded.owner?.id, "harness-plugin");
   });
 });
 
@@ -158,18 +157,16 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
     });
 
     assert.ok(linked);
-    assert.equal(linked.parsedResultAttachmentId, parsedAttachment.attachmentId);
+    assert.equal(linked.parsedResult?.attachmentId, parsedAttachment.attachmentId);
 
     const runtimeSnapshot = JSON.parse(await readFile(runtimeSessionFile, "utf8"));
     const pluginSnapshot = JSON.parse(await readFile(pluginSessionFile, "utf8"));
     const runtimeAttachment = runtimeSnapshot?.messages?.[0]?.attachmentMetas?.[0] || {};
     const pluginAttachment = pluginSnapshot?.messages?.[0]?.attachmentMetas?.[0] || {};
-    assert.equal(runtimeAttachment.parsedResultAttachmentId, parsedAttachment.attachmentId);
-    assert.equal(pluginAttachment.parsedResultAttachmentId, parsedAttachment.attachmentId);
-    assert.equal(runtimeSnapshot?.messages?.[0]?.attachments?.[0]?.parsedResultAttachmentId, undefined);
-    assert.equal(pluginSnapshot?.messages?.[0]?.attachments?.[0]?.parsedResultAttachmentId, undefined);
-    assert.equal(runtimeAttachment.parsedResultTool, "doc_to_data");
-    assert.equal(pluginAttachment.parsedResultTool, "doc_to_data");
+    assert.equal(runtimeAttachment.parsedResult?.attachmentId, parsedAttachment.attachmentId);
+    assert.equal(pluginAttachment.parsedResult?.attachmentId, parsedAttachment.attachmentId);
+    assert.equal(runtimeAttachment.parsedResult?.tool, "doc_to_data");
+    assert.equal(pluginAttachment.parsedResult?.tool, "doc_to_data");
   });
 });
 

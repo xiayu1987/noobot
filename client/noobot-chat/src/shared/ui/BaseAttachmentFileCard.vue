@@ -33,7 +33,9 @@ const mimeType = computed(() => String(props.attachmentItem?.mimeType || "").tri
 const hasThumbnail = computed(() => Boolean(String(props.thumbnailUrl || "").trim()));
 const isImage = computed(() => props.isImageMime(mimeType.value));
 const isVideo = computed(() => mimeType.value.startsWith("video/"));
-const ownerType = computed(() => String(props.attachmentItem?.attachmentOwnerType || "").trim());
+const ownerType = computed(() =>
+  String(props.attachmentItem?.owner?.type || "").trim(),
+);
 const resolvedName = computed(
   () => String(props.nameText || props.attachmentItem?.name || "").trim(),
 );
@@ -54,7 +56,7 @@ const showCustomBadge = computed(() => Boolean(String(props.customBadgeText || "
 const hasParsedResult = computed(
   () =>
     props.showParsedResult &&
-    Boolean(props.attachmentItem?.parsedResultAttachmentId) &&
+    Boolean(props.attachmentItem?.parsedResult?.attachmentId) &&
     Boolean(props.attachmentItem?.parsedResultUrl),
 );
 </script>

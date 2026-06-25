@@ -217,7 +217,7 @@ function isOfficeMime(mimeType = "") {
 
 function hasParsedResult(attachmentItem = {}) {
   return Boolean(
-    String(attachmentItem?.parsedResultAttachmentId || "").trim() ||
+    String(attachmentItem?.parsedResult?.attachmentId || "").trim() ||
       String(attachmentItem?.parsedResultUrl || "").trim(),
   );
 }
