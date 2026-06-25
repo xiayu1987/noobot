@@ -10,6 +10,7 @@ import {
   invokeLlmWithTransientRetry,
   normalizeAiTextContent,
 } from "../llm-invoker.js";
+import { appendMessage } from "../message-context/message-store.js";
 import { resolveNonThinkingCallOverrides } from "./tool-choice-strategy.js";
 import { buildReasoningRetrySystemMessage } from "./turn-stage.js";
 
@@ -17,6 +18,7 @@ export async function maybeRetryReasoningOnlyNoTools({
   modelResponse,
   responseContentText = "",
   messages = [],
+  messageHolder = null,
   invokeLlm,
   modelState,
   runtime,
@@ -36,10 +38,15 @@ export async function maybeRetryReasoningOnlyNoTools({
     mode: "no_tools",
     reasoningChars: reasoningText.length,
   });
-  messages.push({
+  const retryMessage = {
     role: "system",
     content: buildReasoningRetrySystemMessage(reasoningText, locale),
-  });
+  };
+  if (messageHolder && typeof messageHolder === "object") {
+    appendMessage(messageHolder, retryMessage, { block: "incremental" });
+  } else {
+    messages.push(retryMessage);
+  }
 
   const retryAi = await invokeLlmWithTransientRetry({
     modelState,

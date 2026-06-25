@@ -25,6 +25,7 @@ import {
   resolvePhaseSummaryLoopTurns,
   resolveToolFailureHelpCount,
 } from "./config/index.js";
+import { canonicalizeMessageStore } from "./message-context/message-store.js";
 
 export function createStateBuilder({
   createChatModelFn = createChatModel,
@@ -147,6 +148,7 @@ export function createStateBuilder({
       toolConsecutiveFailureCount: Number(sys?.toolConsecutiveFailureCount || 0),
       errorLogger,
     };
+    canonicalizeMessageStore(loopState);
 
     return { modelState, loopState };
   };

@@ -11,6 +11,7 @@ import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
 import { compactToolResultTextForModel } from "../../../semantic-transfer/core/compact.js";
 import { parseJsonObjectSafely } from "../utils/json-utils.js";
+import { appendMessage } from "../message-context/message-store.js";
 
 const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
   "doc_to_data_tool",
@@ -106,6 +107,7 @@ function parseTransferPayloadFromToolResultText(toolResultText = "") {
 
 export function createStateCommitter({
   messages = null,
+  messageHolder = null,
   traces = null,
   turnMessageStore = null,
   dialogProcessId = "",
@@ -231,13 +233,14 @@ export function createStateCommitter({
           result: normalizedToolResultText.slice(0, TOOL_RESULT_TRACE_TRUNCATE_LENGTH),
         });
       }
-      if (Array.isArray(messages)) {
-        messages.push(
-          new ToolMessage({
-            tool_call_id: resolvedCallId,
-            content: normalizedToolResultText,
-          }),
-        );
+      const toolMessage = new ToolMessage({
+        tool_call_id: resolvedCallId,
+        content: normalizedToolResultText,
+      });
+      if (messageHolder && typeof messageHolder === "object") {
+        appendMessage(messageHolder, toolMessage, { block: "incremental" });
+      } else if (Array.isArray(messages)) {
+        messages.push(toolMessage);
       }
       if (turnMessageStore?.push) {
         turnMessageStore.push(toolResultPayload);

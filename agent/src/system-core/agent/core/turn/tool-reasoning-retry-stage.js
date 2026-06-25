@@ -5,6 +5,7 @@
  */
 import { emitEvent } from "../../../event/index.js";
 import { extractAiReasoningText } from "../llm-invoker.js";
+import { appendMessage } from "../message-context/message-store.js";
 import { buildReasoningRetrySystemMessage } from "./turn-stage.js";
 import { normalizeToolTurnAi } from "./tool-call-retry-stage.js";
 
@@ -13,6 +14,7 @@ export async function maybeRetryReasoningOnlyWithTools({
   calls = [],
   aiContentText = "",
   messages = [],
+  messageHolder = null,
   invokeBoundLlmWithToolChoice,
   eventListener,
   turn,
@@ -28,10 +30,15 @@ export async function maybeRetryReasoningOnlyWithTools({
     mode: "with_tools",
     reasoningChars: reasoningText.length,
   });
-  messages.push({
+  const retryMessage = {
     role: "system",
     content: buildReasoningRetrySystemMessage(reasoningText, locale),
-  });
+  };
+  if (messageHolder && typeof messageHolder === "object") {
+    appendMessage(messageHolder, retryMessage, { block: "incremental" });
+  } else {
+    messages.push(retryMessage);
+  }
 
   const retryAi = await invokeBoundLlmWithToolChoice();
   return {

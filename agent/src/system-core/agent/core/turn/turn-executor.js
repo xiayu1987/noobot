@@ -42,6 +42,7 @@ import { finalizeNoToolsStreamingTurn } from "./no-tools-final-stream-stage.js";
 import { commitNoToolsTurnState } from "./no-tools-commit-stage.js";
 import { maybeCreateRequiredToolChoiceUnsupportedFallbackAi } from "./tool-choice-fallback-stage.js";
 import { handleRequiredToolChoiceNotFollowed } from "./tool-choice-required-stage.js";
+import { appendMessage } from "../message-context/message-store.js";
 export { normalizeToolResultAttachmentMetas } from "./tool-result-normalizer.js";
 export {
   buildAssistantModelMessageForToolCalls,
@@ -155,6 +156,7 @@ export async function invokeNoToolsTurn({
     modelResponse,
     responseContentText,
     messages,
+    messageHolder: loopState,
     invokeLlm,
     modelState,
     runtime,
@@ -170,6 +172,7 @@ export async function invokeNoToolsTurn({
   const finalStreamingTurn = await finalizeNoToolsStreamingTurn({
     modelState,
     messages,
+    messageHolder: loopState,
     modelResponse,
     responseContentText,
     turn,
@@ -303,6 +306,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     calls,
     aiContentText,
     messages,
+    messageHolder: loopState,
     invokeBoundLlmWithToolChoice,
     eventListener,
     turn,
@@ -355,15 +359,13 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     aiContentText = finalStreamResult.text || aiContentText;
   }
   const committedCalls = calls.length > 1 ? calls.slice(0, 1) : calls;
-  messages.push(
-    calls.length
-      ? buildAssistantModelMessageForToolCalls({
-          ai,
-          contentText: aiContentText,
-          toolCalls: committedCalls,
-        })
-      : ai,
-  );
+  appendMessage(loopState, calls.length
+    ? buildAssistantModelMessageForToolCalls({
+        ai,
+        contentText: aiContentText,
+        toolCalls: committedCalls,
+      })
+    : ai, { block: "incremental" });
 
   const turnMessageStore = resolveTurnMessagesStore(currentTurnMessages, turnMessages);
   const turnTaskStore = resolveTurnTasksStore(currentTurnTasks, loopState.turnTasks || []);
@@ -371,6 +373,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
 
   const stateCommitter = createStateCommitter({
     messages,
+    messageHolder: loopState,
     traces,
     turnMessageStore,
     dialogProcessId,

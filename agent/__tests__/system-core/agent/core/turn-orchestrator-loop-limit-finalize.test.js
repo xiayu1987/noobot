@@ -40,6 +40,7 @@ function createLoopState({ maxTurns = 1, tool = null } = {}) {
   return {
     tools: tool ? [tool] : [],
     messages: [],
+    messageBlocks: { system: [], history: [], incremental: [] },
     traces: [],
     turnMessages: [],
     turnTasks: [],
@@ -132,9 +133,10 @@ test("loop over max turns: inject finalize prompt, allow 5-turn buffer, then no-
     },
   ]);
 
+  const loopState = createLoopState({ maxTurns: 1, tool });
   const result = await runFunctionCallLoop({
     modelState: createModelState(llm),
-    loopState: createLoopState({ maxTurns: 1, tool }),
+    loopState,
     turn: 1,
   });
 
@@ -152,6 +154,13 @@ test("loop over max turns: inject finalize prompt, allow 5-turn buffer, then no-
     String(finalizePromptMessage.content || ""),
     /停止继续调用工具|Stop calling tools|toolLoopLimitFinalizePrompt/i,
   );
+  const promptInBlocks = loopState.messageBlocks.incremental.find(
+    (message) => message === finalizePromptMessage,
+  );
+  assert.equal(promptInBlocks, finalizePromptMessage);
+  assert.ok(loopState.messageBlocks.incrementalIds.includes(
+    finalizePromptMessage.additional_kwargs.noobotMessageId,
+  ));
 });
 
 test("when model returns no tool calls, add a user prompt to use tools and retry", async () => {
@@ -183,9 +192,10 @@ test("when model returns no tool calls, add a user prompt to use tools and retry
       events.push(payload);
     },
   };
+  const loopState = createLoopState({ maxTurns: 3, tool });
   const result = await runFunctionCallLoop({
     modelState,
-    loopState: createLoopState({ maxTurns: 3, tool }),
+    loopState,
     turn: 1,
   });
 
@@ -197,6 +207,17 @@ test("when model returns no tool calls, add a user prompt to use tools and retry
     events.some((item) => item?.event === "tool_choice_required_retry_prompted"),
     "should emit retry prompt event when model does not call tools",
   );
+  const retryPrompt = loopState.messageBlocks.incremental.find((messageItem) => {
+    const marker =
+      messageItem?.additional_kwargs?.noobotInternalMessageType ||
+      messageItem?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
+      "";
+    return marker === "tool_choice_required_retry_prompt";
+  });
+  assert.ok(retryPrompt);
+  assert.ok(loopState.messageBlocks.incrementalIds.includes(
+    retryPrompt.additional_kwargs.noobotMessageId,
+  ));
 });
 
 test("when forceTool is disabled, no-tool response should return directly without retry prompt", async () => {
@@ -519,6 +540,23 @@ test("multiple tool calls are replayed as one assistant/tool pair per loop witho
   assert.ok(
     assistantToolCallCounts.slice(-3).every((count) => count === 1),
     "each assistant message sent to the next LLM call should contain one tool call",
+  );
+  const incrementalToolCallIds = loopState.messageBlocks.incremental
+    .filter((message) => Array.isArray(message?.tool_calls) && message.tool_calls.length === 1)
+    .map((message) => message.tool_calls[0]?.id)
+    .filter(Boolean);
+  assert.deepEqual(incrementalToolCallIds.slice(-3), ["call_1", "call_2", "call_3"]);
+  const incrementalToolResultIds = loopState.messageBlocks.incremental
+    .filter((message) => String(message?._getType?.() || "") === "tool")
+    .map((message) => message.tool_call_id)
+    .filter(Boolean);
+  assert.deepEqual(incrementalToolResultIds.slice(-3), ["call_1", "call_2", "call_3"]);
+  assert.ok(
+    loopState.messageBlocks.incremental
+      .slice(-6)
+      .every((message) => loopState.messageBlocks.incrementalIds.includes(
+        message.additional_kwargs?.noobotMessageId,
+      )),
   );
 
   const syntheticBeforeLlm = beforeLlmContexts.filter((ctx) => ctx?.fakeTurn === true);
