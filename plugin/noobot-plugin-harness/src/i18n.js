@@ -33,7 +33,7 @@ export const HARNESS_DEFAULT_SCENARIO_POLICY_TEXTS = Object.freeze({
 
     programming: `编程场景策略：
 1. 先读必要代码、配置、测试和上下文，快速定位问题与影响范围；优先复用现有结构、方法、字段、约定和测试入口，避免绕开既有设计另起通道。
-2. 面对复杂任务时，最小切片是连续推进方式：按“定位 -> 小步实施 -> 验证/反馈 -> 修正 -> 下一切片”循环推进多个可逆、可验证、能靠近完成的切片；不是临时补丁式绕过，也不是只做一个小改就停下。
+2. 面对复杂任务时，最小切片是连续推进方式：先看完整数据链路（输入 -> 处理 -> 存储 -> 输出 -> 展示），核对字段是否贯通、有无遗漏或重复事实，并遵守单一事实源原则；再按“定位 -> 小步实施 -> 验证/反馈 -> 修正 -> 下一切片”循环推进多个可逆、可验证、能靠近完成的切片；不是临时补丁式绕过，也不是只做一个小改就停下。
 3. 验证是完成条件：优先跑相关测试、lint、类型检查或构建；失败先按错误修正并重试。
 4. 调用链不确定、测试可能失败、边界不全、类型/构建风险等普通风险不阻塞改动，必须转成验证动作。
 5. 只有破坏性/不可逆、安全/密钥/权限、生产数据/配置、破坏公开 API、无法合理假设的需求冲突或高代价且无法验证时才停下确认。
@@ -56,7 +56,7 @@ export const HARNESS_DEFAULT_SCENARIO_POLICY_TEXTS = Object.freeze({
 
     programming: `Programming-scenario policy:
 1. Read necessary code, configuration, tests, and context to quickly locate the issue and impact scope; prefer reusing existing structures, methods, fields, conventions, and test entry points instead of bypassing the established design with a new path.
-2. For complex tasks, “smallest slice” means a continuous execution style: loop locate -> small implementation -> verify/feedback -> fix -> next slice, advancing through multiple reversible, verifiable slices that move the task toward completion; it is not temporary patch-style bypassing, and it does not mean making one tiny change and stopping.
+2. For complex tasks, “smallest slice” means first tracing the full data chain (input -> processing -> storage -> output -> display), checking whether fields flow through, whether any field is missing, and whether duplicated facts violate a single source of truth; then loop locate -> small implementation -> verify/feedback -> fix -> next slice, advancing through multiple reversible, verifiable slices that move the task toward completion; it is not temporary patch-style bypassing, and it does not mean making one tiny change and stopping.
 3. Verification is required for completion: prefer relevant tests, lint, type checks, or builds; fix failures and retry.
 4. Uncertain call chains, likely test failures, incomplete edge cases, or type/build risk do not block edits; convert them into verification actions.
 5. Stop for confirmation only for destructive/irreversible changes, security/secrets/permissions, production data/config, breaking public APIs, unresolvable requirement conflicts, or costly unverifiable changes.
@@ -433,7 +433,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     harnessPolicyTextPrompt:
       "Noobot Harness 文本场景策略：遵守用户隔离；复杂任务必须先分文件，按文件拆成交付单元，逐文件产出与维护，禁止把完整内容一次写进单个文件或单次回复；边查/边搜/边核对，边写/边产出，不等资料全部收集完才开始产出；建议每轮推进一个可交付单元，如文件、章节、表格、摘要、清单、对比或阶段稿，并标明来源、假设或待核对项；外部文本到手先保真消费并保留来源路径、事实、约束、依据和可复用片段；每批检查来源、覆盖、关键事实和格式。",
     harnessPolicyProgrammingPrompt:
-      "Noobot Harness 编程场景策略：遵守用户隔离；先读必要代码、配置、测试和上下文，快速定位问题与影响范围；优先复用现有结构、方法、字段、约定和测试入口，避免绕开既有设计另起通道；面对复杂任务时，以连续多个最小切片推进任务，每个切片都应可逆、可验证、能靠近完成，不做临时补丁式绕过，也不只做一个小改就停下；循环执行 -> 验证/反馈 -> 修正 -> 继续。验证是完成条件：优先运行相关测试、lint、类型检查或构建；失败先按错误修复并重试；只有不可逆/破坏性、安全凭证、生产数据、生产发布或需求冲突时停下确认。最终回复简洁说明改动文件与验证。",
+      "Noobot Harness 编程场景策略：遵守用户隔离；先读必要代码、配置、测试和上下文，快速定位问题与影响范围；优先复用现有结构、方法、字段、约定和测试入口，避免绕开既有设计另起通道；面对复杂任务时，先看完整数据链路（输入 -> 处理 -> 存储 -> 输出 -> 展示），核对字段是否贯通、有无遗漏或重复事实，并遵守单一事实源原则；再以连续多个最小切片推进任务，每个切片都应可逆、可验证、能靠近完成，不做临时补丁式绕过，也不只做一个小改就停下；循环执行 -> 验证/反馈 -> 修正 -> 继续。验证是完成条件：优先运行相关测试、lint、类型检查或构建；失败先按错误修复并重试；只有不可逆/破坏性、安全凭证、生产数据、生产发布或需求冲突时停下确认。最终回复简洁说明改动文件与验证。",
     harnessFinalResponsePrompt:
       "最终回复请包含：做了什么、改了哪些文件、验证情况或未验证原因、下一步建议。",
     acceptanceRawTitle: "[Harness-验收]",
@@ -697,7 +697,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     harnessPolicyTextPrompt:
       "Noobot Harness text-scenario policy: enforce user isolation; complex tasks must be split into files first; make each file a deliverable unit and produce/maintain files one by one; do not put the full content into one file or one response; search/check while writing and producing instead of waiting until all material is collected; it is recommended to advance one deliverable unit each turn, such as a file, section, table, summary, checklist, comparison, or stage draft, and mark sources, assumptions, or items to verify; faithfully consume external text and preserve source paths, facts, constraints, evidence, and reusable snippets; check sources, coverage, key facts, and format for each batch.",
     harnessPolicyProgrammingPrompt:
-      "Noobot Harness programming-scenario policy: enforce user isolation; read necessary code, configuration, tests, and context, then take the smallest-slice reversible action; loop execute -> verify/feedback -> fix -> continue, continuously advancing the task. Verification is required for completion: prefer targeted tests, lint, type checks, or builds; fix failures and retry. Stop for confirmation only for irreversible/destructive operations, security credentials, production data, production release, or requirement conflicts. Final response: concise changed files and validation.",
+      "Noobot Harness programming-scenario policy: enforce user isolation; read necessary code, configuration, tests, and context; for complex tasks, trace the full data chain (input -> processing -> storage -> output -> display), verify field continuity, missing fields, duplicated facts, and the single source of truth before editing; then take smallest-slice reversible actions and loop execute -> verify/feedback -> fix -> continue. Verification is required for completion: prefer targeted tests, lint, type checks, or builds; fix failures and retry. Stop for confirmation only for irreversible/destructive operations, security credentials, production data, production release, or requirement conflicts. Final response: concise changed files and validation.",
     harnessFinalResponsePrompt:
       "Final response should include: what was done, which files were changed, validation status (or why not validated), and next-step suggestions.",
     acceptanceRawTitle: "[Harness-Acceptance]",
