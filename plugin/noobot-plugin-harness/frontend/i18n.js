@@ -36,6 +36,8 @@ const HARNESS_FRONTEND_MESSAGES = Object.freeze({
       capabilitySuffix: "能力",
       enabled: "启用",
       disabled: "不启用",
+      guidanceFixed: "固定启用",
+      acceptanceModelDisabled: "启用 Planning Acceptance 后可选择模型",
     }),
   }),
   "en-US": Object.freeze({
@@ -65,6 +67,8 @@ const HARNESS_FRONTEND_MESSAGES = Object.freeze({
       capabilitySuffix: "Capability",
       enabled: "Enabled",
       disabled: "Disabled",
+      guidanceFixed: "Always enabled",
+      acceptanceModelDisabled: "Enable Planning Acceptance to select a model",
     }),
   }),
 });

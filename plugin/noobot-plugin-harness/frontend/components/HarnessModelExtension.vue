@@ -16,7 +16,7 @@ const props = defineProps({
 const HARNESS_MODEL_STEPS = [
   { key: "planning", label: "Planning" },
   { key: "guidance", label: "Guidance" },
-  { key: "acceptance", label: "Acceptance" },
+  { key: "acceptance", label: "Planning Acceptance" },
   { key: "default", label: "Default" },
 ];
 
@@ -36,6 +36,7 @@ function getModelMetaText(modelItem = {}) {
 function onHarnessStepModelChange(stepKey = "", value = "") {
   const key = String(stepKey || "").trim();
   if (!key || typeof props.updatePluginModelConfig !== "function") return;
+  if (isHarnessStepModelDisabled(key)) return;
   const nextValue = String(value || "").trim();
   const currentConfig = props.pluginModelConfig && typeof props.pluginModelConfig === "object"
     ? props.pluginModelConfig
@@ -64,6 +65,7 @@ function isHarnessCapabilityEnabled(capabilityKey = "") {
 function onHarnessCapabilityEnabledChange(capabilityKey = "", value = true) {
   const key = String(capabilityKey || "").trim();
   if (!key || typeof props.updatePluginModelConfig !== "function") return;
+  if (key === "guidance") return;
   const enabled = value !== false;
   const currentConfig = props.pluginModelConfig && typeof props.pluginModelConfig === "object"
     ? props.pluginModelConfig
@@ -93,6 +95,17 @@ function onHarnessCapabilityEnabledChange(capabilityKey = "", value = true) {
     },
   });
 }
+
+function canToggleHarnessCapability(stepKey = "") {
+  const key = String(stepKey || "").trim();
+  return key && key !== "default" && key !== "guidance";
+}
+
+function isHarnessStepModelDisabled(stepKey = "") {
+  const key = String(stepKey || "").trim();
+  if (!props.hasModelOptions) return true;
+  return canToggleHarnessCapability(key) && !isHarnessCapabilityEnabled(key);
+}
 </script>
 
 <template>
@@ -109,7 +122,7 @@ function onHarnessCapabilityEnabledChange(capabilityKey = "", value = true) {
       >
         <span class="plugin-model-label">{{ stepItem.label }}</span>
         <el-radio-group
-          v-if="stepItem.key !== 'default'"
+          v-if="canToggleHarnessCapability(stepItem.key)"
           :model-value="isHarnessCapabilityEnabled(stepItem.key)"
           size="small"
           class="plugin-capability-toggle"
@@ -118,14 +131,19 @@ function onHarnessCapabilityEnabledChange(capabilityKey = "", value = true) {
           <el-radio-button :value="true">{{ translate("modelExtension.enabled") }}</el-radio-button>
           <el-radio-button :value="false">{{ translate("modelExtension.disabled") }}</el-radio-button>
         </el-radio-group>
+        <span v-else-if="stepItem.key === 'guidance'" class="plugin-fixed-text">
+          {{ translate("modelExtension.guidanceFixed") }}
+        </span>
         <el-select
           :model-value="getHarnessStepModel(stepItem.key)"
           size="small"
           clearable
           :filterable="false"
           popper-class="noobot-composer-select-popper noobot-model-select-popper"
-          :disabled="!hasModelOptions"
-          :placeholder="translate('modelExtension.placeholder')"
+          :disabled="isHarnessStepModelDisabled(stepItem.key)"
+          :placeholder="stepItem.key === 'acceptance' && !isHarnessCapabilityEnabled(stepItem.key)
+            ? translate('modelExtension.acceptanceModelDisabled')
+            : translate('modelExtension.placeholder')"
           class="composer-select model-select noobot-model-select-control"
           @update:model-value="onHarnessStepModelChange(stepItem.key, $event)"
         >
@@ -209,6 +227,10 @@ function onHarnessCapabilityEnabledChange(capabilityKey = "", value = true) {
 
 .plugin-capability-toggle {
   width: 100%;
+  height: 28px;
+  min-height: 28px;
+  align-items: stretch;
+  box-sizing: border-box;
 }
 
 .plugin-capability-toggle :deep(.el-radio-button) {
@@ -217,6 +239,28 @@ function onHarnessCapabilityEnabledChange(capabilityKey = "", value = true) {
 
 .plugin-capability-toggle :deep(.el-radio-button__inner) {
   width: 100%;
+  height: 28px;
+  line-height: 26px;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 8px;
+  padding-right: 8px;
+  box-sizing: border-box;
+  font-size: 12px;
+}
+
+.plugin-fixed-text {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  height: 28px;
+  padding: 0 9px;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--el-color-primary) 22%, var(--noobot-panel-border, var(--el-border-color)));
+  border-radius: 8px;
+  color: var(--noobot-text-secondary, var(--el-text-color-regular));
+  background: color-mix(in srgb, var(--el-color-primary) 6%, var(--noobot-control-bg, var(--el-bg-color)));
+  font-size: 12px;
 }
 
 .composer-select :deep(.el-select__wrapper) {
