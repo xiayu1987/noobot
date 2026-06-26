@@ -179,6 +179,47 @@ test("runAgentRuntimeHook exposes hook client channel and skips routine plugin p
   assert.equal(events.some((evt) => evt?.event === "hook_plugin_progress"), false);
 });
 
+test("runAgentRuntimeHook forwards harness capability response through injected client channel", async () => {
+  const manager = createAgentHookManager();
+  const events = [];
+  const eventListener = {
+    onEvent(evt = {}) {
+      events.push(evt);
+    },
+  };
+  const runtime = { hookManager: manager };
+  manager.on("runtime_point", async (ctx = {}) => {
+    ctx.emitHookClientEvent("harness_capability_response", {
+      purpose: "guidance",
+      harnessFlow: "analysis",
+      chain: "auxiliary",
+      output: "guidance result",
+      text: "Harness 模型返回 / guidance\nguidance result",
+      runtime: { secret: "hidden" },
+      agentContext: { secret: "hidden" },
+      extraUnsafe: "hidden",
+    });
+  });
+
+  await runAgentRuntimeHook({
+    runtime,
+    point: "runtime_point",
+    context: {},
+    eventListener,
+  });
+
+  const harnessEvent = events.find((evt) => evt?.event === "harness_capability_response");
+  assert.ok(harnessEvent);
+  assert.equal(harnessEvent?.data?.purpose, "guidance");
+  assert.equal(harnessEvent?.data?.harnessFlow, "analysis");
+  assert.equal(harnessEvent?.data?.chain, "auxiliary");
+  assert.equal(harnessEvent?.data?.output, "guidance result");
+  assert.equal(Object.hasOwn(harnessEvent?.data || {}, "runtime"), false);
+  assert.equal(Object.hasOwn(harnessEvent?.data || {}, "agentContext"), false);
+  assert.equal(Object.hasOwn(harnessEvent?.data || {}, "extraUnsafe"), false);
+  assert.equal(events.some((evt) => evt?.event === "hook_plugin_progress"), false);
+});
+
 test("runAgentRuntimeHook records important plugin progress and sanitizes forwarded payload", async () => {
   const manager = createAgentHookManager();
   const events = [];

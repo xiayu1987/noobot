@@ -100,9 +100,9 @@ function createPlanningAgentContext({ counters = {}, scenario = "full" } = {}) {
   };
 }
 
-test("planning schedules guidance analysis by full-mode turn threshold", async () => {
-  const handler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
-  const agentContext = createPlanningAgentContext({
+test("guidance schedules analysis by full-mode turn threshold", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = createAgentContext({
     counters: {
       llmTurns: 0,
       analysisTurns: FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 1,
@@ -115,18 +115,38 @@ test("planning schedules guidance analysis by full-mode turn threshold", async (
     agentContext,
   };
 
-  await handler({ capability: "planning", point: "before_llm_call", ctx, meta: {} });
+  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta: {} });
 
   assert.equal(agentContext.payload.harness.state.pending.analysis, true);
   assert.equal(agentContext.payload.harness.state.counters.analysisTurns, 0);
-  const decisionLog = agentContext.payload.harness.logs.planning.find(
+  const decisionLog = agentContext.payload.harness.logs.guidance.find(
     (item = {}) => item?.event === "workflow_priority_decision",
   );
   assert.equal(decisionLog?.detail?.pending?.analysis?.active, true);
   assert.equal(decisionLog?.detail?.triggeredActions?.includes("analysis"), true);
 });
 
-test("planning counters consume skipped agent turns from multi-tool loop turn increments", async () => {
+test("planning does not schedule guidance analysis", async () => {
+  const handler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = createPlanningAgentContext({
+    counters: {
+      analysisTurns: FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 1,
+      planUpdateTurns: 0,
+      phaseAcceptanceTurns: 0,
+    },
+  });
+  const ctx = {
+    messages: [{ role: "user", content: "继续" }],
+    agentContext,
+  };
+
+  await handler({ capability: "planning", point: "before_llm_call", ctx, meta: {} });
+
+  assert.notEqual(agentContext.payload.harness.state.pending.analysis, true);
+  assert.equal(agentContext.payload.harness.state.counters.analysisTurns, FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 1);
+});
+
+test("planning counters consume skipped agent turns without owning analysis turns", async () => {
   const handler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext({
     counters: {
@@ -151,16 +171,33 @@ test("planning counters consume skipped agent turns from multi-tool loop turn in
 
   const counters = agentContext.payload.harness.state.counters;
   assert.equal(counters.llmTurns, 4);
-  assert.equal(counters.analysisTurns, 4);
+  assert.equal(counters.analysisTurns, 1);
   assert.equal(counters.planUpdateTurns, 4);
   assert.equal(counters.phaseAcceptanceTurns, 4);
   assert.equal(counters.lastPlanningCounterTurn, 4);
 });
 
-test("planning schedules guidance analysis by scenario-specific turn threshold", async () => {
-  const handler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
-  const beforeProgrammingThreshold = createPlanningAgentContext({
-    scenario: "programming",
+test("guidance analysis counter consumes skipped turns and ignores same-turn reentry", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = createAgentContext({
+    counters: {
+      analysisTurns: FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 2,
+      lastGuidanceAnalysisCounterTurn: 1,
+    },
+  });
+
+  const ctx = { turn: 2, messages: [{ role: "user", content: "继续" }], agentContext };
+  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta: {} });
+  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta: {} });
+
+  const counters = agentContext.payload.harness.state.counters;
+  assert.equal(counters.analysisTurns, FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 1);
+  assert.equal(counters.lastGuidanceAnalysisCounterTurn, 2);
+});
+
+test("guidance schedules analysis by scenario-specific turn threshold", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const beforeProgrammingThreshold = createAgentContext({
     counters: {
       analysisTurns: PROGRAMMING_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 2,
       planUpdateTurns: 0,
@@ -168,10 +205,10 @@ test("planning schedules guidance analysis by scenario-specific turn threshold",
     },
   });
   await handler({
-    capability: "planning",
+    capability: "guidance",
     point: "before_llm_call",
     ctx: { messages: [{ role: "user", content: "继续" }], agentContext: beforeProgrammingThreshold },
-    meta: {},
+    meta: { harness: { scenario: "programming" } },
   });
   assert.equal(beforeProgrammingThreshold.payload.harness.state.pending.analysis, false);
   assert.equal(
@@ -179,8 +216,7 @@ test("planning schedules guidance analysis by scenario-specific turn threshold",
     PROGRAMMING_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 1,
   );
 
-  const atProgrammingThreshold = createPlanningAgentContext({
-    scenario: "programming",
+  const atProgrammingThreshold = createAgentContext({
     counters: {
       analysisTurns: PROGRAMMING_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 1,
       planUpdateTurns: 0,
@@ -188,10 +224,10 @@ test("planning schedules guidance analysis by scenario-specific turn threshold",
     },
   });
   await handler({
-    capability: "planning",
+    capability: "guidance",
     point: "before_llm_call",
     ctx: { messages: [{ role: "user", content: "继续" }], agentContext: atProgrammingThreshold },
-    meta: {},
+    meta: { harness: { scenario: "programming" } },
   });
   assert.equal(atProgrammingThreshold.payload.harness.state.pending.analysis, true);
   assert.equal(atProgrammingThreshold.payload.harness.state.counters.analysisTurns, 0);
@@ -312,7 +348,9 @@ test("separate_model analysis uses aligned agent context then user request and u
   };
   await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
 
-  assert.equal(capturedPayload?.purpose, "analysis");
+  assert.equal(capturedPayload?.purpose, "guidance");
+  assert.equal(capturedPayload?.harnessFlow, "analysis");
+  assert.equal(capturedPayload?.chain, "auxiliary");
   assert.deepEqual(
     capturedPayload.messages.slice(0, 2).map((item = {}) => [item.role, item.content]),
     [
@@ -332,7 +370,10 @@ test("separate_model analysis uses aligned agent context then user request and u
   assert.equal(agentContext.payload.harness.state.pending.analysis, false);
   assert.equal(
     ctx.messages.some((item = {}) =>
-      String(item?.injectedMessageType || "").includes("analysis") &&
+      String(item?.injectedMessageType || "").includes("guidance") &&
+      item?.purpose === "guidance" &&
+      item?.harnessFlow === "analysis" &&
+      item?.chain === "auxiliary" &&
       String(item?.content || "").includes("疑点"),
     ),
     true,
@@ -593,7 +634,7 @@ test("revision and refinement have independent MAX_PLAN_UPDATE_ATTEMPTS budgets"
   assert.equal(canAttemptPlanRevision({}, state, { increment: false, stage: "refinement" }), true);
 });
 
-test("planning thresholds use full-mode defaults from modeThresholds", async () => {
+test("guidance summary and planning plan-update thresholds use full-mode defaults", async () => {
   assert.equal(WORKFLOW_PARAMS.planning.summary, undefined);
   assert.equal(WORKFLOW_PARAMS.guidance.summary.turnsThreshold, LLM_SUMMARY_THRESHOLD);
   assert.equal(WORKFLOW_PARAMS.modeThresholds.full.planning.summary, undefined);
@@ -604,31 +645,36 @@ test("planning thresholds use full-mode defaults from modeThresholds", async () 
     PROGRAMMING_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
   );
   assert.equal(WORKFLOW_PARAMS.modeThresholds.text.guidance.analysis.turnsThreshold, TEXT_ANALYSIS_TRIGGER_TURNS_THRESHOLD);
+  const guidanceHandler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext({
     scenario: "full",
     counters: {
-      llmTurns: FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD,
+      summaryTurns: FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD + 1,
       planUpdateTurns: FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 1,
     },
   });
   const ctx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
 
+  await guidanceHandler({ capability: "guidance", point: "before_llm_call", ctx, meta: {} });
+  assert.equal(agentContext.payload.harness.logs.guidance.some((item = {}) => item?.event === "summary_scheduled_by_turn_threshold"), true);
+  agentContext.payload.harness.state.pending.summary = false;
   await planningHandler({ capability: "planning", point: "before_llm_call", ctx, meta: {} });
 
-  assert.equal(agentContext.payload.harness.state.pending.summary, true);
+  assert.equal(agentContext.payload.harness.state.pending.summary, false);
   assert.equal(agentContext.payload.harness.state.pending.planRevision, true);
   assert.equal(agentContext.payload.harness.state.counters.planUpdateTurns, 0);
 });
 
-test("planning thresholds use programming-mode overrides: configured summary and plan-update", async () => {
+test("guidance summary and planning plan-update thresholds use programming-mode overrides", async () => {
+  const guidanceHandler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const beforeProgrammingThresholds = createPlanningAgentContext({
     scenario: "programming",
-    counters: { llmTurns: PROGRAMMING_SUMMARY_TRIGGER_TURNS_THRESHOLD - 2, planUpdateTurns: 3 },
+    counters: { summaryTurns: PROGRAMMING_SUMMARY_TRIGGER_TURNS_THRESHOLD - 1, planUpdateTurns: 3 },
   });
-  await planningHandler({
-    capability: "planning",
+  await guidanceHandler({
+    capability: "guidance",
     point: "before_llm_call",
     ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext: beforeProgrammingThresholds },
     meta: {},
@@ -639,17 +685,25 @@ test("planning thresholds use programming-mode overrides: configured summary and
   const atProgrammingThresholds = createPlanningAgentContext({
     scenario: "programming",
     counters: {
-      llmTurns: PROGRAMMING_SUMMARY_TRIGGER_TURNS_THRESHOLD,
+      summaryTurns: PROGRAMMING_SUMMARY_TRIGGER_TURNS_THRESHOLD + 1,
       planUpdateTurns: PROGRAMMING_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 1,
     },
   });
+  await guidanceHandler({
+    capability: "guidance",
+    point: "before_llm_call",
+    ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext: atProgrammingThresholds },
+    meta: {},
+  });
+  assert.equal(atProgrammingThresholds.payload.harness.logs.guidance.some((item = {}) => item?.event === "summary_scheduled_by_turn_threshold"), true);
+  atProgrammingThresholds.payload.harness.state.pending.summary = false;
   await planningHandler({
     capability: "planning",
     point: "before_llm_call",
     ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext: atProgrammingThresholds },
     meta: {},
   });
-  assert.equal(atProgrammingThresholds.payload.harness.state.pending.summary, true);
+  assert.equal(atProgrammingThresholds.payload.harness.state.pending.summary, false);
   assert.equal(atProgrammingThresholds.payload.harness.state.pending.planRevision, true);
   assert.equal(atProgrammingThresholds.payload.harness.state.counters.planUpdateTurns, 0);
 });
@@ -708,17 +762,18 @@ test("phase acceptance threshold uses programming-mode override", async () => {
 });
 
 
-test("planning thresholds use text-mode overrides: configured summary and plan-update", async () => {
+test("guidance summary and planning plan-update thresholds use text-mode overrides", async () => {
+  const guidanceHandler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const beforeTextThresholds = createPlanningAgentContext({
     scenario: "text",
     counters: {
-      llmTurns: TEXT_SUMMARY_TRIGGER_TURNS_THRESHOLD - 2,
+      summaryTurns: TEXT_SUMMARY_TRIGGER_TURNS_THRESHOLD - 1,
       planUpdateTurns: TEXT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 2,
     },
   });
-  await planningHandler({
-    capability: "planning",
+  await guidanceHandler({
+    capability: "guidance",
     point: "before_llm_call",
     ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext: beforeTextThresholds },
     meta: {},
@@ -729,17 +784,25 @@ test("planning thresholds use text-mode overrides: configured summary and plan-u
   const atTextThresholds = createPlanningAgentContext({
     scenario: "文本",
     counters: {
-      llmTurns: TEXT_SUMMARY_TRIGGER_TURNS_THRESHOLD,
+      summaryTurns: TEXT_SUMMARY_TRIGGER_TURNS_THRESHOLD + 1,
       planUpdateTurns: TEXT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 1,
     },
   });
+  await guidanceHandler({
+    capability: "guidance",
+    point: "before_llm_call",
+    ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext: atTextThresholds },
+    meta: {},
+  });
+  assert.equal(atTextThresholds.payload.harness.logs.guidance.some((item = {}) => item?.event === "summary_scheduled_by_turn_threshold"), true);
+  atTextThresholds.payload.harness.state.pending.summary = false;
   await planningHandler({
     capability: "planning",
     point: "before_llm_call",
     ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext: atTextThresholds },
     meta: {},
   });
-  assert.equal(atTextThresholds.payload.harness.state.pending.summary, true);
+  assert.equal(atTextThresholds.payload.harness.state.pending.summary, false);
   assert.equal(atTextThresholds.payload.harness.state.pending.planRevision, true);
   assert.equal(atTextThresholds.payload.harness.state.counters.planUpdateTurns, 0);
 });
@@ -1066,14 +1129,18 @@ test("separate_model summary does not consume refinement attempts", async () => 
   assert.equal(agentContext.payload.harness.logs.planning.length >= 0, true);
 });
 
-test("planning summary threshold by turns is independent from plan update attempts", async () => {
+test("guidance summary threshold by turns is independent from plan update attempts", async () => {
+  const guidanceHandler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext({
-    counters: { llmTurns: FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD, planUpdateAttempts: 0 },
+    counters: { summaryTurns: FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD + 1, planUpdateAttempts: 0 },
   });
   const ctx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
+  await guidanceHandler({ capability: "guidance", point: "before_llm_call", ctx, meta: {} });
+  assert.equal(agentContext.payload.harness.logs.guidance.some((item = {}) => item?.event === "summary_scheduled_by_turn_threshold"), true);
+  agentContext.payload.harness.state.pending.summary = false;
   await planningHandler({ capability: "planning", point: "before_llm_call", ctx, meta: {} });
-  assert.equal(agentContext.payload.harness.state.pending.summary, true);
+  assert.equal(agentContext.payload.harness.state.pending.summary, false);
   assert.equal(agentContext.payload.harness.state.counters.planUpdateAttempts, 0);
   const planningLogs = agentContext.payload.harness.logs.planning;
   assert.equal(
@@ -1086,19 +1153,23 @@ test("planning summary threshold by turns is independent from plan update attemp
   );
 });
 
-test("planning summary threshold by chars is independent from plan update attempts", async () => {
+test("guidance summary threshold by chars is independent from plan update attempts", async () => {
+  const guidanceHandler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext();
   const ctx = {
     messages: [{ role: "user", content: "x".repeat(LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD + 1) }],
     agentContext,
   };
+  await guidanceHandler({ capability: "guidance", point: "before_llm_call", ctx, meta: {} });
+  assert.equal(agentContext.payload.harness.logs.guidance.some((item = {}) => item?.event === "summary_scheduled_by_char_threshold"), true);
+  agentContext.payload.harness.state.pending.summary = false;
   await planningHandler({ capability: "planning", point: "before_llm_call", ctx, meta: {} });
-  assert.equal(agentContext.payload.harness.state.pending.summary, true);
+  assert.equal(agentContext.payload.harness.state.pending.summary, false);
   assert.equal(agentContext.payload.harness.state.counters.planUpdateAttempts, 0);
 });
 
-test("planning schedules summary after a single model tool burst reaches summary threshold when enabled", async () => {
+test("guidance schedules summary after a single model tool burst reaches summary threshold when enabled", async () => {
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const guidanceHandler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext({
@@ -1120,11 +1191,23 @@ test("planning schedules summary after a single model tool burst reaches summary
     },
     meta: { harness: { summaryOnToolBurstThreshold: true } },
   });
+  assert.equal(agentContext.payload.harness.state.pending.summary, false);
+
+  await guidanceHandler({
+    capability: "guidance",
+    point: "after_tool_calls",
+    ctx: {
+      messages: [{ role: "user", content: "继续任务" }],
+      calls,
+      agentContext,
+    },
+    meta: { harness: { summaryOnToolBurstThreshold: true } },
+  });
 
   assert.equal(agentContext.payload.harness.state.pending.summary, true);
   assert.equal(agentContext.payload.harness.state.flags.summaryByCharsPrompted, false);
   assert.equal(
-    agentContext.payload.harness.logs.planning.some(
+    agentContext.payload.harness.logs.guidance.some(
       (item = {}) => item?.event === "summary_scheduled_by_tool_burst_threshold",
     ),
     true,

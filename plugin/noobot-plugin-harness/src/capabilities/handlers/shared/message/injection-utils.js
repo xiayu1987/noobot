@@ -79,6 +79,9 @@ export function injectMessageWithPolicy(
     dedupe = false,
     injectedMessageType = "",
     injectionType = "",
+    purpose = "",
+    harnessFlow = "",
+    chain = "",
     avoidBreakToolCallContinuity = true,
     persistToCurrentTurn = true,
   } = {},
@@ -101,6 +104,9 @@ export function injectMessageWithPolicy(
     dialogProcessId: resolveDialogProcessIdFromContext(ctx),
     injectedMessageType,
     injectionType,
+    purpose,
+    harnessFlow,
+    chain,
   });
 
   if (dedupe && dedupeExists(messages, message)) {

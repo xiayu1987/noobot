@@ -52,6 +52,25 @@ const HOOK_PLUGIN_PROGRESS_ALLOWED_KEYS = new Set([
   "error",
 ]);
 
+const HARNESS_CAPABILITY_RESPONSE_ALLOWED_KEYS = new Set([
+  "event",
+  "category",
+  "type",
+  "harnessFlow",
+  "chain",
+  "purpose",
+  "domain",
+  "model",
+  "sessionId",
+  "parentSessionId",
+  "dialogProcessId",
+  "output",
+  "text",
+  "finishedReason",
+  "turn",
+  "toolTurnLimitReached",
+]);
+
 export const AGENT_HOOK_POINTS = Object.freeze({
   BEFORE_TURN: "before_turn",
   AFTER_TURN: "after_turn",
@@ -383,10 +402,25 @@ function normalizeHookPluginProgressData(data = {}) {
   return output;
 }
 
+function normalizeHarnessCapabilityResponseData(data = {}) {
+  const input = data && typeof data === "object" ? data : {};
+  const output = {};
+  for (const [key, value] of Object.entries(input)) {
+    const normalizedKey = String(key || "").trim();
+    if (!HARNESS_CAPABILITY_RESPONSE_ALLOWED_KEYS.has(normalizedKey)) continue;
+    output[normalizedKey] = sanitizeForHookClient(value);
+  }
+  return output;
+}
+
 function createHookClientChannel({ listener = null, point = "", runtime = {} } = {}) {
   return {
     emit(event = "", data = {}) {
       const name = String(event || "").trim() || "hook_progress";
+      if (name === "harness_capability_response") {
+        emitEvent(listener, name, normalizeHarnessCapabilityResponseData(data));
+        return;
+      }
       if (!isHookPluginProgressTraceEnabled(runtime) && !isImportantHookPluginProgress(name, data)) {
         return;
       }

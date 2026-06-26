@@ -202,6 +202,48 @@ test("RunConfigPluginPreparer merges agent plugin model config by generic plugin
   });
 });
 
+test("RunConfigPluginPreparer merges agent plugin capability profile without losing disabled flags", () => {
+  const preparer = createPreparer({
+    pluginRuntime: {
+      agentPluginKey: "assistant-driver",
+      agentPluginSelectors: new Set(["assistant-driver"]),
+    },
+  });
+
+  const options = preparer.resolveAgentPluginOptions({
+    userId: "u1",
+    runConfig: {
+      selectedPlugins: ["assistant-driver"],
+      config: {
+        pluginModelConfig: {
+          "assistant-driver": {
+            capabilityProfile: {
+              planning: { enabled: false },
+              guidance: { enabled: false },
+              acceptance: { enabled: false },
+            },
+          },
+        },
+      },
+      plugins: {
+        "assistant-driver": {
+          capabilityProfile: {
+            planning: { enabled: true, priority: 3 },
+            review: { enabled: false },
+          },
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(options.capabilityProfile, {
+    planning: { enabled: false, priority: 3 },
+    review: { enabled: false },
+    guidance: { enabled: false },
+    acceptance: { enabled: false },
+  });
+});
+
 test("RunConfigPluginPreparer registers agent plugin once", () => {
   let registerCount = 0;
   const loadedDynamicPlugins = createLoadedPlugins({

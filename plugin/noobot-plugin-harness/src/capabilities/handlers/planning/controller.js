@@ -11,13 +11,12 @@ import {
   appendCapabilityLog,
   disableBlockedToolsInRegistry,
   ensureHarnessBucket,
-  extractRawTextContent,
   sanitizeInternalMessages,
   shouldUseSeparateModel,
 } from "./deps.js";
 import { ensurePlanRefinementTool } from "./tool-injector.js";
 import { maybeInjectPlanningPrompt } from "./prompt-builder.js";
-import { maybeCapturePlanningResult, runPlanningBySeparateModel } from "./capture-runner.js";
+import { maybeCapturePlanningResult } from "./capture-runner.js";
 import { canAttemptPlanUpdate, setPendingPlanUpdate } from "./plan-update-engine.js";
 import { resolvePendingPlanUpdate } from "./plan-update-scheduler.js";
 import { LOCALE } from "../shared/constants.js";
@@ -28,42 +27,14 @@ import {
 } from "../shared/workflow/pattern.js";
 import { resolveWorkflowThresholdModeFromContext } from "../shared/workflow/prompts.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
-import {
-  HARNESS_MAIN_FLOW_CONTROL_REASON,
-  requestFinalNoToolsMainFlowInstruction,
-} from "../shared/runtime/main-flow-control-instruction.js";
-
-function isMessageSummarized(message = {}) {
-  return message?.summarized === true || message?.lc_kwargs?.summarized === true;
-}
-
-function resolveUnsummarizedMessageChars(messages = []) {
-  if (!Array.isArray(messages)) return 0;
-  return messages.reduce((total, message) => {
-    if (!message || typeof message !== "object") return total;
-    if (isMessageSummarized(message)) return total;
-    const content = extractRawTextContent(message?.content ?? message);
-    return total + String(content || "").length;
-  }, 0);
-}
 
 const TASK_SUMMARY_TOOL_NAME = WORKFLOW_PARAMS.planning.tools.summaryToolName;
 const PLANNING_DECISION = WORKFLOW_PARAMS.planning.decisions;
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
-const DEFAULT_LLM_SUMMARY_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.turnsThreshold;
-const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.messageCharsThreshold;
-const LLM_SUMMARY_OVERFLOW_POLICY = Object.freeze({
-  ENABLE_PRUNE_AFTER_SUMMARY: WORKFLOW_PARAMS.guidance.summary.overflowPolicy.enablePruneAfterSummary,
-  PRUNE_TRIGGER_AFTER_CHAR_SUMMARY_ROUNDS:
-    WORKFLOW_PARAMS.guidance.summary.overflowPolicy.pruneTriggerAfterCharSummaryRounds,
-  FORCE_ACCEPTANCE_WHEN_STILL_OVERFLOW:
-    WORKFLOW_PARAMS.guidance.summary.overflowPolicy.forceAcceptanceWhenStillOverflow,
-});
 const DEFAULT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD = WORKFLOW_PARAMS.planning.planUpdate.triggerTurnsThreshold;
 const DEFAULT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
   WORKFLOW_PARAMS.acceptance.phase.triggerTurnsThreshold;
-const ANALYSIS_TRIGGER_TURNS_THRESHOLD = WORKFLOW_PARAMS.guidance.analysis.turnsThreshold;
 const PLANNING_THRESHOLD_SNAPSHOT_EVENT = "planning_threshold_snapshot";
 
 function normalizePositiveInteger(value = 0, fallback = 0) {
@@ -80,14 +51,6 @@ function resolvePlanningTurnThresholds(ctx = {}) {
   const scopedGuidance = scopedMode?.guidance || {};
   return {
     mode: modeThresholds[thresholdMode] ? thresholdMode : "full",
-    summaryTurnsThreshold: normalizePositiveInteger(
-      scopedGuidance?.summary?.turnsThreshold,
-      DEFAULT_LLM_SUMMARY_THRESHOLD,
-    ),
-    analysisTriggerTurnsThreshold: normalizePositiveInteger(
-      scopedGuidance?.analysis?.turnsThreshold,
-      ANALYSIS_TRIGGER_TURNS_THRESHOLD,
-    ),
     planUpdateTriggerTurnsThreshold: normalizePositiveInteger(
       scoped?.planUpdate?.triggerTurnsThreshold,
       DEFAULT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
@@ -104,8 +67,6 @@ function isPlanningThresholdDebugEnabled() {
 }
 const PLANNING_REASON_LABEL_KEY = Object.freeze({
   [PLANNING_DECISION.reason.idle]: "planningReasonIdle",
-  [PLANNING_DECISION.reason.summaryThresholdTurns]: "planningReasonSummaryThresholdTurns",
-  [PLANNING_DECISION.reason.summaryThresholdChars]: "planningReasonSummaryThresholdChars",
   [PLANNING_DECISION.reason.planUpdateThreshold]: "planningReasonPlanUpdateThreshold",
   [PLANNING_DECISION.reason.phaseAcceptanceThreshold]: "planningReasonPhaseAcceptanceThreshold",
   [PLANNING_DECISION.reason.afterLlmCapture]: "planningReasonAfterLlmCapture",
@@ -128,86 +89,17 @@ function resolvePlanningBlockedReasonLabel(locale = LOCALE.ZH_CN, reason = "") {
 }
 
 function resolvePlanningTriggeredActions({
-  summary = false,
-  summaryByCharsPrompted = false,
   planUpdate = false,
-  analysis = false,
   phaseAcceptance = false,
 } = {}) {
   const actions = [];
-  if (summaryByCharsPrompted && summary) {
-    actions.push(PLANNING_DECISION.label.summaryOverflow);
-  } else if (summary) {
-    actions.push(PLANNING_DECISION.label.summaryTurns);
-  }
   if (planUpdate) {
     actions.push(PLANNING_DECISION.label.planUpdateRevision);
-  }
-  if (analysis) {
-    actions.push(WORKFLOW_PARAMS.guidance.decisions.label.analysis);
   }
   if (phaseAcceptance) {
     actions.push(PLANNING_DECISION.label.phaseAcceptance);
   }
   return actions;
-}
-
-function getMessageToolCalls(messageItem = {}) {
-  if (Array.isArray(messageItem?.tool_calls)) return messageItem.tool_calls;
-  if (Array.isArray(messageItem?.lc_kwargs?.tool_calls)) return messageItem.lc_kwargs.tool_calls;
-  if (Array.isArray(messageItem?.additional_kwargs?.tool_calls)) return messageItem.additional_kwargs.tool_calls;
-  return [];
-}
-
-function resolveToolNameFromToolCall(toolCall = {}) {
-  if (!toolCall || typeof toolCall !== "object") return "";
-  if (toolCall.name) return String(toolCall.name || "").trim();
-  const fn = toolCall.function && typeof toolCall.function === "object" ? toolCall.function : {};
-  return String(fn.name || "").trim();
-}
-
-function resolveToolCallId(toolCall = {}) {
-  return String(toolCall?.id ?? toolCall?.tool_call_id ?? toolCall?.toolCallId ?? "").trim();
-}
-
-function resolveToolCallIdFromToolMessage(messageItem = {}) {
-  return String(
-    messageItem?.tool_call_id ??
-      messageItem?.toolCallId ??
-      messageItem?.lc_kwargs?.tool_call_id ??
-      "",
-  ).trim();
-}
-
-function isSummaryOnToolBurstThresholdEnabled(meta = {}) {
-  return meta?.harness?.summaryOnToolBurstThreshold === true ||
-    meta?.harness?.enableToolBurstSummary === true;
-}
-
-function maybeScheduleSummaryByToolBurst(ctx = {}, meta = {}) {
-  if (!isSummaryOnToolBurstThresholdEnabled(meta)) return false;
-  const threshold = Number(resolvePlanningTurnThresholds(ctx).summaryTurnsThreshold);
-  if (!Number.isFinite(threshold) || threshold <= 0) return false;
-  const calls = Array.isArray(ctx?.calls) ? ctx.calls : [];
-  if (!Array.isArray(calls) || calls.length < threshold) return false;
-  const holder = ensureHarnessBucket(ctx);
-  if (!holder) return false;
-  if (holder.state?.pending?.summary === true) return false;
-  const toolNames = calls.map((call) => resolveToolNameFromToolCall(call)).filter(Boolean);
-  if (toolNames.includes(TASK_SUMMARY_TOOL_NAME)) return false;
-
-  setPendingStateWithMeta(holder.state, "summary", true);
-  holder.state.flags.summaryByCharsPrompted = false;
-  appendCapabilityLog(ctx, {
-    domain: CAPABILITY_DOMAIN.PLANNING,
-    event: PLANNING_EVENTS.summaryScheduledByToolBurstThreshold,
-    detail: {
-      threshold,
-      toolCallCount: calls.length,
-      toolNames,
-    },
-  });
-  return true;
 }
 
 function consumePlanningTurnIncrement(state = {}, ctx = {}) {
@@ -223,72 +115,6 @@ function consumePlanningTurnIncrement(state = {}, ctx = {}) {
     counters.lastPlanningCounterTurn = Math.trunc(currentTurn);
   }
   return increment;
-}
-
-function setMessageSummarized(messageItem = {}) {
-  if (!messageItem || typeof messageItem !== "object") return false;
-  if (messageItem.summarized === true && messageItem?.lc_kwargs?.summarized === true) return false;
-  messageItem.summarized = true;
-  if (messageItem?.lc_kwargs && typeof messageItem.lc_kwargs === "object") {
-    messageItem.lc_kwargs.summarized = true;
-  }
-  return true;
-}
-
-function discardOldestToolCallPairs(messages = [], charsThreshold = 0) {
-  if (!Array.isArray(messages) || !Number.isFinite(charsThreshold) || charsThreshold <= 0) {
-    return { discardedMessages: 0, charsAfter: resolveUnsummarizedMessageChars(messages) };
-  }
-  let charsAfter = resolveUnsummarizedMessageChars(messages);
-  if (charsAfter <= charsThreshold) {
-    return { discardedMessages: 0, charsAfter };
-  }
-
-  let discardedMessages = 0;
-  for (let index = 0; index < messages.length; index += 1) {
-    if (charsAfter <= charsThreshold) break;
-    const message = messages[index];
-    if (!message || typeof message !== "object") continue;
-    if (isMessageSummarized(message)) continue;
-    const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
-    if (role !== "assistant") continue;
-    const contentText = extractRawTextContent(message?.content ?? "");
-    if (String(contentText || "").trim()) continue;
-    const toolCalls = getMessageToolCalls(message);
-    if (!toolCalls.length) continue;
-
-    const toolCallIds = toolCalls
-      .filter((toolCall) => resolveToolNameFromToolCall(toolCall) !== TASK_SUMMARY_TOOL_NAME)
-      .map((toolCall) => resolveToolCallId(toolCall))
-      .filter(Boolean);
-    if (!toolCallIds.length) continue;
-
-    const toolResultIndexes = [];
-    for (let cursor = index + 1; cursor < messages.length; cursor += 1) {
-      const maybeToolResult = messages[cursor];
-      if (!maybeToolResult || typeof maybeToolResult !== "object") continue;
-      if (isMessageSummarized(maybeToolResult)) continue;
-      const resultRole = String(
-        maybeToolResult?.role || maybeToolResult?.lc_kwargs?.role || "",
-      ).trim().toLowerCase();
-      if (resultRole !== "tool") continue;
-      const toolCallId = resolveToolCallIdFromToolMessage(maybeToolResult);
-      if (!toolCallId || !toolCallIds.includes(toolCallId)) continue;
-      const explicitToolName = String(
-        maybeToolResult?.toolName || maybeToolResult?.tool_name || "",
-      ).trim();
-      if (explicitToolName === TASK_SUMMARY_TOOL_NAME) continue;
-      toolResultIndexes.push(cursor);
-    }
-    if (!toolResultIndexes.length) continue;
-
-    if (setMessageSummarized(message)) discardedMessages += 1;
-    for (const toolIndex of toolResultIndexes) {
-      if (setMessageSummarized(messages[toolIndex])) discardedMessages += 1;
-    }
-    charsAfter = resolveUnsummarizedMessageChars(messages);
-  }
-  return { discardedMessages, charsAfter };
 }
 
 export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => true } = {}) {
@@ -320,25 +146,16 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
       if (holder) {
         const turnIncrement = consumePlanningTurnIncrement(holder.state, ctx);
         holder.state.counters.llmTurns += turnIncrement;
-        holder.state.counters.analysisTurns =
-          Number(holder.state.counters.analysisTurns || 0) + turnIncrement;
         holder.state.counters.planUpdateTurns =
           Number(holder.state.counters.planUpdateTurns || 0) + turnIncrement;
         holder.state.counters.phaseAcceptanceTurns =
           Number(holder.state.counters.phaseAcceptanceTurns || 0) + turnIncrement;
-        let currentChars = resolveUnsummarizedMessageChars(ctx?.messages);
         const planningThresholds = resolvePlanningTurnThresholds(ctx);
-        const summaryTurnsThreshold = planningThresholds.summaryTurnsThreshold;
         const planUpdateTriggerTurnsThreshold = planningThresholds.planUpdateTriggerTurnsThreshold;
-        const analysisTriggerTurnsThreshold = planningThresholds.analysisTriggerTurnsThreshold;
         const phaseAcceptanceTriggerTurnsThreshold =
           planningThresholds.phaseAcceptanceTriggerTurnsThreshold;
-        const reachedTurnsSummary = holder.state.counters.llmTurns > summaryTurnsThreshold;
-        let reachedCharsSummary = currentChars > LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD;
         const reachedPlanUpdateTurns =
           holder.state.counters.planUpdateTurns >= planUpdateTriggerTurnsThreshold;
-        const reachedAnalysisTurns =
-          holder.state.counters.analysisTurns >= analysisTriggerTurnsThreshold;
         const reachedPhaseAcceptanceTurns =
           holder.state.counters.phaseAcceptanceTurns >= phaseAcceptanceTriggerTurnsThreshold;
 
@@ -350,94 +167,19 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
               thresholdMode: planningThresholds.mode,
               counters: {
                 llmTurns: holder.state.counters.llmTurns,
-                analysisTurns: holder.state.counters.analysisTurns,
                 planUpdateTurns: holder.state.counters.planUpdateTurns,
                 phaseAcceptanceTurns: holder.state.counters.phaseAcceptanceTurns,
               },
               thresholds: {
-                summaryTurnsThreshold,
-                analysisTriggerTurnsThreshold,
                 planUpdateTriggerTurnsThreshold,
                 phaseAcceptanceTriggerTurnsThreshold,
               },
               reached: {
-                summaryTurns: reachedTurnsSummary,
-                summaryChars: reachedCharsSummary,
-                analysisTurns: reachedAnalysisTurns,
                 planUpdateTurns: reachedPlanUpdateTurns,
                 phaseAcceptanceTurns: reachedPhaseAcceptanceTurns,
               },
             },
           });
-        }
-
-        const pruneEnabled = LLM_SUMMARY_OVERFLOW_POLICY.ENABLE_PRUNE_AFTER_SUMMARY === true;
-        const pruneTriggerRounds = Number(
-          LLM_SUMMARY_OVERFLOW_POLICY.PRUNE_TRIGGER_AFTER_CHAR_SUMMARY_ROUNDS || 1,
-        );
-        const canPruneAfterSummary =
-          holder.state.flags.summaryByCharsPrompted === true && pruneTriggerRounds <= 1;
-        if (reachedCharsSummary && pruneEnabled && canPruneAfterSummary) {
-          const pruneResult = discardOldestToolCallPairs(
-            ctx?.messages,
-            LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
-          );
-          setupChanged = pruneResult.discardedMessages > 0 || setupChanged;
-          currentChars = pruneResult.charsAfter;
-          reachedCharsSummary = currentChars > LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD;
-          if (
-            reachedCharsSummary &&
-            LLM_SUMMARY_OVERFLOW_POLICY.FORCE_ACCEPTANCE_WHEN_STILL_OVERFLOW === true
-          ) {
-            holder.state.flags.overflowForceAcceptancePending = true;
-            const instruction = requestFinalNoToolsMainFlowInstruction(ctx, {
-              reason: HARNESS_MAIN_FLOW_CONTROL_REASON.CONTEXT_OVERFLOW_AFTER_SUMMARY,
-              source: "harness_summary_overflow",
-              detail: {
-                charsThreshold: LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
-                unsummarizedChars: currentChars,
-                discardedMessages: pruneResult.discardedMessages,
-              },
-            });
-            if (instruction) {
-              appendCapabilityLog(ctx, {
-                domain: CAPABILITY_DOMAIN.PLANNING,
-                event: "main_flow_final_no_tools_instruction_requested",
-                detail: {
-                  action: instruction.action,
-                  reason: instruction.reason,
-                  source: instruction.source,
-                  charsThreshold: LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
-                  unsummarizedChars: currentChars,
-                  discardedMessages: pruneResult.discardedMessages,
-                },
-              });
-            }
-            if (instruction) {
-              holder.state.flags.overflowForceAcceptancePending = false;
-              holder.state.flags.mainFlowFinalNoToolsPending = true;
-            }
-          } else {
-            holder.state.flags.overflowForceAcceptancePending = false;
-            holder.state.flags.mainFlowFinalNoToolsPending = false;
-            holder.state.flags.summaryByCharsPrompted = false;
-          }
-        } else if (holder.state.flags.overflowForceAcceptancePending !== true) {
-          holder.state.flags.overflowForceAcceptancePending = false;
-        }
-
-        if (reachedTurnsSummary || reachedCharsSummary) {
-          setPendingStateWithMeta(holder.state, "summary", true);
-          if (reachedCharsSummary) {
-            holder.state.flags.summaryByCharsPrompted = true;
-            decisionReason = PLANNING_DECISION.reason.summaryThresholdChars;
-          } else if (decisionReason === PLANNING_DECISION.reason.idle) {
-            decisionReason = PLANNING_DECISION.reason.summaryThresholdTurns;
-          }
-        } else {
-          holder.state.flags.summaryByCharsPrompted = false;
-          holder.state.flags.overflowForceAcceptancePending = false;
-          holder.state.flags.mainFlowFinalNoToolsPending = false;
         }
 
         if (reachedPlanUpdateTurns) {
@@ -476,19 +218,6 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
           } else {
             holder.state.counters.planUpdateTurns = 0;
           }
-        }
-
-        if (reachedAnalysisTurns) {
-          setPendingStateWithMeta(holder.state, "analysis", true);
-          holder.state.counters.analysisTurns = 0;
-          appendCapabilityLog(ctx, {
-            domain: CAPABILITY_DOMAIN.GUIDANCE,
-            event: WORKFLOW_PARAMS.logging.events.guidance.analysisScheduledByTurnThreshold,
-            detail: {
-              triggerTurns: analysisTriggerTurnsThreshold,
-              thresholdMode: planningThresholds.mode,
-            },
-          });
         }
 
         if (reachedPhaseAcceptanceTurns) {
@@ -539,10 +268,7 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
           planningCaptured: holder.state.flags?.planningCaptured === true,
         };
         candidateActions = resolvePlanningTriggeredActions({
-          summary: pendingSnapshotRaw.summary,
-          summaryByCharsPrompted: pendingSnapshotRaw.summaryByCharsPrompted,
           planUpdate: pendingSnapshotRaw.planUpdate,
-          analysis: pendingSnapshotRaw.analysis,
           phaseAcceptance: pendingSnapshotRaw.phaseAcceptance,
         });
       }
@@ -614,11 +340,7 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
           changed = disableBlockedToolsInRegistry(ctx) || changed;
           changed = ensureTaskAcceptanceTool(ctx, meta) || changed;
           changed = ensurePlanRefinementTool(ctx, meta) || changed;
-          if (shouldUseSeparateModel(meta)) {
-            const planningPrimaryChanged = (await runPlanningBySeparateModel(ctx, meta)) || false;
-            planningPrimaryExecuted = planningPrimaryChanged === true;
-            changed = planningPrimaryChanged || changed;
-          } else {
+          if (!shouldUseSeparateModel(meta)) {
             const planningPrimaryChanged = maybeInjectPlanningPrompt(ctx, meta) || false;
             planningPrimaryExecuted = planningPrimaryChanged === true;
             changed = planningPrimaryChanged || changed;
@@ -660,10 +382,6 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
         },
       });
       return { capability, point, status: "active", changed: lifecycle.execution.changed };
-    }
-    if (point === "after_tool_calls") {
-      const changed = maybeScheduleSummaryByToolBurst(ctx, meta);
-      return { capability, point, status: "active", changed };
     }
     return { capability, point, status: "active", changed: false };
   };

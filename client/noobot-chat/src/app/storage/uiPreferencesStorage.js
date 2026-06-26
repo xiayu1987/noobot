@@ -70,13 +70,15 @@ export function normalizeSelectedModelSelectionByScenarioPreference(value = {}) 
 
 export function normalizePluginModelConfig(value = {}) {
   const normalizeNode = (node) => {
-    if (typeof node === "string" || typeof node === "number" || typeof node === "boolean") {
+    if (typeof node === "boolean") return node;
+    if (typeof node === "string" || typeof node === "number") {
       return normalizePreferenceString(node);
     }
     if (Array.isArray(node)) {
       const nextArray = node
         .map((item) => normalizeNode(item))
         .filter((item) => {
+          if (typeof item === "boolean") return true;
           if (typeof item === "string") return Boolean(item);
           if (Array.isArray(item)) return item.length > 0;
           return item && typeof item === "object" && Object.keys(item).length > 0;
@@ -89,6 +91,10 @@ export function normalizePluginModelConfig(value = {}) {
       const key = normalizePreferenceString(rawKey);
       if (!key) continue;
       const nextValue = normalizeNode(rawValue);
+      if (typeof nextValue === "boolean") {
+        nextObject[key] = nextValue;
+        continue;
+      }
       if (typeof nextValue === "string") {
         if (nextValue) nextObject[key] = nextValue;
         continue;

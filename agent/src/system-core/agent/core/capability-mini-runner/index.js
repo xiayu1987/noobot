@@ -96,6 +96,63 @@ function normalizeHeaderValue(input = "") {
     .slice(0, 120);
 }
 
+function buildHarnessCapabilityLogBase({
+  purpose = "",
+  domain = "",
+  modelName = "",
+  sessionMeta = {},
+  ctx = {},
+} = {}) {
+  const runtime = resolveRuntime(ctx);
+  return {
+    category: "system",
+    type: "system",
+    harnessFlow: "analysis",
+    chain: "auxiliary",
+    purpose: String(purpose || "").trim(),
+    domain: String(domain || "").trim(),
+    model: String(modelName || "").trim(),
+    sessionId: String(sessionMeta?.sessionId || ""),
+    parentSessionId: String(sessionMeta?.parentSessionId || ""),
+    dialogProcessId: String(ctx?.dialogProcessId || runtime?.dialogProcessId || ""),
+  };
+}
+
+function emitHarnessCapabilityRealtimeLog({ ctx = {}, event = "", text = "", data = {} } = {}) {
+  const normalizedText = String(text || "").trim();
+  if (!event || !normalizedText) return;
+  const isGuidanceAnalysisResponse =
+    event === "harness_capability_response" &&
+    String(data?.purpose || "").trim() === "guidance" &&
+    String(data?.harnessFlow || "").trim() === "analysis" &&
+    String(data?.chain || "").trim() === "auxiliary";
+  if (event === "harness_capability_response") {
+    if (!isGuidanceAnalysisResponse) return;
+  }
+  const emitClientEvent =
+    typeof ctx?.emitHookClientEvent === "function"
+      ? ctx.emitHookClientEvent
+      : typeof ctx?.hookClientChannel?.emit === "function"
+        ? (name, payload) => ctx.hookClientChannel.emit(name, payload)
+        : null;
+  if (!emitClientEvent) return;
+  emitClientEvent(event, {
+    ...data,
+    event,
+    text: normalizedText,
+  });
+  if (isGuidanceAnalysisResponse) {
+    emitClientEvent("thinking", {
+      ...data,
+      category: "system",
+      type: "guidance_analysis",
+      event: "guidance_analysis",
+      rawEvent: "harness_capability_response",
+      text: normalizedText,
+    });
+  }
+}
+
 export function createAgentCapabilityModelInvoker({
   maxTurns = MAX_MINI_RUNNER_TOOL_TURNS,
   toolAllowlist = [],
@@ -183,6 +240,13 @@ export function createAgentCapabilityModelInvoker({
           ? fallbackUserConfig
           : {};
     const normalizedModelName = String(modelName || "").trim();
+    const harnessCapabilityLogBase = buildHarnessCapabilityLogBase({
+      purpose,
+      domain,
+      modelName: normalizedModelName,
+      sessionMeta,
+      ctx,
+    });
     const normalizedPurpose = normalizeHeaderValue(purpose || "unknown");
     const normalizedDomain = normalizeHeaderValue(domain || "unknown");
     const resolvedHeaderNamespace = normalizeHeaderValue(
@@ -249,6 +313,17 @@ export function createAgentCapabilityModelInvoker({
         signal: runtime?.abortSignal || null,
       });
       const text = normalizeTextContent(ai?.content);
+      emitHarnessCapabilityRealtimeLog({
+        ctx,
+        event: "harness_capability_response",
+        text: `Harness 模型返回 / ${purpose || "unknown"}${text ? `\n${text}` : ""}`,
+        data: {
+          ...harnessCapabilityLogBase,
+          output: text,
+          finishedReason: "tool_binding_disabled",
+          turn: 1,
+        },
+      });
       return {
         content: text,
         output: text,
@@ -306,6 +381,17 @@ export function createAgentCapabilityModelInvoker({
         runMessages.push(ai);
       }
       if (!calls.length) {
+        emitHarnessCapabilityRealtimeLog({
+          ctx,
+          event: "harness_capability_response",
+          text: `Harness 模型返回 / ${purpose || "unknown"}${text ? `\n${text}` : ""}`,
+          data: {
+            ...harnessCapabilityLogBase,
+            output: text,
+            finishedReason: "no_tool_call",
+            turn,
+          },
+        });
         return {
           content: text,
           output: text,
@@ -404,6 +490,19 @@ export function createAgentCapabilityModelInvoker({
         targetPurpose: purpose,
       });
     }
+
+    emitHarnessCapabilityRealtimeLog({
+      ctx,
+      event: "harness_capability_response",
+      text: `Harness 模型返回 / ${purpose || "unknown"}${finalizedText ? `\n${finalizedText}` : ""}`,
+      data: {
+        ...harnessCapabilityLogBase,
+        output: finalizedText,
+        finishedReason: finalizedText ? "max_turn_reached_finalized" : "max_turn_reached",
+        turn: maxTurnCount,
+        toolTurnLimitReached,
+      },
+    });
 
     return {
       content: finalizedText,

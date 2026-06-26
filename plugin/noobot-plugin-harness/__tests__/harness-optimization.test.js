@@ -252,6 +252,68 @@ test("takeover priority pipeline keeps higher priority takeover effective", asyn
   assert.match(String(ctx.messages[1]?.content || ""), /planning/);
 });
 
+test("capability runtime skips disabled planning guidance and acceptance handlers", async () => {
+  const calls = [];
+  const runtime = createCapabilityRuntime({
+    profile: {
+      planning: { enabled: false },
+      guidance: { enabled: false },
+      acceptance: { enabled: false },
+      review: { enabled: true },
+    },
+    handlers: {
+      planning: async () => {
+        calls.push("planning");
+        return { messageTakeover: { content: "planning", mode: "prepend" } };
+      },
+      guidance: async () => {
+        calls.push("guidance");
+        return { messageTakeover: { content: "guidance", mode: "prepend" } };
+      },
+      acceptance: async () => {
+        calls.push("acceptance");
+        return { toolTakeover: { denyToolNames: ["task_summary"] } };
+      },
+      review: async () => {
+        calls.push("review");
+        return null;
+      },
+    },
+  });
+
+  const ctx = { messages: [{ role: "user", content: "hello" }], toolPolicy: {} };
+  const hooksWithDisabledCapabilities = [
+    HARNESS_HOOK_POINTS.BEFORE_TURN,
+    HARNESS_HOOK_POINTS.BEFORE_LLM_CALL,
+    HARNESS_HOOK_POINTS.AFTER_LLM_CALL,
+    HARNESS_HOOK_POINTS.BEFORE_TOOL_CALLS,
+    HARNESS_HOOK_POINTS.BEFORE_TOOL_CALL,
+    HARNESS_HOOK_POINTS.AFTER_TOOL_CALL,
+    HARNESS_HOOK_POINTS.TOOL_CALL_ERROR,
+    HARNESS_HOOK_POINTS.AFTER_TOOL_CALLS,
+    HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT,
+  ];
+
+  for (const hook of hooksWithDisabledCapabilities) {
+    const capabilities = runtime.resolveByHook(hook);
+    assert.equal(capabilities.includes("planning"), false, `${hook} should not include disabled planning`);
+    assert.equal(capabilities.includes("guidance"), false, `${hook} should not include disabled guidance`);
+    assert.equal(capabilities.includes("acceptance"), false, `${hook} should not include disabled acceptance`);
+  }
+  assert.deepEqual(runtime.resolveByHook(HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT), ["review"]);
+
+  await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_LLM_CALL, ctx, {});
+  await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT, ctx, {});
+
+  assert.deepEqual(calls, ["review"]);
+  assert.equal(calls.includes("planning"), false);
+  assert.equal(calls.includes("guidance"), false);
+  assert.equal(calls.includes("acceptance"), false);
+  assert.equal(String(ctx.messages[0]?.content || "").includes("planning"), false);
+  assert.equal(String(ctx.messages[0]?.content || "").includes("guidance"), false);
+  assert.deepEqual(ctx.toolPolicy, {});
+});
+
 test("inferFsmTarget uses rule table consistently", () => {
   const toPlanning = inferFsmTarget(HARNESS_HOOK_POINTS.BEFORE_TURN, {}, HARNESS_FSM_STATES.IDLE);
   const toPlanned = inferFsmTarget(

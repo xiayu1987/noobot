@@ -387,6 +387,8 @@ export function relaySeparateModelOutputAsUserMessage(
   {
     locale = LOCALE.ZH_CN,
     purpose = "",
+    harnessFlow = undefined,
+    chain = undefined,
     content = "",
     dedupe = false,
     attachments = [],
@@ -399,6 +401,8 @@ export function relaySeparateModelOutputAsUserMessage(
   const prefix = translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SEPARATE_MODEL_PREFIX, {
     purpose: String(purpose || "").trim() || "unknown",
   });
+  const normalizedHarnessFlow = String(harnessFlow || "").trim() || undefined;
+  const normalizedChain = String(chain || "").trim() || undefined;
   const relayAttachments = Array.isArray(attachments) ? attachments : [];
   const resolvedTransferPayload = getTransferPayloadFromAttachments(
     relayAttachments,
@@ -409,6 +413,9 @@ export function relaySeparateModelOutputAsUserMessage(
     role: "user",
     content: `${prefix}\n${text}`,
     injectedMessageType: `separate_model_relay:${String(purpose || "unknown").trim() || "unknown"}`,
+    purpose: String(purpose || "").trim() || undefined,
+    harnessFlow: normalizedHarnessFlow,
+    chain: normalizedChain,
     ...resolvedTransferPayload,
     injectAt: "append",
     dedupe,
@@ -446,12 +453,14 @@ export function relaySeparateModelOutputAsUserMessage(
 export async function appendCapabilityModelTraceLog(
   ctx = {},
   meta = {},
-  { domain = "", purpose = "", response = null } = {},
+  { domain = "", purpose = "", harnessFlow = undefined, chain = undefined, response = null } = {},
 ) {
   const traces = Array.isArray(response?.traces) ? response.traces : [];
   if (!traces.length) return false;
   const detail = {
     purpose: String(purpose || response?.purpose || "").trim() || undefined,
+    harnessFlow: String(harnessFlow || response?.harnessFlow || "").trim() || undefined,
+    chain: String(chain || response?.chain || "").trim() || undefined,
     finishedReason: response?.finishedReason || undefined,
     turn: response?.turn || undefined,
     toolTurnLimitReached: response?.toolTurnLimitReached === true,

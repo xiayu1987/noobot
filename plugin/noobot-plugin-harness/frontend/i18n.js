@@ -33,6 +33,9 @@ const HARNESS_FRONTEND_MESSAGES = Object.freeze({
       description: "为 planning / guidance / acceptance 等非主流程步骤单独指定模型。",
       placeholder: "使用主流程/默认模型",
       empty: "暂无可用于对话的启用模型",
+      capabilitySuffix: "能力",
+      enabled: "启用",
+      disabled: "不启用",
     }),
   }),
   "en-US": Object.freeze({
@@ -59,6 +62,9 @@ const HARNESS_FRONTEND_MESSAGES = Object.freeze({
       description: "Configure separate models for non-main-flow steps such as planning, guidance, and acceptance.",
       placeholder: "Use main/default model",
       empty: "No enabled chat models are available",
+      capabilitySuffix: "Capability",
+      enabled: "Enabled",
+      disabled: "Disabled",
     }),
   }),
 });

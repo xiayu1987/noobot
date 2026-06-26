@@ -644,4 +644,89 @@ describe("ThinkingPanel", () => {
     expect(wrapper.text()).toContain("previous_tool");
     expect(wrapper.text()).toContain("current_tool");
   });
+
+  it("renders only the latest strict harness guidance analysis response outside execution logs", () => {
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: true,
+      turnScopeId: "client-turn:harness-analysis",
+      processExecutionLogTotal: 5,
+      processRealtimeLogs: [
+        { event: "tool_call", type: "tool_call", text: "tool log" },
+        {
+          event: "harness_capability_response",
+          type: "harness_capability_response",
+          purpose: "planning",
+          text: "legacy planning response",
+        },
+        {
+          event: "harness_capability_response",
+          type: "harness_capability_response",
+          purpose: "guidance",
+          harnessFlow: "analysis",
+          chain: "auxiliary",
+          output: "old guidance analysis",
+        },
+        {
+          event: "harness_capability_response",
+          type: "harness_capability_response",
+          purpose: "planning",
+          harnessFlow: "analysis",
+          chain: "auxiliary",
+          output: "old planning analysis",
+        },
+        {
+          event: "harness_capability_response",
+          type: "harness_capability_response",
+          purpose: "planning",
+          harnessFlow: "analysis",
+          chain: "auxiliary",
+          output: "latest planning analysis",
+        },
+        {
+          event: "harness_capability_response",
+          type: "harness_capability_response",
+          purpose: "guidance",
+          harnessFlow: "analysis",
+          chain: "auxiliary",
+          output: "latest guidance analysis",
+        },
+      ],
+    });
+
+    expect(wrapper.text()).toContain("分析流程");
+    expect(wrapper.text()).toContain("模型返回");
+    expect(wrapper.text()).toContain("latest guidance analysis");
+    expect(wrapper.text()).not.toContain("old planning analysis");
+    expect(wrapper.text()).not.toContain("latest planning analysis");
+    expect(wrapper.text()).not.toContain("legacy planning response");
+    expect(wrapper.text()).not.toContain("old guidance analysis");
+    expect(wrapper.findAll(".execution-log-line")).toHaveLength(1);
+    expect(wrapper.findAll(".execution-log-line")[0].text()).toContain("tool log");
+    expect(wrapper.find("button").text()).toContain("1");
+  });
+
+  it("renders latest harness guidance analysis response from completed logs after reload", () => {
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: false,
+      turnScopeId: "client-turn:harness-completed",
+      processCompletedToolLogs: [
+        { event: "tool_result", type: "tool_result", text: "completed tool" },
+        {
+          event: "harness_capability_response",
+          type: "harness_capability_response",
+          purpose: "guidance",
+          harnessFlow: "analysis",
+          chain: "auxiliary",
+          output: "completed guidance analysis",
+        },
+      ],
+    });
+
+    expect(wrapper.text()).toContain("分析流程");
+    expect(wrapper.text()).toContain("completed guidance analysis");
+    expect(wrapper.findAll(".execution-log-line")).toHaveLength(1);
+    expect(wrapper.find(".execution-log-line").text()).toContain("completed tool");
+  });
 });
