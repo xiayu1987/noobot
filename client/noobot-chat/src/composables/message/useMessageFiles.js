@@ -86,6 +86,10 @@ function getMessageAttachmentMetas(messageItem = {}) {
     ? messageItem.attachmentMetas
     : [];
   const transferMetas = getMessageTransferAttachmentMetas(messageItem);
+  // semantic-transfer envelopes describe transfer/link semantics while
+  // attachmentMetas describe attachment storage/display facts.  Keep both
+  // layers coexisting: transfer-derived metas can augment display fields, but
+  // legacy attachmentMetas remain the storage/display source of truth.
   return transferMetas.length ? mergeAttachmentMetas(transferMetas, base) : base;
 }
 
@@ -583,10 +587,27 @@ export function useMessageFiles({
         getAttachmentOwnerType(attachmentItem) === "plugin" &&
         getAttachmentOwnerType(existingItem) !== "plugin"
       ) {
-        dedupedWithOwnerType[existingIndex] = mergeAttachmentMetas(
-          [existingItem],
-          [attachmentItem],
-        )[0] || attachmentItem;
+        dedupedWithOwnerType[existingIndex] = {
+          ...existingItem,
+          ...attachmentItem,
+        };
+        for (const key of attachmentKeys) {
+          seenAttachmentKeySet.set(key, existingIndex);
+        }
+        if (attachmentContentKey) {
+          seenAttachmentContentKeySet.set(attachmentContentKey, existingIndex);
+        }
+        continue;
+      }
+      if (
+        getAttachmentOwnerType(existingItem) === "plugin" &&
+        getAttachmentOwnerType(attachmentItem) !== "plugin"
+      ) {
+        const preservedPluginItem = {
+          ...attachmentItem,
+          ...existingItem,
+        };
+        dedupedWithOwnerType[existingIndex] = preservedPluginItem;
         for (const key of attachmentKeys) {
           seenAttachmentKeySet.set(key, existingIndex);
         }

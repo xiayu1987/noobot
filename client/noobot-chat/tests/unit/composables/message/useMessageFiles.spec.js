@@ -62,7 +62,7 @@ describe("useMessageFiles", () => {
     );
   });
 
-  it("prefers semantic-transfer attachment metadata before legacy attachmentMetas", () => {
+  it("keeps legacy attachment metadata while augmenting display with semantic-transfer fields", () => {
     const envelope = {
       protocol: "noobot.semantic-transfer",
       version: 1,
@@ -107,8 +107,8 @@ describe("useMessageFiles", () => {
     expect(displayedAttachmentMetas.value).toHaveLength(1);
     expect(displayedAttachmentMetas.value[0]).toMatchObject({
       attachmentId: "att-transfer-1",
-      name: "result.md",
-      mimeType: "text/markdown",
+      name: "legacy-result.md",
+      mimeType: "text/plain",
       transferFilePath: "/workspace/admin/runtime/result.md",
       owner: { type: "agent" },
     });
