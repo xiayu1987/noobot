@@ -9,6 +9,7 @@ import {
   getMessageTransferEnvelopes,
   normalizeTransferEnvelopes,
 } from "./transferEnvelopes";
+import { getMessageAttachments } from "./messageModel";
 import {
   canUseTurnScopedAssets,
   clearTurnScopedAssets,
@@ -230,10 +231,7 @@ function messageCompareKey(messageItem = {}) {
   const dialogProcessId = getMessageDialogProcessId(messageItem);
   const content = normalizeMessageContentForCompare(messageItem?.content || "");
   if (role === RoleEnum.USER) {
-    const attachmentKey = [
-      ...getArrayItems(messageItem?.attachments),
-      ...getMessageTransferAttachments(messageItem),
-    ]
+    const attachmentKey = getMessageAttachments(messageItem)
       .map((attachmentItem) =>
         [
           attachmentItem?.name,
@@ -340,9 +338,7 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
     ? targetMessage.expandedDetailLogKeys
     : null;
   const existingContent = String(targetMessage?.content || "");
-  const existingAttachments = Array.isArray(targetMessage?.attachments)
-    ? targetMessage.attachments
-    : [];
+  const existingAttachments = getMessageAttachments(targetMessage);
   const existingModelRuns = Array.isArray(targetMessage?.modelRuns)
     ? targetMessage.modelRuns
     : [];
@@ -373,7 +369,7 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   if (
     sourceCanUseTurnScopedAssets &&
     existingAttachments.length &&
-    !hasArrayItems(sourceMessage?.attachments)
+    !getMessageAttachments(sourceMessage).length
   ) {
     targetMessage.attachments = existingAttachments;
   }

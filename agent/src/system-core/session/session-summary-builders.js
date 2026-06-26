@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 4;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 5;
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
 
 export function isSessionDisplaySummaryPayload(payload = null, sessionId = "") {

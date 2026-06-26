@@ -29,7 +29,35 @@ function normalizeTransferEnvelopes(value = null) {
 }
 
 function getMessageTransferEnvelopes(messageItem = {}) {
-  return normalizeTransferEnvelopes(messageItem?.transferEnvelopes);
+  const seen = new Set();
+  const out = [];
+  const append = (value) => {
+    for (const envelope of normalizeTransferEnvelopes(value)) {
+      const key = JSON.stringify(envelope);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(envelope);
+    }
+  };
+  append(messageItem?.transferEnvelopes);
+  append(messageItem?.payload?.transferEnvelopes);
+  append(messageItem?.pluginMeta?.payload?.transferEnvelopes);
+  append(messageItem?.pluginMeta?.payload?.nodeResultTransferEnvelopes);
+  const nodeRuns = Array.isArray(messageItem?.pluginMeta?.payload?.execution?.nodeAgentRuns)
+    ? messageItem.pluginMeta.payload.execution.nodeAgentRuns
+    : [];
+  for (const runItem of nodeRuns) {
+    append(runItem?.transferEnvelopes);
+    append(runItem?.nodeResultTransferEnvelopes);
+  }
+  const nodeSessions = Array.isArray(messageItem?.pluginMeta?.payload?.nodeSessions)
+    ? messageItem.pluginMeta.payload.nodeSessions
+    : [];
+  for (const sessionItem of nodeSessions) {
+    append(sessionItem?.transferEnvelopes);
+    append(sessionItem?.nodeResultTransferEnvelopes);
+  }
+  return out;
 }
 
 function getTransferFilesFromEnvelope(envelope = null) {

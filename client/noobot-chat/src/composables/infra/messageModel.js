@@ -19,6 +19,7 @@ import {
   getMessageDialogProcessId,
   getMessageParentDialogProcessId,
   getMessageRole,
+  getMessageSessionId,
   getMessageTurnScopeId,
 } from "./messageIdentity";
 import {
@@ -34,8 +35,52 @@ function normalizeArray(value) {
 }
 
 function getMessageAttachments(messageItem = {}) {
-  if (Array.isArray(messageItem?.attachments)) return messageItem.attachments;
-  return [];
+  const sourceAttachments = Array.isArray(messageItem?.attachments)
+    ? messageItem.attachments
+    : [];
+  const transferAttachments = getMessageTransferAttachments(messageItem).map((attachmentItem) =>
+    enrichTransferAttachmentScope(attachmentItem, messageItem),
+  );
+  return transferAttachments.length
+    ? mergeAttachments(transferAttachments, sourceAttachments)
+    : sourceAttachments;
+}
+
+function isPlainObject(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function enrichTransferAttachmentScope(attachmentItem = {}, messageItem = {}) {
+  const sessionId = getMessageSessionId(messageItem);
+  const turnScopeId = getMessageTurnScopeId(messageItem);
+  const dialogProcessId = getMessageDialogProcessId(messageItem);
+  const parentDialogProcessId = getMessageParentDialogProcessId(messageItem);
+  const role = getMessageRole(messageItem);
+  if (!sessionId && !turnScopeId && !dialogProcessId && !parentDialogProcessId && !role) {
+    return attachmentItem;
+  }
+  const owner = isPlainObject(attachmentItem?.owner) ? attachmentItem.owner : {};
+  const turnScope = isPlainObject(attachmentItem?.turnScope) ? attachmentItem.turnScope : {};
+  return {
+    ...attachmentItem,
+    ...(sessionId && !attachmentItem.sessionId && !attachmentItem.session_id ? { sessionId } : {}),
+    owner: {
+      ...(sessionId && !owner.sessionId && !owner.session_id ? { sessionId } : {}),
+      ...(turnScopeId && !owner.turnScopeId ? { turnScopeId } : {}),
+      ...(dialogProcessId && !owner.dialogProcessId && !owner.dialog_process_id ? { dialogProcessId } : {}),
+      ...(role && !owner.role ? { role } : {}),
+      ...owner,
+    },
+    turnScope: {
+      ...(sessionId && !turnScope.sessionId && !turnScope.session_id ? { sessionId } : {}),
+      ...(turnScopeId && !turnScope.turnScopeId ? { turnScopeId } : {}),
+      ...(dialogProcessId && !turnScope.dialogProcessId && !turnScope.dialog_process_id ? { dialogProcessId } : {}),
+      ...(parentDialogProcessId && !turnScope.parentDialogProcessId && !turnScope.parent_dialog_process_id
+        ? { parentDialogProcessId }
+        : {}),
+      ...turnScope,
+    },
+  };
 }
 
 const EXECUTION_LOG_DISPLAY_LIMIT = 10;
@@ -242,12 +287,7 @@ function buildViewMessage(
   messageItem = {},
   { userId = "", isImageMime = () => false } = {},
 ) {
-  const sourceAttachments = getMessageAttachments(messageItem);
-  const transferAttachments = getMessageTransferAttachments(messageItem);
-  const normalizedAttachments = (transferAttachments.length
-    ? mergeAttachments(transferAttachments, normalizeArray(sourceAttachments))
-    : normalizeArray(sourceAttachments)
-  ).map((attachmentItem) =>
+  const normalizedAttachments = getMessageAttachments(messageItem).map((attachmentItem) =>
     normalizeAttachment(attachmentItem, { userId, isImageMime }),
   );
   return createMessageModel({

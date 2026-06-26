@@ -168,6 +168,91 @@ describe("messageModel semantic transfer", () => {
     });
   });
 
+  it("enriches refreshed transfer envelope attachments with message scope", () => {
+    const message = buildViewMessage({
+      id: "msg-scope-1",
+      role: "assistant",
+      content: "done",
+      sessionId: "session-scope-1",
+      turnScopeId: "turn-scope-1",
+      dialogProcessId: "dialog-scope-1",
+      transferEnvelopes: [
+        {
+          protocol: "noobot.semantic-transfer",
+          files: [
+            {
+              filePath: "runtime/attach/scope.txt",
+              attachmentMeta: {
+                attachmentId: "att-scope-1",
+                name: "scope.txt",
+                size: 10,
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(message.attachments[0]).toMatchObject({
+      attachmentId: "att-scope-1",
+      sessionId: "session-scope-1",
+      owner: {
+        sessionId: "session-scope-1",
+        turnScopeId: "turn-scope-1",
+        dialogProcessId: "dialog-scope-1",
+        role: "assistant",
+      },
+      turnScope: {
+        sessionId: "session-scope-1",
+        turnScopeId: "turn-scope-1",
+        dialogProcessId: "dialog-scope-1",
+      },
+    });
+  });
+
+  it("restores attachments from refreshed plugin payload transfer envelopes", () => {
+    const message = buildViewMessage({
+      id: "msg-plugin-payload-transfer",
+      role: "assistant",
+      content: "workflow done",
+      sessionId: "session-plugin-1",
+      turnScopeId: "turn-plugin-1",
+      pluginMeta: {
+        payload: {
+          execution: {
+            nodeAgentRuns: [
+              {
+                nodeResultTransferEnvelopes: [
+                  {
+                    protocol: "noobot.semantic-transfer",
+                    files: [
+                      {
+                        filePath: "runtime/workflow/report.md",
+                        attachmentMeta: {
+                          attachmentId: "att-plugin-payload-1",
+                          name: "report.md",
+                          mimeType: "text/markdown",
+                        },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    expect(message.attachments).toHaveLength(1);
+    expect(message.attachments[0]).toMatchObject({
+      attachmentId: "att-plugin-payload-1",
+      name: "report.md",
+      sessionId: "session-plugin-1",
+      owner: expect.objectContaining({ turnScopeId: "turn-plugin-1" }),
+    });
+  });
+
   it("normalizes parsed result metadata from attachments", () => {
     const message = buildViewMessage(
       {

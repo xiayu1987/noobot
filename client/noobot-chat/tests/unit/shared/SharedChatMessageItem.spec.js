@@ -124,4 +124,58 @@ describe("SharedChatMessageItem", () => {
     expect(probe.attributes("data-attachment-count")).toBe("1");
     expect(probe.attributes("data-legacy-attachment-count")).toBe("1");
   });
+
+  it("passes refreshed transfer envelope attachments through displayed attachments", () => {
+    registerFrontendPlugin({
+      id: "shared-message-transfer-context-probe",
+      messageCards: [
+        {
+          id: "shared-message-transfer-context-probe:card",
+          slot: "pre",
+          component: TestRenderer,
+          match: (messageItem = {}) => messageItem?.id === "msg-transfer",
+          resolveProps: (context = {}) => ({
+            attachmentCount: Array.isArray(context.displayedAttachments)
+              ? context.displayedAttachments.length
+              : -1,
+            legacyAttachmentCount: Array.isArray(context.displayedAttachmentMetas)
+              ? context.displayedAttachmentMetas.length
+              : -1,
+          }),
+        },
+      ],
+    });
+
+    const wrapper = mountItem({
+      messageItem: {
+        id: "msg-transfer",
+        role: "assistant",
+        content: "done",
+        sessionId: "session-1",
+        turnScopeId: "turn-1",
+        transferEnvelopes: [
+          {
+            protocol: "noobot.semantic-transfer",
+            files: [
+              {
+                role: "primary",
+                filePath: "runtime/attach/report.pdf",
+                attachmentMeta: {
+                  attachmentId: "att-transfer-1",
+                  name: "report.pdf",
+                  mimeType: "application/pdf",
+                  size: 42,
+                },
+              },
+            ],
+          },
+        ],
+      },
+    });
+    const probe = wrapper.find(".context-probe");
+
+    expect(probe.exists()).toBe(true);
+    expect(probe.attributes("data-attachment-count")).toBe("1");
+    expect(probe.attributes("data-legacy-attachment-count")).toBe("1");
+  });
 });

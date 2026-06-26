@@ -145,12 +145,8 @@ export function mergePreservedDetailMessages(existingMessages = [], detailMessag
       const thinkingOpenNames = Array.isArray(existingMessage?.thinkingOpenNames)
         ? existingMessage.thinkingOpenNames
         : [];
-      const existingAttachments = Array.isArray(existingMessage?.attachments)
-        ? existingMessage.attachments
-        : [];
-      const detailAttachments = Array.isArray(detailMessageItem?.attachments)
-        ? detailMessageItem.attachments
-        : [];
+      const existingAttachments = getMessageAttachments(existingMessage);
+      const detailAttachments = getMessageAttachments(detailMessageItem);
       const restoreRunningThinkingState = preserveRunningThinkingState(
         existingMessage,
         detailMessageItem,
@@ -198,10 +194,8 @@ export function buildChildAttachmentsByParentDialogProcessId({
     if (!sessionId || sessionId === String(rootSessionId || "").trim()) continue;
     const messageList = Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : [];
     for (const messageItem of messageList) {
-      const directAttachments = getMessageAttachments(messageItem);
-      const normalizedAttachments =
-        makeViewMessage(messageItem).attachments || [];
-      if (!directAttachments.length && !normalizedAttachments.length) continue;
+      const normalizedAttachments = getMessageAttachments(makeViewMessage(messageItem));
+      if (!normalizedAttachments.length) continue;
       const parentDialogProcessId = String(
         messageItem?.parentDialogProcessId || "",
       ).trim();
@@ -251,7 +245,7 @@ export function mergeChildTurnAttachmentsIntoRootMessages({
       childAttachmentsByParentDialogProcessId.get(dialogProcessId) || [];
     if (!childAttachments.length) continue;
     messageItem.attachments = mergeAttachments(
-      messageItem?.attachments || [],
+      getMessageAttachments(messageItem),
       childAttachments,
     );
   }
