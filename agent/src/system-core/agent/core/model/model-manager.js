@@ -13,6 +13,7 @@ import {
 function updateModelState(modelState, spec, shouldSwitch) {
   modelState.activeModelName = String(spec.model || "").trim();
   modelState.activeModelAlias = String(spec?.alias || "").trim();
+  modelState.activeModelSpec = spec && typeof spec === "object" ? { ...spec } : null;
   if (shouldSwitch) {
     emitEvent(modelState.eventListener, "model_switched", {
       alias: spec?.alias || "",

@@ -5,7 +5,11 @@
  */
 import { filterForModelContext } from "../../../context/session/message-context-policy.js";
 import { invokeLlmWithTransientRetry } from "../llm-invoker.js";
-import { resolveNonThinkingCallOverrides } from "./tool-choice-strategy.js";
+import {
+  applyBoundToolModelRequestOverridesToLlm,
+  resolveBoundToolModelRequestOverrides,
+  resolveNonThinkingCallOverrides,
+} from "./tool-choice-strategy.js";
 import { emitModelContextTrace, summarizeDiagnosticMessages } from "../message-context/context-diagnostics.js";
 
 export function createBoundLlmToolChoiceInvoker({
@@ -43,10 +47,18 @@ export function createBoundLlmToolChoiceInvoker({
         const boundLlm = Object.keys(effectiveBindOptions).length
           ? targetLlm.bindTools(boundTools, effectiveBindOptions)
           : targetLlm.bindTools(boundTools);
+        const effectiveModelSpec = modelState?.activeModelSpec || modelState?.defaultModelSpec || {};
         const nonThinkingOverrides = resolveNonThinkingCallOverrides(
           runtime,
           effectiveToolChoice,
-          modelState?.defaultModelSpec || {},
+          effectiveModelSpec,
+        );
+        const boundToolOverrides = resolveBoundToolModelRequestOverrides(
+          effectiveModelSpec,
+        );
+        const effectiveBoundLlm = applyBoundToolModelRequestOverridesToLlm(
+          boundLlm,
+          boundToolOverrides,
         );
         const modelMessages = filterForModelContext(messages);
         emitModelContextTrace(runtime, "llm_invoke_messages", {
@@ -55,11 +67,12 @@ export function createBoundLlmToolChoiceInvoker({
           toolChoice: effectiveToolChoice,
           messages: summarizeDiagnosticMessages(modelMessages),
         });
-        return boundLlm.invoke(modelMessages, {
+        return effectiveBoundLlm.invoke(modelMessages, {
           callbacks,
           signal: abortSignal,
           ...(effectiveToolChoice ? { tool_choice: effectiveToolChoice } : {}),
           ...nonThinkingOverrides,
+          ...boundToolOverrides,
         });
       },
     });

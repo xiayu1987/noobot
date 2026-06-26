@@ -8,6 +8,24 @@ import {
 
 function createFakeModel(responses = []) {
   let index = 0;
+  const invocations = [];
+  const model = {
+    invocations,
+    bindTools() { return this; },
+    async invoke(messages, options = {}) {
+      invocations.push({ messages, options });
+      const response = responses[index] || responses.at(-1) || { content: "" };
+      index += 1;
+      response.seenMessages = messages;
+      response.seenOptions = options;
+      return response;
+    },
+  };
+  return model;
+}
+
+function createLegacyFakeModel(responses = []) {
+  let index = 0;
   return {
     bindTools() { return this; },
     async invoke(messages) {
@@ -284,6 +302,58 @@ test("mini-runner defaults to no-tool binding invocation", async () => {
   assert.equal(bindCalled, false);
   assert.equal(result.finishedReason, "tool_binding_disabled");
   assert.equal(result.output, "plain result");
+});
+
+test("mini-runner bound dashscope requests force thinking disabled options", async () => {
+  const fakeModel = createFakeModel([{ content: "ok" }]);
+  const invoker = createAgentCapabilityModelInvoker({
+    enableToolBinding: true,
+    createChatModelFn: () => fakeModel,
+    resolveDefaultModelSpecFn: () => ({ format: "dashscope", preserve_thinking: true, thinking_budget: 2048 }),
+    adaptToolsForBindingFn: () => ({ tools: [{ name: "echo" }] }),
+  });
+
+  await invoker({
+    ctx: { agentContext: { payload: { tools: { registry: [{ name: "echo" }] } } } },
+  });
+
+  assert.equal(fakeModel.invocations[0].options.preserve_thinking, false);
+  assert.equal(fakeModel.invocations[0].options.thinking_budget, 0);
+});
+
+test("mini-runner bound openai compatible requests force reasoning_effort low", async () => {
+  const fakeModel = createFakeModel([{ content: "ok" }]);
+  const invoker = createAgentCapabilityModelInvoker({
+    enableToolBinding: true,
+    createChatModelByNameFn: () => fakeModel,
+    resolveModelSpecByNameFn: ({ modelName }) => ({ model: modelName, format: "openai_compatible", reasoning_effort: "high" }),
+    adaptToolsForBindingFn: () => ({ tools: [{ name: "echo" }] }),
+  });
+
+  await invoker({
+    model: "named-openai",
+    ctx: { agentContext: { payload: { tools: { registry: [{ name: "echo" }] } } } },
+  });
+
+  assert.equal(fakeModel.invocations[0].options.reasoning_effort, "low");
+});
+
+test("mini-runner does not inject bound-tool overrides without bound tools", async () => {
+  const fakeModel = createFakeModel([{ content: "ok" }]);
+  const invoker = createAgentCapabilityModelInvoker({
+    enableToolBinding: true,
+    createChatModelFn: () => fakeModel,
+    resolveDefaultModelSpecFn: () => ({ format: "dashscope" }),
+    adaptToolsForBindingFn: () => ({ tools: [] }),
+  });
+
+  await invoker({
+    ctx: { agentContext: { payload: { tools: { registry: [{ name: "echo" }] } } } },
+  });
+
+  assert.equal("preserve_thinking" in fakeModel.invocations[0].options, false);
+  assert.equal("thinking_budget" in fakeModel.invocations[0].options, false);
+  assert.equal("reasoning_effort" in fakeModel.invocations[0].options, false);
 });
 
 test("mini-runner filters only summarized history before first model invoke", async () => {

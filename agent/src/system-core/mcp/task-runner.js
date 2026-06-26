@@ -4,11 +4,18 @@
  * SPDX-License-Identifier: MIT
  */
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
-import { createChatModel, createChatModelByName, normalizeToolCalls } from "../model/index.js";
+import {
+  createChatModel,
+  createChatModelByName,
+  normalizeToolCalls,
+  resolveDefaultModelSpec,
+  resolveModelSpecByName,
+} from "../model/index.js";
 import { recoverableToolError } from "../error/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { getMcpServerByName, createMcpClient } from "./client-factory.js";
 import { buildLangChainMcpTools } from "./tool-adapter.js";
+import { resolveBoundToolModelRequestOverrides } from "../agent/core/turn/tool-choice-strategy.js";
 
 function toText(content) {
   if (typeof content === "string") return content;
@@ -104,6 +111,15 @@ export async function executeMcpTask({
         streaming: false,
         context: { runtime },
       });
+  const modelSpec = modelName
+    ? resolveModelSpecByName({
+        modelName,
+        globalConfig,
+        userConfig,
+        fallbackToDefault: false,
+      })
+    : resolveDefaultModelSpec({ globalConfig, userConfig });
+  const boundToolOverrides = resolveBoundToolModelRequestOverrides(modelSpec || {});
   const toolMap = new Map(langchainTools.map((tool) => [tool.name, tool]));
 
   const messages = [
@@ -122,6 +138,7 @@ export async function executeMcpTask({
   for (let turn = 1; turn <= maxTurns; turn += 1) {
     const ai = await llm.bindTools(langchainTools).invoke(messages, {
       signal: signal || undefined,
+      ...boundToolOverrides,
     });
     messages.push(ai);
     const { calls } = normalizeToolCalls(ai);

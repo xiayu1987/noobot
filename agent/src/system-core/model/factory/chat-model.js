@@ -106,7 +106,7 @@ export function buildModelKwargs(modelSpec = {}) {
     normalizedSpec.thinking_budget !== undefined
   ) {
     const thinkingBudget = Math.floor(Number(normalizedSpec.thinking_budget));
-    if (Number.isFinite(thinkingBudget) && thinkingBudget > 0) {
+    if (Number.isFinite(thinkingBudget) && thinkingBudget >= 0) {
       out.thinking_budget = thinkingBudget;
     }
   }
