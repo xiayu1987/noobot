@@ -607,13 +607,6 @@ onBeforeUnmount(() => {
           </BaseSectionHeader>
         </template>
         <BaseTabPanelBody>
-              <div v-if="getLatestHarnessAnalysisLog(messageItem)" class="thinking-analysis-block">
-                <BaseMetaLabel class="thinking-analysis-title" text="分析流程" />
-                <BaseNoteBlock
-                  title="模型返回"
-                  :content="getLatestHarnessAnalysisLog(messageItem).output"
-                />
-              </div>
               <div
                 v-for="(logItem, logIndex) in getExecutionLogs(messageItem)"
                 :key="`realtime-${logIndex}`"
@@ -631,6 +624,12 @@ onBeforeUnmount(() => {
                 v-if="!getExecutionLogCount(messageItem) && !messageItem.pending"
                 :text="translate('message.noExecutionLogs')"
               />
+              <div v-if="getLatestHarnessAnalysisLog(messageItem)" class="thinking-analysis-block">
+                <BaseMetaLabel class="thinking-analysis-title" text="分析流程" />
+                <BaseNoteBlock
+                  :content="getLatestHarnessAnalysisLog(messageItem).output"
+                />
+              </div>
               <div class="thinking-execution-actions">
                 <BasePillButton
                   class="thinking-detail-action-button"
@@ -745,9 +744,10 @@ onBeforeUnmount(() => {
 }
 
 .thinking-analysis-block {
+  margin-top: 12px;
   margin-bottom: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--noobot-divider);
+  padding-top: 12px;
+  border-top: 1px solid var(--noobot-divider);
 }
 
 .thinking-analysis-title {
