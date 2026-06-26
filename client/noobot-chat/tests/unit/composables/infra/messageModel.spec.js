@@ -96,7 +96,7 @@ describe("messageModel semantic transfer", () => {
     expect(message.turnScopeId).toBe("client-turn:backend-scope-1");
   });
 
-  it("prefers transfer-derived attachment metadata over legacy attachmentMetas", () => {
+  it("preserves legacy attachmentMetas alongside semantic transfer envelopes", () => {
     const message = buildViewMessage({
       role: "assistant",
       content: "done",
@@ -117,10 +117,9 @@ describe("messageModel semantic transfer", () => {
     expect(message.attachmentMetas).toHaveLength(1);
     expect(message.attachmentMetas[0]).toMatchObject({
       attachmentId: "att-1",
-      name: "report.md",
-      mimeType: "text/markdown",
-      transferFilePath: "/workspace/u1/report.md",
-      sandboxPath: "/workspace/u1/report.md",
+      name: "legacy-report.md",
+      mimeType: "text/plain",
+      path: "/legacy-only/report.md",
     });
   });
 
