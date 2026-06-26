@@ -636,6 +636,35 @@ test("consumer helpers read envelope files and attachment metas", async () => {
   assert.equal(warnings[0]?.data?.message.includes("no longer supported"), true);
 });
 
+test("consumer helpers read compact transfer file refs", async () => {
+  const {
+    getTransferAttachmentMetas,
+    getTransferDisplayPath,
+    getTransferFiles,
+  } = await import("../../../src/system-core/semantic-transfer/index.js");
+  const envelope = {
+    protocol: "noobot.semantic-transfer",
+    version: 1,
+    direction: "output",
+    transport: "file",
+    files: [
+      {
+        attachmentId: "compact-a",
+        name: "a.md",
+        path: "/workspace/a.md",
+        sandboxPath: "/sandbox/a.md",
+        owner: { type: "plugin", id: "harness-plugin" },
+      },
+    ],
+  };
+
+  assert.equal(getTransferFiles(envelope).length, 1);
+  assert.equal(getTransferDisplayPath(envelope), "/workspace/a.md");
+  const [meta] = getTransferAttachmentMetas(envelope);
+  assert.equal(meta.attachmentId, "compact-a");
+  assert.equal(meta.owner.type, "plugin");
+});
+
 test("semantic-transfer public index only exposes unified transfer entry for scenario wrappers", async () => {
   const mod = await import("../../../src/system-core/semantic-transfer/index.js");
   assert.equal("buildLegacyTransferCompat" in mod, false);

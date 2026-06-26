@@ -253,7 +253,7 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
         modelName: "",
         summarized: false,
         ts: "2026-05-14T00:00:00.000Z",
-        attachments: [{ attachmentId: "att-1", name: "a.txt" }],
+        attachments: [{ id: "att-1", attachmentId: "att-1", name: "a.txt" }],
       },
     ],
     selectedConnectors: {},

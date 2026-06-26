@@ -14,6 +14,11 @@ import {
   filterSemanticTransferAttachmentMetas,
 } from "../../attach/meta-ops.js";
 import { getTransferAttachmentMetas } from "../../semantic-transfer/storage/consumer.js";
+import {
+  compactAttachmentRef,
+  compactTransferEnvelopes,
+  dedupeAttachmentRefs,
+} from "../../session/transfer-attachment-refs.js";
 import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
 import { summarizeExecutionLogs } from "../../tracking/execution-log/execution-log-summary.js";
 
@@ -61,7 +66,7 @@ function resolveAttachmentsFromMessage(messageItem = {}) {
 }
 
 function dedupeTransferEnvelopes(envelopes = []) {
-  const list = Array.isArray(envelopes) ? envelopes : [];
+  const list = compactTransferEnvelopes(envelopes);
   if (!list.length) return [];
   const seen = new Set();
   const output = [];
@@ -70,8 +75,11 @@ function dedupeTransferEnvelopes(envelopes = []) {
     const key =
       String(
         envelope?.files?.[0]?.attachmentMeta?.attachmentId ||
+        envelope?.files?.[0]?.attachmentId ||
+        envelope?.files?.[0]?.id ||
         envelope?.attachmentMeta?.attachmentId ||
         envelope?.files?.[0]?.filePath ||
+        envelope?.files?.[0]?.path ||
         envelope?.filePath ||
         "",
       ).trim() || JSON.stringify(envelope);
@@ -80,6 +88,16 @@ function dedupeTransferEnvelopes(envelopes = []) {
     output.push(envelope);
   }
   return output;
+}
+
+function dedupeAttachments(attachments = []) {
+  const list = dedupeAttachmentRefs(
+    (Array.isArray(attachments) ? attachments : [])
+      .map((attachment) => compactAttachmentRef(attachment))
+      .filter(Boolean),
+  );
+  if (!list.length) return [];
+  return list;
 }
 
 function shouldPromoteTransferEnvelope(envelope = {}) {
@@ -103,11 +121,26 @@ function promoteGeneratedTransfersToFinalAssistant(messages = []) {
       : resolveAttachmentsFromMessage(messageItem)
           .filter(shouldPromoteSemanticTransferAttachmentToAssistant),
   );
+  const generatedOrdinaryAttachments = dedupeAttachments(
+    sourceMessages.flatMap((messageItem = {}) =>
+      resolveTransferEnvelopesFromMessage(messageItem).length
+        ? []
+        : resolveAttachmentsFromMessage(messageItem)
+            .filter((attachmentItem = {}) =>
+              shouldPromoteAttachmentToAssistant(attachmentItem) &&
+              !shouldPromoteSemanticTransferAttachmentToAssistant(attachmentItem),
+            ),
+    ),
+  );
   const generatedAttachmentTransferPayload = buildTransferPayloadFromAttachmentMetas(generatedAttachmentMetas);
   const generatedAttachmentTransferEnvelopes = Array.isArray(generatedAttachmentTransferPayload?.transferEnvelopes)
     ? generatedAttachmentTransferPayload.transferEnvelopes
     : [];
-  if (!generatedTransferEnvelopes.length && !generatedAttachmentTransferEnvelopes.length) return sourceMessages;
+  if (
+    !generatedTransferEnvelopes.length &&
+    !generatedAttachmentTransferEnvelopes.length &&
+    !generatedOrdinaryAttachments.length
+  ) return sourceMessages;
 
   const finalAssistantIndex = (() => {
     for (let index = sourceMessages.length - 1; index >= 0; index -= 1) {
@@ -130,9 +163,14 @@ function promoteGeneratedTransfersToFinalAssistant(messages = []) {
     ...generatedTransferEnvelopes,
     ...generatedAttachmentTransferEnvelopes,
   ]);
+  const mergedAttachments = dedupeAttachments([
+    ...resolveAttachmentsFromMessage(finalAssistant),
+    ...generatedOrdinaryAttachments,
+  ]);
   const nextFinalAssistant = {
     ...finalAssistant,
     ...(mergedTransferEnvelopes.length ? { transferEnvelopes: mergedTransferEnvelopes } : {}),
+    ...(mergedAttachments.length ? { attachments: mergedAttachments } : {}),
   };
   outputMessages[finalAssistantIndex] = nextFinalAssistant;
   return outputMessages;

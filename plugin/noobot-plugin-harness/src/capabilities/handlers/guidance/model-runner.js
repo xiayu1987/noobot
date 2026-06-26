@@ -451,7 +451,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
       invoker,
       invokePayload: {
         purpose,
-        harnessFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
+        pluginFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
         chain: workflowPurpose === "analysis" ? "auxiliary" : undefined,
         promptVersion: PROMPT_ENVELOPE.VERSION,
         envelopeType: PROMPT_ENVELOPE.TYPE,
@@ -468,7 +468,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
       },
       maxReasoningRetries: 1,
       purpose,
-      harnessFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
+      pluginFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
       chain: workflowPurpose === "analysis" ? "auxiliary" : undefined,
       domain: CAPABILITY_DOMAIN.GUIDANCE,
       appendCapabilityLog,
@@ -476,7 +476,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
         await appendCapabilityModelTraceLog(ctx, meta, {
           domain: CAPABILITY_DOMAIN.GUIDANCE,
           purpose,
-          harnessFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
+          pluginFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
           chain: workflowPurpose === "analysis" ? "auxiliary" : undefined,
           response: retryResponse,
         });
@@ -545,7 +545,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
   }
   bucket.guidanceOutputs.push({
     purpose,
-    harnessFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
+    pluginFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
     chain: workflowPurpose === "analysis" ? "auxiliary" : undefined,
     reason: reason || undefined,
     content: responseText,
@@ -554,7 +554,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
   relaySeparateModelOutputAsUserMessage(ctx, {
     locale,
     purpose,
-    harnessFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
+    pluginFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
     chain: workflowPurpose === "analysis" ? "auxiliary" : undefined,
     content: relayText,
     transferPayload: getTransferPayloadFromAttachments(relayAttachments),

@@ -80,7 +80,7 @@ export function injectMessageWithPolicy(
     injectedMessageType = "",
     injectionType = "",
     purpose = "",
-    harnessFlow = "",
+    pluginFlow = "",
     chain = "",
     avoidBreakToolCallContinuity = true,
     persistToCurrentTurn = true,
@@ -105,7 +105,7 @@ export function injectMessageWithPolicy(
     injectedMessageType,
     injectionType,
     purpose,
-    harnessFlow,
+    pluginFlow,
     chain,
   });
 

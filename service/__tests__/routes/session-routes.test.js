@@ -649,7 +649,7 @@ test("session-routes: workflow session returns summary and execution jsonl from 
     fs.writeFile(
       path.join(workflowDir, "session-summary.json"),
       `${JSON.stringify({
-        schemaVersion: 4,
+        schemaVersion: 5,
         sessionId: "node-s",
         messages: [{ role: "assistant", content: "done" }],
         stats: { messageCount: 1 },

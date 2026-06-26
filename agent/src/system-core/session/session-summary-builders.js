@@ -4,6 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
+import {
+  collectAttachmentRefsFromTransferEnvelopes,
+  compactAttachmentRef,
+  compactTransferEnvelopes,
+  dedupeAttachmentRefs,
+} from "./transfer-attachment-refs.js";
+
 export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 5;
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
 
@@ -104,31 +111,10 @@ function pickPlainObjectFields(source = null, keys = []) {
 
 function pickLightAttachments(message = {}) {
   const metas = Array.isArray(message?.attachments) ? message.attachments : [];
-  return metas.map((item = {}) => {
-    const attachmentId = item?.attachmentId || item?.attachment_id || item?.id || item?.fileId || item?.file_id || "";
-    const mimeType = item?.mimeType || item?.type || item?.mime || "";
-    const attachmentSource = item?.attachmentSource || item?.attachment_source || item?.source || "";
-    const sessionId = item?.sessionId || item?.session_id || item?.backendSessionId || "";
-    const ownerObject = pickPlainObjectFields(item?.owner, ["type", "id", "source"]);
-    return {
-      id: attachmentId,
-      attachmentId,
-      name: item?.name || item?.fileName || item?.filename || "",
-      type: mimeType,
-      mimeType,
-      size: item?.size || item?.bytes || 0,
-      attachmentSource,
-      source: attachmentSource,
-      sessionId,
-      ...(ownerObject ? { owner: ownerObject } : {}),
-      generationSource: item?.generationSource || "",
-      url: item?.url || item?.downloadUrl || "",
-      previewUrl: item?.previewUrl || "",
-      ...(item?.turnScope && typeof item.turnScope === "object" && !Array.isArray(item.turnScope)
-        ? { turnScope: item.turnScope }
-        : {}),
-    };
-  }).filter((item) => item.id || item.attachmentId || item.name || item.url || item.previewUrl);
+  return dedupeAttachmentRefs([
+    ...metas.map((item) => compactAttachmentRef(item)).filter(Boolean),
+    ...collectAttachmentRefsFromTransferEnvelopes(message?.transferEnvelopes),
+  ]);
 }
 
 function tryParseJsonContent(content = "") {
@@ -203,50 +189,8 @@ function pickPlainFields(source = {}, allowedKeys = [], options = {}) {
   return Object.keys(picked).length ? picked : null;
 }
 
-function pickTransferAttachmentMeta(meta = {}) {
-  return pickPlainFields(meta, [
-    "id", "attachmentId", "attachment_id", "fileId", "file_id",
-    "name", "fileName", "filename", "type", "mimeType", "mime",
-    "size", "bytes", "path", "relativePath", "sandboxPath", "sandboxViewPath",
-    "sessionId", "session_id", "backendSessionId", "attachmentSource", "attachment_source", "source",
-    "generationSource", "url", "downloadUrl", "previewUrl", "owner", "turnScope",
-  ], { maxStringLength: 1000 });
-}
-
-function pickTransferPathView(pathView = {}) {
-  return pickPlainFields(pathView, [
-    "displayPath", "sandboxPath", "relativePath", "hostPath",
-  ], { maxStringLength: 1000 });
-}
-
-function pickTransferFile(file = {}) {
-  if (!file || typeof file !== "object" || Array.isArray(file)) return null;
-  const picked = pickPlainFields(file, [
-    "id", "role", "filePath", "path", "relativePath", "sandboxPath", "name", "fileName", "mimeType", "type", "size",
-  ], { maxStringLength: 1000 }) || {};
-  const attachmentMeta = pickTransferAttachmentMeta(file?.attachmentMeta);
-  if (attachmentMeta) picked.attachmentMeta = attachmentMeta;
-  const pathView = pickTransferPathView(file?.pathView);
-  if (pathView) picked.pathView = pathView;
-  return Object.keys(picked).length ? picked : null;
-}
-
 function pickTransferEnvelope(envelope = {}) {
-  if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) return null;
-  const picked = pickPlainFields(envelope, [
-    "protocol", "version", "direction", "transport", "filePath", "path", "relativePath", "sandboxPath",
-    "id", "type", "from", "to", "status", "state", "title", "label", "createdAt", "updatedAt",
-  ], { maxStringLength: 1000 }) || {};
-  const attachmentMeta = pickTransferAttachmentMeta(envelope?.attachmentMeta);
-  if (attachmentMeta) picked.attachmentMeta = attachmentMeta;
-  const pathView = pickTransferPathView(envelope?.pathView);
-  if (pathView) picked.pathView = pathView;
-  const files = (Array.isArray(envelope?.files) ? envelope.files : [])
-    .slice(0, 20)
-    .map((item) => pickTransferFile(item))
-    .filter(Boolean);
-  if (files.length) picked.files = files;
-  return Object.keys(picked).length ? picked : null;
+  return compactTransferEnvelopes([envelope])[0] || null;
 }
 
 function pickLightPayloadTransferEnvelopes(value = []) {
@@ -272,7 +216,7 @@ function pickPayloadSemantic(semantic = {}) {
 function pickPayloadNodeRun(item = {}) {
   if (!item || typeof item !== "object" || Array.isArray(item)) return null;
   // Summary snapshots may include legacy plugin payloads. Keep dialogId/nodeDialogId
-  // here only as read-only history fields; new workflow payloads must write
+  // here only as read-only history fields; new plugin payloads must write
   // dialogProcessId/nodeDialogProcessId instead.
   const picked = pickPlainFields(item, [
     "transition", "stepId", "stepIndex", "actionNodeStateId", "nodeDialogProcessId", "dialogProcessId",

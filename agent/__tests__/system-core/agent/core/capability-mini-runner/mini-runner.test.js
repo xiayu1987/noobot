@@ -162,7 +162,7 @@ test("mini-runner sends guidance analysis response through execution event liste
 
   await invoker({
     purpose: "guidance",
-    harnessFlow: "analysis",
+    pluginFlow: "analysis",
     chain: "auxiliary",
     ctx: {
       sessionId: "s1",
@@ -188,7 +188,7 @@ test("mini-runner sends guidance analysis response through execution event liste
   const thinkingEvent = executionEvents[0];
   assert.equal(thinkingEvent.event, "guidance_analysis_response");
   assert.equal(thinkingEvent.data.purpose, "guidance");
-  assert.equal(thinkingEvent.data.harnessFlow, "analysis");
+  assert.equal(thinkingEvent.data.pluginFlow, "analysis");
   assert.equal(thinkingEvent.data.chain, "auxiliary");
   assert.equal(thinkingEvent.data.type, "guidance_analysis");
   assert.equal(thinkingEvent.data.event, "guidance_analysis");
@@ -212,7 +212,7 @@ test("mini-runner uses harness flow for plugin flow header without changing purp
 
   await invoker({
     purpose: "guidance",
-    harnessFlow: "analysis",
+    pluginFlow: "analysis",
     chain: "auxiliary",
     domain: "guidance",
     ctx: {
@@ -274,7 +274,7 @@ test("mini-runner maps harness flow headers for main and sub workflows", async (
   const cases = [
     { purpose: "planning", domain: "planning", flow: "plugin.planning" },
     { purpose: "guidance", domain: "guidance", flow: "plugin.guidance" },
-    { purpose: "guidance", harnessFlow: "analysis", domain: "guidance", flow: "plugin.analysis" },
+    { purpose: "guidance", pluginFlow: "analysis", domain: "guidance", flow: "plugin.analysis" },
     { purpose: "summary", domain: "guidance", flow: "plugin.summary" },
     { purpose: "planning_revision", domain: "planning", flow: "plugin.planning_revision" },
     { purpose: "planning_refinement", domain: "planning", flow: "plugin.planning_refinement" },
@@ -284,7 +284,7 @@ test("mini-runner maps harness flow headers for main and sub workflows", async (
   for (const item of cases) {
     await invoker({
       purpose: item.purpose,
-      harnessFlow: item.harnessFlow,
+      pluginFlow: item.pluginFlow,
       domain: item.domain,
       ctx: { agentContext: { payload: { tools: { registry: [] } } } },
     });
@@ -321,7 +321,7 @@ test("mini-runner preserves custom flow prefix while using harness flow name", a
 
   await invoker({
     purpose: "semantic",
-    harnessFlow: "semantic_check",
+    pluginFlow: "semantic_check",
     domain: "bot",
     ctx: { agentContext: { payload: { tools: { registry: [] } } } },
   });

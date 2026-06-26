@@ -32,7 +32,7 @@ export function buildHarnessInjectedMessage(
     injectedMessageType = "",
     injectionType = "",
     purpose = "",
-    harnessFlow = "",
+    pluginFlow = "",
     chain = "",
     promptInjectionId = "",
     messageBlockPolicy = null,
@@ -56,9 +56,9 @@ export function buildHarnessInjectedMessage(
   if (normalizedPurpose) {
     message.purpose = normalizedPurpose;
   }
-  const normalizedHarnessFlow = String(harnessFlow || "").trim();
-  if (normalizedHarnessFlow) {
-    message.harnessFlow = normalizedHarnessFlow;
+  const normalizedPluginFlow = String(pluginFlow || "").trim();
+  if (normalizedPluginFlow) {
+    message.pluginFlow = normalizedPluginFlow;
   }
   const normalizedChain = String(chain || "").trim();
   if (normalizedChain) {

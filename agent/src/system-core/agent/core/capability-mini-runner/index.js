@@ -98,24 +98,24 @@ function normalizeHeaderValue(input = "") {
     .slice(0, 120);
 }
 
-function buildHarnessCapabilityLogBase({
+function buildPluginCapabilityLogBase({
   purpose = "",
   domain = "",
-  harnessFlow = "",
+  pluginFlow = "",
   chain = "",
   modelName = "",
   sessionMeta = {},
   ctx = {},
 } = {}) {
   const runtime = resolveRuntime(ctx);
-  const normalizedHarnessFlow = String(harnessFlow || "").trim();
+  const normalizedPluginFlow = String(pluginFlow || "").trim();
   const normalizedChain = String(chain || "").trim();
   return {
     category: "system",
     type: "system",
     purpose: String(purpose || "").trim(),
     domain: String(domain || "").trim(),
-    ...(normalizedHarnessFlow ? { harnessFlow: normalizedHarnessFlow } : {}),
+    ...(normalizedPluginFlow ? { pluginFlow: normalizedPluginFlow } : {}),
     ...(normalizedChain ? { chain: normalizedChain } : {}),
     model: String(modelName || "").trim(),
     sessionId: String(sessionMeta?.sessionId || ""),
@@ -124,15 +124,15 @@ function buildHarnessCapabilityLogBase({
   };
 }
 
-function emitHarnessCapabilityRealtimeLog({ ctx = {}, event = "", text = "", data = {} } = {}) {
+function emitPluginCapabilityRealtimeLog({ ctx = {}, event = "", text = "", data = {} } = {}) {
   const normalizedText = String(text || "").trim();
   if (!event || !normalizedText) return;
   const isGuidanceAnalysisResponse =
-    event === "harness_capability_response" &&
+    event === "plugin_capability_response" &&
     String(data?.purpose || "").trim() === "guidance" &&
-    String(data?.harnessFlow || "").trim() === "analysis" &&
+    String(data?.pluginFlow || "").trim() === "analysis" &&
     String(data?.chain || "").trim() === "auxiliary";
-  if (event === "harness_capability_response") {
+  if (event === "plugin_capability_response") {
     if (!isGuidanceAnalysisResponse) return;
   }
   if (isGuidanceAnalysisResponse) {
@@ -144,7 +144,7 @@ function emitHarnessCapabilityRealtimeLog({ ctx = {}, event = "", text = "", dat
       category: "system",
       type: "guidance_analysis",
       event: "guidance_analysis",
-      rawEvent: "harness_capability_response",
+      rawEvent: "plugin_capability_response",
       text: normalizedText,
       },
     });
@@ -216,7 +216,7 @@ export function createAgentCapabilityModelInvoker({
   return async function capabilityModelInvoker({
     purpose = "",
     domain = "",
-    harnessFlow = "",
+    pluginFlow = "",
     chain = "",
     model: modelName = "",
     locale = "zh-CN",
@@ -248,10 +248,10 @@ export function createAgentCapabilityModelInvoker({
           ? fallbackUserConfig
           : {};
     const normalizedModelName = String(modelName || "").trim();
-    const harnessCapabilityLogBase = buildHarnessCapabilityLogBase({
+    const pluginCapabilityLogBase = buildPluginCapabilityLogBase({
       purpose,
       domain,
-      harnessFlow,
+      pluginFlow,
       chain,
       modelName: normalizedModelName,
       sessionMeta,
@@ -259,7 +259,7 @@ export function createAgentCapabilityModelInvoker({
     });
     const normalizedPurpose = normalizeHeaderValue(purpose || "unknown");
     const normalizedDomain = normalizeHeaderValue(domain || "unknown");
-    const normalizedFlowName = normalizeHeaderValue(harnessFlow || purpose || "unknown");
+    const normalizedFlowName = normalizeHeaderValue(pluginFlow || purpose || "unknown");
     const resolvedHeaderNamespace = normalizeHeaderValue(
       headerNamespaceOverride || headerNamespace || "plugin",
     ).toLowerCase() || "plugin";
@@ -324,12 +324,12 @@ export function createAgentCapabilityModelInvoker({
         signal: runtime?.abortSignal || null,
       });
       const text = normalizeTextContent(ai?.content);
-      emitHarnessCapabilityRealtimeLog({
+      emitPluginCapabilityRealtimeLog({
         ctx,
-        event: "harness_capability_response",
-        text: `Harness 模型返回 / ${purpose || "unknown"}${text ? `\n${text}` : ""}`,
+        event: "plugin_capability_response",
+        text: `Plugin 模型返回 / ${purpose || "unknown"}${text ? `\n${text}` : ""}`,
         data: {
-          ...harnessCapabilityLogBase,
+          ...pluginCapabilityLogBase,
           output: text,
           finishedReason: "tool_binding_disabled",
           turn: 1,
@@ -392,12 +392,12 @@ export function createAgentCapabilityModelInvoker({
         runMessages.push(ai);
       }
       if (!calls.length) {
-        emitHarnessCapabilityRealtimeLog({
+        emitPluginCapabilityRealtimeLog({
           ctx,
-          event: "harness_capability_response",
-          text: `Harness 模型返回 / ${purpose || "unknown"}${text ? `\n${text}` : ""}`,
+          event: "plugin_capability_response",
+          text: `Plugin 模型返回 / ${purpose || "unknown"}${text ? `\n${text}` : ""}`,
           data: {
-            ...harnessCapabilityLogBase,
+            ...pluginCapabilityLogBase,
             output: text,
             finishedReason: "no_tool_call",
             turn,
@@ -502,12 +502,12 @@ export function createAgentCapabilityModelInvoker({
       });
     }
 
-    emitHarnessCapabilityRealtimeLog({
+    emitPluginCapabilityRealtimeLog({
       ctx,
-      event: "harness_capability_response",
-      text: `Harness 模型返回 / ${purpose || "unknown"}${finalizedText ? `\n${finalizedText}` : ""}`,
+      event: "plugin_capability_response",
+      text: `Plugin 模型返回 / ${purpose || "unknown"}${finalizedText ? `\n${finalizedText}` : ""}`,
       data: {
-        ...harnessCapabilityLogBase,
+        ...pluginCapabilityLogBase,
         output: finalizedText,
         finishedReason: finalizedText ? "max_turn_reached_finalized" : "max_turn_reached",
         turn: maxTurnCount,
