@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { SessionTurnPersister } from "../../../src/system-core/bot-manage/execution/turn-persister.js";
 
-test("SessionTurnPersister does not persist intermediate tool transfer envelopes into session turns", async () => {
+test("SessionTurnPersister persists tool transfer envelopes into session turns", async () => {
   const appendedTurns = [];
   const session = {
     appendExecutionLog: async () => {},
@@ -30,10 +30,11 @@ test("SessionTurnPersister does not persist intermediate tool transfer envelopes
   });
 
   assert.equal(appendedTurns.length, 1);
-  assert.equal("transferEnvelopes" in appendedTurns[0], false);
+  assert.equal("transferEnvelopes" in appendedTurns[0], true);
+  assert.equal(appendedTurns[0].transferEnvelopes?.[0]?.protocol, "noobot.semantic-transfer");
 });
 
-test("SessionTurnPersister persists final assistant transfer envelopes without attachment mirror", async () => {
+test("SessionTurnPersister persists final assistant transfer envelopes with attachment mirror", async () => {
   const appendedTurns = [];
   const session = {
     appendExecutionLog: async () => {},
@@ -58,6 +59,7 @@ test("SessionTurnPersister persists final assistant transfer envelopes without a
         role: "assistant",
         type: "message",
         content: "done",
+        attachments: [{ attachmentId: "att-final", name: "final.md" }],
         transferEnvelopes: [envelope],
       },
     ],
@@ -66,12 +68,13 @@ test("SessionTurnPersister persists final assistant transfer envelopes without a
 
   assert.equal(appendedTurns.length, 1);
   assert.equal(appendedTurns[0].attachmentMetas, undefined);
+  assert.deepEqual(appendedTurns[0].attachments, [{ attachmentId: "att-final", name: "final.md" }]);
   assert.equal("transferEnvelopes" in appendedTurns[0], true);
   assert.equal(appendedTurns[0].transferEnvelopes?.[0]?.files?.[0]?.attachmentMeta?.attachmentId, "att-final");
   assert.equal(appendedTurns[0].transferEnvelopes?.length, 1);
 });
 
-test("SessionTurnPersister drops direct-consumed intermediate tool payloads and metas", async () => {
+test("SessionTurnPersister drops direct-consumed intermediate tool payloads and legacy metas without dropping refresh metadata", async () => {
   const appendedTurns = [];
   const executionLogs = [];
   const session = {
@@ -100,6 +103,27 @@ test("SessionTurnPersister drops direct-consumed intermediate tool payloads and 
             generationSource: "doc_to_data_tool",
           },
         ],
+        attachments: [
+          {
+            attachmentId: "parsed_1",
+            name: "input.doc2data.md",
+            generationSource: "doc_to_data_tool",
+          },
+        ],
+        transferEnvelopes: [
+          {
+            protocol: "noobot.semantic-transfer",
+            files: [
+              {
+                attachmentMeta: {
+                  attachmentId: "parsed_1",
+                  generationSource: "doc_to_data_tool",
+                },
+                role: "primary",
+              },
+            ],
+          },
+        ],
         content: JSON.stringify({
           toolName: "doc_to_data",
           ok: true,
@@ -120,13 +144,54 @@ test("SessionTurnPersister drops direct-consumed intermediate tool payloads and 
 
   assert.equal(appendedTurns.length, 1);
   assert.equal(appendedTurns[0].attachmentMetas, undefined);
+  assert.deepEqual(appendedTurns[0].attachments, []);
+  assert.equal(appendedTurns[0].transferEnvelopes?.[0]?.protocol, "noobot.semantic-transfer");
+  assert.equal(appendedTurns[0].transferEnvelopes?.[0]?.files?.[0]?.attachmentMeta?.attachmentId, "parsed_1");
   const persistedContent = JSON.parse(appendedTurns[0].content);
   assert.equal(persistedContent.intermediateConsumedByModel, true);
   assert.equal(persistedContent.sessionPersistence, "summary_only");
   assert.equal("text" in persistedContent, false);
+  assert.equal("text_length" in persistedContent.summary, false);
+  assert.deepEqual(persistedContent.summary, { saved_attachment_count: 1 });
   const fullTurnLog = executionLogs[0]?.data || {};
   assert.equal(fullTurnLog.attachmentMetas, undefined);
+  assert.deepEqual(fullTurnLog.attachments, []);
+  assert.equal(fullTurnLog.transferEnvelopes?.[0]?.files?.[0]?.attachmentMeta?.attachmentId, "parsed_1");
   assert.equal(JSON.parse(fullTurnLog.content).sessionPersistence, "summary_only");
+});
+
+test("SessionTurnPersister hides web_to_data intermediate payloads", async () => {
+  const appendedTurns = [];
+  const session = {
+    appendExecutionLog: async () => {},
+    appendTurn: async (payload = {}) => appendedTurns.push(payload),
+  };
+  const persister = new SessionTurnPersister({ session });
+
+  await persister.appendAgentMessages({
+    userId: "u1",
+    sessionId: "s1",
+    messages: [
+      {
+        role: "tool",
+        type: "tool_result",
+        tool_call_id: "call_web",
+        toolName: "web_to_data",
+        content: JSON.stringify({
+          toolName: "web_to_data",
+          ok: true,
+          text: "large web text".repeat(100),
+          attachmentMetas: [{ attachmentId: "web_1", generationSource: "web_to_data_tool" }],
+        }),
+      },
+    ],
+    dialogProcessId: "dp1",
+  });
+
+  const persistedContent = JSON.parse(appendedTurns[0].content);
+  assert.equal(persistedContent.sessionPersistence, "summary_only");
+  assert.equal("text" in persistedContent, false);
+  assert.equal("text_length" in persistedContent.summary, false);
 });
 
 test("SessionTurnPersister persists canonical plugin metadata without old concrete-plugin fields", async () => {

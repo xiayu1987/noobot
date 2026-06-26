@@ -45,7 +45,7 @@ test("session display summary should keep canonical attachment fields", () => {
     ],
   });
 
-  assert.equal(summary.schemaVersion, 4);
+  assert.equal(summary.schemaVersion, 5);
   assert.equal(summary.messages[0].attachments[0].attachmentId, "att-canonical");
   assert.equal(summary.messages[0].attachments[0].name, "canonical.txt");
   assert.equal(summary.messages[1].attachments[0].attachmentId, "att-legacy");
@@ -472,7 +472,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     const persistedSession = JSON.parse(await readFile(scopeB.sessionFile, "utf8"));
     assert.equal(persistedSession.messages.every((item) => "turnScopeId" in item), true);
     let summary = JSON.parse(await readFile(summaryFile, "utf8"));
-    assert.equal(summary.schemaVersion, 4);
+    assert.equal(summary.schemaVersion, 5);
     assert.equal(summary.sessionId, "B");
     assert.equal(summary.messages.length, 6);
     assert.equal(summary.messages.every((item) => "turnScopeId" in item), true);
@@ -585,14 +585,14 @@ test("session display summary should keep chat view lightweight and rebuild stal
     );
     assert.equal(JSON.stringify(summary).includes("injected secret"), false);
 
-    await writeFile(summaryFile, JSON.stringify({ schemaVersion: 0, sessionId: "wrong" }), "utf8");
+    await writeFile(summaryFile, JSON.stringify({ schemaVersion: 4, sessionId: "B", depth: 2, messages: [] }), "utf8");
     const displayData = await runtime.sessionCrudService.getSessionDisplayData({ userId, sessionId: "B" });
     assert.equal(displayData.summary, true);
     assert.equal(displayData.sessions.length, 1);
     assert.equal(displayData.sessions[0].depth, 2);
     assert.equal(displayData.sessions[0].toolLogSummaries.every((item) => item.depth === 2), true);
     summary = JSON.parse(await readFile(summaryFile, "utf8"));
-    assert.equal(summary.schemaVersion, 4);
+    assert.equal(summary.schemaVersion, 5);
     assert.equal(summary.sessionId, "B");
     assert.equal(summary.depth, 2);
   });

@@ -19,12 +19,14 @@ import {
 const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
   "doc_to_data_tool",
   "media_to_data_tool",
+  "web_to_data_tool",
   "tool_result_overflow",
 ]);
 
 const DIRECT_CONSUMED_INTERMEDIATE_TOOLS = new Set([
   "doc_to_data",
   "media_to_data",
+  "web_to_data",
 ]);
 const LEGACY_ATTACHMENT_MIRROR_KEY = "attachment" + "Metas";
 
@@ -64,6 +66,14 @@ function filterSessionAttachments(attachments = []) {
   );
 }
 
+function filterSessionTransferEnvelopes(transferEnvelopes = []) {
+  // Transfer envelopes are lightweight descriptors required to rebuild
+  // refresh-time attachment/file cards from session.json.  Do not drop them
+  // solely because they originate from a tool; the heavy tool body is
+  // sanitized separately by sanitizeToolContentForSession().
+  return (Array.isArray(transferEnvelopes) ? transferEnvelopes : []).filter(isPlainObject);
+}
+
 function resolveMessageAttachments(message = {}) {
   if (Array.isArray(message?.attachments)) return message.attachments;
   return [];
@@ -78,7 +88,6 @@ function sanitizeToolContentForSession(content = "", explicitToolName = "") {
     hasHiddenIntermediateMeta(parsed);
   if (!shouldDropDirectConsumedPayload) return String(content || "");
 
-  const textLength = String(parsed?.text || parsed?.content || "").length;
   const summary =
     parsed?.summary && typeof parsed.summary === "object" && !Array.isArray(parsed.summary)
       ? parsed.summary
@@ -90,10 +99,7 @@ function sanitizeToolContentForSession(content = "", explicitToolName = "") {
     mode: String(parsed?.mode || "").trim(),
     intermediateConsumedByModel: true,
     sessionPersistence: "summary_only",
-    summary: {
-      ...summary,
-      ...(textLength ? { text_length: Number(summary?.text_length || textLength) } : {}),
-    },
+    summary,
   });
 }
 
@@ -159,13 +165,7 @@ export class SessionTurnPersister {
       role === MESSAGE_ROLE.TOOL
         ? sanitizeToolContentForSession(content, toolName)
         : String(content || "");
-    const shouldPersistTransferPayload = role !== MESSAGE_ROLE.TOOL;
-    const sessionTransferEnvelopes =
-      shouldPersistTransferPayload && Array.isArray(transferEnvelopes)
-        ? transferEnvelopes.filter(isPlainObject)
-        : [];
-    const shouldOmitAttachmentMirror =
-      shouldPersistTransferPayload && sessionTransferEnvelopes.length > 0;
+    const sessionTransferEnvelopes = filterSessionTransferEnvelopes(transferEnvelopes);
     const fullTurnPayload = {
       role,
       content: sessionContent,
@@ -177,7 +177,7 @@ export class SessionTurnPersister {
       turnScopeId: normalizedTurnScopeId,
       tool_calls: Array.isArray(tool_calls) ? tool_calls : [],
       tool_call_id: tool_call_id || "",
-      ...(!shouldOmitAttachmentMirror ? { attachments: sessionAttachments } : {}),
+      attachments: sessionAttachments,
       modelAlias: String(modelAlias || "").trim(),
       modelName: String(modelName || "").trim(),
       summarized: summarized === true,
@@ -246,7 +246,7 @@ export class SessionTurnPersister {
       turnScopeId: normalizedTurnScopeId,
       tool_calls,
       tool_call_id,
-      ...(!shouldOmitAttachmentMirror ? { attachments: sessionAttachments } : {}),
+      attachments: sessionAttachments,
       modelAlias,
       modelName,
       summarized,

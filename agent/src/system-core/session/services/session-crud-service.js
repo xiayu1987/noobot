@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeSelectedConnectors } from "../entities/session-entity.js";
+import { isSessionDisplaySummaryPayload } from "../session-summary-builders.js";
 
 export class SessionCrudService {
   constructor({
@@ -152,7 +153,7 @@ export class SessionCrudService {
       let summary = typeof this.sessionRepo?.readSessionDisplaySummary === "function"
         ? await this.sessionRepo.readSessionDisplaySummary(userId, currentSessionId, currentParentSessionId)
         : null;
-      const needsRebuild = !summary ||
+      const needsRebuild = !isSessionDisplaySummaryPayload(summary, currentSessionId) ||
         Number(summary?.depth || 0) !== Number(depth || 0) ||
         (Array.isArray(summary?.toolLogSummaries) &&
           summary.toolLogSummaries.some((item) => Number(item?.depth || 0) !== Number(depth || 0)));

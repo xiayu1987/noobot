@@ -150,7 +150,7 @@ test("ScopedArtifactPersistenceHelpers persists detached snapshot json files", a
   assert.equal(sessionJson.sessionId, "s1");
   assert.equal(sessionJson.messages[0].content, "done");
   const sessionSummaryJson = JSON.parse(await fs.readFile(persisted.files.sessionSummary, "utf8"));
-  assert.equal(sessionSummaryJson.schemaVersion, 4);
+  assert.equal(sessionSummaryJson.schemaVersion, 5);
   assert.equal(sessionSummaryJson.sessionId, "s1");
   assert.equal(sessionSummaryJson.stats.messageCount, 1);
   assert.equal(await fs.readFile(persisted.files.executionEvents, "utf8"), "");

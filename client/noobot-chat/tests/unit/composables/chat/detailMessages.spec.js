@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applySummaryToolLogs,
   buildChildAttachmentsByParentDialogProcessId,
+  mergeChildTurnAttachmentsIntoRootMessages,
   mergePreservedDetailMessages,
 } from "../../../../src/composables/chat/chatList/detailMessages";
 import { buildViewMessage } from "../../../../src/composables/infra/messageModel";
@@ -187,6 +188,64 @@ describe("detailMessages", () => {
     expect(metasByParent.get("root-dp")?.[0]).toMatchObject({
       attachmentId: "child-transfer-1",
       name: "result.md",
+    });
+  });
+
+  it("keeps child transfer envelope attachments on root assistant after refreshed detail merge", () => {
+    const rootMessages = [
+      {
+        role: RoleEnum.ASSISTANT,
+        dialogProcessId: "root-dp",
+        turnScopeId: "client-turn:root",
+        content: "root answer",
+      },
+    ];
+
+    const mergedMessages = mergeChildTurnAttachmentsIntoRootMessages({
+      rootSessionId: "root-session",
+      rootMessages,
+      sessionDocs: [
+        {
+          sessionId: "root-session",
+          messages: rootMessages,
+        },
+        {
+          sessionId: "child-session",
+          messages: [
+            {
+              role: RoleEnum.ASSISTANT,
+              dialogProcessId: "child-dp",
+              parentDialogProcessId: "root-dp",
+              content: "child generated file",
+              transferEnvelopes: [
+                {
+                  protocol: "noobot.semantic-transfer",
+                  version: 1,
+                  direction: "output",
+                  files: [
+                    {
+                      filePath: "/workspace/result.md",
+                      attachmentMeta: {
+                        attachmentId: "child-transfer-1",
+                        name: "result.md",
+                        mimeType: "text/markdown",
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      makeViewMessage: buildViewMessage,
+    });
+
+    expect(mergedMessages[0].attachments).toHaveLength(1);
+    expect(mergedMessages[0].attachments[0]).toMatchObject({
+      attachmentId: "child-transfer-1",
+      name: "result.md",
+      mimeType: "text/markdown",
     });
   });
 });

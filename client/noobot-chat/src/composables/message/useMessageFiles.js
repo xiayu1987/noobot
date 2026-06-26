@@ -16,7 +16,7 @@ import {
   normalizeTurnMeta,
   shouldCollectAttachmentsFromMessage,
 } from "../infra/messageIdentity";
-import { getMessageTransferAttachments } from "../infra/transferEnvelopes";
+import { getMessageAttachments as resolveRenderableMessageAttachments } from "../infra/messageModel";
 
 function tryParseJsonContent(content = "") {
   try {
@@ -82,15 +82,7 @@ function extractCandidatePathsFromText(content = "") {
 }
 
 function getMessageAttachments(messageItem = {}) {
-  const base = Array.isArray(messageItem?.attachments)
-    ? messageItem.attachments
-    : [];
-  const transferMetas = getMessageTransferAttachments(messageItem);
-  // semantic-transfer envelopes describe transfer/link semantics while
-  // attachments describe attachment storage/display facts.  Keep both
-  // layers coexisting: transfer-derived metas can augment display fields, but
-  // legacy attachments remain the storage/display source of truth.
-  return transferMetas.length ? mergeAttachments(transferMetas, base) : base;
+  return resolveRenderableMessageAttachments(messageItem);
 }
 
 function trim(value = "") {
