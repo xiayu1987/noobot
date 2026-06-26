@@ -249,7 +249,6 @@ export function buildGuidanceAnalysisPromptText({
   return [
     String(marker || "").trim(),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_ANALYSIS_PROMPT_GOAL),
-    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_ANALYSIS_OUTPUT_CONSTRAINT),
   ].filter(Boolean).join("\n");
 }
 
