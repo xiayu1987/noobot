@@ -5,12 +5,13 @@
  */
 
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
+import { compactAttachmentRef, compactTransferEnvelopes, dedupeAttachmentRefs } from "../transfer-attachment-refs.js";
 
 function normalizeTransferEnvelopesFromMessage(message = {}) {
   const seen = new Set();
   const source = Array.isArray(message?.transferEnvelopes) ? message.transferEnvelopes : [];
-  return source.filter((item) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+  return source.map((item) => compactTransferEnvelopes([item])[0]).filter((item) => {
+    if (!item) return false;
     const key = JSON.stringify(item);
     if (seen.has(key)) return false;
     seen.add(key);
@@ -38,7 +39,7 @@ export function normalizeMessageEntity(
   now = () => new Date().toISOString(),
 ) {
   const normalizedAttachments = Array.isArray(message?.attachments)
-    ? message.attachments
+    ? dedupeAttachmentRefs(message.attachments.map((item) => compactAttachmentRef(item)).filter(Boolean))
     : [];
   const normalizedMessage = {
     role: String(message?.role || "").trim(),

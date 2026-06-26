@@ -17,6 +17,15 @@ function normalizeString(value = "") {
   return String(value || "").trim();
 }
 
+function hasCompactAttachmentRef(value = {}) {
+  if (!isPlainObject(value)) return false;
+  return Boolean(
+    normalizeString(value.attachmentId || value.id || value.fileId) ||
+      normalizeString(value.name || value.fileName || value.filename) ||
+      normalizeString(value.path || value.filePath || value.relativePath || value.sandboxPath),
+  );
+}
+
 function isLegacyTransferLikeInput(value = null) {
   if (!value) return false;
   if (isTransferEnvelope(value)) return false;
@@ -78,8 +87,11 @@ function collectTransferEnvelopes(value = null) {
       const key =
         normalizeString(
           envelope?.files?.[0]?.attachmentMeta?.attachmentId ||
+            envelope?.files?.[0]?.attachmentId ||
+            envelope?.files?.[0]?.id ||
             envelope?.attachmentMeta?.attachmentId ||
             envelope?.files?.[0]?.filePath ||
+            envelope?.files?.[0]?.path ||
             envelope?.filePath,
         ) || JSON.stringify(envelope);
       if (seen.has(key)) continue;
@@ -118,6 +130,8 @@ export function getTransferDisplayPath(value = null, options = {}) {
   return firstNormalizedString(
     pathView?.displayPath,
     file?.filePath,
+    file?.path,
+    file?.sandboxPath,
     resolveTransferFilePath({
       attachmentMeta,
       path: pathView?.hostPath || "",
@@ -138,6 +152,10 @@ export function getTransferAttachmentMetas(value = null, { runtime = {} } = {}) 
       ? envelope.files.map((item = {}) => item?.attachmentMeta).filter(isPlainObject)
       : [];
     if (fromFiles.length) return fromFiles;
+    const compactFiles = Array.isArray(envelope.files)
+      ? envelope.files.filter(hasCompactAttachmentRef)
+      : [];
+    if (compactFiles.length) return compactFiles;
     return isPlainObject(envelope.attachmentMeta) ? [envelope.attachmentMeta] : [];
   });
   return fromEnvelopes;

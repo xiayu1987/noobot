@@ -48,7 +48,7 @@ test("normalizeSseLogEvent maps guidance analysis response to thinking and prese
     event: "guidance_analysis_response",
     data: {
       purpose: "guidance",
-      harnessFlow: "analysis",
+      pluginFlow: "analysis",
       chain: "auxiliary",
       dialogProcessId: "dp1",
       sessionId: "s1",
@@ -65,7 +65,7 @@ test("normalizeSseLogEvent maps guidance analysis response to thinking and prese
   assert.equal(normalized.data.rawEvent, "guidance_analysis_response");
   assert.equal(normalized.data.text, "analysis model output");
   assert.equal(normalized.data.purpose, "guidance");
-  assert.equal(normalized.data.harnessFlow, "analysis");
+  assert.equal(normalized.data.pluginFlow, "analysis");
   assert.equal(normalized.data.chain, "auxiliary");
   assert.equal(normalized.data.dialogProcessId, "dp1");
   assert.equal(normalized.data.sessionId, "s1");

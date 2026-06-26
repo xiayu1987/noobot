@@ -80,7 +80,16 @@ function isSummaryRelayMessage(message = {}) {
   ).trim();
   if (injectedType === "separate_model_relay:summary") return true;
   const content = String(message?.content ?? message?.lc_kwargs?.content ?? "").trim();
-  return /^\[(?:harness:summary|来自harness外部模型输出\/summary|from harness external model output\/summary)\]/i.test(content);
+  const relayPrefixes = [LOCALE.ZH_CN, LOCALE.EN_US]
+    .map((locale) =>
+      translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SEPARATE_MODEL_PREFIX, {
+        purpose: "summary",
+      }),
+    )
+    .filter(Boolean);
+  return content.startsWith("[harness:summary]") ||
+    relayPrefixes.some((prefix) => content.startsWith(prefix)) ||
+    /^\[from harness external model output\/summary\]/i.test(content);
 }
 
 function filterHistoricalSummaryRelayMessages(messages = []) {

@@ -52,6 +52,68 @@ test("session display summary should keep canonical attachment fields", () => {
   assert.equal(summary.stats.attachmentCount, 2);
 });
 
+test("session display summary derives attachments from transfer envelopes", () => {
+  const summary = buildSessionDisplaySummary({
+    sessionId: "s-transfer-attachments",
+    messages: [
+      {
+        role: "assistant",
+        content: "transfer only attachment",
+        transferEnvelopes: [
+          {
+            protocol: "noobot.semantic-transfer",
+            version: 1,
+            direction: "output",
+            transport: "file",
+            filePath: "/workspace/result.md",
+            attachmentMeta: {
+              attachmentId: "att-transfer-1",
+              sessionId: "s-transfer-attachments",
+              attachmentSource: "model",
+              name: "result.md",
+              mimeType: "text/markdown",
+              size: 44,
+              relativePath: "runtime/result.md",
+              owner: { type: "plugin", id: "harness-plugin" },
+            },
+            files: [
+              {
+                role: "primary",
+                filePath: "/workspace/result.md",
+                pathView: { sandboxPath: "/sandbox/result.md" },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(summary.stats.attachmentCount, 1);
+  assert.deepEqual(summary.messages[0].attachments, [
+    {
+      id: "att-transfer-1",
+      attachmentId: "att-transfer-1",
+      name: "result.md",
+      type: "text/markdown",
+      mimeType: "text/markdown",
+      size: 44,
+      attachmentSource: "model",
+      source: "model",
+      sessionId: "s-transfer-attachments",
+      relativePath: "runtime/result.md",
+      sandboxPath: "/sandbox/result.md",
+      path: "/workspace/result.md",
+      owner: { type: "plugin", id: "harness-plugin" },
+      role: "primary",
+    },
+  ]);
+  assert.equal(summary.messages[0].transferEnvelopes[0].files[0].attachmentId, "att-transfer-1");
+  assert.equal(summary.messages[0].transferEnvelopes[0].files[0].owner.type, "plugin");
+  assert.equal("attachmentMeta" in summary.messages[0].transferEnvelopes[0].files[0], false);
+  assert.equal("pathView" in summary.messages[0].transferEnvelopes[0].files[0], false);
+});
+
 test("session artifact persistence should normalize attachment fields before writing", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const sessionDir = path.join(workspaceRoot, "u1", "runtime", "session", "s-attachments");
@@ -480,7 +542,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(summary.stats.displayMessageCount, 6);
     assert.equal(summary.stats.injectedMessageCount, 1);
     assert.equal(summary.stats.thinkingMessageCount, 2);
-    assert.equal(summary.stats.attachmentCount, 2);
+    assert.equal(summary.stats.attachmentCount, 3);
     assert.equal(summary.stats.toolLogCount, 5);
     assert.equal(summary.stats.displayToolLogCount, 1);
     assert.equal(summary.stats.hasToolDetails, true);
@@ -509,12 +571,6 @@ test("session display summary should keep chat view lightweight and rebuild stal
         type: "text/plain",
         mimeType: "text/plain",
         size: 12,
-        attachmentSource: "",
-        source: "",
-        sessionId: "",
-        generationSource: "",
-        url: "",
-        previewUrl: "",
       },
     ]);
     const assistantMessage = summary.messages.find((item) => item.id === "a1");
@@ -540,8 +596,6 @@ test("session display summary should keep chat view lightweight and rebuild stal
         sessionId: "B",
         owner: { type: "plugin", id: "harness-plugin" },
         generationSource: "harness_plan",
-        url: "",
-        previewUrl: "",
       },
     ]);
     const toolOnlyAssistantMessage = summary.messages.find((item) => item.id === "tool-display-assistant");
@@ -571,16 +625,20 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal("transferEnvelopes" in workflowMessage, true);
     assert.equal(Array.isArray(workflowMessage.transferEnvelopes), true);
     assert.equal(workflowMessage.transferEnvelopes[0].protocol, "noobot.semantic-transfer");
-    assert.equal(workflowMessage.transferEnvelopes[0].filePath, "/workspace/u1/runtime/workflow-result.md");
-    assert.equal(workflowMessage.transferEnvelopes[0].files[0].attachmentMeta.attachmentId, "att-workflow-1");
-    assert.equal(workflowMessage.transferEnvelopes[0].files[0].pathView.sandboxPath, "/sandbox/u1/runtime/workflow-result.md");
+    assert.equal("filePath" in workflowMessage.transferEnvelopes[0], false);
+    assert.equal(workflowMessage.transferEnvelopes[0].files[0].attachmentId, "att-workflow-1");
+    assert.equal(workflowMessage.transferEnvelopes[0].files[0].sandboxPath, "/sandbox/u1/runtime/workflow-result.md");
+    assert.equal(workflowMessage.attachments[0].attachmentId, "att-workflow-1");
+    assert.equal(workflowMessage.attachments[0].relativePath, "runtime/workflow-result.md");
     assert.equal("payload" in workflowMessage.transferEnvelopes[0], false);
+    assert.equal("attachmentMeta" in workflowMessage.transferEnvelopes[0].files[0], false);
+    assert.equal("pathView" in workflowMessage.transferEnvelopes[0].files[0], false);
     assert.equal(
-      workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].nodeResultTransferEnvelopes[0].files[0].attachmentMeta.attachmentId,
+      workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].nodeResultTransferEnvelopes[0].files[0].attachmentId,
       "att-workflow-1",
     );
     assert.equal(
-      workflowMessage.pluginMeta.payload.nodeSessions[0].transferEnvelopes[0].files[0].attachmentMeta.attachmentId,
+      workflowMessage.pluginMeta.payload.nodeSessions[0].transferEnvelopes[0].files[0].attachmentId,
       "att-workflow-1",
     );
     assert.equal(JSON.stringify(summary).includes("injected secret"), false);

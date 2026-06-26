@@ -189,12 +189,12 @@ test("runAgentRuntimeHook forwards harness capability response through injected 
   };
   const runtime = { hookManager: manager };
   manager.on("runtime_point", async (ctx = {}) => {
-    ctx.emitHookClientEvent("harness_capability_response", {
+    ctx.emitHookClientEvent("plugin_capability_response", {
       purpose: "guidance",
-      harnessFlow: "analysis",
+      pluginFlow: "analysis",
       chain: "auxiliary",
       output: "guidance result",
-      text: "Harness 模型返回 / guidance\nguidance result",
+      text: "Plugin 模型返回 / guidance\nguidance result",
       runtime: { secret: "hidden" },
       agentContext: { secret: "hidden" },
       extraUnsafe: "hidden",
@@ -208,10 +208,10 @@ test("runAgentRuntimeHook forwards harness capability response through injected 
     eventListener,
   });
 
-  const harnessEvent = events.find((evt) => evt?.event === "harness_capability_response");
+  const harnessEvent = events.find((evt) => evt?.event === "plugin_capability_response");
   assert.ok(harnessEvent);
   assert.equal(harnessEvent?.data?.purpose, "guidance");
-  assert.equal(harnessEvent?.data?.harnessFlow, "analysis");
+  assert.equal(harnessEvent?.data?.pluginFlow, "analysis");
   assert.equal(harnessEvent?.data?.chain, "auxiliary");
   assert.equal(harnessEvent?.data?.output, "guidance result");
   assert.equal(Object.hasOwn(harnessEvent?.data || {}, "runtime"), false);

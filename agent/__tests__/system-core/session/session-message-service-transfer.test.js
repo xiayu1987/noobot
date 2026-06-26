@@ -37,6 +37,7 @@ test("SessionMessageService.appendTurn persists transferEnvelopes", async () => 
         attachmentMeta: {
           attachmentId: "att_1",
           name: "a.md",
+          owner: { type: "plugin", id: "harness-plugin" },
         },
       },
     ],
@@ -54,5 +55,23 @@ test("SessionMessageService.appendTurn persists transferEnvelopes", async () => 
   const lastMessage = saved[0]?.messages?.[0];
   assert.equal("attachmentMetas" in lastMessage, false);
   assert.equal("transferEnvelopes" in lastMessage, true);
-  assert.deepEqual(lastMessage?.transferEnvelopes, [envelope]);
+  assert.deepEqual(lastMessage?.transferEnvelopes, [
+    {
+      protocol: "noobot.semantic-transfer",
+      version: 1,
+      direction: "output",
+      transport: "file",
+      files: [
+        {
+          id: "att_1",
+          attachmentId: "att_1",
+          name: "a.md",
+          path: "/workspace/a.md",
+          owner: { type: "plugin", id: "harness-plugin" },
+        },
+      ],
+    },
+  ]);
+  assert.equal("attachmentMeta" in lastMessage.transferEnvelopes[0], false);
+  assert.equal("attachmentMeta" in lastMessage.transferEnvelopes[0].files[0], false);
 });

@@ -22,13 +22,19 @@ test("normalizeMessageEntity does not persist heavy raw model fields", () => {
   assert.equal("modelResponseMetadata" in normalized, false);
 });
 
-test("normalizeMessageEntity persists transferEnvelopes", () => {
+test("normalizeMessageEntity persists compact transferEnvelopes", () => {
   const envelope = {
     protocol: "noobot.semantic-transfer",
     version: 1,
     direction: "output",
     transport: "file",
     filePath: "/workspace/a.md",
+    attachmentMeta: {
+      attachmentId: "att_1",
+      name: "a.md",
+      owner: { type: "plugin", id: "harness-plugin", extra: "drop" },
+    },
+    pathView: { sandboxPath: "/sandbox/a.md", hostPath: "/host/a.md" },
   };
   const normalized = normalizeMessageEntity({
     role: "assistant",
@@ -36,7 +42,26 @@ test("normalizeMessageEntity persists transferEnvelopes", () => {
     transferEnvelopes: [envelope],
   });
   assert.equal("transferEnvelopes" in normalized, true);
-  assert.deepEqual(normalized.transferEnvelopes, [envelope]);
+  assert.deepEqual(normalized.transferEnvelopes, [
+    {
+      protocol: "noobot.semantic-transfer",
+      version: 1,
+      direction: "output",
+      transport: "file",
+      files: [
+        {
+          id: "att_1",
+          attachmentId: "att_1",
+          name: "a.md",
+          path: "/workspace/a.md",
+          sandboxPath: "/sandbox/a.md",
+          owner: { type: "plugin", id: "harness-plugin" },
+        },
+      ],
+    },
+  ]);
+  assert.equal("attachmentMeta" in normalized.transferEnvelopes[0], false);
+  assert.equal("pathView" in normalized.transferEnvelopes[0], false);
 });
 
 test("normalizeMessageEntity ignores non-array transferEnvelopes", () => {
@@ -64,16 +89,32 @@ test("normalizeMessageEntity omits empty attachments", () => {
   assert.equal("attachments" in withEmptyAttachments, false);
 });
 
-test("normalizeMessageEntity preserves non-empty attachments", () => {
-  const attachments = [{ attachmentId: "att_1", filename: "a.txt" }];
+test("normalizeMessageEntity preserves compact non-empty attachments", () => {
+  const attachments = [{
+    attachmentId: "att_1",
+    filename: "a.txt",
+    mimeType: "text/plain",
+    raw: "drop",
+    owner: { type: "plugin", id: "harness-plugin", extra: "drop" },
+  }];
   const normalized = normalizeMessageEntity({
     role: "user",
     content: "see attachment",
     attachments,
   });
 
-  assert.deepEqual(normalized.attachments, attachments);
+  assert.deepEqual(normalized.attachments, [
+    {
+      id: "att_1",
+      attachmentId: "att_1",
+      name: "a.txt",
+      type: "text/plain",
+      mimeType: "text/plain",
+      owner: { type: "plugin", id: "harness-plugin" },
+    },
+  ]);
   assert.equal("attachmentMetas" in normalized, false);
+  assert.equal("raw" in normalized.attachments[0], false);
 });
 
 test("normalizeMessageEntity ignores legacy attachment mirror fields", () => {

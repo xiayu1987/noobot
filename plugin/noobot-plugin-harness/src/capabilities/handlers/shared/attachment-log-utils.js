@@ -387,7 +387,7 @@ export function relaySeparateModelOutputAsUserMessage(
   {
     locale = LOCALE.ZH_CN,
     purpose = "",
-    harnessFlow = undefined,
+    pluginFlow = undefined,
     chain = undefined,
     content = "",
     dedupe = false,
@@ -401,7 +401,7 @@ export function relaySeparateModelOutputAsUserMessage(
   const prefix = translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SEPARATE_MODEL_PREFIX, {
     purpose: String(purpose || "").trim() || "unknown",
   });
-  const normalizedHarnessFlow = String(harnessFlow || "").trim() || undefined;
+  const normalizedPluginFlow = String(pluginFlow || "").trim() || undefined;
   const normalizedChain = String(chain || "").trim() || undefined;
   const relayAttachments = Array.isArray(attachments) ? attachments : [];
   const resolvedTransferPayload = getTransferPayloadFromAttachments(
@@ -414,7 +414,7 @@ export function relaySeparateModelOutputAsUserMessage(
     content: `${prefix}\n${text}`,
     injectedMessageType: `separate_model_relay:${String(purpose || "unknown").trim() || "unknown"}`,
     purpose: String(purpose || "").trim() || undefined,
-    harnessFlow: normalizedHarnessFlow,
+    pluginFlow: normalizedPluginFlow,
     chain: normalizedChain,
     ...resolvedTransferPayload,
     injectAt: "append",
@@ -453,13 +453,13 @@ export function relaySeparateModelOutputAsUserMessage(
 export async function appendCapabilityModelTraceLog(
   ctx = {},
   meta = {},
-  { domain = "", purpose = "", harnessFlow = undefined, chain = undefined, response = null } = {},
+  { domain = "", purpose = "", pluginFlow = undefined, chain = undefined, response = null } = {},
 ) {
   const traces = Array.isArray(response?.traces) ? response.traces : [];
   if (!traces.length) return false;
   const detail = {
     purpose: String(purpose || response?.purpose || "").trim() || undefined,
-    harnessFlow: String(harnessFlow || response?.harnessFlow || "").trim() || undefined,
+    pluginFlow: String(pluginFlow || response?.pluginFlow || "").trim() || undefined,
     chain: String(chain || response?.chain || "").trim() || undefined,
     finishedReason: response?.finishedReason || undefined,
     turn: response?.turn || undefined,

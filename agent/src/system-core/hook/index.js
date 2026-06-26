@@ -53,11 +53,11 @@ const HOOK_PLUGIN_PROGRESS_ALLOWED_KEYS = new Set([
   "error",
 ]);
 
-const HARNESS_CAPABILITY_RESPONSE_ALLOWED_KEYS = new Set([
+const PLUGIN_CAPABILITY_RESPONSE_ALLOWED_KEYS = new Set([
   "event",
   "category",
   "type",
-  "harnessFlow",
+  "pluginFlow",
   "chain",
   "purpose",
   "domain",
@@ -403,12 +403,12 @@ function normalizeHookPluginProgressData(data = {}) {
   return output;
 }
 
-function normalizeHarnessCapabilityResponseData(data = {}) {
+function normalizePluginCapabilityResponseData(data = {}) {
   const input = data && typeof data === "object" ? data : {};
   const output = {};
   for (const [key, value] of Object.entries(input)) {
     const normalizedKey = String(key || "").trim();
-    if (!HARNESS_CAPABILITY_RESPONSE_ALLOWED_KEYS.has(normalizedKey)) continue;
+    if (!PLUGIN_CAPABILITY_RESPONSE_ALLOWED_KEYS.has(normalizedKey)) continue;
     output[normalizedKey] = sanitizeForHookClient(value);
   }
   return output;
@@ -417,8 +417,8 @@ function normalizeHarnessCapabilityResponseData(data = {}) {
 function createHookClientEmitter({ listener = null, point = "", runtime = {} } = {}) {
   return (event = "", data = {}) => {
     const name = String(event || "").trim() || "hook_progress";
-    if (name === "harness_capability_response") {
-      emitEvent(listener, name, normalizeHarnessCapabilityResponseData(data));
+    if (name === "plugin_capability_response") {
+      emitEvent(listener, name, normalizePluginCapabilityResponseData(data));
       return;
     }
     if (!isHookPluginProgressTraceEnabled(runtime) && !isImportantHookPluginProgress(name, data)) {

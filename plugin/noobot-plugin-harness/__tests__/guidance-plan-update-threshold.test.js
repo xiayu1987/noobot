@@ -349,7 +349,7 @@ test("separate_model analysis uses aligned agent context then user request and u
   await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
 
   assert.equal(capturedPayload?.purpose, "guidance");
-  assert.equal(capturedPayload?.harnessFlow, "analysis");
+  assert.equal(capturedPayload?.pluginFlow, "analysis");
   assert.equal(capturedPayload?.chain, "auxiliary");
   assert.deepEqual(
     capturedPayload.messages.slice(0, 2).map((item = {}) => [item.role, item.content]),
@@ -375,7 +375,7 @@ test("separate_model analysis uses aligned agent context then user request and u
     ctx.messages.some((item = {}) =>
       String(item?.injectedMessageType || "").includes("guidance") &&
       item?.purpose === "guidance" &&
-      item?.harnessFlow === "analysis" &&
+      item?.pluginFlow === "analysis" &&
       item?.chain === "auxiliary" &&
       String(item?.content || "").includes("疑点"),
     ),
@@ -405,7 +405,7 @@ test("separate_model guidance pending triggers guidance invoker without analysis
   await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
 
   assert.deepEqual(invocations.map((item = {}) => item.purpose), ["guidance"]);
-  assert.equal(invocations[0]?.harnessFlow, undefined);
+  assert.equal(invocations[0]?.pluginFlow, undefined);
   assert.equal(invocations[0]?.chain, undefined);
   assert.equal(agentContext.payload.harness.state.pending.guidance, null);
   assert.equal(agentContext.payload.harness.state.counters.consecutiveToolFailures, 0);
@@ -413,7 +413,7 @@ test("separate_model guidance pending triggers guidance invoker without analysis
   assert.equal(
     ctx.messages.some((item = {}) =>
       item?.purpose === "guidance" &&
-      item?.harnessFlow === undefined &&
+      item?.pluginFlow === undefined &&
       String(item?.content || "").includes("建议先确认失败工具"),
     ),
     true,
@@ -656,7 +656,7 @@ test("separate_model simultaneous plan update follows up with analysis before su
         if (payload.purpose === "planning_revision") {
           return { content: "1. 主任务\n2. 补充执行" };
         }
-        if (payload.harnessFlow === "analysis") {
+        if (payload.pluginFlow === "analysis") {
           return { content: "疑点：计划更新后还有待确认项。" };
         }
         return { content: "小结完成" };
@@ -668,14 +668,14 @@ test("separate_model simultaneous plan update follows up with analysis before su
   await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
 
   assert.deepEqual(
-    invocations.map((item = {}) => item.harnessFlow || item.purpose),
+    invocations.map((item = {}) => item.pluginFlow || item.purpose),
     ["planning_revision", "analysis"],
   );
   assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
   assert.equal(agentContext.payload.harness.state.pending.analysis, false);
   assert.equal(agentContext.payload.harness.state.pending.summary, true);
   assert.equal(
-    ctx.messages.some((item = {}) => item?.harnessFlow === "analysis" && String(item?.content || "").includes("疑点")),
+    ctx.messages.some((item = {}) => item?.pluginFlow === "analysis" && String(item?.content || "").includes("疑点")),
     true,
   );
   assert.equal(

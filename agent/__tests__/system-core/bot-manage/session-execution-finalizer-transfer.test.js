@@ -47,6 +47,7 @@ test("SessionExecutionFinalizer promotes semantic-transfer attachments as transf
               mimeType: "image/png",
               path: "/attachments/image.png",
               generationSource: "semantic_transfer_tool_output",
+              owner: { type: "plugin", id: "harness-plugin", extra: "drop" },
             },
           ],
         },
@@ -62,13 +63,15 @@ test("SessionExecutionFinalizer promotes semantic-transfer attachments as transf
   assert.equal("transferEnvelopes" in finalAssistant, true);
   assert.equal(Array.isArray(finalAssistant.transferEnvelopes), true);
   assert.equal(
-    finalAssistant.transferEnvelopes[0]?.files?.[0]?.attachmentMeta?.attachmentId,
+    finalAssistant.transferEnvelopes[0]?.files?.[0]?.attachmentId,
     "att-generated",
   );
+  assert.equal(finalAssistant.transferEnvelopes[0]?.files?.[0]?.owner?.type, "plugin");
+  assert.equal("attachmentMeta" in finalAssistant.transferEnvelopes[0].files[0], false);
   assert.equal(appendedMessages.find((item = {}) => item.role === "assistant")?.attachmentMetas, undefined);
 });
 
-test("SessionExecutionFinalizer does not promote ordinary generated attachments into semantic-transfer envelopes", async () => {
+test("SessionExecutionFinalizer promotes ordinary generated attachments to final assistant attachments", async () => {
   const appendedMessages = [];
   const finalizer = new SessionExecutionFinalizer({
     session: {
@@ -112,6 +115,8 @@ test("SessionExecutionFinalizer does not promote ordinary generated attachments 
               mimeType: "image/png",
               path: "/attachments/image.png",
               generationSource: "multimodal_generate_tool",
+              owner: { type: "plugin", id: "harness-plugin", extra: "drop" },
+              raw: "drop",
             },
           ],
         },
@@ -124,6 +129,12 @@ test("SessionExecutionFinalizer does not promote ordinary generated attachments 
   const finalAssistant = result.messages.find((item = {}) => item.role === "assistant") || {};
   assert.equal("transferEnvelopes" in finalAssistant, false);
   assert.equal(finalAssistant.attachmentMetas, undefined);
-  assert.equal(finalAssistant.attachments, undefined);
+  assert.equal(finalAssistant.attachments?.[0]?.attachmentId, "att-ordinary");
+  assert.equal(finalAssistant.attachments?.[0]?.owner?.type, "plugin");
+  assert.equal("raw" in finalAssistant.attachments[0], false);
   assert.equal(appendedMessages.find((item = {}) => item.role === "assistant")?.transferEnvelopes, undefined);
+  assert.equal(
+    appendedMessages.find((item = {}) => item.role === "assistant")?.attachments?.[0]?.attachmentId,
+    "att-ordinary",
+  );
 });
