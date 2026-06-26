@@ -22,8 +22,10 @@ import {
   PLUGIN_MODEL_HEADER_KEY,
 } from "../../../model/headers/plugin-headers.js";
 import { resolveBoundToolModelRequestOverrides } from "../turn/tool-choice-strategy.js";
+import { resolveHookClientEmitter } from "../../../hook/index.js";
 
 export const MAX_MINI_RUNNER_TOOL_TURNS = 5;
+export const GUIDANCE_ANALYSIS_RESPONSE_EVENT = "guidance_analysis_response";
 
 function normalizeTextContent(content = "") {
   if (typeof content === "string") return content;
@@ -99,18 +101,22 @@ function normalizeHeaderValue(input = "") {
 function buildHarnessCapabilityLogBase({
   purpose = "",
   domain = "",
+  harnessFlow = "",
+  chain = "",
   modelName = "",
   sessionMeta = {},
   ctx = {},
 } = {}) {
   const runtime = resolveRuntime(ctx);
+  const normalizedHarnessFlow = String(harnessFlow || "").trim();
+  const normalizedChain = String(chain || "").trim();
   return {
     category: "system",
     type: "system",
-    harnessFlow: "analysis",
-    chain: "auxiliary",
     purpose: String(purpose || "").trim(),
     domain: String(domain || "").trim(),
+    ...(normalizedHarnessFlow ? { harnessFlow: normalizedHarnessFlow } : {}),
+    ...(normalizedChain ? { chain: normalizedChain } : {}),
     model: String(modelName || "").trim(),
     sessionId: String(sessionMeta?.sessionId || ""),
     parentSessionId: String(sessionMeta?.parentSessionId || ""),
@@ -129,28 +135,28 @@ function emitHarnessCapabilityRealtimeLog({ ctx = {}, event = "", text = "", dat
   if (event === "harness_capability_response") {
     if (!isGuidanceAnalysisResponse) return;
   }
-  const emitClientEvent =
-    typeof ctx?.emitHookClientEvent === "function"
-      ? ctx.emitHookClientEvent
-      : typeof ctx?.hookClientChannel?.emit === "function"
-        ? (name, payload) => ctx.hookClientChannel.emit(name, payload)
-        : null;
-  if (!emitClientEvent) return;
-  emitClientEvent(event, {
-    ...data,
-    event,
-    text: normalizedText,
-  });
   if (isGuidanceAnalysisResponse) {
-    emitClientEvent("thinking", {
+    const runtime = resolveRuntime(ctx);
+    runtime?.eventListener?.onEvent?.({
+      event: GUIDANCE_ANALYSIS_RESPONSE_EVENT,
+      data: {
       ...data,
       category: "system",
       type: "guidance_analysis",
       event: "guidance_analysis",
       rawEvent: "harness_capability_response",
       text: normalizedText,
+      },
     });
+    return;
   }
+  const emitClientEvent = resolveHookClientEmitter(ctx);
+  if (!emitClientEvent) return;
+  emitClientEvent(event, {
+    ...data,
+    event,
+    text: normalizedText,
+  });
 }
 
 export function createAgentCapabilityModelInvoker({
@@ -210,6 +216,8 @@ export function createAgentCapabilityModelInvoker({
   return async function capabilityModelInvoker({
     purpose = "",
     domain = "",
+    harnessFlow = "",
+    chain = "",
     model: modelName = "",
     locale = "zh-CN",
     prompt = "",
@@ -243,18 +251,21 @@ export function createAgentCapabilityModelInvoker({
     const harnessCapabilityLogBase = buildHarnessCapabilityLogBase({
       purpose,
       domain,
+      harnessFlow,
+      chain,
       modelName: normalizedModelName,
       sessionMeta,
       ctx,
     });
     const normalizedPurpose = normalizeHeaderValue(purpose || "unknown");
     const normalizedDomain = normalizeHeaderValue(domain || "unknown");
+    const normalizedFlowName = normalizeHeaderValue(harnessFlow || purpose || "unknown");
     const resolvedHeaderNamespace = normalizeHeaderValue(
       headerNamespaceOverride || headerNamespace || "plugin",
     ).toLowerCase() || "plugin";
     const resolvedFlowPrefix = normalizeHeaderValue(
       flowPrefixOverride || flowPrefix || resolvedHeaderNamespace,
-    ).toLowerCase() || resolvedHeaderNamespace;
+    ) || resolvedHeaderNamespace;
     const isCanonicalPluginNamespace = resolvedHeaderNamespace === "plugin";
     const namespaceHeaderKeys = isCanonicalPluginNamespace
       ? PLUGIN_MODEL_HEADER_KEY
@@ -268,7 +279,7 @@ export function createAgentCapabilityModelInvoker({
     const customPurposeHeaderKey = namespaceHeaderKeys.PURPOSE;
     const customDomainHeaderKey = namespaceHeaderKeys.DOMAIN;
     const customSessionHeaderKey = namespaceHeaderKeys.SESSION_ID;
-    const flowValue = `${resolvedFlowPrefix}.${normalizedPurpose}`;
+    const flowValue = `${resolvedFlowPrefix}.${normalizedFlowName}`;
     const resolvedSessionId = String(sessionMeta?.sessionId || "").trim();
     const additionalHeaders = {
       [customFlowHeaderKey]: flowValue,

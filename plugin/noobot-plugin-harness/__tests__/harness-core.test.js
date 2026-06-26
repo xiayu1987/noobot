@@ -199,7 +199,7 @@ test("harness plugin writes manifest, events and context snapshot", async () => 
   assert.equal(snapshot.payload.historyMessageCount, 1);
 });
 
-test("harness plugin emits hook progress via client channel when available", async () => {
+test("harness plugin emits hook progress via client emitter when available", async () => {
   const hookManager = createAgentHookManager();
   const channelEvents = [];
   registerNoobotPlugin(
@@ -942,6 +942,14 @@ test("harness plugin exposes capability handler skeleton and hook mapping in man
   );
   assert.equal(
     manifest?.capabilities?.hookMap?.acceptance?.includes("after_llm_call"),
+    true,
+  );
+  assert.equal(
+    manifest?.capabilities?.hookMap?.guidance?.includes("after_llm_call"),
+    true,
+  );
+  assert.equal(
+    manifest?.capabilities?.hookMap?.guidance?.includes("after_tool_calls"),
     true,
   );
 });

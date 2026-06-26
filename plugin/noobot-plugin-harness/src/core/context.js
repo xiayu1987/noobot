@@ -7,6 +7,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { createCapabilityRuntime } from "../capabilities/runtime.js";
+import { resolveHookClientEmitter } from "../../../../agent/src/system-core/hook/client-channel.js";
 import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/runtime/dialog-process-id.js";
 import { safeId } from "../data/record-builders.js";
 import { DEFAULT_OPTIONS, normalizeOptions } from "./options.js";
@@ -162,15 +163,7 @@ export async function ensureRunDir(paths) {
   return true;
 }
 
-export function resolveHookClientEmitter(ctx = {}) {
-  if (typeof ctx?.emitHookClientEvent === "function") {
-    return (event, data) => ctx.emitHookClientEvent(event, data);
-  }
-  if (ctx?.hookClientChannel && typeof ctx.hookClientChannel.emit === "function") {
-    return (event, data) => ctx.hookClientChannel.emit(event, data);
-  }
-  return null;
-}
+export { resolveHookClientEmitter };
 
 export function isPrimaryExecutionScope(ctx = {}) {
   const scope = String(ctx?.executionScope || "").trim().toLowerCase();
@@ -187,7 +180,7 @@ export function emitHarnessHookProgress(ctx = {}, event = "", data = {}) {
       ...(data && typeof data === "object" ? data : {}),
     });
   } catch {
-    // client channel failures should not interrupt main flow
+    // client emitter failures should not interrupt main flow
   }
 }
 

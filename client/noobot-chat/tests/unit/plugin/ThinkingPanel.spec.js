@@ -246,6 +246,70 @@ describe("ThinkingPanel", () => {
     expect(wrapper.find("button").text()).toContain("1");
   });
 
+  it("renders latest guidance analysis above execution logs without mixing it into rolling tool logs", () => {
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: true,
+      processRealtimeLogs: [
+        {
+          event: "guidance_analysis",
+          type: "guidance_analysis",
+          rawEvent: "guidance_analysis_response",
+          purpose: "guidance",
+          harnessFlow: "analysis",
+          chain: "auxiliary",
+          output: "old analysis\nline two",
+          text: "old analysis\nline two",
+        },
+        { event: "tool_call", type: "tool_call", text: "read_file" },
+        {
+          event: "guidance_analysis",
+          type: "guidance_analysis",
+          rawEvent: "guidance_analysis_response",
+          purpose: "guidance",
+          harnessFlow: "analysis",
+          chain: "auxiliary",
+          output: "latest analysis\nkeep newline",
+          text: "latest analysis\nkeep newline",
+        },
+        { event: "tool_result", type: "tool_result", text: "read_file done" },
+      ],
+    });
+
+    const analysisBlock = wrapper.find(".thinking-analysis-block");
+    expect(analysisBlock.exists()).toBe(true);
+    expect(analysisBlock.text()).toContain("latest analysis\nkeep newline");
+    expect(analysisBlock.text()).not.toContain("old analysis");
+
+    const rollingLogs = wrapper.findAll(".execution-log-line").map((line) => line.text());
+    expect(rollingLogs).toEqual(["开始：执行命令：read_file", "完成：执行命令：read_file done"]);
+  });
+
+  it("does not render non-guidance analysis logs in the dedicated analysis block", () => {
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: true,
+      processRealtimeLogs: [
+        {
+          event: "guidance_analysis",
+          type: "guidance_analysis",
+          rawEvent: "guidance_analysis_response",
+          purpose: "summary",
+          harnessFlow: "analysis",
+          chain: "auxiliary",
+          output: "summary analysis should stay hidden",
+          text: "summary analysis should stay hidden",
+        },
+        { event: "tool_call", type: "tool_call", text: "execute_script" },
+      ],
+    });
+
+    expect(wrapper.find(".thinking-analysis-block").exists()).toBe(false);
+    expect(wrapper.findAll(".execution-log-line").map((line) => line.text())).toEqual([
+      "开始：执行命令：execute_script",
+    ]);
+  });
+
   it("uses thinking detail count rather than execution total for detail action label", () => {
     const wrapper = mountThinkingPanel({
       role: "assistant",
@@ -645,7 +709,7 @@ describe("ThinkingPanel", () => {
     expect(wrapper.text()).toContain("current_tool");
   });
 
-  it("renders only the latest strict harness guidance analysis response outside execution logs", () => {
+  it("does not render legacy harness capability response as guidance analysis", () => {
     const wrapper = mountThinkingPanel({
       role: "assistant",
       pending: true,
@@ -694,9 +758,9 @@ describe("ThinkingPanel", () => {
       ],
     });
 
-    expect(wrapper.text()).toContain("分析流程");
-    expect(wrapper.text()).toContain("模型返回");
-    expect(wrapper.text()).toContain("latest guidance analysis");
+    expect(wrapper.text()).not.toContain("分析流程");
+    expect(wrapper.text()).not.toContain("模型返回");
+    expect(wrapper.text()).not.toContain("latest guidance analysis");
     expect(wrapper.text()).not.toContain("old planning analysis");
     expect(wrapper.text()).not.toContain("latest planning analysis");
     expect(wrapper.text()).not.toContain("legacy planning response");
@@ -706,7 +770,7 @@ describe("ThinkingPanel", () => {
     expect(wrapper.find("button").text()).toContain("1");
   });
 
-  it("renders latest harness guidance analysis response from completed logs after reload", () => {
+  it("renders latest guidance analysis response from completed logs after reload", () => {
     const wrapper = mountThinkingPanel({
       role: "assistant",
       pending: false,
@@ -714,8 +778,9 @@ describe("ThinkingPanel", () => {
       processCompletedToolLogs: [
         { event: "tool_result", type: "tool_result", text: "completed tool" },
         {
-          event: "harness_capability_response",
-          type: "harness_capability_response",
+          event: "guidance_analysis",
+          type: "guidance_analysis",
+          rawEvent: "guidance_analysis_response",
           purpose: "guidance",
           harnessFlow: "analysis",
           chain: "auxiliary",

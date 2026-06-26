@@ -55,10 +55,9 @@ Common lifecycle metadata:
 Most hook points (except `before_context_build`) now also include:
 
 - `agentContext` (the complete in-memory agent context object; mutable)
-- `hookClientChannel` (plugin -> frontend channel, supports `emit(event, data)`)
-- `emitHookClientEvent(event, data)` (helper function, same as above)
+- `emitHookClientEvent(event, data)` (plugin -> frontend event emitter)
 
-`hookClientChannel` output is sanitized by runtime hook layer and strips internal fields such as
+`emitHookClientEvent` output is sanitized by runtime hook layer and strips internal fields such as
 `agent`, `agentContext`, and `runtime` before forwarding to frontend.
 Additionally, `hook_plugin_progress.data` is schema-whitelisted to:
 `plugin, version, point, stage, status, fsmState, fsmRejected, reason, toolName, commitType, message, timestamp, durationMs, error`.

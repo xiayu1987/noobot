@@ -7,6 +7,7 @@ import { emitEvent } from "../event/index.js";
 import { resolveDialogProcessIdFromContext } from "../context/session/dialog-process-id-resolver.js";
 import { getSystemRuntimeFromRuntime } from "../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../context/parent-session-id-resolver.js";
+import { resolveHookClientEmitter } from "./client-channel.js";
 
 const DEFAULT_HOOK_TIMEOUT_MS = 3000;
 const HOOK_PROGRESS_TEXT_LIMIT = 240;
@@ -413,31 +414,30 @@ function normalizeHarnessCapabilityResponseData(data = {}) {
   return output;
 }
 
-function createHookClientChannel({ listener = null, point = "", runtime = {} } = {}) {
-  return {
-    emit(event = "", data = {}) {
-      const name = String(event || "").trim() || "hook_progress";
-      if (name === "harness_capability_response") {
-        emitEvent(listener, name, normalizeHarnessCapabilityResponseData(data));
-        return;
-      }
-      if (!isHookPluginProgressTraceEnabled(runtime) && !isImportantHookPluginProgress(name, data)) {
-        return;
-      }
-      emitEvent(listener, "hook_plugin_progress", {
-        point: String(point || "").trim(),
-        event: name,
-        data: normalizeHookPluginProgressData(data),
-      });
-    },
+function createHookClientEmitter({ listener = null, point = "", runtime = {} } = {}) {
+  return (event = "", data = {}) => {
+    const name = String(event || "").trim() || "hook_progress";
+    if (name === "harness_capability_response") {
+      emitEvent(listener, name, normalizeHarnessCapabilityResponseData(data));
+      return;
+    }
+    if (!isHookPluginProgressTraceEnabled(runtime) && !isImportantHookPluginProgress(name, data)) {
+      return;
+    }
+    emitEvent(listener, "hook_plugin_progress", {
+      point: String(point || "").trim(),
+      event: name,
+      data: normalizeHookPluginProgressData(data),
+    });
   };
 }
 
-function withHookClientChannel(context = {}, channel = null) {
+export { resolveHookClientEmitter };
+
+function withHookClientEmitter(context = {}, emitHookClientEvent = null) {
   const safeContext = context && typeof context === "object" ? context : {};
-  if (!channel || typeof channel.emit !== "function") return safeContext;
-  safeContext.hookClientChannel = channel;
-  safeContext.emitHookClientEvent = (event = "", data = {}) => channel.emit(event, data);
+  if (typeof emitHookClientEvent !== "function") return safeContext;
+  safeContext.emitHookClientEvent = emitHookClientEvent;
   return safeContext;
 }
 
@@ -457,12 +457,12 @@ export async function runAgentRuntimeHook({
   if (!manager) {
     return { executed: false, point: normalizedPoint, context, results: [], errors: [] };
   }
-  const hookClientChannel = createHookClientChannel({
+  const emitHookClientEvent = createHookClientEmitter({
     listener,
     point: normalizedPoint,
     runtime,
   });
-  const hookedContext = withHookClientChannel(context, hookClientChannel);
+  const hookedContext = withHookClientEmitter(context, emitHookClientEvent);
 
   emitEvent(listener, "hook_start", { point: normalizedPoint });
   try {

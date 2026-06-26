@@ -148,7 +148,7 @@ test("runAgentRuntimeHook resolves manager, executes, and emits hook_start/hook_
   assert.equal(events[1]?.event, "hook_end");
 });
 
-test("runAgentRuntimeHook exposes hook client channel and skips routine plugin progress by default", async () => {
+test("runAgentRuntimeHook exposes hook client emitter and skips routine plugin progress by default", async () => {
   const manager = createAgentHookManager();
   const events = [];
   const eventListener = {
@@ -158,8 +158,8 @@ test("runAgentRuntimeHook exposes hook client channel and skips routine plugin p
   };
   const runtime = { hookManager: manager };
   manager.on("runtime_point", async (ctx = {}) => {
-    assert.equal(typeof ctx?.hookClientChannel?.emit, "function");
     assert.equal(typeof ctx?.emitHookClientEvent, "function");
+    assert.equal(Object.hasOwn(ctx, "hookClientChannel"), false);
     ctx.emitHookClientEvent("plugin_step", {
       plugin: "agentPlugin",
       point: "before_turn",
@@ -179,7 +179,7 @@ test("runAgentRuntimeHook exposes hook client channel and skips routine plugin p
   assert.equal(events.some((evt) => evt?.event === "hook_plugin_progress"), false);
 });
 
-test("runAgentRuntimeHook forwards harness capability response through injected client channel", async () => {
+test("runAgentRuntimeHook forwards harness capability response through injected client emitter", async () => {
   const manager = createAgentHookManager();
   const events = [];
   const eventListener = {
@@ -230,8 +230,8 @@ test("runAgentRuntimeHook records important plugin progress and sanitizes forwar
   };
   const runtime = { hookManager: manager };
   manager.on("runtime_point", async (ctx = {}) => {
-    assert.equal(typeof ctx?.hookClientChannel?.emit, "function");
     assert.equal(typeof ctx?.emitHookClientEvent, "function");
+    assert.equal(Object.hasOwn(ctx, "hookClientChannel"), false);
     ctx.emitHookClientEvent("plugin_failed", {
       plugin: "agentPlugin",
       point: "before_turn",

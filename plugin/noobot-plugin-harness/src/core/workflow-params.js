@@ -18,6 +18,11 @@ function deepFreeze(value) {
 export const WORKFLOW_PARAMS = deepFreeze({
   workflow: {
     scheduler: {
+      // Priority principle:
+      // hard guard > failure recovery > planning structure > main-flow acceptance
+      // > auxiliary diagnosis > context compression > validation.
+      // Keep this list in semantic priority order; lower index wins when actions
+      // are simultaneously pending.
       order: [
         { flow: "final_acceptance", subflow: "forced", action: "forced_acceptance", executor: "acceptance", kind: "guard", hardOverride: true },
         { flow: "guidance", subflow: "failure_recovery", action: "guidance", executor: "guidance", kind: "workflow" },

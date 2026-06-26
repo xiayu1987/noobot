@@ -15,8 +15,8 @@ Planning, guidance, acceptance, and review follow the matrix below:
 
 | Flow | Trigger | Arbitrate | Execute | Observe |
 | --- | --- | --- | --- | --- |
-| Planning | At `before_llm_call`, run workflow tick: threshold checks update pending states (`summary`/`planUpdate`/`phaseAcceptance`) | Fixed action `planning_bootstrap` (`planning_capture` at `after_llm_call`) | Runs by mode: `runPlanningBySeparateModel` or `maybeInjectPlanningPrompt`; capture by `maybeCapturePlanningResult` | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`planning`) |
-| Guidance | Pending states come from failure thresholds and summary/plan-update signals | `resolveNextGuidanceAction` chooses: `guidance > plan_update > summary_overflow > summary_turns`; summary defers when phase acceptance is ready so the stable context prefix remains provider-cache friendly | One execution path per mode (inject/separate-model), including plan-update and summary/guidance chaining | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`guidance`) |
+| Planning | At `before_llm_call`, run planning tick: threshold checks update pending states (`planUpdate`/`phaseAcceptance`) | Fixed action `planning_bootstrap` (`planning_capture` at `after_llm_call`) | Runs by mode: `runPlanningBySeparateModel` or `maybeInjectPlanningPrompt`; capture by `maybeCapturePlanningResult` | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`planning`) |
+| Guidance | Owns analysis and summary triggers, plus failure thresholds and plan-update execution signals | `resolveNextGuidanceAction` consumes the unified scheduler order for guidance-owned actions: `guidance > plan_update > analysis > summary_overflow > summary_turns`; summary defers when phase acceptance is ready so the stable context prefix remains provider-cache friendly | One execution path per mode (inject/separate-model), including analysis, plan-update, summary/guidance chaining, and summary capture | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`guidance`) |
 | Acceptance | Multi-hook triggers from `pending.phaseAcceptance`, `pending.acceptanceSemanticValidation`, and overflow flags | `resolveAcceptanceDecision` picks `phase_acceptance` / `forced_acceptance` / `acceptance_semantic_validation` etc. | Executes phase acceptance, semantic validation, final-output guard, and tool guards by hook and mode | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`acceptance`) |
 | Review | Triggered on review hooks (`before_final_output`, `on_error`, `on_abort`, etc.) | Fixed action `review_report` | Builds report and conditionally attaches it to final output | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`review`) |
 
@@ -34,26 +34,41 @@ Standard events (all four domains):
 
 ## Concurrent Trigger Priority
 
-Current guidance scheduler decision order (`before_llm_call`) is cache-friendly:
+Unified scheduler order (`before_llm_call`) follows this semantic priority:
 
-1. `guidance`
+`hard guard > failure recovery > planning structure > main-flow acceptance > auxiliary diagnosis > context compression > validation`
+
+The concrete order is:
+
+1. `forced_acceptance`
+   Trigger condition: `flags.overflowForceAcceptancePending === true`
+2. `guidance`
    Trigger condition: `pending.guidance != null`
-2. `plan_update_revision` / `plan_update_refinement`
-   Trigger condition: `pending.planUpdate === true` (or legacy `pending.planRevision === true` / `pending.planRefinement === true`)
-3. `summary_overflow`
+3. `planning_bootstrap`
+   Trigger condition: `flags.planningCaptured !== true && flags.planningPromptInjected !== true`
+4. `plan_update_revision`
+   Trigger condition: `pending.planRevision === true`
+5. `plan_update_refinement`
+   Trigger condition: `pending.planRefinement === true`
+6. `phase_acceptance`
+   Trigger condition: `pending.phaseAcceptance === true`
+7. `analysis`
+   Trigger condition: `pending.analysis === true`
+8. `summary_overflow`
    Trigger condition: `pending.summary === true && flags.summaryByCharsPrompted === true`
-4. `summary_turns`
+9. `summary_turns`
    Trigger condition: `pending.summary === true && flags.summaryByCharsPrompted !== true`
-5. `none`
+10. `acceptance_semantic_validation`
+    Trigger condition: `pending.acceptanceSemanticValidation != null`
 
-`phase_acceptance` is not selected by guidance scheduler. When only summary and phase acceptance are pending, summary defers in the guidance domain so the later acceptance domain can run phase acceptance first. True hard overflow still uses the `overflowForceAcceptancePending` forced-acceptance override.
+`phase_acceptance` can block lower-priority validation and can make summary defer in selected cases so the stable context prefix remains provider-cache friendly. True hard overflow uses the `overflowForceAcceptancePending` forced-acceptance override.
 
 
 ## Scheduler Architecture And Failure Isolation
 
 Ordering decisions live in `src/capabilities/handlers/shared/workflow/scheduler.js`. The complete order is described by one config item, `WORKFLOW_PARAMS.workflow.scheduler.order` (flow / subflow / action / executor / kind), and the scheduler derives executors and sorting from it with these layers:
 
-- Strategy: `WORKFLOW_ACTION_PRIORITY` defines the cache-friendly business priority.
+- Strategy: `WORKFLOW_PARAMS.workflow.scheduler.order` defines semantic business priority; lower index wins when actions are simultaneously pending.
 - Chain of Responsibility: `resolveBlockReason(...)` applies blockers one by one (for example, summary defers when phase acceptance is eligible).
 - Command routing: `WORKFLOW_ACTION_EXECUTOR` maps each action to an executor domain (planning/guidance/acceptance).
 
@@ -73,7 +88,7 @@ Log detail fields:
 
 - `mode`: `inject` or `separate_model`
 - `category`: `workflow` | `guard` (semantic grouping; especially useful for acceptance flow)
-- `chosenAction`: `summary_overflow` | `guidance` | `plan_update_revision` | `plan_update_refinement` | `summary_turns` | `none`
+- `chosenAction`: `forced_acceptance` | `guidance` | `planning_bootstrap` | `plan_update_revision` | `plan_update_refinement` | `phase_acceptance` | `analysis` | `summary_overflow` | `summary_turns` | `acceptance_semantic_validation` | `none`
 - `chosenReason`: scheduler reason code
 - `chosenStage`: `revision` | `refinement` | `""`
 - `candidateActions`: all candidate actions scanned in this turn
@@ -83,10 +98,12 @@ Log detail fields:
 - `triggeredActions`: legacy field kept for compatibility (mapped from candidate actions)
 - `pending`: snapshot
   - `summary`
-  - `summaryByCharsPrompted`
   - `guidance`
+  - `analysis`
   - `planUpdate`
   - `phaseAcceptance`
+  - `acceptanceSemanticValidation`
+  - `flags.summaryByCharsPrompted`
 
 Execution result fields (`workflow_execution_result`):
 
@@ -124,24 +141,29 @@ Unified observation/lifecycle entry:
 ### Planning
 
 - Hook point: `before_llm_call`
-- Summary trigger:
-  - Turn-based: `state.counters.llmTurns > LLM_SUMMARY_THRESHOLD` (`8`)
-  - Char-based: `unsummarized_chars > LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD` (`200000`)
-- Overflow prune policy (`SUMMARY_POLICY.OVERFLOW_POLICY`):
-  - `ENABLE_PRUNE_AFTER_SUMMARY`
-  - `PRUNE_TRIGGER_AFTER_CHAR_SUMMARY_ROUNDS`
-  - `FORCE_ACCEPTANCE_WHEN_STILL_OVERFLOW`
 - Plan update trigger:
   - `state.counters.planUpdateTurns >= PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD` (mode-specific via `WORKFLOW_PARAMS.modeThresholds.<full|programming|text>.planning.planUpdate`)
 - Phase acceptance scheduling threshold:
   - `state.counters.phaseAcceptanceTurns >= PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD` (mode-specific via `WORKFLOW_PARAMS.modeThresholds.<full|programming|text>.acceptance.phase`)
 
-### Guidance (tool-failure recovery)
+### Guidance (analysis, summary, and tool-failure recovery)
 
 - Hook points:
+  - `before_llm_call`
+  - `after_llm_call`
+  - `after_tool_calls`
   - `after_tool_call`
   - `tool_call_error`
-  - `before_llm_call`
+- Summary trigger:
+  - Turn-based: `state.counters.summaryTurns > LLM_SUMMARY_THRESHOLD` (`8`)
+  - Char-based: `unsummarized_chars > LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD` (`200000`)
+  - Tool-burst: `after_tool_calls` when enabled and call count reaches the summary threshold
+- Overflow prune policy (`SUMMARY_POLICY.OVERFLOW_POLICY`):
+  - `ENABLE_PRUNE_AFTER_SUMMARY`
+  - `PRUNE_TRIGGER_AFTER_CHAR_SUMMARY_ROUNDS`
+  - `FORCE_ACCEPTANCE_WHEN_STILL_OVERFLOW`
+- Analysis trigger:
+  - `state.counters.analysisTurns >= ANALYSIS_TRIGGER_TURNS_THRESHOLD`
 - Failure thresholds (`FAILURE_THRESHOLD`):
   - Consecutive failures: `CONSECUTIVE = 3`
   - Accumulated failures: `ACCUMULATED = 10`
@@ -182,7 +204,7 @@ Planning inject and separate-model paths now share an intermediate message plan:
 | --- | --- | --- | --- |
 | `planning_bootstrap` | Planning | Planning | `before_llm_call` |
 | `planning_capture` | Planning | Planning | `after_llm_call` |
-| `summary` | Planning (thresholds) | Guidance | `before_llm_call` |
+| `summary` | Guidance (thresholds) | Guidance | `before_llm_call` / `after_llm_call` / `after_tool_calls` |
 | `guidance` | Guidance (failure thresholds) | Guidance | `before_llm_call` |
 | `plan_update_revision/refinement` | Planning (thresholds) | Guidance | `before_llm_call` / `after_llm_call` |
 | `phase_acceptance` | Planning (thresholds) | Acceptance | `before_llm_call` |
@@ -272,8 +294,13 @@ Notation: `existing_context` is the current main-model context; `agent_messages`
   - `src/capabilities/handlers/shared/workflow/policy.js`
 - Invariant guards:
   - `src/capabilities/handlers/shared/workflow/invariants.js`
-- Priority scheduler: `src/capabilities/handlers/guidance/plan-update-scheduler.js`
-- Priority decision log emit: `src/capabilities/handlers/guidance/controller.js`
+- Unified priority scheduler:
+  - `src/capabilities/handlers/shared/workflow/scheduler.js`
+- Guidance scheduler adapter:
+  - `src/capabilities/handlers/planning/plan-update-scheduler.js`
+- Priority decision log emit:
+  - `src/capabilities/handlers/shared/workflow/pattern.js`
+  - domain controllers (`planning/controller.js`, `guidance/controller.js`, `acceptance/controller.js`, `review/controller.js`)
 - Planning inject/separate message builders:
   - `src/capabilities/handlers/planning/prompt-builder.js`
   - `src/capabilities/handlers/planning/capture-runner.js`
