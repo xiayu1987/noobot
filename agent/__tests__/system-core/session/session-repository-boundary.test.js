@@ -65,21 +65,20 @@ test("session display summary derives attachments from transfer envelopes", () =
             version: 1,
             direction: "output",
             transport: "file",
-            filePath: "/workspace/result.md",
-            attachmentMeta: {
-              attachmentId: "att-transfer-1",
-              sessionId: "s-transfer-attachments",
-              attachmentSource: "model",
-              name: "result.md",
-              mimeType: "text/markdown",
-              size: 44,
-              relativePath: "runtime/result.md",
-              owner: { type: "plugin", id: "harness-plugin" },
-            },
             files: [
               {
                 role: "primary",
                 filePath: "/workspace/result.md",
+                attachmentMeta: {
+                  attachmentId: "att-transfer-1",
+                  sessionId: "s-transfer-attachments",
+                  attachmentSource: "model",
+                  name: "result.md",
+                  mimeType: "text/markdown",
+                  size: 44,
+                  relativePath: "runtime/result.md",
+                  owner: { type: "plugin", id: "harness-plugin" },
+                },
                 pathView: { sandboxPath: "/sandbox/result.md" },
               },
             ],
@@ -92,14 +91,11 @@ test("session display summary derives attachments from transfer envelopes", () =
   assert.equal(summary.stats.attachmentCount, 1);
   assert.deepEqual(summary.messages[0].attachments, [
     {
-      id: "att-transfer-1",
       attachmentId: "att-transfer-1",
       name: "result.md",
-      type: "text/markdown",
       mimeType: "text/markdown",
       size: 44,
       attachmentSource: "model",
-      source: "model",
       sessionId: "s-transfer-attachments",
       relativePath: "runtime/result.md",
       sandboxPath: "/sandbox/result.md",
@@ -108,6 +104,9 @@ test("session display summary derives attachments from transfer envelopes", () =
       role: "primary",
     },
   ]);
+  assert.equal("id" in summary.messages[0].attachments[0], false);
+  assert.equal("type" in summary.messages[0].attachments[0], false);
+  assert.equal("source" in summary.messages[0].attachments[0], false);
   assert.equal(summary.messages[0].transferEnvelopes[0].files[0].attachmentId, "att-transfer-1");
   assert.equal(summary.messages[0].transferEnvelopes[0].files[0].owner.type, "plugin");
   assert.equal("attachmentMeta" in summary.messages[0].transferEnvelopes[0].files[0], false);
@@ -359,7 +358,6 @@ test("session display summary should keep chat view lightweight and rebuild stal
       version: 1,
       direction: "output",
       transport: "file",
-      filePath: "/workspace/u1/runtime/workflow-result.md",
       payload: { huge: true },
       files: [
         {
@@ -565,14 +563,15 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(userMessage.content.includes(`${userContentTail}…`), false);
     assert.deepEqual(userMessage.attachments, [
       {
-        id: "att-1",
         attachmentId: "att-1",
         name: "a.txt",
-        type: "text/plain",
         mimeType: "text/plain",
         size: 12,
       },
     ]);
+    assert.equal("id" in userMessage.attachments[0], false);
+    assert.equal("type" in userMessage.attachments[0], false);
+    assert.equal("source" in userMessage.attachments[0], false);
     const assistantMessage = summary.messages.find((item) => item.id === "a1");
     assert.equal(assistantMessage.content, longAssistantContent);
     assert.equal(assistantMessage.content.endsWith(assistantContentTail), true);
@@ -585,19 +584,19 @@ test("session display summary should keep chat view lightweight and rebuild stal
     const pluginAttachmentAssistant = summary.messages.find((item) => item.id === "plugin-attachment-assistant");
     assert.deepEqual(pluginAttachmentAssistant.attachments, [
       {
-        id: "att-plugin-1",
         attachmentId: "att-plugin-1",
         name: "harness-plan-text.txt",
-        type: "text/plain",
         mimeType: "text/plain",
         size: 123,
         attachmentSource: "model",
-        source: "model",
         sessionId: "B",
         owner: { type: "plugin", id: "harness-plugin" },
         generationSource: "harness_plan",
       },
     ]);
+    assert.equal("id" in pluginAttachmentAssistant.attachments[0], false);
+    assert.equal("type" in pluginAttachmentAssistant.attachments[0], false);
+    assert.equal("source" in pluginAttachmentAssistant.attachments[0], false);
     const toolOnlyAssistantMessage = summary.messages.find((item) => item.id === "tool-display-assistant");
     assert.equal(toolOnlyAssistantMessage.content, "tool only final answer");
     assert.equal(toolOnlyAssistantMessage.hasThinkingDetails, true);

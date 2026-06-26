@@ -15,10 +15,6 @@ function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
-function nonEmptyString(value = "") {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
 export function validateTransferEnvelope(value = null, { strict = false } = {}) {
   const errors = [];
   if (!isPlainObject(value)) {
@@ -32,11 +28,9 @@ export function validateTransferEnvelope(value = null, { strict = false } = {}) 
       errors.push("direct transport requires content");
     }
     if (value.transport === TRANSFER_TRANSPORT.FILE) {
-      const hasFilePath = nonEmptyString(value.filePath);
       const hasFiles = Array.isArray(value.files) && value.files.length > 0;
-      const hasAttachmentMeta = isPlainObject(value.attachmentMeta);
-      if (!hasFilePath && !hasFiles && !hasAttachmentMeta) {
-        errors.push("file transport requires filePath, files, or attachmentMeta");
+      if (!hasFiles) {
+        errors.push("file transport requires canonical files");
       }
       if (Array.isArray(value.files)) {
         value.files.forEach((file, index) => {

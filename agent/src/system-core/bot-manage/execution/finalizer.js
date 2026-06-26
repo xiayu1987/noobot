@@ -77,10 +77,8 @@ function dedupeTransferEnvelopes(envelopes = []) {
         envelope?.files?.[0]?.attachmentMeta?.attachmentId ||
         envelope?.files?.[0]?.attachmentId ||
         envelope?.files?.[0]?.id ||
-        envelope?.attachmentMeta?.attachmentId ||
         envelope?.files?.[0]?.filePath ||
         envelope?.files?.[0]?.path ||
-        envelope?.filePath ||
         "",
       ).trim() || JSON.stringify(envelope);
     if (seen.has(key)) continue;

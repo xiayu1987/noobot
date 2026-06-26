@@ -30,7 +30,6 @@ test("SessionMessageService.appendTurn persists transferEnvelopes", async () => 
     version: 1,
     direction: "output",
     transport: "file",
-    filePath: "/workspace/a.md",
     files: [
       {
         filePath: "/workspace/a.md",
@@ -63,7 +62,6 @@ test("SessionMessageService.appendTurn persists transferEnvelopes", async () => 
       transport: "file",
       files: [
         {
-          id: "att_1",
           attachmentId: "att_1",
           name: "a.md",
           path: "/workspace/a.md",
@@ -74,4 +72,7 @@ test("SessionMessageService.appendTurn persists transferEnvelopes", async () => 
   ]);
   assert.equal("attachmentMeta" in lastMessage.transferEnvelopes[0], false);
   assert.equal("attachmentMeta" in lastMessage.transferEnvelopes[0].files[0], false);
+  assert.equal("id" in lastMessage.transferEnvelopes[0].files[0], false);
+  assert.equal("type" in lastMessage.transferEnvelopes[0].files[0], false);
+  assert.equal("source" in lastMessage.transferEnvelopes[0].files[0], false);
 });

@@ -109,7 +109,7 @@ test("session-execution-engine-utils resolves transfer envelopes and preferred a
         direction: "output",
         transport: "file",
         envelopeId: "e1",
-        attachmentMeta: { attachmentId: "att-1" },
+        files: [{ attachmentId: "att-1" }],
       },
     ],
     lc_kwargs: {
@@ -120,7 +120,7 @@ test("session-execution-engine-utils resolves transfer envelopes and preferred a
           direction: "output",
           transport: "file",
           envelopeId: "e3",
-          attachmentMeta: { attachmentId: "att-3" },
+          files: [{ attachmentId: "att-3" }],
         },
       ],
     },
@@ -253,7 +253,7 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
         modelName: "",
         summarized: false,
         ts: "2026-05-14T00:00:00.000Z",
-        attachments: [{ id: "att-1", attachmentId: "att-1", name: "a.txt" }],
+        attachments: [{ attachmentId: "att-1", name: "a.txt" }],
       },
     ],
     selectedConnectors: {},
@@ -261,6 +261,7 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
     updatedAt: "2026-05-14T00:00:00.000Z",
   });
   assert.equal(JSON.stringify(sessionPayload).includes("attachmentMetas"), false);
+  assert.equal("id" in sessionPayload.messages[0].attachments[0], false);
   const sessionSummary = JSON.parse(await fs.readFile(persisted.files.sessionSummary, "utf8"));
   assert.equal(sessionSummary.schemaVersion, 5);
   assert.equal(sessionSummary.sessionId, "s1");

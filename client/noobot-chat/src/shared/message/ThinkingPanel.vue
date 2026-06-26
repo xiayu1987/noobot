@@ -55,7 +55,7 @@ const EXECUTION_LOG_DISPLAY_LIMIT = 10;
 
 function getRealtimeLogs(messageItem = {}) {
   return getAllRealtimeLogs(messageItem)
-    .filter((logItem) => !isHarnessCapabilityResponseLog(logItem))
+    .filter((logItem) => !isPluginCapabilityResponseLog(logItem))
     .filter((logItem) => !isGuidanceAnalysisResponseLog(logItem))
     .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
     .filter(Boolean)
@@ -97,15 +97,20 @@ function normalizeLogString(value = "") {
   return String(value || "").trim().toLowerCase();
 }
 
-function isHarnessAnalysisResponseLog(logItem = {}) {
+function isPluginAnalysisResponseLog(logItem = {}) {
   const eventName = normalizeLogString(logItem?.event || logItem?.type);
   const purpose = normalizeLogString(logItem?.purpose || logItem?.data?.purpose);
-  const harnessFlow = normalizeLogString(logItem?.harnessFlow || logItem?.data?.harnessFlow);
+  const pluginFlow = normalizeLogString(
+    logItem?.pluginFlow
+      || logItem?.data?.pluginFlow
+      || logItem?.harnessFlow
+      || logItem?.data?.harnessFlow,
+  );
   const chain = normalizeLogString(logItem?.chain || logItem?.data?.chain || logItem?.executionScope || logItem?.data?.executionScope);
   return (
     isGuidanceAnalysisEventName(eventName) &&
     purpose === "guidance" &&
-    harnessFlow === "analysis" &&
+    pluginFlow === "analysis" &&
     chain === "auxiliary"
   );
 }
@@ -119,25 +124,25 @@ function isGuidanceAnalysisResponseLog(logItem = {}) {
   return isGuidanceAnalysisEventName(eventName);
 }
 
-function isHarnessCapabilityResponseLog(logItem = {}) {
+function isPluginCapabilityResponseLog(logItem = {}) {
   const eventName = normalizeLogString(logItem?.event || logItem?.type);
-  return eventName === "harness_capability_response";
+  return eventName === "plugin_capability_response" || eventName === "harness_capability_response";
 }
 
-function getHarnessAnalysisLogOutput(logItem = {}) {
+function getPluginAnalysisLogOutput(logItem = {}) {
   const output = String(logItem?.output ?? logItem?.data?.output ?? "").trim();
   if (output) return output;
   const text = String(logItem?.text || "").trim();
-  return text.replace(/^Harness\s+模型返回\s*\/\s*[^\n]+\n?/i, "").trim();
+  return text.replace(/^(?:Plugin|Harness)\s+模型返回\s*\/\s*[^\n]+\n?/i, "").trim();
 }
 
-function getLatestHarnessAnalysisLog(messageItem = {}) {
+function getLatestPluginAnalysisLog(messageItem = {}) {
   const logs = [
     ...getAllRealtimeLogs(messageItem),
     ...getAllCompletedLogs(messageItem),
-  ].filter(isHarnessAnalysisResponseLog);
+  ].filter(isPluginAnalysisResponseLog);
   for (let index = logs.length - 1; index >= 0; index -= 1) {
-    const output = getHarnessAnalysisLogOutput(logs[index]);
+    const output = getPluginAnalysisLogOutput(logs[index]);
     if (output) return { ...logs[index], output };
   }
   return null;
@@ -153,12 +158,12 @@ function getExecutionLogCount(messageItem = {}) {
     const hiddenAnalysisLogCount = [
       ...getAllRealtimeLogs(messageItem),
       ...getAllCompletedLogs(messageItem),
-    ].filter((logItem) => isHarnessCapabilityResponseLog(logItem) || isGuidanceAnalysisResponseLog(logItem)).length;
+    ].filter((logItem) => isPluginCapabilityResponseLog(logItem) || isGuidanceAnalysisResponseLog(logItem)).length;
     return Math.max(0, explicitTotal - hiddenAnalysisLogCount);
   }
 
   const realtimeLogs = getAllRealtimeLogs(messageItem).filter(
-    (logItem) => !isHarnessCapabilityResponseLog(logItem) && !isGuidanceAnalysisResponseLog(logItem),
+    (logItem) => !isPluginCapabilityResponseLog(logItem) && !isGuidanceAnalysisResponseLog(logItem),
   );
   if (realtimeLogs.length > 0) return realtimeLogs.length;
 
@@ -189,7 +194,7 @@ function hasThinkingLogs(messageItem = {}) {
   if (!messageItem || getMessageRole(messageItem) !== "assistant") return false;
   if (messageItem.pending) return true;
   if (hasSummaryThinkingDetails(messageItem)) return true;
-  if (getLatestHarnessAnalysisLog(messageItem)) return true;
+  if (getLatestPluginAnalysisLog(messageItem)) return true;
   const hasRealtimeLogs = Array.isArray(messageItem.processRealtimeLogs) || Array.isArray(messageItem.realtimeLogs)
     ? getRealtimeLogs(messageItem).length > 0
     : false;
@@ -333,7 +338,7 @@ function buildFallbackCompletedToolLogs(messageItem = {}) {
 
 function getCompletedToolLogsForMessage(messageItem = {}) {
   return getAllCompletedLogs(messageItem)
-    .filter((logItem) => !isHarnessCapabilityResponseLog(logItem))
+    .filter((logItem) => !isPluginCapabilityResponseLog(logItem))
     .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
     .filter(Boolean);
 }
@@ -624,10 +629,10 @@ onBeforeUnmount(() => {
                 v-if="!getExecutionLogCount(messageItem) && !messageItem.pending"
                 :text="translate('message.noExecutionLogs')"
               />
-              <div v-if="getLatestHarnessAnalysisLog(messageItem)" class="thinking-analysis-block">
+              <div v-if="getLatestPluginAnalysisLog(messageItem)" class="thinking-analysis-block">
                 <BaseMetaLabel class="thinking-analysis-title" text="分析流程" />
                 <BaseNoteBlock
-                  :content="getLatestHarnessAnalysisLog(messageItem).output"
+                  :content="getLatestPluginAnalysisLog(messageItem).output"
                 />
               </div>
               <div class="thinking-execution-actions">

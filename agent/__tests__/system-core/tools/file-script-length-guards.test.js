@@ -550,7 +550,9 @@ test("read_file: 大文件原始结果由 semantic-transfer 转为沙箱视角 o
   assert.equal(JSON.stringify(result).includes(workspaceRoot), false);
   assert.equal(result.overflow_strategy, "original_file_reference");
   assert.equal(result.transferEnvelopes?.[0]?.protocol, "noobot.semantic-transfer");
-  assert.equal(result.transferEnvelopes?.[0]?.filePath, "/workspace/admin/runtime/ops_workdir/large_test_file.txt");
+  assert.equal("filePath" in result.transferEnvelopes?.[0], false);
+  assert.equal(result.transferEnvelopes?.[0]?.files?.[0]?.filePath, "/workspace/admin/runtime/ops_workdir/large_test_file.txt");
+  assert.equal(result.transferEnvelopes?.[0]?.files?.[0]?.pathView?.sandboxPath, "/workspace/admin/runtime/ops_workdir/large_test_file.txt");
   assert.equal(result.transferEnvelopes?.[0]?.storage?.originalFile, true);
   assert.equal(result.transferEnvelopes?.[0]?.storage?.persisted, false);
 });

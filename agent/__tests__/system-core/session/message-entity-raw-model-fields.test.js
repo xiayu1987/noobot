@@ -28,13 +28,17 @@ test("normalizeMessageEntity persists compact transferEnvelopes", () => {
     version: 1,
     direction: "output",
     transport: "file",
-    filePath: "/workspace/a.md",
-    attachmentMeta: {
-      attachmentId: "att_1",
-      name: "a.md",
-      owner: { type: "plugin", id: "harness-plugin", extra: "drop" },
-    },
-    pathView: { sandboxPath: "/sandbox/a.md", hostPath: "/host/a.md" },
+    files: [
+      {
+        filePath: "/workspace/a.md",
+        attachmentMeta: {
+          attachmentId: "att_1",
+          name: "a.md",
+          owner: { type: "plugin", id: "harness-plugin", extra: "drop" },
+        },
+        pathView: { sandboxPath: "/sandbox/a.md", hostPath: "/host/a.md" },
+      },
+    ],
   };
   const normalized = normalizeMessageEntity({
     role: "assistant",
@@ -50,7 +54,6 @@ test("normalizeMessageEntity persists compact transferEnvelopes", () => {
       transport: "file",
       files: [
         {
-          id: "att_1",
           attachmentId: "att_1",
           name: "a.md",
           path: "/workspace/a.md",
@@ -62,6 +65,9 @@ test("normalizeMessageEntity persists compact transferEnvelopes", () => {
   ]);
   assert.equal("attachmentMeta" in normalized.transferEnvelopes[0], false);
   assert.equal("pathView" in normalized.transferEnvelopes[0], false);
+  assert.equal("id" in normalized.transferEnvelopes[0].files[0], false);
+  assert.equal("type" in normalized.transferEnvelopes[0].files[0], false);
+  assert.equal("source" in normalized.transferEnvelopes[0].files[0], false);
 });
 
 test("normalizeMessageEntity ignores non-array transferEnvelopes", () => {
@@ -105,16 +111,17 @@ test("normalizeMessageEntity preserves compact non-empty attachments", () => {
 
   assert.deepEqual(normalized.attachments, [
     {
-      id: "att_1",
       attachmentId: "att_1",
       name: "a.txt",
-      type: "text/plain",
       mimeType: "text/plain",
       owner: { type: "plugin", id: "harness-plugin" },
     },
   ]);
   assert.equal("attachmentMetas" in normalized, false);
   assert.equal("raw" in normalized.attachments[0], false);
+  assert.equal("id" in normalized.attachments[0], false);
+  assert.equal("type" in normalized.attachments[0], false);
+  assert.equal("source" in normalized.attachments[0], false);
 });
 
 test("normalizeMessageEntity ignores legacy attachment mirror fields", () => {

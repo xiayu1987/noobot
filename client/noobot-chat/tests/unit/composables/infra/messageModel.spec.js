@@ -6,13 +6,6 @@ const envelope = {
   version: 1,
   direction: "output",
   transport: "file",
-  filePath: "/workspace/u1/report.md",
-  attachmentMeta: {
-    attachmentId: "att-1",
-    name: "report.md",
-    mimeType: "text/markdown",
-    path: "/legacy/report.md",
-  },
   files: [
     {
       filePath: "/workspace/u1/report.md",
@@ -133,7 +126,6 @@ describe("messageModel semantic transfer", () => {
           version: 1,
           direction: "output",
           transport: "file",
-          filePath: "/workspace/u1/runtime/workflow-result.md",
           files: [
             {
               role: "primary",
@@ -165,6 +157,52 @@ describe("messageModel semantic transfer", () => {
       mimeType: "text/markdown",
       transferFilePath: "/sandbox/u1/runtime/workflow-result.md",
       sandboxPath: "/sandbox/u1/runtime/workflow-result.md",
+    });
+  });
+
+  it("restores compact session summary transfer attachments with ownership", () => {
+    const message = buildViewMessage({
+      role: "assistant",
+      content: "compact transfer",
+      sessionId: "session-compact-1",
+      turnScopeId: "turn-compact-1",
+      dialogProcessId: "dialog-compact-1",
+      transferEnvelopes: [
+        {
+          protocol: "noobot.semantic-transfer",
+          version: 1,
+          direction: "output",
+          transport: "file",
+          files: [
+            {
+              attachmentId: "att-compact-1",
+              name: "compact.md",
+              mimeType: "text/markdown",
+              relativePath: "runtime/compact.md",
+              sandboxPath: "/workspace/u1/runtime/compact.md",
+              owner: { type: "plugin", id: "harness-plugin" },
+              role: "primary",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(message.attachments).toHaveLength(1);
+    expect(message.attachments[0]).toMatchObject({
+      attachmentId: "att-compact-1",
+      name: "compact.md",
+      mimeType: "text/markdown",
+      relativePath: "runtime/compact.md",
+      sandboxPath: "/workspace/u1/runtime/compact.md",
+      transferFilePath: "/workspace/u1/runtime/compact.md",
+      owner: expect.objectContaining({
+        type: "plugin",
+        id: "harness-plugin",
+        sessionId: "session-compact-1",
+        turnScopeId: "turn-compact-1",
+        dialogProcessId: "dialog-compact-1",
+      }),
     });
   });
 

@@ -207,8 +207,12 @@ test("guidance schedules analysis by scenario-specific turn threshold", async ()
   await handler({
     capability: "guidance",
     point: "before_llm_call",
-    ctx: { messages: [{ role: "user", content: "继续" }], agentContext: beforeProgrammingThreshold },
-    meta: { harness: { scenario: "programming" } },
+    ctx: {
+      runConfig: { scenario: "programming" },
+      messages: [{ role: "user", content: "继续" }],
+      agentContext: beforeProgrammingThreshold,
+    },
+    meta: {},
   });
   assert.equal(beforeProgrammingThreshold.payload.harness.state.pending.analysis, false);
   assert.equal(
@@ -226,8 +230,12 @@ test("guidance schedules analysis by scenario-specific turn threshold", async ()
   await handler({
     capability: "guidance",
     point: "before_llm_call",
-    ctx: { messages: [{ role: "user", content: "继续" }], agentContext: atProgrammingThreshold },
-    meta: { harness: { scenario: "programming" } },
+    ctx: {
+      runConfig: { scenario: "programming" },
+      messages: [{ role: "user", content: "继续" }],
+      agentContext: atProgrammingThreshold,
+    },
+    meta: {},
   });
   assert.equal(atProgrammingThreshold.payload.harness.state.pending.analysis, true);
   assert.equal(atProgrammingThreshold.payload.harness.state.counters.analysisTurns, 0);

@@ -82,9 +82,7 @@ function extractAttachmentsFromTransferPayload(payload = {}) {
       for (const file of files) {
         if (isPlainObject(file?.attachmentMeta)) metas.push(file.attachmentMeta);
       }
-      continue;
     }
-    if (isPlainObject(envelope.attachmentMeta)) metas.push(envelope.attachmentMeta);
   }
   return metas;
 }

@@ -7,7 +7,17 @@ import path from "node:path";
 import { executeToolCall } from "../../../../src/system-core/agent/core/execution/tool-runner.js";
 import { createAgentHookManager, AGENT_HOOK_POINTS } from "../../../../src/system-core/hook/index.js";
 
-test("executeToolCall extracts attachmentMetas from multimodal tool result", async () => {
+function getPrimaryTransferFile(envelope = {}) {
+  return Array.isArray(envelope?.files) ? envelope.files[0] || {} : {};
+}
+
+function findTransferEnvelopeByFilePath(envelopes = [], pattern = "") {
+  return (Array.isArray(envelopes) ? envelopes : []).find((item = {}) =>
+    String(getPrimaryTransferFile(item)?.filePath || "").includes(pattern),
+  );
+}
+
+test("executeToolCall extracts attachments from multimodal tool result", async () => {
   const call = {
     id: "call_1",
     name: "multimodal_generate",
@@ -18,7 +28,7 @@ test("executeToolCall extracts attachmentMetas from multimodal tool result", asy
       JSON.stringify({
         toolName: "multimodal_generate",
         ok: true,
-        attachmentMetas: [
+        attachments: [
           {
             attachmentId: "att_1",
             name: "generated_image_1.png",
@@ -42,10 +52,10 @@ test("executeToolCall extracts attachmentMetas from multimodal tool result", asy
   });
 
   assert.equal(result.success, true);
-  assert.equal(Array.isArray(result.extractedAttachmentMetas), true);
-  assert.equal(result.extractedAttachmentMetas.length, 1);
+  assert.equal(Array.isArray(result.extractedAttachments), true);
+  assert.equal(result.extractedAttachments.length, 1);
   assert.equal(
-    result.extractedAttachmentMetas[0]?.relativePath,
+    result.extractedAttachments[0]?.relativePath,
     "runtime/attach/scoped/s1/model/a.png",
   );
 });
@@ -96,9 +106,9 @@ test("executeToolCall extracts attachmentMetas from transferEnvelopes", async ()
   });
 
   assert.equal(result.success, true);
-  assert.equal(Array.isArray(result.extractedAttachmentMetas), true);
-  assert.equal(result.extractedAttachmentMetas.length, 1);
-  assert.equal(result.extractedAttachmentMetas[0]?.attachmentId, "att_t1");
+  assert.equal(Array.isArray(result.extractedAttachments), true);
+  assert.equal(result.extractedAttachments.length, 1);
+  assert.equal(result.extractedAttachments[0]?.attachmentId, "att_t1");
 });
 
 test("executeToolCall returns toToolJsonResult when tool is missing", async () => {
@@ -251,16 +261,16 @@ test("executeToolCall: tool result too long should be persisted and return overf
   const payload = JSON.parse(result.toolResultText);
   assert.equal(payload.ok, true);
   assert.equal(payload.overflowed, true);
-  const overflowEnvelope = Array.isArray(payload.transferEnvelopes)
-    ? payload.transferEnvelopes.find((item = {}) => String(item?.filePath || "").includes(".tool-result-overflow/"))
-    : null;
-  assert.equal(typeof overflowEnvelope?.filePath, "string");
-  assert.equal(overflowEnvelope.filePath.includes(".tool-result-overflow"), true);
-  assert.equal(overflowEnvelope.filePath.includes(".tool-result-overflow/session-overflow-1/"), true);
+  const overflowEnvelope = findTransferEnvelopeByFilePath(payload.transferEnvelopes, ".tool-result-overflow/");
+  const overflowFile = getPrimaryTransferFile(overflowEnvelope);
+  assert.equal("filePath" in overflowEnvelope, false);
+  assert.equal(typeof overflowFile?.filePath, "string");
+  assert.equal(overflowFile.filePath.includes(".tool-result-overflow"), true);
+  assert.equal(overflowFile.filePath.includes(".tool-result-overflow/session-overflow-1/"), true);
 
   const overflowHostPath = String(
-    overflowEnvelope?.pathView?.hostPath ||
-      overflowEnvelope?.filePath ||
+    overflowFile?.pathView?.hostPath ||
+      overflowFile?.filePath ||
       "",
   );
   const overflowFileContent = await fs.readFile(overflowHostPath, "utf8");
@@ -388,14 +398,14 @@ test("executeToolCall: overflow keeps original semantic-transfer artifact and co
   assert.equal(Array.isArray(payload.transferEnvelopes), true);
   assert.equal(payload.transferEnvelopes.length >= 1, true);
   assert.equal(
-    result.extractedAttachmentMetas.some((item) => item?.attachmentId === "att_real_1"),
+    result.extractedAttachments.some((item) => item?.attachmentId === "att_real_1"),
     true,
   );
 
-  const overflowEnvelope = Array.isArray(payload.transferEnvelopes)
-    ? payload.transferEnvelopes.find((item = {}) => String(item?.filePath || "").includes(".tool-result-overflow/"))
-    : null;
-  const overflowHostPath = String(overflowEnvelope?.pathView?.hostPath || overflowEnvelope?.filePath || "");
+  const overflowEnvelope = findTransferEnvelopeByFilePath(payload.transferEnvelopes, ".tool-result-overflow/");
+  const overflowFile = getPrimaryTransferFile(overflowEnvelope);
+  assert.equal("filePath" in overflowEnvelope, false);
+  const overflowHostPath = String(overflowFile?.pathView?.hostPath || overflowFile?.filePath || "");
   const overflowPayload = JSON.parse(await fs.readFile(overflowHostPath, "utf8"));
   assert.equal(Array.isArray(overflowPayload.result.transferEnvelopes), true);
   assert.equal(overflowPayload.result.transferEnvelopes.length >= 1, true);
@@ -517,16 +527,17 @@ test("executeToolCall: overflow result should include sandbox path when resolver
 
   const payload = JSON.parse(result.toolResultText);
   assert.equal(payload.overflowed, true);
-  const overflowEnvelope = Array.isArray(payload.transferEnvelopes)
-    ? payload.transferEnvelopes.find((item = {}) => String(item?.filePath || "").includes(".tool-result-overflow/"))
-    : null;
-  assert.equal(typeof overflowEnvelope?.pathView?.sandboxPath, "string");
+  const overflowEnvelope = findTransferEnvelopeByFilePath(payload.transferEnvelopes, ".tool-result-overflow/");
+  const overflowFile = getPrimaryTransferFile(overflowEnvelope);
+  assert.equal("filePath" in overflowEnvelope, false);
+  assert.equal("pathView" in overflowEnvelope, false);
+  assert.equal(typeof overflowFile?.pathView?.sandboxPath, "string");
   assert.equal(
-    overflowEnvelope.pathView.sandboxPath.startsWith("/workspace/"),
+    overflowFile.pathView.sandboxPath.startsWith("/workspace/"),
     true,
   );
   assert.equal(
-    overflowEnvelope.pathView.sandboxPath.includes(
+    overflowFile.pathView.sandboxPath.includes(
       "/runtime/ops_workdir/.tool-result-overflow/",
     ),
     true,

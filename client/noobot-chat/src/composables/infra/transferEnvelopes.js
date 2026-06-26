@@ -65,16 +65,6 @@ function getTransferFilesFromEnvelope(envelope = null) {
   if (Array.isArray(envelope.files) && envelope.files.length) {
     return envelope.files.filter(isPlainObject);
   }
-  if (envelope.filePath || envelope.attachmentMeta) {
-    return [
-      {
-        filePath: normalizeString(envelope.filePath),
-        ...(isPlainObject(envelope.attachmentMeta) ? { attachmentMeta: envelope.attachmentMeta } : {}),
-        ...(isPlainObject(envelope.pathView) ? { pathView: envelope.pathView } : {}),
-        role: "primary",
-      },
-    ];
-  }
   return [];
 }
 
@@ -116,6 +106,9 @@ function getTransferDisplayPath(file = {}) {
   return firstNormalizedString(
     getPathViewDisplayPath(file?.pathView),
     file?.filePath,
+    file?.sandboxPath,
+    file?.relativePath,
+    file?.path,
     getAttachmentMetaDisplayPath(file?.attachmentMeta),
   );
 }
@@ -125,14 +118,23 @@ function transferFileToAttachmentMeta(file = {}) {
   const pathView = isPlainObject(file?.pathView) ? file.pathView : {};
   const filePath = getTransferDisplayPath(file);
   const name = normalizeString(file?.name || attachmentMeta?.name || filePath.split("/").pop());
+  const owner = isPlainObject(file?.owner)
+    ? file.owner
+    : isPlainObject(attachmentMeta?.owner)
+      ? attachmentMeta.owner
+      : null;
   return {
     ...attachmentMeta,
+    ...(file?.attachmentId || file?.id ? { attachmentId: normalizeString(file?.attachmentId || file?.id) } : {}),
     name,
-    mimeType: normalizeString(file?.mimeType || attachmentMeta?.mimeType || "application/octet-stream"),
+    mimeType: normalizeString(file?.mimeType || file?.type || attachmentMeta?.mimeType || "application/octet-stream"),
     size: Number(file?.size || attachmentMeta?.size || 0),
-    path: normalizeString(attachmentMeta?.path || pathView.hostPath || filePath),
-    relativePath: normalizeString(attachmentMeta?.relativePath || pathView.relativePath),
-    sandboxPath: normalizeString(attachmentMeta?.sandboxPath || pathView.sandboxPath),
+    path: normalizeString(attachmentMeta?.path || file?.path || pathView.hostPath || filePath),
+    relativePath: normalizeString(attachmentMeta?.relativePath || file?.relativePath || pathView.relativePath),
+    sandboxPath: normalizeString(attachmentMeta?.sandboxPath || file?.sandboxPath || pathView.sandboxPath),
+    ...(file?.attachmentSource || file?.source ? { attachmentSource: normalizeString(file?.attachmentSource || file?.source) } : {}),
+    ...(file?.sessionId ? { sessionId: normalizeString(file.sessionId) } : {}),
+    ...(owner ? { owner } : {}),
     transferFilePath: filePath,
     transferPathView: pathView,
     transferRole: normalizeString(file?.role || ""),

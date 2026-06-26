@@ -70,7 +70,11 @@ test("SessionTurnPersister persists final assistant transfer envelopes with atta
   assert.equal(appendedTurns[0].attachmentMetas, undefined);
   assert.deepEqual(appendedTurns[0].attachments, [{ attachmentId: "att-final", name: "final.md" }]);
   assert.equal("transferEnvelopes" in appendedTurns[0], true);
-  assert.equal(appendedTurns[0].transferEnvelopes?.[0]?.files?.[0]?.attachmentMeta?.attachmentId, "att-final");
+  assert.equal("attachmentMeta" in appendedTurns[0].transferEnvelopes?.[0]?.files?.[0], false);
+  assert.equal(appendedTurns[0].transferEnvelopes?.[0]?.files?.[0]?.attachmentId, "att-final");
+  assert.equal("id" in appendedTurns[0].transferEnvelopes?.[0]?.files?.[0], false);
+  assert.equal("type" in appendedTurns[0].transferEnvelopes?.[0]?.files?.[0], false);
+  assert.equal("source" in appendedTurns[0].transferEnvelopes?.[0]?.files?.[0], false);
   assert.equal(appendedTurns[0].transferEnvelopes?.length, 1);
 });
 
@@ -146,7 +150,8 @@ test("SessionTurnPersister drops direct-consumed intermediate tool payloads and 
   assert.equal(appendedTurns[0].attachmentMetas, undefined);
   assert.deepEqual(appendedTurns[0].attachments, []);
   assert.equal(appendedTurns[0].transferEnvelopes?.[0]?.protocol, "noobot.semantic-transfer");
-  assert.equal(appendedTurns[0].transferEnvelopes?.[0]?.files?.[0]?.attachmentMeta?.attachmentId, "parsed_1");
+  assert.equal("attachmentMeta" in appendedTurns[0].transferEnvelopes?.[0]?.files?.[0], false);
+  assert.equal(appendedTurns[0].transferEnvelopes?.[0]?.files?.[0]?.attachmentId, "parsed_1");
   const persistedContent = JSON.parse(appendedTurns[0].content);
   assert.equal(persistedContent.intermediateConsumedByModel, true);
   assert.equal(persistedContent.sessionPersistence, "summary_only");
@@ -156,7 +161,8 @@ test("SessionTurnPersister drops direct-consumed intermediate tool payloads and 
   const fullTurnLog = executionLogs[0]?.data || {};
   assert.equal(fullTurnLog.attachmentMetas, undefined);
   assert.deepEqual(fullTurnLog.attachments, []);
-  assert.equal(fullTurnLog.transferEnvelopes?.[0]?.files?.[0]?.attachmentMeta?.attachmentId, "parsed_1");
+  assert.equal("attachmentMeta" in fullTurnLog.transferEnvelopes?.[0]?.files?.[0], false);
+  assert.equal(fullTurnLog.transferEnvelopes?.[0]?.files?.[0]?.attachmentId, "parsed_1");
   assert.equal(JSON.parse(fullTurnLog.content).sessionPersistence, "summary_only");
 });
 
