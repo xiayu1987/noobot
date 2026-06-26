@@ -5,6 +5,8 @@
 import {
   createChatModel,
   createChatModelByName,
+  resolveDefaultModelSpec,
+  resolveModelSpecByName,
   adaptToolsForBinding,
   normalizeToolCalls,
 } from "../../../model/index.js";
@@ -19,6 +21,7 @@ import { compactToolResultTextForModel } from "../../../semantic-transfer/core/c
 import {
   PLUGIN_MODEL_HEADER_KEY,
 } from "../../../model/headers/plugin-headers.js";
+import { resolveBoundToolModelRequestOverrides } from "../turn/tool-choice-strategy.js";
 
 export const MAX_MINI_RUNNER_TOOL_TURNS = 5;
 
@@ -103,6 +106,8 @@ export function createAgentCapabilityModelInvoker({
   fallbackUserConfig = null,
   createChatModelFn = createChatModel,
   createChatModelByNameFn = createChatModelByName,
+  resolveDefaultModelSpecFn = resolveDefaultModelSpec,
+  resolveModelSpecByNameFn = resolveModelSpecByName,
   adaptToolsForBindingFn = adaptToolsForBinding,
   executeToolCallFn = executeToolCall,
 } = {}) {
@@ -230,6 +235,14 @@ export function createAgentCapabilityModelInvoker({
           },
           additionalHeaders,
         });
+    const modelSpec = normalizedModelName
+      ? resolveModelSpecByNameFn({
+          modelName: normalizedModelName,
+          globalConfig,
+          userConfig,
+          fallbackToDefault: false,
+        })
+      : resolveDefaultModelSpecFn({ globalConfig, userConfig });
 
     if (enableToolBinding !== true) {
       const ai = await llm.invoke(runMessages, {
@@ -275,6 +288,7 @@ export function createAgentCapabilityModelInvoker({
     for (let turn = 1; turn <= maxTurnCount; turn += 1) {
       const ai = await model.invoke(runMessages, {
         signal: runtime?.abortSignal || null,
+        ...(boundTools.length ? resolveBoundToolModelRequestOverrides(modelSpec || {}) : {}),
       });
       const text = normalizeTextContent(ai?.content);
       lastAssistantText = text;

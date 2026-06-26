@@ -1,9 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { HumanMessage } from "@langchain/core/messages";
+import { ChatOpenAI } from "@langchain/openai";
 
 import { runFunctionCallLoop } from "../../../../src/system-core/agent/core/turn/orchestrator.js";
 import { createAgentHookManager } from "../../../../src/system-core/hook/index.js";
+import {
+  applyBoundToolModelRequestOverridesToLlm,
+  resolveBoundToolModelRequestOverrides,
+} from "../../../../src/system-core/agent/core/turn/tool-choice-strategy.js";
+import { createBoundLlmToolChoiceInvoker } from "../../../../src/system-core/agent/core/turn/tool-invoke-strategy.js";
 
 function delay(ms = 0) {
   return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
@@ -68,8 +74,8 @@ function createModelState(llm, defaultModelSpec = null) {
       : { alias: "test_alias", model: "test-model" };
   return {
     llm,
-    activeModelName: "test-model",
-    activeModelAlias: "test_alias",
+    activeModelName: String(resolvedModelSpec?.model || "test-model"),
+    activeModelAlias: String(resolvedModelSpec?.alias || "test_alias"),
     eventListener: null,
     runtime: {
       systemRuntime: {
@@ -79,6 +85,7 @@ function createModelState(llm, defaultModelSpec = null) {
     globalConfig: {},
     userConfig: {},
     defaultModelSpec: resolvedModelSpec,
+    activeModelSpec: resolvedModelSpec,
     abortSignal: null,
   };
 }
@@ -486,7 +493,19 @@ test("loop over max turns: next turn no-tool response returns directly", async (
   assert.equal(capturedNoToolInvokeOptions[1]?.tool_choice, "auto");
 });
 
-test("auto tool_choice should not force non-thinking params", async () => {
+test("bound tool dashscope request overrides disable thinking", () => {
+  assert.deepEqual(
+    resolveBoundToolModelRequestOverrides({
+      format: "dashscope",
+      model: "qwen3.6-plus",
+      preserve_thinking: true,
+      thinking_budget: 4096,
+    }),
+    { preserve_thinking: false, thinking_budget: 0 },
+  );
+});
+
+test("auto tool_choice should apply bound tool dashscope request overrides", async () => {
   let toolInvokeCount = 0;
   const tool = {
     name: "execute_script",
@@ -511,7 +530,7 @@ test("auto tool_choice should not force non-thinking params", async () => {
   ]);
 
   const result = await runFunctionCallLoop({
-    modelState: createModelState(llm),
+    modelState: createModelState(llm, { format: "dashscope", model: "qwen3.6-plus" }),
     loopState: createLoopState({ maxTurns: 1, tool }),
     turn: 1,
   });
@@ -519,10 +538,137 @@ test("auto tool_choice should not force non-thinking params", async () => {
   assert.equal(toolInvokeCount, 1);
   assert.equal(capturedNoToolInvokeOptions[0]?.tool_choice, "auto");
   assert.equal(capturedNoToolInvokeOptions[1]?.tool_choice, "auto");
-  assert.equal(capturedNoToolInvokeOptions[1]?.enable_thinking, undefined);
-  assert.equal(capturedNoToolInvokeOptions[1]?.preserve_thinking, undefined);
-  assert.equal(capturedNoToolInvokeOptions[1]?.thinking_budget, undefined);
+  assert.equal(capturedNoToolInvokeOptions[1]?.enable_thinking, false);
+  assert.equal(capturedNoToolInvokeOptions[1]?.preserve_thinking, false);
+  assert.equal(capturedNoToolInvokeOptions[1]?.thinking_budget, 0);
   assert.equal(result.output, "收尾结果");
+});
+
+test("bound tool requests force openai_compatible reasoning_effort low", () => {
+  assert.deepEqual(
+    resolveBoundToolModelRequestOverrides({
+      format: "openai_compatible",
+      model: "gpt-5.5",
+      reasoning_effort: "high",
+    }),
+    { reasoning_effort: "low" },
+  );
+});
+
+test("bound ChatOpenAI request params force openai_compatible reasoning_effort low", () => {
+  const tool = {
+    type: "function",
+    function: {
+      name: "execute_script",
+      description: "execute script",
+      parameters: { type: "object", properties: {} },
+    },
+  };
+  const llm = new ChatOpenAI({
+    apiKey: "test-key",
+    configuration: { baseURL: "http://localhost" },
+    model: "gpt-5.5",
+    modelKwargs: { reasoning_effort: "high" },
+    reasoning: { effort: "high" },
+  });
+  const bound = llm.bindTools([tool]);
+
+  applyBoundToolModelRequestOverridesToLlm(bound, { reasoning_effort: "low" });
+
+  assert.equal(llm.invocationParams({}).reasoning_effort, "high");
+  assert.equal(bound.invocationParams({}).reasoning_effort, "low");
+});
+
+test("bound ChatOpenAI request params force dashscope thinking off", () => {
+  const tool = {
+    type: "function",
+    function: {
+      name: "execute_script",
+      description: "execute script",
+      parameters: { type: "object", properties: {} },
+    },
+  };
+  const llm = new ChatOpenAI({
+    apiKey: "test-key",
+    configuration: { baseURL: "http://localhost" },
+    model: "qwen3.6-plus",
+    modelKwargs: { preserve_thinking: true, thinking_budget: 1024 },
+  });
+  const bound = llm.bindTools([tool]);
+
+  applyBoundToolModelRequestOverridesToLlm(bound, {
+    preserve_thinking: false,
+    thinking_budget: 0,
+  });
+
+  assert.equal(llm.invocationParams({}).preserve_thinking, true);
+  assert.equal(llm.invocationParams({}).thinking_budget, 1024);
+  assert.equal(bound.invocationParams({}).preserve_thinking, false);
+  assert.equal(bound.invocationParams({}).thinking_budget, 0);
+});
+
+test("bound tool openai_compatible request overrides are passed to invoke options", async () => {
+  const tool = {
+    name: "execute_script",
+    async invoke() {
+      return "{\"ok\":true}";
+    },
+  };
+  const { llm, capturedNoToolInvokeOptions } = createToolCallingLlm([
+    {
+      content: "完成",
+      tool_calls: [],
+      additional_kwargs: {},
+      response_metadata: {},
+    },
+  ]);
+
+  const result = await runFunctionCallLoop({
+    modelState: createModelState(llm, {
+      format: "openai_compatible",
+      model: "gpt-5.5",
+      reasoning_effort: "high",
+    }),
+    loopState: createLoopState({ maxTurns: 1, tool }),
+    turn: 1,
+  });
+
+  assert.equal(capturedNoToolInvokeOptions[0]?.tool_choice, "auto");
+  assert.equal(capturedNoToolInvokeOptions[0]?.reasoning_effort, "low");
+  assert.equal(result.output, "完成");
+});
+
+test("bound tool overrides use active model spec when it differs from default spec", async () => {
+  const { llm, capturedNoToolInvokeOptions } = createToolCallingLlm([
+    {
+      content: "完成",
+      tool_calls: [],
+      additional_kwargs: {},
+      response_metadata: {},
+    },
+  ]);
+  const modelState = createModelState(llm, { format: "dashscope", model: "qwen3.6-plus" });
+  modelState.activeModelSpec = {
+    format: "openai_compatible",
+    model: "gpt-5.5",
+    reasoning_effort: "high",
+  };
+  const invokeBoundLlmWithToolChoice = createBoundLlmToolChoiceInvoker({
+    adaptedBinding: { bindOptions: { tool_choice: "auto" } },
+    boundTools: [{ name: "execute_script" }],
+    invokeLlm: llm,
+    messages: [],
+    modelState,
+    runtime: modelState.runtime,
+    abortSignal: null,
+    turn: 1,
+  });
+
+  await invokeBoundLlmWithToolChoice("auto");
+
+  assert.equal(capturedNoToolInvokeOptions[0]?.reasoning_effort, "low");
+  assert.equal(capturedNoToolInvokeOptions[0]?.preserve_thinking, undefined);
+  assert.equal(capturedNoToolInvokeOptions[0]?.thinking_budget, undefined);
 });
 
 test("multiple tool calls stay in one tool turn and advance loop turns by tool count", async () => {

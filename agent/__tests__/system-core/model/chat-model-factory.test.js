@@ -78,3 +78,13 @@ test("buildModelKwargs respects explicit dashscope enable_thinking value", () =>
 
   assert.equal(kwargs.enable_thinking, true);
 });
+
+test("buildModelKwargs preserves explicit dashscope zero thinking_budget", () => {
+  const kwargs = buildModelKwargs({
+    format: "dashscope",
+    model: "qwen3.6-plus",
+    thinking_budget: 0,
+  });
+
+  assert.equal(kwargs.thinking_budget, 0);
+});
