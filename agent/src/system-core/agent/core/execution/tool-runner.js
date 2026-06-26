@@ -6,7 +6,7 @@
 import { emitEvent } from "../../../event/index.js";
 import { isFatalError } from "../../../error/index.js";
 import { toToolJsonResult } from "../../../tools/core/tool-json-result.js";
-import { extractAttachmentMetasFromToolResult } from "../media/artifact-service.js";
+import { extractAttachmentsFromToolResult } from "../media/artifact-service.js";
 import { isAbortError } from "../utils/error-utils.js";
 import { parseJsonObjectSafely } from "../utils/json-utils.js";
 import { handleEngineError } from "../error/index.js";
@@ -183,7 +183,7 @@ export async function executeToolCall({
     return {
       call,
       toolResultText,
-      extractedAttachmentMetas: [],
+      extractedAttachments: [],
       success: false,
       failureReason: "tool_not_found",
     };
@@ -260,7 +260,7 @@ export async function executeToolCall({
         return {
           call,
           toolResultText,
-          extractedAttachmentMetas: [],
+          extractedAttachments: [],
           success: true,
           failureReason: "",
         };
@@ -364,7 +364,7 @@ export async function executeToolCall({
     toolResultText: rawToolResultText || toolResultText,
     invokeError,
   });
-  const rawExtractedAttachmentMetas = extractAttachmentMetasFromToolResult(
+  const rawExtractedAttachments = extractAttachmentsFromToolResult(
     call?.name,
     rawToolResultText || toolResultText,
   );
@@ -407,16 +407,16 @@ export async function executeToolCall({
       agentContext,
     }),
   });
-  const normalizedExtractedAttachmentMetas = extractAttachmentMetasFromToolResult(
+  const normalizedExtractedAttachments = extractAttachmentsFromToolResult(
     call?.name,
     toolResultText,
   );
   return {
     call,
     toolResultText,
-    extractedAttachmentMetas: normalizedExtractedAttachmentMetas.length
-      ? normalizedExtractedAttachmentMetas
-      : rawExtractedAttachmentMetas,
+    extractedAttachments: normalizedExtractedAttachments.length
+      ? normalizedExtractedAttachments
+      : rawExtractedAttachments,
     success: failureState.success,
     failureReason: failureState.reason,
   };

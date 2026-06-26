@@ -340,8 +340,8 @@ export function registerFrontendPlugin(ctx = {}) {
         component: MessageAttachments,
         match: () => true,
         resolveProps: (context = {}) => ({
-          attachments: Array.isArray(context?.displayedAttachmentMetas)
-            ? context.displayedAttachmentMetas
+          attachments: Array.isArray(context?.displayedAttachments)
+            ? context.displayedAttachments
             : [],
           isImageMime: context?.isImageMime,
           canPreviewAttachment: context?.canPreviewAttachment,

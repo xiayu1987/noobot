@@ -9,6 +9,7 @@ import {
   buildSessionDisplaySummary,
   isSessionDisplaySummaryPayload,
 } from "./session-summary-builders.js";
+import { normalizeSessionEntity } from "./entities/session-entity.js";
 
 export const SESSION_ARTIFACT_FILE_NAMES = Object.freeze({
   session: "session.json",
@@ -105,15 +106,17 @@ export async function writeSessionArtifact({
   sessionPayload = {},
   depth = 0,
   atomic = true,
+  now = () => new Date().toISOString(),
 } = {}) {
   const files = buildSessionArtifactFileMap(sessionDir);
   await mkdir(sessionDir, { recursive: true });
-  const summaryPayload = buildSessionDisplaySummary(sessionPayload, { depth });
+  const normalizedSessionPayload = normalizeSessionEntity(sessionPayload, { now });
+  const summaryPayload = buildSessionDisplaySummary(normalizedSessionPayload, { depth });
   await Promise.all([
     writeJsonWithStorage({
       storageService,
       artifactPath: files.session,
-      payload: sessionPayload,
+      payload: normalizedSessionPayload,
       atomic,
     }),
     writeJsonWithStorage({
@@ -125,7 +128,7 @@ export async function writeSessionArtifact({
   ]);
   return {
     files,
-    session: sessionPayload,
+    session: normalizedSessionPayload,
     sessionSummary: summaryPayload,
   };
 }
@@ -222,6 +225,7 @@ export async function persistSessionArtifactSnapshot({
   taskPayload = {},
   executionPayload = {},
   metadata = null,
+  now = () => new Date().toISOString(),
 } = {}) {
   await mkdir(outputDir, { recursive: true });
   const files = buildSessionArtifactFileMap(outputDir);
@@ -234,6 +238,7 @@ export async function persistSessionArtifactSnapshot({
     writeSessionArtifact({
       sessionDir: outputDir,
       sessionPayload: sessionPayload && typeof sessionPayload === "object" ? sessionPayload : {},
+      now,
     }),
     writeTaskArtifact({
       sessionDir: outputDir,

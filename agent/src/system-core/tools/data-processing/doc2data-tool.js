@@ -105,7 +105,7 @@ function buildExistingArtifactPersistedOutput({
   text = "",
 } = {}) {
   if (!attachmentMeta || typeof attachmentMeta !== "object" || Array.isArray(attachmentMeta)) {
-    return { attachmentMetas: [], transferEnvelopes: [] };
+    return { attachments: [], transferEnvelopes: [] };
   }
   const file = buildTransferFileEntry({
     runtime,
@@ -136,7 +136,7 @@ function buildExistingArtifactPersistedOutput({
   });
   const transferEnvelopes = [envelope];
   return {
-    attachmentMetas: [attachmentMeta],
+    attachments: [attachmentMeta],
     transferEnvelopes,
     resultFields: buildTextResultFields({
       text,
@@ -306,8 +306,8 @@ function resolveDocInputAttachmentMeta(filePath = "", agentContext = {}) {
   const normalizedInputPath = String(filePath || "").trim();
   const runtime = getRuntimeFromAgentContext(agentContext);
   const runtimeAttachmentMetas = [
-    ...(Array.isArray(runtime?.inputAttachmentMetas) ? runtime.inputAttachmentMetas : []),
-    ...(Array.isArray(runtime?.attachmentMetas) ? runtime.attachmentMetas : []),
+    ...(Array.isArray(runtime?.inputAttachments) ? runtime.inputAttachments : []),
+    ...(Array.isArray(runtime?.attachments) ? runtime.attachments : []),
   ];
   if (!normalizedInputPath || !runtimeAttachmentMetas.length) return null;
   const inputBaseName = path.basename(normalizedInputPath);
@@ -496,9 +496,9 @@ async function persistDoc2DataTextAttachment({
     producer: { type: "tool", name: TOOL_NAME.DOC_TO_DATA },
     meta: { mode, inputFile },
   });
-  const attachmentMetas = getTransferAttachmentMetas(materialized.transferEnvelopes);
+  const attachments = getTransferAttachmentMetas(materialized.transferEnvelopes);
   return {
-    attachmentMetas,
+    attachments,
     transferEnvelopes: materialized.transferEnvelopes,
     resultFields: materialized.resultFields,
   };
@@ -524,7 +524,7 @@ async function backwriteParsedResultToSourceAttachment({
       sourceAttachmentSource: String(sourceAttachmentMeta?.attachmentSource || "").trim(),
       sourceAttachmentPath: String(sourceAttachmentMeta?.path || "").trim(),
     });
-    for (const bucketName of ["inputAttachmentMetas", "attachmentMetas"]) {
+    for (const bucketName of ["inputAttachments", "attachments"]) {
       if (!Array.isArray(runtime?.[bucketName])) continue;
       const sourceAttachmentIndex = runtime[bucketName].findIndex(
         (item) => String(item?.attachmentId || "").trim() === sourceAttachmentId,
@@ -542,17 +542,17 @@ async function backwriteParsedResultToSourceAttachment({
   }
 }
 
-function _normalizeAttachmentMetas(persistedOutput) {
-  return Array.isArray(persistedOutput?.attachmentMetas)
-    ? persistedOutput.attachmentMetas
+function _normalizeAttachments(persistedOutput) {
+  return Array.isArray(persistedOutput?.attachments)
+    ? persistedOutput.attachments
     : [];
 }
 
-async function _backwriteFirstAttachment({ runtime, sourceAttachmentMeta, attachmentMetas }) {
+async function _backwriteFirstAttachment({ runtime, sourceAttachmentMeta, attachments }) {
   return backwriteParsedResultToSourceAttachment({
     runtime,
     sourceAttachmentMeta,
-    parsedAttachmentMeta: attachmentMetas[0] || null,
+    parsedAttachmentMeta: attachments[0] || null,
   });
 }
 
@@ -627,7 +627,7 @@ export function createDoc2DataTool({ agentContext }) {
             attachmentMeta: reusableAttachmentMeta,
             text: directTextDocument.text,
           });
-          const attachmentMetas = _normalizeAttachmentMetas(persistedOutput);
+          const attachments = _normalizeAttachments(persistedOutput);
           return toToolJsonResult(
             TOOL_NAME.DOC_TO_DATA,
             {
@@ -644,7 +644,7 @@ export function createDoc2DataTool({ agentContext }) {
                 parsed_from_attachment_id: String(reusableAttachmentMeta?.attachmentId || ""),
                 parsed_result_path: String(reusableAttachmentMeta?.path || inputFile || ""),
                 source_attachment_backwritten: false,
-                saved_attachment_count: attachmentMetas.length,
+                saved_attachment_count: attachments.length,
                 text_length: directTextDocument.text.length,
               },
             },
@@ -658,11 +658,11 @@ export function createDoc2DataTool({ agentContext }) {
           text: directTextDocument.text,
           mode: TOOL_DATA_MODE.DIRECT_TEXT,
         });
-        const attachmentMetas = _normalizeAttachmentMetas(persistedOutput);
+        const attachments = _normalizeAttachments(persistedOutput);
         const updatedSourceAttachment = await _backwriteFirstAttachment({
           runtime,
           sourceAttachmentMeta,
-          attachmentMetas,
+          attachments,
         });
         return toToolJsonResult(
           TOOL_NAME.DOC_TO_DATA,
@@ -677,9 +677,9 @@ export function createDoc2DataTool({ agentContext }) {
               bytes: Number(directTextDocument.bytes || 0),
               parse_engine: resolvedParseEngine,
               parsed_from_attachment_id: String(sourceAttachmentMeta?.attachmentId || ""),
-              parsed_result_path: String(attachmentMetas?.[0]?.path || ""),
+              parsed_result_path: String(attachments?.[0]?.path || ""),
               source_attachment_backwritten: Boolean(updatedSourceAttachment),
-              saved_attachment_count: attachmentMetas.length,
+              saved_attachment_count: attachments.length,
               text_length: directTextDocument.text.length,
             },
           },
@@ -701,11 +701,11 @@ export function createDoc2DataTool({ agentContext }) {
             text: libreOfficeResult.text,
             mode: libreOfficeResult.mode || "libreoffice_text",
           });
-          const attachmentMetas = _normalizeAttachmentMetas(persistedOutput);
+          const attachments = _normalizeAttachments(persistedOutput);
           const updatedSourceAttachment = await _backwriteFirstAttachment({
             runtime,
             sourceAttachmentMeta,
-            attachmentMetas,
+            attachments,
           });
           return toToolJsonResult(
             TOOL_NAME.DOC_TO_DATA,
@@ -721,9 +721,9 @@ export function createDoc2DataTool({ agentContext }) {
                 parse_engine: resolvedParseEngine,
                 libreoffice_output_format: String(libreOfficeResult.outputFormat || ""),
                 parsed_from_attachment_id: String(sourceAttachmentMeta?.attachmentId || ""),
-                parsed_result_path: String(attachmentMetas?.[0]?.path || ""),
+                parsed_result_path: String(attachments?.[0]?.path || ""),
                 source_attachment_backwritten: Boolean(updatedSourceAttachment),
-                saved_attachment_count: attachmentMetas.length,
+                saved_attachment_count: attachments.length,
                 text_length: libreOfficeResult.text.length,
               },
             },
@@ -819,11 +819,11 @@ export function createDoc2DataTool({ agentContext }) {
         text: mergedText,
         mode: TOOL_DATA_MODE.IMAGE_MODEL,
       });
-      const attachmentMetas = _normalizeAttachmentMetas(persistedOutput);
+      const attachments = _normalizeAttachments(persistedOutput);
       const updatedSourceAttachment = await _backwriteFirstAttachment({
         runtime,
         sourceAttachmentMeta,
-        attachmentMetas,
+        attachments,
       });
 
       return toToolJsonResult(
@@ -845,11 +845,11 @@ export function createDoc2DataTool({ agentContext }) {
             batch_count: batchResults.length,
             parse_engine: effectiveParseEngine,
             parsed_from_attachment_id: String(sourceAttachmentMeta?.attachmentId || ""),
-            parsed_result_path: String(attachmentMetas?.[0]?.path || ""),
+            parsed_result_path: String(attachments?.[0]?.path || ""),
             source_attachment_backwritten: Boolean(updatedSourceAttachment),
             total_image_bytes: totalImageBytes,
             batch_max_bytes: MAX_BATCH_BYTES,
-            saved_attachment_count: attachmentMetas.length,
+            saved_attachment_count: attachments.length,
             text_length: mergedText.length,
             pages: batchResults.flatMap((item) => item.pages || []),
           },

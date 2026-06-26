@@ -54,7 +54,7 @@ export async function prepareWorkflowPlanningMessage({
   });
   attachPlanningDialog(planningWorkflowPayload, ctx, planningPersistResult);
   planningWorkflowPayload.nodeSessions = [];
-  planningWorkflowPayload.attachmentMetas = [];
+  planningWorkflowPayload.attachments = [];
   await appendWorkflowPlanningMessage({
     options,
     agentResult,
@@ -63,7 +63,7 @@ export async function prepareWorkflowPlanningMessage({
     semanticText,
     semanticResolution,
     workflowPayload: planningWorkflowPayload,
-    attachmentMetas: [],
+    attachments: [],
   });
   await emitWorkflowRuntimeEvent({
     options,

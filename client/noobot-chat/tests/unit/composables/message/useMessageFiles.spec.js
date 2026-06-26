@@ -87,7 +87,7 @@ describe("useMessageFiles", () => {
       role: "assistant",
       dialogProcessId: "dp-1",
       content: "done",
-      attachmentMetas: [
+      attachments: [
         {
           attachmentId: "att-transfer-1",
           name: "legacy-result.md",
@@ -97,15 +97,15 @@ describe("useMessageFiles", () => {
       ],
       transferEnvelopes: [envelope],
     };
-    const { displayedAttachmentMetas } = useMessageFiles({
+    const { displayedAttachments } = useMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [],
       getSessionDocs: () => [],
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toHaveLength(1);
-    expect(displayedAttachmentMetas.value[0]).toMatchObject({
+    expect(displayedAttachments.value).toHaveLength(1);
+    expect(displayedAttachments.value[0]).toMatchObject({
       attachmentId: "att-transfer-1",
       name: "legacy-result.md",
       mimeType: "text/plain",
@@ -119,7 +119,7 @@ describe("useMessageFiles", () => {
       role: "assistant",
       dialogProcessId: "dp-1",
       content: "done",
-      attachmentMetas: [
+      attachments: [
         {
           attachmentId: "att-harness-1",
           name: "harness-acceptance-report.txt",
@@ -134,18 +134,18 @@ describe("useMessageFiles", () => {
         },
       ],
     };
-    const { displayedAttachmentMetas } = useMessageFiles({
+    const { displayedAttachments } = useMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [],
       getSessionDocs: () => [],
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toHaveLength(2);
-    expect(displayedAttachmentMetas.value.find((item) => item.attachmentId === "att-harness-1")).toMatchObject({
+    expect(displayedAttachments.value).toHaveLength(2);
+    expect(displayedAttachments.value.find((item) => item.attachmentId === "att-harness-1")).toMatchObject({
       owner: { type: "plugin" },
     });
-    expect(displayedAttachmentMetas.value.find((item) => item.attachmentId === "att-agent-1")).toMatchObject({
+    expect(displayedAttachments.value.find((item) => item.attachmentId === "att-agent-1")).toMatchObject({
       owner: { type: "agent" },
     });
   });
@@ -157,7 +157,7 @@ describe("useMessageFiles", () => {
       turnScopeId: "turn-1",
       dialogProcessId: "dp-1",
       content: "done",
-      attachmentMetas: [
+      attachments: [
         {
           attachmentId: "plan-1",
           name: "harness-plan-text.txt",
@@ -181,7 +181,7 @@ describe("useMessageFiles", () => {
           turnScopeId: "turn-1",
           dialogProcessId: "dp-1",
           content: "done",
-          attachmentMetas: [
+          attachments: [
             { attachmentId: "plan-1", name: "harness-plan-text.txt", size: 1400 },
             { attachmentId: "report-1", name: "harness-acceptance-report.txt", size: 5600 },
           ],
@@ -189,19 +189,19 @@ describe("useMessageFiles", () => {
       ],
     };
 
-    const { displayedAttachmentMetas } = useMessageFiles({
+    const { displayedAttachments } = useMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [messageItem],
       getSessionDocs: () => [refreshedSessionDoc],
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toHaveLength(2);
-    expect(displayedAttachmentMetas.value.map((item) => item.attachmentId)).toEqual([
+    expect(displayedAttachments.value).toHaveLength(2);
+    expect(displayedAttachments.value.map((item) => item.attachmentId)).toEqual([
       "plan-1",
       "report-1",
     ]);
-    expect(displayedAttachmentMetas.value).toEqual([
+    expect(displayedAttachments.value).toEqual([
       expect.objectContaining({
         attachmentId: "plan-1",
         owner: { type: "plugin", id: "harness-plugin" },
@@ -220,7 +220,7 @@ describe("useMessageFiles", () => {
       turnScopeId: "turn-1",
       dialogProcessId: "dp-1",
       content: "done",
-      attachmentMetas: [
+      attachments: [
         { attachmentId: "report-1", name: "harness-acceptance-report.txt", size: 5600 },
         {
           attachmentId: "report-1",
@@ -231,15 +231,15 @@ describe("useMessageFiles", () => {
       ],
     };
 
-    const { displayedAttachmentMetas } = useMessageFiles({
+    const { displayedAttachments } = useMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [messageItem],
       getSessionDocs: () => [],
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toHaveLength(1);
-    expect(displayedAttachmentMetas.value[0]).toMatchObject({
+    expect(displayedAttachments.value).toHaveLength(1);
+    expect(displayedAttachments.value[0]).toMatchObject({
       attachmentId: "report-1",
       owner: { type: "plugin", id: "harness-plugin" },
     });
@@ -252,7 +252,7 @@ describe("useMessageFiles", () => {
       turnScopeId: "turn-1",
       dialogProcessId: "dp-1",
       content: "done",
-      attachmentMetas: [
+      attachments: [
         {
           attachmentId: "plan-plugin-live",
           name: "harness-plan-text.txt",
@@ -276,7 +276,7 @@ describe("useMessageFiles", () => {
           turnScopeId: "turn-1",
           dialogProcessId: "dp-1",
           content: "done",
-          attachmentMetas: [
+          attachments: [
             { attachmentId: "plan-agent-refresh", name: "harness-plan-text.txt", size: 1400 },
             { attachmentId: "report-agent-refresh", name: "harness-acceptance-report.txt", size: 5600 },
           ],
@@ -284,19 +284,19 @@ describe("useMessageFiles", () => {
       ],
     };
 
-    const { displayedAttachmentMetas } = useMessageFiles({
+    const { displayedAttachments } = useMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [messageItem],
       getSessionDocs: () => [refreshedSessionDoc],
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toHaveLength(2);
-    expect(displayedAttachmentMetas.value.map((item) => item.attachmentId)).toEqual([
+    expect(displayedAttachments.value).toHaveLength(2);
+    expect(displayedAttachments.value.map((item) => item.attachmentId)).toEqual([
       "plan-plugin-live",
       "report-plugin-live",
     ]);
-    expect(displayedAttachmentMetas.value).toEqual([
+    expect(displayedAttachments.value).toEqual([
       expect.objectContaining({ name: "harness-plan-text.txt", owner: expect.objectContaining({ type: "plugin" }) }),
       expect.objectContaining({ name: "harness-acceptance-report.txt", owner: expect.objectContaining({ type: "plugin" }) }),
     ]);
@@ -309,7 +309,7 @@ describe("useMessageFiles", () => {
       turnScopeId: "turn-1",
       dialogProcessId: "dp-1",
       content: "done",
-      attachmentMetas: [
+      attachments: [
         {
           attachmentId: "plan-nested-owner",
           name: "harness-plan-text.txt",
@@ -325,15 +325,15 @@ describe("useMessageFiles", () => {
       ],
     };
 
-    const { displayedAttachmentMetas } = useMessageFiles({
+    const { displayedAttachments } = useMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [messageItem],
       getSessionDocs: () => [],
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toHaveLength(2);
-    expect(displayedAttachmentMetas.value).toEqual([
+    expect(displayedAttachments.value).toHaveLength(2);
+    expect(displayedAttachments.value).toEqual([
       expect.objectContaining({
         attachmentId: "plan-nested-owner",
         owner: expect.objectContaining({ type: "plugin" }),
@@ -352,7 +352,7 @@ describe("useMessageFiles", () => {
       turnScopeId: "turn-1",
       dialogProcessId: "dp-1",
       content: "done",
-      attachmentMetas: [
+      attachments: [
         { attachmentId: "plan-current", name: "harness-plan-text.txt", size: 1400 },
         { attachmentId: "report-current", name: "harness-acceptance-report.txt", size: 5600 },
       ],
@@ -366,7 +366,7 @@ describe("useMessageFiles", () => {
           turnScopeId: "turn-1",
           dialogProcessId: "dp-1",
           content: "done",
-          attachmentMetas: [
+          attachments: [
             { attachmentId: "plan-refreshed", name: "harness-plan-text.txt", size: 1400 },
             { attachmentId: "report-refreshed", name: "harness-acceptance-report.txt", size: 5600 },
           ],
@@ -374,15 +374,15 @@ describe("useMessageFiles", () => {
       ],
     };
 
-    const { displayedAttachmentMetas } = useMessageFiles({
+    const { displayedAttachments } = useMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [messageItem],
       getSessionDocs: () => [refreshedSessionDoc],
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toHaveLength(4);
-    expect(displayedAttachmentMetas.value).toEqual([
+    expect(displayedAttachments.value).toHaveLength(4);
+    expect(displayedAttachments.value).toEqual([
       expect.objectContaining({ attachmentId: "plan-current", owner: { type: "agent" } }),
       expect.objectContaining({ attachmentId: "report-current", owner: { type: "agent" } }),
       expect.objectContaining({ attachmentId: "plan-refreshed", owner: { type: "agent" } }),
@@ -397,7 +397,7 @@ describe("useMessageFiles", () => {
       turnScopeId: "turn-1",
       dialogProcessId: "dp-1",
       content: "done",
-      attachmentMetas: [
+      attachments: [
         {
           attachmentId: "plan-current",
           name: "harness-plan-text.txt",
@@ -421,7 +421,7 @@ describe("useMessageFiles", () => {
           turnScopeId: "turn-1",
           dialogProcessId: "dp-1",
           content: "done",
-          attachmentMetas: [
+          attachments: [
             {
               attachmentId: "plan-refreshed",
               name: "harness-plan-text.txt",
@@ -439,15 +439,15 @@ describe("useMessageFiles", () => {
       ],
     };
 
-    const { displayedAttachmentMetas } = useMessageFiles({
+    const { displayedAttachments } = useMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [messageItem],
       getSessionDocs: () => [refreshedSessionDoc],
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toHaveLength(2);
-    expect(displayedAttachmentMetas.value).toEqual([
+    expect(displayedAttachments.value).toHaveLength(2);
+    expect(displayedAttachments.value).toEqual([
       expect.objectContaining({
         attachmentId: "plan-current",
         owner: expect.objectContaining({ type: "plugin" }),
@@ -464,7 +464,7 @@ describe("useMessageFiles", () => {
       role: "assistant",
       dialogProcessId: "dp-1",
       content: "done",
-      attachmentMetas: [
+      attachments: [
         {
           attachmentId: "att-legacy-harness-name",
           name: "harness-named-file.txt",
@@ -473,27 +473,27 @@ describe("useMessageFiles", () => {
         },
       ],
     };
-    const { displayedAttachmentMetas } = useMessageFiles({
+    const { displayedAttachments } = useMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [],
       getSessionDocs: () => [],
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toHaveLength(1);
-    expect(displayedAttachmentMetas.value[0]).toMatchObject({
+    expect(displayedAttachments.value).toHaveLength(1);
+    expect(displayedAttachments.value[0]).toMatchObject({
       attachmentId: "att-legacy-harness-name",
       owner: { type: "agent" },
     });
   });
 
 
-  it("keeps parsed result metadata from attachmentMetas", () => {
+  it("keeps parsed result metadata from attachments", () => {
     const messageItem = {
       role: "user",
       dialogProcessId: "dp-1",
       content: "source",
-      attachmentMetas: [
+      attachments: [
         {
           attachmentId: "src-1",
           name: "source.pdf",
@@ -503,15 +503,15 @@ describe("useMessageFiles", () => {
         },
       ],
     };
-    const { displayedAttachmentMetas } = useMessageFiles({
+    const { displayedAttachments } = useMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [],
       getSessionDocs: () => [],
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toHaveLength(1);
-    expect(displayedAttachmentMetas.value[0]).toMatchObject({
+    expect(displayedAttachments.value).toHaveLength(1);
+    expect(displayedAttachments.value[0]).toMatchObject({
       attachmentId: "src-1",
       parsedResult: { attachmentId: "parsed-1" },
       parsedResultUrl: "/api/attachments/parsed-1",
@@ -519,7 +519,7 @@ describe("useMessageFiles", () => {
     });
   });
 
-  it("does not read legacy attachments fallback", () => {
+  it("reads canonical message attachments", () => {
     const messageItem = {
       role: "user",
       dialogProcessId: "dp-1",
@@ -528,14 +528,16 @@ describe("useMessageFiles", () => {
         { attachmentId: "legacy-1", name: "legacy.pdf" },
       ],
     };
-    const { displayedAttachmentMetas } = useMessageFiles({
+    const { displayedAttachments } = useMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [],
       getSessionDocs: () => [],
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toEqual([]);
+    expect(displayedAttachments.value).toEqual([
+      { attachmentId: "legacy-1", name: "legacy.pdf" },
+    ]);
   });
 
   it("does not backfill written files while current assistant is pending before streaming starts", () => {
@@ -614,24 +616,24 @@ describe("useMessageFiles", () => {
       role: "assistant",
       pending: true,
       dialogProcessId: "dp-1",
-      attachmentMetas: [],
+      attachments: [],
     };
     const previousAssistantMessage = {
       role: "assistant",
       pending: false,
       dialogProcessId: "dp-1",
-      attachmentMetas: [
+      attachments: [
         { attachmentId: "prev-1", name: "previous-result.md" },
       ],
     };
-    const { displayedAttachmentMetas } = useMessageFiles({
+    const { displayedAttachments } = useMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [previousAssistantMessage, messageItem],
       getSessionDocs: () => [],
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toEqual([]);
+    expect(displayedAttachments.value).toEqual([]);
   });
 
   it("collects attachments for the same dialogProcessId after current dialog starts streaming", () => {
@@ -640,25 +642,25 @@ describe("useMessageFiles", () => {
       pending: false,
       dialogProcessId: "dp-1",
       turnScopeId: "turn-1",
-      attachmentMetas: [],
+      attachments: [],
     };
     const previousAssistantMessage = {
       role: "assistant",
       pending: false,
       dialogProcessId: "dp-1",
       turnScopeId: "turn-1",
-      attachmentMetas: [
+      attachments: [
         { attachmentId: "prev-1", name: "previous-result.md" },
       ],
     };
-    const { displayedAttachmentMetas } = useMessageFiles({
+    const { displayedAttachments } = useMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [previousAssistantMessage, messageItem],
       getSessionDocs: () => [],
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toEqual([
+    expect(displayedAttachments.value).toEqual([
       { attachmentId: "prev-1", owner: { type: "agent" }, name: "previous-result.md" },
     ]);
   });
@@ -669,25 +671,25 @@ describe("useMessageFiles", () => {
       pending: false,
       dialogProcessId: "dp-1",
       turnScopeId: "turn-current",
-      attachmentMetas: [],
+      attachments: [],
     };
     const previousAssistantMessage = {
       role: "assistant",
       pending: false,
       dialogProcessId: "dp-1",
       turnScopeId: "turn-previous",
-      attachmentMetas: [
+      attachments: [
         { attachmentId: "prev-1", name: "previous-result.md" },
       ],
     };
-    const { displayedAttachmentMetas } = useMessageFiles({
+    const { displayedAttachments } = useMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [previousAssistantMessage, messageItem],
       getSessionDocs: () => [],
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toEqual([]);
+    expect(displayedAttachments.value).toEqual([]);
   });
 
   it("does not collect previous assistant attachments when explicit turn identity is missing", () => {
@@ -695,24 +697,24 @@ describe("useMessageFiles", () => {
       role: "assistant",
       pending: false,
       dialogProcessId: "dp-1",
-      attachmentMetas: [],
+      attachments: [],
     };
     const previousAssistantMessage = {
       role: "assistant",
       pending: false,
       dialogProcessId: "dp-1",
-      attachmentMetas: [
+      attachments: [
         { attachmentId: "prev-1", name: "previous-result.md" },
       ],
     };
-    const { displayedAttachmentMetas } = useMessageFiles({
+    const { displayedAttachments } = useMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [previousAssistantMessage, messageItem],
       getSessionDocs: () => [],
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toEqual([]);
+    expect(displayedAttachments.value).toEqual([]);
   });
 
   it("does not fall back to dialogProcessId when current message has a turn scope", () => {
@@ -721,24 +723,24 @@ describe("useMessageFiles", () => {
       pending: false,
       dialogProcessId: "dp-1",
       turnScopeId: "turn-current",
-      attachmentMetas: [],
+      attachments: [],
     };
     const previousAssistantMessage = {
       role: "assistant",
       pending: false,
       dialogProcessId: "dp-1",
-      attachmentMetas: [
+      attachments: [
         { attachmentId: "prev-1", name: "previous-result.md" },
       ],
     };
-    const { displayedAttachmentMetas } = useMessageFiles({
+    const { displayedAttachments } = useMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [previousAssistantMessage, messageItem],
       getSessionDocs: () => [],
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toEqual([]);
+    expect(displayedAttachments.value).toEqual([]);
   });
 
   it("does not collect previous turn tool attachments for a later assistant before refresh", () => {
@@ -746,7 +748,7 @@ describe("useMessageFiles", () => {
     const firstTool = {
       role: "tool",
       dialogProcessId: "dp-first",
-      attachmentMetas: [
+      attachments: [
         { attachmentId: "bird-1", name: "generated_image_1.png" },
       ],
     };
@@ -754,7 +756,7 @@ describe("useMessageFiles", () => {
       role: "assistant",
       dialogProcessId: "dp-first",
       content: "小鸟图片已生成",
-      attachmentMetas: [],
+      attachments: [],
     };
     const secondUser = { role: "user", dialogProcessId: "dp-second", content: "你好" };
     const secondAssistant = {
@@ -763,18 +765,18 @@ describe("useMessageFiles", () => {
       hasFirstStreamEvent: true,
       dialogProcessId: "dp-second",
       content: "你好！",
-      attachmentMetas: [],
+      attachments: [],
     };
     const allMessages = [firstUser, firstTool, firstAssistant, secondUser, secondAssistant];
 
-    const { displayedAttachmentMetas } = useMessageFiles({
+    const { displayedAttachments } = useMessageFiles({
       getMessageItem: () => secondAssistant,
       getAllMessages: () => allMessages,
       getSessionDocs: () => [],
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toEqual([]);
+    expect(displayedAttachments.value).toEqual([]);
   });
 
   it("does not collect previous session-doc tool attachments while later assistant is streaming but absent from summary", () => {
@@ -793,7 +795,7 @@ describe("useMessageFiles", () => {
           sessionId: "session-1",
           turnScopeId: "turn-first",
           dialogProcessId: "dp-first",
-          attachmentMetas: [
+          attachments: [
             {
               attachmentId: "bird-1",
               name: "generated_image_1.png",
@@ -825,17 +827,17 @@ describe("useMessageFiles", () => {
       sessionId: "session-1",
       turnScopeId: "turn-second",
       dialogProcessId: "dp-second",
-      attachmentMetas: [],
+      attachments: [],
     };
 
-    const { displayedAttachmentMetas } = useMessageFiles({
+    const { displayedAttachments } = useMessageFiles({
       getMessageItem: () => secondAssistant,
       getAllMessages: () => [sessionDoc.messages[0], sessionDoc.messages[2], secondUser, secondAssistant],
       getSessionDocs: () => [sessionDoc],
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toEqual([]);
+    expect(displayedAttachments.value).toEqual([]);
   });
 
   it("does not collect session-doc attachments from a different session with the same turn scope", () => {
@@ -844,7 +846,7 @@ describe("useMessageFiles", () => {
       sessionId: "session-current",
       turnScopeId: "turn-same",
       dialogProcessId: "dp-current",
-      attachmentMetas: [],
+      attachments: [],
     };
     const otherSessionDoc = {
       sessionId: "session-other",
@@ -853,7 +855,7 @@ describe("useMessageFiles", () => {
           role: "tool",
           turnScopeId: "turn-same",
           dialogProcessId: "dp-other",
-          attachmentMetas: [
+          attachments: [
             {
               attachmentId: "other-session-file",
               name: "other.png",
@@ -864,14 +866,14 @@ describe("useMessageFiles", () => {
       ],
     };
 
-    const { displayedAttachmentMetas } = useMessageFiles({
+    const { displayedAttachments } = useMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [messageItem],
       getSessionDocs: () => [otherSessionDoc],
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toEqual([]);
+    expect(displayedAttachments.value).toEqual([]);
   });
 
   it("still collects tool attachments from the same linear turn", () => {
@@ -887,7 +889,7 @@ describe("useMessageFiles", () => {
       dialogProcessId: "dp-first",
       sessionId: "session-1",
       turnScopeId: "turn-first",
-      attachmentMetas: [
+      attachments: [
         { attachmentId: "bird-1", name: "generated_image_1.png" },
       ],
     };
@@ -897,7 +899,7 @@ describe("useMessageFiles", () => {
       sessionId: "session-1",
       turnScopeId: "turn-first",
       content: "小鸟图片已生成",
-      attachmentMetas: [],
+      attachments: [],
     };
     const secondUser = {
       role: "user",
@@ -915,14 +917,14 @@ describe("useMessageFiles", () => {
     };
     const allMessages = [firstUser, firstTool, firstAssistant, secondUser, secondAssistant];
 
-    const { displayedAttachmentMetas } = useMessageFiles({
+    const { displayedAttachments } = useMessageFiles({
       getMessageItem: () => firstAssistant,
       getAllMessages: () => allMessages,
       getSessionDocs: () => [],
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toEqual([
+    expect(displayedAttachments.value).toEqual([
       { attachmentId: "bird-1", owner: { type: "agent" }, name: "generated_image_1.png" },
     ]);
   });
@@ -932,13 +934,13 @@ describe("useMessageFiles", () => {
       role: "assistant",
       dialogProcessId: "dp-reused",
       turnScopeId: "turn-current",
-      attachmentMetas: [],
+      attachments: [],
     };
     const previousTool = {
       role: "tool",
       dialogProcessId: "dp-reused",
       turnScopeId: "turn-previous",
-      attachmentMetas: [
+      attachments: [
         {
           attachmentId: "prev-explicit",
           name: "previous.png",
@@ -947,14 +949,14 @@ describe("useMessageFiles", () => {
       ],
     };
 
-    const { displayedAttachmentMetas } = useMessageFiles({
+    const { displayedAttachments } = useMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [previousTool, messageItem],
       getSessionDocs: () => [],
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toEqual([]);
+    expect(displayedAttachments.value).toEqual([]);
   });
 
   it("collects explicitly owned tool attachments for the current turn scope", () => {
@@ -962,13 +964,13 @@ describe("useMessageFiles", () => {
       role: "assistant",
       dialogProcessId: "dp-current",
       turnScopeId: "turn-current",
-      attachmentMetas: [],
+      attachments: [],
     };
     const currentTool = {
       role: "tool",
       dialogProcessId: "dp-current",
       turnScopeId: "turn-current",
-      attachmentMetas: [
+      attachments: [
         {
           attachmentId: "current-explicit",
           name: "current.png",
@@ -977,14 +979,14 @@ describe("useMessageFiles", () => {
       ],
     };
 
-    const { displayedAttachmentMetas } = useMessageFiles({
+    const { displayedAttachments } = useMessageFiles({
       getMessageItem: () => messageItem,
       getAllMessages: () => [currentTool, messageItem],
       getSessionDocs: () => [],
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachmentMetas.value).toEqual([
+    expect(displayedAttachments.value).toEqual([
       {
         attachmentId: "current-explicit",
         owner: { type: "agent" },

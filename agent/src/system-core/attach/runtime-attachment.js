@@ -26,7 +26,7 @@ function appendUniqueTransferEnvelope(target = [], envelope = null, seen = new S
 export function appendAttachmentMetasToRuntimeAndTurn(
   runtimeOrPayload,
   turnArg,
-  attachmentMetasArg = [],
+  attachmentsArg = [],
   optionsArg = {},
 ) {
   const isPayloadStyle =
@@ -34,15 +34,15 @@ export function appendAttachmentMetasToRuntimeAndTurn(
     typeof runtimeOrPayload === "object" &&
     (Object.prototype.hasOwnProperty.call(runtimeOrPayload, "runtime") ||
       Object.prototype.hasOwnProperty.call(runtimeOrPayload, "turnMessageStore") ||
-      Object.prototype.hasOwnProperty.call(runtimeOrPayload, "attachmentMetas"));
+      Object.prototype.hasOwnProperty.call(runtimeOrPayload, "attachments"));
 
   const runtime = isPayloadStyle ? runtimeOrPayload.runtime : runtimeOrPayload;
   const turn = isPayloadStyle
     ? runtimeOrPayload.turnMessageStore || runtimeOrPayload.turn
     : turnArg;
   const attachmentMetas = isPayloadStyle
-    ? runtimeOrPayload.attachmentMetas || []
-    : attachmentMetasArg;
+    ? runtimeOrPayload.attachments || []
+    : attachmentsArg;
   const options = isPayloadStyle ? runtimeOrPayload.options || {} : optionsArg;
 
   const {
@@ -64,9 +64,9 @@ export function appendAttachmentMetasToRuntimeAndTurn(
   );
   const transferPayload = buildTransferPayloadFromAttachmentMetas(semanticTransferMetas);
 
-  // 更新 runtime
-  runtime.attachmentMetas = mergeAttachmentMetas(
-    runtime.attachmentMetas,
+  // 更新 runtime。标准字段统一为 attachments。
+  runtime.attachments = mergeAttachmentMetas(
+    Array.isArray(runtime.attachments) ? runtime.attachments : [],
     mappedMetas,
   );
 
@@ -88,12 +88,12 @@ export function appendAttachmentMetasToRuntimeAndTurn(
       ...(mergedEnvelopes.length ? { transferEnvelopes: mergedEnvelopes } : {}),
       ...(ordinaryAttachmentMetas.length
         ? {
-            attachmentMetas: mergeAttachmentMetas(
-              Array.isArray(target?.attachmentMetas) ? target.attachmentMetas : [],
+            attachments: mergeAttachmentMetas(
+              Array.isArray(target?.attachments) ? target.attachments : [],
               ordinaryAttachmentMetas,
             ),
           }
-        : { attachmentMetas: undefined }),
+        : { attachments: undefined }),
     };
   };
 
@@ -107,7 +107,9 @@ export function appendAttachmentMetasToRuntimeAndTurn(
     const lastItem = Array.isArray(turnItems) && turnItems.length
       ? turnItems[turnItems.length - 1] || {}
       : {};
-    turn.updateLast(applyAttachmentPayload(lastItem));
+    const nextItem = applyAttachmentPayload(lastItem);
+    if (!ordinaryAttachmentMetas.length) delete nextItem.attachments;
+    turn.updateLast(nextItem);
     return;
   }
   if (Array.isArray(turn)) {
@@ -115,9 +117,9 @@ export function appendAttachmentMetasToRuntimeAndTurn(
     const lastIndex = turn.length - 1;
     const lastItem = turn[lastIndex] || {};
     turn[lastIndex] = applyAttachmentPayload(lastItem);
-    if (!ordinaryAttachmentMetas.length) delete turn[lastIndex].attachmentMetas;
+    if (!ordinaryAttachmentMetas.length) delete turn[lastIndex].attachments;
     return;
   }
   Object.assign(turn, applyAttachmentPayload(turn));
-  if (!ordinaryAttachmentMetas.length) delete turn.attachmentMetas;
+  if (!ordinaryAttachmentMetas.length) delete turn.attachments;
 }

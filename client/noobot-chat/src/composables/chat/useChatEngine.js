@@ -76,7 +76,7 @@ export function useChatEngine({
   });
   const {
     applyAssistantFailureState,
-    mergeAssistantAttachmentMetas,
+    mergeAssistantAttachments,
   } = createAssistantMessageHelpers({
     translate,
     makeViewMessage,
@@ -165,7 +165,7 @@ export function useChatEngine({
     locateSendingStartedMessage,
     locateDoneMessage,
     makeViewMessage,
-    mergeAssistantAttachmentMetas,
+    mergeAssistantAttachments,
     notify,
     pendingInteractionRequest,
     pluginModelConfig,

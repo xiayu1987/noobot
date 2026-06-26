@@ -62,8 +62,8 @@ test("inject-mode summary defaults to injecting full summary to main agent witho
   assert.match(String(harnessBucket.summaryText || ""), /^1\. \[plan=2\]\[status=done\] 完成模块分析/m);
   assert.match(String(harnessBucket.summaryFullText || ""), /\[SUMMARY_DETAIL\]/);
   assert.equal(ingestCalled, 0);
-  assert.equal(Array.isArray(harnessBucket.summaryDetailAttachmentMetas), true);
-  assert.equal(harnessBucket.summaryDetailAttachmentMetas.length, 0);
+  assert.equal(Array.isArray(harnessBucket.summaryDetailAttachments), true);
+  assert.equal(harnessBucket.summaryDetailAttachments.length, 0);
   assert.equal(
     ctx.messages.some(
       (item = {}) =>

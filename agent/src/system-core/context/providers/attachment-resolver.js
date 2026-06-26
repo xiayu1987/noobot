@@ -11,8 +11,8 @@ export async function resolveAttachments({
   attachmentService = null,
   runtimeBasePath = "",
   effectiveConfig = {},
-  inputAttachmentMetas = null,
-  attachmentMetas = [],
+  inputAttachments = null,
+  attachments = [],
   userId = "",
   sessionId = "",
 } = {}) {
@@ -21,18 +21,18 @@ export async function resolveAttachments({
     effectiveConfig?.attachments && typeof effectiveConfig.attachments === "object"
       ? effectiveConfig.attachments
       : {};
-  const sourceAttachmentMetas = Array.isArray(inputAttachmentMetas)
-    ? inputAttachmentMetas
-    : Array.isArray(attachmentMetas)
-      ? attachmentMetas
+  const sourceAttachments = Array.isArray(inputAttachments)
+    ? inputAttachments
+    : Array.isArray(attachments)
+      ? attachments
       : [];
-  const hasIngestedRecords = sourceAttachmentMetas.some(
+  const hasIngestedRecords = sourceAttachments.some(
     (attachmentItem) =>
       String(attachmentItem?.attachmentId || "").trim() &&
       String(attachmentItem?.path || "").trim(),
   );
   if (hasIngestedRecords) {
-    return sourceAttachmentMetas.map((attachmentItem) => {
+    return sourceAttachments.map((attachmentItem) => {
       const parsedResult = normalizeAttachmentParsedResultMeta(attachmentItem);
       return {
         attachmentId: String(attachmentItem?.attachmentId || ""),
@@ -53,7 +53,7 @@ export async function resolveAttachments({
     userId,
     sessionId: sessionId || "",
     attachmentSource: "user",
-    attachments: sourceAttachmentMetas,
+    attachments: sourceAttachments,
     attachmentPolicy,
   });
 }

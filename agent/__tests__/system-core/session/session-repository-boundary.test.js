@@ -5,6 +5,8 @@ import path from "node:path";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 
 import { createSessionServices } from "../../../src/system-core/session/index.js";
+import { writeSessionArtifact } from "../../../src/system-core/session/session-artifact-store.js";
+import { buildSessionDisplaySummary } from "../../../src/system-core/session/session-summary-builders.js";
 
 async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(
@@ -25,6 +27,81 @@ async function exists(filePath) {
     return false;
   }
 }
+
+test("session display summary should keep canonical attachment fields", () => {
+  const summary = buildSessionDisplaySummary({
+    sessionId: "s-attachments",
+    messages: [
+      {
+        role: "assistant",
+        content: "canonical attachment",
+        attachments: [{ attachmentId: "att-canonical", name: "canonical.txt", mimeType: "text/plain" }],
+      },
+      {
+        role: "assistant",
+        content: "legacy attachment ignored",
+        attachments: [{ id: "att-legacy", name: "legacy.txt", type: "text/plain" }],
+      },
+    ],
+  });
+
+  assert.equal(summary.schemaVersion, 4);
+  assert.equal(summary.messages[0].attachments[0].attachmentId, "att-canonical");
+  assert.equal(summary.messages[0].attachments[0].name, "canonical.txt");
+  assert.equal(summary.messages[1].attachments[0].attachmentId, "att-legacy");
+  assert.equal(summary.stats.attachmentCount, 2);
+});
+
+test("session artifact persistence should normalize attachment fields before writing", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const sessionDir = path.join(workspaceRoot, "u1", "runtime", "session", "s-attachments");
+    const result = await writeSessionArtifact({
+      sessionDir,
+      depth: 1,
+      now: () => "2026-05-14T00:00:00.000Z",
+      sessionPayload: {
+        sessionId: "s-attachments",
+        caller: "user",
+        messages: [
+          {
+            role: "user",
+            content: "canonical survives",
+            attachments: [
+              {
+                attachmentId: "att-canonical",
+                name: "canonical.txt",
+                mimeType: "text/plain",
+              },
+            ],
+            attachmentMetas: [{ attachmentId: "att-legacy-meta" }],
+            attachment_metas: [{ attachmentId: "att-legacy-snake" }],
+          },
+          {
+            role: "assistant",
+            content: "legacy only is ignored",
+            attachmentMetas: [{ attachmentId: "att-legacy-only" }],
+            attachment_metas: [{ attachmentId: "att-legacy-only-snake" }],
+          },
+        ],
+      },
+    });
+
+    const persistedSession = JSON.parse(await readFile(result.files.session, "utf8"));
+    const persistedSummary = JSON.parse(await readFile(result.files.sessionSummary, "utf8"));
+    const sessionJson = JSON.stringify(persistedSession);
+    const summaryJson = JSON.stringify(persistedSummary);
+
+    assert.equal(persistedSession.messages[0].attachments[0].attachmentId, "att-canonical");
+    assert.equal("attachments" in persistedSession.messages[1], false);
+    assert.equal(sessionJson.includes("attachmentMetas"), false);
+    assert.equal(sessionJson.includes("attachment_metas"), false);
+    assert.equal(persistedSummary.depth, 1);
+    assert.equal(persistedSummary.messages[0].attachments[0].attachmentId, "att-canonical");
+    assert.equal("attachments" in persistedSummary.messages[1], false);
+    assert.equal(summaryJson.includes("attachmentMetas"), false);
+    assert.equal(summaryJson.includes("attachment_metas"), false);
+  });
+});
 
 test("session/task/execution repositories should keep file ownership boundaries", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
@@ -253,7 +330,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
         role: "user",
         turnScopeId: "turn-scope-u1",
         content: longUserContent,
-        attachmentMetas: [{ id: "att-1", name: "a.txt", type: "text/plain", size: 12, raw: "large" }],
+        attachments: [{ id: "att-1", name: "a.txt", type: "text/plain", size: 12, raw: "large" }],
       },
       {
         id: "i1",
@@ -275,7 +352,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
         role: "assistant",
         turnScopeId: "turn-scope-plugin",
         content: "plugin attachment result",
-        attachmentMetas: [
+        attachments: [
           {
             attachmentId: "att-plugin-1",
             sessionId: "B",
@@ -395,7 +472,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     const persistedSession = JSON.parse(await readFile(scopeB.sessionFile, "utf8"));
     assert.equal(persistedSession.messages.every((item) => "turnScopeId" in item), true);
     let summary = JSON.parse(await readFile(summaryFile, "utf8"));
-    assert.equal(summary.schemaVersion, 3);
+    assert.equal(summary.schemaVersion, 4);
     assert.equal(summary.sessionId, "B");
     assert.equal(summary.messages.length, 6);
     assert.equal(summary.messages.every((item) => "turnScopeId" in item), true);
@@ -424,7 +501,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(userMessage.content, longUserContent);
     assert.equal(userMessage.content.endsWith(userContentTail), true);
     assert.equal(userMessage.content.includes(`${userContentTail}…`), false);
-    assert.deepEqual(userMessage.attachmentMetas, [
+    assert.deepEqual(userMessage.attachments, [
       {
         id: "att-1",
         attachmentId: "att-1",
@@ -450,7 +527,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal("completedToolLogs" in assistantMessage, false);
     assert.equal("rawMessages" in assistantMessage, false);
     const pluginAttachmentAssistant = summary.messages.find((item) => item.id === "plugin-attachment-assistant");
-    assert.deepEqual(pluginAttachmentAssistant.attachmentMetas, [
+    assert.deepEqual(pluginAttachmentAssistant.attachments, [
       {
         id: "att-plugin-1",
         attachmentId: "att-plugin-1",
@@ -515,7 +592,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(displayData.sessions[0].depth, 2);
     assert.equal(displayData.sessions[0].toolLogSummaries.every((item) => item.depth === 2), true);
     summary = JSON.parse(await readFile(summaryFile, "utf8"));
-    assert.equal(summary.schemaVersion, 3);
+    assert.equal(summary.schemaVersion, 4);
     assert.equal(summary.sessionId, "B");
     assert.equal(summary.depth, 2);
   });

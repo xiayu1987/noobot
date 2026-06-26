@@ -48,7 +48,7 @@ export function createCollabArtifactPersistor({
   tAgentCollab,
 }) {
   const emptyPersistOutput = {
-    attachmentMetas: [],
+    attachments: [],
     transferEnvelopes: [],
   };
   return async function persistCompletedTaskResultsAsAttachments({
@@ -105,7 +105,7 @@ export function createCollabArtifactPersistor({
       };
     });
 
-    let attachmentMetas = [];
+    let attachments = [];
     try {
       const records = await attachmentService.ingestGeneratedArtifacts({
         userId,
@@ -114,7 +114,7 @@ export function createCollabArtifactPersistor({
         generationSource: ASYNC_SUBTASK_RESULT_GENERATION_SOURCE,
         artifacts: generatedAttachments,
       });
-      attachmentMetas = mapAttachmentRecordsToMetas(records, {
+      attachments = mapAttachmentRecordsToMetas(records, {
         fallbackMimeType: MIME_TYPE.TEXT_MARKDOWN,
         fallbackGenerationSource: ASYNC_SUBTASK_RESULT_GENERATION_SOURCE,
       });
@@ -126,8 +126,8 @@ export function createCollabArtifactPersistor({
       return emptyPersistOutput;
     }
 
-    for (let index = 0; index < attachmentMetas.length; index += 1) {
-      const meta = attachmentMetas[index] || {};
+    for (let index = 0; index < attachments.length; index += 1) {
+      const meta = attachments[index] || {};
       const artifact = generatedAttachments[index] || {};
       const sessionId = String(artifact?.__sessionId || "").trim();
       if (!sessionId) continue;
@@ -141,7 +141,7 @@ export function createCollabArtifactPersistor({
       });
     }
     return {
-      attachmentMetas,
+      attachments,
       transferEnvelopes: [],
     };
   };

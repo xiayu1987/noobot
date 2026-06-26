@@ -15,7 +15,7 @@ test("toConversationMessages keeps transferEnvelopes", () => {
     {
       role: "assistant",
       content: "ok",
-      attachmentMetas: [{ attachmentId: "att_1" }],
+      attachments: [{ attachmentId: "att_1" }],
       transferEnvelopes: [envelope],
     },
   ]);
@@ -23,7 +23,7 @@ test("toConversationMessages keeps transferEnvelopes", () => {
   assert.equal(messages.length, 1);
   assert.equal("transferEnvelopes" in messages[0], true);
   assert.deepEqual(messages[0].transferEnvelopes, [envelope]);
-  assert.deepEqual(messages[0].attachmentMetas, [{ attachmentId: "att_1" }]);
+  assert.deepEqual(messages[0].attachments, [{ attachmentId: "att_1" }]);
 });
 
 test("toConversationMessages omits empty legacy attachment/transfer mirrors", () => {
@@ -31,11 +31,11 @@ test("toConversationMessages omits empty legacy attachment/transfer mirrors", ()
     {
       role: "assistant",
       content: "ok",
-      attachmentMetas: [],
+      attachments: [],
       transferEnvelopes: [],
     },
   ]);
 
-  assert.equal("attachmentMetas" in message, false);
+  assert.equal("attachments" in message, false);
   assert.equal("transferEnvelopes" in message, false);
 });

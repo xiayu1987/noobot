@@ -96,11 +96,11 @@ describe("messageModel semantic transfer", () => {
     expect(message.turnScopeId).toBe("client-turn:backend-scope-1");
   });
 
-  it("preserves legacy attachmentMetas alongside semantic transfer envelopes", () => {
+  it("preserves legacy attachments alongside semantic transfer envelopes", () => {
     const message = buildViewMessage({
       role: "assistant",
       content: "done",
-      attachmentMetas: [
+      attachments: [
         {
           attachmentId: "att-1",
           name: "legacy-report.md",
@@ -114,8 +114,8 @@ describe("messageModel semantic transfer", () => {
     expect(message.transferResult).toBeUndefined();
     expect(message.transferEnvelopes).toHaveLength(1);
     expect(message.transferEnvelopes[0]?.protocol).toBe("noobot.semantic-transfer");
-    expect(message.attachmentMetas).toHaveLength(1);
-    expect(message.attachmentMetas[0]).toMatchObject({
+    expect(message.attachments).toHaveLength(1);
+    expect(message.attachments[0]).toMatchObject({
       attachmentId: "att-1",
       name: "legacy-report.md",
       mimeType: "text/plain",
@@ -156,8 +156,8 @@ describe("messageModel semantic transfer", () => {
       ],
     });
 
-    expect(message.attachmentMetas).toHaveLength(1);
-    expect(message.attachmentMetas[0]).toMatchObject({
+    expect(message.attachments).toHaveLength(1);
+    expect(message.attachments[0]).toMatchObject({
       attachmentId: "att-workflow-1",
       sessionId: "s1",
       attachmentSource: "model",
@@ -168,12 +168,12 @@ describe("messageModel semantic transfer", () => {
     });
   });
 
-  it("normalizes parsed result metadata from attachmentMetas", () => {
+  it("normalizes parsed result metadata from attachments", () => {
     const message = buildViewMessage(
       {
         role: "user",
         content: "source",
-        attachmentMetas: [
+        attachments: [
           {
             attachmentId: "src-1",
             name: "source.pdf",
@@ -188,8 +188,8 @@ describe("messageModel semantic transfer", () => {
       { userId: "admin" },
     );
 
-    expect(message.attachmentMetas).toHaveLength(1);
-    expect(message.attachmentMetas[0]).toMatchObject({
+    expect(message.attachments).toHaveLength(1);
+    expect(message.attachments[0]).toMatchObject({
       attachmentId: "src-1",
       parsedResult: {
         attachmentId: "parsed-1",
@@ -197,7 +197,7 @@ describe("messageModel semantic transfer", () => {
       },
       parsedResultName: "source.md",
     });
-    expect(message.attachmentMetas[0].parsedResultUrl).toContain("parsed-1");
+    expect(message.attachments[0].parsedResultUrl).toContain("parsed-1");
   });
 
   it("normalizes attachment url from compatible id/session/source fields", () => {
@@ -205,7 +205,7 @@ describe("messageModel semantic transfer", () => {
       {
         role: "assistant",
         content: "generated file",
-        attachmentMetas: [
+        attachments: [
           {
             id: "att-alias-1",
             name: "result.md",
@@ -217,17 +217,17 @@ describe("messageModel semantic transfer", () => {
       { userId: "admin" },
     );
 
-    expect(message.attachmentMetas[0]).toMatchObject({
+    expect(message.attachments[0]).toMatchObject({
       attachmentId: "att-alias-1",
       sessionId: "session-1",
       attachmentSource: "model",
     });
-    expect(message.attachmentMetas[0].url).toBe(
+    expect(message.attachments[0].url).toBe(
       "/api/internal/attachment/admin/att-alias-1?sessionId=session-1&attachmentSource=model",
     );
   });
 
-  it("does not fall back to legacy attachments", () => {
+  it("keeps canonical attachments after refresh", () => {
     const message = buildViewMessage({
       role: "user",
       content: "source",
@@ -239,7 +239,26 @@ describe("messageModel semantic transfer", () => {
       ],
     });
 
-    expect(message.attachmentMetas).toEqual([]);
+    expect(message.attachments).toHaveLength(1);
+    expect(message.attachments[0]).toMatchObject({
+      attachmentId: "legacy-1",
+      name: "legacy.pdf",
+    });
+  });
+
+  it("does not restore attachment metadata from legacy snake_case attachment_metas", () => {
+    const message = buildViewMessage({
+      role: "user",
+      content: "source",
+      attachment_metas: [
+        {
+          attachmentId: "snake-1",
+          name: "snake.pdf",
+        },
+      ],
+    });
+
+    expect(message.attachments).toEqual([]);
   });
 
   it("preserves parent dialog process id for related attachment aggregation", () => {
@@ -304,7 +323,7 @@ describe("messageModel execution logs", () => {
         role: "assistant",
         content: "previous answer",
         dialogProcessId: "dp-same-until-stream-arrives",
-        attachmentMetas: [{ attachmentId: "att-prev", name: "previous.md" }],
+        attachments: [{ attachmentId: "att-prev", name: "previous.md" }],
         realtimeLogs: [{ text: "previous tool log" }],
         completedToolLogs: [{ text: "previous completed tool" }],
         tool_calls: [{ id: "tool-prev" }],
@@ -315,7 +334,7 @@ describe("messageModel execution logs", () => {
         content: "",
         dialogProcessId: "dp-same-until-stream-arrives",
         pending: true,
-        attachmentMetas: [],
+        attachments: [],
         realtimeLogs: [],
         completedToolLogs: [],
         tool_calls: [],
@@ -326,7 +345,7 @@ describe("messageModel execution logs", () => {
 
     expect(messages).toHaveLength(2);
     expect(messages[1].pending).toBe(true);
-    expect(messages[1].attachmentMetas).toEqual([]);
+    expect(messages[1].attachments).toEqual([]);
     expect(messages[1].realtimeLogs).toEqual([]);
     expect(messages[1].completedToolLogs).toEqual([]);
     expect(messages[1].tool_calls).toEqual([]);
@@ -341,7 +360,7 @@ describe("messageModel execution logs", () => {
         content: "new partial answer",
         turnScopeId: "client-turn:new-stream",
         dialogProcessId: "dp-new-stream",
-        attachmentMetas: [{ attachmentId: "att-new", name: "new.md" }],
+        attachments: [{ attachmentId: "att-new", name: "new.md" }],
         realtimeLogs: [{ text: "new tool log" }],
         tool_calls: [{ id: "tool-new" }],
         executionLogTotal: 1,
@@ -359,8 +378,8 @@ describe("messageModel execution logs", () => {
     expect(messages).toHaveLength(1);
     expect(messages[0].content).toContain("new partial answer");
     expect(messages[0].content).toContain("new continuation");
-    expect(messages[0].attachmentMetas).toHaveLength(1);
-    expect(messages[0].attachmentMetas[0]).toMatchObject({ attachmentId: "att-new" });
+    expect(messages[0].attachments).toHaveLength(1);
+    expect(messages[0].attachments[0]).toMatchObject({ attachmentId: "att-new" });
     expect(messages[0].realtimeLogs).toHaveLength(2);
     expect(messages[0].tool_calls).toHaveLength(1);
     expect(messages[0].executionLogTotal).toBe(2);

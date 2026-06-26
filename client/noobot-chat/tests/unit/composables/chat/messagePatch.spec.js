@@ -7,7 +7,7 @@ describe("messagePatch", () => {
       role: "assistant",
       dialogProcessId: "dp-current",
       content: "",
-      attachmentMetas: [],
+      attachments: [],
     };
     const activeSession = {
       value: {
@@ -31,7 +31,7 @@ describe("messagePatch", () => {
       makeViewMessage: (messageItem) => ({ ...messageItem }),
       foldMessagesForView: (messages) =>
         messages.filter((messageItem) => ["user", "assistant"].includes(messageItem.role)),
-      mergeAssistantAttachmentMetas: () => {},
+      mergeAssistantAttachments: () => {},
     });
 
     expect(activeSession.value.rawMessages.map((messageItem) => messageItem.legacyDialogIdentity)).toEqual([

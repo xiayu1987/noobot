@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { mergeAttachmentMetas } from "../../infra/dialogProcessChain";
+import { mergeAttachments } from "../../infra/dialogProcessChain";
 
 export function createAssistantMessageHelpers({ translate, makeViewMessage }) {
   function applyAssistantFailureState(targetAssistantMessage, errorMessage = "") {
@@ -18,22 +18,22 @@ export function createAssistantMessageHelpers({ translate, makeViewMessage }) {
     }
   }
 
-  function mergeAssistantAttachmentMetas(targetAssistantMessage, attachmentMetas = []) {
-    if (!targetAssistantMessage || !Array.isArray(attachmentMetas) || !attachmentMetas.length) {
+  function mergeAssistantAttachments(targetAssistantMessage, attachments = []) {
+    if (!targetAssistantMessage || !Array.isArray(attachments) || !attachments.length) {
       return;
     }
-    const normalizedAttachmentMetas =
-      makeViewMessage({ attachmentMetas })?.attachmentMetas || attachmentMetas;
-    targetAssistantMessage.attachmentMetas = mergeAttachmentMetas(
-      Array.isArray(targetAssistantMessage.attachmentMetas)
-        ? targetAssistantMessage.attachmentMetas
+    const normalizedAttachments =
+      makeViewMessage({ attachments })?.attachments || attachments;
+    targetAssistantMessage.attachments = mergeAttachments(
+      Array.isArray(targetAssistantMessage.attachments)
+        ? targetAssistantMessage.attachments
         : [],
-      normalizedAttachmentMetas,
+      normalizedAttachments,
     );
   }
 
   return {
     applyAssistantFailureState,
-    mergeAssistantAttachmentMetas,
+    mergeAssistantAttachments,
   };
 }

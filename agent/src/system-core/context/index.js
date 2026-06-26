@@ -70,8 +70,8 @@ export class ContextBuilder {
       sessionId = "",
       caller = "user",
       parentSessionId = "",
-      inputAttachmentMetas = null,
-      attachmentMetas = [],
+      inputAttachments = null,
+      attachments = [],
       sessionManager,
       memoryService,
       attachmentService,
@@ -90,8 +90,12 @@ export class ContextBuilder {
     this.sessionId = sessionId;
     this.caller = caller;
     this.parentSessionId = parentSessionId;
-    this.inputAttachmentMetas = Array.isArray(inputAttachmentMetas) ? inputAttachmentMetas : attachmentMetas;
-    this.attachmentMetas = this.inputAttachmentMetas;
+    this.inputAttachments = Array.isArray(inputAttachments)
+      ? inputAttachments
+      : Array.isArray(attachments)
+        ? attachments
+        : [];
+    this.attachments = this.inputAttachments;
     this.sessionManager = sessionManager;
     this.memoryService = memoryService;
     this.attachmentService = attachmentService;
@@ -227,7 +231,7 @@ export class ContextBuilder {
       dialogProcessId = "",
       sessionTree = null,
       rootSessionId = "",
-      attachmentMetas = [],
+      attachments = [],
     } = {},
   ) {
     const effectiveSystemMessages = [
@@ -274,7 +278,7 @@ export class ContextBuilder {
         sessionTree: resolvedSessionTree,
         rootSessionId: resolvedRootSessionId,
       }),
-      inputAttachmentMetas: attachmentMetas,
+      inputAttachments: attachments,
     });
     await initializeRuntimeEnvironment(runtime);
 
@@ -357,7 +361,7 @@ export class ContextBuilder {
       now: this._now(),
     });
 
-    const [systemPrompt, skills, attachmentMetas, workspaceDirectories] =
+    const [systemPrompt, skills, attachments, workspaceDirectories] =
       await Promise.all([
         includeBasePrompt ? loadSystemPrompt() : "",
         includeSkills
@@ -371,7 +375,7 @@ export class ContextBuilder {
           attachmentService: this.attachmentService,
           runtimeBasePath,
           effectiveConfig,
-          inputAttachmentMetas: this.inputAttachmentMetas,
+          inputAttachments: this.inputAttachments,
           userId: this.userId,
           sessionId: this.sessionId,
         }),
@@ -443,7 +447,7 @@ export class ContextBuilder {
       skills,
       services,
       mcpServers,
-      inputAttachmentMetas: includeAttachments ? attachmentMetas : [],
+      inputAttachments: includeAttachments ? attachments : [],
       connectorStatusSection,
     });
     return {
@@ -451,7 +455,7 @@ export class ContextBuilder {
       runtimeBasePath,
       sessionTree: treeInfo.sessionTree,
       rootSessionId: treeInfo.rootSessionId,
-      attachmentMetas,
+      attachments,
     };
   }
 
@@ -472,14 +476,14 @@ export class ContextBuilder {
       runtimeBasePath,
       sessionTree,
       rootSessionId,
-      attachmentMetas,
+      attachments,
     } = await this._buildSystemContext({ dialogProcessId });
     return this._buildAgentContext(systemContext, toConversationMessages(sessionRecords), {
       runtimeBasePath,
       dialogProcessId,
       sessionTree,
       rootSessionId,
-      attachmentMetas,
+      attachments,
     });
   }
 
@@ -505,7 +509,7 @@ export class ContextBuilder {
       runtimeBasePath,
       sessionTree,
       rootSessionId,
-      attachmentMetas,
+      attachments,
     } = await this._buildSystemContext({ dialogProcessId, longMemory });
     return this._buildAgentContext(
       systemContext,
@@ -515,7 +519,7 @@ export class ContextBuilder {
         dialogProcessId,
         sessionTree,
         rootSessionId,
-        attachmentMetas,
+        attachments,
       },
     );
   }

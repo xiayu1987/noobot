@@ -143,7 +143,7 @@ export function canUseTurnScopedAssets(messageItem = {}) {
 
 export function clearTurnScopedAssets(messageItem = {}) {
   if (!messageItem || typeof messageItem !== "object") return messageItem;
-  messageItem.attachmentMetas = [];
+  messageItem.attachments = [];
   messageItem.completedToolLogs = [];
   messageItem.realtimeLogs = [];
   messageItem.executionLogTotal = 0;
@@ -272,7 +272,7 @@ export function isSameExplicitMessageTurn(leftMessage = {}, rightMessage = {}) {
   return Boolean(leftIdentity && rightIdentity && leftIdentity === rightIdentity);
 }
 
-export function shouldCollectAttachmentMetasFromMessage(targetMessage = {}, candidateMessage = {}) {
+export function shouldCollectAttachmentsFromMessage(targetMessage = {}, candidateMessage = {}) {
   if (candidateMessage === targetMessage) return true;
   if (getMessageRole(targetMessage) !== "assistant" || getMessageRole(candidateMessage) !== "assistant") {
     return true;

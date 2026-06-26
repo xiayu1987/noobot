@@ -3,16 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { extractAttachmentMetasFromToolResult } from "../media/artifact-service.js";
+import { extractAttachmentsFromToolResult } from "../media/artifact-service.js";
 
-export function normalizeToolResultAttachmentMetas(toolCallResult = {}, call = {}) {
+export function normalizeToolResultAttachments(toolCallResult = {}, call = {}) {
   const toolResultText = String(toolCallResult?.toolResultText || "");
-  const fallbackExtractedAttachmentMetas = extractAttachmentMetasFromToolResult(
+  const fallbackExtractedAttachments = extractAttachmentsFromToolResult(
     call?.name || "",
     toolResultText,
   );
-  return Array.isArray(toolCallResult?.extractedAttachmentMetas) &&
-    toolCallResult.extractedAttachmentMetas.length
-    ? toolCallResult.extractedAttachmentMetas
-    : fallbackExtractedAttachmentMetas;
+  return Array.isArray(toolCallResult?.extractedAttachments) &&
+    toolCallResult.extractedAttachments.length
+    ? toolCallResult.extractedAttachments
+    : fallbackExtractedAttachments;
 }

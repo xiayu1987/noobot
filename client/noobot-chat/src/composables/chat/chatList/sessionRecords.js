@@ -106,8 +106,8 @@ export function reconcileSessionObject(mappedSession = {}, existingSession = nul
 
 export function revokeMessagePreviewUrls(messages = []) {
   for (const messageItem of messages) {
-    const attachmentMetas = messageItem.attachmentMetas || [];
-    for (const attachmentItem of attachmentMetas) {
+    const attachments = messageItem.attachments || [];
+    for (const attachmentItem of attachments) {
       if (attachmentItem.previewUrl) URL.revokeObjectURL(attachmentItem.previewUrl);
     }
   }

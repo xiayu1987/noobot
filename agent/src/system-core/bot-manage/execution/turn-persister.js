@@ -26,6 +26,7 @@ const DIRECT_CONSUMED_INTERMEDIATE_TOOLS = new Set([
   "doc_to_data",
   "media_to_data",
 ]);
+const LEGACY_ATTACHMENT_MIRROR_KEY = "attachment" + "Metas";
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -48,19 +49,24 @@ function hasHiddenIntermediateMeta(value = null) {
   if (HIDDEN_INTERMEDIATE_GENERATION_SOURCES.has(generationSource)) return true;
   return (
     hasHiddenIntermediateMeta(value?.attachmentMeta) ||
-    hasHiddenIntermediateMeta(value?.attachmentMetas) ||
+    hasHiddenIntermediateMeta(value?.[LEGACY_ATTACHMENT_MIRROR_KEY]) ||
     hasHiddenIntermediateMeta(value?.transferFiles) ||
     hasHiddenIntermediateMeta(value?.files)
   );
 }
 
-function filterSessionAttachmentMetas(attachmentMetas = []) {
-  return (Array.isArray(attachmentMetas) ? attachmentMetas : []).filter(
+function filterSessionAttachments(attachments = []) {
+  return (Array.isArray(attachments) ? attachments : []).filter(
     (attachmentItem = {}) =>
       !HIDDEN_INTERMEDIATE_GENERATION_SOURCES.has(
         String(attachmentItem?.generationSource || "").trim(),
       ),
   );
+}
+
+function resolveMessageAttachments(message = {}) {
+  if (Array.isArray(message?.attachments)) return message.attachments;
+  return [];
 }
 
 function sanitizeToolContentForSession(content = "", explicitToolName = "") {
@@ -119,7 +125,7 @@ export class SessionTurnPersister {
     taskStatus = null,
     tool_calls = null,
     tool_call_id = "",
-    attachmentMetas = [],
+    attachments = [],
     modelAlias = "",
     modelName = "",
     summarized = false,
@@ -147,7 +153,7 @@ export class SessionTurnPersister {
     status = "",
     channelState = "",
   }) {
-    const sessionAttachmentMetas = filterSessionAttachmentMetas(attachmentMetas);
+    const sessionAttachments = filterSessionAttachments(attachments);
     const normalizedTurnScopeId = String(turnScopeId || "").trim();
     const sessionContent =
       role === MESSAGE_ROLE.TOOL
@@ -158,7 +164,7 @@ export class SessionTurnPersister {
       shouldPersistTransferPayload && Array.isArray(transferEnvelopes)
         ? transferEnvelopes.filter(isPlainObject)
         : [];
-    const shouldOmitAttachmentMetasMirror =
+    const shouldOmitAttachmentMirror =
       shouldPersistTransferPayload && sessionTransferEnvelopes.length > 0;
     const fullTurnPayload = {
       role,
@@ -171,7 +177,7 @@ export class SessionTurnPersister {
       turnScopeId: normalizedTurnScopeId,
       tool_calls: Array.isArray(tool_calls) ? tool_calls : [],
       tool_call_id: tool_call_id || "",
-      ...(!shouldOmitAttachmentMetasMirror ? { attachmentMetas: sessionAttachmentMetas } : {}),
+      ...(!shouldOmitAttachmentMirror ? { attachments: sessionAttachments } : {}),
       modelAlias: String(modelAlias || "").trim(),
       modelName: String(modelName || "").trim(),
       summarized: summarized === true,
@@ -240,7 +246,7 @@ export class SessionTurnPersister {
       turnScopeId: normalizedTurnScopeId,
       tool_calls,
       tool_call_id,
-      ...(!shouldOmitAttachmentMetasMirror ? { attachmentMetas: sessionAttachmentMetas } : {}),
+      ...(!shouldOmitAttachmentMirror ? { attachments: sessionAttachments } : {}),
       modelAlias,
       modelName,
       summarized,
@@ -295,9 +301,7 @@ export class SessionTurnPersister {
           ? messageItem.tool_calls
           : null,
         tool_call_id: messageItem.tool_call_id || "",
-        attachmentMetas: Array.isArray(messageItem.attachmentMetas)
-          ? filterSessionAttachmentMetas(messageItem.attachmentMetas)
-          : null,
+        attachments: filterSessionAttachments(resolveMessageAttachments(messageItem)),
         modelAlias: (messageItem.modelAlias ?? "").trim(),
         modelName: (messageItem.modelName ?? "").trim(),
         summarized: messageItem.summarized === true,

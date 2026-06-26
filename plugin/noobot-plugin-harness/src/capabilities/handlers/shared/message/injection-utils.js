@@ -73,8 +73,7 @@ export function injectMessageWithPolicy(
   {
     role = "system",
     content = "",
-    attachmentMetas = [],
-    legacyAttachmentMetasMirror = false,
+    attachments = null,
     transferEnvelopes = [],
     injectAt = "append",
     dedupe = false,
@@ -97,8 +96,7 @@ export function injectMessageWithPolicy(
   const resolvedRole = resolveHarnessMainFlowRole({ role });
   const message = buildHarnessInjectedMessage(normalizedContent, {
     role: resolvedRole,
-    attachmentMetas: Array.isArray(attachmentMetas) ? attachmentMetas : [],
-    legacyAttachmentMetasMirror,
+    attachments: Array.isArray(attachments) ? attachments : [],
     transferEnvelopes,
     dialogProcessId: resolveDialogProcessIdFromContext(ctx),
     injectedMessageType,

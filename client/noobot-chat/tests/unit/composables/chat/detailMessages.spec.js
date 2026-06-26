@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   applySummaryToolLogs,
+  buildChildAttachmentsByParentDialogProcessId,
   mergePreservedDetailMessages,
 } from "../../../../src/composables/chat/chatList/detailMessages";
+import { buildViewMessage } from "../../../../src/composables/infra/messageModel";
 import { RoleEnum } from "../../../../src/shared/constants/chatConstants";
 
 describe("detailMessages", () => {
@@ -129,5 +131,62 @@ describe("detailMessages", () => {
 
     expect(sessionItem.messages[0].completedToolLogs).toHaveLength(1);
     expect(sessionItem.messages[0].completedToolLogs[0].text).toBe("current tool");
+  });
+
+  it("collects child attachments from transfer envelopes for refreshed detail", () => {
+    const metasByParent = buildChildAttachmentsByParentDialogProcessId({
+      rootSessionId: "root-session",
+      rootMessages: [
+        {
+          role: RoleEnum.ASSISTANT,
+          dialogProcessId: "root-dp",
+          turnScopeId: "client-turn:root",
+        },
+      ],
+      sessionDocs: [
+        {
+          sessionId: "root-session",
+          messages: [
+            {
+              role: RoleEnum.ASSISTANT,
+              dialogProcessId: "root-dp",
+              turnScopeId: "client-turn:root",
+            },
+          ],
+        },
+        {
+          sessionId: "child-session",
+          messages: [
+            {
+              role: RoleEnum.ASSISTANT,
+              dialogProcessId: "child-dp",
+              parentDialogProcessId: "root-dp",
+              transferEnvelopes: [
+                {
+                  protocol: "noobot.semantic-transfer",
+                  version: 1,
+                  files: [
+                    {
+                      filePath: "/workspace/result.md",
+                      attachmentMeta: {
+                        attachmentId: "child-transfer-1",
+                        name: "result.md",
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      makeViewMessage: buildViewMessage,
+    });
+
+    expect(metasByParent.get("root-dp")).toHaveLength(1);
+    expect(metasByParent.get("root-dp")?.[0]).toMatchObject({
+      attachmentId: "child-transfer-1",
+      name: "result.md",
+    });
   });
 });

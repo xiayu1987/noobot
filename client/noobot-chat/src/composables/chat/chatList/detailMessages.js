@@ -7,7 +7,7 @@ import { RoleEnum } from "../../../shared/constants/chatConstants";
 import {
   buildDialogProcessParentMap,
   flattenSessionMessages,
-  mergeAttachmentMetas,
+  mergeAttachments,
   resolveRootDialogProcessIdByChain,
 } from "../../infra/dialogProcessChain";
 import {
@@ -26,6 +26,7 @@ import {
   setThinkingFinishedAt,
   setThinkingStartedAt,
 } from "../../infra/timeFields";
+import { getMessageAttachments } from "../../infra/messageModel";
 
 const IN_FLIGHT_CHANNEL_STATES = new Set([
   "sending",
@@ -144,11 +145,22 @@ export function mergePreservedDetailMessages(existingMessages = [], detailMessag
       const thinkingOpenNames = Array.isArray(existingMessage?.thinkingOpenNames)
         ? existingMessage.thinkingOpenNames
         : [];
+      const existingAttachments = Array.isArray(existingMessage?.attachments)
+        ? existingMessage.attachments
+        : [];
+      const detailAttachments = Array.isArray(detailMessageItem?.attachments)
+        ? detailMessageItem.attachments
+        : [];
       const restoreRunningThinkingState = preserveRunningThinkingState(
         existingMessage,
         detailMessageItem,
       );
       Object.assign(existingMessage, detailMessageItem);
+      if (existingAttachments.length || detailAttachments.length) {
+        existingMessage.attachments = detailAttachments.length
+          ? mergeAttachments(existingAttachments, detailAttachments)
+          : existingAttachments;
+      }
       if (thinkingOpenNames.length) existingMessage.thinkingOpenNames = thinkingOpenNames;
       existingMessage.pending = false;
       restoreRunningThinkingState();
@@ -161,7 +173,7 @@ export function mergePreservedDetailMessages(existingMessages = [], detailMessag
   }
 }
 
-export function buildChildAttachmentMetasByParentDialogProcessId({
+export function buildChildAttachmentsByParentDialogProcessId({
   sessionDocs = [],
   rootSessionId = "",
   rootMessages = [],
@@ -186,10 +198,10 @@ export function buildChildAttachmentMetasByParentDialogProcessId({
     if (!sessionId || sessionId === String(rootSessionId || "").trim()) continue;
     const messageList = Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : [];
     for (const messageItem of messageList) {
-      const attachmentMetas = Array.isArray(messageItem?.attachmentMetas)
-        ? messageItem.attachmentMetas
-        : [];
-      if (!attachmentMetas.length) continue;
+      const directAttachments = getMessageAttachments(messageItem);
+      const normalizedAttachments =
+        makeViewMessage(messageItem).attachments || [];
+      if (!directAttachments.length && !normalizedAttachments.length) continue;
       const parentDialogProcessId = String(
         messageItem?.parentDialogProcessId || "",
       ).trim();
@@ -200,13 +212,11 @@ export function buildChildAttachmentMetasByParentDialogProcessId({
         parentByDialogProcessId,
       });
       if (!rootDialogProcessId) continue;
-      const normalizedAttachmentMetas =
-        makeViewMessage({ attachmentMetas }).attachmentMetas || [];
-      const mergedAttachmentMetas = mergeAttachmentMetas(
+      const mergedAttachments = mergeAttachments(
         output.get(rootDialogProcessId) || [],
-        normalizedAttachmentMetas,
+        normalizedAttachments,
       );
-      output.set(rootDialogProcessId, mergedAttachmentMetas);
+      output.set(rootDialogProcessId, mergedAttachments);
     }
   }
   return output;
@@ -220,14 +230,14 @@ export function mergeChildTurnAttachmentsIntoRootMessages({
 } = {}) {
   const messages = Array.isArray(rootMessages) ? rootMessages : [];
   if (!messages.length) return messages;
-  const childAttachmentMetasByParentDialogProcessId =
-    buildChildAttachmentMetasByParentDialogProcessId({
+  const childAttachmentsByParentDialogProcessId =
+    buildChildAttachmentsByParentDialogProcessId({
       sessionDocs,
       rootSessionId,
       rootMessages: messages,
       makeViewMessage,
     });
-  if (!childAttachmentMetasByParentDialogProcessId.size) return messages;
+  if (!childAttachmentsByParentDialogProcessId.size) return messages;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const messageItem = messages[index];
     if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) continue;
@@ -237,12 +247,12 @@ export function mergeChildTurnAttachmentsIntoRootMessages({
     }
     const dialogProcessId = getMessageDialogProcessId(messageItem);
     if (!dialogProcessId) continue;
-    const childAttachmentMetas =
-      childAttachmentMetasByParentDialogProcessId.get(dialogProcessId) || [];
-    if (!childAttachmentMetas.length) continue;
-    messageItem.attachmentMetas = mergeAttachmentMetas(
-      messageItem?.attachmentMetas || [],
-      childAttachmentMetas,
+    const childAttachments =
+      childAttachmentsByParentDialogProcessId.get(dialogProcessId) || [];
+    if (!childAttachments.length) continue;
+    messageItem.attachments = mergeAttachments(
+      messageItem?.attachments || [],
+      childAttachments,
     );
   }
   return messages;

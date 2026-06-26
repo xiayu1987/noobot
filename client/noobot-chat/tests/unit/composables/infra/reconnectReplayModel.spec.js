@@ -110,7 +110,7 @@ describe("reconnectReplayModel", () => {
     };
     const target = {
       content: "existing content",
-      attachmentMetas: [{ name: "a.txt" }],
+      attachments: [{ name: "a.txt" }],
       modelRuns: [{ id: 1 }],
       completedToolLogs: [{ id: 1 }],
       realtimeLogs: [{ id: 1 }],
@@ -122,7 +122,7 @@ describe("reconnectReplayModel", () => {
 
     patchMessageObjectPreservingUiState(target, {
       content: "   ",
-      attachmentMetas: [],
+      attachments: [],
       modelRuns: [],
       completedToolLogs: [],
       realtimeLogs: [],
@@ -130,7 +130,7 @@ describe("reconnectReplayModel", () => {
     });
 
     expect(target.content).toBe("existing content");
-    expect(target.attachmentMetas).toHaveLength(1);
+    expect(target.attachments).toHaveLength(1);
     expect(target.modelRuns).toHaveLength(1);
     expect(target.completedToolLogs).toHaveLength(1);
     expect(target.realtimeLogs).toHaveLength(1);
@@ -197,7 +197,7 @@ describe("reconnectReplayModel", () => {
       role: RoleEnum.ASSISTANT,
       dialogProcessId: "dp-stale",
       turnScopeId: "turn-old",
-      attachmentMetas: [{ name: "old.txt" }],
+      attachments: [{ name: "old.txt" }],
       completedToolLogs: [{ id: "old-tool" }],
       realtimeLogs: [{ id: "old-realtime" }],
       processCompletedToolLogs: [{ id: "old-process" }],
@@ -212,7 +212,7 @@ describe("reconnectReplayModel", () => {
     });
 
     expect(target.turnScopeId).toBeUndefined();
-    expect(target.attachmentMetas).toEqual([]);
+    expect(target.attachments).toEqual([]);
     expect(target.completedToolLogs).toEqual([]);
     expect(target.realtimeLogs).toEqual([]);
     expect(target.processCompletedToolLogs).toEqual([]);

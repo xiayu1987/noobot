@@ -148,7 +148,7 @@ test("runAgentRuntimeHook resolves manager, executes, and emits hook_start/hook_
   assert.equal(events[1]?.event, "hook_end");
 });
 
-test("runAgentRuntimeHook exposes hook client channel to plugins and sanitizes forwarded payload", async () => {
+test("runAgentRuntimeHook exposes hook client channel and skips routine plugin progress by default", async () => {
   const manager = createAgentHookManager();
   const events = [];
   const eventListener = {
@@ -164,8 +164,40 @@ test("runAgentRuntimeHook exposes hook client channel to plugins and sanitizes f
       plugin: "agentPlugin",
       point: "before_turn",
       stage: "trace_done",
-      fsmState: "planning",
-      fsmRejected: false,
+      status: "ok",
+      message: "routine progress",
+    });
+  });
+
+  await runAgentRuntimeHook({
+    runtime,
+    point: "runtime_point",
+    context: {},
+    eventListener,
+  });
+
+  assert.equal(events.some((evt) => evt?.event === "hook_plugin_progress"), false);
+});
+
+test("runAgentRuntimeHook records important plugin progress and sanitizes forwarded payload", async () => {
+  const manager = createAgentHookManager();
+  const events = [];
+  const eventListener = {
+    onEvent(evt = {}) {
+      events.push(evt);
+    },
+  };
+  const runtime = { hookManager: manager };
+  manager.on("runtime_point", async (ctx = {}) => {
+    assert.equal(typeof ctx?.hookClientChannel?.emit, "function");
+    assert.equal(typeof ctx?.emitHookClientEvent, "function");
+    ctx.emitHookClientEvent("plugin_failed", {
+      plugin: "agentPlugin",
+      point: "before_turn",
+      stage: "trace_done",
+      fsmState: "failed",
+      fsmRejected: true,
+      message: "x".repeat(320),
       agent: { shouldBeHidden: true },
       agentContext: { shouldBeHidden: true },
       nested: { runtime: { shouldBeHidden: true }, pass: 1 },
@@ -182,13 +214,46 @@ test("runAgentRuntimeHook exposes hook client channel to plugins and sanitizes f
 
   const pluginEvent = events.find((evt) => evt?.event === "hook_plugin_progress");
   assert.ok(pluginEvent);
-  assert.equal(pluginEvent?.data?.event, "plugin_step");
+  assert.equal(pluginEvent?.data?.event, "plugin_failed");
   assert.equal(pluginEvent?.data?.data?.plugin, "agentPlugin");
-  assert.equal(pluginEvent?.data?.data?.fsmState, "planning");
+  assert.equal(pluginEvent?.data?.data?.fsmState, "failed");
+  assert.equal(pluginEvent?.data?.data?.fsmRejected, true);
+  assert.ok(pluginEvent?.data?.data?.message.length < 260);
   assert.equal("agent" in (pluginEvent?.data?.data || {}), false);
   assert.equal("agentContext" in (pluginEvent?.data?.data || {}), false);
   assert.equal("nested" in (pluginEvent?.data?.data || {}), false);
   assert.equal("customFieldShouldDrop" in (pluginEvent?.data?.data || {}), false);
+});
+
+test("runAgentRuntimeHook can record routine plugin progress when verbose trace is enabled", async () => {
+  const manager = createAgentHookManager();
+  const events = [];
+  const eventListener = {
+    onEvent(evt = {}) {
+      events.push(evt);
+    },
+  };
+  const runtime = { hookManager: manager, hookPluginProgressTrace: true };
+  manager.on("runtime_point", async (ctx = {}) => {
+    ctx.emitHookClientEvent("plugin_step", {
+      plugin: "agentPlugin",
+      point: "before_turn",
+      stage: "trace_done",
+      status: "ok",
+    });
+  });
+
+  await runAgentRuntimeHook({
+    runtime,
+    point: "runtime_point",
+    context: {},
+    eventListener,
+  });
+
+  const pluginEvent = events.find((evt) => evt?.event === "hook_plugin_progress");
+  assert.ok(pluginEvent);
+  assert.equal(pluginEvent?.data?.event, "plugin_step");
+  assert.equal(pluginEvent?.data?.data?.status, "ok");
 });
 
 test("runAgentRuntimeHook returns executed=false when no manager exists", async () => {

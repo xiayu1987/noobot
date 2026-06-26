@@ -222,7 +222,7 @@ function buildChecklistFromParsedPlan(parsedPlan = null) {
 
 function buildSummaryDetailPaths(bucket = {}, ctx = {}) {
   const directPaths = Array.isArray(bucket?.summaryDetailPaths) ? bucket.summaryDetailPaths : [];
-  const metas = Array.isArray(bucket?.summaryDetailAttachmentMetas) ? bucket.summaryDetailAttachmentMetas : [];
+  const metas = Array.isArray(bucket?.summaryDetailAttachments) ? bucket.summaryDetailAttachments : [];
   const metaPaths = metas
     .map((item = {}) => resolveAttachmentDisplayPath(item, ctx))
     .filter(Boolean);

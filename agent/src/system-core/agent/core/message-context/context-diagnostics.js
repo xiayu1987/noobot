@@ -43,7 +43,7 @@ export function isModelContextTraceEnabled(runtime = {}) {
   if (explicit !== undefined) return explicit;
   const argvToggle = readTraceToggleFromArgv();
   if (argvToggle !== undefined) return argvToggle;
-  return true;
+  return false;
 }
 
 function textHash(text = "") {

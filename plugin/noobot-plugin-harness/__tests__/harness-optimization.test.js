@@ -352,7 +352,7 @@ test("relaySeparateModelOutputAsUserMessage preserves oversized relay content wh
     purpose: "planning_refinement",
     content,
     dedupe: true,
-    attachmentMetas: [
+    attachments: [
       {
         attachmentId: "att-1",
         name: "detail.md",
@@ -372,7 +372,7 @@ test("relaySeparateModelOutputAsUserMessage preserves oversized relay content wh
   assert.equal(typeof message?.transferEnvelopes, "object");
   assert.equal(Array.isArray(message?.transferEnvelopes), true);
   assert.equal(message.transferEnvelopes.length > 0, true);
-  assert.equal(message?.attachmentMetas, undefined);
+  assert.equal(message?.attachments, undefined);
 });
 
 test("relaySeparateModelOutputAsUserMessage is blocked after agent turn ended", async () => {

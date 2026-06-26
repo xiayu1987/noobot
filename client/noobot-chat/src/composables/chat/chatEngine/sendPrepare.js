@@ -64,7 +64,7 @@ export function prepareChatSend({
   botMessage.pending = true;
   botMessage.hasFirstStreamEvent = false;
   botMessage.statusLabel = "";
-  botMessage.attachmentMetas = [];
+  botMessage.attachments = [];
   botMessage.realtimeLogs = [];
   botMessage.completedToolLogs = [];
   botMessage.tool_calls = [];

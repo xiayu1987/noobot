@@ -73,8 +73,8 @@ function resolveWorkspaceBasePath(runtime = {}) {
   return path.resolve(basePath);
 }
 
-function dedupeAttachmentMetas(attachmentMetas = []) {
-  const source = Array.isArray(attachmentMetas) ? attachmentMetas : [];
+function dedupeAttachments(attachments = []) {
+  const source = Array.isArray(attachments) ? attachments : [];
   const seen = new Set();
   return source.filter((item = {}) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return false;
@@ -356,13 +356,13 @@ function buildAccessConnectorTool(context = {}) {
         generationSource,
         artifacts: sourceArtifacts,
       });
-      const rawAttachmentMetas = dedupeAttachmentMetas(
+      const rawAttachments = dedupeAttachments(
         mapAttachmentRecordsToMetas(records, {
           fallbackMimeType: MIME_TYPE.APPLICATION_OCTET_STREAM,
           fallbackGenerationSource: generationSource,
         }),
       );
-      const attachmentMetas = rawAttachmentMetas.map(
+      const attachments = rawAttachments.map(
         (attachmentItem, attachmentIndex) => ({
           attachmentId: String(attachmentItem?.attachmentId || "").trim(),
           sessionId: String(attachmentItem?.sessionId || runtimeSessionId).trim(),
@@ -392,7 +392,7 @@ function buildAccessConnectorTool(context = {}) {
         }),
       );
       return {
-        attachmentMetas,
+        attachments,
         transferEnvelopes: [],
       };
     };

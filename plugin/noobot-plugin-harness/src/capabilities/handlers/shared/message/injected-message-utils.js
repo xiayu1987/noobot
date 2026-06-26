@@ -26,8 +26,7 @@ export function buildHarnessInjectedMessage(
   content = "",
   {
     role = "",
-    attachmentMetas = [],
-    legacyAttachmentMetasMirror = false,
+    attachments = [],
     transferEnvelopes = [],
     dialogProcessId = "",
     injectedMessageType = "",
@@ -72,12 +71,9 @@ export function buildHarnessInjectedMessage(
   if (normalizedDialogProcessId) {
     message.dialogProcessId = normalizedDialogProcessId;
   }
-  if (
-    legacyAttachmentMetasMirror === true &&
-    Array.isArray(attachmentMetas) &&
-    attachmentMetas.length
-  ) {
-    message.attachmentMetas = attachmentMetas;
+  const normalizedAttachments = Array.isArray(attachments) ? attachments : [];
+  if (normalizedAttachments.length) {
+    message.attachments = normalizedAttachments;
   }
   const normalizedTransferEnvelopes = Array.isArray(transferEnvelopes)
     ? transferEnvelopes.filter(isPlainObject)

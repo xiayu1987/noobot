@@ -9,6 +9,24 @@ import { getSystemRuntimeFromRuntime } from "../context/agent-context-accessor.j
 import { resolveParentSessionId } from "../context/parent-session-id-resolver.js";
 
 const DEFAULT_HOOK_TIMEOUT_MS = 3000;
+const HOOK_PROGRESS_TEXT_LIMIT = 240;
+const HOOK_PROGRESS_VERBOSE_ENABLED_VALUES = new Set(["1", "true", "on", "yes", "enable", "enabled"]);
+const HOOK_PROGRESS_IMPORTANT_STATUSES = new Set([
+  "abort",
+  "aborted",
+  "block",
+  "blocked",
+  "error",
+  "fail",
+  "failed",
+  "failure",
+  "reject",
+  "rejected",
+  "timeout",
+  "warn",
+  "warning",
+]);
+const HOOK_PROGRESS_IMPORTANT_EVENT_RE = /\b(error|fail|failed|failure|reject|rejected|blocked?|abort|aborted|timeout|warn(?:ing)?)\b/i;
 const HOOK_CLIENT_BLOCKED_KEYS = new Set([
   "agent",
   "agentContext",
@@ -314,6 +332,28 @@ function sanitizeForHookClient(value, depth = 0, seen = new WeakSet()) {
   return output;
 }
 
+function truncateHookProgressText(value) {
+  const text = String(value ?? "");
+  return text.length > HOOK_PROGRESS_TEXT_LIMIT
+    ? `${text.slice(0, HOOK_PROGRESS_TEXT_LIMIT)}...`
+    : text;
+}
+
+function isHookPluginProgressTraceEnabled(runtime = {}) {
+  const raw = runtime?.systemRuntime?.hookPluginProgressTrace ?? runtime?.hookPluginProgressTrace;
+  if (raw === true) return true;
+  return HOOK_PROGRESS_VERBOSE_ENABLED_VALUES.has(String(raw ?? "").trim().toLowerCase());
+}
+
+function isImportantHookPluginProgress(event = "", data = {}) {
+  const name = String(event || "").trim();
+  if (HOOK_PROGRESS_IMPORTANT_EVENT_RE.test(name)) return true;
+  if (data?.error) return true;
+  if (data?.fsmRejected === true) return true;
+  const status = String(data?.status || data?.fsmState || "").trim().toLowerCase();
+  return HOOK_PROGRESS_IMPORTANT_STATUSES.has(status);
+}
+
 function normalizeHookPluginProgressData(data = {}) {
   const input = data && typeof data === "object" ? data : {};
   const output = {};
@@ -324,26 +364,32 @@ function normalizeHookPluginProgressData(data = {}) {
       const safeError = sanitizeForHookClient(value);
       if (safeError && typeof safeError === "object" && !Array.isArray(safeError)) {
         output.error = {
-          name: String(safeError?.name || "Error"),
-          message: String(safeError?.message || ""),
+          name: truncateHookProgressText(safeError?.name || "Error"),
+          message: truncateHookProgressText(safeError?.message || ""),
           code: safeError?.code ? String(safeError.code) : undefined,
         };
       } else if (typeof safeError === "string") {
-        output.error = { name: "Error", message: safeError };
+        output.error = { name: "Error", message: truncateHookProgressText(safeError) };
       } else {
         output.error = null;
       }
       continue;
     }
-    output[normalizedKey] = sanitizeForHookClient(value);
+    const safeValue = sanitizeForHookClient(value);
+    output[normalizedKey] = ["message", "reason"].includes(normalizedKey)
+      ? truncateHookProgressText(safeValue)
+      : safeValue;
   }
   return output;
 }
 
-function createHookClientChannel({ listener = null, point = "" } = {}) {
+function createHookClientChannel({ listener = null, point = "", runtime = {} } = {}) {
   return {
     emit(event = "", data = {}) {
       const name = String(event || "").trim() || "hook_progress";
+      if (!isHookPluginProgressTraceEnabled(runtime) && !isImportantHookPluginProgress(name, data)) {
+        return;
+      }
       emitEvent(listener, "hook_plugin_progress", {
         point: String(point || "").trim(),
         event: name,
@@ -380,6 +426,7 @@ export async function runAgentRuntimeHook({
   const hookClientChannel = createHookClientChannel({
     listener,
     point: normalizedPoint,
+    runtime,
   });
   const hookedContext = withHookClientChannel(context, hookClientChannel);
 

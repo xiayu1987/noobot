@@ -121,7 +121,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
             content: "已切换模型并生成附件",
             modelAlias: "anthropic",
             modelName: "gpt-4.1-mini",
-            attachmentMetas: [
+            attachments: [
               {
                 attachmentId: "att-out-1",
                 sessionId: "",
@@ -142,32 +142,32 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
 
   engine._buildContextBuilder = ({
     runConfig = {},
-    inputAttachmentMetas = [],
-    attachmentMetas = [],
+    inputAttachments = [],
+    attachments = [],
     sessionId = "",
     parentSessionId = "",
     caller = "user",
   } = {}) => {
     capturedBuildContextInput = {
       runConfig,
-      inputAttachmentMetas,
-      attachmentMetas,
+      inputAttachments,
+      attachments,
       sessionId,
       parentSessionId,
       caller,
     };
     return {
       async buildInitialContext({ dialogProcessId = "" } = {}) {
-        const effectiveAttachmentMetas = Array.isArray(inputAttachmentMetas) && inputAttachmentMetas.length
-          ? inputAttachmentMetas
-          : attachmentMetas;
-        const firstIncoming = Array.isArray(effectiveAttachmentMetas) ? effectiveAttachmentMetas[0] || {} : {};
+        const effectiveAttachments = Array.isArray(inputAttachments) && inputAttachments.length
+          ? inputAttachments
+          : attachments;
+        const firstIncoming = Array.isArray(effectiveAttachments) ? effectiveAttachments[0] || {} : {};
         return {
           execution: {
             controllers: {
               runtime: {
                 runtimeModel: String(runConfig?.runtimeModel || ""),
-                inputAttachmentMetas: [
+                inputAttachments: [
                   {
                     attachmentId: "att-in-1",
                     sessionId,
@@ -179,7 +179,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
                     relativePath: "input.png",
                   },
                 ],
-                attachmentMetas: [],
+                attachments: [],
                 systemRuntime: {
                   dialogProcessId,
                 },
@@ -239,7 +239,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
     ["scenario", "system_runtime", "base_prompt", "services", "mcp_servers"],
   );
   assert.equal(
-    capturedBuildContextInput?.inputAttachmentMetas?.[0]?.name,
+    capturedBuildContextInput?.inputAttachments?.[0]?.name,
     "input.png",
     "入口附件应透传到 context 构建阶段",
   );
@@ -248,7 +248,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   const userTurn = persistedTurns.find((turn) => turn.role === "user");
   assert.ok(userTurn);
   assert.equal(userTurn.content, "请切换模型并输出附件");
-  assert.equal(userTurn.attachmentMetas?.[0]?.attachmentId, "att-in-1");
+  assert.equal(userTurn.attachments?.[0]?.attachmentId, "att-in-1");
 
   const finalAssistantTurn = [...persistedTurns]
     .reverse()
@@ -256,7 +256,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   assert.ok(finalAssistantTurn);
   assert.equal(finalAssistantTurn.modelAlias, "anthropic");
   assert.equal(finalAssistantTurn.modelName, "gpt-4.1-mini");
-  assert.equal(finalAssistantTurn.attachmentMetas?.[0]?.attachmentId, "att-out-1");
+  assert.equal(finalAssistantTurn.attachments?.[0]?.attachmentId, "att-out-1");
   assert.equal(finalAssistantTurn.transferEnvelopes, undefined);
 
   assert.equal(savedCurrentTurnTasksPayload?.currentTurnTasks?.length, 1);

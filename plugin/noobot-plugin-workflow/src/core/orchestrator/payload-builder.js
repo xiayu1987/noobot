@@ -48,7 +48,7 @@ export async function buildFinalWorkflowPayload({
     },
   });
 
-  const { workflowAttachmentMetas } = enrichWorkflowPayload({
+  const { workflowAttachments } = enrichWorkflowPayload({
     workflowPayload,
     ctx,
     semantic,
@@ -58,6 +58,6 @@ export async function buildFinalWorkflowPayload({
 
   return {
     workflowPayload,
-    workflowAttachmentMetas,
+    workflowAttachments,
   };
 }

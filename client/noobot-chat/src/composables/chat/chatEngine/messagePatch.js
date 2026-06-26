@@ -19,7 +19,7 @@ export function applyDoneMessagesPatch({
   activeSession = null,
   makeViewMessage,
   foldMessagesForView,
-  mergeAssistantAttachmentMetas,
+  mergeAssistantAttachments,
 } = {}) {
   if (!botMessage || !activeSession?.value || !Array.isArray(data?.messages) || !data.messages.length) {
     return false;
@@ -72,7 +72,7 @@ export function applyDoneMessagesPatch({
         botMessage.modelRuns = lastAssistant.modelRuns;
       }
       if (botTurnScopeId && lastAssistantTurnScopeId === botTurnScopeId) {
-        mergeAssistantAttachmentMetas(botMessage, lastAssistant.attachmentMetas || []);
+        mergeAssistantAttachments(botMessage, lastAssistant.attachments || []);
       }
     }
   }

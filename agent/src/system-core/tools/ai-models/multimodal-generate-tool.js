@@ -114,8 +114,8 @@ function normalizeImageSize(imageSize = "1024x1024") {
   return normalizedImageSize || "1024x1024";
 }
 
-function dedupeAttachmentMetas(attachmentMetas = []) {
-  const source = Array.isArray(attachmentMetas) ? attachmentMetas : [];
+function dedupeAttachments(attachments = []) {
+  const source = Array.isArray(attachments) ? attachments : [];
   const seen = new Set();
   return source.filter((item = {}) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return false;
@@ -370,7 +370,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
                 generationSource: ARTIFACT_GENERATION_SOURCE.MULTIMODAL_GENERATE_TOOL,
               })
             : [];
-        const mergedAttachmentMetas = dedupeAttachmentMetas(
+        const mergedAttachments = dedupeAttachments(
           mapAttachmentRecordsToMetas(attachmentRecords, {
             fallbackMimeType: MIME_TYPE.IMAGE_PNG,
             fallbackGenerationSource: ARTIFACT_GENERATION_SOURCE.MULTIMODAL_GENERATE_TOOL,
@@ -386,10 +386,10 @@ export function createMultimodalGenerateTool({ agentContext }) {
             model: String(resolvedModelSpec?.model || "").trim(),
             text: String(generationResult?.rawText || "").trim(),
             generationContentSource: "tool_input_generation_content",
-            attachmentMetas: mergedAttachmentMetas,
+            attachments: mergedAttachments,
             summary: {
               generated_image_count: imageArtifacts.length,
-              saved_attachment_count: mergedAttachmentMetas.length,
+              saved_attachment_count: mergedAttachments.length,
             },
           },
           true,

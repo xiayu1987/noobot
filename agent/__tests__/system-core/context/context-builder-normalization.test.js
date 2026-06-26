@@ -24,7 +24,7 @@ function createBuilderForNormalizationTest() {
       sessionId: "s1",
       caller: "user",
       parentSessionId: "",
-      attachmentMetas: [],
+      attachments: [],
       runConfig: {},
       abortSignal: null,
       parentAsyncResultContainer: null,
@@ -33,8 +33,8 @@ function createBuilderForNormalizationTest() {
 }
 
 function createBuilderForAttachmentRuntimeTest({
-  attachmentMetas = [],
-  inputAttachmentMetas = null,
+  attachments = [],
+  inputAttachments = null,
   includeContextKeys = [],
 } = {}) {
   return new ContextBuilder({
@@ -58,8 +58,8 @@ function createBuilderForAttachmentRuntimeTest({
       sessionId: "s1",
       caller: "user",
       parentSessionId: "",
-      ...(Array.isArray(inputAttachmentMetas) ? { inputAttachmentMetas } : {}),
-      attachmentMetas,
+      ...(Array.isArray(inputAttachments) ? { inputAttachments } : {}),
+      attachments,
       runConfig: {
         contextPolicy: {
           includeContextKeys,
@@ -104,9 +104,9 @@ test("_normalizeSessionRecordsForConversation filters summarized and orphan tool
   );
 });
 
-test("buildInitialContext prefers inputAttachmentMetas over legacy attachmentMetas", async () => {
+test("buildInitialContext prefers inputAttachments over legacy attachments", async () => {
   const builder = createBuilderForAttachmentRuntimeTest({
-    inputAttachmentMetas: [
+    inputAttachments: [
       {
         attachmentId: "att_input",
         sessionId: "s1",
@@ -116,7 +116,7 @@ test("buildInitialContext prefers inputAttachmentMetas over legacy attachmentMet
         path: "/tmp/noobot-test-workspace/u1/runtime/attach/scoped/s1/user/input.png",
       },
     ],
-    attachmentMetas: [
+    attachments: [
       {
         attachmentId: "att_legacy",
         sessionId: "s1",
@@ -131,21 +131,21 @@ test("buildInitialContext prefers inputAttachmentMetas over legacy attachmentMet
 
   const context = await builder.buildInitialContext({ dialogProcessId: "dp_1" });
   assert.equal(
-    context?.execution?.controllers?.runtime?.inputAttachmentMetas?.[0]?.attachmentId,
+    context?.execution?.controllers?.runtime?.inputAttachments?.[0]?.attachmentId,
     "att_input",
   );
-  assert.deepEqual(context?.execution?.controllers?.runtime?.attachmentMetas, []);
+  assert.deepEqual(context?.execution?.controllers?.runtime?.attachments, []);
 });
 
-test("buildContextMessageBlocks prefers runtime inputAttachmentMetas for user meta", () => {
+test("buildContextMessageBlocks prefers runtime inputAttachments for user meta", () => {
   const blocks = buildContextMessageBlocks(
     {
       execution: {
         controllers: {
           runtime: {
             userId: "u1",
-            inputAttachmentMetas: [{ attachmentId: "att_input", name: "input.png" }],
-            attachmentMetas: [{ attachmentId: "att_legacy", name: "legacy.png" }],
+            inputAttachments: [{ attachmentId: "att_input", name: "input.png" }],
+            attachments: [{ attachmentId: "att_legacy", name: "legacy.png" }],
             systemRuntime: { sessionId: "s1", dialogProcessId: "dp1" },
           },
         },
@@ -164,7 +164,7 @@ test("buildContextMessageBlocks prefers runtime inputAttachmentMetas for user me
 
 test("buildInitialContext keeps input attachments separate from runtime generated attachments when attachments section is excluded", async () => {
   const builder = createBuilderForAttachmentRuntimeTest({
-    attachmentMetas: [
+    attachments: [
       {
         attachmentId: "att_1",
         sessionId: "s1",
@@ -179,10 +179,10 @@ test("buildInitialContext keeps input attachments separate from runtime generate
 
   const context = await builder.buildInitialContext({ dialogProcessId: "dp_1" });
   const runtime = context?.execution?.controllers?.runtime || {};
-  assert.equal(Array.isArray(runtime.inputAttachmentMetas), true);
-  assert.equal(runtime.inputAttachmentMetas.length, 1);
-  assert.equal(runtime.inputAttachmentMetas[0]?.attachmentId, "att_1");
-  assert.deepEqual(runtime.attachmentMetas, []);
+  assert.equal(Array.isArray(runtime.inputAttachments), true);
+  assert.equal(runtime.inputAttachments.length, 1);
+  assert.equal(runtime.inputAttachments[0]?.attachmentId, "att_1");
+  assert.deepEqual(runtime.attachments, []);
 });
 
 test("buildInitialContext resolves session history and passes edited turnScopeId", async () => {
@@ -225,7 +225,7 @@ test("buildInitialContext resolves session history and passes edited turnScopeId
       sessionId: "s1",
       caller: "user",
       parentSessionId: "",
-      attachmentMetas: [],
+      attachments: [],
       runConfig: {
         turnScopeId: "client-turn:edited",
         contextPolicy: { includeContextKeys: ["base_prompt", "system_runtime"] },

@@ -50,12 +50,12 @@ function withCanonicalAttachmentOwner(attachmentItem = {}) {
   };
 }
 
-function buildTransferPayloadFromAttachmentMetas(attachmentMetas = []) {
-  const metas = (Array.isArray(attachmentMetas) ? attachmentMetas : []).filter(isPlainObject);
-  if (!metas.length) return normalizeTransferPayload();
-  const files = metas.map((meta = {}, index) => ({
-    filePath: normalizeString(meta?.sandboxPath || meta?.relativePath || meta?.path || meta?.name || ""),
-    attachmentMeta: meta,
+function buildTransferPayloadFromAttachments(attachments = []) {
+  const items = (Array.isArray(attachments) ? attachments : []).filter(isPlainObject);
+  if (!items.length) return normalizeTransferPayload();
+  const files = items.map((attachment = {}, index) => ({
+    filePath: normalizeString(attachment?.sandboxPath || attachment?.relativePath || attachment?.path || attachment?.name || ""),
+    attachmentMeta: attachment,
     role: index === 0 ? "primary" : "secondary",
   }));
   const primaryEnvelope = {
@@ -71,7 +71,7 @@ function buildTransferPayloadFromAttachmentMetas(attachmentMetas = []) {
   });
 }
 
-function extractAttachmentMetasFromTransferPayload(payload = {}) {
+function extractAttachmentsFromTransferPayload(payload = {}) {
   const source = normalizeTransferPayload(payload || {});
   const envelopes = source.transferEnvelopes;
   const metas = [];
@@ -99,13 +99,12 @@ function normalizeTransferPayload(payload = {}) {
   };
 }
 
-export function getTransferPayloadFromAttachmentMetas(attachmentMetas = [], payload = null) {
-  void attachmentMetas;
+export function getTransferPayloadFromAttachments(attachments = [], payload = null) {
   const payloadTransfer = normalizeTransferPayload(payload || {});
   if (payloadTransfer.transferEnvelopes.length) {
     return payloadTransfer;
   }
-  return buildTransferPayloadFromAttachmentMetas(attachmentMetas);
+  return buildTransferPayloadFromAttachments(attachments);
 }
 
 export function applyTransferPayloadToMessage(message = {}, payload = {}) {
@@ -125,7 +124,7 @@ export function applyTransferPayloadToMessage(message = {}, payload = {}) {
   return message;
 }
 
-export function mergeAttachmentMetas(existing = [], incoming = []) {
+export function mergeAttachments(existing = [], incoming = []) {
   const current = Array.isArray(existing) ? existing : [];
   const next = Array.isArray(incoming) ? incoming : [];
   if (!next.length) return current;
@@ -192,7 +191,7 @@ export function markHarnessPluginAttachmentMeta(meta = {}) {
   };
 }
 
-export function markHarnessPluginAttachmentMetas(metas = []) {
+export function markHarnessPluginAttachments(metas = []) {
   return (Array.isArray(metas) ? metas : []).map((item = {}) =>
     markHarnessPluginAttachmentMeta(item),
   );
@@ -235,7 +234,7 @@ function isHarnessInjectedMessage(message = {}) {
 }
 
 export function attachMetasToLatestInjectedMessage(ctx = {}, metas = [], transferPayload = null) {
-  const normalizedTransferPayload = getTransferPayloadFromAttachmentMetas(metas, transferPayload);
+  const normalizedTransferPayload = getTransferPayloadFromAttachments(metas, transferPayload);
   const candidates = [{ list: Array.isArray(ctx?.messages) ? ctx.messages : [], isCtxMessages: true }];
   for (const candidate of candidates) {
     const messages = candidate.list;
@@ -352,7 +351,7 @@ export async function saveCapabilityOutputAsTransferArtifacts(
           sessionId,
         },
       });
-      return markHarnessPluginAttachmentMetas(extractAttachmentMetasFromTransferPayload(staged));
+      return markHarnessPluginAttachments(extractAttachmentsFromTransferPayload(staged));
     }
     const artifact = {
       name: buildCapabilityArtifactName({ purpose }),
@@ -383,11 +382,6 @@ export async function saveCapabilityOutputAsTransferArtifacts(
   }
 }
 
-// Deprecated alias kept for compatibility with existing handler imports.
-export async function saveCapabilityOutputAsAttachmentMetas(ctx = {}, options = {}) {
-  return saveCapabilityOutputAsTransferArtifacts(ctx, options);
-}
-
 export function relaySeparateModelOutputAsUserMessage(
   ctx = {},
   {
@@ -395,7 +389,7 @@ export function relaySeparateModelOutputAsUserMessage(
     purpose = "",
     content = "",
     dedupe = false,
-    attachmentMetas = [],
+    attachments = [],
     transferPayload = null,
   } = {},
 ) {
@@ -405,9 +399,9 @@ export function relaySeparateModelOutputAsUserMessage(
   const prefix = translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SEPARATE_MODEL_PREFIX, {
     purpose: String(purpose || "").trim() || "unknown",
   });
-  const relayAttachmentMetas = Array.isArray(attachmentMetas) ? attachmentMetas : [];
-  const resolvedTransferPayload = getTransferPayloadFromAttachmentMetas(
-    relayAttachmentMetas,
+  const relayAttachments = Array.isArray(attachments) ? attachments : [];
+  const resolvedTransferPayload = getTransferPayloadFromAttachments(
+    relayAttachments,
     transferPayload,
   );
   if (!messages) return false;
@@ -422,8 +416,8 @@ export function relaySeparateModelOutputAsUserMessage(
     persistToCurrentTurn: true,
   });
   if (!injection.injected && injection.deduped === true) {
-    if (relayAttachmentMetas.length) {
-      attachMetasToLatestInjectedMessage(ctx, relayAttachmentMetas, resolvedTransferPayload);
+    if (relayAttachments.length) {
+      attachMetasToLatestInjectedMessage(ctx, relayAttachments, resolvedTransferPayload);
     }
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,

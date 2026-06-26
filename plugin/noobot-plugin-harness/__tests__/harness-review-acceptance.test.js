@@ -188,17 +188,8 @@ test("acceptance checklist attachments are bound to final assistant turn output"
     .flatMap((envelope = {}) => (Array.isArray(envelope.files) ? envelope.files : []))
     .map((file = {}) => String(file?.attachmentMeta?.attachmentId || "").trim())
     .filter(Boolean);
-  const legacyAttachmentIds = (Array.isArray(finalAssistant.attachmentMetas)
-    ? finalAssistant.attachmentMetas
-    : []
-  )
-    .map((item = {}) => String(item?.attachmentId || "").trim())
-    .filter(Boolean);
-  const effectiveAttachmentIds = transferAttachmentIds.length
-    ? transferAttachmentIds
-    : legacyAttachmentIds;
   assert.deepEqual(
-    effectiveAttachmentIds.slice().sort(),
+    transferAttachmentIds.slice().sort(),
     ["att_plan", "att_report"],
   );
   const transferAttachmentOwners = (Array.isArray(finalAssistant.transferEnvelopes)
@@ -208,7 +199,7 @@ test("acceptance checklist attachments are bound to final assistant turn output"
     .flatMap((envelope = {}) => (Array.isArray(envelope.files) ? envelope.files : []))
     .map((file = {}) => file?.attachmentMeta?.owner?.type);
   assert.deepEqual(transferAttachmentOwners, ["plugin", "plugin"]);
-  assert.equal(finalAssistant.attachmentMetas, undefined);
+  assert.equal(finalAssistant.attachments, undefined);
   const acceptanceLogs = ctx.agentContext.payload.harness.logs.acceptance;
   assert.equal(
     acceptanceLogs.some((item = {}) => item?.event === "workflow_priority_decision"),

@@ -53,7 +53,7 @@ test("resolveAttachments should bypass ingest when attachment already ingested",
       },
     },
     runtimeBasePath: "/workspace/u1",
-    attachmentMetas: [
+    attachments: [
       {
         attachmentId: "att1",
         path: "/workspace/u1/runtime/attach/scoped/s1/user/att1.png",
@@ -85,7 +85,7 @@ test("resolveAttachments should call ingest when attachments are raw", async () 
     effectiveConfig: {
       attachments: { maxFileCount: 3 },
     },
-    attachmentMetas: [{ name: "raw.txt", mimeType: "text/plain", size: 10 }],
+    attachments: [{ name: "raw.txt", mimeType: "text/plain", size: 10 }],
     userId: "u1",
     sessionId: "s1",
   });
@@ -96,7 +96,7 @@ test("resolveAttachments should call ingest when attachments are raw", async () 
   assert.deepEqual(result, [{ attachmentId: "att-ingested" }]);
 });
 
-test("resolveAttachments prefers inputAttachmentMetas over legacy attachmentMetas", async () => {
+test("resolveAttachments prefers inputAttachments over attachments", async () => {
   let receivedPayload = null;
   const result = await resolveAttachments({
     attachmentService: {
@@ -106,8 +106,8 @@ test("resolveAttachments prefers inputAttachmentMetas over legacy attachmentMeta
       },
     },
     runtimeBasePath: "/workspace/u1",
-    inputAttachmentMetas: [{ name: "input.txt", mimeType: "text/plain", size: 1 }],
-    attachmentMetas: [{ name: "legacy.txt", mimeType: "text/plain", size: 1 }],
+    inputAttachments: [{ name: "input.txt", mimeType: "text/plain", size: 1 }],
+    attachments: [{ name: "fallback.txt", mimeType: "text/plain", size: 1 }],
     userId: "u1",
     sessionId: "s1",
   });
@@ -116,7 +116,7 @@ test("resolveAttachments prefers inputAttachmentMetas over legacy attachmentMeta
   assert.deepEqual(result, [{ attachmentId: "att-input" }]);
 });
 
-test("toConversationMessages preserves model payload fields and attachment fallback", () => {
+test("toConversationMessages preserves model payload fields and attachments", () => {
   const output = toConversationMessages([
     {
       role: "assistant",
@@ -147,7 +147,7 @@ test("toConversationMessages preserves model payload fields and attachment fallb
   assert.equal(output[0].pluginMessage, true);
   assert.deepEqual(output[0].modelAdditionalKwargs, { k: 1 });
   assert.deepEqual(output[0].modelResponseMetadata, { finish_reason: "tool_calls" });
-  assert.deepEqual(output[0].attachmentMetas, [{ attachmentId: "a1" }]);
+  assert.deepEqual(output[0].attachments, [{ attachmentId: "a1" }]);
 });
 
 test("resolveLongMemory only reads static long memory payload from memoryService", async () => {

@@ -105,11 +105,11 @@ export function resolveTransferEnvelopeListFromMessage(message = {}) {
   return transferEnvelopes;
 }
 
-export function resolvePreferredAttachmentMetas(message = {}) {
+export function resolvePreferredAttachments(message = {}) {
   const transferAttachmentMetas = getTransferAttachmentMetas(resolveTransferEnvelopesFromMessage(message));
   if (transferAttachmentMetas.length) return transferAttachmentMetas;
-  if (Array.isArray(message?.attachmentMetas)) return message.attachmentMetas;
-  if (Array.isArray(message?.lc_kwargs?.attachmentMetas)) return message.lc_kwargs.attachmentMetas;
+  if (Array.isArray(message?.attachments)) return message.attachments;
+  if (Array.isArray(message?.lc_kwargs?.attachments)) return message.lc_kwargs.attachments;
   return [];
 }
 
@@ -166,6 +166,7 @@ export async function persistSnapshotJsonFiles({
   taskPayload = {},
   executionPayload = {},
   metadata = null,
+  now = undefined,
 } = {}) {
   return persistSessionArtifactSnapshot({
     outputDir,
@@ -173,6 +174,7 @@ export async function persistSnapshotJsonFiles({
     taskPayload,
     executionPayload,
     metadata,
+    ...(typeof now === "function" ? { now } : {}),
   });
 }
 

@@ -161,8 +161,8 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
 
     const runtimeSnapshot = JSON.parse(await readFile(runtimeSessionFile, "utf8"));
     const pluginSnapshot = JSON.parse(await readFile(pluginSessionFile, "utf8"));
-    const runtimeAttachment = runtimeSnapshot?.messages?.[0]?.attachmentMetas?.[0] || {};
-    const pluginAttachment = pluginSnapshot?.messages?.[0]?.attachmentMetas?.[0] || {};
+    const runtimeAttachment = runtimeSnapshot?.messages?.[0]?.attachments?.[0] || {};
+    const pluginAttachment = pluginSnapshot?.messages?.[0]?.attachments?.[0] || {};
     assert.equal(runtimeAttachment.parsedResult?.attachmentId, parsedAttachment.attachmentId);
     assert.equal(pluginAttachment.parsedResult?.attachmentId, parsedAttachment.attachmentId);
     assert.equal(runtimeAttachment.parsedResult?.tool, "doc_to_data");

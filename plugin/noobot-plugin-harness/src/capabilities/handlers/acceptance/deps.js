@@ -23,11 +23,11 @@ export {
   appendCapabilityModelTraceLog,
   applyTransferPayloadToMessage,
   attachMetasToLatestInjectedMessage,
-  markHarnessPluginAttachmentMetas,
+  markHarnessPluginAttachments,
   markHarnessPluginTransferPayload,
   mapAttachmentRecordsToMetas,
   relaySeparateModelOutputAsUserMessage,
-  getTransferPayloadFromAttachmentMetas,
+  getTransferPayloadFromAttachments,
   saveCapabilityOutputAsTransferArtifacts,
 } from "../shared/attachment-log-utils.js";
 

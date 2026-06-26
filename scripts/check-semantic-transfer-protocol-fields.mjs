@@ -51,6 +51,20 @@ const FORBIDDEN_FIELDS = [
   { field: "transferResult", regex: /\btransferResult\b/ },
   { field: "nodeResultTransferResult", regex: /\bnodeResultTransferResult\b/ },
 ];
+const ATTACHMENT_LEGACY_FIELDS = [
+  { field: "attachmentMetas", regex: /\battachmentMetas\b/ },
+  { field: "inputAttachmentMetas", regex: /\binputAttachmentMetas\b/ },
+  { field: "attachment_metas", regex: /\battachment_metas\b/ },
+  { field: "AttachmentMetas", regex: /\bAttachmentMetas\b/ },
+];
+const ATTACHMENT_LEGACY_ALLOWED_PREFIXES = [
+  "agent/src/system-core/attach/",
+  "agent/src/system-core/semantic-transfer/",
+];
+
+function isAttachmentLegacyAllowed(relPath = "") {
+  return ATTACHMENT_LEGACY_ALLOWED_PREFIXES.some((prefix) => relPath.startsWith(prefix));
+}
 
 function toPosix(filePath) {
   return filePath.split(path.sep).join("/");
@@ -90,6 +104,17 @@ for (const relDir of TARGET_DIRS) {
           text: line.trim(),
         });
       }
+      if (!isAttachmentLegacyAllowed(rel)) {
+        for (const item of ATTACHMENT_LEGACY_FIELDS) {
+          if (!item.regex.test(line)) continue;
+          violations.push({
+            field: item.field,
+            file: rel,
+            line: index + 1,
+            text: line.trim(),
+          });
+        }
+      }
     }
   }
 }
@@ -97,7 +122,8 @@ for (const relDir of TARGET_DIRS) {
 if (violations.length) {
   console.error("[check-semantic-transfer-protocol-fields] failed");
   console.error("semantic-transfer protocol fields must use transferEnvelopes only.");
-  console.error("Remove legacy transferResult/nodeResultTransferResult compatibility from source chains.");
+  console.error("Remove legacy transferResult/nodeResultTransferResult and attachmentMetas compatibility from source chains.");
+  console.error("attachmentMetas/inputAttachmentMetas may only exist inside attach/semantic-transfer adapter boundaries.");
   for (const violation of violations.slice(0, 80)) {
     console.error(`- ${violation.file}:${violation.line} ${violation.field}: ${violation.text}`);
   }

@@ -19,8 +19,8 @@ const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
   "tool_result_overflow",
 ]);
 
-function filterDisplayableAttachmentMetas(attachmentMetas = []) {
-  return (Array.isArray(attachmentMetas) ? attachmentMetas : []).filter(
+function filterDisplayableAttachments(attachments = []) {
+  return (Array.isArray(attachments) ? attachments : []).filter(
     (attachmentItem = {}) => {
       const generationSource = String(attachmentItem?.generationSource || "").trim();
       return !HIDDEN_INTERMEDIATE_GENERATION_SOURCES.has(generationSource);
@@ -57,11 +57,11 @@ function resolveTurnOwnership(runtime = {}, dialogProcessId = "") {
   return { turnScopeId, dialogProcessId: resolvedDialogProcessId, sessionId };
 }
 
-function annotateAttachmentMetas(attachmentMetas = [], ownership = {}) {
+function annotateAttachments(attachments = [], ownership = {}) {
   const turnScopeId = String(ownership?.turnScopeId || "").trim();
   const dialogProcessId = String(ownership?.dialogProcessId || "").trim();
   const sessionId = String(ownership?.sessionId || "").trim();
-  return (Array.isArray(attachmentMetas) ? attachmentMetas : []).map((attachmentItem = {}) => {
+  return (Array.isArray(attachments) ? attachments : []).map((attachmentItem = {}) => {
     const turnScope = {
       ...(turnScopeId ? { turnScopeId } : {}),
       ...(dialogProcessId ? { dialogProcessId } : {}),
@@ -249,31 +249,31 @@ export function createStateCommitter({
         }),
       });
     },
-    async appendAttachmentMetas(attachmentMetas = []) {
-      if (!Array.isArray(attachmentMetas) || !attachmentMetas.length) return;
-      const ownedAttachmentMetas = annotateAttachmentMetas(attachmentMetas, ownership);
+    async appendAttachments(attachments = []) {
+      if (!Array.isArray(attachments) || !attachments.length) return;
+      const ownedAttachments = annotateAttachments(attachments, ownership);
       await runAgentRuntimeHook({
         runtime,
         point: AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT,
         context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT, runtime, {
           phase: "state_commit",
-          commitType: "attachment_metas",
+          commitType: "attachments",
           status: "start",
-          payload: { attachmentMetas: ownedAttachmentMetas },
+          payload: { attachments: ownedAttachments },
           agentContext,
         }),
       });
-      const committedAttachmentMetas = annotateAttachmentMetas(ownedAttachmentMetas, ownership);
+      const committedAttachments = annotateAttachments(ownedAttachments, ownership);
       appendAttachmentMetasToRuntimeAndTurn({
         runtime,
         turnMessageStore,
-        attachmentMetas: committedAttachmentMetas,
+        attachments: committedAttachments,
       });
-      const displayableAttachmentMetas = filterDisplayableAttachmentMetas(committedAttachmentMetas);
-      if (displayableAttachmentMetas.length) {
-        emitEvent(runtime?.eventListener || null, "attachment_metas_saved", {
+      const displayableAttachments = filterDisplayableAttachments(committedAttachments);
+      if (displayableAttachments.length) {
+        emitEvent(runtime?.eventListener || null, "attachments_saved", {
           dialogProcessId,
-          attachmentMetas: displayableAttachmentMetas,
+          attachments: displayableAttachments,
         });
       }
       await runAgentRuntimeHook({
@@ -281,9 +281,9 @@ export function createStateCommitter({
         point: AGENT_HOOK_POINTS.AFTER_STATE_COMMIT,
         context: buildHookContext(AGENT_HOOK_POINTS.AFTER_STATE_COMMIT, runtime, {
           phase: "state_commit",
-          commitType: "attachment_metas",
+          commitType: "attachments",
           status: "success",
-          payload: { attachmentMetas: committedAttachmentMetas },
+          payload: { attachments: committedAttachments },
           agentContext,
         }),
       });

@@ -6,11 +6,11 @@
 
 import {
   applyWorkflowTransferPayload,
-  buildWorkflowTransferPayloadFromAttachmentMetas,
+  buildWorkflowTransferPayloadFromAttachments,
   normalizeWorkflowTransferPayload,
   resolveAttachmentDisplayPath,
-  resolveWorkflowAttachmentMetasFromTransferPayload,
-  resolveWorkflowCompatAttachmentMetas,
+  resolveWorkflowAttachments,
+  resolveWorkflowAttachmentsFromTransferPayload,
   resolveWorkflowTransferFileDisplayPath,
   resolveWorkflowTransferFilesFromPayload,
 } from "./attachments.js";
@@ -55,9 +55,9 @@ export function stripHarnessReviewAppendix(text = "") {
   return raw.slice(0, markerIndex).trim();
 }
 
-export function buildWorkflowAttachmentPathBlockWithContext(attachmentMetas = [], ctx = {}) {
+export function buildWorkflowAttachmentPathBlockWithContext(attachments = [], ctx = {}) {
   const locale = resolveWorkflowLocaleFromContext(ctx);
-  const lines = (Array.isArray(attachmentMetas) ? attachmentMetas : [])
+  const lines = (Array.isArray(attachments) ? attachments : [])
     .map((item = {}, index) => {
       const label = String(
         item?.name || tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.DEFAULT_LABEL, { index: index + 1 }),
@@ -177,7 +177,7 @@ export async function persistWorkflowNodeResultAttachment({
     const runtime = resolveWorkflowRuntimeFromContext(ctx);
     const semanticTransferContent =
       runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
-    let attachmentMetas = [];
+    let attachments = [];
     let transferPayload = normalizeWorkflowTransferPayload();
     if (typeof semanticTransferContent === "function") {
       const transferred = await semanticTransferContent({
@@ -203,9 +203,9 @@ export async function persistWorkflowNodeResultAttachment({
         mimeType: artifact.mimeType,
       });
       transferPayload = normalizeWorkflowTransferPayload(transferred);
-      attachmentMetas = resolveWorkflowAttachmentMetasFromTransferPayload(transferPayload, ctx);
+      attachments = resolveWorkflowAttachmentsFromTransferPayload(transferPayload, ctx);
     } else {
-      attachmentMetas = await persister({
+      attachments = await persister({
         userId,
         sessionId,
         attachmentSource: "model",
@@ -213,9 +213,9 @@ export async function persistWorkflowNodeResultAttachment({
         fallbackMimeType: "text/markdown",
         artifacts: [artifact],
       });
-      transferPayload = buildWorkflowTransferPayloadFromAttachmentMetas(attachmentMetas);
+      transferPayload = buildWorkflowTransferPayloadFromAttachments(attachments);
     }
-    const metas = Array.isArray(attachmentMetas) ? attachmentMetas : [];
+    const metas = Array.isArray(attachments) ? attachments : [];
     if (!metas.length) return [];
     if (subSession.result && typeof subSession.result === "object") {
       applyWorkflowTransferPayload(subSession.result, transferPayload);
@@ -241,7 +241,7 @@ export async function appendWorkflowPlanningMessage({
   semanticText = "",
   semanticResolution = {},
   workflowPayload = null,
-  attachmentMetas = [],
+  attachments = [],
 } = {}) {
   const turnMessages = ensureTurnMessages(agentResult);
   const dialogProcessId = String(ctx?.dialogProcessId || "").trim();
@@ -296,9 +296,9 @@ export async function appendWorkflowPlanningMessage({
         : []),
     ],
   });
-  const compatAttachmentMetas = resolveWorkflowCompatAttachmentMetas({
+  const resolvedAttachments = resolveWorkflowAttachments({
     workflowPayload: mergedTransferPayload,
-    attachmentMetas,
+    attachments,
     ctx,
   });
   const attachmentPathBlock =
@@ -308,7 +308,7 @@ export async function appendWorkflowPlanningMessage({
       : buildWorkflowTransferPathBlockWithContext(mergedTransferPayload, ctx) ||
         (composedTransferPayload.transferEnvelopes.length
           ? ""
-          : buildWorkflowAttachmentPathBlockWithContext(compatAttachmentMetas, ctx)));
+          : buildWorkflowAttachmentPathBlockWithContext(resolvedAttachments, ctx)));
   const content = [semanticText || sourceText || "", attachmentPathBlock]
     .map((item) => String(item || "").trim())
     .filter(Boolean)

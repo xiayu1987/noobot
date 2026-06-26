@@ -125,10 +125,10 @@ export function buildWaitAsyncTaskResultPayload({
   containers = [],
   containerStatuses = [],
   taskStats = {},
-  attachmentMetas = [],
+  attachments = [],
   transferEnvelopes = [],
 } = {}) {
-  void attachmentMetas;
+  void attachments;
   const normalizedTransferEnvelopes = [];
   const seenEnvelopeKeys = new Set();
   const appendEnvelope = (envelope = null) => {

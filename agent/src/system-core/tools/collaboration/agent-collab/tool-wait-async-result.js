@@ -165,8 +165,8 @@ export function createWaitAsyncTaskResultTool({
             container: containerItem,
             taskResults,
           });
-          const attachmentMetas = Array.isArray(persistedAttachments?.attachmentMetas)
-            ? persistedAttachments.attachmentMetas
+          const attachments = Array.isArray(persistedAttachments?.attachments)
+            ? persistedAttachments.attachments
             : [];
           const transferEnvelopes = [];
           const seenTransferEnvelopeKeys = new Set();
@@ -193,7 +193,7 @@ export function createWaitAsyncTaskResultTool({
             ok: status !== SESSION_ASYNC_STATUS.FAILED,
             status,
             tasks: taskResults,
-            attachmentMetas,
+            attachments,
             transferEnvelopes,
           };
         }),
@@ -227,8 +227,8 @@ export function createWaitAsyncTaskResultTool({
             String(item?.status || "") === SESSION_ASYNC_STATUS.INVALID_REQUEST,
         ).length,
       };
-      const attachmentMetas = containerResults.flatMap((item) =>
-        Array.isArray(item?.attachmentMetas) ? item.attachmentMetas : [],
+      const attachments = containerResults.flatMap((item) =>
+        Array.isArray(item?.attachments) ? item.attachments : [],
       );
       const transferEnvelopes = containerResults.flatMap((item) => {
         if (Array.isArray(item?.transferEnvelopes) && item.transferEnvelopes.length) {
@@ -252,7 +252,7 @@ export function createWaitAsyncTaskResultTool({
           containers,
           containerStatuses,
           taskStats,
-          attachmentMetas,
+          attachments,
           transferEnvelopes,
         });
       }
@@ -268,7 +268,7 @@ export function createWaitAsyncTaskResultTool({
           containers,
           containerStatuses,
           taskStats,
-          attachmentMetas,
+          attachments,
           transferEnvelopes,
         });
       }
@@ -284,7 +284,7 @@ export function createWaitAsyncTaskResultTool({
           containers,
           containerStatuses,
           taskStats,
-          attachmentMetas,
+          attachments,
           transferEnvelopes,
         });
       }
@@ -296,7 +296,7 @@ export function createWaitAsyncTaskResultTool({
         containers,
         containerStatuses,
         taskStats,
-        attachmentMetas,
+        attachments,
         transferEnvelopes,
       });
     },

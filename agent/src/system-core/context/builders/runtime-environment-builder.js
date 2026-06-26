@@ -83,8 +83,8 @@ export function buildRuntimeContext({
   parentAsyncResultContainer = null,
   runConfig = {},
   systemRuntime = {},
-  inputAttachmentMetas = null,
-  attachmentMetas = [],
+  inputAttachments = null,
+  attachments = [],
 } = {}) {
   const passthroughSharedTools =
     runConfig?.sharedTools && typeof runConfig.sharedTools === "object"
@@ -129,15 +129,15 @@ export function buildRuntimeContext({
     systemRuntime: systemRuntime && typeof systemRuntime === "object" ? systemRuntime : {},
     currentTurnMessages: createCurrentTurnMessagesStore(),
     currentTurnTasks: createCurrentTurnTasksStore(),
-    inputAttachmentMetas: Array.isArray(inputAttachmentMetas)
-      ? inputAttachmentMetas
-      : Array.isArray(attachmentMetas)
-        ? attachmentMetas
+    inputAttachments: Array.isArray(inputAttachments)
+      ? inputAttachments
+      : Array.isArray(attachments)
+        ? attachments
         : [],
     // Runtime-generated attachments are tracked separately from user input attachments.
-    // User input attachments live in inputAttachmentMetas; attachmentMetas remains
+    // User input attachments live in inputAttachments; attachments remains
     // a mutable runtime bucket for generated ordinary attachments only.
-    attachmentMetas: [],
+    attachments: [],
   };
 }
 

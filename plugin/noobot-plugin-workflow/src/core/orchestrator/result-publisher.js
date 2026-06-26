@@ -16,7 +16,7 @@ export async function publishWorkflowResult({
   semanticText = "",
   semanticResolution = {},
   workflowPayload = {},
-  workflowAttachmentMetas = [],
+  workflowAttachments = [],
   execution = {},
   beforeDispatchMode = false,
 } = {}) {
@@ -29,7 +29,7 @@ export async function publishWorkflowResult({
     semanticText,
     semanticResolution,
     workflowPayload,
-    attachmentMetas: workflowAttachmentMetas,
+    attachments: workflowAttachments,
   });
   appendWorkflowTrace(agentResult, {
     stage: WORKFLOW_TRACE.STAGE_EXECUTED,

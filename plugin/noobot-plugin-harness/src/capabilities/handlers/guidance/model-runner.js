@@ -15,7 +15,7 @@ import {
   buildCapabilityProtocolModelMessages,
   ensureHarnessBucket,
   extractRawTextContent,
-  getTransferPayloadFromAttachmentMetas,
+  getTransferPayloadFromAttachments,
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsTransferArtifacts,
   invokeWithReasoningRetry,
@@ -42,7 +42,7 @@ import { getMessageId } from "../../../core/message-store.js";
 import {
   applySummaryText,
   recordLatestSummaryFullText,
-  recordSummaryDetailAttachmentMetas,
+  recordSummaryDetailAttachments,
   resolvePreviousSummaryContextText,
   shouldSaveSummaryDetailToAttachment,
   transferSummaryInjectionMessage,
@@ -84,10 +84,10 @@ function resolveDetailPath(meta = {}) {
 function buildSummaryRelayContent({
   locale = LOCALE.ZH_CN,
   overviewText = "",
-  detailAttachmentMetas = [],
+  detailAttachments = [],
 } = {}) {
   const overview = String(overviewText || "").trim();
-  const metas = Array.isArray(detailAttachmentMetas) ? detailAttachmentMetas : [];
+  const metas = Array.isArray(detailAttachments) ? detailAttachments : [];
   if (!metas.length) return overview;
   const lines = metas
     .map((item = {}) => resolveDetailPath(item))
@@ -255,7 +255,7 @@ export async function runPlanUpdateAfterSummary(
   });
   const flagsAfterRevision = resolveScenarioPolicyFlagsFromContext(ctx, meta);
   const dynamicPolicyPromptAfterRevision = flagsAfterRevision.dynamicPolicyPrompt || dynamicPolicyPrompt;
-  const revisionAttachmentMetas = await saveCapabilityOutputAsTransferArtifacts(ctx, {
+  const revisionAttachments = await saveCapabilityOutputAsTransferArtifacts(ctx, {
     purpose: "planning_revision",
     content: revisionText,
     generationSource: "harness_planning_revision",
@@ -266,7 +266,7 @@ export async function runPlanUpdateAfterSummary(
     purpose: "planning_revision",
     content: revisionText,
     dedupe: true,
-    transferPayload: getTransferPayloadFromAttachmentMetas(revisionAttachmentMetas),
+    transferPayload: getTransferPayloadFromAttachments(revisionAttachments),
   });
   const revisionApplied = applyRevisedPlanFromText(ctx, revisionText, {
     source: "planning_revision",
@@ -486,7 +486,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     extractRawTextContent(response?.content) ||
     String(response?.text || response?.output || "").trim();
   let relayText = responseText;
-  let relayAttachmentMetas = [];
+  let relayAttachments = [];
   let summaryMergeText = responseText;
   if (purpose === "summary") {
     const parsedSummary = parseSummaryOverviewAndDetailFromText(responseText);
@@ -494,7 +494,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     summaryMergeText = summaryOverviewText;
     const saveDetailToAttachment = shouldSaveSummaryDetailToAttachment(meta);
     const summaryDetailAttachmentText = resolveSummaryDetailAttachmentText(parsedSummary);
-    const summaryDetailAttachmentMetas = saveDetailToAttachment && summaryDetailAttachmentText
+    const summaryDetailAttachments = saveDetailToAttachment && summaryDetailAttachmentText
       ? await saveCapabilityOutputAsTransferArtifacts(ctx, {
         purpose: "summary_detail",
         content: summaryDetailAttachmentText,
@@ -502,12 +502,12 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
         domain: CAPABILITY_DOMAIN.GUIDANCE,
       })
       : [];
-    recordSummaryDetailAttachmentMetas(ctx, summaryDetailAttachmentMetas);
+    recordSummaryDetailAttachments(ctx, summaryDetailAttachments);
     const baseRelayText = saveDetailToAttachment
       ? buildSummaryRelayContent({
           locale,
           overviewText: summaryOverviewText,
-          detailAttachmentMetas: summaryDetailAttachmentMetas,
+          detailAttachments: summaryDetailAttachments,
         })
       : responseText;
     relayText = await transferSummaryInjectionMessage(ctx, {
@@ -521,9 +521,9 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
       relayText || baseRelayText,
       formatOperationDirectoryForRelay(resolveOperationDirectoryContext(ctx)),
     ].filter(Boolean).join("\n\n");
-    relayAttachmentMetas = summaryDetailAttachmentMetas;
+    relayAttachments = summaryDetailAttachments;
   } else if (purpose !== "analysis") {
-    relayAttachmentMetas = await saveCapabilityOutputAsTransferArtifacts(ctx, {
+    relayAttachments = await saveCapabilityOutputAsTransferArtifacts(ctx, {
       purpose,
       content: responseText,
       generationSource: `harness_${String(purpose || "").trim() || "guidance"}`,
@@ -543,7 +543,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     locale,
     purpose,
     content: relayText,
-    transferPayload: getTransferPayloadFromAttachmentMetas(relayAttachmentMetas),
+    transferPayload: getTransferPayloadFromAttachments(relayAttachments),
   });
   if (purpose === "summary") {
     recordLatestSummaryFullText(ctx, responseText);

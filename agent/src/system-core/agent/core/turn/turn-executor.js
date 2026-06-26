@@ -50,7 +50,7 @@ import {
   summarizeDiagnosticMessages,
 } from "../message-context/context-diagnostics.js";
 import { peekMainFlowFinalNoToolsTurnInstruction } from "../main-flow-control.js";
-export { normalizeToolResultAttachmentMetas } from "./tool-result-normalizer.js";
+export { normalizeToolResultAttachments } from "./tool-result-normalizer.js";
 export {
   buildAssistantModelMessageForToolCalls,
   formatToolCallsForLangChain,

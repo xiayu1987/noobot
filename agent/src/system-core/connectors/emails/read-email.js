@@ -37,7 +37,7 @@ async function saveEmailAttachments({
 } = {}) {
   if (typeof attachmentHandler !== "function" || !Array.isArray(parsedEmail?.attachments)) {
     return {
-      attachmentMetas: [],
+      attachments: [],
       transferEnvelopes: [],
     };
   }
@@ -72,7 +72,7 @@ async function saveEmailAttachments({
   }
   if (!artifacts.length) {
     return {
-      attachmentMetas: [],
+      attachments: [],
       transferEnvelopes: [],
     };
   }
@@ -81,18 +81,20 @@ async function saveEmailAttachments({
   });
   if (Array.isArray(savedOutput)) {
     return {
-      attachmentMetas: savedOutput,
+      attachments: savedOutput,
       transferEnvelopes: [],
     };
   }
   if (!savedOutput || typeof savedOutput !== "object") {
     return {
-      attachmentMetas: [],
+      attachments: [],
       transferEnvelopes: [],
     };
   }
   return {
-    attachmentMetas: Array.isArray(savedOutput?.attachmentMetas) ? savedOutput.attachmentMetas : [],
+    attachments: Array.isArray(savedOutput?.attachments)
+      ? savedOutput.attachments
+      : [],
     transferEnvelopes: normalizeTransferEnvelopesFromPayload(savedOutput),
   };
 }
@@ -201,13 +203,13 @@ export async function executeReadEmail({
         attachmentHandler,
         parsedEmail,
       });
-      const attachmentMetas = Array.isArray(persistedAttachments?.attachmentMetas)
-        ? persistedAttachments.attachmentMetas
+      const attachments = Array.isArray(persistedAttachments?.attachments)
+        ? persistedAttachments.attachments
         : [];
-      const inlineAttachmentMetas = attachmentMetas.filter(
+      const inlineAttachments = attachments.filter(
         (attachmentItem) => attachmentItem?.email_is_inline === true,
       );
-      const inlineAttachmentTextLines = inlineAttachmentMetas.map(
+      const inlineAttachmentTextLines = inlineAttachments.map(
         (attachmentItem, attachmentIndex) =>
           `- [${INLINE_ATTACHMENT_ITEM_PREFIX}${attachmentIndex + 1}] name=${String(
             attachmentItem?.name || "unknown",
@@ -233,7 +235,7 @@ export async function executeReadEmail({
       const htmlWithInlineAttachmentHint = inlineAttachmentTextLines.length
         ? `${baseHtml}${
             baseHtml ? "<hr/>" : ""
-          }<div><strong>${INLINE_ATTACHMENT_TITLE_TEXT}</strong><ul>${inlineAttachmentMetas
+          }<div><strong>${INLINE_ATTACHMENT_TITLE_TEXT}</strong><ul>${inlineAttachments
             .map(
               (attachmentItem, attachmentIndex) =>
                 `<li>[${INLINE_ATTACHMENT_ITEM_PREFIX}${attachmentIndex + 1}] ${String(
@@ -275,7 +277,7 @@ export async function executeReadEmail({
         date: String(parsedEmail?.date || fetchedMessages?.internalDate || ""),
         text: textWithInlineAttachmentHint,
         html: htmlWithInlineAttachmentHint,
-        attachment_metas: attachmentMetas,
+        attachments,
         ...(Array.isArray(persistedAttachments?.transferEnvelopes) && persistedAttachments.transferEnvelopes.length
           ? { transferEnvelopes: persistedAttachments.transferEnvelopes }
           : {}),

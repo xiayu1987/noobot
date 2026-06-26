@@ -111,20 +111,20 @@ function transferFileToAttachmentMeta(file = {}) {
   };
 }
 
-function getTransferAttachmentMetas(value = null) {
+function getTransferAttachments(value = null) {
   return getTransferFiles(value)
     .map((file) => transferFileToAttachmentMeta(file))
     .filter((item) => item.name || item.path || item.relativePath || item.attachmentId || item.transferFilePath);
 }
 
-function getMessageTransferAttachmentMetas(messageItem = {}) {
-  return getTransferAttachmentMetas(getMessageTransferEnvelopes(messageItem));
+function getMessageTransferAttachments(messageItem = {}) {
+  return getTransferAttachments(getMessageTransferEnvelopes(messageItem));
 }
 
 export {
-  getMessageTransferAttachmentMetas,
+  getMessageTransferAttachments,
   getMessageTransferEnvelopes,
-  getTransferAttachmentMetas,
+  getTransferAttachments,
   getTransferDisplayPath,
   getTransferFiles,
   isTransferEnvelope,

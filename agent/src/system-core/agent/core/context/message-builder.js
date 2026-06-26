@@ -123,30 +123,34 @@ function toLangChainToolCalls(toolCalls = []) {
     .filter(Boolean);
 }
 
-function resolveAttachmentMetas(msg = {}, fallbackAttachmentMetas = []) {
-  const transferAttachmentMetas = getTransferAttachmentMetas(
+function resolveAttachments(msg = {}, fallbackAttachments = []) {
+  const transferAttachments = getTransferAttachmentMetas(
     [
       ...(Array.isArray(msg?.transferEnvelopes) ? msg.transferEnvelopes : []),
       ...(Array.isArray(msg?.lc_kwargs?.transferEnvelopes) ? msg.lc_kwargs.transferEnvelopes : []),
     ].filter(Boolean),
   );
-  if (transferAttachmentMetas.length) return transferAttachmentMetas;
-  if (Array.isArray(msg?.inputAttachmentMetas)) return msg.inputAttachmentMetas;
-  if (Array.isArray(msg?.attachmentMetas)) return msg.attachmentMetas;
-  return Array.isArray(fallbackAttachmentMetas) ? fallbackAttachmentMetas : [];
+  if (transferAttachments.length) return transferAttachments;
+  if (Array.isArray(msg?.inputAttachments)) return msg.inputAttachments;
+  if (Array.isArray(msg?.attachments)) return msg.attachments;
+  return Array.isArray(fallbackAttachments) ? fallbackAttachments : [];
 }
 
-function buildHumanMessageContent(msg = {}, fallbackAttachmentMetas = []) {
+function resolveFallbackAttachments(meta = {}) {
+  if (Array.isArray(meta?.inputAttachments)) return meta.inputAttachments;
+  if (Array.isArray(meta?.attachments)) return meta.attachments;
+  return [];
+}
+
+function buildHumanMessageContent(msg = {}, fallbackAttachments = []) {
   const textContent = String(msg?.content || "");
-  void fallbackAttachmentMetas;
+  void fallbackAttachments;
   return textContent;
 }
 
 function buildUserMetaInfoContent(runtime = {}, msg = {}, fallbackMeta = {}) {
-  const fallbackAttachments = Array.isArray(fallbackMeta?.inputAttachmentMetas)
-    ? fallbackMeta.inputAttachmentMetas
-    : fallbackMeta?.attachmentMetas || [];
-  const attachmentMetas = resolveAttachmentMetas(msg, fallbackAttachments);
+  const fallbackAttachments = resolveFallbackAttachments(fallbackMeta);
+  const attachments = resolveAttachments(msg, fallbackAttachments);
   const fallbackParentSessionId = resolveParentSessionId({
     runtime,
     parentSessionId: fallbackMeta?.parentSessionId,
@@ -166,7 +170,7 @@ function buildUserMetaInfoContent(runtime = {}, msg = {}, fallbackMeta = {}) {
     parentDialogProcessId: String(
       msg?.parentDialogProcessId || fallbackMeta?.parentDialogProcessId || "",
     ).trim(),
-    attachments: attachmentMetas.map((attachmentItem) => {
+    attachments: attachments.map((attachmentItem) => {
       const parsedResult = normalizeAttachmentParsedResultMeta(attachmentItem);
       return {
         attachmentId: String(attachmentItem?.attachmentId || "").trim(),
@@ -184,9 +188,7 @@ function buildUserMetaInfoContent(runtime = {}, msg = {}, fallbackMeta = {}) {
 function buildHumanMessagesForUser(runtime = {}, msg = {}, fallbackMeta = {}) {
   const contentText = buildHumanMessageContent(
     msg,
-    Array.isArray(fallbackMeta?.inputAttachmentMetas)
-      ? fallbackMeta.inputAttachmentMetas
-      : fallbackMeta?.attachmentMetas || [],
+    resolveFallbackAttachments(fallbackMeta),
   );
   const isFrontendUserMessage = msg?.frontendUserMessage === true;
   const identityKwargs = buildModelMessageIdentityKwargs(msg, fallbackMeta);
@@ -370,9 +372,7 @@ function buildHistoryMessages({
         new HumanMessage({
           content: buildHumanMessageContent(
             msg,
-            Array.isArray(fallbackUserMeta?.inputAttachmentMetas)
-              ? fallbackUserMeta.inputAttachmentMetas
-              : fallbackUserMeta?.attachmentMetas || [],
+            resolveFallbackAttachments(fallbackUserMeta),
           ),
           additional_kwargs: buildModelMessageIdentityKwargs(msg, fallbackUserMeta),
         }),
@@ -397,10 +397,10 @@ export function buildContextMessageBlocks(
     parentDialogProcessId: String(
       systemRuntime?.parentDialogProcessId || "",
     ).trim(),
-    inputAttachmentMetas: Array.isArray(runtime?.inputAttachmentMetas)
-      ? runtime.inputAttachmentMetas
-      : Array.isArray(runtime?.attachmentMetas)
-        ? runtime.attachmentMetas
+    attachments: Array.isArray(runtime?.inputAttachments)
+      ? runtime.inputAttachments
+      : Array.isArray(runtime?.attachments)
+        ? runtime.attachments
         : [],
   };
   const systemMessages = Array.isArray(agentContext?.payload?.messages?.system)
@@ -440,7 +440,7 @@ export function buildContextMessageBlocks(
       content: normalizedCurrentUserMessage,
       frontendUserMessage: true,
       userName: fallbackUserMeta.userName,
-      inputAttachmentMetas: fallbackUserMeta.inputAttachmentMetas,
+      attachments: fallbackUserMeta.attachments,
       sessionId: fallbackUserMeta.sessionId,
       parentSessionId: fallbackUserMeta.parentSessionId,
       dialogProcessId: fallbackUserMeta.dialogProcessId,

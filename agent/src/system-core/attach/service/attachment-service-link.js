@@ -250,14 +250,17 @@ export async function syncParsedResultToSessionSnapshots({
       return { items: nextItems, changed: bucketChanged };
     };
     const nextMessages = messages.map((messageItem) => {
-      const attachmentMetas = Array.isArray(messageItem?.attachmentMetas) ? messageItem.attachmentMetas : [];
-      const syncedAttachmentMetas = syncAttachmentBucket(attachmentMetas);
-      if (!syncedAttachmentMetas.changed) return messageItem;
+      const attachments = Array.isArray(messageItem?.attachments)
+        ? messageItem.attachments
+        : [];
+      const syncedAttachments = syncAttachmentBucket(attachments);
+      if (!syncedAttachments.changed) return messageItem;
       changed = true;
-      return {
+      const nextMessage = {
         ...(messageItem || {}),
-        ...(attachmentMetas.length ? { attachmentMetas: syncedAttachmentMetas.items } : {}),
+        ...(attachments.length ? { attachments: syncedAttachments.items } : {}),
       };
+      return nextMessage;
     });
     if (!changed) continue;
     try {

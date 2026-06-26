@@ -13,8 +13,8 @@ import {
   applyTransferPayloadToMessage,
   attachMetasToLatestInjectedMessage,
   ensureHarnessBucket,
-  getTransferPayloadFromAttachmentMetas,
-  markHarnessPluginAttachmentMetas,
+  getTransferPayloadFromAttachments,
+  markHarnessPluginAttachments,
   markHarnessPluginTransferPayload,
   mapAttachmentRecordsToMetas,
   relaySeparateModelOutputAsUserMessage,
@@ -27,7 +27,7 @@ const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
 function attachMetasToFinalOutputTurn(ctx = {}, metas = [], transferPayload = null) {
   if (!Array.isArray(metas) || !metas.length) return false;
-  const normalizedTransferPayload = getTransferPayloadFromAttachmentMetas(
+  const normalizedTransferPayload = getTransferPayloadFromAttachments(
     metas,
     transferPayload,
   );
@@ -121,7 +121,7 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
       },
       artifacts,
     });
-    metas = markHarnessPluginAttachmentMetas(mapAttachmentRecordsToMetas(savedRecords));
+    metas = markHarnessPluginAttachments(mapAttachmentRecordsToMetas(savedRecords));
   } catch (error) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
@@ -132,7 +132,7 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
   }
 
   if (!metas.length) return false;
-  transferPayload = getTransferPayloadFromAttachmentMetas(metas, transferPayload);
+  transferPayload = getTransferPayloadFromAttachments(metas, transferPayload);
   const attachedToInjectedMessage = attachMetasToLatestInjectedMessage(
     ctx,
     metas,

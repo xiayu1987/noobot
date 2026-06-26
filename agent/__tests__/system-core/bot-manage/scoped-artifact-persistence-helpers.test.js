@@ -103,7 +103,7 @@ test("ScopedArtifactPersistenceHelpers normalizes detached sub-session messages 
       dialogProcessId: "d1",
       parentDialogProcessId: "pd1",
       tool_call_id: "tc1",
-      attachmentMetas: [{ attachmentId: "a1", mimeType: "text/plain" }],
+      attachments: [{ attachmentId: "a1", mimeType: "text/plain" }],
       transferEnvelopes: [{ envelopeId: "e3" }],
       injectedMessage: true,
       injectedBy: "botPlugin",
@@ -117,7 +117,7 @@ test("ScopedArtifactPersistenceHelpers normalizes detached sub-session messages 
   assert.equal(normalized.content, "payload");
   assert.equal(normalized.tool_call_id, "tc1");
   assert.equal(normalized.ts, "2026-02-03T04:05:06.000Z");
-  assert.deepEqual(normalized.attachmentMetas, [{ attachmentId: "a1", mimeType: "text/plain" }]);
+  assert.deepEqual(normalized.attachments, [{ attachmentId: "a1", mimeType: "text/plain" }]);
   assert.equal("transferResult" in normalized, false);
   assert.deepEqual(normalized.transferEnvelopes, [{ envelopeId: "e3" }]);
   assert.equal(normalized.injectedMessage, true);
@@ -150,7 +150,7 @@ test("ScopedArtifactPersistenceHelpers persists detached snapshot json files", a
   assert.equal(sessionJson.sessionId, "s1");
   assert.equal(sessionJson.messages[0].content, "done");
   const sessionSummaryJson = JSON.parse(await fs.readFile(persisted.files.sessionSummary, "utf8"));
-  assert.equal(sessionSummaryJson.schemaVersion, 3);
+  assert.equal(sessionSummaryJson.schemaVersion, 4);
   assert.equal(sessionSummaryJson.sessionId, "s1");
   assert.equal(sessionSummaryJson.stats.messageCount, 1);
   assert.equal(await fs.readFile(persisted.files.executionEvents, "utf8"), "");

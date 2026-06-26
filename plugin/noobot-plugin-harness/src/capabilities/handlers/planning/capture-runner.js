@@ -294,7 +294,7 @@ async function handleSeparateModelPlanningProcessResult(
     responseText || getPlanningSeparateModelEmptyRelay(locale),
     formatOperationDirectoryForRelay(operationDirectory),
   ].filter(Boolean).join("\n\n");
-  const attachmentMetas = await saveCapabilityOutputAsTransferArtifacts(ctx, {
+  const attachments = await saveCapabilityOutputAsTransferArtifacts(ctx, {
     purpose: "planning",
     content: relayText,
     generationSource: "harness_planning",
@@ -306,7 +306,7 @@ async function handleSeparateModelPlanningProcessResult(
       purpose: "planning",
       content: relayText,
       dedupe: true,
-      attachmentMetas,
+      attachments,
     });
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
@@ -321,7 +321,7 @@ async function handleSeparateModelPlanningProcessResult(
     purpose: "planning",
     content: relayText,
     dedupe: true,
-    attachmentMetas,
+    attachments,
   });
   relaySeparateModelOutputAsUserMessage(ctx, {
     locale,

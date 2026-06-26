@@ -162,8 +162,8 @@ export function useChatSession({
     activeSession,
   });
 
-  function appendMessage(role, content = "", attachmentMetas = [], options = {}) {
-    const msg = reactive(buildAppendMessage(role, content, attachmentMetas, options));
+  function appendMessage(role, content = "", attachments = [], options = {}) {
+    const msg = reactive(buildAppendMessage(role, content, attachments, options));
     activeSession.value.messages.push(msg);
     activeSession.value.rawMessages.push(msg);
     activeSession.value.messageCount = (activeSession.value.messageCount || 0) + 1;

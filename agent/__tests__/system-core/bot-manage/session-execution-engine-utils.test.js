@@ -13,7 +13,7 @@ import {
   persistSnapshotJsonFiles,
   resolveScopedMessagesDialogProcessId,
   resolvePluginOptionsFromConfig,
-  resolvePreferredAttachmentMetas,
+  resolvePreferredAttachments,
   resolveTransferEnvelopeListFromMessage,
   resolveTransferEnvelopesFromMessage,
   selectHookManager,
@@ -99,9 +99,9 @@ test("session-execution-engine-utils applies normalized message flags", () => {
   assert.equal(applied.frontendUserMessage, true);
 });
 
-test("session-execution-engine-utils resolves transfer envelopes and preferred attachment metas", () => {
+test("session-execution-engine-utils resolves transfer envelopes and preferred attachments", () => {
   const message = {
-    attachmentMetas: [{ attachmentId: "fallback" }],
+    attachments: [{ attachmentId: "fallback" }],
     transferEnvelopes: [
       {
         protocol: "noobot.semantic-transfer",
@@ -134,12 +134,13 @@ test("session-execution-engine-utils resolves transfer envelopes and preferred a
     "e3",
   ]);
   assert.deepEqual(
-    resolvePreferredAttachmentMetas(message).map((item) => item.attachmentId),
+    resolvePreferredAttachments(message).map((item) => item.attachmentId),
     ["att-1", "att-3"],
   );
-  assert.deepEqual(resolvePreferredAttachmentMetas({ attachmentMetas: [{ attachmentId: "fallback" }] }), [
+  assert.deepEqual(resolvePreferredAttachments({ attachments: [{ attachmentId: "fallback" }] }), [
     { attachmentId: "fallback" },
   ]);
+  assert.deepEqual(resolvePreferredAttachments({ attachmentMetas: [{ attachmentId: "legacy" }] }), []);
 });
 
 test("session-execution-engine-utils resolves current dialog for incremental blocks", () => {
@@ -211,23 +212,62 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
   const outputDir = path.join(await createTempRoot(), "snapshot");
   const persisted = await persistSnapshotJsonFiles({
     outputDir,
-    sessionPayload: { sessionId: "s1", parentSessionId: "p1", messages: [] },
+    sessionPayload: {
+      sessionId: "s1",
+      parentSessionId: "p1",
+      messages: [
+        {
+          role: "assistant",
+          content: "canonical attachment",
+          attachments: [{ attachmentId: "att-1", name: "a.txt" }],
+          attachmentMetas: [{ attachmentId: "legacy" }],
+        },
+      ],
+    },
     taskPayload: { sessionId: "s1", tasks: [] },
     executionPayload: { sessionId: "s1", logs: [{ event: "started" }] },
     metadata: { node: "n1" },
+    now: () => "2026-05-14T00:00:00.000Z",
   });
 
   assert.equal(persisted.outputDir, outputDir);
-  assert.deepEqual(JSON.parse(await fs.readFile(persisted.files.session, "utf8")), {
+  const sessionPayload = JSON.parse(await fs.readFile(persisted.files.session, "utf8"));
+  assert.deepEqual(sessionPayload, {
     sessionId: "s1",
     parentSessionId: "p1",
-    messages: [],
+    caller: "user",
+    modelAlias: "",
+    currentTaskId: "",
+    shortMemoryCheckpoint: 0,
+    messages: [
+      {
+        role: "assistant",
+        content: "canonical attachment",
+        type: "",
+        dialogProcessId: "",
+        parentDialogProcessId: "",
+        turnScopeId: "",
+        taskId: "",
+        taskStatus: "",
+        modelAlias: "",
+        modelName: "",
+        summarized: false,
+        ts: "2026-05-14T00:00:00.000Z",
+        attachments: [{ attachmentId: "att-1", name: "a.txt" }],
+      },
+    ],
+    selectedConnectors: {},
+    createdAt: "2026-05-14T00:00:00.000Z",
+    updatedAt: "2026-05-14T00:00:00.000Z",
   });
+  assert.equal(JSON.stringify(sessionPayload).includes("attachmentMetas"), false);
   const sessionSummary = JSON.parse(await fs.readFile(persisted.files.sessionSummary, "utf8"));
-  assert.equal(sessionSummary.schemaVersion, 3);
+  assert.equal(sessionSummary.schemaVersion, 4);
   assert.equal(sessionSummary.sessionId, "s1");
   assert.equal(sessionSummary.parentSessionId, "p1");
-  assert.equal(sessionSummary.stats.messageCount, 0);
+  assert.equal(sessionSummary.stats.messageCount, 1);
+  assert.equal(sessionSummary.messages[0].attachments[0].attachmentId, "att-1");
+  assert.equal(JSON.stringify(sessionSummary).includes("attachmentMetas"), false);
   assert.deepEqual(JSON.parse(await fs.readFile(persisted.files.task, "utf8")), {
     sessionId: "s1",
     tasks: [],
