@@ -8,12 +8,35 @@ import assert from "node:assert/strict";
 
 import { WORKFLOW_PARAMS } from "../src/core/workflow-params.js";
 import { createAcceptanceHandler } from "../src/capabilities/handlers/acceptance.js";
-import { createPlanningHandler } from "../src/capabilities/handlers/planning.js";
+import { createGuidanceHandler } from "../src/capabilities/handlers/guidance.js";
 
 const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.messageCharsThreshold;
 
-test("planning handler prunes oldest tool-call pair after second char-overflow summary round", async () => {
-  const planningHandler = createPlanningHandler({
+async function finishGuidanceSummaryRound(guidanceHandler, { messages, agentContext, content = "SUMMARY_DONE" } = {}) {
+  await guidanceHandler({
+    capability: "guidance",
+    point: "after_llm_call",
+    ctx: {
+      messages,
+      ai: { content },
+      agentContext,
+    },
+    meta: {},
+  });
+}
+
+async function runGuidanceSummaryRound(guidanceHandler, { messages, agentContext, content = "SUMMARY_DONE" } = {}) {
+  await guidanceHandler({
+    capability: "guidance",
+    point: "before_llm_call",
+    ctx: { messages, agentContext },
+    meta: {},
+  });
+  await finishGuidanceSummaryRound(guidanceHandler, { messages, agentContext, content });
+}
+
+test("guidance summary capture marks oldest tool-call pair after a char-overflow summary round", async () => {
+  const guidanceHandler = createGuidanceHandler({
     shouldProcessPrimaryToolHooks: () => true,
   });
   const agentContext = {
@@ -33,23 +56,18 @@ test("planning handler prunes oldest tool-call pair after second char-overflow s
     { role: "tool", tool_call_id: "tc1", content: "y".repeat(20), toolName: "read_file" },
   ];
 
-  await planningHandler({
-    capability: "planning",
+  await guidanceHandler({
+    capability: "guidance",
     point: "before_llm_call",
     ctx: { messages, agentContext },
     meta: {},
   });
-  assert.equal(agentContext.payload.harness.state.pending.summary, true);
+  assert.equal(agentContext.payload.harness.state.pending.summary, false);
   assert.equal(agentContext.payload.harness.state.flags.summaryByCharsPrompted, true);
   assert.equal(messages[1].summarized, undefined);
   assert.equal(messages[2].summarized, undefined);
 
-  await planningHandler({
-    capability: "planning",
-    point: "before_llm_call",
-    ctx: { messages, agentContext },
-    meta: {},
-  });
+  await finishGuidanceSummaryRound(guidanceHandler, { messages, agentContext });
   assert.equal(messages[1].summarized, true);
   assert.equal(messages[2].summarized, true);
   assert.equal(
@@ -59,7 +77,7 @@ test("planning handler prunes oldest tool-call pair after second char-overflow s
 });
 
 test("overflow after harness summary requests agent main-flow final no-tools instead of local forced acceptance", async () => {
-  const planningHandler = createPlanningHandler({
+  const guidanceHandler = createGuidanceHandler({
     shouldProcessPrimaryToolHooks: () => true,
   });
   const acceptanceHandler = createAcceptanceHandler({
@@ -89,14 +107,9 @@ test("overflow after harness summary requests agent main-flow final no-tools ins
     { role: "tool", tool_call_id: "tc2", content: "y".repeat(20), toolName: "read_file" },
   ];
 
-  await planningHandler({
-    capability: "planning",
-    point: "before_llm_call",
-    ctx: { messages, agentContext },
-    meta: {},
-  });
-  await planningHandler({
-    capability: "planning",
+  await runGuidanceSummaryRound(guidanceHandler, { messages, agentContext });
+  await guidanceHandler({
+    capability: "guidance",
     point: "before_llm_call",
     ctx: { messages, agentContext },
     meta: {},

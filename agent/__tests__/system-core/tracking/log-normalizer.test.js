@@ -43,6 +43,35 @@ test("normalizeSseLogEvent normalizes semantic-transfer legacy warning event", (
   assert.equal(normalized.data.api, "getTransferFiles");
 });
 
+test("normalizeSseLogEvent maps guidance analysis response to thinking and preserves text", () => {
+  const normalized = normalizeSseLogEvent({
+    event: "guidance_analysis_response",
+    data: {
+      purpose: "guidance",
+      harnessFlow: "analysis",
+      chain: "auxiliary",
+      dialogProcessId: "dp1",
+      sessionId: "s1",
+      model: "m1",
+      output: "analysis model output",
+      text: "analysis model output",
+    },
+    ts: "2026-06-08T00:00:00.000Z",
+  });
+  assert.equal(normalized.event, "thinking");
+  assert.equal(normalized.data.category, "system");
+  assert.equal(normalized.data.type, "guidance_analysis");
+  assert.equal(normalized.data.event, "guidance_analysis_response");
+  assert.equal(normalized.data.rawEvent, "guidance_analysis_response");
+  assert.equal(normalized.data.text, "analysis model output");
+  assert.equal(normalized.data.purpose, "guidance");
+  assert.equal(normalized.data.harnessFlow, "analysis");
+  assert.equal(normalized.data.chain, "auxiliary");
+  assert.equal(normalized.data.dialogProcessId, "dp1");
+  assert.equal(normalized.data.sessionId, "s1");
+  assert.equal(normalized.data.model, "m1");
+});
+
 
 
 test("normalizeSseLogEvent keeps tool_call_start text compact", () => {

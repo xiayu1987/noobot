@@ -106,12 +106,6 @@ export function enforceWorkflowInvariants(ctx = {}, { domain = "" } = {}) {
     violations.push("flags.planRevisionCaptureTargetMainStepIndexes_removed");
   }
 
-  if (state.flags.summaryByCharsPrompted === true && state.pending.summary !== true) {
-    state.flags.summaryByCharsPrompted = false;
-    changed = true;
-    violations.push("flags.summaryByCharsPrompted_without_pending_summary");
-  }
-
   if (!changed) return false;
   appendCapabilityLog(ctx, {
     domain: String(domain || "guidance").trim() || "guidance",

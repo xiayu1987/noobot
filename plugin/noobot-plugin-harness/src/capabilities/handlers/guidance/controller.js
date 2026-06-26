@@ -416,8 +416,9 @@ async function executeGuidanceWorkflowAction({
       const pending = holder?.state?.pending && typeof holder.state.pending === "object"
         ? holder.state.pending
         : {};
-      const hasSummaryOrGuidancePending = pending.summary === true || Boolean(pending.guidance);
-      if (hasSummaryOrGuidancePending) {
+      const hasGuidanceFollowupPending =
+        pending.summary === true || Boolean(pending.guidance) || pending.analysis === true;
+      if (hasGuidanceFollowupPending) {
         const followupAction = resolveNextGuidanceAction(holder?.state || {});
         const followupChanged = await runGuidanceBySeparateModel(ctx, meta, { action: followupAction.action });
         changed = followupChanged || changed;

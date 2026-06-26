@@ -148,8 +148,191 @@ test("mini-runner preserves standalone system previous-summary context", async (
   assert.equal(seenMessages[previousSummaryIndex]?.role, "system");
 });
 
-test("mini-runner sends harness guidance analysis response and thinking log through injected hook client event channel", async () => {
-  const emitted = [];
+test("mini-runner sends guidance analysis response through execution event listener only", async () => {
+  const hookEvents = [];
+  const executionEvents = [];
+  const invoker = createAgentCapabilityModelInvoker({
+    enableToolBinding: false,
+    createChatModelFn: () => ({
+      async invoke() {
+        return { content: "guidance output" };
+      },
+    }),
+  });
+
+  await invoker({
+    purpose: "guidance",
+    harnessFlow: "analysis",
+    chain: "auxiliary",
+    ctx: {
+      sessionId: "s1",
+      dialogProcessId: "dp1",
+      emitHookClientEvent(event, data) {
+        hookEvents.push({ event, data });
+      },
+      agentContext: {
+        runtime: {
+          eventListener: {
+            onEvent(eventPayload) {
+              executionEvents.push(eventPayload);
+            },
+          },
+        },
+        payload: { tools: { registry: [] } },
+      },
+    },
+  });
+
+  assert.equal(hookEvents.length, 0);
+  assert.equal(executionEvents.length, 1);
+  const thinkingEvent = executionEvents[0];
+  assert.equal(thinkingEvent.event, "guidance_analysis_response");
+  assert.equal(thinkingEvent.data.purpose, "guidance");
+  assert.equal(thinkingEvent.data.harnessFlow, "analysis");
+  assert.equal(thinkingEvent.data.chain, "auxiliary");
+  assert.equal(thinkingEvent.data.type, "guidance_analysis");
+  assert.equal(thinkingEvent.data.event, "guidance_analysis");
+  assert.equal(thinkingEvent.data.output, "guidance output");
+  assert.equal(thinkingEvent.data.dialogProcessId, "dp1");
+});
+
+test("mini-runner uses harness flow for plugin flow header without changing purpose", async () => {
+  let capturedHeaders = null;
+  const invoker = createAgentCapabilityModelInvoker({
+    enableToolBinding: false,
+    createChatModelFn: ({ additionalHeaders } = {}) => {
+      capturedHeaders = additionalHeaders;
+      return {
+        async invoke() {
+          return { content: "analysis output" };
+        },
+      };
+    },
+  });
+
+  await invoker({
+    purpose: "guidance",
+    harnessFlow: "analysis",
+    chain: "auxiliary",
+    domain: "guidance",
+    ctx: {
+      sessionId: "s1",
+      agentContext: {
+        runtime: {
+          eventListener: { onEvent() {} },
+        },
+        payload: { tools: { registry: [] } },
+      },
+    },
+  });
+
+  assert.equal(capturedHeaders?.["X-Plugin-Flow"], "plugin.analysis");
+  assert.equal(capturedHeaders?.["X-Plugin-Purpose"], "guidance");
+  assert.equal(capturedHeaders?.["X-Plugin-Domain"], "guidance");
+  assert.equal(capturedHeaders?.["X-Plugin-Session-Id"], "s1");
+});
+
+test("mini-runner keeps ordinary guidance on guidance flow header", async () => {
+  let capturedHeaders = null;
+  const invoker = createAgentCapabilityModelInvoker({
+    enableToolBinding: false,
+    createChatModelFn: ({ additionalHeaders } = {}) => {
+      capturedHeaders = additionalHeaders;
+      return {
+        async invoke() {
+          return { content: "guidance output" };
+        },
+      };
+    },
+  });
+
+  await invoker({
+    purpose: "guidance",
+    domain: "guidance",
+    ctx: { agentContext: { payload: { tools: { registry: [] } } } },
+  });
+
+  assert.equal(capturedHeaders?.["X-Plugin-Flow"], "plugin.guidance");
+  assert.equal(capturedHeaders?.["X-Plugin-Purpose"], "guidance");
+  assert.equal(capturedHeaders?.["X-Plugin-Domain"], "guidance");
+});
+
+test("mini-runner maps harness flow headers for main and sub workflows", async () => {
+  const captured = [];
+  const invoker = createAgentCapabilityModelInvoker({
+    enableToolBinding: false,
+    createChatModelFn: ({ additionalHeaders } = {}) => {
+      captured.push(additionalHeaders);
+      return {
+        async invoke() {
+          return { content: "ok" };
+        },
+      };
+    },
+  });
+
+  const cases = [
+    { purpose: "planning", domain: "planning", flow: "plugin.planning" },
+    { purpose: "guidance", domain: "guidance", flow: "plugin.guidance" },
+    { purpose: "guidance", harnessFlow: "analysis", domain: "guidance", flow: "plugin.analysis" },
+    { purpose: "summary", domain: "guidance", flow: "plugin.summary" },
+    { purpose: "planning_revision", domain: "planning", flow: "plugin.planning_revision" },
+    { purpose: "planning_refinement", domain: "planning", flow: "plugin.planning_refinement" },
+    { purpose: "phase_acceptance", domain: "acceptance", flow: "plugin.phase_acceptance" },
+  ];
+
+  for (const item of cases) {
+    await invoker({
+      purpose: item.purpose,
+      harnessFlow: item.harnessFlow,
+      domain: item.domain,
+      ctx: { agentContext: { payload: { tools: { registry: [] } } } },
+    });
+  }
+
+  assert.deepEqual(
+    captured.map((headers = {}) => ({
+      flow: headers["X-Plugin-Flow"],
+      purpose: headers["X-Plugin-Purpose"],
+      domain: headers["X-Plugin-Domain"],
+    })),
+    cases.map((item) => ({
+      flow: item.flow,
+      purpose: item.purpose,
+      domain: item.domain,
+    })),
+  );
+});
+
+test("mini-runner preserves custom flow prefix while using harness flow name", async () => {
+  let capturedHeaders = null;
+  const invoker = createAgentCapabilityModelInvoker({
+    enableToolBinding: false,
+    flowPrefix: "botPlugin",
+    createChatModelFn: ({ additionalHeaders } = {}) => {
+      capturedHeaders = additionalHeaders;
+      return {
+        async invoke() {
+          return { content: "bot output" };
+        },
+      };
+    },
+  });
+
+  await invoker({
+    purpose: "semantic",
+    harnessFlow: "semantic_check",
+    domain: "bot",
+    ctx: { agentContext: { payload: { tools: { registry: [] } } } },
+  });
+
+  assert.equal(capturedHeaders?.["X-Plugin-Flow"], "botPlugin.semantic_check");
+  assert.equal(capturedHeaders?.["X-Plugin-Purpose"], "semantic");
+  assert.equal(capturedHeaders?.["X-Plugin-Domain"], "bot");
+});
+
+test("mini-runner does not classify plain guidance as guidance analysis", async () => {
+  const executionEvents = [];
   const invoker = createAgentCapabilityModelInvoker({
     enableToolBinding: false,
     createChatModelFn: () => ({
@@ -162,33 +345,20 @@ test("mini-runner sends harness guidance analysis response and thinking log thro
   await invoker({
     purpose: "guidance",
     ctx: {
-      sessionId: "s1",
-      dialogProcessId: "dp1",
-      emitHookClientEvent(event, data) {
-        emitted.push({ event, data });
+      agentContext: {
+        runtime: {
+          eventListener: {
+            onEvent(eventPayload) {
+              executionEvents.push(eventPayload);
+            },
+          },
+        },
+        payload: { tools: { registry: [] } },
       },
-      agentContext: { payload: { tools: { registry: [] } } },
     },
   });
 
-  assert.equal(emitted.length, 2);
-  const harnessEvent = emitted.find((item) => item.event === "harness_capability_response");
-  const thinkingEvent = emitted.find((item) => item.event === "thinking");
-  assert.ok(harnessEvent);
-  assert.ok(thinkingEvent);
-  assert.equal(harnessEvent.data.purpose, "guidance");
-  assert.equal(harnessEvent.data.harnessFlow, "analysis");
-  assert.equal(harnessEvent.data.chain, "auxiliary");
-  assert.equal(harnessEvent.data.output, "guidance output");
-  assert.equal(harnessEvent.data.sessionId, "s1");
-  assert.equal(harnessEvent.data.dialogProcessId, "dp1");
-  assert.equal(thinkingEvent.data.purpose, "guidance");
-  assert.equal(thinkingEvent.data.harnessFlow, "analysis");
-  assert.equal(thinkingEvent.data.chain, "auxiliary");
-  assert.equal(thinkingEvent.data.type, "guidance_analysis");
-  assert.equal(thinkingEvent.data.event, "guidance_analysis");
-  assert.equal(thinkingEvent.data.output, "guidance output");
-  assert.equal(thinkingEvent.data.dialogProcessId, "dp1");
+  assert.equal(executionEvents.length, 0);
 });
 
 test("mini-runner does not emit harness capability response for non-guidance analysis purposes", async () => {

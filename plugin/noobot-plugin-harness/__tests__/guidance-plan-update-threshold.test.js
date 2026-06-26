@@ -364,7 +364,9 @@ test("separate_model analysis uses aligned agent context then user request and u
   );
   const tailMessages = capturedPayload.messages.slice(-2);
   assert.equal(tailMessages[0]?.role, "user");
-  assert.match(String(tailMessages[0]?.content || ""), /只分析疑点|doubt|suspicious/i);
+  assert.match(String(tailMessages[0]?.content || ""), /现在应做|what should be done|Do now/i);
+  assert.match(String(tailMessages[0]?.content || ""), /问题|Problem/i);
+  assert.match(String(tailMessages[0]?.content || ""), /解决|Fix/i);
   assert.equal(tailMessages[1]?.role, "user");
   assert.match(String(tailMessages[1]?.content || ""), /分析|analysis/i);
   assert.equal(agentContext.payload.harness.state.pending.analysis, false);
@@ -378,6 +380,48 @@ test("separate_model analysis uses aligned agent context then user request and u
     ),
     true,
   );
+});
+
+test("separate_model guidance pending triggers guidance invoker without analysis flow", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const invocations = [];
+  const agentContext = createAgentContext({
+    pending: {
+      guidance: "consecutive_failures",
+    },
+  });
+  const meta = {
+    harness: {
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async (payload = {}) => {
+        invocations.push(payload);
+        return { content: "建议先确认失败工具的输入参数。" };
+      },
+    },
+  };
+
+  const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
+  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+
+  assert.deepEqual(invocations.map((item = {}) => item.purpose), ["guidance"]);
+  assert.equal(invocations[0]?.harnessFlow, undefined);
+  assert.equal(invocations[0]?.chain, undefined);
+  assert.equal(agentContext.payload.harness.state.pending.guidance, null);
+  assert.equal(agentContext.payload.harness.state.counters.consecutiveToolFailures, 0);
+  assert.equal(agentContext.payload.harness.state.counters.totalToolFailures, 0);
+  assert.equal(
+    ctx.messages.some((item = {}) =>
+      item?.purpose === "guidance" &&
+      item?.harnessFlow === undefined &&
+      String(item?.content || "").includes("建议先确认失败工具"),
+    ),
+    true,
+  );
+  const executionLog = agentContext.payload.harness.logs.guidance.find(
+    (item = {}) => item?.event === "workflow_execution_result",
+  );
+  assert.equal(executionLog?.detail?.requestedAction, "guidance_separate_model");
+  assert.equal(executionLog?.detail?.executedPrimary, true);
 });
 
 test("separate_model summary uses checkpointed summary scope when marking messages", async () => {
@@ -589,6 +633,61 @@ test("separate_model mode: pending revision runs by separate model without promp
   );
   assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
   assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
+});
+
+test("separate_model simultaneous plan update follows up with analysis before summary", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const invocations = [];
+  const agentContext = createAgentContext({
+    pending: {
+      summary: true,
+      analysis: true,
+      planRevision: true,
+      planRevisionContext: { targetMainStepIndexes: [] },
+    },
+  });
+  agentContext.payload.harness.state.flags.planRefinementEnabled = false;
+  const meta = {
+    harness: {
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async (payload = {}) => {
+        invocations.push(payload);
+        if (payload.purpose === "planning_revision") {
+          return { content: "1. 主任务\n2. 补充执行" };
+        }
+        if (payload.harnessFlow === "analysis") {
+          return { content: "疑点：计划更新后还有待确认项。" };
+        }
+        return { content: "小结完成" };
+      },
+    },
+  };
+
+  const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
+  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+
+  assert.deepEqual(
+    invocations.map((item = {}) => item.harnessFlow || item.purpose),
+    ["planning_revision", "analysis"],
+  );
+  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
+  assert.equal(agentContext.payload.harness.state.pending.analysis, false);
+  assert.equal(agentContext.payload.harness.state.pending.summary, true);
+  assert.equal(
+    ctx.messages.some((item = {}) => item?.harnessFlow === "analysis" && String(item?.content || "").includes("疑点")),
+    true,
+  );
+  assert.equal(
+    ctx.messages.some((item = {}) => item?.purpose === "summary" && String(item?.content || "").includes("小结完成")),
+    false,
+  );
+  const executionLog = agentContext.payload.harness.logs.guidance.find(
+    (item = {}) => item?.event === "workflow_execution_result",
+  );
+  assert.equal(executionLog?.detail?.chosenAction, "plan_update_revision");
+  assert.equal(executionLog?.detail?.requestedAction, "plan_update_revision_separate_model");
+  assert.equal(executionLog?.detail?.executedPrimary, true);
+  assert.equal(executionLog?.detail?.executedFollowup, true);
 });
 
 test("workflow_execution_result captures errorCode when separate_model guidance fails", async () => {

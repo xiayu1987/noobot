@@ -16,7 +16,7 @@ import {
 } from "./deps.js";
 import { ensurePlanRefinementTool } from "./tool-injector.js";
 import { maybeInjectPlanningPrompt } from "./prompt-builder.js";
-import { maybeCapturePlanningResult } from "./capture-runner.js";
+import { maybeCapturePlanningResult, runPlanningBySeparateModel } from "./capture-runner.js";
 import { canAttemptPlanUpdate, setPendingPlanUpdate } from "./plan-update-engine.js";
 import { resolvePendingPlanUpdate } from "./plan-update-scheduler.js";
 import { LOCALE } from "../shared/constants.js";
@@ -340,7 +340,11 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
           changed = disableBlockedToolsInRegistry(ctx) || changed;
           changed = ensureTaskAcceptanceTool(ctx, meta) || changed;
           changed = ensurePlanRefinementTool(ctx, meta) || changed;
-          if (!shouldUseSeparateModel(meta)) {
+          if (shouldUseSeparateModel(meta)) {
+            const planningSeparateModelChanged = await runPlanningBySeparateModel(ctx, meta);
+            planningPrimaryExecuted = planningSeparateModelChanged === true;
+            changed = planningSeparateModelChanged || changed;
+          } else {
             const planningPrimaryChanged = maybeInjectPlanningPrompt(ctx, meta) || false;
             planningPrimaryExecuted = planningPrimaryChanged === true;
             changed = planningPrimaryChanged || changed;

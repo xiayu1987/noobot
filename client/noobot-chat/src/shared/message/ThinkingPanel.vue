@@ -56,6 +56,7 @@ const EXECUTION_LOG_DISPLAY_LIMIT = 10;
 function getRealtimeLogs(messageItem = {}) {
   return getAllRealtimeLogs(messageItem)
     .filter((logItem) => !isHarnessCapabilityResponseLog(logItem))
+    .filter((logItem) => !isGuidanceAnalysisResponseLog(logItem))
     .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
     .filter(Boolean)
     .slice(-EXECUTION_LOG_DISPLAY_LIMIT);
@@ -102,11 +103,20 @@ function isHarnessAnalysisResponseLog(logItem = {}) {
   const harnessFlow = normalizeLogString(logItem?.harnessFlow || logItem?.data?.harnessFlow);
   const chain = normalizeLogString(logItem?.chain || logItem?.data?.chain || logItem?.executionScope || logItem?.data?.executionScope);
   return (
-    eventName === "harness_capability_response" &&
+    isGuidanceAnalysisEventName(eventName) &&
     purpose === "guidance" &&
     harnessFlow === "analysis" &&
     chain === "auxiliary"
   );
+}
+
+function isGuidanceAnalysisEventName(eventName = "") {
+  return eventName === "guidance_analysis_response" || eventName === "guidance_analysis";
+}
+
+function isGuidanceAnalysisResponseLog(logItem = {}) {
+  const eventName = normalizeLogString(logItem?.event || logItem?.type || logItem?.rawEvent);
+  return isGuidanceAnalysisEventName(eventName);
 }
 
 function isHarnessCapabilityResponseLog(logItem = {}) {
@@ -140,15 +150,15 @@ function getExecutionLogCount(messageItem = {}) {
       ?? messageItem.execution_log_total,
   );
   if (explicitTotal !== null) {
-    const harnessCapabilityLogCount = [
+    const hiddenAnalysisLogCount = [
       ...getAllRealtimeLogs(messageItem),
       ...getAllCompletedLogs(messageItem),
-    ].filter(isHarnessCapabilityResponseLog).length;
-    return Math.max(0, explicitTotal - harnessCapabilityLogCount);
+    ].filter((logItem) => isHarnessCapabilityResponseLog(logItem) || isGuidanceAnalysisResponseLog(logItem)).length;
+    return Math.max(0, explicitTotal - hiddenAnalysisLogCount);
   }
 
   const realtimeLogs = getAllRealtimeLogs(messageItem).filter(
-    (logItem) => !isHarnessCapabilityResponseLog(logItem),
+    (logItem) => !isHarnessCapabilityResponseLog(logItem) && !isGuidanceAnalysisResponseLog(logItem),
   );
   if (realtimeLogs.length > 0) return realtimeLogs.length;
 
@@ -179,6 +189,7 @@ function hasThinkingLogs(messageItem = {}) {
   if (!messageItem || getMessageRole(messageItem) !== "assistant") return false;
   if (messageItem.pending) return true;
   if (hasSummaryThinkingDetails(messageItem)) return true;
+  if (getLatestHarnessAnalysisLog(messageItem)) return true;
   const hasRealtimeLogs = Array.isArray(messageItem.processRealtimeLogs) || Array.isArray(messageItem.realtimeLogs)
     ? getRealtimeLogs(messageItem).length > 0
     : false;
@@ -745,6 +756,9 @@ onBeforeUnmount(() => {
 
 .thinking-analysis-block :deep(.base-note-block__content) {
   font-size: var(--noobot-msg-caption-font-size);
+  max-height: 160px;
+  overflow-y: auto;
+  white-space: pre-wrap;
 }
 
 .thinking-execution-actions {
