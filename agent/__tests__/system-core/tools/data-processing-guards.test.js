@@ -134,7 +134,7 @@ test("doc_to_data: direct text result returns preview when over semantic-transfe
 });
 
 
-test("doc_to_data: backwrites parsed result to source attachment from inputAttachmentMetas", async () => {
+test("doc_to_data: backwrites parsed result to source attachment from inputAttachments", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-backwrite-input-"));
   const textPath = path.join(basePath, "runtime", "ops_workdir", "source.md");
   await fs.mkdir(path.dirname(textPath), { recursive: true });
@@ -186,7 +186,7 @@ test("doc_to_data: backwrites parsed result to source attachment from inputAttac
   runtime.userId = "admin";
   runtime.systemRuntime = { sessionId: "s1" };
   runtime.attachmentService = attachmentService;
-  runtime.inputAttachmentMetas = [
+  runtime.inputAttachments = [
     {
       attachmentId: "source-att",
       sessionId: "s1",
@@ -209,8 +209,8 @@ test("doc_to_data: backwrites parsed result to source attachment from inputAttac
   assert.equal(linkCalls.length, 1);
   assert.equal(linkCalls[0]?.sourceAttachmentId, "source-att");
   assert.equal(linkCalls[0]?.parsedAttachmentMeta?.attachmentId, "parsed-1");
-  assert.equal(runtime.inputAttachmentMetas[0]?.parsedResult?.attachmentId, "parsed-1");
-  assert.equal(runtime.inputAttachmentMetas[0]?.parsedResult?.tool, TOOL_NAME.DOC_TO_DATA);
+  assert.equal(runtime.inputAttachments[0]?.parsedResult?.attachmentId, "parsed-1");
+  assert.equal(runtime.inputAttachments[0]?.parsedResult?.tool, TOOL_NAME.DOC_TO_DATA);
 });
 
 test("doc_to_data: reuses generated data artifact instead of creating recursive copies", async () => {
@@ -223,7 +223,7 @@ test("doc_to_data: reuses generated data artifact instead of creating recursive 
   const agentContext = buildAgentContext(basePath);
   agentContext.execution.controllers.runtime.userId = "admin";
   agentContext.execution.controllers.runtime.systemRuntime = { sessionId: "s1" };
-  agentContext.execution.controllers.runtime.attachmentMetas = [
+  agentContext.execution.controllers.runtime.attachments = [
     {
       attachmentId: "existing-att",
       sessionId: "s1",

@@ -5,7 +5,7 @@
  */
 import { RoleEnum, StreamEventEnum } from "../../shared/constants/chatConstants";
 import {
-  getMessageTransferAttachmentMetas,
+  getMessageTransferAttachments,
   getMessageTransferEnvelopes,
   normalizeTransferEnvelopes,
 } from "./transferEnvelopes";
@@ -231,8 +231,8 @@ function messageCompareKey(messageItem = {}) {
   const content = normalizeMessageContentForCompare(messageItem?.content || "");
   if (role === RoleEnum.USER) {
     const attachmentKey = [
-      ...getArrayItems(messageItem?.attachmentMetas),
-      ...getMessageTransferAttachmentMetas(messageItem),
+      ...getArrayItems(messageItem?.attachments),
+      ...getMessageTransferAttachments(messageItem),
     ]
       .map((attachmentItem) =>
         [
@@ -340,8 +340,8 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
     ? targetMessage.expandedDetailLogKeys
     : null;
   const existingContent = String(targetMessage?.content || "");
-  const existingAttachmentMetas = Array.isArray(targetMessage?.attachmentMetas)
-    ? targetMessage.attachmentMetas
+  const existingAttachments = Array.isArray(targetMessage?.attachments)
+    ? targetMessage.attachments
     : [];
   const existingModelRuns = Array.isArray(targetMessage?.modelRuns)
     ? targetMessage.modelRuns
@@ -372,10 +372,10 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   }
   if (
     sourceCanUseTurnScopedAssets &&
-    existingAttachmentMetas.length &&
-    !hasArrayItems(sourceMessage?.attachmentMetas)
+    existingAttachments.length &&
+    !hasArrayItems(sourceMessage?.attachments)
   ) {
-    targetMessage.attachmentMetas = existingAttachmentMetas;
+    targetMessage.attachments = existingAttachments;
   }
   if (existingModelRuns.length && !hasArrayItems(sourceMessage?.modelRuns)) {
     targetMessage.modelRuns = existingModelRuns;

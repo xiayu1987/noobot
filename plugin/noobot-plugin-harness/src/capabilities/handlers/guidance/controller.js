@@ -8,7 +8,7 @@ import {
   CAPABILITY_DOMAIN,
   HARNESS_I18N_KEYSET,
   LOCALE,
-  getTransferPayloadFromAttachmentMetas,
+  getTransferPayloadFromAttachments,
   saveCapabilityOutputAsTransferArtifacts,
   relaySeparateModelOutputAsUserMessage,
   ensureHarnessBucket,
@@ -34,7 +34,7 @@ import { markGuidanceSummarizedMessages, markToolSignals, updateFailureCounters 
 import {
   applySummaryText,
   recordLatestSummaryFullText,
-  recordSummaryDetailAttachmentMetas,
+  recordSummaryDetailAttachments,
   shouldSaveSummaryDetailToAttachment,
   transferSummaryInjectionMessage,
 } from "./summary-manager.js";
@@ -53,8 +53,8 @@ function resolveDetailPath(meta = {}, ctx = {}) {
   return resolveAttachmentDisplayPath(meta, ctx);
 }
 
-function buildSummaryDetailPathRelayContent(ctx = {}, locale = LOCALE.ZH_CN, detailAttachmentMetas = []) {
-  const metas = Array.isArray(detailAttachmentMetas) ? detailAttachmentMetas : [];
+function buildSummaryDetailPathRelayContent(ctx = {}, locale = LOCALE.ZH_CN, detailAttachments = []) {
+  const metas = Array.isArray(detailAttachments) ? detailAttachments : [];
   if (!metas.length) return "";
   const lines = metas.map((item = {}) => resolveDetailPath(item, ctx)).filter(Boolean);
   if (!lines.length) return "";
@@ -222,7 +222,7 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
         const summaryOverviewText = String(parsedSummary?.overviewText || "").trim() || rawSummaryText;
         const saveDetailToAttachment = shouldSaveSummaryDetailToAttachment(meta);
         const summaryDetailAttachmentText = resolveSummaryDetailAttachmentText(parsedSummary);
-        const detailAttachmentMetas = saveDetailToAttachment && summaryDetailAttachmentText
+        const detailAttachments = saveDetailToAttachment && summaryDetailAttachmentText
           ? await saveCapabilityOutputAsTransferArtifacts(ctx, {
             purpose: "summary_detail",
             content: summaryDetailAttachmentText,
@@ -230,11 +230,11 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
             domain: CAPABILITY_DOMAIN.GUIDANCE,
           })
           : [];
-        recordSummaryDetailAttachmentMetas(ctx, detailAttachmentMetas);
+        recordSummaryDetailAttachments(ctx, detailAttachments);
         const detailPathRelay = buildSummaryDetailPathRelayContent(
           ctx,
           locale,
-          detailAttachmentMetas,
+          detailAttachments,
         );
         if (detailPathRelay) {
           relaySeparateModelOutputAsUserMessage(ctx, {
@@ -242,7 +242,7 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
             purpose: "summary_detail_path",
             content: detailPathRelay,
             dedupe: true,
-            transferPayload: getTransferPayloadFromAttachmentMetas(detailAttachmentMetas),
+            transferPayload: getTransferPayloadFromAttachments(detailAttachments),
           });
         }
         if (!saveDetailToAttachment && rawSummaryText) {

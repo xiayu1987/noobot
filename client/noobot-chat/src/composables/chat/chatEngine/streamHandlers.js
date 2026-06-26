@@ -147,15 +147,15 @@ export function handleConnectorStatusStreamEvent({
   }
 }
 
-export function handleAttachmentMetasStreamEvent({
+export function handleAttachmentsStreamEvent({
   data,
   botMessage,
-  mergeAssistantAttachmentMetas,
+  mergeAssistantAttachments,
   scrollOnFirstResponseOnce,
 }) {
   markFirstStreamEvent(botMessage);
   if (!getMessageTurnScopeId(botMessage)) return;
-  mergeAssistantAttachmentMetas(botMessage, data?.attachmentMetas || []);
+  mergeAssistantAttachments(botMessage, data?.attachments || []);
   scrollOnFirstResponseOnce();
 }
 
@@ -193,7 +193,7 @@ export function handleDoneStreamEvent({
   scrollOnFirstResponseOnce,
   makeViewMessage,
   foldMessagesForView,
-  mergeAssistantAttachmentMetas,
+  mergeAssistantAttachments,
   locateDoneMessage,
   applyConversationState,
   processStore,
@@ -272,7 +272,7 @@ export function handleDoneStreamEvent({
     activeSession,
     makeViewMessage,
     foldMessagesForView,
-    mergeAssistantAttachmentMetas,
+    mergeAssistantAttachments,
   });
   if (botMessage?.pending !== false) {
     const turnMeta = normalizeTurnMeta(data);
@@ -304,8 +304,8 @@ export function handleBasicStreamEvent(event, context = {}) {
     handleConnectorStatusStreamEvent(context);
     return true;
   }
-  if (event === StreamEventEnum.ATTACHMENT_METAS) {
-    handleAttachmentMetasStreamEvent(context);
+  if (event === StreamEventEnum.ATTACHMENTS) {
+    handleAttachmentsStreamEvent(context);
     return true;
   }
   return false;

@@ -5,7 +5,7 @@
  */
 import { computed } from "vue";
 import {
-  mergeAttachmentMetas,
+  mergeAttachments,
 } from "../infra/dialogProcessChain";
 import {
   getMessageRole,
@@ -14,9 +14,9 @@ import {
   isAssistantWithoutTurnScope,
   isSameMessageRound,
   normalizeTurnMeta,
-  shouldCollectAttachmentMetasFromMessage,
+  shouldCollectAttachmentsFromMessage,
 } from "../infra/messageIdentity";
-import { getMessageTransferAttachmentMetas } from "../infra/transferEnvelopes";
+import { getMessageTransferAttachments } from "../infra/transferEnvelopes";
 
 function tryParseJsonContent(content = "") {
   try {
@@ -81,16 +81,16 @@ function extractCandidatePathsFromText(content = "") {
   return out;
 }
 
-function getMessageAttachmentMetas(messageItem = {}) {
-  const base = Array.isArray(messageItem?.attachmentMetas)
-    ? messageItem.attachmentMetas
+function getMessageAttachments(messageItem = {}) {
+  const base = Array.isArray(messageItem?.attachments)
+    ? messageItem.attachments
     : [];
-  const transferMetas = getMessageTransferAttachmentMetas(messageItem);
+  const transferMetas = getMessageTransferAttachments(messageItem);
   // semantic-transfer envelopes describe transfer/link semantics while
-  // attachmentMetas describe attachment storage/display facts.  Keep both
+  // attachments describe attachment storage/display facts.  Keep both
   // layers coexisting: transfer-derived metas can augment display fields, but
-  // legacy attachmentMetas remain the storage/display source of truth.
-  return transferMetas.length ? mergeAttachmentMetas(transferMetas, base) : base;
+  // legacy attachments remain the storage/display source of truth.
+  return transferMetas.length ? mergeAttachments(transferMetas, base) : base;
 }
 
 function trim(value = "") {
@@ -163,8 +163,8 @@ function isAttachmentOwnedByMessage(attachmentItem = {}, messageItem = {}) {
   return true;
 }
 
-function filterAttachmentMetasForMessage(attachmentMetas = [], messageItem = {}) {
-  return (Array.isArray(attachmentMetas) ? attachmentMetas : []).filter((attachmentItem) =>
+function filterAttachmentsForMessage(attachments = [], messageItem = {}) {
+  return (Array.isArray(attachments) ? attachments : []).filter((attachmentItem) =>
     isAttachmentOwnedByMessage(attachmentItem, messageItem),
   );
 }
@@ -210,18 +210,18 @@ function isHarnessPluginAttachmentMeta(attachmentItem = {}) {
   return false;
 }
 
-function splitAttachmentMetasByOwner(attachmentMetas = []) {
+function splitAttachmentsByOwner(attachments = []) {
   const plugin = [];
   const agent = [];
-  for (const attachmentItem of Array.isArray(attachmentMetas) ? attachmentMetas : []) {
+  for (const attachmentItem of Array.isArray(attachments) ? attachments : []) {
     if (isHarnessPluginAttachmentMeta(attachmentItem)) plugin.push(attachmentItem);
     else agent.push(attachmentItem);
   }
   return { agent, plugin };
 }
 
-function withAttachmentOwners(attachmentMetas = []) {
-  const split = splitAttachmentMetasByOwner(attachmentMetas);
+function withAttachmentOwners(attachments = []) {
+  const split = splitAttachmentsByOwner(attachments);
   const markOwnerType = (attachmentItem = {}, type = "") => ({
     ...attachmentItem,
     owner: {
@@ -461,32 +461,32 @@ export function useMessageFiles({
     return out;
   });
 
-  const displayedAttachmentMetas = computed(() => {
+  const displayedAttachments = computed(() => {
     const messageItem = getMessageItem() || {};
-    const baseAttachmentMetas = filterAttachmentMetasForMessage(
-      getMessageAttachmentMetas(messageItem),
+    const baseAttachments = filterAttachmentsForMessage(
+      getMessageAttachments(messageItem),
       messageItem,
     );
     const canUseAssociatedTurnArtifacts = !isAssistantWithoutTurnScope(messageItem);
-    const toolLogAttachmentMetas = [];
+    const toolLogAttachments = [];
     if (canUseAssociatedTurnArtifacts) {
       for (const logItem of Array.isArray(messageItem?.completedToolLogs) ? messageItem.completedToolLogs : []) {
-        toolLogAttachmentMetas.push(
-          ...(Array.isArray(logItem?.attachmentMetas) ? logItem.attachmentMetas : []),
+        toolLogAttachments.push(
+          ...(Array.isArray(logItem?.attachments) ? logItem.attachments : []),
         );
       }
     }
-    const mergedBaseAttachmentMetas = toolLogAttachmentMetas.length
-      ? mergeAttachmentMetas(baseAttachmentMetas, toolLogAttachmentMetas)
-      : baseAttachmentMetas;
+    const mergedBaseAttachments = toolLogAttachments.length
+      ? mergeAttachments(baseAttachments, toolLogAttachments)
+      : baseAttachments;
     if (getMessageRole(messageItem) !== "assistant") {
-      return mergedBaseAttachmentMetas;
+      return mergedBaseAttachments;
     }
     if (isFreshPendingAssistant(messageItem)) {
-      return withAttachmentOwners(mergedBaseAttachmentMetas);
+      return withAttachmentOwners(mergedBaseAttachments);
     }
     const rootTurnScopeId = getMessageTurnScopeId(messageItem);
-    if (!rootTurnScopeId) return withAttachmentOwners(mergedBaseAttachmentMetas);
+    if (!rootTurnScopeId) return withAttachmentOwners(mergedBaseAttachments);
 
     const allMessages = Array.isArray(getAllMessages()) ? getAllMessages() : [];
     const sessionDocMessages = flattenSessionMessagesWithSessionId(getSessionDocs());
@@ -494,9 +494,9 @@ export function useMessageFiles({
       ...allMessages,
       ...sessionDocMessages,
     ];
-    const baseSplit = splitAttachmentMetasByOwner(mergedBaseAttachmentMetas);
-    let mainFlowAttachmentMetas = [...baseSplit.agent];
-    let pluginAttachmentMetas = [...baseSplit.plugin];
+    const baseSplit = splitAttachmentsByOwner(mergedBaseAttachments);
+    let mainFlowAttachments = [...baseSplit.agent];
+    let pluginAttachments = [...baseSplit.plugin];
     for (const sessionMessage of candidateMessages) {
       const messageRole = getMessageRole(sessionMessage);
       // Newer messages and generated attachments are scoped by sessionId +
@@ -505,41 +505,41 @@ export function useMessageFiles({
       // collection; otherwise a pending assistant can temporarily collect files
       // from a previous summary/sessionDocs turn.
       if (!isSameExplicitTurnScope(messageItem, sessionMessage)) continue;
-      if (!shouldCollectAttachmentMetasFromMessage(messageItem, sessionMessage)) {
+      if (!shouldCollectAttachmentsFromMessage(messageItem, sessionMessage)) {
         continue;
       }
-      const currentAttachmentMetas = filterAttachmentMetasForMessage(
-        getMessageAttachmentMetas(sessionMessage),
+      const currentAttachments = filterAttachmentsForMessage(
+        getMessageAttachments(sessionMessage),
         messageItem,
       );
-      if (!currentAttachmentMetas.length) continue;
-      const splitCurrentAttachmentMetas = splitAttachmentMetasByOwner(currentAttachmentMetas);
+      if (!currentAttachments.length) continue;
+      const splitCurrentAttachments = splitAttachmentsByOwner(currentAttachments);
       if (
         messageRole === "user" &&
         isHarnessPluginInjectedMessage(sessionMessage)
       ) {
-        pluginAttachmentMetas = mergeAttachmentMetas(
-          pluginAttachmentMetas,
-          currentAttachmentMetas,
+        pluginAttachments = mergeAttachments(
+          pluginAttachments,
+          currentAttachments,
         );
         continue;
       }
-      if (splitCurrentAttachmentMetas.plugin.length) {
-        pluginAttachmentMetas = mergeAttachmentMetas(
-          pluginAttachmentMetas,
-          splitCurrentAttachmentMetas.plugin,
+      if (splitCurrentAttachments.plugin.length) {
+        pluginAttachments = mergeAttachments(
+          pluginAttachments,
+          splitCurrentAttachments.plugin,
         );
       }
       if (!["assistant", "tool"].includes(messageRole)) continue;
-      if (!splitCurrentAttachmentMetas.agent.length) continue;
-      mainFlowAttachmentMetas = mergeAttachmentMetas(
-        mainFlowAttachmentMetas,
-        splitCurrentAttachmentMetas.agent,
+      if (!splitCurrentAttachments.agent.length) continue;
+      mainFlowAttachments = mergeAttachments(
+        mainFlowAttachments,
+        splitCurrentAttachments.agent,
       );
     }
     const mergedWithOwnerType = withAttachmentOwners([
-      ...mainFlowAttachmentMetas,
-      ...pluginAttachmentMetas,
+      ...mainFlowAttachments,
+      ...pluginAttachments,
     ]);
     const dedupedWithOwnerType = [];
     const seenAttachmentKeySet = new Map();
@@ -621,6 +621,6 @@ export function useMessageFiles({
 
   return {
     writtenFiles,
-    displayedAttachmentMetas,
+    displayedAttachments,
   };
 }

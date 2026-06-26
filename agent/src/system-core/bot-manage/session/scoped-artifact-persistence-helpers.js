@@ -12,7 +12,7 @@ import { normalizeSessionEntity } from "../../session/entities/session-entity.js
 import {
   applyNormalizedMessageFlags,
   persistSnapshotJsonFiles,
-  resolvePreferredAttachmentMetas,
+  resolvePreferredAttachments,
   resolveTransferEnvelopeListFromMessage,
 } from "./session-execution-engine-utils.js";
 
@@ -145,8 +145,8 @@ export class ScopedArtifactPersistenceHelpers {
     if (String(message?.tool_call_id || "").trim()) {
       normalized.tool_call_id = String(message.tool_call_id || "").trim();
     }
-    const preferredAttachmentMetas = resolvePreferredAttachmentMetas(message);
-    if (preferredAttachmentMetas.length) normalized.attachmentMetas = preferredAttachmentMetas;
+    const preferredAttachments = resolvePreferredAttachments(message);
+    if (preferredAttachments.length) normalized.attachments = preferredAttachments;
     const transferEnvelopes = resolveTransferEnvelopeListFromMessage(message);
     if (transferEnvelopes.length) normalized.transferEnvelopes = transferEnvelopes;
     return applyNormalizedMessageFlags(normalized, message);

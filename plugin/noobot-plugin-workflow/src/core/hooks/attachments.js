@@ -7,7 +7,7 @@
 import { WORKFLOW_ATTACHMENT_SCOPE } from "../constants.js";
 import { resolveWorkflowAgentContext, resolveWorkflowRuntimeFromContext } from "./runtime.js";
 
-export function mergeAttachmentMetas(existing = [], incoming = []) {
+export function mergeAttachments(existing = [], incoming = []) {
   const merged = Array.isArray(existing) ? existing.slice() : [];
   const seen = new Set(
     merged
@@ -24,11 +24,11 @@ export function mergeAttachmentMetas(existing = [], incoming = []) {
   return merged;
 }
 
-export function resolveWorkflowInputAttachmentMetas(ctx = {}) {
+export function resolveWorkflowInputAttachments(ctx = {}) {
   const agentContext = resolveWorkflowAgentContext(ctx);
   const candidates = [
-    ctx?.attachmentMetas,
-    ctx?.userMessageAttachmentMetas,
+    ctx?.attachments,
+    ctx?.userMessageAttachments,
     agentContext?.session?.current?.attachments,
   ];
   for (const candidate of candidates) {
@@ -60,14 +60,14 @@ export function resolveSemanticAttachmentDeclarationMap(semantic = {}) {
   return map;
 }
 
-export function resolveNodeInputAttachmentMetas({ ctx = {}, semanticNode = {}, semantic = {} } = {}) {
-  const userAttachmentMetas = resolveWorkflowInputAttachmentMetas(ctx);
-  if (!userAttachmentMetas.length) return [];
+export function resolveNodeInputAttachments({ ctx = {}, semanticNode = {}, semantic = {} } = {}) {
+  const userAttachments = resolveWorkflowInputAttachments(ctx);
+  if (!userAttachments.length) return [];
   const refs = normalizeAttachmentRefs(
     semanticNode?.attachments || semanticNode?.inputAttachments || semanticNode?.attachmentIds || [],
   );
   if (!refs.length) return [];
-  if (refs.some(isAllUserAttachmentRef)) return userAttachmentMetas;
+  if (refs.some(isAllUserAttachmentRef)) return userAttachments;
   const semanticAttachmentMap = resolveSemanticAttachmentDeclarationMap(semantic);
   const expandedRefs = refs.flatMap((ref) => {
     const normalizedRef = String(ref || "").trim();
@@ -85,7 +85,7 @@ export function resolveNodeInputAttachmentMetas({ ctx = {}, semanticNode = {}, s
   });
   const refSet = new Set(expandedRefs.map((item) => String(item || "").trim()).filter(Boolean));
   if (!refSet.size) return [];
-  return userAttachmentMetas.filter((meta = {}) => {
+  return userAttachments.filter((meta = {}) => {
     const keys = [
       meta?.attachmentId,
       meta?.id,
@@ -194,8 +194,8 @@ export function applyWorkflowTransferPayload(target = {}, payload = {}) {
   return target;
 }
 
-export function buildWorkflowTransferPayloadFromAttachmentMetas(attachmentMetas = []) {
-  const metas = (Array.isArray(attachmentMetas) ? attachmentMetas : [])
+export function buildWorkflowTransferPayloadFromAttachments(attachments = []) {
+  const metas = (Array.isArray(attachments) ? attachments : [])
     .filter((item) => item && typeof item === "object" && !Array.isArray(item));
   if (!metas.length) return normalizeWorkflowTransferPayload();
   const files = metas.map((meta = {}, index) => ({
@@ -250,24 +250,24 @@ export function resolveWorkflowTransferFilesFromPayload(payload = {}, ctx = {}) 
   });
 }
 
-export function resolveWorkflowAttachmentMetasFromTransferPayload(payload = {}, ctx = {}) {
+export function resolveWorkflowAttachmentsFromTransferPayload(payload = {}, ctx = {}) {
   const transferPayload = normalizeWorkflowTransferPayload(payload);
   return resolveWorkflowTransferFilesFromPayload(transferPayload, ctx)
     .map((item = {}) => item?.attachmentMeta)
     .filter((item) => item && typeof item === "object" && !Array.isArray(item));
 }
 
-export function resolveWorkflowCompatAttachmentMetas({
+export function resolveWorkflowAttachments({
   workflowPayload = null,
-  attachmentMetas = [],
+  attachments = [],
   ctx = {},
 } = {}) {
-  const transferMetas = resolveWorkflowAttachmentMetasFromTransferPayload(
+  const transferAttachments = resolveWorkflowAttachmentsFromTransferPayload(
     workflowPayload && typeof workflowPayload === "object" ? workflowPayload : {},
     ctx,
   );
-  if (transferMetas.length) return transferMetas;
-  return Array.isArray(attachmentMetas) ? attachmentMetas : [];
+  if (transferAttachments.length) return transferAttachments;
+  return Array.isArray(attachments) ? attachments : [];
 }
 
 export function resolveWorkflowTransferFileDisplayPath(file = {}, ctx = {}) {

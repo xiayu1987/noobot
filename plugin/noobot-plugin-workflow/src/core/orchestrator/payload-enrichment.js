@@ -5,9 +5,9 @@
  */
 
 import {
-  mergeAttachmentMetas,
+  mergeAttachments,
   normalizeWorkflowTransferPayload,
-  resolveWorkflowAttachmentMetasFromTransferPayload,
+  resolveWorkflowAttachmentsFromTransferPayload,
 } from "../hooks/attachments.js";
 import { resolveSemanticNodeForPendingStep } from "../hooks/node-agent.js";
 import { resolveWorkflowNodeDialogProcessId } from "../dialog-process-compat.js";
@@ -66,7 +66,7 @@ export function buildWorkflowNodeSessions({
     );
 }
 
-export function resolveWorkflowAttachmentMetasFromNodeRuns({
+export function resolveWorkflowAttachmentsFromNodeRuns({
   ctx = {},
   nodeAgentRuns = [],
 } = {}) {
@@ -74,13 +74,13 @@ export function resolveWorkflowAttachmentMetasFromNodeRuns({
     const transferPayload = normalizeWorkflowTransferPayload({
       transferEnvelopes: Array.isArray(item?.nodeResultTransferEnvelopes) ? item.nodeResultTransferEnvelopes : [],
     });
-    const metas = resolveWorkflowAttachmentMetasFromTransferPayload(transferPayload, ctx);
-    return mergeAttachmentMetas(
+    const attachments = resolveWorkflowAttachmentsFromTransferPayload(transferPayload, ctx);
+    return mergeAttachments(
       acc,
-      metas.length
-        ? metas
-        : Array.isArray(item?.nodeResultAttachmentMetas)
-          ? item.nodeResultAttachmentMetas
+      attachments.length
+        ? attachments
+        : Array.isArray(item?.nodeResultAttachments)
+          ? item.nodeResultAttachments
           : [],
     );
   }, []);
@@ -109,13 +109,13 @@ export function enrichWorkflowPayload({
     storageFile: String(planningPersistResult?.outputFile || "").trim(),
   };
   workflowPayload.nodeSessions = buildWorkflowNodeSessions({ ctx, semantic, nodeAgentRuns });
-  const workflowAttachmentMetas = resolveWorkflowAttachmentMetasFromNodeRuns({
+  const workflowAttachments = resolveWorkflowAttachmentsFromNodeRuns({
     ctx,
     nodeAgentRuns,
   });
   workflowPayload.transferEnvelopes = resolveWorkflowTransferEnvelopesFromNodeRuns(nodeAgentRuns);
   return {
     workflowPayload,
-    workflowAttachmentMetas,
+    workflowAttachments,
   };
 }

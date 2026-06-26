@@ -9,9 +9,9 @@ import {
   resolveAttachmentSessionId,
   resolveAttachmentSource,
 } from "../../services/api/chatApi";
-import { mergeAttachmentMetas } from "./dialogProcessChain";
+import { mergeAttachments } from "./dialogProcessChain";
 import {
-  getMessageTransferAttachmentMetas,
+  getMessageTransferAttachments,
   getMessageTransferEnvelopes,
 } from "./transferEnvelopes";
 import {
@@ -31,6 +31,11 @@ import {
 
 function normalizeArray(value) {
   return Array.isArray(value) ? value : [];
+}
+
+function getMessageAttachments(messageItem = {}) {
+  if (Array.isArray(messageItem?.attachments)) return messageItem.attachments;
+  return [];
 }
 
 const EXECUTION_LOG_DISPLAY_LIMIT = 10;
@@ -150,9 +155,7 @@ function normalizeMessageType(messageItem = {}) {
 }
 
 function createMessageModel(messageItem = {}) {
-  const normalizedAttachmentMetas = Array.isArray(messageItem?.attachmentMetas)
-    ? messageItem.attachmentMetas
-    : [];
+  const normalizedAttachments = getMessageAttachments(messageItem);
   const transferEnvelopes = getMessageTransferEnvelopes(messageItem);
   const workflowMeta = normalizeWorkflowMeta(messageItem);
   const turnScopeId = getMessageTurnScopeId(messageItem);
@@ -176,7 +179,7 @@ function createMessageModel(messageItem = {}) {
     modelAlias: messageItem.modelAlias || "",
     modelName: messageItem.modelName || messageItem.model || "",
     modelRuns: normalizeArray(messageItem.modelRuns),
-    attachmentMetas: normalizeArray(normalizedAttachmentMetas),
+    attachments: normalizeArray(normalizedAttachments),
     transferEnvelopes,
     realtimeLogs: normalizeArray(messageItem.realtimeLogs),
     executionLogTotal: Number(
@@ -214,12 +217,12 @@ function createMessageModel(messageItem = {}) {
   };
 }
 
-function buildAppendMessage(role, content = "", attachmentMetas = [], options = {}) {
+function buildAppendMessage(role, content = "", attachments = [], options = {}) {
   return createMessageModel({
     role,
     content,
     type: "message",
-    attachmentMetas,
+    attachments,
     ts: nowMs(),
   });
 }
@@ -239,19 +242,17 @@ function buildViewMessage(
   messageItem = {},
   { userId = "", isImageMime = () => false } = {},
 ) {
-  const sourceAttachmentMetas = Array.isArray(messageItem?.attachmentMetas)
-    ? messageItem.attachmentMetas
-    : [];
-  const transferAttachmentMetas = getMessageTransferAttachmentMetas(messageItem);
-  const normalizedAttachments = (transferAttachmentMetas.length
-    ? mergeAttachmentMetas(transferAttachmentMetas, normalizeArray(sourceAttachmentMetas))
-    : normalizeArray(sourceAttachmentMetas)
+  const sourceAttachments = getMessageAttachments(messageItem);
+  const transferAttachments = getMessageTransferAttachments(messageItem);
+  const normalizedAttachments = (transferAttachments.length
+    ? mergeAttachments(transferAttachments, normalizeArray(sourceAttachments))
+    : normalizeArray(sourceAttachments)
   ).map((attachmentItem) =>
     normalizeAttachment(attachmentItem, { userId, isImageMime }),
   );
   return createMessageModel({
     ...messageItem,
-    attachmentMetas: normalizedAttachments,
+    attachments: normalizedAttachments,
   });
 }
 
@@ -337,13 +338,13 @@ function foldConversationMessages(messages = [], buildView) {
       Number(previousMessage?.thinkingDetailCount || 0),
       Number(currentMessage?.thinkingDetailCount || 0),
     );
-    const currentAttachmentMetas = normalizeArray(currentMessage?.attachmentMetas);
-    const previousAttachmentMetas = normalizeArray(previousMessage?.attachmentMetas);
+    const currentAttachments = normalizeArray(currentMessage?.attachments);
+    const previousAttachments = normalizeArray(previousMessage?.attachments);
 
-    if (currentAttachmentMetas.length) {
-      previousMessage.attachmentMetas = mergeAttachmentMetas(
-        previousAttachmentMetas,
-        currentAttachmentMetas,
+    if (currentAttachments.length) {
+      previousMessage.attachments = mergeAttachments(
+        previousAttachments,
+        currentAttachments,
       );
     }
     const previousTransferEnvelopes = normalizeArray(previousMessage?.transferEnvelopes);
@@ -377,6 +378,7 @@ export {
   buildViewMessage,
   foldConversationMessages,
   createMessageModel,
+  getMessageAttachments,
   isHarnessInjectedMessage,
   isWorkflowMessageLike,
 };

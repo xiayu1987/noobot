@@ -152,8 +152,8 @@ export function composeSystemInfoSections({
   skills = [],
   services = [],
   mcpServers = [],
-  inputAttachmentMetas = null,
-  attachmentMetas = [],
+  inputAttachments = null,
+  attachments = [],
   connectorStatusSection = {},
 }) {
   const i18n = resolveSystemPromptFormatterI18n(locale);
@@ -179,7 +179,11 @@ export function composeSystemInfoSections({
     defaultWorkspaceDescription,
   });
   const normalizedAttachmentMetas = normalizeAttachmentMetas(
-    Array.isArray(inputAttachmentMetas) ? inputAttachmentMetas : attachmentMetas,
+    Array.isArray(inputAttachments)
+      ? inputAttachments
+      : Array.isArray(attachments)
+        ? attachments
+        : [],
   );
   return [
     normalizedSystemPrompt,

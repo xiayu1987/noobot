@@ -57,8 +57,8 @@ function resolveMediaInputPathFromAttachmentMetas(filePath = "", agentContext = 
   const normalizedInputPath = normalizeMediaInputPath(filePath);
   const runtime = getRuntimeFromAgentContext(agentContext);
   const runtimeAttachmentMetas = [
-    ...(Array.isArray(runtime?.inputAttachmentMetas) ? runtime.inputAttachmentMetas : []),
-    ...(Array.isArray(runtime?.attachmentMetas) ? runtime.attachmentMetas : []),
+    ...(Array.isArray(runtime?.inputAttachments) ? runtime.inputAttachments : []),
+    ...(Array.isArray(runtime?.attachments) ? runtime.attachments : []),
   ];
   if (!normalizedInputPath || !runtimeAttachmentMetas.length) {
     return {
@@ -307,9 +307,9 @@ async function persistMedia2DataTextAttachment({
     producer: { type: "tool", name: TOOL_NAME.MEDIA_TO_DATA },
     meta: { mediaType, inputFile },
   });
-  const attachmentMetas = getTransferAttachmentMetas(materialized.transferEnvelopes);
+  const attachments = getTransferAttachmentMetas(materialized.transferEnvelopes);
   return {
-    attachmentMetas,
+    attachments,
     transferEnvelopes: materialized.transferEnvelopes,
     resultFields: materialized.resultFields,
   };
@@ -335,7 +335,7 @@ async function backwriteParsedResultToSourceAttachment({
       sourceAttachmentSource: String(sourceAttachmentMeta?.attachmentSource || "").trim(),
       sourceAttachmentPath: String(sourceAttachmentMeta?.path || "").trim(),
     });
-    for (const bucketName of ["inputAttachmentMetas", "attachmentMetas"]) {
+    for (const bucketName of ["inputAttachments", "attachments"]) {
       if (!Array.isArray(runtime?.[bucketName])) continue;
       const sourceAttachmentIndex = runtime[bucketName].findIndex(
         (item) => String(item?.attachmentId || "").trim() === sourceAttachmentId,
@@ -465,13 +465,13 @@ export function createMedia2DataTool({ agentContext }) {
         mediaType,
         text: extractedText,
       });
-      const attachmentMetas = Array.isArray(persistedOutput?.attachmentMetas)
-        ? persistedOutput.attachmentMetas
+      const attachments = Array.isArray(persistedOutput?.attachments)
+        ? persistedOutput.attachments
         : [];
       const updatedSourceAttachment = await backwriteParsedResultToSourceAttachment({
         runtime,
         sourceAttachmentMeta,
-        parsedAttachmentMeta: attachmentMetas[0] || null,
+        parsedAttachmentMeta: attachments[0] || null,
       });
       return toToolJsonResult(
         TOOL_NAME.MEDIA_TO_DATA,
@@ -489,9 +489,9 @@ export function createMedia2DataTool({ agentContext }) {
           summary: {
             media_type: mediaType,
             parsed_from_attachment_id: String(sourceAttachmentMeta?.attachmentId || ""),
-            parsed_result_path: String(attachmentMetas?.[0]?.path || ""),
+            parsed_result_path: String(attachments?.[0]?.path || ""),
             source_attachment_backwritten: Boolean(updatedSourceAttachment),
-            saved_attachment_count: attachmentMetas.length,
+            saved_attachment_count: attachments.length,
             text_length: extractedText.length,
           },
         },

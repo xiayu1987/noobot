@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 3;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 4;
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
 
 export function isSessionDisplaySummaryPayload(payload = null, sessionId = "") {
@@ -102,8 +102,8 @@ function pickPlainObjectFields(source = null, keys = []) {
   return Object.keys(out).length ? out : null;
 }
 
-function pickLightAttachmentMetas(message = {}) {
-  const metas = Array.isArray(message?.attachmentMetas) ? message.attachmentMetas : [];
+function pickLightAttachments(message = {}) {
+  const metas = Array.isArray(message?.attachments) ? message.attachments : [];
   return metas.map((item = {}) => {
     const attachmentId = item?.attachmentId || item?.attachment_id || item?.id || item?.fileId || item?.file_id || "";
     const mimeType = item?.mimeType || item?.type || item?.mime || "";
@@ -375,8 +375,8 @@ function buildDisplayMessageSummary(message = {}) {
   if (["tool_call", "tool_result"].includes(type)) return null;
   const summary = buildMessageSummary(message) || {};
   summary.content = typeof message?.content === "string" ? message.content : JSON.stringify(message?.content ?? "");
-  const attachmentMetas = pickLightAttachmentMetas(message);
-  if (attachmentMetas.length) summary.attachmentMetas = attachmentMetas;
+  const attachments = pickLightAttachments(message);
+  if (attachments.length) summary.attachments = attachments;
   for (const key of ["id", "pluginMessage", "done", "pending", "error"]) {
     if (message?.[key] !== undefined) summary[key] = message[key];
   }
@@ -424,9 +424,9 @@ function buildToolLogSummaries(session = {}, { depth = 0 } = {}) {
       const toolCallId = String(message?.tool_call_id || "").trim();
       const toolName = toolNameByCallId.get(toolCallId) || String(message?.toolName || "tool_result");
       totalCount += 1;
-      const attachmentMetas = pickLightAttachmentMetas(message);
+      const attachments = pickLightAttachments(message);
       const writtenFile = parseToolFileResult(message?.content || "");
-      if (!attachmentMetas.length && !writtenFile) continue;
+      if (!attachments.length && !writtenFile) continue;
       const summary = {
         event: "tool_result", type: "tool_result",
         role: "tool",
@@ -434,7 +434,7 @@ function buildToolLogSummaries(session = {}, { depth = 0 } = {}) {
         text: writtenFile ? `${writtenFile.toolName} ${writtenFile.fileName}` : truncateText(`${toolName}`.trim(), 200),
         ts, sessionId, depth, toolCallId, dialogProcessId, parentDialogProcessId, turnScopeId,
       };
-      if (attachmentMetas.length) summary.attachmentMetas = attachmentMetas;
+      if (attachments.length) summary.attachments = attachments;
       if (writtenFile) {
         summary.writtenFiles = [{ ...writtenFile, sourceType: "tool", recognized: false }];
       }
@@ -510,7 +510,7 @@ export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
   const thinkingCount = displayMessages.filter((message) => message?.hasThinkingDetails === true).length;
   const { logs: toolLogSummaries, totalCount: toolLogCount } = buildToolLogSummaries(session, { depth });
   const attachmentCount = displayMessages.reduce(
-    (count, message) => count + (Array.isArray(message?.attachmentMetas) ? message.attachmentMetas.length : 0),
+    (count, message) => count + (Array.isArray(message?.attachments) ? message.attachments.length : 0),
     0,
   );
   return {

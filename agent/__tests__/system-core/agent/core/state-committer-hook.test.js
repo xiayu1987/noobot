@@ -207,23 +207,23 @@ test("state-committer persists transferEnvelopes only", async () => {
   assert.deepEqual(turnMessageStore.items[0].transferEnvelopes, [envelope]);
 });
 
-test("state-committer emits before/after hooks for attachment meta commit", async () => {
+test("state-committer emits before/after hooks for attachment commit", async () => {
   const hookCalls = [];
   const hookManager = createAgentHookManager();
-  const runtime = { hookManager, attachmentMetas: [] };
+  const runtime = { hookManager, attachments: [] };
   const turnMessageStore = createInMemoryTurnStore();
 
   hookManager.on(AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT, async (ctx = {}) => {
-    if (ctx.commitType !== "attachment_metas") return;
+    if (ctx.commitType !== "attachments") return;
     hookCalls.push(`before:${ctx.commitType}`);
-    ctx.payload.attachmentMetas.push({
+    ctx.payload.attachments.push({
       attachmentId: "att_2",
       name: "b.png",
       mimeType: "image/png",
     });
   });
   hookManager.on(AGENT_HOOK_POINTS.AFTER_STATE_COMMIT, async (ctx = {}) => {
-    if (ctx.commitType !== "attachment_metas") return;
+    if (ctx.commitType !== "attachments") return;
     hookCalls.push(`after:${ctx.commitType}`);
   });
 
@@ -241,11 +241,11 @@ test("state-committer emits before/after hooks for attachment meta commit", asyn
     },
   ]);
 
-  assert.deepEqual(hookCalls, ["before:attachment_metas", "after:attachment_metas"]);
-  assert.equal(Array.isArray(runtime.attachmentMetas), true);
-  assert.equal(runtime.attachmentMetas.length, 2);
+  assert.deepEqual(hookCalls, ["before:attachments", "after:attachments"]);
+  assert.equal(Array.isArray(runtime.attachments), true);
+  assert.equal(runtime.attachments.length, 2);
   assert.deepEqual(
-    runtime.attachmentMetas.map((item) => item.attachmentId),
+    runtime.attachments.map((item) => item.attachmentId),
     ["att_1", "att_2"],
   );
 });
@@ -253,7 +253,7 @@ test("state-committer emits before/after hooks for attachment meta commit", asyn
 test("state-committer annotates attachment metas with explicit turn ownership", async () => {
   const events = [];
   const runtime = {
-    attachmentMetas: [],
+    attachments: [],
     systemRuntime: {
       sessionId: "session-1",
       turnScopeId: "turn-scope-1",
@@ -282,14 +282,14 @@ test("state-committer annotates attachment metas with explicit turn ownership", 
     },
   ]);
 
-  assert.deepEqual(runtime.attachmentMetas[0].turnScope, {
+  assert.deepEqual(runtime.attachments[0].turnScope, {
     turnScopeId: "turn-scope-1",
     dialogProcessId: "dp_owned",
   });
-  assert.deepEqual(turnMessageStore.items[0].attachmentMetas[0].turnScope, {
+  assert.deepEqual(turnMessageStore.items[0].attachments[0].turnScope, {
     turnScopeId: "turn-scope-1",
     dialogProcessId: "dp_owned",
   });
-  const attachmentEvent = events.find((eventPayload) => eventPayload?.event === "attachment_metas_saved");
-  assert.equal(attachmentEvent?.data?.attachmentMetas?.[0]?.turnScope?.turnScopeId, "turn-scope-1");
+  const attachmentEvent = events.find((eventPayload) => eventPayload?.event === "attachments_saved");
+  assert.equal(attachmentEvent?.data?.attachments?.[0]?.turnScope?.turnScopeId, "turn-scope-1");
 });

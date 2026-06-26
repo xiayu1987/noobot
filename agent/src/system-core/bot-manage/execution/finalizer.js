@@ -55,6 +55,11 @@ function resolveTransferEnvelopesFromMessage(messageItem = {}) {
     : [];
 }
 
+function resolveAttachmentsFromMessage(messageItem = {}) {
+  if (Array.isArray(messageItem?.attachments)) return messageItem.attachments;
+  return [];
+}
+
 function dedupeTransferEnvelopes(envelopes = []) {
   const list = Array.isArray(envelopes) ? envelopes : [];
   if (!list.length) return [];
@@ -95,7 +100,7 @@ function promoteGeneratedTransfersToFinalAssistant(messages = []) {
   const generatedAttachmentMetas = sourceMessages.flatMap((messageItem = {}) =>
     resolveTransferEnvelopesFromMessage(messageItem).length
       ? []
-      : (Array.isArray(messageItem?.attachmentMetas) ? messageItem.attachmentMetas : [])
+      : resolveAttachmentsFromMessage(messageItem)
           .filter(shouldPromoteSemanticTransferAttachmentToAssistant),
   );
   const generatedAttachmentTransferPayload = buildTransferPayloadFromAttachmentMetas(generatedAttachmentMetas);
@@ -129,9 +134,6 @@ function promoteGeneratedTransfersToFinalAssistant(messages = []) {
     ...finalAssistant,
     ...(mergedTransferEnvelopes.length ? { transferEnvelopes: mergedTransferEnvelopes } : {}),
   };
-  if (mergedTransferEnvelopes.length) {
-    delete nextFinalAssistant.attachmentMetas;
-  }
   outputMessages[finalAssistantIndex] = nextFinalAssistant;
   return outputMessages;
 }

@@ -92,7 +92,7 @@ const {
   },
 });
 
-const { writtenFiles, displayedAttachmentMetas } = useMessageFiles({
+const { writtenFiles, displayedAttachments } = useMessageFiles({
   getMessageItem: () => props.messageItem,
   getAllMessages: () => props.allMessages,
   getSessionDocs: () => props.sessionDocs,
@@ -145,7 +145,8 @@ function resolveRendererContext() {
     showSubTaskActivity: showSubTaskActivity.value,
     subTaskStatusText: subTaskStatusText.value,
     writtenFiles: writtenFiles.value,
-    displayedAttachmentMetas: displayedAttachmentMetas.value,
+    displayedAttachments: displayedAttachments.value,
+    displayedAttachmentMetas: displayedAttachments.value,
     canPreviewAttachment,
     onOpenFilePreview: openFilePreview,
     onDownloadFile,

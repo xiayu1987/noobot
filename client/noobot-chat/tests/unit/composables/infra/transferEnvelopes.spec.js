@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  getMessageTransferAttachmentMetas,
+  getMessageTransferAttachments,
   getMessageTransferEnvelopes,
   getTransferDisplayPath,
   normalizeTransferEnvelope,
@@ -38,7 +38,7 @@ describe("transferEnvelopes", () => {
   });
 
   it("extracts attachment-like metas from transfer files", () => {
-    const metas = getMessageTransferAttachmentMetas({ transferEnvelopes: [envelope] });
+    const metas = getMessageTransferAttachments({ transferEnvelopes: [envelope] });
 
     expect(metas).toHaveLength(1);
     expect(metas[0]).toMatchObject({
@@ -53,7 +53,7 @@ describe("transferEnvelopes", () => {
   });
 
   it("uses legacy shortcut fields when files are absent", () => {
-    const metas = getMessageTransferAttachmentMetas({
+    const metas = getMessageTransferAttachments({
       transferEnvelopes: [
         {
           protocol: "noobot.semantic-transfer",

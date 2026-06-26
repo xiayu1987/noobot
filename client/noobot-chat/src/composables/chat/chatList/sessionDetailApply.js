@@ -147,6 +147,14 @@ export function createSessionDetailApplicator({
       const foldedDetailMessages = isSummaryDetail
         ? detailMessages.map((messageItem) => makeViewMessage(messageItem))
         : foldMessagesForView(detailMessages);
+      if (!isSummaryDetail) {
+        mergeChildTurnAttachmentsIntoRootMessages({
+          rootMessages: foldedDetailMessages,
+          sessionDocs,
+          rootSessionId: detail.sessionId,
+          makeViewMessage,
+        });
+      }
       const existingMessages = Array.isArray(sessionItem.messages) ? sessionItem.messages : [];
       mergePreservedDetailMessages(existingMessages, foldedDetailMessages);
       const workflowMessages = foldedDetailMessages.filter(

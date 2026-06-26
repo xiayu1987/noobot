@@ -48,8 +48,8 @@ function applyMemoryTakeoverForStateCommit(ctx = {}, takeover = {}) {
     changed = true;
   }
 
-  if (takeover?.clearAttachmentMetas === true && Array.isArray(payload?.attachmentMetas)) {
-    payload.attachmentMetas = [];
+  if (takeover?.clearAttachments === true && Array.isArray(payload?.attachments)) {
+    payload.attachments = [];
     changed = true;
   }
 

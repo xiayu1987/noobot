@@ -300,7 +300,7 @@ export function applyReconnectEnvelopeToTargetMessage({
   normalizeExecutionLogForRealtime,
   onInteractionRequest,
   onConnectorStatus,
-  onAttachmentMetas,
+  onAttachments,
   onDoneMessages,
   processStore,
 } = {}) {
@@ -340,8 +340,8 @@ export function applyReconnectEnvelopeToTargetMessage({
     onInteractionRequest?.(eventData);
   } else if (eventName === StreamEventEnum.CONNECTOR_STATUS) {
     onConnectorStatus?.(eventData);
-  } else if (eventName === StreamEventEnum.ATTACHMENT_METAS) {
-    onAttachmentMetas?.(targetMessage, eventData?.attachmentMetas || []);
+  } else if (eventName === StreamEventEnum.ATTACHMENTS) {
+    onAttachments?.(targetMessage, eventData?.attachments || []);
   } else if (eventName === StreamEventEnum.DONE) {
     terminalDialogProcessIdSet?.add?.(normalizedDpId);
     targetMessage.pending = false;
@@ -416,7 +416,7 @@ export function applyReconnectEnvelopeBatchToTargetMessage({
   normalizeExecutionLogForRealtime,
   onInteractionRequest,
   onConnectorStatus,
-  onAttachmentMetas,
+  onAttachments,
   onDoneMessages,
   processStore,
 } = {}) {
@@ -433,7 +433,7 @@ export function applyReconnectEnvelopeBatchToTargetMessage({
       normalizeExecutionLogForRealtime,
       onInteractionRequest,
       onConnectorStatus,
-      onAttachmentMetas,
+      onAttachments,
       onDoneMessages,
       processStore,
     });
@@ -444,14 +444,14 @@ export function applyReconnectEnvelopeBatchToTargetMessage({
 export function buildReconnectReplayEnvelopeCallbacks({
   onInteractionRequest,
   onConnectorStatus,
-  onAttachmentMetas,
+  onAttachments,
   onDoneMessages,
 } = {}) {
   return {
     onInteractionRequest: (eventData) => onInteractionRequest?.(eventData),
     onConnectorStatus: (eventData) => onConnectorStatus?.(eventData),
-    onAttachmentMetas: (targetMessage, attachmentMetas = []) =>
-      onAttachmentMetas?.(targetMessage, attachmentMetas),
+    onAttachments: (targetMessage, attachments = []) =>
+      onAttachments?.(targetMessage, attachments),
     onDoneMessages: (eventData) => onDoneMessages?.(eventData),
   };
 }

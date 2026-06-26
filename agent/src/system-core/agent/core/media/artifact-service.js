@@ -142,11 +142,11 @@ function resolveGeneratedArtifactOwnership(runtime = {}, dialogProcessId = "") {
   return { turnScopeId, dialogProcessId: resolvedDialogProcessId, sessionId };
 }
 
-function annotateGeneratedAttachmentMetas(attachmentMetas = [], ownership = {}) {
+function annotateGeneratedAttachments(attachments = [], ownership = {}) {
   const turnScopeId = String(ownership?.turnScopeId || "").trim();
   const dialogProcessId = String(ownership?.dialogProcessId || "").trim();
   const sessionId = String(ownership?.sessionId || "").trim();
-  return (Array.isArray(attachmentMetas) ? attachmentMetas : []).map((attachmentItem = {}) => {
+  return (Array.isArray(attachments) ? attachments : []).map((attachmentItem = {}) => {
     const turnScope = {
       ...(turnScopeId ? { turnScopeId } : {}),
       ...(dialogProcessId ? { dialogProcessId } : {}),
@@ -229,7 +229,7 @@ export async function persistModelGeneratedArtifacts({
     fallbackGenerationSource: "llm_output",
   });
   const seen = new Set();
-  const attachmentMetas = sourceMetas.filter((attachmentItem = {}) => {
+  const attachments = sourceMetas.filter((attachmentItem = {}) => {
     const key = String(attachmentItem?.attachmentId || "").trim() ||
       `${String(attachmentItem?.path || "").trim()}|${String(attachmentItem?.relativePath || "").trim()}|${String(attachmentItem?.name || "").trim()}`;
     if (!key) return true;
@@ -237,25 +237,25 @@ export async function persistModelGeneratedArtifacts({
     seen.add(key);
     return true;
   });
-  if (!attachmentMetas.length) return [];
-  const ownedAttachmentMetas = annotateGeneratedAttachmentMetas(
-    attachmentMetas,
+  if (!attachments.length) return [];
+  const ownedAttachments = annotateGeneratedAttachments(
+    attachments,
     resolveGeneratedArtifactOwnership(runtime, dialogProcessId),
   );
   appendAttachmentMetasToRuntimeAndTurn({
     runtime,
     turnMessageStore,
-    attachmentMetas: ownedAttachmentMetas,
+    attachments: ownedAttachments,
   });
   emitEvent(eventListener, "model_generated_attachments_saved", {
     dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
-    count: ownedAttachmentMetas.length,
-    attachmentMetas: ownedAttachmentMetas,
+    count: ownedAttachments.length,
+    attachments: ownedAttachments,
   });
-  return ownedAttachmentMetas;
+  return ownedAttachments;
 }
 
-export function extractAttachmentMetasFromToolResult(toolName = "", toolResultText = "") {
+export function extractAttachmentsFromToolResult(toolName = "", toolResultText = "") {
   void toolName;
   const normalizedToolResultText = String(toolResultText || "").trim();
   if (!normalizedToolResultText) return [];
@@ -264,17 +264,17 @@ export function extractAttachmentMetasFromToolResult(toolName = "", toolResultTe
     const transferAttachmentMetas = getTransferAttachmentMetas(
       Array.isArray(parsedResult?.transferEnvelopes) ? parsedResult.transferEnvelopes : [],
     );
-    const directAttachmentMetas = Array.isArray(parsedResult?.attachmentMetas)
-      ? parsedResult.attachmentMetas
+    const directAttachmentMetas = Array.isArray(parsedResult?.attachments)
+      ? parsedResult.attachments
       : [];
-    const preferredAttachmentMetas = transferAttachmentMetas.length
+    const preferredAttachments = transferAttachmentMetas.length
       ? transferAttachmentMetas
       : directAttachmentMetas;
-    const attachmentMetas = preferredAttachmentMetas
+    const attachments = preferredAttachments
       .filter(isRuntimeAttachmentMeta);
-    if (!attachmentMetas.length) return [];
+    if (!attachments.length) return [];
     const seen = new Set();
-    return attachmentMetas.filter((attachmentItem = {}) => {
+    return attachments.filter((attachmentItem = {}) => {
       const key = String(attachmentItem?.attachmentId || "").trim() ||
         `${String(attachmentItem?.path || "").trim()}|${String(attachmentItem?.relativePath || "").trim()}|${String(attachmentItem?.name || "").trim()}`;
       if (key && seen.has(key)) return false;

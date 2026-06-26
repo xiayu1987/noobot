@@ -29,10 +29,10 @@ const makeSession = (id, overrides = {}) => ({
   ...overrides,
 });
 
-const makeMessage = (role, content = "", attachmentMetas = []) => ({
+const makeMessage = (role, content = "", attachments = []) => ({
   role,
   content,
-  attachmentMetas,
+  attachments,
   pending: false,
   statusLabel: "",
   realtimeLogs: [],
@@ -59,8 +59,8 @@ const createHarness = ({
   const pendingInteractionRequest = ref(pendingInteraction);
   const interactionSubmitting = ref(interactionSubmittingValue);
 
-  const appendMessage = vi.fn((role, content = "", attachmentMetas = []) => {
-    const message = makeMessage(role, content, attachmentMetas);
+  const appendMessage = vi.fn((role, content = "", attachments = []) => {
+    const message = makeMessage(role, content, attachments);
     activeSession.value.messages.push(message);
     activeSession.value.rawMessages.push(message);
     activeSession.value.messageCount = activeSession.value.messages.length;
@@ -261,7 +261,7 @@ describe("useChatEngine", () => {
               modelAlias: "alias-a",
               modelName: "model-a",
               modelRuns: [{ runId: "r1" }],
-              attachmentMetas: [{ name: "f1" }],
+              attachments: [{ name: "f1" }],
               tool_calls: [{ id: "tc1" }],
             },
           ],

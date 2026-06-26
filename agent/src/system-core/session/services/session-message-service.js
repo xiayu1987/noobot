@@ -10,8 +10,8 @@ import {
 } from "../../context/session/dialog-process-id-resolver.js";
 import { getTransferAttachmentMetas } from "../../semantic-transfer/storage/consumer.js";
 
-function dedupeAttachmentMetas(attachmentMetas = []) {
-  const source = Array.isArray(attachmentMetas) ? attachmentMetas : [];
+function dedupeAttachments(attachments = []) {
+  const source = Array.isArray(attachments) ? attachments : [];
   const seen = new Set();
   return source.filter((item = {}) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return false;
@@ -119,7 +119,7 @@ export class SessionMessageService {
     turnScopeId = "",
     tool_calls = null,
     tool_call_id = "",
-    attachmentMetas = [],
+    attachments = [],
     modelAlias = "",
     modelName = "",
     summarized = false,
@@ -211,19 +211,19 @@ export class SessionMessageService {
     if (tool_call_id) turn.tool_call_id = tool_call_id;
     if (toolName) turn.toolName = String(toolName || "").trim();
     if (Array.isArray(tool_calls) && tool_calls.length) turn.tool_calls = tool_calls;
-    const transferAttachmentMetas = getTransferAttachmentMetas(
+    const transferAttachments = getTransferAttachmentMetas(
       [
         ...(Array.isArray(transferEnvelopes) ? transferEnvelopes : []),
         ...(Array.isArray(turn?.transferEnvelopes) ? turn.transferEnvelopes : []),
       ].filter(Boolean),
     );
-    const preferredAttachmentMetas = Array.isArray(turn?.transferEnvelopes) && turn.transferEnvelopes.length
+    const preferredAttachments = Array.isArray(turn?.transferEnvelopes) && turn.transferEnvelopes.length
       ? []
-      : transferAttachmentMetas.length
-        ? dedupeAttachmentMetas(transferAttachmentMetas)
-        : (Array.isArray(attachmentMetas) ? attachmentMetas : []);
-    if (preferredAttachmentMetas.length) {
-      turn.attachmentMetas = preferredAttachmentMetas;
+      : transferAttachments.length
+        ? dedupeAttachments(transferAttachments)
+        : (Array.isArray(attachments) ? attachments : []);
+    if (preferredAttachments.length) {
+      turn.attachments = preferredAttachments;
     }
 
     session.messages = Array.isArray(session.messages) ? session.messages : [];

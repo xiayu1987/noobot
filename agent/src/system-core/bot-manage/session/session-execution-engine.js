@@ -452,8 +452,8 @@ export class SessionExecutionEngine {
     caller = CALLER_ROLE.USER,
     parentSessionId,
     userConfig,
-    inputAttachmentMetas = null,
-    attachmentMetas,
+    inputAttachments = null,
+    attachments,
     systemMessages = [],
     eventListener,
     userInteractionBridge = null,
@@ -467,8 +467,8 @@ export class SessionExecutionEngine {
       caller,
       parentSessionId,
       userConfig,
-      inputAttachmentMetas,
-      attachmentMetas,
+      inputAttachments,
+      attachments,
       systemMessages,
       eventListener,
       userInteractionBridge,
@@ -498,14 +498,14 @@ export class SessionExecutionEngine {
       abortSignal,
     });
     const preparedRuntime = getRuntimeFromAgentContext(prepared?.agentContext || {});
-    const runtimeAttachmentMetas = Array.isArray(preparedRuntime?.inputAttachmentMetas)
-      ? preparedRuntime.inputAttachmentMetas
-      : Array.isArray(preparedRuntime?.attachmentMetas)
-        ? preparedRuntime.attachmentMetas
+    const runtimeAttachments = Array.isArray(preparedRuntime?.inputAttachments)
+      ? preparedRuntime.inputAttachments
+      : Array.isArray(preparedRuntime?.attachments)
+        ? preparedRuntime.attachments
         : [];
     return {
       ...(prepared && typeof prepared === "object" ? prepared : {}),
-      userMessageAttachmentMetas: mapAttachmentRecordsToMetas(runtimeAttachmentMetas, {
+      userMessageAttachments: mapAttachmentRecordsToMetas(runtimeAttachments, {
         fallbackMimeType: MIME_TYPE.APPLICATION_OCTET_STREAM,
         userId: String(payload?.userId || "").trim(),
       }),
@@ -522,7 +522,7 @@ export class SessionExecutionEngine {
     taskStatus = null,
     tool_calls = null,
     tool_call_id = "",
-    attachmentMetas = [],
+    attachments = [],
     modelAlias = "",
     modelName = "",
     summarized = false,
@@ -546,7 +546,7 @@ export class SessionExecutionEngine {
       taskStatus,
       tool_calls,
       tool_call_id,
-      attachmentMetas,
+      attachments,
       modelAlias,
       modelName,
       summarized,

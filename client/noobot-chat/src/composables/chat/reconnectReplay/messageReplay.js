@@ -63,20 +63,20 @@ export function applyAssistantFailureState({ targetAssistantMessage, errorMessag
   }
 }
 
-export function mergeAssistantAttachmentMetas({
+export function mergeAssistantAttachments({
   targetAssistantMessage,
-  attachmentMetas = [],
+  attachments = [],
   makeViewMessage,
-  mergeAttachmentMetas,
+  mergeAttachments,
 } = {}) {
-  if (!targetAssistantMessage || !Array.isArray(attachmentMetas) || !attachmentMetas.length) {
+  if (!targetAssistantMessage || !Array.isArray(attachments) || !attachments.length) {
     return;
   }
-  const normalizedAttachmentMetas =
-    makeViewMessage({ attachmentMetas })?.attachmentMetas || attachmentMetas;
-  targetAssistantMessage.attachmentMetas = mergeAttachmentMetas(
-    _ensureArray(targetAssistantMessage.attachmentMetas),
-    normalizedAttachmentMetas,
+  const normalizedAttachments =
+    makeViewMessage({ attachments })?.attachments || attachments;
+  targetAssistantMessage.attachments = mergeAttachments(
+    _ensureArray(targetAssistantMessage.attachments),
+    normalizedAttachments,
   );
 }
 

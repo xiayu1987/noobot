@@ -17,7 +17,7 @@ import {
 import { throwIfWorkflowAborted } from "../hooks/runtime.js";
 import {
   getWorkflowTransferPayloadFromResult,
-  resolveWorkflowAttachmentMetasFromTransferPayload,
+  resolveWorkflowAttachmentsFromTransferPayload,
 } from "../hooks/attachments.js";
 import {
   buildWorkflowUpstreamAttachmentResults,
@@ -47,15 +47,13 @@ function resolveWorkflowExecutionLimits(options = {}) {
   };
 }
 
-function resolveNodeResultAttachmentMetas(item = {}, ctx = {}) {
-  const transferMetas = resolveWorkflowAttachmentMetasFromTransferPayload(
+function resolveNodeResultAttachments(item = {}, ctx = {}) {
+  const transferAttachments = resolveWorkflowAttachmentsFromTransferPayload(
     getWorkflowTransferPayloadFromResult(item?.subSession?.result || {}),
     ctx,
   );
-  if (transferMetas.length) return transferMetas;
-  return Array.isArray(item?.subSession?.result?.attachmentMetas)
-    ? item.subSession.result.attachmentMetas
-    : [];
+  if (transferAttachments.length) return transferAttachments;
+  return Array.isArray(item?.subSession?.result?.attachments) ? item.subSession.result.attachments : [];
 }
 
 function resolveItemStepFailure(item = {}) {
@@ -97,7 +95,7 @@ function buildNodeAgentRunRecord({
       ),
       4000,
     ),
-    nodeResultAttachmentMetas: resolveNodeResultAttachmentMetas(item, ctx),
+    nodeResultAttachments: resolveNodeResultAttachments(item, ctx),
     nodeResultTransferEnvelopes: resultTransferPayload.transferEnvelopes,
     // Persist an explicit terminal status for every executed node step.
     // The workflow card is rendered again from the saved session message after a page refresh;
@@ -157,7 +155,7 @@ function rememberCompletedStepResult({
     nodeSessionId: String(item?.subSession?.sessionId || "").trim(),
     stepStatus: stepFailure ? "failed" : "success",
     stepFailure,
-    attachmentMetas: resolveNodeResultAttachmentMetas(item, ctx),
+    attachments: resolveNodeResultAttachments(item, ctx),
     transferEnvelopes: resultTransferPayload.transferEnvelopes,
   });
 }

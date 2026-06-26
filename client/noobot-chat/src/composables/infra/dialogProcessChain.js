@@ -47,7 +47,7 @@ export function mergeAttachmentMetaFields(existingItem = {}, incomingItem = {}) 
   return merged;
 }
 
-export function mergeAttachmentMetas(existing = [], incoming = []) {
+export function mergeAttachments(existing = [], incoming = []) {
   const existingList = Array.isArray(existing) ? existing : [];
   const incomingList = Array.isArray(incoming) ? incoming : [];
   if (!incomingList.length) return existingList;

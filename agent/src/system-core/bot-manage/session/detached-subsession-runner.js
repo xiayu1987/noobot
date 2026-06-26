@@ -36,7 +36,7 @@ export function createDetachedSubSessionRunner({
   return async ({
     parentContext = {},
     message = "",
-    attachmentMetas = [],
+    attachments = [],
     runConfigPatch = {},
     systemMessages = [],
     strategy = {},
@@ -80,7 +80,7 @@ export function createDetachedSubSessionRunner({
       runConfigPatch,
       disabledPlugins: strategy?.disabledPlugins || [],
     });
-    const subSessionAttachmentMetas = Array.isArray(attachmentMetas) ? attachmentMetas : [];
+    const subSessionAttachments = Array.isArray(attachments) ? attachments : [];
 
     // 子会话为 detached 执行，不能复用父会话的 hook manager（会把父插件/hook 链一并带入）。
     // 否则即便 selectedPlugins 关闭，也可能继续触发已注册的 plugin hooks。
@@ -125,7 +125,7 @@ export function createDetachedSubSessionRunner({
         parentSessionId,
         dialogProcessId: subDialogProcessId || subSessionId,
         userConfig: subSessionUserConfig,
-        inputAttachmentMetas: subSessionAttachmentMetas,
+        inputAttachments: subSessionAttachments,
         systemMessages: Array.isArray(systemMessages) ? systemMessages : [],
         eventListener: resolveObjectEventListener(eventListener),
         userInteractionBridge: inheritedUserInteractionBridge,
@@ -160,7 +160,7 @@ export function createDetachedSubSessionRunner({
       turnScopeId: subSessionTurnScopeId,
       message,
       systemMessages,
-      subSessionAttachmentMetas,
+      subSessionAttachments,
       strategy,
       metadata,
       agentResult,
@@ -335,7 +335,7 @@ async function persistPluginSubSessionSnapshot({
   turnScopeId = "",
   message = "",
   systemMessages = [],
-  subSessionAttachmentMetas = [],
+  subSessionAttachments = [],
   strategy = {},
   metadata = {},
   agentResult = {},
@@ -384,9 +384,7 @@ async function persistPluginSubSessionSnapshot({
       parentDialogProcessId,
       turnScopeId: normalizedTurnScopeId,
       frontendUserMessage: false,
-      ...(subSessionAttachmentMetas.length
-        ? { inputAttachmentMetas: subSessionAttachmentMetas }
-        : {}),
+      ...(subSessionAttachments.length ? { inputAttachments: subSessionAttachments } : {}),
     },
     timestamp,
   );

@@ -111,7 +111,7 @@ Additionally, `hook_plugin_progress.data` is schema-whitelisted to:
 - `before_tool_call` / `after_tool_call` / `tool_call_error`:
   - `turn`, `toolName`, `call`, `args`, `success`, `failureReason`, `toolResultText`, `error`
 - `before_state_commit` / `after_state_commit`:
-  - `commitType` (`assistant_message` / `tool_result` / `attachment_metas`)
+  - `commitType` (`assistant_message` / `tool_result` / `attachments`)
   - `payload`, `call` (for tool result)
 - `after_session_delete`:
   - `deletedSessionIds` (deleted branch IDs)

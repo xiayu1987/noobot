@@ -456,16 +456,17 @@ export function registerChatWebSocketServer(
               return;
             }
             if (
-              eventName === "attachment_metas_saved" ||
+              eventName === "attachments_saved" ||
               eventName === "model_generated_attachments_saved"
             ) {
-              sendEvent("attachment_metas", {
+              const attachments = Array.isArray(eventData?.attachments)
+                ? eventData.attachments
+                : [];
+              sendEvent("attachments", {
                 ...eventData,
                 dialogProcessId: String(eventData?.dialogProcessId || ""),
                 sessionId: String(sessionId || ""),
-                attachmentMetas: Array.isArray(eventData?.attachmentMetas)
-                  ? eventData.attachmentMetas
-                  : [],
+                attachments,
               });
               return;
             }

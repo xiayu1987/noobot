@@ -119,13 +119,13 @@ test("SessionTurnPersister drops direct-consumed intermediate tool payloads and 
   });
 
   assert.equal(appendedTurns.length, 1);
-  assert.deepEqual(appendedTurns[0].attachmentMetas, []);
+  assert.equal(appendedTurns[0].attachmentMetas, undefined);
   const persistedContent = JSON.parse(appendedTurns[0].content);
   assert.equal(persistedContent.intermediateConsumedByModel, true);
   assert.equal(persistedContent.sessionPersistence, "summary_only");
   assert.equal("text" in persistedContent, false);
   const fullTurnLog = executionLogs[0]?.data || {};
-  assert.deepEqual(fullTurnLog.attachmentMetas, []);
+  assert.equal(fullTurnLog.attachmentMetas, undefined);
   assert.equal(JSON.parse(fullTurnLog.content).sessionPersistence, "summary_only");
 });
 

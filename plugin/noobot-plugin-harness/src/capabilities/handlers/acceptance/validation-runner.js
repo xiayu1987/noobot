@@ -514,7 +514,7 @@ export async function runPhaseAcceptanceBySeparateModel(
   if (state?.flags && typeof state.flags === "object") {
     state.flags.phaseAcceptanceTriggeredThisTurn = true;
   }
-  const attachmentMetas = await saveCapabilityOutputAsTransferArtifacts(ctx, {
+  const attachments = await saveCapabilityOutputAsTransferArtifacts(ctx, {
     purpose: "phase_acceptance",
     content: responseText,
     generationSource: "harness_phase_acceptance",
@@ -525,7 +525,7 @@ export async function runPhaseAcceptanceBySeparateModel(
     purpose: "phase_acceptance",
     content: responseText,
     dedupe: true,
-    attachmentMetas,
+    attachments,
   });
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,
@@ -917,7 +917,7 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
   const responseText =
     extractRawTextContent(response?.content) ||
     String(response?.text || response?.output || "").trim();
-  const attachmentMetas = await saveCapabilityOutputAsTransferArtifacts(ctx, {
+  const attachments = await saveCapabilityOutputAsTransferArtifacts(ctx, {
     purpose: "acceptance_semantic_validation",
     content: responseText,
     generationSource: "harness_acceptance_semantic_validation",
@@ -928,7 +928,7 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     purpose: "acceptance_semantic_validation",
     content: responseText,
     dedupe: true,
-    attachmentMetas,
+    attachments,
   });
   const parsed = buildTextAcceptanceValidationResult(responseText);
   if (!parsed) {

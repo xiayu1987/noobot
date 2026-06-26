@@ -14,7 +14,7 @@ import {
 } from "../hooks/runtime.js";
 import {
   resolveAttachmentDisplayPath,
-  resolveWorkflowInputAttachmentMetas,
+  resolveWorkflowInputAttachments,
 } from "../hooks/attachments.js";
 import {
   buildWorkflowAvailableToolsPlanningBlock,
@@ -23,9 +23,9 @@ import {
 } from "../hooks/messages.js";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 
-export function buildWorkflowInputAttachmentPlanningBlock(attachmentMetas = [], ctx = {}) {
+export function buildWorkflowInputAttachmentPlanningBlock(attachments = [], ctx = {}) {
   const locale = resolveWorkflowLocaleFromContext(ctx);
-  const lines = (Array.isArray(attachmentMetas) ? attachmentMetas : [])
+  const lines = (Array.isArray(attachments) ? attachments : [])
     .map((item = {}, index) => {
       const attachmentId = String(item?.attachmentId || item?.id || "").trim();
       const name = String(
@@ -68,8 +68,8 @@ export async function resolveSemanticText({ options = {}, ctx = {}, sourceText =
   }
   const userMessage = String(ctx?.userMessage || "").trim();
   const locale = String(ctx?.runConfig?.locale || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_LOCALE).trim();
-  const userAttachmentMetas = resolveWorkflowInputAttachmentMetas(ctx);
-  const attachmentPlanningBlock = buildWorkflowInputAttachmentPlanningBlock(userAttachmentMetas, ctx);
+  const userAttachments = resolveWorkflowInputAttachments(ctx);
+  const attachmentPlanningBlock = buildWorkflowInputAttachmentPlanningBlock(userAttachments, ctx);
   const availableToolNames = resolveWorkflowAvailableToolNames(ctx);
   const availableToolsPlanningBlock = buildWorkflowAvailableToolsPlanningBlock(ctx, locale);
   const contextMessages = resolveWorkflowSemanticContextMessages({ options, ctx, locale });

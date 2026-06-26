@@ -37,8 +37,8 @@ export function normalizeMessageEntity(
   message = {},
   now = () => new Date().toISOString(),
 ) {
-  const normalizedAttachmentMetas = Array.isArray(message?.attachmentMetas)
-    ? message.attachmentMetas
+  const normalizedAttachments = Array.isArray(message?.attachments)
+    ? message.attachments
     : [];
   const normalizedMessage = {
     role: String(message?.role || "").trim(),
@@ -54,8 +54,8 @@ export function normalizeMessageEntity(
     summarized: message?.summarized === true,
     ts: String(message?.ts || "").trim() || now(),
   };
-  if (normalizedAttachmentMetas.length) {
-    normalizedMessage.attachmentMetas = normalizedAttachmentMetas;
+  if (normalizedAttachments.length) {
+    normalizedMessage.attachments = normalizedAttachments;
   }
   const normalizedTransferEnvelopes = normalizeTransferEnvelopesFromMessage(message);
   if (normalizedTransferEnvelopes.length) {

@@ -16,11 +16,7 @@ function normalizeTransferEnvelopesFromRecord(item = {}) {
 
 export function toConversationMessages(sessionRecords = []) {
   return (sessionRecords || []).map((item) => {
-    const attachmentMetas = Array.isArray(item.attachmentMetas)
-      ? item.attachmentMetas
-      : Array.isArray(item.attachments)
-        ? item.attachments
-        : [];
+    const attachments = Array.isArray(item.attachments) ? item.attachments : [];
     const transferEnvelopes = normalizeTransferEnvelopesFromRecord(item);
     return {
       role: item.role || "user",
@@ -53,7 +49,7 @@ export function toConversationMessages(sessionRecords = []) {
         !Array.isArray(item.modelResponseMetadata)
           ? item.modelResponseMetadata
           : null,
-      ...(attachmentMetas.length ? { attachmentMetas } : {}),
+      ...(attachments.length ? { attachments } : {}),
       ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
     };
   });

@@ -8,7 +8,7 @@ import {
   isSameMessageIdentity,
   isSameExplicitMessageTurn,
   isSameMessageRound,
-  shouldCollectAttachmentMetasFromMessage,
+  shouldCollectAttachmentsFromMessage,
 } from "../../../../src/composables/infra/messageIdentity";
 
 describe("messageIdentity", () => {
@@ -78,15 +78,15 @@ describe("messageIdentity", () => {
   });
 
   it("blocks assistant attachment collection when explicit turn identity is missing", () => {
-    expect(shouldCollectAttachmentMetasFromMessage(
+    expect(shouldCollectAttachmentsFromMessage(
       { role: "assistant", dialogProcessId: "dp-1" },
       { role: "assistant", dialogProcessId: "dp-1" },
     )).toBe(false);
-    expect(shouldCollectAttachmentMetasFromMessage(
+    expect(shouldCollectAttachmentsFromMessage(
       { role: "assistant", dialogProcessId: "dp-1", turnScopeId: "client-1" },
       { role: "assistant", dialogProcessId: "dp-1", turnScopeId: "client-1" },
     )).toBe(true);
-    expect(shouldCollectAttachmentMetasFromMessage(
+    expect(shouldCollectAttachmentsFromMessage(
       { role: "assistant", dialogProcessId: "dp-1" },
       { role: "tool", dialogProcessId: "dp-1" },
     )).toBe(true);

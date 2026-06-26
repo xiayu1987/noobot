@@ -8,12 +8,12 @@ import { WORKFLOW_ACTION, WORKFLOW_BOT_HOOK_POINTS, WORKFLOW_PLUGIN_DEFAULTS } f
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import {
   getWorkflowTransferPayloadFromResult,
-  mergeAttachmentMetas,
+  mergeAttachments,
   normalizeAttachmentRefs,
   normalizeWorkflowTransferPayload,
   resolveAttachmentDisplayPath,
-  resolveNodeInputAttachmentMetas,
-  resolveWorkflowAttachmentMetasFromTransferPayload,
+  resolveNodeInputAttachments,
+  resolveWorkflowAttachmentsFromTransferPayload,
   resolveWorkflowTransferFileDisplayPath,
   resolveWorkflowTransferFilesFromPayload,
 } from "./attachments.js";
@@ -35,12 +35,12 @@ import { resolveWorkflowNodeDialogProcessId } from "../dialog-process-compat.js"
 
 export function buildWorkflowInputAttachmentSystemMessage({
   ctx = {},
-  attachmentMetas = [],
+  attachments = [],
   semanticNode = {},
 } = {}) {
-  const metas = Array.isArray(attachmentMetas) ? attachmentMetas : [];
+  const normalizedAttachments = Array.isArray(attachments) ? attachments : [];
   const locale = resolveWorkflowLocaleFromContext(ctx);
-  const lines = metas
+  const lines = normalizedAttachments
     .map((item = {}, index) => {
       const label = String(
           item?.name ||
@@ -143,7 +143,7 @@ export async function buildWorkflowUpstreamAttachmentSystemMessage({
           ctx,
           pendingStep,
           upstreamNodeResults: normalizedResults,
-          attachmentMetas: [],
+          attachments: [],
         }) || "",
       ).trim();
       if (customMessage) customUpstreamMessage = customMessage;
@@ -338,7 +338,7 @@ export async function runNodeAgent({
     },
   });
   const semanticNode = resolveSemanticNodeForPendingStep({ semantic, pendingStep }) || {};
-  const nodeInputAttachmentMetas = resolveNodeInputAttachmentMetas({
+  const nodeInputAttachments = resolveNodeInputAttachments({
     ctx,
     semanticNode,
     semantic,
@@ -361,7 +361,7 @@ export async function runNodeAgent({
   };
   const inputAttachmentSystemMessage = buildWorkflowInputAttachmentSystemMessage({
     ctx,
-    attachmentMetas: nodeInputAttachmentMetas,
+    attachments: nodeInputAttachments,
     semanticNode,
   });
   const upstreamAttachmentSystemMessage = await buildWorkflowUpstreamAttachmentSystemMessage({
@@ -375,14 +375,14 @@ export async function runNodeAgent({
     upstreamAttachmentSystemMessage,
   ].filter(Boolean);
   hookPayload.workflow.upstreamNodeResults = upstreamNodeResults;
-  hookPayload.workflow.upstreamAttachmentMetas = upstreamNodeResults.reduce((acc, item = {}) => {
+  hookPayload.workflow.upstreamAttachments = upstreamNodeResults.reduce((acc, item = {}) => {
     const transferPayload = normalizeWorkflowTransferPayload({
       transferEnvelopes: Array.isArray(item?.transferEnvelopes) ? item.transferEnvelopes : [],
     });
-    const metas = resolveWorkflowAttachmentMetasFromTransferPayload(transferPayload, ctx);
-    return mergeAttachmentMetas(acc, metas.length ? metas : item?.attachmentMetas || []);
+    const attachments = resolveWorkflowAttachmentsFromTransferPayload(transferPayload, ctx);
+    return mergeAttachments(acc, attachments.length ? attachments : item?.attachments || []);
   }, []);
-  hookPayload.workflow.inputAttachmentMetas = nodeInputAttachmentMetas;
+  hookPayload.workflow.inputAttachments = nodeInputAttachments;
   hookPayload.workflow.inputAttachmentSystemMessage = inputAttachmentSystemMessage;
   hookPayload.workflow.upstreamAttachmentSystemMessage = upstreamAttachmentSystemMessage;
   let subSession = null;
@@ -437,7 +437,7 @@ export async function runNodeAgent({
           parentContext: ctx,
           abortSignal: resolveWorkflowAbortSignal(ctx),
           message: hookPayload.agentInstruction,
-          attachmentMetas: nodeInputAttachmentMetas,
+          attachments: nodeInputAttachments,
           runConfigPatch: subSessionRunConfigPatch,
           systemMessages: subSessionSystemMessages,
           eventListener:
@@ -464,7 +464,7 @@ export async function runNodeAgent({
             inputAttachmentRefs: normalizeAttachmentRefs(
               semanticNode?.attachments || semanticNode?.inputAttachments || semanticNode?.attachmentIds || [],
             ),
-            inputAttachmentMetas: nodeInputAttachmentMetas,
+            inputAttachments: nodeInputAttachments,
             upstreamWorkflowNodeResults: upstreamNodeResults,
           },
         }),

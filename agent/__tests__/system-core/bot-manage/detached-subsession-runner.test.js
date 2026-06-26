@@ -167,7 +167,7 @@ test("createDetachedSubSessionRunner prepares context, runs agent, emits runtime
       },
     },
     message: "  hello bot plugin  ",
-    attachmentMetas: [{ attachmentId: "att1" }],
+    attachments: [{ attachmentId: "att1" }],
     runConfigPatch: { patched: true, turnScopeId: "workflow-node:sub-dialog" },
     systemMessages: ["sys"],
     strategy: {
@@ -197,8 +197,8 @@ test("createDetachedSubSessionRunner prepares context, runs agent, emits runtime
   assert.equal(buildContextPayload.caller, CALLER_ROLE.BOT);
   assert.equal(buildContextPayload.parentSessionId, "parent1");
   assert.equal(buildContextPayload.dialogProcessId, "parent-dialog");
-  assert.deepEqual(buildContextPayload.inputAttachmentMetas, [{ attachmentId: "att1" }]);
-  assert.equal(buildContextPayload.attachmentMetas, undefined);
+  assert.deepEqual(buildContextPayload.inputAttachments, [{ attachmentId: "att1" }]);
+  assert.equal(buildContextPayload.attachments, undefined);
   assert.deepEqual(buildContextPayload.systemMessages, ["sys"]);
   assert.equal(buildContextPayload.userInteractionBridge, bridge);
   assert.equal(buildContextPayload.runConfig.systemRuntimePatch.childRunParentSessionId, "parent1");
@@ -310,7 +310,7 @@ test("createDetachedSubSessionRunner persists bot plugin sub-session snapshot wh
       runConfig: {},
     },
     message: "user ask",
-    attachmentMetas: [{ attachmentId: "att1" }],
+    attachments: [{ attachmentId: "att1" }],
     systemMessages: ["sys 1", "", "sys 2"],
     strategy: {
       sessionId: "sub1",
@@ -359,11 +359,11 @@ test("createDetachedSubSessionRunner persists bot plugin sub-session snapshot wh
     "user ask",
   );
   assert.deepEqual(
-    calls.persistDetachedSubSessionSnapshotPayload.sessionPayload.messages[2].inputAttachmentMetas,
+    calls.persistDetachedSubSessionSnapshotPayload.sessionPayload.messages[2].inputAttachments,
     [{ attachmentId: "att1" }],
   );
   assert.equal(
-    calls.persistDetachedSubSessionSnapshotPayload.sessionPayload.messages[2].attachmentMetas,
+    calls.persistDetachedSubSessionSnapshotPayload.sessionPayload.messages[2].attachments,
     undefined,
   );
   assert.deepEqual(calls.persistDetachedSubSessionSnapshotPayload.taskPayload.tasks, [

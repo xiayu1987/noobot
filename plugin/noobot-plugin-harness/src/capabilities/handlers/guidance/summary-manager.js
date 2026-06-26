@@ -90,25 +90,25 @@ function resolveAttachmentPath(meta = {}, ctx = {}) {
   return resolveAttachmentDisplayPath(meta, ctx);
 }
 
-export function recordSummaryDetailAttachmentMetas(ctx = {}, metas = []) {
+export function recordSummaryDetailAttachments(ctx = {}, metas = []) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return [];
   const { bucket } = holder;
   const source = Array.isArray(metas) ? metas : [];
-  if (!Array.isArray(bucket.summaryDetailAttachmentMetas)) {
-    bucket.summaryDetailAttachmentMetas = [];
+  if (!Array.isArray(bucket.summaryDetailAttachments)) {
+    bucket.summaryDetailAttachments = [];
   }
   const keyOf = (item = {}) =>
     String(item?.attachmentId || "").trim() ||
     `${String(item?.name || "").trim()}|${String(item?.path || "").trim()}`;
-  const seen = new Set(bucket.summaryDetailAttachmentMetas.map((item = {}) => keyOf(item)).filter(Boolean));
+  const seen = new Set(bucket.summaryDetailAttachments.map((item = {}) => keyOf(item)).filter(Boolean));
   for (const item of source) {
     const key = keyOf(item);
     if (key && seen.has(key)) continue;
-    bucket.summaryDetailAttachmentMetas.push(item);
+    bucket.summaryDetailAttachments.push(item);
     if (key) seen.add(key);
   }
-  bucket.summaryDetailPaths = bucket.summaryDetailAttachmentMetas
+  bucket.summaryDetailPaths = bucket.summaryDetailAttachments
     .map((item = {}) => resolveAttachmentPath(item, ctx))
     .filter(Boolean);
   return bucket.summaryDetailPaths;

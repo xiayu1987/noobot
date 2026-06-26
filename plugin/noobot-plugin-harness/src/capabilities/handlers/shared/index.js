@@ -35,7 +35,7 @@ export {
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
   mapAttachmentRecordsToMetas,
-  mergeAttachmentMetas,
+  mergeAttachments,
   relaySeparateModelOutputAsUserMessage,
 } from "./attachment-log-utils.js";
 

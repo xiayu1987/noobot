@@ -17,7 +17,7 @@ import {
   resolveConnectorConnectedPayload,
   resolveConnectorStatusPayload,
 } from "./interactionPayload";
-import { mergeAttachmentMetas } from "../infra/dialogProcessChain";
+import { mergeAttachments } from "../infra/dialogProcessChain";
 import {
   createReconnectInteractionEnvelopeCallbacks,
   tryAutoResolveReconnectInteraction,
@@ -53,7 +53,7 @@ import {
   createFinalAssistantFromReconnectReplay as createFinalAssistantFromReconnectReplayWithContext,
   findAssistantMessageByDialogProcessId as findAssistantMessageByDialogProcessIdWithContext,
   hasAssistantMessageWithContent as hasAssistantMessageWithContentWithContext,
-  mergeAssistantAttachmentMetas as mergeAssistantAttachmentMetasWithContext,
+  mergeAssistantAttachments as mergeAssistantAttachmentsWithContext,
   resolveReconnectTargetAssistantMessage as resolveReconnectTargetAssistantMessageWithContext,
 } from "./reconnectReplay/messageReplay";
 import {
@@ -116,12 +116,12 @@ export function useReconnectReplay({
     return applyAssistantFailureStateWithContext({ targetAssistantMessage, errorMessage, translate });
   }
 
-  function mergeAssistantAttachmentMetas(targetAssistantMessage, attachmentMetas = []) {
-    return mergeAssistantAttachmentMetasWithContext({
+  function mergeAssistantAttachments(targetAssistantMessage, attachments = []) {
+    return mergeAssistantAttachmentsWithContext({
       targetAssistantMessage,
-      attachmentMetas,
+      attachments,
       makeViewMessage,
-      mergeAttachmentMetas,
+      mergeAttachments,
     });
   }
 
@@ -153,7 +153,7 @@ export function useReconnectReplay({
       resolveConnectorStatusPayload,
       upsertConnectedConnectorInPanelState,
       refreshSessionConnectorsAsync,
-      onAttachmentMetas: mergeAssistantAttachmentMetas,
+      onAttachments: mergeAssistantAttachments,
       onDoneMessages: applyDoneMessagesFromReconnect,
     });
   }

@@ -49,28 +49,43 @@ test("normalizeMessageEntity ignores non-array transferEnvelopes", () => {
   assert.equal("transferEnvelopes" in normalized, false);
 });
 
-test("normalizeMessageEntity omits empty attachmentMetas", () => {
-  const withoutAttachmentMetas = normalizeMessageEntity({
+test("normalizeMessageEntity omits empty attachments", () => {
+  const withoutAttachments = normalizeMessageEntity({
     role: "user",
     content: "hello",
   });
-  const withEmptyAttachmentMetas = normalizeMessageEntity({
+  const withEmptyAttachments = normalizeMessageEntity({
     role: "user",
     content: "hello",
-    attachmentMetas: [],
+    attachments: [],
   });
 
-  assert.equal("attachmentMetas" in withoutAttachmentMetas, false);
-  assert.equal("attachmentMetas" in withEmptyAttachmentMetas, false);
+  assert.equal("attachments" in withoutAttachments, false);
+  assert.equal("attachments" in withEmptyAttachments, false);
 });
 
-test("normalizeMessageEntity preserves non-empty attachmentMetas", () => {
-  const attachmentMetas = [{ attachmentId: "att_1", filename: "a.txt" }];
+test("normalizeMessageEntity preserves non-empty attachments", () => {
+  const attachments = [{ attachmentId: "att_1", filename: "a.txt" }];
   const normalized = normalizeMessageEntity({
     role: "user",
     content: "see attachment",
-    attachmentMetas,
+    attachments,
   });
 
-  assert.deepEqual(normalized.attachmentMetas, attachmentMetas);
+  assert.deepEqual(normalized.attachments, attachments);
+  assert.equal("attachmentMetas" in normalized, false);
+});
+
+test("normalizeMessageEntity ignores legacy attachment mirror fields", () => {
+  const camelAttachments = [{ attachmentId: "att_camel", filename: "camel.txt" }];
+  const snakeAttachments = [{ attachmentId: "att_snake", filename: "snake.txt" }];
+
+  assert.equal(
+    "attachments" in normalizeMessageEntity({ role: "user", content: "camel", attachmentMetas: camelAttachments }),
+    false,
+  );
+  assert.equal(
+    "attachments" in normalizeMessageEntity({ role: "user", content: "snake", attachment_metas: snakeAttachments }),
+    false,
+  );
 });

@@ -143,7 +143,7 @@ export function markToolSignals(ctx = {}) {
       changed = true;
     }
   }
-  if (ctx?.commitType === "attachment_metas" && Array.isArray(ctx?.payload?.attachmentMetas) && ctx.payload.attachmentMetas.length) {
+  if (ctx?.commitType === "attachments" && Array.isArray(ctx?.payload?.attachments) && ctx.payload.attachments.length) {
     state.signals.parsedAttachment = true;
     changed = true;
   }

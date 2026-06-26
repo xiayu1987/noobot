@@ -8,7 +8,7 @@ import { REQUEST_HELP_TOOL_NAME } from "../../../tools/collaboration/request-hel
 import { executeToolCall } from "../execution/tool-runner.js";
 import { TASK_SUMMARY_TOOL_NAME } from "../constants/index.js";
 import { assertNotAborted } from "../utils/error-utils.js";
-import { normalizeToolResultAttachmentMetas } from "./turn-executor.js";
+import { normalizeToolResultAttachments } from "./turn-executor.js";
 import { FINAL_ANSWER_TOOL_NAME } from "../../../tools/collaboration/final-answer-tool.js";
 import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
@@ -96,10 +96,10 @@ export async function processToolResults({
   for (const toolCallResult of toolCallResults) {
     const call = toolCallResult?.call || {};
     const toolResultText = String(toolCallResult?.toolResultText || "");
-    const extractedAttachmentMetas = normalizeToolResultAttachmentMetas(toolCallResult, call);
+    const extractedAttachments = normalizeToolResultAttachments(toolCallResult, call);
 
     await stateCommitter.pushToolResult({ call, toolResultText });
-    await stateCommitter.appendAttachmentMetas(extractedAttachmentMetas);
+    await stateCommitter.appendAttachments(extractedAttachments);
     updateToolFailureState({ modelState, loopState, toolCallResult });
   }
 

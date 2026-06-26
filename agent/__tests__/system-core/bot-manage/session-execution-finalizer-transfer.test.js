@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { SessionExecutionFinalizer } from "../../../src/system-core/bot-manage/execution/finalizer.js";
 
-test("SessionExecutionFinalizer promotes semantic-transfer attachment metas as transfer envelopes without mirror", async () => {
+test("SessionExecutionFinalizer promotes semantic-transfer attachments as transfer envelopes without mirror", async () => {
   const appendedMessages = [];
   const finalizer = new SessionExecutionFinalizer({
     session: {
@@ -38,7 +38,7 @@ test("SessionExecutionFinalizer promotes semantic-transfer attachment metas as t
         {
           role: "tool",
           type: "tool_result",
-          attachmentMetas: [
+          attachments: [
             {
               attachmentId: "att-generated",
               attachmentSource: "model",
@@ -58,6 +58,7 @@ test("SessionExecutionFinalizer promotes semantic-transfer attachment metas as t
 
   const finalAssistant = result.messages.find((item = {}) => item.role === "assistant") || {};
   assert.equal(finalAssistant.attachmentMetas, undefined);
+  assert.equal(finalAssistant.attachments, undefined);
   assert.equal("transferEnvelopes" in finalAssistant, true);
   assert.equal(Array.isArray(finalAssistant.transferEnvelopes), true);
   assert.equal(
@@ -102,7 +103,7 @@ test("SessionExecutionFinalizer does not promote ordinary generated attachments 
         {
           role: "tool",
           type: "tool_result",
-          attachmentMetas: [
+          attachments: [
             {
               attachmentId: "att-ordinary",
               attachmentSource: "model",
@@ -123,5 +124,6 @@ test("SessionExecutionFinalizer does not promote ordinary generated attachments 
   const finalAssistant = result.messages.find((item = {}) => item.role === "assistant") || {};
   assert.equal("transferEnvelopes" in finalAssistant, false);
   assert.equal(finalAssistant.attachmentMetas, undefined);
+  assert.equal(finalAssistant.attachments, undefined);
   assert.equal(appendedMessages.find((item = {}) => item.role === "assistant")?.transferEnvelopes, undefined);
 });

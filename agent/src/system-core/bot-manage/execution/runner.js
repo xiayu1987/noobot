@@ -92,13 +92,13 @@ export class SessionExecutionRunner {
       safePrepared?.runtimeAgentContext && typeof safePrepared.runtimeAgentContext === "object"
         ? safePrepared.runtimeAgentContext
         : agentContext;
-    const userMessageAttachmentMetas = Array.isArray(safePrepared?.userMessageAttachmentMetas)
-      ? safePrepared.userMessageAttachmentMetas
+    const userMessageAttachments = Array.isArray(safePrepared?.userMessageAttachments)
+      ? safePrepared.userMessageAttachments
       : [];
     return {
       agentContext,
       runtimeAgentContext,
-      userMessageAttachmentMetas,
+      userMessageAttachments,
     };
   }
 
@@ -111,11 +111,11 @@ export class SessionExecutionRunner {
     const toolRegistry = Array.isArray(agentContext?.payload?.tools?.registry)
       ? agentContext.payload.tools.registry
       : [];
-    const inputAttachmentMetas = Array.isArray(runtime?.inputAttachmentMetas)
-      ? runtime.inputAttachmentMetas
+    const inputAttachments = Array.isArray(runtime?.inputAttachments)
+      ? runtime.inputAttachments
       : [];
-    const attachmentMetas = Array.isArray(runtime?.attachmentMetas)
-      ? runtime.attachmentMetas
+    const runtimeAttachments = Array.isArray(runtime?.attachments)
+      ? runtime.attachments
       : [];
     return {
       userId: String(systemRuntime?.userId || "").trim(),
@@ -128,7 +128,7 @@ export class SessionExecutionRunner {
       runtimeModel: String(runtime?.runtimeModel || "").trim(),
       messageCount: messagesHistory.length,
       toolCount: toolRegistry.length,
-      attachmentCount: inputAttachmentMetas.length + attachmentMetas.length,
+      attachmentCount: inputAttachments.length + runtimeAttachments.length,
       hasAbortSignal: Boolean(runtime?.abortSignal),
     };
   }
@@ -270,7 +270,7 @@ export class SessionExecutionRunner {
         caller,
         parentSessionId,
         userConfig,
-        inputAttachmentMetas: attachments,
+        inputAttachments: attachments,
         systemMessages: Array.isArray(systemMessages) ? systemMessages : [],
         eventListener: runtimeEventListener,
         dialogProcessId,
@@ -295,7 +295,7 @@ export class SessionExecutionRunner {
         buildContextPayload,
         abortSignal,
       });
-      const { agentContext, runtimeAgentContext, userMessageAttachmentMetas } =
+      const { agentContext, runtimeAgentContext, userMessageAttachments } =
         this._normalizePreparedAgentTurnExecution(preparedAgentTurnExecution);
       const agentContextSummary = this._buildAgentContextSummary(runtimeAgentContext);
       const dispatchContextMessages = Array.isArray(runtimeAgentContext?.payload?.messages?.history)
@@ -311,7 +311,7 @@ export class SessionExecutionRunner {
           content: normalizedMessage,
           type: MESSAGE_TYPE.MESSAGE,
           frontendUserMessage: true,
-          attachmentMetas: userMessageAttachmentMetas,
+          attachments: userMessageAttachments,
           dialogProcessId,
           parentDialogProcessId,
           turnScopeId: resolvedTurnScopeId,
@@ -332,9 +332,9 @@ export class SessionExecutionRunner {
         runtimeAgentContext,
         abortSignal,
         messages: dispatchContextMessages,
-        inputAttachmentMetas: userMessageAttachmentMetas,
-        attachmentMetas: userMessageAttachmentMetas,
-        userMessageAttachmentMetas,
+        inputAttachments: userMessageAttachments,
+        attachments: userMessageAttachments,
+        userMessageAttachments,
         eventListener: runtimeEventListener,
       };
       const beforeAgentDispatchResult = await runBotRuntimeHook({

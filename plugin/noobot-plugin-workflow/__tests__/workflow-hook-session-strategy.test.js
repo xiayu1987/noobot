@@ -366,13 +366,13 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   assert.equal(agentResult.workflow.nodeSessions[0]?.sessionId, "wf-node-session-1");
   assert.equal(agentResult.workflow.nodeSessions[0]?.stepStatus, "success");
   assert.equal(agentResult.workflow?.execution?.nodeAgentRuns?.[0]?.stepStatus, "success");
-  assert.equal(agentResult.workflow?.attachmentMetas, undefined);
-  assert.equal(agentResult.workflow.nodeSessions[0]?.attachmentMetas, undefined);
+  assert.equal(agentResult.workflow?.attachments, undefined);
+  assert.equal(agentResult.workflow.nodeSessions[0]?.attachments, undefined);
 
   const workflowTurnMessage = workflowTurn(agentResult);
   assert.ok(workflowTurnMessage);
   assert.equal(workflowTurnMessage?.type, "workflow");
-  assert.equal(workflowTurnMessage?.attachmentMetas, undefined);
+  assert.equal(workflowTurnMessage?.attachments, undefined);
   assert.match(
     String(workflowTurnMessage?.content || ""),
     /\/injected\/attachments\/s1\/workflow-node-1-result\.md/,
@@ -1206,7 +1206,7 @@ test("workflow hook passes planned user attachments to node sub-session", async 
     sessionId: "s-input-att",
     dialogProcessId: "d-input-att",
     userMessage: "请基于附件规划并执行",
-    attachmentMetas: [
+    attachments: [
       {
         attachmentId: "att-user-1",
         name: "合同.pdf",

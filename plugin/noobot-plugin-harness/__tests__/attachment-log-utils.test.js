@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mergeAttachmentMetas } from "../src/capabilities/handlers/shared/attachment-log-utils.js";
+import { mergeAttachments } from "../src/capabilities/handlers/shared/attachment-log-utils.js";
 
-test("mergeAttachmentMetas promotes duplicate attachment metadata to plugin ownership", () => {
-  const merged = mergeAttachmentMetas(
+test("mergeAttachments promotes duplicate attachment metadata to plugin ownership", () => {
+  const merged = mergeAttachments(
     [
       {
         attachmentId: "report-1",
