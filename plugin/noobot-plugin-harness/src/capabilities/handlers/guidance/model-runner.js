@@ -341,10 +341,12 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
   const allowAnalysis = requestedAction === "auto" || requestedAction === GUIDANCE_DECISION.action.analysis;
 
   let purpose = "";
+  let workflowPurpose = "";
   let prompt = "";
   let reason = "";
   if (allowSummary && state.pending.summary === true) {
     purpose = "summary";
+    workflowPurpose = "summary";
     // Snapshot current message boundary for summary marking. In separate_model
     // mode, marking happens later (after external model returns), so without
     // this checkpoint newly appended turns may be summarized by mistake.
@@ -362,9 +364,10 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
       includeWorkflowPolicy: false,
     });
     setPendingStateWithMeta(state, "summary", false);
-    state.counters.llmTurns = 0;
+    state.counters.summaryTurns = 0;
   } else if (allowGuidance && state.pending.guidance) {
     purpose = "guidance";
+    workflowPurpose = "guidance";
     reason = state.pending.guidance;
     prompt = buildGuidancePromptContent(locale, reason, {
       programmingMode,
@@ -376,7 +379,8 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     state.counters.consecutiveToolFailures = 0;
     state.counters.totalToolFailures = 0;
   } else if (allowAnalysis && state.pending.analysis === true) {
-    purpose = "analysis";
+    purpose = "guidance";
+    workflowPurpose = "analysis";
     prompt = buildGuidanceAnalysisPromptText({
       locale,
       marker: getGuidanceAnalysisMarker(locale),
@@ -416,15 +420,15 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     dynamicPolicyPrompt,
   });
   const responsibilityPrompt =
-    purpose === "summary" || purpose === "analysis"
-      ? buildWorkflowResponsibilityConstraintUserPrompt(locale, purpose, {
+    workflowPurpose === "summary" || workflowPurpose === "analysis"
+      ? buildWorkflowResponsibilityConstraintUserPrompt(locale, workflowPurpose, {
           programmingMode,
           textMode,
           dynamicPolicyPrompt,
           includeWorkflowPolicy: false,
         })
       : "";
-  const invokerMessages = purpose === "analysis"
+  const invokerMessages = workflowPurpose === "analysis"
     ? buildCapabilityModelMessages({
         locale,
         agentMessages: modelMessagesWithChecklist,
@@ -447,6 +451,8 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
       invoker,
       invokePayload: {
         purpose,
+        harnessFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
+        chain: workflowPurpose === "analysis" ? "auxiliary" : undefined,
         promptVersion: PROMPT_ENVELOPE.VERSION,
         envelopeType: PROMPT_ENVELOPE.TYPE,
         domain: CAPABILITY_DOMAIN.GUIDANCE,
@@ -462,12 +468,16 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
       },
       maxReasoningRetries: 1,
       purpose,
+      harnessFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
+      chain: workflowPurpose === "analysis" ? "auxiliary" : undefined,
       domain: CAPABILITY_DOMAIN.GUIDANCE,
       appendCapabilityLog,
       appendModelTrace: async (retryResponse = null) => {
         await appendCapabilityModelTraceLog(ctx, meta, {
           domain: CAPABILITY_DOMAIN.GUIDANCE,
           purpose,
+          harnessFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
+          chain: workflowPurpose === "analysis" ? "auxiliary" : undefined,
           response: retryResponse,
         });
       },
@@ -522,7 +532,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
       formatOperationDirectoryForRelay(resolveOperationDirectoryContext(ctx)),
     ].filter(Boolean).join("\n\n");
     relayAttachments = summaryDetailAttachments;
-  } else if (purpose !== "analysis") {
+  } else if (workflowPurpose !== "analysis") {
     relayAttachments = await saveCapabilityOutputAsTransferArtifacts(ctx, {
       purpose,
       content: responseText,
@@ -535,6 +545,8 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
   }
   bucket.guidanceOutputs.push({
     purpose,
+    harnessFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
+    chain: workflowPurpose === "analysis" ? "auxiliary" : undefined,
     reason: reason || undefined,
     content: responseText,
     timestamp: new Date().toISOString(),
@@ -542,6 +554,8 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
   relaySeparateModelOutputAsUserMessage(ctx, {
     locale,
     purpose,
+    harnessFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
+    chain: workflowPurpose === "analysis" ? "auxiliary" : undefined,
     content: relayText,
     transferPayload: getTransferPayloadFromAttachments(relayAttachments),
   });
@@ -564,9 +578,9 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.GUIDANCE,
     event:
-      purpose === "summary"
+      workflowPurpose === "summary"
         ? GUIDANCE_EVENTS.summaryGeneratedBySeparateModel
-        : purpose === "analysis"
+        : workflowPurpose === "analysis"
           ? GUIDANCE_EVENTS.analysisGeneratedBySeparateModel
           : GUIDANCE_EVENTS.guidanceGeneratedBySeparateModel,
     detail: { reason: reason || undefined },

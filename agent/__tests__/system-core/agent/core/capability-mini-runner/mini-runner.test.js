@@ -148,6 +148,83 @@ test("mini-runner preserves standalone system previous-summary context", async (
   assert.equal(seenMessages[previousSummaryIndex]?.role, "system");
 });
 
+test("mini-runner sends harness guidance analysis response and thinking log through injected hook client event channel", async () => {
+  const emitted = [];
+  const invoker = createAgentCapabilityModelInvoker({
+    enableToolBinding: false,
+    createChatModelFn: () => ({
+      async invoke() {
+        return { content: "guidance output" };
+      },
+    }),
+  });
+
+  await invoker({
+    purpose: "guidance",
+    ctx: {
+      sessionId: "s1",
+      dialogProcessId: "dp1",
+      emitHookClientEvent(event, data) {
+        emitted.push({ event, data });
+      },
+      agentContext: { payload: { tools: { registry: [] } } },
+    },
+  });
+
+  assert.equal(emitted.length, 2);
+  const harnessEvent = emitted.find((item) => item.event === "harness_capability_response");
+  const thinkingEvent = emitted.find((item) => item.event === "thinking");
+  assert.ok(harnessEvent);
+  assert.ok(thinkingEvent);
+  assert.equal(harnessEvent.data.purpose, "guidance");
+  assert.equal(harnessEvent.data.harnessFlow, "analysis");
+  assert.equal(harnessEvent.data.chain, "auxiliary");
+  assert.equal(harnessEvent.data.output, "guidance output");
+  assert.equal(harnessEvent.data.sessionId, "s1");
+  assert.equal(harnessEvent.data.dialogProcessId, "dp1");
+  assert.equal(thinkingEvent.data.purpose, "guidance");
+  assert.equal(thinkingEvent.data.harnessFlow, "analysis");
+  assert.equal(thinkingEvent.data.chain, "auxiliary");
+  assert.equal(thinkingEvent.data.type, "guidance_analysis");
+  assert.equal(thinkingEvent.data.event, "guidance_analysis");
+  assert.equal(thinkingEvent.data.output, "guidance output");
+  assert.equal(thinkingEvent.data.dialogProcessId, "dp1");
+});
+
+test("mini-runner does not emit harness capability response for non-guidance analysis purposes", async () => {
+  const emitted = [];
+  const invoker = createAgentCapabilityModelInvoker({
+    enableToolBinding: false,
+    createChatModelFn: () => ({
+      async invoke() {
+        return { content: "planning output" };
+      },
+    }),
+  });
+
+  await invoker({
+    purpose: "planning",
+    ctx: {
+      emitHookClientEvent(event, data) {
+        emitted.push({ event, data });
+      },
+      agentContext: { payload: { tools: { registry: [] } } },
+    },
+  });
+
+  await invoker({
+    purpose: "acceptance",
+    ctx: {
+      emitHookClientEvent(event, data) {
+        emitted.push({ event, data });
+      },
+      agentContext: { payload: { tools: { registry: [] } } },
+    },
+  });
+
+  assert.equal(emitted.length, 0);
+});
+
 test("mini-runner treats * as all tools in current registry", async () => {
   const first = {
     content: "need tools",

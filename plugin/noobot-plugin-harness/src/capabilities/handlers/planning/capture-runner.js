@@ -369,13 +369,13 @@ export async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
       response = await invokeWithReasoningRetry({
         invoker,
         invokePayload: {
-          purpose: "planning",
+          purpose: "guidance",
           promptVersion: PROMPT_ENVELOPE.VERSION,
           envelopeType: PROMPT_ENVELOPE.TYPE,
-          domain: CAPABILITY_DOMAIN.PLANNING,
+          domain: CAPABILITY_DOMAIN.GUIDANCE,
           model: resolveCapabilityModelName(meta, {
-            purpose: "planning",
-            domain: CAPABILITY_DOMAIN.PLANNING,
+            purpose: "guidance",
+            domain: CAPABILITY_DOMAIN.GUIDANCE,
           }),
           locale,
           prompt: "",
@@ -384,13 +384,13 @@ export async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
           toolAllowlist: resolvePlanningToolAllowlist(meta),
         },
         maxReasoningRetries: 1,
-        purpose: "planning",
-        domain: CAPABILITY_DOMAIN.PLANNING,
+        purpose: "guidance",
+        domain: CAPABILITY_DOMAIN.GUIDANCE,
         appendCapabilityLog,
         appendModelTrace: async (retryResponse = null) => {
           await appendCapabilityModelTraceLog(ctx, meta, {
-            domain: CAPABILITY_DOMAIN.PLANNING,
-            purpose: "planning",
+            domain: CAPABILITY_DOMAIN.GUIDANCE,
+            purpose: "guidance",
             response: retryResponse,
           });
         },

@@ -344,8 +344,6 @@ const I18N_TOOL_COPY = Object.freeze({
     guidanceReasonIdle: "无待处理 guidance 动作",
     guidanceBlockedPhaseAcceptanceDeferred: "阶段验收被 guidance 优先级规则延后",
     planningReasonIdle: "规划触发器空闲",
-    planningReasonSummaryThresholdTurns: "达到按轮次触发的小结阈值",
-    planningReasonSummaryThresholdChars: "达到按字符数触发的小结阈值",
     planningReasonPlanUpdateThreshold: "达到计划修正触发阈值",
     planningReasonPhaseAcceptanceThreshold: "达到阶段验收触发阈值",
     planningReasonAfterLlmCapture: "LLM 返回后执行规划结果捕获",
@@ -395,8 +393,6 @@ const I18N_TOOL_COPY = Object.freeze({
     guidanceBlockedPhaseAcceptanceDeferred:
       "Phase acceptance is deferred by guidance priority order",
     planningReasonIdle: "Planning triggers are idle",
-    planningReasonSummaryThresholdTurns: "Reached turn-based summary threshold",
-    planningReasonSummaryThresholdChars: "Reached char-based summary threshold",
     planningReasonPlanUpdateThreshold: "Reached plan-update trigger threshold",
     planningReasonPhaseAcceptanceThreshold: "Reached phase-acceptance trigger threshold",
     planningReasonAfterLlmCapture: "Capture planning result after LLM response",

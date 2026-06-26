@@ -11,7 +11,14 @@ describe("buildChatPayload model preferences", () => {
       botScenario: "programming",
       selectedModel: "main-programming",
       pluginModelConfig: {
-        harness: { stepModels: { planning: "harness-programming" } },
+        harness: {
+          stepModels: { planning: "harness-programming" },
+          capabilityProfile: {
+            planning: { enabled: false },
+            guidance: { enabled: false },
+            acceptance: { enabled: false },
+          },
+        },
         workflow: { semanticModel: "workflow-programming" },
       },
       locale: "zh-CN",
@@ -22,7 +29,14 @@ describe("buildChatPayload model preferences", () => {
       scenario: "programming",
       selectedModel: "main-programming",
       pluginModelConfig: {
-        harness: { stepModels: { planning: "harness-programming" } },
+        harness: {
+          stepModels: { planning: "harness-programming" },
+          capabilityProfile: {
+            planning: { enabled: false },
+            guidance: { enabled: false },
+            acceptance: { enabled: false },
+          },
+        },
         workflow: { semanticModel: "workflow-programming" },
       },
       selectedPlugins: ["harness", "workflow"],

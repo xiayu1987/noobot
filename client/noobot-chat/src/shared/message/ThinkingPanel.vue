@@ -55,6 +55,7 @@ const EXECUTION_LOG_DISPLAY_LIMIT = 10;
 
 function getRealtimeLogs(messageItem = {}) {
   return getAllRealtimeLogs(messageItem)
+    .filter((logItem) => !isHarnessCapabilityResponseLog(logItem))
     .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
     .filter(Boolean)
     .slice(-EXECUTION_LOG_DISPLAY_LIMIT);
@@ -79,15 +80,76 @@ function getExecutionLogs(messageItem = {}) {
   return getCompletedToolLogsForMessage(messageItem).slice(-EXECUTION_LOG_DISPLAY_LIMIT);
 }
 
+function getAllCompletedLogs(messageItem = {}) {
+  if (isAssistantWithoutTurnScope(messageItem)) return [];
+  const completedToolLogs = Array.isArray(messageItem?.processCompletedToolLogs)
+    ? messageItem.processCompletedToolLogs
+    : Array.isArray(messageItem?.completedToolLogs)
+    ? messageItem.completedToolLogs
+    : [];
+  return completedToolLogs.length > 0
+    ? completedToolLogs
+    : buildFallbackCompletedToolLogs(messageItem);
+}
+
+function normalizeLogString(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isHarnessAnalysisResponseLog(logItem = {}) {
+  const eventName = normalizeLogString(logItem?.event || logItem?.type);
+  const purpose = normalizeLogString(logItem?.purpose || logItem?.data?.purpose);
+  const harnessFlow = normalizeLogString(logItem?.harnessFlow || logItem?.data?.harnessFlow);
+  const chain = normalizeLogString(logItem?.chain || logItem?.data?.chain || logItem?.executionScope || logItem?.data?.executionScope);
+  return (
+    eventName === "harness_capability_response" &&
+    purpose === "guidance" &&
+    harnessFlow === "analysis" &&
+    chain === "auxiliary"
+  );
+}
+
+function isHarnessCapabilityResponseLog(logItem = {}) {
+  const eventName = normalizeLogString(logItem?.event || logItem?.type);
+  return eventName === "harness_capability_response";
+}
+
+function getHarnessAnalysisLogOutput(logItem = {}) {
+  const output = String(logItem?.output ?? logItem?.data?.output ?? "").trim();
+  if (output) return output;
+  const text = String(logItem?.text || "").trim();
+  return text.replace(/^Harness\s+模型返回\s*\/\s*[^\n]+\n?/i, "").trim();
+}
+
+function getLatestHarnessAnalysisLog(messageItem = {}) {
+  const logs = [
+    ...getAllRealtimeLogs(messageItem),
+    ...getAllCompletedLogs(messageItem),
+  ].filter(isHarnessAnalysisResponseLog);
+  for (let index = logs.length - 1; index >= 0; index -= 1) {
+    const output = getHarnessAnalysisLogOutput(logs[index]);
+    if (output) return { ...logs[index], output };
+  }
+  return null;
+}
+
 function getExecutionLogCount(messageItem = {}) {
   const explicitTotal = toValidExecutionLogTotal(
     messageItem.processExecutionLogTotal
       ?? messageItem.executionLogTotal
       ?? messageItem.execution_log_total,
   );
-  if (explicitTotal !== null) return explicitTotal;
+  if (explicitTotal !== null) {
+    const harnessCapabilityLogCount = [
+      ...getAllRealtimeLogs(messageItem),
+      ...getAllCompletedLogs(messageItem),
+    ].filter(isHarnessCapabilityResponseLog).length;
+    return Math.max(0, explicitTotal - harnessCapabilityLogCount);
+  }
 
-  const realtimeLogs = getAllRealtimeLogs(messageItem);
+  const realtimeLogs = getAllRealtimeLogs(messageItem).filter(
+    (logItem) => !isHarnessCapabilityResponseLog(logItem),
+  );
   if (realtimeLogs.length > 0) return realtimeLogs.length;
 
   const completedToolLogs = getCompletedToolLogsForMessage(messageItem);
@@ -259,16 +321,10 @@ function buildFallbackCompletedToolLogs(messageItem = {}) {
 }
 
 function getCompletedToolLogsForMessage(messageItem = {}) {
-  if (isAssistantWithoutTurnScope(messageItem)) return [];
-  const completedToolLogs = Array.isArray(messageItem?.processCompletedToolLogs)
-    ? messageItem.processCompletedToolLogs
-    : Array.isArray(messageItem?.completedToolLogs)
-    ? messageItem.completedToolLogs
-    : [];
-  const sourceToolLogs = completedToolLogs.length > 0
-    ? completedToolLogs
-    : buildFallbackCompletedToolLogs(messageItem);
-  return sourceToolLogs.map((logItem) => sanitizeExecutionLogForDisplay(logItem)).filter(Boolean);
+  return getAllCompletedLogs(messageItem)
+    .filter((logItem) => !isHarnessCapabilityResponseLog(logItem))
+    .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
+    .filter(Boolean);
 }
 
 function getInjectedMessageCount() {
@@ -540,6 +596,13 @@ onBeforeUnmount(() => {
           </BaseSectionHeader>
         </template>
         <BaseTabPanelBody>
+              <div v-if="getLatestHarnessAnalysisLog(messageItem)" class="thinking-analysis-block">
+                <BaseMetaLabel class="thinking-analysis-title" text="分析流程" />
+                <BaseNoteBlock
+                  title="模型返回"
+                  :content="getLatestHarnessAnalysisLog(messageItem).output"
+                />
+              </div>
               <div
                 v-for="(logItem, logIndex) in getExecutionLogs(messageItem)"
                 :key="`realtime-${logIndex}`"
@@ -668,6 +731,20 @@ onBeforeUnmount(() => {
   min-height: 20px;
   line-height: 1.2;
   border-radius: 999px;
+}
+
+.thinking-analysis-block {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--noobot-divider);
+}
+
+.thinking-analysis-title {
+  margin-bottom: 8px;
+}
+
+.thinking-analysis-block :deep(.base-note-block__content) {
+  font-size: var(--noobot-msg-caption-font-size);
 }
 
 .thinking-execution-actions {

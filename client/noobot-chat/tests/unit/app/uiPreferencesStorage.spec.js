@@ -212,6 +212,40 @@ describe("ui preferences storage", () => {
     });
   });
 
+  it("preserves harness capability enabled false through normalization and scenario storage", () => {
+    persistPluginModelConfigPreferenceByScenario(
+      {
+        harness: {
+          stepModels: { planning: "harness-plan-a" },
+          capabilityProfile: {
+            planning: { enabled: false },
+            guidance: { enabled: false },
+            acceptance: { enabled: false },
+          },
+        },
+      },
+      "programming",
+    );
+
+    expect(readPluginModelConfigPreference("programming")).toEqual({
+      harness: {
+        stepModels: { planning: "harness-plan-a" },
+        capabilityProfile: {
+          planning: { enabled: false },
+          guidance: { enabled: false },
+          acceptance: { enabled: false },
+        },
+      },
+    });
+
+    persistBotScenarioPreference("programming");
+    expect(loadUiPreferences().pluginModelConfig.harness.capabilityProfile).toEqual({
+      planning: { enabled: false },
+      guidance: { enabled: false },
+      acceptance: { enabled: false },
+    });
+  });
+
   it("falls back to legacy global pluginModelConfig when scenario preference is absent", () => {
     persistPluginModelConfigPreference({
       harness: { stepModels: { planning: "legacy-harness" } },

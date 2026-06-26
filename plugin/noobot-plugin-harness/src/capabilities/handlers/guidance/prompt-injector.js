@@ -131,7 +131,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", 
       avoidBreakToolCallContinuity: true,
     });
     setPendingStateWithMeta(state, "summary", false);
-    state.counters.llmTurns = 0;
+    state.counters.summaryTurns = 0;
     state.flags.guidanceSummaryMarkPending = true;
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.GUIDANCE,

@@ -31,6 +31,9 @@ export function buildHarnessInjectedMessage(
     dialogProcessId = "",
     injectedMessageType = "",
     injectionType = "",
+    purpose = "",
+    harnessFlow = "",
+    chain = "",
     promptInjectionId = "",
     messageBlockPolicy = null,
     preserveSystemMessage = false,
@@ -48,6 +51,18 @@ export function buildHarnessInjectedMessage(
   ).trim();
   if (normalizedInjectedMessageType) {
     message[HARNESS_INJECTED_MESSAGE_TYPE_FIELD] = normalizedInjectedMessageType;
+  }
+  const normalizedPurpose = String(purpose || "").trim();
+  if (normalizedPurpose) {
+    message.purpose = normalizedPurpose;
+  }
+  const normalizedHarnessFlow = String(harnessFlow || "").trim();
+  if (normalizedHarnessFlow) {
+    message.harnessFlow = normalizedHarnessFlow;
+  }
+  const normalizedChain = String(chain || "").trim();
+  if (normalizedChain) {
+    message.chain = normalizedChain;
   }
   const normalizedPromptInjectionId = String(promptInjectionId || "").trim();
   if (normalizedPromptInjectionId) {

@@ -54,6 +54,45 @@ function onHarnessStepModelChange(stepKey = "", value = "") {
     },
   });
 }
+
+function isHarnessCapabilityEnabled(capabilityKey = "") {
+  const key = String(capabilityKey || "").trim();
+  if (!key) return true;
+  return props.pluginModelConfig?.harness?.capabilityProfile?.[key]?.enabled !== false;
+}
+
+function onHarnessCapabilityEnabledChange(capabilityKey = "", value = true) {
+  const key = String(capabilityKey || "").trim();
+  if (!key || typeof props.updatePluginModelConfig !== "function") return;
+  const enabled = value !== false;
+  const currentConfig = props.pluginModelConfig && typeof props.pluginModelConfig === "object"
+    ? props.pluginModelConfig
+    : {};
+  const currentHarness = currentConfig.harness && typeof currentConfig.harness === "object"
+    ? currentConfig.harness
+    : {};
+  const currentProfile = currentHarness.capabilityProfile && typeof currentHarness.capabilityProfile === "object"
+    ? currentHarness.capabilityProfile
+    : {};
+  const nextProfile = { ...currentProfile };
+  const nextCapability = nextProfile[key] && typeof nextProfile[key] === "object"
+    ? { ...nextProfile[key] }
+    : {};
+  if (enabled) {
+    if (Object.prototype.hasOwnProperty.call(nextCapability, "enabled")) delete nextCapability.enabled;
+  } else {
+    nextCapability.enabled = false;
+  }
+  if (Object.keys(nextCapability).length) nextProfile[key] = nextCapability;
+  else delete nextProfile[key];
+  props.updatePluginModelConfig({
+    ...currentConfig,
+    harness: {
+      ...currentHarness,
+      capabilityProfile: nextProfile,
+    },
+  });
+}
 </script>
 
 <template>
@@ -69,6 +108,16 @@ function onHarnessStepModelChange(stepKey = "", value = "") {
         class="plugin-model-field"
       >
         <span class="plugin-model-label">{{ stepItem.label }}</span>
+        <el-radio-group
+          v-if="stepItem.key !== 'default'"
+          :model-value="isHarnessCapabilityEnabled(stepItem.key)"
+          size="small"
+          class="plugin-capability-toggle"
+          @update:model-value="onHarnessCapabilityEnabledChange(stepItem.key, $event)"
+        >
+          <el-radio-button :value="true">{{ translate("modelExtension.enabled") }}</el-radio-button>
+          <el-radio-button :value="false">{{ translate("modelExtension.disabled") }}</el-radio-button>
+        </el-radio-group>
         <el-select
           :model-value="getHarnessStepModel(stepItem.key)"
           size="small"
@@ -156,6 +205,18 @@ function onHarnessStepModelChange(stepKey = "", value = "") {
 .model-select {
   width: 100%;
   min-width: 0;
+}
+
+.plugin-capability-toggle {
+  width: 100%;
+}
+
+.plugin-capability-toggle :deep(.el-radio-button) {
+  flex: 1 1 0;
+}
+
+.plugin-capability-toggle :deep(.el-radio-button__inner) {
+  width: 100%;
 }
 
 .composer-select :deep(.el-select__wrapper) {

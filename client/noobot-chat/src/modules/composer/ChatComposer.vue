@@ -335,6 +335,9 @@ defineExpose({
 }
 
 .more-actions-row {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;

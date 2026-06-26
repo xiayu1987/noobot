@@ -134,6 +134,10 @@ export class RunConfigPluginPreparer {
         ...scopedStepModels,
       };
     }
+    const scopedCapabilityProfile = normalizePluginCapabilityProfile(pluginScopedModelConfig?.capabilityProfile);
+    if (Object.keys(scopedCapabilityProfile).length) {
+      next.capabilityProfile = mergeCapabilityProfile(next?.capabilityProfile, scopedCapabilityProfile);
+    }
     next.resolveModelMessages = this.createAgentPluginResolveModelMessages({
       agentPluginOptions: next,
     });
@@ -506,4 +510,40 @@ function normalizePluginStepModels(stepModels = {}) {
       .map(([key, value]) => [String(key || "").trim(), normalizePluginModelName(value)])
       .filter(([key, value]) => key && value),
   );
+}
+
+function normalizePluginCapabilityProfile(capabilityProfile = {}) {
+  const source = capabilityProfile && typeof capabilityProfile === "object" && !Array.isArray(capabilityProfile)
+    ? capabilityProfile
+    : {};
+  return Object.fromEntries(
+    Object.entries(source)
+      .map(([key, value]) => {
+        const capabilityKey = String(key || "").trim();
+        if (!capabilityKey || !value || typeof value !== "object" || Array.isArray(value)) {
+          return ["", null];
+        }
+        const nextValue = { ...value };
+        if (Object.prototype.hasOwnProperty.call(nextValue, "enabled")) {
+          nextValue.enabled = nextValue.enabled !== false;
+        }
+        return [capabilityKey, nextValue];
+      })
+      .filter(([key, value]) => key && value && typeof value === "object" && Object.keys(value).length),
+  );
+}
+
+function mergeCapabilityProfile(baseProfile = {}, scopedProfile = {}) {
+  const nextProfile = {
+    ...(baseProfile && typeof baseProfile === "object" && !Array.isArray(baseProfile) ? baseProfile : {}),
+  };
+  for (const [capabilityKey, capabilityConfig] of Object.entries(scopedProfile)) {
+    nextProfile[capabilityKey] = {
+      ...(nextProfile[capabilityKey] && typeof nextProfile[capabilityKey] === "object" && !Array.isArray(nextProfile[capabilityKey])
+        ? nextProfile[capabilityKey]
+        : {}),
+      ...capabilityConfig,
+    };
+  }
+  return nextProfile;
 }
