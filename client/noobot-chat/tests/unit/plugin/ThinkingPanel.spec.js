@@ -256,7 +256,7 @@ describe("ThinkingPanel", () => {
           type: "guidance_analysis",
           rawEvent: "guidance_analysis_response",
           purpose: "guidance",
-          harnessFlow: "analysis",
+          pluginFlow: "analysis",
           chain: "auxiliary",
           output: "old analysis\nline two",
           text: "old analysis\nline two",
@@ -267,7 +267,7 @@ describe("ThinkingPanel", () => {
           type: "guidance_analysis",
           rawEvent: "guidance_analysis_response",
           purpose: "guidance",
-          harnessFlow: "analysis",
+          pluginFlow: "analysis",
           chain: "auxiliary",
           output: "latest analysis\nkeep newline",
           text: "latest analysis\nkeep newline",
@@ -295,7 +295,7 @@ describe("ThinkingPanel", () => {
           type: "guidance_analysis",
           rawEvent: "guidance_analysis_response",
           purpose: "summary",
-          harnessFlow: "analysis",
+          pluginFlow: "analysis",
           chain: "auxiliary",
           output: "summary analysis should stay hidden",
           text: "summary analysis should stay hidden",
@@ -709,49 +709,49 @@ describe("ThinkingPanel", () => {
     expect(wrapper.text()).toContain("current_tool");
   });
 
-  it("does not render legacy harness capability response as guidance analysis", () => {
+  it("does not render plugin capability responses as guidance analysis", () => {
     const wrapper = mountThinkingPanel({
       role: "assistant",
       pending: true,
-      turnScopeId: "client-turn:harness-analysis",
+      turnScopeId: "client-turn:plugin-analysis",
       processExecutionLogTotal: 5,
       processRealtimeLogs: [
         { event: "tool_call", type: "tool_call", text: "tool log" },
         {
-          event: "harness_capability_response",
-          type: "harness_capability_response",
+          event: "plugin_capability_response",
+          type: "plugin_capability_response",
           purpose: "planning",
-          text: "legacy planning response",
+          text: "planning response",
         },
         {
-          event: "harness_capability_response",
-          type: "harness_capability_response",
+          event: "plugin_capability_response",
+          type: "plugin_capability_response",
           purpose: "guidance",
-          harnessFlow: "analysis",
+          pluginFlow: "analysis",
           chain: "auxiliary",
           output: "old guidance analysis",
         },
         {
-          event: "harness_capability_response",
-          type: "harness_capability_response",
+          event: "plugin_capability_response",
+          type: "plugin_capability_response",
           purpose: "planning",
-          harnessFlow: "analysis",
+          pluginFlow: "analysis",
           chain: "auxiliary",
           output: "old planning analysis",
         },
         {
-          event: "harness_capability_response",
-          type: "harness_capability_response",
+          event: "plugin_capability_response",
+          type: "plugin_capability_response",
           purpose: "planning",
-          harnessFlow: "analysis",
+          pluginFlow: "analysis",
           chain: "auxiliary",
           output: "latest planning analysis",
         },
         {
-          event: "harness_capability_response",
-          type: "harness_capability_response",
+          event: "plugin_capability_response",
+          type: "plugin_capability_response",
           purpose: "guidance",
-          harnessFlow: "analysis",
+          pluginFlow: "analysis",
           chain: "auxiliary",
           output: "latest guidance analysis",
         },
@@ -763,7 +763,7 @@ describe("ThinkingPanel", () => {
     expect(wrapper.text()).not.toContain("latest guidance analysis");
     expect(wrapper.text()).not.toContain("old planning analysis");
     expect(wrapper.text()).not.toContain("latest planning analysis");
-    expect(wrapper.text()).not.toContain("legacy planning response");
+    expect(wrapper.text()).not.toContain("planning response");
     expect(wrapper.text()).not.toContain("old guidance analysis");
     expect(wrapper.findAll(".execution-log-line")).toHaveLength(1);
     expect(wrapper.findAll(".execution-log-line")[0].text()).toContain("tool log");
@@ -774,7 +774,58 @@ describe("ThinkingPanel", () => {
     const wrapper = mountThinkingPanel({
       role: "assistant",
       pending: false,
-      turnScopeId: "client-turn:harness-completed",
+      turnScopeId: "client-turn:plugin-completed",
+      processCompletedToolLogs: [
+        { event: "tool_result", type: "tool_result", text: "completed tool" },
+        {
+          event: "guidance_analysis",
+          type: "guidance_analysis",
+          rawEvent: "guidance_analysis_response",
+          purpose: "guidance",
+          pluginFlow: "analysis",
+          chain: "auxiliary",
+          output: "completed guidance analysis",
+        },
+      ],
+    });
+
+    expect(wrapper.text()).toContain("分析流程");
+    expect(wrapper.text()).toContain("completed guidance analysis");
+    expect(wrapper.findAll(".execution-log-line")).toHaveLength(1);
+    expect(wrapper.find(".execution-log-line").text()).toContain("completed tool");
+  });
+
+  it("renders guidance analysis from normalized data fields", () => {
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: false,
+      turnScopeId: "client-turn:plugin-data-fields",
+      processCompletedToolLogs: [
+        { event: "tool_result", type: "tool_result", text: "completed tool" },
+        {
+          event: "guidance_analysis_response",
+          type: "guidance_analysis_response",
+          data: {
+            purpose: "guidance",
+            pluginFlow: "analysis",
+            chain: "auxiliary",
+            output: "data field guidance analysis",
+          },
+        },
+      ],
+    });
+
+    expect(wrapper.text()).toContain("分析流程");
+    expect(wrapper.text()).toContain("data field guidance analysis");
+    expect(wrapper.findAll(".execution-log-line")).toHaveLength(1);
+    expect(wrapper.find(".execution-log-line").text()).toContain("completed tool");
+  });
+
+  it("keeps old completed guidance analysis visible after reload", () => {
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: false,
+      turnScopeId: "client-turn:old-harness-completed",
       processCompletedToolLogs: [
         { event: "tool_result", type: "tool_result", text: "completed tool" },
         {
@@ -784,13 +835,13 @@ describe("ThinkingPanel", () => {
           purpose: "guidance",
           harnessFlow: "analysis",
           chain: "auxiliary",
-          output: "completed guidance analysis",
+          output: "old completed guidance analysis",
         },
       ],
     });
 
     expect(wrapper.text()).toContain("分析流程");
-    expect(wrapper.text()).toContain("completed guidance analysis");
+    expect(wrapper.text()).toContain("old completed guidance analysis");
     expect(wrapper.findAll(".execution-log-line")).toHaveLength(1);
     expect(wrapper.find(".execution-log-line").text()).toContain("completed tool");
   });

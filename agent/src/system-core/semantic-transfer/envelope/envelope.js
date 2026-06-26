@@ -61,10 +61,7 @@ export function createTransferEnvelope({
   direction = TRANSFER_DIRECTION.OUTPUT,
   transport = TRANSFER_TRANSPORT.DIRECT,
   content = undefined,
-  filePath = "",
-  attachmentMeta = null,
   files = [],
-  pathView = null,
   storage = null,
   producer = null,
   meta = {},
@@ -78,15 +75,10 @@ export function createTransferEnvelope({
     transport: normalizedTransport,
   };
   if (content !== undefined) envelope.content = content;
-  const normalizedFilePath = String(filePath || "").trim();
-  if (normalizedFilePath) envelope.filePath = normalizedFilePath;
-  if (isPlainObject(attachmentMeta)) envelope.attachmentMeta = attachmentMeta;
   const normalizedFiles = Array.isArray(files)
     ? files.map((item) => cleanMeta(item)).filter((item) => Object.keys(item).length)
     : [];
   if (normalizedFiles.length) envelope.files = normalizedFiles;
-  const normalizedPathView = cleanMeta(pathView);
-  if (Object.keys(normalizedPathView).length) envelope.pathView = normalizedPathView;
   const normalizedStorage = cleanMeta(storage);
   if (Object.keys(normalizedStorage).length) envelope.storage = normalizedStorage;
   const normalizedProducer = cleanMeta(producer);
@@ -100,13 +92,13 @@ export function createTransferEnvelope({
 }
 
 export function isTransferEnvelope(value = null) {
-  return (
-    isPlainObject(value) &&
-    value.protocol === TRANSFER_PROTOCOL &&
-    Number(value.version) === TRANSFER_VERSION &&
-    (value.direction === TRANSFER_DIRECTION.INPUT || value.direction === TRANSFER_DIRECTION.OUTPUT) &&
-    (value.transport === TRANSFER_TRANSPORT.DIRECT || value.transport === TRANSFER_TRANSPORT.FILE)
-  );
+  if (!isPlainObject(value)) return false;
+  if (value.protocol !== TRANSFER_PROTOCOL) return false;
+  if (Number(value.version) !== TRANSFER_VERSION) return false;
+  if (value.direction !== TRANSFER_DIRECTION.INPUT && value.direction !== TRANSFER_DIRECTION.OUTPUT) return false;
+  if (value.transport === TRANSFER_TRANSPORT.DIRECT) return value.content !== undefined;
+  if (value.transport === TRANSFER_TRANSPORT.FILE) return Array.isArray(value.files) && value.files.length > 0;
+  return false;
 }
 
 export function directInput(content, meta = {}) {
@@ -119,11 +111,15 @@ export function directInput(content, meta = {}) {
 }
 
 export function fileInput(filePath = "", attachmentMeta = null, meta = {}) {
+  const fileEntry = cleanMeta({
+    filePath,
+    ...(isPlainObject(attachmentMeta) ? { attachmentMeta } : {}),
+    role: "primary",
+  });
   return createTransferEnvelope({
     direction: TRANSFER_DIRECTION.INPUT,
     transport: TRANSFER_TRANSPORT.FILE,
-    filePath,
-    attachmentMeta,
+    files: Object.keys(fileEntry).length ? [fileEntry] : [],
     meta,
   });
 }
@@ -138,11 +134,15 @@ export function directOutput(content, meta = {}) {
 }
 
 export function fileOutput(filePath = "", attachmentMeta = null, meta = {}) {
+  const fileEntry = cleanMeta({
+    filePath,
+    ...(isPlainObject(attachmentMeta) ? { attachmentMeta } : {}),
+    role: "primary",
+  });
   return createTransferEnvelope({
     direction: TRANSFER_DIRECTION.OUTPUT,
     transport: TRANSFER_TRANSPORT.FILE,
-    filePath,
-    attachmentMeta,
+    files: Object.keys(fileEntry).length ? [fileEntry] : [],
     meta,
   });
 }

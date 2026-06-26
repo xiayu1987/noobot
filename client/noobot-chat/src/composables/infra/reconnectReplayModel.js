@@ -201,9 +201,6 @@ function buildTransferEnvelopeKey(envelope = {}) {
     envelope?.version,
     envelope?.direction,
     envelope?.transport,
-    envelope?.filePath,
-    envelope?.attachmentMeta?.attachmentId,
-    envelope?.attachmentMeta?.relativePath,
     fileKeys,
   ]
     .map((item) => String(item || "").trim())

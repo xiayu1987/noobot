@@ -66,16 +66,6 @@ function envelopeToFiles(envelope = null) {
   if (Array.isArray(envelope.files) && envelope.files.length) {
     return envelope.files.filter(isPlainObject);
   }
-  if (envelope.filePath || envelope.attachmentMeta) {
-    return [
-      {
-        filePath: normalizeString(envelope.filePath),
-        ...(isPlainObject(envelope.attachmentMeta) ? { attachmentMeta: envelope.attachmentMeta } : {}),
-        ...(isPlainObject(envelope.pathView) ? { pathView: envelope.pathView } : {}),
-        role: "primary",
-      },
-    ];
-  }
   return [];
 }
 
@@ -89,10 +79,8 @@ function collectTransferEnvelopes(value = null) {
           envelope?.files?.[0]?.attachmentMeta?.attachmentId ||
             envelope?.files?.[0]?.attachmentId ||
             envelope?.files?.[0]?.id ||
-            envelope?.attachmentMeta?.attachmentId ||
             envelope?.files?.[0]?.filePath ||
-            envelope?.files?.[0]?.path ||
-            envelope?.filePath,
+            envelope?.files?.[0]?.path,
         ) || JSON.stringify(envelope);
       if (seen.has(key)) continue;
       seen.add(key);
@@ -156,7 +144,7 @@ export function getTransferAttachmentMetas(value = null, { runtime = {} } = {}) 
       ? envelope.files.filter(hasCompactAttachmentRef)
       : [];
     if (compactFiles.length) return compactFiles;
-    return isPlainObject(envelope.attachmentMeta) ? [envelope.attachmentMeta] : [];
+    return [];
   });
   return fromEnvelopes;
 }

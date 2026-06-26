@@ -43,13 +43,12 @@ function dedupeTransferEnvelopes(envelopes = []) {
   for (const envelope of Array.isArray(envelopes) ? envelopes : []) {
     if (!isPlainObject(envelope)) continue;
     const attachmentId = String(
-      envelope?.attachmentMeta?.attachmentId ||
-        envelope?.files?.[0]?.attachmentMeta?.attachmentId ||
+      envelope?.files?.[0]?.attachmentMeta?.attachmentId ||
         "",
     ).trim();
     const key =
       attachmentId ||
-      firstNormalizedString(envelope?.filePath, envelope?.files?.[0]?.filePath) ||
+      firstNormalizedString(envelope?.files?.[0]?.filePath) ||
       JSON.stringify(envelope);
     if (key && seen.has(key)) continue;
     if (key) seen.add(key);
@@ -153,19 +152,12 @@ function compactTransferEnvelope(envelope = {}) {
   const files = Array.isArray(envelope.files)
     ? envelope.files.map(compactTransferFile).filter(Boolean)
     : [];
-  const compactedPathView = compactPathView(envelope.pathView || {}, envelope.attachmentMeta || {});
   const output = compactObject({
     protocol: envelope.protocol,
     version: envelope.version,
     direction: envelope.direction,
     transport: envelope.transport,
-    ...(files.length
-      ? { files }
-      : {
-          filePath: envelope.filePath,
-          attachmentMeta: compactObject(envelope.attachmentMeta || {}),
-          pathView: compactedPathView,
-        }),
+    ...(files.length ? { files } : {}),
     storage: envelope.storage,
     producer: envelope.producer,
     meta: compactObject(envelope.meta || {}),
@@ -320,7 +312,6 @@ function normalizeReadFileOverflowResult({
   const envelope = createTransferEnvelope({
     direction: TRANSFER_DIRECTION.OUTPUT,
     transport: TRANSFER_TRANSPORT.FILE,
-    filePath: fileAddress,
     files: [
       {
         filePath: fileAddress,
@@ -330,7 +321,6 @@ function normalizeReadFileOverflowResult({
         mimeType: DEFAULT_TRANSFER_MIME_TYPE,
       },
     ],
-    pathView: publicPathView,
     storage: {
       kind: TRANSFER_STORAGE_KIND.WORKSPACE,
       originalFile: true,

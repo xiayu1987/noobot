@@ -44,18 +44,15 @@ function compactRefFields(ref = {}) {
   const owner = pickOwner(ref.owner);
 
   if (attachmentId) {
-    picked.id = attachmentId;
     picked.attachmentId = attachmentId;
   }
   if (name) picked.name = name;
   if (mimeType) {
-    picked.type = mimeType;
     picked.mimeType = mimeType;
   }
   if (size !== "" && Number.isFinite(Number(size))) picked.size = Number(size);
   if (attachmentSource) {
     picked.attachmentSource = attachmentSource;
-    picked.source = attachmentSource;
   }
   if (sessionId) picked.sessionId = sessionId;
   if (relativePath) picked.relativePath = relativePath;
@@ -81,22 +78,17 @@ export function compactAttachmentRef(...sources) {
 
 export function compactTransferFileRef(file = {}, envelope = {}) {
   if (!file || typeof file !== "object" || Array.isArray(file)) return null;
-  const envelopeMeta = envelope?.attachmentMeta;
   const fileMeta = file?.attachmentMeta;
-  const envelopePathView = envelope?.pathView;
   const filePathView = file?.pathView;
   return compactAttachmentRef(
-    envelope,
-    envelopeMeta,
-    envelopePathView,
     file,
     fileMeta,
     filePathView,
     {
       role: file?.role,
-      path: firstValue(fileMeta?.path, file?.path, file?.filePath, envelopeMeta?.path, envelope?.path, envelope?.filePath),
-      relativePath: firstValue(fileMeta?.relativePath, file?.relativePath, filePathView?.relativePath, envelopeMeta?.relativePath, envelope?.relativePath, envelopePathView?.relativePath),
-      sandboxPath: firstValue(fileMeta?.sandboxPath, fileMeta?.sandboxViewPath, file?.sandboxPath, file?.sandboxViewPath, filePathView?.sandboxPath, envelopeMeta?.sandboxPath, envelopeMeta?.sandboxViewPath, envelope?.sandboxPath, envelope?.sandboxViewPath, envelopePathView?.sandboxPath),
+      path: firstValue(fileMeta?.path, file?.path, file?.filePath),
+      relativePath: firstValue(fileMeta?.relativePath, file?.relativePath, filePathView?.relativePath),
+      sandboxPath: firstValue(fileMeta?.sandboxPath, fileMeta?.sandboxViewPath, file?.sandboxPath, file?.sandboxViewPath, filePathView?.sandboxPath),
     },
   );
 }
@@ -128,19 +120,6 @@ export function compactTransferEnvelope(envelope = {}) {
     .slice(0, 50)
     .map((item) => compactTransferFileRef(item, envelope))
     .filter(Boolean);
-  if (!files.length) {
-    const envelopeRef = compactAttachmentRef(
-      envelope,
-      envelope?.attachmentMeta,
-      envelope?.pathView,
-      {
-        path: firstValue(envelope?.attachmentMeta?.path, envelope?.path, envelope?.filePath),
-        relativePath: firstValue(envelope?.attachmentMeta?.relativePath, envelope?.relativePath, envelope?.pathView?.relativePath),
-        sandboxPath: firstValue(envelope?.attachmentMeta?.sandboxPath, envelope?.attachmentMeta?.sandboxViewPath, envelope?.sandboxPath, envelope?.sandboxViewPath, envelope?.pathView?.sandboxPath),
-      },
-    );
-    if (envelopeRef) files.push(envelopeRef);
-  }
   if (files.length) picked.files = dedupeAttachmentRefs(files);
   return Object.keys(picked).length ? picked : null;
 }

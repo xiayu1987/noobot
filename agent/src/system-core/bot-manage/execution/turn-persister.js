@@ -10,6 +10,7 @@ import {
   resolveMessageDialogProcessId,
 } from "../../context/session/dialog-process-id-resolver.js";
 import { MessagePersister } from "../session/message-persister.js";
+import { compactTransferEnvelopes } from "../../session/transfer-attachment-refs.js";
 import {
   EXECUTION_LOG_EVENT,
   MESSAGE_ROLE,
@@ -71,7 +72,9 @@ function filterSessionTransferEnvelopes(transferEnvelopes = []) {
   // refresh-time attachment/file cards from session.json.  Do not drop them
   // solely because they originate from a tool; the heavy tool body is
   // sanitized separately by sanitizeToolContentForSession().
-  return (Array.isArray(transferEnvelopes) ? transferEnvelopes : []).filter(isPlainObject);
+  return compactTransferEnvelopes(
+    (Array.isArray(transferEnvelopes) ? transferEnvelopes : []).filter(isPlainObject),
+  );
 }
 
 function resolveMessageAttachments(message = {}) {

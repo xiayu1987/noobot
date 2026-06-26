@@ -146,14 +146,14 @@ describe("reconnectReplayModel", () => {
       version: 1,
       direction: "output",
       transport: "file",
-      filePath: "/workspace/old.txt",
+      files: [{ filePath: "/workspace/old.txt" }],
     };
     const incomingTransferEnvelope = {
       protocol: "noobot.semantic-transfer",
       version: 1,
       direction: "output",
       transport: "file",
-      filePath: "/workspace/new.txt",
+      files: [{ filePath: "/workspace/new.txt" }],
     };
     const target = {
       role: RoleEnum.ASSISTANT,

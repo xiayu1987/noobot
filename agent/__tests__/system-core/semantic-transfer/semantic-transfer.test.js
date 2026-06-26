@@ -45,7 +45,8 @@ test("semantic transfer envelopes keep direct/file semantics", () => {
   assert.equal(isTransferEnvelope(output), true);
   assert.equal(output.direction, "output");
   assert.equal(output.transport, "file");
-  assert.equal(output.filePath, "/tmp/result.md");
+  assert.equal("filePath" in output, false);
+  assert.equal(output.files?.[0]?.filePath, "/tmp/result.md");
 });
 
 test("intent helpers normalize source/reason/generationSource with aliases", () => {
@@ -67,7 +68,7 @@ test("envelope helpers normalize persisted output and filter invalid envelopes",
     version: 1,
     direction: "output",
     transport: "file",
-    filePath: "/workspace/a.txt",
+    files: [{ filePath: "/workspace/a.txt" }],
   };
   const persisted = { transferEnvelopes: [validEnvelope] };
   assert.deepEqual(extractTransferEnvelopeFromPersisted(persisted), validEnvelope);
@@ -80,14 +81,14 @@ test("envelope helpers normalize persisted output and filter invalid envelopes",
     { files: [{ filePath: "/workspace/b.txt" }] },
   ]);
   assert.equal(normalized.length, 1);
-  assert.equal(normalized[0].filePath, "/workspace/a.txt");
+  assert.equal(normalized[0].files[0].filePath, "/workspace/a.txt");
 
   const validated = normalizeTransferEnvelopesWithPolicy(
     [validEnvelope, { filePath: "/workspace/legacy.txt" }],
     { enforceProtocol: true, withStats: true },
   );
   assert.equal(validated.envelopes.length, 1);
-  assert.equal(validated.envelopes[0].filePath, "/workspace/a.txt");
+  assert.equal(validated.envelopes[0].files[0].filePath, "/workspace/a.txt");
   assert.equal(validated.stats.invalidCount, 1);
   assert.throws(
     () =>
@@ -257,10 +258,10 @@ test("materializeOutput returns direct for small content and falls back direct w
   assert.equal(largeWithoutService.meta.materializeFallback, "direct");
 });
 
-test("normalizeTransfer maps paths to file envelopes", () => {
+test("normalizeTransfer no longer maps legacy path objects to file envelopes", () => {
   const envelope = normalizeTransfer({ path: "/tmp/result.md", name: "result.md" });
-  assert.equal(envelope.transport, "file");
-  assert.equal(envelope.filePath, "/tmp/result.md");
+  assert.equal(envelope.transport, "direct");
+  assert.equal("files" in envelope, false);
 });
 
 test("transferSemanticContent dispatches by scenario", async () => {
@@ -401,7 +402,8 @@ test("persistTransferArtifacts saves through attachment service and returns tran
     sessionId: "s1",
   });
   assert.equal("transferEnvelopes" in persisted, true);
-  assert.equal(persisted.transferEnvelopes?.[0]?.filePath, "attachments/a.txt");
+  assert.equal("filePath" in persisted.transferEnvelopes?.[0], false);
+  assert.equal(firstTransferFile(persisted).filePath, "attachments/a.txt");
   assertTransferProtocolOnly({ transferEnvelopes: persisted.transferEnvelopes });
   assert.equal(getTransferAttachmentMetas(persisted.transferEnvelopes).length, 1);
   const [attachmentMeta] = getTransferAttachmentMetas(persisted.transferEnvelopes);
@@ -417,8 +419,8 @@ test("persistTransferArtifacts saves through attachment service and returns tran
     dialogProcessId: "dialog-1",
     sessionId: "s1",
   });
-  assert.equal(persisted.transferEnvelopes?.[0]?.attachmentMeta?.attachmentId, attachmentMeta.attachmentId);
-  assert.equal(persisted.transferEnvelopes?.[0]?.attachmentMeta?.sessionId, attachmentMeta.sessionId);
+  assert.equal("attachmentMeta" in persisted.transferEnvelopes?.[0], false);
+  assert.equal("pathView" in persisted.transferEnvelopes?.[0], false);
   assert.equal(persisted.transferEnvelopes?.[0]?.files?.[0]?.attachmentMeta?.attachmentId, attachmentMeta.attachmentId);
   assert.equal(persisted.transferEnvelopes?.[0]?.files?.[0]?.attachmentMeta?.sessionId, attachmentMeta.sessionId);
   assert.equal("attachmentMetas" in persisted, false);
@@ -504,21 +506,37 @@ test("file envelope supports files, pathView, storage and producer", () => {
   assert.equal(envelope.meta.producer.id, "p1");
 
   const rich = normalizeTransfer({
-    attachmentMetas: [
-      { name: "a.md", path: "/host/a.md", relativePath: "attachments/a.md", mimeType: "text/markdown", size: 10 },
-      { name: "b.md", path: "/host/b.md", relativePath: "attachments/b.md", mimeType: "text/markdown", size: 20 },
+    protocol: "noobot.semantic-transfer",
+    version: 1,
+    direction: "output",
+    transport: "file",
+    files: [
+      {
+        filePath: "attachments/a.md",
+        attachmentMeta: { name: "a.md", path: "/host/a.md", relativePath: "attachments/a.md", mimeType: "text/markdown", size: 10 },
+        pathView: { relativePath: "attachments/a.md", hostPath: "/host/a.md" },
+        role: "primary",
+      },
+      {
+        filePath: "attachments/b.md",
+        attachmentMeta: { name: "b.md", path: "/host/b.md", relativePath: "attachments/b.md", mimeType: "text/markdown", size: 20 },
+        pathView: { relativePath: "attachments/b.md", hostPath: "/host/b.md" },
+        role: "secondary",
+      },
     ],
     storage: { kind: "attachment", generationSource: "unit_test" },
-    producer: { type: "tool", name: "unit" },
-    meta: { source: "tool" },
+    meta: { source: "tool", producer: { type: "tool", name: "unit" } },
   });
   assert.equal(rich.transport, "file");
-  assert.equal(rich.filePath, "attachments/a.md");
-  assert.equal(rich.attachmentMeta.name, "a.md");
+  assert.equal("filePath" in rich, false);
+  assert.equal("attachmentMeta" in rich, false);
+  assert.equal(rich.files[0].filePath, "attachments/a.md");
+  assert.equal(rich.files[0].attachmentMeta.name, "a.md");
   assert.equal(rich.files.length, 2);
   assert.equal(rich.files[0].role, "primary");
   assert.equal(rich.files[1].role, "secondary");
-  assert.equal(rich.pathView.relativePath, "attachments/a.md");
+  assert.equal("pathView" in rich, false);
+  assert.equal(rich.files[0].pathView.relativePath, "attachments/a.md");
   assert.equal(rich.storage.generationSource, "unit_test");
   assert.equal(rich.meta.producer.name, "unit");
 });
@@ -555,7 +573,10 @@ test("persistTransferArtifacts returns rich transfer envelope for multi artifact
       { name: "b.txt", mimeType: "text/plain", contentBase64: "Yg==" },
     ],
   });
-  assert.equal(persisted.transferEnvelopes[0].filePath, "attachments/a.txt");
+  assert.equal("filePath" in persisted.transferEnvelopes[0], false);
+  assert.equal("attachmentMeta" in persisted.transferEnvelopes[0], false);
+  assert.equal("pathView" in persisted.transferEnvelopes[0], false);
+  assert.equal(persisted.transferEnvelopes[0].files[0].filePath, "attachments/a.txt");
   assert.equal(persisted.transferEnvelopes[0].files.length, 2);
   assert.equal(getTransferAttachmentMetas(persisted.transferEnvelopes).length, 2);
   assert.equal(persisted.transferEnvelopes[0].storage.kind, "attachment");
@@ -575,8 +596,6 @@ test("consumer helpers read envelope files and attachment metas", async () => {
   } = await import("../../../src/system-core/semantic-transfer/index.js");
   const envelope = createTransferEnvelope({
     transport: "file",
-    filePath: "/workspace/a.md",
-    attachmentMeta: { attachmentId: "a", path: "/host/a.md" },
     files: [
       {
         filePath: "/workspace/a.md",
@@ -1098,7 +1117,8 @@ test("persistTransferFile accepts base64 and bytes and returns transfer envelope
     mimeType: "application/octet-stream",
     contentBase64: "AQID",
   });
-  assert.equal(fromBase64.transferEnvelopes?.[0]?.filePath, "attachments/a.bin");
+  assert.equal("filePath" in fromBase64.transferEnvelopes?.[0], false);
+  assert.equal(fromBase64.transferEnvelopes?.[0]?.files?.[0]?.filePath, "attachments/a.bin");
   assert.equal(calls[0].artifacts[0].contentBase64, "AQID");
   assert.equal("attachmentMetas" in fromBase64, false);
   assert.equal("filePath" in fromBase64, false);
@@ -1114,7 +1134,8 @@ test("persistTransferFile accepts base64 and bytes and returns transfer envelope
     name: "b.bin",
     bytes: new Uint8Array([4, 5, 6]),
   });
-  assert.equal(fromBytes.transferEnvelopes?.[0]?.filePath, "attachments/b.bin");
+  assert.equal("filePath" in fromBytes.transferEnvelopes?.[0], false);
+  assert.equal(fromBytes.transferEnvelopes?.[0]?.files?.[0]?.filePath, "attachments/b.bin");
   assert.equal(calls[1].artifacts[0].contentBase64, "BAUG");
 });
 
@@ -1201,7 +1222,9 @@ test("semantic-transfer read_file overflow returns original-file envelope withou
   assert.equal(payload.content_omitted, undefined);
   assert.equal(payload.transferEnvelopes?.[0]?.protocol, "noobot.semantic-transfer");
   assert.equal(payload.transferEnvelopes?.[0]?.transport, "file");
-  assert.equal(payload.transferEnvelopes?.[0]?.filePath, resolvedPath);
+  assert.equal("filePath" in payload.transferEnvelopes?.[0], false);
+  assert.equal("pathView" in payload.transferEnvelopes?.[0], false);
+  assert.equal(payload.transferEnvelopes?.[0]?.files?.[0]?.filePath, resolvedPath);
   assert.equal(payload.transferEnvelopes?.[0]?.storage?.originalFile, true);
   assert.equal(payload.transferEnvelopes?.[0]?.storage?.persisted, false);
   assert.equal(payload.transferEnvelopes?.[0]?.meta?.originalFile, true);

@@ -229,7 +229,6 @@ export function buildTransferPayloadFromAttachmentMetas(attachmentMetas = []) {
     version: 1,
     direction: "output",
     transport: "file",
-    filePath: safeStr(files[0]?.filePath),
     files,
   };
   return {

@@ -117,10 +117,7 @@ function buildExistingArtifactPersistedOutput({
   const envelope = createTransferEnvelope({
     direction: "output",
     transport: "file",
-    filePath: file?.filePath || "",
-    attachmentMeta,
     files: [file],
-    pathView: file?.pathView || null,
     storage: {
       kind: "attachment",
       attachmentSource: String(attachmentMeta?.attachmentSource || TOOL_ATTACHMENT_SOURCE.MODEL),

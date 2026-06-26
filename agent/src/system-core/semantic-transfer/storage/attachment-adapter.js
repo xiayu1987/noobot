@@ -249,8 +249,6 @@ export async function persistTransferArtifacts({
       role: index === 0 ? "primary" : "secondary",
     }),
   );
-  const filePaths = files.map((item = {}) => normalizeString(item?.filePath)).filter(Boolean);
-  const attachmentMeta = attachmentMetas[0] || null;
   const resolvedStorage = storage && typeof storage === "object" && !Array.isArray(storage)
     ? storage
     : {
@@ -261,10 +259,7 @@ export async function persistTransferArtifacts({
   const envelope = createTransferEnvelope({
     direction: TRANSFER_DIRECTION.OUTPUT,
     transport: TRANSFER_TRANSPORT.FILE,
-    filePath: filePaths[0] || "",
-    attachmentMeta,
     files,
-    pathView: files[0]?.pathView || null,
     storage: resolvedStorage,
     producer,
     meta: {

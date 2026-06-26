@@ -11,7 +11,6 @@ const envelope = {
   version: 1,
   direction: "output",
   transport: "file",
-  filePath: "/workspace/user/out/report.md",
   files: [
     {
       filePath: "/workspace/user/out/report.md",
@@ -52,7 +51,43 @@ describe("transferEnvelopes", () => {
     });
   });
 
-  it("uses legacy shortcut fields when files are absent", () => {
+  it("extracts compact session-summary transfer file refs", () => {
+    const metas = getMessageTransferAttachments({
+      transferEnvelopes: [
+        {
+          protocol: "noobot.semantic-transfer",
+          version: 1,
+          direction: "output",
+          transport: "file",
+          files: [
+            {
+              attachmentId: "att-compact-1",
+              name: "compact.md",
+              mimeType: "text/markdown",
+              relativePath: "runtime/compact.md",
+              sandboxPath: "/workspace/u1/runtime/compact.md",
+              owner: { type: "plugin", id: "harness-plugin" },
+              role: "primary",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(metas).toHaveLength(1);
+    expect(metas[0]).toMatchObject({
+      attachmentId: "att-compact-1",
+      name: "compact.md",
+      mimeType: "text/markdown",
+      relativePath: "runtime/compact.md",
+      sandboxPath: "/workspace/u1/runtime/compact.md",
+      transferFilePath: "/workspace/u1/runtime/compact.md",
+      owner: { type: "plugin", id: "harness-plugin" },
+      transferRole: "primary",
+    });
+  });
+
+  it("ignores legacy shortcut fields when files are absent", () => {
     const metas = getMessageTransferAttachments({
       transferEnvelopes: [
         {
@@ -66,11 +101,7 @@ describe("transferEnvelopes", () => {
       ],
     });
 
-    expect(metas[0]).toMatchObject({
-      name: "legacy.txt",
-      mimeType: "text/plain",
-      transferFilePath: "/workspace/user/out/legacy.txt",
-    });
+    expect(metas).toEqual([]);
   });
 
   it("collects envelopes only from transferEnvelopes", () => {
