@@ -619,7 +619,7 @@ describe("useChatEngine", () => {
     expect(fetchSessionDetail).toHaveBeenCalledWith("local-state-only");
     expect(applySessionDetail).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: "local-state-only" }),
-      { preserveCurrentMessages: true },
+      { preserveCurrentMessages: true, scrollToBottom: false },
     );
     expect(deps.chatWebSocketClient.clearStopRequested).toHaveBeenCalledTimes(1);
   });
@@ -1831,6 +1831,7 @@ describe("useChatEngine", () => {
     expect(fetchSessionDetail).toHaveBeenCalledWith("s-error");
     expect(applySessionDetail).toHaveBeenCalledWith({ sessionId: "s-error", messages: [] }, {
       preserveCurrentMessages: true,
+      scrollToBottom: false,
     });
     expect(deps.clearPendingInteraction).toHaveBeenCalled();
     expect(sending.value).toBe(false);

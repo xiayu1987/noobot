@@ -141,7 +141,7 @@ describe("chatEngine streamHandlers", () => {
     expect(botMessage.realtimeLogs).toEqual([
       expect.objectContaining({ text: "完成：执行命令：cd /project/agent && npm test" }),
     ]);
-    expect(locateDoneMessage).toHaveBeenCalledTimes(1);
+    expect(locateDoneMessage).not.toHaveBeenCalled();
   });
 
   it("locates the done message through navigator callback instead of direct bottom scroll", () => {
@@ -168,7 +168,7 @@ describe("chatEngine streamHandlers", () => {
     });
 
     expect(locateSendingStartedMessageOnce).toHaveBeenCalledTimes(1);
-    expect(locateDoneMessage).toHaveBeenCalledTimes(1);
+    expect(locateDoneMessage).not.toHaveBeenCalled();
     expect(scrollBottom).not.toHaveBeenCalled();
   });
 
@@ -204,7 +204,7 @@ describe("chatEngine streamHandlers", () => {
     });
 
     expect(botMessage.dialogProcessId).toBe("dp-from-log");
-    expect(callOrder).toEqual(["started", "done"]);
+    expect(callOrder).toEqual(["started"]);
   });
 
 

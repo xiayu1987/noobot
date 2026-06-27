@@ -115,7 +115,7 @@ describe("replayCacheConsumer", () => {
 
     expect(fixture.activeSession.value.messages[0].content).toBe("new");
     expect(fixture.markReconnectSequenceApplied).toHaveBeenCalledWith("dp-1", 3);
-    expect(fixture.scrollBottom).toHaveBeenCalledTimes(1);
+    expect(fixture.scrollBottom).not.toHaveBeenCalled();
   });
 
   it("marks terminal reconnect batches and ignores later non-terminal replay for that dialog process", async () => {
