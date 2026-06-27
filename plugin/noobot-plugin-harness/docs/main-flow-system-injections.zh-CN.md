@@ -12,7 +12,7 @@ Harness 插件当前主要通过以下路径向主流程注入消息：
 - `agentContext.payload.messages.system.unshift(...)`：用于 takeover 场景直接写入 agent system 上下文。
 - `pushRoleMessage(ctx, messages, "system", content)`：用于部分 acceptance inject 模式追加 system 消息。
 
-`before_llm_call` 的全局 harness policy 注入现在由 capability runtime 的内部 `globalBootstrap` 阶段执行，发生在 planning / guidance / acceptance 等业务流程之前。全局 bootstrap 之后，如果主计划尚未捕获，`before_llm_call` 会只运行 planning 主计划流程，guidance / acceptance 等业务流程延后到后续轮次。`before_final_output` 的 final response prompt 仍在 capability runtime 完成后由 hook 外层注入。
+`before_llm_call` 的全局 harness policy 注入现在由 capability runtime 的内部 `globalBootstrap` 阶段执行，发生在 planning / guidance / acceptance 等业务流程之前。全局 bootstrap 之后，capability runtime 按 hook map 顺序先运行 planning，再运行 guidance / acceptance；runtime 不会因为主计划状态而阻塞后续流程，具体动作是否执行由各流程自己的 pending/ready 条件决定。`before_final_output` 的 final response prompt 仍在 capability runtime 完成后由 hook 外层注入。
 
 ## System 注入清单
 
