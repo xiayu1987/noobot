@@ -28,9 +28,9 @@ import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 export const AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS =
-  TURN_THRESHOLDS.harness.miniRunnerMaxTurns;
+  TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
 export const AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS =
-  TIME_THRESHOLDS.harness.separateModelMinTimeoutMs;
+  TIME_THRESHOLDS.capability.separateModelMinTimeoutMs;
 
 export class RunConfigPluginPreparer {
   constructor({

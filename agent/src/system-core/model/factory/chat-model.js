@@ -18,6 +18,7 @@ import {
   buildPluginModelHeaders,
   MODEL_NAME_HEADER_KEY,
   PARENT_SESSION_HEADER_KEY,
+  PLUGIN_MODEL_HEADER_KEY,
 } from "../headers/plugin-headers.js";
 
 const DEFAULT_MAIN_FLOW = "agent.main";
@@ -118,7 +119,25 @@ function buildDefaultPromptCacheKey(modelSpec = {}) {
   return normalizePromptCacheKey(`${DEFAULT_PROMPT_CACHE_KEY_PREFIX}-${modelSegment}`);
 }
 
-function resolvePromptCacheSettings(modelSpec = {}) {
+function normalizePromptCacheSegment(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function buildDefaultPromptCacheKeyForFlow(modelSpec = {}, flow = "") {
+  const flowSegment = normalizePromptCacheSegment(flow);
+  if (!flowSegment || flowSegment === normalizePromptCacheSegment(DEFAULT_MAIN_FLOW)) {
+    return buildDefaultPromptCacheKey(modelSpec);
+  }
+  const modelSegment = normalizePromptCacheSegment(modelSpec?.model);
+  if (!modelSegment) return "";
+  return normalizePromptCacheKey(`noobot-${flowSegment}-${modelSegment}`);
+}
+
+function resolvePromptCacheSettings(modelSpec = {}, options = {}) {
   const normalizedSpec = normalizeModelSpecWithDefaults(modelSpec);
   if (!isOpenAiPromptCacheCompatibleModel(normalizedSpec)) {
     return {
@@ -136,7 +155,7 @@ function resolvePromptCacheSettings(modelSpec = {}) {
     promptCacheKey = normalizePromptCacheKey(out.prompt_cache_key);
   }
   if (!promptCacheKey) {
-    promptCacheKey = buildDefaultPromptCacheKey(normalizedSpec);
+    promptCacheKey = buildDefaultPromptCacheKeyForFlow(normalizedSpec, options?.flow);
   }
   const promptCacheRetention = String(
       normalizedSpec.prompt_cache_retention ??
@@ -315,6 +334,16 @@ function buildChatModelConfiguration(normalizedSpec = {}, options = {}) {
   return config;
 }
 
+function resolvePromptCacheFlowFromConfiguration(configuration = {}) {
+  const headers =
+    configuration?.defaultHeaders &&
+    typeof configuration.defaultHeaders === "object" &&
+    !Array.isArray(configuration.defaultHeaders)
+      ? configuration.defaultHeaders
+      : {};
+  return String(headers[PLUGIN_MODEL_HEADER_KEY.FLOW] || DEFAULT_MAIN_FLOW).trim();
+}
+
 /**
  * Create a ChatOpenAI instance from a model spec.
  * @param {object} modelSpec
@@ -338,8 +367,15 @@ export function createChatModelFromSpec(modelSpec, options = {}) {
       },
     );
 
+  const configuration = buildChatModelConfiguration(normalizedSpec, options);
+  const promptCacheFlow = resolvePromptCacheFlowFromConfiguration(configuration);
   const modelKwargs = buildModelKwargs(normalizedSpec);
-  const { promptCacheKey, promptCacheRetention } = resolvePromptCacheSettings(normalizedSpec);
+  const { promptCacheKey, promptCacheRetention } = resolvePromptCacheSettings(normalizedSpec, {
+    flow: promptCacheFlow,
+  });
+  if (promptCacheKey && "prompt_cache_key" in modelKwargs) {
+    modelKwargs.prompt_cache_key = promptCacheKey;
+  }
   const defaultsByFormat = getModelDefaultFields(normalizedSpec);
   const chat = new ChatOpenAI({
     model: normalizedSpec.model,
@@ -348,7 +384,7 @@ export function createChatModelFromSpec(modelSpec, options = {}) {
     maxTokens:
       normalizedSpec.max_tokens !== undefined ? Number(normalizedSpec.max_tokens) : undefined,
     apiKey,
-    configuration: buildChatModelConfiguration(normalizedSpec, options),
+    configuration,
     useResponsesApi: resolveUseResponsesApi(normalizedSpec),
     ...(promptCacheKey ? { promptCacheKey } : {}),
     ...(promptCacheRetention ? { promptCacheRetention } : {}),
