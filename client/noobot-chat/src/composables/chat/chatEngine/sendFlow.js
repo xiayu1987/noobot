@@ -152,9 +152,10 @@ export function createChatEngineSender({
       const activeProcessStore = getResolvedProcessStore();
       let locatedSendingStartedMessage = false;
       const locateSendingStartedMessageOnce = () => {
+        // Do not navigate while the assistant response is still streaming.
+        // The final navigation is performed once after DONE/finalize below.
         if (locatedSendingStartedMessage) return;
         locatedSendingStartedMessage = true;
-        locateSendingStartedMessage?.();
       };
 
       await chatWebSocketClient.stream(payload, ({ event, data }) => {
@@ -248,6 +249,7 @@ export function createChatEngineSender({
         applySessionDetail,
         refreshSessionConnectorsAsync,
       });
+      locateDoneMessage?.();
       finalizePendingResendOperation?.({ finalOnly: true });
       return true;
     } catch (error) {

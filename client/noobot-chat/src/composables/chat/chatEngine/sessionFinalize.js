@@ -34,6 +34,7 @@ export async function finalizeDoneSessionDetail({
 
     applySessionDetail(detail, {
       preserveCurrentMessages: shouldPreserveCurrentMessages,
+      scrollToBottom: false,
     });
 
     if (finalExecutionLogTotal > 0 && finalDialogProcessId) {

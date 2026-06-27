@@ -1224,7 +1224,7 @@ test("inject refinement-only flow consumes refinement attempts", async () => {
   assert.equal(agentContext.payload.harness.state.counters.planUpdateAttempts, 1);
 });
 
-test("separate_model refinement-only flow runs planning_refinement directly", async () => {
+test("separate_model refinement-only flow runs planning_refinement then guidance followup", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const invocations = [];
   const agentContext = createAgentContext({
@@ -1255,12 +1255,13 @@ test("separate_model refinement-only flow runs planning_refinement directly", as
 
   assert.deepEqual(
     invocations.map((item = {}) => item.purpose),
-    ["planning_refinement"],
+    ["planning_refinement", "guidance"],
   );
   assert.equal(agentContext.payload.harness.state.counters.planRevisionAttempts, 0);
   assert.equal(agentContext.payload.harness.state.counters.planRefinementAttempts, 1);
   assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
   assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
+  assert.equal(agentContext.payload.harness.state.pending.guidance, null);
 });
 
 

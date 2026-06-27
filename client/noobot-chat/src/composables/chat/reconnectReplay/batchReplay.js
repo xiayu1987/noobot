@@ -461,7 +461,7 @@ export function finalizeReconnectReplayBatch({
   maxAppliedSeq = 0,
   markReconnectSequenceApplied,
   scrollBottom,
-  shouldScroll = true,
+  shouldScroll = false,
 } = {}) {
   markReconnectSequenceApplied?.(normalizedDpId, maxAppliedSeq);
   if (shouldScroll) scrollBottom?.();

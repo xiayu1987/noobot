@@ -602,6 +602,8 @@ onBeforeUnmount(() => {
       <BaseThinkingPanelShell
         v-model="messageItem.thinkingOpenNames"
         item-name="thinking-panel"
+        class="thinking-realtime-shell"
+        :class="{ 'is-running': messageItem.pending }"
       >
         <template #title>
           <BaseSectionHeader :title="translate('message.thinkingExpand')" class="thinking-title-row">
@@ -612,7 +614,8 @@ onBeforeUnmount(() => {
             </template>
           </BaseSectionHeader>
         </template>
-        <BaseTabPanelBody>
+        <BaseTabPanelBody class="thinking-realtime-body">
+          <div class="thinking-realtime-log-stream">
               <div
                 v-for="(logItem, logIndex) in getExecutionLogs(messageItem)"
                 :key="`realtime-${logIndex}`"
@@ -630,6 +633,7 @@ onBeforeUnmount(() => {
                 v-if="!getExecutionLogCount(messageItem) && !messageItem.pending"
                 :text="translate('message.noExecutionLogs')"
               />
+          </div>
               <div v-if="getLatestPluginAnalysisLog(messageItem)" class="thinking-analysis-block">
                 <BaseMetaLabel class="thinking-analysis-title" text="分析流程" />
                 <BaseNoteBlock
@@ -750,6 +754,7 @@ onBeforeUnmount(() => {
 }
 
 .thinking-analysis-block {
+  flex: 0 0 auto;
   margin-top: 12px;
   margin-bottom: 12px;
   padding-top: 12px;
@@ -762,12 +767,40 @@ onBeforeUnmount(() => {
 
 .thinking-analysis-block :deep(.base-note-block__content) {
   font-size: var(--noobot-msg-caption-font-size);
-  max-height: 160px;
+  max-height: 180px;
   overflow-y: auto;
   white-space: pre-wrap;
 }
 
+.thinking-realtime-shell :deep(.el-collapse-item__content) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.thinking-realtime-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 620px;
+  overflow: hidden;
+}
+
+.thinking-realtime-shell.is-running .thinking-realtime-body {
+  height: clamp(420px, 58vh, 620px);
+}
+
+.thinking-realtime-log-stream {
+  flex: 1 1 auto;
+  min-height: 320px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+
 .thinking-execution-actions {
+  flex: 0 0 auto;
   display: flex;
   justify-content: flex-end;
   margin-top: 12px;
@@ -800,6 +833,22 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 720px) {
+  .thinking-realtime-body {
+    max-height: 520px;
+  }
+
+  .thinking-realtime-shell.is-running .thinking-realtime-body {
+    height: clamp(360px, 62vh, 520px);
+  }
+
+  .thinking-realtime-log-stream {
+    min-height: 260px;
+  }
+
+  .thinking-analysis-block :deep(.base-note-block__content) {
+    max-height: 150px;
+  }
+
   .thinking-execution-actions {
     justify-content: stretch;
   }
