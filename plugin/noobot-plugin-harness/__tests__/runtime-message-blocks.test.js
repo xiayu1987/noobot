@@ -41,7 +41,7 @@ test("capability runtime runs global bootstrap before capability handlers", asyn
   assert.deepEqual(calls, ["globalBootstrap", "planning"]);
 });
 
-test("capability runtime gives uncaptured main planning exclusive before_llm_call priority", async () => {
+test("capability runtime keeps planning first without blocking later before_llm_call flows", async () => {
   const calls = [];
   const runtime = createCapabilityRuntime({
     handlers: {
@@ -77,8 +77,49 @@ test("capability runtime gives uncaptured main planning exclusive before_llm_cal
 
   const results = await runtime.runHook("before_llm_call", ctx, {});
 
-  assert.deepEqual(calls, ["planning"]);
-  assert.deepEqual(results.map((item = {}) => item.capability), ["planning"]);
+  assert.deepEqual(calls, ["planning", "guidance", "acceptance"]);
+  assert.deepEqual(results.map((item = {}) => item.capability), ["planning", "guidance", "acceptance"]);
+});
+
+test("capability runtime does not block guidance when plan text exists but captured flag is stale", async () => {
+  const calls = [];
+  const runtime = createCapabilityRuntime({
+    handlers: {
+      planning: async () => {
+        calls.push("planning");
+        return { capability: "planning", point: "before_llm_call", status: "active" };
+      },
+      guidance: async () => {
+        calls.push("guidance");
+        return { capability: "guidance", point: "before_llm_call", status: "active" };
+      },
+      acceptance: async () => {
+        calls.push("acceptance");
+        return { capability: "acceptance", point: "before_llm_call", status: "active" };
+      },
+    },
+    profile: {
+      review: { enabled: false },
+    },
+  });
+  const ctx = {
+    agentContext: {
+      payload: {
+        harness: {
+          planText: "1. 已有主计划",
+          state: {
+            flags: { planningCaptured: false },
+          },
+        },
+      },
+    },
+    messages: [],
+  };
+
+  await runtime.runHook("before_llm_call", ctx, {});
+
+  assert.deepEqual(calls, ["planning", "guidance", "acceptance"]);
+  assert.equal(ctx.agentContext.payload.harness.state.flags.planningCaptured, true);
 });
 
 test("capability runtime delegates before_llm_call messages to agent resolver", async () => {

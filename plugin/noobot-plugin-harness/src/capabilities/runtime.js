@@ -23,15 +23,34 @@ async function runInternalGlobalBootstrap(point = "", ctx = {}, meta = {}) {
   return await bootstrap({ point, ctx, meta });
 }
 
-function isMainPlanningCaptured(ctx = {}) {
-  return ctx?.agentContext?.payload?.harness?.state?.flags?.planningCaptured === true;
+function resolveHarnessBucket(ctx = {}) {
+  const bucket = ctx?.agentContext?.payload?.harness;
+  return bucket && typeof bucket === "object" ? bucket : null;
 }
 
-function prioritizeMainPlanning(point = "", ctx = {}, capabilities = []) {
+function isMainPlanReady(bucket = null) {
+  if (!bucket) return true;
+  const state = bucket?.state && typeof bucket.state === "object" ? bucket.state : {};
+  if (state?.flags?.planningCaptured === true) return true;
+  if (String(bucket?.planText || "").trim()) return true;
+  if (Array.isArray(bucket?.planDocument?.mainPlans) && bucket.planDocument.mainPlans.length > 0) return true;
+  return Array.isArray(bucket?.taskChecklist) && bucket.taskChecklist.length > 0;
+}
+
+function markPlanningCapturedIfPlanReady(bucket = null) {
+  if (!bucket || !isMainPlanReady(bucket)) return;
+  const state = bucket?.state && typeof bucket.state === "object" ? bucket.state : null;
+  if (!state || typeof state !== "object") return;
+  if (!state.flags || typeof state.flags !== "object" || Array.isArray(state.flags)) state.flags = {};
+  state.flags.planningCaptured = true;
+}
+
+function prepareMainPlanningState(point = "", ctx = {}, capabilities = []) {
   if (String(point || "") !== "before_llm_call") return capabilities;
   if (!Array.isArray(capabilities) || !capabilities.includes("planning")) return capabilities;
-  if (isMainPlanningCaptured(ctx)) return capabilities;
-  return ["planning"];
+  const bucket = resolveHarnessBucket(ctx);
+  markPlanningCapturedIfPlanReady(bucket);
+  return capabilities;
 }
 
 function resolveTakeoverDirectives(result = {}) {
@@ -85,7 +104,7 @@ export function createCapabilityRuntime({ profile = {}, handlers = {} } = {}) {
       cleanupExpiredPendingOnHook(point, ctx, meta);
       applyAgentResolvedModelMessages(point, ctx, meta?.harness || {});
       await runInternalGlobalBootstrap(point, ctx, meta);
-      const capabilities = prioritizeMainPlanning(point, ctx, this.resolveByHook(point));
+      const capabilities = prepareMainPlanningState(point, ctx, this.resolveByHook(point));
       const results = [];
       const pendingToolTakeovers = [];
       const pendingMessageTakeovers = [];
