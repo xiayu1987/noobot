@@ -107,6 +107,9 @@ export const QUANTITY_THRESHOLDS = deepFreeze({
     // Completed dialog process ids retained for turn lifecycle checks.
     completedDialogIds: 80,
 
+    // Max incremental message cache entries retained across sessions/purposes.
+    incrementalMessageCacheEntries: 200,
+
     // Max wrapper depth scanned while unwrapping checklist payloads.
     wrappedPayloadMaxDepth: QUANTITY_TIERS.shallowDepth,
   },

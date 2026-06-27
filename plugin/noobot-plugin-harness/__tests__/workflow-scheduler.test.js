@@ -22,11 +22,11 @@ test("workflow scheduler order is described by one flow/subflow config item", ()
       "guidance:failure_recovery:guidance",
       "plan_update:revision:plan_update_revision",
       "plan_update:refinement:plan_update_refinement",
-      "phase_acceptance:phase:phase_acceptance",
-      "guidance:analysis:analysis",
       "summary:overflow:summary_overflow",
       "summary:turns:summary_turns",
+      "phase_acceptance:phase:phase_acceptance",
       "phase_acceptance:semantic_validation:acceptance_semantic_validation",
+      "guidance:analysis:analysis",
     ],
   );
   assert.equal(WORKFLOW_ACTION_META.plan_update_revision.flow, "plan_update");
@@ -88,8 +88,8 @@ test("workflow scheduler hard overflow forced acceptance overrides normal action
   assert.deepEqual(decision.deferredActions, [
     "guidance",
     "plan_update_revision",
-    "phase_acceptance",
     "summary_overflow",
+    "phase_acceptance",
   ]);
 });
 

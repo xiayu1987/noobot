@@ -326,6 +326,7 @@ function maybeScheduleGuidanceAnalysis(ctx = {}, meta = {}) {
   const state = holder.state;
   if (!state.counters || typeof state.counters !== "object") state.counters = {};
   if (!isMainPlanReadyForGuidanceAnalysis(holder.bucket, state)) return false;
+  if (state.pending?.summary === true) return false;
   if (state.pending?.analysis === true) return false;
   const currentTurn = Number(ctx?.turn);
   const previousTurn = Number(state.counters.lastGuidanceAnalysisCounterTurn || 0);

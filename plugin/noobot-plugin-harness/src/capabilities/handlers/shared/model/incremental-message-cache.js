@@ -10,8 +10,9 @@ import {
   MESSAGE_ORIGIN_KIND,
   resolveMessageOrigin,
 } from "./message-metadata.js";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
-const MAX_CACHE_ENTRIES = 200;
+const MAX_CACHE_ENTRIES = QUANTITY_THRESHOLDS.harness.incrementalMessageCacheEntries;
 const capabilityMessageCache = new Map();
 
 function resolveSessionKey(ctx = {}) {

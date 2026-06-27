@@ -31,11 +31,11 @@ export const WORKFLOW_PARAMS = deepFreeze({
         { flow: "guidance", subflow: "failure_recovery", action: "guidance", executor: "guidance", kind: "workflow" },
         { flow: "plan_update", subflow: "revision", action: "plan_update_revision", executor: "guidance", kind: "workflow" },
         { flow: "plan_update", subflow: "refinement", action: "plan_update_refinement", executor: "guidance", kind: "workflow" },
-        { flow: "phase_acceptance", subflow: "phase", action: "phase_acceptance", executor: "acceptance", kind: "workflow" },
-        { flow: "guidance", subflow: "analysis", action: "analysis", executor: "guidance", kind: "workflow" },
         { flow: "summary", subflow: "overflow", action: "summary_overflow", executor: "guidance", kind: "workflow" },
         { flow: "summary", subflow: "turns", action: "summary_turns", executor: "guidance", kind: "workflow" },
+        { flow: "phase_acceptance", subflow: "phase", action: "phase_acceptance", executor: "acceptance", kind: "workflow" },
         { flow: "phase_acceptance", subflow: "semantic_validation", action: "acceptance_semantic_validation", executor: "acceptance", kind: "workflow" },
+        { flow: "guidance", subflow: "analysis", action: "analysis", executor: "guidance", kind: "workflow" },
       ],
     },
     events: {

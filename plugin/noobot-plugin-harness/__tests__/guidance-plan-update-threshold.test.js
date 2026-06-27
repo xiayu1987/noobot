@@ -824,7 +824,7 @@ test("separate_model mode: pending revision runs by separate model without promp
   assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
 });
 
-test("separate_model simultaneous plan update follows up with analysis before summary", async () => {
+test("separate_model simultaneous plan update follows up with summary before analysis", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const invocations = [];
   const agentContext = createAgentContext({
@@ -857,18 +857,18 @@ test("separate_model simultaneous plan update follows up with analysis before su
 
   assert.deepEqual(
     invocations.map((item = {}) => item.pluginFlow || item.purpose),
-    ["planning_revision", "analysis"],
+    ["planning_revision", "summary"],
   );
   assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
-  assert.equal(agentContext.payload.harness.state.pending.analysis, false);
-  assert.equal(agentContext.payload.harness.state.pending.summary, true);
+  assert.equal(agentContext.payload.harness.state.pending.analysis, true);
+  assert.equal(agentContext.payload.harness.state.pending.summary, false);
   assert.equal(
     ctx.messages.some((item = {}) => item?.pluginFlow === "analysis" && String(item?.content || "").includes("疑点")),
-    true,
+    false,
   );
   assert.equal(
     ctx.messages.some((item = {}) => item?.purpose === "summary" && String(item?.content || "").includes("小结完成")),
-    false,
+    true,
   );
   const executionLog = agentContext.payload.harness.logs.guidance.find(
     (item = {}) => item?.event === "workflow_execution_result",
