@@ -241,6 +241,158 @@ test("guidance schedules analysis by scenario-specific turn threshold", async ()
   assert.equal(atProgrammingThreshold.payload.harness.state.counters.analysisTurns, 0);
 });
 
+test("guidance analysis runtime threshold overrides scenario workflow params", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const beforeRuntimeThreshold = createAgentContext({
+    counters: {
+      analysisTurns: 2,
+      planUpdateTurns: 0,
+      phaseAcceptanceTurns: 0,
+    },
+  });
+
+  await handler({
+    capability: "guidance",
+    point: "before_llm_call",
+    ctx: {
+      runConfig: { scenario: "programming" },
+      messages: [{ role: "user", content: "继续" }],
+      agentContext: beforeRuntimeThreshold,
+    },
+    meta: {
+      harness: {
+        guidance: { analysis: { turnsThreshold: 4 } },
+      },
+    },
+  });
+
+  assert.equal(beforeRuntimeThreshold.payload.harness.state.pending.analysis, false);
+  assert.equal(beforeRuntimeThreshold.payload.harness.state.counters.analysisTurns, 3);
+
+  const atRuntimeThreshold = createAgentContext({
+    counters: {
+      analysisTurns: 3,
+      planUpdateTurns: 0,
+      phaseAcceptanceTurns: 0,
+    },
+  });
+
+  await handler({
+    capability: "guidance",
+    point: "before_llm_call",
+    ctx: {
+      runConfig: { scenario: "programming" },
+      messages: [{ role: "user", content: "继续" }],
+      agentContext: atRuntimeThreshold,
+    },
+    meta: {
+      harness: {
+        guidance: { analysis: { turnsThreshold: 4 } },
+      },
+    },
+  });
+
+  assert.equal(atRuntimeThreshold.payload.harness.state.pending.analysis, true);
+  assert.equal(atRuntimeThreshold.payload.harness.state.counters.analysisTurns, 0);
+});
+
+test("guidance analysis runtime threshold uses persisted intensity mapping 10 to 1 turn", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = createAgentContext({
+    counters: {
+      analysisTurns: 0,
+      planUpdateTurns: 0,
+      phaseAcceptanceTurns: 0,
+    },
+  });
+
+  await handler({
+    capability: "guidance",
+    point: "before_llm_call",
+    ctx: {
+      runConfig: { scenario: "programming" },
+      messages: [{ role: "user", content: "继续" }],
+      agentContext,
+    },
+    meta: {
+      harness: {
+        // UI analysis intensity 10 is persisted as turnsThreshold 1.
+        guidance: { analysis: { turnsThreshold: 1 } },
+      },
+    },
+  });
+
+  assert.equal(agentContext.payload.harness.state.pending.analysis, true);
+  assert.equal(agentContext.payload.harness.state.counters.analysisTurns, 0);
+  const scheduledLog = agentContext.payload.harness.logs.guidance.find(
+    (item = {}) => item?.event === "guidance_analysis_scheduled_by_turn_threshold",
+  );
+  assert.equal(scheduledLog?.detail?.triggerTurns, 1);
+  assert.equal(scheduledLog?.detail?.thresholdSource, "runtime");
+});
+
+test("guidance analysis runtime threshold uses persisted intensity mapping 9 to 2 turns", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const beforeThreshold = createAgentContext({
+    counters: {
+      analysisTurns: 0,
+      planUpdateTurns: 0,
+      phaseAcceptanceTurns: 0,
+    },
+  });
+
+  await handler({
+    capability: "guidance",
+    point: "before_llm_call",
+    ctx: {
+      runConfig: { scenario: "programming" },
+      messages: [{ role: "user", content: "继续" }],
+      agentContext: beforeThreshold,
+    },
+    meta: {
+      harness: {
+        // UI analysis intensity 9 is persisted as turnsThreshold 2.
+        guidance: { analysis: { turnsThreshold: 2 } },
+      },
+    },
+  });
+
+  assert.equal(beforeThreshold.payload.harness.state.pending.analysis, false);
+  assert.equal(beforeThreshold.payload.harness.state.counters.analysisTurns, 1);
+
+  const atThreshold = createAgentContext({
+    counters: {
+      analysisTurns: 1,
+      planUpdateTurns: 0,
+      phaseAcceptanceTurns: 0,
+    },
+  });
+
+  await handler({
+    capability: "guidance",
+    point: "before_llm_call",
+    ctx: {
+      runConfig: { scenario: "programming" },
+      messages: [{ role: "user", content: "继续" }],
+      agentContext: atThreshold,
+    },
+    meta: {
+      harness: {
+        // UI analysis intensity 9 is persisted as turnsThreshold 2.
+        guidance: { analysis: { turnsThreshold: 2 } },
+      },
+    },
+  });
+
+  assert.equal(atThreshold.payload.harness.state.pending.analysis, true);
+  assert.equal(atThreshold.payload.harness.state.counters.analysisTurns, 0);
+  const scheduledLog = atThreshold.payload.harness.logs.guidance.find(
+    (item = {}) => item?.event === "guidance_analysis_scheduled_by_turn_threshold",
+  );
+  assert.equal(scheduledLog?.detail?.triggerTurns, 2);
+  assert.equal(scheduledLog?.detail?.thresholdSource, "runtime");
+});
+
 test("inject mode: when turn-summary and revision are both pending, revision prompt is injected first", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createAgentContext({

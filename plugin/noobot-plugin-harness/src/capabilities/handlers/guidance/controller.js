@@ -163,16 +163,26 @@ function normalizePositiveInteger(value = 0, fallback = 0) {
   return Math.floor(num);
 }
 
-function resolveGuidanceAnalysisTurnsThreshold(ctx = {}) {
+function normalizeGuidanceAnalysisTurnsThreshold(value = undefined) {
+  const normalized = normalizePositiveInteger(value, 0);
+  if (!normalized) return 0;
+  return Math.min(10, Math.max(1, normalized));
+}
+
+function resolveGuidanceAnalysisTurnsThreshold(ctx = {}, meta = {}) {
   const modeThresholds = WORKFLOW_PARAMS.modeThresholds || {};
   const thresholdMode = resolveWorkflowThresholdModeFromContext(ctx);
   const scopedMode = modeThresholds[thresholdMode] || modeThresholds.full || {};
+  const runtimeThreshold = normalizeGuidanceAnalysisTurnsThreshold(
+    meta?.harness?.guidance?.analysis?.turnsThreshold,
+  );
   return {
     mode: modeThresholds[thresholdMode] ? thresholdMode : "full",
-    turnsThreshold: normalizePositiveInteger(
+    turnsThreshold: runtimeThreshold || normalizePositiveInteger(
       scopedMode?.guidance?.analysis?.turnsThreshold,
       WORKFLOW_PARAMS.guidance.analysis.turnsThreshold,
     ),
+    source: runtimeThreshold ? "runtime" : "workflow_params",
   };
 }
 
@@ -300,7 +310,7 @@ function maybeScheduleSummaryByToolBurst(ctx = {}, meta = {}) {
   return true;
 }
 
-function maybeScheduleGuidanceAnalysis(ctx = {}) {
+function maybeScheduleGuidanceAnalysis(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder?.state) return false;
   const state = holder.state;
@@ -318,7 +328,7 @@ function maybeScheduleGuidanceAnalysis(ctx = {}) {
     state.counters.lastGuidanceAnalysisCounterTurn = normalizedTurn;
   }
   state.counters.analysisTurns = Number(state.counters.analysisTurns || 0) + turnIncrement;
-  const threshold = resolveGuidanceAnalysisTurnsThreshold(ctx);
+  const threshold = resolveGuidanceAnalysisTurnsThreshold(ctx, meta);
   if (state.counters.analysisTurns < threshold.turnsThreshold) {
     return false;
   }
@@ -330,6 +340,7 @@ function maybeScheduleGuidanceAnalysis(ctx = {}) {
     detail: {
       triggerTurns: threshold.turnsThreshold,
       thresholdMode: threshold.mode,
+      thresholdSource: threshold.source,
     },
   });
   return true;
@@ -450,7 +461,7 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
     if (point === "before_llm_call") {
       const invariantChanged = enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.GUIDANCE }) === true;
       const summaryScheduleChanged = maybeScheduleGuidanceSummary(ctx) === true;
-      const scheduleChanged = maybeScheduleGuidanceAnalysis(ctx) === true;
+      const scheduleChanged = maybeScheduleGuidanceAnalysis(ctx, meta) === true;
       const holder = ensureHarnessBucket(ctx);
       const nextAction = resolveNextGuidanceAction(holder?.state || {});
       const decision = resolveGuidancePriorityDecision(holder?.state || {});

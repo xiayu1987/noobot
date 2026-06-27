@@ -138,6 +138,10 @@ export class RunConfigPluginPreparer {
     if (Object.keys(scopedCapabilityProfile).length) {
       next.capabilityProfile = mergeCapabilityProfile(next?.capabilityProfile, scopedCapabilityProfile);
     }
+    const scopedGuidance = normalizePlainObject(pluginScopedModelConfig?.guidance);
+    if (Object.keys(scopedGuidance).length) {
+      next.guidance = mergePlainObject(next?.guidance, scopedGuidance);
+    }
     next.resolveModelMessages = this.createAgentPluginResolveModelMessages({
       agentPluginOptions: next,
     });
@@ -531,6 +535,17 @@ function normalizePluginCapabilityProfile(capabilityProfile = {}) {
       })
       .filter(([key, value]) => key && value && typeof value === "object" && Object.keys(value).length),
   );
+}
+
+function normalizePlainObject(value = {}) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function mergePlainObject(baseValue = {}, scopedValue = {}) {
+  return {
+    ...normalizePlainObject(baseValue),
+    ...normalizePlainObject(scopedValue),
+  };
 }
 
 function mergeCapabilityProfile(baseProfile = {}, scopedProfile = {}) {

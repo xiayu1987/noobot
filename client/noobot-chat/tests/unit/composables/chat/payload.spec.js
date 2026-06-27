@@ -13,6 +13,9 @@ describe("buildChatPayload model preferences", () => {
       pluginModelConfig: {
         harness: {
           stepModels: { planning: "harness-programming" },
+          guidance: {
+            analysis: { turnsThreshold: 7 },
+          },
           capabilityProfile: {
             planning: { enabled: false },
             guidance: { enabled: false },
@@ -31,6 +34,9 @@ describe("buildChatPayload model preferences", () => {
       pluginModelConfig: {
         harness: {
           stepModels: { planning: "harness-programming" },
+          guidance: {
+            analysis: { turnsThreshold: 7 },
+          },
           capabilityProfile: {
             planning: { enabled: false },
             guidance: { enabled: false },

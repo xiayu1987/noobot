@@ -9,12 +9,6 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
-import {
-  findMessageIdentityIndex,
-  getMessageDialogProcessId,
-  getMessageRole,
-  isSameMessageIdentity,
-} from "../../../client/noobot-chat/src/composables/infra/messageIdentity.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const frontendIndexPath = resolve(__dirname, "../frontend/index.js");
@@ -22,15 +16,9 @@ const frontendIndexPath = resolve(__dirname, "../frontend/index.js");
 function loadFrontendRegistration() {
   const source = readFileSync(frontendIndexPath, "utf8")
     .replace(/import\s+([A-Za-z_$][\w$]*)\s+from\s+["'][^"']+["'];/g, "const $1 = {};")
-    .replace(/import\s*\{[\s\S]*?\}\s*from\s+["'][^"']*messageIdentity\.js["'];/g, "")
     .replace("export const FRONTEND_PLUGIN_API_VERSION", "const FRONTEND_PLUGIN_API_VERSION")
     .replace("export function registerFrontendPlugin", "function registerFrontendPlugin");
-  const sandbox = {
-    findMessageIdentityIndex,
-    getMessageDialogProcessId,
-    getMessageRole,
-    isSameMessageIdentity,
-  };
+  const sandbox = {};
   vm.runInNewContext(`${source}\n;globalThis.__frontend = { registerFrontendPlugin };`, sandbox, {
     filename: frontendIndexPath,
   });
