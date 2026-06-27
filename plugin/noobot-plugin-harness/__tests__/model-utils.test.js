@@ -22,6 +22,7 @@ import {
 import { buildModelMessagesWithStructuredEnvelope } from "../src/capabilities/handlers/shared/message/utils.js";
 import { buildHarnessInjectedMessage } from "../src/capabilities/handlers/shared/message/injected-message-utils.js";
 import { resolveDialogProcessIdFromContext } from "../src/capabilities/handlers/shared/runtime/dialog-process-id.js";
+import { markHarnessTurnLifecycle } from "../src/capabilities/handlers/shared/runtime/lifecycle-utils.js";
 
 function contextMessage(message = {}, key = "") {
   return markMessageAsContext(message, key);
@@ -251,6 +252,65 @@ test("incremental capability message cache can be cleared for summary reset", as
     ["sys", "u1"],
     ["sys", "u2-after-summary"],
   ]);
+});
+
+test("incremental capability message cache is cleared when agent turn ends", async () => {
+  const captured = [];
+  const ctx = {
+    sessionId: "incremental-cache-turn-end",
+    dialogProcessId: "turn-end-dialog-1",
+    agentContext: {
+      payload: {
+        sessionId: "incremental-cache-turn-end",
+        harness: {
+          state: {
+            flags: {},
+            signals: {},
+          },
+        },
+      },
+    },
+  };
+  const invoker = async ({ messages = [] } = {}) => {
+    captured.push(messages.map((item = {}) => item.content));
+    return { content: "ok" };
+  };
+
+  await invokeWithReasoningRetry({
+    invoker,
+    ctx,
+    purpose: "analysis",
+    invokePayload: {
+      purpose: "analysis",
+      messages: [
+        { role: "system", content: "sys" },
+        { role: "user", content: "old-turn-context" },
+      ],
+    },
+  });
+
+  markHarnessTurnLifecycle("after_turn", ctx);
+  const nextCtx = { ...ctx, dialogProcessId: "turn-end-dialog-2" };
+  markHarnessTurnLifecycle("before_turn", nextCtx);
+
+  await invokeWithReasoningRetry({
+    invoker,
+    ctx: nextCtx,
+    purpose: "analysis",
+    invokePayload: {
+      purpose: "analysis",
+      messages: [
+        { role: "system", content: "sys" },
+        { role: "user", content: "new-turn-context" },
+      ],
+    },
+  });
+
+  assert.deepEqual(captured, [
+    ["sys", "old-turn-context"],
+    ["sys", "new-turn-context"],
+  ]);
+  clearIncrementalCapabilityMessageCacheForContext(ctx);
 });
 
 test("incremental capability message cache keeps purpose lanes isolated", async () => {

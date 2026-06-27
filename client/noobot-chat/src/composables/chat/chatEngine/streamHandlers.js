@@ -288,7 +288,6 @@ export function handleDoneStreamEvent({
       { botMessage },
     );
   }
-  locateDoneMessage?.();
 }
 
 export function handleBasicStreamEvent(event, context = {}) {

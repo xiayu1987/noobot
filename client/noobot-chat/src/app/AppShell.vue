@@ -71,6 +71,11 @@ const composerMorePanelVisible = ref(false);
 let chatMessageNavigatorPanel = null;
 let appShellPanelActions = null;
 
+async function locateDoneMessageAfterRender() {
+  await nextTick();
+  locateDoneMessage();
+}
+
 function locateSendingStartedMessage() {
   chatMessageNavigatorPanel?.locateSendingStartedMessage?.();
 }
@@ -125,6 +130,7 @@ const {
     const route = parsePseudoRouteFromLocation();
     await fetchSessions(route.sessionId || "", { scrollToBottom: false });
     await applyPseudoRoute(route);
+    await locateDoneMessageAfterRender();
     chatWebSocketClient.connect();
     reconnectActiveSession({ force: true });
   },
@@ -387,8 +393,9 @@ async function onAppMounted() {
     replacePseudoRoute();
     return;
   }
-  initSessionsAfterMount({ scrollToBottom: false });
+  await initSessionsAfterMount({ scrollToBottom: false });
   replacePseudoRoute();
+  await locateDoneMessageAfterRender();
 }
 
 function onAppUnmounted() {

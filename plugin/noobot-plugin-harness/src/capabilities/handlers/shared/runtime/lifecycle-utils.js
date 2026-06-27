@@ -6,6 +6,7 @@
 import { ensureHarnessBucket } from "../bucket-utils.js";
 import { resolveDialogProcessIdFromContext } from "./dialog-process-id.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { clearIncrementalCapabilityMessageCacheForContext } from "../model/incremental-message-cache.js";
 
 const TURN_END_POINTS = new Set(["after_turn", "on_abort", "on_error"]);
 const TURN_START_POINTS = new Set(["before_turn", "before_context_build"]);
@@ -42,6 +43,7 @@ export function markHarnessTurnLifecycle(point = "", ctx = {}) {
 
   if (!TURN_END_POINTS.has(normalizedPoint)) return false;
   state.flags.agentTurnEnded = true;
+  clearIncrementalCapabilityMessageCacheForContext(ctx);
   if (!dialogProcessId) return true;
   if (!completedIds.includes(dialogProcessId)) {
     completedIds.push(dialogProcessId);
