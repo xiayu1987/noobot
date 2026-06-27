@@ -10,6 +10,7 @@ describe("buildChatPayload model preferences", () => {
       requestedTextStreaming: true,
       botScenario: "programming",
       selectedModel: "main-programming",
+      memoryModel: "memory-programming",
       pluginModelConfig: {
         harness: {
           stepModels: { planning: "harness-programming" },
@@ -31,6 +32,7 @@ describe("buildChatPayload model preferences", () => {
     expect(payload.config).toMatchObject({
       scenario: "programming",
       selectedModel: "main-programming",
+      memoryModel: "memory-programming",
       pluginModelConfig: {
         harness: {
           stepModels: { planning: "harness-programming" },

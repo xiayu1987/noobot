@@ -50,6 +50,14 @@ test("chat-run-service: normalizeRunConfig should omit streaming when not provid
   assert.equal(Object.prototype.hasOwnProperty.call(service.normalizeRunConfig({}), "streaming"), false);
 });
 
+test("chat-run-service: normalizeRunConfig should preserve memory model for top-level and agent compat config", () => {
+  const service = createService();
+  const normalized = service.normalizeRunConfig({ memoryModel: "  memory-gpt  ", scenario: "programming" });
+  assert.equal(normalized.memoryModel, "memory-gpt");
+  assert.equal(normalized.config.memoryModel, "memory-gpt");
+  assert.equal(normalized.config.scenario, "programming");
+});
+
 test("chat-run-service: normalizeRunConfig should preserve selected model for top-level and agent compat config", () => {
   const service = createService();
 

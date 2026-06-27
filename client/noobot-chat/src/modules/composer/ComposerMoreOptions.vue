@@ -21,6 +21,7 @@ const props = defineProps({
   normalizedPluginOptions: { type: Array, default: () => [] },
   selectedPluginKeySet: { type: Object, default: () => new Set() },
   selectedModel: { type: String, default: "" },
+  memoryModel: { type: String, default: "" },
   modelOptions: { type: Array, default: () => [] },
   pluginModelConfig: { type: Object, default: () => ({}) },
   resolveScenarioLabel: { type: Function, required: true },
@@ -34,6 +35,7 @@ const emit = defineEmits([
   "toggle-programming-scenario",
   "toggle-plugin",
   "update:selectedModel",
+  "update:memoryModel",
   "update:pluginModelConfig",
 ]);
 
@@ -243,6 +245,38 @@ function resolveComposerExtensionProps(renderer = {}) {
           </el-option>
         </el-select>
         <span v-if="!hasModelOptions" class="plugin-empty-text">{{ translate("composer.noAvailableModels") }}</span>
+      </div>
+
+      <div class="model-select-card">
+        <div class="model-field-copy">
+          <span class="model-field-label">{{ translate("composer.memoryExperienceModel") }}</span>
+          <span class="model-field-hint">{{ translate("composer.memoryExperienceModelHint") }}</span>
+        </div>
+        <el-select
+          :model-value="memoryModel"
+          size="small"
+          clearable
+          :filterable="false"
+          popper-class="noobot-composer-select-popper noobot-model-select-popper"
+          :disabled="!hasModelOptions"
+          :placeholder="translate('composer.useDefaultModel')"
+          class="composer-select model-select noobot-model-select-control"
+          @update:model-value="emit('update:memoryModel', String($event || '').trim())"
+        >
+          <el-option
+            v-for="modelItem in normalizedModelOptions"
+            :key="`memory-${modelItem.value}`"
+            :label="modelItem.label"
+            :value="modelItem.value"
+            class="model-select-option"
+          >
+            <div class="model-option-content">
+              <span class="model-option-label">{{ modelItem.label }}</span>
+              <span v-if="getModelMetaText(modelItem)" class="model-option-meta">{{ getModelMetaText(modelItem) }}</span>
+              <span v-if="modelItem.description" class="model-option-description">{{ modelItem.description }}</span>
+            </div>
+          </el-option>
+        </el-select>
       </div>
 
       <div class="plugin-model-extension">

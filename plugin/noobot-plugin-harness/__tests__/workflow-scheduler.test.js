@@ -18,8 +18,8 @@ test("workflow scheduler order is described by one flow/subflow config item", ()
     WORKFLOW_SCHEDULER_ORDER.map((item = {}) => `${item.flow}:${item.subflow}:${item.action}`),
     [
       "final_acceptance:forced:forced_acceptance",
-      "guidance:failure_recovery:guidance",
       "planning:bootstrap:planning_bootstrap",
+      "guidance:failure_recovery:guidance",
       "plan_update:revision:plan_update_revision",
       "plan_update:refinement:plan_update_refinement",
       "phase_acceptance:phase:phase_acceptance",

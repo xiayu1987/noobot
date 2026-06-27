@@ -16,6 +16,7 @@ export function buildChatPayload({
   requestedTextStreaming = true,
   botScenario,
   selectedModel,
+  memoryModel,
   pluginModelConfig,
   locale,
   selectedPlugins,
@@ -25,6 +26,7 @@ export function buildChatPayload({
 } = {}) {
   const normalizedScenario = normalizeTrimmedString(botScenario?.value ?? botScenario);
   const normalizedSelectedModel = normalizeTrimmedString(selectedModel?.value ?? selectedModel);
+  const normalizedMemoryModel = normalizeTrimmedString(memoryModel?.value ?? memoryModel);
   const normalizedPluginModelConfig = pluginModelConfig?.value ?? pluginModelConfig;
   const normalizedTurnScopeId = normalizeTrimmedString(turnScopeId);
   return {
@@ -39,6 +41,7 @@ export function buildChatPayload({
       streaming: requestedTextStreaming,
       ...(normalizedScenario ? { scenario: normalizedScenario } : {}),
       ...(normalizedSelectedModel ? { selectedModel: normalizedSelectedModel } : {}),
+      ...(normalizedMemoryModel ? { memoryModel: normalizedMemoryModel } : {}),
       ...(normalizedPluginModelConfig && typeof normalizedPluginModelConfig === "object" && !Array.isArray(normalizedPluginModelConfig)
         ? { pluginModelConfig: normalizedPluginModelConfig }
         : {}),

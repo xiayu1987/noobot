@@ -13,6 +13,74 @@ function resolveFromBlocks({ ctx = {} } = {}) {
   }).messages;
 }
 
+test("capability runtime runs global bootstrap before capability handlers", async () => {
+  const calls = [];
+  const runtime = createCapabilityRuntime({
+    profile: {
+      planning: { enabled: true },
+      guidance: { enabled: false },
+      acceptance: { enabled: false },
+      review: { enabled: false },
+    },
+    handlers: {
+      planning: async () => {
+        calls.push("planning");
+        return { capability: "planning", point: "before_llm_call", status: "ok" };
+      },
+    },
+  });
+
+  await runtime.runHook("before_llm_call", {}, {
+    harness: {
+      globalBootstrap: async () => {
+        calls.push("globalBootstrap");
+      },
+    },
+  });
+
+  assert.deepEqual(calls, ["globalBootstrap", "planning"]);
+});
+
+test("capability runtime gives uncaptured main planning exclusive before_llm_call priority", async () => {
+  const calls = [];
+  const runtime = createCapabilityRuntime({
+    handlers: {
+      planning: async () => {
+        calls.push("planning");
+        return { capability: "planning", point: "before_llm_call", status: "active" };
+      },
+      guidance: async () => {
+        calls.push("guidance");
+        return { capability: "guidance", point: "before_llm_call", status: "active" };
+      },
+      acceptance: async () => {
+        calls.push("acceptance");
+        return { capability: "acceptance", point: "before_llm_call", status: "active" };
+      },
+    },
+    profile: {
+      review: { enabled: false },
+    },
+  });
+  const ctx = {
+    agentContext: {
+      payload: {
+        harness: {
+          state: {
+            flags: { planningCaptured: false },
+          },
+        },
+      },
+    },
+    messages: [],
+  };
+
+  const results = await runtime.runHook("before_llm_call", ctx, {});
+
+  assert.deepEqual(calls, ["planning"]);
+  assert.deepEqual(results.map((item = {}) => item.capability), ["planning"]);
+});
+
 test("capability runtime delegates before_llm_call messages to agent resolver", async () => {
   const runtime = createCapabilityRuntime({
     profile: {
@@ -311,7 +379,15 @@ test("capability runtime keeps later flows running when one flow fails", async (
       review: { enabled: false },
     },
   });
-  const agentContext = { payload: { harness: {} } };
+  const agentContext = {
+    payload: {
+      harness: {
+        state: {
+          flags: { planningCaptured: true },
+        },
+      },
+    },
+  };
   const results = await runtime.runHook("before_llm_call", { agentContext, messages: [] }, {});
 
   assert.deepEqual(calls, ["planning", "guidance", "acceptance"]);

@@ -51,8 +51,7 @@ export const HARNESS_SESSION_CLEANUP_POINTS = Object.freeze([
 
 export function shouldInjectPromptAtPoint(point = "", options = {}) {
   return (
-    point === HARNESS_HOOK_POINTS.BEFORE_LLM_CALL ||
-    (point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT && options.finalResponseGuard !== false)
+    point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT && options.finalResponseGuard !== false
   );
 }
 
@@ -84,10 +83,16 @@ export function createRegisterHarnessHooks(deps = {}) {
             normalizeHookContextProtocol(point, ctx);
             emitHarnessHookProgressFn(ctx, "hook_start", { point });
             try {
+              const globalBootstrap = async () => {
+                if (point !== HARNESS_HOOK_POINTS.BEFORE_LLM_CALL) return;
+                await injectPromptFn(point, ctx, options, plugin);
+                emitHarnessHookProgressFn(ctx, "global_bootstrap_done", { point });
+              };
               await capabilityRuntime.runHook(point, ctx, {
                 pluginName: plugin.name,
                 pluginVersion: plugin.version,
                 harness: {
+                  globalBootstrap,
                   planningGuidanceMode: options.planningGuidanceMode,
                   summaryOnToolBurstThreshold: options.summaryOnToolBurstThreshold === true,
                   summaryDetailSaveToAttachment: options.summaryDetailSaveToAttachment === true,
@@ -110,7 +115,10 @@ export function createRegisterHarnessHooks(deps = {}) {
               });
               emitHarnessHookProgressFn(ctx, "capability_runtime_done", { point });
 
-              if (shouldInjectPromptAtPointFn(point, options)) {
+              if (
+                point !== HARNESS_HOOK_POINTS.BEFORE_LLM_CALL &&
+                shouldInjectPromptAtPointFn(point, options)
+              ) {
                 await injectPromptFn(point, ctx, options, plugin);
                 emitHarnessHookProgressFn(ctx, "prompt_injected", { point });
               }

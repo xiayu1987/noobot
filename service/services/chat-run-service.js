@@ -108,11 +108,13 @@ export function createChatRunService({
         })
       : 0;
     const selectedModel = normalizeSelectedModel(source?.selectedModel);
+    const memoryModel = normalizeSelectedModel(source?.memoryModel);
     const pluginModelConfig = normalizePluginModelConfig(source?.pluginModelConfig);
     const normalizedTurnScopeId = String(source?.turnScopeId || "").trim();
     const compatConfig = {
       ...(hasScenarioField ? { scenario } : {}),
       ...(selectedModel ? { selectedModel } : {}),
+      ...(memoryModel ? { memoryModel } : {}),
       ...(pluginModelConfig ? { pluginModelConfig } : {}),
     };
     return {
@@ -122,6 +124,7 @@ export function createChatRunService({
       locale,
       scenario,
       ...(selectedModel ? { selectedModel } : {}),
+      ...(memoryModel ? { memoryModel } : {}),
       ...(pluginModelConfig ? { pluginModelConfig } : {}),
       ...(Object.keys(compatConfig).length ? { config: compatConfig } : {}),
       ...(Number.isFinite(runTimeoutMs) && runTimeoutMs > 0

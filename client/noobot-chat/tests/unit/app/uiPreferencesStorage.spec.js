@@ -6,6 +6,7 @@ import {
   persistPluginModelConfigPreference,
   persistPluginModelConfigPreferenceByScenario,
   persistSelectedModelPreference,
+  persistMemoryModelPreference,
   normalizeAvailableBotScenarios,
   readPluginModelConfigPreference,
   readSelectedModelPreference,
@@ -40,6 +41,7 @@ describe("ui preferences storage", () => {
       botScenario: "",
       selectedModel: "",
       selectedModelByScenario: {},
+      memoryModel: "",
       pluginModelConfig: {},
     });
 
@@ -57,6 +59,7 @@ describe("ui preferences storage", () => {
       botScenario: "workflow",
       selectedModel: "",
       selectedModelByScenario: {},
+      memoryModel: "",
       pluginModelConfig: {},
     });
   });
@@ -329,4 +332,11 @@ describe("ui preferences storage", () => {
     });
   });
 
+});
+
+
+it("stores memoryModel by scenario", () => {
+  persistMemoryModelPreference("memory-programming", "programming");
+  localStorage.setItem("noobot_bot_scenario", "programming");
+  expect(loadUiPreferences().memoryModel).toBe("memory-programming");
 });

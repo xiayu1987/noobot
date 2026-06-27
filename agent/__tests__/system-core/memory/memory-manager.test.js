@@ -227,6 +227,61 @@ test("maybeSummarize writes object-shaped long memory model output", async () =>
 });
 
 
+test("maybeSummarize uses configured memoryModel for long memory and experience processing", async () => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
+  const userId = "admin";
+  const userRoot = path.join(workspaceRoot, userId);
+  await mkdir(path.join(userRoot, "memory"), { recursive: true });
+  const shortItems = Array.from({ length: 30 }, (_, index) => ({
+    records: [{ role: "user", content: `用户消息 ${index + 1}` }],
+    createdAt: new Date(2026, 0, index + 1).toISOString(),
+  }));
+  await writeFile(path.join(userRoot, "memory/short-memory.json"), JSON.stringify({ items: shortItems }, null, 2));
+
+  const resolvedModelNames = [];
+  const createdModelNames = [];
+  const prompts = [];
+  setModelAdapter({
+    resolveDefaultModelSpec: () => ({ alias: "default-memory-model" }),
+    resolveModelSpecByName: ({ modelName }) => {
+      resolvedModelNames.push(modelName);
+      return modelName === "selected-memory-model" ? { alias: "selected-memory-model" } : null;
+    },
+    createChatModelByName: (modelName) => {
+      createdModelNames.push(modelName);
+      return {
+        invoke: async (prompt) => {
+          prompts.push(String(prompt || ""));
+          if (prompts.length === 1) {
+            return { content: "ADD L[1] 使用专用记忆模型" };
+          }
+          return {
+            content: 'ADD D[1] domain="模型选择" new=true experiences="记忆处理使用专用模型" lessons="不要复用主流程模型假设"',
+          };
+        },
+      };
+    },
+  });
+
+  try {
+    const service = new MemoryManager({ workspaceRoot });
+    await service.maybeSummarize({ userId, userConfig: { memoryModel: "selected-memory-model" } });
+  } finally {
+    resetModelAdapter();
+  }
+
+  assert.deepEqual(resolvedModelNames, ["selected-memory-model"]);
+  assert.deepEqual(createdModelNames, ["selected-memory-model"]);
+  assert.equal(prompts.length >= 2, true);
+  const longMemoryDoc = await readFile(path.join(userRoot, "memory/long-memory.md"), "utf8");
+  assert.match(longMemoryDoc, /使用专用记忆模型/);
+  const summaryRoot = path.join(userRoot, "memory/daily_summary");
+  const dateDirs = await readdir(summaryRoot);
+  assert.equal(dateDirs.length, 1);
+  const files = await readdir(path.join(summaryRoot, dateDirs[0]));
+  assert.deepEqual(files, ["模型选择.md"]);
+});
+
 test("maybeSummarize does not clear short memory for unreadable long memory patch", async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
   const userId = "admin";

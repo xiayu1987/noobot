@@ -282,6 +282,8 @@ export const zhCNMessages = {
     "modelSelectionDescription": "仅展示已启用且可用于对话的模型；未保存时默认选中系统默认模型。",
     "mainFlowModel": "场景主流程",
     "mainFlowModelHint": "各个场景会优先使用这里选择的模型。",
+    "memoryExperienceModel": "处理长期记忆经验及教训",
+    "memoryExperienceModelHint": "长期记忆更新、每日/每周/每月/每年经验教训处理会优先使用这里选择的模型。",
     "useDefaultModel": "使用系统默认模型",
     "modelUsingDefault": "系统默认模型",
     "pluginModelExtensions": "插件模型扩展",

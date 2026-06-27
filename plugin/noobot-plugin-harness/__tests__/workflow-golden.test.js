@@ -82,8 +82,8 @@ test("golden: unified scheduler order stays stable", () => {
     WORKFLOW_SCHEDULER_ORDER.map((item = {}) => item.action),
     [
       "forced_acceptance",
-      "guidance",
       "planning_bootstrap",
+      "guidance",
       "plan_update_revision",
       "plan_update_refinement",
       "phase_acceptance",
