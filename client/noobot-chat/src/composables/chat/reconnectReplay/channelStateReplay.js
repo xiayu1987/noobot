@@ -34,6 +34,7 @@ import {
   rememberThinkingFinished,
   rememberThinkingStarted,
 } from "../thinkingTimingRegistry";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 function parseThinkingTimingMs(value) {
   return parseTimeMs(value);
@@ -144,7 +145,7 @@ export function scheduleMissingInteractionPayloadFailure({
   applyAssistantFailureState,
   emitSyntheticErrorConversationState,
   notify = () => {},
-  timeoutMs = 1200,
+  timeoutMs = TIME_THRESHOLDS.client.missingInteractionPayloadTimeoutMs,
 } = {}) {
   if (hasPendingInteractionForDialog(pendingInteractionRequest, dialogProcessId)) return;
   const key = getInteractionPayloadWaitKey({ sessionId, dialogProcessId });

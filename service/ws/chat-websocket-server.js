@@ -17,10 +17,11 @@ import {
 } from "#agent/config";
 import { logError } from "#agent/tracking";
 import { HTTP_STATUS } from "#agent/constants";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const DEFAULT_RUN_TIMEOUT_MS = BUILTIN_THRESHOLDS.runTimeoutMs;
-const MIN_RUN_TIMEOUT_MS = 10000;
-const MAX_RUN_TIMEOUT_MS = 12 * 60 * 60 * 1000;
+const MIN_RUN_TIMEOUT_MS = TIME_THRESHOLDS.agent.minRunTimeoutMs;
+const MAX_RUN_TIMEOUT_MS = TIME_THRESHOLDS.agent.maxRunTimeoutMs;
 
 function resolveRunTimeoutMs(rawValue) {
   return normalizeTimeMs(rawValue, {

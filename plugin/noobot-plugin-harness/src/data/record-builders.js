@@ -5,6 +5,7 @@
  */
 import crypto from "node:crypto";
 import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/runtime/dialog-process-id.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 function stableStringify(value) {
   try {
@@ -36,14 +37,14 @@ export function safeError(error) {
   };
 }
 
-export function preview(value, maxChars = 1200) {
+export function preview(value, maxChars = LENGTH_THRESHOLDS.display.harnessPreviewChars) {
   if (value == null) return "";
   const text = typeof value === "string" ? value : JSON.stringify(value);
   return String(text || "").slice(0, Math.max(0, Number(maxChars) || 0));
 }
 
 function buildPayloadPreview(point, ctx = {}, options = {}) {
-  const maxPreviewChars = options.maxPreviewChars || 1200;
+  const maxPreviewChars = options.maxPreviewChars || LENGTH_THRESHOLDS.display.harnessPreviewChars;
   if (point === "before_llm_call" || point === "after_llm_call") {
     return {
       messageCount: Array.isArray(ctx.messages) ? ctx.messages.length : undefined,
@@ -149,7 +150,12 @@ export function buildContextSnapshot({ ctx = {}, pluginName = "", pluginVersion 
   };
 }
 
-export function buildPromptRecord({ promptId = "", point = "", content = "", maxPreviewChars = 1200 } = {}) {
+export function buildPromptRecord({
+  promptId = "",
+  point = "",
+  content = "",
+  maxPreviewChars = LENGTH_THRESHOLDS.display.harnessPreviewChars,
+} = {}) {
   return {
     promptId,
     point,

@@ -12,15 +12,16 @@ import { spawn } from "node:child_process";
 import { existsSync, openSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { BUILTIN_THRESHOLDS, normalizeTimeMs, resolveTimeMs } from "#agent/config";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const DEFAULT_COMMAND = "openvscode-server";
 const CURRENT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_START_TIMEOUT_MS = BUILTIN_THRESHOLDS.openvscode.startTimeoutMs;
 const DEFAULT_IDLE_TIMEOUT_MS = BUILTIN_THRESHOLDS.openvscode.idleTimeoutMs;
-const DEFAULT_CLEANUP_INTERVAL_MS = 60000;
-const DEFAULT_SHUTDOWN_GRACE_MS = 5000;
-const DEFAULT_TOUCH_PERSIST_INTERVAL_MS = 30000;
+const DEFAULT_CLEANUP_INTERVAL_MS = TIME_THRESHOLDS.openvscode.cleanupIntervalMs;
+const DEFAULT_SHUTDOWN_GRACE_MS = TIME_THRESHOLDS.openvscode.shutdownGraceMs;
+const DEFAULT_TOUCH_PERSIST_INTERVAL_MS = TIME_THRESHOLDS.openvscode.touchPersistIntervalMs;
 const IDE_PATH_PREFIX = "/ide";
 const IDE_TOKEN_QUERY_KEY = "tkn";
 const IDE_TOKEN_HEADER_KEY = "x-ide-token";
@@ -143,7 +144,11 @@ function isProcessAlive(pid = 0) {
   }
 }
 
-function isPortOpen({ host = DEFAULT_HOST, port = 0, timeoutMs = 500 } = {}) {
+function isPortOpen({
+  host = DEFAULT_HOST,
+  port = 0,
+  timeoutMs = TIME_THRESHOLDS.openvscode.portProbeTimeoutMs,
+} = {}) {
   return new Promise((resolve) => {
     const socket = net.createConnection({ host, port: Number(port || 0) });
     const finish = (ok) => {
@@ -439,9 +444,13 @@ export function createOpenVSCodeService({
     while (Date.now() < deadline) {
       const spawnError = typeof getSpawnError === "function" ? getSpawnError() : null;
       if (spawnError) throw spawnError;
-      if (await isPortOpen({ host: instance.host || DEFAULT_HOST, port: instance.port, timeoutMs: 350 })) return true;
+      if (await isPortOpen({
+        host: instance.host || DEFAULT_HOST,
+        port: instance.port,
+        timeoutMs: TIME_THRESHOLDS.openvscode.waitProbeTimeoutMs,
+      })) return true;
       if (instance.pid && !isProcessAlive(instance.pid)) return false;
-      await sleep(350);
+      await sleep(TIME_THRESHOLDS.openvscode.waitProbeTimeoutMs);
     }
     return false;
   }

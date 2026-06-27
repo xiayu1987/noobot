@@ -5,9 +5,11 @@
  */
 import crypto from "node:crypto";
 import { emitEvent } from "../../../event/index.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
-const DEFAULT_PREVIEW_LIMIT = 40;
-const DEFAULT_CONTENT_CHARS = 120;
+const DEFAULT_PREVIEW_LIMIT = QUANTITY_THRESHOLDS.diagnostics.modelContextPreviewLimit;
+const DEFAULT_CONTENT_CHARS = LENGTH_THRESHOLDS.display.modelContextContentChars;
 
 function parseTraceToggle(value) {
   if (value === true || value === false) return value;

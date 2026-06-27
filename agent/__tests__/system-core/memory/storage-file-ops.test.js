@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { mkdtemp, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 const FILE_OPS_MODULE_URL = new URL(
   "../../../src/system-core/memory/storage/file-ops.js",
@@ -22,28 +23,24 @@ test("splitTextIntoChunks splits by max chars", async () => {
 });
 
 test("writeText/readText/appendText supports split part files", async () => {
-  const prev = process.env.NOOBOT_MEMORY_FILE_SPLIT_MAX_CHARS;
-  process.env.NOOBOT_MEMORY_FILE_SPLIT_MAX_CHARS = "10";
-  try {
-    const { writeText, appendText, readText } = await import(buildFreshModuleUrl());
-    const root = await mkdtemp(path.join(tmpdir(), "noobot-memory-split-"));
-    const filePath = path.join(root, "memory.md");
+  const { writeText, appendText, readText } = await import(buildFreshModuleUrl());
+  const root = await mkdtemp(path.join(tmpdir(), "noobot-memory-split-"));
+  const filePath = path.join(root, "memory.md");
+  const splitMaxChars = LENGTH_THRESHOLDS.memory.fileSplitChars;
+  const initialText = "x".repeat(splitMaxChars * 2 + 3);
+  const appendedText = "y".repeat(7);
 
-    await writeText(filePath, "x".repeat(23));
-    const filesAfterWrite = (await readdir(root)).sort();
-    assert.deepEqual(filesAfterWrite, ["memory.md", "memory.md.part1", "memory.md.part2"]);
-    assert.equal(await readText(filePath, ""), "x".repeat(23));
+  await writeText(filePath, initialText);
+  const filesAfterWrite = (await readdir(root)).sort();
+  assert.deepEqual(filesAfterWrite, ["memory.md", "memory.md.part1", "memory.md.part2"]);
+  assert.equal(await readText(filePath, ""), initialText);
 
-    await appendText(filePath, "y".repeat(7));
-    const filesAfterAppend = (await readdir(root)).sort();
-    assert.deepEqual(filesAfterAppend, [
-      "memory.md",
-      "memory.md.part1",
-      "memory.md.part2",
-    ]);
-    assert.equal(await readText(filePath, ""), "x".repeat(23) + "y".repeat(7));
-  } finally {
-    if (prev === undefined) delete process.env.NOOBOT_MEMORY_FILE_SPLIT_MAX_CHARS;
-    else process.env.NOOBOT_MEMORY_FILE_SPLIT_MAX_CHARS = prev;
-  }
+  await appendText(filePath, appendedText);
+  const filesAfterAppend = (await readdir(root)).sort();
+  assert.deepEqual(filesAfterAppend, [
+    "memory.md",
+    "memory.md.part1",
+    "memory.md.part2",
+  ]);
+  assert.equal(await readText(filePath, ""), initialText + appendedText);
 });

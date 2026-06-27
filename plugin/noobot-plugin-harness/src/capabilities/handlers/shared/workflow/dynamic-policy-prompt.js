@@ -4,9 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 export const DYNAMIC_POLICY_PROMPT_BLOCK = "HARNESS_DYNAMIC_POLICY_PROMPT";
-const MAX_DYNAMIC_POLICY_PROMPT_CHARS = 4000;
+const MAX_DYNAMIC_POLICY_PROMPT_CHARS =
+  LENGTH_THRESHOLDS.contextPreview.harnessDynamicPolicyPromptChars;
 const VALID_SCENARIOS = new Set(["general", "text", "programming"]);
 
 function normalizeText(value = "") {

@@ -128,6 +128,14 @@
 | `tools.request_help.tool_failure_help_count` | number | 触发用户帮助提示的连续失败阈值（默认 3） |
 | `tools.email_connect_connector.enabled` | boolean | 启用邮件连接器工具 |
 
+大上下文长度阈值默认值：
+- 阶段小结字符阈值：225000
+- semantic-transfer 直传阈值：30000 字符
+- semantic-transfer 工具结果 inline 阈值：30000 字符
+- semantic-transfer 工具输入 overflow 阈值：30000 字符
+
+长度相关阈值统一集中在 `@noobot/shared/length-thresholds`（`shared/length-thresholds.mjs`）。后续调整字符数、字节数、字符串预览长度时优先改这个包导出。
+
 说明：
 - `docker_mounts` 不配置或为空时，不添加额外挂载。
 - 单条映射仅在 `source` 与 `target` 同时非空时生效。
@@ -227,6 +235,8 @@
 | `providers.<alias>.multimodal_generation.support_understanding` | boolean | 是否支持多模态理解 |
 | `providers.<alias>.multimodal_generation.support_generation.enabled` | boolean | 是否支持多模态生成 |
 | `providers.<alias>.multimodal_generation.support_generation.support_scope` | string[] | 生成范围（如 `["image"]`） |
+
+模型系列默认参数、Prompt Cache 命中优化、`use_responses_api` 策略见：`docs/model-provider-adaptation-cache.md`。
 
 ### 3.8 MCP 服务（`mcp_servers.<name>`）
 

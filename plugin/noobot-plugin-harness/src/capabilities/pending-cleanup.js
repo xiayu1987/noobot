@@ -5,9 +5,10 @@
  */
 import { CAPABILITY_DOMAIN, appendCapabilityLog, ensureHarnessBucket } from "./handlers/shared.js";
 import { HARNESS_HOOK_POINTS } from "../core/constants.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
-const DEFAULT_PENDING_TTL_HOOK_TURNS = 8;
-const WARN_COOLDOWN_TURNS = 3;
+const DEFAULT_PENDING_TTL_HOOK_TURNS = TURN_THRESHOLDS.harness.pendingTtlHookTurns;
+const WARN_COOLDOWN_TURNS = TURN_THRESHOLDS.harness.pendingWarnCooldownTurns;
 const TRACKED_PENDING_KEYS = Object.freeze([
   "guidance",
   "analysis",

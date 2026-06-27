@@ -51,6 +51,7 @@
     "mysql2": "^3.22.5",
     "node-poppler": "^9.1.2",
     "nodemailer": "^9.0.1",
+    "@noobot/shared": "file:../shared",
     "noobot-agent": "file:../agent",
     "noobot-i18n": "file:../i18n",
     "openai": "^6.44.0",

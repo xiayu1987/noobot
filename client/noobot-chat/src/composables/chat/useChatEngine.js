@@ -15,9 +15,12 @@ import { createMonotonicMessageActions } from "./chatEngine/monotonicMessageActi
 import { createChatEngineSender } from "./chatEngine/sendFlow";
 import { createPendingMessageOperationStore } from "./chatEngine/messageOperationStore";
 import { applySessionRunStateEvent } from "./sessionRunStateMachine";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
-const DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS = 3000;
-const DEFAULT_MONOTONIC_ACTION_STOP_POLL_INTERVAL_MS = 50;
+const DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS =
+  TIME_THRESHOLDS.client.monotonicActionStopTimeoutMs;
+const DEFAULT_MONOTONIC_ACTION_STOP_POLL_INTERVAL_MS =
+  TIME_THRESHOLDS.client.monotonicActionStopPollIntervalMs;
 export function useChatEngine({
   userId,
   allowUserInteraction,

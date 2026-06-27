@@ -7,6 +7,7 @@
 import { WORKFLOW_BOT_HOOK_POINTS, WORKFLOW_SEMANTIC } from "../constants.js";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import { resolveWorkflowAgentContext } from "./runtime.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 export function resolveAssistantOutput(agentResult = {}) {
   const direct = String(agentResult?.output || agentResult?.answer || "").trim();
@@ -50,11 +51,15 @@ export function extractWorkflowMessageTextContent(content = "") {
   return String(content || "").trim();
 }
 
-export function compactWorkflowText(input = "", maxLength = 500) {
+export function compactWorkflowText(
+  input = "",
+  maxLength = LENGTH_THRESHOLDS.contextPreview.workflowCompactTextChars,
+) {
   const raw = String(input || "")
     .replace(/\s+/g, " ")
     .trim();
-  const limit = Number.isFinite(Number(maxLength)) ? Math.max(80, Math.floor(Number(maxLength))) : 500;
+  const fallback = LENGTH_THRESHOLDS.contextPreview.workflowCompactTextChars;
+  const limit = Number.isFinite(Number(maxLength)) ? Math.max(80, Math.floor(Number(maxLength))) : fallback;
   if (raw.length <= limit) return raw;
   return `${raw.slice(0, limit).trim()}...`;
 }

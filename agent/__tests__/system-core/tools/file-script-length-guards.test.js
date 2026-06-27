@@ -7,6 +7,7 @@ import path from "node:path";
 import { createFileTool } from "../../../src/system-core/tools/execution/file-tool.js";
 import { executeToolCall } from "../../../src/system-core/agent/core/execution/tool-runner.js";
 import { transferSemanticContent } from "../../../src/system-core/semantic-transfer/index.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import {
   buildExecutionWorkspaceMeta,
   buildScriptExecutionMeta,
@@ -81,7 +82,7 @@ function buildAttachmentService() {
   };
 }
 
-test("execute_script: command 超过 200000 字符时由 semantic-transfer 保存附件并直接提示", async () => {
+test("execute_script: command 超过 semantic-transfer 阈值时保存附件并直接提示", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-guard-"));
   let invoked = false;
   const tool = {
@@ -91,7 +92,7 @@ test("execute_script: command 超过 200000 字符时由 semantic-transfer 保�
     },
   };
 
-  const command = "a".repeat(200001);
+  const command = "a".repeat(LENGTH_THRESHOLDS.semanticTransfer.toolInputOverflowChars + 1);
   const runnerResult = await executeToolCall({
     call: { id: "call_long_script", name: "execute_script", args: { command } },
     tool,
@@ -256,7 +257,7 @@ test("execute_script: Docker 返回仅保留镜像名和当前 workspace 视角"
   assert.deepEqual(meta.workspace.allowedRoots, ["/workspace", "/project"]);
 });
 
-test("write_file: content 超过 200000 字符时由 semantic-transfer 保存附件并直接提示", async () => {
+test("write_file: content 超过 semantic-transfer 阈值时保存附件并直接提示", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-write-guard-"));
   let invoked = false;
   const tool = {
@@ -267,7 +268,7 @@ test("write_file: content 超过 200000 字符时由 semantic-transfer 保存附
   };
 
   const filePath = "large.txt";
-  const content = "x".repeat(200001);
+  const content = "x".repeat(LENGTH_THRESHOLDS.semanticTransfer.toolInputOverflowChars + 1);
   const runnerResult = await executeToolCall({
     call: { id: "call_long_write", name: "write_file", args: { filePath, content } },
     tool,
@@ -412,7 +413,11 @@ test("search: text 输入超过上限时由 semantic-transfer 保存附件并直
     call: {
       id: "call_long_search_text",
       name: "search",
-      args: { source: "text", query: "needle", text: "x".repeat(200001) },
+      args: {
+        source: "text",
+        query: "needle",
+        text: "x".repeat(LENGTH_THRESHOLDS.semanticTransfer.toolInputOverflowChars + 1),
+      },
     },
     tool,
     runtime: {
@@ -439,7 +444,7 @@ test("search: text 输入超过上限时由 semantic-transfer 保存附件并直
   assert.equal(result.toolInputOverflow?.field, "text");
 });
 
-test("patch_file: patch 超过 200000 字符时由 semantic-transfer 保存附件并直接提示", async () => {
+test("patch_file: patch 超过 semantic-transfer 阈值时保存附件并直接提示", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-guard-"));
   let invoked = false;
   const tool = {
@@ -453,7 +458,10 @@ test("patch_file: patch 超过 200000 字符时由 semantic-transfer 保存附�
     call: {
       id: "call_long_patch",
       name: "patch_file",
-      args: { format: "apply_patch", patch: "x".repeat(200001) },
+      args: {
+        format: "apply_patch",
+        patch: "x".repeat(LENGTH_THRESHOLDS.semanticTransfer.toolInputOverflowChars + 1),
+      },
     },
     tool,
     runtime: {

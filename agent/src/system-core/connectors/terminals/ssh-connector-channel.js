@@ -5,6 +5,7 @@
  */
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { normalizeTimeMs, resolveTimeMs } from "../../config/core/time-config-normalizer.js";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 function resolveSshConnection(connectionInfo = {}) {
   const source =
@@ -22,7 +23,7 @@ function resolveSshConnection(connectionInfo = {}) {
       legacyKeys: ["timeout_ms"],
       sourceTag: "connectors.terminal.ssh",
       warnLegacy: true,
-      fallback: 30000,
+      fallback: TIME_THRESHOLDS.connectors.defaultCommandTimeoutMs,
       min: 1000,
     }),
   };
@@ -162,7 +163,11 @@ function parseExitCodeFromOutput(output = "", marker = "") {
   return { hasMarker: true, exitCode, cleaned };
 }
 
-function runSshShellCommand(state, command = "", timeoutMs = 30000) {
+function runSshShellCommand(
+  state,
+  command = "",
+  timeoutMs = TIME_THRESHOLDS.connectors.defaultCommandTimeoutMs,
+) {
   return new Promise((resolve, reject) => {
     if (!state?.stream || !state?.ready) {
       reject(new Error("ssh shell not ready"));

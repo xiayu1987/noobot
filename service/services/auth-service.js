@@ -7,8 +7,9 @@ import { logError } from "#agent/tracking";
 import { normalizeTimeMs } from "#agent/config";
 import { randomBytes } from "node:crypto";
 import { HTTP_STATUS } from "#agent/constants";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
-const DEFAULT_API_KEY_TTL_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_API_KEY_TTL_MS = TIME_THRESHOLDS.service.apiKeyTtlMs;
 
 export function createAuthService({
   initialApiKeyTtlMs = DEFAULT_API_KEY_TTL_MS,

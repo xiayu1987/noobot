@@ -14,6 +14,7 @@
     "check:model-context-convergence": "node ../../scripts/check-model-context-convergence.mjs"
   },
   "dependencies": {
+    "@noobot/shared": "file:../../shared",
     "@langchain/core": "^1.2.0",
     "zod": "^4.4.3"
   }

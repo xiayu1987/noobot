@@ -1,6 +1,8 @@
 import { nowMs } from "../composables/infra/timeFields";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 const CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_KEY = "__noobotChatNavPendingAnchor";
-export const CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_MS = 1400;
+export const CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_MS =
+  TIME_THRESHOLDS.client.chatMessageNavigatorScrollLockMs;
 
 function getAnchorId(anchor = {}) {
   return String(anchor?.dataset?.chatMessageAnchor || anchor?.id || "");

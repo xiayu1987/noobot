@@ -7,6 +7,8 @@ import { createRequire } from "node:module";
 import { isReadabilityExtractorReady } from "../text-cleaner.js";
 import { deepMerge, isPlainObject } from "../../shared-utils.js";
 import { normalizeTimeMs } from "../../../config/core/time-config-normalizer.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const require = createRequire(import.meta.url);
 
@@ -51,28 +53,28 @@ const DEFAULT_CONFIG = {
 
 const WEB2IMG_RUNTIME_DEFAULTS_RAW = {
   page: {
-    loadTimeoutMs: 45000,
-    readyStateTimeoutMs: 20000,
-    networkIdleTimeoutMs: 12000,
-    readyPostWaitMs: 800,
-    gotoTimeoutMs: 45000,
+    loadTimeoutMs: TIME_THRESHOLDS.web.web2img.loadTimeoutMs,
+    readyStateTimeoutMs: TIME_THRESHOLDS.web.web2img.readyStateTimeoutMs,
+    networkIdleTimeoutMs: TIME_THRESHOLDS.web.web2img.networkIdleTimeoutMs,
+    readyPostWaitMs: TIME_THRESHOLDS.web.web2img.readyPostWaitMs,
+    gotoTimeoutMs: TIME_THRESHOLDS.web.web2img.gotoTimeoutMs,
   },
   expand: {
     maxMatchCount: 20,
-    visibleTimeoutMs: 500,
-    clickTimeoutMs: 800,
-    postClickWaitMs: 150,
+    visibleTimeoutMs: TIME_THRESHOLDS.web.web2img.expandVisibleTimeoutMs,
+    clickTimeoutMs: TIME_THRESHOLDS.web.web2img.expandClickTimeoutMs,
+    postClickWaitMs: TIME_THRESHOLDS.web.web2img.expandPostClickWaitMs,
   },
   scroll: {
     maxSteps: 35,
     stepPx: 1400,
-    waitMs: 450,
-    finalTopWaitMs: 300,
+    waitMs: TIME_THRESHOLDS.web.web2img.scrollWaitMs,
+    finalTopWaitMs: TIME_THRESHOLDS.web.web2img.scrollFinalTopWaitMs,
   },
   textStable: {
-    rounds: 10,
-    intervalMs: 700,
-    stableThreshold: 3,
+    rounds: TURN_THRESHOLDS.web2img.textStableRounds,
+    intervalMs: TIME_THRESHOLDS.web.web2img.textStableIntervalMs,
+    stableThreshold: TURN_THRESHOLDS.web2img.textStableThreshold,
   },
 };
 
@@ -91,28 +93,36 @@ function normalizeWeb2ImgRuntimeDefaults(runtimeDefaults = WEB2IMG_RUNTIME_DEFAU
 
   return {
     page: {
-      loadTimeoutMs: normalizeTimeMs(page.loadTimeoutMs, { fallback: 45000, min: 1000 }),
-      readyStateTimeoutMs: normalizeTimeMs(page.readyStateTimeoutMs, { fallback: 20000, min: 1000 }),
-      networkIdleTimeoutMs: normalizeTimeMs(page.networkIdleTimeoutMs, { fallback: 12000, min: 500 }),
-      readyPostWaitMs: normalizeTimeMs(page.readyPostWaitMs, { fallback: 800, min: 0, allowZero: true }),
-      gotoTimeoutMs: normalizeTimeMs(page.gotoTimeoutMs, { fallback: 45000, min: 1000 }),
+      loadTimeoutMs: normalizeTimeMs(page.loadTimeoutMs, { fallback: TIME_THRESHOLDS.web.web2img.loadTimeoutMs, min: 1000 }),
+      readyStateTimeoutMs: normalizeTimeMs(page.readyStateTimeoutMs, { fallback: TIME_THRESHOLDS.web.web2img.readyStateTimeoutMs, min: 1000 }),
+      networkIdleTimeoutMs: normalizeTimeMs(page.networkIdleTimeoutMs, { fallback: TIME_THRESHOLDS.web.web2img.networkIdleTimeoutMs, min: 500 }),
+      readyPostWaitMs: normalizeTimeMs(page.readyPostWaitMs, { fallback: TIME_THRESHOLDS.web.web2img.readyPostWaitMs, min: 0, allowZero: true }),
+      gotoTimeoutMs: normalizeTimeMs(page.gotoTimeoutMs, { fallback: TIME_THRESHOLDS.web.web2img.gotoTimeoutMs, min: 1000 }),
     },
     expand: {
       maxMatchCount: normalizeInteger(expand.maxMatchCount, 20, 0),
-      visibleTimeoutMs: normalizeTimeMs(expand.visibleTimeoutMs, { fallback: 500, min: 0, allowZero: true }),
-      clickTimeoutMs: normalizeTimeMs(expand.clickTimeoutMs, { fallback: 800, min: 0, allowZero: true }),
-      postClickWaitMs: normalizeTimeMs(expand.postClickWaitMs, { fallback: 150, min: 0, allowZero: true }),
+      visibleTimeoutMs: normalizeTimeMs(expand.visibleTimeoutMs, { fallback: TIME_THRESHOLDS.web.web2img.expandVisibleTimeoutMs, min: 0, allowZero: true }),
+      clickTimeoutMs: normalizeTimeMs(expand.clickTimeoutMs, { fallback: TIME_THRESHOLDS.web.web2img.expandClickTimeoutMs, min: 0, allowZero: true }),
+      postClickWaitMs: normalizeTimeMs(expand.postClickWaitMs, { fallback: TIME_THRESHOLDS.web.web2img.expandPostClickWaitMs, min: 0, allowZero: true }),
     },
     scroll: {
       maxSteps: normalizeInteger(scroll.maxSteps, 35, 0),
       stepPx: normalizeInteger(scroll.stepPx, 1400, 0),
-      waitMs: normalizeTimeMs(scroll.waitMs, { fallback: 450, min: 0, allowZero: true }),
-      finalTopWaitMs: normalizeTimeMs(scroll.finalTopWaitMs, { fallback: 300, min: 0, allowZero: true }),
+      waitMs: normalizeTimeMs(scroll.waitMs, { fallback: TIME_THRESHOLDS.web.web2img.scrollWaitMs, min: 0, allowZero: true }),
+      finalTopWaitMs: normalizeTimeMs(scroll.finalTopWaitMs, { fallback: TIME_THRESHOLDS.web.web2img.scrollFinalTopWaitMs, min: 0, allowZero: true }),
     },
     textStable: {
-      rounds: normalizeInteger(textStable.rounds, 10, 0),
-      intervalMs: normalizeTimeMs(textStable.intervalMs, { fallback: 700, min: 0, allowZero: true }),
-      stableThreshold: normalizeInteger(textStable.stableThreshold, 3, 1),
+      rounds: normalizeInteger(
+        textStable.rounds,
+        TURN_THRESHOLDS.web2img.textStableRounds,
+        0,
+      ),
+      intervalMs: normalizeTimeMs(textStable.intervalMs, { fallback: TIME_THRESHOLDS.web.web2img.textStableIntervalMs, min: 0, allowZero: true }),
+      stableThreshold: normalizeInteger(
+        textStable.stableThreshold,
+        TURN_THRESHOLDS.web2img.textStableThreshold,
+        1,
+      ),
     },
   };
 }

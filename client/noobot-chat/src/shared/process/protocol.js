@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { nowIso } from "../../composables/infra/timeFields";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
 export const PROCESS_EVENT_VERSION = 1;
 
@@ -43,7 +44,7 @@ export const ProcessEventSource = Object.freeze({
   UNKNOWN: "unknown",
 });
 
-export const PROCESS_COMPAT_LOG_LIMIT = 10;
+export const PROCESS_COMPAT_LOG_LIMIT = QUANTITY_THRESHOLDS.client.processCompatLogLimit;
 
 export function normalizeProcessString(value = "") {
   return String(value ?? "").trim();

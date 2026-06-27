@@ -46,6 +46,14 @@ test("buildModelKwargs maps explicit prompt_cache_key into modelKwargs", () => {
 });
 
 test("buildModelKwargs defaults prompt cache key for next-gen OpenAI GPT models", () => {
+  const gpt4oKwargs = buildModelKwargs({
+    format: "openai_compatible",
+    model: "gpt-4o",
+  });
+  const gpt41Kwargs = buildModelKwargs({
+    format: "openai_compatible",
+    model: "gpt-4.1",
+  });
   const gpt55Kwargs = buildModelKwargs({
     format: "openai_compatible",
     model: "gpt-5.5",
@@ -66,6 +74,8 @@ test("buildModelKwargs defaults prompt cache key for next-gen OpenAI GPT models"
     model: "gpt-6",
   });
 
+  assert.equal(gpt4oKwargs.prompt_cache_key, "noobot-main-gpt-4o");
+  assert.equal(gpt41Kwargs.prompt_cache_key, "noobot-main-gpt-4-1");
   assert.equal(gpt55Kwargs.prompt_cache_key, "noobot-main-gpt-5-5");
   assert.equal(gpt6Kwargs.prompt_cache_key, "noobot-main-gpt-6-1");
   assert.equal(explicitExtraBodyKwargs.prompt_cache_key, "custom-extra-body-key");
@@ -73,6 +83,14 @@ test("buildModelKwargs defaults prompt cache key for next-gen OpenAI GPT models"
 });
 
 test("buildModelKwargs defaults prompt cache retention for next-gen OpenAI GPT models", () => {
+  const gpt4oKwargs = buildModelKwargs({
+    format: "openai_compatible",
+    model: "gpt-4o",
+  });
+  const gpt41Kwargs = buildModelKwargs({
+    format: "openai_compatible",
+    model: "gpt-4.1",
+  });
   const gpt55Kwargs = buildModelKwargs({
     format: "openai_compatible",
     model: "gpt-5.5",
@@ -91,10 +109,55 @@ test("buildModelKwargs defaults prompt cache retention for next-gen OpenAI GPT m
     model: "gpt-6",
   });
 
+  assert.equal("prompt_cache_retention" in gpt4oKwargs, false);
+  assert.equal(gpt41Kwargs.prompt_cache_retention, "24h");
   assert.equal(gpt55Kwargs.prompt_cache_retention, "24h");
   assert.equal(gpt6Kwargs.prompt_cache_retention, "24h");
   assert.equal(explicitKwargs.prompt_cache_retention, "1h");
   assert.equal("prompt_cache_retention" in nonOpenAiGptKwargs, false);
+});
+
+test("buildModelKwargs strips OpenAI prompt cache fields for non-OpenAI cache vendors", () => {
+  const specs = [
+    {
+      format: "openai_compatible",
+      model: "claude-sonnet-4",
+      base_url: "https://api.anthropic.com/v1",
+    },
+    {
+      format: "openai_compatible",
+      model: "gemini-2.5-pro",
+      base_url: "https://generativelanguage.googleapis.com/v1beta/openai",
+    },
+    {
+      format: "openai_compatible",
+      model: "deepseek-chat",
+      base_url: "https://api.deepseek.com",
+    },
+    {
+      format: "openai_compatible",
+      model: "qwen-plus",
+      base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    },
+    {
+      format: "dashscope",
+      model: "qwen-plus",
+    },
+  ];
+
+  for (const spec of specs) {
+    const kwargs = buildModelKwargs({
+      ...spec,
+      prompt_cache_key: "should-not-leak",
+      prompt_cache_retention: "24h",
+      extra_body: {
+        prompt_cache_key: "extra-key",
+        prompt_cache_retention: "24h",
+      },
+    });
+    assert.equal("prompt_cache_key" in kwargs, false, spec.model);
+    assert.equal("prompt_cache_retention" in kwargs, false, spec.model);
+  }
 });
 
 test("createChatModelFromSpec maps prompt cache settings to LangChain native fields", () => {
@@ -119,7 +182,38 @@ test("createChatModelFromSpec maps prompt cache settings to LangChain native fie
   }
 });
 
-test("buildModelKwargs supports promptCacheKey and filters blank prompt cache keys", () => {
+test("createChatModelFromSpec enables DashScope session cache only with Responses API", () => {
+  const originalDashScopeApiKey = process.env.DASHSCOPE_API_KEY;
+  process.env.DASHSCOPE_API_KEY = "test-key";
+  try {
+    const chatWithoutResponses = createChatModelFromSpec({
+      format: "dashscope",
+      model: "qwen-plus",
+    });
+    const chatWithResponses = createChatModelFromSpec({
+      format: "dashscope",
+      model: "qwen-plus",
+      use_responses_api: true,
+    });
+
+    assert.equal(
+      chatWithoutResponses.clientConfig.defaultHeaders["x-dashscope-session-cache"],
+      undefined,
+    );
+    assert.equal(
+      chatWithResponses.clientConfig.defaultHeaders["x-dashscope-session-cache"],
+      "enable",
+    );
+  } finally {
+    if (originalDashScopeApiKey === undefined) {
+      delete process.env.DASHSCOPE_API_KEY;
+    } else {
+      process.env.DASHSCOPE_API_KEY = originalDashScopeApiKey;
+    }
+  }
+});
+
+test("buildModelKwargs supports promptCacheKey and falls back when prompt cache keys are blank", () => {
   const camelCaseKwargs = buildModelKwargs({
     format: "openai_compatible",
     model: "gpt-4o",
@@ -135,7 +229,7 @@ test("buildModelKwargs supports promptCacheKey and filters blank prompt cache ke
   });
 
   assert.equal(camelCaseKwargs.prompt_cache_key, "agent-main");
-  assert.equal("prompt_cache_key" in blankKwargs, false);
+  assert.equal(blankKwargs.prompt_cache_key, "noobot-main-gpt-4o");
 });
 
 test("buildModelKwargs sets dashscope enable_thinking default to false", () => {

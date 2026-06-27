@@ -5,6 +5,7 @@
  */
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { prepareAdPatternMatchers, isNoiseOrAdLine } from "./web2img-clean.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 async function extractOrderedSegments(page, maxItems = 8000) {
   const js = `
@@ -150,7 +151,11 @@ async function extractOrderedSegments(page, maxItems = 8000) {
   return out;
 }
 
-function segmentsToMarkdown(segments, adPatterns, maxChars = 800000) {
+function segmentsToMarkdown(
+  segments,
+  adPatterns,
+  maxChars = LENGTH_THRESHOLDS.dataProcessing.web2ImgUsefulTextChars,
+) {
   const parts = [];
   let total = 0;
   let prevKey = "";

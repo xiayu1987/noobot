@@ -12,6 +12,7 @@ import {
   WORKFLOW_RETRY,
   WORKFLOW_SEMANTIC,
 } from "./constants.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 function normalizeMetaValue(value = "") {
   return String(value || "").trim();
@@ -40,7 +41,7 @@ function resolveRunMeta(ctx = {}, options = {}) {
   };
 }
 
-function previewText(text = "", maxChars = 800) {
+function previewText(text = "", maxChars = LENGTH_THRESHOLDS.contextPreview.workflowPayloadPreviewChars) {
   const raw = String(text || "");
   if (raw.length <= maxChars) return raw;
   return `${raw.slice(0, maxChars)}...(truncated)`;

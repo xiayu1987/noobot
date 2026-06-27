@@ -11,10 +11,12 @@ import {
   resolveMessageRole,
 } from "../../context/session/message-context-policy.js";
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 
 
-export const MAIN_MODEL_HISTORY_ROUND_LIMIT = 3;
+export const MAIN_MODEL_HISTORY_ROUND_LIMIT =
+  TURN_THRESHOLDS.session.mainModelHistoryRoundLimit;
 
 function readMessageField(message = {}, field = "") {
   const key = String(field || "").trim();
@@ -269,7 +271,10 @@ export function normalizeContextWindow({
   return filterSummarizedMessages(windowMessages);
 }
 
-export function normalizeRecentWindow(messages = [], limit = 20) {
+export function normalizeRecentWindow(
+  messages = [],
+  limit = TURN_THRESHOLDS.session.recentWindowMessageLimit,
+) {
   const source = filterSummarizedMessages(messages);
   const resolvedLimit = Number(limit);
   if (!Number.isFinite(resolvedLimit) || resolvedLimit <= 0) return [];
@@ -287,7 +292,7 @@ export function resolveModelContextMessages({
   normalizeMessage = null,
   shouldKeepMessage = null,
   useRecentWindow = false,
-  recentLimit = 20,
+  recentLimit = TURN_THRESHOLDS.session.recentWindowMessageLimit,
   startIndex = 0,
   limit = Number.POSITIVE_INFINITY,
 } = {}) {

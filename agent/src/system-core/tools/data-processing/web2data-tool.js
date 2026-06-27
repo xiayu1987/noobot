@@ -43,18 +43,21 @@ import {
   IMAGE_EXTENSIONS,
   TEXT_EXTENSIONS,
 } from "./file-extension-constants.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
-const MAX_BATCH_BYTES = Math.floor(0.8 * 1024 * 1024);
-const MAX_TEXT_CHARS = 12000;
+const MAX_BATCH_BYTES = LENGTH_THRESHOLDS.dataProcessing.batchBytes;
+const MAX_TEXT_CHARS = LENGTH_THRESHOLDS.dataProcessing.webTextChars;
 
 function sanitizeArtifactBaseName(input = "", fallback = "web2data_result") {
   const normalized = String(input || "").trim();
   if (!normalized) return fallback;
   return normalized.replace(/[^\w.-]+/g, "_");
 }
-const BROWSER_RETRY_COUNT = 2;
-const DEFAULT_CONCURRENCY = 8;
-const MAX_CONCURRENCY = 60;
+const BROWSER_RETRY_COUNT = TURN_THRESHOLDS.web.browserRetryCount;
+const DEFAULT_CONCURRENCY = QUANTITY_THRESHOLDS.web.defaultConcurrency;
+const MAX_CONCURRENCY = QUANTITY_THRESHOLDS.web.maxConcurrency;
 const BROWSER_SIMULATE_TIMEOUT_MS = normalizeTimeMs(45000, {
   fallback: 45000,
   min: 1000,
@@ -84,7 +87,7 @@ function looksBlockedPage({ status = 0, title = "", html = "", text = "" }) {
   if (Number(status) >= 500) return true;
   const normalizedTitle = normalizeText(title).toLowerCase();
   const normalizedText = String(text || "").toLowerCase();
-  const leadingTextSample = normalizedText.slice(0, 8000);
+  const leadingTextSample = normalizedText.slice(0, LENGTH_THRESHOLDS.dataProcessing.webLeadingTextSampleChars);
   const titleOrTextSample = `${normalizedTitle}\n${leadingTextSample}`;
   const strongPatterns = [
     "503 service temporarily unavailable",
@@ -113,7 +116,9 @@ function looksBlockedPage({ status = 0, title = "", html = "", text = "" }) {
 
   // 仅在正文很短且包含拦截特征时，才用 html 兜底判定
   if (leadingTextSample.length < 500) {
-    const normalizedHtml = String(html || "").toLowerCase().slice(0, 20000);
+    const normalizedHtml = String(html || "")
+      .toLowerCase()
+      .slice(0, LENGTH_THRESHOLDS.dataProcessing.webHtmlProbeChars);
     if (
       /openresty|access denied|403 forbidden|service temporarily unavailable/.test(
         normalizedHtml,

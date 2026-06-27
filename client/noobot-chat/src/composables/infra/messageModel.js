@@ -29,6 +29,7 @@ import {
   nowIso,
   nowMs,
 } from "./timeFields";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
 function normalizeArray(value) {
   return Array.isArray(value) ? value : [];
@@ -83,7 +84,7 @@ function enrichTransferAttachmentScope(attachmentItem = {}, messageItem = {}) {
   };
 }
 
-const EXECUTION_LOG_DISPLAY_LIMIT = 10;
+const EXECUTION_LOG_DISPLAY_LIMIT = QUANTITY_THRESHOLDS.client.executionLogDisplayLimit;
 
 function resolveBaseName(filePath = "") {
   const normalized = String(filePath || "").trim().replaceAll("\\", "/");

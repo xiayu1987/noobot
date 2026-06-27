@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { safeNum } from "../shared-utils.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 const ANSI_PATTERN = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
 
@@ -56,9 +57,9 @@ export function compactStdout(input = "") {
  * Tail-clip text to maxChars, keeping the end portion.
  * Returns { text, truncated, originalLength }.
  */
-export function tailClip(input = "", maxChars = 8000) {
+export function tailClip(input = "", maxChars = LENGTH_THRESHOLDS.toolIO.connectorOutputChars) {
   const text = String(input || "");
-  const limit = Math.max(256, Number(maxChars || 8000));
+  const limit = Math.max(256, Number(maxChars || LENGTH_THRESHOLDS.toolIO.connectorOutputChars));
   if (text.length <= limit) {
     return {
       text,
@@ -81,7 +82,10 @@ export function tailClip(input = "", maxChars = 8000) {
 /**
  * Clean terminal output for LLM consumption.
  */
-export function cleanTerminalOutputForLLM(output = {}, { maxChars = 8000 } = {}) {
+export function cleanTerminalOutputForLLM(
+  output = {},
+  { maxChars = LENGTH_THRESHOLDS.toolIO.connectorOutputChars } = {},
+) {
   const source =
     output && typeof output === "object" && !Array.isArray(output) ? output : {};
   const stdout = tailClip(normalizeTerminalText(source?.stdout || ""), maxChars);
@@ -107,7 +111,10 @@ export function cleanTerminalOutputForLLM(output = {}, { maxChars = 8000 } = {})
 /**
  * Clean database output for LLM consumption.
  */
-export function cleanDatabaseOutputForLLM(output = {}, { maxChars = 8000 } = {}) {
+export function cleanDatabaseOutputForLLM(
+  output = {},
+  { maxChars = LENGTH_THRESHOLDS.toolIO.connectorOutputChars } = {},
+) {
   const source =
     output && typeof output === "object" && !Array.isArray(output) ? output : {};
   const stdout = tailClip(compactStdout(source?.stdout || ""), maxChars);

@@ -16,6 +16,7 @@ import {
 } from "./attachments.js";
 import { resolveWorkflowRuntimeFromContext } from "./runtime.js";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 export function ensureTurnMessages(agentResult = {}) {
   const turnMessages = Array.isArray(agentResult?.turnMessages) ? agentResult.turnMessages : [];
@@ -94,9 +95,13 @@ export function buildWorkflowTransferPathBlockWithContext(workflowPayload = null
   return ["", tWorkflow(locale, WORKFLOW_I18N_KEYSET.PERSISTENCE.NODE_RESULT_ATTACHMENT_TITLE), "", ...lines].join("\n");
 }
 
-export function truncateWorkflowResultText(text = "", maxLength = 1800) {
+export function truncateWorkflowResultText(
+  text = "",
+  maxLength = LENGTH_THRESHOLDS.contextPreview.workflowResultTextChars,
+) {
   const raw = String(text || "").trim();
-  const limit = Number.isFinite(Number(maxLength)) ? Math.max(200, Number(maxLength)) : 1800;
+  const fallback = LENGTH_THRESHOLDS.contextPreview.workflowResultTextChars;
+  const limit = Number.isFinite(Number(maxLength)) ? Math.max(200, Number(maxLength)) : fallback;
   if (raw.length <= limit) return raw;
   return `${raw.slice(0, limit).trim()}\n\n...`;
 }
@@ -332,8 +337,8 @@ export async function appendWorkflowPlanningMessage({
       kind: "workflow",
       phase: "planning",
       semanticInvokerUsed: semanticResolution?.invoked === true,
-      sourceTextPreview: String(sourceText || "").slice(0, 800),
-      semanticTextPreview: String(semanticText || "").slice(0, 2000),
+      sourceTextPreview: String(sourceText || "").slice(0, LENGTH_THRESHOLDS.contextPreview.workflowPayloadPreviewChars),
+      semanticTextPreview: String(semanticText || "").slice(0, LENGTH_THRESHOLDS.contextPreview.workflowSemanticTextPreviewChars),
       payload: sessionWorkflowPayload,
     },
   };

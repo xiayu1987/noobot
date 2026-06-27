@@ -8,6 +8,8 @@ import { extractReadableLinesFromHtml } from "../text-cleaner.js";
 import { HAS_READABILITY } from "./web2img-config.js";
 import { cleanAndDedupLines } from "./web2img-clean.js";
 import { extractOrderedSegments, segmentsToMarkdown } from "./web2img-ordered.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
 async function extractUsefulAndFullText(page, adPatterns, preferTrafilatura = true) {
   const title = String((await page.title()) || "").trim();
@@ -21,7 +23,11 @@ async function extractUsefulAndFullText(page, adPatterns, preferTrafilatura = tr
   desc = String(desc || "").trim();
 
   const orderedSegments = await extractOrderedSegments(page, 8000);
-  const orderedMd = segmentsToMarkdown(orderedSegments, adPatterns, 800000);
+  const orderedMd = segmentsToMarkdown(
+    orderedSegments,
+    adPatterns,
+    LENGTH_THRESHOLDS.dataProcessing.web2ImgUsefulTextChars,
+  );
 
   let trafiLines = [];
   if (preferTrafilatura && HAS_READABILITY) {
@@ -29,7 +35,7 @@ async function extractUsefulAndFullText(page, adPatterns, preferTrafilatura = tr
       const html = await page.content();
       trafiLines = extractReadableLinesFromHtml(html, {
         urlValue: page.url(),
-        maxLines: 1200,
+        maxLines: QUANTITY_THRESHOLDS.web.readableExtractMaxLines,
         extraNoisePatterns: adPatterns,
       });
     } catch {
@@ -68,11 +74,11 @@ async function extractUsefulAndFullText(page, adPatterns, preferTrafilatura = tr
     fullText += `\n\n[ORDERED_CONTENT]\n${orderedMd}`;
   }
 
-  if (usefulText.length > 800000) {
-    usefulText = `${usefulText.slice(0, 800000)}\n\n[${tSystem("web2img.contentTruncated")}]\n`;
+  if (usefulText.length > LENGTH_THRESHOLDS.dataProcessing.web2ImgUsefulTextChars) {
+    usefulText = `${usefulText.slice(0, LENGTH_THRESHOLDS.dataProcessing.web2ImgUsefulTextChars)}\n\n[${tSystem("web2img.contentTruncated")}]\n`;
   }
-  if (fullText.length > 1200000) {
-    fullText = `${fullText.slice(0, 1200000)}\n\n[${tSystem("web2img.contentTruncated")}]\n`;
+  if (fullText.length > LENGTH_THRESHOLDS.dataProcessing.web2ImgFullTextChars) {
+    fullText = `${fullText.slice(0, LENGTH_THRESHOLDS.dataProcessing.web2ImgFullTextChars)}\n\n[${tSystem("web2img.contentTruncated")}]\n`;
   }
 
   return [usefulText, fullText];

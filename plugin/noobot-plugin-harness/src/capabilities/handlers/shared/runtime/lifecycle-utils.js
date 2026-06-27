@@ -5,10 +5,11 @@
  */
 import { ensureHarnessBucket } from "../bucket-utils.js";
 import { resolveDialogProcessIdFromContext } from "./dialog-process-id.js";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
 const TURN_END_POINTS = new Set(["after_turn", "on_abort", "on_error"]);
 const TURN_START_POINTS = new Set(["before_turn", "before_context_build"]);
-const MAX_COMPLETED_DIALOG_IDS = 80;
+const MAX_COMPLETED_DIALOG_IDS = QUANTITY_THRESHOLDS.harness.completedDialogIds;
 
 function resolveDialogProcessId(ctx = {}) {
   return resolveDialogProcessIdFromContext(ctx);

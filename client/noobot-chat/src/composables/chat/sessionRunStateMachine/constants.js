@@ -3,8 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+
 export const STOP_REQUEST_STORAGE_KEY = "noobot:session-run-state-machine:stop-requests:v1";
-export const STOP_REQUEST_TTL_MS = 5 * 60 * 1000;
+export const STOP_REQUEST_TTL_MS = TIME_THRESHOLDS.client.stopRequestTtlMs;
 export const SESSION_RUN_MESSAGE_RUNTIME_MARK = "__noobotRuntimeRunStateKey";
 export const SESSION_RUN_MESSAGE_RUNTIME_ACTION = Object.freeze({
   NONE: "none",

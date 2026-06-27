@@ -8,14 +8,15 @@ import path from "node:path";
 import { HARNESS_FILES, HARNESS_FLUSH_REASONS, HARNESS_TERMINAL_RUN_STATUSES } from "../core/constants.js";
 import { DEFAULT_OPTIONS } from "../core/options.js";
 import { ensureIntervalCleanupTask } from "../utils/cleanup-scheduler.js";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 // ---- Manifest Cache & Debounce ----
 const manifestCache = new Map();
 const manifestWriteTimers = new Map();
 const manifestLastAccessed = new Map(); // Track last access time for LRU cleanup
 
-const MANIFEST_CACHE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
-const MANIFEST_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // Check every 5 minutes
+const MANIFEST_CACHE_MAX_AGE_MS = TIME_THRESHOLDS.harness.manifestCacheMaxAgeMs;
+const MANIFEST_CLEANUP_INTERVAL_MS = TIME_THRESHOLDS.harness.manifestCleanupIntervalMs;
 
 function cleanupStaleManifests() {
   const now = Date.now();
@@ -62,7 +63,7 @@ export async function updateManifestCached(
   options,
   capabilityRuntime,
   mergeFn,
-  debounceMs = 500,
+  debounceMs = TIME_THRESHOLDS.harness.manifestDebounceMs,
 ) {
   if (!paths?.manifest) return;
   const key = paths.manifest;
@@ -144,14 +145,14 @@ const jsonlFlushTimers = new Map(); // filePath -> Timer
 const DEFAULT_JSONL_BATCH_SIZE = DEFAULT_OPTIONS.jsonlBatchSize;
 const DEFAULT_JSONL_FLUSH_INTERVAL_MS = DEFAULT_OPTIONS.jsonlFlushIntervalMs;
 const DEFAULT_JSONL_FLUSH_STRATEGY = DEFAULT_OPTIONS.jsonlFlushStrategy;
-const JSONL_RETRY_BASE_DELAY_MS = 200;
-const JSONL_RETRY_MAX_DELAY_MS = 5000;
+const JSONL_RETRY_BASE_DELAY_MS = TIME_THRESHOLDS.harness.jsonlRetryBaseDelayMs;
+const JSONL_RETRY_MAX_DELAY_MS = TIME_THRESHOLDS.harness.jsonlRetryMaxDelayMs;
 const jsonlFlushFailures = new Map(); // filePath -> number
 const jsonlFlushStrategies = new Map(); // filePath -> strategy
 const tmpCleanupLastRunByFile = new Map(); // filePath -> timestamp
 const runWriteLockRefCounts = new Map(); // runDir -> count
-const TMP_FILE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-const TMP_CLEANUP_MIN_INTERVAL_MS = 5 * 60 * 1000;
+const TMP_FILE_MAX_AGE_MS = TIME_THRESHOLDS.harness.tmpFileMaxAgeMs;
+const TMP_CLEANUP_MIN_INTERVAL_MS = TIME_THRESHOLDS.harness.tmpCleanupMinIntervalMs;
 
 function resolveRunWriteLockPath(targetPath = "") {
   const dir = path.dirname(String(targetPath || "").trim());

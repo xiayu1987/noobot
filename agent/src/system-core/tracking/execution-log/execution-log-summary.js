@@ -5,8 +5,9 @@
  *
  * Compact frontend-oriented execution log summary.
  */
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
-function stringifyBrief(value, maxLength = 160) {
+function stringifyBrief(value, maxLength = LENGTH_THRESHOLDS.display.executionLogBriefChars) {
   if (value == null) return "";
   const text =
     typeof value === "string"
