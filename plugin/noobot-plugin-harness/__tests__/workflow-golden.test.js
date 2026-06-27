@@ -86,11 +86,11 @@ test("golden: unified scheduler order stays stable", () => {
       "guidance",
       "plan_update_revision",
       "plan_update_refinement",
-      "phase_acceptance",
-      "analysis",
       "summary_overflow",
       "summary_turns",
+      "phase_acceptance",
       "acceptance_semantic_validation",
+      "analysis",
     ],
   );
 });
@@ -116,10 +116,10 @@ test("golden: simultaneous workflow candidates follow priority order", () => {
   assert.equal(guidanceFirst.chosenAction, "guidance");
   assert.deepEqual(guidanceFirst.deferredActions, [
     "plan_update_revision",
-    "phase_acceptance",
-    "analysis",
     "summary_overflow",
+    "phase_acceptance",
     "acceptance_semantic_validation",
+    "analysis",
   ]);
   assert.deepEqual(guidanceFirst.blockedActions, ["phase_acceptance", "acceptance_semantic_validation"]);
   assert.deepEqual(guidanceFirst.blockedReasons, [
@@ -148,10 +148,40 @@ test("golden: simultaneous workflow candidates follow priority order", () => {
     },
   });
   assert.equal(phaseFirst.chosenAction, "phase_acceptance");
-  assert.deepEqual(phaseFirst.blockedActions, ["acceptance_semantic_validation"]);
+  assert.deepEqual(phaseFirst.blockedActions, ["summary_overflow", "acceptance_semantic_validation"]);
   assert.deepEqual(phaseFirst.blockedReasons, [
+    "summary_deferred_by_phase_acceptance",
     "acceptance_semantic_validation_deferred_by_phase_acceptance",
   ]);
+
+  const summaryBeforeAnalysis = resolveWorkflowActionDecision({
+    ...baseState,
+    pending: {
+      ...baseState.pending,
+      guidance: null,
+      planRevision: false,
+      planRevisionContext: null,
+      phaseAcceptance: false,
+    },
+  });
+  assert.equal(summaryBeforeAnalysis.chosenAction, "summary_overflow");
+  assert.deepEqual(summaryBeforeAnalysis.deferredActions, ["acceptance_semantic_validation", "analysis"]);
+  assert.deepEqual(summaryBeforeAnalysis.blockedActions, []);
+
+  const semanticValidationBeforeAnalysis = resolveWorkflowActionDecision({
+    ...baseState,
+    pending: {
+      ...baseState.pending,
+      guidance: null,
+      planRevision: false,
+      planRevisionContext: null,
+      phaseAcceptance: false,
+      summary: false,
+    },
+  });
+  assert.equal(semanticValidationBeforeAnalysis.chosenAction, "acceptance_semantic_validation");
+  assert.deepEqual(semanticValidationBeforeAnalysis.deferredActions, ["analysis"]);
+  assert.deepEqual(semanticValidationBeforeAnalysis.blockedActions, []);
 
   const analysisFirst = resolveWorkflowActionDecision({
     ...baseState,
@@ -161,26 +191,13 @@ test("golden: simultaneous workflow candidates follow priority order", () => {
       planRevision: false,
       planRevisionContext: null,
       phaseAcceptance: false,
+      summary: false,
+      acceptanceSemanticValidation: null,
     },
   });
   assert.equal(analysisFirst.chosenAction, "analysis");
-  assert.deepEqual(analysisFirst.deferredActions, ["summary_overflow", "acceptance_semantic_validation"]);
+  assert.deepEqual(analysisFirst.deferredActions, []);
   assert.deepEqual(analysisFirst.blockedActions, []);
-
-  const summaryFirst = resolveWorkflowActionDecision({
-    ...baseState,
-    pending: {
-      ...baseState.pending,
-      guidance: null,
-      planRevision: false,
-      planRevisionContext: null,
-      phaseAcceptance: false,
-      analysis: false,
-    },
-  });
-  assert.equal(summaryFirst.chosenAction, "summary_overflow");
-  assert.deepEqual(summaryFirst.deferredActions, ["acceptance_semantic_validation"]);
-  assert.deepEqual(summaryFirst.blockedActions, []);
 });
 
 test("golden: forced acceptance overrides all simultaneous workflow candidates", () => {
@@ -203,10 +220,10 @@ test("golden: forced acceptance overrides all simultaneous workflow candidates",
   assert.deepEqual(decision.deferredActions, [
     "guidance",
     "plan_update_revision",
-    "phase_acceptance",
-    "analysis",
     "summary_turns",
+    "phase_acceptance",
     "acceptance_semantic_validation",
+    "analysis",
   ]);
 });
 

@@ -90,10 +90,6 @@ function collectWorkflowCandidates(state = {}) {
   const planUpdate = resolvePendingPlanUpdateForWorkflow(state);
   if (planUpdate.active) candidates.push(planUpdate.action);
 
-  if (pending.phaseAcceptance === true) candidates.push(ACCEPTANCE_DECISION.action.phaseAcceptance);
-
-  if (pending.analysis === true) candidates.push(GUIDANCE_DECISION.label.analysis);
-
   if (pending.summary === true) {
     candidates.push(
       state?.flags?.summaryByCharsPrompted === true
@@ -102,9 +98,13 @@ function collectWorkflowCandidates(state = {}) {
     );
   }
 
+  if (pending.phaseAcceptance === true) candidates.push(ACCEPTANCE_DECISION.action.phaseAcceptance);
+
   if (pending.acceptanceSemanticValidation) {
     candidates.push(ACCEPTANCE_DECISION.action.acceptanceSemanticValidation);
   }
+
+  if (pending.analysis === true) candidates.push(GUIDANCE_DECISION.label.analysis);
 
   if (
     !candidates.length &&
@@ -133,7 +133,6 @@ function resolveBlockReason(action = "", state = {}) {
     (action === GUIDANCE_DECISION.label.summaryOverflow || action === GUIDANCE_DECISION.label.summaryTurns) &&
     pending.phaseAcceptance === true &&
     !pending.guidance &&
-    pending.analysis !== true &&
     !planUpdate.active &&
     state?.flags?.planningCaptured === true
   ) {

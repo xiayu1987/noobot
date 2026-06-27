@@ -12,7 +12,7 @@ import {
   resolvePendingPlanUpdate,
 } from "../src/capabilities/handlers/planning/plan-update-scheduler.js";
 
-test("scheduler priority: guidance > revision > refinement > analysis > summary", () => {
+test("scheduler priority: guidance > revision > refinement > summary > analysis", () => {
   assert.deepEqual(
     resolveNextGuidanceAction({
       flags: { summaryByCharsPrompted: true },
@@ -84,7 +84,7 @@ test("scheduler priority: guidance > revision > refinement > analysis > summary"
         planRefinement: false,
       },
     }),
-    { action: "analysis", stage: "", reason: "pending_analysis" },
+    { action: "summary", stage: "", reason: "pending_summary_turns" },
   );
 
   assert.deepEqual(
