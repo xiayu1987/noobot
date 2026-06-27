@@ -205,10 +205,23 @@ const normalizerText = assertFileContains("agent/src/system-core/session/utils/c
   { name: "history excludes system-like roles", pattern: /isSystemLikeMessageRole\(resolveMessageRole\(messageItem\)\)/ },
   { name: "final order system/history/incremental", pattern: /messages:\s*\[\s*\.\.\.system\s*,\s*\.\.\.history\s*,\s*\.\.\.incremental\s*\]/ },
 ]);
-if (normalizerText && /MAIN_MODEL_HISTORY_ROUND_LIMIT\s*=\s*3\b/.test(normalizerText)) {
+const turnThresholdsText = readFileSync(
+  path.join(ROOT, "shared", "turn-thresholds.mjs"),
+  "utf8",
+);
+const historyLimitUsesTurnThreshold =
+  normalizerText &&
+  /MAIN_MODEL_HISTORY_ROUND_LIMIT\s*=\s*[\s\S]*?TURN_THRESHOLDS\.session\.mainModelHistoryRoundLimit\b/.test(normalizerText);
+const centralizedHistoryLimitIsThree =
+  turnThresholdsText &&
+  /mainModelHistoryRoundLimit:\s*3\b/.test(turnThresholdsText);
+if (historyLimitUsesTurnThreshold && centralizedHistoryLimitIsThree) {
   pass("main model history limit remains latest 3 dialog rounds");
 } else {
-  fail("history round limit drifted", "MAIN_MODEL_HISTORY_ROUND_LIMIT must stay 3 unless product requirement changes.");
+  fail(
+    "history round limit drifted",
+    "MAIN_MODEL_HISTORY_ROUND_LIMIT must use TURN_THRESHOLDS.session.mainModelHistoryRoundLimit, and that central value must stay 3 unless product requirement changes.",
+  );
 }
 
 const helpersText = assertFileContains("agent/src/system-core/bot-manage/session/model-message-runtime-helpers.js", [

@@ -128,6 +128,14 @@ Based on latest examples:
 | `tools.request_help.tool_failure_help_count` | number | Consecutive tool failures threshold for user help prompt (default 3) |
 | `tools.email_connect_connector.enabled` | boolean | Enable email connector tool |
 
+Large-context length defaults:
+- Phase-summary character threshold: 225000
+- Semantic-transfer direct threshold: 30000 chars
+- Semantic-transfer tool-result inline threshold: 30000 chars
+- Semantic-transfer tool-input overflow threshold: 30000 chars
+
+Length thresholds are centralized in `@noobot/shared/length-thresholds` (`shared/length-thresholds.mjs`). Update that package export when changing character/byte/string-size limits.
+
 Notes:
 - If `docker_mounts` is missing or empty, no extra mount is added.
 - A mount entry is applied only when both `source` and `target` are non-empty.

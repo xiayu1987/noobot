@@ -31,6 +31,8 @@ import {
 import {
   transferSemanticContent,
 } from "../../semantic-transfer/index.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
 
 async function defaultSharedFetch(url, init = {}) {
@@ -42,7 +44,7 @@ function createDefaultTextCleaner() {
     cleanUniversal(input = "", options = {}) {
       return cleanTextUniversal(input, options || {});
     },
-    cleanText(input = "", maxLines = 4000) {
+    cleanText(input = "", maxLines = QUANTITY_THRESHOLDS.web.textMaxLines) {
       return cleanAndDedupTextLines(String(input || ""), maxLines);
     },
     cleanHtml(input = "", { url = "", readable = false } = {}) {
@@ -61,7 +63,7 @@ function createDefaultTextCleaner() {
         format: "auto",
         contentType: String(contentType || ""),
         url: String(url || ""),
-        maxChars: 200000,
+        maxChars: LENGTH_THRESHOLDS.toolIO.runtimeCleanAnyChars,
       });
     },
   };

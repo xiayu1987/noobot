@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { nowMs, parseTimeMs, toIsoTime } from "../infra/timeFields";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 export const THINKING_TIMING_STORAGE_KEY = "noobot_thinking_timing_v1";
-const TIMING_TTL_MS = 48 * 60 * 60 * 1000;
+const TIMING_TTL_MS = TIME_THRESHOLDS.client.thinkingTimingTtlMs;
 
 function trim(value) {
   return String(value || "").trim();

@@ -8,6 +8,7 @@ import {
   extractVisibleTextFromHtml,
 } from "./web/text-cleaner.js";
 import { cleanTerminalOutputForLLM, cleanDatabaseOutputForLLM } from "./cleaners/output-cleaner.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 const NOISE_PATTERNS = [
   /^(广告|推广|赞助|相关推荐|猜你想看|猜你喜欢|热门推荐|热搜)$/i,
@@ -27,7 +28,7 @@ function normalizeWhitespace(input = "") {
     .trim();
 }
 
-function postCleanText(input = "", maxChars = 120000) {
+function postCleanText(input = "", maxChars = LENGTH_THRESHOLDS.toolIO.cleanedTextChars) {
   const clipped = String(input || "").slice(0, Math.max(0, maxChars));
   const lines = normalizeWhitespace(clipped)
     .split(/\n+/)
@@ -47,11 +48,11 @@ function postCleanText(input = "", maxChars = 120000) {
   return normalizeWhitespace(out.join("\n"));
 }
 
-function cleanPlainText(input = "", maxChars = 120000) {
+function cleanPlainText(input = "", maxChars = LENGTH_THRESHOLDS.toolIO.cleanedTextChars) {
   return postCleanText(input, maxChars);
 }
 
-function cleanMarkdownText(input = "", maxChars = 120000) {
+function cleanMarkdownText(input = "", maxChars = LENGTH_THRESHOLDS.toolIO.cleanedTextChars) {
   const raw = String(input || "")
     .replace(/```[\s\S]*?```/g, " ")
     .replace(/`([^`]+)`/g, "$1")
@@ -64,7 +65,7 @@ function cleanMarkdownText(input = "", maxChars = 120000) {
   return cleanPlainText(raw, maxChars);
 }
 
-function cleanHtmlText(input = "", { url = "", maxChars = 120000 } = {}) {
+function cleanHtmlText(input = "", { url = "", maxChars = LENGTH_THRESHOLDS.toolIO.cleanedTextChars } = {}) {
   const html = String(input || "");
   if (!html) return "";
   const cleaned =
@@ -75,7 +76,7 @@ function cleanHtmlText(input = "", { url = "", maxChars = 120000 } = {}) {
 
 export function cleanTextUniversal(
   input = "",
-  { format = "auto", contentType = "", url = "", maxChars = 120000 } = {},
+  { format = "auto", contentType = "", url = "", maxChars = LENGTH_THRESHOLDS.toolIO.cleanedTextChars } = {},
 ) {
   const text = String(input || "");
   const normalizedFormat = String(format || "auto").toLowerCase();
@@ -97,7 +98,7 @@ export function cleanTextUniversal(
 
 export function cleanConnectorOutputForLLM(
   { connectorType = "", output = {} } = {},
-  { maxChars = 8000 } = {},
+  { maxChars = LENGTH_THRESHOLDS.toolIO.connectorOutputChars } = {},
 ) {
   const normalizedType = String(connectorType || "").trim().toLowerCase();
   if (normalizedType === "terminal") {

@@ -23,8 +23,10 @@ import {
 } from "../../../model/headers/plugin-headers.js";
 import { resolveBoundToolModelRequestOverrides } from "../turn/tool-choice-strategy.js";
 import { resolveHookClientEmitter } from "../../../hook/index.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
-export const MAX_MINI_RUNNER_TOOL_TURNS = 5;
+export const MAX_MINI_RUNNER_TOOL_TURNS =
+  TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
 export const GUIDANCE_ANALYSIS_RESPONSE_EVENT = "guidance_analysis_response";
 
 function normalizeTextContent(content = "") {

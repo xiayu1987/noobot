@@ -6,11 +6,13 @@
 import { Readability } from "@mozilla/readability";
 import { JSDOM } from "jsdom";
 import { normalizeText } from '../shared-utils.js';
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
-const MIN_TAG_TEXT_LENGTH = 6;
+const MIN_TAG_TEXT_LENGTH = LENGTH_THRESHOLDS.toolIO.webMinTagTextChars;
 
 
-export function cleanAndDedupTextLines(input = "", maxLines = 4000) {
+export function cleanAndDedupTextLines(input = "", maxLines = QUANTITY_THRESHOLDS.web.textMaxLines) {
   const out = [];
   const seen = new Set();
   const lines = String(input || "")
@@ -87,7 +89,7 @@ function removeShortTextNodes(doc, minLength = MIN_TAG_TEXT_LENGTH) {
   }
 }
 
-function aggressiveCleanText(input = "", maxLines = 4000) {
+function aggressiveCleanText(input = "", maxLines = QUANTITY_THRESHOLDS.web.textMaxLines) {
   const noisePatterns = [
     /^(广告|推广|赞助|相关推荐|猜你想看|猜你喜欢|热搜|热门推荐)$/i,
     /(cookie|隐私政策|隐私声明|用户协议|订阅|注册|登录|打开app|下载app)/i,
@@ -148,7 +150,11 @@ export function isReadabilityExtractorReady() {
 
 export function extractReadableLinesFromHtml(
   html = "",
-  { urlValue = "", maxLines = 1200, extraNoisePatterns = [] } = {},
+  {
+    urlValue = "",
+    maxLines = QUANTITY_THRESHOLDS.web.readableExtractMaxLines,
+    extraNoisePatterns = [],
+  } = {},
 ) {
   const cleanedText = extractReadableTextFromHtml(html, urlValue);
   if (!cleanedText) return [];

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { StreamEventEnum } from "../../shared/constants/chatConstants";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const TERMINAL_CHANNEL_STATES = Object.freeze([
   "stopped",
@@ -27,9 +28,9 @@ function isTerminalChannelStateEvent(event = "", data = {}) {
 
 export function createChatWebSocketClient({
   resolveWebSocketUrl = () => "",
-  stopCloseDelayMs = 300,
-  forceStopFinalizeMs = 5000,
-  terminalChannelStateGraceMs = 250,
+  stopCloseDelayMs = TIME_THRESHOLDS.client.wsStopCloseDelayMs,
+  forceStopFinalizeMs = TIME_THRESHOLDS.client.wsForceStopFinalizeMs,
+  terminalChannelStateGraceMs = TIME_THRESHOLDS.client.wsTerminalChannelStateGraceMs,
   translateText = (key = "") => String(key || ""),
 } = {}) {
   let activeSocket = null;
@@ -44,7 +45,7 @@ export function createChatWebSocketClient({
   let reconnectResolve = null;
   let reconnectReject = null;
   let reconnectTimeout = null;
-  const RECONNECT_TIMEOUT_MS = 15000;
+  const RECONNECT_TIMEOUT_MS = TIME_THRESHOLDS.client.wsReconnectTimeoutMs;
 
   function clearTimers() {
     if (stopCloseTimer) {
@@ -239,7 +240,7 @@ export function createChatWebSocketClient({
             );
           }
         };
-        setTimeout(waitOpen, 100);
+        setTimeout(waitOpen, TIME_THRESHOLDS.client.wsOpenPollIntervalMs);
       } else {
         onSocketReady();
       }

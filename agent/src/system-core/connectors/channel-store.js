@@ -8,6 +8,7 @@ import { executeTerminalCommand } from "./terminals/index.js";
 import { releaseTerminalChannel } from "./terminals/index.js";
 import { executeEmailCommand } from "./emails/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { recoverableToolError } from "../error/index.js";
 import { ERROR_CODE } from "../error/constants.js";
 import { matchesSensitiveFieldPattern } from "../tools/core/sensitive-field-patterns.js";
@@ -284,11 +285,11 @@ class ConnectorChannelStore {
     connectorName = "",
     connectorType = "",
     command = "",
-    timeoutMs = 30000,
+    timeoutMs = TIME_THRESHOLDS.connectors.channelCommandTimeoutMs,
     emailAttachmentHandler = null,
   } = {}) {
     const resolvedTimeoutMs = normalizeTimeMs(timeoutMs, {
-      fallback: 30000,
+      fallback: TIME_THRESHOLDS.connectors.channelCommandTimeoutMs,
       min: 1000,
     });
     const channel = this._getChannel({ sessionId, connectorName, connectorType });
@@ -374,10 +375,10 @@ class ConnectorChannelStore {
 
   async inspectSessionConnectors({
     sessionId = "",
-    timeoutMs = 6000,
+    timeoutMs = TIME_THRESHOLDS.connectors.quickInspectTimeoutMs,
   } = {}) {
     const resolvedTimeoutMs = normalizeTimeMs(timeoutMs, {
-      fallback: 6000,
+      fallback: TIME_THRESHOLDS.connectors.quickInspectTimeoutMs,
       min: 1000,
     });
     const normalizedSessionId = String(sessionId || "").trim();
@@ -507,10 +508,10 @@ class ConnectorChannelStore {
     sessionId = "",
     connectorName = "",
     connectorType = "",
-    timeoutMs = 6000,
+    timeoutMs = TIME_THRESHOLDS.connectors.quickInspectTimeoutMs,
   } = {}) {
     const resolvedTimeoutMs = normalizeTimeMs(timeoutMs, {
-      fallback: 6000,
+      fallback: TIME_THRESHOLDS.connectors.quickInspectTimeoutMs,
       min: 1000,
     });
     const normalizedSessionId = String(sessionId || "").trim();

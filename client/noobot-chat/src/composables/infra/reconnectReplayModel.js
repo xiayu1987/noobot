@@ -25,6 +25,7 @@ import {
   setThinkingFinishedAt,
   setThinkingStartedAt,
 } from "./timeFields";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
 function isReconnectTerminalEvent(eventName = "") {
   return [
@@ -166,7 +167,7 @@ function getArrayItems(value = null) {
   return Array.isArray(value) ? value : [];
 }
 
-const EXECUTION_LOG_DISPLAY_LIMIT = 10;
+const EXECUTION_LOG_DISPLAY_LIMIT = QUANTITY_THRESHOLDS.client.executionLogDisplayLimit;
 const IN_FLIGHT_CHANNEL_STATES = new Set([
   "sending",
   "reconnecting",

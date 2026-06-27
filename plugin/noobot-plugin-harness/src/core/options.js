@@ -6,6 +6,10 @@
 import { resolveCapabilityProfile } from "../capabilities/profile.js";
 import { HARNESS_LIMITS } from "./constants.js";
 import { WORKFLOW_PARAMS } from "./workflow-params.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { z } from "zod";
 
 export function resolveHarnessDenyToolNames(input = null) {
@@ -32,8 +36,8 @@ export const DEFAULT_OPTIONS = Object.freeze({
   harnessDirName: "harness",
   promptPriority: 80,
   tracePriority: 20,
-  timeoutMs: 1000,
-  maxPreviewChars: 1200,
+  timeoutMs: TIME_THRESHOLDS.harness.hookTimeoutMs,
+  maxPreviewChars: LENGTH_THRESHOLDS.display.harnessPreviewChars,
   planningGuidanceMode: "separate_model",
   summaryOnToolBurstThreshold: false,
   summaryDetailSaveToAttachment: false,
@@ -44,7 +48,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
   guidance: Object.freeze({}),
   capabilityToolAllowlist: [],
   capabilityToolAllowlistByPurpose: Object.freeze({}),
-  miniRunnerMaxTurns: 5,
+  miniRunnerMaxTurns: TURN_THRESHOLDS.harness.miniRunnerMaxTurns,
   miniRunnerToolAllowlist: [],
   acceptance: Object.freeze({
     semanticValidation: WORKFLOW_PARAMS.acceptance.semanticValidation.enabled,
@@ -52,26 +56,26 @@ export const DEFAULT_OPTIONS = Object.freeze({
   review: Object.freeze({
     attachToFinalOutput: true,
   }),
-  pendingTtlHookTurns: 8,
-  manifestDebounceMs: 500,
-  jsonlBatchSize: 50,
-  jsonlFlushIntervalMs: 2000,
+  pendingTtlHookTurns: TURN_THRESHOLDS.harness.pendingTtlHookTurns,
+  manifestDebounceMs: TIME_THRESHOLDS.harness.manifestDebounceMs,
+  jsonlBatchSize: QUANTITY_THRESHOLDS.harness.jsonlBatchSize,
+  jsonlFlushIntervalMs: TIME_THRESHOLDS.harness.jsonlFlushIntervalMs,
   flushHookPriority: 5,
-  flushHookTimeoutMs: 2000,
+  flushHookTimeoutMs: TIME_THRESHOLDS.harness.flushHookTimeoutMs,
   jsonlFlushStrategy: Object.freeze({
-    maxSize: 50,
-    maxTime: 2000,
+    maxSize: QUANTITY_THRESHOLDS.harness.jsonlFlushMaxSize,
+    maxTime: TIME_THRESHOLDS.harness.jsonlFlushMaxTimeMs,
     onTerminal: true,
     onError: true,
-    maxRetry: 5,
+    maxRetry: TURN_THRESHOLDS.harness.jsonl.flushMaxRetry,
     maxBufferEntries: HARNESS_LIMITS.JSONL_MAX_BUFFER_ENTRIES,
     maxBufferBytes: HARNESS_LIMITS.JSONL_MAX_BUFFER_BYTES,
     maxFileBytes: 5 * 1024 * 1024,
-    maxFiles: 20,
+    maxFiles: QUANTITY_THRESHOLDS.harness.jsonlMaxFiles,
   }),
-  maxRuns: 100,
-  maxRunAgeDays: 30,
-  cleanupGraceMs: 10 * 60 * 1000,
+  maxRuns: QUANTITY_THRESHOLDS.harness.maxRuns,
+  maxRunAgeDays: TIME_THRESHOLDS.harness.maxRunAgeDays,
+  cleanupGraceMs: TIME_THRESHOLDS.harness.cleanupGraceMs,
   fsmEnabled: true,
   denyToolNames: DEFAULT_HARNESS_DENY_TOOL_NAMES,
   promptText: "",

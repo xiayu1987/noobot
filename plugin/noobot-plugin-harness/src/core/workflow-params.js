@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 function deepFreeze(value) {
   if (!value || typeof value !== "object") return value;
@@ -134,15 +136,16 @@ export const WORKFLOW_PARAMS = deepFreeze({
     full: {
       guidance: {
         summary: {
-          turnsThreshold: 10,
+          turnsThreshold: TURN_THRESHOLDS.harness.modeThresholds.full.summaryTurns,
         },
         analysis: {
-          turnsThreshold: 8,
+          turnsThreshold: TURN_THRESHOLDS.harness.modeThresholds.full.analysisTurns,
         },
       },
       planning: {
         planUpdate: {
-          triggerTurnsThreshold: 8,
+          triggerTurnsThreshold:
+            TURN_THRESHOLDS.harness.modeThresholds.full.planUpdateTriggerTurns,
         },
         planRefinement: {
           enabled: true,
@@ -150,22 +153,24 @@ export const WORKFLOW_PARAMS = deepFreeze({
       },
       acceptance: {
         phase: {
-          triggerTurnsThreshold: 9,
+          triggerTurnsThreshold:
+            TURN_THRESHOLDS.harness.modeThresholds.full.phaseAcceptanceTriggerTurns,
         },
       },
     },
     programming: {
       guidance: {
         summary: {
-          turnsThreshold: 23,
+          turnsThreshold: TURN_THRESHOLDS.harness.modeThresholds.programming.summaryTurns,
         },
         analysis: {
-          turnsThreshold: 1,
+          turnsThreshold: TURN_THRESHOLDS.harness.modeThresholds.programming.analysisTurns,
         },
       },
       planning: {
         planUpdate: {
-          triggerTurnsThreshold: 12,
+          triggerTurnsThreshold:
+            TURN_THRESHOLDS.harness.modeThresholds.programming.planUpdateTriggerTurns,
         },
         planRefinement: {
           enabled: false,
@@ -173,22 +178,24 @@ export const WORKFLOW_PARAMS = deepFreeze({
       },
       acceptance: {
         phase: {
-          triggerTurnsThreshold: 24,
+          triggerTurnsThreshold:
+            TURN_THRESHOLDS.harness.modeThresholds.programming.phaseAcceptanceTriggerTurns,
         },
       },
     },
     text: {
       guidance: {
         summary: {
-          turnsThreshold: 15,
+          turnsThreshold: TURN_THRESHOLDS.harness.modeThresholds.text.summaryTurns,
         },
         analysis: {
-          turnsThreshold: 8,
+          turnsThreshold: TURN_THRESHOLDS.harness.modeThresholds.text.analysisTurns,
         },
       },
       planning: {
         planUpdate: {
-          triggerTurnsThreshold: 4,
+          triggerTurnsThreshold:
+            TURN_THRESHOLDS.harness.modeThresholds.text.planUpdateTriggerTurns,
         },
         planRefinement: {
           enabled: true,
@@ -196,24 +203,26 @@ export const WORKFLOW_PARAMS = deepFreeze({
       },
       acceptance: {
         phase: {
-          triggerTurnsThreshold: 14,
+          triggerTurnsThreshold:
+            TURN_THRESHOLDS.harness.modeThresholds.text.phaseAcceptanceTriggerTurns,
         },
       },
     },
   },
   planning: {
     planUpdate: {
-      revisionMaxAttempts: 10,
-      refinementMaxAttempts: 10,
-      triggerTurnsThreshold: 4,
+      revisionMaxAttempts: TURN_THRESHOLDS.harness.planning.planUpdateRevisionMaxAttempts,
+      refinementMaxAttempts:
+        TURN_THRESHOLDS.harness.planning.planUpdateRefinementMaxAttempts,
+      triggerTurnsThreshold: TURN_THRESHOLDS.harness.planning.planUpdateTriggerTurns,
     },
     capture: {
-      maxAttempts: 2,
+      maxAttempts: TURN_THRESHOLDS.harness.planning.captureMaxAttempts,
       rawOutputLimit: 20,
       summaryMaxItems: 8,
-      compactTextMaxChars: 500,
-      rawOutputPreviewMaxChars: 300,
-      contextGoalMaxChars: 800,
+      compactTextMaxChars: LENGTH_THRESHOLDS.contextPreview.planningCompactTextChars,
+      rawOutputPreviewMaxChars: LENGTH_THRESHOLDS.display.planningRawOutputPreviewChars,
+      contextGoalMaxChars: LENGTH_THRESHOLDS.contextPreview.planningContextGoalChars,
     },
     tools: {
       summaryToolName: "task_summary",
@@ -248,20 +257,21 @@ export const WORKFLOW_PARAMS = deepFreeze({
   guidance: {
     summary: {
       // Fallback defaults. Mode-specific summary thresholds live in top-level modeThresholds.<mode>.guidance.summary.
-      turnsThreshold: 8,
-      messageCharsThreshold: 200000,
+      turnsThreshold: TURN_THRESHOLDS.harness.guidance.summaryTurns,
+      messageCharsThreshold: LENGTH_THRESHOLDS.context.harnessSummaryMessageChars,
       overflowPolicy: {
         enablePruneAfterSummary: true,
-        pruneTriggerAfterCharSummaryRounds: 1,
+        pruneTriggerAfterCharSummaryRounds:
+          TURN_THRESHOLDS.agent.phaseSummaryPruneAfterCharSummaryRounds,
         forceAcceptanceWhenStillOverflow: true,
       },
     },
     analysis: {
-      turnsThreshold: 10,
+      turnsThreshold: TURN_THRESHOLDS.harness.guidance.analysisTurns,
     },
     failureThreshold: {
-      consecutive: 3,
-      accumulated: 10,
+      consecutive: TURN_THRESHOLDS.harness.guidance.failureConsecutive,
+      accumulated: TURN_THRESHOLDS.harness.guidance.failureAccumulated,
     },
     decisions: {
       action: {
@@ -320,7 +330,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
     phase: {
       // Fallback default. Mode-specific phase acceptance thresholds live in
       // top-level modeThresholds.<mode>.acceptance.phase.
-      triggerTurnsThreshold: 9,
+      triggerTurnsThreshold: TURN_THRESHOLDS.harness.acceptance.phaseTriggerTurns,
       blockerKeys: ["guidance", "planUpdate", "planningCaptured"],
     },
     tools: {

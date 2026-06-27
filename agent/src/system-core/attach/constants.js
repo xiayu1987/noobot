@@ -7,10 +7,11 @@ import {
   DEFAULT_MIME_TYPE,
   MIME_TO_EXTENSION,
 } from "../constants/index.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 export { DEFAULT_MIME_TYPE, MIME_TO_EXTENSION };
 
 export const DEFAULT_ATTACHMENT_SESSION_ID = "unknown_session";
 export const DEFAULT_ATTACHMENT_SOURCE = "user";
 export const VALID_ATTACHMENT_SOURCES = new Set(["user", "model", "email", "subtask"]);
 
-export const MAX_EXTENSION_LENGTH = 20;
+export const MAX_EXTENSION_LENGTH = LENGTH_THRESHOLDS.preview.attachmentExtensionChars;

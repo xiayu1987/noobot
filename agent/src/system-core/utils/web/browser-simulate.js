@@ -7,6 +7,7 @@ import { chromium } from "playwright";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { logger } from "../../tracking/index.js";
 import { normalizeTimeMs } from "../../config/core/time-config-normalizer.js";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
@@ -97,16 +98,16 @@ function shouldBlockRequest(request) {
 export async function browseUrlHtml({
   url = "",
   waitUntil = "domcontentloaded",
-  timeout = 30000,
-  networkIdleTimeout = 4500,
+  timeout = TIME_THRESHOLDS.web.browserDefaultTimeoutMs,
+  networkIdleTimeout = TIME_THRESHOLDS.web.browserNetworkIdleTimeoutMs,
   runtimeContext = null,
 } = {}) {
   const resolvedTimeoutMs = normalizeTimeMs(timeout, {
-    fallback: 30000,
+    fallback: TIME_THRESHOLDS.web.browserDefaultTimeoutMs,
     min: 1000,
   });
   const resolvedNetworkIdleTimeoutMs = normalizeTimeMs(networkIdleTimeout, {
-    fallback: 4500,
+    fallback: TIME_THRESHOLDS.web.browserNetworkIdleTimeoutMs,
     min: 500,
   });
   const targetUrl = String(url || "").trim();

@@ -43,6 +43,7 @@ import {
   buildRuntimeConnectorStatus,
   upsertRuntimeSelectedConnector,
 } from "./connector-toolkit/connector-runtime.js";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import {
   createConnectorToolContext,
   resolveRememberedConnectorInfo,
@@ -102,7 +103,7 @@ function createConnectorTools({ agentContext } = {}) {
       }
       const inspected = await store.inspectSessionConnectors({
         sessionId: rootSessionId,
-        timeoutMs: 8000,
+        timeoutMs: TIME_THRESHOLDS.connectors.toolkitCommandTimeoutMs,
       });
       const databases = Array.isArray(inspected?.connectors?.databases)
         ? inspected.connectors.databases

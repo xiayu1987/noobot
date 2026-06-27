@@ -12,11 +12,14 @@ import {
   translateI18nText,
 } from "./i18n.js";
 import { extractJsonObjectFromText, sanitizeJsonCandidate } from "./json-repair-utils.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 export { extractJsonObjectFromText, sanitizeJsonCandidate } from "./json-repair-utils.js";
 
-const WRAPPED_PAYLOAD_MAX_DEPTH = 3;
+const WRAPPED_PAYLOAD_MAX_DEPTH = QUANTITY_THRESHOLDS.harness.wrappedPayloadMaxDepth;
 const WRAPPED_PAYLOAD_MAX_NODES = 100;
-const WRAPPED_PAYLOAD_MAX_STRING_LENGTH = 200000;
+const WRAPPED_PAYLOAD_MAX_STRING_LENGTH =
+  LENGTH_THRESHOLDS.preview.harnessWrappedPayloadStringChars;
 const CHECKLIST_HINT_RE = /taskchecklist|refinementchecklist|checklist|\"task\"|\"index\"|\u6b65\u9aa4|\u4efb\u52a1/i;
 const STRIP_FENCED_BLOCK_RE = /```[\s\S]*?```/g;
 

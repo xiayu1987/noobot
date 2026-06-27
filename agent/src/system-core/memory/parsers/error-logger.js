@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import path from "node:path";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 export async function appendParseErrorLog({
   storage,
@@ -25,9 +26,9 @@ export async function appendParseErrorLog({
     const block = [
       `[${new Date().toISOString()}] stage=${String(stage || "").trim() || "unknown"}`,
       `error=${String(error || "").trim() || "unknown_parse_error"}`,
-      `candidate=${String(candidate || "").slice(0, 2000)}`,
+      `candidate=${String(candidate || "").slice(0, LENGTH_THRESHOLDS.display.memoryParserCandidatePreviewChars)}`,
       "raw:",
-      String(rawText || "").slice(0, 20000),
+      String(rawText || "").slice(0, LENGTH_THRESHOLDS.preview.memoryParserRawPreviewChars),
       "---",
       "",
     ].join("\n");

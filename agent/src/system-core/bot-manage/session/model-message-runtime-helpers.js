@@ -24,6 +24,7 @@ import {
 import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
 import { normalizeMessageForModelRuntime } from "./session-execution-engine-utils.js";
 import { emitModelContextTrace, summarizeDiagnosticBlocks, summarizeDiagnosticMessages } from "../../agent/core/message-context/context-diagnostics.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 const PLUGIN_DEEP_MERGE_KEYS = new Set([
   "stepModels",
@@ -100,7 +101,9 @@ function resolveNonMainModelContextWindowLimit(...items) {
       item.clipNonMainModelContext === true;
     if (!shouldClip) continue;
     const limit = Number(item.contextWindowRecentMessageLimit);
-    return Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 20;
+    return Number.isFinite(limit) && limit > 0
+      ? Math.floor(limit)
+      : TURN_THRESHOLDS.session.nonMainContextWindowRecentMessageLimit;
   }
   return 0;
 }

@@ -13,6 +13,7 @@
     "check": "node -e \"import('./src/index.js').then(()=>console.log('ok')).catch(e=>{console.error(e);process.exit(1);})\""
   },
   "dependencies": {
+    "@noobot/shared": "file:../../shared",
     "workflow": "file:../../workflow"
   }
 }

@@ -6,6 +6,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { HARNESS_FILES } from "../core/constants.js";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 function normalizeSessionIds(input = []) {
   if (Array.isArray(input)) {
@@ -33,7 +34,7 @@ function resolveLockMaxAgeMs(options = {}) {
   if (Number.isFinite(Number(options?.cleanupGraceMs)) && Number(options.cleanupGraceMs) > 0) {
     return Number(options.cleanupGraceMs);
   }
-  return 10 * 60 * 1000;
+  return TIME_THRESHOLDS.harness.cleanupGraceMs;
 }
 
 async function isRunWriteLocked(runDirPath = "", options = {}) {
@@ -56,11 +57,13 @@ export async function cleanupOldRuns(basePath, options = {}) {
   const runtimeDirName = options.runtimeDirName || "runtime";
   const harnessDirName = options.harnessDirName || "harness";
   const maxRuns = Number.isFinite(Number(options.maxRuns)) ? Number(options.maxRuns) : 100;
-  const maxRunAgeDays = Number.isFinite(Number(options.maxRunAgeDays)) ? Number(options.maxRunAgeDays) : 30;
+  const maxRunAgeDays = Number.isFinite(Number(options.maxRunAgeDays))
+    ? Number(options.maxRunAgeDays)
+    : TIME_THRESHOLDS.harness.maxRunAgeDays;
   const cleanupGraceMs =
     Number.isFinite(Number(options.cleanupGraceMs)) && Number(options.cleanupGraceMs) >= 0
       ? Number(options.cleanupGraceMs)
-      : 10 * 60 * 1000;
+      : TIME_THRESHOLDS.harness.cleanupGraceMs;
 
   const harnessRunsDir = path.join(basePath, runtimeDirName, harnessDirName, "runs");
   let deleted = 0;

@@ -7,8 +7,10 @@
  */
 import { emitEvent } from "../../event/index.js";
 import { createChatModel, createChatModelByName } from "../factory/chat-model.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
-const STREAMING_TOOL_CALL_MISMATCH_THRESHOLD = 2;
+const STREAMING_TOOL_CALL_MISMATCH_THRESHOLD =
+  TURN_THRESHOLDS.agent.streamingToolCallMismatchThreshold;
 
 /**
  * Get or create a cached non-streaming LLM instance.

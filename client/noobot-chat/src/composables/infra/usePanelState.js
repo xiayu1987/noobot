@@ -4,10 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const MOBILE_BREAKPOINT = 768;
 
-function useThrottledResize(handler, delayMs = 150) {
+function useThrottledResize(handler, delayMs = TIME_THRESHOLDS.client.panelResizeThrottleMs) {
   let timer = null;
   function throttled() {
     if (timer) return;

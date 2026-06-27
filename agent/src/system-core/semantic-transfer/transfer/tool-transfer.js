@@ -24,8 +24,10 @@ import {
   materializeTextForToolResult,
   resolveToolResultInlineTextLimit,
 } from "./tool-result-text.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
-const TOOL_INPUT_OVERFLOW_MAX_CHARS = 200000;
+const TOOL_INPUT_OVERFLOW_MAX_CHARS =
+  LENGTH_THRESHOLDS.semanticTransfer.toolInputOverflowChars;
 
 const TOOL_INPUT_OVERFLOW_LIMITS = Object.freeze({
   WRITE_FILE_CONTENT_CHARS: TOOL_INPUT_OVERFLOW_MAX_CHARS,
@@ -227,7 +229,7 @@ export async function transferToolOutput({
   meta = {},
   forceAttachment = false,
   inlineMaxChars = null,
-  previewChars = 1200,
+  previewChars = LENGTH_THRESHOLDS.semanticTransfer.previewChars,
   forcePreview = false,
 } = {}) {
   const normalizedText = String(text || content || "");

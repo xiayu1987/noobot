@@ -11,9 +11,10 @@ import {
   BOT_MANAGE_LOG_EVENT,
   BOT_MANAGE_LOG_SOURCE,
 } from "../config/constants.js";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
-const DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS = 300000;
-const DEFAULT_EXECUTION_BUNDLE_TIMEOUT_MS = 5000;
+const DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS = TIME_THRESHOLDS.memory.summaryTimeoutMs;
+const DEFAULT_EXECUTION_BUNDLE_TIMEOUT_MS = TIME_THRESHOLDS.memory.executionBundleTimeoutMs;
 
 function isAbortLikeError(error = {}) {
   const name = String(error?.name || "").toLowerCase();

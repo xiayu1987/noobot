@@ -34,10 +34,11 @@ import { ERROR_CODE } from "../../error/constants.js";
 import { SANDBOX_CONFIG, TOOL_NAME } from "../constants/index.js";
 import { logDebug, logWarn } from "../../tracking/console/logger.js";
 import { formatLinesWithNumbers, splitLines } from "./file-utils.js";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const EXECUTE_SCRIPT_TOOL_NAME = TOOL_NAME.EXECUTE_SCRIPT;
-const DEFAULT_TIMEOUT = 300000;
-const DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS = 3600000;
+const DEFAULT_TIMEOUT = TIME_THRESHOLDS.tools.executeScriptTimeoutMs;
+const DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS = TIME_THRESHOLDS.tools.dockerLockWaitTimeoutMs;
 const SANDBOX_PROVIDER_NAME = SANDBOX_CONFIG.PROVIDERS;
 const DOCKER_SANDBOX_DEFAULT = SANDBOX_CONFIG.DOCKER;
 const SANDBOX_COMMAND = SANDBOX_CONFIG.COMMANDS;

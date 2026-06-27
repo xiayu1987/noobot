@@ -49,10 +49,11 @@ import {
   IMAGE_EXTENSIONS,
   TEXT_EXTENSIONS,
 } from "./file-extension-constants.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 const require = createRequire(import.meta.url);
-const MAX_BATCH_BYTES = Math.floor(0.8 * 1024 * 1024);
-const MAX_DIRECT_TEXT_BYTES = 8 * 1024 * 1024;
+const MAX_BATCH_BYTES = LENGTH_THRESHOLDS.dataProcessing.batchBytes;
+const MAX_DIRECT_TEXT_BYTES = LENGTH_THRESHOLDS.dataProcessing.directTextBytes;
 const DATA_PROCESSING_ARTIFACT_SOURCES = new Set([
   ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
   ARTIFACT_GENERATION_SOURCE.MEDIA_TO_DATA_TOOL,

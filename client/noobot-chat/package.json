@@ -18,6 +18,7 @@
     "pretest": "npm run -s generate:frontend-plugin-entries && npm run -s check:plugin-frontend-reverse-deps && npm run -s check:i18n-imports"
   },
   "dependencies": {
+    "@noobot/shared": "file:../../shared",
     "@element-plus/icons-vue": "^2.3.2",
     "element-plus": "^2.14.2",
     "markdown-it": "^14.2.0",

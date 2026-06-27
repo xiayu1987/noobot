@@ -24,9 +24,13 @@ import {
   resolvePluginOptionsFromConfig,
   selectHookManager,
 } from "./session-execution-engine-utils.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
-export const AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS = 5;
-export const AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS = 180000;
+export const AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS =
+  TURN_THRESHOLDS.harness.miniRunnerMaxTurns;
+export const AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS =
+  TIME_THRESHOLDS.harness.separateModelMinTimeoutMs;
 
 export class RunConfigPluginPreparer {
   constructor({

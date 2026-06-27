@@ -7,9 +7,11 @@ import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "..
 import { firstNormalizedString } from "../core/compact.js";
 import { resolveTransferIntent } from "../core/intent.js";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
-export const DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS = 30000;
-const DEFAULT_PREVIEW_CHARS = 1200;
+export const DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS =
+  LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars;
+const DEFAULT_PREVIEW_CHARS = LENGTH_THRESHOLDS.semanticTransfer.previewChars;
 
 function normalizeString(value = "") {
   return String(value || "").trim();

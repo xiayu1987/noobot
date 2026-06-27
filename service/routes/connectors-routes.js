@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { withJsonError } from "./route-wrapper.js";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const DEFAULT_LOCALE = "zh-CN";
 
@@ -104,7 +105,7 @@ export function registerConnectorRoutes(
       const connectorHistoryStore = getConnectorHistoryStore();
       const inspectedConnectors = await connectorChannelStore.inspectSessionConnectors({
         sessionId: rootSessionId,
-        timeoutMs: 6000,
+        timeoutMs: TIME_THRESHOLDS.connectors.serviceInspectTimeoutMs,
       });
       const historyConnectors =
         connectorHistoryStore &&

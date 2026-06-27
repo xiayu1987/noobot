@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 // ========================
 // Async Domain Constants
@@ -86,14 +87,14 @@ export const ASYNC_JOB_TYPES = {
   CUSTOM: "custom",
 };
 
-export const DEFAULT_WAIT_ASYNC_TIMEOUT_MS = 300000;
-export const MIN_WAIT_ASYNC_TIMEOUT_MS = 1000;
-export const ASYNC_JOB_FAST_CLEANUP_MS = 1000;
-export const ASYNC_JOB_RETENTION_MS = 5 * 60 * 1000;
+export const DEFAULT_WAIT_ASYNC_TIMEOUT_MS = TIME_THRESHOLDS.async.waitTimeoutMs;
+export const MIN_WAIT_ASYNC_TIMEOUT_MS = TIME_THRESHOLDS.async.minWaitTimeoutMs;
+export const ASYNC_JOB_FAST_CLEANUP_MS = TIME_THRESHOLDS.async.fastCleanupMs;
+export const ASYNC_JOB_RETENTION_MS = TIME_THRESHOLDS.async.retentionMs;
 
 export const DEFAULT_ASYNC_JOB_CONFIG = {
-  pollInterval: 1000,
-  maxWaitTime: 30000,
+  pollInterval: TIME_THRESHOLDS.async.defaultPollIntervalMs,
+  maxWaitTime: TIME_THRESHOLDS.async.defaultMaxWaitTimeMs,
   retentionMs: ASYNC_JOB_RETENTION_MS,
 };
 

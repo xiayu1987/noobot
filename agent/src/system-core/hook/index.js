@@ -8,9 +8,11 @@ import { resolveDialogProcessIdFromContext } from "../context/session/dialog-pro
 import { getSystemRuntimeFromRuntime } from "../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../context/parent-session-id-resolver.js";
 import { resolveHookClientEmitter } from "./client-channel.js";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
-const DEFAULT_HOOK_TIMEOUT_MS = 3000;
-const HOOK_PROGRESS_TEXT_LIMIT = 240;
+const DEFAULT_HOOK_TIMEOUT_MS = TIME_THRESHOLDS.agent.hookTimeoutMs;
+const HOOK_PROGRESS_TEXT_LIMIT = LENGTH_THRESHOLDS.display.hookProgressTextChars;
 const HOOK_PROGRESS_VERBOSE_ENABLED_VALUES = new Set(["1", "true", "on", "yes", "enable", "enabled"]);
 const HOOK_PROGRESS_IMPORTANT_STATUSES = new Set([
   "abort",

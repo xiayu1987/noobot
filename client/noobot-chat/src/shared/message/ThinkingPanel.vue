@@ -34,6 +34,7 @@ import {
   BaseThinkingLogLine,
   BaseThinkingPanelShell,
 } from "../ui";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
 const props = defineProps({
   messageItem: { type: Object, default: () => ({}) },
@@ -51,7 +52,7 @@ const { translate } = useLocale();
 const nowTick = ref(nowMs());
 const detailExpansionTick = ref(0);
 let timer = null;
-const EXECUTION_LOG_DISPLAY_LIMIT = 10;
+const EXECUTION_LOG_DISPLAY_LIMIT = QUANTITY_THRESHOLDS.client.executionLogDisplayLimit;
 
 function getRealtimeLogs(messageItem = {}) {
   return getAllRealtimeLogs(messageItem)

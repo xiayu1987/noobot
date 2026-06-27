@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 /**
  * 引擎 I18n 键名映射
@@ -23,13 +25,15 @@ export const ENGINE_I18N_KEY_MAP = {
 /**
  * 工具连续错误触发帮助提示默认阈值
  */
-export const DEFAULT_TOOL_FAILURE_HELP_COUNT = 3;
+export const DEFAULT_TOOL_FAILURE_HELP_COUNT =
+  TURN_THRESHOLDS.agent.toolFailureHelpCount;
 
 /**
  * 工具调用循环默认最大轮数
  * 内置阈值，不通过配置覆盖
  */
-export const DEFAULT_MAX_TOOL_LOOP_TURNS = 300;
+export const DEFAULT_MAX_TOOL_LOOP_TURNS =
+  TURN_THRESHOLDS.agent.maxToolLoopTurns;
 
 /**
  * 超过工具调用循环最大轮数后的缓冲轮数。
@@ -38,29 +42,34 @@ export const DEFAULT_MAX_TOOL_LOOP_TURNS = 300;
  * 之后仍未结束工具循环，则强制切换到无工具模型调用生成最终答复。
  * 内置阈值，不通过配置覆盖。
  */
-export const DEFAULT_TOOL_LOOP_LIMIT_BUFFER_TURNS = 5;
+export const DEFAULT_TOOL_LOOP_LIMIT_BUFFER_TURNS =
+  TURN_THRESHOLDS.agent.toolLoopLimitBufferTurns;
 
 /**
  * 阶段小结默认触发工具循环轮数。
  * 内置阈值，不通过配置覆盖。
  */
-export const DEFAULT_PHASE_SUMMARY_LOOP_TURNS = 15;
+export const DEFAULT_PHASE_SUMMARY_LOOP_TURNS =
+  TURN_THRESHOLDS.agent.phaseSummaryLoopTurns;
 
 /**
  * 阶段小结默认触发消息字符阈值（未 summarized 的上下文总字符数）。
  * 内置阈值，不通过配置覆盖。
  */
-export const DEFAULT_PHASE_SUMMARY_MESSAGE_CHARS_THRESHOLD = 150000;
+export const DEFAULT_PHASE_SUMMARY_MESSAGE_CHARS_THRESHOLD =
+  LENGTH_THRESHOLDS.context.phaseSummaryMessageChars;
 export const PHASE_SUMMARY_OVERFLOW_POLICY = Object.freeze({
   ENABLE_PRUNE_AFTER_SUMMARY: true,
-  PRUNE_TRIGGER_AFTER_CHAR_SUMMARY_ROUNDS: 1,
+  PRUNE_TRIGGER_AFTER_CHAR_SUMMARY_ROUNDS:
+    TURN_THRESHOLDS.agent.phaseSummaryPruneAfterCharSummaryRounds,
   ENFORCE_NO_TOOLS_WHEN_STILL_OVERFLOW: true,
 });
 
 /**
  * 帮助提示默认循环轮数
  */
-export const DEFAULT_HELP_PROMPT_LOOP_TURNS = 50;
+export const DEFAULT_HELP_PROMPT_LOOP_TURNS =
+  TURN_THRESHOLDS.agent.helpPromptLoopTurns;
 
 /**
  * Internal message type markers for system-injected prompts.

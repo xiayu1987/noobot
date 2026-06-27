@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveTimeMs } from "../../config/core/time-config-normalizer.js";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 export function normalizeConnectionSource(connectionInfo = {}) {
   return connectionInfo && typeof connectionInfo === "object" ? connectionInfo : {};
@@ -55,7 +56,10 @@ export function resolveHostPortUserPasswordDatabase({
   };
 }
 
-export function normalizeTimeoutMs(source = {}, fallback = 30000) {
+export function normalizeTimeoutMs(
+  source = {},
+  fallback = TIME_THRESHOLDS.connectors.defaultCommandTimeoutMs,
+) {
   return resolveTimeMs(source, {
     key: "timeoutMs",
     legacyKeys: ["timeout_ms"],

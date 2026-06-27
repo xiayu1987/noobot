@@ -9,6 +9,7 @@ import {
   normalizeTimeoutMs,
   resolveHostPortUserPasswordDatabase,
 } from "./common-db-connector-channel.js";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 function resolvePostgresConnection(connectionInfo = {}) {
   const source = normalizeConnectionSource(connectionInfo);
@@ -63,7 +64,7 @@ function getPostgresPool(pg, conn = {}) {
     statement_timeout: conn.timeoutMs,
     query_timeout: conn.timeoutMs,
     connectionTimeoutMillis: conn.timeoutMs,
-    idleTimeoutMillis: 60000,
+    idleTimeoutMillis: TIME_THRESHOLDS.connectors.postgresIdleTimeoutMs,
     max: 5,
   });
   postgresPools.set(key, { pool, createdAt: Date.now() });

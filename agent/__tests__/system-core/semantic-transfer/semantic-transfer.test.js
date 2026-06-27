@@ -24,7 +24,10 @@ import {
   transferSemanticContent,
   resolveTransferPathView,
 } from "../../../src/system-core/semantic-transfer/index.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { materializeOutput } from "../../../src/system-core/semantic-transfer/storage/materializer.js";
+
+const TOOL_INPUT_OVERFLOW_CHARS = LENGTH_THRESHOLDS.semanticTransfer.toolInputOverflowChars;
 
 function assertTransferProtocolOnly(value = {}) {
   assert.deepEqual(Object.keys(value).sort(), ["transferEnvelopes"]);
@@ -741,7 +744,7 @@ test("transferSemanticContent tool_input decides call arg overflow inside semant
       name: "write_file",
       args: {
         filePath: "large.txt",
-        content: "x".repeat(200001),
+        content: "x".repeat(TOOL_INPUT_OVERFLOW_CHARS + 1),
       },
     },
     runtime: {
@@ -753,7 +756,7 @@ test("transferSemanticContent tool_input decides call arg overflow inside semant
             attachmentSource: payload.attachmentSource,
             name: artifact.name,
             mimeType: artifact.mimeType,
-            size: 200001,
+            size: TOOL_INPUT_OVERFLOW_CHARS + 1,
             path: `/host/${artifact.name}`,
             relativePath: `attachments/${artifact.name}`,
             generatedByModel: true,
@@ -780,7 +783,7 @@ test("transferSemanticContent tool_input supports patch_file patch overflow", as
       name: "patch_file",
       args: {
         format: "apply_patch",
-        patch: "x".repeat(200001),
+        patch: "x".repeat(TOOL_INPUT_OVERFLOW_CHARS + 1),
       },
     },
     runtime: {
@@ -792,7 +795,7 @@ test("transferSemanticContent tool_input supports patch_file patch overflow", as
             attachmentSource: payload.attachmentSource,
             name: artifact.name,
             mimeType: artifact.mimeType,
-            size: 200001,
+            size: TOOL_INPUT_OVERFLOW_CHARS + 1,
             path: `/host/${artifact.name}`,
             relativePath: `attachments/${artifact.name}`,
             generatedByModel: true,
@@ -857,7 +860,7 @@ test("transferSemanticContent tool_input overflow returns sandbox path view when
         attachmentSource: payload.attachmentSource,
         name: artifact.name,
         mimeType: artifact.mimeType,
-        size: 200001,
+        size: TOOL_INPUT_OVERFLOW_CHARS + 1,
         path: `/host/users/admin/attachments/${artifact.name}`,
         relativePath: `attachments/${artifact.name}`,
         generatedByModel: true,
@@ -872,7 +875,7 @@ test("transferSemanticContent tool_input overflow returns sandbox path view when
       name: "write_file",
       args: {
         filePath: "large.txt",
-        content: "x".repeat(200001),
+        content: "x".repeat(TOOL_INPUT_OVERFLOW_CHARS + 1),
       },
     },
     runtime: buildSandboxRuntime(true, {
@@ -900,7 +903,7 @@ test("transferSemanticContent sandbox view prefers default workspace over /proje
         attachmentSource: payload.attachmentSource,
         name: artifact.name,
         mimeType: artifact.mimeType,
-        size: 200001,
+        size: TOOL_INPUT_OVERFLOW_CHARS + 1,
         path: `${basePath}/runtime/ops_workdir/${artifact.name}`,
         relativePath: `runtime/ops_workdir/${artifact.name}`,
         generatedByModel: true,
@@ -915,7 +918,7 @@ test("transferSemanticContent sandbox view prefers default workspace over /proje
       name: "write_file",
       args: {
         filePath: "large_file_test.txt",
-        content: "x".repeat(200001),
+        content: "x".repeat(TOOL_INPUT_OVERFLOW_CHARS + 1),
       },
     },
     runtime: buildSandboxRuntime(true, {
@@ -959,7 +962,7 @@ test("transferSemanticContent tool_input overflow returns non-sandbox path view 
         attachmentSource: payload.attachmentSource,
         name: artifact.name,
         mimeType: artifact.mimeType,
-        size: 200001,
+        size: TOOL_INPUT_OVERFLOW_CHARS + 1,
         path: `/host/users/admin/attachments/${artifact.name}`,
         relativePath: `attachments/${artifact.name}`,
         generatedByModel: true,
@@ -974,7 +977,7 @@ test("transferSemanticContent tool_input overflow returns non-sandbox path view 
       name: "write_file",
       args: {
         filePath: "large.txt",
-        content: "x".repeat(200001),
+        content: "x".repeat(TOOL_INPUT_OVERFLOW_CHARS + 1),
       },
     },
     runtime: buildSandboxRuntime(false, {

@@ -5,6 +5,7 @@ import {
   buildRuntimeContext,
   initializeRuntimeEnvironment,
 } from "../../../src/system-core/context/builders/runtime-environment-builder.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 test("buildRuntimeContext keeps sharedTools passthrough and creates turn stores", () => {
   const hookManager = { emit() {} };
@@ -118,6 +119,9 @@ test("initializeRuntimeEnvironment wires shared tools and connector runtime", as
 });
 
 test("initializeRuntimeEnvironment shared semantic-transfer keeps runtime basePath when caller passes partial runtime", async () => {
+  const overflowContent = "x".repeat(
+    LENGTH_THRESHOLDS.semanticTransfer.toolInputOverflowChars + 1,
+  );
   const runtime = buildRuntimeContext({
     userId: "admin",
     basePath: "/home/xiayu/projects/noobot/workspace/admin",
@@ -145,7 +149,7 @@ test("initializeRuntimeEnvironment shared semantic-transfer keeps runtime basePa
           attachmentSource: payload.attachmentSource,
           name: artifact.name,
           mimeType: artifact.mimeType,
-          size: 200001,
+          size: overflowContent.length,
           path: `/home/xiayu/projects/noobot/workspace/admin/runtime/ops_workdir/${artifact.name}`,
           relativePath: `runtime/ops_workdir/${artifact.name}`,
           generatedByModel: true,
@@ -170,7 +174,7 @@ test("initializeRuntimeEnvironment shared semantic-transfer keeps runtime basePa
       name: "write_file",
       args: {
         filePath: "large_file_test.txt",
-        content: "x".repeat(200001),
+        content: overflowContent,
       },
     },
   });

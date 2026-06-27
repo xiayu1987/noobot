@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import {
   collectAttachmentRefsFromTransferEnvelopes,
   compactAttachmentRef,
@@ -13,6 +14,13 @@ import {
 
 export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 5;
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
+const SUMMARY_ARRAY_ITEM_CHARS = LENGTH_THRESHOLDS.display.sessionSummaryArrayItemChars;
+const SUMMARY_OBJECT_FIELD_CHARS = LENGTH_THRESHOLDS.display.sessionSummaryObjectFieldChars;
+const SUMMARY_DEFAULT_JSON_STRING_CHARS =
+  LENGTH_THRESHOLDS.display.sessionSummaryDefaultJsonStringChars;
+const SUMMARY_SMALL_JSON_STRING_CHARS =
+  LENGTH_THRESHOLDS.display.sessionSummarySmallJsonStringChars;
+const SUMMARY_FILE_NAME_CHARS = LENGTH_THRESHOLDS.display.sessionSummaryFileNameChars;
 
 export function isSessionDisplaySummaryPayload(payload = null, sessionId = "") {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
@@ -93,7 +101,7 @@ function buildMessageSummary(message = {}) {
   return compactMessageSummary(summary);
 }
 
-function truncateText(value = "", maxLength = 4000) {
+function truncateText(value = "", maxLength = LENGTH_THRESHOLDS.display.sessionSummaryTextChars) {
   const text = typeof value === "string" ? value : JSON.stringify(value ?? "");
   return text.length > maxLength ? `${text.slice(0, maxLength)}…` : text;
 }
@@ -156,15 +164,19 @@ function pickLightObject(source = {}, allowedKeys = []) {
     } else if (Array.isArray(value)) {
       picked[key] = value
         .slice(0, 20)
-        .map((item) => (["string", "number", "boolean"].includes(typeof item) ? item : truncateText(item, 500)));
+        .map((item) =>
+          ["string", "number", "boolean"].includes(typeof item)
+            ? item
+            : truncateText(item, SUMMARY_ARRAY_ITEM_CHARS),
+        );
     } else if (typeof value === "object") {
-      picked[key] = truncateText(value, 1000);
+      picked[key] = truncateText(value, SUMMARY_OBJECT_FIELD_CHARS);
     }
   }
   return Object.keys(picked).length ? picked : null;
 }
 
-function clonePlainJson(value, { maxStringLength = 2000 } = {}) {
+function clonePlainJson(value, { maxStringLength = SUMMARY_DEFAULT_JSON_STRING_CHARS } = {}) {
   if (value === undefined || value === null) return value;
   if (["number", "boolean"].includes(typeof value)) return value;
   if (typeof value === "string") return truncateText(value, maxStringLength);
@@ -203,14 +215,18 @@ function pickLightPayloadTransferEnvelopes(value = []) {
 
 function pickPayloadStepFailure(value) {
   if (!value) return null;
-  if (typeof value === "string") return truncateText(value, 1000);
+  if (typeof value === "string") return truncateText(value, SUMMARY_OBJECT_FIELD_CHARS);
   if (typeof value !== "object" || Array.isArray(value)) return null;
-  return pickPlainFields(value, ["message", "error", "code", "name", "stack"], { maxStringLength: 1000 });
+  return pickPlainFields(value, ["message", "error", "code", "name", "stack"], {
+    maxStringLength: SUMMARY_OBJECT_FIELD_CHARS,
+  });
 }
 
 function pickPayloadSemantic(semantic = {}) {
   if (!semantic || typeof semantic !== "object" || Array.isArray(semantic)) return null;
-  return pickPlainFields(semantic, ["nodes", "flowtos", "edges", "attachments"], { maxStringLength: 2000 });
+  return pickPlainFields(semantic, ["nodes", "flowtos", "edges", "attachments"], {
+    maxStringLength: SUMMARY_DEFAULT_JSON_STRING_CHARS,
+  });
 }
 
 function pickPayloadNodeRun(item = {}) {
@@ -222,10 +238,10 @@ function pickPayloadNodeRun(item = {}) {
     "transition", "stepId", "stepIndex", "actionNodeStateId", "nodeDialogProcessId", "dialogProcessId",
     "nodeDialogId", "dialogId",
     "nodeSessionId", "sessionId", "rootSessionId", "stepStatus", "status", "parallelWave", "waveOrder",
-  ], { maxStringLength: 1000 }) || {};
+  ], { maxStringLength: SUMMARY_OBJECT_FIELD_CHARS }) || {};
   const step = pickPlainFields(item?.step, [
     "nodeId", "nodeName", "nodeType", "type", "stateType", "stepId", "stepIndex", "actionNodeStateId",
-  ], { maxStringLength: 1000 });
+  ], { maxStringLength: SUMMARY_OBJECT_FIELD_CHARS });
   if (step) picked.step = step;
   const stepFailure = pickPayloadStepFailure(item?.stepFailure);
   if (stepFailure) picked.stepFailure = stepFailure;
@@ -242,7 +258,7 @@ function pickPayloadNodeSession(item = {}) {
     "transition", "nodeName", "nodeId", "nodeType", "actionNodeStateId", "stepId", "stepIndex",
     "type", "stateType", "rootSessionId", "dialogProcessId", "dialogId", "sessionId", "stepStatus", "status",
     "parallelWave", "waveOrder",
-  ], { maxStringLength: 1000 }) || {};
+  ], { maxStringLength: SUMMARY_OBJECT_FIELD_CHARS }) || {};
   const stepFailure = pickPayloadStepFailure(item?.stepFailure);
   if (stepFailure) picked.stepFailure = stepFailure;
   const envelopes = pickLightPayloadTransferEnvelopes(item?.transferEnvelopes || item?.nodeResultTransferEnvelopes);
@@ -252,11 +268,17 @@ function pickPayloadNodeSession(item = {}) {
 
 function pickPluginPayloadSnapshot(payload = {}) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-  const picked = pickPlainFields(payload, ["status", "phase", "phaseStatus"], { maxStringLength: 500 }) || {};
+  const picked = pickPlainFields(payload, ["status", "phase", "phaseStatus"], {
+    maxStringLength: SUMMARY_SMALL_JSON_STRING_CHARS,
+  }) || {};
   const semantic = pickPayloadSemantic(payload?.semantic);
   if (semantic) picked.semantic = semantic;
   if (payload?.execution && typeof payload.execution === "object" && !Array.isArray(payload.execution)) {
-    const execution = pickPlainFields(payload.execution, ["completed", "status", "startedAt", "endedAt", "error"], { maxStringLength: 1000 }) || {};
+    const execution = pickPlainFields(
+      payload.execution,
+      ["completed", "status", "startedAt", "endedAt", "error"],
+      { maxStringLength: SUMMARY_OBJECT_FIELD_CHARS },
+    ) || {};
     const runs = (Array.isArray(payload.execution?.nodeAgentRuns) ? payload.execution.nodeAgentRuns : [])
       .slice(0, 100)
       .map((item) => pickPayloadNodeRun(item))
@@ -270,11 +292,21 @@ function pickPluginPayloadSnapshot(payload = {}) {
     .filter(Boolean);
   if (nodeSessions.length) picked.nodeSessions = nodeSessions;
   // dialogId remains in summary allow-lists only for historical payload snapshots.
-  const planningDialog = pickPlainFields(payload?.planningDialog, ["sessionId", "dialogProcessId", "dialogId", "parentSessionId"], { maxStringLength: 1000 });
+  const planningDialog = pickPlainFields(
+    payload?.planningDialog,
+    ["sessionId", "dialogProcessId", "dialogId", "parentSessionId"],
+    { maxStringLength: SUMMARY_OBJECT_FIELD_CHARS },
+  );
   if (planningDialog) picked.planningDialog = planningDialog;
-  const runMeta = pickPlainFields(payload?.runMeta, ["sessionId", "dialogProcessId", "dialogId", "parentSessionId", "runId"], { maxStringLength: 1000 });
+  const runMeta = pickPlainFields(
+    payload?.runMeta,
+    ["sessionId", "dialogProcessId", "dialogId", "parentSessionId", "runId"],
+    { maxStringLength: SUMMARY_OBJECT_FIELD_CHARS },
+  );
   if (runMeta) picked.runMeta = runMeta;
-  const interaction = pickPlainFields(payload?.interaction, ["semanticTextPreview"], { maxStringLength: 4000 });
+  const interaction = pickPlainFields(payload?.interaction, ["semanticTextPreview"], {
+    maxStringLength: LENGTH_THRESHOLDS.display.sessionSummaryTextChars,
+  });
   if (interaction) picked.interaction = interaction;
   return Object.keys(picked).length ? picked : null;
 }
@@ -375,7 +407,9 @@ function buildToolLogSummaries(session = {}, { depth = 0 } = {}) {
         event: "tool_result", type: "tool_result",
         role: "tool",
         toolName,
-        text: writtenFile ? `${writtenFile.toolName} ${writtenFile.fileName}` : truncateText(`${toolName}`.trim(), 200),
+        text: writtenFile
+          ? `${writtenFile.toolName} ${writtenFile.fileName}`
+          : truncateText(`${toolName}`.trim(), SUMMARY_FILE_NAME_CHARS),
         ts, sessionId, depth, toolCallId, dialogProcessId, parentDialogProcessId, turnScopeId,
       };
       if (attachments.length) summary.attachments = attachments;

@@ -1,8 +1,9 @@
 import { computed, onBeforeUnmount, onUpdated, ref, watchEffect } from "vue";
 import { ElMessage } from "element-plus";
 import { nowMs } from "../../composables/infra/timeFields";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
-const MIC_MAX_DURATION_SECONDS = 60;
+const MIC_MAX_DURATION_SECONDS = TIME_THRESHOLDS.client.micMaxDurationSeconds;
 const MIC_SLIDE_CANCEL_THRESHOLD = 44;
 
 export function useComposerMediaCapture(props, emitAppendUploads, translate) {

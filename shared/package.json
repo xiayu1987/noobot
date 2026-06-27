@@ -1,0 +1,13 @@
+{
+  "name": "@noobot/shared",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./length-thresholds": "./length-thresholds.mjs",
+    "./quantity-thresholds": "./quantity-thresholds.mjs",
+    "./time-thresholds": "./time-thresholds.mjs",
+    "./turn-thresholds": "./turn-thresholds.mjs",
+    "./package.json": "./package.json"
+  }
+}

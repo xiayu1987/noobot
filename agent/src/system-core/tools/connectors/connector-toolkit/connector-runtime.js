@@ -9,6 +9,7 @@ import { tTool } from "../../core/tool-i18n.js";
 import { pickObject } from "./connector-fields.js";
 import { matchesSensitiveFieldPattern } from "../../core/sensitive-field-patterns.js";
 import { CONNECTOR_TYPE } from "../../constants/index.js";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 function tConnector(runtime = {}, key = "", params = {}) {
   const normalizedKey = String(key || "").trim();
@@ -175,7 +176,7 @@ function buildRuntimeConnectorStatus({
         sessionId: rootSessionId,
         connectorName,
         connectorType,
-        timeoutMs: 8000,
+        timeoutMs: TIME_THRESHOLDS.connectors.toolkitCommandTimeoutMs,
       })
     : Promise.resolve({
         connector_name: connectorName,

@@ -20,8 +20,9 @@ import {
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
 import { summarizeExecutionLogs } from "../../tracking/execution-log/execution-log-summary.js";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
-const POLL_INTERVAL_MS = 300;
+const POLL_INTERVAL_MS = TIME_THRESHOLDS.async.sessionRunnerPollIntervalMs;
 
 /**
  * Session-specific async wrappers (legacy API compatibility).

@@ -16,6 +16,8 @@ import { tSystem } from "noobot-i18n/agent/system-text";
 import { getMcpServerByName, createMcpClient } from "./client-factory.js";
 import { buildLangChainMcpTools } from "./tool-adapter.js";
 import { resolveBoundToolModelRequestOverrides } from "../agent/core/turn/tool-choice-strategy.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 function toText(content) {
   if (typeof content === "string") return content;
@@ -134,7 +136,7 @@ export async function executeMcpTask({
   ];
 
   const traces = [];
-  const maxTurns = 12;
+  const maxTurns = TURN_THRESHOLDS.subTasks.mcpTaskMaxTurns;
   for (let turn = 1; turn <= maxTurns; turn += 1) {
     const ai = await llm.bindTools(langchainTools).invoke(messages, {
       signal: signal || undefined,
@@ -166,7 +168,7 @@ export async function executeMcpTask({
       traces.push({
         tool: call?.name || "",
         args: call?.args || {},
-        result: String(resultText).slice(0, 1000),
+        result: String(resultText).slice(0, LENGTH_THRESHOLDS.display.mcpTaskResultPreviewChars),
       });
       messages.push(
         new ToolMessage({

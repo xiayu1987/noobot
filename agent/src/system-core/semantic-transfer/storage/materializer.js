@@ -9,13 +9,17 @@ import { resolveTransferIntent } from "../core/intent.js";
 import { persistTransferFile } from "./attachment-adapter.js";
 import { normalizeTransferPolicy } from "../core/policy.js";
 import { createTransferResult, TRANSFER_RESULT_STATUS } from "../core/result.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+
+const SEMANTIC_TRANSFER_POLICY_DIRECT_CHARS =
+  LENGTH_THRESHOLDS.semanticTransfer.directChars;
 
 export async function materializeOutputResult({
   runtime = {},
   agentContext = null,
   content = "",
   prefer = "auto",
-  maxDirectChars = 8000,
+  maxDirectChars = SEMANTIC_TRANSFER_POLICY_DIRECT_CHARS,
   policy = null,
   name = "output.txt",
   mimeType = DEFAULT_TRANSFER_MIME_TYPE,
