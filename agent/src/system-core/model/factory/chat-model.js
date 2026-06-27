@@ -23,6 +23,23 @@ import {
 const DEFAULT_MAIN_FLOW = "agent.main";
 const DEFAULT_MAIN_PURPOSE = "main_agent";
 const DEFAULT_MAIN_DOMAIN = "primary";
+const DEFAULT_PROMPT_CACHE_RETENTION = "24h";
+const DEFAULT_PROMPT_CACHE_KEY_PREFIX = "noobot-main";
+
+function parseOpenAiGptMajor(modelName = "") {
+  const normalized = String(modelName || "").trim().toLowerCase();
+  const match = normalized.match(/\bgpt[-_]?(\d+)(?:\b|[-_.])/);
+  if (!match) return null;
+  const major = Number(match[1]);
+  return Number.isInteger(major) ? major : null;
+}
+
+function isOpenAiNextGenGptModel(modelSpec = {}) {
+  const providerFormat = normalizeProviderFormat(modelSpec?.format || "");
+  if (providerFormat !== PROVIDER_FORMAT.OPENAI_COMPATIBLE) return false;
+  const major = parseOpenAiGptMajor(modelSpec?.model || "");
+  return Number.isInteger(major) && major >= 5;
+}
 
 function supportsTopP(modelSpec = {}) {
   const providerFormat = normalizeProviderFormat(modelSpec?.format || "");
@@ -38,6 +55,44 @@ function normalizePromptCacheKey(value) {
   const normalized = String(value).trim();
   if (!normalized) return "";
   return normalized.slice(0, 200);
+}
+
+function buildDefaultPromptCacheKey(modelSpec = {}) {
+  if (!isOpenAiNextGenGptModel(modelSpec)) return "";
+  const modelSegment = String(modelSpec?.model || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (!modelSegment) return "";
+  return normalizePromptCacheKey(`${DEFAULT_PROMPT_CACHE_KEY_PREFIX}-${modelSegment}`);
+}
+
+function resolvePromptCacheSettings(modelSpec = {}) {
+  const normalizedSpec = normalizeModelSpecWithDefaults(modelSpec);
+  const out = normalizedSpec.extra_body && typeof normalizedSpec.extra_body === "object"
+    ? { ...normalizedSpec.extra_body }
+    : {};
+  let promptCacheKey = normalizePromptCacheKey(
+    normalizedSpec.prompt_cache_key ?? normalizedSpec.promptCacheKey,
+  );
+  if (!promptCacheKey && "prompt_cache_key" in out) {
+    promptCacheKey = normalizePromptCacheKey(out.prompt_cache_key);
+  }
+  if (!promptCacheKey) {
+    promptCacheKey = buildDefaultPromptCacheKey(normalizedSpec);
+  }
+  const promptCacheRetention = String(
+    normalizedSpec.prompt_cache_retention ??
+      normalizedSpec.promptCacheRetention ??
+      out.prompt_cache_retention ??
+      (isOpenAiNextGenGptModel(normalizedSpec) ? DEFAULT_PROMPT_CACHE_RETENTION : "") ??
+      "",
+  ).trim();
+  return {
+    promptCacheKey,
+    promptCacheRetention,
+  };
 }
 
 /**
@@ -65,18 +120,16 @@ export function buildModelKwargs(modelSpec = {}) {
   const normalizedSpec = normalizeModelSpecWithDefaults(modelSpec);
   const out = { ...(normalizedSpec.extra_body || {}) };
   const providerFormat = normalizeProviderFormat(normalizedSpec?.format || "");
-  const promptCacheKey = normalizePromptCacheKey(
-    normalizedSpec.prompt_cache_key ?? normalizedSpec.promptCacheKey,
-  );
+  const { promptCacheKey, promptCacheRetention } = resolvePromptCacheSettings(normalizedSpec);
   if (promptCacheKey) {
     out.prompt_cache_key = promptCacheKey;
   } else if ("prompt_cache_key" in out) {
-    const extraBodyPromptCacheKey = normalizePromptCacheKey(out.prompt_cache_key);
-    if (extraBodyPromptCacheKey) {
-      out.prompt_cache_key = extraBodyPromptCacheKey;
-    } else {
-      delete out.prompt_cache_key;
-    }
+    delete out.prompt_cache_key;
+  }
+  if (promptCacheRetention) {
+    out.prompt_cache_retention = promptCacheRetention;
+  } else if ("prompt_cache_retention" in out) {
+    delete out.prompt_cache_retention;
   }
   if (normalizedSpec.reasoning_effort !== undefined)
     out.reasoning_effort = normalizedSpec.reasoning_effort;
@@ -224,6 +277,7 @@ export function createChatModelFromSpec(modelSpec, options = {}) {
     );
 
   const modelKwargs = buildModelKwargs(normalizedSpec);
+  const { promptCacheKey, promptCacheRetention } = resolvePromptCacheSettings(normalizedSpec);
   const defaultsByFormat = getModelDefaultFields(normalizedSpec);
   const chat = new ChatOpenAI({
     model: normalizedSpec.model,
@@ -234,6 +288,8 @@ export function createChatModelFromSpec(modelSpec, options = {}) {
     apiKey,
     configuration: buildChatModelConfiguration(normalizedSpec, options),
     useResponsesApi: resolveUseResponsesApi(normalizedSpec),
+    ...(promptCacheKey ? { promptCacheKey } : {}),
+    ...(promptCacheRetention ? { promptCacheRetention } : {}),
     ...(Object.keys(modelKwargs).length ? { modelKwargs } : {}),
   });
 

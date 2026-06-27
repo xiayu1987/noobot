@@ -65,6 +65,9 @@ export function adaptToolsForBinding(tools = [], modelState = {}) {
     seenNames.add(toolName);
     validTools.push(toolItem);
   }
+  validTools.sort((left, right) =>
+    String(left?.name || "").localeCompare(String(right?.name || ""), "en"),
+  );
 
   const strictByPolicy = resolveStrictToolSchemaPolicy(modelState);
   const strictIncompatibleTools = validTools

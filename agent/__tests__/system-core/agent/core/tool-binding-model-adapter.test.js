@@ -18,6 +18,19 @@ test("adaptToolsForBinding drops invalid names and deduplicates", () => {
   assert.deepEqual(adapted.droppedToolNames, ["invalid tool", "(empty)"]);
 });
 
+test("adaptToolsForBinding returns tools in stable name order", () => {
+  const adapted = adaptToolsForBinding([
+    { name: "write_file" },
+    { name: "read_file" },
+    { name: "execute_script" },
+  ]);
+
+  assert.deepEqual(
+    adapted.tools.map((toolItem) => toolItem.name),
+    ["execute_script", "read_file", "write_file"],
+  );
+});
+
 test("adaptToolsForBinding enables strict by default for codex-like model", () => {
   const adapted = adaptToolsForBinding(
     [{ name: "task_summary" }],
