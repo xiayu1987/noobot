@@ -524,7 +524,10 @@ test("separate_model analysis uses aligned agent context then user request and u
   );
   const tailMessages = capturedPayload.messages.slice(-2);
   assert.equal(tailMessages[0]?.role, "user");
-  assert.match(String(tailMessages[0]?.content || ""), /只用一句话概括现在该干什么|one sentence to summarize what should be done now/i);
+  assert.match(
+    String(tailMessages[0]?.content || ""),
+    /根据当前执行结果|current execution result/i,
+  );
   assert.equal(tailMessages[1]?.role, "user");
   assert.match(String(tailMessages[1]?.content || ""), /分析|analysis/i);
   assert.equal(agentContext.payload.harness.state.pending.analysis, false);

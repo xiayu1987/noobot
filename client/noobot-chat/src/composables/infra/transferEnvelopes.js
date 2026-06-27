@@ -115,6 +115,11 @@ function getTransferDisplayPath(file = {}) {
 
 function transferFileToAttachmentMeta(file = {}) {
   const attachmentMeta = isPlainObject(file?.attachmentMeta) ? file.attachmentMeta : {};
+  const parsedResult = isPlainObject(file?.parsedResult)
+    ? file.parsedResult
+    : isPlainObject(attachmentMeta?.parsedResult)
+      ? attachmentMeta.parsedResult
+      : null;
   const pathView = isPlainObject(file?.pathView) ? file.pathView : {};
   const filePath = getTransferDisplayPath(file);
   const name = normalizeString(file?.name || attachmentMeta?.name || filePath.split("/").pop());
@@ -134,6 +139,22 @@ function transferFileToAttachmentMeta(file = {}) {
     sandboxPath: normalizeString(attachmentMeta?.sandboxPath || file?.sandboxPath || pathView.sandboxPath),
     ...(file?.attachmentSource || file?.source ? { attachmentSource: normalizeString(file?.attachmentSource || file?.source) } : {}),
     ...(file?.sessionId ? { sessionId: normalizeString(file.sessionId) } : {}),
+    ...(parsedResult ? { parsedResult } : {}),
+    ...(file?.parsedResultAttachmentId || attachmentMeta?.parsedResultAttachmentId
+      ? { parsedResultAttachmentId: normalizeString(file?.parsedResultAttachmentId || attachmentMeta?.parsedResultAttachmentId) }
+      : {}),
+    ...(file?.parsedResultUrl || attachmentMeta?.parsedResultUrl
+      ? { parsedResultUrl: normalizeString(file?.parsedResultUrl || attachmentMeta?.parsedResultUrl) }
+      : {}),
+    ...(file?.parsedResultName || attachmentMeta?.parsedResultName
+      ? { parsedResultName: normalizeString(file?.parsedResultName || attachmentMeta?.parsedResultName) }
+      : {}),
+    ...(file?.parsedResultPath || attachmentMeta?.parsedResultPath
+      ? { parsedResultPath: normalizeString(file?.parsedResultPath || attachmentMeta?.parsedResultPath) }
+      : {}),
+    ...(file?.parsedResultRelativePath || attachmentMeta?.parsedResultRelativePath
+      ? { parsedResultRelativePath: normalizeString(file?.parsedResultRelativePath || attachmentMeta?.parsedResultRelativePath) }
+      : {}),
     ...(owner ? { owner } : {}),
     transferFilePath: filePath,
     transferPathView: pathView,

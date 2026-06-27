@@ -28,13 +28,17 @@ const canPreviewAttachment = (...args) => props.canPreviewAttachment(...args);
 const formatFileSize = (...args) => props.formatFileSize(...args);
 const pluginAttachmentsCollapsed = ref(true);
 const normalAttachments = computed(() =>
-  attachments.value.filter(
-    (item = {}) => resolveAttachmentOwnerType(item) !== "plugin",
+  dedupeAttachments(
+    attachments.value
+      .filter((item = {}) => resolveAttachmentOwnerType(item) !== "plugin")
+      .map((item = {}) => normalizeAttachmentParsedResultForDisplay(item)),
   ),
 );
 const pluginAttachments = computed(() =>
-  attachments.value.filter(
-    (item = {}) => resolveAttachmentOwnerType(item) === "plugin",
+  dedupeAttachments(
+    attachments.value
+      .filter((item = {}) => resolveAttachmentOwnerType(item) === "plugin")
+      .map((item = {}) => normalizeAttachmentParsedResultForDisplay(item)),
   ),
 );
 const thumbnailUrlByKey = ref({});
@@ -47,6 +51,68 @@ function resolveAttachmentOwnerType(attachmentItem = {}) {
   ).trim();
 }
 
+function resolveAttachmentContentKey(attachmentItem = {}) {
+  const name = String(attachmentItem?.name || "").trim();
+  if (!name) return "";
+  return `${name}|${Number(attachmentItem?.size) || 0}|${String(attachmentItem?.mimeType || "").trim()}`;
+}
+
+function mergeAttachmentDisplayMeta(existingItem = {}, incomingItem = {}) {
+  const merged = { ...existingItem, ...incomingItem };
+  for (const field of [
+    "attachmentId",
+    "previewUrl",
+    "downloadUrl",
+    "parsedResultUrl",
+    "parsedResultName",
+    "parsedResultAttachmentId",
+    "sessionId",
+    "attachmentSource",
+    "source",
+    "mimeType",
+    "name",
+  ]) {
+    const incomingValue = incomingItem?.[field];
+    const existingValue = existingItem?.[field];
+    if (
+      (incomingValue === undefined || incomingValue === null || String(incomingValue).trim() === "") &&
+      existingValue !== undefined &&
+      existingValue !== null &&
+      String(existingValue).trim() !== ""
+    ) {
+      merged[field] = existingValue;
+    }
+  }
+  if (existingItem?.parsedResult && !incomingItem?.parsedResult) merged.parsedResult = existingItem.parsedResult;
+  if (existingItem?.parsedResult && incomingItem?.parsedResult) {
+    merged.parsedResult = mergeAttachmentDisplayMeta(existingItem.parsedResult, incomingItem.parsedResult);
+  }
+  return merged;
+}
+
+function dedupeAttachments(list = []) {
+  const out = [];
+  const indexByIdentity = new Map();
+  const indexByContent = new Map();
+  for (const attachmentItem of Array.isArray(list) ? list : []) {
+    const identityKey = String(attachmentItem?.attachmentId || "").trim();
+    const contentKey = resolveAttachmentContentKey(attachmentItem);
+    let existingIndex = identityKey ? indexByIdentity.get(identityKey) : undefined;
+    if (existingIndex === undefined && contentKey) existingIndex = indexByContent.get(contentKey);
+    if (existingIndex === undefined) {
+      out.push(attachmentItem);
+      const nextIndex = out.length - 1;
+      if (identityKey) indexByIdentity.set(identityKey, nextIndex);
+      if (contentKey) indexByContent.set(contentKey, nextIndex);
+      continue;
+    }
+    out[existingIndex] = mergeAttachmentDisplayMeta(out[existingIndex] || {}, attachmentItem);
+    if (identityKey) indexByIdentity.set(identityKey, existingIndex);
+    if (contentKey) indexByContent.set(contentKey, existingIndex);
+  }
+  return out;
+}
+
 function resolveParsedResultMeta(attachmentItem = {}) {
   const parsedResult = attachmentItem?.parsedResult &&
     typeof attachmentItem.parsedResult === "object" &&
@@ -57,6 +123,7 @@ function resolveParsedResultMeta(attachmentItem = {}) {
     attachmentId: String(
       parsedResult?.attachmentId ||
         parsedResult?.id ||
+        attachmentItem?.parsedResultAttachmentId ||
         "",
     ).trim(),
     name: String(
@@ -64,7 +131,46 @@ function resolveParsedResultMeta(attachmentItem = {}) {
         attachmentItem?.parsedResultName ||
         "",
     ).trim(),
-    url: String(attachmentItem?.parsedResultUrl || parsedResult?.url || "").trim(),
+    url: String(
+      attachmentItem?.parsedResultUrl ||
+        parsedResult?.url ||
+        parsedResult?.previewUrl ||
+        parsedResult?.downloadUrl ||
+        "",
+    ).trim(),
+  };
+}
+
+function resolveBaseName(filePath = "") {
+  const normalized = String(filePath || "").trim().replaceAll("\\", "/");
+  if (!normalized) return "";
+  const parts = normalized.split("/");
+  return String(parts[parts.length - 1] || "").trim();
+}
+
+function normalizeAttachmentParsedResultForDisplay(attachmentItem = {}) {
+  const parsedResult = resolveParsedResultMeta(attachmentItem);
+  const parsedResultPath = String(
+    attachmentItem?.parsedResult?.path || "",
+  ).trim();
+  const parsedResultRelativePath = String(
+    attachmentItem?.parsedResult?.relativePath || "",
+  ).trim();
+  const parsedResultUrl = parsedResult.url ||
+    (parsedResult.attachmentId
+      ? buildAttachmentUrl({
+          userId: String(props.userId || "").trim(),
+          attachmentId: parsedResult.attachmentId,
+        })
+      : "");
+  const parsedResultName = parsedResult.name ||
+    resolveBaseName(parsedResultRelativePath) ||
+    resolveBaseName(parsedResultPath);
+  if (!parsedResultUrl && !parsedResultName) return attachmentItem;
+  return {
+    ...attachmentItem,
+    ...(parsedResultUrl ? { parsedResultUrl } : {}),
+    ...(parsedResultName ? { parsedResultName } : {}),
   };
 }
 

@@ -107,12 +107,20 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
 
     const basePath = path.join(workspaceRoot, userId);
     const runtimeSessionFile = path.join(basePath, "runtime/session", rootSessionId, "session.json");
+    const runtimeSummaryFile = path.join(basePath, "runtime/session", rootSessionId, "session-summary.json");
     const pluginSessionFile = path.join(
       basePath,
       "runtime/plugin/session",
       rootSessionId,
       pluginDialogId,
       "session.json",
+    );
+    const pluginSummaryFile = path.join(
+      basePath,
+      "runtime/plugin/session",
+      rootSessionId,
+      pluginDialogId,
+      "session-summary.json",
     );
     const snapshotPayload = {
       sessionId: rootSessionId,
@@ -143,8 +151,10 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
     };
     await mkdir(path.dirname(runtimeSessionFile), { recursive: true });
     await writeFile(runtimeSessionFile, `${JSON.stringify(snapshotPayload, null, 2)}\n`, "utf8");
+    await writeFile(runtimeSummaryFile, `${JSON.stringify({ schemaVersion: 5, sessionId: rootSessionId, depth: 2, messages: [] }, null, 2)}\n`, "utf8");
     await mkdir(path.dirname(pluginSessionFile), { recursive: true });
     await writeFile(pluginSessionFile, `${JSON.stringify(snapshotPayload, null, 2)}\n`, "utf8");
+    await writeFile(pluginSummaryFile, `${JSON.stringify({ schemaVersion: 5, sessionId: rootSessionId, depth: 3, messages: [] }, null, 2)}\n`, "utf8");
 
     const linked = await service.linkParsedResultToAttachment({
       userId,
@@ -167,6 +177,15 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
     assert.equal(pluginAttachment.parsedResult?.attachmentId, parsedAttachment.attachmentId);
     assert.equal(runtimeAttachment.parsedResult?.tool, "doc_to_data");
     assert.equal(pluginAttachment.parsedResult?.tool, "doc_to_data");
+
+    const runtimeSummary = JSON.parse(await readFile(runtimeSummaryFile, "utf8"));
+    const pluginSummary = JSON.parse(await readFile(pluginSummaryFile, "utf8"));
+    assert.equal(runtimeSummary.depth, 2);
+    assert.equal(pluginSummary.depth, 3);
+    assert.equal(runtimeSummary.messages[0].attachments[0].parsedResult?.attachmentId, parsedAttachment.attachmentId);
+    assert.equal(pluginSummary.messages[0].attachments[0].parsedResult?.attachmentId, parsedAttachment.attachmentId);
+    assert.equal(runtimeSummary.messages[0].attachments[0].parsedResult?.tool, "doc_to_data");
+    assert.equal(pluginSummary.messages[0].attachments[0].parsedResult?.tool, "doc_to_data");
   });
 });
 

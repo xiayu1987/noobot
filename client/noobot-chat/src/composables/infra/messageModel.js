@@ -125,21 +125,25 @@ function normalizeAttachment(
     ? attachmentItem.parsedResult
     : {};
   const parsedAttachmentId = String(
-    parsedResult?.attachmentId || parsedResult?.id || "",
+    parsedResult?.attachmentId || parsedResult?.id || attachmentItem?.parsedResultAttachmentId || "",
   ).trim();
   const parsedPath = String(
-    parsedResult?.path || "",
+    parsedResult?.path || attachmentItem?.parsedResultPath || "",
   ).trim();
   const parsedRelativePath = String(
-    parsedResult?.relativePath || "",
+    parsedResult?.relativePath || attachmentItem?.parsedResultRelativePath || "",
+  ).trim();
+  const existingParsedResultUrl = String(
+    attachmentItem?.parsedResultUrl || parsedResult?.url || parsedResult?.previewUrl || parsedResult?.downloadUrl || "",
   ).trim();
   const parsedResultUrl = parsedAttachmentId
     ? buildAttachmentUrl({
         userId,
         attachmentId: parsedAttachmentId,
-      })
-    : "";
+      }) || existingParsedResultUrl
+    : existingParsedResultUrl;
   const parsedResultName =
+    String(attachmentItem?.parsedResultName || parsedResult?.name || "").trim() ||
     resolveBaseName(parsedRelativePath) ||
     resolveBaseName(parsedPath) ||
     "";
@@ -152,10 +156,10 @@ function normalizeAttachment(
     url: attachmentUrl,
     previewUrl:
       String(attachmentItem?.previewUrl || ""),
-    parsedResult: parsedAttachmentId
+    parsedResult: parsedAttachmentId || parsedResultUrl
       ? {
           ...parsedResult,
-          attachmentId: parsedAttachmentId,
+          ...(parsedAttachmentId ? { attachmentId: parsedAttachmentId } : {}),
           ...(parsedPath ? { path: parsedPath } : {}),
           ...(parsedRelativePath ? { relativePath: parsedRelativePath } : {}),
         }
