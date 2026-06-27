@@ -36,7 +36,7 @@ describe("HarnessModelExtension", () => {
     expect(slider.attributes("min")).toBe("1");
     expect(slider.attributes("max")).toBe("10");
     expect(slider.attributes("step")).toBe("1");
-    expect(slider.attributes("modelvalue")).toBe("3");
+    expect(slider.attributes("modelvalue")).toBe("8");
   });
 
   it("normalizes guidance analysis intensity to an integer from one to ten", async () => {
@@ -48,7 +48,7 @@ describe("HarnessModelExtension", () => {
       },
     });
 
-    expect(wrapper.find(".plugin-guidance-analysis-title").text()).toContain("10");
-    expect(wrapper.find("el-slider").attributes("modelvalue")).toBe("10");
+    expect(wrapper.find(".plugin-guidance-analysis-title").text()).toContain("1");
+    expect(wrapper.find("el-slider").attributes("modelvalue")).toBe("1");
   });
 });

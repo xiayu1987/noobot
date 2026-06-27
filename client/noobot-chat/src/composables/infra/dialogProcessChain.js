@@ -23,6 +23,7 @@ export function mergeAttachmentMetaFields(existingItem = {}, incomingItem = {}) 
     "downloadUrl",
     "parsedResultUrl",
     "parsedResultName",
+    "parsedResultAttachmentId",
     "sessionId",
     "attachmentSource",
     "source",
@@ -44,6 +45,9 @@ export function mergeAttachmentMetaFields(existingItem = {}, incomingItem = {}) 
     }
   }
   if (existing.parsedResult && !incoming.parsedResult) merged.parsedResult = existing.parsedResult;
+  if (incoming.parsedResult && existing.parsedResult) {
+    merged.parsedResult = mergeAttachmentMetaFields(existing.parsedResult, incoming.parsedResult);
+  }
   return merged;
 }
 

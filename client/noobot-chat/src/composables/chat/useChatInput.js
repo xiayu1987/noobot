@@ -15,6 +15,14 @@ function toBase64(file) {
   });
 }
 
+function resolveRawFile(fileItem) {
+  if (!fileItem) return null;
+  if (fileItem.raw) return fileItem.raw;
+  if (typeof File !== "undefined" && fileItem instanceof File) return fileItem;
+  if (typeof Blob !== "undefined" && fileItem instanceof Blob) return fileItem;
+  return null;
+}
+
 export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
   const chatStore = useChatStore();
   const { input, uploadFiles } = storeToRefs(chatStore);
@@ -30,6 +38,28 @@ export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
     };
   }
 
+  function getUploadEntryKey(fileItem = {}) {
+    const rawFile = resolveRawFile(fileItem) || fileItem;
+    return [
+      String(rawFile?.name || fileItem?.name || "").trim(),
+      String(rawFile?.size || fileItem?.size || 0),
+      String(rawFile?.lastModified || fileItem?.lastModified || 0),
+      String(rawFile?.type || fileItem?.mimeType || "").trim(),
+    ].join("|");
+  }
+
+  function dedupeUploadEntries(files = []) {
+    const out = [];
+    const seen = new Set();
+    for (const fileItem of Array.isArray(files) ? files : []) {
+      const key = getUploadEntryKey(fileItem);
+      if (key && seen.has(key)) continue;
+      if (key) seen.add(key);
+      out.push(fileItem);
+    }
+    return out;
+  }
+
   function revokePreviewUrls(files = []) {
     for (const uploadFile of Array.isArray(files) ? files : []) {
       if (uploadFile.previewUrl) URL.revokeObjectURL(uploadFile.previewUrl);
@@ -38,8 +68,9 @@ export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
 
   function onUploadChange(file, fileList) {
     revokePreviewUrls(uploadFiles.value);
-    uploadFiles.value = fileList
-      .map((fileItem) => fileItem.raw)
+    const nextFileList = Array.isArray(fileList) ? fileList : [file].filter(Boolean);
+    uploadFiles.value = dedupeUploadEntries(nextFileList)
+      .map((fileItem) => resolveRawFile(fileItem))
       .filter(Boolean)
       .map((rawFile) => createUploadEntry(rawFile));
   }
@@ -49,7 +80,7 @@ export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
       .filter(Boolean)
       .map((rawFile) => createUploadEntry(rawFile));
     if (!nextFiles.length) return;
-    uploadFiles.value = [...uploadFiles.value, ...nextFiles];
+    uploadFiles.value = dedupeUploadEntries([...uploadFiles.value, ...nextFiles]);
   }
 
   function clearUploads() {
@@ -61,10 +92,12 @@ export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
   async function serializeAttachments(files = []) {
     const output = [];
     for (const fileItem of Array.isArray(files) ? files : []) {
+      const rawFile = resolveRawFile(fileItem);
+      if (!rawFile) continue;
       output.push({
         name: fileItem.name,
         mimeType: fileItem.mimeType || "application/octet-stream",
-        contentBase64: await toBase64(fileItem.raw),
+        contentBase64: await toBase64(rawFile),
       });
     }
     return output;

@@ -42,6 +42,7 @@ function compactRefFields(ref = {}) {
   const url = trimString(firstValue(ref.url, ref.downloadUrl));
   const previewUrl = trimString(ref.previewUrl);
   const owner = pickOwner(ref.owner);
+  const parsedResult = compactParsedResultRef(ref.parsedResult);
 
   if (attachmentId) {
     picked.attachmentId = attachmentId;
@@ -60,10 +61,32 @@ function compactRefFields(ref = {}) {
   if (path) picked.path = path;
   if (generationSource) picked.generationSource = generationSource;
   if (owner) picked.owner = owner;
+  if (parsedResult) picked.parsedResult = parsedResult;
   if (role) picked.role = role;
   if (url) picked.url = url;
   if (previewUrl) picked.previewUrl = previewUrl;
   return picked;
+}
+
+function compactParsedResultRef(parsedResult = null) {
+  if (!parsedResult || typeof parsedResult !== "object" || Array.isArray(parsedResult)) return null;
+  const picked = {};
+  const attachmentId = trimString(firstValue(parsedResult.attachmentId, parsedResult.id));
+  const name = trimString(firstValue(parsedResult.name, parsedResult.fileName, parsedResult.filename));
+  const path = trimString(firstValue(parsedResult.path, parsedResult.filePath, parsedResult.file_path));
+  const relativePath = trimString(firstValue(parsedResult.relativePath, parsedResult.relative_path));
+  const tool = trimString(parsedResult.tool);
+  const updatedAt = trimString(firstValue(parsedResult.updatedAt, parsedResult.updated_at));
+  const mimeType = trimString(firstValue(parsedResult.mimeType, parsedResult.type, parsedResult.mime));
+
+  if (attachmentId) picked.attachmentId = attachmentId;
+  if (name) picked.name = name;
+  if (path) picked.path = path;
+  if (relativePath) picked.relativePath = relativePath;
+  if (tool) picked.tool = tool;
+  if (updatedAt) picked.updatedAt = updatedAt;
+  if (mimeType) picked.mimeType = mimeType;
+  return Object.keys(picked).length ? picked : null;
 }
 
 export function compactAttachmentRef(...sources) {

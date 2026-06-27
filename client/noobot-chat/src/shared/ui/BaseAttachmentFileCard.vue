@@ -56,7 +56,6 @@ const showCustomBadge = computed(() => Boolean(String(props.customBadgeText || "
 const hasParsedResult = computed(
   () =>
     props.showParsedResult &&
-    Boolean(props.attachmentItem?.parsedResult?.attachmentId) &&
     Boolean(props.attachmentItem?.parsedResultUrl),
 );
 

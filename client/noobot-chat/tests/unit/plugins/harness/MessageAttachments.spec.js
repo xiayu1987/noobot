@@ -22,13 +22,13 @@ vi.mock("../../../../src/shared/ui", () => ({
         <span>{{ attachmentItem.name }}</span>
         <span v-if='showParsedResult'>{{ translate("message.parsedResultLabel") }}</span>
         <button
-          v-if='showParsedResult && attachmentItem.parsedResult?.attachmentId && attachmentItem.parsedResultUrl'
+          v-if='showParsedResult && attachmentItem.parsedResultUrl'
           type='button'
           :title='translate("message.previewParsedResult", { name: attachmentItem.parsedResultName || translate("message.parsedResultDefaultName") })'
           @click='$emit("preview-parsed-result", attachmentItem)'
         >{{ translate("message.previewParsedResultShort") }}</button>
         <button
-          v-if='showParsedResult && attachmentItem.parsedResult?.attachmentId && attachmentItem.parsedResultUrl'
+          v-if='showParsedResult && attachmentItem.parsedResultUrl'
           type='button'
           :title='translate("message.downloadParsedResult", { name: attachmentItem.parsedResultName || translate("message.parsedResultDefaultName") })'
           @click='$emit("download-parsed-result", attachmentItem)'
@@ -114,6 +114,87 @@ describe("MessageAttachments parsed result", () => {
       name: "source.md",
       mimeType: "text/markdown",
       previewUrl: "/api/attachments/parsed-1",
+    });
+  });
+
+  it("dedupes transient duplicated attachments by file content", () => {
+    const wrapper = mountMessageAttachments({
+      attachments: [
+        {
+          attachmentId: "client-temp-1",
+          name: "source.pdf",
+          size: 10,
+          mimeType: "application/pdf",
+        },
+        {
+          attachmentId: "server-1",
+          name: "source.pdf",
+          size: 10,
+          mimeType: "application/pdf",
+          parsedResultUrl: "/api/attachments/parsed-1",
+          parsedResultName: "source.md",
+        },
+      ],
+    });
+
+    expect(wrapper.findAll(".base-attachment-file-card-stub")).toHaveLength(1);
+    expect(wrapper.text()).toContain("预览");
+    expect(wrapper.text()).toContain("下载");
+  });
+
+  it("shows parsed result actions when parsed result url exists without nested id", () => {
+    const wrapper = mountMessageAttachments({
+      attachments: [
+        {
+          attachmentId: "src-1",
+          name: "source.pdf",
+          mimeType: "application/pdf",
+          parsedResult: { url: "/api/attachments/parsed-1" },
+          parsedResultUrl: "/api/attachments/parsed-1",
+          parsedResultName: "source.md",
+        },
+      ],
+    });
+
+    expect(wrapper.text()).toContain("解析结果");
+    expect(wrapper.text()).toContain("预览");
+    expect(wrapper.text()).toContain("下载");
+  });
+
+  it("derives parsed result actions from session summary parsedResult metadata", async () => {
+    const wrapper = mountMessageAttachments({
+      attachments: [
+        {
+          attachmentId: "src-1",
+          sessionId: "session-1",
+          attachmentSource: "user",
+          name: "source.pdf",
+          mimeType: "application/pdf",
+          parsedResult: {
+            attachmentId: "parsed-1",
+            relativePath: "runtime/attach/model/source.doc2data.md",
+            tool: "doc_to_data",
+          },
+        },
+      ],
+    });
+
+    expect(wrapper.text()).toContain("解析结果");
+    expect(wrapper.text()).toContain("预览");
+    expect(wrapper.text()).toContain("下载");
+
+    const previewButton = wrapper
+      .findAll("button")
+      .find((button) => button.attributes("title") === "预览解析结果 source.doc2data.md");
+    expect(previewButton).toBeTruthy();
+
+    await previewButton.trigger("click");
+
+    expect(wrapper.emitted("preview")?.[0]?.[0]).toMatchObject({
+      attachmentId: "parsed-1",
+      name: "source.doc2data.md",
+      mimeType: "text/markdown",
+      previewUrl: "/api/internal/attachment/admin/parsed-1",
     });
   });
 });

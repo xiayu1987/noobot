@@ -12,6 +12,7 @@ import { safeStr } from "../../utils/shared-utils.js";
 import { readAttachIndex, writeAttachIndex } from "../index-manager.js";
 import { attachScopedRoot, resolveBasePath } from "./path-resolver.js";
 import { buildPublicRecord } from "./record-builder.js";
+import { buildSessionDisplaySummary } from "../../session/session-summary-builders.js";
 
 export async function linkParsedResultToAttachment(service, {
   userId,
@@ -263,16 +264,27 @@ export async function syncParsedResultToSessionSnapshots({
       return nextMessage;
     });
     if (!changed) continue;
+    const nextSessionPayload = { ...(sessionPayload || {}), messages: nextMessages };
     try {
-      await fsWriteFile(
-        sessionJsonFile,
-        `${JSON.stringify({ ...(sessionPayload || {}), messages: nextMessages }, null, 2)}\n`,
-        "utf8",
-      );
+      await fsWriteFile(sessionJsonFile, `${JSON.stringify(nextSessionPayload, null, 2)}\n`, "utf8");
+      await syncSessionSummaryForSessionFile(sessionJsonFile, nextSessionPayload);
     } catch {
       // ignore snapshot sync failures
     }
   }
+}
+
+async function syncSessionSummaryForSessionFile(sessionJsonFile = "", sessionPayload = {}) {
+  const summaryFile = path.join(path.dirname(sessionJsonFile), "session-summary.json");
+  let depth = 0;
+  try {
+    const existingSummary = JSON.parse(await fsReadFile(summaryFile, "utf8"));
+    if (Number.isFinite(Number(existingSummary?.depth))) depth = Number(existingSummary.depth);
+  } catch {
+    depth = 0;
+  }
+  const summaryPayload = buildSessionDisplaySummary(sessionPayload, { depth });
+  await fsWriteFile(summaryFile, `${JSON.stringify(summaryPayload, null, 2)}\n`, "utf8");
 }
 
 export async function collectSessionJsonFiles({ sessionRoot = "", sessionIdHint = "" } = {}) {

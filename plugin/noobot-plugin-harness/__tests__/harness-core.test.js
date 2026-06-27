@@ -619,6 +619,7 @@ test("harness policy prompt matrix exposes scenario without workflow mode", asyn
   assert.match(programmingPrompt, /快速定位问题与影响范围/);
   assert.match(programmingPrompt, /复用现有结构、方法、字段/);
   assert.match(programmingPrompt, /面对复杂任务时/);
+  assert.match(programmingPrompt, /消除旧入口、旧字段、兼容分支、重复存储和废弃逻辑等残留/);
   assert.match(programmingPrompt, /连续多个最小切片推进任务/);
   assert.match(programmingPrompt, /不是临时补丁式绕过/);
   assert.match(programmingPrompt, /不只做一个小改就停下/);
@@ -673,6 +674,7 @@ test("dynamic policy prompt protocol instruction is localized", () => {
   assert.match(zh, /快速定位问题与影响范围/);
   assert.match(zh, /复用现有结构、方法、字段/);
   assert.match(zh, /面对复杂任务时/);
+  assert.match(zh, /消除旧入口、旧字段、兼容分支、重复存储和废弃逻辑等残留/);
   assert.match(zh, /连续多个最小切片推进任务/);
   assert.match(zh, /不做临时补丁式绕过/);
   assert.match(zh, /不只做一个小改就停下/);
@@ -698,6 +700,7 @@ test("dynamic policy prompt protocol instruction is localized", () => {
   assert.match(en, /quickly locate the issue and impact scope/);
   assert.match(en, /reusing existing structures, methods, fields/);
   assert.match(en, /for complex tasks/);
+  assert.match(en, /remove leftovers such as old entry points, legacy fields, compatibility branches, duplicate storage, and deprecated logic/);
   assert.match(en, /multiple smallest slices/);
   assert.match(en, /temporary patch-style bypasses/);
   assert.match(en, /do not stop after only one tiny change/);
