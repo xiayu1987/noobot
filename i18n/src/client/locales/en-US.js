@@ -282,6 +282,8 @@ export const enUSMessages = {
     "modelSelectionDescription": "Only enabled models marked for conversation are shown. The system default is selected when nothing is saved.",
     "mainFlowModel": "Main flow",
     "mainFlowModelHint": "Each scenario will prefer the model selected here.",
+    "memoryExperienceModel": "Long-term memory experiences and lessons",
+    "memoryExperienceModelHint": "Long-term memory updates and daily/weekly/monthly/yearly experience processing will prefer this model.",
     "useDefaultModel": "Use system default model",
     "modelUsingDefault": "System default model",
     "pluginModelExtensions": "Plugin model extensions",

@@ -56,6 +56,7 @@ defineProps({
   streamOutput: { type: Boolean, default: false },
   botScenario: { type: String, default: "" },
   selectedModel: { type: String, default: "" },
+  memoryModel: { type: String, default: "" },
   availableModelOptions: { type: Array, default: () => [] },
   pluginModelConfig: { type: Object, default: () => ({}) },
   availableBotScenarios: { type: Array, default: () => [] },
@@ -265,6 +266,7 @@ defineExpose({
           :stream-output="streamOutput"
           :bot-scenario="botScenario"
           :selected-model="selectedModel"
+          :memory-model="memoryModel"
           :model-options="availableModelOptions"
           :plugin-model-config="pluginModelConfig"
           :scenario-options="availableBotScenarios"
@@ -279,6 +281,7 @@ defineExpose({
           @update:stream-output="emit('update:stream-output', $event)"
           @update:bot-scenario="emit('update:bot-scenario', $event)"
           @update:selected-model="emit('update:selected-model', $event)"
+          @update:memory-model="emit('update:memory-model', $event)"
           @update:plugin-model-config="emit('update:plugin-model-config', $event)"
           @update:selected-plugins="emit('update:selected-plugins', $event)"
           @update:more-panel-visible="emit('update:more-panel-visible', $event)"

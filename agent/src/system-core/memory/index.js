@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createChatModelByName, resolveDefaultModelSpec } from "../model/index.js";
+import { createChatModelByName, resolveDefaultModelSpec, resolveModelSpecByName } from "../model/index.js";
 import { BUILTIN_THRESHOLDS, mergeConfig } from "../config/index.js";
 import { normalizeLocale } from "noobot-i18n/shared";
 import { SYSTEM_PROMPT_FORMATTER_I18N as zhSystemPromptI18n } from "noobot-i18n/agent/locales/zh-CN/system-prompt";
@@ -24,6 +24,26 @@ const MEMORY_PROMPT_I18N = Object.freeze({
   "zh-CN": Object.freeze(zhSystemPromptI18n?.memoryPrompt || {}),
   "en-US": Object.freeze(enSystemPromptI18n?.memoryPrompt || {}),
 });
+
+function normalizeMemoryModelSelection(userConfig = {}) {
+  return String(userConfig?.memoryModel ?? userConfig?.config?.memoryModel ?? "").trim();
+}
+
+function resolveMemoryModelSpec({ globalConfig, userConfig } = {}) {
+  const selectedMemoryModel = normalizeMemoryModelSelection(userConfig);
+  if (selectedMemoryModel) {
+    const selectedModelSpec = resolveModelSpecByName({
+      modelName: selectedMemoryModel,
+      globalConfig,
+      userConfig,
+    });
+    if (selectedModelSpec) return selectedModelSpec;
+  }
+  return resolveDefaultModelSpec({
+    globalConfig,
+    userConfig,
+  });
+}
 
 function resolveMemoryPromptI18n(locale = "zh-CN") {
   const normalizedLocale = normalizeLocale(locale, "zh-CN");
@@ -84,7 +104,7 @@ export class MemoryManager {
     throwIfAborted(abortSignal);
     const existingLongMemory = String(existingLongMemoryText || "").trim();
 
-    const modelSpec = resolveDefaultModelSpec({
+    const modelSpec = resolveMemoryModelSpec({
       globalConfig: this.globalConfig,
       userConfig,
     });

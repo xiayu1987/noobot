@@ -195,6 +195,34 @@ test("guidance analysis counter consumes skipped turns and ignores same-turn ree
   assert.equal(counters.lastGuidanceAnalysisCounterTurn, 2);
 });
 
+test("guidance analysis waits for captured main plan before scheduling", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = createAgentContext({
+    planText: "",
+    counters: {
+      analysisTurns: FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 1,
+      lastGuidanceAnalysisCounterTurn: 1,
+    },
+  });
+  agentContext.payload.harness.state.flags.planningCaptured = false;
+
+  await handler({
+    capability: "guidance",
+    point: "before_llm_call",
+    ctx: {
+      turn: 2,
+      messages: [{ role: "user", content: "继续" }],
+      agentContext,
+    },
+    meta: {},
+  });
+
+  const state = agentContext.payload.harness.state;
+  assert.notEqual(state.pending.analysis, true);
+  assert.equal(state.counters.analysisTurns, FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 1);
+  assert.equal(state.counters.lastGuidanceAnalysisCounterTurn, 1);
+});
+
 test("guidance schedules analysis by scenario-specific turn threshold", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const beforeProgrammingThreshold = createAgentContext({

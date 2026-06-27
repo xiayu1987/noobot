@@ -19,6 +19,12 @@ function resolveFromBlocks({ ctx = {} } = {}) {
   }).messages;
 }
 
+const capabilityRuntimeWithBootstrap = {
+  async runHook(_point, _ctx, payload = {}) {
+    await payload?.harness?.globalBootstrap?.();
+  },
+};
+
 test("createRegisterHarnessHooks wires trace/flush handlers and executes success flow", async () => {
   const calls = [];
   const handlers = new Map();
@@ -74,6 +80,7 @@ test("createRegisterHarnessHooks wires trace/flush handlers and executes success
     async runHook(point, ctx, payload) {
       calls.push(["runHook", point, !!ctx, payload?.pluginName]);
       assert.equal(typeof payload?.harness?.runTraceSink, "function");
+      await payload?.harness?.globalBootstrap?.();
     },
   };
   const plugin = { name: "noobot-plugin-harness", version: "0.1.0" };
@@ -92,7 +99,6 @@ test("createRegisterHarnessHooks wires trace/flush handlers and executes success
       .filter((name) =>
         [
           "runHook",
-          "shouldInjectPromptAtPoint",
           "injectPrompt",
           "traceHook",
           "flushAllManifests",
@@ -101,7 +107,6 @@ test("createRegisterHarnessHooks wires trace/flush handlers and executes success
       ),
     [
       "runHook",
-      "shouldInjectPromptAtPoint",
       "injectPrompt",
       "traceHook",
       "flushAllManifests",
@@ -190,7 +195,7 @@ test("createRegisterHarnessHooks leaves plain messages un-compacted without mess
       acceptance: {},
       review: {},
     },
-    capabilityRuntime: { async runHook() {} },
+    capabilityRuntime: capabilityRuntimeWithBootstrap,
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
   });
 
@@ -242,7 +247,7 @@ test("createRegisterHarnessHooks composes by system history incremental message 
       review: {},
       resolveModelMessages: resolveFromBlocks,
     },
-    capabilityRuntime: { async runHook() {} },
+    capabilityRuntime: capabilityRuntimeWithBootstrap,
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
   });
 
@@ -309,7 +314,7 @@ test("createRegisterHarnessHooks keeps compacted messageBlocks as single-store v
       review: {},
       resolveModelMessages: resolveFromBlocks,
     },
-    capabilityRuntime: { async runHook() {} },
+    capabilityRuntime: capabilityRuntimeWithBootstrap,
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
   });
 
@@ -375,7 +380,7 @@ test("createRegisterHarnessHooks ignores messages outside agent-provided message
       review: {},
       resolveModelMessages: resolveFromBlocks,
     },
-    capabilityRuntime: { async runHook() {} },
+    capabilityRuntime: capabilityRuntimeWithBootstrap,
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
   });
 
@@ -430,7 +435,7 @@ test("createRegisterHarnessHooks keeps message block order and lets incremental 
       review: {},
       resolveModelMessages: resolveFromBlocks,
     },
-    capabilityRuntime: { async runHook() {} },
+    capabilityRuntime: capabilityRuntimeWithBootstrap,
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
   });
 
@@ -521,7 +526,7 @@ test("createRegisterHarnessHooks keeps message block order after prompt injectio
       review: {},
       resolveModelMessages: resolveFromBlocks,
     },
-    capabilityRuntime: { async runHook() {} },
+    capabilityRuntime: capabilityRuntimeWithBootstrap,
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
   });
 
@@ -617,7 +622,7 @@ test("createRegisterHarnessHooks preserves unsummarized history messages between
       review: {},
       resolveModelMessages: resolveFromBlocks,
     },
-    capabilityRuntime: { async runHook() {} },
+    capabilityRuntime: capabilityRuntimeWithBootstrap,
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
   });
 
@@ -707,7 +712,7 @@ test("createRegisterHarnessHooks can recover current-turn harness injections aft
       review: {},
       resolveModelMessages: resolveFromBlocks,
     },
-    capabilityRuntime: { async runHook() {} },
+    capabilityRuntime: capabilityRuntimeWithBootstrap,
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
   });
 
@@ -790,7 +795,7 @@ test("createRegisterHarnessHooks keeps multiple empty assistant tool-call messag
       review: {},
       resolveModelMessages: resolveFromBlocks,
     },
-    capabilityRuntime: { async runHook() {} },
+    capabilityRuntime: capabilityRuntimeWithBootstrap,
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
   });
 

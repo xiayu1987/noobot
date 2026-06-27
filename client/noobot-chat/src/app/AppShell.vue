@@ -86,6 +86,7 @@ const {
   streamOutput,
   botScenario,
   selectedModel,
+  memoryModel,
   pluginModelConfig,
   selectedPlugins,
   availableBotScenarios,
@@ -97,6 +98,7 @@ const {
   onStreamOutputUpdate,
   onBotScenarioUpdate,
   onSelectedModelUpdate,
+  onMemoryModelUpdate,
   onPluginModelConfigUpdate,
   onSelectedPluginsUpdate,
   onUserIdUpdate,
@@ -185,6 +187,7 @@ const {
   streamOutput,
   botScenario,
   selectedModel,
+  memoryModel,
   pluginModelConfig,
   selectedPlugins,
   connected,
@@ -468,6 +471,7 @@ const drawerPanels = computed(() =>
       :stream-output="streamOutput"
       :bot-scenario="botScenario"
       :selected-model="selectedModel"
+      :memory-model="memoryModel"
       :available-model-options="availableModelOptions"
       :plugin-model-config="pluginModelConfig"
       :available-bot-scenarios="availableBotScenarios"
@@ -511,6 +515,7 @@ const drawerPanels = computed(() =>
       @update:stream-output="onStreamOutputUpdate"
       @update:bot-scenario="onBotScenarioUpdate"
       @update:selected-model="onSelectedModelUpdate"
+      @update:memory-model="onMemoryModelUpdate"
       @update:plugin-model-config="onPluginModelConfigUpdate"
       @update:selected-plugins="onSelectedPluginsUpdate"
       @update:more-panel-visible="handleComposerMorePanelVisibleUpdate"

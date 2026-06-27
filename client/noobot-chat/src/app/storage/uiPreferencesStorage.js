@@ -7,6 +7,7 @@ export const UI_PREFERENCE_STORAGE_KEYS = Object.freeze({
   selectedModel: "noobot_selected_model",
   selectedModelByScenario: "noobot_selected_model_by_scenario",
   selectedModelSelectionByScenario: "noobot_selected_model_selection_by_scenario_v2",
+  memoryModelByScenario: "noobot_memory_model_by_scenario_v1",
   pluginModelConfig: "noobot_plugin_model_config",
   pluginModelConfigByScenario: "noobot_plugin_model_config_by_scenario_v2",
 });
@@ -159,6 +160,7 @@ export function loadUiPreferences() {
     botScenario,
     selectedModel: readSelectedModelPreference(botScenario),
     selectedModelByScenario,
+    memoryModel: readMemoryModelPreference(botScenario),
     pluginModelConfig: readPluginModelConfigPreference(botScenario),
   };
 }
@@ -207,6 +209,26 @@ export function persistSelectedModelPreference(value = "", scenarioKey = "") {
     UI_PREFERENCE_STORAGE_KEYS.selectedModelSelectionByScenario,
     selectedModelSelectionByScenario,
   );
+}
+
+export function loadMemoryModelByScenarioPreference() {
+  return normalizeSelectedModelByScenarioPreference(
+    readJsonStorageValue(UI_PREFERENCE_STORAGE_KEYS.memoryModelByScenario, {}),
+  );
+}
+
+export function readMemoryModelPreference(scenarioKey = "") {
+  const memoryModelByScenario = loadMemoryModelByScenarioPreference();
+  const normalizedScenarioKey = normalizeScenarioPreferenceKey(scenarioKey);
+  return Object.prototype.hasOwnProperty.call(memoryModelByScenario, normalizedScenarioKey)
+    ? normalizePreferenceString(memoryModelByScenario[normalizedScenarioKey])
+    : "";
+}
+
+export function persistMemoryModelPreference(value = "", scenarioKey = "") {
+  const memoryModelByScenario = loadMemoryModelByScenarioPreference();
+  memoryModelByScenario[normalizeScenarioPreferenceKey(scenarioKey)] = normalizePreferenceString(value);
+  return writeJsonStorageValue(UI_PREFERENCE_STORAGE_KEYS.memoryModelByScenario, memoryModelByScenario);
 }
 
 export function persistPluginModelConfigPreference(value = {}) {
@@ -289,7 +311,7 @@ function collectPluginModelValues(pluginModelConfig = {}) {
   return values;
 }
 
-export function normalizeModelOptionsFromEnabledModels(enabledModels = [], selectedModel = "", pluginModelConfig = {}) {
+export function normalizeModelOptionsFromEnabledModels(enabledModels = [], selectedModel = "", pluginModelConfig = {}, memoryModel = "") {
   const optionMap = new Map();
   const addOption = (rawOption = {}) => {
     const value = normalizePreferenceString(
@@ -315,6 +337,7 @@ export function normalizeModelOptionsFromEnabledModels(enabledModels = [], selec
   };
   (Array.isArray(enabledModels) ? enabledModels : []).forEach(addOption);
   addOption(selectedModel);
+  addOption(memoryModel);
   collectPluginModelValues(pluginModelConfig).forEach(addOption);
   return Array.from(optionMap.values());
 }

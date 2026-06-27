@@ -310,11 +310,21 @@ function maybeScheduleSummaryByToolBurst(ctx = {}, meta = {}) {
   return true;
 }
 
+function isMainPlanReadyForGuidanceAnalysis(bucket = {}, state = {}) {
+  if (state?.flags?.planningCaptured !== true) return false;
+  if (String(bucket?.planText || "").trim()) return true;
+  if (Array.isArray(bucket?.planDocument?.mainPlans) && bucket.planDocument.mainPlans.length > 0) {
+    return true;
+  }
+  return Array.isArray(bucket?.taskChecklist) && bucket.taskChecklist.length > 0;
+}
+
 function maybeScheduleGuidanceAnalysis(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder?.state) return false;
   const state = holder.state;
   if (!state.counters || typeof state.counters !== "object") state.counters = {};
+  if (!isMainPlanReadyForGuidanceAnalysis(holder.bucket, state)) return false;
   if (state.pending?.analysis === true) return false;
   const currentTurn = Number(ctx?.turn);
   const previousTurn = Number(state.counters.lastGuidanceAnalysisCounterTurn || 0);

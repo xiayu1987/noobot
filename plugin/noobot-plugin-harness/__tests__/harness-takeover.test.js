@@ -128,6 +128,17 @@ test("harness capability hook can take over and remove agent internal forced mes
     userId: "u6",
     sessionId: "s6",
     dialogProcessId: "dp6",
+    agentContext: {
+      payload: {
+        harness: {
+          planText: "1. 已有主计划",
+          taskChecklist: [{ index: 1, task: "已有主计划" }],
+          state: {
+            flags: { planningCaptured: true, planningPromptInjected: true },
+          },
+        },
+      },
+    },
     messages: [
       {
         role: "user",
@@ -178,6 +189,17 @@ test("harness message takeover keeps system context before injected ctx messages
     userId: "u7",
     sessionId: "s7",
     dialogProcessId: "dp7",
+    agentContext: {
+      payload: {
+        harness: {
+          planText: "1. 已有主计划",
+          taskChecklist: [{ index: 1, task: "已有主计划" }],
+          state: {
+            flags: { planningCaptured: true, planningPromptInjected: true },
+          },
+        },
+      },
+    },
     messages: [
       { role: "system", content: "system context" },
       { role: "user", content: "real user message" },
@@ -217,6 +239,17 @@ test("harness ctx message takeover writes through message store views", async ()
     userId: "u8",
     sessionId: "s8",
     dialogProcessId: "dp8",
+    agentContext: {
+      payload: {
+        harness: {
+          planText: "1. 已有主计划",
+          taskChecklist: [{ index: 1, task: "已有主计划" }],
+          state: {
+            flags: { planningCaptured: true, planningPromptInjected: true },
+          },
+        },
+      },
+    },
     messages: [{ role: "user", content: "real user message" }],
     messageBlocks: {
       system: [],

@@ -17,6 +17,23 @@ import { safeError } from "../data/record-builders.js";
 import { WORKFLOW_PARAMS } from "../core/workflow-params.js";
 import { applyAgentResolvedModelMessages } from "../core/model-message-context.js";
 
+async function runInternalGlobalBootstrap(point = "", ctx = {}, meta = {}) {
+  const bootstrap = meta?.harness?.globalBootstrap;
+  if (typeof bootstrap !== "function") return null;
+  return await bootstrap({ point, ctx, meta });
+}
+
+function isMainPlanningCaptured(ctx = {}) {
+  return ctx?.agentContext?.payload?.harness?.state?.flags?.planningCaptured === true;
+}
+
+function prioritizeMainPlanning(point = "", ctx = {}, capabilities = []) {
+  if (String(point || "") !== "before_llm_call") return capabilities;
+  if (!Array.isArray(capabilities) || !capabilities.includes("planning")) return capabilities;
+  if (isMainPlanningCaptured(ctx)) return capabilities;
+  return ["planning"];
+}
+
 function resolveTakeoverDirectives(result = {}) {
   return {
     tool:
@@ -67,7 +84,8 @@ export function createCapabilityRuntime({ profile = {}, handlers = {} } = {}) {
       markHarnessTurnLifecycle(point, ctx);
       cleanupExpiredPendingOnHook(point, ctx, meta);
       applyAgentResolvedModelMessages(point, ctx, meta?.harness || {});
-      const capabilities = this.resolveByHook(point);
+      await runInternalGlobalBootstrap(point, ctx, meta);
+      const capabilities = prioritizeMainPlanning(point, ctx, this.resolveByHook(point));
       const results = [];
       const pendingToolTakeovers = [];
       const pendingMessageTakeovers = [];

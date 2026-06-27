@@ -73,7 +73,11 @@ test("dynamic harness system injections compose before history", async () => {
       review: {},
       resolveModelMessages: resolveFromBlocks,
     },
-    capabilityRuntime: { async runHook() {} },
+    capabilityRuntime: {
+      async runHook(_point, _ctx, payload = {}) {
+        await payload?.harness?.globalBootstrap?.();
+      },
+    },
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
   });
 

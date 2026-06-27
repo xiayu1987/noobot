@@ -12,12 +12,14 @@ import {
   normalizeAvailableBotScenarios,
   normalizeModelOptionsFromEnabledModels,
   readPluginModelConfigPreference,
+  readMemoryModelPreference,
   readSelectedModelPreference,
   syncBotScenarioWithConfig as syncBotScenarioWithConfigState,
   updateAllowUserInteractionPreference,
   updateBotScenarioPreference,
   updateForceToolPreference,
   updatePluginModelConfigPreference,
+  persistMemoryModelPreference,
   updateSelectedModelPreference,
   updateStreamOutputPreference,
 } from "./storage/uiPreferencesStorage";
@@ -69,6 +71,7 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
   const streamOutput = ref(uiPreferences.streamOutput);
   const botScenario = ref(uiPreferences.botScenario);
   const selectedModel = ref(uiPreferences.selectedModel);
+  const memoryModel = ref(uiPreferences.memoryModel);
   const pluginModelConfig = ref(uiPreferences.pluginModelConfig);
   const hasStoredSelectedPlugins = ref(hasStoredSelectedPluginKeys());
   const selectedPlugins = ref(loadSelectedPluginKeys());
@@ -91,6 +94,7 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
       : currentScenarioConfig.value?.enabledModels || [],
     selectedModel.value,
     pluginModelConfig.value,
+    memoryModel.value,
   ));
 
   const availablePlugins = computed(() => {
@@ -136,6 +140,7 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
   function syncPluginModelConfigWithPreference() {
     const currentScenarioKey = String(botScenario.value || "").trim();
     pluginModelConfig.value = readPluginModelConfigPreference(currentScenarioKey);
+    memoryModel.value = readMemoryModelPreference(currentScenarioKey);
   }
 
   function onAllowUserInteractionUpdate(value) {
@@ -160,6 +165,11 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
 
   function onSelectedModelUpdate(value = "") {
     updateSelectedModelPreference({ preferenceRef: selectedModel, value, scenarioKey: botScenario.value });
+  }
+
+  function onMemoryModelUpdate(value = "") {
+    memoryModel.value = String(value || "").trim();
+    persistMemoryModelPreference(memoryModel.value, botScenario.value);
   }
 
   function onPluginModelConfigUpdate(value = {}) {
@@ -213,6 +223,7 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
     streamOutput,
     botScenario,
     selectedModel,
+    memoryModel,
     pluginModelConfig,
     selectedPlugins,
     availableBotScenarios,
@@ -224,6 +235,7 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
     onStreamOutputUpdate,
     onBotScenarioUpdate,
     onSelectedModelUpdate,
+    onMemoryModelUpdate,
     onPluginModelConfigUpdate,
     onSelectedPluginsUpdate,
     onUserIdUpdate,

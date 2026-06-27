@@ -28,6 +28,7 @@ const props = defineProps({
   botScenario: { type: String, default: "" },
   scenarioOptions: { type: Array, default: () => [] },
   selectedModel: { type: String, default: "" },
+  memoryModel: { type: String, default: "" },
   modelOptions: { type: Array, default: () => [] },
   pluginModelConfig: { type: Object, default: () => ({}) },
   availablePlugins: { type: Array, default: () => [] },
@@ -44,6 +45,7 @@ const emit = defineEmits([
   "update:streamOutput",
   "update:botScenario",
   "update:selectedModel",
+  "update:memoryModel",
   "update:pluginModelConfig",
   "update:selectedPlugins",
   "update:morePanelVisible",
@@ -212,6 +214,7 @@ defineExpose({
                 :stream-output="streamOutput"
                 :bot-scenario="botScenario"
                 :selected-model="selectedModel"
+                :memory-model="memoryModel"
                 :model-options="modelOptions"
                 :plugin-model-config="pluginModelConfig"
                 :normalized-scenario-options="normalizedScenarioOptions"
@@ -223,6 +226,7 @@ defineExpose({
                 @update:force-tool="onForceToolChange"
                 @update:stream-output="onStreamOutputChange"
                 @update:selected-model="emit('update:selectedModel', $event)"
+                @update:memory-model="emit('update:memoryModel', $event)"
                 @update:plugin-model-config="emit('update:pluginModelConfig', $event)"
                 @select-scenario="onScenarioSelect"
                 @toggle-programming-scenario="onProgrammingScenarioToggle"
