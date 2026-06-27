@@ -244,6 +244,44 @@ test("RunConfigPluginPreparer merges agent plugin capability profile without los
   });
 });
 
+test("RunConfigPluginPreparer merges agent plugin guidance runtime options", () => {
+  const preparer = createPreparer({
+    pluginRuntime: {
+      agentPluginKey: "assistant-driver",
+      agentPluginSelectors: new Set(["assistant-driver"]),
+    },
+  });
+
+  const options = preparer.resolveAgentPluginOptions({
+    userId: "u1",
+    runConfig: {
+      selectedPlugins: ["assistant-driver"],
+      config: {
+        pluginModelConfig: {
+          "assistant-driver": {
+            guidance: {
+              analysis: { turnsThreshold: 4 },
+            },
+          },
+        },
+      },
+      plugins: {
+        "assistant-driver": {
+          guidance: {
+            analysis: { turnsThreshold: 9 },
+            summary: { turnsThreshold: 12 },
+          },
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(options.guidance, {
+    analysis: { turnsThreshold: 4 },
+    summary: { turnsThreshold: 12 },
+  });
+});
+
 test("RunConfigPluginPreparer registers agent plugin once", () => {
   let registerCount = 0;
   const loadedDynamicPlugins = createLoadedPlugins({

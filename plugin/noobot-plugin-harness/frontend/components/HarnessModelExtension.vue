@@ -4,6 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
+import { computed } from "vue";
 import { useHarnessLocale } from "../i18n";
 
 const props = defineProps({
@@ -25,6 +26,42 @@ const { translate } = useHarnessLocale();
 function getHarnessStepModel(stepKey = "") {
   return String(props.pluginModelConfig?.harness?.stepModels?.[stepKey] || "").trim();
 }
+
+function normalizeGuidanceAnalysisIntensity(value = 10) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return 10;
+  return Math.min(10, Math.max(1, Math.round(num)));
+}
+
+function mapGuidanceAnalysisIntensityToTurnsThreshold(value = 10) {
+  return 11 - normalizeGuidanceAnalysisIntensity(value);
+}
+
+function mapGuidanceAnalysisTurnsThresholdToIntensity(value = 1) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return 10;
+  const turnsThreshold = Math.min(10, Math.max(1, Math.round(num)));
+  return 11 - turnsThreshold;
+}
+
+function getGuidanceAnalysisTurnsThreshold() {
+  return mapGuidanceAnalysisIntensityToTurnsThreshold(getGuidanceAnalysisIntensity());
+}
+
+function getGuidanceAnalysisIntensity() {
+  return mapGuidanceAnalysisTurnsThresholdToIntensity(
+    props.pluginModelConfig?.harness?.guidance?.analysis?.turnsThreshold,
+  );
+}
+
+const guidanceAnalysisIntensity = computed({
+  get() {
+    return getGuidanceAnalysisIntensity();
+  },
+  set(value) {
+    onGuidanceAnalysisIntensityChange(value);
+  },
+});
 
 function getModelMetaText(modelItem = {}) {
   return [modelItem.alias && modelItem.alias !== modelItem.label ? modelItem.alias : "", modelItem.model]
@@ -96,6 +133,36 @@ function onHarnessCapabilityEnabledChange(capabilityKey = "", value = true) {
   });
 }
 
+function onGuidanceAnalysisIntensityChange(value = 10) {
+  if (typeof props.updatePluginModelConfig !== "function") return;
+  const turnsThreshold = mapGuidanceAnalysisIntensityToTurnsThreshold(value);
+  const currentConfig = props.pluginModelConfig && typeof props.pluginModelConfig === "object"
+    ? props.pluginModelConfig
+    : {};
+  const currentHarness = currentConfig.harness && typeof currentConfig.harness === "object"
+    ? currentConfig.harness
+    : {};
+  const currentGuidance = currentHarness.guidance && typeof currentHarness.guidance === "object"
+    ? currentHarness.guidance
+    : {};
+  const currentAnalysis = currentGuidance.analysis && typeof currentGuidance.analysis === "object"
+    ? currentGuidance.analysis
+    : {};
+  props.updatePluginModelConfig({
+    ...currentConfig,
+    harness: {
+      ...currentHarness,
+      guidance: {
+        ...currentGuidance,
+        analysis: {
+          ...currentAnalysis,
+          turnsThreshold,
+        },
+      },
+    },
+  });
+}
+
 function canToggleHarnessCapability(stepKey = "") {
   const key = String(stepKey || "").trim();
   return key && key !== "default" && key !== "guidance";
@@ -115,7 +182,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
       <p class="plugin-model-description">{{ translate("modelExtension.description") }}</p>
     </div>
     <div class="plugin-model-grid">
-      <label
+      <div
         v-for="stepItem in HARNESS_MODEL_STEPS"
         :key="stepItem.key"
         class="plugin-model-field"
@@ -131,9 +198,31 @@ function isHarnessStepModelDisabled(stepKey = "") {
           <el-radio-button :value="true">{{ translate("modelExtension.enabled") }}</el-radio-button>
           <el-radio-button :value="false">{{ translate("modelExtension.disabled") }}</el-radio-button>
         </el-radio-group>
-        <span v-else-if="stepItem.key === 'guidance'" class="plugin-fixed-text">
-          {{ translate("modelExtension.guidanceFixed") }}
-        </span>
+        <div
+          v-else-if="stepItem.key === 'guidance'"
+          class="plugin-guidance-analysis-control"
+          @click.stop
+          @mousedown.stop
+          @pointerdown.stop
+          @touchstart.stop
+        >
+          <span class="plugin-guidance-analysis-title">
+            {{ translate("modelExtension.guidanceAnalysisIntensity") }}
+            <strong>{{ getGuidanceAnalysisIntensity() }}</strong>
+          </span>
+          <el-slider
+            v-model="guidanceAnalysisIntensity"
+            :min="1"
+            :max="10"
+            :step="1"
+            show-stops
+            size="small"
+            @click.stop
+            @mousedown.stop
+            @pointerdown.stop
+            @touchstart.stop
+          />
+        </div>
         <el-select
           :model-value="getHarnessStepModel(stepItem.key)"
           size="small"
@@ -160,7 +249,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
             </div>
           </el-option>
         </el-select>
-      </label>
+      </div>
     </div>
     <span v-if="!hasModelOptions" class="plugin-empty-text">{{ translate("modelExtension.empty") }}</span>
   </div>
@@ -261,6 +350,59 @@ function isHarnessStepModelDisabled(stepKey = "") {
   color: var(--noobot-text-secondary, var(--el-text-color-regular));
   background: color-mix(in srgb, var(--el-color-primary) 6%, var(--noobot-control-bg, var(--el-bg-color)));
   font-size: 12px;
+}
+
+.plugin-guidance-analysis-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--el-color-primary) 22%, var(--noobot-panel-border, var(--el-border-color)));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--el-color-primary) 6%, var(--noobot-control-bg, var(--el-bg-color)));
+}
+
+.plugin-guidance-analysis-title {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 6px;
+  max-width: 42%;
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--noobot-text-secondary, var(--el-text-color-regular));
+  white-space: nowrap;
+}
+
+.plugin-guidance-analysis-title strong {
+  color: var(--el-color-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.plugin-guidance-analysis-control :deep(.el-slider) {
+  --el-slider-height: 4px;
+  --el-slider-button-size: 13px;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  height: 28px;
+  margin: 0;
+  padding: 0 7px;
+  box-sizing: border-box;
+}
+
+.plugin-guidance-analysis-control :deep(.el-slider__runway) {
+  margin: 12px 0;
+}
+
+.plugin-guidance-analysis-control :deep(.el-slider__stop) {
+  width: 3px;
+  height: 3px;
 }
 
 .composer-select :deep(.el-select__wrapper) {

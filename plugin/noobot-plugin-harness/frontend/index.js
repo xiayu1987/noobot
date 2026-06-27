@@ -10,17 +10,105 @@ import MessageStatusRow from "./components/MessageStatusRow.vue";
 import MessageWrittenFiles from "./components/MessageWrittenFiles.vue";
 import MessageAttachments from "./components/MessageAttachments.vue";
 import HarnessModelExtension from "./components/HarnessModelExtension.vue";
-import {
-  findMessageIdentityIndex,
-  getMessageDialogProcessId,
-  getMessageRole,
-  isSameMessageIdentity,
-} from "../../../client/noobot-chat/src/composables/infra/messageIdentity.js";
 
 export const FRONTEND_PLUGIN_API_VERSION = "1";
 
 function normalizeText(value = "") {
   return String(value || "").trim().toLowerCase();
+}
+
+function normalizeMessageRole(messageItem = {}) {
+  const explicitRole = normalizeText(
+    messageItem?.role ||
+      messageItem?.messageRole ||
+      messageItem?.message_role ||
+      messageItem?.authorRole ||
+      messageItem?.author_role ||
+      messageItem?.senderRole ||
+      messageItem?.sender_role,
+  );
+  if (explicitRole === "human") return "user";
+  if (explicitRole === "ai" || explicitRole === "bot") return "assistant";
+  if (explicitRole === "function") return "tool";
+  if (explicitRole) return explicitRole;
+  if (
+    messageItem?.frontendUserMessage === true ||
+    messageItem?.additional_kwargs?.frontendUserMessage === true ||
+    messageItem?.lc_kwargs?.frontendUserMessage === true ||
+    messageItem?.lc_kwargs?.additional_kwargs?.frontendUserMessage === true
+  ) {
+    return "user";
+  }
+  return "";
+}
+
+function normalizeIdentityValue(value = "") {
+  return String(value || "").trim();
+}
+
+function getMessagePrimaryId(messageItem = {}) {
+  return normalizeIdentityValue(
+    messageItem?.id ||
+      messageItem?.messageId ||
+      messageItem?.message_id ||
+      messageItem?.clientMessageId ||
+      messageItem?.client_message_id,
+  );
+}
+
+function getMessageDialogProcessId(messageItem = {}) {
+  return normalizeIdentityValue(
+    messageItem?.dialogProcessId ||
+      messageItem?.dialog_process_id ||
+      messageItem?.dialogId ||
+      messageItem?.dialog_id,
+  );
+}
+
+function getMessageTurnScopeId(messageItem = {}) {
+  return normalizeIdentityValue(messageItem?.turnScopeId || messageItem?.turn_scope_id);
+}
+
+function getMessageSessionId(messageItem = {}) {
+  return normalizeIdentityValue(
+    messageItem?.sessionId ||
+      messageItem?.session_id ||
+      messageItem?.backendSessionId ||
+      messageItem?.backend_session_id,
+  );
+}
+
+function isSameMessageIdentity(targetMessage = {}, candidateMessage = {}) {
+  if (targetMessage === candidateMessage) return true;
+  const targetId = getMessagePrimaryId(targetMessage);
+  const candidateId = getMessagePrimaryId(candidateMessage);
+  if (targetId && candidateId) return targetId === candidateId;
+  const targetRole = normalizeMessageRole(targetMessage);
+  const candidateRole = normalizeMessageRole(candidateMessage);
+  if (targetRole && candidateRole && targetRole !== candidateRole) return false;
+  const targetDialogProcessId = getMessageDialogProcessId(targetMessage);
+  const candidateDialogProcessId = getMessageDialogProcessId(candidateMessage);
+  if (targetDialogProcessId && candidateDialogProcessId) {
+    return targetDialogProcessId === candidateDialogProcessId;
+  }
+  const targetTurnScopeId = getMessageTurnScopeId(targetMessage);
+  const candidateTurnScopeId = getMessageTurnScopeId(candidateMessage);
+  if (targetTurnScopeId && candidateTurnScopeId) {
+    const targetSessionId = getMessageSessionId(targetMessage);
+    const candidateSessionId = getMessageSessionId(candidateMessage);
+    return (
+      targetTurnScopeId === candidateTurnScopeId &&
+      (!targetSessionId || !candidateSessionId || targetSessionId === candidateSessionId)
+    );
+  }
+  return false;
+}
+
+function findMessageIdentityIndex(targetMessage = {}, allMessages = []) {
+  const messages = Array.isArray(allMessages) ? allMessages : [];
+  const directIndex = messages.indexOf(targetMessage);
+  if (directIndex >= 0) return directIndex;
+  return messages.findIndex((candidateMessage) => isSameMessageIdentity(targetMessage, candidateMessage));
 }
 
 const GENERATED_STATUS_LABEL = "\u5df2\u751f\u6210";
@@ -38,7 +126,7 @@ function isMonotonicMessage(messageItem = {}) {
 }
 
 function isUserMessage(messageItem = {}) {
-  return normalizeText(getMessageRole(messageItem)) === "user";
+  return normalizeMessageRole(messageItem) === "user";
 }
 
 function isPlainUserMessage(messageItem = {}) {

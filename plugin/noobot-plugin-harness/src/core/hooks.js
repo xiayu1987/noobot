@@ -96,6 +96,7 @@ export function createRegisterHarnessHooks(deps = {}) {
                   capabilityModelInvoker: options.capabilityModelInvoker,
                   capabilityModelByPurpose: options.capabilityModelByPurpose,
                   stepModels: options.stepModels,
+                  guidance: options.guidance,
                   resolveModelMessages: options.resolveModelMessages,
                   markMessagesSummarized: options.markMessagesSummarized,
                   capabilityToolAllowlist: options.capabilityToolAllowlist,
