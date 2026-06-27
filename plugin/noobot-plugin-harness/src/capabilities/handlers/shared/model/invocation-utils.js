@@ -6,6 +6,7 @@
 import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
 import { ensureHarnessBucket } from "../bucket-utils.js";
 import { isHarnessAgentTurnEnded } from "../runtime/lifecycle-utils.js";
+import { resolveIncrementalCapabilityMessages } from "./incremental-message-cache.js";
 
 const THINK_BLOCK_RE = /<think>([\s\S]*?)<\/think>/gi;
 const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
@@ -102,7 +103,11 @@ export async function invokeWithReasoningRetry({
   if (typeof invoker !== "function") return null;
   if (isHarnessAgentTurnEnded(ctx)) return null;
   const payload = invokePayload && typeof invokePayload === "object" ? { ...invokePayload } : {};
-  let runtimeMessages = Array.isArray(payload?.messages) ? [...payload.messages] : [];
+  let runtimeMessages = resolveIncrementalCapabilityMessages({
+    ctx,
+    purpose: purpose || payload?.purpose,
+    messages: Array.isArray(payload?.messages) ? payload.messages : [],
+  });
   let response = null;
 
   for (let attempt = 0; attempt <= Math.max(0, Number(maxReasoningRetries) || 0); attempt += 1) {

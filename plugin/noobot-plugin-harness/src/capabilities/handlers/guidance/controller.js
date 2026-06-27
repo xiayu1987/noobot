@@ -51,6 +51,7 @@ import {
   HARNESS_MAIN_FLOW_CONTROL_REASON,
   requestFinalNoToolsMainFlowInstruction,
 } from "../shared/runtime/main-flow-control-instruction.js";
+import { clearIncrementalCapabilityMessageCacheForContext } from "../shared/model/incremental-message-cache.js";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
@@ -575,6 +576,7 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
         }
         recordLatestSummaryFullText(ctx, rawSummaryText);
         const summaryText = applySummaryText(ctx, summaryOverviewText);
+        clearIncrementalCapabilityMessageCacheForContext(ctx);
         if (!isSummaryCompletionMarked(summaryText, locale)) {
           appendCapabilityLog(ctx, {
             domain: CAPABILITY_DOMAIN.GUIDANCE,

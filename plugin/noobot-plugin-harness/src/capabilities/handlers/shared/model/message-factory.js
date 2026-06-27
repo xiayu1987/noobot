@@ -5,6 +5,14 @@
  */
 import { extractRawTextContent } from "../message/utils.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
+import {
+  buildContentOriginKey,
+  MESSAGE_ORIGIN_KIND,
+  markMessageAsContext,
+  markMessageAsProtocol,
+  resolveRawMessageSourceId,
+  resolveMessageOriginKey,
+} from "./message-metadata.js";
 
 function resolveCompatibleRole(message = {}) {
   const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
@@ -49,7 +57,29 @@ function normalizeMessageForCompatibility(message = {}) {
   ) {
     normalized.frontendUserMessage = true;
   }
+  const sourceMessageId = resolveRawMessageSourceId(message);
+  if (sourceMessageId) {
+    markMessageAsContext(normalized, sourceMessageId);
+  }
   return normalized;
+}
+
+function markContextOriginFromNormalized(message = {}, normalized = {}) {
+  const originKey = resolveMessageOriginKey(normalized, MESSAGE_ORIGIN_KIND.CONTEXT) ||
+    buildContentOriginKey({
+      prefix: "rewritten-context",
+      role: message?.role,
+      content: message?.content,
+    });
+  return markMessageAsContext(message, originKey);
+}
+
+function markProtocolMessage(message = {}, prefix = "protocol") {
+  return markMessageAsProtocol(message, buildContentOriginKey({
+    prefix,
+    role: message?.role,
+    content: message?.content,
+  }));
 }
 
 function resolveToolCallName(toolCall = {}) {
@@ -111,19 +141,21 @@ function rewriteMessageForCapabilityContext(message = {}, locale = "zh-CN") {
   if (!normalized) return null;
 
   if (normalized.role === "tool") {
-    return {
+    const rewritten = {
       role: "assistant",
       content: String(normalized.content || "").trim(),
     };
+    return markContextOriginFromNormalized(rewritten, normalized);
   }
 
   if (normalized.role === "assistant" && Array.isArray(normalized.tool_calls) && normalized.tool_calls.length) {
     const semanticContent = buildToolCallSemanticText(normalized.tool_calls, locale);
     if (!semanticContent) return null;
-    return {
+    const rewritten = {
       role: "user",
       content: semanticContent,
     };
+    return markContextOriginFromNormalized(rewritten, normalized);
   }
 
   const passthrough = {
@@ -133,7 +165,7 @@ function rewriteMessageForCapabilityContext(message = {}, locale = "zh-CN") {
   if (normalized.frontendUserMessage === true) {
     passthrough.frontendUserMessage = true;
   }
-  return passthrough;
+  return markContextOriginFromNormalized(passthrough, normalized);
 }
 
 function normalizeModelMessageRole(role = "", fallback = "user") {
@@ -169,7 +201,7 @@ export function buildCapabilityModelMessages({
     .map((item = {}) => rewriteMessageForCapabilityContext(item, locale))
     .filter((item) => item && String(item.content || "").trim());
   const constraintMessages = normalizeTextList(constraints)
-    .map((content) => ({ role: "system", content }));
+    .map((content) => markProtocolMessage({ role: "system", content }, "constraint"));
   const agentSystemMessages = flattenedAgentMessages.filter((item = {}) =>
     isSystemLikeRole(item.role),
   );
@@ -182,14 +214,14 @@ export function buildCapabilityModelMessages({
   const resolvedPostTaskRole = normalizeModelMessageRole(postTaskRole, resolvedTaskRole);
   if (normalizedTask) {
     const target = isSystemLikeRole(resolvedTaskRole) ? systemMessages : conversationMessages;
-    target.push({ role: resolvedTaskRole, content: normalizedTask });
+    target.push(markProtocolMessage({ role: resolvedTaskRole, content: normalizedTask }, "task"));
   }
   for (const content of normalizedPostTaskSystemMessages) {
-    systemMessages.push({ role: "system", content });
+    systemMessages.push(markProtocolMessage({ role: "system", content }, "post-system"));
   }
   for (const content of normalizedPostTaskMessages) {
     const target = isSystemLikeRole(resolvedPostTaskRole) ? systemMessages : conversationMessages;
-    target.push({ role: resolvedPostTaskRole, content });
+    target.push(markProtocolMessage({ role: resolvedPostTaskRole, content }, "post-message"));
   }
   return [...systemMessages, ...conversationMessages];
 }

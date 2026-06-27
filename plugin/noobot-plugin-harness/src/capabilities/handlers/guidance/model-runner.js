@@ -68,6 +68,7 @@ import {
   resolveOperationDirectoryContext,
 } from "../shared/operation-directory.js";
 import { applyDynamicPolicyPromptFromText } from "../shared/workflow/dynamic-policy-prompt.js";
+import { clearIncrementalCapabilityMessageCacheForContext } from "../shared/model/incremental-message-cache.js";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
@@ -562,6 +563,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
   if (purpose === "summary") {
     recordLatestSummaryFullText(ctx, responseText);
     const mergedSummaryText = applySummaryText(ctx, summaryMergeText);
+    clearIncrementalCapabilityMessageCacheForContext(ctx);
     const markedCount = await markGuidanceSummarizedMessages(ctx, meta);
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.GUIDANCE,
