@@ -182,6 +182,88 @@ test("createChatModelFromSpec maps prompt cache settings to LangChain native fie
   }
 });
 
+test("createChatModelFromSpec keeps main flow default prompt cache key", () => {
+  const originalOpenAiApiKey = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = "test-key";
+  try {
+    const chat = createChatModelFromSpec(
+      {
+        format: "openai_compatible",
+        model: "gpt-5.5",
+      },
+      {
+        additionalHeaders: {
+          "X-Plugin-Flow": "agent.main",
+        },
+      },
+    );
+
+    assert.equal(chat.promptCacheKey, "noobot-main-gpt-5-5");
+    assert.equal(chat.modelKwargs.prompt_cache_key, "noobot-main-gpt-5-5");
+  } finally {
+    if (originalOpenAiApiKey === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = originalOpenAiApiKey;
+    }
+  }
+});
+
+test("createChatModelFromSpec scopes default prompt cache key by non-main flow", () => {
+  const originalOpenAiApiKey = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = "test-key";
+  try {
+    const chat = createChatModelFromSpec(
+      {
+        format: "openai_compatible",
+        model: "gpt-5.5",
+      },
+      {
+        additionalHeaders: {
+          "X-Plugin-Flow": "plugin.analysis",
+        },
+      },
+    );
+
+    assert.equal(chat.promptCacheKey, "noobot-plugin-analysis-gpt-5-5");
+    assert.equal(chat.modelKwargs.prompt_cache_key, "noobot-plugin-analysis-gpt-5-5");
+  } finally {
+    if (originalOpenAiApiKey === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = originalOpenAiApiKey;
+    }
+  }
+});
+
+test("createChatModelFromSpec preserves explicit prompt cache key for non-main flow", () => {
+  const originalOpenAiApiKey = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = "test-key";
+  try {
+    const chat = createChatModelFromSpec(
+      {
+        format: "openai_compatible",
+        model: "gpt-5.5",
+        prompt_cache_key: "custom-plugin-cache",
+      },
+      {
+        additionalHeaders: {
+          "X-Plugin-Flow": "plugin.analysis",
+        },
+      },
+    );
+
+    assert.equal(chat.promptCacheKey, "custom-plugin-cache");
+    assert.equal(chat.modelKwargs.prompt_cache_key, "custom-plugin-cache");
+  } finally {
+    if (originalOpenAiApiKey === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = originalOpenAiApiKey;
+    }
+  }
+});
+
 test("createChatModelFromSpec enables DashScope session cache only with Responses API", () => {
   const originalDashScopeApiKey = process.env.DASHSCOPE_API_KEY;
   process.env.DASHSCOPE_API_KEY = "test-key";

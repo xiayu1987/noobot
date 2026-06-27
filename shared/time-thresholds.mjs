@@ -96,6 +96,10 @@ export const TIME_THRESHOLDS = deepFreeze({
     pollIntervalMs: TIME_TIERS.fiveSecondsMs,
   },
 
+  capability: {
+    separateModelMinTimeoutMs: TIME_TIERS.threeMinutesMs,
+  },
+
   openvscode: {
     startTimeoutMs: TIME_TIERS.startupMs,
     idleTimeoutMs: TIME_TIERS.threeHoursMs,
