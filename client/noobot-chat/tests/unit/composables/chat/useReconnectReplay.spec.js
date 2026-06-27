@@ -1329,7 +1329,7 @@ describe("useReconnectReplay", () => {
 
     expect(mocks.appendMessage).toHaveBeenCalled();
     expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalled();
-    expect(mocks.scrollBottom).toHaveBeenCalled();
+    expect(mocks.scrollBottom).not.toHaveBeenCalled();
   });
 
   it("interaction_pending without pendingInteraction falls back to error state", async () => {
