@@ -13,14 +13,34 @@ Electron-based Windows WebView shell for Noobot.
 
 ## Backend packaging
 
-The Windows installer is not only a frontend WebView package. It also includes the Noobot backend runtime files under Electron's `resources/backend` directory:
+The Windows package is not only a frontend WebView shell. Before packaging, the build runs:
+
+```bash
+npm run -w client/windows prepare:backend
+```
+
+This creates a generated backend runtime at:
+
+```text
+client/windows/build/backend-runtime/backend
+```
+
+The generated runtime is what gets copied into Electron resources:
+
+```text
+resources/backend
+```
+
+It contains the backend source/runtime packages needed by the desktop app, including:
 
 - `service/`
 - `agent/`
 - `shared/`
 - `i18n/`
-- root `node_modules/`
-- root `package.json` and `package-lock.json`
+- a fresh production-focused `node_modules/`
+- generated backend runtime `package.json` / lockfile
+
+The package does **not** directly copy the repository root `node_modules` anymore. This avoids putting Electron build tools, dev dependencies, caches, tests, docs, and unrelated workspace files into the installer.
 
 In packaged mode the client starts the backend with Electron's embedded Node runtime:
 
@@ -68,18 +88,44 @@ Install workspace dependencies before the first build:
 npm install
 ```
 
+Recommended verification order:
+
+```bash
+npm run -w client/windows check
+npm run -w client/windows build:win:dir
+```
+
+`build:win:dir` creates an unpacked Windows app and verifies that `resources/backend/service/app.js` and production dependencies are laid out correctly, without creating an installer.
+
+## Recommended distributable targets
+
+Because NSIS internally still creates a `.nsis.7z` archive and may call 7zip with high compression flags on some machines, the more reliable distribution targets are portable or zip:
+
+```bash
+npm run -w client/windows build:win:portable
+```
+
+or:
+
+```bash
+npm run -w client/windows build:win:zip
+```
+
+These targets still include the bundled backend runtime, but avoid the NSIS installer compression path that can fail with:
+
+```text
+ERROR: Can't allocate required memory!
+7za.exe ... -mx=9 ... *.nsis.7z
+```
+
+## NSIS installer
+
+The NSIS installer target is still available:
+
 ```bash
 npm run -w client/windows build:win
 ```
 
-The installer output is written to `client/windows/dist`.
-
-For a faster resource-layout check without creating the NSIS installer:
-
-```bash
-npm run -w client/windows build:win:dir
-```
-
-The Windows installer uses `compression: store` to avoid high-memory 7zip compression during the NSIS stage. If a local build still reports `ERROR: Can't allocate required memory!`, close other memory-heavy applications, clean `client/windows/dist`, and retry from a fresh terminal.
+If it continues to fail in the 7zip/NSIS stage, treat that as an installer packaging limitation rather than an application packaging failure. First verify `build:win:dir`, then ship `portable` or `zip` while NSIS is optimized or replaced later.
 
 On non-Windows systems, building the NSIS installer requires `wine`. Without `wine`, `electron-builder --win --dir` can still verify the unpacked app/resource layout, but the final installer step will fail.

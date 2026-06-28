@@ -3,6 +3,7 @@
 
 # build outputs
 **/dist/
+client/windows/build/
 **/.vite/
 
 # runtime logs & process files
