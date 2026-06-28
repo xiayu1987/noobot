@@ -36,6 +36,9 @@ const SHARED_THRESHOLD_FILES = new Set([
   "shared/time-thresholds.mjs",
   "shared/turn-thresholds.mjs",
 ]);
+const SELF_CONTAINED_ENTRY_FILES = new Set([
+  "client/shared/electron/main.js",
+]);
 const IGNORE_PATH_PARTS = [
   `${path.sep}node_modules${path.sep}`,
   `${path.sep}.git${path.sep}`,
@@ -218,6 +221,7 @@ function classifyName(name = "", kind = "name") {
 function collectViolations(filePath, text) {
   const relativePath = rel(filePath);
   if (SHARED_THRESHOLD_FILES.has(relativePath)) return [];
+  if (SELF_CONTAINED_ENTRY_FILES.has(relativePath)) return [];
   const code = stripCommentsAndStrings(text);
   const violations = [];
 

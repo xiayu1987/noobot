@@ -14,6 +14,11 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "../../..");
 const packagedBackendRoot = path.join(process.resourcesPath, "backend");
 const desktopAppName = "Noobot";
+const desktopDependencyTimeouts = Object.freeze({
+  commandProbeMs: 15000,
+  packageQueryMs: 30000,
+  installMs: 20 * 60 * 1000,
+});
 
 app.setName(desktopAppName);
 
@@ -198,7 +203,9 @@ function sleep(ms) {
 }
 
 async function hasCommand(command) {
-  const result = await runProcess(command, ["--version"], { timeoutMs: 15000 });
+  const result = await runProcess(command, ["--version"], {
+    timeoutMs: desktopDependencyTimeouts.commandProbeMs,
+  });
   return result.ok;
 }
 
@@ -222,7 +229,9 @@ function parseWindowsRegistryDefaultValue(output) {
 
 async function hasWindowsRegistryInstallPath(spec) {
   for (const registryKey of spec.win32RegistryKeys || []) {
-    const result = await runProcess("reg", ["query", registryKey], { timeoutMs: 15000 });
+    const result = await runProcess("reg", ["query", registryKey], {
+      timeoutMs: desktopDependencyTimeouts.commandProbeMs,
+    });
     if (!result.ok) continue;
     const installPath = parseWindowsRegistryDefaultValue(result.stdout);
     if (!installPath) continue;
@@ -240,7 +249,9 @@ async function hasWindowsRegistryInstallPath(spec) {
 async function hasWindowsWingetPackage(spec) {
   if (!spec.win32WingetPackages?.length || !(await findAvailableCommand(["winget"]))) return false;
   for (const packageId of spec.win32WingetPackages) {
-    const result = await runProcess("winget", ["list", "--id", packageId, "--exact", "--accept-source-agreements"], { timeoutMs: 30000 });
+    const result = await runProcess("winget", ["list", "--id", packageId, "--exact", "--accept-source-agreements"], {
+      timeoutMs: desktopDependencyTimeouts.packageQueryMs,
+    });
     if (result.ok && String(result.stdout || "").toLowerCase().includes(packageId.toLowerCase())) return true;
   }
   return false;
@@ -322,7 +333,9 @@ async function ensureSelectedDependencies(dependencies = {}) {
     const installCommand = await buildDependencyInstallCommand(spec);
     if (!installCommand) throw new Error(`Cannot auto-install ${spec.label}: no supported package manager was found.`);
     sendStatus({ phase: "dependency", message: `Installing ${spec.label}...` });
-    const result = await runProcess(installCommand.command, installCommand.args, { timeoutMs: 20 * 60 * 1000 });
+    const result = await runProcess(installCommand.command, installCommand.args, {
+      timeoutMs: desktopDependencyTimeouts.installMs,
+    });
     if (!result.ok) {
       const detail = String(result.stderr || result.stdout || result.error || "").trim().slice(0, 1000);
       throw new Error(`Failed to install ${spec.label}.${detail ? ` ${detail}` : ""}`);
