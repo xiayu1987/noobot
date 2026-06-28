@@ -5,6 +5,8 @@
  */
 import "dotenv/config";
 import express from "express";
+import fs from "node:fs";
+import path from "node:path";
 import { createGlobalConfigBuilder } from "#agent/config";
 import {
   getConnectorChannelStore,
@@ -20,6 +22,12 @@ import { createServiceGlobalConfigSource } from "./services/global-config-source
 import { buildWorkspaceTree } from "./services/workspace-tree-service.js";
 
 const app = express();
+
+const desktopFrontendRoot = String(
+  process.env.NOOBOT_DESKTOP_FRONTEND_ROOT || path.resolve(process.cwd(), "../frontend"),
+).trim();
+const shouldServeDesktopFrontend = process.env.NOOBOT_DESKTOP === "1"
+  && fs.existsSync(path.join(desktopFrontendRoot, "index.html"));
 
 const globalConfigSource = createServiceGlobalConfigSource();
 const globalConfigBuilder = createGlobalConfigBuilder({
@@ -52,12 +60,23 @@ registerGlobalMiddlewares(app, {
   defaultLocale,
 });
 
+if (shouldServeDesktopFrontend) {
+  app.use("/api", (req, _res, next) => next());
+}
+
 initConnectorChannelStore();
 initConnectorHistoryStore({ workspaceRoot: workspaceRootPath() });
 
 await registerHttpModules(app, buildHttpModuleDependencies());
 
 app.get("/health", (_, res) => res.json({ ok: true }));
+
+if (shouldServeDesktopFrontend) {
+  app.use(express.static(desktopFrontendRoot));
+  app.get(/^\/(?!api\/|internal\/|agent-proxy\/ws|health$).*/, (_req, res) => {
+    res.sendFile(path.join(desktopFrontendRoot, "index.html"));
+  });
+}
 
 openVSCodeService?.startLifecycleManager?.();
 
