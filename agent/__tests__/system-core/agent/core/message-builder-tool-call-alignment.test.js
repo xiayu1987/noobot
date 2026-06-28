@@ -6,6 +6,38 @@ import {
   buildContextMessages,
   buildContextMessageBlocks,
 } from "../../../../src/system-core/agent/core/context/message-builder.js";
+import { MAIN_MODEL_HISTORY_ROUND_LIMIT } from "../../../../src/system-core/session/utils/context-window-normalizer.js";
+
+function buildRoundContents(fromRound, toRound) {
+  return Array.from(
+    { length: Math.max(0, toRound - fromRound + 1) },
+    (_, index) => {
+      const number = fromRound + index;
+      return [`u-${number}`, `a-${number}`];
+    },
+  ).flat();
+}
+
+function buildDefaultHistoryRounds() {
+  const totalRounds = MAIN_MODEL_HISTORY_ROUND_LIMIT + 2;
+  return Array.from({ length: totalRounds }, (_, index) => [
+    {
+      role: "user",
+      content: `u-${index + 1}`,
+      dialogProcessId: `dlg-${index + 1}`,
+    },
+    {
+      role: "assistant",
+      content: `a-${index + 1}`,
+      dialogProcessId: `dlg-${index + 1}`,
+    },
+  ]).flat();
+}
+
+function expectedDefaultHistoryContents() {
+  const totalRounds = MAIN_MODEL_HISTORY_ROUND_LIMIT + 2;
+  return buildRoundContents(totalRounds - MAIN_MODEL_HISTORY_ROUND_LIMIT + 1, totalRounds);
+}
 
 test("buildContextMessages drops orphan tool results without matching assistant tool_call", () => {
   const messages = buildContextMessages(
@@ -160,18 +192,7 @@ test("buildContextMessages keeps explicit history dialog groups in natural order
 });
 
 test("buildContextMessages applies main model recent round window by default", () => {
-  const history = Array.from({ length: 5 }, (_, index) => [
-    {
-      role: "user",
-      content: `u-${index + 1}`,
-      dialogProcessId: `dlg-${index + 1}`,
-    },
-    {
-      role: "assistant",
-      content: `a-${index + 1}`,
-      dialogProcessId: `dlg-${index + 1}`,
-    },
-  ]).flat();
+  const history = buildDefaultHistoryRounds();
   const messages = buildContextMessages(
     {
       execution: {
@@ -191,23 +212,12 @@ test("buildContextMessages applies main model recent round window by default", (
 
   assert.deepEqual(
     messages.map((item) => item?.content),
-    ["u-3", "a-3", "u-4", "a-4", "u-5", "a-5"],
+    expectedDefaultHistoryContents(),
   );
 });
 
 test("buildContextMessages ignores legacy main model message-count window config", () => {
-  const history = Array.from({ length: 5 }, (_, index) => [
-    {
-      role: "user",
-      content: `u-${index + 1}`,
-      dialogProcessId: `dlg-${index + 1}`,
-    },
-    {
-      role: "assistant",
-      content: `a-${index + 1}`,
-      dialogProcessId: `dlg-${index + 1}`,
-    },
-  ]).flat();
+  const history = buildDefaultHistoryRounds();
   const messages = buildContextMessages(
     {
       execution: {
@@ -234,23 +244,12 @@ test("buildContextMessages ignores legacy main model message-count window config
 
   assert.deepEqual(
     messages.map((item) => item?.content),
-    ["u-3", "a-3", "u-4", "a-4", "u-5", "a-5"],
+    expectedDefaultHistoryContents(),
   );
 });
 
 test("buildContextMessages keeps harness plugin history aligned with main recent rounds", () => {
-  const history = Array.from({ length: 5 }, (_, index) => [
-    {
-      role: "user",
-      content: `u-${index + 1}`,
-      dialogProcessId: `dlg-${index + 1}`,
-    },
-    {
-      role: "assistant",
-      content: `a-${index + 1}`,
-      dialogProcessId: `dlg-${index + 1}`,
-    },
-  ]).flat();
+  const history = buildDefaultHistoryRounds();
   const messages = buildContextMessages(
     {
       execution: {
@@ -280,7 +279,7 @@ test("buildContextMessages keeps harness plugin history aligned with main recent
 
   assert.deepEqual(
     messages.map((item) => item?.content),
-    ["u-3", "a-3", "u-4", "a-4", "u-5", "a-5"],
+    expectedDefaultHistoryContents(),
   );
 });
 

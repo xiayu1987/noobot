@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  MAIN_MODEL_HISTORY_ROUND_LIMIT,
   resolveMainModelFinalMessages,
   resolveMainModelHistoryMessages,
   resolveMainModelIncrementalMessages,
@@ -54,8 +55,9 @@ test("model-context rules 1.1: systemMessages keeps latest injected system by ty
   assert.equal(result.length, 15);
 });
 
-test("model-context rules 1.2: historyMessages keeps non-system unsummarized messages in natural dialog groups for latest 3 rounds", () => {
-  const dialogs = Array.from({ length: 6 }, (_, index) => {
+test("model-context rules 1.2: historyMessages keeps non-system unsummarized messages in natural dialog groups for default latest rounds", () => {
+  const totalRounds = MAIN_MODEL_HISTORY_ROUND_LIMIT + 1;
+  const dialogs = Array.from({ length: totalRounds }, (_, index) => {
     const number = index + 1;
     const dialogFields = number % 2 === 0
       ? { dialogId: `dlg-${number}` }
@@ -77,35 +79,23 @@ test("model-context rules 1.2: historyMessages keeps non-system unsummarized mes
 
   const result = resolveMainModelHistoryMessages({ sourceMessages: dialogs });
 
-  assert.deepEqual(contents(result), [
-    "aux-injected-4",
-    "aux-user-meta-4",
-    "aux-recovered-summary-4",
-    "actual-user-4-first",
-    "actual-user-4-second",
-    "assistant-4-old",
-    "tool-4",
-    "assistant-4-latest",
-    "after-latest-tool-4",
-    "aux-injected-5",
-    "aux-user-meta-5",
-    "aux-recovered-summary-5",
-    "actual-user-5-first",
-    "actual-user-5-second",
-    "assistant-5-old",
-    "tool-5",
-    "assistant-5-latest",
-    "after-latest-tool-5",
-    "aux-injected-6",
-    "aux-user-meta-6",
-    "aux-recovered-summary-6",
-    "actual-user-6-first",
-    "actual-user-6-second",
-    "assistant-6-old",
-    "tool-6",
-    "assistant-6-latest",
-    "after-latest-tool-6",
-  ]);
+  assert.deepEqual(
+    contents(result),
+    Array.from({ length: MAIN_MODEL_HISTORY_ROUND_LIMIT }, (_, index) => {
+      const number = totalRounds - MAIN_MODEL_HISTORY_ROUND_LIMIT + index + 1;
+      return [
+        `aux-injected-${number}`,
+        `aux-user-meta-${number}`,
+        `aux-recovered-summary-${number}`,
+        `actual-user-${number}-first`,
+        `actual-user-${number}-second`,
+        `assistant-${number}-old`,
+        `tool-${number}`,
+        `assistant-${number}-latest`,
+        `after-latest-tool-${number}`,
+      ];
+    }).flat(),
+  );
 });
 
 test("model-context rules 1.2: historyMessages ignores messages without dialogProcessId", () => {
