@@ -114,6 +114,11 @@ const preMessageCardRenderers = computed(() =>
 const postMessageCardRenderers = computed(() =>
   resolveMessageCardRenderers(props.messageItem, { slot: "post" }),
 );
+const suppressDefaultAssets = computed(() =>
+  postMessageCardRenderers.value.some(
+    (renderer = {}) => renderer?.suppressDefaultAssets === true,
+  ),
+);
 const preContentMessageActionRenderers = computed(() =>
   resolveMessageActionRenderers(props.messageItem, { placement: "after-pre-cards" }),
 );
@@ -227,7 +232,7 @@ async function handleCopyAssistantMessageText() {
       v-bind="resolveActionRendererProps(renderer)"
     />
 
-    <BaseFileCardList v-if="displayedAttachments.length || writtenFiles.length">
+    <BaseFileCardList v-if="!suppressDefaultAssets && (displayedAttachments.length || writtenFiles.length)">
       <BaseAttachmentFileCard
         v-for="attachmentItem in displayedAttachments"
         :key="`attachment:${attachmentItem.attachmentId || attachmentItem.name || ''}:${attachmentItem.size || 0}`"

@@ -20,7 +20,7 @@ import { TOOL_CALL_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/inde
 const WEB_SEARCH_FLOW_NAME = "agent.web_search";
 const WEB_SEARCH_PURPOSE_NAME = "web_search";
 const WEB_SEARCH_DOMAIN_NAME = "tool";
-const OPENAI_WEB_SEARCH_TOOL_TYPE = "web_search_preview";
+const OPENAI_WEB_SEARCH_TOOL_TYPE = "web_search";
 const WEB_SEARCH_MODE_RESPONSES_API = "responses_api";
 const WEB_SEARCH_MODE_SEARCH_ENGINE = "search_engine";
 const WEB_SEARCH_SERVICE_ENDPOINT_NAME = "search";

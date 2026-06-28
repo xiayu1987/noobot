@@ -58,6 +58,7 @@ function normalizeMessageCardEntry(entry = {}, pluginId = "", pluginCapabilities
       typeof entry?.resolveListeners === "function"
         ? entry.resolveListeners
         : () => ({}),
+    suppressDefaultAssets: entry?.suppressDefaultAssets === true,
   };
 }
 
