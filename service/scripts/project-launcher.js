@@ -380,6 +380,17 @@ async function ensureModelProxyConfig({ serviceRoot } = {}) {
   await copyFile(examplePath, configPath);
 }
 
+async function ensureAgentProxyConfig({ serviceRoot } = {}) {
+  const agentProxyRoot = path.resolve(serviceRoot, "../agent-proxy");
+  const examplePath = path.join(agentProxyRoot, "agent-proxy.config.example.json");
+  const configPath = path.join(agentProxyRoot, "agent-proxy.config.json");
+
+  if (await fileExists(configPath)) return;
+  if (!(await fileExists(examplePath))) return;
+
+  await copyFile(examplePath, configPath);
+}
+
 function normalizeProviderAlias(modelName = "") {
   const normalized = String(modelName || "")
     .trim()
@@ -1291,6 +1302,7 @@ async function runProjectLauncher() {
   const globalExamplePath = path.resolve(serviceRoot, "./config/global.config.example.json");
 
   await ensureModelProxyConfig({ serviceRoot });
+  await ensureAgentProxyConfig({ serviceRoot });
 
   if (!(await fileExists(globalConfigPath))) {
     await initializeGlobalConfigWhenMissing({

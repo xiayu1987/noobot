@@ -58,16 +58,22 @@ setTimeout(() => {
 }, 3000);
 
 const servicePort = Number.parseInt(process.env.NOOBOT_SERVICE_PORT || "10061", 10);
+const agentProxyPort = Number.parseInt(process.env.AGENT_PROXY_PORT || "10062", 10);
 const serviceOrigin = String(
   process.env.NOOBOT_SERVICE_URL || `http://127.0.0.1:${servicePort}`,
 ).replace(/\/$/, "");
 const healthUrl = `${serviceOrigin}/health`;
+const agentProxyOrigin = String(
+  process.env.NOOBOT_AGENT_PROXY_URL || `http://127.0.0.1:${agentProxyPort}`,
+).replace(/\/$/, "");
+const agentProxyHealthUrl = `${agentProxyOrigin}/health`;
 const defaultClientUrl = process.env.NOOBOT_CLIENT_URL || "http://127.0.0.1:10060";
 const startupTimeoutMs = Number.parseInt(process.env.NOOBOT_STARTUP_TIMEOUT_MS || "60000", 10);
 const pollIntervalMs = Number.parseInt(process.env.NOOBOT_STARTUP_POLL_MS || "1000", 10);
 
 let mainWindow = null;
 let managedServiceProcess = null;
+let managedAgentProxyProcess = null;
 let serviceStartupPromise = null;
 let bootStarted = false;
 let pendingConfigResolve = null;
@@ -100,6 +106,24 @@ function sendStatus(status) {
   if (status?.message) appendDesktopLog(`[${status.phase || "status"}] ${status.message}`);
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send("noobot:startup-status", status);
+}
+
+function syncPackagedProxyConfig(proxyName) {
+  if (!app.isPackaged) return;
+  const examplePath = path.join(packagedBackendRoot, proxyName, `${proxyName}.config.example.json`);
+  const configPath = path.join(packagedBackendRoot, proxyName, `${proxyName}.config.json`);
+  if (fs.existsSync(configPath)) return;
+  if (!fs.existsSync(examplePath)) {
+    sendStatus({ phase: "warning", message: `Skipped ${proxyName} config sync; example config not found: ${examplePath}` });
+    return;
+  }
+  fs.copyFileSync(examplePath, configPath);
+  sendStatus({ phase: "config", message: `Synced ${proxyName} config from example: ${examplePath} -> ${configPath}` });
+}
+
+function syncPackagedProxyConfigs() {
+  syncPackagedProxyConfig("agent-proxy");
+  syncPackagedProxyConfig("model-proxy");
 }
 
 const desktopConfigSyncSkipTopLevelKeys = new Set([
@@ -382,6 +406,20 @@ async function isServiceHealthy() {
   }
 }
 
+async function isAgentProxyHealthy() {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 1500);
+    const response = await fetch(agentProxyHealthUrl, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!response.ok) return false;
+    const data = await response.json().catch(() => ({}));
+    return data?.ok === true;
+  } catch {
+    return false;
+  }
+}
+
 function startNoobotService() {
   if (managedServiceProcess) return;
   const isPackaged = app.isPackaged;
@@ -448,10 +486,68 @@ function startNoobotService() {
   });
 }
 
+function startAgentProxy() {
+  if (managedAgentProxyProcess) return;
+  const isPackaged = app.isPackaged;
+  const command = isPackaged ? process.execPath : process.platform === "win32" ? "npm.cmd" : "npm";
+  const args = isPackaged ? [path.join(packagedBackendRoot, "agent-proxy", "agent-proxy.js")] : ["run", "-w", "agent-proxy", "start"];
+  const cwd = isPackaged ? packagedBackendRoot : repoRoot;
+  const frontendRoot = isPackaged ? path.join(process.resourcesPath, "frontend") : "";
+  sendStatus({
+    phase: "starting",
+    message: [
+      `Starting Noobot agent proxy process...`,
+      `command=${command}`,
+      `args=${args.join(" ")}`,
+      `cwd=${cwd}`,
+      `health=${agentProxyHealthUrl}`,
+      `frontend=${frontendRoot || "dev-server"}`,
+    ].join("\n"),
+  });
+  managedAgentProxyProcess = spawn(command, args, {
+    cwd,
+    env: {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: isPackaged ? "1" : process.env.ELECTRON_RUN_AS_NODE,
+      AGENT_PROXY_PORT: String(agentProxyPort),
+      AGENT_PROXY_HOST: "127.0.0.1",
+      AGENT_PROXY_UPSTREAM_HTTP_BASE: serviceOrigin,
+      AGENT_PROXY_UPSTREAM_WS_URL: `ws://127.0.0.1:${servicePort}/chat/ws`,
+      AGENT_PROXY_FRONTEND_ROOT: frontendRoot,
+      AGENT_PROXY_HTTP_RATE_LIMIT_ENABLED: "0",
+      AGENT_PROXY_WS_RATE_LIMIT_ENABLED: "0",
+    },
+    stdio: "pipe",
+    windowsHide: true,
+  });
+  managedAgentProxyProcess.stdout?.on("data", (chunk) => sendStatus({ phase: "agent-proxy-log", message: chunk.toString() }));
+  managedAgentProxyProcess.stderr?.on("data", (chunk) => sendStatus({ phase: "agent-proxy-log", message: chunk.toString() }));
+  managedAgentProxyProcess.once("error", (error) => {
+    managedAgentProxyProcess = null;
+    sendStatus({ phase: "error", message: `Failed to start Noobot agent proxy process: ${error?.message || String(error)}` });
+  });
+  managedAgentProxyProcess.once("exit", (code, signal) => {
+    const wasManaged = managedAgentProxyProcess;
+    managedAgentProxyProcess = null;
+    if (wasManaged && code !== 0 && code !== null) {
+      sendStatus({ phase: "error", message: `Noobot agent proxy exited early (code=${code}, signal=${signal || ""}).` });
+    }
+  });
+}
+
 async function waitForHealthyService() {
   const startedAt = Date.now();
   while (Date.now() - startedAt < startupTimeoutMs) {
     if (await isServiceHealthy()) return true;
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+  return false;
+}
+
+async function waitForHealthyAgentProxy() {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < startupTimeoutMs) {
+    if (await isAgentProxyHealthy()) return true;
     await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
   }
   return false;
@@ -482,6 +578,14 @@ async function ensureServiceStarted() {
       throw new Error(`Noobot service did not become healthy within ${startupTimeoutMs}ms.`);
     }
     sendStatus({ phase: "ready", message: "Noobot service is ready." });
+    if (app.isPackaged) {
+      sendStatus({ phase: "starting", message: "Starting Noobot agent proxy..." });
+      syncPackagedProxyConfigs();
+      if (!(await isAgentProxyHealthy())) startAgentProxy();
+      const proxyHealthy = await waitForHealthyAgentProxy();
+      if (!proxyHealthy) throw new Error(`Noobot agent proxy did not become healthy within ${startupTimeoutMs}ms.`);
+      sendStatus({ phase: "ready", message: "Noobot agent proxy is ready." });
+    }
   })().finally(() => {
     serviceStartupPromise = null;
   });
@@ -489,10 +593,13 @@ async function ensureServiceStarted() {
 }
 
 async function resolveNoobotUrl() {
-  // The current service does not serve the built Vue app. In packaged deployments this
-  // may be changed to serviceOrigin once static hosting is added; for now, keep the
-  // WebView pointed at the existing noobot-chat UI so its first-run configuration flow
-  // remains the single source of truth.
+  if (app.isPackaged) {
+    const packagedFrontendIndex = path.join(process.resourcesPath, "frontend", "index.html");
+    if (fs.existsSync(packagedFrontendIndex)) return agentProxyOrigin;
+    appendDesktopLog(`[main:frontend] packaged frontend not found: ${packagedFrontendIndex}`);
+  }
+
+  // Development keeps loading the Vite dev server so frontend hot reload remains usable.
   return defaultClientUrl;
 }
 
@@ -536,6 +643,11 @@ async function startBoot(reason) {
 }
 
 function stopManagedService() {
+  if (managedAgentProxyProcess) {
+    const child = managedAgentProxyProcess;
+    managedAgentProxyProcess = null;
+    child.kill("SIGTERM");
+  }
   if (!managedServiceProcess) return;
   const child = managedServiceProcess;
   managedServiceProcess = null;
