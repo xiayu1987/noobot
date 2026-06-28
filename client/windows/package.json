@@ -1,0 +1,100 @@
+{
+  "name": "noobot-windows-client",
+  "private": true,
+  "version": "1.1.0",
+  "type": "module",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "NOOBOT_CLIENT_URL=${NOOBOT_CLIENT_URL:-http://127.0.0.1:10060} electron .",
+    "build:win": "electron-builder --win",
+    "check": "node --check src/main.js && node --check src/preload.js"
+  },
+  "devDependencies": {
+    "electron": "39.8.10",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.noobot.windows-client",
+    "productName": "Noobot",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../../service",
+        "to": "backend/service",
+        "filter": [
+          "**/*",
+          "!__tests__/**",
+          "!node_modules/.cache/**"
+        ]
+      },
+      {
+        "from": "../../agent",
+        "to": "backend/agent",
+        "filter": [
+          "**/*",
+          "!__tests__/**",
+          "!node_modules/.cache/**"
+        ]
+      },
+      {
+        "from": "../../shared",
+        "to": "backend/shared",
+        "filter": [
+          "**/*",
+          "!__tests__/**"
+        ]
+      },
+      {
+        "from": "../../i18n",
+        "to": "backend/i18n",
+        "filter": [
+          "**/*",
+          "!__tests__/**"
+        ]
+      },
+      {
+        "from": "../../node_modules",
+        "to": "backend/node_modules",
+        "filter": [
+          "**/*",
+          "!.cache/**",
+          "!electron/**",
+          "!electron-builder/**",
+          "!electron-builder-squirrel-windows/**",
+          "!electron-publish/**",
+          "!electron-winstaller/**",
+          "!app-builder-bin/**",
+          "!builder-util/**",
+          "!builder-util-runtime/**",
+          "!@electron/**",
+          "!@electron-forge/**",
+          "!@electron/rebuild/**",
+          "!nodemon/**",
+          "!pm2/**",
+          "!pm2-sysmonit/**",
+          "!eslint/**"
+        ]
+      },
+      {
+        "from": "../../package.json",
+        "to": "backend/package.json"
+      },
+      {
+        "from": "../../package-lock.json",
+        "to": "backend/package-lock.json"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    }
+  }
+}

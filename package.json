@@ -12,7 +12,8 @@
     "workflow",
     "plugin/noobot-plugin-harness",
     "plugin/noobot-plugin-workflow",
-    "client/noobot-chat"
+    "client/noobot-chat",
+    "client/windows"
   ],
   "scripts": {
     "project:launcher": "node ./scripts/project-launcher.mjs",
@@ -22,6 +23,8 @@
     "dev:service": "npm run -w service dev",
     "dev:agent-proxy": "npm run -w agent-proxy dev",
     "dev:client": "npm run -w client/noobot-chat dev",
+    "dev:windows": "npm run -w client/windows dev",
+    "build:windows": "npm run -w client/windows build:win",
     "test": "npm run -s check:numeric-literal-style && npm run -s check:shared-thresholds && npm run -s check:semantic-transfer-protocol-fields && npm run -s check:model-context-convergence && npm run --workspaces --if-present test",
     "check:i18n-imports": "npm run --workspaces --if-present check:i18n-imports",
     "check:plugin-frontend-i18n": "node ./scripts/check-plugin-frontend-i18n.mjs",
