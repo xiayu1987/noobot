@@ -91,7 +91,15 @@ const dependencySpecs = {
     win32ExecutableCandidates: [
       "LibreOffice\\program\\soffice.exe",
       "LibreOffice\\program\\libreoffice.exe",
+      "The Document Foundation\\LibreOffice\\program\\soffice.exe",
+      "The Document Foundation\\LibreOffice\\program\\libreoffice.exe",
     ],
+    win32RegistryKeys: [
+      "HKLM\\SOFTWARE\\LibreOffice\\UNO\\InstallPath",
+      "HKLM\\SOFTWARE\\WOW6432Node\\LibreOffice\\UNO\\InstallPath",
+      "HKCU\\SOFTWARE\\LibreOffice\\UNO\\InstallPath",
+    ],
+    win32WingetPackages: ["TheDocumentFoundation.LibreOffice"],
     packages: {
       win32: { winget: "TheDocumentFoundation.LibreOffice", choco: "libreoffice-fresh" },
       darwin: { brew: "libreoffice" },
@@ -104,11 +112,35 @@ const dependencySpecs = {
     win32ExecutableCandidates: [
       "ffmpeg\\bin\\ffmpeg.exe",
       "Gyan\\FFmpeg\\bin\\ffmpeg.exe",
+      "Gyan\\ffmpeg\\bin\\ffmpeg.exe",
+      "chocolatey\\bin\\ffmpeg.exe",
     ],
+    win32WingetPackages: ["Gyan.FFmpeg"],
     packages: {
       win32: { winget: "Gyan.FFmpeg", choco: "ffmpeg" },
       darwin: { brew: "ffmpeg" },
       linux: { apt: "ffmpeg", dnf: "ffmpeg", yum: "ffmpeg", pacman: "ffmpeg" },
+    },
+  },
+  nodejs: {
+    label: "Node.js",
+    checkCommands: ["node"],
+    win32ExecutableCandidates: [
+      "nodejs\\node.exe",
+      "node\\node.exe",
+      "node.exe",
+      "chocolatey\\bin\\node.exe",
+    ],
+    win32RegistryKeys: [
+      "HKLM\\SOFTWARE\\Node.js",
+      "HKLM\\SOFTWARE\\WOW6432Node\\Node.js",
+      "HKCU\\SOFTWARE\\Node.js",
+    ],
+    win32WingetPackages: ["OpenJS.NodeJS.LTS", "OpenJS.NodeJS"],
+    packages: {
+      win32: { winget: "OpenJS.NodeJS.LTS", choco: "nodejs-lts" },
+      darwin: { brew: "node" },
+      linux: { apt: "nodejs", dnf: "nodejs", yum: "nodejs", pacman: "nodejs" },
     },
   },
 };
@@ -170,18 +202,71 @@ async function hasCommand(command) {
   return result.ok;
 }
 
+function hasExistingFile(filePath) {
+  try {
+    return Boolean(filePath) && fs.existsSync(filePath);
+  } catch {
+    return false;
+  }
+}
+
+function parseWindowsRegistryDefaultValue(output) {
+  const lines = String(output || "").split(/\r?\n/);
+  for (const line of lines) {
+    const match = line.match(/^\s*\(Default\)\s+REG_\w+\s+(.+)\s*$/i)
+      || line.match(/^\s*默认\s+REG_\w+\s+(.+)\s*$/i);
+    if (match?.[1]) return match[1].trim();
+  }
+  return "";
+}
+
+async function hasWindowsRegistryInstallPath(spec) {
+  for (const registryKey of spec.win32RegistryKeys || []) {
+    const result = await runProcess("reg", ["query", registryKey], { timeoutMs: 15000 });
+    if (!result.ok) continue;
+    const installPath = parseWindowsRegistryDefaultValue(result.stdout);
+    if (!installPath) continue;
+    const candidates = [
+      path.join(installPath, "soffice.exe"),
+      path.join(installPath, "libreoffice.exe"),
+      path.join(installPath, "program", "soffice.exe"),
+      path.join(installPath, "program", "libreoffice.exe"),
+    ];
+    if (candidates.some(hasExistingFile)) return true;
+  }
+  return false;
+}
+
+async function hasWindowsWingetPackage(spec) {
+  if (!spec.win32WingetPackages?.length || !(await findAvailableCommand(["winget"]))) return false;
+  for (const packageId of spec.win32WingetPackages) {
+    const result = await runProcess("winget", ["list", "--id", packageId, "--exact", "--accept-source-agreements"], { timeoutMs: 30000 });
+    if (result.ok && String(result.stdout || "").toLowerCase().includes(packageId.toLowerCase())) return true;
+  }
+  return false;
+}
+
 async function isDependencyInstalled(spec) {
   for (const command of spec.checkCommands || []) {
     if (await hasCommand(command)) return true;
   }
   if (process.platform === "win32") {
-    const roots = [process.env.ProgramFiles, process.env["ProgramFiles(x86)"], process.env.LOCALAPPDATA]
+    if (await hasWindowsRegistryInstallPath(spec)) return true;
+    const roots = [
+      process.env.ProgramFiles,
+      process.env["ProgramFiles(x86)"],
+      process.env.ProgramData,
+      process.env.LOCALAPPDATA,
+      process.env.APPDATA,
+      "C:\\",
+    ]
       .filter(Boolean);
     for (const root of roots) {
       for (const relative of spec.win32ExecutableCandidates || []) {
-        if (fs.existsSync(path.join(root, relative))) return true;
+        if (hasExistingFile(path.join(root, relative))) return true;
       }
     }
+    if (await hasWindowsWingetPackage(spec)) return true;
   }
   return false;
 }
