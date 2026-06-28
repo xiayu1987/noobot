@@ -37,9 +37,8 @@ export function createMcpTool({ agentContext }) {
     schema: z.object({
       mcpName: z.string().describe(tTool(runtime, "tools.mcp.fieldMcpName")),
       task: z.string().describe(tTool(runtime, "tools.mcp.fieldTask")),
-      modelName: z.string().optional().describe(tTool(runtime, "tools.mcp.fieldModelName")),
     }),
-    func: async ({ mcpName, task, modelName = "" }) => {
+    func: async ({ mcpName, task }) => {
       const normalizedMcpName = String(mcpName || "").trim();
       const normalizedTask = String(task || "").trim();
       if (!normalizedMcpName) {
@@ -74,7 +73,6 @@ export function createMcpTool({ agentContext }) {
       const parentDialogProcessId = resolveDialogProcessIdFromContext({
         runtime,
       });
-      const resolvedModelName = String(modelName || "").trim();
       const allowUserInteraction =
         systemRuntime?.config?.allowUserInteraction !== false;
       const hasParentStreamingConfig = hasOwnConfigKey(systemRuntime?.config || {}, "streaming");
@@ -128,7 +126,6 @@ export function createMcpTool({ agentContext }) {
               mode: SANDBOX_CONFIG.TOOL_POLICY_MODE.CUSTOM_ONLY,
               customTools: mcpToolset.tools,
             },
-            runtimeModel: resolvedModelName || "",
             maxToolLoopTurns:
               Number.isFinite(maxToolLoopTurns) && maxToolLoopTurns > 0
                 ? Math.floor(maxToolLoopTurns)
@@ -184,7 +181,6 @@ export function createMcpTool({ agentContext }) {
             parentSessionId,
             mcpName: normalizedMcpName,
             task: normalizedTask,
-            modelName: resolvedModelName,
             source: TOOL_NAME.CALL_MCP_TASK,
             event: TOOL_EVENT_NAME.CALL_MCP_TASK_FAILED,
             message: error?.message || String(error),

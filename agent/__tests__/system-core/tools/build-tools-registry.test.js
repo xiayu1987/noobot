@@ -42,6 +42,15 @@ test("buildTools: 重组后应注册关键工具", async () => {
     assert.ok(names.has(toolName), `应注册工具: ${toolName}`);
   }
 
+  const toolByName = new Map(tools.map((tool) => [tool?.name, tool]));
+  assert.deepEqual(Object.keys(toolByName.get("call_mcp_task")?.schema?.shape || {}).sort(), [
+    "mcpName",
+    "task",
+  ]);
+  assert.deepEqual(Object.keys(toolByName.get("web_search")?.schema?.shape || {}).sort(), [
+    "query",
+  ]);
+
   const hardDisabled = [
     "delegate_task_async",
     "wait_async_task_result",

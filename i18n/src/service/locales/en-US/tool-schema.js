@@ -129,16 +129,12 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "call_mcp_task": {
     "description": {
       "key": "tools.mcp.description",
-      "text": "Call an MCP service task. Input mcpName and task (optional modelName). Returns task execution result."
+      "text": "Call an MCP service task. Input mcpName and task. Returns task execution result."
     },
     "params": {
       "mcpName": {
         "key": "tools.mcp.fieldMcpName",
         "text": "MCP service name."
-      },
-      "modelName": {
-        "key": "tools.mcp.fieldModelName",
-        "text": "Model name."
       },
       "task": {
         "key": "tools.mcp.fieldTask",
@@ -477,10 +473,6 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "text": "Search the web for information. Input query. Returns web search results."
     },
     "params": {
-      "model_name": {
-        "key": "tools.web_search.fieldModelName",
-        "text": "Model name."
-      },
       "query": {
         "key": "tools.web_search.fieldQuery",
         "text": "Search query."
