@@ -69,6 +69,7 @@ const pollIntervalMs = Number.parseInt(process.env.NOOBOT_STARTUP_POLL_MS || "10
 let mainWindow = null;
 let managedServiceProcess = null;
 let serviceStartupPromise = null;
+let bootStarted = false;
 const startupStatuses = [];
 
 function getLogFilePath() {
@@ -241,6 +242,11 @@ async function resolveNoobotUrl() {
 }
 
 async function boot() {
+  if (bootStarted) {
+    appendEarlyLog("[main:boot] skipped; already started");
+    return;
+  }
+  bootStarted = true;
   appendDesktopLog("[main:boot] start");
   createWindow();
   try {
@@ -255,6 +261,17 @@ async function boot() {
       healthUrl,
       clientUrl: defaultClientUrl,
     });
+  }
+}
+
+async function startBoot(reason) {
+  appendEarlyLog(`[main:startBoot] requested; reason=${reason}; isReady=${app.isReady()}; bootStarted=${bootStarted}`);
+  try {
+    await boot();
+    appendEarlyLog(`[main:startBoot] completed; reason=${reason}`);
+  } catch (error) {
+    appendEarlyLog(`[main:startBoot] failed; reason=${reason}; error=${error?.stack || error?.message || String(error)}`);
+    throw error;
   }
 }
 
@@ -273,6 +290,22 @@ ipcMain.handle("noobot:retry-startup", async () => {
 
 ipcMain.handle("noobot:get-startup-statuses", () => startupStatuses);
 
-app.whenReady().then(boot);
+app.whenReady()
+  .then(() => startBoot("whenReady"))
+  .catch((error) => appendEarlyLog(`[main:whenReady] failed: ${error?.stack || error?.message || String(error)}`));
+
+app.once("ready", () => {
+  setImmediate(() => {
+    if (!bootStarted) {
+      startBoot("ready-event-fallback").catch(() => {});
+    }
+  });
+});
+
+setTimeout(() => {
+  if (app.isReady() && !bootStarted) {
+    startBoot("timer-fallback").catch(() => {});
+  }
+}, 5000);
 app.on("window-all-closed", () => app.quit());
 app.on("before-quit", stopManagedService);
