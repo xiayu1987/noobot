@@ -13,12 +13,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "../../..");
 const packagedBackendRoot = path.join(process.resourcesPath, "backend");
+const desktopAppName = "Noobot";
+
+app.setName(desktopAppName);
 
 function getEarlyLogFilePath() {
   const base = process.platform === "win32"
     ? process.env.APPDATA || process.env.LOCALAPPDATA || process.env.TEMP || process.cwd()
     : process.env.XDG_CONFIG_HOME || process.env.HOME || process.env.TMPDIR || process.cwd();
-  return path.join(base, "Noobot", "logs", "desktop-startup.log");
+  return path.join(base, desktopAppName, "logs", "desktop-startup.log");
 }
 
 function appendEarlyLog(message) {
