@@ -62,10 +62,24 @@ Optional environment variables:
 
 ## Windows build
 
+Install workspace dependencies before the first build:
+
+```bash
+npm install
+```
+
 ```bash
 npm run -w client/windows build:win
 ```
 
 The installer output is written to `client/windows/dist`.
+
+For a faster resource-layout check without creating the NSIS installer:
+
+```bash
+npm run -w client/windows build:win:dir
+```
+
+The Windows installer uses `compression: store` to avoid high-memory 7zip compression during the NSIS stage. If a local build still reports `ERROR: Can't allocate required memory!`, close other memory-heavy applications, clean `client/windows/dist`, and retry from a fresh terminal.
 
 On non-Windows systems, building the NSIS installer requires `wine`. Without `wine`, `electron-builder --win --dir` can still verify the unpacked app/resource layout, but the final installer step will fail.

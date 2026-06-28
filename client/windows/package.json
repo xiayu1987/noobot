@@ -8,6 +8,7 @@
     "start": "electron .",
     "dev": "NOOBOT_CLIENT_URL=${NOOBOT_CLIENT_URL:-http://127.0.0.1:10060} electron .",
     "build:win": "electron-builder --win",
+    "build:win:dir": "electron-builder --win --dir",
     "check": "node --check src/main.js && node --check src/preload.js"
   },
   "devDependencies": {
@@ -17,6 +18,7 @@
   "build": {
     "appId": "com.noobot.windows-client",
     "productName": "Noobot",
+    "compression": "store",
     "directories": {
       "output": "dist"
     },
@@ -76,10 +78,22 @@
           "!@electron/**",
           "!@electron-forge/**",
           "!@electron/rebuild/**",
+          "!@eslint/**",
+          "!@eslint-community/**",
+          "!@humanfs/**",
+          "!@humanwhocodes/**",
           "!nodemon/**",
           "!pm2/**",
           "!pm2-sysmonit/**",
-          "!eslint/**"
+          "!jscpd/**",
+          "!eslint/**",
+          "!@types/**",
+          "!typescript/**",
+          "!**/test/**",
+          "!**/tests/**",
+          "!**/__tests__/**",
+          "!**/*.map",
+          "!**/*.md"
         ]
       },
       {
