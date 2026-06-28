@@ -34,6 +34,29 @@ function appendEarlyLog(message) {
 
 appendEarlyLog(`[main:module] loaded; node=${process.version}; electron=${process.versions.electron}; platform=${process.platform}; packaged=${app.isPackaged}; argv=${process.argv.join(" ")}`);
 
+process.on("uncaughtException", (error) => {
+  appendEarlyLog(`[process:uncaughtException] ${error?.stack || error?.message || String(error)}`);
+});
+
+process.on("unhandledRejection", (reason) => {
+  appendEarlyLog(`[process:unhandledRejection] ${reason?.stack || reason?.message || String(reason)}`);
+});
+
+app.on("will-finish-launching", () => appendEarlyLog("[app:event] will-finish-launching"));
+app.on("ready", () => appendEarlyLog("[app:event] ready"));
+app.on("browser-window-created", () => appendEarlyLog("[app:event] browser-window-created"));
+app.on("render-process-gone", (_event, _webContents, details) => {
+  appendEarlyLog(`[app:event] render-process-gone reason=${details?.reason || ""} exitCode=${details?.exitCode ?? ""}`);
+});
+app.on("child-process-gone", (_event, details) => {
+  appendEarlyLog(`[app:event] child-process-gone type=${details?.type || ""} reason=${details?.reason || ""} exitCode=${details?.exitCode ?? ""}`);
+});
+app.on("gpu-process-crashed", (_event, killed) => appendEarlyLog(`[app:event] gpu-process-crashed killed=${killed}`));
+
+setTimeout(() => {
+  appendEarlyLog(`[main:timer] 3000ms after module load; isReady=${app.isReady()}; whenReadyState=pending-or-resolved`);
+}, 3000);
+
 const servicePort = Number.parseInt(process.env.NOOBOT_SERVICE_PORT || "10061", 10);
 const serviceOrigin = String(
   process.env.NOOBOT_SERVICE_URL || `http://127.0.0.1:${servicePort}`,
