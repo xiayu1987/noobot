@@ -14,15 +14,15 @@ export function createTemplateResolveContext({
   return {
     params,
     runtimeEnv,
-    lowerCaseParamKeyMap: Object.fromEntries(
+    upperCaseParamKeyMap: Object.fromEntries(
       Object.entries(params).map(([paramKey, paramValue]) => [
-        String(paramKey || "").trim().toLowerCase(),
+        String(paramKey || "").trim().toUpperCase(),
         paramValue,
       ]),
     ),
-    lowerCaseEnvKeyMap: Object.fromEntries(
+    upperCaseEnvKeyMap: Object.fromEntries(
       Object.entries(runtimeEnv).map(([envKey, envValue]) => [
-        String(envKey || "").trim().toLowerCase(),
+        String(envKey || "").trim().toUpperCase(),
         envValue,
       ]),
     ),
@@ -34,27 +34,24 @@ function resolveTemplateInString(
   {
     params = {},
     runtimeEnv = {},
-    lowerCaseParamKeyMap = {},
-    lowerCaseEnvKeyMap = {},
+    upperCaseParamKeyMap = {},
+    upperCaseEnvKeyMap = {},
   } = {},
 ) {
-  return String(input || "").replace(/\$\{([A-Z0-9_]+)\}/gi, (_, key) => {
+  return String(input || "").replace(/\$\{([A-Z0-9_]+)\}/g, (_, key) => {
     const normalizedKey = String(key || "").trim();
-    const lowerCaseKey = normalizedKey.toLowerCase();
     const upperCaseKey = normalizedKey.toUpperCase();
     const envValue =
       runtimeEnv?.[normalizedKey] ??
       runtimeEnv?.[upperCaseKey] ??
-      runtimeEnv?.[lowerCaseKey] ??
-      lowerCaseEnvKeyMap?.[lowerCaseKey];
+      upperCaseEnvKeyMap?.[upperCaseKey];
     if (envValue !== undefined && envValue !== null && String(envValue) !== "") {
       return String(envValue);
     }
     const value =
       params?.[normalizedKey] ??
       params?.[upperCaseKey] ??
-      params?.[lowerCaseKey] ??
-      lowerCaseParamKeyMap?.[lowerCaseKey];
+      upperCaseParamKeyMap?.[upperCaseKey];
     if (value === undefined || value === null) return "";
     return String(value);
   });

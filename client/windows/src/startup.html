@@ -5,34 +5,114 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Noobot</title>
     <style>
-      body { margin: 0; font-family: "Segoe UI", sans-serif; background: #0f172a; color: #e2e8f0; }
-      main { min-height: 100vh; display: grid; place-items: center; padding: 32px; box-sizing: border-box; }
-      section { width: min(760px, 100%); background: rgba(15, 23, 42, .84); border: 1px solid #334155; border-radius: 18px; padding: 28px; box-shadow: 0 24px 80px rgba(0,0,0,.35); }
-      h1 { margin: 0 0 12px; font-size: 28px; }
-      p { margin: 8px 0; color: #cbd5e1; line-height: 1.55; }
-      pre { white-space: pre-wrap; max-height: 220px; overflow: auto; background: #020617; border-radius: 12px; padding: 12px; color: #94a3b8; }
-      button { margin-top: 16px; border: 0; border-radius: 10px; padding: 10px 16px; background: #38bdf8; color: #082f49; font-weight: 700; cursor: pointer; }
-      button:disabled { opacity: .65; cursor: not-allowed; }
-      label { display: block; margin-top: 14px; color: #e2e8f0; font-weight: 700; }
-      input { box-sizing: border-box; width: 100%; margin-top: 6px; border: 1px solid #475569; border-radius: 10px; padding: 10px 12px; background: #020617; color: #e2e8f0; }
-      small { display: block; margin-top: 4px; color: #94a3b8; }
-      .hidden { display: none; }
-      .error { color: #fca5a5; }
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+        background:
+          radial-gradient(circle at 18% 12%, rgba(56, 189, 248, .25), transparent 32%),
+          radial-gradient(circle at 86% 18%, rgba(129, 140, 248, .28), transparent 34%),
+          linear-gradient(135deg, #020617 0%, #0f172a 52%, #111827 100%);
+        color: #e2e8f0;
+      }
+      main { min-height: 100vh; display: grid; place-items: center; padding: 34px; }
+      section {
+        width: min(820px, 100%);
+        overflow: hidden;
+        border: 1px solid rgba(148, 163, 184, .24);
+        border-radius: 28px;
+        background: rgba(15, 23, 42, .78);
+        box-shadow: 0 30px 110px rgba(0, 0, 0, .48);
+        backdrop-filter: blur(18px);
+      }
+      .hero { padding: 34px 36px 20px; border-bottom: 1px solid rgba(148, 163, 184, .16); }
+      .badge { display: inline-flex; gap: 8px; align-items: center; padding: 7px 11px; border-radius: 999px; background: rgba(14, 165, 233, .12); color: #7dd3fc; font-size: 13px; font-weight: 700; }
+      .badge::before { content: ""; width: 8px; height: 8px; border-radius: 999px; background: #38bdf8; box-shadow: 0 0 18px #38bdf8; }
+      h1 { margin: 18px 0 10px; font-size: 34px; letter-spacing: -.03em; }
+      p { margin: 8px 0; color: #cbd5e1; line-height: 1.58; }
+      .content { padding: 26px 36px 34px; }
+      form { margin: 18px 0 0; padding: 22px; border: 1px solid rgba(148, 163, 184, .18); border-radius: 22px; background: rgba(2, 6, 23, .42); }
+      .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+      .field-full { grid-column: 1 / -1; }
+      label { display: block; margin: 0 0 7px; color: #f8fafc; font-size: 14px; font-weight: 800; }
+      input, select {
+        width: 100%;
+        border: 1px solid rgba(148, 163, 184, .38);
+        border-radius: 14px;
+        padding: 12px 13px;
+        outline: none;
+        background: rgba(2, 6, 23, .72);
+        color: #e2e8f0;
+        transition: border-color .15s, box-shadow .15s, transform .15s;
+      }
+      input:focus, select:focus { border-color: #38bdf8; box-shadow: 0 0 0 4px rgba(56, 189, 248, .14); }
+      small { display: block; margin-top: 6px; color: #94a3b8; line-height: 1.45; }
+      .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+      button {
+        border: 0;
+        border-radius: 14px;
+        padding: 12px 18px;
+        background: linear-gradient(135deg, #38bdf8, #818cf8);
+        color: #020617;
+        font-weight: 900;
+        cursor: pointer;
+      }
+      button.secondary { background: rgba(148, 163, 184, .14); color: #e2e8f0; border: 1px solid rgba(148, 163, 184, .25); }
+      button:disabled { opacity: .62; cursor: not-allowed; }
+      pre { white-space: pre-wrap; max-height: 210px; overflow: auto; margin: 22px 0 0; background: rgba(2, 6, 23, .72); border: 1px solid rgba(148, 163, 184, .16); border-radius: 16px; padding: 14px; color: #94a3b8; font-size: 12px; }
+      .hidden { display: none !important; }
+      .error { color: #fca5a5; padding: 10px 12px; border-radius: 12px; background: rgba(127, 29, 29, .25); }
+      @media (max-width: 720px) { main { padding: 18px; } .hero, .content { padding-left: 22px; padding-right: 22px; } .grid { grid-template-columns: 1fr; } h1 { font-size: 28px; } }
     </style>
   </head>
   <body>
     <main>
       <section>
-        <h1>Starting Noobot</h1>
-        <p id="message">Checking local Noobot service...</p>
-        <form id="config-form" class="hidden">
-          <p>Noobot needs the following configuration values before it can continue. Values are saved only in your user data directory.</p>
-          <div id="config-fields"></div>
-          <p id="config-error" class="error hidden"></p>
-          <button id="save-config" type="submit">Save and continue</button>
-        </form>
-        <pre id="log"></pre>
-        <button id="retry" class="hidden">Retry</button>
+        <div class="hero">
+          <div class="badge">Noobot Desktop</div>
+          <h1>Starting Noobot</h1>
+          <p id="message">Checking local Noobot service...</p>
+        </div>
+        <div class="content">
+          <form id="super-admin-form" class="hidden">
+            <p>Complete the required first-run setup. These values are saved only in your Windows user data directory.</p>
+            <div class="grid">
+              <div>
+                <label for="super-admin-language">Language</label>
+                <select id="super-admin-language" name="language" required>
+                  <option value="zh-CN">简体中文</option>
+                  <option value="en-US">English</option>
+                </select>
+                <small>Used as the default Noobot interface and response language.</small>
+              </div>
+              <div>
+                <label for="super-admin-user-id">Super admin username</label>
+                <input id="super-admin-user-id" name="userId" required autocomplete="username" placeholder="e.g. owner" />
+                <small>Please use a non-default administrator name.</small>
+              </div>
+              <div class="field-full">
+                <label for="super-admin-connect-code">Connect code</label>
+                <input id="super-admin-connect-code" name="connectCode" required autocomplete="off" placeholder="Create a private connection code" />
+                <small>Keep this code private. It is used to connect as the super admin.</small>
+              </div>
+            </div>
+            <p id="super-admin-error" class="error hidden"></p>
+            <div class="actions"><button id="save-super-admin" type="submit">Next</button></div>
+          </form>
+          <form id="config-form" class="hidden">
+            <p>The following configuration variables are optional. You can fill them now or skip this step.</p>
+            <div id="config-fields" class="grid"></div>
+            <p id="config-error" class="error hidden"></p>
+            <div class="actions">
+              <button id="save-config" type="submit">Save and continue</button>
+              <button id="skip-config" class="secondary" type="button">Skip</button>
+            </div>
+          </form>
+          <pre id="log"></pre>
+          <div class="actions"><button id="retry" class="hidden secondary">Retry</button></div>
+        </div>
       </section>
     </main>
     <script>
@@ -43,24 +123,48 @@
       const configFields = document.querySelector("#config-fields");
       const configError = document.querySelector("#config-error");
       const saveConfig = document.querySelector("#save-config");
+      const skipConfig = document.querySelector("#skip-config");
+      const superAdminForm = document.querySelector("#super-admin-form");
+      const superAdminError = document.querySelector("#super-admin-error");
+      const saveSuperAdmin = document.querySelector("#save-super-admin");
+      const superAdminLanguage = document.querySelector("#super-admin-language");
+      const superAdminUserId = document.querySelector("#super-admin-user-id");
+      const superAdminConnectCode = document.querySelector("#super-admin-connect-code");
       let requiredParams = [];
+
+      function hideForms() { configForm.classList.add("hidden"); superAdminForm.classList.add("hidden"); }
+      function normalizeLanguage(language) { return language === "en-US" ? "en-US" : "zh-CN"; }
+
+      function renderSuperAdminForm(superAdmin) {
+        configForm.classList.add("hidden");
+        superAdminLanguage.value = normalizeLanguage(superAdmin?.language);
+        superAdminUserId.value = superAdmin?.userId || "";
+        superAdminConnectCode.value = superAdmin?.connectCode || "";
+        superAdminError.classList.add("hidden");
+        superAdminError.textContent = "";
+        superAdminForm.classList.remove("hidden");
+        retry.classList.add("hidden");
+      }
 
       function renderConfigForm(params) {
         requiredParams = Array.isArray(params) ? params : [];
         configFields.textContent = "";
         for (const item of requiredParams) {
           const key = String(item?.key || "");
+          const wrapper = document.createElement("div");
+          wrapper.className = "field-full";
           const label = document.createElement("label");
           label.textContent = key;
           label.htmlFor = `config-${key}`;
           const input = document.createElement("input");
           input.id = `config-${key}`;
           input.name = key;
-          input.required = true;
+          input.required = false;
           input.autocomplete = "off";
           const description = document.createElement("small");
-          description.textContent = item?.description || "Required configuration value";
-          configFields.append(label, input, description);
+          description.textContent = item?.description || "Optional configuration value";
+          wrapper.append(label, input, description);
+          configFields.append(wrapper);
         }
         configError.classList.add("hidden");
         configError.textContent = "";
@@ -75,52 +179,75 @@
           log.textContent = `${log.textContent}${status.message}\n`;
           log.scrollTop = log.scrollHeight;
         }
-        if (status.phase === "config-required") {
-          renderConfigForm(status.params);
-          return;
-        }
-        configForm.classList.add("hidden");
+        if (status.phase === "super-admin-required") return renderSuperAdminForm(status.superAdmin);
+        if (status.phase === "config-optional") return renderConfigForm(status.params);
+        hideForms();
         retry.classList.toggle("hidden", status.phase !== "error");
       }
 
-      window.noobotDesktop?.getStartupStatuses?.().then((statuses) => {
-        if (Array.isArray(statuses)) statuses.forEach(renderStatus);
-      }).catch(() => {});
+      window.noobotDesktop?.getStartupStatuses?.().then((statuses) => { if (Array.isArray(statuses)) statuses.forEach(renderStatus); }).catch(() => {});
+      window.noobotDesktop?.onStartupStatus((status) => renderStatus(status));
 
-      window.noobotDesktop?.onStartupStatus((status) => {
-        renderStatus(status);
+      superAdminForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const formData = new FormData(superAdminForm);
+        const language = normalizeLanguage(String(formData.get("language") || ""));
+        const userId = String(formData.get("userId") || "").trim();
+        const connectCode = String(formData.get("connectCode") || "").trim();
+        if (!userId || !connectCode) {
+          superAdminError.textContent = "Super admin username and connect code are required.";
+          superAdminError.classList.remove("hidden");
+          return;
+        }
+        saveSuperAdmin.disabled = true;
+        try {
+          const result = await window.noobotDesktop?.saveSuperAdmin({ language, userId, connectCode });
+          if (!result?.ok) {
+            renderSuperAdminForm(result?.superAdmin || { language });
+            superAdminError.textContent = "Please complete super admin setup.";
+            superAdminError.classList.remove("hidden");
+            return;
+          }
+          superAdminForm.classList.add("hidden");
+          message.textContent = "Basic setup saved. Checking optional variables...";
+        } catch (error) {
+          superAdminError.textContent = error?.message || String(error);
+          superAdminError.classList.remove("hidden");
+        } finally {
+          saveSuperAdmin.disabled = false;
+        }
       });
 
       configForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         const values = {};
+        const formData = new FormData(configForm);
         for (const item of requiredParams) {
           const key = String(item?.key || "");
-          const value = String(new FormData(configForm).get(key) || "").trim();
-          if (!value) {
-            configError.textContent = `Please fill ${key}.`;
-            configError.classList.remove("hidden");
-            return;
-          }
-          values[key] = value;
+          const value = String(formData.get(key) || "").trim();
+          if (value) values[key] = value;
         }
         saveConfig.disabled = true;
         try {
-          const result = await window.noobotDesktop?.saveConfigParams(values);
-          if (!result?.ok) {
-            renderConfigForm(result?.missingParams || requiredParams);
-            configError.textContent = "Please complete all required values.";
-            configError.classList.remove("hidden");
-            return;
-          }
+          await window.noobotDesktop?.saveConfigParams(values);
           configForm.classList.add("hidden");
           message.textContent = "Configuration saved. Starting Noobot service...";
         } catch (error) {
           configError.textContent = error?.message || String(error);
           configError.classList.remove("hidden");
-        } finally {
-          saveConfig.disabled = false;
-        }
+        } finally { saveConfig.disabled = false; }
+      });
+
+      skipConfig.addEventListener("click", async () => {
+        skipConfig.disabled = true;
+        try {
+          await window.noobotDesktop?.skipConfigParams();
+          configForm.classList.add("hidden");
+          message.textContent = "Optional configuration skipped. Starting Noobot service...";
+        } catch (error) {
+          configError.textContent = error?.message || String(error);
+          configError.classList.remove("hidden");
+        } finally { skipConfig.disabled = false; }
       });
 
       retry.addEventListener("click", async () => {

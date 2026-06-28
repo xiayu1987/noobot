@@ -71,6 +71,7 @@ let managedServiceProcess = null;
 let serviceStartupPromise = null;
 let bootStarted = false;
 let pendingConfigResolve = null;
+let pendingSuperAdminResolve = null;
 let desktopConfigState = null;
 const startupStatuses = [];
 
@@ -125,6 +126,22 @@ function writeJsonFile(filePath, payload) {
   fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
+function getNestedString(root, segments) {
+  let node = root;
+  for (const segment of segments) node = isPlainObject(node) ? node[segment] : undefined;
+  return String(node ?? "").trim();
+}
+
+function setNestedValue(root, segments, value) {
+  let node = root;
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    const segment = segments[index];
+    if (!isPlainObject(node[segment])) node[segment] = {};
+    node = node[segment];
+  }
+  node[segments[segments.length - 1]] = value;
+}
+
 function deepClone(input) {
   return JSON.parse(JSON.stringify(input));
 }
@@ -159,7 +176,7 @@ function copyDirectoryContents({ from, to }) {
 
 function collectTemplateVariables(input, keys = new Set()) {
   if (typeof input === "string") {
-    for (const match of input.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g)) keys.add(match[1]);
+    for (const match of input.matchAll(/\$\{([A-Z0-9_]+)\}/g)) keys.add(match[1]);
   } else if (Array.isArray(input)) {
     input.forEach((item) => collectTemplateVariables(item, keys));
   } else if (isPlainObject(input)) {
@@ -191,13 +208,44 @@ function getMissingRequiredConfigParams(configParamsPath) {
     .map(([key]) => ({ key, description: String(payload.descriptions?.[key] || "") }));
 }
 
+function getSuperAdminRequirement(globalConfigPath) {
+  const payload = readJsonFile(globalConfigPath, {}) || {};
+  const userId = getNestedString(payload, ["super_admin", "user_id"]);
+  const connectCode = getNestedString(payload, ["super_admin", "connect_code"]);
+  const language = getNestedString(payload, ["preferences", "language"]) || "zh-CN";
+  const missing = !userId || !connectCode || userId === "admin" || connectCode === "change-your-connect-code";
+  return { missing, userId: userId === "admin" ? "" : userId, connectCode: connectCode === "change-your-connect-code" ? "" : connectCode, language };
+}
+
+function normalizeDesktopLanguage(language) {
+  const value = String(language ?? "").trim();
+  if (["zh-CN", "en-US"].includes(value)) return value;
+  if (value.toLowerCase().startsWith("en")) return "en-US";
+  return "zh-CN";
+}
+
+function saveSuperAdminConfig({ globalConfigPath, userId, connectCode, language } = {}) {
+  const normalizedUserId = String(userId ?? "").trim();
+  const normalizedConnectCode = String(connectCode ?? "").trim();
+  const normalizedLanguage = normalizeDesktopLanguage(language);
+  if (!normalizedUserId) throw new Error("Super admin username is required.");
+  if (!normalizedConnectCode) throw new Error("Super admin connect code is required.");
+  if (normalizedUserId === "admin") throw new Error("Please change the default super admin username.");
+  if (normalizedConnectCode === "change-your-connect-code") throw new Error("Please change the default connect code.");
+  const payload = readJsonFile(globalConfigPath, {}) || {};
+  setNestedValue(payload, ["super_admin", "user_id"], normalizedUserId);
+  setNestedValue(payload, ["super_admin", "connect_code"], normalizedConnectCode);
+  setNestedValue(payload, ["preferences", "language"], normalizedLanguage);
+  writeJsonFile(globalConfigPath, payload);
+}
+
 function saveConfigParamValues({ workspaceRootPath, values = {} } = {}) {
   const filePath = path.join(workspaceRootPath, "config-params.json");
   const payload = readJsonFile(filePath, {}) || {};
   const currentValues = isPlainObject(payload.values) ? { ...payload.values } : {};
   const descriptions = isPlainObject(payload.descriptions) ? { ...payload.descriptions } : {};
   for (const [key, value] of Object.entries(values || {})) {
-    const normalizedKey = String(key || "").trim();
+    const normalizedKey = String(key || "").trim().toUpperCase();
     if (!normalizedKey) continue;
     currentValues[normalizedKey] = String(value ?? "").trim();
     if (!Object.prototype.hasOwnProperty.call(descriptions, normalizedKey)) descriptions[normalizedKey] = "";
@@ -252,11 +300,29 @@ function ensureDesktopGlobalConfig({ isPackaged, userDataPath }) {
     workspaceRootPath,
     configFiles: [targetPath, templateConfigPath, templateExamplePath],
   });
-  return { globalConfigPath: targetPath, workspaceRootPath, workspaceTemplatePath, configParamsPath, missingParams: getMissingRequiredConfigParams(configParamsPath) };
+  return {
+    globalConfigPath: targetPath,
+    workspaceRootPath,
+    workspaceTemplatePath,
+    configParamsPath,
+    superAdmin: getSuperAdminRequirement(targetPath),
+    missingParams: getMissingRequiredConfigParams(configParamsPath),
+  };
+}
+
+function requestSuperAdminConfig(superAdmin) {
+  sendStatus({
+    phase: "super-admin-required",
+    message: "Please set the super admin username and connect code before starting Noobot.",
+    superAdmin,
+  });
+  return new Promise((resolve) => {
+    pendingSuperAdminResolve = resolve;
+  });
 }
 
 function requestMissingConfigParams(missingParams) {
-  sendStatus({ phase: "config-required", message: "Please complete required configuration before starting Noobot.", params: missingParams });
+  sendStatus({ phase: "config-optional", message: "Optional configuration variables can be filled now or skipped.", params: missingParams });
   return new Promise((resolve) => {
     pendingConfigResolve = resolve;
   });
@@ -401,6 +467,10 @@ async function ensureServiceStarted() {
     }
 
     desktopConfigState = ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") });
+    if (desktopConfigState.superAdmin?.missing) {
+      await requestSuperAdminConfig(desktopConfigState.superAdmin);
+      desktopConfigState = ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") });
+    }
     if (desktopConfigState.missingParams.length) {
       await requestMissingConfigParams(desktopConfigState.missingParams);
       desktopConfigState = ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") });
@@ -484,13 +554,34 @@ ipcMain.handle("noobot:save-config-params", (_event, values) => {
   const state = desktopConfigState || ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") });
   saveConfigParamValues({ workspaceRootPath: state.workspaceRootPath, values });
   desktopConfigState = ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") });
-  if (desktopConfigState.missingParams.length) {
-    sendStatus({ phase: "config-required", message: "Please complete all required configuration values.", params: desktopConfigState.missingParams });
-    return { ok: false, missingParams: desktopConfigState.missingParams };
-  }
   if (pendingConfigResolve) {
     const resolve = pendingConfigResolve;
     pendingConfigResolve = null;
+    resolve();
+  }
+  return { ok: true };
+});
+
+ipcMain.handle("noobot:skip-config-params", () => {
+  if (pendingConfigResolve) {
+    const resolve = pendingConfigResolve;
+    pendingConfigResolve = null;
+    resolve();
+  }
+  return { ok: true };
+});
+
+ipcMain.handle("noobot:save-super-admin", (_event, values = {}) => {
+  const state = desktopConfigState || ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") });
+  saveSuperAdminConfig({ globalConfigPath: state.globalConfigPath, userId: values.userId, connectCode: values.connectCode, language: values.language });
+  desktopConfigState = ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") });
+  if (desktopConfigState.superAdmin?.missing) {
+    sendStatus({ phase: "super-admin-required", message: "Please complete super admin setup.", superAdmin: desktopConfigState.superAdmin });
+    return { ok: false, superAdmin: desktopConfigState.superAdmin };
+  }
+  if (pendingSuperAdminResolve) {
+    const resolve = pendingSuperAdminResolve;
+    pendingSuperAdminResolve = null;
     resolve();
   }
   return { ok: true };

@@ -11,7 +11,7 @@ const CONFIG_PARAMS_FILE_NAME = "config-params.json";
 
 function collectTemplateKeysFromObject(input, collector = new Set()) {
   if (typeof input === "string") {
-    const templatePattern = /\$\{([A-Z0-9_]+)\}/gi;
+    const templatePattern = /\$\{([A-Z0-9_]+)\}/g;
     let matchedItem = templatePattern.exec(input);
     while (matchedItem) {
       collector.add(String(matchedItem[1] || "").trim());
@@ -29,6 +29,10 @@ function collectTemplateKeysFromObject(input, collector = new Set()) {
     }
   }
   return collector;
+}
+
+function normalizeConfigParamKey(input = "") {
+  return String(input || "").trim().toUpperCase();
 }
 
 export function createConfigParamsService({
@@ -53,12 +57,12 @@ export function createConfigParamsService({
         : {};
     const values = Object.fromEntries(
       Object.entries(rawValues)
-        .map(([key, value]) => [String(key || "").trim(), String(value ?? "").trim()])
+        .map(([key, value]) => [normalizeConfigParamKey(key), String(value ?? "").trim()])
         .filter(([key]) => Boolean(key)),
     );
     const descriptions = Object.fromEntries(
       Object.entries(rawDescriptions)
-        .map(([key, value]) => [String(key || "").trim(), String(value ?? "").trim()])
+        .map(([key, value]) => [normalizeConfigParamKey(key), String(value ?? "").trim()])
         .filter(([key]) => Boolean(key)),
     );
     return { values, descriptions };

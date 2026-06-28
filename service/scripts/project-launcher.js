@@ -486,7 +486,7 @@ function normalizeBuiltinScenarioConfigForLauncher(scenarios = {}, { programming
   const programming = isPlainObject(definitions.programming) ? definitions.programming : {};
   const text = isPlainObject(definitions.text) ? definitions.text : {};
   const model = String(programmingModel || programming.model || "").trim();
-  const textModel = String(text.model || "").trim();
+  const textModel = String(programmingModel || text.model || "").trim();
   return {
     default: BUILTIN_SCENARIO_KEYS.has(defaultScenario) ? defaultScenario : "full",
     definitions: {
@@ -542,6 +542,16 @@ function alignInitialModelReferences({
     };
   }
 
+  if (isPlainObject(globalConfig.plugins) && isPlainObject(globalConfig.plugins.workflow)) {
+    globalConfig.plugins = {
+      ...globalConfig.plugins,
+      workflow: {
+        ...globalConfig.plugins.workflow,
+        semanticModel: alias,
+      },
+    };
+  }
+
   globalConfig.scenarios = normalizeBuiltinScenarioConfigForLauncher(globalConfig.scenarios, {
     programmingModel: alias,
   });
@@ -568,7 +578,7 @@ async function alignInitialModelReferencesForFile({
 
 function parseTemplateVariables(input, collector = new Set()) {
   if (typeof input === "string") {
-    const pattern = /\$\{([^{}]+)\}/g;
+    const pattern = /\$\{([A-Z0-9_]+)\}/g;
     let matched = pattern.exec(input);
     while (matched) {
       const key = String(matched[1] || "").trim();
@@ -818,12 +828,12 @@ async function upsertConfigParams({
     : {};
   const overwriteKeySet = new Set(
     (Array.isArray(overwriteKeys) ? overwriteKeys : [])
-      .map((key) => String(key || "").trim())
+      .map((key) => String(key || "").trim().toUpperCase())
       .filter(Boolean),
   );
 
   for (const [key, value] of Object.entries(entries || {})) {
-    const normalizedKey = String(key || "").trim();
+    const normalizedKey = String(key || "").trim().toUpperCase();
     if (!normalizedKey) continue;
     const incomingValue = String(value ?? "").trim();
     if (!hasOwnProperty(values, normalizedKey)) {

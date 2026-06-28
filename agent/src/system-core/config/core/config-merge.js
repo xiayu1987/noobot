@@ -47,7 +47,7 @@ export function mergeConfig(globalConfig = {}, userConfig = {}) {
       ...(isPlainObject(globalBase?.configParams) ? globalBase.configParams : {}),
     };
     for (const [paramKey, rawValue] of Object.entries(userRuntimeConfigParams)) {
-      const normalizedKey = String(paramKey || "").trim();
+      const normalizedKey = String(paramKey || "").trim().toUpperCase();
       if (!normalizedKey) continue;
       const normalizedValue = String(rawValue ?? "").trim();
       if (!normalizedValue) continue;
