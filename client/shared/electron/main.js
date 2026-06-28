@@ -84,6 +84,27 @@ let pendingSuperAdminResolve = null;
 let desktopConfigState = null;
 const startupStatuses = [];
 
+const dependencySpecs = {
+  libreoffice: {
+    label: "LibreOffice",
+    checkCommands: ["libreoffice", "soffice"],
+    packages: {
+      win32: { winget: "TheDocumentFoundation.LibreOffice", choco: "libreoffice-fresh" },
+      darwin: { brew: "libreoffice" },
+      linux: { apt: "libreoffice", dnf: "libreoffice", yum: "libreoffice", pacman: "libreoffice-fresh" },
+    },
+  },
+  ffmpeg: {
+    label: "FFmpeg",
+    checkCommands: ["ffmpeg"],
+    packages: {
+      win32: { winget: "Gyan.FFmpeg", choco: "ffmpeg" },
+      darwin: { brew: "ffmpeg" },
+      linux: { apt: "ffmpeg", dnf: "ffmpeg", yum: "ffmpeg", pacman: "ffmpeg" },
+    },
+  },
+};
+
 function getLogFilePath() {
   return path.join(app.getPath("userData"), "logs", "desktop-startup.log");
 }
@@ -109,6 +130,93 @@ function sendStatus(status) {
   if (status?.message) appendDesktopLog(`[${status.phase || "status"}] ${status.message}`);
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send("noobot:startup-status", status);
+}
+
+function runProcess(command, args = [], { timeoutMs = 120000 } = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, { windowsHide: true, shell: false });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      try { child.kill(); } catch {}
+    }, timeoutMs);
+    child.stdout?.on("data", (chunk) => { stdout += String(chunk || ""); });
+    child.stderr?.on("data", (chunk) => { stderr += String(chunk || ""); });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      resolve({ ok: false, code: -1, stdout, stderr, error: error?.message || String(error) });
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      resolve({ ok: code === 0, code, stdout, stderr });
+    });
+  });
+}
+
+async function hasCommand(command) {
+  const result = await runProcess(command, ["--version"], { timeoutMs: 15000 });
+  return result.ok;
+}
+
+async function isDependencyInstalled(spec) {
+  for (const command of spec.checkCommands || []) {
+    if (await hasCommand(command)) return true;
+  }
+  return false;
+}
+
+async function findAvailableCommand(commands = []) {
+  for (const command of commands) {
+    if (await hasCommand(command)) return command;
+  }
+  return "";
+}
+
+async function buildDependencyInstallCommand(spec) {
+  const packages = spec.packages?.[process.platform] || {};
+  if (process.platform === "win32") {
+    if (packages.winget && await findAvailableCommand(["winget"])) return { command: "winget", args: ["install", "--id", packages.winget, "--exact", "--accept-package-agreements", "--accept-source-agreements"] };
+    if (packages.choco && await findAvailableCommand(["choco"])) return { command: "choco", args: ["install", packages.choco, "-y"] };
+  }
+  if (process.platform === "darwin") {
+    if (packages.brew && await findAvailableCommand(["brew"])) return { command: "brew", args: ["install", "--cask", packages.brew] };
+  }
+  if (process.platform === "linux") {
+    if (packages.apt && await findAvailableCommand(["apt-get"])) {
+      const isRoot = typeof process.getuid === "function" && process.getuid() === 0;
+      return isRoot ? { command: "apt-get", args: ["install", "-y", packages.apt] } : { command: "sudo", args: ["-n", "apt-get", "install", "-y", packages.apt] };
+    }
+    const isRoot = typeof process.getuid === "function" && process.getuid() === 0;
+    if (packages.dnf && await findAvailableCommand(["dnf"])) return isRoot ? { command: "dnf", args: ["install", "-y", packages.dnf] } : { command: "sudo", args: ["-n", "dnf", "install", "-y", packages.dnf] };
+    if (packages.yum && await findAvailableCommand(["yum"])) return isRoot ? { command: "yum", args: ["install", "-y", packages.yum] } : { command: "sudo", args: ["-n", "yum", "install", "-y", packages.yum] };
+    if (packages.pacman && await findAvailableCommand(["pacman"])) return isRoot ? { command: "pacman", args: ["-S", "--noconfirm", packages.pacman] } : { command: "sudo", args: ["-n", "pacman", "-S", "--noconfirm", packages.pacman] };
+  }
+  return null;
+}
+
+async function ensureSelectedDependencies(dependencies = {}) {
+  const selected = Object.entries(dependencySpecs).filter(([key]) => dependencies?.[key] === true);
+  const results = [];
+  for (const [key, spec] of selected) {
+    sendStatus({ phase: "dependency", message: `Checking ${spec.label}...` });
+    if (await isDependencyInstalled(spec)) {
+      sendStatus({ phase: "dependency", message: `${spec.label} is already installed. Skipping.` });
+      results.push({ key, ok: true, skipped: true });
+      continue;
+    }
+    const installCommand = await buildDependencyInstallCommand(spec);
+    if (!installCommand) throw new Error(`Cannot auto-install ${spec.label}: no supported package manager was found.`);
+    sendStatus({ phase: "dependency", message: `Installing ${spec.label}...` });
+    const result = await runProcess(installCommand.command, installCommand.args, { timeoutMs: 20 * 60 * 1000 });
+    if (!result.ok) {
+      const detail = String(result.stderr || result.stdout || result.error || "").trim().slice(0, 1000);
+      throw new Error(`Failed to install ${spec.label}.${detail ? ` ${detail}` : ""}`);
+    }
+    if (!(await isDependencyInstalled(spec))) throw new Error(`${spec.label} installation finished, but the command is still not available.`);
+    sendStatus({ phase: "dependency", message: `${spec.label} installed.` });
+    results.push({ key, ok: true, installed: true });
+  }
+  return results;
 }
 
 function syncPackagedProxyConfig(proxyName) {
@@ -167,6 +275,81 @@ function setNestedValue(root, segments, value) {
     node = node[segment];
   }
   node[segments[segments.length - 1]] = value;
+}
+
+
+function getNestedObject(root, segments) {
+  let node = root;
+  for (const segment of segments) node = isPlainObject(node) ? node[segment] : undefined;
+  return isPlainObject(node) ? node : null;
+}
+
+function collectModelOptionsFromConfig(payload = {}) {
+  const providers = isPlainObject(payload.providers) ? payload.providers : {};
+  return Object.entries(providers)
+    .map(([key, value]) => ({
+      key: String(key || "").trim(),
+      model: String(value?.model || "").trim(),
+      description: String(value?.description || "").trim(),
+      enabled: value?.enabled !== false,
+      usedForConversation: value?.used_for_conversation !== false,
+    }))
+    .filter((item) => item.key)
+    .sort((a, b) => a.key.localeCompare(b.key));
+}
+
+function getDefaultModelAlias(payload = {}) {
+  const defaultProvider = getNestedString(payload, ["default_provider"]);
+  if (defaultProvider) return defaultProvider;
+  const providers = isPlainObject(payload.providers) ? payload.providers : {};
+  return Object.keys(providers)[0] || "";
+}
+
+function setObjectStringValues(target, value) {
+  if (!isPlainObject(target)) return;
+  for (const key of Object.keys(target)) target[key] = value;
+}
+
+function applySelectedModelToConfig(payload = {}, selectedModel = "") {
+  const alias = String(selectedModel || "").trim();
+  if (!alias || !isPlainObject(payload)) return payload;
+  const providers = isPlainObject(payload.providers) ? payload.providers : {};
+  if (!isPlainObject(providers[alias])) throw new Error(`Selected model provider not found: ${alias}`);
+
+  payload.default_provider = alias;
+  for (const [providerKey, provider] of Object.entries(providers)) {
+    if (!isPlainObject(provider)) continue;
+    if (providerKey === alias) {
+      provider.enabled = true;
+      provider.used_for_conversation = true;
+    }
+  }
+
+  const attachmentModels = getNestedObject(payload, ["attachments", "attachment_models"]);
+  setObjectStringValues(attachmentModels, alias);
+
+  const scenarioDefinitions = getNestedObject(payload, ["scenarios", "definitions"]);
+  if (scenarioDefinitions) {
+    for (const definition of Object.values(scenarioDefinitions)) {
+      if (isPlainObject(definition) && Object.prototype.hasOwnProperty.call(definition, "model")) definition.model = alias;
+    }
+  }
+
+  const webSearchResponses = getNestedObject(payload, ["tools", "web_search", "responses_api"]);
+  if (webSearchResponses) webSearchResponses.model = alias;
+
+  const requestHelp = getNestedObject(payload, ["tools", "request_help"]);
+  if (requestHelp && Object.prototype.hasOwnProperty.call(requestHelp, "help_model") && String(requestHelp.help_model || "").trim()) requestHelp.help_model = alias;
+
+  const harnessStepModels = getNestedObject(payload, ["plugins", "harness", "stepModels"]);
+  setObjectStringValues(harnessStepModels, alias);
+  const capabilityModels = getNestedObject(payload, ["plugins", "harness", "capabilityModelByPurpose"]);
+  setObjectStringValues(capabilityModels, alias);
+
+  const workflow = getNestedObject(payload, ["plugins", "workflow"]);
+  if (workflow && Object.prototype.hasOwnProperty.call(workflow, "semanticModel")) workflow.semanticModel = alias;
+
+  return payload;
 }
 
 function deepClone(input) {
@@ -240,8 +423,10 @@ function getSuperAdminRequirement(globalConfigPath) {
   const userId = getNestedString(payload, ["super_admin", "user_id"]);
   const connectCode = getNestedString(payload, ["super_admin", "connect_code"]);
   const language = getNestedString(payload, ["preferences", "language"]) || "zh-CN";
+  const model = getDefaultModelAlias(payload);
+  const modelOptions = collectModelOptionsFromConfig(payload);
   const missing = !userId || !connectCode || userId === "admin" || connectCode === "change-your-connect-code";
-  return { missing, userId: userId === "admin" ? "" : userId, connectCode: connectCode === "change-your-connect-code" ? "" : connectCode, language };
+  return { missing, userId: userId === "admin" ? "" : userId, connectCode: connectCode === "change-your-connect-code" ? "" : connectCode, language, model, modelOptions };
 }
 
 function normalizeDesktopLanguage(language) {
@@ -251,10 +436,11 @@ function normalizeDesktopLanguage(language) {
   return "zh-CN";
 }
 
-function saveSuperAdminConfig({ globalConfigPath, userId, connectCode, language } = {}) {
+function saveSuperAdminConfig({ globalConfigPath, userConfigPath, userId, connectCode, language, model } = {}) {
   const normalizedUserId = String(userId ?? "").trim();
   const normalizedConnectCode = String(connectCode ?? "").trim();
   const normalizedLanguage = normalizeDesktopLanguage(language);
+  const normalizedModel = String(model ?? "").trim();
   if (!normalizedUserId) throw new Error("Super admin username is required.");
   if (!normalizedConnectCode) throw new Error("Super admin connect code is required.");
   if (normalizedUserId === "admin") throw new Error("Please change the default super admin username.");
@@ -263,7 +449,16 @@ function saveSuperAdminConfig({ globalConfigPath, userId, connectCode, language 
   setNestedValue(payload, ["super_admin", "user_id"], normalizedUserId);
   setNestedValue(payload, ["super_admin", "connect_code"], normalizedConnectCode);
   setNestedValue(payload, ["preferences", "language"], normalizedLanguage);
+  if (normalizedModel) applySelectedModelToConfig(payload, normalizedModel);
   writeJsonFile(globalConfigPath, payload);
+
+  if (userConfigPath) {
+    const userPayload = readJsonFile(userConfigPath, null);
+    if (isPlainObject(userPayload) && normalizedModel) {
+      applySelectedModelToConfig(userPayload, normalizedModel);
+      writeJsonFile(userConfigPath, userPayload);
+    }
+  }
 }
 
 function saveConfigParamValues({ workspaceRootPath, values = {} } = {}) {
@@ -346,6 +541,7 @@ function ensureDesktopGlobalConfig({ isPackaged, userDataPath }) {
     globalConfigPath: targetPath,
     workspaceRootPath,
     workspaceTemplatePath,
+    templateConfigPath,
     configParamsPath,
     superAdmin: getSuperAdminRequirement(targetPath),
     missingParams: getMissingRequiredConfigParams(configParamsPath),
@@ -841,9 +1037,10 @@ ipcMain.handle("noobot:skip-config-params", () => {
   return { ok: true };
 });
 
-ipcMain.handle("noobot:save-super-admin", (_event, values = {}) => {
+ipcMain.handle("noobot:save-super-admin", async (_event, values = {}) => {
   const state = desktopConfigState || ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") });
-  saveSuperAdminConfig({ globalConfigPath: state.globalConfigPath, userId: values.userId, connectCode: values.connectCode, language: values.language });
+  saveSuperAdminConfig({ globalConfigPath: state.globalConfigPath, userConfigPath: state.templateConfigPath, userId: values.userId, connectCode: values.connectCode, language: values.language, model: values.model });
+  const dependencyResults = await ensureSelectedDependencies(values.dependencies || {});
   desktopConfigState = ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") });
   if (desktopConfigState.superAdmin?.missing) {
     sendStatus({ phase: "super-admin-required", message: "Please complete super admin setup.", superAdmin: desktopConfigState.superAdmin });
@@ -854,7 +1051,7 @@ ipcMain.handle("noobot:save-super-admin", (_event, values = {}) => {
     pendingSuperAdminResolve = null;
     resolve();
   }
-  return { ok: true };
+  return { ok: true, dependencies: dependencyResults };
 });
 
 app.whenReady()

@@ -128,6 +128,11 @@
                 <small>Used as the default Noobot interface and response language.</small>
               </div>
               <div>
+                <label for="super-admin-model">Model</label>
+                <select id="super-admin-model" name="model" required></select>
+                <small>Used as the default model for global and default user configuration.</small>
+              </div>
+              <div>
                 <label for="super-admin-user-id">Super admin username</label>
                 <input id="super-admin-user-id" name="userId" required autocomplete="username" placeholder="e.g. owner" />
                 <small>Please use a non-default administrator name.</small>
@@ -136,6 +141,12 @@
                 <label for="super-admin-connect-code">Connect code</label>
                 <input id="super-admin-connect-code" name="connectCode" required autocomplete="off" placeholder="Create a private connection code" />
                 <small>Keep this code private. It is used to connect as the super admin.</small>
+              </div>
+              <div class="field-full">
+                <label>Optional dependencies</label>
+                <label><input id="dependency-libreoffice" name="installLibreOffice" type="checkbox" /> Install LibreOffice if missing</label>
+                <label><input id="dependency-ffmpeg" name="installFfmpeg" type="checkbox" /> Install FFmpeg if missing</label>
+                <small>Already installed dependencies are skipped. If automatic installation is not available, setup will show a clear error and you can install them manually.</small>
               </div>
             </div>
             <p id="super-admin-error" class="error hidden"></p>
@@ -171,8 +182,11 @@
       const superAdminError = document.querySelector("#super-admin-error");
       const saveSuperAdmin = document.querySelector("#save-super-admin");
       const superAdminLanguage = document.querySelector("#super-admin-language");
+      const superAdminModel = document.querySelector("#super-admin-model");
       const superAdminUserId = document.querySelector("#super-admin-user-id");
       const superAdminConnectCode = document.querySelector("#super-admin-connect-code");
+      const dependencyLibreOffice = document.querySelector("#dependency-libreoffice");
+      const dependencyFfmpeg = document.querySelector("#dependency-ffmpeg");
       let requiredParams = [];
       const logLines = [];
       let pendingLogFlush = false;
@@ -180,6 +194,34 @@
 
       function hideForms() { configForm.classList.add("hidden"); superAdminForm.classList.add("hidden"); }
       function normalizeLanguage(language) { return language === "en-US" ? "en-US" : "zh-CN"; }
+      function normalizeModel(model, options) {
+        const value = String(model || "").trim();
+        const optionKeys = Array.isArray(options) ? options.map((item) => String(item?.key || "").trim()).filter(Boolean) : [];
+        if (value && optionKeys.includes(value)) return value;
+        return optionKeys[0] || value;
+      }
+      function renderModelOptions(superAdmin) {
+        const options = Array.isArray(superAdmin?.modelOptions) ? superAdmin.modelOptions : [];
+        const selected = normalizeModel(superAdmin?.model, options);
+        superAdminModel.textContent = "";
+        for (const item of options) {
+          const key = String(item?.key || "").trim();
+          if (!key) continue;
+          const option = document.createElement("option");
+          option.value = key;
+          const modelName = String(item?.model || "").trim();
+          const description = String(item?.description || "").trim();
+          option.textContent = [key, modelName, description].filter(Boolean).join(" · ");
+          superAdminModel.append(option);
+        }
+        if (!superAdminModel.options.length && selected) {
+          const option = document.createElement("option");
+          option.value = selected;
+          option.textContent = selected;
+          superAdminModel.append(option);
+        }
+        superAdminModel.value = selected;
+      }
 
       function flushLog() {
         pendingLogFlush = false;
@@ -209,6 +251,7 @@
       function renderSuperAdminForm(superAdmin) {
         configForm.classList.add("hidden");
         superAdminLanguage.value = normalizeLanguage(superAdmin?.language);
+        renderModelOptions(superAdmin);
         superAdminUserId.value = superAdmin?.userId || "";
         superAdminConnectCode.value = superAdmin?.connectCode || "";
         superAdminError.classList.add("hidden");
@@ -262,18 +305,24 @@
         event.preventDefault();
         const formData = new FormData(superAdminForm);
         const language = normalizeLanguage(String(formData.get("language") || ""));
+        const model = normalizeModel(String(formData.get("model") || ""), Array.from(superAdminModel.options).map((option) => ({ key: option.value })));
         const userId = String(formData.get("userId") || "").trim();
         const connectCode = String(formData.get("connectCode") || "").trim();
-        if (!userId || !connectCode) {
-          superAdminError.textContent = "Super admin username and connect code are required.";
+        const dependencies = {
+          libreoffice: formData.get("installLibreOffice") === "on",
+          ffmpeg: formData.get("installFfmpeg") === "on",
+        };
+        if (!userId || !connectCode || !model) {
+          superAdminError.textContent = "Super admin username, connect code and model are required.";
           superAdminError.classList.remove("hidden");
           return;
         }
         saveSuperAdmin.disabled = true;
         try {
-          const result = await window.noobotDesktop?.saveSuperAdmin({ language, userId, connectCode });
+          if (dependencies.libreoffice || dependencies.ffmpeg) message.textContent = "Saving setup and checking selected dependencies...";
+          const result = await window.noobotDesktop?.saveSuperAdmin({ language, model, userId, connectCode, dependencies });
           if (!result?.ok) {
-            renderSuperAdminForm(result?.superAdmin || { language });
+            renderSuperAdminForm(result?.superAdmin || { language, model });
             superAdminError.textContent = "Please complete super admin setup.";
             superAdminError.classList.remove("hidden");
             return;
