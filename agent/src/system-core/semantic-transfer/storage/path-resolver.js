@@ -36,11 +36,15 @@ function buildTransferPathResolverPayload({
   const sourceMeta = resolveSourceMeta(attachmentMeta, meta);
   const resolvedHostPath = firstNormalizedString(hostPath, path, sourceMeta?.path);
   const resolvedRelativePath = firstNormalizedString(relativePath, sourceMeta?.relativePath);
+  const isSandbox = typeof sourceMeta?.isSandbox === "boolean"
+    ? sourceMeta.isSandbox
+    : sourceMeta?.sandboxEnabled;
   return {
     meta: sourceMeta,
     path: resolvedHostPath,
     hostPath: resolvedHostPath,
     relativePath: resolvedRelativePath,
+    ...(typeof isSandbox === "boolean" ? { isSandbox } : {}),
     runtime,
     agentContext,
     purpose,
@@ -130,6 +134,7 @@ export function resolveTransferPathView({
     ...(sandboxPath ? { sandboxPath } : {}),
     ...(resolverPayload.hostPath ? { hostPath: resolverPayload.hostPath } : {}),
     ...(resolverPayload.relativePath ? { relativePath: resolverPayload.relativePath } : {}),
+    ...(typeof resolverPayload.isSandbox === "boolean" ? { isSandbox: resolverPayload.isSandbox } : {}),
   };
 }
 
@@ -164,6 +169,7 @@ export function buildTransferFileEntry({
     ...(filePath ? { filePath } : {}),
     ...(isPlainObject(sourceMeta) ? { attachmentMeta: sourceMeta } : {}),
     ...(Object.keys(pathView).length ? { pathView } : {}),
+    ...(typeof sourceMeta?.isSandbox === "boolean" ? { isSandbox: sourceMeta.isSandbox } : {}),
     role: normalizeString(role) || "primary",
     ...(sourceMeta?.name ? { name: normalizeString(sourceMeta.name) } : {}),
     ...(sourceMeta?.mimeType ? { mimeType: normalizeString(sourceMeta.mimeType) } : {}),

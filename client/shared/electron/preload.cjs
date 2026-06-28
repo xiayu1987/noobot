@@ -30,6 +30,12 @@ contextBridge.exposeInMainWorld("noobotDesktop", {
   saveDownload({ fileName, bytes } = {}) {
     return ipcRenderer.invoke("noobot:save-download", { fileName, bytes });
   },
+  readHostFile({ path, traceId } = {}) {
+    return ipcRenderer.invoke("noobot:read-host-file", { path, traceId });
+  },
+  downloadHostFile({ path, traceId } = {}) {
+    return ipcRenderer.invoke("noobot:download-host-file", { path, traceId });
+  },
   logFileAccess(payload = {}) {
     return ipcRenderer.invoke("noobot:file-access-log", payload);
   },

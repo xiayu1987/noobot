@@ -150,7 +150,10 @@ function parseToolFileResult(content = "") {
   const resolvedPath = String(parsed?.resolvedPath || parsed?.path || "").trim();
   const fileName = String(parsed?.fileName || resolveBaseName(resolvedPath)).trim();
   if (!resolvedPath || !fileName) return null;
-  return { toolName, resolvedPath, fileName };
+  const out = { toolName, resolvedPath, fileName };
+  if (typeof parsed?.isSandbox === "boolean") out.isSandbox = parsed.isSandbox;
+  else if (typeof parsed?.sandboxEnabled === "boolean") out.isSandbox = parsed.sandboxEnabled;
+  return out;
 }
 
 function pickLightObject(source = {}, allowedKeys = []) {

@@ -41,6 +41,7 @@ function compactRefFields(ref = {}) {
   const role = trimString(ref.role);
   const url = trimString(firstValue(ref.url, ref.downloadUrl));
   const previewUrl = trimString(ref.previewUrl);
+  const sandboxFlag = typeof ref.isSandbox === "boolean" ? ref.isSandbox : ref.sandboxEnabled;
   const owner = pickOwner(ref.owner);
   const parsedResult = compactParsedResultRef(ref.parsedResult);
 
@@ -65,6 +66,7 @@ function compactRefFields(ref = {}) {
   if (role) picked.role = role;
   if (url) picked.url = url;
   if (previewUrl) picked.previewUrl = previewUrl;
+  if (typeof sandboxFlag === "boolean") picked.isSandbox = sandboxFlag === true;
   return picked;
 }
 
@@ -78,6 +80,7 @@ function compactParsedResultRef(parsedResult = null) {
   const tool = trimString(parsedResult.tool);
   const updatedAt = trimString(firstValue(parsedResult.updatedAt, parsedResult.updated_at));
   const mimeType = trimString(firstValue(parsedResult.mimeType, parsedResult.type, parsedResult.mime));
+  const sandboxFlag = typeof parsedResult.isSandbox === "boolean" ? parsedResult.isSandbox : parsedResult.sandboxEnabled;
 
   if (attachmentId) picked.attachmentId = attachmentId;
   if (name) picked.name = name;
@@ -86,6 +89,7 @@ function compactParsedResultRef(parsedResult = null) {
   if (tool) picked.tool = tool;
   if (updatedAt) picked.updatedAt = updatedAt;
   if (mimeType) picked.mimeType = mimeType;
+  if (typeof sandboxFlag === "boolean") picked.isSandbox = sandboxFlag === true;
   return Object.keys(picked).length ? picked : null;
 }
 
@@ -112,6 +116,7 @@ export function compactTransferFileRef(file = {}, envelope = {}) {
       path: firstValue(fileMeta?.path, file?.path, file?.filePath),
       relativePath: firstValue(fileMeta?.relativePath, file?.relativePath, filePathView?.relativePath),
       sandboxPath: firstValue(fileMeta?.sandboxPath, fileMeta?.sandboxViewPath, file?.sandboxPath, file?.sandboxViewPath, filePathView?.sandboxPath),
+      isSandbox: firstValue(fileMeta?.isSandbox, file?.isSandbox, filePathView?.isSandbox),
     },
   );
 }

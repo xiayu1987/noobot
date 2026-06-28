@@ -111,6 +111,24 @@ function resolveWorkspaceBasePath({ runtime = {}, agentContext = null } = {}) {
   return normalizeString(runtime?.basePath || agentContext?.environment?.workspace?.basePath);
 }
 
+function resolveRuntimeIsSandbox({ runtime = {}, agentContext = null } = {}) {
+  const scriptConfig = runtime?.globalConfig?.tools?.execute_script && typeof runtime.globalConfig.tools.execute_script === "object"
+    ? runtime.globalConfig.tools.execute_script
+    : agentContext?.runtime?.globalConfig?.tools?.execute_script && typeof agentContext.runtime.globalConfig.tools.execute_script === "object"
+      ? agentContext.runtime.globalConfig.tools.execute_script
+      : {};
+  return scriptConfig?.sandboxMode === true || scriptConfig?.sandbox_mode === true;
+}
+
+function resolveArtifactIsSandbox(...sources) {
+  for (const source of sources) {
+    if (!source || typeof source !== "object" || Array.isArray(source)) continue;
+    if (typeof source.isSandbox === "boolean") return source.isSandbox;
+    if (typeof source.sandboxEnabled === "boolean") return source.sandboxEnabled;
+  }
+  return undefined;
+}
+
 function shouldUseLocalToolOverflowFallback({ service = null, generationSource = "", reason = "" } = {}) {
   if (service && typeof service.ingestGeneratedArtifacts === "function") return false;
   return [generationSource, reason].some((value) => normalizeString(value) === TRANSFER_REASON.TOOL_RESULT_OVERFLOW);
@@ -123,6 +141,7 @@ function buildLocalToolOverflowRecord({
   relativePath = "",
   sessionId = "",
   generationSource = TRANSFER_REASON.TOOL_RESULT_OVERFLOW,
+  isSandbox = undefined,
 } = {}) {
   const name = firstNormalizedString(artifact?.name, path.basename(filePath), "tool-result-overflow.txt");
   return {
@@ -134,6 +153,7 @@ function buildLocalToolOverflowRecord({
     size: contentBytes?.length || 0,
     path: filePath,
     relativePath,
+    ...(typeof isSandbox === "boolean" ? { isSandbox } : {}),
     generatedByModel: true,
     generationSource,
   };
@@ -147,6 +167,7 @@ async function persistLocalToolOverflowArtifacts({
   generationSource = TRANSFER_REASON.TOOL_RESULT_OVERFLOW,
 } = {}) {
   const basePath = resolveWorkspaceBasePath({ runtime, agentContext });
+  const defaultIsSandbox = resolveRuntimeIsSandbox({ runtime, agentContext });
   const artifactList = Array.isArray(artifacts) ? artifacts : [];
   if (!basePath || !sessionId || !artifactList.length) return [];
 
@@ -173,6 +194,7 @@ async function persistLocalToolOverflowArtifacts({
       relativePath: path.relative(basePath, filePath),
       sessionId,
       generationSource,
+      isSandbox: resolveArtifactIsSandbox(artifact, artifact?.meta) ?? defaultIsSandbox,
     }));
   }
   return records;

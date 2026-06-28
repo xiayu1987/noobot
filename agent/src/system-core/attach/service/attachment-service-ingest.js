@@ -19,6 +19,22 @@ import { attachScopeRoot, resolveBasePath, resolveAttachmentScope } from "./path
 import { buildPublicRecord, normalizeExtension } from "./record-builder.js";
 import { ERROR_CODE } from "../../error/constants.js";
 
+function resolveConfigIsSandbox(config = {}) {
+  const scriptConfig = config?.tools?.execute_script && typeof config.tools.execute_script === "object"
+    ? config.tools.execute_script
+    : {};
+  return scriptConfig?.sandboxMode === true || scriptConfig?.sandbox_mode === true;
+}
+
+function resolveAttachmentIsSandbox(...sources) {
+  for (const source of sources) {
+    if (!source || typeof source !== "object" || Array.isArray(source)) continue;
+    if (typeof source.isSandbox === "boolean") return source.isSandbox;
+    if (typeof source.sandboxEnabled === "boolean") return source.sandboxEnabled;
+  }
+  return undefined;
+}
+
 export async function saveAttachmentRecord({
   basePath,
   attachmentIndex,
@@ -32,6 +48,7 @@ export async function saveAttachmentRecord({
   turnScope = null,
   turnScopeId = "",
   dialogProcessId = "",
+  isSandbox = undefined,
 }) {
   const attachmentId = uuidv4();
   const extension = normalizeExtension(name, mimeType);
@@ -56,6 +73,7 @@ export async function saveAttachmentRecord({
     turnScope,
     turnScopeId,
     dialogProcessId,
+    ...(typeof isSandbox === "boolean" ? { isSandbox } : {}),
   });
 
   attachmentIndex.attachments[attachmentId] = record;
@@ -64,6 +82,7 @@ export async function saveAttachmentRecord({
 
 export async function ingestAttachments(service, { userId, sessionId = "", attachmentSource = "user", attachments, attachmentPolicy = {} }) {
   const basePath = resolveBasePath(service.globalConfig, userId);
+  const defaultIsSandbox = resolveConfigIsSandbox(service.globalConfig);
   if (!attachments?.length) return [];
 
   const scope = resolveAttachmentScope({ sessionId, attachmentSource, requireSessionId: true });
@@ -150,6 +169,7 @@ export async function ingestAttachments(service, { userId, sessionId = "", attac
       name,
       mimeType: normalizedMime,
       contentBytes: bytes,
+      isSandbox: resolveAttachmentIsSandbox(item) ?? defaultIsSandbox,
     });
     saved.push(record);
   }
@@ -170,6 +190,7 @@ export async function ingestGeneratedArtifacts(service, {
   dialogProcessId = "",
 }) {
   const basePath = resolveBasePath(service.globalConfig, userId);
+  const defaultIsSandbox = resolveConfigIsSandbox(service.globalConfig);
   const list = Array.isArray(artifacts) ? artifacts : [];
   if (!list.length) return [];
 
@@ -199,6 +220,7 @@ export async function ingestGeneratedArtifacts(service, {
         : turnScope,
       turnScopeId: safeStr(item?.turnScopeId || turnScopeId),
       dialogProcessId: safeStr(item?.dialogProcessId || item?.dialog_process_id || dialogProcessId),
+      isSandbox: resolveAttachmentIsSandbox(item, item?.meta) ?? defaultIsSandbox,
     });
     saved.push(record);
   }

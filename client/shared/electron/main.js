@@ -715,6 +715,44 @@ function sanitizeFileAccessLogPayload(payload = {}) {
   return output;
 }
 
+function maskHostPath(pathValue = "") {
+  const normalized = String(pathValue || "").trim().replaceAll("\\", "/");
+  if (!normalized) return "";
+  const parts = normalized.split("/").filter(Boolean);
+  if (parts.length <= 2) return normalized;
+  return `${parts[0]}/.../${parts.at(-1)}`;
+}
+
+function logHostFileAccess(event, payload = {}) {
+  appendDesktopLog(`[noobot:file-access] ${JSON.stringify(sanitizeFileAccessLogPayload({
+    layer: "electron.main",
+    event,
+    channel: "desktop-host-ipc",
+    ...payload,
+  }))}`);
+}
+
+async function resolveHostFile(pathValue = "") {
+  const targetPath = String(pathValue || "").trim();
+  if (!targetPath) {
+    const error = new Error("Missing host file path.");
+    error.code = "missing_path";
+    throw error;
+  }
+  if (!path.isAbsolute(targetPath)) {
+    const error = new Error("Host file path must be absolute.");
+    error.code = "not_absolute";
+    throw error;
+  }
+  const stats = await fs.promises.stat(targetPath);
+  if (!stats.isFile()) {
+    const error = new Error("Host path is not a file.");
+    error.code = "not_file";
+    throw error;
+  }
+  return { targetPath, stats };
+}
+
 ipcMain.handle("noobot:save-download", async (_event, { fileName = "download", bytes } = {}) => {
   const buffer = normalizeDownloadBytes(bytes);
   const defaultPath = path.join(app.getPath("downloads"), sanitizeDownloadFileName(fileName));
@@ -731,6 +769,35 @@ ipcMain.handle("noobot:save-download", async (_event, { fileName = "download", b
 ipcMain.handle("noobot:file-access-log", (_event, payload = {}) => {
   appendDesktopLog(`[noobot:file-access] ${JSON.stringify(sanitizeFileAccessLogPayload(payload))}`);
   return { ok: true };
+});
+
+ipcMain.handle("noobot:read-host-file", async (_event, { path: pathValue = "", traceId = "" } = {}) => {
+  const hostPath = String(pathValue || "").trim();
+  try {
+    logHostFileAccess("host.read.request", { traceId, hostPath: maskHostPath(hostPath), hasPath: Boolean(hostPath) });
+    const { targetPath, stats } = await resolveHostFile(hostPath);
+    const buffer = await fs.promises.readFile(targetPath);
+    const isText = !buffer.includes(0);
+    const content = isText ? buffer.toString("utf8") : "";
+    logHostFileAccess("host.read.response", { traceId, hostPath: maskHostPath(targetPath), isText, size: stats.size });
+    return { ok: true, path: targetPath, fileName: path.basename(targetPath), isText, size: stats.size, content };
+  } catch (error) {
+    logHostFileAccess("host.read.failed", { traceId, hostPath: maskHostPath(hostPath), errorCode: error?.code || "host_read_failed", error: error?.message || String(error) });
+    return { ok: false, errorCode: error?.code || "host_read_failed", error: error?.message || String(error) };
+  }
+});
+
+ipcMain.handle("noobot:download-host-file", async (_event, { path: pathValue = "", traceId = "" } = {}) => {
+  const hostPath = String(pathValue || "").trim();
+  try {
+    logHostFileAccess("host.download.request", { traceId, hostPath: maskHostPath(hostPath), hasPath: Boolean(hostPath) });
+    const { targetPath, stats } = await resolveHostFile(hostPath);
+    logHostFileAccess("host.download.response", { traceId, hostPath: maskHostPath(targetPath), size: stats.size });
+    return { ok: true, path: targetPath, fileName: path.basename(targetPath), url: `file://${targetPath.replaceAll("\\", "/")}`, size: stats.size };
+  } catch (error) {
+    logHostFileAccess("host.download.failed", { traceId, hostPath: maskHostPath(hostPath), errorCode: error?.code || "host_download_failed", error: error?.message || String(error) });
+    return { ok: false, errorCode: error?.code || "host_download_failed", error: error?.message || String(error) };
+  }
 });
 
 ipcMain.handle("noobot:retry-startup", async () => {
