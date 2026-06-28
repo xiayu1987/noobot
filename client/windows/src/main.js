@@ -14,6 +14,26 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "../../..");
 const packagedBackendRoot = path.join(process.resourcesPath, "backend");
 
+function getEarlyLogFilePath() {
+  const base = process.platform === "win32"
+    ? process.env.APPDATA || process.env.LOCALAPPDATA || process.env.TEMP || process.cwd()
+    : process.env.XDG_CONFIG_HOME || process.env.HOME || process.env.TMPDIR || process.cwd();
+  return path.join(base, "Noobot", "logs", "desktop-startup.log");
+}
+
+function appendEarlyLog(message) {
+  const line = `[${new Date().toISOString()}] ${message}\n`;
+  try {
+    const logFile = getEarlyLogFilePath();
+    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    fs.appendFileSync(logFile, line, "utf8");
+  } catch {
+    // Diagnostics must not break startup.
+  }
+}
+
+appendEarlyLog(`[main:module] loaded; node=${process.version}; electron=${process.versions.electron}; platform=${process.platform}; packaged=${app.isPackaged}; argv=${process.argv.join(" ")}`);
+
 const servicePort = Number.parseInt(process.env.NOOBOT_SERVICE_PORT || "10061", 10);
 const serviceOrigin = String(
   process.env.NOOBOT_SERVICE_URL || `http://127.0.0.1:${servicePort}`,
@@ -39,7 +59,7 @@ function appendDesktopLog(message) {
     fs.mkdirSync(path.dirname(logFile), { recursive: true });
     fs.appendFileSync(logFile, line, "utf8");
   } catch {
-    // Startup diagnostics must never prevent the app from opening.
+    appendEarlyLog(`[main:app-log-fallback] ${message}`);
   }
 }
 
@@ -52,6 +72,7 @@ function sendStatus(status) {
 }
 
 function createWindow() {
+  appendDesktopLog("[main:create-window] creating startup window");
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 860,
@@ -67,12 +88,21 @@ function createWindow() {
     },
   });
 
-  mainWindow.once("ready-to-show", () => mainWindow?.show());
+  mainWindow.once("ready-to-show", () => {
+    appendDesktopLog("[main:window] ready-to-show");
+    mainWindow?.show();
+  });
+  mainWindow.webContents.once("did-finish-load", () => appendDesktopLog(`[main:window] did-finish-load ${mainWindow?.webContents.getURL() || ""}`));
+  mainWindow.webContents.on("did-fail-load", (_event, code, description, url) => appendDesktopLog(`[main:window] did-fail-load code=${code} description=${description} url=${url}`));
+  mainWindow.webContents.on("preload-error", (_event, preloadPath, error) => appendDesktopLog(`[main:window] preload-error path=${preloadPath} error=${error?.stack || error?.message || String(error)}`));
+  mainWindow.webContents.on("render-process-gone", (_event, details) => appendDesktopLog(`[main:window] render-process-gone reason=${details.reason} exitCode=${details.exitCode}`));
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };
   });
-  mainWindow.loadFile(path.join(__dirname, "startup.html"));
+  const startupFile = path.join(__dirname, "startup.html");
+  appendDesktopLog(`[main:create-window] loading ${startupFile}`);
+  mainWindow.loadFile(startupFile).catch((error) => appendDesktopLog(`[main:create-window] loadFile failed: ${error?.stack || error?.message || String(error)}`));
   return mainWindow;
 }
 
@@ -188,6 +218,7 @@ async function resolveNoobotUrl() {
 }
 
 async function boot() {
+  appendDesktopLog("[main:boot] start");
   createWindow();
   try {
     await ensureServiceStarted();
