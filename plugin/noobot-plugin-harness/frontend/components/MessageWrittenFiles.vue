@@ -22,6 +22,19 @@ const { translate } = useLocale();
 const isImageMime = () => false;
 const canPreviewAttachment = () => false;
 const formatFileSize = () => "";
+
+function hasFileIdentity(fileItem = {}) {
+  return Boolean(
+    String(
+      fileItem?.relativePath ||
+        fileItem?.resolvedPath ||
+        fileItem?.fileName ||
+        fileItem?.path ||
+        fileItem?.filePath ||
+        "",
+    ).trim(),
+  );
+}
 </script>
 
 <template>
@@ -42,8 +55,8 @@ const formatFileSize = () => "";
       :name-text="fileItem.fileName"
       :title-text="fileItem.resolvedPath || fileItem.fileName"
       :show-size="false"
-      :show-preview="Boolean(fileItem.relativePath)"
-      :show-download="Boolean(fileItem.relativePath)"
+      :show-preview="hasFileIdentity(fileItem)"
+      :show-download="hasFileIdentity(fileItem)"
       :preview-icon="View"
       :custom-badge-text="fileItem.recognized ? translate('message.recognizedFile') : ''"
       custom-badge-class="is-recognized"
