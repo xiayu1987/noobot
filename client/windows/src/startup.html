@@ -7,12 +7,17 @@
     <style>
       body { margin: 0; font-family: "Segoe UI", sans-serif; background: #0f172a; color: #e2e8f0; }
       main { min-height: 100vh; display: grid; place-items: center; padding: 32px; box-sizing: border-box; }
-      section { width: min(720px, 100%); background: rgba(15, 23, 42, .84); border: 1px solid #334155; border-radius: 18px; padding: 28px; box-shadow: 0 24px 80px rgba(0,0,0,.35); }
+      section { width: min(760px, 100%); background: rgba(15, 23, 42, .84); border: 1px solid #334155; border-radius: 18px; padding: 28px; box-shadow: 0 24px 80px rgba(0,0,0,.35); }
       h1 { margin: 0 0 12px; font-size: 28px; }
       p { margin: 8px 0; color: #cbd5e1; line-height: 1.55; }
       pre { white-space: pre-wrap; max-height: 220px; overflow: auto; background: #020617; border-radius: 12px; padding: 12px; color: #94a3b8; }
       button { margin-top: 16px; border: 0; border-radius: 10px; padding: 10px 16px; background: #38bdf8; color: #082f49; font-weight: 700; cursor: pointer; }
+      button:disabled { opacity: .65; cursor: not-allowed; }
+      label { display: block; margin-top: 14px; color: #e2e8f0; font-weight: 700; }
+      input { box-sizing: border-box; width: 100%; margin-top: 6px; border: 1px solid #475569; border-radius: 10px; padding: 10px 12px; background: #020617; color: #e2e8f0; }
+      small { display: block; margin-top: 4px; color: #94a3b8; }
       .hidden { display: none; }
+      .error { color: #fca5a5; }
     </style>
   </head>
   <body>
@@ -20,6 +25,12 @@
       <section>
         <h1>Starting Noobot</h1>
         <p id="message">Checking local Noobot service...</p>
+        <form id="config-form" class="hidden">
+          <p>Noobot needs the following configuration values before it can continue. Values are saved only in your user data directory.</p>
+          <div id="config-fields"></div>
+          <p id="config-error" class="error hidden"></p>
+          <button id="save-config" type="submit">Save and continue</button>
+        </form>
         <pre id="log"></pre>
         <button id="retry" class="hidden">Retry</button>
       </section>
@@ -28,6 +39,35 @@
       const message = document.querySelector("#message");
       const log = document.querySelector("#log");
       const retry = document.querySelector("#retry");
+      const configForm = document.querySelector("#config-form");
+      const configFields = document.querySelector("#config-fields");
+      const configError = document.querySelector("#config-error");
+      const saveConfig = document.querySelector("#save-config");
+      let requiredParams = [];
+
+      function renderConfigForm(params) {
+        requiredParams = Array.isArray(params) ? params : [];
+        configFields.textContent = "";
+        for (const item of requiredParams) {
+          const key = String(item?.key || "");
+          const label = document.createElement("label");
+          label.textContent = key;
+          label.htmlFor = `config-${key}`;
+          const input = document.createElement("input");
+          input.id = `config-${key}`;
+          input.name = key;
+          input.required = true;
+          input.autocomplete = "off";
+          const description = document.createElement("small");
+          description.textContent = item?.description || "Required configuration value";
+          configFields.append(label, input, description);
+        }
+        configError.classList.add("hidden");
+        configError.textContent = "";
+        configForm.classList.toggle("hidden", requiredParams.length === 0);
+        retry.classList.add("hidden");
+      }
+
       function renderStatus(status) {
         if (!status) return;
         if (status.message) {
@@ -35,6 +75,11 @@
           log.textContent = `${log.textContent}${status.message}\n`;
           log.scrollTop = log.scrollHeight;
         }
+        if (status.phase === "config-required") {
+          renderConfigForm(status.params);
+          return;
+        }
+        configForm.classList.add("hidden");
         retry.classList.toggle("hidden", status.phase !== "error");
       }
 
@@ -45,6 +90,39 @@
       window.noobotDesktop?.onStartupStatus((status) => {
         renderStatus(status);
       });
+
+      configForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const values = {};
+        for (const item of requiredParams) {
+          const key = String(item?.key || "");
+          const value = String(new FormData(configForm).get(key) || "").trim();
+          if (!value) {
+            configError.textContent = `Please fill ${key}.`;
+            configError.classList.remove("hidden");
+            return;
+          }
+          values[key] = value;
+        }
+        saveConfig.disabled = true;
+        try {
+          const result = await window.noobotDesktop?.saveConfigParams(values);
+          if (!result?.ok) {
+            renderConfigForm(result?.missingParams || requiredParams);
+            configError.textContent = "Please complete all required values.";
+            configError.classList.remove("hidden");
+            return;
+          }
+          configForm.classList.add("hidden");
+          message.textContent = "Configuration saved. Starting Noobot service...";
+        } catch (error) {
+          configError.textContent = error?.message || String(error);
+          configError.classList.remove("hidden");
+        } finally {
+          saveConfig.disabled = false;
+        }
+      });
+
       retry.addEventListener("click", async () => {
         retry.classList.add("hidden");
         log.textContent = "";

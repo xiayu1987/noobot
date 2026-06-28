@@ -507,7 +507,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceFailurePromptTemplate:
       "工具失败达到阈值({reason})，请分析工具失败原因，并且给予修复建议。",
     guidanceAnalysisPromptGoal:
-      "请根据当前执行结果，用一句自然、通俗的话说明当前进展，让人一眼就知道现在做到哪了、有没有新的问题情况疑点风险、接下来该做什么。不要重复上一轮内容，避免固定模板、分点或机械套话。",
+      "请根据当前执行结果，用一句自然、通俗的话概括当前进展，让人一眼就知道现在做到哪了、有没有新的问题情况疑点风险、接下来该做什么。避免固定模板、分点或机械套话。",
     dynamicPolicyPromptProtocolInstruction:
       "可选动态策略提示词协议：\n请根据用户实际意图判断是否需要调整处理风格；只有当前任务需要比默认矩阵更合适的场景策略时，才追加且只追加一个 [{block}] 块；否则不要输出该块。scenario 必须符合用户实际意图。\n该 prompt 只描述处理事情的风格/执行策略，不要涉及具体任务本身、任务结论、计划项、文件名或业务内容；尽量简洁，并且可直接作为后续主流程、followup 与 harness 辅助调用的统一场景策略块使用。\n[{block}]\nscenario = general|text|programming\nreason = short reason\nprompt:\n<用于替换默认场景提示词的策略提示词>\n[/{block}]\n文本示例：\n[{block}]\nscenario = text\nreason = task-specific text delivery policy\nprompt:\n文本场景动态策略：复杂任务必须先分文件，按文件拆成交付单元，逐文件产出与维护，禁止把完整内容一次写进单个文件或单次回复；边查/边搜/边核对，边写/边产出，不等资料全部收集完才开始产出；建议每轮推进一个可交付单元，如文件、章节、表格、摘要、清单、对比或阶段稿，并标明来源、假设或待核对项；外部文本到手先保真消费并保留来源；每批检查事实、来源和格式。\n[/{block}]\n编程示例：\n[{block}]\nscenario = programming\nreason = task-specific coding verification policy\nprompt:\n编程场景动态策略：先读取相关代码、配置、测试和上下文，快速定位问题与影响范围；优先复用现有结构、方法、字段、约定和测试入口，避免绕开既有设计另起通道；面对复杂任务时，先看完整数据链路，核对遗漏字段、重复事实和单一事实源，并同步消除旧入口、旧字段、兼容分支、重复存储和废弃逻辑等残留；再以连续多个最小切片推进任务，每个切片都应可逆、可验证、能靠近完成，不做临时补丁式绕过，也不只做一个小改就停下；验证是完成条件，优先运行相关测试、lint、类型检查或构建，失败先按反馈修正并重试；最终说明改动文件与验证结果。\n[/{block}]",
     acceptanceMainPlanContextHeader: "计划清单上下文如下（验收时必须完整对齐）：",

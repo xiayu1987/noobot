@@ -70,6 +70,8 @@ let mainWindow = null;
 let managedServiceProcess = null;
 let serviceStartupPromise = null;
 let bootStarted = false;
+let pendingConfigResolve = null;
+let desktopConfigState = null;
 const startupStatuses = [];
 
 function getLogFilePath() {
@@ -99,6 +101,167 @@ function sendStatus(status) {
   mainWindow.webContents.send("noobot:startup-status", status);
 }
 
+const desktopConfigSyncSkipTopLevelKeys = new Set([
+  "workspace_root",
+  "workspace_template_path",
+  "streaming",
+  "super_admin",
+]);
+
+function isPlainObject(input) {
+  return input !== null && typeof input === "object" && !Array.isArray(input);
+}
+
+function readJsonFile(filePath, fallback = null) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJsonFile(filePath, payload) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+}
+
+function deepClone(input) {
+  return JSON.parse(JSON.stringify(input));
+}
+
+function mergeIncremental({ template, target, pathDepth = 0, skipTopLevelKeys = new Set() } = {}) {
+  if (Array.isArray(template)) return target === undefined ? deepClone(template) : target;
+  if (!isPlainObject(template)) return target === undefined ? template : target;
+  const output = isPlainObject(target) ? deepClone(target) : {};
+  const targetObject = isPlainObject(target) ? target : {};
+  for (const [key, templateValue] of Object.entries(template)) {
+    if (pathDepth === 0 && skipTopLevelKeys.has(key)) continue;
+    if (!Object.prototype.hasOwnProperty.call(targetObject, key)) {
+      output[key] = deepClone(templateValue);
+    } else if (isPlainObject(templateValue) && isPlainObject(targetObject[key])) {
+      output[key] = mergeIncremental({ template: templateValue, target: targetObject[key], pathDepth: pathDepth + 1, skipTopLevelKeys });
+    } else {
+      output[key] = targetObject[key];
+    }
+  }
+  return output;
+}
+
+function copyDirectoryContents({ from, to }) {
+  if (!fs.existsSync(from)) return false;
+  fs.mkdirSync(to, { recursive: true });
+  fs.cpSync(from, to, {
+    recursive: true,
+    filter: (src) => !["config.json", "global.config.json"].includes(path.basename(src)),
+  });
+  return true;
+}
+
+function collectTemplateVariables(input, keys = new Set()) {
+  if (typeof input === "string") {
+    for (const match of input.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g)) keys.add(match[1]);
+  } else if (Array.isArray(input)) {
+    input.forEach((item) => collectTemplateVariables(item, keys));
+  } else if (isPlainObject(input)) {
+    Object.values(input).forEach((value) => collectTemplateVariables(value, keys));
+  }
+  return keys;
+}
+
+function ensureConfigParamsCatalog({ workspaceRootPath, configFiles = [] } = {}) {
+  const keys = new Set();
+  for (const filePath of configFiles) collectTemplateVariables(readJsonFile(filePath, {}), keys);
+  const filePath = path.join(workspaceRootPath, "config-params.json");
+  const current = readJsonFile(filePath, {}) || {};
+  const values = isPlainObject(current.values) ? { ...current.values } : {};
+  const descriptions = isPlainObject(current.descriptions) ? { ...current.descriptions } : {};
+  for (const key of Array.from(keys).sort((a, b) => a.localeCompare(b))) {
+    if (!Object.prototype.hasOwnProperty.call(values, key)) values[key] = "";
+    if (!Object.prototype.hasOwnProperty.call(descriptions, key)) descriptions[key] = "";
+  }
+  writeJsonFile(filePath, { values, descriptions });
+  return filePath;
+}
+
+function getMissingRequiredConfigParams(configParamsPath) {
+  const payload = readJsonFile(configParamsPath, {}) || {};
+  const values = isPlainObject(payload.values) ? payload.values : {};
+  return Object.entries(values)
+    .filter(([, value]) => String(value ?? "").trim() === "")
+    .map(([key]) => ({ key, description: String(payload.descriptions?.[key] || "") }));
+}
+
+function saveConfigParamValues({ workspaceRootPath, values = {} } = {}) {
+  const filePath = path.join(workspaceRootPath, "config-params.json");
+  const payload = readJsonFile(filePath, {}) || {};
+  const currentValues = isPlainObject(payload.values) ? { ...payload.values } : {};
+  const descriptions = isPlainObject(payload.descriptions) ? { ...payload.descriptions } : {};
+  for (const [key, value] of Object.entries(values || {})) {
+    const normalizedKey = String(key || "").trim();
+    if (!normalizedKey) continue;
+    currentValues[normalizedKey] = String(value ?? "").trim();
+    if (!Object.prototype.hasOwnProperty.call(descriptions, normalizedKey)) descriptions[normalizedKey] = "";
+  }
+  writeJsonFile(filePath, { values: currentValues, descriptions });
+}
+
+function syncJsonFileIncremental({ templateFilePath, targetFilePath, skipTopLevelKeys = new Set() } = {}) {
+  const templateJson = readJsonFile(templateFilePath, null);
+  if (!isPlainObject(templateJson)) return false;
+  const targetExists = fs.existsSync(targetFilePath);
+  const targetJson = targetExists ? readJsonFile(targetFilePath, {}) : {};
+  const merged = mergeIncremental({ template: templateJson, target: targetJson, skipTopLevelKeys });
+  if (!targetExists || JSON.stringify(targetJson) !== JSON.stringify(merged)) {
+    writeJsonFile(targetFilePath, merged);
+    return true;
+  }
+  return false;
+}
+
+function ensureDesktopGlobalConfig({ isPackaged, userDataPath }) {
+  const configDir = process.env.NOOBOT_CONFIG_DIR || path.join(userDataPath, "config");
+  const targetPath = process.env.NOOBOT_GLOBAL_CONFIG_PATH || path.join(configDir, "global.config.json");
+  const examplePath = isPackaged
+    ? path.join(packagedBackendRoot, "service", "config", "global.config.example.json")
+    : path.join(repoRoot, "service", "config", "global.config.example.json");
+  const bundledTemplatePath = isPackaged
+    ? path.join(packagedBackendRoot, "user-template", "default-user")
+    : path.join(repoRoot, "user-template", "default-user");
+  const workspaceRootPath = process.env.NOOBOT_WORKSPACE_ROOT || path.join(userDataPath, "workspace");
+  const workspaceTemplatePath = process.env.NOOBOT_WORKSPACE_TEMPLATE_PATH || path.join(userDataPath, "user-template", "default-user");
+
+  const exampleConfig = readJsonFile(examplePath, null);
+  if (!isPlainObject(exampleConfig)) throw new Error(`invalid global config example: ${examplePath}`);
+  const currentConfig = fs.existsSync(targetPath) ? readJsonFile(targetPath, {}) : {};
+  const mergedConfig = mergeIncremental({ template: exampleConfig, target: currentConfig, skipTopLevelKeys: desktopConfigSyncSkipTopLevelKeys });
+  mergedConfig.workspace_root = workspaceRootPath;
+  mergedConfig.workspace_template_path = workspaceTemplatePath;
+  if (!fs.existsSync(targetPath) || JSON.stringify(currentConfig) !== JSON.stringify(mergedConfig)) {
+    writeJsonFile(targetPath, mergedConfig);
+    appendDesktopLog(`[main:config] synced global config from example: ${examplePath} -> ${targetPath}`);
+  }
+
+  copyDirectoryContents({ from: bundledTemplatePath, to: workspaceTemplatePath });
+  const templateExamplePath = path.join(workspaceTemplatePath, "config.example.json");
+  const templateConfigPath = path.join(workspaceTemplatePath, "config.json");
+  if (fs.existsSync(templateExamplePath)) {
+    syncJsonFileIncremental({ templateFilePath: templateExamplePath, targetFilePath: templateConfigPath, skipTopLevelKeys: desktopConfigSyncSkipTopLevelKeys });
+  }
+  fs.mkdirSync(workspaceRootPath, { recursive: true });
+  const configParamsPath = ensureConfigParamsCatalog({
+    workspaceRootPath,
+    configFiles: [targetPath, templateConfigPath, templateExamplePath],
+  });
+  return { globalConfigPath: targetPath, workspaceRootPath, workspaceTemplatePath, configParamsPath, missingParams: getMissingRequiredConfigParams(configParamsPath) };
+}
+
+function requestMissingConfigParams(missingParams) {
+  sendStatus({ phase: "config-required", message: "Please complete required configuration before starting Noobot.", params: missingParams });
+  return new Promise((resolve) => {
+    pendingConfigResolve = resolve;
+  });
+}
+
 function createWindow() {
   appendEarlyLog("[main:create-window] enter");
   appendDesktopLog("[main:create-window] creating startup window");
@@ -111,7 +274,7 @@ function createWindow() {
     show: false,
     title: "Noobot",
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
@@ -160,6 +323,10 @@ function startNoobotService() {
   const args = isPackaged ? [path.join(packagedBackendRoot, "service", "app.js")] : ["run", "-w", "service", "start"];
   const cwd = isPackaged ? packagedBackendRoot : repoRoot;
   const userDataPath = app.getPath("userData");
+  const configDir = process.env.NOOBOT_CONFIG_DIR || path.join(userDataPath, "config");
+  const configState = desktopConfigState || ensureDesktopGlobalConfig({ isPackaged, userDataPath });
+  desktopConfigState = configState;
+  const globalConfigPath = configState.globalConfigPath;
   sendStatus({
     phase: "starting",
     message: [
@@ -168,6 +335,7 @@ function startNoobotService() {
       `args=${args.join(" ")}`,
       `cwd=${cwd}`,
       `log=${getLogFilePath()}`,
+      `globalConfig=${globalConfigPath}`,
     ].join("\n"),
   });
   managedServiceProcess = spawn(command, args, {
@@ -178,9 +346,12 @@ function startNoobotService() {
       PORT: String(servicePort),
       NOOBOT_DESKTOP: "1",
       NOOBOT_USER_DATA_DIR: userDataPath,
-      NOOBOT_CONFIG_DIR: process.env.NOOBOT_CONFIG_DIR || path.join(userDataPath, "config"),
+      NOOBOT_CONFIG_DIR: configDir,
       NOOBOT_DATA_DIR: process.env.NOOBOT_DATA_DIR || path.join(userDataPath, "data"),
       NOOBOT_LOG_DIR: process.env.NOOBOT_LOG_DIR || path.join(userDataPath, "logs"),
+      NOOBOT_GLOBAL_CONFIG_PATH: globalConfigPath,
+      NOOBOT_WORKSPACE_ROOT: configState.workspaceRootPath,
+      NOOBOT_WORKSPACE_TEMPLATE_PATH: configState.workspaceTemplatePath,
     },
     stdio: "pipe",
     windowsHide: true,
@@ -229,6 +400,11 @@ async function ensureServiceStarted() {
       return;
     }
 
+    desktopConfigState = ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") });
+    if (desktopConfigState.missingParams.length) {
+      await requestMissingConfigParams(desktopConfigState.missingParams);
+      desktopConfigState = ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") });
+    }
     sendStatus({ phase: "starting", message: "Starting Noobot service..." });
     startNoobotService();
     const healthy = await waitForHealthyService();
@@ -303,6 +479,22 @@ ipcMain.handle("noobot:retry-startup", async () => {
 });
 
 ipcMain.handle("noobot:get-startup-statuses", () => startupStatuses);
+
+ipcMain.handle("noobot:save-config-params", (_event, values) => {
+  const state = desktopConfigState || ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") });
+  saveConfigParamValues({ workspaceRootPath: state.workspaceRootPath, values });
+  desktopConfigState = ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") });
+  if (desktopConfigState.missingParams.length) {
+    sendStatus({ phase: "config-required", message: "Please complete all required configuration values.", params: desktopConfigState.missingParams });
+    return { ok: false, missingParams: desktopConfigState.missingParams };
+  }
+  if (pendingConfigResolve) {
+    const resolve = pendingConfigResolve;
+    pendingConfigResolve = null;
+    resolve();
+  }
+  return { ok: true };
+});
 
 app.whenReady()
   .then(() => startBoot("whenReady"))

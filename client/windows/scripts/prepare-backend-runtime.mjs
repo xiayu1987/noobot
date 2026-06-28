@@ -9,7 +9,16 @@ const outRoot = path.join(repoRoot, 'client/windows/build/backend-runtime');
 const backendRoot = path.join(outRoot, 'backend');
 
 const runtimeWorkspaces = ['service', 'agent', 'shared', 'i18n'];
+const runtimeAssetDirs = ['user-template'];
 const ignore = /(^|[/\\])(?:node_modules|\.git|__tests__|test|tests|\.cache|dist|coverage)([/\\]|$)|\.(?:map|md)$/i;
+const privateConfigFileNames = new Set(['global.config.json', 'config.json']);
+
+function shouldCopyRuntimeFile(fromRoot, src) {
+  const relativePath = path.relative(fromRoot, src);
+  if (ignore.test(relativePath)) return false;
+  if (privateConfigFileNames.has(path.basename(src))) return false;
+  return true;
+}
 
 function log(message) {
   console.log(`[prepare-backend] ${message}`);
@@ -45,7 +54,7 @@ async function copyDir(name) {
   log(`Copying ${name}: ${from} -> ${to}`);
   await cp(from, to, {
     recursive: true,
-    filter: (src) => !ignore.test(path.relative(from, src)),
+    filter: (src) => shouldCopyRuntimeFile(from, src),
   });
 }
 
@@ -100,6 +109,10 @@ async function main() {
   await mkdir(backendRoot, { recursive: true });
 
   for (const name of runtimeWorkspaces) {
+    await copyDir(name);
+  }
+
+  for (const name of runtimeAssetDirs) {
     await copyDir(name);
   }
 

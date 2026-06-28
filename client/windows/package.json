@@ -9,7 +9,7 @@
     "dev": "NOOBOT_CLIENT_URL=${NOOBOT_CLIENT_URL:-http://127.0.0.1:10060} electron .",
     "build:win": "npm run prepare:backend && electron-builder --win",
     "build:win:dir": "npm run prepare:backend && electron-builder --win --dir",
-    "check": "node --check src/main.js && node --check src/preload.js",
+    "check": "node --check src/main.js && node --check src/preload.cjs",
     "prepare:backend": "node scripts/prepare-backend-runtime.mjs",
     "build:win:portable": "npm run prepare:backend && electron-builder --win portable",
     "build:win:zip": "npm run prepare:backend && electron-builder --win zip"
