@@ -679,15 +679,28 @@ function sanitizeDownloadFileName(fileName = "") {
   return value.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").replace(/\.+$/g, "_").slice(0, 180) || "download";
 }
 
-ipcMain.handle("noobot:save-download", async (_event, { fileName = "download", bytes } = {}) => {
+function normalizeDownloadBytes(bytes) {
   if (!bytes) throw new Error("Missing download content.");
+  if (Buffer.isBuffer(bytes)) return bytes;
+  if (bytes instanceof ArrayBuffer) return Buffer.from(new Uint8Array(bytes));
+  if (ArrayBuffer.isView(bytes)) {
+    return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  }
+  if (Array.isArray(bytes)) return Buffer.from(bytes);
+  if (typeof bytes === "object" && bytes?.type === "Buffer" && Array.isArray(bytes?.data)) {
+    return Buffer.from(bytes.data);
+  }
+  throw new Error("Unsupported download content.");
+}
+
+ipcMain.handle("noobot:save-download", async (_event, { fileName = "download", bytes } = {}) => {
+  const buffer = normalizeDownloadBytes(bytes);
   const defaultPath = path.join(app.getPath("downloads"), sanitizeDownloadFileName(fileName));
   const result = await dialog.showSaveDialog(mainWindow || undefined, {
     defaultPath,
     properties: ["createDirectory", "showOverwriteConfirmation"],
   });
   if (result.canceled || !result.filePath) return { ok: false, canceled: true };
-  const buffer = Buffer.from(bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : bytes);
   await fs.promises.mkdir(path.dirname(result.filePath), { recursive: true });
   await fs.promises.writeFile(result.filePath, buffer);
   return { ok: true, filePath: result.filePath };
