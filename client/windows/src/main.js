@@ -356,6 +356,7 @@ function createWindow() {
   appendEarlyLog("[main:create-window] enter");
   appendDesktopLog("[main:create-window] creating startup window");
   appendEarlyLog("[main:create-window] before BrowserWindow");
+  const windowIconPath = path.join(__dirname, "..", "assets", "noobot.ico");
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 860,
@@ -363,6 +364,7 @@ function createWindow() {
     minHeight: 640,
     show: false,
     title: "Noobot",
+    icon: windowIconPath,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
