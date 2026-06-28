@@ -392,9 +392,21 @@ export function useMessageFiles({
     const genericWorkspaceMarker = "/workspace/";
     const genericMarkerIndex = normalizedPath.indexOf(genericWorkspaceMarker);
     if (genericMarkerIndex < 0) return "";
-    return sanitizeWorkspaceRelativePath(
+    const genericRelativePath = sanitizeWorkspaceRelativePath(
       normalizedPath.slice(genericMarkerIndex + genericWorkspaceMarker.length),
     );
+    if (!genericRelativePath) return "";
+    // Backend tool summaries can arrive before the desktop client has a stable
+    // userId prop, especially in packaged Electron replay/hydration.  Absolute
+    // paths are still rooted as /workspace/<userId>/..., while workspace
+    // download APIs expect the path below that user directory.  If we cannot
+    // match the explicit user marker above, treat the first segment after
+    // /workspace/ as the user workspace directory and keep the remainder.
+    const slashIndex = genericRelativePath.indexOf("/");
+    if (!normalizedUserId && slashIndex > 0) {
+      return sanitizeWorkspaceRelativePath(genericRelativePath.slice(slashIndex + 1));
+    }
+    return genericRelativePath;
   }
 
   function normalizeRecognizedFilePath(pathToken = "") {
