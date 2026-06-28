@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { existsSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -42,6 +43,95 @@ import {
 } from "./file-extension-constants.js";
 const FFPROBE_AMBIGUOUS_EXTENSIONS = new Set([".webm", ".ogg", ".mkv"]);
 const MODEL_READY_AUDIO_EXTENSIONS = new Set([".wav", ".mp3"]);
+const MEDIA_BINARY_NAMES = Object.freeze({
+  ffmpeg: "ffmpeg",
+  ffprobe: "ffprobe",
+});
+
+function getMediaBinaryExecutableName(binaryName = "", platform = process.platform) {
+  const normalizedBinaryName = String(binaryName || "").trim();
+  if (!normalizedBinaryName) return "";
+  return platform === "win32" ? `${normalizedBinaryName}.exe` : normalizedBinaryName;
+}
+
+function getMediaBinaryEnvVarName(binaryName = "") {
+  return `NOOBOT_${String(binaryName || "").trim().toUpperCase()}_PATH`;
+}
+
+function uniqueExistingDirectories(directories = []) {
+  const seen = new Set();
+  const output = [];
+  for (const directory of directories) {
+    const normalizedDirectory = String(directory || "").trim();
+    if (!normalizedDirectory || seen.has(normalizedDirectory)) continue;
+    seen.add(normalizedDirectory);
+    output.push(normalizedDirectory);
+  }
+  return output;
+}
+
+function resolveMediaBinaryCandidateDirectories({
+  platform = process.platform,
+  arch = process.arch,
+  resourcesPath = process.resourcesPath,
+  execPath = process.execPath,
+  cwd = process.cwd(),
+} = {}) {
+  const moduleRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
+  const appDirectory = execPath ? path.dirname(execPath) : "";
+  const platformArch = `${platform}-${arch}`;
+  return uniqueExistingDirectories([
+    resourcesPath && path.join(resourcesPath, "bin"),
+    resourcesPath && path.join(resourcesPath, "bin", "ffmpeg"),
+    resourcesPath && path.join(resourcesPath, "bin", "ffmpeg", platform),
+    resourcesPath && path.join(resourcesPath, "bin", "ffmpeg", platformArch),
+    resourcesPath && path.join(resourcesPath, "ffmpeg"),
+    resourcesPath && path.join(resourcesPath, "ffmpeg", platform),
+    resourcesPath && path.join(resourcesPath, "ffmpeg", platformArch),
+    appDirectory,
+    appDirectory && path.join(appDirectory, "bin"),
+    appDirectory && path.join(appDirectory, "bin", "ffmpeg"),
+    cwd && path.join(cwd, "bin"),
+    cwd && path.join(cwd, "bin", "ffmpeg"),
+    cwd && path.join(cwd, "bin", "ffmpeg", platform),
+    cwd && path.join(cwd, "bin", "ffmpeg", platformArch),
+    moduleRoot && path.join(moduleRoot, "bin"),
+    moduleRoot && path.join(moduleRoot, "bin", "ffmpeg"),
+    moduleRoot && path.join(moduleRoot, "bin", "ffmpeg", platform),
+    moduleRoot && path.join(moduleRoot, "bin", "ffmpeg", platformArch),
+  ]);
+}
+
+export function resolveMediaBinaryPath(binaryName = "", {
+  env = process.env,
+  platform = process.platform,
+  arch = process.arch,
+  resourcesPath = process.resourcesPath,
+  execPath = process.execPath,
+  cwd = process.cwd(),
+  exists = existsSync,
+} = {}) {
+  const normalizedBinaryName = String(binaryName || "").trim();
+  const fallbackExecutableName = getMediaBinaryExecutableName(normalizedBinaryName, platform);
+  if (!fallbackExecutableName) return "";
+
+  const envPath = String(env?.[getMediaBinaryEnvVarName(normalizedBinaryName)] || "").trim();
+  if (envPath) return envPath;
+
+  const candidateDirectories = resolveMediaBinaryCandidateDirectories({
+    platform,
+    arch,
+    resourcesPath,
+    execPath,
+    cwd,
+  });
+  for (const directory of candidateDirectories) {
+    const candidatePath = path.join(directory, fallbackExecutableName);
+    if (exists(candidatePath)) return candidatePath;
+  }
+  return fallbackExecutableName;
+}
+
 function normalizeMediaInputPath(rawFilePath = "") {
   const normalized = String(rawFilePath || "").trim();
   if (!normalized) return "";
@@ -133,8 +223,9 @@ function resolveMediaTypeByPath(filePath = "") {
 
 function runFfprobe(filePath = "") {
   return new Promise((resolve, reject) => {
+    const ffprobePath = resolveMediaBinaryPath(MEDIA_BINARY_NAMES.ffprobe);
     const ffprobeProcess = spawn(
-      "ffprobe",
+      ffprobePath,
       [
         "-v",
         "error",
@@ -193,7 +284,8 @@ async function resolveMediaTypeByPathWithProbe(filePath = "") {
 
 function runFfmpeg(args = []) {
   return new Promise((resolve, reject) => {
-    const ffmpegProcess = spawn("ffmpeg", args, {
+    const ffmpegPath = resolveMediaBinaryPath(MEDIA_BINARY_NAMES.ffmpeg);
+    const ffmpegProcess = spawn(ffmpegPath, args, {
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stderrText = "";

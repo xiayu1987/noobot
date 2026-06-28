@@ -146,6 +146,55 @@ function buildExistingArtifactPersistedOutput({
 
 let libreOfficeConverters = null;
 
+function uniqueTruthyStrings(values = []) {
+  return [...new Set(
+    values
+      .map((value) => String(value || "").trim())
+      .filter(Boolean),
+  )];
+}
+
+function resolveLibreOfficeBinaryPaths() {
+  const configuredPaths = [
+    process.env.LIBRE_OFFICE_EXE,
+    process.env.LIBREOFFICE_EXE,
+    process.env.SOFFICE_EXE,
+    process.env.SOFFICE_PATH,
+  ];
+
+  if (process.platform === "darwin") {
+    return uniqueTruthyStrings([
+      ...configuredPaths,
+      "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+      "/Applications/LibreOffice.app/Contents/MacOS/soffice.bin",
+    ]);
+  }
+
+  if (process.platform === "win32") {
+    const programFiles = process.env.PROGRAMFILES || "C:/Program Files";
+    const programFilesX86 =
+      process.env["PROGRAMFILES(X86)"] ||
+      process.env.PROGRAMFILES_X86 ||
+      "C:/Program Files (x86)";
+    return uniqueTruthyStrings([
+      ...configuredPaths,
+      path.join(programFiles, "LibreOffice", "program", "soffice.exe"),
+      path.join(programFilesX86, "LibreOffice", "program", "soffice.exe"),
+      "C:/Program Files/LibreOffice/program/soffice.exe",
+      "C:/Program Files (x86)/LibreOffice/program/soffice.exe",
+    ]);
+  }
+
+  return uniqueTruthyStrings([
+    ...configuredPaths,
+    "/usr/bin/libreoffice",
+    "/usr/bin/soffice",
+    "/snap/bin/libreoffice",
+    "/opt/libreoffice/program/soffice",
+    "/opt/libreoffice7.6/program/soffice",
+  ]);
+}
+
 function resolveLibreOfficeConverters() {
   if (libreOfficeConverters) {
     return libreOfficeConverters;
@@ -392,6 +441,7 @@ async function parseDocumentToTextViaLibreOffice({
       outputBuffer = converterWithOptions
         ? await converterWithOptions(inputBuffer, outputFormat.format, outputFormat.filter, {
           fileName: inputFileName,
+          sofficeBinaryPaths: resolveLibreOfficeBinaryPaths(),
         })
         : await converter(inputBuffer, outputFormat.format, outputFormat.filter);
     } catch (primaryError) {
@@ -403,6 +453,7 @@ async function parseDocumentToTextViaLibreOffice({
       outputBuffer = converterWithOptions
         ? await converterWithOptions(inputBuffer, "txt", "Text", {
           fileName: inputFileName,
+          sofficeBinaryPaths: resolveLibreOfficeBinaryPaths(),
         })
         : await converter(inputBuffer, "txt", "Text");
     }

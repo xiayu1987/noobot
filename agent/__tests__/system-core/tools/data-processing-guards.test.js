@@ -5,7 +5,10 @@ import os from "node:os";
 import path from "node:path";
 
 import { createDoc2DataTool } from "../../../src/system-core/tools/data-processing/doc2data-tool.js";
-import { createMedia2DataTool } from "../../../src/system-core/tools/data-processing/media2data-tool.js";
+import {
+  createMedia2DataTool,
+  resolveMediaBinaryPath,
+} from "../../../src/system-core/tools/data-processing/media2data-tool.js";
 import { createContentProcessTool } from "../../../src/system-core/tools/data-processing/content-process-tool.js";
 import { createWeb2DataTool } from "../../../src/system-core/tools/data-processing/web2data-tool.js";
 import { createConnectorAccessTool } from "../../../src/system-core/tools/connectors/connector-access-tool.js";
@@ -322,6 +325,67 @@ test("media_to_data: non-media file should fail with unsupported media file type
   await assert.rejects(
     () => tool.invoke({ filePath: "runtime/ops_workdir/input.txt" }),
     (error) => error?.code === ERROR_CODE.RECOVERABLE_UNSUPPORTED_MEDIA_FILE_TYPE,
+  );
+});
+
+test("media_to_data: resolves ffmpeg and ffprobe binary paths across desktop platforms", () => {
+  const existingPaths = new Set([
+    path.join("/app/resources", "bin", "ffmpeg", "win32-x64", "ffmpeg.exe"),
+    path.join("/app/resources", "bin", "ffmpeg", "darwin-arm64", "ffprobe"),
+    path.join("/repo", "bin", "ffmpeg", "linux-x64", "ffmpeg"),
+  ]);
+  const exists = (candidatePath) => existingPaths.has(candidatePath);
+
+  assert.equal(
+    resolveMediaBinaryPath("ffmpeg", {
+      platform: "win32",
+      arch: "x64",
+      resourcesPath: "/app/resources",
+      execPath: "/app/Noobot.exe",
+      cwd: "/repo",
+      env: {},
+      exists,
+    }),
+    path.join("/app/resources", "bin", "ffmpeg", "win32-x64", "ffmpeg.exe"),
+  );
+  assert.equal(
+    resolveMediaBinaryPath("ffprobe", {
+      platform: "darwin",
+      arch: "arm64",
+      resourcesPath: "/app/resources",
+      execPath: "/app/Noobot.app/Contents/MacOS/Noobot",
+      cwd: "/repo",
+      env: {},
+      exists,
+    }),
+    path.join("/app/resources", "bin", "ffmpeg", "darwin-arm64", "ffprobe"),
+  );
+  assert.equal(
+    resolveMediaBinaryPath("ffmpeg", {
+      platform: "linux",
+      arch: "x64",
+      resourcesPath: "",
+      execPath: "/app/noobot",
+      cwd: "/repo",
+      env: {},
+      exists,
+    }),
+    path.join("/repo", "bin", "ffmpeg", "linux-x64", "ffmpeg"),
+  );
+});
+
+test("media_to_data: ffmpeg binary environment override wins over bundled paths", () => {
+  assert.equal(
+    resolveMediaBinaryPath("ffmpeg", {
+      platform: "win32",
+      arch: "x64",
+      resourcesPath: "/app/resources",
+      execPath: "/app/Noobot.exe",
+      cwd: "/repo",
+      env: { NOOBOT_FFMPEG_PATH: "C:\\tools\\ffmpeg.exe" },
+      exists: () => true,
+    }),
+    "C:\\tools\\ffmpeg.exe",
   );
 });
 
