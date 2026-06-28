@@ -15,8 +15,16 @@ vi.mock("../../../src/shared/ui", async () => {
   return {
     BaseAttachmentFileCard: defineComponent({
       name: "BaseAttachmentFileCard",
-      setup() {
-        return () => null;
+      props: {
+        attachmentItem: { type: Object, default: () => ({}) },
+        nameText: { type: String, default: "" },
+      },
+      setup(props) {
+        return () => h(
+          "div",
+          { class: "BaseAttachmentFileCard-stub" },
+          props.nameText || props.attachmentItem?.name || props.attachmentItem?.fileName || "",
+        );
       },
     }),
     BaseFileCardList: passthrough("BaseFileCardList"),
@@ -66,6 +74,21 @@ const TestRenderer = defineComponent({
       class: "context-probe",
       "data-attachment-count": String(props.attachmentCount),
       "data-legacy-attachment-count": String(props.legacyAttachmentCount),
+    });
+  },
+});
+
+const AssetRenderer = defineComponent({
+  name: "SharedMessageAssetRendererProbe",
+  props: {
+    attachmentCount: { type: Number, default: 0 },
+    writtenFileCount: { type: Number, default: 0 },
+  },
+  setup(props) {
+    return () => h("div", {
+      class: "asset-renderer-probe",
+      "data-attachment-count": String(props.attachmentCount),
+      "data-written-file-count": String(props.writtenFileCount),
     });
   },
 });
@@ -184,5 +207,48 @@ describe("SharedChatMessageItem", () => {
     expect(probe.exists()).toBe(true);
     expect(probe.attributes("data-attachment-count")).toBe("1");
     expect(probe.attributes("data-legacy-attachment-count")).toBe("1");
+  });
+
+  it("does not render the default asset list when a post renderer suppresses default assets", () => {
+    registerFrontendPlugin({
+      id: "shared-message-assets-suppress-probe",
+      messageCards: [
+        {
+          id: "shared-message-assets-suppress-probe:card",
+          slot: "post",
+          suppressDefaultAssets: true,
+          component: AssetRenderer,
+          match: (messageItem = {}) => messageItem?.id === "msg-assets-suppress",
+          resolveProps: (context = {}) => ({
+            attachmentCount: Array.isArray(context.displayedAttachments)
+              ? context.displayedAttachments.length
+              : -1,
+            writtenFileCount: Array.isArray(context.writtenFiles)
+              ? context.writtenFiles.length
+              : -1,
+          }),
+        },
+      ],
+    });
+
+    const wrapper = mountItem({
+      messageItem: {
+        id: "msg-assets-suppress",
+        role: "assistant",
+        content: "done",
+        attachments: [
+          { attachmentId: "att-1", name: "a.txt", size: 12 },
+          { attachmentId: "att-2", name: "b.txt", size: 34 },
+        ],
+      },
+    });
+
+    const probe = wrapper.find(".asset-renderer-probe");
+
+    expect(probe.exists()).toBe(true);
+    expect(probe.attributes("data-attachment-count")).toBe("2");
+    expect(probe.attributes("data-written-file-count")).toBe("0");
+    expect(wrapper.find(".BaseFileCardList-stub").exists()).toBe(false);
+    expect(wrapper.findAll(".BaseAttachmentFileCard-stub")).toHaveLength(0);
   });
 });

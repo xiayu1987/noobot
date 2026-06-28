@@ -408,6 +408,7 @@ export function registerFrontendPlugin(ctx = {}) {
         capability: "message.panel.assets",
         slot: "post",
         priority: 10,
+        suppressDefaultAssets: true,
         component: MessageWrittenFiles,
         match: (messageItem = {}) => messageItem?.role === "assistant",
         resolveProps: (context = {}) => ({
@@ -425,6 +426,7 @@ export function registerFrontendPlugin(ctx = {}) {
         capability: "message.panel.assets",
         slot: "post",
         priority: 20,
+        suppressDefaultAssets: true,
         component: MessageAttachments,
         match: () => true,
         resolveProps: (context = {}) => ({

@@ -7,7 +7,7 @@ import {
   searchWithSearchEngine,
 } from "../../../src/system-core/tools/ai-models/web-search-tool.js";
 
-test("web_search: Responses API 调用应启用 web_search_preview 工具", async () => {
+test("web_search: Responses API 调用应启用 web_search 工具", async () => {
   let capturedRequest = null;
   const openaiClient = {
     responses: {
@@ -27,7 +27,7 @@ test("web_search: Responses API 调用应启用 web_search_preview 工具", asyn
     query: "latest noobot news",
   });
 
-  assert.deepEqual(capturedRequest?.tools, [{ type: "web_search_preview" }]);
+  assert.deepEqual(capturedRequest?.tools, [{ type: "web_search" }]);
   assert.equal(capturedRequest?.model, "gpt-5.5");
   const inputText = capturedRequest?.input?.[0]?.content?.[0]?.text;
   assert.match(inputText, /必须使用网页搜索/);

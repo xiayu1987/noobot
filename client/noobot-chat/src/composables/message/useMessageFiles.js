@@ -240,8 +240,80 @@ function toAttachmentKey(attachmentItem = {}) {
 
 function toAttachmentContentKey(attachmentItem = {}) {
   const name = String(attachmentItem?.name || "").trim();
-  if (!name) return "";
-  return `${name}|${Number(attachmentItem?.size) || 0}`;
+  const size = Number(attachmentItem?.size);
+  if (!name || !Number.isFinite(size) || size <= 0) return "";
+  return `${name}|${size}`;
+}
+
+function normalizeComparablePath(pathValue = "") {
+  return String(pathValue || "")
+    .trim()
+    .replaceAll("\\", "/")
+    .replace(/^file:\/\//, "")
+    .replace(/^\.\//, "")
+    .replace(/\/+$/, "");
+}
+
+function getAttachmentComparablePaths(attachmentItem = {}) {
+  return [
+    attachmentItem?.path,
+    attachmentItem?.filePath,
+    attachmentItem?.resolvedPath,
+    attachmentItem?.relativePath,
+    attachmentItem?.transferFilePath,
+    attachmentItem?.pathView?.sandboxPath,
+    attachmentItem?.pathView?.workspacePath,
+  ]
+    .map(normalizeComparablePath)
+    .filter(Boolean);
+}
+
+function getWrittenComparablePaths(fileItem = {}) {
+  return [
+    fileItem?.resolvedPath,
+    fileItem?.relativePath,
+    fileItem?.path,
+    fileItem?.filePath,
+    fileItem?.transferFilePath,
+  ]
+    .map(normalizeComparablePath)
+    .filter(Boolean);
+}
+
+function areComparablePathsSame(left = "", right = "") {
+  const a = normalizeComparablePath(left);
+  const b = normalizeComparablePath(right);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  return a.endsWith(`/${b}`) || b.endsWith(`/${a}`);
+}
+
+function toWrittenFileContentKey(fileItem = {}) {
+  const name = String(fileItem?.fileName || fileItem?.name || resolveBaseName(fileItem?.relativePath || fileItem?.resolvedPath || "")).trim();
+  const size = Number(fileItem?.size);
+  if (!name || !Number.isFinite(size) || size <= 0) return "";
+  return `${name}|${size}`;
+}
+
+function isWrittenFileBackedByAttachment(fileItem = {}, attachments = []) {
+  const writtenPaths = getWrittenComparablePaths(fileItem);
+  const writtenContentKey = toWrittenFileContentKey(fileItem);
+  for (const attachmentItem of Array.isArray(attachments) ? attachments : []) {
+    const attachmentPaths = getAttachmentComparablePaths(attachmentItem);
+    if (
+      writtenPaths.length &&
+      attachmentPaths.length &&
+      writtenPaths.some((writtenPath) =>
+        attachmentPaths.some((attachmentPath) => areComparablePathsSame(writtenPath, attachmentPath)),
+      )
+    ) {
+      return true;
+    }
+    if (writtenContentKey && writtenContentKey === toAttachmentContentKey(attachmentItem)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function sanitizeWorkspaceRelativePath(pathValue = "") {
@@ -381,7 +453,7 @@ export function useMessageFiles({
       .replaceAll("\\", "/");
   }
 
-  const writtenFiles = computed(() => {
+  const rawWrittenFiles = computed(() => {
     const messageItem = getMessageItem() || {};
     if (isFreshPendingAssistant(messageItem)) return [];
     const canUseAssociatedTurnArtifacts = !isAssistantWithoutTurnScope(messageItem);
@@ -397,6 +469,8 @@ export function useMessageFiles({
             resolvedPath: fileItem?.resolvedPath || "",
             fileName: fileItem?.fileName || resolveBaseName(fileItem?.resolvedPath || ""),
             relativePath: fileItem?.relativePath || resolveRelativeWorkspacePath(fileItem?.resolvedPath || ""),
+            size: fileItem?.size,
+            mimeType: fileItem?.mimeType || fileItem?.type || "",
             sourceType: fileItem?.sourceType || "tool",
             recognized: fileItem?.recognized === true,
           };
@@ -610,6 +684,12 @@ export function useMessageFiles({
     }
     return dedupedWithOwnerType;
   });
+
+  const writtenFiles = computed(() =>
+    rawWrittenFiles.value.filter(
+      (fileItem) => !isWrittenFileBackedByAttachment(fileItem, displayedAttachments.value),
+    ),
+  );
 
   return {
     writtenFiles,
