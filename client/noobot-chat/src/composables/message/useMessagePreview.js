@@ -233,6 +233,16 @@ function parseContentDisposition(contentDisposition = "") {
 }
 
 async function triggerBlobDownload(blob, fileName, translate, notify) {
+  const desktopSaveDownload = window?.noobotDesktop?.saveDownload;
+  if (typeof desktopSaveDownload === "function") {
+    const bytes = await blob.arrayBuffer();
+    const result = await desktopSaveDownload({ fileName: String(fileName || "download"), bytes });
+    if (result?.ok) {
+      notify({ type: "success", message: translate("message.downloaded") || "Downloaded" });
+      return;
+    }
+    if (result?.canceled) return;
+  }
   const downloadUrl = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = downloadUrl;

@@ -27,4 +27,7 @@ contextBridge.exposeInMainWorld("noobotDesktop", {
   saveSuperAdmin(values) {
     return ipcRenderer.invoke("noobot:save-super-admin", values);
   },
+  saveDownload({ fileName, bytes } = {}) {
+    return ipcRenderer.invoke("noobot:save-download", { fileName, bytes });
+  },
 });

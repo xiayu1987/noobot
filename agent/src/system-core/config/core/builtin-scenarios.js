@@ -26,6 +26,7 @@ export const PROGRAMMING_REQUIRED_TOOL_NAMES = Object.freeze([
 export const PROGRAMMING_AUXILIARY_TOOL_NAMES = Object.freeze([
   "task_summary",
   "request_help",
+  "web_search",
 ]);
 export const PROGRAMMING_TOOL_NAMES = Object.freeze([
   ...PROGRAMMING_REQUIRED_TOOL_NAMES,
@@ -55,7 +56,7 @@ export const BUILTIN_SCENARIOS = Object.freeze({
         "services",
         "mcp_servers",
       ]),
-      services: Object.freeze(["web_search_service"]),
+      services: Object.freeze([]),
       mcpServers: Object.freeze([]),
     }),
     text: Object.freeze({
@@ -70,7 +71,7 @@ export const BUILTIN_SCENARIOS = Object.freeze({
         "services",
         "mcp_servers",
       ]),
-      services: Object.freeze(["web_search_service"]),
+      services: Object.freeze([]),
       mcpServers: Object.freeze([]),
     }),
   }),

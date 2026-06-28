@@ -95,7 +95,6 @@ export const BLOCKED_AGENT_TOOL_NAMES = new Set([
   ...WORKFLOW_PARAMS.acceptance.guards.blockedAgentToolNames,
 ]);
 
-export const GUIDANCE_WEB_SERVICE_NAME = WORKFLOW_PARAMS.guidance.web.serviceName;
 export const GUIDANCE_WEB_TOOL_NAMES = [...WORKFLOW_PARAMS.guidance.web.toolNames];
 export const TASK_ACCEPTANCE_TOOL_NAME = WORKFLOW_PARAMS.acceptance.tools.taskAcceptanceToolName;
 export const PLAN_REFINEMENT_TOOL_NAME = WORKFLOW_PARAMS.planning.tools.planRefinementToolName;

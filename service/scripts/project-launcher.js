@@ -563,6 +563,19 @@ function alignInitialModelReferences({
     };
   }
 
+  if (isPlainObject(globalConfig.tools) && isPlainObject(globalConfig.tools.web_search)) {
+    const webSearch = { ...globalConfig.tools.web_search };
+    const responsesApi = isPlainObject(webSearch.responses_api)
+      ? { ...webSearch.responses_api }
+      : {};
+    responsesApi.model = alias;
+    webSearch.responses_api = responsesApi;
+    globalConfig.tools = {
+      ...globalConfig.tools,
+      web_search: webSearch,
+    };
+  }
+
   globalConfig.scenarios = normalizeBuiltinScenarioConfigForLauncher(globalConfig.scenarios, {
     programmingModel: alias,
   });

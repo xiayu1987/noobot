@@ -27,7 +27,7 @@ import { ERROR_CODE } from "../../error/constants.js";
 import { TOOL_NAME } from "../constants/index.js";
 
 export const REQUEST_HELP_TOOL_NAME = TOOL_NAME.REQUEST_HELP;
-const DEFAULT_HELP_SERVICES = ["web_search_service"];
+const DEFAULT_HELP_SERVICES = [];
 const DEFAULT_QUERY_KEY = "q";
 const DEFAULT_SEARCH_ENDPOINT = "search";
 const TOOL_RESULT_STATUS = Object.freeze({

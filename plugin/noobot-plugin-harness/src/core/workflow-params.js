@@ -319,8 +319,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
       },
     },
     web: {
-      serviceName: "web_search_service",
-      toolNames: ["call_service"],
+      toolNames: ["web_search"],
     },
   },
   acceptance: {

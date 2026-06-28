@@ -172,7 +172,7 @@ test("resolveScenarioRunConfig should use builtin programming shape and only acc
     "process_content_task",
     "task_summary",
     "request_help",
-    "call_service",
+    "web_search",
   ]);
   assert.deepEqual(resolved.scenarioProfile.context, [
     "scenario",
@@ -181,7 +181,7 @@ test("resolveScenarioRunConfig should use builtin programming shape and only acc
     "services",
     "mcp_servers",
   ]);
-  assert.deepEqual(resolved.scenarioProfile.services, ["web_search_service"]);
+  assert.deepEqual(resolved.scenarioProfile.services, []);
 });
 
 test("resolveScenarioRunConfig should keep selectedModel separate from runtimeModel", () => {

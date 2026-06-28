@@ -120,6 +120,7 @@ test("resolveScenarioProfile supports builtin text scenario without a hard-coded
     "process_content_task",
     "task_summary",
     "request_help",
+    "web_search",
   ]);
   assert.deepEqual(result.context, [
     "scenario",
@@ -128,7 +129,7 @@ test("resolveScenarioProfile supports builtin text scenario without a hard-coded
     "services",
     "mcp_servers",
   ]);
-  assert.deepEqual(result.services, ["web_search_service"]);
+  assert.deepEqual(result.services, []);
   assert.deepEqual(result.mcpServers, []);
 });
 

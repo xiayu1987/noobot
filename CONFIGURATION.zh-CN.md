@@ -122,7 +122,7 @@
 | `tools.task_summary.enabled` | boolean | 启用阶段小结工具 |
 | `tools.task_summary.phase_summary_loop_turns` | number | 触发阶段小结的对话轮数阈值 |
 | `tools.request_help.enabled` | boolean | 启用请求帮助工具 |
-| `tools.request_help.help_services` | string[]/object[] | 帮助服务列表（默认包含 `web_search_service`） |
+| `tools.request_help.help_services` | string[]/object[] | 帮助服务列表（默认空；网页搜索使用 `web_search` 工具） |
 | `tools.request_help.help_model` | string | 帮助模型别名/名称（留空按当前/默认模型逻辑） |
 | `tools.request_help.help_prompt_loop_turns` | number | 触发系统帮助提示的工具循环阈值（默认 50） |
 | `tools.request_help.tool_failure_help_count` | number | 触发用户帮助提示的连续失败阈值（默认 3） |
@@ -152,7 +152,7 @@
 
 情景定义现在由系统内置，只保留两个固定情景：
 - `full`（全能，默认）：tools/context/services/mcp_servers 均为 `["*"]`，表示不额外限制。
-- `programming`（编程）：固定使用代码任务策略，包含代码修改必要工具、代码上下文段、`web_search_service` 辅助服务；配置文件只允许覆盖 `model`。
+- `programming`（编程）：固定使用代码任务策略，包含代码修改必要工具、代码上下文段和 `web_search` 工具；配置文件只允许覆盖 `model`。
 
 用户配置或全局配置中的其它字段（如 `name`、`description`、`tools`、`context`、`services`、`mcp_servers`，以及自定义情景定义）会被忽略，避免破坏内置行为。
 
@@ -295,8 +295,9 @@
 | `services.<name>.endpoints.<epName>.custom_param_format` | string | 自定义参数模板 |
 
 当前仓库默认：
-- `web_search_service`：基于 SearX 实例的搜索端点
 - `weather_service`：通过 `wttr.in` 查询天气
+
+网页搜索由 `web_search` 工具提供，不再通过外部服务提供。
 
 ### 4.2 插件配置（`plugins.<name>`）
 

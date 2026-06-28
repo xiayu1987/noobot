@@ -138,7 +138,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
       },
       "modelName": {
         "key": "tools.mcp.fieldModelName",
-        "text": "模型名称（可选）。"
+        "text": "模型名称。"
       },
       "task": {
         "key": "tools.mcp.fieldTask",
@@ -471,6 +471,29 @@ export const TOOL_SCHEMA_BY_TOOL = {
     },
     "texts": {}
   },
+  "web_search": {
+    "description": {
+      "key": "tools.web_search.description",
+      "text": "搜索网页信息。输入 query，返回网页搜索结果。"
+    },
+    "params": {
+      "model_name": {
+        "key": "tools.web_search.fieldModelName",
+        "text": "模型名称。"
+      },
+      "query": {
+        "key": "tools.web_search.fieldQuery",
+        "text": "搜索内容。"
+      }
+    },
+    "texts": {
+      "tools.web_search.modelApiKeyMissing": "模型 API Key 缺失",
+      "tools.web_search.queryRequired": "query 必填",
+      "tools.web_search.searchEngineUrlMissing": "搜索引擎模式需要配置 endpoints.search.url",
+      "tools.web_search.searchFailed": "网页搜索失败",
+      "tools.web_search.userIdMissing": "运行时用户 ID 缺失"
+    }
+  },
   "multimodal_generate": {
     "description": {
       "key": "tools.multimodal.description",
@@ -487,7 +510,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
       },
       "model_name": {
         "key": "tools.multimodal.fieldModelName",
-        "text": "模型名称（可选）。"
+        "text": "模型名称。"
       }
     },
     "texts": {
@@ -523,7 +546,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
     "params": {
       "modelName": {
         "key": "tools.process_connector.fieldModelName",
-        "text": "模型名称（可选）。"
+        "text": "模型名称。"
       },
       "task": {
         "key": "tools.process_connector.fieldTask",
@@ -548,7 +571,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
       },
       "modelName": {
         "key": "tools.content_process.fieldModelName",
-        "text": "模型名称（可选）。"
+        "text": "模型名称。"
       },
       "task": {
         "key": "tools.content_process.fieldTask",

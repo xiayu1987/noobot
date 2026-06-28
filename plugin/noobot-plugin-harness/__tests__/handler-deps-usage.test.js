@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename);
 const handlersRoot = path.resolve(__dirname, "../src/capabilities/handlers");
 const ALLOWED_UNUSED_EXPORTS = Object.freeze({
   planning: new Set(["getTaskTemplate"]),
-  guidance: new Set(["GUIDANCE_WEB_SERVICE_NAME", "GUIDANCE_WEB_TOOL_NAMES"]),
+  guidance: new Set(["GUIDANCE_WEB_TOOL_NAMES"]),
 });
 
 function extractNamedExports(source = "") {

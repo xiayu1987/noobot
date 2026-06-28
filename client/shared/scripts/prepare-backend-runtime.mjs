@@ -9,7 +9,17 @@ const desktopProjectDir = process.env.NOOBOT_DESKTOP_PROJECT_DIR || process.cwd(
 const outRoot = path.join(desktopProjectDir, 'build/backend-runtime');
 const backendRoot = path.join(outRoot, 'backend');
 
-const runtimeWorkspaces = ['service', 'agent', 'agent-proxy', 'model-proxy', 'shared', 'i18n'];
+const runtimeWorkspaces = [
+  'service',
+  'agent',
+  'agent-proxy',
+  'model-proxy',
+  'shared',
+  'i18n',
+  'workflow',
+  'plugin/noobot-plugin-harness',
+  'plugin/noobot-plugin-workflow',
+];
 const runtimeAssetDirs = ['user-template'];
 const ignore = /(^|[/\\])(?:node_modules|\.git|__tests__|test|tests|\.cache|dist|coverage)([/\\]|$)|\.(?:map|md)$/i;
 const privateConfigFileNames = new Set(['global.config.json', 'config.json', 'agent-proxy.config.json', 'model-proxy.config.json']);

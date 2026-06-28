@@ -138,7 +138,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
       },
       "modelName": {
         "key": "tools.mcp.fieldModelName",
-        "text": "Model name (optional)."
+        "text": "Model name."
       },
       "task": {
         "key": "tools.mcp.fieldTask",
@@ -471,6 +471,29 @@ export const TOOL_SCHEMA_BY_TOOL = {
     },
     "texts": {}
   },
+  "web_search": {
+    "description": {
+      "key": "tools.web_search.description",
+      "text": "Search the web for information. Input query. Returns web search results."
+    },
+    "params": {
+      "model_name": {
+        "key": "tools.web_search.fieldModelName",
+        "text": "Model name."
+      },
+      "query": {
+        "key": "tools.web_search.fieldQuery",
+        "text": "Search query."
+      }
+    },
+    "texts": {
+      "tools.web_search.modelApiKeyMissing": "Model API Key missing",
+      "tools.web_search.queryRequired": "query required",
+      "tools.web_search.searchEngineUrlMissing": "search_engine mode requires endpoints.search.url",
+      "tools.web_search.searchFailed": "web search failed",
+      "tools.web_search.userIdMissing": "runtime user ID missing"
+    }
+  },
   "multimodal_generate": {
     "description": {
       "key": "tools.multimodal.description",
@@ -487,7 +510,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
       },
       "model_name": {
         "key": "tools.multimodal.fieldModelName",
-        "text": "Model name (optional)."
+        "text": "Model name."
       }
     },
     "texts": {
@@ -523,7 +546,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
     "params": {
       "modelName": {
         "key": "tools.process_connector.fieldModelName",
-        "text": "Model name (optional)."
+        "text": "Model name."
       },
       "task": {
         "key": "tools.process_connector.fieldTask",
@@ -548,7 +571,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
       },
       "modelName": {
         "key": "tools.content_process.fieldModelName",
-        "text": "Model name (optional)."
+        "text": "Model name."
       },
       "task": {
         "key": "tools.content_process.fieldTask",

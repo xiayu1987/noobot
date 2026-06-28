@@ -35,6 +35,7 @@ test("buildTools: 重组后应注册关键工具", async () => {
     "task_summary",
     "request_help",
     "user_interaction",
+    "web_search",
   ];
 
   for (const toolName of expected) {
@@ -61,6 +62,7 @@ test("buildTools: enabled=false 应按配置过滤", async () => {
           process_content_task: { enabled: false },
           process_connector_tool: { enabled: false },
           request_help: { enabled: false },
+          web_search: { enabled: false },
           agent_collab: { enabled: false },
           user_interaction: { enabled: false },
         },
@@ -75,6 +77,7 @@ test("buildTools: enabled=false 应按配置过滤", async () => {
     "process_content_task",
     "process_connector_tool",
     "request_help",
+    "web_search",
     "delegate_task_async",
     "wait_async_task_result",
     "plan_multi_task_collaboration",
