@@ -343,22 +343,26 @@ export async function postResetAllWorkspaceApi(
 }
 
 export async function getWorkspaceFileApi(
-  { userId = "", path = "" },
+  { userId = "", path = "", traceId = "" },
   { fetcher } = {},
 ) {
   const runFetch = resolveFetcher(fetcher);
+  const headers = traceId ? { "x-noobot-file-trace-id": String(traceId) } : undefined;
   return runFetch(
     `/api/internal/workspace/${encodeURIComponent(userId)}/file?path=${encodeURIComponent(path)}`,
+    headers ? { headers } : undefined,
   );
 }
 
 export async function downloadWorkspaceFileApi(
-  { userId = "", path = "" },
+  { userId = "", path = "", traceId = "" },
   { fetcher } = {},
 ) {
   const runFetch = resolveFetcher(fetcher);
+  const headers = traceId ? { "x-noobot-file-trace-id": String(traceId) } : undefined;
   return runFetch(
     `/api/internal/workspace/${encodeURIComponent(userId)}/download?path=${encodeURIComponent(path)}`,
+    headers ? { headers } : undefined,
   );
 }
 

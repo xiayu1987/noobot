@@ -232,17 +232,89 @@ function parseContentDisposition(contentDisposition = "") {
   return String(basicMatch?.[1] || "").trim();
 }
 
-async function triggerBlobDownload(blob, fileName, translate, notify) {
-  const desktopSaveDownload = window?.noobotDesktop?.saveDownload;
-  if (typeof desktopSaveDownload === "function") {
-    const bytes = await blob.arrayBuffer();
-    const result = await desktopSaveDownload({ fileName: String(fileName || "download"), bytes });
-    if (result?.ok) {
-      notify({ type: "success", message: translate("message.downloaded") || "Downloaded" });
-      return;
-    }
-    if (result?.canceled) return;
+function sanitizeWorkspaceRelativePath(pathValue = "") {
+  const normalized = String(pathValue || "")
+    .trim()
+    .replaceAll("\\", "/")
+    .replace(/^\.\//, "")
+    .replace(/^\/+/, "");
+  if (!normalized) return "";
+  if (normalized.startsWith("../")) return "";
+  if (normalized.includes("/../")) return "";
+  if (normalized.endsWith("/..")) return "";
+  return normalized;
+}
+
+function resolveWorkspaceRelativePath(pathValue = "", userId = "") {
+  const normalizedPath = String(pathValue || "").trim().replaceAll("\\", "/");
+  if (!normalizedPath) return "";
+  if (!normalizedPath.startsWith("/") && !/^[a-zA-Z]:\//.test(normalizedPath)) {
+    return sanitizeWorkspaceRelativePath(normalizedPath);
   }
+  const normalizedUserId = String(userId || "").trim();
+  if (normalizedUserId) {
+    const marker = `/workspace/${normalizedUserId}/`;
+    const markerIndex = normalizedPath.indexOf(marker);
+    if (markerIndex >= 0) {
+      return sanitizeWorkspaceRelativePath(normalizedPath.slice(markerIndex + marker.length));
+    }
+  }
+  const workspaceMarker = "/workspace/";
+  const markerIndex = normalizedPath.indexOf(workspaceMarker);
+  if (markerIndex < 0) return "";
+  const relativeWithUser = sanitizeWorkspaceRelativePath(
+    normalizedPath.slice(markerIndex + workspaceMarker.length),
+  );
+  const slashIndex = relativeWithUser.indexOf("/");
+  if (slashIndex > 0) {
+    return sanitizeWorkspaceRelativePath(relativeWithUser.slice(slashIndex + 1));
+  }
+  return relativeWithUser;
+}
+
+function resolveFileItemRelativePath(fileItem = {}, userId = "") {
+  return resolveWorkspaceRelativePath(fileItem?.relativePath || "", userId);
+}
+
+function resolveFileItemName(fileItem = {}, relativePath = "") {
+  const explicitName = String(fileItem?.fileName || fileItem?.name || "").trim();
+  if (explicitName) return explicitName;
+  const normalizedPath = String(relativePath || fileItem?.resolvedPath || fileItem?.path || "")
+    .trim()
+    .replaceAll("\\", "/");
+  return String(normalizedPath.split("/").pop() || "").trim();
+}
+
+function createFileAccessTraceId(prefix = "preview") {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function maskWorkspacePath(pathValue = "") {
+  const normalized = String(pathValue || "").trim().replaceAll("\\", "/");
+  if (!normalized) return "";
+  const parts = normalized.split("/").filter(Boolean);
+  if (parts.length <= 2) return normalized;
+  return `${parts.slice(0, 2).join("/")}/.../${parts.at(-1)}`;
+}
+
+function logFileAccess(event, payload = {}) {
+  try {
+    console.info("[noobot:file-access]", {
+      layer: "client.messagePreview",
+      event,
+      ...payload,
+    });
+  } catch {}
+}
+
+async function triggerBlobDownload(blob, fileName, translate, notify) {
+  const traceId = createFileAccessTraceId("save");
+  logFileAccess("blobDownload.start", {
+    traceId,
+    fileName: String(fileName || "download"),
+    size: Number(blob?.size || 0),
+    type: String(blob?.type || ""),
+  });
   const downloadUrl = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = downloadUrl;
@@ -251,6 +323,7 @@ async function triggerBlobDownload(blob, fileName, translate, notify) {
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(downloadUrl);
+  logFileAccess("blobDownload.done", { traceId, fileName: String(fileName || "download") });
 }
 
 async function handleCopyMarkdown({ textContent, renderMarkdown, translate, notify, noCopyableContentTexts, noCopyableTextTexts, rich = true }) {
@@ -393,14 +466,41 @@ export function useMessagePreview({
   // --- 下载 ---
 
   async function onDownloadFile(fileItem = {}) {
+    const traceId = createFileAccessTraceId("download");
     const normalizedUserId = String(userId || "").trim();
-    const relativePath = String(fileItem?.relativePath || "").trim();
-    if (!normalizedUserId || !relativePath) return;
+    const relativePath = resolveFileItemRelativePath(fileItem, normalizedUserId);
+    logFileAccess("download.click", {
+      traceId,
+      hasUserId: Boolean(normalizedUserId),
+      hasRelativePath: Boolean(fileItem?.relativePath),
+      hasFileName: Boolean(fileItem?.fileName || fileItem?.name),
+      hasResolvedPath: Boolean(fileItem?.resolvedPath),
+      relativePath: maskWorkspacePath(relativePath),
+    });
+    if (!normalizedUserId || !relativePath) {
+      logFileAccess("download.invalidMetadata", {
+        traceId,
+        hasUserId: Boolean(normalizedUserId),
+        hasRelativePath: Boolean(fileItem?.relativePath),
+        hasFileName: Boolean(fileItem?.fileName || fileItem?.name),
+        hasResolvedPath: Boolean(fileItem?.resolvedPath),
+      });
+      notify({ type: "error", message: translate("message.downloadFailed") });
+      return;
+    }
     try {
+      logFileAccess("download.request", { traceId, relativePath: maskWorkspacePath(relativePath) });
       const res = await downloadWorkspaceFileApi(
-        { userId: normalizedUserId, path: relativePath },
+        { userId: normalizedUserId, path: relativePath, traceId },
         { fetcher: authFetch || undefined },
       );
+      logFileAccess("download.response", {
+        traceId,
+        ok: Boolean(res?.ok),
+        status: Number(res?.status || 0),
+        contentType: String(res.headers?.get("content-type") || ""),
+        contentDisposition: Boolean(res.headers?.get("content-disposition")),
+      });
       if (!res.ok) {
         let errorText = translate("message.downloadFailedHttp", { status: res.status });
         try {
@@ -410,9 +510,10 @@ export function useMessagePreview({
         throw new Error(errorText);
       }
       const blob = await res.blob();
-      const fileName = parseContentDisposition(res.headers?.get("content-disposition") || "") || fileItem?.fileName || "download";
+      const fileName = parseContentDisposition(res.headers?.get("content-disposition") || "") || resolveFileItemName(fileItem, relativePath) || "download";
       await triggerBlobDownload(blob, fileName, translate, notify);
     } catch (error) {
+      logFileAccess("download.failed", { traceId, error: String(error?.message || error || "") });
       notify({ type: "error", message: error?.message || translate("message.downloadFailed") });
     }
   }
@@ -428,10 +529,29 @@ export function useMessagePreview({
   // --- 文件预览 ---
 
   async function openFilePreview(fileItem = {}) {
+    const traceId = createFileAccessTraceId("preview");
     const normalizedUserId = String(userId || "").trim();
-    const relativePath = String(fileItem?.relativePath || "").trim();
-    const fileName = String(fileItem?.fileName || "").trim();
-    if (!normalizedUserId || !relativePath || !fileName) return;
+    const relativePath = resolveFileItemRelativePath(fileItem, normalizedUserId);
+    const fileName = resolveFileItemName(fileItem, relativePath);
+    logFileAccess("preview.click", {
+      traceId,
+      hasUserId: Boolean(normalizedUserId),
+      hasRelativePath: Boolean(fileItem?.relativePath),
+      hasFileName: Boolean(fileItem?.fileName || fileItem?.name),
+      hasResolvedPath: Boolean(fileItem?.resolvedPath),
+      relativePath: maskWorkspacePath(relativePath),
+    });
+    if (!normalizedUserId || !relativePath || !fileName) {
+      logFileAccess("preview.invalidMetadata", {
+        traceId,
+        hasUserId: Boolean(normalizedUserId),
+        hasRelativePath: Boolean(fileItem?.relativePath),
+        hasFileName: Boolean(fileItem?.fileName || fileItem?.name),
+        hasResolvedPath: Boolean(fileItem?.resolvedPath),
+      });
+      notify({ type: "error", message: translate("message.previewFailed") });
+      return;
+    }
 
     filePreview.visible.value = true;
     filePreview.loading.value = true;
@@ -443,10 +563,17 @@ export function useMessagePreview({
 
     try {
       if (isImageFile(fileName)) {
+        logFileAccess("preview.imageRequest", { traceId, relativePath: maskWorkspacePath(relativePath) });
         const downloadRes = await downloadWorkspaceFileApi(
-          { userId: normalizedUserId, path: relativePath },
+          { userId: normalizedUserId, path: relativePath, traceId },
           { fetcher: authFetch || undefined },
         );
+        logFileAccess("preview.imageResponse", {
+          traceId,
+          ok: Boolean(downloadRes?.ok),
+          status: Number(downloadRes?.status || 0),
+          contentType: String(downloadRes.headers?.get("content-type") || ""),
+        });
         if (!downloadRes.ok) {
           let errorText = translate("message.previewFailedHttp", { status: downloadRes.status });
           try {
@@ -462,9 +589,15 @@ export function useMessagePreview({
       }
 
       const res = await getWorkspaceFileApi(
-        { userId: normalizedUserId, path: relativePath },
+        { userId: normalizedUserId, path: relativePath, traceId },
         { fetcher: authFetch || undefined },
       );
+      logFileAccess("preview.textResponse", {
+        traceId,
+        ok: Boolean(res?.ok),
+        status: Number(res?.status || 0),
+        contentType: String(res.headers?.get("content-type") || ""),
+      });
       const contentType = String(res.headers?.get("content-type") || "").toLowerCase();
       let data = null;
       if (contentType.includes("application/json")) {
@@ -486,6 +619,7 @@ export function useMessagePreview({
       filePreview.textContent.value = String(data.content || "");
       filePreview.mode.value = isMarkdownFile(fileName) ? "markdown" : "text";
     } catch (error) {
+      logFileAccess("preview.failed", { traceId, error: String(error?.message || error || "") });
       filePreview.error.value = error?.message || translate("message.previewFailed");
     } finally {
       filePreview.loading.value = false;
