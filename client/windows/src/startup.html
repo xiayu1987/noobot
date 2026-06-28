@@ -28,16 +28,26 @@
       const message = document.querySelector("#message");
       const log = document.querySelector("#log");
       const retry = document.querySelector("#retry");
-      window.noobotDesktop?.onStartupStatus((status) => {
+      function renderStatus(status) {
         if (!status) return;
         if (status.message) {
           message.textContent = status.message;
           log.textContent = `${log.textContent}${status.message}\n`;
+          log.scrollTop = log.scrollHeight;
         }
         retry.classList.toggle("hidden", status.phase !== "error");
+      }
+
+      window.noobotDesktop?.getStartupStatuses?.().then((statuses) => {
+        if (Array.isArray(statuses)) statuses.forEach(renderStatus);
+      }).catch(() => {});
+
+      window.noobotDesktop?.onStartupStatus((status) => {
+        renderStatus(status);
       });
       retry.addEventListener("click", async () => {
         retry.classList.add("hidden");
+        log.textContent = "";
         message.textContent = "Retrying...";
         await window.noobotDesktop?.retryStartup();
       });

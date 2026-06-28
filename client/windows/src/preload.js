@@ -15,4 +15,7 @@ contextBridge.exposeInMainWorld("noobotDesktop", {
   retryStartup() {
     return ipcRenderer.invoke("noobot:retry-startup");
   },
+  getStartupStatuses() {
+    return ipcRenderer.invoke("noobot:get-startup-statuses");
+  },
 });
