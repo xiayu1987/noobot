@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -673,6 +673,25 @@ function stopManagedService() {
   managedServiceProcess = null;
   child.kill("SIGTERM");
 }
+
+function sanitizeDownloadFileName(fileName = "") {
+  const value = String(fileName || "download").trim() || "download";
+  return value.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").replace(/\.+$/g, "_").slice(0, 180) || "download";
+}
+
+ipcMain.handle("noobot:save-download", async (_event, { fileName = "download", bytes } = {}) => {
+  if (!bytes) throw new Error("Missing download content.");
+  const defaultPath = path.join(app.getPath("downloads"), sanitizeDownloadFileName(fileName));
+  const result = await dialog.showSaveDialog(mainWindow || undefined, {
+    defaultPath,
+    properties: ["createDirectory", "showOverwriteConfirmation"],
+  });
+  if (result.canceled || !result.filePath) return { ok: false, canceled: true };
+  const buffer = Buffer.from(bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : bytes);
+  await fs.promises.mkdir(path.dirname(result.filePath), { recursive: true });
+  await fs.promises.writeFile(result.filePath, buffer);
+  return { ok: true, filePath: result.filePath };
+});
 
 ipcMain.handle("noobot:retry-startup", async () => {
   await ensureServiceStarted();

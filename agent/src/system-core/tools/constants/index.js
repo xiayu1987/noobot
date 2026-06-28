@@ -69,6 +69,7 @@ export const TOOL_NAME = Object.freeze({
   PROCESS_CONNECTOR_TOOL: "process_connector_tool",
   ACCESS_CONNECTOR: "access_connector",
   INSPECT_CONNECTORS: "inspect_connectors",
+  WEB_SEARCH: "web_search",
   MULTIMODAL_GENERATE: "multimodal_generate",
   TASK_SUMMARY: "task_summary",
   REQUEST_HELP: "request_help",

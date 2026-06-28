@@ -12,6 +12,7 @@ import { createModelTool } from "./ai-models/model-tool.js";
 import { createUserInteractionTool } from "./collaboration/user-interaction-tool.js";
 import { createMcpTool } from "./execution/mcp-tool.js";
 import { createConnectorAccessTool } from "./connectors/connector-access-tool.js";
+import { createWebSearchTool } from "./ai-models/web-search-tool.js";
 import { createMultimodalGenerateTool } from "./ai-models/multimodal-generate-tool.js";
 import { createTaskSummaryTool } from "./collaboration/task-summary-tool.js";
 import { createRequestHelpTool } from "./collaboration/request-help-tool.js";
@@ -171,6 +172,7 @@ const TOOL_CONFIG_ALIASES = {
   [TOOL_NAME.EMAIL_CONNECT_CONNECTOR]: [CONNECTOR_TYPE.CONNECT_TOOL_NAME.EMAIL],
   [TOOL_NAME.ACCESS_CONNECTOR]: [TOOL_NAME.ACCESS_CONNECTOR],
   [TOOL_NAME.INSPECT_CONNECTORS]: [TOOL_NAME.INSPECT_CONNECTORS],
+  [TOOL_NAME.WEB_SEARCH]: [TOOL_NAME.WEB_SEARCH],
   [TOOL_NAME.MULTIMODAL_GENERATE]: [TOOL_NAME.MULTIMODAL_GENERATE],
   [TOOL_NAME.TASK_SUMMARY]: [TOOL_NAME.TASK_SUMMARY],
   [TOOL_NAME.REQUEST_HELP]: [TOOL_NAME.REQUEST_HELP],
@@ -252,6 +254,7 @@ async function buildToolsDefault(ctx) {
     ...createContentProcessTool(ctx),
     ...createServiceTool(ctx),
     ...createMcpTool(ctx),
+    ...createWebSearchTool(ctx),
     ...(enableMultimodalGenerateTool ? createMultimodalGenerateTool(ctx) : []),
     ...createConnectorAccessTool(ctx),
     // Multi-agent collaboration tools are intentionally not registered here.

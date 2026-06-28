@@ -13,6 +13,13 @@ vi.mock("../../../src/shared/ui", async () => {
     },
   });
   return {
+    BaseAttachmentFileCard: defineComponent({
+      name: "BaseAttachmentFileCard",
+      setup() {
+        return () => null;
+      },
+    }),
+    BaseFileCardList: passthrough("BaseFileCardList"),
     BaseMarkdownContent: defineComponent({
       name: "BaseMarkdownContent",
       props: { content: { type: String, default: "" } },

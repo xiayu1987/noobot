@@ -13,6 +13,8 @@ import { getMessageRole } from "../../composables/infra/messageIdentity";
 import { useLocale } from "../i18n/useLocale";
 import {
   BaseMarkdownContent,
+  BaseAttachmentFileCard,
+  BaseFileCardList,
   BaseMessageErrorAlert,
   BaseMessageShell,
   BaseMessageTypeTag,
@@ -224,6 +226,42 @@ async function handleCopyAssistantMessageText() {
       :key="renderer.id"
       v-bind="resolveActionRendererProps(renderer)"
     />
+
+    <BaseFileCardList v-if="displayedAttachments.length || writtenFiles.length">
+      <BaseAttachmentFileCard
+        v-for="attachmentItem in displayedAttachments"
+        :key="`attachment:${attachmentItem.attachmentId || attachmentItem.name || ''}:${attachmentItem.size || 0}`"
+        :attachment-item="attachmentItem"
+        :thumbnail-url="attachmentItem.thumbnailUrl || attachmentItem.previewUrl || ''"
+        :is-image-mime="isImageMime"
+        :can-preview-attachment="canPreviewAttachment"
+        :format-file-size="formatFileSize"
+        :translate="translate"
+        show-parsed-result
+        @preview="openAttachmentPreview"
+        @download="onDownloadAttachment"
+        @preview-parsed-result="openAttachmentPreview"
+        @download-parsed-result="onDownloadAttachment"
+      />
+
+      <BaseAttachmentFileCard
+        v-for="fileItem in writtenFiles"
+        :key="`written-file:${fileItem.relativePath || fileItem.resolvedPath || fileItem.fileName || ''}`"
+        :attachment-item="fileItem"
+        :is-image-mime="isImageMime"
+        :can-preview-attachment="() => Boolean(fileItem.relativePath && fileItem.fileName)"
+        :format-file-size="formatFileSize"
+        :translate="translate"
+        :name-text="fileItem.fileName || fileItem.relativePath || fileItem.resolvedPath || ''"
+        :title-text="fileItem.relativePath || fileItem.resolvedPath || fileItem.fileName || ''"
+        :size-value="0"
+        :show-size="false"
+        :custom-badge-text="fileItem.recognized ? translate('message.recognizedFile') : translate('message.generatedFile')"
+        :custom-badge-class="fileItem.recognized ? 'is-recognized' : 'is-agent'"
+        @preview="openFilePreview"
+        @download="onDownloadFile"
+      />
+    </BaseFileCardList>
 
     <component
       :is="renderer.component"

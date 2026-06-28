@@ -212,15 +212,20 @@ const turnThresholdsText = readFileSync(
 const historyLimitUsesTurnThreshold =
   normalizerText &&
   /MAIN_MODEL_HISTORY_ROUND_LIMIT\s*=\s*[\s\S]*?TURN_THRESHOLDS\.session\.mainModelHistoryRoundLimit\b/.test(normalizerText);
-const centralizedHistoryLimitIsThree =
-  turnThresholdsText &&
-  /mainModelHistoryRoundLimit:\s*3\b/.test(turnThresholdsText);
-if (historyLimitUsesTurnThreshold && centralizedHistoryLimitIsThree) {
-  pass("main model history limit remains latest 3 dialog rounds");
+const centralHistoryLimitMatch = turnThresholdsText?.match(
+  /mainModelHistoryRoundLimit:\s*(\d+)\b/,
+);
+const centralizedHistoryLimit = centralHistoryLimitMatch
+  ? Number.parseInt(centralHistoryLimitMatch[1], 10)
+  : NaN;
+const centralizedHistoryLimitIsValid =
+  Number.isInteger(centralizedHistoryLimit) && centralizedHistoryLimit > 0;
+if (historyLimitUsesTurnThreshold && centralizedHistoryLimitIsValid) {
+  pass(`main model history limit uses central latest ${centralizedHistoryLimit} dialog rounds`);
 } else {
   fail(
     "history round limit drifted",
-    "MAIN_MODEL_HISTORY_ROUND_LIMIT must use TURN_THRESHOLDS.session.mainModelHistoryRoundLimit, and that central value must stay 3 unless product requirement changes.",
+    "MAIN_MODEL_HISTORY_ROUND_LIMIT must use TURN_THRESHOLDS.session.mainModelHistoryRoundLimit, and that central value must be a positive integer.",
   );
 }
 

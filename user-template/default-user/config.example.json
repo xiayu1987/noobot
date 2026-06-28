@@ -46,9 +46,7 @@
     },
     "request_help": {
       "enabled": true,
-      "help_services": [
-        "web_search_service"
-      ],
+      "help_services": [],
       "help_model": ""
     },
     "web_to_data": {
@@ -113,6 +111,26 @@
     },
     "inspect_connectors": {
       "enabled": true
+    },
+    "web_search": {
+      "enabled": true,
+      "mode": "responses_api",
+      "responses_api": {
+        "model": "GLM_5_1"
+      },
+      "search_engine": {
+        "prompt": "优先用于补充实时或外部网页信息，优先关键词搜索，再精确搜索，最后再回答。",
+        "endpoints": {
+          "search": {
+            "description": "搜索网页",
+            "prompt": "返回可引用的检索结果摘要与来源。",
+            "custom_param_format": "searx实例地址",
+            "url": "${WEB_SEARCH_ENGINE_SEARCH_ADDRESS}",
+            "query_string_format": "q=搜索内容",
+            "body_format": "{}"
+          }
+        }
+      }
     },
     "multimodal_generate": {
       "enabled": true
@@ -253,22 +271,6 @@
     }
   },
   "services": {
-    "web_search_service": {
-      "enabled": true,
-      "api_key": "",
-      "handler": "web-search-service-handler",
-      "prompt": "优先用于补充实时或外部网页信息，优先关键词搜索，再精确搜索，最后再回答。",
-      "endpoints": {
-        "search": {
-          "description": "搜索网页",
-          "prompt": "返回可引用的检索结果摘要与来源。",
-          "custom_param_format": "searx实例地址",
-          "url": "${WEB_SEARCH_SERVICE_SEARCH_ADDRESS}",
-          "query_string_format": "q=搜索内容",
-          "body_format": "{}"
-        }
-      }
-    },
     "weather_service": {
       "enabled": true,
       "api_key": "",

@@ -122,7 +122,7 @@ Based on latest examples:
 | `tools.task_summary.enabled` | boolean | Enable task summary tool |
 | `tools.task_summary.phase_summary_loop_turns` | number | Number of turns threshold to trigger phase summary |
 | `tools.request_help.enabled` | boolean | Enable request-help tool |
-| `tools.request_help.help_services` | string[]/object[] | Help service list (default includes `web_search_service`) |
+| `tools.request_help.help_services` | string[]/object[] | Help service list (empty by default; use the `web_search` tool for web search) |
 | `tools.request_help.help_model` | string | Help model alias/name (empty = current/default model logic) |
 | `tools.request_help.help_prompt_loop_turns` | number | Tool loop turns threshold for system help prompt (default 50) |
 | `tools.request_help.tool_failure_help_count` | number | Consecutive tool failures threshold for user help prompt (default 3) |
@@ -152,7 +152,7 @@ Notes:
 
 Scenario definitions are now system built-ins with two fixed scenarios:
 - `full` (all-purpose, default): tools/context/services/mcp_servers are `["*"]`, meaning unrestricted by scenario.
-- `programming`: fixed code-task policy with required coding tools, code context sections, and `web_search_service`; configuration may override only `model`.
+- `programming`: fixed code-task policy with required coding tools, code context sections, and the `web_search` tool; configuration may override only `model`.
 
 Other scenario fields in global/user config (`name`, `description`, `tools`, `context`, `services`, `mcp_servers`) and custom scenario definitions are ignored to protect built-in behavior.
 
@@ -293,8 +293,9 @@ User-level external service definitions for `call_service` tool.
 | `services.<name>.endpoints.<epName>.custom_param_format` | string | Custom param template |
 
 Current defaults in repo:
-- `web_search_service`: search endpoint using SearX instance
 - `weather_service`: weather query via `wttr.in`
+
+Web search is provided by the `web_search` tool, not by an external service.
 
 ### 4.2 Plugins (`plugins.<name>`)
 
