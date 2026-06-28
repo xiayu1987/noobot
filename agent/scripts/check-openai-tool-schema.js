@@ -95,7 +95,7 @@ function normalizeConfigParams(input = {}) {
   return Object.fromEntries(
     Object.entries(rawValues)
       .map(([paramKey, paramValue]) => [
-        String(paramKey || "").trim(),
+        String(paramKey || "").trim().toUpperCase(),
         String(paramValue ?? "").trim(),
       ])
       .filter(([paramKey]) => Boolean(paramKey)),
@@ -108,7 +108,7 @@ function mergeConfigParamsWithFallback(systemParams = {}, userParams = {}) {
   };
   const userSource = userParams && typeof userParams === "object" ? userParams : {};
   for (const [paramKey, rawValue] of Object.entries(userSource)) {
-    const normalizedKey = String(paramKey || "").trim();
+    const normalizedKey = String(paramKey || "").trim().toUpperCase();
     if (!normalizedKey) continue;
     const normalizedValue = String(rawValue ?? "").trim();
     if (!normalizedValue) continue;

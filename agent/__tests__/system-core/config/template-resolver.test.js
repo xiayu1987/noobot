@@ -7,13 +7,13 @@ import {
   resolveConfigTemplates,
 } from "../../../src/system-core/config/core/template-resolver.js";
 
-test("createTemplateResolveContext: 应生成大小写无关查询映射", () => {
+test("createTemplateResolveContext: 应生成大写参数查询映射", () => {
   const ctx = createTemplateResolveContext({
     configParams: { Api_Key: "k1" },
     env: { Token: "t1" },
   });
-  assert.equal(ctx.lowerCaseParamKeyMap.api_key, "k1");
-  assert.equal(ctx.lowerCaseEnvKeyMap.token, "t1");
+  assert.equal(ctx.upperCaseParamKeyMap.API_KEY, "k1");
+  assert.equal(ctx.upperCaseEnvKeyMap.TOKEN, "t1");
 });
 
 test("resolveConfigSecrets: 应优先使用 env，再回退到 configParams", () => {
@@ -42,6 +42,24 @@ test("resolveConfigSecrets: 未命中变量应替换为空字符串", () => {
     { configParams: {}, env: {} },
   );
   assert.equal(out.text, "hello--world");
+});
+
+test("resolveConfigSecrets: 小写占位符不作为配置变量解析", () => {
+  const out = resolveConfigSecrets(
+    {
+      upper: "${API_KEY}",
+      lower: "${api_key}",
+      mixed: "${Api_Key}",
+    },
+    {
+      configParams: { API_KEY: "param-key" },
+      env: { API_KEY: "env-key" },
+    },
+  );
+
+  assert.equal(out.upper, "env-key");
+  assert.equal(out.lower, "${api_key}");
+  assert.equal(out.mixed, "${Api_Key}");
 });
 
 test("resolveConfigSecrets: 应递归处理数组和对象", () => {

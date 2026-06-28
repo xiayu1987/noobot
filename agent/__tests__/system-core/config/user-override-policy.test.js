@@ -64,8 +64,8 @@ test("mergeConfig: 应按策略深度合并并合并 runtime configParams", () =
       openai: { temperature: 0.6 },
     },
     configParams: {
-      B: "20",
-      C: "30",
+      b: "20",
+      c: "30",
       EMPTY: "   ",
     },
   };

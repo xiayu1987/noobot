@@ -31,6 +31,7 @@
     ],
     "extraResources": [],
     "win": {
+      "icon": "assets/noobot.ico",
       "target": [
         "nsis",
         "portable",

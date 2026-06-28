@@ -15,7 +15,7 @@ function normalizeConfigParams(input = {}) {
   return Object.fromEntries(
     Object.entries(rawValues)
       .map(([paramKey, paramValue]) => [
-        String(paramKey || "").trim(),
+        String(paramKey || "").trim().toUpperCase(),
         String(paramValue ?? "").trim(),
       ])
       .filter(([paramKey]) => Boolean(paramKey)),
@@ -29,7 +29,7 @@ function mergeConfigParamsWithFallback(systemParams = {}, overrideParams = {}) {
   const overrideSource =
     overrideParams && typeof overrideParams === "object" ? overrideParams : {};
   for (const [paramKey, rawValue] of Object.entries(overrideSource)) {
-    const normalizedKey = String(paramKey || "").trim();
+    const normalizedKey = String(paramKey || "").trim().toUpperCase();
     if (!normalizedKey) continue;
     const normalizedValue = String(rawValue ?? "").trim();
     if (!normalizedValue) continue;

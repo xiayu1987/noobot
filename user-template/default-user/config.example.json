@@ -94,7 +94,7 @@
           "host": "127.0.0.1",
           "port": 3306,
           "username": "readonly_user",
-          "password": "${example_database_password}",
+          "password": "${EXAMPLE_DATABASE_PASSWORD}",
           "database": "example_db"
         }
       }
@@ -107,7 +107,7 @@
           "host": "10.0.0.8",
           "port": 22,
           "username": "ops",
-          "password": "${example_terminal_password}"
+          "password": "${EXAMPLE_TERMINAL_PASSWORD}"
         }
       }
     },
@@ -169,7 +169,7 @@
       "base_url": "${OPENAI_API_ADDRESS}",
       "model": "gpt-5.5",
       "format": "openai_compatible",
-      "reasoning_effort": "low",
+      "reasoning_effort": "medium",
       "temperature": 0.7,
       "max_tokens": 10000,
       "description": "擅长编码",
@@ -263,7 +263,7 @@
           "description": "搜索网页",
           "prompt": "返回可引用的检索结果摘要与来源。",
           "custom_param_format": "searx实例地址",
-          "url": "${web_search_service_search_address}",
+          "url": "${WEB_SEARCH_SERVICE_SEARCH_ADDRESS}",
           "query_string_format": "q=搜索内容",
           "body_format": "{}"
         }
