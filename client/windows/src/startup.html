@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Noobot</title>
+    <style>
+      body { margin: 0; font-family: "Segoe UI", sans-serif; background: #0f172a; color: #e2e8f0; }
+      main { min-height: 100vh; display: grid; place-items: center; padding: 32px; box-sizing: border-box; }
+      section { width: min(720px, 100%); background: rgba(15, 23, 42, .84); border: 1px solid #334155; border-radius: 18px; padding: 28px; box-shadow: 0 24px 80px rgba(0,0,0,.35); }
+      h1 { margin: 0 0 12px; font-size: 28px; }
+      p { margin: 8px 0; color: #cbd5e1; line-height: 1.55; }
+      pre { white-space: pre-wrap; max-height: 220px; overflow: auto; background: #020617; border-radius: 12px; padding: 12px; color: #94a3b8; }
+      button { margin-top: 16px; border: 0; border-radius: 10px; padding: 10px 16px; background: #38bdf8; color: #082f49; font-weight: 700; cursor: pointer; }
+      .hidden { display: none; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section>
+        <h1>Starting Noobot</h1>
+        <p id="message">Checking local Noobot service...</p>
+        <pre id="log"></pre>
+        <button id="retry" class="hidden">Retry</button>
+      </section>
+    </main>
+    <script>
+      const message = document.querySelector("#message");
+      const log = document.querySelector("#log");
+      const retry = document.querySelector("#retry");
+      window.noobotDesktop?.onStartupStatus((status) => {
+        if (!status) return;
+        if (status.message) {
+          message.textContent = status.message;
+          log.textContent = `${log.textContent}${status.message}\n`;
+        }
+        retry.classList.toggle("hidden", status.phase !== "error");
+      });
+      retry.addEventListener("click", async () => {
+        retry.classList.add("hidden");
+        message.textContent = "Retrying...";
+        await window.noobotDesktop?.retryStartup();
+      });
+    </script>
+  </body>
+</html>
