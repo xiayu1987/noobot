@@ -5,6 +5,7 @@ import {
   filterSummarizedMessages,
   normalizeContextWindow,
   normalizeRecentWindow,
+  MAIN_MODEL_HISTORY_ROUND_LIMIT,
   resolveMainModelFinalMessages,
   resolveMainModelHistoryMessages,
   resolveMainModelIncrementalMessages,
@@ -354,8 +355,9 @@ test("resolveModelContextMessages keeps latest injected message per type without
 });
 
 
-test("resolveMainModelHistoryMessages keeps non-system unsummarized messages in explicit dialog groups for latest 3 rounds", () => {
-  const input = Array.from({ length: 6 }, (_, index) => {
+test("resolveMainModelHistoryMessages keeps non-system unsummarized messages in explicit dialog groups for default latest rounds", () => {
+  const totalRounds = MAIN_MODEL_HISTORY_ROUND_LIMIT + 1;
+  const input = Array.from({ length: totalRounds }, (_, index) => {
     const dialogProcessId = `d${index + 1}`;
     return [
       { role: "user", content: `u${index + 1}-first`, dialogProcessId },
@@ -372,23 +374,16 @@ test("resolveMainModelHistoryMessages keeps non-system unsummarized messages in 
 
   assert.deepEqual(
     result.map((item) => item.content),
-    [
-      "u4-first",
-      "u4-second",
-      "a4-old",
-      "a4-latest",
-      "after-latest4",
-      "u5-first",
-      "u5-second",
-      "a5-old",
-      "a5-latest",
-      "after-latest5",
-      "u6-first",
-      "u6-second",
-      "a6-old",
-      "a6-latest",
-      "after-latest6",
-    ],
+    Array.from({ length: MAIN_MODEL_HISTORY_ROUND_LIMIT }, (_, index) => {
+      const number = totalRounds - MAIN_MODEL_HISTORY_ROUND_LIMIT + index + 1;
+      return [
+        `u${number}-first`,
+        `u${number}-second`,
+        `a${number}-old`,
+        `a${number}-latest`,
+        `after-latest${number}`,
+      ];
+    }).flat(),
   );
 });
 

@@ -1,5 +1,5 @@
 {
-  "name": "noobot-windows-client",
+  "name": "noobot-mac-client",
   "private": true,
   "version": "1.1.0",
   "type": "module",
@@ -8,19 +8,19 @@
     "start": "electron .",
     "dev": "NOOBOT_CLIENT_URL=${NOOBOT_CLIENT_URL:-http://127.0.0.1:10060} electron .",
     "prepare:frontend": "npm --prefix ../noobot-chat run build",
-    "build:win": "npm run prepare:frontend && npm run prepare:backend && electron-builder --win",
-    "build:win:dir": "npm run prepare:frontend && npm run prepare:backend && electron-builder --win --dir",
-    "check": "node --check src/main.js && node --check ../shared/electron/main.js && node --check ../shared/electron/preload.cjs",
     "prepare:backend": "node scripts/prepare-backend-runtime.mjs",
-    "build:win:portable": "npm run prepare:frontend && npm run prepare:backend && electron-builder --win portable",
-    "build:win:zip": "npm run prepare:frontend && npm run prepare:backend && electron-builder --win zip"
+    "check": "node --check src/main.js && node --check ../shared/electron/main.js && node --check ../shared/electron/preload.cjs",
+    "build:mac": "npm run prepare:frontend && npm run prepare:backend && electron-builder --mac",
+    "build:mac:dir": "npm run prepare:frontend && npm run prepare:backend && electron-builder --mac --dir",
+    "build:mac:dmg": "npm run prepare:frontend && npm run prepare:backend && electron-builder --mac dmg",
+    "build:mac:zip": "npm run prepare:frontend && npm run prepare:backend && electron-builder --mac zip"
   },
   "devDependencies": {
     "electron": "39.8.10",
     "electron-builder": "^26.0.12"
   },
   "build": {
-    "appId": "com.noobot.windows-client",
+    "appId": "com.noobot.mac-client",
     "productName": "Noobot",
     "compression": "store",
     "directories": {
@@ -40,18 +40,12 @@
         ]
       }
     ],
-    "win": {
-      "icon": "assets/noobot.ico",
+    "mac": {
       "target": [
-        "nsis",
-        "portable",
+        "dmg",
         "zip"
-      ]
-    },
-    "nsis": {
-      "installerIcon": "assets/noobot.ico",
-      "uninstallerIcon": "assets/noobot.ico",
-      "shortcutName": "Noobot"
+      ],
+      "category": "public.app-category.productivity"
     },
     "afterPack": "scripts/copy-backend-after-pack.mjs"
   }

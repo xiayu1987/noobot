@@ -4,6 +4,7 @@
 # build outputs
 **/dist/
 client/windows/build/
+client/mac/build/
 **/.vite/
 
 # runtime logs & process files
