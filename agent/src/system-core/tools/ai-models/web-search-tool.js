@@ -233,12 +233,8 @@ export function createWebSearchTool({ agentContext }) {
       description: tTool(runtime, "tools.web_search.description"),
       schema: z.object({
         query: z.string().describe(tTool(runtime, "tools.web_search.fieldQuery")),
-        model_name: z
-          .string()
-          .optional()
-          .describe(tTool(runtime, "tools.web_search.fieldModelName")),
       }),
-      func: async ({ query, model_name = "" }) => {
+      func: async ({ query }) => {
         const normalizedQuery = String(query || "").trim();
         let resolvedModelSpec = null;
         if (!normalizedQuery) {
@@ -270,7 +266,7 @@ export function createWebSearchTool({ agentContext }) {
           }
           const responsesApiCfg = resolveResponsesApiConfig(toolCfg);
           const { resolvedModelName, resolvedModelSpec: selectedModelSpec } = resolveSearchModelSpec({
-            modelName: model_name || responsesApiCfg?.model,
+            modelName: responsesApiCfg?.model,
             runtimeModel: runtime?.runtimeModel,
             globalConfig,
             userConfig,

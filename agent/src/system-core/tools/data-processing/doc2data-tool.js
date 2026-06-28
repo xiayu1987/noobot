@@ -59,6 +59,70 @@ const DATA_PROCESSING_ARTIFACT_SOURCES = new Set([
   ARTIFACT_GENERATION_SOURCE.MEDIA_TO_DATA_TOOL,
 ]);
 
+const LIBREOFFICE_TEXT_DECODER_ENCODINGS = Object.freeze([
+  "utf-8",
+  "gb18030",
+  "gbk",
+  "big5",
+  "windows-1252",
+]);
+
+function countReplacementCharacters(text = "") {
+  return (String(text || "").match(/\uFFFD/g) || []).length;
+}
+
+function scoreDecodedText(text = "") {
+  const value = String(text || "");
+  if (!value) return 0;
+  const replacementPenalty = countReplacementCharacters(value) * 20;
+  let score = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const codePoint = value.charCodeAt(index);
+    if (codePoint === 9 || codePoint === 10 || codePoint === 13) score += 1;
+    else if (codePoint >= 32 && codePoint <= 126) score += 1;
+    else if (codePoint >= 0x4e00 && codePoint <= 0x9fff) score += 3;
+    else if (codePoint >= 0x3000 && codePoint <= 0x303f) score += 2;
+    else if (codePoint >= 0xff00 && codePoint <= 0xffef) score += 2;
+    else if (codePoint >= 0x80) score += 1;
+    else score -= 2;
+  }
+  return score - replacementPenalty;
+}
+
+export function decodeLibreOfficeTextBuffer(outputBuffer = Buffer.alloc(0)) {
+  const buffer = Buffer.from(outputBuffer || "");
+  if (!buffer.length) return "";
+
+  if (buffer.length >= 3 && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
+    return buffer.subarray(3).toString("utf8");
+  }
+  if (buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe) {
+    return buffer.subarray(2).toString("utf16le");
+  }
+  if (buffer.length >= 2 && buffer[0] === 0xfe && buffer[1] === 0xff) {
+    return new TextDecoder("utf-16be").decode(buffer.subarray(2));
+  }
+
+  const utf8Text = buffer.toString("utf8");
+  if (countReplacementCharacters(utf8Text) === 0) return utf8Text;
+
+  let bestText = utf8Text;
+  let bestScore = scoreDecodedText(utf8Text);
+  for (const encoding of LIBREOFFICE_TEXT_DECODER_ENCODINGS) {
+    try {
+      const decodedText = new TextDecoder(encoding, { fatal: false }).decode(buffer);
+      const score = scoreDecodedText(decodedText);
+      if (score > bestScore) {
+        bestText = decodedText;
+        bestScore = score;
+      }
+    } catch {
+      // Encoding is not available in this Node/ICU build; try the next fallback.
+    }
+  }
+  return bestText.replace(/^\uFEFF/, "");
+}
+
 function isGeneratedDataProcessingArtifact(attachmentMeta = null) {
   if (!attachmentMeta || typeof attachmentMeta !== "object" || Array.isArray(attachmentMeta)) return false;
   return DATA_PROCESSING_ARTIFACT_SOURCES.has(String(attachmentMeta?.generationSource || "").trim());
@@ -457,7 +521,7 @@ async function parseDocumentToTextViaLibreOffice({
         })
         : await converter(inputBuffer, "txt", "Text");
     }
-    const text = Buffer.from(outputBuffer || "").toString("utf8").replace(/^\uFEFF/, "");
+    const text = decodeLibreOfficeTextBuffer(outputBuffer);
     return {
       text,
       bytes: Number(outputBuffer?.length || 0),

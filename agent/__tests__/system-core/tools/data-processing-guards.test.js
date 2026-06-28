@@ -4,7 +4,10 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createDoc2DataTool } from "../../../src/system-core/tools/data-processing/doc2data-tool.js";
+import {
+  createDoc2DataTool,
+  decodeLibreOfficeTextBuffer,
+} from "../../../src/system-core/tools/data-processing/doc2data-tool.js";
 import {
   createMedia2DataTool,
   resolveMediaBinaryPath,
@@ -32,6 +35,23 @@ function buildAgentContext(basePath = "") {
     },
   };
 }
+
+test("doc_to_data: LibreOffice text output decoder handles Windows Chinese encodings", () => {
+  const gbkBuffer = Buffer.from([
+    0xd6, 0xd0, 0xce, 0xc4, // 中文
+    0x0d, 0x0a,
+    0xb2, 0xe2, 0xca, 0xd4, // 测试
+  ]);
+
+  assert.equal(decodeLibreOfficeTextBuffer(gbkBuffer), "中文\r\n测试");
+});
+
+test("doc_to_data: LibreOffice text output decoder keeps UTF-8 and strips BOM", () => {
+  assert.equal(
+    decodeLibreOfficeTextBuffer(Buffer.from("\uFEFF中文\n", "utf8")),
+    "中文\n",
+  );
+});
 
 test("doc_to_data: direct text result stores content in file and returns text when under limit", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-direct-"));

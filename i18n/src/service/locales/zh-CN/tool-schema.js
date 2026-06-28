@@ -129,16 +129,12 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "call_mcp_task": {
     "description": {
       "key": "tools.mcp.description",
-      "text": "调用 MCP 服务执行任务。输入 mcpName、task（可选 modelName）。返回任务执行结果。"
+      "text": "调用 MCP 服务执行任务。输入 mcpName、task。返回任务执行结果。"
     },
     "params": {
       "mcpName": {
         "key": "tools.mcp.fieldMcpName",
         "text": "MCP 服务名称。"
-      },
-      "modelName": {
-        "key": "tools.mcp.fieldModelName",
-        "text": "模型名称。"
       },
       "task": {
         "key": "tools.mcp.fieldTask",
@@ -477,10 +473,6 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "text": "搜索网页信息。输入 query，返回网页搜索结果。"
     },
     "params": {
-      "model_name": {
-        "key": "tools.web_search.fieldModelName",
-        "text": "模型名称。"
-      },
       "query": {
         "key": "tools.web_search.fieldQuery",
         "text": "搜索内容。"
