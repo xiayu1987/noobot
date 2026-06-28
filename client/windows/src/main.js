@@ -5,6 +5,7 @@
  */
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,8 +26,27 @@ const pollIntervalMs = Number.parseInt(process.env.NOOBOT_STARTUP_POLL_MS || "10
 let mainWindow = null;
 let managedServiceProcess = null;
 let serviceStartupPromise = null;
+const startupStatuses = [];
+
+function getLogFilePath() {
+  return path.join(app.getPath("userData"), "logs", "desktop-startup.log");
+}
+
+function appendDesktopLog(message) {
+  const line = `[${new Date().toISOString()}] ${message}\n`;
+  try {
+    const logFile = getLogFilePath();
+    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    fs.appendFileSync(logFile, line, "utf8");
+  } catch {
+    // Startup diagnostics must never prevent the app from opening.
+  }
+}
 
 function sendStatus(status) {
+  startupStatuses.push(status);
+  if (startupStatuses.length > 300) startupStatuses.shift();
+  if (status?.message) appendDesktopLog(`[${status.phase || "status"}] ${status.message}`);
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send("noobot:startup-status", status);
 }
@@ -77,6 +97,16 @@ function startNoobotService() {
   const args = isPackaged ? [path.join(packagedBackendRoot, "service", "app.js")] : ["run", "-w", "service", "start"];
   const cwd = isPackaged ? packagedBackendRoot : repoRoot;
   const userDataPath = app.getPath("userData");
+  sendStatus({
+    phase: "starting",
+    message: [
+      `Starting Noobot service process...`,
+      `command=${command}`,
+      `args=${args.join(" ")}`,
+      `cwd=${cwd}`,
+      `log=${getLogFilePath()}`,
+    ].join("\n"),
+  });
   managedServiceProcess = spawn(command, args, {
     cwd,
     env: {
@@ -98,6 +128,13 @@ function startNoobotService() {
   });
   managedServiceProcess.stderr?.on("data", (chunk) => {
     sendStatus({ phase: "service-log", message: chunk.toString() });
+  });
+  managedServiceProcess.once("error", (error) => {
+    managedServiceProcess = null;
+    sendStatus({
+      phase: "error",
+      message: `Failed to start Noobot service process: ${error?.message || String(error)}`,
+    });
   });
   managedServiceProcess.once("exit", (code, signal) => {
     const wasManaged = managedServiceProcess;
@@ -179,6 +216,8 @@ ipcMain.handle("noobot:retry-startup", async () => {
   const noobotUrl = await resolveNoobotUrl();
   await mainWindow?.loadURL(noobotUrl);
 });
+
+ipcMain.handle("noobot:get-startup-statuses", () => startupStatuses);
 
 app.whenReady().then(boot);
 app.on("window-all-closed", () => app.quit());
