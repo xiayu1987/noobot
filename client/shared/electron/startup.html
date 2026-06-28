@@ -73,6 +73,31 @@
       }
       input:focus, select:focus { border-color: #38bdf8; box-shadow: 0 0 0 4px rgba(56, 189, 248, .14); }
       small { display: block; margin-top: 6px; color: #94a3b8; line-height: 1.45; }
+      .dependency-panel { grid-column: 1 / -1; margin-top: 4px; }
+      .dependency-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+      .dependency-title label { margin: 0; }
+      .dependency-badge { padding: 4px 9px; border-radius: 999px; background: rgba(56, 189, 248, .12); color: #7dd3fc; border: 1px solid rgba(125, 211, 252, .18); font-size: 12px; font-weight: 800; }
+      .dependency-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+      .dependency-card {
+        position: relative;
+        display: flex;
+        gap: 12px;
+        min-height: 112px;
+        padding: 14px;
+        border: 1px solid rgba(148, 163, 184, .22);
+        border-radius: 18px;
+        background: linear-gradient(180deg, rgba(15, 23, 42, .72), rgba(2, 6, 23, .52));
+        cursor: pointer;
+        transition: border-color .15s, box-shadow .15s, transform .15s, background .15s;
+      }
+      .dependency-card:hover { transform: translateY(-1px); border-color: rgba(125, 211, 252, .38); box-shadow: 0 14px 36px rgba(8, 47, 73, .18); }
+      .dependency-card input { position: absolute; opacity: 0; pointer-events: none; }
+      .dependency-check { width: 22px; height: 22px; flex: 0 0 auto; border: 1px solid rgba(148, 163, 184, .46); border-radius: 8px; background: rgba(2, 6, 23, .82); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04); }
+      .dependency-card:has(input:checked) { border-color: rgba(56, 189, 248, .72); background: linear-gradient(180deg, rgba(14, 165, 233, .18), rgba(2, 6, 23, .55)); box-shadow: 0 0 0 4px rgba(56, 189, 248, .10); }
+      .dependency-card:has(input:checked) .dependency-check { border-color: #38bdf8; background: linear-gradient(135deg, #38bdf8, #818cf8); }
+      .dependency-card:has(input:checked) .dependency-check::after { content: "✓"; display: grid; place-items: center; height: 100%; color: #020617; font-size: 14px; font-weight: 1000; }
+      .dependency-name { display: block; margin: 0 0 5px; color: #f8fafc; font-size: 14px; font-weight: 900; }
+      .dependency-desc { margin: 0; color: #94a3b8; font-size: 12px; line-height: 1.45; }
       .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
       button {
         border: 0;
@@ -104,7 +129,7 @@
       .error { color: #fca5a5; padding: 10px 12px; border-radius: 12px; background: rgba(127, 29, 29, .25); }
       @keyframes spin { to { transform: rotate(360deg); } }
       @keyframes pulse { 0%, 100% { opacity: .55; transform: scale(.92); } 50% { opacity: 1; transform: scale(1); } }
-      @media (max-width: 720px) { main { padding: 18px; } .hero, .content { padding-left: 22px; padding-right: 22px; } .grid { grid-template-columns: 1fr; } h1 { font-size: 28px; } }
+      @media (max-width: 720px) { main { padding: 18px; } .hero, .content { padding-left: 22px; padding-right: 22px; } .grid, .dependency-list { grid-template-columns: 1fr; } h1 { font-size: 28px; } }
     </style>
   </head>
   <body>
@@ -142,11 +167,26 @@
                 <input id="super-admin-connect-code" name="connectCode" required autocomplete="off" placeholder="Create a private connection code" />
                 <small>Keep this code private. It is used to connect as the super admin.</small>
               </div>
-              <div class="field-full">
-                <label>Optional dependencies</label>
-                <label><input id="dependency-libreoffice" name="installLibreOffice" type="checkbox" /> Install LibreOffice if missing</label>
-                <label><input id="dependency-ffmpeg" name="installFfmpeg" type="checkbox" /> Install FFmpeg if missing</label>
-                <small>Already installed dependencies are skipped. If automatic installation is not available, setup will show a clear error and you can install them manually.</small>
+              <div class="dependency-panel">
+                <div class="dependency-title"><label>Optional dependencies</label><span class="dependency-badge">Auto skip installed</span></div>
+                <div class="dependency-list">
+                  <label class="dependency-card" for="dependency-libreoffice">
+                    <input id="dependency-libreoffice" name="installLibreOffice" type="checkbox" />
+                    <span class="dependency-check" aria-hidden="true"></span>
+                    <span><span class="dependency-name">LibreOffice</span><span class="dependency-desc">Document conversion for Office files, spreadsheets and presentations.</span></span>
+                  </label>
+                  <label class="dependency-card" for="dependency-ffmpeg">
+                    <input id="dependency-ffmpeg" name="installFfmpeg" type="checkbox" />
+                    <span class="dependency-check" aria-hidden="true"></span>
+                    <span><span class="dependency-name">FFmpeg</span><span class="dependency-desc">Audio and video processing for media extraction and conversion.</span></span>
+                  </label>
+                  <label class="dependency-card" for="dependency-nodejs">
+                    <input id="dependency-nodejs" name="installNodejs" type="checkbox" />
+                    <span class="dependency-check" aria-hidden="true"></span>
+                    <span><span class="dependency-name">Node.js</span><span class="dependency-desc">JavaScript runtime required by local services and tooling.</span></span>
+                  </label>
+                </div>
+                <small>Checked dependencies are installed only when missing. Setup shows a clear error if automatic installation is not available.</small>
               </div>
             </div>
             <p id="super-admin-error" class="error hidden"></p>
@@ -187,6 +227,7 @@
       const superAdminConnectCode = document.querySelector("#super-admin-connect-code");
       const dependencyLibreOffice = document.querySelector("#dependency-libreoffice");
       const dependencyFfmpeg = document.querySelector("#dependency-ffmpeg");
+      const dependencyNodejs = document.querySelector("#dependency-nodejs");
       let requiredParams = [];
       const logLines = [];
       let pendingLogFlush = false;
@@ -311,6 +352,7 @@
         const dependencies = {
           libreoffice: formData.get("installLibreOffice") === "on",
           ffmpeg: formData.get("installFfmpeg") === "on",
+          nodejs: formData.get("installNodejs") === "on",
         };
         if (!userId || !connectCode || !model) {
           superAdminError.textContent = "Super admin username, connect code and model are required.";
@@ -319,7 +361,7 @@
         }
         saveSuperAdmin.disabled = true;
         try {
-          if (dependencies.libreoffice || dependencies.ffmpeg) message.textContent = "Saving setup and checking selected dependencies...";
+          if (Object.values(dependencies).some(Boolean)) message.textContent = "Saving setup and checking selected dependencies...";
           const result = await window.noobotDesktop?.saveSuperAdmin({ language, model, userId, connectCode, dependencies });
           if (!result?.ok) {
             renderSuperAdminForm(result?.superAdmin || { language, model });
