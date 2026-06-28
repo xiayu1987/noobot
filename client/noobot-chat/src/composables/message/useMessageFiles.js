@@ -386,11 +386,13 @@ function maskWorkspacePath(pathValue = "") {
 
 function logGeneratedFileAccess(event, payload = {}) {
   try {
-    console.info("[noobot:file-access]", {
+    const entry = {
       layer: "client.messageFiles",
       event,
       ...payload,
-    });
+    };
+    console.info("[noobot:file-access]", entry);
+    window?.noobotDesktop?.logFileAccess?.(entry).catch?.(() => {});
   } catch {}
 }
 

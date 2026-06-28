@@ -693,6 +693,28 @@ function normalizeDownloadBytes(bytes) {
   throw new Error("Unsupported download content.");
 }
 
+function sanitizeFileAccessLogPayload(payload = {}) {
+  const input = payload && typeof payload === "object" ? payload : { message: String(payload || "") };
+  const output = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (value === undefined) continue;
+    if (value === null || ["string", "number", "boolean"].includes(typeof value)) {
+      output[key] = value;
+      continue;
+    }
+    if (value instanceof Error) {
+      output[key] = value.message;
+      continue;
+    }
+    try {
+      output[key] = JSON.stringify(value).slice(0, 1000);
+    } catch {
+      output[key] = String(value).slice(0, 1000);
+    }
+  }
+  return output;
+}
+
 ipcMain.handle("noobot:save-download", async (_event, { fileName = "download", bytes } = {}) => {
   const buffer = normalizeDownloadBytes(bytes);
   const defaultPath = path.join(app.getPath("downloads"), sanitizeDownloadFileName(fileName));
@@ -704,6 +726,11 @@ ipcMain.handle("noobot:save-download", async (_event, { fileName = "download", b
   await fs.promises.mkdir(path.dirname(result.filePath), { recursive: true });
   await fs.promises.writeFile(result.filePath, buffer);
   return { ok: true, filePath: result.filePath };
+});
+
+ipcMain.handle("noobot:file-access-log", (_event, payload = {}) => {
+  appendDesktopLog(`[noobot:file-access] ${JSON.stringify(sanitizeFileAccessLogPayload(payload))}`);
+  return { ok: true };
 });
 
 ipcMain.handle("noobot:retry-startup", async () => {
