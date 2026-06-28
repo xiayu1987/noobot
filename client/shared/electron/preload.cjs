@@ -30,4 +30,7 @@ contextBridge.exposeInMainWorld("noobotDesktop", {
   saveDownload({ fileName, bytes } = {}) {
     return ipcRenderer.invoke("noobot:save-download", { fileName, bytes });
   },
+  logFileAccess(payload = {}) {
+    return ipcRenderer.invoke("noobot:file-access-log", payload);
+  },
 });

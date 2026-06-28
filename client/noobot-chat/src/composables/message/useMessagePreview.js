@@ -299,11 +299,13 @@ function maskWorkspacePath(pathValue = "") {
 
 function logFileAccess(event, payload = {}) {
   try {
-    console.info("[noobot:file-access]", {
+    const entry = {
       layer: "client.messagePreview",
       event,
       ...payload,
-    });
+    };
+    console.info("[noobot:file-access]", entry);
+    window?.noobotDesktop?.logFileAccess?.(entry).catch?.(() => {});
   } catch {}
 }
 
