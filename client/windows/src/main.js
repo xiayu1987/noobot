@@ -78,16 +78,20 @@ function getLogFilePath() {
 
 function appendDesktopLog(message) {
   const line = `[${new Date().toISOString()}] ${message}\n`;
+  appendEarlyLog(`[desktop-log:enter] ${message}`);
   try {
     const logFile = getLogFilePath();
+    appendEarlyLog(`[desktop-log:path] ${logFile}`);
     fs.mkdirSync(path.dirname(logFile), { recursive: true });
     fs.appendFileSync(logFile, line, "utf8");
+    appendEarlyLog(`[desktop-log:done] ${message}`);
   } catch {
     appendEarlyLog(`[main:app-log-fallback] ${message}`);
   }
 }
 
 function sendStatus(status) {
+  appendEarlyLog(`[main:sendStatus] phase=${status?.phase || ""}; message=${String(status?.message || "").slice(0, 500)}`);
   startupStatuses.push(status);
   if (startupStatuses.length > 300) startupStatuses.shift();
   if (status?.message) appendDesktopLog(`[${status.phase || "status"}] ${status.message}`);
@@ -96,7 +100,9 @@ function sendStatus(status) {
 }
 
 function createWindow() {
+  appendEarlyLog("[main:create-window] enter");
   appendDesktopLog("[main:create-window] creating startup window");
+  appendEarlyLog("[main:create-window] before BrowserWindow");
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 860,
@@ -111,6 +117,7 @@ function createWindow() {
       sandbox: false,
     },
   });
+  appendEarlyLog("[main:create-window] after BrowserWindow");
 
   mainWindow.once("ready-to-show", () => {
     appendDesktopLog("[main:window] ready-to-show");
@@ -126,7 +133,9 @@ function createWindow() {
   });
   const startupFile = path.join(__dirname, "startup.html");
   appendDesktopLog(`[main:create-window] loading ${startupFile}`);
+  appendEarlyLog(`[main:create-window] before loadFile ${startupFile}`);
   mainWindow.loadFile(startupFile).catch((error) => appendDesktopLog(`[main:create-window] loadFile failed: ${error?.stack || error?.message || String(error)}`));
+  appendEarlyLog("[main:create-window] after loadFile call");
   return mainWindow;
 }
 
@@ -242,15 +251,20 @@ async function resolveNoobotUrl() {
 }
 
 async function boot() {
+  appendEarlyLog(`[main:boot] enter; bootStarted=${bootStarted}`);
   if (bootStarted) {
     appendEarlyLog("[main:boot] skipped; already started");
     return;
   }
   bootStarted = true;
+  appendEarlyLog("[main:boot] before appendDesktopLog start");
   appendDesktopLog("[main:boot] start");
+  appendEarlyLog("[main:boot] before createWindow");
   createWindow();
+  appendEarlyLog("[main:boot] after createWindow; before ensureServiceStarted");
   try {
     await ensureServiceStarted();
+    appendEarlyLog("[main:boot] after ensureServiceStarted");
     const noobotUrl = await resolveNoobotUrl();
     sendStatus({ phase: "loading", message: `Loading ${noobotUrl}` });
     await mainWindow.loadURL(noobotUrl);
