@@ -88,6 +88,10 @@ const dependencySpecs = {
   libreoffice: {
     label: "LibreOffice",
     checkCommands: ["libreoffice", "soffice"],
+    win32ExecutableCandidates: [
+      "LibreOffice\\program\\soffice.exe",
+      "LibreOffice\\program\\libreoffice.exe",
+    ],
     packages: {
       win32: { winget: "TheDocumentFoundation.LibreOffice", choco: "libreoffice-fresh" },
       darwin: { brew: "libreoffice" },
@@ -97,6 +101,10 @@ const dependencySpecs = {
   ffmpeg: {
     label: "FFmpeg",
     checkCommands: ["ffmpeg"],
+    win32ExecutableCandidates: [
+      "ffmpeg\\bin\\ffmpeg.exe",
+      "Gyan\\FFmpeg\\bin\\ffmpeg.exe",
+    ],
     packages: {
       win32: { winget: "Gyan.FFmpeg", choco: "ffmpeg" },
       darwin: { brew: "ffmpeg" },
@@ -153,6 +161,10 @@ function runProcess(command, args = [], { timeoutMs = 120000 } = {}) {
   });
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function hasCommand(command) {
   const result = await runProcess(command, ["--version"], { timeoutMs: 15000 });
   return result.ok;
@@ -161,6 +173,24 @@ async function hasCommand(command) {
 async function isDependencyInstalled(spec) {
   for (const command of spec.checkCommands || []) {
     if (await hasCommand(command)) return true;
+  }
+  if (process.platform === "win32") {
+    const roots = [process.env.ProgramFiles, process.env["ProgramFiles(x86)"], process.env.LOCALAPPDATA]
+      .filter(Boolean);
+    for (const root of roots) {
+      for (const relative of spec.win32ExecutableCandidates || []) {
+        if (fs.existsSync(path.join(root, relative))) return true;
+      }
+    }
+  }
+  return false;
+}
+
+async function waitForDependencyInstalled(spec, { timeoutMs = 90000, intervalMs = 3000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() <= deadline) {
+    if (await isDependencyInstalled(spec)) return true;
+    await sleep(intervalMs);
   }
   return false;
 }
@@ -212,7 +242,10 @@ async function ensureSelectedDependencies(dependencies = {}) {
       const detail = String(result.stderr || result.stdout || result.error || "").trim().slice(0, 1000);
       throw new Error(`Failed to install ${spec.label}.${detail ? ` ${detail}` : ""}`);
     }
-    if (!(await isDependencyInstalled(spec))) throw new Error(`${spec.label} installation finished, but the command is still not available.`);
+    sendStatus({ phase: "dependency", message: `${spec.label} installer finished. Verifying availability...` });
+    if (!(await waitForDependencyInstalled(spec))) {
+      throw new Error(`${spec.label} installation finished, but it is not available yet. Please restart Noobot or install it manually if the command is still missing from PATH.`);
+    }
     sendStatus({ phase: "dependency", message: `${spec.label} installed.` });
     results.push({ key, ok: true, installed: true });
   }
