@@ -41,6 +41,30 @@ test("capability runtime runs global bootstrap before capability handlers", asyn
   assert.deepEqual(calls, ["globalBootstrap", "planning"]);
 });
 
+test("capability runtime exposes resolved capability profile to handlers", async () => {
+  let capturedProfile = null;
+  const runtime = createCapabilityRuntime({
+    profile: {
+      planning: { enabled: false },
+      guidance: { enabled: true },
+      acceptance: { enabled: false },
+      review: { enabled: false },
+    },
+    handlers: {
+      guidance: async ({ meta = {} } = {}) => {
+        capturedProfile = meta?.harness?.capabilityProfile || null;
+        return { capability: "guidance", point: "before_llm_call", status: "ok" };
+      },
+    },
+  });
+
+  await runtime.runHook("before_llm_call", { messages: [] }, {});
+
+  assert.equal(capturedProfile?.planning?.enabled, false);
+  assert.equal(capturedProfile?.guidance?.enabled, true);
+  assert.equal(capturedProfile?.acceptance?.enabled, false);
+});
+
 test("capability runtime keeps planning first without blocking later before_llm_call flows", async () => {
   const calls = [];
   const runtime = createCapabilityRuntime({

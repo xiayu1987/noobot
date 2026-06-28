@@ -311,7 +311,12 @@ function maybeScheduleSummaryByToolBurst(ctx = {}, meta = {}) {
   return true;
 }
 
-function isMainPlanReadyForGuidanceAnalysis(bucket = {}, state = {}) {
+function isPlanningCapabilityEnabled(meta = {}) {
+  return meta?.harness?.capabilityProfile?.planning?.enabled !== false;
+}
+
+function isMainPlanReadyForGuidanceAnalysis(bucket = {}, state = {}, meta = {}) {
+  if (!isPlanningCapabilityEnabled(meta)) return true;
   if (state?.flags?.planningCaptured !== true) return false;
   if (String(bucket?.planText || "").trim()) return true;
   if (Array.isArray(bucket?.planDocument?.mainPlans) && bucket.planDocument.mainPlans.length > 0) {
@@ -325,7 +330,7 @@ function maybeScheduleGuidanceAnalysis(ctx = {}, meta = {}) {
   if (!holder?.state) return false;
   const state = holder.state;
   if (!state.counters || typeof state.counters !== "object") state.counters = {};
-  if (!isMainPlanReadyForGuidanceAnalysis(holder.bucket, state)) return false;
+  if (!isMainPlanReadyForGuidanceAnalysis(holder.bucket, state, meta)) return false;
   if (state.pending?.summary === true) return false;
   if (state.pending?.analysis === true) return false;
   const currentTurn = Number(ctx?.turn);
