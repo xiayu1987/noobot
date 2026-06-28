@@ -105,6 +105,13 @@ export function createCapabilityRuntime({ profile = {}, handlers = {} } = {}) {
       applyAgentResolvedModelMessages(point, ctx, meta?.harness || {});
       await runInternalGlobalBootstrap(point, ctx, meta);
       const capabilities = prepareMainPlanningState(point, ctx, this.resolveByHook(point));
+      const handlerMeta = {
+        ...(meta && typeof meta === "object" ? meta : {}),
+        harness: {
+          ...(meta?.harness && typeof meta.harness === "object" ? meta.harness : {}),
+          capabilityProfile: resolvedProfile,
+        },
+      };
       const results = [];
       const pendingToolTakeovers = [];
       const pendingMessageTakeovers = [];
@@ -123,7 +130,7 @@ export function createCapabilityRuntime({ profile = {}, handlers = {} } = {}) {
             point,
             ctx,
             profile: profileState,
-            meta,
+            meta: handlerMeta,
           });
         } catch (error) {
           const normalizedError = safeError(error);

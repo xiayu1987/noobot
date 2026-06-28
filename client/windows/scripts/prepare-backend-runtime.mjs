@@ -74,6 +74,22 @@ function run(command, args, options) {
   }
 }
 
+function getNpmCommand() {
+  if (process.env.npm_execpath) {
+    return {
+      command: process.execPath,
+      argsPrefix: [process.env.npm_execpath],
+      label: `${process.execPath} ${process.env.npm_execpath}`,
+    };
+  }
+
+  return {
+    command: process.platform === 'win32' ? 'npm.cmd' : 'npm',
+    argsPrefix: [],
+    label: process.platform === 'win32' ? 'npm.cmd' : 'npm',
+  };
+}
+
 async function main() {
   log(`repoRoot=${repoRoot}`);
   log(`backendRoot=${backendRoot}`);
@@ -98,8 +114,9 @@ async function main() {
     overrides: servicePkg.overrides || {},
   }, null, 2));
 
-  const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  run(npmCommand, ['install', '--omit=dev', '--ignore-scripts', '--no-audit', '--fund=false'], {
+  const npmCommand = getNpmCommand();
+  log(`npm runner: ${npmCommand.label}`);
+  run(npmCommand.command, [...npmCommand.argsPrefix, 'install', '--omit=dev', '--ignore-scripts', '--no-audit', '--fund=false'], {
     cwd: backendRoot,
   });
 

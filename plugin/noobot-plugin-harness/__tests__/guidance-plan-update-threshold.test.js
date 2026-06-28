@@ -223,6 +223,41 @@ test("guidance analysis waits for captured main plan before scheduling", async (
   assert.equal(state.counters.lastGuidanceAnalysisCounterTurn, 1);
 });
 
+test("guidance analysis does not require captured main plan when planning is disabled", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = createAgentContext({
+    planText: "",
+    counters: {
+      analysisTurns: FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 1,
+      lastGuidanceAnalysisCounterTurn: 1,
+    },
+  });
+  agentContext.payload.harness.state.flags.planningCaptured = false;
+
+  await handler({
+    capability: "guidance",
+    point: "before_llm_call",
+    ctx: {
+      turn: 2,
+      messages: [{ role: "user", content: "继续" }],
+      agentContext,
+    },
+    meta: {
+      harness: {
+        capabilityProfile: {
+          planning: { enabled: false },
+          acceptance: { enabled: false },
+        },
+      },
+    },
+  });
+
+  const state = agentContext.payload.harness.state;
+  assert.equal(state.pending.analysis, true);
+  assert.equal(state.counters.analysisTurns, 0);
+  assert.equal(state.counters.lastGuidanceAnalysisCounterTurn, 2);
+});
+
 test("guidance schedules analysis by scenario-specific turn threshold", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const beforeProgrammingThreshold = createAgentContext({
