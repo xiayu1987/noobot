@@ -792,8 +792,20 @@ ipcMain.handle("noobot:download-host-file", async (_event, { path: pathValue = "
   try {
     logHostFileAccess("host.download.request", { traceId, hostPath: maskHostPath(hostPath), hasPath: Boolean(hostPath) });
     const { targetPath, stats } = await resolveHostFile(hostPath);
-    logHostFileAccess("host.download.response", { traceId, hostPath: maskHostPath(targetPath), size: stats.size });
-    return { ok: true, path: targetPath, fileName: path.basename(targetPath), url: `file://${targetPath.replaceAll("\\", "/")}`, size: stats.size };
+    const fileName = path.basename(targetPath);
+    const defaultPath = path.join(app.getPath("downloads"), sanitizeDownloadFileName(fileName));
+    const result = await dialog.showSaveDialog(mainWindow || undefined, {
+      defaultPath,
+      properties: ["createDirectory", "showOverwriteConfirmation"],
+    });
+    if (result.canceled || !result.filePath) {
+      logHostFileAccess("host.download.response", { traceId, hostPath: maskHostPath(targetPath), canceled: true, size: stats.size });
+      return { ok: false, canceled: true, fileName, size: stats.size };
+    }
+    await fs.promises.mkdir(path.dirname(result.filePath), { recursive: true });
+    await fs.promises.copyFile(targetPath, result.filePath);
+    logHostFileAccess("host.download.response", { traceId, hostPath: maskHostPath(targetPath), savedPath: maskHostPath(result.filePath), size: stats.size });
+    return { ok: true, path: targetPath, savedPath: result.filePath, fileName, size: stats.size };
   } catch (error) {
     logHostFileAccess("host.download.failed", { traceId, hostPath: maskHostPath(hostPath), errorCode: error?.code || "host_download_failed", error: error?.message || String(error) });
     return { ok: false, errorCode: error?.code || "host_download_failed", error: error?.message || String(error) };

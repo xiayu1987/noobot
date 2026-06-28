@@ -516,14 +516,12 @@ export function useMessagePreview({
         let res;
         if (window?.noobotDesktop?.downloadHostFile) {
           res = await window.noobotDesktop.downloadHostFile({ path: hostPath, traceId });
+          if (res?.canceled) {
+            logFileAccess("download.response", { traceId, channel: "desktop-host-ipc", ok: false, canceled: true });
+            return;
+          }
           if (!res?.ok) throw new Error(res?.error || translate("message.downloadFailed"));
-          const anchor = document.createElement("a");
-          anchor.href = res.url;
-          anchor.download = resolveFileItemName(fileItem, hostPath) || res.fileName || "download";
-          document.body.appendChild(anchor);
-          anchor.click();
-          anchor.remove();
-          logFileAccess("download.response", { traceId, channel: "desktop-host-ipc", ok: true });
+          logFileAccess("download.response", { traceId, channel: "desktop-host-ipc", ok: true, hasSavedPath: Boolean(res?.savedPath) });
           return;
         }
         res = await downloadHostFileApi({ path: hostPath, traceId, isSandbox }, { fetcher: authFetch || undefined });
