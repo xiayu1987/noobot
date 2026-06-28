@@ -89,13 +89,32 @@ export function normalizeProxyPathname(pathname = "/", stripPrefix = config.upst
 export function proxyHttpRequest(request, response) {
   const locale = resolveLocaleFromRequest(request);
   const method = String(request?.method || "GET").trim().toUpperCase() || "GET";
+  const traceId = String(request?.headers?.["x-noobot-file-trace-id"] || "").trim();
   let targetUrl = null;
   try {
     targetUrl = new URL(request?.url || "/", config.upstreamHttpBase);
     targetUrl.pathname = normalizeProxyPathname(targetUrl.pathname);
   } catch {
+    if (traceId) {
+      console.info("[noobot:file-access]", {
+        layer: "agentProxy.http",
+        event: "proxy.invalidRequestUrl",
+        traceId,
+        method,
+      });
+    }
     writeProxyError(response, 400, AGENT_PROXY_ERROR.INVALID_REQUEST_URL, locale);
     return;
+  }
+  if (traceId) {
+    console.info("[noobot:file-access]", {
+      layer: "agentProxy.http",
+      event: "proxy.request",
+      traceId,
+      method,
+      pathname: targetUrl.pathname,
+      hasSearch: Boolean(targetUrl.search),
+    });
   }
   const isHttps = targetUrl.protocol === "https:";
   const requestHeaders = { ...(request?.headers || {}) };
@@ -113,6 +132,18 @@ export function proxyHttpRequest(request, response) {
     },
     (upstreamResponse) => {
       const statusCode = Number(upstreamResponse?.statusCode || 502);
+      if (traceId) {
+        console.info("[noobot:file-access]", {
+          layer: "agentProxy.http",
+          event: "proxy.response",
+          traceId,
+          method,
+          pathname: targetUrl.pathname,
+          status: statusCode,
+          contentType: String(upstreamResponse?.headers?.["content-type"] || ""),
+          contentDisposition: Boolean(upstreamResponse?.headers?.["content-disposition"]),
+        });
+      }
       const responseHeaders = decorateProxyResponseHeaders({
         ...(upstreamResponse?.headers || {}),
       });
@@ -124,6 +155,16 @@ export function proxyHttpRequest(request, response) {
     upstreamRequest.destroy(new Error("upstream timeout"));
   });
   upstreamRequest.on("error", (error) => {
+    if (traceId) {
+      console.info("[noobot:file-access]", {
+        layer: "agentProxy.http",
+        event: "proxy.failed",
+        traceId,
+        method,
+        pathname: targetUrl?.pathname || "",
+        error: String(error?.message || error || ""),
+      });
+    }
     writeProxyError(
       response,
       502,

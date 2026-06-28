@@ -78,6 +78,28 @@ export function registerFileCrudRoutes(
       ? responseBuilders.save
       : ({ path }) => ({ ok: true, path });
 
+  const maskWorkspacePath = (pathValue = "") => {
+    const normalized = String(pathValue || "").trim().replaceAll("\\", "/");
+    if (!normalized) return "";
+    const parts = normalized.split("/").filter(Boolean);
+    if (parts.length <= 2) return normalized;
+    return `${parts.slice(0, 2).join("/")}/.../${parts.at(-1)}`;
+  };
+
+  const logFileAccess = (req, event, payload = {}) => {
+    const traceId = String(req?.headers?.["x-noobot-file-trace-id"] || "").trim();
+    if (!traceId) return;
+    try {
+      console.info("[noobot:file-access]", {
+        layer: "service.fileCrud",
+        event,
+        traceId,
+        routePrefix,
+        ...payload,
+      });
+    } catch {}
+  };
+
   // GET tree
   app.get(
     `${routePrefix}/tree`,
@@ -100,15 +122,32 @@ export function registerFileCrudRoutes(
     jsonRoute(
       async (req, res) => {
       const relativePath = String(req.query.path || "");
+      logFileAccess(req, "file.request", {
+        hasPath: Boolean(relativePath),
+        relativePath: maskWorkspacePath(relativePath),
+      });
       if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
       const root = await resolveRootPath(req);
       const absolutePath = safeJoin(root, relativePath);
-      await access(absolutePath);
+      try {
+        await access(absolutePath);
+      } catch (error) {
+        logFileAccess(req, "file.accessFailed", {
+          relativePath: maskWorkspacePath(relativePath),
+          error: String(error?.code || error?.message || error || ""),
+        });
+        throw error;
+      }
       const fileStats = await stat(absolutePath);
       if (!fileStats.isFile()) throw new Error(translateText("common.pathIsNotFile", req.locale));
       const contentBuffer = await readFile(absolutePath);
       const isText = !contentBuffer.includes(0);
       const content = isText ? contentBuffer.toString("utf8") : "";
+      logFileAccess(req, "file.response", {
+        relativePath: maskWorkspacePath(relativePath),
+        isText,
+        size: fileStats.size,
+      });
       res.json(
         buildFileResponse({
           req,
@@ -150,16 +189,36 @@ export function registerFileCrudRoutes(
       jsonRoute(
         async (req, res) => {
         const relativePath = String(req.query.path || "");
+        logFileAccess(req, "download.request", {
+          hasPath: Boolean(relativePath),
+          relativePath: maskWorkspacePath(relativePath),
+        });
         if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
         const root = await resolveRootPath(req);
         const absolutePath = safeJoin(root, relativePath);
-        await access(absolutePath);
+        try {
+          await access(absolutePath);
+        } catch (error) {
+          logFileAccess(req, "download.accessFailed", {
+            relativePath: maskWorkspacePath(relativePath),
+            error: String(error?.code || error?.message || error || ""),
+          });
+          throw error;
+        }
         const fileStats = await stat(absolutePath);
         if (fileStats.isFile()) {
+          logFileAccess(req, "download.fileResponse", {
+            relativePath: maskWorkspacePath(relativePath),
+            size: fileStats.size,
+          });
           res.download(absolutePath, path.basename(relativePath));
           return;
         }
         if (!fileStats.isDirectory()) throw new Error(translateText("common.pathIsNotFile", req.locale));
+        logFileAccess(req, "download.directoryArchive", {
+          relativePath: maskWorkspacePath(relativePath),
+          size: fileStats.size,
+        });
         const archiveMeta = await buildDirectoryArchiveFile({
           absoluteDirectoryPath: absolutePath,
           archiveName: path.basename(relativePath),

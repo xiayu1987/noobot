@@ -254,7 +254,7 @@ async function handleCopyAssistantMessageText() {
         :key="`written-file:${fileItem.relativePath || fileItem.resolvedPath || fileItem.fileName || ''}`"
         :attachment-item="fileItem"
         :is-image-mime="isImageMime"
-        :can-preview-attachment="() => Boolean(fileItem.relativePath && fileItem.fileName)"
+        :can-preview-attachment="() => Boolean(fileItem.relativePath || fileItem.resolvedPath || fileItem.path)"
         :format-file-size="formatFileSize"
         :translate="translate"
         :name-text="fileItem.fileName || fileItem.relativePath || fileItem.resolvedPath || ''"

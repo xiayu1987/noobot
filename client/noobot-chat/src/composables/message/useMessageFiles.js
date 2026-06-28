@@ -372,6 +372,28 @@ function stripWorkspaceLikePrefix(pathValue = "", userId = "") {
   return "";
 }
 
+function createFileAccessTraceId(prefix = "files") {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function maskWorkspacePath(pathValue = "") {
+  const normalized = String(pathValue || "").trim().replaceAll("\\", "/");
+  if (!normalized) return "";
+  const parts = normalized.split("/").filter(Boolean);
+  if (parts.length <= 2) return normalized;
+  return `${parts.slice(0, 2).join("/")}/.../${parts.at(-1)}`;
+}
+
+function logGeneratedFileAccess(event, payload = {}) {
+  try {
+    console.info("[noobot:file-access]", {
+      layer: "client.messageFiles",
+      event,
+      ...payload,
+    });
+  } catch {}
+}
+
 export function useMessageFiles({
   getMessageItem = () => ({}),
   getAllMessages = () => [],
@@ -379,19 +401,38 @@ export function useMessageFiles({
   getUserId = () => "",
 } = {}) {
   function resolveRelativeWorkspacePath(absolutePath = "") {
+    const traceId = createFileAccessTraceId("normalize");
     const normalizedUserId = String(getUserId() || "").trim();
     const normalizedPath = String(absolutePath || "").trim();
-    if (!normalizedPath) return "";
+    if (!normalizedPath) {
+      logGeneratedFileAccess("normalize.emptyPath", { traceId, hasUserId: Boolean(normalizedUserId) });
+      return "";
+    }
     if (normalizedUserId) {
       const marker = `/workspace/${normalizedUserId}/`;
       const idx = normalizedPath.indexOf(marker);
       if (idx >= 0) {
-        return sanitizeWorkspaceRelativePath(normalizedPath.slice(idx + marker.length));
+        const relativePath = sanitizeWorkspaceRelativePath(normalizedPath.slice(idx + marker.length));
+        logGeneratedFileAccess("normalize.explicitWorkspace", {
+          traceId,
+          hasUserId: true,
+          input: maskWorkspacePath(normalizedPath),
+          relativePath: maskWorkspacePath(relativePath),
+          ok: Boolean(relativePath),
+        });
+        return relativePath;
       }
     }
     const genericWorkspaceMarker = "/workspace/";
     const genericMarkerIndex = normalizedPath.indexOf(genericWorkspaceMarker);
-    if (genericMarkerIndex < 0) return "";
+    if (genericMarkerIndex < 0) {
+      logGeneratedFileAccess("normalize.notWorkspacePath", {
+        traceId,
+        hasUserId: Boolean(normalizedUserId),
+        input: maskWorkspacePath(normalizedPath),
+      });
+      return "";
+    }
     const genericRelativePath = sanitizeWorkspaceRelativePath(
       normalizedPath.slice(genericMarkerIndex + genericWorkspaceMarker.length),
     );
@@ -404,8 +445,23 @@ export function useMessageFiles({
     // /workspace/ as the user workspace directory and keep the remainder.
     const slashIndex = genericRelativePath.indexOf("/");
     if (slashIndex > 0) {
-      return sanitizeWorkspaceRelativePath(genericRelativePath.slice(slashIndex + 1));
+      const relativePath = sanitizeWorkspaceRelativePath(genericRelativePath.slice(slashIndex + 1));
+      logGeneratedFileAccess("normalize.genericWorkspace", {
+        traceId,
+        hasUserId: Boolean(normalizedUserId),
+        input: maskWorkspacePath(normalizedPath),
+        relativePath: maskWorkspacePath(relativePath),
+        ok: Boolean(relativePath),
+      });
+      return relativePath;
     }
+    logGeneratedFileAccess("normalize.genericWorkspaceNoUserSegment", {
+      traceId,
+      hasUserId: Boolean(normalizedUserId),
+      input: maskWorkspacePath(normalizedPath),
+      relativePath: maskWorkspacePath(genericRelativePath),
+      ok: Boolean(genericRelativePath),
+    });
     return genericRelativePath;
   }
 
@@ -490,6 +546,14 @@ export function useMessageFiles({
             sourceType: fileItem?.sourceType || "tool",
             recognized: fileItem?.recognized === true,
           };
+          logGeneratedFileAccess("writtenFile.normalized", {
+            traceId: createFileAccessTraceId("written"),
+            sourceType: normalizedFileItem.sourceType,
+            hasFileName: Boolean(normalizedFileItem.fileName),
+            hasResolvedPath: Boolean(normalizedFileItem.resolvedPath),
+            hasRelativePath: Boolean(normalizedFileItem.relativePath),
+            relativePath: maskWorkspacePath(normalizedFileItem.relativePath),
+          });
           const fileKey = toWrittenFileKey(normalizedFileItem);
           if (fileKey && seen.has(fileKey)) continue;
           if (fileKey) seen.add(fileKey);
@@ -516,6 +580,14 @@ export function useMessageFiles({
           sourceType: "tool",
           recognized: false,
         };
+        logGeneratedFileAccess("writtenFile.normalized", {
+          traceId: createFileAccessTraceId("written"),
+          sourceType: fileItem.sourceType,
+          hasFileName: Boolean(fileItem.fileName),
+          hasResolvedPath: Boolean(fileItem.resolvedPath),
+          hasRelativePath: Boolean(fileItem.relativePath),
+          relativePath: maskWorkspacePath(fileItem.relativePath),
+        });
         const fileKey = toWrittenFileKey(fileItem);
         if (fileKey && seen.has(fileKey)) continue;
         if (fileKey) seen.add(fileKey);
