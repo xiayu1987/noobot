@@ -40,6 +40,11 @@
         "zip"
       ]
     },
+    "nsis": {
+      "installerIcon": "assets/noobot.ico",
+      "uninstallerIcon": "assets/noobot.ico",
+      "shortcutName": "Noobot"
+    },
     "afterPack": "scripts/copy-backend-after-pack.mjs"
   }
 }

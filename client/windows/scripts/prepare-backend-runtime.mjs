@@ -15,6 +15,8 @@ const privateConfigFileNames = new Set(['global.config.json', 'config.json', 'ag
 
 function shouldCopyRuntimeFile(fromRoot, src) {
   const relativePath = path.relative(fromRoot, src);
+  const normalizedRelativePath = relativePath.split(path.sep).join('/');
+  if (normalizedRelativePath.startsWith('src/system-core/system-prompt/')) return true;
   if (ignore.test(relativePath)) return false;
   if (privateConfigFileNames.has(path.basename(src))) return false;
   return true;
@@ -134,6 +136,7 @@ async function main() {
   });
 
   await assertExists(path.join(backendRoot, 'service/app.js'), 'Prepared backend entry');
+  await assertExists(path.join(backendRoot, 'agent/src/system-core/system-prompt/base.md'), 'Prepared backend system prompt');
   await assertExists(path.join(backendRoot, 'node_modules/express/package.json'), 'Prepared backend dependency express');
   log(`Prepared backend runtime: ${backendRoot}`);
 }
