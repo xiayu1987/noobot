@@ -161,6 +161,7 @@ export function normalizeAttachmentMetas(attachmentMetas = []) {
         mimeType: safeStr(attachmentItem?.mimeType || attachmentItem?.type),
         size: safeNum(attachmentItem?.size),
         path: safeStr(attachmentItem?.path),
+        ...(typeof attachmentItem?.isSandbox === "boolean" ? { isSandbox: attachmentItem.isSandbox } : {}),
       };
       if (!normalized.attachmentId) delete normalized.attachmentId;
       if (!normalized.name) delete normalized.name;
@@ -195,6 +196,7 @@ export function mapAttachmentRecordsToMetas(
       relativePath: safeStr(item?.relativePath),
       generatedByModel: item?.generatedByModel === true,
       generationSource: safeStr(item?.generationSource, fallbackGenerationSource),
+      ...(typeof item?.isSandbox === "boolean" ? { isSandbox: item.isSandbox } : {}),
       ...(owner ? { owner } : {}),
       ...(turnScope ? { turnScope } : {}),
       ...(parsedResult ? { parsedResult } : {}),

@@ -38,7 +38,10 @@ function parseToolFileResult(content = "") {
   const resolvedPath = String(parsed?.resolvedPath || parsed?.path || "").trim();
   const fileName = String(parsed?.fileName || "").trim();
   if (!resolvedPath || !fileName) return null;
-  return { toolName, resolvedPath, fileName };
+  const out = { toolName, resolvedPath, fileName };
+  if (typeof parsed?.isSandbox === "boolean") out.isSandbox = parsed.isSandbox;
+  else if (typeof parsed?.sandboxEnabled === "boolean") out.isSandbox = parsed.sandboxEnabled;
+  return out;
 }
 
 function resolveBaseName(filePath = "") {
@@ -543,6 +546,8 @@ export function useMessageFiles({
             resolvedPath: fileItem?.resolvedPath || "",
             fileName: fileItem?.fileName || resolveBaseName(fileItem?.resolvedPath || ""),
             relativePath: fileItem?.relativePath || resolveRelativeWorkspacePath(fileItem?.resolvedPath || ""),
+            ...(typeof fileItem?.isSandbox === "boolean" ? { isSandbox: fileItem.isSandbox } : {}),
+            ...(typeof fileItem?.sandboxEnabled === "boolean" && typeof fileItem?.isSandbox !== "boolean" ? { isSandbox: fileItem.sandboxEnabled } : {}),
             size: fileItem?.size,
             mimeType: fileItem?.mimeType || fileItem?.type || "",
             sourceType: fileItem?.sourceType || "tool",
@@ -554,6 +559,7 @@ export function useMessageFiles({
             hasFileName: Boolean(normalizedFileItem.fileName),
             hasResolvedPath: Boolean(normalizedFileItem.resolvedPath),
             hasRelativePath: Boolean(normalizedFileItem.relativePath),
+            isSandbox: normalizedFileItem.isSandbox,
             relativePath: maskWorkspacePath(normalizedFileItem.relativePath),
           });
           const fileKey = toWrittenFileKey(normalizedFileItem);
@@ -579,6 +585,7 @@ export function useMessageFiles({
           resolvedPath,
           fileName,
           relativePath: resolveRelativeWorkspacePath(resolvedPath),
+          ...(typeof parsed?.isSandbox === "boolean" ? { isSandbox: parsed.isSandbox } : {}),
           sourceType: "tool",
           recognized: false,
         };
@@ -588,6 +595,7 @@ export function useMessageFiles({
           hasFileName: Boolean(fileItem.fileName),
           hasResolvedPath: Boolean(fileItem.resolvedPath),
           hasRelativePath: Boolean(fileItem.relativePath),
+          isSandbox: fileItem.isSandbox,
           relativePath: maskWorkspacePath(fileItem.relativePath),
         });
         const fileKey = toWrittenFileKey(fileItem);

@@ -293,6 +293,7 @@ export function extractAttachmentsFromToolResult(toolName = "", toolResultText =
       relativePath: String(attachmentItem?.relativePath || "").trim(),
       generatedByModel: attachmentItem?.generatedByModel === true,
       generationSource: String(attachmentItem?.generationSource || "").trim(),
+      ...(typeof attachmentItem?.isSandbox === "boolean" ? { isSandbox: attachmentItem.isSandbox } : {}),
     }));
   } catch {
     return [];

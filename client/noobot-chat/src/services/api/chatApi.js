@@ -366,6 +366,28 @@ export async function downloadWorkspaceFileApi(
   );
 }
 
+export async function getHostFileApi(
+  { path = "", traceId = "", isSandbox = undefined },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  const headers = traceId ? { "x-noobot-file-trace-id": String(traceId) } : undefined;
+  const params = new URLSearchParams({ path: String(path || "") });
+  if (typeof isSandbox === "boolean") params.set("isSandbox", String(isSandbox));
+  return runFetch(`/api/internal/host-file/file?${params.toString()}`, headers ? { headers } : undefined);
+}
+
+export async function downloadHostFileApi(
+  { path = "", traceId = "", isSandbox = undefined },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  const headers = traceId ? { "x-noobot-file-trace-id": String(traceId) } : undefined;
+  const params = new URLSearchParams({ path: String(path || "") });
+  if (typeof isSandbox === "boolean") params.set("isSandbox", String(isSandbox));
+  return runFetch(`/api/internal/host-file/download?${params.toString()}`, headers ? { headers } : undefined);
+}
+
 export async function downloadWorkspaceAllFileApi(
   { path = "" },
   { fetcher } = {},

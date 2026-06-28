@@ -72,7 +72,20 @@ function buildPatchFailurePayload({
   };
 }
 
+function resolveFileToolIsSandbox(agentContext = {}) {
+  const runtime = agentContext?.execution?.controllers?.runtime || {};
+  const globalCfg = runtime?.globalConfig?.tools?.execute_script && typeof runtime.globalConfig.tools.execute_script === "object"
+    ? runtime.globalConfig.tools.execute_script
+    : {};
+  const userCfg = runtime?.userConfig?.tools?.execute_script && typeof runtime.userConfig.tools.execute_script === "object"
+    ? runtime.userConfig.tools.execute_script
+    : {};
+  const scriptConfig = { ...globalCfg, ...userCfg };
+  return scriptConfig?.sandboxMode === true || scriptConfig?.sandbox_mode === true;
+}
+
 export function createFileTool({ agentContext }) {
+  const isSandbox = resolveFileToolIsSandbox(agentContext);
   const readFileTool = new DynamicStructuredTool({
     name: TOOL_NAME.READ_FILE,
     description: tTool(agentContext, "tools.file.readDescriptionWithLineNumbers"),
@@ -112,6 +125,7 @@ export function createFileTool({ agentContext }) {
         ok: true,
         resolvedPath,
         fileName: path.basename(resolvedPath),
+        isSandbox,
         startLine: start,
         endLine: end,
         totalLines,
@@ -143,6 +157,7 @@ export function createFileTool({ agentContext }) {
           message: "file exists; set overwrite=true to replace it",
           resolvedPath,
           fileName: path.basename(resolvedPath),
+          isSandbox,
         });
       }
       await mkdir(path.dirname(resolvedPath), { recursive: true });
@@ -152,6 +167,7 @@ export function createFileTool({ agentContext }) {
         state: TOOL_RESULT_STATE.OK,
         resolvedPath,
         fileName: path.basename(resolvedPath),
+        isSandbox,
       });
     },
   });

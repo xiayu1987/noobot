@@ -48,6 +48,7 @@ export function buildPublicRecord(basePath, record) {
     attachmentSource: safeStr(record.attachmentSource, DEFAULT_ATTACHMENT_SOURCE),
     generatedByModel: record?.generatedByModel === true,
     generationSource: safeStr(record.generationSource),
+    ...(typeof record?.isSandbox === "boolean" ? { isSandbox: record.isSandbox } : {}),
     ...(owner ? { owner } : {}),
     ...(turnScope ? { turnScope } : {}),
     ...(parsedResult ? { parsedResult } : {}),

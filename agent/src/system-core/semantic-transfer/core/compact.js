@@ -43,6 +43,7 @@ export const COMPACT_TRANSFER_FILE_FIELDS = Object.freeze([
   "size",
   "relativePath",
   "sandboxPath",
+  "isSandbox",
   "generatedByModel",
   "generationSource",
   "parsedResult",
@@ -98,12 +99,16 @@ export function compactAttachmentMetaForModel(meta = {}) {
     size: meta.size,
     relativePath: meta.relativePath,
     sandboxPath: firstNormalizedString(meta.sandboxPath, meta.sandboxViewPath),
+    ...(typeof meta.isSandbox === "boolean" ? { isSandbox: meta.isSandbox } : {}),
+    ...(typeof meta.sandboxEnabled === "boolean" && typeof meta.isSandbox !== "boolean" ? { isSandbox: meta.sandboxEnabled } : {}),
     generatedByModel: meta.generatedByModel,
     generationSource: meta.generationSource,
     parsedResult: compactObject({
       attachmentId: parsedResult.attachmentId,
       relativePath: parsedResult.relativePath,
       tool: parsedResult.tool,
+      ...(typeof parsedResult.isSandbox === "boolean" ? { isSandbox: parsedResult.isSandbox } : {}),
+      ...(typeof parsedResult.sandboxEnabled === "boolean" && typeof parsedResult.isSandbox !== "boolean" ? { isSandbox: parsedResult.sandboxEnabled } : {}),
     }),
   });
 }
@@ -120,6 +125,8 @@ function transferFileToModelFile(file = {}) {
     ...attachmentMeta,
     transferFilePath,
     role: file?.role,
+    ...(typeof file?.isSandbox === "boolean" && typeof attachmentMeta?.isSandbox !== "boolean" ? { isSandbox: file.isSandbox } : {}),
+    ...(typeof pathView?.isSandbox === "boolean" && typeof attachmentMeta?.isSandbox !== "boolean" && typeof file?.isSandbox !== "boolean" ? { isSandbox: pathView.isSandbox } : {}),
   });
 }
 

@@ -5,7 +5,7 @@
  */
 import { logError } from "#agent/tracking";
 import path from "node:path";
-import { access, mkdir, readdir } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, stat } from "node:fs/promises";
 import { registerFileCrudRoutes } from "./file-crud-routes.js";
 import { buildWorkspaceTree } from "../services/workspace-tree-service.js";
 import { buildDirectoryArchiveFile } from "../services/zip-service.js";
@@ -60,7 +60,116 @@ export function registerWorkspaceRoutes(
 ) {
   const jsonRoute = createJsonRouteWrapper({ translateText });
 
+  const maskHostPath = (pathValue = "") => {
+    const normalized = String(pathValue || "").trim().replaceAll("\\", "/");
+    if (!normalized) return "";
+    const parts = normalized.split("/").filter(Boolean);
+    if (parts.length <= 2) return normalized;
+    return `${parts[0]}/.../${parts.at(-1)}`;
+  };
+
+  const logHostFileAccess = (req, event, payload = {}) => {
+    const traceId = String(req?.headers?.["x-noobot-file-trace-id"] || "").trim();
+    if (!traceId) return;
+    try {
+      console.info("[noobot:file-access]", {
+        layer: "service.hostFile",
+        event,
+        traceId,
+        channel: "backend-host-api",
+        ...payload,
+      });
+    } catch {}
+  };
+
+  const assertHostAccessAllowed = (req) => {
+    const isSandbox = String(req?.query?.isSandbox || "").trim().toLowerCase();
+    if (isSandbox !== "false") {
+      const error = new Error("Host file access requires non-sandbox attachment metadata.");
+      error.status = 403;
+      error.code = "host_access_requires_non_sandbox";
+      throw error;
+    }
+  };
+
+  const resolveHostFilePath = async (req) => {
+    const hostPath = String(req?.query?.path || "").trim();
+    if (!hostPath) {
+      const error = new Error(translateText("common.pathRequired", req.locale));
+      error.code = "missing_path";
+      throw error;
+    }
+    if (!path.isAbsolute(hostPath)) {
+      const error = new Error("Host file path must be absolute.");
+      error.status = 400;
+      error.code = "not_absolute";
+      throw error;
+    }
+    const fileStats = await stat(hostPath);
+    if (!fileStats.isFile()) {
+      const error = new Error(translateText("common.pathIsNotFile", req.locale));
+      error.status = 400;
+      error.code = "not_file";
+      throw error;
+    }
+    return { hostPath, fileStats };
+  };
+
   // ── User-level workspace routes (unchanged) ──
+
+  app.get(
+    "/internal/host-file/file",
+    jsonRoute(
+      async (req, res) => {
+        const requestedPath = String(req?.query?.path || "").trim();
+        logHostFileAccess(req, "file.request", {
+          hasPath: Boolean(requestedPath),
+          hostPath: maskHostPath(requestedPath),
+          isSandbox: String(req?.query?.isSandbox || ""),
+        });
+        assertHostAccessAllowed(req);
+        const { hostPath, fileStats } = await resolveHostFilePath(req);
+        const contentBuffer = await readFile(hostPath);
+        const isText = !contentBuffer.includes(0);
+        logHostFileAccess(req, "file.response", {
+          hostPath: maskHostPath(hostPath),
+          isText,
+          size: fileStats.size,
+        });
+        res.json({
+          ok: true,
+          path: hostPath,
+          fileName: path.basename(hostPath),
+          isText,
+          size: fileStats.size,
+          content: isText ? contentBuffer.toString("utf8") : "",
+        });
+      },
+      { fallbackErrorKey: "common.readWorkspaceFileFailed" },
+    ),
+  );
+
+  app.get(
+    "/internal/host-file/download",
+    jsonRoute(
+      async (req, res) => {
+        const requestedPath = String(req?.query?.path || "").trim();
+        logHostFileAccess(req, "download.request", {
+          hasPath: Boolean(requestedPath),
+          hostPath: maskHostPath(requestedPath),
+          isSandbox: String(req?.query?.isSandbox || ""),
+        });
+        assertHostAccessAllowed(req);
+        const { hostPath, fileStats } = await resolveHostFilePath(req);
+        logHostFileAccess(req, "download.response", {
+          hostPath: maskHostPath(hostPath),
+          size: fileStats.size,
+        });
+        res.download(hostPath, path.basename(hostPath));
+      },
+      { fallbackErrorKey: "common.downloadWorkspaceFileFailed" },
+    ),
+  );
 
   app.post(
     "/internal/workspace/reset/:userId",

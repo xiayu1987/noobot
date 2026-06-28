@@ -6,7 +6,9 @@
 import { onBeforeUnmount, ref } from "vue";
 import {
   buildAttachmentUrl,
+  downloadHostFileApi,
   downloadWorkspaceFileApi,
+  getHostFileApi,
   getWorkspaceFileApi,
   resolveAttachmentId,
   resolveAttachmentSessionId,
@@ -276,6 +278,19 @@ function resolveFileItemRelativePath(fileItem = {}, userId = "") {
   return resolveWorkspaceRelativePath(fileItem?.relativePath || "", userId);
 }
 
+function isHostAbsolutePath(pathValue = "") {
+  const normalized = String(pathValue || "").trim().replaceAll("\\", "/");
+  return /^[a-zA-Z]:\//.test(normalized) || normalized.startsWith("/");
+}
+
+function resolveFileItemHostPath(fileItem = {}) {
+  for (const value of [fileItem?.hostPath, fileItem?.resolvedPath, fileItem?.path]) {
+    const normalized = String(value || "").trim();
+    if (normalized && isHostAbsolutePath(normalized)) return normalized;
+  }
+  return "";
+}
+
 function resolveFileItemName(fileItem = {}, relativePath = "") {
   const explicitName = String(fileItem?.fileName || fileItem?.name || "").trim();
   if (explicitName) return explicitName;
@@ -295,6 +310,14 @@ function maskWorkspacePath(pathValue = "") {
   const parts = normalized.split("/").filter(Boolean);
   if (parts.length <= 2) return normalized;
   return `${parts.slice(0, 2).join("/")}/.../${parts.at(-1)}`;
+}
+
+function maskHostPath(pathValue = "") {
+  const normalized = String(pathValue || "").trim().replaceAll("\\", "/");
+  if (!normalized) return "";
+  const parts = normalized.split("/").filter(Boolean);
+  if (parts.length <= 2) return normalized;
+  return `${parts[0]}/.../${parts.at(-1)}`;
 }
 
 function logFileAccess(event, payload = {}) {
@@ -471,18 +494,62 @@ export function useMessagePreview({
     const traceId = createFileAccessTraceId("download");
     const normalizedUserId = String(userId || "").trim();
     const relativePath = resolveFileItemRelativePath(fileItem, normalizedUserId);
+    const hostPath = resolveFileItemHostPath(fileItem);
+    const isSandbox = fileItem?.isSandbox;
+    const useHostChannel = isSandbox === false && Boolean(hostPath);
+    const missingSandboxFlag = typeof isSandbox !== "boolean";
     logFileAccess("download.click", {
       traceId,
+      isSandbox,
+      channel: useHostChannel ? (window?.noobotDesktop?.downloadHostFile ? "desktop-host-ipc" : "backend-host-api") : "workspace-api",
       hasUserId: Boolean(normalizedUserId),
       hasRelativePath: Boolean(fileItem?.relativePath),
+      hasHostPath: Boolean(hostPath),
       hasFileName: Boolean(fileItem?.fileName || fileItem?.name),
       hasResolvedPath: Boolean(fileItem?.resolvedPath),
       relativePath: maskWorkspacePath(relativePath),
+      hostPath: maskHostPath(hostPath),
     });
+    if (useHostChannel) {
+      try {
+        logFileAccess("download.request", { traceId, channel: window?.noobotDesktop?.downloadHostFile ? "desktop-host-ipc" : "backend-host-api", isSandbox, hostPath: maskHostPath(hostPath) });
+        let res;
+        if (window?.noobotDesktop?.downloadHostFile) {
+          res = await window.noobotDesktop.downloadHostFile({ path: hostPath, traceId });
+          if (!res?.ok) throw new Error(res?.error || translate("message.downloadFailed"));
+          const anchor = document.createElement("a");
+          anchor.href = res.url;
+          anchor.download = resolveFileItemName(fileItem, hostPath) || res.fileName || "download";
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+          logFileAccess("download.response", { traceId, channel: "desktop-host-ipc", ok: true });
+          return;
+        }
+        res = await downloadHostFileApi({ path: hostPath, traceId, isSandbox }, { fetcher: authFetch || undefined });
+        logFileAccess("download.response", { traceId, channel: "backend-host-api", ok: Boolean(res?.ok), status: Number(res?.status || 0) });
+        if (!res.ok) throw new Error(translate("message.downloadFailedHttp", { status: res.status }));
+        const blob = await res.blob();
+        const fileName = parseContentDisposition(res.headers?.get("content-disposition") || "") || resolveFileItemName(fileItem, hostPath) || "download";
+        await triggerBlobDownload(blob, fileName, translate, notify);
+        return;
+      } catch (error) {
+        logFileAccess("download.failed", { traceId, channel: window?.noobotDesktop?.downloadHostFile ? "desktop-host-ipc" : "backend-host-api", error: String(error?.message || error || "") });
+        notify({ type: "error", message: error?.message || translate("message.downloadFailed") });
+        return;
+      }
+    }
+    if (missingSandboxFlag && hostPath && !relativePath) {
+      logFileAccess("download.invalidMetadata", { traceId, reason: "rejectedMissingSandboxFlag", isSandbox, hasHostPath: true, hostPath: maskHostPath(hostPath) });
+      notify({ type: "error", message: translate("message.downloadFailed") });
+      return;
+    }
     if (!normalizedUserId || !relativePath) {
       logFileAccess("download.invalidMetadata", {
         traceId,
         hasUserId: Boolean(normalizedUserId),
+        isSandbox,
+        reason: "missingWorkspaceMetadata",
         hasRelativePath: Boolean(fileItem?.relativePath),
         hasFileName: Boolean(fileItem?.fileName || fileItem?.name),
         hasResolvedPath: Boolean(fileItem?.resolvedPath),
@@ -491,7 +558,7 @@ export function useMessagePreview({
       return;
     }
     try {
-      logFileAccess("download.request", { traceId, relativePath: maskWorkspacePath(relativePath) });
+      logFileAccess("download.request", { traceId, channel: "workspace-api", isSandbox, relativePath: maskWorkspacePath(relativePath) });
       const res = await downloadWorkspaceFileApi(
         { userId: normalizedUserId, path: relativePath, traceId },
         { fetcher: authFetch || undefined },
@@ -534,19 +601,83 @@ export function useMessagePreview({
     const traceId = createFileAccessTraceId("preview");
     const normalizedUserId = String(userId || "").trim();
     const relativePath = resolveFileItemRelativePath(fileItem, normalizedUserId);
+    const hostPath = resolveFileItemHostPath(fileItem);
+    const isSandbox = fileItem?.isSandbox;
+    const useHostChannel = isSandbox === false && Boolean(hostPath);
+    const missingSandboxFlag = typeof isSandbox !== "boolean";
     const fileName = resolveFileItemName(fileItem, relativePath);
     logFileAccess("preview.click", {
       traceId,
+      isSandbox,
+      channel: useHostChannel ? (window?.noobotDesktop?.readHostFile ? "desktop-host-ipc" : "backend-host-api") : "workspace-api",
       hasUserId: Boolean(normalizedUserId),
       hasRelativePath: Boolean(fileItem?.relativePath),
+      hasHostPath: Boolean(hostPath),
       hasFileName: Boolean(fileItem?.fileName || fileItem?.name),
       hasResolvedPath: Boolean(fileItem?.resolvedPath),
       relativePath: maskWorkspacePath(relativePath),
+      hostPath: maskHostPath(hostPath),
     });
+    if (missingSandboxFlag && hostPath && !relativePath) {
+      logFileAccess("preview.invalidMetadata", { traceId, reason: "rejectedMissingSandboxFlag", isSandbox, hasHostPath: true, hostPath: maskHostPath(hostPath) });
+      notify({ type: "error", message: translate("message.previewFailed") });
+      return;
+    }
+    if (useHostChannel && fileName) {
+      filePreview.visible.value = true;
+      filePreview.loading.value = true;
+      filePreview.error.value = "";
+      filePreview.fileName.value = fileName;
+      filePreview.mode.value = "text";
+      filePreview.textContent.value = "";
+      cleanupPreviewImageUrl();
+      try {
+        const channel = window?.noobotDesktop?.readHostFile ? "desktop-host-ipc" : "backend-host-api";
+        if (isImageFile(fileName)) {
+          const imageChannel = window?.noobotDesktop?.downloadHostFile ? "desktop-host-ipc" : "backend-host-api";
+          logFileAccess("preview.imageRequest", { traceId, channel: imageChannel, isSandbox, hostPath: maskHostPath(hostPath) });
+          if (window?.noobotDesktop?.downloadHostFile) {
+            const result = await window.noobotDesktop.downloadHostFile({ path: hostPath, traceId });
+            if (!result?.ok) throw new Error(result?.error || translate("message.previewFailed"));
+            filePreview.imageUrl.value = result.url;
+          } else {
+            const res = await downloadHostFileApi({ path: hostPath, traceId, isSandbox }, { fetcher: authFetch || undefined });
+            if (!res.ok) throw new Error(translate("message.previewFailedHttp", { status: res.status }));
+            filePreview.imageUrl.value = URL.createObjectURL(await res.blob());
+          }
+          filePreview.mode.value = "image";
+          logFileAccess("preview.imageResponse", { traceId, channel: imageChannel, ok: true });
+          return;
+        }
+        logFileAccess("preview.textRequest", { traceId, channel, isSandbox, hostPath: maskHostPath(hostPath) });
+        let data;
+        if (window?.noobotDesktop?.readHostFile) {
+          data = await window.noobotDesktop.readHostFile({ path: hostPath, traceId });
+        } else {
+          const res = await getHostFileApi({ path: hostPath, traceId, isSandbox }, { fetcher: authFetch || undefined });
+          data = await res.json();
+          if (!res.ok) data = { ok: false, error: data?.error || translate("message.previewFailedHttp", { status: res.status }) };
+        }
+        logFileAccess("preview.textResponse", { traceId, channel, ok: Boolean(data?.ok), isText: data?.isText });
+        if (!data?.ok) throw new Error(data?.error || translate("message.previewFailed"));
+        if (data.isText === false) throw new Error(translate("message.fileTypeNotSupported"));
+        filePreview.textContent.value = String(data.content || "");
+        filePreview.mode.value = isMarkdownFile(fileName) ? "markdown" : "text";
+        return;
+      } catch (error) {
+        logFileAccess("preview.failed", { traceId, channel: window?.noobotDesktop?.readHostFile ? "desktop-host-ipc" : "backend-host-api", error: String(error?.message || error || "") });
+        filePreview.error.value = error?.message || translate("message.previewFailed");
+        return;
+      } finally {
+        filePreview.loading.value = false;
+      }
+    }
     if (!normalizedUserId || !relativePath || !fileName) {
       logFileAccess("preview.invalidMetadata", {
         traceId,
         hasUserId: Boolean(normalizedUserId),
+        isSandbox,
+        reason: "missingWorkspaceMetadata",
         hasRelativePath: Boolean(fileItem?.relativePath),
         hasFileName: Boolean(fileItem?.fileName || fileItem?.name),
         hasResolvedPath: Boolean(fileItem?.resolvedPath),
@@ -565,7 +696,7 @@ export function useMessagePreview({
 
     try {
       if (isImageFile(fileName)) {
-        logFileAccess("preview.imageRequest", { traceId, relativePath: maskWorkspacePath(relativePath) });
+        logFileAccess("preview.imageRequest", { traceId, channel: "workspace-api", isSandbox, relativePath: maskWorkspacePath(relativePath) });
         const downloadRes = await downloadWorkspaceFileApi(
           { userId: normalizedUserId, path: relativePath, traceId },
           { fetcher: authFetch || undefined },
