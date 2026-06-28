@@ -403,7 +403,7 @@ export function useMessageFiles({
     // match the explicit user marker above, treat the first segment after
     // /workspace/ as the user workspace directory and keep the remainder.
     const slashIndex = genericRelativePath.indexOf("/");
-    if (!normalizedUserId && slashIndex > 0) {
+    if (slashIndex > 0) {
       return sanitizeWorkspaceRelativePath(genericRelativePath.slice(slashIndex + 1));
     }
     return genericRelativePath;
@@ -429,9 +429,13 @@ export function useMessageFiles({
     const genericWorkspaceMarker = "/workspace/";
     const genericMarkerIndex = normalizedPath.indexOf(genericWorkspaceMarker);
     if (genericMarkerIndex >= 0) {
-      const relativePath = sanitizeWorkspaceRelativePath(
+      const genericRelativePath = sanitizeWorkspaceRelativePath(
         normalizedPath.slice(genericMarkerIndex + genericWorkspaceMarker.length),
       );
+      const slashIndex = genericRelativePath.indexOf("/");
+      const relativePath = slashIndex > 0
+        ? sanitizeWorkspaceRelativePath(genericRelativePath.slice(slashIndex + 1))
+        : genericRelativePath;
       if (!relativePath || !isLikelyFilePath(relativePath)) return null;
       return {
         resolvedPath: normalizedPath,
