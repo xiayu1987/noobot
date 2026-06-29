@@ -438,8 +438,26 @@ async function downloadFileWithCurl(url, destinationPath, { timeoutMs, label = "
   writeDependencyLog(`${eventPrefix}:finish`, { ok: result.ok, code: result.code, error: result.error });
   if (!result.ok) {
     const detail = String(result.stderr || result.stdout || result.error || "").trim().slice(0, 1000);
-    throw new Error(`Failed to download ${label}.${detail ? ` ${detail}` : ""}`);
+    const error = new Error(`Failed to download ${label}.${detail ? ` ${detail}` : ""}`);
+    error.failureKind = "download";
+    error.retryable = true;
+    throw error;
   }
+}
+
+function createDependencyError(message, { failureKind = "local", retryable = false, cause } = {}) {
+  const error = new Error(message);
+  error.failureKind = failureKind;
+  error.retryable = retryable === true;
+  if (cause) error.cause = cause;
+  return error;
+}
+
+function getDependencyErrorMeta(error, defaults = {}) {
+  return {
+    failureKind: error?.failureKind || defaults.failureKind || "local",
+    retryable: error?.retryable === true || defaults.retryable === true,
+  };
 }
 
 async function downloadFirstAvailableLibreOfficeDmg(spec, destinationPath) {
@@ -458,7 +476,7 @@ async function downloadFirstAvailableLibreOfficeDmg(spec, destinationPath) {
       await fs.promises.rm(destinationPath, { force: true }).catch(() => {});
     }
   }
-  throw new Error(`Failed to download LibreOffice DMG from official candidates. Tried: ${failures.join(" ; ")}. You can set NOOBOT_LIBREOFFICE_MAC_DMG_URL to a verified LibreOffice macOS DMG URL, or install manually from https://www.libreoffice.org/download/download-libreoffice/`);
+  throw createDependencyError(`Failed to download LibreOffice DMG from official candidates. Tried: ${failures.join(" ; ")}. You can set NOOBOT_LIBREOFFICE_MAC_DMG_URL to a verified LibreOffice macOS DMG URL, or install manually from https://www.libreoffice.org/download/download-libreoffice/`, { failureKind: "download", retryable: true });
 }
 
 async function installLibreOfficeFromDmg(spec) {
@@ -477,15 +495,15 @@ async function installLibreOfficeFromDmg(spec) {
     writeDependencyLog("dmg:attach:finish", { ok: attachResult.ok, code: attachResult.code, error: attachResult.error });
     if (!attachResult.ok) {
       const detail = String(attachResult.stderr || attachResult.stdout || attachResult.error || "").trim().slice(0, 1000);
-      throw new Error(`Failed to mount LibreOffice DMG.${detail ? ` ${detail}` : ""}`);
+      throw createDependencyError(`Failed to mount LibreOffice DMG.${detail ? ` ${detail}` : ""}`, { failureKind: "package" });
     }
     mountPoint = parseHdiutilMountPoint(`${attachResult.stdout || ""}\n${attachResult.stderr || ""}`);
     writeDependencyLog("dmg:mount-point", { path: mountPoint });
-    if (!mountPoint) throw new Error("Failed to locate LibreOffice DMG mount point.");
+    if (!mountPoint) throw createDependencyError("Failed to locate LibreOffice DMG mount point.", { failureKind: "package" });
 
     const sourceApp = findLibreOfficeAppInVolume(mountPoint);
     writeDependencyLog("dmg:app-source", { path: sourceApp });
-    if (!sourceApp) throw new Error("Mounted LibreOffice DMG did not contain LibreOffice.app.");
+    if (!sourceApp) throw createDependencyError("Mounted LibreOffice DMG did not contain LibreOffice.app.", { failureKind: "package" });
 
     const targetApp = "/Applications/LibreOffice.app";
     sendStatus({ phase: "dependency", message: `Copying ${spec.label} to /Applications...` });
@@ -494,7 +512,7 @@ async function installLibreOfficeFromDmg(spec) {
     writeDependencyLog("dmg:copy:finish", { ok: copyResult.ok, code: copyResult.code, error: copyResult.error });
     if (!copyResult.ok) {
       const detail = String(copyResult.stderr || copyResult.stdout || copyResult.error || "").trim().slice(0, 1000);
-      throw new Error(`Failed to copy LibreOffice to /Applications. macOS may require permission to write to /Applications.${detail ? ` ${detail}` : ""}`);
+      throw createDependencyError(`Failed to copy LibreOffice to /Applications. macOS may require permission to write to /Applications.${detail ? ` ${detail}` : ""}`, { failureKind: "permission" });
     }
     return { ok: true, method: "dmg" };
   } finally {
@@ -528,6 +546,58 @@ async function runManagedCommand(key, command, args = []) {
   return runProcess(commandPath, args, { timeoutMs: desktopDependencyTimeouts.commandProbeMs });
 }
 
+function getFileMode(filePath) {
+  try {
+    return fs.statSync(filePath).mode.toString(8);
+  } catch {
+    return "";
+  }
+}
+
+async function findExecutableFileByName(rootDir, fileName) {
+  const stack = [rootDir];
+  while (stack.length) {
+    const current = stack.pop();
+    let entries = [];
+    try {
+      entries = await fs.promises.readdir(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+        continue;
+      }
+      if (entry.isFile() && entry.name === fileName) return fullPath;
+    }
+  }
+  return "";
+}
+
+async function verifyManagedCommand(key, command, args = ["--version"]) {
+  const commandPath = getMacManagedCommandPath(key, command);
+  const exists = hasExistingFile(commandPath);
+  const mode = exists ? getFileMode(commandPath) : "";
+  const result = exists
+    ? await runProcess(commandPath, args, { timeoutMs: desktopDependencyTimeouts.commandProbeMs })
+    : { ok: false, code: -1, stdout: "", stderr: "", error: "managed command missing" };
+  writeDependencyLog("managed:verify", {
+    key,
+    command,
+    path: commandPath,
+    exists,
+    mode,
+    ok: result.ok,
+    code: result.code,
+    error: result.error,
+    stderr: String(result.stderr || "").slice(0, 500),
+    pathEnv: String(process.env.PATH || "").slice(0, 1000),
+  });
+  return { ...result, path: commandPath, exists, mode };
+}
+
 async function downloadFirstAvailableFile({ key, label, candidates, destinationPath, eventPrefix, manualUrl, envHint }) {
   const failures = [];
   writeDependencyLog(`${eventPrefix}:candidates`, { key, count: candidates.length, urls: candidates.join(" | ") });
@@ -543,7 +613,7 @@ async function downloadFirstAvailableFile({ key, label, candidates, destinationP
       await fs.promises.rm(destinationPath, { force: true }).catch(() => {});
     }
   }
-  throw new Error(`Failed to download ${label}. Tried: ${failures.join(" ; ")}.${envHint ? ` You can set ${envHint}.` : ""}${manualUrl ? ` Manual download: ${manualUrl}` : ""}`);
+  throw createDependencyError(`Failed to download ${label}. Tried: ${failures.join(" ; ")}.${envHint ? ` You can set ${envHint}.` : ""}${manualUrl ? ` Manual download: ${manualUrl}` : ""}`, { failureKind: "download", retryable: true });
 }
 
 function getMacFfmpegUrlCandidates(spec) {
@@ -577,16 +647,18 @@ async function installFfmpegManagedMac(spec) {
     await fs.promises.mkdir(extractDir, { recursive: true });
     sendStatus({ phase: "dependency", message: `Extracting ${spec.label}...` });
     const unzipResult = await runProcess("ditto", ["-x", "-k", archivePath, extractDir], { timeoutMs: desktopDependencyTimeouts.installMs });
-    if (!unzipResult.ok) throw new Error(`Failed to extract FFmpeg.${String(unzipResult.stderr || unzipResult.error || "").slice(0, 1000)}`);
-    const sourcePath = path.join(extractDir, "ffmpeg");
-    if (!hasExistingFile(sourcePath)) throw new Error("FFmpeg archive did not contain ffmpeg binary.");
+    if (!unzipResult.ok) throw createDependencyError(`Failed to extract FFmpeg.${String(unzipResult.stderr || unzipResult.error || "").slice(0, 1000)}`, { failureKind: "package" });
+    const sourcePath = await findExecutableFileByName(extractDir, "ffmpeg");
+    writeDependencyLog("managed:ffmpeg:binary", { source: sourcePath, target: targetPath });
+    if (!sourcePath) throw createDependencyError("FFmpeg archive did not contain ffmpeg binary.", { failureKind: "package" });
+    await fs.promises.rm(path.dirname(targetBinDir), { recursive: true, force: true });
     await fs.promises.mkdir(targetBinDir, { recursive: true });
     await fs.promises.copyFile(sourcePath, targetPath);
     await fs.promises.chmod(targetPath, 0o755);
     prependManagedDependencyPath();
-    const verify = await runManagedCommand("ffmpeg", "ffmpeg", ["-version"]);
-    if (!verify.ok) throw new Error(`Managed FFmpeg verification failed.${String(verify.stderr || verify.error || "").slice(0, 1000)}`);
-    return { ok: true, method: "managed" };
+    const verify = await verifyManagedCommand("ffmpeg", "ffmpeg", ["-version"]);
+    if (!verify.ok) throw createDependencyError(`Managed FFmpeg verification failed at ${verify.path || targetPath}. exists=${verify.exists}; mode=${verify.mode}; ${String(verify.stderr || verify.error || "").slice(0, 1000)}`, { failureKind: "verification" });
+    return { ok: true, method: "managed", path: verify.path };
   } finally {
     fs.promises.rm(tempDir, { recursive: true, force: true }).catch(() => {});
   }
@@ -620,15 +692,15 @@ async function installNodeManagedMac(spec) {
     await fs.promises.mkdir(extractDir, { recursive: true });
     sendStatus({ phase: "dependency", message: `Extracting ${spec.label}...` });
     const tarResult = await runProcess("tar", ["-xJf", archivePath, "-C", extractDir, "--strip-components", "1"], { timeoutMs: desktopDependencyTimeouts.installMs });
-    if (!tarResult.ok) throw new Error(`Failed to extract Node.js.${String(tarResult.stderr || tarResult.error || "").slice(0, 1000)}`);
+    if (!tarResult.ok) throw createDependencyError(`Failed to extract Node.js.${String(tarResult.stderr || tarResult.error || "").slice(0, 1000)}`, { failureKind: "package" });
     await fs.promises.rm(targetDir, { recursive: true, force: true });
     await fs.promises.mkdir(path.dirname(targetDir), { recursive: true });
     await fs.promises.rename(extractDir, targetDir);
     await fs.promises.chmod(path.join(targetDir, "bin", "node"), 0o755).catch(() => {});
     await fs.promises.chmod(path.join(targetDir, "bin", "npm"), 0o755).catch(() => {});
     prependManagedDependencyPath();
-    const nodeVerify = await runManagedCommand("nodejs", "node", ["--version"]);
-    if (!nodeVerify.ok) throw new Error(`Managed Node.js verification failed.${String(nodeVerify.stderr || nodeVerify.error || "").slice(0, 1000)}`);
+    const nodeVerify = await verifyManagedCommand("nodejs", "node", ["--version"]);
+    if (!nodeVerify.ok) throw createDependencyError(`Managed Node.js verification failed.${String(nodeVerify.stderr || nodeVerify.error || "").slice(0, 1000)}`, { failureKind: "verification" });
     const npmVerify = await runManagedCommand("nodejs", "npm", ["--version"]);
     writeDependencyLog("managed:nodejs:npm:verify", { ok: npmVerify.ok, error: npmVerify.error });
     return { ok: true, method: "managed" };
@@ -865,17 +937,18 @@ async function ensureSelectedDependencies(dependencies = {}) {
           writeDependencyLog("verify:start", { key, label: spec.label, method: "dmg" });
           if (!(await waitForDependencyInstalled(spec))) {
             writeDependencyLog("verify:failed", { key, label: spec.label, method: "dmg" });
-            throw new Error(`${spec.label} DMG installation finished, but it is not available yet. Please restart Noobot or install it manually if /Applications/LibreOffice.app is still missing.`);
+            throw createDependencyError(`${spec.label} DMG installation finished, but it is not available yet. Please restart Noobot or install it manually if /Applications/LibreOffice.app is still missing.`, { failureKind: "verification" });
           }
           writeDependencyLog("verify:finish", { key, label: spec.label, method: "dmg" });
           sendStatus({ phase: "dependency", message: `${spec.label} installed.` });
           results.push({ key, ok: true, installed: true, method: "dmg" });
           continue;
         } catch (error) {
+          const meta = getDependencyErrorMeta(error);
           const message = `Failed to auto-install ${spec.label} without Homebrew. ${error?.message || String(error)}`;
           writeDependencyLog("dmg:install:error", { key, label: spec.label, error });
-          sendStatus({ phase: "dependency-missing", message, dependency: key });
-          throw new Error(message);
+          sendStatus({ phase: "dependency-missing", message, dependency: key, retryable: meta.retryable, failureKind: meta.failureKind });
+          throw createDependencyError(message, meta);
         }
       }
       if (process.platform === "darwin" && (key === "ffmpeg" || key === "nodejs")) {
@@ -887,26 +960,27 @@ async function ensureSelectedDependencies(dependencies = {}) {
           writeDependencyLog("verify:start", { key, label: spec.label, method: "managed" });
           if (!(await waitForDependencyInstalled(spec))) {
             writeDependencyLog("verify:failed", { key, label: spec.label, method: "managed" });
-            throw new Error(`${spec.label} managed installation finished, but it is not available yet. Please restart Noobot or install it manually.`);
+            throw createDependencyError(`${spec.label} managed installation finished, but it is not available yet. Please restart Noobot or install it manually.`, { failureKind: "verification" });
           }
           writeDependencyLog("verify:finish", { key, label: spec.label, method: "managed" });
           sendStatus({ phase: "dependency", message: `${spec.label} installed.` });
           results.push({ key, ok: true, installed: true, method: "managed" });
           continue;
         } catch (error) {
+          const meta = getDependencyErrorMeta(error);
           const envHint = key === "ffmpeg" ? "NOOBOT_FFMPEG_MAC_URL" : "NOOBOT_NODEJS_MAC_URL / NOOBOT_NODEJS_MAC_VERSION";
           const message = `Failed to auto-install ${spec.label} without Homebrew. ${error?.message || String(error)} You can override the download with ${envHint}.`;
           writeDependencyLog("managed:install:error", { key, label: spec.label, error });
-          sendStatus({ phase: "dependency-missing", message, dependency: key });
-          throw new Error(message);
+          sendStatus({ phase: "dependency-missing", message, dependency: key, retryable: meta.retryable, failureKind: meta.failureKind });
+          throw createDependencyError(message, meta);
         }
       }
       const message = process.platform === "darwin"
         ? `Cannot auto-install ${spec.label}: Homebrew was not found. Please install ${spec.label} manually or install Homebrew and run: brew install --cask ${spec.packages?.darwin?.brew || spec.packages?.darwin?.brew || spec.label}`
         : `Cannot auto-install ${spec.label}: no supported package manager was found.`;
       writeDependencyLog("missing:no-installer", { key, label: spec.label, message });
-      sendStatus({ phase: "dependency-missing", message, dependency: key });
-      throw new Error(message);
+      sendStatus({ phase: "dependency-missing", message, dependency: key, retryable: false, failureKind: "installer-unavailable" });
+      throw createDependencyError(message, { failureKind: "installer-unavailable" });
     }
     writeDependencyLog("install:start", { key, label: spec.label, command: [installCommand.command, ...(installCommand.args || [])].join(" "), timeoutMs: desktopDependencyTimeouts.installMs });
     sendStatus({ phase: "dependency", message: `Installing ${spec.label}...` });
@@ -916,13 +990,13 @@ async function ensureSelectedDependencies(dependencies = {}) {
     writeDependencyLog("install:finish", { key, label: spec.label, ok: result.ok, code: result.code, error: result.error });
     if (!result.ok) {
       const detail = String(result.stderr || result.stdout || result.error || "").trim().slice(0, 1000);
-      throw new Error(`Failed to install ${spec.label}.${detail ? ` ${detail}` : ""}`);
+      throw createDependencyError(`Failed to install ${spec.label}.${detail ? ` ${detail}` : ""}`, { failureKind: "installer" });
     }
     sendStatus({ phase: "dependency", message: `${spec.label} installer finished. Verifying availability...` });
     writeDependencyLog("verify:start", { key, label: spec.label });
     if (!(await waitForDependencyInstalled(spec))) {
       writeDependencyLog("verify:failed", { key, label: spec.label });
-      throw new Error(`${spec.label} installation finished, but it is not available yet. Please restart Noobot or install it manually if the command is still missing from PATH.`);
+      throw createDependencyError(`${spec.label} installation finished, but it is not available yet. Please restart Noobot or install it manually if the command is still missing from PATH.`, { failureKind: "verification" });
     }
     writeDependencyLog("verify:finish", { key, label: spec.label });
     sendStatus({ phase: "dependency", message: `${spec.label} installed.` });

@@ -234,6 +234,7 @@
       let lastMessage = "";
       let currentStep = "starting";
       let superAdminCompleted = false;
+      let lastDependencyRetryable = false;
 
       const dependencyPhases = new Set(["dependency", "dependency-missing"]);
 
@@ -356,14 +357,21 @@
         if (status.phase === "config-optional") return renderConfigForm(status.params);
         if (status.phase === "dependency-missing") {
           const text = status.message || "A selected dependency is missing and cannot be installed automatically.";
+          const canRetry = status.retryable === true;
+          const failureKind = status.failureKind ? `Failure type: ${status.failureKind}. ` : "";
+          const manualHint = canRetry
+            ? "This looks like a network/download problem. You can retry after checking your network."
+            : `${failureKind}Retry is hidden because this does not look like a network/download problem. Please install or fix the dependency manually, adjust permissions or package URL if needed, then restart Noobot. See ~/Noobot-startup-debug.log for details.`;
           message.textContent = text;
           appendLogLine(text);
+          appendLogLine(manualHint);
           setStep("dependency");
-          retry.classList.remove("hidden");
+          lastDependencyRetryable = canRetry;
+          retry.classList.toggle("hidden", !canRetry);
           return;
         }
         hideForms();
-        retry.classList.toggle("hidden", status.phase !== "error");
+        retry.classList.toggle("hidden", !(status.phase === "error" && status.retryable === true));
       }
 
       window.noobotDesktop?.getStartupStatuses?.().then((statuses) => { if (Array.isArray(statuses)) statuses.forEach(renderStatus); }).catch(() => {});
@@ -407,7 +415,8 @@
           message.textContent = text;
           appendLogLine(text);
           if (currentStep === "dependency") {
-            retry.classList.remove("hidden");
+            retry.classList.toggle("hidden", !lastDependencyRetryable);
+            if (!lastDependencyRetryable) appendLogLine("Retry is hidden because the last dependency failure was not marked as a network/download problem. Check ~/Noobot-startup-debug.log and fix the dependency manually before restarting Noobot.");
           } else {
             currentStep = "super-admin";
             superAdminCompleted = false;
