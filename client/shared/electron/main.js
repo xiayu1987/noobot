@@ -34,14 +34,31 @@ function appendEarlyLog(message) {
   const line = `[${new Date().toISOString()}] ${message}\n`;
   try {
     const logFile = getEarlyLogFilePath();
-    fs.mkdirSync(path.dirname(logFile), { recursive: true });
-    fs.appendFileSync(logFile, line, "utf8");
+    fs.promises.mkdir(path.dirname(logFile), { recursive: true })
+      .then(() => fs.promises.appendFile(logFile, line, "utf8"))
+      .catch(() => {});
   } catch {
     // Diagnostics must not break startup.
   }
 }
 
-appendEarlyLog(`[main:module] loaded; node=${process.version}; electron=${process.versions.electron}; platform=${process.platform}; packaged=${app.isPackaged}; argv=${process.argv.join(" ")}`);
+function appendFallbackDebugLog(message) {
+  const line = `[${new Date().toISOString()}] ${message}\n`;
+  const candidates = [
+    path.join(process.env.HOME || process.cwd(), `${desktopAppName}-startup-debug.log`),
+    path.join(process.env.TMPDIR || "/tmp", `${desktopAppName}-startup-debug.log`),
+  ];
+  for (const filePath of candidates) {
+    try {
+      fs.promises.appendFile(filePath, line, "utf8").catch(() => {});
+    } catch {
+      // Diagnostics must not break startup.
+    }
+  }
+}
+
+appendEarlyLog(`[main:module] loaded; node=${process.version}; electron=${process.versions.electron}; platform=${process.platform}; packaged=${app.isPackaged}; filename=${__filename}; execPath=${process.execPath}; resourcesPath=${process.resourcesPath || ""}; argv=${process.argv.join(" ")}`);
+appendFallbackDebugLog(`[main:module] loaded; node=${process.version}; electron=${process.versions.electron}; platform=${process.platform}; packaged=${app.isPackaged}; filename=${__filename}; execPath=${process.execPath}; resourcesPath=${process.resourcesPath || ""}; argv=${process.argv.join(" ")}`);
 
 process.on("uncaughtException", (error) => {
   appendEarlyLog(`[process:uncaughtException] ${error?.stack || error?.message || String(error)}`);
