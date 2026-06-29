@@ -18,6 +18,7 @@ const desktopDependencyTimeouts = Object.freeze({
   commandProbeMs: 15000,
   checkMs: 45000,
   packageQueryMs: 30000,
+  installCommandMs: 15000,
   installMs: 20 * 60 * 1000,
 });
 
@@ -406,13 +407,20 @@ async function waitForDependencyInstalled(spec, { timeoutMs = 90000, intervalMs 
 }
 
 async function findAvailableCommand(commands = []) {
+  appendStartupTrace(`[dependency:find-command:start] commands=${commands.join(",")}`);
   for (const command of commands) {
-    if (await hasCommand(command)) return command;
+    appendStartupTrace(`[dependency:find-command:probe] command=${command}`);
+    if (await hasCommand(command)) {
+      appendStartupTrace(`[dependency:find-command:found] command=${command}`);
+      return command;
+    }
   }
+  appendStartupTrace(`[dependency:find-command:missing] commands=${commands.join(",")}`);
   return "";
 }
 
 async function buildDependencyInstallCommand(spec) {
+  appendStartupTrace(`[dependency:install-command:build:start] label=${spec.label}; platform=${process.platform}`);
   const packages = spec.packages?.[process.platform] || {};
   if (process.platform === "win32") {
     if (packages.winget && await findAvailableCommand(["winget"])) return { command: "winget", args: ["install", "--id", packages.winget, "--exact", "--accept-package-agreements", "--accept-source-agreements"] };
@@ -431,6 +439,7 @@ async function buildDependencyInstallCommand(spec) {
     if (packages.yum && await findAvailableCommand(["yum"])) return isRoot ? { command: "yum", args: ["install", "-y", packages.yum] } : { command: "sudo", args: ["-n", "yum", "install", "-y", packages.yum] };
     if (packages.pacman && await findAvailableCommand(["pacman"])) return isRoot ? { command: "pacman", args: ["-S", "--noconfirm", packages.pacman] } : { command: "sudo", args: ["-n", "pacman", "-S", "--noconfirm", packages.pacman] };
   }
+  appendStartupTrace(`[dependency:install-command:build:missing] label=${spec.label}; platform=${process.platform}`);
   return null;
 }
 
@@ -456,25 +465,45 @@ async function ensureSelectedDependencies(dependencies = {}) {
       sendStatus({ phase: "dependency", message: `${spec.label} check timed out or failed. Continuing with installer lookup...` });
     }
     if (installed) {
+      appendStartupTrace(`[dependency:ensure:installed] key=${key}; label=${spec.label}`);
       sendStatus({ phase: "dependency", message: `${spec.label} is already installed. Skipping.` });
       results.push({ key, ok: true, skipped: true });
       continue;
     }
-    appendEarlyLog(`[dependency:ensure:install-command:start] key=${key}; label=${spec.label}`);
-    const installCommand = await buildDependencyInstallCommand(spec);
-    if (!installCommand) throw new Error(`Cannot auto-install ${spec.label}: no supported package manager was found.`);
+    appendStartupTrace(`[dependency:missing:start] key=${key}; label=${spec.label}; platform=${process.platform}`);
+    sendStatus({ phase: "dependency", message: `${spec.label} is not installed. Looking for an installer...` });
+    appendStartupTrace(`[dependency:install-command:start] key=${key}; label=${spec.label}; timeoutMs=${desktopDependencyTimeouts.installCommandMs}`);
+    const installCommand = await withTimeout(
+      buildDependencyInstallCommand(spec),
+      desktopDependencyTimeouts.installCommandMs,
+      `dependency installer lookup ${spec.label}`,
+    );
+    appendStartupTrace(`[dependency:install-command:finish] key=${key}; label=${spec.label}; command=${installCommand ? [installCommand.command, ...(installCommand.args || [])].join(" ") : ""}`);
+    if (!installCommand) {
+      const message = process.platform === "darwin"
+        ? `Cannot auto-install ${spec.label}: Homebrew was not found. Please install ${spec.label} manually from https://www.libreoffice.org/download/download-libreoffice/ or install Homebrew and run: brew install --cask ${spec.packages?.darwin?.brew || "libreoffice"}`
+        : `Cannot auto-install ${spec.label}: no supported package manager was found.`;
+      appendStartupTrace(`[dependency:missing:no-installer] key=${key}; label=${spec.label}; message=${message}`);
+      sendStatus({ phase: "dependency-missing", message, dependency: key });
+      throw new Error(message);
+    }
+    appendStartupTrace(`[dependency:install:start] key=${key}; label=${spec.label}; command=${[installCommand.command, ...(installCommand.args || [])].join(" ")}; timeoutMs=${desktopDependencyTimeouts.installMs}`);
     sendStatus({ phase: "dependency", message: `Installing ${spec.label}...` });
     const result = await runProcess(installCommand.command, installCommand.args, {
       timeoutMs: desktopDependencyTimeouts.installMs,
     });
+    appendStartupTrace(`[dependency:install:finish] key=${key}; label=${spec.label}; ok=${result.ok}; code=${result.code ?? ""}; error=${result.error || ""}`);
     if (!result.ok) {
       const detail = String(result.stderr || result.stdout || result.error || "").trim().slice(0, 1000);
       throw new Error(`Failed to install ${spec.label}.${detail ? ` ${detail}` : ""}`);
     }
     sendStatus({ phase: "dependency", message: `${spec.label} installer finished. Verifying availability...` });
+    appendStartupTrace(`[dependency:verify:start] key=${key}; label=${spec.label}`);
     if (!(await waitForDependencyInstalled(spec))) {
+      appendStartupTrace(`[dependency:verify:failed] key=${key}; label=${spec.label}`);
       throw new Error(`${spec.label} installation finished, but it is not available yet. Please restart Noobot or install it manually if the command is still missing from PATH.`);
     }
+    appendStartupTrace(`[dependency:verify:finish] key=${key}; label=${spec.label}`);
     sendStatus({ phase: "dependency", message: `${spec.label} installed.` });
     results.push({ key, ok: true, installed: true });
   }
