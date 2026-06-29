@@ -110,6 +110,7 @@ const dependencySpecs = {
       darwin: { brew: "libreoffice" },
       linux: { apt: "libreoffice", dnf: "libreoffice", yum: "libreoffice", pacman: "libreoffice-fresh" },
     },
+    darwinAppBundle: "LibreOffice.app",
   },
   ffmpeg: {
     label: "FFmpeg",
@@ -174,7 +175,11 @@ function sendStatus(status) {
   if (startupStatuses.length > 300) startupStatuses.shift();
   if (status?.message) appendDesktopLog(`[${status.phase || "status"}] ${status.message}`);
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  mainWindow.webContents.send("noobot:startup-status", status);
+  try {
+    mainWindow.webContents.send("noobot:startup-status", status);
+  } catch (error) {
+    appendEarlyLog(`[main:sendStatus:error] ${error?.stack || error?.message || String(error)}`);
+  }
 }
 
 function runProcess(command, args = [], { timeoutMs = 120000 } = {}) {
@@ -230,6 +235,15 @@ function hasExistingFile(filePath) {
   }
 }
 
+function hasMacAppBundle(appName) {
+  if (process.platform !== "darwin") return false;
+  const candidates = [
+    path.join("/Applications", appName),
+    path.join(process.env.HOME || "", "Applications", appName),
+  ].filter(Boolean);
+  return candidates.some(hasExistingFile);
+}
+
 function parseWindowsRegistryDefaultValue(output) {
   const lines = String(output || "").split(/\r?\n/);
   for (const line of lines) {
@@ -271,7 +285,13 @@ async function hasWindowsWingetPackage(spec) {
 }
 
 async function isDependencyInstalled(spec) {
+  appendEarlyLog(`[dependency:installed:start] label=${spec.label}; platform=${process.platform}`);
+  if (process.platform === "darwin" && spec.darwinAppBundle && hasMacAppBundle(spec.darwinAppBundle)) {
+    appendEarlyLog(`[dependency:installed:mac-app] label=${spec.label}; app=${spec.darwinAppBundle}`);
+    return true;
+  }
   for (const command of spec.checkCommands || []) {
+    appendEarlyLog(`[dependency:installed:command] label=${spec.label}; command=${command}`);
     if (await hasCommand(command)) return true;
   }
   if (process.platform === "win32") {
@@ -292,6 +312,7 @@ async function isDependencyInstalled(spec) {
     }
     if (await hasWindowsWingetPackage(spec)) return true;
   }
+  appendEarlyLog(`[dependency:installed:finish] label=${spec.label}; installed=false`);
   return false;
 }
 
@@ -337,12 +358,15 @@ async function ensureSelectedDependencies(dependencies = {}) {
   const selected = Object.entries(dependencySpecs).filter(([key]) => dependencies?.[key] === true);
   const results = [];
   for (const [key, spec] of selected) {
+    appendEarlyLog(`[dependency:ensure:start] key=${key}; label=${spec.label}`);
     sendStatus({ phase: "dependency", message: `Checking ${spec.label}...` });
+    appendEarlyLog(`[dependency:ensure:after-status] key=${key}; label=${spec.label}`);
     if (await isDependencyInstalled(spec)) {
       sendStatus({ phase: "dependency", message: `${spec.label} is already installed. Skipping.` });
       results.push({ key, ok: true, skipped: true });
       continue;
     }
+    appendEarlyLog(`[dependency:ensure:install-command:start] key=${key}; label=${spec.label}`);
     const installCommand = await buildDependencyInstallCommand(spec);
     if (!installCommand) throw new Error(`Cannot auto-install ${spec.label}: no supported package manager was found.`);
     sendStatus({ phase: "dependency", message: `Installing ${spec.label}...` });
