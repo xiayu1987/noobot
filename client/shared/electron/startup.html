@@ -299,7 +299,7 @@
       }
 
       function renderSuperAdminForm(superAdmin) {
-        if (superAdminCompleted || currentStep === "dependency" || currentStep === "config" || currentStep === "starting") {
+        if (superAdminCompleted || currentStep === "dependency" || currentStep === "config") {
           appendLogLine("Super admin setup is already completed for this startup session. Continuing...");
           return;
         }
