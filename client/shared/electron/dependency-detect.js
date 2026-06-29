@@ -96,7 +96,15 @@ export function createDependencyDetector({
   }
 
   async function isDependencyInstalled(spec) {
-    appendEarlyLog(`[dependency:installed:start] label=${spec.label}; platform=${process.platform}`);
+    const specKeys = Object.keys(spec || {}).join(",");
+    appendEarlyLog(`[dependency:installed:start] label=${spec?.label || ""}; platform=${process.platform}; managedCommand=${spec?.managedCommand || ""}; checkCommands=${(spec?.checkCommands || []).join(",")}; keys=${specKeys}`);
+    writeDependencyLog("installed:start", {
+      label: spec?.label || "",
+      platform: process.platform,
+      managedCommand: spec?.managedCommand || "",
+      checkCommands: (spec?.checkCommands || []).join(","),
+      keys: specKeys,
+    });
     if (process.platform === "darwin" && spec.managedCommand) {
       const managedKey = getDarwinManagedKeyForSpec(spec);
       const managedPath = managedKey ? getMacManagedCommandPath(managedKey, spec.managedCommand) : "";
@@ -163,11 +171,29 @@ export function createDependencyDetector({
   }
 
   async function waitForDependencyInstalled(spec, { timeoutMs = 90000, intervalMs = 3000 } = {}) {
+    appendEarlyLog(`[dependency:wait:start] label=${spec?.label || ""}; platform=${process.platform}; managedCommand=${spec?.managedCommand || ""}; timeoutMs=${timeoutMs}; intervalMs=${intervalMs}`);
+    writeDependencyLog("wait:start", {
+      label: spec?.label || "",
+      platform: process.platform,
+      managedCommand: spec?.managedCommand || "",
+      timeoutMs,
+      intervalMs,
+    });
     const deadline = Date.now() + timeoutMs;
+    let attempt = 0;
     while (Date.now() <= deadline) {
-      if (await isDependencyInstalled(spec)) return true;
+      attempt += 1;
+      appendEarlyLog(`[dependency:wait:attempt] label=${spec?.label || ""}; attempt=${attempt}`);
+      writeDependencyLog("wait:attempt", { label: spec?.label || "", attempt }, { debug: true });
+      if (await isDependencyInstalled(spec)) {
+        appendEarlyLog(`[dependency:wait:finish] label=${spec?.label || ""}; installed=true; attempts=${attempt}`);
+        writeDependencyLog("wait:finish", { label: spec?.label || "", installed: true, attempts: attempt });
+        return true;
+      }
       await sleep(intervalMs);
     }
+    appendEarlyLog(`[dependency:wait:finish] label=${spec?.label || ""}; installed=false; attempts=${attempt}`);
+    writeDependencyLog("wait:finish", { label: spec?.label || "", installed: false, attempts: attempt });
     return false;
   }
 
