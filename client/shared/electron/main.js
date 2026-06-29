@@ -57,6 +57,11 @@ function appendFallbackDebugLog(message) {
   }
 }
 
+function appendStartupTrace(message) {
+  appendEarlyLog(message);
+  appendFallbackDebugLog(message);
+}
+
 appendEarlyLog(`[main:module] loaded; node=${process.version}; electron=${process.versions.electron}; platform=${process.platform}; packaged=${app.isPackaged}; filename=${__filename}; execPath=${process.execPath}; resourcesPath=${process.resourcesPath || ""}; argv=${process.argv.join(" ")}`);
 appendFallbackDebugLog(`[main:module] loaded; node=${process.version}; electron=${process.versions.electron}; platform=${process.platform}; packaged=${app.isPackaged}; filename=${__filename}; execPath=${process.execPath}; resourcesPath=${process.resourcesPath || ""}; argv=${process.argv.join(" ")}`);
 
@@ -189,28 +194,28 @@ function appendDesktopLog(message) {
 }
 
 function sendStatus(status) {
-  appendEarlyLog(`[main:sendStatus:enter] phase=${status?.phase || ""}; message=${String(status?.message || "").slice(0, 500)}`);
-  appendEarlyLog(`[main:sendStatus] phase=${status?.phase || ""}; message=${String(status?.message || "").slice(0, 500)}`);
+  appendStartupTrace(`[main:sendStatus:enter] phase=${status?.phase || ""}; message=${String(status?.message || "").slice(0, 500)}`);
+  appendStartupTrace(`[main:sendStatus] phase=${status?.phase || ""}; message=${String(status?.message || "").slice(0, 500)}`);
   startupStatuses.push(status);
   if (startupStatuses.length > 300) startupStatuses.shift();
-  appendEarlyLog(`[main:sendStatus:after-cache] phase=${status?.phase || ""}`);
+  appendStartupTrace(`[main:sendStatus:after-cache] phase=${status?.phase || ""}`);
   if (status?.message) appendDesktopLog(`[${status.phase || "status"}] ${status.message}`);
-  appendEarlyLog(`[main:sendStatus:after-log-call] phase=${status?.phase || ""}`);
+  appendStartupTrace(`[main:sendStatus:after-log-call] phase=${status?.phase || ""}`);
   if (!mainWindow || mainWindow.isDestroyed()) {
-    appendEarlyLog(`[main:sendStatus:no-window] phase=${status?.phase || ""}`);
+    appendStartupTrace(`[main:sendStatus:no-window] phase=${status?.phase || ""}`);
     return;
   }
   setImmediate(() => {
-    appendEarlyLog(`[main:sendStatus:ipc-enter] phase=${status?.phase || ""}`);
+    appendStartupTrace(`[main:sendStatus:ipc-enter] phase=${status?.phase || ""}`);
     try {
       if (!mainWindow || mainWindow.isDestroyed()) {
-        appendEarlyLog(`[main:sendStatus:ipc-no-window] phase=${status?.phase || ""}`);
+        appendStartupTrace(`[main:sendStatus:ipc-no-window] phase=${status?.phase || ""}`);
         return;
       }
       mainWindow.webContents.send("noobot:startup-status", status);
-      appendEarlyLog(`[main:sendStatus:ipc-done] phase=${status?.phase || ""}`);
+      appendStartupTrace(`[main:sendStatus:ipc-done] phase=${status?.phase || ""}`);
     } catch (error) {
-      appendEarlyLog(`[main:sendStatus:error] ${error?.stack || error?.message || String(error)}`);
+      appendStartupTrace(`[main:sendStatus:error] ${error?.stack || error?.message || String(error)}`);
     }
   });
 }
@@ -433,20 +438,21 @@ async function ensureSelectedDependencies(dependencies = {}) {
   const selected = Object.entries(dependencySpecs).filter(([key]) => dependencies?.[key] === true);
   const results = [];
   for (const [key, spec] of selected) {
-    appendEarlyLog(`[dependency:ensure:start] key=${key}; label=${spec.label}`);
+    appendStartupTrace(`[dependency:ensure:start] key=${key}; label=${spec.label}`);
+    appendStartupTrace(`[dependency:ensure:before-status] key=${key}; label=${spec.label}`);
     sendStatus({ phase: "dependency", message: `Checking ${spec.label}...` });
-    appendEarlyLog(`[dependency:ensure:after-status] key=${key}; label=${spec.label}`);
+    appendStartupTrace(`[dependency:ensure:after-status] key=${key}; label=${spec.label}`);
     let installed = false;
     try {
-      appendEarlyLog(`[dependency:check:start] key=${key}; label=${spec.label}; timeoutMs=${desktopDependencyTimeouts.checkMs}`);
+      appendStartupTrace(`[dependency:check:start] key=${key}; label=${spec.label}; timeoutMs=${desktopDependencyTimeouts.checkMs}`);
       installed = await withTimeout(
         isDependencyInstalled(spec),
         desktopDependencyTimeouts.checkMs,
         `dependency check ${spec.label}`,
       );
-      appendEarlyLog(`[dependency:check:finish] key=${key}; label=${spec.label}; installed=${installed}`);
+      appendStartupTrace(`[dependency:check:finish] key=${key}; label=${spec.label}; installed=${installed}`);
     } catch (error) {
-      appendEarlyLog(`[dependency:check:error] key=${key}; label=${spec.label}; error=${error?.stack || error?.message || String(error)}`);
+      appendStartupTrace(`[dependency:check:error] key=${key}; label=${spec.label}; error=${error?.stack || error?.message || String(error)}`);
       sendStatus({ phase: "dependency", message: `${spec.label} check timed out or failed. Continuing with installer lookup...` });
     }
     if (installed) {
