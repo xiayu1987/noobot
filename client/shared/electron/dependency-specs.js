@@ -47,6 +47,7 @@ export const dependencySpecs = {
     label: "FFmpeg",
     checkCommands: ["ffmpeg"],
     managedCommand: "ffmpeg",
+    managedVersionArgs: ["-version"],
     win32ExecutableCandidates: [
       "ffmpeg\\bin\\ffmpeg.exe",
       "Gyan\\FFmpeg\\bin\\ffmpeg.exe",
