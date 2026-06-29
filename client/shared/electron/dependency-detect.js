@@ -118,11 +118,13 @@ export function createDependencyDetector({
         mode: managedExists ? getFileMode(managedPath) : "",
       });
       if (managedExists) {
-        const result = await runProcess(managedPath, ["--version"], { timeoutMs: desktopDependencyTimeouts.commandProbeMs });
+        const versionArgs = spec.managedVersionArgs || spec.versionArgs || ["--version"];
+        const result = await runProcess(managedPath, versionArgs, { timeoutMs: desktopDependencyTimeouts.commandProbeMs });
         writeDependencyLog("installed:managed:probe", {
           label: spec.label,
           key: managedKey,
           command: spec.managedCommand,
+          args: versionArgs.join(" "),
           path: managedPath,
           ok: result.ok,
           code: result.code,
