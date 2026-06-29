@@ -179,21 +179,32 @@ function sendStatus(status) {
 
 function runProcess(command, args = [], { timeoutMs = 120000 } = {}) {
   return new Promise((resolve) => {
+    const startedAt = Date.now();
+    const commandLine = [command, ...args].join(" ");
+    appendEarlyLog(`[process:start] ${commandLine}; timeoutMs=${timeoutMs}`);
+    let settled = false;
+    const finish = (payload) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      appendEarlyLog(`[process:finish] ${commandLine}; ok=${payload.ok}; code=${payload.code ?? ""}; elapsedMs=${Date.now() - startedAt}; error=${payload.error || ""}`);
+      resolve(payload);
+    };
     const child = spawn(command, args, { windowsHide: true, shell: false });
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => {
+      appendEarlyLog(`[process:timeout] ${commandLine}; killing child`);
       try { child.kill(); } catch {}
+      finish({ ok: false, code: -1, stdout, stderr, error: `Timed out after ${timeoutMs}ms` });
     }, timeoutMs);
     child.stdout?.on("data", (chunk) => { stdout += String(chunk || ""); });
     child.stderr?.on("data", (chunk) => { stderr += String(chunk || ""); });
     child.on("error", (error) => {
-      clearTimeout(timer);
-      resolve({ ok: false, code: -1, stdout, stderr, error: error?.message || String(error) });
+      finish({ ok: false, code: -1, stdout, stderr, error: error?.message || String(error) });
     });
     child.on("close", (code) => {
-      clearTimeout(timer);
-      resolve({ ok: code === 0, code, stdout, stderr });
+      finish({ ok: code === 0, code, stdout, stderr });
     });
   });
 }
@@ -203,9 +214,11 @@ function sleep(ms) {
 }
 
 async function hasCommand(command) {
+  appendEarlyLog(`[dependency:probe:start] command=${command}`);
   const result = await runProcess(command, ["--version"], {
     timeoutMs: desktopDependencyTimeouts.commandProbeMs,
   });
+  appendEarlyLog(`[dependency:probe:finish] command=${command}; ok=${result.ok}; error=${result.error || ""}`);
   return result.ok;
 }
 
