@@ -16,6 +16,7 @@ const packagedBackendRoot = path.join(process.resourcesPath, "backend");
 const desktopAppName = "Noobot";
 const desktopDependencyTimeouts = Object.freeze({
   commandProbeMs: 15000,
+  checkMs: 45000,
   packageQueryMs: 30000,
   installMs: 20 * 60 * 1000,
 });
@@ -161,25 +162,40 @@ function appendDesktopLog(message) {
   try {
     const logFile = getLogFilePath();
     appendEarlyLog(`[desktop-log:path] ${logFile}`);
-    fs.mkdirSync(path.dirname(logFile), { recursive: true });
-    fs.appendFileSync(logFile, line, "utf8");
-    appendEarlyLog(`[desktop-log:done] ${message}`);
+    fs.promises.mkdir(path.dirname(logFile), { recursive: true })
+      .then(() => fs.promises.appendFile(logFile, line, "utf8"))
+      .then(() => appendEarlyLog(`[desktop-log:done] ${message}`))
+      .catch((error) => appendEarlyLog(`[desktop-log:error] ${message}; error=${error?.stack || error?.message || String(error)}`));
   } catch {
     appendEarlyLog(`[main:app-log-fallback] ${message}`);
   }
 }
 
 function sendStatus(status) {
+  appendEarlyLog(`[main:sendStatus:enter] phase=${status?.phase || ""}; message=${String(status?.message || "").slice(0, 500)}`);
   appendEarlyLog(`[main:sendStatus] phase=${status?.phase || ""}; message=${String(status?.message || "").slice(0, 500)}`);
   startupStatuses.push(status);
   if (startupStatuses.length > 300) startupStatuses.shift();
+  appendEarlyLog(`[main:sendStatus:after-cache] phase=${status?.phase || ""}`);
   if (status?.message) appendDesktopLog(`[${status.phase || "status"}] ${status.message}`);
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  try {
-    mainWindow.webContents.send("noobot:startup-status", status);
-  } catch (error) {
-    appendEarlyLog(`[main:sendStatus:error] ${error?.stack || error?.message || String(error)}`);
+  appendEarlyLog(`[main:sendStatus:after-log-call] phase=${status?.phase || ""}`);
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    appendEarlyLog(`[main:sendStatus:no-window] phase=${status?.phase || ""}`);
+    return;
   }
+  setImmediate(() => {
+    appendEarlyLog(`[main:sendStatus:ipc-enter] phase=${status?.phase || ""}`);
+    try {
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        appendEarlyLog(`[main:sendStatus:ipc-no-window] phase=${status?.phase || ""}`);
+        return;
+      }
+      mainWindow.webContents.send("noobot:startup-status", status);
+      appendEarlyLog(`[main:sendStatus:ipc-done] phase=${status?.phase || ""}`);
+    } catch (error) {
+      appendEarlyLog(`[main:sendStatus:error] ${error?.stack || error?.message || String(error)}`);
+    }
+  });
 }
 
 function runProcess(command, args = [], { timeoutMs = 120000 } = {}) {
@@ -223,6 +239,21 @@ function runProcess(command, args = [], { timeoutMs = 120000 } = {}) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function withTimeout(promise, timeoutMs, label) {
+  let timer = null;
+  return new Promise((resolve, reject) => {
+    timer = setTimeout(() => {
+      appendEarlyLog(`[timeout] label=${label}; timeoutMs=${timeoutMs}`);
+      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+    Promise.resolve(promise)
+      .then(resolve, reject)
+      .finally(() => {
+        if (timer) clearTimeout(timer);
+      });
+  });
 }
 
 async function hasCommand(command) {
@@ -388,7 +419,20 @@ async function ensureSelectedDependencies(dependencies = {}) {
     appendEarlyLog(`[dependency:ensure:start] key=${key}; label=${spec.label}`);
     sendStatus({ phase: "dependency", message: `Checking ${spec.label}...` });
     appendEarlyLog(`[dependency:ensure:after-status] key=${key}; label=${spec.label}`);
-    if (await isDependencyInstalled(spec)) {
+    let installed = false;
+    try {
+      appendEarlyLog(`[dependency:check:start] key=${key}; label=${spec.label}; timeoutMs=${desktopDependencyTimeouts.checkMs}`);
+      installed = await withTimeout(
+        isDependencyInstalled(spec),
+        desktopDependencyTimeouts.checkMs,
+        `dependency check ${spec.label}`,
+      );
+      appendEarlyLog(`[dependency:check:finish] key=${key}; label=${spec.label}; installed=${installed}`);
+    } catch (error) {
+      appendEarlyLog(`[dependency:check:error] key=${key}; label=${spec.label}; error=${error?.stack || error?.message || String(error)}`);
+      sendStatus({ phase: "dependency", message: `${spec.label} check timed out or failed. Continuing with installer lookup...` });
+    }
+    if (installed) {
       sendStatus({ phase: "dependency", message: `${spec.label} is already installed. Skipping.` });
       results.push({ key, ok: true, skipped: true });
       continue;
