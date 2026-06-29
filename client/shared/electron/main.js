@@ -6,6 +6,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,6 +20,10 @@ const desktopDependencyTimeouts = Object.freeze({
   checkMs: 45000,
   packageQueryMs: 30000,
   installCommandMs: 15000,
+  downloadMs: 15 * 60 * 1000,
+  dmgAttachMs: 2 * 60 * 1000,
+  appCopyMs: 10 * 60 * 1000,
+  dmgDetachMs: 60 * 1000,
   installMs: 20 * 60 * 1000,
 });
 
@@ -135,6 +140,10 @@ const dependencySpecs = {
       linux: { apt: "libreoffice", dnf: "libreoffice", yum: "libreoffice", pacman: "libreoffice-fresh" },
     },
     darwinAppBundle: "LibreOffice.app",
+    darwinDmg: {
+      version: process.env.NOOBOT_LIBREOFFICE_MAC_VERSION || "25.2.6",
+      url: process.env.NOOBOT_LIBREOFFICE_MAC_DMG_URL || "",
+    },
   },
   ffmpeg: {
     label: "FFmpeg",
@@ -277,6 +286,92 @@ function withTimeout(promise, timeoutMs, label) {
         if (timer) clearTimeout(timer);
       });
   });
+}
+
+function getMacLibreOfficeDmgUrl(spec) {
+  const configuredUrl = String(spec.darwinDmg?.url || "").trim();
+  if (configuredUrl) return configuredUrl;
+  const version = String(spec.darwinDmg?.version || "25.2.6").trim();
+  const arch = process.arch === "arm64" ? "aarch64" : "x86_64";
+  return `https://download.documentfoundation.org/libreoffice/stable/${version}/mac/${arch}/LibreOffice_${version}_MacOS_${arch}.dmg`;
+}
+
+function findLibreOfficeAppInVolume(volumePath) {
+  const direct = path.join(volumePath, "LibreOffice.app");
+  if (hasExistingFile(direct)) return direct;
+  try {
+    const entries = fs.readdirSync(volumePath, { withFileTypes: true });
+    const match = entries.find((entry) => entry.isDirectory() && entry.name.toLowerCase() === "libreoffice.app");
+    return match ? path.join(volumePath, match.name) : "";
+  } catch {
+    return "";
+  }
+}
+
+function parseHdiutilMountPoint(output) {
+  const lines = String(output || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  for (const line of lines) {
+    const match = line.match(/(\/Volumes\/.+)$/);
+    if (match?.[1]) return match[1].trim();
+  }
+  return "";
+}
+
+async function downloadFileWithCurl(url, destinationPath, { timeoutMs }) {
+  appendStartupTrace(`[dependency:dmg:download:start] url=${url}; destination=${destinationPath}; timeoutMs=${timeoutMs}`);
+  const result = await runProcess("curl", ["-L", "--fail", "--show-error", "--connect-timeout", "30", "-o", destinationPath, url], { timeoutMs });
+  appendStartupTrace(`[dependency:dmg:download:finish] ok=${result.ok}; code=${result.code ?? ""}; error=${result.error || ""}`);
+  if (!result.ok) {
+    const detail = String(result.stderr || result.stdout || result.error || "").trim().slice(0, 1000);
+    throw new Error(`Failed to download LibreOffice DMG.${detail ? ` ${detail}` : ""}`);
+  }
+}
+
+async function installLibreOfficeFromDmg(spec) {
+  if (process.platform !== "darwin" || spec.label !== "LibreOffice") return null;
+  const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "noobot-libreoffice-"));
+  const dmgPath = path.join(tempDir, "LibreOffice.dmg");
+  let mountPoint = "";
+  try {
+    const dmgUrl = getMacLibreOfficeDmgUrl(spec);
+    sendStatus({ phase: "dependency", message: `Downloading ${spec.label} from the official LibreOffice site...` });
+    await downloadFileWithCurl(dmgUrl, dmgPath, { timeoutMs: desktopDependencyTimeouts.downloadMs });
+
+    sendStatus({ phase: "dependency", message: `Mounting ${spec.label} installer...` });
+    appendStartupTrace(`[dependency:dmg:attach:start] path=${dmgPath}; timeoutMs=${desktopDependencyTimeouts.dmgAttachMs}`);
+    const attachResult = await runProcess("hdiutil", ["attach", dmgPath, "-nobrowse", "-readonly"], { timeoutMs: desktopDependencyTimeouts.dmgAttachMs });
+    appendStartupTrace(`[dependency:dmg:attach:finish] ok=${attachResult.ok}; code=${attachResult.code ?? ""}; error=${attachResult.error || ""}`);
+    if (!attachResult.ok) {
+      const detail = String(attachResult.stderr || attachResult.stdout || attachResult.error || "").trim().slice(0, 1000);
+      throw new Error(`Failed to mount LibreOffice DMG.${detail ? ` ${detail}` : ""}`);
+    }
+    mountPoint = parseHdiutilMountPoint(`${attachResult.stdout || ""}\n${attachResult.stderr || ""}`);
+    appendStartupTrace(`[dependency:dmg:mount-point] path=${mountPoint}`);
+    if (!mountPoint) throw new Error("Failed to locate LibreOffice DMG mount point.");
+
+    const sourceApp = findLibreOfficeAppInVolume(mountPoint);
+    appendStartupTrace(`[dependency:dmg:app-source] path=${sourceApp}`);
+    if (!sourceApp) throw new Error("Mounted LibreOffice DMG did not contain LibreOffice.app.");
+
+    const targetApp = "/Applications/LibreOffice.app";
+    sendStatus({ phase: "dependency", message: `Copying ${spec.label} to /Applications...` });
+    appendStartupTrace(`[dependency:dmg:copy:start] source=${sourceApp}; target=${targetApp}; timeoutMs=${desktopDependencyTimeouts.appCopyMs}`);
+    const copyResult = await runProcess("ditto", [sourceApp, targetApp], { timeoutMs: desktopDependencyTimeouts.appCopyMs });
+    appendStartupTrace(`[dependency:dmg:copy:finish] ok=${copyResult.ok}; code=${copyResult.code ?? ""}; error=${copyResult.error || ""}`);
+    if (!copyResult.ok) {
+      const detail = String(copyResult.stderr || copyResult.stdout || copyResult.error || "").trim().slice(0, 1000);
+      throw new Error(`Failed to copy LibreOffice to /Applications. macOS may require permission to write to /Applications.${detail ? ` ${detail}` : ""}`);
+    }
+    return { ok: true, method: "dmg" };
+  } finally {
+    if (mountPoint) {
+      sendStatus({ phase: "dependency", message: `Unmounting ${spec.label} installer...` });
+      appendStartupTrace(`[dependency:dmg:detach:start] mount=${mountPoint}; timeoutMs=${desktopDependencyTimeouts.dmgDetachMs}`);
+      const detachResult = await runProcess("hdiutil", ["detach", mountPoint], { timeoutMs: desktopDependencyTimeouts.dmgDetachMs });
+      appendStartupTrace(`[dependency:dmg:detach:finish] ok=${detachResult.ok}; code=${detachResult.code ?? ""}; error=${detachResult.error || ""}`);
+    }
+    fs.promises.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 async function hasCommand(command) {
@@ -480,6 +575,28 @@ async function ensureSelectedDependencies(dependencies = {}) {
     );
     appendStartupTrace(`[dependency:install-command:finish] key=${key}; label=${spec.label}; command=${installCommand ? [installCommand.command, ...(installCommand.args || [])].join(" ") : ""}`);
     if (!installCommand) {
+      if (process.platform === "darwin" && key === "libreoffice") {
+        appendStartupTrace(`[dependency:dmg:install:start] key=${key}; label=${spec.label}`);
+        try {
+          await installLibreOfficeFromDmg(spec);
+          appendStartupTrace(`[dependency:dmg:install:finish] key=${key}; label=${spec.label}`);
+          sendStatus({ phase: "dependency", message: `${spec.label} DMG installer finished. Verifying availability...` });
+          appendStartupTrace(`[dependency:verify:start] key=${key}; label=${spec.label}; method=dmg`);
+          if (!(await waitForDependencyInstalled(spec))) {
+            appendStartupTrace(`[dependency:verify:failed] key=${key}; label=${spec.label}; method=dmg`);
+            throw new Error(`${spec.label} DMG installation finished, but it is not available yet. Please restart Noobot or install it manually if /Applications/LibreOffice.app is still missing.`);
+          }
+          appendStartupTrace(`[dependency:verify:finish] key=${key}; label=${spec.label}; method=dmg`);
+          sendStatus({ phase: "dependency", message: `${spec.label} installed.` });
+          results.push({ key, ok: true, installed: true, method: "dmg" });
+          continue;
+        } catch (error) {
+          const message = `Failed to auto-install ${spec.label} without Homebrew. ${error?.message || String(error)}`;
+          appendStartupTrace(`[dependency:dmg:install:error] key=${key}; label=${spec.label}; error=${error?.stack || error?.message || String(error)}`);
+          sendStatus({ phase: "dependency-missing", message, dependency: key });
+          throw new Error(message);
+        }
+      }
       const message = process.platform === "darwin"
         ? `Cannot auto-install ${spec.label}: Homebrew was not found. Please install ${spec.label} manually from https://www.libreoffice.org/download/download-libreoffice/ or install Homebrew and run: brew install --cask ${spec.packages?.darwin?.brew || "libreoffice"}`
         : `Cannot auto-install ${spec.label}: no supported package manager was found.`;
