@@ -107,6 +107,7 @@ const agentProxyHealthUrl = `${agentProxyOrigin}/health`;
 const defaultClientUrl = process.env.NOOBOT_CLIENT_URL || "http://127.0.0.1:10060";
 const startupTimeoutMs = Number.parseInt(process.env.NOOBOT_STARTUP_TIMEOUT_MS || "60000", 10);
 const pollIntervalMs = Number.parseInt(process.env.NOOBOT_STARTUP_POLL_MS || "1000", 10);
+const startupDebugEnabled = /^(1|true|yes|on)$/i.test(String(process.env.NOOBOT_STARTUP_DEBUG || ""));
 
 let mainWindow = null;
 let managedServiceProcess = null;
@@ -184,48 +185,66 @@ const dependencySpecs = {
   },
 };
 
+function formatLogValue(value) {
+  if (value === undefined || value === null) return "";
+  if (value instanceof Error) return value.stack || value.message || String(value);
+  if (typeof value === "object") {
+    try { return JSON.stringify(value); } catch { return String(value); }
+  }
+  return String(value);
+}
+
+function formatLogFields(fields = {}) {
+  return Object.entries(fields)
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .map(([key, value]) => `${key}=${formatLogValue(value).replace(/\s+/g, " ").slice(0, 1200)}`)
+    .join("; ");
+}
+
+function writeStartupLog(scope, event, fields = {}, { debug = false } = {}) {
+  if (debug && !startupDebugEnabled) return;
+  const detail = formatLogFields(fields);
+  appendStartupTrace(`[${scope}:${event}]${detail ? ` ${detail}` : ""}`);
+}
+
+function writeDependencyLog(event, fields = {}, options = {}) {
+  writeStartupLog("dependency", event, fields, options);
+}
+
 function getLogFilePath() {
   return path.join(app.getPath("userData"), "logs", "desktop-startup.log");
 }
 
 function appendDesktopLog(message) {
   const line = `[${new Date().toISOString()}] ${message}\n`;
-  appendEarlyLog(`[desktop-log:enter] ${message}`);
   try {
     const logFile = getLogFilePath();
-    appendEarlyLog(`[desktop-log:path] ${logFile}`);
     fs.promises.mkdir(path.dirname(logFile), { recursive: true })
       .then(() => fs.promises.appendFile(logFile, line, "utf8"))
-      .then(() => appendEarlyLog(`[desktop-log:done] ${message}`))
-      .catch((error) => appendEarlyLog(`[desktop-log:error] ${message}; error=${error?.stack || error?.message || String(error)}`));
+      .catch((error) => writeStartupLog("desktop-log", "error", { message, error }, { debug: true }));
   } catch {
-    appendEarlyLog(`[main:app-log-fallback] ${message}`);
+    writeStartupLog("desktop-log", "fallback", { message }, { debug: true });
   }
 }
 
 function sendStatus(status) {
-  appendStartupTrace(`[main:sendStatus:enter] phase=${status?.phase || ""}; message=${String(status?.message || "").slice(0, 500)}`);
-  appendStartupTrace(`[main:sendStatus] phase=${status?.phase || ""}; message=${String(status?.message || "").slice(0, 500)}`);
+  writeStartupLog("main", "status", { phase: status?.phase, dependency: status?.dependency, message: String(status?.message || "").slice(0, 500) });
   startupStatuses.push(status);
   if (startupStatuses.length > 300) startupStatuses.shift();
-  appendStartupTrace(`[main:sendStatus:after-cache] phase=${status?.phase || ""}`);
   if (status?.message) appendDesktopLog(`[${status.phase || "status"}] ${status.message}`);
-  appendStartupTrace(`[main:sendStatus:after-log-call] phase=${status?.phase || ""}`);
   if (!mainWindow || mainWindow.isDestroyed()) {
-    appendStartupTrace(`[main:sendStatus:no-window] phase=${status?.phase || ""}`);
+    writeStartupLog("main", "status:no-window", { phase: status?.phase }, { debug: true });
     return;
   }
   setImmediate(() => {
-    appendStartupTrace(`[main:sendStatus:ipc-enter] phase=${status?.phase || ""}`);
     try {
       if (!mainWindow || mainWindow.isDestroyed()) {
-        appendStartupTrace(`[main:sendStatus:ipc-no-window] phase=${status?.phase || ""}`);
+        writeStartupLog("main", "status:ipc-no-window", { phase: status?.phase }, { debug: true });
         return;
       }
       mainWindow.webContents.send("noobot:startup-status", status);
-      appendStartupTrace(`[main:sendStatus:ipc-done] phase=${status?.phase || ""}`);
     } catch (error) {
-      appendStartupTrace(`[main:sendStatus:error] ${error?.stack || error?.message || String(error)}`);
+      writeStartupLog("main", "status:error", { error });
     }
   });
 }
@@ -313,18 +332,18 @@ function getMacLibreOfficeDmgUrl(spec) {
 
 async function fetchLibreOfficeStableVersions() {
   const indexUrl = "https://download.documentfoundation.org/libreoffice/stable/";
-  appendStartupTrace(`[dependency:dmg:versions:start] url=${indexUrl}`);
+  writeDependencyLog("dmg:versions:start", { url: indexUrl });
   const result = await runProcess("curl", ["-L", "--fail", "--silent", "--show-error", "--connect-timeout", "30", indexUrl], {
     timeoutMs: desktopDependencyTimeouts.packageQueryMs,
   });
-  appendStartupTrace(`[dependency:dmg:versions:finish] ok=${result.ok}; code=${result.code ?? ""}; error=${result.error || ""}`);
+  writeDependencyLog("dmg:versions:finish", { ok: result.ok, code: result.code, error: result.error });
   if (!result.ok) return [];
   const versions = Array.from(new Set(
     String(result.stdout || "")
       .matchAll(/href=["'](\d+\.\d+\.\d+)\/["']/gi)
       .map((match) => match[1]),
   )).sort(compareVersionDesc);
-  appendStartupTrace(`[dependency:dmg:versions:list] versions=${versions.join(",")}`);
+  writeDependencyLog("dmg:versions:list", { versions: versions.join(",") });
   return versions;
 }
 
@@ -368,9 +387,9 @@ function parseHdiutilMountPoint(output) {
 }
 
 async function downloadFileWithCurl(url, destinationPath, { timeoutMs }) {
-  appendStartupTrace(`[dependency:dmg:download:start] url=${url}; destination=${destinationPath}; timeoutMs=${timeoutMs}`);
+  writeDependencyLog("dmg:download:start", { url, destination: destinationPath, timeoutMs });
   const result = await runProcess("curl", ["-L", "--fail", "--show-error", "--connect-timeout", "30", "-o", destinationPath, url], { timeoutMs });
-  appendStartupTrace(`[dependency:dmg:download:finish] ok=${result.ok}; code=${result.code ?? ""}; error=${result.error || ""}`);
+  writeDependencyLog("dmg:download:finish", { ok: result.ok, code: result.code, error: result.error });
   if (!result.ok) {
     const detail = String(result.stderr || result.stdout || result.error || "").trim().slice(0, 1000);
     throw new Error(`Failed to download LibreOffice DMG.${detail ? ` ${detail}` : ""}`);
@@ -380,7 +399,7 @@ async function downloadFileWithCurl(url, destinationPath, { timeoutMs }) {
 async function downloadFirstAvailableLibreOfficeDmg(spec, destinationPath) {
   const candidates = await getMacLibreOfficeDmgUrlCandidates(spec);
   const failures = [];
-  appendStartupTrace(`[dependency:dmg:download:candidates] count=${candidates.length}; urls=${candidates.join(" | ")}`);
+  writeDependencyLog("dmg:download:candidates", { count: candidates.length, urls: candidates.join(" | ") });
   for (const url of candidates) {
     try {
       await fs.promises.rm(destinationPath, { force: true });
@@ -389,7 +408,7 @@ async function downloadFirstAvailableLibreOfficeDmg(spec, destinationPath) {
     } catch (error) {
       const message = error?.message || String(error);
       failures.push(`${url} => ${message.slice(0, 500)}`);
-      appendStartupTrace(`[dependency:dmg:download:candidate-failed] url=${url}; error=${message.slice(0, 1000)}`);
+      writeDependencyLog("dmg:download:candidate-failed", { url, error: message.slice(0, 1000) });
       await fs.promises.rm(destinationPath, { force: true }).catch(() => {});
     }
   }
@@ -404,29 +423,29 @@ async function installLibreOfficeFromDmg(spec) {
   try {
     sendStatus({ phase: "dependency", message: `Downloading ${spec.label} from the official LibreOffice site...` });
     const dmgUrl = await downloadFirstAvailableLibreOfficeDmg(spec, dmgPath);
-    appendStartupTrace(`[dependency:dmg:download:selected] url=${dmgUrl}`);
+    writeDependencyLog("dmg:download:selected", { url: dmgUrl });
 
     sendStatus({ phase: "dependency", message: `Mounting ${spec.label} installer...` });
-    appendStartupTrace(`[dependency:dmg:attach:start] path=${dmgPath}; timeoutMs=${desktopDependencyTimeouts.dmgAttachMs}`);
+    writeDependencyLog("dmg:attach:start", { path: dmgPath, timeoutMs: desktopDependencyTimeouts.dmgAttachMs });
     const attachResult = await runProcess("hdiutil", ["attach", dmgPath, "-nobrowse", "-readonly"], { timeoutMs: desktopDependencyTimeouts.dmgAttachMs });
-    appendStartupTrace(`[dependency:dmg:attach:finish] ok=${attachResult.ok}; code=${attachResult.code ?? ""}; error=${attachResult.error || ""}`);
+    writeDependencyLog("dmg:attach:finish", { ok: attachResult.ok, code: attachResult.code, error: attachResult.error });
     if (!attachResult.ok) {
       const detail = String(attachResult.stderr || attachResult.stdout || attachResult.error || "").trim().slice(0, 1000);
       throw new Error(`Failed to mount LibreOffice DMG.${detail ? ` ${detail}` : ""}`);
     }
     mountPoint = parseHdiutilMountPoint(`${attachResult.stdout || ""}\n${attachResult.stderr || ""}`);
-    appendStartupTrace(`[dependency:dmg:mount-point] path=${mountPoint}`);
+    writeDependencyLog("dmg:mount-point", { path: mountPoint });
     if (!mountPoint) throw new Error("Failed to locate LibreOffice DMG mount point.");
 
     const sourceApp = findLibreOfficeAppInVolume(mountPoint);
-    appendStartupTrace(`[dependency:dmg:app-source] path=${sourceApp}`);
+    writeDependencyLog("dmg:app-source", { path: sourceApp });
     if (!sourceApp) throw new Error("Mounted LibreOffice DMG did not contain LibreOffice.app.");
 
     const targetApp = "/Applications/LibreOffice.app";
     sendStatus({ phase: "dependency", message: `Copying ${spec.label} to /Applications...` });
-    appendStartupTrace(`[dependency:dmg:copy:start] source=${sourceApp}; target=${targetApp}; timeoutMs=${desktopDependencyTimeouts.appCopyMs}`);
+    writeDependencyLog("dmg:copy:start", { source: sourceApp, target: targetApp, timeoutMs: desktopDependencyTimeouts.appCopyMs });
     const copyResult = await runProcess("ditto", [sourceApp, targetApp], { timeoutMs: desktopDependencyTimeouts.appCopyMs });
-    appendStartupTrace(`[dependency:dmg:copy:finish] ok=${copyResult.ok}; code=${copyResult.code ?? ""}; error=${copyResult.error || ""}`);
+    writeDependencyLog("dmg:copy:finish", { ok: copyResult.ok, code: copyResult.code, error: copyResult.error });
     if (!copyResult.ok) {
       const detail = String(copyResult.stderr || copyResult.stdout || copyResult.error || "").trim().slice(0, 1000);
       throw new Error(`Failed to copy LibreOffice to /Applications. macOS may require permission to write to /Applications.${detail ? ` ${detail}` : ""}`);
@@ -435,9 +454,9 @@ async function installLibreOfficeFromDmg(spec) {
   } finally {
     if (mountPoint) {
       sendStatus({ phase: "dependency", message: `Unmounting ${spec.label} installer...` });
-      appendStartupTrace(`[dependency:dmg:detach:start] mount=${mountPoint}; timeoutMs=${desktopDependencyTimeouts.dmgDetachMs}`);
+      writeDependencyLog("dmg:detach:start", { mount: mountPoint, timeoutMs: desktopDependencyTimeouts.dmgDetachMs });
       const detachResult = await runProcess("hdiutil", ["detach", mountPoint], { timeoutMs: desktopDependencyTimeouts.dmgDetachMs });
-      appendStartupTrace(`[dependency:dmg:detach:finish] ok=${detachResult.ok}; code=${detachResult.code ?? ""}; error=${detachResult.error || ""}`);
+      writeDependencyLog("dmg:detach:finish", { ok: detachResult.ok, code: detachResult.code, error: detachResult.error });
     }
     fs.promises.rm(tempDir, { recursive: true, force: true }).catch(() => {});
   }
@@ -571,20 +590,20 @@ async function waitForDependencyInstalled(spec, { timeoutMs = 90000, intervalMs 
 }
 
 async function findAvailableCommand(commands = []) {
-  appendStartupTrace(`[dependency:find-command:start] commands=${commands.join(",")}`);
+  writeDependencyLog("find-command:start", { commands: commands.join(",") }, { debug: true });
   for (const command of commands) {
-    appendStartupTrace(`[dependency:find-command:probe] command=${command}`);
+    writeDependencyLog("find-command:probe", { command }, { debug: true });
     if (await hasCommand(command)) {
-      appendStartupTrace(`[dependency:find-command:found] command=${command}`);
+      writeDependencyLog("find-command:found", { command });
       return command;
     }
   }
-  appendStartupTrace(`[dependency:find-command:missing] commands=${commands.join(",")}`);
+  writeDependencyLog("find-command:missing", { commands: commands.join(",") });
   return "";
 }
 
 async function buildDependencyInstallCommand(spec) {
-  appendStartupTrace(`[dependency:install-command:build:start] label=${spec.label}; platform=${process.platform}`);
+  writeDependencyLog("install-command:build:start", { label: spec.label, platform: process.platform }, { debug: true });
   const packages = spec.packages?.[process.platform] || {};
   if (process.platform === "win32") {
     if (packages.winget && await findAvailableCommand(["winget"])) return { command: "winget", args: ["install", "--id", packages.winget, "--exact", "--accept-package-agreements", "--accept-source-agreements"] };
@@ -603,7 +622,7 @@ async function buildDependencyInstallCommand(spec) {
     if (packages.yum && await findAvailableCommand(["yum"])) return isRoot ? { command: "yum", args: ["install", "-y", packages.yum] } : { command: "sudo", args: ["-n", "yum", "install", "-y", packages.yum] };
     if (packages.pacman && await findAvailableCommand(["pacman"])) return isRoot ? { command: "pacman", args: ["-S", "--noconfirm", packages.pacman] } : { command: "sudo", args: ["-n", "pacman", "-S", "--noconfirm", packages.pacman] };
   }
-  appendStartupTrace(`[dependency:install-command:build:missing] label=${spec.label}; platform=${process.platform}`);
+  writeDependencyLog("install-command:build:missing", { label: spec.label, platform: process.platform });
   return null;
 }
 
@@ -611,57 +630,55 @@ async function ensureSelectedDependencies(dependencies = {}) {
   const selected = Object.entries(dependencySpecs).filter(([key]) => dependencies?.[key] === true);
   const results = [];
   for (const [key, spec] of selected) {
-    appendStartupTrace(`[dependency:ensure:start] key=${key}; label=${spec.label}`);
-    appendStartupTrace(`[dependency:ensure:before-status] key=${key}; label=${spec.label}`);
+    writeDependencyLog("ensure:start", { key, label: spec.label });
     sendStatus({ phase: "dependency", message: `Checking ${spec.label}...` });
-    appendStartupTrace(`[dependency:ensure:after-status] key=${key}; label=${spec.label}`);
     let installed = false;
     try {
-      appendStartupTrace(`[dependency:check:start] key=${key}; label=${spec.label}; timeoutMs=${desktopDependencyTimeouts.checkMs}`);
+      writeDependencyLog("check:start", { key, label: spec.label, timeoutMs: desktopDependencyTimeouts.checkMs });
       installed = await withTimeout(
         isDependencyInstalled(spec),
         desktopDependencyTimeouts.checkMs,
         `dependency check ${spec.label}`,
       );
-      appendStartupTrace(`[dependency:check:finish] key=${key}; label=${spec.label}; installed=${installed}`);
+      writeDependencyLog("check:finish", { key, label: spec.label, installed });
     } catch (error) {
-      appendStartupTrace(`[dependency:check:error] key=${key}; label=${spec.label}; error=${error?.stack || error?.message || String(error)}`);
+      writeDependencyLog("check:error", { key, label: spec.label, error });
       sendStatus({ phase: "dependency", message: `${spec.label} check timed out or failed. Continuing with installer lookup...` });
     }
     if (installed) {
-      appendStartupTrace(`[dependency:ensure:installed] key=${key}; label=${spec.label}`);
+      writeDependencyLog("ensure:installed", { key, label: spec.label });
       sendStatus({ phase: "dependency", message: `${spec.label} is already installed. Skipping.` });
       results.push({ key, ok: true, skipped: true });
       continue;
     }
-    appendStartupTrace(`[dependency:missing:start] key=${key}; label=${spec.label}; platform=${process.platform}`);
+    writeDependencyLog("missing:start", { key, label: spec.label, platform: process.platform });
     sendStatus({ phase: "dependency", message: `${spec.label} is not installed. Looking for an installer...` });
-    appendStartupTrace(`[dependency:install-command:start] key=${key}; label=${spec.label}; timeoutMs=${desktopDependencyTimeouts.installCommandMs}`);
+    writeDependencyLog("install-command:start", { key, label: spec.label, timeoutMs: desktopDependencyTimeouts.installCommandMs });
     const installCommand = await withTimeout(
       buildDependencyInstallCommand(spec),
       desktopDependencyTimeouts.installCommandMs,
       `dependency installer lookup ${spec.label}`,
     );
-    appendStartupTrace(`[dependency:install-command:finish] key=${key}; label=${spec.label}; command=${installCommand ? [installCommand.command, ...(installCommand.args || [])].join(" ") : ""}`);
+    writeDependencyLog("install-command:finish", { key, label: spec.label, command: installCommand ? [installCommand.command, ...(installCommand.args || [])].join(" ") : "" });
     if (!installCommand) {
       if (process.platform === "darwin" && key === "libreoffice") {
-        appendStartupTrace(`[dependency:dmg:install:start] key=${key}; label=${spec.label}`);
+        writeDependencyLog("dmg:install:start", { key, label: spec.label });
         try {
           await installLibreOfficeFromDmg(spec);
-          appendStartupTrace(`[dependency:dmg:install:finish] key=${key}; label=${spec.label}`);
+          writeDependencyLog("dmg:install:finish", { key, label: spec.label });
           sendStatus({ phase: "dependency", message: `${spec.label} DMG installer finished. Verifying availability...` });
-          appendStartupTrace(`[dependency:verify:start] key=${key}; label=${spec.label}; method=dmg`);
+          writeDependencyLog("verify:start", { key, label: spec.label, method: "dmg" });
           if (!(await waitForDependencyInstalled(spec))) {
-            appendStartupTrace(`[dependency:verify:failed] key=${key}; label=${spec.label}; method=dmg`);
+            writeDependencyLog("verify:failed", { key, label: spec.label, method: "dmg" });
             throw new Error(`${spec.label} DMG installation finished, but it is not available yet. Please restart Noobot or install it manually if /Applications/LibreOffice.app is still missing.`);
           }
-          appendStartupTrace(`[dependency:verify:finish] key=${key}; label=${spec.label}; method=dmg`);
+          writeDependencyLog("verify:finish", { key, label: spec.label, method: "dmg" });
           sendStatus({ phase: "dependency", message: `${spec.label} installed.` });
           results.push({ key, ok: true, installed: true, method: "dmg" });
           continue;
         } catch (error) {
           const message = `Failed to auto-install ${spec.label} without Homebrew. ${error?.message || String(error)}`;
-          appendStartupTrace(`[dependency:dmg:install:error] key=${key}; label=${spec.label}; error=${error?.stack || error?.message || String(error)}`);
+          writeDependencyLog("dmg:install:error", { key, label: spec.label, error });
           sendStatus({ phase: "dependency-missing", message, dependency: key });
           throw new Error(message);
         }
@@ -669,27 +686,27 @@ async function ensureSelectedDependencies(dependencies = {}) {
       const message = process.platform === "darwin"
         ? `Cannot auto-install ${spec.label}: Homebrew was not found. Please install ${spec.label} manually from https://www.libreoffice.org/download/download-libreoffice/ or install Homebrew and run: brew install --cask ${spec.packages?.darwin?.brew || "libreoffice"}`
         : `Cannot auto-install ${spec.label}: no supported package manager was found.`;
-      appendStartupTrace(`[dependency:missing:no-installer] key=${key}; label=${spec.label}; message=${message}`);
+      writeDependencyLog("missing:no-installer", { key, label: spec.label, message });
       sendStatus({ phase: "dependency-missing", message, dependency: key });
       throw new Error(message);
     }
-    appendStartupTrace(`[dependency:install:start] key=${key}; label=${spec.label}; command=${[installCommand.command, ...(installCommand.args || [])].join(" ")}; timeoutMs=${desktopDependencyTimeouts.installMs}`);
+    writeDependencyLog("install:start", { key, label: spec.label, command: [installCommand.command, ...(installCommand.args || [])].join(" "), timeoutMs: desktopDependencyTimeouts.installMs });
     sendStatus({ phase: "dependency", message: `Installing ${spec.label}...` });
     const result = await runProcess(installCommand.command, installCommand.args, {
       timeoutMs: desktopDependencyTimeouts.installMs,
     });
-    appendStartupTrace(`[dependency:install:finish] key=${key}; label=${spec.label}; ok=${result.ok}; code=${result.code ?? ""}; error=${result.error || ""}`);
+    writeDependencyLog("install:finish", { key, label: spec.label, ok: result.ok, code: result.code, error: result.error });
     if (!result.ok) {
       const detail = String(result.stderr || result.stdout || result.error || "").trim().slice(0, 1000);
       throw new Error(`Failed to install ${spec.label}.${detail ? ` ${detail}` : ""}`);
     }
     sendStatus({ phase: "dependency", message: `${spec.label} installer finished. Verifying availability...` });
-    appendStartupTrace(`[dependency:verify:start] key=${key}; label=${spec.label}`);
+    writeDependencyLog("verify:start", { key, label: spec.label });
     if (!(await waitForDependencyInstalled(spec))) {
-      appendStartupTrace(`[dependency:verify:failed] key=${key}; label=${spec.label}`);
+      writeDependencyLog("verify:failed", { key, label: spec.label });
       throw new Error(`${spec.label} installation finished, but it is not available yet. Please restart Noobot or install it manually if the command is still missing from PATH.`);
     }
-    appendStartupTrace(`[dependency:verify:finish] key=${key}; label=${spec.label}`);
+    writeDependencyLog("verify:finish", { key, label: spec.label });
     sendStatus({ phase: "dependency", message: `${spec.label} installed.` });
     results.push({ key, ok: true, installed: true });
   }
