@@ -49,11 +49,16 @@ function logPluginStartupCheck({ loadedPlugins = null, pluginRuntime = null } = 
     pluginRuntime?.[PLUGIN_RUNTIME_PROPERTY.AGENT_PLUGIN_SELECTORS] || [],
   );
   const loaded = Array.isArray(diagnostics?.loaded) ? diagnostics.loaded : [];
-  const harnessLoaded = loaded.some((item = {}) => {
+  const agentPluginKey = String(
+    pluginRuntime?.[PLUGIN_RUNTIME_PROPERTY.AGENT_PLUGIN_KEY] || "",
+  ).trim();
+  const agentPluginLoaded = agentPluginKey
+    ? loaded.some((item = {}) => {
     const id = String(item.id || "").trim();
     const pluginKey = String(item.pluginKey || "").trim();
-    return id === "harness" || pluginKey === "harness";
-  });
+        return id === agentPluginKey || pluginKey === agentPluginKey;
+      })
+    : false;
   console.warn("[noobot:plugin-startup-check]", {
     pluginRootDir: diagnostics.pluginRootDir,
     pluginRootDirExists: diagnostics.pluginRootDir ? fs.existsSync(diagnostics.pluginRootDir) : false,
@@ -62,10 +67,10 @@ function logPluginStartupCheck({ loadedPlugins = null, pluginRuntime = null } = 
     skippedCount: diagnostics.skippedCount,
     loaded: diagnostics.loaded,
     errors: diagnostics.errors,
-    agentPluginKey: pluginRuntime?.[PLUGIN_RUNTIME_PROPERTY.AGENT_PLUGIN_KEY],
+    agentPluginKey,
     agentPluginSelectors: agentSelectors,
-    harnessLoaded,
-    harnessSelectable: agentSelectors.includes("harness"),
+    agentPluginLoaded,
+    agentPluginSelectable: agentPluginKey ? agentSelectors.includes(agentPluginKey) : false,
   });
 }
 
