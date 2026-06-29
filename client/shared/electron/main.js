@@ -149,6 +149,7 @@ const dependencySpecs = {
   ffmpeg: {
     label: "FFmpeg",
     checkCommands: ["ffmpeg"],
+    managedCommand: "ffmpeg",
     win32ExecutableCandidates: [
       "ffmpeg\\bin\\ffmpeg.exe",
       "Gyan\\FFmpeg\\bin\\ffmpeg.exe",
@@ -161,10 +162,15 @@ const dependencySpecs = {
       darwin: { brew: "ffmpeg" },
       linux: { apt: "ffmpeg", dnf: "ffmpeg", yum: "ffmpeg", pacman: "ffmpeg" },
     },
+    darwinManaged: {
+      url: process.env.NOOBOT_FFMPEG_MAC_URL || "",
+      manualUrl: "https://evermeet.cx/ffmpeg/",
+    },
   },
   nodejs: {
     label: "Node.js",
     checkCommands: ["node"],
+    managedCommand: "node",
     win32ExecutableCandidates: [
       "nodejs\\node.exe",
       "node\\node.exe",
@@ -181,6 +187,11 @@ const dependencySpecs = {
       win32: { winget: "OpenJS.NodeJS.LTS", choco: "nodejs-lts" },
       darwin: { brew: "node" },
       linux: { apt: "nodejs", dnf: "nodejs", yum: "nodejs", pacman: "nodejs" },
+    },
+    darwinManaged: {
+      version: process.env.NOOBOT_NODEJS_MAC_VERSION || "",
+      url: process.env.NOOBOT_NODEJS_MAC_URL || "",
+      manualUrl: "https://nodejs.org/en/download",
     },
   },
 };
@@ -292,6 +303,41 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function getManagedDependenciesRoot() {
+  const base = app.isReady() ? app.getPath("userData") : (process.env.HOME || os.tmpdir());
+  return path.join(base, "managed-dependencies");
+}
+
+function getManagedDependencyDir(key) {
+  return path.join(getManagedDependenciesRoot(), key);
+}
+
+function getManagedBinDirs() {
+  return [
+    path.join(getManagedDependencyDir("ffmpeg"), "bin"),
+    path.join(getManagedDependencyDir("nodejs"), "bin"),
+  ];
+}
+
+function getDarwinManagedKeyForSpec(spec) {
+  if (spec === dependencySpecs.ffmpeg) return "ffmpeg";
+  if (spec === dependencySpecs.nodejs) return "nodejs";
+  return "";
+}
+
+function prependManagedDependencyPath() {
+  if (process.platform !== "darwin") return;
+  const delimiter = path.delimiter;
+  const current = String(process.env.PATH || "");
+  const parts = current.split(delimiter).filter(Boolean);
+  const managed = getManagedBinDirs().filter((dir) => hasExistingFile(dir));
+  const next = [...managed, ...parts.filter((part) => !managed.includes(part))].join(delimiter);
+  if (next && next !== current) {
+    process.env.PATH = next;
+    writeDependencyLog("managed:path", { dirs: managed.join(" | ") });
+  }
+}
+
 function withTimeout(promise, timeoutMs, label) {
   let timer = null;
   return new Promise((resolve, reject) => {
@@ -386,13 +432,13 @@ function parseHdiutilMountPoint(output) {
   return "";
 }
 
-async function downloadFileWithCurl(url, destinationPath, { timeoutMs }) {
-  writeDependencyLog("dmg:download:start", { url, destination: destinationPath, timeoutMs });
+async function downloadFileWithCurl(url, destinationPath, { timeoutMs, label = "file", eventPrefix = "download" } = {}) {
+  writeDependencyLog(`${eventPrefix}:start`, { url, destination: destinationPath, timeoutMs });
   const result = await runProcess("curl", ["-L", "--fail", "--show-error", "--connect-timeout", "30", "-o", destinationPath, url], { timeoutMs });
-  writeDependencyLog("dmg:download:finish", { ok: result.ok, code: result.code, error: result.error });
+  writeDependencyLog(`${eventPrefix}:finish`, { ok: result.ok, code: result.code, error: result.error });
   if (!result.ok) {
     const detail = String(result.stderr || result.stdout || result.error || "").trim().slice(0, 1000);
-    throw new Error(`Failed to download LibreOffice DMG.${detail ? ` ${detail}` : ""}`);
+    throw new Error(`Failed to download ${label}.${detail ? ` ${detail}` : ""}`);
   }
 }
 
@@ -403,7 +449,7 @@ async function downloadFirstAvailableLibreOfficeDmg(spec, destinationPath) {
   for (const url of candidates) {
     try {
       await fs.promises.rm(destinationPath, { force: true });
-      await downloadFileWithCurl(url, destinationPath, { timeoutMs: desktopDependencyTimeouts.downloadMs });
+      await downloadFileWithCurl(url, destinationPath, { timeoutMs: desktopDependencyTimeouts.downloadMs, label: "LibreOffice DMG", eventPrefix: "dmg:download" });
       return url;
     } catch (error) {
       const message = error?.message || String(error);
@@ -462,7 +508,144 @@ async function installLibreOfficeFromDmg(spec) {
   }
 }
 
+function getMacNodeArch() {
+  return process.arch === "arm64" ? "arm64" : "x64";
+}
+
+function getMacNodeTarUrlForVersion(version) {
+  const normalized = String(version || "").trim().replace(/^v?/, "v");
+  return `https://nodejs.org/dist/${normalized}/node-${normalized}-darwin-${getMacNodeArch()}.tar.xz`;
+}
+
+function getMacManagedCommandPath(key, command) {
+  if (process.platform !== "darwin") return "";
+  return path.join(getManagedDependencyDir(key), "bin", command);
+}
+
+async function runManagedCommand(key, command, args = []) {
+  const commandPath = getMacManagedCommandPath(key, command);
+  if (!commandPath || !hasExistingFile(commandPath)) return { ok: false, error: "managed command missing" };
+  return runProcess(commandPath, args, { timeoutMs: desktopDependencyTimeouts.commandProbeMs });
+}
+
+async function downloadFirstAvailableFile({ key, label, candidates, destinationPath, eventPrefix, manualUrl, envHint }) {
+  const failures = [];
+  writeDependencyLog(`${eventPrefix}:candidates`, { key, count: candidates.length, urls: candidates.join(" | ") });
+  for (const url of candidates) {
+    try {
+      await fs.promises.rm(destinationPath, { force: true });
+      await downloadFileWithCurl(url, destinationPath, { timeoutMs: desktopDependencyTimeouts.downloadMs, label, eventPrefix });
+      return url;
+    } catch (error) {
+      const message = error?.message || String(error);
+      failures.push(`${url} => ${message.slice(0, 500)}`);
+      writeDependencyLog(`${eventPrefix}:candidate-failed`, { key, url, error: message.slice(0, 1000) });
+      await fs.promises.rm(destinationPath, { force: true }).catch(() => {});
+    }
+  }
+  throw new Error(`Failed to download ${label}. Tried: ${failures.join(" ; ")}.${envHint ? ` You can set ${envHint}.` : ""}${manualUrl ? ` Manual download: ${manualUrl}` : ""}`);
+}
+
+function getMacFfmpegUrlCandidates(spec) {
+  const configuredUrl = String(spec.darwinManaged?.url || "").trim();
+  return Array.from(new Set([
+    configuredUrl,
+    "https://evermeet.cx/ffmpeg/getrelease/zip",
+    "https://evermeet.cx/ffmpeg/ffmpeg.zip",
+  ].filter(Boolean)));
+}
+
+async function installFfmpegManagedMac(spec) {
+  if (process.platform !== "darwin") return null;
+  const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "noobot-ffmpeg-"));
+  const archivePath = path.join(tempDir, "ffmpeg.zip");
+  const extractDir = path.join(tempDir, "extract");
+  const targetBinDir = path.join(getManagedDependencyDir("ffmpeg"), "bin");
+  const targetPath = path.join(targetBinDir, "ffmpeg");
+  try {
+    sendStatus({ phase: "dependency", message: `Downloading ${spec.label} binary...` });
+    const selectedUrl = await downloadFirstAvailableFile({
+      key: "ffmpeg",
+      label: "FFmpeg",
+      candidates: getMacFfmpegUrlCandidates(spec),
+      destinationPath: archivePath,
+      eventPrefix: "managed:ffmpeg:download",
+      manualUrl: spec.darwinManaged?.manualUrl,
+      envHint: "NOOBOT_FFMPEG_MAC_URL",
+    });
+    writeDependencyLog("managed:ffmpeg:download:selected", { url: selectedUrl });
+    await fs.promises.mkdir(extractDir, { recursive: true });
+    sendStatus({ phase: "dependency", message: `Extracting ${spec.label}...` });
+    const unzipResult = await runProcess("ditto", ["-x", "-k", archivePath, extractDir], { timeoutMs: desktopDependencyTimeouts.installMs });
+    if (!unzipResult.ok) throw new Error(`Failed to extract FFmpeg.${String(unzipResult.stderr || unzipResult.error || "").slice(0, 1000)}`);
+    const sourcePath = path.join(extractDir, "ffmpeg");
+    if (!hasExistingFile(sourcePath)) throw new Error("FFmpeg archive did not contain ffmpeg binary.");
+    await fs.promises.mkdir(targetBinDir, { recursive: true });
+    await fs.promises.copyFile(sourcePath, targetPath);
+    await fs.promises.chmod(targetPath, 0o755);
+    prependManagedDependencyPath();
+    const verify = await runManagedCommand("ffmpeg", "ffmpeg", ["-version"]);
+    if (!verify.ok) throw new Error(`Managed FFmpeg verification failed.${String(verify.stderr || verify.error || "").slice(0, 1000)}`);
+    return { ok: true, method: "managed" };
+  } finally {
+    fs.promises.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+function getMacNodeUrlCandidates(spec) {
+  const configuredUrl = String(spec.darwinManaged?.url || "").trim();
+  const configuredVersion = String(spec.darwinManaged?.version || "").trim();
+  const versions = [configuredVersion, "v22.21.1", "v20.19.5", "v24.11.1"].filter(Boolean);
+  return Array.from(new Set([configuredUrl, ...versions.map(getMacNodeTarUrlForVersion)].filter(Boolean)));
+}
+
+async function installNodeManagedMac(spec) {
+  if (process.platform !== "darwin") return null;
+  const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "noobot-nodejs-"));
+  const archivePath = path.join(tempDir, "node.tar.xz");
+  const extractDir = path.join(tempDir, "extract");
+  const targetDir = getManagedDependencyDir("nodejs");
+  try {
+    sendStatus({ phase: "dependency", message: `Downloading ${spec.label} from nodejs.org...` });
+    const selectedUrl = await downloadFirstAvailableFile({
+      key: "nodejs",
+      label: "Node.js",
+      candidates: getMacNodeUrlCandidates(spec),
+      destinationPath: archivePath,
+      eventPrefix: "managed:nodejs:download",
+      manualUrl: spec.darwinManaged?.manualUrl,
+      envHint: "NOOBOT_NODEJS_MAC_URL or NOOBOT_NODEJS_MAC_VERSION",
+    });
+    writeDependencyLog("managed:nodejs:download:selected", { url: selectedUrl });
+    await fs.promises.mkdir(extractDir, { recursive: true });
+    sendStatus({ phase: "dependency", message: `Extracting ${spec.label}...` });
+    const tarResult = await runProcess("tar", ["-xJf", archivePath, "-C", extractDir, "--strip-components", "1"], { timeoutMs: desktopDependencyTimeouts.installMs });
+    if (!tarResult.ok) throw new Error(`Failed to extract Node.js.${String(tarResult.stderr || tarResult.error || "").slice(0, 1000)}`);
+    await fs.promises.rm(targetDir, { recursive: true, force: true });
+    await fs.promises.mkdir(path.dirname(targetDir), { recursive: true });
+    await fs.promises.rename(extractDir, targetDir);
+    await fs.promises.chmod(path.join(targetDir, "bin", "node"), 0o755).catch(() => {});
+    await fs.promises.chmod(path.join(targetDir, "bin", "npm"), 0o755).catch(() => {});
+    prependManagedDependencyPath();
+    const nodeVerify = await runManagedCommand("nodejs", "node", ["--version"]);
+    if (!nodeVerify.ok) throw new Error(`Managed Node.js verification failed.${String(nodeVerify.stderr || nodeVerify.error || "").slice(0, 1000)}`);
+    const npmVerify = await runManagedCommand("nodejs", "npm", ["--version"]);
+    writeDependencyLog("managed:nodejs:npm:verify", { ok: npmVerify.ok, error: npmVerify.error });
+    return { ok: true, method: "managed" };
+  } finally {
+    fs.promises.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+async function installManagedDependencyMac(key, spec) {
+  if (process.platform !== "darwin") return null;
+  if (key === "ffmpeg") return installFfmpegManagedMac(spec);
+  if (key === "nodejs") return installNodeManagedMac(spec);
+  return null;
+}
+
 async function hasCommand(command) {
+  if (process.platform === "darwin") prependManagedDependencyPath();
   appendEarlyLog(`[dependency:probe:start] command=${command}`);
   const result = await runProcess(command, ["--version"], {
     timeoutMs: desktopDependencyTimeouts.commandProbeMs,
@@ -542,6 +725,18 @@ async function hasWindowsWingetPackage(spec) {
 
 async function isDependencyInstalled(spec) {
   appendEarlyLog(`[dependency:installed:start] label=${spec.label}; platform=${process.platform}`);
+  if (process.platform === "darwin" && spec.managedCommand) {
+    const managedKey = getDarwinManagedKeyForSpec(spec);
+    const managedPath = managedKey ? getMacManagedCommandPath(managedKey, spec.managedCommand) : "";
+    if (hasExistingFile(managedPath)) {
+      const result = await runProcess(managedPath, ["--version"], { timeoutMs: desktopDependencyTimeouts.commandProbeMs });
+      if (result.ok) {
+        prependManagedDependencyPath();
+        appendEarlyLog(`[dependency:installed:finish] label=${spec.label}; installed=true; via=managed; path=${managedPath}`);
+        return true;
+      }
+    }
+  }
   if (process.platform === "darwin" && spec.darwinAppBundle) {
     appendEarlyLog(`[dependency:installed:mac-app] label=${spec.label}; app=${spec.darwinAppBundle}`);
     if (hasMacAppBundle(spec.darwinAppBundle)) {
@@ -683,8 +878,31 @@ async function ensureSelectedDependencies(dependencies = {}) {
           throw new Error(message);
         }
       }
+      if (process.platform === "darwin" && (key === "ffmpeg" || key === "nodejs")) {
+        writeDependencyLog("managed:install:start", { key, label: spec.label });
+        try {
+          await installManagedDependencyMac(key, spec);
+          writeDependencyLog("managed:install:finish", { key, label: spec.label });
+          sendStatus({ phase: "dependency", message: `${spec.label} managed installer finished. Verifying availability...` });
+          writeDependencyLog("verify:start", { key, label: spec.label, method: "managed" });
+          if (!(await waitForDependencyInstalled(spec))) {
+            writeDependencyLog("verify:failed", { key, label: spec.label, method: "managed" });
+            throw new Error(`${spec.label} managed installation finished, but it is not available yet. Please restart Noobot or install it manually.`);
+          }
+          writeDependencyLog("verify:finish", { key, label: spec.label, method: "managed" });
+          sendStatus({ phase: "dependency", message: `${spec.label} installed.` });
+          results.push({ key, ok: true, installed: true, method: "managed" });
+          continue;
+        } catch (error) {
+          const envHint = key === "ffmpeg" ? "NOOBOT_FFMPEG_MAC_URL" : "NOOBOT_NODEJS_MAC_URL / NOOBOT_NODEJS_MAC_VERSION";
+          const message = `Failed to auto-install ${spec.label} without Homebrew. ${error?.message || String(error)} You can override the download with ${envHint}.`;
+          writeDependencyLog("managed:install:error", { key, label: spec.label, error });
+          sendStatus({ phase: "dependency-missing", message, dependency: key });
+          throw new Error(message);
+        }
+      }
       const message = process.platform === "darwin"
-        ? `Cannot auto-install ${spec.label}: Homebrew was not found. Please install ${spec.label} manually from https://www.libreoffice.org/download/download-libreoffice/ or install Homebrew and run: brew install --cask ${spec.packages?.darwin?.brew || "libreoffice"}`
+        ? `Cannot auto-install ${spec.label}: Homebrew was not found. Please install ${spec.label} manually or install Homebrew and run: brew install --cask ${spec.packages?.darwin?.brew || spec.packages?.darwin?.brew || spec.label}`
         : `Cannot auto-install ${spec.label}: no supported package manager was found.`;
       writeDependencyLog("missing:no-installer", { key, label: spec.label, message });
       sendStatus({ phase: "dependency-missing", message, dependency: key });
