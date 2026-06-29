@@ -10,8 +10,8 @@ import { buildDockerCommand } from "../../../src/system-core/sandbox/docker-sand
 
 test("buildDockerCommand validates mounts through docker inspect template equality", () => {
   const built = buildDockerCommand({
-    userRoot: "/home/xiayu/projects/noobot/workspace/admin",
-    userId: "admin",
+    userRoot: "/home/xiayu/projects/noobot/workspace/primary-user",
+    userId: "primary-user",
     command: "echo ok",
     scriptConfig: {
       dockerContainerScope: "global",

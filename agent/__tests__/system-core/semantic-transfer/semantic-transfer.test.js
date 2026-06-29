@@ -105,8 +105,8 @@ test("envelope helpers normalize persisted output and filter invalid envelopes",
 
 function buildSandboxRuntime(enabled = true, overrides = {}) {
   return {
-    userId: "admin",
-    basePath: "/host/users/admin",
+    userId: "primary-user",
+    basePath: "/host/users/primary-user",
     globalConfig: {
       tools: {
         execute_script: {
@@ -128,17 +128,17 @@ test("resolveTransferFilePath follows sandbox/non-sandbox path view", () => {
     resolveTransferFilePath({
       runtime: buildSandboxRuntime(true),
       attachmentMeta: {
-        path: "/host/users/admin/attachments/a.md",
+        path: "/host/users/primary-user/attachments/a.md",
         relativePath: "attachments/a.md",
       },
     }),
-    "/workspace/admin/attachments/a.md",
+    "/workspace/primary-user/attachments/a.md",
   );
   assert.equal(
     resolveTransferFilePath({
       runtime: buildSandboxRuntime(false),
       attachmentMeta: {
-        path: "/host/users/admin/attachments/a.md",
+        path: "/host/users/primary-user/attachments/a.md",
         relativePath: "attachments/a.md",
       },
     }),
@@ -162,17 +162,17 @@ test("resolveTransferPathView keeps sandboxPath semantic separate from relative 
     resolveTransferPathView({
       runtime: buildSandboxRuntime(true),
       attachmentMeta: {
-        path: "/host/users/admin/attachments/a.md",
+        path: "/host/users/primary-user/attachments/a.md",
         relativePath: "attachments/a.md",
         name: "a.md",
       },
     }).sandboxPath,
-    "/workspace/admin/attachments/a.md",
+    "/workspace/primary-user/attachments/a.md",
   );
   const nonSandboxView = resolveTransferPathView({
     runtime: buildSandboxRuntime(false),
     attachmentMeta: {
-      path: "/host/users/admin/attachments/a.md",
+      path: "/host/users/primary-user/attachments/a.md",
       relativePath: "attachments/a.md",
       name: "a.md",
     },
@@ -196,11 +196,11 @@ test("resolveTransferFilePath tolerates resolver errors and keeps fallback behav
         },
       },
       attachmentMeta: {
-        path: "/host/users/admin/attachments/a.md",
+        path: "/host/users/primary-user/attachments/a.md",
         relativePath: "attachments/a.md",
       },
     }),
-    "/workspace/admin/attachments/a.md",
+    "/workspace/primary-user/attachments/a.md",
   );
 });
 
@@ -214,7 +214,7 @@ test("persisted semantic-transfer file uses sandbox view when sandbox is enabled
         name: artifact.name,
         mimeType: artifact.mimeType,
         size: 3,
-        path: `/host/users/admin/attachments/${artifact.name}`,
+        path: `/host/users/primary-user/attachments/${artifact.name}`,
         relativePath: `attachments/${artifact.name}`,
         generatedByModel: true,
         generationSource: payload.generationSource,
@@ -222,7 +222,7 @@ test("persisted semantic-transfer file uses sandbox view when sandbox is enabled
     },
   };
   const runtime = buildSandboxRuntime(true, {
-    systemRuntime: { userId: "admin", sessionId: "s1" },
+    systemRuntime: { userId: "primary-user", sessionId: "s1" },
     attachmentService,
     sharedTools: {
       resolveAttachmentDisplayPath({ hostPath = "", path = "" } = {}) {
@@ -244,10 +244,10 @@ test("persisted semantic-transfer file uses sandbox view when sandbox is enabled
   });
 
   const file = transferred?.transferEnvelopes?.[0]?.files?.[0] || {};
-  assert.equal(file.filePath, "/workspace/admin/attachments/sandbox-output.txt");
-  assert.equal(file.pathView?.displayPath, "/workspace/admin/attachments/sandbox-output.txt");
-  assert.equal(file.pathView?.sandboxPath, "/workspace/admin/attachments/sandbox-output.txt");
-  assert.equal(file.pathView?.hostPath, "/host/users/admin/attachments/sandbox-output.txt");
+  assert.equal(file.filePath, "/workspace/primary-user/attachments/sandbox-output.txt");
+  assert.equal(file.pathView?.displayPath, "/workspace/primary-user/attachments/sandbox-output.txt");
+  assert.equal(file.pathView?.sandboxPath, "/workspace/primary-user/attachments/sandbox-output.txt");
+  assert.equal(file.pathView?.hostPath, "/host/users/primary-user/attachments/sandbox-output.txt");
 });
 
 test("materializeOutput returns direct for small content and falls back direct when no persister", async () => {
@@ -861,7 +861,7 @@ test("transferSemanticContent tool_input overflow returns sandbox path view when
         name: artifact.name,
         mimeType: artifact.mimeType,
         size: TOOL_INPUT_OVERFLOW_CHARS + 1,
-        path: `/host/users/admin/attachments/${artifact.name}`,
+        path: `/host/users/primary-user/attachments/${artifact.name}`,
         relativePath: `attachments/${artifact.name}`,
         generatedByModel: true,
         generationSource: payload.generationSource,
@@ -879,22 +879,22 @@ test("transferSemanticContent tool_input overflow returns sandbox path view when
       },
     },
     runtime: buildSandboxRuntime(true, {
-      systemRuntime: { userId: "admin", sessionId: "s-tool-input-sandbox" },
+      systemRuntime: { userId: "primary-user", sessionId: "s-tool-input-sandbox" },
       attachmentService,
     }),
   });
 
   const file = transferred?.transferEnvelopes?.[0]?.files?.[0] || {};
-  assert.equal(file.filePath, "/workspace/admin/attachments/large.txt.tool-input.txt");
-  assert.equal(file.pathView?.displayPath, "/workspace/admin/attachments/large.txt.tool-input.txt");
-  assert.equal(file.pathView?.sandboxPath, "/workspace/admin/attachments/large.txt.tool-input.txt");
-  assert.equal(file.pathView?.hostPath, "/host/users/admin/attachments/large.txt.tool-input.txt");
+  assert.equal(file.filePath, "/workspace/primary-user/attachments/large.txt.tool-input.txt");
+  assert.equal(file.pathView?.displayPath, "/workspace/primary-user/attachments/large.txt.tool-input.txt");
+  assert.equal(file.pathView?.sandboxPath, "/workspace/primary-user/attachments/large.txt.tool-input.txt");
+  assert.equal(file.pathView?.hostPath, "/host/users/primary-user/attachments/large.txt.tool-input.txt");
   assertTransferProtocolOnly(transferred);
 });
 
 test("transferSemanticContent sandbox view prefers default workspace over /project mount", async () => {
   const projectRoot = "/home/xiayu/projects/noobot";
-  const basePath = `${projectRoot}/workspace/admin`;
+  const basePath = `${projectRoot}/workspace/primary-user`;
   const attachmentService = {
     async ingestGeneratedArtifacts(payload) {
       return payload.artifacts.map((artifact) => ({
@@ -922,9 +922,9 @@ test("transferSemanticContent sandbox view prefers default workspace over /proje
       },
     },
     runtime: buildSandboxRuntime(true, {
-      userId: "admin",
+      userId: "primary-user",
       basePath,
-      systemRuntime: { userId: "admin", sessionId: "s-tool-input-default-workspace" },
+      systemRuntime: { userId: "primary-user", sessionId: "s-tool-input-default-workspace" },
       attachmentService,
       globalConfig: {
         tools: {
@@ -943,8 +943,8 @@ test("transferSemanticContent sandbox view prefers default workspace over /proje
     }),
   });
 
-  const expectedPath = "/workspace/admin/runtime/ops_workdir/large_file_test.txt.tool-input.txt";
-  const wrongProjectPath = "/project/workspace/admin/runtime/ops_workdir/large_file_test.txt.tool-input.txt";
+  const expectedPath = "/workspace/primary-user/runtime/ops_workdir/large_file_test.txt.tool-input.txt";
+  const wrongProjectPath = "/project/workspace/primary-user/runtime/ops_workdir/large_file_test.txt.tool-input.txt";
   const file = transferred?.transferEnvelopes?.[0]?.files?.[0] || {};
   assert.equal(file.filePath, expectedPath);
   assert.equal(file.pathView?.displayPath, expectedPath);
@@ -963,7 +963,7 @@ test("transferSemanticContent tool_input overflow returns non-sandbox path view 
         name: artifact.name,
         mimeType: artifact.mimeType,
         size: TOOL_INPUT_OVERFLOW_CHARS + 1,
-        path: `/host/users/admin/attachments/${artifact.name}`,
+        path: `/host/users/primary-user/attachments/${artifact.name}`,
         relativePath: `attachments/${artifact.name}`,
         generatedByModel: true,
         generationSource: payload.generationSource,
@@ -981,7 +981,7 @@ test("transferSemanticContent tool_input overflow returns non-sandbox path view 
       },
     },
     runtime: buildSandboxRuntime(false, {
-      systemRuntime: { userId: "admin", sessionId: "s-tool-input-non-sandbox" },
+      systemRuntime: { userId: "primary-user", sessionId: "s-tool-input-non-sandbox" },
       attachmentService,
     }),
   });
@@ -990,7 +990,7 @@ test("transferSemanticContent tool_input overflow returns non-sandbox path view 
   assert.equal(file.filePath, "attachments/large.txt.tool-input.txt");
   assert.equal(file.pathView?.displayPath, "attachments/large.txt.tool-input.txt");
   assert.equal(file.pathView?.sandboxPath, undefined);
-  assert.equal(file.pathView?.hostPath, "/host/users/admin/attachments/large.txt.tool-input.txt");
+  assert.equal(file.pathView?.hostPath, "/host/users/primary-user/attachments/large.txt.tool-input.txt");
   assertTransferProtocolOnly(transferred);
 });
 

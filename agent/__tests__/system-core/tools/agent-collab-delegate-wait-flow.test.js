@@ -15,9 +15,9 @@ function createAgentContext() {
   const waitCalls = [];
 
   const agentContext = {
-    userId: "admin",
+    userId: "primary-user",
     runtime: {
-      userId: "admin",
+      userId: "primary-user",
       botManager: {
         runAsyncSession: (payload = {}) => {
           runCalls.push(payload);

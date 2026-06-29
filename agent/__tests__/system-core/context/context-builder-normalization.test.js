@@ -246,3 +246,66 @@ test("buildInitialContext resolves session history and passes edited turnScopeId
   );
   assert.equal(context.payload.messages.system.length > 0, true);
 });
+
+function createBuilderForSuperUserRuntimeTest({ globalConfig = {}, userId = "u1", systemRuntimePatch = null } = {}) {
+  return new ContextBuilder({
+    config: {
+      globalConfig,
+      userConfig: {},
+    },
+    serviceContainer: {
+      sessionManager: null,
+      memoryService: null,
+      attachmentService: null,
+      skillService: null,
+      eventListener: null,
+      botManager: null,
+      userInteractionBridge: null,
+    },
+    sessionContext: {
+      userId,
+      sessionId: "s1",
+      caller: "user",
+      parentSessionId: "",
+      attachments: [],
+      runConfig: systemRuntimePatch ? { systemRuntimePatch } : {},
+      abortSignal: null,
+      parentAsyncResultContainer: null,
+    },
+  });
+}
+
+test("_buildSystemRuntime derives isSuperUser from configured super user id", () => {
+  const builder = createBuilderForSuperUserRuntimeTest({
+    globalConfig: { super_admin: { user_id: "super-root-user" } },
+    userId: "super-root-user",
+  });
+
+  const runtime = builder._buildSystemRuntime({ dialogProcessId: "dp-super" });
+
+  assert.equal(runtime.isSuperUser, true);
+});
+
+test("_buildSystemRuntime defaults isSuperUser to false when config is missing", () => {
+  const builder = createBuilderForSuperUserRuntimeTest({
+    globalConfig: {},
+    userId: "super-root-user",
+  });
+
+  const runtime = builder._buildSystemRuntime({ dialogProcessId: "dp-regular" });
+
+  assert.equal(runtime.isSuperUser, false);
+});
+
+test("_buildSystemRuntime does not allow systemRuntimePatch to grant super user", () => {
+  const builder = createBuilderForSuperUserRuntimeTest({
+    globalConfig: { super_admin: { user_id: "super-root-user" } },
+    userId: "regular-user",
+    systemRuntimePatch: { isSuperUser: true, userId: "super-root-user" },
+  });
+
+  const runtime = builder._buildSystemRuntime({ dialogProcessId: "dp-guard" });
+
+  assert.equal(runtime.isSuperUser, false);
+  assert.equal(runtime.userId, "super-root-user");
+});

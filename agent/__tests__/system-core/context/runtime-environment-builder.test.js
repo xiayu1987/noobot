@@ -123,8 +123,8 @@ test("initializeRuntimeEnvironment shared semantic-transfer keeps runtime basePa
     LENGTH_THRESHOLDS.semanticTransfer.toolInputOverflowChars + 1,
   );
   const runtime = buildRuntimeContext({
-    userId: "admin",
-    basePath: "/home/xiayu/projects/noobot/workspace/admin",
+    userId: "primary-user",
+    basePath: "/home/xiayu/projects/noobot/workspace/primary-user",
     globalConfig: {
       tools: {
         execute_script: {
@@ -150,7 +150,7 @@ test("initializeRuntimeEnvironment shared semantic-transfer keeps runtime basePa
           name: artifact.name,
           mimeType: artifact.mimeType,
           size: overflowContent.length,
-          path: `/home/xiayu/projects/noobot/workspace/admin/runtime/ops_workdir/${artifact.name}`,
+          path: `/home/xiayu/projects/noobot/workspace/primary-user/runtime/ops_workdir/${artifact.name}`,
           relativePath: `runtime/ops_workdir/${artifact.name}`,
           generatedByModel: true,
           generationSource: payload.generationSource,
@@ -158,7 +158,7 @@ test("initializeRuntimeEnvironment shared semantic-transfer keeps runtime basePa
       },
     },
     systemRuntime: {
-      userId: "admin",
+      userId: "primary-user",
       sessionId: "s1",
       rootSessionId: "r1",
       config: { allowUserInteraction: true },
@@ -182,11 +182,11 @@ test("initializeRuntimeEnvironment shared semantic-transfer keeps runtime basePa
 
   assert.equal(
     file.filePath,
-    "/workspace/admin/runtime/ops_workdir/large_file_test.txt.tool-input.txt",
+    "/workspace/primary-user/runtime/ops_workdir/large_file_test.txt.tool-input.txt",
   );
   assert.notEqual(
     file.filePath,
-    "/project/workspace/admin/runtime/ops_workdir/large_file_test.txt.tool-input.txt",
+    "/project/workspace/primary-user/runtime/ops_workdir/large_file_test.txt.tool-input.txt",
   );
 });
 

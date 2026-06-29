@@ -127,7 +127,7 @@ test("ConfigService.loadUserConfig: 缺少 config-params.json 时应使用全局
 
 test("ConfigService.loadUserConfig: user 为空时应回退读取 workspace/config-params.json", async () => {
   const workspaceRoot = await createTempDir();
-  const userDir = path.join(workspaceRoot, "admin");
+  const userDir = path.join(workspaceRoot, "primary-user");
   try {
     await mkdir(userDir, { recursive: true });
     await writeFile(
@@ -168,7 +168,7 @@ test("ConfigService.loadUserConfig: user 为空时应回退读取 workspace/conf
 
 test("ConfigService.loadUserConfig: user 非空应优先于 workspace，user 空值应回退 workspace", async () => {
   const workspaceRoot = await createTempDir();
-  const userDir = path.join(workspaceRoot, "admin");
+  const userDir = path.join(workspaceRoot, "primary-user");
   try {
     await mkdir(userDir, { recursive: true });
     await writeFile(

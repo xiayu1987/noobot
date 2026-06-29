@@ -21,7 +21,7 @@ function createAgentContext({
   const normalizedToolPolicy =
     parentToolPolicy && typeof parentToolPolicy === "object" ? parentToolPolicy : undefined;
   const runtime = {
-    userId: "admin",
+    userId: "primary-user",
     botManager: {
       runAsyncSession: (payload = {}) => {
         runCalls.push(payload);
@@ -69,7 +69,7 @@ function createAgentContext({
 
   return {
     agentContext: {
-      userId: "admin",
+      userId: "primary-user",
       runtime,
     },
     events,

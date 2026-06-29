@@ -36,13 +36,13 @@ test("buildModelKwargs maps explicit prompt_cache_key into modelKwargs", () => {
   const kwargs = buildModelKwargs({
     format: "openai_compatible",
     model: "gpt-4o",
-    prompt_cache_key: "  admin-session-main  ",
+    prompt_cache_key: "  primary-user-session-main  ",
     extra_body: {
       prompt_cache_key: "fallback",
     },
   });
 
-  assert.equal(kwargs.prompt_cache_key, "admin-session-main");
+  assert.equal(kwargs.prompt_cache_key, "primary-user-session-main");
 });
 
 test("buildModelKwargs defaults prompt cache key for next-gen OpenAI GPT models", () => {

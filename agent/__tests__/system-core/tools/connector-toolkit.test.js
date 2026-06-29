@@ -438,7 +438,7 @@ test("connector-toolkit/access_connector: command_file_path 超过大小限制�
 test("connector-toolkit/access_connector(email): 邮件附件保存不提升为 semantic-transfer 输出", async () => {
   const ingestCalls = [];
   const runtime = {
-    userId: "admin",
+    userId: "primary-user",
     attachmentService: {
       async ingestGeneratedArtifacts(payload = {}) {
         ingestCalls.push(payload);
@@ -531,7 +531,7 @@ test("connector-toolkit/access_connector(email): 邮件附件保存不提升为 
 
 test("connector-toolkit/access_connector(email): stdout 里的 transfer-like 字段不提升为顶层 semantic-transfer 输出", async () => {
   const runtime = {
-    userId: "admin",
+    userId: "primary-user",
     systemRuntime: {
       sessionId: "s-child",
       rootSessionId: "s-root",
@@ -610,7 +610,7 @@ test("connector-toolkit/access_connector(email): stdout 里的 transfer-like 字
 
 test("connector-toolkit/access_connector(email): stdout 非 JSON 时不应注入 transfer 字段", async () => {
   const runtime = {
-    userId: "admin",
+    userId: "primary-user",
     systemRuntime: {
       sessionId: "s-child",
       rootSessionId: "s-root",

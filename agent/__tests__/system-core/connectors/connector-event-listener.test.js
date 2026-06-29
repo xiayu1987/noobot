@@ -11,7 +11,7 @@ function createBaseListener({
 } = {}) {
   return createConnectorEventListener({
     runtime: {
-      userId: "admin",
+      userId: "primary-user",
       systemRuntime: {
         config: {
           allowUserInteraction,

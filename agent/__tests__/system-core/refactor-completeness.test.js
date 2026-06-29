@@ -275,7 +275,7 @@ describe('3. Session 字段完整性测试', () => {
     it('Session 应包含 sessionId, userId, scenario, status, createdAt, updatedAt', () => {
       const session = {
         sessionId: 'sess-1',
-        userId: 'admin',
+        userId: 'primary-user',
         scenario: 'programming',
         status: 'active',
         createdAt: new Date().toISOString(),
@@ -338,7 +338,7 @@ describe('4. 落盘字段完整性测试', () => {
     it('落盘 session.json 应包含完整字段', () => {
       const diskSession = {
         sessionId: 'sess-1',
-        userId: 'admin',
+        userId: 'primary-user',
         scenario: 'programming',
         status: 'completed',
         parentSessionId: '',
