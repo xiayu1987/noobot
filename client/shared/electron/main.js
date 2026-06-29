@@ -188,21 +188,28 @@ function runProcess(command, args = [], { timeoutMs = 120000 } = {}) {
     const commandLine = [command, ...args].join(" ");
     appendEarlyLog(`[process:start] ${commandLine}; timeoutMs=${timeoutMs}`);
     let settled = false;
+    let child = null;
+    let timer = null;
+    let stdout = "";
+    let stderr = "";
     const finish = (payload) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       appendEarlyLog(`[process:finish] ${commandLine}; ok=${payload.ok}; code=${payload.code ?? ""}; elapsedMs=${Date.now() - startedAt}; error=${payload.error || ""}`);
       resolve(payload);
     };
-    const child = spawn(command, args, { windowsHide: true, shell: false });
-    let stdout = "";
-    let stderr = "";
-    const timer = setTimeout(() => {
+    timer = setTimeout(() => {
       appendEarlyLog(`[process:timeout] ${commandLine}; killing child`);
-      try { child.kill(); } catch {}
+      try { child?.kill(); } catch {}
       finish({ ok: false, code: -1, stdout, stderr, error: `Timed out after ${timeoutMs}ms` });
     }, timeoutMs);
+    try {
+      child = spawn(command, args, { windowsHide: true, shell: false });
+    } catch (error) {
+      finish({ ok: false, code: -1, stdout, stderr, error: error?.message || String(error) });
+      return;
+    }
     child.stdout?.on("data", (chunk) => { stdout += String(chunk || ""); });
     child.stderr?.on("data", (chunk) => { stderr += String(chunk || ""); });
     child.on("error", (error) => {
@@ -230,7 +237,8 @@ async function hasCommand(command) {
 function hasExistingFile(filePath) {
   try {
     return Boolean(filePath) && fs.existsSync(filePath);
-  } catch {
+  } catch (error) {
+    appendEarlyLog(`[fs:exists:error] path=${filePath || ""}; error=${error?.message || String(error)}`);
     return false;
   }
 }
@@ -241,7 +249,18 @@ function hasMacAppBundle(appName) {
     path.join("/Applications", appName),
     path.join(process.env.HOME || "", "Applications", appName),
   ].filter(Boolean);
-  return candidates.some(hasExistingFile);
+  appendEarlyLog(`[dependency:installed:mac-app:start] app=${appName}; candidates=${candidates.join(" | ")}`);
+  for (const candidate of candidates) {
+    appendEarlyLog(`[dependency:installed:mac-app:path] app=${appName}; path=${candidate}`);
+    const exists = hasExistingFile(candidate);
+    appendEarlyLog(`[dependency:installed:mac-app:path-result] app=${appName}; path=${candidate}; exists=${exists}`);
+    if (exists) {
+      appendEarlyLog(`[dependency:installed:mac-app:finish] app=${appName}; installed=true; path=${candidate}`);
+      return true;
+    }
+  }
+  appendEarlyLog(`[dependency:installed:mac-app:finish] app=${appName}; installed=false`);
+  return false;
 }
 
 function parseWindowsRegistryDefaultValue(output) {
@@ -286,13 +305,21 @@ async function hasWindowsWingetPackage(spec) {
 
 async function isDependencyInstalled(spec) {
   appendEarlyLog(`[dependency:installed:start] label=${spec.label}; platform=${process.platform}`);
-  if (process.platform === "darwin" && spec.darwinAppBundle && hasMacAppBundle(spec.darwinAppBundle)) {
+  if (process.platform === "darwin" && spec.darwinAppBundle) {
     appendEarlyLog(`[dependency:installed:mac-app] label=${spec.label}; app=${spec.darwinAppBundle}`);
-    return true;
+    if (hasMacAppBundle(spec.darwinAppBundle)) {
+      appendEarlyLog(`[dependency:installed:finish] label=${spec.label}; installed=true; via=mac-app`);
+      return true;
+    }
   }
   for (const command of spec.checkCommands || []) {
     appendEarlyLog(`[dependency:installed:command] label=${spec.label}; command=${command}`);
-    if (await hasCommand(command)) return true;
+    const installed = await hasCommand(command);
+    appendEarlyLog(`[dependency:installed:command-result] label=${spec.label}; command=${command}; installed=${installed}`);
+    if (installed) {
+      appendEarlyLog(`[dependency:installed:finish] label=${spec.label}; installed=true; via=command; command=${command}`);
+      return true;
+    }
   }
   if (process.platform === "win32") {
     if (await hasWindowsRegistryInstallPath(spec)) return true;
