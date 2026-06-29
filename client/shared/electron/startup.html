@@ -53,9 +53,9 @@
       .badge::before { content: ""; width: 8px; height: 8px; border-radius: 999px; background: #38bdf8; box-shadow: 0 0 18px #38bdf8; animation: pulse 1.8s ease-in-out infinite; }
       h1 { margin: 18px 0 10px; font-size: clamp(30px, 5vw, 42px); letter-spacing: -.04em; }
       p { margin: 8px 0; color: #cbd5e1; line-height: 1.58; }
-      .status-line { display: flex; gap: 12px; align-items: center; min-height: 28px; }
+      .status-line { display: flex; gap: 12px; align-items: center; min-height: 28px; max-width: calc(100% - 86px); }
       .spinner { width: 18px; height: 18px; flex: 0 0 auto; border: 2px solid rgba(125, 211, 252, .20); border-top-color: #38bdf8; border-radius: 999px; animation: spin .9s linear infinite; }
-      #message { margin: 0; transition: opacity .18s ease; }
+      #message { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: opacity .18s ease; }
       .content { padding: 26px 38px 34px; }
       form { margin: 18px 0 0; padding: 22px; border: 1px solid rgba(148, 163, 184, .18); border-radius: 22px; background: rgba(2, 6, 23, .42); }
       .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
