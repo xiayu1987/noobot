@@ -6,6 +6,7 @@
 import {
   getNoobotPluginRuntime,
   resolveFirstLoadedNoobotPluginByCapability,
+  buildNoobotPluginDiagnostics,
 } from "./plugin-loader.js";
 import { PLUGIN_CAPABILITY } from "./capabilities.js";
 import {
@@ -27,6 +28,19 @@ const loadedDynamicPlugins = await getNoobotPluginRuntime({
   registry: new Map(),
   errors: [],
 }));
+
+function isPluginDebugEnabled() {
+  const value = String(process.env.NOOBOT_PLUGIN_DEBUG || "").trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes" || value === "on";
+}
+
+function debugSessionPluginRuntime(message = "", details = {}) {
+  if (!isPluginDebugEnabled()) return;
+  console.warn("[noobot:plugin-debug] session plugin runtime", {
+    message,
+    ...(details && typeof details === "object" ? details : {}),
+  });
+}
 
 function resolvePluginKeyByCapability({ loadedPlugins = null, descriptor = {} } = {}) {
   const matched = resolveFirstLoadedNoobotPluginByCapability(
@@ -67,6 +81,20 @@ const defaultSessionPluginRuntime = createSessionPluginRuntime({
   loadedPlugins: loadedDynamicPlugins,
   descriptors: SESSION_PLUGIN_DESCRIPTORS,
   resolvePluginKey: resolvePluginKeyByCapability,
+});
+
+debugSessionPluginRuntime("default runtime initialized", {
+  diagnostics: buildNoobotPluginDiagnostics(loadedDynamicPlugins),
+  runtime: {
+    agentPluginKey: defaultSessionPluginRuntime?.[PLUGIN_RUNTIME_PROPERTY.AGENT_PLUGIN_KEY],
+    agentPluginSelectors: Array.from(
+      defaultSessionPluginRuntime?.[PLUGIN_RUNTIME_PROPERTY.AGENT_PLUGIN_SELECTORS] || [],
+    ),
+    botPluginKey: defaultSessionPluginRuntime?.[PLUGIN_RUNTIME_PROPERTY.BOT_PLUGIN_KEY],
+    botPluginSelectors: Array.from(
+      defaultSessionPluginRuntime?.[PLUGIN_RUNTIME_PROPERTY.BOT_PLUGIN_SELECTORS] || [],
+    ),
+  },
 });
 
 export function getDefaultSessionPluginRuntime() {
