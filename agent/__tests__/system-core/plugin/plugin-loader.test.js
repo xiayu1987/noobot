@@ -10,12 +10,16 @@ import {
   getNoobotPluginRuntime,
   loadNoobotPlugins,
   refreshNoobotPluginRuntime,
+  resolveDefaultPluginRootDir,
+  resolveDefaultPluginRootDirFromLoaderDir,
   resolveFirstLoadedNoobotPluginByCapability,
   resolveLoadedNoobotPluginsByCapability,
   resolvePluginRegisterByCapability,
   resolvePluginRegisterByPluginKey,
   resolvePluginRegisterFromLoaded,
 } from "../../../src/system-core/plugin/plugin-loader.js";
+
+const REPO_ROOT = path.resolve(import.meta.dirname, "../../../..");
 
 function createTempRoot(prefix = "noobot-plugin-loader-") {
   return path.join(os.tmpdir(), `${prefix}${Date.now()}-${Math.random().toString(16).slice(2)}`);
@@ -73,6 +77,21 @@ test("plugin loader discovers manifest and loads register function", async () =>
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }
+});
+
+test("default plugin root points to repository plugin directory in source runtime", () => {
+  assert.equal(resolveDefaultPluginRootDir(), path.join(REPO_ROOT, "plugin"));
+});
+
+test("default plugin root points outside node_modules when agent is packaged as dependency", () => {
+  const packagedLoaderDir = path.join(
+    REPO_ROOT,
+    "client/windows/dist/win-unpacked/resources/backend/node_modules/noobot-agent/src/system-core/plugin",
+  );
+  assert.equal(
+    resolveDefaultPluginRootDirFromLoaderDir(packagedLoaderDir),
+    path.join(REPO_ROOT, "client/windows/dist/win-unpacked/resources/backend/plugin"),
+  );
 });
 
 test("plugin loader falls back to static register when dynamic plugin is missing", async () => {

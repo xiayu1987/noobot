@@ -48,6 +48,53 @@ export function createDesktopServiceManager({
     syncPackagedProxyConfig("model-proxy");
   }
 
+  function writeStartupContext({ isPackaged, userDataPath, cwd, configDir, configState, globalConfigPath } = {}) {
+    const runtimeDir = path.join(userDataPath, "runtime");
+    fs.mkdirSync(runtimeDir, { recursive: true });
+    const backendRoot = isPackaged ? packagedBackendRoot : repoRoot;
+    const frontendRoot = isPackaged ? path.join(process.resourcesPath, "frontend") : "";
+    const startupContextPath = path.join(runtimeDir, "startup-context.json");
+    const startupContext = {
+      schemaVersion: 1,
+      app: {
+        name: "Noobot",
+        platform: "desktop",
+        channel: process.platform,
+        packaged: Boolean(isPackaged),
+      },
+      paths: {
+        backendRoot,
+        frontendRoot,
+        pluginRootDir: path.join(backendRoot, "plugin"),
+        userDataDir: userDataPath,
+        configDir,
+        dataDir: process.env.NOOBOT_DATA_DIR || path.join(userDataPath, "data"),
+        logDir: process.env.NOOBOT_LOG_DIR || path.join(userDataPath, "logs"),
+        workspaceRoot: configState?.workspaceRootPath || "",
+        workspaceTemplatePath: configState?.workspaceTemplatePath || "",
+        globalConfigPath,
+      },
+      service: {
+        port: Number(servicePort),
+        origin: serviceOrigin,
+      },
+      agentProxy: {
+        port: Number(agentProxyPort),
+        origin: `http://127.0.0.1:${agentProxyPort}`,
+      },
+      runtime: {
+        node: process.version,
+        electron: process.versions?.electron || "",
+        cwd,
+        execPath: process.execPath,
+        resourcesPath: process.resourcesPath || "",
+      },
+      createdAt: new Date().toISOString(),
+    };
+    fs.writeFileSync(startupContextPath, `${JSON.stringify(startupContext, null, 2)}\n`, "utf8");
+    return startupContextPath;
+  }
+
 
   async function isServiceHealthy() {
     try {
@@ -81,13 +128,23 @@ export function createDesktopServiceManager({
     if (managedServiceProcess) return;
     const isPackaged = app.isPackaged;
     const command = isPackaged ? process.execPath : process.platform === "win32" ? "npm.cmd" : "npm";
-    const args = isPackaged ? [path.join(packagedBackendRoot, "service", "app.js")] : ["run", "-w", "service", "start"];
     const cwd = isPackaged ? packagedBackendRoot : repoRoot;
     const userDataPath = app.getPath("userData");
     const configDir = process.env.NOOBOT_CONFIG_DIR || path.join(userDataPath, "config");
     const configState = getDesktopConfigState() || ensureDesktopGlobalConfig({ isPackaged, userDataPath });
     setDesktopConfigState(configState);
     const globalConfigPath = configState.globalConfigPath;
+    const startupContextPath = writeStartupContext({
+      isPackaged,
+      userDataPath,
+      cwd,
+      configDir,
+      configState,
+      globalConfigPath,
+    });
+    const args = isPackaged
+      ? [path.join(packagedBackendRoot, "service", "app.js"), "--startup-context", startupContextPath]
+      : ["run", "-w", "service", "start", "--", "--startup-context", startupContextPath];
     sendStatus({
       phase: "starting",
       message: [
@@ -97,6 +154,7 @@ export function createDesktopServiceManager({
         `cwd=${cwd}`,
         `log=${getLogFilePath()}`,
         `globalConfig=${globalConfigPath}`,
+        `startupContext=${startupContextPath}`,
       ].join("\n"),
     });
     managedServiceProcess = spawn(command, args, {

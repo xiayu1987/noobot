@@ -3,8 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createSessionPluginRuntimeBundle } from "#agent/plugin";
 
 export function createRuntimeConfigService({
+  startupContext = {},
   readWorkspaceConfigParams,
   globalConfigBuilder,
   BotManager,
@@ -25,7 +27,13 @@ export function createRuntimeConfigService({
     const rawGlobalConfig = builtConfig?.rawConfig || {};
     const resolvedGlobalConfig = builtConfig?.resolvedConfig || {};
     setApiKeyTtlMs(Number(resolvedGlobalConfig?.auth?.apiKeyTtlMs || 24 * 60 * 60 * 1000));
-    const bot = new BotManager(resolvedGlobalConfig);
+    const pluginRuntimeBundle = await createSessionPluginRuntimeBundle({
+      pluginRootDir: startupContext?.paths?.pluginRootDir,
+    });
+    const bot = new BotManager(resolvedGlobalConfig, {
+      startupContext,
+      pluginRuntimeBundle,
+    });
     setGlobalConfigRaw(rawGlobalConfig);
     setGlobalConfig(resolvedGlobalConfig);
     setBot(bot);

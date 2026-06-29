@@ -32,6 +32,7 @@ const DEFAULT_WORKSPACE_USERS_CONFIG = {
 };
 
 export async function createAppDependencies({
+  startupContext = {},
   globalConfigBuilder,
   initConnectorHistoryStore,
   getConnectorChannelStore,
@@ -142,6 +143,7 @@ export async function createAppDependencies({
   });
 
   const runtimeConfigService = createRuntimeConfigService({
+    startupContext,
     readWorkspaceConfigParams,
     globalConfigBuilder: configBuilder,
     BotManager,

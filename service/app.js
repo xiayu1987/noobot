@@ -19,12 +19,18 @@ import { registerGlobalMiddlewares } from "./bootstrap/register-global-middlewar
 import { registerHttpModules } from "./bootstrap/register-http-modules.js";
 import { startHttpServer } from "./bootstrap/start-http-server.js";
 import { createServiceGlobalConfigSource } from "./services/global-config-source.js";
+import {
+  loadStartupContext,
+  safeStartupContextForLog,
+} from "./services/startup-context-service.js";
 import { buildWorkspaceTree } from "./services/workspace-tree-service.js";
 
 const app = express();
+const startupContext = await loadStartupContext({ argv: process.argv, cwd: process.cwd() });
+console.warn("[noobot:startup-context]", safeStartupContextForLog(startupContext));
 
 const desktopFrontendRoot = String(
-  process.env.NOOBOT_DESKTOP_FRONTEND_ROOT || path.resolve(process.cwd(), "../frontend"),
+  startupContext?.paths?.frontendRoot || process.env.NOOBOT_DESKTOP_FRONTEND_ROOT || path.resolve(process.cwd(), "../frontend"),
 ).trim();
 const shouldServeDesktopFrontend = process.env.NOOBOT_DESKTOP === "1"
   && fs.existsSync(path.join(desktopFrontendRoot, "index.html"));
@@ -35,6 +41,7 @@ const globalConfigBuilder = createGlobalConfigBuilder({
   sourceName: globalConfigSource.name,
 });
 const appDependencies = await createAppDependencies({
+  startupContext,
   globalConfigBuilder,
   initConnectorHistoryStore,
   getConnectorChannelStore,

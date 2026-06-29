@@ -10,7 +10,8 @@
     "#agent/tracking": "./deps/agent-tracking.js",
     "#agent/constants": "./deps/agent-constants.js",
     "#agent/utils": "./deps/agent-utils.js",
-    "#agent/event": "./deps/agent-event.js"
+    "#agent/event": "./deps/agent-event.js",
+    "#agent/plugin": "./deps/agent-plugin.js"
   },
   "main": "app.js",
   "scripts": {
