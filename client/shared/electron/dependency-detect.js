@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import path from "node:path";
+import fs from "node:fs";
 import { desktopDependencyTimeouts } from "./dependency-specs.js";
 import { sleep } from "./dependency-process.js";
 
@@ -16,6 +17,14 @@ export function createDependencyDetector({
   getMacManagedCommandPath = () => "",
   prependManagedDependencyPath = () => {},
 } = {}) {
+  function getFileMode(filePath) {
+    try {
+      return fs.statSync(filePath).mode.toString(8);
+    } catch {
+      return "";
+    }
+  }
+
   async function hasCommand(command) {
     if (process.platform === "darwin") prependManagedDependencyPath();
     appendEarlyLog(`[dependency:probe:start] command=${command}`);
@@ -91,13 +100,36 @@ export function createDependencyDetector({
     if (process.platform === "darwin" && spec.managedCommand) {
       const managedKey = getDarwinManagedKeyForSpec(spec);
       const managedPath = managedKey ? getMacManagedCommandPath(managedKey, spec.managedCommand) : "";
-      if (hasExistingFile(managedPath)) {
+      const managedExists = hasExistingFile(managedPath);
+      writeDependencyLog("installed:managed:path", {
+        label: spec.label,
+        key: managedKey,
+        command: spec.managedCommand,
+        path: managedPath,
+        exists: managedExists,
+        mode: managedExists ? getFileMode(managedPath) : "",
+      });
+      if (managedExists) {
         const result = await runProcess(managedPath, ["--version"], { timeoutMs: desktopDependencyTimeouts.commandProbeMs });
+        writeDependencyLog("installed:managed:probe", {
+          label: spec.label,
+          key: managedKey,
+          command: spec.managedCommand,
+          path: managedPath,
+          ok: result.ok,
+          code: result.code,
+          error: result.error,
+          stdout: String(result.stdout || "").slice(0, 500),
+          stderr: String(result.stderr || "").slice(0, 1000),
+        });
+        appendEarlyLog(`[dependency:installed:managed:probe] label=${spec.label}; path=${managedPath}; ok=${result.ok}; code=${result.code ?? ""}; error=${result.error || ""}; stderr=${String(result.stderr || "").slice(0, 500)}`);
         if (result.ok) {
           prependManagedDependencyPath();
           appendEarlyLog(`[dependency:installed:finish] label=${spec.label}; installed=true; via=managed; path=${managedPath}`);
           return true;
         }
+      } else if (managedPath) {
+        appendEarlyLog(`[dependency:installed:managed:missing] label=${spec.label}; path=${managedPath}`);
       }
     }
     if (process.platform === "darwin" && spec.darwinAppBundle) {
