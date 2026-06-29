@@ -104,8 +104,19 @@ export function createDependencyInstaller({
         if (process.platform === "darwin" && (key === "ffmpeg" || key === "nodejs")) {
           writeDependencyLog("managed:install:start", { key, label: spec.label });
           try {
-            await installManagedDependencyMac(key, spec);
-            writeDependencyLog("managed:install:finish", { key, label: spec.label });
+            const managedInstallResult = await installManagedDependencyMac(key, spec);
+            writeDependencyLog("managed:install:finish", {
+              key,
+              label: spec.label,
+              ok: managedInstallResult?.ok === true,
+              method: managedInstallResult?.method || "managed",
+              path: managedInstallResult?.path || "",
+            });
+            if (managedInstallResult?.ok === true) {
+              sendStatus({ phase: "dependency", message: `${spec.label} installed.` });
+              results.push({ key, ok: true, installed: true, method: managedInstallResult.method || "managed", path: managedInstallResult.path || "" });
+              continue;
+            }
             sendStatus({ phase: "dependency", message: `${spec.label} managed installer finished. Verifying availability...` });
             writeDependencyLog("verify:start", { key, label: spec.label, method: "managed" });
             if (!(await waitForDependencyInstalled(spec))) {
