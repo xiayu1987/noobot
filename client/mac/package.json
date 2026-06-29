@@ -9,7 +9,7 @@
     "dev": "NOOBOT_CLIENT_URL=${NOOBOT_CLIENT_URL:-http://127.0.0.1:10060} electron .",
     "prepare:frontend": "npm --prefix ../noobot-chat run build",
     "prepare:backend": "node scripts/prepare-backend-runtime.mjs",
-    "check": "node --check src/main.js && node --check ../shared/electron/main.js && node --check ../shared/electron/preload.cjs",
+    "check": "node --check src/main.js && node --check ../shared/electron/main.js && node --check ../shared/electron/preload.cjs && node --check ../shared/electron/startup-logging.js && node --check ../shared/electron/desktop-config.js && node --check ../shared/electron/file-ipc.js && node --check ../shared/electron/desktop-dependencies.js && node --check ../shared/electron/desktop-services.js && node --check ../shared/electron/desktop-window.js && node --check ../shared/electron/startup-ipc.js",
     "build:mac": "npm run prepare:frontend && npm run prepare:backend && electron-builder --mac",
     "build:mac:dir": "npm run prepare:frontend && npm run prepare:backend && electron-builder --mac --dir",
     "build:mac:dmg": "npm run prepare:frontend && npm run prepare:backend && electron-builder --mac dmg",
