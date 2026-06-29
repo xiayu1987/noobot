@@ -5,9 +5,12 @@ export default async function copyBackendAfterPack(context) {
   const projectDir = context.packager.projectDir;
   const repoRoot = path.resolve(projectDir, '../..');
   const backendSource = path.join(projectDir, 'build/backend-runtime/backend');
-  const backendDestination = path.join(context.appOutDir, 'resources/backend');
+  const resourcesDir = context.electronPlatformName === 'darwin'
+    ? path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`, 'Contents', 'Resources')
+    : path.join(context.appOutDir, 'resources');
+  const backendDestination = path.join(resourcesDir, 'backend');
   const frontendSource = path.join(repoRoot, 'client/noobot-chat/dist');
-  const frontendDestination = path.join(context.appOutDir, 'resources/frontend');
+  const frontendDestination = path.join(resourcesDir, 'frontend');
 
   await stat(path.join(backendSource, 'service/app.js'));
   await stat(path.join(backendSource, 'node_modules/express/package.json'));
