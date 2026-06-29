@@ -1,6 +1,23 @@
 import { cp, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 
+const requiredBackendRuntimeFiles = [
+  'service/app.js',
+  'node_modules/express/package.json',
+  'plugin/noobot-plugin-harness/manifest.json',
+  'plugin/noobot-plugin-workflow/manifest.json',
+];
+
+async function assertRequiredBackendRuntimeFiles(rootDir, label) {
+  await Promise.all(requiredBackendRuntimeFiles.map(async (relativePath) => {
+    try {
+      await stat(path.join(rootDir, relativePath));
+    } catch (error) {
+      throw new Error(`Missing required backend runtime file after ${label}: ${relativePath}`, { cause: error });
+    }
+  }));
+}
+
 function getBackendCopyOptions(context) {
   // Windows package builds commonly run without the privilege required to
   // create symlinks. The prepared backend runtime can contain workspace package
@@ -25,12 +42,10 @@ export default async function copyBackendAfterPack(context) {
   const frontendSource = path.join(repoRoot, 'client/noobot-chat/dist');
   const frontendDestination = path.join(resourcesDir, 'frontend');
 
-  await stat(path.join(backendSource, 'service/app.js'));
-  await stat(path.join(backendSource, 'node_modules/express/package.json'));
+  await assertRequiredBackendRuntimeFiles(backendSource, 'prepare');
   await rm(backendDestination, { recursive: true, force: true });
   await cp(backendSource, backendDestination, getBackendCopyOptions(context));
-  await stat(path.join(backendDestination, 'service/app.js'));
-  await stat(path.join(backendDestination, 'node_modules/express/package.json'));
+  await assertRequiredBackendRuntimeFiles(backendDestination, 'copy');
   console.log(`Copied backend runtime to ${backendDestination}`);
 
   await stat(path.join(frontendSource, 'index.html'));
