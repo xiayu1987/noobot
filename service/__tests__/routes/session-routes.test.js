@@ -264,7 +264,7 @@ test("session-routes: replace-turn 兼容 /api/internal 前缀", async () => {
   });
 
   await withTestServer(app, async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/api/internal/session/admin/93606d58-60eb-4ca4-bccf-c926e67e1fed/messages/replace-turn`, {
+    const response = await fetch(`${baseUrl}/api/internal/session/primary-user/93606d58-60eb-4ca4-bccf-c926e67e1fed/messages/replace-turn`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -277,7 +277,7 @@ test("session-routes: replace-turn 兼容 /api/internal 前缀", async () => {
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].userId, "admin");
+    assert.equal(calls[0].userId, "primary-user");
     assert.equal(calls[0].sessionId, "93606d58-60eb-4ca4-bccf-c926e67e1fed");
     assert.deepEqual(calls[0].anchor, { turnScopeId: "client-turn:api" });
   });

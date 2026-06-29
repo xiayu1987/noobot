@@ -148,6 +148,24 @@ function buildHumanMessageContent(msg = {}, fallbackAttachments = []) {
   return textContent;
 }
 
+function buildUserMetaAttachmentInfo(attachmentItem = {}) {
+  const parsedResult = normalizeAttachmentParsedResultMeta(attachmentItem);
+  const size = Number(attachmentItem?.size);
+  return {
+    attachmentId: String(attachmentItem?.attachmentId || "").trim(),
+    name: String(attachmentItem?.name || "").trim(),
+    mimeType: String(attachmentItem?.mimeType || "").trim(),
+    attachmentSource: String(attachmentItem?.attachmentSource || "").trim(),
+    sessionId: String(attachmentItem?.sessionId || "").trim(),
+    path: String(attachmentItem?.path || "").trim(),
+    relativePath: String(attachmentItem?.relativePath || "").trim(),
+    sandboxPath: String(attachmentItem?.sandboxPath || "").trim(),
+    ...(Number.isFinite(size) ? { size } : {}),
+    ...(typeof attachmentItem?.isSandbox === "boolean" ? { isSandbox: attachmentItem.isSandbox } : {}),
+    ...(parsedResult ? { parsedResult } : {}),
+  };
+}
+
 function buildUserMetaInfoContent(runtime = {}, msg = {}, fallbackMeta = {}) {
   const fallbackAttachments = resolveFallbackAttachments(fallbackMeta);
   const attachments = resolveAttachments(msg, fallbackAttachments);
@@ -170,16 +188,7 @@ function buildUserMetaInfoContent(runtime = {}, msg = {}, fallbackMeta = {}) {
     parentDialogProcessId: String(
       msg?.parentDialogProcessId || fallbackMeta?.parentDialogProcessId || "",
     ).trim(),
-    attachments: attachments.map((attachmentItem) => {
-      const parsedResult = normalizeAttachmentParsedResultMeta(attachmentItem);
-      return {
-        attachmentId: String(attachmentItem?.attachmentId || "").trim(),
-        name: String(attachmentItem?.name || "").trim(),
-        path: String(attachmentItem?.path || "").trim(),
-        relativePath: String(attachmentItem?.relativePath || "").trim(),
-        ...(parsedResult ? { parsedResult } : {}),
-      };
-    }),
+    attachments: attachments.map((attachmentItem) => buildUserMetaAttachmentInfo(attachmentItem)),
   };
   const userMetaTag = tEngine(runtime, "agent.userMetaTag");
   return `[${userMetaTag}]\n${JSON.stringify(payload, null, 2)}\n[/${userMetaTag}]`;
@@ -212,6 +221,10 @@ function buildHumanMessagesForUser(runtime = {}, msg = {}, fallbackMeta = {}) {
     },
   });
   return [contentMessage, metaMessage];
+}
+
+function shouldBuildUserMetaForHistoryMessage(msg = {}, fallbackMeta = {}) {
+  return resolveAttachments(msg, resolveFallbackAttachments(fallbackMeta)).length > 0;
 }
 
 function buildModelMessageIdentityKwargs(msg = {}, fallbackMeta = {}) {
@@ -365,7 +378,7 @@ function buildHistoryMessages({
       );
       continue;
     }
-    if (includeUserMeta) {
+    if (includeUserMeta || shouldBuildUserMetaForHistoryMessage(msg, fallbackUserMeta)) {
       history.push(...buildHumanMessagesForUser(runtime, msg, fallbackUserMeta));
     } else {
       history.push(

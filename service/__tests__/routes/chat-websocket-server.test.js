@@ -13,7 +13,7 @@ async function startServerWithWs({ runSession = async () => ({}), bot = null } =
   registerChatWebSocketServer(server, {
     getBot: () => bot || ({ runSession }),
     resolveRequestLocale: () => "zh-CN",
-    resolveAuthByApiKey: () => ({ userId: "admin" }),
+    resolveAuthByApiKey: () => ({ userId: "primary-user" }),
     isForbiddenUserScope: () => false,
     normalizeRunConfig: (config = {}) => config || {},
     normalizeLocale: (locale = "") => String(locale || "zh-CN"),

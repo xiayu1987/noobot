@@ -61,7 +61,7 @@ function createMcpFetch() {
 test("call_mcp_task: 透传父 runConfig 显式 streaming=false 到子 session", async () => {
   const runCalls = [];
   const runtime = {
-    userId: "admin",
+    userId: "primary-user",
     botManager: {
       async runSession(payload = {}) {
         runCalls.push(payload);
@@ -89,7 +89,7 @@ test("call_mcp_task: 透传父 runConfig 显式 streaming=false 到子 session",
     userConfig: {},
     sharedTools: { fetch: createMcpFetch() },
   };
-  const [tool] = createMcpTool({ agentContext: { userId: "admin", runtime } });
+  const [tool] = createMcpTool({ agentContext: { userId: "primary-user", runtime } });
   const raw = await tool.invoke({ mcpName: "fake", task: "do something" });
   const payload = JSON.parse(String(raw || "{}"));
   assert.equal(payload.ok, true);

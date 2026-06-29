@@ -457,6 +457,97 @@ test("buildContextMessageBlocks does not duplicate frontend current user already
   );
 });
 
+test("buildContextMessageBlocks builds user_meta with source info for historical user attachments", () => {
+  const blocks = buildContextMessageBlocks({
+    execution: {
+      controllers: {
+        runtime: {
+          userId: "u1",
+          systemRuntime: {
+            sessionId: "s1",
+            dialogProcessId: "dlg-current",
+            turnScopeId: "client-turn:current",
+          },
+        },
+      },
+    },
+    payload: {
+      messages: {
+        system: [],
+        history: [
+          {
+            role: "user",
+            content: "历史附件问题",
+            dialogProcessId: "dlg-history",
+            turnScopeId: "client-turn:history",
+            attachments: [
+              {
+                attachmentId: "att-history-1",
+                name: "history.md",
+                mimeType: "text/markdown",
+                attachmentSource: "user",
+                sessionId: "s-history",
+                relativePath: "runtime/attach/scoped/s-history/user/att-history-1.md",
+                sandboxPath: "/workspace/primary-user/runtime/attach/scoped/s-history/user/att-history-1.md",
+                size: 42,
+                isSandbox: true,
+              },
+            ],
+          },
+          {
+            role: "assistant",
+            content: "历史回答",
+            dialogProcessId: "dlg-history",
+            turnScopeId: "client-turn:history",
+          },
+        ],
+      },
+    },
+  });
+
+  assert.equal(blocks.history.length, 3);
+  assert.equal(blocks.history[0]?.content, "历史附件问题");
+  assert.equal(blocks.history[1]?.additional_kwargs?.noobotInternalMessageType, "user_meta");
+  assert.equal(blocks.history[2]?.content, "历史回答");
+
+  const metaContent = blocks.history[1]?.content || "";
+  const metaPayload = JSON.parse(metaContent.match(/\n([\s\S]*)\n\[\//)?.[1] || "{}");
+  assert.deepEqual(metaPayload.attachments, [
+    {
+      attachmentId: "att-history-1",
+      name: "history.md",
+      mimeType: "text/markdown",
+      attachmentSource: "user",
+      sessionId: "s-history",
+      path: "",
+      relativePath: "runtime/attach/scoped/s-history/user/att-history-1.md",
+      sandboxPath: "/workspace/primary-user/runtime/attach/scoped/s-history/user/att-history-1.md",
+      size: 42,
+      isSandbox: true,
+    },
+  ]);
+});
+
+test("buildContextMessageBlocks keeps historical user without attachments as plain history", () => {
+  const blocks = buildContextMessageBlocks({
+    execution: { controllers: { runtime: { userId: "u1", systemRuntime: { sessionId: "s1" } } } },
+    payload: {
+      messages: {
+        system: [],
+        history: [
+          { role: "user", content: "无附件历史", dialogProcessId: "dlg-plain" },
+          { role: "assistant", content: "普通回答", dialogProcessId: "dlg-plain" },
+        ],
+      },
+    },
+  });
+
+  assert.equal(blocks.history.length, 2);
+  assert.equal(blocks.history[0]?.content, "无附件历史");
+  assert.equal(blocks.history[0]?.additional_kwargs?.noobotInternalMessageType, undefined);
+  assert.equal(blocks.history[1]?.content, "普通回答");
+});
+
 test("buildContextMessageBlocks removes same-text current user from history rounds", () => {
   const blocks = buildContextMessageBlocks(
     {

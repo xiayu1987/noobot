@@ -39,6 +39,16 @@ import { normalizeParentSessionId } from "./parent-session-id-resolver.js";
 import { normalizeContextWindow } from "../session/utils/context-window-normalizer.js";
 import { emitModelContextTrace, summarizeDiagnosticMessages } from "../agent/core/message-context/context-diagnostics.js";
 
+function resolveConfiguredSuperUserId(globalConfig = {}) {
+  return String(globalConfig?.super_admin?.user_id || "").trim();
+}
+
+function resolveRuntimeSuperUserFlag({ globalConfig = {}, userId = "" } = {}) {
+  const configuredSuperUserId = resolveConfiguredSuperUserId(globalConfig);
+  if (!configuredSuperUserId) return false;
+  return String(userId || "").trim() === configuredSuperUserId;
+}
+
 function normalizeAdditionalSystemMessages(input = []) {
   if (!Array.isArray(input)) return [];
   return input
@@ -219,6 +229,10 @@ export class ContextBuilder {
             currentDialogProcessId: protectedDialogProcessId,
           }
         : {}),
+      isSuperUser: resolveRuntimeSuperUserFlag({
+        globalConfig: this.globalConfig,
+        userId: dynamicInfo?.userId || this.userId,
+      }),
       parentSessionId: normalizeParentSessionId(mergedRuntime?.parentSessionId),
     };
   }

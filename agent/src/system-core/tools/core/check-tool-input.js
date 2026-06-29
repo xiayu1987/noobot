@@ -9,6 +9,7 @@ import {
   getBasePathFromAgentContext,
   getRuntimeFromAgentContext,
   getSessionIdsFromAgentContext,
+  getSystemRuntimeFromAgentContext,
 } from "../../context/agent-context-accessor.js";
 import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
 import { recoverableToolError } from "../../error/index.js";
@@ -60,6 +61,18 @@ function resolveRuntimeBasePath(agentContext = {}) {
 
 function resolveUserWorkspacePath(agentContext = {}) {
   return resolveRuntimeBasePath(agentContext);
+}
+
+function resolveWorkspaceRoot(agentContext = {}) {
+  const runtime = getRuntimeFromAgentContext(agentContext);
+  const workspaceRoot = String(runtime?.globalConfig?.workspaceRoot || "").trim();
+  return workspaceRoot ? path.resolve(workspaceRoot) : "";
+}
+
+function isSuperUserAgentContext(agentContext = {}) {
+  const runtime = getRuntimeFromAgentContext(agentContext);
+  const systemRuntime = getSystemRuntimeFromAgentContext(agentContext, runtime);
+  return systemRuntime?.isSuperUser === true;
 }
 
 function resolveExecuteScriptConfig(runtime = {}) {
@@ -119,6 +132,17 @@ function resolveAdditionalAllowedRoots(agentContext = {}) {
 
 function resolveInputPathToHostPath({ inputPath = "", workspacePath = "", agentContext = {} } = {}) {
   const runtime = getRuntimeFromAgentContext(agentContext);
+  if (isSuperUserAgentContext(agentContext)) {
+    const workspaceRoot = resolveWorkspaceRoot(agentContext);
+    const normalizedInputPath = String(inputPath || "").trim();
+    if (workspaceRoot && path.isAbsolute(normalizedInputPath)) {
+      const normalizedSandboxPath = normalizedInputPath.replaceAll("\\", "/");
+      if (normalizedSandboxPath === "/workspace") return workspaceRoot;
+      if (normalizedSandboxPath.startsWith("/workspace/")) {
+        return path.resolve(workspaceRoot, normalizedSandboxPath.slice("/workspace/".length));
+      }
+    }
+  }
   const payload = {
     path: inputPath,
     sandboxPath: inputPath,
@@ -350,8 +374,9 @@ export async function assertAndResolveUserWorkspaceFilePath({
 
   const allowedRoots = [
     workspacePath,
+    ...(isSuperUserAgentContext(agentContext) ? [resolveWorkspaceRoot(agentContext)] : []),
     ...resolveAdditionalAllowedRoots(agentContext),
-  ];
+  ].filter(Boolean);
   const inAllowedScope = allowedRoots.some((rootPath) =>
     isWithinBasePath(rootPath, resolvedTargetPath),
   );

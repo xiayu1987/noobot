@@ -16,7 +16,7 @@ test("buildToolCompatibilityLogLine includes model and tools", () => {
       activeModelName: "gpt-5.3-codex",
     },
     runtime: {
-      userId: "admin",
+      userId: "primary-user",
       systemRuntime: {
         sessionId: "s1",
         parentSessionId: "p1",

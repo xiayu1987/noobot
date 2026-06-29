@@ -22,7 +22,7 @@ async function waitFor(asyncGetter, { retries = 20, intervalMs = 20 } = {}) {
 
 test("readLongMemory only returns static long memory content", async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
-  const userId = "admin";
+  const userId = "primary-user";
   const userRoot = path.join(workspaceRoot, userId);
   await mkdir(path.join(userRoot, "memory"), { recursive: true });
   await writeFile(
@@ -37,7 +37,7 @@ test("readLongMemory only returns static long memory content", async () => {
 
 test("append daily domain results writes per-domain md and metadata", async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
-  const userId = "admin";
+  const userId = "primary-user";
   const userRoot = path.join(workspaceRoot, userId);
   await mkdir(path.join(userRoot, "memory"), { recursive: true });
 
@@ -86,7 +86,7 @@ test("parse daily experience output supports ID+PATCH protocol", () => {
 
 test("logs raw model output when daily patch parse fails", async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
-  const userId = "admin";
+  const userId = "primary-user";
   const userRoot = path.join(workspaceRoot, userId);
   await mkdir(path.join(userRoot, "memory"), { recursive: true });
 
@@ -110,7 +110,7 @@ test("logs raw model output when daily patch parse fails", async () => {
 
 test("long memory update applies L/M patch commands", async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
-  const userId = "admin";
+  const userId = "primary-user";
   const userRoot = path.join(workspaceRoot, userId);
   await mkdir(path.join(userRoot, "memory"), { recursive: true });
   await writeFile(
@@ -145,7 +145,7 @@ test("long memory update applies L/M patch commands", async () => {
 
 test("long memory update materializes metadata-only patches into long-memory.md", async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
-  const userId = "admin";
+  const userId = "primary-user";
   const userRoot = path.join(workspaceRoot, userId);
   await mkdir(path.join(userRoot, "memory"), { recursive: true });
 
@@ -177,7 +177,7 @@ test("long memory update materializes metadata-only patches into long-memory.md"
 
 test("maybeSummarize writes object-shaped long memory model output", async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
-  const userId = "admin";
+  const userId = "primary-user";
   const userRoot = path.join(workspaceRoot, userId);
   await mkdir(path.join(userRoot, "memory"), { recursive: true });
 
@@ -229,7 +229,7 @@ test("maybeSummarize writes object-shaped long memory model output", async () =>
 
 test("maybeSummarize uses configured memoryModel for long memory and experience processing", async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
-  const userId = "admin";
+  const userId = "primary-user";
   const userRoot = path.join(workspaceRoot, userId);
   await mkdir(path.join(userRoot, "memory"), { recursive: true });
   const shortItems = Array.from({ length: 30 }, (_, index) => ({
@@ -284,7 +284,7 @@ test("maybeSummarize uses configured memoryModel for long memory and experience 
 
 test("maybeSummarize does not clear short memory for unreadable long memory patch", async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
-  const userId = "admin";
+  const userId = "primary-user";
   const userRoot = path.join(workspaceRoot, userId);
   await mkdir(path.join(userRoot, "memory"), { recursive: true });
   const shortItems = Array.from({ length: 30 }, (_, index) => ({
@@ -309,7 +309,7 @@ test("maybeSummarize does not clear short memory for unreadable long memory patc
 
 test("long memory update treats equivalent legal patch as unchanged", async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
-  const userId = "admin";
+  const userId = "primary-user";
   const userRoot = path.join(workspaceRoot, userId);
   await mkdir(path.join(userRoot, "memory/long-memory"), { recursive: true });
   await writeFile(path.join(userRoot, "memory/long-memory.md"), "1. 喜欢结构化输出\n");
@@ -324,7 +324,7 @@ test("long memory update treats equivalent legal patch as unchanged", async () =
 
 test("long memory update accepts colon separator in stable text protocol", async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
-  const userId = "admin";
+  const userId = "primary-user";
   const userRoot = path.join(workspaceRoot, userId);
   await mkdir(path.join(userRoot, "memory"), { recursive: true });
   const service = new MemoryManager({ workspaceRoot });
@@ -339,7 +339,7 @@ test("long memory update accepts colon separator in stable text protocol", async
 
 test("captureSessionToShortMemory skips injected messages", async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
-  const userId = "admin";
+  const userId = "primary-user";
   const userRoot = path.join(workspaceRoot, userId);
   await mkdir(path.join(userRoot, "runtime/session/s1"), { recursive: true });
   await mkdir(path.join(userRoot, "memory"), { recursive: true });

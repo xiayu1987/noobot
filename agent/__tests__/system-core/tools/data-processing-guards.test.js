@@ -84,7 +84,7 @@ test("doc_to_data: direct text result stores content in file and returns text wh
     },
   };
   const agentContext = buildAgentContext(basePath);
-  agentContext.execution.controllers.runtime.userId = "admin";
+  agentContext.execution.controllers.runtime.userId = "primary-user";
   agentContext.execution.controllers.runtime.systemRuntime = { sessionId: "s1" };
   agentContext.execution.controllers.runtime.attachmentService = attachmentService;
 
@@ -134,7 +134,7 @@ test("doc_to_data: direct text result returns preview when over semantic-transfe
     },
   };
   const agentContext = buildAgentContext(basePath);
-  agentContext.execution.controllers.runtime.userId = "admin";
+  agentContext.execution.controllers.runtime.userId = "primary-user";
   agentContext.execution.controllers.runtime.systemRuntime = { sessionId: "s1" };
   agentContext.execution.controllers.runtime.attachmentService = attachmentService;
   agentContext.execution.controllers.runtime.globalConfig = { tools: { maxToolResultChars: 1000 } };
@@ -206,7 +206,7 @@ test("doc_to_data: backwrites parsed result to source attachment from inputAttac
   };
   const agentContext = buildAgentContext(basePath);
   const runtime = agentContext.execution.controllers.runtime;
-  runtime.userId = "admin";
+  runtime.userId = "primary-user";
   runtime.systemRuntime = { sessionId: "s1" };
   runtime.attachmentService = attachmentService;
   runtime.inputAttachments = [
@@ -244,7 +244,7 @@ test("doc_to_data: reuses generated data artifact instead of creating recursive 
 
   let persistCalls = 0;
   const agentContext = buildAgentContext(basePath);
-  agentContext.execution.controllers.runtime.userId = "admin";
+  agentContext.execution.controllers.runtime.userId = "primary-user";
   agentContext.execution.controllers.runtime.systemRuntime = { sessionId: "s1" };
   agentContext.execution.controllers.runtime.attachments = [
     {
@@ -295,7 +295,7 @@ test("doc_to_data: reuses generated data artifact by path even without attachmen
 
   let persistCalls = 0;
   const agentContext = buildAgentContext(basePath);
-  agentContext.execution.controllers.runtime.userId = "admin";
+  agentContext.execution.controllers.runtime.userId = "primary-user";
   agentContext.execution.controllers.runtime.systemRuntime = { sessionId: "s1" };
   agentContext.execution.controllers.runtime.attachmentService = {
     async ingestGeneratedArtifacts() {
@@ -444,7 +444,7 @@ test("process_content_task: detached runtime uses durable parent session", async
         controllers: {
           runtime: {
             basePath,
-            userId: "admin",
+            userId: "primary-user",
             globalConfig: {},
             userConfig: {},
             botManager,
@@ -494,7 +494,7 @@ test("process_content_task: 透传父 runConfig 显式 streaming=false 到子 se
         controllers: {
           runtime: {
             basePath,
-            userId: "admin",
+            userId: "primary-user",
             globalConfig: {},
             userConfig: {},
             botManager,
@@ -542,7 +542,7 @@ test("process_connector_tool: detached runtime uses durable parent session", asy
       execution: {
         controllers: {
           runtime: {
-            userId: "admin",
+            userId: "primary-user",
             globalConfig: {},
             userConfig: {},
             botManager,
@@ -596,7 +596,7 @@ test("process_connector_tool: 透传父 runConfig 显式 streaming=false 到子 
       execution: {
         controllers: {
           runtime: {
-            userId: "admin",
+            userId: "primary-user",
             globalConfig: {},
             userConfig: {},
             botManager,

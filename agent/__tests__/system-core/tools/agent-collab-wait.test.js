@@ -9,9 +9,9 @@ function parseToolJson(text = "") {
 
 test("wait_async_task_result treats invalid_request container as failed summary", async () => {
   const agentContext = {
-    userId: "admin",
+    userId: "primary-user",
     runtime: {
-      userId: "admin",
+      userId: "primary-user",
       botManager: {
         waitAsyncSession: async () => ({ ok: true, status: "completed", result: {} }),
       },

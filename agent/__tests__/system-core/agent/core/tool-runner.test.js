@@ -511,10 +511,10 @@ test("executeToolCall: overflow result should include sandbox path when resolver
       userConfig: {},
       sharedTools: {
         resolveAttachmentDisplayPath({ meta = {} } = {}) {
-          return String(meta?.path || "").replace(basePath, "/injected/admin");
+          return String(meta?.path || "").replace(basePath, "/injected/primary-user");
         },
         resolveSandboxPath({ hostPath }) {
-          return String(hostPath || "").replace(basePath, "/workspace/admin");
+          return String(hostPath || "").replace(basePath, "/workspace/primary-user");
         },
       },
     },

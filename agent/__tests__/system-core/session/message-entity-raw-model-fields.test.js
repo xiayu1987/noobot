@@ -124,6 +124,44 @@ test("normalizeMessageEntity preserves compact non-empty attachments", () => {
   assert.equal("source" in normalized.attachments[0], false);
 });
 
+test("normalizeMessageEntity preserves user attachment source fields for history rebuild", () => {
+  const normalized = normalizeMessageEntity({
+    role: "user",
+    content: "see attachment",
+    attachments: [
+      {
+        attachmentId: "att_source_1",
+        name: "source.md",
+        mimeType: "text/markdown",
+        attachmentSource: "user",
+        sessionId: "s-source",
+        path: "/workspace/primary-user/runtime/attach/scoped/s-source/user/source.md",
+        relativePath: "runtime/attach/scoped/s-source/user/source.md",
+        sandboxPath: "/workspace/primary-user/runtime/attach/scoped/s-source/user/source.md",
+        size: 42,
+        isSandbox: true,
+        raw: "drop",
+      },
+    ],
+  });
+
+  assert.deepEqual(normalized.attachments, [
+    {
+      attachmentId: "att_source_1",
+      name: "source.md",
+      mimeType: "text/markdown",
+      size: 42,
+      attachmentSource: "user",
+      sessionId: "s-source",
+      relativePath: "runtime/attach/scoped/s-source/user/source.md",
+      sandboxPath: "/workspace/primary-user/runtime/attach/scoped/s-source/user/source.md",
+      path: "/workspace/primary-user/runtime/attach/scoped/s-source/user/source.md",
+      isSandbox: true,
+    },
+  ]);
+  assert.equal("raw" in normalized.attachments[0], false);
+});
+
 test("normalizeMessageEntity ignores legacy attachment mirror fields", () => {
   const camelAttachments = [{ attachmentId: "att_camel", filename: "camel.txt" }];
   const snakeAttachments = [{ attachmentId: "att_snake", filename: "snake.txt" }];
