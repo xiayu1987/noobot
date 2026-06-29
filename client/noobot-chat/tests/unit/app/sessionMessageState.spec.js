@@ -37,6 +37,24 @@ describe("sessionMessageState", () => {
     expect(item.subAgentTask).toBe("");
   });
 
+  it("preserves plugin analysis text from output fallback fields", () => {
+    const topLevelOutput = classifyRealtimeLog({
+      event: "guidance_analysis_response",
+      type: "guidance_analysis",
+      purpose: "guidance",
+      pluginFlow: "analysis",
+      chain: "auxiliary",
+      output: "desktop analysis output",
+    });
+    const nestedOutput = classifyRealtimeLog({
+      event: "guidance_analysis_response",
+      data: { output: "nested desktop analysis output" },
+    });
+
+    expect(topLevelOutput.text).toBe("desktop analysis output");
+    expect(nestedOutput.text).toBe("nested desktop analysis output");
+  });
+
   it("formats message attachment and time helpers", () => {
     expect(isImageMime("image/png")).toBe(true);
     expect(isImageMime("text/plain")).toBe(false);

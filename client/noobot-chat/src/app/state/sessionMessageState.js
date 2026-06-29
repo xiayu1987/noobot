@@ -5,7 +5,9 @@ const TOOL_LOG_TYPES = new Set(["tool_call", "tool_result"]);
 
 export function classifyRealtimeLog(data = {}) {
   const eventName = String(data.event || "").trim();
-  const text = sanitizeExecutionLogText(data.text || "");
+  const text = sanitizeExecutionLogText(
+    data.text ?? data.output ?? data.data?.text ?? data.data?.output ?? "",
+  );
   const category = String(data.category || "").trim();
   const type = String(data.type || "").trim();
   const isTool =
