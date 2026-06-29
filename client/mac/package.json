@@ -41,6 +41,7 @@
       }
     ],
     "mac": {
+      "icon": "assets/noobot.icns",
       "target": [
         "dmg",
         "zip"
