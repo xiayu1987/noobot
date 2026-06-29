@@ -274,7 +274,7 @@ defineExpose({
           :selected-plugins="selectedPlugins"
           :interaction-active="Boolean(pendingInteractionRequest)"
           @update:model-value="emit('update:input', $event)"
-          @upload-change="emit('upload-change', $event)"
+          @upload-change="(file, fileList) => emit('upload-change', file, fileList)"
           @append-uploads="emit('append-uploads', $event)"
           @update:allow-user-interaction="emit('update:allow-user-interaction', $event)"
           @update:force-tool="emit('update:force-tool', $event)"
