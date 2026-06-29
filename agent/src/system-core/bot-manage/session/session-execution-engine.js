@@ -31,6 +31,7 @@ import { ModelMessageRuntimeHelpers } from "./model-message-runtime-helpers.js";
 import { ScopedArtifactPersistenceHelpers } from "./scoped-artifact-persistence-helpers.js";
 import {
   createDefaultRunConfigPluginPreparer,
+  createRunConfigPluginPreparerFromRuntimeBundle,
   getDefaultSessionPluginRuntime,
 } from "../../plugin/session-plugin-runtime-provider.js";
 
@@ -46,6 +47,7 @@ export class SessionExecutionEngine {
     errorLogger = null,
     botManager = null,
     agentRunner = runAgentTurn,
+    pluginRuntimeBundle = null,
   } = {}) {
     this._assignCoreDependencies({
       globalConfig,
@@ -58,6 +60,7 @@ export class SessionExecutionEngine {
       errorLogger,
       botManager,
       agentRunner,
+      pluginRuntimeBundle,
     });
     this._initializeCoreServices();
     this._initializeRuntimeServices();
@@ -76,6 +79,7 @@ export class SessionExecutionEngine {
     errorLogger = null,
     botManager = null,
     agentRunner = runAgentTurn,
+    pluginRuntimeBundle = null,
   } = {}) {
     this.globalConfig = globalConfig;
     this.session = session;
@@ -87,6 +91,7 @@ export class SessionExecutionEngine {
     this.errorLogger = errorLogger;
     this.botManager = botManager;
     this.agentRunner = typeof agentRunner === "function" ? agentRunner : runAgentTurn;
+    this.pluginRuntimeBundle = pluginRuntimeBundle;
   }
 
   _initializeCoreServices() {
@@ -159,7 +164,12 @@ export class SessionExecutionEngine {
   }
 
   _createRunConfigPluginPreparer() {
-    return createDefaultRunConfigPluginPreparer({
+    const factory = this.pluginRuntimeBundle
+      ? createRunConfigPluginPreparerFromRuntimeBundle
+      : createDefaultRunConfigPluginPreparer;
+    return factory({
+      loadedPlugins: this.pluginRuntimeBundle?.loadedPlugins,
+      pluginRuntime: this.pluginRuntimeBundle?.pluginRuntime,
       globalConfig: this.globalConfig,
       workspaceService: this.workspaceService,
       normalizeStringArray: (input) => this._normalizeStringArray(input),
@@ -428,7 +438,7 @@ export class SessionExecutionEngine {
       configService: this.configService,
       agentRuntimeFacade: this.agentRuntimeFacade,
       errorLogger: this.errorLogger,
-      pluginRuntime: getDefaultSessionPluginRuntime(),
+      pluginRuntime: this.pluginRuntimeBundle?.pluginRuntime || getDefaultSessionPluginRuntime(),
       mergeRunConfigWithPluginStrategy: (payload = {}) =>
         this._mergeRunConfigWithPluginStrategy(payload),
       prepareRunConfig: (payload = {}) => this._prepareRunConfig(payload),

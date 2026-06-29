@@ -18,8 +18,10 @@ import { rm } from "node:fs/promises";
 export * as hook from "./hook/index.js";
 
 export class BotManager {
-  constructor(globalConfig) {
+  constructor(globalConfig, { startupContext = {}, pluginRuntimeBundle = null } = {}) {
     this.globalConfig = globalConfig;
+    this.startupContext = startupContext;
+    this.pluginRuntimeBundle = pluginRuntimeBundle;
 
     this.sessionRuntime = createSessionServices(globalConfig);
     this.session = createSessionFacade(this.sessionRuntime);
@@ -43,6 +45,7 @@ export class BotManager {
       workspaceService: this.workspaceService,
       errorLogger: this.errorLogger,
       botManager: this,
+      pluginRuntimeBundle: this.pluginRuntimeBundle,
     });
     this.asyncJobManager = new AsyncJobManager({
       session: this.session,

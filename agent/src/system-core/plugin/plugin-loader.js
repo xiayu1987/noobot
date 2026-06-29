@@ -76,11 +76,18 @@ function ensurePathInsideRoot(rootDir = "", candidatePath = "") {
   return Boolean(relativePath) && !relativePath.startsWith("..") && !path.isAbsolute(relativePath);
 }
 
+export function resolveDefaultPluginRootDirFromLoaderDir(loaderDir = "") {
+  const normalizedLoaderDir = path.resolve(String(loaderDir || "").trim());
+  const directBackendPluginDir = path.resolve(normalizedLoaderDir, "../../../../plugin");
+  const packagedAgentPluginDir = path.resolve(normalizedLoaderDir, "../../../../../plugin");
+  return normalizedLoaderDir.includes(`${path.sep}node_modules${path.sep}`)
+    ? packagedAgentPluginDir
+    : directBackendPluginDir;
+}
+
 export function resolveDefaultPluginRootDir() {
-  return path.resolve(
-    path.dirname(fileURLToPath(import.meta.url)),
-    "../../../../plugin",
-  );
+  const loaderDir = path.dirname(fileURLToPath(import.meta.url));
+  return resolveDefaultPluginRootDirFromLoaderDir(loaderDir);
 }
 
 export async function discoverNoobotPluginManifests({

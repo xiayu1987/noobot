@@ -26,6 +26,7 @@
     "./semantic-transfer": "./src/system-core/semantic-transfer/index.js",
     "./context": "./src/system-core/context/index.js",
     "./config": "./src/system-core/config/index.js",
+    "./plugin": "./src/system-core/plugin/session-plugin-runtime-provider.js",
     "./hook": "./src/system-core/hook/index.js",
     "./package.json": "./package.json"
   },

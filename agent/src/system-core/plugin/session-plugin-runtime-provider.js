@@ -17,6 +17,7 @@ import {
   PLUGIN_RUNTIME_PROPERTY,
   PLUGIN_SLOT_KEY,
 } from "./plugin-constants.js";
+import fs from "node:fs";
 
 const loadedDynamicPlugins = await getNoobotPluginRuntime({
   requiredApiVersion: "1",
@@ -39,6 +40,77 @@ function debugSessionPluginRuntime(message = "", details = {}) {
   console.warn("[noobot:plugin-debug] session plugin runtime", {
     message,
     ...(details && typeof details === "object" ? details : {}),
+  });
+}
+
+function logPluginStartupCheck({ loadedPlugins = null, pluginRuntime = null } = {}) {
+  const diagnostics = buildNoobotPluginDiagnostics(loadedPlugins);
+  const agentSelectors = Array.from(
+    pluginRuntime?.[PLUGIN_RUNTIME_PROPERTY.AGENT_PLUGIN_SELECTORS] || [],
+  );
+  const loaded = Array.isArray(diagnostics?.loaded) ? diagnostics.loaded : [];
+  const harnessLoaded = loaded.some((item = {}) => {
+    const id = String(item.id || "").trim();
+    const pluginKey = String(item.pluginKey || "").trim();
+    return id === "harness" || pluginKey === "harness";
+  });
+  console.warn("[noobot:plugin-startup-check]", {
+    pluginRootDir: diagnostics.pluginRootDir,
+    pluginRootDirExists: diagnostics.pluginRootDir ? fs.existsSync(diagnostics.pluginRootDir) : false,
+    discoveredCount: diagnostics.discoveredCount,
+    loadedCount: diagnostics.loadedCount,
+    skippedCount: diagnostics.skippedCount,
+    loaded: diagnostics.loaded,
+    errors: diagnostics.errors,
+    agentPluginKey: pluginRuntime?.[PLUGIN_RUNTIME_PROPERTY.AGENT_PLUGIN_KEY],
+    agentPluginSelectors: agentSelectors,
+    harnessLoaded,
+    harnessSelectable: agentSelectors.includes("harness"),
+  });
+}
+
+export async function createSessionPluginRuntimeBundle({
+  pluginRootDir = "",
+  requiredApiVersion = "1",
+} = {}) {
+  const loadedPlugins = await getNoobotPluginRuntime({
+    pluginRootDir,
+    requiredApiVersion,
+  }).catch(() => ({
+    pluginRootDir: String(pluginRootDir || ""),
+    requiredApiVersion,
+    discoveredCount: 0,
+    loadedCount: 0,
+    registry: new Map(),
+    errors: [],
+  }));
+  const pluginRuntime = createSessionPluginRuntime({
+    loadedPlugins,
+    descriptors: SESSION_PLUGIN_DESCRIPTORS,
+    resolvePluginKey: resolvePluginKeyByCapability,
+  });
+  debugSessionPluginRuntime("runtime bundle initialized", {
+    diagnostics: buildNoobotPluginDiagnostics(loadedPlugins),
+    runtime: {
+      agentPluginKey: pluginRuntime?.[PLUGIN_RUNTIME_PROPERTY.AGENT_PLUGIN_KEY],
+      agentPluginSelectors: Array.from(pluginRuntime?.[PLUGIN_RUNTIME_PROPERTY.AGENT_PLUGIN_SELECTORS] || []),
+      botPluginKey: pluginRuntime?.[PLUGIN_RUNTIME_PROPERTY.BOT_PLUGIN_KEY],
+      botPluginSelectors: Array.from(pluginRuntime?.[PLUGIN_RUNTIME_PROPERTY.BOT_PLUGIN_SELECTORS] || []),
+    },
+  });
+  logPluginStartupCheck({ loadedPlugins, pluginRuntime });
+  return { loadedPlugins, pluginRuntime };
+}
+
+export function createRunConfigPluginPreparerFromRuntimeBundle({
+  loadedPlugins = loadedDynamicPlugins,
+  pluginRuntime = defaultSessionPluginRuntime,
+  ...options
+} = {}) {
+  return createRunConfigPluginPreparer({
+    ...options,
+    loadedPlugins,
+    pluginRuntime,
   });
 }
 
@@ -106,7 +178,7 @@ export function getDefaultLoadedDynamicPlugins() {
 }
 
 export function createDefaultRunConfigPluginPreparer(options = {}) {
-  return createRunConfigPluginPreparer({
+  return createRunConfigPluginPreparerFromRuntimeBundle({
     ...options,
     loadedPlugins: loadedDynamicPlugins,
     pluginRuntime: defaultSessionPluginRuntime,
