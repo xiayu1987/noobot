@@ -232,8 +232,17 @@
       const logLines = [];
       let pendingLogFlush = false;
       let lastMessage = "";
+      let currentStep = "starting";
+      let superAdminCompleted = false;
+
+      const dependencyPhases = new Set(["dependency", "dependency-missing"]);
 
       function hideForms() { configForm.classList.add("hidden"); superAdminForm.classList.add("hidden"); }
+      function setStep(step) {
+        currentStep = step || currentStep;
+        if (currentStep !== "super-admin") superAdminForm.classList.add("hidden");
+        if (currentStep !== "config") configForm.classList.add("hidden");
+      }
       function normalizeLanguage(language) { return language === "en-US" ? "en-US" : "zh-CN"; }
       function normalizeModel(model, options) {
         const value = String(model || "").trim();
@@ -290,6 +299,11 @@
       }
 
       function renderSuperAdminForm(superAdmin) {
+        if (superAdminCompleted || currentStep === "dependency" || currentStep === "config" || currentStep === "starting") {
+          appendLogLine("Super admin setup is already completed for this startup session. Continuing...");
+          return;
+        }
+        setStep("super-admin");
         configForm.classList.add("hidden");
         superAdminLanguage.value = normalizeLanguage(superAdmin?.language);
         renderModelOptions(superAdmin);
@@ -302,6 +316,7 @@
       }
 
       function renderConfigForm(params) {
+        setStep("config");
         requiredParams = Array.isArray(params) ? params : [];
         configFields.textContent = "";
         for (const item of requiredParams) {
@@ -333,16 +348,17 @@
           message.textContent = status.message;
           appendLogLine(status.message);
         }
+        if (dependencyPhases.has(status.phase)) {
+          superAdminCompleted = true;
+          setStep("dependency");
+        }
         if (status.phase === "super-admin-required") return renderSuperAdminForm(status.superAdmin);
         if (status.phase === "config-optional") return renderConfigForm(status.params);
         if (status.phase === "dependency-missing") {
           const text = status.message || "A selected dependency is missing and cannot be installed automatically.";
           message.textContent = text;
           appendLogLine(text);
-          configForm.classList.add("hidden");
-          superAdminForm.classList.remove("hidden");
-          superAdminError.textContent = text;
-          superAdminError.classList.remove("hidden");
+          setStep("dependency");
           retry.classList.remove("hidden");
           return;
         }
@@ -371,10 +387,14 @@
           return;
         }
         saveSuperAdmin.disabled = true;
+        superAdminCompleted = true;
+        setStep("dependency");
         try {
           if (Object.values(dependencies).some(Boolean)) message.textContent = "Saving setup and checking selected dependencies...";
           const result = await window.noobotDesktop?.saveSuperAdmin({ language, model, userId, connectCode, dependencies });
           if (!result?.ok) {
+            superAdminCompleted = false;
+            currentStep = "super-admin";
             renderSuperAdminForm(result?.superAdmin || { language, model });
             superAdminError.textContent = "Please complete super admin setup.";
             superAdminError.classList.remove("hidden");
@@ -386,9 +406,15 @@
           const text = error?.message || String(error);
           message.textContent = text;
           appendLogLine(text);
-          superAdminForm.classList.remove("hidden");
-          superAdminError.textContent = text;
-          superAdminError.classList.remove("hidden");
+          if (currentStep === "dependency") {
+            retry.classList.remove("hidden");
+          } else {
+            currentStep = "super-admin";
+            superAdminCompleted = false;
+            superAdminForm.classList.remove("hidden");
+            superAdminError.textContent = text;
+            superAdminError.classList.remove("hidden");
+          }
         } finally {
           saveSuperAdmin.disabled = false;
         }
