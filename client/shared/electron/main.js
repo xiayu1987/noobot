@@ -141,7 +141,7 @@ const dependencySpecs = {
     },
     darwinAppBundle: "LibreOffice.app",
     darwinDmg: {
-      version: process.env.NOOBOT_LIBREOFFICE_MAC_VERSION || "25.2.6",
+      version: process.env.NOOBOT_LIBREOFFICE_MAC_VERSION || "",
       url: process.env.NOOBOT_LIBREOFFICE_MAC_DMG_URL || "",
     },
   },
@@ -288,12 +288,62 @@ function withTimeout(promise, timeoutMs, label) {
   });
 }
 
+function compareVersionDesc(a, b) {
+  const left = String(a || "").split(".").map((part) => Number.parseInt(part, 10) || 0);
+  const right = String(b || "").split(".").map((part) => Number.parseInt(part, 10) || 0);
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    const diff = (right[index] || 0) - (left[index] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+function getMacLibreOfficeDmgUrlForVersion(version) {
+  const arch = process.arch === "arm64" ? "aarch64" : "x86_64";
+  return `https://download.documentfoundation.org/libreoffice/stable/${version}/mac/${arch}/LibreOffice_${version}_MacOS_${arch}.dmg`;
+}
+
 function getMacLibreOfficeDmgUrl(spec) {
   const configuredUrl = String(spec.darwinDmg?.url || "").trim();
   if (configuredUrl) return configuredUrl;
-  const version = String(spec.darwinDmg?.version || "25.2.6").trim();
-  const arch = process.arch === "arm64" ? "aarch64" : "x86_64";
-  return `https://download.documentfoundation.org/libreoffice/stable/${version}/mac/${arch}/LibreOffice_${version}_MacOS_${arch}.dmg`;
+  const version = String(spec.darwinDmg?.version || "").trim();
+  return version ? getMacLibreOfficeDmgUrlForVersion(version) : "";
+}
+
+async function fetchLibreOfficeStableVersions() {
+  const indexUrl = "https://download.documentfoundation.org/libreoffice/stable/";
+  appendStartupTrace(`[dependency:dmg:versions:start] url=${indexUrl}`);
+  const result = await runProcess("curl", ["-L", "--fail", "--silent", "--show-error", "--connect-timeout", "30", indexUrl], {
+    timeoutMs: desktopDependencyTimeouts.packageQueryMs,
+  });
+  appendStartupTrace(`[dependency:dmg:versions:finish] ok=${result.ok}; code=${result.code ?? ""}; error=${result.error || ""}`);
+  if (!result.ok) return [];
+  const versions = Array.from(new Set(
+    String(result.stdout || "")
+      .matchAll(/href=["'](\d+\.\d+\.\d+)\/["']/gi)
+      .map((match) => match[1]),
+  )).sort(compareVersionDesc);
+  appendStartupTrace(`[dependency:dmg:versions:list] versions=${versions.join(",")}`);
+  return versions;
+}
+
+async function getMacLibreOfficeDmgUrlCandidates(spec) {
+  const configuredUrl = String(spec.darwinDmg?.url || "").trim();
+  if (configuredUrl) return [configuredUrl];
+
+  const candidates = [];
+  const configuredVersion = String(spec.darwinDmg?.version || "").trim();
+  if (configuredVersion) candidates.push(getMacLibreOfficeDmgUrlForVersion(configuredVersion));
+
+  const stableVersions = await fetchLibreOfficeStableVersions();
+  for (const version of stableVersions) candidates.push(getMacLibreOfficeDmgUrlForVersion(version));
+
+  // Last-resort fallbacks for offline directory parsing or transient index failures.
+  for (const version of ["26.2.4", "26.2.3", "26.2.2", "25.8.7", "25.8.6"]) {
+    candidates.push(getMacLibreOfficeDmgUrlForVersion(version));
+  }
+  return Array.from(new Set(candidates.filter(Boolean)));
 }
 
 function findLibreOfficeAppInVolume(volumePath) {
@@ -327,15 +377,34 @@ async function downloadFileWithCurl(url, destinationPath, { timeoutMs }) {
   }
 }
 
+async function downloadFirstAvailableLibreOfficeDmg(spec, destinationPath) {
+  const candidates = await getMacLibreOfficeDmgUrlCandidates(spec);
+  const failures = [];
+  appendStartupTrace(`[dependency:dmg:download:candidates] count=${candidates.length}; urls=${candidates.join(" | ")}`);
+  for (const url of candidates) {
+    try {
+      await fs.promises.rm(destinationPath, { force: true });
+      await downloadFileWithCurl(url, destinationPath, { timeoutMs: desktopDependencyTimeouts.downloadMs });
+      return url;
+    } catch (error) {
+      const message = error?.message || String(error);
+      failures.push(`${url} => ${message.slice(0, 500)}`);
+      appendStartupTrace(`[dependency:dmg:download:candidate-failed] url=${url}; error=${message.slice(0, 1000)}`);
+      await fs.promises.rm(destinationPath, { force: true }).catch(() => {});
+    }
+  }
+  throw new Error(`Failed to download LibreOffice DMG from official candidates. Tried: ${failures.join(" ; ")}. You can set NOOBOT_LIBREOFFICE_MAC_DMG_URL to a verified LibreOffice macOS DMG URL, or install manually from https://www.libreoffice.org/download/download-libreoffice/`);
+}
+
 async function installLibreOfficeFromDmg(spec) {
   if (process.platform !== "darwin" || spec.label !== "LibreOffice") return null;
   const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "noobot-libreoffice-"));
   const dmgPath = path.join(tempDir, "LibreOffice.dmg");
   let mountPoint = "";
   try {
-    const dmgUrl = getMacLibreOfficeDmgUrl(spec);
     sendStatus({ phase: "dependency", message: `Downloading ${spec.label} from the official LibreOffice site...` });
-    await downloadFileWithCurl(dmgUrl, dmgPath, { timeoutMs: desktopDependencyTimeouts.downloadMs });
+    const dmgUrl = await downloadFirstAvailableLibreOfficeDmg(spec, dmgPath);
+    appendStartupTrace(`[dependency:dmg:download:selected] url=${dmgUrl}`);
 
     sendStatus({ phase: "dependency", message: `Mounting ${spec.label} installer...` });
     appendStartupTrace(`[dependency:dmg:attach:start] path=${dmgPath}; timeoutMs=${desktopDependencyTimeouts.dmgAttachMs}`);
