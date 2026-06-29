@@ -335,6 +335,17 @@
         }
         if (status.phase === "super-admin-required") return renderSuperAdminForm(status.superAdmin);
         if (status.phase === "config-optional") return renderConfigForm(status.params);
+        if (status.phase === "dependency-missing") {
+          const text = status.message || "A selected dependency is missing and cannot be installed automatically.";
+          message.textContent = text;
+          appendLogLine(text);
+          configForm.classList.add("hidden");
+          superAdminForm.classList.remove("hidden");
+          superAdminError.textContent = text;
+          superAdminError.classList.remove("hidden");
+          retry.classList.remove("hidden");
+          return;
+        }
         hideForms();
         retry.classList.toggle("hidden", status.phase !== "error");
       }
@@ -372,7 +383,11 @@
           superAdminForm.classList.add("hidden");
           message.textContent = "Basic setup saved. Checking optional variables...";
         } catch (error) {
-          superAdminError.textContent = error?.message || String(error);
+          const text = error?.message || String(error);
+          message.textContent = text;
+          appendLogLine(text);
+          superAdminForm.classList.remove("hidden");
+          superAdminError.textContent = text;
           superAdminError.classList.remove("hidden");
         } finally {
           saveSuperAdmin.disabled = false;
