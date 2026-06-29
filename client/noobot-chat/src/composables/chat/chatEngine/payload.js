@@ -6,6 +6,17 @@
 import { normalizeSelectedConnectors } from "../../../shared/models/sessionModel";
 import { normalizeTrimmedString } from "./utils";
 
+function normalizeSelectedPluginKeys(selectedPlugins) {
+  const source = Array.isArray(selectedPlugins?.value)
+    ? selectedPlugins.value
+    : Array.isArray(selectedPlugins)
+      ? selectedPlugins
+      : [];
+  return source
+    .map((pluginKey) => normalizeTrimmedString(pluginKey))
+    .filter(Boolean);
+}
+
 export function buildChatPayload({
   userId,
   activeSession,
@@ -49,9 +60,7 @@ export function buildChatPayload({
       selectedConnectors: normalizeSelectedConnectors(
         activeSession?.value?.connectorPanelState?.selectedConnectors || {},
       ),
-      selectedPlugins: (Array.isArray(selectedPlugins?.value) ? selectedPlugins.value : [])
-        .map((pluginKey) => normalizeTrimmedString(pluginKey))
-        .filter(Boolean),
+      selectedPlugins: normalizeSelectedPluginKeys(selectedPlugins),
       ...(reuseExistingUserTurn ? {
         reuseExistingUserTurn: true,
       } : {}),

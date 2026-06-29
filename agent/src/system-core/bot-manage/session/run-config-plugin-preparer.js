@@ -32,6 +32,19 @@ export const AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS =
 export const AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS =
   TIME_THRESHOLDS.capability.separateModelMinTimeoutMs;
 
+function isPluginDebugEnabled() {
+  const value = String(process.env.NOOBOT_PLUGIN_DEBUG || "").trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes" || value === "on";
+}
+
+function debugPluginPreparer(message = "", details = {}) {
+  if (!isPluginDebugEnabled()) return;
+  console.warn("[noobot:plugin-debug] run config plugin preparer", {
+    message,
+    ...(details && typeof details === "object" ? details : {}),
+  });
+}
+
 export class RunConfigPluginPreparer {
   constructor({
     globalConfig = {},
@@ -117,6 +130,15 @@ export class RunConfigPluginPreparer {
       .trim()
       .toLowerCase();
     const resolvedMode = normalizedMode === "on" ? "on" : "off";
+    debugPluginPreparer("resolve agent plugin", {
+      selectedPlugins,
+      selectors: Array.from(agentPluginSelectors || []),
+      agentPluginSelected,
+      effectiveMode: effectiveAgentPlugin?.mode,
+      runMode: runAgentPlugin?.mode,
+      resolvedMode,
+      pluginKey: resolveAgentPluginKey(this.pluginRuntime),
+    });
     if (resolvedMode !== "on") return { enabled: false, mode: "off" };
     const basePath =
       typeof options.basePath === "string" && options.basePath.trim()
@@ -234,6 +256,15 @@ export class RunConfigPluginPreparer {
       botPluginSelected || normalizedRunMode === "on" || normalizedEffectiveMode === "on"
         ? "on"
         : "off";
+    debugPluginPreparer("resolve bot plugin", {
+      selectedPlugins,
+      selectors: Array.from(botPluginSelectors || []),
+      botPluginSelected,
+      effectiveMode: effectiveBotPlugin?.mode,
+      runMode: runBotPlugin?.mode,
+      resolvedMode,
+      pluginKey: resolveBotPluginKey(this.pluginRuntime),
+    });
     if (resolvedMode !== "on") return { enabled: false, mode: "off" };
     const options = {
       ...(effectiveBotPlugin && typeof effectiveBotPlugin === "object" ? effectiveBotPlugin : {}),
@@ -351,8 +382,11 @@ export class RunConfigPluginPreparer {
         capability,
       );
       if (typeof registerPlugin === "function") {
+        debugPluginPreparer("register plugin", { pluginName, capability, runtimeKey });
         registerPlugin(pluginApi, options);
         defineRegistrationFlags(manager, registrationFlags);
+      } else {
+        debugPluginPreparer("register plugin missing", { pluginName, capability, runtimeKey });
       }
     } else if (typeof pluginApi?.policy?.appendDenyToolNames === "function") {
       // Keep per-run policy patch behavior even when hook registration is reused.

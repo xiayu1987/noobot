@@ -50,4 +50,14 @@ describe("buildChatPayload model preferences", () => {
       selectedPlugins: ["harness", "workflow"],
     });
   });
+
+  it("accepts selectedPlugins as a plain array", () => {
+    const payload = buildChatPayload({
+      userId: "admin",
+      message: "hello",
+      selectedPlugins: [" harness ", "workflow", ""],
+    });
+
+    expect(payload.config.selectedPlugins).toEqual(["harness", "workflow"]);
+  });
 });

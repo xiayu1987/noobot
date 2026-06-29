@@ -48,6 +48,23 @@ function resolveConfigRunTimeoutMs(config = {}) {
   });
 }
 
+function isPluginDebugEnabled() {
+  const value = String(process.env.NOOBOT_PLUGIN_DEBUG || "").trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes" || value === "on";
+}
+
+function summarizePluginConfig(plugins = {}) {
+  if (!plugins || typeof plugins !== "object" || Array.isArray(plugins)) return {};
+  return Object.fromEntries(
+    Object.entries(plugins).map(([key, value]) => [
+      key,
+      value && typeof value === "object"
+        ? { enabled: value.enabled, mode: value.mode }
+        : value,
+    ]),
+  );
+}
+
 async function resolveEffectiveRunTimeoutMs({ bot: _bot, userId: _userId = "", runConfig = {} } = {}) {
   const runConfigTimeoutMs = resolveConfigRunTimeoutMs(runConfig);
   if (runConfigTimeoutMs !== undefined && runConfigTimeoutMs !== null) {
@@ -380,6 +397,15 @@ export function registerChatWebSocketServer(
           ...normalizeRunConfig(config),
           turnScopeId: String(turnScopeId || config?.turnScopeId || "").trim(),
         };
+        if (isPluginDebugEnabled()) {
+          console.warn("[noobot:plugin-debug] websocket run config", {
+            userId: String(userId || "").trim(),
+            sessionId: String(sessionId || "").trim(),
+            payloadSelectedPlugins: config?.selectedPlugins,
+            normalizedSelectedPlugins: normalizedRunConfig?.selectedPlugins,
+            normalizedPlugins: summarizePluginConfig(normalizedRunConfig?.plugins),
+          });
+        }
         const activeBot = resolveBot();
         const runTimeoutMs = await resolveEffectiveRunTimeoutMs({
           bot: activeBot,
