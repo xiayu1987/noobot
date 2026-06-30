@@ -740,6 +740,108 @@ test("read_file: configured super user can read another user workspace through /
   assert.equal(result.resolvedPath, otherUserFile);
 });
 
+test("read_file: regular user cannot read an absolute file outside allowed roots", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workspace-root-"));
+  const outsideRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-outside-root-"));
+  const basePath = path.join(workspaceRoot, "u-test");
+  const outsideFile = path.join(outsideRoot, "secret.txt");
+  await fs.mkdir(basePath, { recursive: true });
+  await fs.writeFile(outsideFile, "secret", "utf8");
+
+  const agentContext = buildAgentContext(basePath, "u-test", {
+    runtime: {
+      globalConfig: { workspaceRoot },
+    },
+  });
+  const tool = createFileTool({ agentContext }).find((item) => item?.name === "read_file");
+  assert.ok(tool);
+
+  const runnerResult = await executeToolCall({
+    call: {
+      id: "call_regular_user_read_outside_absolute_path",
+      name: "read_file",
+      args: { filePath: outsideFile },
+    },
+    tool,
+    runtime: agentContext.execution.controllers.runtime,
+    agentContext,
+  });
+  const result = parseToolResult(runnerResult.toolResultText);
+
+  assert.equal(result.toolName, "read_file");
+  assert.equal(result.ok, false);
+  assert.match(String(result.message || result.error || ""), /scope|范围|允许|path/i);
+});
+
+test("read_file: super user can read an absolute file outside workspace root", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workspace-root-"));
+  const outsideRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-outside-root-"));
+  const basePath = path.join(workspaceRoot, "super-root-user");
+  const outsideFile = path.join(outsideRoot, "visible.txt");
+  await fs.mkdir(basePath, { recursive: true });
+  await fs.writeFile(outsideFile, "visible-outside", "utf8");
+
+  const agentContext = buildAgentContext(basePath, "super-root-user", {
+    runtime: {
+      systemRuntime: { userId: "super-root-user", sessionId: "s-1", rootSessionId: "s-1", isSuperUser: true, config: {} },
+      globalConfig: { workspaceRoot, super_admin: { user_id: "super-root-user" } },
+    },
+  });
+  const tool = createFileTool({ agentContext }).find((item) => item?.name === "read_file");
+  assert.ok(tool);
+
+  const runnerResult = await executeToolCall({
+    call: {
+      id: "call_super_user_read_outside_absolute_path",
+      name: "read_file",
+      args: { filePath: outsideFile },
+    },
+    tool,
+    runtime: agentContext.execution.controllers.runtime,
+    agentContext,
+  });
+  const result = parseToolResult(runnerResult.toolResultText);
+
+  assert.equal(result.toolName, "read_file");
+  assert.equal(result.ok, true);
+  assert.equal(result.content, "1 | visible-outside");
+  assert.equal(result.resolvedPath, outsideFile);
+});
+
+test("write_file: super user can write an absolute file outside workspace root", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workspace-root-"));
+  const outsideRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-outside-root-"));
+  const basePath = path.join(workspaceRoot, "super-root-user");
+  const outsideFile = path.join(outsideRoot, "created", "write-ok.txt");
+  await fs.mkdir(basePath, { recursive: true });
+
+  const agentContext = buildAgentContext(basePath, "super-root-user", {
+    runtime: {
+      systemRuntime: { userId: "super-root-user", sessionId: "s-1", rootSessionId: "s-1", isSuperUser: true, config: {} },
+      globalConfig: { workspaceRoot, super_admin: { user_id: "super-root-user" } },
+    },
+  });
+  const tool = createFileTool({ agentContext }).find((item) => item?.name === "write_file");
+  assert.ok(tool);
+
+  const runnerResult = await executeToolCall({
+    call: {
+      id: "call_super_user_write_outside_absolute_path",
+      name: "write_file",
+      args: { filePath: outsideFile, content: "write-outside" },
+    },
+    tool,
+    runtime: agentContext.execution.controllers.runtime,
+    agentContext,
+  });
+  const result = parseToolResult(runnerResult.toolResultText);
+
+  assert.equal(result.toolName, "write_file");
+  assert.equal(result.ok, true);
+  assert.equal(result.resolvedPath, outsideFile);
+  assert.equal(await fs.readFile(outsideFile, "utf8"), "write-outside");
+});
+
 test("read_file: configured super user cross-workspace read still respects mustExist", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workspace-root-"));
   const basePath = path.join(workspaceRoot, "super-root-user");
