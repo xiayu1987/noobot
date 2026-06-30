@@ -372,12 +372,12 @@ export async function assertAndResolveUserWorkspaceFilePath({
     ? path.resolve(normalizedPath)
     : path.resolve(workspacePath, normalizedPath));
 
+  const isSuperUser = isSuperUserAgentContext(agentContext);
   const allowedRoots = [
     workspacePath,
-    ...(isSuperUserAgentContext(agentContext) ? [resolveWorkspaceRoot(agentContext)] : []),
     ...resolveAdditionalAllowedRoots(agentContext),
   ].filter(Boolean);
-  const inAllowedScope = allowedRoots.some((rootPath) =>
+  const inAllowedScope = isSuperUser || allowedRoots.some((rootPath) =>
     isWithinBasePath(rootPath, resolvedTargetPath),
   );
   if (!inAllowedScope) {
