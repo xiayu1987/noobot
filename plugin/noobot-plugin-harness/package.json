@@ -1,6 +1,6 @@
 {
   "name": "noobot-plugin-harness",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "private": true,
   "type": "module",
   "main": "src/index.js",
