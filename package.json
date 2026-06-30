@@ -1,6 +1,6 @@
 {
   "name": "noobot",
-  "version": "1.1.0",
+  "version": "3.0.0",
   "private": true,
   "workspaces": [
     "service",
@@ -19,6 +19,8 @@
   ],
   "scripts": {
     "project:launcher": "node ./scripts/project-launcher.mjs",
+    "release:version": "node ./scripts/bump-version.mjs",
+    "release": "node ./scripts/release.mjs",
     "install:all": "npm install --workspaces",
     "build": "npm run -w client/startup build && npm run -w client/noobot-chat build",
     "check:legacy-time-keys": "node ./scripts/check-legacy-time-keys.mjs",

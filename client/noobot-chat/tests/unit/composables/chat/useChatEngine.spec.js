@@ -412,7 +412,7 @@ describe("useChatEngine", () => {
     expect(fetchSessionDetail).toHaveBeenCalledWith("local-stop-refresh");
     expect(applySessionDetail).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: "local-stop-refresh" }),
-      { preserveCurrentMessages: true, scrollToBottom: false },
+      { preserveCurrentMessages: false, scrollToBottom: false },
     );
     expect(deps.chatWebSocketClient.isStopRequested).toHaveBeenCalled();
   });

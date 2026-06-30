@@ -209,6 +209,139 @@ export function buildDependencyRuntimeEnv({
   return output;
 }
 
+function hasCustomDependencySource(env = {}, key = "") {
+  return Boolean(normalizeString(env[key]));
+}
+
+function buildDependencySourceItem({
+  key,
+  name,
+  available,
+  installMode,
+  sourceType,
+  customEnvKeys = [],
+  configKeys = [],
+} = {}) {
+  const normalizedSourceType = normalizeString(sourceType);
+  return {
+    key: normalizeString(key),
+    name: normalizeString(name),
+    available: Boolean(available),
+    installMode: normalizeString(installMode),
+    sourceType: normalizedSourceType,
+    hasCustomSource: normalizedSourceType === "self-hosted",
+    customSourceEnvKeys: customEnvKeys.map(normalizeString).filter(Boolean),
+    configKeys: configKeys.map(normalizeString).filter(Boolean),
+  };
+}
+
+function summarizeDarwinDependencySources({ runtimeEnv = {}, env = process.env, platform = "darwin", app = null, exists = fs.existsSync } = {}) {
+  const libreOfficeCustom = hasCustomDependencySource(env, "NOOBOT_LIBREOFFICE_MAC_DMG_URL");
+  const ffmpegCustom = hasCustomDependencySource(env, "NOOBOT_FFMPEG_MAC_URL");
+  const nodeCustom = hasCustomDependencySource(env, "NOOBOT_NODEJS_MAC_URL");
+  const nodeVersionCustom = hasCustomDependencySource(env, "NOOBOT_NODEJS_MAC_VERSION");
+  const nodePath = resolveBinaryPath("node", { app, env: { ...env, PATH: runtimeEnv.PATH || env.PATH || "" }, platform, exists });
+  return [
+    buildDependencySourceItem({
+      key: "libreoffice",
+      name: "LibreOffice",
+      available: Boolean(runtimeEnv.LIBRE_OFFICE_EXE),
+      installMode: libreOfficeCustom ? "dmg" : "homebrew-or-dmg",
+      sourceType: libreOfficeCustom ? "self-hosted" : "package-manager-or-official",
+      customEnvKeys: libreOfficeCustom ? ["NOOBOT_LIBREOFFICE_MAC_DMG_URL"] : [],
+      configKeys: ["darwinDmg.url", "packages.darwin.brew"],
+    }),
+    buildDependencySourceItem({
+      key: "ffmpeg",
+      name: "FFmpeg",
+      available: Boolean(runtimeEnv.NOOBOT_FFMPEG_PATH),
+      installMode: ffmpegCustom ? "managed" : "homebrew-or-managed",
+      sourceType: ffmpegCustom ? "self-hosted" : "package-manager-or-official",
+      customEnvKeys: ffmpegCustom ? ["NOOBOT_FFMPEG_MAC_URL"] : [],
+      configKeys: ["darwinManaged.url", "packages.darwin.brew"],
+    }),
+    buildDependencySourceItem({
+      key: "nodejs",
+      name: "Node.js",
+      available: Boolean(nodePath),
+      installMode: nodeCustom || nodeVersionCustom ? "managed" : "homebrew-or-managed",
+      sourceType: nodeCustom ? "self-hosted" : "package-manager-or-official",
+      customEnvKeys: [
+        ...(nodeCustom ? ["NOOBOT_NODEJS_MAC_URL"] : []),
+        ...(nodeVersionCustom ? ["NOOBOT_NODEJS_MAC_VERSION"] : []),
+      ],
+      configKeys: ["darwinManaged.url", "darwinManaged.version", "packages.darwin.brew"],
+    }),
+  ];
+}
+
+function summarizeWin32DependencySources({ runtimeEnv = {}, env = process.env, platform = "win32", exists = fs.existsSync } = {}) {
+  const libreOfficeCustom = hasCustomDependencySource(env, "NOOBOT_LIBREOFFICE_WIN_URL");
+  const ffmpegCustom = hasCustomDependencySource(env, "NOOBOT_FFMPEG_WIN_URL");
+  const nodeCustom = hasCustomDependencySource(env, "NOOBOT_NODEJS_WIN_URL");
+  const nodeVersionCustom = hasCustomDependencySource(env, "NOOBOT_NODEJS_WIN_VERSION");
+  const pathEnv = runtimeEnv.PATH || env.PATH || "";
+  const nodePath = resolveBinaryPath("node", { env: { ...env, PATH: pathEnv }, platform, exists });
+  return [
+    buildDependencySourceItem({
+      key: "libreoffice",
+      name: "LibreOffice",
+      available: Boolean(runtimeEnv.LIBRE_OFFICE_EXE),
+      installMode: libreOfficeCustom ? "managed" : "winget-or-choco",
+      sourceType: libreOfficeCustom ? "self-hosted" : "package-manager",
+      customEnvKeys: libreOfficeCustom ? ["NOOBOT_LIBREOFFICE_WIN_URL"] : [],
+      configKeys: ["packages.win32.winget", "packages.win32.choco"],
+    }),
+    buildDependencySourceItem({
+      key: "ffmpeg",
+      name: "FFmpeg",
+      available: Boolean(runtimeEnv.NOOBOT_FFMPEG_PATH),
+      installMode: ffmpegCustom ? "managed" : "winget-or-choco",
+      sourceType: ffmpegCustom ? "self-hosted" : "package-manager",
+      customEnvKeys: ffmpegCustom ? ["NOOBOT_FFMPEG_WIN_URL"] : [],
+      configKeys: ["packages.win32.winget", "packages.win32.choco"],
+    }),
+    buildDependencySourceItem({
+      key: "nodejs",
+      name: "Node.js",
+      available: Boolean(nodePath),
+      installMode: nodeCustom || nodeVersionCustom ? "managed" : "winget-or-choco",
+      sourceType: nodeCustom ? "self-hosted" : "package-manager",
+      customEnvKeys: [
+        ...(nodeCustom ? ["NOOBOT_NODEJS_WIN_URL"] : []),
+        ...(nodeVersionCustom ? ["NOOBOT_NODEJS_WIN_VERSION"] : []),
+      ],
+      configKeys: ["packages.win32.winget", "packages.win32.choco"],
+    }),
+  ];
+}
+
+export function summarizeDependencySources({
+  runtimeEnv = {},
+  env = process.env,
+  platform = process.platform,
+  app = null,
+  exists = fs.existsSync,
+} = {}) {
+  const normalizedPlatform = normalizeString(platform) || process.platform;
+  if (normalizedPlatform === "darwin") {
+    return {
+      platform: normalizedPlatform,
+      dependencies: summarizeDarwinDependencySources({ runtimeEnv, env, platform: normalizedPlatform, app, exists }),
+    };
+  }
+  if (normalizedPlatform === "win32") {
+    return {
+      platform: normalizedPlatform,
+      dependencies: summarizeWin32DependencySources({ runtimeEnv, env, platform: normalizedPlatform, exists }),
+    };
+  }
+  return {
+    platform: normalizedPlatform,
+    dependencies: [],
+  };
+}
+
 export function summarizeDependencyRuntimeEnv(runtimeEnv = {}) {
   return {
     hasFfmpeg: Boolean(runtimeEnv.NOOBOT_FFMPEG_PATH),

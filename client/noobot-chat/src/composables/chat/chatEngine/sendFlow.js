@@ -271,6 +271,7 @@ export function createChatEngineSender({
           fetchSessionDetail,
           applySessionDetail,
           refreshSessionConnectorsAsync,
+          preserveCurrentMessages: false,
         });
         locateDoneMessage?.();
         finalizePendingResendOperation?.({ finalOnly: true });
@@ -309,6 +310,7 @@ export function createChatEngineSender({
           fetchSessionDetail,
           applySessionDetail,
           refreshSessionConnectorsAsync,
+          preserveCurrentMessages: false,
         });
         locateDoneMessage?.();
         finalizePendingResendOperation?.({ finalOnly: true });

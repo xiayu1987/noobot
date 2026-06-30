@@ -14,7 +14,7 @@ import os from "node:os";
 import { createDependencyDetector } from "../../electron/dependency-detect.js";
 import { createDependencyInstaller } from "../../electron/dependency-installer.js";
 import { createMacDependencyInstallerTools } from "../../electron/dependency-managed-mac.js";
-import { buildDependencyRuntimeEnv } from "../../electron/dependency-runtime-env.js";
+import { buildDependencyRuntimeEnv, summarizeDependencySources } from "../../electron/dependency-runtime-env.js";
 import { getDependencyProxyEnv, getCurlProxyArgs, maskDependencyProxyUrl, normalizeDependencyProxyUrl, validateDependencyProxy } from "../../electron/dependency-proxy.js";
 
 function withPlatform(platform, fn) {
@@ -59,6 +59,68 @@ test("darwin managed dependency probe uses managedVersionArgs", async () => {
 
     assert.equal(installed, true);
     assert.deepEqual(calls, [{ command: "/managed/ffmpeg/bin/ffmpeg", args: ["-version"] }]);
+  });
+});
+
+test("darwin dependency source summary is redacted for model context", async () => {
+  await withPlatform("darwin", async () => {
+    const summary = summarizeDependencySources({
+      platform: "darwin",
+      runtimeEnv: {
+        LIBRE_OFFICE_EXE: "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+        NOOBOT_FFMPEG_PATH: "/Users/me/Library/Application Support/Noobot/managed-dependencies/ffmpeg/bin/ffmpeg",
+        PATH: "/Users/me/Library/Application Support/Noobot/managed-dependencies/nodejs/bin:/usr/bin",
+      },
+      env: {
+        NOOBOT_LIBREOFFICE_MAC_DMG_URL: "https://user:secret@example.internal/libreoffice.dmg?token=abc",
+        NOOBOT_FFMPEG_MAC_URL: "https://example.internal/ffmpeg.tar.gz?sig=secret",
+        NOOBOT_NODEJS_MAC_URL: "https://example.internal/node.tar.xz?token=secret",
+        NOOBOT_NODEJS_MAC_VERSION: "v24.0.0",
+      },
+      exists: (filePath) => filePath.endsWith("/node"),
+    });
+
+    const text = JSON.stringify(summary);
+    assert.equal(summary.platform, "darwin");
+    assert.equal(summary.dependencies.find((item) => item.name === "LibreOffice")?.key, "libreoffice");
+    assert.equal(summary.dependencies.find((item) => item.name === "LibreOffice")?.sourceType, "self-hosted");
+    assert.equal(summary.dependencies.find((item) => item.name === "FFmpeg")?.hasCustomSource, true);
+    assert.equal(summary.dependencies.find((item) => item.name === "Node.js")?.available, true);
+    assert.ok(summary.dependencies.find((item) => item.name === "Node.js")?.configKeys.includes("darwinManaged.url"));
+    assert.match(text, /NOOBOT_FFMPEG_MAC_URL/);
+    assert.doesNotMatch(text, /example\.internal|secret|token=|sig=|\/Users\/me|Application Support/);
+  });
+});
+
+test("win32 dependency source summary is platform neutral and redacted", async () => {
+  await withPlatform("win32", async () => {
+    const summary = summarizeDependencySources({
+      platform: "win32",
+      runtimeEnv: {
+        LIBRE_OFFICE_EXE: "C:\\Program Files\\LibreOffice\\program\\soffice.exe",
+        NOOBOT_FFMPEG_PATH: "C:\\Users\\me\\AppData\\Local\\Noobot\\managed-dependencies\\ffmpeg\\bin\\ffmpeg.exe",
+        PATH: "C:\\Users\\me\\AppData\\Local\\Noobot\\managed-dependencies\\nodejs\\bin;C:\\Windows\\System32",
+      },
+      env: {
+        NOOBOT_LIBREOFFICE_WIN_URL: "https://user:secret@example.internal/libreoffice.exe?token=abc",
+        NOOBOT_FFMPEG_WIN_URL: "https://example.internal/ffmpeg.zip?sig=secret",
+        NOOBOT_NODEJS_WIN_URL: "https://example.internal/node.zip?token=secret",
+        NOOBOT_NODEJS_WIN_VERSION: "v24.0.0",
+      },
+      exists: (filePath) => String(filePath).endsWith("node.exe"),
+    });
+
+    const text = JSON.stringify(summary);
+    assert.equal(summary.platform, "win32");
+    assert.equal(summary.dependencies.length, 3);
+    assert.deepEqual(summary.dependencies.map((item) => item.key), ["libreoffice", "ffmpeg", "nodejs"]);
+    assert.equal(summary.dependencies.find((item) => item.key === "libreoffice")?.installMode, "managed");
+    assert.equal(summary.dependencies.find((item) => item.key === "ffmpeg")?.sourceType, "self-hosted");
+    assert.equal(summary.dependencies.find((item) => item.key === "nodejs")?.available, true);
+    assert.ok(summary.dependencies.find((item) => item.key === "nodejs")?.customSourceEnvKeys.includes("NOOBOT_NODEJS_WIN_URL"));
+    assert.ok(summary.dependencies.find((item) => item.key === "nodejs")?.configKeys.includes("packages.win32.winget"));
+    assert.match(text, /NOOBOT_FFMPEG_WIN_URL/);
+    assert.doesNotMatch(text, /example\.internal|secret|token=|sig=|C:\\Users|AppData|Program Files/);
   });
 });
 
