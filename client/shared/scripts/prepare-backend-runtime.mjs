@@ -148,6 +148,7 @@ async function main() {
 
   await assertExists(path.join(backendRoot, 'service/app.js'), 'Prepared backend entry');
   await assertExists(path.join(backendRoot, 'agent/src/system-core/system-prompt/base.md'), 'Prepared backend system prompt');
+  await assertExists(path.join(backendRoot, 'node_modules/noobot-agent/package.json'), 'Prepared backend dependency noobot-agent');
   await assertExists(path.join(backendRoot, 'node_modules/express/package.json'), 'Prepared backend dependency express');
   log(`Prepared backend runtime: ${backendRoot}`);
 }
