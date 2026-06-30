@@ -126,6 +126,36 @@ const globalMountOptions = {
   stubs: globalStubs,
 };
 
+async function dispatchKeydown(elementWrapper, options = {}) {
+  const event = new KeyboardEvent("keydown", {
+    key: "Enter",
+    bubbles: true,
+    cancelable: true,
+    ...options,
+  });
+  if (Object.prototype.hasOwnProperty.call(options, "isComposing")) {
+    Object.defineProperty(event, "isComposing", {
+      configurable: true,
+      value: options.isComposing,
+    });
+  }
+  if (Object.prototype.hasOwnProperty.call(options, "keyCode")) {
+    Object.defineProperty(event, "keyCode", {
+      configurable: true,
+      value: options.keyCode,
+    });
+  }
+  if (Object.prototype.hasOwnProperty.call(options, "which")) {
+    Object.defineProperty(event, "which", {
+      configurable: true,
+      value: options.which,
+    });
+  }
+  elementWrapper.element.dispatchEvent(event);
+  await nextTick();
+  return event;
+}
+
 describe("ComposerInputActions", () => {
   it("emits input, send, stop, more, camera and microphone events", async () => {
     const wrapper = mount(ComposerInputActions, {
@@ -185,6 +215,26 @@ describe("ComposerInputActions", () => {
     expect(wrapper.find("el-button[title='拍照']").attributes("disabled")).toBe("true");
     expect(wrapper.find("el-button[title='按住录音']").classes()).toContain("is-recording");
     expect(wrapper.find(".mic-status-text").text()).toBe("松开发送 1");
+  });
+
+  it("does not send when Enter confirms an active IME composition", async () => {
+    const wrapper = mount(ComposerInputActions, {
+      props: {
+        modelValue: "拼",
+        sendButtonText: "发送",
+      },
+      global: globalMountOptions,
+      attachTo: document.body,
+    });
+    const input = wrapper.find("el-input.chat-input");
+
+    await dispatchKeydown(input, { isComposing: true });
+    await dispatchKeydown(input, { keyCode: 229 });
+    await dispatchKeydown(input, { which: 229 });
+    expect(wrapper.emitted("send")).toBeUndefined();
+
+    await dispatchKeydown(input);
+    expect(wrapper.emitted("send")).toHaveLength(1);
   });
 });
 

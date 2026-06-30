@@ -148,6 +148,13 @@ function scrollBottom() {
   });
 }
 
+function refreshSessionsFromSidebar() {
+  return fetchSessions("", {
+    forceCurrentSessionRerender: true,
+    preserveCurrentMessages: false,
+  });
+}
+
 // --- Chat session ---
 const {
   input,
@@ -498,7 +505,7 @@ const drawerPanels = computed(() =>
       @connect="connectBackend"
       @new-session="newSession"
       @delete-session="handleDeleteSession"
-      @refresh-sessions="fetchSessions"
+      @refresh-sessions="refreshSessionsFromSidebar"
       @select-session="handleSelectSession"
       @open-openvscode="openOpenVSCode"
       @open-workspace="openWorkspace"

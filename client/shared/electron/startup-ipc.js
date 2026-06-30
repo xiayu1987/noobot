@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { ipcMain } from "electron";
+import { maskDependencyProxyUrl, validateDependencyProxy } from "./dependency-proxy.js";
 
 export function createStartupConfigRequesters({ sendStatus = () => {}, setPendingConfigResolve = () => {}, setPendingSuperAdminResolve = () => {} } = {}) {
   function requestSuperAdminConfig(superAdmin) {
@@ -44,6 +45,7 @@ export function registerStartupIpcHandlers({
   resolveNoobotUrl,
   getMainWindow = () => null,
   sendStatus = () => {},
+  runProcess,
 } = {}) {
   ipcMain.handle("noobot:retry-startup", async () => {
     await ensureServiceStarted();
@@ -76,7 +78,21 @@ export function registerStartupIpcHandlers({
 
   ipcMain.handle("noobot:save-super-admin", async (_event, values = {}) => {
     const state = getDesktopConfigState() || ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") });
-    saveSuperAdminConfig({ globalConfigPath: state.globalConfigPath, userConfigPath: state.templateConfigPath, userId: values.userId, connectCode: values.connectCode, language: values.language, model: values.model });
+    const proxyUrl = String(values.dependencyProxyUrl || "").trim();
+    if (proxyUrl) {
+      sendStatus({ phase: "dependency", message: `Checking dependency download proxy ${maskDependencyProxyUrl(proxyUrl)}...` });
+      const proxyValidation = await validateDependencyProxy({ proxyUrl, runProcess });
+      if (!proxyValidation.ok) {
+        const superAdmin = { ...state.superAdmin, language: values.language, model: values.model, userId: values.userId, connectCode: values.connectCode, dependencyProxyUrl: proxyUrl };
+        sendStatus({ phase: "super-admin-required", message: `Dependency download proxy is not reachable: ${proxyValidation.error || "validation failed"}`, superAdmin });
+        return { ok: false, error: `Dependency download proxy is not reachable: ${proxyValidation.error || "validation failed"}`, superAdmin };
+      }
+      sendStatus({ phase: "dependency", message: `Dependency download proxy is available: ${proxyValidation.maskedProxyUrl}` });
+    }
+    saveSuperAdminConfig({ globalConfigPath: state.globalConfigPath, userConfigPath: state.templateConfigPath, userId: values.userId, connectCode: values.connectCode, language: values.language, model: values.model, dependencyProxyUrl: proxyUrl });
+    const savedState = ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") });
+    setDesktopConfigState(savedState);
+    sendStatus({ phase: "dependency", message: proxyUrl ? `Dependency downloads will use proxy ${maskDependencyProxyUrl(proxyUrl)}.` : "Dependency downloads will not use a proxy." });
     const dependencyResults = await ensureSelectedDependencies(values.dependencies || {});
     const nextState = ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") });
     setDesktopConfigState(nextState);

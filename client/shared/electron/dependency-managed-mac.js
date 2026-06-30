@@ -6,8 +6,11 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { pipeline } from "node:stream/promises";
+import zlib from "node:zlib";
 import { dependencySpecs, desktopDependencyTimeouts } from "./dependency-specs.js";
 import { createDependencyError } from "./dependency-process.js";
+import { getCurlProxyArgs, getDependencyProxyEnv, maskDependencyProxyUrl } from "./dependency-proxy.js";
 
 export function createMacDependencyInstallerTools({
   app,
@@ -15,7 +18,12 @@ export function createMacDependencyInstallerTools({
   hasExistingFile,
   writeDependencyLog = () => {},
   sendStatus = () => {},
+  getDependencyProxyUrl = () => "",
 } = {}) {
+  function getProxyOptions() {
+    const proxyUrl = String(getDependencyProxyUrl() || "").trim();
+    return { proxyUrl, args: getCurlProxyArgs(proxyUrl), env: getDependencyProxyEnv(proxyUrl), masked: maskDependencyProxyUrl(proxyUrl) };
+  }
   function getManagedDependenciesRoot() {
     const base = app.isReady() ? app.getPath("userData") : (process.env.HOME || os.tmpdir());
     return path.join(base, "managed-dependencies");
@@ -77,8 +85,11 @@ export function createMacDependencyInstallerTools({
   async function fetchLibreOfficeStableVersions() {
     const indexUrl = "https://download.documentfoundation.org/libreoffice/stable/";
     writeDependencyLog("dmg:versions:start", { url: indexUrl });
-    const result = await runProcess("curl", ["-L", "--fail", "--silent", "--show-error", "--connect-timeout", "30", indexUrl], {
+    const proxy = getProxyOptions();
+    writeDependencyLog("proxy:curl", { enabled: Boolean(proxy.proxyUrl), proxy: proxy.masked, target: "libreoffice-index" });
+    const result = await runProcess("curl", ["-L", "--fail", "--silent", "--show-error", "--connect-timeout", "30", ...proxy.args, indexUrl], {
       timeoutMs: desktopDependencyTimeouts.packageQueryMs,
+      env: proxy.env,
     });
     writeDependencyLog("dmg:versions:finish", { ok: result.ok, code: result.code, error: result.error });
     if (!result.ok) return [];
@@ -132,7 +143,9 @@ export function createMacDependencyInstallerTools({
 
   async function downloadFileWithCurl(url, destinationPath, { timeoutMs, label = "file", eventPrefix = "download" } = {}) {
     writeDependencyLog(`${eventPrefix}:start`, { url, destination: destinationPath, timeoutMs });
-    const result = await runProcess("curl", ["-L", "--fail", "--show-error", "--connect-timeout", "30", "-o", destinationPath, url], { timeoutMs });
+    const proxy = getProxyOptions();
+    writeDependencyLog("proxy:curl", { enabled: Boolean(proxy.proxyUrl), proxy: proxy.masked, target: eventPrefix });
+    const result = await runProcess("curl", ["-L", "--fail", "--show-error", "--connect-timeout", "30", ...proxy.args, "-o", destinationPath, url], { timeoutMs, env: proxy.env });
     writeDependencyLog(`${eventPrefix}:finish`, { ok: result.ok, code: result.code, error: result.error });
     if (!result.ok) {
       const detail = String(result.stderr || result.stdout || result.error || "").trim().slice(0, 1000);
@@ -299,19 +312,49 @@ export function createMacDependencyInstallerTools({
     throw createDependencyError(`Failed to download ${label}. Tried: ${failures.join(" ; ")}.${envHint ? ` You can set ${envHint}.` : ""}${manualUrl ? ` Manual download: ${manualUrl}` : ""}`, { failureKind: "download", retryable: true });
   }
 
+  function getMacFfmpegArch() {
+    return process.arch === "arm64" ? "arm64" : "x64";
+  }
+
   function getMacFfmpegUrlCandidates(spec) {
     const configuredUrl = String(spec.darwinManaged?.url || "").trim();
     return Array.from(new Set([
       configuredUrl,
+      `https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-darwin-${getMacFfmpegArch()}.gz`,
       "https://evermeet.cx/ffmpeg/getrelease/zip",
       "https://evermeet.cx/ffmpeg/ffmpeg.zip",
     ].filter(Boolean)));
   }
 
+  function isGzipArchiveUrl(url) {
+    return String(url || "").split(/[?#]/, 1)[0].toLowerCase().endsWith(".gz");
+  }
+
+  async function extractFfmpegArchive({ archivePath, extractDir, selectedUrl }) {
+    if (isGzipArchiveUrl(selectedUrl)) {
+      await fs.promises.mkdir(extractDir, { recursive: true });
+      const outputPath = path.join(extractDir, "ffmpeg");
+      writeDependencyLog("managed:ffmpeg:extract:start", { archive: archivePath, destination: outputPath, format: "gzip", timeoutMs: desktopDependencyTimeouts.installMs });
+      await pipeline(
+        fs.createReadStream(archivePath),
+        zlib.createGunzip(),
+        fs.createWriteStream(outputPath, { mode: 0o755 }),
+      );
+      await fs.promises.chmod(outputPath, 0o755);
+      writeDependencyLog("managed:ffmpeg:extract:finish", { ok: true, format: "gzip", destination: outputPath });
+      return;
+    }
+
+    writeDependencyLog("managed:ffmpeg:extract:start", { archive: archivePath, destination: extractDir, format: "zip", timeoutMs: desktopDependencyTimeouts.installMs });
+    const unzipResult = await runProcess("ditto", ["-x", "-k", archivePath, extractDir], { timeoutMs: desktopDependencyTimeouts.installMs });
+    writeDependencyLog("managed:ffmpeg:extract:finish", { ok: unzipResult.ok, code: unzipResult.code, error: unzipResult.error, stderr: String(unzipResult.stderr || "").slice(0, 500), format: "zip" });
+    if (!unzipResult.ok) throw createDependencyError(`Failed to extract FFmpeg.${String(unzipResult.stderr || unzipResult.error || "").slice(0, 1000)}`, { failureKind: "package" });
+  }
+
   async function installFfmpegManagedMac(spec) {
     if (process.platform !== "darwin") return null;
     const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "noobot-ffmpeg-"));
-    const archivePath = path.join(tempDir, "ffmpeg.zip");
+    const archivePath = path.join(tempDir, "ffmpeg.archive");
     const extractDir = path.join(tempDir, "extract");
     const targetBinDir = path.join(getManagedDependencyDir("ffmpeg"), "bin");
     const targetPath = path.join(targetBinDir, "ffmpeg");
@@ -329,10 +372,7 @@ export function createMacDependencyInstallerTools({
       writeDependencyLog("managed:ffmpeg:download:selected", { url: selectedUrl });
       await fs.promises.mkdir(extractDir, { recursive: true });
       sendStatus({ phase: "dependency", message: `Extracting ${spec.label}...` });
-      writeDependencyLog("managed:ffmpeg:extract:start", { archive: archivePath, destination: extractDir, timeoutMs: desktopDependencyTimeouts.installMs });
-      const unzipResult = await runProcess("ditto", ["-x", "-k", archivePath, extractDir], { timeoutMs: desktopDependencyTimeouts.installMs });
-      writeDependencyLog("managed:ffmpeg:extract:finish", { ok: unzipResult.ok, code: unzipResult.code, error: unzipResult.error, stderr: String(unzipResult.stderr || "").slice(0, 500) });
-      if (!unzipResult.ok) throw createDependencyError(`Failed to extract FFmpeg.${String(unzipResult.stderr || unzipResult.error || "").slice(0, 1000)}`, { failureKind: "package" });
+      await extractFfmpegArchive({ archivePath, extractDir, selectedUrl });
       sendStatus({ phase: "dependency", message: `Locating ${spec.label} binary...` });
       const sourcePath = await findExecutableFileByName(extractDir, "ffmpeg");
       writeDependencyLog("managed:ffmpeg:binary", { source: sourcePath, target: targetPath });
@@ -410,6 +450,7 @@ export function createMacDependencyInstallerTools({
   return {
     getDarwinManagedKeyForSpec,
     getMacManagedCommandPath,
+    getMacFfmpegUrlCandidates,
     installLibreOfficeFromDmg,
     installManagedDependencyMac,
     prependManagedDependencyPath,

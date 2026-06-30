@@ -40,6 +40,7 @@ export function createSessionListActions({
     const {
       force = false,
       preserveCurrentMessages = false,
+      requireFresh = false,
       scrollToBottom = true,
       silent = false,
     } = options;
@@ -73,6 +74,7 @@ export function createSessionListActions({
       const detail = await fetchSessionDetail(detailSessionId, {
         source: "selectSession",
         force,
+        requireFresh,
         allowLoadedSnapshot: true,
       });
       if (detail) {
@@ -97,6 +99,7 @@ export function createSessionListActions({
       silent = false,
       preserveCurrentMessages = true,
       scrollToBottom = true,
+      forceCurrentSessionRerender = false,
     } = options;
     if (!ensureConnected()) return false;
     if (!silent) loadingSessions.value = true;
@@ -151,10 +154,12 @@ export function createSessionListActions({
         silent,
         preserveCurrentMessages:
           preserveCurrentMessages &&
+          !forceCurrentSessionRerender &&
           Boolean(existingNextSession) &&
           Array.isArray(existingNextSession?.messages) &&
           existingNextSession.messages.length > 0,
         scrollToBottom,
+        requireFresh: forceCurrentSessionRerender,
       });
       return true;
     } catch (error) {

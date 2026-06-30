@@ -51,7 +51,8 @@ export function createDesktopWindowManager({
       shell.openExternal(url);
       return { action: "deny" };
     });
-    const startupFile = path.join(dirname, "startup.html");
+    const builtStartupFile = path.join(dirname, "startup", "index.html");
+    const startupFile = fs.existsSync(builtStartupFile) ? builtStartupFile : path.join(dirname, "startup.html");
     appendDesktopLog(`[main:create-window] loading ${startupFile}`);
     appendEarlyLog(`[main:create-window] before loadFile ${startupFile}`);
     mainWindow.loadFile(startupFile).catch((error) => appendDesktopLog(`[main:create-window] loadFile failed: ${error?.stack || error?.message || String(error)}`));

@@ -5,6 +5,7 @@
  */
 import { dependencySpecs, desktopDependencyTimeouts } from "./dependency-specs.js";
 import { createDependencyError, getDependencyErrorMeta, withTimeout } from "./dependency-process.js";
+import { getDependencyProxyEnv, maskDependencyProxyUrl } from "./dependency-proxy.js";
 
 export function createDependencyInstaller({
   appendEarlyLog = () => {},
@@ -16,7 +17,12 @@ export function createDependencyInstaller({
   waitForDependencyInstalled,
   installLibreOfficeFromDmg,
   installManagedDependencyMac,
+  getDependencyProxyUrl = () => "",
 } = {}) {
+  function getProxyRunOptions() {
+    const proxyUrl = String(getDependencyProxyUrl() || "").trim();
+    return { env: getDependencyProxyEnv(proxyUrl), masked: maskDependencyProxyUrl(proxyUrl), enabled: Boolean(proxyUrl) };
+  }
   async function buildDependencyInstallCommand(spec) {
     writeDependencyLog("install-command:build:start", { label: spec.label, platform: process.platform }, { debug: true });
     const packages = spec.packages?.[process.platform] || {};
@@ -144,9 +150,12 @@ export function createDependencyInstaller({
         throw createDependencyError(message, { failureKind: "installer-unavailable" });
       }
       writeDependencyLog("install:start", { key, label: spec.label, command: [installCommand.command, ...(installCommand.args || [])].join(" "), timeoutMs: desktopDependencyTimeouts.installMs });
+      const proxy = getProxyRunOptions();
+      writeDependencyLog("proxy:install-command", { key, label: spec.label, enabled: proxy.enabled, proxy: proxy.masked });
       sendStatus({ phase: "dependency", message: `Installing ${spec.label}...` });
       const result = await runProcess(installCommand.command, installCommand.args, {
         timeoutMs: desktopDependencyTimeouts.installMs,
+        env: proxy.env,
       });
       writeDependencyLog("install:finish", { key, label: spec.label, ok: result.ok, code: result.code, error: result.error });
       if (!result.ok) {

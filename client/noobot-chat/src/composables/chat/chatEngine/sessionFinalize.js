@@ -7,21 +7,39 @@ import { RoleEnum } from "../../../shared/constants/chatConstants";
 import { normalizeTrimmedString } from "./utils";
 import { getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity";
 
-export async function finalizeDoneSessionDetail({
+function resolveFinalizeSessionId({
+  activeSession,
+  finalDoneEventData,
+  finalEventData,
+} = {}) {
+  return String(
+    finalEventData?.sessionId ||
+      finalDoneEventData?.sessionId ||
+      activeSession?.value?.backendSessionId ||
+      "",
+  );
+}
+
+export async function refreshFinalSessionDetail({
   activeSession,
   activeSessionId,
   botMessage,
   finalDoneEventData,
+  finalEventData,
   fetchSessionDetail,
   applySessionDetail,
   refreshSessionConnectorsAsync,
 } = {}) {
-  const doneSessionId = String(
-    finalDoneEventData?.sessionId || activeSession?.value?.backendSessionId || "",
-  );
+  const doneSessionId = resolveFinalizeSessionId({
+    activeSession,
+    finalDoneEventData,
+    finalEventData,
+  });
   const finalExecutionLogTotal = Number(botMessage?.executionLogTotal || 0);
   const finalDialogProcessId = normalizeTrimmedString(
-    getMessageDialogProcessId(botMessage) || finalDoneEventData?.dialogProcessId,
+    getMessageDialogProcessId(botMessage) ||
+      finalEventData?.dialogProcessId ||
+      finalDoneEventData?.dialogProcessId,
   );
 
   if (!doneSessionId) return false;
@@ -60,4 +78,8 @@ export async function finalizeDoneSessionDetail({
     console.warn("load session detail after done failed", loadDetailError);
     return false;
   }
+}
+
+export async function finalizeDoneSessionDetail(options = {}) {
+  return refreshFinalSessionDetail(options);
 }

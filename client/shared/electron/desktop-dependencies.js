@@ -13,6 +13,7 @@ export function createDesktopDependencyManager({
   appendEarlyLog = () => {},
   writeDependencyLog = () => {},
   sendStatus = () => {},
+  getDependencyProxyUrl = () => "",
 } = {}) {
   const { runProcess, hasExistingFile } = createDependencyProcessTools({ appendEarlyLog });
 
@@ -28,6 +29,7 @@ export function createDesktopDependencyManager({
     hasExistingFile,
     writeDependencyLog,
     sendStatus,
+    getDependencyProxyUrl,
   });
 
   const { findAvailableCommand, isDependencyInstalled, waitForDependencyInstalled } = createDependencyDetector({
@@ -50,6 +52,7 @@ export function createDesktopDependencyManager({
     waitForDependencyInstalled,
     installLibreOfficeFromDmg,
     installManagedDependencyMac,
+    getDependencyProxyUrl,
   });
 
   return { ensureSelectedDependencies };
