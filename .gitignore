@@ -5,6 +5,7 @@
 **/dist/
 client/windows/build/
 client/mac/build/
+client/shared/electron/startup/
 **/.vite/
 
 # runtime logs & process files
