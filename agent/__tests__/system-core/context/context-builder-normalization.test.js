@@ -275,6 +275,54 @@ function createBuilderForSuperUserRuntimeTest({ globalConfig = {}, userId = "u1"
   });
 }
 
+function createBuilderForStartupDependencyRuntimeTest() {
+  return new ContextBuilder({
+    config: {
+      globalConfig: {},
+      userConfig: {},
+    },
+    serviceContainer: {
+      sessionManager: null,
+      memoryService: null,
+      attachmentService: null,
+      skillService: null,
+      eventListener: null,
+      botManager: {
+        startupContext: {
+          runtime: {
+            dependencies: {
+              sourceSummary: {
+                platform: "darwin",
+                dependencies: [{
+                  key: "ffmpeg",
+                  name: "FFmpeg",
+                  available: true,
+                  installMode: "managed",
+                  sourceType: "self-hosted",
+                  hasCustomSource: true,
+                  customSourceEnvKeys: ["NOOBOT_FFMPEG_MAC_URL"],
+                  configKeys: ["darwinManaged.url"],
+                }],
+              },
+            },
+          },
+        },
+      },
+      userInteractionBridge: null,
+    },
+    sessionContext: {
+      userId: "u1",
+      sessionId: "s1",
+      caller: "user",
+      parentSessionId: "",
+      attachments: [],
+      runConfig: {},
+      abortSignal: null,
+      parentAsyncResultContainer: null,
+    },
+  });
+}
+
 test("_buildSystemRuntime derives isSuperUser from configured super user id", () => {
   const builder = createBuilderForSuperUserRuntimeTest({
     globalConfig: { super_admin: { user_id: "super-root-user" } },
@@ -284,6 +332,27 @@ test("_buildSystemRuntime derives isSuperUser from configured super user id", ()
   const runtime = builder._buildSystemRuntime({ dialogProcessId: "dp-super" });
 
   assert.equal(runtime.isSuperUser, true);
+});
+
+test("_buildSystemRuntime injects redacted desktop dependency source summary", () => {
+  const builder = createBuilderForStartupDependencyRuntimeTest();
+
+  const runtime = builder._buildSystemRuntime({ dialogProcessId: "dp-deps" });
+
+  assert.deepEqual(runtime.desktopDependencySources, {
+    platform: "darwin",
+    dependencies: [{
+      key: "ffmpeg",
+      name: "FFmpeg",
+      available: true,
+      installMode: "managed",
+      sourceType: "self-hosted",
+      hasCustomSource: true,
+      customSourceEnvKeys: ["NOOBOT_FFMPEG_MAC_URL"],
+      configKeys: ["darwinManaged.url"],
+    }],
+  });
+  assert.equal(JSON.stringify(runtime.desktopDependencySources).includes("http"), false);
 });
 
 test("_buildSystemRuntime defaults isSuperUser to false when config is missing", () => {

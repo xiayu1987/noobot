@@ -27,6 +27,33 @@ function normalizeEnvMap(value = {}) {
   return output;
 }
 
+function normalizeDependencySourceSummary(value = {}) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const dependencies = Array.isArray(source.dependencies) ? source.dependencies : [];
+  return {
+    platform: String(source.platform || ""),
+    dependencies: dependencies.map((item) => {
+      const dependency = item && typeof item === "object" ? item : {};
+      const customSourceEnvKeys = Array.isArray(dependency.customSourceEnvKeys)
+        ? dependency.customSourceEnvKeys.map((key) => String(key || "").trim()).filter(Boolean)
+        : [];
+      const configKeys = Array.isArray(dependency.configKeys)
+        ? dependency.configKeys.map((key) => String(key || "").trim()).filter(Boolean)
+        : [];
+      return {
+        key: String(dependency.key || ""),
+        name: String(dependency.name || ""),
+        available: Boolean(dependency.available),
+        installMode: String(dependency.installMode || ""),
+        sourceType: String(dependency.sourceType || ""),
+        hasCustomSource: Boolean(dependency.hasCustomSource),
+        customSourceEnvKeys,
+        configKeys,
+      };
+    }).filter((item) => item.key || item.name),
+  };
+}
+
 function resolveDefaultBackendRoot(cwd = process.cwd()) {
   const normalizedCwd = normalizePath(cwd) || process.cwd();
   if (path.basename(normalizedCwd) === "service") return path.dirname(normalizedCwd);
@@ -95,6 +122,7 @@ export function normalizeStartupContext(input = {}, { cwd = process.cwd() } = {}
         ffprobePath: String(dependencies.ffprobePath || ""),
         libreOfficePath: String(dependencies.libreOfficePath || ""),
         pathPrefix: String(dependencies.pathPrefix || ""),
+        sourceSummary: normalizeDependencySourceSummary(dependencies.sourceSummary),
       },
     },
     createdAt: String(raw.createdAt || new Date().toISOString()),

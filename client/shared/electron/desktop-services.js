@@ -9,6 +9,7 @@ import path from "node:path";
 import {
   buildDependencyRuntimeEnv,
   summarizeDependencyRuntimeEnv,
+  summarizeDependencySources,
 } from "./dependency-runtime-env.js";
 
 export function createDesktopServiceManager({
@@ -59,7 +60,10 @@ export function createDesktopServiceManager({
     const frontendRoot = isPackaged ? path.join(process.resourcesPath, "frontend") : "";
     const startupContextPath = path.join(runtimeDir, "startup-context.json");
     const dependencyEnv = buildDependencyRuntimeEnv({ app });
-    const dependencySummary = summarizeDependencyRuntimeEnv(dependencyEnv);
+    const dependencySummary = {
+      ...summarizeDependencyRuntimeEnv(dependencyEnv),
+      sourceSummary: summarizeDependencySources({ runtimeEnv: dependencyEnv, app }),
+    };
     sendStatus({
       phase: "dependency",
       message: `Resolved startup dependency environment: ${JSON.stringify(dependencySummary)}`,
@@ -223,7 +227,10 @@ export function createDesktopServiceManager({
     const cwd = isPackaged ? packagedBackendRoot : repoRoot;
     const frontendRoot = isPackaged ? path.join(process.resourcesPath, "frontend") : "";
     const dependencyEnv = buildDependencyRuntimeEnv({ app });
-    const dependencySummary = summarizeDependencyRuntimeEnv(dependencyEnv);
+    const dependencySummary = {
+      ...summarizeDependencyRuntimeEnv(dependencyEnv),
+      sourceSummary: summarizeDependencySources({ runtimeEnv: dependencyEnv, app }),
+    };
     sendStatus({
       phase: "starting",
       message: [

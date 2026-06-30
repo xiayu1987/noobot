@@ -51,6 +51,20 @@ test("startup-context-service loads explicit snapshot and preserves explicit plu
         hasLibreOffice: true,
         ffmpegPath: "/managed/bin/ffmpeg",
         libreOfficePath: "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+        sourceSummary: {
+          platform: "darwin",
+          dependencies: [{
+            key: "ffmpeg",
+            name: "FFmpeg",
+            available: true,
+            installMode: "managed",
+            sourceType: "self-hosted",
+            hasCustomSource: true,
+            customSourceEnvKeys: ["NOOBOT_FFMPEG_MAC_URL"],
+            configKeys: ["darwinManaged.url"],
+            url: "https://example.internal/ffmpeg.tar.gz?token=secret",
+          }],
+        },
       },
     },
   }), "utf8");
@@ -68,6 +82,20 @@ test("startup-context-service loads explicit snapshot and preserves explicit plu
   assert.equal(context.runtime.env.NOOBOT_FFMPEG_PATH, "/managed/bin/ffmpeg");
   assert.equal(context.runtime.env.LIBRE_OFFICE_EXE, "/Applications/LibreOffice.app/Contents/MacOS/soffice");
   assert.equal(context.runtime.dependencies.hasFfmpeg, true);
+  assert.deepEqual(context.runtime.dependencies.sourceSummary, {
+    platform: "darwin",
+    dependencies: [{
+      key: "ffmpeg",
+      name: "FFmpeg",
+      available: true,
+      installMode: "managed",
+      sourceType: "self-hosted",
+      hasCustomSource: true,
+      customSourceEnvKeys: ["NOOBOT_FFMPEG_MAC_URL"],
+      configKeys: ["darwinManaged.url"],
+    }],
+  });
+  assert.equal(JSON.stringify(context.runtime.dependencies.sourceSummary).includes("token=secret"), false);
 });
 
 test("startup-context-service applies runtime env to service process env", () => {

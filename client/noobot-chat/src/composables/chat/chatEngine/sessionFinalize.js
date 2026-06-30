@@ -29,6 +29,7 @@ export async function refreshFinalSessionDetail({
   fetchSessionDetail,
   applySessionDetail,
   refreshSessionConnectorsAsync,
+  preserveCurrentMessages,
 } = {}) {
   const doneSessionId = resolveFinalizeSessionId({
     activeSession,
@@ -47,8 +48,10 @@ export async function refreshFinalSessionDetail({
   try {
     const detail = await fetchSessionDetail(doneSessionId);
     const shouldPreserveCurrentMessages =
-      String(doneSessionId || "") === String(activeSession?.value?.backendSessionId || "") &&
-      String(activeSession?.value?.id || "") === String(activeSessionId?.value || "");
+      typeof preserveCurrentMessages === "boolean"
+        ? preserveCurrentMessages
+        : String(doneSessionId || "") === String(activeSession?.value?.backendSessionId || "") &&
+          String(activeSession?.value?.id || "") === String(activeSessionId?.value || "");
 
     applySessionDetail(detail, {
       preserveCurrentMessages: shouldPreserveCurrentMessages,
