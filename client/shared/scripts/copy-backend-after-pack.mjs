@@ -3,6 +3,7 @@ import path from 'node:path';
 
 const requiredBackendRuntimeFiles = [
   'service/app.js',
+  'node_modules/noobot-agent/package.json',
   'node_modules/express/package.json',
   'plugin/noobot-plugin-harness/manifest.json',
   'plugin/noobot-plugin-workflow/manifest.json',
@@ -19,16 +20,13 @@ async function assertRequiredBackendRuntimeFiles(rootDir, label) {
 }
 
 function getBackendCopyOptions(context) {
-  // Windows package builds commonly run without the privilege required to
-  // create symlinks. The prepared backend runtime can contain workspace package
-  // links such as node_modules/@noobot/shared -> backend/shared; copying those
-  // links with fs.cp would try to recreate symlinks in dist/win-unpacked and
-  // fail with EPERM. Dereference only for Windows so platform-specific package
-  // behavior stays isolated.
-  if (context.electronPlatformName === 'win32') {
-    return { recursive: true, dereference: true };
-  }
-  return { recursive: true };
+  // The prepared backend runtime contains workspace package links such as
+  // node_modules/noobot-agent -> ../agent. Packaged apps must be self-contained:
+  // preserving those symlinks can leave Node unable to resolve workspace
+  // packages from Resources/backend/service after signing, zipping, or moving
+  // the app bundle. Dereference them while copying so node_modules contains
+  // real package directories on every desktop platform.
+  return { recursive: true, dereference: true };
 }
 
 export default async function copyBackendAfterPack(context) {
