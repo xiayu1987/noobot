@@ -27,6 +27,10 @@ import {
   setThinkingStartedAt,
 } from "../../infra/timeFields";
 import { getMessageAttachments } from "../../infra/messageModel";
+import {
+  logResendDebug,
+  summarizeDebugMessage,
+} from "../debug/resendDebugLogger";
 
 const IN_FLIGHT_CHANNEL_STATES = new Set([
   "sending",
@@ -34,6 +38,36 @@ const IN_FLIGHT_CHANNEL_STATES = new Set([
   "interaction_pending",
   "stopping",
 ]);
+
+const TERMINAL_STOP_CHANNEL_STATES = new Set([
+  "stopped",
+  "cancelled",
+  "canceled",
+  "aborted",
+]);
+
+function normalizeState(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isInFlightAssistantMessage(messageItem = {}) {
+  if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) return false;
+  if (messageItem?.pending === true) return true;
+  const channelState = normalizeState(messageItem?.channelState?.state || messageItem?.channel_state?.state);
+  return IN_FLIGHT_CHANNEL_STATES.has(channelState);
+}
+
+function isTerminalStopAssistantDetail(messageItem = {}) {
+  if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) return false;
+  const states = [
+    messageItem?.stopState,
+    messageItem?.status,
+    messageItem?.state,
+    messageItem?.channelState?.state,
+    messageItem?.channel_state?.state,
+  ].map(normalizeState);
+  return states.some((state) => TERMINAL_STOP_CHANNEL_STATES.has(state));
+}
 
 function preserveRunningThinkingState(existingMessage = {}, detailMessageItem = {}) {
   const existingChannelState =
@@ -112,78 +146,39 @@ function isInlineEditingUserMessage(messageItem = {}) {
   );
 }
 
-function findFollowingAssistantDialogProcessId(existingMessages = [], userMessageIndex = -1) {
-  if (userMessageIndex < 0) return "";
-  for (let index = userMessageIndex + 1; index < existingMessages.length; index += 1) {
-    const messageItem = existingMessages[index];
-    const role = normalizeMessageRole(messageItem);
-    if (role === RoleEnum.USER) return "";
-    if (role !== RoleEnum.ASSISTANT) continue;
-    const dialogProcessId = getMessageDialogProcessId(messageItem);
-    if (dialogProcessId) return dialogProcessId;
-  }
-  return "";
-}
-
-function findInlineEditingUserMessageIndexForDetail(existingMessages = [], detailMessageItem = {}) {
-  if (normalizeMessageRole(detailMessageItem) !== RoleEnum.USER) return -1;
-  const detailDialogProcessId = getMessageDialogProcessId(detailMessageItem);
-  if (!detailDialogProcessId) return -1;
-  for (let index = existingMessages.length - 1; index >= 0; index -= 1) {
-    const messageItem = existingMessages[index];
-    if (!isInlineEditingUserMessage(messageItem)) continue;
-    if (
-      getMessageDialogProcessId(messageItem) === detailDialogProcessId ||
-      findFollowingAssistantDialogProcessId(existingMessages, index) === detailDialogProcessId
-    ) {
-      return index;
-    }
-  }
-  return -1;
-}
-
 export function findExistingMessageIndexForDetailMessage(existingMessages = [], detailMessageItem = {}) {
-  const detailRole = normalizeMessageRole(detailMessageItem);
-  const detailDialogProcessId = getMessageDialogProcessId(detailMessageItem);
-  const detailContent = normalizeMessageContent(detailMessageItem?.content);
-  if (!detailRole || (!detailDialogProcessId && !detailContent)) return -1;
-  const exactIndex = findMessageIdentityIndex(detailMessageItem, existingMessages);
-  if (exactIndex >= 0) return exactIndex;
-  const editingUserIndex = findInlineEditingUserMessageIndexForDetail(
-    existingMessages,
-    detailMessageItem,
-  );
-  if (editingUserIndex >= 0) return editingUserIndex;
-  if (detailDialogProcessId) {
-    const dialogIndex = existingMessages.findIndex(
-      (messageItem) =>
-        normalizeMessageRole(messageItem) === detailRole &&
-        getMessageDialogProcessId(messageItem) === detailDialogProcessId,
-    );
-    if (dialogIndex >= 0) return dialogIndex;
-  }
-  if (detailRole === RoleEnum.USER && detailContent) {
-    for (let index = existingMessages.length - 1; index >= 0; index -= 1) {
-      const messageItem = existingMessages[index];
-      if (normalizeMessageRole(messageItem) !== RoleEnum.USER) continue;
-      if (normalizeMessageContent(messageItem?.content) !== detailContent) continue;
-      return index;
-    }
-  }
-  return -1;
+  if (!buildMessageIdentity(detailMessageItem)) return -1;
+  return findMessageIdentityIndex(detailMessageItem, existingMessages);
 }
 
 export function mergePreservedDetailMessages(existingMessages = [], detailMessages = []) {
   if (!Array.isArray(existingMessages) || !Array.isArray(detailMessages) || !detailMessages.length) {
     return;
   }
-  const appendedIdentities = new Set(existingMessages.map((messageItem) => buildMessageIdentity(messageItem)));
   for (const detailMessageItem of detailMessages) {
     if (detailMessageItem?.workflowMessage === true) continue;
     const detailIdentity = buildMessageIdentity(detailMessageItem);
     const existingIndex = findExistingMessageIndexForDetailMessage(existingMessages, detailMessageItem);
     if (existingIndex >= 0) {
       const existingMessage = existingMessages[existingIndex];
+      logResendDebug("detail.merge.match", {
+        identity: detailIdentity,
+        existingIndex,
+        existing: summarizeDebugMessage(existingMessage),
+        detail: summarizeDebugMessage(detailMessageItem),
+      });
+      if (
+        isInFlightAssistantMessage(existingMessage) &&
+        isTerminalStopAssistantDetail(detailMessageItem)
+      ) {
+        logResendDebug("detail.merge.skipStoppedOverInFlight", {
+          identity: detailIdentity,
+          existingIndex,
+          existing: summarizeDebugMessage(existingMessage),
+          detail: summarizeDebugMessage(detailMessageItem),
+        });
+        continue;
+      }
       const keepInlineEditingContent = isInlineEditingUserMessage(existingMessage);
       const inlineEditingContent = keepInlineEditingContent
         ? existingMessage.content
@@ -198,6 +193,12 @@ export function mergePreservedDetailMessages(existingMessages = [], detailMessag
         detailMessageItem,
       );
       Object.assign(existingMessage, detailMessageItem);
+      logResendDebug("detail.merge.assign", {
+        identity: detailIdentity,
+        existingIndex,
+        before: summarizeDebugMessage({ ...existingMessage, ...detailMessageItem }),
+        detail: summarizeDebugMessage(detailMessageItem),
+      });
       if (keepInlineEditingContent) {
         existingMessage.content = inlineEditingContent;
         existingMessage.__monotonicEditing = true;
@@ -210,12 +211,8 @@ export function mergePreservedDetailMessages(existingMessages = [], detailMessag
       if (thinkingOpenNames.length) existingMessage.thinkingOpenNames = thinkingOpenNames;
       existingMessage.pending = false;
       restoreRunningThinkingState();
-      appendedIdentities.add(detailIdentity);
       continue;
     }
-    if (!detailIdentity || appendedIdentities.has(detailIdentity)) continue;
-    existingMessages.push(detailMessageItem);
-    appendedIdentities.add(detailIdentity);
   }
 }
 

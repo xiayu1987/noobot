@@ -1,6 +1,7 @@
 import { ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import { useChatEngine } from "../../../../src/composables/chat/useChatEngine";
+import { createSessionDetailApplicator } from "../../../../src/composables/chat/chatList/sessionDetailApply";
 import { SESSION_RUN_STATE } from "../../../../src/composables/chat/sessionRunStateMachine";
 import {
   RoleEnum,
@@ -198,6 +199,42 @@ describe("useChatEngine", () => {
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
   });
+
+  it("send rejects when frontend run state has no matching in-flight assistant", async () => {
+    const stream = vi.fn(async () => {});
+    const { engine, activeSession, runStateSnapshot, sending, deps, appendMessage } = createHarness({
+      sessionId: "local-send-state-mismatch",
+      stream,
+    });
+    activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "old", turnScopeId: "turn-old" },
+      {
+        role: RoleEnum.ASSISTANT,
+        content: "stopped",
+        pending: false,
+        statusLabel: "chat.stopped",
+        turnScopeId: "turn-old",
+        channelState: { state: "stopped", turnScopeId: "turn-old" },
+      },
+    ];
+    activeSession.value.rawMessages = [...activeSession.value.messages];
+    sending.value = true;
+    runStateSnapshot.value = {
+      state: SESSION_RUN_STATE.SENDING,
+      sessionId: "local-send-state-mismatch",
+      turnScopeId: "turn-missing",
+    };
+
+    await expect(engine.send()).resolves.toBe(false);
+
+    expect(stream).not.toHaveBeenCalled();
+    expect(appendMessage).not.toHaveBeenCalled();
+    expect(deps.notify).toHaveBeenCalledWith(expect.objectContaining({
+      type: "warning",
+      message: "chat.sessionStateOutOfSync",
+    }));
+  });
+
   it("DONE immediately finalizes assistant UI even if stream promise stays open", async () => {
     let releaseStream;
     const stream = vi.fn(async (_payload, onEvent) => {
@@ -371,7 +408,7 @@ describe("useChatEngine", () => {
     expect(sending.value).toBe(false);
   });
 
-  it("refreshes current session detail after stopped final event even when stop request flag is cleared", async () => {
+  it("does not refresh current session detail after stopped final event", async () => {
     const fetchSessionDetail = vi.fn(async () => ({
       sessionId: "local-stop-refresh",
       sessions: [
@@ -409,12 +446,323 @@ describe("useChatEngine", () => {
 
     await engine.send();
 
-    expect(fetchSessionDetail).toHaveBeenCalledWith("local-stop-refresh");
-    expect(applySessionDetail).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: "local-stop-refresh" }),
-      { preserveCurrentMessages: false, scrollToBottom: false },
-    );
+    expect(fetchSessionDetail).not.toHaveBeenCalled();
+    expect(applySessionDetail).not.toHaveBeenCalled();
     expect(deps.chatWebSocketClient.isStopRequested).toHaveBeenCalled();
+  });
+
+  it("stopped final detail preserves a fresh replacement turn instead of replacing it with a stale stopped snapshot", async () => {
+    let replacementTurnScopeId = "";
+    const staleStoppedTurnScopeId = "client-turn:old-stopped-detail";
+    const fetchSessionDetail = vi.fn(async () => ({
+      sessionId: "local-stop-detail-preserve",
+      sessions: [
+        {
+          sessionId: "local-stop-detail-preserve",
+          messages: [
+            { role: RoleEnum.USER, content: "old question", turnScopeId: staleStoppedTurnScopeId },
+            {
+              role: RoleEnum.ASSISTANT,
+              content: "old partial",
+              turnScopeId: staleStoppedTurnScopeId,
+              statusLabel: "chat.stopped",
+              stopState: "stopped",
+              channelState: { state: "stopped", turnScopeId: staleStoppedTurnScopeId },
+            },
+          ],
+        },
+      ],
+    }));
+    const stream = vi.fn(async (payload, onEvent) => {
+      replacementTurnScopeId = payload.turnScopeId;
+      emitChannelState(onEvent, "local-stop-detail-preserve", "dp-new", "stopped", {
+        turnScopeId: payload.turnScopeId,
+      });
+      onEvent({
+        event: StreamEventEnum.STOPPED,
+        data: {
+          sessionId: "local-stop-detail-preserve",
+          dialogProcessId: "dp-new",
+          turnScopeId: payload.turnScopeId,
+        },
+      });
+    });
+    const harness = createHarness({
+      sessionId: "local-stop-detail-preserve",
+      stream,
+    });
+    const sessions = ref([harness.activeSession.value]);
+    const { applySessionDetail } = createSessionDetailApplicator({
+      sessions,
+      activeSessionId: harness.activeSessionId,
+      makeViewMessage: (message) => ({ ...message }),
+      foldMessagesForView: (messages) => messages.map((message) => ({ ...message })),
+      sessionTitleFromMessages: () => "title",
+      applyCompletedToolLogsToMessages: vi.fn(),
+      scrollBottom: vi.fn(),
+      isSameSessionIdentity: (a, b) => String(a) === String(b),
+    });
+    harness.deps.fetchSessionDetail = fetchSessionDetail;
+    harness.deps.applySessionDetail = applySessionDetail;
+    harness.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "edited question", turnScopeId: "client-turn:fresh" },
+    ];
+
+    await harness.engine.send({
+      content: "edited question",
+      turnScopeId: "client-turn:fresh",
+      reuseExistingUserTurn: true,
+    });
+
+    const messages = harness.activeSession.value.messages;
+    expect(replacementTurnScopeId).toBe("client-turn:fresh");
+    expect(messages.some((message) => message.turnScopeId === staleStoppedTurnScopeId)).toBe(false);
+    expect(messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: RoleEnum.USER, content: "edited question", turnScopeId: "client-turn:fresh" }),
+      expect.objectContaining({ role: RoleEnum.ASSISTANT, turnScopeId: "client-turn:fresh" }),
+    ]));
+  });
+
+  it("applySessionDetail preserves a fresh in-flight turn even when caller requests replacement", () => {
+    const staleStoppedTurnScopeId = "turn-stopped-old";
+    const freshTurnScopeId = "client-turn:fresh-apply";
+    const activeSession = {
+      id: "s-apply-preserve",
+      sessionId: "s-apply-preserve",
+      backendSessionId: "s-apply-preserve",
+      title: "current",
+      messages: [
+        { role: RoleEnum.USER, content: "edited again", turnScopeId: freshTurnScopeId },
+        {
+          role: RoleEnum.ASSISTANT,
+          content: "",
+          turnScopeId: freshTurnScopeId,
+          dialogProcessId: "dp-fresh-apply",
+          pending: true,
+          channelState: { state: "sending", turnScopeId: freshTurnScopeId },
+        },
+      ],
+    };
+    const activeSessionId = ref("s-apply-preserve");
+    const sessions = ref([activeSession]);
+    const { applySessionDetail } = createSessionDetailApplicator({
+      sessions,
+      activeSessionId,
+      makeViewMessage: (message) => ({ ...message }),
+      foldMessagesForView: (messages) => messages.map((message) => ({ ...message })),
+      sessionTitleFromMessages: () => "title",
+      applyCompletedToolLogsToMessages: vi.fn(),
+      scrollBottom: vi.fn(),
+      isSameSessionIdentity: (a, b) => String(a) === String(b),
+    });
+
+    applySessionDetail({
+      sessionId: "s-apply-preserve",
+      sessions: [{
+        sessionId: "s-apply-preserve",
+        messages: [
+          { role: RoleEnum.USER, content: "old stopped", turnScopeId: staleStoppedTurnScopeId },
+          {
+            role: RoleEnum.ASSISTANT,
+            content: "已停止",
+            turnScopeId: staleStoppedTurnScopeId,
+            dialogProcessId: "dp-old-apply",
+            statusLabel: "chat.stopped",
+            stopState: "stopped",
+            channelState: { state: "stopped", turnScopeId: staleStoppedTurnScopeId },
+          },
+        ],
+      }],
+    }, { preserveCurrentMessages: false });
+
+    expect(activeSession.messages).toHaveLength(2);
+    expect(activeSession.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: RoleEnum.USER, content: "edited again", turnScopeId: freshTurnScopeId }),
+      expect.objectContaining({
+        role: RoleEnum.ASSISTANT,
+        turnScopeId: freshTurnScopeId,
+        pending: true,
+      }),
+    ]));
+    expect(activeSession.messages.some((message) => message.turnScopeId === staleStoppedTurnScopeId)).toBe(false);
+  });
+
+  it("applySessionDetail does not roll back a newer local session version", () => {
+    const activeSession = {
+      id: "s-apply-version",
+      sessionId: "s-apply-version",
+      backendSessionId: "s-apply-version",
+      title: "current",
+      version: 9,
+      revision: 9,
+      messages: [{ role: RoleEnum.USER, content: "current", turnScopeId: "client-turn:version" }],
+      rawMessages: [],
+    };
+    const activeSessionId = ref("s-apply-version");
+    const sessions = ref([activeSession]);
+    const { applySessionDetail } = createSessionDetailApplicator({
+      sessions,
+      activeSessionId,
+      makeViewMessage: (message) => ({ ...message }),
+      foldMessagesForView: (messages) => messages.map((message) => ({ ...message })),
+      sessionTitleFromMessages: () => "title",
+      applyCompletedToolLogsToMessages: vi.fn(),
+      scrollBottom: vi.fn(),
+      isSameSessionIdentity: (a, b) => String(a) === String(b),
+    });
+
+    applySessionDetail({
+      sessionId: "s-apply-version",
+      sessions: [{
+        sessionId: "s-apply-version",
+        version: 7,
+        revision: 7,
+        messages: [{ role: RoleEnum.USER, content: "stale", turnScopeId: "client-turn:version" }],
+      }],
+    });
+
+    expect(activeSession.version).toBe(9);
+    expect(activeSession.revision).toBe(9);
+
+    applySessionDetail({
+      sessionId: "s-apply-version",
+      sessions: [{
+        sessionId: "s-apply-version",
+        version: 10,
+        revision: 10,
+        messages: [{ role: RoleEnum.USER, content: "fresh", turnScopeId: "client-turn:version" }],
+      }],
+    });
+
+    expect(activeSession.version).toBe(10);
+    expect(activeSession.revision).toBe(10);
+  });
+
+  it("applySessionDetail does not let stopped detail overwrite an in-flight assistant with the same turnScopeId", () => {
+    const freshTurnScopeId = "client-turn:fresh-same-scope";
+    const activeSession = {
+      id: "s-apply-same-scope-stopped",
+      sessionId: "s-apply-same-scope-stopped",
+      backendSessionId: "s-apply-same-scope-stopped",
+      title: "current",
+      messages: [
+        { role: RoleEnum.USER, content: "edited question", turnScopeId: freshTurnScopeId },
+        {
+          role: RoleEnum.ASSISTANT,
+          content: "",
+          turnScopeId: freshTurnScopeId,
+          dialogProcessId: "dp-local-pending",
+          pending: true,
+          statusLabel: "",
+          channelState: { state: "sending", turnScopeId: freshTurnScopeId },
+        },
+      ],
+    };
+    const activeSessionId = ref("s-apply-same-scope-stopped");
+    const sessions = ref([activeSession]);
+    const { applySessionDetail } = createSessionDetailApplicator({
+      sessions,
+      activeSessionId,
+      makeViewMessage: (message) => ({ ...message }),
+      foldMessagesForView: (messages) => messages.map((message) => ({ ...message })),
+      sessionTitleFromMessages: () => "title",
+      applyCompletedToolLogsToMessages: vi.fn(),
+      scrollBottom: vi.fn(),
+      isSameSessionIdentity: (a, b) => String(a) === String(b),
+    });
+
+    applySessionDetail({
+      sessionId: "s-apply-same-scope-stopped",
+      sessions: [{
+        sessionId: "s-apply-same-scope-stopped",
+        messages: [
+          { role: RoleEnum.USER, content: "edited question", turnScopeId: freshTurnScopeId },
+          {
+            role: RoleEnum.ASSISTANT,
+            content: "已停止",
+            turnScopeId: freshTurnScopeId,
+            dialogProcessId: "dp-stale-stopped",
+            pending: false,
+            statusLabel: "chat.stopped",
+            stopState: "stopped",
+            channelState: { state: "stopped", turnScopeId: freshTurnScopeId },
+          },
+        ],
+      }],
+    }, { preserveCurrentMessages: true });
+
+    const assistant = activeSession.messages.find((message) => message.role === RoleEnum.ASSISTANT);
+    expect(assistant).toEqual(expect.objectContaining({
+      content: "",
+      turnScopeId: freshTurnScopeId,
+      dialogProcessId: "dp-local-pending",
+      pending: true,
+      statusLabel: "",
+    }));
+    expect(assistant.channelState).toEqual(expect.objectContaining({ state: "sending" }));
+    expect(assistant.stopState).toBeUndefined();
+  });
+
+  it("applySessionDetail still merges completed detail into an in-flight assistant with the same turnScopeId", () => {
+    const freshTurnScopeId = "client-turn:fresh-completed-scope";
+    const activeSession = {
+      id: "s-apply-same-scope-completed",
+      sessionId: "s-apply-same-scope-completed",
+      backendSessionId: "s-apply-same-scope-completed",
+      title: "current",
+      messages: [
+        { role: RoleEnum.USER, content: "edited question", turnScopeId: freshTurnScopeId },
+        {
+          role: RoleEnum.ASSISTANT,
+          content: "",
+          turnScopeId: freshTurnScopeId,
+          dialogProcessId: "dp-local-pending",
+          pending: true,
+          statusLabel: "",
+          channelState: { state: "sending", turnScopeId: freshTurnScopeId },
+        },
+      ],
+    };
+    const activeSessionId = ref("s-apply-same-scope-completed");
+    const sessions = ref([activeSession]);
+    const { applySessionDetail } = createSessionDetailApplicator({
+      sessions,
+      activeSessionId,
+      makeViewMessage: (message) => ({ ...message }),
+      foldMessagesForView: (messages) => messages.map((message) => ({ ...message })),
+      sessionTitleFromMessages: () => "title",
+      applyCompletedToolLogsToMessages: vi.fn(),
+      scrollBottom: vi.fn(),
+      isSameSessionIdentity: (a, b) => String(a) === String(b),
+    });
+
+    applySessionDetail({
+      sessionId: "s-apply-same-scope-completed",
+      sessions: [{
+        sessionId: "s-apply-same-scope-completed",
+        messages: [
+          { role: RoleEnum.USER, content: "edited question", turnScopeId: freshTurnScopeId },
+          {
+            role: RoleEnum.ASSISTANT,
+            content: "answer done",
+            turnScopeId: freshTurnScopeId,
+            dialogProcessId: "dp-completed",
+            pending: false,
+            completed: true,
+            channelState: { state: "completed", turnScopeId: freshTurnScopeId },
+          },
+        ],
+      }],
+    }, { preserveCurrentMessages: true });
+
+    const assistant = activeSession.messages.find((message) => message.role === RoleEnum.ASSISTANT);
+    expect(assistant).toEqual(expect.objectContaining({
+      content: "answer done",
+      turnScopeId: freshTurnScopeId,
+      dialogProcessId: "dp-completed",
+      pending: false,
+      completed: true,
+    }));
   });
 
   it("expired channel_state schedules session refresh", async () => {
@@ -667,7 +1015,7 @@ describe("useChatEngine", () => {
       expect.objectContaining({ sessionId: "local-state-only" }),
       { preserveCurrentMessages: true, scrollToBottom: false },
     );
-    expect(deps.chatWebSocketClient.clearStopRequested).toHaveBeenCalledTimes(1);
+    expect(deps.chatWebSocketClient.clearStopRequested).toHaveBeenCalledTimes(2);
   });
 
   it("interaction_pending without pendingInteraction falls back to error state", async () => {
@@ -770,7 +1118,7 @@ describe("useChatEngine", () => {
         },
       });
     });
-    const { engine, activeSession } = createHarness({
+    const { engine, activeSession, appendMessage } = createHarness({
       sessionId: "local-connector-status",
       stream,
       deps: {
@@ -873,6 +1221,7 @@ describe("useChatEngine", () => {
       content: "partial answer",
       pending: true,
       dialogProcessId: "dp-stop-payload",
+      turnScopeId: "turn-stop-payload",
       parentDialogProcessId: "parent-dp",
       modelAlias: "alias-a",
       modelName: "model-a",
@@ -889,15 +1238,53 @@ describe("useChatEngine", () => {
       userId: "u-1",
       sessionId: "backend-stop-payload",
       dialogProcessId: "dp-stop-payload",
+      turnScopeId: "turn-stop-payload",
       parentSessionId: "parent-session",
       parentDialogProcessId: "parent-dp",
       partialAssistant: {
         content: "partial answer",
         dialogProcessId: "dp-stop-payload",
+        turnScopeId: "turn-stop-payload",
         modelAlias: "alias-a",
         modelName: "model-a",
       },
     });
+  });
+
+  it("stopSending can stop a refreshed in-flight assistant with channelState but no pending flag", async () => {
+    const { engine, deps, sending, canStop, activeSession } = createHarness({
+      sessionId: "local-stop-refreshed",
+    });
+    activeSession.value.backendSessionId = "backend-stop-refreshed";
+    activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "edited", turnScopeId: "turn-refreshed" },
+      {
+        role: RoleEnum.ASSISTANT,
+        content: "partial after refresh",
+        dialogProcessId: "dp-refreshed",
+        turnScopeId: "turn-refreshed",
+        channelState: { state: SESSION_RUN_STATE.RESEND_STREAMING },
+      },
+    ];
+    activeSession.value.rawMessages = [...activeSession.value.messages];
+    sending.value = true;
+    canStop.value = true;
+    deps.chatWebSocketClient.requestStop.mockReturnValue(true);
+
+    expect(engine.stopSending()).toBe(true);
+    expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "backend-stop-refreshed",
+        dialogProcessId: "dp-refreshed",
+        turnScopeId: "turn-refreshed",
+        partialAssistant: expect.objectContaining({
+          content: "partial after refresh",
+          dialogProcessId: "dp-refreshed",
+          turnScopeId: "turn-refreshed",
+        }),
+      }),
+      expect.any(Function),
+    );
   });
 
   it("prepareMonotonicMessageAction stops first and waits until sending settles", async () => {
@@ -910,10 +1297,16 @@ describe("useChatEngine", () => {
       },
     });
     activeSession.value.messages.push({
+      role: RoleEnum.USER,
+      content: "question",
+      turnScopeId: "turn-stop",
+    });
+    activeSession.value.messages.push({
       role: RoleEnum.ASSISTANT,
       content: "partial",
       pending: true,
       dialogProcessId: "dp-stop",
+      turnScopeId: "turn-stop",
     });
     sending.value = true;
     canStop.value = true;
@@ -934,7 +1327,7 @@ describe("useChatEngine", () => {
   it("prepareMonotonicMessageAction warns and rejects when stop does not settle", async () => {
     vi.useFakeTimers();
     const notify = vi.fn();
-    const { engine, deps, sending } = createHarness({
+    const { engine, deps, activeSession, sending, runStateSnapshot } = createHarness({
       sessionId: "local-monotonic-timeout",
       deps: {
         notify,
@@ -942,7 +1335,23 @@ describe("useChatEngine", () => {
         monotonicActionStopPollIntervalMs: 10,
       },
     });
+    activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "running", turnScopeId: "turn-timeout" },
+      {
+        role: RoleEnum.ASSISTANT,
+        content: "",
+        pending: true,
+        turnScopeId: "turn-timeout",
+        channelState: { state: "sending", turnScopeId: "turn-timeout" },
+      },
+    ];
+    activeSession.value.rawMessages = [...activeSession.value.messages];
     sending.value = true;
+    runStateSnapshot.value = {
+      state: SESSION_RUN_STATE.SENDING,
+      sessionId: "local-monotonic-timeout",
+      turnScopeId: "turn-timeout",
+    };
     deps.chatWebSocketClient.requestStop.mockReturnValue(true);
 
     const actionPromise = engine.prepareMonotonicMessageAction();
@@ -981,9 +1390,9 @@ describe("useChatEngine", () => {
 
   it("cascadeDeleteMessagesFrom removes matching rawMessages even when they are not the same objects", () => {
     const { engine, activeSession } = createHarness({ sessionId: "local-cascade-raw-copy" });
-    const first = { id: "m1", role: RoleEnum.USER, content: "first", dialogProcessId: "dp-1" };
-    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target", dialogProcessId: "dp-1" };
-    const tail = { id: "m3", role: RoleEnum.USER, content: "tail", dialogProcessId: "dp-2" };
+    const first = { id: "m1", role: RoleEnum.USER, content: "first", turnScopeId: "turn-1", dialogProcessId: "dp-1" };
+    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target", turnScopeId: "turn-1", dialogProcessId: "dp-1" };
+    const tail = { id: "m3", role: RoleEnum.USER, content: "tail", turnScopeId: "turn-2", dialogProcessId: "dp-2" };
     activeSession.value.messages = [first, target, tail];
     activeSession.value.rawMessages = [
       { ...first },
@@ -1004,7 +1413,7 @@ describe("useChatEngine", () => {
   it("deleteMonotonicMessage stops before cascading deletion from resolved user message", async () => {
     const { engine, activeSession, sending, canStop, deps } = createHarness({ sessionId: "local-delete" });
     const first = { id: "m1", turnScopeId: "client-turn:resend-stale", role: RoleEnum.USER, content: "first" };
-    const target = { id: "m2", turnScopeId: "client-turn:resend-stale", role: RoleEnum.ASSISTANT, content: "target" };
+    const target = { id: "m2", turnScopeId: "client-turn:resend-stale", role: RoleEnum.ASSISTANT, content: "target", pending: true };
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
     sending.value = true;
@@ -1027,7 +1436,7 @@ describe("useChatEngine", () => {
       stream,
     });
     const first = { id: "m1", turnScopeId: "client-turn:resend-no-flicker", role: RoleEnum.USER, content: "first" };
-    const target = { id: "m2", turnScopeId: "client-turn:resend-no-flicker", role: RoleEnum.ASSISTANT, content: "target" };
+    const target = { id: "m2", turnScopeId: "client-turn:resend-no-flicker", role: RoleEnum.ASSISTANT, content: "target", pending: true };
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
     sending.value = true;
@@ -1037,17 +1446,13 @@ describe("useChatEngine", () => {
       return true;
     });
 
-    await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(true);
+    await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(false);
 
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledTimes(1);
-    expect(stream).toHaveBeenCalledTimes(1);
-    expect(stream.mock.calls[0][0].message).toBe("edited question");
-    expect(activeSession.value.messages[0]).toEqual(expect.objectContaining({
-      role: RoleEnum.USER,
-      content: "edited question",
-    }));
+    expect(stream).not.toHaveBeenCalled();
+    expect(activeSession.value.messages).toEqual([first, target]);
     expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
-    expect(input.value).toBe("");
+    expect(input.value).toBe("hello");
   });
 
   it("resendMonotonicMessage keeps final edited messages after backend delete fallback", async () => {
@@ -1088,7 +1493,7 @@ describe("useChatEngine", () => {
         ],
       }],
     }));
-    const { engine, activeSession } = createHarness({
+    const { engine, activeSession, appendMessage } = createHarness({
       sessionId: "local-resend-stale-snapshot",
       stream,
       deps: { deleteSessionMessagesFromApi, applySessionDetail, fetchSessionDetail },
@@ -1098,7 +1503,10 @@ describe("useChatEngine", () => {
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
 
-    await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(true);
+    await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(false);
+    expect(stream).not.toHaveBeenCalled();
+    expect(activeSession.value.messages).toEqual([first, target]);
+    return;
 
     const userMessages = activeSession.value.rawMessages.filter((message) => message.role === RoleEnum.USER);
     expect(userMessages).toHaveLength(1);
@@ -1160,7 +1568,10 @@ describe("useChatEngine", () => {
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
 
-    await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(true);
+    await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(false);
+    expect(stream).not.toHaveBeenCalled();
+    expect(activeSession.value.messages).toEqual([first, target]);
+    return;
 
     expect(activeSession.value.messages.find((message) => message.content === "first")).toBeUndefined();
     expect(activeSession.value.messages).toEqual(expect.arrayContaining([
@@ -1220,7 +1631,10 @@ describe("useChatEngine", () => {
     activeSession.value.messages = [{ ...staleFirst }, { ...staleTarget }];
     activeSession.value.rawMessages = [{ ...staleFirst }, { ...staleTarget }];
 
-    await expect(engine.resendMonotonicMessage(staleTarget, "edited question")).resolves.toBe(true);
+    await expect(engine.resendMonotonicMessage(staleTarget, "edited question")).resolves.toBe(false);
+    expect(stream).not.toHaveBeenCalled();
+    expect(activeSession.value.messages).toEqual([{ ...staleFirst }, { ...staleTarget }]);
+    return;
 
     expect(activeSession.value.messages.map((message) => message.content)).toEqual([
       "edited question",
@@ -1273,7 +1687,10 @@ describe("useChatEngine", () => {
     activeSession.value.messages = [{ ...staleFirst }, { ...staleTarget }];
     activeSession.value.rawMessages = [{ ...staleFirst }, { ...staleTarget }];
 
-    await expect(engine.resendMonotonicMessage(staleTarget, "repeat")).resolves.toBe(true);
+    await expect(engine.resendMonotonicMessage(staleTarget, "repeat")).resolves.toBe(false);
+    expect(stream).not.toHaveBeenCalled();
+    expect(activeSession.value.messages).toEqual([{ ...staleFirst }, { ...staleTarget }]);
+    return;
 
     expect(activeSession.value.messages.map((message) => message.content)).toEqual([
       "repeat",
@@ -1314,7 +1731,10 @@ describe("useChatEngine", () => {
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
 
-    await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(true);
+    await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(false);
+    expect(stream).not.toHaveBeenCalled();
+    expect(activeSession.value.messages).toEqual([first, target]);
+    return;
 
     expect(observedMessagesAtStream).toEqual(expect.arrayContaining([
       expect.objectContaining({ role: RoleEnum.USER, content: "edited question" }),
@@ -1330,8 +1750,9 @@ describe("useChatEngine", () => {
   it("resendMonotonicMessage continues generation after atomic replace-turn returns user-only snapshot", async () => {
     const stream = vi.fn(async () => {});
     const deleteSessionMessagesFromApi = vi.fn();
-    const replacementUser = { turnScopeId: "client-turn:replacement", role: RoleEnum.USER, content: "edited question" };
-    const replaceSessionTurnApi = vi.fn(async () => ({
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId }) => {
+      const replacementUser = { turnScopeId, role: RoleEnum.USER, content: "edited question" };
+      return {
       ok: true,
       newTurn: replacementUser,
       session: makeSession("local-resend-replace-success", {
@@ -1340,7 +1761,8 @@ describe("useChatEngine", () => {
         messageCount: 1,
         version: 4,
       }),
-    }));
+    };
+    });
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value = { ...activeSession.value, ...mainSession };
@@ -1371,8 +1793,10 @@ describe("useChatEngine", () => {
     }), expect.any(Object));
     expect(applySessionDetail).toHaveBeenCalledWith(expect.objectContaining({
       sessionId: "local-resend-replace-success",
-      sessions: [expect.objectContaining({ messages: [replacementUser] })],
-    }), { preserveCurrentMessages: false });
+      sessions: [expect.objectContaining({
+        messages: [expect.objectContaining({ turnScopeId: expect.stringMatching(/^client-turn:/), content: "edited question" })],
+      })],
+    }), { preserveCurrentMessages: true });
     expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
     expect(stream).toHaveBeenCalledTimes(1);
     expect(stream.mock.calls[0][0].message).toBe("edited question");
@@ -1384,16 +1808,597 @@ describe("useChatEngine", () => {
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
     expect(runStateSnapshot.value).toEqual(expect.objectContaining({
-      state: SESSION_RUN_STATE.SENDING,
+      state: SESSION_RUN_STATE.RESEND_STREAMING,
       dialogProcessId: "",
       turnScopeId: expect.any(String),
     }));
     expect(appendMessage).toHaveBeenCalledTimes(1);
+    expect(appendMessage).not.toHaveBeenCalledWith(RoleEnum.USER, "edited question", []);
     expect(appendMessage).toHaveBeenCalledWith(RoleEnum.ASSISTANT, "", []);
     expect(activeSession.value.messages.filter((message) => message.role === RoleEnum.USER)).toHaveLength(1);
     expect(activeSession.value.messages.map((message) => message.content)).toEqual(["edited question", ""]);
+    expect(activeSession.value.messages[0].turnScopeId).toBe(activeSession.value.messages[1].turnScopeId);
     expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
     expect(input.value).toBe("");
+  });
+
+  it("resendMonotonicMessage refreshes session version after 409 and retries replace-turn with the newer version", async () => {
+    const stream = vi.fn(async () => {});
+    const fetchSessionDetail = vi.fn(async () => ({
+      sessionId: "local-resend-version-retry",
+      sessions: [makeSession("local-resend-version-retry", {
+        version: 5,
+        revision: 5,
+        messages: [
+          { turnScopeId: "client-turn:old-version", role: RoleEnum.USER, content: "old" },
+          { turnScopeId: "client-turn:old-version", role: RoleEnum.ASSISTANT, content: "stopped", stopState: "stopped" },
+        ],
+      })],
+    }));
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, expectedVersion }) => {
+      if (expectedVersion === 3) {
+        return { ok: false, status: 409, statusText: "Conflict", error: "session version conflict" };
+      }
+      const replacementUser = { turnScopeId, role: RoleEnum.USER, content: newContent };
+      return {
+        ok: true,
+        session: makeSession("local-resend-version-retry", {
+          version: 6,
+          revision: 6,
+          messages: [replacementUser],
+          rawMessages: [replacementUser],
+        }),
+      };
+    });
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value = { ...activeSession.value, ...mainSession };
+    });
+    const { engine, activeSession, appendMessage } = createHarness({
+      sessionId: "local-resend-version-retry",
+      stream,
+      deps: { replaceSessionTurnApi, fetchSessionDetail, applySessionDetail },
+    });
+    const stoppedUser = { turnScopeId: "client-turn:old-version", role: RoleEnum.USER, content: "old" };
+    const stoppedAssistant = { turnScopeId: "client-turn:old-version", role: RoleEnum.ASSISTANT, content: "partial", stopState: "stopped" };
+    activeSession.value.messages = [stoppedUser, stoppedAssistant];
+    activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
+    activeSession.value.version = 3;
+    activeSession.value.revision = 3;
+
+    await expect(engine.resendMonotonicMessage(stoppedAssistant, "edited after conflict")).resolves.toBe(true);
+
+    expect(replaceSessionTurnApi).toHaveBeenCalledTimes(2);
+    expect(replaceSessionTurnApi.mock.calls[0][0]).toEqual(expect.objectContaining({ expectedVersion: 3 }));
+    expect(replaceSessionTurnApi.mock.calls[1][0]).toEqual(expect.objectContaining({ expectedVersion: 5 }));
+    expect(replaceSessionTurnApi.mock.calls[1][0].idempotencyKey).toContain("retry-version");
+    expect(fetchSessionDetail).toHaveBeenCalledWith("local-resend-version-retry", expect.objectContaining({
+      force: true,
+      reuseRecentlyLoaded: false,
+      source: "resendVersionConflict",
+    }));
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(stream.mock.calls[0][0]).toEqual(expect.objectContaining({
+      message: "edited after conflict",
+      turnScopeId: expect.stringMatching(/^client-turn:/),
+    }));
+    expect(appendMessage).toHaveBeenCalledWith(RoleEnum.ASSISTANT, "", []);
+  });
+
+  it("resendMonotonicMessage does not retry a 409 when refresh does not advance the session version", async () => {
+    const stream = vi.fn(async () => {});
+    const fetchSessionDetail = vi.fn(async () => ({
+      sessionId: "local-resend-version-no-change",
+      sessions: [makeSession("local-resend-version-no-change", {
+        version: 3,
+        revision: 3,
+        messages: [{ turnScopeId: "client-turn:no-change", role: RoleEnum.USER, content: "old" }],
+      })],
+    }));
+    const replaceSessionTurnApi = vi.fn(async () => ({
+      ok: false,
+      status: 409,
+      statusText: "Conflict",
+      error: "session version conflict",
+    }));
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value = { ...activeSession.value, ...mainSession };
+    });
+    const { engine, activeSession, input } = createHarness({
+      sessionId: "local-resend-version-no-change",
+      stream,
+      deps: { replaceSessionTurnApi, fetchSessionDetail, applySessionDetail },
+    });
+    const stoppedUser = { turnScopeId: "client-turn:no-change", role: RoleEnum.USER, content: "old" };
+    const stoppedAssistant = { turnScopeId: "client-turn:no-change", role: RoleEnum.ASSISTANT, content: "partial", stopState: "stopped" };
+    activeSession.value.messages = [stoppedUser, stoppedAssistant];
+    activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
+    activeSession.value.version = 3;
+    activeSession.value.revision = 3;
+    input.value = "draft before failed retry";
+
+    await expect(engine.resendMonotonicMessage(stoppedAssistant, "edited no retry")).resolves.toBe(false);
+
+    expect(replaceSessionTurnApi).toHaveBeenCalledTimes(1);
+    expect(fetchSessionDetail).toHaveBeenCalledTimes(1);
+    expect(stream).not.toHaveBeenCalled();
+    expect(activeSession.value.messages).toEqual([stoppedUser, stoppedAssistant]);
+    expect(input.value).toBe("draft before failed retry");
+  });
+
+  it("resendMonotonicMessage ignores stopped assistant returned with the fresh replacement turn and continues streaming", async () => {
+    const stream = vi.fn(async () => {});
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {
+      const replacementUser = {
+        turnScopeId,
+        role: RoleEnum.USER,
+        content: newContent,
+      };
+      const staleStoppedAssistant = {
+        turnScopeId,
+        role: RoleEnum.ASSISTANT,
+        content: "old stopped partial",
+        pending: false,
+        statusLabel: "chat.stopped",
+        stopState: "stopped",
+        channelState: { state: "stopped", turnScopeId },
+      };
+      return {
+        ok: true,
+        session: makeSession("local-resend-fresh-stopped-assistant", {
+          messages: [replacementUser, staleStoppedAssistant],
+          rawMessages: [replacementUser, staleStoppedAssistant],
+        }),
+      };
+    });
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value = { ...activeSession.value, ...mainSession };
+    });
+    const { engine, activeSession, sending, canStop, runStateSnapshot } = createHarness({
+      sessionId: "local-resend-fresh-stopped-assistant",
+      stream,
+      deps: { replaceSessionTurnApi, applySessionDetail },
+    });
+    const stoppedUser = {
+      turnScopeId: "client-turn:first-old",
+      role: RoleEnum.USER,
+      content: "first stopped",
+      stopState: "stopped",
+    };
+    const stoppedAssistant = {
+      turnScopeId: "client-turn:first-old",
+      role: RoleEnum.ASSISTANT,
+      content: "partial",
+      pending: false,
+      statusLabel: "chat.stopped",
+      stopState: "stopped",
+      channelState: { state: "stopped", turnScopeId: "client-turn:first-old" },
+    };
+    activeSession.value.messages = [stoppedUser, stoppedAssistant];
+    activeSession.value.rawMessages = [...activeSession.value.messages];
+
+    await expect(engine.resendMonotonicMessage(stoppedAssistant, "edited first resend")).resolves.toBe(true);
+
+    expect(stream).toHaveBeenCalledTimes(1);
+    const [replacementUser, placeholder] = activeSession.value.messages;
+    expect(replacementUser).toEqual(expect.objectContaining({
+      role: RoleEnum.USER,
+      content: "edited first resend",
+      turnScopeId: expect.stringMatching(/^client-turn:/),
+    }));
+    expect(placeholder).toEqual(expect.objectContaining({
+      role: RoleEnum.ASSISTANT,
+      content: "",
+      pending: true,
+      statusLabel: "",
+      turnScopeId: replacementUser.turnScopeId,
+    }));
+    expect(activeSession.value.messages).toHaveLength(2);
+    expect(activeSession.value.messages.some((message) => message.stopState === "stopped")).toBe(false);
+    expect(sending.value).toBe(true);
+    expect(canStop.value).toBe(true);
+    expect(runStateSnapshot.value).toEqual(expect.objectContaining({
+      state: SESSION_RUN_STATE.RESEND_STREAMING,
+      turnScopeId: replacementUser.turnScopeId,
+    }));
+  });
+
+  it("resendMonotonicMessage rejects stale stopped replacement snapshots without the new turnScopeId", async () => {
+    const stream = vi.fn(async () => {});
+    const staleStoppedUser = {
+      turnScopeId: "client-turn:stopped-old",
+      role: RoleEnum.USER,
+      content: "stopped question",
+      stopState: "stopped",
+      monotonicState: "monotonic",
+    };
+    const staleStoppedAssistant = {
+      turnScopeId: "client-turn:stopped-old",
+      role: RoleEnum.ASSISTANT,
+      content: "partial stopped",
+      statusLabel: "chat.stopped",
+      stopState: "stopped",
+    };
+    const replaceSessionTurnApi = vi.fn(async () => ({
+      ok: true,
+      session: makeSession("local-resend-stale-stopped", {
+        messages: [staleStoppedUser, staleStoppedAssistant],
+        rawMessages: [staleStoppedUser, staleStoppedAssistant],
+      }),
+    }));
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value = { ...activeSession.value, ...mainSession };
+    });
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-resend-stale-stopped",
+      stream,
+      deps: { replaceSessionTurnApi, applySessionDetail },
+    });
+    activeSession.value.messages = [staleStoppedUser, staleStoppedAssistant];
+    activeSession.value.rawMessages = [staleStoppedUser, staleStoppedAssistant];
+
+    await expect(engine.resendMonotonicMessage(staleStoppedAssistant, "edited again")).resolves.toBe(false);
+
+    expect(stream).not.toHaveBeenCalled();
+    expect(activeSession.value.messages).toEqual([staleStoppedUser, staleStoppedAssistant]);
+  });
+
+  it("resendMonotonicMessage can repeatedly replace a stopped turn and append a fresh assistant placeholder", async () => {
+    const stream = vi.fn(async () => {});
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {
+      const replacementUser = {
+        turnScopeId,
+        role: RoleEnum.USER,
+        content: newContent,
+        dialogProcessId: "",
+      };
+      return {
+        ok: true,
+        session: makeSession("local-resend-repeat-stopped", {
+          messages: [replacementUser],
+          rawMessages: [replacementUser],
+        }),
+      };
+    });
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value = { ...activeSession.value, ...mainSession };
+    });
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-resend-repeat-stopped",
+      stream,
+      deps: { replaceSessionTurnApi, applySessionDetail },
+    });
+    const stoppedUser = {
+      turnScopeId: "client-turn:repeat-old",
+      role: RoleEnum.USER,
+      content: "first stopped",
+      stopState: "stopped",
+      monotonicState: "monotonic",
+    };
+    const stoppedAssistant = {
+      turnScopeId: "client-turn:repeat-old",
+      role: RoleEnum.ASSISTANT,
+      content: "partial",
+      statusLabel: "chat.stopped",
+      stopState: "stopped",
+    };
+    activeSession.value.messages = [stoppedUser, stoppedAssistant];
+    activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
+
+    await expect(engine.resendMonotonicMessage(stoppedAssistant, "second resend")).resolves.toBe(true);
+
+    const [replacementUser, placeholder] = activeSession.value.messages;
+    expect(replacementUser).toEqual(expect.objectContaining({
+      role: RoleEnum.USER,
+      content: "second resend",
+      turnScopeId: expect.stringMatching(/^client-turn:/),
+    }));
+    expect(replacementUser.stopState).toBeUndefined();
+    expect(placeholder).toEqual(expect.objectContaining({
+      role: RoleEnum.ASSISTANT,
+      content: "",
+      pending: true,
+      turnScopeId: replacementUser.turnScopeId,
+    }));
+    expect(placeholder.statusLabel).toBe("");
+    expect(stream).toHaveBeenCalledTimes(1);
+  });
+
+  it("resendMonotonicMessage keeps the second replacement turn running instead of inheriting stopped state", async () => {
+    const stream = vi.fn(async () => {});
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {
+      const replacementUser = {
+        turnScopeId,
+        role: RoleEnum.USER,
+        content: newContent,
+        dialogProcessId: "",
+      };
+      return {
+        ok: true,
+        session: makeSession("local-resend-second-stopped", {
+          messages: [replacementUser],
+          rawMessages: [replacementUser],
+        }),
+      };
+    });
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value = { ...activeSession.value, ...mainSession };
+    });
+    const { engine, activeSession, runStateSnapshot, sending, canStop } = createHarness({
+      sessionId: "local-resend-second-stopped",
+      stream,
+      deps: { replaceSessionTurnApi, applySessionDetail },
+    });
+    activeSession.value.messages = [
+      {
+        turnScopeId: "client-turn:old",
+        role: RoleEnum.USER,
+        content: "first stopped",
+        stopState: "stopped",
+      },
+      {
+        turnScopeId: "client-turn:old",
+        role: RoleEnum.ASSISTANT,
+        content: "partial",
+        pending: false,
+        statusLabel: "chat.stopped",
+        stopState: "stopped",
+        channelState: { state: "stopped", turnScopeId: "client-turn:old" },
+      },
+    ];
+    activeSession.value.rawMessages = [...activeSession.value.messages];
+
+    await expect(engine.resendMonotonicMessage(activeSession.value.messages[1], "second")).resolves.toBe(true);
+    const firstReplacementUser = activeSession.value.messages[0];
+    const firstReplacementAssistant = activeSession.value.messages[1];
+    const firstTurnScopeId = firstReplacementUser.turnScopeId;
+
+    firstReplacementUser.stopState = "stopped";
+    firstReplacementUser.monotonicState = "monotonic";
+    firstReplacementAssistant.pending = false;
+    firstReplacementAssistant.statusLabel = "chat.stopped";
+    firstReplacementAssistant.stopState = "stopped";
+    firstReplacementAssistant.channelState = { state: "stopped", turnScopeId: firstTurnScopeId };
+    runStateSnapshot.value = {
+      state: SESSION_RUN_STATE.STOPPED,
+      sessionId: "local-resend-second-stopped",
+      dialogProcessId: "",
+      turnScopeId: firstTurnScopeId,
+      seq: 0,
+    };
+    sending.value = false;
+    canStop.value = false;
+
+    await expect(engine.resendMonotonicMessage(firstReplacementAssistant, "third")).resolves.toBe(true);
+
+    const [secondReplacementUser, secondPlaceholder] = activeSession.value.messages;
+    expect(secondReplacementUser.turnScopeId).toMatch(/^client-turn:/);
+    expect(secondReplacementUser.turnScopeId).not.toBe(firstTurnScopeId);
+    expect(secondReplacementUser.stopState).toBeUndefined();
+    expect(secondPlaceholder).toEqual(expect.objectContaining({
+      role: RoleEnum.ASSISTANT,
+      content: "",
+      pending: true,
+      statusLabel: "",
+      turnScopeId: secondReplacementUser.turnScopeId,
+    }));
+    expect(secondPlaceholder.stopState).toBeUndefined();
+    expect(secondPlaceholder.channelState?.state).not.toBe("stopped");
+    expect(runStateSnapshot.value).toMatchObject({
+      state: SESSION_RUN_STATE.RESEND_STREAMING,
+      turnScopeId: secondReplacementUser.turnScopeId,
+    });
+    expect(sending.value).toBe(true);
+    expect(canStop.value).toBe(true);
+    expect(stream).toHaveBeenCalledTimes(2);
+  });
+
+  it("resendMonotonicMessage ignores stale stopped channel_state replayed onto a fresh replacement turn", async () => {
+    let streamCallCount = 0;
+    const stream = vi.fn(async (payload, onEvent) => {
+      streamCallCount += 1;
+      if (streamCallCount === 2) {
+        emitChannelState(onEvent, "local-resend-stale-stop-replay", "dp-old-stopped", "stopped", {
+          turnScopeId: payload.turnScopeId,
+        });
+      }
+    });
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {
+      const replacementUser = {
+        turnScopeId,
+        role: RoleEnum.USER,
+        content: newContent,
+        dialogProcessId: "",
+      };
+      return {
+        ok: true,
+        session: makeSession("local-resend-stale-stop-replay", {
+          messages: [
+            {
+              turnScopeId: "client-turn:history",
+              role: RoleEnum.USER,
+              content: "historical stopped",
+              dialogProcessId: "dp-old-stopped",
+              stopState: "stopped",
+            },
+            {
+              turnScopeId: "client-turn:history",
+              role: RoleEnum.ASSISTANT,
+              content: "historical partial",
+              pending: false,
+              statusLabel: "chat.stopped",
+              dialogProcessId: "dp-old-stopped",
+              channelState: { state: "stopped", dialogProcessId: "dp-old-stopped", turnScopeId: "client-turn:history" },
+            },
+            replacementUser,
+          ],
+          rawMessages: [replacementUser],
+        }),
+      };
+    });
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value = { ...activeSession.value, ...mainSession };
+    });
+    const { engine, activeSession, runStateSnapshot, sending, canStop } = createHarness({
+      sessionId: "local-resend-stale-stop-replay",
+      stream,
+      deps: { replaceSessionTurnApi, applySessionDetail },
+    });
+    activeSession.value.messages = [
+      { turnScopeId: "client-turn:first", role: RoleEnum.USER, content: "first", stopState: "stopped" },
+      {
+        turnScopeId: "client-turn:first",
+        role: RoleEnum.ASSISTANT,
+        content: "partial",
+        pending: false,
+        statusLabel: "chat.stopped",
+        channelState: { state: "stopped", turnScopeId: "client-turn:first" },
+      },
+    ];
+    activeSession.value.rawMessages = [...activeSession.value.messages];
+
+    await expect(engine.resendMonotonicMessage(activeSession.value.messages[1], "second")).resolves.toBe(true);
+    const firstAssistant = activeSession.value.messages.find((message) => message.role === RoleEnum.ASSISTANT && message.pending === true);
+    firstAssistant.pending = false;
+    firstAssistant.statusLabel = "chat.stopped";
+    firstAssistant.channelState = { state: "stopped", turnScopeId: firstAssistant.turnScopeId };
+    runStateSnapshot.value = {
+      state: SESSION_RUN_STATE.STOPPED,
+      sessionId: "local-resend-stale-stop-replay",
+      turnScopeId: firstAssistant.turnScopeId,
+      seq: 0,
+    };
+    sending.value = false;
+    canStop.value = false;
+
+    await expect(engine.resendMonotonicMessage(firstAssistant, "third")).resolves.toBe(true);
+
+    const freshPlaceholder = [...activeSession.value.messages]
+      .reverse()
+      .find((message) => message.role === RoleEnum.ASSISTANT && message.pending === true);
+    expect(freshPlaceholder).toEqual(expect.objectContaining({
+      content: "",
+      pending: true,
+      statusLabel: "",
+      turnScopeId: expect.stringMatching(/^client-turn:/),
+    }));
+    expect(freshPlaceholder.channelState?.state).not.toBe("stopped");
+    expect(runStateSnapshot.value).toMatchObject({
+      state: SESSION_RUN_STATE.RESEND_STREAMING,
+      turnScopeId: freshPlaceholder.turnScopeId,
+    });
+    expect(sending.value).toBe(true);
+    expect(canStop.value).toBe(true);
+  });
+
+  it("resendMonotonicMessage rejects when frontend run state has no matching in-flight assistant", async () => {
+    const stream = vi.fn(async () => {});
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => ({
+      ok: true,
+      session: makeSession("local-resend-state-mismatch", {
+        messages: [{ turnScopeId, role: RoleEnum.USER, content: newContent }],
+        rawMessages: [{ turnScopeId, role: RoleEnum.USER, content: newContent }],
+      }),
+    }));
+    const { engine, activeSession, runStateSnapshot, sending, canStop, deps } = createHarness({
+      sessionId: "local-resend-state-mismatch",
+      stream,
+      deps: { replaceSessionTurnApi },
+    });
+    const stoppedUser = {
+      turnScopeId: "client-turn:old-stopped",
+      role: RoleEnum.USER,
+      content: "old stopped",
+      stopState: "stopped",
+    };
+    const stoppedAssistant = {
+      turnScopeId: "client-turn:old-stopped",
+      role: RoleEnum.ASSISTANT,
+      content: "partial",
+      pending: false,
+      statusLabel: "chat.stopped",
+      channelState: { state: "stopped", turnScopeId: "client-turn:old-stopped" },
+    };
+    activeSession.value.messages = [stoppedUser, stoppedAssistant];
+    activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
+    sending.value = true;
+    canStop.value = false;
+    runStateSnapshot.value = {
+      state: SESSION_RUN_STATE.RESEND_STREAMING,
+      sessionId: "local-resend-state-mismatch",
+      turnScopeId: "client-turn:missing-in-flight",
+    };
+
+    await expect(engine.resendMonotonicMessage(stoppedAssistant, "retry")).resolves.toBe(false);
+
+    expect(replaceSessionTurnApi).not.toHaveBeenCalled();
+    expect(stream).not.toHaveBeenCalled();
+    expect(activeSession.value.messages).toEqual([stoppedUser, stoppedAssistant]);
+    expect(deps.notify).toHaveBeenCalledWith(expect.objectContaining({
+      type: "warning",
+      message: "chat.sessionStateOutOfSync",
+    }));
+  });
+
+  it("resendMonotonicMessage ignores stale stopped assistants after the new replacement user", async () => {
+    const stream = vi.fn(async () => {});
+    const staleStoppedAssistant = {
+      turnScopeId: "client-turn:old-stopped",
+      role: RoleEnum.ASSISTANT,
+      content: "old stopped partial",
+      statusLabel: "chat.stopped",
+      stopState: "stopped",
+    };
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {
+      const replacementUser = {
+        turnScopeId,
+        role: RoleEnum.USER,
+        content: newContent,
+      };
+      return {
+        ok: true,
+        session: makeSession("local-resend-ignore-stale-assistant", {
+          messages: [replacementUser, staleStoppedAssistant],
+          rawMessages: [replacementUser, staleStoppedAssistant],
+        }),
+      };
+    });
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value = { ...activeSession.value, ...mainSession };
+    });
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-resend-ignore-stale-assistant",
+      stream,
+      deps: { replaceSessionTurnApi, applySessionDetail },
+    });
+    const oldUser = {
+      turnScopeId: "client-turn:old-stopped",
+      role: RoleEnum.USER,
+      content: "old",
+      stopState: "stopped",
+    };
+    activeSession.value.messages = [oldUser, staleStoppedAssistant];
+    activeSession.value.rawMessages = [oldUser, staleStoppedAssistant];
+
+    await expect(engine.resendMonotonicMessage(staleStoppedAssistant, "new attempt")).resolves.toBe(true);
+
+    const replacementUser = activeSession.value.messages.find((message) => message.role === RoleEnum.USER);
+    const latestAssistant = activeSession.value.messages[activeSession.value.messages.length - 1];
+    expect(latestAssistant).toEqual(expect.objectContaining({
+      role: RoleEnum.ASSISTANT,
+      content: "",
+      pending: true,
+      turnScopeId: replacementUser.turnScopeId,
+      statusLabel: "",
+    }));
+    expect(stream).toHaveBeenCalledTimes(1);
   });
 
   it("resendMonotonicMessage keeps edited content when reusing a stale user message object", async () => {
@@ -1401,19 +2406,21 @@ describe("useChatEngine", () => {
     const stream = vi.fn(async () => {
       observedUserMessage = activeSession.value.messages.find((message) => message.role === RoleEnum.USER);
     });
-    const staleReplacementUser = {
-      turnScopeId: "client-turn:replacement-stale",
-      role: RoleEnum.USER,
-      content: "original question",
-    };
-    const replaceSessionTurnApi = vi.fn(async () => ({
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId }) => {
+      const staleReplacementUser = {
+        turnScopeId,
+        role: RoleEnum.USER,
+        content: "original question",
+      };
+      return {
       ok: true,
       newTurn: staleReplacementUser,
       session: makeSession("local-resend-replace-stale", {
         messages: [staleReplacementUser],
         rawMessages: [staleReplacementUser],
       }),
-    }));
+    };
+    });
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value = { ...activeSession.value, ...mainSession };
@@ -1456,18 +2463,19 @@ describe("useChatEngine", () => {
       role: RoleEnum.ASSISTANT,
       content: "old answer",
     };
-    const replacementUser = {
-      id: "new-user",
-      turnScopeId: "client-turn:resend",
-      role: RoleEnum.USER,
-      content: "edited question",
-    };
-    const replaceSessionTurnApi = vi.fn(async () => ({
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId }) => {
+      const replacementUser = {
+        id: "new-user",
+        turnScopeId,
+        role: RoleEnum.USER,
+        content: "edited question",
+      };
+      return {
       ok: true,
       turnScopeReplacement: {
         replacedTurnScopeIds: ["client-turn:old"],
-        replacementTurnScopeId: "client-turn:resend",
-        replacementTurnScopeIds: ["client-turn:resend"],
+        replacementTurnScopeId: turnScopeId,
+        replacementTurnScopeIds: [turnScopeId],
       },
       session: makeSession("local-resend-replace-mapping", {
         // Simulate a stale refresh/apply race that still contains the old
@@ -1477,7 +2485,8 @@ describe("useChatEngine", () => {
         messageCount: 3,
         version: 4,
       }),
-    }));
+    };
+    });
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value = { ...activeSession.value, ...mainSession };
@@ -1497,9 +2506,18 @@ describe("useChatEngine", () => {
     expect(observedMessagesAtStream.find((message) => message.id === "old-user")).toBeUndefined();
     expect(observedMessagesAtStream.find((message) => message.id === "old-assistant")).toBeUndefined();
     expect(observedMessagesAtStream).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: "new-user", role: RoleEnum.USER, content: "edited question" }),
+      expect.objectContaining({ role: RoleEnum.USER, content: "edited question", turnScopeId: expect.stringMatching(/^client-turn:/) }),
     ]));
-    expect(activeSession.value.messages.find((message) => message.id === "new-user")).toBeTruthy();
+    expect(activeSession.value.messages.find((message) => message.id === "new-user")).toEqual(expect.objectContaining({
+      role: RoleEnum.USER,
+      content: "edited question",
+      turnScopeId: expect.stringMatching(/^client-turn:/),
+    }));
+    expect(activeSession.value.messages.find((message) => (
+      message.role === RoleEnum.USER &&
+      message.content === "edited question" &&
+      /^client-turn:/.test(message.turnScopeId)
+    ))).toBeTruthy();
   });
 
   it("resendMonotonicMessage keeps previous duplicate-content turn when resending latest scoped user", async () => {
@@ -1520,13 +2538,14 @@ describe("useChatEngine", () => {
       content: "old answer",
       turnScopeId: "client-turn:old",
     };
-    const replacementUser = {
-      id: "u-new",
-      role: RoleEnum.USER,
-      content: "same question",
-      turnScopeId: "client-turn:new",
-    };
-    const replaceSessionTurnApi = vi.fn(async () => ({
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId }) => {
+      const replacementUser = {
+        id: "u-new",
+        role: RoleEnum.USER,
+        content: "same question",
+        turnScopeId,
+      };
+      return {
       ok: true,
       newTurn: replacementUser,
       session: makeSession("local-resend-duplicate-scoped-latest", {
@@ -1534,7 +2553,8 @@ describe("useChatEngine", () => {
         rawMessages: [previousUser, previousAssistant, replacementUser],
         version: 4,
       }),
-    }));
+    };
+    });
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value.messages = [...(mainSession.messages || [])];
@@ -1566,14 +2586,26 @@ describe("useChatEngine", () => {
       "u-new",
       undefined,
     ]);
+    expect(observedMessagesAtStream[2]).toEqual(expect.objectContaining({
+      role: RoleEnum.USER,
+      content: "same question",
+      turnScopeId: expect.stringMatching(/^client-turn:/),
+    }));
+    expect(observedMessagesAtStream[3]).toEqual(expect.objectContaining({
+      role: RoleEnum.ASSISTANT,
+      content: "",
+      pending: true,
+      turnScopeId: observedMessagesAtStream[2].turnScopeId,
+    }));
   });
 
   it("resendMonotonicMessage does not generate again when replace-turn returns completed assistant snapshot", async () => {
     const stream = vi.fn(async () => {});
     const deleteSessionMessagesFromApi = vi.fn();
-    const replacementUser = { turnScopeId: "scope-new", role: RoleEnum.USER, content: "edited question" };
-    const replacementAssistant = { turnScopeId: "scope-new", role: RoleEnum.ASSISTANT, content: "edited answer" };
-    const replaceSessionTurnApi = vi.fn(async () => ({
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId }) => {
+      const replacementUser = { turnScopeId, role: RoleEnum.USER, content: "edited question" };
+      const replacementAssistant = { turnScopeId, role: RoleEnum.ASSISTANT, content: "edited answer" };
+      return {
       ok: true,
       session: makeSession("local-resend-replace-completed", {
         messages: [replacementUser, replacementAssistant],
@@ -1581,7 +2613,8 @@ describe("useChatEngine", () => {
         messageCount: 2,
         version: 4,
       }),
-    }));
+    };
+    });
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value = { ...activeSession.value, ...mainSession };
@@ -1606,7 +2639,7 @@ describe("useChatEngine", () => {
     expect(input.value).toBe("");
   });
 
-  it("resendMonotonicMessage falls back to delete and send when replace-turn is unsupported", async () => {
+  it("resendMonotonicMessage fails without delete/send fallback when replace-turn is unsupported", async () => {
     const stream = vi.fn(async () => {});
     const replaceSessionTurnApi = vi.fn(async () => ({ ok: false, status: 404 }));
     const deleteSessionMessagesFromApi = vi.fn(async () => ({
@@ -1628,17 +2661,16 @@ describe("useChatEngine", () => {
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
 
-    await expect(engine.resendMonotonicMessage(target, "edited through fallback")).resolves.toBe(true);
+    await expect(engine.resendMonotonicMessage(target, "edited through fallback")).resolves.toBe(false);
 
     expect(replaceSessionTurnApi).toHaveBeenCalledTimes(1);
-    expect(deleteSessionMessagesFromApi).toHaveBeenCalledTimes(1);
-    expect(stream).toHaveBeenCalledTimes(1);
-    expect(stream.mock.calls[0][0].message).toBe("edited through fallback");
-    expect(activeSession.value.messages).toHaveLength(0);
+    expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
+    expect(stream).not.toHaveBeenCalled();
+    expect(activeSession.value.messages).toEqual([first, target]);
     expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
   });
 
-  it("resendMonotonicMessage falls back when replace-turn throws an HTTP 404 error", async () => {
+  it("resendMonotonicMessage fails without fallback when replace-turn throws an HTTP 404 error", async () => {
     const stream = vi.fn(async () => {});
     const notFoundError = new Error("Cannot POST /api/internal/session/u1/s1/messages/replace-turn");
     notFoundError.response = { status: 404 };
@@ -1664,12 +2696,11 @@ describe("useChatEngine", () => {
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
 
-    await expect(engine.resendMonotonicMessage(target, "edited after route 404")).resolves.toBe(true);
+    await expect(engine.resendMonotonicMessage(target, "edited after route 404")).resolves.toBe(false);
 
     expect(replaceSessionTurnApi).toHaveBeenCalledTimes(1);
-    expect(deleteSessionMessagesFromApi).toHaveBeenCalledTimes(1);
-    expect(stream).toHaveBeenCalledTimes(1);
-    expect(stream.mock.calls[0][0].message).toBe("edited after route 404");
+    expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
+    expect(stream).not.toHaveBeenCalled();
     expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
   });
 
@@ -1682,8 +2713,8 @@ describe("useChatEngine", () => {
       stream,
       deps: { replaceSessionTurnApi, deleteSessionMessagesFromApi },
     });
-    const first = { id: "m1", role: RoleEnum.USER, content: "first" };
-    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
+    const first = { id: "m1", turnScopeId: "client-turn:conflict", role: RoleEnum.USER, content: "first" };
+    const target = { id: "m2", turnScopeId: "client-turn:conflict", role: RoleEnum.ASSISTANT, content: "target" };
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
     activeSession.value.messageCount = 2;
@@ -1703,7 +2734,7 @@ describe("useChatEngine", () => {
     expect(input.value).toBe("draft before conflict");
   });
 
-  it("resendMonotonicMessage does not treat reused dialogId as stable turn identity after replace-turn snapshot", async () => {
+  it("resendMonotonicMessage rejects reused dialogId snapshots without the new turnScopeId", async () => {
     const staleFirst = { turnScopeId: "scope-old", dialogId: "dp-reused", role: RoleEnum.USER, content: "repeat" };
     const staleTarget = { turnScopeId: "scope-old", dialogId: "dp-reused", role: RoleEnum.ASSISTANT, content: "old answer" };
     const editedUser = { turnScopeId: "scope-new", dialogId: "dp-reused", role: RoleEnum.USER, content: "repeat" };
@@ -1735,11 +2766,11 @@ describe("useChatEngine", () => {
     activeSession.value.messages = [{ ...staleFirst }, { ...staleTarget }];
     activeSession.value.rawMessages = [{ ...staleFirst }, { ...staleTarget }];
 
-    await expect(engine.resendMonotonicMessage(staleTarget, "repeat")).resolves.toBe(true);
+    await expect(engine.resendMonotonicMessage(staleTarget, "repeat")).resolves.toBe(false);
 
     expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
     expect(stream).not.toHaveBeenCalled();
-    expect(activeSession.value.messages.map((message) => message.content)).toEqual(["repeat", "new answer"]);
+    expect(activeSession.value.messages.map((message) => message.content)).toEqual(["repeat", "old answer"]);
     expect(activeSession.value.messages.filter((message) => message.role === RoleEnum.USER)).toHaveLength(1);
     expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
   });
@@ -1830,12 +2861,24 @@ describe("useChatEngine", () => {
 
   it("deleteMonotonicMessage does not delete when stop precondition fails", async () => {
     vi.useFakeTimers();
-    const { engine, activeSession, sending } = createHarness({ sessionId: "local-delete-fail" });
-    const first = { id: "m1", role: RoleEnum.USER, content: "first" };
-    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
+    const { engine, activeSession, sending, runStateSnapshot } = createHarness({ sessionId: "local-delete-fail" });
+    const first = { id: "m1", role: RoleEnum.USER, content: "first", turnScopeId: "turn-delete-fail" };
+    const target = {
+      id: "m2",
+      role: RoleEnum.ASSISTANT,
+      content: "target",
+      pending: true,
+      turnScopeId: "turn-delete-fail",
+      channelState: { state: "sending", turnScopeId: "turn-delete-fail" },
+    };
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
     sending.value = true;
+    runStateSnapshot.value = {
+      state: SESSION_RUN_STATE.SENDING,
+      sessionId: "local-delete-fail",
+      turnScopeId: "turn-delete-fail",
+    };
     const actionPromise = engine.deleteMonotonicMessage(target, { timeoutMs: 20, pollIntervalMs: 5 });
     const rejectionExpectation = expect(actionPromise).rejects.toThrow("chat.monotonicActionStopTimeout");
     await vi.advanceTimersByTimeAsync(25);
@@ -1848,12 +2891,24 @@ describe("useChatEngine", () => {
   it("resendMonotonicMessage does not delete or send when stop precondition fails", async () => {
     vi.useFakeTimers();
     const stream = vi.fn(async () => {});
-    const { engine, activeSession, sending, input } = createHarness({ sessionId: "local-resend-fail", stream });
-    const first = { id: "m1", role: RoleEnum.USER, content: "first" };
-    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
+    const { engine, activeSession, sending, input, runStateSnapshot } = createHarness({ sessionId: "local-resend-fail", stream });
+    const first = { id: "m1", role: RoleEnum.USER, content: "first", turnScopeId: "turn-resend-fail" };
+    const target = {
+      id: "m2",
+      role: RoleEnum.ASSISTANT,
+      content: "target",
+      pending: true,
+      turnScopeId: "turn-resend-fail",
+      channelState: { state: "sending", turnScopeId: "turn-resend-fail" },
+    };
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
     sending.value = true;
+    runStateSnapshot.value = {
+      state: SESSION_RUN_STATE.SENDING,
+      sessionId: "local-resend-fail",
+      turnScopeId: "turn-resend-fail",
+    };
     const actionPromise = engine.resendMonotonicMessage(target, "edited", { timeoutMs: 20, pollIntervalMs: 5 });
     const rejectionExpectation = expect(actionPromise).rejects.toThrow("chat.monotonicActionStopTimeout");
     await vi.advanceTimersByTimeAsync(25);
@@ -1868,9 +2923,27 @@ describe("useChatEngine", () => {
     const stream = vi.fn(async () => {
       throw new Error("network failed");
     });
-    const { engine, activeSession, input } = createHarness({ sessionId: "local-resend-send-fail", stream });
-    const first = { id: "m1", role: RoleEnum.USER, content: "first" };
-    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId }) => {
+      const replacementUser = { id: "m-new", turnScopeId, role: RoleEnum.USER, content: "edited retry text" };
+      return {
+        ok: true,
+        session: makeSession("local-resend-send-fail", {
+          messages: [replacementUser],
+          rawMessages: [replacementUser],
+        }),
+      };
+    });
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value = { ...activeSession.value, ...mainSession };
+    });
+    const { engine, activeSession, input } = createHarness({
+      sessionId: "local-resend-send-fail",
+      stream,
+      deps: { replaceSessionTurnApi, applySessionDetail },
+    });
+    const first = { id: "m1", turnScopeId: "turn-send-fail", role: RoleEnum.USER, content: "first" };
+    const target = { id: "m2", turnScopeId: "turn-send-fail", role: RoleEnum.ASSISTANT, content: "target" };
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
     activeSession.value.messageCount = 2;

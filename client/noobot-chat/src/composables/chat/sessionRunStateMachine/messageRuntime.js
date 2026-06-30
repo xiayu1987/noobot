@@ -49,21 +49,12 @@ export function resolveSessionRunStateForMessage({
   const messageDialogProcessId = getMessageDialogProcessId(messageItem);
   const messageTurnScopeId = getMessageTurnScopeId(messageItem);
 
-  if (runDialogProcessId && messageDialogProcessId && runDialogProcessId === messageDialogProcessId) {
-    return stateSnapshot;
-  }
   if (runTurnScopeId && messageTurnScopeId && runTurnScopeId === messageTurnScopeId) {
     return stateSnapshot;
   }
-  const latestAssistant = getLatestAssistantMessage(activeSession);
-  if (latestAssistant !== messageItem) return null;
-
-  // Fallback for reconnect/session refresh windows where one side has not
-  // received the backend dialogProcessId/turnScopeId yet. Terminal and stale
-  // state consistency is still owned by this state machine before this helper
-  // returns an in-flight state.
-  if (!runDialogProcessId && !runTurnScopeId) return stateSnapshot;
-  if (!messageDialogProcessId && !messageTurnScopeId) return stateSnapshot;
+  if (!runTurnScopeId && runDialogProcessId && messageTurnScopeId && messageDialogProcessId) {
+    return runDialogProcessId === messageDialogProcessId ? stateSnapshot : null;
+  }
   return null;
 }
 

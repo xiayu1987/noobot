@@ -18,10 +18,9 @@ export function prepareChatSend({
   applyConversationState,
   translate,
   scrollBottom,
-  skipUserMessageAppend = false,
-  existingUserMessage = null,
   messageText = "",
   turnScopeId = "",
+  reuseExistingUserTurn = false,
 }) {
   const normalizedTurnScopeId = String(turnScopeId || "").trim();
   const explicitText = typeof messageText === "string" ? messageText.trim() : "";
@@ -37,14 +36,12 @@ export function prepareChatSend({
       ? URL.createObjectURL(fileItem.raw)
       : "",
   }));
-  const userMessage = skipUserMessageAppend
-    ? existingUserMessage
+  const userMessage = reuseExistingUserTurn
+    ? (activeSession.value?.messages || []).find((message) => (
+      message?.role === RoleEnum.USER &&
+      String(message?.turnScopeId || "").trim() === normalizedTurnScopeId
+    ))
     : appendMessage(RoleEnum.USER, text || translate("chat.uploadOnly"), userAttachments);
-  if (skipUserMessageAppend && userMessage && text) {
-    userMessage.content = text;
-    if (typeof userMessage.text === "string") userMessage.text = text;
-    if (typeof userMessage.message === "string") userMessage.message = text;
-  }
   if (userMessage && normalizedTurnScopeId) {
     userMessage.turnScopeId = normalizedTurnScopeId;
   }

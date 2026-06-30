@@ -7,6 +7,7 @@ import { computed } from "vue";
 import { useLocale } from "../../shared/i18n/useLocale";
 import { zhCNMessages } from "noobot-i18n/client/locales/zh-CN";
 import { enUSMessages } from "noobot-i18n/client/locales/en-US";
+import { logResendDebug, summarizeDebugMessage } from "../chat/debug/resendDebugLogger";
 
 export function useMessageMeta({ getMessageItem = () => ({}) } = {}) {
   const { translate } = useLocale();
@@ -49,10 +50,19 @@ export function useMessageMeta({ getMessageItem = () => ({}) } = {}) {
       String(enUSMessages?.chat?.failed || "").trim(),
       String(translate("chat.failed") || "").trim(),
     ]);
-    if (messageItem.pending) return translate("message.subtaskProcessing");
-    if (stoppedLabels.has(statusLabel)) return translate("message.subtaskStopped");
-    if (failedLabels.has(statusLabel)) return translate("message.subtaskFailed");
-    return translate("message.subtaskDone");
+    const result = messageItem.pending
+      ? translate("message.subtaskProcessing")
+      : stoppedLabels.has(statusLabel)
+        ? translate("message.subtaskStopped")
+        : failedLabels.has(statusLabel)
+          ? translate("message.subtaskFailed")
+          : translate("message.subtaskDone");
+    logResendDebug("ui.messageMeta", {
+      message: summarizeDebugMessage(messageItem),
+      statusLabel,
+      subTaskStatusText: result,
+    });
+    return result;
   });
 
   return {

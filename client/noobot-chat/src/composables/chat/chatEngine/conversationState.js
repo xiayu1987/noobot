@@ -41,6 +41,7 @@ import {
   setThinkingFinishedAt,
   setThinkingStartedAt,
 } from "../../infra/timeFields";
+import { logResendDebug, summarizeDebugMessage } from "../debug/resendDebugLogger";
 
 function parseThinkingTimingMs(value) {
   return parseTimeMs(value);
@@ -175,6 +176,7 @@ export function createChatEngineConversationState({
   function scheduleMissingInteractionPayloadFailure({
     sessionId = "",
     dialogProcessId = "",
+    turnScopeId = "",
     targetAssistantMessage = null,
   } = {}) {
     if (hasPendingInteractionForDialog(dialogProcessId)) return;
@@ -189,6 +191,7 @@ export function createChatEngineConversationState({
           state: "error",
           sessionId,
           dialogProcessId,
+          turnScopeId,
           source: "interaction_payload_missing",
         });
       } else {
@@ -201,6 +204,7 @@ export function createChatEngineConversationState({
       emitSyntheticErrorConversationState({
         sessionId,
         dialogProcessId,
+        turnScopeId,
         sourceEvent: "interaction_payload_missing",
       });
       notify({ type: "error", message: missingInteractionError });
@@ -318,25 +322,24 @@ export function createChatEngineConversationState({
     return false;
   }
 
-  function findTargetAssistantMessage({ botMessage = null, dialogProcessId = "" } = {}) {
-    if (botMessage && getMessageRole(botMessage) === RoleEnum.ASSISTANT) {
-      return botMessage;
-    }
+  function canApplyStateToBotMessage({ botMessage = null, explicitTurnScopeId = "" } = {}) {
+    if (!botMessage || getMessageRole(botMessage) !== RoleEnum.ASSISTANT) return false;
+    const botTurnScopeId = getMessageTurnScopeId(botMessage);
+    if (!botTurnScopeId) return true;
+    return Boolean(explicitTurnScopeId && explicitTurnScopeId === botTurnScopeId);
+  }
+
+  function findTargetAssistantMessage({ botMessage = null, turnScopeId = "" } = {}) {
+    const normalizedTurnScopeId = normalizeTrimmedString(turnScopeId);
+    if (canApplyStateToBotMessage({ botMessage, explicitTurnScopeId: normalizedTurnScopeId })) return botMessage;
     const messageList = Array.isArray(activeSession.value?.messages)
       ? activeSession.value.messages
       : [];
-    const normalizedDpId = normalizeTrimmedString(dialogProcessId);
+    if (!normalizedTurnScopeId) return null;
     for (let messageIndex = messageList.length - 1; messageIndex >= 0; messageIndex -= 1) {
       const messageItem = messageList[messageIndex];
       if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) continue;
-      if (
-        normalizedDpId &&
-        getMessageDialogProcessId(messageItem) &&
-        getMessageDialogProcessId(messageItem) !== normalizedDpId
-      ) {
-        continue;
-      }
-      return messageItem;
+      if (getMessageTurnScopeId(messageItem) === normalizedTurnScopeId) return messageItem;
     }
     return null;
   }
@@ -364,6 +367,7 @@ export function createChatEngineConversationState({
     const forActiveSession = isStateForActiveSession(sessionId) || botMessageInActiveSession;
     const turnMeta = normalizeTurnMeta(statePayload);
     const turnScopeId = String(turnMeta.turnScopeId || "").trim();
+    const explicitDialogProcessId = String(statePayload?.dialogProcessId || "").trim();
     if (typeof onConversationState === "function") {
       onConversationState({
         source: "stream",
@@ -384,11 +388,20 @@ export function createChatEngineConversationState({
     }
     if (!forActiveSession) return;
     const dialogProcessId = String(
-      statePayload?.dialogProcessId || fallbackDialogProcessId || "",
+      explicitDialogProcessId || "",
     ).trim();
     const targetAssistantMessage = findTargetAssistantMessage({
       botMessage,
+      turnScopeId,
+    });
+    logResendDebug("conversationState.target", {
+      state,
+      sessionId,
       dialogProcessId,
+      turnScopeId,
+      fallbackTurnScopeId,
+      botMessage: summarizeDebugMessage(botMessage),
+      targetAssistantMessage: summarizeDebugMessage(targetAssistantMessage),
     });
     const channelStateView = {
       ...(targetAssistantMessage?.channelState &&
@@ -492,6 +505,7 @@ export function createChatEngineConversationState({
           scheduleMissingInteractionPayloadFailure({
             sessionId,
             dialogProcessId,
+            turnScopeId,
             targetAssistantMessage,
           });
           return;
@@ -519,7 +533,7 @@ export function createChatEngineConversationState({
       return;
     }
     if (!isTerminalConversationState(state)) return;
-    clearRememberedStopRequests({ sessionId, dialogProcessId });
+    clearRememberedStopRequests({ sessionId, dialogProcessId, turnScopeId });
     rememberThinkingFinished({
       sessionId,
       dialogProcessId,
@@ -561,12 +575,18 @@ export function createChatEngineConversationState({
       return;
     }
     if (!targetAssistantMessage) return;
+    const beforeTerminalApply = summarizeDebugMessage(targetAssistantMessage);
     targetAssistantMessage.channelState = channelStateView;
     applyEarliestThinkingStartedAt(targetAssistantMessage, channelStateView.createdAt || channelStateView.createdAtMs);
     setThinkingFinishedAt(targetAssistantMessage, getThinkingFinishedAt(targetAssistantMessage) || updatedAt || createdAt || nowIso());
     targetAssistantMessage.pending = false;
     if (state === "completed") {
       targetAssistantMessage.statusLabel = translate("chat.generated");
+      logResendDebug("conversationState.terminal.apply", {
+        state, sessionId, dialogProcessId, turnScopeId,
+        before: beforeTerminalApply,
+        after: summarizeDebugMessage(targetAssistantMessage),
+      });
       return;
     }
     if (state === "stopped" || state === "cancelled" || state === "canceled") {
@@ -574,11 +594,21 @@ export function createChatEngineConversationState({
       if (!String(targetAssistantMessage.content || "").trim()) {
         targetAssistantMessage.content = translate("chat.stoppedContent");
       }
+      logResendDebug("conversationState.terminal.apply", {
+        state, sessionId, dialogProcessId, turnScopeId,
+        before: beforeTerminalApply,
+        after: summarizeDebugMessage(targetAssistantMessage),
+      });
       return;
     }
     if (state === "error") {
       targetAssistantMessage.statusLabel = translate("chat.failed");
     }
+    logResendDebug("conversationState.terminal.apply", {
+      state, sessionId, dialogProcessId, turnScopeId,
+      before: beforeTerminalApply,
+      after: summarizeDebugMessage(targetAssistantMessage),
+    });
   }
 
   function applyConversationStateFromEvent(

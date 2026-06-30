@@ -180,7 +180,8 @@ export const enUSMessages = {
     "unknownError": "Unknown error",
     "occurredError": "Error: {error}",
     "sendFailed": "Send failed",
-    "expiredRefreshFailed": "Session expired. Please create a new conversation."
+    "expiredRefreshFailed": "Session expired. Please create a new conversation.",
+    "sessionStateOutOfSync": "Session state is out of sync. Refresh and try again."
   },
   "message": {
     "subtaskProcessing": "Subtask processing...",

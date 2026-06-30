@@ -76,24 +76,27 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
   assert.equal(saved[0].messages[1].messageId, undefined);
   assert.equal(saved[0].messages[1].id, undefined);
   assert.equal(saved[0].messages[1].turnScopeId, "turn-scope-new");
-  assert.equal(saved[0].messages[1].dialogProcessId, "dp-old");
+  assert.equal(saved[0].messages[1].dialogProcessId, "");
   assert.equal(saved[0].version, 3);
   assert.equal(saved[0].revision, 3);
   assert.equal(saved[0].updatedAt, "2026-06-22T00:00:00.000Z");
 });
 
-test("SessionMessageService.replaceTurn matches ts anchors", async () => {
+test("SessionMessageService.replaceTurn rejects ts anchors", async () => {
   const { service: tsService, saved: tsSaved } = createService({
     initialSession: baseSession({ messages: [
       { role: "user", content: "old", ts: "ts-user" },
       { role: "assistant", content: "old answer", ts: "ts-assistant" },
     ] }),
   });
-  await tsService.replaceTurn({ userId: "u1", sessionId: "s1", anchor: { ts: "ts-assistant" }, newContent: "by ts" });
-  assert.deepEqual(tsSaved[0].messages.map((message) => message.content), ["by ts"]);
+  await assert.rejects(
+    tsService.replaceTurn({ userId: "u1", sessionId: "s1", anchor: { ts: "ts-assistant" }, newContent: "by ts" }),
+    (error) => error?.statusCode === 400 && /anchor is required/.test(error.message),
+  );
+  assert.equal(tsSaved.length, 0);
 });
 
-test("SessionMessageService.replaceTurn uses dialogId only as compatibility anchor", async () => {
+test("SessionMessageService.replaceTurn rejects dialogId compatibility anchors", async () => {
   const { service, saved } = createService({
     initialSession: baseSession({ messages: [
       { role: "user", content: "first", dialogId: "dp-compat" },
@@ -102,15 +105,16 @@ test("SessionMessageService.replaceTurn uses dialogId only as compatibility anch
     ] }),
   });
 
-  await service.replaceTurn({
-    userId: "u1",
-    sessionId: "s1",
-    anchor: { dialogId: "dp-compat" },
-    newContent: "edited compat",
-  });
-
-  assert.deepEqual(saved[0].messages.map((message) => message.content), ["edited compat"]);
-  assert.equal(saved[0].messages[0].dialogProcessId, "dp-compat");
+  await assert.rejects(
+    service.replaceTurn({
+      userId: "u1",
+      sessionId: "s1",
+      anchor: { dialogId: "dp-compat" },
+      newContent: "edited compat",
+    }),
+    (error) => error?.statusCode === 400 && /anchor is required/.test(error.message),
+  );
+  assert.equal(saved.length, 0);
 });
 
 test("SessionMessageService.replaceTurn rejects conflicts and missing anchors without saving", async () => {
@@ -137,6 +141,10 @@ test("SessionMessageService.replaceTurn validates required payload", async () =>
   await assert.rejects(
     service.replaceTurn({ userId: "u1", sessionId: "s1", newContent: "edit" }),
     (error) => error?.statusCode === 400 && /anchor is required/.test(error.message),
+  );
+  await assert.rejects(
+    service.replaceTurn({ userId: "u1", sessionId: "s1", anchor: { turnScopeId: "scope-old" }, newContent: "edit" }),
+    (error) => error?.statusCode === 400 && /turnScopeId is required/.test(error.message),
   );
   assert.equal(saved.length, 0);
 });

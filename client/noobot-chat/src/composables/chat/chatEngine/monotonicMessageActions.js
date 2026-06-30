@@ -6,13 +6,16 @@
 import { normalizeTrimmedString } from "./utils";
 import { createResendMessageTransaction } from "./resendTransaction";
 import { syncSessionMessageSummary } from "./resendReconciler";
+import { getCurrentSessionVersion } from "./sessionVersionManager";
 import {
   buildMessageAnchor,
   findMessageIdentityIndex,
-  getMessageDialogProcessId,
   getMessageRole,
+  getMessageTurnScopeId,
 } from "../../infra/messageIdentity";
 import { nowMs } from "../../infra/timeFields";
+import { isInFlightSessionRunState } from "../sessionRunStateMachine";
+import { MESSAGE_IN_FLIGHT_CHANNEL_STATES } from "../sessionRunStateMachine/constants";
 
 const delay = (ms) => new Promise((resolve) => {
   setTimeout(resolve, ms);
@@ -20,6 +23,26 @@ const delay = (ms) => new Promise((resolve) => {
 
 function isUserMessage(message = {}) {
   return getMessageRole(message).toLowerCase() === "user";
+}
+
+function isInFlightAssistantMessage(messageItem = {}) {
+  if (getMessageRole(messageItem) !== "assistant") return false;
+  if (!getMessageTurnScopeId(messageItem)) return false;
+  if (messageItem?.pending === true) return true;
+  const channelState = normalizeTrimmedString(messageItem?.channelState?.state);
+  return MESSAGE_IN_FLIGHT_CHANNEL_STATES.includes(channelState);
+}
+
+function hasMatchingInFlightAssistant({ activeSession, runStateSnapshot } = {}) {
+  const messages = Array.isArray(activeSession?.value?.messages)
+    ? activeSession.value.messages
+    : [];
+  const runTurnScopeId = normalizeTrimmedString(runStateSnapshot?.value?.turnScopeId);
+  if (!runTurnScopeId) return messages.some((messageItem) => isInFlightAssistantMessage(messageItem));
+  return messages.some((messageItem) => (
+    isInFlightAssistantMessage(messageItem) &&
+    getMessageTurnScopeId(messageItem) === runTurnScopeId
+  ));
 }
 
 function normalizeSessionDetailSnapshot(payload = {}, fallbackSessionId = "") {
@@ -62,10 +85,25 @@ export function createMonotonicMessageActions({
   translate,
   userId,
   applySessionDetail,
+  fetchSessionDetail,
+  runStateSnapshot,
   messageOperationStore,
   monotonicActionStopTimeoutMs,
   monotonicActionStopPollIntervalMs,
+  applyRunStateEvent,
 }) {
+  function notifyStateMismatch() {
+    notify({
+      type: "warning",
+      message: translate("chat.sessionStateOutOfSync") || "Session state is out of sync. Refresh and try again.",
+    });
+  }
+
+  function hasConsistentSendingState() {
+    if (!sending?.value && !isInFlightSessionRunState(runStateSnapshot?.value?.state)) return true;
+    return hasMatchingInFlightAssistant({ activeSession, runStateSnapshot });
+  }
+
   async function waitForSendingSettled({
     timeoutMs = monotonicActionStopTimeoutMs,
     pollIntervalMs = monotonicActionStopPollIntervalMs,
@@ -85,6 +123,10 @@ export function createMonotonicMessageActions({
 
   async function prepareMonotonicMessageAction({ timeoutMs, pollIntervalMs } = {}) {
     if (!sending?.value) return true;
+    if (!hasConsistentSendingState()) {
+      notifyStateMismatch();
+      return false;
+    }
     stopSending();
     const settled = await waitForSendingSettled({ timeoutMs, pollIntervalMs });
     if (!settled) {
@@ -107,22 +149,11 @@ export function createMonotonicMessageActions({
       return messages[directIndex];
     }
 
-    const targetDialogProcessId = getMessageDialogProcessId(targetMessage);
-    if (targetDialogProcessId) {
-      const sameDialogProcessUserMessage = messages.find(
-        (message) => isUserMessage(message) && getMessageDialogProcessId(message) === targetDialogProcessId,
-      );
-      if (sameDialogProcessUserMessage) return sameDialogProcessUserMessage;
-    }
-
-    const targetIndex = directIndex;
-    if (targetIndex >= 0) {
-      for (let index = targetIndex - 1; index >= 0; index -= 1) {
-        if (isUserMessage(messages[index])) return messages[index];
-      }
-    }
-
-    return null;
+    const targetTurnScopeId = getMessageTurnScopeId(targetMessage);
+    if (!targetTurnScopeId) return null;
+    return messages.find(
+      (message) => isUserMessage(message) && getMessageTurnScopeId(message) === targetTurnScopeId,
+    ) || null;
   }
 
   function findMessageCascadeStartIndex(targetMessage = {}) {
@@ -147,12 +178,6 @@ export function createMonotonicMessageActions({
       const rawStartIndex = findMessageIdentityIndex(userTargetMessage, session.rawMessages);
       if (rawStartIndex >= 0) {
         session.rawMessages = session.rawMessages.slice(0, rawStartIndex);
-      } else {
-        const removedSet = new Set(removedMessages);
-        session.rawMessages = session.rawMessages.filter((message) => !removedSet.has(message));
-        if (session.rawMessages.length > session.messages.length) {
-          session.rawMessages = session.rawMessages.slice(0, session.messages.length);
-        }
       }
     }
     syncSessionMessageSummary(session);
@@ -175,7 +200,7 @@ export function createMonotonicMessageActions({
         sessionId,
         parentSessionId: normalizeTrimmedString(activeSession.value?.parentSessionId),
         anchor,
-        expectedVersion: activeSession.value?.version ?? activeSession.value?.revision,
+        expectedVersion: getCurrentSessionVersion(activeSession),
       }, { fetcher: authFetch });
       const payload = typeof result?.json === "function" ? await result.json() : result;
       if (result?.ok === false || payload?.ok === false) return false;
@@ -191,16 +216,17 @@ export function createMonotonicMessageActions({
   const resendTransaction = createResendMessageTransaction({
     activeSession,
     activeSessionId,
+    applyRunStateEvent,
     applySessionDetail,
     authFetch,
     buildMonotonicMessageAnchor: buildMessageAnchor,
     clearPendingInteraction,
-    deleteMonotonicMessage,
     findMessageCascadeStartIndex,
     input,
     messageOperationStore,
     prepareMonotonicMessageAction,
     replaceSessionTurnApi,
+    fetchSessionDetail,
     resolveMonotonicUserTarget,
     send,
     userId,

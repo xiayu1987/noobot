@@ -3,6 +3,48 @@ import assert from "node:assert/strict";
 
 import { SessionTurnPersister } from "../../../src/system-core/bot-manage/execution/turn-persister.js";
 
+test("SessionTurnPersister scopes stopped assistant persistence by turnScopeId", async () => {
+  const appendedTurns = [];
+  const markedTurns = [];
+  const session = {
+    markUserMessageMonotonic: async (payload = {}) => {
+      markedTurns.push(payload);
+    },
+    getSessionBundle: async () => ({
+      session: {
+        messages: [
+          { role: "user", turnScopeId: "turn-old", dialogProcessId: "dp-reused" },
+          { role: "user", turnScopeId: "turn-new", dialogProcessId: "dp-reused" },
+        ],
+      },
+    }),
+    appendExecutionLog: async () => {},
+    appendTurn: async (payload = {}) => {
+      appendedTurns.push(payload);
+    },
+  };
+  const persister = new SessionTurnPersister({ session });
+
+  const saved = await persister.persistStoppedAssistantMessage({
+    userId: "u1",
+    sessionId: "s1",
+    partialAssistant: {
+      content: "partial",
+      dialogProcessId: "dp-reused",
+      turnScopeId: "turn-new",
+    },
+  });
+
+  assert.equal(saved, true);
+  assert.equal(markedTurns.length, 1);
+  assert.equal(markedTurns[0].turnScopeId, "turn-new");
+  assert.equal(markedTurns[0].dialogProcessId, undefined);
+  assert.equal(appendedTurns.length, 1);
+  assert.equal(appendedTurns[0].turnScopeId, "turn-new");
+  assert.equal(appendedTurns[0].dialogProcessId, "dp-reused");
+  assert.equal(appendedTurns[0].stopState, "stopped");
+});
+
 test("SessionTurnPersister persists tool transfer envelopes into session turns", async () => {
   const appendedTurns = [];
   const session = {

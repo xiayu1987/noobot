@@ -52,6 +52,7 @@ import {
   buildReconnectReplayEnvelopeCallbacks,
   createFinalAssistantFromReconnectReplay as createFinalAssistantFromReconnectReplayWithContext,
   findAssistantMessageByDialogProcessId as findAssistantMessageByDialogProcessIdWithContext,
+  findAssistantMessageByTurnScopeId as findAssistantMessageByTurnScopeIdWithContext,
   hasAssistantMessageWithContent as hasAssistantMessageWithContentWithContext,
   mergeAssistantAttachments as mergeAssistantAttachmentsWithContext,
   resolveReconnectTargetAssistantMessage as resolveReconnectTargetAssistantMessageWithContext,
@@ -234,6 +235,7 @@ export function useReconnectReplay({
       stateData,
       onConversationState,
       isCurrentActiveSession,
+      findAssistantMessageByTurnScopeId,
       findAssistantMessageByDialogProcessId,
       findFallbackAssistantMessage: findReconnectChannelStateFallbackAssistant,
       sending,
@@ -315,6 +317,10 @@ export function useReconnectReplay({
 
   function findAssistantMessageByDialogProcessId(dialogProcessId = "") {
     return findAssistantMessageByDialogProcessIdWithContext(activeSession, dialogProcessId);
+  }
+
+  function findAssistantMessageByTurnScopeId(turnScopeId = "") {
+    return findAssistantMessageByTurnScopeIdWithContext(activeSession, turnScopeId);
   }
 
   function hasAssistantMessageWithContent(content = "") {

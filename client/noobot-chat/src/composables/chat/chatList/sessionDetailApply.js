@@ -25,6 +25,11 @@ import {
   patchExistingWorkflowMessage,
 } from "./detailMessages";
 import { revokeMessagePreviewUrls } from "./sessionRecords";
+import {
+  logResendDebug,
+  summarizeDebugMessages,
+} from "../debug/resendDebugLogger";
+import { applyLatestSessionVersion } from "../chatEngine/sessionVersionManager";
 
 export function createSessionDetailApplicator({
   sessions,
@@ -69,9 +74,14 @@ export function createSessionDetailApplicator({
   }
 
   function applySessionDetail(detail, options = {}) {
-    const preserveCurrentMessages = Boolean(options.preserveCurrentMessages);
     const sessionItem = findSessionByAnyIdInList(sessions.value, detail.sessionId);
     if (!sessionItem) return;
+    const requestedPreserveCurrentMessages = Boolean(options.preserveCurrentMessages);
+    logResendDebug("detail.apply.begin", {
+      sessionId: detail.sessionId,
+      requestedPreserveCurrentMessages,
+      currentMessages: summarizeDebugMessages(sessionItem.messages),
+    });
     const openThinkingDialogProcessIds = new Set(
       (sessionItem.messages || [])
         .filter(
@@ -83,10 +93,6 @@ export function createSessionDetailApplicator({
         )
         .map((messageItem) => getMessageDialogProcessId(messageItem)),
     );
-    if (!preserveCurrentMessages) {
-      revokeMessagePreviewUrls(sessionItem.messages || []);
-    }
-
     const detailSessionId = String(detail.sessionId || "").trim();
     sessionItem.loaded = true;
     const promotionResult = promoteSessionIdentityToBackendId({
@@ -107,8 +113,7 @@ export function createSessionDetailApplicator({
     );
     sessionItem.currentTaskId = mainSessionDoc.currentTaskId || "";
     sessionItem.currentTaskStatus = "idle";
-    if (mainSessionDoc.version !== undefined) sessionItem.version = mainSessionDoc.version;
-    if (mainSessionDoc.revision !== undefined) sessionItem.revision = mainSessionDoc.revision;
+    applyLatestSessionVersion(sessionItem, mainSessionDoc);
     sessionItem.createdAt = mainSessionDoc.createdAt || sessionItem.createdAt;
     sessionItem.updatedAt = mainSessionDoc.updatedAt || sessionItem.updatedAt;
 
@@ -118,6 +123,35 @@ export function createSessionDetailApplicator({
     const detailMessages = Array.isArray(mainSessionDoc.messages)
       ? mainSessionDoc.messages
       : [];
+    const detailTurnScopeIds = new Set(
+      detailMessages.map((messageItem) => getMessageTurnScopeId(messageItem)).filter(Boolean),
+    );
+    const hasCurrentInFlightTurnMissingFromDetail = currentRenderedMessages.some((messageItem) => {
+      if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) return false;
+      const turnScopeId = getMessageTurnScopeId(messageItem);
+      if (!turnScopeId || detailTurnScopeIds.has(turnScopeId)) return false;
+      const channelState = String(messageItem?.channelState?.state || "").trim();
+      return messageItem?.pending === true || [
+        "sending",
+        "reconnecting",
+        "interaction_pending",
+        "stopping",
+      ].includes(channelState);
+    });
+    const preserveCurrentMessages =
+      requestedPreserveCurrentMessages || hasCurrentInFlightTurnMissingFromDetail;
+    logResendDebug("detail.apply.mode", {
+      sessionId: detail.sessionId,
+      requestedPreserveCurrentMessages,
+      hasCurrentInFlightTurnMissingFromDetail,
+      preserveCurrentMessages,
+      detailMessageCount: detailMessages.length,
+      detailTurnScopeIds: Array.from(detailTurnScopeIds),
+      currentMessages: summarizeDebugMessages(currentRenderedMessages),
+    });
+    if (!preserveCurrentMessages) {
+      revokeMessagePreviewUrls(sessionItem.messages || []);
+    }
     const shouldKeepCurrentMessagesForEmptyDetail =
       !preserveCurrentMessages &&
       currentRenderedMessages.length > 0 &&
@@ -125,6 +159,10 @@ export function createSessionDetailApplicator({
       isSameSessionIdentity(detailSessionId, activeSessionId.value);
 
     if (!preserveCurrentMessages && !shouldKeepCurrentMessagesForEmptyDetail) {
+      logResendDebug("detail.apply.replaceAll", {
+        sessionId: detail.sessionId,
+        detailMessages: summarizeDebugMessages(detailMessages),
+      });
       sessionItem.messages = isSummaryDetail
         ? detailMessages.map((messageItem) => makeViewMessage(messageItem))
         : foldMessagesForView(detailMessages);
@@ -144,6 +182,11 @@ export function createSessionDetailApplicator({
         }
       }
     } else if (preserveCurrentMessages) {
+      logResendDebug("detail.apply.preserve", {
+        sessionId: detail.sessionId,
+        detailMessages: summarizeDebugMessages(detailMessages),
+        currentMessages: summarizeDebugMessages(sessionItem.messages),
+      });
       const foldedDetailMessages = isSummaryDetail
         ? detailMessages.map((messageItem) => makeViewMessage(messageItem))
         : foldMessagesForView(detailMessages);

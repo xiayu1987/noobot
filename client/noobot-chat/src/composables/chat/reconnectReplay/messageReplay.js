@@ -37,6 +37,7 @@ export {
 } from "./batchReplay";
 export {
   findAssistantMessageByDialogProcessId,
+  findAssistantMessageByTurnScopeId,
   findLatestAssistantMessageForRealtimeLogs,
   hasAssistantMessageWithContent,
   mergeRealtimeLogs,

@@ -58,6 +58,8 @@ export function applySessionRunEventPatch({ current, event, startsNewTurn, nextD
     stopRequestedAt:
       event.state === SESSION_RUN_STATE.STOP_REQUESTED
         ? event.timestamp
+        : startsNewTurn
+          ? 0
         : Number(current.stopRequestedAt || 0),
     lastEventType: event.type,
   };

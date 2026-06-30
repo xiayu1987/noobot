@@ -355,11 +355,12 @@ export class SessionTurnPersister {
   } = {}) {
     const content = (partialAssistant?.content ?? "").trim();
     const dialogProcessId = resolveMessageDialogProcessId(partialAssistant);
+    const turnScopeId = String(partialAssistant?.turnScopeId || "").trim();
     await this.session?.markUserMessageMonotonic?.({
       userId,
       sessionId,
       parentSessionId,
-      dialogProcessId,
+      turnScopeId,
       state: "stopped",
       stopState: "stopped",
     });
@@ -387,7 +388,7 @@ export class SessionTurnPersister {
       type: MESSAGE_TYPE.MESSAGE,
       dialogProcessId,
       parentDialogProcessId,
-      turnScopeId: String(partialAssistant?.turnScopeId || "").trim(),
+      turnScopeId,
       modelAlias: (partialAssistant?.modelAlias ?? "").trim(),
       modelName: (partialAssistant?.modelName ?? "").trim(),
       isMonotonic: true,

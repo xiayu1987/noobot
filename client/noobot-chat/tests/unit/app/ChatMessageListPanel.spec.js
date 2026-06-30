@@ -207,14 +207,87 @@ describe("ChatMessageListPanel", () => {
     expect(wrapper.find(".chat-message-item-stub").text()).toBe("dp-live");
   });
 
+  it("remounts assistant item when resend replaces it with a new turnScopeId", async () => {
+    const counters = reactive({ mounted: 0, unmounted: 0 });
+    chatMessageItemMock.field = "statusLabel";
+    chatMessageItemMock.mounted = () => {
+      counters.mounted += 1;
+    };
+    chatMessageItemMock.unmounted = () => {
+      counters.unmounted += 1;
+    };
+
+    const activeSession = reactive({
+      messages: [
+        { role: RoleEnum.USER, content: "old", turnScopeId: "client-turn:old" },
+        {
+          role: RoleEnum.ASSISTANT,
+          content: "",
+          turnScopeId: "client-turn:old",
+          pending: false,
+          statusLabel: "chat.stopped",
+          channelState: { state: "stopped", turnScopeId: "client-turn:old" },
+        },
+      ],
+    });
+    const wrapper = mount(ChatMessageListPanel, {
+      props: {
+        loadingSessionDetail: false,
+        activeSession,
+        shouldRenderMessageInChat: () => true,
+        userId: "u-1",
+        authFetch: null,
+        renderMarkdown: (v) => v,
+        formatTime: (v) => String(v || ""),
+        formatFileSize: (v) => String(v || ""),
+        isImageMime: () => false,
+        emptyLogoSrc: "",
+      },
+      global: {
+        stubs: {
+          "el-scrollbar": defineComponent({
+            name: "ElScrollbarStub",
+            template: "<div><slot /></div>",
+          }),
+          "el-skeleton": true,
+        },
+      },
+    });
+
+    expect(counters.mounted).toBe(2);
+    expect(counters.unmounted).toBe(0);
+    expect(wrapper.findAll(".chat-message-item-stub")[1].text()).toBe("chat.stopped");
+
+    await wrapper.setProps({
+      activeSession: {
+        messages: [
+          { role: RoleEnum.USER, content: "new", turnScopeId: "client-turn:new" },
+          {
+            role: RoleEnum.ASSISTANT,
+            content: "",
+            turnScopeId: "client-turn:new",
+            pending: true,
+            statusLabel: "",
+            channelState: { state: "sending", turnScopeId: "client-turn:new" },
+          },
+        ],
+      },
+    });
+    await nextTick();
+
+    expect(counters.mounted).toBe(4);
+    expect(counters.unmounted).toBe(2);
+    expect(wrapper.findAll(".chat-message-item-stub")[1].text()).toBe("");
+  });
+
   it("hydrates latest assistant running time from runStateSnapshot during render", () => {
     const startedAt = "2026-06-22T10:00:00.000Z";
     const activeSession = {
       id: "s-1",
       backendSessionId: "s-1",
       messages: [
-        { role: RoleEnum.USER, content: "edited orphan" },
-        { role: RoleEnum.ASSISTANT, content: "partial after refresh", pending: false },
+        { role: RoleEnum.USER, content: "edited orphan", turnScopeId: "turn-live" },
+        { role: RoleEnum.ASSISTANT, content: "partial after refresh", pending: false, turnScopeId: "turn-live" },
       ],
     };
 
@@ -223,6 +296,7 @@ describe("ChatMessageListPanel", () => {
       runStateSnapshot: {
         sessionId: "s-1",
         dialogProcessId: "",
+        turnScopeId: "turn-live",
         state: "sending",
         createdAtIso: startedAt,
         createdAtMs: Date.parse(startedAt),
@@ -243,13 +317,14 @@ describe("ChatMessageListPanel", () => {
       id: "s-1",
       backendSessionId: "s-1",
       messages: [
-        { role: RoleEnum.USER, content: "q" },
-        { role: RoleEnum.ASSISTANT, content: "partial", pending: false },
+        { role: RoleEnum.USER, content: "q", turnScopeId: "turn-live" },
+        { role: RoleEnum.ASSISTANT, content: "partial", pending: false, turnScopeId: "turn-live" },
       ],
     });
     const runStateSnapshot = reactive({
       sessionId: "s-1",
       dialogProcessId: "",
+      turnScopeId: "turn-live",
       state: "sending",
       createdAtIso: startedAt,
       createdAtMs: Date.parse(startedAt),
@@ -288,15 +363,16 @@ describe("ChatMessageListPanel", () => {
       id: "s-1",
       backendSessionId: "s-1",
       messages: [
-        { role: RoleEnum.USER, content: "old q" },
+        { role: RoleEnum.USER, content: "old q", turnScopeId: "turn-old" },
         {
           role: RoleEnum.ASSISTANT,
           content: "old answer",
           pending: true,
           channelState: { state: "sending" },
+          turnScopeId: "turn-old",
         },
-        { role: RoleEnum.USER, content: "new q" },
-        { role: RoleEnum.ASSISTANT, content: "new partial", pending: false },
+        { role: RoleEnum.USER, content: "new q", turnScopeId: "turn-new" },
+        { role: RoleEnum.ASSISTANT, content: "new partial", pending: false, turnScopeId: "turn-new" },
       ],
     };
 
@@ -305,6 +381,7 @@ describe("ChatMessageListPanel", () => {
       runStateSnapshot: {
         sessionId: "s-1",
         dialogProcessId: "",
+        turnScopeId: "turn-new",
         state: "sending",
       },
     });

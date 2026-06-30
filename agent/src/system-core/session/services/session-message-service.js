@@ -32,31 +32,36 @@ function resolveTurnScopeId(message = {}) {
   return normalizeAnchorValue(message?.turnScopeId || "");
 }
 
-function resolveAnchorDialogProcessId(anchor = {}) {
-  return resolveDialogProcessIdFromContext({
-    // dialogId is a read-only legacy anchor alias for historical callers.
-    // New anchors must pass dialogProcessId.
-    dialogProcessId: anchor?.dialogProcessId || anchor?.dialogId,
-  });
-}
-
 function resolveSessionVersion(session = {}) {
   const version = Number(session?.version ?? session?.revision ?? 0);
   return Number.isFinite(version) ? version : 0;
+}
+
+function clearReplacementUserRuntimeState(message = {}) {
+  if (!message || typeof message !== "object" || Array.isArray(message)) return {};
+  const nextMessage = { ...message };
+  for (const key of [
+    "channelState",
+    "dialogId",
+    "dialog_id",
+    "dialog_process_id",
+    "status",
+    "statusLabel",
+    "state",
+    "stopState",
+    "thinkingFinishedAt",
+    "thinkingStartedAt",
+    "__noobotRuntimeRunStateKey",
+  ]) {
+    delete nextMessage[key];
+  }
+  return nextMessage;
 }
 
 function createMessageAnchorMatcher(anchor = {}) {
   const turnScopeId = normalizeAnchorValue(anchor?.turnScopeId);
   if (turnScopeId) {
     return (messageItem) => resolveTurnScopeId(messageItem) === turnScopeId;
-  }
-  const dialogProcessId = resolveAnchorDialogProcessId(anchor);
-  if (dialogProcessId) {
-    return (messageItem) => resolveMessageDialogProcessId(messageItem) === dialogProcessId;
-  }
-  const ts = normalizeAnchorValue(anchor?.ts);
-  if (ts) {
-    return (messageItem) => normalizeAnchorValue(messageItem?.ts) === ts;
   }
   return null;
 }
@@ -273,6 +278,7 @@ export class SessionMessageService {
       if (!Number.isFinite(normalizedExpectedVersion) || normalizedExpectedVersion !== currentVersion) {
         const error = new Error("session version conflict");
         error.statusCode = 409;
+        error.errorCode = "SESSION_VERSION_CONFLICT";
         error.currentVersion = currentVersion;
         throw error;
       }
@@ -355,17 +361,16 @@ export class SessionMessageService {
     }
     const turnStartIndex = resolveUserTurnStartIndex(messages, anchorIndex);
     const replacedMessages = messages.slice(turnStartIndex);
-    const anchorMessage = messages[anchorIndex] || {};
-    const replacedUserMessage = messages[turnStartIndex] || anchorMessage;
-    const normalizedTurnScopeId = String(
-      turnScopeId ||
-        anchor?.turnScopeId ||
-        replacedUserMessage?.turnScopeId ||
-        "",
-    ).trim();
+    const replacedUserMessage = messages[turnStartIndex] || messages[anchorIndex] || {};
+    const normalizedTurnScopeId = String(turnScopeId || "").trim();
+    if (!normalizedTurnScopeId) {
+      const error = new Error("turnScopeId is required");
+      error.statusCode = 400;
+      throw error;
+    }
     const nextVersion = currentVersion + 1;
     const nowValue = this.now();
-    const replacementBaseMessage = { ...(replacedUserMessage || {}) };
+    const replacementBaseMessage = clearReplacementUserRuntimeState(replacedUserMessage || {});
     delete replacementBaseMessage.turnId;
     delete replacementBaseMessage.turn_id;
     delete replacementBaseMessage.messageId;
@@ -377,9 +382,7 @@ export class SessionMessageService {
       type: "message",
       content: normalizedNewContent,
       turnScopeId: normalizedTurnScopeId,
-      dialogProcessId: resolveMessageDialogProcessId(replacedUserMessage) ||
-        resolveMessageDialogProcessId(anchorMessage) ||
-        resolveAnchorDialogProcessId(anchor),
+      dialogProcessId: "",
       pending: false,
       error: false,
       done: true,
@@ -425,12 +428,13 @@ export class SessionMessageService {
     userId,
     sessionId,
     parentSessionId = "",
-    dialogProcessId = "",
+    turnScopeId = "",
     state = "stopped",
     stopState = "stopped",
   } = {}) {
     if (!userId || !sessionId) return { marked: false, reason: "missing_session" };
-    const normalizedDialogProcessId = resolveDialogProcessIdFromContext({ dialogProcessId });
+    const normalizedTurnScopeId = String(turnScopeId || "").trim();
+    if (!normalizedTurnScopeId) return { marked: false, reason: "missing_turn_scope" };
     const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
       userId,
       sessionId,
@@ -447,9 +451,9 @@ export class SessionMessageService {
       for (let index = messages.length - 1; index >= 0; index -= 1) {
         const messageItem = messages[index];
         if (String(messageItem?.role || "").trim() !== "user") continue;
-        if (!normalizedDialogProcessId) return index;
-        const messageDialogProcessId = resolveMessageDialogProcessId(messageItem);
-        if (!messageDialogProcessId || messageDialogProcessId === normalizedDialogProcessId) return index;
+        if (String(messageItem?.turnScopeId || "").trim() !== normalizedTurnScopeId) continue;
+        if (messageItem?.injectedMessage === true || messageItem?.pluginMessage === true) continue;
+        return index;
       }
       return -1;
     })();
