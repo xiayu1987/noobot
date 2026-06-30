@@ -244,14 +244,22 @@ export function createChatEngineSender({
         applyConversationState,
       });
 
-      if (
-        applyStopRequestedState({
-          chatWebSocketClient,
-          activeSession,
-          botMessage: botMsg,
-          applyConversationState,
-        })
-      ) {
+      const stoppedByFinalEvent = Boolean(finalStopEventData);
+      const stoppedByStopRequest = applyStopRequestedState({
+        chatWebSocketClient,
+        activeSession,
+        botMessage: botMsg,
+        applyConversationState,
+      });
+      if (stoppedByFinalEvent || stoppedByStopRequest) {
+        if (stoppedByFinalEvent && !stoppedByStopRequest) {
+          applyStopRequestedState({
+            chatWebSocketClient: { isStopRequested: () => true },
+            activeSession,
+            botMessage: botMsg,
+            applyConversationState,
+          });
+        }
         await refreshFinalSessionDetail({
           activeSession,
           activeSessionId,
@@ -294,7 +302,7 @@ export function createChatEngineSender({
           activeSession,
           activeSessionId,
           botMessage: botMsg,
-          finalEventData: {
+          finalEventData: finalStopEventData || {
             sessionId: activeSession?.value?.backendSessionId || activeSession?.value?.id || "",
             dialogProcessId: normalizeTrimmedString(botMsg.dialogProcessId),
           },
@@ -302,6 +310,8 @@ export function createChatEngineSender({
           applySessionDetail,
           refreshSessionConnectorsAsync,
         });
+        locateDoneMessage?.();
+        finalizePendingResendOperation?.({ finalOnly: true });
         return false;
       }
       applySendErrorState({
