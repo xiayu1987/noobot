@@ -1350,6 +1350,48 @@ describe("useChatEngine", () => {
     expect(input.value).toBe("");
   });
 
+  it("resendMonotonicMessage keeps edited content when reusing a stale user message object", async () => {
+    let observedUserMessage = null;
+    const stream = vi.fn(async () => {
+      observedUserMessage = activeSession.value.messages.find((message) => message.role === RoleEnum.USER);
+    });
+    const staleReplacementUser = {
+      turnScopeId: "client-turn:replacement-stale",
+      role: RoleEnum.USER,
+      content: "original question",
+    };
+    const replaceSessionTurnApi = vi.fn(async () => ({
+      ok: true,
+      newTurn: staleReplacementUser,
+      session: makeSession("local-resend-replace-stale", {
+        messages: [staleReplacementUser],
+        rawMessages: [staleReplacementUser],
+      }),
+    }));
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value = { ...activeSession.value, ...mainSession };
+    });
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-resend-replace-stale",
+      stream,
+      deps: { replaceSessionTurnApi, applySessionDetail },
+    });
+    const first = { turnScopeId: "client-turn:old-stale", role: RoleEnum.USER, content: "original question" };
+    const target = { turnScopeId: "client-turn:old-stale", role: RoleEnum.ASSISTANT, content: "target" };
+    activeSession.value.messages = [first, target];
+    activeSession.value.rawMessages = [first, target];
+
+    await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(true);
+
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(observedUserMessage).toEqual(expect.objectContaining({
+      role: RoleEnum.USER,
+      content: "edited question",
+    }));
+    expect(activeSession.value.messages.map((message) => message.content)).toEqual(["edited question", ""]);
+  });
+
   it("resendMonotonicMessage uses backend replace-turn mapping to prune stale replaced messages", async () => {
     let observedMessagesAtStream = [];
     const stream = vi.fn(async () => {

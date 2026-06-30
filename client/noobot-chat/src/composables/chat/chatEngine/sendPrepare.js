@@ -40,6 +40,11 @@ export function prepareChatSend({
   const userMessage = skipUserMessageAppend
     ? existingUserMessage
     : appendMessage(RoleEnum.USER, text || translate("chat.uploadOnly"), userAttachments);
+  if (skipUserMessageAppend && userMessage && text) {
+    userMessage.content = text;
+    if (typeof userMessage.text === "string") userMessage.text = text;
+    if (typeof userMessage.message === "string") userMessage.message = text;
+  }
   if (userMessage && normalizedTurnScopeId) {
     userMessage.turnScopeId = normalizedTurnScopeId;
   }

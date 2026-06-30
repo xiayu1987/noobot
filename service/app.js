@@ -20,6 +20,7 @@ import { registerHttpModules } from "./bootstrap/register-http-modules.js";
 import { startHttpServer } from "./bootstrap/start-http-server.js";
 import { createServiceGlobalConfigSource } from "./services/global-config-source.js";
 import {
+  applyStartupRuntimeEnv,
   loadStartupContext,
   safeStartupContextForLog,
 } from "./services/startup-context-service.js";
@@ -27,6 +28,7 @@ import { buildWorkspaceTree } from "./services/workspace-tree-service.js";
 
 const app = express();
 const startupContext = await loadStartupContext({ argv: process.argv, cwd: process.cwd() });
+applyStartupRuntimeEnv(startupContext);
 console.warn("[noobot:startup-context]", safeStartupContextForLog(startupContext));
 
 const desktopFrontendRoot = String(

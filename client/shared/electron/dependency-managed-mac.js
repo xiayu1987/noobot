@@ -358,6 +358,7 @@ export function createMacDependencyInstallerTools({
     const extractDir = path.join(tempDir, "extract");
     const targetBinDir = path.join(getManagedDependencyDir("ffmpeg"), "bin");
     const targetPath = path.join(targetBinDir, "ffmpeg");
+    const targetFfprobePath = path.join(targetBinDir, "ffprobe");
     try {
       sendStatus({ phase: "dependency", message: `Downloading ${spec.label} binary...` });
       const selectedUrl = await downloadFirstAvailableFile({
@@ -375,7 +376,13 @@ export function createMacDependencyInstallerTools({
       await extractFfmpegArchive({ archivePath, extractDir, selectedUrl });
       sendStatus({ phase: "dependency", message: `Locating ${spec.label} binary...` });
       const sourcePath = await findExecutableFileByName(extractDir, "ffmpeg");
-      writeDependencyLog("managed:ffmpeg:binary", { source: sourcePath, target: targetPath });
+      const sourceFfprobePath = await findExecutableFileByName(extractDir, "ffprobe");
+      writeDependencyLog("managed:ffmpeg:binary", {
+        source: sourcePath,
+        sourceFfprobe: sourceFfprobePath,
+        target: targetPath,
+        targetFfprobe: targetFfprobePath,
+      });
       if (!sourcePath) throw createDependencyError("FFmpeg archive did not contain ffmpeg binary.", { failureKind: "package" });
       sendStatus({ phase: "dependency", message: `Installing ${spec.label} to managed dependencies...` });
       writeDependencyLog("managed:ffmpeg:copy:start", { source: sourcePath, target: targetPath });
@@ -383,6 +390,10 @@ export function createMacDependencyInstallerTools({
       await fs.promises.mkdir(targetBinDir, { recursive: true });
       await fs.promises.copyFile(sourcePath, targetPath);
       await fs.promises.chmod(targetPath, 0o755);
+      if (sourceFfprobePath) {
+        await fs.promises.copyFile(sourceFfprobePath, targetFfprobePath);
+        await fs.promises.chmod(targetFfprobePath, 0o755);
+      }
       writeDependencyLog("managed:ffmpeg:copy:finish", { target: targetPath, mode: getFileMode(targetPath) });
       prependManagedDependencyPath();
       sendStatus({ phase: "dependency", message: `Verifying ${spec.label}...` });
