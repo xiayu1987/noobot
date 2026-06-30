@@ -118,6 +118,14 @@ export function resolveMediaBinaryPath(binaryName = "", {
   const envPath = String(env?.[getMediaBinaryEnvVarName(normalizedBinaryName)] || "").trim();
   if (envPath) return envPath;
 
+  if (normalizedBinaryName === MEDIA_BINARY_NAMES.ffprobe) {
+    const ffmpegEnvPath = String(env?.[getMediaBinaryEnvVarName(MEDIA_BINARY_NAMES.ffmpeg)] || "").trim();
+    const siblingFfprobePath = ffmpegEnvPath
+      ? path.join(path.dirname(ffmpegEnvPath), getMediaBinaryExecutableName(normalizedBinaryName, platform))
+      : "";
+    if (siblingFfprobePath && exists(siblingFfprobePath)) return siblingFfprobePath;
+  }
+
   const candidateDirectories = resolveMediaBinaryCandidateDirectories({
     platform,
     arch,

@@ -6,6 +6,10 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import {
+  buildDependencyRuntimeEnv,
+  summarizeDependencyRuntimeEnv,
+} from "./dependency-runtime-env.js";
 
 export function createDesktopServiceManager({
   app,
@@ -54,6 +58,12 @@ export function createDesktopServiceManager({
     const backendRoot = isPackaged ? packagedBackendRoot : repoRoot;
     const frontendRoot = isPackaged ? path.join(process.resourcesPath, "frontend") : "";
     const startupContextPath = path.join(runtimeDir, "startup-context.json");
+    const dependencyEnv = buildDependencyRuntimeEnv({ app });
+    const dependencySummary = summarizeDependencyRuntimeEnv(dependencyEnv);
+    sendStatus({
+      phase: "dependency",
+      message: `Resolved startup dependency environment: ${JSON.stringify(dependencySummary)}`,
+    });
     const startupContext = {
       schemaVersion: 1,
       app: {
@@ -88,11 +98,13 @@ export function createDesktopServiceManager({
         cwd,
         execPath: process.execPath,
         resourcesPath: process.resourcesPath || "",
+        env: dependencyEnv,
+        dependencies: dependencySummary,
       },
       createdAt: new Date().toISOString(),
     };
     fs.writeFileSync(startupContextPath, `${JSON.stringify(startupContext, null, 2)}\n`, "utf8");
-    return startupContextPath;
+    return { startupContextPath, dependencyEnv, dependencySummary };
   }
 
 
@@ -134,7 +146,7 @@ export function createDesktopServiceManager({
     const configState = getDesktopConfigState() || ensureDesktopGlobalConfig({ isPackaged, userDataPath });
     setDesktopConfigState(configState);
     const globalConfigPath = configState.globalConfigPath;
-    const startupContextPath = writeStartupContext({
+    const { startupContextPath, dependencyEnv, dependencySummary } = writeStartupContext({
       isPackaged,
       userDataPath,
       cwd,
@@ -154,6 +166,7 @@ export function createDesktopServiceManager({
         `cwd=${cwd}`,
         `log=${getLogFilePath()}`,
         `globalConfig=${globalConfigPath}`,
+        `dependencies=${JSON.stringify(dependencySummary)}`,
         `startupContext=${startupContextPath}`,
       ].join("\n"),
     });
@@ -161,6 +174,7 @@ export function createDesktopServiceManager({
       cwd,
       env: {
         ...process.env,
+        ...dependencyEnv,
         ELECTRON_RUN_AS_NODE: isPackaged ? "1" : process.env.ELECTRON_RUN_AS_NODE,
         PORT: String(servicePort),
         NOOBOT_DESKTOP: "1",
@@ -208,6 +222,8 @@ export function createDesktopServiceManager({
     const args = isPackaged ? [path.join(packagedBackendRoot, "agent-proxy", "agent-proxy.js")] : ["run", "-w", "agent-proxy", "start"];
     const cwd = isPackaged ? packagedBackendRoot : repoRoot;
     const frontendRoot = isPackaged ? path.join(process.resourcesPath, "frontend") : "";
+    const dependencyEnv = buildDependencyRuntimeEnv({ app });
+    const dependencySummary = summarizeDependencyRuntimeEnv(dependencyEnv);
     sendStatus({
       phase: "starting",
       message: [
@@ -217,12 +233,14 @@ export function createDesktopServiceManager({
         `cwd=${cwd}`,
         `health=${agentProxyHealthUrl}`,
         `frontend=${frontendRoot || "dev-server"}`,
+        `dependencies=${JSON.stringify(dependencySummary)}`,
       ].join("\n"),
     });
     managedAgentProxyProcess = spawn(command, args, {
       cwd,
       env: {
         ...process.env,
+        ...dependencyEnv,
         ELECTRON_RUN_AS_NODE: isPackaged ? "1" : process.env.ELECTRON_RUN_AS_NODE,
         AGENT_PROXY_PORT: String(agentProxyPort),
         AGENT_PROXY_HOST: "127.0.0.1",

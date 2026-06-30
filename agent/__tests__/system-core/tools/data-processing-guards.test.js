@@ -409,6 +409,21 @@ test("media_to_data: ffmpeg binary environment override wins over bundled paths"
   );
 });
 
+test("media_to_data: ffprobe falls back to sibling of configured ffmpeg path", () => {
+  assert.equal(
+    resolveMediaBinaryPath("ffprobe", {
+      platform: "darwin",
+      arch: "arm64",
+      resourcesPath: "/app/resources",
+      execPath: "/app/Noobot.app/Contents/MacOS/Noobot",
+      cwd: "/repo",
+      env: { NOOBOT_FFMPEG_PATH: "/managed/ffmpeg/bin/ffmpeg" },
+      exists: (candidatePath) => candidatePath === "/managed/ffmpeg/bin/ffprobe",
+    }),
+    "/managed/ffmpeg/bin/ffprobe",
+  );
+});
+
 test("web_to_data: empty input and urls should fail before network work", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-web2data-"));
   const tools = createWeb2DataTool({ agentContext: buildAgentContext(basePath) });

@@ -14,6 +14,7 @@ import os from "node:os";
 import { createDependencyDetector } from "../../electron/dependency-detect.js";
 import { createDependencyInstaller } from "../../electron/dependency-installer.js";
 import { createMacDependencyInstallerTools } from "../../electron/dependency-managed-mac.js";
+import { buildDependencyRuntimeEnv } from "../../electron/dependency-runtime-env.js";
 import { getDependencyProxyEnv, getCurlProxyArgs, maskDependencyProxyUrl, normalizeDependencyProxyUrl, validateDependencyProxy } from "../../electron/dependency-proxy.js";
 
 function withPlatform(platform, fn) {
@@ -253,6 +254,48 @@ test("darwin curl downloads include configured dependency proxy", async () => {
   });
 });
 
+test("darwin FFmpeg managed installer copies ffprobe when archive contains it", async () => {
+  await withPlatform("darwin", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "noobot-ffmpeg-managed-ffprobe-"));
+    try {
+      const app = {
+        isReady: () => true,
+        getPath: () => rootDir,
+      };
+      const tools = createMacDependencyInstallerTools({
+        app,
+        hasExistingFile: (filePath) => Boolean(filePath) && existsSync(filePath),
+        runProcess: async (command, args) => {
+          if (command === "curl") {
+            await writeFile(args[args.indexOf("-o") + 1], "fake zip");
+            return { ok: true, code: 0, stdout: "", stderr: "" };
+          }
+          if (command === "ditto") {
+            const extractDir = args[args.length - 1];
+            await writeFile(path.join(extractDir, "ffmpeg"), "#!/bin/sh\necho ffmpeg\n");
+            await writeFile(path.join(extractDir, "ffprobe"), "#!/bin/sh\necho ffprobe\n");
+            return { ok: true, code: 0, stdout: "", stderr: "" };
+          }
+          if (String(command).endsWith("/managed-dependencies/ffmpeg/bin/ffmpeg")) {
+            return { ok: true, code: 0, stdout: "ffmpeg version test", stderr: "" };
+          }
+          return { ok: false, code: 1, stdout: "", stderr: `unexpected command ${command}` };
+        },
+      });
+
+      await tools.installManagedDependencyMac("ffmpeg", {
+        label: "FFmpeg",
+        darwinManaged: { url: "https://mirror.example/ffmpeg.zip" },
+      });
+
+      const installedFfprobePath = path.join(rootDir, "managed-dependencies", "ffmpeg", "bin", "ffprobe");
+      assert.equal(await readFile(installedFfprobePath, "utf8"), "#!/bin/sh\necho ffprobe\n");
+    } finally {
+      await rm(rootDir, { recursive: true, force: true });
+    }
+  });
+});
+
 test("dependency installer injects proxy environment into Windows install commands", async () => {
   await withPlatform("win32", async () => {
     const runs = [];
@@ -273,5 +316,29 @@ test("dependency installer injects proxy environment into Windows install comman
     assert.equal(result[0].ok, true);
     assert.equal(runs[0].command, "winget");
     assert.equal(runs[0].options.env.HTTPS_PROXY, "http://127.0.0.1:7890/");
+  });
+});
+
+test("dependency runtime env resolves managed ffmpeg, sibling ffprobe and LibreOffice app", async () => {
+  await withPlatform("darwin", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "noobot-runtime-env-"));
+    try {
+      const ffmpegPath = path.join(rootDir, "managed-dependencies", "ffmpeg", "bin", "ffmpeg");
+      const ffprobePath = path.join(rootDir, "managed-dependencies", "ffmpeg", "bin", "ffprobe");
+      const sofficePath = "/Applications/LibreOffice.app/Contents/MacOS/soffice";
+      const runtimeEnv = buildDependencyRuntimeEnv({
+        app: { isReady: () => true, getPath: () => rootDir },
+        env: { PATH: "/usr/bin" },
+        platform: "darwin",
+        exists: (candidatePath) => [ffmpegPath, ffprobePath, sofficePath].includes(candidatePath),
+      });
+
+      assert.equal(runtimeEnv.NOOBOT_FFMPEG_PATH, ffmpegPath);
+      assert.equal(runtimeEnv.NOOBOT_FFPROBE_PATH, ffprobePath);
+      assert.equal(runtimeEnv.LIBRE_OFFICE_EXE, sofficePath);
+      assert.ok(runtimeEnv.PATH.startsWith(path.dirname(ffmpegPath)));
+    } finally {
+      await rm(rootDir, { recursive: true, force: true });
+    }
   });
 });

@@ -14,6 +14,19 @@ function normalizePath(value = "") {
   return text ? path.resolve(text) : "";
 }
 
+function normalizeEnvMap(value = {}) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const output = {};
+  for (const [key, rawValue] of Object.entries(source)) {
+    const normalizedKey = String(key || "").trim();
+    if (!normalizedKey) continue;
+    const normalizedValue = String(rawValue || "").trim();
+    if (!normalizedValue) continue;
+    output[normalizedKey] = normalizedValue;
+  }
+  return output;
+}
+
 function resolveDefaultBackendRoot(cwd = process.cwd()) {
   const normalizedCwd = normalizePath(cwd) || process.cwd();
   if (path.basename(normalizedCwd) === "service") return path.dirname(normalizedCwd);
@@ -39,6 +52,9 @@ export function normalizeStartupContext(input = {}, { cwd = process.cwd() } = {}
   const paths = raw.paths && typeof raw.paths === "object" ? raw.paths : {};
   const service = raw.service && typeof raw.service === "object" ? raw.service : {};
   const runtime = raw.runtime && typeof raw.runtime === "object" ? raw.runtime : {};
+  const dependencies = runtime.dependencies && typeof runtime.dependencies === "object"
+    ? runtime.dependencies
+    : {};
   const app = raw.app && typeof raw.app === "object" ? raw.app : {};
   const backendRoot = normalizePath(paths.backendRoot || resolveDefaultBackendRoot(cwd));
   return {
@@ -70,6 +86,16 @@ export function normalizeStartupContext(input = {}, { cwd = process.cwd() } = {}
       cwd: normalizePath(runtime.cwd || cwd),
       execPath: normalizePath(runtime.execPath || process.execPath),
       resourcesPath: normalizePath(runtime.resourcesPath),
+      env: normalizeEnvMap(runtime.env),
+      dependencies: {
+        hasFfmpeg: Boolean(dependencies.hasFfmpeg),
+        hasFfprobe: Boolean(dependencies.hasFfprobe),
+        hasLibreOffice: Boolean(dependencies.hasLibreOffice),
+        ffmpegPath: String(dependencies.ffmpegPath || ""),
+        ffprobePath: String(dependencies.ffprobePath || ""),
+        libreOfficePath: String(dependencies.libreOfficePath || ""),
+        pathPrefix: String(dependencies.pathPrefix || ""),
+      },
     },
     createdAt: String(raw.createdAt || new Date().toISOString()),
   };
@@ -90,6 +116,14 @@ export async function loadStartupContext({ argv = process.argv, cwd = process.cw
   return normalizeStartupContext(parsed, { cwd });
 }
 
+export function applyStartupRuntimeEnv(context = {}, { env = process.env } = {}) {
+  const runtimeEnv = normalizeEnvMap(context?.runtime?.env || {});
+  for (const [key, value] of Object.entries(runtimeEnv)) {
+    env[key] = value;
+  }
+  return runtimeEnv;
+}
+
 export function safeStartupContextForLog(context = {}) {
   const normalized = normalizeStartupContext(context);
   return {
@@ -97,7 +131,15 @@ export function safeStartupContextForLog(context = {}) {
     app: normalized.app,
     paths: normalized.paths,
     service: normalized.service,
-    runtime: normalized.runtime,
+    runtime: {
+      ...normalized.runtime,
+      env: {
+        PATH: normalized.runtime.env.PATH ? "[set]" : "",
+        NOOBOT_FFMPEG_PATH: normalized.runtime.env.NOOBOT_FFMPEG_PATH || "",
+        NOOBOT_FFPROBE_PATH: normalized.runtime.env.NOOBOT_FFPROBE_PATH || "",
+        LIBRE_OFFICE_EXE: normalized.runtime.env.LIBRE_OFFICE_EXE || "",
+      },
+    },
     createdAt: normalized.createdAt,
   };
 }

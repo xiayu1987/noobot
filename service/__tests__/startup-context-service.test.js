@@ -9,6 +9,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
+  applyStartupRuntimeEnv,
   createDefaultStartupContext,
   loadStartupContext,
   normalizeStartupContext,
@@ -39,6 +40,19 @@ test("startup-context-service loads explicit snapshot and preserves explicit plu
     app: { platform: "desktop", channel: "win32", packaged: true },
     paths: { backendRoot, pluginRootDir },
     service: { port: 10061, origin: "http://127.0.0.1:10061" },
+    runtime: {
+      env: {
+        PATH: "/managed/bin:/usr/bin",
+        NOOBOT_FFMPEG_PATH: "/managed/bin/ffmpeg",
+        LIBRE_OFFICE_EXE: "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+      },
+      dependencies: {
+        hasFfmpeg: true,
+        hasLibreOffice: true,
+        ffmpegPath: "/managed/bin/ffmpeg",
+        libreOfficePath: "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+      },
+    },
   }), "utf8");
 
   const context = await loadStartupContext({
@@ -51,6 +65,30 @@ test("startup-context-service loads explicit snapshot and preserves explicit plu
   assert.equal(context.paths.backendRoot, path.resolve(backendRoot));
   assert.equal(context.paths.pluginRootDir, path.resolve(pluginRootDir));
   assert.equal(context.service.port, 10061);
+  assert.equal(context.runtime.env.NOOBOT_FFMPEG_PATH, "/managed/bin/ffmpeg");
+  assert.equal(context.runtime.env.LIBRE_OFFICE_EXE, "/Applications/LibreOffice.app/Contents/MacOS/soffice");
+  assert.equal(context.runtime.dependencies.hasFfmpeg, true);
+});
+
+test("startup-context-service applies runtime env to service process env", () => {
+  const env = {};
+  const applied = applyStartupRuntimeEnv({
+    runtime: {
+      env: {
+        PATH: "/managed/bin:/usr/bin",
+        NOOBOT_FFMPEG_PATH: "/managed/bin/ffmpeg",
+        EMPTY_VALUE: "",
+      },
+    },
+  }, { env });
+
+  assert.deepEqual(applied, {
+    PATH: "/managed/bin:/usr/bin",
+    NOOBOT_FFMPEG_PATH: "/managed/bin/ffmpeg",
+  });
+  assert.equal(env.PATH, "/managed/bin:/usr/bin");
+  assert.equal(env.NOOBOT_FFMPEG_PATH, "/managed/bin/ffmpeg");
+  assert.equal("EMPTY_VALUE" in env, false);
 });
 
 test("startup-context-service creates web/dev default context when no snapshot is provided", () => {
