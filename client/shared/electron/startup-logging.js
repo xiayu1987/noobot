@@ -3,17 +3,25 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { app } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 
 export const desktopAppName = "Noobot";
 
+export const DESKTOP_LOG_FILES = Object.freeze({
+  STARTUP: "desktop-startup.log",
+  MAIN: "desktop-main.log",
+  DEPENDENCY: "desktop-dependency.log",
+  SERVICE: "service.log",
+  AGENT_PROXY: "agent-proxy.log",
+  FRONTEND: "frontend.log",
+});
+
 export function getEarlyLogFilePath() {
   const base = process.platform === "win32"
     ? process.env.APPDATA || process.env.LOCALAPPDATA || process.env.TEMP || process.cwd()
     : process.env.XDG_CONFIG_HOME || process.env.HOME || process.env.TMPDIR || process.cwd();
-  return path.join(base, desktopAppName, "logs", "desktop-startup.log");
+  return path.join(base, desktopAppName, "logs", DESKTOP_LOG_FILES.STARTUP);
 }
 
 export function appendEarlyLog(message) {
@@ -64,37 +72,84 @@ export function formatLogFields(fields = {}) {
     .join("; ");
 }
 
-export function createStartupLogger({ startupDebugEnabled = false } = {}) {
-  function writeStartupLog(scope, event, fields = {}, { debug = false } = {}) {
-    if (debug && !startupDebugEnabled) return;
-    const detail = formatLogFields(fields);
-    appendStartupTrace(`[${scope}:${event}]${detail ? ` ${detail}` : ""}`);
+export function createStartupLogger({ app, startupDebugEnabled = false } = {}) {
+  function getLogDir() {
+    return path.join(app.getPath("userData"), "logs");
   }
 
-  function writeDependencyLog(event, fields = {}, options = {}) {
-    writeStartupLog("dependency", event, fields, options);
+  function getLogFilePath(fileName = DESKTOP_LOG_FILES.STARTUP) {
+    return path.join(getLogDir(), fileName);
   }
 
-  function getLogFilePath() {
-    return path.join(app.getPath("userData"), "logs", "desktop-startup.log");
-  }
-
-  function appendDesktopLog(message) {
+  function appendLogFile(fileName, message) {
     const line = `[${new Date().toISOString()}] ${message}\n`;
     try {
-      const logFile = getLogFilePath();
+      const logFile = getLogFilePath(fileName);
       fs.promises.mkdir(path.dirname(logFile), { recursive: true })
         .then(() => fs.promises.appendFile(logFile, line, "utf8"))
-        .catch((error) => writeStartupLog("desktop-log", "error", { message, error }, { debug: true }));
+        .catch((error) => {
+          if (fileName !== DESKTOP_LOG_FILES.STARTUP) {
+            writeStartupLog("desktop-log", "error", { fileName, message, error }, { debug: true });
+          }
+        });
     } catch {
-      writeStartupLog("desktop-log", "fallback", { message }, { debug: true });
+      if (fileName !== DESKTOP_LOG_FILES.STARTUP) {
+        writeStartupLog("desktop-log", "fallback", { fileName, message }, { debug: true });
+      }
     }
   }
 
-  return { writeStartupLog, writeDependencyLog, getLogFilePath, appendDesktopLog };
+  function writeStartupLog(scope, event, fields = {}, { debug = false, mirrorToEarly = true } = {}) {
+    if (debug && !startupDebugEnabled) return;
+    const detail = formatLogFields(fields);
+    const message = `[${scope}:${event}]${detail ? ` ${detail}` : ""}`;
+    appendLogFile(DESKTOP_LOG_FILES.STARTUP, message);
+    if (mirrorToEarly) appendStartupTrace(message);
+  }
+
+  function writeDependencyLog(event, fields = {}, options = {}) {
+    if (options?.debug && !startupDebugEnabled) return;
+    const detail = formatLogFields(fields);
+    const message = `[dependency:${event}]${detail ? ` ${detail}` : ""}`;
+    appendLogFile(DESKTOP_LOG_FILES.DEPENDENCY, message);
+    writeStartupLog("dependency", event, fields, { ...options, mirrorToEarly: false });
+  }
+
+  function appendDesktopLog(message) {
+    appendLogFile(DESKTOP_LOG_FILES.MAIN, message);
+  }
+
+  function appendStartupLog(message) {
+    appendLogFile(DESKTOP_LOG_FILES.STARTUP, message);
+  }
+
+  function appendServiceLog(message) {
+    appendLogFile(DESKTOP_LOG_FILES.SERVICE, message);
+  }
+
+  function appendAgentProxyLog(message) {
+    appendLogFile(DESKTOP_LOG_FILES.AGENT_PROXY, message);
+  }
+
+  function appendFrontendLog(message) {
+    appendLogFile(DESKTOP_LOG_FILES.FRONTEND, message);
+  }
+
+  return {
+    writeStartupLog,
+    writeDependencyLog,
+    getLogDir,
+    getLogFilePath,
+    appendDesktopLog,
+    appendStartupLog,
+    appendServiceLog,
+    appendAgentProxyLog,
+    appendFrontendLog,
+  };
 }
 
-export function installEarlyDiagnostics({ moduleUrl, filename, dirname } = {}) {
+export function installEarlyDiagnostics({ app, moduleUrl, filename, dirname } = {}) {
+  if (!app) throw new Error("installEarlyDiagnostics requires app");
   app.setName(desktopAppName);
   const loadMessage = `[main:module] loaded; node=${process.version}; electron=${process.versions.electron}; platform=${process.platform}; packaged=${app.isPackaged}; filename=${filename || moduleUrl || ""}; dirname=${dirname || ""}; execPath=${process.execPath}; resourcesPath=${process.resourcesPath || ""}; argv=${process.argv.join(" ")}`;
   appendEarlyLog(loadMessage);
