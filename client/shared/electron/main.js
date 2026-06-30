@@ -13,6 +13,7 @@ import { createDesktopDependencyManager } from "./desktop-dependencies.js";
 import { createDesktopServiceManager } from "./desktop-services.js";
 import { createDesktopWindowManager } from "./desktop-window.js";
 import { createStartupConfigRequesters, registerStartupIpcHandlers } from "./startup-ipc.js";
+import { createDependencyProcessTools } from "./dependency-process.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -77,12 +78,14 @@ function sendStatus(status) {
 }
 
 const { ensureDesktopGlobalConfig, saveConfigParamValues, saveSuperAdminConfig } = createDesktopConfigManager({ repoRoot, packagedBackendRoot, appendDesktopLog });
+const { runProcess: runDependencyProcess } = createDependencyProcessTools({ appendEarlyLog });
 
 const { ensureSelectedDependencies } = createDesktopDependencyManager({
   app,
   appendEarlyLog,
   writeDependencyLog,
   sendStatus,
+  getDependencyProxyUrl: () => String(desktopConfigState?.superAdmin?.dependencyProxyUrl || ""),
 });
 
 const { requestSuperAdminConfig, requestMissingConfigParams } = createStartupConfigRequesters({
@@ -168,6 +171,7 @@ registerStartupIpcHandlers({
   resolveNoobotUrl,
   getMainWindow,
   sendStatus,
+  runProcess: runDependencyProcess,
 });
 
 app.whenReady()

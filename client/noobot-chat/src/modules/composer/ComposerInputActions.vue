@@ -32,6 +32,18 @@ const emit = defineEmits([
 
 const { translate } = useLocale();
 const iconButtonClassName = "composer-icon-btn";
+
+function isImeComposing(event) {
+  return Boolean(event?.isComposing || event?.keyCode === 229 || event?.which === 229);
+}
+
+function onInputKeydown(event) {
+  if (event?.key !== "Enter") return;
+  if (event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return;
+  if (isImeComposing(event)) return;
+  event.preventDefault();
+  emit("send");
+}
 </script>
 
 <template>
@@ -61,7 +73,7 @@ const iconButtonClassName = "composer-icon-btn";
       :placeholder="translate('composer.inputPlaceholder')"
       class="chat-input"
       @update:model-value="emit('update:modelValue', $event)"
-      @keydown.enter.exact.prevent="emit('send')"
+      @keydown="onInputKeydown"
     />
     <el-button
       :class="iconButtonClassName"

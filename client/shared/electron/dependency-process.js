@@ -7,7 +7,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 
 export function createDependencyProcessTools({ appendEarlyLog = () => {} } = {}) {
-  function runProcess(command, args = [], { timeoutMs = 120000 } = {}) {
+  function runProcess(command, args = [], { timeoutMs = 120000, env } = {}) {
     return new Promise((resolve) => {
       const startedAt = Date.now();
       const commandLine = [command, ...args].join(" ");
@@ -30,7 +30,7 @@ export function createDependencyProcessTools({ appendEarlyLog = () => {} } = {})
         finish({ ok: false, code: -1, stdout, stderr, error: `Timed out after ${timeoutMs}ms` });
       }, timeoutMs);
       try {
-        child = spawn(command, args, { windowsHide: true, shell: false });
+        child = spawn(command, args, { windowsHide: true, shell: false, env: env ? { ...process.env, ...env } : process.env });
       } catch (error) {
         finish({ ok: false, code: -1, stdout, stderr, error: error?.message || String(error) });
         return;

@@ -13,7 +13,7 @@ import {
   finalizeSendCleanup,
 } from "./sendFinalize";
 import { prepareChatSend } from "./sendPrepare";
-import { finalizeDoneSessionDetail } from "./sessionFinalize";
+import { finalizeDoneSessionDetail, refreshFinalSessionDetail } from "./sessionFinalize";
 import {
   handleBasicStreamEvent,
   handleDoneStreamEvent,
@@ -130,6 +130,7 @@ export function createChatEngineSender({
       clearUploads();
       const attachments = await serializeAttachments(filesToSend);
       let finalDoneEventData = null;
+      let finalStopEventData = null;
       const requestedTextStreaming = streamOutput?.value !== false;
 
       const payload = buildChatPayload({
@@ -165,6 +166,14 @@ export function createChatEngineSender({
           fallbackTurnScopeId: normalizeTrimmedString(botMsg.turnScopeId),
         });
         if (event === StreamEventEnum.CHANNEL_STATE) {
+          const channelState = normalizeTrimmedString(data?.state);
+          if (["stopped", "cancelled", "canceled"].includes(channelState)) {
+            finalStopEventData = {
+              ...(data || {}),
+              sessionId: data?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || "",
+              dialogProcessId: data?.dialogProcessId || normalizeTrimmedString(botMsg.dialogProcessId),
+            };
+          }
           return;
         }
         if (event === StreamEventEnum.ERROR) {
@@ -215,6 +224,12 @@ export function createChatEngineSender({
             processStore: activeProcessStore,
             locateSendingStartedMessageOnce,
           });
+        } else if (event === StreamEventEnum.STOPPED) {
+          finalStopEventData = {
+            ...(data || {}),
+            sessionId: data?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || "",
+            dialogProcessId: data?.dialogProcessId || normalizeTrimmedString(botMsg.dialogProcessId),
+          };
         }
       });
 
@@ -237,6 +252,20 @@ export function createChatEngineSender({
           applyConversationState,
         })
       ) {
+        await refreshFinalSessionDetail({
+          activeSession,
+          activeSessionId,
+          botMessage: botMsg,
+          finalEventData: finalStopEventData || {
+            sessionId: activeSession?.value?.backendSessionId || activeSession?.value?.id || "",
+            dialogProcessId: normalizeTrimmedString(botMsg.dialogProcessId),
+          },
+          fetchSessionDetail,
+          applySessionDetail,
+          refreshSessionConnectorsAsync,
+        });
+        locateDoneMessage?.();
+        finalizePendingResendOperation?.({ finalOnly: true });
         return;
       }
 
@@ -261,6 +290,18 @@ export function createChatEngineSender({
           applyConversationState,
         })
       ) {
+        await refreshFinalSessionDetail({
+          activeSession,
+          activeSessionId,
+          botMessage: botMsg,
+          finalEventData: {
+            sessionId: activeSession?.value?.backendSessionId || activeSession?.value?.id || "",
+            dialogProcessId: normalizeTrimmedString(botMsg.dialogProcessId),
+          },
+          fetchSessionDetail,
+          applySessionDetail,
+          refreshSessionConnectorsAsync,
+        });
         return false;
       }
       applySendErrorState({

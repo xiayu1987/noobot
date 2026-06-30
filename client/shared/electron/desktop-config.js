@@ -37,6 +37,12 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
     return String(node ?? "").trim();
   }
 
+  function normalizeProxyUrl(proxyUrl = "") {
+    const value = String(proxyUrl || "").trim();
+    if (!value) return "";
+    return new URL(value).toString();
+  }
+
   function setNestedValue(root, segments, value) {
     let node = root;
     for (let index = 0; index < segments.length - 1; index += 1) {
@@ -193,10 +199,11 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
     const userId = getNestedString(payload, ["super_admin", "user_id"]);
     const connectCode = getNestedString(payload, ["super_admin", "connect_code"]);
     const language = getNestedString(payload, ["preferences", "language"]) || "zh-CN";
+    const dependencyProxyUrl = getNestedString(payload, ["desktop", "dependency_proxy_url"]);
     const model = getDefaultModelAlias(payload);
     const modelOptions = collectModelOptionsFromConfig(payload);
     const missing = !userId || !connectCode || userId === "admin" || connectCode === "change-your-connect-code";
-    return { missing, userId: userId === "admin" ? "" : userId, connectCode: connectCode === "change-your-connect-code" ? "" : connectCode, language, model, modelOptions };
+    return { missing, userId: userId === "admin" ? "" : userId, connectCode: connectCode === "change-your-connect-code" ? "" : connectCode, language, model, modelOptions, dependencyProxyUrl };
   }
 
   function normalizeDesktopLanguage(language) {
@@ -206,11 +213,12 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
     return "zh-CN";
   }
 
-  function saveSuperAdminConfig({ globalConfigPath, userConfigPath, userId, connectCode, language, model } = {}) {
+  function saveSuperAdminConfig({ globalConfigPath, userConfigPath, userId, connectCode, language, model, dependencyProxyUrl } = {}) {
     const normalizedUserId = String(userId ?? "").trim();
     const normalizedConnectCode = String(connectCode ?? "").trim();
     const normalizedLanguage = normalizeDesktopLanguage(language);
     const normalizedModel = String(model ?? "").trim();
+    const normalizedDependencyProxyUrl = normalizeProxyUrl(dependencyProxyUrl);
     if (!normalizedUserId) throw new Error("Super admin username is required.");
     if (!normalizedConnectCode) throw new Error("Super admin connect code is required.");
     if (normalizedUserId === "admin") throw new Error("Please change the default super admin username.");
@@ -219,6 +227,7 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
     setNestedValue(payload, ["super_admin", "user_id"], normalizedUserId);
     setNestedValue(payload, ["super_admin", "connect_code"], normalizedConnectCode);
     setNestedValue(payload, ["preferences", "language"], normalizedLanguage);
+    setNestedValue(payload, ["desktop", "dependency_proxy_url"], normalizedDependencyProxyUrl);
     if (normalizedModel) applySelectedModelToConfig(payload, normalizedModel);
     writeJsonFile(globalConfigPath, payload);
 

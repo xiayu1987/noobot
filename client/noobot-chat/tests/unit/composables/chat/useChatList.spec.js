@@ -163,6 +163,73 @@ describe("useChatList", () => {
     expect(fixture.refs.loadingSessions.value).toBe(false);
   });
 
+  it("fetchSessions can force the unchanged active session to reload and rerender messages", async () => {
+    const existingMessages = [{ role: RoleEnum.USER, content: "stale local" }];
+    const fixture = createUseChatListFixture({
+      getSessionsApi: vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          ok: true,
+          sessions: [
+            {
+              sessionId: "backend-refresh",
+              caller: RoleEnum.USER,
+              createdAt: "2026-05-14T00:00:00.000Z",
+              updatedAt: "2026-05-14T00:03:00.000Z",
+              messages: [{ role: RoleEnum.USER, content: "summary" }],
+            },
+          ],
+        }),
+      })),
+      getSessionDetailApi: vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          ok: true,
+          exists: true,
+          sessionId: "backend-refresh",
+          sessions: [
+            {
+              sessionId: "backend-refresh",
+              currentTaskId: "",
+              createdAt: "2026-05-14T00:00:00.000Z",
+              updatedAt: "2026-05-14T00:03:00.000Z",
+              messages: [
+                { role: RoleEnum.USER, content: "fresh server" },
+                { role: RoleEnum.ASSISTANT, content: "fresh answer" },
+              ],
+            },
+          ],
+        }),
+      })),
+    });
+    const { api, refs, mocks } = fixture;
+    refs.sessions.value = [{
+      id: "backend-refresh",
+      backendSessionId: "backend-refresh",
+      title: "loaded",
+      isLocal: false,
+      loaded: true,
+      messages: existingMessages,
+      rawMessages: [],
+      sessionDocs: [{ sessionId: "backend-refresh", messages: existingMessages }],
+      connectorPanelState: { selectedConnectors: {} },
+    }];
+    refs.activeSessionId.value = "backend-refresh";
+
+    await api.fetchSessions("", {
+      forceCurrentSessionRerender: true,
+      preserveCurrentMessages: false,
+    });
+
+    expect(mocks.getSessionDetailApi).toHaveBeenCalledTimes(1);
+    expect(refs.activeSessionId.value).toBe("backend-refresh");
+    expect(refs.sessions.value[0].messages).not.toBe(existingMessages);
+    expect(refs.sessions.value[0].messages.map((message) => message.content)).toEqual([
+      "fresh server",
+      "fresh answer",
+    ]);
+  });
+
   it("fetchSessionDetail can reuse a just-loaded detail snapshot for initialization replay", async () => {
     const getSessionDetailApi = vi.fn(async () => ({
       ok: true,
