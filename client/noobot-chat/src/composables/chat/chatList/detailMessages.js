@@ -105,6 +105,43 @@ export function buildMessageIdentity(messageItem = {}) {
   return buildMessageIdentityKey(messageItem);
 }
 
+function isInlineEditingUserMessage(messageItem = {}) {
+  return (
+    normalizeMessageRole(messageItem) === RoleEnum.USER &&
+    messageItem?.__monotonicEditing === true
+  );
+}
+
+function findFollowingAssistantDialogProcessId(existingMessages = [], userMessageIndex = -1) {
+  if (userMessageIndex < 0) return "";
+  for (let index = userMessageIndex + 1; index < existingMessages.length; index += 1) {
+    const messageItem = existingMessages[index];
+    const role = normalizeMessageRole(messageItem);
+    if (role === RoleEnum.USER) return "";
+    if (role !== RoleEnum.ASSISTANT) continue;
+    const dialogProcessId = getMessageDialogProcessId(messageItem);
+    if (dialogProcessId) return dialogProcessId;
+  }
+  return "";
+}
+
+function findInlineEditingUserMessageIndexForDetail(existingMessages = [], detailMessageItem = {}) {
+  if (normalizeMessageRole(detailMessageItem) !== RoleEnum.USER) return -1;
+  const detailDialogProcessId = getMessageDialogProcessId(detailMessageItem);
+  if (!detailDialogProcessId) return -1;
+  for (let index = existingMessages.length - 1; index >= 0; index -= 1) {
+    const messageItem = existingMessages[index];
+    if (!isInlineEditingUserMessage(messageItem)) continue;
+    if (
+      getMessageDialogProcessId(messageItem) === detailDialogProcessId ||
+      findFollowingAssistantDialogProcessId(existingMessages, index) === detailDialogProcessId
+    ) {
+      return index;
+    }
+  }
+  return -1;
+}
+
 export function findExistingMessageIndexForDetailMessage(existingMessages = [], detailMessageItem = {}) {
   const detailRole = normalizeMessageRole(detailMessageItem);
   const detailDialogProcessId = getMessageDialogProcessId(detailMessageItem);
@@ -112,6 +149,11 @@ export function findExistingMessageIndexForDetailMessage(existingMessages = [], 
   if (!detailRole || (!detailDialogProcessId && !detailContent)) return -1;
   const exactIndex = findMessageIdentityIndex(detailMessageItem, existingMessages);
   if (exactIndex >= 0) return exactIndex;
+  const editingUserIndex = findInlineEditingUserMessageIndexForDetail(
+    existingMessages,
+    detailMessageItem,
+  );
+  if (editingUserIndex >= 0) return editingUserIndex;
   if (detailDialogProcessId) {
     const dialogIndex = existingMessages.findIndex(
       (messageItem) =>
@@ -142,6 +184,10 @@ export function mergePreservedDetailMessages(existingMessages = [], detailMessag
     const existingIndex = findExistingMessageIndexForDetailMessage(existingMessages, detailMessageItem);
     if (existingIndex >= 0) {
       const existingMessage = existingMessages[existingIndex];
+      const keepInlineEditingContent = isInlineEditingUserMessage(existingMessage);
+      const inlineEditingContent = keepInlineEditingContent
+        ? existingMessage.content
+        : undefined;
       const thinkingOpenNames = Array.isArray(existingMessage?.thinkingOpenNames)
         ? existingMessage.thinkingOpenNames
         : [];
@@ -152,6 +198,10 @@ export function mergePreservedDetailMessages(existingMessages = [], detailMessag
         detailMessageItem,
       );
       Object.assign(existingMessage, detailMessageItem);
+      if (keepInlineEditingContent) {
+        existingMessage.content = inlineEditingContent;
+        existingMessage.__monotonicEditing = true;
+      }
       if (existingAttachments.length || detailAttachments.length) {
         existingMessage.attachments = detailAttachments.length
           ? mergeAttachments(existingAttachments, detailAttachments)

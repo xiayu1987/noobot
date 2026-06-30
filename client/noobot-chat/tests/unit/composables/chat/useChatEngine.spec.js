@@ -371,6 +371,52 @@ describe("useChatEngine", () => {
     expect(sending.value).toBe(false);
   });
 
+  it("refreshes current session detail after stopped final event even when stop request flag is cleared", async () => {
+    const fetchSessionDetail = vi.fn(async () => ({
+      sessionId: "local-stop-refresh",
+      sessions: [
+        {
+          sessionId: "local-stop-refresh",
+          messages: [
+            { role: RoleEnum.USER, content: "hello" },
+            {
+              role: RoleEnum.ASSISTANT,
+              dialogProcessId: "dp-stop-refresh",
+              content: "persisted stopped answer",
+            },
+          ],
+        },
+      ],
+    }));
+    const applySessionDetail = vi.fn();
+    const stream = vi.fn(async (_payload, onEvent) => {
+      emitChannelState(onEvent, "local-stop-refresh", "dp-stop-refresh", "stopped", {
+        seq: 2,
+      });
+      onEvent({
+        event: StreamEventEnum.STOPPED,
+        data: { sessionId: "local-stop-refresh", dialogProcessId: "dp-stop-refresh" },
+      });
+    });
+    const { engine, deps } = createHarness({
+      sessionId: "local-stop-refresh",
+      stream,
+      deps: {
+        fetchSessionDetail,
+        applySessionDetail,
+      },
+    });
+
+    await engine.send();
+
+    expect(fetchSessionDetail).toHaveBeenCalledWith("local-stop-refresh");
+    expect(applySessionDetail).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: "local-stop-refresh" }),
+      { preserveCurrentMessages: true, scrollToBottom: false },
+    );
+    expect(deps.chatWebSocketClient.isStopRequested).toHaveBeenCalled();
+  });
+
   it("expired channel_state schedules session refresh", async () => {
     vi.useFakeTimers();
     const refreshSessionsAsync = vi.fn(async () => {});

@@ -417,6 +417,78 @@ describe("useChatList", () => {
     expect(session.messageCount).toBe(2);
   });
 
+  it("applySessionDetail preserves one inline editing user message when stop refresh returns original content", () => {
+    const { api, refs } = createUseChatListFixture();
+    const editingUserMessage = {
+      role: RoleEnum.USER,
+      content: "draft edited question",
+      __monotonicEditing: true,
+    };
+    const stoppedAssistantMessage = {
+      role: RoleEnum.ASSISTANT,
+      content: "partial answer",
+      dialogProcessId: "dp-editing-stop",
+      pending: false,
+      statusLabel: "chat.stopped",
+    };
+    const session = {
+      id: "local-editing-stop",
+      backendSessionId: "backend-editing-stop",
+      title: "session",
+      isLocal: true,
+      loaded: true,
+      messages: [editingUserMessage, stoppedAssistantMessage],
+      rawMessages: [],
+      sessionDocs: [],
+      connectorPanelState: { selectedConnectors: {} },
+      createdAt: "2026-05-14T00:00:00.000Z",
+      updatedAt: "2026-05-14T00:00:00.000Z",
+      currentTaskId: "",
+      currentTaskStatus: "idle",
+      messageCount: 2,
+      lastMessage: stoppedAssistantMessage,
+    };
+    refs.sessions.value.push(session);
+    refs.activeSessionId.value = "local-editing-stop";
+
+    api.applySessionDetail(
+      {
+        sessionId: "backend-editing-stop",
+        sessions: [
+          {
+            sessionId: "backend-editing-stop",
+            currentTaskId: "",
+            createdAt: "2026-05-14T00:00:00.000Z",
+            updatedAt: "2026-05-14T00:02:00.000Z",
+            messages: [
+              {
+                role: RoleEnum.USER,
+                content: "original question",
+                dialogProcessId: "dp-editing-stop",
+              },
+              {
+                role: RoleEnum.ASSISTANT,
+                content: "stopped answer",
+                dialogProcessId: "dp-editing-stop",
+              },
+            ],
+          },
+        ],
+      },
+      { preserveCurrentMessages: true },
+    );
+
+    const userMessages = session.messages.filter((message) => message.role === RoleEnum.USER);
+    expect(userMessages).toHaveLength(1);
+    expect(userMessages[0]).toBe(editingUserMessage);
+    expect(userMessages[0].content).toBe("draft edited question");
+    expect(userMessages[0].__monotonicEditing).toBe(true);
+    expect(userMessages[0].dialogProcessId).toBe("dp-editing-stop");
+    expect(session.messages).toHaveLength(2);
+    expect(session.messages[1]).toBe(stoppedAssistantMessage);
+    expect(session.messages[1].content).toBe("stopped answer");
+  });
+
   it("applySessionDetail keeps active messages when backend detail is briefly empty", () => {
     const { api, refs } = createUseChatListFixture();
     const currentMessages = [
