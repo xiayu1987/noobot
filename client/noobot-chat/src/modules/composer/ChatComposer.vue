@@ -15,6 +15,7 @@ import ComposerCameraDialog from "./ComposerCameraDialog.vue";
 import { useComposerMediaCapture } from "./useComposerMediaCapture";
 import { useComposerOptions } from "./useComposerOptions";
 import { useLocale } from "../../shared/i18n/useLocale";
+import { logResendDebug } from "../../composables/chat/debug/resendDebugLogger";
 
 const props = defineProps({
   modelValue: { type: String, default: "" },
@@ -88,12 +89,31 @@ const {
   onScenarioSelect,
 } = useComposerOptions(props, emit, translate);
 
-const sendDisabled = computed(
-  () =>
-    (!String(props.modelValue || "").trim() && !attachmentCount.value) ||
-    !props.connected ||
-    (props.interactionActive && props.sending),
-);
+const sendDisabled = computed(() => {
+  const inputLength = String(props.modelValue || "").trim().length;
+  const noInput = !inputLength && !attachmentCount.value;
+  const disconnected = !props.connected;
+  const blockedBySendingInteraction = props.interactionActive && props.sending;
+  const disabled = noInput || disconnected || blockedBySendingInteraction;
+  const disabledReason = noInput
+    ? "empty"
+    : disconnected
+      ? "disconnected"
+      : blockedBySendingInteraction
+        ? "interactionActiveAndSending"
+        : "";
+  logResendDebug("ui.sendDisabled", {
+    disabled,
+    disabledReason,
+    connected: props.connected,
+    sending: props.sending,
+    canStop: props.canStop,
+    interactionActive: props.interactionActive,
+    inputLength,
+    attachmentCount: attachmentCount.value,
+  });
+  return disabled;
+});
 
 function emitAppendUploads(files = []) {
   if (captureActionsDisabled.value) return;

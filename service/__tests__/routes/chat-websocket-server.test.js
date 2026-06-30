@@ -48,6 +48,83 @@ async function callChatWs({ port, payload = {} } = {}) {
   });
 }
 
+async function stopChatWs({ port, payload = {}, stopPayload = {} } = {}) {
+  return new Promise((resolve, reject) => {
+    const messages = [];
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/chat/ws`, {
+      headers: { authorization: "Bearer test-key" },
+    });
+    ws.on("open", () => {
+      ws.send(JSON.stringify(payload));
+      setTimeout(() => ws.send(JSON.stringify({ action: "stop", ...stopPayload })), 10);
+    });
+    ws.on("message", (raw) => {
+      try {
+        messages.push(JSON.parse(String(raw || "{}")));
+      } catch (error) {
+        reject(error);
+      }
+    });
+    ws.on("close", () => resolve(messages));
+    ws.on("error", reject);
+  });
+}
+
+test("chat-websocket-server: stop persists and emits the stopped turnScopeId", async () => {
+  let capturedStopPayload = null;
+  const server = await startServerWithWs({
+    bot: {
+      persistStoppedAssistantMessage: async (payload = {}) => {
+        capturedStopPayload = payload;
+      },
+      runSession: async ({ abortSignal }) => {
+        await new Promise((resolve) => {
+          if (abortSignal?.aborted) {
+            resolve();
+            return;
+          }
+          abortSignal?.addEventListener?.("abort", resolve, { once: true });
+        });
+        return {
+          sessionId: "s1",
+          dialogProcessId: "dp-new",
+          answer: "",
+          messages: [],
+          traces: [],
+          executionLogs: [],
+        };
+      },
+    },
+  });
+  try {
+    const { port } = server.address();
+    const events = await stopChatWs({
+      port,
+      payload: {
+        userId: "u1",
+        sessionId: "s1",
+        message: "hello",
+        turnScopeId: "turn-new",
+        config: { locale: "zh-CN" },
+      },
+      stopPayload: {
+        turnScopeId: "turn-new",
+        partialAssistant: {
+          content: "partial",
+          dialogProcessId: "dp-new",
+          turnScopeId: "turn-new",
+        },
+      },
+    });
+
+    assert.equal(capturedStopPayload?.partialAssistant?.turnScopeId, "turn-new");
+    const stoppedEvent = events.find((item) => item?.event === "stopped");
+    assert.equal(stoppedEvent?.data?.turnScopeId, "turn-new");
+  } finally {
+    await closeServer(server);
+  }
+});
+
 test("chat-websocket-server: streaming=false 仍推系统事件且不推 delta", async () => {
   const server = await startServerWithWs({
     runSession: async ({ eventListener }) => {

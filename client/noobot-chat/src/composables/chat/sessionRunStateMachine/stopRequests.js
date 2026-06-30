@@ -56,18 +56,20 @@ export function rememberStopRequestedEvent(rawEvent = {}) {
   return event;
 }
 
-export function resolveRememberedStopRequestedEvent({ sessionId = "", dialogProcessId = "" } = {}) {
+export function resolveRememberedStopRequestedEvent({ sessionId = "", dialogProcessId = "", turnScopeId = "" } = {}) {
   const normalizedSessionId = trim(sessionId);
   const normalizedDialogProcessId = trim(dialogProcessId);
+  const normalizedTurnScopeId = trim(turnScopeId);
   if (!normalizedSessionId) return null;
   const timestamp = nowMs();
   const entries = readStopRequests();
   const freshEntries = entries.filter((entry) => isFreshStopRequest(entry, timestamp));
   if (freshEntries.length !== entries.length) writeStopRequests(freshEntries);
+  if (!normalizedTurnScopeId) return null;
   const match = freshEntries.find((entry) => {
     if (trim(entry.sessionId) !== normalizedSessionId) return false;
-    const entryDialogProcessId = trim(entry.dialogProcessId);
-    return !entryDialogProcessId || !normalizedDialogProcessId || entryDialogProcessId === normalizedDialogProcessId;
+    const entryTurnScopeId = trim(entry.turnScopeId);
+    return Boolean(entryTurnScopeId && entryTurnScopeId === normalizedTurnScopeId);
   });
   if (!match) return null;
   return normalizeSessionRunEvent({
@@ -82,12 +84,17 @@ export function resolveRememberedStopRequestedEvent({ sessionId = "", dialogProc
   });
 }
 
-export function clearRememberedStopRequests({ sessionId = "", dialogProcessId = "" } = {}) {
+export function clearRememberedStopRequests({ sessionId = "", dialogProcessId = "", turnScopeId = "" } = {}) {
   const normalizedSessionId = trim(sessionId);
   const normalizedDialogProcessId = trim(dialogProcessId);
+  const normalizedTurnScopeId = trim(turnScopeId);
   if (!normalizedSessionId) return;
   const entries = readStopRequests().filter((entry) => {
     if (trim(entry.sessionId) !== normalizedSessionId) return true;
+    const entryTurnScopeId = trim(entry.turnScopeId);
+    if (normalizedTurnScopeId || entryTurnScopeId) {
+      return !(normalizedTurnScopeId && entryTurnScopeId && normalizedTurnScopeId === entryTurnScopeId);
+    }
     const entryDialogProcessId = trim(entry.dialogProcessId);
     if (!normalizedDialogProcessId || !entryDialogProcessId) return false;
     return entryDialogProcessId !== normalizedDialogProcessId;

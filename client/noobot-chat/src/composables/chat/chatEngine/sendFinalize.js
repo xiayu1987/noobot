@@ -10,6 +10,7 @@ import {
   getMessageTurnScopeId,
   normalizeTurnMeta,
 } from "../../infra/messageIdentity";
+import { logResendDebug, summarizeDebugMessage } from "../debug/resendDebugLogger";
 
 function normalizeTrimmedString(value = "") {
   return String(value || "").trim();
@@ -23,6 +24,8 @@ function markLatestUserMessageStopped(activeSession, botMessage = null) {
     ? activeSession.value.rawMessages
     : [];
   if (!messages.length) return false;
+  const botTurnScopeId = getMessageTurnScopeId(botMessage);
+  if (!botTurnScopeId) return false;
   const botDialogProcessId = getMessageDialogProcessId(botMessage);
   const botIndex = botMessage ? messages.findIndex((messageItem) => messageItem === botMessage) : -1;
   const startIndex = botIndex >= 0 ? botIndex - 1 : messages.length - 1;
@@ -40,23 +43,17 @@ function markLatestUserMessageStopped(activeSession, botMessage = null) {
   for (let index = startIndex; index >= 0; index -= 1) {
     const messageItem = messages[index];
     if (getMessageRole(messageItem) !== RoleEnum.USER) continue;
-    const userDialogProcessId = getMessageDialogProcessId(messageItem);
-    if (botDialogProcessId && userDialogProcessId && userDialogProcessId !== botDialogProcessId) {
-      return false;
-    }
+    if (getMessageTurnScopeId(messageItem) !== botTurnScopeId) continue;
     markStopped(messageItem);
     const rawCandidate = rawMessages[index];
     if (rawCandidate && getMessageRole(rawCandidate) === RoleEnum.USER) {
       markStopped(rawCandidate);
       return true;
     }
-    const userContent = normalizeTrimmedString(messageItem?.content);
     for (let rawIndex = rawMessages.length - 1; rawIndex >= 0; rawIndex -= 1) {
       const rawMessage = rawMessages[rawIndex];
       if (getMessageRole(rawMessage) !== RoleEnum.USER) continue;
-      const rawDialogProcessId = getMessageDialogProcessId(rawMessage);
-      if (botDialogProcessId && rawDialogProcessId && rawDialogProcessId !== botDialogProcessId) continue;
-      if (!botDialogProcessId && userContent && normalizeTrimmedString(rawMessage?.content) !== userContent) continue;
+      if (getMessageTurnScopeId(rawMessage) !== botTurnScopeId) continue;
       markStopped(rawMessage);
       return true;
     }
@@ -100,14 +97,35 @@ export function applyStopRequestedState({
   botMessage,
   applyConversationState,
 } = {}) {
-  if (!chatWebSocketClient?.isStopRequested?.()) return false;
+  if (!chatWebSocketClient?.isStopRequested?.()) {
+    logResendDebug("sendFinalize.stopRequested.skip", { reason: "notRequested", botMessage: summarizeDebugMessage(botMessage) });
+    return false;
+  }
+  const botTurnScopeId = getMessageTurnScopeId(botMessage);
+  const stopRequestedTurnScopeId = normalizeTrimmedString(
+    chatWebSocketClient?.getStopRequestedTurnScopeId?.(),
+  );
+  if (stopRequestedTurnScopeId && stopRequestedTurnScopeId !== botTurnScopeId) {
+    logResendDebug("sendFinalize.stopRequested.skip", {
+      reason: "turnScopeMismatch",
+      stopRequestedTurnScopeId,
+      botTurnScopeId,
+      botMessage: summarizeDebugMessage(botMessage),
+    });
+    return false;
+  }
+  logResendDebug("sendFinalize.stopRequested.hit", {
+    stopRequestedTurnScopeId,
+    botTurnScopeId,
+    botMessage: summarizeDebugMessage(botMessage),
+  });
   markLatestUserMessageStopped(activeSession, botMessage);
   applyConversationState(
     {
       state: "stopped",
       sessionId: String(activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
       dialogProcessId: String(getMessageDialogProcessId(botMessage) || ""),
-      ...(getMessageTurnScopeId(botMessage) ? { turnScopeId: String(getMessageTurnScopeId(botMessage) || "") } : {}),
+      ...(botTurnScopeId ? { turnScopeId: String(botTurnScopeId || "") } : {}),
     },
     { botMessage },
   );

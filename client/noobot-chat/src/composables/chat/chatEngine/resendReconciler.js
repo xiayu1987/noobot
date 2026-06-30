@@ -3,86 +3,34 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeTrimmedString } from "./utils";
 import {
-  getMessageDialogProcessId,
-  getMessageRole,
   getMessageTurnScopeId,
 } from "../../infra/messageIdentity";
 import { nowIso } from "../../infra/timeFields";
 
-function isUserMessage(message = {}) {
-  return getMessageRole(message).toLowerCase() === "user";
-}
-
 function createRemovedIdentitySnapshot(anchorMessage = {}, removedMessages = []) {
   const removedReferences = new Set(removedMessages.filter(Boolean));
   const removedTurnScopeIds = new Set(removedMessages.map(getMessageTurnScopeId).filter(Boolean));
-  const removedDialogProcessIds = new Set(removedMessages.map(getMessageDialogProcessId).filter(Boolean));
-  const removedTsValues = new Set(
-    removedMessages
-      .map((message) => message?.ts)
-      .filter((value) => value !== undefined && value !== null),
-  );
   const anchorTurnScopeId = getMessageTurnScopeId(anchorMessage);
-  const anchorDialogProcessId = getMessageDialogProcessId(anchorMessage);
-  const anchorTs = anchorMessage?.ts;
   if (anchorTurnScopeId) removedTurnScopeIds.add(anchorTurnScopeId);
-  if (anchorDialogProcessId) removedDialogProcessIds.add(anchorDialogProcessId);
-  if (anchorTs !== undefined && anchorTs !== null) removedTsValues.add(anchorTs);
   return {
     anchorTurnScopeId,
-    anchorDialogProcessId,
-    anchorTs,
-    anchorRole: getMessageRole(anchorMessage).toLowerCase(),
-    anchorContent: normalizeTrimmedString(anchorMessage?.content),
     removedReferences,
     removedTurnScopeIds,
-    removedDialogProcessIds,
-    removedTsValues,
   };
 }
 
-function matchesStableRemovedIdentity(message = {}, identity) {
+function matchesRemovedTurnScope(message = {}, identity) {
   if (!message || typeof message !== "object") return false;
   if (identity.removedReferences.has(message)) return true;
   const messageTurnScopeId = getMessageTurnScopeId(message);
-  if (messageTurnScopeId && identity.removedTurnScopeIds.has(messageTurnScopeId)) return true;
-  const messageTs = message?.ts;
-  if (messageTs !== undefined && messageTs !== null && identity.removedTsValues.has(messageTs)) return true;
-  const messageDialogProcessId = getMessageDialogProcessId(message);
-  return Boolean(messageDialogProcessId && identity.removedDialogProcessIds.has(messageDialogProcessId));
+  return Boolean(messageTurnScopeId && identity.removedTurnScopeIds.has(messageTurnScopeId));
 }
 
-function matchesFinalRemovedIdentity(message = {}, identity, { allowTurnScope = false } = {}) {
-  if (!message || typeof message !== "object") return false;
-  if (identity.removedReferences.has(message)) return true;
-  const messageTurnScopeId = getMessageTurnScopeId(message);
-  if (allowTurnScope && messageTurnScopeId && identity.removedTurnScopeIds.has(messageTurnScopeId)) return true;
-  const messageTs = message?.ts;
-  // Final session detail may legitimately reuse the old dialogProcessId for the
-  // replacement turn, so final reconcile only removes by object reference or
-  // timestamp and never by content or dialogProcessId alone.
-  return messageTs !== undefined && messageTs !== null && identity.removedTsValues.has(messageTs);
-}
-
-function matchesImmediateCompatIdentity(message = {}, identity) {
-  if (matchesStableRemovedIdentity(message, identity)) return true;
-  // Compatibility-only fallback for the immediate post-delete pass. Final
-  // reconcile intentionally never uses content matching to avoid deleting a
-  // new resend when the edited text duplicates an earlier user message.
-  return Boolean(
-    identity.anchorRole &&
-    identity.anchorContent &&
-    getMessageRole(message).toLowerCase() === identity.anchorRole &&
-    normalizeTrimmedString(message?.content) === identity.anchorContent,
-  );
-}
-
-function normalizeIdSet(values = []) {
+function normalizeTurnScopeIdSet(values = []) {
   return new Set(
     (Array.isArray(values) ? values : [values])
-      .map((value) => normalizeTrimmedString(value))
+      .map((value) => String(value || "").trim())
       .filter(Boolean),
   );
 }
@@ -93,21 +41,13 @@ function collectRefValues(refs = [], key = "") {
     .filter((value) => value !== undefined && value !== null);
 }
 
-function mergeReplacementSide(source = {}) {
-  const turnScopeIds = normalizeIdSet([
+function mergeReplacementTurnScopeIds(source = {}) {
+  return normalizeTurnScopeIdSet([
     source?.turnScopeId,
     source?.replacementTurnScopeId,
     ...(Array.isArray(source?.turnScopeIds) ? source.turnScopeIds : []),
     ...collectRefValues(source?.messages, "turnScopeId"),
   ]);
-  const dialogProcessIds = normalizeIdSet([
-    source?.dialogProcessId,
-    source?.replacementDialogProcessId,
-    ...(Array.isArray(source?.dialogProcessIds) ? source.dialogProcessIds : []),
-    ...collectRefValues(source?.messages, "dialogProcessId"),
-    ...collectRefValues(source?.messages, "dialogId"),
-  ]);
-  return { turnScopeIds, dialogProcessIds };
 }
 
 function normalizeExplicitTurnReplacement(operation = {}) {
@@ -115,29 +55,22 @@ function normalizeExplicitTurnReplacement(operation = {}) {
     ? operation.turnScopeReplacement
     : null;
   if (!scopeCompact) return null;
-  const replaced = mergeReplacementSide({
+  const replacedTurnScopeIds = mergeReplacementTurnScopeIds({
     turnScopeIds: scopeCompact.replacedTurnScopeIds,
-    dialogProcessIds: scopeCompact.replacedDialogProcessIds,
   });
-  const replacement = mergeReplacementSide({
+  const replacementTurnScopeIds = mergeReplacementTurnScopeIds({
     turnScopeId: scopeCompact.replacementTurnScopeId,
     turnScopeIds: scopeCompact.replacementTurnScopeIds,
-    dialogProcessId: scopeCompact.replacementDialogProcessId,
-    dialogProcessIds: scopeCompact.replacementDialogProcessIds,
   });
-  const hasReplaced = replaced.turnScopeIds.size > 0 ||
-    replaced.dialogProcessIds.size > 0;
-  const hasReplacement = replacement.turnScopeIds.size > 0 ||
-    replacement.dialogProcessIds.size > 0;
-  return hasReplaced ? { replaced, replacement, hasReplacement } : null;
+  const hasReplaced = replacedTurnScopeIds.size > 0;
+  const hasReplacement = replacementTurnScopeIds.size > 0;
+  return hasReplaced ? { replacedTurnScopeIds, replacementTurnScopeIds, hasReplacement } : null;
 }
 
-function matchesReplacementSide(message = {}, side = {}) {
+function matchesTurnScopeIdSet(message = {}, turnScopeIds = new Set()) {
   if (!message || typeof message !== "object") return false;
   const turnScopeId = getMessageTurnScopeId(message);
-  if (turnScopeId && side.turnScopeIds?.has(turnScopeId)) return true;
-  const dialogProcessId = getMessageDialogProcessId(message);
-  return Boolean(dialogProcessId && side.dialogProcessIds?.has(dialogProcessId));
+  return Boolean(turnScopeId && turnScopeIds.has(turnScopeId));
 }
 
 function pruneByExplicitTurnReplacement(sourceMessages = [], explicitReplacement = null) {
@@ -148,8 +81,8 @@ function pruneByExplicitTurnReplacement(sourceMessages = [], explicitReplacement
   let changed = false;
   sourceMessages.forEach((message) => {
     const isReplacement = explicitReplacement.hasReplacement
-      && matchesReplacementSide(message, explicitReplacement.replacement);
-    const isReplaced = matchesReplacementSide(message, explicitReplacement.replaced);
+      && matchesTurnScopeIdSet(message, explicitReplacement.replacementTurnScopeIds);
+    const isReplaced = matchesTurnScopeIdSet(message, explicitReplacement.replacedTurnScopeIds);
     if (isReplaced && !isReplacement) {
       changed = true;
       return;
@@ -159,54 +92,21 @@ function pruneByExplicitTurnReplacement(sourceMessages = [], explicitReplacement
   return { kept, changed };
 }
 
-function findAppendedResendStartIndex(sourceMessages = [], operation, identity, matchRemoved) {
-  const originalStartIndex = Number(operation?.originalStartIndex);
-  if (!Array.isArray(sourceMessages) || originalStartIndex < 0 || sourceMessages.length <= originalStartIndex) {
-    return -1;
-  }
-  for (let index = originalStartIndex; index < sourceMessages.length; index += 1) {
-    const message = sourceMessages[index];
-    if (isUserMessage(message) && !matchRemoved(message, identity)) {
-      return index;
-    }
-  }
-  return -1;
-}
-
 export function reconcileStaleResendMessages(session, operation = {}, options = {}) {
   if (!session || !operation || Number(operation.originalStartIndex) < 0) {
     return { changed: false, messagesChanged: false, rawMessagesChanged: false };
   }
-  const finalOnly = options.finalOnly === true;
   const identity = createRemovedIdentitySnapshot(operation.anchorMessage, operation.removedMessages || []);
-  const immediateMatch = (message) => matchesImmediateCompatIdentity(message, identity);
-  const stableMatch = (message) => matchesStableRemovedIdentity(message, identity);
-  const finalMatch = (message) => matchesFinalRemovedIdentity(message, identity, {
-    allowTurnScope: true,
-  });
   const explicitReplacement = normalizeExplicitTurnReplacement(operation);
 
   const pruneMessages = (sourceMessages = []) => {
     if (explicitReplacement) {
       return pruneByExplicitTurnReplacement(sourceMessages, explicitReplacement);
     }
-    const appendedResendStartIndex = findAppendedResendStartIndex(
-      sourceMessages,
-      operation,
-      identity,
-      immediateMatch,
-    );
     const kept = [];
     let changed = false;
-    sourceMessages.forEach((message, index) => {
-      const candidateForRemoval = index >= operation.originalStartIndex && (
-        appendedResendStartIndex < 0 ||
-        index < appendedResendStartIndex ||
-        stableMatch(message)
-      );
-      const shouldRemove = finalOnly
-        ? finalMatch(message)
-        : candidateForRemoval && immediateMatch(message);
+    sourceMessages.forEach((message) => {
+      const shouldRemove = matchesRemovedTurnScope(message, identity);
       if (shouldRemove) {
         changed = true;
         return;

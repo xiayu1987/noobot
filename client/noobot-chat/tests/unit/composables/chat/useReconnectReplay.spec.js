@@ -231,6 +231,37 @@ describe("useReconnectReplay", () => {
     expect(assistant.thinking_started_at).toBeUndefined();
   });
 
+  it("does not apply a stale stopped channel_state to a newer resend placeholder", async () => {
+    const { api, refs } = createFixture();
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "edited", turnScopeId: "client-turn:new" },
+      {
+        role: RoleEnum.ASSISTANT,
+        content: "",
+        turnScopeId: "client-turn:new",
+        dialogProcessId: "",
+        pending: true,
+        channelState: { state: "sending", turnScopeId: "client-turn:new" },
+      },
+    ];
+
+    await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-old",
+      turnScopeId: "client-turn:old",
+      state: "stopped",
+      sourceEvent: "stop",
+    });
+
+    const assistant = refs.activeSession.value.messages[1];
+    expect(assistant.pending).toBe(true);
+    expect(assistant.statusLabel).toBeUndefined();
+    expect(assistant.channelState).toMatchObject({
+      state: "sending",
+      turnScopeId: "client-turn:new",
+    });
+  });
+
   it("applies live reconnect thinking without sessionId to active process items", async () => {
     const processStore = createFakeProcessStore();
     const { api, refs } = createFixture({ processStore });

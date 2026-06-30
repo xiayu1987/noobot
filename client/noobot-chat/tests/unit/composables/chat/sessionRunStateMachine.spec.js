@@ -110,6 +110,68 @@ describe("sessionRunStateMachine", () => {
     });
   });
 
+  it("reopens an old stopped turn when resend starts with a fresh turnScopeId", () => {
+    const stopped = transitionSessionRunState(createInitialSessionRunState(), {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: "stopped",
+      sessionId: "s1",
+      turnScopeId: "turn-old",
+      seq: 3,
+    });
+    expect(stopped).toMatchObject({
+      state: SESSION_RUN_STATE.STOPPED,
+      turnScopeId: "turn-old",
+    });
+
+    const replacing = transitionSessionRunState(stopped, {
+      type: SESSION_RUN_EVENT.LOCAL_RESEND_STARTED,
+      sessionId: "s1",
+      turnScopeId: "turn-new",
+    });
+    expect(replacing).toMatchObject({
+      state: SESSION_RUN_STATE.RESEND_REPLACING_TURN,
+      turnScopeId: "turn-new",
+      dialogProcessId: "",
+    });
+
+    const streaming = transitionSessionRunState(replacing, {
+      type: SESSION_RUN_EVENT.LOCAL_RESEND_STREAMING,
+      sessionId: "s1",
+      turnScopeId: "turn-new",
+    });
+    expect(streaming).toMatchObject({
+      state: SESSION_RUN_STATE.RESEND_STREAMING,
+      turnScopeId: "turn-new",
+    });
+    expect(evaluateSessionRunState(streaming)).toMatchObject({
+      sending: true,
+      canStop: true,
+    });
+  });
+
+  it("does not replay a remembered stop request onto a different turnScopeId", () => {
+    rememberStopRequestedEvent({
+      sessionId: "s1",
+      dialogProcessId: "",
+      turnScopeId: "turn-old",
+    });
+
+    expect(resolveRememberedStopRequestedEvent({
+      sessionId: "s1",
+      dialogProcessId: "",
+      turnScopeId: "turn-new",
+    })).toBeNull();
+
+    expect(resolveRememberedStopRequestedEvent({
+      sessionId: "s1",
+      dialogProcessId: "",
+      turnScopeId: "turn-old",
+    })).toMatchObject({
+      state: SESSION_RUN_STATE.STOP_REQUESTED,
+      turnScopeId: "turn-old",
+    });
+  });
+
   it("keeps local send active by turnScopeId until real dialog id binds", () => {
     const localStarted = transitionSessionRunState(createInitialSessionRunState(), {
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
@@ -167,6 +229,7 @@ describe("sessionRunStateMachine", () => {
       state: "completed",
       sessionId: "s1",
       dialogProcessId: "dialog-1",
+      turnScopeId: "client-1",
       seq: 3,
     });
     expect(completed).toMatchObject({
@@ -619,14 +682,31 @@ describe("sessionRunStateMachine", () => {
   });
 
   it("persists remembered stop requests and clears them on terminal", () => {
-    rememberStopRequestedEvent({ sessionId: "s1", dialogProcessId: "d1", timestamp: Date.now() });
-    expect(resolveRememberedStopRequestedEvent({ sessionId: "s1", dialogProcessId: "d1" })?.state).toBe(SESSION_RUN_STATE.STOP_REQUESTED);
-    clearRememberedStopRequests({ sessionId: "s1", dialogProcessId: "d1" });
-    expect(resolveRememberedStopRequestedEvent({ sessionId: "s1", dialogProcessId: "d1" })).toBeNull();
+    rememberStopRequestedEvent({
+      sessionId: "s1",
+      dialogProcessId: "d1",
+      turnScopeId: "turn-1",
+      timestamp: Date.now(),
+    });
+    expect(resolveRememberedStopRequestedEvent({
+      sessionId: "s1",
+      dialogProcessId: "d1",
+    })).toBeNull();
+    expect(resolveRememberedStopRequestedEvent({
+      sessionId: "s1",
+      dialogProcessId: "d1",
+      turnScopeId: "turn-1",
+    })?.state).toBe(SESSION_RUN_STATE.STOP_REQUESTED);
+    clearRememberedStopRequests({ sessionId: "s1", dialogProcessId: "d1", turnScopeId: "turn-1" });
+    expect(resolveRememberedStopRequestedEvent({
+      sessionId: "s1",
+      dialogProcessId: "d1",
+      turnScopeId: "turn-1",
+    })).toBeNull();
   });
 
   it("resolves in-flight state for a matching assistant message", () => {
-    const assistant = { role: "assistant", dialogProcessId: "d1", content: "" };
+    const assistant = { role: "assistant", dialogProcessId: "d1", turnScopeId: "turn-1", content: "" };
     const activeSession = {
       id: "s1",
       backendSessionId: "s1",
@@ -636,6 +716,7 @@ describe("sessionRunStateMachine", () => {
       state: SESSION_RUN_STATE.SENDING,
       sessionId: "s1",
       dialogProcessId: "d1",
+      turnScopeId: "turn-1",
       priority: 40,
     });
 
@@ -643,7 +724,7 @@ describe("sessionRunStateMachine", () => {
   });
 
   it("does not resolve terminal or different-session run state for a message", () => {
-    const assistant = { role: "assistant", dialogProcessId: "d1", content: "" };
+    const assistant = { role: "assistant", dialogProcessId: "d1", turnScopeId: "turn-1", content: "" };
     const activeSession = {
       id: "s1",
       backendSessionId: "s1",
@@ -673,7 +754,7 @@ describe("sessionRunStateMachine", () => {
   });
 
   it("resolves message runtime effects from state machine rules", () => {
-    const assistant = { role: "assistant", dialogProcessId: "d1", content: "" };
+    const assistant = { role: "assistant", dialogProcessId: "d1", turnScopeId: "turn-1", content: "" };
     const activeSession = {
       id: "s1",
       backendSessionId: "s1",
@@ -683,6 +764,7 @@ describe("sessionRunStateMachine", () => {
       state: SESSION_RUN_STATE.SENDING,
       sessionId: "s1",
       dialogProcessId: "d1",
+      turnScopeId: "turn-1",
       priority: 40,
     });
 
@@ -694,12 +776,13 @@ describe("sessionRunStateMachine", () => {
       action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
       reason: SESSION_RUN_MESSAGE_RUNTIME_REASON.IN_FLIGHT_MATCH,
       patch: {
-        runtimeMark: "sending|s1|d1||",
+        runtimeMark: "sending|s1|d1|turn-1|",
         pending: true,
         channelState: {
           state: SESSION_RUN_STATE.SENDING,
           sessionId: "s1",
           dialogProcessId: "d1",
+          turnScopeId: "turn-1",
         },
       },
     });

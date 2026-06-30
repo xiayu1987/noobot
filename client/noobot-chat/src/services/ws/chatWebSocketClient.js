@@ -35,6 +35,7 @@ export function createChatWebSocketClient({
 } = {}) {
   let activeSocket = null;
   let stopRequested = false;
+  let stopRequestedTurnScopeId = "";
   let stopCloseTimer = null;
   let forceStopFinalizeTimer = null;
   let resolveCurrentStream = null;
@@ -78,6 +79,11 @@ export function createChatWebSocketClient({
 
   function clearStopRequested() {
     stopRequested = false;
+    stopRequestedTurnScopeId = "";
+  }
+
+  function getStopRequestedTurnScopeId() {
+    return stopRequestedTurnScopeId;
   }
 
   function getLastReceivedSeqMap() {
@@ -414,7 +420,6 @@ export function createChatWebSocketClient({
   }
 
   function requestStop(stopPayloadOrFinalize = {}, onForceFinalize = () => {}) {
-    stopRequested = true;
     const ws = activeSocket;
     const firstArgIsFinalize = typeof stopPayloadOrFinalize === "function";
     const normalizedStopPayload =
@@ -429,6 +434,9 @@ export function createChatWebSocketClient({
         : typeof onForceFinalize === "function"
         ? onForceFinalize
         : () => {};
+    const requestedTurnScopeId = normalizeTrimmedString(normalizedStopPayload?.turnScopeId);
+    stopRequested = true;
+    stopRequestedTurnScopeId = requestedTurnScopeId;
 
     if (ws && ws.readyState === WebSocket.OPEN) {
       try {
@@ -497,6 +505,7 @@ export function createChatWebSocketClient({
     }
     resolveCurrentStream = null;
     stopRequested = false;
+    stopRequestedTurnScopeId = "";
     reconnecting = false;
     reconnectResolve = null;
     reconnectReject = null;
@@ -511,6 +520,7 @@ export function createChatWebSocketClient({
     getActiveSocket,
     isStopRequested,
     clearStopRequested,
+    getStopRequestedTurnScopeId,
     getLastReceivedSeqMap,
     clearLastReceivedSeqMap,
     hasReconnectState,

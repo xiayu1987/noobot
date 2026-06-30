@@ -180,7 +180,8 @@ export const zhCNMessages = {
     "unknownError": "未知错误",
     "occurredError": "发生错误：{error}",
     "sendFailed": "发送失败",
-    "expiredRefreshFailed": "会话已过期，请新建对话"
+    "expiredRefreshFailed": "会话已过期，请新建对话",
+    "sessionStateOutOfSync": "会话状态不同步，请刷新后重试"
   },
   "message": {
     "subtaskProcessing": "子任务处理中...",

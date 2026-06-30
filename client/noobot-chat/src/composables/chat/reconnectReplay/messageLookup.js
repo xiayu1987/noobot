@@ -5,7 +5,11 @@
  */
 import { RoleEnum } from "../../../shared/constants/chatConstants";
 import { _isAssistantRole, _matchesDialogProcessId, _trimStr } from "./utils";
-import { getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity";
+import {
+  getMessageDialogProcessId,
+  getMessageRole,
+  getMessageTurnScopeId,
+} from "../../infra/messageIdentity";
 
 export function findAssistantMessageByDialogProcessId(activeSession, dialogProcessId = "") {
   const normalizedDpId = _trimStr(dialogProcessId);
@@ -14,6 +18,16 @@ export function findAssistantMessageByDialogProcessId(activeSession, dialogProce
     (messageItem) =>
       _isAssistantRole(messageItem) &&
       _matchesDialogProcessId(messageItem, normalizedDpId),
+  ) || null;
+}
+
+export function findAssistantMessageByTurnScopeId(activeSession, turnScopeId = "") {
+  const normalizedTurnScopeId = _trimStr(turnScopeId);
+  if (!normalizedTurnScopeId || !activeSession?.value) return null;
+  return (activeSession.value.messages || []).find(
+    (messageItem) =>
+      _isAssistantRole(messageItem) &&
+      getMessageTurnScopeId(messageItem) === normalizedTurnScopeId,
   ) || null;
 }
 

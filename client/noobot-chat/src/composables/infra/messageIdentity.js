@@ -169,12 +169,8 @@ export function getMessageContentIdentity(messageItem = {}) {
 }
 
 export function buildMessageIdentityKey(messageItem = {}) {
-  return [
-    getMessageRole(messageItem),
-    getMessageTurnScopeId(messageItem),
-    getMessageDialogProcessId(messageItem),
-    getMessageContentIdentity(messageItem),
-  ].join("|");
+  const turnScopeId = getMessageTurnScopeId(messageItem);
+  return turnScopeId ? `${getMessageRole(messageItem)}|${turnScopeId}` : "";
 }
 
 export function hasMessageTurnScopeConflict(leftMessage = {}, rightMessage = {}) {
@@ -184,52 +180,18 @@ export function hasMessageTurnScopeConflict(leftMessage = {}, rightMessage = {})
 }
 
 export function hasExplicitMessageIdentity(messageItem = {}) {
-  return Boolean(
-    getMessageTurnScopeId(messageItem) ||
-      getMessageStableId(messageItem) ||
-      messageItem?.ts !== undefined ||
-      getMessageDialogProcessId(messageItem),
-  );
+  return Boolean(getMessageTurnScopeId(messageItem));
 }
 
 export function isSameMessageIdentity(targetMessage = {}, candidateMessage = {}) {
   if (!targetMessage || !candidateMessage) return false;
   if (targetMessage === candidateMessage) return true;
 
+  const targetTurnScopeId = getMessageTurnScopeId(targetMessage);
+  if (!targetTurnScopeId || getMessageTurnScopeId(candidateMessage) !== targetTurnScopeId) return false;
   const targetRole = lower(getMessageRole(targetMessage));
   const candidateRole = lower(getMessageRole(candidateMessage));
-  if (targetRole && candidateRole && targetRole !== candidateRole) return false;
-
-  const targetTurnScopeId = getMessageTurnScopeId(targetMessage);
-  if (targetTurnScopeId) {
-    return getMessageTurnScopeId(candidateMessage) === targetTurnScopeId;
-  }
-
-  const targetId = getMessageStableId(targetMessage);
-  if (targetId) {
-    return getMessageStableId(candidateMessage) === targetId;
-  }
-
-  const targetTs = targetMessage?.ts;
-  if (targetTs !== undefined && targetTs !== null) {
-    return candidateMessage?.ts === targetTs;
-  }
-
-  const targetDialogProcessId = getMessageDialogProcessId(targetMessage);
-  if (targetDialogProcessId) {
-    return (
-      getMessageDialogProcessId(candidateMessage) === targetDialogProcessId &&
-      (!targetRole || candidateRole === targetRole)
-    );
-  }
-
-  const targetContent = getMessageContentIdentity(targetMessage);
-  return Boolean(
-    targetRole &&
-      targetContent &&
-      lower(getMessageRole(candidateMessage)) === targetRole &&
-      getMessageContentIdentity(candidateMessage) === targetContent
-  );
+  return Boolean(targetRole && candidateRole && targetRole === candidateRole);
 }
 
 export function findMessageIdentityIndex(targetMessage = {}, messages = []) {
@@ -240,7 +202,6 @@ export function findMessageIdentityIndex(targetMessage = {}, messages = []) {
 export function buildMessageAnchor(targetMessage = {}) {
   const turnScopeId = getMessageTurnScopeId(targetMessage);
   if (turnScopeId) return { turnScopeId };
-  if (targetMessage?.ts !== undefined && targetMessage?.ts !== null) return { ts: targetMessage.ts };
   return {};
 }
 

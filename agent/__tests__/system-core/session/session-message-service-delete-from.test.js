@@ -78,7 +78,7 @@ test("SessionMessageService.deleteFromMessage returns 404 when anchor is missing
   assert.equal(saved.length, 0);
 });
 
-test("SessionMessageService.deleteFromMessage matches dialogProcessId against legacy dialogId", async () => {
+test("SessionMessageService.deleteFromMessage rejects dialogProcessId legacy anchors", async () => {
   const { service, saved } = createService({
     initialSession: {
       sessionId: "s1",
@@ -93,15 +93,15 @@ test("SessionMessageService.deleteFromMessage matches dialogProcessId against le
     },
   });
 
-  const result = await service.deleteFromMessage({
-    userId: "u1",
-    sessionId: "s1",
-    anchor: { dialogProcessId: "dp-legacy" },
-  });
-
-  assert.equal(result.deletedCount, 2);
-  assert.equal(result.anchorIndex, 1);
-  assert.deepEqual(saved[0].messages.map((message) => message.content), ["keep"]);
+  await assert.rejects(
+    service.deleteFromMessage({
+      userId: "u1",
+      sessionId: "s1",
+      anchor: { dialogProcessId: "dp-legacy" },
+    }),
+    (error) => error?.statusCode === 400 && /anchor is required/.test(error.message),
+  );
+  assert.equal(saved.length, 0);
 });
 
 test("SessionMessageService.deleteFromMessage returns 409 when expectedVersion conflicts", async () => {
@@ -145,7 +145,7 @@ test("SessionMessageService.markUserMessageMonotonic persists stopped monotonic 
   const result = await service.markUserMessageMonotonic({
     userId: "u1",
     sessionId: "s1",
-    dialogProcessId: "dp-stop",
+    turnScopeId: "scope-stop",
   });
 
   assert.equal(result.marked, true);
@@ -158,4 +158,55 @@ test("SessionMessageService.markUserMessageMonotonic persists stopped monotonic 
   assert.equal(saved[0].messages[2].state, "stopped");
   assert.equal(saved[0].version, 8);
   assert.equal(saved[0].revision, 8);
+});
+
+test("SessionMessageService.markUserMessageMonotonic rejects dialogProcessId-only legacy scope", async () => {
+  const { service, saved } = createService({
+    initialSession: {
+      sessionId: "s1",
+      parentSessionId: "",
+      version: 7,
+      revision: 7,
+      messages: [
+        { turnScopeId: "scope-old", role: "user", content: "old", dialogProcessId: "dp-reused" },
+        { turnScopeId: "scope-new", role: "user", content: "new", dialogProcessId: "dp-reused" },
+      ],
+    },
+  });
+
+  const result = await service.markUserMessageMonotonic({
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp-reused",
+  });
+
+  assert.deepEqual(result, { marked: false, reason: "missing_turn_scope" });
+  assert.equal(saved.length, 0);
+});
+
+test("SessionMessageService.markUserMessageMonotonic marks only the matching turnScopeId", async () => {
+  const { service, saved } = createService({
+    initialSession: {
+      sessionId: "s1",
+      parentSessionId: "",
+      version: 7,
+      revision: 7,
+      messages: [
+        { turnScopeId: "scope-old", role: "user", content: "old", dialogProcessId: "dp-reused" },
+        { turnScopeId: "scope-new", role: "user", content: "new", dialogProcessId: "dp-reused" },
+      ],
+    },
+  });
+
+  const result = await service.markUserMessageMonotonic({
+    userId: "u1",
+    sessionId: "s1",
+    turnScopeId: "scope-new",
+  });
+
+  assert.equal(result.marked, true);
+  assert.equal(result.messageIndex, 1);
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].messages[0].stopState, undefined);
+  assert.equal(saved[0].messages[1].stopState, "stopped");
 });

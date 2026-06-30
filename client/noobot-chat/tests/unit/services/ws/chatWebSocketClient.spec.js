@@ -75,6 +75,25 @@ describe("chatWebSocketClient", () => {
     await reconnectPromise;
   });
 
+  it("scopes stopRequested to the stopped turnScopeId", () => {
+    const client = createChatWebSocketClient({
+      resolveWebSocketUrl: () => "ws://test",
+    });
+
+    expect(client.isStopRequested()).toBe(false);
+    expect(client.getStopRequestedTurnScopeId()).toBe("");
+
+    client.requestStop({ turnScopeId: "turn-stop" }, vi.fn());
+
+    expect(client.isStopRequested()).toBe(true);
+    expect(client.getStopRequestedTurnScopeId()).toBe("turn-stop");
+
+    client.clearStopRequested();
+
+    expect(client.isStopRequested()).toBe(false);
+    expect(client.getStopRequestedTurnScopeId()).toBe("");
+  });
+
   it("does not resolve after completed channel_state before DONE", async () => {
     const client = createChatWebSocketClient({
       resolveWebSocketUrl: () => "ws://test",

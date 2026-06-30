@@ -35,6 +35,7 @@ import {
   rememberThinkingStarted,
 } from "../thinkingTimingRegistry";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { logResendDebug, summarizeDebugMessage } from "../debug/resendDebugLogger";
 
 function parseThinkingTimingMs(value) {
   return parseTimeMs(value);
@@ -176,6 +177,7 @@ export function applyReconnectChannelState({
   stateData = {},
   onConversationState,
   isCurrentActiveSession,
+  findAssistantMessageByTurnScopeId,
   findAssistantMessageByDialogProcessId,
   findFallbackAssistantMessage,
   sending,
@@ -221,10 +223,23 @@ export function applyReconnectChannelState({
   const dialogProcessId = _trimStr(stateData?.dialogProcessId);
   const turnScopeId = turnMeta.turnScopeId;
   const targetAssistantMessage =
-    findAssistantMessageByDialogProcessId(dialogProcessId) ||
-    (typeof findFallbackAssistantMessage === "function"
+    (turnScopeId && typeof findAssistantMessageByTurnScopeId === "function"
+      ? findAssistantMessageByTurnScopeId(turnScopeId)
+      : null) ||
+    (!turnScopeId && dialogProcessId && typeof findAssistantMessageByDialogProcessId === "function"
+      ? findAssistantMessageByDialogProcessId(dialogProcessId)
+      : null) ||
+    (!turnScopeId && !dialogProcessId && typeof findFallbackAssistantMessage === "function"
       ? findFallbackAssistantMessage()
       : null);
+  logResendDebug("channelStateReplay.target", {
+    state,
+    sessionId,
+    dialogProcessId,
+    turnScopeId,
+    sourceEvent: _trimStr(stateData?.sourceEvent),
+    targetAssistantMessage: summarizeDebugMessage(targetAssistantMessage),
+  });
   if (isInFlightConversationState(state)) {
     rememberThinkingStarted({
       sessionId,
@@ -304,6 +319,7 @@ export function applyReconnectChannelState({
       }
     }
     if (targetAssistantMessage) {
+      const beforeTerminalApply = summarizeDebugMessage(targetAssistantMessage);
       applyReconnectChannelTimingToMessage({
         targetAssistantMessage,
         state,
@@ -328,7 +344,7 @@ export function applyReconnectChannelState({
     if (_trimStr(stateData?.sourceEvent) !== "done") {
       chatWebSocketClient.clearStopRequested();
     }
-    clearRememberedStopRequests({ sessionId, dialogProcessId });
+    clearRememberedStopRequests({ sessionId, dialogProcessId, turnScopeId });
     rememberThinkingFinished({
       sessionId,
       dialogProcessId,
@@ -389,6 +405,14 @@ export function applyReconnectChannelState({
       } else if (state === "error") {
         targetAssistantMessage.statusLabel = translate("chat.failed");
       }
+      logResendDebug("channelStateReplay.terminal.apply", {
+        state,
+        sessionId,
+        dialogProcessId,
+        turnScopeId,
+        before: beforeTerminalApply,
+        after: summarizeDebugMessage(targetAssistantMessage),
+      });
     }
   }
 }

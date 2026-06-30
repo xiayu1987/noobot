@@ -52,6 +52,7 @@ describe("detailMessages", () => {
       { role: RoleEnum.USER, content: "q" },
       {
         role: RoleEnum.ASSISTANT,
+        turnScopeId: "client-turn:time",
         dialogProcessId: "dp-time",
         content: "partial",
         pending: true,
@@ -62,7 +63,13 @@ describe("detailMessages", () => {
     ];
 
     mergePreservedDetailMessages(existingMessages, [
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-time", content: "partial from detail", pending: false },
+      {
+        role: RoleEnum.ASSISTANT,
+        turnScopeId: "client-turn:time",
+        dialogProcessId: "dp-time",
+        content: "partial from detail",
+        pending: false,
+      },
     ]);
 
     const assistant = existingMessages[1];
@@ -70,6 +77,47 @@ describe("detailMessages", () => {
     expect(assistant.channelState).toMatchObject({ state: "sending", createdAt: startedAt });
     expect(assistant.thinkingStartedAt).toBe(startedAt);
     expect(assistant.thinking_started_at).toBeUndefined();
+  });
+
+  it("does not merge stale stopped detail into a newer resend turn by dialogProcessId or content", () => {
+    const existingMessages = [
+      { role: RoleEnum.USER, content: "repeat", turnScopeId: "client-turn:new" },
+      {
+        role: RoleEnum.ASSISTANT,
+        content: "",
+        turnScopeId: "client-turn:new",
+        dialogProcessId: "",
+        pending: true,
+        channelState: { state: "sending", turnScopeId: "client-turn:new" },
+      },
+    ];
+
+    mergePreservedDetailMessages(existingMessages, [
+      {
+        role: RoleEnum.USER,
+        content: "repeat",
+        turnScopeId: "client-turn:old",
+        dialogProcessId: "dp-reused",
+      },
+      {
+        role: RoleEnum.ASSISTANT,
+        content: "",
+        turnScopeId: "client-turn:old",
+        dialogProcessId: "dp-reused",
+        pending: false,
+        channelState: { state: "stopped", turnScopeId: "client-turn:old" },
+        statusLabel: "chat.stopped",
+      },
+    ]);
+
+    expect(existingMessages).toHaveLength(2);
+    expect(existingMessages[1]).toMatchObject({
+      role: RoleEnum.ASSISTANT,
+      turnScopeId: "client-turn:new",
+      pending: true,
+      channelState: { state: "sending", turnScopeId: "client-turn:new" },
+    });
+    expect(existingMessages[1].statusLabel).toBeUndefined();
   });
 
   it("does not apply summary tool logs to assistant messages before turnScopeId is persisted", () => {

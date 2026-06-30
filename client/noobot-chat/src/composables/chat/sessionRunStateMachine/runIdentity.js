@@ -55,12 +55,11 @@ export function sameConversationScope(current = {}, event = {}) {
   }
   if (hasConflictingRunTurnIdentity(current, event)) return false;
 
-  const processMatched = Boolean(currentDialogProcessId && eventDialogProcessId);
-  const turnMatched = hasMatchingRunTurnIdentity(current, event);
-  if (processMatched || turnMatched) return true;
-
   const currentHasTurnIdentity = hasRunTurnIdentity(current);
   const eventHasTurnIdentity = hasRunTurnIdentity(event);
+  if (currentHasTurnIdentity) {
+    return hasMatchingRunTurnIdentity(current, event);
+  }
   if (currentHasTurnIdentity && eventHasTurnIdentity) return false;
 
   const currentHasProcessIdentity = hasRunProcessIdentity(current);
@@ -71,6 +70,9 @@ export function sameConversationScope(current = {}, event = {}) {
   ) {
     return false;
   }
+  const processMatched = Boolean(currentDialogProcessId && eventDialogProcessId);
+  const turnMatched = hasMatchingRunTurnIdentity(current, event);
+  if (processMatched || turnMatched) return true;
   return true;
 }
 
@@ -86,7 +88,11 @@ export function resolveRunTurnScopeId(value = {}) {
 }
 
 export function shouldStartNewTurn(current = {}, event = {}) {
-  if (event.type !== SESSION_RUN_EVENT.LOCAL_SEND_STARTED) return false;
+  if (![
+    SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+    SESSION_RUN_EVENT.LOCAL_RESEND_STARTED,
+    SESSION_RUN_EVENT.LOCAL_RESEND_REPLACING_TURN,
+  ].includes(event.type)) return false;
   if (TERMINAL_STATES.includes(normalizeState(current.state))) return true;
   const eventScope = resolveEventScope(event);
   const currentScope = resolveEventScope(current);

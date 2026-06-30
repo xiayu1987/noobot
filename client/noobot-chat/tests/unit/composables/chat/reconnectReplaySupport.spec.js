@@ -103,7 +103,7 @@ describe("reconnectReplay support modules", () => {
       reuseRecentlyLoaded: true,
       allowLoadedSnapshot: true,
     });
-    expect(applySessionDetail).toHaveBeenCalledWith(detail, { preserveCurrentMessages: false });
+    expect(applySessionDetail).toHaveBeenCalledWith(detail, { preserveCurrentMessages: true });
   });
 
   it("reports expired refresh failure when session refresh fails", async () => {

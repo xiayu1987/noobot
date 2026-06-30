@@ -8,6 +8,10 @@ import { findLatestPendingAssistantAfterLastUser } from "../../infra/reconnectRe
 import { getMessageRole } from "../../infra/messageIdentity";
 import { _ensureArray, _trimStr } from "./utils";
 import { findAssistantMessageByDialogProcessId } from "./messageLookup";
+import {
+  logResendDebug,
+  summarizeDebugMessages,
+} from "../debug/resendDebugLogger";
 
 export function shouldHydrateSessionBeforeReplay({
   activeSession,
@@ -59,7 +63,16 @@ export async function renderActiveSessionBeforeReplay({
         allowLoadedSnapshot: true,
       });
       if (!detail) return false;
-      chatList.applySessionDetail(detail, { preserveCurrentMessages: false });
+      logResendDebug("hydration.detail.apply.before", {
+        sessionId: backendSessionId,
+        preserveCurrentMessages: true,
+        messages: summarizeDebugMessages(activeSession?.value?.messages),
+      });
+      chatList.applySessionDetail(detail, { preserveCurrentMessages: true });
+      logResendDebug("hydration.detail.apply.after", {
+        sessionId: backendSessionId,
+        messages: summarizeDebugMessages(activeSession?.value?.messages),
+      });
       return true;
     } catch (error) {
       onError(error);

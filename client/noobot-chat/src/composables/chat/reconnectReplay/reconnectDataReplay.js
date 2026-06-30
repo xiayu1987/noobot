@@ -45,6 +45,7 @@ function createReconnectRunStateEvents(reconnectSessions = [], recoverableSessio
       const rememberedStopEvent = resolveRememberedStopRequestedEvent({
         sessionId,
         dialogProcessId: _trimStr(stateEntry?.dialogProcessId),
+        turnScopeId: turnMeta.turnScopeId,
       });
       if (rememberedStopEvent) events.push(rememberedStopEvent);
       events.push({

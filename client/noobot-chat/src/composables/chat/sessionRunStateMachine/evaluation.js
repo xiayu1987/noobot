@@ -20,6 +20,8 @@ export function isTerminalSessionRunState(state = "") {
 export function isInFlightSessionRunState(state = "") {
   return [
     SESSION_RUN_STATE.SENDING,
+    SESSION_RUN_STATE.RESEND_REPLACING_TURN,
+    SESSION_RUN_STATE.RESEND_STREAMING,
     SESSION_RUN_STATE.STOP_REQUESTED,
     SESSION_RUN_STATE.STOPPING,
     SESSION_RUN_STATE.RECONNECTING,
@@ -38,6 +40,8 @@ export function evaluateSessionRunState(stateSnapshot = {}) {
     sending: isInFlightSessionRunState(state),
     canStop: [
       SESSION_RUN_STATE.SENDING,
+      SESSION_RUN_STATE.RESEND_REPLACING_TURN,
+      SESSION_RUN_STATE.RESEND_STREAMING,
       SESSION_RUN_STATE.RECONNECTING,
       SESSION_RUN_STATE.INTERACTION_PENDING,
     ].includes(state),
@@ -46,6 +50,10 @@ export function evaluateSessionRunState(stateSnapshot = {}) {
     assistantStatus:
       state === SESSION_RUN_STATE.STOPPING || state === SESSION_RUN_STATE.STOP_REQUESTED
         ? "stopping"
+        : state === SESSION_RUN_STATE.RESEND_REPLACING_TURN
+          ? "resend_replacing_turn"
+          : state === SESSION_RUN_STATE.RESEND_STREAMING
+            ? "resend_streaming"
         : state === SESSION_RUN_STATE.RECONNECTING
           ? "reconnecting"
           : state === SESSION_RUN_STATE.COMPLETED
