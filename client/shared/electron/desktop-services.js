@@ -25,11 +25,16 @@ export function createDesktopServiceManager({
   pollIntervalMs,
   sendStatus = () => {},
   getLogFilePath = () => "",
+  appendServiceLog = () => {},
+  appendAgentProxyLog = () => {},
   ensureDesktopGlobalConfig,
   getDesktopConfigState = () => null,
   setDesktopConfigState = () => {},
   requestSuperAdminConfig,
   requestMissingConfigParams,
+  spawnProcess = spawn,
+  fetchImpl = fetch,
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 } = {}) {
   let managedServiceProcess = null;
   let managedAgentProxyProcess = null;
@@ -116,7 +121,7 @@ export function createDesktopServiceManager({
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 1500);
-      const response = await fetch(healthUrl, { signal: controller.signal });
+      const response = await fetchImpl(healthUrl, { signal: controller.signal });
       clearTimeout(timer);
       if (!response.ok) return false;
       const data = await response.json().catch(() => ({}));
@@ -130,7 +135,7 @@ export function createDesktopServiceManager({
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 1500);
-      const response = await fetch(agentProxyHealthUrl, { signal: controller.signal });
+      const response = await fetchImpl(agentProxyHealthUrl, { signal: controller.signal });
       clearTimeout(timer);
       if (!response.ok) return false;
       const data = await response.json().catch(() => ({}));
@@ -168,13 +173,13 @@ export function createDesktopServiceManager({
         `command=${command}`,
         `args=${args.join(" ")}`,
         `cwd=${cwd}`,
-        `log=${getLogFilePath()}`,
+        `log=${getLogFilePath("service.log")}`,
         `globalConfig=${globalConfigPath}`,
         `dependencies=${JSON.stringify(dependencySummary)}`,
         `startupContext=${startupContextPath}`,
       ].join("\n"),
     });
-    managedServiceProcess = spawn(command, args, {
+    managedServiceProcess = spawnProcess(command, args, {
       cwd,
       env: {
         ...process.env,
@@ -195,10 +200,14 @@ export function createDesktopServiceManager({
     });
 
     managedServiceProcess.stdout?.on("data", (chunk) => {
-      sendStatus({ phase: "service-log", message: chunk.toString() });
+      const message = chunk.toString();
+      appendServiceLog(message);
+      sendStatus({ phase: "service-log", message });
     });
     managedServiceProcess.stderr?.on("data", (chunk) => {
-      sendStatus({ phase: "service-log", message: chunk.toString() });
+      const message = chunk.toString();
+      appendServiceLog(message);
+      sendStatus({ phase: "service-log", message });
     });
     managedServiceProcess.once("error", (error) => {
       managedServiceProcess = null;
@@ -239,11 +248,12 @@ export function createDesktopServiceManager({
         `args=${args.join(" ")}`,
         `cwd=${cwd}`,
         `health=${agentProxyHealthUrl}`,
+        `log=${getLogFilePath("agent-proxy.log")}`,
         `frontend=${frontendRoot || "dev-server"}`,
         `dependencies=${JSON.stringify(dependencySummary)}`,
       ].join("\n"),
     });
-    managedAgentProxyProcess = spawn(command, args, {
+    managedAgentProxyProcess = spawnProcess(command, args, {
       cwd,
       env: {
         ...process.env,
@@ -260,8 +270,16 @@ export function createDesktopServiceManager({
       stdio: "pipe",
       windowsHide: true,
     });
-    managedAgentProxyProcess.stdout?.on("data", (chunk) => sendStatus({ phase: "agent-proxy-log", message: chunk.toString() }));
-    managedAgentProxyProcess.stderr?.on("data", (chunk) => sendStatus({ phase: "agent-proxy-log", message: chunk.toString() }));
+    managedAgentProxyProcess.stdout?.on("data", (chunk) => {
+      const message = chunk.toString();
+      appendAgentProxyLog(message);
+      sendStatus({ phase: "agent-proxy-log", message });
+    });
+    managedAgentProxyProcess.stderr?.on("data", (chunk) => {
+      const message = chunk.toString();
+      appendAgentProxyLog(message);
+      sendStatus({ phase: "agent-proxy-log", message });
+    });
     managedAgentProxyProcess.once("error", (error) => {
       managedAgentProxyProcess = null;
       sendStatus({ phase: "error", message: `Failed to start Noobot agent proxy process: ${error?.message || String(error)}` });
@@ -279,7 +297,7 @@ export function createDesktopServiceManager({
     const startedAt = Date.now();
     while (Date.now() - startedAt < startupTimeoutMs) {
       if (await isServiceHealthy()) return true;
-      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+      await sleep(pollIntervalMs);
     }
     return false;
   }
@@ -288,7 +306,7 @@ export function createDesktopServiceManager({
     const startedAt = Date.now();
     while (Date.now() - startedAt < startupTimeoutMs) {
       if (await isAgentProxyHealthy()) return true;
-      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+      await sleep(pollIntervalMs);
     }
     return false;
   }
