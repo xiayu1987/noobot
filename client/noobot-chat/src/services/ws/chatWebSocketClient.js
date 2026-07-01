@@ -28,7 +28,6 @@ function isTerminalChannelStateEvent(event = "", data = {}) {
 
 export function createChatWebSocketClient({
   resolveWebSocketUrl = () => "",
-  stopCloseDelayMs = TIME_THRESHOLDS.client.wsStopCloseDelayMs,
   forceStopFinalizeMs = TIME_THRESHOLDS.client.wsForceStopFinalizeMs,
   terminalChannelStateGraceMs = TIME_THRESHOLDS.client.wsTerminalChannelStateGraceMs,
   translateText = (key = "") => String(key || ""),
@@ -36,7 +35,6 @@ export function createChatWebSocketClient({
   let activeSocket = null;
   let stopRequested = false;
   let stopRequestedTurnScopeId = "";
-  let stopCloseTimer = null;
   let forceStopFinalizeTimer = null;
   let resolveCurrentStream = null;
 
@@ -49,10 +47,6 @@ export function createChatWebSocketClient({
   const RECONNECT_TIMEOUT_MS = TIME_THRESHOLDS.client.wsReconnectTimeoutMs;
 
   function clearTimers() {
-    if (stopCloseTimer) {
-      clearTimeout(stopCloseTimer);
-      stopCloseTimer = null;
-    }
     if (forceStopFinalizeTimer) {
       clearTimeout(forceStopFinalizeTimer);
       forceStopFinalizeTimer = null;
@@ -306,7 +300,7 @@ export function createChatWebSocketClient({
         };
 
         streamSocket.onclose = () => {
-          if (doneReceived || stopRequested) {
+          if (doneReceived) {
             finalize(() => resolve());
             return;
           }
@@ -443,11 +437,6 @@ export function createChatWebSocketClient({
         ws.send(JSON.stringify({ action: "stop", ...normalizedStopPayload }));
       } catch {}
       clearTimers();
-      stopCloseTimer = setTimeout(() => {
-        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-          ws.close(1000, "stop_requested");
-        }
-      }, stopCloseDelayMs);
       forceStopFinalizeTimer = setTimeout(() => {
         const latestSocket = activeSocket;
         if (

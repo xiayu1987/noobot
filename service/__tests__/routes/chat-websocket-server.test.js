@@ -85,14 +85,9 @@ test("chat-websocket-server: stop persists and emits the stopped turnScopeId", a
           }
           abortSignal?.addEventListener?.("abort", resolve, { once: true });
         });
-        return {
-          sessionId: "s1",
-          dialogProcessId: "dp-new",
-          answer: "",
-          messages: [],
-          traces: [],
-          executionLogs: [],
-        };
+        const error = new Error("aborted by user");
+        error.name = "AbortError";
+        throw error;
       },
     },
   });
@@ -120,6 +115,121 @@ test("chat-websocket-server: stop persists and emits the stopped turnScopeId", a
     assert.equal(capturedStopPayload?.partialAssistant?.turnScopeId, "turn-new");
     const stoppedEvent = events.find((item) => item?.event === "stopped");
     assert.equal(stoppedEvent?.data?.turnScopeId, "turn-new");
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("chat-websocket-server: stop emits non-terminal stopping before run settles", async () => {
+  let resolveRun = null;
+  const runWait = new Promise((resolve) => {
+    resolveRun = resolve;
+  });
+  const server = await startServerWithWs({
+    bot: {
+      runSession: async ({ abortSignal }) => {
+        await new Promise((resolve) => {
+          if (abortSignal?.aborted) {
+            resolve();
+            return;
+          }
+          abortSignal?.addEventListener?.("abort", resolve, { once: true });
+        });
+        await runWait;
+        return { sessionId: "s1", dialogProcessId: "dp-slow", answer: "" };
+      },
+    },
+  });
+  try {
+    const { port } = server.address();
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/chat/ws`, {
+      headers: { authorization: "Bearer test-key" },
+    });
+    const stoppingEvent = await new Promise((resolve, reject) => {
+      ws.on("open", () => {
+        ws.send(JSON.stringify({
+          userId: "u1",
+          sessionId: "s1",
+          message: "hello",
+          turnScopeId: "turn-slow",
+          config: { locale: "zh-CN" },
+        }));
+        setTimeout(() => ws.send(JSON.stringify({
+          action: "stop",
+          turnScopeId: "turn-slow",
+          partialAssistant: {
+            dialogProcessId: "dp-slow",
+            turnScopeId: "turn-slow",
+          },
+        })), 10);
+      });
+      ws.on("message", (raw) => {
+        const parsed = JSON.parse(String(raw || "{}"));
+        if (parsed?.event === "channel_state" && parsed?.data?.state === "stopping") {
+          resolve(parsed);
+        }
+        if (parsed?.event === "stopped" || parsed?.event === "done") {
+          reject(new Error(`unexpected terminal event before run settled: ${parsed.event}`));
+        }
+      });
+      ws.on("error", reject);
+      setTimeout(() => reject(new Error("stopping event timeout")), 1000);
+    });
+    assert.equal(stoppingEvent?.data?.turnScopeId, "turn-slow");
+    assert.equal(stoppingEvent?.data?.dialogProcessId, "dp-slow");
+    resolveRun();
+    ws.close();
+  } finally {
+    resolveRun?.();
+    await closeServer(server);
+  }
+});
+
+test("chat-websocket-server: stop request still emits done when runSession completes normally", async () => {
+  const server = await startServerWithWs({
+    bot: {
+      persistStoppedAssistantMessage: async () => {
+        throw new Error("should not persist stopped assistant for normal completion");
+      },
+      runSession: async ({ abortSignal }) => {
+        await new Promise((resolve) => {
+          abortSignal?.addEventListener?.("abort", resolve, { once: true });
+        });
+        return {
+          sessionId: "s1",
+          dialogProcessId: "dp-normal-after-stop",
+          answer: "completed",
+          messages: [],
+          traces: [],
+          executionLogs: [],
+        };
+      },
+    },
+  });
+  try {
+    const { port } = server.address();
+    const events = await stopChatWs({
+      port,
+      payload: {
+        userId: "u1",
+        sessionId: "s1",
+        message: "hello",
+        turnScopeId: "turn-normal-after-stop",
+        config: { locale: "zh-CN" },
+      },
+      stopPayload: {
+        turnScopeId: "turn-normal-after-stop",
+        partialAssistant: {
+          dialogProcessId: "dp-normal-after-stop",
+          turnScopeId: "turn-normal-after-stop",
+        },
+      },
+    });
+
+    assert.equal(events.some((item) => item?.event === "stopped"), false);
+    const doneEvent = events.find((item) => item?.event === "done");
+    assert.equal(doneEvent?.data?.dialogProcessId, "dp-normal-after-stop");
+    assert.equal(doneEvent?.data?.turnScopeId, "turn-normal-after-stop");
   } finally {
     await closeServer(server);
   }

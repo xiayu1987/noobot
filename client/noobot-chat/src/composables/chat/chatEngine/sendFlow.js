@@ -13,7 +13,10 @@ import {
   finalizeSendCleanup,
 } from "./sendFinalize";
 import { prepareChatSend } from "./sendPrepare";
-import { finalizeDoneSessionDetail, refreshFinalSessionDetail } from "./sessionFinalize";
+import {
+  finalizeDoneSessionDetail,
+  refreshFinalSessionDetail,
+} from "./sessionFinalize";
 import {
   handleBasicStreamEvent,
   handleDoneStreamEvent,
