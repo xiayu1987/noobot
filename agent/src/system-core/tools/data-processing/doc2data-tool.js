@@ -312,6 +312,13 @@ function createLibreOfficeTimeoutError(timeoutMs) {
   return error;
 }
 
+function createLibreOfficeAbortError() {
+  const error = new Error("LibreOffice conversion aborted");
+  error.name = "AbortError";
+  error.code = "ABORT_ERR";
+  return error;
+}
+
 function createLibreOfficeTempLimitError(tempBytes, maxTempBytes) {
   const error = new Error(
     `LibreOffice conversion temp output exceeded limit (${tempBytes}/${maxTempBytes} bytes)`,
@@ -446,7 +453,7 @@ async function killLibreOfficeProcessesForNodePid(pid = process.pid) {
   }
 }
 
-async function withLibreOfficeConvertGuard(convertPromise, budget = {}) {
+async function withLibreOfficeConvertGuard(convertPromise, budget = {}, abortSignal = null) {
   const timeoutMs =
     Number.isFinite(Number(budget?.timeoutMs)) && Number(budget.timeoutMs) > 0
       ? Number(budget.timeoutMs)
@@ -460,20 +467,39 @@ async function withLibreOfficeConvertGuard(convertPromise, budget = {}) {
     Number(budget.progressCheckIntervalMs) > 0
       ? Number(budget.progressCheckIntervalMs)
       : 0;
-  if (!timeoutMs && (!tempMaxBytes || !progressCheckIntervalMs)) return convertPromise;
+  if (!timeoutMs && (!tempMaxBytes || !progressCheckIntervalMs) && !abortSignal) return convertPromise;
 
   let timeoutTimer = null;
   let progressTimer = null;
   let settled = false;
+  let abortHandler = null;
   const cleanup = () => {
     settled = true;
     if (timeoutTimer) clearTimeout(timeoutTimer);
     if (progressTimer) clearInterval(progressTimer);
+    if (abortSignal && abortHandler) {
+      abortSignal.removeEventListener?.("abort", abortHandler);
+    }
   };
   try {
     return await Promise.race([
       convertPromise,
       new Promise((_, reject) => {
+        if (abortSignal?.aborted) {
+          killLibreOfficeProcessesForNodePid(process.pid).finally(() => {
+            reject(createLibreOfficeAbortError());
+          });
+          return;
+        }
+        if (abortSignal) {
+          abortHandler = () => {
+            if (settled) return;
+            killLibreOfficeProcessesForNodePid(process.pid).finally(() => {
+              reject(createLibreOfficeAbortError());
+            });
+          };
+          abortSignal.addEventListener?.("abort", abortHandler, { once: true });
+        }
         if (timeoutMs) {
           timeoutTimer = setTimeout(async () => {
             if (settled) return;
@@ -698,10 +724,12 @@ async function parseDocumentToTextViaLibreOffice({
   let outputFormat = { format: "txt", filter: undefined, mode: "libreoffice_text" };
   let convertBudget = resolveLibreOfficeConvertBudget(0);
   try {
+    if (runtime?.abortSignal?.aborted) throw createLibreOfficeAbortError();
     const inputBuffer = await readFile(inputFile);
     if (!inputBuffer.length) {
       return { text: "", bytes: 0 };
     }
+    if (runtime?.abortSignal?.aborted) throw createLibreOfficeAbortError();
     convertBudget = resolveLibreOfficeConvertBudget(inputBuffer.length);
     // `libreoffice` / `libreoffice-convert` expect format without leading dot.
     // Passing ".txt" makes them probe `source..txt`, which can trigger ENOENT.
@@ -724,6 +752,7 @@ async function parseDocumentToTextViaLibreOffice({
           })
           : converter(inputBuffer, outputFormat.format, outputFormat.filter),
         convertBudget,
+        runtime?.abortSignal || null,
       );
     } catch (primaryError) {
       const primaryMessage = String(primaryError?.message || "");
@@ -739,6 +768,7 @@ async function parseDocumentToTextViaLibreOffice({
           })
           : converter(inputBuffer, "txt", "Text"),
         convertBudget,
+        runtime?.abortSignal || null,
       );
     }
     const text = decodeLibreOfficeTextBuffer(outputBuffer);

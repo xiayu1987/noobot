@@ -65,6 +65,20 @@ function summarizePluginConfig(plugins = {}) {
   );
 }
 
+function isAbortLikeError(error) {
+  const normalizedName = String(error?.name || "").trim().toLowerCase();
+  const message = String(error?.message || "").trim().toLowerCase();
+  const code = String(error?.code || "").trim().toUpperCase();
+  return (
+    normalizedName === "aborterror" ||
+    code === "ABORT_ERR" ||
+    message === "aborterror" ||
+    message.includes("aborterror") ||
+    message.includes("aborted") ||
+    message.includes("stopped by user")
+  );
+}
+
 async function resolveEffectiveRunTimeoutMs({ bot: _bot, userId: _userId = "", runConfig = {} } = {}) {
   const runConfigTimeoutMs = resolveConfigRunTimeoutMs(runConfig);
   if (runConfigTimeoutMs !== undefined && runConfigTimeoutMs !== null) {
@@ -210,6 +224,10 @@ export function registerChatWebSocketServer(
     let currentRunMeta = null;
     let currentRunTimeoutTimer = null;
     let currentRunTimedOut = false;
+    let currentStopPayload = null;
+    let stopRequested = false;
+    let currentTurnScopeId = "";
+    let currentAbortSignal = null;
     const pendingInteractionRequests = new Map();
 
     let eventSequence = 0;
@@ -319,7 +337,7 @@ export function registerChatWebSocketServer(
     };
 
     webSocket.on("message", async (rawMessage) => {
-      let abortSignal = null;
+      let runMessageStarted = false;
       try {
         const payload = JSON.parse(String(rawMessage || "{}"));
         const action = String(payload?.action || "").trim().toLowerCase();
@@ -336,34 +354,37 @@ export function registerChatWebSocketServer(
           return;
         }
         if (action === "stop") {
-          if (isRunning && currentAbortController) {
-            currentAbortController.abort({ type: "user_stop", reason: "user stop action" });
-          }
+          stopRequested = true;
+          currentTurnScopeId =
+            String(payload?.turnScopeId || payload?.partialAssistant?.turnScopeId || "").trim() ||
+            currentTurnScopeId;
           rejectAllPendingInteractions(new Error(translateText("ws.dialogStoppedByUser", currentLocale)));
-          try {
-            await resolveBot()?.persistStoppedAssistantMessage?.({
-              userId: currentRunMeta?.userId || "",
-              sessionId: currentRunMeta?.sessionId || "",
-              parentSessionId: currentRunMeta?.parentSessionId || "",
-              parentDialogProcessId: currentRunMeta?.parentDialogProcessId || "",
-              partialAssistant: payload?.partialAssistant || {},
-            });
-          } catch (error) {
-            logError("[ws][chat-websocket-server] persist stopped assistant message failed", {
-              userId: currentRunMeta?.userId || "",
-              sessionId: currentRunMeta?.sessionId || "",
-              error: error?.message || String(error),
-            });
-          }
-          sendEvent("stopped", {
+          currentStopPayload = {
             message: translateText("ws.dialogStoppedByUser", currentLocale),
             sessionId: currentRunMeta?.sessionId || "",
             dialogProcessId:
               String(payload?.partialAssistant?.dialogProcessId || "").trim() ||
               currentRunMeta?.dialogProcessId ||
               "",
+            turnScopeId:
+              String(payload?.turnScopeId || payload?.partialAssistant?.turnScopeId || "").trim() ||
+              currentTurnScopeId ||
+              currentRunMeta?.turnScopeId ||
+              "",
+            partialAssistant: payload?.partialAssistant || {},
+          };
+          if (isRunning && currentAbortController) {
+            currentAbortController.abort({
+              type: "user_stop",
+              reason: "user stop action",
+              stopPayload: currentStopPayload,
+            });
+          }
+          sendEvent("channel_state", {
+            ...currentStopPayload,
+            state: "stopping",
+            sourceEvent: "stop_requested",
           });
-          webSocket.close(1000, "stopped");
           return;
         }
         if (isRunning) {
@@ -371,9 +392,10 @@ export function registerChatWebSocketServer(
           return;
         }
         isRunning = true;
+        runMessageStarted = true;
         currentAbortController = new AbortController();
         currentRunTimedOut = false;
-        abortSignal = currentAbortController.signal;
+        currentAbortSignal = currentAbortController.signal;
 
         const {
           userId,
@@ -385,6 +407,9 @@ export function registerChatWebSocketServer(
           config = {},
           turnScopeId = "",
         } = payload || {};
+        currentTurnScopeId =
+          String(turnScopeId || config?.turnScopeId || "").trim() ||
+          currentTurnScopeId;
         currentLocale = normalizeLocale(config?.locale || currentLocale);
 
         if (!userId || !sessionId || !message) {
@@ -428,8 +453,25 @@ export function registerChatWebSocketServer(
           parentSessionId: String(parentSessionId || "").trim(),
           parentDialogProcessId: String(parentDialogProcessId || "").trim(),
           dialogProcessId: "",
-          turnScopeId: String(normalizedRunConfig?.turnScopeId || "").trim(),
+          turnScopeId: String(normalizedRunConfig?.turnScopeId || currentTurnScopeId || "").trim(),
         };
+        if (stopRequested && currentAbortController && !currentAbortController.signal?.aborted) {
+          currentAbortController.abort({
+            type: "user_stop",
+            reason: "user stop action",
+            stopPayload: currentStopPayload,
+          });
+        }
+        if (stopRequested && currentStopPayload) {
+          sendEvent("channel_state", {
+            ...currentStopPayload,
+            sessionId: currentStopPayload?.sessionId || currentRunMeta?.sessionId || "",
+            dialogProcessId: currentStopPayload?.dialogProcessId || currentRunMeta?.dialogProcessId || "",
+            turnScopeId: currentStopPayload?.turnScopeId || currentRunMeta?.turnScopeId || "",
+            state: "stopping",
+            sourceEvent: "stop_requested",
+          });
+        }
 
         const textStreamingEnabled = await resolveEffectiveStreamingEnabled({
           bot: activeBot,
@@ -511,23 +553,18 @@ export function registerChatWebSocketServer(
           message,
           attachments,
           eventListener,
-          abortSignal,
+          abortSignal: currentAbortSignal,
           userInteractionBridge,
           runConfig: normalizedRunConfig,
         });
 
-        if (abortSignal?.aborted) {
-          if (currentRunTimedOut) {
-            sendEvent("error", {
-              error: `run timeout after ${runTimeoutMs}ms`,
-              sessionId: currentRunMeta?.sessionId || "",
-              dialogProcessId: currentRunMeta?.dialogProcessId || "",
-            });
-            webSocket.close(1011, "timeout");
-          } else {
-            sendEvent("stopped", { message: translateText("ws.dialogStoppedByUser", currentLocale) });
-            webSocket.close(1000, "stopped");
-          }
+        if (currentRunTimedOut && currentAbortSignal?.aborted) {
+          sendEvent("error", {
+            error: `run timeout after ${runTimeoutMs}ms`,
+            sessionId: currentRunMeta?.sessionId || "",
+            dialogProcessId: currentRunMeta?.dialogProcessId || "",
+          });
+          webSocket.close(1011, "timeout");
           return;
         }
 
@@ -535,13 +572,18 @@ export function registerChatWebSocketServer(
           sessionId: result.sessionId,
           answer: result.answer,
           dialogProcessId: result.dialogProcessId || "",
+          turnScopeId:
+            currentStopPayload?.turnScopeId ||
+            currentRunMeta?.turnScopeId ||
+            currentTurnScopeId ||
+            "",
           messages: result.messages || [],
           traces: result.traces || [],
           executionLogs: result.executionLogs || [],
         });
         webSocket.close(1000, "done");
       } catch (error) {
-        if (abortSignal?.aborted) {
+        if (currentAbortSignal?.aborted || isAbortLikeError(error)) {
           if (currentRunTimedOut) {
             sendEvent("error", {
               error: error?.message || "run timeout",
@@ -550,7 +592,32 @@ export function registerChatWebSocketServer(
             });
             webSocket.close(1011, "timeout");
           } else {
-            sendEvent("stopped", { message: translateText("ws.dialogStoppedByUser", currentLocale) });
+            const stopPayload = currentStopPayload || currentAbortSignal?.reason?.stopPayload || {};
+            try {
+              await resolveBot()?.persistStoppedAssistantMessage?.({
+                userId: currentRunMeta?.userId || "",
+                sessionId: currentRunMeta?.sessionId || "",
+                parentSessionId: currentRunMeta?.parentSessionId || "",
+                parentDialogProcessId: currentRunMeta?.parentDialogProcessId || "",
+                partialAssistant: stopPayload?.partialAssistant || {},
+              });
+            } catch (persistError) {
+              logError("[ws][chat-websocket-server] persist stopped assistant message failed", {
+                userId: currentRunMeta?.userId || "",
+                sessionId: currentRunMeta?.sessionId || "",
+                error: persistError?.message || String(persistError),
+              });
+            }
+            sendEvent("stopped", {
+              message: stopPayload?.message || translateText("ws.dialogStoppedByUser", currentLocale),
+              sessionId: stopPayload?.sessionId || currentRunMeta?.sessionId || "",
+              dialogProcessId: stopPayload?.dialogProcessId || currentRunMeta?.dialogProcessId || "",
+              turnScopeId:
+                stopPayload?.turnScopeId ||
+                currentRunMeta?.turnScopeId ||
+                currentTurnScopeId ||
+                "",
+            });
             webSocket.close(1000, "stopped");
           }
           return;
@@ -569,14 +636,20 @@ export function registerChatWebSocketServer(
         });
         webSocket.close(1011, "error");
       } finally {
-        if (currentRunTimeoutTimer) {
-          clearTimeout(currentRunTimeoutTimer);
-          currentRunTimeoutTimer = null;
+        if (runMessageStarted) {
+          if (currentRunTimeoutTimer) {
+            clearTimeout(currentRunTimeoutTimer);
+            currentRunTimeoutTimer = null;
+          }
+          isRunning = false;
+          currentAbortController = null;
+          currentAbortSignal = null;
+          currentRunMeta = null;
+          currentRunTimedOut = false;
+          currentStopPayload = null;
+          stopRequested = false;
+          currentTurnScopeId = "";
         }
-        isRunning = false;
-        currentAbortController = null;
-        currentRunMeta = null;
-        currentRunTimedOut = false;
       }
     });
 

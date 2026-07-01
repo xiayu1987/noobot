@@ -170,6 +170,22 @@ describe("chatWebSocketClient", () => {
     expect(settled).toBe(false);
   });
 
+  it("does not treat stop-requested socket close as successful final state", async () => {
+    const client = createChatWebSocketClient({
+      resolveWebSocketUrl: () => "ws://test",
+      forceStopFinalizeMs: 1000,
+      translateText: (key) => key,
+    });
+    client.connect();
+    const socket = MockWebSocket.instances[0];
+
+    const streamPromise = client.stream({ action: "chat" }, vi.fn());
+    client.requestStop({ turnScopeId: "turn-stop" }, vi.fn());
+    socket.close(1000, "server_closed_without_terminal_event");
+
+    await expect(streamPromise).rejects.toThrow("infra.websocketStreamError");
+  });
+
   it.each(["cancelled", "canceled"])(
     "resolves after %s terminal channel_state",
     async (state) => {

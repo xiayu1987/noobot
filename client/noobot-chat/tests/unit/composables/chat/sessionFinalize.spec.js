@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { refreshFinalSessionDetail } from "../../../../src/composables/chat/chatEngine/sessionFinalize";
+import {
+  refreshFinalSessionDetail,
+} from "../../../../src/composables/chat/chatEngine/sessionFinalize";
 import { RoleEnum } from "../../../../src/shared/constants/chatConstants";
 
 describe("sessionFinalize", () => {
