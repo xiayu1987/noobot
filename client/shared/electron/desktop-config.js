@@ -160,6 +160,19 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
     return true;
   }
 
+  function ensureWorkspaceTemplateExample({ bundledTemplatePath, workspaceTemplatePath }) {
+    const bundledExamplePath = path.join(bundledTemplatePath, "config.example.json");
+    const workspaceExamplePath = path.join(workspaceTemplatePath, "config.example.json");
+    if (fs.existsSync(workspaceExamplePath)) return workspaceExamplePath;
+    if (!fs.existsSync(bundledExamplePath)) {
+      throw new Error(`desktop default user config example not found in bundled runtime: ${bundledExamplePath}`);
+    }
+    fs.mkdirSync(workspaceTemplatePath, { recursive: true });
+    fs.copyFileSync(bundledExamplePath, workspaceExamplePath);
+    appendDesktopLog(`[main:config] restored default user config example: ${bundledExamplePath} -> ${workspaceExamplePath}`);
+    return workspaceExamplePath;
+  }
+
   function collectTemplateVariables(input, keys = new Set()) {
     if (typeof input === "string") {
       for (const match of input.matchAll(/\$\{([A-Z0-9_]+)\}/g)) keys.add(match[1]);
@@ -301,7 +314,7 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
     }
 
     copyDirectoryContents({ from: bundledTemplatePath, to: workspaceTemplatePath });
-    const templateExamplePath = path.join(workspaceTemplatePath, "config.example.json");
+    const templateExamplePath = ensureWorkspaceTemplateExample({ bundledTemplatePath, workspaceTemplatePath });
     const templateConfigPath = path.join(workspaceTemplatePath, "config.json");
     if (fs.existsSync(templateExamplePath)) {
       const isFirstUserConfig = !fs.existsSync(templateConfigPath);

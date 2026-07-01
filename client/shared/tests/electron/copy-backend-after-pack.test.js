@@ -24,6 +24,7 @@ async function createFixture() {
   const frontendSource = path.join(rootDir, "client", "noobot-chat", "dist");
 
   await writeRuntimeFile(backendSource, "service/app.js");
+  await writeRuntimeFile(backendSource, "node_modules/noobot-agent/package.json", "{}");
   await writeRuntimeFile(backendSource, "node_modules/express/package.json", "{}");
   await writeRuntimeFile(backendSource, "plugin/noobot-plugin-harness/manifest.json", "{}");
   await writeRuntimeFile(backendSource, "plugin/noobot-plugin-workflow/manifest.json", "{}");
