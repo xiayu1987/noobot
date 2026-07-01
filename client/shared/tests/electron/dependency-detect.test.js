@@ -377,8 +377,47 @@ test("dependency installer injects proxy environment into Windows install comman
     const result = await installer.ensureSelectedDependencies({ ffmpeg: true });
     assert.equal(result[0].ok, true);
     assert.equal(runs[0].command, "winget");
+    assert.deepEqual(runs[0].args.slice(0, 7), ["install", "--id", "Gyan.FFmpeg", "--exact", "--source", "winget", "--accept-package-agreements"]);
+    assert.ok(runs[0].args.includes("--accept-source-agreements"));
+    assert.ok(runs[0].args.includes("--disable-interactivity"));
     assert.equal(runs[0].options.env.HTTPS_PROXY, "http://127.0.0.1:7890/");
   });
+});
+
+test("dependency installer classifies Windows installer cancellation as retryable", async () => {
+  const installer = createDependencyInstaller();
+
+  const failure = installer.classifyInstallFailure({
+    label: "LibreOffice",
+    result: {
+      ok: false,
+      code: 1602,
+      stdout: "你已取消安装。\n安装程序失败，退出代码为: 1602",
+      stderr: "",
+    },
+  });
+
+  assert.equal(failure.failureKind, "user-cancelled");
+  assert.equal(failure.retryable, true);
+  assert.match(failure.message, /installer was cancelled/);
+});
+
+test("dependency installer classifies Windows source agreement failures as retryable", async () => {
+  const installer = createDependencyInstaller();
+
+  const failure = installer.classifyInstallFailure({
+    label: "LibreOffice",
+    result: {
+      ok: false,
+      code: 1,
+      stdout: "msstore source requires agreement before use.",
+      stderr: "",
+    },
+  });
+
+  assert.equal(failure.failureKind, "source-agreement");
+  assert.equal(failure.retryable, true);
+  assert.match(failure.message, /source requires an agreement/);
 });
 
 test("dependency runtime env resolves managed ffmpeg, sibling ffprobe and LibreOffice app", async () => {

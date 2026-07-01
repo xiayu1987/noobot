@@ -23,11 +23,53 @@ export function createDependencyInstaller({
     const proxyUrl = String(getDependencyProxyUrl() || "").trim();
     return { env: getDependencyProxyEnv(proxyUrl), masked: maskDependencyProxyUrl(proxyUrl), enabled: Boolean(proxyUrl) };
   }
+
+  function buildWindowsWingetInstallArgs(packageId) {
+    return [
+      "install",
+      "--id",
+      packageId,
+      "--exact",
+      "--source",
+      "winget",
+      "--accept-package-agreements",
+      "--accept-source-agreements",
+      "--disable-interactivity",
+    ];
+  }
+
+  function classifyInstallFailure({ result, label }) {
+    const detail = String(result?.stderr || result?.stdout || result?.error || "").trim().slice(0, 1000);
+    const text = `${detail}\n${result?.error || ""}`.toLowerCase();
+    if (result?.code === 1602 || text.includes("你已取消安装") || text.includes("cancelled") || text.includes("canceled")) {
+      return {
+        detail,
+        failureKind: "user-cancelled",
+        retryable: true,
+        message: `Failed to install ${label}. The installer was cancelled. Please retry and accept the installer prompts, or install ${label} manually before restarting Noobot.${detail ? ` ${detail}` : ""}`,
+      };
+    }
+    if (text.includes("msstore") || text.includes("source agreement") || text.includes("source agreements") || text.includes("协议")) {
+      return {
+        detail,
+        failureKind: "source-agreement",
+        retryable: true,
+        message: `Failed to install ${label}. The Windows package source requires an agreement or region confirmation. Please retry, or run winget once manually to accept the source agreement.${detail ? ` ${detail}` : ""}`,
+      };
+    }
+    return {
+      detail,
+      failureKind: "installer",
+      retryable: false,
+      message: `Failed to install ${label}.${detail ? ` ${detail}` : ""}`,
+    };
+  }
+
   async function buildDependencyInstallCommand(spec) {
     writeDependencyLog("install-command:build:start", { label: spec.label, platform: process.platform }, { debug: true });
     const packages = spec.packages?.[process.platform] || {};
     if (process.platform === "win32") {
-      if (packages.winget && await findAvailableCommand(["winget"])) return { command: "winget", args: ["install", "--id", packages.winget, "--exact", "--accept-package-agreements", "--accept-source-agreements"] };
+      if (packages.winget && await findAvailableCommand(["winget"])) return { command: "winget", args: buildWindowsWingetInstallArgs(packages.winget) };
       if (packages.choco && await findAvailableCommand(["choco"])) return { command: "choco", args: ["install", packages.choco, "-y"] };
     }
     if (process.platform === "darwin") {
@@ -159,8 +201,10 @@ export function createDependencyInstaller({
       });
       writeDependencyLog("install:finish", { key, label: spec.label, ok: result.ok, code: result.code, error: result.error });
       if (!result.ok) {
-        const detail = String(result.stderr || result.stdout || result.error || "").trim().slice(0, 1000);
-        throw createDependencyError(`Failed to install ${spec.label}.${detail ? ` ${detail}` : ""}`, { failureKind: "installer" });
+        const failure = classifyInstallFailure({ result, label: spec.label });
+        writeDependencyLog("install:error:classified", { key, label: spec.label, code: result.code, failureKind: failure.failureKind, retryable: failure.retryable, detail: failure.detail });
+        sendStatus({ phase: "dependency-missing", message: failure.message, dependency: key, retryable: failure.retryable, failureKind: failure.failureKind });
+        throw createDependencyError(failure.message, { failureKind: failure.failureKind, retryable: failure.retryable });
       }
       sendStatus({ phase: "dependency", message: `${spec.label} installer finished. Verifying availability...` });
       writeDependencyLog("verify:start", { key, label: spec.label });
@@ -175,5 +219,5 @@ export function createDependencyInstaller({
     return results;
   }
 
-  return { buildDependencyInstallCommand, ensureSelectedDependencies };
+  return { buildDependencyInstallCommand, classifyInstallFailure, ensureSelectedDependencies };
 }
