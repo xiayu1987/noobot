@@ -88,6 +88,10 @@ export const TIME_THRESHOLDS = deepFreeze({
 
   tools: {
     executeScriptTimeoutMs: TIME_TIERS.fiveMinutesMs,
+    docToDataLibreOfficeBaseTimeoutMs: TIME_TIERS.threeMinutesMs,
+    docToDataLibreOfficePerMiBTimeoutMs: TIME_TIERS.startupMs,
+    docToDataLibreOfficeMaxTimeoutMs: TIME_TIERS.oneHourMs,
+    docToDataLibreOfficeProgressCheckIntervalMs: TIME_TIERS.fiveSecondsMs,
     dockerLockWaitTimeoutMs: TIME_TIERS.oneHourMs,
   },
 

@@ -302,6 +302,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
     `这是第 ${Number(params.batchIndex || 1)} 批图片，页码范围 ${String(params.range || "")}。请按页码顺序输出。`,
       "tools.doc2data.extractPrompt": "请提取文档中的全部可识别文字，按原始结构输出，不要编造内容。",
       "tools.doc2data.imageFileUseMedia2Data": "图片文件请使用 media2data 工具解析",
+      "tools.doc2data.libreofficeDocUnsupported": "LibreOffice 已禁用 .doc 文档解析，请改用 parseEngine=vision。",
       "tools.doc2data.libreofficeParseFailed": "LibreOffice 文档解析失败，可尝试 parseEngine=vision。",
       "tools.doc2data.libreofficeUnavailable": "未检测到 LibreOffice 解析能力，请安装依赖或改用 parseEngine=vision。",
       "tools.doc2data.noImagesProduced": "未生成可用图片"

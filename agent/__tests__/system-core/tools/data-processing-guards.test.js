@@ -332,6 +332,29 @@ test("doc_to_data: image input should fail fast with unsupported file type", asy
   );
 });
 
+test("doc_to_data: libreoffice rejects legacy .doc before conversion", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-doc-"));
+  const docPath = path.join(basePath, "runtime", "ops_workdir", "input.doc");
+  await fs.mkdir(path.dirname(docPath), { recursive: true });
+  await fs.writeFile(docPath, Buffer.from([0xd0, 0xcf, 0x11, 0xe0]));
+
+  const tools = createDoc2DataTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === TOOL_NAME.DOC_TO_DATA);
+  assert.ok(tool);
+
+  await assert.rejects(
+    () => tool.invoke({
+      filePath: "runtime/ops_workdir/input.doc",
+      parseEngine: "libreoffice",
+    }),
+    (error) => {
+      assert.equal(error?.code, ERROR_CODE.RECOVERABLE_UNSUPPORTED_FILE_TYPE);
+      assert.match(error?.message || "", /LibreOffice|vision|\.doc/);
+      return true;
+    },
+  );
+});
+
 test("media_to_data: non-media file should fail with unsupported media file type", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-media2data-"));
   const textPath = path.join(basePath, "runtime", "ops_workdir", "input.txt");
