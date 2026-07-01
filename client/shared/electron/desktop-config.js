@@ -75,6 +75,48 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
     appendDesktopLog(`[main:config] restored desktop ${label}: ${from} -> ${to}`);
   }
 
+  function shouldCopyTemplatePath(src) {
+    return !["config.json", "global.config.json"].includes(path.basename(src));
+  }
+
+  function copyDirectoryContentsManually({ from, to }) {
+    const sourceStat = fs.statSync(from);
+    if (!sourceStat.isDirectory()) {
+      if (!shouldCopyTemplatePath(from)) return;
+      fs.mkdirSync(path.dirname(to), { recursive: true });
+      fs.copyFileSync(from, to);
+      return;
+    }
+
+    fs.mkdirSync(to, { recursive: true });
+    for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
+      const srcPath = path.join(from, entry.name);
+      const dstPath = path.join(to, entry.name);
+      if (!shouldCopyTemplatePath(srcPath)) continue;
+      if (entry.isDirectory()) {
+        copyDirectoryContentsManually({ from: srcPath, to: dstPath });
+      } else if (entry.isFile()) {
+        fs.mkdirSync(path.dirname(dstPath), { recursive: true });
+        fs.copyFileSync(srcPath, dstPath);
+      }
+    }
+  }
+
+  function logTemplateDirectoryStatus({ bundledTemplatePath, workspaceTemplatePath }) {
+    const relativePaths = [
+      ".",
+      "config.example.json",
+      "memory",
+      path.join("memory", "short-memory.json"),
+      "runtime",
+      "services",
+      "skills",
+    ];
+    for (const relativePath of relativePaths) {
+      appendDesktopLog(`[main:config] template path status; relative=${relativePath}; bundled=${JSON.stringify(describePath(path.join(bundledTemplatePath, relativePath)))}; workspace=${JSON.stringify(describePath(path.join(workspaceTemplatePath, relativePath)))}`);
+    }
+  }
+
   function getNestedString(root, segments) {
     let node = root;
     for (const segment of segments) node = isPlainObject(node) ? node[segment] : undefined;
@@ -209,7 +251,13 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
       return true;
     } catch (error) {
       appendDesktopLog(`[main:config] desktop template directory sync failed: ${from} -> ${to}; error=${error?.stack || error?.message || String(error)}`);
-      return false;
+      try {
+        copyDirectoryContentsManually({ from, to });
+        appendDesktopLog(`[main:config] synced desktop template directory with manual fallback: ${from} -> ${to}`);
+        return true;
+      } catch (fallbackError) {
+        throw new Error(`failed to sync desktop template directory: ${from} -> ${to}`, { cause: fallbackError });
+      }
     }
   }
 
@@ -372,6 +420,7 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
 
     const templateExamplePath = ensureWorkspaceTemplateExample({ bundledTemplatePath, workspaceTemplatePath });
     copyDirectoryContents({ from: bundledTemplatePath, to: workspaceTemplatePath });
+    logTemplateDirectoryStatus({ bundledTemplatePath, workspaceTemplatePath });
     const templateConfigPath = path.join(workspaceTemplatePath, "config.json");
     if (fs.existsSync(templateExamplePath)) {
       const isFirstUserConfig = !fs.existsSync(templateConfigPath);
