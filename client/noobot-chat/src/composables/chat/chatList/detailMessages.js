@@ -147,8 +147,31 @@ function isInlineEditingUserMessage(messageItem = {}) {
 }
 
 export function findExistingMessageIndexForDetailMessage(existingMessages = [], detailMessageItem = {}) {
-  if (!buildMessageIdentity(detailMessageItem)) return -1;
-  return findMessageIdentityIndex(detailMessageItem, existingMessages);
+  if (buildMessageIdentity(detailMessageItem)) {
+    return findMessageIdentityIndex(detailMessageItem, existingMessages);
+  }
+  const detailRole = normalizeMessageRole(detailMessageItem);
+  const detailDialogProcessId = getMessageDialogProcessId(detailMessageItem);
+  if (detailDialogProcessId) {
+    const matchingDialogIndexes = existingMessages
+      .map((messageItem, index) => ({ messageItem, index }))
+      .filter(({ messageItem }) => {
+        if (normalizeMessageRole(messageItem) !== detailRole) return false;
+        if (buildMessageIdentity(messageItem)) return false;
+        return getMessageDialogProcessId(messageItem) === detailDialogProcessId;
+      })
+      .map(({ index }) => index);
+    if (matchingDialogIndexes.length === 1) return matchingDialogIndexes[0];
+  }
+  if (detailRole !== RoleEnum.USER) return -1;
+  const matchingUserIndexes = existingMessages
+    .map((messageItem, index) => ({ messageItem, index }))
+    .filter(({ messageItem }) => {
+      if (normalizeMessageRole(messageItem) !== RoleEnum.USER) return false;
+      return !buildMessageIdentity(messageItem);
+    })
+    .map(({ index }) => index);
+  return matchingUserIndexes.length === 1 ? matchingUserIndexes[0] : -1;
 }
 
 export function mergePreservedDetailMessages(existingMessages = [], detailMessages = []) {
