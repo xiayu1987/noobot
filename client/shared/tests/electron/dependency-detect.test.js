@@ -439,6 +439,28 @@ test("dependency installer classifies install timeout as retryable", async () =>
   assert.match(failure.message, /timed out/);
 });
 
+test("dependency installer classifies localized winget download failures as retryable", async () => {
+  const installer = createDependencyInstaller();
+
+  const failure = installer.classifyInstallFailure({
+    label: "LibreOffice",
+    result: {
+      ok: false,
+      code: 1,
+      stdout: [
+        "已找到 LibreOffice [TheDocumentFoundation.LibreOffice] 版本 26.2.4.2",
+        "此包需要以下依赖项：",
+        "正在下载 https://download.documentfoundation.org/libreoffice/stable/26.2.4/win/x86_64/LibreOffice_26.2.4_Win_x86-64.msi",
+      ].join("\n"),
+      stderr: "",
+    },
+  });
+
+  assert.equal(failure.failureKind, "download");
+  assert.equal(failure.retryable, true);
+  assert.match(failure.message, /Failed to download LibreOffice/);
+});
+
 test("dependency runtime env resolves managed ffmpeg, sibling ffprobe and LibreOffice app", async () => {
   await withPlatform("darwin", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "noobot-runtime-env-"));

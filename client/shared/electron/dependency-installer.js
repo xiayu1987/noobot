@@ -38,8 +38,14 @@ export function createDependencyInstaller({
     ];
   }
 
+  function compactProcessOutput(result) {
+    const raw = String(result?.stderr || result?.stdout || result?.error || "").trim();
+    if (raw.length <= 1600) return raw;
+    return `${raw.slice(0, 700)}\n...\n${raw.slice(-900)}`;
+  }
+
   function classifyInstallFailure({ result, label }) {
-    const detail = String(result?.stderr || result?.stdout || result?.error || "").trim().slice(0, 1000);
+    const detail = compactProcessOutput(result);
     const text = `${detail}\n${result?.error || ""}`.toLowerCase();
     if (result?.code === -1 && text.includes("timed out")) {
       return {
@@ -63,6 +69,14 @@ export function createDependencyInstaller({
         failureKind: "source-agreement",
         retryable: true,
         message: `Failed to install ${label}. The Windows package source requires an agreement or region confirmation. Please retry, or run winget once manually to accept the source agreement.${detail ? ` ${detail}` : ""}`,
+      };
+    }
+    if (text.includes("downloading") || text.includes("download failed") || text.includes("正在下载") || text.includes("下载失败") || text.includes("download.documentfoundation.org")) {
+      return {
+        detail,
+        failureKind: "download",
+        retryable: true,
+        message: `Failed to download ${label}. Please check the network or configure a dependency download proxy, then retry.${detail ? ` ${detail}` : ""}`,
       };
     }
     return {
