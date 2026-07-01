@@ -386,6 +386,7 @@ export function applyReconnectChannelState({
       return;
     }
     if (targetAssistantMessage) {
+      const beforeTerminalApply = summarizeDebugMessage(targetAssistantMessage);
       applyReconnectChannelTimingToMessage({
         targetAssistantMessage,
         state,
