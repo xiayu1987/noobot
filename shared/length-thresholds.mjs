@@ -95,6 +95,7 @@ const LENGTH_TIERS = deepFreeze({
     attachmentFile: 10 * MiB,
     searchBuffer: 16 * MiB,
     attachmentTotal: 30 * MiB,
+    libreOfficeTempBaseline: 512 * MiB,
   },
 });
 
@@ -183,6 +184,9 @@ export const LENGTH_THRESHOLDS = deepFreeze({
     // Max generated web2img page-text artifact chars before truncating payloads.
     web2ImgUsefulTextChars: LENGTH_TIERS.artifactTextChars.web2ImgUsefulText,
     web2ImgFullTextChars: LENGTH_TIERS.artifactTextChars.web2ImgFullText,
+
+    // LibreOffice conversion temp output guard. Actual cap is max(this, input size ratio).
+    libreOfficeTempMaxBytes: LENGTH_TIERS.bytes.libreOfficeTempBaseline,
   },
 
   harness: {

@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readFile, stat } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
+import { execFile } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -50,10 +51,23 @@ import {
   TEXT_EXTENSIONS,
 } from "./file-extension-constants.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const require = createRequire(import.meta.url);
+const execFileAsync = promisify(execFile);
 const MAX_BATCH_BYTES = LENGTH_THRESHOLDS.dataProcessing.batchBytes;
 const MAX_DIRECT_TEXT_BYTES = LENGTH_THRESHOLDS.dataProcessing.directTextBytes;
+const LIBREOFFICE_CONVERT_BASE_TIMEOUT_MS =
+  TIME_THRESHOLDS.tools.docToDataLibreOfficeBaseTimeoutMs;
+const LIBREOFFICE_CONVERT_PER_MIB_TIMEOUT_MS =
+  TIME_THRESHOLDS.tools.docToDataLibreOfficePerMiBTimeoutMs;
+const LIBREOFFICE_CONVERT_MAX_TIMEOUT_MS =
+  TIME_THRESHOLDS.tools.docToDataLibreOfficeMaxTimeoutMs;
+const LIBREOFFICE_CONVERT_PROGRESS_CHECK_INTERVAL_MS =
+  TIME_THRESHOLDS.tools.docToDataLibreOfficeProgressCheckIntervalMs;
+const LIBREOFFICE_TEMP_MAX_BYTES =
+  LENGTH_THRESHOLDS.dataProcessing.libreOfficeTempMaxBytes;
+const LIBREOFFICE_TEMP_INPUT_RATIO = 20;
 const DATA_PROCESSING_ARTIFACT_SOURCES = new Set([
   ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
   ARTIFACT_GENERATION_SOURCE.MEDIA_TO_DATA_TOOL,
@@ -291,6 +305,200 @@ function resolveLibreOfficeConverters() {
   return null;
 }
 
+function createLibreOfficeTimeoutError(timeoutMs) {
+  const error = new Error(`LibreOffice conversion timeout after ${timeoutMs}ms`);
+  error.code = "LIBREOFFICE_CONVERT_TIMEOUT";
+  error.timeoutMs = timeoutMs;
+  return error;
+}
+
+function createLibreOfficeTempLimitError(tempBytes, maxTempBytes) {
+  const error = new Error(
+    `LibreOffice conversion temp output exceeded limit (${tempBytes}/${maxTempBytes} bytes)`,
+  );
+  error.code = "LIBREOFFICE_CONVERT_TEMP_LIMIT";
+  error.tempBytes = tempBytes;
+  error.maxTempBytes = maxTempBytes;
+  return error;
+}
+
+function resolveLibreOfficeConvertBudget(inputBytes = 0) {
+  const normalizedInputBytes =
+    Number.isFinite(Number(inputBytes)) && Number(inputBytes) > 0
+      ? Number(inputBytes)
+      : 0;
+  const mib = 1024 * 1024;
+  const fileMiB = Math.ceil(normalizedInputBytes / mib);
+  const timeoutMs = Math.min(
+    LIBREOFFICE_CONVERT_MAX_TIMEOUT_MS,
+    LIBREOFFICE_CONVERT_BASE_TIMEOUT_MS +
+      fileMiB * LIBREOFFICE_CONVERT_PER_MIB_TIMEOUT_MS,
+  );
+  const tempMaxBytes = Math.max(
+    LIBREOFFICE_TEMP_MAX_BYTES,
+    normalizedInputBytes * LIBREOFFICE_TEMP_INPUT_RATIO,
+  );
+  return {
+    inputBytes: normalizedInputBytes,
+    timeoutMs,
+    tempMaxBytes,
+    progressCheckIntervalMs: LIBREOFFICE_CONVERT_PROGRESS_CHECK_INTERVAL_MS,
+  };
+}
+
+async function collectDirectoryBytes(directoryPath = "") {
+  const normalizedDirectoryPath = String(directoryPath || "").trim();
+  if (!normalizedDirectoryPath) return 0;
+  let totalBytes = 0;
+  let entries = [];
+  try {
+    entries = await readdir(normalizedDirectoryPath, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  for (const entry of entries) {
+    const entryPath = path.join(normalizedDirectoryPath, entry.name);
+    try {
+      if (entry.isDirectory()) {
+        totalBytes += await collectDirectoryBytes(entryPath);
+      } else if (entry.isFile()) {
+        const entryStat = await stat(entryPath);
+        totalBytes += Number(entryStat?.size || 0);
+      }
+    } catch {
+      // Ignore files that disappear while LibreOffice is working.
+    }
+  }
+  return totalBytes;
+}
+
+async function collectLibreOfficeTempBytesForNodePid(pid = process.pid) {
+  const normalizedPid = String(pid || "").trim();
+  if (!normalizedPid || process.platform === "win32") return 0;
+  let tmpEntries = [];
+  try {
+    tmpEntries = await readdir("/tmp", { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  const prefixes = [
+    `libreofficeConvert_-${normalizedPid}-`,
+    `soffice-${normalizedPid}-`,
+  ];
+  let totalBytes = 0;
+  for (const entry of tmpEntries) {
+    if (!entry.isDirectory()) continue;
+    if (!prefixes.some((prefix) => entry.name.startsWith(prefix))) continue;
+    totalBytes += await collectDirectoryBytes(path.join("/tmp", entry.name));
+  }
+  return totalBytes;
+}
+
+async function killLibreOfficeProcessesForNodePid(pid = process.pid) {
+  const normalizedPid = String(pid || "").trim();
+  if (!normalizedPid || process.platform === "win32") return;
+
+  const userInstallationToken = `/tmp/soffice-${normalizedPid}-`;
+  const convertDirToken = `/tmp/libreofficeConvert_-${normalizedPid}-`;
+  try {
+    const { stdout } = await execFileAsync("ps", ["-eo", "pid=,args="], {
+      timeout: 5000,
+      maxBuffer: 1024 * 1024,
+    });
+    const targetPids = String(stdout || "")
+      .split(/\r?\n/)
+      .map((line) => {
+        const trimmed = line.trim();
+        const match = trimmed.match(/^(\d+)\s+(.+)$/);
+        if (!match) return null;
+        const [, processId, args] = match;
+        const isLibreOfficeProcess =
+          args.includes("/libreoffice/") ||
+          args.includes("soffice") ||
+          args.includes("oosplash");
+        const isCurrentConvert =
+          args.includes(userInstallationToken) ||
+          args.includes(convertDirToken);
+        return isLibreOfficeProcess && isCurrentConvert ? Number(processId) : null;
+      })
+      .filter((processId) => Number.isInteger(processId) && processId > 0);
+
+    for (const processId of targetPids) {
+      try {
+        process.kill(processId, "SIGTERM");
+      } catch {
+        // Process may have exited between ps and kill.
+      }
+    }
+    if (targetPids.length) {
+      setTimeout(() => {
+        for (const processId of targetPids) {
+          try {
+            process.kill(processId, "SIGKILL");
+          } catch {
+            // Process already exited.
+          }
+        }
+      }, 1500).unref?.();
+    }
+  } catch {
+    // Best-effort cleanup only; timeout result should still be returned.
+  }
+}
+
+async function withLibreOfficeConvertGuard(convertPromise, budget = {}) {
+  const timeoutMs =
+    Number.isFinite(Number(budget?.timeoutMs)) && Number(budget.timeoutMs) > 0
+      ? Number(budget.timeoutMs)
+      : 0;
+  const tempMaxBytes =
+    Number.isFinite(Number(budget?.tempMaxBytes)) && Number(budget.tempMaxBytes) > 0
+      ? Number(budget.tempMaxBytes)
+      : 0;
+  const progressCheckIntervalMs =
+    Number.isFinite(Number(budget?.progressCheckIntervalMs)) &&
+    Number(budget.progressCheckIntervalMs) > 0
+      ? Number(budget.progressCheckIntervalMs)
+      : 0;
+  if (!timeoutMs && (!tempMaxBytes || !progressCheckIntervalMs)) return convertPromise;
+
+  let timeoutTimer = null;
+  let progressTimer = null;
+  let settled = false;
+  const cleanup = () => {
+    settled = true;
+    if (timeoutTimer) clearTimeout(timeoutTimer);
+    if (progressTimer) clearInterval(progressTimer);
+  };
+  try {
+    return await Promise.race([
+      convertPromise,
+      new Promise((_, reject) => {
+        if (timeoutMs) {
+          timeoutTimer = setTimeout(async () => {
+            if (settled) return;
+            await killLibreOfficeProcessesForNodePid(process.pid);
+            reject(createLibreOfficeTimeoutError(timeoutMs));
+          }, timeoutMs);
+          timeoutTimer.unref?.();
+        }
+        if (tempMaxBytes && progressCheckIntervalMs) {
+          progressTimer = setInterval(async () => {
+            if (settled) return;
+            const tempBytes = await collectLibreOfficeTempBytesForNodePid(process.pid);
+            if (tempBytes <= tempMaxBytes) return;
+            await killLibreOfficeProcessesForNodePid(process.pid);
+            reject(createLibreOfficeTempLimitError(tempBytes, tempMaxBytes));
+          }, progressCheckIntervalMs);
+          progressTimer.unref?.();
+        }
+      }),
+    ]);
+  } finally {
+    cleanup();
+  }
+}
+
 function resolveMimeTypeByPath(filePath = "", preferredMediaType = "") {
   const extension = path.extname(String(filePath || "")).toLowerCase();
   void preferredMediaType;
@@ -413,6 +621,10 @@ function isImageInputFile(filePath = "") {
   return IMAGE_EXTENSIONS.has(extension);
 }
 
+function isLegacyDocInputFile(filePath = "") {
+  return path.extname(String(filePath || "")).toLowerCase() === ".doc";
+}
+
 function resolveDocInputAttachmentMeta(filePath = "", agentContext = {}) {
   const normalizedInputPath = String(filePath || "").trim();
   const runtime = getRuntimeFromAgentContext(agentContext);
@@ -484,11 +696,13 @@ async function parseDocumentToTextViaLibreOffice({
   }
   let inputFileName = "";
   let outputFormat = { format: "txt", filter: undefined, mode: "libreoffice_text" };
+  let convertBudget = resolveLibreOfficeConvertBudget(0);
   try {
     const inputBuffer = await readFile(inputFile);
     if (!inputBuffer.length) {
       return { text: "", bytes: 0 };
     }
+    convertBudget = resolveLibreOfficeConvertBudget(inputBuffer.length);
     // `libreoffice` / `libreoffice-convert` expect format without leading dot.
     // Passing ".txt" makes them probe `source..txt`, which can trigger ENOENT.
     // Also pass the original filename (with extension) when supported so soffice
@@ -502,24 +716,30 @@ async function parseDocumentToTextViaLibreOffice({
     outputFormat = resolveLibreOfficeOutputFormat(inputFileName);
     let outputBuffer = null;
     try {
-      outputBuffer = converterWithOptions
-        ? await converterWithOptions(inputBuffer, outputFormat.format, outputFormat.filter, {
-          fileName: inputFileName,
-          sofficeBinaryPaths: resolveLibreOfficeBinaryPaths(),
-        })
-        : await converter(inputBuffer, outputFormat.format, outputFormat.filter);
+      outputBuffer = await withLibreOfficeConvertGuard(
+        converterWithOptions
+          ? converterWithOptions(inputBuffer, outputFormat.format, outputFormat.filter, {
+            fileName: inputFileName,
+            sofficeBinaryPaths: resolveLibreOfficeBinaryPaths(),
+          })
+          : converter(inputBuffer, outputFormat.format, outputFormat.filter),
+        convertBudget,
+      );
     } catch (primaryError) {
       const primaryMessage = String(primaryError?.message || "");
       if (outputFormat.format !== "txt") throw primaryError;
       const shouldRetryWithTextFilter =
         primaryMessage.includes("no export filter") || primaryMessage.includes("impl_store");
       if (!shouldRetryWithTextFilter) throw primaryError;
-      outputBuffer = converterWithOptions
-        ? await converterWithOptions(inputBuffer, "txt", "Text", {
-          fileName: inputFileName,
-          sofficeBinaryPaths: resolveLibreOfficeBinaryPaths(),
-        })
-        : await converter(inputBuffer, "txt", "Text");
+      outputBuffer = await withLibreOfficeConvertGuard(
+        converterWithOptions
+          ? converterWithOptions(inputBuffer, "txt", "Text", {
+            fileName: inputFileName,
+            sofficeBinaryPaths: resolveLibreOfficeBinaryPaths(),
+          })
+          : converter(inputBuffer, "txt", "Text"),
+        convertBudget,
+      );
     }
     const text = decodeLibreOfficeTextBuffer(outputBuffer);
     return {
@@ -541,6 +761,8 @@ async function parseDocumentToTextViaLibreOffice({
       libreOfficeModule: String(converters?.moduleName || ""),
       inputFileName,
       libreOfficeOutputFormat: outputFormat?.format || "",
+      timeoutMs: convertBudget.timeoutMs,
+      libreOfficeBudget: convertBudget,
     });
     throw recoverableToolError(tTool(runtime, "tools.doc2data.libreofficeParseFailed"), {
       code: ERROR_CODE.RECOVERABLE_TOOL_ERROR,
@@ -721,6 +943,18 @@ export function createDoc2DataTool({ agentContext }) {
           {
             code: ERROR_CODE.RECOVERABLE_UNSUPPORTED_FILE_TYPE,
             details: { input: inputFile },
+          },
+        );
+      }
+      if (
+        resolvedParseEngine === DOC2DATA_PARSE_ENGINE.LIBREOFFICE &&
+        isLegacyDocInputFile(inputFile)
+      ) {
+        throw recoverableToolError(
+          tTool(runtime, "tools.doc2data.libreofficeDocUnsupported"),
+          {
+            code: ERROR_CODE.RECOVERABLE_UNSUPPORTED_FILE_TYPE,
+            details: { input: inputFile, parseEngine: resolvedParseEngine },
           },
         );
       }

@@ -302,6 +302,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
     `This is image batch ${Number(params.batchIndex || 1)}, page range ${String(params.range || "")}. Output in page order.`,
       "tools.doc2data.extractPrompt": "Extract all readable text from the document, preserve original structure, and do not fabricate content.",
       "tools.doc2data.imageFileUseMedia2Data": "Image files should be parsed with the media2data tool.",
+      "tools.doc2data.libreofficeDocUnsupported": "LibreOffice parsing is disabled for .doc documents. Use parseEngine=vision instead.",
       "tools.doc2data.libreofficeParseFailed": "LibreOffice document parsing failed. You can try parseEngine=vision.",
       "tools.doc2data.libreofficeUnavailable": "LibreOffice parsing is unavailable. Install dependencies or use parseEngine=vision.",
       "tools.doc2data.noImagesProduced": "no images produced"
