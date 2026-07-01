@@ -1,0 +1,214 @@
+import {
+  test,
+  assert,
+  fs,
+  os,
+  path,
+  createFileTool,
+  executeToolCall,
+  transferSemanticContent,
+  LENGTH_THRESHOLDS,
+  buildExecutionWorkspaceMeta,
+  buildScriptExecutionMeta,
+  createScriptTool,
+  buildAgentContext,
+  parseToolResult,
+  buildAttachmentService,
+} from "./helpers/file-script-length-guards-helper.js";
+
+test("search: 支持搜索文件和文本", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-search-"));
+  await fs.mkdir(path.join(basePath, "src"), { recursive: true });
+  await fs.writeFile(path.join(basePath, "src", "a.js"), "alpha\nbeta\nAlpha2\n", "utf8");
+  await fs.writeFile(path.join(basePath, "src", "skip.txt"), "alpha\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === "search");
+  assert.ok(tool);
+
+  const fileResult = parseToolResult(
+    await tool.invoke({ source: "files", query: "alpha", path: "src", glob: "*.js", maxResults: 5 }),
+  );
+  assert.equal(fileResult.ok, true);
+  assert.equal(fileResult.matches.length, 2);
+  assert.equal(fileResult.matches[0].filePath, "src/a.js");
+  assert.equal(fileResult.matches[0].line, 1);
+  assert.equal(fileResult.matches[1].line, 3);
+
+  const textResult = parseToolResult(
+    await tool.invoke({ source: "text", query: "b.t", isRegex: true, text: "aa\nbet\ncc" }),
+  );
+  assert.equal(textResult.ok, true);
+  assert.equal(textResult.matches.length, 1);
+  assert.equal(textResult.matches[0].line, 2);
+});
+
+test("patch_file: 支持 apply_patch 和 unified_diff 协议", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-"));
+  await fs.writeFile(path.join(basePath, "a.txt"), "one\ntwo\nthree\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const applyPatch = [
+    "*** Begin Patch",
+    "*** Update File: a.txt",
+    "@@",
+    " one",
+    "-two",
+    "+TWO",
+    " three",
+    "*** End Patch",
+    "",
+  ].join("\n");
+  const applyResult = parseToolResult(await tool.invoke({ format: "apply_patch", patch: applyPatch }));
+  assert.equal(applyResult.ok, true);
+  assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\nTWO\nthree\n");
+
+  const diff = [
+    "--- a/a.txt",
+    "+++ b/a.txt",
+    "@@ -1,3 +1,3 @@",
+    " one",
+    "-TWO",
+    "+two",
+    " three",
+    "",
+  ].join("\n");
+  const dryRunResult = parseToolResult(
+    await tool.invoke({ format: "unified_diff", patch: diff, strip: 1, dryRun: true }),
+  );
+  assert.equal(dryRunResult.ok, true);
+  assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\nTWO\nthree\n");
+
+  const diffResult = parseToolResult(await tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }));
+  assert.equal(diffResult.ok, true);
+  assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\ntwo\nthree\n");
+});
+
+test("patch_file: 默认使用主流 git diff/unified_diff 并兼容 git 元数据", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-git-diff-"));
+  await fs.mkdir(path.join(basePath, "src"), { recursive: true });
+  await fs.writeFile(path.join(basePath, "src/a.txt"), "one\n--- literal\nthree\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const gitDiff = [
+    "diff --git a/src/a.txt b/src/a.txt",
+    "index 83db48f..bf269f4 100644",
+    "--- a/src/a.txt",
+    "+++ b/src/a.txt",
+    "@@ -1,3 +1,3 @@",
+    " one",
+    "---- literal",
+    "+--- changed literal",
+    " three",
+    "",
+  ].join("\n");
+
+  const result = parseToolResult(await tool.invoke({ patch: gitDiff }));
+  assert.equal(result.ok, true);
+  assert.equal(result.format, "unified_diff");
+  assert.equal(await fs.readFile(path.join(basePath, "src/a.txt"), "utf8"), "one\n--- changed literal\nthree\n");
+});
+
+test("patch_file: unified_diff hunk 行数不准时自动按内容重算", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-counts-"));
+  await fs.writeFile(path.join(basePath, "a.txt"), "one\ntwo\nthree\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const badCountDiff = [
+    "--- a/a.txt",
+    "+++ b/a.txt",
+    "@@ -1,9 +1,10 @@",
+    " one",
+    "-two",
+    "+TWO",
+    " three",
+    "",
+  ].join("\n");
+
+  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: badCountDiff, strip: 1 }));
+  assert.equal(result.ok, true);
+  assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\nTWO\nthree\n");
+});
+
+test("patch_file: unified_diff 兼容 /project 虚拟路径前缀", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-path-"));
+  await fs.mkdir(path.join(basePath, "client"), { recursive: true });
+  await fs.writeFile(path.join(basePath, "client/a.txt"), "one\ntwo\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const diff = [
+    "--- a//project/client/a.txt",
+    "+++ b//project/client/a.txt",
+    "@@ -1,2 +1,2 @@",
+    " one",
+    "-two",
+    "+TWO",
+    "",
+  ].join("\n");
+
+  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }));
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.changedFiles, ["client/a.txt"]);
+  assert.equal(await fs.readFile(path.join(basePath, "client/a.txt"), "utf8"), "one\nTWO\n");
+});
+
+test("patch_file: 不填 format 时仍自动识别旧 apply_patch 格式", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-autodetect-"));
+  await fs.writeFile(path.join(basePath, "a.txt"), "one\ntwo\nthree\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const applyPatch = [
+    "*** Begin Patch",
+    "*** Update File: a.txt",
+    "@@",
+    " one",
+    "-two",
+    "+TWO",
+    " three",
+    "*** End Patch",
+    "",
+  ].join("\n");
+
+  const result = parseToolResult(await tool.invoke({ patch: applyPatch }));
+  assert.equal(result.ok, true);
+  assert.equal(result.format, "apply_patch");
+  assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\nTWO\nthree\n");
+});
+
+test("patch_file: hunk 不匹配时返回带行号上下文", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-context-"));
+  await fs.writeFile(path.join(basePath, "a.txt"), "one\ntwo\nthree\nfour\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const badPatch = [
+    "*** Begin Patch",
+    "*** Update File: a.txt",
+    "@@",
+    " one",
+    "-TWO",
+    "+two",
+    " three",
+    "*** End Patch",
+    "",
+  ].join("\n");
+  const result = parseToolResult(await tool.invoke({ format: "apply_patch", patch: badPatch }));
+
+  assert.equal(result.toolName, "patch_file");
+  assert.equal(result.ok, false);
+  assert.equal(result.filePath, "a.txt");
+  assert.equal(result.details.line, 1);
+  assert.match(result.nearbyContent, /1 \| one/);
+  assert.match(result.nearbyContent, /2 \| two/);
+  assert.match(result.nearbyContent, /3 \| three/);
+});
