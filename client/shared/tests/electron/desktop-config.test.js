@@ -38,6 +38,13 @@ async function createFixture() {
     },
     tools: { execute_script: { sandbox_mode: true } },
   }));
+  await mkdir(path.join(packagedBackendRoot, "user-template", "default-user", "memory"), { recursive: true });
+  await mkdir(path.join(packagedBackendRoot, "user-template", "default-user", "runtime"), { recursive: true });
+  await mkdir(path.join(packagedBackendRoot, "user-template", "default-user", "services"), { recursive: true });
+  await mkdir(path.join(packagedBackendRoot, "user-template", "default-user", "skills"), { recursive: true });
+  await writeFile(path.join(packagedBackendRoot, "user-template", "default-user", "memory", "short-memory.json"), "{}");
+  await writeFile(path.join(packagedBackendRoot, "user-template", "default-user", "services", "weather-service-handler.js"), "export default {};\n");
+  await writeFile(path.join(packagedBackendRoot, "user-template", "default-user", "skills", "SKILL.md"), "# Skill\n");
   return {
     rootDir,
     repoRoot,
@@ -141,7 +148,11 @@ test("packaged desktop config restores core template even when directory sync fa
     const templateExample = path.join(fixture.userDataPath, "user-template", "default-user", "config.example.json");
     assert.equal(state.workspaceTemplatePath, path.dirname(templateExample));
     assert.equal(JSON.parse(await readFile(templateExample, "utf8")).default_provider, "openai");
+    assert.equal(await readFile(path.join(fixture.userDataPath, "user-template", "default-user", "memory", "short-memory.json"), "utf8"), "{}");
+    assert.match(await readFile(path.join(fixture.userDataPath, "user-template", "default-user", "services", "weather-service-handler.js"), "utf8"), /export default/);
+    assert.match(await readFile(path.join(fixture.userDataPath, "user-template", "default-user", "skills", "SKILL.md"), "utf8"), /Skill/);
     assert.ok(logs.some((line) => line.includes("desktop template directory sync failed")));
+    assert.ok(logs.some((line) => line.includes("manual fallback")));
   } finally {
     fs.cpSync = originalCpSync;
     await fixture.restore();
