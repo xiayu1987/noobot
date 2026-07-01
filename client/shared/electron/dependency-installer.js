@@ -41,6 +41,14 @@ export function createDependencyInstaller({
   function classifyInstallFailure({ result, label }) {
     const detail = String(result?.stderr || result?.stdout || result?.error || "").trim().slice(0, 1000);
     const text = `${detail}\n${result?.error || ""}`.toLowerCase();
+    if (result?.code === -1 && text.includes("timed out")) {
+      return {
+        detail,
+        failureKind: "timeout",
+        retryable: true,
+        message: `Failed to install ${label}. The installer timed out. Please retry, or install ${label} manually before restarting Noobot.${detail ? ` ${detail}` : ""}`,
+      };
+    }
     if (result?.code === 1602 || text.includes("你已取消安装") || text.includes("cancelled") || text.includes("canceled")) {
       return {
         detail,
@@ -194,11 +202,21 @@ export function createDependencyInstaller({
       writeDependencyLog("install:start", { key, label: spec.label, command: [installCommand.command, ...(installCommand.args || [])].join(" "), timeoutMs: desktopDependencyTimeouts.installMs });
       const proxy = getProxyRunOptions();
       writeDependencyLog("proxy:install-command", { key, label: spec.label, enabled: proxy.enabled, proxy: proxy.masked });
-      sendStatus({ phase: "dependency", message: `Installing ${spec.label}...` });
-      const result = await runProcess(installCommand.command, installCommand.args, {
-        timeoutMs: desktopDependencyTimeouts.installMs,
-        env: proxy.env,
-      });
+      sendStatus({ phase: "dependency", message: `Installing ${spec.label}... This may take several minutes. Please accept any Windows installer prompts if they appear.` });
+      const installStartedAt = Date.now();
+      const heartbeat = setInterval(() => {
+        const elapsedSeconds = Math.max(1, Math.round((Date.now() - installStartedAt) / 1000));
+        sendStatus({ phase: "dependency", message: `Installing ${spec.label}... still running after ${elapsedSeconds}s. Please leave Noobot open and accept any Windows installer prompts if they appear.` });
+      }, 30000);
+      let result;
+      try {
+        result = await runProcess(installCommand.command, installCommand.args, {
+          timeoutMs: desktopDependencyTimeouts.installMs,
+          env: proxy.env,
+        });
+      } finally {
+        clearInterval(heartbeat);
+      }
       writeDependencyLog("install:finish", { key, label: spec.label, ok: result.ok, code: result.code, error: result.error });
       if (!result.ok) {
         const failure = classifyInstallFailure({ result, label: spec.label });
