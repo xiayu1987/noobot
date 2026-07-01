@@ -3,8 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { ipcMain } from "electron";
+import { createRequire } from "node:module";
 import { maskDependencyProxyUrl, validateDependencyProxy } from "./dependency-proxy.js";
+
+const require = createRequire(import.meta.url);
+
+function getDefaultIpcMain() {
+  return require("electron").ipcMain;
+}
 
 export function createStartupConfigRequesters({ sendStatus = () => {}, setPendingConfigResolve = () => {}, setPendingSuperAdminResolve = () => {} } = {}) {
   function requestSuperAdminConfig(superAdmin) {
@@ -30,6 +36,7 @@ export function createStartupConfigRequesters({ sendStatus = () => {}, setPendin
 
 export function registerStartupIpcHandlers({
   app,
+  ipcMain = getDefaultIpcMain(),
   getStartupStatuses = () => [],
   getDesktopConfigState = () => null,
   setDesktopConfigState = () => {},
@@ -47,6 +54,12 @@ export function registerStartupIpcHandlers({
   sendStatus = () => {},
   runProcess,
 } = {}) {
+  function refreshDesktopConfigState() {
+    const state = ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") });
+    setDesktopConfigState(state);
+    return state;
+  }
+
   ipcMain.handle("noobot:retry-startup", async () => {
     await ensureServiceStarted();
     const noobotUrl = await resolveNoobotUrl();
@@ -56,9 +69,9 @@ export function registerStartupIpcHandlers({
   ipcMain.handle("noobot:get-startup-statuses", () => getStartupStatuses());
 
   ipcMain.handle("noobot:save-config-params", (_event, values) => {
-    const state = getDesktopConfigState() || ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") });
+    const state = refreshDesktopConfigState();
     saveConfigParamValues({ workspaceRootPath: state.workspaceRootPath, values });
-    setDesktopConfigState(ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") }));
+    refreshDesktopConfigState();
     const pendingConfigResolve = getPendingConfigResolve();
     if (pendingConfigResolve) {
       setPendingConfigResolve(null);
@@ -77,7 +90,7 @@ export function registerStartupIpcHandlers({
   });
 
   ipcMain.handle("noobot:save-super-admin", async (_event, values = {}) => {
-    const state = getDesktopConfigState() || ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") });
+    const state = refreshDesktopConfigState();
     const proxyUrl = String(values.dependencyProxyUrl || "").trim();
     if (proxyUrl) {
       sendStatus({ phase: "dependency", message: `Checking dependency download proxy ${maskDependencyProxyUrl(proxyUrl)}...` });
@@ -90,12 +103,10 @@ export function registerStartupIpcHandlers({
       sendStatus({ phase: "dependency", message: `Dependency download proxy is available: ${proxyValidation.maskedProxyUrl}` });
     }
     saveSuperAdminConfig({ globalConfigPath: state.globalConfigPath, userConfigPath: state.templateConfigPath, userId: values.userId, connectCode: values.connectCode, language: values.language, model: values.model, dependencyProxyUrl: proxyUrl });
-    const savedState = ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") });
-    setDesktopConfigState(savedState);
+    refreshDesktopConfigState();
     sendStatus({ phase: "dependency", message: proxyUrl ? `Dependency downloads will use proxy ${maskDependencyProxyUrl(proxyUrl)}.` : "Dependency downloads will not use a proxy." });
     const dependencyResults = await ensureSelectedDependencies(values.dependencies || {});
-    const nextState = ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") });
-    setDesktopConfigState(nextState);
+    const nextState = refreshDesktopConfigState();
     if (nextState.superAdmin?.missing) {
       sendStatus({ phase: "super-admin-required", message: "Please complete super admin setup.", superAdmin: nextState.superAdmin });
       return { ok: false, superAdmin: nextState.superAdmin };
