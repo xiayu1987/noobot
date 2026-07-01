@@ -28,6 +28,8 @@ async function createFixture() {
   await writeRuntimeFile(backendSource, "node_modules/express/package.json", "{}");
   await writeRuntimeFile(backendSource, "plugin/noobot-plugin-harness/manifest.json", "{}");
   await writeRuntimeFile(backendSource, "plugin/noobot-plugin-workflow/manifest.json", "{}");
+  await writeRuntimeFile(backendSource, "service/config/global.config.example.json", "{}");
+  await writeRuntimeFile(backendSource, "user-template/default-user/config.example.json", "{}");
   await writeRuntimeFile(frontendSource, "index.html", "<html></html>");
 
   const context = {
@@ -68,6 +70,20 @@ test("copyBackendAfterPack fails when prepared backend runtime is missing plugin
     await assert.rejects(
       () => copyBackendAfterPack(fixture.context),
       /Missing required backend runtime file after prepare: plugin\/noobot-plugin-harness\/manifest\.json/,
+    );
+  } finally {
+    await rm(fixture.rootDir, { recursive: true, force: true });
+  }
+});
+
+test("copyBackendAfterPack fails when prepared backend runtime is missing default user template", async () => {
+  const fixture = await createFixture();
+  try {
+    await rm(path.join(fixture.backendSource, "user-template"), { recursive: true, force: true });
+
+    await assert.rejects(
+      () => copyBackendAfterPack(fixture.context),
+      /Missing required backend runtime file after prepare: user-template\/default-user\/config\.example\.json/,
     );
   } finally {
     await rm(fixture.rootDir, { recursive: true, force: true });
