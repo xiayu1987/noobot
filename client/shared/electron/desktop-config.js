@@ -31,6 +31,50 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
     fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
   }
 
+  function assertFileExists(filePath, label) {
+    try {
+      const fileStat = fs.statSync(filePath);
+      if (fileStat.isFile()) return;
+    } catch (error) {
+      throw new Error(`${label} missing: ${filePath}`, { cause: error });
+    }
+    throw new Error(`${label} is not a file: ${filePath}`);
+  }
+
+  function isJsonObjectFile(filePath) {
+    return isPlainObject(readJsonFile(filePath, null));
+  }
+
+  function describePath(filePath) {
+    try {
+      const fileStat = fs.statSync(filePath);
+      return {
+        exists: true,
+        isFile: fileStat.isFile(),
+        isDirectory: fileStat.isDirectory(),
+        size: fileStat.size,
+      };
+    } catch (error) {
+      return {
+        exists: false,
+        error: error?.code || error?.message || String(error),
+      };
+    }
+  }
+
+  function replaceFileFromBundledTemplate({ from, to, label }) {
+    assertFileExists(from, `desktop bundled ${label}`);
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    try {
+      fs.rmSync(to, { recursive: true, force: true });
+      fs.copyFileSync(from, to);
+    } catch (error) {
+      throw new Error(`failed to restore desktop ${label}: ${from} -> ${to}`, { cause: error });
+    }
+    assertFileExists(to, `desktop restored ${label}`);
+    appendDesktopLog(`[main:config] restored desktop ${label}: ${from} -> ${to}`);
+  }
+
   function getNestedString(root, segments) {
     let node = root;
     for (const segment of segments) node = isPlainObject(node) ? node[segment] : undefined;
@@ -151,25 +195,38 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
   }
 
   function copyDirectoryContents({ from, to }) {
-    if (!fs.existsSync(from)) return false;
-    fs.mkdirSync(to, { recursive: true });
-    fs.cpSync(from, to, {
-      recursive: true,
-      filter: (src) => !["config.json", "global.config.json"].includes(path.basename(src)),
-    });
-    return true;
+    if (!fs.existsSync(from)) {
+      appendDesktopLog(`[main:config] bundled template directory missing; skipped directory sync: ${from}`);
+      return false;
+    }
+    try {
+      fs.mkdirSync(to, { recursive: true });
+      fs.cpSync(from, to, {
+        recursive: true,
+        filter: (src) => !["config.json", "global.config.json"].includes(path.basename(src)),
+      });
+      appendDesktopLog(`[main:config] synced desktop template directory: ${from} -> ${to}`);
+      return true;
+    } catch (error) {
+      appendDesktopLog(`[main:config] desktop template directory sync failed: ${from} -> ${to}; error=${error?.stack || error?.message || String(error)}`);
+      return false;
+    }
   }
 
   function ensureWorkspaceTemplateExample({ bundledTemplatePath, workspaceTemplatePath }) {
     const bundledExamplePath = path.join(bundledTemplatePath, "config.example.json");
     const workspaceExamplePath = path.join(workspaceTemplatePath, "config.example.json");
-    if (fs.existsSync(workspaceExamplePath)) return workspaceExamplePath;
-    if (!fs.existsSync(bundledExamplePath)) {
-      throw new Error(`desktop default user config example not found in bundled runtime: ${bundledExamplePath}`);
+    appendDesktopLog(`[main:config] checking desktop default user template example; bundled=${bundledExamplePath}; bundledStatus=${JSON.stringify(describePath(bundledExamplePath))}; workspace=${workspaceExamplePath}; workspaceStatus=${JSON.stringify(describePath(workspaceExamplePath))}`);
+    if (!isJsonObjectFile(bundledExamplePath)) {
+      throw new Error(`desktop bundled default user config example is missing or invalid: ${bundledExamplePath}`);
     }
-    fs.mkdirSync(workspaceTemplatePath, { recursive: true });
-    fs.copyFileSync(bundledExamplePath, workspaceExamplePath);
-    appendDesktopLog(`[main:config] restored default user config example: ${bundledExamplePath} -> ${workspaceExamplePath}`);
+    if (!isJsonObjectFile(workspaceExamplePath)) {
+      replaceFileFromBundledTemplate({
+        from: bundledExamplePath,
+        to: workspaceExamplePath,
+        label: "default user config example",
+      });
+    }
     return workspaceExamplePath;
   }
 
@@ -313,8 +370,8 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
       appendDesktopLog(`[main:config] synced global config from example: ${examplePath} -> ${targetPath}`);
     }
 
-    copyDirectoryContents({ from: bundledTemplatePath, to: workspaceTemplatePath });
     const templateExamplePath = ensureWorkspaceTemplateExample({ bundledTemplatePath, workspaceTemplatePath });
+    copyDirectoryContents({ from: bundledTemplatePath, to: workspaceTemplatePath });
     const templateConfigPath = path.join(workspaceTemplatePath, "config.json");
     if (fs.existsSync(templateExamplePath)) {
       const isFirstUserConfig = !fs.existsSync(templateConfigPath);
@@ -324,6 +381,8 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
         appendDesktopLog(`[main:config] initialized desktop default user config with non-sandbox execute_script: ${templateConfigPath}`);
       }
     }
+    if (!isJsonObjectFile(templateExamplePath)) throw new Error(`desktop workspace default user config example is missing or invalid: ${templateExamplePath}`);
+    if (!isJsonObjectFile(templateConfigPath)) throw new Error(`desktop workspace default user config is missing or invalid: ${templateConfigPath}`);
     fs.mkdirSync(workspaceRootPath, { recursive: true });
     const configParamsPath = ensureConfigParamsCatalog({
       workspaceRootPath,

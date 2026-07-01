@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -80,6 +81,69 @@ test("packaged desktop config restores missing userData template example before 
     assert.equal(globalConfig.super_admin.connect_code, "secret");
     assert.equal(templateConfig.default_provider, "openai");
   } finally {
+    await fixture.restore();
+  }
+});
+
+test("packaged desktop config fails fast when bundled default user template is missing", async () => {
+  const fixture = await createFixture();
+  try {
+    const manager = createDesktopConfigManager({
+      repoRoot: fixture.repoRoot,
+      packagedBackendRoot: fixture.packagedBackendRoot,
+    });
+    await rm(path.join(fixture.packagedBackendRoot, "user-template"), { recursive: true, force: true });
+
+    assert.throws(
+      () => manager.ensureDesktopGlobalConfig({ isPackaged: true, userDataPath: fixture.userDataPath }),
+      /desktop bundled default user config example is missing or invalid:/,
+    );
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("packaged desktop config replaces corrupted userData template example from bundled runtime", async () => {
+  const fixture = await createFixture();
+  try {
+    const manager = createDesktopConfigManager({
+      repoRoot: fixture.repoRoot,
+      packagedBackendRoot: fixture.packagedBackendRoot,
+    });
+    const templateDir = path.join(fixture.userDataPath, "user-template", "default-user");
+    const templateExample = path.join(templateDir, "config.example.json");
+    await mkdir(templateDir, { recursive: true });
+    await writeFile(templateExample, "{broken", "utf8");
+
+    const state = manager.ensureDesktopGlobalConfig({ isPackaged: true, userDataPath: fixture.userDataPath });
+    assert.equal(state.workspaceTemplatePath, templateDir);
+    assert.equal(JSON.parse(await readFile(templateExample, "utf8")).default_provider, "openai");
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("packaged desktop config restores core template even when directory sync fails", async () => {
+  const fixture = await createFixture();
+  const originalCpSync = fs.cpSync;
+  try {
+    const logs = [];
+    const manager = createDesktopConfigManager({
+      repoRoot: fixture.repoRoot,
+      packagedBackendRoot: fixture.packagedBackendRoot,
+      appendDesktopLog: (line) => logs.push(line),
+    });
+    fs.cpSync = () => {
+      throw new Error("directory copy blocked");
+    };
+
+    const state = manager.ensureDesktopGlobalConfig({ isPackaged: true, userDataPath: fixture.userDataPath });
+    const templateExample = path.join(fixture.userDataPath, "user-template", "default-user", "config.example.json");
+    assert.equal(state.workspaceTemplatePath, path.dirname(templateExample));
+    assert.equal(JSON.parse(await readFile(templateExample, "utf8")).default_provider, "openai");
+    assert.ok(logs.some((line) => line.includes("desktop template directory sync failed")));
+  } finally {
+    fs.cpSync = originalCpSync;
     await fixture.restore();
   }
 });
