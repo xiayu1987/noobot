@@ -420,6 +420,25 @@ test("dependency installer classifies Windows source agreement failures as retry
   assert.match(failure.message, /source requires an agreement/);
 });
 
+test("dependency installer classifies install timeout as retryable", async () => {
+  const installer = createDependencyInstaller();
+
+  const failure = installer.classifyInstallFailure({
+    label: "LibreOffice",
+    result: {
+      ok: false,
+      code: -1,
+      stdout: "",
+      stderr: "",
+      error: "Timed out after 1200000ms",
+    },
+  });
+
+  assert.equal(failure.failureKind, "timeout");
+  assert.equal(failure.retryable, true);
+  assert.match(failure.message, /timed out/);
+});
+
 test("dependency runtime env resolves managed ffmpeg, sibling ffprobe and LibreOffice app", async () => {
   await withPlatform("darwin", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "noobot-runtime-env-"));
