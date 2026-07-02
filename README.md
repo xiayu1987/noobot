@@ -7,7 +7,7 @@
 
 Noobot is a full-stack AI chat system built with **Node.js + Vue**.
 
-Co-created with Hyler Epicur.
+Co-created with Hyler Epicur and gonglei.
 
 ## Features
 

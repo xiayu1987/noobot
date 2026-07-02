@@ -4,6 +4,7 @@ import path from 'node:path';
 const requiredBackendRuntimeFiles = [
   'service/app.js',
   'node_modules/noobot-agent/package.json',
+  'node_modules/noobot-agent/src/system-core/system-prompt/base.md',
   'node_modules/express/package.json',
   'plugin/noobot-plugin-harness/manifest.json',
   'plugin/noobot-plugin-workflow/manifest.json',

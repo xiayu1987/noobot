@@ -25,6 +25,11 @@ async function createFixture() {
 
   await writeRuntimeFile(backendSource, "service/app.js");
   await writeRuntimeFile(backendSource, "node_modules/noobot-agent/package.json", "{}");
+  await writeRuntimeFile(
+    backendSource,
+    "node_modules/noobot-agent/src/system-core/system-prompt/base.md",
+    "base prompt",
+  );
   await writeRuntimeFile(backendSource, "node_modules/express/package.json", "{}");
   await writeRuntimeFile(backendSource, "plugin/noobot-plugin-harness/manifest.json", "{}");
   await writeRuntimeFile(backendSource, "plugin/noobot-plugin-workflow/manifest.json", "{}");
@@ -62,6 +67,32 @@ test("copyBackendAfterPack copies backend plugins into packaged resources", asyn
   }
 });
 
+test("copyBackendAfterPack copies bundled agent system prompt into packaged resources", async () => {
+  const fixture = await createFixture();
+  try {
+    await copyBackendAfterPack(fixture.context);
+
+    const backendDestination = path.join(fixture.appOutDir, "resources", "backend");
+    assert.equal(
+      await readFile(
+        path.join(
+          backendDestination,
+          "node_modules",
+          "noobot-agent",
+          "src",
+          "system-core",
+          "system-prompt",
+          "base.md",
+        ),
+        "utf8",
+      ),
+      "base prompt",
+    );
+  } finally {
+    await rm(fixture.rootDir, { recursive: true, force: true });
+  }
+});
+
 test("copyBackendAfterPack fails when prepared backend runtime is missing plugin manifests", async () => {
   const fixture = await createFixture();
   try {
@@ -84,6 +115,23 @@ test("copyBackendAfterPack fails when prepared backend runtime is missing defaul
     await assert.rejects(
       () => copyBackendAfterPack(fixture.context),
       /Missing required backend runtime file after prepare: user-template\/default-user\/config\.example\.json/,
+    );
+  } finally {
+    await rm(fixture.rootDir, { recursive: true, force: true });
+  }
+});
+
+test("copyBackendAfterPack fails when prepared backend runtime is missing bundled agent system prompt", async () => {
+  const fixture = await createFixture();
+  try {
+    await rm(
+      path.join(fixture.backendSource, "node_modules", "noobot-agent", "src", "system-core", "system-prompt"),
+      { recursive: true, force: true },
+    );
+
+    await assert.rejects(
+      () => copyBackendAfterPack(fixture.context),
+      /Missing required backend runtime file after prepare: node_modules\/noobot-agent\/src\/system-core\/system-prompt\/base\.md/,
     );
   } finally {
     await rm(fixture.rootDir, { recursive: true, force: true });
