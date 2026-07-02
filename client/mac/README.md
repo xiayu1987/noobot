@@ -95,37 +95,26 @@ npm run -w client/mac check
 npm run -w client/mac build:mac:dir
 ```
 
-`build:mac:dir` creates an unpacked Windows app and verifies that `resources/backend/service/app.js` and production dependencies are laid out correctly, without creating an installer.
+`build:mac:dir` creates an unpacked macOS app and verifies that `resources/backend/service/app.js` and production dependencies are laid out correctly, without creating a distributable archive.
 
 ## Recommended distributable targets
 
-Because NSIS internally still creates a `.nsis.7z` archive and may call 7zip with high compression flags on some machines, the more reliable distribution targets are portable or zip:
-
-```bash
-npm run -w client/mac build:mac:portable
-```
-
-or:
+The GitHub release workflow builds the macOS zip target by default. Zip is the most reliable unsigned macOS artifact for CI because it avoids the extra DMG creation step and still preserves the `.app` bundle layout.
 
 ```bash
 npm run -w client/mac build:mac:zip
 ```
 
-These targets still include the bundled backend runtime, but avoid the NSIS installer compression path that can fail with:
+## DMG package
 
-```text
-ERROR: Can't allocate required memory!
-7za.exe ... -mx=9 ... *.nsis.7z
+The DMG target is still available for manual builds:
+
+```bash
+npm run -w client/mac build:mac:dmg
 ```
 
-## NSIS installer
-
-The NSIS installer target is still available:
+The default macOS build target is currently zip-only:
 
 ```bash
 npm run -w client/mac build:mac
 ```
-
-If it continues to fail in the 7zip/NSIS stage, treat that as an installer packaging limitation rather than an application packaging failure. First verify `build:mac:dir`, then ship `portable` or `zip` while NSIS is optimized or replaced later.
-
-On non-Windows systems, building the NSIS installer requires `wine`. Without `wine`, `electron-builder --win --dir` can still verify the unpacked app/resource layout, but the final installer step will fail.

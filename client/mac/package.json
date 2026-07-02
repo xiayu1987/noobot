@@ -44,7 +44,6 @@
     "mac": {
       "icon": "assets/noobot.icns",
       "target": [
-        "dmg",
         "zip"
       ],
       "category": "public.app-category.productivity"
