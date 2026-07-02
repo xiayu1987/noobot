@@ -7,7 +7,7 @@
 
 Noobot 是一个基于 **Node.js + Vue** 的前后端分离智能对话系统。
 
-共创：Hyler Epicur
+共创：Hyler Epicur、gonglei
 
 ## 功能特性
 
