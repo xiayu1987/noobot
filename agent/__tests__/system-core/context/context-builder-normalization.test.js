@@ -137,6 +137,47 @@ test("buildInitialContext prefers inputAttachments over legacy attachments", asy
   assert.deepEqual(context?.execution?.controllers?.runtime?.attachments, []);
 });
 
+test("buildInitialContext marks normalized superAdmin user as super user", async () => {
+  const builder = new ContextBuilder({
+    config: {
+      globalConfig: {
+        workspaceRoot: "/tmp/noobot-test-workspace",
+        superAdmin: { userId: "admin" },
+      },
+      userConfig: {},
+    },
+    serviceContainer: {
+      sessionManager: null,
+      memoryService: null,
+      attachmentService: { async ingest() { return []; } },
+      skillService: null,
+      eventListener: null,
+      botManager: null,
+      userInteractionBridge: null,
+    },
+    sessionContext: {
+      userId: "admin",
+      sessionId: "s1",
+      caller: "user",
+      parentSessionId: "",
+      attachments: [],
+      runConfig: {
+        contextPolicy: {
+          includeContextKeys: ["base_prompt", "system_runtime", "scenario"],
+        },
+      },
+      abortSignal: null,
+      parentAsyncResultContainer: null,
+    },
+  });
+
+  const context = await builder.buildInitialContext({ dialogProcessId: "dp_1" });
+  assert.equal(
+    context?.execution?.controllers?.runtime?.systemRuntime?.isSuperUser,
+    true,
+  );
+});
+
 test("buildContextMessageBlocks prefers runtime inputAttachments for user meta", () => {
   const blocks = buildContextMessageBlocks(
     {

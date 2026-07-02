@@ -72,7 +72,27 @@ function resolveWorkspaceRoot(agentContext = {}) {
 function isSuperUserAgentContext(agentContext = {}) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const systemRuntime = getSystemRuntimeFromAgentContext(agentContext, runtime);
-  return systemRuntime?.isSuperUser === true;
+  if (systemRuntime?.isSuperUser === true) return true;
+  const role = String(
+    agentContext?.environment?.identity?.role ||
+      agentContext?.auth?.role ||
+      runtime?.role ||
+      systemRuntime?.role ||
+      "",
+  ).trim();
+  if (role === "super_admin") return true;
+  const configuredSuperUserId = String(
+    runtime?.globalConfig?.superAdmin?.userId ||
+      runtime?.globalConfig?.super_admin?.user_id ||
+      "",
+  ).trim();
+  const currentUserId = String(
+    agentContext?.environment?.identity?.userId ||
+      runtime?.userId ||
+      systemRuntime?.userId ||
+      "",
+  ).trim();
+  return Boolean(configuredSuperUserId && currentUserId === configuredSuperUserId);
 }
 
 function resolveExecuteScriptConfig(runtime = {}) {

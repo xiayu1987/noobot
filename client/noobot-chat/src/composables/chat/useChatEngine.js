@@ -203,6 +203,7 @@ export function useChatEngine({
     notify,
     send,
     sending,
+    canStop,
     stopSending,
     translate,
     userId,

@@ -42,6 +42,43 @@ test("search: 支持搜索文件和文本", async () => {
   assert.equal(textResult.matches[0].line, 2);
 });
 
+test("read_file: 超级管理员可以读取工作区外文件", async () => {
+  const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-super-read-"));
+  const basePath = path.join(rootPath, "workspace");
+  const outsidePath = path.join(rootPath, "outside.txt");
+  await fs.mkdir(basePath, { recursive: true });
+  await fs.writeFile(outsidePath, "outside\ncontent\n", "utf8");
+
+  const regularTools = createFileTool({
+    agentContext: buildAgentContext(basePath, "user", {
+      runtime: {
+        globalConfig: { superAdmin: { userId: "admin" } },
+      },
+    }),
+  });
+  const regularReadTool = regularTools.find((item) => item?.name === "read_file");
+  assert.ok(regularReadTool);
+  await assert.rejects(
+    () => regularReadTool.invoke({ filePath: outsidePath, includeLineNumbers: false }),
+    /路径超出允许范围|path out of scope/,
+  );
+
+  const superTools = createFileTool({
+    agentContext: buildAgentContext(basePath, "admin", {
+      runtime: {
+        globalConfig: { superAdmin: { userId: "admin" } },
+      },
+    }),
+  });
+  const superReadTool = superTools.find((item) => item?.name === "read_file");
+  assert.ok(superReadTool);
+  const result = parseToolResult(
+    await superReadTool.invoke({ filePath: outsidePath, includeLineNumbers: false }),
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.content, "outside\ncontent");
+});
+
 test("patch_file: 支持 apply_patch 和 unified_diff 协议", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-"));
   await fs.writeFile(path.join(basePath, "a.txt"), "one\ntwo\nthree\n", "utf8");

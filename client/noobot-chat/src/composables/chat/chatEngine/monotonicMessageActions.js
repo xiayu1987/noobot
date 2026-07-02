@@ -9,12 +9,17 @@ import { syncSessionMessageSummary } from "./resendReconciler";
 import { getCurrentSessionVersion } from "./sessionVersionManager";
 import {
   buildMessageAnchor,
+  getMessageDialogProcessId,
   findMessageIdentityIndex,
   getMessageRole,
   getMessageTurnScopeId,
 } from "../../infra/messageIdentity";
 import { nowMs } from "../../infra/timeFields";
-import { isInFlightSessionRunState } from "../sessionRunStateMachine";
+import {
+  SESSION_RUN_EVENT,
+  SESSION_RUN_STATE,
+  isInFlightSessionRunState,
+} from "../sessionRunStateMachine";
 import {
   SESSION_DETAIL_APPLY_MODE,
   hasMatchingInFlightAssistantMessage,
@@ -28,12 +33,46 @@ function isUserMessage(message = {}) {
   return getMessageRole(message).toLowerCase() === "user";
 }
 
+function isStoppedMonotonicMessage(message = {}) {
+  return Boolean(
+    message?.stopState === "stopped" ||
+    message?.monotonicState === "monotonic" ||
+    message?.isMonotonic === true ||
+    message?.monotonic === true,
+  );
+}
+
+function isStoppingAssistantMessage(message = {}) {
+  if (getMessageRole(message) !== "assistant") return false;
+  return ["stopping", "stopped", "cancelled", "canceled"].includes(
+    normalizeTrimmedString(message?.channelState?.state || message?.state || message?.status),
+  );
+}
+
+function isStopPendingRunState(state = "") {
+  return [
+    SESSION_RUN_STATE.STOP_REQUESTED,
+    SESSION_RUN_STATE.STOPPING,
+    SESSION_RUN_STATE.STOPPED,
+    SESSION_RUN_STATE.CANCELLED,
+    SESSION_RUN_STATE.CANCELED,
+  ].includes(normalizeTrimmedString(state));
+}
+
 function hasMatchingInFlightAssistant({ activeSession, runStateSnapshot } = {}) {
   const messages = Array.isArray(activeSession?.value?.messages)
     ? activeSession.value.messages
     : [];
   const runTurnScopeId = normalizeTrimmedString(runStateSnapshot?.value?.turnScopeId);
   return hasMatchingInFlightAssistantMessage(messages, { turnScopeId: runTurnScopeId });
+}
+
+function getStoppedTurnMessage({ targetMessage = null, originalTargetMessage = null } = {}) {
+  if (isStoppedMonotonicMessage(targetMessage)) return targetMessage;
+  if (isStoppedMonotonicMessage(originalTargetMessage)) return originalTargetMessage;
+  if (isStoppingAssistantMessage(originalTargetMessage)) return originalTargetMessage;
+  if (isStoppingAssistantMessage(targetMessage)) return targetMessage;
+  return null;
 }
 
 function normalizeSessionDetailSnapshot(payload = {}, fallbackSessionId = "") {
@@ -72,6 +111,7 @@ export function createMonotonicMessageActions({
   notify,
   send,
   sending,
+  canStop,
   stopSending,
   translate,
   userId,
@@ -112,8 +152,31 @@ export function createMonotonicMessageActions({
     return true;
   }
 
-  async function prepareMonotonicMessageAction({ timeoutMs, pollIntervalMs } = {}) {
+  async function prepareMonotonicMessageAction({
+    timeoutMs,
+    pollIntervalMs,
+    targetMessage = null,
+    originalTargetMessage = null,
+  } = {}) {
     if (!sending?.value) return true;
+    const stoppedTurnMessage = getStoppedTurnMessage({ targetMessage, originalTargetMessage });
+    if (stoppedTurnMessage) {
+      const session = activeSession?.value || {};
+      if (isStopPendingRunState(runStateSnapshot?.value?.state)) {
+        applyRunStateEvent?.({
+          type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
+          state: "stopped",
+          sessionId: normalizeTrimmedString(session.backendSessionId || session.sessionId || session.id || activeSessionId?.value),
+          dialogProcessId: getMessageDialogProcessId(stoppedTurnMessage),
+          turnScopeId: getMessageTurnScopeId(stoppedTurnMessage),
+          source: "monotonic_delete_stopped_turn",
+          updatedAtMs: nowMs(),
+        });
+        sending.value = false;
+        if (canStop) canStop.value = false;
+        return true;
+      }
+    }
     if (!hasConsistentSendingState()) {
       notifyStateMismatch();
       return false;
@@ -177,9 +240,13 @@ export function createMonotonicMessageActions({
   }
 
   async function deleteMonotonicMessage(targetMessage = {}, options = {}) {
-    await prepareMonotonicMessageAction(options);
     const userTargetMessage = resolveMonotonicUserTarget(targetMessage);
     if (!userTargetMessage) return false;
+    await prepareMonotonicMessageAction({
+      ...options,
+      targetMessage: userTargetMessage,
+      originalTargetMessage: targetMessage,
+    });
     if (typeof deleteSessionMessagesFromApi === "function") {
       const sessionId = normalizeTrimmedString(
         activeSession.value?.backendSessionId || activeSession.value?.sessionId || activeSessionId.value,
