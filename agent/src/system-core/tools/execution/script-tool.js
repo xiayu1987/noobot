@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { exec } from "node:child_process";
+import { exec, execFile } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { DynamicStructuredTool } from "@langchain/core/tools";
@@ -70,7 +70,13 @@ function tScript(runtime = {}, key = "", params = {}) {
 
 function hasCommand(commandName = "") {
   return new Promise((resolve) => {
-    exec(`command -v ${JSON.stringify(String(commandName || ""))}`, (error) => {
+    const normalizedCommandName = String(commandName || "").trim();
+    if (!normalizedCommandName) {
+      resolve(false);
+      return;
+    }
+    const lookupCommand = process.platform === "win32" ? "where" : "which";
+    execFile(lookupCommand, [normalizedCommandName], { windowsHide: true }, (error) => {
       resolve(!error);
     });
   });

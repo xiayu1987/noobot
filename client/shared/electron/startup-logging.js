@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 export const desktopAppName = "Noobot";
@@ -40,7 +41,7 @@ export function appendFallbackDebugLog(message) {
   const line = `[${new Date().toISOString()}] ${message}\n`;
   const candidates = [
     path.join(process.env.HOME || process.cwd(), `${desktopAppName}-startup-debug.log`),
-    path.join(process.env.TMPDIR || "/tmp", `${desktopAppName}-startup-debug.log`),
+    path.join(os.tmpdir(), `${desktopAppName}-startup-debug.log`),
   ];
   for (const filePath of candidates) {
     try {

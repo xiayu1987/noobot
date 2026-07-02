@@ -3,9 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readdir, readFile, stat } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { createRequire } from "node:module";
+import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { DOC2DATA_PARSE_ENGINE } from "../../../config/core/enums.js";
@@ -18,8 +19,6 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const require = createRequire(import.meta.url);
 const execFileAsync = promisify(execFile);
-const MAX_BATCH_BYTES = LENGTH_THRESHOLDS.dataProcessing.batchBytes;
-const MAX_DIRECT_TEXT_BYTES = LENGTH_THRESHOLDS.dataProcessing.directTextBytes;
 const LIBREOFFICE_CONVERT_BASE_TIMEOUT_MS =
   TIME_THRESHOLDS.tools.docToDataLibreOfficeBaseTimeoutMs;
 const LIBREOFFICE_CONVERT_PER_MIB_TIMEOUT_MS =
@@ -93,91 +92,6 @@ export function decodeLibreOfficeTextBuffer(outputBuffer = Buffer.alloc(0)) {
     }
   }
   return bestText.replace(/^\uFEFF/, "");
-}
-
-function isGeneratedDataProcessingArtifact(attachmentMeta = null) {
-  if (!attachmentMeta || typeof attachmentMeta !== "object" || Array.isArray(attachmentMeta)) return false;
-  return DATA_PROCESSING_ARTIFACT_SOURCES.has(String(attachmentMeta?.generationSource || "").trim());
-}
-
-function looksLikeDataProcessingArtifactPath(filePath = "") {
-  const baseName = path.basename(String(filePath || "").trim()).toLowerCase();
-  return (
-    baseName.includes(".doc2data.") ||
-    baseName.includes(".media2data.")
-  ) && baseName.endsWith(".md");
-}
-
-function buildFallbackArtifactMeta({
-  runtime = {},
-  basePath = "",
-  inputFile = "",
-  bytes = 0,
-} = {}) {
-  const normalizedInput = String(inputFile || "").trim();
-  const normalizedBase = String(basePath || runtime?.basePath || "").trim();
-  const relativePath = normalizedBase && normalizedInput.startsWith(normalizedBase)
-    ? path.relative(normalizedBase, normalizedInput)
-    : "";
-  const baseName = path.basename(normalizedInput);
-  const generationSource = baseName.toLowerCase().includes(".media2data.")
-    ? ARTIFACT_GENERATION_SOURCE.MEDIA_TO_DATA_TOOL
-    : ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL;
-  return {
-    name: baseName,
-    mimeType: MIME_TYPE.TEXT_MARKDOWN,
-    size: Number(bytes || 0),
-    path: normalizedInput,
-    ...(relativePath ? { relativePath } : {}),
-    generatedByModel: true,
-    generationSource,
-    attachmentSource: TOOL_ATTACHMENT_SOURCE.MODEL,
-  };
-}
-
-function buildExistingArtifactPersistedOutput({
-  runtime = {},
-  agentContext = null,
-  attachmentMeta = null,
-  text = "",
-} = {}) {
-  if (!attachmentMeta || typeof attachmentMeta !== "object" || Array.isArray(attachmentMeta)) {
-    return { attachments: [], transferEnvelopes: [] };
-  }
-  const file = buildTransferFileEntry({
-    runtime,
-    agentContext,
-    attachmentMeta,
-    purpose: "reuse_data_processing_artifact",
-    role: "primary",
-  });
-  const envelope = createTransferEnvelope({
-    direction: "output",
-    transport: "file",
-    files: [file],
-    storage: {
-      kind: "attachment",
-      attachmentSource: String(attachmentMeta?.attachmentSource || TOOL_ATTACHMENT_SOURCE.MODEL),
-      generationSource: String(attachmentMeta?.generationSource || ""),
-      reused: true,
-    },
-    producer: { type: "tool", name: TOOL_NAME.DOC_TO_DATA },
-    meta: {
-      source: TRANSFER_SOURCE.TOOL,
-      reason: TRANSFER_REASON.REUSE_DATA_PROCESSING_ARTIFACT,
-      mimeType: String(attachmentMeta?.mimeType || MIME_TYPE.TEXT_MARKDOWN),
-    },
-  });
-  const transferEnvelopes = [envelope];
-  return {
-    attachments: [attachmentMeta],
-    transferEnvelopes,
-    resultFields: buildTextResultFields({
-      text,
-      transferEnvelopes,
-      inlineMaxChars: resolveToolResultInlineTextLimit(runtime),
-    }),
-  };
 }
 
 let libreOfficeConverters = null;
@@ -337,34 +251,149 @@ async function collectDirectoryBytes(directoryPath = "") {
   return totalBytes;
 }
 
+export function resolveLibreOfficeTempRoots() {
+  return uniqueTruthyStrings([
+    process.env.TMPDIR,
+    process.env.TEMP,
+    process.env.TMP,
+    os.tmpdir(),
+    // cross-platform-allow: /tmp is a macOS/Linux fallback in addition to platform temp env vars.
+    "/tmp",
+  ]).map((item) => path.resolve(item));
+}
+
+export function buildLibreOfficeTempPathTokensForNodePid(pid = process.pid) {
+  const normalizedPid = String(pid || "").trim();
+  if (!normalizedPid) return [];
+  return resolveLibreOfficeTempRoots().flatMap((tempRoot) => [
+    path.join(tempRoot, `soffice-${normalizedPid}-`),
+    path.join(tempRoot, `libreofficeConvert_-${normalizedPid}-`),
+  ]);
+}
+
+async function createLibreOfficeGuardTempDir() {
+  return mkdtemp(path.join(os.tmpdir(), "noobot-libreoffice-"));
+}
+
 async function collectLibreOfficeTempBytesForNodePid(pid = process.pid) {
   const normalizedPid = String(pid || "").trim();
   if (!normalizedPid || process.platform === "win32") return 0;
-  let tmpEntries = [];
-  try {
-    tmpEntries = await readdir("/tmp", { withFileTypes: true });
-  } catch {
-    return 0;
-  }
   const prefixes = [
     `libreofficeConvert_-${normalizedPid}-`,
     `soffice-${normalizedPid}-`,
   ];
   let totalBytes = 0;
-  for (const entry of tmpEntries) {
-    if (!entry.isDirectory()) continue;
-    if (!prefixes.some((prefix) => entry.name.startsWith(prefix))) continue;
-    totalBytes += await collectDirectoryBytes(path.join("/tmp", entry.name));
+  for (const tempRoot of resolveLibreOfficeTempRoots()) {
+    let tmpEntries = [];
+    try {
+      tmpEntries = await readdir(tempRoot, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of tmpEntries) {
+      if (!entry.isDirectory()) continue;
+      if (!prefixes.some((prefix) => entry.name.startsWith(prefix))) continue;
+      totalBytes += await collectDirectoryBytes(path.join(tempRoot, entry.name));
+    }
   }
   return totalBytes;
 }
 
-async function killLibreOfficeProcessesForNodePid(pid = process.pid) {
-  const normalizedPid = String(pid || "").trim();
-  if (!normalizedPid || process.platform === "win32") return;
+async function collectLibreOfficeTempBytesForGuardDir(tempRoot = "") {
+  return collectDirectoryBytes(tempRoot);
+}
 
-  const userInstallationToken = `/tmp/soffice-${normalizedPid}-`;
-  const convertDirToken = `/tmp/libreofficeConvert_-${normalizedPid}-`;
+function parseWindowsProcessRows(output = "") {
+  try {
+    const rows = JSON.parse(String(output || "[]"));
+    return (Array.isArray(rows) ? rows : [rows]).map((row) => ({
+      processId: Number(row?.ProcessId || 0),
+      commandLine: String(row?.CommandLine || ""),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function listWindowsLibreOfficeProcesses() {
+  const powershellScript = [
+    "Get-CimInstance Win32_Process",
+    "| Where-Object { $_.Name -like '*soffice*' -or $_.Name -like '*oosplash*' }",
+    "| Select-Object ProcessId,CommandLine",
+    "| ConvertTo-Json -Compress",
+  ].join(" ");
+  try {
+    const { stdout } = await execFileAsync(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-Command", powershellScript],
+      {
+        timeout: 5000,
+        maxBuffer: 1024 * 1024,
+        windowsHide: true,
+      },
+    );
+    return parseWindowsProcessRows(stdout);
+  } catch {
+    // Fall back to wmic for older Windows environments.
+  }
+  try {
+    const { stdout } = await execFileAsync(
+      "wmic",
+      ["process", "where", "name like '%soffice%'", "get", "ProcessId,CommandLine", "/format:csv"],
+      {
+        timeout: 5000,
+        maxBuffer: 1024 * 1024,
+        windowsHide: true,
+      },
+    );
+    return String(stdout || "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const cells = line.split(",");
+        const processId = Number(cells[cells.length - 1]);
+        const commandLine = cells.slice(1, -1).join(",");
+        return { processId, commandLine };
+      });
+  } catch {
+    return [];
+  }
+}
+
+async function killLibreOfficeProcessesForNodePid(pid = process.pid, extraPathTokens = []) {
+  const normalizedPid = String(pid || "").trim();
+  if (!normalizedPid) return;
+
+  const tempPathTokens = uniqueTruthyStrings([
+    ...buildLibreOfficeTempPathTokensForNodePid(normalizedPid),
+    ...extraPathTokens,
+  ]);
+  if (!tempPathTokens.length) return;
+  if (process.platform === "win32") {
+    try {
+      const targetPids = (await listWindowsLibreOfficeProcesses())
+        .map((processItem) => {
+          const isCurrentConvert = tempPathTokens.some((token) =>
+            processItem.commandLine.includes(token),
+          );
+          return Number.isInteger(processItem.processId) && processItem.processId > 0 && isCurrentConvert
+            ? processItem.processId
+            : null;
+        })
+        .filter((processId) => Number.isInteger(processId) && processId > 0);
+      await Promise.all(targetPids.map((processId) =>
+        execFileAsync("taskkill", ["/PID", String(processId), "/T", "/F"], {
+          timeout: 5000,
+          maxBuffer: 1024 * 1024,
+          windowsHide: true,
+        }).catch(() => {}),
+      ));
+    } catch {
+      // Best-effort cleanup only; timeout result should still be returned.
+    }
+    return;
+  }
   try {
     const { stdout } = await execFileAsync("ps", ["-eo", "pid=,args="], {
       timeout: 5000,
@@ -381,15 +410,14 @@ async function killLibreOfficeProcessesForNodePid(pid = process.pid) {
           args.includes("/libreoffice/") ||
           args.includes("soffice") ||
           args.includes("oosplash");
-        const isCurrentConvert =
-          args.includes(userInstallationToken) ||
-          args.includes(convertDirToken);
+        const isCurrentConvert = tempPathTokens.some((token) => args.includes(token));
         return isLibreOfficeProcess && isCurrentConvert ? Number(processId) : null;
       })
       .filter((processId) => Number.isInteger(processId) && processId > 0);
 
     for (const processId of targetPids) {
       try {
+        // cross-platform-allow: Windows uses taskkill above; POSIX LibreOffice cleanup uses signals.
         process.kill(processId, "SIGTERM");
       } catch {
         // Process may have exited between ps and kill.
@@ -399,6 +427,7 @@ async function killLibreOfficeProcessesForNodePid(pid = process.pid) {
       setTimeout(() => {
         for (const processId of targetPids) {
           try {
+            // cross-platform-allow: Windows uses taskkill above; POSIX LibreOffice cleanup uses signals.
             process.kill(processId, "SIGKILL");
           } catch {
             // Process already exited.
@@ -411,7 +440,12 @@ async function killLibreOfficeProcessesForNodePid(pid = process.pid) {
   }
 }
 
-async function withLibreOfficeConvertGuard(convertPromise, budget = {}, abortSignal = null) {
+async function withLibreOfficeConvertGuard(
+  convertPromise,
+  budget = {},
+  abortSignal = null,
+  guardTempDir = "",
+) {
   const timeoutMs =
     Number.isFinite(Number(budget?.timeoutMs)) && Number(budget.timeoutMs) > 0
       ? Number(budget.timeoutMs)
@@ -444,7 +478,7 @@ async function withLibreOfficeConvertGuard(convertPromise, budget = {}, abortSig
       convertPromise,
       new Promise((_, reject) => {
         if (abortSignal?.aborted) {
-          killLibreOfficeProcessesForNodePid(process.pid).finally(() => {
+          killLibreOfficeProcessesForNodePid(process.pid, [guardTempDir]).finally(() => {
             reject(createLibreOfficeAbortError());
           });
           return;
@@ -452,7 +486,7 @@ async function withLibreOfficeConvertGuard(convertPromise, budget = {}, abortSig
         if (abortSignal) {
           abortHandler = () => {
             if (settled) return;
-            killLibreOfficeProcessesForNodePid(process.pid).finally(() => {
+            killLibreOfficeProcessesForNodePid(process.pid, [guardTempDir]).finally(() => {
               reject(createLibreOfficeAbortError());
             });
           };
@@ -461,7 +495,7 @@ async function withLibreOfficeConvertGuard(convertPromise, budget = {}, abortSig
         if (timeoutMs) {
           timeoutTimer = setTimeout(async () => {
             if (settled) return;
-            await killLibreOfficeProcessesForNodePid(process.pid);
+            await killLibreOfficeProcessesForNodePid(process.pid, [guardTempDir]);
             reject(createLibreOfficeTimeoutError(timeoutMs));
           }, timeoutMs);
           timeoutTimer.unref?.();
@@ -469,9 +503,11 @@ async function withLibreOfficeConvertGuard(convertPromise, budget = {}, abortSig
         if (tempMaxBytes && progressCheckIntervalMs) {
           progressTimer = setInterval(async () => {
             if (settled) return;
-            const tempBytes = await collectLibreOfficeTempBytesForNodePid(process.pid);
+            const tempBytes = guardTempDir
+              ? await collectLibreOfficeTempBytesForGuardDir(guardTempDir)
+              : await collectLibreOfficeTempBytesForNodePid(process.pid);
             if (tempBytes <= tempMaxBytes) return;
-            await killLibreOfficeProcessesForNodePid(process.pid);
+            await killLibreOfficeProcessesForNodePid(process.pid, [guardTempDir]);
             reject(createLibreOfficeTempLimitError(tempBytes, tempMaxBytes));
           }, progressCheckIntervalMs);
           progressTimer.unref?.();
@@ -500,6 +536,7 @@ export async function parseDocumentToTextViaLibreOffice({
   let inputFileName = "";
   let outputFormat = { format: "txt", filter: undefined, mode: "libreoffice_text" };
   let convertBudget = resolveLibreOfficeConvertBudget(0);
+  let guardTempDir = "";
   try {
     if (runtime?.abortSignal?.aborted) throw createLibreOfficeAbortError();
     const inputBuffer = await readFile(inputFile);
@@ -526,10 +563,12 @@ export async function parseDocumentToTextViaLibreOffice({
           ? converterWithOptions(inputBuffer, outputFormat.format, outputFormat.filter, {
             fileName: inputFileName,
             sofficeBinaryPaths: resolveLibreOfficeBinaryPaths(),
+            tmpOptions: { dir: guardTempDir || (guardTempDir = await createLibreOfficeGuardTempDir()) },
           })
           : converter(inputBuffer, outputFormat.format, outputFormat.filter),
         convertBudget,
         runtime?.abortSignal || null,
+        guardTempDir,
       );
     } catch (primaryError) {
       const primaryMessage = String(primaryError?.message || "");
@@ -542,10 +581,12 @@ export async function parseDocumentToTextViaLibreOffice({
           ? converterWithOptions(inputBuffer, "txt", "Text", {
             fileName: inputFileName,
             sofficeBinaryPaths: resolveLibreOfficeBinaryPaths(),
+            tmpOptions: { dir: guardTempDir || (guardTempDir = await createLibreOfficeGuardTempDir()) },
           })
           : converter(inputBuffer, "txt", "Text"),
         convertBudget,
         runtime?.abortSignal || null,
+        guardTempDir,
       );
     }
     const text = decodeLibreOfficeTextBuffer(outputBuffer);
@@ -578,6 +619,10 @@ export async function parseDocumentToTextViaLibreOffice({
         input: inputFile,
       },
     });
+  } finally {
+    if (guardTempDir) {
+      await rm(guardTempDir, { recursive: true, force: true }).catch(() => {});
+    }
   }
 }
 

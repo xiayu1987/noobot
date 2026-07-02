@@ -6,12 +6,12 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "NOOBOT_CLIENT_URL=${NOOBOT_CLIENT_URL:-http://127.0.0.1:10060} electron .",
+    "dev": "node ../shared/electron/dev-launcher.mjs",
     "prepare:startup": "npm --prefix ../startup run build",
     "prepare:frontend": "npm run prepare:startup && npm --prefix ../noobot-chat run build",
     "build:win": "npm run prepare:frontend && npm run prepare:backend && electron-builder --win",
     "build:win:dir": "npm run prepare:frontend && npm run prepare:backend && electron-builder --win --dir",
-    "check": "node --check src/main.js && node --check ../shared/electron/main.js && node --check ../shared/electron/preload.cjs && node --check ../shared/electron/startup-logging.js && node --check ../shared/electron/desktop-config.js && node --check ../shared/electron/file-ipc.js && node --check ../shared/electron/dependency-specs.js && node --check ../shared/electron/dependency-process.js && node --check ../shared/electron/dependency-managed-mac.js && node --check ../shared/electron/dependency-detect.js && node --check ../shared/electron/dependency-installer.js && node --check ../shared/electron/desktop-dependencies.js && node --check ../shared/electron/desktop-services.js && node --check ../shared/electron/desktop-window.js && node --check ../shared/electron/startup-ipc.js && node --test ../shared/tests/electron/*.test.js",
+    "check": "node --check src/main.js && node --check ../shared/electron/main.js && node --check ../shared/electron/preload.cjs && node --check ../shared/electron/startup-logging.js && node --check ../shared/electron/desktop-config.js && node --check ../shared/electron/file-ipc.js && node --check ../shared/electron/dependency-specs.js && node --check ../shared/electron/dependency-process.js && node --check ../shared/electron/dependency-managed-mac.js && node --check ../shared/electron/dependency-detect.js && node --check ../shared/electron/dependency-installer.js && node --check ../shared/electron/desktop-dependencies.js && node --check ../shared/electron/desktop-services.js && node --check ../shared/electron/desktop-window.js && node --check ../shared/electron/startup-ipc.js && node --check ../shared/electron/dev-launcher.mjs && node --test ../shared/tests/electron/*.test.js",
     "prepare:backend": "node scripts/prepare-backend-runtime.mjs",
     "build:win:portable": "npm run prepare:frontend && npm run prepare:backend && electron-builder --win portable",
     "build:win:zip": "npm run prepare:frontend && npm run prepare:backend && electron-builder --win zip"

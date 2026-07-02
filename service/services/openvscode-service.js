@@ -8,7 +8,7 @@ import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { existsSync, openSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { BUILTIN_THRESHOLDS, normalizeTimeMs, resolveTimeMs } from "#agent/config";
@@ -161,6 +161,15 @@ function isPortOpen({
     socket.once("timeout", () => finish(false));
     socket.once("error", () => finish(false));
   });
+}
+
+export function taskkillProcessTreeBestEffort(pid = 0, { execFileImpl = execFile } = {}) {
+  const normalizedPid = Number(pid || 0);
+  if (!Number.isInteger(normalizedPid) || normalizedPid <= 0) return false;
+  execFileImpl("taskkill", ["/PID", String(normalizedPid), "/T", "/F"], {
+    windowsHide: true,
+  }, () => {});
+  return true;
 }
 
 function allocatePort(host = DEFAULT_HOST) {
@@ -372,7 +381,12 @@ export function createOpenVSCodeService({
   function stopInstanceBestEffort(instance = {}, { forceAfterMs = DEFAULT_SHUTDOWN_GRACE_MS } = {}) {
     if (!instance?.pid) return;
     const pid = Number(instance.pid);
+    if (process.platform === "win32") {
+      taskkillProcessTreeBestEffort(pid);
+      return;
+    }
     try {
+      // cross-platform-allow: Windows uses taskkill above; POSIX OpenVSCode cleanup uses signals.
       process.kill(pid, "SIGTERM");
     } catch {
       return;
@@ -381,6 +395,7 @@ export function createOpenVSCodeService({
       const forceTimer = setTimeout(() => {
         if (!isProcessAlive(pid)) return;
         try {
+          // cross-platform-allow: Windows uses taskkill above; POSIX OpenVSCode cleanup uses signals.
           process.kill(pid, "SIGKILL");
         } catch {
           // ignore force-kill errors

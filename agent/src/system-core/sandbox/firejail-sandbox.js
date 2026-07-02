@@ -19,6 +19,7 @@ export function buildFirejailCommand({ userRoot, command }) {
     "--private-tmp",
     "--private-cache",
     "--",
+    // cross-platform-allow: firejail is a Linux sandbox provider and runs commands through bash.
     "bash",
     "-lc",
     JSON.stringify(
