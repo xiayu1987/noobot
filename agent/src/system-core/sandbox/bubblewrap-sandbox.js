@@ -52,11 +52,14 @@ export function buildBubblewrapCommand({ userRoot, command }) {
     "--setenv",
     "PWD",
     persistDir,
+    // cross-platform-allow: bubblewrap is a Linux sandbox provider; these are sandbox-internal Unix paths and shell.
     "--tmpfs",
     "/tmp",
     "--tmpfs",
+    // cross-platform-allow: bubblewrap is a Linux sandbox provider; /var/tmp is sandbox-internal.
     "/var/tmp",
     "--",
+    // cross-platform-allow: bubblewrap commands run inside a Linux sandbox.
     "bash",
     "-lc",
     JSON.stringify(`mkdir -p "${persistDir}" && cd "${persistDir}" && ${command}`),

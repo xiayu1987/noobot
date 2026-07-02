@@ -3,14 +3,21 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
 
 import {
   createDoc2DataTool,
   decodeLibreOfficeTextBuffer,
 } from "../../../src/system-core/tools/data-processing/doc2data-tool.js";
 import {
+  buildLibreOfficeTempPathTokensForNodePid,
+  resolveLibreOfficeTempRoots,
+} from "../../../src/system-core/tools/data-processing/doc2data/libreoffice.js";
+import {
   createMedia2DataTool,
   resolveMediaBinaryPath,
+  runMediaProcess,
 } from "../../../src/system-core/tools/data-processing/media2data-tool.js";
 import { createContentProcessTool } from "../../../src/system-core/tools/data-processing/content-process-tool.js";
 import { createWeb2DataTool } from "../../../src/system-core/tools/data-processing/web2data-tool.js";
@@ -51,6 +58,34 @@ test("doc_to_data: LibreOffice text output decoder keeps UTF-8 and strips BOM", 
     decodeLibreOfficeTextBuffer(Buffer.from("\uFEFF中文\n", "utf8")),
     "中文\n",
   );
+});
+
+test("doc_to_data: LibreOffice temp roots include macOS TMPDIR and /tmp fallback", () => {
+  const originalTmpdir = process.env.TMPDIR;
+  const originalTemp = process.env.TEMP;
+  const originalTmp = process.env.TMP;
+  try {
+    process.env.TMPDIR = "/var/folders/aa/bb/T/";
+    delete process.env.TEMP;
+    delete process.env.TMP;
+
+    const roots = resolveLibreOfficeTempRoots();
+    assert.equal(roots.includes(path.resolve("/var/folders/aa/bb/T/")), true);
+    assert.equal(roots.includes(path.resolve("/tmp")), true);
+
+    const tokens = buildLibreOfficeTempPathTokensForNodePid(12345);
+    assert.equal(tokens.includes(path.join(path.resolve("/var/folders/aa/bb/T/"), "soffice-12345-")), true);
+    assert.equal(tokens.includes(path.join(path.resolve("/var/folders/aa/bb/T/"), "libreofficeConvert_-12345-")), true);
+    assert.equal(tokens.includes(path.join(path.resolve("/tmp"), "soffice-12345-")), true);
+    assert.equal(tokens.includes(path.join(path.resolve("/tmp"), "libreofficeConvert_-12345-")), true);
+  } finally {
+    if (originalTmpdir === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = originalTmpdir;
+    if (originalTemp === undefined) delete process.env.TEMP;
+    else process.env.TEMP = originalTemp;
+    if (originalTmp === undefined) delete process.env.TMP;
+    else process.env.TMP = originalTmp;
+  }
 });
 
 test("doc_to_data: direct text result stores content in file and returns text when under limit", async () => {
@@ -445,6 +480,39 @@ test("media_to_data: ffprobe falls back to sibling of configured ffmpeg path", (
     }),
     "/managed/ffmpeg/bin/ffprobe",
   );
+});
+
+test("media_to_data: spawned media process is terminated on abort", async () => {
+  const abortController = new AbortController();
+  const killSignals = [];
+  const fakeChild = new EventEmitter();
+  fakeChild.stdout = new PassThrough();
+  fakeChild.stderr = new PassThrough();
+  fakeChild.killed = false;
+  fakeChild.kill = (signal) => {
+    killSignals.push(signal);
+    fakeChild.killed = true;
+    return true;
+  };
+  const spawnCalls = [];
+  const processPromise = runMediaProcess("ffmpeg", ["-version"], {
+    abortSignal: abortController.signal,
+    killGraceMs: 0,
+    timeoutMs: 0,
+    spawnImpl: (command, args, options) => {
+      spawnCalls.push({ command, args, options });
+      return fakeChild;
+    },
+  });
+
+  abortController.abort("stop requested");
+
+  await assert.rejects(
+    () => processPromise,
+    (error) => error?.code === "MEDIA_PROCESS_ABORTED",
+  );
+  assert.deepEqual(spawnCalls.map((item) => item.command), ["ffmpeg"]);
+  assert.deepEqual(killSignals, ["SIGTERM"]);
 });
 
 test("web_to_data: empty input and urls should fail before network work", async () => {

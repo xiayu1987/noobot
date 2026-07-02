@@ -102,6 +102,7 @@ const TEXT_PREVIEW_EXTS = new Set([
   "kts",
   "scala",
   "sh",
+  // cross-platform-allow: this is a file extension label, not a shell execution dependency.
   "bash",
   "zsh",
   "fish",

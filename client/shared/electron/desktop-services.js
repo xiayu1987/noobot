@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -33,12 +33,26 @@ export function createDesktopServiceManager({
   requestSuperAdminConfig,
   requestMissingConfigParams,
   spawnProcess = spawn,
+  execFileProcess = execFile,
   fetchImpl = fetch,
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 } = {}) {
   let managedServiceProcess = null;
   let managedAgentProxyProcess = null;
   let serviceStartupPromise = null;
+
+  function stopManagedChildProcess(child) {
+    if (!child) return;
+    const pid = Number(child.pid || 0);
+    if (process.platform === "win32" && Number.isInteger(pid) && pid > 0) {
+      execFileProcess("taskkill", ["/PID", String(pid), "/T", "/F"], {
+        windowsHide: true,
+      }, () => {});
+      return;
+    }
+    // cross-platform-allow: Windows uses taskkill above; POSIX children use signals.
+    child.kill("SIGTERM");
+  }
 
   function syncPackagedProxyConfig(proxyName) {
     if (!app.isPackaged) return;
@@ -355,12 +369,12 @@ export function createDesktopServiceManager({
     if (managedAgentProxyProcess) {
       const child = managedAgentProxyProcess;
       managedAgentProxyProcess = null;
-      child.kill("SIGTERM");
+      stopManagedChildProcess(child);
     }
     if (!managedServiceProcess) return;
     const child = managedServiceProcess;
     managedServiceProcess = null;
-    child.kill("SIGTERM");
+    stopManagedChildProcess(child);
   }
 
 

@@ -41,8 +41,12 @@ import {
   MIME_TYPE,
   VIDEO_EXTENSION_TO_MIME,
 } from "./file-extension-constants.js";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 const FFPROBE_AMBIGUOUS_EXTENSIONS = new Set([".webm", ".ogg", ".mkv"]);
 const MODEL_READY_AUDIO_EXTENSIONS = new Set([".wav", ".mp3"]);
+const MEDIA_PROCESS_KILL_GRACE_MS = TIME_THRESHOLDS.tools.mediaToDataKillGraceMs;
+const MEDIA_PROBE_TIMEOUT_MS = TIME_THRESHOLDS.tools.mediaToDataProbeTimeoutMs;
+const MEDIA_TRANSCODE_TIMEOUT_MS = TIME_THRESHOLDS.tools.mediaToDataTranscodeTimeoutMs;
 const MEDIA_BINARY_NAMES = Object.freeze({
   ffmpeg: "ffmpeg",
   ffprobe: "ffprobe",
@@ -229,41 +233,132 @@ function resolveMediaTypeByPath(filePath = "") {
   return "";
 }
 
-function runFfprobe(filePath = "") {
+function createMediaProcessError(message = "", code = "", details = {}) {
+  const error = new Error(message);
+  if (code) error.code = code;
+  error.details = details;
+  return error;
+}
+
+function terminateMediaProcess(childProcess, {
+  forceAfterMs = MEDIA_PROCESS_KILL_GRACE_MS,
+} = {}) {
+  if (!childProcess) return;
+  try {
+    // cross-platform-allow: Node maps child process signals per platform; this is best-effort cleanup.
+    childProcess.kill("SIGTERM");
+  } catch {
+    return;
+  }
+  if (Number(forceAfterMs || 0) <= 0) return;
+  const forceTimer = setTimeout(() => {
+    try {
+      // cross-platform-allow: Node maps child process signals per platform; this is best-effort cleanup.
+      childProcess.kill("SIGKILL");
+    } catch {
+      // ignore force-kill errors
+    }
+  }, Number(forceAfterMs || 0));
+  forceTimer.unref?.();
+}
+
+export function runMediaProcess(command = "", args = [], {
+  timeoutMs = MEDIA_TRANSCODE_TIMEOUT_MS,
+  abortSignal = null,
+  errorLabel = "media process",
+  killGraceMs = MEDIA_PROCESS_KILL_GRACE_MS,
+  spawnImpl = spawn,
+} = {}) {
   return new Promise((resolve, reject) => {
-    const ffprobePath = resolveMediaBinaryPath(MEDIA_BINARY_NAMES.ffprobe);
-    const ffprobeProcess = spawn(
-      ffprobePath,
-      [
-        "-v",
-        "error",
-        "-show_streams",
-        "-print_format",
-        "json",
-        String(filePath || ""),
-      ],
-      { stdio: ["ignore", "pipe", "pipe"] },
-    );
+    if (abortSignal?.aborted) {
+      reject(
+        createMediaProcessError(`${errorLabel} aborted`, "MEDIA_PROCESS_ABORTED", {
+          reason: abortSignal.reason,
+        }),
+      );
+      return;
+    }
+    const childProcess = spawnImpl(command, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     let stdoutText = "";
     let stderrText = "";
-    ffprobeProcess.stdout.on("data", (chunk) => {
+    let settled = false;
+    let timeoutTimer = null;
+    const cleanup = () => {
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      abortSignal?.removeEventListener?.("abort", onAbort);
+    };
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      callback(value);
+    };
+    const onAbort = () => {
+      terminateMediaProcess(childProcess, { forceAfterMs: killGraceMs });
+      finish(
+        reject,
+        createMediaProcessError(`${errorLabel} aborted`, "MEDIA_PROCESS_ABORTED", {
+          reason: abortSignal?.reason,
+        }),
+      );
+    };
+    if (Number(timeoutMs || 0) > 0) {
+      timeoutTimer = setTimeout(() => {
+        terminateMediaProcess(childProcess, { forceAfterMs: killGraceMs });
+        finish(
+          reject,
+          createMediaProcessError(`${errorLabel} timeout after ${timeoutMs}ms`, "MEDIA_PROCESS_TIMEOUT", {
+            timeoutMs,
+          }),
+        );
+      }, Number(timeoutMs || 0));
+      timeoutTimer.unref?.();
+    }
+    abortSignal?.addEventListener?.("abort", onAbort, { once: true });
+    childProcess.stdout.on("data", (chunk) => {
       stdoutText += String(chunk || "");
     });
-    ffprobeProcess.stderr.on("data", (chunk) => {
+    childProcess.stderr.on("data", (chunk) => {
       stderrText += String(chunk || "");
     });
-    ffprobeProcess.on("error", (error) => reject(error));
-    ffprobeProcess.on("close", (exitCode) => {
+    childProcess.on("error", (error) => {
+      finish(reject, error);
+    });
+    childProcess.on("close", (exitCode) => {
+      if (settled) return;
       if (exitCode !== 0) {
-        reject(new Error(stderrText.trim() || `ffprobe exited with code ${exitCode}`));
+        finish(reject, new Error(stderrText.trim() || `${errorLabel} exited with code ${exitCode}`));
         return;
       }
-      resolve(stdoutText);
+      finish(resolve, { stdoutText, stderrText });
     });
   });
 }
 
-async function resolveMediaTypeByPathWithProbe(filePath = "") {
+async function runFfprobe(filePath = "", { abortSignal = null } = {}) {
+  const ffprobePath = resolveMediaBinaryPath(MEDIA_BINARY_NAMES.ffprobe);
+  const result = await runMediaProcess(
+    ffprobePath,
+    [
+      "-v",
+      "error",
+      "-show_streams",
+      "-print_format",
+      "json",
+      String(filePath || ""),
+    ],
+    {
+      timeoutMs: MEDIA_PROBE_TIMEOUT_MS,
+      abortSignal,
+      errorLabel: "ffprobe",
+    },
+  );
+  return result.stdoutText;
+}
+
+async function resolveMediaTypeByPathWithProbe(filePath = "", { abortSignal = null } = {}) {
   const normalizedFilePath = String(filePath || "").trim();
   const extension = path.extname(normalizedFilePath).toLowerCase();
   const extensionResolvedType = resolveMediaTypeByPath(normalizedFilePath);
@@ -271,7 +366,7 @@ async function resolveMediaTypeByPathWithProbe(filePath = "") {
     return extensionResolvedType;
   }
   try {
-    const ffprobeJsonText = await runFfprobe(normalizedFilePath);
+    const ffprobeJsonText = await runFfprobe(normalizedFilePath, { abortSignal });
     const ffprobePayload = JSON.parse(ffprobeJsonText || "{}");
     const streamList = Array.isArray(ffprobePayload?.streams)
       ? ffprobePayload.streams
@@ -290,30 +385,16 @@ async function resolveMediaTypeByPathWithProbe(filePath = "") {
   }
 }
 
-function runFfmpeg(args = []) {
-  return new Promise((resolve, reject) => {
-    const ffmpegPath = resolveMediaBinaryPath(MEDIA_BINARY_NAMES.ffmpeg);
-    const ffmpegProcess = spawn(ffmpegPath, args, {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    let stderrText = "";
-    ffmpegProcess.stderr.on("data", (chunk) => {
-      stderrText += String(chunk || "");
-    });
-    ffmpegProcess.on("error", (error) => {
-      reject(error);
-    });
-    ffmpegProcess.on("close", (exitCode) => {
-      if (exitCode === 0) {
-        resolve();
-        return;
-      }
-      reject(new Error(stderrText.trim() || `ffmpeg exited with code ${exitCode}`));
-    });
+async function runFfmpeg(args = [], { abortSignal = null } = {}) {
+  const ffmpegPath = resolveMediaBinaryPath(MEDIA_BINARY_NAMES.ffmpeg);
+  await runMediaProcess(ffmpegPath, args, {
+    timeoutMs: MEDIA_TRANSCODE_TIMEOUT_MS,
+    abortSignal,
+    errorLabel: "ffmpeg",
   });
 }
 
-async function ensureAudioFileForModel(inputFile = "", outputDirectory = "") {
+async function ensureAudioFileForModel(inputFile = "", outputDirectory = "", { abortSignal = null } = {}) {
   await mkdir(outputDirectory, { recursive: true });
   const extension = path.extname(String(inputFile || "")).toLowerCase();
   if (MODEL_READY_AUDIO_EXTENSIONS.has(extension)) {
@@ -323,39 +404,45 @@ async function ensureAudioFileForModel(inputFile = "", outputDirectory = "") {
     };
   }
   const outputFilePath = path.join(outputDirectory, `${randomUUID()}.mp3`);
-  await runFfmpeg([
-    "-y",
-    "-i",
-    inputFile,
-    "-vn",
-    "-acodec",
-    "libmp3lame",
-    "-ar",
-    "16000",
-    outputFilePath,
-  ]);
+  await runFfmpeg(
+    [
+      "-y",
+      "-i",
+      inputFile,
+      "-vn",
+      "-acodec",
+      "libmp3lame",
+      "-ar",
+      "16000",
+      outputFilePath,
+    ],
+    { abortSignal },
+  );
   return { filePath: outputFilePath, format: "mp3" };
 }
 
-async function ensureVideoFileForModel(inputFile = "", outputDirectory = "") {
+async function ensureVideoFileForModel(inputFile = "", outputDirectory = "", { abortSignal = null } = {}) {
   await mkdir(outputDirectory, { recursive: true });
   const extension = path.extname(String(inputFile || "")).toLowerCase();
   if (extension === ".mp4") {
     return { filePath: inputFile, mimeType: MIME_TYPE.VIDEO_MP4 };
   }
   const outputFilePath = path.join(outputDirectory, `${randomUUID()}.mp4`);
-  await runFfmpeg([
-    "-y",
-    "-i",
-    inputFile,
-    "-c:v",
-    "libx264",
-    "-c:a",
-    "aac",
-    "-movflags",
-    "+faststart",
-    outputFilePath,
-  ]);
+  await runFfmpeg(
+    [
+      "-y",
+      "-i",
+      inputFile,
+      "-c:v",
+      "libx264",
+      "-c:a",
+      "aac",
+      "-movflags",
+      "+faststart",
+      outputFilePath,
+    ],
+    { abortSignal },
+  );
   return { filePath: outputFilePath, mimeType: MIME_TYPE.VIDEO_MP4 };
 }
 
@@ -483,7 +570,8 @@ export function createMedia2DataTool({ agentContext }) {
         fieldName: "filePath",
         mustExist: true,
       });
-      const mediaType = await resolveMediaTypeByPathWithProbe(inputFile);
+      const abortSignal = runtime?.abortSignal || null;
+      const mediaType = await resolveMediaTypeByPathWithProbe(inputFile, { abortSignal });
       if (!mediaType) {
         throw recoverableToolError(
           tTool(runtime, "tools.media2data.unsupportedMediaFileType"),
@@ -520,7 +608,7 @@ export function createMedia2DataTool({ agentContext }) {
 
       let attachmentPayload = null;
       if (mediaType === "audio") {
-        const preparedAudioFile = await ensureAudioFileForModel(inputFile, outputDirectory);
+        const preparedAudioFile = await ensureAudioFileForModel(inputFile, outputDirectory, { abortSignal });
         const contentBase64 = (
           await readFile(preparedAudioFile.filePath)
         ).toString("base64");
@@ -534,7 +622,7 @@ export function createMedia2DataTool({ agentContext }) {
           data: contentBase64,
         };
       } else if (mediaType === "video") {
-        const preparedVideoFile = await ensureVideoFileForModel(inputFile, outputDirectory);
+        const preparedVideoFile = await ensureVideoFileForModel(inputFile, outputDirectory, { abortSignal });
         attachmentPayload = {
           type: preparedVideoFile.mimeType,
           mimeType: preparedVideoFile.mimeType,

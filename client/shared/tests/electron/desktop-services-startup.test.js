@@ -21,11 +21,18 @@ function withPlatform(platform, fn) {
     });
 }
 
+let nextMockPid = 3000;
+
 function createMockChildProcess() {
   const child = new EventEmitter();
+  child.pid = nextMockPid;
+  nextMockPid += 1;
   child.stdout = new EventEmitter();
   child.stderr = new EventEmitter();
-  child.kill = () => {};
+  child.killCalls = [];
+  child.kill = (signal) => {
+    child.killCalls.push(signal);
+  };
   return child;
 }
 
@@ -57,6 +64,7 @@ async function createFixture({ packaged = false } = {}) {
   };
   let desktopConfigState = null;
   const calls = [];
+  const execFileCalls = [];
   let healthCalls = 0;
   const originalResourcesPath = Object.getOwnPropertyDescriptor(process, "resourcesPath");
   Object.defineProperty(process, "resourcesPath", { value: resourcesPath, configurable: true });
@@ -99,8 +107,13 @@ async function createFixture({ packaged = false } = {}) {
       return { ok: true, json: async () => ({ ok: calls.length > 0 }) };
     },
     spawnProcess: (command, args, options) => {
-      calls.push({ command, args, options });
-      return createMockChildProcess();
+      const child = createMockChildProcess();
+      calls.push({ command, args, options, child });
+      return child;
+    },
+    execFileProcess: (command, args, options, callback) => {
+      execFileCalls.push({ command, args, options });
+      callback?.(null, "", "");
     },
   });
 
@@ -110,6 +123,7 @@ async function createFixture({ packaged = false } = {}) {
     userDataPath,
     packagedBackendRoot,
     calls,
+    execFileCalls,
     getHealthCalls: () => healthCalls,
     manager,
     restore: async () => {
@@ -137,6 +151,26 @@ test("desktop startup uses npm.cmd for Windows development service launch", asyn
       assert.equal(fixture.calls[0].options.env.NOOBOT_DESKTOP, "1");
       assert.match(fixture.calls[0].options.env.NOOBOT_GLOBAL_CONFIG_PATH, /global\.config\.json$/);
       assert.ok(fixture.getHealthCalls() >= 2);
+    } finally {
+      await fixture.restore();
+    }
+  });
+});
+
+test("desktop stop uses taskkill process tree cleanup on Windows", async () => {
+  await withPlatform("win32", async () => {
+    const fixture = await createFixture({ packaged: false });
+    try {
+      await fixture.manager.ensureServiceStarted();
+      fixture.manager.stopManagedService();
+
+      assert.equal(fixture.execFileCalls.length, 1);
+      assert.deepEqual(fixture.execFileCalls[0], {
+        command: "taskkill",
+        args: ["/PID", String(fixture.calls[0].child.pid), "/T", "/F"],
+        options: { windowsHide: true },
+      });
+      assert.deepEqual(fixture.calls[0].child.killCalls, []);
     } finally {
       await fixture.restore();
     }
