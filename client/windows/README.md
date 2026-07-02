@@ -99,33 +99,33 @@ npm run -w client/windows build:win:dir
 
 ## Recommended distributable targets
 
-Because NSIS internally still creates a `.nsis.7z` archive and may call 7zip with high compression flags on some machines, the more reliable distribution targets are portable or zip:
+The GitHub release workflow builds the NSIS installer and zip targets by default:
 
 ```bash
-npm run -w client/windows build:win:portable
+npm run -w client/windows build:win
 ```
 
-or:
+The zip target is also available independently:
 
 ```bash
 npm run -w client/windows build:win:zip
 ```
 
-These targets still include the bundled backend runtime, but avoid the NSIS installer compression path that can fail with:
+The portable target is kept as a manual/local option only and is not built in GitHub release CI:
+
+```bash
+npm run -w client/windows build:win:portable
+```
+
+## NSIS installer
+
+If the NSIS installer fails in the 7zip stage with:
 
 ```text
 ERROR: Can't allocate required memory!
 7za.exe ... -mx=9 ... *.nsis.7z
 ```
 
-## NSIS installer
-
-The NSIS installer target is still available:
-
-```bash
-npm run -w client/windows build:win
-```
-
-If it continues to fail in the 7zip/NSIS stage, treat that as an installer packaging limitation rather than an application packaging failure. First verify `build:win:dir`, then ship `portable` or `zip` while NSIS is optimized or replaced later.
+first verify `build:win:dir`, then ship `zip` while NSIS is optimized or replaced later.
 
 On non-Windows systems, building the NSIS installer requires `wine`. Without `wine`, `electron-builder --win --dir` can still verify the unpacked app/resource layout, but the final installer step will fail.

@@ -52,7 +52,8 @@ jobs:
 
   mac:
     name: Build macOS client
-    runs-on: macos-13
+    runs-on: macos-15-intel
+    timeout-minutes: 60
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: false
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
@@ -79,5 +80,4 @@ jobs:
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           files: |
-            client/mac/dist/*.dmg
             client/mac/dist/*.zip
