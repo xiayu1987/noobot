@@ -1,6 +1,6 @@
 {
   "name": "noobot-service",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "type": "module",
   "imports": {
     "#agent/config": "./deps/agent-config.js",
