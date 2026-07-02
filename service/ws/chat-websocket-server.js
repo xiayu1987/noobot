@@ -568,6 +568,41 @@ export function registerChatWebSocketServer(
           return;
         }
 
+        if (stopRequested || currentAbortSignal?.aborted) {
+          const stopPayload = currentStopPayload || currentAbortSignal?.reason?.stopPayload || {};
+          try {
+            await resolveBot()?.persistStoppedAssistantMessage?.({
+              userId: currentRunMeta?.userId || "",
+              sessionId: currentRunMeta?.sessionId || "",
+              parentSessionId: currentRunMeta?.parentSessionId || "",
+              parentDialogProcessId: currentRunMeta?.parentDialogProcessId || "",
+              partialAssistant: stopPayload?.partialAssistant || {},
+            });
+          } catch (persistError) {
+            logError("[ws][chat-websocket-server] persist stopped assistant message failed", {
+              userId: currentRunMeta?.userId || "",
+              sessionId: currentRunMeta?.sessionId || "",
+              error: persistError?.message || String(persistError),
+            });
+          }
+          sendEvent("stopped", {
+            message: stopPayload?.message || translateText("ws.dialogStoppedByUser", currentLocale),
+            sessionId: stopPayload?.sessionId || currentRunMeta?.sessionId || result.sessionId || "",
+            dialogProcessId:
+              stopPayload?.dialogProcessId ||
+              currentRunMeta?.dialogProcessId ||
+              result.dialogProcessId ||
+              "",
+            turnScopeId:
+              stopPayload?.turnScopeId ||
+              currentRunMeta?.turnScopeId ||
+              currentTurnScopeId ||
+              "",
+          });
+          webSocket.close(1000, "stopped");
+          return;
+        }
+
         sendEvent("done", {
           sessionId: result.sessionId,
           answer: result.answer,

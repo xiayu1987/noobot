@@ -262,4 +262,72 @@ describe("chatWebSocketClient", () => {
     expect(client.getLastReceivedSeqMap()).toEqual({ "dp-1": 4 });
     socket.close(1011, "server_error");
   });
+
+  it.each([
+    [StreamEventEnum.DONE, { turnScopeId: "doc-turn", dialogProcessId: "doc-dp" }],
+    [StreamEventEnum.STOPPED, { turnScopeId: "doc-turn", dialogProcessId: "doc-dp" }],
+    [StreamEventEnum.ERROR, { turnScopeId: "doc-turn", dialogProcessId: "doc-dp", error: "doc2data failed" }],
+    [StreamEventEnum.CHANNEL_STATE, { turnScopeId: "doc-turn", dialogProcessId: "doc-dp", state: "stopped" }],
+  ])("does not settle current stream for unrelated %s events", async (event, data) => {
+    const client = createChatWebSocketClient({
+      resolveWebSocketUrl: () => "ws://test",
+      terminalChannelStateGraceMs: 20,
+      translateText: (key) => key,
+    });
+    client.connect();
+    const socket = MockWebSocket.instances[0];
+    let settled = false;
+
+    const streamPromise = client
+      .stream({ action: "chat", turnScopeId: "main-turn", dialogProcessId: "main-dp" }, vi.fn())
+      .then(
+        () => {
+          settled = true;
+        },
+        () => {
+          settled = true;
+        },
+      );
+
+    socket.emit(event, { sessionId: "s-1", seq: 10, ...data });
+    await vi.advanceTimersByTimeAsync(50);
+    await Promise.resolve();
+
+    expect(settled).toBe(false);
+
+    socket.emit(StreamEventEnum.DONE, {
+      sessionId: "s-1",
+      turnScopeId: "main-turn",
+      dialogProcessId: "main-dp",
+      seq: 11,
+    });
+    await streamPromise;
+    expect(settled).toBe(true);
+  });
+
+  it("still settles stream for matching turn terminal events", async () => {
+    const client = createChatWebSocketClient({
+      resolveWebSocketUrl: () => "ws://test",
+      terminalChannelStateGraceMs: 20,
+    });
+    client.connect();
+    const socket = MockWebSocket.instances[0];
+    let resolved = false;
+
+    const streamPromise = client
+      .stream({ action: "chat", turnScopeId: "main-turn", dialogProcessId: "main-dp" }, vi.fn())
+      .then(() => {
+        resolved = true;
+      });
+
+    socket.emit(StreamEventEnum.STOPPED, {
+      sessionId: "s-1",
+      turnScopeId: "main-turn",
+      dialogProcessId: "main-dp",
+      seq: 12,
+    });
+
+    await streamPromise;
+    expect(resolved).toBe(true);
+  });
 });

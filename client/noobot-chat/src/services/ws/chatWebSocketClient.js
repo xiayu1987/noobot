@@ -26,6 +26,24 @@ function isTerminalChannelStateEvent(event = "", data = {}) {
   );
 }
 
+function isEventForStreamScope(data = {}, payload = {}) {
+  const payloadTurnScopeId = normalizeTrimmedString(payload?.turnScopeId);
+  const eventTurnScopeId = normalizeTrimmedString(data?.turnScopeId);
+  if (payloadTurnScopeId && eventTurnScopeId && payloadTurnScopeId !== eventTurnScopeId) {
+    return false;
+  }
+  const payloadDialogProcessId = normalizeTrimmedString(payload?.dialogProcessId);
+  const eventDialogProcessId = normalizeTrimmedString(data?.dialogProcessId);
+  if (
+    payloadDialogProcessId &&
+    eventDialogProcessId &&
+    payloadDialogProcessId !== eventDialogProcessId
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export function createChatWebSocketClient({
   resolveWebSocketUrl = () => "",
   forceStopFinalizeMs = TIME_THRESHOLDS.client.wsForceStopFinalizeMs,
@@ -275,17 +293,18 @@ export function createChatWebSocketClient({
               }
             }
             onEvent({ event, data });
-            if (event === StreamEventEnum.ERROR) {
+            const eventMatchesCurrentStream = isEventForStreamScope(data, payload);
+            if (event === StreamEventEnum.ERROR && eventMatchesCurrentStream) {
               finalize(() => reject(createStreamEventError(data)));
               return;
             }
-            if (event === StreamEventEnum.DONE) {
+            if (event === StreamEventEnum.DONE && eventMatchesCurrentStream) {
               doneReceived = true;
               finalize(() => resolve());
-            } else if (event === StreamEventEnum.STOPPED) {
+            } else if (event === StreamEventEnum.STOPPED && eventMatchesCurrentStream) {
               doneReceived = true;
               finalize(() => resolve());
-            } else if (isTerminalChannelStateEvent(event, data)) {
+            } else if (eventMatchesCurrentStream && isTerminalChannelStateEvent(event, data)) {
               scheduleTerminalChannelStateFinalize(data);
             }
           } catch (error) {

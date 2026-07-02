@@ -390,6 +390,34 @@ test("doc_to_data: libreoffice rejects legacy .doc before conversion", async () 
   );
 });
 
+test("doc_to_data: libreoffice abort propagates instead of falling back to vision", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-abort-"));
+  const docPath = path.join(basePath, "runtime", "ops_workdir", "input.docx");
+  await fs.mkdir(path.dirname(docPath), { recursive: true });
+  await fs.writeFile(docPath, Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00, 0xff]));
+
+  const abortController = new AbortController();
+  abortController.abort({ type: "user_stop" });
+  const agentContext = buildAgentContext(basePath);
+  agentContext.execution.controllers.runtime.abortSignal = abortController.signal;
+
+  const tools = createDoc2DataTool({ agentContext });
+  const tool = tools.find((item) => item?.name === TOOL_NAME.DOC_TO_DATA);
+  assert.ok(tool);
+
+  await assert.rejects(
+    () => tool.invoke({
+      filePath: "runtime/ops_workdir/input.docx",
+      parseEngine: "libreoffice",
+    }),
+    (error) => {
+      assert.equal(error?.name, "AbortError");
+      assert.equal(error?.code, "ABORT_ERR");
+      return true;
+    },
+  );
+});
+
 test("media_to_data: non-media file should fail with unsupported media file type", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-media2data-"));
   const textPath = path.join(basePath, "runtime", "ops_workdir", "input.txt");

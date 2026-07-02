@@ -185,11 +185,12 @@ test("chat-websocket-server: stop emits non-terminal stopping before run settles
   }
 });
 
-test("chat-websocket-server: stop request still emits done when runSession completes normally", async () => {
+test("chat-websocket-server: stop request emits stopped even when runSession completes normally", async () => {
+  let capturedStopPayload = null;
   const server = await startServerWithWs({
     bot: {
-      persistStoppedAssistantMessage: async () => {
-        throw new Error("should not persist stopped assistant for normal completion");
+      persistStoppedAssistantMessage: async (payload = {}) => {
+        capturedStopPayload = payload;
       },
       runSession: async ({ abortSignal }) => {
         await new Promise((resolve) => {
@@ -226,10 +227,11 @@ test("chat-websocket-server: stop request still emits done when runSession compl
       },
     });
 
-    assert.equal(events.some((item) => item?.event === "stopped"), false);
-    const doneEvent = events.find((item) => item?.event === "done");
-    assert.equal(doneEvent?.data?.dialogProcessId, "dp-normal-after-stop");
-    assert.equal(doneEvent?.data?.turnScopeId, "turn-normal-after-stop");
+    assert.equal(events.some((item) => item?.event === "done"), false);
+    assert.equal(capturedStopPayload?.partialAssistant?.turnScopeId, "turn-normal-after-stop");
+    const stoppedEvent = events.find((item) => item?.event === "stopped");
+    assert.equal(stoppedEvent?.data?.dialogProcessId, "dp-normal-after-stop");
+    assert.equal(stoppedEvent?.data?.turnScopeId, "turn-normal-after-stop");
   } finally {
     await closeServer(server);
   }

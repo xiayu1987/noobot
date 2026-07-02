@@ -17,6 +17,7 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import { logError } from "../../tracking/console/logger.js";
+import { isAbortError } from "../../utils/error-utils.js";
 import { TOOL_DATA_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { decodeLibreOfficeTextBuffer, parseDocumentToTextViaLibreOffice } from "./doc2data/libreoffice.js";
@@ -154,6 +155,7 @@ export function createDoc2DataTool({ agentContext }) {
             },
           }, true);
         } catch (libreOfficeError) {
+          if (isAbortError(libreOfficeError)) throw libreOfficeError;
           effectiveParseEngine = DOC2DATA_PARSE_ENGINE.VISION;
           logError("[doc_to_data][libreoffice_fallback_to_vision]", {
             input: inputFile,
