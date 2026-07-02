@@ -72,7 +72,10 @@ export function mapToAgentContextSchema({
             : { workspaceRoot: globalConfig?.workspaceRoot || "" },
       },
       identity: {
-        userId: staticAgentContext.userId || "",
+        userId: staticAgentContext?.identity?.userId || staticAgentContext.userId || "",
+        isSuperUser:
+          staticAgentContext?.identity?.isSuperUser === true ||
+          systemRuntime?.isSuperUser === true,
       },
     },
     execution: {
