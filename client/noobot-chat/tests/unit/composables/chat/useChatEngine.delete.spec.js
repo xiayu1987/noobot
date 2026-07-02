@@ -140,6 +140,57 @@ describe("useChatEngine.delete", () => {
     expect(activeSession.value.messages).toHaveLength(1);
   });
 
+  it("deleteMonotonicMessage immediately removes stopped pending tail even when detail preserve would keep it", async () => {
+    const backendSession = makeSession("local-delete-stopped-tail", {
+      messages: [],
+      rawMessages: [],
+      messageCount: 0,
+      version: 4,
+    });
+    const deleteSessionMessagesFromApi = vi.fn(async () => ({
+      ok: true,
+      session: backendSession,
+      deletedCount: 2,
+      anchorIndex: 0,
+      version: 4,
+    }));
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      const detailTurnScopeIds = new Set((mainSession.messages || []).map((message) => message.turnScopeId).filter(Boolean));
+      const shouldPreserveStoppedTail = activeSession.value.messages.some((message) => (
+        message.role === RoleEnum.ASSISTANT &&
+        message.turnScopeId &&
+        !detailTurnScopeIds.has(message.turnScopeId) &&
+        (message.pending === true || message.channelState?.state === "stopping")
+      ));
+      if (shouldPreserveStoppedTail) return;
+      activeSession.value = { ...activeSession.value, ...mainSession };
+    });
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-delete-stopped-tail",
+      deps: { deleteSessionMessagesFromApi, applySessionDetail },
+    });
+    const first = { id: "u1", turnScopeId: "turn-stopped-tail", role: RoleEnum.USER, content: "first" };
+    const target = {
+      id: "a1",
+      turnScopeId: "turn-stopped-tail",
+      role: RoleEnum.ASSISTANT,
+      content: "target",
+      pending: true,
+      channelState: { state: "stopping", turnScopeId: "turn-stopped-tail" },
+    };
+    activeSession.value.messages = [first, target];
+    activeSession.value.rawMessages = [first, target];
+    activeSession.value.version = 3;
+
+    await expect(engine.deleteMonotonicMessage(target)).resolves.toBe(true);
+
+    expect(deleteSessionMessagesFromApi).toHaveBeenCalledTimes(1);
+    expect(applySessionDetail).toHaveBeenCalledWith(expect.any(Object), { preserveCurrentMessages: false });
+    expect(activeSession.value.messages).toEqual([]);
+    expect(activeSession.value.rawMessages).toEqual([]);
+  });
+
   it("deleteMonotonicMessage does not locally delete when backend returns failure", async () => {
     const deleteSessionMessagesFromApi = vi.fn(async () => ({ ok: false, status: 409 }));
     const { engine, activeSession } = createHarness({

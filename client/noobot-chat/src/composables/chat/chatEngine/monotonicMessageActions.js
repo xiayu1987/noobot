@@ -206,6 +206,7 @@ export function createMonotonicMessageActions({
       if (result?.ok === false || payload?.ok === false) return false;
       const sessionDetail = normalizeSessionDetailSnapshot(payload, sessionId);
       if (!sessionDetail) return false;
+      cascadeDeleteMessagesFrom(userTargetMessage);
       applySessionDetail?.(sessionDetail, { preserveCurrentMessages: false });
       clearPendingInteraction?.();
       return true;
