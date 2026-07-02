@@ -14,6 +14,7 @@ import { recoverableToolError } from "../../../error/index.js";
 import { ERROR_CODE } from "../../../error/constants.js";
 import { logError } from "../../../tracking/console/logger.js";
 import { tTool } from "../../core/tool-i18n.js";
+import { isAbortError } from "../../../utils/error-utils.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
@@ -597,6 +598,7 @@ export async function parseDocumentToTextViaLibreOffice({
       outputFormat: outputFormat.format,
     };
   } catch (error) {
+    if (isAbortError(error)) throw error;
     logError("[doc_to_data][libreoffice_parse_failed]", {
       input: inputFile,
       cause: error?.message || String(error || ""),
