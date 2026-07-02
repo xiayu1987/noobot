@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createJsonRouteWrapper } from "./route-wrapper.js";
+import { isSuperAdminRole } from "#agent/utils";
 
 export function registerIdeRoutes(
   app,
@@ -20,15 +21,15 @@ export function registerIdeRoutes(
     jsonRoute(async (req, res) => {
       const userId = String(req.params?.userId || req.auth?.userId || "").trim();
       const authUserId = String(req.auth?.userId || "").trim();
-      const authRole = String(req.auth?.role || "").trim();
+      const isSuperAdmin = isSuperAdminRole(req.auth?.role);
       if (
-        authRole !== "super_admin" &&
+        !isSuperAdmin &&
         authUserId !== userId
       ) {
         res.status(403).json({ ok: false, error: "forbidden user scope" });
         return;
       }
-      if (authRole !== "super_admin") {
+      if (!isSuperAdmin) {
         const users = typeof readWorkspaceUsers === "function" ? await readWorkspaceUsers() : [];
         const matchedUser = (Array.isArray(users) ? users : []).find(
           (item) => String(item?.userId || "").trim() === userId,

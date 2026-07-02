@@ -24,6 +24,7 @@ import {
 import { ERROR_CODE } from "../../../error/constants.js";
 import { MIME_TYPE } from "../../../constants/index.js";
 import { mapAttachmentRecordsToMetas } from "../../../attach/meta-ops.js";
+import { isSuperUserRuntime } from "../../../utils/super-user.js";
 import {
   ARTIFACT_GENERATION_SOURCE,
   TOOL_ATTACHMENT_SOURCE,
@@ -170,13 +171,14 @@ async function resolveCommandFromFile({
     runtime,
     connectorType,
   });
+  const isSuperUser = isSuperUserRuntime(runtime);
   if (!policy.enabled) {
     throw recoverableToolError("command_file_path is disabled by config", {
       code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
       details: { field: "command_file_path", reason: "disabled" },
     });
   }
-  if (!policy.allowedRoots.length) {
+  if (!isSuperUser && !policy.allowedRoots.length) {
     throw recoverableToolError("command_file_path allowed roots not configured", {
       code: ERROR_CODE.RECOVERABLE_RUNTIME_BASEPATH_MISSING,
       details: { field: "command_file_path" },
@@ -185,12 +187,12 @@ async function resolveCommandFromFile({
 
   const resolvedInputPath = path.isAbsolute(normalizedFilePath)
     ? path.resolve(normalizedFilePath)
-    : path.resolve(policy.allowedRoots[0], normalizedFilePath);
+    : path.resolve(policy.allowedRoots[0] || resolveWorkspaceBasePath(runtime) || process.cwd(), normalizedFilePath);
 
   const inAllowedRoots = policy.allowedRoots.some((rootPath) =>
     isPathUnderRoot(rootPath, resolvedInputPath),
   );
-  if (!inAllowedRoots) {
+  if (!isSuperUser && !inAllowedRoots) {
     throw recoverableToolError("command_file_path out of allowed roots", {
       code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
       details: {
@@ -217,7 +219,7 @@ async function resolveCommandFromFile({
   const realInAllowedRoots = policy.allowedRoots.some((rootPath) =>
     isPathUnderRoot(rootPath, resolvedRealPath),
   );
-  if (!realInAllowedRoots) {
+  if (!isSuperUser && !realInAllowedRoots) {
     throw recoverableToolError("command_file_path out of allowed roots", {
       code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
       details: {

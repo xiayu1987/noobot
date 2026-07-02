@@ -354,6 +354,51 @@ test("connector-toolkit/access_connector: command_file_path 越界应拒绝", as
   }
 });
 
+test("connector-toolkit/access_connector: 超级管理员 command_file_path 可读取 allowed_roots 外文件", async () => {
+  const allowedRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-access-allowed-"));
+  const outsideRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-access-outside-"));
+  try {
+    const outsideSqlPath = path.join(outsideRoot, "safe.sql");
+    await writeFile(outsideSqlPath, "select 2 where 2=2;", "utf8");
+    let executed = null;
+    const runtime = buildAccessConnectorRuntime({
+      basePath: allowedRoot,
+      connectorType: "database",
+      connectorName: "db-main",
+      onExecute: (payload) => {
+        executed = payload;
+      },
+      globalConfig: {
+        superAdmin: { userId: "admin" },
+        tools: {
+          access_connector: {
+            enabled: true,
+            command_file: {
+              enabled: true,
+              allowed_roots: [allowedRoot],
+            },
+          },
+        },
+      },
+    });
+    runtime.userId = "admin";
+    runtime.systemRuntime.userId = "admin";
+    const tools = createConnectorTools({ agentContext: { runtime } });
+    const accessTool = tools.find((tool) => tool?.name === "access_connector");
+    assert.ok(accessTool, "access_connector 工具应存在");
+
+    const result = parseToolJson(await accessTool.invoke({
+      connector_type: "database",
+      command_file_path: outsideSqlPath,
+    }));
+    assert.equal(result.ok, true);
+    assert.equal(String(executed?.command || ""), "select 2 where 2=2;");
+  } finally {
+    await rm(allowedRoot, { recursive: true, force: true });
+    await rm(outsideRoot, { recursive: true, force: true });
+  }
+});
+
 test("connector-toolkit/access_connector: command_file_path 后缀不在白名单应拒绝", async () => {
   const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-access-file-"));
   try {

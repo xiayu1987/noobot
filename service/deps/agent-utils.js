@@ -6,3 +6,8 @@
 
 export { resolveForceToolCall } from "noobot-agent/utils/shared-utils";
 export { safeJoin } from "noobot-agent/utils/fs-safe";
+export {
+  isSuperAdminRole,
+  resolveConfiguredSuperUserId,
+  SUPER_ADMIN_ROLE,
+} from "noobot-agent/utils/super-user";

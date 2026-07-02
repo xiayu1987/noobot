@@ -11,7 +11,8 @@ import { ERROR_CODE } from "../error/constants.js";
 export function safeJoin(base, target) {
   const resolvedBase = path.resolve(base);
   const resolvedTarget = path.resolve(base, target);
-  if (!resolvedTarget.startsWith(resolvedBase)) {
+  const relative = path.relative(resolvedBase, resolvedTarget);
+  if (relative && (relative.startsWith("..") || path.isAbsolute(relative))) {
     throw recoverableToolError(`${tSystem("common.pathOutOfScope")}: ${target}`, {
       code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
       details: { base: resolvedBase, target },

@@ -6,6 +6,7 @@
 import { resolveBuiltinScenarios } from "#agent/config";
 import { getProviders, resolveDefaultModelSpec } from "#agent/model";
 import { logError } from "#agent/tracking";
+import { isSuperAdminRole, resolveConfiguredSuperUserId } from "#agent/utils";
 import { withJsonError } from "./route-wrapper.js";
 
 function isPlainObject(value) {
@@ -104,7 +105,7 @@ function buildClientDefaultModel(globalConfig = {}, userConfig = {}, enabledMode
 
 function buildClientPermissions(role = "user", { canUseIDE = false } = {}) {
   const normalizedRole = String(role || "user").trim() || "user";
-  const isSuperAdmin = normalizedRole === "super_admin";
+  const isSuperAdmin = isSuperAdminRole(normalizedRole);
   return {
     role: normalizedRole,
     canChat: true,
@@ -160,7 +161,7 @@ export function registerAuthRoutes(
         }
       };
       const superAdmin = globalConfig?.superAdmin || {};
-      const superAdminUserId = String(superAdmin?.userId || "").trim();
+      const superAdminUserId = resolveConfiguredSuperUserId(globalConfig);
       const superAdminCode = String(superAdmin?.connectCode || "").trim();
       if (
         superAdminUserId &&
