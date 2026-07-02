@@ -8,13 +8,28 @@ import {
   fsAccess,
   fsMkdir,
   fsReadFile,
+  fsRm,
   fsRename,
   fsWriteFile,
 } from "../store/fs-adapter.js";
 
+const ATOMIC_RENAME_RETRY_CODES = new Set(["EPERM", "EACCES", "EBUSY"]);
+const ATOMIC_RENAME_RETRY_DELAYS_MS = [25, 75, 150, 300, 600];
+
+function sleep(ms = 0) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableAtomicRenameError(error) {
+  return ATOMIC_RENAME_RETRY_CODES.has(String(error?.code || ""));
+}
+
 export class StorageService {
-  constructor({ pathResolver } = {}) {
+  constructor({ pathResolver, atomicRenameRetryDelaysMs = ATOMIC_RENAME_RETRY_DELAYS_MS } = {}) {
     this.pathResolver = pathResolver;
+    this.atomicRenameRetryDelaysMs = Array.isArray(atomicRenameRetryDelaysMs)
+      ? atomicRenameRetryDelaysMs
+      : ATOMIC_RENAME_RETRY_DELAYS_MS;
   }
 
   async exists(filePath = "") {
@@ -54,7 +69,29 @@ export class StorageService {
 
   async writeJsonAtomic(filePath, data) {
     const tempFile = `${filePath}.tmp-${process.pid}-${Date.now()}-${randomUUID()}`;
-    await fsWriteFile(tempFile, JSON.stringify(data, null, 2), "utf8");
-    await fsRename(tempFile, filePath);
+    try {
+      await fsWriteFile(tempFile, JSON.stringify(data, null, 2), "utf8");
+      for (let attempt = 0; attempt <= this.atomicRenameRetryDelaysMs.length; attempt += 1) {
+        try {
+          await fsRename(tempFile, filePath);
+          return;
+        } catch (error) {
+          if (
+            attempt >= this.atomicRenameRetryDelaysMs.length ||
+            !isRetryableAtomicRenameError(error)
+          ) {
+            throw error;
+          }
+          await sleep(this.atomicRenameRetryDelaysMs[attempt]);
+        }
+      }
+    } catch (error) {
+      try {
+        await fsRm(tempFile, { force: true });
+      } catch {
+        // Best-effort cleanup; preserve the original write/rename error.
+      }
+      throw error;
+    }
   }
 }
