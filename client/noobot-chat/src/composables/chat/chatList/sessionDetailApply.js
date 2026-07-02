@@ -162,6 +162,7 @@ export function createSessionDetailApplicator({
       revokeMessagePreviewUrls(sessionItem.messages || []);
     }
     const shouldKeepCurrentMessagesForEmptyDetail =
+      shouldPreserveMissingInFlight &&
       !preserveCurrentMessages &&
       currentRenderedMessages.length > 0 &&
       detailMessages.length === 0 &&

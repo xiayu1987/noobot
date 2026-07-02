@@ -4,9 +4,34 @@ import {
   createHarness,
 } from "./helpers/useChatEngineHarness";
 import { createSessionDetailApplicator } from "../../../../src/composables/chat/chatList/sessionDetailApply";
+import { SESSION_DETAIL_APPLY_MODE } from "../../../../src/composables/chat/chatEngine/messageStateGuards";
 import {
   RoleEnum,
 } from "../../../../src/shared/constants/chatConstants";
+
+function createApplySessionDetailHarness({ sessionId = "s-apply-mode", messages = [] } = {}) {
+  const activeSession = {
+    id: sessionId,
+    sessionId,
+    backendSessionId: sessionId,
+    title: "current",
+    messages,
+    rawMessages: [],
+  };
+  const activeSessionId = ref(sessionId);
+  const sessions = ref([activeSession]);
+  const { applySessionDetail } = createSessionDetailApplicator({
+    sessions,
+    activeSessionId,
+    makeViewMessage: (message) => ({ ...message }),
+    foldMessagesForView: (sourceMessages) => sourceMessages.map((message) => ({ ...message })),
+    sessionTitleFromMessages: () => "title",
+    applyCompletedToolLogsToMessages: vi.fn(),
+    scrollBottom: vi.fn(),
+    isSameSessionIdentity: (a, b) => String(a) === String(b),
+  });
+  return { activeSession, applySessionDetail };
+}
 
 describe("useChatEngine.session-detail", () => {
   it("applySessionDetail preserves a fresh in-flight turn even when caller requests replacement", () => {
@@ -248,6 +273,73 @@ describe("useChatEngine.session-detail", () => {
       dialogProcessId: "dp-completed",
       pending: false,
       completed: true,
+    }));
+  });
+
+  it.each([
+    SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
+    SESSION_DETAIL_APPLY_MODE.FINALIZE_RUN,
+    SESSION_DETAIL_APPLY_MODE.REPLACE,
+  ])("applySessionDetail %s mode applies authoritative empty snapshot over missing in-flight assistant", (mode) => {
+    const turnScopeId = `client-turn:${mode}`;
+    const { activeSession, applySessionDetail } = createApplySessionDetailHarness({
+      sessionId: `s-apply-${mode}`,
+      messages: [
+        { role: RoleEnum.USER, content: "question", turnScopeId },
+        {
+          role: RoleEnum.ASSISTANT,
+          content: "",
+          turnScopeId,
+          dialogProcessId: `dp-${mode}`,
+          pending: true,
+          channelState: { state: "stopping", turnScopeId },
+        },
+      ],
+    });
+
+    applySessionDetail({
+      sessionId: `s-apply-${mode}`,
+      sessions: [{
+        sessionId: `s-apply-${mode}`,
+        messages: [],
+      }],
+    }, { mode, preserveCurrentMessages: false });
+
+    expect(activeSession.messages).toEqual([]);
+    expect(activeSession.messageCount).toBe(0);
+    expect(activeSession.lastMessage).toBe(null);
+  });
+
+  it("applySessionDetail merge-preserve-inflight mode keeps missing in-flight assistant during background refresh", () => {
+    const turnScopeId = "client-turn:background-preserve";
+    const { activeSession, applySessionDetail } = createApplySessionDetailHarness({
+      sessionId: "s-apply-background-preserve",
+      messages: [
+        { role: RoleEnum.USER, content: "question", turnScopeId },
+        {
+          role: RoleEnum.ASSISTANT,
+          content: "streaming",
+          turnScopeId,
+          dialogProcessId: "dp-background-preserve",
+          pending: true,
+          channelState: { state: "sending", turnScopeId },
+        },
+      ],
+    });
+
+    applySessionDetail({
+      sessionId: "s-apply-background-preserve",
+      sessions: [{
+        sessionId: "s-apply-background-preserve",
+        messages: [],
+      }],
+    }, { mode: SESSION_DETAIL_APPLY_MODE.MERGE_PRESERVE_IN_FLIGHT });
+
+    expect(activeSession.messages).toHaveLength(2);
+    expect(activeSession.messages[1]).toEqual(expect.objectContaining({
+      role: RoleEnum.ASSISTANT,
+      turnScopeId,
+      pending: true,
     }));
   });
 });

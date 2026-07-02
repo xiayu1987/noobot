@@ -215,6 +215,78 @@ describe("useChatEngine.delete", () => {
     expect(activeSession.value.messages).toEqual([first, target]);
   });
 
+  it("deleteMonotonicMessage deletes stopped turn when sending state is still stop-requested", async () => {
+    const backendSession = makeSession("local-delete-stopped-sending", {
+      messages: [],
+      rawMessages: [],
+      messageCount: 0,
+      version: 8,
+    });
+    const deleteSessionMessagesFromApi = vi.fn(async () => ({
+      ok: true,
+      session: backendSession,
+      deletedCount: 2,
+      anchorIndex: 0,
+      version: 8,
+    }));
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value = { ...activeSession.value, ...mainSession };
+    });
+    const { engine, activeSession, sending, canStop, runStateSnapshot, deps } = createHarness({
+      sessionId: "local-delete-stopped-sending",
+      deps: { deleteSessionMessagesFromApi, applySessionDetail },
+    });
+    const first = {
+      id: "u1",
+      turnScopeId: "turn-stopped-sending",
+      dialogProcessId: "dp-stopped-sending",
+      role: RoleEnum.USER,
+      content: "first",
+      stopState: "stopped",
+      monotonicState: "monotonic",
+      isMonotonic: true,
+      monotonic: true,
+    };
+    const target = {
+      id: "a1",
+      turnScopeId: "turn-stopped-sending",
+      dialogProcessId: "dp-stopped-sending",
+      role: RoleEnum.ASSISTANT,
+      content: "partial",
+      pending: true,
+      channelState: { state: "stopping", turnScopeId: "turn-stopped-sending" },
+    };
+    activeSession.value.messages = [first, target];
+    activeSession.value.rawMessages = [{ ...first }, { ...target }];
+    activeSession.value.version = 7;
+    sending.value = true;
+    canStop.value = false;
+    runStateSnapshot.value = {
+      state: SESSION_RUN_STATE.STOP_REQUESTED,
+      sessionId: "local-delete-stopped-sending",
+      turnScopeId: "turn-stopped-sending",
+      dialogProcessId: "dp-stopped-sending",
+    };
+
+    await expect(engine.deleteMonotonicMessage(target, { timeoutMs: 20, pollIntervalMs: 5 })).resolves.toBe(true);
+
+    expect(deps.chatWebSocketClient.requestStop).not.toHaveBeenCalled();
+    expect(sending.value).toBe(false);
+    expect(canStop.value).toBe(false);
+    expect(runStateSnapshot.value).toEqual(expect.objectContaining({
+      state: SESSION_RUN_STATE.STOPPED,
+      turnScopeId: "turn-stopped-sending",
+      dialogProcessId: "dp-stopped-sending",
+    }));
+    expect(deleteSessionMessagesFromApi).toHaveBeenCalledWith(expect.objectContaining({
+      anchor: { turnScopeId: "turn-stopped-sending" },
+      expectedVersion: 7,
+    }), expect.any(Object));
+    expect(activeSession.value.messages).toEqual([]);
+    expect(activeSession.value.rawMessages).toEqual([]);
+  });
+
   it("resendMonotonicMessage does not send when backend delete fails", async () => {
     const stream = vi.fn(async () => {});
     const deleteSessionMessagesFromApi = vi.fn(async () => ({ ok: false, status: 404 }));

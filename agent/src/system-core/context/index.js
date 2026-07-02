@@ -40,7 +40,11 @@ import { normalizeContextWindow } from "../session/utils/context-window-normaliz
 import { emitModelContextTrace, summarizeDiagnosticMessages } from "../agent/core/message-context/context-diagnostics.js";
 
 function resolveConfiguredSuperUserId(globalConfig = {}) {
-  return String(globalConfig?.super_admin?.user_id || "").trim();
+  return String(
+    globalConfig?.superAdmin?.userId ||
+      globalConfig?.super_admin?.user_id ||
+      "",
+  ).trim();
 }
 
 function resolveRuntimeSuperUserFlag({ globalConfig = {}, userId = "" } = {}) {
