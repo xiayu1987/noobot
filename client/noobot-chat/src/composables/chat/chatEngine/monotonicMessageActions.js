@@ -15,7 +15,10 @@ import {
 } from "../../infra/messageIdentity";
 import { nowMs } from "../../infra/timeFields";
 import { isInFlightSessionRunState } from "../sessionRunStateMachine";
-import { MESSAGE_IN_FLIGHT_CHANNEL_STATES } from "../sessionRunStateMachine/constants";
+import {
+  SESSION_DETAIL_APPLY_MODE,
+  hasMatchingInFlightAssistantMessage,
+} from "./messageStateGuards";
 
 const delay = (ms) => new Promise((resolve) => {
   setTimeout(resolve, ms);
@@ -25,24 +28,12 @@ function isUserMessage(message = {}) {
   return getMessageRole(message).toLowerCase() === "user";
 }
 
-function isInFlightAssistantMessage(messageItem = {}) {
-  if (getMessageRole(messageItem) !== "assistant") return false;
-  if (!getMessageTurnScopeId(messageItem)) return false;
-  if (messageItem?.pending === true) return true;
-  const channelState = normalizeTrimmedString(messageItem?.channelState?.state);
-  return MESSAGE_IN_FLIGHT_CHANNEL_STATES.includes(channelState);
-}
-
 function hasMatchingInFlightAssistant({ activeSession, runStateSnapshot } = {}) {
   const messages = Array.isArray(activeSession?.value?.messages)
     ? activeSession.value.messages
     : [];
   const runTurnScopeId = normalizeTrimmedString(runStateSnapshot?.value?.turnScopeId);
-  if (!runTurnScopeId) return messages.some((messageItem) => isInFlightAssistantMessage(messageItem));
-  return messages.some((messageItem) => (
-    isInFlightAssistantMessage(messageItem) &&
-    getMessageTurnScopeId(messageItem) === runTurnScopeId
-  ));
+  return hasMatchingInFlightAssistantMessage(messages, { turnScopeId: runTurnScopeId });
 }
 
 function normalizeSessionDetailSnapshot(payload = {}, fallbackSessionId = "") {
@@ -207,7 +198,10 @@ export function createMonotonicMessageActions({
       const sessionDetail = normalizeSessionDetailSnapshot(payload, sessionId);
       if (!sessionDetail) return false;
       cascadeDeleteMessagesFrom(userTargetMessage);
-      applySessionDetail?.(sessionDetail, { preserveCurrentMessages: false });
+      applySessionDetail?.(sessionDetail, {
+        mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
+        preserveCurrentMessages: false,
+      });
       clearPendingInteraction?.();
       return true;
     }
