@@ -30,6 +30,11 @@ import {
   summarizeDebugMessages,
 } from "../debug/resendDebugLogger";
 import { applyLatestSessionVersion } from "../chatEngine/sessionVersionManager";
+import {
+  SESSION_DETAIL_APPLY_MODE,
+  hasInFlightAssistantMissingFromDetail,
+  normalizeSessionDetailApplyMode,
+} from "../chatEngine/messageStateGuards";
 
 export function createSessionDetailApplicator({
   sessions,
@@ -76,10 +81,19 @@ export function createSessionDetailApplicator({
   function applySessionDetail(detail, options = {}) {
     const sessionItem = findSessionByAnyIdInList(sessions.value, detail.sessionId);
     if (!sessionItem) return;
-    const requestedPreserveCurrentMessages = Boolean(options.preserveCurrentMessages);
+    const applyMode = normalizeSessionDetailApplyMode(options.mode);
+    const requestedPreserveCurrentMessages =
+      applyMode === SESSION_DETAIL_APPLY_MODE.MERGE_PRESERVE_IN_FLIGHT ||
+      Boolean(options.preserveCurrentMessages);
+    const shouldPreserveMissingInFlight = ![
+      SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
+      SESSION_DETAIL_APPLY_MODE.FINALIZE_RUN,
+      SESSION_DETAIL_APPLY_MODE.REPLACE,
+    ].includes(applyMode);
     logResendDebug("detail.apply.begin", {
       sessionId: detail.sessionId,
       requestedPreserveCurrentMessages,
+      applyMode,
       currentMessages: summarizeDebugMessages(sessionItem.messages),
     });
     const openThinkingDialogProcessIds = new Set(
@@ -126,23 +140,18 @@ export function createSessionDetailApplicator({
     const detailTurnScopeIds = new Set(
       detailMessages.map((messageItem) => getMessageTurnScopeId(messageItem)).filter(Boolean),
     );
-    const hasCurrentInFlightTurnMissingFromDetail = currentRenderedMessages.some((messageItem) => {
-      if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) return false;
-      const turnScopeId = getMessageTurnScopeId(messageItem);
-      if (!turnScopeId || detailTurnScopeIds.has(turnScopeId)) return false;
-      const channelState = String(messageItem?.channelState?.state || "").trim();
-      return messageItem?.pending === true || [
-        "sending",
-        "reconnecting",
-        "interaction_pending",
-        "stopping",
-      ].includes(channelState);
-    });
+    const hasCurrentInFlightTurnMissingFromDetail = shouldPreserveMissingInFlight &&
+      hasInFlightAssistantMissingFromDetail({
+        currentMessages: currentRenderedMessages,
+        detailMessages,
+      });
     const preserveCurrentMessages =
       requestedPreserveCurrentMessages || hasCurrentInFlightTurnMissingFromDetail;
     logResendDebug("detail.apply.mode", {
       sessionId: detail.sessionId,
       requestedPreserveCurrentMessages,
+      applyMode,
+      shouldPreserveMissingInFlight,
       hasCurrentInFlightTurnMissingFromDetail,
       preserveCurrentMessages,
       detailMessageCount: detailMessages.length,

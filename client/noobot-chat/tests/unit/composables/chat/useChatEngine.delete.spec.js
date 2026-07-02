@@ -4,6 +4,7 @@ import {
   makeSession,
 } from "./helpers/useChatEngineHarness";
 import { SESSION_RUN_STATE } from "../../../../src/composables/chat/sessionRunStateMachine";
+import { SESSION_DETAIL_APPLY_MODE } from "../../../../src/composables/chat/chatEngine/messageStateGuards";
 import {
   RoleEnum,
 } from "../../../../src/shared/constants/chatConstants";
@@ -136,7 +137,10 @@ describe("useChatEngine.delete", () => {
         sessionId: "local-delete-api",
         messages: backendSession.messages,
       })],
-    }), { preserveCurrentMessages: false });
+    }), {
+      mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
+      preserveCurrentMessages: false,
+    });
     expect(activeSession.value.messages).toHaveLength(1);
   });
 
@@ -186,7 +190,10 @@ describe("useChatEngine.delete", () => {
     await expect(engine.deleteMonotonicMessage(target)).resolves.toBe(true);
 
     expect(deleteSessionMessagesFromApi).toHaveBeenCalledTimes(1);
-    expect(applySessionDetail).toHaveBeenCalledWith(expect.any(Object), { preserveCurrentMessages: false });
+    expect(applySessionDetail).toHaveBeenCalledWith(expect.any(Object), {
+      mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
+      preserveCurrentMessages: false,
+    });
     expect(activeSession.value.messages).toEqual([]);
     expect(activeSession.value.rawMessages).toEqual([]);
   });
