@@ -25,6 +25,7 @@ import { createJsonRouteWrapper } from "./route-wrapper.js";
  * @property {(ctx: {req: import("express").Request, root: string, tree: any}) => object} [responseBuilders.tree] - Build response for /tree
  * @property {(ctx: {req: import("express").Request, path: string, isText: boolean, size: number, content: string}) => object} [responseBuilders.file] - Build response for /file GET
  * @property {(ctx: {req: import("express").Request, path: string}) => object} [responseBuilders.save] - Build response for /file PUT
+ * @property {boolean | ((req?: import("express").Request) => boolean)} [allowAbsolutePath] - Allow absolute file paths instead of constraining to root.
  */
 
 const DEFAULT_I18N_KEYS = {
@@ -54,6 +55,7 @@ export function registerFileCrudRoutes(
     translateText,
     i18nKeys = {},
     responseBuilders = {},
+    allowAbsolutePath = false,
   } = {},
 ) {
   const keys = { ...DEFAULT_I18N_KEYS, ...i18nKeys };
@@ -100,6 +102,19 @@ export function registerFileCrudRoutes(
     } catch {}
   };
 
+  const isAbsolutePathAllowed = (req) =>
+    typeof allowAbsolutePath === "function"
+      ? allowAbsolutePath(req) === true
+      : allowAbsolutePath === true;
+
+  const resolveRequestFilePath = (req, root, requestedPath = "") => {
+    const normalizedPath = String(requestedPath || "");
+    if (isAbsolutePathAllowed(req) && path.isAbsolute(normalizedPath)) {
+      return path.resolve(normalizedPath);
+    }
+    return safeJoin(root, normalizedPath);
+  };
+
   // GET tree
   app.get(
     `${routePrefix}/tree`,
@@ -128,7 +143,7 @@ export function registerFileCrudRoutes(
       });
       if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
       const root = await resolveRootPath(req);
-      const absolutePath = safeJoin(root, relativePath);
+      const absolutePath = resolveRequestFilePath(req, root, relativePath);
       try {
         await access(absolutePath);
       } catch (error) {
@@ -172,7 +187,7 @@ export function registerFileCrudRoutes(
       const content = String(req.body?.content || "");
       if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
       const root = await resolveRootPath(req);
-      const absolutePath = safeJoin(root, relativePath);
+      const absolutePath = resolveRequestFilePath(req, root, relativePath);
       await mkdir(path.dirname(absolutePath), { recursive: true });
       await writeFile(absolutePath, content, "utf8");
       res.json(buildSaveResponse({ req, path: relativePath }));
@@ -195,7 +210,7 @@ export function registerFileCrudRoutes(
         });
         if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
         const root = await resolveRootPath(req);
-        const absolutePath = safeJoin(root, relativePath);
+        const absolutePath = resolveRequestFilePath(req, root, relativePath);
         try {
           await access(absolutePath);
         } catch (error) {

@@ -38,14 +38,7 @@ import { tSystem } from "noobot-i18n/agent/system-text";
 import { normalizeParentSessionId } from "./parent-session-id-resolver.js";
 import { normalizeContextWindow } from "../session/utils/context-window-normalizer.js";
 import { emitModelContextTrace, summarizeDiagnosticMessages } from "../agent/core/message-context/context-diagnostics.js";
-
-function resolveConfiguredSuperUserId(globalConfig = {}) {
-  return String(
-    globalConfig?.superAdmin?.userId ||
-      globalConfig?.super_admin?.user_id ||
-      "",
-  ).trim();
-}
+import { resolveConfiguredSuperUserId } from "../utils/super-user.js";
 
 function resolveRuntimeSuperUserFlag({ globalConfig = {}, userId = "" } = {}) {
   const configuredSuperUserId = resolveConfiguredSuperUserId(globalConfig);

@@ -9,7 +9,6 @@ import {
   getBasePathFromAgentContext,
   getRuntimeFromAgentContext,
   getSessionIdsFromAgentContext,
-  getSystemRuntimeFromAgentContext,
 } from "../../context/agent-context-accessor.js";
 import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
 import { recoverableToolError } from "../../error/index.js";
@@ -19,6 +18,7 @@ import {
   resolveHostPath,
   resolveSandboxPathMappings,
 } from "../../utils/sandbox-path-resolver.js";
+import { isSuperUserAgentContext } from "../../utils/super-user.js";
 
 function tCheckInput(agentContext = {}, key = "") {
   const keyMap = {
@@ -67,32 +67,6 @@ function resolveWorkspaceRoot(agentContext = {}) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const workspaceRoot = String(runtime?.globalConfig?.workspaceRoot || "").trim();
   return workspaceRoot ? path.resolve(workspaceRoot) : "";
-}
-
-function isSuperUserAgentContext(agentContext = {}) {
-  const runtime = getRuntimeFromAgentContext(agentContext);
-  const systemRuntime = getSystemRuntimeFromAgentContext(agentContext, runtime);
-  if (systemRuntime?.isSuperUser === true) return true;
-  const role = String(
-    agentContext?.environment?.identity?.role ||
-      agentContext?.auth?.role ||
-      runtime?.role ||
-      systemRuntime?.role ||
-      "",
-  ).trim();
-  if (role === "super_admin") return true;
-  const configuredSuperUserId = String(
-    runtime?.globalConfig?.superAdmin?.userId ||
-      runtime?.globalConfig?.super_admin?.user_id ||
-      "",
-  ).trim();
-  const currentUserId = String(
-    agentContext?.environment?.identity?.userId ||
-      runtime?.userId ||
-      systemRuntime?.userId ||
-      "",
-  ).trim();
-  return Boolean(configuredSuperUserId && currentUserId === configuredSuperUserId);
 }
 
 function resolveExecuteScriptConfig(runtime = {}) {

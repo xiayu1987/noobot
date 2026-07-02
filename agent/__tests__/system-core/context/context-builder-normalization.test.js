@@ -138,11 +138,12 @@ test("buildInitialContext prefers inputAttachments over legacy attachments", asy
 });
 
 test("buildInitialContext marks normalized superAdmin user as super user", async () => {
+  const configuredSuperUserId = "xiayu-owner";
   const builder = new ContextBuilder({
     config: {
       globalConfig: {
         workspaceRoot: "/tmp/noobot-test-workspace",
-        superAdmin: { userId: "admin" },
+        superAdmin: { userId: configuredSuperUserId },
       },
       userConfig: {},
     },
@@ -156,7 +157,7 @@ test("buildInitialContext marks normalized superAdmin user as super user", async
       userInteractionBridge: null,
     },
     sessionContext: {
-      userId: "admin",
+      userId: configuredSuperUserId,
       sessionId: "s1",
       caller: "user",
       parentSessionId: "",

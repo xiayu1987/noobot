@@ -5,6 +5,7 @@
  */
 import { logError } from "#agent/tracking";
 import { normalizeTimeMs } from "#agent/config";
+import { isSuperAdminRole, SUPER_ADMIN_ROLE } from "#agent/utils";
 import { randomBytes } from "node:crypto";
 import { HTTP_STATUS } from "#agent/constants";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
@@ -32,7 +33,7 @@ export function createAuthService({
     const apiKey = randomBytes(24).toString("hex");
     apiKeyStore.set(apiKey, {
       userId: String(userId || "").trim(),
-      role: role === "super_admin" ? "super_admin" : "user",
+      role: isSuperAdminRole(role) ? SUPER_ADMIN_ROLE : "user",
       issuedAt: Date.now(),
     });
     return apiKey;
@@ -71,7 +72,7 @@ export function createAuthService({
   function isForbiddenUserScope(authInfo, requestUserId = "") {
     const normalizedRequestUserId = String(requestUserId || "").trim();
     if (!normalizedRequestUserId) return false;
-    if (authInfo?.role === "super_admin") return false;
+    if (isSuperAdminRole(authInfo?.role)) return false;
     return String(authInfo?.userId || "") !== normalizedRequestUserId;
   }
 
@@ -100,7 +101,7 @@ export function createAuthService({
 
   function requireSuperAdmin(req, res, next) {
     const authInfo = req.auth || null;
-    if (String(authInfo?.role || "") !== "super_admin") {
+    if (!isSuperAdminRole(authInfo?.role)) {
       res.status(HTTP_STATUS.FORBIDDEN).json({
         ok: false,
         error: translateText("auth.superAdminRequired", req.locale),

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { logError } from "#agent/tracking";
+import { isSuperAdminRole, resolveConfiguredSuperUserId } from "#agent/utils";
 import path from "node:path";
 import { access, mkdir, readdir, readFile, stat } from "node:fs/promises";
 import { registerFileCrudRoutes } from "./file-crud-routes.js";
@@ -40,7 +41,7 @@ async function listWorkspaceUserDirs(root = "", globalConfig = {}) {
       // A user workspace must have config.json. Skip stray directories.
     }
   }
-  const superAdminUserId = String(globalConfig?.superAdmin?.userId || "").trim();
+  const superAdminUserId = resolveConfiguredSuperUserId(globalConfig);
   if (superAdminUserId && !userDirs.includes(superAdminUserId)) {
     userDirs.push(superAdminUserId);
   }
@@ -302,5 +303,6 @@ export function registerWorkspaceRoutes(
     buildWorkspaceTree,
     buildDirectoryArchiveFile,
     translateText,
+    allowAbsolutePath: (req) => isSuperAdminRole(req?.auth?.role),
   });
 }

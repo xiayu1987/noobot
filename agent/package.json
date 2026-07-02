@@ -18,6 +18,7 @@
     "./connectors": "./src/system-core/connectors/index.js",
     "./constants": "./src/system-core/constants/index.js",
     "./utils/fs-safe": "./src/system-core/utils/fs-safe.js",
+    "./utils/super-user": "./src/system-core/utils/super-user.js",
     "./utils/shared-utils": "./src/system-core/utils/shared-utils.js",
     "./utils/session-crypto": "./src/system-core/utils/session-crypto.js",
     "./store": "./src/system-core/store/index.js",
