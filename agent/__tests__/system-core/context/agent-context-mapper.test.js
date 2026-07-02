@@ -15,6 +15,7 @@ test("mapToAgentContextSchema maps runtime/session/payload fields correctly", ()
       nodeVersion: "v20.0.0",
       timezone: "Asia/Shanghai",
       globalDefaults: { workspaceRoot: "/workspace" },
+      identity: { userId: "u1", isSuperUser: true },
     },
     runtime: {
       runtimeModel: "openai",
@@ -44,6 +45,7 @@ test("mapToAgentContextSchema maps runtime/session/payload fields correctly", ()
   });
 
   assert.equal(context.environment.identity.userId, "u1");
+  assert.equal(context.environment.identity.isSuperUser, true);
   assert.equal(context.execution.flags.allowUserInteraction, false);
   assert.equal(context.execution.flags.maxToolLoopTurns, 6);
   assert.equal(context.execution.models.runtimeModel, "openai");
@@ -97,4 +99,5 @@ test("mapToAgentContextSchema keeps empty os/workspace fields when static contex
   assert.equal(context.environment.os.timezone, "");
   assert.equal(context.environment.os.nodeVersion, "");
   assert.equal(context.environment.workspace.cwd, "");
+  assert.equal(context.environment.identity.isSuperUser, false);
 });

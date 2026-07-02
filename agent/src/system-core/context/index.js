@@ -436,15 +436,25 @@ export class ContextBuilder {
           connectorHistoryStore: getConnectorHistoryStore(),
         })
       : {};
+    const identityInfo = {
+      userId: String(this.userId || "").trim(),
+      isSuperUser: resolveRuntimeSuperUserFlag({
+        globalConfig: this.globalConfig,
+        userId: this.userId,
+      }),
+    };
 
     const staticInfo = includeSystemRuntime
-      ? buildSandboxViewStaticInfo({
-          runtimeBasePath,
-          userId: this.userId,
-          globalConfig: this.globalConfig,
-          effectiveConfig,
-        })
-      : {};
+      ? {
+          ...buildSandboxViewStaticInfo({
+            runtimeBasePath,
+            userId: this.userId,
+            globalConfig: this.globalConfig,
+            effectiveConfig,
+          }),
+          identity: identityInfo,
+        }
+      : { identity: identityInfo };
     const dynamicInfo = includeSystemRuntime
       ? this._buildSystemRuntime({
           dialogProcessId,

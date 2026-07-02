@@ -177,6 +177,53 @@ test("buildInitialContext marks normalized superAdmin user as super user", async
     context?.execution?.controllers?.runtime?.systemRuntime?.isSuperUser,
     true,
   );
+  assert.equal(context?.environment?.identity?.isSuperUser, true);
+  assert.equal(
+    context.payload.messages.system.join("\n").includes("\"isSuperUser\": true"),
+    true,
+  );
+});
+
+test("buildInitialContext keeps super user identity in system message when system_runtime is excluded", async () => {
+  const configuredSuperUserId = "system-owner";
+  const builder = new ContextBuilder({
+    config: {
+      globalConfig: {
+        workspaceRoot: "/tmp/noobot-test-workspace",
+        superAdmin: { userId: configuredSuperUserId },
+      },
+      userConfig: {},
+    },
+    serviceContainer: {
+      sessionManager: null,
+      memoryService: null,
+      attachmentService: { async ingest() { return []; } },
+      skillService: null,
+      eventListener: null,
+      botManager: null,
+      userInteractionBridge: null,
+    },
+    sessionContext: {
+      userId: configuredSuperUserId,
+      sessionId: "s1",
+      caller: "user",
+      parentSessionId: "",
+      attachments: [],
+      runConfig: {
+        contextPolicy: {
+          includeContextKeys: ["base_prompt"],
+        },
+      },
+      abortSignal: null,
+      parentAsyncResultContainer: null,
+    },
+  });
+
+  const context = await builder.buildInitialContext({ dialogProcessId: "dp_1" });
+  const systemText = context.payload.messages.system.join("\n");
+  assert.equal(context?.environment?.identity?.isSuperUser, true);
+  assert.equal(systemText.includes("\"identity\""), true);
+  assert.equal(systemText.includes("\"isSuperUser\": true"), true);
 });
 
 test("buildContextMessageBlocks prefers runtime inputAttachments for user meta", () => {
