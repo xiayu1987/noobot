@@ -25,6 +25,7 @@ defineProps({
   connecting: { type: Boolean, default: false },
   connected: { type: Boolean, default: false },
   sending: { type: Boolean, default: false },
+  composerActionState: { type: Object, default: () => ({}) },
   loadingSessions: { type: Boolean, default: false },
   sessions: { type: Array, default: () => [] },
   activeSessionId: { type: String, default: "" },
@@ -259,6 +260,7 @@ defineExpose({
           :upload-files="uploadFiles"
           :connector-panel-state="activeSession?.connectorPanelState || {}"
           :sending="sending"
+          :composer-action-state="composerActionState"
           :can-stop="canStop"
           :connected="connected"
           :allow-user-interaction="allowUserInteraction"

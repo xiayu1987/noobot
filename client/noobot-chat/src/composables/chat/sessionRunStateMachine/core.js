@@ -8,7 +8,11 @@ import { evaluateSessionRunState } from "./evaluation";
 import { normalizeSessionRunEvent } from "./eventNormalization";
 import { transitionPriority, transitionRule, trim } from "./normalize";
 import { resolveRunTurnScopeId, shouldStartNewTurn } from "./runIdentity";
-import { createInitialSessionRunState, applySessionRunEventPatch } from "./stateSnapshot";
+import {
+  createInitialSessionRunState,
+  applySessionRunActionEventPatch,
+  applySessionRunEventPatch,
+} from "./stateSnapshot";
 import { canApplyNormalizedEvent, resolveNormalizedTransitionDecision } from "./transitionDecision";
 
 export function normalizeTransitionInputs(currentState = createInitialSessionRunState(), rawEvent = {}) {
@@ -58,6 +62,7 @@ function resolveNextTurnScopeId(current = {}, event = {}, { startsNewTurn = fals
 export function transitionSessionRunState(currentState = createInitialSessionRunState(), rawEvent = {}) {
   const transition = normalizeTransitionInputs(currentState, rawEvent);
   const { current, event, startsNewTurn } = transition;
+  if (isComposerActionEvent(event.type)) return applySessionRunActionEventPatch({ current, event });
   if (!canApplyNormalizedEvent(transition)) return current;
   if (event.type === SESSION_RUN_EVENT.LOCAL_RESET) return createInitialSessionRunState({ updatedAt: event.timestamp });
 
@@ -68,6 +73,17 @@ export function transitionSessionRunState(currentState = createInitialSessionRun
     nextDialogProcessId: resolveNextDialogProcessId(current, event, { startsNewTurn }),
     nextTurnScopeId: resolveNextTurnScopeId(current, event, { startsNewTurn }),
   });
+}
+
+function isComposerActionEvent(type = "") {
+  return [
+    SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
+    SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_SETTLED,
+    SESSION_RUN_EVENT.LOCAL_STOP_REQUEST_STARTED,
+    SESSION_RUN_EVENT.LOCAL_STOP_REQUEST_SETTLED,
+    SESSION_RUN_EVENT.LOCAL_STOP_PENDING_BACKEND_READY,
+    SESSION_RUN_EVENT.LOCAL_STOP_PENDING_CLEARED,
+  ].includes(type);
 }
 
 export function reduceSessionRunEvents(initialState = createInitialSessionRunState(), rawEvents = []) {

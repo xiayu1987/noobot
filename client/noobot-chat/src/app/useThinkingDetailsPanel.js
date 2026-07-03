@@ -12,6 +12,7 @@ import {
 } from "./state/thinkingDetailsState";
 import {
   getMessageDialogProcessId,
+  getMessageRole,
   isAssistantWithoutTurnScope,
 } from "../composables/infra/messageIdentity";
 

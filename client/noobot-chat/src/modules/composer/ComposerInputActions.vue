@@ -10,6 +10,8 @@ import { useLocale } from "../../shared/i18n/useLocale";
 const props = defineProps({
   modelValue: { type: String, default: "" },
   sending: { type: Boolean, default: false },
+  sendRequesting: { type: Boolean, default: false },
+  stopRequesting: { type: Boolean, default: false },
   canStop: { type: Boolean, default: false },
   sendDisabled: { type: Boolean, default: false },
   sendButtonText: { type: String, default: "" },
@@ -52,6 +54,8 @@ function onInputKeydown(event) {
     type="danger"
     class="stop-float-btn"
     :title="translate('composer.stop')"
+    :loading="stopRequesting"
+    :disabled="stopRequesting"
     @click="emit('stop')"
   >
     <el-icon :size="20"><VideoPause /></el-icon>
@@ -100,7 +104,7 @@ function onInputKeydown(event) {
       <el-button
         type="primary"
         class="send-btn"
-        :loading="sending"
+        :loading="sendRequesting"
         :disabled="sendDisabled"
         @click="emit('send')"
       >

@@ -161,6 +161,7 @@ const {
   uploadFiles,
   sending,
   canStop,
+  composerActionState,
   sessions,
   activeSessionId,
   activeSession,
@@ -454,6 +455,7 @@ const drawerPanels = computed(() =>
       :connecting="connecting"
       :connected="connected"
       :sending="sending"
+      :composer-action-state="composerActionState"
       :loading-sessions="loadingSessions"
       :sessions="sessions"
       :active-session-id="activeSessionId"

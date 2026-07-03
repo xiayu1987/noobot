@@ -54,7 +54,6 @@ export async function registerExternalFrontendPlugins() {
         },
         logger: console,
       });
-      console.info(`[frontend-plugin] loaded ${pluginName}`);
     } catch (error) {
       console.warn(
         `[frontend-plugin] failed to load ${pluginName}: ${String(error?.message || error)}`,

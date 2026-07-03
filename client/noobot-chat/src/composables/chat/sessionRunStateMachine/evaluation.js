@@ -35,16 +35,36 @@ export function isStopLockedSessionRunState(state = "") {
 
 export function evaluateSessionRunState(stateSnapshot = {}) {
   const state = normalizeState(stateSnapshot?.state) || SESSION_RUN_STATE.IDLE;
+  const composerActionState = {
+    sendRequesting: Boolean(stateSnapshot?.composerActionState?.sendRequesting),
+    stopRequesting: Boolean(stateSnapshot?.composerActionState?.stopRequesting),
+    stopPendingUntilBackendReady: Boolean(stateSnapshot?.composerActionState?.stopPendingUntilBackendReady),
+  };
+  const backendCanStop = [
+    SESSION_RUN_STATE.SENDING,
+    SESSION_RUN_STATE.RESEND_REPLACING_TURN,
+    SESSION_RUN_STATE.RESEND_STREAMING,
+    SESSION_RUN_STATE.RECONNECTING,
+    SESSION_RUN_STATE.INTERACTION_PENDING,
+  ].includes(state);
+  const awaitingBackendStop = Boolean(
+    composerActionState.stopRequesting ||
+    composerActionState.stopPendingUntilBackendReady ||
+    state === SESSION_RUN_STATE.STOP_REQUESTED ||
+    state === SESSION_RUN_STATE.STOPPING,
+  );
+  const canStartNewSend = !awaitingBackendStop;
   return {
     state,
+    composerActionState,
     sending: isInFlightSessionRunState(state),
-    canStop: [
-      SESSION_RUN_STATE.SENDING,
-      SESSION_RUN_STATE.RESEND_REPLACING_TURN,
-      SESSION_RUN_STATE.RESEND_STREAMING,
-      SESSION_RUN_STATE.RECONNECTING,
-      SESSION_RUN_STATE.INTERACTION_PENDING,
-    ].includes(state),
+    backendCanStop,
+    canStop: backendCanStop || composerActionState.sendRequesting || composerActionState.stopPendingUntilBackendReady,
+    stopInFlight: awaitingBackendStop,
+    awaitingBackendStop,
+    canStartNewSend,
+    canRetryMessage: canStartNewSend,
+    canDeleteMessage: canStartNewSend,
     interactionSubmitting: state === SESSION_RUN_STATE.INTERACTION_PENDING ? false : undefined,
     pendingInteractionPolicy: state === SESSION_RUN_STATE.INTERACTION_PENDING ? "await_payload" : "unchanged",
     assistantStatus:

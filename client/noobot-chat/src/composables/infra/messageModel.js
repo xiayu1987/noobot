@@ -177,6 +177,15 @@ function isHarnessInjectedMessage(messageItem = {}) {
   );
 }
 
+function findVisibleLastMessage(messages = []) {
+  if (!Array.isArray(messages)) return null;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const messageItem = messages[index];
+    if (!isHarnessInjectedMessage(messageItem)) return messageItem || null;
+  }
+  return null;
+}
+
 function normalizeWorkflowMeta(messageItem = {}) {
   return messageItem?.pluginMeta &&
     typeof messageItem.pluginMeta === "object" &&
@@ -424,6 +433,7 @@ export {
   foldConversationMessages,
   createMessageModel,
   getMessageAttachments,
+  findVisibleLastMessage,
   isHarnessInjectedMessage,
   isWorkflowMessageLike,
 };

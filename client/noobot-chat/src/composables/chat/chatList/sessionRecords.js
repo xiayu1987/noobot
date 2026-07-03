@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { nowIso } from "../../infra/timeFields";
+import { findVisibleLastMessage, isHarnessInjectedMessage } from "../../infra/messageModel";
 
 export function createLocalSessionItem({ id, title, createConnectorPanelState }) {
   return {
@@ -33,11 +34,12 @@ export function mapSummaryToSession(item, { sessionTitleFromMessages, createConn
   const messageCount = Number.isFinite(Number(item.messageCount))
     ? Number(item.messageCount)
     : messages.length || 0;
-  const lastMessage = item.lastMessage && typeof item.lastMessage === "object"
+  const summaryLastMessage = item.lastMessage && typeof item.lastMessage === "object"
     ? item.lastMessage
-    : messages.length
-      ? messages[messages.length - 1]
-      : null;
+    : null;
+  const lastMessage = summaryLastMessage && !isHarnessInjectedMessage(summaryLastMessage)
+    ? summaryLastMessage
+    : findVisibleLastMessage(messages);
   return {
     id: item.sessionId,
     title,
@@ -86,7 +88,7 @@ export function mergeExistingSessionState(mappedSession = {}, existingSession = 
     connectorPanelState: existingSession.connectorPanelState || mappedSession.connectorPanelState,
     messageCount: existingMessages.length || mappedSession.messageCount || 0,
     lastMessage: existingMessages.length
-      ? existingMessages[existingMessages.length - 1]
+      ? findVisibleLastMessage(existingMessages)
       : mappedSession.lastMessage,
     title: existingMessages.length
       ? sessionTitleFromMessages(existingMessages, existingSession.title || mappedSession.title)

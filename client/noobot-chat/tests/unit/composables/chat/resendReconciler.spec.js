@@ -100,4 +100,23 @@ describe("resendReconciler", () => {
     expect(session.messageCount).toBe(2);
     expect(session.lastMessage).toBe(refreshedAssistant);
   });
+
+  it("syncs lastMessage to the latest visible message instead of a harness injected relay", () => {
+    const userMessage = { role: RoleEnum.USER, content: "question" };
+    const assistantMessage = { role: RoleEnum.ASSISTANT, content: "answer" };
+    const harnessRelay = {
+      role: RoleEnum.USER,
+      content: "[Relay from harness external model/planning] hidden",
+      injectedMessage: true,
+      injectedBy: "harness-plugin",
+    };
+    const session = {
+      messages: [userMessage, assistantMessage, harnessRelay],
+    };
+
+    syncSessionMessageSummary(session);
+
+    expect(session.messageCount).toBe(3);
+    expect(session.lastMessage).toBe(assistantMessage);
+  });
 });

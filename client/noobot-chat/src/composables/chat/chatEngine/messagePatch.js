@@ -11,6 +11,7 @@ import {
   pickAssistantMessagesForCurrentTurn,
 } from "./utils";
 import { getMessageDialogProcessId, getMessageTurnScopeId } from "../../infra/messageIdentity";
+import { findVisibleLastMessage } from "../../infra/messageModel";
 import { nowIso } from "../../infra/timeFields";
 
 export function applyDoneMessagesPatch({
@@ -96,7 +97,7 @@ export function applyDoneMessagesPatch({
     }
     if (appendedCount > 0) {
       activeSession.value.messageCount = sessionMessages.length;
-      activeSession.value.lastMessage = sessionMessages[sessionMessages.length - 1] || null;
+      activeSession.value.lastMessage = findVisibleLastMessage(sessionMessages);
       activeSession.value.updatedAt = nowIso();
     }
   }
