@@ -274,7 +274,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "doc_to_data": {
     "description": {
       "key": "tools.doc2data.description",
-      "text": "Extract document content into text data. Input filePath (optional prompt, dpi, parseEngine). parseEngine supports libreoffice/vision and defaults to libreoffice."
+      "text": "Extract document content into text data. Input filePath (optional prompt, dpi, parseEngine). parseEngine supports libreoffice/vision and defaults to libreoffice. Vision is not recommended."
     },
     "params": {
       "dpi": {
@@ -287,7 +287,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
       },
       "parseEngine": {
         "key": "tools.doc2data.fieldParseEngine",
-        "text": "Parse engine (optional): libreoffice or vision. Default is libreoffice."
+        "text": "Parse engine (optional): libreoffice or vision. Default is libreoffice. Vision is not recommended."
       },
       "prompt": {
         "key": "tools.doc2data.fieldPrompt",

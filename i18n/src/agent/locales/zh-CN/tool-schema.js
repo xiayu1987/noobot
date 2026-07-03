@@ -278,7 +278,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "doc_to_data": {
     "description": {
       "key": "tools.doc2data.description",
-      "text": "提取文档内容为文本数据。输入 filePath（可选 prompt、dpi、parseEngine）。parseEngine 支持 libreoffice/vision，默认 libreoffice。"
+      "text": "提取文档内容为文本数据。输入 filePath（可选 prompt、dpi、parseEngine）。parseEngine 支持 libreoffice/vision，默认 libreoffice。不推荐使用 vision。"
     },
     "params": {
       "dpi": {
@@ -291,7 +291,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
       },
       "parseEngine": {
         "key": "tools.doc2data.fieldParseEngine",
-        "text": "解析引擎（可选）：libreoffice 或 vision，默认 libreoffice。"
+        "text": "解析引擎（可选）：libreoffice 或 vision，默认 libreoffice。不推荐使用 vision。"
       },
       "prompt": {
         "key": "tools.doc2data.fieldPrompt",

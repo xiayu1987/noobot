@@ -67,6 +67,7 @@ test("read_file: 超级管理员可以读取工作区外文件", async () => {
     agentContext: buildAgentContext(basePath, "admin", {
       runtime: {
         globalConfig: { superAdmin: { userId: "admin" } },
+        systemRuntime: { isSuperUser: true },
       },
     }),
   });

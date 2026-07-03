@@ -15,6 +15,7 @@ import {
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { parseDataUrl, sanitizeGeneratedArtifactName } from "../../utils/mime-utils.js";
+import { generateWithImagesAsyncApi } from "./images-async-adapter.js";
 import { recoverableToolError } from "../../error/index.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import { MIME_TYPE } from "../../constants/index.js";
@@ -36,9 +37,6 @@ import {
 const MULTIMODAL_FLOW_NAME = "agent.multimodal_generate";
 const MULTIMODAL_PURPOSE_NAME = "multimodal_generate";
 const MULTIMODAL_DOMAIN_NAME = "tool";
-const DEFAULT_IMAGE_ASYNC_POLL_INTERVAL_MS = 5000;
-const DEFAULT_IMAGE_ASYNC_TIMEOUT_MS = 180000;
-const WEBSOCKET_OPEN_STATE = 1;
 const AVAILABLE_GENERATION_API_TYPES = Object.freeze([
   IMAGE_GENERATION_API_TYPE.OPENAI_RESPONSES,
   IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC,
@@ -225,124 +223,10 @@ function normalizeImageSize(imageSize = "1024x1024") {
   return normalizedImageSize || "1024x1024";
 }
 
-function normalizeImageGenerationCount(value = 1) {
-  const count = Math.floor(Number(value || 1));
-  if (!Number.isFinite(count)) return 1;
-  return Math.min(10, Math.max(1, count));
-}
-
 function normalizeStringArray(value = []) {
   return (Array.isArray(value) ? value : [])
     .map((item) => String(item || "").trim())
     .filter(Boolean);
-}
-
-function extractImagesAsyncTaskId(payload = {}) {
-  const payloadData = payload?.data && typeof payload.data === "object" ? payload.data : null;
-  const data = Array.isArray(payloadData) ? payloadData : payloadData ? [payloadData] : [];
-  const firstDataItem = data.find((item) => item && typeof item === "object") || {};
-  return String(
-    payload?.id ||
-      payload?.task_id ||
-      payload?.taskId ||
-      firstDataItem?.id ||
-      firstDataItem?.task_id ||
-      firstDataItem?.taskId ||
-      "",
-  ).trim();
-}
-
-function unwrapImagesAsyncPayload(payload = {}) {
-  const source = payload && typeof payload === "object" ? payload : {};
-  const nestedData =
-    source?.data && typeof source.data === "object" && !Array.isArray(source.data)
-      ? source.data
-      : null;
-  const nestedPayload =
-    source?.payload && typeof source.payload === "object" && !Array.isArray(source.payload)
-      ? source.payload
-      : null;
-  const nestedResult =
-    source?.result && typeof source.result === "object" && !Array.isArray(source.result)
-      ? source.result
-      : null;
-  return {
-    ...source,
-    ...(nestedData || {}),
-    ...(nestedPayload || {}),
-    ...(nestedResult || {}),
-  };
-}
-
-function normalizeImagesAsyncTaskPayload(payload = {}) {
-  const source = unwrapImagesAsyncPayload(payload || {});
-  const sourceData = source?.data && typeof source.data === "object" ? source.data : null;
-  const data = Array.isArray(sourceData) ? sourceData : sourceData ? [sourceData] : [];
-  const firstDataItem = data.find((item) => item && typeof item === "object") || {};
-  return {
-    ...source,
-    ...(firstDataItem && typeof firstDataItem === "object" ? firstDataItem : {}),
-    result_data:
-      source?.result_data ||
-      source?.resultData ||
-      source?.images ||
-      source?.output ||
-      firstDataItem?.result_data ||
-      firstDataItem?.resultData ||
-      firstDataItem?.images ||
-      firstDataItem?.output ||
-      [],
-  };
-}
-
-function normalizeGeneratedImageBase64(value = "") {
-  const normalized = String(value || "").trim();
-  if (!normalized.startsWith("data:image/")) return normalized;
-  const parsed = parseDataUrl(normalized);
-  return parsed?.contentBase64 || normalized;
-}
-
-function taskPayloadToImageArtifacts(taskPayload = {}) {
-  const normalizedTask = normalizeImagesAsyncTaskPayload(taskPayload || {});
-  const resultData = Array.isArray(normalizedTask?.result_data)
-    ? normalizedTask.result_data
-    : [];
-  return resultData
-    .map((item = {}, index) => ({
-      fileName: `generated_image_${index + 1}.png`,
-      b64Json: normalizeGeneratedImageBase64(
-        item?.b64_json ||
-          item?.image_base64 ||
-          item?.base64 ||
-          item?.data ||
-          "",
-      ).trim(),
-      url: String(item?.url || item?.image_url || "").trim(),
-    }))
-    .filter((item) => item.b64Json || item.url);
-}
-
-function normalizeBaseUrl(baseUrl = "") {
-  return String(baseUrl || "").trim().replace(/\/+$/, "");
-}
-
-function buildApiUrl(baseUrl = "", path = "") {
-  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
-  const normalizedPath = String(path || "").trim();
-  if (!normalizedBaseUrl) return normalizedPath;
-  if (normalizedBaseUrl.endsWith("/v1") && normalizedPath.startsWith("/v1/")) {
-    return `${normalizedBaseUrl}${normalizedPath.slice(3)}`;
-  }
-  return `${normalizedBaseUrl}${normalizedPath}`;
-}
-
-function buildWebSocketUrl(httpUrl = "") {
-  const normalizedUrl = String(httpUrl || "").trim();
-  if (!normalizedUrl) return "";
-  const parsed = new URL(normalizedUrl);
-  if (parsed.protocol === "https:") parsed.protocol = "wss:";
-  else if (parsed.protocol === "http:") parsed.protocol = "ws:";
-  return parsed.toString();
 }
 
 function normalizeGenerationApiType(apiType = "") {
@@ -377,35 +261,10 @@ function shouldAppendApiTypeHint(error = {}) {
   return Boolean(error?.status || error?.statusCode || error?.payload);
 }
 
-function isWebSocketUpgradeError(error = {}) {
-  const status = Number(error?.status || error?.statusCode || 0);
-  const message = String(
-    error?.message || error?.payload?.message || error?.payload?.error || "",
-  ).toLowerCase();
-  return (
-    status === 426 ||
-    message.includes("websocket upgrade required") ||
-    message.includes("upgrade: websocket")
-  );
-}
-
 function appendApiTypeHint(message = "", runtime = {}) {
   const baseMessage = String(message || "").trim() || tMultimodal(runtime, "generateFailed");
   const hint = tMultimodal(runtime, "trySwitchApiType");
   return hint ? `${baseMessage}\n${hint}` : baseMessage;
-}
-
-function sleep(ms = 0) {
-  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms || 0))));
-}
-
-async function loadWebSocketClient() {
-  try {
-    const websocketLibrary = await import("ws");
-    return websocketLibrary.default || websocketLibrary.WebSocket || null;
-  } catch {
-    return typeof globalThis.WebSocket === "function" ? globalThis.WebSocket : null;
-  }
 }
 
 function dedupeAttachments(attachments = []) {
@@ -527,248 +386,6 @@ async function generateWithOpenaiResponsesApi({
   };
 }
 
-async function requestJson({ fetchImpl, url, method = "GET", headers = {}, body = null } = {}) {
-  let response = null;
-  try {
-    response = await fetchImpl(url, {
-      method,
-      headers: {
-        ...headers,
-        ...(body ? { "Content-Type": "application/json" } : {}),
-      },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-    });
-  } catch (error) {
-    error.requestUrl = String(url || "").trim();
-    error.requestMethod = String(method || "GET").trim().toUpperCase();
-    throw error;
-  }
-  const responseText = await response.text();
-  let payload = {};
-  try {
-    payload = responseText ? JSON.parse(responseText) : {};
-  } catch {
-    payload = { message: responseText };
-  }
-  if (!response?.ok) {
-    const message = String(payload?.error?.message || payload?.message || payload?.error || responseText || "").trim();
-    const error = new Error(message || `HTTP ${response?.status || 500}`);
-    error.status = response?.status;
-    error.payload = payload;
-    error.requestUrl = String(url || "").trim();
-    error.requestMethod = String(method || "GET").trim().toUpperCase();
-    throw error;
-  }
-  return payload;
-}
-
-async function waitForImagesAsyncTaskViaWebSocket({
-  taskUrl = "",
-  headers = {},
-  taskId = "",
-  runtime = {},
-} = {}) {
-  const WebSocketClient = await loadWebSocketClient();
-  if (typeof WebSocketClient !== "function") {
-    const error = new Error(tMultimodal(runtime, "fetchUnavailable"));
-    error.apiTypeSwitchHint = true;
-    throw error;
-  }
-  const wsUrl = buildWebSocketUrl(taskUrl);
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    let socket = null;
-    const finish = (callback, value) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      try {
-        socket?.close?.();
-      } catch {
-        // ignore close errors
-      }
-      callback(value);
-    };
-    const timeout = setTimeout(() => {
-      const timeoutError = new Error(tMultimodal(runtime, "taskTimeout", { taskId }));
-      timeoutError.apiTypeSwitchHint = true;
-      timeoutError.requestUrl = wsUrl;
-      timeoutError.requestMethod = "WEBSOCKET";
-      finish(reject, timeoutError);
-    }, DEFAULT_IMAGE_ASYNC_TIMEOUT_MS);
-
-    try {
-      socket = new WebSocketClient(wsUrl, {
-        headers,
-      });
-    } catch (error) {
-      error.requestUrl = wsUrl;
-      error.requestMethod = "WEBSOCKET";
-      finish(reject, error);
-      return;
-    }
-
-    const handlePayload = (payload = {}) => {
-      const normalizedTask = normalizeImagesAsyncTaskPayload(payload || {});
-      const status = String(normalizedTask?.status || "").trim().toLowerCase();
-      const imageArtifacts = taskPayloadToImageArtifacts(normalizedTask);
-      if (status === "failed") {
-        const error = new Error(
-          String(normalizedTask?.error || normalizedTask?.message || tMultimodal(runtime, "taskFailed")),
-        );
-        error.apiTypeSwitchHint = true;
-        error.requestUrl = wsUrl;
-        error.requestMethod = "WEBSOCKET";
-        finish(reject, error);
-        return;
-      }
-      if (["completed", "succeeded", "success", "done"].includes(status) || imageArtifacts.length) {
-        finish(resolve, {
-          taskId,
-          imageArtifacts,
-          rawText: "",
-          rawTask: normalizedTask,
-          transport: "websocket",
-        });
-      }
-    };
-
-    const handleOpen = () => {
-      if (socket?.readyState === WEBSOCKET_OPEN_STATE) {
-        try {
-          socket.send(JSON.stringify({ task_id: taskId, taskId, action: "subscribe" }));
-        } catch {
-          // Some gateways only need the upgraded URL and reject client messages.
-        }
-      }
-    };
-    const handleMessage = (eventOrData) => {
-      const raw = eventOrData?.data !== undefined ? eventOrData.data : eventOrData;
-      let text = "";
-      if (typeof raw === "string") text = raw;
-      else if (Buffer.isBuffer(raw)) text = raw.toString("utf8");
-      else if (raw instanceof ArrayBuffer) text = Buffer.from(raw).toString("utf8");
-      else if (Array.isArray(raw)) text = Buffer.concat(raw).toString("utf8");
-      if (!text) return;
-      try {
-        handlePayload(JSON.parse(text));
-      } catch {
-        handlePayload({ message: text });
-      }
-    };
-    const handleError = (event) => {
-      const error = new Error(String(event?.message || "websocket task stream error"));
-      error.requestUrl = wsUrl;
-      error.requestMethod = "WEBSOCKET";
-      finish(reject, error);
-    };
-    const handleClose = () => {
-      if (settled) return;
-      const error = new Error(tMultimodal(runtime, "taskFailed"));
-      error.requestUrl = wsUrl;
-      error.requestMethod = "WEBSOCKET";
-      finish(reject, error);
-    };
-    if (typeof socket.on === "function") {
-      socket.on("open", handleOpen);
-      socket.on("message", handleMessage);
-      socket.on("error", handleError);
-      socket.on("close", handleClose);
-    }
-    socket.onopen = handleOpen;
-    socket.onmessage = handleMessage;
-    socket.onerror = handleError;
-    socket.onclose = handleClose;
-  });
-}
-
-async function generateWithImagesAsyncApi({
-  fetchImpl,
-  modelSpec,
-  modelName,
-  generationContent,
-  imageSize,
-  resolution = "",
-  n = 1,
-  quality = "",
-  imageUrls = [],
-  runtime = {},
-}) {
-  if (typeof fetchImpl !== "function") {
-    throw new Error(tMultimodal(runtime, "fetchUnavailable"));
-  }
-  const baseUrl = resolveModelBaseUrl(modelSpec || {});
-  const apiKey = resolveModelApiKey(modelSpec || {});
-  const taskCreateUrl = buildApiUrl(baseUrl, "/v1/images/generations");
-  const headers = {
-    Authorization: `Bearer ${apiKey}`,
-  };
-  const requestBody = {
-    model: String(modelName || "").trim(),
-    prompt: String(generationContent || "").trim(),
-    size: normalizeImageSize(imageSize || "1:1"),
-    ...(String(resolution || "").trim() ? { resolution: String(resolution || "").trim() } : {}),
-    n: normalizeImageGenerationCount(n),
-    ...(String(quality || "").trim() ? { quality: String(quality || "").trim() } : {}),
-    ...(imageUrls.length ? { image_urls: imageUrls } : {}),
-  };
-  const createdTask = await requestJson({
-    fetchImpl,
-    url: taskCreateUrl,
-    method: "POST",
-    headers,
-    body: requestBody,
-  });
-  const taskId = extractImagesAsyncTaskId(createdTask);
-  if (!taskId) {
-    const error = new Error(tMultimodal(runtime, "taskIdMissing"));
-    error.apiTypeSwitchHint = true;
-    throw error;
-  }
-  const startedAtMs = Date.now();
-  let latestTask = null;
-  const taskUrl = buildApiUrl(baseUrl, `/v1/tasks/${encodeURIComponent(taskId)}`);
-  while (Date.now() - startedAtMs < DEFAULT_IMAGE_ASYNC_TIMEOUT_MS) {
-    try {
-      latestTask = await requestJson({
-        fetchImpl,
-        url: taskUrl,
-        method: "GET",
-        headers,
-      });
-    } catch (error) {
-      if (isWebSocketUpgradeError(error)) {
-        return await waitForImagesAsyncTaskViaWebSocket({
-          taskUrl,
-          headers,
-          taskId,
-          runtime,
-        });
-      }
-      throw error;
-    }
-    const normalizedTask = normalizeImagesAsyncTaskPayload(latestTask || {});
-    const status = String(normalizedTask?.status || "").trim().toLowerCase();
-    if (status === "completed") {
-      const imageArtifacts = taskPayloadToImageArtifacts(normalizedTask);
-      return {
-        taskId,
-        imageArtifacts,
-        rawText: "",
-        rawTask: normalizedTask,
-      };
-    }
-    if (status === "failed") {
-      const error = new Error(String(normalizedTask?.error || normalizedTask?.message || tMultimodal(runtime, "taskFailed")));
-      error.apiTypeSwitchHint = true;
-      throw error;
-    }
-    await sleep(DEFAULT_IMAGE_ASYNC_POLL_INTERVAL_MS);
-  }
-  const timeoutError = new Error(tMultimodal(runtime, "taskTimeout", { taskId }));
-  timeoutError.apiTypeSwitchHint = true;
-  throw timeoutError;
-}
 
 
 export function createMultimodalGenerateTool({ agentContext }) {
@@ -909,7 +526,8 @@ export function createMultimodalGenerateTool({ agentContext }) {
           generationApiType === IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC
             ? await generateWithImagesAsyncApi({
                 fetchImpl: sharedFetch,
-                modelSpec: resolvedModelSpec,
+                baseUrl: resolveModelBaseUrl(resolvedModelSpec || {}),
+                apiKey: modelApiKey,
                 modelName: modelNameForGeneration,
                 generationContent,
                 imageSize: effectiveImageSize,
@@ -917,7 +535,9 @@ export function createMultimodalGenerateTool({ agentContext }) {
                 n,
                 quality,
                 imageUrls: normalizeStringArray(image_urls),
-                runtime,
+                taskIdMissingMessage: tMultimodal(runtime, "taskIdMissing"),
+                taskFailedMessage: tMultimodal(runtime, "taskFailed"),
+                taskTimeoutMessageBuilder: (taskId) => tMultimodal(runtime, "taskTimeout", { taskId }),
               })
             : await generateWithOpenaiResponsesApi({
                 openaiClient: new OpenAI({

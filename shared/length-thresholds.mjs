@@ -50,11 +50,11 @@ const LENGTH_TIERS = deepFreeze({
   chars: {
     compact: 500,
     compactPayload: 800,
-    persistedChunk: 30000,
+    persistedChunk: 40000,
     cleanedText: 120000,
     wrappedPayload: 200000,
-    mainContext: 225000,
-    externalToolHeavy: 300000,
+    mainContext: 25000,
+    externalToolHeavy: 350000,
   },
   displayChars: {
     extensionName: 20,
