@@ -9,7 +9,7 @@ import {
   SUPER_ADMIN_ROLE,
 } from "../../../src/system-core/utils/super-user.js";
 
-test("super-user: configured super user id is not hardcoded to admin", () => {
+test("super-user: configured super user id alone does not grant super user", () => {
   const configuredUserId = "owner-xiayu";
   assert.equal(resolveConfiguredSuperUserId({ superAdmin: { userId: configuredUserId } }), configuredUserId);
   assert.equal(
@@ -19,6 +19,11 @@ test("super-user: configured super user id is not hardcoded to admin", () => {
   assert.equal(isSuperUserRuntime({
     userId: configuredUserId,
     globalConfig: { superAdmin: { userId: configuredUserId } },
+  }), false);
+  assert.equal(isSuperUserRuntime({
+    userId: configuredUserId,
+    globalConfig: { superAdmin: { userId: configuredUserId } },
+    systemRuntime: { isSuperUser: true },
   }), true);
   assert.equal(isSuperUserRuntime({
     userId: "admin",
@@ -34,7 +39,7 @@ test("super-user: role and agent context checks share the same helper", () => {
       controllers: {
         runtime: {
           globalConfig: { superAdmin: { userId: "custom-root" } },
-          systemRuntime: { sessionId: "s1" },
+          systemRuntime: { sessionId: "s1", isSuperUser: true },
         },
       },
     },

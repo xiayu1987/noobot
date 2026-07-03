@@ -383,6 +383,7 @@ test("connector-toolkit/access_connector: 超级管理员 command_file_path 可�
     });
     runtime.userId = "admin";
     runtime.systemRuntime.userId = "admin";
+    runtime.systemRuntime.isSuperUser = true;
     const tools = createConnectorTools({ agentContext: { runtime } });
     const accessTool = tools.find((tool) => tool?.name === "access_connector");
     assert.ok(accessTool, "access_connector 工具应存在");

@@ -35,9 +35,7 @@ export function isSuperUserRuntime(runtime = {}) {
   const systemRuntime = asObject(sourceRuntime?.systemRuntime) || {};
   if (systemRuntime?.isSuperUser === true) return true;
   if (isSuperAdminRole(sourceRuntime?.role || systemRuntime?.role)) return true;
-  const configuredSuperUserId = resolveConfiguredSuperUserId(sourceRuntime?.globalConfig);
-  const currentUserId = String(sourceRuntime?.userId || systemRuntime?.userId || "").trim();
-  return Boolean(configuredSuperUserId && currentUserId === configuredSuperUserId);
+  return false;
 }
 
 export function isSuperUserAgentContext(agentContext = {}) {
@@ -53,12 +51,5 @@ export function isSuperUserAgentContext(agentContext = {}) {
   )) {
     return true;
   }
-  const configuredSuperUserId = resolveConfiguredSuperUserId(runtime?.globalConfig);
-  const currentUserId = String(
-    context?.environment?.identity?.userId ||
-      runtime?.userId ||
-      systemRuntime?.userId ||
-      "",
-  ).trim();
-  return Boolean(configuredSuperUserId && currentUserId === configuredSuperUserId);
+  return false;
 }
