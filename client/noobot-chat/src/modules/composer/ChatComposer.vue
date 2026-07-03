@@ -54,6 +54,7 @@ const emit = defineEmits([
   "upload-change",
   "append-uploads",
   "clear-uploads",
+  "remove-upload",
   "connector-selected",
   "send",
   "stop",
@@ -218,6 +219,10 @@ function onClearUploads() {
   emit("clear-uploads");
 }
 
+function onRemoveUpload(uploadFileIndex) {
+  emit("remove-upload", uploadFileIndex);
+}
+
 function onSend() {
   if (props.interactionActive) return;
   emit("send");
@@ -270,6 +275,7 @@ defineExpose({
       :selected-scenario-label="selectedScenarioLabel"
       :selected-plugin-labels="selectedPluginLabels"
       :upload-files="uploadFiles"
+      @remove-upload="onRemoveUpload"
     />
 
     <div class="composer">
@@ -325,6 +331,7 @@ defineExpose({
                 :upload-files="uploadFiles"
                 @upload-change="onUploadChange"
                 @clear-uploads="onClearUploads"
+                @remove-upload="onRemoveUpload"
               />
             </div>
           </div>

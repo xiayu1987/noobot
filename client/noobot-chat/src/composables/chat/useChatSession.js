@@ -184,6 +184,7 @@ export function useChatSession({
     onUploadChange,
     appendUploads,
     clearUploads,
+    removeUpload,
     serializeAttachments,
   } = useChatInput({
     isImageMime,
@@ -474,6 +475,7 @@ export function useChatSession({
     onUploadChange,
     appendUploads,
     clearUploads,
+    removeUpload,
     shouldRenderMessageInChat,
     closeMobileSidebarOnSelect,
     releaseAllPreviewUrls: chatList.releaseAllPreviewUrls,

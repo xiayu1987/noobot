@@ -186,6 +186,7 @@ const {
   onUploadChange,
   appendUploads,
   clearUploads,
+  removeUpload,
   shouldRenderMessageInChat,
   closeMobileSidebarOnSelect,
   releaseAllPreviewUrls,
@@ -530,6 +531,7 @@ const drawerPanels = computed(() =>
       @update:input="input = $event"
       @upload-change="onUploadChange"
       @append-uploads="appendUploads"
+      @remove-upload="removeUpload"
       @update:allow-user-interaction="onAllowUserInteractionUpdate"
       @update:force-tool="onForceToolUpdate"
       @update:stream-output="onStreamOutputUpdate"

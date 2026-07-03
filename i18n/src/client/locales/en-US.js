@@ -276,6 +276,7 @@ export const enUSMessages = {
     "sending": "Sending",
     "send": "Send",
     "attachments": "Attachments",
+    "removeAttachment": "Remove attachment {name}",
     "dropFilesToAttach": "Drop to attach files",
     "clear": "Clear",
     "fieldRequired": "{label} is required",
