@@ -5,7 +5,8 @@
 -->
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
-import { ChatDotRound, Delete } from "@element-plus/icons-vue";
+import { ElMessageBox } from "element-plus";
+import { ChatDotRound, Delete, EditPen } from "@element-plus/icons-vue";
 import { useLocale } from "../../shared/i18n/useLocale";
 
 const props = defineProps({
@@ -15,7 +16,7 @@ const props = defineProps({
   collapsed: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(["select-session", "delete-session"]);
+const emit = defineEmits(["select-session", "delete-session", "rename-session"]);
 const { translate } = useLocale();
 
 const sessionListRef = ref(null);
@@ -56,6 +57,32 @@ onBeforeUnmount(() => {
   if (listWrapEl.value) listWrapEl.value.removeEventListener("scroll", onSessionListScroll);
 });
 
+async function promptRenameSession(sessionItem = {}) {
+  if (props.sending) return;
+  const currentTitle = String(sessionItem?.title || "").trim();
+  try {
+    const { value } = await ElMessageBox.prompt(
+      translate("common.renameSessionPlaceholder"),
+      translate("common.renameSessionTitle"),
+      {
+        confirmButtonText: translate("infra.confirm"),
+        cancelButtonText: translate("infra.cancel"),
+        inputValue: currentTitle,
+        inputValidator: (value) => {
+          const nextTitle = String(value || "").trim();
+          if (!nextTitle) return translate("common.sessionTitleRequired");
+          if (nextTitle.length > 80) return translate("common.sessionTitleTooLong");
+          if (nextTitle === currentTitle) return translate("common.sessionTitleUnchanged");
+          return true;
+        },
+      },
+    );
+    emit("rename-session", { sessionId: sessionItem.id, title: String(value || "").trim() });
+  } catch {
+    // User cancelled.
+  }
+}
+
 watch(
   () => props.sessions,
   () => restoreSessionListScrollTop(),
@@ -84,7 +111,18 @@ watch(
               #{{ sessionItem.backendSessionId ? sessionItem.backendSessionId.slice(0, 8) : translate("common.notStarted") }}
             </div>
           </div>
-          <button
+          <div class="session-actions">
+            <button
+              type="button"
+              class="session-rename-btn noobot-action-btn noobot-flat-icon-btn"
+              :title="translate('common.renameSession')"
+              :aria-label="translate('common.renameSession')"
+              :disabled="sending"
+              @click.stop="promptRenameSession(sessionItem)"
+            >
+              <el-icon><EditPen /></el-icon>
+            </button>
+            <button
             type="button"
             class="session-delete-btn noobot-action-btn noobot-flat-icon-btn"
             :title="translate('common.deleteSession')"
@@ -93,7 +131,8 @@ watch(
             @click.stop="emit('delete-session', sessionItem.id)"
           >
             <el-icon><Delete /></el-icon>
-          </button>
+            </button>
+          </div>
         </div>
       </div>
     </el-scrollbar>
@@ -171,17 +210,34 @@ watch(
   gap: 4px;
 }
 
+.session-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.session-rename-btn,
 .session-delete-btn {
+  display: inline-flex;
   color: var(--noobot-text-muted);
   opacity: 0;
   transform: none;
   transition: opacity 0.2s ease, color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
 }
 
+.session-item:hover .session-rename-btn,
 .session-item:hover .session-delete-btn,
+.session-item.active .session-rename-btn,
 .session-item.active .session-delete-btn {
   opacity: 1;
   transform: none;
+}
+
+.session-rename-btn:hover {
+  color: var(--noobot-text-strong);
+  border-color: var(--noobot-panel-border);
+  background: var(--noobot-surface-soft-hover);
 }
 
 .session-delete-btn:hover {
@@ -190,6 +246,7 @@ watch(
   background: var(--noobot-danger-soft);
 }
 
+.session-rename-btn:disabled,
 .session-delete-btn:disabled {
   opacity: 0.45 !important;
   cursor: not-allowed;
@@ -245,9 +302,8 @@ watch(
 
 .session-list-panel.collapsed .title,
 .session-list-panel.collapsed .sid,
-.session-list-panel.collapsed .session-delete-btn {
+.session-list-panel.collapsed .session-actions {
   display: none;
-  opacity: 0;
 }
 
 .session-list-panel.collapsed .session-item {

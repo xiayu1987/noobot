@@ -10,6 +10,7 @@ const props = defineProps({
   selectedConnectorNames: { type: Array, default: () => [] },
   selectedScenarioLabel: { type: String, default: "" },
   selectedPluginLabels: { type: Array, default: () => [] },
+  uploadFiles: { type: Array, default: () => [] },
 });
 
 const { translate } = useLocale();
@@ -17,7 +18,7 @@ const { translate } = useLocale();
 
 <template>
   <div
-    v-if="selectedConnectorNames.length || selectedScenarioLabel || selectedPluginLabels.length"
+    v-if="selectedConnectorNames.length || selectedScenarioLabel || selectedPluginLabels.length || uploadFiles.length"
     class="selected-connectors-row"
   >
     <span
@@ -39,6 +40,14 @@ const { translate } = useLocale();
       class="selected-connector-name selected-plugin-name"
     >
       {{ pluginLabel }}
+    </span>
+    <span
+      v-for="(uploadFile, uploadFileIndex) in uploadFiles"
+      :key="`attachment-${uploadFile.name}-${uploadFileIndex}`"
+      class="selected-connector-name selected-attachment-name"
+      :title="uploadFile.name"
+    >
+      {{ uploadFile.name }}
     </span>
   </div>
 </template>
@@ -82,12 +91,22 @@ const { translate } = useLocale();
   background: color-mix(in srgb, var(--noobot-cyber-cyan, #0ea5e9) 10%, transparent);
 }
 
+.selected-attachment-name {
+  border-color: rgba(113, 113, 122, 0.24);
+  background: color-mix(in srgb, var(--noobot-fill-soft, #f4f4f5) 78%, var(--noobot-base-blue-500, #3b82f6));
+}
+
 @media (max-width: 768px) {
   .selected-connectors-row {
     margin-bottom: 8px;
     overflow-x: auto;
     flex-wrap: nowrap;
     scrollbar-width: none;
+  }
+
+  .selected-connector-name {
+    max-width: 168px;
+    flex: 0 0 auto;
   }
 }
 </style>

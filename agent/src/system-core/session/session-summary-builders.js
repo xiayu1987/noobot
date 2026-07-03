@@ -48,6 +48,7 @@ export function buildSessionSummary(session = {}, { depth = 0 } = {}) {
       String(messageItem?.content || "").trim(),
   );
   const lastMessage = messages.length ? buildMessageSummary(messages[messages.length - 1]) : null;
+  const customTitle = String(session?.customTitle || "").trim();
   return {
     sessionId,
     parentSessionId: String(session?.parentSessionId || "").trim(),
@@ -56,9 +57,9 @@ export function buildSessionSummary(session = {}, { depth = 0 } = {}) {
     createdAt: String(session?.createdAt || "").trim(),
     updatedAt: String(session?.updatedAt || "").trim(),
     depth: Number.isFinite(Number(depth)) ? Number(depth) : 0,
-    title: firstUserMessage
+    title: customTitle || (firstUserMessage
       ? String(firstUserMessage.content || "").slice(0, 20)
-      : sessionId.slice(0, 8),
+      : sessionId.slice(0, 8)),
     messageCount: messages.length,
     lastMessage,
   };
@@ -472,6 +473,14 @@ function resolveThinkingDetailCountForDisplayMessage(message = {}, countsByKey =
 
 export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
   const messages = Array.isArray(session?.messages) ? session.messages : [];
+  const sessionId = String(session?.sessionId || "").trim();
+  const firstUserMessage = messages.find(
+    (messageItem) =>
+      messageItem?.injectedMessage !== true &&
+      String(messageItem?.role || "").trim().toLowerCase() === "user" &&
+      String(messageItem?.content || "").trim(),
+  );
+  const customTitle = String(session?.customTitle || "").trim();
   const thinkingDetailCountsByKey = buildThinkingDetailCountsByCorrelationKey(messages);
   const displayMessages = messages
     .map((message) => {
@@ -496,12 +505,15 @@ export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
   );
   return {
     schemaVersion: SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
-    sessionId: String(session?.sessionId || "").trim(),
+    sessionId,
     parentSessionId: String(session?.parentSessionId || "").trim(),
     caller: String(session?.caller || "user").trim() || "user",
     currentTaskId: String(session?.currentTaskId || "").trim(),
     createdAt: String(session?.createdAt || "").trim(),
     updatedAt: String(session?.updatedAt || "").trim(),
+    title: customTitle || (firstUserMessage
+      ? String(firstUserMessage.content || "").slice(0, 20)
+      : sessionId.slice(0, 8)),
     version: session?.version,
     revision: session?.revision,
     depth: Number.isFinite(Number(depth)) ? Number(depth) : 0,

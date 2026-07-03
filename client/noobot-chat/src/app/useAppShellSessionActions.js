@@ -8,6 +8,7 @@ export function useAppShellSessionActions({
   activeSessionId,
   confirmDeleteSession,
   deleteSession,
+  renameSession,
   fetchSessions,
   refreshSessionConnectorsAsync,
   updateSessionSelectedConnector,
@@ -30,6 +31,17 @@ export function useAppShellSessionActions({
     }
   }
 
+  async function handleRenameSession({ sessionId = "", title = "" } = {}) {
+    try {
+      const renamed = await renameSession?.(sessionId, title);
+      if (renamed) {
+        notify?.({ type: "success", message: translate("common.renameSessionSuccess") });
+      }
+    } catch (error) {
+      notify?.({ type: "error", message: error.message || translate("common.renameSessionFailed") });
+    }
+  }
+
   async function handleWorkspaceReset() {
     await fetchSessions?.();
     if (activeSessionId?.value) {
@@ -47,6 +59,7 @@ export function useAppShellSessionActions({
 
   return {
     handleDeleteSession,
+    handleRenameSession,
     handleWorkspaceReset,
     onConnectorSelected,
   };

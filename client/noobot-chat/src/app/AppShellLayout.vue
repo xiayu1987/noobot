@@ -78,6 +78,7 @@ const emit = defineEmits([
   "connect",
   "connector-selected",
   "delete-session",
+  "rename-session",
   "mobile-chat-navigator-trigger-click",
   "mobile-chat-navigator-trigger-pointer-cancel",
   "mobile-chat-navigator-trigger-pointer-down",
@@ -153,6 +154,7 @@ defineExpose({
       @connect="emit('connect')"
       @new-session="emit('new-session')"
       @delete-session="emit('delete-session', $event)"
+      @rename-session="emit('rename-session', $event)"
       @refresh-sessions="emit('refresh-sessions')"
       @select-session="emit('select-session', $event)"
     />

@@ -158,8 +158,16 @@ export function useComposerMediaCapture(props, emitAppendUploads, translate) {
     return mobilePattern.test(uaText);
   }
 
+  function isDesktopClient() {
+    return typeof window !== "undefined" && Boolean(window.noobotDesktop);
+  }
+
   function openCameraCapture() {
     if (captureActionsDisabled.value) return;
+    if (isDesktopClient()) {
+      cameraInputRef.value?.click?.();
+      return;
+    }
     if (isLikelyMobileDevice()) {
       cameraInputRef.value?.click?.();
       return;

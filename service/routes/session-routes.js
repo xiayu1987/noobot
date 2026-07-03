@@ -121,6 +121,32 @@ export function registerSessionRoutes(
     replaceTurnHandler,
   );
 
+  const renameSessionHandler = jsonRoute(async (req, res) => {
+    const { userId, sessionId } = req.params;
+    const title = String(req.body?.title || "").trim();
+    if (!title) {
+      const error = new Error("Session title is required");
+      error.statusCode = HTTP_STATUS.BAD_REQUEST;
+      throw error;
+    }
+    const session = await bot.session.renameSession({ userId, sessionId, title });
+    if (!session) {
+      const error = new Error("Session not found");
+      error.statusCode = HTTP_STATUS.NOT_FOUND;
+      throw error;
+    }
+    res.json({ ok: true, sessionId: session.sessionId, title: session.customTitle || title });
+  });
+
+  app.post(
+    "/internal/session/:userId/:sessionId/rename",
+    renameSessionHandler,
+  );
+  app.post(
+    "/api/internal/session/:userId/:sessionId/rename",
+    renameSessionHandler,
+  );
+
   app.delete(
     "/internal/session/:userId/:sessionId",
     jsonRoute(

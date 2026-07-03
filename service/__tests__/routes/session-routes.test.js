@@ -176,6 +176,82 @@ test("session-routes: delete-from 保留服务层 404/409 状态码", async () =
   });
 });
 
+test("session-routes: rename 路由 trim 标题并返回成功", async () => {
+  const calls = [];
+  const app = express();
+  app.use(express.json());
+  registerSessionRoutes(app, {
+    bot: {
+      session: {
+        getSessionData: async () => ({}),
+        getRootSessionId: async () => "",
+        deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
+        getAllSessionsData: async () => [],
+        renameSession: async (payload) => {
+          calls.push(payload);
+          return { sessionId: payload.sessionId, customTitle: payload.title };
+        },
+      },
+      getAttachmentById: async () => null,
+    },
+    handleChat: (_req, res) => res.json({ ok: true }),
+    getConnectorChannelStore: () => ({}),
+    getConnectorHistoryStore: () => ({}),
+    translateText: () => "",
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/internal/session/u1/s1/rename`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "  new title  " }),
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.deepEqual(payload, { ok: true, sessionId: "s1", title: "new title" });
+    assert.deepEqual(calls[0], { userId: "u1", sessionId: "s1", title: "new title" });
+  });
+});
+
+test("session-routes: rename 空标题返回 400，session 不存在返回 404", async () => {
+  const app = express();
+  app.use(express.json());
+  registerSessionRoutes(app, {
+    bot: {
+      session: {
+        getSessionData: async () => ({}),
+        getRootSessionId: async () => "",
+        deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
+        getAllSessionsData: async () => [],
+        renameSession: async () => null,
+      },
+      getAttachmentById: async () => null,
+    },
+    handleChat: (_req, res) => res.json({ ok: true }),
+    getConnectorChannelStore: () => ({}),
+    getConnectorHistoryStore: () => ({}),
+    translateText: () => "",
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    const emptyResponse = await fetch(`${baseUrl}/api/internal/session/u1/s1/rename`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "   " }),
+    });
+    assert.equal(emptyResponse.status, 400);
+    assert.equal((await emptyResponse.json()).ok, false);
+
+    const missingResponse = await fetch(`${baseUrl}/api/internal/session/u1/missing/rename`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "new title" }),
+    });
+    assert.equal(missingResponse.status, 404);
+    assert.equal((await missingResponse.json()).ok, false);
+  });
+});
+
 test("session-routes: replace-turn 路由透传请求体并返回后端快照", async () => {
   const calls = [];
   const app = express();
