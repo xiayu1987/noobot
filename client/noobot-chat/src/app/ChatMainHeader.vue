@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { Menu, MoreFilled, Setting } from "@element-plus/icons-vue";
+import { Menu, MoreFilled, Refresh, Setting } from "@element-plus/icons-vue";
 import { useLocale } from "../shared/i18n/useLocale";
 import { useTheme } from "../shared/theme/useTheme";
 
@@ -19,7 +19,16 @@ const emit = defineEmits(["toggle-sidebar", "open-openvscode", "open-workspace",
 const { translate, locale, setLocale } = useLocale();
 const { theme, applyTheme } = useTheme();
 
+function reloadPage() {
+  const desktopReload = window.noobotDesktop?.reload;
+  if (typeof desktopReload === "function") {
+    return desktopReload().catch(() => window.location.reload());
+  }
+  window.location.reload();
+}
+
 function handleHeaderAction(command = "") {
+  if (command === "reload") return reloadPage();
   if (command === "openvscode") return emit("open-openvscode");
   if (command === "workspace") return emit("open-workspace");
   if (command === "user-settings") return emit("open-user-settings");
@@ -69,6 +78,13 @@ function handleHeaderAction(command = "") {
         <el-button class="workspace-btn noobot-action-btn noobot-flat-soft-btn" @click="emit('open-config-params')">
           {{ translate("common.configParams") }}
         </el-button>
+        <el-button
+          class="workspace-btn settings-btn noobot-action-btn noobot-flat-soft-btn"
+          native-type="button"
+          :icon="Refresh"
+          :title="translate('common.refresh')"
+          @click="reloadPage"
+        />
       <el-dropdown
         class="settings-dropdown"
         trigger="click"
@@ -112,6 +128,7 @@ function handleHeaderAction(command = "") {
             <el-dropdown-item command="workspace">{{ translate("common.workspace") }}</el-dropdown-item>
             <el-dropdown-item v-if="isSuperAdmin" command="user-settings">{{ translate("common.userSettings") }}</el-dropdown-item>
             <el-dropdown-item command="config-params">{{ translate("common.configParams") }}</el-dropdown-item>
+            <el-dropdown-item divided command="reload">{{ translate("common.refresh") }}</el-dropdown-item>
             <el-dropdown-item divided command="lang_zh">{{ translate("common.chinese") }}</el-dropdown-item>
             <el-dropdown-item command="lang_en">{{ translate("common.english") }}</el-dropdown-item>
             <el-dropdown-item divided command="theme_system">{{ translate("common.themeSystem") }}</el-dropdown-item>

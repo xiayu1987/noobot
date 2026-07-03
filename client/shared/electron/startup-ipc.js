@@ -49,6 +49,7 @@ export function registerStartupIpcHandlers({
   saveSuperAdminConfig,
   ensureSelectedDependencies,
   ensureServiceStarted,
+  reloadWebContents = () => ({ ok: false, error: "reload unavailable" }),
   resolveNoobotUrl,
   getMainWindow = () => null,
   sendStatus = () => {},
@@ -67,6 +68,8 @@ export function registerStartupIpcHandlers({
   });
 
   ipcMain.handle("noobot:get-startup-statuses", () => getStartupStatuses());
+
+  ipcMain.handle("noobot:reload", () => reloadWebContents());
 
   ipcMain.handle("noobot:save-config-params", (_event, values) => {
     const state = refreshDesktopConfigState();

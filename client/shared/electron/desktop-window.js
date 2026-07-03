@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { BrowserWindow, shell } from "electron";
+import { BrowserWindow, Menu, shell } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -16,6 +16,36 @@ export function createDesktopWindowManager({
   appendDesktopLog = () => {},
 } = {}) {
   let mainWindow = null;
+
+  function reloadWebContents(webContents = mainWindow?.webContents) {
+    if (!webContents || webContents.isDestroyed()) return { ok: false, error: "webContents unavailable" };
+    webContents.reload();
+    return { ok: true };
+  }
+
+  function createContextMenuTemplate(params = {}, webContents = mainWindow?.webContents) {
+    const template = [];
+    if (params.isEditable) {
+      template.push(
+        { role: "undo" },
+        { role: "redo" },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        { role: "selectAll" },
+        { type: "separator" },
+      );
+    } else if (params.selectionText) {
+      template.push({ role: "copy" }, { type: "separator" });
+    }
+    template.push({
+      label: process.platform === "darwin" ? "Reload" : "重新加载",
+      accelerator: "CmdOrCtrl+R",
+      click: () => reloadWebContents(webContents),
+    });
+    return template;
+  }
 
   function createWindow() {
     appendEarlyLog("[main:create-window] enter");
@@ -51,6 +81,10 @@ export function createDesktopWindowManager({
       shell.openExternal(url);
       return { action: "deny" };
     });
+    mainWindow.webContents.on("context-menu", (_event, params) => {
+      if (process.platform !== "win32" && process.platform !== "darwin") return;
+      Menu.buildFromTemplate(createContextMenuTemplate(params, mainWindow?.webContents)).popup({ window: mainWindow });
+    });
     const builtStartupFile = path.join(dirname, "startup", "index.html");
     const startupFile = fs.existsSync(builtStartupFile) ? builtStartupFile : path.join(dirname, "startup.html");
     appendDesktopLog(`[main:create-window] loading ${startupFile}`);
@@ -74,6 +108,7 @@ export function createDesktopWindowManager({
   return {
     createWindow,
     resolveNoobotUrl,
+    reloadWebContents,
     getMainWindow: () => mainWindow,
   };
 }
