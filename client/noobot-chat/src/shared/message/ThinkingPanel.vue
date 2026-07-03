@@ -89,9 +89,10 @@ function getAllCompletedLogs(messageItem = {}) {
     : Array.isArray(messageItem?.completedToolLogs)
     ? messageItem.completedToolLogs
     : [];
-  return completedToolLogs.length > 0
-    ? completedToolLogs
-    : buildFallbackCompletedToolLogs(messageItem);
+  const fallbackToolLogs = buildFallbackCompletedToolLogs(messageItem);
+  if (completedToolLogs.length <= 0) return fallbackToolLogs;
+  if (fallbackToolLogs.length <= 0) return completedToolLogs;
+  return mergeCompletedAndFallbackToolLogs(completedToolLogs, fallbackToolLogs);
 }
 
 function normalizeLogString(value = "") {
@@ -315,6 +316,8 @@ function buildFallbackCompletedToolLogs(messageItem = {}) {
           dialogProcessId,
           type: "tool_call",
           event: "tool_call",
+          id: toolCall?.id,
+          tool_call_id: toolCall?.id,
           text: buildToolCallText(toolCall, toolCallIndex),
           ts: timestamp,
         });
@@ -329,12 +332,42 @@ function buildFallbackCompletedToolLogs(messageItem = {}) {
         dialogProcessId,
         type: "tool_result",
         event: "tool_result",
+        tool_call_id: item?.tool_call_id || item?.toolCallId,
         text: buildToolResultText(item),
         ts: timestamp,
       });
     }
   }
   return fallbackToolLogs;
+}
+
+function getToolLogIdentity(logItem = {}) {
+  const eventName = String(logItem?.event || logItem?.type || "").trim().toLowerCase();
+  const callId = String(
+    logItem?.tool_call_id
+      || logItem?.toolCallId
+      || logItem?.id
+      || logItem?.callId
+      || logItem?.data?.tool_call_id
+      || logItem?.data?.toolCallId
+      || "",
+  ).trim();
+  if (callId) return `${eventName}|id:${callId}`;
+  return `${eventName}|${String(logItem?.text || "").trim()}|${String(logItem?.ts || "").trim()}`;
+}
+
+function mergeCompletedAndFallbackToolLogs(completedToolLogs = [], fallbackToolLogs = []) {
+  const mergedLogs = [];
+  const seenKeys = new Set();
+  const appendLog = (logItem = {}) => {
+    const key = getToolLogIdentity(logItem);
+    if (seenKeys.has(key)) return;
+    seenKeys.add(key);
+    mergedLogs.push(logItem);
+  };
+  fallbackToolLogs.forEach(appendLog);
+  completedToolLogs.forEach(appendLog);
+  return mergedLogs;
 }
 
 function getCompletedToolLogsForMessage(messageItem = {}) {

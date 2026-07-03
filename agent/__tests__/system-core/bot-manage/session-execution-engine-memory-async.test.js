@@ -6,7 +6,7 @@ import { SessionExecutionEngine } from "../../../src/system-core/bot-manage/sess
 const TEST_SHORT_DELAY_MS = 5;
 const TEST_MEDIUM_DELAY_MS = 20;
 
-function createEngine({ captureSessionToShortMemory, maybeSummarize } = {}) {
+function createEngine({ captureSessionToShortMemory, maybeSummarize, globalConfig = {} } = {}) {
   const session = {
     async appendExecutionLog() {},
     async appendTurn() {},
@@ -30,7 +30,7 @@ function createEngine({ captureSessionToShortMemory, maybeSummarize } = {}) {
     },
   };
   return new SessionExecutionEngine({
-    globalConfig: {},
+    globalConfig,
     session,
     memory,
     attach: {},
@@ -136,4 +136,158 @@ test("_finalizeRunSession blocks on memory postprocess when postprocess async di
   resolveCapture?.();
   await finalizePromise;
   assert.equal(finalizeCompleted, true);
+});
+
+test("_finalizeRunSession does not block on memory summarize when only summary async enabled", async () => {
+  let finalizeCompleted = false;
+  let captureCompleted = false;
+  let summarizeStarted = false;
+  let resolveSummarize = null;
+  const engine = createEngine({
+    captureSessionToShortMemory: async () => {
+      captureCompleted = true;
+    },
+    maybeSummarize: async () => {
+      summarizeStarted = true;
+      await new Promise((resolve) => {
+        resolveSummarize = resolve;
+      });
+    },
+  });
+
+  const finalizePromise = engine
+    ._finalizeRunSession(
+      buildFinalizeInput({
+        memory: { postprocess_async: false, summarize_async: true },
+      }),
+    )
+    .then(() => {
+      finalizeCompleted = true;
+    });
+
+  await waitFor(() => captureCompleted === true);
+  await waitFor(() => summarizeStarted === true);
+  await waitFor(() => finalizeCompleted === true);
+  assert.equal(typeof resolveSummarize, "function");
+
+  resolveSummarize?.();
+  await finalizePromise;
+});
+
+test("_finalizeRunSession uses code builtin memory summarize async default without config", async () => {
+  let finalizeCompleted = false;
+  let summarizeStarted = false;
+  let resolveSummarize = null;
+  const engine = createEngine({
+    maybeSummarize: async () => {
+      summarizeStarted = true;
+      await new Promise((resolve) => {
+        resolveSummarize = resolve;
+      });
+    },
+  });
+
+  const finalizePromise = engine
+    ._finalizeRunSession(buildFinalizeInput({ memory: { postprocess_async: false } }))
+    .then(() => {
+      finalizeCompleted = true;
+    });
+
+  await waitFor(() => summarizeStarted === true);
+  await waitFor(() => finalizeCompleted === true);
+  assert.equal(typeof resolveSummarize, "function");
+
+  resolveSummarize?.();
+  await finalizePromise;
+});
+
+test("_finalizeRunSession ignores user memory summarize async false and still runs background", async () => {
+  let finalizeCompleted = false;
+  let summarizeStarted = false;
+  let resolveSummarize = null;
+  const engine = createEngine({
+    maybeSummarize: async () => {
+      summarizeStarted = true;
+      await new Promise((resolve) => {
+        resolveSummarize = resolve;
+      });
+    },
+  });
+
+  const finalizePromise = engine
+    ._finalizeRunSession(
+      buildFinalizeInput({
+        memory: { postprocess_async: false, summarize_async: false },
+      }),
+    )
+    .then(() => {
+      finalizeCompleted = true;
+    });
+
+  await waitFor(() => summarizeStarted === true);
+  await waitFor(() => finalizeCompleted === true);
+  assert.equal(typeof resolveSummarize, "function");
+
+  resolveSummarize?.();
+  await finalizePromise;
+});
+
+test("_finalizeRunSession ignores legacy user memorySummarizeAsync false and still runs background", async () => {
+  let finalizeCompleted = false;
+  let summarizeStarted = false;
+  let resolveSummarize = null;
+  const engine = createEngine({
+    maybeSummarize: async () => {
+      summarizeStarted = true;
+      await new Promise((resolve) => {
+        resolveSummarize = resolve;
+      });
+    },
+  });
+
+  const finalizePromise = engine
+    ._finalizeRunSession(
+      buildFinalizeInput({
+        memory: { postprocess_async: false },
+        memorySummarizeAsync: false,
+      }),
+    )
+    .then(() => {
+      finalizeCompleted = true;
+    });
+
+  await waitFor(() => summarizeStarted === true);
+  await waitFor(() => finalizeCompleted === true);
+  assert.equal(typeof resolveSummarize, "function");
+
+  resolveSummarize?.();
+  await finalizePromise;
+});
+
+test("_finalizeRunSession ignores global memory summarize async false and still runs background", async () => {
+  let finalizeCompleted = false;
+  let summarizeStarted = false;
+  let resolveSummarize = null;
+  const engine = createEngine({
+    globalConfig: { memory: { summarize_async: false } },
+    maybeSummarize: async () => {
+      summarizeStarted = true;
+      await new Promise((resolve) => {
+        resolveSummarize = resolve;
+      });
+    },
+  });
+
+  const finalizePromise = engine
+    ._finalizeRunSession(buildFinalizeInput({ memory: { postprocess_async: false } }))
+    .then(() => {
+      finalizeCompleted = true;
+    });
+
+  await waitFor(() => summarizeStarted === true);
+  await waitFor(() => finalizeCompleted === true);
+  assert.equal(typeof resolveSummarize, "function");
+
+  resolveSummarize?.();
+  await finalizePromise;
 });

@@ -225,7 +225,7 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
     skill: {},
     configService: {
       async loadUserConfig() {
-        return { memory: { postprocess_async: false, summarize_async: false } };
+        return { memory: { postprocess_async: false } };
       },
     },
     workspaceService: {

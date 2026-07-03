@@ -79,15 +79,7 @@ export class MemoryPostProcessService {
   }
 
   resolveMemorySummaryAsyncEnabled(userConfig = {}) {
-    const configured =
-      userConfig?.memory?.summarize_async ??
-      userConfig?.memory?.summarizeAsync ??
-      userConfig?.memorySummarizeAsync ??
-      this.globalConfig?.memory?.summarize_async ??
-      this.globalConfig?.memory?.summarizeAsync ??
-      this.globalConfig?.memorySummarizeAsync;
-    if (configured === undefined || configured === null) return true;
-    return configured !== false;
+    return true;
   }
 
   resolveMemoryPostProcessAsyncEnabled(userConfig = {}) {
@@ -168,6 +160,15 @@ export class MemoryPostProcessService {
     });
   }
 
+  scheduleMemorySummarizeFlow(payload = {}) {
+    Promise.resolve()
+      .then(() => this.runMemorySummarizeFlow(payload))
+      .catch(() => {
+        // runMemorySummarizeFlow already emits/logs failures; keep background
+        // long-memory and experience processing from surfacing unhandled rejections.
+      });
+  }
+
   async runMemoryPostProcessFlow({
     userId,
     sessionId,
@@ -187,21 +188,18 @@ export class MemoryPostProcessService {
         sessionId,
         mode,
       });
-      const memorySummaryAsyncEnabled =
-        this.resolveMemorySummaryAsyncEnabled(userConfig);
-      if (memorySummaryAsyncEnabled) {
-        emitEvent(runtimeEventListener, "memory_summary_scheduled", {
-          sessionId,
-          mode: "async",
-        });
-      }
-      await this.runMemorySummarizeFlow({
+      emitEvent(runtimeEventListener, "memory_summary_scheduled", {
+        sessionId,
+        mode: "async",
+      });
+      this.scheduleMemorySummarizeFlow({
         userId,
         sessionId,
         userConfig,
         runtimeEventListener,
-        mode: memorySummaryAsyncEnabled ? "async" : "sync",
+        mode: "async",
       });
+      return;
     } catch (error) {
       emitEvent(runtimeEventListener, "memory_postprocess_failed", {
         sessionId,
