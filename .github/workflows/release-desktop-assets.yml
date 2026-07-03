@@ -48,7 +48,6 @@ jobs:
           tag_name: ${{ env.RELEASE_TAG }}
           files: |
             client/windows/dist/Noobot Setup *.exe
-            client/windows/dist/*.zip
 
   mac:
     name: Build macOS client

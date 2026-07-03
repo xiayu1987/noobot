@@ -44,8 +44,7 @@
     "win": {
       "icon": "assets/noobot.ico",
       "target": [
-        "nsis",
-        "zip"
+        "nsis"
       ]
     },
     "nsis": {
