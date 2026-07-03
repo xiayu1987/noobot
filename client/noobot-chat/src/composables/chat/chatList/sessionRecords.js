@@ -90,9 +90,10 @@ export function mergeExistingSessionState(mappedSession = {}, existingSession = 
     lastMessage: existingMessages.length
       ? findVisibleLastMessage(existingMessages)
       : mappedSession.lastMessage,
-    title: existingMessages.length
-      ? sessionTitleFromMessages(existingMessages, existingSession.title || mappedSession.title)
-      : mappedSession.title,
+    title: String(mappedSession.title || "").trim()
+      || (existingMessages.length
+        ? sessionTitleFromMessages(existingMessages, existingSession.title || mappedSession.title)
+        : existingSession.title || mappedSession.title),
   };
 }
 

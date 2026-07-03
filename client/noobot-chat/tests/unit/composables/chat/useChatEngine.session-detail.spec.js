@@ -34,6 +34,42 @@ function createApplySessionDetailHarness({ sessionId = "s-apply-mode", messages 
 }
 
 describe("useChatEngine.session-detail", () => {
+  it("applySessionDetail keeps server renamed title instead of deriving it from messages", () => {
+    const sessionTitleFromMessages = vi.fn(() => "old message title");
+    const activeSession = {
+      id: "s-renamed",
+      sessionId: "s-renamed",
+      backendSessionId: "s-renamed",
+      title: "previous title",
+      messages: [],
+      rawMessages: [],
+    };
+    const activeSessionId = ref("s-renamed");
+    const sessions = ref([activeSession]);
+    const { applySessionDetail } = createSessionDetailApplicator({
+      sessions,
+      activeSessionId,
+      makeViewMessage: (message) => ({ ...message }),
+      foldMessagesForView: (messages) => messages.map((message) => ({ ...message })),
+      sessionTitleFromMessages,
+      applyCompletedToolLogsToMessages: vi.fn(),
+      scrollBottom: vi.fn(),
+      isSameSessionIdentity: (a, b) => String(a) === String(b),
+    });
+
+    applySessionDetail({
+      sessionId: "s-renamed",
+      sessions: [{
+        sessionId: "s-renamed",
+        title: "Renamed from server",
+        messages: [{ role: RoleEnum.USER, content: "old message title" }],
+      }],
+    });
+
+    expect(activeSession.title).toBe("Renamed from server");
+    expect(sessionTitleFromMessages).not.toHaveBeenCalled();
+  });
+
   it("applySessionDetail preserves a fresh in-flight turn even when caller requests replacement", () => {
     const staleStoppedTurnScopeId = "turn-stopped-old";
     const freshTurnScopeId = "client-turn:fresh-apply";

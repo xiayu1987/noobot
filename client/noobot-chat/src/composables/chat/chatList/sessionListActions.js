@@ -27,6 +27,7 @@ export function createSessionListActions({
   ensureConnected,
   getSessionsApi,
   deleteSessionApi,
+  renameSessionApi,
   createConnectorPanelState,
   sessionTitleFromMessages,
   fetchSessionDetail,
@@ -171,6 +172,42 @@ export function createSessionListActions({
     }
   }
 
+  async function renameSession(sessionId = "", title = "") {
+    const targetSessionId = String(sessionId || "").trim();
+    const normalizedTitle = String(title || "").trim();
+    if (!targetSessionId) return false;
+    if (sending.value) {
+      notify({ type: "warning", message: translate("common.cannotRenameWhileSending") });
+      return false;
+    }
+    if (!normalizedTitle) {
+      notify({ type: "warning", message: translate("common.sessionTitleRequired") });
+      return false;
+    }
+    const targetSession = findSessionByAnyIdInList(sessions.value, targetSessionId);
+    if (!targetSession) return false;
+    if (String(targetSession.title || "").trim() === normalizedTitle) {
+      notify({ type: "info", message: translate("common.sessionTitleUnchanged") });
+      return false;
+    }
+    if (targetSession?.isLocal) {
+      targetSession.title = normalizedTitle;
+      return true;
+    }
+    if (!ensureConnected()) return false;
+    const backendSessionId = String(targetSession.backendSessionId || targetSession.id || targetSessionId).trim();
+    const res = await renameSessionApi(
+      { userId: userId.value, sessionId: backendSessionId, title: normalizedTitle },
+      { fetcher: authFetch },
+    );
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || translate("common.renameSessionFailed"));
+    }
+    await fetchSessions(targetSessionId, { preserveCurrentMessages: true });
+    return true;
+  }
+
   async function deleteSession(sessionId = "") {
     const targetSessionId = String(sessionId || "").trim();
     if (!targetSessionId) return false;
@@ -217,5 +254,6 @@ export function createSessionListActions({
     fetchSessions,
     selectSession,
     deleteSession,
+    renameSession,
   };
 }

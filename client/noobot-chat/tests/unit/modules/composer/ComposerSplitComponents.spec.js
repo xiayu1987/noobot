@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import ComposerInputActions from "../../../../src/modules/composer/ComposerInputActions.vue";
 import ComposerMoreOptions from "../../../../src/modules/composer/ComposerMoreOptions.vue";
 import ComposerCameraDialog from "../../../../src/modules/composer/ComposerCameraDialog.vue";
+import ComposerSelectedTags from "../../../../src/modules/composer/ComposerSelectedTags.vue";
 
 vi.mock("../../../../src/shared/i18n/useLocale", () => ({
   useLocale: () => ({
@@ -325,6 +326,41 @@ describe("ComposerMoreOptions", () => {
     await wrapper.find(".scenario-selector el-button").trigger("click");
     expect(wrapper.emitted("toggle-programming-scenario")).toHaveLength(1);
     expect(wrapper.find(".plugin-empty-text").text()).toBe("暂无插件");
+  });
+});
+
+describe("ComposerSelectedTags", () => {
+  it("renders attachment chips with titles beside other selected tags", () => {
+    const wrapper = mount(ComposerSelectedTags, {
+      props: {
+        selectedConnectorNames: ["prod-db"],
+        selectedScenarioLabel: "编程",
+        selectedPluginLabels: ["工作流"],
+        uploadFiles: [
+          { name: "brief.pdf" },
+          { name: "very-long-screenshot-name.png" },
+        ],
+      },
+      global: globalMountOptions,
+    });
+
+    const rowText = wrapper.find(".selected-connectors-row").text();
+    expect(rowText).toContain("场景: 编程");
+    expect(rowText).toContain("prod-db");
+    expect(rowText).toContain("工作流");
+    expect(rowText).toContain("brief.pdf");
+    expect(wrapper.findAll(".selected-attachment-name").map((item) => item.attributes("title"))).toEqual([
+      "brief.pdf",
+      "very-long-screenshot-name.png",
+    ]);
+  });
+
+  it("stays hidden when there are no selected tags or attachments", () => {
+    const wrapper = mount(ComposerSelectedTags, {
+      global: globalMountOptions,
+    });
+
+    expect(wrapper.find(".selected-connectors-row").exists()).toBe(false);
   });
 });
 

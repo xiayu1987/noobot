@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ChatComposer from "../../../../src/modules/composer/ChatComposer.vue";
 import ComposerInputActions from "../../../../src/modules/composer/ComposerInputActions.vue";
 import ComposerAttachmentToolbar from "../../../../src/modules/composer/ComposerAttachmentToolbar.vue";
+import { useComposerMediaCapture } from "../../../../src/modules/composer/useComposerMediaCapture";
 
 const messageMock = vi.hoisted(() => ({
   error: vi.fn(),
@@ -26,6 +27,7 @@ vi.mock("../../../../src/shared/i18n/useLocale", () => ({
         "composer.cameraDialogTitle": "拍照",
         "composer.capturePhoto": "拍照",
         "composer.clear": "清空",
+        "composer.dropFilesToAttach": "释放以添加附件",
         "composer.inputPlaceholder": "输入消息",
         "composer.recordAudioHold": "按住录音",
         "composer.recordingReleaseToSend": `松开发送 ${params.seconds ?? 0}`,
@@ -195,6 +197,18 @@ async function triggerPointer(elementWrapper, type, options = {}) {
   await nextTick();
 }
 
+async function dispatchDragEvent(element, type, dataTransfer) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "dataTransfer", {
+    configurable: true,
+    value: dataTransfer,
+  });
+  const preventDefaultSpy = vi.spyOn(event, "preventDefault");
+  element.dispatchEvent(event);
+  await nextTick();
+  return { event, preventDefaultSpy };
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-06-15T00:00:00.000Z"));
@@ -206,6 +220,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  delete window.noobotDesktop;
   document.body.innerHTML = "";
 });
 
@@ -334,6 +349,103 @@ describe("ChatComposer interactions", () => {
     expect(input.element.value).toBe("");
   });
 
+  it("opens the camera file picker directly in the desktop client", async () => {
+    Object.defineProperty(window, "noobotDesktop", {
+      configurable: true,
+      value: { saveDownload: vi.fn() },
+    });
+    const getUserMedia = mockMediaDevices({ getTracks: () => [] });
+    const clickSpy = vi.fn();
+    const Harness = defineComponent({
+      setup() {
+        const capture = useComposerMediaCapture(
+          { sending: false },
+          vi.fn(),
+          (key) => key,
+        );
+        capture.cameraInputRef.value = { click: clickSpy };
+        return capture;
+      },
+      template: '<button type="button" @click="openCameraCapture">camera</button>',
+    });
+    const wrapper = mount(Harness);
+
+    await wrapper.find("button").trigger("click");
+    await nextTick();
+
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(messageMock.error).not.toHaveBeenCalled();
+  });
+
+  it("appends dropped files as attachments", async () => {
+    const wrapper = mountComposer();
+    const droppedFile = new File(["hello"], "drop.txt", { type: "text/plain" });
+    const dataTransfer = {
+      types: ["Files"],
+      files: [droppedFile],
+      dropEffect: "none",
+    };
+
+    const dragResult = await dispatchDragEvent(
+      wrapper.find(".composer-wrapper").element,
+      "dragenter",
+      dataTransfer,
+    );
+    expect(dragResult.preventDefaultSpy).toHaveBeenCalledTimes(1);
+
+    const dropResult = await dispatchDragEvent(
+      wrapper.find(".composer-wrapper").element,
+      "drop",
+      dataTransfer,
+    );
+
+    expect(dropResult.preventDefaultSpy).toHaveBeenCalledTimes(1);
+    expect(dataTransfer.dropEffect).toBe("copy");
+    expect(wrapper.emitted("append-uploads")?.[0]).toEqual([[droppedFile]]);
+  });
+
+  it("ignores non-file drags", async () => {
+    const wrapper = mountComposer();
+    const dataTransfer = {
+      types: ["text/plain"],
+      files: [],
+      dropEffect: "none",
+    };
+
+    const dragResult = await dispatchDragEvent(
+      wrapper.find(".composer-wrapper").element,
+      "dragenter",
+      dataTransfer,
+    );
+    await dispatchDragEvent(wrapper.find(".composer-wrapper").element, "drop", dataTransfer);
+
+    expect(dragResult.preventDefaultSpy).not.toHaveBeenCalled();
+    expect(dataTransfer.dropEffect).toBe("none");
+    expect(wrapper.emitted("append-uploads")).toBeUndefined();
+  });
+
+  it("does not append dropped files while sending", async () => {
+    const wrapper = mountComposer({ sending: true });
+    const droppedFile = new File(["hello"], "drop.txt", { type: "text/plain" });
+    const dataTransfer = {
+      types: ["Files"],
+      files: [droppedFile],
+      dropEffect: "none",
+    };
+
+    await dispatchDragEvent(wrapper.find(".composer-wrapper").element, "dragenter", dataTransfer);
+    const dropResult = await dispatchDragEvent(
+      wrapper.find(".composer-wrapper").element,
+      "drop",
+      dataTransfer,
+    );
+
+    expect(dropResult.preventDefaultSpy).toHaveBeenCalledTimes(1);
+    expect(dataTransfer.dropEffect).toBe("copy");
+    expect(wrapper.emitted("append-uploads")).toBeUndefined();
+  });
+
   it("appends microphone recordings as attachments on pointer release", async () => {
     const audioTrack = { stop: vi.fn() };
     const getUserMedia = mockMediaDevices({ getTracks: () => [audioTrack] });
@@ -393,9 +505,13 @@ describe("ChatComposer interactions", () => {
     expect(audioTrack.stop).toHaveBeenCalledTimes(1);
   });
 
-  it("shows selected scenario, connectors, and plugin tags at the top", () => {
+  it("shows selected scenario, connectors, plugins, and attachments at the top", () => {
     const wrapper = mountComposer({
       botScenario: "programming",
+      uploadFiles: [
+        { name: "brief.pdf" },
+        { name: "screenshot.png" },
+      ],
       connectorPanelState: {
         selectedConnectors: {
           database: "prod-db",
@@ -417,5 +533,7 @@ describe("ChatComposer interactions", () => {
     expect(tagText).toContain("alerts-mail");
     expect(tagText).toContain("工作流");
     expect(tagText).not.toContain("Harness");
+    expect(tagText).toContain("brief.pdf");
+    expect(tagText).toContain("screenshot.png");
   });
 });

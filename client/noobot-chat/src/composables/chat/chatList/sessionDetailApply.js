@@ -122,6 +122,9 @@ export function createSessionDetailApplicator({
       sessionDocs.find((doc) => doc.sessionId === detail.sessionId) ||
       sessionDocs[0] ||
       {};
+    const serverSessionTitle = String(
+      mainSessionDoc.title || mainSessionDoc.customTitle || detail.title || "",
+    ).trim();
     const isSummaryDetail = detail?.summary === true;
     sessionItem.rawMessages = (mainSessionDoc.messages || []).map((messageItem) =>
       makeViewMessage(messageItem),
@@ -258,11 +261,13 @@ export function createSessionDetailApplicator({
     sessionItem.lastMessage = findVisibleLastMessage(sessionItem.messages);
 
     if (!preserveCurrentMessages) {
-      sessionItem.title = sessionTitleFromMessages(
+      sessionItem.title = serverSessionTitle || sessionTitleFromMessages(
         sessionItem.messages,
         sessionItem.title || detail.sessionId.slice(0, 8),
       );
       if (options.scrollToBottom !== false) scrollBottom();
+    } else if (serverSessionTitle) {
+      sessionItem.title = serverSessionTitle;
     }
   }
 

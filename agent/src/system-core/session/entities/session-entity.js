@@ -148,7 +148,8 @@ export function normalizeSessionEntity(
     session?.parentSessionId || parentSessionId || "",
   ).trim();
   const normalizedShortMemoryCheckpoint = Number(session?.shortMemoryCheckpoint);
-  return {
+  const normalizedCustomTitle = String(session?.customTitle || "").trim();
+  const normalizedSession = {
     ...(session && typeof session === "object" ? session : {}),
     sessionId: normalizedSessionId,
     parentSessionId: normalizedParentSessionId,
@@ -163,6 +164,9 @@ export function normalizeSessionEntity(
     createdAt: String(session?.createdAt || "").trim() || nowValue,
     updatedAt: String(session?.updatedAt || "").trim() || nowValue,
   };
+  if (normalizedCustomTitle) normalizedSession.customTitle = normalizedCustomTitle;
+  else delete normalizedSession.customTitle;
+  return normalizedSession;
 }
 
 export function normalizeSessionTreeEntity(

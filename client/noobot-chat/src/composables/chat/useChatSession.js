@@ -24,6 +24,7 @@ import {
   getSessionThinkingDetailApi,
   getSessionsApi,
   replaceSessionTurnApi,
+  renameSessionApi,
 } from "../../services/api/chatApi";
 import { encryptPayloadBySessionId } from "../../shared/utils/sessionCrypto";
 import { RoleEnum, StreamEventEnum } from "../../shared/constants/chatConstants";
@@ -262,6 +263,7 @@ export function useChatSession({
     getSessionFullDetailApi,
     getSessionThinkingDetailApi,
     deleteSessionApi,
+    renameSessionApi,
   deleteSessionMessagesFromApi,
     makeViewMessage,
     foldMessagesForView,
@@ -452,6 +454,7 @@ export function useChatSession({
     loadingSessionDetail,
     newSession: chatList.newSession,
     deleteSession: chatList.deleteSession,
+    renameSession: chatList.renameSession,
     fetchSessions: chatList.fetchSessions,
     fetchSessionFullDetail: chatList.fetchSessionFullDetail,
     fetchThinkingDetail: chatList.fetchThinkingDetail,

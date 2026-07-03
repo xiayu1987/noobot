@@ -39,6 +39,7 @@ const emit = defineEmits([
   "connect",
   "new-session",
   "delete-session",
+  "rename-session",
   "refresh-sessions",
   "select-session",
 ]);
@@ -156,6 +157,7 @@ const { translate } = useLocale();
       :collapsed="sidebarCollapsed && !isMobile"
       @select-session="emit('select-session', $event)"
       @delete-session="emit('delete-session', $event)"
+      @rename-session="emit('rename-session', $event)"
     />
   </aside>
 </template>

@@ -173,6 +173,7 @@ const {
   fetchThinkingDetail,
   selectSession,
   deleteSession,
+  renameSession,
   send,
   stopSending,
   deleteMonotonicMessage,
@@ -381,12 +382,14 @@ const {
 
 const {
   handleDeleteSession,
+  handleRenameSession,
   handleWorkspaceReset,
   onConnectorSelected,
 } = useAppShellSessionActions({
   activeSessionId,
   confirmDeleteSession,
   deleteSession,
+  renameSession,
   fetchSessions,
   refreshSessionConnectorsAsync,
   updateSessionSelectedConnector,
@@ -507,6 +510,7 @@ const drawerPanels = computed(() =>
       @connect="connectBackend"
       @new-session="newSession"
       @delete-session="handleDeleteSession"
+      @rename-session="handleRenameSession"
       @refresh-sessions="refreshSessionsFromSidebar"
       @select-session="handleSelectSession"
       @open-openvscode="openOpenVSCode"

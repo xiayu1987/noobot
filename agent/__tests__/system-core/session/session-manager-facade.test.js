@@ -141,6 +141,10 @@ test("createSessionFacade should delegate CRUD and connector methods to sessionC
         captured.push(["setRootSessionSelectedConnectors", payload]);
         return { search: "google" };
       },
+      async renameSession(payload = {}) {
+        captured.push(["renameSession", payload]);
+        return { sessionId: payload.sessionId, customTitle: payload.title };
+      },
     },
     sessionMessageService: {},
     sessionContextService: {},
@@ -155,14 +159,17 @@ test("createSessionFacade should delegate CRUD and connector methods to sessionC
     sessionId: "s1",
     selectedConnectors: { search: "google" },
   });
+  const renamed = await session.renameSession({ userId: "u1", sessionId: "s1", title: "new name" });
 
-  assert.equal(captured.length, 3);
+  assert.equal(captured.length, 4);
   assert.equal(captured[0][0], "createSession");
   assert.equal(captured[1][0], "getSessionBundle");
   assert.equal(captured[2][0], "setRootSessionSelectedConnectors");
+  assert.equal(captured[3][0], "renameSession");
   assert.deepEqual(created, { exists: true });
   assert.equal(bundle.exists, true);
   assert.deepEqual(connectors, { search: "google" });
+  assert.deepEqual(renamed, { sessionId: "s1", customTitle: "new name" });
 });
 
 test("createSessionFacade should delegate message and tree methods", async () => {

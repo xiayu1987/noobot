@@ -294,6 +294,31 @@ export class SessionCrudService {
     return session;
   }
 
+
+  async renameSession({ userId, sessionId, title }) {
+    const normalizedTitle = String(title || "").trim();
+    if (!normalizedTitle) {
+      const error = new Error("Session title is required");
+      error.statusCode = 400;
+      throw error;
+    }
+    const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+      userId,
+      sessionId,
+      "",
+    );
+    const session = await this.sessionRepo.findById(
+      userId,
+      sessionId,
+      resolvedParentSessionId,
+    );
+    if (!session) return null;
+    session.customTitle = normalizedTitle;
+    session.updatedAt = this.now();
+    await this.sessionRepo.save(userId, session, resolvedParentSessionId);
+    return session;
+  }
+
   async getRootSessionSelectedConnectors({ userId, sessionId }) {
     const rootSessionId = this.sessionTreeService
       ? await this.sessionTreeService.getRootSessionId({ userId, sessionId })

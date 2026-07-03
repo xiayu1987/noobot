@@ -114,6 +114,21 @@ export async function putSessionConnectorSelectionApi(
   );
 }
 
+export async function renameSessionApi(
+  { userId = "", sessionId = "", title = "" },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch(
+    `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/rename`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: String(title || "").trim() }),
+    },
+  );
+}
+
 export async function getSessionDetailApi(
   { userId = "", sessionId = "" },
   { fetcher } = {},

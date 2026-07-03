@@ -297,6 +297,10 @@ export function createSessionFacade(runtime = {}) {
       return sessionCrudService.setSessionModelAlias({ userId, sessionId, modelAlias });
     },
 
+    async renameSession({ userId, sessionId, title }) {
+      return sessionCrudService.renameSession({ userId, sessionId, title });
+    },
+
     async getRootSessionSelectedConnectors({ userId, sessionId }) {
       return sessionCrudService.getRootSessionSelectedConnectors({ userId, sessionId });
     },
