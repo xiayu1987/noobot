@@ -282,6 +282,75 @@ test("chat-websocket-server: streaming=false 仍推系统事件且不推 delta",
   }
 });
 
+test("chat-websocket-server: attachment and delta events keep request turnScopeId", async () => {
+  const server = await startServerWithWs({
+    runSession: async ({ eventListener }) => {
+      eventListener?.onEvent?.({
+        event: "attachments_saved",
+        data: {
+          dialogProcessId: "dp-attachments",
+          sessionId: "sub-session-from-parser",
+          attachments: [{ id: "att-1", name: "a.txt" }],
+        },
+      });
+      eventListener?.onEvent?.({
+        event: "llm_delta",
+        data: { text: "root-token", dialogProcessId: "dp-root" },
+      });
+      eventListener?.onEvent?.({
+        event: "llm_delta",
+        data: {
+          text: "sub-token",
+          dialogProcessId: "dp-subagent",
+          sessionId: "sub-session-1",
+          subAgentSessionId: "sub-session-1",
+          subAgentCall: true,
+        },
+      });
+      return {
+        sessionId: "s1",
+        dialogProcessId: "dp-root",
+        answer: "done",
+        messages: [],
+        traces: [],
+        executionLogs: [],
+      };
+    },
+  });
+  try {
+    const { port } = server.address();
+    const events = await callChatWs({
+      port,
+      payload: {
+        userId: "u1",
+        sessionId: "s1",
+        message: "hello",
+        turnScopeId: "turn-parent",
+        config: { streaming: true, locale: "zh-CN" },
+      },
+    });
+
+    const attachmentsEvent = events.find((item) => item?.event === "attachments");
+    assert.equal(attachmentsEvent?.data?.sessionId, "s1");
+    assert.equal(attachmentsEvent?.data?.turnScopeId, "turn-parent");
+    assert.deepEqual(attachmentsEvent?.data?.attachments, [{ id: "att-1", name: "a.txt" }]);
+
+    const deltaEvent = events.find((item) => item?.event === "delta");
+    assert.equal(deltaEvent?.data?.turnScopeId, "turn-parent");
+
+    const subagentDeltaEvent = events.find(
+      (item) => item?.event === "thinking" && item?.data?.rawEvent === "subagent_llm_delta",
+    );
+    assert.equal(subagentDeltaEvent?.data?.sessionId, "s1");
+    assert.equal(subagentDeltaEvent?.data?.turnScopeId, "turn-parent");
+
+    const doneEvent = events.find((item) => item?.event === "done");
+    assert.equal(doneEvent?.data?.turnScopeId, "turn-parent");
+  } finally {
+    await closeServer(server);
+  }
+});
+
 test("chat-websocket-server: streaming=true 保持 delta 推送", async () => {
   const server = await startServerWithWs({
     runSession: async ({ eventListener }) => {

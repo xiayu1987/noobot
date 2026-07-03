@@ -190,6 +190,7 @@ export class SessionExecutionRunner {
         parentSessionId,
         caller,
         eventListener,
+        turnScopeId: String(turnScopeId || runConfig?.turnScopeId || "").trim(),
       });
       const normalizedRequestTurnScopeId = String(turnScopeId || runConfig?.turnScopeId || "").trim();
       const requestRunConfig = {

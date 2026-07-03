@@ -620,6 +620,7 @@ export class SessionExecutionEngine {
     parentSessionId = "",
     caller = CALLER_ROLE.USER,
     eventListener = null,
+    turnScopeId = "",
   }) {
     return this.initializer.initializeRunSessionRuntime({
       userId,
@@ -627,6 +628,7 @@ export class SessionExecutionEngine {
       parentSessionId,
       caller,
       eventListener,
+      turnScopeId,
     });
   }
 
