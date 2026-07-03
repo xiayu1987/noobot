@@ -501,6 +501,10 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "text": "Generate images from multimodal prompt. Input generation_content (optional model_name, image_size). Returns generated image results."
     },
     "params": {
+      "api_type": {
+        "key": "tools.multimodal.fieldApiType",
+        "text": "Image generation API type (optional), supports openai_responses and images_async."
+      },
       "generation_content": {
         "key": "tools.multimodal.fieldGenerationContent",
         "text": "Generation content description."
@@ -509,13 +513,34 @@ export const TOOL_SCHEMA_BY_TOOL = {
         "key": "tools.multimodal.fieldImageSize",
         "text": "Image size (optional)."
       },
+      "image_urls": {
+        "key": "tools.multimodal.fieldImageUrls",
+        "text": "Source image URLs for image-to-image or outpainting (optional)."
+      },
       "model_name": {
         "key": "tools.multimodal.fieldModelName",
         "text": "Model name."
+      },
+      "n": {
+        "key": "tools.multimodal.fieldN",
+        "text": "Number of images to generate (optional, 1-10)."
+      },
+      "quality": {
+        "key": "tools.multimodal.fieldQuality",
+        "text": "Image quality (optional)."
+      },
+      "resolution": {
+        "key": "tools.multimodal.fieldResolution",
+        "text": "Image resolution for ratio size (optional, e.g. 1K, 2K, 4K)."
+      },
+      "size": {
+        "key": "tools.multimodal.fieldSize",
+        "text": "Image size or aspect ratio (optional, e.g. auto, 1:1, 16:9, 1024x1024)."
       }
     },
     "texts": {
       "tools.multimodal.fetchGeneratedImageUrlFailed": "fetch generated image url failed",
+      "tools.multimodal.fetchUnavailable": "runtime fetch unavailable",
       "tools.multimodal.generateFailed": "multimodal generate failed",
       "tools.multimodal.generationContentRequired": "generation_content required",
       "tools.multimodal.imagesApiNotEnabledError": "Current account does not have image generation enabled (403 Images API is not enabled).",
@@ -523,7 +548,12 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "tools.multimodal.modelApiKeyMissing": "model api key missing",
       "tools.multimodal.multimodalUnsupportedError": (params = {}) =>
     `Current model does not support multimodal image generation: ${String(params.model || "").trim()}`,
-      "tools.multimodal.multimodalUnsupportedMessage": "Switch to a model that supports image generation, or specify one via model_name."
+      "tools.multimodal.multimodalUnsupportedMessage": "Switch to a model that supports image generation, or specify one via model_name.",
+      "tools.multimodal.taskFailed": "image generation task failed",
+      "tools.multimodal.taskIdMissing": "image generation task id missing",
+      "tools.multimodal.taskTimeout": (params = {}) =>
+    `image generation task timeout: ${String(params.taskId || "").trim()}`,
+      "tools.multimodal.trySwitchApiType": "Try switching api_type, for example openai_responses or images_async."
     }
   },
   "plan_multi_task_collaboration": {
