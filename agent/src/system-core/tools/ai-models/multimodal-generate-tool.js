@@ -38,6 +38,22 @@ const MULTIMODAL_PURPOSE_NAME = "multimodal_generate";
 const MULTIMODAL_DOMAIN_NAME = "tool";
 const DEFAULT_IMAGE_ASYNC_POLL_INTERVAL_MS = 5000;
 const DEFAULT_IMAGE_ASYNC_TIMEOUT_MS = 180000;
+const AVAILABLE_GENERATION_API_TYPES = Object.freeze([
+  IMAGE_GENERATION_API_TYPE.OPENAI_RESPONSES,
+  IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC,
+]);
+const GENERATION_API_TYPE_ALIASES = Object.freeze({
+  [IMAGE_GENERATION_API_TYPE.OPENAI_RESPONSES]: [
+    "responses",
+    "responses_api",
+    "openai_responses_api",
+  ],
+  [IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC]: [
+    "image_async",
+    "images_generations",
+    "images",
+  ],
+});
 
 function tMultimodal(runtime = {}, key = "", params = {}) {
   return tTool(runtime, `tools.multimodal.${String(key || "").trim()}`, params);
@@ -49,6 +65,97 @@ function resolveModelApiKey(modelSpec = {}) {
 
 function resolveModelBaseUrl(modelSpec = {}) {
   return String(modelSpec.base_url || "").trim();
+}
+
+function describeBaseUrlForDiagnostics(baseUrl = "") {
+  const value = String(baseUrl || "").trim();
+  if (!value) return "";
+  try {
+    const url = new URL(value);
+    url.username = "";
+    url.password = "";
+    url.search = "";
+    url.hash = "";
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return value.replace(/[?#].*$/, "").replace(/\/+$/, "");
+  }
+}
+
+function generationApiTypeToCallMode(apiType = "") {
+  return apiType === IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC
+    ? TOOL_CALL_MODE.IMAGES_ASYNC_API
+    : TOOL_CALL_MODE.OPENAI_RESPONSES_API;
+}
+
+function resolveGenerateErrorCode(error = {}) {
+  const errorCode = String(error?.code || "").trim();
+  if (errorCode && errorCode !== "undefined") return errorCode;
+  return ERROR_CODE.RECOVERABLE_MULTIMODAL_GENERATE_FAILED;
+}
+
+function maskDiagnosticUrl(value = "") {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "";
+  try {
+    const url = new URL(normalized);
+    if (url.username) url.username = "***";
+    if (url.password) url.password = "***";
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return normalized.replace(/:\/\/([^:@/]+):([^@/]+)@/, "://***:***@").replace(/[?#].*$/, "");
+  }
+}
+
+function collectProxyEnvDiagnostics(env = process.env) {
+  const keys = [
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "NO_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+    "no_proxy",
+  ];
+  return Object.fromEntries(
+    keys
+      .map((key) => [key, maskDiagnosticUrl(env?.[key])])
+      .filter(([, value]) => Boolean(value)),
+  );
+}
+
+function buildFailureDetails({
+  message = "",
+  modelAlias = "",
+  model = "",
+  requestedApiType = "",
+  generationApiType = "",
+  effectiveImageSize = "",
+  modelSpec = {},
+  requestUrl = "",
+  requestMethod = "",
+} = {}) {
+  const resolvedApiType =
+    generationApiType || resolveGenerationApiType(modelSpec || {}, requestedApiType);
+  return {
+    ...(message ? { message } : {}),
+    modelAlias,
+    model,
+    apiType: resolvedApiType,
+    requestedApiType: String(requestedApiType || "").trim(),
+    callMode: generationApiTypeToCallMode(resolvedApiType),
+    baseUrl: describeBaseUrlForDiagnostics(resolveModelBaseUrl(modelSpec || {})),
+    requestUrl: describeBaseUrlForDiagnostics(requestUrl),
+    requestMethod: String(requestMethod || "").trim().toUpperCase(),
+    imageSize: String(effectiveImageSize || "").trim(),
+    availableApiTypes: [...AVAILABLE_GENERATION_API_TYPES],
+    apiTypeAliases: GENERATION_API_TYPE_ALIASES,
+    platform: process.platform,
+    proxyEnv: collectProxyEnvDiagnostics(),
+  };
 }
 
 function buildMultimodalRequestHeaders(modelName = "", runtime = {}) {
@@ -305,14 +412,21 @@ async function generateWithOpenaiResponsesApi({
 }
 
 async function requestJson({ fetchImpl, url, method = "GET", headers = {}, body = null } = {}) {
-  const response = await fetchImpl(url, {
-    method,
-    headers: {
-      ...headers,
-      ...(body ? { "Content-Type": "application/json" } : {}),
-    },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
+  let response = null;
+  try {
+    response = await fetchImpl(url, {
+      method,
+      headers: {
+        ...headers,
+        ...(body ? { "Content-Type": "application/json" } : {}),
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+  } catch (error) {
+    error.requestUrl = String(url || "").trim();
+    error.requestMethod = String(method || "GET").trim().toUpperCase();
+    throw error;
+  }
   const responseText = await response.text();
   let payload = {};
   try {
@@ -325,6 +439,8 @@ async function requestJson({ fetchImpl, url, method = "GET", headers = {}, body 
     const error = new Error(message || `HTTP ${response?.status || 500}`);
     error.status = response?.status;
     error.payload = payload;
+    error.requestUrl = String(url || "").trim();
+    error.requestMethod = String(method || "GET").trim().toUpperCase();
     throw error;
   }
   return payload;
@@ -485,6 +601,9 @@ export function createMultimodalGenerateTool({ agentContext }) {
     }) => {
       const generationContent = String(generation_content || "").trim();
       let resolvedModelSpec = null;
+      let generationApiType = "";
+      let effectiveImageSize = "";
+      const requestedApiType = String(api_type || "").trim();
       if (!generationContent) {
         throw recoverableToolError(tMultimodal(runtime, "generationContentRequired"), {
           code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
@@ -529,8 +648,8 @@ export function createMultimodalGenerateTool({ agentContext }) {
         const modelNameForGeneration = String(
           resolvedModelSpec?.model || resolvedModelName || "",
         ).trim();
-        const generationApiType = resolveGenerationApiType(resolvedModelSpec || {}, api_type);
-        const effectiveImageSize = String(size || image_size || "").trim() ||
+        generationApiType = resolveGenerationApiType(resolvedModelSpec || {}, requestedApiType);
+        effectiveImageSize = String(size || image_size || "").trim() ||
           (generationApiType === IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC ? "1:1" : "1024x1024");
         const modelApiKey = resolveModelApiKey(resolvedModelSpec || {});
         if (!modelApiKey) {
@@ -608,10 +727,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
           {
             ok: true,
             status: TOOL_RESULT_STATUS.COMPLETED,
-            callMode:
-              generationApiType === IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC
-                ? TOOL_CALL_MODE.IMAGES_ASYNC_API
-                : TOOL_CALL_MODE.OPENAI_RESPONSES_API,
+            callMode: generationApiTypeToCallMode(generationApiType),
             modelAlias: String(resolvedModelSpec?.alias || "").trim(),
             model: String(resolvedModelSpec?.model || "").trim(),
             text: String(generationResult?.rawText || "").trim(),
@@ -642,34 +758,56 @@ export function createMultimodalGenerateTool({ agentContext }) {
           );
           throw recoverableToolError(hintMessage, {
             code: ERROR_CODE.RECOVERABLE_IMAGES_API_NOT_ENABLED,
-            details: {
+            details: buildFailureDetails({
               message: hintMessage,
               modelAlias,
               model: modelName,
-            },
+              requestedApiType,
+              generationApiType,
+              effectiveImageSize,
+              modelSpec: resolvedModelSpec || {},
+              requestUrl: error?.requestUrl,
+              requestMethod: error?.requestMethod,
+            }),
           });
         }
         if (!shouldAppendApiTypeHint(error)) {
           throw recoverableToolError(
             errorMessage || tMultimodal(runtime, "generateFailed"),
             {
-              code: String(error?.code || ERROR_CODE.RECOVERABLE_MULTIMODAL_GENERATE_FAILED),
-              details: {
+              code: resolveGenerateErrorCode(error),
+              details: buildFailureDetails({
                 modelAlias,
                 model: modelName,
-              },
+                requestedApiType,
+                generationApiType,
+                effectiveImageSize,
+                modelSpec: resolvedModelSpec || {},
+                requestUrl: error?.requestUrl,
+                requestMethod: error?.requestMethod,
+              }),
             },
           );
         }
+        const hintMessage = appendApiTypeHint(
+          errorMessage || tMultimodal(runtime, "generateFailed"),
+          runtime,
+        );
         throw recoverableToolError(
-          appendApiTypeHint(errorMessage || tMultimodal(runtime, "generateFailed"), runtime),
+          hintMessage,
           {
-            code: String(error?.code || ERROR_CODE.RECOVERABLE_MULTIMODAL_GENERATE_FAILED),
-            details: {
-              message: appendApiTypeHint(errorMessage || tMultimodal(runtime, "generateFailed"), runtime),
+            code: resolveGenerateErrorCode(error),
+            details: buildFailureDetails({
+              message: hintMessage,
               modelAlias,
               model: modelName,
-            },
+              requestedApiType,
+              generationApiType,
+              effectiveImageSize,
+              modelSpec: resolvedModelSpec || {},
+              requestUrl: error?.requestUrl,
+              requestMethod: error?.requestMethod,
+            }),
           },
         );
       }
