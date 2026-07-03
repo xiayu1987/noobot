@@ -709,6 +709,58 @@ describe("ThinkingPanel", () => {
     expect(wrapper.text()).toContain("current_tool");
   });
 
+  it("renders persisted tool calls together with completed tool results in thinking details", () => {
+    const wrapper = mountThinkingPanel(
+      {
+        role: "assistant",
+        pending: false,
+        sessionId: "session-1",
+        dialogProcessId: "dialog-1",
+        turnScopeId: "client-turn:tool-call-result",
+        completedToolLogs: [
+          {
+            event: "tool_result",
+            type: "tool_result",
+            text: "search result ok",
+            tool_call_id: "call-1",
+          },
+        ],
+      },
+      {
+        allMessages: [
+          {
+            role: "assistant",
+            pending: false,
+            sessionId: "session-1",
+            dialogProcessId: "dialog-1",
+            turnScopeId: "client-turn:tool-call-result",
+            tool_calls: [
+              {
+                id: "call-1",
+                function: {
+                  name: "search",
+                  arguments: JSON.stringify({ q: "noobot" }),
+                },
+              },
+            ],
+          },
+          {
+            role: "tool",
+            sessionId: "session-1",
+            dialogProcessId: "dialog-1",
+            turnScopeId: "client-turn:tool-call-result",
+            tool_call_id: "call-1",
+            content: "search result ok",
+          },
+        ],
+      },
+    );
+
+    expect(wrapper.text()).toContain('search({"q":"noobot"})');
+    expect(wrapper.text()).toContain("search result ok");
+    expect(wrapper.findAll(".execution-log-line")).toHaveLength(2);
+  });
+
   it("does not render plugin capability responses as guidance analysis", () => {
     const wrapper = mountThinkingPanel({
       role: "assistant",

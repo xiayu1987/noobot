@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { WebSocketServer } from "ws";
 
 import { createMultimodalGenerateTool } from "../../../src/system-core/tools/ai-models/multimodal-generate-tool.js";
 
@@ -134,4 +135,88 @@ test("multimodal_generate: explicit images_async overrides provider default api 
     },
   );
   assert.deepEqual(requestedUrls, ["https://models.example.com/v1/images/generations"]);
+});
+
+test("multimodal_generate: images_async falls back to websocket task stream on upgrade response", async () => {
+  const websocketServer = new WebSocketServer({ port: 0 });
+  await new Promise((resolve) => websocketServer.once("listening", resolve));
+  const port = websocketServer.address().port;
+  const requestedUrls = [];
+  let websocketAuth = "";
+  websocketServer.on("connection", (socket, request) => {
+    websocketAuth = String(request?.headers?.authorization || "");
+    socket.send(JSON.stringify({
+      type: "task.completed",
+      data: {
+        status: "succeeded",
+        result_data: [{ b64_json: `data:image/png;base64,${Buffer.from("fake-image").toString("base64")}` }],
+      },
+    }));
+  });
+
+  const runtime = {
+    globalConfig: {
+      providers: {
+        gpt_image_2: {
+          enabled: true,
+          used_for_conversation: false,
+          api_key: "test-key",
+          base_url: `http://127.0.0.1:${port}/v1`,
+          model: "gpt-image-2",
+          format: "openai_compatible",
+          multimodal_generation: {
+            support_understanding: false,
+            support_generation: {
+              enabled: true,
+              support_scope: ["image"],
+              api_type: "images_async",
+            },
+          },
+        },
+      },
+    },
+    userConfig: {},
+    sharedTools: {
+      async fetch(url, init = {}) {
+        requestedUrls.push(`${String(init?.method || "GET").toUpperCase()} ${String(url || "")}`);
+        if (String(url || "").endsWith("/v1/images/generations")) {
+          return {
+            ok: true,
+            async text() {
+              return JSON.stringify({ data: [{ task_id: "task-1" }] });
+            },
+          };
+        }
+        return {
+          ok: false,
+          status: 426,
+          async text() {
+            return "WebSocket upgrade required (Upgrade: websocket)";
+          },
+        };
+      },
+    },
+  };
+  const tool = getMultimodalGenerateTool(runtime);
+
+  try {
+    const payload = JSON.parse(await tool.invoke({
+      api_type: "images_async",
+      generation_content: "draw a bird",
+      model_name: "gpt-image-2",
+      size: "1:1",
+    }));
+
+    assert.equal(payload.ok, true);
+    assert.equal(payload.callMode, "images_async_api");
+    assert.equal(payload.summary.task_id, "task-1");
+    assert.equal(payload.summary.generated_image_count, 1);
+    assert.equal(websocketAuth, "Bearer test-key");
+    assert.deepEqual(requestedUrls, [
+      `POST http://127.0.0.1:${port}/v1/images/generations`,
+      `GET http://127.0.0.1:${port}/v1/tasks/task-1`,
+    ]);
+  } finally {
+    await new Promise((resolve) => websocketServer.close(resolve));
+  }
 });
