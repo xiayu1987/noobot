@@ -28,6 +28,7 @@ export class SessionExecutionInitializer {
     parentSessionId = "",
     caller = CALLER_ROLE.USER,
     eventListener = null,
+    turnScopeId = "",
   }) {
     const usedSessionId = sessionId;
     const upstreamListener = eventListener;
@@ -67,6 +68,7 @@ export class SessionExecutionInitializer {
       userId,
       sessionId: usedSessionId,
       parentSessionId,
+      turnScopeId,
       upstream: { ...upstreamListener, dialogProcessId },
     });
 

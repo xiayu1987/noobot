@@ -518,10 +518,16 @@ export function registerChatWebSocketServer(
                   ...normalizedEvent.data,
                   dialogProcessId: String(eventData?.dialogProcessId || ""),
                   sessionId: String(sessionId || ""),
+                  turnScopeId: currentRunMeta?.turnScopeId || currentTurnScopeId || "",
                 });
                 return;
               }
-              sendEvent("delta", { text: String(eventData.text || ""), dialogProcessId: String(eventData?.dialogProcessId || ""), sessionId: String(sessionId || "") });
+              sendEvent("delta", {
+                text: String(eventData.text || ""),
+                dialogProcessId: String(eventData?.dialogProcessId || ""),
+                sessionId: String(sessionId || ""),
+                turnScopeId: eventData?.turnScopeId || currentRunMeta?.turnScopeId || currentTurnScopeId || "",
+              });
               return;
             }
             if (
@@ -535,6 +541,7 @@ export function registerChatWebSocketServer(
                 ...eventData,
                 dialogProcessId: String(eventData?.dialogProcessId || ""),
                 sessionId: String(sessionId || ""),
+                turnScopeId: currentRunMeta?.turnScopeId || currentTurnScopeId || "",
                 attachments,
               });
               return;

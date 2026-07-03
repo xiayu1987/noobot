@@ -25,6 +25,7 @@ function enrichEventData(rawData = {}, defaults = {}) {
       currentDialogProcessId: defaults.dialogProcessId,
     }),
     sessionId: String(eventData?.sessionId || defaults.sessionId || ""),
+    turnScopeId: String(eventData?.turnScopeId || defaults.turnScopeId || ""),
     parentSessionId: resolveParentSessionId({
       context: { parentSessionId: eventData?.parentSessionId },
       parentSessionId: defaults.parentSessionId,
@@ -37,11 +38,12 @@ export function createExecutionEventListener({
   userId = "",
   sessionId = "",
   parentSessionId = "",
+  turnScopeId = "",
   upstream = null,
 }) {
   const dialogProcessId = resolveDialogProcessIdFromContext(upstream);
   const llmDeltaVisibilityFilter = createLlmDeltaVisibilityFilter();
-  const defaults = { dialogProcessId, sessionId, parentSessionId };
+  const defaults = { dialogProcessId, sessionId, parentSessionId, turnScopeId };
 
   return {
     onEvent: (evt = {}) => {
