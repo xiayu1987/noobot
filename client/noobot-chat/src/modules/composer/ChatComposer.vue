@@ -21,6 +21,7 @@ const props = defineProps({
   modelValue: { type: String, default: "" },
   uploadFiles: { type: Array, default: () => [] },
   sending: { type: Boolean, default: false },
+  composerActionState: { type: Object, default: () => ({}) },
   connected: { type: Boolean, default: false },
   canStop: { type: Boolean, default: false },
   allowUserInteraction: { type: Boolean, default: true },
@@ -93,20 +94,28 @@ const sendDisabled = computed(() => {
   const inputLength = String(props.modelValue || "").trim().length;
   const noInput = !inputLength && !attachmentCount.value;
   const disconnected = !props.connected;
+  const sendRequesting = Boolean(props.composerActionState?.sendRequesting);
+  const canStartNewSend = props.composerActionState?.canStartNewSend !== false;
   const blockedBySendingInteraction = props.interactionActive && props.sending;
-  const disabled = noInput || disconnected || blockedBySendingInteraction;
+  const disabled = noInput || disconnected || sendRequesting || !canStartNewSend || blockedBySendingInteraction;
   const disabledReason = noInput
     ? "empty"
     : disconnected
       ? "disconnected"
-      : blockedBySendingInteraction
-        ? "interactionActiveAndSending"
-        : "";
+      : sendRequesting
+        ? "sendRequesting"
+        : !canStartNewSend
+          ? "stopInFlight"
+          : blockedBySendingInteraction
+            ? "interactionActiveAndSending"
+          : "";
   logResendDebug("ui.sendDisabled", {
     disabled,
     disabledReason,
     connected: props.connected,
     sending: props.sending,
+    sendRequesting,
+    canStartNewSend,
     canStop: props.canStop,
     interactionActive: props.interactionActive,
     inputLength,
@@ -140,8 +149,12 @@ const {
 
 const sendButtonText = computed(() => {
   if (micRecording.value) return recordingTimeText.value;
-  return props.sending ? translate("composer.sending") : translate("composer.send");
+  const sendRequesting = Boolean(props.composerActionState?.sendRequesting);
+  return sendRequesting || props.sending ? translate("composer.sending") : translate("composer.send");
 });
+
+const sendRequesting = computed(() => Boolean(props.composerActionState?.sendRequesting));
+const stopRequesting = computed(() => Boolean(props.composerActionState?.stopRequesting));
 
 function onInputChange(value) {
   emit("update:modelValue", value);
@@ -267,6 +280,8 @@ defineExpose({
       <ComposerInputActions
         :model-value="modelValue"
         :sending="sending"
+        :send-requesting="sendRequesting"
+        :stop-requesting="stopRequesting"
         :can-stop="canStop"
         :send-disabled="sendDisabled"
         :send-button-text="sendButtonText"

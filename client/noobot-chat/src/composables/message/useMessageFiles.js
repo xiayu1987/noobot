@@ -394,7 +394,6 @@ function logGeneratedFileAccess(event, payload = {}) {
       event,
       ...payload,
     };
-    console.info("[noobot:file-access]", entry);
     window?.noobotDesktop?.logFileAccess?.(entry).catch?.(() => {});
   } catch {}
 }

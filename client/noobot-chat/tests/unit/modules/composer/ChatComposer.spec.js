@@ -234,6 +234,47 @@ describe("ChatComposer interactions", () => {
     expect(inputActions(wrapper).props("sending")).toBe(true);
   });
 
+  it("uses composer action state for frontend send and stop request controls", async () => {
+    const wrapper = mountComposer({
+      modelValue: "hello",
+      sending: false,
+      canStop: true,
+      composerActionState: {
+        sendRequesting: true,
+        stopRequesting: true,
+      },
+    });
+
+    expect(inputActions(wrapper).props("sendRequesting")).toBe(true);
+    expect(inputActions(wrapper).props("stopRequesting")).toBe(true);
+    expect(inputActions(wrapper).props("sendDisabled")).toBe(true);
+    expect(inputActions(wrapper).props("sendButtonText")).toBe("发送中");
+
+    inputActions(wrapper).vm.$emit("send");
+    inputActions(wrapper).vm.$emit("stop");
+    await nextTick();
+
+    expect(wrapper.emitted("send")).toHaveLength(1);
+    expect(wrapper.emitted("stop")).toHaveLength(1);
+
+    const backendSendingWrapper = mountComposer({
+      modelValue: "hello",
+      sending: true,
+      canStop: true,
+      composerActionState: {
+        sendRequesting: false,
+        stopRequesting: false,
+      },
+    });
+
+    expect(inputActions(backendSendingWrapper).props("sendRequesting")).toBe(false);
+    expect(inputActions(backendSendingWrapper).props("stopRequesting")).toBe(false);
+    expect(inputActions(backendSendingWrapper).props("sendDisabled")).toBe(false);
+    expect(inputActions(backendSendingWrapper).props("sendButtonText")).toBe("发送中");
+    expect(inputActions(backendSendingWrapper).props("sending")).toBe(true);
+    expect(inputActions(backendSendingWrapper).props("canStop")).toBe(true);
+  });
+
   it("emits upload changes and clears attachment selection through the owner flow", async () => {
     const file = new File(["hello"], "hello.txt", { type: "text/plain" });
     const ownerClearUploads = vi.fn();

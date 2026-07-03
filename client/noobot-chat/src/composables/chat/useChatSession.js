@@ -3,12 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { reactive, ref } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { applyCompletedToolLogsToMessages } from "../infra/sessionToolLogs";
 import {
   buildAppendMessage,
   buildViewMessage,
+  findVisibleLastMessage,
   foldConversationMessages,
   isHarnessInjectedMessage,
 } from "../infra/messageModel";
@@ -42,6 +43,11 @@ import { useChatStore } from "../../shared/stores/useChatStore";
 import { useProcessStore } from "../../shared/stores/useProcessStore";
 import { useLocale } from "../../shared/i18n/useLocale";
 import { getMessageRole } from "../infra/messageIdentity";
+import {
+  applySessionRunStateEvent,
+  evaluateSessionRunState,
+  SESSION_RUN_EVENT,
+} from "./sessionRunStateMachine";
 
 export function useChatSession({
   userId,
@@ -79,6 +85,37 @@ export function useChatSession({
   } = storeToRefs(chatStore);
   const conversationStateSnapshot = ref({});
   const conversationStateTimeline = ref([]);
+  const composerActionState = computed(() => ({
+    sendRequesting: Boolean(runStateSnapshot.value?.composerActionState?.sendRequesting),
+    stopRequesting: Boolean(runStateSnapshot.value?.composerActionState?.stopRequesting),
+    stopPendingUntilBackendReady: Boolean(runStateSnapshot.value?.composerActionState?.stopPendingUntilBackendReady),
+    canStartNewSend: evaluateSessionRunState(runStateSnapshot.value).canStartNewSend !== false,
+    canRetryMessage: evaluateSessionRunState(runStateSnapshot.value).canRetryMessage !== false,
+    canDeleteMessage: evaluateSessionRunState(runStateSnapshot.value).canDeleteMessage !== false,
+    stopInFlight: Boolean(evaluateSessionRunState(runStateSnapshot.value).stopInFlight),
+    awaitingBackendStop: Boolean(evaluateSessionRunState(runStateSnapshot.value).awaitingBackendStop),
+  }));
+
+  const applyComposerActionStateEvent = (event) => applySessionRunStateEvent({
+    stateRef: runStateSnapshot,
+    sending,
+    canStop,
+    event,
+  });
+
+  function replayPendingStopWhenBackendReady() {
+    const evaluation = evaluateSessionRunState(runStateSnapshot.value);
+    if (!evaluation.composerActionState?.stopPendingUntilBackendReady) return false;
+    if (!evaluation.backendCanStop) return false;
+    const requested = chatEngine.stopSending();
+    if (requested) {
+      applyComposerActionStateEvent({
+        type: SESSION_RUN_EVENT.LOCAL_STOP_PENDING_CLEARED,
+        source: "use_chat_session",
+      });
+    }
+    return requested;
+  }
 
   function trackConversationState(stateEntry = {}) {
     const state = String(stateEntry?.state || "").trim();
@@ -119,6 +156,25 @@ export function useChatSession({
         ts: updatedAt,
       },
     ].slice(-80);
+    applySessionRunStateEvent({
+      stateRef: runStateSnapshot,
+      sending,
+      canStop,
+      event: {
+        type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
+        state,
+        sessionId,
+        dialogProcessId,
+        turnScopeId,
+        source: normalizedEntry.source || "conversation_state",
+        sourceEvent: normalizedEntry.sourceEvent,
+        seq: normalizedEntry.seq,
+        createdAtMs,
+        updatedAtMs,
+        createdAt,
+        updatedAt,
+      },
+    });
   }
 
   const {
@@ -167,7 +223,7 @@ export function useChatSession({
     activeSession.value.messages.push(msg);
     activeSession.value.rawMessages.push(msg);
     activeSession.value.messageCount = (activeSession.value.messageCount || 0) + 1;
-    activeSession.value.lastMessage = msg;
+    activeSession.value.lastMessage = findVisibleLastMessage(activeSession.value.messages);
     activeSession.value.updatedAt = nowIso();
     return msg;
   }
@@ -297,6 +353,58 @@ export function useChatSession({
     processStore,
   });
 
+  watch(
+    () => [
+      runStateSnapshot.value?.state,
+      runStateSnapshot.value?.sessionId,
+      runStateSnapshot.value?.dialogProcessId,
+      runStateSnapshot.value?.turnScopeId,
+      runStateSnapshot.value?.composerActionState?.stopPendingUntilBackendReady,
+    ],
+    () => replayPendingStopWhenBackendReady(),
+  );
+
+  async function sendWithComposerActionState(...args) {
+    if (evaluateSessionRunState(runStateSnapshot.value).canStartNewSend === false) return false;
+    if (composerActionState.value.sendRequesting) return false;
+    applyComposerActionStateEvent({
+      type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
+      source: "use_chat_session",
+    });
+    try {
+      return await chatEngine.send(...args);
+    } finally {
+      replayPendingStopWhenBackendReady();
+      applyComposerActionStateEvent({
+        type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_SETTLED,
+        source: "use_chat_session",
+      });
+    }
+  }
+
+  function stopSendingWithComposerActionState(...args) {
+    if (composerActionState.value.stopRequesting) return false;
+    applyComposerActionStateEvent({
+      type: SESSION_RUN_EVENT.LOCAL_STOP_REQUEST_STARTED,
+      source: "use_chat_session",
+    });
+    const requested = chatEngine.stopSending(...args);
+    if (!requested) {
+      if (composerActionState.value.sendRequesting) {
+        applyComposerActionStateEvent({
+          type: SESSION_RUN_EVENT.LOCAL_STOP_PENDING_BACKEND_READY,
+          source: "use_chat_session",
+        });
+        return true;
+      }
+      applyComposerActionStateEvent({
+        type: SESSION_RUN_EVENT.LOCAL_STOP_REQUEST_SETTLED,
+        source: "use_chat_session",
+      });
+    }
+    return requested;
+  }
+
   async function handleReconnect() {
     const pendingReconnectReplays = [];
     const trackReconnectReplay = (replayPromise) => {
@@ -335,6 +443,7 @@ export function useChatSession({
     uploadFiles,
     sending,
     canStop,
+    composerActionState,
     sessions,
     activeSessionId,
     activeSession,
@@ -347,8 +456,8 @@ export function useChatSession({
     fetchSessionFullDetail: chatList.fetchSessionFullDetail,
     fetchThinkingDetail: chatList.fetchThinkingDetail,
     selectSession: chatList.selectSession,
-    send: chatEngine.send,
-    stopSending: chatEngine.stopSending,
+    send: sendWithComposerActionState,
+    stopSending: stopSendingWithComposerActionState,
     prepareMonotonicMessageAction: chatEngine.prepareMonotonicMessageAction,
     cascadeDeleteMessagesFrom: chatEngine.cascadeDeleteMessagesFrom,
     deleteMonotonicMessage: chatEngine.deleteMonotonicMessage,

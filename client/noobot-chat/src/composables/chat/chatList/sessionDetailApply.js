@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { RoleEnum } from "../../../shared/constants/chatConstants";
+import { findVisibleLastMessage } from "../../infra/messageModel";
 import { ProcessEventSource, ProcessStatus } from "../../../shared/process/protocol";
 import { createProcessSnapshotFromLogs } from "../../../shared/process/aggregator";
 import {
@@ -254,9 +255,7 @@ export function createSessionDetailApplicator({
     }
     hydrateProcessSnapshotsFromMessages(sessionItem.messages);
     sessionItem.messageCount = sessionItem.messages.length;
-    sessionItem.lastMessage = sessionItem.messages.length
-      ? sessionItem.messages[sessionItem.messages.length - 1]
-      : null;
+    sessionItem.lastMessage = findVisibleLastMessage(sessionItem.messages);
 
     if (!preserveCurrentMessages) {
       sessionItem.title = sessionTitleFromMessages(

@@ -23,8 +23,43 @@ export function createInitialSessionRunState(overrides = {}) {
     updatedAtIso: "",
     updatedAt: 0,
     stopRequestedAt: 0,
+    composerActionState: {
+      sendRequesting: false,
+      stopRequesting: false,
+      stopPendingUntilBackendReady: false,
+    },
     lastEventType: "",
     ...overrides,
+  };
+}
+
+export function applySessionRunActionEventPatch({ current, event }) {
+  const currentComposerActionState = current?.composerActionState || {};
+  const nextComposerActionState = {
+    sendRequesting: Boolean(currentComposerActionState.sendRequesting),
+    stopRequesting: Boolean(currentComposerActionState.stopRequesting),
+    stopPendingUntilBackendReady: Boolean(currentComposerActionState.stopPendingUntilBackendReady),
+  };
+  if (event.type === "local_send_request_started") nextComposerActionState.sendRequesting = true;
+  if (event.type === "local_send_request_settled") nextComposerActionState.sendRequesting = false;
+  if (event.type === "local_stop_request_started") nextComposerActionState.stopRequesting = true;
+  if (event.type === "local_stop_request_settled") nextComposerActionState.stopRequesting = false;
+  if (event.type === "local_stop_pending_backend_ready") {
+    nextComposerActionState.stopRequesting = true;
+    nextComposerActionState.stopPendingUntilBackendReady = true;
+  }
+  if (event.type === "local_stop_pending_cleared") {
+    nextComposerActionState.stopPendingUntilBackendReady = false;
+  }
+  return {
+    ...current,
+    composerActionState: nextComposerActionState,
+    updatedAt: event.timestamp,
+    updatedAtMs: event.updatedAtMs || event.timestamp,
+    updatedAtIso:
+      event.updatedAt ||
+      (event.updatedAtMs > 0 ? toIsoTime(event.updatedAtMs) : toIsoTime(event.timestamp)),
+    lastEventType: event.type,
   };
 }
 
@@ -61,6 +96,14 @@ export function applySessionRunEventPatch({ current, event, startsNewTurn, nextD
         : startsNewTurn
           ? 0
         : Number(current.stopRequestedAt || 0),
+    composerActionState: {
+      sendRequesting: false,
+      stopRequesting:
+        event.state === SESSION_RUN_STATE.STOP_REQUESTED
+          ? Boolean(current?.composerActionState?.stopRequesting)
+          : false,
+      stopPendingUntilBackendReady: false,
+    },
     lastEventType: event.type,
   };
 }

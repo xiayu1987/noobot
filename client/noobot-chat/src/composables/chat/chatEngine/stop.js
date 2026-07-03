@@ -192,8 +192,32 @@ export function stopSending({
   } else if (canStop) {
     canStop.value = false;
   }
-  return chatWebSocketClient?.requestStop?.(
-    stopPayload,
-    onForceStopUiFinalize,
-  );
+  const applyStopRequestFailure = (error) => {
+    if (applyRunStateEvent) {
+      applyRunStateEvent({
+        type: SESSION_RUN_EVENT.LOCAL_FAILURE,
+        state: "error",
+        sessionId: stopPayload.sessionId,
+        dialogProcessId: stopPayload.dialogProcessId,
+        turnScopeId: stopPayload.turnScopeId,
+        source: "stop_sending_request_failed",
+        error,
+      });
+    } else if (canStop) {
+      canStop.value = false;
+    }
+    return false;
+  };
+  try {
+    const requestResult = chatWebSocketClient?.requestStop?.(
+      stopPayload,
+      onForceStopUiFinalize,
+    );
+    if (requestResult && typeof requestResult.catch === "function") {
+      return requestResult.catch(applyStopRequestFailure);
+    }
+    return requestResult;
+  } catch (error) {
+    return applyStopRequestFailure(error);
+  }
 }

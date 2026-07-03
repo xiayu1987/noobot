@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { promoteSessionIdentityToBackendId } from "../../infra/sessionIdentity";
+import { findVisibleLastMessage } from "../../infra/messageModel";
 import { nowIso } from "../../infra/timeFields";
 import { findReconnectDoneEnvelopeWithMessages } from "../../infra/reconnectReplayModel";
 import { sanitizeExecutionLogForDisplay } from "../chatEngine/utils";
@@ -92,9 +93,7 @@ export function applyDoneMessagesFromReconnect({
     activeSession.value.sessionDocs || [],
   );
   activeSession.value.messageCount = activeSession.value.messages.length;
-  activeSession.value.lastMessage = activeSession.value.messages.length
-    ? activeSession.value.messages[activeSession.value.messages.length - 1]
-    : null;
+  activeSession.value.lastMessage = findVisibleLastMessage(activeSession.value.messages);
   activeSession.value.title = sessionTitleFromMessages(
     activeSession.value.messages,
     activeSession.value.title || returnedSessionId.slice(0, 8),

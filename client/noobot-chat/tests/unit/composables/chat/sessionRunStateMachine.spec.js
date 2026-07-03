@@ -61,6 +61,165 @@ describe("sessionRunStateMachine", () => {
     });
   });
 
+  it("keeps composer action request flags in the session run state machine", () => {
+    const initial = createInitialSessionRunState();
+    const sendRequesting = transitionSessionRunState(initial, {
+      type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
+    });
+    expect(sendRequesting.state).toBe(SESSION_RUN_STATE.IDLE);
+    expect(evaluateSessionRunState(sendRequesting).composerActionState).toEqual({
+      sendRequesting: true,
+      stopRequesting: false,
+      stopPendingUntilBackendReady: false,
+    });
+
+    const backendSending = transitionSessionRunState(sendRequesting, {
+      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+      sessionId: "s1",
+      turnScopeId: "client-1",
+    });
+    expect(evaluateSessionRunState(backendSending)).toMatchObject({
+      sending: true,
+      canStop: true,
+      composerActionState: {
+        sendRequesting: false,
+        stopRequesting: false,
+        stopPendingUntilBackendReady: false,
+      },
+    });
+
+    const stopRequesting = transitionSessionRunState(backendSending, {
+      type: SESSION_RUN_EVENT.LOCAL_STOP_REQUEST_STARTED,
+    });
+    expect(evaluateSessionRunState(stopRequesting).composerActionState).toEqual({
+      sendRequesting: false,
+      stopRequesting: true,
+      stopPendingUntilBackendReady: false,
+    });
+
+    const stopRequested = transitionSessionRunState(stopRequesting, {
+      type: SESSION_RUN_EVENT.LOCAL_STOP_REQUESTED,
+      sessionId: "s1",
+      turnScopeId: "client-1",
+    });
+    expect(evaluateSessionRunState(stopRequested)).toMatchObject({
+      sending: true,
+      canStop: false,
+      composerActionState: {
+        sendRequesting: false,
+        stopRequesting: true,
+        stopPendingUntilBackendReady: false,
+      },
+    });
+
+    const stopped = transitionSessionRunState(stopRequested, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: "stopped",
+      sessionId: "s1",
+      turnScopeId: "client-1",
+    });
+    expect(evaluateSessionRunState(stopped)).toMatchObject({
+      sending: false,
+      canStop: false,
+      composerActionState: {
+        sendRequesting: false,
+        stopRequesting: false,
+        stopPendingUntilBackendReady: false,
+      },
+    });
+  });
+
+  it("keeps an early stop intent pending until backend stop is available", () => {
+    const sendRequesting = transitionSessionRunState(createInitialSessionRunState(), {
+      type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
+    });
+    const pendingStop = transitionSessionRunState(sendRequesting, {
+      type: SESSION_RUN_EVENT.LOCAL_STOP_PENDING_BACKEND_READY,
+    });
+    expect(evaluateSessionRunState(pendingStop)).toMatchObject({
+      sending: false,
+      canStop: true,
+      backendCanStop: false,
+      stopInFlight: true,
+      awaitingBackendStop: true,
+      canStartNewSend: false,
+      canRetryMessage: false,
+      canDeleteMessage: false,
+      composerActionState: {
+        sendRequesting: true,
+        stopRequesting: true,
+        stopPendingUntilBackendReady: true,
+      },
+    });
+
+    const backendReady = transitionSessionRunState(pendingStop, {
+      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+      sessionId: "s1",
+      turnScopeId: "client-1",
+    });
+    expect(evaluateSessionRunState(backendReady)).toMatchObject({
+      sending: true,
+      canStop: true,
+      backendCanStop: true,
+      stopInFlight: false,
+      awaitingBackendStop: false,
+      canStartNewSend: true,
+      canRetryMessage: true,
+      canDeleteMessage: true,
+      composerActionState: {
+        sendRequesting: false,
+        stopRequesting: false,
+        stopPendingUntilBackendReady: false,
+      },
+    });
+  });
+
+  it("locks new send, resend, and delete while backend stop confirmation is pending", () => {
+    const sending = transitionSessionRunState(createInitialSessionRunState(), {
+      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+      sessionId: "s1",
+      turnScopeId: "client-1",
+    });
+    const stopRequesting = transitionSessionRunState(sending, {
+      type: SESSION_RUN_EVENT.LOCAL_STOP_REQUEST_STARTED,
+    });
+    expect(evaluateSessionRunState(stopRequesting)).toMatchObject({
+      stopInFlight: true,
+      awaitingBackendStop: true,
+      canStartNewSend: false,
+      canRetryMessage: false,
+      canDeleteMessage: false,
+    });
+
+    const stopping = transitionSessionRunState(stopRequesting, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: "stopping",
+      sessionId: "s1",
+      turnScopeId: "client-1",
+    });
+    expect(evaluateSessionRunState(stopping)).toMatchObject({
+      stopInFlight: true,
+      awaitingBackendStop: true,
+      canStartNewSend: false,
+      canRetryMessage: false,
+      canDeleteMessage: false,
+    });
+
+    const stopped = transitionSessionRunState(stopping, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: "stopped",
+      sessionId: "s1",
+      turnScopeId: "client-1",
+    });
+    expect(evaluateSessionRunState(stopped)).toMatchObject({
+      stopInFlight: false,
+      awaitingBackendStop: false,
+      canStartNewSend: true,
+      canRetryMessage: true,
+      canDeleteMessage: true,
+    });
+  });
+
   it("scopes local turns by turnScopeId and binds backend dialogProcessId", () => {
     const firstTurn = transitionSessionRunState(createInitialSessionRunState(), {
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,

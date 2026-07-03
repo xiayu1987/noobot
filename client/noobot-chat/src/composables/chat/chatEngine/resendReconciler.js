@@ -6,6 +6,7 @@
 import {
   getMessageTurnScopeId,
 } from "../../infra/messageIdentity";
+import { findVisibleLastMessage } from "../../infra/messageModel";
 import { nowIso } from "../../infra/timeFields";
 
 function createRemovedIdentitySnapshot(anchorMessage = {}, removedMessages = []) {
@@ -138,6 +139,6 @@ export function syncSessionMessageSummary(session) {
   if (!session) return;
   const messages = Array.isArray(session.messages) ? session.messages : [];
   session.messageCount = messages.length;
-  session.lastMessage = messages.length ? messages[messages.length - 1] : null;
+  session.lastMessage = findVisibleLastMessage(messages);
   session.updatedAt = nowIso();
 }

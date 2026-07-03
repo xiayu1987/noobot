@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildAppendMessage, buildViewMessage, foldConversationMessages } from "../../../../src/composables/infra/messageModel";
+import {
+  buildAppendMessage,
+  buildViewMessage,
+  findVisibleLastMessage,
+  foldConversationMessages,
+} from "../../../../src/composables/infra/messageModel";
 
 const envelope = {
   protocol: "noobot.semantic-transfer",
@@ -25,6 +30,20 @@ const envelope = {
 };
 
 describe("messageModel semantic transfer", () => {
+  it("finds the last user-visible message and skips harness injected relay messages", () => {
+    const userMessage = { role: "user", content: "real request" };
+    const assistantMessage = { role: "assistant", content: "real answer" };
+    const harnessRelay = {
+      role: "user",
+      content: "[来自harness外部模型输出/planning] hidden relay",
+      injectedMessage: true,
+      injectedBy: "harness-plugin",
+    };
+
+    expect(findVisibleLastMessage([userMessage, assistantMessage, harnessRelay])).toBe(assistantMessage);
+    expect(findVisibleLastMessage([harnessRelay])).toBe(null);
+  });
+
   it("renders serialized LangChain human and ai messages as user and assistant", () => {
     const messages = foldConversationMessages([
       {

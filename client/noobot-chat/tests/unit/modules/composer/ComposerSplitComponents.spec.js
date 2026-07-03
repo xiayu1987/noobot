@@ -196,10 +196,11 @@ describe("ComposerInputActions", () => {
     expect(wrapper.emitted("mic-pointer-up-or-cancel")).toHaveLength(1);
   });
 
-  it("reflects disabled, loading and recording status", () => {
+  it("reflects disabled, request loading and recording status", () => {
     const wrapper = mount(ComposerInputActions, {
       props: {
         sending: true,
+        sendRequesting: true,
         sendDisabled: true,
         sendButtonText: "发送中",
         captureActionsDisabled: true,
@@ -215,6 +216,38 @@ describe("ComposerInputActions", () => {
     expect(wrapper.find("el-button[title='拍照']").attributes("disabled")).toBe("true");
     expect(wrapper.find("el-button[title='按住录音']").classes()).toContain("is-recording");
     expect(wrapper.find(".mic-status-text").text()).toBe("松开发送 1");
+  });
+
+  it("keeps backend sending separate from frontend send request loading", () => {
+    const wrapper = mount(ComposerInputActions, {
+      props: {
+        sending: true,
+        sendRequesting: false,
+        sendDisabled: false,
+        sendButtonText: "发送中",
+      },
+      global: globalMountOptions,
+    });
+
+    const sendButton = wrapper.find("el-button.send-btn");
+    expect(sendButton.attributes("loading")).toBe("false");
+    expect(sendButton.attributes("disabled")).toBe("false");
+    expect(sendButton.text()).toBe("发送中");
+  });
+
+  it("uses stop request state for stop button loading and disabled", () => {
+    const wrapper = mount(ComposerInputActions, {
+      props: {
+        canStop: true,
+        stopRequesting: true,
+        sendButtonText: "发送",
+      },
+      global: globalMountOptions,
+    });
+
+    const stopButton = wrapper.find("el-button.stop-float-btn");
+    expect(stopButton.attributes("loading")).toBe("true");
+    expect(stopButton.attributes("disabled")).toBe("true");
   });
 
   it("does not send when Enter confirms an active IME composition", async () => {

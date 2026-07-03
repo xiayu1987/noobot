@@ -6,7 +6,7 @@
 import { normalizeTrimmedString } from "./utils";
 import { createResendMessageTransaction } from "./resendTransaction";
 import { syncSessionMessageSummary } from "./resendReconciler";
-import { getCurrentSessionVersion } from "./sessionVersionManager";
+import { createSessionVersionManager } from "./sessionVersionManager";
 import {
   buildMessageAnchor,
   getMessageDialogProcessId,
@@ -18,6 +18,7 @@ import { nowMs } from "../../infra/timeFields";
 import {
   SESSION_RUN_EVENT,
   SESSION_RUN_STATE,
+  evaluateSessionRunState,
   isInFlightSessionRunState,
 } from "../sessionRunStateMachine";
 import {
@@ -158,9 +159,8 @@ export function createMonotonicMessageActions({
     targetMessage = null,
     originalTargetMessage = null,
   } = {}) {
-    if (!sending?.value) return true;
     const stoppedTurnMessage = getStoppedTurnMessage({ targetMessage, originalTargetMessage });
-    if (stoppedTurnMessage) {
+    if (sending?.value && stoppedTurnMessage) {
       const session = activeSession?.value || {};
       if (isStopPendingRunState(runStateSnapshot?.value?.state)) {
         applyRunStateEvent?.({
@@ -177,6 +177,11 @@ export function createMonotonicMessageActions({
         return true;
       }
     }
+    const runStateEvaluation = evaluateSessionRunState(runStateSnapshot?.value);
+    if (runStateEvaluation.canRetryMessage === false || runStateEvaluation.canDeleteMessage === false) {
+      return false;
+    }
+    if (!sending?.value) return true;
     if (!hasConsistentSendingState()) {
       notifyStateMismatch();
       return false;
@@ -242,25 +247,44 @@ export function createMonotonicMessageActions({
   async function deleteMonotonicMessage(targetMessage = {}, options = {}) {
     const userTargetMessage = resolveMonotonicUserTarget(targetMessage);
     if (!userTargetMessage) return false;
-    await prepareMonotonicMessageAction({
+    const prepared = await prepareMonotonicMessageAction({
       ...options,
       targetMessage: userTargetMessage,
       originalTargetMessage: targetMessage,
     });
+    if (prepared === false) return false;
     if (typeof deleteSessionMessagesFromApi === "function") {
       const sessionId = normalizeTrimmedString(
         activeSession.value?.backendSessionId || activeSession.value?.sessionId || activeSessionId.value,
       );
       const anchor = buildMessageAnchor(userTargetMessage);
       if (!Object.keys(anchor).length) return false;
-      const result = await deleteSessionMessagesFromApi({
-        userId: userId?.value || userId,
-        sessionId,
-        parentSessionId: normalizeTrimmedString(activeSession.value?.parentSessionId),
-        anchor,
-        expectedVersion: getCurrentSessionVersion(activeSession),
-      }, { fetcher: authFetch });
-      const payload = typeof result?.json === "function" ? await result.json() : result;
+      const sessionVersionManager = createSessionVersionManager({
+        activeSession,
+        fetchSessionDetail,
+        applySessionDetail,
+      });
+      const mutationResult = await sessionVersionManager.runVersionedMutation({
+        mutate: async ({ expectedVersion, attempt }) => {
+          const result = await deleteSessionMessagesFromApi({
+            userId: userId?.value || userId,
+            sessionId,
+            parentSessionId: normalizeTrimmedString(activeSession.value?.parentSessionId),
+            anchor,
+            expectedVersion,
+            idempotencyKey: attempt > 1 ? `${anchor.turnScopeId || "delete"}:retry-version` : "",
+          }, { fetcher: authFetch });
+          const payload = typeof result?.json === "function" ? await result.json() : result;
+          return { result, payload };
+        },
+        refreshOptions: {
+          sessionId,
+          detailOptions: { source: "deleteVersionConflict" },
+          logContext: { turnScopeId: anchor.turnScopeId || "" },
+        },
+      });
+      const result = mutationResult?.result;
+      const payload = mutationResult?.payload;
       if (result?.ok === false || payload?.ok === false) return false;
       const sessionDetail = normalizeSessionDetailSnapshot(payload, sessionId);
       if (!sessionDetail) return false;

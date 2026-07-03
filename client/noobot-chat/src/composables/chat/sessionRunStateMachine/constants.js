@@ -38,12 +38,18 @@ export const SESSION_RUN_STATE = Object.freeze({
 
 export const SESSION_RUN_EVENT = Object.freeze({
   LOCAL_SEND_STARTED: "local_send_started",
+  LOCAL_SEND_REQUEST_STARTED: "local_send_request_started",
+  LOCAL_SEND_REQUEST_SETTLED: "local_send_request_settled",
   LOCAL_RESEND_STARTED: "local_resend_started",
   LOCAL_RESEND_REPLACING_TURN: "local_resend_replacing_turn",
   LOCAL_RESEND_STREAMING: "local_resend_streaming",
   LOCAL_RESEND_COMPLETED: "local_resend_completed",
   LOCAL_RESEND_FAILED: "local_resend_failed",
   LOCAL_STOP_REQUESTED: "local_stop_requested",
+  LOCAL_STOP_REQUEST_STARTED: "local_stop_request_started",
+  LOCAL_STOP_REQUEST_SETTLED: "local_stop_request_settled",
+  LOCAL_STOP_PENDING_BACKEND_READY: "local_stop_pending_backend_ready",
+  LOCAL_STOP_PENDING_CLEARED: "local_stop_pending_cleared",
   BACKEND_RECOVERABLE_RUNNING: "backend_recoverable_running",
   BACKEND_CONVERSATION_STATE: "backend_conversation_state",
   BACKEND_CHANNEL_STATE: "backend_channel_state",
