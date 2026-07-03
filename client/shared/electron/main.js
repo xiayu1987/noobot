@@ -52,7 +52,7 @@ let pendingSuperAdminResolve = null;
 let desktopConfigState = null;
 const startupStatuses = [];
 
-const { createWindow, resolveNoobotUrl, getMainWindow } = createDesktopWindowManager({
+const { createWindow, resolveNoobotUrl, reloadWebContents, getMainWindow } = createDesktopWindowManager({
   app,
   dirname: __dirname,
   agentProxyOrigin,
@@ -167,6 +167,7 @@ registerStartupIpcHandlers({
   saveSuperAdminConfig,
   ensureSelectedDependencies,
   ensureServiceStarted,
+  reloadWebContents,
   resolveNoobotUrl,
   getMainWindow,
   sendStatus,

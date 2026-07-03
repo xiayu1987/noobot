@@ -18,6 +18,9 @@ contextBridge.exposeInMainWorld("noobotDesktop", {
   getStartupStatuses() {
     return ipcRenderer.invoke("noobot:get-startup-statuses");
   },
+  reload() {
+    return ipcRenderer.invoke("noobot:reload");
+  },
   saveConfigParams(values) {
     return ipcRenderer.invoke("noobot:save-config-params", values);
   },
