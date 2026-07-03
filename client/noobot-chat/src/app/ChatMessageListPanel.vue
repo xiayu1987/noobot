@@ -46,7 +46,12 @@ const props = defineProps({
 const listRef = ref(null);
 const { translate } = useLocale();
 const messageItemSharedProps = computed(() => ({
-  allMessages: props.activeSession?.rawMessages || props.activeSession?.messages || [],
+  // Message actions are mounted on the folded/rendered message objects from
+  // activeSession.messages. In old sessions rawMessages may contain stale detail
+  // snapshots that do not include the newly stopped turn/runtime patch yet,
+  // which makes monotonic actions resolve against a different list than the
+  // rendered user row. Keep allMessages aligned with the rendered list first.
+  allMessages: props.activeSession?.messages || props.activeSession?.rawMessages || [],
   sessionDocs: props.activeSession?.sessionDocs || [],
   userId: props.userId,
   authFetch: props.authFetch,

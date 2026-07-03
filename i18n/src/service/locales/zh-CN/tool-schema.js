@@ -493,6 +493,10 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "text": "生成图片内容。输入 generation_content（可选 model_name、image_size）。返回生成图片结果。"
     },
     "params": {
+      "api_type": {
+        "key": "tools.multimodal.fieldApiType",
+        "text": "图片生成接口类型（可选），支持 openai_responses、images_async。"
+      },
       "generation_content": {
         "key": "tools.multimodal.fieldGenerationContent",
         "text": "生成内容描述。"
@@ -501,13 +505,34 @@ export const TOOL_SCHEMA_BY_TOOL = {
         "key": "tools.multimodal.fieldImageSize",
         "text": "图片尺寸（可选）。"
       },
+      "image_urls": {
+        "key": "tools.multimodal.fieldImageUrls",
+        "text": "图生图或扩图时使用的原图 URL 列表（可选）。"
+      },
       "model_name": {
         "key": "tools.multimodal.fieldModelName",
         "text": "模型名称。"
+      },
+      "n": {
+        "key": "tools.multimodal.fieldN",
+        "text": "生成图片数量（可选，1-10）。"
+      },
+      "quality": {
+        "key": "tools.multimodal.fieldQuality",
+        "text": "图片质量（可选）。"
+      },
+      "resolution": {
+        "key": "tools.multimodal.fieldResolution",
+        "text": "比例尺寸下的图片分辨率（可选，如 1K、2K、4K）。"
+      },
+      "size": {
+        "key": "tools.multimodal.fieldSize",
+        "text": "图片尺寸或比例（可选，如 auto、1:1、16:9、1024x1024）。"
       }
     },
     "texts": {
       "tools.multimodal.fetchGeneratedImageUrlFailed": "拉取生成图片 URL 失败",
+      "tools.multimodal.fetchUnavailable": "运行时 fetch 不可用",
       "tools.multimodal.generateFailed": "多模态生成失败",
       "tools.multimodal.generationContentRequired": "generation_content 必填",
       "tools.multimodal.imagesApiNotEnabledError": "当前账号未开通图片生成能力（403 Images API is not enabled）。",
@@ -515,7 +540,12 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "tools.multimodal.modelApiKeyMissing": "模型 API Key 缺失",
       "tools.multimodal.multimodalUnsupportedError": (params = {}) =>
     `当前模型不支持多模态生成（图片）：${String(params.model || "").trim()}`,
-      "tools.multimodal.multimodalUnsupportedMessage": "请切换到支持图片生成的模型，或通过 model_name 指定支持生成的模型。"
+      "tools.multimodal.multimodalUnsupportedMessage": "请切换到支持图片生成的模型，或通过 model_name 指定支持生成的模型。",
+      "tools.multimodal.taskFailed": "图片生成任务失败",
+      "tools.multimodal.taskIdMissing": "图片生成任务 ID 缺失",
+      "tools.multimodal.taskTimeout": (params = {}) =>
+    `图片生成任务超时：${String(params.taskId || "").trim()}`,
+      "tools.multimodal.trySwitchApiType": "请尝试更换 api_type，例如 openai_responses 或 images_async。"
     }
   },
   "plan_multi_task_collaboration": {

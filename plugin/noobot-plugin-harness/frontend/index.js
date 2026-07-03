@@ -61,12 +61,21 @@ function getMessageDialogProcessId(messageItem = {}) {
     messageItem?.dialogProcessId ||
       messageItem?.dialog_process_id ||
       messageItem?.dialogId ||
-      messageItem?.dialog_id,
+      messageItem?.dialog_id ||
+      messageItem?.channelState?.dialogProcessId ||
+      messageItem?.channelState?.dialog_process_id ||
+      messageItem?.channelState?.dialogId ||
+      messageItem?.channelState?.dialog_id,
   );
 }
 
 function getMessageTurnScopeId(messageItem = {}) {
-  return normalizeIdentityValue(messageItem?.turnScopeId || messageItem?.turn_scope_id);
+  return normalizeIdentityValue(
+    messageItem?.turnScopeId ||
+      messageItem?.turn_scope_id ||
+      messageItem?.channelState?.turnScopeId ||
+      messageItem?.channelState?.turn_scope_id,
+  );
 }
 
 function getMessageSessionId(messageItem = {}) {
@@ -74,7 +83,11 @@ function getMessageSessionId(messageItem = {}) {
     messageItem?.sessionId ||
       messageItem?.session_id ||
       messageItem?.backendSessionId ||
-      messageItem?.backend_session_id,
+      messageItem?.backend_session_id ||
+      messageItem?.channelState?.sessionId ||
+      messageItem?.channelState?.session_id ||
+      messageItem?.channelState?.backendSessionId ||
+      messageItem?.channelState?.backend_session_id,
   );
 }
 
@@ -119,7 +132,12 @@ function isMonotonicMessage(messageItem = {}) {
   if (messageItem.isMonotonic === true || messageItem.monotonic === true) return true;
   if (normalizeText(messageItem.monotonicState) === "monotonic") return true;
   if (normalizeText(messageItem.stopState) === "stopped") return true;
-  const state = normalizeText(messageItem.state || messageItem.status || messageItem.channelState);
+  const channelState = messageItem.channelState;
+  const channelStateValue =
+    channelState && typeof channelState === "object"
+      ? channelState.state || channelState.status
+      : channelState;
+  const state = normalizeText(messageItem.state || messageItem.status || channelStateValue);
   if (["completed", "done", "stopped"].includes(state)) return true;
   const label = normalizeText(messageItem.statusLabel);
   return ["generated", GENERATED_STATUS_LABEL, "stopped", STOPPED_STATUS_LABEL].includes(label);
@@ -153,6 +171,16 @@ function resolveMonotonicUserTarget(messageItem = {}, allMessages = []) {
       (item) => isUserMessage(item) && getMessageDialogProcessId(item) === targetDialogProcessId,
     );
     if (sameDialogProcessUserMessage) return sameDialogProcessUserMessage;
+  }
+  const targetTurnScopeId = getMessageTurnScopeId(messageItem);
+  if (targetTurnScopeId) {
+    const targetSessionId = getMessageSessionId(messageItem);
+    const sameTurnScopeUserMessage = messages.find((item) => {
+      if (!isUserMessage(item) || getMessageTurnScopeId(item) !== targetTurnScopeId) return false;
+      const candidateSessionId = getMessageSessionId(item);
+      return !targetSessionId || !candidateSessionId || targetSessionId === candidateSessionId;
+    });
+    if (sameTurnScopeUserMessage) return sameTurnScopeUserMessage;
   }
   if (directIndex >= 0) {
     for (let index = directIndex - 1; index >= 0; index -= 1) {
@@ -188,6 +216,20 @@ function buildMonotonicSourceMap(allMessages = []) {
       );
       if (sameDialogProcessUserMessage) {
         attachMonotonicSource(sourceMap, sameDialogProcessUserMessage, sourceMessage);
+        continue;
+      }
+    }
+
+    const sourceTurnScopeId = getMessageTurnScopeId(sourceMessage);
+    if (sourceTurnScopeId) {
+      const sourceSessionId = getMessageSessionId(sourceMessage);
+      const sameTurnScopeUserMessage = messages.find((item) => {
+        if (!isUserMessage(item) || getMessageTurnScopeId(item) !== sourceTurnScopeId) return false;
+        const candidateSessionId = getMessageSessionId(item);
+        return !sourceSessionId || !candidateSessionId || sourceSessionId === candidateSessionId;
+      });
+      if (sameTurnScopeUserMessage) {
+        attachMonotonicSource(sourceMap, sameTurnScopeUserMessage, sourceMessage);
         continue;
       }
     }

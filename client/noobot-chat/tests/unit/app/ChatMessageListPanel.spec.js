@@ -8,6 +8,7 @@ const chatMessageItemMock = vi.hoisted(() => ({
   field: "content",
   mounted: null,
   unmounted: null,
+  render: null,
 }));
 
 vi.mock("../../../src/modules/message/ChatMessageItem.vue", async () => {
@@ -17,12 +18,14 @@ vi.mock("../../../src/modules/message/ChatMessageItem.vue", async () => {
       name: "ChatMessageItem",
       props: {
         messageItem: { type: Object, required: true },
+        allMessages: { type: Array, default: () => [] },
       },
       setup(props) {
         onVueMounted(() => chatMessageItemMock.mounted?.());
         onVueUnmounted(() => chatMessageItemMock.unmounted?.());
         return () => {
           const messageItem = props.messageItem || {};
+          chatMessageItemMock.render?.(props);
           return h("div", { class: "chat-message-item-stub" }, String(messageItem?.[chatMessageItemMock.field] || ""));
         };
       },
@@ -36,16 +39,25 @@ vi.mock("../../../src/shared/i18n/useLocale", () => ({
   }),
 }));
 
-function mountPanel(props = {}) {
-  chatMessageItemMock.field = "content";
-  chatMessageItemMock.mounted = null;
-  chatMessageItemMock.unmounted = null;
+function mountPanel(props = {}, options = {}) {
+  if (!options.preserveChatMessageItemMock) {
+    chatMessageItemMock.field = "content";
+    chatMessageItemMock.mounted = null;
+    chatMessageItemMock.unmounted = null;
+    chatMessageItemMock.render = null;
+  }
   const ChatMessageItemStub = defineComponent({
     name: "ChatMessageItem",
     props: {
       messageItem: { type: Object, required: true },
+      allMessages: { type: Array, default: () => [] },
     },
-    template: "<div class='chat-message-item-stub'>{{ messageItem.content }}</div>",
+    setup(itemProps) {
+      return () => {
+        chatMessageItemMock.render?.(itemProps);
+        return itemProps.messageItem?.content || "";
+      };
+    },
   });
   return mount(ChatMessageListPanel, {
     props: {
@@ -389,6 +401,46 @@ describe("ChatMessageListPanel", () => {
     expect(activeSession.messages[1].pending).toBe(false);
     expect(activeSession.messages[1].channelState).toMatchObject({ state: "completed" });
     expect(activeSession.messages[3].pending).toBe(true);
+  });
+
+  it("passes rendered messages before stale rawMessages to message actions in old sessions", () => {
+    const capturedProps = [];
+    chatMessageItemMock.render = (itemProps = {}) => {
+      capturedProps.push({
+        messageItem: itemProps.messageItem,
+        allMessages: itemProps.allMessages,
+      });
+    };
+    const staleRawMessages = [
+      { role: RoleEnum.USER, content: "history", turnScopeId: "turn-history" },
+      { role: RoleEnum.ASSISTANT, content: "history answer", turnScopeId: "turn-history" },
+    ];
+    const renderedMessages = [
+      ...staleRawMessages,
+      { role: RoleEnum.USER, content: "全仓回归测试", turnScopeId: "turn-new" },
+      {
+        role: RoleEnum.ASSISTANT,
+        content: "",
+        pending: false,
+        turnScopeId: "turn-new",
+        channelState: { state: "stopped", turnScopeId: "turn-new" },
+      },
+    ];
+
+    mountPanel({
+      activeSession: {
+        messages: renderedMessages,
+        rawMessages: staleRawMessages,
+      },
+    }, { preserveChatMessageItemMock: true });
+
+    expect(capturedProps).toHaveLength(renderedMessages.length);
+    expect(capturedProps[2].messageItem.content).toBe("全仓回归测试");
+    expect(capturedProps[2].allMessages).toHaveLength(renderedMessages.length);
+    expect(capturedProps[2].allMessages.map((item) => item.content)).toEqual(
+      renderedMessages.map((item) => item.content),
+    );
+    expect(capturedProps[2].allMessages).not.toBe(staleRawMessages);
   });
 
   it("renders stable anchors and exposes scrollToMessageAnchor", () => {

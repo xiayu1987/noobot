@@ -31,8 +31,107 @@ describe("harness frontend monotonic message action registration", () => {
     expect(action.match({ status: "completed" })).toBe(true);
     expect(action.match({ state: "done" })).toBe(true);
     expect(action.match({ channelState: "stopped" })).toBe(true);
+    expect(action.match({ channelState: { state: "stopped" } })).toBe(true);
+    expect(action.match({ channelState: { status: "stopped" } })).toBe(true);
     expect(action.match({ statusLabel: "已生成" })).toBe(true);
     expect(action.match({ status: "running" })).toBe(false);
+  });
+
+  it("shows actions after stop when assistant channelState is an object", () => {
+    const action = getMonotonicAction();
+    const deleteMonotonicMessage = vi.fn();
+    const resendMonotonicMessage = vi.fn();
+    const userMessage = {
+      id: "u-stopped-object",
+      role: "user",
+      turnScopeId: "turn-stopped-object",
+      dialogProcessId: "dp-stopped-object",
+      content: "stop me",
+    };
+    const stoppedAssistant = {
+      id: "a-stopped-object",
+      role: "assistant",
+      turnScopeId: "turn-stopped-object",
+      dialogProcessId: "dp-stopped-object",
+      channelState: { state: "stopped", turnScopeId: "turn-stopped-object" },
+    };
+    const allMessages = [userMessage, stoppedAssistant];
+
+    expect(action.match(stoppedAssistant)).toBe(true);
+    const props = action.resolveProps({
+      messageItem: userMessage,
+      allMessages,
+      deleteMonotonicMessage,
+      resendMonotonicMessage,
+    });
+    expect(props.visible).toBe(true);
+    expect(props.messageItem).toBe(userMessage);
+    expect(props.onDelete).toBe(deleteMonotonicMessage);
+    expect(props.onResend).toBe(resendMonotonicMessage);
+    expect(action.resolveProps({ messageItem: stoppedAssistant, allMessages, deleteMonotonicMessage }).visible).toBe(false);
+  });
+
+  it("restores stopped actions in old sessions when round ids are only in assistant channelState", () => {
+    const action = getMonotonicAction();
+    const deleteMonotonicMessage = vi.fn();
+    const resendMonotonicMessage = vi.fn();
+    const oldSessionId = "18c9be16-a197-4581-b0fb-7eee18cea005";
+    const firstUser = {
+      role: "user",
+      sessionId: oldSessionId,
+      turnScopeId: "client-turn:history-1",
+      dialogProcessId: "dp-history-1",
+      content: "history question",
+    };
+    const firstAssistant = {
+      role: "assistant",
+      sessionId: oldSessionId,
+      turnScopeId: "client-turn:history-1",
+      dialogProcessId: "dp-history-1",
+      status: "completed",
+      content: "history answer",
+    };
+    const targetUser = {
+      role: "user",
+      sessionId: oldSessionId,
+      turnScopeId: "client-turn:mr4cncpk:522h4o4b",
+      content: "全仓回归测试",
+    };
+    const stoppedAssistant = {
+      role: "assistant",
+      type: "message",
+      pending: false,
+      channelState: {
+        state: "stopped",
+        sessionId: oldSessionId,
+        dialogProcessId: "3b2a4540-89c6-48bd-9cb2-4cde447ce582",
+        turnScopeId: "client-turn:mr4cncpk:522h4o4b",
+      },
+      content: "",
+    };
+    const allMessages = [firstUser, firstAssistant, targetUser, stoppedAssistant];
+
+    const props = action.resolveProps({
+      messageItem: targetUser,
+      allMessages,
+      deleteMonotonicMessage,
+      resendMonotonicMessage,
+    });
+
+    expect(action.match(stoppedAssistant)).toBe(true);
+    expect(props.visible).toBe(true);
+    expect(props.messageItem).toBe(targetUser);
+    expect(action.resolveProps({
+      messageItem: firstUser,
+      allMessages,
+      deleteMonotonicMessage,
+    }).visible).toBe(false);
+    expect(action.resolveProps({
+      messageItem: stoppedAssistant,
+      allMessages,
+      deleteMonotonicMessage,
+      resendMonotonicMessage,
+    }).visible).toBe(false);
   });
 
   it("mounts monotonic actions only on the resolved user message", () => {

@@ -28,6 +28,7 @@ import {
   ARTIFACT_GENERATION_SOURCE,
   TOOL_ATTACHMENT_SOURCE,
   TOOL_CALL_MODE,
+  IMAGE_GENERATION_API_TYPE,
   TOOL_NAME,
   TOOL_RESULT_STATUS,
 } from "../constants/index.js";
@@ -35,6 +36,8 @@ import {
 const MULTIMODAL_FLOW_NAME = "agent.multimodal_generate";
 const MULTIMODAL_PURPOSE_NAME = "multimodal_generate";
 const MULTIMODAL_DOMAIN_NAME = "tool";
+const DEFAULT_IMAGE_ASYNC_POLL_INTERVAL_MS = 5000;
+const DEFAULT_IMAGE_ASYNC_TIMEOUT_MS = 180000;
 
 function tMultimodal(runtime = {}, key = "", params = {}) {
   return tTool(runtime, `tools.multimodal.${String(key || "").trim()}`, params);
@@ -112,6 +115,74 @@ function parseDataUrlToImageArtifact(dataUrl = "", fileName = "generated_image_1
 function normalizeImageSize(imageSize = "1024x1024") {
   const normalizedImageSize = String(imageSize || "1024x1024").trim();
   return normalizedImageSize || "1024x1024";
+}
+
+function normalizeImageGenerationCount(value = 1) {
+  const count = Math.floor(Number(value || 1));
+  if (!Number.isFinite(count)) return 1;
+  return Math.min(10, Math.max(1, count));
+}
+
+function normalizeStringArray(value = []) {
+  return (Array.isArray(value) ? value : [])
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+}
+
+function normalizeBaseUrl(baseUrl = "") {
+  return String(baseUrl || "").trim().replace(/\/+$/, "");
+}
+
+function buildApiUrl(baseUrl = "", path = "") {
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+  const normalizedPath = String(path || "").trim();
+  if (!normalizedBaseUrl) return normalizedPath;
+  if (normalizedBaseUrl.endsWith("/v1") && normalizedPath.startsWith("/v1/")) {
+    return `${normalizedBaseUrl}${normalizedPath.slice(3)}`;
+  }
+  return `${normalizedBaseUrl}${normalizedPath}`;
+}
+
+function normalizeGenerationApiType(apiType = "") {
+  const normalizedApiType = String(apiType || "").trim().toLowerCase();
+  if (["images_async", "image_async", "images_generations", "images"].includes(normalizedApiType)) {
+    return IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC;
+  }
+  if (["openai_responses", "responses", "responses_api", "openai_responses_api"].includes(normalizedApiType)) {
+    return IMAGE_GENERATION_API_TYPE.OPENAI_RESPONSES;
+  }
+  return "";
+}
+
+function resolveGenerationApiType(modelSpec = {}, requestedApiType = "") {
+  const normalizedRequestedApiType = normalizeGenerationApiType(requestedApiType);
+  if (normalizedRequestedApiType) return normalizedRequestedApiType;
+  const supportGeneration = modelSpec?.multimodal_generation?.support_generation || {};
+  return normalizeGenerationApiType(
+    supportGeneration?.api_type ||
+      supportGeneration?.apiType ||
+      supportGeneration?.endpoint ||
+      supportGeneration?.generation_api ||
+      "",
+  ) || IMAGE_GENERATION_API_TYPE.OPENAI_RESPONSES;
+}
+
+function shouldAppendApiTypeHint(error = {}) {
+  if (error?.apiTypeSwitchHint === true) return true;
+  if (error?.code) {
+    return String(error.code || "") === ERROR_CODE.RECOVERABLE_MULTIMODAL_GENERATE_FAILED;
+  }
+  return Boolean(error?.status || error?.statusCode || error?.payload);
+}
+
+function appendApiTypeHint(message = "", runtime = {}) {
+  const baseMessage = String(message || "").trim() || tMultimodal(runtime, "generateFailed");
+  const hint = tMultimodal(runtime, "trySwitchApiType");
+  return hint ? `${baseMessage}\n${hint}` : baseMessage;
+}
+
+function sleep(ms = 0) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms || 0))));
 }
 
 function dedupeAttachments(attachments = []) {
@@ -233,6 +304,112 @@ async function generateWithOpenaiResponsesApi({
   };
 }
 
+async function requestJson({ fetchImpl, url, method = "GET", headers = {}, body = null } = {}) {
+  const response = await fetchImpl(url, {
+    method,
+    headers: {
+      ...headers,
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  const responseText = await response.text();
+  let payload = {};
+  try {
+    payload = responseText ? JSON.parse(responseText) : {};
+  } catch {
+    payload = { message: responseText };
+  }
+  if (!response?.ok) {
+    const message = String(payload?.error?.message || payload?.message || payload?.error || responseText || "").trim();
+    const error = new Error(message || `HTTP ${response?.status || 500}`);
+    error.status = response?.status;
+    error.payload = payload;
+    throw error;
+  }
+  return payload;
+}
+
+async function generateWithImagesAsyncApi({
+  fetchImpl,
+  modelSpec,
+  modelName,
+  generationContent,
+  imageSize,
+  resolution = "",
+  n = 1,
+  quality = "",
+  imageUrls = [],
+  runtime = {},
+}) {
+  if (typeof fetchImpl !== "function") {
+    throw new Error(tMultimodal(runtime, "fetchUnavailable"));
+  }
+  const baseUrl = resolveModelBaseUrl(modelSpec || {});
+  const apiKey = resolveModelApiKey(modelSpec || {});
+  const taskCreateUrl = buildApiUrl(baseUrl, "/v1/images/generations");
+  const headers = {
+    Authorization: `Bearer ${apiKey}`,
+  };
+  const requestBody = {
+    model: String(modelName || "").trim(),
+    prompt: String(generationContent || "").trim(),
+    size: normalizeImageSize(imageSize || "1:1"),
+    ...(String(resolution || "").trim() ? { resolution: String(resolution || "").trim() } : {}),
+    n: normalizeImageGenerationCount(n),
+    ...(String(quality || "").trim() ? { quality: String(quality || "").trim() } : {}),
+    ...(imageUrls.length ? { image_urls: imageUrls } : {}),
+  };
+  const createdTask = await requestJson({
+    fetchImpl,
+    url: taskCreateUrl,
+    method: "POST",
+    headers,
+    body: requestBody,
+  });
+  const taskId = String(createdTask?.id || "").trim();
+  if (!taskId) {
+    const error = new Error(tMultimodal(runtime, "taskIdMissing"));
+    error.apiTypeSwitchHint = true;
+    throw error;
+  }
+  const startedAtMs = Date.now();
+  let latestTask = null;
+  while (Date.now() - startedAtMs < DEFAULT_IMAGE_ASYNC_TIMEOUT_MS) {
+    latestTask = await requestJson({
+      fetchImpl,
+      url: buildApiUrl(baseUrl, `/v1/tasks/${encodeURIComponent(taskId)}`),
+      method: "GET",
+      headers,
+    });
+    const status = String(latestTask?.status || "").trim().toLowerCase();
+    if (status === "completed") {
+      const resultData = Array.isArray(latestTask?.result_data) ? latestTask.result_data : [];
+      return {
+        taskId,
+        imageArtifacts: resultData
+          .map((item = {}, index) => ({
+            fileName: `generated_image_${index + 1}.png`,
+            b64Json: String(item?.b64_json || item?.image_base64 || "").trim(),
+            url: String(item?.url || "").trim(),
+          }))
+          .filter((item) => item.b64Json || item.url),
+        rawText: "",
+        rawTask: latestTask,
+      };
+    }
+    if (status === "failed") {
+      const error = new Error(String(latestTask?.error || latestTask?.message || tMultimodal(runtime, "taskFailed")));
+      error.apiTypeSwitchHint = true;
+      throw error;
+    }
+    await sleep(DEFAULT_IMAGE_ASYNC_POLL_INTERVAL_MS);
+  }
+  const timeoutError = new Error(tMultimodal(runtime, "taskTimeout", { taskId }));
+  timeoutError.apiTypeSwitchHint = true;
+  throw timeoutError;
+}
+
 
 export function createMultimodalGenerateTool({ agentContext }) {
   const runtime = agentContext?.runtime || {};
@@ -266,12 +443,46 @@ export function createMultimodalGenerateTool({ agentContext }) {
         .string()
         .optional()
         .describe(tTool(runtime, "tools.multimodal.fieldModelName")),
+      size: z
+        .string()
+        .optional()
+        .describe(tTool(runtime, "tools.multimodal.fieldSize")),
       image_size: z
         .string()
         .optional()
         .describe(tTool(runtime, "tools.multimodal.fieldImageSize")),
+      resolution: z
+        .string()
+        .optional()
+        .describe(tTool(runtime, "tools.multimodal.fieldResolution")),
+      n: z
+        .number()
+        .optional()
+        .describe(tTool(runtime, "tools.multimodal.fieldN")),
+      quality: z
+        .string()
+        .optional()
+        .describe(tTool(runtime, "tools.multimodal.fieldQuality")),
+      image_urls: z
+        .array(z.string())
+        .optional()
+        .describe(tTool(runtime, "tools.multimodal.fieldImageUrls")),
+      api_type: z
+        .string()
+        .optional()
+        .describe(tTool(runtime, "tools.multimodal.fieldApiType")),
     }),
-    func: async ({ generation_content, model_name = "", image_size = "1024x1024" }) => {
+    func: async ({
+      generation_content,
+      model_name = "",
+      image_size = "",
+      size = "",
+      resolution = "",
+      n = 1,
+      quality = "",
+      image_urls = [],
+      api_type = "",
+    }) => {
       const generationContent = String(generation_content || "").trim();
       let resolvedModelSpec = null;
       if (!generationContent) {
@@ -318,6 +529,9 @@ export function createMultimodalGenerateTool({ agentContext }) {
         const modelNameForGeneration = String(
           resolvedModelSpec?.model || resolvedModelName || "",
         ).trim();
+        const generationApiType = resolveGenerationApiType(resolvedModelSpec || {}, api_type);
+        const effectiveImageSize = String(size || image_size || "").trim() ||
+          (generationApiType === IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC ? "1:1" : "1024x1024");
         const modelApiKey = resolveModelApiKey(resolvedModelSpec || {});
         if (!modelApiKey) {
           throw recoverableToolError(tMultimodal(runtime, "modelApiKeyMissing"), {
@@ -328,19 +542,32 @@ export function createMultimodalGenerateTool({ agentContext }) {
             },
           });
         }
-        const openaiClient = new OpenAI({
-          apiKey: modelApiKey,
-          ...(resolveModelBaseUrl(resolvedModelSpec || {})
-            ? { baseURL: resolveModelBaseUrl(resolvedModelSpec || {}) }
-            : {}),
-          defaultHeaders: buildMultimodalRequestHeaders(modelNameForGeneration, runtime),
-        });
-        const generationResult = await generateWithOpenaiResponsesApi({
-          openaiClient,
-          modelName: modelNameForGeneration,
-          generationContent,
-          imageSize: image_size,
-        });
+        const generationResult =
+          generationApiType === IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC
+            ? await generateWithImagesAsyncApi({
+                fetchImpl: sharedFetch,
+                modelSpec: resolvedModelSpec,
+                modelName: modelNameForGeneration,
+                generationContent,
+                imageSize: effectiveImageSize,
+                resolution,
+                n,
+                quality,
+                imageUrls: normalizeStringArray(image_urls),
+                runtime,
+              })
+            : await generateWithOpenaiResponsesApi({
+                openaiClient: new OpenAI({
+                  apiKey: modelApiKey,
+                  ...(resolveModelBaseUrl(resolvedModelSpec || {})
+                    ? { baseURL: resolveModelBaseUrl(resolvedModelSpec || {}) }
+                    : {}),
+                  defaultHeaders: buildMultimodalRequestHeaders(modelNameForGeneration, runtime),
+                }),
+                modelName: modelNameForGeneration,
+                generationContent,
+                imageSize: effectiveImageSize,
+              });
         const imageArtifacts = Array.isArray(generationResult?.imageArtifacts)
           ? generationResult.imageArtifacts
           : [];
@@ -381,13 +608,17 @@ export function createMultimodalGenerateTool({ agentContext }) {
           {
             ok: true,
             status: TOOL_RESULT_STATUS.COMPLETED,
-            callMode: TOOL_CALL_MODE.OPENAI_RESPONSES_API,
+            callMode:
+              generationApiType === IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC
+                ? TOOL_CALL_MODE.IMAGES_ASYNC_API
+                : TOOL_CALL_MODE.OPENAI_RESPONSES_API,
             modelAlias: String(resolvedModelSpec?.alias || "").trim(),
             model: String(resolvedModelSpec?.model || "").trim(),
             text: String(generationResult?.rawText || "").trim(),
             generationContentSource: "tool_input_generation_content",
             attachments: mergedAttachments,
             summary: {
+              task_id: String(generationResult?.taskId || "").trim(),
               generated_image_count: imageArtifacts.length,
               saved_attachment_count: mergedAttachments.length,
             },
@@ -405,20 +636,37 @@ export function createMultimodalGenerateTool({ agentContext }) {
           errorStatusCode === 403 &&
           normalizedMessage.includes("images api is not enabled")
         ) {
-          throw recoverableToolError(tMultimodal(runtime, "imagesApiNotEnabledError"), {
+          const hintMessage = appendApiTypeHint(
+            tMultimodal(runtime, "imagesApiNotEnabledError"),
+            runtime,
+          );
+          throw recoverableToolError(hintMessage, {
             code: ERROR_CODE.RECOVERABLE_IMAGES_API_NOT_ENABLED,
             details: {
-              message: tMultimodal(runtime, "imagesApiNotEnabledMessage"),
+              message: hintMessage,
               modelAlias,
               model: modelName,
             },
           });
         }
+        if (!shouldAppendApiTypeHint(error)) {
+          throw recoverableToolError(
+            errorMessage || tMultimodal(runtime, "generateFailed"),
+            {
+              code: String(error?.code || ERROR_CODE.RECOVERABLE_MULTIMODAL_GENERATE_FAILED),
+              details: {
+                modelAlias,
+                model: modelName,
+              },
+            },
+          );
+        }
         throw recoverableToolError(
-          errorMessage || tMultimodal(runtime, "generateFailed"),
+          appendApiTypeHint(errorMessage || tMultimodal(runtime, "generateFailed"), runtime),
           {
             code: String(error?.code || ERROR_CODE.RECOVERABLE_MULTIMODAL_GENERATE_FAILED),
             details: {
+              message: appendApiTypeHint(errorMessage || tMultimodal(runtime, "generateFailed"), runtime),
               modelAlias,
               model: modelName,
             },
