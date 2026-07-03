@@ -5,14 +5,14 @@
 -->
 <script setup>
 import { computed, ref } from "vue";
-import { Paperclip } from "@element-plus/icons-vue";
+import { Close, Paperclip } from "@element-plus/icons-vue";
 import { useLocale } from "../../shared/i18n/useLocale";
 
 const props = defineProps({
   uploadFiles: { type: Array, default: () => [] },
 });
 
-const emit = defineEmits(["upload-change", "clear-uploads"]);
+const emit = defineEmits(["upload-change", "clear-uploads", "remove-upload"]);
 
 const uploadRef = ref();
 const { translate } = useLocale();
@@ -28,6 +28,10 @@ function clearUploadSelection() {
 
 function onClearUploads() {
   emit("clear-uploads");
+}
+
+function onRemoveUpload(uploadFileIndex) {
+  emit("remove-upload", uploadFileIndex);
 }
 
 defineExpose({
@@ -56,7 +60,16 @@ defineExpose({
         v-for="(uploadFile, uploadFileIndex) in uploadFiles"
         :key="`${uploadFile.name}-${uploadFileIndex}`"
       >
-        <span class="attachment-name">{{ uploadFile.name }}</span>
+        <span class="attachment-name" :title="uploadFile.name">{{ uploadFile.name }}</span>
+        <button
+          type="button"
+          class="attachment-remove-btn noobot-flat-icon-btn"
+          :title="translate('composer.removeAttachment', { name: uploadFile.name || '' })"
+          :aria-label="translate('composer.removeAttachment', { name: uploadFile.name || '' })"
+          @click.stop="onRemoveUpload(uploadFileIndex)"
+        >
+          <el-icon><Close /></el-icon>
+        </button>
       </div>
       <el-button size="small" text class="clear-files-btn noobot-action-btn" @click="onClearUploads">
         {{ translate("composer.clear") }}
@@ -99,8 +112,12 @@ defineExpose({
 
 .attachment-pill {
   max-width: 200px;
-  padding: 4px 10px;
+  padding: 4px 6px 4px 10px;
   box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
 }
 
 .attachment-name {
@@ -110,6 +127,27 @@ defineExpose({
   overflow: hidden;
   text-overflow: ellipsis;
   display: block;
+  min-width: 0;
+}
+
+.attachment-remove-btn {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: var(--noobot-text-secondary);
+  background: transparent;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.attachment-remove-btn:hover,
+.attachment-remove-btn:focus-visible {
+  color: var(--el-color-danger);
+  background: color-mix(in srgb, var(--el-color-danger) 10%, transparent);
+  outline: none;
 }
 
 .clear-files-btn {
@@ -120,6 +158,12 @@ defineExpose({
 @media (max-width: 768px) {
   .attachment-pill {
     max-width: 140px;
+  }
+
+  .attachment-remove-btn {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
   }
 }
 </style>

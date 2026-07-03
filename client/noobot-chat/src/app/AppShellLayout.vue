@@ -75,6 +75,7 @@ defineProps({
 const emit = defineEmits([
   "append-uploads",
   "clear-uploads",
+  "remove-upload",
   "connect",
   "connector-selected",
   "delete-session",
@@ -280,6 +281,7 @@ defineExpose({
           @update:model-value="emit('update:input', $event)"
           @upload-change="(file, fileList) => emit('upload-change', file, fileList)"
           @append-uploads="emit('append-uploads', $event)"
+          @remove-upload="emit('remove-upload', $event)"
           @update:allow-user-interaction="emit('update:allow-user-interaction', $event)"
           @update:force-tool="emit('update:force-tool', $event)"
           @update:stream-output="emit('update:stream-output', $event)"

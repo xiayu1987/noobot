@@ -276,6 +276,7 @@ export const zhCNMessages = {
     "sending": "发送中",
     "send": "发送",
     "attachments": "附件",
+    "removeAttachment": "移除附件 {name}",
     "dropFilesToAttach": "释放以添加附件",
     "clear": "清空",
     "fieldRequired": "{label} 为必填项",

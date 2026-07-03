@@ -89,6 +89,15 @@ export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
     clearUploadSelection();
   }
 
+  function removeUpload(uploadIndex) {
+    const index = Number(uploadIndex);
+    if (!Number.isInteger(index) || index < 0 || index >= uploadFiles.value.length) return;
+    const nextUploadFiles = [...uploadFiles.value];
+    const [removedFile] = nextUploadFiles.splice(index, 1);
+    revokePreviewUrls([removedFile]);
+    uploadFiles.value = nextUploadFiles;
+  }
+
   async function serializeAttachments(files = []) {
     const output = [];
     for (const fileItem of Array.isArray(files) ? files : []) {
@@ -109,6 +118,7 @@ export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
     onUploadChange,
     appendUploads,
     clearUploads,
+    removeUpload,
     serializeAttachments,
   };
 }

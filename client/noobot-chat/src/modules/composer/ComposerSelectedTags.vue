@@ -4,6 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
+import { Close } from "@element-plus/icons-vue";
 import { useLocale } from "../../shared/i18n/useLocale";
 
 const props = defineProps({
@@ -14,6 +15,11 @@ const props = defineProps({
 });
 
 const { translate } = useLocale();
+const emit = defineEmits(["remove-upload"]);
+
+function onRemoveUpload(uploadFileIndex) {
+  emit("remove-upload", uploadFileIndex);
+}
 </script>
 
 <template>
@@ -47,7 +53,16 @@ const { translate } = useLocale();
       class="selected-connector-name selected-attachment-name"
       :title="uploadFile.name"
     >
-      {{ uploadFile.name }}
+      <span class="selected-attachment-text">{{ uploadFile.name }}</span>
+      <button
+        type="button"
+        class="selected-attachment-remove-btn noobot-flat-icon-btn"
+        :title="translate('composer.removeAttachment', { name: uploadFile.name || '' })"
+        :aria-label="translate('composer.removeAttachment', { name: uploadFile.name || '' })"
+        @click.stop="onRemoveUpload(uploadFileIndex)"
+      >
+        <el-icon><Close /></el-icon>
+      </button>
     </span>
   </div>
 </template>
@@ -94,6 +109,37 @@ const { translate } = useLocale();
 .selected-attachment-name {
   border-color: rgba(113, 113, 122, 0.24);
   background: color-mix(in srgb, var(--noobot-fill-soft, #f4f4f5) 78%, var(--noobot-base-blue-500, #3b82f6));
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 6px;
+}
+
+.selected-attachment-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.selected-attachment-remove-btn {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: var(--noobot-text-secondary, #52525b);
+  background: transparent;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.selected-attachment-remove-btn:hover,
+.selected-attachment-remove-btn:focus-visible {
+  color: var(--el-color-danger);
+  background: color-mix(in srgb, var(--el-color-danger) 10%, transparent);
+  outline: none;
 }
 
 @media (max-width: 768px) {
@@ -107,6 +153,12 @@ const { translate } = useLocale();
   .selected-connector-name {
     max-width: 168px;
     flex: 0 0 auto;
+  }
+
+  .selected-attachment-remove-btn {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
   }
 }
 </style>
