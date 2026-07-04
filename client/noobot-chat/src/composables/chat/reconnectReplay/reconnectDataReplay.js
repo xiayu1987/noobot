@@ -16,6 +16,7 @@ import {
 } from "./conversationState";
 import { _trimStr } from "./utils";
 import {
+  BackendChannelState,
   SESSION_RUN_EVENT,
   resolveRememberedStopRequestedEvent,
 } from "../sessionRunStateMachine";
@@ -30,7 +31,7 @@ function createReconnectRunStateEvents(reconnectSessions = [], recoverableSessio
     if (rememberedStopEvent) events.push(rememberedStopEvent);
     events.push({
       type: SESSION_RUN_EVENT.BACKEND_RECOVERABLE_RUNNING,
-      state: "reconnecting",
+      state: BackendChannelState.RECONNECTING,
       sessionId: recoverableSessionId,
       source: "reconnect_data",
     });
@@ -74,7 +75,7 @@ function resolveReconnectSessionRunningStateFromStates(sessionEntry = null) {
     if (isInFlightConversationState(state)) {
       restoredState = {
         sending: true,
-        canStop: state === "sending" || state === "reconnecting",
+        canStop: state === BackendChannelState.SENDING || state === BackendChannelState.RECONNECTING,
       };
     }
     if (isTerminalConversationState(state)) {

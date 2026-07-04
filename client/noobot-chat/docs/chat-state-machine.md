@@ -1,7 +1,7 @@
 # Chat 状态机（纯状态驱动）说明
 
-本文仅描述前端会话状态机，不包含 replay 细节实现。  
-目标：统一实时流与回放链路，让 UI 状态只由 `channel_state` 驱动。
+本文描述前端会话状态机与后端 `channel_state` 的分层关系，不包含 replay 细节实现。  
+目标：统一实时流与回放链路，同时区分“后端完成”和“前端完成”：`completed` 只表示后端完成，前端完成终态为 `frontend_completed`。
 
 ---
 
@@ -11,12 +11,16 @@
 2. **内容层**：`delta/thinking/done/messages/error` 只更新内容与元数据，不直接改 UI 状态。
 3. **一致性优先**：刷新、多端、重连后，状态必须可恢复且结果一致。
 4. **语义解耦**：`sending` 表示会话仍在处理中（in-flight），不等价于“所有输入都只读”。
+5. **单一事实源**：`runStateSnapshot`、`sending`、`canStop` 只能由状态机评估结果统一派生；业务链路不得在触发状态机事件后再手动覆盖这些字段。
+6. **展示快照边界**：`message.channelState` 是单条消息的展示/历史恢复快照，可携带 `pending`、`statusLabel`、thinking timing 等展示元数据；它不是全局 run/channel 状态事实源，也不参与 `sending` / `canStop` 的事实判断。
 
 ---
 
-## 2. 状态枚举
+## 2. 状态枚举边界
 
-来源：agent-proxy `channel_state.state`
+### 2.1 `BackendChannelState`
+
+来源：agent-proxy `channel_state.state`，表示后端 channel/run 对外状态：
 
 - `no_conversation`
 - `sending`
@@ -28,9 +32,46 @@
 - `error`
 - `expired`
 
+### 2.2 `BackendTerminalStates`
+
+后端视角的终态：
+
+- `completed`：后端正常完成；前端仍需继续 completion 收敛
+- `stopped`
+- `error`
+- `expired`
+- `no_conversation`
+
+### 2.3 `FrontendRunState`
+
+前端本地 run 流程状态：
+
+- `idle`
+- `resend_replacing_turn`
+- `resend_streaming`
+- `stop_requested`
+- `frontend_completion_requesting`
+- `frontend_completed`
+- `cancelled`
+
+其中 `frontend_completed` 表示前端完成终态；`completed` 不属于前端本地完成态。
+
+### 2.4 `FrontendTerminalStates`
+
+前端状态机当前用于锁定/收敛 UI 的终态集合：
+
+- `frontend_completed`
+- `cancelled`
+- `stopped`
+- `error`
+- `expired`
+- `no_conversation`
+
+注意：`completed` 属于 `BackendTerminalStates`，但不属于 `FrontendTerminalStates`；它会继续过渡到 `frontend_completion_requesting`，最终收敛为 `frontend_completed`。
+
 ---
 
-## 2.1 Interaction 事件统一字段（v1）
+## 2.5 Interaction 事件统一字段（v1）
 
 `pendingInteraction` / `interaction_request` 建议统一携带：
 
@@ -83,6 +124,18 @@
 - assistant `statusLabel=chat.reconnecting`
 
 ### `completed`
+- 含义：后端已完成，本状态不是前端终态
+- 前端状态机仍视为 in-flight：`sending=true`
+- assistant 暂不标记生成完成，等待前端 completion 收敛
+- 后续应进入 `frontend_completion_requesting`，最终收敛到 `frontend_completed`
+
+### `frontend_completion_requesting`
+- 含义：前端正在请求/应用 completion 收敛
+- `sending=true`
+- assistant 暂不标记生成完成
+
+### `frontend_completed`
+- 含义：前端完成终态
 - `sending=false`
 - assistant `pending=false`
 - assistant `statusLabel=chat.generated`
@@ -120,7 +173,9 @@ send
   -> ws events: thinking/delta/... (只更新内容)
   -> channel_state:sending/interaction_pending/... (更新状态)
   -> interaction_pending --(用户确认/取消)--> sending
-  -> channel_state:completed|stopped|error (收敛终态)
+  -> channel_state:completed (后端完成，非前端终态)
+  -> frontend_completion_requesting -> frontend_completed (前端收敛终态)
+  -> channel_state:stopped|error (停止/错误终态)
 ```
 
 ## 4.2 重连回放（reconnect）
@@ -158,7 +213,8 @@ reconnect
 交互态清理闭环（必须同时满足）：
 - 恢复入口：`interaction_pending + pendingInteraction`
 - 清理入口：
-  - `completed/stopped/error/no_conversation/expired`（终态）
+  - `frontend_completed/stopped/error/no_conversation/expired`（前端终态）
+  - `completed` 仅表示后端完成，需等前端收敛到 `frontend_completed` 后再按完成终态清理
   - `sending + sourceEvent=interaction_response`（用户已响应，回到执行态）
 - 非清理入口：
   - `sending`（无 `sourceEvent` 或非 `interaction_response`）

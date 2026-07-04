@@ -7,6 +7,7 @@ import { RoleEnum } from "../../../shared/constants/chatConstants";
 import { zhCNMessages } from "noobot-i18n/client/locales/zh-CN";
 import { enUSMessages } from "noobot-i18n/client/locales/en-US";
 import { rememberThinkingStarted } from "../thinkingTimingRegistry";
+import { BackendChannelState } from "../sessionRunStateMachine";
 import { nowMs, toIsoTime, setThinkingStartedAt } from "../../infra/timeFields";
 
 export function prepareChatSend({
@@ -79,7 +80,7 @@ export function prepareChatSend({
   });
   applyConversationState(
     {
-      state: "sending",
+      state: BackendChannelState.SENDING,
       sessionId,
       turnScopeId: botMessage.turnScopeId,
         createdAtMs: thinkingStartedAtMs,

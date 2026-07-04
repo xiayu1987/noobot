@@ -2,7 +2,6 @@ import { ref } from "vue";
 import { vi } from "vitest";
 import { useChatEngine } from "../../../../../src/composables/chat/useChatEngine";
 import { createSessionDetailApplicator } from "../../../../../src/composables/chat/chatList/sessionDetailApply";
-import { SESSION_RUN_STATE } from "../../../../../src/composables/chat/sessionRunStateMachine";
 import {
   RoleEnum,
   StreamEventEnum,

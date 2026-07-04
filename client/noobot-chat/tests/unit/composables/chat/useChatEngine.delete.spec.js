@@ -3,7 +3,7 @@ import {
   createHarness,
   makeSession,
 } from "./helpers/useChatEngineHarness";
-import { SESSION_RUN_STATE } from "../../../../src/composables/chat/sessionRunStateMachine";
+import { BackendChannelState, FrontendRunState } from "../../../../src/composables/chat/sessionRunStateMachine";
 import { SESSION_DETAIL_APPLY_MODE } from "../../../../src/composables/chat/chatEngine/messageStateGuards";
 import {
   RoleEnum,
@@ -260,7 +260,7 @@ describe("useChatEngine.delete", () => {
     sending.value = true;
     canStop.value = false;
     runStateSnapshot.value = {
-      state: SESSION_RUN_STATE.STOP_REQUESTED,
+      state: FrontendRunState.STOP_REQUESTED,
       sessionId: "local-delete-stopped-sending",
       turnScopeId: "turn-stopped-sending",
       dialogProcessId: "dp-stopped-sending",
@@ -272,7 +272,7 @@ describe("useChatEngine.delete", () => {
     expect(sending.value).toBe(false);
     expect(canStop.value).toBe(false);
     expect(runStateSnapshot.value).toEqual(expect.objectContaining({
-      state: SESSION_RUN_STATE.STOPPED,
+      state: BackendChannelState.STOPPED,
       turnScopeId: "turn-stopped-sending",
       dialogProcessId: "dp-stopped-sending",
     }));
@@ -320,7 +320,7 @@ describe("useChatEngine.delete", () => {
     activeSession.value.rawMessages = [first, target];
     sending.value = true;
     runStateSnapshot.value = {
-      state: SESSION_RUN_STATE.SENDING,
+      state: BackendChannelState.SENDING,
       sessionId: "local-delete-fail",
       turnScopeId: "turn-delete-fail",
     };
@@ -349,7 +349,7 @@ describe("useChatEngine.delete", () => {
     activeSession.value.rawMessages = [first, target];
     sending.value = true;
     runStateSnapshot.value = {
-      state: SESSION_RUN_STATE.SENDING,
+      state: BackendChannelState.SENDING,
       sessionId: "local-resend-fail",
       turnScopeId: "turn-resend-fail",
     };

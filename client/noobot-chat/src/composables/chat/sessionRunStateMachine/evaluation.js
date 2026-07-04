@@ -3,56 +3,56 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { SESSION_RUN_STATE } from "./constants";
+import { BackendChannelState, FrontendRunState } from "./constants";
 import { normalizeState } from "./normalize";
 
 export function isTerminalSessionRunState(state = "") {
   return [
-    SESSION_RUN_STATE.FRONTEND_COMPLETED,
-    SESSION_RUN_STATE.ERROR,
-    SESSION_RUN_STATE.STOPPED,
-    SESSION_RUN_STATE.CANCELLED,
-    SESSION_RUN_STATE.IDLE,
+    FrontendRunState.FRONTEND_COMPLETED,
+    BackendChannelState.ERROR,
+    BackendChannelState.STOPPED,
+    FrontendRunState.CANCELLED,
+    FrontendRunState.IDLE,
   ].includes(normalizeState(state));
 }
 
 export function isInFlightSessionRunState(state = "") {
   return [
-    SESSION_RUN_STATE.SENDING,
-    SESSION_RUN_STATE.RESEND_REPLACING_TURN,
-    SESSION_RUN_STATE.RESEND_STREAMING,
-    SESSION_RUN_STATE.BACKEND_COMPLETED,
-    SESSION_RUN_STATE.FRONTEND_COMPLETION_REQUESTING,
-    SESSION_RUN_STATE.STOP_REQUESTED,
-    SESSION_RUN_STATE.STOPPING,
-    SESSION_RUN_STATE.RECONNECTING,
-    SESSION_RUN_STATE.INTERACTION_PENDING,
+    BackendChannelState.SENDING,
+    FrontendRunState.RESEND_REPLACING_TURN,
+    FrontendRunState.RESEND_STREAMING,
+    BackendChannelState.COMPLETED,
+    FrontendRunState.FRONTEND_COMPLETION_REQUESTING,
+    FrontendRunState.STOP_REQUESTED,
+    BackendChannelState.STOPPING,
+    BackendChannelState.RECONNECTING,
+    BackendChannelState.INTERACTION_PENDING,
   ].includes(normalizeState(state));
 }
 
 export function isStopLockedSessionRunState(state = "") {
-  return [SESSION_RUN_STATE.STOP_REQUESTED, SESSION_RUN_STATE.STOPPING].includes(normalizeState(state));
+  return [FrontendRunState.STOP_REQUESTED, BackendChannelState.STOPPING].includes(normalizeState(state));
 }
 
 export function evaluateSessionRunState(stateSnapshot = {}) {
-  const state = normalizeState(stateSnapshot?.state) || SESSION_RUN_STATE.IDLE;
+  const state = normalizeState(stateSnapshot?.state) || FrontendRunState.IDLE;
   const composerActionState = {
     sendRequesting: Boolean(stateSnapshot?.composerActionState?.sendRequesting),
     stopRequesting: Boolean(stateSnapshot?.composerActionState?.stopRequesting),
     stopPendingUntilBackendReady: Boolean(stateSnapshot?.composerActionState?.stopPendingUntilBackendReady),
   };
   const backendCanStop = [
-    SESSION_RUN_STATE.SENDING,
-    SESSION_RUN_STATE.RESEND_REPLACING_TURN,
-    SESSION_RUN_STATE.RESEND_STREAMING,
-    SESSION_RUN_STATE.RECONNECTING,
-    SESSION_RUN_STATE.INTERACTION_PENDING,
+    BackendChannelState.SENDING,
+    FrontendRunState.RESEND_REPLACING_TURN,
+    FrontendRunState.RESEND_STREAMING,
+    BackendChannelState.RECONNECTING,
+    BackendChannelState.INTERACTION_PENDING,
   ].includes(state);
   const awaitingBackendStop = Boolean(
     composerActionState.stopRequesting ||
     composerActionState.stopPendingUntilBackendReady ||
-    state === SESSION_RUN_STATE.STOP_REQUESTED ||
-    state === SESSION_RUN_STATE.STOPPING,
+    state === FrontendRunState.STOP_REQUESTED ||
+    state === BackendChannelState.STOPPING,
   );
   const canStartNewSend = !awaitingBackendStop;
   return {
@@ -66,25 +66,25 @@ export function evaluateSessionRunState(stateSnapshot = {}) {
     canStartNewSend,
     canRetryMessage: canStartNewSend,
     canDeleteMessage: canStartNewSend,
-    interactionSubmitting: state === SESSION_RUN_STATE.INTERACTION_PENDING ? false : undefined,
-    pendingInteractionPolicy: state === SESSION_RUN_STATE.INTERACTION_PENDING ? "await_payload" : "unchanged",
+    interactionSubmitting: state === BackendChannelState.INTERACTION_PENDING ? false : undefined,
+    pendingInteractionPolicy: state === BackendChannelState.INTERACTION_PENDING ? "await_payload" : "unchanged",
     assistantStatus:
-      state === SESSION_RUN_STATE.STOPPING || state === SESSION_RUN_STATE.STOP_REQUESTED
+      state === BackendChannelState.STOPPING || state === FrontendRunState.STOP_REQUESTED
         ? "stopping"
-        : state === SESSION_RUN_STATE.RESEND_REPLACING_TURN
+        : state === FrontendRunState.RESEND_REPLACING_TURN
           ? "resend_replacing_turn"
-          : state === SESSION_RUN_STATE.RESEND_STREAMING
+          : state === FrontendRunState.RESEND_STREAMING
             ? "resend_streaming"
-            : state === SESSION_RUN_STATE.BACKEND_COMPLETED ||
-                state === SESSION_RUN_STATE.FRONTEND_COMPLETION_REQUESTING
+            : state === BackendChannelState.COMPLETED ||
+                state === FrontendRunState.FRONTEND_COMPLETION_REQUESTING
               ? ""
-        : state === SESSION_RUN_STATE.RECONNECTING
+        : state === BackendChannelState.RECONNECTING
           ? "reconnecting"
-          : state === SESSION_RUN_STATE.FRONTEND_COMPLETED
+          : state === FrontendRunState.FRONTEND_COMPLETED
             ? "generated"
-            : [SESSION_RUN_STATE.STOPPED, SESSION_RUN_STATE.CANCELLED].includes(state)
+            : [BackendChannelState.STOPPED, FrontendRunState.CANCELLED].includes(state)
               ? "stopped"
-              : state === SESSION_RUN_STATE.ERROR
+              : state === BackendChannelState.ERROR
                 ? "failed"
                 : "",
     terminal: isTerminalSessionRunState(state),

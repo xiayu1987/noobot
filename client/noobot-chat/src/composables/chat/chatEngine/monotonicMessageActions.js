@@ -17,7 +17,8 @@ import {
 import { nowMs } from "../../infra/timeFields";
 import {
   SESSION_RUN_EVENT,
-  SESSION_RUN_STATE,
+  BackendChannelState,
+  FrontendRunState,
   evaluateSessionRunState,
   isInFlightSessionRunState,
 } from "../sessionRunStateMachine";
@@ -52,10 +53,10 @@ function isStoppingAssistantMessage(message = {}) {
 
 function isStopPendingRunState(state = "") {
   return [
-    SESSION_RUN_STATE.STOP_REQUESTED,
-    SESSION_RUN_STATE.STOPPING,
-    SESSION_RUN_STATE.STOPPED,
-    SESSION_RUN_STATE.CANCELLED,
+    FrontendRunState.STOP_REQUESTED,
+    BackendChannelState.STOPPING,
+    BackendChannelState.STOPPED,
+    FrontendRunState.CANCELLED,
   ].includes(normalizeTrimmedString(state));
 }
 
@@ -164,15 +165,13 @@ export function createMonotonicMessageActions({
       if (isStopPendingRunState(runStateSnapshot?.value?.state)) {
         applyRunStateEvent?.({
           type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
-          state: "stopped",
+          state: BackendChannelState.STOPPED,
           sessionId: normalizeTrimmedString(session.backendSessionId || session.sessionId || session.id || activeSessionId?.value),
           dialogProcessId: getMessageDialogProcessId(stoppedTurnMessage),
           turnScopeId: getMessageTurnScopeId(stoppedTurnMessage),
           source: "monotonic_delete_stopped_turn",
           updatedAtMs: nowMs(),
         });
-        sending.value = false;
-        if (canStop) canStop.value = false;
         return true;
       }
     }

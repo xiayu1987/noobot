@@ -6,6 +6,7 @@
 import { RoleEnum } from "../../../shared/constants/chatConstants";
 import { normalizeTrimmedString } from "./utils";
 import {
+  BackendChannelState,
   SESSION_RUN_EVENT,
   rememberStopRequestedEvent,
 } from "../sessionRunStateMachine";
@@ -78,7 +79,7 @@ export function forceStopUiFinalize({
   const finalizedAtMs = nowMs();
   applyConversationState?.(
     {
-      state: "stopped",
+      state: BackendChannelState.STOPPED,
       sessionId: String(activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
       dialogProcessId: fallbackDialogProcessId,
       turnScopeId: fallbackTurnScopeId,
@@ -90,7 +91,7 @@ export function forceStopUiFinalize({
   if (applyRunStateEvent) {
     applyRunStateEvent({
       type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
-      state: "stopped",
+      state: BackendChannelState.STOPPED,
       sessionId: String(activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
       dialogProcessId: fallbackDialogProcessId,
       turnScopeId: fallbackTurnScopeId,
@@ -181,7 +182,7 @@ export function stopSending({
     if (applyRunStateEvent) {
       applyRunStateEvent({
         type: SESSION_RUN_EVENT.LOCAL_FAILURE,
-        state: "error",
+        state: BackendChannelState.ERROR,
         sessionId: stopPayload.sessionId,
         dialogProcessId: stopPayload.dialogProcessId,
         turnScopeId: stopPayload.turnScopeId,

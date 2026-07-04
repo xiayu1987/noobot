@@ -6,7 +6,7 @@ import {
   emitChannelState,
 } from "./helpers/useChatEngineHarness";
 import { createSessionDetailApplicator } from "../../../../src/composables/chat/chatList/sessionDetailApply";
-import { SESSION_RUN_STATE } from "../../../../src/composables/chat/sessionRunStateMachine";
+import { BackendChannelState, FrontendRunState } from "../../../../src/composables/chat/sessionRunStateMachine";
 import {
   RoleEnum,
   StreamEventEnum,
@@ -35,7 +35,7 @@ describe("useChatEngine.send-stream", () => {
     }));
     expect(assistant?.turnScopeId).toBe(capturedPayload.turnScopeId);
     expect(runStateSnapshot.value).toEqual(expect.objectContaining({
-      state: SESSION_RUN_STATE.SENDING,
+      state: BackendChannelState.SENDING,
       dialogProcessId: "",
       turnScopeId: capturedPayload.turnScopeId,
     }));
@@ -63,7 +63,7 @@ describe("useChatEngine.send-stream", () => {
     activeSession.value.rawMessages = [...activeSession.value.messages];
     sending.value = true;
     runStateSnapshot.value = {
-      state: SESSION_RUN_STATE.SENDING,
+      state: BackendChannelState.SENDING,
       sessionId: "local-send-state-mismatch",
       turnScopeId: "turn-missing",
     };
@@ -173,7 +173,7 @@ describe("useChatEngine.send-stream", () => {
     expect(botMessage.tool_calls).toEqual([{ id: "tc1" }]);
     expect(botMessage.pending).toBe(false);
     expect(botMessage.channelState).toMatchObject({
-      state: SESSION_RUN_STATE.ERROR,
+      state: BackendChannelState.ERROR,
     });
     expect(sending.value).toBe(false);
   });
@@ -220,7 +220,7 @@ describe("useChatEngine.send-stream", () => {
 
     const assistant = assistantMessage(activeSession);
     expect(assistant?.channelState).toMatchObject({
-      state: SESSION_RUN_STATE.FRONTEND_COMPLETED,
+      state: FrontendRunState.FRONTEND_COMPLETED,
       createdAt: startedAt,
       createdAtMs: Date.parse(startedAt),
     });
@@ -279,12 +279,12 @@ describe("useChatEngine.send-stream", () => {
     ]);
     expect(assistant?.pending).toBe(false);
     expect(assistant?.channelState).toMatchObject({
-      state: SESSION_RUN_STATE.FRONTEND_COMPLETED,
+      state: FrontendRunState.FRONTEND_COMPLETED,
     });
     expect(assistant?.statusLabelKey).toBe("chat.generated");
     expect(sending.value).toBe(false);
     expect(canStop.value).toBe(false);
-    expect(runStateSnapshot.value?.state).toBe(SESSION_RUN_STATE.FRONTEND_COMPLETED);
+    expect(runStateSnapshot.value?.state).toBe(FrontendRunState.FRONTEND_COMPLETED);
   });
 
   it("terminal completed channel_state triggers frontend completion detail without DONE event", async () => {
@@ -326,12 +326,12 @@ describe("useChatEngine.send-stream", () => {
     expect(assistant?.attachments).toEqual([normalizedAttachment]);
     expect(assistant?.pending).toBe(false);
     expect(assistant?.channelState).toMatchObject({
-      state: SESSION_RUN_STATE.FRONTEND_COMPLETED,
+      state: FrontendRunState.FRONTEND_COMPLETED,
     });
     expect(assistant?.statusLabelKey).toBe("chat.generated");
     expect(sending.value).toBe(false);
     expect(canStop.value).toBe(false);
-    expect(runStateSnapshot.value?.state).toBe(SESSION_RUN_STATE.FRONTEND_COMPLETED);
+    expect(runStateSnapshot.value?.state).toBe(FrontendRunState.FRONTEND_COMPLETED);
   });
 
   it("channel_state drives assistant status transition", async () => {

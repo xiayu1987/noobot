@@ -5,7 +5,7 @@
  */
 import { normalizeTurnMeta } from "../../infra/messageIdentity";
 import { nowMs } from "../../infra/timeFields";
-import { SESSION_RUN_EVENT, SESSION_RUN_STATE } from "./constants";
+import { BackendChannelState, FrontendRunState, SESSION_RUN_EVENT } from "./constants";
 import { normalizeState, trim } from "./normalize";
 
 function normalizeTimestamp(rawEvent = {}) {
@@ -25,23 +25,23 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
   const type = trim(rawEvent?.type || rawEvent?.event || SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE);
   let state = normalizeState(rawEvent?.state);
   if (!state) {
-    if (type === SESSION_RUN_EVENT.LOCAL_SEND_STARTED) state = SESSION_RUN_STATE.SENDING;
-    if (type === SESSION_RUN_EVENT.LOCAL_RESEND_STARTED) state = SESSION_RUN_STATE.RESEND_REPLACING_TURN;
-    if (type === SESSION_RUN_EVENT.LOCAL_RESEND_REPLACING_TURN) state = SESSION_RUN_STATE.RESEND_REPLACING_TURN;
-    if (type === SESSION_RUN_EVENT.LOCAL_RESEND_STREAMING) state = SESSION_RUN_STATE.RESEND_STREAMING;
-    if (type === SESSION_RUN_EVENT.LOCAL_RESEND_COMPLETED) state = SESSION_RUN_STATE.FRONTEND_COMPLETED;
-    if (type === SESSION_RUN_EVENT.LOCAL_RESEND_FAILED) state = SESSION_RUN_STATE.ERROR;
+    if (type === SESSION_RUN_EVENT.LOCAL_SEND_STARTED) state = BackendChannelState.SENDING;
+    if (type === SESSION_RUN_EVENT.LOCAL_RESEND_STARTED) state = FrontendRunState.RESEND_REPLACING_TURN;
+    if (type === SESSION_RUN_EVENT.LOCAL_RESEND_REPLACING_TURN) state = FrontendRunState.RESEND_REPLACING_TURN;
+    if (type === SESSION_RUN_EVENT.LOCAL_RESEND_STREAMING) state = FrontendRunState.RESEND_STREAMING;
+    if (type === SESSION_RUN_EVENT.LOCAL_RESEND_COMPLETED) state = FrontendRunState.FRONTEND_COMPLETED;
+    if (type === SESSION_RUN_EVENT.LOCAL_RESEND_FAILED) state = BackendChannelState.ERROR;
     if (type === SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_REQUEST_STARTED) {
-      state = SESSION_RUN_STATE.FRONTEND_COMPLETION_REQUESTING;
+      state = FrontendRunState.FRONTEND_COMPLETION_REQUESTING;
     }
     if (type === SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED) {
-      state = SESSION_RUN_STATE.FRONTEND_COMPLETED;
+      state = FrontendRunState.FRONTEND_COMPLETED;
     }
-    if (type === SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED) state = SESSION_RUN_STATE.ERROR;
-    if (type === SESSION_RUN_EVENT.LOCAL_STOP_REQUESTED) state = SESSION_RUN_STATE.STOP_REQUESTED;
-    if (type === SESSION_RUN_EVENT.BACKEND_RECOVERABLE_RUNNING) state = SESSION_RUN_STATE.RECONNECTING;
-    if (type === SESSION_RUN_EVENT.LOCAL_FAILURE) state = SESSION_RUN_STATE.ERROR;
-    if (type === SESSION_RUN_EVENT.LOCAL_RESET) state = SESSION_RUN_STATE.IDLE;
+    if (type === SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED) state = BackendChannelState.ERROR;
+    if (type === SESSION_RUN_EVENT.LOCAL_STOP_REQUESTED) state = FrontendRunState.STOP_REQUESTED;
+    if (type === SESSION_RUN_EVENT.BACKEND_RECOVERABLE_RUNNING) state = BackendChannelState.RECONNECTING;
+    if (type === SESSION_RUN_EVENT.LOCAL_FAILURE) state = BackendChannelState.ERROR;
+    if (type === SESSION_RUN_EVENT.LOCAL_RESET) state = FrontendRunState.IDLE;
   }
   const timestamp = normalizeTimestamp(rawEvent);
   return {

@@ -5,8 +5,8 @@
  */
 import {
   COMMON_TRANSITION_GUARD_IDS,
+  FrontendRunState,
   SESSION_RUN_EVENT,
-  SESSION_RUN_STATE,
   SESSION_RUN_TRANSITION_DECISION_REASON,
   SESSION_RUN_TRANSITION_GUARD_ID,
   SESSION_RUN_TRANSITION_TABLE,
@@ -66,14 +66,14 @@ export function resolveTransitionGuards(state = "") {
 
 export function resolveNormalizedTransitionDecision(transition = {}) {
   const { current = {}, event = {} } = transition;
-  const currentState = normalizeState(current.state) || SESSION_RUN_STATE.IDLE;
+  const currentState = normalizeState(current.state) || FrontendRunState.IDLE;
 
   function decision(canApply, reason, nextState = currentState) {
     return { canApply, reason, nextState };
   }
 
   if (event.type === SESSION_RUN_EVENT.LOCAL_RESET) {
-    return decision(true, SESSION_RUN_TRANSITION_DECISION_REASON.LOCAL_RESET, SESSION_RUN_STATE.IDLE);
+    return decision(true, SESSION_RUN_TRANSITION_DECISION_REASON.LOCAL_RESET, FrontendRunState.IDLE);
   }
   for (const guard of resolveTransitionGuards(currentState)) {
     if (!guard.passes(transition)) {

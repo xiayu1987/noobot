@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { StreamEventEnum } from "../../../shared/constants/chatConstants";
+import { BackendChannelState } from "../sessionRunStateMachine";
 import { normalizeReplayCacheKey } from "./replayCache";
 import { _trimStr } from "./utils";
 
@@ -32,7 +33,7 @@ export async function applyReconnectEventReplay({
         ...(data || {}),
         sessionId,
         dialogProcessId,
-        state: "completed",
+        state: BackendChannelState.COMPLETED,
         sourceEvent: "done",
       });
     }
@@ -45,7 +46,7 @@ export async function applyReconnectEventReplay({
       applyChannelState({
         ...(data || {}),
         dialogProcessId,
-        state: "completed",
+        state: BackendChannelState.COMPLETED,
         sourceEvent: "done",
       });
     }

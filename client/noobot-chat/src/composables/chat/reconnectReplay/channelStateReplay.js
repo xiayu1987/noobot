@@ -15,6 +15,8 @@ import {
 } from "./conversationState";
 import { _trimStr } from "./utils";
 import {
+  BackendChannelState,
+  FrontendRunState,
   SESSION_RUN_EVENT,
   clearRememberedStopRequests,
 } from "../sessionRunStateMachine";
@@ -69,7 +71,7 @@ export function emitSyntheticReconnectErrorConversationState({
   if (typeof onConversationState !== "function") return;
   onConversationState({
     source: "reconnect",
-    state: "error",
+    state: BackendChannelState.ERROR,
     sessionId: _trimStr(sessionId),
     dialogProcessId: _trimStr(dialogProcessId),
     sourceEvent: _trimStr(sourceEvent),
@@ -265,10 +267,12 @@ export function applyReconnectChannelState({
       });
     } else {
       sending.value = true;
-      if (canStop) canStop.value = state === "sending" || state === "reconnecting";
+      if (canStop) {
+        canStop.value = state === BackendChannelState.SENDING || state === BackendChannelState.RECONNECTING;
+      }
     }
     if (
-      state === "sending" &&
+      state === BackendChannelState.SENDING &&
       _trimStr(stateData?.sourceEvent).toLowerCase() === "interaction_response" &&
       typeof clearPendingInteractionIfObsolete === "function"
     ) {
@@ -282,7 +286,7 @@ export function applyReconnectChannelState({
         clearPendingInteractionIfObsolete({ requestId: responseRequestId });
       }
     }
-    if (state === "interaction_pending") {
+    if (state === BackendChannelState.INTERACTION_PENDING) {
       interactionSubmitting.value = false;
       const pendingInteractionPayloads = normalizePendingInteractionPayloads(stateData);
       if (pendingInteractionPayloads.length) {
@@ -329,11 +333,11 @@ export function applyReconnectChannelState({
         stateData,
       });
       targetAssistantMessage.pending = true;
-      if (state === "stopping") {
+      if (state === BackendChannelState.STOPPING) {
         targetAssistantMessage.statusLabel = translate("chat.stopping");
-      } else if (state === "reconnecting") {
+      } else if (state === BackendChannelState.RECONNECTING) {
         targetAssistantMessage.statusLabel = translate("chat.reconnecting");
-      } else if (state === "sending") {
+      } else if (state === BackendChannelState.SENDING) {
         targetAssistantMessage.statusLabel = "";
       }
     }
@@ -353,7 +357,7 @@ export function applyReconnectChannelState({
       finishedAt: timing.updatedAt,
     });
     interactionSubmitting.value = false;
-    if (state === "expired") {
+    if (state === BackendChannelState.EXPIRED) {
       scheduleCacheExpiredSessionRefresh({ sessionId, dialogProcessId, targetAssistantMessage });
     }
     if (applyRunStateEvent) {
@@ -379,7 +383,7 @@ export function applyReconnectChannelState({
       clearPendingInteractionIfObsolete({ sessionId, dialogProcessId });
     }
     clearMissingInteractionPayloadTimer(missingInteractionPayloadTimers, { sessionId, dialogProcessId });
-    if (state === "no_conversation" || state === "expired") {
+    if (state === BackendChannelState.NO_CONVERSATION || state === BackendChannelState.EXPIRED) {
       clearPendingInteraction();
       interactionSubmitting.value = false;
       if (targetAssistantMessage) targetAssistantMessage.pending = false;
@@ -396,7 +400,7 @@ export function applyReconnectChannelState({
         stateData,
         terminal: true,
       });
-      if (state === "completed" || state === "backend_completed") {
+      if (state === BackendChannelState.COMPLETED) {
         logResendDebug("channelStateReplay.backendCompleted.apply", {
           state,
           sessionId,
@@ -408,13 +412,13 @@ export function applyReconnectChannelState({
         return;
       }
       targetAssistantMessage.pending = false;
-      if (state === "frontend_completed") {
+      if (state === FrontendRunState.FRONTEND_COMPLETED) {
         targetAssistantMessage.statusLabel = translate("chat.generated");
-      } else if (state === "stopped") {
+      } else if (state === BackendChannelState.STOPPED) {
         targetAssistantMessage.statusLabel = translate("chat.stopped");
-      } else if (state === "cancelled") {
+      } else if (state === FrontendRunState.CANCELLED) {
         targetAssistantMessage.statusLabel = translate("chat.stopped");
-      } else if (state === "error") {
+      } else if (state === BackendChannelState.ERROR) {
         targetAssistantMessage.statusLabel = translate("chat.failed");
       }
       logResendDebug("channelStateReplay.terminal.apply", {

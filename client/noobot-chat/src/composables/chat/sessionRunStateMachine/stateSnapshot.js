@@ -3,13 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { SESSION_RUN_STATE } from "./constants";
+import { FrontendRunState } from "./constants";
 import { toIsoTime } from "../../infra/timeFields";
 import { transitionPriority } from "./normalize";
 
 export function createInitialSessionRunState(overrides = {}) {
   return {
-    state: SESSION_RUN_STATE.IDLE,
+    state: FrontendRunState.IDLE,
     sessionId: "",
     dialogProcessId: "",
     turnScopeId: "",
@@ -91,7 +91,7 @@ export function applySessionRunEventPatch({ current, event, startsNewTurn, nextD
         : toIsoTime(event.timestamp)),
     updatedAt: event.timestamp,
     stopRequestedAt:
-      event.state === SESSION_RUN_STATE.STOP_REQUESTED
+      event.state === FrontendRunState.STOP_REQUESTED
         ? event.timestamp
         : startsNewTurn
           ? 0
@@ -99,7 +99,7 @@ export function applySessionRunEventPatch({ current, event, startsNewTurn, nextD
     composerActionState: {
       sendRequesting: false,
       stopRequesting:
-        event.state === SESSION_RUN_STATE.STOP_REQUESTED
+        event.state === FrontendRunState.STOP_REQUESTED
           ? Boolean(current?.composerActionState?.stopRequesting)
           : false,
       stopPendingUntilBackendReady: false,

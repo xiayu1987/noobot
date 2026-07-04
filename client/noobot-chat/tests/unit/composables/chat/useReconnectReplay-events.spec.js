@@ -1,9 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createFixture, createFakeProcessStore } from "./helpers/useReconnectReplayHelper";
-import {
-  createInitialSessionRunState,
-  SESSION_RUN_STATE,
-} from "../../../../src/composables/chat/sessionRunStateMachine";
+import { BackendChannelState, createInitialSessionRunState } from "../../../../src/composables/chat/sessionRunStateMachine";
 import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
 
 afterEach(() => {
@@ -131,7 +128,7 @@ describe("useReconnectReplay", () => {
     refs.sending.value = true;
     refs.canStop.value = true;
     refs.runStateSnapshot.value = createInitialSessionRunState({
-      state: SESSION_RUN_STATE.SENDING,
+      state: BackendChannelState.SENDING,
       sessionId: "s-1",
       dialogProcessId: "",
       turnScopeId: "client-current",
@@ -147,7 +144,7 @@ describe("useReconnectReplay", () => {
 
     expect(refs.sending.value).toBe(true);
     expect(refs.canStop.value).toBe(true);
-    expect(refs.runStateSnapshot.value.state).toBe(SESSION_RUN_STATE.SENDING);
+    expect(refs.runStateSnapshot.value.state).toBe(BackendChannelState.SENDING);
     expect(refs.runStateSnapshot.value.turnScopeId).toBe("client-current");
     expect(refs.runStateSnapshot.value.dialogProcessId).toBe("");
   });

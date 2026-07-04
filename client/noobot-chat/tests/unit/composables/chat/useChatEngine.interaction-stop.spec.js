@@ -4,7 +4,7 @@ import {
   assistantMessage,
   emitChannelState,
 } from "./helpers/useChatEngineHarness";
-import { SESSION_RUN_STATE } from "../../../../src/composables/chat/sessionRunStateMachine";
+import { BackendChannelState, FrontendRunState } from "../../../../src/composables/chat/sessionRunStateMachine";
 import {
   StreamEventEnum,
   RoleEnum,
@@ -215,7 +215,7 @@ describe("useChatEngine.interaction-stop", () => {
     expect(sending.value).toBe(false);
     const assistant = assistantMessage(activeSession);
     expect(assistant?.pending).toBe(false);
-    expect(assistant?.channelState?.state).toBe(SESSION_RUN_STATE.ERROR);
+    expect(assistant?.channelState?.state).toBe(BackendChannelState.ERROR);
     expect(assistant?.statusLabelKey || assistant?.statusLabel).toBe("chat.failed");
   });
 
@@ -260,7 +260,7 @@ describe("useChatEngine.interaction-stop", () => {
     expect(sending.value).toBe(false);
     expect(assistant?.content).toBe("detail answer");
     expect(assistant?.pending).toBe(false);
-    expect(assistant?.channelState?.state).toBe(SESSION_RUN_STATE.FRONTEND_COMPLETED);
+    expect(assistant?.channelState?.state).toBe(FrontendRunState.FRONTEND_COMPLETED);
     expect(assistant?.statusLabelKey).toBe("chat.generated");
     expect(fetchSessionDetail).toHaveBeenCalledWith("local-state-only");
     expect(applySessionDetail).toHaveBeenCalledWith(
@@ -515,7 +515,7 @@ describe("useChatEngine.interaction-stop", () => {
         content: "partial after refresh",
         dialogProcessId: "dp-refreshed",
         turnScopeId: "turn-refreshed",
-        channelState: { state: SESSION_RUN_STATE.RESEND_STREAMING },
+        channelState: { state: FrontendRunState.RESEND_STREAMING },
       },
     ];
     activeSession.value.rawMessages = [...activeSession.value.messages];
@@ -600,7 +600,7 @@ describe("useChatEngine.interaction-stop", () => {
     activeSession.value.rawMessages = [...activeSession.value.messages];
     sending.value = true;
     runStateSnapshot.value = {
-      state: SESSION_RUN_STATE.SENDING,
+      state: BackendChannelState.SENDING,
       sessionId: "local-monotonic-timeout",
       turnScopeId: "turn-timeout",
     };

@@ -17,6 +17,8 @@ import {
   normalizeTrimmedString,
 } from "./utils";
 import {
+  BackendChannelState,
+  FrontendRunState,
   SESSION_RUN_EVENT,
   clearRememberedStopRequests,
 } from "../sessionRunStateMachine";
@@ -140,7 +142,7 @@ export function createChatEngineConversationState({
     if (typeof onConversationState !== "function") return;
     onConversationState({
       source: "stream",
-      state: "error",
+      state: BackendChannelState.ERROR,
       sessionId: String(sessionId || "").trim(),
       dialogProcessId: normalizeTrimmedString(dialogProcessId),
       sourceEvent: String(sourceEvent || "").trim(),
@@ -188,7 +190,7 @@ export function createChatEngineConversationState({
       if (applyRunStateEvent) {
         applyRunStateEvent({
           type: SESSION_RUN_EVENT.LOCAL_FAILURE,
-          state: "error",
+          state: BackendChannelState.ERROR,
           sessionId,
           dialogProcessId,
           turnScopeId,
@@ -232,7 +234,7 @@ export function createChatEngineConversationState({
           if (applyRunStateEvent) {
             applyRunStateEvent({
               type: SESSION_RUN_EVENT.LOCAL_FAILURE,
-              state: "error",
+              state: BackendChannelState.ERROR,
               sessionId: normalizeTrimmedString(sessionId || activeSession.value?.id),
               dialogProcessId,
               source: "expired_refresh_failed",
@@ -256,7 +258,7 @@ export function createChatEngineConversationState({
           if (applyRunStateEvent) {
             applyRunStateEvent({
               type: SESSION_RUN_EVENT.LOCAL_FAILURE,
-              state: "error",
+              state: BackendChannelState.ERROR,
               sessionId: normalizeTrimmedString(sessionId || activeSession.value?.id),
               dialogProcessId,
               source: "expired_refresh_failed",
@@ -441,10 +443,16 @@ export function createChatEngineConversationState({
         });
       } else {
         sending.value = true;
-        if (canStop) canStop.value = ["sending", "reconnecting", "interaction_pending"].includes(state);
+        if (canStop) {
+          canStop.value = [
+            BackendChannelState.SENDING,
+            BackendChannelState.RECONNECTING,
+            BackendChannelState.INTERACTION_PENDING,
+          ].includes(state);
+        }
       }
       if (
-        state === "sending" &&
+        state === BackendChannelState.SENDING &&
         String(statePayload?.sourceEvent || "").trim().toLowerCase() === "interaction_response" &&
         typeof clearPendingInteractionIfObsolete === "function"
       ) {
@@ -458,7 +466,7 @@ export function createChatEngineConversationState({
           clearPendingInteractionIfObsolete({ requestId: responseRequestId });
         }
       }
-      if (state === "interaction_pending") {
+      if (state === BackendChannelState.INTERACTION_PENDING) {
         interactionSubmitting.value = false;
         const pendingInteractionPayloads = normalizePendingInteractionPayloads(statePayload);
         if (pendingInteractionPayloads.length) {
@@ -510,11 +518,11 @@ export function createChatEngineConversationState({
         targetAssistantMessage.channelState = channelStateView;
         applyEarliestThinkingStartedAt(targetAssistantMessage, channelStateView.createdAt || channelStateView.createdAtMs);
         targetAssistantMessage.pending = true;
-        if (state === "stopping") {
+        if (state === BackendChannelState.STOPPING) {
           targetAssistantMessage.statusLabel = translate("chat.stopping");
-        } else if (state === "reconnecting") {
+        } else if (state === BackendChannelState.RECONNECTING) {
           targetAssistantMessage.statusLabel = translate("chat.reconnecting");
-        } else if (state === "sending") {
+        } else if (state === BackendChannelState.SENDING) {
           targetAssistantMessage.statusLabel = "";
         }
       }
@@ -555,20 +563,25 @@ export function createChatEngineConversationState({
     if (!pendingInteractionRequest.value) {
       interactionSubmitting.value = false;
     }
-    if (state === "expired") {
+    if (state === BackendChannelState.EXPIRED) {
       scheduleCacheExpiredSessionRefresh({ sessionId, dialogProcessId, targetAssistantMessage });
     }
-    if (state === "no_conversation" || state === "expired") {
+    if (state === BackendChannelState.NO_CONVERSATION || state === BackendChannelState.EXPIRED) {
       clearPendingInteraction();
       return;
     }
     if (!targetAssistantMessage) return;
-    if (state === "completed" || state === "backend_completed") {
+    if (state === BackendChannelState.COMPLETED) {
       const beforeTerminalApply = summarizeDebugMessage(targetAssistantMessage);
       const currentMessageState = normalizeTrimmedString(targetAssistantMessage?.channelState?.state);
       if (
         targetAssistantMessage.pending === false ||
-        ["frontend_completed", "error", "stopped", "cancelled"].includes(currentMessageState)
+        [
+          FrontendRunState.FRONTEND_COMPLETED,
+          BackendChannelState.ERROR,
+          BackendChannelState.STOPPED,
+          FrontendRunState.CANCELLED,
+        ].includes(currentMessageState)
       ) {
         logResendDebug("conversationState.backendCompleted.skipFinalized", {
           state, sessionId, dialogProcessId, turnScopeId,
@@ -592,7 +605,7 @@ export function createChatEngineConversationState({
     applyEarliestThinkingStartedAt(targetAssistantMessage, channelStateView.createdAt || channelStateView.createdAtMs);
     setThinkingFinishedAt(targetAssistantMessage, getThinkingFinishedAt(targetAssistantMessage) || updatedAt || createdAt || nowIso());
     targetAssistantMessage.pending = false;
-    if (state === "frontend_completed") {
+    if (state === FrontendRunState.FRONTEND_COMPLETED) {
       targetAssistantMessage.statusLabel = translate("chat.generated");
       logResendDebug("conversationState.terminal.apply", {
         state, sessionId, dialogProcessId, turnScopeId,
@@ -601,7 +614,7 @@ export function createChatEngineConversationState({
       });
       return;
     }
-    if (state === "stopped" || state === "cancelled") {
+    if (state === BackendChannelState.STOPPED || state === FrontendRunState.CANCELLED) {
       targetAssistantMessage.statusLabel = translate("chat.stopped");
       if (!String(targetAssistantMessage.content || "").trim()) {
         targetAssistantMessage.content = translate("chat.stoppedContent");
@@ -613,7 +626,7 @@ export function createChatEngineConversationState({
       });
       return;
     }
-    if (state === "error") {
+    if (state === BackendChannelState.ERROR) {
       targetAssistantMessage.statusLabel = translate("chat.failed");
     }
     logResendDebug("conversationState.terminal.apply", {

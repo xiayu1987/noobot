@@ -18,25 +18,44 @@ export const SESSION_RUN_MESSAGE_RUNTIME_REASON = Object.freeze({
   OBSOLETE_PENDING_ASSISTANT: "obsolete_pending_assistant",
 });
 
-export const SESSION_RUN_STATE = Object.freeze({
-  IDLE: "idle",
+export const BackendChannelState = Object.freeze({
+  NO_CONVERSATION: "no_conversation",
   SENDING: "sending",
-  RECONNECTING: "reconnecting",
   INTERACTION_PENDING: "interaction_pending",
+  STOPPING: "stopping",
+  RECONNECTING: "reconnecting",
+  COMPLETED: "completed",
+  STOPPED: "stopped",
+  ERROR: "error",
+  EXPIRED: "expired",
+});
+
+export const BackendTerminalStates = Object.freeze([
+  BackendChannelState.COMPLETED,
+  BackendChannelState.STOPPED,
+  BackendChannelState.ERROR,
+  BackendChannelState.EXPIRED,
+  BackendChannelState.NO_CONVERSATION,
+]);
+
+export const FrontendRunState = Object.freeze({
+  IDLE: "idle",
   RESEND_REPLACING_TURN: "resend_replacing_turn",
   RESEND_STREAMING: "resend_streaming",
   STOP_REQUESTED: "stop_requested",
-  STOPPING: "stopping",
-  STOPPED: "stopped",
-  COMPLETED: "completed",
-  BACKEND_COMPLETED: "backend_completed",
   FRONTEND_COMPLETION_REQUESTING: "frontend_completion_requesting",
   FRONTEND_COMPLETED: "frontend_completed",
-  ERROR: "error",
-  EXPIRED: "expired",
-  NO_CONVERSATION: "no_conversation",
   CANCELLED: "cancelled",
 });
+
+export const FrontendTerminalStates = Object.freeze([
+  FrontendRunState.FRONTEND_COMPLETED,
+  FrontendRunState.CANCELLED,
+  BackendChannelState.STOPPED,
+  BackendChannelState.ERROR,
+  BackendChannelState.EXPIRED,
+  BackendChannelState.NO_CONVERSATION,
+]);
 
 export const SESSION_RUN_EVENT = Object.freeze({
   LOCAL_SEND_STARTED: "local_send_started",
@@ -62,48 +81,39 @@ export const SESSION_RUN_EVENT = Object.freeze({
   LOCAL_RESET: "local_reset",
 });
 
-export const TERMINAL_STATES = Object.freeze([
-  SESSION_RUN_STATE.STOPPED,
-  SESSION_RUN_STATE.FRONTEND_COMPLETED,
-  SESSION_RUN_STATE.ERROR,
-  SESSION_RUN_STATE.EXPIRED,
-  SESSION_RUN_STATE.NO_CONVERSATION,
-  SESSION_RUN_STATE.CANCELLED,
-]);
-
 export const IN_FLIGHT_STATES = Object.freeze([
-  SESSION_RUN_STATE.SENDING,
-  SESSION_RUN_STATE.RECONNECTING,
-  SESSION_RUN_STATE.INTERACTION_PENDING,
-  SESSION_RUN_STATE.RESEND_REPLACING_TURN,
-  SESSION_RUN_STATE.RESEND_STREAMING,
-  SESSION_RUN_STATE.BACKEND_COMPLETED,
-  SESSION_RUN_STATE.FRONTEND_COMPLETION_REQUESTING,
-  SESSION_RUN_STATE.STOP_REQUESTED,
-  SESSION_RUN_STATE.STOPPING,
+  BackendChannelState.SENDING,
+  BackendChannelState.RECONNECTING,
+  BackendChannelState.INTERACTION_PENDING,
+  FrontendRunState.RESEND_REPLACING_TURN,
+  FrontendRunState.RESEND_STREAMING,
+  BackendChannelState.COMPLETED,
+  FrontendRunState.FRONTEND_COMPLETION_REQUESTING,
+  FrontendRunState.STOP_REQUESTED,
+  BackendChannelState.STOPPING,
 ]);
 
 export const MESSAGE_IN_FLIGHT_CHANNEL_STATES = Object.freeze([
-  SESSION_RUN_STATE.SENDING,
-  SESSION_RUN_STATE.RECONNECTING,
-  SESSION_RUN_STATE.INTERACTION_PENDING,
-  SESSION_RUN_STATE.RESEND_REPLACING_TURN,
-  SESSION_RUN_STATE.RESEND_STREAMING,
-  SESSION_RUN_STATE.STOPPING,
+  BackendChannelState.SENDING,
+  BackendChannelState.RECONNECTING,
+  BackendChannelState.INTERACTION_PENDING,
+  FrontendRunState.RESEND_REPLACING_TURN,
+  FrontendRunState.RESEND_STREAMING,
+  BackendChannelState.STOPPING,
 ]);
 
 export const STOP_LOCK_STATES = Object.freeze([
-  SESSION_RUN_STATE.STOP_REQUESTED,
-  SESSION_RUN_STATE.STOPPING,
-  SESSION_RUN_STATE.STOPPED,
-  SESSION_RUN_STATE.CANCELLED,
+  FrontendRunState.STOP_REQUESTED,
+  BackendChannelState.STOPPING,
+  BackendChannelState.STOPPED,
+  FrontendRunState.CANCELLED,
 ]);
 
 export const STOP_LOCK_REOPEN_STATES = Object.freeze([
-  SESSION_RUN_STATE.SENDING,
-  SESSION_RUN_STATE.RECONNECTING,
-  SESSION_RUN_STATE.RESEND_REPLACING_TURN,
-  SESSION_RUN_STATE.RESEND_STREAMING,
+  BackendChannelState.SENDING,
+  BackendChannelState.RECONNECTING,
+  FrontendRunState.RESEND_REPLACING_TURN,
+  FrontendRunState.RESEND_STREAMING,
 ]);
 
 export const SESSION_RUN_TRANSITION_RULE = Object.freeze({
@@ -165,21 +175,20 @@ function createTransitionConfig(priority, rule = SESSION_RUN_TRANSITION_RULE.PRI
 }
 
 export const SESSION_RUN_TRANSITION_TABLE = Object.freeze({
-  [SESSION_RUN_STATE.IDLE]: createTransitionConfig(0),
-  [SESSION_RUN_STATE.SENDING]: createTransitionConfig(40),
-  [SESSION_RUN_STATE.RECONNECTING]: createTransitionConfig(40),
-  [SESSION_RUN_STATE.INTERACTION_PENDING]: createTransitionConfig(50),
-  [SESSION_RUN_STATE.RESEND_REPLACING_TURN]: createTransitionConfig(55),
-  [SESSION_RUN_STATE.RESEND_STREAMING]: createTransitionConfig(60),
-  [SESSION_RUN_STATE.STOP_REQUESTED]: createTransitionConfig(70, SESSION_RUN_TRANSITION_RULE.STOP_LOCKED),
-  [SESSION_RUN_STATE.STOPPING]: createTransitionConfig(80, SESSION_RUN_TRANSITION_RULE.STOP_LOCKED),
-  [SESSION_RUN_STATE.BACKEND_COMPLETED]: createTransitionConfig(90),
-  [SESSION_RUN_STATE.FRONTEND_COMPLETION_REQUESTING]: createTransitionConfig(95),
-  [SESSION_RUN_STATE.COMPLETED]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
-  [SESSION_RUN_STATE.FRONTEND_COMPLETED]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
-  [SESSION_RUN_STATE.ERROR]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
-  [SESSION_RUN_STATE.EXPIRED]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
-  [SESSION_RUN_STATE.NO_CONVERSATION]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
-  [SESSION_RUN_STATE.STOPPED]: createTransitionConfig(110, SESSION_RUN_TRANSITION_RULE.STOP_LOCKED),
-  [SESSION_RUN_STATE.CANCELLED]: createTransitionConfig(110, SESSION_RUN_TRANSITION_RULE.STOP_LOCKED),
+  [FrontendRunState.IDLE]: createTransitionConfig(0),
+  [BackendChannelState.SENDING]: createTransitionConfig(40),
+  [BackendChannelState.RECONNECTING]: createTransitionConfig(40),
+  [BackendChannelState.INTERACTION_PENDING]: createTransitionConfig(50),
+  [FrontendRunState.RESEND_REPLACING_TURN]: createTransitionConfig(55),
+  [FrontendRunState.RESEND_STREAMING]: createTransitionConfig(60),
+  [FrontendRunState.STOP_REQUESTED]: createTransitionConfig(70, SESSION_RUN_TRANSITION_RULE.STOP_LOCKED),
+  [BackendChannelState.STOPPING]: createTransitionConfig(80, SESSION_RUN_TRANSITION_RULE.STOP_LOCKED),
+  [BackendChannelState.COMPLETED]: createTransitionConfig(90),
+  [FrontendRunState.FRONTEND_COMPLETION_REQUESTING]: createTransitionConfig(95),
+  [FrontendRunState.FRONTEND_COMPLETED]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
+  [BackendChannelState.ERROR]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
+  [BackendChannelState.EXPIRED]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
+  [BackendChannelState.NO_CONVERSATION]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
+  [BackendChannelState.STOPPED]: createTransitionConfig(110, SESSION_RUN_TRANSITION_RULE.STOP_LOCKED),
+  [FrontendRunState.CANCELLED]: createTransitionConfig(110, SESSION_RUN_TRANSITION_RULE.STOP_LOCKED),
 });

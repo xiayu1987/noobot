@@ -4,21 +4,21 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { BackendChannelState, BackendTerminalStates, FrontendRunState } from "../sessionRunStateMachine";
 import { _trimStr } from "./utils";
 
 export function isInFlightConversationState(state = "") {
-  return ["sending", "interaction_pending", "stopping", "reconnecting"].includes(
-    _trimStr(state),
-  );
+  return [
+    BackendChannelState.SENDING,
+    BackendChannelState.INTERACTION_PENDING,
+    BackendChannelState.STOPPING,
+    BackendChannelState.RECONNECTING,
+  ].includes(_trimStr(state));
 }
 
 export function isTerminalConversationState(state = "") {
   return [
-    "stopped",
-    "completed",
-    "error",
-    "no_conversation",
-    "expired",
-    "cancelled",
+    ...BackendTerminalStates,
+    FrontendRunState.CANCELLED,
   ].includes(_trimStr(state));
 }
