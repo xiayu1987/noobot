@@ -80,6 +80,8 @@ describe("chatEngine utils", () => {
     expect(targetMessage.tool_calls).toEqual([{ id: "call-1", name: "read_file" }]);
     expect(targetMessage.tool_call_id).toBe("call-1");
     expect(targetMessage.type).toBe("tool_call");
+    expect(targetMessage.workflowMessage).toBeUndefined();
+    expect(targetMessage.workflowMeta).toBeUndefined();
     expect(workflowMessageItem.tool_calls).toEqual([{ id: "call-1", name: "read_file" }]);
     expect(workflowMessageItem.tool_call_id).toBe("call-1");
     expect(workflowMessageItem.type).toBe("tool_call");

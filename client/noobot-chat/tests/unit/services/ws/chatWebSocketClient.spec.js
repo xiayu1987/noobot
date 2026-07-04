@@ -186,7 +186,7 @@ describe("chatWebSocketClient", () => {
     await expect(streamPromise).rejects.toThrow("infra.websocketStreamError");
   });
 
-  it.each(["cancelled", "canceled"])(
+  it.each(["cancelled"])(
     "resolves after %s terminal channel_state",
     async (state) => {
       const client = createChatWebSocketClient({

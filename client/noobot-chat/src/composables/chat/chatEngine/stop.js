@@ -27,9 +27,6 @@ function markLatestUserMessageStopped(activeSession, pendingAssistantMessage = n
   const messages = Array.isArray(activeSession?.value?.messages)
     ? activeSession.value.messages
     : [];
-  const rawMessages = Array.isArray(activeSession?.value?.rawMessages)
-    ? activeSession.value.rawMessages
-    : [];
   const pendingTurnScopeId = getMessageTurnScopeId(pendingAssistantMessage);
   if (!pendingTurnScopeId) return;
   const pendingDialogProcessId = getMessageDialogProcessId(pendingAssistantMessage);
@@ -53,18 +50,6 @@ function markLatestUserMessageStopped(activeSession, pendingAssistantMessage = n
     messageItem.monotonic = true;
   };
   markStopped(targetUserMessage);
-  const rawCandidate = rawMessages[targetUserMessageIndex.index];
-  if (rawCandidate && getMessageRole(rawCandidate) === RoleEnum.USER) {
-    markStopped(rawCandidate);
-    return;
-  }
-  for (let index = rawMessages.length - 1; index >= 0; index -= 1) {
-    const rawMessage = rawMessages[index];
-    if (getMessageRole(rawMessage) !== RoleEnum.USER) continue;
-    if (getMessageTurnScopeId(rawMessage) !== pendingTurnScopeId) continue;
-    markStopped(rawMessage);
-    return;
-  }
 }
 
 export function forceStopUiFinalize({

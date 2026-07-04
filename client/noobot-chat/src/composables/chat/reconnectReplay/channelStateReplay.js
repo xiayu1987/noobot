@@ -396,12 +396,23 @@ export function applyReconnectChannelState({
         stateData,
         terminal: true,
       });
+      if (state === "completed" || state === "backend_completed") {
+        logResendDebug("channelStateReplay.backendCompleted.apply", {
+          state,
+          sessionId,
+          dialogProcessId,
+          turnScopeId,
+          before: beforeTerminalApply,
+          after: summarizeDebugMessage(targetAssistantMessage),
+        });
+        return;
+      }
       targetAssistantMessage.pending = false;
-      if (state === "completed") {
+      if (state === "frontend_completed") {
         targetAssistantMessage.statusLabel = translate("chat.generated");
       } else if (state === "stopped") {
         targetAssistantMessage.statusLabel = translate("chat.stopped");
-      } else if (state === "cancelled" || state === "canceled") {
+      } else if (state === "cancelled") {
         targetAssistantMessage.statusLabel = translate("chat.stopped");
       } else if (state === "error") {
         targetAssistantMessage.statusLabel = translate("chat.failed");

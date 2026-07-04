@@ -358,7 +358,7 @@ describe("ChatMessageListPanel", () => {
       activeSession,
       runStateSnapshot: {
         ...runStateSnapshot,
-        state: "completed",
+        state: "frontend_completed",
         updatedAtIso: "2026-06-22T10:00:05.000Z",
         updatedAtMs: Date.parse("2026-06-22T10:00:05.000Z"),
       },
@@ -366,7 +366,7 @@ describe("ChatMessageListPanel", () => {
     await nextTick();
 
     expect(assistant.pending).toBe(false);
-    expect(assistant.channelState).toMatchObject({ state: "completed" });
+    expect(assistant.channelState).toMatchObject({ state: "frontend_completed" });
     expect(assistant.thinkingFinishedAt).toBeTruthy();
   });
 
@@ -399,7 +399,7 @@ describe("ChatMessageListPanel", () => {
     });
 
     expect(activeSession.messages[1].pending).toBe(false);
-    expect(activeSession.messages[1].channelState).toMatchObject({ state: "completed" });
+    expect(activeSession.messages[1].channelState).toMatchObject({ state: "frontend_completed" });
     expect(activeSession.messages[3].pending).toBe(true);
   });
 

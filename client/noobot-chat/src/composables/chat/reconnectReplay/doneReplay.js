@@ -69,10 +69,14 @@ export function applyDoneMessagesFromReconnect({
     activeSessionId.value = promotionResult.nextActiveSessionId;
   }
   activeSession.value.loaded = true;
-  activeSession.value.rawMessages = sessionMessages.map((messageItem) =>
+  // Reconnect DONE messages are a replay snapshot for reconciling the current
+  // pending/streaming overlay.  Keep them local to this pass instead of
+  // publishing another completed-message array on session.rawMessages; completed
+  // display state is rebuilt from normalized session detail.
+  const replayMessagesForView = sessionMessages.map((messageItem) =>
     makeViewMessage(messageItem),
   );
-  const foldedSessionMessages = foldMessagesForView(sessionMessages);
+  const foldedSessionMessages = foldMessagesForView(replayMessagesForView);
   const doneDialogProcessId = _trimStr(eventData?.dialogProcessId);
   if (
     doneDialogProcessId &&

@@ -51,7 +51,7 @@ function statusFromLog(logItem = {}, terminal = false) {
   const status = normalizeProcessString(logItem.status).toLowerCase();
   const event = normalizeProcessString(logItem.event || logItem.type).toLowerCase();
   if (["failed", "error", "errored"].includes(status) || event.includes("error")) return ProcessNodeStatus.FAILED;
-  if (["cancelled", "canceled"].includes(status) || event.includes("cancel")) return ProcessNodeStatus.CANCELLED;
+  if (["cancelled"].includes(status) || event.includes("cancel")) return ProcessNodeStatus.CANCELLED;
   if (status === "skipped") return ProcessNodeStatus.SKIPPED;
   if (event === "tool_result" || event.endsWith("_result") || terminal) return ProcessNodeStatus.SUCCEEDED;
   return ProcessNodeStatus.RUNNING;

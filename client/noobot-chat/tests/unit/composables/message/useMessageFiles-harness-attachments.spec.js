@@ -269,12 +269,10 @@ describe("useMessageFiles harness attachments", () => {
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachments.value).toHaveLength(4);
+    expect(displayedAttachments.value).toHaveLength(2);
     expect(displayedAttachments.value).toEqual([
       expect.objectContaining({ attachmentId: "plan-current", owner: { type: "agent" } }),
       expect.objectContaining({ attachmentId: "report-current", owner: { type: "agent" } }),
-      expect.objectContaining({ attachmentId: "plan-refreshed", owner: { type: "agent" } }),
-      expect.objectContaining({ attachmentId: "report-refreshed", owner: { type: "agent" } }),
     ]);
   });
 

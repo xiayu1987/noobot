@@ -20,8 +20,8 @@ import {
 } from "../../infra/messageIdentity";
 import {
   applySummaryToolLogs,
+  buildNormalizedDetailMessages,
   buildWorkflowMessageSignature,
-  mergeChildTurnAttachmentsIntoRootMessages,
   mergePreservedDetailMessages,
   patchExistingWorkflowMessage,
 } from "./detailMessages";
@@ -126,9 +126,6 @@ export function createSessionDetailApplicator({
       mainSessionDoc.title || mainSessionDoc.customTitle || detail.title || "",
     ).trim();
     const isSummaryDetail = detail?.summary === true;
-    sessionItem.rawMessages = (mainSessionDoc.messages || []).map((messageItem) =>
-      makeViewMessage(messageItem),
-    );
     sessionItem.currentTaskId = mainSessionDoc.currentTaskId || "";
     sessionItem.currentTaskStatus = "idle";
     applyLatestSessionVersion(sessionItem, mainSessionDoc);
@@ -172,22 +169,21 @@ export function createSessionDetailApplicator({
       detailMessages.length === 0 &&
       isSameSessionIdentity(detailSessionId, activeSessionId.value);
 
+    const normalizedDetailMessages = buildNormalizedDetailMessages({
+      detailMessages,
+      sessionDocs,
+      rootSessionId: detail.sessionId,
+      makeViewMessage,
+      foldMessagesForView,
+      isSummaryDetail,
+    });
+
     if (!preserveCurrentMessages && !shouldKeepCurrentMessagesForEmptyDetail) {
       logResendDebug("detail.apply.replaceAll", {
         sessionId: detail.sessionId,
         detailMessages: summarizeDebugMessages(detailMessages),
       });
-      sessionItem.messages = isSummaryDetail
-        ? detailMessages.map((messageItem) => makeViewMessage(messageItem))
-        : foldMessagesForView(detailMessages);
-      if (!isSummaryDetail) {
-        mergeChildTurnAttachmentsIntoRootMessages({
-          rootMessages: sessionItem.messages,
-          sessionDocs,
-          rootSessionId: detail.sessionId,
-          makeViewMessage,
-        });
-      }
+      sessionItem.messages = normalizedDetailMessages;
       for (const messageItem of sessionItem.messages || []) {
         const dialogProcessId = getMessageDialogProcessId(messageItem);
         if (!dialogProcessId) continue;
@@ -201,20 +197,9 @@ export function createSessionDetailApplicator({
         detailMessages: summarizeDebugMessages(detailMessages),
         currentMessages: summarizeDebugMessages(sessionItem.messages),
       });
-      const foldedDetailMessages = isSummaryDetail
-        ? detailMessages.map((messageItem) => makeViewMessage(messageItem))
-        : foldMessagesForView(detailMessages);
-      if (!isSummaryDetail) {
-        mergeChildTurnAttachmentsIntoRootMessages({
-          rootMessages: foldedDetailMessages,
-          sessionDocs,
-          rootSessionId: detail.sessionId,
-          makeViewMessage,
-        });
-      }
       const existingMessages = Array.isArray(sessionItem.messages) ? sessionItem.messages : [];
-      mergePreservedDetailMessages(existingMessages, foldedDetailMessages);
-      const workflowMessages = foldedDetailMessages.filter(
+      mergePreservedDetailMessages(existingMessages, normalizedDetailMessages);
+      const workflowMessages = normalizedDetailMessages.filter(
         (messageItem) =>
           getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
           messageItem?.workflowMessage === true,

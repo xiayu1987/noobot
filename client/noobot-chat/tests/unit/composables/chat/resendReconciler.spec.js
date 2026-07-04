@@ -37,7 +37,6 @@ describe("resendReconciler", () => {
     };
     const session = {
       messages: [oldUser, oldAssistant, replacementUser, replacementAssistant],
-      rawMessages: [oldUser, oldAssistant, replacementUser, replacementAssistant],
     };
 
     const result = reconcileStaleResendMessages(session, {
@@ -53,7 +52,6 @@ describe("resendReconciler", () => {
 
     expect(result.changed).toBe(true);
     expect(session.messages).toEqual([replacementUser, replacementAssistant]);
-    expect(session.rawMessages).toEqual([replacementUser, replacementAssistant]);
   });
 
   it("removes stale messages by old turnScopeId when replacement uses a new turnScopeId", () => {
@@ -83,7 +81,6 @@ describe("resendReconciler", () => {
     };
     const session = {
       messages: [oldUser, oldAssistant, refreshedReplacementUser, refreshedAssistant],
-      rawMessages: [oldUser, oldAssistant, refreshedReplacementUser, refreshedAssistant],
     };
 
     const result = reconcileStaleResendMessages(session, {
@@ -96,7 +93,6 @@ describe("resendReconciler", () => {
 
     expect(result.changed).toBe(true);
     expect(session.messages).toEqual([refreshedReplacementUser, refreshedAssistant]);
-    expect(session.rawMessages).toEqual([refreshedReplacementUser, refreshedAssistant]);
     expect(session.messageCount).toBe(2);
     expect(session.lastMessage).toBe(refreshedAssistant);
   });

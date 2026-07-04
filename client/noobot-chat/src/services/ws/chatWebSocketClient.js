@@ -12,7 +12,6 @@ const TERMINAL_CHANNEL_STATES = Object.freeze([
   "no_conversation",
   "expired",
   "cancelled",
-  "canceled",
 ]);
 
 function normalizeTrimmedString(value = "") {

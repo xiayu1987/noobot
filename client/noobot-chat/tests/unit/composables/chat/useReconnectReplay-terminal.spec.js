@@ -43,7 +43,7 @@ describe("useReconnectReplay", () => {
     expect(mocks.chatWebSocketClient.clearStopRequested).toHaveBeenCalledTimes(1);
   });
 
-  it("EV-04a: DONE without channel_state still finalizes terminal ui fields", async () => {
+  it("EV-04a: DONE without channel_state patches overlay but stays awaiting frontend completion", async () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
@@ -61,7 +61,7 @@ describe("useReconnectReplay", () => {
     );
     expect(assistant?.pending).toBe(false);
     expect(assistant?.statusLabel).toBe("chat.generated");
-    expect(refs.sending.value).toBe(false);
+    expect(refs.sending.value).toBe(true);
     expect(refs.interactionSubmitting.value).toBe(false);
     expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
       sessionId: "s-1",
@@ -69,7 +69,7 @@ describe("useReconnectReplay", () => {
     });
   });
 
-  it("EV-04: channel_state completed sets terminal ui fields", async () => {
+  it("EV-04: channel_state completed stays backend-completed until frontend completion", async () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
@@ -93,7 +93,7 @@ describe("useReconnectReplay", () => {
     );
     expect(assistant?.pending).toBe(false);
     expect(assistant?.statusLabel).toBe("chat.generated");
-    expect(refs.sending.value).toBe(false);
+    expect(refs.sending.value).toBe(true);
     expect(refs.interactionSubmitting.value).toBe(false);
     expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
       sessionId: "s-1",

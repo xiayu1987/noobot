@@ -29,7 +29,6 @@ function resolveSessionId(activeSession, activeSessionId) {
 function createSessionSnapshot(session, inputValue) {
   return {
     messages: Array.isArray(session?.messages) ? [...session.messages] : null,
-    rawMessages: Array.isArray(session?.rawMessages) ? [...session.rawMessages] : null,
     messageCount: session?.messageCount,
     lastMessage: session?.lastMessage,
     updatedAt: session?.updatedAt,
@@ -38,9 +37,8 @@ function createSessionSnapshot(session, inputValue) {
 }
 
 function restoreSessionSnapshot(session, snapshot) {
-  if (!session || !snapshot?.messages || !snapshot?.rawMessages) return false;
+  if (!session || !snapshot?.messages) return false;
   session.messages = snapshot.messages;
-  session.rawMessages = snapshot.rawMessages;
   session.messageCount = snapshot.messageCount;
   session.lastMessage = snapshot.lastMessage;
   session.updatedAt = snapshot.updatedAt;
@@ -102,7 +100,7 @@ function isStoppedAssistantSnapshot(message = {}) {
     message?.channelState?.state,
     message?.channel_state?.state,
   ].map(normalizeState);
-  return states.some((state) => ["stopped", "cancelled", "canceled", "aborted"].includes(state));
+  return states.some((state) => ["stopped", "cancelled", "aborted"].includes(state));
 }
 
 function findReplacementUserMessage({ session, turnScopeId }) {
@@ -147,7 +145,6 @@ function appendReplacementUserMessage(session, sessionDetail, turnScopeId = "", 
   delete replacementUser.stopState;
   delete replacementUser.statusLabel;
   session.messages.push(replacementUser);
-  if (Array.isArray(session.rawMessages)) session.rawMessages.push({ ...replacementUser });
   syncSessionMessageSummary(session);
   logResendDebug("resend.replacementUser.insert", {
     turnScopeId,
@@ -161,9 +158,6 @@ function pruneLocalMessagesFromIndex(session, startIndex = -1) {
   if (!session || startIndex < 0) return false;
   if (Array.isArray(session.messages)) {
     session.messages = session.messages.slice(0, startIndex);
-  }
-  if (Array.isArray(session.rawMessages)) {
-    session.rawMessages = session.rawMessages.slice(0, startIndex);
   }
   syncSessionMessageSummary(session);
   return true;
@@ -187,10 +181,8 @@ function pruneReplacedTurnMessages(session, { replacement = {}, fallbackTurnScop
     })
     : messages;
   const nextMessages = prune(session.messages);
-  const nextRawMessages = prune(session.rawMessages);
-  const changed = nextMessages !== session.messages || nextRawMessages !== session.rawMessages;
+  const changed = nextMessages !== session.messages;
   if (Array.isArray(nextMessages)) session.messages = nextMessages;
-  if (Array.isArray(nextRawMessages)) session.rawMessages = nextRawMessages;
   if (changed) syncSessionMessageSummary(session);
   return changed;
 }
@@ -206,10 +198,8 @@ function pruneStoppedAssistantSnapshotsForTurn(session, turnScopeId = "") {
     })
     : messages;
   const nextMessages = prune(session.messages);
-  const nextRawMessages = prune(session.rawMessages);
-  const changed = nextMessages !== session.messages || nextRawMessages !== session.rawMessages;
+  const changed = nextMessages !== session.messages;
   if (Array.isArray(nextMessages)) session.messages = nextMessages;
-  if (Array.isArray(nextRawMessages)) session.rawMessages = nextRawMessages;
   if (changed) syncSessionMessageSummary(session);
   return changed;
 }
@@ -445,9 +435,6 @@ export function createResendMessageTransaction({
         applySessionDetail?.(sessionDetail, { preserveCurrentMessages: true });
         if (Array.isArray(activeSession?.value?.messages)) {
           activeSession.value.messages = [...activeSession.value.messages];
-        }
-        if (Array.isArray(activeSession?.value?.rawMessages)) {
-          activeSession.value.rawMessages = [...activeSession.value.rawMessages];
         }
         logResendDebug("resend.detail.apply.after", {
           sessionId,

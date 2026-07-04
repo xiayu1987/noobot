@@ -39,6 +39,7 @@ import {
   summarizeDebugMessage,
   summarizeDebugMessages,
 } from "../debug/resendDebugLogger";
+import { logStateMachineDebug, summarizeStateMachineMessage } from "../debug/stateMachineLogger";
 
 function createTurnScopeId() {
   const randomUuid = globalThis?.crypto?.randomUUID?.();
@@ -56,7 +57,21 @@ function isTerminalStopStateEvent(event = "", data = {}) {
   const normalizedEvent = normalizeTrimmedString(event);
   if (normalizedEvent === StreamEventEnum.STOPPED) return true;
   if (normalizedEvent !== StreamEventEnum.CHANNEL_STATE) return false;
-  return ["stopped", "cancelled", "canceled"].includes(normalizeTrimmedString(data?.state));
+  return ["stopped", "cancelled"].includes(normalizeTrimmedString(data?.state));
+}
+
+function isTerminalCompletedStateEvent(event = "", data = {}) {
+  if (normalizeTrimmedString(event) !== StreamEventEnum.CHANNEL_STATE) return false;
+  return ["completed", "backend_completed"].includes(normalizeTrimmedString(data?.state));
+}
+
+function buildFinalDoneEventData({ data = {}, activeSession, botMessage } = {}) {
+  return {
+    ...(data || {}),
+    sessionId: data?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || "",
+    dialogProcessId: data?.dialogProcessId || normalizeTrimmedString(botMessage?.dialogProcessId),
+    turnScopeId: data?.turnScopeId || normalizeTrimmedString(botMessage?.turnScopeId),
+  };
 }
 
 function hasDialogProcessConflictForTurn({ activeSession, data = {}, botMessage = {} } = {}) {
@@ -210,6 +225,7 @@ export function createChatEngineSender({
     let lastStreamErrorEventData = null;
     let finalDoneEventData = null;
     let finalStopEventData = null;
+    let finalDoneDetailPromise = null;
     try {
       clearUploads();
       const attachments = await serializeAttachments(filesToSend);
@@ -246,6 +262,51 @@ export function createChatEngineSender({
         if (locatedSendingStartedMessage) return;
         locatedSendingStartedMessage = true;
       };
+      const startFinalDoneSessionDetailOnce = (source = "") => {
+        if (!finalDoneEventData || finalDoneDetailPromise) return finalDoneDetailPromise;
+        logStateMachineDebug("stateMachine.done.finalize.before", {
+          source,
+          sessionId: finalDoneEventData.sessionId,
+          dialogProcessId: finalDoneEventData.dialogProcessId,
+          turnScopeId: finalDoneEventData.turnScopeId,
+          botMessage: summarizeStateMachineMessage(botMsg),
+        });
+        finalDoneDetailPromise = finalizeDoneSessionDetail({
+          activeSession,
+          activeSessionId,
+          botMessage: botMsg,
+          finalDoneEventData,
+          fetchSessionDetail,
+          applySessionDetail,
+          applyRunStateEvent,
+          refreshSessionConnectorsAsync,
+        }).then((applied) => {
+          logStateMachineDebug("stateMachine.done.finalize.after", {
+            source,
+            applied: Boolean(applied),
+            sessionId: finalDoneEventData?.sessionId || "",
+            dialogProcessId: finalDoneEventData?.dialogProcessId || "",
+            turnScopeId: finalDoneEventData?.turnScopeId || "",
+            botMessage: summarizeStateMachineMessage(botMsg),
+          });
+          if (applied) {
+            locateDoneMessage?.();
+            finalizePendingResendOperation?.({ finalOnly: true });
+          }
+          return applied;
+        }).catch((error) => {
+          logStateMachineDebug("stateMachine.done.finalize.failed", {
+            source,
+            sessionId: finalDoneEventData?.sessionId || "",
+            dialogProcessId: finalDoneEventData?.dialogProcessId || "",
+            turnScopeId: finalDoneEventData?.turnScopeId || "",
+            error: String(error?.message || error || ""),
+            botMessage: summarizeStateMachineMessage(botMsg),
+          });
+          throw error;
+        });
+        return finalDoneDetailPromise;
+      };
 
       await chatWebSocketClient.stream(payload, ({ event, data }) => {
         logResendDebug("send.stream.event", {
@@ -268,12 +329,28 @@ export function createChatEngineSender({
         });
         if (event === StreamEventEnum.CHANNEL_STATE) {
           const channelState = normalizeTrimmedString(data?.state);
-          if (["stopped", "cancelled", "canceled"].includes(channelState)) {
+          if (["stopped", "cancelled"].includes(channelState)) {
             finalStopEventData = {
               ...(data || {}),
               sessionId: data?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || "",
               dialogProcessId: data?.dialogProcessId || normalizeTrimmedString(botMsg.dialogProcessId),
             };
+          }
+          if (isTerminalCompletedStateEvent(event, data || {})) {
+            finalDoneEventData = buildFinalDoneEventData({
+              data,
+              activeSession,
+              botMessage: botMsg,
+            });
+            logStateMachineDebug("stateMachine.done.finalize.detected", {
+              source: "channel_state",
+              backendState: channelState,
+              sessionId: finalDoneEventData.sessionId,
+              dialogProcessId: finalDoneEventData.dialogProcessId,
+              turnScopeId: finalDoneEventData.turnScopeId,
+              botMessage: summarizeStateMachineMessage(botMsg),
+            });
+            startFinalDoneSessionDetailOnce("channel_state");
           }
           return;
         }
@@ -307,7 +384,19 @@ export function createChatEngineSender({
             setPendingInteractionRequest,
           });
         } else if (event === StreamEventEnum.DONE) {
-          finalDoneEventData = data || {};
+          finalDoneEventData = buildFinalDoneEventData({
+            data,
+            activeSession,
+            botMessage: botMsg,
+          });
+          logStateMachineDebug("stateMachine.done.finalize.detected", {
+            source: "done_event",
+            sessionId: finalDoneEventData.sessionId,
+            dialogProcessId: finalDoneEventData.dialogProcessId,
+            turnScopeId: finalDoneEventData.turnScopeId,
+            botMessage: summarizeStateMachineMessage(botMsg),
+          });
+          startFinalDoneSessionDetailOnce("done_event");
           handleDoneStreamEvent({
             data,
             requestedTextStreaming,
@@ -324,6 +413,7 @@ export function createChatEngineSender({
             applyConversationState,
             processStore: activeProcessStore,
             locateSendingStartedMessageOnce,
+            suppressCompletionConversationState: Boolean(finalDoneDetailPromise),
           });
         } else if (event === StreamEventEnum.STOPPED) {
           finalStopEventData = {
@@ -333,20 +423,34 @@ export function createChatEngineSender({
           };
         }
       });
+      logStateMachineDebug("stateMachine.stream.resolved", {
+        hasFinalDoneEventData: Boolean(finalDoneEventData),
+        hasFinalDoneDetailPromise: Boolean(finalDoneDetailPromise),
+        sessionId: finalDoneEventData?.sessionId || "",
+        dialogProcessId: finalDoneEventData?.dialogProcessId || "",
+        turnScopeId: finalDoneEventData?.turnScopeId || turnScopeId,
+        botMessage: summarizeStateMachineMessage(botMsg),
+      });
+
+      if (finalDoneEventData) {
+        await startFinalDoneSessionDetailOnce("stream_resolved");
+      }
 
       // Safety net: if terminal channel_state is delayed/lost, avoid sticky "stop" UI.
-      // Primary source of truth remains channel_state; this fallback only runs when
-      // stream is already ended and UI is still in-flight.
+      // Primary source of truth remains the frontend completion detail chain once a
+      // final DONE/channel_state has been detected. Run fallback only when no final
+      // completion detail chain exists; otherwise a failed detail request must remain
+      // an error and must not be overwritten by a late completed fallback.
       applyStreamCompletedFallback({
         sending,
-        finalDoneEventData,
+        finalDoneEventData: finalDoneEventData ? null : finalDoneEventData,
         activeSession,
         botMessage: botMsg,
         applyConversationState,
       });
 
       const stoppedByFinalEvent = Boolean(finalStopEventData);
-      const stoppedByStopRequest = applyStopRequestedState({
+      const stoppedByStopRequest = !finalDoneEventData && applyStopRequestedState({
         chatWebSocketClient,
         activeSession,
         botMessage: botMsg,
@@ -357,6 +461,7 @@ export function createChatEngineSender({
         stoppedByFinalEvent,
         stoppedByStopRequest,
         finalStopEventData,
+        hasFinalDoneEventData: Boolean(finalDoneEventData),
         messages: summarizeDebugMessages(activeSession?.value?.messages),
       });
       if (stoppedByFinalEvent || stoppedByStopRequest) {
@@ -379,18 +484,6 @@ export function createChatEngineSender({
         });
         return;
       }
-
-      await finalizeDoneSessionDetail({
-        activeSession,
-        activeSessionId,
-        botMessage: botMsg,
-        finalDoneEventData,
-        fetchSessionDetail,
-        applySessionDetail,
-        refreshSessionConnectorsAsync,
-      });
-      locateDoneMessage?.();
-      finalizePendingResendOperation?.({ finalOnly: true });
       logResendDebug("send.doneReturn", {
         turnScopeId,
         messages: summarizeDebugMessages(activeSession?.value?.messages),
@@ -413,16 +506,18 @@ export function createChatEngineSender({
         finalizePendingResendOperation?.({ finalOnly: true });
         return false;
       }
-      applySendErrorState({
-        error,
-        errorEventData: lastStreamErrorEventData || error?.data || null,
-        activeSession,
-        botMessage: botMsg,
-        applyConversationState,
-        clearPendingInteraction,
-        notify,
-        translate,
-      });
+      if (!(options?.allowDuringResend === true && options?.reuseExistingUserTurn === true)) {
+        applySendErrorState({
+          error,
+          errorEventData: lastStreamErrorEventData || error?.data || null,
+          activeSession,
+          botMessage: botMsg,
+          applyConversationState,
+          clearPendingInteraction,
+          notify,
+          translate,
+        });
+      }
       logResendDebug("send.catch.error", {
         turnScopeId,
         error: String(error?.message || error || ""),
@@ -435,6 +530,7 @@ export function createChatEngineSender({
         finalDoneEventData: lastStreamErrorEventData || error?.data || null,
         fetchSessionDetail,
         applySessionDetail,
+        applyRunStateEvent,
         refreshSessionConnectorsAsync,
       });
       return false;

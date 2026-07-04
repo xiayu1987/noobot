@@ -49,7 +49,7 @@ export function getThinkingDetailsTitle(messageItem = {}, translate) {
 }
 
 export function resolveFallbackThinkingDetailsPayload(activeSession = {}) {
-  const messages = activeSession?.rawMessages || activeSession?.messages || [];
+  const messages = activeSession?.messages || [];
   const messageItem = [...messages].reverse().find((item = {}) =>
     getMessageRole(item) === "assistant" &&
     !isAssistantWithoutTurnScope(item) &&

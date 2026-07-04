@@ -8,11 +8,10 @@ import { normalizeState } from "./normalize";
 
 export function isTerminalSessionRunState(state = "") {
   return [
-    SESSION_RUN_STATE.COMPLETED,
+    SESSION_RUN_STATE.FRONTEND_COMPLETED,
     SESSION_RUN_STATE.ERROR,
     SESSION_RUN_STATE.STOPPED,
     SESSION_RUN_STATE.CANCELLED,
-    SESSION_RUN_STATE.CANCELED,
     SESSION_RUN_STATE.IDLE,
   ].includes(normalizeState(state));
 }
@@ -22,6 +21,8 @@ export function isInFlightSessionRunState(state = "") {
     SESSION_RUN_STATE.SENDING,
     SESSION_RUN_STATE.RESEND_REPLACING_TURN,
     SESSION_RUN_STATE.RESEND_STREAMING,
+    SESSION_RUN_STATE.BACKEND_COMPLETED,
+    SESSION_RUN_STATE.FRONTEND_COMPLETION_REQUESTING,
     SESSION_RUN_STATE.STOP_REQUESTED,
     SESSION_RUN_STATE.STOPPING,
     SESSION_RUN_STATE.RECONNECTING,
@@ -74,11 +75,14 @@ export function evaluateSessionRunState(stateSnapshot = {}) {
           ? "resend_replacing_turn"
           : state === SESSION_RUN_STATE.RESEND_STREAMING
             ? "resend_streaming"
+            : state === SESSION_RUN_STATE.BACKEND_COMPLETED ||
+                state === SESSION_RUN_STATE.FRONTEND_COMPLETION_REQUESTING
+              ? ""
         : state === SESSION_RUN_STATE.RECONNECTING
           ? "reconnecting"
-          : state === SESSION_RUN_STATE.COMPLETED
+          : state === SESSION_RUN_STATE.FRONTEND_COMPLETED
             ? "generated"
-            : [SESSION_RUN_STATE.STOPPED, SESSION_RUN_STATE.CANCELLED, SESSION_RUN_STATE.CANCELED].includes(state)
+            : [SESSION_RUN_STATE.STOPPED, SESSION_RUN_STATE.CANCELLED].includes(state)
               ? "stopped"
               : state === SESSION_RUN_STATE.ERROR
                 ? "failed"

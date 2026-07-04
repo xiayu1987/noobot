@@ -223,7 +223,6 @@ export function useChatSession({
   function appendMessage(role, content = "", attachments = [], options = {}) {
     const msg = reactive(buildAppendMessage(role, content, attachments, options));
     activeSession.value.messages.push(msg);
-    activeSession.value.rawMessages.push(msg);
     activeSession.value.messageCount = (activeSession.value.messageCount || 0) + 1;
     activeSession.value.lastMessage = findVisibleLastMessage(activeSession.value.messages);
     activeSession.value.updatedAt = nowIso();

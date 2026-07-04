@@ -12,8 +12,8 @@ export function trim(value = "") {
 export function normalizeState(state = "") {
   const value = trim(state).toLowerCase();
   if (value === "running") return SESSION_RUN_STATE.SENDING;
+  if (value === "completed") return SESSION_RUN_STATE.BACKEND_COMPLETED;
   if (value === "cancelled") return SESSION_RUN_STATE.CANCELLED;
-  if (value === "canceled") return SESSION_RUN_STATE.CANCELED;
   return Object.values(SESSION_RUN_STATE).includes(value) ? value : "";
 }
 

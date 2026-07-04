@@ -100,7 +100,6 @@ describe("useChatEngine.resend failure rollback", () => {
     expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
     expect(stream).not.toHaveBeenCalled();
     expect(activeSession.value.messages).toEqual([first, target]);
-    expect(activeSession.value.rawMessages).toEqual([first, target]);
     expect(activeSession.value.messageCount).toBe(2);
     expect(activeSession.value.lastMessage).toStrictEqual(target);
     expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
@@ -184,7 +183,6 @@ describe("useChatEngine.resend failure rollback", () => {
   
     expect(stream).toHaveBeenCalledTimes(1);
     expect(activeSession.value.messages).toEqual([first, target]);
-    expect(activeSession.value.rawMessages).toEqual([first, target]);
     expect(activeSession.value.messageCount).toBe(2);
     expect(activeSession.value.lastMessage).toStrictEqual(target);
     expect(activeSession.value.updatedAt).toBe("before");

@@ -30,7 +30,7 @@ describe("useMessageFiles turn backfill", () => {
     expect(writtenFiles.value).toEqual([]);
   });
 
-  it("collects written files for the same turnScopeId after current turn starts streaming", () => {
+  it("does not collect written files from getAllMessages after current turn starts streaming", () => {
     const messageItem = {
       role: "assistant",
       pending: false,
@@ -70,7 +70,37 @@ describe("useMessageFiles turn backfill", () => {
       getUserId: () => "admin",
     });
 
-    expect(writtenFiles.value.map((item) => item.fileName)).toEqual(["previous.md", "current.md"]);
+    expect(writtenFiles.value).toEqual([]);
+  });
+
+  it("collects written files from the current normalized message completedToolLogs", () => {
+    const messageItem = {
+      role: "assistant",
+      pending: false,
+      dialogProcessId: "dp-1",
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      content: "",
+      completedToolLogs: [
+        {
+          writtenFiles: [
+            {
+              toolName: "write_file",
+              resolvedPath: "/workspace/admin/current.md",
+              fileName: "current.md",
+            },
+          ],
+        },
+      ],
+    };
+    const { writtenFiles } = createMessageFiles({
+      getMessageItem: () => messageItem,
+      getAllMessages: () => [],
+      getSessionDocs: () => [],
+      getUserId: () => "admin",
+    });
+
+    expect(writtenFiles.value.map((item) => item.fileName)).toEqual(["current.md"]);
   });
 
   it("does not backfill previous assistant attachments while current assistant is pending", () => {
@@ -98,7 +128,7 @@ describe("useMessageFiles turn backfill", () => {
     expect(displayedAttachments.value).toEqual([]);
   });
 
-  it("collects attachments for the same dialogProcessId after current dialog starts streaming", () => {
+  it("does not collect attachments from historical messages after current dialog starts streaming", () => {
     const messageItem = {
       role: "assistant",
       pending: false,
@@ -122,9 +152,7 @@ describe("useMessageFiles turn backfill", () => {
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachments.value).toEqual([
-      { attachmentId: "prev-1", owner: { type: "agent" }, name: "previous-result.md" },
-    ]);
+    expect(displayedAttachments.value).toEqual([]);
   });
 
   it("does not collect previous assistant attachments from a different turn scope", () => {
@@ -338,7 +366,7 @@ describe("useMessageFiles turn backfill", () => {
     expect(displayedAttachments.value).toEqual([]);
   });
 
-  it("still collects tool attachments from the same linear turn", () => {
+  it("does not collect tool attachments from getAllMessages for the same linear turn", () => {
     const firstUser = {
       role: "user",
       dialogProcessId: "dp-first",
@@ -386,9 +414,7 @@ describe("useMessageFiles turn backfill", () => {
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachments.value).toEqual([
-      { attachmentId: "bird-1", owner: { type: "agent" }, name: "generated_image_1.png" },
-    ]);
+    expect(displayedAttachments.value).toEqual([]);
   });
 
   it("prefers explicit attachment turnScopeId ownership over dialogProcessId fallback", () => {
@@ -421,7 +447,7 @@ describe("useMessageFiles turn backfill", () => {
     expect(displayedAttachments.value).toEqual([]);
   });
 
-  it("collects explicitly owned tool attachments for the current turn scope", () => {
+  it("does not collect explicitly owned tool attachments from getAllMessages for the current turn scope", () => {
     const messageItem = {
       role: "assistant",
       dialogProcessId: "dp-current",
@@ -448,13 +474,36 @@ describe("useMessageFiles turn backfill", () => {
       getUserId: () => "admin",
     });
 
+    expect(displayedAttachments.value).toEqual([]);
+  });
+
+  it("does not merge turn fallback attachments when the normalized message already has attachments", () => {
+    const messageItem = {
+      role: "assistant",
+      dialogProcessId: "dp-current",
+      turnScopeId: "turn-current",
+      attachments: [
+        { attachmentId: "normalized", name: "normalized.png" },
+      ],
+    };
+    const fallbackTool = {
+      role: "tool",
+      dialogProcessId: "dp-current",
+      turnScopeId: "turn-current",
+      attachments: [
+        { attachmentId: "fallback", name: "fallback.png" },
+      ],
+    };
+
+    const { displayedAttachments } = createMessageFiles({
+      getMessageItem: () => messageItem,
+      getAllMessages: () => [fallbackTool, messageItem],
+      getSessionDocs: () => [{ sessionId: "session-1", messages: [fallbackTool] }],
+      getUserId: () => "admin",
+    });
+
     expect(displayedAttachments.value).toEqual([
-      {
-        attachmentId: "current-explicit",
-        owner: { type: "agent" },
-        name: "current.png",
-        turnScope: { turnScopeId: "turn-current", dialogProcessId: "dp-current" },
-      },
+      { attachmentId: "normalized", owner: { type: "agent" }, name: "normalized.png" },
     ]);
   });
 });

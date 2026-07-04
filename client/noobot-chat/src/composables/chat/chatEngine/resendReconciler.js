@@ -95,7 +95,7 @@ function pruneByExplicitTurnReplacement(sourceMessages = [], explicitReplacement
 
 export function reconcileStaleResendMessages(session, operation = {}, options = {}) {
   if (!session || !operation || Number(operation.originalStartIndex) < 0) {
-    return { changed: false, messagesChanged: false, rawMessagesChanged: false };
+    return { changed: false, messagesChanged: false };
   }
   const identity = createRemovedIdentitySnapshot(operation.anchorMessage, operation.removedMessages || []);
   const explicitReplacement = normalizeExplicitTurnReplacement(operation);
@@ -121,17 +121,9 @@ export function reconcileStaleResendMessages(session, operation = {}, options = 
   const messagesResult = pruneMessages(messages);
   if (messagesResult.changed) session.messages = messagesResult.kept;
 
-  let rawMessagesChanged = false;
-  if (Array.isArray(session.rawMessages)) {
-    const rawMessagesResult = pruneMessages(session.rawMessages);
-    if (rawMessagesResult.changed) session.rawMessages = rawMessagesResult.kept;
-    rawMessagesChanged = rawMessagesResult.changed;
-  }
-
   return {
-    changed: messagesResult.changed || rawMessagesChanged,
+    changed: messagesResult.changed,
     messagesChanged: messagesResult.changed,
-    rawMessagesChanged,
   };
 }
 

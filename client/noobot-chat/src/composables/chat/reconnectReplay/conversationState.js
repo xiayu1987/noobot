@@ -20,6 +20,5 @@ export function isTerminalConversationState(state = "") {
     "no_conversation",
     "expired",
     "cancelled",
-    "canceled",
   ].includes(_trimStr(state));
 }

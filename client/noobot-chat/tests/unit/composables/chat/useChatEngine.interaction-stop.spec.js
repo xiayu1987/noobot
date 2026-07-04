@@ -215,7 +215,8 @@ describe("useChatEngine.interaction-stop", () => {
     expect(sending.value).toBe(false);
     const assistant = assistantMessage(activeSession);
     expect(assistant?.pending).toBe(false);
-    expect(assistant?.statusLabel).toBe("chat.generated");
+    expect(assistant?.channelState?.state).toBe(SESSION_RUN_STATE.ERROR);
+    expect(assistant?.statusLabelKey || assistant?.statusLabel).toBe("chat.failed");
   });
 
   it("terminal channel_state without DONE still lets send finalize and refresh detail", async () => {
@@ -235,7 +236,10 @@ describe("useChatEngine.interaction-stop", () => {
         },
       ],
     }));
-    const applySessionDetail = vi.fn();
+    const applySessionDetail = vi.fn(async () => {
+      const assistant = assistantMessage(activeSession);
+      assistant.content = "detail answer";
+    });
     const stream = vi.fn(async (_payload, onEvent) => {
       emitChannelState(onEvent, "local-state-only", "dp-state-only", "completed", {
         seq: 2,
@@ -254,12 +258,14 @@ describe("useChatEngine.interaction-stop", () => {
 
     const assistant = assistantMessage(activeSession);
     expect(sending.value).toBe(false);
+    expect(assistant?.content).toBe("detail answer");
     expect(assistant?.pending).toBe(false);
-    expect(assistant?.statusLabel).toBe("chat.generated");
+    expect(assistant?.channelState?.state).toBe(SESSION_RUN_STATE.FRONTEND_COMPLETED);
+    expect(assistant?.statusLabelKey).toBe("chat.generated");
     expect(fetchSessionDetail).toHaveBeenCalledWith("local-state-only");
     expect(applySessionDetail).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: "local-state-only" }),
-      { preserveCurrentMessages: true, scrollToBottom: false },
+      expect.objectContaining({ preserveCurrentMessages: true }),
     );
     expect(deps.chatWebSocketClient.clearStopRequested).toHaveBeenCalledTimes(2);
   });

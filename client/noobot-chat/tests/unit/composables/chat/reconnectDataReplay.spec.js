@@ -183,7 +183,7 @@ describe("applyReconnectDataReplay", () => {
     expect(fixture.canStop.value).toBe(false);
   });
 
-  it.each(["cancelled", "canceled", "completed", "error", "expired", "no_conversation"])(
+  it.each(["cancelled", "completed", "error", "expired", "no_conversation"])(
     "restores terminal %s as not sending and not stoppable",
     async (terminalState) => {
       const fixture = createFixture();

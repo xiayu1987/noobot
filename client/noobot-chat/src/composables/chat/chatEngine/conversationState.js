@@ -305,18 +305,6 @@ export function createChatEngineConversationState({
         return false;
       }
       messageItem.dialogProcessId = normalizedDialogProcessId;
-      const rawMessages = Array.isArray(activeSession?.value?.rawMessages)
-        ? activeSession.value.rawMessages
-        : [];
-      const rawUserMessage = rawMessages.find((rawMessage) => rawMessage === messageItem) ||
-        rawMessages.find(
-          (rawMessage) =>
-            getMessageRole(rawMessage) === RoleEnum.USER &&
-            rawMessage?.ts !== undefined &&
-            messageItem?.ts !== undefined &&
-            rawMessage.ts === messageItem.ts,
-        );
-      if (rawUserMessage) rawUserMessage.dialogProcessId = normalizedDialogProcessId;
       return true;
     }
     return false;
@@ -575,12 +563,36 @@ export function createChatEngineConversationState({
       return;
     }
     if (!targetAssistantMessage) return;
+    if (state === "completed" || state === "backend_completed") {
+      const beforeTerminalApply = summarizeDebugMessage(targetAssistantMessage);
+      const currentMessageState = normalizeTrimmedString(targetAssistantMessage?.channelState?.state);
+      if (
+        targetAssistantMessage.pending === false ||
+        ["frontend_completed", "error", "stopped", "cancelled"].includes(currentMessageState)
+      ) {
+        logResendDebug("conversationState.backendCompleted.skipFinalized", {
+          state, sessionId, dialogProcessId, turnScopeId,
+          currentMessageState,
+          before: beforeTerminalApply,
+        });
+        return;
+      }
+      targetAssistantMessage.channelState = channelStateView;
+      applyEarliestThinkingStartedAt(targetAssistantMessage, channelStateView.createdAt || channelStateView.createdAtMs);
+      setThinkingFinishedAt(targetAssistantMessage, getThinkingFinishedAt(targetAssistantMessage) || updatedAt || createdAt || nowIso());
+      logResendDebug("conversationState.backendCompleted.apply", {
+        state, sessionId, dialogProcessId, turnScopeId,
+        before: beforeTerminalApply,
+        after: summarizeDebugMessage(targetAssistantMessage),
+      });
+      return;
+    }
     const beforeTerminalApply = summarizeDebugMessage(targetAssistantMessage);
     targetAssistantMessage.channelState = channelStateView;
     applyEarliestThinkingStartedAt(targetAssistantMessage, channelStateView.createdAt || channelStateView.createdAtMs);
     setThinkingFinishedAt(targetAssistantMessage, getThinkingFinishedAt(targetAssistantMessage) || updatedAt || createdAt || nowIso());
     targetAssistantMessage.pending = false;
-    if (state === "completed") {
+    if (state === "frontend_completed") {
       targetAssistantMessage.statusLabel = translate("chat.generated");
       logResendDebug("conversationState.terminal.apply", {
         state, sessionId, dialogProcessId, turnScopeId,
@@ -589,7 +601,7 @@ export function createChatEngineConversationState({
       });
       return;
     }
-    if (state === "stopped" || state === "cancelled" || state === "canceled") {
+    if (state === "stopped" || state === "cancelled") {
       targetAssistantMessage.statusLabel = translate("chat.stopped");
       if (!String(targetAssistantMessage.content || "").trim()) {
         targetAssistantMessage.content = translate("chat.stoppedContent");
