@@ -197,6 +197,7 @@ export function createChatEngineConversationState({
           source: "interaction_payload_missing",
         });
       } else {
+        // Compatibility fallback for callers that do not provide the run state machine bridge.
         sending.value = false;
         if (canStop) canStop.value = false;
       }
@@ -240,6 +241,7 @@ export function createChatEngineConversationState({
               source: "expired_refresh_failed",
             });
           } else {
+            // Compatibility fallback for callers that do not provide the run state machine bridge.
             sending.value = false;
             if (canStop) canStop.value = false;
           }
@@ -264,6 +266,7 @@ export function createChatEngineConversationState({
               source: "expired_refresh_failed",
             });
           } else {
+            // Compatibility fallback for callers that do not provide the run state machine bridge.
             sending.value = false;
             if (canStop) canStop.value = false;
           }
@@ -442,6 +445,7 @@ export function createChatEngineConversationState({
           updatedAt,
         });
       } else {
+        // Compatibility fallback for callers that do not provide the run state machine bridge.
         sending.value = true;
         if (canStop) {
           canStop.value = [
@@ -553,6 +557,7 @@ export function createChatEngineConversationState({
         updatedAt,
       });
     } else {
+      // Compatibility fallback for callers that do not provide the run state machine bridge.
       sending.value = false;
       if (canStop) canStop.value = false;
     }

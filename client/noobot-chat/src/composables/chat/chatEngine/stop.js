@@ -100,6 +100,7 @@ export function forceStopUiFinalize({
       source: "force_stop_finalize",
     });
   } else {
+    // Compatibility fallback for callers that do not provide the run state machine bridge.
     sending.value = false;
     if (canStop) canStop.value = false;
   }
@@ -176,6 +177,7 @@ export function stopSending({
   if (applyRunStateEvent) {
     applyRunStateEvent(stopEvent);
   } else if (canStop) {
+    // Compatibility fallback for callers that do not provide the run state machine bridge.
     canStop.value = false;
   }
   const applyStopRequestFailure = (error) => {
@@ -190,6 +192,7 @@ export function stopSending({
         error,
       });
     } else if (canStop) {
+      // Compatibility fallback for callers that do not provide the run state machine bridge.
       canStop.value = false;
     }
     return false;

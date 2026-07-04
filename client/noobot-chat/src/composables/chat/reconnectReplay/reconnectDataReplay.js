@@ -110,6 +110,7 @@ export async function applyReconnectDataReplay({
     if (applyRunStateEvents) {
       applyReconnectRunState();
     } else {
+      // Compatibility fallback for callers that do not provide the run state machine bridge.
       sending.value = true;
       if (canStop) canStop.value = true;
     }
@@ -178,6 +179,7 @@ export async function applyReconnectDataReplay({
     if (applyRunStateEvents) {
       applyReconnectRunState();
     } else if (restoredState !== null) {
+      // Compatibility fallback for callers that do not provide the run state machine bridge.
       sending.value = restoredState.sending;
       if (canStop) canStop.value = restoredState.canStop;
     }

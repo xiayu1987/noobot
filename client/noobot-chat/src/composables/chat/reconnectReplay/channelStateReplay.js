@@ -156,8 +156,19 @@ export function scheduleMissingInteractionPayloadFailure({
   const timer = setTimeout(() => {
     missingInteractionPayloadTimers.delete(key);
     if (hasPendingInteractionForDialog(pendingInteractionRequest, dialogProcessId)) return;
-    sending.value = false;
-    if (canStop) canStop.value = false;
+    if (typeof applyRunStateEvent === "function") {
+      applyRunStateEvent({
+        type: SESSION_RUN_EVENT.LOCAL_FAILURE,
+        state: BackendChannelState.ERROR,
+        sessionId,
+        dialogProcessId,
+        source: "interaction_payload_missing",
+      });
+    } else {
+      // Compatibility fallback for callers that do not provide the run state machine bridge.
+      sending.value = false;
+      if (canStop) canStop.value = false;
+    }
     interactionSubmitting.value = false;
     clearPendingInteraction();
     const missingInteractionError = translate("chat.interactionPayloadMissing");
@@ -266,6 +277,7 @@ export function applyReconnectChannelState({
         updatedAt: timing.updatedAt,
       });
     } else {
+      // Compatibility fallback for callers that do not provide the run state machine bridge.
       sending.value = true;
       if (canStop) {
         canStop.value = state === BackendChannelState.SENDING || state === BackendChannelState.RECONNECTING;
@@ -376,6 +388,7 @@ export function applyReconnectChannelState({
         updatedAt: timing.updatedAt,
       });
     } else {
+      // Compatibility fallback for callers that do not provide the run state machine bridge.
       sending.value = false;
       if (canStop) canStop.value = false;
     }

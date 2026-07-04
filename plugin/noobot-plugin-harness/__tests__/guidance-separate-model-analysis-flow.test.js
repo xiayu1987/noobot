@@ -82,6 +82,10 @@ test("separate_model analysis uses aligned agent context then user request and u
     String(tailMessages[0]?.content || ""),
     /根据当前执行结果|current execution result/i,
   );
+  assert.match(
+    String(tailMessages[0]?.content || ""),
+    /不要自己执行|do not execute/i,
+  );
   assert.equal(tailMessages[1]?.role, "user");
   assert.match(String(tailMessages[1]?.content || ""), /分析|analysis/i);
   assert.equal(agentContext.payload.harness.state.pending.analysis, false);
@@ -138,4 +142,3 @@ test("separate_model guidance pending triggers guidance invoker without analysis
   assert.equal(executionLog?.detail?.requestedAction, "guidance_separate_model");
   assert.equal(executionLog?.detail?.executedPrimary, true);
 });
-

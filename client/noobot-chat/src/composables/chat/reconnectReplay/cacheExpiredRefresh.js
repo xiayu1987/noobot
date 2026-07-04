@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { findLatestPendingAssistantAfterLastUser } from "../../infra/reconnectReplayModel";
+import { BackendChannelState, SESSION_RUN_EVENT } from "../sessionRunStateMachine";
 import { _trimStr } from "./utils";
 
 export function scheduleCacheExpiredSessionRefresh({
@@ -18,6 +19,7 @@ export function scheduleCacheExpiredSessionRefresh({
   activeSession,
   activeSessionId,
   chatList,
+  applyRunStateEvent,
   applyAssistantFailureState,
   emitSyntheticErrorConversationState,
   notify,
@@ -38,8 +40,20 @@ export function scheduleCacheExpiredSessionRefresh({
       dialogProcessId: failedDialogProcessId = "",
       targetAssistantMessage: failedTargetAssistantMessage = null,
     } = {}) {
-      sending.value = false;
-      if (canStop) canStop.value = false;
+      const normalizedFailedSessionId = _trimStr(failedSessionId || activeSession.value?.id);
+      if (typeof applyRunStateEvent === "function") {
+        applyRunStateEvent({
+          type: SESSION_RUN_EVENT.LOCAL_FAILURE,
+          state: BackendChannelState.ERROR,
+          sessionId: normalizedFailedSessionId,
+          dialogProcessId: failedDialogProcessId,
+          source: "expired_refresh_failed",
+        });
+      } else {
+        // Compatibility fallback for callers that do not provide the run state machine bridge.
+        sending.value = false;
+        if (canStop) canStop.value = false;
+      }
       interactionSubmitting.value = false;
       clearPendingInteraction?.();
       const expiredErrorMessage = translate("chat.expiredRefreshFailed");
@@ -48,7 +62,7 @@ export function scheduleCacheExpiredSessionRefresh({
         findLatestPendingAssistantAfterLastUser(activeSession.value?.messages || []);
       applyAssistantFailureState(fallbackAssistantMessage, expiredErrorMessage);
       emitSyntheticErrorConversationState({
-        sessionId: _trimStr(failedSessionId || activeSession.value?.id),
+        sessionId: normalizedFailedSessionId,
         dialogProcessId: failedDialogProcessId,
         sourceEvent: "expired_refresh_failed",
       });

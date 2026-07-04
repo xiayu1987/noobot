@@ -1,12 +1,93 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createFixture, createFakeProcessStore } from "./helpers/useReconnectReplayHelper";
 import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
+import {
+  BackendChannelState,
+  SESSION_RUN_EVENT,
+} from "../../../../src/composables/chat/sessionRunStateMachine";
+import {
+  scheduleMissingInteractionPayloadFailure,
+} from "../../../../src/composables/chat/reconnectReplay/channelStateReplay";
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
 describe("useReconnectReplay", () => {
+  it("missing interaction payload timeout reports local failure through run state machine", async () => {
+    vi.useFakeTimers();
+    const sending = { value: true };
+    const canStop = { value: true };
+    const interactionSubmitting = { value: true };
+    const clearPendingInteraction = vi.fn();
+    const applyRunStateEvent = vi.fn();
+    const notify = vi.fn();
+    const targetAssistantMessage = { role: RoleEnum.ASSISTANT, pending: true };
+
+    scheduleMissingInteractionPayloadFailure({
+      pendingInteractionRequest: { value: null },
+      missingInteractionPayloadTimers: new Map(),
+      sessionId: "s-1",
+      dialogProcessId: "dp-missing",
+      targetAssistantMessage,
+      sending,
+      canStop,
+      applyRunStateEvent,
+      interactionSubmitting,
+      clearPendingInteraction,
+      translate: (key) => key,
+      applyAssistantFailureState: vi.fn((message, errorMessage) => {
+        message.pending = false;
+        message.statusLabel = errorMessage;
+      }),
+      emitSyntheticErrorConversationState: vi.fn(),
+      notify,
+      timeoutMs: 10,
+    });
+
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(applyRunStateEvent).toHaveBeenCalledWith({
+      type: SESSION_RUN_EVENT.LOCAL_FAILURE,
+      state: BackendChannelState.ERROR,
+      sessionId: "s-1",
+      dialogProcessId: "dp-missing",
+      source: "interaction_payload_missing",
+    });
+    expect(sending.value).toBe(true);
+    expect(canStop.value).toBe(true);
+    expect(interactionSubmitting.value).toBe(false);
+    expect(clearPendingInteraction).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledWith({ type: "error", message: "chat.interactionPayloadMissing" });
+  });
+
+  it("missing interaction payload timeout keeps compatibility fallback without run state machine", async () => {
+    vi.useFakeTimers();
+    const sending = { value: true };
+    const canStop = { value: true };
+
+    scheduleMissingInteractionPayloadFailure({
+      pendingInteractionRequest: { value: null },
+      missingInteractionPayloadTimers: new Map(),
+      sessionId: "s-1",
+      dialogProcessId: "dp-missing-fallback",
+      sending,
+      canStop,
+      interactionSubmitting: { value: true },
+      clearPendingInteraction: vi.fn(),
+      translate: (key) => key,
+      applyAssistantFailureState: vi.fn(),
+      emitSyntheticErrorConversationState: vi.fn(),
+      notify: vi.fn(),
+      timeoutMs: 10,
+    });
+
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(sending.value).toBe(false);
+    expect(canStop.value).toBe(false);
+  });
+
   it("session scoped reconnect channel_state restores elapsed on latest assistant even when refresh did not mark it pending", async () => {
     const { api, refs } = createFixture();
     const startedAt = "2026-06-22T10:00:00.000Z";

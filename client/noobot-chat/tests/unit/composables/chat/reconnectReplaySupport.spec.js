@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
+import {
+  BackendChannelState,
+  SESSION_RUN_EVENT,
+} from "../../../../src/composables/chat/sessionRunStateMachine";
 import { disposeReconnectReplayTimers } from "../../../../src/composables/chat/reconnectReplay/cleanup";
 import { scheduleCacheExpiredSessionRefresh } from "../../../../src/composables/chat/reconnectReplay/cacheExpiredRefresh";
 import { renderActiveSessionBeforeReplay } from "../../../../src/composables/chat/reconnectReplay/hydrationReplay";
@@ -108,6 +112,9 @@ describe("reconnectReplay support modules", () => {
 
   it("reports expired refresh failure when session refresh fails", async () => {
     vi.useFakeTimers();
+    const sending = { value: true };
+    const canStop = { value: true };
+    const applyRunStateEvent = vi.fn();
     const clearPendingInteraction = vi.fn();
     const applyAssistantFailureState = vi.fn();
     const emitSyntheticErrorConversationState = vi.fn();
@@ -118,13 +125,15 @@ describe("reconnectReplay support modules", () => {
       getCacheExpiredRefreshTimer: vi.fn(() => null),
       setCacheExpiredRefreshTimer: vi.fn(),
       replayCache: {},
-      sending: { value: true },
+      sending,
+      canStop,
       interactionSubmitting: { value: true },
       clearPendingInteraction,
       translate: vi.fn((key) => `translated:${key}`),
       activeSession: { value: { id: "active-s", messages: [] } },
       activeSessionId: { value: "active-s" },
       chatList: { fetchSessions: vi.fn(async () => false) },
+      applyRunStateEvent,
       applyAssistantFailureState,
       emitSyntheticErrorConversationState,
       notify,
@@ -135,6 +144,15 @@ describe("reconnectReplay support modules", () => {
 
     await vi.advanceTimersByTimeAsync(1200);
 
+    expect(applyRunStateEvent).toHaveBeenCalledWith({
+      type: SESSION_RUN_EVENT.LOCAL_FAILURE,
+      state: BackendChannelState.ERROR,
+      sessionId: "failed-s",
+      dialogProcessId: "dp-failed",
+      source: "expired_refresh_failed",
+    });
+    expect(sending.value).toBe(true);
+    expect(canStop.value).toBe(true);
     expect(clearPendingInteraction).toHaveBeenCalledTimes(1);
     expect(applyAssistantFailureState).toHaveBeenCalledWith(
       targetAssistantMessage,
@@ -149,6 +167,37 @@ describe("reconnectReplay support modules", () => {
       type: "error",
       message: "translated:chat.expiredRefreshFailed",
     });
+    vi.useRealTimers();
+  });
+
+  it("falls back to closing sending/canStop when expired refresh fails without state machine bridge", async () => {
+    vi.useFakeTimers();
+    const sending = { value: true };
+    const canStop = { value: true };
+
+    scheduleCacheExpiredSessionRefresh({
+      getCacheExpiredRefreshTimer: vi.fn(() => null),
+      setCacheExpiredRefreshTimer: vi.fn(),
+      replayCache: {},
+      sending,
+      canStop,
+      interactionSubmitting: { value: true },
+      clearPendingInteraction: vi.fn(),
+      translate: vi.fn((key) => key),
+      activeSession: { value: { id: "active-s", messages: [] } },
+      activeSessionId: { value: "active-s" },
+      chatList: { fetchSessions: vi.fn(async () => false) },
+      applyAssistantFailureState: vi.fn(),
+      emitSyntheticErrorConversationState: vi.fn(),
+      notify: vi.fn(),
+      sessionId: "failed-s",
+      dialogProcessId: "dp-fallback",
+    });
+
+    await vi.advanceTimersByTimeAsync(1200);
+
+    expect(sending.value).toBe(false);
+    expect(canStop.value).toBe(false);
     vi.useRealTimers();
   });
 });
