@@ -18,7 +18,6 @@ export function createLocalSessionItem({ id, title, createConnectorPanelState })
     messageCount: 0,
     lastMessage: null,
     messages: [],
-    rawMessages: [],
     sessionDocs: [],
     connectorPanelState: createConnectorPanelState(),
     createdAt: nowIso(),
@@ -51,7 +50,6 @@ export function mapSummaryToSession(item, { sessionTitleFromMessages, createConn
     messageCount,
     lastMessage,
     messages: [],
-    rawMessages: [],
     sessionDocs: [],
     connectorPanelState: createConnectorPanelState(),
     createdAt: item.createdAt || "",
@@ -65,9 +63,6 @@ export function mergeExistingSessionState(mappedSession = {}, existingSession = 
   if (!existingSession) return mappedSession;
   const existingMessages = Array.isArray(existingSession?.messages)
     ? existingSession.messages
-    : [];
-  const existingRawMessages = Array.isArray(existingSession?.rawMessages)
-    ? existingSession.rawMessages
     : [];
   const existingSessionDocs = Array.isArray(existingSession?.sessionDocs)
     ? existingSession.sessionDocs
@@ -83,7 +78,6 @@ export function mergeExistingSessionState(mappedSession = {}, existingSession = 
     currentTaskId: mappedSession.currentTaskId || existingSession.currentTaskId || "",
     currentTaskStatus: mappedSession.currentTaskStatus || existingSession.currentTaskStatus || "idle",
     messages: existingMessages.length ? existingMessages : mappedSession.messages,
-    rawMessages: existingRawMessages.length ? existingRawMessages : mappedSession.rawMessages,
     sessionDocs: existingSessionDocs.length ? existingSessionDocs : mappedSession.sessionDocs,
     connectorPanelState: existingSession.connectorPanelState || mappedSession.connectorPanelState,
     messageCount: existingMessages.length || mappedSession.messageCount || 0,

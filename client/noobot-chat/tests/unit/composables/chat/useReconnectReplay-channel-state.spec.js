@@ -331,7 +331,7 @@ describe("useReconnectReplay", () => {
     expect(mocks.clearPendingInteraction).toHaveBeenCalled();
   });
 
-  it.each(["cancelled", "canceled"])(
+  it.each(["cancelled"])(
     "RT-06b: %s state clears pending interaction and stops sending",
     async (state) => {
       const { api, refs, mocks } = createFixture();

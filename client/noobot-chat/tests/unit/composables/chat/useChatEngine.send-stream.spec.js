@@ -78,7 +78,7 @@ describe("useChatEngine.send-stream", () => {
     }));
   });
 
-  it("DONE immediately finalizes assistant UI even if stream promise stays open", async () => {
+  it("DONE patches overlay but waits for frontend completion detail while stream promise stays open", async () => {
     let releaseStream;
     const stream = vi.fn(async (_payload, onEvent) => {
       onEvent({
@@ -110,16 +110,16 @@ describe("useChatEngine.send-stream", () => {
     await Promise.resolve();
 
     const assistant = assistantMessage(activeSession);
-    expect(assistant?.pending).toBe(false);
-    expect(assistant?.statusLabel).toBe("chat.generated");
-    expect(sending.value).toBe(false);
+    expect(assistant?.pending).toBe(true);
+    expect(assistant?.statusLabel).not.toBe("chat.generated");
+    expect(sending.value).toBe(true);
     expect(canStop.value).toBe(false);
 
     releaseStream();
     await sendPromise;
   });
 
-  it("DONE patches current assistant turn and promotes session identity", async () => {
+  it("DONE patches current assistant turn and promotes session identity without frontend completion", async () => {
     const stream = vi.fn(async (_payload, onEvent) => {
       onEvent({
         event: StreamEventEnum.DELTA,
@@ -172,6 +172,9 @@ describe("useChatEngine.send-stream", () => {
     expect(botMessage.modelAlias).toBe("alias-a");
     expect(botMessage.tool_calls).toEqual([{ id: "tc1" }]);
     expect(botMessage.pending).toBe(false);
+    expect(botMessage.channelState).toMatchObject({
+      state: SESSION_RUN_STATE.ERROR,
+    });
     expect(sending.value).toBe(false);
   });
 
@@ -217,14 +220,118 @@ describe("useChatEngine.send-stream", () => {
 
     const assistant = assistantMessage(activeSession);
     expect(assistant?.channelState).toMatchObject({
-      state: "completed",
+      state: SESSION_RUN_STATE.FRONTEND_COMPLETED,
       createdAt: startedAt,
       createdAtMs: Date.parse(startedAt),
-      updatedAt: "2026-06-22T10:00:12.000Z",
     });
     expect(assistant?.thinkingStartedAt).toBe(startedAt);
     expect(assistant?.thinking_started_at).toBeUndefined();
     expect(assistant?.thinkingFinishedAt).toBe("2026-06-22T10:00:12.000Z");
+  });
+
+  it("frontend completion detail apply clears pending and keeps normalized attachments on current assistant", async () => {
+    const stream = vi.fn(async (_payload, onEvent) => {
+      onEvent({
+        event: StreamEventEnum.DONE,
+        data: {
+          sessionId: "local-frontend-complete",
+          dialogProcessId: "dp-frontend-complete",
+          messages: [
+            { role: RoleEnum.USER, content: "hello" },
+            {
+              role: RoleEnum.ASSISTANT,
+              dialogProcessId: "dp-frontend-complete",
+              content: "overlay answer",
+            },
+          ],
+        },
+      });
+    });
+    const normalizedAttachment = { id: "att-1", name: "result.txt" };
+    const applySessionDetail = vi.fn(async () => {
+      const assistant = assistantMessage(activeSession);
+      assistant.content = "normalized answer";
+      assistant.attachments = [normalizedAttachment];
+      assistant.completedToolLogs = {
+        attachments: [{ id: "log-att-1", name: "tool.log" }],
+      };
+    });
+    const { engine, activeSession, sending, canStop, runStateSnapshot } = createHarness({
+      sessionId: "local-frontend-complete",
+      stream,
+      deps: {
+        fetchSessionDetail: vi.fn(async () => ({ sessionId: "local-frontend-complete" })),
+        applySessionDetail,
+      },
+    });
+
+    await engine.send();
+
+    const assistant = assistantMessage(activeSession);
+    expect(applySessionDetail).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: "local-frontend-complete" }),
+      expect.objectContaining({ preserveCurrentMessages: true }),
+    );
+    expect(assistant?.content).toBe("normalized answer");
+    expect(assistant?.attachments).toEqual([normalizedAttachment]);
+    expect(assistant?.completedToolLogs?.attachments).toEqual([
+      { id: "log-att-1", name: "tool.log" },
+    ]);
+    expect(assistant?.pending).toBe(false);
+    expect(assistant?.channelState).toMatchObject({
+      state: SESSION_RUN_STATE.FRONTEND_COMPLETED,
+    });
+    expect(assistant?.statusLabelKey).toBe("chat.generated");
+    expect(sending.value).toBe(false);
+    expect(canStop.value).toBe(false);
+    expect(runStateSnapshot.value?.state).toBe(SESSION_RUN_STATE.FRONTEND_COMPLETED);
+  });
+
+  it("terminal completed channel_state triggers frontend completion detail without DONE event", async () => {
+    const stream = vi.fn(async (_payload, onEvent) => {
+      emitChannelState(onEvent, "local-channel-complete", "dp-channel-complete", "sending");
+      onEvent({
+        event: StreamEventEnum.DELTA,
+        data: {
+          sessionId: "local-channel-complete",
+          dialogProcessId: "dp-channel-complete",
+          text: "overlay answer",
+        },
+      });
+      emitChannelState(onEvent, "local-channel-complete", "dp-channel-complete", "completed");
+    });
+    const normalizedAttachment = { id: "att-channel", name: "channel-result.txt" };
+    const applySessionDetail = vi.fn(async () => {
+      const assistant = assistantMessage(activeSession);
+      assistant.content = "normalized channel answer";
+      assistant.attachments = [normalizedAttachment];
+    });
+    const { engine, activeSession, sending, canStop, runStateSnapshot } = createHarness({
+      sessionId: "local-channel-complete",
+      stream,
+      deps: {
+        fetchSessionDetail: vi.fn(async () => ({ sessionId: "local-channel-complete" })),
+        applySessionDetail,
+      },
+    });
+
+    await engine.send();
+
+    const assistant = assistantMessage(activeSession);
+    expect(applySessionDetail).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: "local-channel-complete" }),
+      expect.objectContaining({ preserveCurrentMessages: true }),
+    );
+    expect(assistant?.content).toBe("normalized channel answer");
+    expect(assistant?.attachments).toEqual([normalizedAttachment]);
+    expect(assistant?.pending).toBe(false);
+    expect(assistant?.channelState).toMatchObject({
+      state: SESSION_RUN_STATE.FRONTEND_COMPLETED,
+    });
+    expect(assistant?.statusLabelKey).toBe("chat.generated");
+    expect(sending.value).toBe(false);
+    expect(canStop.value).toBe(false);
+    expect(runStateSnapshot.value?.state).toBe(SESSION_RUN_STATE.FRONTEND_COMPLETED);
   });
 
   it("channel_state drives assistant status transition", async () => {

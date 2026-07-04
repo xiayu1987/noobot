@@ -23,7 +23,6 @@ describe("useChatEngine.delete", () => {
     expect(engine.cascadeDeleteMessagesFrom(target)).toBe(true);
 
     expect(activeSession.value.messages).toEqual([]);
-    expect(activeSession.value.rawMessages).toEqual([]);
     expect(activeSession.value.messageCount).toBe(0);
     expect(activeSession.value.lastMessage).toBe(null);
     expect(activeSession.value.updatedAt).toBeTruthy();
@@ -46,7 +45,6 @@ describe("useChatEngine.delete", () => {
     expect(engine.cascadeDeleteMessagesFrom(target)).toBe(true);
 
     expect(activeSession.value.messages).toEqual([]);
-    expect(activeSession.value.rawMessages).toEqual([]);
     expect(activeSession.value.messageCount).toBe(0);
     expect(activeSession.value.lastMessage).toBe(null);
   });
@@ -195,7 +193,6 @@ describe("useChatEngine.delete", () => {
       preserveCurrentMessages: false,
     });
     expect(activeSession.value.messages).toEqual([]);
-    expect(activeSession.value.rawMessages).toEqual([]);
   });
 
   it("deleteMonotonicMessage does not locally delete when backend returns failure", async () => {
@@ -284,7 +281,6 @@ describe("useChatEngine.delete", () => {
       expectedVersion: 7,
     }), expect.any(Object));
     expect(activeSession.value.messages).toEqual([]);
-    expect(activeSession.value.rawMessages).toEqual([]);
   });
 
   it("resendMonotonicMessage does not send when backend delete fails", async () => {
@@ -333,7 +329,6 @@ describe("useChatEngine.delete", () => {
     await vi.advanceTimersByTimeAsync(25);
     await rejectionExpectation;
     expect(activeSession.value.messages).toEqual([first, target]);
-    expect(activeSession.value.rawMessages).toEqual([first, target]);
     vi.useRealTimers();
   });
 

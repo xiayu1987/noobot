@@ -129,6 +129,62 @@ describe("sessionRunStateMachine", () => {
     });
   });
 
+  it("requires frontend completion after backend completed before a turn is terminal", () => {
+    const sending = transitionSessionRunState(createInitialSessionRunState(), {
+      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+      sessionId: "s1",
+      turnScopeId: "client-1",
+    });
+
+    const backendCompleted = transitionSessionRunState(sending, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: "completed",
+      sessionId: "s1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "client-1",
+      seq: 2,
+    });
+
+    expect(backendCompleted).toMatchObject({
+      state: SESSION_RUN_STATE.BACKEND_COMPLETED,
+      dialogProcessId: "dialog-1",
+      turnScopeId: "client-1",
+    });
+    expect(evaluateSessionRunState(backendCompleted)).toMatchObject({
+      sending: true,
+      terminal: false,
+      assistantStatus: "",
+    });
+
+    const requesting = transitionSessionRunState(backendCompleted, {
+      type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_REQUEST_STARTED,
+      sessionId: "s1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "client-1",
+      seq: 3,
+    });
+    expect(requesting.state).toBe(SESSION_RUN_STATE.FRONTEND_COMPLETION_REQUESTING);
+    expect(evaluateSessionRunState(requesting)).toMatchObject({
+      sending: true,
+      terminal: false,
+      assistantStatus: "",
+    });
+
+    const completed = transitionSessionRunState(requesting, {
+      type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
+      sessionId: "s1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "client-1",
+      seq: 4,
+    });
+    expect(completed.state).toBe(SESSION_RUN_STATE.FRONTEND_COMPLETED);
+    expect(evaluateSessionRunState(completed)).toMatchObject({
+      sending: false,
+      terminal: true,
+      assistantStatus: "generated",
+    });
+  });
+
   it("keeps an early stop intent pending until backend stop is available", () => {
     const sendRequesting = transitionSessionRunState(createInitialSessionRunState(), {
       type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
@@ -392,7 +448,7 @@ describe("sessionRunStateMachine", () => {
       seq: 3,
     });
     expect(completed).toMatchObject({
-      state: SESSION_RUN_STATE.COMPLETED,
+      state: SESSION_RUN_STATE.BACKEND_COMPLETED,
       dialogProcessId: "dialog-1",
       turnScopeId: "client-1",
     });
@@ -554,14 +610,14 @@ describe("sessionRunStateMachine", () => {
     },
     {
       name: "keeps terminal state against non-terminal event",
-      current: { state: SESSION_RUN_STATE.COMPLETED, sessionId: "s1", dialogProcessId: "d1" },
+      current: { state: SESSION_RUN_STATE.FRONTEND_COMPLETED, sessionId: "s1", dialogProcessId: "d1" },
       event: { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "sending", sessionId: "s1", dialogProcessId: "d1" },
       canApply: false,
-      nextState: SESSION_RUN_STATE.COMPLETED,
+      nextState: SESSION_RUN_STATE.FRONTEND_COMPLETED,
     },
     {
       name: "allows new local turn after terminal state",
-      current: { state: SESSION_RUN_STATE.COMPLETED, sessionId: "s1", dialogProcessId: "d1" },
+      current: { state: SESSION_RUN_STATE.FRONTEND_COMPLETED, sessionId: "s1", dialogProcessId: "d1" },
       event: { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED, sessionId: "s1", turnScopeId: "c2" },
       canApply: true,
       nextState: SESSION_RUN_STATE.SENDING,
@@ -571,7 +627,7 @@ describe("sessionRunStateMachine", () => {
       current: { state: SESSION_RUN_STATE.SENDING, sessionId: "s1", dialogProcessId: "d1", seq: 1 },
       event: { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "completed", sessionId: "s1", dialogProcessId: "d1", seq: 2 },
       canApply: true,
-      nextState: SESSION_RUN_STATE.COMPLETED,
+      nextState: SESSION_RUN_STATE.BACKEND_COMPLETED,
     },
   ])("transition table: $name", ({ current, event, canApply, nextState }) => {
     const state = createInitialSessionRunState(current);
@@ -615,11 +671,11 @@ describe("sessionRunStateMachine", () => {
     },
     {
       name: "terminal lock reopen",
-      current: { state: SESSION_RUN_STATE.COMPLETED, sessionId: "s1", dialogProcessId: "d1" },
+      current: { state: SESSION_RUN_STATE.FRONTEND_COMPLETED, sessionId: "s1", dialogProcessId: "d1" },
       event: { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "sending", sessionId: "s1", dialogProcessId: "d1" },
       reason: SESSION_RUN_TRANSITION_DECISION_REASON.TERMINAL_LOCK_REOPEN,
       canApply: false,
-      nextState: SESSION_RUN_STATE.COMPLETED,
+      nextState: SESSION_RUN_STATE.FRONTEND_COMPLETED,
     },
     {
       name: "stale seq regression",
@@ -643,7 +699,7 @@ describe("sessionRunStateMachine", () => {
       event: { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "completed", sessionId: "s1", dialogProcessId: "d1" },
       reason: SESSION_RUN_TRANSITION_DECISION_REASON.APPLIED,
       canApply: true,
-      nextState: SESSION_RUN_STATE.COMPLETED,
+      nextState: SESSION_RUN_STATE.BACKEND_COMPLETED,
     },
   ])("transition decision reason: $name", ({ current, event, reason, canApply, nextState }) => {
     expect(resolveTransitionDecision(createInitialSessionRunState(current), event)).toEqual({
@@ -796,12 +852,12 @@ describe("sessionRunStateMachine", () => {
       updatedAtMs: 1710000005000,
     });
     expect(realCompleted).toMatchObject({
-      state: SESSION_RUN_STATE.COMPLETED,
+      state: SESSION_RUN_STATE.BACKEND_COMPLETED,
       dialogProcessId: "new-dialog",
       turnScopeId: "client-new",
       updatedAt: 1710000005000,
     });
-    expect(evaluateSessionRunState(realCompleted)).toMatchObject({ sending: false, canStop: false, terminal: true });
+    expect(evaluateSessionRunState(realCompleted)).toMatchObject({ sending: true, canStop: false, terminal: false });
   });
 
   it("does not treat dialogProcessId and turnScopeId as interchangeable scopes", () => {
@@ -892,7 +948,7 @@ describe("sessionRunStateMachine", () => {
 
     expect(resolveSessionRunStateForMessage({
       stateSnapshot: createInitialSessionRunState({
-        state: SESSION_RUN_STATE.COMPLETED,
+        state: SESSION_RUN_STATE.FRONTEND_COMPLETED,
         sessionId: "s1",
         dialogProcessId: "d1",
         priority: 100,
@@ -949,7 +1005,7 @@ describe("sessionRunStateMachine", () => {
     assistant[SESSION_RUN_MESSAGE_RUNTIME_MARK] = "sending|s1|d1||0";
     expect(resolveSessionRunMessageRuntimePatch({
       stateSnapshot: createInitialSessionRunState({
-        state: SESSION_RUN_STATE.COMPLETED,
+        state: SESSION_RUN_STATE.FRONTEND_COMPLETED,
         sessionId: "s1",
         dialogProcessId: "d1",
         priority: 100,
@@ -962,9 +1018,23 @@ describe("sessionRunStateMachine", () => {
       patch: {
         clearRuntimeMark: true,
         pending: false,
-        channelState: { state: SESSION_RUN_STATE.COMPLETED },
+        channelState: { state: SESSION_RUN_STATE.FRONTEND_COMPLETED },
         statusLabelKey: "chat.generated",
       },
+    });
+
+    expect(resolveSessionRunMessageRuntimePatch({
+      stateSnapshot: createInitialSessionRunState({
+        state: SESSION_RUN_STATE.BACKEND_COMPLETED,
+        sessionId: "s1",
+        dialogProcessId: "other-dialog",
+        turnScopeId: "other-turn",
+        priority: 90,
+      }),
+      messageItem: assistant,
+      activeSession,
+    })).toMatchObject({
+      action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.NONE,
     });
   });
 
@@ -1000,7 +1070,7 @@ describe("sessionRunStateMachine", () => {
       patch: {
         clearRuntimeMark: true,
         pending: false,
-        channelState: { state: SESSION_RUN_STATE.COMPLETED },
+        channelState: { state: SESSION_RUN_STATE.FRONTEND_COMPLETED },
       },
     });
   });

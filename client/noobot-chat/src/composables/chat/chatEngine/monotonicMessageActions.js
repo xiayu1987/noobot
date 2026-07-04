@@ -45,7 +45,7 @@ function isStoppedMonotonicMessage(message = {}) {
 
 function isStoppingAssistantMessage(message = {}) {
   if (getMessageRole(message) !== "assistant") return false;
-  return ["stopping", "stopped", "cancelled", "canceled"].includes(
+  return ["stopping", "stopped", "cancelled"].includes(
     normalizeTrimmedString(message?.channelState?.state || message?.state || message?.status),
   );
 }
@@ -56,7 +56,6 @@ function isStopPendingRunState(state = "") {
     SESSION_RUN_STATE.STOPPING,
     SESSION_RUN_STATE.STOPPED,
     SESSION_RUN_STATE.CANCELLED,
-    SESSION_RUN_STATE.CANCELED,
   ].includes(normalizeTrimmedString(state));
 }
 
@@ -233,12 +232,6 @@ export function createMonotonicMessageActions({
     const messages = Array.isArray(session.messages) ? session.messages : [];
     const removedMessages = messages.slice(startIndex);
     session.messages = messages.slice(0, startIndex);
-    if (Array.isArray(session.rawMessages)) {
-      const rawStartIndex = findMessageIdentityIndex(userTargetMessage, session.rawMessages);
-      if (rawStartIndex >= 0) {
-        session.rawMessages = session.rawMessages.slice(0, rawStartIndex);
-      }
-    }
     syncSessionMessageSummary(session);
     clearPendingInteraction?.();
     return true;

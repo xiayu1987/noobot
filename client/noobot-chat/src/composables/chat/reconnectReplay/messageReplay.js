@@ -133,12 +133,9 @@ export function applyFoldedMessagesForDialogProcess(activeSession, foldedMessage
         reusableMessage = null;
       }
     }
-    if (reusableMessage) {
-      reusableMessage.dialogProcessId = normalizedDpId;
-      patchMessageObjectPreservingUiState(reusableMessage, nextMessage);
-      continue;
-    }
-    existingMessages.push(nextMessage);
+    if (!reusableMessage) continue;
+    reusableMessage.dialogProcessId = normalizedDpId;
+    patchMessageObjectPreservingUiState(reusableMessage, nextMessage);
   }
   return existingMessages;
 }

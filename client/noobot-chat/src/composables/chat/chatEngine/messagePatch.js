@@ -4,15 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  buildWorkflowMessageSignature,
   mergeAssistantContents,
   normalizeTrimmedString,
   patchAssistantFromWorkflowMessage,
   pickAssistantMessagesForCurrentTurn,
 } from "./utils";
 import { getMessageDialogProcessId, getMessageTurnScopeId } from "../../infra/messageIdentity";
-import { findVisibleLastMessage } from "../../infra/messageModel";
-import { nowIso } from "../../infra/timeFields";
 
 export function applyDoneMessagesPatch({
   data = {},
@@ -28,7 +25,10 @@ export function applyDoneMessagesPatch({
   const botTurnScopeId = getMessageTurnScopeId(botMessage);
 
   const rawMessagesForView = data.messages.map((messageItem) => makeViewMessage(messageItem));
-  activeSession.value.rawMessages = rawMessagesForView;
+  // DONE messages are a replay snapshot used to patch the current
+  // pending/streaming overlay.  Do not publish them into session.rawMessages as
+  // another completed-message array; the final display source is normalized
+  // session detail, while this path only updates the in-flight bot message.
   const folded = foldMessagesForView(rawMessagesForView);
   const assistantMessagesForCurrentTurn = pickAssistantMessagesForCurrentTurn({
     foldedMessages: folded,
@@ -41,66 +41,38 @@ export function applyDoneMessagesPatch({
   const normalAssistants = assistantMessagesForCurrentTurn.filter(
     (messageItem) => messageItem?.workflowMessage !== true,
   );
-  const latestWorkflowAssistant = workflowAssistants[workflowAssistants.length - 1] || null;
-  const patchedWorkflowMessage = latestWorkflowAssistant
-    ? patchAssistantFromWorkflowMessage(botMessage, makeViewMessage(latestWorkflowAssistant))
-    : false;
-  if (!patchedWorkflowMessage) {
-    const patchAssistants = (normalAssistants.length
-      ? normalAssistants
-      : assistantMessagesForCurrentTurn).filter(
-      (messageItem) => String(messageItem?.type || "") !== "tool_call",
-    );
+  const patchAssistants = normalAssistants.filter(
+    (messageItem) => String(messageItem?.type || "") !== "tool_call",
+  );
+  if (patchAssistants.length) {
     const lastAssistant = patchAssistants[patchAssistants.length - 1];
-    if (lastAssistant) {
-      const lastAssistantTurnScopeId = getMessageTurnScopeId(lastAssistant);
-      if (botTurnScopeId && lastAssistantTurnScopeId && lastAssistantTurnScopeId !== botTurnScopeId) {
-        return true;
-      }
-      const mergedAssistantContent = mergeAssistantContents(patchAssistants);
-      const lastAssistantType = String(lastAssistant.type || "");
-      if (lastAssistantType && lastAssistantType !== "tool_call") {
-        botMessage.type = lastAssistantType;
-      }
-      botMessage.tool_calls = Array.isArray(lastAssistant.tool_calls)
-        ? lastAssistant.tool_calls
-        : [];
-      botMessage.dialogProcessId = getMessageDialogProcessId(lastAssistant) || getMessageDialogProcessId(botMessage);
-      botMessage.content = String(mergedAssistantContent || botMessage.content || "");
-      botMessage.modelAlias = normalizeTrimmedString(lastAssistant.modelAlias);
-      botMessage.modelName = normalizeTrimmedString(lastAssistant.modelName);
-      if (Array.isArray(lastAssistant.modelRuns)) {
-        botMessage.modelRuns = lastAssistant.modelRuns;
-      }
-      if (botTurnScopeId && lastAssistantTurnScopeId === botTurnScopeId) {
-        mergeAssistantAttachments(botMessage, lastAssistant.attachments || []);
-      }
+    const lastAssistantTurnScopeId = getMessageTurnScopeId(lastAssistant);
+    if (botTurnScopeId && lastAssistantTurnScopeId && lastAssistantTurnScopeId !== botTurnScopeId) {
+      return true;
+    }
+    const mergedAssistantContent = mergeAssistantContents(patchAssistants);
+    const lastAssistantType = String(lastAssistant.type || "");
+    if (lastAssistantType && lastAssistantType !== "tool_call") {
+      botMessage.type = lastAssistantType;
+    }
+    botMessage.tool_calls = Array.isArray(lastAssistant.tool_calls)
+      ? lastAssistant.tool_calls
+      : [];
+    botMessage.dialogProcessId = getMessageDialogProcessId(lastAssistant) || getMessageDialogProcessId(botMessage);
+    botMessage.content = String(mergedAssistantContent || botMessage.content || "");
+    botMessage.modelAlias = normalizeTrimmedString(lastAssistant.modelAlias);
+    botMessage.modelName = normalizeTrimmedString(lastAssistant.modelName);
+    if (Array.isArray(lastAssistant.modelRuns)) {
+      botMessage.modelRuns = lastAssistant.modelRuns;
+    }
+    if (botTurnScopeId && lastAssistantTurnScopeId === botTurnScopeId) {
+      mergeAssistantAttachments(botMessage, lastAssistant.attachments || []);
+    }
+  } else {
+    const latestWorkflowAssistant = workflowAssistants[workflowAssistants.length - 1] || null;
+    if (latestWorkflowAssistant) {
+      patchAssistantFromWorkflowMessage(botMessage, makeViewMessage(latestWorkflowAssistant));
     }
   }
-  if (!patchedWorkflowMessage && workflowAssistants.length && Array.isArray(activeSession.value?.messages)) {
-    const sessionMessages = activeSession.value.messages;
-    const existingWorkflowSignatures = new Set(
-      sessionMessages
-        .filter((messageItem) => messageItem?.workflowMessage === true)
-        .map((messageItem) => buildWorkflowMessageSignature(messageItem)),
-    );
-    let appendedCount = 0;
-    for (const workflowMessageItem of workflowAssistants) {
-      const signature = buildWorkflowMessageSignature(workflowMessageItem);
-      if (!signature || existingWorkflowSignatures.has(signature)) continue;
-      const viewWorkflowMessage = makeViewMessage(workflowMessageItem);
-      viewWorkflowMessage.hasFirstStreamEvent = true;
-      viewWorkflowMessage.pending = false;
-      sessionMessages.push(viewWorkflowMessage);
-      existingWorkflowSignatures.add(signature);
-      appendedCount += 1;
-    }
-    if (appendedCount > 0) {
-      activeSession.value.messageCount = sessionMessages.length;
-      activeSession.value.lastMessage = findVisibleLastMessage(sessionMessages);
-      activeSession.value.updatedAt = nowIso();
-    }
-  }
-
   return true;
 }

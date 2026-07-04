@@ -198,6 +198,7 @@ export function handleDoneStreamEvent({
   applyConversationState,
   processStore,
   locateSendingStartedMessageOnce,
+  suppressCompletionConversationState,
 }) {
   clearPendingInteraction();
   markFirstStreamEvent(botMessage);
@@ -274,7 +275,7 @@ export function handleDoneStreamEvent({
     foldMessagesForView,
     mergeAssistantAttachments,
   });
-  if (botMessage?.pending !== false) {
+  if (!suppressCompletionConversationState && botMessage?.pending !== false) {
     const turnMeta = normalizeTurnMeta(data);
     applyConversationState?.(
       {

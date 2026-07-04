@@ -93,6 +93,7 @@ export function buildInFlightMessageRuntimePatch(stateItem = {}) {
   if (timing.createdAt) channelState.createdAt = timing.createdAt;
   if (timing.updatedAt) channelState.updatedAt = timing.updatedAt;
   return {
+    [SESSION_RUN_MESSAGE_RUNTIME_MARK]: buildSessionRunMessageRuntimeKey(stateItem),
     runtimeMark: buildSessionRunMessageRuntimeKey(stateItem),
     pending: true,
     channelState,
@@ -120,7 +121,7 @@ export function buildClearMessageRuntimePatch({
     clearRuntimeMark: true,
     pending: false,
     channelState: {
-      state: SESSION_RUN_STATE.COMPLETED,
+      state: SESSION_RUN_STATE.FRONTEND_COMPLETED,
       updatedAt: finishedAt,
       updatedAtMs: finishedAtMs,
     },
@@ -128,6 +129,35 @@ export function buildClearMessageRuntimePatch({
     thinkingFinishedAtPolicy: "if_missing",
     statusLabelKey: "chat.generated",
     statusLabelPolicy: "if_empty",
+  };
+}
+
+export function buildFailedMessageRuntimePatch({
+  messageItem = {},
+  stateSnapshot = createInitialSessionRunState(),
+} = {}) {
+  const stateTiming = normalizeTimePair(stateSnapshot);
+  const channelState = getMessageChannelState(messageItem);
+  const channelTiming = normalizeTimePair(channelState);
+  const finishedAt =
+    stateTiming.updatedAt ||
+    channelTiming.updatedAt ||
+    toIsoTime(nowMs());
+  const finishedAtMs =
+    stateTiming.updatedAtMs ||
+    channelTiming.updatedAtMs ||
+    nowMs();
+  return {
+    clearRuntimeMark: true,
+    pending: false,
+    channelState: {
+      state: SESSION_RUN_STATE.ERROR,
+      updatedAt: finishedAt,
+      updatedAtMs: finishedAtMs,
+    },
+    thinkingFinishedAt: finishedAt,
+    thinkingFinishedAtPolicy: "if_missing",
+    statusLabelKey: "chat.failed",
   };
 }
 
@@ -159,7 +189,20 @@ export function resolveSessionRunMessageRuntimePatch({
       patch: buildInFlightMessageRuntimePatch(stateItem),
     };
   }
-  if (messageItem?.[SESSION_RUN_MESSAGE_RUNTIME_MARK]) {
+  if (
+    normalizeState(stateSnapshot?.state) === SESSION_RUN_STATE.ERROR &&
+    messageItem?.[SESSION_RUN_MESSAGE_RUNTIME_MARK]
+  ) {
+    return {
+      action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
+      reason: SESSION_RUN_MESSAGE_RUNTIME_REASON.RUNTIME_STATE_NO_LONGER_MATCHES,
+      patch: buildFailedMessageRuntimePatch({ messageItem, stateSnapshot }),
+    };
+  }
+  if (
+    normalizeState(stateSnapshot?.state) === SESSION_RUN_STATE.FRONTEND_COMPLETED &&
+    messageItem?.[SESSION_RUN_MESSAGE_RUNTIME_MARK]
+  ) {
     return {
       action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
       reason: SESSION_RUN_MESSAGE_RUNTIME_REASON.RUNTIME_STATE_NO_LONGER_MATCHES,

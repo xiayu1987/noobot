@@ -119,7 +119,13 @@ export function isNotReopeningStopLock({ event = {}, startsNewTurn = false, curr
 export function isNotLeavingTerminal({ event = {}, startsNewTurn = false, currentRule = "" } = {}) {
   if (currentRule !== SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED) return true;
   if (startsNewTurn) return true;
-  return TERMINAL_STATES.includes(normalizeState(event.state));
+  const currentState = normalizeState(arguments[0]?.current?.state);
+  const nextState = normalizeState(event.state);
+  if (!TERMINAL_STATES.includes(nextState)) return false;
+  if ([SESSION_RUN_STATE.ERROR, SESSION_RUN_STATE.STOPPED, SESSION_RUN_STATE.CANCELLED].includes(currentState)) {
+    return nextState === currentState;
+  }
+  return true;
 }
 
 export function isNotStaleSeqRegression({ currentPriority = 0, nextPriority = 0, staleSeq = false } = {}) {

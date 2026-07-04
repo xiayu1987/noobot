@@ -293,7 +293,11 @@ export function patchAssistantFromWorkflowMessage(targetMessage = null, workflow
     Number(workflowMessageItem?.executionLogTotal || 0),
     previousRealtimeLogs.length,
   );
-  targetMessage.workflowMessage = true;
+  // Workflow DONE snapshots only patch the current pending/streaming overlay.
+  // Do not turn that overlay into a standalone workflow completed message; the
+  // completed display source is rebuilt from normalized session detail.
+  delete targetMessage.workflowMessage;
+  delete targetMessage.workflowMeta;
   return true;
 }
 
@@ -350,6 +354,5 @@ export function isTerminalConversationState(state = "") {
     "no_conversation",
     "expired",
     "cancelled",
-    "canceled",
   ].includes(normalizeTrimmedString(state));
 }

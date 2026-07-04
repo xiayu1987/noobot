@@ -34,15 +34,59 @@ describe("messagePatch", () => {
       mergeAssistantAttachments: () => {},
     });
 
-    expect(activeSession.value.rawMessages.map((messageItem) => messageItem.legacyDialogIdentity)).toEqual([
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-    ]);
+    expect(activeSession.value.rawMessages).toEqual([]);
     expect(botMessage.legacyDialogIdentity).toBeUndefined();
     expect(botMessage.content).toBe("current assistant");
+  });
+
+  it("does not append workflow finalized messages from DONE into display messages", () => {
+    const botMessage = {
+      role: "assistant",
+      dialogProcessId: "dp-current",
+      turnScopeId: "turn-current",
+      content: "",
+      attachments: [],
+      pending: true,
+    };
+    const activeSession = {
+      value: {
+        rawMessages: [],
+        messages: [
+          { role: "user", content: "current", dialogProcessId: "dp-current", turnScopeId: "turn-current" },
+          botMessage,
+        ],
+      },
+    };
+    const dataMessages = [
+      { role: "user", content: "current", dialogProcessId: "dp-current", turnScopeId: "turn-current" },
+      {
+        role: "assistant",
+        content: "workflow finalized",
+        dialogProcessId: "dp-current",
+        turnScopeId: "turn-current",
+        workflowMessage: true,
+        workflowMeta: { source: "workflow-plugin" },
+      },
+      {
+        role: "assistant",
+        content: "normal finalized",
+        dialogProcessId: "dp-current",
+        turnScopeId: "turn-current",
+      },
+    ];
+
+    applyDoneMessagesPatch({
+      data: { messages: dataMessages, dialogProcessId: "dp-current" },
+      botMessage,
+      activeSession,
+      makeViewMessage: (messageItem) => ({ ...messageItem }),
+      foldMessagesForView: (messages) => messages,
+      mergeAssistantAttachments: () => {},
+    });
+
+    expect(activeSession.value.rawMessages).toEqual([]);
+    expect(activeSession.value.messages).toHaveLength(2);
+    expect(activeSession.value.messages.some((messageItem) => messageItem.workflowMessage === true)).toBe(false);
+    expect(botMessage.content).toBe("normal finalized");
   });
 });

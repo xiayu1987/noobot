@@ -75,7 +75,7 @@ export function useComposerMediaCapture(props, emitAppendUploads, translate) {
         if (micCancelBySendingRef.value || micSlideCancelReady.value || captureActionsDisabled.value) {
           micCancelBySendingRef.value = false;
           micSlideCancelReady.value = false;
-          if (!captureActionsDisabled.value) ElMessage.info(translate("composer.recordingCanceled"));
+          if (!captureActionsDisabled.value) ElMessage.info(translate("composer.recordingCancelled"));
         } else if (chunks.length) {
           const recordingMimeType = mediaRecorder.mimeType || "audio/webm";
           const audioBlob = new Blob(chunks, { type: recordingMimeType });

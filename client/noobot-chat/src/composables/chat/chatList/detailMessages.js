@@ -27,10 +27,15 @@ import {
   setThinkingStartedAt,
 } from "../../infra/timeFields";
 import { getMessageAttachments } from "../../infra/messageModel";
+import { SESSION_RUN_MESSAGE_RUNTIME_MARK } from "../sessionRunStateMachine";
 import {
   logResendDebug,
   summarizeDebugMessage,
 } from "../debug/resendDebugLogger";
+import {
+  logStateMachineDebug,
+  summarizeStateMachineMessage,
+} from "../debug/stateMachineLogger";
 
 const IN_FLIGHT_CHANNEL_STATES = new Set([
   "sending",
@@ -42,12 +47,16 @@ const IN_FLIGHT_CHANNEL_STATES = new Set([
 const TERMINAL_STOP_CHANNEL_STATES = new Set([
   "stopped",
   "cancelled",
-  "canceled",
   "aborted",
 ]);
 
 function normalizeState(value = "") {
   return String(value || "").trim().toLowerCase();
+}
+
+function countCompletedToolLogAttachments(messageItem = {}) {
+  return (Array.isArray(messageItem?.completedToolLogs) ? messageItem.completedToolLogs : [])
+    .reduce((total, logItem) => total + (Array.isArray(logItem?.attachments) ? logItem.attachments.length : 0), 0);
 }
 
 function isInFlightAssistantMessage(messageItem = {}) {
@@ -67,6 +76,27 @@ function isTerminalStopAssistantDetail(messageItem = {}) {
     messageItem?.channel_state?.state,
   ].map(normalizeState);
   return states.some((state) => TERMINAL_STOP_CHANNEL_STATES.has(state));
+}
+
+function hasReliableCompletedAssistantIdentity(messageItem = {}) {
+  if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) return false;
+  if (messageItem?.workflowMessage === true) return false;
+  if (isInFlightAssistantMessage(messageItem)) return false;
+  if (isTerminalStopAssistantDetail(messageItem)) return false;
+  return Boolean(getMessageTurnScopeId(messageItem) || getMessageDialogProcessId(messageItem));
+}
+
+function conflictsWithInFlightAssistant(existingMessages = [], detailMessageItem = {}) {
+  const detailTurnScopeId = getMessageTurnScopeId(detailMessageItem);
+  const detailDialogProcessId = getMessageDialogProcessId(detailMessageItem);
+  return (Array.isArray(existingMessages) ? existingMessages : []).some((messageItem) => {
+    if (!isInFlightAssistantMessage(messageItem)) return false;
+    const existingTurnScopeId = getMessageTurnScopeId(messageItem);
+    const existingDialogProcessId = getMessageDialogProcessId(messageItem);
+    if (detailTurnScopeId && existingTurnScopeId) return detailTurnScopeId === existingTurnScopeId;
+    if (detailDialogProcessId && existingDialogProcessId) return detailDialogProcessId === existingDialogProcessId;
+    return false;
+  });
 }
 
 function preserveRunningThinkingState(existingMessage = {}, detailMessageItem = {}) {
@@ -209,8 +239,12 @@ export function mergePreservedDetailMessages(existingMessages = [], detailMessag
       const thinkingOpenNames = Array.isArray(existingMessage?.thinkingOpenNames)
         ? existingMessage.thinkingOpenNames
         : [];
+      const runtimeStateMark = existingMessage?.[SESSION_RUN_MESSAGE_RUNTIME_MARK];
+      const runtimeMark = existingMessage?.runtimeMark;
       const existingAttachments = getMessageAttachments(existingMessage);
       const detailAttachments = getMessageAttachments(detailMessageItem);
+      const completedToolLogAttachmentsBefore = countCompletedToolLogAttachments(existingMessage);
+      const completedToolLogAttachmentsDetail = countCompletedToolLogAttachments(detailMessageItem);
       const restoreRunningThinkingState = preserveRunningThinkingState(
         existingMessage,
         detailMessageItem,
@@ -232,11 +266,71 @@ export function mergePreservedDetailMessages(existingMessages = [], detailMessag
           : existingAttachments;
       }
       if (thinkingOpenNames.length) existingMessage.thinkingOpenNames = thinkingOpenNames;
+      if (runtimeStateMark && !existingMessage[SESSION_RUN_MESSAGE_RUNTIME_MARK]) {
+        existingMessage[SESSION_RUN_MESSAGE_RUNTIME_MARK] = runtimeStateMark;
+      }
+      if (runtimeMark && !existingMessage.runtimeMark) {
+        existingMessage.runtimeMark = runtimeMark;
+      }
+      const attachmentsAfter = getMessageAttachments(existingMessage);
+      const completedToolLogAttachmentsAfter = countCompletedToolLogAttachments(existingMessage);
+      logStateMachineDebug("detailApply.merge.runtimeAndAttachments", {
+        identity: detailIdentity,
+        existingIndex,
+        message: summarizeStateMachineMessage(existingMessage),
+        hasRuntimeMarkBefore: Boolean(runtimeStateMark || runtimeMark),
+        hasRuntimeMarkAfter: Boolean(existingMessage?.[SESSION_RUN_MESSAGE_RUNTIME_MARK] || existingMessage?.runtimeMark),
+        runtimeMarkPreserved: Boolean((runtimeStateMark && existingMessage?.[SESSION_RUN_MESSAGE_RUNTIME_MARK]) || (runtimeMark && existingMessage?.runtimeMark)),
+        attachmentsCountBefore: existingAttachments.length,
+        attachmentsCountDetail: detailAttachments.length,
+        attachmentsCountAfter: attachmentsAfter.length,
+        completedToolLogAttachmentsCountBefore: completedToolLogAttachmentsBefore,
+        completedToolLogAttachmentsCountDetail: completedToolLogAttachmentsDetail,
+        completedToolLogAttachmentsCountAfter: completedToolLogAttachmentsAfter,
+      });
       existingMessage.pending = false;
       restoreRunningThinkingState();
       continue;
     }
+    if (
+      hasReliableCompletedAssistantIdentity(detailMessageItem) &&
+      !conflictsWithInFlightAssistant(existingMessages, detailMessageItem)
+    ) {
+      existingMessages.push(detailMessageItem);
+    } else {
+      logStateMachineDebug("detailApply.merge.notAppended", {
+        identity: detailIdentity,
+        detail: summarizeStateMachineMessage(detailMessageItem),
+        attachmentsCountDetail: getMessageAttachments(detailMessageItem).length,
+        completedToolLogAttachmentsCountDetail: countCompletedToolLogAttachments(detailMessageItem),
+        hasReliableCompletedAssistantIdentity: hasReliableCompletedAssistantIdentity(detailMessageItem),
+        conflictsWithInFlightAssistant: conflictsWithInFlightAssistant(existingMessages, detailMessageItem),
+      });
+    }
   }
+}
+
+export function buildNormalizedDetailMessages({
+  detailMessages = [],
+  sessionDocs = [],
+  rootSessionId = "",
+  makeViewMessage,
+  foldMessagesForView,
+  isSummaryDetail = false,
+} = {}) {
+  const sourceMessages = Array.isArray(detailMessages) ? detailMessages : [];
+  const normalizedMessages = isSummaryDetail
+    ? sourceMessages.map((messageItem) => makeViewMessage(messageItem))
+    : foldMessagesForView(sourceMessages);
+  if (!isSummaryDetail) {
+    mergeChildTurnAttachmentsIntoRootMessages({
+      rootMessages: normalizedMessages,
+      sessionDocs,
+      rootSessionId,
+      makeViewMessage,
+    });
+  }
+  return normalizedMessages;
 }
 
 export function buildChildAttachmentsByParentDialogProcessId({

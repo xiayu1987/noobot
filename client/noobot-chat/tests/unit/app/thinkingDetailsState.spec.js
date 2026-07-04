@@ -70,7 +70,7 @@ describe("thinking details state", () => {
       thinkingAssistant,
     ];
 
-    expect(resolveFallbackThinkingDetailsPayload({ rawMessages: messages })).toEqual({
+    expect(resolveFallbackThinkingDetailsPayload({ messages })).toEqual({
       messageItem: thinkingAssistant,
       allMessages: messages,
     });

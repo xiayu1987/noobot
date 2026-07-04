@@ -186,7 +186,7 @@ describe("useChatSession reconnect replay", () => {
     expect(newAssistant.content).toBe("new final answer");
     expect(newAssistant.modelAlias).toBe("alias-1");
     expect(newAssistant.pending).toBe(false);
-    expect(store.sending).toBe(false);
+    expect(store.sending).toBe(true);
     expect(store.pendingInteractionRequest).toBeNull();
     expect(store.interactionSubmitting).toBe(false);
   });

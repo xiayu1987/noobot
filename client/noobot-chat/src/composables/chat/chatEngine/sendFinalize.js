@@ -20,9 +20,6 @@ function markLatestUserMessageStopped(activeSession, botMessage = null) {
   const messages = Array.isArray(activeSession?.value?.messages)
     ? activeSession.value.messages
     : [];
-  const rawMessages = Array.isArray(activeSession?.value?.rawMessages)
-    ? activeSession.value.rawMessages
-    : [];
   if (!messages.length) return false;
   const botTurnScopeId = getMessageTurnScopeId(botMessage);
   if (!botTurnScopeId) return false;
@@ -45,18 +42,6 @@ function markLatestUserMessageStopped(activeSession, botMessage = null) {
     if (getMessageRole(messageItem) !== RoleEnum.USER) continue;
     if (getMessageTurnScopeId(messageItem) !== botTurnScopeId) continue;
     markStopped(messageItem);
-    const rawCandidate = rawMessages[index];
-    if (rawCandidate && getMessageRole(rawCandidate) === RoleEnum.USER) {
-      markStopped(rawCandidate);
-      return true;
-    }
-    for (let rawIndex = rawMessages.length - 1; rawIndex >= 0; rawIndex -= 1) {
-      const rawMessage = rawMessages[rawIndex];
-      if (getMessageRole(rawMessage) !== RoleEnum.USER) continue;
-      if (getMessageTurnScopeId(rawMessage) !== botTurnScopeId) continue;
-      markStopped(rawMessage);
-      return true;
-    }
     return true;
   }
   return false;

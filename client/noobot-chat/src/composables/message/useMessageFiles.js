@@ -10,6 +10,7 @@ import {
 import {
   getMessageRole,
   getMessageSessionId,
+  getMessageDialogProcessId,
   getMessageTurnScopeId,
   isAssistantWithoutTurnScope,
   isSameMessageRound,
@@ -17,6 +18,10 @@ import {
   shouldCollectAttachmentsFromMessage,
 } from "../infra/messageIdentity";
 import { getMessageAttachments as resolveRenderableMessageAttachments } from "../infra/messageModel";
+import {
+  SESSION_RUN_MESSAGE_RUNTIME_MARK,
+} from "../chat/sessionRunStateMachine";
+import { logStateMachineDebug } from "../chat/debug/stateMachineLogger";
 
 function tryParseJsonContent(content = "") {
   try {
@@ -398,6 +403,30 @@ function logGeneratedFileAccess(event, payload = {}) {
   } catch {}
 }
 
+function logDisplayedAttachmentsSummary({
+  messageItem = {},
+  baseAttachmentsCount = 0,
+  toolLogAttachmentsCount = 0,
+  displayedAttachmentsCount = 0,
+  canUseAssociatedTurnArtifacts = false,
+  freshPendingAssistant = false,
+} = {}) {
+  logStateMachineDebug("messageFiles.attachments.displayed", {
+    messageId: messageItem?.id || messageItem?.messageId || "",
+    sessionId: getMessageSessionId(messageItem),
+    dialogProcessId: getMessageDialogProcessId(messageItem),
+    turnScopeId: getMessageTurnScopeId(messageItem),
+    pending: messageItem?.pending === true,
+    channelState: messageItem?.channelState?.state || messageItem?.channel_state?.state || "",
+    hasRuntimeMark: Boolean(messageItem?.[SESSION_RUN_MESSAGE_RUNTIME_MARK] || messageItem?.runtimeMark),
+    baseAttachmentsCount,
+    toolLogAttachmentsCount,
+    displayedAttachmentsCount,
+    canUseAssociatedTurnArtifacts,
+    isFreshPendingAssistant: freshPendingAssistant,
+  });
+}
+
 export function useMessageFiles({
   getMessageItem = () => ({}),
   getAllMessages = () => [],
@@ -568,42 +597,6 @@ export function useMessageFiles({
         }
       }
     }
-    const candidateMessages = [
-      ...(Array.isArray(getAllMessages()) ? getAllMessages() : []),
-      ...flattenSessionMessagesWithSessionId(getSessionDocs()),
-    ];
-    if (turnScopeId) {
-      for (const sessionMessage of candidateMessages) {
-        if (getMessageRole(sessionMessage) !== "tool") continue;
-        if (!isSameMessageRound(messageItem, sessionMessage)) continue;
-        const parsed = parseToolFileResult(sessionMessage?.content || "");
-        if (!parsed) continue;
-        const { resolvedPath, fileName, toolName } = parsed;
-        const fileItem = {
-          toolName,
-          resolvedPath,
-          fileName,
-          relativePath: resolveRelativeWorkspacePath(resolvedPath),
-          ...(typeof parsed?.isSandbox === "boolean" ? { isSandbox: parsed.isSandbox } : {}),
-          sourceType: "tool",
-          recognized: false,
-        };
-        logGeneratedFileAccess("writtenFile.normalized", {
-          traceId: createFileAccessTraceId("written"),
-          sourceType: fileItem.sourceType,
-          hasFileName: Boolean(fileItem.fileName),
-          hasResolvedPath: Boolean(fileItem.resolvedPath),
-          hasRelativePath: Boolean(fileItem.relativePath),
-          isSandbox: fileItem.isSandbox,
-          relativePath: maskWorkspacePath(fileItem.relativePath),
-        });
-        const fileKey = toWrittenFileKey(fileItem);
-        if (fileKey && seen.has(fileKey)) continue;
-        if (fileKey) seen.add(fileKey);
-        out.push(fileItem);
-      }
-    }
-
     if (getMessageRole(messageItem) === "assistant") {
       const recognizedPathTokens = extractCandidatePathsFromText(messageItem?.content || "");
       for (const pathToken of recognizedPathTokens) {
@@ -631,6 +624,7 @@ export function useMessageFiles({
       messageItem,
     );
     const canUseAssociatedTurnArtifacts = !isAssistantWithoutTurnScope(messageItem);
+    const freshPendingAssistant = isFreshPendingAssistant(messageItem);
     const toolLogAttachments = [];
     if (canUseAssociatedTurnArtifacts) {
       for (const logItem of Array.isArray(messageItem?.completedToolLogs) ? messageItem.completedToolLogs : []) {
@@ -643,67 +637,29 @@ export function useMessageFiles({
       ? mergeAttachments(baseAttachments, toolLogAttachments)
       : baseAttachments;
     if (getMessageRole(messageItem) !== "assistant") {
+      logDisplayedAttachmentsSummary({
+        messageItem,
+        baseAttachmentsCount: baseAttachments.length,
+        toolLogAttachmentsCount: toolLogAttachments.length,
+        displayedAttachmentsCount: mergedBaseAttachments.length,
+        canUseAssociatedTurnArtifacts,
+        freshPendingAssistant,
+      });
       return mergedBaseAttachments;
     }
-    if (isFreshPendingAssistant(messageItem)) {
-      return withAttachmentOwners(mergedBaseAttachments);
-    }
-    const rootTurnScopeId = getMessageTurnScopeId(messageItem);
-    if (!rootTurnScopeId) return withAttachmentOwners(mergedBaseAttachments);
-
-    const allMessages = Array.isArray(getAllMessages()) ? getAllMessages() : [];
-    const sessionDocMessages = flattenSessionMessagesWithSessionId(getSessionDocs());
-    const candidateMessages = [
-      ...allMessages,
-      ...sessionDocMessages,
-    ];
-    const baseSplit = splitAttachmentsByOwner(mergedBaseAttachments);
-    let mainFlowAttachments = [...baseSplit.agent];
-    let pluginAttachments = [...baseSplit.plugin];
-    for (const sessionMessage of candidateMessages) {
-      const messageRole = getMessageRole(sessionMessage);
-      // Newer messages and generated attachments are scoped by sessionId +
-      // turnScopeId.  When the target assistant has a turn scope, treat that as
-      // the source of truth and never fall back to dialogProcessId/linear-window
-      // collection; otherwise a pending assistant can temporarily collect files
-      // from a previous summary/sessionDocs turn.
-      if (!isSameExplicitTurnScope(messageItem, sessionMessage)) continue;
-      if (!shouldCollectAttachmentsFromMessage(messageItem, sessionMessage)) {
-        continue;
-      }
-      const currentAttachments = filterAttachmentsForMessage(
-        getMessageAttachments(sessionMessage),
+    if (freshPendingAssistant) {
+      const pendingAttachments = withAttachmentOwners(mergedBaseAttachments);
+      logDisplayedAttachmentsSummary({
         messageItem,
-      );
-      if (!currentAttachments.length) continue;
-      const splitCurrentAttachments = splitAttachmentsByOwner(currentAttachments);
-      if (
-        messageRole === "user" &&
-        isHarnessPluginInjectedMessage(sessionMessage)
-      ) {
-        pluginAttachments = mergeAttachments(
-          pluginAttachments,
-          currentAttachments,
-        );
-        continue;
-      }
-      if (splitCurrentAttachments.plugin.length) {
-        pluginAttachments = mergeAttachments(
-          pluginAttachments,
-          splitCurrentAttachments.plugin,
-        );
-      }
-      if (!["assistant", "tool"].includes(messageRole)) continue;
-      if (!splitCurrentAttachments.agent.length) continue;
-      mainFlowAttachments = mergeAttachments(
-        mainFlowAttachments,
-        splitCurrentAttachments.agent,
-      );
+        baseAttachmentsCount: baseAttachments.length,
+        toolLogAttachmentsCount: toolLogAttachments.length,
+        displayedAttachmentsCount: pendingAttachments.length,
+        canUseAssociatedTurnArtifacts,
+        freshPendingAssistant,
+      });
+      return pendingAttachments;
     }
-    const mergedWithOwnerType = withAttachmentOwners([
-      ...mainFlowAttachments,
-      ...pluginAttachments,
-    ]);
+    const mergedWithOwnerType = withAttachmentOwners(mergedBaseAttachments);
     const dedupedWithOwnerType = [];
     const seenAttachmentKeySet = new Map();
     const seenAttachmentContentKeySet = new Map();
@@ -779,6 +735,14 @@ export function useMessageFiles({
         }
       }
     }
+    logDisplayedAttachmentsSummary({
+      messageItem,
+      baseAttachmentsCount: baseAttachments.length,
+      toolLogAttachmentsCount: toolLogAttachments.length,
+      displayedAttachmentsCount: dedupedWithOwnerType.length,
+      canUseAssociatedTurnArtifacts,
+      freshPendingAssistant,
+    });
     return dedupedWithOwnerType;
   });
 
