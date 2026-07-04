@@ -5,7 +5,7 @@ import {
   assistantMessage,
   emitChannelState,
 } from "./helpers/useChatEngineHarness";
-import { SESSION_RUN_STATE } from "../../../../src/composables/chat/sessionRunStateMachine";
+import { BackendChannelState, FrontendRunState } from "../../../../src/composables/chat/sessionRunStateMachine";
 import {
   RoleEnum,
   StreamEventEnum,
@@ -172,7 +172,7 @@ describe("useChatEngine.resend stopped state", () => {
     firstReplacementAssistant.stopState = "stopped";
     firstReplacementAssistant.channelState = { state: "stopped", turnScopeId: firstTurnScopeId };
     runStateSnapshot.value = {
-      state: SESSION_RUN_STATE.STOPPED,
+      state: BackendChannelState.STOPPED,
       sessionId: "local-resend-second-stopped",
       dialogProcessId: "",
       turnScopeId: firstTurnScopeId,
@@ -197,7 +197,7 @@ describe("useChatEngine.resend stopped state", () => {
     expect(secondPlaceholder.stopState).toBeUndefined();
     expect(secondPlaceholder.channelState?.state).not.toBe("stopped");
     expect(runStateSnapshot.value).toMatchObject({
-      state: SESSION_RUN_STATE.RESEND_STREAMING,
+      state: FrontendRunState.RESEND_STREAMING,
       turnScopeId: secondReplacementUser.turnScopeId,
     });
     expect(sending.value).toBe(true);
@@ -276,7 +276,7 @@ describe("useChatEngine.resend stopped state", () => {
     firstAssistant.statusLabel = "chat.stopped";
     firstAssistant.channelState = { state: "stopped", turnScopeId: firstAssistant.turnScopeId };
     runStateSnapshot.value = {
-      state: SESSION_RUN_STATE.STOPPED,
+      state: BackendChannelState.STOPPED,
       sessionId: "local-resend-stale-stop-replay",
       turnScopeId: firstAssistant.turnScopeId,
       seq: 0,
@@ -297,7 +297,7 @@ describe("useChatEngine.resend stopped state", () => {
     }));
     expect(freshPlaceholder.channelState?.state).not.toBe("stopped");
     expect(runStateSnapshot.value).toMatchObject({
-      state: SESSION_RUN_STATE.RESEND_STREAMING,
+      state: FrontendRunState.RESEND_STREAMING,
       turnScopeId: freshPlaceholder.turnScopeId,
     });
     expect(sending.value).toBe(true);
@@ -337,7 +337,7 @@ describe("useChatEngine.resend stopped state", () => {
     sending.value = true;
     canStop.value = false;
     runStateSnapshot.value = {
-      state: SESSION_RUN_STATE.RESEND_STREAMING,
+      state: FrontendRunState.RESEND_STREAMING,
       sessionId: "local-resend-state-mismatch",
       turnScopeId: "client-turn:missing-in-flight",
     };

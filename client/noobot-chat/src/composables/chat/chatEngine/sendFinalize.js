@@ -11,6 +11,7 @@ import {
   normalizeTurnMeta,
 } from "../../infra/messageIdentity";
 import { logResendDebug, summarizeDebugMessage } from "../debug/resendDebugLogger";
+import { BackendChannelState } from "../sessionRunStateMachine";
 
 function normalizeTrimmedString(value = "") {
   return String(value || "").trim();
@@ -58,7 +59,7 @@ export function applyStreamCompletedFallback({
   const turnMeta = normalizeTurnMeta(finalDoneEventData);
   applyConversationState(
     {
-      state: "completed",
+      state: BackendChannelState.COMPLETED,
       sessionId: String(
         finalDoneEventData?.sessionId ||
           activeSession?.value?.backendSessionId ||
@@ -107,7 +108,7 @@ export function applyStopRequestedState({
   markLatestUserMessageStopped(activeSession, botMessage);
   applyConversationState(
     {
-      state: "stopped",
+      state: BackendChannelState.STOPPED,
       sessionId: String(activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
       dialogProcessId: String(getMessageDialogProcessId(botMessage) || ""),
       ...(botTurnScopeId ? { turnScopeId: String(botTurnScopeId || "") } : {}),
@@ -129,7 +130,7 @@ export function applySendErrorState({
 } = {}) {
   applyConversationState(
     {
-      state: "error",
+      state: BackendChannelState.ERROR,
       sessionId: String(
         errorEventData?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || "",
       ),

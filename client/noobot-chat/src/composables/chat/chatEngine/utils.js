@@ -8,6 +8,7 @@ import { RoleEnum } from "../../../shared/constants/chatConstants";
 import { messages } from "noobot-i18n/client/messages";
 import { foldConversationMessages } from "../../infra/messageModel";
 import { getMessageDialogProcessId, getMessageRole, getMessageTurnScopeId } from "../../infra/messageIdentity";
+import { BackendChannelState, BackendTerminalStates, FrontendRunState } from "../sessionRunStateMachine";
 
 export function normalizeTrimmedString(value) {
   return String(value || "").trim();
@@ -341,18 +342,17 @@ export function normalizePendingInteractionPayloads(statePayload = {}) {
 }
 
 export function isInFlightConversationState(state = "") {
-  return ["sending", "interaction_pending", "stopping", "reconnecting"].includes(
-    normalizeTrimmedString(state),
-  );
+  return [
+    BackendChannelState.SENDING,
+    BackendChannelState.INTERACTION_PENDING,
+    BackendChannelState.STOPPING,
+    BackendChannelState.RECONNECTING,
+  ].includes(normalizeTrimmedString(state));
 }
 
 export function isTerminalConversationState(state = "") {
   return [
-    "stopped",
-    "completed",
-    "error",
-    "no_conversation",
-    "expired",
-    "cancelled",
+    ...BackendTerminalStates,
+    FrontendRunState.CANCELLED,
   ].includes(normalizeTrimmedString(state));
 }

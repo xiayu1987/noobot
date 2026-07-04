@@ -5,7 +5,7 @@ import {
   assistantMessage,
   emitChannelState,
 } from "./helpers/useChatEngineHarness";
-import { SESSION_RUN_STATE } from "../../../../src/composables/chat/sessionRunStateMachine";
+import { FrontendRunState } from "../../../../src/composables/chat/sessionRunStateMachine";
 import {
   RoleEnum,
   StreamEventEnum,
@@ -73,7 +73,7 @@ describe("useChatEngine.resend replace turn", () => {
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
     expect(runStateSnapshot.value).toEqual(expect.objectContaining({
-      state: SESSION_RUN_STATE.RESEND_STREAMING,
+      state: FrontendRunState.RESEND_STREAMING,
       dialogProcessId: "",
       turnScopeId: expect.any(String),
     }));
@@ -265,7 +265,7 @@ describe("useChatEngine.resend replace turn", () => {
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
     expect(runStateSnapshot.value).toEqual(expect.objectContaining({
-      state: SESSION_RUN_STATE.RESEND_STREAMING,
+      state: FrontendRunState.RESEND_STREAMING,
       turnScopeId: replacementUser.turnScopeId,
     }));
   });

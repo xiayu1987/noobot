@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { SESSION_RUN_EVENT, SESSION_RUN_STATE, STOP_REQUEST_STORAGE_KEY, STOP_REQUEST_TTL_MS } from "./constants";
+import { FrontendRunState, SESSION_RUN_EVENT, STOP_REQUEST_STORAGE_KEY, STOP_REQUEST_TTL_MS } from "./constants";
 import { normalizeSessionRunEvent } from "./core";
 import { trim } from "./normalize";
 import { nowMs } from "../../infra/timeFields";
@@ -36,7 +36,7 @@ export function rememberStopRequestedEvent(rawEvent = {}) {
   const event = normalizeSessionRunEvent({
     ...rawEvent,
     type: SESSION_RUN_EVENT.LOCAL_STOP_REQUESTED,
-    state: SESSION_RUN_STATE.STOP_REQUESTED,
+    state: FrontendRunState.STOP_REQUESTED,
   });
   if (!event.sessionId) return event;
   const entries = readStopRequests().filter((entry) => {
@@ -74,7 +74,7 @@ export function resolveRememberedStopRequestedEvent({ sessionId = "", dialogProc
   if (!match) return null;
   return normalizeSessionRunEvent({
     type: SESSION_RUN_EVENT.LOCAL_STOP_REQUESTED,
-    state: SESSION_RUN_STATE.STOP_REQUESTED,
+    state: FrontendRunState.STOP_REQUESTED,
     sessionId: normalizedSessionId,
     dialogProcessId: normalizedDialogProcessId || trim(match.dialogProcessId),
     turnScopeId: trim(match.turnScopeId),

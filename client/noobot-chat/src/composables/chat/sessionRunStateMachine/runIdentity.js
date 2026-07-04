@@ -4,11 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import {
+  BackendChannelState,
+  FrontendTerminalStates,
+  FrontendRunState,
   SESSION_RUN_EVENT,
-  SESSION_RUN_STATE,
   SESSION_RUN_TRANSITION_RULE,
   STOP_LOCK_REOPEN_STATES,
-  TERMINAL_STATES,
 } from "./constants";
 import { normalizeState, trim } from "./normalize";
 
@@ -93,7 +94,7 @@ export function shouldStartNewTurn(current = {}, event = {}) {
     SESSION_RUN_EVENT.LOCAL_RESEND_STARTED,
     SESSION_RUN_EVENT.LOCAL_RESEND_REPLACING_TURN,
   ].includes(event.type)) return false;
-  if (TERMINAL_STATES.includes(normalizeState(current.state))) return true;
+  if (FrontendTerminalStates.includes(normalizeState(current.state))) return true;
   const eventScope = resolveEventScope(event);
   const currentScope = resolveEventScope(current);
   if (!eventScope || !currentScope) return true;
@@ -121,8 +122,8 @@ export function isNotLeavingTerminal({ event = {}, startsNewTurn = false, curren
   if (startsNewTurn) return true;
   const currentState = normalizeState(arguments[0]?.current?.state);
   const nextState = normalizeState(event.state);
-  if (!TERMINAL_STATES.includes(nextState)) return false;
-  if ([SESSION_RUN_STATE.ERROR, SESSION_RUN_STATE.STOPPED, SESSION_RUN_STATE.CANCELLED].includes(currentState)) {
+  if (!FrontendTerminalStates.includes(nextState)) return false;
+  if ([BackendChannelState.ERROR, BackendChannelState.STOPPED, FrontendRunState.CANCELLED].includes(currentState)) {
     return nextState === currentState;
   }
   return true;
@@ -146,8 +147,8 @@ export function isBackendRunStateEvent(event = {}) {
 
 export function isUnscopedBackendProtectedState(state = "") {
   return [
-    SESSION_RUN_STATE.STOPPING,
-    ...TERMINAL_STATES,
+    BackendChannelState.STOPPING,
+    ...FrontendTerminalStates,
   ].includes(normalizeState(state));
 }
 

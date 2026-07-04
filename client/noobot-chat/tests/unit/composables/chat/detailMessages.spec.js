@@ -11,9 +11,9 @@ import {
   foldConversationMessages,
 } from "../../../../src/composables/infra/messageModel";
 import {
+  FrontendRunState,
   SESSION_RUN_MESSAGE_RUNTIME_ACTION,
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
-  SESSION_RUN_STATE,
   resolveSessionRunMessageRuntimePatch,
 } from "../../../../src/composables/chat/sessionRunStateMachine";
 import { RoleEnum } from "../../../../src/shared/constants/chatConstants";
@@ -186,7 +186,7 @@ describe("detailMessages", () => {
         dialogProcessId: "dp-runtime",
         pending: true,
         channelState: {
-          state: SESSION_RUN_STATE.FRONTEND_COMPLETION_REQUESTING,
+          state: FrontendRunState.FRONTEND_COMPLETION_REQUESTING,
           sessionId: "session-runtime",
           dialogProcessId: "dp-runtime",
           turnScopeId: "turn-runtime",
@@ -224,7 +224,7 @@ describe("detailMessages", () => {
 
     const effect = resolveSessionRunMessageRuntimePatch({
       stateSnapshot: {
-        state: SESSION_RUN_STATE.FRONTEND_COMPLETED,
+        state: FrontendRunState.FRONTEND_COMPLETED,
         sessionId: "session-runtime",
         dialogProcessId: "dp-runtime",
         turnScopeId: "turn-runtime",
@@ -236,7 +236,7 @@ describe("detailMessages", () => {
     expect(effect.patch).toMatchObject({
       clearRuntimeMark: true,
       pending: false,
-      channelState: { state: SESSION_RUN_STATE.FRONTEND_COMPLETED },
+      channelState: { state: FrontendRunState.FRONTEND_COMPLETED },
       statusLabelKey: "chat.generated",
     });
   });

@@ -10,11 +10,12 @@ import {
 } from "../../infra/messageIdentity";
 import { normalizeTimePair, nowMs, toIsoTime } from "../../infra/timeFields";
 import {
+  BackendChannelState,
+  FrontendRunState,
   MESSAGE_IN_FLIGHT_CHANNEL_STATES,
   SESSION_RUN_MESSAGE_RUNTIME_ACTION,
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
   SESSION_RUN_MESSAGE_RUNTIME_REASON,
-  SESSION_RUN_STATE,
 } from "./constants";
 import { createInitialSessionRunState, isInFlightSessionRunState } from "./core";
 import { normalizeState, trim } from "./normalize";
@@ -121,7 +122,7 @@ export function buildClearMessageRuntimePatch({
     clearRuntimeMark: true,
     pending: false,
     channelState: {
-      state: SESSION_RUN_STATE.FRONTEND_COMPLETED,
+      state: FrontendRunState.FRONTEND_COMPLETED,
       updatedAt: finishedAt,
       updatedAtMs: finishedAtMs,
     },
@@ -151,7 +152,7 @@ export function buildFailedMessageRuntimePatch({
     clearRuntimeMark: true,
     pending: false,
     channelState: {
-      state: SESSION_RUN_STATE.ERROR,
+      state: BackendChannelState.ERROR,
       updatedAt: finishedAt,
       updatedAtMs: finishedAtMs,
     },
@@ -190,7 +191,7 @@ export function resolveSessionRunMessageRuntimePatch({
     };
   }
   if (
-    normalizeState(stateSnapshot?.state) === SESSION_RUN_STATE.ERROR &&
+    normalizeState(stateSnapshot?.state) === BackendChannelState.ERROR &&
     messageItem?.[SESSION_RUN_MESSAGE_RUNTIME_MARK]
   ) {
     return {
@@ -200,7 +201,7 @@ export function resolveSessionRunMessageRuntimePatch({
     };
   }
   if (
-    normalizeState(stateSnapshot?.state) === SESSION_RUN_STATE.FRONTEND_COMPLETED &&
+    normalizeState(stateSnapshot?.state) === FrontendRunState.FRONTEND_COMPLETED &&
     messageItem?.[SESSION_RUN_MESSAGE_RUNTIME_MARK]
   ) {
     return {

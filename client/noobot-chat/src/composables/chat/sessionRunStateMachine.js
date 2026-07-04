@@ -4,12 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 export {
+  BackendChannelState,
+  BackendTerminalStates,
+  FrontendRunState,
+  FrontendTerminalStates,
   SESSION_RUN_EVENT,
   MESSAGE_IN_FLIGHT_CHANNEL_STATES,
   SESSION_RUN_MESSAGE_RUNTIME_ACTION,
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
   SESSION_RUN_MESSAGE_RUNTIME_REASON,
-  SESSION_RUN_STATE,
   SESSION_RUN_TRANSITION_DECISION_REASON,
   SESSION_RUN_TRANSITION_TABLE,
 } from "./sessionRunStateMachine/constants";

@@ -30,6 +30,7 @@ import {
   resolveConnectorStatusPayload,
 } from "../interactionPayload";
 import { bindThinkingDialogProcess, rememberThinkingFinished } from "../thinkingTimingRegistry";
+import { BackendChannelState } from "../sessionRunStateMachine";
 
 function markFirstStreamEvent(botMessage) {
   if (!botMessage) return;
@@ -279,7 +280,7 @@ export function handleDoneStreamEvent({
     const turnMeta = normalizeTurnMeta(data);
     applyConversationState?.(
       {
-        state: "completed",
+        state: BackendChannelState.COMPLETED,
         sessionId: String(data?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
         dialogProcessId: String(getMessageDialogProcessId(botMessage) || data?.dialogProcessId || ""),
         turnScopeId: String(getMessageTurnScopeId(botMessage) || turnMeta.turnScopeId || ""),

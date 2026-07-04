@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createFixture, createFakeProcessStore } from "./helpers/useReconnectReplayHelper";
-import { SESSION_RUN_STATE } from "../../../../src/composables/chat/sessionRunStateMachine";
 import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
 
 afterEach(() => {

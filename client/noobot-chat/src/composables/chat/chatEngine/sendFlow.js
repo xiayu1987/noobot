@@ -62,7 +62,7 @@ function isTerminalStopStateEvent(event = "", data = {}) {
 
 function isTerminalCompletedStateEvent(event = "", data = {}) {
   if (normalizeTrimmedString(event) !== StreamEventEnum.CHANNEL_STATE) return false;
-  return ["completed", "backend_completed"].includes(normalizeTrimmedString(data?.state));
+  return normalizeTrimmedString(data?.state) === "completed";
 }
 
 function buildFinalDoneEventData({ data = {}, activeSession, botMessage } = {}) {
@@ -194,10 +194,6 @@ export function createChatEngineSender({
       turnScopeId,
       source: "send_flow",
     });
-    if (!applyRunStateEvent) {
-      sending.value = true;
-      if (canStop) canStop.value = true;
-    }
     const {
       text,
       filesToSend,
