@@ -18,6 +18,11 @@ import {
   PLUGIN_SLOT_KEY,
 } from "./plugin-constants.js";
 import fs from "node:fs";
+import {
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
 
 const loadedDynamicPlugins = await getNoobotPluginRuntime({
   requiredApiVersion: "1",
@@ -37,9 +42,16 @@ function isPluginDebugEnabled() {
 
 function debugSessionPluginRuntime(message = "", details = {}) {
   if (!isPluginDebugEnabled()) return;
-  console.warn("[noobot:plugin-debug] session plugin runtime", {
-    message,
-    ...(details && typeof details === "object" ? details : {}),
+  void writeRoutedRuntimeEvent({
+    source: "agent",
+    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+    category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
+    level: "debug",
+    event: "agent.plugin.sessionRuntime.debug",
+    data: {
+      message: String(message || ""),
+      detailKeys: details && typeof details === "object" ? Object.keys(details).slice(0, 20) : [],
+    },
   });
 }
 
@@ -59,18 +71,26 @@ function logPluginStartupCheck({ loadedPlugins = null, pluginRuntime = null } = 
         return id === agentPluginKey || pluginKey === agentPluginKey;
       })
     : false;
-  console.warn("[noobot:plugin-startup-check]", {
-    pluginRootDir: diagnostics.pluginRootDir,
+  void writeRoutedRuntimeEvent({
+    scope: "startup",
+    source: "agent",
+    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+    category: RUNTIME_EVENT_CATEGORIES.STATE,
+    level: "warn",
+    event: "agent.plugin.startupCheck",
+    data: {
+    pluginRootDirLength: String(diagnostics.pluginRootDir || "").length,
     pluginRootDirExists: diagnostics.pluginRootDir ? fs.existsSync(diagnostics.pluginRootDir) : false,
     discoveredCount: diagnostics.discoveredCount,
     loadedCount: diagnostics.loadedCount,
     skippedCount: diagnostics.skippedCount,
-    loaded: diagnostics.loaded,
-    errors: diagnostics.errors,
-    agentPluginKey,
-    agentPluginSelectors: agentSelectors,
+    loadedCountReported: loaded.length,
+    errorCount: Array.isArray(diagnostics.errors) ? diagnostics.errors.length : 0,
+    agentPluginKeyLength: agentPluginKey.length,
+    agentPluginSelectorCount: agentSelectors.length,
     agentPluginLoaded,
     agentPluginSelectable: agentPluginKey ? agentSelectors.includes(agentPluginKey) : false,
+    },
   });
 }
 

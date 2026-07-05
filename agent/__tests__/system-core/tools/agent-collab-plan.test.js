@@ -28,7 +28,7 @@ afterEach(() => {
   resetModelAdapter();
 });
 
-test("plan_multi_task_collaboration: JSON parse fallbacks write telemetry with session context", async () => {
+test("plan_multi_task_collaboration: JSON parse fallbacks write runtime-events with session context", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-plan-collab-"));
   installFakeModel('not json\n```json\n{ "tasks": [\n```');
 
@@ -50,7 +50,7 @@ test("plan_multi_task_collaboration: JSON parse fallbacks write telemetry with s
 
   await tool.invoke({ task: "split this task" });
 
-  const records = await readJsonl(path.join(workspaceRoot, "u1", "runtime", "session", "s1", "logs", "system.jsonl"));
+  const records = await readJsonl(path.join(workspaceRoot, "u1", "runtime", "session", "s1", "events", "system.jsonl"));
   const fallback = records.find((item) => item.event === "agent.collab.planJsonParse.fallbackToMarkdown");
   const markdownFailed = records.find((item) => item.event === "agent.collab.planMarkdownJsonParse.failed");
 
@@ -69,7 +69,7 @@ test("plan_multi_task_collaboration: JSON parse fallbacks write telemetry with s
   }
 });
 
-test("plan_multi_task_collaboration: JSON parse fallback without session does not write session telemetry", async () => {
+test("plan_multi_task_collaboration: JSON parse fallback without session writes routed system telemetry", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-plan-collab-nosession-"));
   installFakeModel("not json");
 
@@ -87,6 +87,23 @@ test("plan_multi_task_collaboration: JSON parse fallback without session does no
 
   await tool.invoke({ task: "split this task" });
 
-  const entries = await fs.readdir(workspaceRoot, { recursive: true }).catch(() => []);
-  assert.deepEqual(entries, []);
+  const records = await readJsonl(path.join(
+    workspaceRoot,
+    "system",
+    "runtime",
+    "events",
+    "system",
+    "agent",
+    "system.jsonl",
+  ));
+  const fallback = records.find((item) => item.event === "agent.collab.planJsonParse.fallbackToMarkdown");
+  for (const record of [fallback]) {
+    assert.ok(record);
+    assert.equal(record.source, "agent");
+    assert.equal(record.channel, "direct");
+    assert.equal(record.category, "system");
+    assert.equal(record.userId, undefined);
+    assert.equal(record.sessionId, undefined);
+    assert.equal(record.data.toolName, "plan_multi_task_collaboration");
+  }
 });

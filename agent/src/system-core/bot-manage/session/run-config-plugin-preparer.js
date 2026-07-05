@@ -26,6 +26,11 @@ import {
 } from "./session-execution-engine-utils.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import {
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
 
 export const AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS =
   TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
@@ -39,9 +44,16 @@ function isPluginDebugEnabled() {
 
 function debugPluginPreparer(message = "", details = {}) {
   if (!isPluginDebugEnabled()) return;
-  console.warn("[noobot:plugin-debug] run config plugin preparer", {
-    message,
-    ...(details && typeof details === "object" ? details : {}),
+  void writeRoutedRuntimeEvent({
+    source: "agent",
+    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+    category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
+    level: "debug",
+    event: "agent.plugin.runConfigPreparer.debug",
+    data: {
+      message: String(message || ""),
+      detailKeys: details && typeof details === "object" ? Object.keys(details).slice(0, 20) : [],
+    },
   });
 }
 

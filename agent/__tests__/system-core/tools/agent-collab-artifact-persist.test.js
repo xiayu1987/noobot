@@ -12,7 +12,7 @@ async function readJsonl(filePath) {
   return content.trim().split(/\n+/).filter(Boolean).map((line) => JSON.parse(line));
 }
 
-test("collab artifact persistor writes failed attachment persistence to telemetry session system log", async () => {
+test("collab artifact persistor writes failed attachment persistence to runtime-events session system event", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-collab-artifact-"));
   const runtime = {
     globalConfig: { workspaceRoot },
@@ -56,7 +56,7 @@ test("collab artifact persistor writes failed attachment persistence to telemetr
     "runtime",
     "session",
     "s-root",
-    "logs",
+    "events",
     "system.jsonl",
   ));
   assert.equal(records.length, 1);

@@ -5,9 +5,13 @@
  */
 import { resolveBuiltinScenarios } from "#agent/config";
 import { getProviders, resolveDefaultModelSpec } from "#agent/model";
-import { logError } from "#agent/tracking";
 import { isSuperAdminRole, resolveConfiguredSuperUserId } from "#agent/utils";
 import { withJsonError } from "./route-wrapper.js";
+import {
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -153,9 +157,14 @@ export function registerAuthRoutes(
             ? (await loadUserConfigForUser(targetUserId)) || {}
             : {};
         } catch (error) {
-          logError("[auth-routes] loadUserConfig failed", {
-            userId: targetUserId,
-            error: error?.message || String(error),
+          void writeRoutedRuntimeEvent({
+            source: "service",
+            channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+            category: RUNTIME_EVENT_CATEGORIES.CONFIG,
+            level: "warn",
+            event: "service.authRoutes.userConfig.load.failed",
+            data: { userIdLength: String(targetUserId || "").trim().length },
+            error,
           });
           return {};
         }

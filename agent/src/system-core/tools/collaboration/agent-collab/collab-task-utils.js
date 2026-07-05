@@ -3,29 +3,40 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { logError } from "../../../tracking/console/logger.js";
 import { resolveMessageDialogProcessId } from "../../../context/session/dialog-process-id-resolver.js";
 import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { SESSION_ASYNC_STATUS } from "../../../bot-manage/config/constants.js";
 import { TOOL_NAME } from "../../constants/index.js";
 import { normalizeParentSessionId } from "../../../context/parent-session-id-resolver.js";
+import {
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
+
+function writeCloneFailedEvent(event = "", error = null) {
+  void writeRoutedRuntimeEvent({
+    source: "agent",
+    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+    category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
+    level: "warn",
+    event,
+    error,
+  });
+}
 
 export function cloneData(value) {
   if (typeof globalThis.structuredClone === "function") {
     try {
       return globalThis.structuredClone(value);
     } catch (error) {
-      logError("[agent-collab-tool] structuredClone fallback failed", {
-        error: error?.message || String(error),
-      });
+      writeCloneFailedEvent("agent.collabTask.clone.structuredClone.failed", error);
     }
   }
   try {
     return JSON.parse(JSON.stringify(value));
   } catch (error) {
-    logError("[agent-collab-tool] JSON.stringify/parse clone fallback failed", {
-      error: error?.message || String(error),
-    });
+    writeCloneFailedEvent("agent.collabTask.clone.jsonFallback.failed", error);
     return value;
   }
 }

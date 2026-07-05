@@ -12,17 +12,17 @@ import { ERROR_CODE } from "../../error/constants.js";
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
 import {
-  SESSION_CHANNEL_CATEGORIES,
-  SESSION_CHANNELS,
-  writeSessionChannelEvent,
-} from "@noobot/telemetry/session-channel";
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
 
 function mapExecutionLogToSessionChannelCategory(normalizedLog = {}) {
   const category = String(normalizedLog?.category || "").trim().toLowerCase();
-  if (category === "tool") return SESSION_CHANNEL_CATEGORIES.INTERACTION;
-  if (category === "error") return SESSION_CHANNEL_CATEGORIES.SYSTEM;
-  if (category === "semantic_transfer") return SESSION_CHANNEL_CATEGORIES.DEBUG;
-  return SESSION_CHANNEL_CATEGORIES.SYSTEM;
+  if (category === "tool") return RUNTIME_EVENT_CATEGORIES.INTERACTION;
+  if (category === "error") return RUNTIME_EVENT_CATEGORIES.SYSTEM;
+  if (category === "semantic_transfer") return RUNTIME_EVENT_CATEGORIES.DEBUG;
+  return RUNTIME_EVENT_CATEGORIES.SYSTEM;
 }
 
 export class ExecutionLogRepository {
@@ -41,14 +41,15 @@ export class ExecutionLogRepository {
 
   async _appendSessionChannelLog(userId, sessionId, normalizedLog = {}, parentSessionId = "") {
     if (!sessionId) return;
-    await writeSessionChannelEvent({
+    await writeRoutedRuntimeEvent({
+      scope: "session",
       userId,
       sessionId,
       parentSessionId,
       dialogProcessId: resolveMessageDialogProcessId(normalizedLog),
       source: "agent",
       category: mapExecutionLogToSessionChannelCategory(normalizedLog),
-      channel: SESSION_CHANNELS.DIRECT,
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
       event: normalizedLog.event || "agent.execution",
       data: {
         executionCategory: normalizedLog.category || "",

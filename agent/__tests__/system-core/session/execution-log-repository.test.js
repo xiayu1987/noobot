@@ -86,7 +86,7 @@ test("appendLog without dialogProcessId stays in current latest dialog", async (
   assert.equal(bundle.logs[1].dialogProcessId, "d1");
 });
 
-test("appendLog mirrors session execution logs to telemetry session channel", async () => {
+test("appendLog mirrors session execution logs to runtime-events session events", async () => {
   const workspaceRoot = await makeTempDir();
   const sessionRepository = createInMemorySessionRepository();
   const repo = new ExecutionLogRepository({
@@ -104,7 +104,7 @@ test("appendLog mirrors session execution logs to telemetry session channel", as
     ts: "2026-05-13T00:00:01.000Z",
   }, "p1");
 
-  const telemetryFile = path.join(workspaceRoot, "u1", "runtime", "session", "s1", "logs", "interaction.jsonl");
+  const telemetryFile = path.join(workspaceRoot, "u1", "runtime", "session", "s1", "events", "interaction.jsonl");
   const records = await readJsonLines(telemetryFile);
   assert.equal(records.length, 1);
   assert.equal(records[0].source, "agent");

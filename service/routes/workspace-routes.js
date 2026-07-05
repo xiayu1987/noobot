@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { logError } from "#agent/tracking";
 import { isSuperAdminRole, resolveConfiguredSuperUserId } from "#agent/utils";
 import path from "node:path";
 import { access, mkdir, readdir, readFile, stat } from "node:fs/promises";
@@ -11,6 +10,11 @@ import { registerFileCrudRoutes } from "./file-crud-routes.js";
 import { buildWorkspaceTree } from "../services/workspace-tree-service.js";
 import { buildDirectoryArchiveFile } from "../services/zip-service.js";
 import { createJsonRouteWrapper } from "./route-wrapper.js";
+import {
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
 
 const RESERVED_WORKSPACE_ROOT_DIRS = new Set([
   "memory",
@@ -33,10 +37,14 @@ async function listWorkspaceUserDirs(root = "", globalConfig = {}) {
       await access(path.join(root, userId, "config.json"));
       userDirs.push(userId);
     } catch (error) {
-      logError("[workspace-routes] listWorkspaceUserDirs config.json access failed", {
-        root,
-        userId,
-        error: error?.message || String(error),
+      void writeRoutedRuntimeEvent({
+        source: "service",
+        channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+        category: RUNTIME_EVENT_CATEGORIES.CONFIG,
+        level: "warn",
+        event: "service.workspaceRoutes.userConfig.access.failed",
+        data: { rootPathLength: String(root || "").length, userIdLength: userId.length },
+        error,
       });
       // A user workspace must have config.json. Skip stray directories.
     }
@@ -72,15 +80,19 @@ export function registerWorkspaceRoutes(
   const logHostFileAccess = (req, event, payload = {}) => {
     const traceId = String(req?.headers?.["x-noobot-file-trace-id"] || "").trim();
     if (!traceId) return;
-    try {
-      console.info("[noobot:file-access]", {
-        layer: "service.hostFile",
-        event,
-        traceId,
-        channel: "backend-host-api",
+    void writeRoutedRuntimeEvent({
+      source: "service",
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.DEBUG,
+      level: "debug",
+      event: "service.hostFile.fileAccess.trace",
+      data: {
+        traceEvent: event,
+        traceIdLength: traceId.length,
+        apiChannel: "backend-host-api",
         ...payload,
-      });
-    } catch {}
+      },
+    });
   };
 
   const assertHostAccessAllowed = (req) => {
@@ -241,9 +253,14 @@ export function registerWorkspaceRoutes(
           await workspaceService.syncUserWorkspace(userId);
           syncedUsers.push(userId);
         } catch (error) {
-          logError("[workspace-routes] syncUserWorkspace failed in sync-all loop", {
-            userId,
-            error: error?.message || String(error),
+          void writeRoutedRuntimeEvent({
+            source: "service",
+            channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+            category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
+            level: "warn",
+            event: "service.workspaceRoutes.syncUserWorkspace.failed",
+            data: { userIdLength: String(userId || "").length },
+            error,
           });
           // ignore single-user sync error, continue syncing others
         }
@@ -274,10 +291,17 @@ export function registerWorkspaceRoutes(
           await workspaceService.resetUserWorkspace(userId, { sections });
           resetUsers.push(userId);
         } catch (error) {
-          logError("[workspace-routes] resetUserWorkspace failed in reset-all loop", {
-            userId,
-            sections: JSON.stringify(sections),
-            error: error?.message || String(error),
+          void writeRoutedRuntimeEvent({
+            source: "service",
+            channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+            category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
+            level: "warn",
+            event: "service.workspaceRoutes.resetUserWorkspace.failed",
+            data: {
+              userIdLength: String(userId || "").length,
+              sectionCount: sections.length,
+            },
+            error,
           });
           // ignore single-user failure and continue
         }

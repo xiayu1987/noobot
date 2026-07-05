@@ -5,7 +5,22 @@
  */
 
 import { SCENARIO_CONFIG_KEYS } from "./constants.js";
-import { logError } from "../../tracking/index.js";
+import {
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
+
+function writeScenarioResolveFailedEvent(event = "", error = null) {
+  void writeRoutedRuntimeEvent({
+    source: "agent",
+    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+    category: RUNTIME_EVENT_CATEGORIES.CONFIG,
+    level: "warn",
+    event,
+    error,
+  });
+}
 
 /**
  * Resolve and parse scenario configuration from input and options.
@@ -61,9 +76,7 @@ export class ScenarioResolver {
       const userConfig = await this.workspaceService.loadUserConfig(options);
       return userConfig?.tools || [];
     } catch (error) {
-      logError("[bot-manage][scenario-resolver] resolve default tools failed", {
-        error: error?.message || String(error),
-      });
+      writeScenarioResolveFailedEvent("agent.scenarioResolver.defaultTools.resolve.failed", error);
       return [];
     }
   }
@@ -73,9 +86,7 @@ export class ScenarioResolver {
       const userConfig = await this.workspaceService.loadUserConfig(options);
       return userConfig?.context || {};
     } catch (error) {
-      logError("[bot-manage][scenario-resolver] resolve default context failed", {
-        error: error?.message || String(error),
-      });
+      writeScenarioResolveFailedEvent("agent.scenarioResolver.defaultContext.resolve.failed", error);
       return {};
     }
   }
@@ -85,9 +96,7 @@ export class ScenarioResolver {
       const userConfig = await this.workspaceService.loadUserConfig(options);
       return userConfig?.model || "default";
     } catch (error) {
-      logError("[bot-manage][scenario-resolver] resolve default model failed", {
-        error: error?.message || String(error),
-      });
+      writeScenarioResolveFailedEvent("agent.scenarioResolver.defaultModel.resolve.failed", error);
       return "default";
     }
   }

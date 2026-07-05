@@ -12,6 +12,11 @@ import {
   resolveLocaleFromRequest,
 } from "noobot-i18n/agent-proxy";
 import { buildSecurityHeaders } from "./security.js";
+import {
+  writeAgentProxyInvalidRequestUrlEvent,
+  writeAgentProxyUpstreamRequestFailedEvent,
+  writeAgentProxyHttpTraceEvent,
+} from "./http-runtime-events.js";
 
 function resolveSafeErrorMessage(statusCode = 502, message = "Bad Gateway") {
   if (Number(statusCode || 500) < 500) {
@@ -94,10 +99,14 @@ export function proxyHttpRequest(request, response) {
   try {
     targetUrl = new URL(request?.url || "/", config.upstreamHttpBase);
     targetUrl.pathname = normalizeProxyPathname(targetUrl.pathname);
-  } catch {
+  } catch (error) {
+    void writeAgentProxyInvalidRequestUrlEvent({
+      requestUrl: request?.url || "",
+      method,
+      error,
+    });
     if (traceId) {
-      console.info("[noobot:file-access]", {
-        layer: "agentProxy.http",
+      void writeAgentProxyHttpTraceEvent({
         event: "proxy.invalidRequestUrl",
         traceId,
         method,
@@ -107,8 +116,7 @@ export function proxyHttpRequest(request, response) {
     return;
   }
   if (traceId) {
-    console.info("[noobot:file-access]", {
-      layer: "agentProxy.http",
+    void writeAgentProxyHttpTraceEvent({
       event: "proxy.request",
       traceId,
       method,
@@ -120,6 +128,7 @@ export function proxyHttpRequest(request, response) {
   const requestHeaders = { ...(request?.headers || {}) };
   delete requestHeaders.host;
   const transport = isHttps ? https : http;
+  let upstreamTimedOut = false;
   const upstreamRequest = transport.request(
     {
       protocol: targetUrl.protocol,
@@ -133,8 +142,7 @@ export function proxyHttpRequest(request, response) {
     (upstreamResponse) => {
       const statusCode = Number(upstreamResponse?.statusCode || 502);
       if (traceId) {
-        console.info("[noobot:file-access]", {
-          layer: "agentProxy.http",
+        void writeAgentProxyHttpTraceEvent({
           event: "proxy.response",
           traceId,
           method,
@@ -152,12 +160,20 @@ export function proxyHttpRequest(request, response) {
     },
   );
   upstreamRequest.on("timeout", () => {
+    upstreamTimedOut = true;
     upstreamRequest.destroy(new Error("upstream timeout"));
   });
   upstreamRequest.on("error", (error) => {
+    void writeAgentProxyUpstreamRequestFailedEvent({
+      method,
+      pathname: targetUrl?.pathname || "",
+      statusCode: 502,
+      timeoutMs: config.httpUpstreamTimeoutMs,
+      timedOut: upstreamTimedOut || String(error?.message || "") === "upstream timeout",
+      error,
+    });
     if (traceId) {
-      console.info("[noobot:file-access]", {
-        layer: "agentProxy.http",
+      void writeAgentProxyHttpTraceEvent({
         event: "proxy.failed",
         traceId,
         method,

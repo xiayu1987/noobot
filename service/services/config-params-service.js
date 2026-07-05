@@ -3,9 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { logError } from "#agent/tracking";
 import path from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import {
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
 
 const CONFIG_PARAMS_FILE_NAME = "config-params.json";
 
@@ -39,6 +43,7 @@ export function createConfigParamsService({
   workspaceRootPath,
   getGlobalConfigRaw,
   templateRootPath,
+  runtimeEventsConfig,
 } = {}) {
   function workspaceConfigParamsFilePath() {
     return path.join(workspaceRootPath(), CONFIG_PARAMS_FILE_NAME);
@@ -68,15 +73,33 @@ export function createConfigParamsService({
     return { values, descriptions };
   }
 
+  function writeConfigReadFailedEvent({ event, filePath, error, data = {} } = {}) {
+    void writeRoutedRuntimeEvent({
+      source: "service",
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.CONFIG,
+      level: "warn",
+      event,
+      data: {
+        fileName: path.basename(String(filePath || "")),
+        filePathLength: String(filePath || "").length,
+        ...data,
+      },
+      error,
+    }, runtimeEventsConfig);
+  }
+
   async function readWorkspaceConfigParams({ createIfMissing = false } = {}) {
     const filePath = workspaceConfigParamsFilePath();
     try {
       const parsedPayload = JSON.parse(await readFile(filePath, "utf8"));
       return normalizeConfigParams(parsedPayload);
     } catch (error) {
-      logError("[config-params-service] readWorkspaceConfigParams failed", {
+      writeConfigReadFailedEvent({
+        event: "service.configParams.workspace.read.failed",
         filePath,
-        error: error?.message || String(error),
+        error,
+        data: { createIfMissing: createIfMissing === true },
       });
       if (!createIfMissing) return normalizeConfigParams({});
       const payload = normalizeConfigParams({});
@@ -99,9 +122,14 @@ export function createConfigParamsService({
       const parsedPayload = JSON.parse(await readFile(filePath, "utf8"));
       return normalizeConfigParams(parsedPayload);
     } catch (error) {
-      logError("[config-params-service] readWorkspaceConfigParams failed", {
+      writeConfigReadFailedEvent({
+        event: "service.configParams.user.read.failed",
         filePath,
-        error: error?.message || String(error),
+        error,
+        data: {
+          createIfMissing: createIfMissing === true,
+          userIdLength: String(userId || "").trim().length,
+        },
       });
       if (!createIfMissing) return normalizeConfigParams({});
       const payload = normalizeConfigParams({});
@@ -122,9 +150,10 @@ export function createConfigParamsService({
     try {
       return JSON.parse(await readFile(filePath, "utf8"));
     } catch (error) {
-      logError("[config-params-service] readConfigJsonIfExists failed", {
+      writeConfigReadFailedEvent({
+        event: "service.configParams.configJson.read.failed",
         filePath,
-        error: error?.message || String(error),
+        error,
       });
       return {};
     }

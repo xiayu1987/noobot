@@ -31,6 +31,12 @@ import {
   isOriginTrusted,
 } from "./src/security.js";
 import { resolveLocaleFromRequest } from "noobot-i18n/agent-proxy";
+import { writeAgentProxyHttpServerListenStartedEvent } from "./src/startup-events.js";
+import {
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
 
 async function loadWebSocketLibrary() {
   try {
@@ -143,7 +149,20 @@ function isLogProxyPath(pathname = "") {
 function agentProxyLogDiagnostic(message, data = {}) {
   const raw = String(process.env.AGENT_PROXY_SESSION_LOG_DIAGNOSTIC || "true").trim().toLowerCase();
   if (["0", "false", "no", "off"].includes(raw)) return;
-  console.info("[session-log-ws][agent-proxy]", message, data);
+  void writeRoutedRuntimeEvent({
+    source: "agent-proxy",
+    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+    category: RUNTIME_EVENT_CATEGORIES.TRANSPORT,
+    level: "debug",
+    event: "agentProxy.sessionLogWs.diagnostic",
+    data: {
+      message: String(message || ""),
+      detailKeys: data && typeof data === "object" ? Object.keys(data).slice(0, 20) : [],
+      statusCode: Number(data?.statusCode || 0),
+      pathname: String(data?.pathname || "").slice(0, 200),
+      reason: String(data?.reason || "").slice(0, 120),
+    },
+  });
 }
 
 function logAgentProxyEvent(apiKey = "", event = {}) {
@@ -425,7 +444,8 @@ cleanupTimer.unref?.();
 
 // ---- Start ----
 httpServer.listen(config.proxyPort, config.proxyHost, () => {
-  console.log(
-    `[agentProxy] listening on ${config.proxyHost}:${config.proxyPort}, upstream=${config.upstreamWsUrl}`,
-  );
+  void writeAgentProxyHttpServerListenStartedEvent({
+    host: config.proxyHost,
+    port: config.proxyPort,
+  });
 });

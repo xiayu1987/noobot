@@ -25,11 +25,25 @@ import {
   safeStartupContextForLog,
 } from "./services/startup-context-service.js";
 import { buildWorkspaceTree } from "./services/workspace-tree-service.js";
+import {
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
 
 const app = express();
 const startupContext = await loadStartupContext({ argv: process.argv, cwd: process.cwd() });
 applyStartupRuntimeEnv(startupContext);
-console.warn("[noobot:startup-context]", safeStartupContextForLog(startupContext));
+void writeRoutedRuntimeEvent({
+  scope: "startup",
+  source: "service",
+  channel: RUNTIME_EVENT_CHANNELS.STARTUP,
+  category: RUNTIME_EVENT_CATEGORIES.CONFIG,
+  level: "debug",
+  event: "service.startup.context.loaded",
+  workspaceRoot: startupContext?.workspaceRoot,
+  data: safeStartupContextForLog(startupContext),
+});
 
 const desktopFrontendRoot = String(
   startupContext?.paths?.frontendRoot || process.env.NOOBOT_DESKTOP_FRONTEND_ROOT || path.resolve(process.cwd(), "../frontend"),

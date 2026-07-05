@@ -5,12 +5,11 @@
  */
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { resolveDialogProcessIdFromContext } from "../context/session/dialog-process-id-resolver.js";
-import { logError } from "../tracking/console/logger.js";
 import {
-  SESSION_CHANNEL_CATEGORIES,
-  SESSION_CHANNELS,
-  writeSessionChannelEvent,
-} from "@noobot/telemetry/session-channel";
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
 import {
   CONNECTOR_TYPE,
   normalizeConnectorType,
@@ -48,11 +47,10 @@ async function recordConnectorInteractionFailure({
   data = {},
 } = {}) {
   const normalizedSessionId = String(sessionId || "").trim();
-  if (!normalizedSessionId) return { ok: true, skipped: true };
-  return writeSessionChannelEvent({
+  return writeRoutedRuntimeEvent({
     source: "agent",
-    channel: SESSION_CHANNELS.DIRECT,
-    category: SESSION_CHANNEL_CATEGORIES.SYSTEM,
+    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+    category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
     event,
     userId: String(runtime?.userId || "").trim(),
     sessionId: normalizedSessionId,
@@ -247,13 +245,7 @@ export class ConnectorEventListener {
           connectorType: normalizedType,
           connectorName: normalizedName,
         },
-      }).catch(() => {
-        logError("[connector-event-listener] notifyConnectorConnected telemetry failed", {
-          connectorType: normalizedType,
-          connectorName: normalizedName,
-          error: error?.message || String(error),
-        });
-      });
+      }).catch(() => {});
     }
   }
 
@@ -304,14 +296,7 @@ export class ConnectorEventListener {
           connectorName: normalizedName,
           reconnectToolName: normalizedReconnectToolName,
         },
-      }).catch(() => {
-        logError("[connector-event-listener] notifyReconnectRequired telemetry failed", {
-          connectorType: normalizedType,
-          connectorName: normalizedName,
-          reconnectToolName: normalizedReconnectToolName,
-          error: error?.message || String(error),
-        });
-      });
+      }).catch(() => {});
     }
   }
 

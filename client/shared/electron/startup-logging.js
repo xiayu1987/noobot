@@ -6,6 +6,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createDesktopRuntimeEventWriter } from "./desktop-runtime-events.js";
 
 export const desktopAppName = "Noobot";
 
@@ -74,6 +75,8 @@ export function formatLogFields(fields = {}) {
 }
 
 export function createStartupLogger({ app, startupDebugEnabled = false } = {}) {
+  const runtimeEvents = createDesktopRuntimeEventWriter({ app });
+
   function getLogDir() {
     return path.join(app.getPath("userData"), "logs");
   }
@@ -105,6 +108,7 @@ export function createStartupLogger({ app, startupDebugEnabled = false } = {}) {
     const detail = formatLogFields(fields);
     const message = `[${scope}:${event}]${detail ? ` ${detail}` : ""}`;
     appendLogFile(DESKTOP_LOG_FILES.STARTUP, message);
+    runtimeEvents.write({ scope: "startup", category: "system", event: `desktop.${scope}.${event}` }, fields).catch(() => {});
     if (mirrorToEarly) appendStartupTrace(message);
   }
 
@@ -113,6 +117,7 @@ export function createStartupLogger({ app, startupDebugEnabled = false } = {}) {
     const detail = formatLogFields(fields);
     const message = `[dependency:${event}]${detail ? ` ${detail}` : ""}`;
     appendLogFile(DESKTOP_LOG_FILES.DEPENDENCY, message);
+    runtimeEvents.write({ scope: "startup", category: "system", event: `desktop.dependency.${event}` }, fields).catch(() => {});
     writeStartupLog("dependency", event, fields, { ...options, mirrorToEarly: false });
   }
 
@@ -141,6 +146,7 @@ export function createStartupLogger({ app, startupDebugEnabled = false } = {}) {
     writeDependencyLog,
     getLogDir,
     getLogFilePath,
+    getRuntimeEventsRoot: () => runtimeEvents.runtimeEventsRoot,
     appendDesktopLog,
     appendStartupLog,
     appendServiceLog,

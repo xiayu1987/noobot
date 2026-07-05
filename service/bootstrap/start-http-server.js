@@ -4,6 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { createServer } from "node:http";
+import {
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
 import { registerChatWebSocketServer } from "../ws/chat-websocket-server.js";
 import { registerLogWebSocketServer, resolveSessionLogConfig } from "../ws/log-websocket-server.js";
 
@@ -51,7 +56,22 @@ export function startHttpServer({
     logConfig: sessionLogConfig,
   });
   server.listen(port, () => {
-    console.log(`Agent server running on :${port}`);
+    const address = server.address();
+    const listenHost = typeof address === "object" && address ? address.address : "";
+    const listenPort = typeof address === "object" && address ? address.port : port;
+    void writeRoutedRuntimeEvent({
+      scope: "startup",
+      source: "service",
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.STATE,
+      level: "info",
+      event: "service.startup.httpServer.listen.started",
+      workspaceRoot: sessionLogConfig.workspaceRoot,
+      data: {
+        host: String(listenHost || ""),
+        port: listenPort,
+      },
+    }, { ...sessionLogConfig, dirName: "events" });
   });
   return server;
 }

@@ -14,7 +14,7 @@
     "plugin/noobot-plugin-workflow",
     "client/noobot-chat",
     "client/startup",
-    "telemetry",
+    "runtime-events",
     "client/windows",
     "client/mac"
   ],

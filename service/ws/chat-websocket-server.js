@@ -15,13 +15,12 @@ import {
   resolveRunConfigValue,
   resolveTimeMs,
 } from "#agent/config";
-import { logError } from "#agent/tracking";
 import { HTTP_STATUS } from "#agent/constants";
 import {
-  SESSION_CHANNEL_CATEGORIES,
-  SESSION_CHANNELS,
-  writeSessionChannelEvent,
-} from "@noobot/telemetry/session-channel";
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const DEFAULT_RUN_TIMEOUT_MS = BUILTIN_THRESHOLDS.runTimeoutMs;
@@ -39,10 +38,11 @@ export function recordServiceWebSocketSendFailure({
 } = {}) {
   const normalizedSessionId = String(sessionId || "").trim();
   if (!normalizedSessionId) return Promise.resolve({ ok: true, skipped: true });
-  return writeSessionChannelEvent({
+  return writeRoutedRuntimeEvent({
+      scope: "session",
     source: "service",
-    channel: SESSION_CHANNELS.DIRECT,
-    category: SESSION_CHANNEL_CATEGORIES.SYSTEM,
+    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+    category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
     event: "service.websocket.sendEvent.failed",
     sessionId: normalizedSessionId,
     userId: String(userId || "").trim(),
@@ -68,10 +68,11 @@ export function recordServiceWebSocketRuntimeError({
 } = {}) {
   const normalizedSessionId = String(sessionId || "").trim();
   if (!normalizedSessionId) return Promise.resolve({ ok: true, skipped: true });
-  return writeSessionChannelEvent({
+  return writeRoutedRuntimeEvent({
+      scope: "session",
     source: "service",
-    channel: SESSION_CHANNELS.DIRECT,
-    category: SESSION_CHANNEL_CATEGORIES.SYSTEM,
+    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+    category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
     event,
     userId: String(userId || "").trim(),
     sessionId: normalizedSessionId,
@@ -185,9 +186,14 @@ async function resolveEffectiveStreamingEnabled({ bot, userId = "", runConfig = 
         ? (await bot.loadUserConfig(workspacePath)) || {}
         : {};
   } catch (error) {
-    logError("[ws][chat-websocket-server] load user config failed when resolving streaming", {
-      userId: normalizedUserId,
-      error: error?.message || String(error),
+    void writeRoutedRuntimeEvent({
+      source: "service",
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.CONFIG,
+      level: "warn",
+      event: "service.websocket.userConfig.load.failed",
+      data: { userIdLength: normalizedUserId.length },
+      error,
     });
     userConfig = {};
   }
@@ -241,10 +247,20 @@ export function registerChatWebSocketServer(
     try {
       requestPathname = new URL(request.url || "", "http://localhost").pathname;
     } catch (error) {
-      logError("[ws][chat-websocket-server] invalid websocket upgrade url", {
-        url: String(request?.url || ""),
-        error: error?.message || String(error),
-      });
+      const rawUrl = String(request?.url || "");
+      const urlPathPreview = rawUrl.split("?")[0].slice(0, 200);
+      void writeRoutedRuntimeEvent({
+        source: "service",
+        channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+        category: RUNTIME_EVENT_CATEGORIES.TRANSPORT,
+        level: "warn",
+        event: "service.websocket.upgradeUrlParse.failed",
+        data: {
+          urlPathPreview,
+          urlLength: rawUrl.length,
+        },
+        error,
+      }, sessionLogConfig);
       sendUpgradeError(
         socket,
         HTTP_STATUS.BAD_REQUEST,
@@ -321,9 +337,18 @@ export function registerChatWebSocketServer(
         try {
           requestItem?.reject?.(error);
         } catch (rejectError) {
-          logError("[ws][chat-websocket-server] reject pending interaction failed", {
-            error: rejectError?.message || String(rejectError),
-          });
+          void writeRoutedRuntimeEvent({
+            source: "service",
+            channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+            category: RUNTIME_EVENT_CATEGORIES.INTERACTION,
+            level: "warn",
+            event: "service.websocket.pendingInteraction.reject.failed",
+            userId: currentRunMeta?.userId || "",
+            sessionId: currentRunMeta?.sessionId || "",
+            dialogProcessId: currentRunMeta?.dialogProcessId || "",
+            turnScopeId: currentRunMeta?.turnScopeId || "",
+            error: rejectError,
+          }, sessionLogConfig);
         }
         clearTimeout(requestItem?.timer);
       }
@@ -486,9 +511,10 @@ export function registerChatWebSocketServer(
           turnScopeId: String(turnScopeId || config?.turnScopeId || "").trim(),
         };
         if (isPluginDebugEnabled()) {
-          await writeSessionChannelEvent({
+          await writeRoutedRuntimeEvent({
+      scope: "session",
             source: "service",
-            channel: SESSION_CHANNELS.DIRECT,
+            channel: RUNTIME_EVENT_CHANNELS.DIRECT,
             category: "debug",
             event: "service.websocket.pluginDebug.runConfig",
             userId: String(userId || "").trim(),

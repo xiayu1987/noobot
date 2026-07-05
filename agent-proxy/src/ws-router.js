@@ -12,6 +12,7 @@ import {
   CONVERSATION_SOURCE_EVENT,
   WS_ACTION,
 } from "./constants.js";
+import { writeAgentProxyInvalidJsonPayloadEvent } from "./ws-runtime-events.js";
 
 export class WsRouter {
   constructor(channelManager) {
@@ -24,6 +25,7 @@ export class WsRouter {
       try {
         payload = JSON.parse(String(rawData || "{}"));
       } catch {
+        void writeAgentProxyInvalidJsonPayloadEvent({ rawData });
         this.channelManager.sendSocketError(
           socket,
           AGENT_PROXY_ERROR.INVALID_JSON_PAYLOAD,
