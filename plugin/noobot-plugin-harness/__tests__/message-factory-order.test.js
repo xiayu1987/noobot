@@ -20,11 +20,11 @@ test("capability protocol model messages keep system block before agent conversa
     messages.map((item) => `${item.role}:${item.content}`),
     [
       "system:agent system",
-      "system:planning context",
       "system:planning protocol",
       "system:workflow policy",
       "user:current user",
       "assistant:history assistant",
+      "user:planning context",
       "user:please plan",
     ],
   );

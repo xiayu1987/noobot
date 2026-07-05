@@ -33,6 +33,7 @@ import {
   buildAllPhaseAcceptanceReportSystemContents,
   buildAcceptanceMainPlanContextPromptText,
   buildAcceptanceValidationRequestPromptText,
+  buildAcceptancePatchProtocolText,
   buildWorkflowResponsibilityConstraintUserPrompt,
   buildScenarioPolicyPromptText,
   resolveScenarioPolicyFlagsFromContext,
@@ -243,6 +244,7 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     },
     ...resolveScenarioPolicyFlagsFromContext(ctx, meta),
     includeWorkflowPolicy: false,
+    includeProtocol: false,
   });
   const mainPlanContextPrompt = buildAcceptanceMainPlanContextPromptText({
     locale,
@@ -259,6 +261,7 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     planContextContent: mainPlanContextPrompt,
     phaseReportsContents: phaseReportsPrompts,
     requestContent: prompt,
+    protocolContent: buildAcceptancePatchProtocolText({ locale, mode: "final" }),
     workflowPolicyPrompt: buildScenarioPolicyPromptText(locale, resolveScenarioPolicyFlagsFromContext(ctx, meta)),
     ...resolveScenarioPolicyFlagsFromContext(ctx, meta),
   });

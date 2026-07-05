@@ -54,25 +54,39 @@ finalMessages = systemMessages + historyMessages + incrementalMessages
 - 顺序：实际顺序。
 - 执行顺序：先筛选，再裁剪（本段无裁剪）。
 
-## 2. harness 插件非主流程模型请求上下文
+## 2. harness 插件非主流程模型请求上下文统一规则
 
 harness 插件给非主流程模型请求的上下文原先第 1 段是“最近 20 条 agent 上下文”。现在改为：
 
 ```text
-1. 和主流程最终给模型的消息一致的 agent 上下文
-2. system: summary reports，如果有
-3. system: main plan context
-4. system: previous phase acceptance reports，如果有
-5. user: phase acceptance request
-6. user: phase acceptance responsibility constraint
+1. 和主流程最终给模型的消息一致的 agent 上下文（systemMessages + historyMessages + incrementalMessages）
+2. system: 文本协议/稳定协议/稳定 workflow policy，如果有
+3. user: 当前流程专属上下文、报告、清单、计划、请求、约束等，如果有
 ```
 
 注意：
 
-- 只有第 1 段改变；后续 capability/acceptance 自己追加的 summary、plan、request、constraint 顺序与职责不变。
+- 不做非主流程侧裁剪。
+- 文本协议如果有，放到 systemMessages，且 role 必须是 system；文本协议稳定不变，可以命中缓存。
+- 除文本协议和稳定 policy 以外，各流程专属消息都用 user，包括 summary reports、main plan context、previous phase acceptance reports、phase acceptance request、phase acceptance responsibility constraint、planning checklist context、previous summary context 等。
+- 验收类流程如果不需要 agent 上下文，可以不带第 1 段；但它直接传入的阶段验收清单、主计划上下文、最终验收请求等仍按 user 消息追加，验收文本协议仍按 system 消息追加。
+- 后续 capability/acceptance 自己追加的 summary、plan、request、constraint 顺序与职责不变，只统一 role 归属：协议 system，专属内容 user。
 - harness 侧消息转换规则不变：例如 assistant tool_calls 仍转换为语义 user 消息，tool role 仍转换为 assistant 消息。
 - 筛选、裁剪、拼接规则都由 agent 侧完成，并通过注入方法提供给插件侧；插件侧只调用注入方法，不自行决定 agent 上下文窗口。
 - harness 小结标记规则不变；agent 侧小结标记规则不变。
+
+phase acceptance separate model 的典型顺序为：
+
+```text
+1. agent 上下文（systemMessages + historyMessages + incrementalMessages）
+2. system: phase acceptance 文本协议
+3. system: 稳定 workflow policy，如果有
+4. user: summary reports，如果有
+5. user: main plan context
+6. user: previous phase acceptance reports，如果有
+7. user: phase acceptance request
+8. user: phase acceptance responsibility constraint
+```
 
 ## 3. harness 主流程 messageBlocks 边界
 

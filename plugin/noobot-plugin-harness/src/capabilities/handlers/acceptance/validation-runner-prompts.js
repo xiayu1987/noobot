@@ -17,6 +17,7 @@ import {
   buildAcceptanceMainPlanContextPromptText,
   buildAcceptanceValidationRequestPromptText,
   buildWorkflowResponsibilityConstraintUserPrompt,
+  buildAcceptancePatchProtocolText,
   buildPhaseAcceptanceRequestPromptText,
   resolveScenarioPolicyFlagsFromContext,
   getAllPhaseAcceptanceReportsMarker,
@@ -141,6 +142,7 @@ export function buildFinalAcceptanceSemanticValidationMessages({
   planContextContent = "",
   phaseReportsContents = [],
   requestContent = "",
+  protocolContent = "",
   workflowPolicyPrompt = "",
   programmingMode = false,
   textMode = false,
@@ -152,8 +154,9 @@ export function buildFinalAcceptanceSemanticValidationMessages({
     contextMessages: [
       planContextContent,
       ...(Array.isArray(phaseReportsContents) ? phaseReportsContents : []),
+      requestContent,
     ],
-    protocolPrompt: requestContent,
+    protocolPrompt: protocolContent || buildAcceptancePatchProtocolText({ locale, mode: "final" }),
     workflowPolicyPrompt: hasRequest ? workflowPolicyPrompt : "",
     responsibilityPrompt: hasRequest
       ? buildWorkflowResponsibilityConstraintUserPrompt(locale, "final_acceptance", {
@@ -275,6 +278,7 @@ export function buildAcceptancePromptParts({
         textMode,
         dynamicPolicyPrompt,
         includeWorkflowPolicy,
+        includeProtocol: false,
       })
     : buildAcceptanceValidationRequestPromptText({
         locale,
@@ -284,9 +288,19 @@ export function buildAcceptancePromptParts({
         textMode,
         dynamicPolicyPrompt,
         includeWorkflowPolicy,
+        includeProtocol: false,
       });
   void state;
-  return { planContextContent, summaryReportsContents, phaseReportsContents, requestContent };
+  return {
+    planContextContent,
+    summaryReportsContents,
+    phaseReportsContents,
+    requestContent,
+    protocolContent: buildAcceptancePatchProtocolText({
+      locale,
+      mode: phase ? "phase" : "final",
+    }),
+  };
 }
 
 export function buildPhaseAcceptanceMessages({
@@ -296,23 +310,35 @@ export function buildPhaseAcceptanceMessages({
   planContextContent = "",
   phaseReportsContents = [],
   requestContent = "",
+  protocolContent = "",
   workflowPolicyPrompt = "",
   programmingMode = false,
   textMode = false,
   dynamicPolicyPrompt = "",
 } = {}) {
   const hasRequest = String(requestContent || "").trim();
-  return buildCapabilityProtocolModelMessages({
-    locale,
-    agentMessages,
-    contextMessages: [
-      ...(Array.isArray(summaryReportsContents) ? summaryReportsContents : []),
-      planContextContent,
-      ...(Array.isArray(phaseReportsContents) ? phaseReportsContents : []),
-    ],
-    protocolPrompt: requestContent,
-    workflowPolicyPrompt: hasRequest ? workflowPolicyPrompt : "",
-    responsibilityPrompt: hasRequest
+  const normalizedAgentMessages = Array.isArray(agentMessages) ? agentMessages : [];
+  const agentSystemMessages = normalizedAgentMessages.filter((message = {}) =>
+    isSystemLikeRole(message?.role),
+  );
+  const agentConversationMessages = normalizedAgentMessages.filter((message = {}) =>
+    !isSystemLikeRole(message?.role),
+  );
+  const systemMessages = [
+    ...agentSystemMessages,
+    ...(hasRequest && String(protocolContent || "").trim()
+      ? [{ role: "system", content: String(protocolContent || "").trim() }]
+      : []),
+    ...(hasRequest && String(workflowPolicyPrompt || "").trim()
+      ? [{ role: "system", content: String(workflowPolicyPrompt || "").trim() }]
+      : []),
+  ];
+  const userMessages = [
+    ...(Array.isArray(summaryReportsContents) ? summaryReportsContents : []),
+    planContextContent,
+    ...(Array.isArray(phaseReportsContents) ? phaseReportsContents : []),
+    requestContent,
+    hasRequest
       ? buildWorkflowResponsibilityConstraintUserPrompt(locale, "phase_acceptance", {
           programmingMode,
           textMode,
@@ -320,6 +346,13 @@ export function buildPhaseAcceptanceMessages({
           includeWorkflowPolicy: false,
         })
       : "",
-  });
+  ]
+    .map((content) => String(content || "").trim())
+    .filter(Boolean)
+    .map((content) => ({ role: "user", content }));
+  return [
+    ...systemMessages,
+    ...agentConversationMessages,
+    ...userMessages,
+  ];
 }
-

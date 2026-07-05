@@ -53,7 +53,7 @@ export function maybeInjectPhaseAcceptancePrompt(ctx = {}, meta = {}) {
     textMode,
     dynamicPolicyPrompt,
   } = resolveScenarioPolicyFlagsFromContext(ctx, meta);
-  const { summaryReportsContents, planContextContent, phaseReportsContents, requestContent } = buildAcceptancePromptParts({
+  const { summaryReportsContents, planContextContent, phaseReportsContents, requestContent, protocolContent } = buildAcceptancePromptParts({
     bucket,
     state,
     locale,
@@ -62,12 +62,13 @@ export function maybeInjectPhaseAcceptancePrompt(ctx = {}, meta = {}) {
     ctx,
     meta,
   });
+  pushRoleMessage(ctx, messages, "system", protocolContent);
   for (const content of summaryReportsContents) {
-    pushRoleMessage(ctx, messages, "system", content);
+    pushRoleMessage(ctx, messages, "user", content);
   }
-  pushRoleMessage(ctx, messages, "system", planContextContent);
+  pushRoleMessage(ctx, messages, "user", planContextContent);
   for (const content of phaseReportsContents) {
-    pushRoleMessage(ctx, messages, "system", content);
+    pushRoleMessage(ctx, messages, "user", content);
   }
   pushRoleMessage(ctx, messages, "user", requestContent);
   pushRoleMessage(
@@ -131,7 +132,7 @@ export async function runPhaseAcceptanceBySeparateModel(
     return forceRun === true ? false : maybeInjectPhaseAcceptancePrompt(ctx, meta);
   }
   const locale = state?.locale || LOCALE.ZH_CN;
-  const { summaryReportsContents, planContextContent, phaseReportsContents, requestContent } = buildAcceptancePromptParts({
+  const { summaryReportsContents, planContextContent, phaseReportsContents, requestContent, protocolContent } = buildAcceptancePromptParts({
     bucket,
     state,
     locale,
@@ -175,6 +176,7 @@ export async function runPhaseAcceptanceBySeparateModel(
           planContextContent,
           phaseReportsContents,
           requestContent,
+          protocolContent,
           workflowPolicyPrompt: buildScenarioPolicyPromptText(locale, resolveScenarioPolicyFlagsFromContext(ctx, meta)),
           ...resolveScenarioPolicyFlagsFromContext(ctx, meta),
         }),
@@ -251,7 +253,7 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
   }
   const locale = state?.locale || LOCALE.ZH_CN;
   const requestPayload = buildPhaseAcceptanceRequestPayload({ bucket, state });
-  const { summaryReportsContents, planContextContent, phaseReportsContents, requestContent } = buildAcceptancePromptParts({
+  const { summaryReportsContents, planContextContent, phaseReportsContents, requestContent, protocolContent } = buildAcceptancePromptParts({
     bucket,
     state,
     locale,
@@ -306,6 +308,7 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
           planContextContent,
           phaseReportsContents,
           requestContent,
+          protocolContent,
           workflowPolicyPrompt: buildScenarioPolicyPromptText(locale, resolveScenarioPolicyFlagsFromContext(ctx, meta)),
           ...resolveScenarioPolicyFlagsFromContext(ctx, meta),
         }),
@@ -350,4 +353,3 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
   });
   return true;
 }
-
