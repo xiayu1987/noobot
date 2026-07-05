@@ -61,18 +61,6 @@ export const TURN_THRESHOLDS = deepFreeze({
   session: {
     // Main-model history keeps this many previous dialog rounds.
     mainModelHistoryRoundLimit: 5,
-
-    // Default recent-message window for generic model-context normalization.
-    recentWindowMessageLimit: 20,
-
-    // Built-in main-model recent window setting.
-    mainModelRecentLimit: 15,
-
-    // Built-in session recent-message fallback.
-    sessionRecentMessageLimit: 15,
-
-    // Default clipped non-main model context recent-message window.
-    nonMainContextWindowRecentMessageLimit: 20,
   },
 
   subTasks: {

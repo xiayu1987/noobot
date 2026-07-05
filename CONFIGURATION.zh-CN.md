@@ -61,13 +61,7 @@ Session 日志 WebSocket：
 
 ### 3.2 会话策略
 
-| 键名 | 类型 | 说明 |
-|---|---|---|
-| `session.recent_message_limit` | number | 上下文中最近消息数量 |
-| `context.main_model_recent_window` | boolean | `agent.main` 是否启用 recent window 截断 |
-| `context.main_model_recent_limit` | number | `agent.main` recent window 窗口大小（启用时生效） |
-| `session.use_last_running_task_range` | boolean | 优先从最近运行任务开始取上下文 |
-| `session.use_last_completed_task_range` | boolean | 优先从最近完成任务开始取上下文 |
+模型历史上下文由 agent 运行时固定处理：保留最新 5 个 `dialogProcessId/dialogId` 轮次。会话历史窗口不提供配置项。
 
 ### 3.3 附件策略
 
@@ -176,17 +170,11 @@ Session 日志 WebSocket：
 | `plugins.<name>.enabled` | boolean | 插件总开关。为 `false` 时前端不展示且运行时禁用。 |
 | `plugins.<name>.mode` | enum | 插件默认运行模式。目前支持 `on` / `off`（`off` 表示插件可用但默认不激活）。 |
 | `plugins.harness.stepModels.<purpose>` | string | Harness 各步骤模型别名（`planning` / `guidance` / `acceptance` / `default`）。 |
-| `plugins.harness.contextWindowRecentMessageLimit` | number | Harness 历史消息块统一过滤/裁剪入口的 recent-window 条数上限。 |
-| `plugins.harness.incrementalRecentMessageLimit` | number | Harness 增量消息块统一过滤/裁剪入口的 recent-window 条数上限。 |
 
 当前仓库插件默认值：
 - `plugins.harness.enabled = true`
 - `plugins.harness.mode = "off"`
 - `plugins.harness.stepModels = { planning, guidance, acceptance, default }`（当前示例中均为 `"qwen3_6_plus"`）
-
-未配置 recent-window 限制时的运行时默认：
-- `plugins.harness.contextWindowRecentMessageLimit = 20`
-- `plugins.harness.incrementalRecentMessageLimit = 20`（未配置时回落到 history limit）
 
 ### 3.6 连接器预置
 

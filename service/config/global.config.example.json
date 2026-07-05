@@ -2,10 +2,6 @@
   "workspace_root": "../workspace",
   "workspace_template_path": "../user-template/default-user",
   "default_provider": "GLM_5_1",
-  "session": {
-    "use_last_running_task_range": false,
-    "use_last_completed_task_range": false
-  },
   "attachments": {
     "attachment_models": {
       "audio": "qwen3_5_omni_plus",

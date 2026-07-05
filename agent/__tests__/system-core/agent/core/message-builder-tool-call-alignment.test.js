@@ -164,14 +164,14 @@ test("buildContextMessages keeps explicit history dialog groups in natural order
             {
               role: "user",
               content: "当前问题",
-              dialogProcessId: "dlg_current",
+              dialogProcessId: "dlg_newer",
             },
             {
               role: "assistant",
               content: "当前对话注入",
               injectedMessage: true,
               injectedBy: "agent-plugin",
-              dialogProcessId: "dlg_current",
+              dialogProcessId: "dlg_newer",
             },
             {
               role: "assistant",
@@ -216,38 +216,6 @@ test("buildContextMessages applies main model recent round window by default", (
   );
 });
 
-test("buildContextMessages ignores legacy main model message-count window config", () => {
-  const history = buildDefaultHistoryRounds();
-  const messages = buildContextMessages(
-    {
-      execution: {
-        controllers: {
-          runtime: {
-            globalConfig: {
-              context: {
-                mainModelRecentWindow: false,
-                mainModelRecentLimit: 15,
-              },
-            },
-          },
-        },
-      },
-      payload: {
-        messages: {
-          system: [],
-          history,
-        },
-      },
-    },
-    { currentUserMessage: "" },
-  );
-
-  assert.deepEqual(
-    messages.map((item) => item?.content),
-    expectedDefaultHistoryContents(),
-  );
-});
-
 test("buildContextMessages keeps harness plugin history aligned with main recent rounds", () => {
   const history = buildDefaultHistoryRounds();
   const messages = buildContextMessages(
@@ -260,7 +228,6 @@ test("buildContextMessages keeps harness plugin history aligned with main recent
                 harness: {
                   enabled: true,
                   mode: "on",
-                  contextWindowRecentMessageLimit: 20,
                 },
               },
             },
@@ -548,7 +515,7 @@ test("buildContextMessageBlocks keeps historical user without attachments as pla
   assert.equal(blocks.history[1]?.content, "普通回答");
 });
 
-test("buildContextMessageBlocks removes same-text current user from history rounds", () => {
+test("buildContextMessageBlocks keeps previous history rounds with same user text", () => {
   const blocks = buildContextMessageBlocks(
     {
       execution: {
@@ -604,8 +571,59 @@ test("buildContextMessageBlocks removes same-text current user from history roun
 
   assert.equal(
     visibleContents.filter((content) => content === "全仓回归测试").length,
-    1,
+    2,
   );
-  assert.equal(visibleContents.includes("旧同文本回答"), false);
+  assert.equal(visibleContents.includes("旧同文本回答"), true);
   assert.equal(visibleContents.includes("旧不同文本回答"), true);
+});
+
+test("buildContextMessageBlocks keeps latest repeated next-step dialog rounds", () => {
+  const history = [];
+  for (const id of ["dlg_1", "dlg_2", "dlg_3", "dlg_4", "dlg_5"]) {
+    history.push({
+      role: "user",
+      content: "下一步",
+      dialogProcessId: id,
+      turnScopeId: `turn:${id}`,
+    });
+    history.push({
+      role: "assistant",
+      content: `${id} answer`,
+      dialogProcessId: id,
+      turnScopeId: `turn:${id}`,
+    });
+  }
+
+  const blocks = buildContextMessageBlocks(
+    {
+      execution: {
+        controllers: {
+          runtime: {
+            userId: "u1",
+            systemRuntime: {
+              sessionId: "s1",
+              dialogProcessId: "dlg_current",
+              turnScopeId: "turn:current",
+            },
+          },
+        },
+      },
+      payload: {
+        messages: {
+          system: [],
+          history,
+        },
+      },
+    },
+    { currentUserMessage: "下一步" },
+  );
+
+  const visibleContents = blocks.messages
+    .map((message) => message?.content)
+    .filter((content) => typeof content === "string");
+
+  assert.equal(visibleContents.filter((content) => content === "下一步").length, 6);
+  for (const id of ["dlg_1", "dlg_2", "dlg_3", "dlg_4", "dlg_5"]) {
+    assert.equal(visibleContents.includes(`${id} answer`), true, id);
+  }
 });

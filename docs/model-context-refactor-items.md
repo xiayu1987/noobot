@@ -5,11 +5,11 @@
 ## 状态
 
 - [x] 1. 删除旧的上下文/模型消息流文档，新增统一规则文档 `docs/model-context-message-rules.md`。
-- [x] 2. 在 agent 侧沉淀主流程上下文筛选/裁剪方法：system 无裁剪、history 按 dialog 构造最近 3 个完整轮次并保留 user 到 assistant 区间所有未小结非 system 消息、incremental 未小结且无裁剪。
+- [x] 2. 在 agent 侧沉淀主流程上下文筛选/裁剪方法：system 无裁剪、history 按 dialog 构造最近 5 个 dialog 组并保留组内所有未小结非 system 消息、incremental 未小结且无裁剪。
 - [x] 3. 主流程 `message-builder` 复用新规则生成最终模型消息，避免 harness 未启用时依赖插件压缩。
 - [x] 4. 注入给 harness 的 `resolveModelMessages/resolveMessageBlock` 复用主流程规则；插件只调用，不自行裁剪 agent 上下文。
-- [x] 5. harness capability 消息转换规则保持不变，但移除“最近 20 条 agent 上下文”的插件侧裁剪路径。
-- [x] 6. 更新/新增测试覆盖主流程规则、harness 注入 resolver、非主流程 capability 上下文不再固定 20 条裁剪。
+- [x] 5. harness capability 消息转换规则保持不变，但移除插件侧 agent 上下文裁剪路径。
+- [x] 6. 更新/新增测试覆盖主流程规则、harness 注入 resolver、非主流程 capability 上下文不再固定条数裁剪。
 - [x] 7. 运行相关测试并回写结果。
 
 ## 测试记录
@@ -22,7 +22,7 @@
 
 - [x] 8. 收敛 harness 插件侧遗留 fallback：`resolveCapabilityModelMessages` fallback 不再过滤 summarized，不再裁剪；resolver 返回结果保持原样。
 - [x] 9. 收敛 capability invoker：`invokeWithReasoningRetry` 调用前不再额外过滤 summarized 消息。
-- [x] 10. 收敛 planning context summary fallback：移除插件侧 summarized/dialog/tool-pair 筛选和最近 20 条裁剪，仅做 role/content 格式转换卫生。
+- [x] 10. 收敛 planning context summary fallback：移除插件侧 summarized/dialog/tool-pair 筛选和固定条数裁剪，仅做 role/content 格式转换卫生。
 - [x] 11. 删除/停止导出 harness 插件侧 agent 上下文裁剪 helper 与 `capabilityModelRecentMessageLimit` 遗留配置。
 
 ## 追加测试记录
@@ -31,7 +31,7 @@
 
 ## 配置面收敛
 
-- [x] 12. 删除已失效的 harness/window 配置面：`contextWindowRecentMessageLimit`、`incrementalRecentMessageLimit`、`WORKFLOW_PARAMS.contextWindow`、agent workflow 内置 `contextWindowRecentMessageLimit` 及对应 override 白名单/测试断言。
+- [x] 12. 删除已失效的 harness/window 配置面及对应 override 白名单/测试断言。
 
 ## 配置面测试记录
 
@@ -87,7 +87,7 @@
 ## history / incremental 边界收敛
 
 - [x] 20. 明确 harness 主流程 `messageBlocks.history` 不进入 `conversation` 二次裁剪；`conversation` final compact 只处理 current/incremental 与 prompt 注入。
-- [x] 21. 补充 history 轮次规则：最近 3 个有效历史轮次，保留从第一条实际用户消息到最后一条未小结 assistant 之间的所有 `summarized:false` 非 system 消息。
+- [x] 21. 补充 history 轮次规则：最近 5 个 dialog 组，组内保留所有 `summarized:false` 非 system 消息。
 
 ## history / incremental 边界测试记录
 

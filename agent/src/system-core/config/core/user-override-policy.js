@@ -31,9 +31,6 @@ const USER_OVERRIDE_TOP_LEVEL_DENY_KEYS = new Set([
 ]);
 
 const USER_OVERRIDE_DENY_PATHS = new Set([
-  "context.mainModelRecentWindow",
-  "context.mainModelRecentLimit",
-  "session.recentMessageLimit",
   "attachments.maxFileCount",
   "attachments.maxFileSizeBytes",
   "attachments.maxTotalSizeBytes",

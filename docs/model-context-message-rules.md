@@ -33,7 +33,7 @@ finalMessages = systemMessages + historyMessages + incrementalMessages
 - 筛选：只读取带 `dialogProcessId/dialogId` 的历史消息，按该 id 分组；没有 dialog id 的消息不进入 history。
 - 每个入选 dialog 组保留组内所有未小结非 system 消息；中间的插件规划、跟进、工具结果等只要 `summarized !== true`，都属于该 history 组的一部分，不得被二次裁剪丢弃。
 - 最终模型发送前的通用过滤只处理 `summarized` 与非法 tool/tool_call 配对，不得对 history 中的未小结注入消息执行“同类型只保留最新一条”去重；该 latest-only 策略只属于小结/压缩标记路径。
-- 裁剪：按 dialog 组首次出现顺序，只保留最近 3 个 dialog 组。
+- 裁剪：按 dialog 组首次出现顺序，只保留最近 5 个 dialog 组。
 - 顺序：dialog 组之间按首次出现顺序；组内保持原始自然顺序。
 - 执行顺序：先筛选，再裁剪。
 
@@ -56,7 +56,7 @@ finalMessages = systemMessages + historyMessages + incrementalMessages
 
 ## 2. harness 插件非主流程模型请求上下文统一规则
 
-harness 插件给非主流程模型请求的上下文原先第 1 段是“最近 20 条 agent 上下文”。现在改为：
+harness 插件给非主流程模型请求的上下文第 1 段统一为：
 
 ```text
 1. 和主流程最终给模型的消息一致的 agent 上下文（systemMessages + historyMessages + incrementalMessages）

@@ -5,9 +5,7 @@ import { SessionExecutionEngine } from "../../../src/system-core/bot-manage/sess
 
 test("_createPluginResolveModelMessages reads dialogProcessId from execution context", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const resolver = engine._createPluginResolveModelMessages({
-    agentPluginOptions: { contextWindowRecentMessageLimit: 50 },
-  });
+  const resolver = engine._createPluginResolveModelMessages();
   const resolved = resolver({
     messages: [
       {
@@ -44,9 +42,7 @@ test("_createPluginResolveModelMessages reads dialogProcessId from execution con
 
 test("_createPluginResolveModelMessages falls back to latest message dialogProcessId", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const resolver = engine._createPluginResolveModelMessages({
-    agentPluginOptions: { contextWindowRecentMessageLimit: 50 },
-  });
+  const resolver = engine._createPluginResolveModelMessages();
   const resolved = resolver({
     messages: [
       {
@@ -77,9 +73,7 @@ test("_createPluginResolveModelMessages falls back to latest message dialogProce
 
 test("_createPluginResolveModelMessages accepts agentPluginOptions payload", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const resolver = engine._createPluginResolveModelMessages({
-    agentPluginOptions: { contextWindowRecentMessageLimit: 1 },
-  });
+  const resolver = engine._createPluginResolveModelMessages();
 
   const resolved = resolver({
     messages: [
@@ -102,9 +96,7 @@ test("_createPluginResolveModelMessages accepts agentPluginOptions payload", () 
 
 test("_createPluginResolveModelMessages no longer clips agent context to plugin context window limit", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const resolver = engine._createPluginResolveModelMessages({
-    agentPluginOptions: { contextWindowRecentMessageLimit: 2 },
-  });
+  const resolver = engine._createPluginResolveModelMessages();
   const resolved = resolver({
     messages: [
       { role: "user", content: "u1", dialogProcessId: "dlg_new" },
@@ -129,9 +121,7 @@ test("_createPluginResolveModelMessages no longer clips agent context to plugin 
 
 test("_createPluginResolveModelMessages uses main-flow blocks when available", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const resolver = engine._createPluginResolveModelMessages({
-    agentPluginOptions: { contextWindowRecentMessageLimit: 2 },
-  });
+  const resolver = engine._createPluginResolveModelMessages();
   const resolved = resolver({
     messages: [],
     ctx: {

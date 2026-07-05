@@ -129,6 +129,74 @@ function assertFileContains(relPath, checks = []) {
 const sourceFiles = SOURCE_ROOTS.flatMap((dir) => walk(dir));
 if (!sourceFiles.length) fail("no source files found for convergence scan", SOURCE_ROOTS.map(rel).join("\n"));
 
+const legacyWindowScanRoots = [
+  path.join(ROOT, "agent", "src"),
+  path.join(ROOT, "agent", "__tests__"),
+  path.join(ROOT, "plugin", "noobot-plugin-harness", "src"),
+  path.join(ROOT, "plugin", "noobot-plugin-harness", "__tests__"),
+  path.join(ROOT, "shared"),
+  path.join(ROOT, "docs"),
+];
+const legacyWindowFiles = legacyWindowScanRoots.flatMap((dir) => walk(dir));
+const legacyWindowTokens = [
+  ["contextWindow", "RecentMessageLimit"].join(""),
+  ["incremental", "RecentMessageLimit"].join(""),
+  ["recentWindow", "MessageLimit"].join(""),
+  ["nonMainContextWindow", "RecentMessageLimit"].join(""),
+  ["mainModel", "RecentLimit"].join(""),
+  ["mainModel", "RecentWindow"].join(""),
+  ["session", "RecentMessageLimit"].join(""),
+  ["recent", "MessageLimit"].join(""),
+  ["normalize", "RecentWindow"].join(""),
+  ["resolve", "ModelContextMessages"].join(""),
+  ["use", "RecentWindow"].join(""),
+  ["recent", "Limit"].join(""),
+  ["最近 ", "20"].join(""),
+  ["20 ", "条"].join(""),
+];
+const legacyWindowHits = [];
+for (const file of legacyWindowFiles) {
+  const text = readFileSync(file, "utf8");
+  for (const token of legacyWindowTokens) {
+    let index = text.indexOf(token);
+    while (index >= 0) {
+      legacyWindowHits.push({ file, token, index });
+      index = text.indexOf(token, index + token.length);
+    }
+  }
+}
+if (legacyWindowHits.length) {
+  fail(
+    "legacy fixed-size non-main context window markers found",
+    legacyWindowHits
+      .slice(0, 12)
+      .map((item) => `  ${rel(item.file)}:${lineOf(readFileSync(item.file, "utf8"), item.index)} ${item.token}`)
+      .join("\n"),
+  );
+} else {
+  pass("no legacy fixed-size non-main context window markers");
+}
+
+const sessionContextServiceText = readFileSync(
+  path.join(ROOT, "agent", "src", "system-core", "session", "services", "session-context-service.js"),
+  "utf8",
+);
+const getContextRecordsMatch = sessionContextServiceText.match(
+  /async\s+getContextRecords\s*\([\s\S]*?\n\s*\}\n\s*\}/,
+);
+const getContextRecordsText = getContextRecordsMatch ? getContextRecordsMatch[0] : "";
+if (
+  /getMessagesSinceLast(?:Running|Completed)Task/.test(sessionContextServiceText) ||
+  /useLast(?:Running|Completed)TaskRange/.test(getContextRecordsText)
+) {
+  fail(
+    "task-range session context branch found",
+    "Model context must resolve main-model history via latest dialog groups only.",
+  );
+} else {
+  pass("session context has no task-range context branches");
+}
+
 const forbiddenSymbolPattern = /\b(resolveMessageBlock|composeFinalMessageBlocks|applyMessageBlocksForBeforeLlmCall|resolveFinalMessageBlocks|collectPayloadMessages|resolveContextSourceMessages|includePayloadMessages|shouldUsePayloadMessageFallback|resolveAgentModelMessages|misplacedSystemMessages)\b/g;
 const SYSTEM_LIKE_ROLE_PATTERN = "(?:system|developer)";
 
@@ -263,6 +331,22 @@ assertFileContains("agent/src/system-core/session/services/session-context-servi
   { name: "session history excludes current turn before recent dialogs", pattern: /_filterCurrentRunMessages[\s\S]*?_filterCurrentDialogMessages[\s\S]*?_filterCurrentTurnMessages/ },
   { name: "recent history uses current dialog exclusion", pattern: /async\s+getRecentSessionMessages[\s\S]*?currentDialogProcessId[\s\S]*?_filterCurrentRunMessages[\s\S]*?currentTurnScopeId,\s*currentDialogProcessId/ },
 ]);
+
+const messageBuilderText = readFileSync(
+  path.join(ROOT, "agent", "src", "system-core", "agent", "core", "context", "message-builder.js"),
+  "utf8",
+);
+if (
+  /\bsameCurrentText\b/.test(messageBuilderText) ||
+  /String\(\s*msg\?\.content\s*\|\|\s*["']["']\s*\)\.trim\(\)\s*===\s*normalizedCurrentUserMessage/.test(messageBuilderText)
+) {
+  fail(
+    "history filtering by current user text found",
+    "Repeated goals such as “下一步” must not delete previous dialogProcessId history rounds; only current turn/dialog ids may be filtered.",
+  );
+} else {
+  pass("history filtering does not drop previous rounds by repeated user text");
+}
 
 assertFileContains("plugin/noobot-plugin-harness/src/core/model-message-context.js", [
   { name: "harness before_llm_call delegates to resolver", pattern: /applyAgentResolvedModelMessages/ },

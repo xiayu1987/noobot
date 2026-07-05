@@ -15,10 +15,6 @@ test("sanitizeUserConfig: 应仅保留允许覆盖字段并规范化键名", () 
     default_provider: "openai",
     workspace_root: "/should-be-denied",
     providers: { openai: { model: "gpt-4o" } },
-    context: {
-      main_model_recent_window: true,
-      main_model_recent_limit: 15,
-    },
     unknownKey: "x",
   });
   assert.equal(out.defaultProvider, "openai");
@@ -82,7 +78,6 @@ test("mergeConfig: session/context/preferences 用户覆盖应保持深度合并
   const out = mergeConfig(
     {
       session: {
-        recentMessageLimit: 15,
         contextWindow: { maxTokens: 1000, reserveTokens: 200 },
       },
       context: {
@@ -108,7 +103,6 @@ test("mergeConfig: session/context/preferences 用户覆盖应保持深度合并
   );
 
   assert.deepEqual(out.session, {
-    recentMessageLimit: 15,
     contextWindow: { maxTokens: 1000, reserveTokens: 300 },
   });
   assert.deepEqual(out.context, {

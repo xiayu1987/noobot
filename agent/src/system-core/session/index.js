@@ -259,21 +259,8 @@ export function createSessionFacade(runtime = {}) {
 
     async getRecentSessionMessages(payload = {}) {
       return sessionContextService.getRecentSessionMessages({
-        limit: payload?.limit,
         ...normalizeContextServicePayload(payload),
       });
-    },
-
-    async getMessagesSinceLastRunningTask(payload = {}) {
-      return sessionContextService.getMessagesSinceLastRunningTask(
-        normalizeContextServicePayload(payload),
-      );
-    },
-
-    async getMessagesSinceLastCompletedTask(payload = {}) {
-      return sessionContextService.getMessagesSinceLastCompletedTask(
-        normalizeContextServicePayload(payload),
-      );
     },
 
     async getContextRecords(payload = {}) {

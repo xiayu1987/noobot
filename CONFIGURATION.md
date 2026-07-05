@@ -61,13 +61,7 @@ Session log WebSocket:
 
 ### 3.2 Session
 
-| Key | Type | Description |
-|---|---|---|
-| `session.recent_message_limit` | number | Number of recent messages in context |
-| `context.main_model_recent_window` | boolean | Whether `agent.main` uses recent-window clipping |
-| `context.main_model_recent_limit` | number | Recent-window size for `agent.main` (effective when enabled) |
-| `session.use_last_running_task_range` | boolean | Prefer context since last running task |
-| `session.use_last_completed_task_range` | boolean | Prefer context since last completed task |
+Model history is fixed by the agent runtime: it keeps the latest 5 `dialogProcessId/dialogId` rounds. There is no session history-window configuration.
 
 ### 3.3 Attachments
 
@@ -176,17 +170,11 @@ Other scenario fields in global/user config (`name`, `description`, `tools`, `co
 | `plugins.<name>.enabled` | boolean | Plugin global switch. When `false`, plugin is hidden in frontend and disabled at runtime. |
 | `plugins.<name>.mode` | enum | Default runtime mode for this plugin. Currently `on` / `off` (`off` means enabled but not active by default). |
 | `plugins.harness.stepModels.<purpose>` | string | Harness step-specific model alias (`planning` / `guidance` / `acceptance` / `default`). |
-| `plugins.harness.contextWindowRecentMessageLimit` | number | Harness history block recent-window limit used by unified clipping entry. |
-| `plugins.harness.incrementalRecentMessageLimit` | number | Harness incremental block recent-window limit used by unified clipping entry. |
 
 Current plugin defaults in repo:
 - `plugins.harness.enabled = true`
 - `plugins.harness.mode = "off"`
 - `plugins.harness.stepModels = { planning, guidance, acceptance, default }` (all default to `"qwen3_6_plus"` in current example)
-
-Effective defaults when recent-window limits are not configured:
-- `plugins.harness.contextWindowRecentMessageLimit = 20`
-- `plugins.harness.incrementalRecentMessageLimit = 20` (fallback to history limit when omitted)
 
 ### 3.6 Connector Presets
 

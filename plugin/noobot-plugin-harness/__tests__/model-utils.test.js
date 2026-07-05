@@ -526,6 +526,41 @@ test("incremental capability message cache prefers explicit source ids over posi
   clearIncrementalCapabilityMessageCacheForContext(ctx);
 });
 
+test("incremental capability message cache skips repeated system protocol but appends current flow user messages", () => {
+  const ctx = { sessionId: "incremental-cache-system-protocol-dedupe" };
+
+  resolveIncrementalCapabilityMessages({
+    ctx,
+    purpose: "summary",
+    messages: [
+      protocolMessage({ role: "system", content: "stable protocol" }, "stable-protocol"),
+      protocolMessage({ role: "system", content: "stable policy" }, "stable-policy"),
+      contextMessage({ role: "user", content: "u1" }, "u1"),
+      protocolMessage({ role: "user", content: "flow user 1" }, "flow-user-1"),
+    ],
+  });
+  const resolved = resolveIncrementalCapabilityMessages({
+    ctx,
+    purpose: "summary",
+    messages: [
+      protocolMessage({ role: "system", content: "stable protocol" }, "stable-protocol"),
+      protocolMessage({ role: "system", content: "stable policy" }, "stable-policy"),
+      contextMessage({ role: "assistant", content: "a2" }, "a2"),
+      protocolMessage({ role: "user", content: "flow user 2" }, "flow-user-2"),
+    ],
+  });
+
+  assert.deepEqual(resolved.map((item) => `${item.role}:${item.content}`), [
+    "system:stable protocol",
+    "system:stable policy",
+    "user:u1",
+    "user:flow user 1",
+    "assistant:a2",
+    "user:flow user 2",
+  ]);
+  clearIncrementalCapabilityMessageCacheForContext(ctx);
+});
+
 test("incremental capability message cache keeps origin-marked tool execution context", () => {
   const ctx = { sessionId: "incremental-cache-origin-tool-context" };
 

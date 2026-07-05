@@ -40,7 +40,6 @@ test("getRecentSessionMessages returns only complete history rounds", async () =
   const result = await service.getRecentSessionMessages({
     userId: "u1",
     sessionId: "s1",
-    limit: 2,
   });
 
   assert.deepEqual(result, []);
@@ -67,7 +66,6 @@ test("getRecentSessionMessages keeps explicit dialog group content in original o
   const result = await service.getRecentSessionMessages({
     userId: "u1",
     sessionId: "s1",
-    limit: 2,
   });
 
   assert.deepEqual(
@@ -86,7 +84,6 @@ test("getRecentSessionMessages respects summarized filter before window normaliz
   const result = await service.getRecentSessionMessages({
     userId: "u1",
     sessionId: "s1",
-    limit: 2,
   });
 
   assert.deepEqual(
@@ -95,7 +92,7 @@ test("getRecentSessionMessages respects summarized filter before window normaliz
   );
 });
 
-test("getRecentSessionMessages keeps recent complete rounds and all unsummarized injected messages", async () => {
+test("getRecentSessionMessages keeps latest fixed dialog rounds and all unsummarized injected messages", async () => {
   const messages = [
     { role: "user", content: "first real question", dialogProcessId: "dlg_1" },
     {
@@ -128,12 +125,14 @@ test("getRecentSessionMessages keeps recent complete rounds and all unsummarized
   const result = await service.getRecentSessionMessages({
     userId: "u1",
     sessionId: "s1",
-    limit: 2,
   });
 
   assert.deepEqual(
     result.map((messageItem) => messageItem.content),
     [
+      "first real question",
+      "[Relay from plugin/planning]\nold plan 1",
+      "first real answer",
       "second real question",
       "[Relay from plugin/planning_revision]\nold plan 2",
       "[Relay from plugin/planning_revision]\nlatest plan 2",
@@ -176,7 +175,6 @@ test("getRecentSessionMessages excludes current turn user when reusing an edited
   const result = await service.getRecentSessionMessages({
     userId: "u1",
     sessionId: "s1",
-    limit: 3,
     currentTurnScopeId: "client-turn:mqrt1icf:lxcfigpr",
   });
 
@@ -226,7 +224,7 @@ test("getContextRecords passes current turn filter through recent history", asyn
   );
 });
 
-test("getRecentSessionMessages selects latest 3 previous dialogProcessId rounds", async () => {
+test("getRecentSessionMessages selects fixed latest previous dialogProcessId rounds", async () => {
   const messages = [];
   for (const id of ["dlg_1", "dlg_2", "dlg_3", "dlg_4", "dlg_current"]) {
     messages.push({
@@ -248,7 +246,6 @@ test("getRecentSessionMessages selects latest 3 previous dialogProcessId rounds"
   const result = await service.getRecentSessionMessages({
     userId: "u1",
     sessionId: "s1",
-    limit: 3,
     currentDialogProcessId: "dlg_current",
     currentTurnScopeId: "turn:dlg_current",
   });
@@ -256,6 +253,8 @@ test("getRecentSessionMessages selects latest 3 previous dialogProcessId rounds"
   assert.deepEqual(
     result.map((messageItem) => messageItem.content),
     [
+      "dlg_1 user",
+      "dlg_1 assistant",
       "dlg_2 user",
       "dlg_2 assistant",
       "dlg_3 user",
@@ -266,105 +265,26 @@ test("getRecentSessionMessages selects latest 3 previous dialogProcessId rounds"
   );
 });
 
-test("getMessagesSinceLastRunningTask uses the same normalization", async () => {
+test("getContextRecords uses fixed latest dialog history", async () => {
   const messages = [
-    { role: "user", content: "origin user" },
+    { role: "user", content: "origin user", dialogProcessId: "dlg_1" },
+    { role: "assistant", content: "old answer", dialogProcessId: "dlg_1" },
     {
       role: "assistant",
       content: "",
       taskStatus: "start",
+      dialogProcessId: "dlg_2",
       tool_calls: [{ id: "call_run", function: { name: "execute_script", arguments: "{}" } }],
     },
     {
       role: "tool",
       content: "{\"toolName\":\"execute_script\",\"ok\":true}",
       tool_call_id: "call_run",
+      dialogProcessId: "dlg_2",
     },
-    {
-      role: "tool",
-      content: "{\"toolName\":\"execute_script\",\"ok\":true}",
-      tool_call_id: "orphan_call",
-    },
+    { role: "user", content: "latest user", dialogProcessId: "dlg_3" },
   ];
   const service = createSessionContextService(messages);
-  const result = await service.getMessagesSinceLastRunningTask({
-    userId: "u1",
-    sessionId: "s1",
-  });
-
-  assert.equal(result[0]?.role, "user");
-  assert.equal(
-    result.some(
-      (messageItem) =>
-        messageItem?.role === "tool" &&
-        String(messageItem?.tool_call_id || "") === "orphan_call",
-    ),
-    false,
-  );
-});
-
-test("getMessagesSinceLastCompletedTask uses the same normalization", async () => {
-  const messages = [
-    { role: "user", content: "origin user" },
-    {
-      role: "assistant",
-      content: "",
-      taskStatus: "completed",
-      tool_calls: [{ id: "call_done", function: { name: "task_summary", arguments: "{}" } }],
-    },
-    {
-      role: "tool",
-      content: "{\"toolName\":\"task_summary\",\"ok\":true}",
-      tool_call_id: "call_done",
-    },
-    {
-      role: "tool",
-      content: "{\"toolName\":\"task_summary\",\"ok\":true}",
-      tool_call_id: "orphan_done",
-    },
-  ];
-  const service = createSessionContextService(messages);
-  const result = await service.getMessagesSinceLastCompletedTask({
-    userId: "u1",
-    sessionId: "s1",
-  });
-
-  assert.equal(result[0]?.role, "user");
-  assert.equal(
-    result.some(
-      (messageItem) =>
-        messageItem?.role === "user" &&
-        messageItem?.phaseSummaryMemory === true &&
-        String(messageItem?.original_tool_call_id || "") === "orphan_done",
-    ),
-    true,
-  );
-});
-
-test("getContextRecords reads session context options from global config", async () => {
-  const messages = [
-    { role: "user", content: "origin user" },
-    { role: "assistant", content: "old answer" },
-    {
-      role: "assistant",
-      content: "",
-      taskStatus: "start",
-      tool_calls: [{ id: "call_run", function: { name: "execute_script", arguments: "{}" } }],
-    },
-    {
-      role: "tool",
-      content: "{\"toolName\":\"execute_script\",\"ok\":true}",
-      tool_call_id: "call_run",
-    },
-  ];
-  const service = createSessionContextService(messages, {
-    globalConfig: {
-      session: {
-        use_last_running_task_range: true,
-        recent_message_limit: 1,
-      },
-    },
-  });
 
   const result = await service.getContextRecords({
     userId: "u1",
@@ -373,20 +293,20 @@ test("getContextRecords reads session context options from global config", async
 
   assert.deepEqual(
     result.map((messageItem) => messageItem.content),
-    ["origin user", "", "{\"toolName\":\"execute_script\",\"ok\":true}"],
+    [
+      "origin user",
+      "old answer",
+      "",
+      "{\"toolName\":\"execute_script\",\"ok\":true}",
+      "latest user",
+    ],
   );
 });
 
-test("session context config resolves canonicalized global session options", async () => {
-  const service = createSessionContextService([], {
-    globalConfig: {
-      session: {
-        recent_message_limit: 2,
-      },
-    },
-  });
+test("session context config always uses the central main history round limit", async () => {
+  const service = createSessionContextService([]);
 
   const result = service._sessionContextConfig();
 
-  assert.equal(result.recentMessageLimit, 2);
+  assert.equal(result.historyRoundLimit, 5);
 });
