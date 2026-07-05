@@ -60,6 +60,7 @@ export async function applyReconnectMessagesToActiveSessionReplay({
   markReconnectSequenceApplied: markSequenceApplied,
   scrollBottom,
   processStore,
+  onHydrationError,
 } = {}) {
   return applyReconnectReplayBatchToActiveSession({
     activeSession,
@@ -77,7 +78,7 @@ export async function applyReconnectMessagesToActiveSessionReplay({
     normalizeExecutionLogForRealtime,
     getReplayHydrationPromise,
     setReplayHydrationPromise,
-    onHydrationError: (error) => console.warn("Reconnect replay pre-render session failed:", error),
+    onHydrationError,
     applyDoneMessages,
     envelopeCallbacks,
     markReconnectSequenceApplied: markSequenceApplied,

@@ -3,6 +3,7 @@ import { createFixture, createFakeProcessStore } from "./helpers/useReconnectRep
 import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
 import {
   BackendChannelState,
+  FrontendRunState,
   SESSION_RUN_EVENT,
 } from "../../../../src/composables/chat/sessionRunStateMachine";
 import {
@@ -409,6 +410,61 @@ describe("useReconnectReplay", () => {
     expect(refs.sending.value).toBe(false);
     expect(refs.interactionSubmitting.value).toBe(false);
     expect(mocks.clearPendingInteraction).toHaveBeenCalled();
+  });
+
+  it("RT-06a: backend completed replay finalizes through session detail flow", async () => {
+    const { api, refs, mocks } = createFixture();
+    refs.sending.value = true;
+    refs.canStop.value = true;
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "q" },
+      {
+        role: RoleEnum.ASSISTANT,
+        dialogProcessId: "dp-completed",
+        content: "answer",
+        pending: true,
+        channelState: { state: "sending", dialogProcessId: "dp-completed" },
+      },
+    ];
+
+    await api.applyReconnectData({
+      sessions: [
+        {
+          sessionId: "s-1",
+          conversationStates: [
+            {
+              sessionId: "s-1",
+              dialogProcessId: "dp-completed",
+              state: "completed",
+              seq: 12,
+            },
+          ],
+          dialogProcesses: [],
+        },
+      ],
+    });
+
+    const assistant = refs.activeSession.value.messages[1];
+    expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1");
+    expect(mocks.chatList.applySessionDetail).toHaveBeenCalledTimes(1);
+    expect(refs.runStateSnapshot.value).toMatchObject({
+      state: FrontendRunState.FRONTEND_COMPLETED,
+      lastEventType: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
+      sessionId: "s-1",
+      dialogProcessId: "dp-completed",
+    });
+    expect(refs.sending.value).toBe(false);
+    expect(refs.canStop.value).toBe(false);
+    expect(assistant.pending).toBe(false);
+    expect(assistant.channelState).toMatchObject({
+      state: "completed",
+      dialogProcessId: "dp-completed",
+    });
+    expect(assistant.statusLabel).toBe("chat.generated");
+    expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
+      sessionId: "s-1",
+      dialogProcessId: "dp-completed",
+    });
   });
 
   it.each(["cancelled"])(

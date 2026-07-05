@@ -1,10 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { WebSocket } from "ws";
-import { registerChatWebSocketServer } from "../../ws/chat-websocket-server.js";
+import {
+  recordServiceWebSocketRuntimeError,
+  recordServiceWebSocketSendFailure,
+  registerChatWebSocketServer,
+} from "../../ws/chat-websocket-server.js";
 
-async function startServerWithWs({ runSession = async () => ({}), bot = null } = {}) {
+async function startServerWithWs({ runSession = async () => ({}), bot = null, sessionLogConfig = undefined } = {}) {
   const server = createServer((_req, res) => {
     res.statusCode = 404;
     res.end("not-found");
@@ -19,10 +26,16 @@ async function startServerWithWs({ runSession = async () => ({}), bot = null } =
     normalizeLocale: (locale = "") => String(locale || "zh-CN"),
     defaultLocale: "zh-CN",
     translateText: (key = "") => String(key || ""),
+    sessionLogConfig,
   });
 
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   return server;
+}
+
+async function readJsonl(filePath) {
+  const content = await fs.readFile(filePath, "utf8");
+  return content.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
 }
 
 async function closeServer(server) {
@@ -499,4 +512,75 @@ test("chat-websocket-server: edit resend turnScopeId reaches runConfig", async (
   } finally {
     await closeServer(server);
   }
+});
+
+test("chat-websocket-server: service websocket send failures write direct system telemetry", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-service-telemetry-"));
+  await recordServiceWebSocketSendFailure({
+    sessionLogConfig: { workspaceRoot },
+    eventName: "done",
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp1",
+    turnScopeId: "turn1",
+    error: new Error("send failed"),
+  });
+
+  const records = await readJsonl(path.join(
+    workspaceRoot,
+    "u1",
+    "runtime",
+    "session",
+    "s1",
+    "logs",
+    "system.jsonl",
+  ));
+  assert.equal(records.length, 1);
+  assert.equal(records[0].source, "service");
+  assert.equal(records[0].channel, "direct");
+  assert.equal(records[0].category, "system");
+  assert.equal(records[0].event, "service.websocket.sendEvent.failed");
+  assert.equal(records[0].userId, "u1");
+  assert.equal(records[0].sessionId, "s1");
+  assert.equal(records[0].dialogProcessId, "dp1");
+  assert.equal(records[0].turnScopeId, "turn1");
+  assert.equal(records[0].data.eventName, "done");
+  assert.equal(records[0].data.error, "send failed");
+});
+
+test("chat-websocket-server: service websocket runtime errors write direct system telemetry", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-service-runtime-telemetry-"));
+  await recordServiceWebSocketRuntimeError({
+    sessionLogConfig: { workspaceRoot },
+    event: "service.websocket.run.failed",
+    userId: "u1",
+    sessionId: "s1",
+    parentSessionId: "p1",
+    dialogProcessId: "dp1",
+    turnScopeId: "turn1",
+    error: new Error("run failed"),
+    data: { phase: "run" },
+  });
+
+  const records = await readJsonl(path.join(
+    workspaceRoot,
+    "u1",
+    "runtime",
+    "session",
+    "s1",
+    "logs",
+    "system.jsonl",
+  ));
+  assert.equal(records.length, 1);
+  assert.equal(records[0].source, "service");
+  assert.equal(records[0].channel, "direct");
+  assert.equal(records[0].category, "system");
+  assert.equal(records[0].event, "service.websocket.run.failed");
+  assert.equal(records[0].userId, "u1");
+  assert.equal(records[0].sessionId, "s1");
+  assert.equal(records[0].parentSessionId, "p1");
+  assert.equal(records[0].dialogProcessId, "dp1");
+  assert.equal(records[0].turnScopeId, "turn1");
+  assert.equal(records[0].data.phase, "run");
+  assert.equal(records[0].data.error, "run failed");
 });

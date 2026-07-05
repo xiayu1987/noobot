@@ -484,7 +484,7 @@ export async function applyReconnectReplayBatchToActiveSession({
   normalizeExecutionLogForRealtime,
   getReplayHydrationPromise = () => null,
   setReplayHydrationPromise = () => {},
-  onHydrationError = console.warn,
+  onHydrationError = () => {},
   applyDoneMessages,
   envelopeCallbacks = {},
   markReconnectSequenceApplied,

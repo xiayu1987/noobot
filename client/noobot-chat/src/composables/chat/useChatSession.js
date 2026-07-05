@@ -16,6 +16,7 @@ import {
 import { normalizeTimePair, nowIso } from "../infra/timeFields";
 import {
   buildChatWebSocketUrl,
+  buildLogWebSocketUrl,
   deleteSessionApi,
   deleteSessionMessagesFromApi,
   getSessionConnectorsApi,
@@ -34,6 +35,7 @@ import {
   sessionTitleFromMessages,
 } from "../../shared/models/sessionModel";
 import { createChatWebSocketClient } from "../../services/ws/chatWebSocketClient";
+import { createSessionLogWebSocketClient } from "../../services/ws/sessionLogWebSocketClient";
 import { useChatInput } from "./useChatInput";
 import { useAgentInteraction } from "./useAgentInteraction";
 import { useConnectorPanel } from "../infra/useConnectorPanel";
@@ -49,6 +51,8 @@ import {
   evaluateSessionRunState,
   SESSION_RUN_EVENT,
 } from "./sessionRunStateMachine";
+import { setStateMachineDebugLogSink } from "./debug/stateMachineLogger";
+import { setResendDebugLogSink } from "./debug/resendDebugLogger";
 
 export function useChatSession({
   userId,
@@ -157,6 +161,14 @@ export function useChatSession({
         ts: updatedAt,
       },
     ].slice(-80);
+    sessionLogWebSocketClient.log({
+      category: "state",
+      event: "conversation.state",
+      sessionId,
+      dialogProcessId,
+      turnScopeId,
+      data: normalizedEntry,
+    });
     applySessionRunStateEvent({
       stateRef: runStateSnapshot,
       sending,
@@ -196,6 +208,27 @@ export function useChatSession({
       buildChatWebSocketUrl({ apiKey: apiKey.value || "" }),
     translateText: translate,
   });
+  const sessionLogWebSocketClient = createSessionLogWebSocketClient({
+    resolveWebSocketUrl: () => buildLogWebSocketUrl({ apiKey: apiKey.value || "" }),
+    source: "frontend",
+  });
+  setStateMachineDebugLogSink(sessionLogWebSocketClient);
+  setResendDebugLogSink(sessionLogWebSocketClient);
+
+  function logSessionSystemEvent(event, payload = {}) {
+    sessionLogWebSocketClient.log({
+      category: "system",
+      event,
+      sessionId: payload?.sessionId || String(activeSession.value?.backendSessionId || activeSessionId.value || ""),
+      dialogProcessId: payload?.dialogProcessId || "",
+      turnScopeId: payload?.turnScopeId || "",
+      data: {
+        event,
+        at: new Date().toISOString(),
+        ...payload,
+      },
+    });
+  }
 
   const {
     pendingInteractionRequest,
@@ -318,6 +351,7 @@ export function useChatSession({
     refreshSessionsAsync: chatList.fetchSessions,
     onConversationState: trackConversationState,
     chatWebSocketClient,
+    sessionLogWebSocketClient,
     ensureConnected,
     notify,
     processStore,
@@ -351,6 +385,7 @@ export function useChatSession({
     scrollBottom,
     translate,
     onConversationState: trackConversationState,
+    sessionLogWebSocketClient,
     notify,
     processStore,
   });
@@ -426,7 +461,9 @@ export function useChatSession({
         }
       },
     }).then(() => Promise.all(pendingReconnectReplays)).catch((error) => {
-      console.warn("Reconnect failed:", error);
+      logSessionSystemEvent("reconnect.failed", {
+        error: String(error?.message || error || ""),
+      });
       notify({ type: "warning", message: translate("infra.reconnectFailed") });
     });
   }

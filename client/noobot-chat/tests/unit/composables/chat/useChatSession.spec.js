@@ -3,8 +3,10 @@ import { createPinia, setActivePinia } from "pinia";
 import { nextTick, ref, toRef } from "vue";
 import { useChatStore } from "../../../../src/shared/stores/useChatStore";
 import { useChatSession } from "../../../../src/composables/chat/useChatSession";
+import { logResendDebug, setResendDebugLogSink } from "../../../../src/composables/chat/debug/resendDebugLogger";
 import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
 import {
+  FrontendRunState,
   SESSION_RUN_EVENT,
   applySessionRunStateEvent,
 } from "../../../../src/composables/chat/sessionRunStateMachine";
@@ -26,6 +28,12 @@ const wsClientMock = {
   isStopRequested: vi.fn(() => false),
   reconnect: vi.fn(async () => {}),
 };
+
+const sessionLogClientMock = vi.hoisted(() => ({
+  log: vi.fn(() => true),
+  debug: vi.fn(() => true),
+  dispose: vi.fn(),
+}));
 
 function createSessionFixture(overrides = {}) {
   return {
@@ -72,6 +80,10 @@ vi.mock("../../../../src/services/ws/chatWebSocketClient", () => ({
   createChatWebSocketClient: () => wsClientMock,
 }));
 
+vi.mock("../../../../src/services/ws/sessionLogWebSocketClient", () => ({
+  createSessionLogWebSocketClient: () => sessionLogClientMock,
+}));
+
 describe("useChatSession reconnect replay", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -82,6 +94,35 @@ describe("useChatSession reconnect replay", () => {
     });
     wsClientMock.isStopRequested.mockReturnValue(false);
     wsClientMock.reconnect.mockResolvedValue(undefined);
+    sessionLogClientMock.log.mockClear();
+    sessionLogClientMock.debug.mockClear();
+    sessionLogClientMock.dispose.mockClear();
+    setResendDebugLogSink(null);
+    vi.unstubAllEnvs();
+  });
+
+  it("injects the session log websocket client into resend debug logger", () => {
+    vi.stubEnv("VITE_NOOBOT_RESEND_DEBUG", "true");
+
+    createChatSession();
+    logResendDebug("resend.injected", {
+      sessionId: "s-log",
+      dialogProcessId: "dp-log",
+      turnScopeId: "ts-log",
+      detail: "through-session-log-client",
+    });
+
+    expect(sessionLogClientMock.log).toHaveBeenCalledWith(expect.objectContaining({
+      category: "debug",
+      event: "resend.injected",
+      sessionId: "s-log",
+      dialogProcessId: "dp-log",
+      turnScopeId: "ts-log",
+      data: expect.objectContaining({
+        phase: "resend.injected",
+        detail: "through-session-log-client",
+      }),
+    }));
   });
 
   it("reconnect DONE with dialogProcessId only patches that assistant turn", async () => {
@@ -156,6 +197,27 @@ describe("useChatSession reconnect replay", () => {
       });
     });
 
+    const authFetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        exists: true,
+        sessionId: "s-1",
+        sessions: [],
+        messages: [
+          { role: RoleEnum.USER, content: "old q" },
+          { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-old", content: "old keep" },
+          { role: RoleEnum.USER, content: "new q" },
+          {
+            role: RoleEnum.ASSISTANT,
+            dialogProcessId: "dp-new",
+            content: "new final answer",
+            modelAlias: "alias-1",
+          },
+        ],
+      }),
+    }));
+
     const session = useChatSession({
       userId: ref("u-1"),
       apiKey: ref(""),
@@ -164,7 +226,7 @@ describe("useChatSession reconnect replay", () => {
       botScenario: ref(""),
       connected: ref(true),
       ensureConnected: vi.fn(() => true),
-      authFetch: null,
+      authFetch,
       isImageMime: () => false,
       classifyRealtimeLog: (item) => item,
       scrollBottom: vi.fn(),
@@ -186,7 +248,14 @@ describe("useChatSession reconnect replay", () => {
     expect(newAssistant.content).toBe("new final answer");
     expect(newAssistant.modelAlias).toBe("alias-1");
     expect(newAssistant.pending).toBe(false);
-    expect(store.sending).toBe(true);
+    expect(authFetch).toHaveBeenCalledWith("/api/internal/session/u-1/s-1");
+    expect(store.runStateSnapshot).toMatchObject({
+      state: FrontendRunState.FRONTEND_COMPLETED,
+      lastEventType: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
+      sessionId: "s-1",
+      dialogProcessId: "dp-new",
+    });
+    expect(store.sending).toBe(false);
     expect(store.pendingInteractionRequest).toBeNull();
     expect(store.interactionSubmitting).toBe(false);
   });
@@ -299,6 +368,15 @@ describe("useChatSession reconnect replay", () => {
     );
     expect(authFetch).not.toHaveBeenCalled();
     expect(notify).toHaveBeenCalledWith({ type: "warning", message: "infra.reconnectFailed" });
+    expect(sessionLogClientMock.log).toHaveBeenCalledWith(expect.objectContaining({
+      category: "system",
+      event: "reconnect.failed",
+      sessionId: "s-cross-device",
+      data: expect.objectContaining({
+        event: "reconnect.failed",
+        error: "socket reconnect failed",
+      }),
+    }));
     expect(assistant.pending).toBe(false);
     expect(store.sending).toBe(false);
     expect(store.canStop).toBe(false);
@@ -351,6 +429,17 @@ describe("useChatSession reconnect replay", () => {
       });
     });
 
+    const authFetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        exists: true,
+        sessionId: "s-state",
+        sessions: [],
+        messages: [],
+      }),
+    }));
+
     const session = useChatSession({
       userId: ref("u-state"),
       apiKey: ref(""),
@@ -360,7 +449,7 @@ describe("useChatSession reconnect replay", () => {
       botScenario: ref(""),
       connected: ref(true),
       ensureConnected: vi.fn(() => true),
-      authFetch: null,
+      authFetch,
       isImageMime: () => false,
       classifyRealtimeLog: (item) => item,
       scrollBottom: vi.fn(),
@@ -372,6 +461,7 @@ describe("useChatSession reconnect replay", () => {
 
     expect(session.conversationStateSnapshot.value["s-state::dialogProcess:same-id"].state).toBe("sending");
     expect(session.conversationStateSnapshot.value["s-state::turnScope:same-id"].state).toBe("completed");
+    expect(authFetch).toHaveBeenCalledWith("/api/internal/session/u-state/s-state");
     expect(Object.keys(session.conversationStateSnapshot.value)).toEqual(
       expect.arrayContaining([
         "s-state::dialogProcess:same-id",

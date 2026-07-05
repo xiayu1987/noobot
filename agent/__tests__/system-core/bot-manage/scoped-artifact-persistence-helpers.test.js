@@ -226,6 +226,19 @@ test("ScopedArtifactPersistenceHelpers detects detached sub-session isolation le
   assert.equal(events[0].event, "plugin_subsession_persistence_leak");
   assert.equal(events[0].data.scope, "test_scope");
   assert.equal(events[0].data.leakedMainSessionFile, leakedFile);
+  const telemetryFile = path.join(tempRoot, "u1", "runtime/session", "s-leak", "logs", "system.jsonl");
+  const telemetryRecords = (await fs.readFile(telemetryFile, "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  assert.equal(telemetryRecords.length, 1);
+  assert.equal(telemetryRecords[0].source, "agent");
+  assert.equal(telemetryRecords[0].category, "system");
+  assert.equal(telemetryRecords[0].channel, "direct");
+  assert.equal(telemetryRecords[0].event, "plugin_subsession_persistence_leak");
+  assert.equal(telemetryRecords[0].userId, "u1");
+  assert.equal(telemetryRecords[0].sessionId, "s-leak");
+  assert.equal(telemetryRecords[0].data.scope, "test_scope");
 });
 
 test("ScopedArtifactPersistenceHelpers generated artifact persister maps records to metas", async () => {

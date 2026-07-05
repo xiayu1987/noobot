@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createFixture, createFakeProcessStore } from "./helpers/useReconnectReplayHelper";
 import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
+import {
+  FrontendRunState,
+  SESSION_RUN_EVENT,
+} from "../../../../src/composables/chat/sessionRunStateMachine";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -42,7 +46,7 @@ describe("useReconnectReplay", () => {
     expect(mocks.chatWebSocketClient.clearStopRequested).toHaveBeenCalledTimes(1);
   });
 
-  it("EV-04a: DONE without channel_state patches overlay but stays awaiting frontend completion", async () => {
+  it("EV-04a: DONE without channel_state patches overlay clears replay sending state", async () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
@@ -60,7 +64,15 @@ describe("useReconnectReplay", () => {
     );
     expect(assistant?.pending).toBe(false);
     expect(assistant?.statusLabel).toBe("chat.generated");
-    expect(refs.sending.value).toBe(true);
+    expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1");
+    expect(mocks.chatList.applySessionDetail).toHaveBeenCalled();
+    expect(refs.runStateSnapshot.value).toMatchObject({
+      state: FrontendRunState.FRONTEND_COMPLETED,
+      lastEventType: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
+      sessionId: "s-1",
+      dialogProcessId: "dp-done-only",
+    });
+    expect(refs.sending.value).toBe(false);
     expect(refs.interactionSubmitting.value).toBe(false);
     expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
       sessionId: "s-1",
@@ -68,7 +80,7 @@ describe("useReconnectReplay", () => {
     });
   });
 
-  it("EV-04: channel_state completed stays backend-completed until frontend completion", async () => {
+  it("EV-04: channel_state completed clears replay sending state", async () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
@@ -92,7 +104,15 @@ describe("useReconnectReplay", () => {
     );
     expect(assistant?.pending).toBe(false);
     expect(assistant?.statusLabel).toBe("chat.generated");
-    expect(refs.sending.value).toBe(true);
+    expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1");
+    expect(mocks.chatList.applySessionDetail).toHaveBeenCalled();
+    expect(refs.runStateSnapshot.value).toMatchObject({
+      state: FrontendRunState.FRONTEND_COMPLETED,
+      lastEventType: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
+      sessionId: "s-1",
+      dialogProcessId: "dp-done",
+    });
+    expect(refs.sending.value).toBe(false);
     expect(refs.interactionSubmitting.value).toBe(false);
     expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
       sessionId: "s-1",

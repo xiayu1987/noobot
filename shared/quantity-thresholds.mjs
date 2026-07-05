@@ -121,4 +121,12 @@ export const QUANTITY_THRESHOLDS = deepFreeze({
     // Compatibility process logs kept during reconnect replay/reduction.
     processCompatLogLimit: QUANTITY_TIERS.smallDisplay,
   },
+
+  sessionLog: {
+    // Max events accepted in one session-log batch payload.
+    maxBatchSize: 100,
+
+    // Max pending records retained by session-log WebSocket clients.
+    maxQueueSize: 500,
+  },
 });

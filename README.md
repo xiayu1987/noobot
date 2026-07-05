@@ -113,6 +113,7 @@ Optional system deps:
 ## Config
 
 - Main config doc: [`CONFIGURATION.md`](./CONFIGURATION.md)
+- Session log WebSocket, retention, and debug switches are documented in [`CONFIGURATION.md`](./CONFIGURATION.md#2-environment-variables).
 - Contributing guide: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
 - Coding standard: [`CODING-STANDARD.md`](./CODING-STANDARD.md)
 - Backend docs: [English](./service/README.md) | [中文](./service/README.zh-CN.md)

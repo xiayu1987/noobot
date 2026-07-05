@@ -113,6 +113,7 @@ npm run -w client/noobot-chat build
 ## 配置说明
 
 - 核心配置文档：[`CONFIGURATION.zh-CN.md`](./CONFIGURATION.zh-CN.md)
+- Session 日志 WebSocket、保留时间和 debug 开关见 [`CONFIGURATION.zh-CN.md`](./CONFIGURATION.zh-CN.md#2环境变量)
 - 贡献指南：[`CONTRIBUTING.zh-CN.md`](./CONTRIBUTING.zh-CN.md)
 - 编码规范：[`CODING-STANDARD.md`](./CODING-STANDARD.md)
 - 后端说明：[中文](./service/README.zh-CN.md) | [English](./service/README.md)

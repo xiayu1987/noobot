@@ -112,6 +112,7 @@ export function createChatEngineSender({
   appendMessage,
   botScenario,
   chatWebSocketClient,
+  sessionLogWebSocketClient,
   classifyRealtimeLog,
   clearMissingInteractionPayloadTimer,
   clearPendingInteraction,
@@ -152,6 +153,7 @@ export function createChatEngineSender({
   processStore = null,
 }) {
   let resolvedProcessStore = processStore || null;
+  const logSessionEvent = (event = {}) => sessionLogWebSocketClient?.log?.(event);
   function getResolvedProcessStore() {
     if (resolvedProcessStore) return resolvedProcessStore;
     try {
@@ -176,8 +178,21 @@ export function createChatEngineSender({
     if (!hasTextToSend && uploadFiles.value.length === 0) return false;
 
     const turnScopeId = normalizeTrimmedString(options?.turnScopeId) || createTurnScopeId();
+    const sessionId = String(activeSession.value?.backendSessionId || activeSession.value?.id || activeSessionId?.value || "");
+    logSessionEvent({
+      category: "message",
+      event: "send.begin",
+      sessionId,
+      turnScopeId,
+      data: {
+        reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
+        allowDuringResend: options?.allowDuringResend === true,
+        hasText: hasTextToSend,
+        uploadCount: uploadFiles.value.length,
+      },
+    });
     logResendDebug("send.begin", {
-      sessionId: String(activeSession.value?.backendSessionId || activeSession.value?.id || activeSessionId?.value || ""),
+      sessionId,
       turnScopeId,
       reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
       allowDuringResend: options?.allowDuringResend === true,
@@ -190,7 +205,7 @@ export function createChatEngineSender({
     logResendDebug("send.clearStopRequested", { turnScopeId });
     applyRunStateEvent?.({
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
-      sessionId: String(activeSession.value?.backendSessionId || activeSession.value?.id || activeSessionId?.value || ""),
+      sessionId,
       turnScopeId,
       source: "send_flow",
     });
@@ -243,6 +258,17 @@ export function createChatEngineSender({
         turnScopeId,
         uploadHint: translate("chat.uploadHint"),
         reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
+      });
+      logSessionEvent({
+        category: "transport",
+        event: "stream.start",
+        sessionId,
+        turnScopeId,
+        data: {
+          requestedTextStreaming,
+          attachmentCount: attachments.length,
+          reuseExistingUserTurn: payload?.reuseExistingUserTurn === true,
+        },
       });
       logResendDebug("send.stream.before", {
         turnScopeId,
@@ -305,6 +331,19 @@ export function createChatEngineSender({
       };
 
       await chatWebSocketClient.stream(payload, ({ event, data }) => {
+        logSessionEvent({
+          category: event === StreamEventEnum.INTERACTION_REQUEST ? "interaction" : "transport",
+          event: `stream.${event || "event"}`,
+          sessionId: data?.sessionId || sessionId,
+          dialogProcessId: data?.dialogProcessId || normalizeTrimmedString(botMsg.dialogProcessId),
+          turnScopeId: data?.turnScopeId || turnScopeId,
+          data: {
+            streamEvent: event,
+            state: data?.state || "",
+            seq: data?.seq || 0,
+            hasContent: Boolean(data?.content || data?.delta || data?.message),
+          },
+        });
         logResendDebug("send.stream.event", {
           event,
           eventTurnScopeId: data?.turnScopeId,
@@ -427,6 +466,17 @@ export function createChatEngineSender({
         turnScopeId: finalDoneEventData?.turnScopeId || turnScopeId,
         botMessage: summarizeStateMachineMessage(botMsg),
       });
+      logSessionEvent({
+        category: "message",
+        event: "send.resolved",
+        sessionId: finalDoneEventData?.sessionId || sessionId,
+        dialogProcessId: finalDoneEventData?.dialogProcessId || "",
+        turnScopeId: finalDoneEventData?.turnScopeId || turnScopeId,
+        data: {
+          hasFinalDoneEventData: Boolean(finalDoneEventData),
+          hasFinalDoneDetailPromise: Boolean(finalDoneDetailPromise),
+        },
+      });
 
       if (finalDoneEventData) {
         await startFinalDoneSessionDetailOnce("stream_resolved");
@@ -519,6 +569,18 @@ export function createChatEngineSender({
         error: String(error?.message || error || ""),
         messages: summarizeDebugMessages(activeSession?.value?.messages),
       });
+      logSessionEvent({
+        category: "message",
+        level: "error",
+        event: "send.error",
+        sessionId,
+        turnScopeId,
+        message: String(error?.message || error || ""),
+        data: {
+          error: String(error?.message || error || ""),
+          hasStreamErrorEventData: Boolean(lastStreamErrorEventData),
+        },
+      });
       await finalizeDoneSessionDetail({
         activeSession,
         activeSessionId,
@@ -537,6 +599,13 @@ export function createChatEngineSender({
         canStop: canStop?.value,
         runState: runStateSnapshot?.value,
         messages: summarizeDebugMessages(activeSession?.value?.messages),
+      });
+      logSessionEvent({
+        category: "message",
+        event: "send.cleanup",
+        sessionId,
+        turnScopeId,
+        data: { sending: sending?.value, canStop: canStop?.value },
       });
       finalizeSendCleanup({
         chatWebSocketClient,

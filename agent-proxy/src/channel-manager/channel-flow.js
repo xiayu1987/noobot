@@ -44,10 +44,28 @@ resolveChannelFromSocketMessage(socket, payload = {}) {
 
 forwardToUpstream(channel, payload = {}) {
   if (!channel?.upstreamSocket || channel.upstreamSocket.readyState !== this.WebSocket.OPEN) {
+    this.logSessionEvent(channel, {
+      category: "transport",
+      level: "warn",
+      event: "agentProxy.upstream.forward.skipped",
+      data: { channelKey: channel?.key, action: payload?.action || "message", reason: "upstream_not_open" },
+    });
     return false;
   }
   try {
     channel.upstreamSocket.send(JSON.stringify(payload || {}));
+    this.logSessionEvent(channel, {
+      category: "transport",
+      event: "agentProxy.upstream.forward",
+      data: {
+        channelKey: channel.key,
+        action: payload?.action || "message",
+        sessionId: payload?.sessionId,
+        dialogProcessId: payload?.dialogProcessId,
+        turnScopeId: payload?.turnScopeId,
+        requestId: payload?.requestId,
+      },
+    });
     if (
       String(payload?.action || "").trim().toLowerCase() ===
       WS_ACTION.INTERACTION_RESPONSE
@@ -86,7 +104,13 @@ forwardToUpstream(channel, payload = {}) {
       }
     }
     return true;
-  } catch {
+  } catch (error) {
+    this.logSessionEvent(channel, {
+      category: "transport",
+      level: "warn",
+      event: "agentProxy.upstream.forward.error",
+      data: { channelKey: channel.key, action: payload?.action || "message", error: String(error?.message || error || "send failed") },
+    });
     return false;
   }
 }
@@ -137,6 +161,11 @@ startOrJoinChannel({ socket, payload, connectionApiKey, connectionLocale }) {
 
   this.attachSubscriber(channel, socket);
   this.syncSocketToChannelTail(channel, socket);
+  this.logSessionEvent(channel, {
+    category: "interaction",
+    event: shouldStartNewRun ? "agentProxy.channel.start" : "agentProxy.channel.join",
+    data: { channelKey: channel.key, socketId: socket?.__agentProxySocketId, keepExistingRun, sessionId, userId },
+  });
 
   if (keepExistingRun) return;
   if (!shouldStartNewRun) return;

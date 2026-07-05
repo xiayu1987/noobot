@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-const DEBUG_PREFIX = "[noobot-resend-debug]";
+let sessionLogSink = null;
+
+export function setResendDebugLogSink(sink = null) {
+  sessionLogSink = sink && typeof sink.log === "function" ? sink : null;
+}
 
 function isBrowserDebugEnabled() {
   try {
@@ -65,6 +69,13 @@ export function logResendDebug(phase, payload = {}) {
       at: new Date().toISOString(),
       ...payload,
     };
-    console.info(`${DEBUG_PREFIX} ${JSON.stringify(entry)}`);
+    sessionLogSink?.log?.({
+      category: "debug",
+      event: phase,
+      sessionId: payload?.sessionId || "",
+      dialogProcessId: payload?.dialogProcessId || "",
+      turnScopeId: payload?.turnScopeId || "",
+      data: entry,
+    });
   } catch {}
 }

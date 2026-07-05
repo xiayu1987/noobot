@@ -7,6 +7,11 @@ import { tSystem } from "noobot-i18n/agent/system-text";
 import { resolveDialogProcessIdFromContext } from "../context/session/dialog-process-id-resolver.js";
 import { logError } from "../tracking/console/logger.js";
 import {
+  SESSION_CHANNEL_CATEGORIES,
+  SESSION_CHANNELS,
+  writeSessionChannelEvent,
+} from "@noobot/telemetry/session-channel";
+import {
   CONNECTOR_TYPE,
   normalizeConnectorType,
 } from "../config/core/enums.js";
@@ -32,6 +37,33 @@ function collectNonSensitiveDefaults(connectionInfo = {}) {
     defaults[normalizedKey] = normalizedValue;
   }
   return defaults;
+}
+
+async function recordConnectorInteractionFailure({
+  runtime = {},
+  sessionId = "",
+  dialogProcessId = "",
+  event = "agent.connector.interaction.failed",
+  error = null,
+  data = {},
+} = {}) {
+  const normalizedSessionId = String(sessionId || "").trim();
+  if (!normalizedSessionId) return { ok: true, skipped: true };
+  return writeSessionChannelEvent({
+    source: "agent",
+    channel: SESSION_CHANNELS.DIRECT,
+    category: SESSION_CHANNEL_CATEGORIES.SYSTEM,
+    event,
+    userId: String(runtime?.userId || "").trim(),
+    sessionId: normalizedSessionId,
+    dialogProcessId: String(dialogProcessId || "").trim(),
+    data: {
+      ...(data && typeof data === "object" ? data : {}),
+      error: error?.message || String(error || ""),
+    },
+  }, {
+    workspaceRoot: runtime?.globalConfig?.workspaceRoot || "",
+  });
 }
 
 function resolveConnectToolName(connectorType = "") {
@@ -205,10 +237,22 @@ export class ConnectorEventListener {
         },
       });
     } catch (error) {
-      logError("[connector-event-listener] notifyConnectorConnected requestUserInteraction failed", {
-        connectorType: normalizedType,
-        connectorName: normalizedName,
-        error: error?.message || String(error),
+      await recordConnectorInteractionFailure({
+        runtime: this.runtime,
+        sessionId: this.sessionId,
+        dialogProcessId: this.dialogProcessId,
+        event: "agent.connector.notifyConnectorConnected.failed",
+        error,
+        data: {
+          connectorType: normalizedType,
+          connectorName: normalizedName,
+        },
+      }).catch(() => {
+        logError("[connector-event-listener] notifyConnectorConnected telemetry failed", {
+          connectorType: normalizedType,
+          connectorName: normalizedName,
+          error: error?.message || String(error),
+        });
       });
     }
   }
@@ -249,11 +293,24 @@ export class ConnectorEventListener {
         },
       });
     } catch (error) {
-      logError("[connector-event-listener] notifyReconnectRequired requestUserInteraction failed", {
-        connectorType: normalizedType,
-        connectorName: normalizedName,
-        reconnectToolName: normalizedReconnectToolName,
-        error: error?.message || String(error),
+      await recordConnectorInteractionFailure({
+        runtime: this.runtime,
+        sessionId: this.sessionId,
+        dialogProcessId: this.dialogProcessId,
+        event: "agent.connector.notifyReconnectRequired.failed",
+        error,
+        data: {
+          connectorType: normalizedType,
+          connectorName: normalizedName,
+          reconnectToolName: normalizedReconnectToolName,
+        },
+      }).catch(() => {
+        logError("[connector-event-listener] notifyReconnectRequired telemetry failed", {
+          connectorType: normalizedType,
+          connectorName: normalizedName,
+          reconnectToolName: normalizedReconnectToolName,
+          error: error?.message || String(error),
+        });
       });
     }
   }

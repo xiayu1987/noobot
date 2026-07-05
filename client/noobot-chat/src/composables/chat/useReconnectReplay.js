@@ -63,6 +63,7 @@ import {
 import { createReconnectReplayPublicApi } from "./reconnectReplay/publicApi";
 import { registerReconnectReplayLifecycleCleanup } from "./reconnectReplay/lifecycle";
 import { applySessionRunStateEvent, applySessionRunStateEvents } from "./sessionRunStateMachine";
+import { refreshFinalSessionDetail } from "./chatEngine/sessionFinalize";
 
 export function useReconnectReplay({
   sessions,
@@ -91,6 +92,7 @@ export function useReconnectReplay({
   scrollBottom,
   translate,
   onConversationState,
+  sessionLogWebSocketClient,
   notify = () => {},
   processStore,
 } = {}) {
@@ -254,8 +256,38 @@ export function useReconnectReplay({
       terminalDialogProcessIdSet,
       chatWebSocketClient,
       scheduleCacheExpiredSessionRefresh,
+      finalizeReplayCompletedSessionDetail,
       clearPendingInteraction,
       translate,
+    });
+  }
+
+  async function finalizeReplayCompletedSessionDetail({
+    sessionId = "",
+    dialogProcessId = "",
+    turnScopeId = "",
+    targetAssistantMessage = null,
+    stateData = {},
+  } = {}) {
+    if (typeof chatList?.fetchSessionDetail !== "function" || typeof chatList?.applySessionDetail !== "function") {
+      return false;
+    }
+    return refreshFinalSessionDetail({
+      activeSession,
+      activeSessionId,
+      botMessage: targetAssistantMessage,
+      finalDoneEventData: {
+        ...stateData,
+        sessionId,
+        dialogProcessId,
+        turnScopeId,
+      },
+      finalEventData: stateData,
+      fetchSessionDetail: chatList.fetchSessionDetail,
+      applySessionDetail: chatList.applySessionDetail,
+      applyRunStateEvent,
+      refreshSessionConnectorsAsync,
+      preserveCurrentMessages: true,
     });
   }
 
@@ -377,6 +409,21 @@ export function useReconnectReplay({
     });
   }
 
+  function logReconnectReplaySystemEvent(event, payload = {}) {
+    sessionLogWebSocketClient?.log?.({
+      category: "system",
+      event,
+      sessionId: payload?.sessionId || String(activeSession.value?.backendSessionId || activeSessionId.value || ""),
+      dialogProcessId: payload?.dialogProcessId || "",
+      turnScopeId: payload?.turnScopeId || "",
+      data: {
+        event,
+        at: new Date().toISOString(),
+        ...payload,
+      },
+    });
+  }
+
   async function applyReconnectMessagesToActiveSession(
     messages,
     dialogProcessId,
@@ -403,6 +450,10 @@ export function useReconnectReplay({
       markReconnectSequenceApplied,
       scrollBottom,
       processStore,
+      onHydrationError: (error) => logReconnectReplaySystemEvent("reconnectReplay.hydration.failed", {
+        dialogProcessId,
+        error: String(error?.message || error || ""),
+      }),
     });
   }
 

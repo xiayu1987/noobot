@@ -216,6 +216,6 @@ export const config = {
   upstreamHttpStripPrefix: normalizePathPrefix(
     envString("AGENT_PROXY_UPSTREAM_HTTP_STRIP_PREFIX", "upstreamHttpStripPrefix", "/api"),
   ),
-  wsPaths: ["/chat/ws", "/api/chat/ws", "/agent-proxy/ws", "/api/agent-proxy/ws"],
+  wsPaths: ["/chat/ws", "/api/chat/ws", "/agent-proxy/ws", "/api/agent-proxy/ws", "/logs/ws", "/api/logs/ws"],
   connectPaths: ["/internal/connect", "/api/internal/connect"],
 };

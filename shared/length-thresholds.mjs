@@ -194,6 +194,11 @@ export const LENGTH_THRESHOLDS = deepFreeze({
     jsonlMaxBufferBytes: LENGTH_TIERS.bytes.jsonlBuffer,
   },
 
+  sessionLog: {
+    // Max bytes accepted for one session-log WebSocket payload.
+    maxPayloadBytes: LENGTH_TIERS.bytes.connectorCommandFile,
+  },
+
   display: {
     // Context-independent execution log/UI brief text.
     executionLogBriefChars: LENGTH_TIERS.displayChars.executionLogBrief,

@@ -11,11 +11,25 @@ import { reconnectMethods } from "./channel-manager/reconnect.js";
 import { cleanupMethods } from "./channel-manager/cleanup.js";
 
 export class ChannelManager {
-  constructor(WebSocket) {
+  constructor(WebSocket, { sessionLogClient = null } = {}) {
     this.WebSocket = WebSocket;
+    this.sessionLogClient = sessionLogClient;
     this.channelStore = new Map();
     this.requestChannelMap = new Map();
     this.apiKeyIdentityStore = new Map();
+  }
+
+  logSessionEvent(channel, event = {}) {
+    if (!this.sessionLogClient || !channel) return false;
+    const sessionId = String(
+      event.sessionId || event.data?.sessionId || channel.startPayload?.sessionId || this._extractSessionIdFromChannelKey?.(channel.key) || "agent-proxy",
+    ).trim();
+    return this.sessionLogClient.log(channel.apiKey || channel.ownerApiKey || "", {
+      ...event,
+      sessionId,
+      dialogProcessId: event.dialogProcessId || event.data?.dialogProcessId || channel.startPayload?.dialogProcessId || "",
+      turnScopeId: event.turnScopeId || event.data?.turnScopeId || channel.startPayload?.turnScopeId || "",
+    });
   }
 }
 

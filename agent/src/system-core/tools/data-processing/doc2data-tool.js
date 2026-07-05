@@ -18,6 +18,11 @@ import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import { logError } from "../../tracking/console/logger.js";
 import { isAbortError } from "../../utils/error-utils.js";
+import {
+  SESSION_CHANNEL_CATEGORIES,
+  SESSION_CHANNELS,
+  writeSessionChannelEvent,
+} from "@noobot/telemetry/session-channel";
 import { TOOL_DATA_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { decodeLibreOfficeTextBuffer, parseDocumentToTextViaLibreOffice } from "./doc2data/libreoffice.js";
@@ -46,6 +51,39 @@ import {
 const MAX_BATCH_BYTES = LENGTH_THRESHOLDS.dataProcessing.batchBytes;
 
 export { decodeLibreOfficeTextBuffer };
+
+async function recordDoc2DataLibreOfficeFallback({
+  runtime = {},
+  inputFile = "",
+  error = null,
+} = {}) {
+  const userId = String(runtime?.userId || "").trim();
+  const sessionId = String(
+    runtime?.systemRuntime?.sessionId || runtime?.systemRuntime?.rootSessionId || "",
+  ).trim();
+  const systemRuntime = runtime?.systemRuntime || {};
+  const dialogProcessId = String(systemRuntime?.dialogProcessId || systemRuntime?.currentDialogProcessId || "").trim();
+  const turnScopeId = String(systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || "").trim();
+  if (!sessionId) return { ok: true, skipped: true };
+  return writeSessionChannelEvent({
+    source: "agent",
+    channel: SESSION_CHANNELS.DIRECT,
+    category: SESSION_CHANNEL_CATEGORIES.SYSTEM,
+    event: "agent.doc2data.libreofficeFallbackToVision",
+    userId,
+    sessionId,
+    ...(dialogProcessId ? { dialogProcessId } : {}),
+    ...(turnScopeId ? { turnScopeId } : {}),
+    data: {
+      input: String(inputFile || ""),
+      cause: error?.message || String(error || ""),
+      stack: error?.stack || "",
+      parseEngine: DOC2DATA_PARSE_ENGINE.LIBREOFFICE,
+    },
+  }, {
+    workspaceRoot: runtime?.globalConfig?.workspaceRoot || "",
+  });
+}
 
 export function createDoc2DataTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
@@ -157,13 +195,15 @@ export function createDoc2DataTool({ agentContext }) {
         } catch (libreOfficeError) {
           if (isAbortError(libreOfficeError)) throw libreOfficeError;
           effectiveParseEngine = DOC2DATA_PARSE_ENGINE.VISION;
-          logError("[doc_to_data][libreoffice_fallback_to_vision]", {
-            input: inputFile,
-            cause: libreOfficeError?.message || String(libreOfficeError || ""),
-            stack: libreOfficeError?.stack || "",
-            userId: String(runtime?.userId || "").trim(),
-            sessionId: String(runtime?.systemRuntime?.sessionId || runtime?.systemRuntime?.rootSessionId || "").trim(),
-            parseEngine: DOC2DATA_PARSE_ENGINE.LIBREOFFICE,
+          await recordDoc2DataLibreOfficeFallback({
+            runtime,
+            inputFile,
+            error: libreOfficeError,
+          }).catch((telemetryError) => {
+            logError("[doc_to_data][libreoffice_fallback_to_vision][telemetry_failed]", {
+              input: inputFile,
+              cause: telemetryError?.message || String(telemetryError || ""),
+            });
           });
         }
       }

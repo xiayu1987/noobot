@@ -66,6 +66,7 @@ export function useChatEngine({
   refreshSessionsAsync,
   onConversationState,
   chatWebSocketClient,
+  sessionLogWebSocketClient,
   ensureConnected,
   notify = () => {},
   processStore = null,
@@ -82,6 +83,18 @@ export function useChatEngine({
       turnScopeId: event?.turnScopeId || "",
       fromState: previousRunState,
     });
+    sessionLogWebSocketClient?.log?.({
+      category: "state",
+      event: "stateMachine.event",
+      sessionId: event?.sessionId || activeSessionId?.value || "",
+      dialogProcessId: event?.dialogProcessId || "",
+      turnScopeId: event?.turnScopeId || "",
+      data: {
+        eventType: event?.type || "",
+        source: event?.source || "",
+        fromState: previousRunState,
+      },
+    });
     const result = applySessionRunStateEvent({
       stateRef: runStateSnapshot,
       sending,
@@ -95,6 +108,21 @@ export function useChatEngine({
       sending: sending?.value === true,
       canStop: canStop?.value === true,
       messageCount: Array.isArray(activeSession?.value?.messages) ? activeSession.value.messages.length : 0,
+    });
+    sessionLogWebSocketClient?.log?.({
+      category: "state",
+      event: "stateMachine.transition",
+      sessionId: event?.sessionId || activeSessionId?.value || "",
+      dialogProcessId: event?.dialogProcessId || "",
+      turnScopeId: event?.turnScopeId || "",
+      data: {
+        eventType: event?.type || "",
+        fromState: previousRunState,
+        toState: runStateSnapshot?.value?.state || "",
+        sending: sending?.value === true,
+        canStop: canStop?.value === true,
+        messageCount: Array.isArray(activeSession?.value?.messages) ? activeSession.value.messages.length : 0,
+      },
     });
     applyRunStateMessageRuntimePatch({
       activeSession,
@@ -177,6 +205,7 @@ export function useChatEngine({
     appendMessage,
     botScenario,
     chatWebSocketClient,
+    sessionLogWebSocketClient,
     classifyRealtimeLog,
     clearMissingInteractionPayloadTimer,
     clearPendingInteraction,
@@ -204,6 +233,7 @@ export function useChatEngine({
     selectedPlugins,
     sending,
     canStop,
+    runStateSnapshot,
     applyRunStateEvent,
     serializeAttachments,
     streamOutput,

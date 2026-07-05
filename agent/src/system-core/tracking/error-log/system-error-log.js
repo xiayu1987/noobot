@@ -11,6 +11,11 @@ import {
   resolveLogFilePath,
   resolveTargetLogFiles,
 } from "../core/log-writer.js";
+import {
+  SESSION_CHANNEL_CATEGORIES,
+  SESSION_CHANNELS,
+  writeSessionChannelEvent,
+} from "@noobot/telemetry/session-channel";
 
 const SYSTEM_ERROR_LOG_FILE_NAME = "system-error.log";
 
@@ -45,17 +50,34 @@ export async function appendSystemErrorLog({
     }),
     extra: extra && typeof extra === "object" ? extra : {},
   };
-  const targetFiles = resolveTargetLogFiles({
-    basePath,
-    workspaceRoot,
-    fileName: SYSTEM_ERROR_LOG_FILE_NAME,
-  });
-  await appendRecordToFiles({
-    targetFiles,
-    record,
-  });
-  // 同时输出到服务端日志，便于线上排查
-  // eslint-disable-next-line no-console
-  console.error(`[system_error] ${record.ts} ${record.message}`, record);
+  if (sessionId) {
+    await writeSessionChannelEvent({
+      userId,
+      sessionId,
+      parentSessionId,
+      source,
+      category: SESSION_CHANNEL_CATEGORIES.SYSTEM,
+      channel: SESSION_CHANNELS.DIRECT,
+      event,
+      message,
+      data: {
+        message,
+        stack,
+        extra: record.extra,
+      },
+    }, {
+      workspaceRoot,
+    });
+  } else {
+    const targetFiles = resolveTargetLogFiles({
+      basePath,
+      workspaceRoot,
+      fileName: SYSTEM_ERROR_LOG_FILE_NAME,
+    });
+    await appendRecordToFiles({
+      targetFiles,
+      record,
+    });
+  }
   return record;
 }

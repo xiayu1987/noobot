@@ -17,11 +17,73 @@ import {
 } from "#agent/config";
 import { logError } from "#agent/tracking";
 import { HTTP_STATUS } from "#agent/constants";
+import {
+  SESSION_CHANNEL_CATEGORIES,
+  SESSION_CHANNELS,
+  writeSessionChannelEvent,
+} from "@noobot/telemetry/session-channel";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const DEFAULT_RUN_TIMEOUT_MS = BUILTIN_THRESHOLDS.runTimeoutMs;
 const MIN_RUN_TIMEOUT_MS = TIME_THRESHOLDS.agent.minRunTimeoutMs;
 const MAX_RUN_TIMEOUT_MS = TIME_THRESHOLDS.agent.maxRunTimeoutMs;
+
+export function recordServiceWebSocketSendFailure({
+  sessionLogConfig,
+  eventName = "",
+  sessionId = "",
+  userId = "",
+  dialogProcessId = "",
+  turnScopeId = "",
+  error = null,
+} = {}) {
+  const normalizedSessionId = String(sessionId || "").trim();
+  if (!normalizedSessionId) return Promise.resolve({ ok: true, skipped: true });
+  return writeSessionChannelEvent({
+    source: "service",
+    channel: SESSION_CHANNELS.DIRECT,
+    category: SESSION_CHANNEL_CATEGORIES.SYSTEM,
+    event: "service.websocket.sendEvent.failed",
+    sessionId: normalizedSessionId,
+    userId: String(userId || "").trim(),
+    dialogProcessId: String(dialogProcessId || "").trim(),
+    turnScopeId: String(turnScopeId || "").trim(),
+    data: {
+      eventName: String(eventName || ""),
+      error: error?.message || String(error || ""),
+    },
+  }, sessionLogConfig);
+}
+
+export function recordServiceWebSocketRuntimeError({
+  sessionLogConfig,
+  event = "service.websocket.runtime.failed",
+  userId = "",
+  sessionId = "",
+  parentSessionId = "",
+  dialogProcessId = "",
+  turnScopeId = "",
+  error = null,
+  data = {},
+} = {}) {
+  const normalizedSessionId = String(sessionId || "").trim();
+  if (!normalizedSessionId) return Promise.resolve({ ok: true, skipped: true });
+  return writeSessionChannelEvent({
+    source: "service",
+    channel: SESSION_CHANNELS.DIRECT,
+    category: SESSION_CHANNEL_CATEGORIES.SYSTEM,
+    event,
+    userId: String(userId || "").trim(),
+    sessionId: normalizedSessionId,
+    parentSessionId: String(parentSessionId || "").trim(),
+    dialogProcessId: String(dialogProcessId || "").trim(),
+    turnScopeId: String(turnScopeId || "").trim(),
+    data: {
+      ...(data && typeof data === "object" ? data : {}),
+      error: error?.message || String(error || ""),
+    },
+  }, sessionLogConfig);
+}
 
 function resolveRunTimeoutMs(rawValue) {
   return normalizeTimeMs(rawValue, {
@@ -163,6 +225,7 @@ export function registerChatWebSocketServer(
     normalizeLocale,
     defaultLocale,
     translateText,
+    sessionLogConfig,
   } = {},
 ) {
   const resolveBot = () => {
@@ -194,10 +257,7 @@ export function registerChatWebSocketServer(
       return;
     }
 
-    if (requestPathname !== "/chat/ws") {
-      socket.destroy();
-      return;
-    }
+    if (requestPathname !== "/chat/ws") return;
 
     const authInfo = resolveAuthByApiKey(request);
     if (!authInfo) {
@@ -244,11 +304,14 @@ export function registerChatWebSocketServer(
       try {
         webSocket.send(JSON.stringify({ event: eventName, data: enrichedData }));
       } catch (error) {
-        logError("[ws][chat-websocket-server] websocket send event failed", {
+        void recordServiceWebSocketSendFailure({
+          sessionLogConfig,
           eventName: String(eventName || ""),
+          userId: currentRunMeta?.userId || "",
           dialogProcessId: enrichedData.dialogProcessId,
           sessionId: enrichedData.sessionId,
-          error: error?.message || String(error),
+          turnScopeId: enrichedData.turnScopeId,
+          error,
         });
       }
     };
@@ -423,12 +486,20 @@ export function registerChatWebSocketServer(
           turnScopeId: String(turnScopeId || config?.turnScopeId || "").trim(),
         };
         if (isPluginDebugEnabled()) {
-          console.warn("[noobot:plugin-debug] websocket run config", {
+          await writeSessionChannelEvent({
+            source: "service",
+            channel: SESSION_CHANNELS.DIRECT,
+            category: "debug",
+            event: "service.websocket.pluginDebug.runConfig",
             userId: String(userId || "").trim(),
             sessionId: String(sessionId || "").trim(),
-            payloadSelectedPlugins: config?.selectedPlugins,
-            normalizedSelectedPlugins: normalizedRunConfig?.selectedPlugins,
-            normalizedPlugins: summarizePluginConfig(normalizedRunConfig?.plugins),
+            dialogProcessId: "",
+            turnScopeId: String(normalizedRunConfig?.turnScopeId || currentTurnScopeId || "").trim(),
+            data: {
+              payloadSelectedPlugins: config?.selectedPlugins,
+              normalizedSelectedPlugins: normalizedRunConfig?.selectedPlugins,
+              normalizedPlugins: summarizePluginConfig(normalizedRunConfig?.plugins),
+            },
           });
         }
         const activeBot = resolveBot();
@@ -586,10 +657,15 @@ export function registerChatWebSocketServer(
               partialAssistant: stopPayload?.partialAssistant || {},
             });
           } catch (persistError) {
-            logError("[ws][chat-websocket-server] persist stopped assistant message failed", {
+            void recordServiceWebSocketRuntimeError({
+              sessionLogConfig,
+              event: "service.websocket.persistStoppedAssistantMessage.failed",
               userId: currentRunMeta?.userId || "",
               sessionId: currentRunMeta?.sessionId || "",
-              error: persistError?.message || String(persistError),
+              parentSessionId: currentRunMeta?.parentSessionId || "",
+              dialogProcessId: currentRunMeta?.dialogProcessId || "",
+              turnScopeId: currentRunMeta?.turnScopeId || currentTurnScopeId || "",
+              error: persistError,
             });
           }
           sendEvent("stopped", {
@@ -644,10 +720,15 @@ export function registerChatWebSocketServer(
                 partialAssistant: stopPayload?.partialAssistant || {},
               });
             } catch (persistError) {
-              logError("[ws][chat-websocket-server] persist stopped assistant message failed", {
+              void recordServiceWebSocketRuntimeError({
+                sessionLogConfig,
+                event: "service.websocket.persistStoppedAssistantMessage.failed",
                 userId: currentRunMeta?.userId || "",
                 sessionId: currentRunMeta?.sessionId || "",
-                error: persistError?.message || String(persistError),
+                parentSessionId: currentRunMeta?.parentSessionId || "",
+                dialogProcessId: currentRunMeta?.dialogProcessId || "",
+                turnScopeId: currentRunMeta?.turnScopeId || currentTurnScopeId || "",
+                error: persistError,
               });
             }
             sendEvent("stopped", {
@@ -664,12 +745,15 @@ export function registerChatWebSocketServer(
           }
           return;
         }
-        logError("[ws][chat-websocket-server] websocket run failed", {
+        void recordServiceWebSocketRuntimeError({
+          sessionLogConfig,
+          event: "service.websocket.run.failed",
           userId: currentRunMeta?.userId || "",
           sessionId: currentRunMeta?.sessionId || "",
           parentSessionId: currentRunMeta?.parentSessionId || "",
           dialogProcessId: currentRunMeta?.dialogProcessId || "",
-          error: error?.message || String(error),
+          turnScopeId: currentRunMeta?.turnScopeId || currentTurnScopeId || "",
+          error,
         });
         sendEvent("error", {
           error: error.message || translateText("ws.unknownError", currentLocale),

@@ -83,6 +83,20 @@ pushChannelEvent(channel, eventName = "", data = {}) {
   if (channel.eventLog.length > config.maxChannelEvents) {
     channel.eventLog = channel.eventLog.slice(-config.maxChannelEvents);
   }
+  this.logSessionEvent(channel, {
+    category: "message",
+    event: "agentProxy.channel.event",
+    data: {
+      channelKey: channel.key,
+      event: envelope.event,
+      sequence: envelope.sequence,
+      sessionId: envelope.data?.sessionId,
+      dialogProcessId: envelope.data?.dialogProcessId,
+      turnScopeId: envelope.data?.turnScopeId,
+      requestId: envelope.data?.requestId,
+      hasContent: Boolean(envelope.data?.content || envelope.data?.text),
+    },
+  });
   if (String(envelope.event || "") === CHANNEL_EVENT.INTERACTION_REQUEST) {
     const requestId = String(envelope?.data?.requestId || "").trim();
     if (requestId) {
@@ -140,6 +154,20 @@ updateConversationState(
     requestId: String(requestId || "").trim(),
   };
   channel.conversationStateByDialogProcessId.set(stateKey, stateItem);
+  this.logSessionEvent(channel, {
+    category: "state",
+    event: "agentProxy.conversation.state",
+    sessionId: stateItem.sessionId,
+    dialogProcessId: stateItem.dialogProcessId,
+    turnScopeId: stateItem.turnScopeId,
+    data: {
+      channelKey: channel.key,
+      state: stateItem.state,
+      sourceEvent: stateItem.sourceEvent,
+      seq: stateItem.seq,
+      requestId: stateItem.requestId,
+    },
+  });
   if (broadcast) {
     this.broadcastChannelState(channel, stateItem);
   }

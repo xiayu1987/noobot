@@ -8,6 +8,11 @@ import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { z } from "zod";
 import { logError } from "../../../tracking/console/logger.js";
 import {
+  SESSION_CHANNEL_CATEGORIES,
+  SESSION_CHANNELS,
+  writeSessionChannelEvent,
+} from "@noobot/telemetry/session-channel";
+import {
   createChatModel,
   createChatModelByName,
   resolveDefaultModelSpec,
@@ -18,6 +23,31 @@ import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { tTool } from "../../core/tool-i18n.js";
 import { ERROR_CODE } from "../../../error/constants.js";
 import { TOOL_NAME } from "../../constants/index.js";
+
+async function recordPlanJsonParseFallback({ runtime, event, error, hasMarkdownBlock }) {
+  const userId = String(runtime?.userId || "").trim();
+  const systemRuntime = runtime?.systemRuntime || {};
+  const sessionId = String(systemRuntime?.sessionId || systemRuntime?.rootSessionId || "").trim();
+  if (!userId || !sessionId) return { ok: true, skipped: true };
+  return writeSessionChannelEvent(
+    {
+      source: "agent",
+      channel: SESSION_CHANNELS.DIRECT,
+      category: SESSION_CHANNEL_CATEGORIES.SYSTEM,
+      event,
+      userId,
+      sessionId,
+      dialogProcessId: systemRuntime?.dialogProcessId || systemRuntime?.currentDialogProcessId || undefined,
+      turnScopeId: systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || undefined,
+      data: {
+        toolName: TOOL_NAME.PLAN_MULTI_TASK_COLLABORATION,
+        error: error?.message || String(error),
+        hasMarkdownBlock: Boolean(hasMarkdownBlock),
+      },
+    },
+    { workspaceRoot: runtime?.globalConfig?.workspaceRoot },
+  );
+}
 
 export function createPlanMultiTaskCollaborationTool({
   runtime,
@@ -89,17 +119,43 @@ export function createPlanMultiTaskCollaborationTool({
       try {
         parsedPlan = JSON.parse(content);
       } catch (error) {
-        logError("[agent-collab-tool] JSON.parse plan response failed, trying markdown extraction", {
-          error: error?.message || String(error),
-        });
         const match = String(content).match(/```json\s*([\s\S]*?)\s*```/i);
+        const telemetryResult = await recordPlanJsonParseFallback({
+          runtime,
+          event: "agent.collab.planJsonParse.fallbackToMarkdown",
+          error,
+          hasMarkdownBlock: Boolean(match?.[1]),
+        }).catch((telemetryError) => {
+          logError("[agent-collab-tool] JSON.parse plan response telemetry failed", {
+            error: telemetryError?.message || String(telemetryError),
+          });
+          return { ok: false };
+        });
+        if (telemetryResult?.skipped) {
+          logError("[agent-collab-tool] JSON.parse plan response failed, trying markdown extraction", {
+            error: error?.message || String(error),
+          });
+        }
         if (match?.[1]) {
           try {
             parsedPlan = JSON.parse(match[1]);
           } catch (error) {
-            logError("[agent-collab-tool] JSON.parse markdown-extracted plan also failed", {
-              error: error?.message || String(error),
+            const telemetryResult = await recordPlanJsonParseFallback({
+              runtime,
+              event: "agent.collab.planMarkdownJsonParse.failed",
+              error,
+              hasMarkdownBlock: true,
+            }).catch((telemetryError) => {
+              logError("[agent-collab-tool] JSON.parse markdown-extracted plan telemetry failed", {
+                error: telemetryError?.message || String(telemetryError),
+              });
+              return { ok: false };
             });
+            if (telemetryResult?.skipped) {
+              logError("[agent-collab-tool] JSON.parse markdown-extracted plan also failed", {
+                error: error?.message || String(error),
+              });
+            }
           }
         }
       }

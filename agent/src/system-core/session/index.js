@@ -86,6 +86,7 @@ export function createSessionServices(globalConfig = {}, { now = null } = {}) {
   const executionRepository = new ExecutionLogRepository({
     executionRepository: fileSystemExecutionRepository,
     now: nowFn,
+    workspaceRoot: globalConfig?.workspaceRoot || "",
   });
 
   const sessionTreeService = new SessionTreeService({
