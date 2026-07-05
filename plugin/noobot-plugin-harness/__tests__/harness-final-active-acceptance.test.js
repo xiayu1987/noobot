@@ -85,11 +85,14 @@ test("final acceptance separate model receives revised plan, all phase checklist
       String(item.content || "").includes("harness-phase-acceptance-reports") ? index : -1)
     .filter((index) => index >= 0);
   const requestIndex = messages.findIndex((item = {}) => String(item.content || "").includes("harness-acceptance-semantic-validation"));
-  assert.equal(messages[planIndex].role, "system");
+  const protocolIndex = messages.findIndex((item = {}) => String(item.content || "").includes("acceptance_patch_v1"));
+  assert.equal(messages[protocolIndex].role, "system");
+  assert.equal(messages[planIndex].role, "user");
   assert.equal(phaseIndexes.length >= 2, true);
-  assert.equal(messages[phaseIndexes[0]].role, "system");
-  assert.equal(messages[phaseIndexes[1]].role, "system");
-  assert.equal(messages[requestIndex].role, "system");
+  assert.equal(messages[phaseIndexes[0]].role, "user");
+  assert.equal(messages[phaseIndexes[1]].role, "user");
+  assert.equal(messages[requestIndex].role, "user");
+  assert.doesNotMatch(String(messages[requestIndex].content || ""), /acceptance_patch_v1/);
   assert.equal(
     planIndex > -1 &&
       phaseIndexes[0] > planIndex &&
@@ -99,9 +102,9 @@ test("final acceptance separate model receives revised plan, all phase checklist
   );
   assert.match(String(messages[phaseIndexes[0]].content), /阶段验收清单一/);
   assert.match(String(messages[phaseIndexes[1]].content), /阶段验收清单二/);
-  assert.match(String(messages[requestIndex].content), /acceptance_patch_v1/);
-  assert.match(String(messages[requestIndex].content), /ADD A\[验收ID\] plan=计划ID status=\[pass\|warn\|fail\]/);
-  assert.match(String(messages[requestIndex].content), /risk=\[low\|medium\|high\]/);
+  assert.match(String(messages[protocolIndex].content), /acceptance_patch_v1/);
+  assert.match(String(messages[protocolIndex].content), /ADD A\[验收ID\] plan=计划ID status=\[pass\|warn\|fail\]/);
+  assert.match(String(messages[protocolIndex].content), /risk=\[low\|medium\|high\]/);
 });
 
 
@@ -208,5 +211,3 @@ test("harness active request_task_acceptance falls back to closure meta when con
   assert.equal(result.phaseAcceptanceTriggered, true);
   assert.equal(result.report.semanticValidation.status, "pass");
 });
-
-

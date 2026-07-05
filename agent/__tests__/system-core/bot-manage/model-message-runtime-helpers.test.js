@@ -87,6 +87,51 @@ test("ModelMessageRuntimeHelpers resolves non-main history from agent payload bl
   );
 });
 
+test("ModelMessageRuntimeHelpers does not clip non-main payload blocks even when legacy clip option is enabled", () => {
+  const helpers = new ModelMessageRuntimeHelpers();
+  const resolver = helpers.createResolveModelMessages({
+    agentPluginOptions: {
+      clipNonMainModelContextMessages: true,
+      contextWindowRecentMessageLimit: 20,
+    },
+  });
+
+  const history = Array.from({ length: 22 }, (_, index) => ({
+    role: index % 2 === 0 ? "user" : "assistant",
+    content: `history-${index + 1}`,
+    dialogProcessId: "dlg-history",
+  }));
+  const incremental = Array.from({ length: 4 }, (_, index) => ({
+    role: index % 2 === 0 ? "user" : "assistant",
+    content: `incremental-${index + 1}`,
+    dialogProcessId: "dlg-current",
+  }));
+
+  const resolved = resolver({
+    purpose: "planning",
+    ctx: {
+      agentContext: {
+        payload: {
+          messages: {
+            system: [{ role: "system", content: "sys" }],
+            history,
+            incremental,
+          },
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(
+    resolved.map((item = {}) => item.content),
+    [
+      "sys",
+      ...history.map((item) => item.content),
+      ...incremental.map((item) => item.content),
+    ],
+  );
+});
+
 test("ModelMessageRuntimeHelpers does not clip non-main model context by default", () => {
   const helpers = new ModelMessageRuntimeHelpers();
   const resolver = helpers.createResolveModelMessages({
@@ -114,7 +159,7 @@ test("ModelMessageRuntimeHelpers does not clip non-main model context by default
   );
 });
 
-test("ModelMessageRuntimeHelpers clips non-main model context only when explicitly enabled", () => {
+test("ModelMessageRuntimeHelpers never clips non-main model context in injected resolver", () => {
   const helpers = new ModelMessageRuntimeHelpers();
   const resolver = helpers.createResolveModelMessages({
     agentPluginOptions: {
@@ -140,7 +185,7 @@ test("ModelMessageRuntimeHelpers clips non-main model context only when explicit
 
   assert.deepEqual(
     resolved.map((item = {}) => item.content),
-    Array.from({ length: 20 }, (_, index) => `m${index + 3}`),
+    Array.from({ length: 22 }, (_, index) => `m${index + 1}`),
   );
 });
 

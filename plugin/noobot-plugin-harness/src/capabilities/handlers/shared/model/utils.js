@@ -59,23 +59,12 @@ export function resolveCapabilityModelName(meta = {}, { purpose = "", domain = "
   return "";
 }
 
-function isMessageSummarized(message = {}) {
-  return message?.summarized === true ||
-    message?.lc_kwargs?.summarized === true ||
-    message?.additional_kwargs?.summarized === true ||
-    message?.lc_kwargs?.additional_kwargs?.summarized === true;
-}
-
-function filterSummarizedMessages(messages = []) {
-  return (Array.isArray(messages) ? messages : []).filter((message = {}) => !isMessageSummarized(message));
-}
-
 export function resolveCapabilityModelMessages(
   meta = {},
   { ctx = {}, purpose = "", messages = [] } = {},
 ) {
   const hasExplicitMessages = Array.isArray(messages) && messages.length > 0;
-  const sourceMessages = hasExplicitMessages ? filterSummarizedMessages(messages) : [];
+  const sourceMessages = hasExplicitMessages ? messages : [];
   const resolver = meta?.harness?.resolveModelMessages;
   if (typeof resolver === "function") {
     try {
@@ -84,7 +73,7 @@ export function resolveCapabilityModelMessages(
         purpose: String(purpose || "").trim(),
         messages: hasExplicitMessages ? sourceMessages : [],
       });
-      if (Array.isArray(resolved)) return filterSummarizedMessages(resolved);
+      if (Array.isArray(resolved)) return resolved;
     } catch {
       return sourceMessages;
     }

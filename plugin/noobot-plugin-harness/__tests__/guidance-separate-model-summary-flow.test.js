@@ -98,18 +98,18 @@ test("separate_model summary request includes previous summary after complete pl
   await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
 
   const checklistIndex = capturedMessages.findIndex((item = {}) =>
-    String(item?.content || "").includes("当前完整计划"),
+    String(item?.content || "").startsWith("<!-- harness-plan-checklist-context -->"),
   );
   const previousSummaryIndex = capturedMessages.findIndex((item = {}) =>
-    String(item?.content || "").includes("上一轮详细证据"),
+    String(item?.content || "").startsWith("<!-- harness-previous-summary-context -->"),
   );
   assert.equal(checklistIndex >= 0, true);
   assert.equal(previousSummaryIndex > checklistIndex, true);
-  assert.equal(capturedMessages[checklistIndex]?.role, "system");
-  assert.equal(capturedMessages[previousSummaryIndex]?.role, "system");
+  assert.equal(capturedMessages[checklistIndex]?.role, "user");
+  assert.equal(capturedMessages[previousSummaryIndex]?.role, "user");
   assert.equal(previousSummaryIndex, checklistIndex + 1);
   const previousSummaryMessages = capturedMessages.filter((item = {}) =>
-    String(item?.content || "").includes("harness-previous-summary-context"),
+    String(item?.content || "").startsWith("<!-- harness-previous-summary-context -->"),
   );
   assert.equal(previousSummaryMessages.length, 1);
   assert.equal(
@@ -171,15 +171,14 @@ test("separate_model summary request extracts previous summary relay into standa
   await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
 
   const checklistIndex = capturedMessages.findIndex((item = {}) =>
-    String(item?.content || "").includes("当前完整计划"),
+    String(item?.content || "").startsWith("<!-- harness-plan-checklist-context -->"),
   );
   const previousSummaryIndex = capturedMessages.findIndex((item = {}) =>
-    String(item?.content || "").includes("仅存在于历史 relay 中的上一轮详细证据") &&
-      String(item?.content || "").includes("上一次小结"),
+    String(item?.content || "").startsWith("<!-- harness-previous-summary-context -->"),
   );
   assert.equal(checklistIndex >= 0, true);
   assert.equal(previousSummaryIndex, checklistIndex + 1);
-  assert.equal(capturedMessages[previousSummaryIndex]?.role, "system");
+  assert.equal(capturedMessages[previousSummaryIndex]?.role, "user");
   assert.equal(
     String(capturedMessages[previousSummaryIndex]?.content || "").includes("[SUMMARY_DETAIL]"),
     true,
@@ -220,4 +219,3 @@ test("separate_model summary no longer auto-triggers revision", async () => {
   assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
   assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
 });
-

@@ -180,15 +180,14 @@ export async function runPlanUpdateAfterSummary(
     return changed;
   }
   const revisionTask = buildPlanningRevisionPrompt(locale, bucket, state);
-  const revisionBaseMessages = [
-    ...modelMessages,
-    ...buildPlanChecklistContextMessages({
-      locale,
-      planText: bucket?.planText || "",
-      bucket,
-      ctx,
-    }),
-  ];
+  const revisionContextMessages = buildPlanChecklistContextMessages({
+    locale,
+    planText: bucket?.planText || "",
+    bucket,
+    ctx,
+  })
+    .map((item = {}) => String(item?.content || "").trim())
+    .filter(Boolean);
   const revisionWorkflowPolicyPrompt = buildScenarioPolicyPromptText(locale, {
     programmingMode,
     textMode,
@@ -196,7 +195,8 @@ export async function runPlanUpdateAfterSummary(
   });
   const revisionMessagesFinal = buildCapabilityProtocolModelMessages({
     locale,
-    agentMessages: revisionBaseMessages,
+    agentMessages: modelMessages,
+    contextMessages: revisionContextMessages,
     protocolPrompt: revisionTask,
     workflowPolicyPrompt: revisionWorkflowPolicyPrompt,
     responsibilityPrompt: buildWorkflowResponsibilityConstraintUserPrompt(locale, "revision", {
@@ -401,20 +401,19 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     bucket,
     ctx,
   });
-  const modelMessagesWithChecklist =
+  const workflowContextMessages =
     purpose === "summary"
       ? [
-          ...modelMessages,
           ...planChecklistContextMessages,
           ...buildPreviousSummaryContextMessages({
             locale,
             previousSummaryContent: resolvePreviousSummaryContextText(ctx),
           }),
         ]
-      : [
-          ...modelMessages,
-          ...planChecklistContextMessages,
-        ];
+      : planChecklistContextMessages;
+  const workflowContextContents = workflowContextMessages
+    .map((item = {}) => String(item?.content || "").trim())
+    .filter(Boolean);
   const workflowPolicyPrompt = buildScenarioPolicyPromptText(locale, {
     programmingMode,
     textMode,
@@ -432,15 +431,16 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
   const invokerMessages = workflowPurpose === "analysis"
     ? buildCapabilityModelMessages({
         locale,
-        agentMessages: modelMessagesWithChecklist,
+        agentMessages: modelMessages,
         task: prompt,
         taskRole: "user",
-        postTaskMessages: [responsibilityPrompt],
+        postTaskMessages: [...workflowContextContents, responsibilityPrompt],
         postTaskRole: "user",
       })
     : buildCapabilityProtocolModelMessages({
         locale,
-        agentMessages: modelMessagesWithChecklist,
+        agentMessages: modelMessages,
+        contextMessages: workflowContextContents,
         protocolPrompt: prompt,
         workflowPolicyPrompt,
         responsibilityPrompt,

@@ -101,15 +101,14 @@ export async function runPlanningRefinementBySeparateModel(
         ctx,
         purpose: "planning_refinement",
       });
-  const agentMessages = [
-    ...agentMessagesBase,
-    ...buildPlanChecklistContextMessages({
-      locale,
-      planText: bucket?.planText || "",
-      bucket,
-      ctx,
-    }),
-  ];
+  const refinementContextMessages = buildPlanChecklistContextMessages({
+    locale,
+    planText: bucket?.planText || "",
+    bucket,
+    ctx,
+  })
+    .map((item = {}) => String(item?.content || "").trim())
+    .filter(Boolean);
   const workflowPolicyPrompt = buildScenarioPolicyPromptText(locale, {
     programmingMode,
     textMode,
@@ -117,7 +116,8 @@ export async function runPlanningRefinementBySeparateModel(
   });
   const refinementMessages = buildCapabilityProtocolModelMessages({
     locale,
-    agentMessages,
+    agentMessages: agentMessagesBase,
+    contextMessages: refinementContextMessages,
     protocolPrompt: refinementTask,
     workflowPolicyPrompt,
     responsibilityPrompt: buildWorkflowResponsibilityConstraintUserPrompt(locale, "refinement", {

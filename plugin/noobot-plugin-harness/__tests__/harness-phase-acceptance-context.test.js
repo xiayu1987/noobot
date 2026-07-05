@@ -61,21 +61,25 @@ test("phase acceptance injects context, revised plan checklist, then phase reque
   const planContextIndex = ctx.messages.findIndex((item = {}) =>
     /harness-acceptance-main-plan/.test(String(item?.content || "")),
   );
+  const protocolIndex = ctx.messages.findIndex((item = {}) =>
+    /acceptance_patch_v1/.test(String(item?.content || "")),
+  );
   const requestIndex = ctx.messages.findIndex((item = {}) =>
     /harness-phase-acceptance-request/.test(String(item?.content || "")),
   );
   const responsibilityIndex = ctx.messages.findIndex((item = {}) =>
     /请根据上下文进行「阶段验收」，按文本协议返回（如果有）。/.test(String(item?.content || "")),
   );
-  assert.equal(ctx.messages[planContextIndex].role, "system");
+  assert.equal(ctx.messages[protocolIndex].role, "system");
+  assert.equal(ctx.messages[planContextIndex].role, "user");
   assert.match(String(ctx.messages[planContextIndex].content), /计划清单上下文|Plan checklist context/);
   assert.match(String(ctx.messages[planContextIndex].content), /核心实现/);
   assert.equal(ctx.messages[planContextIndex].injectedMessage, true);
   assert.equal(ctx.messages[planContextIndex].injectedBy, "harness-plugin");
   assert.equal(ctx.messages[requestIndex].role, "user");
-  assert.match(String(ctx.messages[requestIndex].content), /acceptance_patch_v1/);
-  assert.match(String(ctx.messages[requestIndex].content), /ADD A\[验收ID\] plan=计划ID status=\[pass\|warn\|fail\]/);
-  assert.match(String(ctx.messages[requestIndex].content), /evidence=\[简短证据\]/);
+  assert.doesNotMatch(String(ctx.messages[requestIndex].content), /acceptance_patch_v1/);
+  assert.match(String(ctx.messages[protocolIndex].content), /ADD A\[验收ID\] plan=计划ID status=\[pass\|warn\|fail\]/);
+  assert.match(String(ctx.messages[protocolIndex].content), /evidence=\[简短证据\]/);
   assert.equal(ctx.messages[requestIndex].injectedMessage, true);
   assert.equal(ctx.messages[requestIndex].injectedBy, "harness-plugin");
   assert.equal(
@@ -160,14 +164,14 @@ test("phase acceptance separate model receives context, summaries, revised plan,
     .filter((index) => index >= 0);
   const requestIndex = messages.findIndex((item = {}) => String(item.content || "").includes("harness-phase-acceptance-request"));
   assert.equal(summaryIndexes.length, 1);
-  assert.equal(messages[summaryIndexes[0]].role, "system");
+  assert.equal(messages[summaryIndexes[0]].role, "user");
   assert.match(String(messages[summaryIndexes[0]].content || ""), /最新小结概要/);
   assert.doesNotMatch(String(messages[summaryIndexes[0]].content || ""), /旧小结/);
   assert.match(String(messages[summaryIndexes[0]].content || ""), /\[SUMMARY_DETAIL\]/);
   assert.match(String(messages[summaryIndexes[0]].content || ""), /详细内容不应作为小结清单/);
-  assert.equal(messages[planIndex].role, "system");
-  assert.equal(messages[phaseIndexes[0]].role, "system");
-  assert.equal(messages[requestIndex].role, "system");
+  assert.equal(messages[planIndex].role, "user");
+  assert.equal(messages[phaseIndexes[0]].role, "user");
+  assert.equal(messages[requestIndex].role, "user");
   assert.equal(
     summaryIndexes[0] >= 0 &&
       planIndex > summaryIndexes[0] &&
@@ -294,20 +298,20 @@ test("model-context rules 2: phase acceptance separate model uses six ordered co
   assert.equal(messages[historyAssistantIndex]?.role, "assistant");
   assert.equal(messages[toolCallSemanticIndex]?.role, "user");
   assert.equal(messages[toolResultIndex]?.role, "assistant");
-  assert.equal(messages[summaryIndex]?.role, "system");
-  assert.equal(messages[planIndex]?.role, "system");
-  assert.equal(messages[phaseReportIndex]?.role, "system");
-  assert.equal(messages[requestIndex]?.role, "system");
+  assert.equal(messages[summaryIndex]?.role, "user");
+  assert.equal(messages[planIndex]?.role, "user");
+  assert.equal(messages[phaseReportIndex]?.role, "user");
+  assert.equal(messages[requestIndex]?.role, "user");
   assert.equal(messages[responsibilityIndex]?.role, "user");
-  assert.equal(agentSystemIndex < summaryIndex, true);
-  assert.equal(summaryIndex < planIndex, true);
-  assert.equal(planIndex < phaseReportIndex, true);
-  assert.equal(phaseReportIndex < requestIndex, true);
-  assert.equal(requestIndex < historyUserIndex, true);
+  assert.equal(agentSystemIndex < historyUserIndex, true);
   assert.equal(historyUserIndex < historyAssistantIndex, true);
   assert.equal(historyAssistantIndex < toolCallSemanticIndex, true);
   assert.equal(toolCallSemanticIndex < toolResultIndex, true);
-  assert.equal(toolResultIndex < responsibilityIndex, true);
+  assert.equal(toolResultIndex < summaryIndex, true);
+  assert.equal(summaryIndex < planIndex, true);
+  assert.equal(planIndex < phaseReportIndex, true);
+  assert.equal(phaseReportIndex < requestIndex, true);
+  assert.equal(requestIndex < responsibilityIndex, true);
   assert.match(String(messages[summaryIndex]?.content || ""), /最后一次完整小结：用于阶段验收/);
   assert.match(String(messages[phaseReportIndex]?.content || ""), /上一阶段验收：warn/);
 });
@@ -480,5 +484,3 @@ test("phase acceptance separate model uses messageBlocks incremental when ctx.me
   assert.match(joined, /current-incremental-result/);
   assert.doesNotMatch(joined, /history-only-visible-in-ctx\.messages/);
 });
-
-

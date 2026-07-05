@@ -568,11 +568,12 @@ export function buildPhaseAcceptanceRequestPromptText(options = {}) {
   const payload = data.requestPayload ?? data.payload ?? options?.requestPayload ?? options?.payload ?? {};
   const payloadText = JSON.stringify(payload || {}, null, 2);
   const includeWorkflowPolicy = options?.includeWorkflowPolicy === true;
+  const includeProtocol = options?.includeProtocol !== false;
   return [
     String(marker || "").trim(),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PHASE_ACCEPTANCE_REQUEST_GOAL),
     includeWorkflowPolicy ? buildScenarioPolicyText(locale, { programmingMode, textMode, dynamicPolicyPrompt }) : "",
-    buildAcceptancePatchProtocolText({ locale, mode: "phase" }),
+    includeProtocol ? buildAcceptancePatchProtocolText({ locale, mode: "phase" }) : "",
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PHASE_ACCEPTANCE_REQUEST_CONSTRAINT),
     payloadText,
   ].filter(Boolean).join("\n");
@@ -645,11 +646,12 @@ export function buildAcceptanceValidationRequestPromptText(options = {}) {
   const payload = data.requestPayload ?? data.payload ?? options?.requestPayload ?? options?.payload ?? null;
   const payloadText = JSON.stringify(payload || {}, null, 2);
   const includeWorkflowPolicy = options?.includeWorkflowPolicy === true;
+  const includeProtocol = options?.includeProtocol !== false;
   return [
     String(marker || "").trim(),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.FINAL_ACCEPTANCE_REQUEST_GOAL),
     includeWorkflowPolicy ? buildScenarioPolicyText(locale, { programmingMode, textMode, dynamicPolicyPrompt }) : "",
-    buildAcceptancePatchProtocolText({ locale, mode: "final" }),
+    includeProtocol ? buildAcceptancePatchProtocolText({ locale, mode: "final" }) : "",
     payloadText,
   ].filter(Boolean).join("\n");
 }

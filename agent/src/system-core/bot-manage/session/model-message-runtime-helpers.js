@@ -5,7 +5,6 @@
  */
 import {
   resolveMainModelFinalMessages,
-  normalizeRecentWindow,
 } from "../../session/utils/context-window-normalizer.js";
 import {
   shouldMarkCurrentTurnSummarizedMessage,
@@ -24,7 +23,6 @@ import {
 import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
 import { normalizeMessageForModelRuntime } from "./session-execution-engine-utils.js";
 import { emitModelContextTrace, summarizeDiagnosticBlocks, summarizeDiagnosticMessages } from "../../agent/core/message-context/context-diagnostics.js";
-import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 const PLUGIN_DEEP_MERGE_KEYS = new Set([
   "stepModels",
@@ -93,21 +91,6 @@ function resolveRuntimeDialogProcessId(ctx = {}) {
   ).trim();
 }
 
-function resolveNonMainModelContextWindowLimit(...items) {
-  for (const item of items) {
-    if (!item || typeof item !== "object") continue;
-    const shouldClip =
-      item.clipNonMainModelContextMessages === true ||
-      item.clipNonMainModelContext === true;
-    if (!shouldClip) continue;
-    const limit = Number(item.contextWindowRecentMessageLimit);
-    return Number.isFinite(limit) && limit > 0
-      ? Math.floor(limit)
-      : TURN_THRESHOLDS.session.nonMainContextWindowRecentMessageLimit;
-  }
-  return 0;
-}
-
 export class ModelMessageRuntimeHelpers {
   constructor({ session = null } = {}) {
     this.session = session;
@@ -142,10 +125,8 @@ export class ModelMessageRuntimeHelpers {
     agentPluginOptions = {},
     botPluginOptions = {},
   } = {}) {
-    const recentMessageLimit = resolveNonMainModelContextWindowLimit(
-      agentPluginOptions,
-      botPluginOptions,
-    );
+    void agentPluginOptions;
+    void botPluginOptions;
     return ({ messages = [], ctx = {}, purpose = "" } = {}) => {
       const includePayloadBlocks = shouldUsePayloadMessageBlocks(purpose);
       const blockSource = resolveContextMessageBlocksSource(ctx, { includePayloadBlocks });
@@ -161,17 +142,14 @@ export class ModelMessageRuntimeHelpers {
           historyMessages: normalizeMessagesForModelRuntime(resolveBlockMessages(ctx, blocks, "history")),
           incrementalMessages: normalizeMessagesForModelRuntime(resolveBlockMessages(ctx, blocks, "incremental")),
         });
-        const outputMessages = recentMessageLimit > 0
-          ? normalizeRecentWindow(resolved.messages, recentMessageLimit)
-          : resolved.messages;
         emitModelContextTrace(getRuntimeFromAgentContext(ctx?.agentContext || ctx?.runtimeAgentContext || {}), "resolve_model_messages", {
           purpose: String(purpose || "").trim(),
           includePayloadBlocks,
           blockSource,
           blocks: summarizeDiagnosticBlocks(blocks),
-          resolvedMessages: summarizeDiagnosticMessages(outputMessages),
+          resolvedMessages: summarizeDiagnosticMessages(resolved.messages),
         });
-        return outputMessages;
+        return resolved.messages;
       }
       const dialogProcessId = resolveRuntimeDialogProcessId(ctx);
       const fallbackSource = dialogProcessId
@@ -180,18 +158,15 @@ export class ModelMessageRuntimeHelpers {
       const resolvedMessages = filterForModelContext(fallbackSource, {
         keepLatestInjectedOnly: true,
       });
-      const outputMessages = recentMessageLimit > 0
-        ? normalizeRecentWindow(resolvedMessages, recentMessageLimit)
-        : resolvedMessages;
       emitModelContextTrace(getRuntimeFromAgentContext(ctx?.agentContext || ctx?.runtimeAgentContext || {}), "resolve_model_messages", {
         purpose: String(purpose || "").trim(),
         includePayloadBlocks,
         blockSource,
         fallback: true,
         sourceMessages: summarizeDiagnosticMessages(normalizedSource),
-        resolvedMessages: summarizeDiagnosticMessages(outputMessages),
+        resolvedMessages: summarizeDiagnosticMessages(resolvedMessages),
       });
-      return outputMessages;
+      return resolvedMessages;
     };
   }
 

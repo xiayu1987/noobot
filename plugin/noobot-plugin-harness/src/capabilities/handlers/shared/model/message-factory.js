@@ -235,14 +235,18 @@ export function buildCapabilityProtocolModelMessages({
   workflowPolicyPrompt = "",
   responsibilityPrompt = "",
 } = {}) {
+  const userMessages = [
+    ...normalizeTextList(contextMessages),
+    ...normalizeTextList([responsibilityPrompt]),
+  ];
   return buildCapabilityModelMessages({
     locale,
     agentMessages,
-    constraints: contextMessages,
+    constraints: [],
     task: protocolPrompt,
     taskRole: "system",
     postTaskSystemMessages: [workflowPolicyPrompt],
-    postTaskMessages: [responsibilityPrompt],
+    postTaskMessages: userMessages,
     postTaskRole: "user",
   });
 }

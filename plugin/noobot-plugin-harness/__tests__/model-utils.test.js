@@ -68,30 +68,30 @@ test("resolveDialogProcessIdFromContext reads nested execution dialogProcessId",
 });
 
 
-test("resolveCapabilityModelMessages preserves unsummarized fallback messages and filters summarized resolver output", () => {
+test("resolveCapabilityModelMessages preserves fallback messages and resolver output without plugin-side filtering", () => {
   const fallback = resolveCapabilityModelMessages(
     {},
     {
       messages: [
         { role: "user", content: "keep" },
-        { role: "assistant", content: "drop", summarized: true },
+        { role: "assistant", content: "summarized-fallback", summarized: true },
       ],
     },
   );
-  assert.deepEqual(fallback.map((item) => item.content), ["keep"]);
+  assert.deepEqual(fallback.map((item) => item.content), ["keep", "summarized-fallback"]);
 
   const resolved = resolveCapabilityModelMessages(
     {
       harness: {
         resolveModelMessages: () => [
           { role: "user", content: "keep-resolved" },
-          { role: "assistant", content: "drop-resolved", lc_kwargs: { summarized: true } },
+          { role: "assistant", content: "summarized-resolved", lc_kwargs: { summarized: true } },
         ],
       },
     },
     { messages: [{ role: "user", content: "ignored" }] },
   );
-  assert.deepEqual(resolved.map((item) => item.content), ["keep-resolved"]);
+  assert.deepEqual(resolved.map((item) => item.content), ["keep-resolved", "summarized-resolved"]);
 });
 
 test("resolveCapabilityModelMessages lets injected resolver use messageBlocks when messages are not explicit", () => {
@@ -655,12 +655,12 @@ test("buildCapabilityModelMessages assigns origin to every capability message", 
 });
 
 
-test("resolveCapabilityModelMessages fallback filters summarized messages without clipping unsummarized messages", () => {
+test("resolveCapabilityModelMessages fallback preserves provided messages without clipping", () => {
   const result = resolveCapabilityModelMessages(
     {},
     {
       messages: [
-        { role: "assistant", content: "drop", summarized: true },
+        { role: "assistant", content: "summarized", summarized: true },
         ...Array.from({ length: 22 }, (_, index) => ({
           role: "user",
           content: `m${index + 1}`,
@@ -671,11 +671,11 @@ test("resolveCapabilityModelMessages fallback filters summarized messages withou
 
   assert.deepEqual(
     result.map((item) => item.content),
-    ["m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10", "m11", "m12", "m13", "m14", "m15", "m16", "m17", "m18", "m19", "m20", "m21", "m22"],
+    ["summarized", "m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10", "m11", "m12", "m13", "m14", "m15", "m16", "m17", "m18", "m19", "m20", "m21", "m22"],
   );
 });
 
-test("resolveCapabilityModelMessages filters summarized messages and does not use payload fallback", () => {
+test("resolveCapabilityModelMessages does not filter and does not use payload fallback", () => {
   const explicit = resolveCapabilityModelMessages(
     {},
     {
@@ -686,7 +686,7 @@ test("resolveCapabilityModelMessages filters summarized messages and does not us
       ],
     },
   );
-  assert.deepEqual(explicit.map((item) => item.content), ["keep-explicit"]);
+  assert.deepEqual(explicit.map((item) => item.content), ["drop-explicit", "drop-lc", "keep-explicit"]);
 
   const resolved = resolveCapabilityModelMessages(
     {
@@ -707,7 +707,7 @@ test("resolveCapabilityModelMessages filters summarized messages and does not us
       purpose: "analysis",
     },
   );
-  assert.deepEqual(resolved.map((item) => item.content), ["keep-resolver"]);
+  assert.deepEqual(resolved.map((item) => item.content), ["drop-resolver", "keep-resolver"]);
 
   const payloadFallback = resolveCapabilityModelMessages(
     {},
