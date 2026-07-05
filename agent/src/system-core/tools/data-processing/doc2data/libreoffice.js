@@ -12,14 +12,13 @@ import { promisify } from "node:util";
 import { DOC2DATA_PARSE_ENGINE } from "../../../config/core/enums.js";
 import { recoverableToolError } from "../../../error/index.js";
 import { ERROR_CODE } from "../../../error/constants.js";
-import { logError } from "../../../tracking/console/logger.js";
 import { tTool } from "../../core/tool-i18n.js";
 import { isAbortError } from "../../../utils/error-utils.js";
 import {
-  SESSION_CHANNEL_CATEGORIES,
-  SESSION_CHANNELS,
-  writeSessionChannelEvent,
-} from "@noobot/telemetry/session-channel";
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
@@ -222,25 +221,28 @@ async function recordLibreOfficeParseFailed({
   const dialogProcessId = String(systemRuntime?.dialogProcessId || systemRuntime?.currentDialogProcessId || "").trim();
   const turnScopeId = String(systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || "").trim();
   if (!userId || !sessionId) return { ok: true, skipped: true };
-  return writeSessionChannelEvent({
+  const inputValue = String(inputFile || "");
+  return writeRoutedRuntimeEvent({
+    scope: "session",
     source: "agent",
-    channel: SESSION_CHANNELS.DIRECT,
-    category: SESSION_CHANNEL_CATEGORIES.SYSTEM,
+    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+    category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
     event: "agent.doc2data.libreofficeParse.failed",
     userId,
     sessionId,
     ...(dialogProcessId ? { dialogProcessId } : {}),
     ...(turnScopeId ? { turnScopeId } : {}),
     data: {
-      input: inputFile,
-      cause: error?.message || String(error || ""),
-      stack: error?.stack || "",
+      inputFileName: String(inputFileName || path.basename(inputValue)),
+      inputPathLength: inputValue.length,
+      errorName: String(error?.name || ""),
+      errorCode: String(error?.code || ""),
+      errorMessage: error?.message || String(error || ""),
       parseEngine: DOC2DATA_PARSE_ENGINE.LIBREOFFICE,
       libreOfficeModule: String(converters?.moduleName || ""),
-      inputFileName,
       libreOfficeOutputFormat: outputFormat?.format || "",
-      timeoutMs: convertBudget.timeoutMs,
-      libreOfficeBudget: convertBudget,
+      timeoutMs: Number(convertBudget?.timeoutMs || 0),
+      tempMaxBytes: Number(convertBudget?.tempMaxBytes || 0),
     },
   }, {
     workspaceRoot: runtime?.globalConfig?.workspaceRoot || "",
@@ -652,30 +654,10 @@ export async function parseDocumentToTextViaLibreOffice({
       inputFileName,
       outputFormat,
       convertBudget,
-    }).catch((telemetryError) => {
-      logError("[doc_to_data][libreoffice_parse_failed][telemetry_failed]", {
-        input: inputFile,
-        cause: telemetryError?.message || String(telemetryError || ""),
-      });
+    }).catch(() => {
       return { ok: false };
     });
-    if (telemetryResult?.skipped) {
-      logError("[doc_to_data][libreoffice_parse_failed]", {
-        input: inputFile,
-        cause: error?.message || String(error || ""),
-        stack: error?.stack || "",
-        userId: String(runtime?.userId || "").trim(),
-        sessionId: String(
-          runtime?.systemRuntime?.sessionId || runtime?.systemRuntime?.rootSessionId || "",
-        ).trim(),
-        parseEngine: DOC2DATA_PARSE_ENGINE.LIBREOFFICE,
-        libreOfficeModule: String(converters?.moduleName || ""),
-        inputFileName,
-        libreOfficeOutputFormat: outputFormat?.format || "",
-        timeoutMs: convertBudget.timeoutMs,
-        libreOfficeBudget: convertBudget,
-      });
-    }
+    void telemetryResult;
     throw recoverableToolError(tTool(runtime, "tools.doc2data.libreofficeParseFailed"), {
       code: ERROR_CODE.RECOVERABLE_TOOL_ERROR,
       cause: error?.message || String(error || ""),

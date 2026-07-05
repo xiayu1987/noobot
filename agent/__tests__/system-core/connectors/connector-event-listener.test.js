@@ -103,7 +103,7 @@ test("ConnectorEventListener.notifyConnectorConnected: fallback to requestUserIn
   assert.equal(String(requestCalls[0]?.resolvedBy || ""), "system");
 });
 
-test("ConnectorEventListener.notifyConnectorConnected: failed bridge writes telemetry session system log", async () => {
+test("ConnectorEventListener.notifyConnectorConnected: failed bridge writes runtime-events session system event", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-connector-telemetry-"));
   const listener = createBaseListener({
     workspaceRoot,
@@ -125,7 +125,7 @@ test("ConnectorEventListener.notifyConnectorConnected: failed bridge writes tele
     "runtime",
     "session",
     "session-1",
-    "logs",
+    "events",
     "system.jsonl",
   ));
   assert.equal(records.length, 1);
@@ -141,7 +141,7 @@ test("ConnectorEventListener.notifyConnectorConnected: failed bridge writes tele
   assert.equal(records[0].data.error, "emit failed");
 });
 
-test("ConnectorEventListener.notifyReconnectRequired: failed interaction writes telemetry session system log", async () => {
+test("ConnectorEventListener.notifyReconnectRequired: failed interaction writes runtime-events session system event", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-connector-reconnect-"));
   const listener = createBaseListener({
     workspaceRoot,
@@ -164,7 +164,7 @@ test("ConnectorEventListener.notifyReconnectRequired: failed interaction writes 
     "runtime",
     "session",
     "session-1",
-    "logs",
+    "events",
     "system.jsonl",
   ));
   assert.equal(records.length, 1);

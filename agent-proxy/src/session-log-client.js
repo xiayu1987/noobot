@@ -6,7 +6,7 @@ import { config } from "./config.js";
 import {
   createSessionChannelWebSocketClient,
   SESSION_CHANNELS,
-} from "@noobot/telemetry/session-channel";
+} from "@noobot/runtime-events/session-channel";
 
 const DEBUG_ENABLED = ["1", "true", "yes", "on"].includes(
   String(process.env.AGENT_PROXY_SESSION_LOG_DEBUG || "").trim().toLowerCase(),

@@ -83,6 +83,7 @@ export async function createAppDependencies({
   const workspaceUsersService = createWorkspaceUsersService({
     workspaceRootPath,
     defaultWorkspaceUsersConfig: DEFAULT_WORKSPACE_USERS_CONFIG,
+    runtimeEventsConfig: { workspaceRoot: workspaceRootPath() },
   });
   const {
     normalizeWorkspaceUsersConfig,
@@ -94,6 +95,7 @@ export async function createAppDependencies({
   const authService = createAuthService({
     initialApiKeyTtlMs: Number(globalConfig?.auth?.apiKeyTtlMs || 24 * 60 * 60 * 1000),
     translateText,
+    runtimeEventsConfig: { workspaceRoot: workspaceRootPath() },
   });
   const {
     setApiKeyTtlMs,

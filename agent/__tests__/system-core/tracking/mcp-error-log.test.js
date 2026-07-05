@@ -18,7 +18,7 @@ async function readJsonLines(filePath) {
   return content.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
 }
 
-test("appendMcpErrorLog writes session MCP errors to telemetry session channel", async () => {
+test("appendMcpErrorLog writes session MCP errors to runtime-events session events", async () => {
   const workspaceRoot = await makeTempDir();
   const basePath = path.join(workspaceRoot, "u1");
   await fs.mkdir(basePath, { recursive: true });
@@ -40,7 +40,7 @@ test("appendMcpErrorLog writes session MCP errors to telemetry session channel",
   });
 
   assert.equal(record.sessionId, "s1");
-  const telemetryFile = path.join(workspaceRoot, "u1", "runtime", "session", "s1", "logs", "system.jsonl");
+  const telemetryFile = path.join(workspaceRoot, "u1", "runtime", "session", "s1", "events", "system.jsonl");
   const records = await readJsonLines(telemetryFile);
   assert.equal(records.length, 1);
   assert.equal(records[0].source, "call_mcp_task");
@@ -86,7 +86,7 @@ test("appendMcpErrorLog keeps non-session MCP errors in local fallback file", as
   assert.equal(records[0].mcpName, "startup-mcp");
 
   await assert.rejects(
-    fs.access(path.join(workspaceRoot, "u1", "runtime", "session", "unknown-session", "logs", "system.jsonl")),
+    fs.access(path.join(workspaceRoot, "u1", "runtime", "session", "unknown-session", "events", "system.jsonl")),
     /ENOENT/,
   );
 });

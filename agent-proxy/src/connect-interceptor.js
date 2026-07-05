@@ -13,6 +13,11 @@ import {
   decorateProxyResponseHeaders,
 } from "./http-proxy.js";
 import { isLoopbackAddress, resolveHeaderValue, secureEquals } from "./security.js";
+import {
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
 
 function isConnectTokenAuthorized(request = null) {
   const expectedToken = String(config.connectToken || "").trim();
@@ -56,7 +61,18 @@ export async function interceptConnectRequest(request, response, channelManager)
   let upstreamConnectUrl = "";
   try {
     upstreamConnectUrl = new URL("/internal/connect", config.upstreamHttpBase).toString();
-  } catch {
+  } catch (error) {
+    void writeRoutedRuntimeEvent({
+      source: "agent-proxy",
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.CONFIG,
+      level: "error",
+      event: "agentProxy.connect.upstreamBaseUrl.invalid",
+      data: {
+        upstreamHttpBaseLength: String(config.upstreamHttpBase || "").length,
+      },
+      error,
+    });
     writeProxyError(
       response,
       500,

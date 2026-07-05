@@ -1,0 +1,24 @@
+{
+  "name": "@noobot/runtime-events",
+  "version": "4.0.2",
+  "private": true,
+  "type": "module",
+  "description": "Noobot runtime event center for startup, session runtime, and system runtime events.",
+  "exports": {
+    ".": "./src/index.js",
+    "./events": "./src/writer.js",
+    "./schema": "./src/schema.js",
+    "./paths": "./src/paths.js",
+    "./channels/session": "./src/channels/session.js",
+    "./channels/startup": "./src/channels/startup.js",
+    "./channels/system": "./src/channels/system.js",
+    "./session-channel": "./session-channel.mjs",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@noobot/shared": "file:../shared"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}

@@ -423,7 +423,7 @@ test("doc_to_data: libreoffice abort propagates instead of falling back to visio
   );
 });
 
-test("doc_to_data: libreoffice fallback writes telemetry session system log", async () => {
+test("doc_to_data: libreoffice fallback writes runtime-events session system event", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-telemetry-"));
   const docPath = path.join(basePath, "runtime", "ops_workdir", "input.docx");
   await fs.mkdir(path.dirname(docPath), { recursive: true });
@@ -454,7 +454,7 @@ test("doc_to_data: libreoffice fallback writes telemetry session system log", as
     "runtime",
     "session",
     "s1",
-    "logs",
+    "events",
     "system.jsonl",
   ));
   assert.equal(records.length, 2);
@@ -475,10 +475,16 @@ test("doc_to_data: libreoffice fallback writes telemetry session system log", as
     assert.equal(record.dialogProcessId, "dp1");
     assert.equal(record.turnScopeId, "turn1");
     assert.equal(record.data.parseEngine, "libreoffice");
-    assert.match(record.data.input, /input\.docx$/);
-    assert.ok(String(record.data.cause || ""));
+    assert.equal(record.data.inputFileName, "input.docx");
+    assert.ok(Number(record.data.inputPathLength) > 0);
+    assert.ok(String(record.data.errorMessage || ""));
+    assert.equal(record.data.input, undefined);
+    assert.equal(record.data.cause, undefined);
+    assert.equal(record.data.stack, undefined);
   }
-  assert.ok("libreOfficeBudget" in parseFailedRecord.data);
+  assert.ok("timeoutMs" in parseFailedRecord.data);
+  assert.ok("tempMaxBytes" in parseFailedRecord.data);
+  assert.equal("libreOfficeBudget" in parseFailedRecord.data, false);
 });
 
 test("media_to_data: non-media file should fail with unsupported media file type", async () => {

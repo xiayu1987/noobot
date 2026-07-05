@@ -67,7 +67,7 @@
     "ws": "^8.21.0",
     "yazl": "^3.3.1",
     "zod": "^4.4.3",
-    "@noobot/telemetry": "file:../telemetry"
+    "@noobot/runtime-events": "file:../runtime-events"
   },
   "overrides": {
     "systeminformation": "^5.31.7"

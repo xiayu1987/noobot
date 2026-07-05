@@ -16,13 +16,12 @@ import { assertAndResolveUserWorkspaceFilePath } from "../core/check-tool-input.
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import { logError } from "../../tracking/console/logger.js";
 import { isAbortError } from "../../utils/error-utils.js";
 import {
-  SESSION_CHANNEL_CATEGORIES,
-  SESSION_CHANNELS,
-  writeSessionChannelEvent,
-} from "@noobot/telemetry/session-channel";
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
 import { TOOL_DATA_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { decodeLibreOfficeTextBuffer, parseDocumentToTextViaLibreOffice } from "./doc2data/libreoffice.js";
@@ -65,19 +64,23 @@ async function recordDoc2DataLibreOfficeFallback({
   const dialogProcessId = String(systemRuntime?.dialogProcessId || systemRuntime?.currentDialogProcessId || "").trim();
   const turnScopeId = String(systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || "").trim();
   if (!sessionId) return { ok: true, skipped: true };
-  return writeSessionChannelEvent({
+  const inputValue = String(inputFile || "");
+  return writeRoutedRuntimeEvent({
+    scope: "session",
     source: "agent",
-    channel: SESSION_CHANNELS.DIRECT,
-    category: SESSION_CHANNEL_CATEGORIES.SYSTEM,
+    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+    category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
     event: "agent.doc2data.libreofficeFallbackToVision",
     userId,
     sessionId,
     ...(dialogProcessId ? { dialogProcessId } : {}),
     ...(turnScopeId ? { turnScopeId } : {}),
     data: {
-      input: String(inputFile || ""),
-      cause: error?.message || String(error || ""),
-      stack: error?.stack || "",
+      inputFileName: path.basename(inputValue),
+      inputPathLength: inputValue.length,
+      errorName: String(error?.name || ""),
+      errorCode: String(error?.code || ""),
+      errorMessage: error?.message || String(error || ""),
       parseEngine: DOC2DATA_PARSE_ENGINE.LIBREOFFICE,
     },
   }, {
@@ -199,12 +202,7 @@ export function createDoc2DataTool({ agentContext }) {
             runtime,
             inputFile,
             error: libreOfficeError,
-          }).catch((telemetryError) => {
-            logError("[doc_to_data][libreoffice_fallback_to_vision][telemetry_failed]", {
-              input: inputFile,
-              cause: telemetryError?.message || String(telemetryError || ""),
-            });
-          });
+          }).catch(() => {});
         }
       }
 

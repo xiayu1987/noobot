@@ -10,10 +10,10 @@ import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
 import { MIME_TYPE } from "../../constants/index.js";
 import { normalizeSessionEntity } from "../../session/entities/session-entity.js";
 import {
-  SESSION_CHANNEL_CATEGORIES,
-  SESSION_CHANNELS,
-  writeSessionChannelEvent,
-} from "@noobot/telemetry/session-channel";
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
 import {
   applyNormalizedMessageFlags,
   persistSnapshotJsonFiles,
@@ -209,10 +209,11 @@ export class ScopedArtifactPersistenceHelpers {
       "plugin_subsession_persistence_leak",
       payload,
     );
-    await writeSessionChannelEvent({
+    await writeRoutedRuntimeEvent({
+      scope: "session",
       source: "agent",
-      channel: SESSION_CHANNELS.DIRECT,
-      category: SESSION_CHANNEL_CATEGORIES.SYSTEM,
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
       event: "plugin_subsession_persistence_leak",
       userId,
       sessionId,

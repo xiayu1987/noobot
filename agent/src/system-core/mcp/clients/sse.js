@@ -3,11 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { logError } from "../../tracking/console/logger.js";
 import { recoverableToolError } from "../../error/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { BaseMcpClient, buildJsonRpcRequest, buildRequestHeaders } from "./base.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import {
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
 
 function parseSseEventBlock(rawBlock = "") {
   const normalized = String(rawBlock || "").replace(/\r/g, "");
@@ -88,9 +92,14 @@ export class SseMcpClient extends BaseMcpClient {
     try {
       payload = JSON.parse(data);
     } catch (error) {
-      logError("[mcp-sse-client] JSON.parse event data failed", {
-        data: String(data || "").slice(0, 200),
-        error: error?.message || String(error),
+      void writeRoutedRuntimeEvent({
+        source: "agent",
+        channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+        category: RUNTIME_EVENT_CATEGORIES.TRANSPORT,
+        level: "warn",
+        event: "agent.mcpSse.eventData.parse.failed",
+        data: { eventName: event, dataLength: data.length },
+        error,
       });
       return;
     }

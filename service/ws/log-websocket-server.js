@@ -8,11 +8,10 @@ import {
   MAX_SESSION_CHANNEL_BATCH_SIZE,
   MAX_SESSION_CHANNEL_MESSAGE_BYTES,
   resolveSessionChannelConfig,
-  SESSION_CHANNELS,
-  writeSessionChannelEvent,
-} from "@noobot/telemetry/session-channel";
+} from "@noobot/runtime-events/session-channel";
+import { isSessionLogDebugEnabled } from "@noobot/shared/session-log-protocol";
+import { RUNTIME_EVENT_CHANNELS, writeRoutedRuntimeEvent } from "@noobot/runtime-events";
 import { HTTP_STATUS } from "#agent/constants";
-import { logError } from "#agent/tracking";
 
 const MAX_LOG_MESSAGE_BYTES = MAX_SESSION_CHANNEL_MESSAGE_BYTES;
 const MAX_LOG_BATCH_SIZE = MAX_SESSION_CHANNEL_BATCH_SIZE;
@@ -30,7 +29,17 @@ function diagnosticEnabled() {
 
 function logDiagnostic(message, data = {}) {
   if (!diagnosticEnabled()) return;
-  console.info(DIAG_PREFIX, message, data);
+  void writeRoutedRuntimeEvent({
+    source: "service",
+    channel: RUNTIME_EVENT_CHANNELS.WEB_SOCKET,
+    category: "debug",
+    level: "info",
+    event: "service.logWebSocket.diagnostic",
+    data: {
+      message: String(message || ""),
+      ...(data && typeof data === "object" ? data : {}),
+    },
+  });
 }
 
 export function resolveSessionLogConfig(options = {}) {
@@ -38,7 +47,10 @@ export function resolveSessionLogConfig(options = {}) {
 }
 
 export async function writeSessionLogEvent(event = {}, config = resolveSessionLogConfig()) {
-  const result = await writeSessionChannelEvent({ ...event, channel: event.channel || SESSION_CHANNELS.WEB_SOCKET }, config);
+  if (!isSessionLogDebugEnabled(event.category, config.debugEnabled)) return { ok: true, skipped: true };
+  const runtimeEventConfig = config.logRoot ? { ...config, root: config.logRoot } : config;
+  const result = await writeRoutedRuntimeEvent({
+      scope: "session", ...event, channel: event.channel || RUNTIME_EVENT_CHANNELS.WEB_SOCKET }, runtimeEventConfig);
   if (!result.skipped) logDiagnostic("written", { file: result.file, category: event.category, sessionId: event.sessionId });
   return result;
 }
@@ -99,7 +111,15 @@ export function registerLogWebSocketServer(server, { resolveAuthByApiKey, logCon
         }
         if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ event: "ack", count: events.length }));
       } catch (error) {
-        logError("[ws][log-websocket-server] write log failed", { error: error?.message || String(error) });
+        void writeRoutedRuntimeEvent({
+          source: "service",
+          channel: RUNTIME_EVENT_CHANNELS.WEB_SOCKET,
+          category: "transport",
+          level: "warn",
+          event: "service.logWebSocket.write.failed",
+          data: { userIdLength: String(request?.auth?.userId || "").length },
+          error,
+        }, logConfig);
         if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ event: "error", error: error?.message || "log write failed" }));
       }
     });

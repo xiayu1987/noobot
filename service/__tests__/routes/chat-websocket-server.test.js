@@ -38,6 +38,21 @@ async function readJsonl(filePath) {
   return content.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
 }
 
+async function waitForFile(filePath, { timeoutMs = 1000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+  while (Date.now() < deadline) {
+    try {
+      await fs.access(filePath);
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+  }
+  throw lastError;
+}
+
 async function closeServer(server) {
   await new Promise((resolve) => server.close(resolve));
 }
@@ -514,7 +529,59 @@ test("chat-websocket-server: edit resend turnScopeId reaches runConfig", async (
   }
 });
 
-test("chat-websocket-server: service websocket send failures write direct system telemetry", async () => {
+test("chat-websocket-server: invalid upgrade URL writes sanitized system runtime event", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-chat-ws-system-"));
+  const server = await startServerWithWs({ sessionLogConfig: { workspaceRoot } });
+  try {
+    const { port } = server.address();
+    const response = await new Promise((resolve, reject) => {
+      const socket = new WebSocket(`ws://127.0.0.1:${port}/http://[?apikey=SECRET&authorization=Bearer-token&cookie=session&secret=value`, {
+        headers: { authorization: "Bearer test-key" },
+      });
+      socket.on("unexpected-response", (_request, res) => {
+        resolve({ statusCode: res.statusCode });
+      });
+      socket.on("open", () => reject(new Error("unexpected websocket open")));
+      socket.on("error", (error) => {
+        if (error?.message?.includes?.("Unexpected server response")) return;
+        reject(error);
+      });
+    });
+
+    assert.equal(response.statusCode, 400);
+
+    const eventFile = path.join(
+      workspaceRoot,
+      "system",
+      "runtime",
+      "events",
+      "system",
+      "service",
+      "transport.jsonl",
+    );
+    await waitForFile(eventFile);
+    const [record] = await readJsonl(eventFile);
+    assert.equal(record.scope, "system");
+    assert.equal(record.source, "service");
+    assert.equal(record.channel, "direct");
+    assert.equal(record.category, "transport");
+    assert.equal(record.level, "warn");
+    assert.equal(record.event, "service.websocket.upgradeUrlParse.failed");
+    assert.equal(Object.prototype.hasOwnProperty.call(record, "sessionId"), false);
+    assert.equal(record.data.urlPathPreview, "/http://[");
+    assert.equal(record.data.urlLength, "/http://[?apikey=SECRET&authorization=Bearer-token&cookie=session&secret=value".length);
+    assert.equal(record.error.name, "TypeError");
+    const serialized = JSON.stringify(record);
+    assert.equal(serialized.includes("SECRET"), false);
+    assert.equal(serialized.includes("Bearer-token"), false);
+    assert.equal(serialized.includes("cookie=session"), false);
+    assert.equal(serialized.includes("secret=value"), false);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("chat-websocket-server: service websocket send failures write direct system runtime event", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-service-telemetry-"));
   await recordServiceWebSocketSendFailure({
     sessionLogConfig: { workspaceRoot },
@@ -532,7 +599,7 @@ test("chat-websocket-server: service websocket send failures write direct system
     "runtime",
     "session",
     "s1",
-    "logs",
+    "events",
     "system.jsonl",
   ));
   assert.equal(records.length, 1);
@@ -548,7 +615,7 @@ test("chat-websocket-server: service websocket send failures write direct system
   assert.equal(records[0].data.error, "send failed");
 });
 
-test("chat-websocket-server: service websocket runtime errors write direct system telemetry", async () => {
+test("chat-websocket-server: service websocket runtime errors write direct system runtime event", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-service-runtime-telemetry-"));
   await recordServiceWebSocketRuntimeError({
     sessionLogConfig: { workspaceRoot },
@@ -568,7 +635,7 @@ test("chat-websocket-server: service websocket runtime errors write direct syste
     "runtime",
     "session",
     "s1",
-    "logs",
+    "events",
     "system.jsonl",
   ));
   assert.equal(records.length, 1);

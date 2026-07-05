@@ -226,7 +226,7 @@ test("ScopedArtifactPersistenceHelpers detects detached sub-session isolation le
   assert.equal(events[0].event, "plugin_subsession_persistence_leak");
   assert.equal(events[0].data.scope, "test_scope");
   assert.equal(events[0].data.leakedMainSessionFile, leakedFile);
-  const telemetryFile = path.join(tempRoot, "u1", "runtime/session", "s-leak", "logs", "system.jsonl");
+  const telemetryFile = path.join(tempRoot, "u1", "runtime/session", "s-leak", "events", "system.jsonl");
   const telemetryRecords = (await fs.readFile(telemetryFile, "utf8"))
     .trim()
     .split("\n")

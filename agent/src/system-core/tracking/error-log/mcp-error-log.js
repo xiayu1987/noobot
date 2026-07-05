@@ -12,10 +12,10 @@ import {
   resolveTargetLogFiles,
 } from "../core/log-writer.js";
 import {
-  SESSION_CHANNEL_CATEGORIES,
-  SESSION_CHANNELS,
-  writeSessionChannelEvent,
-} from "@noobot/telemetry/session-channel";
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
 
 const MCP_ERROR_LOG_FILE_NAME = "mcp-error.log";
 
@@ -57,13 +57,14 @@ export async function appendMcpErrorLog({
     details: details && typeof details === "object" ? details : {},
   };
   if (sessionId) {
-    await writeSessionChannelEvent({
+    await writeRoutedRuntimeEvent({
+      scope: "session",
       userId,
       sessionId,
       parentSessionId,
       source,
-      category: SESSION_CHANNEL_CATEGORIES.SYSTEM,
-      channel: SESSION_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
       event,
       message,
       data: {

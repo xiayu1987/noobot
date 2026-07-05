@@ -3,13 +3,18 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { logError } from "#agent/tracking";
 import path from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import {
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
 
 export function createWorkspaceUsersService({
   workspaceRootPath,
   defaultWorkspaceUsersConfig = { users: [] },
+  runtimeEventsConfig,
 } = {}) {
   function normalizeAllowIDE(userItem = {}) {
     return (
@@ -46,10 +51,19 @@ export function createWorkspaceUsersService({
     try {
       parsedPayload = JSON.parse(await readFile(filePath, "utf8"));
     } catch (error) {
-      logError("[workspace-users-service] readWorkspaceUsersConfig failed", {
-        filePath,
-        error: error?.message || String(error),
-      });
+      void writeRoutedRuntimeEvent({
+        source: "service",
+        channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+        category: RUNTIME_EVENT_CATEGORIES.CONFIG,
+        level: "warn",
+        event: "service.workspaceUsers.config.read.failed",
+        data: {
+          fileName: path.basename(filePath),
+          filePathLength: String(filePath || "").length,
+          createIfMissing: createIfMissing === true,
+        },
+        error,
+      }, runtimeEventsConfig);
       if (createIfMissing) {
         const payload = normalizeWorkspaceUsersConfig(defaultWorkspaceUsersConfig);
         await writeWorkspaceUsersConfig(payload);

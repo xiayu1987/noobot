@@ -15,6 +15,7 @@ const runtimeWorkspaces = [
   'agent-proxy',
   'model-proxy',
   'shared',
+  'runtime-events',
   'i18n',
   'workflow',
   'plugin/noobot-plugin-harness',

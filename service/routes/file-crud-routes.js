@@ -7,6 +7,11 @@ import path from "node:path";
 import { access, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { safeJoin } from "#agent/utils";
 import { createJsonRouteWrapper } from "./route-wrapper.js";
+import {
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
 
 /**
  * @typedef {Object} FileCrudRouteOptions
@@ -91,15 +96,19 @@ export function registerFileCrudRoutes(
   const logFileAccess = (req, event, payload = {}) => {
     const traceId = String(req?.headers?.["x-noobot-file-trace-id"] || "").trim();
     if (!traceId) return;
-    try {
-      console.info("[noobot:file-access]", {
-        layer: "service.fileCrud",
-        event,
-        traceId,
-        routePrefix,
+    void writeRoutedRuntimeEvent({
+      source: "service",
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.DEBUG,
+      level: "debug",
+      event: "service.fileCrud.fileAccess.trace",
+      data: {
+        traceEvent: event,
+        traceIdLength: traceId.length,
+        routePrefixLength: String(routePrefix || "").length,
         ...payload,
-      });
-    } catch {}
+      },
+    });
   };
 
   const isAbsolutePathAllowed = (req) =>

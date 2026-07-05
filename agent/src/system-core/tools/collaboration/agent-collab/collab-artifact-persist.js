@@ -4,12 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { Buffer } from "node:buffer";
-import { logError } from "../../../tracking/console/logger.js";
 import {
-  SESSION_CHANNEL_CATEGORIES,
-  SESSION_CHANNELS,
-  writeSessionChannelEvent,
-} from "@noobot/telemetry/session-channel";
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
 import { mapAttachmentRecordsToMetas } from "../../../attach/meta-ops.js";
 import { TASK_STATUS } from "../../../bot-manage/async/constants.js";
 import { MIME_TYPE } from "../../../constants/index.js";
@@ -26,12 +25,10 @@ async function recordCollabArtifactPersistFailure({
   containerId,
   error,
 } = {}) {
-  if (!userId || !sessionId) return;
-  try {
-    await writeSessionChannelEvent({
+  await writeRoutedRuntimeEvent({
       source: "agent",
-      channel: SESSION_CHANNELS.DIRECT,
-      category: SESSION_CHANNEL_CATEGORIES.SYSTEM,
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
       event: "agent.collab.persistCompletedTaskResultsAsAttachments.failed",
       userId,
       sessionId,
@@ -41,14 +38,8 @@ async function recordCollabArtifactPersistFailure({
         error: error?.message || String(error || ""),
       },
     }, {
-      workspaceRoot: runtime?.globalConfig?.workspaceRoot || "",
-    });
-  } catch (telemetryError) {
-    logError("[agent-collab-tool] persistCompletedTaskResultsAsAttachments telemetry failed", {
-      containerId: String(containerId || ""),
-      error: telemetryError?.message || String(telemetryError),
-    });
-  }
+    workspaceRoot: runtime?.globalConfig?.workspaceRoot || "",
+  }).catch(() => {});
 }
 
 function toSafeArtifactName(value = "") {
@@ -67,9 +58,15 @@ function toFinalResultMarkdownText({ taskResultItem = {}, tAgentCollab, runtime 
     try {
       return JSON.stringify(rawResult, null, 2);
     } catch (error) {
-      logError("[agent-collab-tool] JSON.stringify task result failed", {
-        error: error?.message || String(error),
-      });
+      void writeRoutedRuntimeEvent({
+        source: "agent",
+        channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+        category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
+        level: "warn",
+        event: "agent.collab.taskResult.stringify.failed",
+        data: { hasRawResult: true },
+        error,
+      }, { workspaceRoot: runtime?.globalConfig?.workspaceRoot || "" });
     }
   }
   const fallbackError = String(taskResultItem?.error || "").trim();
