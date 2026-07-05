@@ -142,6 +142,61 @@ function isAbortLikeError(error) {
   );
 }
 
+function normalizeWsText(value = "") {
+  return String(value || "").trim();
+}
+
+function isChildRunEventData(eventData = {}, { rootSessionId = "" } = {}) {
+  const normalizedRootSessionId = normalizeWsText(rootSessionId);
+  const eventSessionId = normalizeWsText(eventData?.sessionId);
+  const subAgentSessionId = normalizeWsText(eventData?.subAgentSessionId);
+  const parentSessionId = normalizeWsText(eventData?.parentSessionId);
+  return Boolean(
+    eventData?.subAgentCall ||
+      (eventSessionId && normalizedRootSessionId && eventSessionId !== normalizedRootSessionId) ||
+      (subAgentSessionId && normalizedRootSessionId && subAgentSessionId !== normalizedRootSessionId) ||
+      (parentSessionId && normalizedRootSessionId && parentSessionId === normalizedRootSessionId),
+  );
+}
+
+function parentOwnsChildRunEventData(eventData = {}, {
+  rootSessionId = "",
+  parentDialogProcessId = "",
+} = {}) {
+  const childSessionId = normalizeWsText(eventData?.sessionId || eventData?.subAgentSessionId);
+  const childDialogProcessId = normalizeWsText(eventData?.dialogProcessId);
+  const resolvedParentDialogProcessId = normalizeWsText(
+    parentDialogProcessId || eventData?.parentDialogProcessId,
+  );
+  return {
+    ...(eventData && typeof eventData === "object" ? eventData : {}),
+    sessionId: normalizeWsText(rootSessionId),
+    dialogProcessId: resolvedParentDialogProcessId,
+    parentDialogProcessId: resolvedParentDialogProcessId,
+    childSessionId,
+    childDialogProcessId,
+    subAgentCall: true,
+    conversationStateOwner: "parent_agent",
+  };
+}
+
+function buildParentOwnedChildRunPayload(normalizedData = {}, parentOwnedData = {}, {
+  rootSessionId = "",
+  turnScopeId = "",
+} = {}) {
+  return {
+    ...(normalizedData && typeof normalizedData === "object" ? normalizedData : {}),
+    sessionId: normalizeWsText(rootSessionId),
+    dialogProcessId: normalizeWsText(parentOwnedData?.dialogProcessId),
+    parentDialogProcessId: normalizeWsText(parentOwnedData?.parentDialogProcessId),
+    childSessionId: normalizeWsText(parentOwnedData?.childSessionId),
+    childDialogProcessId: normalizeWsText(parentOwnedData?.childDialogProcessId),
+    subAgentCall: true,
+    conversationStateOwner: "parent_agent",
+    turnScopeId: normalizeWsText(turnScopeId),
+  };
+}
+
 async function resolveEffectiveRunTimeoutMs({ bot: _bot, userId: _userId = "", runConfig = {} } = {}) {
   const runConfigTimeoutMs = resolveConfigRunTimeoutMs(runConfig);
   if (runConfigTimeoutMs !== undefined && runConfigTimeoutMs !== null) {
@@ -580,7 +635,15 @@ export function registerChatWebSocketServer(
             const eventName = eventPayload?.event || "thinking";
             const eventData = eventPayload?.data || {};
             const eventDialogProcessId = String(eventData?.dialogProcessId || "").trim();
-            if (eventDialogProcessId && currentRunMeta) {
+            const childRunEvent = isChildRunEventData(eventData, {
+              rootSessionId: sessionId,
+            });
+            const parentDialogProcessId =
+              currentRunMeta?.dialogProcessId ||
+              eventData?.parentDialogProcessId ||
+              currentRunMeta?.parentDialogProcessId ||
+              "";
+            if (eventDialogProcessId && currentRunMeta && !childRunEvent) {
               currentRunMeta.dialogProcessId = eventDialogProcessId;
             }
             if (eventName === "llm_delta") {
@@ -588,35 +651,29 @@ export function registerChatWebSocketServer(
                 // Non-streaming mode: suppress token deltas, keep other system/tool events.
                 return;
               }
-              const currentEventSessionId = String(eventData?.sessionId || "").trim();
-              const currentSubAgentSessionId = String(
-                eventData?.subAgentSessionId || "",
-              ).trim();
-              const rootSessionId = String(sessionId || "").trim();
-              const isSubTaskDelta =
-                eventData?.subAgentCall ||
-                (currentSubAgentSessionId &&
-                  currentSubAgentSessionId !== rootSessionId) ||
-                (currentEventSessionId &&
-                  currentEventSessionId !== rootSessionId);
-              if (isSubTaskDelta) {
+              if (childRunEvent) {
+                const parentOwnedData = parentOwnsChildRunEventData(eventData, {
+                  rootSessionId: sessionId,
+                  parentDialogProcessId,
+                });
                 const normalizedEvent = normalizeSseLogEvent({
                   ...eventPayload,
                   event: "subagent_llm_delta",
                   data: {
-                    ...eventData,
+                    ...parentOwnedData,
                     category: "system",
                     type: "subagent_delta",
                     event: "subagent_delta",
-                    text: String(eventData.text || ""),
+                    text: String(parentOwnedData.text || ""),
                   },
                 });
-                sendEvent(normalizedEvent.event, {
-                  ...normalizedEvent.data,
-                  dialogProcessId: String(eventData?.dialogProcessId || ""),
-                  sessionId: String(sessionId || ""),
-                  turnScopeId: currentRunMeta?.turnScopeId || currentTurnScopeId || "",
-                });
+                sendEvent(
+                  normalizedEvent.event,
+                  buildParentOwnedChildRunPayload(normalizedEvent.data, parentOwnedData, {
+                    rootSessionId: sessionId,
+                    turnScopeId: currentRunMeta?.turnScopeId || currentTurnScopeId || "",
+                  }),
+                );
                 return;
               }
               sendEvent("delta", {
@@ -631,19 +688,49 @@ export function registerChatWebSocketServer(
               eventName === "attachments_saved" ||
               eventName === "model_generated_attachments_saved"
             ) {
+              const parentOwnedData = childRunEvent
+                ? parentOwnsChildRunEventData(eventData, {
+                    rootSessionId: sessionId,
+                    parentDialogProcessId,
+                  })
+                : eventData;
               const attachments = Array.isArray(eventData?.attachments)
                 ? eventData.attachments
                 : [];
               sendEvent("attachments", {
-                ...eventData,
-                dialogProcessId: String(eventData?.dialogProcessId || ""),
+                ...parentOwnedData,
+                dialogProcessId: String(parentOwnedData?.dialogProcessId || ""),
                 sessionId: String(sessionId || ""),
                 turnScopeId: currentRunMeta?.turnScopeId || currentTurnScopeId || "",
                 attachments,
               });
               return;
             }
-            const normalizedEvent = normalizeSseLogEvent(eventPayload);
+            const normalizedEvent = normalizeSseLogEvent(
+              childRunEvent
+                ? {
+                    ...eventPayload,
+                    data: parentOwnsChildRunEventData(eventData, {
+                      rootSessionId: sessionId,
+                      parentDialogProcessId,
+                    }),
+                  }
+                : eventPayload,
+            );
+            if (childRunEvent) {
+              const parentOwnedData = parentOwnsChildRunEventData(eventData, {
+                rootSessionId: sessionId,
+                parentDialogProcessId,
+              });
+              sendEvent(
+                normalizedEvent.event,
+                buildParentOwnedChildRunPayload(normalizedEvent.data, parentOwnedData, {
+                  rootSessionId: sessionId,
+                  turnScopeId: currentRunMeta?.turnScopeId || currentTurnScopeId || "",
+                }),
+              );
+              return;
+            }
             sendEvent(normalizedEvent.event, normalizedEvent.data);
           },
         };

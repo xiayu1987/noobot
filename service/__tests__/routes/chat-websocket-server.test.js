@@ -370,10 +370,111 @@ test("chat-websocket-server: attachment and delta events keep request turnScopeI
       (item) => item?.event === "thinking" && item?.data?.rawEvent === "subagent_llm_delta",
     );
     assert.equal(subagentDeltaEvent?.data?.sessionId, "s1");
+    assert.equal(subagentDeltaEvent?.data?.dialogProcessId, "dp-root");
+    assert.equal(subagentDeltaEvent?.data?.childSessionId, "sub-session-1");
+    assert.equal(subagentDeltaEvent?.data?.childDialogProcessId, "dp-subagent");
+    assert.equal(subagentDeltaEvent?.data?.conversationStateOwner, "parent_agent");
     assert.equal(subagentDeltaEvent?.data?.turnScopeId, "turn-parent");
 
     const doneEvent = events.find((item) => item?.event === "done");
     assert.equal(doneEvent?.data?.turnScopeId, "turn-parent");
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("chat-websocket-server: child run system events are owned by parent dialog state", async () => {
+  const server = await startServerWithWs({
+    runSession: async ({ eventListener }) => {
+      eventListener?.onEvent?.({
+        event: "tool_call_start",
+        data: {
+          dialogProcessId: "dp-parent",
+          sessionId: "s1",
+          tool: "process_content_task",
+        },
+      });
+      eventListener?.onEvent?.({
+        event: "session_starting",
+        data: {
+          dialogProcessId: "dp-child",
+          sessionId: "child-session-1",
+          parentSessionId: "s1",
+        },
+      });
+      eventListener?.onEvent?.({
+        event: "workspace_ready",
+        data: {
+          dialogProcessId: "dp-child",
+          sessionId: "child-session-1",
+          parentSessionId: "s1",
+        },
+      });
+      eventListener?.onEvent?.({
+        event: "tool_call_start",
+        data: {
+          dialogProcessId: "dp-child",
+          parentDialogProcessId: "dp-parent",
+          sessionId: "child-session-1",
+          parentSessionId: "s1",
+          tool: "parse_attachment",
+        },
+      });
+      return {
+        sessionId: "s1",
+        dialogProcessId: "dp-parent",
+        answer: "done",
+        messages: [],
+        traces: [],
+        executionLogs: [],
+      };
+    },
+  });
+  try {
+    const { port } = server.address();
+    const events = await callChatWs({
+      port,
+      payload: {
+        userId: "u1",
+        sessionId: "s1",
+        message: "hello",
+        config: { streaming: true, locale: "zh-CN" },
+      },
+    });
+
+    const childSystemEvents = events.filter(
+      (item) =>
+        item?.event === "thinking" &&
+        item?.data?.childSessionId === "child-session-1" &&
+        ["session_starting", "workspace_ready", "tool_call_start"].includes(item?.data?.rawEvent),
+    );
+    assert.equal(childSystemEvents.length, 3);
+    assert.deepEqual(
+      childSystemEvents.map((item) => item?.data?.dialogProcessId),
+      ["dp-parent", "dp-parent", "dp-parent"],
+    );
+    assert.deepEqual(
+      childSystemEvents.map((item) => item?.data?.childDialogProcessId),
+      ["dp-child", "dp-child", "dp-child"],
+    );
+    assert.deepEqual(
+      childSystemEvents.map((item) => item?.data?.childSessionId),
+      ["child-session-1", "child-session-1", "child-session-1"],
+    );
+    assert.equal(
+      childSystemEvents.every(
+        (item) =>
+          item?.data?.subAgentCall === true &&
+          item?.data?.conversationStateOwner === "parent_agent",
+      ),
+      true,
+    );
+    assert.equal(
+      events.some((item) => item?.event === "thinking" && item?.data?.dialogProcessId === "dp-child"),
+      false,
+    );
+    const doneEvent = events.find((item) => item?.event === "done");
+    assert.equal(doneEvent?.data?.dialogProcessId, "dp-parent");
   } finally {
     await closeServer(server);
   }
