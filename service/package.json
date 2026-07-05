@@ -27,7 +27,7 @@
     "pm2:delete": "PM2_HOME=../.pm2 npx pm2 delete noobot-service",
     "pm2:logs": "PM2_HOME=../.pm2 npx pm2 logs noobot-service",
     "pm2:list": "PM2_HOME=../.pm2 npx pm2 list",
-    "test": "node --test __tests__/routes/*.test.js",
+    "test": "node --test __tests__/project-launcher.test.js __tests__/routes/*.test.js",
     "test:tools": "npm --prefix ../agent run test:tools",
     "test:routes": "node --test __tests__/routes/*.test.js",
     "lint:tools-constants": "eslint .",

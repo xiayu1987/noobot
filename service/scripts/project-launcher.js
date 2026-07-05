@@ -7,6 +7,7 @@ import { access, copyFile, mkdir, readdir, readFile, writeFile } from "node:fs/p
 import path from "node:path";
 import process from "node:process";
 import readline from "node:readline/promises";
+import { resolveServiceGlobalConfigPath } from "../services/global-config-source.js";
 
 const DEFAULT_WORKSPACE_ROOT = "../workspace";
 const DEFAULT_TEMPLATE_PATH = "../user-template/default-user";
@@ -15,9 +16,12 @@ const DEFAULT_SUPER_ADMIN_CONNECT_CODE = "change-your-connect-code";
 const MODEL_FORMAT_VALUES = new Set(["dashscope", "openai_compatible"]);
 const CONFIG_SYNC_SKIP_TOP_LEVEL_KEYS = new Set([
   "workspace_root",
+  "workspaceRoot",
   "workspace_template_path",
+  "workspaceTemplatePath",
   "streaming",
   "super_admin",
+  "superAdmin",
 ]);
 
 const BUILTIN_CONFIG_PRUNE_PATHS = Object.freeze([
@@ -245,6 +249,7 @@ function parseCliOptions(argv = []) {
   const options = {
     nonInteractive: items.includes("--non-interactive"),
     lang: "",
+    globalConfigPath: "",
   };
 
   for (let index = 0; index < items.length; index += 1) {
@@ -257,9 +262,49 @@ function parseCliOptions(argv = []) {
       options.lang = String(items[index + 1] || "").trim();
       index += 1;
     }
+    if (item.startsWith("--global-config-path=")) {
+      options.globalConfigPath = item.slice("--global-config-path=".length).trim();
+      continue;
+    }
+    if (item === "--global-config-path") {
+      options.globalConfigPath = String(items[index + 1] || "").trim();
+      index += 1;
+    }
   }
 
   return options;
+}
+
+function firstNonEmptyString(...values) {
+  for (const value of values) {
+    const text = String(value || "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function resolveConfiguredWorkspaceRoot(config = {}) {
+  return firstNonEmptyString(config?.workspace_root, config?.workspaceRoot, DEFAULT_WORKSPACE_ROOT);
+}
+
+function resolveConfiguredWorkspaceTemplatePath(config = {}) {
+  return firstNonEmptyString(
+    config?.workspace_template_path,
+    config?.workspaceTemplatePath,
+    DEFAULT_TEMPLATE_PATH,
+  );
+}
+
+function resolveConfiguredSuperAdminUserId(config = {}) {
+  return firstNonEmptyString(config?.super_admin?.user_id, config?.superAdmin?.userId);
+}
+
+function resolveLauncherGlobalConfigPath({ serviceRoot, cliOptions = {}, env = process.env } = {}) {
+  return resolveServiceGlobalConfigPath({
+    filePath: cliOptions?.globalConfigPath || "",
+    cwd: serviceRoot,
+    env,
+  });
 }
 
 function normalizeModelFormat(input = "") {
@@ -1268,12 +1313,9 @@ async function syncWhenGlobalConfigExists({ globalExamplePath, globalConfigPath,
     await writeJson(globalConfigPath, mergedGlobalLocalized);
   }
 
-  const workspaceRootRelative = String(
-    mergedGlobalLocalized.workspace_root || DEFAULT_WORKSPACE_ROOT,
-  );
-  const workspaceTemplateRelative = String(
-    mergedGlobalLocalized.workspace_template_path || DEFAULT_TEMPLATE_PATH,
-  );
+  const workspaceRootRelative = resolveConfiguredWorkspaceRoot(mergedGlobalLocalized);
+  const workspaceTemplateRelative = resolveConfiguredWorkspaceTemplatePath(mergedGlobalLocalized);
+  const superAdminUserId = resolveConfiguredSuperAdminUserId(mergedGlobalLocalized);
 
   const workspaceRootAbsolutePath = path.resolve(serviceRoot, workspaceRootRelative);
   const workspaceTemplateAbsolutePath = path.resolve(serviceRoot, workspaceTemplateRelative);
@@ -1281,14 +1323,14 @@ async function syncWhenGlobalConfigExists({ globalExamplePath, globalConfigPath,
   await syncTemplateAndUserConfigs({
     workspaceRootAbsolutePath,
     workspaceTemplateAbsolutePath,
-    superAdminUserId: String(mergedGlobalLocalized?.super_admin?.user_id || "").trim(),
+    superAdminUserId,
     locale: normalizeSetupLocale(process.env.NOOBOT_SETUP_LANG || process.env.NOOBOT_LANG || process.env.LANG, "zh"),
   });
 
   await syncLanguageAcrossTemplateAndUsers({
     workspaceRootAbsolutePath,
     workspaceTemplateAbsolutePath,
-    superAdminUserId: String(mergedGlobalLocalized?.super_admin?.user_id || "").trim(),
+    superAdminUserId,
     language: String(mergedGlobalLocalized?.preferences?.language || "").trim(),
     locale: normalizeSetupLocale(process.env.NOOBOT_SETUP_LANG || process.env.NOOBOT_LANG || process.env.LANG, "zh"),
   });
@@ -1303,7 +1345,7 @@ async function syncWhenGlobalConfigExists({ globalExamplePath, globalConfigPath,
 async function runProjectLauncher() {
   const serviceRoot = process.cwd();
   const cliOptions = parseCliOptions(process.argv.slice(2));
-  const globalConfigPath = path.resolve(serviceRoot, "./config/global.config.json");
+  const globalConfigPath = resolveLauncherGlobalConfigPath({ serviceRoot, cliOptions });
   const globalExamplePath = path.resolve(serviceRoot, "./config/global.config.example.json");
 
   await ensureModelProxyConfig({ serviceRoot });
