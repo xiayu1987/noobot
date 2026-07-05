@@ -31,9 +31,9 @@ function createMockResponse() {
 
 test('connect interceptor writes sanitized system event for invalid upstream base URL', async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'agent-proxy-connect-system-events-'));
-  const previousWorkspaceRoot = process.env.NOOBOT_WORKSPACE_ROOT;
+  const previousRuntimeEventsWorkspaceRoot = process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT;
   const previousBase = process.env.AGENT_PROXY_UPSTREAM_HTTP_BASE;
-  process.env.NOOBOT_WORKSPACE_ROOT = workspaceRoot;
+  process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT = workspaceRoot;
   process.env.AGENT_PROXY_UPSTREAM_HTTP_BASE = 'http://[?apikey=secret-token';
 
   try {
@@ -78,14 +78,14 @@ test('connect interceptor writes sanitized system event for invalid upstream bas
     assert.equal(record.level, 'error');
     assert.equal(record.channel, 'direct');
     assert.equal(record.sessionId, undefined);
-    assert.equal(record.workspaceRoot, workspaceRoot);
+    assert.equal(record.workspaceRoot, undefined);
     assert.equal(record.data.upstreamHttpBaseLength, 'http://[?apikey=secret-token'.length);
     assert.ok(record.error?.message);
     assert.equal(JSON.stringify(record).includes('secret-token'), false);
     assert.equal(JSON.stringify(record).includes('apikey='), false);
   } finally {
-    if (previousWorkspaceRoot === undefined) delete process.env.NOOBOT_WORKSPACE_ROOT;
-    else process.env.NOOBOT_WORKSPACE_ROOT = previousWorkspaceRoot;
+    if (previousRuntimeEventsWorkspaceRoot === undefined) delete process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT;
+    else process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT = previousRuntimeEventsWorkspaceRoot;
     if (previousBase === undefined) delete process.env.AGENT_PROXY_UPSTREAM_HTTP_BASE;
     else process.env.AGENT_PROXY_UPSTREAM_HTTP_BASE = previousBase;
     await rm(workspaceRoot, { recursive: true, force: true });
