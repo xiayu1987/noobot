@@ -49,14 +49,6 @@ test("createSessionFacade preserves context contract payload fields for session 
         captured.getRecentSessionMessages = payload;
         return [];
       },
-      async getMessagesSinceLastRunningTask(payload = {}) {
-        captured.getMessagesSinceLastRunningTask = payload;
-        return [];
-      },
-      async getMessagesSinceLastCompletedTask(payload = {}) {
-        captured.getMessagesSinceLastCompletedTask = payload;
-        return [];
-      },
       async getContextRecords(payload = {}) {
         captured.getContextRecords = payload;
         return [];
@@ -68,16 +60,13 @@ test("createSessionFacade preserves context contract payload fields for session 
   const payload = {
     userId: "u1",
     sessionId: "s1",
-    limit: 3,
-    userConfig: { session: { recentMessageLimit: 3 } },
+    userConfig: { session: { customContextFlag: true } },
     currentDialogProcessId: "dp-current",
     currentTurnScopeId: "turn-current",
     futureContractField: "must-not-drop",
   };
 
   await session.getRecentSessionMessages(payload);
-  await session.getMessagesSinceLastRunningTask(payload);
-  await session.getMessagesSinceLastCompletedTask(payload);
   await session.getContextRecords(payload);
 
   for (const [name, item] of Object.entries(captured)) {
@@ -87,7 +76,6 @@ test("createSessionFacade preserves context contract payload fields for session 
     assert.equal(item.currentTurnScopeId, "turn-current", name);
     assert.equal(item.futureContractField, "must-not-drop", name);
   }
-  assert.equal(captured.getRecentSessionMessages.limit, 3);
   assert.deepEqual(captured.getContextRecords.userConfig, payload.userConfig);
 });
 

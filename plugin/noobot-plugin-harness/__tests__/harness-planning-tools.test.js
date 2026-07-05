@@ -380,10 +380,10 @@ test("harness planning separate model uses resolved planning tool allowlist", as
   assert.equal(invocations[0].promptVersion, "v1");
   assert.equal(invocations[0].envelopeType, "structured_v1");
   assertFlatCapabilityMessages(invocations[0].messages);
-  const constraintPrompt = invocations[0].messages.find((item = {}) =>
-    String(item?.role || "") === "system" &&
+  const contextPrompt = invocations[0].messages.find((item = {}) =>
+    String(item?.role || "") === "user" &&
     /规划输入上下文摘要（精简）如下/.test(String(item?.content || "")));
-  assert.match(String(constraintPrompt?.content || ""), /"latestUserGoal": "开始任务"/);
+  assert.match(String(contextPrompt?.content || ""), /"latestUserGoal": "开始任务"/);
   const taskPrompt = invocations[0].messages.find((item = {}) =>
     String(item?.role || "") === "system" &&
     /harness-planning-bootstrap/.test(String(item?.content || "")));

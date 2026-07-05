@@ -71,39 +71,6 @@ function createBuilderForAttachmentRuntimeTest({
   });
 }
 
-test("_normalizeSessionRecordsForConversation filters summarized and orphan tool results", () => {
-  const builder = createBuilderForNormalizationTest();
-  const input = [
-    { role: "assistant", content: "summarized", summarized: true },
-    {
-      role: "assistant",
-      content: "",
-      tool_calls: [{ id: "call_1", function: { name: "execute_script", arguments: "{}" } }],
-    },
-    {
-      role: "tool",
-      content: "{\"toolName\":\"execute_script\",\"ok\":true}",
-      tool_call_id: "call_1",
-    },
-    {
-      role: "tool",
-      content: "{\"toolName\":\"execute_script\",\"ok\":true}",
-      tool_call_id: "orphan_call",
-    },
-  ];
-
-  const result = builder._normalizeSessionRecordsForConversation(input);
-  assert.equal(result.some((messageItem) => messageItem?.summarized === true), false);
-  assert.equal(
-    result.some(
-      (messageItem) =>
-        messageItem?.role === "tool" &&
-        String(messageItem?.tool_call_id || "") === "orphan_call",
-    ),
-    false,
-  );
-});
-
 test("buildInitialContext prefers inputAttachments over legacy attachments", async () => {
   const builder = createBuilderForAttachmentRuntimeTest({
     inputAttachments: [

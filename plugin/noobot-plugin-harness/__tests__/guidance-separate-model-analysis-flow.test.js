@@ -68,26 +68,28 @@ test("separate_model analysis uses aligned agent context then user request and u
   assert.deepEqual(
     capturedPayload.messages.slice(0, 2).map((item = {}) => [item.role, item.content]),
     [
-      ["system", "<!-- harness-plan-checklist-context -->\n【当前完整计划清单】\n1. 主任务"],
       ["user", "历史上下文"],
+      ["assistant", "当前增量"],
     ],
   );
-  assert.equal(
-    capturedPayload.messages.some((item = {}) => item.role === "assistant" && item.content === "当前增量"),
-    true,
-  );
-  const tailMessages = capturedPayload.messages.slice(-2);
-  assert.equal(tailMessages[0]?.role, "user");
+  const planContextIndex = capturedPayload.messages.findIndex((item = {}) =>
+    String(item?.content || "").startsWith("<!-- harness-plan-checklist-context -->"));
+  assert.ok(planContextIndex > 1);
+  assert.equal(capturedPayload.messages[planContextIndex]?.role, "user");
+  const analysisRequest = capturedPayload.messages.find((item = {}) =>
+    String(item?.content || "").startsWith("<!-- harness-guidance-analysis -->"));
+  assert.equal(analysisRequest?.role, "user");
   assert.match(
-    String(tailMessages[0]?.content || ""),
+    String(analysisRequest?.content || ""),
     /根据当前执行结果|current execution result/i,
   );
   assert.match(
-    String(tailMessages[0]?.content || ""),
+    String(analysisRequest?.content || ""),
     /不要自己执行|do not execute/i,
   );
-  assert.equal(tailMessages[1]?.role, "user");
-  assert.match(String(tailMessages[1]?.content || ""), /分析|analysis/i);
+  const responsibilityMessage = capturedPayload.messages.at(-1);
+  assert.equal(responsibilityMessage?.role, "user");
+  assert.match(String(responsibilityMessage?.content || ""), /分析|analysis/i);
   assert.equal(agentContext.payload.harness.state.pending.analysis, false);
   assert.equal(
     ctx.messages.some((item = {}) =>

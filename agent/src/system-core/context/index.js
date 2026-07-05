@@ -36,7 +36,6 @@ import { composeSystemInfoSections } from "./formatters/system-prompt-formatter.
 import { mapToAgentContextSchema } from "./formatters/agent-context-mapper.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { normalizeParentSessionId } from "./parent-session-id-resolver.js";
-import { normalizeContextWindow } from "../session/utils/context-window-normalizer.js";
 import { emitModelContextTrace, summarizeDiagnosticMessages } from "../agent/core/message-context/context-diagnostics.js";
 import { resolveConfiguredSuperUserId } from "../utils/super-user.js";
 
@@ -327,17 +326,6 @@ export class ContextBuilder {
       ? builtTools
       : [];
     return agentContext;
-  }
-
-  _normalizeSessionRecordsForConversation(
-    messages = [],
-    { startIndex = 0, limit = Number.POSITIVE_INFINITY } = {},
-  ) {
-    return normalizeContextWindow({
-      sourceMessages: Array.isArray(messages) ? messages : [],
-      startIndex,
-      limit,
-    });
   }
 
   async _resolveSessionRecords({ sessionId, dialogProcessId = "" } = {}) {

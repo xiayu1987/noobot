@@ -19,9 +19,6 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 export const BUILTIN_THRESHOLDS = Object.freeze({
   memoryMaxItems: QUANTITY_THRESHOLDS.memory.maxItems,
   maxToolLoopTurns: TURN_THRESHOLDS.agent.maxToolLoopTurns,
-  mainModelRecentWindow: true,
-  mainModelRecentLimit: TURN_THRESHOLDS.session.mainModelRecentLimit,
-  sessionRecentMessageLimit: TURN_THRESHOLDS.session.sessionRecentMessageLimit,
   attachments: Object.freeze({
     maxFileCount: QUANTITY_THRESHOLDS.attachments.maxFileCount,
     maxFileSizeBytes: LENGTH_THRESHOLDS.attachments.maxFileSizeBytes,

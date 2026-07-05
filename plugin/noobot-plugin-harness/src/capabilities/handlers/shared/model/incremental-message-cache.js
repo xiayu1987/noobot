@@ -122,11 +122,19 @@ function resolveOriginKeySet(messages = [], kind = "") {
   );
 }
 
+function shouldAppendProtocolMessage(message = {}, previousProtocolKeys = new Set()) {
+  const origin = resolveMessageOrigin(message);
+  if (!origin || origin.kind !== MESSAGE_ORIGIN_KIND.PROTOCOL) return false;
+  if (!isSystemLikeMessage(message)) return true;
+  return !previousProtocolKeys.has(origin.key);
+}
+
 function resolveExplicitIncrementalMessages({
   currentMessages = [],
   previousMessages = [],
 } = {}) {
   const previousContextKeys = resolveOriginKeySet(previousMessages, MESSAGE_ORIGIN_KIND.CONTEXT);
+  const previousProtocolKeys = resolveOriginKeySet(previousMessages, MESSAGE_ORIGIN_KIND.PROTOCOL);
   const contextMessages = [];
   const protocolMessages = [];
   const hasOrigins = currentMessages.some((message) => Boolean(resolveMessageOrigin(message)));
@@ -145,7 +153,7 @@ function resolveExplicitIncrementalMessages({
       }
       continue;
     }
-    if (origin.kind === MESSAGE_ORIGIN_KIND.PROTOCOL) {
+    if (shouldAppendProtocolMessage(message, previousProtocolKeys)) {
       protocolMessages.push(message);
     }
   }

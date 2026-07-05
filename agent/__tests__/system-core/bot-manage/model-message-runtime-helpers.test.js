@@ -89,12 +89,7 @@ test("ModelMessageRuntimeHelpers resolves non-main history from agent payload bl
 
 test("ModelMessageRuntimeHelpers does not clip non-main payload blocks even when legacy clip option is enabled", () => {
   const helpers = new ModelMessageRuntimeHelpers();
-  const resolver = helpers.createResolveModelMessages({
-    agentPluginOptions: {
-      clipNonMainModelContextMessages: true,
-      contextWindowRecentMessageLimit: 20,
-    },
-  });
+  const resolver = helpers.createResolveModelMessages();
 
   const history = Array.from({ length: 22 }, (_, index) => ({
     role: index % 2 === 0 ? "user" : "assistant",
@@ -134,9 +129,7 @@ test("ModelMessageRuntimeHelpers does not clip non-main payload blocks even when
 
 test("ModelMessageRuntimeHelpers does not clip non-main model context by default", () => {
   const helpers = new ModelMessageRuntimeHelpers();
-  const resolver = helpers.createResolveModelMessages({
-    agentPluginOptions: { contextWindowRecentMessageLimit: 20 },
-  });
+  const resolver = helpers.createResolveModelMessages();
 
   const resolved = resolver({
     messages: Array.from({ length: 22 }, (_, index) => ({
@@ -161,12 +154,7 @@ test("ModelMessageRuntimeHelpers does not clip non-main model context by default
 
 test("ModelMessageRuntimeHelpers never clips non-main model context in injected resolver", () => {
   const helpers = new ModelMessageRuntimeHelpers();
-  const resolver = helpers.createResolveModelMessages({
-    agentPluginOptions: {
-      clipNonMainModelContextMessages: true,
-      contextWindowRecentMessageLimit: 20,
-    },
-  });
+  const resolver = helpers.createResolveModelMessages();
 
   const resolved = resolver({
     messages: Array.from({ length: 22 }, (_, index) => ({

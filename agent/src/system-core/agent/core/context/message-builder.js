@@ -277,11 +277,11 @@ ${summaryText}`,
 
 function filterCurrentTurnUserMessageFromHistory(
   historyMessages = [],
-  { turnScopeId = "", currentUserMessage = "" } = {},
+  { turnScopeId = "", currentDialogProcessId = "" } = {},
 ) {
   const normalizedTurnScopeId = String(turnScopeId || "").trim();
-  const normalizedCurrentUserMessage = String(currentUserMessage || "").trim();
-  if (!normalizedTurnScopeId && !normalizedCurrentUserMessage) return historyMessages;
+  const normalizedDialogProcessId = String(currentDialogProcessId || "").trim();
+  if (!normalizedTurnScopeId && !normalizedDialogProcessId) return historyMessages;
   const source = Array.isArray(historyMessages) ? historyMessages : [];
   const blockedDialogProcessIds = new Set();
   const blockedTurnScopeIds = new Set();
@@ -290,10 +290,9 @@ function filterCurrentTurnUserMessageFromHistory(
     const messageTurnScopeId = String(msg?.turnScopeId || "").trim();
     const messageDialogProcessId = String(msg?.dialogProcessId || "").trim();
     const sameTurn = normalizedTurnScopeId && messageTurnScopeId === normalizedTurnScopeId;
-    const sameCurrentText =
-      normalizedCurrentUserMessage &&
-      String(msg?.content || "").trim() === normalizedCurrentUserMessage;
-    if (!sameTurn && !sameCurrentText) continue;
+    const sameDialog =
+      normalizedDialogProcessId && messageDialogProcessId === normalizedDialogProcessId;
+    if (!sameTurn && !sameDialog) continue;
     if (messageTurnScopeId) blockedTurnScopeIds.add(messageTurnScopeId);
     if (messageDialogProcessId) blockedDialogProcessIds.add(messageDialogProcessId);
   }
@@ -430,7 +429,7 @@ export function buildContextMessageBlocks(
     normalizeUnpairedTaskSummaryToolResults(rawHistoryMessages),
     {
       turnScopeId: currentTurnScopeId,
-      currentUserMessage,
+      currentDialogProcessId: systemRuntime?.dialogProcessId,
     },
   );
   const resolvedDialogProcessId = resolveDialogProcessId({

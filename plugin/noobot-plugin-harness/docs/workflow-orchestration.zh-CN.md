@@ -128,12 +128,11 @@ Hook 点：`before_llm_call`
 参数单一事实源：`src/core/workflow-params.js`（`WORKFLOW_PARAMS`），覆盖阈值、工具名、
 调度顺序、workflow 的 action/reason/event 枚举，以及 capability 日志事件名（`logging.events.*`）。
 
-Harness 调用 Agent 时的上下文裁剪窗口也已统一到插件侧配置：
+Harness 调用 Agent 时不再维护独立上下文窗口：
 
-- 默认值来源：`WORKFLOW_PARAMS.contextWindow.recentMessageLimit`（默认 `20`）
-- 运行时可配置项：`plugins.harness.contextWindowRecentMessageLimit`
-- 作用范围：`resolveModelMessages`（Harness 注入到 Agent 的统一消息裁剪入口）
-- 说明：Harness 路径不再依赖 `session.recentMessageLimit`。
+- 统一调用 Agent 注入的 `resolveModelMessages`。
+- 历史消息只由 Agent 侧按最新 5 个 `dialogProcessId/dialogId` 轮次构建。
+- Harness 侧不配置、不裁剪、不重排 agent 上下文。
 
 统一执行观测入口：
 
