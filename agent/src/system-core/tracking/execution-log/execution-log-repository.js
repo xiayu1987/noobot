@@ -11,17 +11,52 @@ import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../error/constants.js";
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
+import {
+  SESSION_CHANNEL_CATEGORIES,
+  SESSION_CHANNELS,
+  writeSessionChannelEvent,
+} from "@noobot/telemetry/session-channel";
+
+function mapExecutionLogToSessionChannelCategory(normalizedLog = {}) {
+  const category = String(normalizedLog?.category || "").trim().toLowerCase();
+  if (category === "tool") return SESSION_CHANNEL_CATEGORIES.INTERACTION;
+  if (category === "error") return SESSION_CHANNEL_CATEGORIES.SYSTEM;
+  if (category === "semantic_transfer") return SESSION_CHANNEL_CATEGORIES.DEBUG;
+  return SESSION_CHANNEL_CATEGORIES.SYSTEM;
+}
 
 export class ExecutionLogRepository {
   constructor({
     executionRepository = null,
     sessionRepository = null,
     now = () => new Date().toISOString(),
+    workspaceRoot = "",
   } = {}) {
     this.executionRepository = executionRepository;
     this.sessionRepository = sessionRepository;
     this.now = now;
+    this.workspaceRoot = workspaceRoot;
     this.appendQueues = new Map();
+  }
+
+  async _appendSessionChannelLog(userId, sessionId, normalizedLog = {}, parentSessionId = "") {
+    if (!sessionId) return;
+    await writeSessionChannelEvent({
+      userId,
+      sessionId,
+      parentSessionId,
+      dialogProcessId: resolveMessageDialogProcessId(normalizedLog),
+      source: "agent",
+      category: mapExecutionLogToSessionChannelCategory(normalizedLog),
+      channel: SESSION_CHANNELS.DIRECT,
+      event: normalizedLog.event || "agent.execution",
+      data: {
+        executionCategory: normalizedLog.category || "",
+        type: normalizedLog.type || "",
+        ts: normalizedLog.ts || "",
+        ...(normalizedLog.data && typeof normalizedLog.data === "object" ? normalizedLog.data : {}),
+      },
+    }, this.workspaceRoot ? { workspaceRoot: this.workspaceRoot } : undefined);
   }
 
   _appendQueueKey(userId = "", sessionId = "", parentSessionId = "") {
@@ -151,6 +186,12 @@ export class ExecutionLogRepository {
         normalizedSessionId,
         normalizedLog,
         bundle,
+        parentSessionId,
+      );
+      await this._appendSessionChannelLog(
+        userId,
+        normalizedSessionId,
+        normalizedLog,
         parentSessionId,
       );
     });

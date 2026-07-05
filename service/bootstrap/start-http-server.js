@@ -5,6 +5,7 @@
  */
 import { createServer } from "node:http";
 import { registerChatWebSocketServer } from "../ws/chat-websocket-server.js";
+import { registerLogWebSocketServer, resolveSessionLogConfig } from "../ws/log-websocket-server.js";
 
 export function startHttpServer({
   app,
@@ -17,9 +18,13 @@ export function startHttpServer({
   defaultLocale,
   translateText,
   openVSCodeService,
+  workspaceRootPath,
   port = process.env.PORT || 10061,
 } = {}) {
   const server = createServer(app);
+  const sessionLogConfig = resolveSessionLogConfig({
+    workspaceRoot: typeof workspaceRootPath === "function" ? workspaceRootPath() : undefined,
+  });
   server.on("upgrade", (request, socket, head) => {
     if (
       openVSCodeService &&
@@ -39,6 +44,11 @@ export function startHttpServer({
     normalizeLocale,
     defaultLocale,
     translateText,
+    sessionLogConfig,
+  });
+  registerLogWebSocketServer(server, {
+    resolveAuthByApiKey,
+    logConfig: sessionLogConfig,
   });
   server.listen(port, () => {
     console.log(`Agent server running on :${port}`);

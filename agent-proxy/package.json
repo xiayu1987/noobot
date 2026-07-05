@@ -20,6 +20,8 @@
   },
   "dependencies": {
     "ws": "^8.21.0",
-    "noobot-i18n": "file:../i18n"
+    "noobot-i18n": "file:../i18n",
+    "@noobot/shared": "file:../shared",
+    "@noobot/telemetry": "file:../telemetry"
   }
 }

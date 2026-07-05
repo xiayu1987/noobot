@@ -49,9 +49,10 @@ function createReconnectRunStateEvents(reconnectSessions = [], recoverableSessio
         turnScopeId: turnMeta.turnScopeId,
       });
       if (rememberedStopEvent) events.push(rememberedStopEvent);
+      const state = _trimStr(stateEntry?.state);
       events.push({
         type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-        state: _trimStr(stateEntry?.state),
+        state,
         sessionId,
         dialogProcessId: _trimStr(stateEntry?.dialogProcessId),
         turnScopeId: turnMeta.turnScopeId,
@@ -162,14 +163,14 @@ export async function applyReconnectDataReplay({
     }
   }
 
-  reconnectSessions.forEach((sessionEntry) => {
+  for (const sessionEntry of reconnectSessions) {
     const stateEntries = Array.isArray(sessionEntry?.conversationStates)
       ? sessionEntry.conversationStates
       : [];
-    stateEntries.forEach((stateEntry) => {
-      applyChannelState(stateEntry);
-    });
-  });
+    for (const stateEntry of stateEntries) {
+      await applyChannelState(stateEntry);
+    }
+  }
 
   if (recoverableSessionId && isCurrentActiveSession(recoverableSessionId)) {
     const recoverableSessionEntry = reconnectSessions.find(

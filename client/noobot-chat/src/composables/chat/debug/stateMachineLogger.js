@@ -4,9 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-const DEBUG_PREFIX = "[noobot-state-machine]";
 const ENABLED_VALUES = new Set(["1", "true", "yes", "on"]);
 const SESSION_RUN_MESSAGE_RUNTIME_MARK = "__noobotRuntimeRunStateKey";
+let sessionLogSink = null;
+
+export function setStateMachineDebugLogSink(sink = null) {
+  sessionLogSink = sink && typeof sink.log === "function" ? sink : null;
+}
 
 function isBrowserStateMachineDebugEnabled() {
   try {
@@ -54,6 +58,13 @@ export function logStateMachineDebug(event, payload = {}) {
       at: new Date().toISOString(),
       ...payload,
     };
-    console.info(`${DEBUG_PREFIX} ${JSON.stringify(entry)}`);
+    sessionLogSink?.log?.({
+      category: "debug",
+      event,
+      sessionId: payload?.sessionId || "",
+      dialogProcessId: payload?.dialogProcessId || "",
+      turnScopeId: payload?.turnScopeId || "",
+      data: entry,
+    });
   } catch {}
 }

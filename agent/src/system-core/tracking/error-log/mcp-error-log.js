@@ -11,6 +11,11 @@ import {
   resolveLogFilePath,
   resolveTargetLogFiles,
 } from "../core/log-writer.js";
+import {
+  SESSION_CHANNEL_CATEGORIES,
+  SESSION_CHANNELS,
+  writeSessionChannelEvent,
+} from "@noobot/telemetry/session-channel";
 
 const MCP_ERROR_LOG_FILE_NAME = "mcp-error.log";
 
@@ -51,16 +56,37 @@ export async function appendMcpErrorLog({
     modelName: String(modelName || ""),
     details: details && typeof details === "object" ? details : {},
   };
-  const targetFiles = resolveTargetLogFiles({
-    basePath,
-    workspaceRoot,
-    fileName: MCP_ERROR_LOG_FILE_NAME,
-  });
-  await appendRecordToFiles({
-    targetFiles,
-    record,
-  });
-  // eslint-disable-next-line no-console
-  console.error(`[mcp_error] ${record.ts} ${record.message}`, record);
+  if (sessionId) {
+    await writeSessionChannelEvent({
+      userId,
+      sessionId,
+      parentSessionId,
+      source,
+      category: SESSION_CHANNEL_CATEGORIES.SYSTEM,
+      channel: SESSION_CHANNELS.DIRECT,
+      event,
+      message,
+      data: {
+        message,
+        stack,
+        mcpName: record.mcpName,
+        task: record.task,
+        modelName: record.modelName,
+        details: record.details,
+      },
+    }, {
+      workspaceRoot,
+    });
+  } else {
+    const targetFiles = resolveTargetLogFiles({
+      basePath,
+      workspaceRoot,
+      fileName: MCP_ERROR_LOG_FILE_NAME,
+    });
+    await appendRecordToFiles({
+      targetFiles,
+      record,
+    });
+  }
   return record;
 }

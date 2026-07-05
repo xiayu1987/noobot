@@ -61,6 +61,24 @@ export function createFixture({ activeId = "s-1", processStore = null } = {}) {
 
   const chatList = {
     fetchSessions: vi.fn(async () => {}),
+    fetchSessionDetail: vi.fn(async (id) => ({
+      sessions: [sessions.value.find((sessionItem) => sessionItem.id === id)].filter(Boolean),
+    })),
+    applySessionDetail: vi.fn((detail = {}) => {
+      const sessionDocs = Array.isArray(detail?.sessions) ? detail.sessions : [];
+      const nextSession = sessionDocs[0];
+      if (!nextSession?.id && !nextSession?.sessionId) return;
+      const nextId = nextSession.id || nextSession.sessionId;
+      const index = sessions.value.findIndex(
+        (sessionItem) => sessionItem.id === nextId || sessionItem.backendSessionId === nextId,
+      );
+      if (index >= 0) {
+        sessions.value[index] = { ...sessions.value[index], ...nextSession };
+        if (activeSessionId.value === sessions.value[index].id || activeSessionId.value === nextId) {
+          activeSession.value = sessions.value[index];
+        }
+      }
+    }),
     selectSession: vi.fn(async (id) => {
       const found = sessions.value.find((sessionItem) => sessionItem.id === id);
       if (found) {

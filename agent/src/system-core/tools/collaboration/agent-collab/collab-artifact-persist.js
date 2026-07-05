@@ -5,6 +5,11 @@
  */
 import { Buffer } from "node:buffer";
 import { logError } from "../../../tracking/console/logger.js";
+import {
+  SESSION_CHANNEL_CATEGORIES,
+  SESSION_CHANNELS,
+  writeSessionChannelEvent,
+} from "@noobot/telemetry/session-channel";
 import { mapAttachmentRecordsToMetas } from "../../../attach/meta-ops.js";
 import { TASK_STATUS } from "../../../bot-manage/async/constants.js";
 import { MIME_TYPE } from "../../../constants/index.js";
@@ -12,6 +17,39 @@ import { normalizeString } from "./collab-task-utils.js";
 import { normalizeParentSessionId } from "../../../context/parent-session-id-resolver.js";
 
 const ASYNC_SUBTASK_RESULT_GENERATION_SOURCE = "async_subtask_result";
+
+async function recordCollabArtifactPersistFailure({
+  runtime,
+  userId,
+  sessionId,
+  parentSessionId,
+  containerId,
+  error,
+} = {}) {
+  if (!userId || !sessionId) return;
+  try {
+    await writeSessionChannelEvent({
+      source: "agent",
+      channel: SESSION_CHANNELS.DIRECT,
+      category: SESSION_CHANNEL_CATEGORIES.SYSTEM,
+      event: "agent.collab.persistCompletedTaskResultsAsAttachments.failed",
+      userId,
+      sessionId,
+      parentSessionId,
+      data: {
+        containerId: String(containerId || ""),
+        error: error?.message || String(error || ""),
+      },
+    }, {
+      workspaceRoot: runtime?.globalConfig?.workspaceRoot || "",
+    });
+  } catch (telemetryError) {
+    logError("[agent-collab-tool] persistCompletedTaskResultsAsAttachments telemetry failed", {
+      containerId: String(containerId || ""),
+      error: telemetryError?.message || String(telemetryError),
+    });
+  }
+}
 
 function toSafeArtifactName(value = "") {
   return String(value || "")
@@ -119,9 +157,13 @@ export function createCollabArtifactPersistor({
         fallbackGenerationSource: ASYNC_SUBTASK_RESULT_GENERATION_SOURCE,
       });
     } catch (error) {
-      logError("[agent-collab-tool] persistCompletedTaskResultsAsAttachments failed", {
-        containerId: String(container?.id || ""),
-        error: error?.message || String(error),
+      await recordCollabArtifactPersistFailure({
+        runtime,
+        userId,
+        sessionId: attachmentSessionId,
+        parentSessionId,
+        containerId: container?.id,
+        error,
       });
       return emptyPersistOutput;
     }

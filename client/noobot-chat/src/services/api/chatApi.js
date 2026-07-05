@@ -274,6 +274,15 @@ export function buildChatWebSocketUrl({ apiKey = "" } = {}) {
   return `${protocol}//${host}/api/agent-proxy/ws${query}`;
 }
 
+export function buildLogWebSocketUrl({ apiKey = "" } = {}) {
+  const normalizedApiKey = String(apiKey || "").trim();
+  if (!normalizedApiKey) return "";
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const host = window.location.host;
+  const query = `?apikey=${encodeURIComponent(normalizedApiKey)}`;
+  return `${protocol}//${host}/api/logs/ws${query}`;
+}
+
 
 export async function postOpenVSCodeServerApi(
   { userId = "" },

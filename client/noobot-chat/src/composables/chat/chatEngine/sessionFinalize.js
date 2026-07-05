@@ -157,7 +157,6 @@ export async function refreshFinalSessionDetail({
       ...completionEventScope,
       source: "final_session_detail",
     });
-    console.warn("load session detail after done failed", loadDetailError);
     return false;
   }
 }

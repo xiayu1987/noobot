@@ -40,7 +40,7 @@ export async function renderActiveSessionBeforeReplay({
   chatList,
   getReplayHydrationPromise = () => null,
   setReplayHydrationPromise = () => {},
-  onError = console.warn,
+  onError = () => {},
 } = {}) {
   if (!activeSession?.value) return false;
   const existingPromise = getReplayHydrationPromise();
@@ -94,7 +94,7 @@ export async function hydrateSessionBeforeReconnectReplayIfNeeded({
   allowCreate = true,
   getReplayHydrationPromise = () => null,
   setReplayHydrationPromise = () => {},
-  onError = console.warn,
+  onError = () => {},
 } = {}) {
   if (!shouldHydrateSessionBeforeReplay({
     activeSession,

@@ -19,8 +19,10 @@ import {
   proxyHttpRequest,
   writeProxyError,
   decorateProxyResponseHeaders,
+  normalizeProxyPathname,
 } from "./src/http-proxy.js";
 import { interceptConnectRequest } from "./src/connect-interceptor.js";
+import { createSessionLogClient } from "./src/session-log-client.js";
 import { parseRequestPathname, parseRequestQuery, normalizeApiKey } from "./src/utils.js";
 import {
   createFixedWindowRateLimiter,
@@ -43,7 +45,8 @@ const WebSocket = websocketLibrary.default || websocketLibrary.WebSocket;
 const WebSocketServer = websocketLibrary.WebSocketServer;
 
 // ---- State ----
-const channelManager = new ChannelManager(WebSocket);
+const sessionLogClient = createSessionLogClient({ WebSocketImpl: WebSocket });
+const channelManager = new ChannelManager(WebSocket, { sessionLogClient });
 const wsRouter = new WsRouter(channelManager);
 let activeConnectionCount = 0;
 const httpRateLimiter = createFixedWindowRateLimiter({
@@ -90,6 +93,8 @@ function isFrontendBypassPath(pathname = "") {
     || pathname === "/api/agent-proxy/ws"
     || pathname === "/chat/ws"
     || pathname === "/api/chat/ws"
+    || pathname === "/logs/ws"
+    || pathname === "/api/logs/ws"
     || pathname.startsWith("/api/")
     || pathname === "/ide"
     || pathname.startsWith("/ide/");
@@ -131,11 +136,34 @@ function isIdeProxyPath(pathname = "") {
   return normalizedPathname === "/ide" || normalizedPathname.startsWith("/ide/");
 }
 
+function isLogProxyPath(pathname = "") {
+  return pathname === "/logs/ws" || pathname === "/api/logs/ws";
+}
+
+function agentProxyLogDiagnostic(message, data = {}) {
+  const raw = String(process.env.AGENT_PROXY_SESSION_LOG_DIAGNOSTIC || "true").trim().toLowerCase();
+  if (["0", "false", "no", "off"].includes(raw)) return;
+  console.info("[session-log-ws][agent-proxy]", message, data);
+}
+
+function logAgentProxyEvent(apiKey = "", event = {}) {
+  sessionLogClient.log(apiKey, event);
+}
+
 function proxyUpgradeToHttpUpstream(request, socket, head) {
   let upstreamUrl = null;
   try {
     upstreamUrl = new URL(request?.url || "/", config.upstreamHttpBase);
+    upstreamUrl.pathname = normalizeProxyPathname(upstreamUrl.pathname);
+    if (isLogProxyPath(parseRequestPathname(request))) {
+      agentProxyLogDiagnostic("proxy upgrade", {
+        from: request?.url || "",
+        to: `${upstreamUrl.pathname}${upstreamUrl.search}`,
+        upstream: `${upstreamUrl.protocol}//${upstreamUrl.host}`,
+      });
+    }
   } catch {
+    agentProxyLogDiagnostic("proxy upgrade failed", { reason: "invalid-url", url: request?.url || "" });
     socket.destroy();
     return;
   }
@@ -153,6 +181,9 @@ function proxyUpgradeToHttpUpstream(request, socket, head) {
     timeout: config.httpUpstreamTimeoutMs,
   });
   upstreamRequest.on("upgrade", (upstreamResponse, upstreamSocket, upstreamHead) => {
+    if (isLogProxyPath(parseRequestPathname(request))) {
+      agentProxyLogDiagnostic("proxy upgrade accepted", { statusCode: upstreamResponse.statusCode || 101 });
+    }
     socket.write(
       `HTTP/1.1 ${upstreamResponse.statusCode || 101} ${upstreamResponse.statusMessage || "Switching Protocols"}\r\n` +
         Object.entries(upstreamResponse.headers || {})
@@ -163,10 +194,34 @@ function proxyUpgradeToHttpUpstream(request, socket, head) {
     if (upstreamHead?.length) socket.write(upstreamHead);
     upstreamSocket.pipe(socket).pipe(upstreamSocket);
   });
+  upstreamRequest.on("response", (upstreamResponse) => {
+    if (isLogProxyPath(parseRequestPathname(request))) {
+      agentProxyLogDiagnostic("proxy upgrade response", {
+        pathname: upstreamUrl?.pathname || "",
+        statusCode: upstreamResponse.statusCode || 0,
+      });
+    }
+    const statusCode = upstreamResponse.statusCode || 502;
+    const statusMessage = upstreamResponse.statusMessage || "Bad Gateway";
+    socket.write(
+      `HTTP/1.1 ${statusCode} ${statusMessage}\r\n` +
+        Object.entries(upstreamResponse.headers || {})
+          .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`)
+          .join("\r\n") +
+        "\r\n\r\n",
+    );
+    upstreamResponse.on("data", (chunk) => {
+      if (socket.writable) socket.write(chunk);
+    });
+    upstreamResponse.on("end", () => socket.destroy());
+  });
   upstreamRequest.on("timeout", () => {
     upstreamRequest.destroy(new Error("upstream timeout"));
   });
-  upstreamRequest.on("error", () => {
+  upstreamRequest.on("error", (error) => {
+    if (isLogProxyPath(parseRequestPathname(request))) {
+      agentProxyLogDiagnostic("proxy upgrade error", { pathname: upstreamUrl?.pathname || "", error: error?.message || String(error) });
+    }
     socket.destroy();
   });
   upstreamRequest.end(head);
@@ -268,6 +323,18 @@ httpServer.on("upgrade", (request, socket, head) => {
     return;
   }
 
+  if (isLogProxyPath(pathname)) {
+    agentProxyLogDiagnostic("log path hit", { pathname, clientIp, hasApiKey: Boolean(parseRequestQuery(request).apiKey) });
+    logAgentProxyEvent(parseRequestQuery(request).apiKey, {
+      category: "agent-proxy",
+      event: "agentProxy.logs.upgrade",
+      sessionId: "agent-proxy",
+      data: { pathname, clientIp },
+    });
+    proxyUpgradeToHttpUpstream(request, socket, head);
+    return;
+  }
+
   if (!config.wsPaths.includes(pathname)) {
     socket.destroy();
     return;
@@ -300,6 +367,12 @@ websocketServer.on("connection", (socket, request) => {
   socket.__agentProxyLocale = connectionLocale;
   const socketIdentity = channelManager.resolveApiKeyIdentity(connectionApiKey);
   socket.__agentProxyUserId = String(socketIdentity?.userId || "").trim();
+  logAgentProxyEvent(connectionApiKey, {
+    category: "agent-proxy",
+    event: "agentProxy.chat.connected",
+    sessionId: "agent-proxy",
+    data: { pathname: requestInfo.pathname, socketId: socket.__agentProxySocketId },
+  });
 
   if (!connectionApiKey) {
     channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.MISSING_APIKEY);
@@ -316,11 +389,24 @@ websocketServer.on("connection", (socket, request) => {
   wsRouter.handle(socket, connectionApiKey, connectionLocale);
 
   socket.on("close", () => {
+    logAgentProxyEvent(connectionApiKey, {
+      category: "agent-proxy",
+      event: "agentProxy.chat.closed",
+      sessionId: "agent-proxy",
+      data: { socketId: socket.__agentProxySocketId, channels: [...(socket.__agentProxyChannelKeys || [])] },
+    });
     activeConnectionCount = Math.max(0, activeConnectionCount - 1);
     channelManager.detachSocketFromAllChannels(socket);
   });
 
   socket.on("error", () => {
+    logAgentProxyEvent(connectionApiKey, {
+      category: "agent-proxy",
+      level: "warn",
+      event: "agentProxy.chat.error",
+      sessionId: "agent-proxy",
+      data: { socketId: socket.__agentProxySocketId, channels: [...(socket.__agentProxyChannelKeys || [])] },
+    });
     activeConnectionCount = Math.max(0, activeConnectionCount - 1);
     channelManager.detachSocketFromAllChannels(socket);
   });

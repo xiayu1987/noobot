@@ -186,7 +186,7 @@ export function scheduleMissingInteractionPayloadFailure({
   missingInteractionPayloadTimers.set(key, timer);
 }
 
-export function applyReconnectChannelState({
+export async function applyReconnectChannelState({
   stateData = {},
   onConversationState,
   isCurrentActiveSession,
@@ -208,6 +208,7 @@ export function applyReconnectChannelState({
   terminalDialogProcessIdSet,
   chatWebSocketClient,
   scheduleCacheExpiredSessionRefresh,
+  finalizeReplayCompletedSessionDetail,
   clearPendingInteraction,
   translate,
 } = {}) {
@@ -402,6 +403,7 @@ export function applyReconnectChannelState({
       if (targetAssistantMessage) targetAssistantMessage.pending = false;
       return;
     }
+    let shouldFinalizeCompletedReplay = state === BackendChannelState.COMPLETED;
     if (targetAssistantMessage) {
       const beforeTerminalApply = summarizeDebugMessage(targetAssistantMessage);
       applyReconnectChannelTimingToMessage({
@@ -422,25 +424,35 @@ export function applyReconnectChannelState({
           before: beforeTerminalApply,
           after: summarizeDebugMessage(targetAssistantMessage),
         });
-        return;
-      }
-      targetAssistantMessage.pending = false;
-      if (state === FrontendRunState.FRONTEND_COMPLETED) {
+        targetAssistantMessage.pending = false;
         targetAssistantMessage.statusLabel = translate("chat.generated");
-      } else if (state === BackendChannelState.STOPPED) {
-        targetAssistantMessage.statusLabel = translate("chat.stopped");
-      } else if (state === FrontendRunState.CANCELLED) {
-        targetAssistantMessage.statusLabel = translate("chat.stopped");
-      } else if (state === BackendChannelState.ERROR) {
-        targetAssistantMessage.statusLabel = translate("chat.failed");
+        shouldFinalizeCompletedReplay = true;
+      } else {
+        targetAssistantMessage.pending = false;
+        if (state === BackendChannelState.STOPPED) {
+          targetAssistantMessage.statusLabel = translate("chat.stopped");
+        } else if (state === FrontendRunState.CANCELLED) {
+          targetAssistantMessage.statusLabel = translate("chat.stopped");
+        } else if (state === BackendChannelState.ERROR) {
+          targetAssistantMessage.statusLabel = translate("chat.failed");
+        }
+        logResendDebug("channelStateReplay.terminal.apply", {
+          state,
+          sessionId,
+          dialogProcessId,
+          turnScopeId,
+          before: beforeTerminalApply,
+          after: summarizeDebugMessage(targetAssistantMessage),
+        });
       }
-      logResendDebug("channelStateReplay.terminal.apply", {
-        state,
+    }
+    if (shouldFinalizeCompletedReplay) {
+      await finalizeReplayCompletedSessionDetail?.({
         sessionId,
         dialogProcessId,
         turnScopeId,
-        before: beforeTerminalApply,
-        after: summarizeDebugMessage(targetAssistantMessage),
+        targetAssistantMessage,
+        stateData,
       });
     }
   }

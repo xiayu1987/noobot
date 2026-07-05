@@ -1,7 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 import { ExecutionLogRepository } from "../../../src/system-core/tracking/execution-log/execution-log-repository.js";
+
+async function makeTempDir() {
+  return fs.mkdtemp(path.join(os.tmpdir(), "noobot-execution-log-repository-"));
+}
+
+async function readJsonLines(filePath) {
+  const content = await fs.readFile(filePath, "utf8");
+  return content.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+}
 
 function createInMemorySessionRepository() {
   const store = new Map();
@@ -72,4 +84,37 @@ test("appendLog without dialogProcessId stays in current latest dialog", async (
   assert.equal(bundle.dialogProcessId, "d1");
   assert.equal(bundle.logs[0].dialogProcessId, "d1");
   assert.equal(bundle.logs[1].dialogProcessId, "d1");
+});
+
+test("appendLog mirrors session execution logs to telemetry session channel", async () => {
+  const workspaceRoot = await makeTempDir();
+  const sessionRepository = createInMemorySessionRepository();
+  const repo = new ExecutionLogRepository({
+    sessionRepository,
+    now: () => "2026-05-13T00:00:00.000Z",
+    workspaceRoot,
+  });
+
+  await repo.appendLog("u1", "s1", {
+    dialogProcessId: "d1",
+    event: "tool_call_start",
+    category: "tool",
+    type: "tool_call",
+    data: { tool: "read_file" },
+    ts: "2026-05-13T00:00:01.000Z",
+  }, "p1");
+
+  const telemetryFile = path.join(workspaceRoot, "u1", "runtime", "session", "s1", "logs", "interaction.jsonl");
+  const records = await readJsonLines(telemetryFile);
+  assert.equal(records.length, 1);
+  assert.equal(records[0].source, "agent");
+  assert.equal(records[0].channel, "direct");
+  assert.equal(records[0].category, "interaction");
+  assert.equal(records[0].event, "tool_call_start");
+  assert.equal(records[0].sessionId, "s1");
+  assert.equal(records[0].userId, "u1");
+  assert.equal(records[0].dialogProcessId, "d1");
+  assert.equal(records[0].data.executionCategory, "tool");
+  assert.equal(records[0].data.type, "tool_call");
+  assert.equal(records[0].data.tool, "read_file");
 });

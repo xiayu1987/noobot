@@ -10,6 +10,11 @@ import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
 import { MIME_TYPE } from "../../constants/index.js";
 import { normalizeSessionEntity } from "../../session/entities/session-entity.js";
 import {
+  SESSION_CHANNEL_CATEGORIES,
+  SESSION_CHANNELS,
+  writeSessionChannelEvent,
+} from "@noobot/telemetry/session-channel";
+import {
   applyNormalizedMessageFlags,
   persistSnapshotJsonFiles,
   resolvePreferredAttachments,
@@ -204,8 +209,17 @@ export class ScopedArtifactPersistenceHelpers {
       "plugin_subsession_persistence_leak",
       payload,
     );
-    // Runtime assertion log for easier tracing in non-event environments.
-    console.warn("[plugin-subsession-leak]", JSON.stringify(payload));
+    await writeSessionChannelEvent({
+      source: "agent",
+      channel: SESSION_CHANNELS.DIRECT,
+      category: SESSION_CHANNEL_CATEGORIES.SYSTEM,
+      event: "plugin_subsession_persistence_leak",
+      userId,
+      sessionId,
+      data: payload,
+    }, {
+      workspaceRoot: path.dirname(workspacePath),
+    }).catch(() => null);
     return false;
   }
 

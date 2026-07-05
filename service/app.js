@@ -114,4 +114,5 @@ startHttpServer({
   defaultLocale,
   translateText,
   openVSCodeService,
+  workspaceRootPath,
 });

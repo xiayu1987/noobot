@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 import {
   createConnectorEventListener,
@@ -8,6 +11,7 @@ import {
 function createBaseListener({
   allowUserInteraction = true,
   bridge = {},
+  workspaceRoot = "",
 } = {}) {
   return createConnectorEventListener({
     runtime: {
@@ -16,6 +20,9 @@ function createBaseListener({
         config: {
           allowUserInteraction,
         },
+      },
+      globalConfig: {
+        workspaceRoot,
       },
     },
     store: null,
@@ -26,6 +33,11 @@ function createBaseListener({
     allowUserInteraction,
     bridge,
   });
+}
+
+async function readJsonl(filePath) {
+  const content = await fs.readFile(filePath, "utf8");
+  return content.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
 }
 
 test("ConnectorEventListener.notifyConnectorConnected: informational flow should emit connector_status notification", async () => {
@@ -89,4 +101,82 @@ test("ConnectorEventListener.notifyConnectorConnected: fallback to requestUserIn
   assert.equal(String(requestCalls[0]?.lifecycle || ""), "resolved");
   assert.equal(String(requestCalls[0]?.ackMode || ""), "auto");
   assert.equal(String(requestCalls[0]?.resolvedBy || ""), "system");
+});
+
+test("ConnectorEventListener.notifyConnectorConnected: failed bridge writes telemetry session system log", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-connector-telemetry-"));
+  const listener = createBaseListener({
+    workspaceRoot,
+    bridge: {
+      emitNotification: async () => {
+        throw new Error("emit failed");
+      },
+    },
+  });
+
+  await listener.notifyConnectorConnected({
+    connectorType: "email",
+    connectorName: "example_email",
+  });
+
+  const records = await readJsonl(path.join(
+    workspaceRoot,
+    "primary-user",
+    "runtime",
+    "session",
+    "session-1",
+    "logs",
+    "system.jsonl",
+  ));
+  assert.equal(records.length, 1);
+  assert.equal(records[0].source, "agent");
+  assert.equal(records[0].channel, "direct");
+  assert.equal(records[0].category, "system");
+  assert.equal(records[0].event, "agent.connector.notifyConnectorConnected.failed");
+  assert.equal(records[0].userId, "primary-user");
+  assert.equal(records[0].sessionId, "session-1");
+  assert.equal(records[0].dialogProcessId, "dialog-1");
+  assert.equal(records[0].data.connectorType, "email");
+  assert.equal(records[0].data.connectorName, "example_email");
+  assert.equal(records[0].data.error, "emit failed");
+});
+
+test("ConnectorEventListener.notifyReconnectRequired: failed interaction writes telemetry session system log", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-connector-reconnect-"));
+  const listener = createBaseListener({
+    workspaceRoot,
+    bridge: {
+      requestUserInteraction: async () => {
+        throw new Error("interaction failed");
+      },
+    },
+  });
+
+  await listener.notifyReconnectRequired({
+    connectorType: "database",
+    connectorName: "main_db",
+    reconnectToolName: "connect_database",
+  });
+
+  const records = await readJsonl(path.join(
+    workspaceRoot,
+    "primary-user",
+    "runtime",
+    "session",
+    "session-1",
+    "logs",
+    "system.jsonl",
+  ));
+  assert.equal(records.length, 1);
+  assert.equal(records[0].source, "agent");
+  assert.equal(records[0].channel, "direct");
+  assert.equal(records[0].category, "system");
+  assert.equal(records[0].event, "agent.connector.notifyReconnectRequired.failed");
+  assert.equal(records[0].userId, "primary-user");
+  assert.equal(records[0].sessionId, "session-1");
+  assert.equal(records[0].dialogProcessId, "dialog-1");
+  assert.equal(records[0].data.connectorType, "database");
+  assert.equal(records[0].data.connectorName, "main_db");
+  assert.equal(records[0].data.reconnectToolName, "connect_database");
+  assert.equal(records[0].data.error, "interaction failed");
 });

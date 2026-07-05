@@ -43,6 +43,11 @@ function buildAgentContext(basePath = "") {
   };
 }
 
+async function readJsonl(filePath) {
+  const content = await fs.readFile(filePath, "utf8");
+  return content.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+}
+
 test("doc_to_data: LibreOffice text output decoder handles Windows Chinese encodings", () => {
   const gbkBuffer = Buffer.from([
     0xd6, 0xd0, 0xce, 0xc4, // 中文
@@ -416,6 +421,64 @@ test("doc_to_data: libreoffice abort propagates instead of falling back to visio
       return true;
     },
   );
+});
+
+test("doc_to_data: libreoffice fallback writes telemetry session system log", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-telemetry-"));
+  const docPath = path.join(basePath, "runtime", "ops_workdir", "input.docx");
+  await fs.mkdir(path.dirname(docPath), { recursive: true });
+  await fs.writeFile(docPath, Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00, 0xff]));
+
+  const agentContext = buildAgentContext(basePath);
+  const runtime = agentContext.execution.controllers.runtime;
+  runtime.userId = "u1";
+  runtime.globalConfig = { workspaceRoot: basePath };
+  runtime.systemRuntime = {
+    sessionId: "s1",
+    dialogProcessId: "dp1",
+    turnScopeId: "turn1",
+  };
+
+  const tools = createDoc2DataTool({ agentContext });
+  const tool = tools.find((item) => item?.name === TOOL_NAME.DOC_TO_DATA);
+  assert.ok(tool);
+
+  await assert.rejects(() => tool.invoke({
+    filePath: "runtime/ops_workdir/input.docx",
+    parseEngine: "libreoffice",
+  }));
+
+  const records = await readJsonl(path.join(
+    basePath,
+    "u1",
+    "runtime",
+    "session",
+    "s1",
+    "logs",
+    "system.jsonl",
+  ));
+  assert.equal(records.length, 2);
+  const parseFailedRecord = records.find(
+    (record) => record.event === "agent.doc2data.libreofficeParse.failed",
+  );
+  const fallbackRecord = records.find(
+    (record) => record.event === "agent.doc2data.libreofficeFallbackToVision",
+  );
+  assert.ok(parseFailedRecord);
+  assert.ok(fallbackRecord);
+  for (const record of [parseFailedRecord, fallbackRecord]) {
+    assert.equal(record.source, "agent");
+    assert.equal(record.channel, "direct");
+    assert.equal(record.category, "system");
+    assert.equal(record.userId, "u1");
+    assert.equal(record.sessionId, "s1");
+    assert.equal(record.dialogProcessId, "dp1");
+    assert.equal(record.turnScopeId, "turn1");
+    assert.equal(record.data.parseEngine, "libreoffice");
+    assert.match(record.data.input, /input\.docx$/);
+    assert.ok(String(record.data.cause || ""));
+  }
+  assert.ok("libreOfficeBudget" in parseFailedRecord.data);
 });
 
 test("media_to_data: non-media file should fail with unsupported media file type", async () => {

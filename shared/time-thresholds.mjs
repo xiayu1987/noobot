@@ -188,5 +188,8 @@ export const TIME_THRESHOLDS = deepFreeze({
 
   service: {
     apiKeyTtlMs: TIME_TIERS.oneDayMs,
+    sessionLogRetentionMs: 7 * TIME_TIERS.oneDayMs,
+    sessionLogCleanupIntervalMs: TIME_TIERS.oneHourMs,
+    sessionLogMinIntervalMs: TIME_TIERS.startupMs,
   },
 });
