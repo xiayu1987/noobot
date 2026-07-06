@@ -7,6 +7,7 @@ import path from "node:path";
 import { buildTextResultFields, buildTransferFileEntry, createTransferEnvelope, getTransferAttachmentMetas, materializeTextForToolResult, resolveToolResultInlineTextLimit, TRANSFER_REASON, TRANSFER_SOURCE } from "../../../semantic-transfer/index.js";
 import { MIME_TYPE } from "../../../constants/index.js";
 import { ARTIFACT_GENERATION_SOURCE, TOOL_ATTACHMENT_SOURCE, TOOL_NAME } from "../../constants/index.js";
+import { updateRuntimeUserMessageAttachment } from "../../../attach/index.js";
 
 const DATA_PROCESSING_ARTIFACT_SOURCES = new Set([
   ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
@@ -181,18 +182,7 @@ async function backwriteParsedResultToSourceAttachment({
       sourceAttachmentSource: String(sourceAttachmentMeta?.attachmentSource || "").trim(),
       sourceAttachmentPath: String(sourceAttachmentMeta?.path || "").trim(),
     });
-    for (const bucketName of ["inputAttachments", "attachments"]) {
-      if (!Array.isArray(runtime?.[bucketName])) continue;
-      const sourceAttachmentIndex = runtime[bucketName].findIndex(
-        (item) => String(item?.attachmentId || "").trim() === sourceAttachmentId,
-      );
-      if (sourceAttachmentIndex >= 0) {
-        runtime[bucketName][sourceAttachmentIndex] = {
-          ...(runtime[bucketName][sourceAttachmentIndex] || {}),
-          ...(updatedSourceAttachment || {}),
-        };
-      }
-    }
+    updateRuntimeUserMessageAttachment(runtime, sourceAttachmentId, updatedSourceAttachment || {});
     return updatedSourceAttachment;
   } catch {
     return null;

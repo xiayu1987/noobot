@@ -261,6 +261,18 @@ test("doc_to_data: backwrites parsed result to source attachment from inputAttac
       relativePath: path.relative(basePath, textPath),
     },
   ];
+  runtime.attachments = [
+    {
+      attachmentId: "source-att",
+      sessionId: "s1",
+      attachmentSource: "model",
+      name: "source.md",
+      mimeType: "text/markdown",
+      size: 1,
+      path: path.join(basePath, "runtime", "attach", "scoped", "s1", "model", "tool-source.md"),
+      generationSource: "tool_generated_bucket_should_not_be_user_source",
+    },
+  ];
 
   const tools = createDoc2DataTool({ agentContext });
   const tool = tools.find((item) => item?.name === TOOL_NAME.DOC_TO_DATA);
@@ -271,9 +283,14 @@ test("doc_to_data: backwrites parsed result to source attachment from inputAttac
   assert.equal(payload.summary.source_attachment_backwritten, true);
   assert.equal(linkCalls.length, 1);
   assert.equal(linkCalls[0]?.sourceAttachmentId, "source-att");
+  assert.equal(linkCalls[0]?.sourceAttachmentSource, "user");
+  assert.equal(linkCalls[0]?.sourceAttachmentPath, textPath);
   assert.equal(linkCalls[0]?.parsedAttachmentMeta?.attachmentId, "parsed-1");
+  assert.equal(runtime.userMessageAttachments[0]?.parsedResult?.attachmentId, "parsed-1");
+  assert.equal(runtime.userMessageAttachments[0]?.parsedResult?.tool, TOOL_NAME.DOC_TO_DATA);
   assert.equal(runtime.inputAttachments[0]?.parsedResult?.attachmentId, "parsed-1");
   assert.equal(runtime.inputAttachments[0]?.parsedResult?.tool, TOOL_NAME.DOC_TO_DATA);
+  assert.equal(runtime.attachments[0]?.parsedResult, undefined);
 });
 
 test("doc_to_data: reuses generated data artifact instead of creating recursive copies", async () => {

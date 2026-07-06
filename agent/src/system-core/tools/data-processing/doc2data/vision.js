@@ -11,6 +11,7 @@ import { DOC2DATA_PARSE_ENGINE, normalizeDoc2DataParseEngine } from "../../../co
 import { recoverableToolError } from "../../../error/index.js";
 import { ERROR_CODE } from "../../../error/constants.js";
 import { getRuntimeFromAgentContext } from "../../../context/agent-context-accessor.js";
+import { resolveRuntimeUserMessageAttachments } from "../../../attach/index.js";
 import { tTool } from "../../core/tool-i18n.js";
 
 const MAX_BATCH_BYTES = LENGTH_THRESHOLDS.dataProcessing.batchBytes;
@@ -145,10 +146,7 @@ export function isLegacyDocInputFile(filePath = "") {
 export function resolveDocInputAttachmentMeta(filePath = "", agentContext = {}) {
   const normalizedInputPath = String(filePath || "").trim();
   const runtime = getRuntimeFromAgentContext(agentContext);
-  const runtimeAttachmentMetas = [
-    ...(Array.isArray(runtime?.inputAttachments) ? runtime.inputAttachments : []),
-    ...(Array.isArray(runtime?.attachments) ? runtime.attachments : []),
-  ];
+  const runtimeAttachmentMetas = resolveRuntimeUserMessageAttachments(runtime);
   if (!normalizedInputPath || !runtimeAttachmentMetas.length) return null;
   const inputBaseName = path.basename(normalizedInputPath);
   const inputAttachmentId = String(inputBaseName || "").split(".")[0];
