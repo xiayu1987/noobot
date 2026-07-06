@@ -57,6 +57,10 @@ export function mergeAttachmentMetaFields(existingItem = {}, incomingItem = {}) 
 }
 
 export function mergeAttachments(existing = [], incoming = []) {
+  // Frontend message attachments are a UI view over session-message attachment
+  // refs.  Resend/session-detail payloads can be raw transport refs, so all local
+  // write-backs go through this rich-first merge instead of replacing the message
+  // attachment array and losing parsedResult/preview/download fields.
   const existingList = Array.isArray(existing) ? existing : [];
   const incomingList = Array.isArray(incoming) ? incoming : [];
   if (!incomingList.length) return existingList;
@@ -86,7 +90,6 @@ export function mergeAttachments(existing = [], incoming = []) {
     if (name) {
       pushKey(`name:${name}|mime:${mimeType}`);
       pushKey(`name:${name}|size:${size}`);
-      pushKey(`name:${name}`);
     }
     return keys;
   };

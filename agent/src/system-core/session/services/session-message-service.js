@@ -24,6 +24,61 @@ function dedupeAttachments(attachments = []) {
   });
 }
 
+function attachmentMatchKeys(item = {}) {
+  if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+  const name = String(item?.name || item?.fileName || item?.filename || "").trim();
+  const mimeType = String(item?.mimeType || item?.type || item?.mime || "").trim();
+  const size = Number(item?.size || 0);
+  const finiteSize = Number.isFinite(size) && size > 0 ? String(size) : "";
+  return [
+    String(item?.attachmentId || item?.id || "").trim() ? `id:${String(item?.attachmentId || item?.id || "").trim()}` : "",
+    String(item?.path || item?.filePath || "").trim() ? `path:${String(item?.path || item?.filePath || "").trim()}` : "",
+    String(item?.relativePath || "").trim() ? `rel:${String(item?.relativePath || "").trim()}` : "",
+    String(item?.sandboxPath || item?.sandboxViewPath || "").trim() ? `sandbox:${String(item?.sandboxPath || item?.sandboxViewPath || "").trim()}` : "",
+    name && mimeType && finiteSize ? `name-mime-size:${name}|${mimeType}|${finiteSize}` : "",
+    name && finiteSize ? `name-size:${name}|${finiteSize}` : "",
+    name && mimeType ? `name-mime:${name}|${mimeType}` : "",
+  ].filter(Boolean);
+}
+
+function hasAttachmentValue(value) {
+  if (value === undefined || value === null) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") return Object.keys(value).length > 0;
+  return true;
+}
+
+function mergeAttachmentPreferRich(rich = {}, raw = {}) {
+  const out = { ...(raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {}) };
+  for (const [key, value] of Object.entries(rich && typeof rich === "object" && !Array.isArray(rich) ? rich : {})) {
+    if (hasAttachmentValue(value)) out[key] = value;
+  }
+  return out;
+}
+
+function findMatchingAttachment(source = {}, candidates = []) {
+  const sourceKeys = new Set(attachmentMatchKeys(source));
+  if (!sourceKeys.size) return null;
+  return (Array.isArray(candidates) ? candidates : []).find((candidate) =>
+    attachmentMatchKeys(candidate).some((key) => sourceKeys.has(key)),
+  ) || null;
+}
+
+function normalizeIncomingAttachmentsForSessionMessage(existingAttachments = [], incomingAttachments = []) {
+  if (!Array.isArray(incomingAttachments)) return undefined;
+  if (incomingAttachments.length === 0) return [];
+  // Payload attachments may be raw transport refs ({ name, mimeType, size }).
+  // Session user-message attachments are the display/edit-back carrier, so write
+  // paths must merge rich-first instead of letting raw refs downgrade parsedResult
+  // or preview/download addressing.  Only preserve rich fields for attachments
+  // still present in the explicit incoming set; [] remains delete-all.
+  return dedupeAttachments(incomingAttachments.map((incoming) => {
+    const existing = findMatchingAttachment(incoming, existingAttachments);
+    return existing ? mergeAttachmentPreferRich(existing, incoming) : incoming;
+  }));
+}
+
 function normalizeAnchorValue(value = "") {
   return String(value || "").trim();
 }
@@ -378,6 +433,10 @@ export class SessionMessageService {
     delete replacementBaseMessage.messageId;
     delete replacementBaseMessage.message_id;
     delete replacementBaseMessage.id;
+    const nextAttachments = normalizeIncomingAttachmentsForSessionMessage(
+      replacedUserMessage?.attachments,
+      attachments,
+    );
     const newMessage = normalizeMessageEntity({
       ...replacementBaseMessage,
       role: "user",
@@ -392,7 +451,7 @@ export class SessionMessageService {
       monotonic: true,
       monotonicState: "monotonic",
       ts: nowValue,
-      ...(Array.isArray(attachments) ? { attachments: dedupeAttachments(attachments) } : {}),
+      ...(nextAttachments !== undefined ? { attachments: nextAttachments } : {}),
     }, () => nowValue);
     session.messages = [...messages.slice(0, turnStartIndex), newMessage];
     session.updatedAt = nowValue;
@@ -523,7 +582,9 @@ export class SessionMessageService {
 
     const targetMessage = messages[targetIndex];
     const shouldSyncAttachments = Array.isArray(attachments);
-    const nextAttachments = shouldSyncAttachments ? dedupeAttachments(attachments) : undefined;
+    const nextAttachments = shouldSyncAttachments
+      ? normalizeIncomingAttachmentsForSessionMessage(targetMessage.attachments, attachments)
+      : undefined;
     const dialogProcessIdChanged =
       resolveMessageDialogProcessId(targetMessage) !== normalizedDialogProcessId;
     const attachmentsChanged = shouldSyncAttachments &&

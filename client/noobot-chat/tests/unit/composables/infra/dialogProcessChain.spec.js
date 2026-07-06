@@ -62,4 +62,24 @@ describe("dialogProcessChain.mergeAttachments", () => {
       contentBase64: "YQ==",
     }));
   });
+
+  it("does not merge same-name attachments without stable identity", () => {
+    const existingAttachment = {
+      attachmentId: "server-a",
+      name: "report.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      previewUrl: "/api/attachments/server-a/preview",
+    };
+    const incomingAttachment = {
+      name: "report.docx",
+      mimeType: "application/pdf",
+      size: 2048,
+    };
+
+    const merged = mergeAttachments([existingAttachment], [incomingAttachment]);
+
+    expect(merged).toHaveLength(2);
+    expect(merged[0]).toEqual(existingAttachment);
+    expect(merged[1]).toEqual(incomingAttachment);
+  });
 });
