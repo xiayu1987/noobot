@@ -490,6 +490,7 @@ export class SessionMessageService {
     parentSessionId = "",
     turnScopeId = "",
     dialogProcessId = "",
+    attachments = undefined,
   } = {}) {
     if (!userId || !sessionId) return { stamped: false, reason: "missing_session" };
     const normalizedTurnScopeId = String(turnScopeId || "").trim();
@@ -521,7 +522,13 @@ export class SessionMessageService {
     if (targetIndex < 0) return { stamped: false, reason: "user_message_not_found" };
 
     const targetMessage = messages[targetIndex];
-    if (resolveMessageDialogProcessId(targetMessage) === normalizedDialogProcessId) {
+    const shouldSyncAttachments = Array.isArray(attachments);
+    const nextAttachments = shouldSyncAttachments ? dedupeAttachments(attachments) : undefined;
+    const dialogProcessIdChanged =
+      resolveMessageDialogProcessId(targetMessage) !== normalizedDialogProcessId;
+    const attachmentsChanged = shouldSyncAttachments &&
+      JSON.stringify(dedupeAttachments(targetMessage.attachments)) !== JSON.stringify(nextAttachments);
+    if (!dialogProcessIdChanged && !attachmentsChanged) {
       return {
         stamped: false,
         reason: "unchanged",
@@ -530,8 +537,13 @@ export class SessionMessageService {
         dialogProcessId: normalizedDialogProcessId,
       };
     }
-    targetMessage.dialogProcessId = normalizedDialogProcessId;
-    delete targetMessage.dialogId;
+    if (dialogProcessIdChanged) {
+      targetMessage.dialogProcessId = normalizedDialogProcessId;
+      delete targetMessage.dialogId;
+    }
+    if (shouldSyncAttachments) {
+      targetMessage.attachments = nextAttachments;
+    }
     session.updatedAt = this.now();
     const currentVersion = resolveSessionVersion(session);
     session.version = currentVersion + 1;

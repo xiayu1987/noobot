@@ -7,6 +7,23 @@ import { resolveForceToolCall } from "#agent/utils";
 import { HTTP_STATUS } from "#agent/constants";
 import { hasOwnConfigKey, normalizeBooleanLike, resolveTimeMs } from "#agent/config";
 
+function summarizeDebugAttachments(attachments) {
+  if (!Array.isArray(attachments)) {
+    return { kind: attachments === undefined ? "undefined" : "non-array", count: 0, items: [] };
+  }
+  return {
+    kind: "array",
+    count: attachments.length,
+    items: attachments.slice(0, 8).map((attachment = {}) => ({
+      id: String(attachment.id || attachment.fileId || attachment.attachmentId || ""),
+      name: String(attachment.name || attachment.fileName || attachment.filename || ""),
+      type: String(attachment.type || attachment.mimeType || attachment.mime || ""),
+      size: Number.isFinite(Number(attachment.size)) ? Number(attachment.size) : undefined,
+      url: attachment.url ? "present" : "",
+    })),
+  };
+}
+
 export function createChatRunService({
   getBot,
   normalizeLocale,
@@ -156,6 +173,14 @@ export function createChatRunService({
         throw new Error(translateText("common.userSessionMessageRequired", req.locale));
       }
       const bot = getBot();
+      bot?.emitRuntimeEvent?.("debug_resend_http_received", {
+        sessionId,
+        parentSessionId,
+        turnScopeId: String(turnScopeId || config?.turnScopeId || "").trim(),
+        reuseExistingUserTurn: config?.reuseExistingUserTurn === true,
+        attachments: summarizeDebugAttachments(attachments),
+        bodyAttachments: summarizeDebugAttachments(req.body?.attachments),
+      });
       const result = await bot.runSession({
         userId,
         sessionId,

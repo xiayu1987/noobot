@@ -15,6 +15,7 @@ import {
 import { SESSION_RUN_EVENT } from "../sessionRunStateMachine";
 import {
   logResendDebug,
+  summarizeDebugAttachments,
   summarizeDebugMessage,
   summarizeDebugMessages,
 } from "../debug/resendDebugLogger";
@@ -326,6 +327,7 @@ export function createResendMessageTransaction({
       expectedVersion,
       attempt,
       idempotencyKey,
+      attachments: summarizeDebugAttachments(attachments),
       messages: summarizeDebugMessages(activeSession?.value?.messages),
     });
     const result = await replaceSessionTurnApi({
@@ -366,6 +368,17 @@ export function createResendMessageTransaction({
       : [];
     const sessionId = resolveSessionId(activeSession, activeSessionId);
     const resendTurnScopeId = normalizeTrimmedString(options?.turnScopeId) || createTurnScopeId();
+    logResendDebug("resend.attachments.resolved", {
+      sessionId,
+      oldTurnScopeId: getMessageTurnScopeId(userTargetMessage),
+      turnScopeId: resendTurnScopeId,
+      optionsAttachments: summarizeDebugAttachments(options?.attachments),
+      targetAttachments: summarizeDebugAttachments(userTargetMessage?.attachments),
+      keptAttachments: summarizeDebugAttachments(keptAttachments),
+      attachmentFiles: { kind: Array.isArray(options?.attachmentFiles) ? "array" : "undefined", count: attachmentFiles.length },
+      serializedNewAttachments: summarizeDebugAttachments(serializedNewAttachments),
+      finalAttachments: summarizeDebugAttachments(finalAttachments),
+    });
     logResendDebug("resend.begin", {
       sessionId,
       oldTurnScopeId: getMessageTurnScopeId(userTargetMessage),
@@ -540,6 +553,7 @@ export function createResendMessageTransaction({
       logResendDebug("resend.send.before", {
         sessionId,
         turnScopeId: resendTurnScopeId,
+        finalAttachments: summarizeDebugAttachments(finalAttachments),
         messages: summarizeDebugMessages(activeSession?.value?.messages),
       });
       const sent = await send?.({

@@ -188,6 +188,69 @@ test("SessionMessageService.stampReusedUserTurnDialogProcessId updates the reuse
   assert.equal(saved[0].version, 3);
 });
 
+test("SessionMessageService.stampReusedUserTurnDialogProcessId syncs reused user attachments", async () => {
+  const { service, saved } = createService({
+    initialSession: baseSession({
+      messages: [
+        { role: "user", content: "keep", dialogProcessId: "dp-keep", turnScopeId: "scope-keep" },
+        {
+          role: "user",
+          content: "edited",
+          dialogProcessId: "dp-old",
+          turnScopeId: "scope-edited",
+          frontendUserMessage: true,
+          attachments: [{ attachmentId: "old", name: "old.txt" }],
+        },
+      ],
+    }),
+  });
+
+  const nextAttachments = [
+    { attachmentId: "kept", name: "kept.txt" },
+    { attachmentId: "new", name: "new.txt" },
+  ];
+  const result = await service.stampReusedUserTurnDialogProcessId({
+    userId: "u1",
+    sessionId: "s1",
+    turnScopeId: "scope-edited",
+    dialogProcessId: "dp-new",
+    attachments: nextAttachments,
+  });
+
+  assert.equal(result.stamped, true);
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].messages[1].dialogProcessId, "dp-new");
+  assert.deepEqual(saved[0].messages[1].attachments, nextAttachments);
+  assert.equal(saved[0].version, 3);
+});
+
+test("SessionMessageService.stampReusedUserTurnDialogProcessId preserves empty attachments as delete-all", async () => {
+  const { service, saved } = createService({
+    initialSession: baseSession({
+      messages: [
+        {
+          role: "user",
+          content: "edited",
+          dialogProcessId: "dp-old",
+          turnScopeId: "scope-edited",
+          attachments: [{ attachmentId: "old", name: "old.txt" }],
+        },
+      ],
+    }),
+  });
+
+  await service.stampReusedUserTurnDialogProcessId({
+    userId: "u1",
+    sessionId: "s1",
+    turnScopeId: "scope-edited",
+    dialogProcessId: "dp-new",
+    attachments: [],
+  });
+
+  assert.equal(saved.length, 1);
+  assert.deepEqual(saved[0].messages[0].attachments, []);
+});
+
 test("SessionMessageService.stampReusedUserTurnDialogProcessId does not stamp without turnScopeId", async () => {
   const { service, saved } = createService({ initialSession: baseSession() });
 

@@ -33,6 +33,23 @@ import {
 } from "../../context/compatibility-deprecation.js";
 import { PLUGIN_SLOT_KEY } from "../../plugin/plugin-constants.js";
 
+function summarizeDebugAttachments(attachments) {
+  if (!Array.isArray(attachments)) {
+    return { kind: attachments === undefined ? "undefined" : "non-array", count: 0, items: [] };
+  }
+  return {
+    kind: "array",
+    count: attachments.length,
+    items: attachments.slice(0, 8).map((attachment = {}) => ({
+      id: String(attachment.id || attachment.fileId || attachment.attachmentId || ""),
+      name: String(attachment.name || attachment.fileName || attachment.filename || ""),
+      type: String(attachment.type || attachment.mimeType || attachment.mime || ""),
+      size: Number.isFinite(Number(attachment.size)) ? Number(attachment.size) : undefined,
+      url: attachment.url ? "present" : "",
+    })),
+  };
+}
+
 function readSelectedModelValue(modelConfig = "") {
   if (typeof modelConfig === "string") return modelConfig.trim();
   if (!modelConfig || typeof modelConfig !== "object" || Array.isArray(modelConfig)) return "";
@@ -280,15 +297,14 @@ export class SessionExecutionRunner {
         abortSignal,
         parentAsyncResultContainer: resolvedParentAsyncResultContainer,
       };
-      if (resolvedRunConfig?.reuseExistingUserTurn === true) {
-        await this.stampReusedUserTurnDialogProcessId?.({
-          userId,
-          sessionId: usedSessionId,
-          parentSessionId,
-          turnScopeId: resolvedTurnScopeId,
-          dialogProcessId,
-        });
-      }
+      emitEvent(runtimeEventListener, "debug_resend_runner_received", {
+        sessionId: usedSessionId,
+        dialogProcessId,
+        turnScopeId: resolvedTurnScopeId,
+        reuseExistingUserTurn: resolvedRunConfig?.reuseExistingUserTurn === true,
+        attachments: summarizeDebugAttachments(attachments),
+        inputAttachments: summarizeDebugAttachments(buildContextPayload.inputAttachments),
+      });
       if (typeof this.prepareAgentTurnExecution !== "function") {
         throw new Error("prepareAgentTurnExecution is required");
       }
@@ -298,6 +314,42 @@ export class SessionExecutionRunner {
       });
       const { agentContext, runtimeAgentContext, userMessageAttachments } =
         this._normalizePreparedAgentTurnExecution(preparedAgentTurnExecution);
+      const dispatchRuntime = runtimeAgentContext?.execution?.controllers?.runtime;
+      if (dispatchRuntime && typeof dispatchRuntime === "object") {
+        dispatchRuntime.userMessageAttachments = userMessageAttachments;
+        dispatchRuntime.inputAttachments = userMessageAttachments;
+        dispatchRuntime.attachments = userMessageAttachments;
+      }
+      emitEvent(runtimeEventListener, "debug_resend_runner_prepared", {
+        sessionId: usedSessionId,
+        dialogProcessId,
+        turnScopeId: resolvedTurnScopeId,
+        reuseExistingUserTurn: resolvedRunConfig?.reuseExistingUserTurn === true,
+        inputAttachments: summarizeDebugAttachments(attachments),
+        userMessageAttachments: summarizeDebugAttachments(userMessageAttachments),
+      });
+      if (resolvedRunConfig?.reuseExistingUserTurn === true) {
+        emitEvent(runtimeEventListener, "debug_resend_runner_reuse_before_stamp", {
+          sessionId: usedSessionId,
+          dialogProcessId,
+          turnScopeId: resolvedTurnScopeId,
+          attachments: summarizeDebugAttachments(userMessageAttachments),
+        });
+        await this.stampReusedUserTurnDialogProcessId?.({
+          userId,
+          sessionId: usedSessionId,
+          parentSessionId,
+          turnScopeId: resolvedTurnScopeId,
+          dialogProcessId,
+          attachments: userMessageAttachments,
+        });
+        emitEvent(runtimeEventListener, "debug_resend_runner_reuse_after_stamp", {
+          sessionId: usedSessionId,
+          dialogProcessId,
+          turnScopeId: resolvedTurnScopeId,
+          attachments: summarizeDebugAttachments(userMessageAttachments),
+        });
+      }
       const agentContextSummary = this._buildAgentContextSummary(runtimeAgentContext);
       const dispatchContextMessages = Array.isArray(runtimeAgentContext?.payload?.messages?.history)
         ? runtimeAgentContext.payload.messages.history

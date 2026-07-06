@@ -31,7 +31,12 @@ export function mergeAttachmentMetaFields(existingItem = {}, incomingItem = {}) 
     "name",
     "path",
     "relativePath",
+    "sandboxPath",
     "transferFilePath",
+    "parsedResultPath",
+    "parsedResultRelativePath",
+    "parsedResultSessionId",
+    "parsedResultAttachmentSource",
   ]) {
     const incomingValue = incoming[field];
     const existingValue = existing[field];
@@ -56,26 +61,57 @@ export function mergeAttachments(existing = [], incoming = []) {
   const incomingList = Array.isArray(incoming) ? incoming : [];
   if (!incomingList.length) return existingList;
   const merged = [...existingList];
-  const toKey = (attachmentItem = {}) =>
-    String(
-      attachmentItem?.attachmentId ||
-        `${attachmentItem?.name || ""}|${attachmentItem?.size || 0}`,
-    ).trim();
+  const normalizeKeyPart = (value = "") => String(value || "").trim().toLowerCase();
+  const toKeys = (attachmentItem = {}) => {
+    const keys = [];
+    const pushKey = (key = "") => {
+      const normalized = String(key || "").trim();
+      if (normalized && !keys.includes(normalized)) keys.push(normalized);
+    };
+    const attachmentId = normalizeKeyPart(attachmentItem?.attachmentId);
+    const parsedResultAttachmentId = normalizeKeyPart(attachmentItem?.parsedResultAttachmentId);
+    const name = normalizeKeyPart(attachmentItem?.name || attachmentItem?.parsedResultName);
+    const mimeType = normalizeKeyPart(attachmentItem?.mimeType || attachmentItem?.type);
+    const size = Number(attachmentItem?.size || 0) || 0;
+    const path = normalizeKeyPart(
+      attachmentItem?.path ||
+        attachmentItem?.relativePath ||
+        attachmentItem?.transferFilePath ||
+        attachmentItem?.downloadUrl ||
+        attachmentItem?.parsedResultUrl,
+    );
+    pushKey(attachmentId ? `id:${attachmentId}` : "");
+    pushKey(parsedResultAttachmentId ? `parsed-id:${parsedResultAttachmentId}` : "");
+    pushKey(path ? `path:${path}` : "");
+    if (name) {
+      pushKey(`name:${name}|mime:${mimeType}`);
+      pushKey(`name:${name}|size:${size}`);
+      pushKey(`name:${name}`);
+    }
+    return keys;
+  };
   const indexByKey = new Map();
   existingList.forEach((attachmentItem, index) => {
-    const attachmentKey = toKey(attachmentItem);
-    if (attachmentKey && !indexByKey.has(attachmentKey)) indexByKey.set(attachmentKey, index);
+    for (const attachmentKey of toKeys(attachmentItem)) {
+      if (attachmentKey && !indexByKey.has(attachmentKey)) indexByKey.set(attachmentKey, index);
+    }
   });
   for (const attachmentItem of incomingList) {
-    const attachmentKey = toKey(attachmentItem);
-    if (attachmentKey && indexByKey.has(attachmentKey)) {
-      const existingIndex = indexByKey.get(attachmentKey);
+    const attachmentKeys = toKeys(attachmentItem);
+    const matchedKey = attachmentKeys.find((attachmentKey) => indexByKey.has(attachmentKey));
+    if (matchedKey) {
+      const existingIndex = indexByKey.get(matchedKey);
       const existingItem = merged[existingIndex] || {};
       merged[existingIndex] = mergeAttachmentMetaFields(existingItem, attachmentItem);
+      for (const attachmentKey of toKeys(merged[existingIndex])) {
+        if (attachmentKey && !indexByKey.has(attachmentKey)) indexByKey.set(attachmentKey, existingIndex);
+      }
       continue;
     }
     merged.push(attachmentItem);
-    if (attachmentKey) indexByKey.set(attachmentKey, merged.length - 1);
+    for (const attachmentKey of attachmentKeys) {
+      if (attachmentKey && !indexByKey.has(attachmentKey)) indexByKey.set(attachmentKey, merged.length - 1);
+    }
   }
   return merged;
 }
