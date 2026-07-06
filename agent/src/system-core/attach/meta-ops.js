@@ -141,6 +141,57 @@ export function mergeAttachmentMetas(existing = [], incoming = []) {
   return merged;
 }
 
+export function attachmentMatchKeys(item = {}) {
+  if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+  const name = safeStr(item?.name || item?.fileName || item?.filename);
+  const mimeType = safeStr(item?.mimeType || item?.type || item?.mime);
+  const size = Number(item?.size || 0);
+  const finiteSize = Number.isFinite(size) && size > 0 ? String(size) : "";
+  return [
+    safeStr(item?.attachmentId || item?.id) ? `id:${safeStr(item?.attachmentId || item?.id)}` : "",
+    safeStr(item?.path || item?.filePath) ? `path:${safeStr(item?.path || item?.filePath)}` : "",
+    safeStr(item?.relativePath) ? `rel:${safeStr(item?.relativePath)}` : "",
+    safeStr(item?.sandboxPath || item?.sandboxViewPath) ? `sandbox:${safeStr(item?.sandboxPath || item?.sandboxViewPath)}` : "",
+    name && mimeType && finiteSize ? `name-mime-size:${name}|${mimeType}|${finiteSize}` : "",
+    name && finiteSize ? `name-size:${name}|${finiteSize}` : "",
+    name && mimeType ? `name-mime:${name}|${mimeType}` : "",
+  ].filter(Boolean);
+}
+
+export function findMatchingAttachmentMeta(source = {}, candidates = []) {
+  const sourceKeys = new Set(attachmentMatchKeys(source));
+  if (!sourceKeys.size) return null;
+  return (Array.isArray(candidates) ? candidates : []).find((candidate) =>
+    attachmentMatchKeys(candidate).some((key) => sourceKeys.has(key)),
+  ) || null;
+}
+
+export function hasAttachmentMetaValue(value) {
+  if (value === undefined || value === null) return false;
+  if (typeof value === "string") return safeStr(value).length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") return Object.keys(value).length > 0;
+  return true;
+}
+
+export function mergeAttachmentMetaPreferRich(rich = {}, raw = {}) {
+  const out = { ...(raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {}) };
+  for (const [key, value] of Object.entries(rich && typeof rich === "object" && !Array.isArray(rich) ? rich : {})) {
+    if (hasAttachmentMetaValue(value)) out[key] = value;
+  }
+  return out;
+}
+
+export function mergeAttachmentListsPreferRich(existing = [], incoming = []) {
+  if (!Array.isArray(incoming)) return undefined;
+  if (incoming.length === 0) return [];
+  const existingList = Array.isArray(existing) ? existing : [];
+  return incoming.map((incomingItem) => {
+    const match = findMatchingAttachmentMeta(incomingItem, existingList);
+    return match ? mergeAttachmentMetaPreferRich(match, incomingItem) : incomingItem;
+  });
+}
+
 /**
  * 规范化附件元数据（用于系统提示格式化显示）
  * - 将字符串路径转为 { path } 对象

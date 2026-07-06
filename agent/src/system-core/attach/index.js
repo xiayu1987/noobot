@@ -12,6 +12,11 @@ export {
   normalizeAttachmentOwnerMeta,
   normalizeAttachmentParsedResultMeta,
   normalizeAttachmentTurnScopeMeta,
+  attachmentMatchKeys,
+  findMatchingAttachmentMeta,
+  hasAttachmentMetaValue,
+  mergeAttachmentMetaPreferRich,
+  mergeAttachmentListsPreferRich,
 } from "./meta-ops.js";
 export { appendAttachmentMetasToRuntimeAndTurn } from "./runtime-attachment.js";
 export { readAttachIndex, writeAttachIndex } from "./index-manager.js";
