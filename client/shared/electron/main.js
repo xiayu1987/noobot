@@ -18,7 +18,7 @@ import { createDependencyProcessTools } from "./dependency-process.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, "../../..");
+const repoRoot = path.resolve(process.env.NOOBOT_DESKTOP_REPO_ROOT || path.resolve(__dirname, "../../.."));
 const packagedBackendRoot = path.join(process.resourcesPath, "backend");
 
 installEarlyDiagnostics({ app, filename: __filename, dirname: __dirname });
