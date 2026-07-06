@@ -92,6 +92,7 @@ export function registerSessionRoutes(
         anchor: req.body?.anchor || {},
         expectedVersion: req.body?.expectedVersion,
         idempotencyKey: String(req.body?.idempotencyKey || "").trim(),
+        attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : undefined,
       });
       res.json({ ok: true, ...result });
     }),
@@ -108,6 +109,7 @@ export function registerSessionRoutes(
         turnScopeId: String(req.body?.turnScopeId || "").trim(),
         expectedVersion: req.body?.expectedVersion,
         idempotencyKey: String(req.body?.idempotencyKey || "").trim(),
+        attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : undefined,
       });
       res.json({ ok: true, ...result });
     });

@@ -22,14 +22,16 @@ export function prepareChatSend({
   messageText = "",
   turnScopeId = "",
   reuseExistingUserTurn = false,
+  attachmentFiles = null,
+  userAttachments = null,
 }) {
   const normalizedTurnScopeId = String(turnScopeId || "").trim();
   const explicitText = typeof messageText === "string" ? messageText.trim() : "";
   const text = explicitText || input.value.trim();
   input.value = "";
 
-  const filesToSend = [...uploadFiles.value];
-  const userAttachments = filesToSend.map((fileItem) => ({
+  const filesToSend = Array.isArray(attachmentFiles) ? [...attachmentFiles] : [...uploadFiles.value];
+  const resolvedUserAttachments = Array.isArray(userAttachments) ? [...userAttachments] : filesToSend.map((fileItem) => ({
     name: fileItem.name,
     mimeType: fileItem.mimeType,
     size: fileItem.size,
@@ -42,9 +44,12 @@ export function prepareChatSend({
       message?.role === RoleEnum.USER &&
       String(message?.turnScopeId || "").trim() === normalizedTurnScopeId
     ))
-    : appendMessage(RoleEnum.USER, text || translate("chat.uploadOnly"), userAttachments);
+    : appendMessage(RoleEnum.USER, text || translate("chat.uploadOnly"), resolvedUserAttachments);
   if (userMessage && normalizedTurnScopeId) {
     userMessage.turnScopeId = normalizedTurnScopeId;
+  }
+  if (userMessage && Array.isArray(userAttachments)) {
+    userMessage.attachments = [...resolvedUserAttachments];
   }
   if (
     [

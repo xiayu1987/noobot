@@ -19,6 +19,43 @@ import {
   summarizeDebugMessages,
 } from "../debug/resendDebugLogger";
 import { createSessionVersionManager } from "./sessionVersionManager";
+import { serializeAttachments } from "./attachmentSerialization";
+
+
+function normalizeAttachmentMeta(attachment = {}) {
+  if (!attachment || typeof attachment !== "object" || Array.isArray(attachment)) return null;
+  const out = { ...attachment };
+  delete out.raw;
+  delete out.file;
+  return out;
+}
+
+function dedupeAttachmentMetas(attachments = []) {
+  const seen = new Set();
+  const out = [];
+  for (const attachment of Array.isArray(attachments) ? attachments : []) {
+    const meta = normalizeAttachmentMeta(attachment);
+    if (!meta) continue;
+    const key = String(meta.attachmentId || meta.id || "").trim() || [
+      String(meta.path || "").trim(),
+      String(meta.relativePath || "").trim(),
+      String(meta.name || meta.filename || meta.fileName || "").trim(),
+      String(meta.size || 0),
+      String(meta.mimeType || meta.type || "").trim(),
+    ].join("|");
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    out.push(meta);
+  }
+  return out;
+}
+
+function mergeAttachmentMetas(historyAttachments = [], serializedAttachments = []) {
+  return dedupeAttachmentMetas([
+    ...(Array.isArray(historyAttachments) ? historyAttachments : []),
+    ...(Array.isArray(serializedAttachments) ? serializedAttachments : []),
+  ]);
+}
 
 function resolveSessionId(activeSession, activeSessionId) {
   return normalizeTrimmedString(
@@ -296,7 +333,7 @@ export function createResendMessageTransaction({
     }),
   });
 
-  async function requestReplaceTurn({ sessionId, originalSession, anchor, text, resendTurnScopeId, idempotencyKey, attempt, expectedVersion }) {
+  async function requestReplaceTurn({ sessionId, originalSession, anchor, text, resendTurnScopeId, idempotencyKey, attempt, expectedVersion, attachments }) {
     logResendDebug("resend.replaceTurn.request", {
       sessionId,
       turnScopeId: resendTurnScopeId,
@@ -315,6 +352,7 @@ export function createResendMessageTransaction({
       turnScopeId: resendTurnScopeId,
       expectedVersion,
       idempotencyKey,
+      attachments,
     }, { fetcher: authFetch });
     const payload = typeof result?.json === "function" ? await result.json() : result;
     return { result, payload };
@@ -330,6 +368,12 @@ export function createResendMessageTransaction({
     if (!userTargetMessage) return false;
 
     const originalSession = activeSession?.value;
+    const keptAttachments = Array.isArray(options?.attachments)
+      ? dedupeAttachmentMetas(options.attachments)
+      : dedupeAttachmentMetas(userTargetMessage?.attachments || []);
+    const attachmentFiles = Array.isArray(options?.attachmentFiles) ? options.attachmentFiles : [];
+    const serializedNewAttachments = await serializeAttachments?.(attachmentFiles) || [];
+    const finalAttachments = mergeAttachmentMetas(keptAttachments, serializedNewAttachments);
     const snapshot = createSessionSnapshot(originalSession, input?.value);
     const originalCascadeStartIndex = findMessageCascadeStartIndex?.(userTargetMessage) ?? -1;
     const removedMessagesBeforeResend = Array.isArray(originalSession?.messages) && originalCascadeStartIndex >= 0
@@ -383,6 +427,7 @@ export function createResendMessageTransaction({
           expectedVersion,
           idempotencyKey: attempt > 1 ? `${operation?.opId || "resend"}:retry-version` : operation?.opId || "",
           attempt,
+          attachments: finalAttachments,
         }),
       });
       let { result, payload, expectedVersion } = mutationResult || {};
@@ -460,6 +505,7 @@ export function createResendMessageTransaction({
         return false;
       }
       replacementUserMessage.content = text;
+      replacementUserMessage.attachments = [...finalAttachments];
       if ("text" in replacementUserMessage) replacementUserMessage.text = text;
       if ("message" in replacementUserMessage) replacementUserMessage.message = text;
       delete replacementUserMessage.stopState;
@@ -481,7 +527,13 @@ export function createResendMessageTransaction({
         session: activeSession?.value,
         replacementUserMessage,
       });
-      if (completedAssistantReturned || payload?.generation === "completed" || payload?.generated === true) {
+      // replace-turn only mutates the stored user turn. It must not be treated as
+      // a completed resend just because an old assistant snapshot is still
+      // present in the preserved frontend message list. The actual assistant
+      // placeholder and streaming request are created by send({
+      // reuseExistingUserTurn: true }) below. Only skip streaming when the
+      // backend explicitly reports that generation has already completed.
+      if (payload?.generation === "completed" || payload?.generated === true) {
         logResendDebug("resend.completedWithoutStream", {
           sessionId,
           turnScopeId: resendTurnScopeId,
@@ -517,6 +569,9 @@ export function createResendMessageTransaction({
         reuseExistingUserTurn: true,
         turnScopeId: resendTurnScopeId,
         allowDuringResend: true,
+        attachmentFiles: [],
+        userAttachments: finalAttachments,
+        serializedAttachments: finalAttachments,
       });
       logResendDebug("resend.send.after", {
         sessionId,

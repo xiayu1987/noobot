@@ -232,6 +232,7 @@ export async function replaceSessionTurnApi(
     turnScopeId = "",
     expectedVersion = undefined,
     idempotencyKey = "",
+    attachments = undefined,
   },
   { fetcher } = {},
 ) {
@@ -243,6 +244,7 @@ export async function replaceSessionTurnApi(
     turnScopeId: String(turnScopeId || "").trim(),
     idempotencyKey: String(idempotencyKey || "").trim(),
   };
+  if (Array.isArray(attachments)) body.attachments = attachments;
   if (expectedVersion !== undefined && expectedVersion !== null && expectedVersion !== "") {
     body.expectedVersion = expectedVersion;
   }

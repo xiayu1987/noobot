@@ -245,6 +245,7 @@ export class SessionMessageService {
     anchor = {},
     expectedVersion = null,
     idempotencyKey = "",
+    attachments = undefined,
   } = {}) {
     if (!userId || !sessionId) {
       const error = new Error("userId and sessionId are required");
@@ -309,6 +310,7 @@ export class SessionMessageService {
     turnScopeId = "",
     expectedVersion = null,
     idempotencyKey = "",
+    attachments = undefined,
   } = {}) {
     if (!userId || !sessionId) {
       const error = new Error("userId and sessionId are required");
@@ -390,6 +392,7 @@ export class SessionMessageService {
       monotonic: true,
       monotonicState: "monotonic",
       ts: nowValue,
+      ...(Array.isArray(attachments) ? { attachments: dedupeAttachments(attachments) } : {}),
     }, () => nowValue);
     session.messages = [...messages.slice(0, turnStartIndex), newMessage];
     session.updatedAt = nowValue;
