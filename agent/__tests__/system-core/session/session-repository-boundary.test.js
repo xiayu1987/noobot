@@ -52,6 +52,61 @@ test("session display summary should keep canonical attachment fields", () => {
   assert.equal(summary.stats.attachmentCount, 2);
 });
 
+test("session display summary keeps rich attachment fields for preview and parsed result", () => {
+  const summary = buildSessionDisplaySummary({
+    sessionId: "s-rich-attachments",
+    messages: [
+      {
+        role: "user",
+        content: "rich attachment",
+        attachments: [
+          {
+            attachmentId: "att-rich",
+            name: "report.docx",
+            mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            size: 123,
+            sessionId: "s-rich-attachments",
+            attachmentSource: "user",
+            path: "/workspace/report.docx",
+            relativePath: "runtime/attach/s-rich-attachments/user/report.docx",
+            sandboxPath: "/sandbox/report.docx",
+            previewUrl: "/api/attachments/att-rich/preview",
+            downloadUrl: "/api/attachments/att-rich/download",
+            parsedResult: {
+              attachmentId: "att-parsed",
+              name: "report.md",
+              mimeType: "text/markdown",
+              path: "/workspace/report.md",
+              relativePath: "runtime/attach/s-rich-attachments/model/report.md",
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.deepEqual(summary.messages[0].attachments[0], {
+    attachmentId: "att-rich",
+    name: "report.docx",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    size: 123,
+    attachmentSource: "user",
+    sessionId: "s-rich-attachments",
+    relativePath: "runtime/attach/s-rich-attachments/user/report.docx",
+    sandboxPath: "/sandbox/report.docx",
+    path: "/workspace/report.docx",
+    parsedResult: {
+      attachmentId: "att-parsed",
+      name: "report.md",
+      path: "/workspace/report.md",
+      relativePath: "runtime/attach/s-rich-attachments/model/report.md",
+      mimeType: "text/markdown",
+    },
+    url: "/api/attachments/att-rich/download",
+    previewUrl: "/api/attachments/att-rich/preview",
+  });
+});
+
 test("session display summary derives attachments from transfer envelopes", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "s-transfer-attachments",

@@ -82,6 +82,110 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
   assert.equal(saved[0].updatedAt, "2026-06-22T00:00:00.000Z");
 });
 
+test("SessionMessageService.replaceTurn preserves rich attachment fields when payload is raw", async () => {
+  const richAttachment = {
+    attachmentId: "att-rich",
+    name: "report.docx",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    size: 123,
+    sessionId: "s1",
+    path: "/workspace/att-rich.docx",
+    relativePath: "runtime/attach/s1/user/att-rich.docx",
+    sandboxPath: "/workspace/att-rich.docx",
+    parsedResult: { attachmentId: "parsed-rich", path: "/workspace/parsed-rich.md" },
+  };
+  const { service, saved } = createService({
+    initialSession: baseSession({
+      messages: [
+        { role: "user", content: "old", dialogProcessId: "dp-old", turnScopeId: "scope-old", attachments: [richAttachment] },
+        { role: "assistant", content: "old answer", dialogProcessId: "dp-old", turnScopeId: "scope-old" },
+      ],
+    }),
+  });
+
+  await service.replaceTurn({
+    userId: "u1",
+    sessionId: "s1",
+    anchor: { turnScopeId: "scope-old" },
+    newContent: "edited",
+    turnScopeId: "scope-new",
+    attachments: [{ name: "report.docx", mimeType: richAttachment.mimeType, size: 123 }],
+  });
+
+  assert.equal(saved.length, 1);
+  assert.deepEqual(saved[0].messages[0].attachments[0], richAttachment);
+});
+
+test("SessionMessageService.replaceTurn does not merge same-name attachments without stable identity", async () => {
+  const richAttachment = {
+    attachmentId: "att-rich",
+    name: "report.docx",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    size: 123,
+    path: "/workspace/att-rich.docx",
+    parsedResult: { attachmentId: "parsed-rich" },
+  };
+  const incomingAttachment = {
+    name: "report.docx",
+    mimeType: "application/pdf",
+    size: 456,
+  };
+  const { service, saved } = createService({
+    initialSession: baseSession({
+      messages: [
+        { role: "user", content: "old", dialogProcessId: "dp-old", turnScopeId: "scope-old", attachments: [richAttachment] },
+        { role: "assistant", content: "old answer", dialogProcessId: "dp-old", turnScopeId: "scope-old" },
+      ],
+    }),
+  });
+
+  await service.replaceTurn({
+    userId: "u1",
+    sessionId: "s1",
+    anchor: { turnScopeId: "scope-old" },
+    newContent: "edited",
+    turnScopeId: "scope-new",
+    attachments: [incomingAttachment],
+  });
+
+  assert.equal(saved.length, 1);
+  assert.deepEqual(saved[0].messages[0].attachments, [incomingAttachment]);
+});
+
+test("SessionMessageService.stampReusedUserTurnDialogProcessId does not merge same-name attachments without stable identity", async () => {
+  const richAttachment = {
+    attachmentId: "att-rich",
+    name: "report.docx",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    size: 123,
+    path: "/workspace/att-rich.docx",
+    parsedResult: { attachmentId: "parsed-rich" },
+  };
+  const incomingAttachment = {
+    name: "report.docx",
+    mimeType: "application/pdf",
+    size: 456,
+  };
+  const { service, saved } = createService({
+    initialSession: baseSession({
+      messages: [
+        { role: "user", content: "edited", dialogProcessId: "dp-old", turnScopeId: "scope-edited", attachments: [richAttachment] },
+      ],
+    }),
+  });
+
+  await service.stampReusedUserTurnDialogProcessId({
+    userId: "u1",
+    sessionId: "s1",
+    turnScopeId: "scope-edited",
+    dialogProcessId: "dp-new",
+    attachments: [incomingAttachment],
+  });
+
+  assert.equal(saved.length, 1);
+  assert.deepEqual(saved[0].messages[0].attachments, [incomingAttachment]);
+});
+
 test("SessionMessageService.replaceTurn rejects ts anchors", async () => {
   const { service: tsService, saved: tsSaved } = createService({
     initialSession: baseSession({ messages: [
@@ -222,6 +326,46 @@ test("SessionMessageService.stampReusedUserTurnDialogProcessId syncs reused user
   assert.equal(saved[0].messages[1].dialogProcessId, "dp-new");
   assert.deepEqual(saved[0].messages[1].attachments, nextAttachments);
   assert.equal(saved[0].version, 3);
+});
+
+test("SessionMessageService.stampReusedUserTurnDialogProcessId preserves rich fields when prepared payload is raw-matching", async () => {
+  const richAttachment = {
+    attachmentId: "att-rich",
+    name: "report.docx",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    size: 123,
+    sessionId: "s1",
+    path: "/workspace/att-rich.docx",
+    relativePath: "runtime/attach/s1/user/att-rich.docx",
+    sandboxPath: "/workspace/att-rich.docx",
+    parsedResult: { attachmentId: "parsed-rich", path: "/workspace/parsed-rich.md" },
+  };
+  const { service, saved } = createService({
+    initialSession: baseSession({
+      messages: [
+        {
+          role: "user",
+          content: "edited",
+          dialogProcessId: "dp-old",
+          turnScopeId: "scope-edited",
+          frontendUserMessage: true,
+          attachments: [richAttachment],
+        },
+      ],
+    }),
+  });
+
+  await service.stampReusedUserTurnDialogProcessId({
+    userId: "u1",
+    sessionId: "s1",
+    turnScopeId: "scope-edited",
+    dialogProcessId: "dp-new",
+    attachments: [{ name: "report.docx", mimeType: richAttachment.mimeType, size: 123 }],
+  });
+
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].messages[0].dialogProcessId, "dp-new");
+  assert.deepEqual(saved[0].messages[0].attachments[0], richAttachment);
 });
 
 test("SessionMessageService.stampReusedUserTurnDialogProcessId preserves empty attachments as delete-all", async () => {

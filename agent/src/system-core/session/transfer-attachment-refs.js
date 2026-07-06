@@ -94,6 +94,10 @@ function compactParsedResultRef(parsedResult = null) {
 }
 
 export function compactAttachmentRef(...sources) {
+  // Session summaries are a display/edit-back carrier, not a place to rebuild
+  // attachment truth from raw transport payloads.  Keep the canonical addressing
+  // and parsed-result fields compactly so the frontend can still derive preview
+  // and download actions after resend/session-detail reloads.
   const merged = {};
   for (const source of sources) {
     if (!source || typeof source !== "object" || Array.isArray(source)) continue;
