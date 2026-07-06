@@ -12,8 +12,9 @@
     "./channels/session": "./src/channels/session.js",
     "./channels/startup": "./src/channels/startup.js",
     "./channels/system": "./src/channels/system.js",
-    "./session-channel": "./session-channel.mjs",
-    "./package.json": "./package.json"
+    "./session-channel": "./src/session-channel.js",
+    "./package.json": "./package.json",
+    "./session-log-protocol": "./src/session-log-protocol.js"
   },
   "dependencies": {
     "@noobot/shared": "file:../shared"

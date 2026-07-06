@@ -110,7 +110,7 @@ test("hook manager supports parallel emit", async () => {
   assert.deepEqual(order, ["fast", "slow"]);
 });
 
-test("runAgentRuntimeHook resolves manager, executes, and emits hook_start/hook_end", async () => {
+test("runAgentRuntimeHook resolves manager, executes, and emits hook_summary by default", async () => {
   const manager = createAgentHookManager();
   const events = [];
   const eventListener = {
@@ -144,8 +144,40 @@ test("runAgentRuntimeHook resolves manager, executes, and emits hook_start/hook_
   assert.equal(called, true);
   assert.equal(context.mutated, true);
   assert.equal(result.errors.length, 0);
+  assert.equal(events.some((evt) => evt?.event === "hook_start"), false);
+  assert.equal(events.some((evt) => evt?.event === "hook_end"), false);
+  assert.equal(events[0]?.event, "hook_summary");
+  assert.equal(events[0]?.data?.point, "runtime_point");
+  assert.equal(events[0]?.data?.status, "ok");
+  assert.equal(events[0]?.data?.errorCount, 0);
+  assert.equal(typeof events[0]?.data?.durationMs, "number");
+});
+
+test("runAgentRuntimeHook keeps hook_start/hook_end when verbose runtime events are enabled", async () => {
+  const manager = createAgentHookManager();
+  const events = [];
+  const eventListener = {
+    onEvent(evt = {}) {
+      events.push(evt);
+    },
+  };
+  const runtime = { hookManager: manager, hookRuntimeEventsMode: "verbose" };
+  manager.on("runtime_point", async () => {});
+
+  await runAgentRuntimeHook({
+    runtime,
+    point: "runtime_point",
+    context: {},
+    eventListener,
+  });
+
   assert.equal(events[0]?.event, "hook_start");
+  assert.equal(events[0]?.data?.point, "runtime_point");
   assert.equal(events[1]?.event, "hook_end");
+  assert.equal(events[1]?.data?.point, "runtime_point");
+  assert.equal(events[1]?.data?.status, "ok");
+  assert.equal(events[1]?.data?.errorCount, 0);
+  assert.equal(typeof events[1]?.data?.durationMs, "number");
 });
 
 test("runAgentRuntimeHook exposes hook client emitter and skips routine plugin progress by default", async () => {
@@ -333,8 +365,8 @@ test("runAgentRuntimeHook handles runner throw and emits hook_error", async () =
   assert.equal(result.executed, true);
   assert.equal(result.errors.length, 1);
   assert.equal(result.errors[0]?.message, "runner exploded");
-  assert.equal(events[0]?.event, "hook_start");
-  assert.equal(events[1]?.event, "hook_error");
+  assert.equal(events.some((evt) => evt?.event === "hook_start"), false);
+  assert.equal(events[0]?.event, "hook_error");
 });
 
 test("withHookRuntimeMeta merges runtime identifiers into context", () => {

@@ -9,7 +9,7 @@ import {
   isSessionLogDebugEnabled,
   SESSION_LOG_AGENT_PROXY_DEFAULT_CATEGORY,
   SESSION_LOG_DEFAULT_CATEGORY,
-} from "@noobot/shared/session-log-protocol";
+} from "./session-log-protocol.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";

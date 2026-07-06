@@ -199,7 +199,7 @@ test("harness plugin writes manifest, events and context snapshot", async () => 
   assert.equal(snapshot.payload.historyMessageCount, 1);
 });
 
-test("harness plugin emits hook progress via client emitter when available", async () => {
+test("harness plugin emits hook summary via client emitter by default", async () => {
   const hookManager = createAgentHookManager();
   const channelEvents = [];
   registerNoobotPlugin(
@@ -216,9 +216,41 @@ test("harness plugin emits hook progress via client emitter when available", asy
     },
   });
 
+  assert.equal(channelEvents.some((item) => item.event === "harness.hook_start"), false);
+  assert.equal(channelEvents.some((item) => item.event === "harness.capability_runtime_done"), true);
+  assert.equal(channelEvents.some((item) => item.event === "harness.hook_end"), false);
+  const summary = channelEvents.find((item) => item.event === "harness.hook_summary");
+  assert.ok(summary);
+  assert.equal(summary.data?.point, "before_turn");
+  assert.equal(summary.data?.status, "ok");
+  assert.equal(typeof summary.data?.durationMs, "number");
+  assert.equal(summary.data?.fsmRejected, false);
+});
+
+test("harness plugin keeps hook start/end via client emitter in verbose mode", async () => {
+  const hookManager = createAgentHookManager();
+  const channelEvents = [];
+  registerNoobotPlugin(
+    { hookManager },
+    { trace: false, promptPolicy: false, hookRuntimeEventsMode: "verbose" },
+  );
+
+  await hookManager.emit("before_turn", {
+    userId: "u-channel",
+    sessionId: "s-channel",
+    dialogProcessId: "dp-channel",
+    emitHookClientEvent: (event = "", data = {}) => {
+      channelEvents.push({ event, data });
+    },
+  });
+
   assert.equal(channelEvents.some((item) => item.event === "harness.hook_start"), true);
   assert.equal(channelEvents.some((item) => item.event === "harness.capability_runtime_done"), true);
-  assert.equal(channelEvents.some((item) => item.event === "harness.hook_end"), true);
+  const end = channelEvents.find((item) => item.event === "harness.hook_end");
+  assert.ok(end);
+  assert.equal(end.data?.point, "before_turn");
+  assert.equal(end.data?.status, "ok");
+  assert.equal(typeof end.data?.durationMs, "number");
 });
 
 test("harness plugin deletes related run records on after_session_delete", async () => {

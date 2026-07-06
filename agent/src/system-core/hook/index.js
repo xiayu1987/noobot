@@ -10,6 +10,7 @@ import { resolveParentSessionId } from "../context/parent-session-id-resolver.js
 import { resolveHookClientEmitter } from "./client-channel.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { isHookRuntimeEventVerboseEnabled } from "@noobot/shared/runtime-events-config";
 
 const DEFAULT_HOOK_TIMEOUT_MS = TIME_THRESHOLDS.agent.hookTimeoutMs;
 const HOOK_PROGRESS_TEXT_LIMIT = LENGTH_THRESHOLDS.display.hookProgressTextChars;
@@ -465,8 +466,12 @@ export async function runAgentRuntimeHook({
     runtime,
   });
   const hookedContext = withHookClientEmitter(context, emitHookClientEvent);
+  const verboseHookRuntimeEvents = isHookRuntimeEventVerboseEnabled({ runtime });
+  const startedAt = Date.now();
 
-  emitEvent(listener, "hook_start", { point: normalizedPoint });
+  if (verboseHookRuntimeEvents) {
+    emitEvent(listener, "hook_start", { point: normalizedPoint });
+  }
   try {
     const runner =
       typeof manager.emit === "function"
@@ -478,10 +483,13 @@ export async function runAgentRuntimeHook({
       return { executed: false, point: normalizedPoint, context: hookedContext, results: [], errors: [] };
     }
     const result = await runner(normalizedPoint, hookedContext, { parallel });
-    emitEvent(listener, "hook_end", {
+    const summary = {
       point: normalizedPoint,
+      status: Array.isArray(result?.errors) && result.errors.length > 0 ? "error" : "ok",
       errorCount: Array.isArray(result?.errors) ? result.errors.length : 0,
-    });
+      durationMs: Date.now() - startedAt,
+    };
+    emitEvent(listener, verboseHookRuntimeEvents ? "hook_end" : "hook_summary", summary);
     return {
       executed: true,
       ...(result && typeof result === "object" ? result : {}),

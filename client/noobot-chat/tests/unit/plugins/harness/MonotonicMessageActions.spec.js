@@ -76,15 +76,16 @@ describe("MonotonicMessageActions", () => {
     await nextTick();
 
     expect(messageItem.__monotonicEditing).toBe(true);
-    const textarea = wrapper.find("textarea");
-    expect(textarea.exists()).toBe(true);
+    expect(wrapper.find(".monotonic-edit-textarea").exists()).toBe(true);
     expect(wrapper.vm.$.setupState.draftContent).toBe("old content");
 
-    await textarea.setValue("edited content");
     wrapper.vm.$.setupState.draftContent = "edited content";
-    await wrapper.findAll("button").at(-1).trigger("click");
+    await wrapper.findAll(".monotonic-footer-btn").at(1).trigger("click");
 
-    expect(onResend).toHaveBeenCalledWith(messageItem, "edited content");
+    expect(onResend).toHaveBeenCalledWith(messageItem, "edited content", {
+      attachments: [],
+      attachmentFiles: [],
+    });
     expect(messageItem.__monotonicEditing).toBe(false);
   });
 });

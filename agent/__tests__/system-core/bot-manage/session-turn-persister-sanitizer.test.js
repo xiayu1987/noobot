@@ -201,11 +201,10 @@ test("SessionTurnPersister drops direct-consumed intermediate tool payloads and 
   assert.equal("text_length" in persistedContent.summary, false);
   assert.deepEqual(persistedContent.summary, { saved_attachment_count: 1 });
   const fullTurnLog = executionLogs[0]?.data || {};
-  assert.equal(fullTurnLog.attachmentMetas, undefined);
-  assert.deepEqual(fullTurnLog.attachments, []);
-  assert.equal("attachmentMeta" in fullTurnLog.transferEnvelopes?.[0]?.files?.[0], false);
-  assert.equal(fullTurnLog.transferEnvelopes?.[0]?.files?.[0]?.attachmentId, "parsed_1");
-  assert.equal(JSON.parse(fullTurnLog.content).sessionPersistence, "summary_only");
+  assert.equal(fullTurnLog.attachments?.count, 0);
+  assert.equal(fullTurnLog.transferEnvelopes?.count, 1);
+  assert.equal(fullTurnLog.content?.preview.includes("summary_only"), true);
+  assert.equal("text" in JSON.parse(appendedTurns[0].content), false);
 });
 
 test("SessionTurnPersister hides web_to_data intermediate payloads", async () => {
@@ -287,7 +286,8 @@ test("SessionTurnPersister persists canonical plugin metadata without old concre
   assert.equal(appendedTurns[0].workflowMessage, undefined);
   assert.equal(appendedTurns[0].workflowMeta, undefined);
   assert.equal(executionLogs[0]?.data?.pluginMessage, true);
-  assert.equal(executionLogs[0]?.data?.pluginMeta?.payload?.semantic?.flowtos?.length, 1);
+  assert.equal(executionLogs[0]?.data?.pluginMeta?.present, true);
+  assert.equal(executionLogs[0]?.data?.pluginMeta?.keys?.includes("payload"), true);
   assert.equal(executionLogs[0]?.data?.workflowMessage, undefined);
   assert.equal(executionLogs[0]?.data?.workflowMeta, undefined);
 });

@@ -241,21 +241,6 @@ function pruneStoppedAssistantSnapshotsForTurn(session, turnScopeId = "") {
   return changed;
 }
 
-function hasCompletedAssistantAfterReplacementUser({ session, replacementUserMessage }) {
-  const messages = Array.isArray(session?.messages) ? session.messages : [];
-  const userIndex = messages.indexOf(replacementUserMessage);
-  if (userIndex < 0) return false;
-  const replacementTurnScopeId = getMessageTurnScopeId(replacementUserMessage);
-  if (!replacementTurnScopeId) return false;
-  return messages.slice(userIndex + 1).some((message) => {
-    if (normalizeMessageRole(message) !== "assistant") return false;
-    if (getMessageTurnScopeId(message) !== replacementTurnScopeId) return false;
-    if (isStoppedAssistantSnapshot(message)) return false;
-    if (message?.pending === true) return false;
-    return getMessageText(message).trim() || message?.done === true || message?.completed === true;
-  });
-}
-
 function resolveTurnScopeReplacement(payload = {}) {
   return payload?.turnScopeReplacement && typeof payload.turnScopeReplacement === "object" && !Array.isArray(payload.turnScopeReplacement)
     ? payload.turnScopeReplacement
@@ -523,21 +508,14 @@ export function createResendMessageTransaction({
         prunedStopped,
         messages: summarizeDebugMessages(activeSession?.value?.messages),
       });
-      const completedAssistantReturned = hasCompletedAssistantAfterReplacementUser({
-        session: activeSession?.value,
-        replacementUserMessage,
-      });
-      // replace-turn only mutates the stored user turn. It must not be treated as
-      // a completed resend just because an old assistant snapshot is still
-      // present in the preserved frontend message list. The actual assistant
-      // placeholder and streaming request are created by send({
-      // reuseExistingUserTurn: true }) below. Only skip streaming when the
-      // backend explicitly reports that generation has already completed.
+      // replace-turn usually only mutates the stored user turn. It must not be
+      // treated as a completed resend just because an old assistant snapshot is
+      // still present in the preserved frontend message list. Only an explicit
+      // backend protocol flag can prove that generation already completed.
       if (payload?.generation === "completed" || payload?.generated === true) {
         logResendDebug("resend.completedWithoutStream", {
           sessionId,
           turnScopeId: resendTurnScopeId,
-          completedAssistantReturned,
           generation: payload?.generation,
           generated: payload?.generated,
         });

@@ -9,8 +9,19 @@ export async function writeRuntimeEvent(event = {}, options = {}) {
     const record = normalizeRuntimeEvent(event, defaults);
     const config = resolveRuntimeEventsConfig({ ...defaults, ...options, workspaceRoot: record.workspaceRoot || defaults.workspaceRoot });
     const file = resolveRuntimeEventFile(record, config);
-    await appendJsonLine(file, record);
-    return { ok: true, file, record };
+    const writeResult = await appendJsonLine(file, record, {
+      maxFileBytes: config.maxFileBytes,
+      retentionDays: config.retentionDays,
+      maxArchives: config.maxArchives,
+    });
+    return {
+      ok: true,
+      file,
+      record,
+      rotatedFile: writeResult.rotatedFile,
+      deletedFiles: writeResult.deletedFiles,
+      cleanupError: writeResult.cleanupError,
+    };
   } catch (error) {
     if (options.throwOnError) throw error;
     return { ok: false, error };

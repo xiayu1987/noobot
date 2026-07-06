@@ -270,7 +270,9 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   );
   assert.ok(fullTurnLog, "完整 turn 记录应写入 execution 日志");
   assert.equal(typeof fullTurnLog?.data?.role, "string");
-  assert.equal("content" in (fullTurnLog?.data || {}), true);
+  assert.equal(typeof fullTurnLog?.data?.content?.length, "number");
+  assert.equal(typeof fullTurnLog?.data?.content?.preview, "string");
+  assert.equal(fullTurnLog?.data?.artifactRef?.source, "session.messages");
   assert.equal(upstreamEvents.length > 0, true, "应向上游持续回传事件");
   assert.ok(capturedAgentContext, "agent 应收到构建后的完整上下文");
 });

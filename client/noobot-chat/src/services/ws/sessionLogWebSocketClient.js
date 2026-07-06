@@ -7,7 +7,7 @@ import {
   buildSessionLogRecord,
   isSessionLogDebugEnabled,
   SESSION_LOG_DEFAULT_CATEGORY,
-} from "@noobot/shared/session-log-protocol";
+} from "@noobot/runtime-events/session-log-protocol";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
 const DEBUG_ENABLED = ["1", "true", "yes", "on"].includes(

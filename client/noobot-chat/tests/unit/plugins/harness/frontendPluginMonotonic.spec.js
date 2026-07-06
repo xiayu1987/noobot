@@ -1,12 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
-import { registerFrontendPlugin } from "../../../../../../plugin/noobot-plugin-harness/frontend/index.js";
+import {
+  isMonotonicMessage,
+  resolveMonotonicMessageActionProps,
+} from "../../../../src/shared/message/monotonicMessageActionRules";
 
-describe("harness frontend monotonic message action registration", () => {
+describe("noobot-chat monotonic message action rules", () => {
   function getMonotonicAction() {
-    const registered = [];
-    registerFrontendPlugin({ registerFrontendPlugin: (plugin) => registered.push(plugin) });
-    const actionsPlugin = registered.find((plugin) => plugin.id === "message-actions");
-    return actionsPlugin.messageActions.find((action) => action.capability === "message.action.monotonic");
+    return {
+      match: isMonotonicMessage,
+      resolveProps: resolveMonotonicMessageActionProps,
+    };
   }
 
   function expectVisibleOnUserOnly(action, { userMessage, sourceMessage, allMessages }) {

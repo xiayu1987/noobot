@@ -209,7 +209,7 @@ describe("useChatEngine.resend scoped pruning", () => {
     }));
   });
 
-  it("resendMonotonicMessage does not generate again when replace-turn returns completed assistant snapshot", async () => {
+  it("resendMonotonicMessage still generates after replace-turn snapshot unless backend marks generation completed", async () => {
     const stream = vi.fn(async () => {});
     const deleteSessionMessagesFromApi = vi.fn();
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId }) => {
@@ -243,8 +243,19 @@ describe("useChatEngine.resend scoped pruning", () => {
     await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(true);
   
     expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
-    expect(stream).not.toHaveBeenCalled();
-    expect(activeSession.value.messages.map((message) => message.content)).toEqual(["edited question", "edited answer"]);
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(stream.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
+      message: "edited question",
+      sessionId: "local-resend-replace-completed",
+      config: expect.objectContaining({
+        reuseExistingUserTurn: true,
+      }),
+    }));
+    expect(activeSession.value.messages.map((message) => message.content)).toEqual(["edited question", "edited answer", ""]);
+    expect(activeSession.value.messages[2]).toEqual(expect.objectContaining({
+      role: RoleEnum.ASSISTANT,
+      pending: true,
+    }));
     expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
     expect(input.value).toBe("");
   });
