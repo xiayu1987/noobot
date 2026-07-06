@@ -32,6 +32,7 @@ import {
   getMessageDialogProcessId,
   getMessageTurnScopeId,
 } from "../../infra/messageIdentity";
+import { mergeAttachments } from "../../infra/dialogProcessChain";
 import { nowMs } from "../../infra/timeFields";
 import { hasMatchingInFlightAssistantMessage } from "./messageStateGuards";
 import {
@@ -258,7 +259,15 @@ export function createChatEngineSender({
         ))
         : null;
       if (preparedUserMessage && Array.isArray(attachments)) {
-        preparedUserMessage.attachments = attachments.map((attachment) => ({ ...attachment }));
+        // Serialized attachments are transport payloads. For reused user turns,
+        // keep the session message as the display/edit authority and merge
+        // payload fields into it so parsedResult/path/preview fields are not
+        // downgraded by raw { name, mimeType, size } metas. An explicit empty
+        // serialized array still means "delete all attachments".
+        preparedUserMessage.attachments = explicitSerializedAttachments?.length === 0
+          ? []
+          : mergeAttachments(preparedUserMessage.attachments || [], attachments)
+            .map((attachment) => ({ ...attachment }));
       }
       const requestedTextStreaming = streamOutput?.value !== false;
 
