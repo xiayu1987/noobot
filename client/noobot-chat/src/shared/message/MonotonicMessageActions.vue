@@ -6,7 +6,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { translateHarnessFallback, useHarnessLocale } from "../i18n";
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -23,7 +22,6 @@ const draftContent = ref("");
 const textareaRef = ref(null);
 const fileInputRef = ref(null);
 const editAttachments = ref([]);
-const { translate: translateHarness } = useHarnessLocale();
 const attachmentStats = computed(() => {
   const items = Array.isArray(editAttachments.value) ? editAttachments.value : [];
   return {
@@ -33,12 +31,24 @@ const attachmentStats = computed(() => {
   };
 });
 
+const LOCAL_TRANSLATIONS = {
+  "common.cancel": "取消",
+  "common.confirm": "确认",
+  "message.contentRequired": "请输入消息内容",
+  "message.monotonicActionFailed": "操作失败，请稍后重试",
+  "message.monotonicDeleteConfirm": "确认删除本轮消息及其后续回复吗？",
+  "message.monotonicDeleteTitle": "删除消息",
+  "message.monotonicEdit": "编辑重发",
+  "message.monotonicDelete": "删除",
+  "message.monotonicEditPlaceholder": "编辑消息内容后重发",
+  "message.monotonicEditTip": "Ctrl/⌘ + Enter 发送，Esc 取消",
+  "message.monotonicSendEdited": "发送",
+};
+
 function t(key) {
-  const fallbackTranslated = translateHarnessFallback(key);
+  const fallbackTranslated = LOCAL_TRANSLATIONS[key] || key;
   const translated = props.translate(key, fallbackTranslated);
-  if (translated && translated !== key) return translated;
-  const localTranslated = translateHarness(key);
-  return localTranslated && localTranslated !== key ? localTranslated : fallbackTranslated;
+  return translated && translated !== key ? translated : fallbackTranslated;
 }
 
 function isImageMime(mimeType = "") {

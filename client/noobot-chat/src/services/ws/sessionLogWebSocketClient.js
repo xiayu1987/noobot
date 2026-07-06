@@ -21,7 +21,7 @@ function envFlag(name, fallback = false) {
   return ["1", "true", "yes", "on"].includes(raw);
 }
 
-const DIAGNOSTIC_ENABLED = envFlag("VITE_NOOBOT_SESSION_LOG_DIAGNOSTIC", true);
+const DIAGNOSTIC_ENABLED = envFlag("VITE_NOOBOT_SESSION_LOG_DIAGNOSTIC", false);
 
 function logDiagnostic(message, data = {}) {
   if (!DIAGNOSTIC_ENABLED) return;
