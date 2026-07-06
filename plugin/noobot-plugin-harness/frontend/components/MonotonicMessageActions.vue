@@ -41,7 +41,6 @@ function t(key) {
   return localTranslated && localTranslated !== key ? localTranslated : fallbackTranslated;
 }
 
-
 function isImageMime(mimeType = "") {
   return String(mimeType || "").toLowerCase().startsWith("image/");
 }
@@ -263,53 +262,61 @@ async function handleDelete() {
 <template>
   <div v-if="visible" class="monotonic-message-actions" :class="{ editing }">
     <template v-if="editing">
-      <el-card class="monotonic-edit-card" shadow="never">
+      <div class="monotonic-edit-card">
         <div class="monotonic-edit-heading">
           <div class="monotonic-edit-heading-copy">
             <div class="monotonic-edit-title">编辑并重发</div>
             <div class="monotonic-edit-subtitle">调整内容和附件后，将替换本轮消息并重新生成回复</div>
           </div>
-          <el-tag type="primary" effect="light" round>重发模式</el-tag>
+          <el-tag type="primary" effect="light" round class="monotonic-mode-tag">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+              <polyline points="1 4 1 10 7 10"></polyline>
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+            </svg>
+            重发模式
+          </el-tag>
         </div>
-        <el-input
-          ref="textareaRef"
-          v-model="draftContent"
-          class="monotonic-edit-textarea"
-          type="textarea"
-          :disabled="disabled || operating"
-          :placeholder="t('message.monotonicEditPlaceholder')"
-          :autosize="{ minRows: 4, maxRows: 10 }"
-          @keydown.ctrl.enter.prevent="handleSendEdited"
-          @keydown.meta.enter.prevent="handleSendEdited"
-          @keydown.esc.prevent="handleCancelEdit"
-        />
-        <div class="monotonic-edit-attachments">
-          <div class="monotonic-attachment-header">
-            <div class="monotonic-attachment-copy">
-              <span class="monotonic-attachment-title">附件</span>
-              <span class="monotonic-attachment-subtitle">本次重发会携带下方最终附件列表</span>
-            </div>
-            <div class="monotonic-attachment-stats">
-              <el-tag size="small" effect="plain" round>{{ attachmentStats.total }} 个</el-tag>
-              <el-tag v-if="attachmentStats.history" size="small" type="info" effect="light" round>原 {{ attachmentStats.history }}</el-tag>
-              <el-tag v-if="attachmentStats.added" size="small" type="success" effect="light" round>新 {{ attachmentStats.added }}</el-tag>
-            </div>
-          </div>
-          <el-empty
-            v-if="!editAttachments.length"
-            class="monotonic-attachment-empty"
-            :image-size="42"
-            description="暂无附件，可点击下方按钮添加"
+        
+        <div class="monotonic-edit-body">
+          <el-input
+            ref="textareaRef"
+            v-model="draftContent"
+            class="monotonic-edit-textarea"
+            type="textarea"
+            :disabled="disabled || operating"
+            :placeholder="t('message.monotonicEditPlaceholder')"
+            :autosize="{ minRows: 4, maxRows: 10 }"
+            @keydown.ctrl.enter.prevent="handleSendEdited"
+            @keydown.meta.enter.prevent="handleSendEdited"
+            @keydown.esc.prevent="handleCancelEdit"
           />
-          <el-scrollbar v-else max-height="168px" class="monotonic-attachment-scroll">
-            <div class="monotonic-attachment-list">
-              <el-card
-                v-for="(attachment, index) in editAttachments"
-                :key="attachment.key || index"
-                class="monotonic-attachment-item"
-                shadow="hover"
-              >
-                <div class="monotonic-attachment-body">
+          
+          <div class="monotonic-edit-attachments">
+            <div class="monotonic-attachment-header">
+              <div class="monotonic-attachment-copy">
+                <span class="monotonic-attachment-title">附件列表</span>
+              </div>
+              <div class="monotonic-attachment-stats">
+                <el-tag size="small" effect="plain" round class="stat-tag">{{ attachmentStats.total }} 个</el-tag>
+                <el-tag v-if="attachmentStats.history" size="small" type="info" effect="light" round class="stat-tag">原 {{ attachmentStats.history }}</el-tag>
+                <el-tag v-if="attachmentStats.added" size="small" type="success" effect="light" round class="stat-tag">新 {{ attachmentStats.added }}</el-tag>
+              </div>
+            </div>
+
+            <el-empty
+              v-if="!editAttachments.length"
+              class="monotonic-attachment-empty"
+              :image-size="48"
+              description="暂无附件，可点击下方按钮添加"
+            />
+            
+            <el-scrollbar v-else max-height="200px" class="monotonic-attachment-scroll">
+              <div class="monotonic-attachment-list">
+                <div
+                  v-for="(attachment, index) in editAttachments"
+                  :key="attachment.key || index"
+                  class="monotonic-attachment-item"
+                >
                   <el-image
                     v-if="attachment.previewUrl"
                     class="monotonic-attachment-preview"
@@ -319,52 +326,64 @@ async function handleDelete() {
                     preview-teleported
                   />
                   <div v-else class="monotonic-attachment-icon">{{ attachmentIcon(attachment) }}</div>
+                  
                   <div class="monotonic-attachment-meta">
                     <div class="monotonic-attachment-name" :title="attachment.name">{{ attachment.name }}</div>
-                    <div class="monotonic-attachment-tags">
-                      <el-tag size="small" :type="attachment.kind === 'new' ? 'success' : 'info'" effect="light">
+                    <div class="monotonic-attachment-desc">
+                      <el-tag size="small" :type="attachment.kind === 'new' ? 'success' : 'info'" effect="light" class="kind-tag">
                         {{ attachment.kind === 'new' ? '新增' : '原附件' }}
                       </el-tag>
-                    </div>
-                    <div class="monotonic-attachment-desc">
-                      <span>{{ attachmentTypeLabel(attachment) }}</span>
-                      <span aria-hidden="true">·</span>
-                      <span>{{ formatAttachmentSize(attachment.size) }}</span>
+                      <span class="dot" aria-hidden="true">·</span>
+                      <span class="desc-text">{{ attachmentTypeLabel(attachment) }}</span>
+                      <span class="dot" aria-hidden="true">·</span>
+                      <span class="desc-text">{{ formatAttachmentSize(attachment.size) }}</span>
                     </div>
                   </div>
-                  <el-button
+                  
+                  <button
                     class="monotonic-attachment-remove"
-                    circle
-                    size="small"
-                    type="danger"
-                    plain
                     :disabled="operating"
                     @click="removeEditAttachment(index)"
-                  >×</el-button>
+                    title="移除附件"
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
                 </div>
-              </el-card>
-            </div>
-          </el-scrollbar>
-          <input
-            ref="fileInputRef"
-            class="monotonic-file-input"
-            type="file"
-            multiple
-            :disabled="disabled || operating"
-            @change="handleAttachmentInput"
-          />
-          <el-button
-            class="monotonic-add-attachment-btn"
-            type="primary"
-            plain
-            :disabled="disabled || operating"
-            @click="handleChooseFiles"
-          >
-            ＋ 添加附件
-          </el-button>
+              </div>
+            </el-scrollbar>
+            
+            <input
+              ref="fileInputRef"
+              class="monotonic-file-input"
+              type="file"
+              multiple
+              :disabled="disabled || operating"
+              @change="handleAttachmentInput"
+            />
+            <button
+              class="monotonic-add-attachment-btn"
+              :disabled="disabled || operating"
+              @click="handleChooseFiles"
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              添加附件
+            </button>
+          </div>
         </div>
+
         <div class="monotonic-edit-footer">
           <span class="monotonic-edit-tip">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: -2px;">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
             {{ t("message.monotonicEditTip") }}
           </span>
           <div class="monotonic-edit-buttons">
@@ -372,6 +391,7 @@ async function handleDelete() {
               class="monotonic-footer-btn"
               :disabled="operating"
               @click="handleCancelEdit"
+              round
             >
               {{ t("common.cancel") }}
             </el-button>
@@ -381,13 +401,21 @@ async function handleDelete() {
               :loading="operating"
               :disabled="disabled || operating || !String(draftContent || '').trim()"
               @click="handleSendEdited"
+              round
             >
+              <template #icon v-if="!operating">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13"></line>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+              </template>
               {{ t("message.monotonicSendEdited") }}
             </el-button>
           </div>
         </div>
-      </el-card>
+      </div>
     </template>
+    
     <template v-else>
       <div class="monotonic-action-bar">
         <button
@@ -397,7 +425,10 @@ async function handleDelete() {
           :disabled="disabled || operating"
           @click="handleEdit"
         >
-          <span class="monotonic-btn-icon">✎</span>
+          <svg class="monotonic-btn-icon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+          </svg>
           {{ t("message.monotonicEdit") }}
         </button>
         <button
@@ -407,7 +438,10 @@ async function handleDelete() {
           :disabled="disabled || operating"
           @click="handleDelete"
         >
-          <span class="monotonic-btn-icon">⌫</span>
+          <svg class="monotonic-btn-icon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
           {{ t("message.monotonicDelete") }}
         </button>
       </div>
@@ -418,304 +452,296 @@ async function handleDelete() {
 <style scoped>
 .monotonic-message-actions {
   width: 100%;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
+/* Action Bar (View Mode) */
 .monotonic-action-bar {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 8px;
-  opacity: 0.88;
+  gap: 10px;
+  opacity: 0.9;
+  transition: opacity 0.2s ease;
 }
 
-.monotonic-chip-btn {
-  border: 1px solid transparent;
-  border-radius: 999px;
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+.monotonic-action-bar:hover {
+  opacity: 1;
 }
 
 .monotonic-chip-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 28px;
-  padding: 0 10px;
-  color: var(--noobot-text-secondary, var(--el-text-color-regular));
-  background: var(--noobot-btn-secondary-bg, var(--el-fill-color-light));
-  border-color: color-mix(in srgb, var(--noobot-btn-secondary-border, var(--el-border-color)) 62%, transparent);
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  border-radius: 15px;
+  cursor: pointer;
+  border: 1px solid var(--el-border-color-light);
+  color: var(--el-text-color-regular);
+  background: var(--el-bg-color-overlay);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
 .monotonic-chip-btn.edit:hover:not(:disabled) {
-  color: var(--noobot-text-strong, var(--el-text-color-primary));
-  background: var(--noobot-btn-secondary-bg-hover, var(--el-fill-color));
-  border-color: color-mix(in srgb, var(--el-color-primary) 28%, var(--noobot-panel-border, var(--el-border-color)));
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--el-color-primary) 10%, transparent);
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  border-color: var(--el-color-primary-light-7);
+  box-shadow: 0 4px 12px var(--el-color-primary-light-8);
   transform: translateY(-1px);
 }
 
-.monotonic-chip-btn.delete {
-  color: var(--el-color-danger);
-}
-
 .monotonic-chip-btn.delete:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--el-color-danger) 10%, var(--noobot-btn-secondary-bg-hover, var(--el-fill-color)));
-  border-color: color-mix(in srgb, var(--el-color-danger) 34%, var(--noobot-panel-border, var(--el-border-color)));
+  color: var(--el-color-danger);
+  background: var(--el-color-danger-light-9);
+  border-color: var(--el-color-danger-light-7);
+  box-shadow: 0 4px 12px var(--el-color-danger-light-8);
   transform: translateY(-1px);
 }
 
 .monotonic-chip-btn:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: 0.5;
+  box-shadow: none;
 }
 
 .monotonic-btn-icon {
-  font-size: 13px;
-  line-height: 1;
+  flex-shrink: 0;
 }
 
+/* Edit Card */
 .monotonic-edit-card {
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 78%, transparent);
-  border-radius: var(--noobot-radius-lg, 16px);
-  background: var(--noobot-panel-bg, var(--el-bg-color-overlay));
-  box-shadow: var(--noobot-card-shadow, var(--el-box-shadow-light));
-  color: var(--noobot-text-main, var(--el-text-color-primary));
-}
-
-.monotonic-edit-card :deep(.el-card__body) {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 18px;
+  padding: 20px;
+  border-radius: 16px;
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-lighter);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.02);
+  transition: box-shadow 0.3s ease;
+}
+
+.monotonic-edit-card:hover {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.03);
 }
 
 .monotonic-edit-heading {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
-  padding: 2px 2px 0;
-}
-
-.monotonic-edit-heading-copy {
-  min-width: 0;
-  padding-right: 8px;
+  gap: 16px;
 }
 
 .monotonic-edit-title {
-  color: var(--noobot-text-strong, var(--el-text-color-primary));
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.3;
+  color: var(--el-text-color-primary);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .monotonic-edit-subtitle {
-  margin-top: 3px;
-  color: var(--noobot-text-secondary, var(--el-text-color-regular));
-  font-size: 12px;
-  line-height: 1.35;
+  margin-top: 4px;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.4;
 }
 
+.monotonic-mode-tag {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+  padding: 0 10px;
+  height: 26px;
+}
+
+.monotonic-edit-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Textarea */
 .monotonic-edit-textarea :deep(.el-textarea__inner) {
-  padding: 12px 14px;
-  border-radius: var(--noobot-radius-md, 14px);
-  color: var(--noobot-text-main, var(--el-text-color-primary));
-  background: var(--noobot-control-bg, var(--el-fill-color-blank));
-  border-color: var(--noobot-panel-border, var(--el-border-color));
-  box-shadow: none;
-  line-height: 1.58;
+  padding: 14px 16px;
+  border-radius: 12px;
+  color: var(--el-text-color-primary);
+  background: var(--el-fill-color-light);
+  border: none;
+  box-shadow: inset 0 0 0 1px transparent;
+  font-size: 14px;
+  line-height: 1.6;
+  transition: all 0.2s ease;
 }
 
+.monotonic-edit-textarea :deep(.el-textarea__inner:hover) {
+  background: var(--el-fill-color);
+}
+
+.monotonic-edit-textarea :deep(.el-textarea__inner:focus) {
+  background: var(--el-bg-color);
+  box-shadow: inset 0 0 0 1px var(--el-color-primary), 0 0 0 2px var(--el-color-primary-light-8);
+}
+
+/* Attachments Area */
 .monotonic-edit-attachments {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px;
-  border-radius: var(--noobot-radius-md, 14px);
-  border: 1px solid color-mix(in srgb, var(--el-color-primary) 18%, var(--noobot-panel-border, var(--el-border-color)));
-  background: var(--noobot-panel-bg, var(--el-bg-color));
+  gap: 12px;
 }
 
 .monotonic-attachment-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-}
-
-.monotonic-attachment-copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 4px;
 }
 
 .monotonic-attachment-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--noobot-text-strong, var(--el-text-color-primary));
-}
-
-.monotonic-attachment-subtitle {
-  color: var(--noobot-text-secondary, var(--el-text-color-regular));
-  font-size: 12px;
-  line-height: 1.45;
+  color: var(--el-text-color-regular);
 }
 
 .monotonic-attachment-stats {
-  display: inline-flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  display: flex;
   gap: 6px;
 }
 
-.monotonic-attachment-empty {
-  padding: 14px 16px 12px;
-  border-radius: var(--noobot-radius-md, 12px);
-  background: color-mix(in srgb, var(--el-color-primary-light-9, var(--el-fill-color-light)) 72%, var(--noobot-panel-bg, var(--el-bg-color)));
+.stat-tag {
+  border: none;
+  font-weight: 500;
 }
 
-.monotonic-attachment-empty :deep(.el-empty__description) {
-  margin-top: 4px;
+.monotonic-attachment-empty {
+  padding: 20px;
+  border-radius: 12px;
+  background: var(--el-fill-color-lighter);
+  border: 1px dashed var(--el-border-color);
 }
 
 .monotonic-attachment-empty :deep(.el-empty__description p) {
-  color: var(--noobot-text-secondary, var(--el-text-color-regular));
-  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
 }
 
 .monotonic-attachment-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 260px));
-  justify-content: flex-start;
-  gap: 14px;
-  padding: 8px 12px 10px 6px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  padding-right: 8px; /* For scrollbar */
 }
 
 .monotonic-attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--el-fill-color-light);
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
   position: relative;
-  overflow: hidden;
-  border-radius: var(--noobot-radius-md, 12px);
-  border: 1px solid color-mix(in srgb, var(--el-color-primary) 24%, var(--noobot-panel-border, var(--el-border-color)));
-  background: color-mix(in srgb, var(--el-color-primary-light-9, var(--el-bg-color-overlay)) 36%, var(--el-bg-color-overlay, var(--noobot-panel-bg, var(--el-bg-color))));
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .monotonic-attachment-item:hover {
-  border-color: color-mix(in srgb, var(--el-color-primary) 46%, var(--noobot-panel-border, var(--el-border-color)));
-  box-shadow: 0 8px 20px color-mix(in srgb, var(--el-color-primary) 10%, transparent);
+  background: var(--el-bg-color);
+  border-color: var(--el-border-color-light);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   transform: translateY(-1px);
-}
-
-.monotonic-attachment-item :deep(.el-card__body) {
-  padding: 0;
-}
-
-.monotonic-attachment-body {
-  display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) 34px;
-  align-items: start;
-  column-gap: 14px;
-  min-width: 0;
-  width: 100%;
-  padding: 16px;
 }
 
 .monotonic-attachment-preview,
 .monotonic-attachment-icon {
-  width: 44px;
-  height: 44px;
-  flex: 0 0 auto;
-  border-radius: 12px;
-  border: 1px solid color-mix(in srgb, var(--el-color-primary) 16%, var(--noobot-panel-border, var(--el-border-color)));
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .monotonic-attachment-icon {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--el-color-primary-dark-2, var(--el-color-primary));
-  background: color-mix(in srgb, var(--el-color-primary) 16%, var(--el-bg-color-overlay, var(--el-fill-color-light)));
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  font-size: 11px;
+  font-weight: bold;
+  border: 1px solid var(--el-color-primary-light-8);
 }
 
 .monotonic-attachment-meta {
-  display: flex;
-  flex: 1 1 auto;
+  flex: 1;
   min-width: 0;
+  display: flex;
   flex-direction: column;
-  gap: 9px;
-  padding: 0;
+  justify-content: center;
+  gap: 4px;
 }
 
 .monotonic-attachment-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--el-text-color-primary, var(--noobot-text-strong));
-  font-size: 13px;
-  font-weight: 750;
-  line-height: 1.45;
-}
-
-.monotonic-attachment-tags {
-  display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-width: 0;
-}
-
-.monotonic-attachment-tags :deep(.el-tag) {
-  max-width: 100%;
-  height: 22px;
-  padding: 0 8px;
-  border-color: color-mix(in srgb, currentColor 42%, transparent);
-  font-weight: 700;
 }
 
 .monotonic-attachment-desc {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  max-width: 100%;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--el-text-color-primary, var(--noobot-text-main));
-  font-size: 11.5px;
-  font-weight: 650;
-  line-height: 1.5;
-  opacity: 0.92;
+}
+
+.kind-tag {
+  height: 18px;
+  padding: 0 6px;
+  font-size: 10px;
+  border: none;
+}
+
+.dot {
+  margin: 0 4px;
+  color: var(--el-text-color-placeholder);
+}
+
+.desc-text {
+  flex-shrink: 0;
 }
 
 .monotonic-attachment-remove {
-  flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
-  margin: 0;
-  opacity: 0.92;
-  color: var(--el-color-danger);
-  background: var(--el-bg-color-overlay, var(--el-bg-color));
-  border-color: color-mix(in srgb, var(--el-color-danger) 28%, var(--el-border-color));
-  transition: opacity 0.15s ease, transform 0.15s ease, background-color 0.15s ease;
-}
-
-.monotonic-attachment-remove:hover:not(:disabled) {
-  color: var(--el-fill-color-blank, var(--el-bg-color));
-  background: var(--el-color-danger);
-  border-color: var(--el-color-danger);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: var(--el-fill-color);
+  color: var(--el-text-color-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.9);
+  transition: all 0.2s ease;
 }
 
 .monotonic-attachment-item:hover .monotonic-attachment-remove {
   opacity: 1;
-  transform: scale(1.04);
+  transform: scale(1);
+}
+
+.monotonic-attachment-remove:hover {
+  background: var(--el-color-danger);
+  color: white;
 }
 
 .monotonic-file-input {
@@ -723,65 +749,88 @@ async function handleDelete() {
 }
 
 .monotonic-add-attachment-btn {
-  align-self: flex-start;
-  border-radius: 999px;
-  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px dashed var(--el-border-color-dark);
+  background: transparent;
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
+.monotonic-add-attachment-btn:hover:not(:disabled) {
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+
+.monotonic-add-attachment-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  border-color: var(--el-border-color-lighter);
+}
+
+/* Footer */
 .monotonic-edit-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--el-border-color-lighter);
 }
 
 .monotonic-edit-tip {
-  min-width: 0;
-  color: var(--noobot-text-secondary, var(--el-text-color-regular));
-  font-size: 12px;
-  line-height: 1.35;
+  display: flex;
+  align-items: center;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
 }
 
 .monotonic-edit-buttons {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+  display: flex;
+  gap: 12px;
 }
 
 .monotonic-footer-btn {
-  border-radius: var(--noobot-btn-radius, 10px);
+  padding: 8px 20px;
+  font-weight: 500;
 }
 
 @media (max-width: 640px) {
-  .monotonic-edit-footer {
-    align-items: stretch;
+  .monotonic-edit-card {
+    padding: 16px;
+  }
+
+  .monotonic-edit-heading {
     flex-direction: column;
+    gap: 10px;
+  }
+
+  .monotonic-edit-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
   }
 
   .monotonic-edit-buttons {
     justify-content: flex-end;
   }
 
-  .monotonic-edit-heading,
-  .monotonic-attachment-header {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .monotonic-attachment-stats {
-    justify-content: flex-start;
-  }
-
   .monotonic-attachment-list {
     grid-template-columns: 1fr;
-    padding: 8px 6px 10px;
   }
-
-  .monotonic-attachment-body {
-    grid-template-columns: 44px minmax(0, 1fr) 34px;
-    column-gap: 12px;
-    padding: 14px;
+  
+  .monotonic-attachment-remove {
+    opacity: 1;
+    transform: scale(1);
+    background: var(--el-fill-color-darker);
   }
 }
 </style>
