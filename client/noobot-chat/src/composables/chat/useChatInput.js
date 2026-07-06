@@ -5,23 +5,7 @@
  */
 import { storeToRefs } from "pinia";
 import { useChatStore } from "../../shared/stores/useChatStore";
-
-function toBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-function resolveRawFile(fileItem) {
-  if (!fileItem) return null;
-  if (fileItem.raw) return fileItem.raw;
-  if (typeof File !== "undefined" && fileItem instanceof File) return fileItem;
-  if (typeof Blob !== "undefined" && fileItem instanceof Blob) return fileItem;
-  return null;
-}
+import { resolveRawAttachmentFile, serializeAttachments } from "./chatEngine/attachmentSerialization";
 
 export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
   const chatStore = useChatStore();
@@ -39,7 +23,7 @@ export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
   }
 
   function getUploadEntryKey(fileItem = {}) {
-    const rawFile = resolveRawFile(fileItem) || fileItem;
+    const rawFile = resolveRawAttachmentFile(fileItem) || fileItem;
     return [
       String(rawFile?.name || fileItem?.name || "").trim(),
       String(rawFile?.size || fileItem?.size || 0),
@@ -70,7 +54,7 @@ export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
     revokePreviewUrls(uploadFiles.value);
     const nextFileList = Array.isArray(fileList) ? fileList : [file].filter(Boolean);
     uploadFiles.value = dedupeUploadEntries(nextFileList)
-      .map((fileItem) => resolveRawFile(fileItem))
+      .map((fileItem) => resolveRawAttachmentFile(fileItem))
       .filter(Boolean)
       .map((rawFile) => createUploadEntry(rawFile));
   }
@@ -96,20 +80,6 @@ export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
     const [removedFile] = nextUploadFiles.splice(index, 1);
     revokePreviewUrls([removedFile]);
     uploadFiles.value = nextUploadFiles;
-  }
-
-  async function serializeAttachments(files = []) {
-    const output = [];
-    for (const fileItem of Array.isArray(files) ? files : []) {
-      const rawFile = resolveRawFile(fileItem);
-      if (!rawFile) continue;
-      output.push({
-        name: fileItem.name,
-        mimeType: fileItem.mimeType || "application/octet-stream",
-        contentBase64: await toBase64(rawFile),
-      });
-    }
-    return output;
   }
 
   return {

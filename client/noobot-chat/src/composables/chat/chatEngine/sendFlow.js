@@ -165,6 +165,10 @@ export function createChatEngineSender({
   }
   return async function send(options = {}) {
     const explicitMessageText = typeof options?.messageText === "string" ? options.messageText.trim() : "";
+    const explicitAttachmentFiles = Array.isArray(options?.attachmentFiles) ? options.attachmentFiles : null;
+    const explicitUserAttachments = Array.isArray(options?.userAttachments) ? options.userAttachments : null;
+    const explicitSerializedAttachments = Array.isArray(options?.serializedAttachments) ? options.serializedAttachments : null;
+    const hasExplicitAttachments = Boolean(explicitAttachmentFiles?.length || explicitSerializedAttachments?.length);
     const hasTextToSend = Boolean(explicitMessageText || input.value.trim());
     if (!ensureConnected()) return false;
     if (options?.allowDuringResend !== true && !hasConsistentSendingState({ sending, activeSession, runStateSnapshot })) {
@@ -175,7 +179,7 @@ export function createChatEngineSender({
       return false;
     }
     if ((sending.value && options?.allowDuringResend !== true) || !activeSession.value) return false;
-    if (!hasTextToSend && uploadFiles.value.length === 0) return false;
+    if (!hasTextToSend && uploadFiles.value.length === 0 && !hasExplicitAttachments) return false;
 
     const turnScopeId = normalizeTrimmedString(options?.turnScopeId) || createTurnScopeId();
     const sessionId = String(activeSession.value?.backendSessionId || activeSession.value?.id || activeSessionId?.value || "");
@@ -188,7 +192,7 @@ export function createChatEngineSender({
         reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
         allowDuringResend: options?.allowDuringResend === true,
         hasText: hasTextToSend,
-        uploadCount: uploadFiles.value.length,
+        uploadCount: explicitAttachmentFiles?.length ?? uploadFiles.value.length,
       },
     });
     logResendDebug("send.begin", {
@@ -226,6 +230,8 @@ export function createChatEngineSender({
       messageText: explicitMessageText,
       turnScopeId,
       reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
+      attachmentFiles: explicitAttachmentFiles,
+      userAttachments: explicitUserAttachments,
     });
     logResendDebug("send.prepare.after", {
       turnScopeId,
@@ -238,8 +244,8 @@ export function createChatEngineSender({
     let finalStopEventData = null;
     let finalDoneDetailPromise = null;
     try {
-      clearUploads();
-      const attachments = await serializeAttachments(filesToSend);
+      if (!explicitAttachmentFiles) clearUploads();
+      const attachments = explicitSerializedAttachments || await serializeAttachments(filesToSend);
       const requestedTextStreaming = streamOutput?.value !== false;
 
       const payload = buildChatPayload({
