@@ -208,6 +208,136 @@ describe("useChatEngine.resend replace turn", () => {
     expect(activeSession.value.messages[0].attachments).toEqual([originalAttachment]);
   });
 
+  it("resendMonotonicMessage keeps rich parsed attachment fields when serialized payload is raw", async () => {
+    const richAttachment = {
+      attachmentId: "attachment-rich",
+      name: "AI 体系现状概览.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      size: 1407731,
+      sessionId: "session-rich",
+      path: "/workspace/admin/runtime/attach/scoped/session-rich/user/attachment-rich.docx",
+      relativePath: "runtime/attach/scoped/session-rich/user/attachment-rich.docx",
+      sandboxPath: "/workspace/admin/runtime/attach/scoped/session-rich/user/attachment-rich.docx",
+      previewUrl: "/preview/attachment-rich",
+      downloadUrl: "/download/attachment-rich",
+      parsedResult: {
+        attachmentId: "parsed-rich",
+        name: "AI 体系现状概览.md",
+        path: "/workspace/admin/runtime/attach/scoped/session-rich/model/parsed-rich.md",
+        relativePath: "runtime/attach/scoped/session-rich/model/parsed-rich.md",
+      },
+      parsedResultAttachmentId: "parsed-rich",
+      parsedResultUrl: "/download/parsed-rich",
+    };
+    const rawAttachment = {
+      name: richAttachment.name,
+      mimeType: richAttachment.mimeType,
+      size: richAttachment.size,
+    };
+    const stream = vi.fn(async () => {});
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments }) => ({
+      ok: true,
+      session: makeSession("local-resend-rich-raw", {
+        messages: [{ turnScopeId, role: RoleEnum.USER, content: newContent, attachments }],
+        rawMessages: [{ turnScopeId, role: RoleEnum.USER, content: newContent, attachments }],
+        version: 4,
+      }),
+    }));
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value = { ...activeSession.value, ...mainSession };
+    });
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-resend-rich-raw",
+      stream,
+      deps: { replaceSessionTurnApi, applySessionDetail },
+    });
+    const stoppedUser = {
+      turnScopeId: "client-turn:rich-raw-old",
+      role: RoleEnum.USER,
+      content: "old with rich attachment",
+      attachments: [richAttachment],
+    };
+    const stoppedAssistant = {
+      turnScopeId: "client-turn:rich-raw-old",
+      role: RoleEnum.ASSISTANT,
+      content: "partial",
+      stopState: "stopped",
+    };
+    activeSession.value.messages = [stoppedUser, stoppedAssistant];
+    activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
+    activeSession.value.version = 3;
+
+    await expect(engine.resendMonotonicMessage(stoppedAssistant, "old with rich attachment", {
+      attachments: [richAttachment],
+      attachmentFiles: [],
+    })).resolves.toBe(true);
+
+    expect(stream).toHaveBeenCalledWith(expect.objectContaining({
+      attachments: [expect.objectContaining({ attachmentId: "attachment-rich", parsedResultAttachmentId: "parsed-rich" })],
+    }), expect.any(Function));
+    expect(activeSession.value.messages[0].attachments).toEqual([
+      expect.objectContaining({
+        attachmentId: "attachment-rich",
+        path: richAttachment.path,
+        relativePath: richAttachment.relativePath,
+        sandboxPath: richAttachment.sandboxPath,
+        previewUrl: "/preview/attachment-rich",
+        downloadUrl: "/download/attachment-rich",
+        parsedResultAttachmentId: "parsed-rich",
+        parsedResultUrl: "/download/parsed-rich",
+        parsedResult: expect.objectContaining({ attachmentId: "parsed-rich" }),
+      }),
+    ]);
+    expect(activeSession.value.messages[0].attachments[0]).toEqual(expect.objectContaining(rawAttachment));
+  });
+
+  it("resendMonotonicMessage preserves explicit empty attachment deletion", async () => {
+    const stream = vi.fn(async () => {});
+    const oldAttachment = { attachmentId: "old", name: "old.txt", parsedResultAttachmentId: "parsed-old" };
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments }) => ({
+      ok: true,
+      session: makeSession("local-resend-delete-attachments", {
+        messages: [{ turnScopeId, role: RoleEnum.USER, content: newContent, attachments }],
+        rawMessages: [{ turnScopeId, role: RoleEnum.USER, content: newContent, attachments }],
+        version: 4,
+      }),
+    }));
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value = { ...activeSession.value, ...mainSession };
+    });
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-resend-delete-attachments",
+      stream,
+      deps: { replaceSessionTurnApi, applySessionDetail },
+    });
+    const stoppedUser = {
+      turnScopeId: "client-turn:delete-attachments-old",
+      role: RoleEnum.USER,
+      content: "old",
+      attachments: [oldAttachment],
+    };
+    const stoppedAssistant = {
+      turnScopeId: "client-turn:delete-attachments-old",
+      role: RoleEnum.ASSISTANT,
+      content: "partial",
+      stopState: "stopped",
+    };
+    activeSession.value.messages = [stoppedUser, stoppedAssistant];
+    activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
+    activeSession.value.version = 3;
+
+    await expect(engine.resendMonotonicMessage(stoppedAssistant, "old", {
+      attachments: [],
+      attachmentFiles: [],
+    })).resolves.toBe(true);
+
+    expect(replaceSessionTurnApi).toHaveBeenCalledWith(expect.objectContaining({ attachments: [] }), expect.any(Object));
+    expect(stream).toHaveBeenCalledWith(expect.objectContaining({ attachments: [] }), expect.any(Function));
+    expect(activeSession.value.messages[0].attachments).toEqual([]);
+  });
+
   it("resendMonotonicMessage refreshes session version after 409 and retries replace-turn with the newer version", async () => {
     const stream = vi.fn(async () => {});
     const fetchSessionDetail = vi.fn(async () => ({

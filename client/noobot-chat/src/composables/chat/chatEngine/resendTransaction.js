@@ -21,6 +21,7 @@ import {
 } from "../debug/resendDebugLogger";
 import { createSessionVersionManager } from "./sessionVersionManager";
 import { serializeAttachments } from "./attachmentSerialization";
+import { mergeAttachments } from "../../infra/dialogProcessChain";
 
 
 function normalizeAttachmentMeta(attachment = {}) {
@@ -52,10 +53,14 @@ function dedupeAttachmentMetas(attachments = []) {
 }
 
 function mergeAttachmentMetas(historyAttachments = [], serializedAttachments = []) {
-  return dedupeAttachmentMetas([
-    ...(Array.isArray(historyAttachments) ? historyAttachments : []),
-    ...(Array.isArray(serializedAttachments) ? serializedAttachments : []),
-  ]);
+  // raw/serialized attachments are transport payloads only. When writing back to
+  // the local user message, always merge with the richer history/session meta so
+  // parsedResult, path/session addressing and preview/download fields cannot be
+  // downgraded by { name, mimeType, size } payloads.
+  return mergeAttachments(
+    dedupeAttachmentMetas(historyAttachments),
+    dedupeAttachmentMetas(serializedAttachments),
+  );
 }
 
 function resolveSessionId(activeSession, activeSessionId) {
@@ -503,7 +508,10 @@ export function createResendMessageTransaction({
         return false;
       }
       replacementUserMessage.content = text;
-      replacementUserMessage.attachments = [...finalAttachments];
+      replacementUserMessage.attachments = mergeAttachmentMetas(
+        replacementUserMessage.attachments,
+        finalAttachments,
+      );
       if ("text" in replacementUserMessage) replacementUserMessage.text = text;
       if ("message" in replacementUserMessage) replacementUserMessage.message = text;
       delete replacementUserMessage.stopState;
