@@ -51,6 +51,28 @@ const MAX_BATCH_BYTES = LENGTH_THRESHOLDS.dataProcessing.batchBytes;
 
 export { decodeLibreOfficeTextBuffer };
 
+function resolveGeneratedDataProcessingArtifactMeta(inputFile = "", runtime = {}) {
+  const normalizedInputPath = String(inputFile || "").trim();
+  if (!normalizedInputPath) return null;
+  const generatedAttachmentMetas = Array.isArray(runtime?.attachments) ? runtime.attachments : [];
+  if (!generatedAttachmentMetas.length) return null;
+  const inputBaseName = path.basename(normalizedInputPath);
+  const inputAttachmentId = String(inputBaseName || "").split(".")[0];
+  return generatedAttachmentMetas.find((attachmentItem) => {
+    if (!isGeneratedDataProcessingArtifact(attachmentItem)) return false;
+    const metaPath = String(attachmentItem?.path || "").trim();
+    const metaRelativePath = String(attachmentItem?.relativePath || "").trim();
+    const metaBaseName = path.basename(metaPath || metaRelativePath);
+    const metaAttachmentId = String(attachmentItem?.attachmentId || "").trim();
+    return (
+      (metaPath && metaPath === normalizedInputPath) ||
+      (metaRelativePath && metaRelativePath === normalizedInputPath) ||
+      (inputBaseName && metaBaseName === inputBaseName) ||
+      (inputAttachmentId && metaAttachmentId && inputAttachmentId === metaAttachmentId)
+    );
+  }) || null;
+}
+
 async function recordDoc2DataLibreOfficeFallback({
   runtime = {},
   inputFile = "",
@@ -111,6 +133,7 @@ export function createDoc2DataTool({ agentContext }) {
       let effectiveParseEngine = resolvedParseEngine;
       const inputFile = await assertAndResolveUserWorkspaceFilePath({ filePath, agentContext, fieldName: "filePath", mustExist: true });
       const sourceAttachmentMeta = resolveDocInputAttachmentMeta(inputFile, agentContext);
+      const generatedArtifactMeta = resolveGeneratedDataProcessingArtifactMeta(inputFile, runtime);
       if (isImageInputFile(inputFile)) {
         throw recoverableToolError(tTool(runtime, "tools.doc2data.imageFileUseMedia2Data"), {
           code: ERROR_CODE.RECOVERABLE_UNSUPPORTED_FILE_TYPE,
@@ -126,8 +149,8 @@ export function createDoc2DataTool({ agentContext }) {
 
       const directTextDocument = await readDirectTextDocumentIfAvailable(inputFile);
       if (directTextDocument) {
-        if (isGeneratedDataProcessingArtifact(sourceAttachmentMeta) || looksLikeDataProcessingArtifactPath(inputFile)) {
-          const reusableAttachmentMeta = sourceAttachmentMeta || buildFallbackArtifactMeta({ runtime, basePath, inputFile, bytes: directTextDocument.bytes });
+        if (generatedArtifactMeta || looksLikeDataProcessingArtifactPath(inputFile)) {
+          const reusableAttachmentMeta = generatedArtifactMeta || buildFallbackArtifactMeta({ runtime, basePath, inputFile, bytes: directTextDocument.bytes });
           const persistedOutput = buildExistingArtifactPersistedOutput({ runtime, agentContext, attachmentMeta: reusableAttachmentMeta, text: directTextDocument.text });
           const attachments = normalizePersistedAttachments(persistedOutput);
           return toToolJsonResult(TOOL_NAME.DOC_TO_DATA, {

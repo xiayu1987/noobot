@@ -23,7 +23,10 @@ import {
   normalizeParentSessionId,
   resolveParentSessionId,
 } from "../../../context/parent-session-id-resolver.js";
-import { normalizeAttachmentParsedResultMeta } from "../../../attach/index.js";
+import {
+  normalizeAttachmentParsedResultMeta,
+  resolveRuntimeUserMessageAttachments,
+} from "../../../attach/index.js";
 
 
 const TASK_SUMMARY_TOOL_NAME = "task_summary";
@@ -408,6 +411,7 @@ export function buildContextMessageBlocks(
   const runtime = agentContext?.execution?.controllers?.runtime || {};
   const systemRuntime = runtime?.systemRuntime || {};
   const runtimeParentSessionId = resolveParentSessionId({ runtime });
+  const currentUserMessageAttachments = resolveRuntimeUserMessageAttachments(runtime);
   const fallbackUserMeta = {
     userName: String(runtime?.userId || "").trim(),
     sessionId: String(systemRuntime?.sessionId || "").trim(),
@@ -416,16 +420,8 @@ export function buildContextMessageBlocks(
     parentDialogProcessId: String(
       systemRuntime?.parentDialogProcessId || "",
     ).trim(),
-    attachments: Array.isArray(runtime?.userMessageAttachments)
-      ? runtime.userMessageAttachments
-      : Array.isArray(runtime?.inputAttachments)
-        ? runtime.inputAttachments
-        : Array.isArray(runtime?.attachments)
-          ? runtime.attachments
-          : [],
-    userMessageAttachments: Array.isArray(runtime?.userMessageAttachments)
-      ? runtime.userMessageAttachments
-      : undefined,
+    attachments: currentUserMessageAttachments,
+    userMessageAttachments: currentUserMessageAttachments,
   };
   const systemMessages = Array.isArray(agentContext?.payload?.messages?.system)
     ? agentContext.payload.messages.system

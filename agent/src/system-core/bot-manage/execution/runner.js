@@ -32,6 +32,7 @@ import {
   resetAgentContextCompatFieldHitStats,
 } from "../../context/compatibility-deprecation.js";
 import { PLUGIN_SLOT_KEY } from "../../plugin/plugin-constants.js";
+import { applyRuntimeUserMessageAttachments } from "../../attach/index.js";
 
 function summarizeDebugAttachments(attachments) {
   if (!Array.isArray(attachments)) {
@@ -316,9 +317,7 @@ export class SessionExecutionRunner {
         this._normalizePreparedAgentTurnExecution(preparedAgentTurnExecution);
       const dispatchRuntime = runtimeAgentContext?.execution?.controllers?.runtime;
       if (dispatchRuntime && typeof dispatchRuntime === "object") {
-        dispatchRuntime.userMessageAttachments = userMessageAttachments;
-        dispatchRuntime.inputAttachments = userMessageAttachments;
-        dispatchRuntime.attachments = userMessageAttachments;
+        applyRuntimeUserMessageAttachments(dispatchRuntime, userMessageAttachments);
       }
       emitEvent(runtimeEventListener, "debug_resend_runner_prepared", {
         sessionId: usedSessionId,

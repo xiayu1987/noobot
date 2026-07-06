@@ -81,6 +81,70 @@ test("buildContextMessages preserves explicit empty current userMessageAttachmen
   assert.deepEqual(meta.attachments, []);
 });
 
+test("buildContextMessages does not treat runtime attachments bucket as current user attachments", () => {
+  const messages = buildContextMessages(
+    {
+      execution: {
+        controllers: {
+          runtime: {
+            userId: "admin",
+            userMessageAttachments: [],
+            inputAttachments: [],
+            attachments: [
+              { attachmentId: "tool-output", name: "tool.txt", mimeType: "text/plain" },
+            ],
+            systemRuntime: {
+              sessionId: "session-a",
+              dialogProcessId: "dialog-a",
+              turnScopeId: "turn-a",
+            },
+          },
+        },
+      },
+      payload: { messages: { system: [], history: [] } },
+    },
+    { currentUserMessage: "hello" },
+  );
+
+  const metaMessage = findUserMetaMessage(messages);
+  assert.ok(metaMessage);
+  const meta = parseUserMeta(metaMessage.content);
+  assert.deepEqual(meta.attachments, []);
+});
+
+test("buildContextMessages keeps inputAttachments as legacy user attachment adapter input", () => {
+  const messages = buildContextMessages(
+    {
+      execution: {
+        controllers: {
+          runtime: {
+            userId: "admin",
+            inputAttachments: [
+              { attachmentId: "legacy-input", name: "legacy.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+            ],
+            attachments: [
+              { attachmentId: "tool-output", name: "tool.txt", mimeType: "text/plain" },
+            ],
+            systemRuntime: {
+              sessionId: "session-a",
+              dialogProcessId: "dialog-a",
+              turnScopeId: "turn-a",
+            },
+          },
+        },
+      },
+      payload: { messages: { system: [], history: [] } },
+    },
+    { currentUserMessage: "hello" },
+  );
+
+  const metaMessage = findUserMetaMessage(messages);
+  assert.ok(metaMessage);
+  const meta = parseUserMeta(metaMessage.content);
+  assert.equal(meta.attachments.length, 1);
+  assert.equal(meta.attachments[0].attachmentId, "legacy-input");
+});
+
 test("buildContextMessages preserves rich attachment fields in user meta", () => {
   const messages = buildContextMessages(
     {

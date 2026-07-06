@@ -22,6 +22,10 @@ import {
   resolveModelSpecByAlias,
 } from "../../model/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
+import {
+  resolveRuntimeUserMessageAttachments,
+  updateRuntimeUserMessageAttachment,
+} from "../../attach/index.js";
 import { assertAndResolveUserWorkspaceFilePath } from "../core/check-tool-input.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
@@ -158,10 +162,7 @@ function normalizeMediaInputPath(rawFilePath = "") {
 function resolveMediaInputPathFromAttachmentMetas(filePath = "", agentContext = {}) {
   const normalizedInputPath = normalizeMediaInputPath(filePath);
   const runtime = getRuntimeFromAgentContext(agentContext);
-  const runtimeAttachmentMetas = [
-    ...(Array.isArray(runtime?.inputAttachments) ? runtime.inputAttachments : []),
-    ...(Array.isArray(runtime?.attachments) ? runtime.attachments : []),
-  ];
+  const runtimeAttachmentMetas = resolveRuntimeUserMessageAttachments(runtime);
   if (!normalizedInputPath || !runtimeAttachmentMetas.length) {
     return {
       resolvedInputPath: normalizedInputPath,
@@ -522,18 +523,7 @@ async function backwriteParsedResultToSourceAttachment({
       sourceAttachmentSource: String(sourceAttachmentMeta?.attachmentSource || "").trim(),
       sourceAttachmentPath: String(sourceAttachmentMeta?.path || "").trim(),
     });
-    for (const bucketName of ["inputAttachments", "attachments"]) {
-      if (!Array.isArray(runtime?.[bucketName])) continue;
-      const sourceAttachmentIndex = runtime[bucketName].findIndex(
-        (item) => String(item?.attachmentId || "").trim() === sourceAttachmentId,
-      );
-      if (sourceAttachmentIndex >= 0) {
-        runtime[bucketName][sourceAttachmentIndex] = {
-          ...(runtime[bucketName][sourceAttachmentIndex] || {}),
-          ...(updatedSourceAttachment || {}),
-        };
-      }
-    }
+    updateRuntimeUserMessageAttachment(runtime, sourceAttachmentId, updatedSourceAttachment || {});
     return updatedSourceAttachment;
   } catch {
     return null;

@@ -19,6 +19,12 @@ export {
   mergeAttachmentListsPreferRich,
 } from "./meta-ops.js";
 export { appendAttachmentMetasToRuntimeAndTurn } from "./runtime-attachment.js";
+export {
+  applyRuntimeUserMessageAttachments,
+  resolveRuntimeUserMessageAttachments,
+  runtimeHasExplicitUserMessageAttachments,
+  updateRuntimeUserMessageAttachment,
+} from "./runtime-user-message-attachments.js";
 export { readAttachIndex, writeAttachIndex } from "./index-manager.js";
 export { validateAttachmentPolicy, resolveAttachmentPolicy, isMimeTypeAllowed, isExtensionAllowed } from "./policy/policy-validator.js";
 export { getMimeTypeFromExtension, isValidMimeType } from "./policy/mime-utils.js";
