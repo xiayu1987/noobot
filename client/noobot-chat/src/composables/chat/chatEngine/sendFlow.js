@@ -36,6 +36,7 @@ import { nowMs } from "../../infra/timeFields";
 import { hasMatchingInFlightAssistantMessage } from "./messageStateGuards";
 import {
   logResendDebug,
+  summarizeDebugAttachments,
   summarizeDebugMessage,
   summarizeDebugMessages,
 } from "../debug/resendDebugLogger";
@@ -234,7 +235,11 @@ export function createChatEngineSender({
       userAttachments: explicitUserAttachments,
     });
     logResendDebug("send.prepare.after", {
+      sessionId,
       turnScopeId,
+      explicitUserAttachments: summarizeDebugAttachments(explicitUserAttachments),
+      explicitSerializedAttachments: summarizeDebugAttachments(explicitSerializedAttachments),
+      filesToSend: summarizeDebugAttachments(filesToSend),
       botMessage: summarizeDebugMessage(botMsg),
       messages: summarizeDebugMessages(activeSession?.value?.messages),
     });
@@ -246,6 +251,15 @@ export function createChatEngineSender({
     try {
       if (!explicitAttachmentFiles) clearUploads();
       const attachments = explicitSerializedAttachments || await serializeAttachments(filesToSend);
+      const preparedUserMessage = options?.reuseExistingUserTurn === true
+        ? (activeSession.value?.messages || []).find((messageItem) => (
+          messageItem?.role === "user" &&
+          String(messageItem?.turnScopeId || "").trim() === turnScopeId
+        ))
+        : null;
+      if (preparedUserMessage && Array.isArray(attachments)) {
+        preparedUserMessage.attachments = attachments.map((attachment) => ({ ...attachment }));
+      }
       const requestedTextStreaming = streamOutput?.value !== false;
 
       const payload = buildChatPayload({
@@ -277,9 +291,15 @@ export function createChatEngineSender({
         },
       });
       logResendDebug("send.stream.before", {
+        sessionId,
         turnScopeId,
         payloadTurnScopeId: payload?.turnScopeId,
         reuseExistingUserTurn: payload?.reuseExistingUserTurn,
+        explicitUserAttachments: summarizeDebugAttachments(explicitUserAttachments),
+        explicitSerializedAttachments: summarizeDebugAttachments(explicitSerializedAttachments),
+        filesToSend: summarizeDebugAttachments(filesToSend),
+        attachments: summarizeDebugAttachments(attachments),
+        payloadAttachments: summarizeDebugAttachments(payload?.attachments),
         botMessage: summarizeDebugMessage(botMsg),
       });
       const activeProcessStore = getResolvedProcessStore();

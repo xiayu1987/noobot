@@ -87,6 +87,127 @@ describe("useChatEngine.resend replace turn", () => {
     expect(input.value).toBe("");
   });
 
+  it("resendMonotonicMessage sends edited attachment set to replace-turn and stream payload", async () => {
+    const stream = vi.fn(async () => {});
+    const keptAttachment = { attachmentId: "kept", name: "kept.txt" };
+    const removedAttachment = { attachmentId: "removed", name: "removed.txt" };
+    const newAttachment = { name: "new.txt", mimeType: "text/plain", contentBase64: "bmV3" };
+    const localFile = new File(["new"], "new.txt", { type: "text/plain" });
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments }) => {
+      const replacementUser = { turnScopeId, role: RoleEnum.USER, content: newContent, attachments };
+      return {
+        ok: true,
+        session: makeSession("local-resend-attachments", {
+          messages: [replacementUser],
+          rawMessages: [replacementUser],
+          version: 4,
+        }),
+      };
+    });
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value = { ...activeSession.value, ...mainSession };
+    });
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-resend-attachments",
+      stream,
+      deps: { replaceSessionTurnApi, applySessionDetail },
+    });
+    const stoppedUser = {
+      turnScopeId: "client-turn:attachments-old",
+      role: RoleEnum.USER,
+      content: "old",
+      attachments: [keptAttachment, removedAttachment],
+    };
+    const stoppedAssistant = {
+      turnScopeId: "client-turn:attachments-old",
+      role: RoleEnum.ASSISTANT,
+      content: "partial",
+      stopState: "stopped",
+    };
+    activeSession.value.messages = [stoppedUser, stoppedAssistant];
+    activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
+    activeSession.value.version = 3;
+
+    await expect(engine.resendMonotonicMessage(stoppedAssistant, "edited with attachments", {
+      attachments: [keptAttachment],
+      attachmentFiles: [localFile],
+    })).resolves.toBe(true);
+
+    const expectedAttachments = [keptAttachment, newAttachment];
+    expect(replaceSessionTurnApi).toHaveBeenCalledWith(expect.objectContaining({
+      newContent: "edited with attachments",
+      attachments: expectedAttachments,
+    }), expect.any(Object));
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(stream.mock.calls[0][0]).toEqual(expect.objectContaining({
+      message: "edited with attachments",
+      attachments: expectedAttachments,
+    }));
+    expect(activeSession.value.messages[0].attachments).toEqual(expectedAttachments);
+  });
+
+  it("resendMonotonicMessage keeps original attachment when editing without attachment changes", async () => {
+    const stream = vi.fn(async () => {});
+    const originalAttachment = {
+      attachmentId: "attachment-a",
+      name: "a.txt",
+      mimeType: "text/plain",
+      contentBase64: "YQ==",
+    };
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments }) => {
+      const replacementUser = { turnScopeId, role: RoleEnum.USER, content: newContent, attachments };
+      return {
+        ok: true,
+        session: makeSession("local-resend-unchanged-attachment", {
+          messages: [replacementUser],
+          rawMessages: [replacementUser],
+          version: 4,
+        }),
+      };
+    });
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value = { ...activeSession.value, ...mainSession };
+    });
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-resend-unchanged-attachment",
+      stream,
+      deps: { replaceSessionTurnApi, applySessionDetail },
+    });
+    const stoppedUser = {
+      turnScopeId: "client-turn:unchanged-attachment-old",
+      role: RoleEnum.USER,
+      content: "old with attachment A",
+      attachments: [originalAttachment],
+    };
+    const stoppedAssistant = {
+      turnScopeId: "client-turn:unchanged-attachment-old",
+      role: RoleEnum.ASSISTANT,
+      content: "partial",
+      stopState: "stopped",
+    };
+    activeSession.value.messages = [stoppedUser, stoppedAssistant];
+    activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
+    activeSession.value.version = 3;
+
+    await expect(engine.resendMonotonicMessage(stoppedAssistant, "old with attachment A", {
+      attachments: [originalAttachment],
+      attachmentFiles: [],
+    })).resolves.toBe(true);
+
+    expect(replaceSessionTurnApi).toHaveBeenCalledWith(expect.objectContaining({
+      newContent: "old with attachment A",
+      attachments: [originalAttachment],
+    }), expect.any(Object));
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(stream.mock.calls[0][0]).toEqual(expect.objectContaining({
+      message: "old with attachment A",
+      attachments: [originalAttachment],
+    }));
+    expect(activeSession.value.messages[0].attachments).toEqual([originalAttachment]);
+  });
+
   it("resendMonotonicMessage refreshes session version after 409 and retries replace-turn with the newer version", async () => {
     const stream = vi.fn(async () => {});
     const fetchSessionDetail = vi.fn(async () => ({

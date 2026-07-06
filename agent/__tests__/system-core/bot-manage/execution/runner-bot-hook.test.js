@@ -107,7 +107,7 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
     "after_agent_dispatch",
     "after_session_run",
   ]);
-  assert.deepEqual(capturedBuildContextPayload?.inputAttachmentMetas, [{ attachmentId: "att1" }]);
+  assert.deepEqual(capturedBuildContextPayload?.inputAttachments, [{ attachmentId: "att1" }]);
   assert.equal(capturedBuildContextPayload?.attachmentMetas, undefined);
   assert.equal(Boolean(beforeDispatchContext?.agentContext), false);
   assert.equal(typeof beforeDispatchContext?.agentContextSummary, "object");
@@ -178,7 +178,7 @@ test("SessionExecutionRunner merges top-level turnScopeId before context buildin
   assert.equal(appendedTurnScopeId, "client-turn:top-level");
 });
 
-test("SessionExecutionRunner stamps reused user with generated dialogProcessId before context building", async () => {
+test("SessionExecutionRunner stamps reused user with prepared attachments after context building", async () => {
   const calls = [];
   let capturedBuildContextPayload = null;
   const runner = createRunner({
@@ -201,7 +201,65 @@ test("SessionExecutionRunner stamps reused user with generated dialogProcessId b
         payload: { messages: { history: [] } },
         execution: { controllers: { runtime: { attachmentMetas: [] } } },
       };
-      return { agentContext: runtimeAgentContext, runtimeAgentContext };
+      return {
+        agentContext: runtimeAgentContext,
+        runtimeAgentContext,
+        userMessageAttachments: [
+          {
+            attachmentId: "rich-att",
+            name: "doc.docx",
+            path: "/workspace/doc.docx",
+            parsedResult: { attachmentId: "parsed-md" },
+          },
+        ],
+      };
+    },
+  });
+
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "edited",
+    attachments: [{ name: "doc.docx", size: 12 }],
+    runConfig: {
+      reuseExistingUserTurn: true,
+      turnScopeId: "client-turn:edited",
+    },
+  });
+
+  assert.deepEqual(calls.map((item) => item.type), ["prepare", "stamp"]);
+  assert.deepEqual(calls[1].payload, {
+    userId: "u1",
+    sessionId: "s1",
+    parentSessionId: "",
+    turnScopeId: "client-turn:edited",
+    dialogProcessId: "dp-new",
+    attachments: [
+      {
+        attachmentId: "rich-att",
+        name: "doc.docx",
+        path: "/workspace/doc.docx",
+        parsedResult: { attachmentId: "parsed-md" },
+      },
+    ],
+  });
+  assert.equal(capturedBuildContextPayload?.dialogProcessId, "dp-new");
+});
+
+test("SessionExecutionRunner stamps reused user with generated dialogProcessId after context building", async () => {
+  const calls = [];
+  const runner = createRunner({
+    initializeRunSessionRuntime: async ({ eventListener = null } = {}) => ({
+      usedSessionId: "s1",
+      dialogProcessId: "dp-new",
+      isContinue: true,
+      userConfig: {},
+      currentSessionModelAlias: "",
+      executionStartIndex: 0,
+      runtimeEventListener: eventListener,
+    }),
+    stampReusedUserTurnDialogProcessId: async (payload = {}) => {
+      calls.push(payload);
     },
   });
 
@@ -215,15 +273,14 @@ test("SessionExecutionRunner stamps reused user with generated dialogProcessId b
     },
   });
 
-  assert.deepEqual(calls.map((item) => item.type), ["stamp", "prepare"]);
-  assert.deepEqual(calls[0].payload, {
+  assert.deepEqual(calls[0], {
     userId: "u1",
     sessionId: "s1",
     parentSessionId: "",
     turnScopeId: "client-turn:edited",
     dialogProcessId: "dp-new",
+    attachments: [],
   });
-  assert.equal(capturedBuildContextPayload?.dialogProcessId, "dp-new");
 });
 
 test("SessionExecutionRunner emits bot error hooks", async () => {

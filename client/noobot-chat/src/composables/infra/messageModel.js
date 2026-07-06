@@ -128,6 +128,12 @@ function normalizeAttachment(
   const parsedAttachmentId = String(
     parsedResult?.attachmentId || parsedResult?.id || attachmentItem?.parsedResultAttachmentId || "",
   ).trim();
+  const parsedSessionId = String(
+    parsedResult?.sessionId || parsedResult?.session_id || attachmentItem?.parsedResultSessionId || sessionId || "",
+  ).trim();
+  const parsedAttachmentSource = String(
+    parsedResult?.attachmentSource || parsedResult?.source || attachmentItem?.parsedResultAttachmentSource || "model",
+  ).trim();
   const parsedPath = String(
     parsedResult?.path || attachmentItem?.parsedResultPath || "",
   ).trim();
@@ -141,6 +147,8 @@ function normalizeAttachment(
     ? buildAttachmentUrl({
         userId,
         attachmentId: parsedAttachmentId,
+        sessionId: parsedSessionId,
+        attachmentSource: parsedAttachmentSource,
       }) || existingParsedResultUrl
     : existingParsedResultUrl;
   const parsedResultName =
@@ -161,10 +169,17 @@ function normalizeAttachment(
       ? {
           ...parsedResult,
           ...(parsedAttachmentId ? { attachmentId: parsedAttachmentId } : {}),
+          ...(parsedSessionId ? { sessionId: parsedSessionId } : {}),
+          ...(parsedAttachmentSource ? { attachmentSource: parsedAttachmentSource } : {}),
           ...(parsedPath ? { path: parsedPath } : {}),
           ...(parsedRelativePath ? { relativePath: parsedRelativePath } : {}),
         }
       : attachmentItem?.parsedResult,
+    parsedResultAttachmentId: parsedAttachmentId,
+    parsedResultPath: parsedPath,
+    parsedResultRelativePath: parsedRelativePath,
+    parsedResultSessionId: parsedSessionId,
+    parsedResultAttachmentSource: parsedAttachmentSource,
     parsedResultUrl,
     parsedResultName,
   };

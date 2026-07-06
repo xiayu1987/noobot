@@ -23,8 +23,9 @@ import { ERROR_CODE } from "../../error/constants.js";
 import {
   getRuntimeFromAgentContext,
 } from "../../context/agent-context-accessor.js";
-import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
+import { mapAttachmentRecordsToMetas, readAttachIndex } from "../../attach/index.js";
 import { MIME_TYPE } from "../../constants/index.js";
+import path from "node:path";
 import { normalizeTrimmedStringList } from "./session-execution-engine-utils.js";
 import { createDetachedSubSessionRunner } from "./detached-subsession-runner.js";
 import { ModelMessageRuntimeHelpers } from "./model-message-runtime-helpers.js";
@@ -34,6 +35,52 @@ import {
   createRunConfigPluginPreparerFromRuntimeBundle,
   getDefaultSessionPluginRuntime,
 } from "../../plugin/session-plugin-runtime-provider.js";
+
+function trimmed(value = "") {
+  return String(value || "").trim();
+}
+
+function attachmentMatchKeys(item = {}) {
+  if (!item || typeof item !== "object") return [];
+  const name = trimmed(item.name);
+  const mimeType = trimmed(item.mimeType || item.type);
+  const size = Number(item.size);
+  const finiteSize = Number.isFinite(size) && size > 0 ? String(size) : "";
+  return [
+    trimmed(item.attachmentId) ? `id:${trimmed(item.attachmentId)}` : "",
+    trimmed(item.path) ? `path:${trimmed(item.path)}` : "",
+    trimmed(item.relativePath) ? `rel:${trimmed(item.relativePath)}` : "",
+    trimmed(item.sandboxPath || item.sandboxViewPath) ? `sandbox:${trimmed(item.sandboxPath || item.sandboxViewPath)}` : "",
+    name && mimeType && finiteSize ? `name-mime-size:${name}|${mimeType}|${finiteSize}` : "",
+    name && finiteSize ? `name-size:${name}|${finiteSize}` : "",
+    name && mimeType ? `name-mime:${name}|${mimeType}` : "",
+    name ? `name:${name}` : "",
+  ].filter(Boolean);
+}
+
+function findMatchingAttachmentMeta(source = {}, candidates = []) {
+  const sourceKeys = new Set(attachmentMatchKeys(source));
+  if (!sourceKeys.size) return null;
+  return (Array.isArray(candidates) ? candidates : []).find((candidate) =>
+    attachmentMatchKeys(candidate).some((key) => sourceKeys.has(key)),
+  ) || null;
+}
+
+function hasRichAttachmentValue(value) {
+  if (value === undefined || value === null) return false;
+  if (typeof value === "string") return trimmed(value).length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") return Object.keys(value).length > 0;
+  return true;
+}
+
+function mergeAttachmentMetaPreferRich(rich = {}, raw = {}) {
+  const out = { ...(raw && typeof raw === "object" ? raw : {}) };
+  for (const [key, value] of Object.entries(rich && typeof rich === "object" ? rich : {})) {
+    if (hasRichAttachmentValue(value)) out[key] = value;
+  }
+  return out;
+}
 
 export class SessionExecutionEngine {
   constructor({
@@ -508,18 +555,69 @@ export class SessionExecutionEngine {
       abortSignal,
     });
     const preparedRuntime = getRuntimeFromAgentContext(prepared?.agentContext || {});
-    const runtimeAttachments = Array.isArray(preparedRuntime?.inputAttachments)
+    const preparedRuntimeAttachments = Array.isArray(preparedRuntime?.inputAttachments)
       ? preparedRuntime.inputAttachments
       : Array.isArray(preparedRuntime?.attachments)
         ? preparedRuntime.attachments
-        : [];
+        : null;
+    const payloadInputAttachments = Array.isArray(payload?.inputAttachments)
+      ? payload.inputAttachments
+      : [];
+    const runtimeAttachments = Array.isArray(preparedRuntimeAttachments) && preparedRuntimeAttachments.length > 0
+      ? preparedRuntimeAttachments
+      : payloadInputAttachments;
+    const enrichedRuntimeAttachments = await this._enrichUserInputAttachmentsFromIndex({
+      userId: String(payload?.userId || "").trim(),
+      sessionId: String(payload?.sessionId || "").trim(),
+      attachments: runtimeAttachments,
+    });
     return {
       ...(prepared && typeof prepared === "object" ? prepared : {}),
-      userMessageAttachments: mapAttachmentRecordsToMetas(runtimeAttachments, {
+      userMessageAttachments: mapAttachmentRecordsToMetas(enrichedRuntimeAttachments, {
         fallbackMimeType: MIME_TYPE.APPLICATION_OCTET_STREAM,
         userId: String(payload?.userId || "").trim(),
       }),
     };
+  }
+
+  async _enrichUserInputAttachmentsFromIndex({ userId = "", sessionId = "", attachments = [] } = {}) {
+    const sourceAttachments = Array.isArray(attachments) ? attachments : [];
+    if (!sourceAttachments.length) return sourceAttachments;
+    const normalizedSessionId = String(sessionId || "").trim();
+    const basePath = await this._resolveAttachmentIndexBasePath(userId);
+    if (!basePath || !normalizedSessionId) return sourceAttachments;
+    let index = null;
+    try {
+      index = await readAttachIndex(basePath, {
+        sessionId: normalizedSessionId,
+        attachmentSource: "user",
+      });
+    } catch {
+      return sourceAttachments;
+    }
+    const indexedAttachments = Object.values(index?.attachments || {}).filter(
+      (item) => item && typeof item === "object" && !Array.isArray(item),
+    );
+    if (!indexedAttachments.length) return sourceAttachments;
+    return sourceAttachments.map((attachmentItem) => {
+      const match = findMatchingAttachmentMeta(attachmentItem, indexedAttachments);
+      return match ? mergeAttachmentMetaPreferRich(match, attachmentItem) : attachmentItem;
+    });
+  }
+
+  async _resolveAttachmentIndexBasePath(userId = "") {
+    const normalizedUserId = String(userId || "").trim();
+    if (!normalizedUserId) return "";
+    if (this.workspaceService?.ensureUserWorkspace) {
+      try {
+        const basePath = await this.workspaceService.ensureUserWorkspace(normalizedUserId);
+        if (basePath) return String(basePath || "").trim();
+      } catch {
+        // fall through to globalConfig workspaceRoot
+      }
+    }
+    const workspaceRoot = String(this.globalConfig?.workspaceRoot || "").trim();
+    return workspaceRoot ? path.resolve(workspaceRoot, normalizedUserId) : "";
   }
 
   async _appendSessionTurn({

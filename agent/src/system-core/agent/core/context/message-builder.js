@@ -137,6 +137,7 @@ function resolveAttachments(msg = {}, fallbackAttachments = []) {
 }
 
 function resolveFallbackAttachments(meta = {}) {
+  if (Array.isArray(meta?.userMessageAttachments)) return meta.userMessageAttachments;
   if (Array.isArray(meta?.inputAttachments)) return meta.inputAttachments;
   if (Array.isArray(meta?.attachments)) return meta.attachments;
   return [];
@@ -160,6 +161,12 @@ function buildUserMetaAttachmentInfo(attachmentItem = {}) {
     path: String(attachmentItem?.path || "").trim(),
     relativePath: String(attachmentItem?.relativePath || "").trim(),
     sandboxPath: String(attachmentItem?.sandboxPath || "").trim(),
+    downloadUrl: String(attachmentItem?.downloadUrl || "").trim(),
+    previewUrl: String(attachmentItem?.previewUrl || "").trim(),
+    parsedResultUrl: String(attachmentItem?.parsedResultUrl || "").trim(),
+    parsedResultName: String(attachmentItem?.parsedResultName || "").trim(),
+    parsedResultAttachmentId: String(attachmentItem?.parsedResultAttachmentId || "").trim(),
+    transferFilePath: String(attachmentItem?.transferFilePath || "").trim(),
     ...(Number.isFinite(size) ? { size } : {}),
     ...(typeof attachmentItem?.isSandbox === "boolean" ? { isSandbox: attachmentItem.isSandbox } : {}),
     ...(parsedResult ? { parsedResult } : {}),
@@ -409,11 +416,16 @@ export function buildContextMessageBlocks(
     parentDialogProcessId: String(
       systemRuntime?.parentDialogProcessId || "",
     ).trim(),
-    attachments: Array.isArray(runtime?.inputAttachments)
-      ? runtime.inputAttachments
-      : Array.isArray(runtime?.attachments)
-        ? runtime.attachments
-        : [],
+    attachments: Array.isArray(runtime?.userMessageAttachments)
+      ? runtime.userMessageAttachments
+      : Array.isArray(runtime?.inputAttachments)
+        ? runtime.inputAttachments
+        : Array.isArray(runtime?.attachments)
+          ? runtime.attachments
+          : [],
+    userMessageAttachments: Array.isArray(runtime?.userMessageAttachments)
+      ? runtime.userMessageAttachments
+      : undefined,
   };
   const systemMessages = Array.isArray(agentContext?.payload?.messages?.system)
     ? agentContext.payload.messages.system

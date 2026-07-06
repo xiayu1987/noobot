@@ -27,6 +27,23 @@ const DEFAULT_RUN_TIMEOUT_MS = BUILTIN_THRESHOLDS.runTimeoutMs;
 const MIN_RUN_TIMEOUT_MS = TIME_THRESHOLDS.agent.minRunTimeoutMs;
 const MAX_RUN_TIMEOUT_MS = TIME_THRESHOLDS.agent.maxRunTimeoutMs;
 
+function summarizeDebugAttachments(attachments) {
+  if (!Array.isArray(attachments)) {
+    return { kind: attachments === undefined ? "undefined" : "non-array", count: 0, items: [] };
+  }
+  return {
+    kind: "array",
+    count: attachments.length,
+    items: attachments.slice(0, 8).map((attachment = {}) => ({
+      id: String(attachment.id || attachment.fileId || attachment.attachmentId || ""),
+      name: String(attachment.name || attachment.fileName || attachment.filename || ""),
+      type: String(attachment.type || attachment.mimeType || attachment.mime || ""),
+      size: Number.isFinite(Number(attachment.size)) ? Number(attachment.size) : undefined,
+      url: attachment.url ? "present" : "",
+    })),
+  };
+}
+
 export function recordServiceWebSocketSendFailure({
   sessionLogConfig,
   eventName = "",
@@ -554,6 +571,23 @@ export function registerChatWebSocketServer(
           String(turnScopeId || config?.turnScopeId || "").trim() ||
           currentTurnScopeId;
         currentLocale = normalizeLocale(config?.locale || currentLocale);
+
+        void writeRoutedRuntimeEvent({
+          scope: "session",
+          source: "service",
+          channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+          category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
+          event: "debug.resend.websocket.received",
+          userId: String(userId || "").trim(),
+          sessionId: String(sessionId || "").trim(),
+          parentSessionId: String(parentSessionId || "").trim(),
+          turnScopeId: String(currentTurnScopeId || turnScopeId || config?.turnScopeId || "").trim(),
+          data: {
+            reuseExistingUserTurn: config?.reuseExistingUserTurn === true,
+            attachments: summarizeDebugAttachments(attachments),
+            payloadAttachments: summarizeDebugAttachments(payload?.attachments),
+          },
+        }, sessionLogConfig);
 
         if (!userId || !sessionId || !message) {
           throw new Error(translateText("common.userSessionMessageRequired", currentLocale));
