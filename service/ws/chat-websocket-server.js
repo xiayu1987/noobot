@@ -947,4 +947,6 @@ export function registerChatWebSocketServer(
       rejectAllPendingInteractions(new Error(translateText("ws.socketClosed", currentLocale)));
     });
   });
+
+  return { webSocketServer };
 }

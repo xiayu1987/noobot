@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
+import net from "node:net";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -17,7 +18,7 @@ async function startServerWithWs({ runSession = async () => ({}), bot = null, se
     res.end("not-found");
   });
 
-  registerChatWebSocketServer(server, {
+  const registered = registerChatWebSocketServer(server, {
     getBot: () => bot || ({ runSession }),
     resolveRequestLocale: () => "zh-CN",
     resolveAuthByApiKey: () => ({ userId: "primary-user" }),
@@ -30,7 +31,11 @@ async function startServerWithWs({ runSession = async () => ({}), bot = null, se
   });
 
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  return server;
+  return {
+    server,
+    registered,
+    address: (...args) => server.address(...args),
+  };
 }
 
 async function readJsonl(filePath) {
@@ -53,7 +58,13 @@ async function waitForFile(filePath, { timeoutMs = 1000 } = {}) {
   throw lastError;
 }
 
-async function closeServer(server) {
+async function closeServer(serverHandle) {
+  const server = serverHandle?.server || serverHandle;
+  const registered = serverHandle?.registered || null;
+  for (const client of registered?.webSocketServer?.clients || []) {
+    client.terminate?.();
+  }
+  registered?.webSocketServer?.close?.();
   await new Promise((resolve) => server.close(resolve));
 }
 
@@ -95,6 +106,34 @@ async function stopChatWs({ port, payload = {}, stopPayload = {} } = {}) {
     });
     ws.on("close", () => resolve(messages));
     ws.on("error", reject);
+  });
+}
+
+async function requestRawUpgrade({ port, pathName = "/chat/ws" } = {}) {
+  return new Promise((resolve, reject) => {
+    let response = "";
+    const socket = net.createConnection({ host: "127.0.0.1", port }, () => {
+      socket.write([
+        `GET ${pathName} HTTP/1.1`,
+        "Host: 127.0.0.1",
+        "Connection: Upgrade",
+        "Upgrade: websocket",
+        "Sec-WebSocket-Version: 13",
+        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+        "Authorization: Bearer test-key",
+        "",
+        "",
+      ].join("\r\n"));
+    });
+    socket.setTimeout(1000, () => {
+      socket.destroy(new Error("raw upgrade response timeout"));
+    });
+    socket.on("data", (chunk) => {
+      response += chunk.toString("utf8");
+    });
+    socket.on("end", () => resolve(response));
+    socket.on("close", () => resolve(response));
+    socket.on("error", reject);
   });
 }
 
@@ -635,21 +674,12 @@ test("chat-websocket-server: invalid upgrade URL writes sanitized system runtime
   const server = await startServerWithWs({ sessionLogConfig: { workspaceRoot } });
   try {
     const { port } = server.address();
-    const response = await new Promise((resolve, reject) => {
-      const socket = new WebSocket(`ws://127.0.0.1:${port}/http://[?apikey=SECRET&authorization=Bearer-token&cookie=session&secret=value`, {
-        headers: { authorization: "Bearer test-key" },
-      });
-      socket.on("unexpected-response", (_request, res) => {
-        resolve({ statusCode: res.statusCode });
-      });
-      socket.on("open", () => reject(new Error("unexpected websocket open")));
-      socket.on("error", (error) => {
-        if (error?.message?.includes?.("Unexpected server response")) return;
-        reject(error);
-      });
+    const response = await requestRawUpgrade({
+      port,
+      pathName: "http://[?apikey=SECRET&authorization=Bearer-token&cookie=session&secret=value",
     });
 
-    assert.equal(response.statusCode, 400);
+    assert.match(response, /^HTTP\/1\.1 400 /);
 
     const eventFile = path.join(
       workspaceRoot,
@@ -669,8 +699,8 @@ test("chat-websocket-server: invalid upgrade URL writes sanitized system runtime
     assert.equal(record.level, "warn");
     assert.equal(record.event, "service.websocket.upgradeUrlParse.failed");
     assert.equal(Object.prototype.hasOwnProperty.call(record, "sessionId"), false);
-    assert.equal(record.data.urlPathPreview, "/http://[");
-    assert.equal(record.data.urlLength, "/http://[?apikey=SECRET&authorization=Bearer-token&cookie=session&secret=value".length);
+    assert.equal(record.data.urlPathPreview, "http://[");
+    assert.equal(record.data.urlLength, "http://[?apikey=SECRET&authorization=Bearer-token&cookie=session&secret=value".length);
     assert.equal(record.error.name, "TypeError");
     const serialized = JSON.stringify(record);
     assert.equal(serialized.includes("SECRET"), false);
