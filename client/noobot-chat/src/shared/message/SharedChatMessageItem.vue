@@ -11,6 +11,8 @@ import { useMessageFiles } from "../../composables/message/useMessageFiles";
 import { useMessageMeta } from "../../composables/message/useMessageMeta";
 import { getMessageRole } from "../../composables/infra/messageIdentity";
 import { useLocale } from "../i18n/useLocale";
+import MonotonicMessageActions from "./MonotonicMessageActions.vue";
+import { resolveMonotonicMessageActionProps } from "./monotonicMessageActionRules";
 import {
   BaseMarkdownContent,
   BaseAttachmentFileCard,
@@ -128,6 +130,9 @@ const postContentMessageActionRenderers = computed(() =>
 const hideMessageMarkdownForInlineEditor = computed(() =>
   getMessageRole(props.messageItem) === "user" && props.messageItem?.__monotonicEditing === true,
 );
+const defaultMonotonicMessageActionProps = computed(() =>
+  resolveMonotonicMessageActionProps(resolveRendererContext()),
+);
 
 function resolveRendererProps(renderer = {}) {
   return resolveMessageCardProps(renderer, resolveRendererContext());
@@ -231,6 +236,8 @@ async function handleCopyAssistantMessageText() {
       :key="renderer.id"
       v-bind="resolveActionRendererProps(renderer)"
     />
+
+    <MonotonicMessageActions v-bind="defaultMonotonicMessageActionProps" />
 
     <BaseFileCardList v-if="!suppressDefaultAssets && (displayedAttachments.length || writtenFiles.length)">
       <BaseAttachmentFileCard

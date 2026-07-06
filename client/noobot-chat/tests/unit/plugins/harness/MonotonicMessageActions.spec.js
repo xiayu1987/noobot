@@ -1,7 +1,7 @@
 import { mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
-import MonotonicMessageActions from "../../../../../../plugin/noobot-plugin-harness/frontend/components/MonotonicMessageActions.vue";
+import MonotonicMessageActions from "../../../../src/shared/message/MonotonicMessageActions.vue";
 
 vi.mock("element-plus", () => ({
   ElMessage: { error: vi.fn() },
