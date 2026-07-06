@@ -23,7 +23,12 @@ import { ERROR_CODE } from "../../error/constants.js";
 import {
   getRuntimeFromAgentContext,
 } from "../../context/agent-context-accessor.js";
-import { mapAttachmentRecordsToMetas, readAttachIndex } from "../../attach/index.js";
+import {
+  findMatchingAttachmentMeta,
+  mapAttachmentRecordsToMetas,
+  mergeAttachmentMetaPreferRich,
+  readAttachIndex,
+} from "../../attach/index.js";
 import { MIME_TYPE } from "../../constants/index.js";
 import path from "node:path";
 import { normalizeTrimmedStringList } from "./session-execution-engine-utils.js";
@@ -35,52 +40,6 @@ import {
   createRunConfigPluginPreparerFromRuntimeBundle,
   getDefaultSessionPluginRuntime,
 } from "../../plugin/session-plugin-runtime-provider.js";
-
-function trimmed(value = "") {
-  return String(value || "").trim();
-}
-
-function attachmentMatchKeys(item = {}) {
-  if (!item || typeof item !== "object") return [];
-  const name = trimmed(item.name);
-  const mimeType = trimmed(item.mimeType || item.type);
-  const size = Number(item.size);
-  const finiteSize = Number.isFinite(size) && size > 0 ? String(size) : "";
-  return [
-    trimmed(item.attachmentId) ? `id:${trimmed(item.attachmentId)}` : "",
-    trimmed(item.path) ? `path:${trimmed(item.path)}` : "",
-    trimmed(item.relativePath) ? `rel:${trimmed(item.relativePath)}` : "",
-    trimmed(item.sandboxPath || item.sandboxViewPath) ? `sandbox:${trimmed(item.sandboxPath || item.sandboxViewPath)}` : "",
-    name && mimeType && finiteSize ? `name-mime-size:${name}|${mimeType}|${finiteSize}` : "",
-    name && finiteSize ? `name-size:${name}|${finiteSize}` : "",
-    name && mimeType ? `name-mime:${name}|${mimeType}` : "",
-    name ? `name:${name}` : "",
-  ].filter(Boolean);
-}
-
-function findMatchingAttachmentMeta(source = {}, candidates = []) {
-  const sourceKeys = new Set(attachmentMatchKeys(source));
-  if (!sourceKeys.size) return null;
-  return (Array.isArray(candidates) ? candidates : []).find((candidate) =>
-    attachmentMatchKeys(candidate).some((key) => sourceKeys.has(key)),
-  ) || null;
-}
-
-function hasRichAttachmentValue(value) {
-  if (value === undefined || value === null) return false;
-  if (typeof value === "string") return trimmed(value).length > 0;
-  if (Array.isArray(value)) return value.length > 0;
-  if (typeof value === "object") return Object.keys(value).length > 0;
-  return true;
-}
-
-function mergeAttachmentMetaPreferRich(rich = {}, raw = {}) {
-  const out = { ...(raw && typeof raw === "object" ? raw : {}) };
-  for (const [key, value] of Object.entries(rich && typeof rich === "object" ? rich : {})) {
-    if (hasRichAttachmentValue(value)) out[key] = value;
-  }
-  return out;
-}
 
 export class SessionExecutionEngine {
   constructor({
@@ -566,10 +525,18 @@ export class SessionExecutionEngine {
     const runtimeAttachments = Array.isArray(preparedRuntimeAttachments) && preparedRuntimeAttachments.length > 0
       ? preparedRuntimeAttachments
       : payloadInputAttachments;
+    const existingSessionAttachments = await this._resolveExistingUserMessageAttachments({
+      userId: String(payload?.userId || "").trim(),
+      sessionId: String(payload?.sessionId || "").trim(),
+      parentSessionId: String(payload?.parentSessionId || "").trim(),
+      turnScopeId: String(payload?.turnScopeId || payload?.runConfig?.turnScopeId || "").trim(),
+      dialogProcessId: String(payload?.dialogProcessId || "").trim(),
+    });
     const enrichedRuntimeAttachments = await this._enrichUserInputAttachmentsFromIndex({
       userId: String(payload?.userId || "").trim(),
       sessionId: String(payload?.sessionId || "").trim(),
       attachments: runtimeAttachments,
+      existingAttachments: existingSessionAttachments,
     });
     return {
       ...(prepared && typeof prepared === "object" ? prepared : {}),
@@ -580,27 +547,59 @@ export class SessionExecutionEngine {
     };
   }
 
-  async _enrichUserInputAttachmentsFromIndex({ userId = "", sessionId = "", attachments = [] } = {}) {
+  async _resolveExistingUserMessageAttachments({
+    userId = "",
+    sessionId = "",
+    parentSessionId = "",
+    turnScopeId = "",
+    dialogProcessId = "",
+  } = {}) {
+    if (!userId || !sessionId || !this.session?.findById) return [];
+    let sessionDoc = null;
+    try {
+      sessionDoc = await this.session.findById(userId, sessionId, parentSessionId);
+    } catch {
+      return [];
+    }
+    const messages = Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : [];
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const messageItem = messages[index];
+      if (String(messageItem?.role || "").trim() !== "user") continue;
+      if (messageItem?.injectedMessage === true || messageItem?.pluginMessage === true) continue;
+      const sameTurn = turnScopeId && String(messageItem?.turnScopeId || "").trim() === turnScopeId;
+      const sameDialog = dialogProcessId && String(messageItem?.dialogProcessId || "").trim() === dialogProcessId;
+      if (!sameTurn && !sameDialog) continue;
+      return Array.isArray(messageItem?.attachments) ? messageItem.attachments : [];
+    }
+    return [];
+  }
+
+  async _enrichUserInputAttachmentsFromIndex({ userId = "", sessionId = "", attachments = [], existingAttachments = [] } = {}) {
     const sourceAttachments = Array.isArray(attachments) ? attachments : [];
     if (!sourceAttachments.length) return sourceAttachments;
     const normalizedSessionId = String(sessionId || "").trim();
     const basePath = await this._resolveAttachmentIndexBasePath(userId);
-    if (!basePath || !normalizedSessionId) return sourceAttachments;
     let index = null;
-    try {
-      index = await readAttachIndex(basePath, {
-        sessionId: normalizedSessionId,
-        attachmentSource: "user",
-      });
-    } catch {
-      return sourceAttachments;
+    if (basePath && normalizedSessionId) {
+      try {
+        index = await readAttachIndex(basePath, {
+          sessionId: normalizedSessionId,
+          attachmentSource: "user",
+        });
+      } catch {
+        index = null;
+      }
     }
     const indexedAttachments = Object.values(index?.attachments || {}).filter(
       (item) => item && typeof item === "object" && !Array.isArray(item),
     );
-    if (!indexedAttachments.length) return sourceAttachments;
+    const richCandidates = [
+      ...(Array.isArray(existingAttachments) ? existingAttachments : []),
+      ...indexedAttachments,
+    ];
+    if (!richCandidates.length) return sourceAttachments;
     return sourceAttachments.map((attachmentItem) => {
-      const match = findMatchingAttachmentMeta(attachmentItem, indexedAttachments);
+      const match = findMatchingAttachmentMeta(attachmentItem, richCandidates);
       return match ? mergeAttachmentMetaPreferRich(match, attachmentItem) : attachmentItem;
     });
   }

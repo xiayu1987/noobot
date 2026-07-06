@@ -1,85 +1,83 @@
 import { describe, expect, it } from "vitest";
-import { mergeAttachments } from "../../../../src/composables/infra/dialogProcessChain";
 
-describe("dialogProcessChain.mergeAttachments", () => {
-  it("merges a local raw attachment with parsed detail attachment by stable file identity", () => {
-    const localAttachment = {
-      name: "a.txt",
-      mimeType: "text/plain",
-      size: 1,
-      previewUrl: "blob:local-a",
-    };
-    const parsedAttachment = {
-      name: "a.txt",
-      mimeType: "text/plain",
-      attachmentId: "server-a",
-      downloadUrl: "/api/attachments/server-a/download",
-      parsedResultUrl: "/api/attachments/server-a/parsed",
-      parsedResultName: "a.md",
-    };
+import {
+  mergeAttachmentMetaFields,
+  mergeAttachments,
+} from "../../../../src/composables/infra/dialogProcessChain";
 
-    const merged = mergeAttachments([localAttachment], [parsedAttachment]);
-
-    expect(merged).toHaveLength(1);
-    expect(merged[0]).toEqual(expect.objectContaining({
-      name: "a.txt",
-      mimeType: "text/plain",
-      size: 1,
-      previewUrl: "blob:local-a",
-      attachmentId: "server-a",
-      downloadUrl: "/api/attachments/server-a/download",
-      parsedResultUrl: "/api/attachments/server-a/parsed",
-      parsedResultName: "a.md",
-    }));
-  });
-
-  it("keeps parsed preview fields when an edited resend payload carries only basic attachment metadata", () => {
-    const parsedAttachment = {
-      attachmentId: "server-a",
-      name: "a.txt",
-      mimeType: "text/plain",
-      size: 1,
-      downloadUrl: "/api/attachments/server-a/download",
-      parsedResultUrl: "/api/attachments/server-a/parsed",
-      parsedResultName: "a.md",
-    };
-    const resendAttachment = {
-      name: "a.txt",
-      mimeType: "text/plain",
-      contentBase64: "YQ==",
-    };
-
-    const merged = mergeAttachments([parsedAttachment], [resendAttachment]);
-
-    expect(merged).toHaveLength(1);
-    expect(merged[0]).toEqual(expect.objectContaining({
-      attachmentId: "server-a",
-      name: "a.txt",
-      mimeType: "text/plain",
-      downloadUrl: "/api/attachments/server-a/download",
-      parsedResultUrl: "/api/attachments/server-a/parsed",
-      parsedResultName: "a.md",
-      contentBase64: "YQ==",
-    }));
-  });
-
-  it("does not merge same-name attachments without stable identity", () => {
-    const existingAttachment = {
-      attachmentId: "server-a",
+describe("dialogProcessChain attachment rich-first merge", () => {
+  it("keeps parsed result and preview/download fields when incoming payload is raw", () => {
+    const richAttachment = {
+      attachmentId: "att-rich",
+      sessionId: "session-a",
+      attachmentSource: "user",
       name: "report.docx",
       mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      previewUrl: "/api/attachments/server-a/preview",
-    };
-    const incomingAttachment = {
-      name: "report.docx",
-      mimeType: "application/pdf",
-      size: 2048,
+      size: 123,
+      path: "/workspace/report.docx",
+      relativePath: "runtime/attach/scoped/session-a/user/att-rich/report.docx",
+      sandboxPath: "/workspace/report.docx",
+      previewUrl: "/preview/att-rich",
+      downloadUrl: "/download/att-rich",
+      parsedResultUrl: "/download/parsed-rich",
+      parsedResultName: "report.txt",
+      parsedResultAttachmentId: "parsed-rich",
+      parsedResult: { attachmentId: "parsed-rich", path: "/workspace/report.txt" },
     };
 
-    const merged = mergeAttachments([existingAttachment], [incomingAttachment]);
+    const merged = mergeAttachments([richAttachment], [
+      { name: "report.docx", mimeType: richAttachment.mimeType, size: 123 },
+    ]);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({
+      attachmentId: "att-rich",
+      sessionId: "session-a",
+      attachmentSource: "user",
+      path: richAttachment.path,
+      relativePath: richAttachment.relativePath,
+      sandboxPath: richAttachment.sandboxPath,
+      previewUrl: "/preview/att-rich",
+      downloadUrl: "/download/att-rich",
+      parsedResultUrl: "/download/parsed-rich",
+      parsedResultName: "report.txt",
+      parsedResultAttachmentId: "parsed-rich",
+      parsedResult: richAttachment.parsedResult,
+    });
+  });
+
+  it("does not let empty raw fields erase rich display fields", () => {
+    const merged = mergeAttachmentMetaFields(
+      {
+        attachmentId: "att-rich",
+        previewUrl: "/preview/att-rich",
+        downloadUrl: "/download/att-rich",
+        parsedResultUrl: "/download/parsed-rich",
+        parsedResult: { attachmentId: "parsed-rich", path: "/workspace/parsed.txt" },
+      },
+      {
+        attachmentId: "",
+        previewUrl: "",
+        downloadUrl: null,
+        parsedResultUrl: undefined,
+      },
+    );
+
+    expect(merged.attachmentId).toBe("att-rich");
+    expect(merged.previewUrl).toBe("/preview/att-rich");
+    expect(merged.downloadUrl).toBe("/download/att-rich");
+    expect(merged.parsedResultUrl).toBe("/download/parsed-rich");
+    expect(merged.parsedResult).toEqual({ attachmentId: "parsed-rich", path: "/workspace/parsed.txt" });
+  });
+
+  it("keeps same-name attachments separate when stable metadata differs", () => {
+    const existing = [{ attachmentId: "att-docx", name: "report", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", size: 123 }];
+    const incoming = [{ name: "report", mimeType: "application/pdf", size: 456 }];
+
+    const merged = mergeAttachments(existing, incoming);
 
     expect(merged).toHaveLength(2);
-    expect(merged[0]).toEqual(existingAttachment);
-    expect(merged[1]).toEqual(incomingAttachment);
+    expect(merged[0].attachmentId).toBe("att-docx");
+    expect(merged[1]).toEqual(incoming[0]);
   });
 });

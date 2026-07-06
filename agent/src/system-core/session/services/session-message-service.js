@@ -9,6 +9,11 @@ import {
   resolveMessageDialogProcessId,
 } from "../../context/session/dialog-process-id-resolver.js";
 import { getTransferAttachmentMetas } from "../../semantic-transfer/storage/consumer.js";
+import {
+  attachmentMatchKeys,
+  findMatchingAttachmentMeta,
+  mergeAttachmentMetaPreferRich,
+} from "../../attach/index.js";
 
 function dedupeAttachments(attachments = []) {
   const source = Array.isArray(attachments) ? attachments : [];
@@ -24,47 +29,6 @@ function dedupeAttachments(attachments = []) {
   });
 }
 
-function attachmentMatchKeys(item = {}) {
-  if (!item || typeof item !== "object" || Array.isArray(item)) return [];
-  const name = String(item?.name || item?.fileName || item?.filename || "").trim();
-  const mimeType = String(item?.mimeType || item?.type || item?.mime || "").trim();
-  const size = Number(item?.size || 0);
-  const finiteSize = Number.isFinite(size) && size > 0 ? String(size) : "";
-  return [
-    String(item?.attachmentId || item?.id || "").trim() ? `id:${String(item?.attachmentId || item?.id || "").trim()}` : "",
-    String(item?.path || item?.filePath || "").trim() ? `path:${String(item?.path || item?.filePath || "").trim()}` : "",
-    String(item?.relativePath || "").trim() ? `rel:${String(item?.relativePath || "").trim()}` : "",
-    String(item?.sandboxPath || item?.sandboxViewPath || "").trim() ? `sandbox:${String(item?.sandboxPath || item?.sandboxViewPath || "").trim()}` : "",
-    name && mimeType && finiteSize ? `name-mime-size:${name}|${mimeType}|${finiteSize}` : "",
-    name && finiteSize ? `name-size:${name}|${finiteSize}` : "",
-    name && mimeType ? `name-mime:${name}|${mimeType}` : "",
-  ].filter(Boolean);
-}
-
-function hasAttachmentValue(value) {
-  if (value === undefined || value === null) return false;
-  if (typeof value === "string") return value.trim().length > 0;
-  if (Array.isArray(value)) return value.length > 0;
-  if (typeof value === "object") return Object.keys(value).length > 0;
-  return true;
-}
-
-function mergeAttachmentPreferRich(rich = {}, raw = {}) {
-  const out = { ...(raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {}) };
-  for (const [key, value] of Object.entries(rich && typeof rich === "object" && !Array.isArray(rich) ? rich : {})) {
-    if (hasAttachmentValue(value)) out[key] = value;
-  }
-  return out;
-}
-
-function findMatchingAttachment(source = {}, candidates = []) {
-  const sourceKeys = new Set(attachmentMatchKeys(source));
-  if (!sourceKeys.size) return null;
-  return (Array.isArray(candidates) ? candidates : []).find((candidate) =>
-    attachmentMatchKeys(candidate).some((key) => sourceKeys.has(key)),
-  ) || null;
-}
-
 function normalizeIncomingAttachmentsForSessionMessage(existingAttachments = [], incomingAttachments = []) {
   if (!Array.isArray(incomingAttachments)) return undefined;
   if (incomingAttachments.length === 0) return [];
@@ -74,8 +38,8 @@ function normalizeIncomingAttachmentsForSessionMessage(existingAttachments = [],
   // or preview/download addressing.  Only preserve rich fields for attachments
   // still present in the explicit incoming set; [] remains delete-all.
   return dedupeAttachments(incomingAttachments.map((incoming) => {
-    const existing = findMatchingAttachment(incoming, existingAttachments);
-    return existing ? mergeAttachmentPreferRich(existing, incoming) : incoming;
+    const existing = findMatchingAttachmentMeta(incoming, existingAttachments);
+    return existing ? mergeAttachmentMetaPreferRich(existing, incoming) : incoming;
   }));
 }
 

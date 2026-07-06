@@ -137,3 +137,81 @@ test("_prepareAgentTurnExecution enriches raw inputAttachments from scoped attac
   assert.equal(meta.parsedResultUrl, "/download/parsed-rich");
   assert.equal(meta.parsedResultAttachmentId, "parsed-rich");
 });
+
+test("_prepareAgentTurnExecution enriches raw resend payload from existing session message attachments", async () => {
+  const richAttachment = {
+    attachmentId: "att-session-rich",
+    sessionId: "session-existing-a",
+    attachmentSource: "user",
+    name: "需求说明.docx",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    size: 2048,
+    path: "/workspace/admin/runtime/attach/scoped/session-existing-a/user/att-session-rich/需求说明.docx",
+    relativePath: "runtime/attach/scoped/session-existing-a/user/att-session-rich/需求说明.docx",
+    sandboxPath: "/workspace/admin/runtime/attach/scoped/session-existing-a/user/att-session-rich/需求说明.docx",
+    previewUrl: "/preview/att-session-rich",
+    downloadUrl: "/download/att-session-rich",
+    parsedResultUrl: "/download/parsed-session-rich",
+    parsedResultAttachmentId: "parsed-session-rich",
+    parsedResult: { attachmentId: "parsed-session-rich", path: "/tmp/需求说明.txt" },
+  };
+  const engine = Object.create(SessionExecutionEngine.prototype);
+  engine._buildContextBuilder = () => ({ kind: "context-builder" });
+  engine.session = {
+    async findById() {
+      return {
+        messages: [
+          { role: "user", turnScopeId: "turn-existing", dialogProcessId: "dp-existing", attachments: [richAttachment] },
+        ],
+      };
+    },
+  };
+  engine.agentRuntimeFacade = {
+    async prepareTurnExecution() {
+      return { agentContext: { runtime: { inputAttachments: [] } } };
+    },
+  };
+
+  const prepared = await engine._prepareAgentTurnExecution({
+    buildContextPayload: {
+      userId: "admin",
+      sessionId: "session-existing-a",
+      turnScopeId: "turn-existing",
+      dialogProcessId: "dp-existing",
+      inputAttachments: [{ name: "需求说明.docx", mimeType: richAttachment.mimeType, size: 2048 }],
+    },
+  });
+
+  assert.equal(prepared.userMessageAttachments.length, 1);
+  assert.equal(prepared.userMessageAttachments[0].attachmentId, "att-session-rich");
+  assert.equal(prepared.userMessageAttachments[0].path, richAttachment.path);
+  assert.equal(prepared.userMessageAttachments[0].parsedResultUrl, "/download/parsed-session-rich");
+  assert.equal(prepared.userMessageAttachments[0].parsedResultAttachmentId, "parsed-session-rich");
+  assert.deepEqual(prepared.userMessageAttachments[0].parsedResult, richAttachment.parsedResult);
+});
+
+test("_prepareAgentTurnExecution does not restore old rich attachments when payload explicitly deletes all", async () => {
+  const engine = Object.create(SessionExecutionEngine.prototype);
+  engine._buildContextBuilder = () => ({ kind: "context-builder" });
+  engine.session = {
+    async findById() {
+      return { messages: [{ role: "user", turnScopeId: "turn-delete", attachments: [{ attachmentId: "old", name: "old.txt" }] }] };
+    },
+  };
+  engine.agentRuntimeFacade = {
+    async prepareTurnExecution() {
+      return { agentContext: { runtime: { inputAttachments: [] } } };
+    },
+  };
+
+  const prepared = await engine._prepareAgentTurnExecution({
+    buildContextPayload: {
+      userId: "admin",
+      sessionId: "session-delete",
+      turnScopeId: "turn-delete",
+      inputAttachments: [],
+    },
+  });
+
+  assert.deepEqual(prepared.userMessageAttachments, []);
+});

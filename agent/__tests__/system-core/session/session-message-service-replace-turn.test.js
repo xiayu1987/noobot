@@ -186,6 +186,44 @@ test("SessionMessageService.stampReusedUserTurnDialogProcessId does not merge sa
   assert.deepEqual(saved[0].messages[0].attachments, [incomingAttachment]);
 });
 
+test("SessionMessageService.stampReusedUserTurnDialogProcessId preserves rich fields when resend payload is raw", async () => {
+  const richAttachment = {
+    attachmentId: "att-rich-resend",
+    name: "report.docx",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    size: 123,
+    sessionId: "s1",
+    attachmentSource: "user",
+    path: "/workspace/admin/runtime/attach/scoped/s1/user/att-rich-resend/report.docx",
+    relativePath: "runtime/attach/scoped/s1/user/att-rich-resend/report.docx",
+    sandboxPath: "/workspace/admin/runtime/attach/scoped/s1/user/att-rich-resend/report.docx",
+    previewUrl: "/api/attachments/preview/att-rich-resend",
+    downloadUrl: "/api/attachments/download/att-rich-resend",
+    parsedResultUrl: "/api/attachments/download/parsed-rich-resend",
+    parsedResultAttachmentId: "parsed-rich-resend",
+    parsedResult: { attachmentId: "parsed-rich-resend", path: "/workspace/parsed.md" },
+  };
+  const { service, saved } = createService({
+    initialSession: baseSession({
+      messages: [
+        { role: "user", content: "edited", dialogProcessId: "dp-old", turnScopeId: "scope-edited", attachments: [richAttachment] },
+      ],
+    }),
+  });
+
+  await service.stampReusedUserTurnDialogProcessId({
+    userId: "u1",
+    sessionId: "s1",
+    turnScopeId: "scope-edited",
+    dialogProcessId: "dp-new",
+    attachments: [{ name: "report.docx", mimeType: richAttachment.mimeType, size: 123 }],
+  });
+
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].messages[0].dialogProcessId, "dp-new");
+  assert.deepEqual(saved[0].messages[0].attachments, [richAttachment]);
+});
+
 test("SessionMessageService.replaceTurn rejects ts anchors", async () => {
   const { service: tsService, saved: tsSaved } = createService({
     initialSession: baseSession({ messages: [
