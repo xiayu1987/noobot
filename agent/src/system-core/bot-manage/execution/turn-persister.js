@@ -11,6 +11,7 @@ import {
 } from "../../context/session/dialog-process-id-resolver.js";
 import { MessagePersister } from "../session/message-persister.js";
 import { compactTransferEnvelopes } from "../../session/transfer-attachment-refs.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import {
   EXECUTION_LOG_EVENT,
   MESSAGE_ROLE,
@@ -30,6 +31,8 @@ const DIRECT_CONSUMED_INTERMEDIATE_TOOLS = new Set([
   "web_to_data",
 ]);
 const LEGACY_ATTACHMENT_MIRROR_KEY = "attachment" + "Metas";
+const SESSION_TURN_FULL_CONTENT_PREVIEW_CHARS = LENGTH_THRESHOLDS.preview.sessionSummaryArrayItemChars;
+const SESSION_TURN_FULL_RAW_MODEL_PREVIEW_CHARS = LENGTH_THRESHOLDS.preview.sessionSummaryArrayItemChars;
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -104,6 +107,101 @@ function sanitizeToolContentForSession(content = "", explicitToolName = "") {
     sessionPersistence: "summary_only",
     summary,
   });
+}
+
+function previewString(value = "", maxChars = SESSION_TURN_FULL_CONTENT_PREVIEW_CHARS) {
+  const text = String(value || "");
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, maxChars)}…`;
+}
+
+function byteLengthOfJson(value = null) {
+  try {
+    return Buffer.byteLength(JSON.stringify(value ?? null), "utf8");
+  } catch {
+    return 0;
+  }
+}
+
+function summarizeArray(value = []) {
+  return {
+    count: Array.isArray(value) ? value.length : 0,
+    bytes: byteLengthOfJson(Array.isArray(value) ? value : []),
+  };
+}
+
+function summarizeObject(value = null) {
+  if (!isPlainObject(value)) return { present: false, bytes: 0, keys: [] };
+  return {
+    present: true,
+    bytes: byteLengthOfJson(value),
+    keys: Object.keys(value).slice(0, 20),
+  };
+}
+
+function summarizeRawModelContent(value = null) {
+  if (typeof value === "string") {
+    return {
+      kind: "string",
+      present: value.length > 0,
+      length: value.length,
+      preview: previewString(value, SESSION_TURN_FULL_RAW_MODEL_PREVIEW_CHARS),
+    };
+  }
+  if (Array.isArray(value)) {
+    return { kind: "array", present: value.length > 0, ...summarizeArray(value) };
+  }
+  return { kind: "none", present: false, length: 0 };
+}
+
+function summarizeSessionTurnPayload(fullTurnPayload = {}) {
+  const content = String(fullTurnPayload?.content || "");
+  return {
+    summaryVersion: 1,
+    role: fullTurnPayload.role,
+    type: fullTurnPayload.type || "",
+    taskId: fullTurnPayload.taskId ?? "",
+    taskStatus: fullTurnPayload.taskStatus ?? "",
+    dialogProcessId: fullTurnPayload.dialogProcessId || "",
+    parentDialogProcessId: fullTurnPayload.parentDialogProcessId || "",
+    turnScopeId: fullTurnPayload.turnScopeId || "",
+    content: {
+      length: content.length,
+      bytes: Buffer.byteLength(content, "utf8"),
+      preview: previewString(content),
+      truncated: content.length > SESSION_TURN_FULL_CONTENT_PREVIEW_CHARS,
+    },
+    toolCalls: summarizeArray(fullTurnPayload.tool_calls),
+    toolCallId: fullTurnPayload.tool_call_id || "",
+    attachments: summarizeArray(fullTurnPayload.attachments),
+    transferEnvelopes: summarizeArray(fullTurnPayload.transferEnvelopes),
+    modelAlias: fullTurnPayload.modelAlias || "",
+    modelName: fullTurnPayload.modelName || "",
+    summarized: fullTurnPayload.summarized === true,
+    toolName: fullTurnPayload.toolName || "",
+    rawModelContent: summarizeRawModelContent(fullTurnPayload.rawModelContent),
+    modelAdditionalKwargs: summarizeObject(fullTurnPayload.modelAdditionalKwargs),
+    modelResponseMetadata: summarizeObject(fullTurnPayload.modelResponseMetadata),
+    injectedMessage: fullTurnPayload.injectedMessage === true,
+    injectedBy: fullTurnPayload.injectedBy || "",
+    injectedMessageType: fullTurnPayload.injectedMessageType || "",
+    frontendUserMessage: fullTurnPayload.frontendUserMessage === true,
+    pluginMessage: fullTurnPayload.pluginMessage === true,
+    pluginMeta: summarizeObject(fullTurnPayload.pluginMeta),
+    isMonotonic: fullTurnPayload.isMonotonic === true,
+    monotonic: fullTurnPayload.monotonic === true,
+    monotonicState: fullTurnPayload.monotonicState || "",
+    stopState: fullTurnPayload.stopState || "",
+    state: fullTurnPayload.state || "",
+    status: fullTurnPayload.status || "",
+    channelState: fullTurnPayload.channelState || "",
+    artifactRef: {
+      kind: "session_turn",
+      source: "session.messages",
+      dialogProcessId: fullTurnPayload.dialogProcessId || "",
+      turnScopeId: fullTurnPayload.turnScopeId || "",
+    },
+  };
 }
 
 /**
@@ -230,7 +328,7 @@ export class SessionTurnPersister {
         event: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
         category: MESSAGE_ROLE.SYSTEM,
         type: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
-        data: fullTurnPayload,
+        data: summarizeSessionTurnPayload(fullTurnPayload),
       });
     } catch {
       // ignore execution-log failures to avoid blocking the main turn flow

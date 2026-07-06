@@ -9,7 +9,7 @@ import {
   MAX_SESSION_CHANNEL_MESSAGE_BYTES,
   resolveSessionChannelConfig,
 } from "@noobot/runtime-events/session-channel";
-import { isSessionLogDebugEnabled } from "@noobot/shared/session-log-protocol";
+import { isSessionLogDebugEnabled } from "@noobot/runtime-events/session-log-protocol";
 import { RUNTIME_EVENT_CHANNELS, writeRoutedRuntimeEvent } from "@noobot/runtime-events";
 import { HTTP_STATUS } from "#agent/constants";
 

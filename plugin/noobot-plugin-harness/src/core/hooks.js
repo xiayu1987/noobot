@@ -16,6 +16,7 @@ import {
 } from "./context.js";
 import { HARNESS_HOOK_POINTS } from "./constants.js";
 import { applyAgentResolvedModelMessages } from "./model-message-context.js";
+import { isHookRuntimeEventVerboseEnabled } from "@noobot/shared/runtime-events-config";
 
 export const HARNESS_TRACE_POINTS = Object.freeze([
   HARNESS_HOOK_POINTS.BEFORE_CONTEXT_BUILD,
@@ -73,6 +74,7 @@ export function createRegisterHarnessHooks(deps = {}) {
 
   return function registerHarnessHooks({ hookManager, options, capabilityRuntime, plugin }) {
     const disposers = [];
+    const verboseHookRuntimeEvents = isHookRuntimeEventVerboseEnabled({ options });
 
     for (const point of tracePoints) {
       disposers.push(
@@ -81,7 +83,10 @@ export function createRegisterHarnessHooks(deps = {}) {
           async (ctx = {}) => {
             if (!isPrimaryExecutionScopeFn(ctx)) return;
             normalizeHookContextProtocol(point, ctx);
-            emitHarnessHookProgressFn(ctx, "hook_start", { point });
+            const startedAt = Date.now();
+            if (verboseHookRuntimeEvents) {
+              emitHarnessHookProgressFn(ctx, "hook_start", { point });
+            }
             try {
               const globalBootstrap = async () => {
                 if (point !== HARNESS_HOOK_POINTS.BEFORE_LLM_CALL) return;
@@ -124,8 +129,10 @@ export function createRegisterHarnessHooks(deps = {}) {
               applyAgentResolvedModelMessages(point, ctx, options);
 
               const traceResult = await traceHookFn(point, ctx, options, plugin);
-              emitHarnessHookProgressFn(ctx, "hook_end", {
+              emitHarnessHookProgressFn(ctx, verboseHookRuntimeEvents ? "hook_end" : "hook_summary", {
                 point,
+                status: traceResult?.fsmRejected === true ? "rejected" : "ok",
+                durationMs: Date.now() - startedAt,
                 fsmState: traceResult?.fsmState,
                 fsmRejected: traceResult?.fsmRejected === true,
               });

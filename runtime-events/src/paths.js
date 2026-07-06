@@ -9,6 +9,9 @@ export function resolveRuntimeEventsConfig(options = {}) {
     root: options.root || options.runtimeEventsRoot ? path.resolve(String(options.root || options.runtimeEventsRoot)) : '',
     workspaceRoot: path.resolve(String(options.workspaceRoot || defaults.workspaceRoot)),
     dirName: safeSegment(options.dirName || defaults.dirName),
+    maxFileBytes: options.maxFileBytes ?? defaults.maxFileBytes,
+    retentionDays: options.retentionDays ?? defaults.retentionDays,
+    maxArchives: options.maxArchives ?? defaults.maxArchives,
   };
 }
 

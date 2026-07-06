@@ -6,7 +6,7 @@
   "exports": {
     "./length-thresholds": "./length-thresholds.mjs",
     "./quantity-thresholds": "./quantity-thresholds.mjs",
-    "./session-log-protocol": "./session-log-protocol.mjs",
+    "./runtime-events-config": "./runtime-events-config.mjs",
     "./time-thresholds": "./time-thresholds.mjs",
     "./turn-thresholds": "./turn-thresholds.mjs",
     "./package.json": "./package.json"

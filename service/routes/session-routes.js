@@ -85,22 +85,23 @@ export function registerSessionRoutes(
     "/internal/session/:userId/:sessionId/messages/delete-from",
     jsonRoute(async (req, res) => {
       const { userId, sessionId } = req.params;
-      const result = await bot.session.deleteFromMessage({
+      const payload = {
         userId,
         sessionId,
         parentSessionId: String(req.body?.parentSessionId || "").trim(),
         anchor: req.body?.anchor || {},
         expectedVersion: req.body?.expectedVersion,
         idempotencyKey: String(req.body?.idempotencyKey || "").trim(),
-        attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : undefined,
-      });
+      };
+      if (Array.isArray(req.body?.attachments)) payload.attachments = req.body.attachments;
+      const result = await bot.session.deleteFromMessage(payload);
       res.json({ ok: true, ...result });
     }),
   );
 
   const replaceTurnHandler = jsonRoute(async (req, res) => {
       const { userId, sessionId } = req.params;
-      const result = await bot.session.replaceTurn({
+      const payload = {
         userId,
         sessionId,
         parentSessionId: String(req.body?.parentSessionId || "").trim(),
@@ -109,8 +110,9 @@ export function registerSessionRoutes(
         turnScopeId: String(req.body?.turnScopeId || "").trim(),
         expectedVersion: req.body?.expectedVersion,
         idempotencyKey: String(req.body?.idempotencyKey || "").trim(),
-        attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : undefined,
-      });
+      };
+      if (Array.isArray(req.body?.attachments)) payload.attachments = req.body.attachments;
+      const result = await bot.session.replaceTurn(payload);
       res.json({ ok: true, ...result });
     });
 
