@@ -536,6 +536,7 @@ export function createChatEngineSender({
         activeSession,
         botMessage: botMsg,
         applyConversationState,
+        backendStopEventData: finalStopEventData,
       });
       logResendDebug("send.stopCheck", {
         turnScopeId,
@@ -552,6 +553,7 @@ export function createChatEngineSender({
             activeSession,
             botMessage: botMsg,
             applyConversationState,
+            backendStopEventData: finalStopEventData,
           });
         }
         locateDoneMessage?.();

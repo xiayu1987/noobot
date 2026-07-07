@@ -338,6 +338,41 @@ export function createChatEngineConversationState({
     return null;
   }
 
+  function findTargetAssistantMessageByIdentity({ botMessage = null, turnScopeId = "", dialogProcessId = "" } = {}) {
+    const normalizedTurnScopeId = normalizeTrimmedString(turnScopeId);
+    const normalizedDialogProcessId = normalizeTrimmedString(dialogProcessId);
+    const directTarget = findTargetAssistantMessage({ botMessage, turnScopeId: normalizedTurnScopeId });
+    if (directTarget) return directTarget;
+    if (!normalizedDialogProcessId) return null;
+    const messageList = Array.isArray(activeSession.value?.messages)
+      ? activeSession.value.messages
+      : [];
+    for (let messageIndex = messageList.length - 1; messageIndex >= 0; messageIndex -= 1) {
+      const messageItem = messageList[messageIndex];
+      if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) continue;
+      if (getMessageDialogProcessId(messageItem) === normalizedDialogProcessId) return messageItem;
+    }
+    return null;
+  }
+
+  function isTerminalAssistantMessage(messageItem = null) {
+    if (!messageItem || getMessageRole(messageItem) !== RoleEnum.ASSISTANT) return false;
+    const runtimeState = normalizeTrimmedString(
+      getMessageRuntimeChannelState(messageItem)?.state || messageItem?.channelState,
+    );
+    const directState = normalizeTrimmedString(messageItem?.state || messageItem?.status);
+    const stopState = normalizeTrimmedString(messageItem?.stopState);
+    return (
+      messageItem.pending === false &&
+      (
+        isTerminalConversationState(runtimeState) ||
+        isTerminalConversationState(directState) ||
+        stopState === BackendChannelState.STOPPED ||
+        stopState === FrontendRunState.CANCELLED
+      )
+    );
+  }
+
   function applyConversationState(
     statePayload = {},
     {
@@ -384,9 +419,10 @@ export function createChatEngineConversationState({
     const dialogProcessId = String(
       explicitDialogProcessId || "",
     ).trim();
-    const targetAssistantMessage = findTargetAssistantMessage({
+    const targetAssistantMessage = findTargetAssistantMessageByIdentity({
       botMessage,
       turnScopeId,
+      dialogProcessId: explicitDialogProcessId,
     });
     logResendDebug("conversationState.target", {
       state,
@@ -430,6 +466,17 @@ export function createChatEngineConversationState({
       markUserMessageDialogProcessId({ targetAssistantMessage, dialogProcessId });
     }
     if (isInFlightConversationState(state)) {
+      if (isTerminalAssistantMessage(targetAssistantMessage)) {
+        logResendDebug("conversationState.inFlight.skipFinalized", {
+          state,
+          sessionId,
+          dialogProcessId,
+          turnScopeId,
+          sourceEvent: String(statePayload?.sourceEvent || "").trim(),
+          targetAssistantMessage: summarizeDebugMessage(targetAssistantMessage),
+        });
+        return;
+      }
       if (applyRunStateEvent) {
         applyRunStateEvent({
           type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,

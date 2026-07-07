@@ -3,7 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { readdir } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { recoverableToolError } from "../../error/index.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import {
@@ -15,9 +17,14 @@ import {
   isForbiddenWorkspaceRelativePath,
   normalizeSlash,
   splitLines,
+  toWorkspaceRelativePath,
   toPositiveInt,
 } from "./file-utils.js";
-import { getBasePathFromAgentContext } from "../../context/agent-context-accessor.js";
+import {
+  getBasePathFromAgentContext,
+  getRuntimeFromAgentContext,
+} from "../../context/agent-context-accessor.js";
+import { isSuperUserAgentContext } from "../../utils/super-user.js";
 
 function parseUnifiedHunkHeader(header = "") {
   const match = /^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/.exec(header);
@@ -35,30 +42,168 @@ function parseUnifiedHunkHeader(header = "") {
   };
 }
 
+const VIRTUAL_PATCH_ROOTS = new Set(["project", "workspace", "workdir", "repo", "repository"]);
+const PROJECT_ROOT_MARKERS = [
+  ".git",
+  "package.json",
+  "pnpm-workspace.yaml",
+  "yarn.lock",
+  "pyproject.toml",
+  "go.mod",
+  "Cargo.toml",
+  "pom.xml",
+  "build.gradle",
+];
+
+function normalizePatchPathInput(rawPath = "") {
+  const trimmed = String(rawPath || "").trim();
+  if (!trimmed) return "";
+  if (/^file:\/\//i.test(trimmed)) {
+    try {
+      return normalizeSlash(fileURLToPath(trimmed));
+    } catch {
+      return normalizeSlash(trimmed.replace(/^file:\/+/i, ""));
+    }
+  }
+  return normalizeSlash(trimmed);
+}
+
 function stripDiffPath(rawPath = "", strip = 1) {
-  const withoutTimestamp = String(rawPath || "").trim().split(/\s+/)[0] || "";
+  const withoutTimestamp = normalizePatchPathInput(String(rawPath || "").trim().split(/\s+/)[0] || "");
   if (!withoutTimestamp || withoutTimestamp === "/dev/null") return withoutTimestamp;
-  const normalized = normalizeSlash(withoutTimestamp);
-  const parts = normalized.split("/").filter(Boolean);
+  const parts = withoutTimestamp.split("/").filter(Boolean);
+  if (/^[A-Za-z]:$/.test(parts[0] || "")) return withoutTimestamp;
+  if (withoutTimestamp.startsWith("/") && !VIRTUAL_PATCH_ROOTS.has(parts[0])) return withoutTimestamp;
   const stripCount = toPositiveInt(strip, 1, 0, 10);
-  return parts.slice(stripCount).join("/") || normalized;
+  return parts.slice(stripCount).join("/") || withoutTimestamp;
 }
 
 function uniqueStrings(values = []) {
   return Array.from(new Set(values.map((item) => String(item || "").trim()).filter(Boolean)));
 }
 
-function buildPatchPathCandidates(filePath = "", agentContext = {}) {
-  const normalized = normalizeSlash(String(filePath || "").trim());
+function buildPatchPathVariants(filePath = "", agentContext = {}) {
+  const normalized = normalizePatchPathInput(filePath);
   if (!normalized || normalized === "/dev/null") return [normalized];
   const parts = normalized.split("/").filter(Boolean);
-  const candidates = [parts.join("/") || normalized];
   const workspaceBaseName = path.basename(path.resolve(getBasePathFromAgentContext(agentContext) || "."));
-  const virtualRoots = new Set(["project", "workspace", "workdir", "repo", "repository", workspaceBaseName].filter(Boolean));
-  if (virtualRoots.has(parts[0]) && parts.length > 1) {
-    candidates.push(parts.slice(1).join("/"));
+  const virtualRoots = new Set([...VIRTUAL_PATCH_ROOTS, workspaceBaseName].filter(Boolean));
+  if ((path.isAbsolute(normalized) || path.win32.isAbsolute(normalized)) && !virtualRoots.has(parts[0])) {
+    return [normalized];
   }
-  return uniqueStrings(candidates);
+  const variants = [parts.join("/") || normalized];
+  if (virtualRoots.has(parts[0]) && parts.length > 1) {
+    variants.push(parts.slice(1).join("/"));
+  }
+  return uniqueStrings(variants);
+}
+
+function isWithinBasePath(basePath = "", targetPath = "") {
+  const rel = path.relative(basePath, targetPath);
+  if (!rel) return true;
+  return !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
+function formatDisplayPath({ workspacePath = "", rootPath = "", candidatePath = "", resolvedPath = "" } = {}) {
+  const normalizedWorkspace = workspacePath ? path.resolve(workspacePath) : "";
+  const normalizedResolved = resolvedPath ? path.resolve(resolvedPath) : "";
+  if (normalizedWorkspace && normalizedResolved && isWithinBasePath(normalizedWorkspace, normalizedResolved)) {
+    return toWorkspaceRelativePath(normalizedWorkspace, normalizedResolved);
+  }
+  const normalizedRoot = rootPath ? path.resolve(rootPath) : "";
+  if (normalizedRoot && normalizedResolved && isWithinBasePath(normalizedRoot, normalizedResolved)) {
+    return toWorkspaceRelativePath(normalizedRoot, normalizedResolved);
+  }
+  return normalizeSlash(candidatePath);
+}
+
+async function looksLikeProjectRoot(rootPath = "") {
+  for (const marker of PROJECT_ROOT_MARKERS) {
+    if (await exists(path.join(rootPath, marker))) return true;
+  }
+  return false;
+}
+
+async function discoverSuperUserPatchRoots(agentContext = {}) {
+  const workspacePath = path.resolve(getBasePathFromAgentContext(agentContext) || ".");
+  const runtime = getRuntimeFromAgentContext(agentContext);
+  const roots = [workspacePath];
+  const workspaceRoot = String(runtime?.globalConfig?.workspaceRoot || "").trim();
+  if (workspaceRoot) roots.push(path.resolve(workspaceRoot));
+
+  let entries = [];
+  try {
+    entries = await readdir(workspacePath, { withFileTypes: true });
+  } catch {
+    entries = [];
+  }
+  for (const entry of entries) {
+    if (!entry?.isDirectory?.()) continue;
+    if (entry.name.startsWith(".")) continue;
+    const childPath = path.join(workspacePath, entry.name);
+    if (await looksLikeProjectRoot(childPath)) roots.push(childPath);
+  }
+  return uniqueStrings(roots.map((item) => path.resolve(item)));
+}
+
+async function buildPatchPathCandidates(filePath = "", agentContext = {}) {
+  const workspacePath = path.resolve(getBasePathFromAgentContext(agentContext) || ".");
+  const variants = buildPatchPathVariants(filePath, agentContext);
+  const baseCandidates = variants.map((candidatePath, index) => ({
+    candidatePath,
+    displayPath: candidatePath,
+    rootPath: workspacePath,
+    priority: index,
+    reason: index === 0 ? "workspace" : "virtual-root-stripped",
+  }));
+
+  if (!isSuperUserAgentContext(agentContext)) return baseCandidates;
+
+  const roots = await discoverSuperUserPatchRoots(agentContext);
+  const candidates = [];
+  for (const [rootIndex, rootPath] of roots.entries()) {
+    for (const [variantIndex, candidatePath] of variants.entries()) {
+      const resolvedPath = path.resolve(rootPath, candidatePath);
+      candidates.push({
+        candidatePath,
+        inputPath: rootPath === workspacePath ? candidatePath : resolvedPath,
+        displayPath: formatDisplayPath({ workspacePath, rootPath, candidatePath, resolvedPath }),
+        rootPath,
+        priority: (rootIndex * 10) + variantIndex,
+        reason: rootIndex === 0
+          ? (variantIndex === 0 ? "workspace" : "virtual-root-stripped")
+          : (variantIndex === 0 ? "discovered-project-root" : "virtual-root-stripped + discovered-project-root"),
+      });
+    }
+  }
+  return candidates;
+}
+
+function dedupeResolvedCandidates(candidates = []) {
+  const seen = new Set();
+  const result = [];
+  const caseInsensitivePath = process.platform === "win32" || process.platform === "darwin";
+  for (const item of candidates) {
+    const normalizedKey = normalizeSlash(path.resolve(item.resolvedPath || ""));
+    const key = caseInsensitivePath ? normalizedKey.toLowerCase() : normalizedKey;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result.sort((a, b) => a.priority - b.priority);
+}
+
+function throwAmbiguousPatchPath({ filePath = "", fieldName = "filePath", matches = [] } = {}) {
+  const options = matches.map((item) => item.displayPath || item.candidatePath).filter(Boolean);
+  throw recoverableToolError(`ambiguous patch path: ${filePath}`, {
+    code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+    details: {
+      field: fieldName,
+      filePath,
+      options,
+      reasons: matches.map((item) => item.reason).filter(Boolean),
+    },
+  });
 }
 
 async function resolveCompatibleWorkspaceFilePath({
@@ -67,21 +212,32 @@ async function resolveCompatibleWorkspaceFilePath({
   fieldName = "filePath",
   mustExist = false,
 } = {}) {
-  const candidates = buildPatchPathCandidates(filePath, agentContext);
+  const candidates = await buildPatchPathCandidates(filePath, agentContext);
   let firstError = null;
   if (mustExist) {
+    const matches = [];
     for (const candidate of candidates) {
       try {
         const resolvedPath = await assertAndResolveUserWorkspaceFilePath({
-          filePath: candidate,
+          filePath: candidate.inputPath || candidate.candidatePath,
           agentContext,
           fieldName,
           mustExist: false,
         });
-        if (await exists(resolvedPath)) return { displayPath: candidate, resolvedPath };
+        if (await exists(resolvedPath)) {
+          matches.push({ ...candidate, resolvedPath });
+        }
       } catch (error) {
         firstError ||= error;
       }
+    }
+    const uniqueMatches = dedupeResolvedCandidates(matches);
+    if (uniqueMatches.length === 1) {
+      const match = uniqueMatches[0];
+      return { displayPath: match.displayPath, resolvedPath: match.resolvedPath };
+    }
+    if (uniqueMatches.length > 1) {
+      throwAmbiguousPatchPath({ filePath, fieldName, matches: uniqueMatches });
     }
     if (firstError && candidates.length === 1) throw firstError;
     return {
@@ -90,21 +246,32 @@ async function resolveCompatibleWorkspaceFilePath({
     };
   }
 
+  const matches = [];
   for (const candidate of candidates) {
     try {
       const resolvedPath = await assertAndResolveUserWorkspaceFilePath({
-        filePath: candidate,
+        filePath: candidate.inputPath || candidate.candidatePath,
         agentContext,
         fieldName,
         mustExist: false,
       });
-      if (await exists(path.dirname(resolvedPath))) return { displayPath: candidate, resolvedPath };
+      if (await exists(path.dirname(resolvedPath))) {
+        matches.push({ ...candidate, resolvedPath });
+      }
     } catch (error) {
       firstError ||= error;
     }
   }
+  const uniqueMatches = dedupeResolvedCandidates(matches);
+  if (uniqueMatches.length === 1) {
+    const match = uniqueMatches[0];
+    return { displayPath: match.displayPath, resolvedPath: match.resolvedPath };
+  }
+  if (uniqueMatches.length > 1) {
+    throwAmbiguousPatchPath({ filePath, fieldName, matches: uniqueMatches });
+  }
   if (firstError && candidates.length === 1) throw firstError;
-  const fallback = candidates[0] || filePath;
+  const fallback = candidates[0]?.candidatePath || filePath;
   return {
     displayPath: fallback,
     resolvedPath: await assertAndResolveUserWorkspaceFilePath({ filePath: fallback, agentContext, fieldName, mustExist: false }),

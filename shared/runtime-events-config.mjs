@@ -28,6 +28,7 @@ export const RUNTIME_EVENTS_CONFIG_ENVS = deepFreeze({
     systemLog: "NOOBOT_RUNTIME_EVENT_SYSTEM_LOG",
     stateMachineDebug: "NOOBOT_RUNTIME_EVENT_STATE_MACHINE_DEBUG",
     resendDebug: "NOOBOT_RUNTIME_EVENT_RESEND_DEBUG",
+    stopDebug: "NOOBOT_RUNTIME_EVENT_STOP_DEBUG",
     sessionLogWsDebug: "NOOBOT_RUNTIME_EVENT_SESSION_LOG_WS_DEBUG",
   },
   hookRuntimeEvents: {
@@ -50,6 +51,7 @@ export const RUNTIME_EVENTS_CONFIG_DEFAULTS = deepFreeze({
     systemLog: true,
     stateMachineDebug: false,
     resendDebug: false,
+    stopDebug: true,
     sessionLogWsDebug: false,
   },
   hookRuntimeEvents: {

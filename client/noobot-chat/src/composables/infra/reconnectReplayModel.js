@@ -353,6 +353,7 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   const existingPending = targetMessage?.pending === true;
   const existingTransferEnvelopes = getMessageTransferEnvelopes(targetMessage);
   const sourceTransferEnvelopes = getMessageTransferEnvelopes(sourceMessage);
+  const existingRuntimeView = resolveSessionRunMessageRuntimeView(targetMessage);
 
   Object.assign(targetMessage, sourceMessage);
 
@@ -402,7 +403,7 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   if (sourceCanUseTurnScopedAssets && existingTurnScopeId && !getMessageTurnScopeId(sourceMessage)) {
     targetMessage.turnScopeId = existingTurnScopeId;
   }
-  if (sourceAssistantWithoutTurnScope) {
+  if (sourceAssistantWithoutTurnScope && !existingRuntimeView.inFlightAssistant) {
     clearTurnScopedAssets(targetMessage);
     delete targetMessage.turnScopeId;
   }

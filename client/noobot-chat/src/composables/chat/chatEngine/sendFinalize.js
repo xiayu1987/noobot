@@ -82,36 +82,47 @@ export function applyStopRequestedState({
   activeSession,
   botMessage,
   applyConversationState,
+  backendStopEventData = null,
 } = {}) {
+  const stopEvent = backendStopEventData && typeof backendStopEventData === "object"
+    ? backendStopEventData
+    : null;
+  if (!stopEvent) {
+    logResendDebug("sendFinalize.stopRequested.skip", { reason: "missingBackendStopConfirmation", botMessage: summarizeDebugMessage(botMessage) });
+    return false;
+  }
   if (!chatWebSocketClient?.isStopRequested?.()) {
     logResendDebug("sendFinalize.stopRequested.skip", { reason: "notRequested", botMessage: summarizeDebugMessage(botMessage) });
     return false;
   }
   const botTurnScopeId = getMessageTurnScopeId(botMessage);
+  const stopTurnScopeId = normalizeTrimmedString(stopEvent?.turnScopeId);
   const stopRequestedTurnScopeId = normalizeTrimmedString(
     chatWebSocketClient?.getStopRequestedTurnScopeId?.(),
   );
-  if (stopRequestedTurnScopeId && stopRequestedTurnScopeId !== botTurnScopeId) {
+  const comparableBotTurnScopeId = botTurnScopeId || stopTurnScopeId;
+  if (stopRequestedTurnScopeId && comparableBotTurnScopeId && stopRequestedTurnScopeId !== comparableBotTurnScopeId) {
     logResendDebug("sendFinalize.stopRequested.skip", {
       reason: "turnScopeMismatch",
       stopRequestedTurnScopeId,
-      botTurnScopeId,
+      botTurnScopeId: comparableBotTurnScopeId,
       botMessage: summarizeDebugMessage(botMessage),
     });
     return false;
   }
   logResendDebug("sendFinalize.stopRequested.hit", {
     stopRequestedTurnScopeId,
-    botTurnScopeId,
+    botTurnScopeId: comparableBotTurnScopeId,
     botMessage: summarizeDebugMessage(botMessage),
   });
   markLatestUserMessageStopped(activeSession, botMessage);
   applyConversationState(
     {
       state: BackendChannelState.STOPPED,
-      sessionId: String(activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
-      dialogProcessId: String(getMessageDialogProcessId(botMessage) || ""),
-      ...(botTurnScopeId ? { turnScopeId: String(botTurnScopeId || "") } : {}),
+      sessionId: String(stopEvent?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
+      dialogProcessId: String(stopEvent?.dialogProcessId || getMessageDialogProcessId(botMessage) || ""),
+      ...(comparableBotTurnScopeId ? { turnScopeId: String(comparableBotTurnScopeId || "") } : {}),
+      sourceEvent: "backend_stopped",
     },
     { botMessage },
   );

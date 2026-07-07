@@ -5,11 +5,12 @@
  */
 import { RoleEnum } from "../../../shared/constants/chatConstants";
 import {
+  getMessageDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,
 } from "../../infra/messageIdentity";
 import { normalizeTrimmedString } from "./utils";
-import { isMessageInFlightAssistant } from "../sessionRunStateMachine";
+import { resolveSessionRunMessageRuntimeView } from "../sessionRunStateMachine";
 
 export const SESSION_DETAIL_APPLY_MODE = Object.freeze({
   AUTO: "auto",
@@ -28,8 +29,16 @@ export function normalizeSessionDetailApplyMode(value = "") {
 
 export function isInFlightAssistantMessage(messageItem = {}) {
   if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) return false;
-  if (!getMessageTurnScopeId(messageItem)) return false;
-  return isMessageInFlightAssistant(messageItem);
+  const runtimeView = resolveSessionRunMessageRuntimeView(messageItem);
+  if (!runtimeView.inFlightAssistant) return false;
+  const runtimeChannelState = runtimeView.channelState || {};
+  const hasRuntimeIdentity = Boolean(
+    getMessageTurnScopeId(messageItem) ||
+    getMessageDialogProcessId(messageItem) ||
+    runtimeChannelState.turnScopeId ||
+    runtimeChannelState.dialogProcessId,
+  );
+  return hasRuntimeIdentity;
 }
 
 export function isMessageInRunScope(messageItem = {}, { turnScopeId = "" } = {}) {

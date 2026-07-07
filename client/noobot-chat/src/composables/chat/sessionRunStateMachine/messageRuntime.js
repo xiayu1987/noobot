@@ -11,7 +11,9 @@ import {
 import { normalizeTimePair, nowMs, toIsoTime } from "../../infra/timeFields";
 import {
   BackendChannelState,
+  BackendTerminalStates,
   FrontendRunState,
+  FrontendTerminalStates,
   MESSAGE_IN_FLIGHT_CHANNEL_STATES,
   SESSION_RUN_MESSAGE_RUNTIME_ACTION,
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
@@ -39,6 +41,18 @@ const MESSAGE_CAN_STOP_TARGET_STATES = Object.freeze([
   FrontendRunState.RESEND_REPLACING_TURN,
   FrontendRunState.RESEND_STREAMING,
 ]);
+
+function isTerminalMessageRuntimeState(state = "") {
+  const normalizedState = normalizeState(state);
+  return BackendTerminalStates.includes(normalizedState) || FrontendTerminalStates.includes(normalizedState);
+}
+
+function isFinalizedAssistantMessage(messageItem = {}) {
+  if (getMessageRole(messageItem) !== "assistant") return false;
+  const channelState = getMessageChannelState(messageItem);
+  const state = normalizeState(channelState?.state || messageItem?.status || messageItem?.state || messageItem?.stopState);
+  return messageItem?.pending === false && isTerminalMessageRuntimeState(state);
+}
 
 export function isRunStateForActiveSession(stateSnapshot = {}, activeSession = {}) {
   const stateSessionId = trim(stateSnapshot?.sessionId);
@@ -73,7 +87,8 @@ export function resolveSessionRunStateForMessage({
   if (runTurnScopeId && messageTurnScopeId && runTurnScopeId === messageTurnScopeId) {
     return stateSnapshot;
   }
-  if (!runTurnScopeId && runDialogProcessId && messageTurnScopeId && messageDialogProcessId) {
+  if (runDialogProcessId && messageDialogProcessId) {
+    if (runTurnScopeId && messageTurnScopeId && runTurnScopeId !== messageTurnScopeId) return null;
     return runDialogProcessId === messageDialogProcessId ? stateSnapshot : null;
   }
   return null;
@@ -246,6 +261,40 @@ export function buildFailedMessageRuntimePatch({
   };
 }
 
+export function buildStoppedMessageRuntimePatch({
+  messageItem = {},
+  stateSnapshot = createInitialSessionRunState(),
+} = {}) {
+  const stateTiming = normalizeTimePair(stateSnapshot);
+  const channelState = getMessageChannelState(messageItem);
+  const channelTiming = normalizeTimePair(channelState);
+  const finishedAt =
+    stateTiming.updatedAt ||
+    channelTiming.updatedAt ||
+    toIsoTime(nowMs());
+  const finishedAtMs =
+    stateTiming.updatedAtMs ||
+    channelTiming.updatedAtMs ||
+    nowMs();
+  return {
+    clearRuntimeMark: true,
+    pending: false,
+    channelState: {
+      state: BackendChannelState.STOPPED,
+      sessionId: trim(stateSnapshot?.sessionId) || trim(channelState?.sessionId),
+      dialogProcessId: trim(stateSnapshot?.dialogProcessId) || trim(channelState?.dialogProcessId),
+      turnScopeId: trim(stateSnapshot?.turnScopeId) || trim(channelState?.turnScopeId),
+      sourceEvent: trim(stateSnapshot?.sourceEvent) || trim(channelState?.sourceEvent) || "stopped",
+      seq: Number(stateSnapshot?.seq || channelState?.seq || 0),
+      updatedAt: finishedAt,
+      updatedAtMs: finishedAtMs,
+    },
+    thinkingFinishedAt: finishedAt,
+    thinkingFinishedAtPolicy: "if_missing",
+    statusLabelKey: "chat.stopped",
+  };
+}
+
 export function isObsoletePendingAssistantMessage(messageItem = {}, activeSession = {}) {
   if (!messageItem || getMessageRole(messageItem) !== "assistant") return false;
   if (messageItem.pending !== true) return false;
@@ -267,11 +316,31 @@ export function resolveSessionRunMessageRuntimePatch({
     activeSession,
   });
   if (stateItem) {
+    if (isFinalizedAssistantMessage(messageItem)) {
+      return { action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.NONE };
+    }
     return {
       action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
       reason: SESSION_RUN_MESSAGE_RUNTIME_REASON.IN_FLIGHT_MATCH,
       stateItem,
       patch: buildInFlightMessageRuntimePatch(stateItem),
+    };
+  }
+  if (
+    normalizeState(stateSnapshot?.state) === BackendChannelState.STOPPED &&
+    (
+      messageItem?.[SESSION_RUN_MESSAGE_RUNTIME_MARK] ||
+      resolveSessionRunStateForMessage({
+        stateSnapshot: { ...stateSnapshot, state: BackendChannelState.STOPPING },
+        messageItem,
+        activeSession,
+      })
+    )
+  ) {
+    return {
+      action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
+      reason: SESSION_RUN_MESSAGE_RUNTIME_REASON.RUNTIME_STATE_NO_LONGER_MATCHES,
+      patch: buildStoppedMessageRuntimePatch({ messageItem, stateSnapshot }),
     };
   }
   if (

@@ -304,7 +304,60 @@ test("chat-websocket-server: stop request emits stopped even when runSession com
   }
 });
 
-test("chat-websocket-server: idle stop request responds with stopped promptly", async () => {
+test("chat-websocket-server: stopped event and persistence backfill assistant identity from run result", async () => {
+  let capturedStopPayload = null;
+  const server = await startServerWithWs({
+    bot: {
+      persistStoppedAssistantMessage: async (payload = {}) => {
+        capturedStopPayload = payload;
+      },
+      runSession: async ({ abortSignal }) => {
+        await new Promise((resolve) => {
+          abortSignal?.addEventListener?.("abort", resolve, { once: true });
+        });
+        return {
+          sessionId: "s-backfill",
+          dialogProcessId: "dp-result-backfill",
+          answer: "ignored-after-stop",
+          messages: [],
+        };
+      },
+    },
+  });
+  try {
+    const { port } = server.address();
+    const events = await stopChatWs({
+      port,
+      payload: {
+        userId: "u1",
+        sessionId: "s-backfill",
+        message: "hello",
+        turnScopeId: "turn-backfill",
+        config: { locale: "zh-CN" },
+      },
+      stopPayload: {
+        turnScopeId: "turn-backfill",
+        partialAssistant: {
+          content: "",
+        },
+      },
+    });
+
+    const stoppedEvent = events.find((item) => item?.event === "stopped");
+    assert.equal(stoppedEvent?.data?.sessionId, "s-backfill");
+    assert.equal(stoppedEvent?.data?.dialogProcessId, "dp-result-backfill");
+    assert.equal(stoppedEvent?.data?.turnScopeId, "turn-backfill");
+    assert.equal(capturedStopPayload?.partialAssistant?.sessionId, "s-backfill");
+    assert.equal(capturedStopPayload?.partialAssistant?.dialogProcessId, "dp-result-backfill");
+    assert.equal(capturedStopPayload?.partialAssistant?.turnScopeId, "turn-backfill");
+    assert.equal(capturedStopPayload?.partialAssistant?.state, "stopped");
+    assert.equal(capturedStopPayload?.partialAssistant?.channelState, "stopped");
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("chat-websocket-server: idle stop request records pending stop without faking stopped", async () => {
   const server = await startServerWithWs();
   try {
     const { port } = server.address();
@@ -329,7 +382,11 @@ test("chat-websocket-server: idle stop request responds with stopped promptly", 
       });
       ws.on("message", (raw) => {
         try {
-          messages.push(JSON.parse(String(raw || "{}")));
+          const parsed = JSON.parse(String(raw || "{}"));
+          messages.push(parsed);
+          if (parsed?.event === "channel_state" && parsed?.data?.state === "stopping") {
+            ws.close(1000, "pending_stop_recorded");
+          }
         } catch (error) {
           clearTimeout(timer);
           reject(error);
@@ -345,10 +402,165 @@ test("chat-websocket-server: idle stop request responds with stopped promptly", 
       });
     });
 
-    const stoppedEvent = events.find((item) => item?.event === "stopped");
-    assert.equal(stoppedEvent?.data?.turnScopeId, "turn-idle-stop");
-    assert.equal(stoppedEvent?.data?.dialogProcessId, "dp-idle-stop");
+    const stoppingEvent = events.find((item) => item?.event === "channel_state" && item?.data?.state === "stopping");
+    assert.equal(stoppingEvent?.data?.turnScopeId, "turn-idle-stop");
+    assert.equal(stoppingEvent?.data?.dialogProcessId, "dp-idle-stop");
+    assert.equal(stoppingEvent?.data?.sourceEvent, "stop_requested_pending");
+    assert.equal(events.some((item) => item?.event === "stopped"), false);
     assert.equal(events.some((item) => item?.event === "error"), false);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("chat-websocket-server: pending stop is consumed by a later run with the same turnScopeId", async () => {
+  let capturedStopPayload = null;
+  const server = await startServerWithWs({
+    bot: {
+      persistStoppedAssistantMessage: async (payload = {}) => {
+        capturedStopPayload = payload;
+      },
+      runSession: async ({ abortSignal }) => {
+        await new Promise((resolve) => {
+          if (abortSignal?.aborted) return resolve();
+          abortSignal?.addEventListener?.("abort", resolve, { once: true });
+        });
+        const error = new Error("aborted by pending stop");
+        error.name = "AbortError";
+        throw error;
+      },
+    },
+  });
+  try {
+    const { port } = server.address();
+    await new Promise((resolve, reject) => {
+      const ws = new WebSocket(`ws://127.0.0.1:${port}/chat/ws`, {
+        headers: { authorization: "Bearer test-key" },
+      });
+      const timer = setTimeout(() => reject(new Error("pending stop ack timeout")), 1000);
+      ws.on("open", () => ws.send(JSON.stringify({
+        action: "stop",
+        sessionId: "s-pending",
+        turnScopeId: "turn-pending",
+        partialAssistant: { dialogProcessId: "dp-pending", turnScopeId: "turn-pending" },
+      })));
+      ws.on("message", (raw) => {
+        const parsed = JSON.parse(String(raw || "{}"));
+        if (parsed?.event === "channel_state" && parsed?.data?.state === "stopping") {
+          clearTimeout(timer);
+          ws.close(1000, "pending_stop_recorded");
+          resolve();
+        }
+      });
+      ws.on("error", (error) => { clearTimeout(timer); reject(error); });
+    });
+
+    const events = await callChatWs({
+      port,
+      payload: {
+        userId: "u1",
+        sessionId: "s-pending",
+        message: "hello",
+        turnScopeId: "turn-pending",
+        config: { locale: "zh-CN" },
+      },
+    });
+
+    const stoppedEvent = events.find((item) => item?.event === "stopped");
+    assert.equal(stoppedEvent?.data?.sessionId, "s-pending");
+    assert.equal(stoppedEvent?.data?.turnScopeId, "turn-pending");
+    assert.equal(stoppedEvent?.data?.dialogProcessId, "dp-pending");
+    assert.equal(capturedStopPayload?.partialAssistant?.turnScopeId, "turn-pending");
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("chat-websocket-server: stop from a new websocket aborts an active run by turnScopeId", async () => {
+  let capturedStopPayload = null;
+  const server = await startServerWithWs({
+    bot: {
+      persistStoppedAssistantMessage: async (payload = {}) => {
+        capturedStopPayload = payload;
+      },
+      runSession: async ({ abortSignal }) => {
+        await new Promise((resolve) => {
+          if (abortSignal?.aborted) return resolve();
+          abortSignal?.addEventListener?.("abort", resolve, { once: true });
+        });
+        const error = new Error("aborted by cross websocket stop");
+        error.name = "AbortError";
+        throw error;
+      },
+    },
+  });
+  try {
+    const { port } = server.address();
+    const runEvents = [];
+    const runWs = new WebSocket(`ws://127.0.0.1:${port}/chat/ws`, {
+      headers: { authorization: "Bearer test-key" },
+    });
+    await new Promise((resolve, reject) => {
+      runWs.on("open", () => {
+        runWs.send(JSON.stringify({
+          userId: "u1",
+          sessionId: "s-cross-stop",
+          message: "hello",
+          turnScopeId: "turn-cross-stop",
+          config: { locale: "zh-CN" },
+        }));
+        resolve();
+      });
+      runWs.on("error", reject);
+    });
+    runWs.on("message", (raw) => runEvents.push(JSON.parse(String(raw || "{}"))));
+
+    const stopAck = await new Promise((resolve, reject) => {
+      const ws = new WebSocket(`ws://127.0.0.1:${port}/chat/ws`, {
+        headers: { authorization: "Bearer test-key" },
+      });
+      const timer = setTimeout(() => reject(new Error("cross websocket stop ack timeout")), 1000);
+      ws.on("open", () => ws.send(JSON.stringify({
+        action: "stop",
+        sessionId: "s-cross-stop",
+        turnScopeId: "turn-cross-stop",
+        partialAssistant: { content: "partial", turnScopeId: "turn-cross-stop" },
+      })));
+      ws.on("message", (raw) => {
+        const parsed = JSON.parse(String(raw || "{}"));
+        if (parsed?.event === "channel_state" && parsed?.data?.state === "stopping") {
+          clearTimeout(timer);
+          ws.close(1000, "stop_ack_received");
+          resolve(parsed);
+        }
+      });
+      ws.on("error", (error) => { clearTimeout(timer); reject(error); });
+    });
+    assert.equal(stopAck?.data?.sourceEvent, "stop_requested_registry");
+    assert.equal(stopAck?.data?.turnScopeId, "turn-cross-stop");
+
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("active run stopped timeout")), 1000);
+      runWs.on("message", (raw) => {
+        const parsed = JSON.parse(String(raw || "{}"));
+        runEvents.push(parsed);
+        if (parsed?.event === "stopped") {
+          clearTimeout(timer);
+          resolve();
+        }
+      });
+      runWs.on("close", () => {
+        if (runEvents.some((item) => item?.event === "stopped")) {
+          clearTimeout(timer);
+          resolve();
+        }
+      });
+      runWs.on("error", (error) => { clearTimeout(timer); reject(error); });
+    });
+    const stoppedEvent = runEvents.find((item) => item?.event === "stopped");
+    assert.equal(stoppedEvent?.data?.sessionId, "s-cross-stop");
+    assert.equal(stoppedEvent?.data?.turnScopeId, "turn-cross-stop");
+    assert.equal(capturedStopPayload?.partialAssistant?.turnScopeId, "turn-cross-stop");
   } finally {
     await closeServer(server);
   }
