@@ -12,7 +12,7 @@ import {
   getMessageRole,
   getMessageTurnScopeId,
 } from "../../infra/messageIdentity";
-import { SESSION_RUN_EVENT } from "../sessionRunStateMachine";
+import { getMessageRuntimeChannelState, SESSION_RUN_EVENT } from "../sessionRunStateMachine";
 import {
   logResendDebug,
   summarizeDebugAttachments,
@@ -140,8 +140,7 @@ function isStoppedAssistantSnapshot(message = {}) {
     message?.stopState,
     message?.status,
     message?.state,
-    message?.channelState?.state,
-    message?.channel_state?.state,
+    getMessageRuntimeChannelState(message)?.state,
   ].map(normalizeState);
   return states.some((state) => ["stopped", "cancelled", "aborted"].includes(state));
 }

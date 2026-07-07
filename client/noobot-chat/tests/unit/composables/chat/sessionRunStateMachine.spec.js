@@ -24,6 +24,10 @@ import {
   resolveEventScope,
   resolveNextStateByTransitionTable,
   resolveRememberedStopRequestedEvent,
+  getMessageRuntimeChannelState,
+  isMessageInFlightAssistant,
+  isMessageRunning,
+  resolveSessionRunMessageRuntimeView,
   resolveSessionRunMessageRuntimePatch,
   resolveSessionRunStateForMessage,
   resolveTransitionDecision,
@@ -1104,6 +1108,78 @@ describe("sessionRunStateMachine", () => {
         pending: false,
         channelState: { state: FrontendRunState.FRONTEND_COMPLETED },
       },
+    });
+  });
+
+  it("resolves message runtime selector from normalized and legacy message shapes", () => {
+    const sendingMessage = {
+      role: "assistant",
+      pending: true,
+      channelState: {
+        state: BackendChannelState.SENDING,
+        sessionId: "s1",
+        dialogProcessId: "d1",
+        turnScopeId: "turn-1",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        createdAtMs: 1000,
+      },
+      thinkingStartedAt: "2026-01-01T00:00:00.000Z",
+    };
+    expect(getMessageRuntimeChannelState(sendingMessage)).toMatchObject({
+      state: BackendChannelState.SENDING,
+      sessionId: "s1",
+      dialogProcessId: "d1",
+      turnScopeId: "turn-1",
+    });
+    expect(resolveSessionRunMessageRuntimeView(sendingMessage)).toMatchObject({
+      state: BackendChannelState.SENDING,
+      pending: true,
+      running: true,
+      inFlightAssistant: true,
+      canStopTarget: true,
+      startedAt: "2026-01-01T00:00:00.000Z",
+    });
+    expect(isMessageRunning(sendingMessage)).toBe(true);
+    expect(isMessageInFlightAssistant(sendingMessage)).toBe(true);
+
+    expect(resolveSessionRunMessageRuntimeView({
+      role: "assistant",
+      channel_state: { status: "reconnecting" },
+    })).toMatchObject({
+      state: BackendChannelState.RECONNECTING,
+      running: true,
+      inFlightAssistant: true,
+      canStopTarget: true,
+    });
+
+    expect(resolveSessionRunMessageRuntimeView({
+      role: "assistant",
+      channelState: "interaction_pending",
+    })).toMatchObject({
+      state: BackendChannelState.INTERACTION_PENDING,
+      running: true,
+      inFlightAssistant: true,
+      canStopTarget: true,
+    });
+
+    expect(resolveSessionRunMessageRuntimeView({
+      role: "assistant",
+      status: "stop_requested",
+      pending: true,
+    })).toMatchObject({
+      state: FrontendRunState.STOP_REQUESTED,
+      running: true,
+      inFlightAssistant: true,
+      canStopTarget: false,
+    });
+
+    expect(resolveSessionRunMessageRuntimeView({
+      role: "user",
+      pending: true,
+    })).toMatchObject({
+      running: true,
+      inFlightAssistant: false,
+      canStopTarget: false,
     });
   });
 });

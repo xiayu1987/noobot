@@ -34,8 +34,12 @@ export {
   transitionSessionRunState,
 } from "./sessionRunStateMachine/core";
 export {
+  getMessageRuntimeChannelState,
+  isMessageInFlightAssistant,
+  isMessageRunning,
   resolveSessionRunMessageRuntimeEffect,
   resolveSessionRunMessageRuntimePatch,
+  resolveSessionRunMessageRuntimeView,
   resolveSessionRunStateForMessage,
 } from "./sessionRunStateMachine/messageRuntime";
 export {

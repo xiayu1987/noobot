@@ -15,6 +15,7 @@ import {
   isAssistantWithoutTurnScope,
 } from "../../composables/infra/messageIdentity";
 import { sanitizeExecutionLogForDisplay } from "../../composables/chat/chatEngine/utils";
+import { resolveSessionRunMessageRuntimeView } from "../../composables/chat/sessionRunStateMachine";
 import { resolveThinkingTiming } from "../../composables/chat/thinkingTimingRegistry";
 import {
   getMessageTimestamp,
@@ -195,7 +196,7 @@ function hasSummaryThinkingDetails(messageItem = {}) {
 
 function hasThinkingLogs(messageItem = {}) {
   if (!messageItem || getMessageRole(messageItem) !== "assistant") return false;
-  if (messageItem.pending) return true;
+  if (resolveSessionRunMessageRuntimeView(messageItem).running) return true;
   if (hasSummaryThinkingDetails(messageItem)) return true;
   if (getLatestPluginAnalysisLog(messageItem)) return true;
   const hasRealtimeLogs = Array.isArray(messageItem.processRealtimeLogs) || Array.isArray(messageItem.realtimeLogs)
@@ -203,6 +204,10 @@ function hasThinkingLogs(messageItem = {}) {
     : false;
   if (hasRealtimeLogs) return true;
   return getCompletedToolLogsForMessage(messageItem).length > 0;
+}
+
+function isMessageRuntimeRunning(messageItem = {}) {
+  return resolveSessionRunMessageRuntimeView(messageItem).running;
 }
 
 
@@ -517,12 +522,8 @@ function parseAnyTimeMs(...values) {
 
 function getThinkingDurationMs(messageItem = {}) {
   const hasMessageTurnScopeId = Boolean(getMessageTurnScopeId(messageItem));
-  const channelState =
-    messageItem?.channelState &&
-    typeof messageItem.channelState === "object" &&
-    !Array.isArray(messageItem.channelState)
-      ? messageItem.channelState
-      : {};
+  const runtimeView = resolveSessionRunMessageRuntimeView(messageItem);
+  const channelState = runtimeView.channelState || {};
   const msgTs = parseAnyTimeMs(getMessageTimestamp(messageItem));
   const canUseAssociatedTurnTiming = !isAssistantWithoutTurnScope(messageItem);
   const channelStartedAt = canUseAssociatedTurnTiming
@@ -572,8 +573,12 @@ function getThinkingDurationMs(messageItem = {}) {
     fallbackStartedAt,
     fallbackFinishedAt,
     now: nowTick.value,
-    pending: Boolean(messageItem?.pending),
+    pending: runtimeView.running,
   });
+}
+
+function isThinkingRuntimeRunning(messageItem = {}) {
+  return resolveSessionRunMessageRuntimeView(messageItem).running;
 }
 
 function getThinkingDurationLabel(messageItem = {}) {
@@ -595,18 +600,18 @@ function stopTimer() {
 
 
 watch(
-  () => Boolean(props.messageItem?.pending),
-  (pending) => {
-    if (pending) startTimer();
+  () => isThinkingRuntimeRunning(props.messageItem),
+  (running) => {
+    if (running) startTimer();
     else stopTimer();
   },
   { immediate: true },
 );
 
 watch(
-  () => props.messageItem?.pending,
-  (pending) => {
-    if (pending) startTimer();
+  () => isThinkingRuntimeRunning(props.messageItem),
+  (running) => {
+    if (running) startTimer();
   },
   { immediate: true },
 );
@@ -622,7 +627,7 @@ onBeforeUnmount(() => {
         v-model="messageItem.thinkingOpenNames"
         item-name="thinking-panel"
         class="thinking-realtime-shell"
-        :class="{ 'is-running': messageItem.pending }"
+        :class="{ 'is-running': isThinkingRuntimeRunning(messageItem) }"
       >
         <template #title>
           <BaseSectionHeader :title="translate('message.thinkingExpand')" class="thinking-title-row">
@@ -651,11 +656,11 @@ onBeforeUnmount(() => {
                 />
               </div>
               <BaseEmptyHint
-                v-if="!getExecutionLogCount(messageItem) && messageItem.pending"
+                v-if="!getExecutionLogCount(messageItem) && isMessageRuntimeRunning(messageItem)"
                 :text="translate('message.waitingRealtimeLog')"
               />
               <BaseEmptyHint
-                v-if="!getExecutionLogCount(messageItem) && !messageItem.pending"
+                v-if="!getExecutionLogCount(messageItem) && !isMessageRuntimeRunning(messageItem)"
                 :text="translate('message.noExecutionLogs')"
               />
           </div>
@@ -676,7 +681,7 @@ onBeforeUnmount(() => {
       </BaseThinkingPanelShell>
   </template>
   <BaseTabPanelBody v-else-if="hasThinking" class="thinking-details-panel">
-          <template v-if="!messageItem.pending">
+          <template v-if="!isMessageRuntimeRunning(messageItem)">
             <el-tabs class="thinking-details-tabs">
               <el-tab-pane :label="getThinkingDetailLabel(messageItem)">
                 <BaseTabPanelBody class="thinking-details-scroll-body thinking-details-log-body">

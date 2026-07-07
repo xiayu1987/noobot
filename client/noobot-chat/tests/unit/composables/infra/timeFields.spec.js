@@ -4,8 +4,8 @@ import { formatDurationMs, resolveThinkingDurationMs } from "../../../../src/com
 describe("timeFields thinking duration responsibilities", () => {
   it("formats milliseconds as mm:ss or hh:mm:ss", () => {
     expect(formatDurationMs(0)).toBe("00:00");
-    expect(formatDurationMs(65_000)).toBe("01:05");
-    expect(formatDurationMs(3_661_000)).toBe("01:01:01");
+    expect(formatDurationMs(65000)).toBe("01:05");
+    expect(formatDurationMs(3661000)).toBe("01:01:01");
   });
 
   it("uses message thinking timestamps before channel and local cache for completed duration", () => {
@@ -18,7 +18,7 @@ describe("timeFields thinking duration responsibilities", () => {
       cachedFinishedAt: "2026-06-22T10:00:20.000Z",
     });
 
-    expect(duration).toBe(7_000);
+    expect(duration).toBe(7000);
   });
 
   it("uses channel timing before local cache when message thinking fields are absent", () => {
@@ -29,7 +29,7 @@ describe("timeFields thinking duration responsibilities", () => {
       cachedFinishedAt: "2026-06-22T10:00:20.000Z",
     });
 
-    expect(duration).toBe(6_000);
+    expect(duration).toBe(6000);
   });
 
   it("uses now minus resolved start while running and freezes on finish while completed", () => {
@@ -41,14 +41,14 @@ describe("timeFields thinking duration responsibilities", () => {
       messageFinishedAt: "2026-06-22T10:00:15.000Z",
       now: "2026-06-22T10:00:30.000Z",
       pending: true,
-    })).toBe(20_000);
+    })).toBe(20000);
 
     expect(resolveThinkingDurationMs({
       messageStartedAt: "2026-06-22T10:00:10.000Z",
       messageFinishedAt: "2026-06-22T10:00:15.000Z",
       now: "2026-06-22T10:00:30.000Z",
       pending: false,
-    })).toBe(5_000);
+    })).toBe(5000);
 
     vi.useRealTimers();
   });
@@ -59,11 +59,11 @@ describe("timeFields thinking duration responsibilities", () => {
       cachedFinishedAt: "2026-06-22T10:00:11.000Z",
       fallbackStartedAt: "2026-06-22T10:00:02.000Z",
       fallbackFinishedAt: "2026-06-22T10:00:09.000Z",
-    })).toBe(11_000);
+    })).toBe(11000);
 
     expect(resolveThinkingDurationMs({
       fallbackStartedAt: "2026-06-22T10:00:02.000Z",
       fallbackFinishedAt: "2026-06-22T10:00:09.000Z",
-    })).toBe(7_000);
+    })).toBe(7000);
   });
 });
