@@ -7,7 +7,7 @@ import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 export const PLUGIN_NAME = "noobot-plugin-workflow";
-export const PLUGIN_VERSION = "4.0.2";
+export const PLUGIN_VERSION = "4.0.3";
 
 export const WORKFLOW_BOT_HOOK_POINTS = Object.freeze({
   BEFORE_AGENT_DISPATCH: "before_agent_dispatch",

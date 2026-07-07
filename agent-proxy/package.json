@@ -1,6 +1,6 @@
 {
   "name": "noobot-agent-proxy",
-  "version": "4.0.2",
+  "version": "4.0.3",
   "private": true,
   "type": "module",
   "description": "Noobot agent proxy gateway for resilient websocket fanout/replay",
