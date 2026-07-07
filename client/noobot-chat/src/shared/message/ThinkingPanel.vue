@@ -20,8 +20,9 @@ import {
   getMessageTimestamp,
   getThinkingFinishedAt,
   getThinkingStartedAt,
+  formatDurationMs,
   nowMs,
-  parseTimeMs,
+  resolveThinkingDurationMs,
   resolveTimeMs,
 } from "../../composables/infra/timeFields";
 import {
@@ -514,17 +515,6 @@ function parseAnyTimeMs(...values) {
 }
 
 
-function formatDuration(ms = 0) {
-  const total = Math.max(0, Math.floor(Number(ms || 0) / 1000));
-  const hourValue = Math.floor(total / 3600);
-  const minuteValue = Math.floor((total % 3600) / 60);
-  const secondValue = total % 60;
-  if (hourValue > 0) {
-    return `${String(hourValue).padStart(2, "0")}:${String(minuteValue).padStart(2, "0")}:${String(secondValue).padStart(2, "0")}`;
-  }
-  return `${String(minuteValue).padStart(2, "0")}:${String(secondValue).padStart(2, "0")}`;
-}
-
 function getThinkingDurationMs(messageItem = {}) {
   const hasMessageTurnScopeId = Boolean(getMessageTurnScopeId(messageItem));
   const channelState =
@@ -564,34 +554,30 @@ function getThinkingDurationMs(messageItem = {}) {
       parseAnyTimeMs(getMessageTimestamp(logItem)),
     )
     .filter((timeValue) => timeValue > 0);
-  const startCandidates = [
-    persistedStartedAt,
-    startedAt,
-    channelStartedAt,
-  ].filter((timeValue) => timeValue > 0);
-  const fallbackStartCandidates = [
+  const fallbackStartedAt = parseAnyTimeMs(
     ...(logTimes.length ? [Math.min(...logTimes)] : []),
     msgTs,
-  ].filter((timeValue) => timeValue > 0);
-  const startMs = startCandidates[0] || fallbackStartCandidates[0] || 0;
-  if (startMs <= 0) return 0;
-  const completedEndCandidates = [
-    persistedFinishedAt,
-    finishedAt,
-    channelUpdatedAt,
-  ].filter((timeValue) => timeValue > 0);
-  const fallbackEndCandidates = [
+  );
+  const fallbackFinishedAt = parseAnyTimeMs(
     ...(logTimes.length ? [Math.max(...logTimes)] : []),
     msgTs,
-  ].filter((timeValue) => timeValue > 0);
-  const endMs = messageItem?.pending
-    ? nowTick.value
-    : completedEndCandidates[0] || fallbackEndCandidates[0] || startMs;
-  return Math.max(0, endMs - startMs);
+  );
+  return resolveThinkingDurationMs({
+    messageStartedAt: startedAt,
+    messageFinishedAt: finishedAt,
+    channelStartedAt,
+    channelFinishedAt: channelUpdatedAt,
+    cachedStartedAt: persistedStartedAt,
+    cachedFinishedAt: persistedFinishedAt,
+    fallbackStartedAt,
+    fallbackFinishedAt,
+    now: nowTick.value,
+    pending: Boolean(messageItem?.pending),
+  });
 }
 
 function getThinkingDurationLabel(messageItem = {}) {
-  return formatDuration(getThinkingDurationMs(messageItem));
+  return formatDurationMs(getThinkingDurationMs(messageItem));
 }
 
 function startTimer() {

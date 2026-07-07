@@ -138,6 +138,42 @@ export function setThinkingFinishedAt(messageItem = {}, value = "") {
   return iso;
 }
 
+export function formatDurationMs(ms = 0) {
+  const total = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+  const hourValue = Math.floor(total / 3600);
+  const minuteValue = Math.floor((total % 3600) / 60);
+  const secondValue = total % 60;
+  if (hourValue > 0) {
+    return `${String(hourValue).padStart(2, "0")}:${String(minuteValue).padStart(2, "0")}:${String(secondValue).padStart(2, "0")}`;
+  }
+  return `${String(minuteValue).padStart(2, "0")}:${String(secondValue).padStart(2, "0")}`;
+}
+
+export function resolveThinkingDurationMs({
+  messageStartedAt = 0,
+  messageFinishedAt = 0,
+  channelStartedAt = 0,
+  channelFinishedAt = 0,
+  cachedStartedAt = 0,
+  cachedFinishedAt = 0,
+  fallbackStartedAt = 0,
+  fallbackFinishedAt = 0,
+  now = nowMs(),
+  pending = false,
+} = {}) {
+  // Responsibility order:
+  // 1. message thinkingStartedAt/thinkingFinishedAt: canonical message-level thinking lifecycle;
+  // 2. channel createdAt/updatedAt: backend replay/runtime state for refresh recovery;
+  // 3. cached local timing: same-browser fallback only, never overrides server/message facts;
+  // 4. logs/message timestamp: display fallback for legacy messages.
+  const startMs = resolveTimeMs(messageStartedAt, channelStartedAt, cachedStartedAt, fallbackStartedAt);
+  if (startMs <= 0) return 0;
+  const endMs = pending
+    ? parseTimeMs(now) || nowMs()
+    : resolveTimeMs(messageFinishedAt, channelFinishedAt, cachedFinishedAt, fallbackFinishedAt, startMs);
+  return Math.max(0, endMs - startMs);
+}
+
 export function preserveThinkingTimes(targetMessage = {}, sourceMessage = {}) {
   const startedAt = getThinkingStartedAt(targetMessage);
   const finishedAt = getThinkingFinishedAt(targetMessage);
