@@ -51,7 +51,7 @@ export const RUNTIME_EVENTS_CONFIG_DEFAULTS = deepFreeze({
     systemLog: true,
     stateMachineDebug: false,
     resendDebug: false,
-    stopDebug: true,
+    stopDebug: false,
     sessionLogWsDebug: false,
   },
   hookRuntimeEvents: {
