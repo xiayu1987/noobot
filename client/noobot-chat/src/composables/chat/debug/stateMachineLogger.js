@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-const SESSION_RUN_MESSAGE_RUNTIME_MARK = "__noobotRuntimeRunStateKey";
+import {
+  getMessageRuntimeChannelState,
+  SESSION_RUN_MESSAGE_RUNTIME_MARK,
+} from "../sessionRunStateMachine";
+
 let sessionLogSink = null;
 
 export function setStateMachineDebugLogSink(sink = null) {
@@ -17,7 +21,7 @@ export function isStateMachineDebugEnabled() {
 
 export function summarizeStateMachineMessage(message = {}) {
   if (!message || typeof message !== "object") return null;
-  const channelState = message.channelState || message.channel_state || {};
+  const channelState = getMessageRuntimeChannelState(message);
   return {
     id: message.id || message.messageId || "",
     role: message.role || message.messageRole || message.type || "",

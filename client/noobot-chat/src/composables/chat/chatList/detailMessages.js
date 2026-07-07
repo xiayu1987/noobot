@@ -27,7 +27,12 @@ import {
   setThinkingStartedAt,
 } from "../../infra/timeFields";
 import { getMessageAttachments } from "../../infra/messageModel";
-import { SESSION_RUN_MESSAGE_RUNTIME_MARK } from "../sessionRunStateMachine";
+import {
+  getMessageRuntimeChannelState,
+  isMessageInFlightAssistant,
+  resolveSessionRunMessageRuntimeView,
+  SESSION_RUN_MESSAGE_RUNTIME_MARK,
+} from "../sessionRunStateMachine";
 import {
   logResendDebug,
   summarizeDebugMessage,
@@ -36,13 +41,6 @@ import {
   logStateMachineDebug,
   summarizeStateMachineMessage,
 } from "../debug/stateMachineLogger";
-
-const IN_FLIGHT_CHANNEL_STATES = new Set([
-  "sending",
-  "reconnecting",
-  "interaction_pending",
-  "stopping",
-]);
 
 const TERMINAL_STOP_CHANNEL_STATES = new Set([
   "stopped",
@@ -60,10 +58,7 @@ function countCompletedToolLogAttachments(messageItem = {}) {
 }
 
 function isInFlightAssistantMessage(messageItem = {}) {
-  if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) return false;
-  if (messageItem?.pending === true) return true;
-  const channelState = normalizeState(messageItem?.channelState?.state || messageItem?.channel_state?.state);
-  return IN_FLIGHT_CHANNEL_STATES.has(channelState);
+  return isMessageInFlightAssistant(messageItem);
 }
 
 function isTerminalStopAssistantDetail(messageItem = {}) {
@@ -72,8 +67,7 @@ function isTerminalStopAssistantDetail(messageItem = {}) {
     messageItem?.stopState,
     messageItem?.status,
     messageItem?.state,
-    messageItem?.channelState?.state,
-    messageItem?.channel_state?.state,
+    getMessageRuntimeChannelState(messageItem)?.state,
   ].map(normalizeState);
   return states.some((state) => TERMINAL_STOP_CHANNEL_STATES.has(state));
 }
@@ -119,8 +113,8 @@ function preserveRunningThinkingState(existingMessage = {}, detailMessageItem = 
     if (existingThinkingFinishedAt && !getThinkingFinishedAt(detailMessageItem)) {
       setThinkingFinishedAt(existingMessage, existingThinkingFinishedAt);
     }
-    const channelState = String(existingMessage?.channelState?.state || "").trim();
-    if (existingPending && IN_FLIGHT_CHANNEL_STATES.has(channelState)) {
+    const runtimeView = resolveSessionRunMessageRuntimeView(existingMessage);
+    if (existingPending && runtimeView.inFlightAssistant) {
       existingMessage.pending = true;
     }
   };

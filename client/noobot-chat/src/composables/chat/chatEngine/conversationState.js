@@ -21,6 +21,7 @@ import {
   FrontendRunState,
   SESSION_RUN_EVENT,
   clearRememberedStopRequests,
+  getMessageRuntimeChannelState,
 } from "../sessionRunStateMachine";
 import {
   bindThinkingDialogProcess,
@@ -578,7 +579,9 @@ export function createChatEngineConversationState({
     if (!targetAssistantMessage) return;
     if (state === BackendChannelState.COMPLETED) {
       const beforeTerminalApply = summarizeDebugMessage(targetAssistantMessage);
-      const currentMessageState = normalizeTrimmedString(targetAssistantMessage?.channelState?.state);
+      const currentMessageState = normalizeTrimmedString(
+        getMessageRuntimeChannelState(targetAssistantMessage)?.state,
+      );
       if (
         targetAssistantMessage.pending === false ||
         [

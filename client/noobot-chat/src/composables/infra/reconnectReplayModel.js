@@ -25,6 +25,7 @@ import {
   setThinkingFinishedAt,
   setThinkingStartedAt,
 } from "./timeFields";
+import { resolveSessionRunMessageRuntimeView } from "../chat/sessionRunStateMachine";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
 function isReconnectTerminalEvent(eventName = "") {
@@ -168,12 +169,6 @@ function getArrayItems(value = null) {
 }
 
 const EXECUTION_LOG_DISPLAY_LIMIT = QUANTITY_THRESHOLDS.client.executionLogDisplayLimit;
-const IN_FLIGHT_CHANNEL_STATES = new Set([
-  "sending",
-  "reconnecting",
-  "interaction_pending",
-  "stopping",
-]);
 
 function hasArrayItems(value = null) {
   return Array.isArray(value) && value.length > 0;
@@ -411,8 +406,8 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
     clearTurnScopedAssets(targetMessage);
     delete targetMessage.turnScopeId;
   }
-  const channelState = String(targetMessage?.channelState?.state || "").trim();
-  if (existingPending && IN_FLIGHT_CHANNEL_STATES.has(channelState)) {
+  const runtimeView = resolveSessionRunMessageRuntimeView(targetMessage);
+  if (existingPending && runtimeView.inFlightAssistant) {
     targetMessage.pending = true;
   }
   return targetMessage;

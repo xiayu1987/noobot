@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { getMessageRuntimeChannelState } from "../../composables/chat/sessionRunStateMachine";
 
 function normalizeText(value = "") {
   return String(value || "").trim().toLowerCase();
@@ -72,9 +73,8 @@ export function isMonotonicMessage(messageItem = {}) {
   if (messageItem.isMonotonic === true || messageItem.monotonic === true) return true;
   if (normalizeText(messageItem.monotonicState) === "monotonic") return true;
   if (normalizeText(messageItem.stopState) === "stopped") return true;
-  const channelState = messageItem.channelState;
-  const channelStateValue = channelState && typeof channelState === "object" ? channelState.state || channelState.status : channelState;
-  const state = normalizeText(messageItem.state || messageItem.status || channelStateValue);
+  const channelState = getMessageRuntimeChannelState(messageItem);
+  const state = normalizeText(channelState?.state || messageItem.state || messageItem.status);
   if (["completed", "done", "stopped"].includes(state)) return true;
   const label = normalizeText(messageItem.statusLabel);
   return ["generated", GENERATED_STATUS_LABEL, "stopped", STOPPED_STATUS_LABEL].includes(label);

@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { getMessageRuntimeChannelState } from "../sessionRunStateMachine";
+
 let sessionLogSink = null;
 
 export function setResendDebugLogSink(sink = null) {
@@ -16,7 +18,7 @@ export function isResendDebugEnabled() {
 
 export function summarizeDebugMessage(message = {}) {
   if (!message || typeof message !== "object") return null;
-  const channelState = message.channelState || message.channel_state || {};
+  const channelState = getMessageRuntimeChannelState(message);
   return {
     id: message.id || message.messageId || "",
     role: message.role || message.messageRole || message.type || "",

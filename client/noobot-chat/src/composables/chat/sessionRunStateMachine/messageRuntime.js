@@ -20,6 +20,26 @@ import {
 import { createInitialSessionRunState, isInFlightSessionRunState } from "./core";
 import { normalizeState, trim } from "./normalize";
 
+const MESSAGE_RUNNING_CHANNEL_STATES = Object.freeze([
+  BackendChannelState.SENDING,
+  BackendChannelState.RECONNECTING,
+  BackendChannelState.INTERACTION_PENDING,
+  FrontendRunState.RESEND_REPLACING_TURN,
+  FrontendRunState.RESEND_STREAMING,
+  BackendChannelState.COMPLETED,
+  FrontendRunState.FRONTEND_COMPLETION_REQUESTING,
+  FrontendRunState.STOP_REQUESTED,
+  BackendChannelState.STOPPING,
+]);
+
+const MESSAGE_CAN_STOP_TARGET_STATES = Object.freeze([
+  BackendChannelState.SENDING,
+  BackendChannelState.RECONNECTING,
+  BackendChannelState.INTERACTION_PENDING,
+  FrontendRunState.RESEND_REPLACING_TURN,
+  FrontendRunState.RESEND_STREAMING,
+]);
+
 export function isRunStateForActiveSession(stateSnapshot = {}, activeSession = {}) {
   const stateSessionId = trim(stateSnapshot?.sessionId);
   if (!stateSessionId) return true;
@@ -72,11 +92,75 @@ export function buildSessionRunMessageRuntimeKey(stateItem = {}) {
 }
 
 export function getMessageChannelState(messageItem = {}) {
-  return messageItem?.channelState &&
-    typeof messageItem.channelState === "object" &&
-    !Array.isArray(messageItem.channelState)
-    ? messageItem.channelState
-    : {};
+  const channelState = messageItem?.channelState;
+  const legacyChannelState = messageItem?.channel_state;
+  if (channelState && typeof channelState === "object" && !Array.isArray(channelState)) {
+    return { ...channelState, state: normalizeState(channelState.state || channelState.status) };
+  }
+  if (legacyChannelState && typeof legacyChannelState === "object" && !Array.isArray(legacyChannelState)) {
+    return { ...legacyChannelState, state: normalizeState(legacyChannelState.state || legacyChannelState.status) };
+  }
+  const state = normalizeState(
+    typeof channelState === "string"
+      ? channelState
+      : typeof legacyChannelState === "string"
+        ? legacyChannelState
+        : messageItem?.status || messageItem?.state,
+  );
+  return state ? { state } : {};
+}
+
+export const getMessageRuntimeChannelState = getMessageChannelState;
+
+function resolveRuntimeTimestamp(...values) {
+  const normalized = normalizeTimePair({
+    createdAt: values[0],
+    createdAtMs: values[1],
+    updatedAt: values[2],
+    updatedAtMs: values[3],
+  });
+  return {
+    startedAt: normalized.createdAt || normalized.createdAtMs || "",
+    finishedAt: normalized.updatedAt || normalized.updatedAtMs || "",
+  };
+}
+
+export function resolveSessionRunMessageRuntimeView(messageItem = {}) {
+  const channelState = getMessageChannelState(messageItem);
+  const state = normalizeState(channelState?.state || messageItem?.status || messageItem?.state);
+  const pending = messageItem?.pending === true;
+  const running = pending || MESSAGE_RUNNING_CHANNEL_STATES.includes(state);
+  const inFlightAssistant = getMessageRole(messageItem) === "assistant" && (
+    pending || MESSAGE_IN_FLIGHT_CHANNEL_STATES.includes(state)
+  );
+  const canStopTarget = inFlightAssistant && (
+    MESSAGE_CAN_STOP_TARGET_STATES.includes(state) || (pending && !state)
+  );
+  const channelTiming = normalizeTimePair(channelState);
+  const messageTiming = resolveRuntimeTimestamp(
+    messageItem?.thinkingStartedAt,
+    messageItem?.thinkingStartedAtMs,
+    messageItem?.thinkingFinishedAt,
+    messageItem?.thinkingFinishedAtMs,
+  );
+  return {
+    state,
+    channelState,
+    pending,
+    running,
+    inFlightAssistant,
+    canStopTarget,
+    startedAt: messageTiming.startedAt || channelTiming.createdAt || channelTiming.createdAtMs || "",
+    finishedAt: messageTiming.finishedAt || channelTiming.updatedAt || channelTiming.updatedAtMs || "",
+  };
+}
+
+export function isMessageRunning(messageItem = {}) {
+  return resolveSessionRunMessageRuntimeView(messageItem).running;
+}
+
+export function isMessageInFlightAssistant(messageItem = {}) {
+  return resolveSessionRunMessageRuntimeView(messageItem).inFlightAssistant;
 }
 
 export function buildInFlightMessageRuntimePatch(stateItem = {}) {

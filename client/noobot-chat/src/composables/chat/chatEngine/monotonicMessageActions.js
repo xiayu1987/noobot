@@ -21,6 +21,7 @@ import {
   FrontendRunState,
   evaluateSessionRunState,
   isInFlightSessionRunState,
+  getMessageRuntimeChannelState,
 } from "../sessionRunStateMachine";
 import {
   SESSION_DETAIL_APPLY_MODE,
@@ -46,8 +47,9 @@ function isStoppedMonotonicMessage(message = {}) {
 
 function isStoppingAssistantMessage(message = {}) {
   if (getMessageRole(message) !== "assistant") return false;
+  const channelState = getMessageRuntimeChannelState(message);
   return ["stopping", "stopped", "cancelled"].includes(
-    normalizeTrimmedString(message?.channelState?.state || message?.state || message?.status),
+    normalizeTrimmedString(channelState?.state || message?.state || message?.status),
   );
 }
 

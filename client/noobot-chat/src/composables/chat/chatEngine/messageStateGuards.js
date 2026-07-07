@@ -9,7 +9,7 @@ import {
   getMessageTurnScopeId,
 } from "../../infra/messageIdentity";
 import { normalizeTrimmedString } from "./utils";
-import { MESSAGE_IN_FLIGHT_CHANNEL_STATES } from "../sessionRunStateMachine/constants";
+import { isMessageInFlightAssistant } from "../sessionRunStateMachine";
 
 export const SESSION_DETAIL_APPLY_MODE = Object.freeze({
   AUTO: "auto",
@@ -29,9 +29,7 @@ export function normalizeSessionDetailApplyMode(value = "") {
 export function isInFlightAssistantMessage(messageItem = {}) {
   if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) return false;
   if (!getMessageTurnScopeId(messageItem)) return false;
-  if (messageItem?.pending === true) return true;
-  const channelState = normalizeTrimmedString(messageItem?.channelState?.state);
-  return MESSAGE_IN_FLIGHT_CHANNEL_STATES.includes(channelState);
+  return isMessageInFlightAssistant(messageItem);
 }
 
 export function isMessageInRunScope(messageItem = {}, { turnScopeId = "" } = {}) {
