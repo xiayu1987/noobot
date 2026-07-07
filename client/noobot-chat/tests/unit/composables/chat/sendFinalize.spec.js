@@ -25,6 +25,12 @@ describe("sendFinalize", () => {
       activeSession,
       botMessage: assistantMessage,
       applyConversationState,
+      backendStopEventData: {
+        sessionId: "backend-stop",
+        dialogProcessId: "dp-stop",
+        turnScopeId: "turn-stop",
+        sourceEvent: "backend_stopped",
+      },
     });
 
     expect(applied).toBe(true);
@@ -39,6 +45,7 @@ describe("sendFinalize", () => {
         sessionId: "backend-stop",
         dialogProcessId: "dp-stop",
         turnScopeId: "turn-stop",
+        sourceEvent: "backend_stopped",
       },
       { botMessage: assistantMessage },
     );

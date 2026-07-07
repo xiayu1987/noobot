@@ -1074,6 +1074,76 @@ describe("sessionRunStateMachine", () => {
     });
   });
 
+  it("does not regress finalized stopped assistant to in-flight runtime patch", () => {
+    const assistant = {
+      role: "assistant",
+      pending: false,
+      dialogProcessId: "d1",
+      turnScopeId: "turn-1",
+      channelState: { state: BackendChannelState.STOPPED, dialogProcessId: "d1", turnScopeId: "turn-1" },
+      statusLabel: "已停止",
+    };
+    const activeSession = {
+      id: "s1",
+      backendSessionId: "s1",
+      messages: [{ role: "user", content: "q" }, assistant],
+    };
+
+    expect(resolveSessionRunMessageRuntimePatch({
+      stateSnapshot: createInitialSessionRunState({
+        state: BackendChannelState.STOPPING,
+        sessionId: "s1",
+        dialogProcessId: "d1",
+        turnScopeId: "turn-1",
+        sourceEvent: "stop_requested_registry",
+        priority: 70,
+      }),
+      messageItem: assistant,
+      activeSession,
+    })).toMatchObject({ action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.NONE });
+  });
+
+  it("applies backend stopped snapshot to refreshed pending assistant matched by dialogProcessId", () => {
+    const assistant = {
+      role: "assistant",
+      pending: true,
+      dialogProcessId: "d1",
+      turnScopeId: "",
+      content: "",
+    };
+    const activeSession = {
+      id: "s1",
+      backendSessionId: "s1",
+      messages: [{ role: "user", content: "q", turnScopeId: "turn-1" }, assistant],
+    };
+
+    expect(resolveSessionRunMessageRuntimePatch({
+      stateSnapshot: createInitialSessionRunState({
+        state: BackendChannelState.STOPPED,
+        sessionId: "s1",
+        dialogProcessId: "d1",
+        turnScopeId: "turn-1",
+        sourceEvent: "stopped",
+        priority: 100,
+      }),
+      messageItem: assistant,
+      activeSession,
+    })).toMatchObject({
+      action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
+      reason: SESSION_RUN_MESSAGE_RUNTIME_REASON.RUNTIME_STATE_NO_LONGER_MATCHES,
+      patch: {
+        pending: false,
+        channelState: {
+          state: BackendChannelState.STOPPED,
+          sessionId: "s1",
+          dialogProcessId: "d1",
+          turnScopeId: "turn-1",
+        },
+        statusLabelKey: "chat.stopped",
+      },
+    });
+  });
+
   it("resolves obsolete previous pending assistant as clear_runtime", () => {
     const oldAssistant = {
       role: "assistant",

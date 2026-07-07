@@ -217,6 +217,100 @@ test("patch_file: unified_diff 兼容 /project 虚拟路径前缀", async () => 
   assert.equal(await fs.readFile(path.join(basePath, "client/a.txt"), "utf8"), "one\nTWO\n");
 });
 
+test("patch_file: 超级管理员可将虚拟 project 路径解析到 workspace 下的项目根", async () => {
+  const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-super-root-"));
+  const repoPath = path.join(workspacePath, "noobot");
+  await fs.mkdir(path.join(repoPath, ".git"), { recursive: true });
+  await fs.mkdir(path.join(repoPath, "client/noobot-chat/src"), { recursive: true });
+  await fs.writeFile(path.join(repoPath, "package.json"), "{}", "utf8");
+  await fs.writeFile(path.join(repoPath, "client/noobot-chat/src/a.txt"), "one\ntwo\n", "utf8");
+  const tools = createFileTool({
+    agentContext: buildAgentContext(workspacePath, "admin", {
+      runtime: {
+        systemRuntime: { isSuperUser: true, userId: "admin", sessionId: "s-1", rootSessionId: "s-1" },
+      },
+    }),
+  });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const diff = [
+    "--- a/project/client/noobot-chat/src/a.txt",
+    "+++ b/project/client/noobot-chat/src/a.txt",
+    "@@ -1,2 +1,2 @@",
+    " one",
+    "-two",
+    "+TWO",
+    "",
+  ].join("\n");
+
+  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }));
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.changedFiles, ["noobot/client/noobot-chat/src/a.txt"]);
+  assert.equal(await fs.readFile(path.join(repoPath, "client/noobot-chat/src/a.txt"), "utf8"), "one\nTWO\n");
+});
+
+test("patch_file: 普通用户不会跨 workspace 子项目猜测虚拟 project 路径", async () => {
+  const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-normal-root-"));
+  const repoPath = path.join(workspacePath, "noobot");
+  await fs.mkdir(path.join(repoPath, ".git"), { recursive: true });
+  await fs.mkdir(path.join(repoPath, "client/noobot-chat/src"), { recursive: true });
+  await fs.writeFile(path.join(repoPath, "client/noobot-chat/src/a.txt"), "one\ntwo\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(workspacePath) });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const diff = [
+    "--- a/project/client/noobot-chat/src/a.txt",
+    "+++ b/project/client/noobot-chat/src/a.txt",
+    "@@ -1,2 +1,2 @@",
+    " one",
+    "-two",
+    "+TWO",
+    "",
+  ].join("\n");
+
+  await assert.rejects(
+    () => tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }),
+    /文件不存在|file not found/i,
+  );
+  assert.equal(await fs.readFile(path.join(repoPath, "client/noobot-chat/src/a.txt"), "utf8"), "one\ntwo\n");
+});
+
+test("patch_file: 超级管理员虚拟路径命中多个项目根时返回歧义错误", async () => {
+  const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-ambiguous-root-"));
+  for (const repoName of ["repo-a", "repo-b"]) {
+    const repoPath = path.join(workspacePath, repoName);
+    await fs.mkdir(path.join(repoPath, ".git"), { recursive: true });
+    await fs.mkdir(path.join(repoPath, "client"), { recursive: true });
+    await fs.writeFile(path.join(repoPath, "client/a.txt"), `${repoName}\ntwo\n`, "utf8");
+  }
+  const tools = createFileTool({
+    agentContext: buildAgentContext(workspacePath, "admin", {
+      runtime: {
+        systemRuntime: { isSuperUser: true, userId: "admin", sessionId: "s-1", rootSessionId: "s-1" },
+      },
+    }),
+  });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const diff = [
+    "--- a/project/client/a.txt",
+    "+++ b/project/client/a.txt",
+    "@@ -1,2 +1,2 @@",
+    " repo-a",
+    "-two",
+    "+TWO",
+    "",
+  ].join("\n");
+
+  await assert.rejects(
+    () => tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }),
+    /ambiguous patch path/i,
+  );
+});
+
 test("patch_file: 不填 format 时仍自动识别旧 apply_patch 格式", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-autodetect-"));
   await fs.writeFile(path.join(basePath, "a.txt"), "one\ntwo\nthree\n", "utf8");

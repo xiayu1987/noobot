@@ -33,6 +33,7 @@ export const SESSION_LOG_CONTROL_KEYS = Object.freeze({
 export const SESSION_LOG_DEBUG_CONTROL_KEYS = Object.freeze({
   "state-machine": "stateMachineDebug",
   resend: "resendDebug",
+  stop: "stopDebug",
   "session-log-ws": "sessionLogWsDebug",
 });
 
@@ -89,6 +90,7 @@ export function getSessionLogDebugControlKey(event = {}) {
   if (SESSION_LOG_DEBUG_CONTROL_KEYS[debugType]) return SESSION_LOG_DEBUG_CONTROL_KEYS[debugType];
   if (debugType.includes("state")) return SESSION_LOG_DEBUG_CONTROL_KEYS["state-machine"];
   if (debugType.includes("resend")) return SESSION_LOG_DEBUG_CONTROL_KEYS.resend;
+  if (debugType.includes("stop")) return SESSION_LOG_DEBUG_CONTROL_KEYS.stop;
   if (debugType.includes("session-log") || debugType.includes("log-ws") || debugType.includes("websocket")) return SESSION_LOG_DEBUG_CONTROL_KEYS["session-log-ws"];
   return "";
 }

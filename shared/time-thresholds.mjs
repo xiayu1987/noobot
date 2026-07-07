@@ -68,6 +68,7 @@ export const TIME_THRESHOLDS = deepFreeze({
     minRunTimeoutMs: 10000,
     maxRunTimeoutMs: 12 * HOUR_MS,
     hookTimeoutMs: TIME_TIERS.hookMs,
+    pendingStopTtlMs: TIME_TIERS.standardCommandMs,
     transientLlmRetryBaseDelayMs: TIME_TIERS.fastProbeMs,
   },
 

@@ -220,6 +220,33 @@ describe("reconnectReplayModel", () => {
     expect(target.processExecutionLogTotal).toBe(0);
   });
 
+  it("patchMessageObjectPreservingUiState keeps running assistant turnScopeId for stop after refresh", () => {
+    const target = {
+      role: RoleEnum.ASSISTANT,
+      dialogProcessId: "dp-running",
+      turnScopeId: "turn-running",
+      pending: true,
+      channelState: {
+        state: "sending",
+        dialogProcessId: "dp-running",
+        turnScopeId: "turn-running",
+      },
+      attachments: [{ name: "running.txt" }],
+      completedToolLogs: [{ id: "tool-running" }],
+      realtimeLogs: [{ id: "log-running" }],
+    };
+
+    patchMessageObjectPreservingUiState(target, {
+      role: RoleEnum.ASSISTANT,
+      dialogProcessId: "dp-running",
+      content: "running assistant from replay without turn",
+    });
+
+    expect(target.turnScopeId).toBe("turn-running");
+    expect(target.channelState).toMatchObject({ state: "sending", turnScopeId: "turn-running" });
+    expect(target.pending).toBe(true);
+  });
+
   it("findReusableMessageObject rejects dialogProcessId reuse when turn identity conflicts", () => {
     const existing = [
       { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-1", turnScopeId: "client-old", content: "old" },

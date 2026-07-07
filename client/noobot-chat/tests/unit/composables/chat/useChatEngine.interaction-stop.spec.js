@@ -539,6 +539,91 @@ describe("useChatEngine.interaction-stop", () => {
     );
   });
 
+  it("stopSending can stop a refreshed in-flight assistant when identity only exists in channelState", async () => {
+    const { engine, deps, sending, canStop, activeSession } = createHarness({
+      sessionId: "local-stop-channel-identity",
+    });
+    activeSession.value.backendSessionId = "backend-stop-channel-identity";
+    activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "running", turnScopeId: "turn-channel-identity" },
+      {
+        role: RoleEnum.ASSISTANT,
+        content: "partial after refresh",
+        channelState: {
+          state: BackendChannelState.SENDING,
+          dialogProcessId: "dp-channel-identity",
+          turnScopeId: "turn-channel-identity",
+        },
+      },
+    ];
+    activeSession.value.rawMessages = [...activeSession.value.messages];
+    sending.value = true;
+    canStop.value = true;
+    deps.chatWebSocketClient.requestStop.mockReturnValue(true);
+
+    expect(engine.stopSending()).toBe(true);
+    expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "backend-stop-channel-identity",
+        dialogProcessId: "dp-channel-identity",
+        turnScopeId: "turn-channel-identity",
+        partialAssistant: expect.objectContaining({
+          content: "partial after refresh",
+          dialogProcessId: "dp-channel-identity",
+          turnScopeId: "turn-channel-identity",
+        }),
+      }),
+      expect.any(Function),
+    );
+    expect(activeSession.value.messages[0]).not.toMatchObject({
+      stopState: "stopped",
+      monotonicState: "monotonic",
+    });
+  });
+
+  it("stopSending can recover turnScopeId from the latest matching user message after refresh", async () => {
+    const { engine, deps, sending, canStop, activeSession } = createHarness({
+      sessionId: "local-stop-user-turn-fallback",
+    });
+    activeSession.value.backendSessionId = "backend-stop-user-turn-fallback";
+    activeSession.value.messages = [
+      {
+        role: RoleEnum.USER,
+        content: "running",
+        dialogProcessId: "dp-user-turn-fallback",
+        turnScopeId: "turn-user-fallback",
+      },
+      {
+        role: RoleEnum.ASSISTANT,
+        content: "",
+        pending: true,
+        dialogProcessId: "dp-user-turn-fallback",
+      },
+    ];
+    activeSession.value.rawMessages = [...activeSession.value.messages];
+    sending.value = true;
+    canStop.value = true;
+    deps.chatWebSocketClient.requestStop.mockReturnValue(true);
+
+    expect(engine.stopSending()).toBe(true);
+    expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "backend-stop-user-turn-fallback",
+        dialogProcessId: "dp-user-turn-fallback",
+        turnScopeId: "turn-user-fallback",
+        partialAssistant: expect.objectContaining({
+          dialogProcessId: "dp-user-turn-fallback",
+          turnScopeId: "turn-user-fallback",
+        }),
+      }),
+      expect.any(Function),
+    );
+    expect(activeSession.value.messages[0]).not.toMatchObject({
+      stopState: "stopped",
+      monotonicState: "monotonic",
+    });
+  });
+
   it("prepareMonotonicMessageAction stops first and waits until sending settles", async () => {
     vi.useFakeTimers();
     const { engine, deps, sending, canStop, activeSession } = createHarness({

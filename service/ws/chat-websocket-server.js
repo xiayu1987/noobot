@@ -26,6 +26,121 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 const DEFAULT_RUN_TIMEOUT_MS = BUILTIN_THRESHOLDS.runTimeoutMs;
 const MIN_RUN_TIMEOUT_MS = TIME_THRESHOLDS.agent.minRunTimeoutMs;
 const MAX_RUN_TIMEOUT_MS = TIME_THRESHOLDS.agent.maxRunTimeoutMs;
+const PENDING_STOP_TTL_MS = TIME_THRESHOLDS.agent.pendingStopTtlMs;
+
+const activeRunRegistry = new Map();
+const pendingStopRegistry = new Map();
+
+function normalizeRunIdentityPart(value = "") {
+  return String(value || "").trim();
+}
+
+function buildRunRegistryKeys({ sessionId = "", turnScopeId = "", dialogProcessId = "" } = {}) {
+  const normalizedSessionId = normalizeRunIdentityPart(sessionId);
+  const normalizedTurnScopeId = normalizeRunIdentityPart(turnScopeId);
+  const normalizedDialogProcessId = normalizeRunIdentityPart(dialogProcessId);
+  const keys = [];
+  if (normalizedSessionId && normalizedTurnScopeId) keys.push(`session:${normalizedSessionId}:turn:${normalizedTurnScopeId}`);
+  if (normalizedSessionId && normalizedDialogProcessId) keys.push(`session:${normalizedSessionId}:dialog:${normalizedDialogProcessId}`);
+  if (normalizedDialogProcessId) keys.push(`dialog:${normalizedDialogProcessId}`);
+  return [...new Set(keys)];
+}
+
+function registerActiveRun(handle = {}) {
+  const keys = buildRunRegistryKeys(handle);
+  handle.registryKeys = [...new Set([...(handle.registryKeys || []), ...keys])];
+  for (const key of keys) activeRunRegistry.set(key, handle);
+  return handle;
+}
+
+function unregisterActiveRun(handle = {}) {
+  for (const key of handle.registryKeys || []) {
+    if (activeRunRegistry.get(key) === handle) activeRunRegistry.delete(key);
+  }
+  handle.registryKeys = [];
+}
+
+function findActiveRun(identity = {}) {
+  for (const key of buildRunRegistryKeys(identity)) {
+    const handle = activeRunRegistry.get(key);
+    if (handle) return handle;
+  }
+  return null;
+}
+
+function rememberPendingStop(identity = {}, stopPayload = {}) {
+  const expiresAtMs = Date.now() + PENDING_STOP_TTL_MS;
+  for (const key of buildRunRegistryKeys(identity)) {
+    const previousEntry = pendingStopRegistry.get(key);
+    if (previousEntry?.timer) clearTimeout(previousEntry.timer);
+    const timer = setTimeout(() => {
+      const currentEntry = pendingStopRegistry.get(key);
+      if (currentEntry?.expiresAtMs === expiresAtMs) pendingStopRegistry.delete(key);
+    }, PENDING_STOP_TTL_MS);
+    timer?.unref?.();
+    pendingStopRegistry.set(key, { payload: stopPayload, expiresAtMs, timer });
+  }
+}
+
+function deletePendingStopKeys(keys = []) {
+  for (const key of keys) {
+    const entry = pendingStopRegistry.get(key);
+    if (entry?.timer) clearTimeout(entry.timer);
+    pendingStopRegistry.delete(key);
+  }
+}
+
+function consumePendingStop(identity = {}) {
+  const nowMs = Date.now();
+  for (const key of buildRunRegistryKeys(identity)) {
+    const entry = pendingStopRegistry.get(key);
+    if (!entry) continue;
+    if (Number(entry?.expiresAtMs || 0) <= nowMs) {
+      deletePendingStopKeys([key]);
+      continue;
+    }
+    if (entry?.payload) {
+      deletePendingStopKeys(buildRunRegistryKeys(identity));
+      return entry.payload;
+    }
+  }
+  return null;
+}
+
+function buildStoppedPartialAssistant({ stopPayload = {}, runMeta = {}, result = {}, fallbackMessage = "" } = {}) {
+  const sourcePartial = stopPayload?.partialAssistant && typeof stopPayload.partialAssistant === "object"
+    ? stopPayload.partialAssistant
+    : {};
+  const dialogProcessId =
+    normalizeRunIdentityPart(sourcePartial.dialogProcessId) ||
+    normalizeRunIdentityPart(stopPayload?.dialogProcessId) ||
+    normalizeRunIdentityPart(runMeta?.dialogProcessId) ||
+    normalizeRunIdentityPart(result?.dialogProcessId);
+  const turnScopeId =
+    normalizeRunIdentityPart(sourcePartial.turnScopeId) ||
+    normalizeRunIdentityPart(stopPayload?.turnScopeId) ||
+    normalizeRunIdentityPart(runMeta?.turnScopeId);
+  const sessionId =
+    normalizeRunIdentityPart(sourcePartial.sessionId) ||
+    normalizeRunIdentityPart(stopPayload?.sessionId) ||
+    normalizeRunIdentityPart(runMeta?.sessionId) ||
+    normalizeRunIdentityPart(result?.sessionId);
+  const content = String(sourcePartial.content ?? stopPayload?.message ?? fallbackMessage ?? "").trim();
+  return {
+    ...sourcePartial,
+    content,
+    sessionId,
+    dialogProcessId,
+    turnScopeId,
+    state: "stopped",
+    status: "stopped",
+    channelState: "stopped",
+    stopState: "stopped",
+    monotonicState: "monotonic",
+    isMonotonic: true,
+    monotonic: true,
+  };
+}
 
 function summarizeDebugAttachments(attachments) {
   if (!Array.isArray(attachments)) {
@@ -376,6 +491,7 @@ export function registerChatWebSocketServer(
     let stopRequested = false;
     let currentTurnScopeId = "";
     let currentAbortSignal = null;
+    let currentRunHandle = null;
     const pendingInteractionRequests = new Map();
 
     let eventSequence = 0;
@@ -521,8 +637,9 @@ export function registerChatWebSocketServer(
           rejectAllPendingInteractions(new Error(translateText("ws.dialogStoppedByUser", currentLocale)));
           currentStopPayload = {
             message: translateText("ws.dialogStoppedByUser", currentLocale),
-            sessionId: currentRunMeta?.sessionId || "",
+            sessionId: String(payload?.sessionId || payload?.partialAssistant?.sessionId || "").trim() || currentRunMeta?.sessionId || "",
             dialogProcessId:
+              String(payload?.dialogProcessId || "").trim() ||
               String(payload?.partialAssistant?.dialogProcessId || "").trim() ||
               currentRunMeta?.dialogProcessId ||
               "",
@@ -533,13 +650,29 @@ export function registerChatWebSocketServer(
               "",
             partialAssistant: payload?.partialAssistant || {},
           };
-          if (!isRunning || !currentAbortController) {
-            sendEvent("stopped", {
-              ...currentStopPayload,
-              state: "stopped",
-              sourceEvent: "stop_requested_idle",
+          const activeRun = findActiveRun(currentStopPayload);
+          if (activeRun && activeRun.abortController && !activeRun.abortController.signal?.aborted) {
+            activeRun.stopRequested = true;
+            activeRun.stopPayload = currentStopPayload;
+            activeRun.abortController.abort({
+              type: "user_stop",
+              reason: "user stop action",
+              stopPayload: currentStopPayload,
             });
-            webSocket.close(1000, "stopped");
+            sendEvent("channel_state", {
+              ...currentStopPayload,
+              state: "stopping",
+              sourceEvent: "stop_requested_registry",
+            });
+            return;
+          }
+          if (!isRunning || !currentAbortController) {
+            rememberPendingStop(currentStopPayload, currentStopPayload);
+            sendEvent("channel_state", {
+              ...currentStopPayload,
+              state: "stopping",
+              sourceEvent: "stop_requested_pending",
+            });
             return;
           }
           if (isRunning && currentAbortController) {
@@ -650,7 +783,29 @@ export function registerChatWebSocketServer(
           dialogProcessId: "",
           turnScopeId: String(normalizedRunConfig?.turnScopeId || currentTurnScopeId || "").trim(),
         };
+        currentRunHandle = registerActiveRun({
+          userId: currentRunMeta.userId,
+          sessionId: currentRunMeta.sessionId,
+          dialogProcessId: currentRunMeta.dialogProcessId,
+          turnScopeId: currentRunMeta.turnScopeId,
+          abortController: currentAbortController,
+          stopRequested: false,
+          stopPayload: null,
+        });
+        const pendingStopPayload = consumePendingStop(currentRunMeta);
+        if (pendingStopPayload) {
+          stopRequested = true;
+          currentStopPayload = {
+            ...pendingStopPayload,
+            sessionId: pendingStopPayload?.sessionId || currentRunMeta.sessionId || "",
+            turnScopeId: pendingStopPayload?.turnScopeId || currentRunMeta.turnScopeId || "",
+          };
+        }
         if (stopRequested && currentAbortController && !currentAbortController.signal?.aborted) {
+          if (currentRunHandle) {
+            currentRunHandle.stopRequested = true;
+            currentRunHandle.stopPayload = currentStopPayload;
+          }
           currentAbortController.abort({
             type: "user_stop",
             reason: "user stop action",
@@ -688,6 +843,10 @@ export function registerChatWebSocketServer(
               "";
             if (eventDialogProcessId && currentRunMeta && !childRunEvent) {
               currentRunMeta.dialogProcessId = eventDialogProcessId;
+              if (currentRunHandle) {
+                currentRunHandle.dialogProcessId = eventDialogProcessId;
+                registerActiveRun(currentRunHandle);
+              }
             }
             if (eventName === "llm_delta") {
               if (!textStreamingEnabled) {
@@ -804,13 +963,20 @@ export function registerChatWebSocketServer(
 
         if (stopRequested || currentAbortSignal?.aborted) {
           const stopPayload = currentStopPayload || currentAbortSignal?.reason?.stopPayload || {};
+          const stoppedMessage = stopPayload?.message || translateText("ws.dialogStoppedByUser", currentLocale);
+          const stoppedPartialAssistant = buildStoppedPartialAssistant({
+            stopPayload,
+            runMeta: currentRunMeta,
+            result,
+            fallbackMessage: stoppedMessage,
+          });
           try {
             await resolveBot()?.persistStoppedAssistantMessage?.({
               userId: currentRunMeta?.userId || "",
               sessionId: currentRunMeta?.sessionId || "",
               parentSessionId: currentRunMeta?.parentSessionId || "",
               parentDialogProcessId: currentRunMeta?.parentDialogProcessId || "",
-              partialAssistant: stopPayload?.partialAssistant || {},
+              partialAssistant: stoppedPartialAssistant,
             });
           } catch (persistError) {
             void recordServiceWebSocketRuntimeError({
@@ -825,18 +991,10 @@ export function registerChatWebSocketServer(
             });
           }
           sendEvent("stopped", {
-            message: stopPayload?.message || translateText("ws.dialogStoppedByUser", currentLocale),
-            sessionId: stopPayload?.sessionId || currentRunMeta?.sessionId || result.sessionId || "",
-            dialogProcessId:
-              stopPayload?.dialogProcessId ||
-              currentRunMeta?.dialogProcessId ||
-              result.dialogProcessId ||
-              "",
-            turnScopeId:
-              stopPayload?.turnScopeId ||
-              currentRunMeta?.turnScopeId ||
-              currentTurnScopeId ||
-              "",
+            message: stoppedMessage,
+            sessionId: stoppedPartialAssistant.sessionId || "",
+            dialogProcessId: stoppedPartialAssistant.dialogProcessId || "",
+            turnScopeId: stoppedPartialAssistant.turnScopeId || currentTurnScopeId || "",
           });
           webSocket.close(1000, "stopped");
           return;
@@ -867,13 +1025,19 @@ export function registerChatWebSocketServer(
             webSocket.close(1011, "timeout");
           } else {
             const stopPayload = currentStopPayload || currentAbortSignal?.reason?.stopPayload || {};
+            const stoppedMessage = stopPayload?.message || translateText("ws.dialogStoppedByUser", currentLocale);
+            const stoppedPartialAssistant = buildStoppedPartialAssistant({
+              stopPayload,
+              runMeta: currentRunMeta,
+              fallbackMessage: stoppedMessage,
+            });
             try {
               await resolveBot()?.persistStoppedAssistantMessage?.({
                 userId: currentRunMeta?.userId || "",
                 sessionId: currentRunMeta?.sessionId || "",
                 parentSessionId: currentRunMeta?.parentSessionId || "",
                 parentDialogProcessId: currentRunMeta?.parentDialogProcessId || "",
-                partialAssistant: stopPayload?.partialAssistant || {},
+                partialAssistant: stoppedPartialAssistant,
               });
             } catch (persistError) {
               void recordServiceWebSocketRuntimeError({
@@ -888,14 +1052,10 @@ export function registerChatWebSocketServer(
               });
             }
             sendEvent("stopped", {
-              message: stopPayload?.message || translateText("ws.dialogStoppedByUser", currentLocale),
-              sessionId: stopPayload?.sessionId || currentRunMeta?.sessionId || "",
-              dialogProcessId: stopPayload?.dialogProcessId || currentRunMeta?.dialogProcessId || "",
-              turnScopeId:
-                stopPayload?.turnScopeId ||
-                currentRunMeta?.turnScopeId ||
-                currentTurnScopeId ||
-                "",
+              message: stoppedMessage,
+              sessionId: stoppedPartialAssistant.sessionId || "",
+              dialogProcessId: stoppedPartialAssistant.dialogProcessId || "",
+              turnScopeId: stoppedPartialAssistant.turnScopeId || currentTurnScopeId || "",
             });
             webSocket.close(1000, "stopped");
           }
@@ -926,6 +1086,10 @@ export function registerChatWebSocketServer(
           isRunning = false;
           currentAbortController = null;
           currentAbortSignal = null;
+          if (currentRunHandle) {
+            unregisterActiveRun(currentRunHandle);
+            currentRunHandle = null;
+          }
           currentRunMeta = null;
           currentRunTimedOut = false;
           currentStopPayload = null;

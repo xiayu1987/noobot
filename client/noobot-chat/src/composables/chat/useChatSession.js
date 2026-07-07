@@ -53,6 +53,7 @@ import {
 } from "./sessionRunStateMachine";
 import { setStateMachineDebugLogSink } from "./debug/stateMachineLogger";
 import { setResendDebugLogSink } from "./debug/resendDebugLogger";
+import { setStopDebugLogSink } from "./debug/stopDebugLogger";
 
 export function useChatSession({
   userId,
@@ -214,6 +215,7 @@ export function useChatSession({
   });
   setStateMachineDebugLogSink(sessionLogWebSocketClient);
   setResendDebugLogSink(sessionLogWebSocketClient);
+  setStopDebugLogSink(sessionLogWebSocketClient);
 
   function logSessionSystemEvent(event, payload = {}) {
     sessionLogWebSocketClient.log({
