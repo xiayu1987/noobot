@@ -124,8 +124,8 @@ watch(
   color: var(--noobot-preview-text);
   border: 1px solid var(--noobot-preview-border);
   border-radius: var(--noobot-radius-sm);
-  padding: 20px 24px;
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--noobot-panel-border) 35%, transparent);
+  padding: 16px 24px;
+  box-shadow: none;
   transition: all 0.3s ease;
 }
 
@@ -167,7 +167,7 @@ watch(
   margin: 0 auto;
   display: block;
   border-radius: 6px;
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--noobot-mask-bg) 55%, transparent);
+  box-shadow: none;
 }
 
 .preview-video {
@@ -294,7 +294,7 @@ watch(
   background-color: var(--noobot-msg-code-block-bg);
   color: var(--noobot-msg-code-block-text);
   border-radius: 8px;
-  padding: 16px;
+  padding: 12px;
   overflow-x: auto;
   margin-bottom: 16px;
 }
@@ -332,14 +332,14 @@ watch(
 
 .preview-markdown :deep(.mermaid) {
   margin: 20px 0;
-  padding: 16px;
+  padding: 12px;
   border: 1px solid var(--noobot-preview-border);
   border-radius: 8px;
   background: var(--noobot-preview-bg);
   overflow-x: auto;
   display: flex;
   justify-content: center;
-  box-shadow: 0 1px 4px color-mix(in srgb, var(--noobot-panel-border) 45%, transparent);
+  box-shadow: none;
 }
 .preview-markdown :deep(.mermaid svg) {
   max-width: 100% !important;

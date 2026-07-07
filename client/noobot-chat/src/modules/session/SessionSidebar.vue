@@ -165,8 +165,8 @@ const { translate } = useLocale();
 <style scoped>
 /* 定义内部美化变量，提供开箱即用的高级深色主题 */
 .sidebar {
-  width: 280px;
-  min-width: 280px;
+  width: 260px;
+  min-width: 260px;
   background: var(--noobot-surface-sidebar);
   border-right: 1px solid var(--noobot-border-weak);
   display: flex;
@@ -179,17 +179,17 @@ const { translate } = useLocale();
 }
 
 .sidebar.collapsed {
-  width: 80px;
-  min-width: 80px;
+  width: 68px;
+  min-width: 68px;
 }
 
 /* 品牌 Logo 区域 */
 .brand {
-  padding: 24px 20px 20px;
+  padding: 16px 16px 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 76px;
+  height: 60px;
   box-sizing: border-box;
 }
 
@@ -216,7 +216,7 @@ const { translate } = useLocale();
 }
 
 .brand-text {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 800;
   background: var(--noobot-cyber-gradient);
   -webkit-background-clip: text;
@@ -255,16 +255,16 @@ const { translate } = useLocale();
 
 /* 顶部操作区 */
 .sidebar-header {
-  padding: 0 16px 16px;
+  padding: 0 12px 12px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
   border-bottom: 1px solid var(--noobot-border-weak);
 }
 
 /* 自定义输入框样式覆盖 */
 .custom-input :deep(.el-input__wrapper) {
-  border-radius: 10px;
+  border-radius: 8px;
   background-color: transparent;
   box-shadow: 0 0 0 1px var(--noobot-border-soft) inset;
   transition: all 0.2s ease;
@@ -279,7 +279,7 @@ const { translate } = useLocale();
 
 .custom-input :deep(.el-input__inner) {
   color: var(--noobot-text-main);
-  height: 40px;
+  height: 36px;
 }
 
 .input-icon {
@@ -310,8 +310,8 @@ const { translate } = useLocale();
 .new-chat-btn {
   flex: 1 1 0;
   min-width: 0;
-  height: 40px;
-  border-radius: 10px;
+  height: 36px;
+  border-radius: 8px;
   font-weight: 600;
   letter-spacing: 0.5px;
 }
@@ -338,10 +338,10 @@ const { translate } = useLocale();
 
 /* 方形尾部按钮通用样式 */
 .tail-btn {
-  flex: 0 0 40px;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
   background: var(--noobot-btn-soft-bg);
   border: 1px solid var(--noobot-btn-soft-border);
   color: var(--noobot-btn-soft-text);
@@ -349,7 +349,7 @@ const { translate } = useLocale();
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 16px;
   margin-left: 0 !important;
   transition: all 0.2s ease;
 }
@@ -378,13 +378,13 @@ const { translate } = useLocale();
 }
 
 .status-icon {
-  font-size: 18px;
+  font-size: 16px;
 }
 
 /* 折叠状态处理 */
 .sidebar.collapsed .brand {
   justify-content: center;
-  padding: 24px 0;
+  padding: 16px 0;
 }
 
 .sidebar.collapsed .brand-left,

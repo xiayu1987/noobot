@@ -197,7 +197,7 @@ function emitPreview() {
   background: color-mix(in srgb, var(--el-color-success) 14%, transparent);
 }
 .file-size {
-  font-size: var(--noobot-msg-meta-font-size);
+  font-size: var(--noobot-msg-file-size-font-size);
   color: var(--noobot-msg-file-size);
 }
 .parsed-result-row {

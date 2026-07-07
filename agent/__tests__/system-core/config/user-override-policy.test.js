@@ -74,6 +74,35 @@ test("mergeConfig: 应按策略深度合并并合并 runtime configParams", () =
   assert.deepEqual(out.configParams, { A: "1", B: "20", C: "30" });
 });
 
+test("mergeConfig: providers 应深度合并并保留 tool_reasoning_effort", () => {
+  const out = mergeConfig(
+    {
+      providers: {
+        openai: {
+          format: "openai_compatible",
+          model: "gpt-5.5",
+          reasoning_effort: "high",
+          tool_reasoning_effort: "low",
+        },
+      },
+    },
+    {
+      providers: {
+        openai: {
+          temperature: 0.6,
+          tool_reasoning_effort: "medium",
+        },
+      },
+    },
+  );
+
+  assert.equal(out.providers.openai.format, "openai_compatible");
+  assert.equal(out.providers.openai.model, "gpt-5.5");
+  assert.equal(out.providers.openai.reasoning_effort, "high");
+  assert.equal(out.providers.openai.tool_reasoning_effort, "medium");
+  assert.equal(out.providers.openai.temperature, 0.6);
+});
+
 test("mergeConfig: session/context/preferences 用户覆盖应保持深度合并", () => {
   const out = mergeConfig(
     {

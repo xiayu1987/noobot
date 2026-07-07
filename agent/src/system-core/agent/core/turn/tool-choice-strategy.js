@@ -11,7 +11,7 @@ import { normalizeProviderFormat, PROVIDER_FORMAT } from "../../../config/core/e
 export function resolveBoundToolModelRequestOverrides(modelSpec = {}) {
   const providerFormat = normalizeProviderFormat(modelSpec?.format || "");
   if (providerFormat === PROVIDER_FORMAT.OPENAI_COMPATIBLE) {
-    return { reasoning_effort: "low" };
+    return { reasoning_effort: modelSpec?.tool_reasoning_effort || "low" };
   }
   if (providerFormat === PROVIDER_FORMAT.DASHSCOPE) {
     return {

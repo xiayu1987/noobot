@@ -568,12 +568,17 @@ test("mini-runner bound dashscope requests force thinking disabled options", asy
   assert.equal(fakeModel.invocations[0].options.thinking_budget, 0);
 });
 
-test("mini-runner bound openai compatible requests force reasoning_effort low", async () => {
+test("mini-runner bound openai compatible requests use tool_reasoning_effort", async () => {
   const fakeModel = createFakeModel([{ content: "ok" }]);
   const invoker = createAgentCapabilityModelInvoker({
     enableToolBinding: true,
     createChatModelByNameFn: () => fakeModel,
-    resolveModelSpecByNameFn: ({ modelName }) => ({ model: modelName, format: "openai_compatible", reasoning_effort: "high" }),
+    resolveModelSpecByNameFn: ({ modelName }) => ({
+      model: modelName,
+      format: "openai_compatible",
+      reasoning_effort: "high",
+      tool_reasoning_effort: "medium",
+    }),
     adaptToolsForBindingFn: () => ({ tools: [{ name: "echo" }] }),
   });
 
@@ -582,7 +587,7 @@ test("mini-runner bound openai compatible requests force reasoning_effort low", 
     ctx: { agentContext: { payload: { tools: { registry: [{ name: "echo" }] } } } },
   });
 
-  assert.equal(fakeModel.invocations[0].options.reasoning_effort, "low");
+  assert.equal(fakeModel.invocations[0].options.reasoning_effort, "medium");
 });
 
 test("mini-runner does not inject bound-tool overrides without bound tools", async () => {

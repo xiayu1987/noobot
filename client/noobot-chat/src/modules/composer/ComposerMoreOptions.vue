@@ -134,30 +134,32 @@ function resolveComposerExtensionProps(renderer = {}) {
 
 <template>
   <div class="composer-options">
-    <el-switch
-      :model-value="allowUserInteraction"
-      inline-prompt
-      :active-text="translate('composer.allowInteraction')"
-      :inactive-text="translate('composer.disallowInteraction')"
-      class="interaction-switch"
-      @update:model-value="emit('update:allowUserInteraction', $event)"
-    />
-    <el-switch
-      :model-value="forceTool"
-      inline-prompt
-      :active-text="translate('composer.forceTool')"
-      :inactive-text="translate('composer.notForceTool')"
-      class="interaction-switch"
-      @update:model-value="emit('update:forceTool', $event)"
-    />
-    <el-switch
-      :model-value="streamOutput"
-      inline-prompt
-      :active-text="translate('composer.streaming')"
-      :inactive-text="translate('composer.nonStreaming')"
-      class="interaction-switch"
-      @update:model-value="emit('update:streamOutput', $event)"
-    />
+    <div class="composer-toggle-panel">
+      <el-switch
+        :model-value="allowUserInteraction"
+        inline-prompt
+        :active-text="translate('composer.allowInteraction')"
+        :inactive-text="translate('composer.disallowInteraction')"
+        class="interaction-switch"
+        @update:model-value="emit('update:allowUserInteraction', $event)"
+      />
+      <el-switch
+        :model-value="forceTool"
+        inline-prompt
+        :active-text="translate('composer.forceTool')"
+        :inactive-text="translate('composer.notForceTool')"
+        class="interaction-switch"
+        @update:model-value="emit('update:forceTool', $event)"
+      />
+      <el-switch
+        :model-value="streamOutput"
+        inline-prompt
+        :active-text="translate('composer.streaming')"
+        :inactive-text="translate('composer.nonStreaming')"
+        class="interaction-switch"
+        @update:model-value="emit('update:streamOutput', $event)"
+      />
+    </div>
 
     <div class="option-selector scenario-selector">
       <span class="scenario-selector-label">{{ translate("composer.botScenario") }}</span>
@@ -306,7 +308,7 @@ function resolveComposerExtensionProps(renderer = {}) {
 .composer-options {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -315,12 +317,37 @@ function resolveComposerExtensionProps(renderer = {}) {
   --el-switch-off-color: var(--noobot-status-idle, #d4d4d8);
 }
 
+.composer-toggle-panel,
+.option-selector,
+.model-select-card {
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 56%, transparent);
+  border-radius: 12px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 97%, var(--el-fill-color-light)),
+      color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 93%, var(--el-color-primary))
+    );
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--noobot-base-white, #ffffff) 35%, transparent) inset;
+}
+
+.composer-toggle-panel {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
 .option-selector {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-height: 30px;
   min-width: 0;
+  padding: 10px 12px;
 }
 
 .scenario-selector-label {
@@ -328,6 +355,7 @@ function resolveComposerExtensionProps(renderer = {}) {
   font-size: 12px;
   line-height: 18px;
   color: var(--noobot-text-secondary, var(--el-text-color-regular));
+  font-weight: 650;
 }
 
 .option-button-group {
@@ -343,7 +371,7 @@ function resolveComposerExtensionProps(renderer = {}) {
   box-sizing: border-box;
   margin: 0 !important;
   padding: 4px 9px;
-  border-radius: 8px;
+  border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
   line-height: 16px;
@@ -434,20 +462,20 @@ function resolveComposerExtensionProps(renderer = {}) {
 .model-config-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
   min-width: 0;
-  padding: 16px;
-  border: 1px solid color-mix(in srgb, var(--el-color-primary) 22%, var(--noobot-panel-border, var(--el-border-color)));
-  border-radius: 18px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--el-color-primary) 16%, var(--noobot-panel-border, var(--el-border-color)));
+  border-radius: 16px;
   background:
     linear-gradient(
       135deg,
-      color-mix(in srgb, var(--noobot-panel-bg, var(--el-bg-color-overlay)) 96%, var(--el-color-primary)),
-      color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 92%, var(--noobot-cyber-cyan, #0ea5e9))
+      color-mix(in srgb, var(--noobot-panel-bg, var(--el-bg-color-overlay)) 98%, var(--el-color-primary)),
+      color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 96%, var(--noobot-cyber-cyan, #0ea5e9))
     );
   box-shadow:
-    0 14px 34px color-mix(in srgb, var(--el-color-primary) 10%, transparent),
+    0 8px 24px color-mix(in srgb, var(--el-color-primary) 7%, transparent),
     0 1px 0 color-mix(in srgb, var(--noobot-base-white, #ffffff) 45%, transparent) inset;
 }
 
@@ -492,17 +520,7 @@ function resolveComposerExtensionProps(renderer = {}) {
   gap: 12px;
   width: 100%;
   min-width: 0;
-  box-sizing: border-box;
-  padding: 12px;
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 68%, transparent);
-  border-radius: 14px;
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 94%, var(--el-fill-color-light)),
-      color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 86%, var(--el-color-primary))
-    );
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--noobot-base-white, #ffffff) 42%, transparent) inset;
+  padding: 10px 12px;
 }
 
 .model-field-copy {
@@ -555,6 +573,7 @@ function resolveComposerExtensionProps(renderer = {}) {
   flex-direction: column;
   gap: 10px;
   min-width: 0;
+  padding-top: 2px;
 }
 
 .scenario-description {
@@ -566,6 +585,7 @@ function resolveComposerExtensionProps(renderer = {}) {
 
 @media (max-width: 768px) {
   .composer-options,
+  .composer-toggle-panel,
   .scenario-selector,
   .plugin-selector,
   .model-select-card,
@@ -616,6 +636,11 @@ function resolveComposerExtensionProps(renderer = {}) {
     gap: 6px;
     flex-wrap: wrap;
     align-items: flex-start;
+  }
+
+  .composer-toggle-panel {
+    padding: 10px;
+    gap: 8px;
   }
 
   .option-button-group {

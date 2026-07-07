@@ -279,7 +279,7 @@ async function handleDelete() {
             <div class="monotonic-edit-subtitle">调整内容和附件后，将替换本轮消息并重新生成回复</div>
           </div>
           <el-tag type="primary" effect="light" round class="monotonic-mode-tag">
-            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+            <svg class="monotonic-mode-icon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="1 4 1 10 7 10"></polyline>
               <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
             </svg>
@@ -389,7 +389,7 @@ async function handleDelete() {
 
         <div class="monotonic-edit-footer">
           <span class="monotonic-edit-tip">
-            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: -2px;">
+            <svg class="monotonic-tip-icon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="10"></circle>
               <line x1="12" y1="16" x2="12" y2="12"></line>
               <line x1="12" y1="8" x2="12.01" y2="8"></line>
@@ -493,7 +493,7 @@ async function handleDelete() {
   border: 1px solid var(--el-border-color-light);
   color: var(--el-text-color-regular);
   background: var(--el-bg-color-overlay);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+  box-shadow: none;
   transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
@@ -501,7 +501,7 @@ async function handleDelete() {
   color: var(--el-color-primary);
   background: var(--el-color-primary-light-9);
   border-color: var(--el-color-primary-light-7);
-  box-shadow: 0 4px 12px var(--el-color-primary-light-8);
+  box-shadow: none;
   transform: translateY(-1px);
 }
 
@@ -509,7 +509,7 @@ async function handleDelete() {
   color: var(--el-color-danger);
   background: var(--el-color-danger-light-9);
   border-color: var(--el-color-danger-light-7);
-  box-shadow: 0 4px 12px var(--el-color-danger-light-8);
+  box-shadow: none;
   transform: translateY(-1px);
 }
 
@@ -527,24 +527,24 @@ async function handleDelete() {
 .monotonic-edit-card {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 20px;
-  border-radius: 16px;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 8px;
   background: var(--el-bg-color);
   border: 1px solid var(--el-border-color-lighter);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.02);
+  box-shadow: none;
   transition: box-shadow 0.3s ease;
 }
 
 .monotonic-edit-card:hover {
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.03);
+  box-shadow: none;
 }
 
 .monotonic-edit-heading {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 8px;
 }
 
 .monotonic-edit-title {
@@ -564,21 +564,42 @@ async function handleDelete() {
 .monotonic-mode-tag {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  gap: 4px;
   font-weight: 600;
   padding: 0 10px;
   height: 26px;
+  line-height: 26px;
+  white-space: nowrap;
+}
+
+.monotonic-mode-tag :deep(.el-tag__content) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  line-height: 1;
+}
+
+.monotonic-mode-icon,
+.monotonic-tip-icon,
+.monotonic-add-attachment-btn svg,
+.monotonic-footer-btn svg {
+  display: block;
+  flex-shrink: 0;
 }
 
 .monotonic-edit-body {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
 }
 
 /* Textarea */
 .monotonic-edit-textarea :deep(.el-textarea__inner) {
   padding: 14px 16px;
-  border-radius: 12px;
+  border-radius: 8px;
   color: var(--el-text-color-primary);
   background: var(--el-fill-color-light);
   border: none;
@@ -601,7 +622,7 @@ async function handleDelete() {
 .monotonic-edit-attachments {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .monotonic-attachment-header {
@@ -627,8 +648,8 @@ async function handleDelete() {
 }
 
 .monotonic-attachment-empty {
-  padding: 20px;
-  border-radius: 12px;
+  padding: 16px;
+  border-radius: 8px;
   background: var(--el-fill-color-lighter);
   border: 1px dashed var(--el-border-color);
 }
@@ -641,14 +662,14 @@ async function handleDelete() {
 .monotonic-attachment-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 12px;
+  gap: 8px;
   padding-right: 8px; /* For scrollbar */
 }
 
 .monotonic-attachment-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   padding: 10px 12px;
   border-radius: 10px;
   background: var(--el-fill-color-light);
@@ -660,7 +681,7 @@ async function handleDelete() {
 .monotonic-attachment-item:hover {
   background: var(--el-bg-color);
   border-color: var(--el-border-color-light);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  box-shadow: none;
   transform: translateY(-1px);
 }
 
@@ -799,23 +820,102 @@ async function handleDelete() {
 .monotonic-edit-tip {
   display: flex;
   align-items: center;
+  gap: 4px;
   color: var(--el-text-color-secondary);
   font-size: 13px;
 }
 
 .monotonic-edit-buttons {
   display: flex;
-  gap: 12px;
+  align-items: center;
+  gap: 8px;
 }
 
 .monotonic-footer-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 8px 20px;
   font-weight: 500;
 }
 
+.monotonic-footer-btn :deep(.el-button__content) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  line-height: 1;
+}
+
+:root[data-theme="dark"] .monotonic-edit-card,
+html.dark .monotonic-edit-card,
+.dark .monotonic-edit-card {
+  background: #12151b;
+  border-color: #1c2430;
+}
+
+:root[data-theme="dark"] .monotonic-edit-textarea :deep(.el-textarea__inner),
+html.dark .monotonic-edit-textarea :deep(.el-textarea__inner),
+.dark .monotonic-edit-textarea :deep(.el-textarea__inner) {
+  color: #d9dee6;
+  background: #0f1218;
+  box-shadow: inset 0 0 0 1px #1c2430;
+}
+
+:root[data-theme="dark"] .monotonic-edit-textarea :deep(.el-textarea__inner:hover),
+html.dark .monotonic-edit-textarea :deep(.el-textarea__inner:hover),
+.dark .monotonic-edit-textarea :deep(.el-textarea__inner:hover) {
+  background: #111722;
+}
+
+:root[data-theme="dark"] .monotonic-edit-textarea :deep(.el-textarea__inner:focus),
+html.dark .monotonic-edit-textarea :deep(.el-textarea__inner:focus),
+.dark .monotonic-edit-textarea :deep(.el-textarea__inner:focus) {
+  background: #111722;
+  box-shadow: inset 0 0 0 1px #315f9e, 0 0 0 2px rgba(49, 95, 158, 0.22);
+}
+
+:root[data-theme="dark"] .monotonic-attachment-empty,
+html.dark .monotonic-attachment-empty,
+.dark .monotonic-attachment-empty,
+:root[data-theme="dark"] .monotonic-attachment-item,
+html.dark .monotonic-attachment-item,
+.dark .monotonic-attachment-item {
+  background: #0f1218;
+  border-color: #1b222d;
+}
+
+:root[data-theme="dark"] .monotonic-attachment-item:hover,
+html.dark .monotonic-attachment-item:hover,
+.dark .monotonic-attachment-item:hover {
+  background: #121821;
+  border-color: #273244;
+}
+
+:root[data-theme="dark"] .monotonic-attachment-icon,
+html.dark .monotonic-attachment-icon,
+.dark .monotonic-attachment-icon {
+  background: #172033;
+  border-color: #243654;
+  color: #8fb7f0;
+}
+
+:root[data-theme="dark"] .monotonic-add-attachment-btn:hover:not(:disabled),
+html.dark .monotonic-add-attachment-btn:hover:not(:disabled),
+.dark .monotonic-add-attachment-btn:hover:not(:disabled) {
+  background: #172033;
+  border-color: #315f9e;
+}
+
+:root[data-theme="dark"] .monotonic-edit-footer,
+html.dark .monotonic-edit-footer,
+.dark .monotonic-edit-footer {
+  border-top-color: #1c2430;
+}
+
 @media (max-width: 640px) {
   .monotonic-edit-card {
-    padding: 16px;
+    padding: 12px;
   }
 
   .monotonic-edit-heading {
@@ -826,7 +926,7 @@ async function handleDelete() {
   .monotonic-edit-footer {
     flex-direction: column;
     align-items: stretch;
-    gap: 16px;
+    gap: 8px;
   }
 
   .monotonic-edit-buttons {

@@ -43,8 +43,8 @@ const { translate } = useLocale();
 .base-message-shell {
   display: flex;
   flex-direction: column;
-  gap: var(--noobot-space-xs);
-  margin-bottom: calc(var(--noobot-space-lg) + var(--noobot-space-md));
+  gap: 6px;
+  margin-bottom: 22px;
   width: 100%;
   position: relative;
 }
@@ -57,7 +57,7 @@ const { translate } = useLocale();
 .base-message-header {
   display: flex;
   align-items: center;
-  gap: var(--noobot-space-md);
+  gap: 8px;
   height: var(--noobot-msg-avatar-size);
 }
 
@@ -75,10 +75,10 @@ const { translate } = useLocale();
   font-size: var(--noobot-msg-avatar-font-size);
   font-weight: 600;
   flex-shrink: 0;
-  color: var(--noobot-text-strong);
+  color: var(--el-color-primary);
   overflow: hidden;
   box-shadow: none;
-  border: 1px solid var(--noobot-panel-border);
+  border: 1px solid color-mix(in srgb, var(--el-color-primary) 18%, var(--noobot-panel-border));
   background: var(--noobot-msg-avatar-bg);
 }
 
@@ -94,9 +94,9 @@ const { translate } = useLocale();
   font-size: 11px;
   color: var(--noobot-msg-tag-text);
   background: var(--noobot-msg-tag-bg);
-  border: 1px solid var(--noobot-panel-border);
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 62%, transparent);
   border-radius: 999px;
-  padding: 2px var(--noobot-space-xs);
+  padding: 1px 7px;
   line-height: 1.4;
   display: inline-flex;
   align-items: center;
@@ -118,22 +118,23 @@ const { translate } = useLocale();
 
 .base-message-bubble {
   padding: var(--noobot-msg-bubble-pad-y) var(--noobot-msg-bubble-pad-x);
-  border-radius: var(--noobot-radius-lg);
+  border-radius: 16px;
   font-size: var(--noobot-msg-font-size);
   line-height: var(--noobot-msg-line-height);
-  box-shadow: var(--noobot-msg-shadow-card);
+  box-shadow: none;
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 62%, transparent);
   word-wrap: break-word;
   width: 100%;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: background-color 0.18s ease, border-color 0.18s ease;
   position: relative;
   overflow: hidden;
 }
 
 .base-message-shell.assistant .base-message-bubble {
-  background: var(--noobot-msg-assistant-bg);
-  border: 1px solid var(--noobot-msg-assistant-border);
+  background: transparent;
+  border: 1px solid transparent;
   border-top-left-radius: var(--noobot-msg-corner-accent-radius);
   color: var(--noobot-msg-assistant-text);
 }
@@ -146,6 +147,12 @@ const { translate } = useLocale();
 }
 
 .base-message-shell .base-message-bubble:hover {
-  box-shadow: var(--noobot-msg-shadow-card-hover);
+  box-shadow: none;
+  border-color: color-mix(in srgb, var(--el-color-primary) 24%, var(--noobot-panel-border));
+}
+
+.base-message-shell.assistant .base-message-bubble:hover {
+  background: transparent;
+  border-color: transparent;
 }
 </style>
