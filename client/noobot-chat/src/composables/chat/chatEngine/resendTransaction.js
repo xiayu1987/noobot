@@ -52,14 +52,14 @@ function dedupeAttachmentMetas(attachments = []) {
   return out;
 }
 
-function mergeAttachmentMetas(historyAttachments = [], serializedAttachments = []) {
-  // raw/serialized attachments are transport payloads only. When writing back to
+function mergeAttachmentMetas(historyAttachments = [], transportAttachments = []) {
+  // raw transport attachments are payloads only. When writing back to
   // the local user message, always merge with the richer history/session meta so
   // parsedResult, path/session addressing and preview/download fields cannot be
   // downgraded by { name, mimeType, size } payloads.
   return mergeAttachments(
     dedupeAttachmentMetas(historyAttachments),
-    dedupeAttachmentMetas(serializedAttachments),
+    dedupeAttachmentMetas(transportAttachments),
   );
 }
 
@@ -571,7 +571,7 @@ export function createResendMessageTransaction({
         allowDuringResend: true,
         attachmentFiles: [],
         userAttachments: finalAttachments,
-        serializedAttachments: finalAttachments,
+        transportAttachments: finalAttachments,
       });
       logResendDebug("resend.send.after", {
         sessionId,

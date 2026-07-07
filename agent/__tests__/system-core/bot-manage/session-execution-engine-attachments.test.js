@@ -6,7 +6,7 @@ import path from "node:path";
 
 import { SessionExecutionEngine } from "../../../src/system-core/bot-manage/session/session-execution-engine.js";
 
-test("_prepareAgentTurnExecution falls back to payload inputAttachments when prepared runtime has none", async () => {
+test("_prepareAgentTurnExecution falls back to payload userMessageAttachments when prepared runtime has none", async () => {
   const engine = Object.create(SessionExecutionEngine.prototype);
   engine._buildContextBuilder = () => ({ kind: "context-builder" });
   engine.agentRuntimeFacade = {
@@ -14,7 +14,7 @@ test("_prepareAgentTurnExecution falls back to payload inputAttachments when pre
       return {
         agentContext: {
           runtime: {
-            inputAttachments: [],
+            userMessageAttachments: [],
           },
         },
       };
@@ -24,7 +24,7 @@ test("_prepareAgentTurnExecution falls back to payload inputAttachments when pre
   const prepared = await engine._prepareAgentTurnExecution({
     buildContextPayload: {
       userId: "admin",
-      inputAttachments: [
+      userMessageAttachments: [
         {
           name: "AI 体系现状概览.docx",
           mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -43,7 +43,7 @@ test("_prepareAgentTurnExecution falls back to payload inputAttachments when pre
   assert.equal(prepared.userMessageAttachments[0].size, 1407731);
 });
 
-test("_prepareAgentTurnExecution preserves explicit empty payload inputAttachments", async () => {
+test("_prepareAgentTurnExecution preserves explicit empty payload userMessageAttachments", async () => {
   const engine = Object.create(SessionExecutionEngine.prototype);
   engine._buildContextBuilder = () => ({ kind: "context-builder" });
   engine.agentRuntimeFacade = {
@@ -51,7 +51,7 @@ test("_prepareAgentTurnExecution preserves explicit empty payload inputAttachmen
       return {
         agentContext: {
           runtime: {
-            inputAttachments: [],
+            userMessageAttachments: [],
           },
         },
       };
@@ -61,14 +61,14 @@ test("_prepareAgentTurnExecution preserves explicit empty payload inputAttachmen
   const prepared = await engine._prepareAgentTurnExecution({
     buildContextPayload: {
       userId: "admin",
-      inputAttachments: [],
+      userMessageAttachments: [],
     },
   });
 
   assert.deepEqual(prepared.userMessageAttachments, []);
 });
 
-test("_prepareAgentTurnExecution enriches raw inputAttachments from scoped attachment index", async () => {
+test("_prepareAgentTurnExecution enriches raw userMessageAttachments from scoped attachment index", async () => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-attach-index-"));
   const userWorkspace = path.join(workspaceRoot, "admin");
   const sessionId = "session-index-a";
@@ -107,7 +107,7 @@ test("_prepareAgentTurnExecution enriches raw inputAttachments from scoped attac
   engine._buildContextBuilder = () => ({ kind: "context-builder" });
   engine.agentRuntimeFacade = {
     async prepareTurnExecution() {
-      return { agentContext: { runtime: { inputAttachments: [] } } };
+      return { agentContext: { runtime: { userMessageAttachments: [] } } };
     },
   };
 
@@ -115,7 +115,7 @@ test("_prepareAgentTurnExecution enriches raw inputAttachments from scoped attac
     buildContextPayload: {
       userId: "admin",
       sessionId,
-      inputAttachments: [
+      userMessageAttachments: [
         {
           name: "AI 体系现状概览.docx",
           mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -168,7 +168,7 @@ test("_prepareAgentTurnExecution enriches raw resend payload from existing sessi
   };
   engine.agentRuntimeFacade = {
     async prepareTurnExecution() {
-      return { agentContext: { runtime: { inputAttachments: [] } } };
+      return { agentContext: { runtime: { userMessageAttachments: [] } } };
     },
   };
 
@@ -178,7 +178,7 @@ test("_prepareAgentTurnExecution enriches raw resend payload from existing sessi
       sessionId: "session-existing-a",
       turnScopeId: "turn-existing",
       dialogProcessId: "dp-existing",
-      inputAttachments: [{ name: "需求说明.docx", mimeType: richAttachment.mimeType, size: 2048 }],
+      userMessageAttachments: [{ name: "需求说明.docx", mimeType: richAttachment.mimeType, size: 2048 }],
     },
   });
 
@@ -200,7 +200,7 @@ test("_prepareAgentTurnExecution does not restore old rich attachments when payl
   };
   engine.agentRuntimeFacade = {
     async prepareTurnExecution() {
-      return { agentContext: { runtime: { inputAttachments: [] } } };
+      return { agentContext: { runtime: { userMessageAttachments: [] } } };
     },
   };
 
@@ -209,7 +209,7 @@ test("_prepareAgentTurnExecution does not restore old rich attachments when payl
       userId: "admin",
       sessionId: "session-delete",
       turnScopeId: "turn-delete",
-      inputAttachments: [],
+      userMessageAttachments: [],
     },
   });
 

@@ -169,8 +169,8 @@ export function createChatEngineSender({
     const explicitMessageText = typeof options?.messageText === "string" ? options.messageText.trim() : "";
     const explicitAttachmentFiles = Array.isArray(options?.attachmentFiles) ? options.attachmentFiles : null;
     const explicitUserAttachments = Array.isArray(options?.userAttachments) ? options.userAttachments : null;
-    const explicitSerializedAttachments = Array.isArray(options?.serializedAttachments) ? options.serializedAttachments : null;
-    const hasExplicitAttachments = Boolean(explicitAttachmentFiles?.length || explicitSerializedAttachments?.length);
+    const explicitTransportAttachments = Array.isArray(options?.transportAttachments) ? options.transportAttachments : null;
+    const hasExplicitAttachments = Boolean(explicitAttachmentFiles?.length || explicitTransportAttachments?.length);
     const hasTextToSend = Boolean(explicitMessageText || input.value.trim());
     if (!ensureConnected()) return false;
     if (options?.allowDuringResend !== true && !hasConsistentSendingState({ sending, activeSession, runStateSnapshot })) {
@@ -239,7 +239,7 @@ export function createChatEngineSender({
       sessionId,
       turnScopeId,
       explicitUserAttachments: summarizeDebugAttachments(explicitUserAttachments),
-      explicitSerializedAttachments: summarizeDebugAttachments(explicitSerializedAttachments),
+      explicitTransportAttachments: summarizeDebugAttachments(explicitTransportAttachments),
       filesToSend: summarizeDebugAttachments(filesToSend),
       botMessage: summarizeDebugMessage(botMsg),
       messages: summarizeDebugMessages(activeSession?.value?.messages),
@@ -251,7 +251,7 @@ export function createChatEngineSender({
     let finalDoneDetailPromise = null;
     try {
       if (!explicitAttachmentFiles) clearUploads();
-      const attachments = explicitSerializedAttachments || await serializeAttachments(filesToSend);
+      const attachments = explicitTransportAttachments || await serializeAttachments(filesToSend);
       const preparedUserMessage = options?.reuseExistingUserTurn === true
         ? (activeSession.value?.messages || []).find((messageItem) => (
           messageItem?.role === "user" &&
@@ -263,8 +263,8 @@ export function createChatEngineSender({
         // keep the session message as the display/edit authority and merge
         // payload fields into it so parsedResult/path/preview fields are not
         // downgraded by raw { name, mimeType, size } metas. An explicit empty
-        // serialized array still means "delete all attachments".
-        preparedUserMessage.attachments = explicitSerializedAttachments?.length === 0
+        // transport array still means "delete all attachments".
+        preparedUserMessage.attachments = explicitTransportAttachments?.length === 0
           ? []
           : mergeAttachments(preparedUserMessage.attachments || [], attachments)
             .map((attachment) => ({ ...attachment }));
@@ -305,7 +305,7 @@ export function createChatEngineSender({
         payloadTurnScopeId: payload?.turnScopeId,
         reuseExistingUserTurn: payload?.reuseExistingUserTurn,
         explicitUserAttachments: summarizeDebugAttachments(explicitUserAttachments),
-        explicitSerializedAttachments: summarizeDebugAttachments(explicitSerializedAttachments),
+        explicitTransportAttachments: summarizeDebugAttachments(explicitTransportAttachments),
         filesToSend: summarizeDebugAttachments(filesToSend),
         attachments: summarizeDebugAttachments(attachments),
         payloadAttachments: summarizeDebugAttachments(payload?.attachments),

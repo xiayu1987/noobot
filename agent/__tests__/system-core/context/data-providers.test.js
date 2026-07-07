@@ -53,7 +53,7 @@ test("resolveAttachments should bypass ingest when attachment already ingested",
       },
     },
     runtimeBasePath: "/workspace/u1",
-    attachments: [
+    userMessageAttachments: [
       {
         attachmentId: "att1",
         path: "/workspace/u1/runtime/attach/scoped/s1/user/att1.png",
@@ -85,7 +85,7 @@ test("resolveAttachments should call ingest when attachments are raw", async () 
     effectiveConfig: {
       attachments: { maxFileCount: 3 },
     },
-    attachments: [{ name: "raw.txt", mimeType: "text/plain", size: 10 }],
+    userMessageAttachments: [{ name: "raw.txt", mimeType: "text/plain", size: 10 }],
     userId: "u1",
     sessionId: "s1",
   });
@@ -96,7 +96,7 @@ test("resolveAttachments should call ingest when attachments are raw", async () 
   assert.deepEqual(result, [{ attachmentId: "att-ingested" }]);
 });
 
-test("resolveAttachments prefers inputAttachments over attachments", async () => {
+test("resolveAttachments reads only userMessageAttachments", async () => {
   let receivedPayload = null;
   const result = await resolveAttachments({
     attachmentService: {
@@ -106,8 +106,7 @@ test("resolveAttachments prefers inputAttachments over attachments", async () =>
       },
     },
     runtimeBasePath: "/workspace/u1",
-    inputAttachments: [{ name: "input.txt", mimeType: "text/plain", size: 1 }],
-    attachments: [{ name: "fallback.txt", mimeType: "text/plain", size: 1 }],
+    userMessageAttachments: [{ name: "input.txt", mimeType: "text/plain", size: 1 }],
     userId: "u1",
     sessionId: "s1",
   });

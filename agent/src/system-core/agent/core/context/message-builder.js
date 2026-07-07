@@ -134,15 +134,12 @@ function resolveAttachments(msg = {}, fallbackAttachments = []) {
     ].filter(Boolean),
   );
   if (transferAttachments.length) return transferAttachments;
-  if (Array.isArray(msg?.inputAttachments)) return msg.inputAttachments;
   if (Array.isArray(msg?.attachments)) return msg.attachments;
   return Array.isArray(fallbackAttachments) ? fallbackAttachments : [];
 }
 
 function resolveFallbackAttachments(meta = {}) {
   if (Array.isArray(meta?.userMessageAttachments)) return meta.userMessageAttachments;
-  if (Array.isArray(meta?.inputAttachments)) return meta.inputAttachments;
-  if (Array.isArray(meta?.attachments)) return meta.attachments;
   return [];
 }
 

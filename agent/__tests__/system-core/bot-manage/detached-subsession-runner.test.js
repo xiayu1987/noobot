@@ -197,7 +197,7 @@ test("createDetachedSubSessionRunner prepares context, runs agent, emits runtime
   assert.equal(buildContextPayload.caller, CALLER_ROLE.BOT);
   assert.equal(buildContextPayload.parentSessionId, "parent1");
   assert.equal(buildContextPayload.dialogProcessId, "parent-dialog");
-  assert.deepEqual(buildContextPayload.inputAttachments, [{ attachmentId: "att1" }]);
+  assert.deepEqual(buildContextPayload.userMessageAttachments, [{ attachmentId: "att1" }]);
   assert.equal(buildContextPayload.attachments, undefined);
   assert.deepEqual(buildContextPayload.systemMessages, ["sys"]);
   assert.equal(buildContextPayload.userInteractionBridge, bridge);
@@ -359,7 +359,7 @@ test("createDetachedSubSessionRunner persists bot plugin sub-session snapshot wh
     "user ask",
   );
   assert.deepEqual(
-    calls.persistDetachedSubSessionSnapshotPayload.sessionPayload.messages[2].inputAttachments,
+    calls.persistDetachedSubSessionSnapshotPayload.sessionPayload.messages[2].userMessageAttachments,
     [{ attachmentId: "att1" }],
   );
   assert.equal(

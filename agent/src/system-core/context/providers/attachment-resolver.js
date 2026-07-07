@@ -11,8 +11,7 @@ export async function resolveAttachments({
   attachmentService = null,
   runtimeBasePath = "",
   effectiveConfig = {},
-  inputAttachments = null,
-  attachments = [],
+  userMessageAttachments = [],
   userId = "",
   sessionId = "",
 } = {}) {
@@ -21,11 +20,9 @@ export async function resolveAttachments({
     effectiveConfig?.attachments && typeof effectiveConfig.attachments === "object"
       ? effectiveConfig.attachments
       : {};
-  const sourceAttachments = Array.isArray(inputAttachments)
-    ? inputAttachments
-    : Array.isArray(attachments)
-      ? attachments
-      : [];
+  const sourceAttachments = Array.isArray(userMessageAttachments)
+    ? userMessageAttachments
+    : [];
   const hasIngestedRecords = sourceAttachments.some(
     (attachmentItem) =>
       String(attachmentItem?.attachmentId || "").trim() &&
