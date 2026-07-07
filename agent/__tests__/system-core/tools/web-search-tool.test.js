@@ -9,10 +9,13 @@ import {
 
 test("web_search: Responses API 调用应启用 web_search 工具", async () => {
   let capturedRequest = null;
+  let capturedOptions = null;
+  const abortController = new AbortController();
   const openaiClient = {
     responses: {
-      create: async (request) => {
+      create: async (request, options) => {
         capturedRequest = request;
+        capturedOptions = options;
         return {
           output_text: "search result",
           output: [{ type: "message" }],
@@ -25,9 +28,11 @@ test("web_search: Responses API 调用应启用 web_search 工具", async () => 
     openaiClient,
     modelName: "gpt-5.5",
     query: "latest noobot news",
+    abortSignal: abortController.signal,
   });
 
   assert.deepEqual(capturedRequest?.tools, [{ type: "web_search" }]);
+  assert.equal(capturedOptions?.signal, abortController.signal);
   assert.equal(capturedRequest?.model, "gpt-5.5");
   const inputText = capturedRequest?.input?.[0]?.content?.[0]?.text;
   assert.match(inputText, /必须使用网页搜索/);
@@ -74,6 +79,7 @@ test("web_search: search_engine 模式直接请求搜索引擎地址", async () 
   const originalFetch = globalThis.fetch;
   let capturedUrl = "";
   let capturedOptions = null;
+  const abortController = new AbortController();
   globalThis.fetch = async (url, options) => {
     capturedUrl = url;
     capturedOptions = options;
@@ -85,7 +91,7 @@ test("web_search: search_engine 模式直接请求搜索引擎地址", async () 
 
   try {
     const result = await searchWithSearchEngine({
-      runtime: {},
+      runtime: { abortSignal: abortController.signal },
       toolCfg: {
         enabled: true,
         mode: "search_engine",
@@ -102,6 +108,7 @@ test("web_search: search_engine 模式直接请求搜索引擎地址", async () 
 
     assert.equal(capturedUrl, "http://search.local/search?q=noobot");
     assert.equal(capturedOptions.method, "GET");
+    assert.equal(capturedOptions.signal, abortController.signal);
     assert.equal(result.ok, true);
     assert.equal(result.statusCode, 200);
     assert.deepEqual(result.data, { results: [{ title: "Noobot" }] });

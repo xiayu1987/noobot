@@ -304,6 +304,125 @@ test("chat-websocket-server: stop request emits stopped even when runSession com
   }
 });
 
+test("chat-websocket-server: idle stop request responds with stopped promptly", async () => {
+  const server = await startServerWithWs();
+  try {
+    const { port } = server.address();
+    const events = await new Promise((resolve, reject) => {
+      const messages = [];
+      const ws = new WebSocket(`ws://127.0.0.1:${port}/chat/ws`, {
+        headers: { authorization: "Bearer test-key" },
+      });
+      const timer = setTimeout(() => {
+        ws.terminate();
+        reject(new Error("idle stop response timeout"));
+      }, 1000);
+      ws.on("open", () => {
+        ws.send(JSON.stringify({
+          action: "stop",
+          turnScopeId: "turn-idle-stop",
+          partialAssistant: {
+            dialogProcessId: "dp-idle-stop",
+            turnScopeId: "turn-idle-stop",
+          },
+        }));
+      });
+      ws.on("message", (raw) => {
+        try {
+          messages.push(JSON.parse(String(raw || "{}")));
+        } catch (error) {
+          clearTimeout(timer);
+          reject(error);
+        }
+      });
+      ws.on("close", () => {
+        clearTimeout(timer);
+        resolve(messages);
+      });
+      ws.on("error", (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+    });
+
+    const stoppedEvent = events.find((item) => item?.event === "stopped");
+    assert.equal(stoppedEvent?.data?.turnScopeId, "turn-idle-stop");
+    assert.equal(stoppedEvent?.data?.dialogProcessId, "dp-idle-stop");
+    assert.equal(events.some((item) => item?.event === "error"), false);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("chat-websocket-server: stop closes run and next websocket run can start", async () => {
+  let runCount = 0;
+  const server = await startServerWithWs({
+    bot: {
+      runSession: async ({ abortSignal }) => {
+        runCount += 1;
+        if (runCount === 1) {
+          await new Promise((resolve) => {
+            if (abortSignal?.aborted) {
+              resolve();
+              return;
+            }
+            abortSignal?.addEventListener?.("abort", resolve, { once: true });
+          });
+          const error = new Error("aborted by user");
+          error.name = "AbortError";
+          throw error;
+        }
+        return {
+          sessionId: "s1",
+          dialogProcessId: "dp-next-run",
+          answer: "next ok",
+          messages: [],
+          traces: [],
+          executionLogs: [],
+        };
+      },
+      persistStoppedAssistantMessage: async () => {},
+    },
+  });
+  try {
+    const { port } = server.address();
+    const stoppedEvents = await stopChatWs({
+      port,
+      payload: {
+        userId: "u1",
+        sessionId: "s1",
+        message: "stop me",
+        turnScopeId: "turn-stop-before-next",
+        config: { locale: "zh-CN" },
+      },
+      stopPayload: {
+        turnScopeId: "turn-stop-before-next",
+        partialAssistant: {
+          dialogProcessId: "dp-stop-before-next",
+          turnScopeId: "turn-stop-before-next",
+        },
+      },
+    });
+    assert.ok(stoppedEvents.some((item) => item?.event === "stopped"));
+
+    const nextEvents = await callChatWs({
+      port,
+      payload: {
+        userId: "u1",
+        sessionId: "s1",
+        message: "run again",
+        turnScopeId: "turn-next-run",
+        config: { locale: "zh-CN" },
+      },
+    });
+    const doneEvent = nextEvents.find((item) => item?.event === "done");
+    assert.equal(doneEvent?.data?.answer, "next ok");
+    assert.equal(doneEvent?.data?.dialogProcessId, "dp-next-run");
+  } finally {
+    await closeServer(server);
+  }
+});
+
 test("chat-websocket-server: streaming=false 仍推系统事件且不推 delta", async () => {
   const server = await startServerWithWs({
     runSession: async ({ eventListener }) => {

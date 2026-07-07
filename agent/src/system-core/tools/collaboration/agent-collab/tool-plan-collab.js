@@ -107,7 +107,7 @@ export function createPlanMultiTaskCollaborationTool({
           ].join("\n"),
         ),
         new HumanMessage(`${tTool(runtime, "tools.agent_collab.humanTaskPrefix")}\n${taskText}`),
-      ]);
+      ], { signal: runtime?.abortSignal || undefined });
       const content =
         typeof res?.content === "string"
           ? res.content

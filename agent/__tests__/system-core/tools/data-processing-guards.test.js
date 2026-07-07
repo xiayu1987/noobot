@@ -644,6 +644,47 @@ test("web_to_data: empty input and urls should fail before network work", async 
   );
 });
 
+test("web_to_data: direct fetch receives runtime abort signal", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-web2data-abort-"));
+  const abortController = new AbortController();
+  const fetchCalls = [];
+  const tools = createWeb2DataTool({
+    agentContext: {
+      ...buildAgentContext(basePath),
+      execution: {
+        controllers: {
+          runtime: {
+            basePath,
+            globalConfig: {},
+            userConfig: {},
+            abortSignal: abortController.signal,
+            sharedTools: {
+              fetch: async (url, options = {}) => {
+                fetchCalls.push({ url, options });
+                return {
+                  ok: false,
+                  status: 499,
+                  text: async () => "",
+                };
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  const tool = tools.find((item) => item?.name === TOOL_NAME.WEB_TO_DATA);
+  assert.ok(tool);
+
+  await assert.rejects(
+    () => tool.invoke({ input: "https://example.test/slow" }),
+    (error) => error?.code === ERROR_CODE.RECOVERABLE_WEB_TO_DATA_FAILED,
+  );
+
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(fetchCalls[0]?.options?.signal, abortController.signal);
+});
+
 test("process_content_task: detached runtime uses durable parent session", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-process-content-"));
   const calls = [];

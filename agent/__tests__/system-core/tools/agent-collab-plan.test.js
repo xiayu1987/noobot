@@ -107,3 +107,33 @@ test("plan_multi_task_collaboration: JSON parse fallback without session writes 
     assert.equal(record.data.toolName, "plan_multi_task_collaboration");
   }
 });
+
+test("plan_multi_task_collaboration: model invoke receives runtime abort signal", async () => {
+  const abortController = new AbortController();
+  let receivedOptions;
+  setModelAdapter({
+    resolveDefaultModelSpec: () => ({ alias: "fake", model: "fake-model" }),
+    createChatModel: () => ({
+      invoke: async (_messages, options) => {
+        receivedOptions = options;
+        return { content: JSON.stringify({ tasks: [] }) };
+      },
+    }),
+  });
+
+  const runtime = {
+    abortSignal: abortController.signal,
+    globalConfig: {},
+    userConfig: {},
+    systemRuntime: {},
+  };
+  const tool = createPlanMultiTaskCollaborationTool({
+    runtime,
+    globalConfig: runtime.globalConfig,
+    userConfig: runtime.userConfig,
+  });
+
+  await tool.invoke({ task: "split this task" });
+
+  assert.equal(receivedOptions?.signal, abortController.signal);
+});

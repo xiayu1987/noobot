@@ -272,7 +272,9 @@ async function invokeHelpModel({
         streaming: false,
         context: { runtime },
       });
-  const response = await llm.invoke([new HumanMessage(helpContent)]);
+  const response = await llm.invoke([new HumanMessage(helpContent)], {
+    signal: runtime?.abortSignal || undefined,
+  });
   const content =
     typeof response?.content === "string"
       ? response.content

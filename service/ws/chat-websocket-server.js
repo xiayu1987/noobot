@@ -533,6 +533,15 @@ export function registerChatWebSocketServer(
               "",
             partialAssistant: payload?.partialAssistant || {},
           };
+          if (!isRunning || !currentAbortController) {
+            sendEvent("stopped", {
+              ...currentStopPayload,
+              state: "stopped",
+              sourceEvent: "stop_requested_idle",
+            });
+            webSocket.close(1000, "stopped");
+            return;
+          }
           if (isRunning && currentAbortController) {
             currentAbortController.abort({
               type: "user_stop",

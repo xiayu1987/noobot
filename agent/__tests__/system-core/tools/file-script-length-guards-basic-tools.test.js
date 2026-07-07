@@ -42,6 +42,26 @@ test("search: 支持搜索文件和文本", async () => {
   assert.equal(textResult.matches[0].line, 2);
 });
 
+test("search: files search rejects promptly when runtime abort signal is already aborted", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-search-abort-"));
+  await fs.mkdir(path.join(basePath, "src"), { recursive: true });
+  await fs.writeFile(path.join(basePath, "src", "a.js"), "alpha\n", "utf8");
+  const abortController = new AbortController();
+  abortController.abort(new DOMException("stop requested", "AbortError"));
+  const tools = createFileTool({
+    agentContext: buildAgentContext(basePath, "u-test", {
+      runtime: { abortSignal: abortController.signal },
+    }),
+  });
+  const tool = tools.find((item) => item?.name === "search");
+  assert.ok(tool);
+
+  await assert.rejects(
+    () => tool.invoke({ source: "files", query: "alpha", path: "src", glob: "*.js" }),
+    (error) => error?.name === "AbortError" || /stop requested|aborted/i.test(String(error?.message || error)),
+  );
+});
+
 test("read_file: 超级管理员可以读取工作区外文件", async () => {
   const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-super-read-"));
   const basePath = path.join(rootPath, "workspace");

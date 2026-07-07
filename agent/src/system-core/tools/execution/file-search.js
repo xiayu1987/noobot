@@ -88,9 +88,15 @@ export function searchInText({
   };
 }
 
-export async function collectSearchFiles({ rootPath = "", workspacePath = "", glob = "", maxFiles = DEFAULT_MAX_SEARCH_FILES } = {}) {
+function throwIfAborted(abortSignal = null) {
+  if (!abortSignal?.aborted) return;
+  throw abortSignal.reason || new DOMException("The operation was aborted", "AbortError");
+}
+
+export async function collectSearchFiles({ rootPath = "", workspacePath = "", glob = "", maxFiles = DEFAULT_MAX_SEARCH_FILES, abortSignal = null } = {}) {
   const files = [];
   async function walk(currentPath) {
+    throwIfAborted(abortSignal);
     if (files.length >= maxFiles) return;
     let entryStat;
     try {
@@ -144,7 +150,9 @@ export async function searchFilesWithRipgrep({
   glob = "",
   contextLines = DEFAULT_SEARCH_CONTEXT_LINES,
   maxResults = DEFAULT_SEARCH_MAX_RESULTS,
+  abortSignal = null,
 } = {}) {
+  throwIfAborted(abortSignal);
   const contextCount = toPositiveInt(contextLines, DEFAULT_SEARCH_CONTEXT_LINES, 0, 20);
   const maxCount = toPositiveInt(maxResults, DEFAULT_SEARCH_MAX_RESULTS, 1, 500);
   const args = [
@@ -182,6 +190,7 @@ export async function searchFilesWithRipgrep({
     const result = await execFile("rg", args, {
       cwd: rootPath,
       maxBuffer: MAX_SEARCH_BUFFER_SIZE,
+      signal: abortSignal || undefined,
     });
     stdout = String(result?.stdout || "");
   } catch (error) {
