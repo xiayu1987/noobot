@@ -5,14 +5,10 @@
 
 import {
   buildSessionLogRecord,
-  isSessionLogDebugEnabled,
   SESSION_LOG_DEFAULT_CATEGORY,
 } from "@noobot/runtime-events/session-log-protocol";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
-const DEBUG_ENABLED = ["1", "true", "yes", "on"].includes(
-  String(import.meta?.env?.VITE_NOOBOT_SESSION_LOG_DEBUG || "").trim().toLowerCase(),
-);
 const MAX_QUEUE_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxQueueSize;
 
 function envFlag(name, fallback = false) {
@@ -113,7 +109,6 @@ export function createSessionLogWebSocketClient({ resolveWebSocketUrl = () => ""
       defaultCategory: SESSION_LOG_DEFAULT_CATEGORY,
       includeTimestamp: false,
     });
-    if (!isSessionLogDebugEnabled(record.category, DEBUG_ENABLED)) return false;
     queue.push(record);
     if (queue.length > MAX_QUEUE_SIZE) queue.splice(0, queue.length - MAX_QUEUE_SIZE);
     logDiagnostic("queued", { category: record.category, event: record.event, sessionId: record.sessionId, queueLength: queue.length });

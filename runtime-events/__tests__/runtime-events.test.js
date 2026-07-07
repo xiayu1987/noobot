@@ -18,7 +18,8 @@ import {
 import { writeSessionChannelEvent, SESSION_CHANNELS } from '../src/session-channel.js';
 import {
   buildSessionLogRecord,
-  isSessionLogDebugEnabled,
+  getSessionLogControlKey,
+  getSessionLogDebugControlKey,
   normalizeSessionLogCategory,
   SESSION_LOG_CATEGORIES,
   SESSION_LOG_DEBUG_CATEGORY,
@@ -57,8 +58,8 @@ test('session log protocol exports stable categories and helpers from runtime-ev
   assert.ok(SESSION_LOG_RECORD_FIELDS.includes('sessionId'));
   assert.equal(normalizeSessionLogCategory('missing'), SESSION_LOG_DEFAULT_CATEGORY);
   assert.equal(normalizeSessionLogCategory('DEBUG'), SESSION_LOG_DEBUG_CATEGORY);
-  assert.equal(isSessionLogDebugEnabled(SESSION_LOG_DEBUG_CATEGORY, false), false);
-  assert.equal(isSessionLogDebugEnabled(SESSION_LOG_DEBUG_CATEGORY, true), true);
+  assert.equal(getSessionLogControlKey({ category: 'message' }, 'message'), 'messageLog');
+  assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'state-machine' } }), 'stateMachineDebug');
 
   const record = buildSessionLogRecord({
     source: 'frontend',
@@ -571,8 +572,115 @@ test('existing session-channel API remains available', async () => {
     event: 'agent.compat.sessionChannel',
     userId: 'admin',
     sessionId: 'session-1',
-  }, { root, dirName: 'events', debugEnabled: true });
+  }, { root, dirName: 'events' });
 
   assert.equal(result.ok, true);
   assert.match(result.file, /session-1\/system\.jsonl$/);
+});
+
+test('runtime-events writer records normal session logs by default', async () => {
+  const root = await tempRoot();
+  const result = await writeRuntimeEvent({
+    source: 'frontend',
+    scope: 'session',
+    category: 'message',
+    level: 'info',
+    event: 'chat.message',
+    userId: 'admin',
+    sessionId: 'session-log-default',
+  }, { root, includeProcess: false });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.skipped, undefined);
+  assert.equal((await readJsonl(result.file)).length, 1);
+});
+
+test('runtime-events writer drops debug session logs by default', async () => {
+  const root = await tempRoot();
+  const result = await writeRuntimeEvent({
+    source: 'frontend',
+    scope: 'session',
+    category: 'debug',
+    level: 'debug',
+    event: 'state.transition',
+    userId: 'admin',
+    sessionId: 'session-debug-default',
+    data: { debugType: 'state-machine' },
+  }, { root, includeProcess: false });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.skipped, true);
+});
+
+test('runtime-events writer filters session logs by business log control', async () => {
+  const root = await tempRoot();
+  const skipped = await writeRuntimeEvent({
+    source: 'frontend',
+    scope: 'session',
+    category: 'message',
+    level: 'info',
+    event: 'chat.message',
+    userId: 'admin',
+    sessionId: 'session-category-filter',
+  }, { root, includeProcess: false, messageLog: false });
+  const recorded = await writeRuntimeEvent({
+    source: 'frontend',
+    scope: 'session',
+    category: 'state',
+    level: 'info',
+    event: 'state.update',
+    userId: 'admin',
+    sessionId: 'session-category-filter',
+  }, { root, includeProcess: false, stateLog: true, messageLog: false });
+
+  assert.equal(skipped.ok, true);
+  assert.equal(skipped.skipped, true);
+  assert.equal(recorded.ok, true);
+  assert.equal((await readJsonl(recorded.file)).length, 1);
+});
+
+test('runtime-events writer filters debug session logs by business debug control', async () => {
+  const root = await tempRoot();
+  const skipped = await writeRuntimeEvent({
+    source: 'frontend',
+    scope: 'session',
+    category: 'debug',
+    level: 'debug',
+    event: 'resend.tick',
+    userId: 'admin',
+    sessionId: 'session-debug-type',
+    data: { debugType: 'resend' },
+  }, { root, includeProcess: false, resendDebug: false });
+  const recorded = await writeRuntimeEvent({
+    source: 'frontend',
+    scope: 'session',
+    category: 'debug',
+    level: 'debug',
+    event: 'state.transition',
+    userId: 'admin',
+    sessionId: 'session-debug-type',
+    data: { debugType: 'state-machine' },
+  }, { root, includeProcess: false, stateMachineDebug: true });
+
+  assert.equal(skipped.ok, true);
+  assert.equal(skipped.skipped, true);
+  assert.equal(recorded.ok, true);
+  assert.equal((await readJsonl(recorded.file)).length, 1);
+});
+
+test('runtime-events writer drops unknown debug session logs by default', async () => {
+  const root = await tempRoot();
+  const result = await writeRuntimeEvent({
+    source: 'frontend',
+    scope: 'session',
+    category: 'debug',
+    level: 'debug',
+    event: 'unknown.trace',
+    userId: 'admin',
+    sessionId: 'session-debug-unknown',
+    data: { debugType: 'unknown-debug' },
+  }, { root, includeProcess: false });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.skipped, true);
 });

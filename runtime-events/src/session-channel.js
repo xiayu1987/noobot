@@ -6,7 +6,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import {
   buildSessionLogRecord,
-  isSessionLogDebugEnabled,
+  shouldRecordSessionLog,
   SESSION_LOG_AGENT_PROXY_DEFAULT_CATEGORY,
   SESSION_LOG_DEFAULT_CATEGORY,
 } from "./session-log-protocol.js";
@@ -61,7 +61,7 @@ export function resolveSessionChannelConfig(options = {}) {
     logDirName: safeSessionChannelSegment(options.dirName || options.logDirName || process.env.NOOBOT_SESSION_LOG_DIR_NAME || "logs"),
     retentionMs: envMs("NOOBOT_SESSION_LOG_RETENTION_MS", Number(options.retentionMs || DEFAULT_RETENTION_MS)),
     cleanupIntervalMs: envMs("NOOBOT_SESSION_LOG_CLEANUP_INTERVAL_MS", Number(options.cleanupIntervalMs || TIME_THRESHOLDS.service.sessionLogCleanupIntervalMs)),
-    debugEnabled: options.debugEnabled ?? envFlag("NOOBOT_SESSION_LOG_DEBUG", false),
+    sessionLogControls: options.sessionLogControls,
   };
 }
 
@@ -99,7 +99,7 @@ export async function writeSessionChannelEvent(event = {}, config = resolveSessi
   if (event.dialogProcessId) record.dialogProcessId = safeSessionChannelSegment(event.dialogProcessId);
   if (event.turnScopeId) record.turnScopeId = safeSessionChannelSegment(event.turnScopeId);
   record.source = safeSessionChannelSegment(record.source || "unknown");
-  if (!isSessionLogDebugEnabled(record.category, config.debugEnabled)) return { ok: true, skipped: true };
+  if (!shouldRecordSessionLog(record, config)) return { ok: true, skipped: true };
   const dir = resolveSessionChannelDir({ sessionId, userId }, config);
   await fs.mkdir(dir, { recursive: true });
   const file = path.join(dir, `${record.category}.jsonl`);
@@ -125,7 +125,7 @@ export async function cleanupSessionChannelRecords(config = resolveSessionChanne
   return { ok: true, removed };
 }
 
-export function createSessionChannelWebSocketClient({ WebSocketImpl, resolveWebSocketUrl, source = "agent-proxy", defaultCategory = SESSION_LOG_AGENT_PROXY_DEFAULT_CATEGORY, defaultEvent = "agentProxy.log", defaultSessionId = "agent-proxy", debugEnabled = false, channel = SESSION_CHANNELS.AGENT_PROXY_WEB_SOCKET } = {}) {
+export function createSessionChannelWebSocketClient({ WebSocketImpl, resolveWebSocketUrl, source = "agent-proxy", defaultCategory = SESSION_LOG_AGENT_PROXY_DEFAULT_CATEGORY, defaultEvent = "agentProxy.log", defaultSessionId = "agent-proxy", channel = SESSION_CHANNELS.AGENT_PROXY_WEB_SOCKET } = {}) {
   const sockets = new Map();
   const queues = new Map();
   const inFlights = new Map();
@@ -191,7 +191,6 @@ export function createSessionChannelWebSocketClient({ WebSocketImpl, resolveWebS
 
   function log(key = "", event = {}) {
     const record = buildSessionChannelRecord(event, { source, defaultCategory, defaultEvent, defaultSessionId, includeTimestamp: false, channel });
-    if (!isSessionLogDebugEnabled(record.category, debugEnabled)) return false;
     const queue = getQueue(key);
     queue.push(record);
     if (queue.length > MAX_SESSION_CHANNEL_QUEUE_SIZE) queue.splice(0, queue.length - MAX_SESSION_CHANNEL_QUEUE_SIZE);

@@ -32,16 +32,22 @@ Based on latest examples:
 | `NOOBOT_SESSION_LOG_ROOT` | string(path) | `../workspace/session-logs` | Backend directory for session log files written by the log WebSocket. Defaults to `../workspace/session-logs` relative to the backend process cwd. |
 | `NOOBOT_SESSION_LOG_RETENTION_MS` | number | `604800000` | Session log retention time in milliseconds. Defaults to 7 days. Expired session log directories are removed by the backend cleanup task. |
 | `NOOBOT_SESSION_LOG_CLEANUP_INTERVAL_MS` | number | `3600000` | Backend cleanup interval for expired session logs. |
-| `NOOBOT_SESSION_LOG_DEBUG` | boolean | `false` | Enable backend acceptance of `debug` category session logs. Debug logs are dropped by default. |
-| `VITE_NOOBOT_SESSION_LOG_DEBUG` | boolean | `false` | Enable frontend sending of `debug` category session logs. Default is off. |
-| `VITE_NOOBOT_STATE_MACHINE_DEBUG` | boolean | `false` | Enable frontend state-machine debug output; when enabled, the debug sink can also send those entries through the session log WebSocket. |
-| `AGENT_PROXY_SESSION_LOG_DEBUG` | boolean | `false` | Enable agent-proxy sending of `debug` category session logs. Default is off. |
+| `NOOBOT_RUNTIME_EVENT_STATE_LOG` | boolean | `true` | Whether runtime-events records state session logs. |
+| `NOOBOT_RUNTIME_EVENT_MESSAGE_LOG` | boolean | `true` | Whether runtime-events records message session logs. |
+| `NOOBOT_RUNTIME_EVENT_INTERACTION_LOG` | boolean | `true` | Whether runtime-events records interaction session logs. |
+| `NOOBOT_RUNTIME_EVENT_TRANSPORT_LOG` | boolean | `true` | Whether runtime-events records transport session logs. |
+| `NOOBOT_RUNTIME_EVENT_AGENT_PROXY_LOG` | boolean | `true` | Whether runtime-events records agent-proxy session logs. |
+| `NOOBOT_RUNTIME_EVENT_SYSTEM_LOG` | boolean | `true` | Whether runtime-events records system session logs. |
+| `NOOBOT_RUNTIME_EVENT_STATE_MACHINE_DEBUG` | boolean | `false` | Whether runtime-events records state-machine debug events. |
+| `NOOBOT_RUNTIME_EVENT_RESEND_DEBUG` | boolean | `false` | Whether runtime-events records resend debug events. |
+| `NOOBOT_RUNTIME_EVENT_SESSION_LOG_WS_DEBUG` | boolean | `false` | Whether runtime-events records session log WebSocket debug events. |
 
 Session log WebSocket:
 - Endpoint: `/logs/ws` on the backend, usually reached by the frontend through `/api/logs/ws` and by agent-proxy through the backend upstream.
 - Auth: reuses the existing API key WebSocket authentication.
 - Storage: backend writes one directory per `sessionId`, and one JSONL file per category (`state`, `message`, `interaction`, `transport`, `debug`, `agent-proxy`, `system`).
 - Main fields: `source`, `category`, `event`, `sessionId`, optional `dialogProcessId` / `turnScopeId`, and compact `data` payloads for state-machine, message-flow, frontend/backend interaction, and agent-proxy events.
+- Control: frontend and agent-proxy only send events through the log WebSocket. Runtime-events is the single control point that decides whether to record by the specific business-type switches in `runtime-events-config.mjs`. Log-specific switches default to enabled; debug-specific switches default to disabled.
 
 ---
 

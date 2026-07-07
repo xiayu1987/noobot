@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-const ENABLED_VALUES = new Set(["1", "true", "yes", "on"]);
 const SESSION_RUN_MESSAGE_RUNTIME_MARK = "__noobotRuntimeRunStateKey";
 let sessionLogSink = null;
 
@@ -12,24 +11,8 @@ export function setStateMachineDebugLogSink(sink = null) {
   sessionLogSink = sink && typeof sink.log === "function" ? sink : null;
 }
 
-function isBrowserStateMachineDebugEnabled() {
-  try {
-    const params = new URLSearchParams(globalThis?.location?.search || "");
-    if (ENABLED_VALUES.has(String(params.get("noobotStateMachineDebug") || "").toLowerCase())) return true;
-  } catch {}
-  try {
-    const value = globalThis?.localStorage?.getItem?.("noobotStateMachineDebug");
-    if (ENABLED_VALUES.has(String(value || "").toLowerCase())) return true;
-  } catch {}
-  return false;
-}
-
 export function isStateMachineDebugEnabled() {
-  try {
-    const value = import.meta.env?.VITE_NOOBOT_STATE_MACHINE_DEBUG;
-    if (ENABLED_VALUES.has(String(value || "").toLowerCase())) return true;
-  } catch {}
-  return isBrowserStateMachineDebugEnabled();
+  return true;
 }
 
 export function summarizeStateMachineMessage(message = {}) {
@@ -51,7 +34,6 @@ export function summarizeStateMachineMessage(message = {}) {
 }
 
 export function logStateMachineDebug(event, payload = {}) {
-  if (!isStateMachineDebugEnabled()) return;
   try {
     const entry = {
       event,
@@ -60,6 +42,7 @@ export function logStateMachineDebug(event, payload = {}) {
     };
     sessionLogSink?.log?.({
       category: "debug",
+      debugType: "state-machine",
       event,
       sessionId: payload?.sessionId || "",
       dialogProcessId: payload?.dialogProcessId || "",

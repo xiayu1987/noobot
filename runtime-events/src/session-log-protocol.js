@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { resolveRuntimeEventsSessionLogControls } from "@noobot/shared/runtime-events-config";
+
 export const SESSION_LOG_CATEGORIES = Object.freeze([
   "state",
   "message",
@@ -17,6 +19,22 @@ export const SESSION_LOG_CATEGORY_SET = new Set(SESSION_LOG_CATEGORIES);
 export const SESSION_LOG_DEBUG_CATEGORY = "debug";
 export const SESSION_LOG_DEFAULT_CATEGORY = "system";
 export const SESSION_LOG_AGENT_PROXY_DEFAULT_CATEGORY = "agent-proxy";
+export const SESSION_LOG_ALL_TYPES = "*";
+
+export const SESSION_LOG_CONTROL_KEYS = Object.freeze({
+  state: "stateLog",
+  message: "messageLog",
+  interaction: "interactionLog",
+  transport: "transportLog",
+  "agent-proxy": "agentProxyLog",
+  system: "systemLog",
+});
+
+export const SESSION_LOG_DEBUG_CONTROL_KEYS = Object.freeze({
+  "state-machine": "stateMachineDebug",
+  resend: "resendDebug",
+  "session-log-ws": "sessionLogWsDebug",
+});
 
 export const SESSION_LOG_RECORD_FIELDS = Object.freeze([
   "ts",
@@ -48,8 +66,40 @@ export function isSessionLogDebugCategory(category) {
   return normalizeSessionLogCategory(category) === SESSION_LOG_DEBUG_CATEGORY;
 }
 
-export function isSessionLogDebugEnabled(category, debugEnabled = false) {
-  return !isSessionLogDebugCategory(category) || Boolean(debugEnabled);
+export function resolveSessionLogControlConfig(options = {}) {
+  return resolveRuntimeEventsSessionLogControls(options.env || process.env, options.sessionLogControls || options.controls || options);
+}
+
+export function isSessionLogDebugEvent(event = {}) {
+  return isSessionLogDebugCategory(event.category || event.type)
+    || String(event.level || "").trim().toLowerCase() === "debug"
+    || Boolean(String(event.debugType || event.data?.debugType || "").trim());
+}
+
+export function getSessionLogDebugType(event = {}) {
+  return String(event.debugType || event.data?.debugType || event.event || event.name || event.category || SESSION_LOG_DEBUG_CATEGORY).trim().toLowerCase() || SESSION_LOG_DEBUG_CATEGORY;
+}
+
+export function getSessionLogControlKey(event = {}, category = normalizeSessionLogCategory(event.category || event.type)) {
+  return SESSION_LOG_CONTROL_KEYS[category] || SESSION_LOG_CONTROL_KEYS.system;
+}
+
+export function getSessionLogDebugControlKey(event = {}) {
+  const debugType = getSessionLogDebugType(event);
+  if (SESSION_LOG_DEBUG_CONTROL_KEYS[debugType]) return SESSION_LOG_DEBUG_CONTROL_KEYS[debugType];
+  if (debugType.includes("state")) return SESSION_LOG_DEBUG_CONTROL_KEYS["state-machine"];
+  if (debugType.includes("resend")) return SESSION_LOG_DEBUG_CONTROL_KEYS.resend;
+  if (debugType.includes("session-log") || debugType.includes("log-ws") || debugType.includes("websocket")) return SESSION_LOG_DEBUG_CONTROL_KEYS["session-log-ws"];
+  return "";
+}
+
+export function shouldRecordSessionLog(event = {}, options = {}) {
+  const control = resolveSessionLogControlConfig(options);
+  const category = normalizeSessionLogCategory(event.category || event.type, options.defaultCategory || SESSION_LOG_DEFAULT_CATEGORY);
+  if (control[getSessionLogControlKey(event, category)] === false) return false;
+  if (!isSessionLogDebugEvent({ ...event, category })) return true;
+  const debugControlKey = getSessionLogDebugControlKey({ ...event, category });
+  return debugControlKey ? control[debugControlKey] === true : false;
 }
 
 export function buildSessionLogRecord(event = {}, options = {}) {

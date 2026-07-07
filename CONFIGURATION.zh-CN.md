@@ -32,16 +32,22 @@
 | `NOOBOT_SESSION_LOG_ROOT` | string(path) | `../workspace/session-logs` | 后端日志 WebSocket 写入 session 日志文件的目录。默认相对后端进程 cwd 为 `../workspace/session-logs`。 |
 | `NOOBOT_SESSION_LOG_RETENTION_MS` | number | `604800000` | session 日志保留时间（毫秒）。默认 7 天，过期的 session 日志目录会由后端清理任务删除。 |
 | `NOOBOT_SESSION_LOG_CLEANUP_INTERVAL_MS` | number | `3600000` | 后端清理过期 session 日志的间隔。 |
-| `NOOBOT_SESSION_LOG_DEBUG` | boolean | `false` | 是否允许后端接收 `debug` 分类的 session 日志。默认关闭，debug 日志会被丢弃。 |
-| `VITE_NOOBOT_SESSION_LOG_DEBUG` | boolean | `false` | 是否允许前端发送 `debug` 分类的 session 日志。默认关闭。 |
-| `VITE_NOOBOT_STATE_MACHINE_DEBUG` | boolean | `false` | 是否开启前端状态机 debug 输出；开启后，debug sink 也可通过 session 日志 WebSocket 发送这些记录。 |
-| `AGENT_PROXY_SESSION_LOG_DEBUG` | boolean | `false` | 是否允许 agent-proxy 发送 `debug` 分类的 session 日志。默认关闭。 |
+| `NOOBOT_RUNTIME_EVENT_STATE_LOG` | boolean | `true` | runtime-events 是否记录状态类 session 日志。 |
+| `NOOBOT_RUNTIME_EVENT_MESSAGE_LOG` | boolean | `true` | runtime-events 是否记录消息类 session 日志。 |
+| `NOOBOT_RUNTIME_EVENT_INTERACTION_LOG` | boolean | `true` | runtime-events 是否记录交互类 session 日志。 |
+| `NOOBOT_RUNTIME_EVENT_TRANSPORT_LOG` | boolean | `true` | runtime-events 是否记录传输类 session 日志。 |
+| `NOOBOT_RUNTIME_EVENT_AGENT_PROXY_LOG` | boolean | `true` | runtime-events 是否记录 agent-proxy 类 session 日志。 |
+| `NOOBOT_RUNTIME_EVENT_SYSTEM_LOG` | boolean | `true` | runtime-events 是否记录系统类 session 日志。 |
+| `NOOBOT_RUNTIME_EVENT_STATE_MACHINE_DEBUG` | boolean | `false` | runtime-events 是否记录状态机专项 debug。 |
+| `NOOBOT_RUNTIME_EVENT_RESEND_DEBUG` | boolean | `false` | runtime-events 是否记录重发专项 debug。 |
+| `NOOBOT_RUNTIME_EVENT_SESSION_LOG_WS_DEBUG` | boolean | `false` | runtime-events 是否记录 session 日志 WebSocket 专项 debug。 |
 
 Session 日志 WebSocket：
 - 入口：后端 `/logs/ws`，前端通常通过 `/api/logs/ws` 访问，agent-proxy 通过后端 upstream 访问。
 - 鉴权：复用现有 API key WebSocket 鉴权。
 - 存储：后端按 `sessionId` 建目录，并按分类写 JSONL 文件（`state`、`message`、`interaction`、`transport`、`debug`、`agent-proxy`、`system`）。
 - 主要字段：`source`、`category`、`event`、`sessionId`，可选 `dialogProcessId` / `turnScopeId`，以及用于状态机、消息流、前后端交互和 agent-proxy 事件的精简 `data` 载荷。
+- 控制：前端和 agent-proxy 只通过日志 WebSocket 发送事件；是否记录统一由 runtime-events 按 `runtime-events-config.mjs` 中的具体业务小类型开关决定。日志专项默认开启，debug 专项默认关闭。
 
 ---
 

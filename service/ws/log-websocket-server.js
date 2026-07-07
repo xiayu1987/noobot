@@ -9,7 +9,6 @@ import {
   MAX_SESSION_CHANNEL_MESSAGE_BYTES,
   resolveSessionChannelConfig,
 } from "@noobot/runtime-events/session-channel";
-import { isSessionLogDebugEnabled } from "@noobot/runtime-events/session-log-protocol";
 import { RUNTIME_EVENT_CHANNELS, writeRoutedRuntimeEvent } from "@noobot/runtime-events";
 import { HTTP_STATUS } from "#agent/constants";
 
@@ -47,7 +46,6 @@ export function resolveSessionLogConfig(options = {}) {
 }
 
 export async function writeSessionLogEvent(event = {}, config = resolveSessionLogConfig()) {
-  if (!isSessionLogDebugEnabled(event.category, config.debugEnabled)) return { ok: true, skipped: true };
   const runtimeEventConfig = config.logRoot ? { ...config, root: config.logRoot } : config;
   const result = await writeRoutedRuntimeEvent({
       scope: "session", ...event, channel: event.channel || RUNTIME_EVENT_CHANNELS.WEB_SOCKET }, runtimeEventConfig);
@@ -74,7 +72,6 @@ export function registerLogWebSocketServer(server, { resolveAuthByApiKey, logCon
     logDirName: logConfig.logDirName,
     retentionMs: logConfig.retentionMs,
     cleanupIntervalMs: logConfig.cleanupIntervalMs,
-    debugEnabled: logConfig.debugEnabled,
   });
   server.on("upgrade", (request, socket, head) => {
     let pathname = "";
