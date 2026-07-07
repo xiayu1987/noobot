@@ -125,7 +125,7 @@ export function createDetachedSubSessionRunner({
         parentSessionId,
         dialogProcessId: subDialogProcessId || subSessionId,
         userConfig: subSessionUserConfig,
-        inputAttachments: subSessionAttachments,
+        userMessageAttachments: subSessionAttachments,
         systemMessages: Array.isArray(systemMessages) ? systemMessages : [],
         eventListener: resolveObjectEventListener(eventListener),
         userInteractionBridge: inheritedUserInteractionBridge,
@@ -384,7 +384,7 @@ async function persistPluginSubSessionSnapshot({
       parentDialogProcessId,
       turnScopeId: normalizedTurnScopeId,
       frontendUserMessage: false,
-      ...(subSessionAttachments.length ? { inputAttachments: subSessionAttachments } : {}),
+      ...(subSessionAttachments.length ? { userMessageAttachments: subSessionAttachments } : {}),
     },
     timestamp,
   );

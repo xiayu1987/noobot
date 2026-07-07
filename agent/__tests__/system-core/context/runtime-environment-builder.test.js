@@ -22,7 +22,7 @@ test("buildRuntimeContext keeps sharedTools passthrough and creates turn stores"
         manager: hookManager,
       },
     },
-    attachments: [{ attachmentId: "att_1" }],
+    userMessageAttachments: [{ attachmentId: "att_1" }],
   });
 
   assert.equal(runtime.userId, "u1");
@@ -33,7 +33,7 @@ test("buildRuntimeContext keeps sharedTools passthrough and creates turn stores"
   assert.equal(runtime.runConfig.streaming, false);
   assert.equal(typeof runtime.currentTurnMessages.push, "function");
   assert.equal(typeof runtime.currentTurnTasks.push, "function");
-  assert.deepEqual(runtime.inputAttachments, [{ attachmentId: "att_1" }]);
+  assert.deepEqual(runtime.userMessageAttachments, [{ attachmentId: "att_1" }]);
   assert.deepEqual(runtime.attachments, []);
 });
 

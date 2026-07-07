@@ -468,7 +468,7 @@ export class SessionExecutionEngine {
     caller = CALLER_ROLE.USER,
     parentSessionId,
     userConfig,
-    inputAttachments = null,
+    userMessageAttachments = [],
     attachments,
     systemMessages = [],
     eventListener,
@@ -483,7 +483,7 @@ export class SessionExecutionEngine {
       caller,
       parentSessionId,
       userConfig,
-      inputAttachments,
+      userMessageAttachments,
       attachments,
       systemMessages,
       eventListener,
@@ -514,17 +514,15 @@ export class SessionExecutionEngine {
       abortSignal,
     });
     const preparedRuntime = getRuntimeFromAgentContext(prepared?.agentContext || {});
-    const preparedRuntimeAttachments = Array.isArray(preparedRuntime?.inputAttachments)
-      ? preparedRuntime.inputAttachments
-      : Array.isArray(preparedRuntime?.attachments)
-        ? preparedRuntime.attachments
-        : null;
-    const payloadInputAttachments = Array.isArray(payload?.inputAttachments)
-      ? payload.inputAttachments
+    const preparedRuntimeAttachments = Array.isArray(preparedRuntime?.userMessageAttachments)
+      ? preparedRuntime.userMessageAttachments
+      : null;
+    const payloadUserMessageAttachments = Array.isArray(payload?.userMessageAttachments)
+      ? payload.userMessageAttachments
       : [];
     const runtimeAttachments = Array.isArray(preparedRuntimeAttachments) && preparedRuntimeAttachments.length > 0
       ? preparedRuntimeAttachments
-      : payloadInputAttachments;
+      : payloadUserMessageAttachments;
     const existingSessionAttachments = await this._resolveExistingUserMessageAttachments({
       userId: String(payload?.userId || "").trim(),
       sessionId: String(payload?.sessionId || "").trim(),

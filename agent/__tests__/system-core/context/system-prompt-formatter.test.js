@@ -55,15 +55,13 @@ test("composeSystemInfoSections includes MCP/connectors/attachments when data ex
   assert.equal(joined.includes("Current attachment metadata"), true);
 });
 
-test("composeSystemInfoSections accepts inputAttachments as preferred attachment context", () => {
+test("composeSystemInfoSections uses attachments as attachment context", () => {
   const sections = composeSystemInfoSections({
     locale: "en-US",
     systemPrompt: "base",
-    inputAttachments: [{ attachmentId: "input_att", path: "/tmp/input.png" }],
-    attachments: [{ attachmentId: "fallback_att", path: "/tmp/fallback.png" }],
+    attachments: [{ attachmentId: "input_att", path: "/tmp/input.png" }],
   });
 
   const joined = sections.join("\n\n");
   assert.equal(joined.includes("input_att"), true);
-  assert.equal(joined.includes("fallback_att"), false);
 });

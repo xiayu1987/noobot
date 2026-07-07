@@ -10,8 +10,6 @@
  * Canonical rule:
  * - runtime.userMessageAttachments is the current user turn's authoritative
  *   attachment collection for model user-meta and session user-message writes.
- * - runtime.inputAttachments is a compatibility transport view for older
- *   context/tool integrations.
  * - runtime.attachments is the ordinary runtime/tool-generated attachment
  *   bucket and must not be used as a user-message fact source when the
  *   canonical field is present.
@@ -26,9 +24,6 @@ export function resolveRuntimeUserMessageAttachments(runtime = {}) {
   if (Array.isArray(runtime.userMessageAttachments)) {
     return runtime.userMessageAttachments;
   }
-  if (Array.isArray(runtime.inputAttachments)) {
-    return runtime.inputAttachments;
-  }
   return [];
 }
 
@@ -40,8 +35,6 @@ export function applyRuntimeUserMessageAttachments(runtime = {}, attachments = [
   if (!runtime || typeof runtime !== "object") return runtime;
   const canonicalAttachments = cloneAttachmentList(attachments);
   runtime.userMessageAttachments = canonicalAttachments;
-  // Compatibility transport view: older integrations still read inputAttachments.
-  runtime.inputAttachments = canonicalAttachments;
   return runtime;
 }
 

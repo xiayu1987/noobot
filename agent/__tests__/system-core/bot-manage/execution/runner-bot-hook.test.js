@@ -107,7 +107,7 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
     "after_agent_dispatch",
     "after_session_run",
   ]);
-  assert.deepEqual(capturedBuildContextPayload?.inputAttachments, [{ attachmentId: "att1" }]);
+  assert.deepEqual(capturedBuildContextPayload?.userMessageAttachments, [{ attachmentId: "att1" }]);
   assert.equal(capturedBuildContextPayload?.attachmentMetas, undefined);
   assert.equal(Boolean(beforeDispatchContext?.agentContext), false);
   assert.equal(typeof beforeDispatchContext?.agentContextSummary, "object");

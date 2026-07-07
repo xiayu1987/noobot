@@ -76,8 +76,7 @@ export class ContextBuilder {
       sessionId = "",
       caller = "user",
       parentSessionId = "",
-      inputAttachments = null,
-      attachments = [],
+      userMessageAttachments = [],
       sessionManager,
       memoryService,
       attachmentService,
@@ -96,12 +95,9 @@ export class ContextBuilder {
     this.sessionId = sessionId;
     this.caller = caller;
     this.parentSessionId = parentSessionId;
-    this.inputAttachments = Array.isArray(inputAttachments)
-      ? inputAttachments
-      : Array.isArray(attachments)
-        ? attachments
-        : [];
-    this.attachments = this.inputAttachments;
+    this.userMessageAttachments = Array.isArray(userMessageAttachments)
+      ? userMessageAttachments
+      : [];
     this.sessionManager = sessionManager;
     this.memoryService = memoryService;
     this.attachmentService = attachmentService;
@@ -296,7 +292,7 @@ export class ContextBuilder {
         sessionTree: resolvedSessionTree,
         rootSessionId: resolvedRootSessionId,
       }),
-      inputAttachments: attachments,
+      userMessageAttachments: attachments,
     });
     await initializeRuntimeEnvironment(runtime);
 
@@ -382,7 +378,7 @@ export class ContextBuilder {
           attachmentService: this.attachmentService,
           runtimeBasePath,
           effectiveConfig,
-          inputAttachments: this.inputAttachments,
+          userMessageAttachments: this.userMessageAttachments,
           userId: this.userId,
           sessionId: this.sessionId,
         }),
@@ -464,7 +460,7 @@ export class ContextBuilder {
       skills,
       services,
       mcpServers,
-      inputAttachments: includeAttachments ? attachments : [],
+      attachments: includeAttachments ? attachments : [],
       connectorStatusSection,
     });
     return {

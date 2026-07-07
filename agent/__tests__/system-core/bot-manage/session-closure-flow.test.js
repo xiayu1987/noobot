@@ -142,7 +142,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
 
   engine._buildContextBuilder = ({
     runConfig = {},
-    inputAttachments = [],
+    userMessageAttachments = [],
     attachments = [],
     sessionId = "",
     parentSessionId = "",
@@ -150,7 +150,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   } = {}) => {
     capturedBuildContextInput = {
       runConfig,
-      inputAttachments,
+      userMessageAttachments,
       attachments,
       sessionId,
       parentSessionId,
@@ -158,8 +158,8 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
     };
     return {
       async buildInitialContext({ dialogProcessId = "" } = {}) {
-        const effectiveAttachments = Array.isArray(inputAttachments) && inputAttachments.length
-          ? inputAttachments
+        const effectiveAttachments = Array.isArray(userMessageAttachments) && userMessageAttachments.length
+          ? userMessageAttachments
           : attachments;
         const firstIncoming = Array.isArray(effectiveAttachments) ? effectiveAttachments[0] || {} : {};
         return {
@@ -167,7 +167,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
             controllers: {
               runtime: {
                 runtimeModel: String(runConfig?.runtimeModel || ""),
-                inputAttachments: [
+                userMessageAttachments: [
                   {
                     attachmentId: "att-in-1",
                     sessionId,
@@ -239,7 +239,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
     ["scenario", "system_runtime", "base_prompt", "services", "mcp_servers"],
   );
   assert.equal(
-    capturedBuildContextInput?.inputAttachments?.[0]?.name,
+    capturedBuildContextInput?.userMessageAttachments?.[0]?.name,
     "input.png",
     "入口附件应透传到 context 构建阶段",
   );

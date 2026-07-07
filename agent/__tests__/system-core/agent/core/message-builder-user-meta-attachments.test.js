@@ -28,7 +28,6 @@ test("buildContextMessages uses current runtime userMessageAttachments in user m
                 size: 1407731,
               },
             ],
-            inputAttachments: [],
             attachments: [],
             systemRuntime: {
               sessionId: "session-a",
@@ -59,9 +58,6 @@ test("buildContextMessages preserves explicit empty current userMessageAttachmen
           runtime: {
             userId: "admin",
             userMessageAttachments: [],
-            inputAttachments: [
-              { attachmentId: "old", name: "old.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
-            ],
             systemRuntime: {
               sessionId: "session-a",
               dialogProcessId: "dialog-a",
@@ -89,7 +85,6 @@ test("buildContextMessages does not treat runtime attachments bucket as current 
           runtime: {
             userId: "admin",
             userMessageAttachments: [],
-            inputAttachments: [],
             attachments: [
               { attachmentId: "tool-output", name: "tool.txt", mimeType: "text/plain" },
             ],
@@ -112,15 +107,15 @@ test("buildContextMessages does not treat runtime attachments bucket as current 
   assert.deepEqual(meta.attachments, []);
 });
 
-test("buildContextMessages keeps inputAttachments as legacy user attachment adapter input", () => {
+test("buildContextMessages uses only userMessageAttachments as current user attachment input", () => {
   const messages = buildContextMessages(
     {
       execution: {
         controllers: {
           runtime: {
             userId: "admin",
-            inputAttachments: [
-              { attachmentId: "legacy-input", name: "legacy.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+            userMessageAttachments: [
+              { attachmentId: "current-user-input", name: "current.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
             ],
             attachments: [
               { attachmentId: "tool-output", name: "tool.txt", mimeType: "text/plain" },
@@ -142,7 +137,50 @@ test("buildContextMessages keeps inputAttachments as legacy user attachment adap
   assert.ok(metaMessage);
   const meta = parseUserMeta(metaMessage.content);
   assert.equal(meta.attachments.length, 1);
-  assert.equal(meta.attachments[0].attachmentId, "legacy-input");
+  assert.equal(meta.attachments[0].attachmentId, "current-user-input");
+});
+
+test("buildContextMessages does not use fallback meta attachments as current user attachments", () => {
+  const messages = buildContextMessages(
+    {
+      execution: {
+        controllers: {
+          runtime: {
+            userId: "admin",
+            userMessageAttachments: [],
+            attachments: [
+              { attachmentId: "tool-output", name: "tool.txt", mimeType: "text/plain" },
+            ],
+            systemRuntime: {
+              sessionId: "session-a",
+              dialogProcessId: "dialog-a",
+              turnScopeId: "turn-a",
+            },
+          },
+        },
+      },
+      payload: {
+        messages: {
+          system: [],
+          history: [
+            {
+              role: "user",
+              content: "history with stale attachments",
+              attachments: [
+                { attachmentId: "stale-history-attachment", name: "stale.txt", mimeType: "text/plain" },
+              ],
+            },
+          ],
+        },
+      },
+    },
+    { currentUserMessage: "hello" },
+  );
+
+  const metaMessage = findUserMetaMessage(messages);
+  assert.ok(metaMessage);
+  const meta = parseUserMeta(metaMessage.content);
+  assert.deepEqual(meta.attachments, []);
 });
 
 test("buildContextMessages preserves rich attachment fields in user meta", () => {

@@ -34,7 +34,7 @@ function createBuilderForNormalizationTest() {
 
 function createBuilderForAttachmentRuntimeTest({
   attachments = [],
-  inputAttachments = null,
+  userMessageAttachments = null,
   includeContextKeys = [],
 } = {}) {
   return new ContextBuilder({
@@ -58,7 +58,7 @@ function createBuilderForAttachmentRuntimeTest({
       sessionId: "s1",
       caller: "user",
       parentSessionId: "",
-      ...(Array.isArray(inputAttachments) ? { inputAttachments } : {}),
+      ...(Array.isArray(userMessageAttachments) ? { userMessageAttachments } : {}),
       attachments,
       runConfig: {
         contextPolicy: {
@@ -71,9 +71,9 @@ function createBuilderForAttachmentRuntimeTest({
   });
 }
 
-test("buildInitialContext prefers inputAttachments over legacy attachments", async () => {
+test("buildInitialContext prefers userMessageAttachments over legacy attachments", async () => {
   const builder = createBuilderForAttachmentRuntimeTest({
-    inputAttachments: [
+    userMessageAttachments: [
       {
         attachmentId: "att_input",
         sessionId: "s1",
@@ -98,7 +98,7 @@ test("buildInitialContext prefers inputAttachments over legacy attachments", asy
 
   const context = await builder.buildInitialContext({ dialogProcessId: "dp_1" });
   assert.equal(
-    context?.execution?.controllers?.runtime?.inputAttachments?.[0]?.attachmentId,
+    context?.execution?.controllers?.runtime?.userMessageAttachments?.[0]?.attachmentId,
     "att_input",
   );
   assert.deepEqual(context?.execution?.controllers?.runtime?.attachments, []);
@@ -193,14 +193,14 @@ test("buildInitialContext keeps super user identity in system message when syste
   assert.equal(systemText.includes("\"isSuperUser\": true"), true);
 });
 
-test("buildContextMessageBlocks prefers runtime inputAttachments for user meta", () => {
+test("buildContextMessageBlocks prefers runtime userMessageAttachments for user meta", () => {
   const blocks = buildContextMessageBlocks(
     {
       execution: {
         controllers: {
           runtime: {
             userId: "u1",
-            inputAttachments: [{ attachmentId: "att_input", name: "input.png" }],
+            userMessageAttachments: [{ attachmentId: "att_input", name: "input.png" }],
             attachments: [{ attachmentId: "att_legacy", name: "legacy.png" }],
             systemRuntime: { sessionId: "s1", dialogProcessId: "dp1" },
           },
@@ -218,9 +218,9 @@ test("buildContextMessageBlocks prefers runtime inputAttachments for user meta",
   assert.equal(String(metaMessage.content || "").includes("att_legacy"), false);
 });
 
-test("buildInitialContext keeps input attachments separate from runtime generated attachments when attachments section is excluded", async () => {
+test("buildInitialContext keeps user message attachments separate from runtime generated attachments when attachments section is excluded", async () => {
   const builder = createBuilderForAttachmentRuntimeTest({
-    attachments: [
+    userMessageAttachments: [
       {
         attachmentId: "att_1",
         sessionId: "s1",
@@ -235,9 +235,9 @@ test("buildInitialContext keeps input attachments separate from runtime generate
 
   const context = await builder.buildInitialContext({ dialogProcessId: "dp_1" });
   const runtime = context?.execution?.controllers?.runtime || {};
-  assert.equal(Array.isArray(runtime.inputAttachments), true);
-  assert.equal(runtime.inputAttachments.length, 1);
-  assert.equal(runtime.inputAttachments[0]?.attachmentId, "att_1");
+  assert.equal(Array.isArray(runtime.userMessageAttachments), true);
+  assert.equal(runtime.userMessageAttachments.length, 1);
+  assert.equal(runtime.userMessageAttachments[0]?.attachmentId, "att_1");
   assert.deepEqual(runtime.attachments, []);
 });
 

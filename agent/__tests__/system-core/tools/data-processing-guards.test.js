@@ -197,7 +197,7 @@ test("doc_to_data: direct text result returns preview when over semantic-transfe
 });
 
 
-test("doc_to_data: backwrites parsed result to source attachment from inputAttachments", async () => {
+test("doc_to_data: backwrites parsed result to source attachment from userMessageAttachments", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-backwrite-input-"));
   const textPath = path.join(basePath, "runtime", "ops_workdir", "source.md");
   await fs.mkdir(path.dirname(textPath), { recursive: true });
@@ -249,7 +249,7 @@ test("doc_to_data: backwrites parsed result to source attachment from inputAttac
   runtime.userId = "primary-user";
   runtime.systemRuntime = { sessionId: "s1" };
   runtime.attachmentService = attachmentService;
-  runtime.inputAttachments = [
+  runtime.userMessageAttachments = [
     {
       attachmentId: "source-att",
       sessionId: "s1",
@@ -288,8 +288,8 @@ test("doc_to_data: backwrites parsed result to source attachment from inputAttac
   assert.equal(linkCalls[0]?.parsedAttachmentMeta?.attachmentId, "parsed-1");
   assert.equal(runtime.userMessageAttachments[0]?.parsedResult?.attachmentId, "parsed-1");
   assert.equal(runtime.userMessageAttachments[0]?.parsedResult?.tool, TOOL_NAME.DOC_TO_DATA);
-  assert.equal(runtime.inputAttachments[0]?.parsedResult?.attachmentId, "parsed-1");
-  assert.equal(runtime.inputAttachments[0]?.parsedResult?.tool, TOOL_NAME.DOC_TO_DATA);
+  assert.equal(runtime.userMessageAttachments[0]?.parsedResult?.attachmentId, "parsed-1");
+  assert.equal(runtime.userMessageAttachments[0]?.parsedResult?.tool, TOOL_NAME.DOC_TO_DATA);
   assert.equal(runtime.attachments[0]?.parsedResult, undefined);
 });
 

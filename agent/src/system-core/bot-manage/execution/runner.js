@@ -129,8 +129,8 @@ export class SessionExecutionRunner {
     const toolRegistry = Array.isArray(agentContext?.payload?.tools?.registry)
       ? agentContext.payload.tools.registry
       : [];
-    const inputAttachments = Array.isArray(runtime?.inputAttachments)
-      ? runtime.inputAttachments
+    const userMessageAttachments = Array.isArray(runtime?.userMessageAttachments)
+      ? runtime.userMessageAttachments
       : [];
     const runtimeAttachments = Array.isArray(runtime?.attachments)
       ? runtime.attachments
@@ -146,7 +146,7 @@ export class SessionExecutionRunner {
       runtimeModel: String(runtime?.runtimeModel || "").trim(),
       messageCount: messagesHistory.length,
       toolCount: toolRegistry.length,
-      attachmentCount: inputAttachments.length + runtimeAttachments.length,
+      attachmentCount: userMessageAttachments.length + runtimeAttachments.length,
       hasAbortSignal: Boolean(runtime?.abortSignal),
     };
   }
@@ -289,7 +289,7 @@ export class SessionExecutionRunner {
         caller,
         parentSessionId,
         userConfig,
-        inputAttachments: attachments,
+        userMessageAttachments: attachments,
         systemMessages: Array.isArray(systemMessages) ? systemMessages : [],
         eventListener: runtimeEventListener,
         dialogProcessId,
@@ -304,7 +304,7 @@ export class SessionExecutionRunner {
         turnScopeId: resolvedTurnScopeId,
         reuseExistingUserTurn: resolvedRunConfig?.reuseExistingUserTurn === true,
         attachments: summarizeDebugAttachments(attachments),
-        inputAttachments: summarizeDebugAttachments(buildContextPayload.inputAttachments),
+        userMessageAttachments: summarizeDebugAttachments(buildContextPayload.userMessageAttachments),
       });
       if (typeof this.prepareAgentTurnExecution !== "function") {
         throw new Error("prepareAgentTurnExecution is required");
@@ -324,7 +324,7 @@ export class SessionExecutionRunner {
         dialogProcessId,
         turnScopeId: resolvedTurnScopeId,
         reuseExistingUserTurn: resolvedRunConfig?.reuseExistingUserTurn === true,
-        inputAttachments: summarizeDebugAttachments(attachments),
+        userMessageAttachments: summarizeDebugAttachments(attachments),
         userMessageAttachments: summarizeDebugAttachments(userMessageAttachments),
       });
       if (resolvedRunConfig?.reuseExistingUserTurn === true) {
@@ -384,7 +384,6 @@ export class SessionExecutionRunner {
         runtimeAgentContext,
         abortSignal,
         messages: dispatchContextMessages,
-        inputAttachments: userMessageAttachments,
         attachments: userMessageAttachments,
         userMessageAttachments,
         eventListener: runtimeEventListener,
