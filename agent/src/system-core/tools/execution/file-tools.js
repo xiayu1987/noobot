@@ -86,6 +86,8 @@ function resolveFileToolIsSandbox(agentContext = {}) {
 
 export function createFileTool({ agentContext }) {
   const isSandbox = resolveFileToolIsSandbox(agentContext);
+  const runtime = agentContext?.execution?.controllers?.runtime || {};
+  const abortSignal = runtime?.abortSignal || null;
   const readFileTool = new DynamicStructuredTool({
     name: TOOL_NAME.READ_FILE,
     description: tTool(agentContext, "tools.file.readDescriptionWithLineNumbers"),
@@ -228,6 +230,7 @@ export function createFileTool({ agentContext }) {
             glob,
             contextLines,
             maxResults: maxCount,
+            abortSignal,
           });
         } catch {
           fastSearchResult = null;
@@ -243,9 +246,11 @@ export function createFileTool({ agentContext }) {
           workspacePath,
           glob,
           maxFiles: DEFAULT_MAX_SEARCH_FILES,
+          abortSignal,
         });
         matches = [];
         for (const file of files) {
+          if (abortSignal?.aborted) throw abortSignal.reason || new DOMException("The operation was aborted", "AbortError");
           if (matches.length >= maxCount) break;
           let content = "";
           try {

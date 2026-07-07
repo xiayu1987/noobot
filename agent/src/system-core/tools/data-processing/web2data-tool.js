@@ -290,7 +290,10 @@ async function runDirectFetchExtract(
     urls,
     async (url) => {
       try {
-        const res = await fetcher(url, { method: "GET" });
+        const res = await fetcher(url, {
+          method: "GET",
+          signal: runtimeContext?.abortSignal || undefined,
+        });
         const html = await res.text();
         const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
         const pageTitle = normalizeText(titleMatch?.[1] || "");
@@ -453,7 +456,7 @@ async function summarizeByModel({
             })),
           ],
         }),
-      ]);
+      ], { signal: runtime?.abortSignal || undefined });
       batchResults.push({
         batch: batchIndex + 1,
         imageCount: batch.length,
@@ -467,7 +470,7 @@ async function summarizeByModel({
       new HumanMessage({
         content: `${userPrompt}\n\n${tWeb(runtime, "textReference", { sharedText })}`,
       }),
-    ]);
+    ], { signal: runtime?.abortSignal || undefined });
     batchResults.push({
       batch: 1,
       imageCount: 0,

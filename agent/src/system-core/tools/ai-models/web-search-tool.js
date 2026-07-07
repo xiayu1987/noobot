@@ -79,7 +79,7 @@ function resolveSearchModelSpec({ modelName = "", runtimeModel = "", globalConfi
   return { resolvedModelName, resolvedModelSpec };
 }
 
-export async function searchWithOpenaiResponsesApi({ openaiClient, modelName, query }) {
+export async function searchWithOpenaiResponsesApi({ openaiClient, modelName, query, abortSignal = null }) {
   const searchResult = await openaiClient.responses.create({
     model: String(modelName || "").trim(),
     input: [
@@ -94,7 +94,7 @@ export async function searchWithOpenaiResponsesApi({ openaiClient, modelName, qu
       },
     ],
     tools: [{ type: OPENAI_WEB_SEARCH_TOOL_TYPE }],
-  });
+  }, { signal: abortSignal || undefined });
   return {
     rawText: String(searchResult?.output_text || "").trim(),
     output: Array.isArray(searchResult?.output) ? searchResult.output : [],
@@ -205,6 +205,7 @@ export async function searchWithSearchEngine({
     method: request.method,
     headers: request.headers,
     ...(request.body ? { body: request.body } : {}),
+    signal: runtime?.abortSignal || undefined,
   });
   const contentType = String(response.headers.get("content-type") || "").toLowerCase();
   const data = contentType.includes("application/json") ? await response.json() : await response.text();
@@ -296,6 +297,7 @@ export function createWebSearchTool({ agentContext }) {
             openaiClient,
             modelName: modelNameForSearch,
             query: normalizedQuery,
+            abortSignal: runtime?.abortSignal || null,
           });
           return toToolJsonResult(
             TOOL_NAME.WEB_SEARCH,

@@ -34,7 +34,7 @@ class MockWebSocket {
   }
 }
 
-const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0));
+const flushPromises = () => Promise.resolve();
 
 describe("chatWebSocketClient", () => {
   let originalWebSocket;
@@ -184,6 +184,62 @@ describe("chatWebSocketClient", () => {
     socket.close(1000, "server_closed_without_terminal_event");
 
     await expect(streamPromise).rejects.toThrow("infra.websocketStreamError");
+  });
+
+  it("requestStop sends stop payload and force-finalizes UI when backend stays busy", async () => {
+    const client = createChatWebSocketClient({
+      resolveWebSocketUrl: () => "ws://test",
+      forceStopFinalizeMs: 1000,
+    });
+    client.connect();
+    const socket = MockWebSocket.instances[0];
+    const forceFinalize = vi.fn();
+    let settled = false;
+
+    client.stream({ action: "chat", turnScopeId: "turn-stop" }, vi.fn()).then(() => {
+      settled = true;
+    });
+
+    const result = client.requestStop({ turnScopeId: "turn-stop", sessionId: "s-1" }, forceFinalize);
+
+    expect(result).toBe(true);
+    expect(JSON.parse(socket.sent.at(-1))).toEqual(expect.objectContaining({
+      action: "stop",
+      turnScopeId: "turn-stop",
+      sessionId: "s-1",
+    }));
+    expect(forceFinalize).not.toHaveBeenCalled();
+    expect(settled).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    await flushPromises();
+
+    expect(socket.readyState).toBe(MockWebSocket.CLOSED);
+    expect(forceFinalize).toHaveBeenCalledTimes(1);
+    expect(settled).toBe(true);
+  });
+
+  it("repeat requestStop keeps stop state and sends latest stop payload", () => {
+    const client = createChatWebSocketClient({
+      resolveWebSocketUrl: () => "ws://test",
+    });
+    client.connect();
+    const socket = MockWebSocket.instances[0];
+
+    expect(client.requestStop({ turnScopeId: "turn-1" }, vi.fn())).toBe(true);
+    expect(client.requestStop({ turnScopeId: "turn-1", partialAssistant: { content: "partial" } }, vi.fn())).toBe(true);
+
+    const stopMessages = socket.sent
+      .map((item) => JSON.parse(item))
+      .filter((item) => item.action === "stop");
+    expect(stopMessages).toHaveLength(2);
+    expect(stopMessages.at(-1)).toEqual(expect.objectContaining({
+      action: "stop",
+      turnScopeId: "turn-1",
+      partialAssistant: { content: "partial" },
+    }));
+    expect(client.isStopRequested()).toBe(true);
+    expect(client.getStopRequestedTurnScopeId()).toBe("turn-1");
   });
 
   it.each(["cancelled"])(

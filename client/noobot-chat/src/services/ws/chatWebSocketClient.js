@@ -457,16 +457,16 @@ export function createChatWebSocketClient({
       clearTimers();
       forceStopFinalizeTimer = setTimeout(() => {
         const latestSocket = activeSocket;
+        const resolveStream = resolveCurrentStream;
+        if (typeof resolveStream === "function") {
+          resolveStream();
+        }
         if (
           latestSocket &&
           (latestSocket.readyState === WebSocket.OPEN ||
             latestSocket.readyState === WebSocket.CONNECTING)
         ) {
           latestSocket.close(1000, "stop_force_finalize");
-        }
-        const resolveStream = resolveCurrentStream;
-        if (typeof resolveStream === "function") {
-          resolveStream();
         }
         forceFinalize();
       }, forceStopFinalizeMs);
