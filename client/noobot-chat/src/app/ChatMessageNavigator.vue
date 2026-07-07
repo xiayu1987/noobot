@@ -79,7 +79,7 @@ const emit = defineEmits(["select"]);
   max-width: 208px;
   margin: 3px 0;
   padding: 8px 14px 8px 16px;
-  border-radius: 12px;
+  border-radius: 8px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -116,7 +116,7 @@ const emit = defineEmits(["select"]);
   color: var(--noobot-text-strong, var(--el-text-color-primary));
   background: color-mix(in srgb, var(--noobot-fill-soft, var(--el-fill-color-lighter)) 70%, white);
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 70%, transparent);
-  box-shadow: 0 1px 2px color-mix(in srgb, #000 8%, transparent);
+  box-shadow: none;
 }
 
 .chat-message-navigator__content {

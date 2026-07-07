@@ -105,11 +105,16 @@ test("executeMcpTask bound dashscope requests force thinking disabled options", 
   assert.equal(fakeModel.invocations[0].options.thinking_budget, 0);
 });
 
-test("executeMcpTask bound openai compatible requests force reasoning_effort low", async () => {
+test("executeMcpTask bound openai compatible requests use tool_reasoning_effort", async () => {
   const fakeModel = createFakeModel();
   setModelAdapter({
     createChatModelByName: () => fakeModel,
-    resolveModelSpecByName: ({ modelName }) => ({ model: modelName, format: "openai_compatible", reasoning_effort: "high" }),
+    resolveModelSpecByName: ({ modelName }) => ({
+      model: modelName,
+      format: "openai_compatible",
+      reasoning_effort: "high",
+      tool_reasoning_effort: "medium",
+    }),
   });
 
   const result = await executeMcpTask({
@@ -121,5 +126,5 @@ test("executeMcpTask bound openai compatible requests force reasoning_effort low
   });
 
   assert.equal(result.ok, true);
-  assert.equal(fakeModel.invocations[0].options.reasoning_effort, "low");
+  assert.equal(fakeModel.invocations[0].options.reasoning_effort, "medium");
 });

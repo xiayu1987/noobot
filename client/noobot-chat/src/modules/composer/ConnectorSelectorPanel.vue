@@ -180,18 +180,16 @@ function toggleConnectorPanelExpanded() {
 
 <style scoped>
 .connector-panel-shell {
-  background: var(--noobot-panel-bg);
   overflow: hidden;
   transition: all 0.3s ease;
 }
 
 .connector-panel-shell.is-expanded {
-  background: var(--noobot-panel-bg);
   box-shadow: none;
 }
 
 .connector-panel-shell.is-embedded {
-  border: 1px dashed var(--noobot-divider);
+  border-radius: 14px;
 }
 
 .connector-panel-header {
@@ -280,45 +278,54 @@ function toggleConnectorPanelExpanded() {
 
 .connector-panel-shell.is-embedded .connector-panel {
   border-top: none;
-  padding-top: 10px;
+  padding: 10px 12px 12px;
 }
 
 .connector-categories-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 16px;
-  margin-top: 12px;
+  gap: 10px;
+  margin-top: 0;
 }
 
 .connector-group {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  padding: var(--noobot-space-sm);
+  padding: 10px;
+  border-radius: 12px;
 }
 
 .connector-group-title {
   font-size: 12px;
   font-weight: 600;
-  color: var(--noobot-text-secondary);
-  margin-bottom: 10px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--noobot-divider);
+  color: var(--noobot-text-strong, var(--noobot-text-secondary));
+  margin-bottom: 8px;
+  padding-bottom: 0;
+  border-bottom: none;
 }
 
 .vertical-radio-group {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
+  gap: 4px;
+  width: 100%;
 }
 
 .custom-radio {
   display: flex;
   align-items: center;
+  width: 100%;
   margin-right: 0;
   height: 30px;
-  padding: 4px 0;
+  padding: 3px 6px;
+  border-radius: 8px;
+  transition: background-color 0.16s ease;
+}
+
+.custom-radio:hover {
+  background: color-mix(in srgb, var(--el-color-primary) 8%, transparent);
 }
 
 .custom-radio :deep(.el-radio__input) {
@@ -343,12 +350,14 @@ function toggleConnectorPanelExpanded() {
   gap: 6px;
   height: 100%;
   align-items: center;
+  min-width: 0;
 }
 
 .connector-status-icon {
   font-size: 13px;
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .connector-status-icon.status-connected {
@@ -364,7 +373,7 @@ function toggleConnectorPanelExpanded() {
 .connector-name {
   font-size: 13px;
   color: var(--noobot-text-main);
-  max-width: 120px;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

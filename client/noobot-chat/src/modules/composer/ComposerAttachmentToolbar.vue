@@ -82,7 +82,7 @@ defineExpose({
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 

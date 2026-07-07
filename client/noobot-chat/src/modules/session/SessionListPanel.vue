@@ -150,18 +150,18 @@ watch(
 }
 
 .session-list-inner {
-  padding: 5px 16px 16px;
+  padding: 4px 12px 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .session-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border-radius: 12px;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
   cursor: pointer;
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 20%, transparent);
   background: color-mix(in srgb, var(--noobot-panel-bg) 78%, transparent);
@@ -181,9 +181,9 @@ watch(
 }
 
 .session-icon-wrapper {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   background: var(--noobot-surface-soft-hover);
   display: flex;
   align-items: center;
@@ -199,7 +199,7 @@ watch(
 }
 
 .session-icon {
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .session-info {
@@ -254,7 +254,7 @@ watch(
 }
 
 .title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--noobot-text-main);
   white-space: nowrap;
@@ -269,11 +269,11 @@ watch(
 }
 
 .sid {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--noobot-text-muted);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
@@ -310,7 +310,7 @@ watch(
   display: grid;
   place-items: center;
   width: 100%;
-  padding: 12px 0;
+  padding: 8px 0;
   gap: 0;
 }
 

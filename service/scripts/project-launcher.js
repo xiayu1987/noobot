@@ -506,10 +506,16 @@ function buildProviderFromTemplate({
     if (hasOwnProperty(baseProvider, "reasoning_effort")) {
       delete baseProvider.reasoning_effort;
     }
+    if (hasOwnProperty(baseProvider, "tool_reasoning_effort")) {
+      delete baseProvider.tool_reasoning_effort;
+    }
   }
 
   if (format === "openai_compatible" && !hasOwnProperty(baseProvider, "reasoning_effort")) {
     baseProvider.reasoning_effort = "low";
+  }
+  if (format === "openai_compatible" && !hasOwnProperty(baseProvider, "tool_reasoning_effort")) {
+    baseProvider.tool_reasoning_effort = "low";
   }
 
   return baseProvider;

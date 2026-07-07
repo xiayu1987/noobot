@@ -544,7 +544,19 @@ test("auto tool_choice should apply bound tool dashscope request overrides", asy
   assert.equal(result.output, "收尾结果");
 });
 
-test("bound tool requests force openai_compatible reasoning_effort low", () => {
+test("bound tool requests use openai_compatible tool_reasoning_effort when configured", () => {
+  assert.deepEqual(
+    resolveBoundToolModelRequestOverrides({
+      format: "openai_compatible",
+      model: "gpt-5.5",
+      reasoning_effort: "high",
+      tool_reasoning_effort: "medium",
+    }),
+    { reasoning_effort: "medium" },
+  );
+});
+
+test("bound tool requests default openai_compatible reasoning_effort to low", () => {
   assert.deepEqual(
     resolveBoundToolModelRequestOverrides({
       format: "openai_compatible",

@@ -14,15 +14,15 @@
 .base-file-card-list {
   display: flex;
   flex-direction: column;
-  gap: var(--noobot-space-xs);
-  margin-top: var(--noobot-space-lg);
-  padding-top: var(--noobot-space-md);
+  gap: 2px;
+  margin-top: var(--noobot-space-md);
+  padding-top: var(--noobot-space-sm);
   border-top: 1px dashed color-mix(in srgb, var(--noobot-cyber-cyan) 35%, transparent);
 }
 :deep(.base-file-card) {
   display: flex;
   align-items: center;
-  gap: var(--noobot-space-sm);
-  padding: var(--noobot-space-xs) var(--noobot-space-sm);
+  gap: var(--noobot-space-xs);
+  padding: 4px var(--noobot-space-xs);
 }
 </style>

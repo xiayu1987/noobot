@@ -461,12 +461,19 @@ defineExpose({
   display: flex;
   flex-direction: column;
   /* 更多操作面板需要实底，避免使用带 transparent 的 panel token 导致透出背景 */
-  background: color-mix(in srgb, var(--noobot-surface-sidebar, #ffffff) 90%, var(--noobot-base-blue-500, #3b82f6));
-  border: 1px solid var(--noobot-panel-border, #e4e4e7);
-  outline: 1px solid color-mix(in srgb, var(--noobot-base-blue-500, #3b82f6) 16%, transparent);
-  border-radius: 16px;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--noobot-surface-sidebar, #ffffff) 94%, var(--noobot-base-blue-500, #3b82f6)),
+      color-mix(in srgb, var(--noobot-panel-bg, #ffffff) 98%, var(--noobot-base-blue-500, #3b82f6))
+    );
+  border: 1px solid color-mix(in srgb, var(--noobot-base-blue-500, #3b82f6) 18%, var(--noobot-panel-border, #e4e4e7));
+  outline: 1px solid color-mix(in srgb, var(--noobot-base-white, #ffffff) 46%, transparent);
+  border-radius: 18px;
   overflow-x: hidden; overflow-y: auto; /* 确保内部元素不溢出圆角，同时允许垂直滚动 */
-  box-shadow: none;
+  box-shadow:
+    0 18px 46px color-mix(in srgb, var(--noobot-base-black, #000000) 16%, transparent),
+    0 1px 0 color-mix(in srgb, var(--noobot-base-white, #ffffff) 54%, transparent) inset;
 }
 
 .more-actions-row {
@@ -476,9 +483,14 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
-  background: color-mix(in srgb, var(--noobot-surface-sidebar, #ffffff) 84%, var(--noobot-base-blue-500, #3b82f6));
-  border-bottom: 1px solid color-mix(in srgb, var(--noobot-base-blue-500, #3b82f6) 22%, var(--noobot-panel-border, #e4e4e7));
+  padding: 12px 16px;
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--noobot-surface-sidebar, #ffffff) 86%, var(--noobot-base-blue-500, #3b82f6)),
+      color-mix(in srgb, var(--noobot-surface-sidebar, #ffffff) 94%, var(--noobot-base-blue-500, #3b82f6))
+    );
+  border-bottom: 1px solid color-mix(in srgb, var(--noobot-base-blue-500, #3b82f6) 18%, var(--noobot-panel-border, #e4e4e7));
 }
 
 :root[data-theme="light"] .more-panel {
@@ -491,7 +503,8 @@ defineExpose({
 
 .more-panel-title {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   color: var(--noobot-text-strong, #18181b);
 }
 
@@ -499,9 +512,9 @@ defineExpose({
   height: 28px;
   min-height: 28px;
   padding: 0 10px;
-  border-radius: 6px !important;
-  border: none !important;
-  background: transparent !important;
+  border-radius: 999px !important;
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, #e4e4e7) 70%, transparent) !important;
+  background: color-mix(in srgb, var(--noobot-surface-sidebar, #ffffff) 78%, transparent) !important;
   color: var(--noobot-text-main, #18181b) !important;
   box-shadow: none !important;
   display: inline-flex;
@@ -510,15 +523,15 @@ defineExpose({
 }
 
 .more-collapse-btn:hover {
-  background: var(--noobot-surface-soft-hover, #e4e4e7) !important;
+  background: color-mix(in srgb, var(--noobot-base-blue-500, #3b82f6) 10%, var(--noobot-surface-sidebar, #ffffff)) !important;
   color: var(--noobot-text-strong, #18181b) !important;
 }
 
 .more-panel-content {
-  padding: 16px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 /* ================= 响应式调整 ================= */

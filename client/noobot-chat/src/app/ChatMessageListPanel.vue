@@ -256,7 +256,7 @@ defineExpose({
 
 .skeleton-loading {
   background: var(--noobot-panel-bg);
-  padding: 20px;
+  padding: 16px;
   border-radius: var(--noobot-radius-md);
 }
 
@@ -284,7 +284,7 @@ defineExpose({
 @media (max-width: 768px) {
   .msg-list-inner {
     padding: 14px max(12px, env(safe-area-inset-left)) 14px max(12px, env(safe-area-inset-right));
-    gap: 16px;
+    gap: 8px;
   }
 }
 </style>
