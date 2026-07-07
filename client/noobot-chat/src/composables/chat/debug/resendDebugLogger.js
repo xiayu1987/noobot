@@ -10,27 +10,8 @@ export function setResendDebugLogSink(sink = null) {
   sessionLogSink = sink && typeof sink.log === "function" ? sink : null;
 }
 
-function isBrowserDebugEnabled() {
-  try {
-    const params = new URLSearchParams(globalThis?.location?.search || "");
-    if (["1", "true", "yes", "on"].includes(String(params.get("noobotResendDebug") || "").toLowerCase())) {
-      return true;
-    }
-  } catch {}
-  try {
-    const value = globalThis?.localStorage?.getItem?.("noobotResendDebug");
-    if (["1", "true", "yes", "on"].includes(String(value || "").toLowerCase())) return true;
-  } catch {}
-  return false;
-}
-
 export function isResendDebugEnabled() {
-  try {
-    if (import.meta.env?.VITE_NOOBOT_RESEND_DEBUG === "1" || import.meta.env?.VITE_NOOBOT_RESEND_DEBUG === "true") {
-      return true;
-    }
-  } catch {}
-  return isBrowserDebugEnabled();
+  return true;
 }
 
 export function summarizeDebugMessage(message = {}) {
@@ -80,7 +61,6 @@ export function summarizeDebugMessages(messages = [], limit = 12) {
 }
 
 export function logResendDebug(phase, payload = {}) {
-  if (!isResendDebugEnabled()) return;
   try {
     const entry = {
       phase,
@@ -89,6 +69,7 @@ export function logResendDebug(phase, payload = {}) {
     };
     sessionLogSink?.log?.({
       category: "debug",
+      debugType: "resend",
       event: phase,
       sessionId: payload?.sessionId || "",
       dialogProcessId: payload?.dialogProcessId || "",

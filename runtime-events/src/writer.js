@@ -2,12 +2,16 @@ import { RUNTIME_EVENT_SCOPES } from './constants.js';
 import { normalizeRuntimeEvent } from './schema.js';
 import { resolveRuntimeEventFile, resolveRuntimeEventsConfig } from './paths.js';
 import { appendJsonLine } from './transports/jsonl.js';
+import { shouldRecordSessionLog } from './session-log-protocol.js';
 
 export async function writeRuntimeEvent(event = {}, options = {}) {
   try {
     const defaults = options.defaults || options;
     const record = normalizeRuntimeEvent(event, defaults);
     const config = resolveRuntimeEventsConfig({ ...defaults, ...options, workspaceRoot: record.workspaceRoot || defaults.workspaceRoot });
+    if (record.scope === RUNTIME_EVENT_SCOPES.SESSION && !shouldRecordSessionLog(record, { ...defaults, ...options, ...config })) {
+      return { ok: true, skipped: true, record };
+    }
     const file = resolveRuntimeEventFile(record, config);
     const writeResult = await appendJsonLine(file, record, {
       maxFileBytes: config.maxFileBytes,

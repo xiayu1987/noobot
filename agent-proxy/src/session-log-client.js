@@ -8,9 +8,6 @@ import {
   SESSION_CHANNELS,
 } from "@noobot/runtime-events/session-channel";
 
-const DEBUG_ENABLED = ["1", "true", "yes", "on"].includes(
-  String(process.env.AGENT_PROXY_SESSION_LOG_DEBUG || "").trim().toLowerCase(),
-);
 function buildLogWebSocketUrl(apiKey = "") {
   try {
     const target = new URL(config.upstreamHttpBase || "http://127.0.0.1:10061");
@@ -31,7 +28,6 @@ export function createSessionLogClient({ WebSocketImpl } = {}) {
     defaultCategory: "agent-proxy",
     defaultEvent: "agentProxy.log",
     defaultSessionId: "agent-proxy",
-    debugEnabled: DEBUG_ENABLED,
     channel: SESSION_CHANNELS.AGENT_PROXY_WEB_SOCKET,
   });
 }

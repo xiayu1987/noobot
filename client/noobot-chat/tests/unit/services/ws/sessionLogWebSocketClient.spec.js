@@ -35,7 +35,6 @@ describe("sessionLogWebSocketClient", () => {
     originalWebSocket = globalThis.WebSocket;
     MockWebSocket.instances = [];
     globalThis.WebSocket = MockWebSocket;
-    vi.stubEnv("VITE_NOOBOT_SESSION_LOG_DEBUG", "");
   });
 
   afterEach(() => {
@@ -106,16 +105,24 @@ describe("sessionLogWebSocketClient", () => {
     expect(client.status()).toEqual(expect.objectContaining({ queueLength: 1, inFlightLength: 0, hasReconnectTimer: true }));
   });
 
-  it("does not enqueue debug logs by default", async () => {
+  it("forwards debug logs to the log websocket so runtime-events can decide recording", async () => {
     const { createSessionLogWebSocketClient } = await importClient();
     const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
 
-    expect(client.debug({ event: "debug.trace", sessionId: "s-debug" })).toBe(false);
-    expect(MockWebSocket.instances).toHaveLength(0);
+    expect(client.debug({ event: "debug.trace", sessionId: "s-debug", data: { debugType: "state-machine" } })).toBe(true);
+    expect(MockWebSocket.instances).toHaveLength(1);
+    const socket = MockWebSocket.instances[0];
+    socket.readyState = MockWebSocket.OPEN;
+    socket.onopen?.();
+    expect(JSON.parse(socket.sent[0])).toEqual(expect.objectContaining({
+      category: "debug",
+      event: "debug.trace",
+      sessionId: "s-debug",
+      data: { debugType: "state-machine" },
+    }));
   });
 
-  it("sends debug logs when explicitly enabled", async () => {
-    vi.stubEnv("VITE_NOOBOT_SESSION_LOG_DEBUG", "true");
+  it("does not require a frontend debug switch to send debug logs", async () => {
     const { createSessionLogWebSocketClient } = await importClient();
     const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
 

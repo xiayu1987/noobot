@@ -8,6 +8,7 @@ import {
   resolveRuntimeEventsMaxArchives,
   resolveRuntimeEventsMaxFileBytes,
   resolveRuntimeEventsRetentionDays,
+  resolveRuntimeEventsSessionLogControls,
   resolveRuntimeEventsStorageConfig,
 } from '../runtime-events-config.mjs';
 
@@ -37,6 +38,29 @@ test('runtime-events storage cleanup can be disabled with zero values', () => {
     retentionDays: 0,
     maxArchives: 0,
   });
+});
+
+test('runtime-events session log controls use business defaults', () => {
+  assert.deepEqual(
+    resolveRuntimeEventsSessionLogControls({}),
+    RUNTIME_EVENTS_CONFIG_DEFAULTS.sessionLogControls,
+  );
+  assert.equal(resolveRuntimeEventsSessionLogControls({}).messageLog, true);
+  assert.equal(resolveRuntimeEventsSessionLogControls({}).stateMachineDebug, false);
+});
+
+test('runtime-events session log controls resolve per business env and overrides', () => {
+  const env = {
+    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.messageLog]: 'off',
+    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.stateMachineDebug]: 'on',
+    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.resendDebug]: 'invalid',
+  };
+
+  const resolved = resolveRuntimeEventsSessionLogControls(env, { transportLog: false });
+  assert.equal(resolved.messageLog, false);
+  assert.equal(resolved.stateMachineDebug, true);
+  assert.equal(resolved.resendDebug, false);
+  assert.equal(resolved.transportLog, false);
 });
 
 test('hook runtime-events mode defaults to summary and recognizes verbose values', () => {

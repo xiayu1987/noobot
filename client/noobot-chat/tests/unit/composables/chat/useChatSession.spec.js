@@ -102,8 +102,6 @@ describe("useChatSession reconnect replay", () => {
   });
 
   it("injects the session log websocket client into resend debug logger", () => {
-    vi.stubEnv("VITE_NOOBOT_RESEND_DEBUG", "true");
-
     createChatSession();
     logResendDebug("resend.injected", {
       sessionId: "s-log",

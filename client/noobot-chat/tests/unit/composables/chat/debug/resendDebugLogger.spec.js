@@ -12,18 +12,22 @@ describe("resendDebugLogger", () => {
     vi.unstubAllEnvs();
   });
 
-  it("does not write to the session log sink when resend debug is disabled", () => {
+  it("writes resend debug events to the session log sink for runtime-events filtering", () => {
     const sink = { log: vi.fn() };
     setResendDebugLogSink(sink);
 
-    expect(isResendDebugEnabled()).toBe(false);
+    expect(isResendDebugEnabled()).toBe(true);
     logResendDebug("resend.disabled", { sessionId: "s-1" });
 
-    expect(sink.log).not.toHaveBeenCalled();
+    expect(sink.log).toHaveBeenCalledWith(expect.objectContaining({
+      category: "debug",
+      debugType: "resend",
+      event: "resend.disabled",
+      sessionId: "s-1",
+    }));
   });
 
-  it("writes enabled resend debug events to the injected session log sink", () => {
-    vi.stubEnv("VITE_NOOBOT_RESEND_DEBUG", "true");
+  it("does not require a frontend resend debug switch to write to the injected session log sink", () => {
     const sink = { log: vi.fn() };
     setResendDebugLogSink(sink);
 
