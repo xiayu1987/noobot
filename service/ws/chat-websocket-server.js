@@ -726,6 +726,8 @@ export function registerChatWebSocketServer(
           turnScopeId: String(currentTurnScopeId || turnScopeId || config?.turnScopeId || "").trim(),
           data: {
             reuseExistingUserTurn: config?.reuseExistingUserTurn === true,
+            hasPayloadThinkingStartedAt: Boolean(String(config?.thinkingStartedAt || "").trim()),
+            payloadThinkingStartedAt: String(config?.thinkingStartedAt || "").trim(),
             attachments: summarizeDebugAttachments(attachments),
             payloadAttachments: summarizeDebugAttachments(payload?.attachments),
           },
@@ -756,6 +758,9 @@ export function registerChatWebSocketServer(
               payloadSelectedPlugins: config?.selectedPlugins,
               normalizedSelectedPlugins: normalizedRunConfig?.selectedPlugins,
               normalizedPlugins: summarizePluginConfig(normalizedRunConfig?.plugins),
+              hasPayloadThinkingStartedAt: Boolean(String(config?.thinkingStartedAt || "").trim()),
+              payloadThinkingStartedAt: String(config?.thinkingStartedAt || "").trim(),
+              normalizedThinkingStartedAt: String(normalizedRunConfig?.thinkingStartedAt || "").trim(),
             },
           });
         }

@@ -89,7 +89,7 @@ describe("useReconnectReplay", () => {
     expect(canStop.value).toBe(false);
   });
 
-  it("session scoped reconnect channel_state restores elapsed on latest assistant even when refresh did not mark it pending", async () => {
+  it("session scoped reconnect channel_state does not restore elapsed from channel timestamps", async () => {
     const { api, refs } = createFixture();
     const startedAt = "2026-06-22T10:00:00.000Z";
     refs.activeSession.value.messages = [
@@ -101,8 +101,6 @@ describe("useReconnectReplay", () => {
       sessionId: "s-1",
       dialogProcessId: "",
       state: "sending",
-      createdAt: startedAt,
-      createdAtMs: Date.parse(startedAt),
       updatedAt: startedAt,
       updatedAtMs: Date.parse(startedAt),
     });
@@ -111,13 +109,11 @@ describe("useReconnectReplay", () => {
     expect(assistant.pending).toBe(true);
     expect(assistant.channelState).toMatchObject({
       state: "sending",
-      createdAt: startedAt,
-      createdAtMs: Date.parse(startedAt),
     });
-    expect(assistant.thinkingStartedAt).toBe(startedAt);
+    expect(assistant.thinkingStartedAt).toBeUndefined();
   });
 
-  it("session scoped reconnect channel_state preserves thinking elapsed on latest pending assistant", async () => {
+  it("session scoped reconnect channel_state does not use channel timestamps as thinking start", async () => {
     const { api, refs } = createFixture();
     const startedAt = "2026-06-22T10:00:00.000Z";
     refs.activeSession.value.messages = [
@@ -129,8 +125,6 @@ describe("useReconnectReplay", () => {
       sessionId: "s-1",
       dialogProcessId: "",
       state: "sending",
-      createdAt: startedAt,
-      createdAtMs: Date.parse(startedAt),
       updatedAt: startedAt,
       updatedAtMs: Date.parse(startedAt),
     });
@@ -138,13 +132,11 @@ describe("useReconnectReplay", () => {
     const assistant = refs.activeSession.value.messages[1];
     expect(assistant.channelState).toMatchObject({
       state: "sending",
-      createdAt: startedAt,
-      createdAtMs: Date.parse(startedAt),
     });
-    expect(assistant.thinkingStartedAt).toBe(startedAt);
+    expect(assistant.thinkingStartedAt).toBeUndefined();
   });
 
-  it("reconnect channel_state preserves thinking elapsed start on active assistant", async () => {
+  it("reconnect channel_state does not backfill thinking start on active assistant", async () => {
     const { api, refs } = createFixture();
     const startedAt = "2026-06-22T10:00:00.000Z";
     refs.activeSession.value.messages = [
@@ -156,8 +148,6 @@ describe("useReconnectReplay", () => {
       sessionId: "s-1",
       dialogProcessId: "dp-reconnect-time",
       state: "sending",
-      createdAt: startedAt,
-      createdAtMs: Date.parse(startedAt),
       updatedAt: startedAt,
       updatedAtMs: Date.parse(startedAt),
     });
@@ -165,11 +155,8 @@ describe("useReconnectReplay", () => {
     const assistant = refs.activeSession.value.messages[1];
     expect(assistant.channelState).toMatchObject({
       state: "sending",
-      createdAt: startedAt,
-      createdAtMs: Date.parse(startedAt),
     });
-    expect(assistant.thinkingStartedAt).toBe(startedAt);
-    expect(assistant.thinking_started_at).toBeUndefined();
+    expect(assistant.thinkingStartedAt).toBeUndefined();
   });
 
   it("does not apply a stale stopped channel_state to a newer resend placeholder", async () => {

@@ -84,7 +84,7 @@ describe("reconnectReplayModel", () => {
       pending: true,
       channelState: { state: "sending", createdAt: startedAt, createdAtMs: Date.parse(startedAt) },
       thinkingStartedAt: startedAt,
-      thinking_started_at: startedAt,
+      thinkingStartedAt: startedAt,
     };
 
     patchMessageObjectPreservingUiState(target, {
@@ -96,7 +96,6 @@ describe("reconnectReplayModel", () => {
 
     expect(target.channelState).toMatchObject({ state: "sending", createdAt: startedAt });
     expect(target.thinkingStartedAt).toBe(startedAt);
-    expect(target.thinking_started_at).toBeUndefined();
     expect(target.pending).toBe(true);
   });
 

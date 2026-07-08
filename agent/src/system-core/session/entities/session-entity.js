@@ -90,6 +90,10 @@ export function normalizeMessageEntity(
   if (status) normalizedMessage.status = status;
   const channelState = String(message?.channelState || "").trim();
   if (channelState) normalizedMessage.channelState = channelState;
+  const thinkingStartedAt = String(message?.thinkingStartedAt || "").trim();
+  if (thinkingStartedAt) normalizedMessage.thinkingStartedAt = thinkingStartedAt;
+  const thinkingFinishedAt = String(message?.thinkingFinishedAt || "").trim();
+  if (thinkingFinishedAt) normalizedMessage.thinkingFinishedAt = thinkingFinishedAt;
   if (message?.pluginMessage === true) {
     normalizedMessage.pluginMessage = true;
   }
@@ -134,6 +138,33 @@ export function normalizeMessagesEntity(
   );
 }
 
+export function normalizeTurnTimingEntity(timing = {}) {
+  if (!timing || typeof timing !== "object" || Array.isArray(timing)) return null;
+  const turnScopeId = String(timing?.turnScopeId || "").trim();
+  const dialogProcessId = resolveMessageDialogProcessId(timing);
+  if (!turnScopeId && !dialogProcessId) return null;
+  const thinkingStartedAt = String(timing?.thinkingStartedAt || "").trim();
+  const thinkingFinishedAt = String(timing?.thinkingFinishedAt || "").trim();
+  const normalized = { turnScopeId, dialogProcessId };
+  if (thinkingStartedAt) normalized.thinkingStartedAt = thinkingStartedAt;
+  if (thinkingFinishedAt) normalized.thinkingFinishedAt = thinkingFinishedAt;
+  return normalized;
+}
+
+export function normalizeTurnTimingsEntity(turnTimings = []) {
+  const source = Array.isArray(turnTimings)
+    ? turnTimings
+    : Object.values(turnTimings && typeof turnTimings === "object" ? turnTimings : {});
+  const byKey = new Map();
+  for (const item of source) {
+    const normalized = normalizeTurnTimingEntity(item);
+    if (!normalized) continue;
+    const key = normalized.turnScopeId || normalized.dialogProcessId;
+    byKey.set(key, { ...(byKey.get(key) || {}), ...normalized });
+  }
+  return [...byKey.values()];
+}
+
 export function normalizeSessionEntity(
   session = {},
   {
@@ -160,6 +191,7 @@ export function normalizeSessionEntity(
       ? normalizedShortMemoryCheckpoint
       : 0,
     messages: normalizeMessagesEntity(session?.messages || [], now),
+    turnTimings: normalizeTurnTimingsEntity(session?.turnTimings || []),
     selectedConnectors: normalizeSelectedConnectors(session?.selectedConnectors || {}),
     createdAt: String(session?.createdAt || "").trim() || nowValue,
     updatedAt: String(session?.updatedAt || "").trim() || nowValue,

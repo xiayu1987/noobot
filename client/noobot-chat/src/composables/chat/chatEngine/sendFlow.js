@@ -285,6 +285,7 @@ export function createChatEngineSender({
         locale,
         selectedPlugins,
         turnScopeId,
+        thinkingStartedAt: botMsg?.thinkingStartedAt || "",
         uploadHint: translate("chat.uploadHint"),
         reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
       });
@@ -310,6 +311,8 @@ export function createChatEngineSender({
         attachments: summarizeDebugAttachments(attachments),
         payloadAttachments: summarizeDebugAttachments(payload?.attachments),
         botMessage: summarizeDebugMessage(botMsg),
+        botThinkingStartedAt: botMsg?.thinkingStartedAt || "",
+        payloadThinkingStartedAt: payload?.config?.thinkingStartedAt || "",
       });
       const activeProcessStore = getResolvedProcessStore();
       let locatedSendingStartedMessage = false;

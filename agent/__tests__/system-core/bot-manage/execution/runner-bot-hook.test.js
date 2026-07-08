@@ -433,3 +433,23 @@ test("SessionExecutionRunner restores currentSessionModelAlias when selectedMode
 
   assert.equal(capturedRunConfig?.runtimeModel, "history-model");
 });
+
+test("SessionExecutionRunner preserves provided thinkingStartedAt", async () => {
+  let capturedFinalizePayload = null;
+  const providedThinkingStartedAt = "2026-01-02T03:04:05.006Z";
+  const runner = createRunner({});
+  runner.finalizeRunSession = async (payload = {}) => {
+    capturedFinalizePayload = payload;
+    return { answer: "ok" };
+  };
+
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "hello",
+    runConfig: { thinkingStartedAt: providedThinkingStartedAt },
+  });
+
+  assert.equal(capturedFinalizePayload?.thinkingStartedAt, providedThinkingStartedAt);
+});
+

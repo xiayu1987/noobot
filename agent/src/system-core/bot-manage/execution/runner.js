@@ -302,6 +302,11 @@ export class SessionExecutionRunner {
         sessionId: usedSessionId,
         dialogProcessId,
         turnScopeId: resolvedTurnScopeId,
+        requestThinkingStartedAt: String(requestRunConfig?.thinkingStartedAt || "").trim(),
+        scenarioThinkingStartedAt: String(
+          scenarioResolvedRunConfig?.thinkingStartedAt || "",
+        ).trim(),
+        resolvedThinkingStartedAt: String(resolvedRunConfig?.thinkingStartedAt || "").trim(),
         reuseExistingUserTurn: resolvedRunConfig?.reuseExistingUserTurn === true,
         attachments: summarizeDebugAttachments(attachments),
         userMessageAttachments: summarizeDebugAttachments(buildContextPayload.userMessageAttachments),
@@ -323,6 +328,7 @@ export class SessionExecutionRunner {
         sessionId: usedSessionId,
         dialogProcessId,
         turnScopeId: resolvedTurnScopeId,
+        resolvedThinkingStartedAt: String(resolvedRunConfig?.thinkingStartedAt || "").trim(),
         reuseExistingUserTurn: resolvedRunConfig?.reuseExistingUserTurn === true,
         userMessageAttachments: summarizeDebugAttachments(attachments),
         userMessageAttachments: summarizeDebugAttachments(userMessageAttachments),
@@ -456,6 +462,13 @@ export class SessionExecutionRunner {
         },
         eventListener: runtimeEventListener,
       });
+      const finalizeThinkingStartedAt = String(resolvedRunConfig?.thinkingStartedAt || "").trim();
+      emitEvent(runtimeEventListener, "debug_resend_runner_finalize", {
+        sessionId: usedSessionId,
+        dialogProcessId,
+        turnScopeId: resolvedTurnScopeId,
+        resolvedThinkingStartedAt: finalizeThinkingStartedAt,
+      });
       const finalizedResult = await this.finalizeRunSession({
         userId,
         sessionId: usedSessionId,
@@ -464,6 +477,7 @@ export class SessionExecutionRunner {
         caller,
         dialogProcessId,
         turnScopeId: resolvedTurnScopeId,
+        thinkingStartedAt: finalizeThinkingStartedAt,
         agentResult,
         executionStartIndex,
         runtimeEventListener,

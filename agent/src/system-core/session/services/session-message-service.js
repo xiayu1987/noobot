@@ -97,6 +97,40 @@ function uniqueValues(values = []) {
   return [...new Set(values.map((value) => normalizeAnchorValue(value)).filter(Boolean))];
 }
 
+function resolveTurnTimingKey(item = {}) {
+  return normalizeAnchorValue(item?.turnScopeId) || resolveMessageDialogProcessId(item);
+}
+
+function upsertSessionTurnTiming(session = {}, timing = {}) {
+  const turnScopeId = normalizeAnchorValue(timing?.turnScopeId);
+  const dialogProcessId = resolveMessageDialogProcessId(timing);
+  const thinkingStartedAt = normalizeAnchorValue(timing?.thinkingStartedAt);
+  const thinkingFinishedAt = normalizeAnchorValue(timing?.thinkingFinishedAt);
+  if ((!turnScopeId && !dialogProcessId) || (!thinkingStartedAt && !thinkingFinishedAt)) return;
+  const incoming = {
+    turnScopeId,
+    dialogProcessId,
+    ...(thinkingStartedAt ? { thinkingStartedAt } : {}),
+    ...(thinkingFinishedAt ? { thinkingFinishedAt } : {}),
+  };
+  const incomingKey = resolveTurnTimingKey(incoming);
+  const source = Array.isArray(session.turnTimings) ? session.turnTimings : [];
+  let matched = false;
+  session.turnTimings = source.map((item) => {
+    if (resolveTurnTimingKey(item) !== incomingKey) return item;
+    matched = true;
+    return { ...item, ...incoming };
+  });
+  if (!matched) session.turnTimings.push(incoming);
+}
+
+function pruneSessionTurnTimings(session = {}) {
+  const messages = Array.isArray(session.messages) ? session.messages : [];
+  const liveKeys = new Set(messages.map(resolveTurnTimingKey).filter(Boolean));
+  session.turnTimings = (Array.isArray(session.turnTimings) ? session.turnTimings : [])
+    .filter((item) => liveKeys.has(resolveTurnTimingKey(item)));
+}
+
 function buildTurnScopeReplacement({
   replacedMessages = [],
   replacementMessages = [],
@@ -166,6 +200,10 @@ export class SessionMessageService {
     state = "",
     status = "",
     channelState = "",
+    thinkingStartedAt = "",
+    thinkingFinishedAt = "",
+    turnTimingThinkingStartedAt = thinkingStartedAt,
+    turnTimingThinkingFinishedAt = thinkingFinishedAt,
   }) {
     const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
       userId,
@@ -229,6 +267,8 @@ export class SessionMessageService {
       state: String(state || "").trim(),
       status: String(status || "").trim(),
       channelState: String(channelState || "").trim(),
+      ...(String(thinkingStartedAt || "").trim() ? { thinkingStartedAt: String(thinkingStartedAt || "").trim() } : {}),
+      ...(String(thinkingFinishedAt || "").trim() ? { thinkingFinishedAt: String(thinkingFinishedAt || "").trim() } : {}),
       ts: this.now(),
     }, this.now);
 
@@ -252,6 +292,12 @@ export class SessionMessageService {
 
     session.messages = Array.isArray(session.messages) ? session.messages : [];
     session.messages.push(turn);
+    upsertSessionTurnTiming(session, {
+      turnScopeId: turn.turnScopeId,
+      dialogProcessId: resolveMessageDialogProcessId(turn),
+      thinkingStartedAt: turnTimingThinkingStartedAt,
+      thinkingFinishedAt: turnTimingThinkingFinishedAt,
+    });
     session.updatedAt = this.now();
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
     await this.sessionRepo.save(userId, session, resolvedParentSessionId);
@@ -312,6 +358,7 @@ export class SessionMessageService {
     }
     const deletedCount = messages.length - anchorIndex;
     session.messages = messages.slice(0, anchorIndex);
+    pruneSessionTurnTimings(session);
     session.updatedAt = this.now();
     session.version = currentVersion + 1;
     session.revision = session.version;
@@ -418,6 +465,7 @@ export class SessionMessageService {
       ...(nextAttachments !== undefined ? { attachments: nextAttachments } : {}),
     }, () => nowValue);
     session.messages = [...messages.slice(0, turnStartIndex), newMessage];
+    pruneSessionTurnTimings(session);
     session.updatedAt = nowValue;
     session.version = nextVersion;
     session.revision = nextVersion;

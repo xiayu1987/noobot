@@ -294,7 +294,7 @@ describe("detailMessages", () => {
         pending: true,
         channelState: { state: "sending", createdAt: startedAt, createdAtMs: Date.parse(startedAt) },
         thinkingStartedAt: startedAt,
-        thinking_started_at: startedAt,
+        thinkingStartedAt: startedAt,
       },
     ];
 
@@ -312,7 +312,6 @@ describe("detailMessages", () => {
     expect(assistant.pending).toBe(true);
     expect(assistant.channelState).toMatchObject({ state: "sending", createdAt: startedAt });
     expect(assistant.thinkingStartedAt).toBe(startedAt);
-    expect(assistant.thinking_started_at).toBeUndefined();
   });
 
   it("does not merge stale stopped detail into a newer resend turn by dialogProcessId or content", () => {
@@ -617,4 +616,38 @@ describe("detailMessages", () => {
       { attachmentId: "completed-tool-1", name: "completed-tool.md" },
     ]);
   });
+  it("merges same-turn assistant thinking start and finish for reload display", () => {
+    const startedAt = "2026-06-22T10:00:05.000Z";
+    const finishedAt = "2026-06-22T10:00:12.000Z";
+    const normalizedMessages = buildNormalizedDetailMessages({
+      detailMessages: [
+        {
+          role: RoleEnum.ASSISTANT,
+          content: "first chunk",
+          turnScopeId: "turn-thinking",
+          dialogProcessId: "dp-thinking",
+          sessionId: "root-session",
+          thinkingStartedAt: startedAt,
+        },
+        {
+          role: RoleEnum.ASSISTANT,
+          content: "final chunk",
+          turnScopeId: "turn-thinking",
+          dialogProcessId: "dp-thinking",
+          sessionId: "root-session",
+          thinkingFinishedAt: finishedAt,
+        },
+      ],
+      sessionDocs: [],
+      rootSessionId: "root-session",
+      makeViewMessage: buildViewMessage,
+      foldMessagesForView: (messages) => foldConversationMessages(messages, buildViewMessage),
+    });
+
+    expect(normalizedMessages).toHaveLength(1);
+    expect(normalizedMessages[0].thinkingStartedAt).toBe(startedAt);
+    expect(normalizedMessages[0].thinkingFinishedAt).toBe(finishedAt);
+    expect(normalizedMessages[0].content).toBe("first chunk\n\nfinal chunk");
+  });
+
 });

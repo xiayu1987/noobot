@@ -34,12 +34,14 @@ export function buildChatPayload({
   uploadHint = "",
   reuseExistingUserTurn = false,
   turnScopeId = "",
+  thinkingStartedAt = "",
 } = {}) {
   const normalizedScenario = normalizeTrimmedString(botScenario?.value ?? botScenario);
   const normalizedSelectedModel = normalizeTrimmedString(selectedModel?.value ?? selectedModel);
   const normalizedMemoryModel = normalizeTrimmedString(memoryModel?.value ?? memoryModel);
   const normalizedPluginModelConfig = pluginModelConfig?.value ?? pluginModelConfig;
   const normalizedTurnScopeId = normalizeTrimmedString(turnScopeId);
+  const normalizedThinkingStartedAt = normalizeTrimmedString(thinkingStartedAt);
   return {
     userId: userId?.value ?? userId,
     sessionId: activeSession?.value?.backendSessionId || activeSession?.value?.sessionId || activeSession?.value?.id,
@@ -61,6 +63,7 @@ export function buildChatPayload({
         activeSession?.value?.connectorPanelState?.selectedConnectors || {},
       ),
       selectedPlugins: normalizeSelectedPluginKeys(selectedPlugins),
+      ...(normalizedThinkingStartedAt ? { thinkingStartedAt: normalizedThinkingStartedAt } : {}),
       ...(reuseExistingUserTurn ? {
         reuseExistingUserTurn: true,
       } : {}),

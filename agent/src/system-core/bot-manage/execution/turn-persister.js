@@ -34,6 +34,13 @@ const LEGACY_ATTACHMENT_MIRROR_KEY = "attachment" + "Metas";
 const SESSION_TURN_FULL_CONTENT_PREVIEW_CHARS = LENGTH_THRESHOLDS.preview.sessionSummaryArrayItemChars;
 const SESSION_TURN_FULL_RAW_MODEL_PREVIEW_CHARS = LENGTH_THRESHOLDS.preview.sessionSummaryArrayItemChars;
 
+function normalizeIsoTime(value = "") {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const ms = Date.parse(text);
+  return Number.isFinite(ms) && ms > 0 ? new Date(ms).toISOString() : "";
+}
+
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -259,9 +266,17 @@ export class SessionTurnPersister {
     state = "",
     status = "",
     channelState = "",
+    thinkingStartedAt = "",
+    thinkingFinishedAt = "",
+    turnTimingThinkingStartedAt = thinkingStartedAt,
+    turnTimingThinkingFinishedAt = thinkingFinishedAt,
   }) {
     const sessionAttachments = filterSessionAttachments(attachments);
     const normalizedTurnScopeId = String(turnScopeId || "").trim();
+    const normalizedThinkingStartedAt = normalizeIsoTime(thinkingStartedAt);
+    const normalizedThinkingFinishedAt = normalizeIsoTime(thinkingFinishedAt);
+    const normalizedTurnTimingThinkingStartedAt = normalizeIsoTime(turnTimingThinkingStartedAt);
+    const normalizedTurnTimingThinkingFinishedAt = normalizeIsoTime(turnTimingThinkingFinishedAt);
     const sessionContent =
       role === MESSAGE_ROLE.TOOL
         ? sanitizeToolContentForSession(content, toolName)
@@ -312,6 +327,8 @@ export class SessionTurnPersister {
       state: String(state || "").trim(),
       status: String(status || "").trim(),
       channelState: String(channelState || "").trim(),
+      ...(normalizedThinkingStartedAt ? { thinkingStartedAt: normalizedThinkingStartedAt } : {}),
+      ...(normalizedThinkingFinishedAt ? { thinkingFinishedAt: normalizedThinkingFinishedAt } : {}),
       modelResponseMetadata:
         modelResponseMetadata &&
         typeof modelResponseMetadata === "object" &&
@@ -330,6 +347,27 @@ export class SessionTurnPersister {
         type: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
         data: summarizeSessionTurnPayload(fullTurnPayload),
       });
+      if (normalizedTurnTimingThinkingStartedAt || normalizedTurnTimingThinkingFinishedAt) {
+        await this.messagePersister.appendExecutionLog({
+          userId,
+          sessionId,
+          parentSessionId,
+          dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
+          event: "debug_turn_timing_append",
+          category: MESSAGE_ROLE.SYSTEM,
+          type: "system",
+          data: {
+            sessionId,
+            role,
+            turnScopeId: normalizedTurnScopeId,
+            dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
+            messageThinkingStartedAt: normalizedThinkingStartedAt,
+            messageThinkingFinishedAt: normalizedThinkingFinishedAt,
+            turnTimingThinkingStartedAt: normalizedTurnTimingThinkingStartedAt,
+            turnTimingThinkingFinishedAt: normalizedTurnTimingThinkingFinishedAt,
+          },
+        });
+      }
     } catch {
       // ignore execution-log failures to avoid blocking the main turn flow
     }
@@ -369,6 +407,10 @@ export class SessionTurnPersister {
       state,
       status,
       channelState,
+      thinkingStartedAt: normalizedThinkingStartedAt,
+      thinkingFinishedAt: normalizedThinkingFinishedAt,
+      turnTimingThinkingStartedAt: normalizedTurnTimingThinkingStartedAt,
+      turnTimingThinkingFinishedAt: normalizedTurnTimingThinkingFinishedAt,
     });
     emitEvent(eventListener, `${role}_message_saved`, { sessionId });
   }
@@ -382,8 +424,13 @@ export class SessionTurnPersister {
     parentDialogProcessId = "",
     turnScopeId = "",
     eventListener,
+    thinkingStartedAt = "",
+    thinkingFinishedAt = "",
   }) {
-    for (const messageItem of messages) {
+    const normalizedThinkingStartedAt = normalizeIsoTime(thinkingStartedAt);
+    const normalizedThinkingFinishedAt = normalizeIsoTime(thinkingFinishedAt);
+    let turnTimingWritten = false;
+    for (const [index, messageItem] of messages.entries()) {
       await this.appendSessionTurn({
         userId,
         sessionId,
@@ -439,8 +486,13 @@ export class SessionTurnPersister {
             ? messageItem.modelResponseMetadata
             : null,
         turnScopeId: String(messageItem.turnScopeId || turnScopeId || "").trim(),
+        thinkingStartedAt: "",
+        thinkingFinishedAt: "",
+        turnTimingThinkingStartedAt: !turnTimingWritten ? normalizedThinkingStartedAt : "",
+        turnTimingThinkingFinishedAt: !turnTimingWritten ? normalizedThinkingFinishedAt : "",
         eventListener,
       });
+      turnTimingWritten = true;
     }
   }
 

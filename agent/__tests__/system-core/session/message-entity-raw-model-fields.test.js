@@ -175,3 +175,16 @@ test("normalizeMessageEntity ignores legacy attachment mirror fields", () => {
     false,
   );
 });
+
+
+test("normalizeMessageEntity preserves thinking timing fields", () => {
+  const normalized = normalizeMessageEntity({
+    role: "assistant",
+    content: "done",
+    thinkingStartedAt: " 2026-07-08T10:00:00.000Z ",
+    thinkingFinishedAt: " 2026-07-08T10:00:03.500Z ",
+  });
+
+  assert.equal(normalized.thinkingStartedAt, "2026-07-08T10:00:00.000Z");
+  assert.equal(normalized.thinkingFinishedAt, "2026-07-08T10:00:03.500Z");
+});

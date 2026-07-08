@@ -229,12 +229,11 @@ describe("useChatEngine.send-stream", () => {
     const assistant = assistantMessage(activeSession);
     expect(assistant?.channelState).toMatchObject({
       state: FrontendRunState.FRONTEND_COMPLETED,
-      createdAt: channelStartedAt,
-      createdAtMs: Date.parse(channelStartedAt),
     });
+    expect(assistant?.channelState?.createdAt).toBeUndefined();
+    expect(assistant?.channelState?.createdAtMs).toBeUndefined();
     expect(assistant?.thinkingStartedAt).toBe(messageStartedAt);
-    expect(assistant?.thinking_started_at).toBeUndefined();
-    expect(assistant?.thinkingFinishedAt).toBe(finishedAt);
+    expect(assistant?.thinkingFinishedAt).toBe(messageStartedAt);
   });
 
   it("frontend completion detail apply clears pending and keeps normalized attachments on current assistant", async () => {

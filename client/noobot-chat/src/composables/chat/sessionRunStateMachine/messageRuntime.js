@@ -8,7 +8,14 @@ import {
   getMessageRole,
   getMessageTurnScopeId,
 } from "../../infra/messageIdentity";
-import { normalizeTimePair, nowMs, toIsoTime } from "../../infra/timeFields";
+import {
+  getThinkingFinishedAt,
+  getThinkingStartedAt,
+  normalizeTimePair,
+  nowMs,
+  parseTimeMs,
+  toIsoTime,
+} from "../../infra/timeFields";
 import {
   BackendChannelState,
   BackendTerminalStates,
@@ -126,37 +133,29 @@ export function getMessageChannelState(messageItem = {}) {
 
 export const getMessageRuntimeChannelState = getMessageChannelState;
 
-function resolveRuntimeTimestamp(...values) {
-  const normalized = normalizeTimePair({
-    createdAt: values[0],
-    createdAtMs: values[1],
-    updatedAt: values[2],
-    updatedAtMs: values[3],
-  });
-  return {
-    startedAt: normalized.createdAt || normalized.createdAtMs || "",
-    finishedAt: normalized.updatedAt || normalized.updatedAtMs || "",
-  };
+function resolveRuntimeTimestamp({ thinkingStartedAt = "", thinkingFinishedAt = "" } = {}) {
+  const startedAt = parseTimeMs(thinkingStartedAt) > 0 ? thinkingStartedAt : "";
+  const finishedAt = parseTimeMs(thinkingFinishedAt) > 0 ? thinkingFinishedAt : "";
+  return { startedAt, finishedAt };
 }
 
 export function resolveSessionRunMessageRuntimeView(messageItem = {}) {
   const channelState = getMessageChannelState(messageItem);
   const state = normalizeState(channelState?.state || messageItem?.status || messageItem?.state);
   const pending = messageItem?.pending === true;
-  const running = pending || MESSAGE_RUNNING_CHANNEL_STATES.includes(state);
+  const hasFinishedAt = Boolean(getThinkingFinishedAt(messageItem));
+  const terminal = isTerminalMessageRuntimeState(state);
+  const running = !hasFinishedAt && !terminal && (pending || MESSAGE_RUNNING_CHANNEL_STATES.includes(state));
   const inFlightAssistant = getMessageRole(messageItem) === "assistant" && (
-    pending || MESSAGE_IN_FLIGHT_CHANNEL_STATES.includes(state)
+    running || (!hasFinishedAt && !terminal && MESSAGE_IN_FLIGHT_CHANNEL_STATES.includes(state))
   );
   const canStopTarget = inFlightAssistant && (
     MESSAGE_CAN_STOP_TARGET_STATES.includes(state) || (pending && !state)
   );
-  const channelTiming = normalizeTimePair(channelState);
-  const messageTiming = resolveRuntimeTimestamp(
-    messageItem?.thinkingStartedAt,
-    messageItem?.thinkingStartedAtMs,
-    messageItem?.thinkingFinishedAt,
-    messageItem?.thinkingFinishedAtMs,
-  );
+  const messageTiming = resolveRuntimeTimestamp({
+    thinkingStartedAt: getThinkingStartedAt(messageItem),
+    thinkingFinishedAt: getThinkingFinishedAt(messageItem),
+  });
   return {
     state,
     channelState,
@@ -164,8 +163,8 @@ export function resolveSessionRunMessageRuntimeView(messageItem = {}) {
     running,
     inFlightAssistant,
     canStopTarget,
-    startedAt: messageTiming.startedAt || channelTiming.createdAt || channelTiming.createdAtMs || "",
-    finishedAt: messageTiming.finishedAt || channelTiming.updatedAt || channelTiming.updatedAtMs || "",
+    startedAt: messageTiming.startedAt || "",
+    finishedAt: messageTiming.finishedAt || "",
   };
 }
 
@@ -187,10 +186,6 @@ export function buildInFlightMessageRuntimePatch(stateItem = {}) {
     sourceEvent: trim(stateItem?.sourceEvent),
     seq: Number(stateItem?.seq || 0),
   };
-  if (timing.createdAtMs > 0) channelState.createdAtMs = timing.createdAtMs;
-  if (timing.updatedAtMs > 0) channelState.updatedAtMs = timing.updatedAtMs;
-  if (timing.createdAt) channelState.createdAt = timing.createdAt;
-  if (timing.updatedAt) channelState.updatedAt = timing.updatedAt;
   return {
     [SESSION_RUN_MESSAGE_RUNTIME_MARK]: buildSessionRunMessageRuntimeKey(stateItem),
     runtimeMark: buildSessionRunMessageRuntimeKey(stateItem),
@@ -207,22 +202,12 @@ export function buildClearMessageRuntimePatch({
 } = {}) {
   const stateTiming = normalizeTimePair(stateSnapshot);
   const channelState = getMessageChannelState(messageItem);
-  const channelTiming = normalizeTimePair(channelState);
-  const finishedAt =
-    stateTiming.updatedAt ||
-    channelTiming.updatedAt ||
-    toIsoTime(nowMs());
-  const finishedAtMs =
-    stateTiming.updatedAtMs ||
-    channelTiming.updatedAtMs ||
-    nowMs();
+  const finishedAt = stateTiming.updatedAt || toIsoTime(nowMs());
   return {
     clearRuntimeMark: true,
     pending: false,
     channelState: {
       state: FrontendRunState.FRONTEND_COMPLETED,
-      updatedAt: finishedAt,
-      updatedAtMs: finishedAtMs,
     },
     thinkingFinishedAt: finishedAt,
     thinkingFinishedAtPolicy: "if_missing",
@@ -237,22 +222,12 @@ export function buildFailedMessageRuntimePatch({
 } = {}) {
   const stateTiming = normalizeTimePair(stateSnapshot);
   const channelState = getMessageChannelState(messageItem);
-  const channelTiming = normalizeTimePair(channelState);
-  const finishedAt =
-    stateTiming.updatedAt ||
-    channelTiming.updatedAt ||
-    toIsoTime(nowMs());
-  const finishedAtMs =
-    stateTiming.updatedAtMs ||
-    channelTiming.updatedAtMs ||
-    nowMs();
+  const finishedAt = stateTiming.updatedAt || toIsoTime(nowMs());
   return {
     clearRuntimeMark: true,
     pending: false,
     channelState: {
       state: BackendChannelState.ERROR,
-      updatedAt: finishedAt,
-      updatedAtMs: finishedAtMs,
     },
     thinkingFinishedAt: finishedAt,
     thinkingFinishedAtPolicy: "if_missing",
@@ -266,15 +241,7 @@ export function buildStoppedMessageRuntimePatch({
 } = {}) {
   const stateTiming = normalizeTimePair(stateSnapshot);
   const channelState = getMessageChannelState(messageItem);
-  const channelTiming = normalizeTimePair(channelState);
-  const finishedAt =
-    stateTiming.updatedAt ||
-    channelTiming.updatedAt ||
-    toIsoTime(nowMs());
-  const finishedAtMs =
-    stateTiming.updatedAtMs ||
-    channelTiming.updatedAtMs ||
-    nowMs();
+  const finishedAt = stateTiming.updatedAt || toIsoTime(nowMs());
   return {
     clearRuntimeMark: true,
     pending: false,
@@ -285,8 +252,6 @@ export function buildStoppedMessageRuntimePatch({
       turnScopeId: trim(stateSnapshot?.turnScopeId) || trim(channelState?.turnScopeId),
       sourceEvent: trim(stateSnapshot?.sourceEvent) || trim(channelState?.sourceEvent) || "stopped",
       seq: Number(stateSnapshot?.seq || channelState?.seq || 0),
-      updatedAt: finishedAt,
-      updatedAtMs: finishedAtMs,
     },
     thinkingFinishedAt: finishedAt,
     thinkingFinishedAtPolicy: "if_missing",

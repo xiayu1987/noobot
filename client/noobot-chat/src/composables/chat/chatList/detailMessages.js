@@ -23,6 +23,7 @@ import {
 import {
   getThinkingFinishedAt,
   getThinkingStartedAt,
+  resolveTimeIso,
   setThinkingFinishedAt,
   setThinkingStartedAt,
 } from "../../infra/timeFields";
@@ -132,6 +133,36 @@ function restoreFrozenAssistantDisplayFields(messageItem = {}, frozen = null) {
   if (frozen.thinkingFinishedAt) setThinkingFinishedAt(messageItem, frozen.thinkingFinishedAt);
   if (frozen.channelState !== undefined) messageItem.channelState = frozen.channelState;
   messageItem.pending = false;
+}
+
+function resolveTurnTimingKey(item = {}) {
+  return getMessageTurnScopeId(item) || getMessageDialogProcessId(item) || "";
+}
+
+function buildTurnTimingMap(turnTimings = []) {
+  const map = new Map();
+  for (const item of Array.isArray(turnTimings) ? turnTimings : []) {
+    const key = resolveTurnTimingKey(item);
+    if (!key) continue;
+    map.set(key, {
+      thinkingStartedAt: resolveTimeIso(item?.thinkingStartedAt),
+      thinkingFinishedAt: resolveTimeIso(item?.thinkingFinishedAt),
+    });
+  }
+  return map;
+}
+
+function applyTurnTimingsToMessages(messages = [], turnTimings = []) {
+  const timingMap = buildTurnTimingMap(turnTimings);
+  if (!timingMap.size) return messages;
+  for (const messageItem of Array.isArray(messages) ? messages : []) {
+    if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) continue;
+    const timing = timingMap.get(resolveTurnTimingKey(messageItem));
+    if (!timing) continue;
+    if (timing.thinkingStartedAt) setThinkingStartedAt(messageItem, timing.thinkingStartedAt);
+    if (timing.thinkingFinishedAt) setThinkingFinishedAt(messageItem, timing.thinkingFinishedAt);
+  }
+  return messages;
 }
 
 function conflictsWithInFlightAssistant(existingMessages = [], detailMessageItem = {}) {
@@ -366,6 +397,7 @@ export function buildNormalizedDetailMessages({
   detailMessages = [],
   sessionDocs = [],
   rootSessionId = "",
+  turnTimings = [],
   makeViewMessage,
   foldMessagesForView,
   isSummaryDetail = false,
@@ -382,6 +414,7 @@ export function buildNormalizedDetailMessages({
       makeViewMessage,
     });
   }
+  applyTurnTimingsToMessages(normalizedMessages, turnTimings);
   return normalizedMessages;
 }
 

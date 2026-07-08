@@ -96,6 +96,8 @@ function buildMessageSummary(message = {}) {
     "tool_call_id",
     "toolName",
     "turnScopeId",
+    "thinkingStartedAt",
+    "thinkingFinishedAt",
   ]) {
     if (message?.[key] !== undefined) summary[key] = message[key];
   }
@@ -473,6 +475,7 @@ function resolveThinkingDetailCountForDisplayMessage(message = {}, countsByKey =
 
 export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
   const messages = Array.isArray(session?.messages) ? session.messages : [];
+  const turnTimings = Array.isArray(session?.turnTimings) ? session.turnTimings : [];
   const sessionId = String(session?.sessionId || "").trim();
   const firstUserMessage = messages.find(
     (messageItem) =>
@@ -517,6 +520,7 @@ export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
     version: session?.version,
     revision: session?.revision,
     depth: Number.isFinite(Number(depth)) ? Number(depth) : 0,
+    turnTimings,
     messages: displayMessages,
     toolLogSummaries,
     stats: {

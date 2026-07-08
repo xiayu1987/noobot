@@ -24,11 +24,6 @@ import {
   getMessageRuntimeChannelState,
 } from "../sessionRunStateMachine";
 import {
-  bindThinkingDialogProcess,
-  rememberThinkingFinished,
-  rememberThinkingStarted,
-} from "../thinkingTimingRegistry";
-import {
   getMessageDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,
@@ -50,23 +45,6 @@ function parseThinkingTimingMs(value) {
   return parseTimeMs(value);
 }
 
-function applyMissingThinkingStartedAt(targetAssistantMessage = null, nextStartedAt = "") {
-  if (!targetAssistantMessage) return;
-  const currentStartedAtMs = parseThinkingTimingMs(getThinkingStartedAt(targetAssistantMessage));
-  if (currentStartedAtMs > 0) return;
-  const nextStartedAtMs = parseThinkingTimingMs(nextStartedAt);
-  if (nextStartedAtMs <= 0) return;
-  setThinkingStartedAt(targetAssistantMessage, nextStartedAtMs);
-}
-
-function resolveThinkingStartedAtMs(targetAssistantMessage = null, fallbackMs = 0) {
-  return (
-    Number(fallbackMs || 0) ||
-    parseTimeMs(getThinkingStartedAt(targetAssistantMessage)) ||
-    parseTimeMs(targetAssistantMessage?.channelState?.createdAtMs) ||
-    nowMs()
-  );
-}
 
 export function createChatEngineConversationState({
   activeSession,
@@ -445,14 +423,6 @@ export function createChatEngineConversationState({
       turnScopeId,
       sourceEvent: String(statePayload?.sourceEvent || "").trim(),
       seq: Number(statePayload?.seq || 0),
-      createdAtMs:
-        createdAtMs ||
-        Number(targetAssistantMessage?.channelState?.createdAtMs || 0),
-      updatedAtMs,
-      createdAt:
-        createdAt ||
-        String(targetAssistantMessage?.channelState?.createdAt || targetAssistantMessage?.thinkingStartedAt || ""),
-      updatedAt,
     };
     if (targetAssistantMessage && sessionId) {
       targetAssistantMessage.sessionId = targetAssistantMessage.sessionId || sessionId;
@@ -462,7 +432,6 @@ export function createChatEngineConversationState({
       if (!getMessageDialogProcessId(targetAssistantMessage)) {
         targetAssistantMessage.dialogProcessId = dialogProcessId;
       }
-      bindThinkingDialogProcess({ sessionId, dialogProcessId, turnScopeId });
       markUserMessageDialogProcessId({ targetAssistantMessage, dialogProcessId });
     }
     if (isInFlightConversationState(state)) {
@@ -559,16 +528,8 @@ export function createChatEngineConversationState({
           return;
         }
       }
-      rememberThinkingStarted({
-        sessionId,
-        dialogProcessId,
-        turnScopeId,
-      startedAtMs: resolveThinkingStartedAtMs(targetAssistantMessage, createdAtMs),
-        updatedAtMs,
-      });
       if (targetAssistantMessage) {
         targetAssistantMessage.channelState = channelStateView;
-        applyMissingThinkingStartedAt(targetAssistantMessage, channelStateView.createdAt || channelStateView.createdAtMs);
         targetAssistantMessage.pending = true;
         if (state === BackendChannelState.STOPPING) {
           targetAssistantMessage.statusLabel = translate("chat.stopping");
@@ -582,13 +543,6 @@ export function createChatEngineConversationState({
     }
     if (!isTerminalConversationState(state)) return;
     clearRememberedStopRequests({ sessionId, dialogProcessId, turnScopeId });
-    rememberThinkingFinished({
-      sessionId,
-      dialogProcessId,
-      turnScopeId,
-      finishedAtMs: updatedAtMs || nowMs(),
-      finishedAt: updatedAt,
-    });
     if (applyRunStateEvent) {
       applyRunStateEvent({
         type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
@@ -646,8 +600,7 @@ export function createChatEngineConversationState({
         return;
       }
       targetAssistantMessage.channelState = channelStateView;
-      applyMissingThinkingStartedAt(targetAssistantMessage, channelStateView.createdAt || channelStateView.createdAtMs);
-      setThinkingFinishedAt(targetAssistantMessage, getThinkingFinishedAt(targetAssistantMessage) || updatedAt || createdAt || nowIso());
+      setThinkingFinishedAt(targetAssistantMessage, getThinkingFinishedAt(targetAssistantMessage) || nowIso());
       logResendDebug("conversationState.backendCompleted.apply", {
         state, sessionId, dialogProcessId, turnScopeId,
         before: beforeTerminalApply,
@@ -657,8 +610,7 @@ export function createChatEngineConversationState({
     }
     const beforeTerminalApply = summarizeDebugMessage(targetAssistantMessage);
     targetAssistantMessage.channelState = channelStateView;
-    applyMissingThinkingStartedAt(targetAssistantMessage, channelStateView.createdAt || channelStateView.createdAtMs);
-    setThinkingFinishedAt(targetAssistantMessage, getThinkingFinishedAt(targetAssistantMessage) || updatedAt || createdAt || nowIso());
+    setThinkingFinishedAt(targetAssistantMessage, getThinkingFinishedAt(targetAssistantMessage) || nowIso());
     targetAssistantMessage.pending = false;
     if (state === FrontendRunState.FRONTEND_COMPLETED) {
       targetAssistantMessage.statusLabel = translate("chat.generated");

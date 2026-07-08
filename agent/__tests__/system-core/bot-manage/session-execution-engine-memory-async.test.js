@@ -6,10 +6,20 @@ import { SessionExecutionEngine } from "../../../src/system-core/bot-manage/sess
 const TEST_SHORT_DELAY_MS = 5;
 const TEST_MEDIUM_DELAY_MS = 20;
 
-function createEngine({ captureSessionToShortMemory, maybeSummarize, globalConfig = {} } = {}) {
+function createEngine({
+  captureSessionToShortMemory,
+  maybeSummarize,
+  globalConfig = {},
+  appendTurn,
+} = {}) {
   const session = {
     async appendExecutionLog() {},
-    async appendTurn() {},
+    async appendTurn(...args) {
+      if (typeof appendTurn === "function") {
+        return appendTurn(...args);
+      }
+      return undefined;
+    },
     async saveCurrentTurnTasks() {},
     async getExecutionBundle() {
       return { logs: [] };
@@ -51,6 +61,8 @@ function buildFinalizeInput(userConfig = {}) {
     parentDialogProcessId: "",
     caller: "user",
     dialogProcessId: "d1",
+    turnScopeId: "turn-1",
+    thinkingStartedAt: "2026-07-08T16:49:44.113Z",
     agentResult: {
       output: "ok",
       turnMessages: [{ role: "assistant", type: "message", content: "ok" }],
@@ -62,6 +74,26 @@ function buildFinalizeInput(userConfig = {}) {
     resolvedParentAsyncResultContainer: null,
   };
 }
+
+test("_finalizeRunSession forwards thinkingStartedAt to turn timing persistence", async () => {
+  const appendTurnPayloads = [];
+  const engine = createEngine({
+    appendTurn: async (payload = {}) => {
+      appendTurnPayloads.push(payload);
+    },
+  });
+
+  await engine._finalizeRunSession(buildFinalizeInput({ memory: { postprocess_async: true } }));
+
+  assert.equal(appendTurnPayloads.length, 1);
+  assert.equal(
+    appendTurnPayloads[0].turnTimingThinkingStartedAt,
+    "2026-07-08T16:49:44.113Z",
+  );
+  assert.ok(appendTurnPayloads[0].turnTimingThinkingFinishedAt);
+  assert.equal(appendTurnPayloads[0].thinkingStartedAt, "");
+  assert.equal(appendTurnPayloads[0].thinkingFinishedAt, "");
+});
 
 async function waitFor(predicate, timeoutMs = 500) {
   const startedAt = Date.now();

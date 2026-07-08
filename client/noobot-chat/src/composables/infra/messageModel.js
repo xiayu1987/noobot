@@ -407,6 +407,12 @@ function foldConversationMessages(messages = [], buildView) {
       Number(previousMessage?.thinkingDetailCount || 0),
       Number(currentMessage?.thinkingDetailCount || 0),
     );
+    if (!previousMessage.thinkingStartedAt && currentMessage.thinkingStartedAt) {
+      previousMessage.thinkingStartedAt = currentMessage.thinkingStartedAt;
+    }
+    if (currentMessage.thinkingFinishedAt) {
+      previousMessage.thinkingFinishedAt = currentMessage.thinkingFinishedAt;
+    }
     const currentAttachments = normalizeArray(currentMessage?.attachments);
     const previousAttachments = normalizeArray(previousMessage?.attachments);
 

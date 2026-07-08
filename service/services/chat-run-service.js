@@ -128,6 +128,12 @@ export function createChatRunService({
     const memoryModel = normalizeSelectedModel(source?.memoryModel);
     const pluginModelConfig = normalizePluginModelConfig(source?.pluginModelConfig);
     const normalizedTurnScopeId = String(source?.turnScopeId || "").trim();
+    const normalizedThinkingStartedAt = (() => {
+      const value = String(source?.thinkingStartedAt || "").trim();
+      if (!value) return "";
+      const ms = Date.parse(value);
+      return Number.isFinite(ms) && ms > 0 ? new Date(ms).toISOString() : "";
+    })();
     const compatConfig = {
       ...(hasScenarioField ? { scenario } : {}),
       ...(selectedModel ? { selectedModel } : {}),
@@ -151,6 +157,7 @@ export function createChatRunService({
       selectedPlugins: normalizeStringArray(input?.selectedPlugins),
       plugins: normalizePlugins(source?.plugins, input?.selectedPlugins),
       ...(normalizedTurnScopeId ? { turnScopeId: normalizedTurnScopeId } : {}),
+      ...(normalizedThinkingStartedAt ? { thinkingStartedAt: normalizedThinkingStartedAt } : {}),
       ...(source?.reuseExistingUserTurn === true ? {
         reuseExistingUserTurn: true,
       } : {}),

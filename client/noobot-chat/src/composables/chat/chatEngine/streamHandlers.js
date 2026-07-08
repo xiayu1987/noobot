@@ -16,7 +16,6 @@ import {
   getMessageTurnScopeId,
   normalizeTurnMeta,
 } from "../../infra/messageIdentity";
-import { nowMs } from "../../infra/timeFields";
 import { promoteSessionIdentityToBackendId } from "../../infra/sessionIdentity";
 import { applyDoneMessagesPatch } from "./messagePatch";
 import {
@@ -29,7 +28,6 @@ import {
   normalizeInteractionRequestPayload,
   resolveConnectorStatusPayload,
 } from "../interactionPayload";
-import { bindThinkingDialogProcess, rememberThinkingFinished } from "../thinkingTimingRegistry";
 import { BackendChannelState } from "../sessionRunStateMachine";
 
 function markFirstStreamEvent(botMessage) {
@@ -81,11 +79,6 @@ export function handleThinkingStreamEvent({
   }
   if (!item.subAgentCall && item.dialogProcessId) {
     botMessage.dialogProcessId = item.dialogProcessId;
-    bindThinkingDialogProcess({
-      sessionId: item.sessionId || botMessage.sessionId || botMessage.session_id,
-      turnScopeId: getMessageTurnScopeId(botMessage),
-      dialogProcessId: item.dialogProcessId,
-    });
   }
   notifySendingStartedWhenDialogReady({ botMessage, locateSendingStartedMessageOnce });
   markFirstStreamEvent(botMessage);
@@ -116,11 +109,6 @@ export function handleDeltaStreamEvent({
   const chunkText = stripInternalEventPlaceholderLines(data?.text || "");
   if (data?.dialogProcessId && !getMessageDialogProcessId(botMessage)) {
     botMessage.dialogProcessId = normalizeTrimmedString(data.dialogProcessId);
-    bindThinkingDialogProcess({
-      sessionId: data?.sessionId || botMessage.sessionId || botMessage.session_id,
-      turnScopeId: getMessageTurnScopeId(botMessage),
-      dialogProcessId: getMessageDialogProcessId(botMessage),
-    });
   }
   notifySendingStartedWhenDialogReady({ botMessage, locateSendingStartedMessageOnce });
   botMessage.content += chunkText;
@@ -204,19 +192,6 @@ export function handleDoneStreamEvent({
   clearPendingInteraction();
   markFirstStreamEvent(botMessage);
   botMessage.dialogProcessId = data?.dialogProcessId || getMessageDialogProcessId(botMessage) || "";
-  if (getMessageDialogProcessId(botMessage)) {
-    bindThinkingDialogProcess({
-      sessionId: data?.sessionId || botMessage.sessionId || botMessage.session_id,
-      turnScopeId: getMessageTurnScopeId(botMessage),
-      dialogProcessId: getMessageDialogProcessId(botMessage),
-    });
-    rememberThinkingFinished({
-      sessionId: data?.sessionId || botMessage.sessionId || botMessage.session_id,
-      turnScopeId: getMessageTurnScopeId(botMessage),
-      dialogProcessId: getMessageDialogProcessId(botMessage),
-      finishedAtMs: nowMs(),
-    });
-  }
   notifySendingStartedWhenDialogReady({ botMessage, locateSendingStartedMessageOnce });
   const executionSummarySteps = Array.isArray(data?.executionSummary?.steps)
     ? data.executionSummary.steps

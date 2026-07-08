@@ -291,3 +291,50 @@ test("SessionTurnPersister persists canonical plugin metadata without old concre
   assert.equal(executionLogs[0]?.data?.workflowMessage, undefined);
   assert.equal(executionLogs[0]?.data?.workflowMeta, undefined);
 });
+
+test("SessionTurnPersister writes thinking timing to turn timing source when injected user messages precede assistant", async () => {
+  const appendedTurns = [];
+  const session = {
+    appendExecutionLog: async () => {},
+    appendTurn: async (payload = {}) => {
+      appendedTurns.push(payload);
+    },
+  };
+  const persister = new SessionTurnPersister({ session });
+  const thinkingStartedAt = "2026-07-08T15:45:58.275Z";
+  const thinkingFinishedAt = "2026-07-08T15:47:11.710Z";
+
+  await persister.appendAgentMessages({
+    userId: "u1",
+    sessionId: "s1",
+    messages: [
+      {
+        role: "user",
+        type: "message",
+        content: "[来自harness外部模型输出/guidance]",
+        injectedMessage: true,
+        injectedBy: "harness-plugin",
+      },
+      {
+        role: "assistant",
+        type: "message",
+        content: "done",
+      },
+    ],
+    dialogProcessId: "dp1",
+    thinkingStartedAt,
+    thinkingFinishedAt,
+  });
+
+  assert.equal(appendedTurns.length, 2);
+  assert.equal(appendedTurns[0].role, "user");
+  assert.equal(appendedTurns[0].thinkingStartedAt, "");
+  assert.equal(appendedTurns[0].thinkingFinishedAt, "");
+  assert.equal(appendedTurns[0].turnTimingThinkingStartedAt, thinkingStartedAt);
+  assert.equal(appendedTurns[0].turnTimingThinkingFinishedAt, thinkingFinishedAt);
+  assert.equal(appendedTurns[1].role, "assistant");
+  assert.equal(appendedTurns[1].thinkingStartedAt, "");
+  assert.equal(appendedTurns[1].thinkingFinishedAt, "");
+  assert.equal(appendedTurns[1].turnTimingThinkingStartedAt, "");
+  assert.equal(appendedTurns[1].turnTimingThinkingFinishedAt, "");
+});

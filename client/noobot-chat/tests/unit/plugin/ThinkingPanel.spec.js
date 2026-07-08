@@ -1,10 +1,6 @@
 import { mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ThinkingPanel from "../../../src/shared/message/ThinkingPanel.vue";
-import {
-  rememberThinkingFinished,
-  rememberThinkingStarted,
-} from "../../../src/composables/chat/thinkingTimingRegistry";
 
 vi.mock("../../../src/shared/ui", async () => {
   const { defineComponent, h } = await import("vue");
@@ -138,22 +134,15 @@ describe("ThinkingPanel", () => {
     vi.useRealTimers();
   });
 
-  it("keeps pending elapsed time from persisted session plus turn scope start", () => {
+  it("keeps pending elapsed time from message thinking start", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-22T10:00:12.000Z"));
-    rememberThinkingStarted({
-      sessionId: "backend-session-after-refresh",
-      turnScopeId: "client-turn-orphan-resend",
-      startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
-    });
-
     const wrapper = mountThinkingPanel({
       role: "assistant",
       pending: true,
       sessionId: "backend-session-after-refresh",
       turnScopeId: "client-turn-orphan-resend",
-      // This mirrors the refresh path: the assistant is still running, but the
-      // refreshed message does not carry backend timing fields yet.
+      thinkingStartedAt: "2026-06-22T10:00:00.000Z",
       ts: "2026-06-22T10:00:12.000Z",
       channelState: { state: "sending" },
     });
@@ -164,11 +153,6 @@ describe("ThinkingPanel", () => {
   it("does not reuse a persisted turn start from another session", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-22T10:00:12.000Z"));
-    rememberThinkingStarted({
-      sessionId: "session-other",
-      turnScopeId: "client-turn-same-id",
-      startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
-    });
 
     const wrapper = mountThinkingPanel({
       role: "assistant",
@@ -183,26 +167,17 @@ describe("ThinkingPanel", () => {
     expect(wrapper.text()).not.toContain("00:12");
   });
 
-  it("uses persisted finish minus start for completed elapsed time by session plus turn scope", () => {
+  it("uses message finish minus start for completed elapsed time", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-22T10:00:16.000Z"));
-
-    rememberThinkingStarted({
-      sessionId: "session-finished",
-      turnScopeId: "client-turn-finished",
-      startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
-    });
-    rememberThinkingFinished({
-      sessionId: "session-finished",
-      turnScopeId: "client-turn-finished",
-      finishedAtMs: Date.parse("2026-06-22T10:00:15.000Z"),
-    });
 
     const wrapper = mountThinkingPanel({
       role: "assistant",
       pending: false,
       sessionId: "session-finished",
       turnScopeId: "client-turn-finished",
+      thinkingStartedAt: "2026-06-22T10:00:00.000Z",
+      thinkingFinishedAt: "2026-06-22T10:00:15.000Z",
       ts: "2026-06-22T10:05:00.000Z",
       completedToolLogs: [{ type: "tool_result", text: "done", ts: "2026-06-22T10:05:00.000Z" }],
     });
@@ -214,17 +189,6 @@ describe("ThinkingPanel", () => {
   it("prefers refreshed message thinking timestamps over stale local timing", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-22T10:00:30.000Z"));
-
-    rememberThinkingStarted({
-      sessionId: "session-refreshed-server-time",
-      turnScopeId: "client-turn-refreshed-server-time",
-      startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
-    });
-    rememberThinkingFinished({
-      sessionId: "session-refreshed-server-time",
-      turnScopeId: "client-turn-refreshed-server-time",
-      finishedAtMs: Date.parse("2026-06-22T10:00:20.000Z"),
-    });
 
     const wrapper = mountThinkingPanel({
       role: "assistant",
@@ -240,32 +204,28 @@ describe("ThinkingPanel", () => {
     expect(wrapper.text()).not.toContain("00:20");
   });
 
-  it("prefers refreshed running channel createdAt over stale local timing", () => {
+  it("uses message thinking start instead of stale local or channel timing", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-22T10:00:20.000Z"));
-
-    rememberThinkingStarted({
-      sessionId: "session-running-channel-time",
-      turnScopeId: "client-turn-running-channel-time",
-      startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
-    });
 
     const wrapper = mountThinkingPanel({
       role: "assistant",
       pending: true,
       sessionId: "session-running-channel-time",
       turnScopeId: "client-turn-running-channel-time",
+      thinkingStartedAt: "2026-06-22T10:00:05.000Z",
       channelState: {
         state: "sending",
         createdAt: "2026-06-22T10:00:08.000Z",
       },
     });
 
-    expect(wrapper.text()).toContain("00:12");
+    expect(wrapper.text()).toContain("00:15");
+    expect(wrapper.text()).not.toContain("00:12");
     expect(wrapper.text()).not.toContain("00:20");
   });
 
-  it("keeps pending elapsed time after refresh from channel state createdAt", () => {
+  it("does not use channel state createdAt as thinking elapsed source", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-22T10:00:12.000Z"));
 
@@ -280,7 +240,8 @@ describe("ThinkingPanel", () => {
       },
     });
 
-    expect(wrapper.text()).toContain("00:12");
+    expect(wrapper.text()).toContain("00:00");
+    expect(wrapper.text()).not.toContain("00:12");
   });
 
   it("prefers process-derived execution fields while keeping legacy fallback", () => {
@@ -701,11 +662,6 @@ describe("ThinkingPanel", () => {
   it("does not use channel turnScopeId timing before assistant turnScopeId is persisted", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-22T10:00:12.000Z"));
-    rememberThinkingStarted({
-      sessionId: "session-current",
-      turnScopeId: "client-turn:previous",
-      startedAtMs: Date.parse("2026-06-22T10:00:00.000Z"),
-    });
 
     const wrapper = mountThinkingPanel({
       role: "assistant",
