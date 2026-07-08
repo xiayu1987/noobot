@@ -57,6 +57,27 @@
     0 1px 0 color-mix(in srgb, var(--noobot-base-white, #ffffff) 45%, transparent) inset;
 }
 
+.noobot-composer-surface {
+  box-sizing: border-box;
+  background: var(--noobot-surface-sidebar, #ffffff);
+  border: 1px solid color-mix(in srgb, var(--noobot-base-blue-500, #3b82f6) 24%, var(--noobot-panel-border, #e4e4e7));
+  border-radius: 16px;
+  box-shadow: none;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.noobot-composer-surface:focus-within {
+  border-color: color-mix(in srgb, var(--noobot-base-blue-500) 36%, transparent);
+  box-shadow: var(--noobot-focus-ring);
+}
+
+.noobot-drop-surface {
+  border: 1px dashed color-mix(in srgb, var(--noobot-base-blue-500, #3b82f6) 62%, var(--noobot-panel-border, #e4e4e7));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--noobot-surface-sidebar, #ffffff) 88%, var(--noobot-base-blue-500, #3b82f6));
+  color: var(--noobot-text-strong, #18181b);
+}
+
 .noobot-surface-card {
   box-sizing: border-box;
   border: 1px solid var(--noobot-panel-border);
@@ -183,6 +204,12 @@
   box-shadow: none;
 }
 
+.noobot-error-surface.is-preview {
+  color: var(--noobot-preview-danger-text);
+  background: var(--noobot-preview-danger-bg);
+  border-color: var(--noobot-preview-danger-border);
+}
+
 .noobot-preview-surface {
   background: var(--noobot-preview-bg);
   color: var(--noobot-preview-text);
@@ -242,6 +269,60 @@
   border-left: 4px solid var(--noobot-panel-border);
 }
 
+.noobot-rich-content :where(p) {
+  margin-top: 0;
+}
+
+.noobot-rich-content :where(a) {
+  color: var(--noobot-text-accent);
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+
+.noobot-rich-content :where(a:hover) {
+  text-decoration: underline;
+}
+
+.noobot-rich-content :where(hr) {
+  height: 1px;
+  padding: 0;
+  background-color: var(--noobot-divider);
+  border: 0;
+}
+
+.noobot-rich-content :where(h1, h2, h3, h4, h5, h6) {
+  font-weight: 600;
+  line-height: 1.3;
+  color: inherit;
+}
+
+.noobot-rich-content :where(h1, h2) {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--noobot-divider);
+}
+
+.noobot-rich-content :where(ul li::marker) {
+  color: var(--noobot-text-muted);
+}
+
+.noobot-rich-content :where(ol li::marker) {
+  color: var(--noobot-text-secondary);
+  font-weight: 600;
+}
+
+.noobot-rich-content :where(tr:nth-child(even) td) {
+  background: color-mix(in srgb, var(--noobot-panel-muted) 62%, transparent);
+}
+
+.noobot-rich-content :where(.mermaid-render-error) {
+  color: var(--noobot-preview-danger-text);
+  background: var(--noobot-preview-danger-bg);
+  border: 1px solid var(--noobot-preview-danger-border);
+  border-radius: var(--noobot-radius-sm);
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
 .noobot-sticky-actions {
   position: sticky;
   bottom: 0;
@@ -266,6 +347,69 @@
   background: var(--noobot-panel-muted);
   border: 1px solid var(--noobot-panel-border);
   box-shadow: none;
+}
+
+.noobot-chip-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 999px;
+  color: var(--el-text-color-regular);
+  background: var(--el-bg-color-overlay);
+  box-shadow: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.noobot-chip-action-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: none;
+}
+
+.noobot-chip-action-btn.is-primary:hover:not(:disabled) {
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  border-color: var(--el-color-primary-light-7);
+}
+
+.noobot-chip-action-btn.is-danger:hover:not(:disabled) {
+  color: var(--el-color-danger);
+  background: var(--el-color-danger-light-9);
+  border-color: var(--el-color-danger-light-7);
+}
+
+.noobot-chip-action-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  box-shadow: none;
+}
+
+.noobot-primary-pill-action {
+  border: 1px solid color-mix(in srgb, var(--noobot-primary, #409eff) 42%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--noobot-primary, #409eff) 14%, transparent), color-mix(in srgb, var(--noobot-primary, #409eff) 6%, transparent));
+  color: var(--noobot-primary, #409eff);
+  font-weight: 600;
+  filter: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--noobot-primary, #409eff) 6%, transparent);
+  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.noobot-primary-pill-action:hover {
+  filter: none;
+  border-color: color-mix(in srgb, var(--noobot-primary, #409eff) 62%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--noobot-primary, #409eff) 20%, transparent), color-mix(in srgb, var(--noobot-primary, #409eff) 10%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--noobot-primary, #409eff) 12%, transparent);
+}
+
+.noobot-primary-pill-action:active {
+  filter: none;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--noobot-primary, #409eff) 16%, transparent), color-mix(in srgb, var(--noobot-primary, #409eff) 8%, transparent));
 }
 
 .noobot-pill-option.el-button {

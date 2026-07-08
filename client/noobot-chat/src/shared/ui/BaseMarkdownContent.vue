@@ -42,13 +42,9 @@ defineExpose({ getHtml });
 }
 
 .base-markdown-content :deep(a) {
-  color: var(--noobot-msg-link);
-  text-decoration: none;
-  text-underline-offset: 2px;
 }
 
 .base-markdown-content :deep(a:hover) {
-  text-decoration: underline;
 }
 
 .base-markdown-content :deep(code) {
@@ -78,12 +74,9 @@ defineExpose({ getHtml });
 }
 
 .base-markdown-content :deep(ul li::marker) {
-  color: var(--noobot-text-accent);
 }
 
 .base-markdown-content :deep(ol li::marker) {
-  color: color-mix(in srgb, var(--noobot-text-accent) 70%, var(--noobot-text-main));
-  font-weight: 600;
 }
 
 .base-markdown-content :deep(table) {
@@ -102,7 +95,6 @@ defineExpose({ getHtml });
 }
 
 .base-markdown-content :deep(tr:nth-child(even) td) {
-  background: color-mix(in srgb, var(--noobot-panel-muted) 62%, transparent);
 }
 
 .base-markdown-content :deep(.mermaid) {
@@ -116,7 +108,6 @@ defineExpose({ getHtml });
   padding: var(--noobot-space-xs) var(--noobot-space-md);
   border-left: 3px solid color-mix(in srgb, var(--noobot-text-accent) 90%, transparent);
   background: var(--noobot-accent-soft);
-  border-radius: var(--noobot-radius-xs);
 }
 
 .base-markdown-content :deep(.noobot-harness-collapse) {
@@ -159,7 +150,6 @@ defineExpose({ getHtml });
 .base-markdown-content :deep(h4) {
   margin: var(--noobot-space-md) 0 var(--noobot-space-sm);
   line-height: 1.35;
-  color: inherit;
 }
 
 .base-markdown-content :deep(.mermaid svg) {
