@@ -174,7 +174,7 @@ watch(
 .session-icon-wrapper {
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: var(--noobot-radius-xs);
   background: var(--noobot-surface-soft-hover);
   display: flex;
   align-items: center;

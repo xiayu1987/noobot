@@ -313,8 +313,8 @@ function resolveComposerExtensionProps(renderer = {}) {
 }
 
 .interaction-switch {
-  --el-switch-on-color: var(--noobot-cyber-cyan, #0ea5e9);
-  --el-switch-off-color: var(--noobot-status-idle, #d4d4d8);
+  --el-switch-on-color: var(--noobot-cyber-cyan, var(--noobot-base-blue-500));
+  --el-switch-off-color: var(--noobot-status-idle, var(--noobot-status-idle));
 }
 
 .composer-toggle-panel {
@@ -364,12 +364,10 @@ function resolveComposerExtensionProps(renderer = {}) {
   min-height: 38px;
   height: 38px;
   box-sizing: border-box;
-  border-radius: 12px;
+  border-radius: var(--noobot-radius-md);
   background: color-mix(in srgb, var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 94%, var(--el-color-primary));
   border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 78%, transparent);
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 78%, transparent) inset,
-    0 1px 0 color-mix(in srgb, var(--noobot-base-black, #000000) 5%, transparent);
+  box-shadow: var(--noobot-control-shadow);
   transition:
     background-color 0.18s ease,
     border-color 0.18s ease,
@@ -379,9 +377,7 @@ function resolveComposerExtensionProps(renderer = {}) {
 .composer-select :deep(.el-select__wrapper.is-focused),
 .composer-select :deep(.el-select__wrapper:hover) {
   border-color: color-mix(in srgb, var(--el-color-primary) 50%, var(--noobot-panel-border, var(--el-border-color)));
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--el-color-primary) 42%, transparent) inset,
-    0 8px 20px color-mix(in srgb, var(--el-color-primary) 12%, transparent);
+  box-shadow: var(--noobot-control-shadow-focus);
 }
 
 .composer-select :deep(.el-select__selected-item),
@@ -530,7 +526,7 @@ function resolveComposerExtensionProps(renderer = {}) {
 
   .model-config-panel {
     padding: 12px;
-    border-radius: 14px;
+    border-radius: var(--noobot-radius-lg);
   }
 
   .model-select-card,
@@ -616,8 +612,8 @@ function resolveComposerExtensionProps(renderer = {}) {
   border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 82%, transparent);
   background: var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) !important;
   overflow: hidden !important;
-  border-radius: 12px;
-  box-shadow: 0 16px 36px color-mix(in srgb, var(--noobot-base-black, #000000) 18%, transparent);
+  border-radius: var(--noobot-radius-md);
+  box-shadow: var(--noobot-shadow-overlay);
 }
 
 :global(.noobot-composer-select-popper .el-select-dropdown),
@@ -643,7 +639,7 @@ function resolveComposerExtensionProps(renderer = {}) {
   min-height: 44px;
   margin: 0;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--noobot-radius-xs);
   line-height: 1.35;
   color: var(--noobot-text-main, var(--el-text-color-primary));
   background: transparent !important;
@@ -681,10 +677,10 @@ function resolveComposerExtensionProps(renderer = {}) {
     min-width: 0 !important;
     max-width: calc(100vw - 32px) !important;
     max-height: min(44vh, 320px) !important;
-    border-radius: 12px !important;
+    border-radius: var(--noobot-radius-md) !important;
     overflow: hidden auto !important;
     overscroll-behavior: contain;
-    box-shadow: 0 12px 30px color-mix(in srgb, var(--noobot-base-black, #000000) 20%, transparent) !important;
+    box-shadow: var(--noobot-shadow-overlay) !important;
   }
 
   :global(.noobot-composer-select-popper[data-popper-placement^="bottom"]) {

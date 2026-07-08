@@ -189,7 +189,7 @@ function toggleConnectorPanelExpanded() {
 }
 
 .connector-panel-shell.is-embedded {
-  border-radius: 14px;
+  border-radius: var(--noobot-radius-lg);
 }
 
 .connector-panel-header {
@@ -254,7 +254,7 @@ function toggleConnectorPanelExpanded() {
   color: var(--noobot-text-muted);
   flex-shrink: 0;
   padding: 4px 8px;
-  border-radius: 999px;
+  border-radius: var(--noobot-radius-pill);
   transition: all 0.2s;
   margin-left: auto;
 }
@@ -293,7 +293,7 @@ function toggleConnectorPanelExpanded() {
   display: flex;
   flex-direction: column;
   padding: 10px;
-  border-radius: 12px;
+  border-radius: var(--noobot-radius-md);
 }
 
 .connector-group-title {

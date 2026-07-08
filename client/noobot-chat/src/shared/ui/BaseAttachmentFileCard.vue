@@ -211,7 +211,7 @@ function emitPreview() {
   font-size: var(--noobot-msg-meta-font-size);
   padding: 0 8px;
   border-color: transparent;
-  border-radius: 999px;
+  border-radius: var(--noobot-radius-pill);
   color: var(--noobot-msg-file-name);
   white-space: nowrap;
 }

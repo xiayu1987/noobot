@@ -64,7 +64,7 @@ const emit = defineEmits(["select"]);
 
 :deep(.el-anchor__marker) {
   width: 3px;
-  border-radius: 999px;
+  border-radius: var(--noobot-radius-pill);
 }
 
 :deep(.el-anchor__item) {
@@ -76,7 +76,7 @@ const emit = defineEmits(["select"]);
   max-width: 208px;
   margin: 3px 0;
   padding: 8px 14px 8px 16px;
-  border-radius: 8px;
+  border-radius: var(--noobot-radius-xs);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -104,7 +104,7 @@ const emit = defineEmits(["select"]);
   flex: 0 0 auto;
   min-width: 28px;
   padding: 2px 7px;
-  border-radius: 999px;
+  border-radius: var(--noobot-radius-pill);
   font-size: 10px;
   line-height: 1.25;
   font-weight: 800;
@@ -124,13 +124,13 @@ const emit = defineEmits(["select"]);
 }
 
 .chat-message-navigator__item.is-user .chat-message-navigator__role {
-  color: color-mix(in srgb, var(--el-color-primary) 88%, #1f2937);
+  color: color-mix(in srgb, var(--el-color-primary) 88%, var(--noobot-base-slate-800));
   background: color-mix(in srgb, var(--el-color-primary-light-9) 86%, white);
   border-color: color-mix(in srgb, var(--el-color-primary) 30%, transparent);
 }
 
 .chat-message-navigator__item.is-assistant .chat-message-navigator__role {
-  color: color-mix(in srgb, var(--el-color-success) 78%, #1f2937);
+  color: color-mix(in srgb, var(--el-color-success) 78%, var(--noobot-base-slate-800));
   background: color-mix(in srgb, var(--el-color-success-light-9) 86%, white);
   border-color: color-mix(in srgb, var(--el-color-success) 30%, transparent);
 }
@@ -142,7 +142,7 @@ const emit = defineEmits(["select"]);
   left: 3px;
   width: 3px;
   height: 14px;
-  border-radius: 999px;
+  border-radius: var(--noobot-radius-pill);
   background: var(--el-anchor-marker-bg-color, var(--el-color-primary));
   opacity: 0;
   transform: translateY(-50%);

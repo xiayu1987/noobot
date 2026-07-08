@@ -130,7 +130,7 @@ watch(
 }
 .preview-body::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--noobot-panel-border) 90%, var(--noobot-text-muted));
-  border-radius: 4px;
+  border-radius: var(--noobot-radius-xs);
 }
 .preview-body::-webkit-scrollbar-thumb:hover {
   background: var(--noobot-text-secondary);
@@ -157,7 +157,7 @@ watch(
   max-height: 60vh;
   margin: 0 auto;
   display: block;
-  border-radius: 6px;
+  border-radius: var(--noobot-radius-xs);
   box-shadow: none;
 }
 
@@ -165,7 +165,7 @@ watch(
   width: 100%;
   max-height: 60vh;
   display: block;
-  border-radius: 6px;
+  border-radius: var(--noobot-radius-xs);
   background: var(--noobot-msg-code-block-bg);
 }
 

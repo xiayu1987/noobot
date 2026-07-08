@@ -83,7 +83,7 @@ function onRemoveUpload(uploadFileIndex) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--noobot-text-secondary, #52525b);
+  color: var(--noobot-text-secondary, var(--noobot-text-secondary));
   padding: 4px 14px;
   font-size: 13px;
   font-weight: 500;
@@ -94,13 +94,13 @@ function onRemoveUpload(uploadFileIndex) {
 }
 
 .selected-plugin-name {
-  border-color: color-mix(in srgb, var(--noobot-cyber-cyan, #0ea5e9) 32%, transparent);
-  background: color-mix(in srgb, var(--noobot-cyber-cyan, #0ea5e9) 10%, transparent);
+  border-color: color-mix(in srgb, var(--noobot-cyber-cyan, var(--noobot-base-blue-500)) 32%, transparent);
+  background: color-mix(in srgb, var(--noobot-cyber-cyan, var(--noobot-base-blue-500)) 10%, transparent);
 }
 
 .selected-attachment-name {
-  border-color: color-mix(in srgb, var(--noobot-text-muted, #71717a) 28%, transparent);
-  background: color-mix(in srgb, var(--noobot-fill-soft, #f4f4f5) 78%, var(--noobot-base-blue-500, #3b82f6));
+  border-color: color-mix(in srgb, var(--noobot-text-muted, var(--noobot-text-muted)) 28%, transparent);
+  background: color-mix(in srgb, var(--noobot-fill-soft, var(--noobot-fill-soft)) 78%, var(--noobot-base-blue-500, var(--noobot-base-blue-500)));
   padding-right: 6px;
 }
 
@@ -117,7 +117,7 @@ function onRemoveUpload(uploadFileIndex) {
   min-width: 20px;
   padding: 0;
   border: 0;
-  color: var(--noobot-text-secondary, #52525b);
+  color: var(--noobot-text-secondary, var(--noobot-text-secondary));
   flex: 0 0 auto;
 }
 

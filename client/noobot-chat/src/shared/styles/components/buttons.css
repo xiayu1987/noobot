@@ -40,7 +40,7 @@
     color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 97%, var(--el-fill-color-light)),
     color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 93%, var(--el-color-primary))
   );
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--noobot-base-white, #ffffff) 35%, transparent) inset;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--noobot-base-white, var(--noobot-base-white)) 35%, transparent) inset;
 }
 
 .noobot-panel-card {
@@ -50,18 +50,16 @@
   background: linear-gradient(
     135deg,
     color-mix(in srgb, var(--noobot-panel-bg, var(--el-bg-color-overlay)) 98%, var(--el-color-primary)),
-    color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 96%, var(--noobot-cyber-cyan, #0ea5e9))
+    color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 96%, var(--noobot-cyber-cyan, var(--noobot-base-blue-500)))
   );
-  box-shadow:
-    0 8px 24px color-mix(in srgb, var(--el-color-primary) 7%, transparent),
-    0 1px 0 color-mix(in srgb, var(--noobot-base-white, #ffffff) 45%, transparent) inset;
+  box-shadow: var(--noobot-shadow-panel);
 }
 
 .noobot-composer-surface {
   box-sizing: border-box;
-  background: var(--noobot-surface-sidebar, #ffffff);
-  border: 1px solid color-mix(in srgb, var(--noobot-base-blue-500, #3b82f6) 24%, var(--noobot-panel-border, #e4e4e7));
-  border-radius: 16px;
+  background: var(--noobot-surface-sidebar, var(--noobot-base-white));
+  border: 1px solid color-mix(in srgb, var(--noobot-base-blue-500, var(--noobot-base-blue-500)) 24%, var(--noobot-panel-border, var(--noobot-panel-border)));
+  border-radius: var(--noobot-radius-lg);
   box-shadow: none;
   transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
@@ -72,10 +70,10 @@
 }
 
 .noobot-drop-surface {
-  border: 1px dashed color-mix(in srgb, var(--noobot-base-blue-500, #3b82f6) 62%, var(--noobot-panel-border, #e4e4e7));
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--noobot-surface-sidebar, #ffffff) 88%, var(--noobot-base-blue-500, #3b82f6));
-  color: var(--noobot-text-strong, #18181b);
+  border: 1px dashed color-mix(in srgb, var(--noobot-base-blue-500, var(--noobot-base-blue-500)) 62%, var(--noobot-panel-border, var(--noobot-panel-border)));
+  border-radius: var(--noobot-radius-lg);
+  background: color-mix(in srgb, var(--noobot-surface-sidebar, var(--noobot-base-white)) 88%, var(--noobot-base-blue-500, var(--noobot-base-blue-500)));
+  color: var(--noobot-text-strong, var(--noobot-text-strong));
 }
 
 .noobot-surface-card {
@@ -110,7 +108,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
+  border-radius: var(--noobot-radius-pill);
   color: var(--noobot-text-strong);
   background: var(--noobot-panel-muted);
   border: 0;
@@ -119,21 +117,21 @@
 
 .noobot-soft-badge.is-agent,
 .noobot-soft-badge.is-primary {
-  color: color-mix(in srgb, var(--el-color-primary) 78%, var(--noobot-base-white, #fff));
+  color: color-mix(in srgb, var(--el-color-primary) 78%, var(--noobot-base-white, var(--noobot-base-white)));
   border: 1px solid color-mix(in srgb, var(--el-color-primary) 35%, transparent);
   background: color-mix(in srgb, var(--el-color-primary) 14%, transparent);
 }
 
 .noobot-soft-badge.is-plugin,
 .noobot-soft-badge.is-warning {
-  color: color-mix(in srgb, var(--el-color-warning) 80%, var(--noobot-base-white, #fff));
+  color: color-mix(in srgb, var(--el-color-warning) 80%, var(--noobot-base-white, var(--noobot-base-white)));
   border: 1px solid color-mix(in srgb, var(--el-color-warning) 35%, transparent);
   background: color-mix(in srgb, var(--el-color-warning) 14%, transparent);
 }
 
 .noobot-soft-badge.is-recognized,
 .noobot-soft-badge.is-success {
-  color: color-mix(in srgb, var(--el-color-success) 82%, var(--noobot-base-white, #fff));
+  color: color-mix(in srgb, var(--el-color-success) 82%, var(--noobot-base-white, var(--noobot-base-white)));
   border: 1px solid color-mix(in srgb, var(--el-color-success) 35%, transparent);
   background: color-mix(in srgb, var(--el-color-success) 14%, transparent);
 }
@@ -143,7 +141,7 @@
   align-items: center;
   gap: 4px;
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 46%, transparent);
-  border-radius: 999px;
+  border-radius: var(--noobot-radius-pill);
   background: color-mix(in srgb, var(--noobot-panel-muted) 76%, transparent);
   white-space: nowrap;
 }
@@ -341,7 +339,7 @@
   align-items: center;
   gap: var(--noobot-space-xs);
   padding: 2px var(--noobot-space-xs);
-  border-radius: 999px;
+  border-radius: var(--noobot-radius-pill);
   font-size: var(--noobot-msg-meta-font-size);
   color: var(--noobot-msg-tag-text);
   background: var(--noobot-panel-muted);
@@ -356,7 +354,7 @@
   min-height: 30px;
   padding: 0 12px;
   border: 1px solid var(--el-border-color-light);
-  border-radius: 999px;
+  border-radius: var(--noobot-radius-pill);
   color: var(--el-text-color-regular);
   background: var(--el-bg-color-overlay);
   box-shadow: none;
@@ -391,25 +389,25 @@
 }
 
 .noobot-primary-pill-action {
-  border: 1px solid color-mix(in srgb, var(--noobot-primary, #409eff) 42%, transparent);
-  background: linear-gradient(135deg, color-mix(in srgb, var(--noobot-primary, #409eff) 14%, transparent), color-mix(in srgb, var(--noobot-primary, #409eff) 6%, transparent));
-  color: var(--noobot-primary, #409eff);
+  border: 1px solid color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 42%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 14%, transparent), color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 6%, transparent));
+  color: var(--noobot-primary, var(--noobot-base-blue-500));
   font-weight: 600;
   filter: none;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--noobot-primary, #409eff) 6%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 6%, transparent);
   transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
 }
 
 .noobot-primary-pill-action:hover {
   filter: none;
-  border-color: color-mix(in srgb, var(--noobot-primary, #409eff) 62%, transparent);
-  background: linear-gradient(135deg, color-mix(in srgb, var(--noobot-primary, #409eff) 20%, transparent), color-mix(in srgb, var(--noobot-primary, #409eff) 10%, transparent));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--noobot-primary, #409eff) 12%, transparent);
+  border-color: color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 62%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 20%, transparent), color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 10%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 12%, transparent);
 }
 
 .noobot-primary-pill-action:active {
   filter: none;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--noobot-primary, #409eff) 16%, transparent), color-mix(in srgb, var(--noobot-primary, #409eff) 8%, transparent));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 16%, transparent), color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 8%, transparent));
 }
 
 .noobot-pill-option.el-button {
@@ -417,7 +415,7 @@
   box-sizing: border-box;
   margin: 0 !important;
   padding: 4px 9px;
-  border-radius: 999px;
+  border-radius: var(--noobot-radius-pill);
   font-size: 12px;
   font-weight: 600;
   line-height: 16px;
@@ -428,7 +426,7 @@
   color: var(--noobot-text-main, var(--el-text-color-primary));
   border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 82%, transparent);
   background: var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--noobot-base-black, #000000) 5%, transparent);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--noobot-base-black, var(--noobot-base-black)) 5%, transparent);
 }
 
 .noobot-pill-option.el-button--default:hover,
@@ -443,7 +441,7 @@
   background: linear-gradient(
     135deg,
     color-mix(in srgb, var(--el-color-primary) 92%, var(--noobot-panel-bg, var(--el-bg-color-overlay))),
-    color-mix(in srgb, var(--el-color-primary) 76%, var(--noobot-cyber-cyan, #0ea5e9))
+    color-mix(in srgb, var(--el-color-primary) 76%, var(--noobot-cyber-cyan, var(--noobot-base-blue-500)))
   );
   box-shadow: 0 3px 10px color-mix(in srgb, var(--el-color-primary) 14%, transparent);
 }

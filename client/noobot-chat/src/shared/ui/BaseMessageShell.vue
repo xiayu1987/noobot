@@ -94,7 +94,7 @@ const { translate } = useLocale();
   color: var(--noobot-msg-tag-text);
   background: var(--noobot-msg-tag-bg);
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 62%, transparent);
-  border-radius: 999px;
+  border-radius: var(--noobot-radius-pill);
   padding: 1px 7px;
   line-height: 1.4;
   display: inline-flex;

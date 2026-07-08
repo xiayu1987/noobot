@@ -559,7 +559,7 @@ async function handleDelete() {
 /* Textarea */
 .monotonic-edit-textarea :deep(.el-textarea__inner) {
   padding: 14px 16px;
-  border-radius: 8px;
+  border-radius: var(--noobot-radius-xs);
   color: var(--el-text-color-primary);
   background: var(--el-fill-color-light);
   border: none;
@@ -642,7 +642,7 @@ async function handleDelete() {
   width: 40px;
   height: 40px;
   flex-shrink: 0;
-  border-radius: 8px;
+  border-radius: var(--noobot-radius-xs);
   overflow: hidden;
 }
 
@@ -738,7 +738,7 @@ async function handleDelete() {
   gap: 8px;
   width: 100%;
   padding: 12px;
-  border-radius: 10px;
+  border-radius: var(--noobot-radius-sm);
   border: 1px dashed var(--el-border-color-dark);
   background: transparent;
   color: var(--el-text-color-regular);
@@ -802,29 +802,29 @@ async function handleDelete() {
 :root[data-theme="dark"] .monotonic-edit-card,
 html.dark .monotonic-edit-card,
 .dark .monotonic-edit-card {
-  background: #12151b;
-  border-color: #1c2430;
+  background: var(--noobot-panel-bg);
+  border-color: var(--noobot-panel-border);
 }
 
 :root[data-theme="dark"] .monotonic-edit-textarea :deep(.el-textarea__inner),
 html.dark .monotonic-edit-textarea :deep(.el-textarea__inner),
 .dark .monotonic-edit-textarea :deep(.el-textarea__inner) {
-  color: #d9dee6;
-  background: #0f1218;
-  box-shadow: inset 0 0 0 1px #1c2430;
+  color: var(--noobot-text-main);
+  background: var(--noobot-control-bg);
+  box-shadow: var(--noobot-input-ring);
 }
 
 :root[data-theme="dark"] .monotonic-edit-textarea :deep(.el-textarea__inner:hover),
 html.dark .monotonic-edit-textarea :deep(.el-textarea__inner:hover),
 .dark .monotonic-edit-textarea :deep(.el-textarea__inner:hover) {
-  background: #111722;
+  background: var(--noobot-surface-soft-hover);
 }
 
 :root[data-theme="dark"] .monotonic-edit-textarea :deep(.el-textarea__inner:focus),
 html.dark .monotonic-edit-textarea :deep(.el-textarea__inner:focus),
 .dark .monotonic-edit-textarea :deep(.el-textarea__inner:focus) {
-  background: #111722;
-  box-shadow: inset 0 0 0 1px #315f9e, 0 0 0 2px rgba(49, 95, 158, 0.22);
+  background: var(--noobot-surface-soft-hover);
+  box-shadow: var(--noobot-input-ring-focus), var(--noobot-focus-ring);
 }
 
 :root[data-theme="dark"] .monotonic-attachment-empty,
@@ -833,36 +833,36 @@ html.dark .monotonic-attachment-empty,
 :root[data-theme="dark"] .monotonic-attachment-item,
 html.dark .monotonic-attachment-item,
 .dark .monotonic-attachment-item {
-  background: #0f1218;
-  border-color: #1b222d;
+  background: var(--noobot-control-bg);
+  border-color: var(--noobot-panel-border);
 }
 
 :root[data-theme="dark"] .monotonic-attachment-item:hover,
 html.dark .monotonic-attachment-item:hover,
 .dark .monotonic-attachment-item:hover {
-  background: #121821;
-  border-color: #273244;
+  background: var(--noobot-attachment-hover-bg);
+  border-color: var(--noobot-attachment-hover-border);
 }
 
 :root[data-theme="dark"] .monotonic-attachment-icon,
 html.dark .monotonic-attachment-icon,
 .dark .monotonic-attachment-icon {
-  background: #172033;
-  border-color: #243654;
-  color: #8fb7f0;
+  background: var(--noobot-attachment-icon-bg);
+  border-color: var(--noobot-attachment-icon-border);
+  color: var(--noobot-attachment-icon-text);
 }
 
 :root[data-theme="dark"] .monotonic-add-attachment-btn:hover:not(:disabled),
 html.dark .monotonic-add-attachment-btn:hover:not(:disabled),
 .dark .monotonic-add-attachment-btn:hover:not(:disabled) {
-  background: #172033;
-  border-color: #315f9e;
+  background: var(--noobot-attachment-icon-bg);
+  border-color: var(--noobot-border-primary);
 }
 
 :root[data-theme="dark"] .monotonic-edit-footer,
 html.dark .monotonic-edit-footer,
 .dark .monotonic-edit-footer {
-  border-top-color: #1c2430;
+  border-top-color: var(--noobot-footer-border);
 }
 
 @media (max-width: 640px) {

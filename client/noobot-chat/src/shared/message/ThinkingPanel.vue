@@ -774,7 +774,7 @@ onBeforeUnmount(() => {
   padding: 0 6px;
   min-height: 20px;
   line-height: 1.2;
-  border-radius: 999px;
+  border-radius: var(--noobot-radius-pill);
 }
 
 .thinking-analysis-block {

@@ -45,7 +45,7 @@ body {
 
 *::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--noobot-text-muted) 45%, transparent);
-  border-radius: 999px;
+  border-radius: var(--noobot-radius-pill);
 }
 
 *::-webkit-scrollbar-track {

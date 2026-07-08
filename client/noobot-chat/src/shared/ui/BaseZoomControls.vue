@@ -52,7 +52,7 @@ defineEmits(["zoom-in", "zoom-out", "zoom-reset"]);
     var(--noobot-msg-assistant-bg) 96%,
     rgb(var(--workflow-accent-rgb, 109, 74, 255)) 4%
   );
-  border-radius: var(--workflow-radius-sm, 6px);
+  border-radius: var(--noobot-radius-xs);
   cursor: pointer;
   color: var(--noobot-text-primary);
 }

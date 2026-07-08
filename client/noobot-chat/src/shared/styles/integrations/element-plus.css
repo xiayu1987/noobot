@@ -96,7 +96,7 @@
 
 .noobot-settings-dropdown .el-dropdown-menu__item {
   color: var(--noobot-text-main) !important;
-  border-radius: 8px;
+  border-radius: var(--noobot-radius-xs);
 }
 
 .noobot-settings-dropdown .el-dropdown-menu__item:hover,
@@ -110,7 +110,7 @@
 }
 
 .el-dialog {
-  border-radius: 14px !important;
+  border-radius: var(--noobot-radius-lg) !important;
   overflow: hidden;
 }
 

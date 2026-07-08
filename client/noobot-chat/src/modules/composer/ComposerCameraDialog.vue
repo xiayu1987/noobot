@@ -58,10 +58,10 @@ const { translate } = useLocale();
 
 .camera-preview-wrap {
   width: 100%;
-  border: 1px solid var(--noobot-panel-border, #e4e4e7);
-  border-radius: 10px;
+  border: 1px solid var(--noobot-panel-border, var(--noobot-panel-border));
+  border-radius: var(--noobot-radius-sm);
   overflow: hidden;
-  background: #000;
+  background: var(--noobot-base-black);
 }
 
 .camera-preview {

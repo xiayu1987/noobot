@@ -21,5 +21,5 @@
   --noobot-status-running: var(--noobot-base-blue-400);
   --noobot-status-done: var(--noobot-base-emerald-400);
   --noobot-status-error: var(--noobot-base-red-500);
-  --noobot-status-warning: #f59e0b;
+  --noobot-status-warning: var(--noobot-base-amber-500);
 }

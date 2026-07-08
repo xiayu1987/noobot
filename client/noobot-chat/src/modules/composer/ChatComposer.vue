@@ -395,7 +395,7 @@ defineExpose({
 }
 
 .composer-wrapper.is-file-dragging .composer {
-  border-color: color-mix(in srgb, var(--noobot-base-blue-500, #3b82f6) 58%, var(--noobot-panel-border, #e4e4e7));
+  border-color: color-mix(in srgb, var(--noobot-base-blue-500, var(--noobot-base-blue-500)) 58%, var(--noobot-panel-border, var(--noobot-panel-border)));
   box-shadow: var(--noobot-focus-ring);
 }
 
@@ -445,19 +445,12 @@ defineExpose({
   display: flex;
   flex-direction: column;
   /* 更多操作面板需要实底，避免使用带 transparent 的 panel token 导致透出背景 */
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--noobot-surface-sidebar, #ffffff) 94%, var(--noobot-base-blue-500, #3b82f6)),
-      color-mix(in srgb, var(--noobot-panel-bg, #ffffff) 98%, var(--noobot-base-blue-500, #3b82f6))
-    );
-  border: 1px solid color-mix(in srgb, var(--noobot-base-blue-500, #3b82f6) 18%, var(--noobot-panel-border, #e4e4e7));
-  outline: 1px solid color-mix(in srgb, var(--noobot-base-white, #ffffff) 46%, transparent);
-  border-radius: 18px;
+  background: var(--noobot-overlay-solid-bg);
+  border: 1px solid var(--noobot-overlay-border);
+  outline: 1px solid var(--noobot-overlay-outline);
+  border-radius: var(--noobot-radius-lg);
   overflow-x: hidden; overflow-y: auto; /* 确保内部元素不溢出圆角，同时允许垂直滚动 */
-  box-shadow:
-    0 18px 46px color-mix(in srgb, var(--noobot-base-black, #000000) 16%, transparent),
-    0 1px 0 color-mix(in srgb, var(--noobot-base-white, #ffffff) 54%, transparent) inset;
+  box-shadow: var(--noobot-shadow-overlay);
 }
 
 .more-actions-row {
@@ -468,38 +461,33 @@ defineExpose({
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background:
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--noobot-surface-sidebar, #ffffff) 86%, var(--noobot-base-blue-500, #3b82f6)),
-      color-mix(in srgb, var(--noobot-surface-sidebar, #ffffff) 94%, var(--noobot-base-blue-500, #3b82f6))
-    );
-  border-bottom: 1px solid color-mix(in srgb, var(--noobot-base-blue-500, #3b82f6) 18%, var(--noobot-panel-border, #e4e4e7));
+  background: var(--noobot-overlay-head-bg);
+  border-bottom: 1px solid var(--noobot-overlay-border);
 }
 
 :root[data-theme="light"] .more-panel {
-  background: color-mix(in srgb, var(--noobot-surface-sidebar, #ffffff) 94%, var(--noobot-base-blue-500, #3b82f6));
+  background: color-mix(in srgb, var(--noobot-surface-sidebar, var(--noobot-base-white)) 94%, var(--noobot-base-blue-500, var(--noobot-base-blue-500)));
 }
 
 :root[data-theme="light"] .more-actions-row {
-  background: color-mix(in srgb, var(--noobot-surface-sidebar, #ffffff) 90%, var(--noobot-base-blue-500, #3b82f6));
+  background: color-mix(in srgb, var(--noobot-surface-sidebar, var(--noobot-base-white)) 90%, var(--noobot-base-blue-500, var(--noobot-base-blue-500)));
 }
 
 .more-panel-title {
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.01em;
-  color: var(--noobot-text-strong, #18181b);
+  color: var(--noobot-text-strong, var(--noobot-text-strong));
 }
 
 .more-collapse-btn {
   height: 28px;
   min-height: 28px;
   padding: 0 10px;
-  border-radius: 999px !important;
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, #e4e4e7) 70%, transparent) !important;
-  background: color-mix(in srgb, var(--noobot-surface-sidebar, #ffffff) 78%, transparent) !important;
-  color: var(--noobot-text-main, #18181b) !important;
+  border-radius: var(--noobot-radius-pill) !important;
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--noobot-panel-border)) 70%, transparent) !important;
+  background: color-mix(in srgb, var(--noobot-surface-sidebar, var(--noobot-base-white)) 78%, transparent) !important;
+  color: var(--noobot-text-main, var(--noobot-text-strong)) !important;
   box-shadow: none !important;
   display: inline-flex;
   align-items: center;
@@ -507,8 +495,8 @@ defineExpose({
 }
 
 .more-collapse-btn:hover {
-  background: color-mix(in srgb, var(--noobot-base-blue-500, #3b82f6) 10%, var(--noobot-surface-sidebar, #ffffff)) !important;
-  color: var(--noobot-text-strong, #18181b) !important;
+  background: color-mix(in srgb, var(--noobot-base-blue-500, var(--noobot-base-blue-500)) 10%, var(--noobot-surface-sidebar, var(--noobot-base-white))) !important;
+  color: var(--noobot-text-strong, var(--noobot-text-strong)) !important;
 }
 
 .more-panel-content {
@@ -523,7 +511,7 @@ defineExpose({
   .composer-wrapper {
     --composer-row-gap: 6px;
     --composer-icon-size: 32px;
-    --composer-icon-radius: 8px;
+    --composer-icon-radius: var(--noobot-radius-xs);
     --composer-send-height: 32px;
     --composer-send-padding-x: 16px;
     padding: 0 12px calc(12px + env(safe-area-inset-bottom));
@@ -533,11 +521,11 @@ defineExpose({
   }
   .composer-drop-target {
     min-height: 76px;
-    border-radius: 12px;
+    border-radius: var(--noobot-radius-md);
   }
   .composer { 
     padding: 10px 12px; 
-    border-radius: 12px; 
+    border-radius: var(--noobot-radius-md); 
   }
   .more-panel-overlay {
     position: fixed;
@@ -548,7 +536,7 @@ defineExpose({
   }
   .more-panel {
     max-height: inherit;
-    border-radius: 14px;
+    border-radius: var(--noobot-radius-lg);
   }
   .more-panel-content {
     padding: 12px;
