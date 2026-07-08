@@ -422,8 +422,8 @@ watch(
 }
 
 .active-file {
-  border: none !important;
-  background: color-mix(in srgb, var(--noobot-panel-muted) 58%, transparent) !important;
+  border: none;
+  background: color-mix(in srgb, var(--noobot-panel-muted) 58%, transparent);
   border-radius: 999px;
 }
 

@@ -126,10 +126,10 @@ function onInputKeydown(event) {
   z-index: 50;
   width: 44px;
   height: 44px;
-  padding: 0 !important;
-  border-radius: 50% !important;
+  padding: 0;
+  border-radius: 50%;
   border: none;
-  box-shadow: none !important;
+  box-shadow: none;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -140,7 +140,7 @@ function onInputKeydown(event) {
 .stop-float-btn:hover,
 .stop-float-btn:focus-visible,
 .stop-float-btn:active {
-  transform: translateX(-50%) !important;
+  transform: translateX(-50%);
   filter: brightness(0.9);
 }
 
@@ -156,8 +156,8 @@ function onInputKeydown(event) {
 }
 
 .chat-input :deep(.el-textarea__inner) {
-  border: none !important;
-  box-shadow: none !important;
+  border: none;
+  box-shadow: none;
   padding: 6px 4px;
   background: transparent;
   font-size: 15px;
@@ -174,34 +174,34 @@ function onInputKeydown(event) {
   height: var(--composer-icon-size);
   min-width: var(--composer-icon-size);
   min-height: var(--composer-icon-size);
-  padding: 0 !important;
-  border-radius: var(--composer-icon-radius) !important;
-  border: 1px solid transparent !important;
-  background: transparent !important;
-  color: var(--noobot-text-secondary, var(--noobot-text-secondary)) !important;
+  padding: 0;
+  border-radius: var(--composer-icon-radius);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--noobot-text-secondary, var(--noobot-text-secondary));
   transition: background-color 0.2s ease, color 0.2s ease;
-  box-shadow: none !important;
+  box-shadow: none;
 }
 
 .composer-icon-btn:hover {
-  background: var(--noobot-fill-soft, var(--noobot-fill-soft)) !important;
-  color: var(--noobot-text-main, var(--noobot-text-strong)) !important;
+  background: var(--noobot-fill-soft, var(--noobot-fill-soft));
+  color: var(--noobot-text-main, var(--noobot-text-strong));
 }
 
 .composer-icon-btn.is-recording {
-  color: var(--noobot-status-error, var(--noobot-status-error)) !important;
-  background: color-mix(in srgb, var(--noobot-status-error, var(--noobot-status-error)) 10%, transparent) !important;
+  color: var(--noobot-status-error, var(--noobot-status-error));
+  background: color-mix(in srgb, var(--noobot-status-error, var(--noobot-status-error)) 10%, transparent);
 }
 
 .send-btn {
   padding: 0 var(--composer-send-padding-x);
   height: var(--composer-send-height);
-  border-radius: var(--composer-icon-radius) !important;
+  border-radius: var(--composer-icon-radius);
   font-weight: 500;
   letter-spacing: 0.5px;
   flex-shrink: 0;
-  border: none !important;
-  box-shadow: none !important;
+  border: none;
+  box-shadow: none;
   transition: filter 0.2s ease, opacity 0.2s ease;
 }
 
@@ -210,7 +210,7 @@ function onInputKeydown(event) {
 }
 
 .send-btn:not(:disabled):hover {
-  transform: none !important;
+  transform: none;
   filter: brightness(0.95);
 }
 

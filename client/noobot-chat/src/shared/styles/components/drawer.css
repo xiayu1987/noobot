@@ -52,12 +52,12 @@
 @media (max-width: 720px) {
   .noobot-side-drawer,
   .workspace-drawer {
-    width: 100% !important;
+    width: 100%;
   }
 
   .noobot-side-drawer .el-drawer,
   .workspace-drawer .el-drawer {
-    height: 100svh !important;
+    height: 100svh;
     display: flex;
     flex-direction: column;
   }
@@ -73,6 +73,6 @@
   .noobot-side-drawer__body {
     flex: 1 1 auto;
     min-height: 0;
-    padding: 0 !important;
+    padding: 0;
   }
 }

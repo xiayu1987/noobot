@@ -484,19 +484,19 @@ defineExpose({
   height: 28px;
   min-height: 28px;
   padding: 0 10px;
-  border-radius: var(--noobot-radius-pill) !important;
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--noobot-panel-border)) 70%, transparent) !important;
-  background: color-mix(in srgb, var(--noobot-surface-sidebar, var(--noobot-base-white)) 78%, transparent) !important;
-  color: var(--noobot-text-main, var(--noobot-text-strong)) !important;
-  box-shadow: none !important;
+  border-radius: var(--noobot-radius-pill);
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--noobot-panel-border)) 70%, transparent);
+  background: color-mix(in srgb, var(--noobot-surface-sidebar, var(--noobot-base-white)) 78%, transparent);
+  color: var(--noobot-text-main, var(--noobot-text-strong));
+  box-shadow: none;
   display: inline-flex;
   align-items: center;
   gap: 4px;
 }
 
 .more-collapse-btn:hover {
-  background: color-mix(in srgb, var(--noobot-base-blue-500, var(--noobot-base-blue-500)) 10%, var(--noobot-surface-sidebar, var(--noobot-base-white))) !important;
-  color: var(--noobot-text-strong, var(--noobot-text-strong)) !important;
+  background: color-mix(in srgb, var(--noobot-base-blue-500, var(--noobot-base-blue-500)) 10%, var(--noobot-surface-sidebar, var(--noobot-base-white)));
+  color: var(--noobot-text-strong, var(--noobot-text-strong));
 }
 
 .more-panel-content {

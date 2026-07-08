@@ -239,7 +239,7 @@ watch(
 
 .session-rename-btn:disabled,
 .session-delete-btn:disabled {
-  opacity: 0.45 !important;
+  opacity: 0.45;
   cursor: not-allowed;
   pointer-events: none;
 }

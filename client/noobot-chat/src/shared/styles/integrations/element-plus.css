@@ -2,61 +2,61 @@
 .el-input__wrapper,
 .el-textarea__inner,
 .el-select__wrapper {
-  background: var(--noobot-control-bg, var(--noobot-panel-bg)) !important;
-  border: 1px solid var(--noobot-glass-border) !important;
-  box-shadow: none !important;
-  color: var(--noobot-text-main) !important;
+  background: var(--noobot-control-bg, var(--noobot-panel-bg));
+  border: 1px solid var(--noobot-glass-border);
+  box-shadow: none;
+  color: var(--noobot-text-main);
 }
 
 .el-select__wrapper .el-select__placeholder,
 .el-select__wrapper .el-select__selected-item,
 .el-select__wrapper .el-select__selected-item span {
-  color: var(--noobot-text-main) !important;
+  color: var(--noobot-text-main);
 }
 
 .el-select__wrapper .el-select__placeholder.is-transparent {
-  color: var(--noobot-text-muted) !important;
+  color: var(--noobot-text-muted);
 }
 
 .el-select-dropdown,
 .el-select-dropdown__wrap,
 .el-select-dropdown__list {
-  background: var(--noobot-control-menu-bg, var(--noobot-panel-bg)) !important;
+  background: var(--noobot-control-menu-bg, var(--noobot-panel-bg));
 }
 
 .el-select-dropdown.el-popper {
-  border: 1px solid var(--noobot-panel-border) !important;
+  border: 1px solid var(--noobot-panel-border);
 }
 
 .el-select-dropdown__item {
-  color: var(--noobot-text-main) !important;
+  color: var(--noobot-text-main);
 }
 
 .el-select-dropdown__item.hover,
 .el-select-dropdown__item:hover {
-  background: var(--noobot-surface-item-hover) !important;
-  color: var(--noobot-text-strong) !important;
+  background: var(--noobot-surface-item-hover);
+  color: var(--noobot-text-strong);
 }
 
 .el-select-dropdown__item.is-selected {
-  background: var(--noobot-surface-primary-soft) !important;
-  color: var(--noobot-text-accent) !important;
+  background: var(--noobot-surface-primary-soft);
+  color: var(--noobot-text-accent);
 }
 
 .el-select-dropdown__item.is-disabled {
-  color: var(--noobot-text-muted) !important;
+  color: var(--noobot-text-muted);
 }
 
 .el-input__wrapper.is-focus,
 .el-select__wrapper.is-focused,
 .el-textarea__inner:focus {
-  border-color: color-mix(in srgb, var(--noobot-cyber-cyan) 72%, transparent) !important;
-  box-shadow: var(--noobot-focus-ring) !important;
+  border-color: color-mix(in srgb, var(--noobot-cyber-cyan) 72%, transparent);
+  box-shadow: var(--noobot-focus-ring);
 }
 
 .el-button {
-  border-radius: var(--noobot-btn-radius) !important;
-  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease !important;
+  border-radius: var(--noobot-btn-radius);
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
 }
 
 .el-button:not(:disabled):hover {
@@ -65,112 +65,112 @@
 }
 
 .el-button--primary {
-  border: none !important;
-  background: var(--noobot-btn-primary-bg) !important;
+  border: none;
+  background: var(--noobot-btn-primary-bg);
   box-shadow: none;
 }
 
 .el-button--primary:not(:disabled):hover {
   box-shadow: none;
-  background: color-mix(in srgb, var(--noobot-btn-primary-bg) 90%, var(--noobot-base-white)) !important;
+  background: color-mix(in srgb, var(--noobot-btn-primary-bg) 90%, var(--noobot-base-white));
 }
 
 .el-card,
 .el-dropdown-menu,
 .el-popover {
-  background: color-mix(in srgb, var(--noobot-panel-bg) 94%, transparent) !important;
-  border: 1px solid var(--noobot-panel-border) !important;
+  background: color-mix(in srgb, var(--noobot-panel-bg) 94%, transparent);
+  border: 1px solid var(--noobot-panel-border);
   backdrop-filter: none;
 }
 
 /* 头部设置下拉菜单（teleported）统一系统色调 */
 .noobot-settings-dropdown.el-popper {
-  border: 1px solid var(--noobot-panel-border) !important;
+  border: 1px solid var(--noobot-panel-border);
 }
 
 .noobot-settings-dropdown .el-dropdown-menu {
-  background: color-mix(in srgb, var(--noobot-panel-bg) 96%, transparent) !important;
-  border: 1px solid var(--noobot-panel-border) !important;
-  padding: 4px !important;
+  background: color-mix(in srgb, var(--noobot-panel-bg) 96%, transparent);
+  border: 1px solid var(--noobot-panel-border);
+  padding: 4px;
 }
 
 .noobot-settings-dropdown .el-dropdown-menu__item {
-  color: var(--noobot-text-main) !important;
+  color: var(--noobot-text-main);
   border-radius: var(--noobot-radius-xs);
 }
 
 .noobot-settings-dropdown .el-dropdown-menu__item:hover,
 .noobot-settings-dropdown .el-dropdown-menu__item:focus {
-  background: var(--noobot-panel-muted) !important;
-  color: var(--noobot-text-strong) !important;
+  background: var(--noobot-panel-muted);
+  color: var(--noobot-text-strong);
 }
 
 .noobot-settings-dropdown .el-dropdown-menu__item.is-disabled {
-  color: var(--noobot-text-secondary) !important;
+  color: var(--noobot-text-secondary);
 }
 
 .el-dialog {
-  border-radius: var(--noobot-radius-lg) !important;
+  border-radius: var(--noobot-radius-lg);
   overflow: hidden;
 }
 
 /* Tabs / Drawer / Collapse 统一 */
 .el-tabs__header {
-  border-bottom: 1px solid var(--noobot-divider) !important;
+  border-bottom: 1px solid var(--noobot-divider);
 }
 
 .el-tabs__item {
-  color: var(--noobot-text-secondary) !important;
+  color: var(--noobot-text-secondary);
 }
 
 .el-tabs__item.is-active {
-  color: var(--noobot-text-main) !important;
+  color: var(--noobot-text-main);
 }
 
 .el-tabs__active-bar {
-  background: var(--noobot-text-accent) !important;
+  background: var(--noobot-text-accent);
 }
 
 .el-drawer,
 .el-dialog {
-  background: var(--noobot-panel-bg) !important;
-  border: 1px solid var(--noobot-panel-border) !important;
+  background: var(--noobot-panel-bg);
+  border: 1px solid var(--noobot-panel-border);
   box-shadow: none;
 }
 
 .el-drawer__header,
 .el-dialog__header {
-  background: var(--noobot-panel-head-bg) !important;
-  border-bottom: 1px solid var(--noobot-divider) !important;
+  background: var(--noobot-panel-head-bg);
+  border-bottom: 1px solid var(--noobot-divider);
 }
 
 .el-drawer__title,
 .el-dialog__title {
-  color: var(--noobot-text-strong) !important;
-  font-weight: 600 !important;
+  color: var(--noobot-text-strong);
+  font-weight: 600;
 }
 
 .el-collapse-item__header {
-  background: transparent !important;
-  color: var(--noobot-text-main) !important;
+  background: transparent;
+  color: var(--noobot-text-main);
 }
 
 /* 空态与提示收敛 */
 .el-empty__description p,
 .el-alert__description {
-  color: var(--noobot-text-secondary) !important;
+  color: var(--noobot-text-secondary);
 }
 
 @media (max-width: 768px) {
   .el-drawer {
-    width: 100vw !important;
-    max-width: 100vw !important;
+    width: 100vw;
+    max-width: 100vw;
   }
 
   .el-dialog {
-    width: calc(100vw - 16px) !important;
-    max-width: calc(100vw - 16px) !important;
-    margin-top: 5vh !important;
+    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
+    margin-top: 5vh;
   }
 
   .el-button,
@@ -180,6 +180,6 @@
 
   .el-input__wrapper,
   .el-select__wrapper {
-    min-height: 34px !important;
+    min-height: 34px;
   }
 }

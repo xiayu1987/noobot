@@ -34,14 +34,14 @@
 - [x] 三个 Tab 可切换（执行过程/详情/注入消息）
 - [x] 展开/收起交互正常
 - [x] 详情长文本展开交互正常
-- [x] 已移除组件内 `!important`
+- [x] 已移除组件内强制优先级样式写法
 
 ### 2.2 MessageAttachments / MessageWrittenFiles
 
 - [x] 已复用 shared `file-card-common.css`
 - [x] 文件名、省略、图标、下载按钮样式正常
 - [x] parsed result 操作按钮仍可用
-- [x] 插件内 `!important` 已清零（workflow + harness/frontend）
+- [x] 插件内强制优先级样式写法已清零（workflow + harness/frontend）
 
 ---
 

@@ -1,32 +1,32 @@
 /* 预览弹框主色调（全局，适配 teleported el-dialog） */
 .attachment-preview-dialog,
 .generated-file-preview-dialog {
-  background: var(--noobot-panel-bg) !important;
-  border: 1px solid var(--noobot-panel-border) !important;
+  background: var(--noobot-panel-bg);
+  border: 1px solid var(--noobot-panel-border);
 }
 
 .attachment-preview-dialog .el-dialog__header,
 .generated-file-preview-dialog .el-dialog__header {
-  margin-right: 0 !important;
-  padding: 14px 18px !important;
-  background: var(--noobot-panel-head-bg) !important;
-  border-bottom: 1px solid var(--noobot-divider) !important;
+  margin-right: 0;
+  padding: 14px 18px;
+  background: var(--noobot-panel-head-bg);
+  border-bottom: 1px solid var(--noobot-divider);
 }
 
 .attachment-preview-dialog .el-dialog__title,
 .generated-file-preview-dialog .el-dialog__title {
-  color: var(--noobot-text-strong) !important;
-  font-weight: 600 !important;
+  color: var(--noobot-text-strong);
+  font-weight: 600;
 }
 
 .attachment-preview-dialog .el-dialog__headerbtn .el-dialog__close,
 .generated-file-preview-dialog .el-dialog__headerbtn .el-dialog__close {
-  color: var(--noobot-text-secondary) !important;
+  color: var(--noobot-text-secondary);
 }
 
 .attachment-preview-dialog .el-dialog__headerbtn:hover .el-dialog__close,
 .generated-file-preview-dialog .el-dialog__headerbtn:hover .el-dialog__close {
-  color: var(--noobot-text-strong) !important;
+  color: var(--noobot-text-strong);
 }
 
 /* 消息内容与 markdown 区视觉收敛 */
@@ -37,22 +37,22 @@
 
 .md table th,
 .preview-markdown table th {
-  background: color-mix(in srgb, var(--noobot-panel-border) 45%, transparent) !important;
+  background: color-mix(in srgb, var(--noobot-panel-border) 45%, transparent);
 }
 
 .preview-body {
-  color: var(--noobot-preview-text) !important;
-  background: var(--noobot-preview-bg) !important;
-  border-color: var(--noobot-preview-border) !important;
+  color: var(--noobot-preview-text);
+  background: var(--noobot-preview-bg);
+  border-color: var(--noobot-preview-border);
 }
 
 .preview-error {
-  color: var(--noobot-preview-danger-text) !important;
-  background: var(--noobot-preview-danger-bg) !important;
-  border-color: var(--noobot-preview-danger-border) !important;
+  color: var(--noobot-preview-danger-text);
+  background: var(--noobot-preview-danger-bg);
+  border-color: var(--noobot-preview-danger-border);
 }
 
 .preview-text,
 .preview-markdown {
-  color: var(--noobot-preview-text) !important;
+  color: var(--noobot-preview-text);
 }
