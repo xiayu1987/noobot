@@ -90,7 +90,7 @@
 }
 
 .noobot-workspace-layout .empty-icon {
-  font-size: 48px;
+  font-size: var(--noobot-font-size-lg);
   margin-bottom: 16px;
   opacity: 0.3;
 }

@@ -49,7 +49,7 @@ defineExpose({ getHtml });
 
 .base-markdown-content :deep(code) {
   padding: 2px 6px;
-  font-size: 0.9em;
+  font-size: var(--noobot-font-size-sm);
 }
 
 .base-markdown-content :deep(pre) {
@@ -59,7 +59,7 @@ defineExpose({ getHtml });
 
 .base-markdown-content :deep(pre code) {
   padding: 0;
-  font-size: 0.9em;
+  font-size: var(--noobot-font-size-sm);
 }
 
 .base-markdown-content :deep(ul),

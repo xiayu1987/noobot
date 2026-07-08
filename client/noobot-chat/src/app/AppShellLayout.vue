@@ -451,7 +451,7 @@ defineExpose({
 }
 
 .mobile-chat-message-nav-trigger-icon {
-  font-size: 20px;
+  font-size: var(--noobot-font-size-lg);
   font-weight: 800;
   line-height: 1;
 }

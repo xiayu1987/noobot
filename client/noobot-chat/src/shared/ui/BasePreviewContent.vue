@@ -213,16 +213,16 @@ watch(
   margin-bottom: 16px;
 }
 .preview-markdown :deep(h1) {
-  font-size: 1.8em;
+  font-size: var(--noobot-font-size-lg);
 }
 .preview-markdown :deep(h2) {
-  font-size: 1.5em;
+  font-size: var(--noobot-font-size-lg);
 }
 .preview-markdown :deep(h3) {
-  font-size: 1.25em;
+  font-size: var(--noobot-font-size-md);
 }
 .preview-markdown :deep(h4) {
-  font-size: 1em;
+  font-size: var(--noobot-font-size-md);
 }
 
 .preview-markdown :deep(blockquote) {
@@ -255,7 +255,7 @@ watch(
 
 .preview-markdown :deep(code) {
   padding: 0.2em 0.4em;
-  font-size: 0.9em;
+  font-size: var(--noobot-font-size-sm);
 }
 
 .preview-markdown :deep(pre) {
@@ -263,7 +263,7 @@ watch(
   margin-bottom: 16px;
 }
 .preview-markdown :deep(pre code) {
-  font-size: 13.5px;
+  font-size: var(--noobot-font-size-sm);
 }
 
 .preview-markdown :deep(table) {
