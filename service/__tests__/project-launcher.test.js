@@ -122,8 +122,8 @@ test("project launcher initializes openai compatible provider with tool_reasonin
   });
 
   const globalConfig = await readJson(path.join(serviceRoot, "config", "global.config.json"));
-  assert.equal(globalConfig.providers?.gpt_5_5?.reasoning_effort, "low");
-  assert.equal(globalConfig.providers?.gpt_5_5?.tool_reasoning_effort, "low");
+  assert.equal(globalConfig.providers?.["gpt_5_5"]?.reasoning_effort, "low");
+  assert.equal(globalConfig.providers?.["gpt_5_5"]?.tool_reasoning_effort, "low");
 });
 
 test("project launcher resolves camelCase workspace config keys for existing configs", async (t) => {

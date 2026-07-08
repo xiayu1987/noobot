@@ -50,12 +50,12 @@ function parseThinkingTimingMs(value) {
   return parseTimeMs(value);
 }
 
-function applyEarliestThinkingStartedAt(targetAssistantMessage = null, nextStartedAt = "") {
+function applyMissingThinkingStartedAt(targetAssistantMessage = null, nextStartedAt = "") {
   if (!targetAssistantMessage) return;
+  const currentStartedAtMs = parseThinkingTimingMs(getThinkingStartedAt(targetAssistantMessage));
+  if (currentStartedAtMs > 0) return;
   const nextStartedAtMs = parseThinkingTimingMs(nextStartedAt);
   if (nextStartedAtMs <= 0) return;
-  const currentStartedAtMs = parseThinkingTimingMs(getThinkingStartedAt(targetAssistantMessage));
-  if (currentStartedAtMs > 0 && currentStartedAtMs <= nextStartedAtMs) return;
   setThinkingStartedAt(targetAssistantMessage, nextStartedAtMs);
 }
 
@@ -568,7 +568,7 @@ export function createChatEngineConversationState({
       });
       if (targetAssistantMessage) {
         targetAssistantMessage.channelState = channelStateView;
-        applyEarliestThinkingStartedAt(targetAssistantMessage, channelStateView.createdAt || channelStateView.createdAtMs);
+        applyMissingThinkingStartedAt(targetAssistantMessage, channelStateView.createdAt || channelStateView.createdAtMs);
         targetAssistantMessage.pending = true;
         if (state === BackendChannelState.STOPPING) {
           targetAssistantMessage.statusLabel = translate("chat.stopping");
@@ -646,7 +646,7 @@ export function createChatEngineConversationState({
         return;
       }
       targetAssistantMessage.channelState = channelStateView;
-      applyEarliestThinkingStartedAt(targetAssistantMessage, channelStateView.createdAt || channelStateView.createdAtMs);
+      applyMissingThinkingStartedAt(targetAssistantMessage, channelStateView.createdAt || channelStateView.createdAtMs);
       setThinkingFinishedAt(targetAssistantMessage, getThinkingFinishedAt(targetAssistantMessage) || updatedAt || createdAt || nowIso());
       logResendDebug("conversationState.backendCompleted.apply", {
         state, sessionId, dialogProcessId, turnScopeId,
@@ -657,7 +657,7 @@ export function createChatEngineConversationState({
     }
     const beforeTerminalApply = summarizeDebugMessage(targetAssistantMessage);
     targetAssistantMessage.channelState = channelStateView;
-    applyEarliestThinkingStartedAt(targetAssistantMessage, channelStateView.createdAt || channelStateView.createdAtMs);
+    applyMissingThinkingStartedAt(targetAssistantMessage, channelStateView.createdAt || channelStateView.createdAtMs);
     setThinkingFinishedAt(targetAssistantMessage, getThinkingFinishedAt(targetAssistantMessage) || updatedAt || createdAt || nowIso());
     targetAssistantMessage.pending = false;
     if (state === FrontendRunState.FRONTEND_COMPLETED) {

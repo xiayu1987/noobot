@@ -43,12 +43,12 @@ function parseThinkingTimingMs(value) {
   return parseTimeMs(value);
 }
 
-function applyEarliestThinkingStartedAt(targetAssistantMessage = null, nextStartedAt = "") {
+function applyMissingThinkingStartedAt(targetAssistantMessage = null, nextStartedAt = "") {
   if (!targetAssistantMessage) return;
+  const currentStartedAtMs = parseThinkingTimingMs(getThinkingStartedAt(targetAssistantMessage));
+  if (currentStartedAtMs > 0) return;
   const nextStartedAtMs = parseThinkingTimingMs(nextStartedAt);
   if (nextStartedAtMs <= 0) return;
-  const currentStartedAtMs = parseThinkingTimingMs(getThinkingStartedAt(targetAssistantMessage));
-  if (currentStartedAtMs > 0 && currentStartedAtMs <= nextStartedAtMs) return;
   setThinkingStartedAt(targetAssistantMessage, nextStartedAtMs);
 }
 
@@ -123,7 +123,7 @@ function applyReconnectChannelTimingToMessage({
     updatedAt: timing.updatedAt,
   };
   targetAssistantMessage.channelState = channelState;
-  applyEarliestThinkingStartedAt(targetAssistantMessage, channelState.createdAt || channelState.createdAtMs);
+  applyMissingThinkingStartedAt(targetAssistantMessage, channelState.createdAt || channelState.createdAtMs);
   if (terminal) {
     setThinkingFinishedAt(
       targetAssistantMessage,

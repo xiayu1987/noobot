@@ -40,16 +40,16 @@ describe("MonotonicMessageActions", () => {
     ElMessageBox.confirm.mockImplementationOnce(() => new Promise(() => {}));
     const wrapper = mountActions();
 
-    await wrapper.find(".monotonic-chip-btn.delete").trigger("click");
+    await wrapper.find(".monotonic-chip-btn.is-danger").trigger("click");
     await nextTick();
     wrapper.vm.$forceUpdate();
     await nextTick();
 
-    expect(wrapper.find(".monotonic-chip-btn.edit").attributes("disabled")).toBeDefined();
-    expect(wrapper.find(".monotonic-chip-btn.delete").attributes("disabled")).toBeDefined();
+    expect(wrapper.find(".monotonic-chip-btn.is-primary").attributes("disabled")).toBeDefined();
+    expect(wrapper.find(".monotonic-chip-btn.is-danger").attributes("disabled")).toBeDefined();
     const disabledWrapper = mountActions({ disabled: true });
-    expect(disabledWrapper.find(".monotonic-chip-btn.edit").attributes("disabled")).toBeDefined();
-    expect(disabledWrapper.find(".monotonic-chip-btn.delete").attributes("disabled")).toBeDefined();
+    expect(disabledWrapper.find(".monotonic-chip-btn.is-primary").attributes("disabled")).toBeDefined();
+    expect(disabledWrapper.find(".monotonic-chip-btn.is-danger").attributes("disabled")).toBeDefined();
   });
 
   it("calls delete handler with message payload", async () => {
@@ -58,7 +58,7 @@ describe("MonotonicMessageActions", () => {
     const onResend = vi.fn(async () => true);
     const wrapper = mountActions({ messageItem, onDelete, onResend });
 
-    await wrapper.find(".monotonic-chip-btn.delete").trigger("click");
+    await wrapper.find(".monotonic-chip-btn.is-danger").trigger("click");
 
     expect(ElMessageBox.confirm).toHaveBeenCalledTimes(1);
     expect(onDelete).toHaveBeenCalledWith(messageItem);
@@ -70,7 +70,7 @@ describe("MonotonicMessageActions", () => {
     const onResend = vi.fn(async () => true);
     const wrapper = mountActions({ messageItem, onResend });
 
-    await wrapper.find(".monotonic-chip-btn.edit").trigger("click");
+    await wrapper.find(".monotonic-chip-btn.is-primary").trigger("click");
     await nextTick();
     wrapper.vm.$forceUpdate();
     await nextTick();
