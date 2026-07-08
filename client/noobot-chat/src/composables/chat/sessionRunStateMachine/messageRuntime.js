@@ -28,7 +28,6 @@ const MESSAGE_RUNNING_CHANNEL_STATES = Object.freeze([
   BackendChannelState.INTERACTION_PENDING,
   FrontendRunState.RESEND_REPLACING_TURN,
   FrontendRunState.RESEND_STREAMING,
-  BackendChannelState.COMPLETED,
   FrontendRunState.FRONTEND_COMPLETION_REQUESTING,
   FrontendRunState.STOP_REQUESTED,
   BackendChannelState.STOPPING,

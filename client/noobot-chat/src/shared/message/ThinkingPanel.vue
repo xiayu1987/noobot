@@ -886,8 +886,6 @@ onBeforeUnmount(() => {
 
 .thinking-details-tabs :deep(.el-tabs__header) {
   flex: 0 0 auto;
-  margin-bottom: 8px;
-  background: var(--noobot-panel-bg);
   z-index: 1;
 }
 
