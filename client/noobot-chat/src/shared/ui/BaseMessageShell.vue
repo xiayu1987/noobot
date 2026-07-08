@@ -73,19 +73,19 @@ const { translate } = useLocale();
   width: var(--noobot-msg-avatar-size);
   height: var(--noobot-msg-avatar-size);
   border-radius: 50%;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: var(--noobot-msg-avatar-font-size);
   font-weight: 600;
   line-height: 1;
-  flex-shrink: 0;
+  flex: 0 0 var(--noobot-msg-avatar-size);
   overflow: hidden;
 }
 
 .base-message-assistant-icon {
-  width: 100%;
-  height: 100%;
+  width: calc(var(--noobot-msg-avatar-size) * 0.72);
+  height: calc(var(--noobot-msg-avatar-size) * 0.72);
   object-fit: contain;
   display: block;
 }
