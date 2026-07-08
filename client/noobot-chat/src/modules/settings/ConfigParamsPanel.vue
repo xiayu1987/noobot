@@ -433,7 +433,7 @@ watch(
 }
 
 .list-empty-tip .empty-icon {
-  font-size: 34px;
+  font-size: var(--noobot-font-size-lg);
   margin-bottom: 10px;
   opacity: 0.42;
 }

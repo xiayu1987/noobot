@@ -193,11 +193,11 @@ export async function copyMarkdownRichAsHtmlPage(rawHtmlContent = "") {
         .markdown-export-container a { color: var(--noobot-base-blue-500); text-decoration: none; }
         .markdown-export-container hr { height: 1px; margin: 24px 0; background-color: var(--noobot-base-slate-200); border: 0; }
         .markdown-export-container h1, .markdown-export-container h2, .markdown-export-container h3, .markdown-export-container h4 { margin-top: 24px; margin-bottom: 16px; font-weight: 600; color: var(--noobot-base-slate-900); }
-        .markdown-export-container h1 { font-size: 1.8em; border-bottom: 1px solid var(--noobot-base-slate-200); padding-bottom: 0.3em; }
-        .markdown-export-container h2 { font-size: 1.5em; border-bottom: 1px solid var(--noobot-base-slate-200); padding-bottom: 0.3em; }
+        .markdown-export-container h1 { font-size: var(--noobot-font-size-lg); border-bottom: 1px solid var(--noobot-base-slate-200); padding-bottom: 0.3em; }
+        .markdown-export-container h2 { font-size: var(--noobot-font-size-lg); border-bottom: 1px solid var(--noobot-base-slate-200); padding-bottom: 0.3em; }
         .markdown-export-container blockquote { margin: 16px 0; padding: 12px 16px; color: var(--noobot-base-slate-500); background-color: var(--noobot-base-slate-50); border-left: 4px solid var(--noobot-base-slate-200); font-style: italic; }
         .markdown-export-container ul, .markdown-export-container ol { margin-bottom: 16px; padding-left: 2em; }
-        .markdown-export-container code { background-color: var(--noobot-base-slate-100); color: var(--noobot-base-red-500); padding: 0.2em 0.4em; border-radius: 4px; font-family: monospace; font-size: 0.9em; }
+        .markdown-export-container code { background-color: var(--noobot-base-slate-100); color: var(--noobot-base-red-500); padding: 0.2em 0.4em; border-radius: 4px; font-family: monospace; font-size: var(--noobot-font-size-sm); }
         .markdown-export-container pre { background-color: var(--noobot-base-slate-800); color: var(--noobot-base-slate-200); border-radius: 8px; padding: 16px; overflow-x: auto; }
         .markdown-export-container pre code { background-color: transparent; color: inherit; padding: 0; }
         .markdown-export-container table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }

@@ -38,12 +38,12 @@
   --noobot-base-violet-400: var(--noobot-base-blue-400);
   --noobot-base-blue-700: #1d4ed8;
 
-  /* 字号语义收敛：组件只引用语义层，避免散落 px 值 */
-  --noobot-font-size-2xs: 10px;
-  --noobot-font-size-xs: 11px;
-  --noobot-font-size-sm: 12px;
-  --noobot-font-size-md: 13px;
-  --noobot-font-size-base: 14px;
-  --noobot-font-size-lg: 15px;
-  --noobot-font-size-xl: 16px;
+  /* 字号语义收敛：仅保留 4 个实际字号值，其余旧 token 作为兼容别名 */
+  --noobot-font-size-xs: 12px;
+  --noobot-font-size-sm: 13px;
+  --noobot-font-size-md: 14px;
+  --noobot-font-size-lg: 16px;
+  --noobot-font-size-2xs: var(--noobot-font-size-xs);
+  --noobot-font-size-base: var(--noobot-font-size-md);
+  --noobot-font-size-xl: var(--noobot-font-size-lg);
 }
