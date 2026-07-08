@@ -30,7 +30,7 @@ defineEmits(["click"]);
   cursor: pointer;
   height: 20px;
   padding: 0 6px;
-  font-size: 11px;
+  font-size: var(--noobot-font-size-xs);
   line-height: 1.2;
   border-radius: var(--noobot-radius-pill);
 }

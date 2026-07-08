@@ -415,7 +415,7 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
   font-weight: 600;
 }
 
@@ -474,7 +474,7 @@ defineExpose({
 }
 
 .more-panel-title {
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
   font-weight: 700;
   letter-spacing: 0.01em;
   color: var(--noobot-text-strong, var(--noobot-text-strong));

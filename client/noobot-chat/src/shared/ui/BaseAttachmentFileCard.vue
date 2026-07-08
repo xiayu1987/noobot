@@ -174,7 +174,7 @@ function emitPreview() {
   flex: 0 0 auto;
   height: 18px;
   padding: 0 6px;
-  font-size: 10px;
+  font-size: var(--noobot-font-size-2xs);
   line-height: 1;
 }
 .file-size {

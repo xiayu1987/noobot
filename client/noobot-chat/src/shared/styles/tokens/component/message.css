@@ -1,7 +1,8 @@
 :root {
   /* ========== Component Tokens · Message ========== */
   /* Message colors: flat, modern, high-contrast in both light/dark themes */
-  --noobot-msg-avatar-bg: var(--noobot-base-white);
+  --noobot-msg-avatar-bg: var(--noobot-base-blue-500);
+  --noobot-msg-avatar-text: var(--noobot-base-white);
   --noobot-msg-assistant-avatar: var(--noobot-msg-avatar-bg);
   --noobot-msg-user-avatar: var(--noobot-msg-avatar-bg);
   --noobot-msg-meta: var(--noobot-base-slate-500);
@@ -31,11 +32,11 @@
 
   /* ========== Component Tokens · Message Size ========== */
   --noobot-msg-avatar-size: 30px;
-  --noobot-msg-avatar-font-size: 12px;
-  --noobot-msg-meta-font-size: 12px;
-  --noobot-msg-file-size-font-size: 11px;
-  --noobot-msg-caption-font-size: 13px;
-  --noobot-msg-font-size: 15px;
+  --noobot-msg-avatar-font-size: var(--noobot-font-size-sm);
+  --noobot-msg-meta-font-size: var(--noobot-font-size-sm);
+  --noobot-msg-file-size-font-size: var(--noobot-font-size-xs);
+  --noobot-msg-caption-font-size: var(--noobot-font-size-md);
+  --noobot-msg-font-size: var(--noobot-font-size-lg);
   --noobot-msg-line-height: 1.6;
   --noobot-msg-bubble-pad-y: 11px;
   --noobot-msg-bubble-pad-x: 14px;
@@ -51,7 +52,8 @@
 :root[data-theme="dark"],
 html.dark,
 .dark {
-  --noobot-msg-avatar-bg: var(--noobot-panel-bg);
+  --noobot-msg-avatar-bg: var(--noobot-base-blue-500);
+  --noobot-msg-avatar-text: var(--noobot-base-white);
   --noobot-msg-meta: var(--noobot-text-muted);
   --noobot-msg-assistant-bg: var(--noobot-panel-bg);
   --noobot-msg-assistant-border: var(--noobot-panel-border);

@@ -220,13 +220,13 @@ function handleHeaderAction(command = "") {
 
 .head-title {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--noobot-font-size-xl);
   font-weight: 600;
   color: var(--noobot-text-strong);
 }
 
 .head-sub {
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
   color: var(--noobot-text-secondary);
   margin-top: 2px;
 }

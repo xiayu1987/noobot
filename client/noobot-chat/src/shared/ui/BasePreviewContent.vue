@@ -180,13 +180,13 @@ watch(
   word-break: break-word;
   color: var(--noobot-preview-text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 14px;
+  font-size: var(--noobot-font-size-base);
   line-height: 1.6;
 }
 
 .preview-markdown {
   color: var(--noobot-preview-text);
-  font-size: 15px;
+  font-size: var(--noobot-font-size-lg);
   line-height: 1.7;
   word-wrap: break-word;
 }
@@ -268,7 +268,7 @@ watch(
 
 .preview-markdown :deep(table) {
   margin-bottom: 16px;
-  font-size: 14px;
+  font-size: var(--noobot-font-size-base);
 }
 .preview-markdown :deep(th),
 .preview-markdown :deep(td) {

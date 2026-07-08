@@ -509,7 +509,7 @@ async function handleDelete() {
 
 .monotonic-edit-title {
   color: var(--el-text-color-primary);
-  font-size: 16px;
+  font-size: var(--noobot-font-size-xl);
   font-weight: 600;
   line-height: 1.4;
 }
@@ -517,7 +517,7 @@ async function handleDelete() {
 .monotonic-edit-subtitle {
   margin-top: 4px;
   color: var(--el-text-color-secondary);
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
   line-height: 1.4;
 }
 
@@ -564,7 +564,7 @@ async function handleDelete() {
   background: var(--el-fill-color-light);
   border: none;
   box-shadow: inset 0 0 0 1px transparent;
-  font-size: 14px;
+  font-size: var(--noobot-font-size-base);
   line-height: 1.6;
   transition: all 0.2s ease;
 }
@@ -592,7 +592,7 @@ async function handleDelete() {
 }
 
 .monotonic-attachment-title {
-  font-size: 14px;
+  font-size: var(--noobot-font-size-base);
   font-weight: 600;
   color: var(--el-text-color-regular);
 }
@@ -613,7 +613,7 @@ async function handleDelete() {
 
 .monotonic-attachment-empty :deep(.el-empty__description p) {
   color: var(--el-text-color-secondary);
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
 }
 
 .monotonic-attachment-list {
@@ -652,7 +652,7 @@ async function handleDelete() {
   justify-content: center;
   color: var(--el-color-primary);
   background: var(--el-color-primary-light-9);
-  font-size: 11px;
+  font-size: var(--noobot-font-size-xs);
   font-weight: bold;
   border: 1px solid var(--el-color-primary-light-8);
 }
@@ -667,7 +667,7 @@ async function handleDelete() {
 }
 
 .monotonic-attachment-name {
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
   font-weight: 600;
   color: var(--el-text-color-primary);
   white-space: nowrap;
@@ -678,7 +678,7 @@ async function handleDelete() {
 .monotonic-attachment-desc {
   display: flex;
   align-items: center;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
   color: var(--el-text-color-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -688,7 +688,7 @@ async function handleDelete() {
 .kind-tag {
   height: 18px;
   padding: 0 6px;
-  font-size: 10px;
+  font-size: var(--noobot-font-size-2xs);
   border: none;
 }
 
@@ -742,7 +742,7 @@ async function handleDelete() {
   border: 1px dashed var(--el-border-color-dark);
   background: transparent;
   color: var(--el-text-color-regular);
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -774,7 +774,7 @@ async function handleDelete() {
   align-items: center;
   gap: 4px;
   color: var(--el-text-color-secondary);
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
 }
 
 .monotonic-edit-buttons {

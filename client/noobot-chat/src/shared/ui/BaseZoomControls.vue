@@ -34,7 +34,7 @@ defineEmits(["zoom-in", "zoom-out", "zoom-reset"]);
 }
 
 .base-zoom-toolbar__title {
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
   color: var(--noobot-text-secondary);
 }
 
@@ -68,7 +68,7 @@ defineEmits(["zoom-in", "zoom-out", "zoom-reset"]);
 }
 
 .base-zoom-text {
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
   color: var(--noobot-text-secondary);
   min-width: 44px;
   text-align: center;
@@ -102,7 +102,7 @@ defineEmits(["zoom-in", "zoom-out", "zoom-reset"]);
 
   .base-zoom-text {
     min-width: 38px;
-    font-size: 11px;
+    font-size: var(--noobot-font-size-xs);
   }
 }
 </style>

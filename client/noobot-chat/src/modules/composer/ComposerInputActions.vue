@@ -160,7 +160,7 @@ function onInputKeydown(event) {
   box-shadow: none;
   padding: 6px 4px;
   background: transparent;
-  font-size: 15px;
+  font-size: var(--noobot-font-size-lg);
   line-height: 1.5;
   color: var(--noobot-text-main, var(--noobot-text-strong));
 }
@@ -225,7 +225,7 @@ function onInputKeydown(event) {
 }
 
 .mic-status-text {
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
   color: var(--noobot-text-secondary, var(--noobot-text-secondary));
 }
 

@@ -47,7 +47,7 @@
 }
 
 .noobot-workspace-layout .active-file {
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
   color: var(--noobot-text-secondary);
   padding: 4px 10px;
   overflow: hidden;
@@ -86,7 +86,7 @@
   color: var(--noobot-text-muted);
   text-align: center;
   line-height: 1.6;
-  font-size: 14px;
+  font-size: var(--noobot-font-size-base);
 }
 
 .noobot-workspace-layout .empty-icon {
@@ -118,7 +118,7 @@
   height: 38px;
   padding: 0 14px;
   color: var(--noobot-text-secondary);
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
   font-weight: 500;
 }
 
@@ -182,7 +182,7 @@
 
 .noobot-workspace-layout .icon-btn {
   color: var(--noobot-text-secondary);
-  font-size: 16px;
+  font-size: var(--noobot-font-size-xl);
   padding: 4px 8px;
 }
 
@@ -260,11 +260,11 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
 }
 
 .noobot-workspace-layout .node-icon {
-  font-size: 14px;
+  font-size: var(--noobot-font-size-base);
   opacity: 0.9;
 }
 
@@ -295,7 +295,7 @@
 }
 
 .noobot-workspace-layout .user-idx {
-  font-size: 11px;
+  font-size: var(--noobot-font-size-xs);
   color: var(--noobot-text-muted);
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -320,7 +320,7 @@
 
 .noobot-workspace-layout .row-input .el-input__inner {
   color: var(--noobot-text-main);
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
 }
 
 /* 工作区/配置类页面的统一面板语义类 */
@@ -345,7 +345,7 @@
 }
 
 .noobot-workspace-title {
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
   font-weight: 600;
   color: var(--noobot-text-main);
   letter-spacing: 0.01em;

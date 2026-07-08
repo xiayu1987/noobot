@@ -146,13 +146,13 @@ watch(
 .interaction-badge {
   flex: 0 0 auto;
   padding: 2px 8px;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
   font-weight: 700;
 }
 
 .interaction-title {
   color: var(--noobot-text-main);
-  font-size: 14px;
+  font-size: var(--noobot-font-size-base);
   font-weight: 600;
   margin-bottom: 0;
   line-height: 1.5;

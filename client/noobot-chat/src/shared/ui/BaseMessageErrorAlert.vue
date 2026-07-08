@@ -32,6 +32,6 @@ const normalizedError = computed(() => String(props.error || "").trim());
 }
 
 .base-message-error-icon {
-  font-size: 14px;
+  font-size: var(--noobot-font-size-base);
 }
 </style>

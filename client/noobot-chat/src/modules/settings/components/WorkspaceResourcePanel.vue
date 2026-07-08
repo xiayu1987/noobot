@@ -240,7 +240,7 @@ function sectionClass(name) {
   background: var(--noobot-panel-head-bg);
   color: var(--noobot-text-main);
   border-bottom: 1px solid var(--noobot-divider);
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
   font-weight: 600;
 }
 
@@ -301,7 +301,7 @@ function sectionClass(name) {
 .param-desc {
   margin-left: auto;
   color: var(--noobot-text-muted);
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

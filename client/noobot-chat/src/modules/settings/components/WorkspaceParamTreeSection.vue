@@ -59,7 +59,7 @@ const emit = defineEmits(["insert-param"]);
 .param-desc {
   margin-left: auto;
   color: var(--noobot-text-muted);
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

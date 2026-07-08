@@ -337,7 +337,7 @@ function resolveComposerExtensionProps(renderer = {}) {
 
 .scenario-selector-label {
   flex: 0 0 auto;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
   line-height: 18px;
   color: var(--noobot-text-secondary, var(--el-text-color-regular));
   font-weight: 650;
@@ -391,7 +391,7 @@ function resolveComposerExtensionProps(renderer = {}) {
 }
 
 .plugin-empty-text {
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
   color: var(--noobot-text-muted, var(--el-text-color-secondary));
 }
 
@@ -415,7 +415,7 @@ function resolveComposerExtensionProps(renderer = {}) {
 
 .model-config-header,
 .model-config-subtitle {
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
   font-weight: 700;
   color: var(--noobot-text-strong, var(--el-text-color-primary));
 }
@@ -423,7 +423,7 @@ function resolveComposerExtensionProps(renderer = {}) {
 .model-config-description,
 .model-field-hint {
   margin: 3px 0 0;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
   line-height: 1.45;
   color: var(--noobot-text-secondary, var(--el-text-color-regular));
 }
@@ -457,7 +457,7 @@ function resolveComposerExtensionProps(renderer = {}) {
 }
 
 .model-field-label {
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
   font-weight: 650;
   color: var(--noobot-text-main, var(--el-text-color-primary));
 }
@@ -484,7 +484,7 @@ function resolveComposerExtensionProps(renderer = {}) {
 
 .model-option-meta,
 .model-option-description {
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
   line-height: 1.35;
   color: var(--noobot-text-secondary, var(--el-text-color-regular));
 }
@@ -504,7 +504,7 @@ function resolveComposerExtensionProps(renderer = {}) {
 .scenario-description {
   margin: 0;
   width: 100%;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
   color: var(--noobot-text-secondary, var(--el-text-color-regular));
 }
 
@@ -601,7 +601,7 @@ function resolveComposerExtensionProps(renderer = {}) {
   .model-config-description,
   .model-field-hint,
   .scenario-description {
-    font-size: 12px;
+    font-size: var(--noobot-font-size-sm);
     line-height: 1.5;
   }
 }

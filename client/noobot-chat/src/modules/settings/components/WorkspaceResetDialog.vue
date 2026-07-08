@@ -93,7 +93,7 @@ defineEmits([
 }
 
 .reset-dialog-tip {
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
   color: var(--noobot-text-secondary);
   line-height: 1.6;
   padding: 10px 12px;
@@ -117,7 +117,7 @@ defineEmits([
 
 .reset-dialog-note {
   margin-top: 10px;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
   color: var(--noobot-text-muted);
 }
 

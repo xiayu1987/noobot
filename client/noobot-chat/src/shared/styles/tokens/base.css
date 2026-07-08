@@ -37,4 +37,13 @@
   --noobot-base-rose-700: #be123c;
   --noobot-base-violet-400: var(--noobot-base-blue-400);
   --noobot-base-blue-700: #1d4ed8;
+
+  /* 字号语义收敛：组件只引用语义层，避免散落 px 值 */
+  --noobot-font-size-2xs: 10px;
+  --noobot-font-size-xs: 11px;
+  --noobot-font-size-sm: 12px;
+  --noobot-font-size-md: 13px;
+  --noobot-font-size-base: 14px;
+  --noobot-font-size-lg: 15px;
+  --noobot-font-size-xl: 16px;
 }

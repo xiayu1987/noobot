@@ -400,7 +400,7 @@ defineExpose({
 
 .chat-message-nav-title {
   display: inline-flex;
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
   font-weight: 700;
   line-height: 1.2;
 }
@@ -408,7 +408,7 @@ defineExpose({
 .chat-message-nav-count {
   display: block;
   margin-top: 2px;
-  font-size: 11px;
+  font-size: var(--noobot-font-size-xs);
   font-weight: 600;
   color: var(--noobot-text-secondary);
 }
