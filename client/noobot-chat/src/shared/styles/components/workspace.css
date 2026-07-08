@@ -2,10 +2,10 @@
 .noobot-workspace-layout {
   display: grid;
   grid-template-columns: 280px 1fr;
-  gap: 16px;
+  gap: 14px;
   height: 100%;
   min-height: 0;
-  padding: 0 0 16px 0;
+  padding: 2px 2px 16px;
   box-sizing: border-box;
 }
 
@@ -93,6 +93,91 @@
   font-size: 48px;
   margin-bottom: 16px;
   opacity: 0.3;
+}
+
+/* 设置/明细类通用 Tabs：用户设置、参数管理、思考明细等页面统一使用 */
+.settings-tabs {
+  height: calc(100vh - 80px);
+  box-sizing: border-box;
+  padding: 10px 14px 0;
+}
+
+.settings-tabs .el-tabs__header,
+.thinking-details-tabs .el-tabs__header {
+  margin: 0 0 14px;
+}
+
+.settings-tabs .el-tabs__nav-wrap::after,
+.thinking-details-tabs .el-tabs__nav-wrap::after {
+  height: 1px;
+  background: color-mix(in srgb, var(--noobot-divider) 68%, transparent);
+}
+
+.settings-tabs .el-tabs__item,
+.thinking-details-tabs .el-tabs__item {
+  height: 38px;
+  padding: 0 14px;
+  color: var(--noobot-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.settings-tabs .el-tabs__item.is-active,
+.thinking-details-tabs .el-tabs__item.is-active {
+  color: var(--noobot-text-main);
+}
+
+.settings-tabs .el-tabs__active-bar,
+.thinking-details-tabs .el-tabs__active-bar {
+  height: 2px;
+  border-radius: 999px;
+  background: var(--noobot-text-main);
+}
+
+.settings-tabs .el-tabs__content {
+  height: calc(100% - 44px);
+}
+
+.settings-tabs .el-tab-pane {
+  height: 100%;
+}
+
+.settings-tabs .list-empty-tip {
+  position: static;
+  padding: 40px 0;
+}
+
+/* 思考明细复用设置页的简约扁平基础，同时保留抽屉内自适应高度。 */
+.thinking-details-tabs {
+  box-sizing: border-box;
+  color: var(--noobot-text-main);
+}
+
+.thinking-details-tabs .el-tabs__header {
+  background: transparent;
+}
+
+.thinking-details-tabs .el-tabs__content,
+.thinking-details-tabs .el-tab-pane {
+  min-height: 0;
+}
+
+.thinking-details-tabs .base-meta-label {
+  font-size: var(--noobot-msg-meta-font-size);
+  color: var(--noobot-text-muted);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.thinking-details-tabs .base-thinking-log-line {
+  font-size: var(--noobot-msg-caption-font-size);
+  line-height: 1.6;
+  color: var(--noobot-text-secondary);
+}
+
+.thinking-details-tabs .base-note-block__content {
+  font-size: var(--noobot-msg-caption-font-size);
+  line-height: 1.6;
 }
 
 .noobot-workspace-layout .icon-btn {
@@ -192,14 +277,14 @@
 .noobot-workspace-layout .users-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   padding: 12px;
 }
 
 .noobot-workspace-layout .user-row {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
 }
 
 .noobot-workspace-layout .row-header {
@@ -210,16 +295,27 @@
 }
 
 .noobot-workspace-layout .user-idx {
-  font-size: 12px;
-  color: var(--noobot-text-secondary);
-  font-weight: 600;
+  font-size: 11px;
+  color: var(--noobot-text-muted);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .noobot-workspace-layout .row-input .el-input__wrapper {
-  background: transparent;
-  border: 1px solid var(--noobot-panel-border);
+  background: color-mix(in srgb, var(--noobot-panel-bg) 52%, transparent);
+  border: 1px solid transparent;
   box-shadow: none !important;
-  border-radius: var(--noobot-radius-xs);
+  border-radius: 10px;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.noobot-workspace-layout .row-input .el-input__wrapper:hover,
+.noobot-workspace-layout .row-input .el-input__wrapper.is-focus {
+  background: var(--noobot-panel-bg);
+  border-color: color-mix(in srgb, var(--noobot-cyber-cyan) 34%, transparent);
 }
 
 .noobot-workspace-layout .row-input .el-input__inner {
@@ -232,26 +328,27 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: transparent !important;
-  border: 1px solid var(--noobot-panel-border) !important;
-  border-radius: var(--noobot-radius-xs);
+  background: color-mix(in srgb, var(--noobot-panel-bg) 64%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 72%, transparent) !important;
+  border-radius: 16px;
+  box-shadow: none !important;
 }
 
 .noobot-workspace-head {
-  height: 40px;
+  height: 46px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 12px;
-  background: var(--noobot-surface-sidebar) !important;
-  border-bottom: 1px solid var(--noobot-border-weak);
-  border-bottom-color: var(--noobot-divider) !important;
+  padding: 0 14px;
+  background: transparent !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--noobot-divider) 70%, transparent) !important;
 }
 
 .noobot-workspace-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--noobot-text-main);
+  letter-spacing: 0.01em;
 }
 
 .noobot-workspace-body {
@@ -266,9 +363,19 @@
   display: flex;
   flex-direction: column;
   gap: var(--noobot-space-xs);
-  padding: 8px 12px;
-  background: transparent !important;
-  border-bottom: 1px solid var(--noobot-border-weak);
+  padding: 12px;
+  background: color-mix(in srgb, var(--noobot-surface-sidebar) 54%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--noobot-border-weak) 70%, transparent) !important;
+  border-radius: 14px;
+  box-shadow: none !important;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.noobot-list-row:hover {
+  background: color-mix(in srgb, var(--noobot-panel-bg) 82%, transparent) !important;
+  border-color: color-mix(in srgb, var(--noobot-cyber-cyan) 24%, var(--noobot-border-weak)) !important;
 }
 
 /* 编辑器 textarea：桌面端填满面板，移动端在媒体查询里交给 autosize 自增高。 */
@@ -286,12 +393,12 @@
   height: 100%;
   min-height: 180px;
   overflow: auto !important;
-  background: transparent !important;
+  background: color-mix(in srgb, var(--noobot-surface-sidebar) 38%, transparent) !important;
   color: var(--noobot-text-main) !important;
   border: none !important;
   border-color: var(--noobot-panel-border) !important;
   box-shadow: none !important;
-  border-radius: 0;
+  border-radius: 0 0 16px 16px;
   padding: 16px;
   font-family:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
@@ -310,6 +417,18 @@
 }
 
 @media (max-width: 768px) {
+  .settings-tabs {
+    height: auto;
+    overflow: visible;
+  }
+
+  .settings-tabs .el-tabs__content,
+  .settings-tabs .el-tab-pane {
+    height: auto;
+    min-height: auto;
+    overflow: visible;
+  }
+
   .noobot-workspace-layout {
     grid-template-columns: 1fr;
     height: auto;

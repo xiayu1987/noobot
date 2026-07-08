@@ -272,10 +272,10 @@ watch(
                 <div
                   v-for="(item, idx) in params"
                   :key="idx"
-                  class="user-row noobot-flat-card noobot-list-row"
+                  class="user-row param-row noobot-flat-card noobot-list-row"
                 >
                   <div class="row-header">
-                    <span class="user-idx">Param {{ idx + 1 }}</span>
+                    <span class="user-idx param-index">Param {{ idx + 1 }}</span>
                     <el-button
                       class="icon-btn danger-text"
                       size="small"
@@ -283,8 +283,8 @@ watch(
                       @click="removeParamRow(idx)"
                     >✕</el-button>
                   </div>
-                  <el-input v-model="item.key" :placeholder="translate('settings.paramKey')" clearable class="row-input" />
-                  <el-input v-model="item.value" :placeholder="translate('settings.paramValue')" clearable class="row-input" />
+                  <el-input v-model="item.key" :placeholder="translate('settings.paramKey')" clearable class="row-input param-key-input" />
+                  <el-input v-model="item.value" :placeholder="translate('settings.paramValue')" clearable class="row-input param-value-input" />
                 </div>
                 <div v-if="!params.length" class="empty-tip list-empty-tip">
                   <div class="empty-icon">🔐</div>
@@ -335,14 +335,14 @@ watch(
                 <div
                   v-for="(item, idx) in params"
                   :key="idx"
-                  class="user-row noobot-flat-card noobot-list-row"
+                  class="user-row param-row noobot-flat-card noobot-list-row"
                 >
                   <div class="row-header">
-                    <span class="user-idx">Param {{ idx + 1 }}</span>
+                    <span class="user-idx param-index">Param {{ idx + 1 }}</span>
                     <el-button class="icon-btn danger-text" size="small" text @click="removeParamRow(idx)">✕</el-button>
                   </div>
-                  <el-input v-model="item.key" :placeholder="translate('settings.paramKey')" clearable class="row-input" />
-                  <el-input v-model="item.value" :placeholder="translate('settings.paramValue')" clearable class="row-input" />
+                  <el-input v-model="item.key" :placeholder="translate('settings.paramKey')" clearable class="row-input param-key-input" />
+                  <el-input v-model="item.value" :placeholder="translate('settings.paramValue')" clearable class="row-input param-value-input" />
                 </div>
                 <div v-if="!params.length" class="empty-tip list-empty-tip">
                   <div class="empty-icon">🔐</div>
@@ -377,19 +377,6 @@ watch(
 </template>
 
 <style scoped>
-/* Tabs 样式适配 */
-.settings-tabs {
-  height: calc(100vh - 80px);
-}
-
-.settings-tabs :deep(.el-tabs__content) {
-  height: calc(100% - 44px);
-}
-
-.settings-tabs :deep(.el-tab-pane) {
-  height: 100%;
-}
-
 /* 面板通用样式 */
 .workspace-panel {
   display: flex;
@@ -409,23 +396,50 @@ watch(
   color: var(--noobot-text-strong);
 }
 
-.list-empty-tip {
-  position: static;
-  padding: 40px 0;
+.param-row {
+  gap: 10px;
 }
 
-/* 响应式适配 */
-@media (max-width: 768px) {
-  .settings-tabs {
-    height: auto;
-    overflow: visible;
-  }
+.param-index {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+}
 
-  .settings-tabs :deep(.el-tabs__content),
-  .settings-tabs :deep(.el-tab-pane) {
-    height: auto;
-    min-height: auto;
-    overflow: visible;
-  }
+.param-key-input :deep(.el-input__inner) {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.param-value-input :deep(.el-input__inner) {
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+}
+
+.file-info {
+  min-width: 0;
+}
+
+.active-file {
+  border: none !important;
+  background: color-mix(in srgb, var(--noobot-panel-muted) 58%, transparent) !important;
+  border-radius: 999px;
+}
+
+.list-empty-tip {
+  position: static;
+  padding: 48px 16px;
+}
+
+.list-empty-tip .empty-icon {
+  font-size: 34px;
+  margin-bottom: 10px;
+  opacity: 0.42;
+}
+
+.list-empty-tip p {
+  margin: 0;
+  color: var(--noobot-text-muted);
 }
 </style>

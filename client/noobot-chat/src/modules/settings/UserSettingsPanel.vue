@@ -534,17 +534,6 @@ watch(
 </template>
 
 <style scoped>
-/* Tabs 样式适配 */
-.settings-tabs {
-  height: calc(100vh - 80px);
-}
-.settings-tabs :deep(.el-tabs__content) {
-  height: calc(100% - 44px);
-}
-.settings-tabs :deep(.el-tab-pane) {
-  height: 100%;
-}
-
 /* 面板通用样式 */
 .workspace-panel {
   display: flex;
@@ -575,25 +564,5 @@ watch(
 .allow-ide-label {
   color: var(--noobot-text-secondary);
   font-size: 12px;
-}
-
-.list-empty-tip {
-  position: static;
-  padding: 40px 0;
-}
-
-/* 响应式适配 */
-@media (max-width: 768px) {
-  .settings-tabs {
-    height: auto;
-    overflow: visible;
-  }
-
-  .settings-tabs :deep(.el-tabs__content),
-  .settings-tabs :deep(.el-tab-pane) {
-    height: auto;
-    min-height: auto;
-    overflow: visible;
-  }
 }
 </style>

@@ -48,6 +48,17 @@ const TERMINAL_STOP_CHANNEL_STATES = new Set([
   "aborted",
 ]);
 
+const FINALIZED_ASSISTANT_STATES = new Set([
+  "completed",
+  "frontend_completed",
+  "stopped",
+  "cancelled",
+  "aborted",
+  "error",
+  "expired",
+  "no_conversation",
+]);
+
 function normalizeState(value = "") {
   return String(value || "").trim().toLowerCase();
 }
@@ -78,6 +89,49 @@ function hasReliableCompletedAssistantIdentity(messageItem = {}) {
   if (isInFlightAssistantMessage(messageItem)) return false;
   if (isTerminalStopAssistantDetail(messageItem)) return false;
   return Boolean(getMessageTurnScopeId(messageItem) || getMessageDialogProcessId(messageItem));
+}
+
+function isFinalizedAssistantMessage(messageItem = {}) {
+  if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) return false;
+  const state = normalizeState(
+    getMessageRuntimeChannelState(messageItem)?.state ||
+      messageItem?.status ||
+      messageItem?.state ||
+      messageItem?.stopState,
+  );
+  return messageItem?.pending === false && FINALIZED_ASSISTANT_STATES.has(state);
+}
+
+function snapshotFrozenAssistantDisplayFields(messageItem = {}) {
+  return {
+    content: messageItem?.content,
+    ts: messageItem?.ts,
+    timestamp: messageItem?.timestamp,
+    createdAt: messageItem?.createdAt,
+    created_at: messageItem?.created_at,
+    updatedAt: messageItem?.updatedAt,
+    updated_at: messageItem?.updated_at,
+    thinkingStartedAt: getThinkingStartedAt(messageItem),
+    thinkingFinishedAt: getThinkingFinishedAt(messageItem),
+    channelState:
+      messageItem?.channelState && typeof messageItem.channelState === "object" && !Array.isArray(messageItem.channelState)
+        ? { ...messageItem.channelState }
+        : messageItem?.channelState,
+    status: messageItem?.status,
+    state: messageItem?.state,
+    stopState: messageItem?.stopState,
+  };
+}
+
+function restoreFrozenAssistantDisplayFields(messageItem = {}, frozen = null) {
+  if (!messageItem || !frozen) return;
+  ["content", "ts", "timestamp", "createdAt", "created_at", "updatedAt", "updated_at", "status", "state", "stopState"].forEach((key) => {
+    if (frozen[key] !== undefined) messageItem[key] = frozen[key];
+  });
+  if (frozen.thinkingStartedAt) setThinkingStartedAt(messageItem, frozen.thinkingStartedAt);
+  if (frozen.thinkingFinishedAt) setThinkingFinishedAt(messageItem, frozen.thinkingFinishedAt);
+  if (frozen.channelState !== undefined) messageItem.channelState = frozen.channelState;
+  messageItem.pending = false;
 }
 
 function conflictsWithInFlightAssistant(existingMessages = [], detailMessageItem = {}) {
@@ -243,6 +297,9 @@ export function mergePreservedDetailMessages(existingMessages = [], detailMessag
         existingMessage,
         detailMessageItem,
       );
+      const frozenAssistantDisplayFields = isFinalizedAssistantMessage(existingMessage)
+        ? snapshotFrozenAssistantDisplayFields(existingMessage)
+        : null;
       Object.assign(existingMessage, detailMessageItem);
       logResendDebug("detail.merge.assign", {
         identity: detailIdentity,
@@ -266,6 +323,7 @@ export function mergePreservedDetailMessages(existingMessages = [], detailMessag
       if (runtimeMark && !existingMessage.runtimeMark) {
         existingMessage.runtimeMark = runtimeMark;
       }
+      restoreFrozenAssistantDisplayFields(existingMessage, frozenAssistantDisplayFields);
       const attachmentsAfter = getMessageAttachments(existingMessage);
       const completedToolLogAttachmentsAfter = countCompletedToolLogAttachments(existingMessage);
       logStateMachineDebug("detailApply.merge.runtimeAndAttachments", {
