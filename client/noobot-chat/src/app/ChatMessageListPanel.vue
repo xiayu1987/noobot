@@ -201,7 +201,7 @@ defineExpose({
           v-if="loadingSessionDetail && !activeSession?.messages?.length"
           :rows="6"
           animated
-          class="skeleton-loading noobot-flat-card"
+          class="skeleton-loading noobot-surface-card"
         />
 
         <div
@@ -255,9 +255,7 @@ defineExpose({
 }
 
 .skeleton-loading {
-  background: var(--noobot-panel-bg);
   padding: 16px;
-  border-radius: var(--noobot-radius-md);
 }
 
 .empty-state {

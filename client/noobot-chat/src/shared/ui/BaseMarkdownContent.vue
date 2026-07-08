@@ -23,7 +23,7 @@ defineExpose({ getHtml });
 </script>
 
 <template>
-  <div ref="mermaidHostRef" class="base-markdown-content" v-html="renderedHtml" />
+  <div ref="mermaidHostRef" class="base-markdown-content noobot-rich-content" v-html="renderedHtml" />
 </template>
 
 <style scoped>
@@ -52,29 +52,17 @@ defineExpose({ getHtml });
 }
 
 .base-markdown-content :deep(code) {
-  background: var(--noobot-msg-inline-code-bg);
   padding: 2px 6px;
-  border-radius: var(--noobot-radius-xs);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.9em;
-  color: var(--noobot-msg-inline-code-text);
 }
 
 .base-markdown-content :deep(pre) {
-  background: var(--noobot-msg-code-block-bg);
-  color: var(--noobot-msg-code-block-text);
   padding: var(--noobot-msg-markdown-pre-padding);
-  border-radius: var(--noobot-radius-md);
-  border: 1px solid var(--noobot-panel-border);
-  box-shadow: none;
-  overflow-x: auto;
   margin: var(--noobot-space-md) 0;
 }
 
 .base-markdown-content :deep(pre code) {
-  background: transparent;
   padding: 0;
-  color: inherit;
   font-size: 0.9em;
 }
 
@@ -99,26 +87,18 @@ defineExpose({ getHtml });
 }
 
 .base-markdown-content :deep(table) {
-  width: 100%;
-  border-collapse: collapse;
   margin: var(--noobot-space-md) 0;
   font-size: var(--noobot-msg-caption-font-size);
-  border: 1px solid var(--noobot-msg-assistant-border);
   border-radius: var(--noobot-radius-sm);
   overflow: hidden;
 }
 
 .base-markdown-content :deep(th),
 .base-markdown-content :deep(td) {
-  border: 1px solid var(--noobot-msg-assistant-border);
   padding: var(--noobot-msg-table-cell-padding-y) var(--noobot-msg-table-cell-padding-x);
-  text-align: left;
-  vertical-align: top;
 }
 
 .base-markdown-content :deep(th) {
-  background: var(--noobot-panel-muted);
-  font-weight: 600;
 }
 
 .base-markdown-content :deep(tr:nth-child(even) td) {
@@ -128,9 +108,6 @@ defineExpose({ getHtml });
 .base-markdown-content :deep(.mermaid) {
   margin: var(--noobot-space-md) 0;
   padding: var(--noobot-space-sm);
-  border: 1px solid var(--noobot-panel-border);
-  border-radius: var(--noobot-radius-md);
-  background: var(--noobot-panel-bg);
   overflow-x: auto;
 }
 

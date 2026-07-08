@@ -75,9 +75,9 @@ watch(
 </script>
 
 <template>
-  <div v-if="request" class="interaction-card">
+  <div v-if="request" class="interaction-card noobot-surface-card">
     <div class="interaction-head">
-      <span class="interaction-badge">{{ translate("composer.pendingConfirm") }}</span>
+      <span class="interaction-badge noobot-soft-badge">{{ translate("composer.pendingConfirm") }}</span>
       <div class="interaction-title">{{ request.content || translate("composer.confirmOrSupplement") }}</div>
     </div>
 
@@ -100,7 +100,7 @@ watch(
       </el-form-item>
     </el-form>
 
-    <div class="interaction-actions">
+    <div class="interaction-actions noobot-sticky-actions">
       <el-button :disabled="submitting" @click="onCancel">
         {{ translate("common.cancel") }}
       </el-button>
@@ -118,9 +118,6 @@ watch(
   flex-direction: column;
   margin: 0 max(24px, calc(50% - 400px)) 12px;
   padding: 14px 16px;
-  border: 1px solid var(--noobot-panel-border);
-  border-radius: 12px;
-  background: var(--noobot-panel-bg);
   max-height: min(72vh, 560px);
   overflow: hidden;
 }
@@ -149,12 +146,8 @@ watch(
 .interaction-badge {
   flex: 0 0 auto;
   padding: 2px 8px;
-  border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
-  color: var(--noobot-text-strong);
-  background: var(--noobot-panel-muted);
-  box-shadow: none;
 }
 
 .interaction-title {
@@ -188,9 +181,6 @@ watch(
 }
 
 .interaction-actions {
-  position: sticky;
-  bottom: 0;
-  z-index: 1;
   display: flex;
   flex: 0 0 auto;
   flex-wrap: wrap;
@@ -198,8 +188,6 @@ watch(
   justify-content: flex-end;
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid var(--noobot-panel-border);
-  background: var(--noobot-panel-bg);
 }
 
 .interaction-actions :deep(.el-button) {

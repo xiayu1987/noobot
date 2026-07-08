@@ -74,7 +74,7 @@ watch(
 </script>
 
 <template>
-  <div class="preview-body" v-loading="resolvedLoading">
+  <div class="preview-body noobot-preview-surface" v-loading="resolvedLoading">
     <div v-if="showCopyActions" class="preview-copy-actions">
       <el-button size="small" type="primary" plain @click="emitCopyMarkdownRich">{{
         translate("message.copyFormat")
@@ -107,7 +107,7 @@ watch(
     <div
       v-else-if="resolvedPreviewMode === 'markdown'"
       ref="markdownContainerRef"
-      class="preview-markdown"
+      class="preview-markdown noobot-rich-content"
       v-html="renderMarkdown(resolvedPreviewText)"
     />
     <pre v-else class="preview-text">{{ resolvedPreviewText }}</pre>
@@ -120,12 +120,7 @@ watch(
   max-height: 68vh;
   overflow-y: auto;
   overflow-x: hidden;
-  background: var(--noobot-preview-bg);
-  color: var(--noobot-preview-text);
-  border: 1px solid var(--noobot-preview-border);
-  border-radius: var(--noobot-radius-sm);
   padding: 16px 24px;
-  box-shadow: none;
   transition: all 0.3s ease;
 }
 
@@ -282,45 +277,27 @@ watch(
 }
 
 .preview-markdown :deep(code) {
-  background-color: var(--noobot-msg-inline-code-bg);
-  color: var(--noobot-msg-inline-code-text);
   padding: 0.2em 0.4em;
-  border-radius: 4px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.9em;
 }
 
 .preview-markdown :deep(pre) {
-  background-color: var(--noobot-msg-code-block-bg);
-  color: var(--noobot-msg-code-block-text);
-  border-radius: 8px;
   padding: 12px;
-  overflow-x: auto;
   margin-bottom: 16px;
 }
 .preview-markdown :deep(pre code) {
-  background-color: transparent;
-  color: inherit;
-  padding: 0;
   font-size: 13.5px;
-  border-radius: 0;
 }
 
 .preview-markdown :deep(table) {
-  width: 100%;
-  border-collapse: collapse;
   margin-bottom: 16px;
   font-size: 14px;
 }
 .preview-markdown :deep(th),
 .preview-markdown :deep(td) {
-  border: 1px solid var(--noobot-panel-border);
   padding: 10px 14px;
-  text-align: left;
 }
 .preview-markdown :deep(th) {
-  background-color: var(--noobot-panel-muted);
-  font-weight: 600;
   color: var(--noobot-preview-text);
 }
 .preview-markdown :deep(tr:nth-child(even)) {

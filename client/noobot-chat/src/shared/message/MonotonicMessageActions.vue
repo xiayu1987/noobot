@@ -272,7 +272,7 @@ async function handleDelete() {
 <template>
   <div v-if="visible" class="monotonic-message-actions" :class="{ editing }">
     <template v-if="editing">
-      <div class="monotonic-edit-card">
+      <div class="monotonic-edit-card noobot-surface-card">
         <div class="monotonic-edit-heading">
           <div class="monotonic-edit-heading-copy">
             <div class="monotonic-edit-title">编辑并重发</div>
@@ -307,15 +307,15 @@ async function handleDelete() {
                 <span class="monotonic-attachment-title">附件列表</span>
               </div>
               <div class="monotonic-attachment-stats">
-                <el-tag size="small" effect="plain" round class="stat-tag">{{ attachmentStats.total }} 个</el-tag>
-                <el-tag v-if="attachmentStats.history" size="small" type="info" effect="light" round class="stat-tag">原 {{ attachmentStats.history }}</el-tag>
-                <el-tag v-if="attachmentStats.added" size="small" type="success" effect="light" round class="stat-tag">新 {{ attachmentStats.added }}</el-tag>
+                <el-tag size="small" effect="plain" round class="stat-tag noobot-soft-badge">{{ attachmentStats.total }} 个</el-tag>
+                <el-tag v-if="attachmentStats.history" size="small" type="info" effect="light" round class="stat-tag noobot-soft-badge">原 {{ attachmentStats.history }}</el-tag>
+                <el-tag v-if="attachmentStats.added" size="small" type="success" effect="light" round class="stat-tag noobot-soft-badge is-success">新 {{ attachmentStats.added }}</el-tag>
               </div>
             </div>
 
             <el-empty
               v-if="!editAttachments.length"
-              class="monotonic-attachment-empty"
+              class="monotonic-attachment-empty noobot-subtle-row"
               :image-size="48"
               description="暂无附件，可点击下方按钮添加"
             />
@@ -325,7 +325,7 @@ async function handleDelete() {
                 <div
                   v-for="(attachment, index) in editAttachments"
                   :key="attachment.key || index"
-                  class="monotonic-attachment-item"
+                  class="monotonic-attachment-item noobot-subtle-row"
                 >
                   <el-image
                     v-if="attachment.previewUrl"
@@ -529,10 +529,6 @@ async function handleDelete() {
   flex-direction: column;
   gap: 8px;
   padding: 16px;
-  border-radius: 8px;
-  background: var(--el-bg-color);
-  border: 1px solid var(--el-border-color-lighter);
-  box-shadow: none;
   transition: box-shadow 0.3s ease;
 }
 
@@ -649,9 +645,6 @@ async function handleDelete() {
 
 .monotonic-attachment-empty {
   padding: 16px;
-  border-radius: 8px;
-  background: var(--el-fill-color-lighter);
-  border: 1px dashed var(--el-border-color);
 }
 
 .monotonic-attachment-empty :deep(.el-empty__description p) {
@@ -671,16 +664,11 @@ async function handleDelete() {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  border-radius: 10px;
-  background: var(--el-fill-color-light);
-  border: 1px solid transparent;
   transition: all 0.2s ease;
   position: relative;
 }
 
 .monotonic-attachment-item:hover {
-  background: var(--el-bg-color);
-  border-color: var(--el-border-color-light);
   box-shadow: none;
   transform: translateY(-1px);
 }

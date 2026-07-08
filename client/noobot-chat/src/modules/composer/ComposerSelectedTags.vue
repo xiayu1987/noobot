@@ -29,28 +29,28 @@ function onRemoveUpload(uploadFileIndex) {
   >
     <span
       v-if="selectedScenarioLabel"
-      class="selected-connector-name selected-scenario-name"
+      class="selected-connector-name selected-scenario-name noobot-inline-pill is-primary"
     >
       {{ translate("composer.botScenario") }}: {{ selectedScenarioLabel }}
     </span>
     <span
       v-for="(connectorName, connectorIndex) in selectedConnectorNames"
       :key="`${connectorName}-${connectorIndex}`"
-      class="selected-connector-name"
+      class="selected-connector-name noobot-inline-pill"
     >
       {{ connectorName }}
     </span>
     <span
       v-for="(pluginLabel, pluginIndex) in selectedPluginLabels"
       :key="`plugin-${pluginLabel}-${pluginIndex}`"
-      class="selected-connector-name selected-plugin-name"
+      class="selected-connector-name selected-plugin-name noobot-inline-pill is-plugin"
     >
       {{ pluginLabel }}
     </span>
     <span
       v-for="(uploadFile, uploadFileIndex) in uploadFiles"
       :key="`attachment-${uploadFile.name}-${uploadFileIndex}`"
-      class="selected-connector-name selected-attachment-name"
+      class="selected-connector-name selected-attachment-name noobot-inline-pill"
       :title="uploadFile.name"
     >
       <span class="selected-attachment-text">{{ uploadFile.name }}</span>
@@ -83,35 +83,24 @@ function onRemoveUpload(uploadFileIndex) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  background: var(--noobot-fill-soft, #f4f4f5);
   color: var(--noobot-text-secondary, #52525b);
-  border: 1px solid transparent;
-  border-radius: 20px;
   padding: 4px 14px;
   font-size: 13px;
   font-weight: 500;
-  transition: background-color 0.2s ease;
-}
-
-.selected-connector-name:hover {
-  background: var(--noobot-fill-hover, #e4e4e7);
 }
 
 .selected-scenario-name {
-  border-color: rgba(59, 130, 246, 0.25);
+  border-color: color-mix(in srgb, var(--el-color-primary) 28%, transparent);
 }
 
 .selected-plugin-name {
-  border-color: rgba(14, 165, 233, 0.28);
+  border-color: color-mix(in srgb, var(--noobot-cyber-cyan, #0ea5e9) 32%, transparent);
   background: color-mix(in srgb, var(--noobot-cyber-cyan, #0ea5e9) 10%, transparent);
 }
 
 .selected-attachment-name {
-  border-color: rgba(113, 113, 122, 0.24);
+  border-color: color-mix(in srgb, var(--noobot-text-muted, #71717a) 28%, transparent);
   background: color-mix(in srgb, var(--noobot-fill-soft, #f4f4f5) 78%, var(--noobot-base-blue-500, #3b82f6));
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
   padding-right: 6px;
 }
 
@@ -128,10 +117,7 @@ function onRemoveUpload(uploadFileIndex) {
   min-width: 20px;
   padding: 0;
   border: 0;
-  border-radius: 999px;
   color: var(--noobot-text-secondary, #52525b);
-  background: transparent;
-  cursor: pointer;
   flex: 0 0 auto;
 }
 

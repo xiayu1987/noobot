@@ -97,7 +97,7 @@ watch(
         <div
           v-for="sessionItem in sessions"
           :key="sessionItem.id"
-          class="session-item"
+          class="session-item noobot-subtle-row"
           :class="{ active: sessionItem.id === activeSessionId }"
           @click="emit('select-session', sessionItem.id)"
         >
@@ -161,23 +161,14 @@ watch(
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  border-radius: 8px;
   cursor: pointer;
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 20%, transparent);
-  background: color-mix(in srgb, var(--noobot-panel-bg) 78%, transparent);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .session-item:hover {
-  background: var(--noobot-panel-muted);
   transform: none;
-  border-color: color-mix(in srgb, var(--noobot-panel-border) 28%, transparent);
 }
 
 .session-item.active {
-  background: color-mix(in srgb, var(--noobot-surface-primary-soft) 68%, var(--noobot-panel-bg));
-  border-color: color-mix(in srgb, var(--noobot-panel-border) 35%, transparent);
-  box-shadow: none;
 }
 
 .session-icon-wrapper {
