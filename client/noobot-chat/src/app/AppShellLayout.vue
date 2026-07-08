@@ -173,7 +173,10 @@ defineExpose({
         @open-config-params="emit('open-config-params')"
       />
 
-      <div class="chat-content-body">
+      <div
+        class="chat-content-body"
+        :class="{ 'chat-navigator-open': chatNavigatorVisible && chatMessageNavItems.length }"
+      >
         <ChatMessageListPanel
           ref="messageListPanelRef"
           :loading-session-detail="loadingSessionDetail"
@@ -196,10 +199,18 @@ defineExpose({
         <aside
           v-if="!isMobile && chatMessageNavItems.length"
           class="chat-message-nav-panel noobot-panel-card"
+          :class="{ 'is-collapsed': !chatNavigatorVisible }"
         >
           <div class="chat-message-nav-header">
-            <div class="chat-message-nav-title-group">
-              <span class="chat-message-nav-icon"><el-icon><Tickets /></el-icon></span>
+            <button
+              type="button"
+              class="chat-message-nav-icon chat-message-nav-icon-button"
+              :aria-label="chatNavigatorVisible ? translate('common.hideChatNavigator') : translate('common.showChatNavigator')"
+              @click="emit('toggle-chat-navigator-visible')"
+            >
+              <el-icon><Tickets /></el-icon>
+            </button>
+            <div v-show="chatNavigatorVisible" class="chat-message-nav-title-group">
               <div>
                 <span class="chat-message-nav-title">{{ translate("common.chatNavigator") }}</span>
                 <span class="chat-message-nav-count">{{ chatMessageNavItems.length }}</span>
@@ -209,9 +220,10 @@ defineExpose({
               text
               size="small"
               class="chat-message-nav-toggle"
+              v-show="chatNavigatorVisible"
               @click="emit('toggle-chat-navigator-visible')"
             >
-              {{ chatNavigatorVisible ? translate("common.hideChatNavigator") : translate("common.showChatNavigator") }}
+              {{ translate("common.hideChatNavigator") }}
             </el-button>
           </div>
           <el-affix :offset="80">
@@ -247,7 +259,10 @@ defineExpose({
         </el-button>
       </div>
 
-      <div class="chat-composer-body">
+      <div
+        class="chat-composer-body"
+        :class="{ 'chat-navigator-open': chatNavigatorVisible && chatMessageNavItems.length }"
+      >
         <UserInteractionForm
           v-if="pendingInteractionRequest"
           :request="pendingInteractionRequest"
@@ -341,8 +356,8 @@ defineExpose({
 }
 
 @media (min-width: 961px) {
-  .chat-content-body,
-  .chat-composer-body {
+  .chat-content-body.chat-navigator-open,
+  .chat-composer-body.chat-navigator-open {
     padding-right: 268px;
   }
 }
@@ -369,6 +384,16 @@ defineExpose({
   max-width: 24vw;
   padding: 12px;
   backdrop-filter: blur(14px);
+  transition:
+    width 0.18s ease,
+    padding 0.18s ease,
+    max-width 0.18s ease;
+}
+
+.chat-message-nav-panel.is-collapsed {
+  width: 44px;
+  max-width: 44px;
+  padding: 8px;
 }
 
 .chat-message-nav-header {
@@ -378,6 +403,11 @@ defineExpose({
   gap: 8px;
   margin-bottom: 8px;
   color: var(--noobot-text-main);
+}
+
+.chat-message-nav-panel.is-collapsed .chat-message-nav-header {
+  justify-content: center;
+  margin-bottom: 0;
 }
 
 .chat-message-nav-title-group {
@@ -396,6 +426,20 @@ defineExpose({
   color: var(--el-color-primary);
   background: color-mix(in srgb, var(--el-color-primary) 12%, transparent);
   font-weight: 700;
+}
+
+.chat-message-nav-icon-button {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.chat-message-nav-icon-button:hover,
+.chat-message-nav-icon-button:focus-visible {
+  background: color-mix(in srgb, var(--el-color-primary) 18%, transparent);
+  outline: none;
 }
 
 .chat-message-nav-title {

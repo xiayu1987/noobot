@@ -88,16 +88,20 @@ describe("AppShell chat message navigator", () => {
   it("reserves desktop navigator space only inside the chat content body", () => {
     expect(appShellLayoutSource).toContain('<main class="main-content">');
     expect(appShellLayoutSource).toContain("<ChatMainHeader");
-    expect(appShellLayoutSource).toContain('<div class="chat-content-body">');
-    expect(appShellLayoutSource).toContain('<div class="chat-composer-body">');
-    expect(appShellLayoutSource.indexOf("<ChatMainHeader")).toBeLessThan(appShellLayoutSource.indexOf('<div class="chat-content-body">'));
-    expect(appShellLayoutSource.indexOf('<div class="chat-content-body">')).toBeLessThan(appShellLayoutSource.indexOf('<div class="chat-composer-body">'));
-    expect(appShellLayoutSource.indexOf('<div class="chat-composer-body">')).toBeLessThan(appShellLayoutSource.indexOf('<ChatComposer'));
+    expect(appShellLayoutSource).toContain('class="chat-content-body"');
+    expect(appShellLayoutSource).toContain('class="chat-composer-body"');
+    expect(appShellLayoutSource).toContain("'chat-navigator-open': chatNavigatorVisible && chatMessageNavItems.length");
+    expect(appShellLayoutSource.indexOf("<ChatMainHeader")).toBeLessThan(appShellLayoutSource.indexOf('class="chat-content-body"'));
+    expect(appShellLayoutSource.indexOf('class="chat-content-body"')).toBeLessThan(appShellLayoutSource.indexOf('class="chat-composer-body"'));
+    expect(appShellLayoutSource.indexOf('class="chat-composer-body"')).toBeLessThan(appShellLayoutSource.indexOf('<ChatComposer'));
     expect(appShellLayoutSource).toContain(".chat-content-body {\n  position: relative;");
-    expect(appShellLayoutSource).toContain(".chat-content-body,\n  .chat-composer-body {\n    padding-right: 268px;");
+    expect(appShellLayoutSource).toContain(".chat-content-body.chat-navigator-open,\n  .chat-composer-body.chat-navigator-open {\n    padding-right: 268px;");
     expect(appShellLayoutSource).toContain(".chat-composer-body {\n  flex-shrink: 0;");
     expect(appShellLayoutSource).not.toContain(".main-content {\n    padding-right: 268px;");
     expect(appShellLayoutSource).toContain("top: 18px;");
+    expect(appShellLayoutSource).toContain(":class=\"{ 'is-collapsed': !chatNavigatorVisible }\"");
+    expect(appShellLayoutSource).toContain(".chat-message-nav-panel.is-collapsed {");
+    expect(appShellLayoutSource).toContain("width: 44px;");
   });
 
   it("keeps the navigator polished and the mobile trigger reachable", () => {
