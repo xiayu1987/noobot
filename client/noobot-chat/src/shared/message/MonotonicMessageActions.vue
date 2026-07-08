@@ -431,7 +431,7 @@ async function handleDelete() {
         <button
           v-if="onResend"
           type="button"
-          class="monotonic-chip-btn edit"
+          class="monotonic-chip-btn noobot-chip-action-btn is-primary"
           :disabled="disabled || operating"
           @click="handleEdit"
         >
@@ -444,7 +444,7 @@ async function handleDelete() {
         <button
           v-if="onDelete"
           type="button"
-          class="monotonic-chip-btn delete"
+          class="monotonic-chip-btn noobot-chip-action-btn is-danger"
           :disabled="disabled || operating"
           @click="handleDelete"
         >
@@ -480,43 +480,7 @@ async function handleDelete() {
 }
 
 .monotonic-chip-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
   height: 30px;
-  padding: 0 12px;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1;
-  border-radius: 15px;
-  cursor: pointer;
-  border: 1px solid var(--el-border-color-light);
-  color: var(--el-text-color-regular);
-  background: var(--el-bg-color-overlay);
-  box-shadow: none;
-  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
-}
-
-.monotonic-chip-btn.edit:hover:not(:disabled) {
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-  border-color: var(--el-color-primary-light-7);
-  box-shadow: none;
-  transform: translateY(-1px);
-}
-
-.monotonic-chip-btn.delete:hover:not(:disabled) {
-  color: var(--el-color-danger);
-  background: var(--el-color-danger-light-9);
-  border-color: var(--el-color-danger-light-7);
-  box-shadow: none;
-  transform: translateY(-1px);
-}
-
-.monotonic-chip-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-  box-shadow: none;
 }
 
 .monotonic-btn-icon {

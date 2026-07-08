@@ -666,7 +666,7 @@ onBeforeUnmount(() => {
           </div>
               <div class="thinking-execution-actions">
                 <BasePillButton
-                  class="thinking-detail-action-button"
+                  class="thinking-detail-action-button noobot-primary-pill-action"
                   :label="getThinkingDetailLabel(messageItem)"
                   @click="openThinkingDetailDrawer"
                 />
@@ -832,25 +832,6 @@ onBeforeUnmount(() => {
 .thinking-detail-action-button {
   min-height: 34px;
   padding: 0 14px;
-  border: 1px solid color-mix(in srgb, var(--noobot-primary, #409eff) 42%, transparent);
-  background: linear-gradient(135deg, color-mix(in srgb, var(--noobot-primary, #409eff) 14%, transparent), color-mix(in srgb, var(--noobot-primary, #409eff) 6%, transparent));
-  color: var(--noobot-primary, #409eff);
-  font-weight: 600;
-  filter: none;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--noobot-primary, #409eff) 6%, transparent);
-  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
-}
-
-.thinking-detail-action-button:hover {
-  filter: none;
-  border-color: color-mix(in srgb, var(--noobot-primary, #409eff) 62%, transparent);
-  background: linear-gradient(135deg, color-mix(in srgb, var(--noobot-primary, #409eff) 20%, transparent), color-mix(in srgb, var(--noobot-primary, #409eff) 10%, transparent));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--noobot-primary, #409eff) 12%, transparent);
-}
-
-.thinking-detail-action-button:active {
-  filter: none;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--noobot-primary, #409eff) 16%, transparent), color-mix(in srgb, var(--noobot-primary, #409eff) 8%, transparent));
 }
 
 @media (max-width: 720px) {

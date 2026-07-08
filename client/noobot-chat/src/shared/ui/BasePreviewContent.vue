@@ -83,7 +83,7 @@ watch(
         translate("message.copyText")
       }}</el-button>
     </div>
-    <div v-if="resolvedError" class="preview-error">{{ resolvedError }}</div>
+    <div v-if="resolvedError" class="preview-error noobot-error-surface is-preview">{{ resolvedError }}</div>
     <img
       v-else-if="resolvedPreviewMode === 'image' && resolvedPreviewUrl"
       :src="resolvedPreviewUrl"
@@ -140,11 +140,7 @@ watch(
 }
 
 .preview-error {
-  color: var(--noobot-preview-danger-text);
-  background: var(--noobot-preview-danger-bg);
   padding: 12px;
-  border-radius: 6px;
-  border: 1px solid var(--noobot-preview-danger-border);
 }
 
 .preview-copy-actions {
@@ -200,18 +196,11 @@ watch(
   margin-bottom: 16px;
 }
 .preview-markdown :deep(a) {
-  color: var(--noobot-text-accent);
-  text-decoration: none;
 }
 .preview-markdown :deep(a:hover) {
-  text-decoration: underline;
 }
 .preview-markdown :deep(hr) {
-  height: 1px;
-  padding: 0;
   margin: 24px 0;
-  background-color: var(--noobot-divider);
-  border: 0;
 }
 
 .preview-markdown :deep(h1),
@@ -222,19 +211,12 @@ watch(
 .preview-markdown :deep(h6) {
   margin-top: 24px;
   margin-bottom: 16px;
-  font-weight: 600;
-  line-height: 1.25;
-  color: var(--noobot-preview-text);
 }
 .preview-markdown :deep(h1) {
   font-size: 1.8em;
-  padding-bottom: 0.3em;
-  border-bottom: 1px solid var(--noobot-divider);
 }
 .preview-markdown :deep(h2) {
   font-size: 1.5em;
-  padding-bottom: 0.3em;
-  border-bottom: 1px solid var(--noobot-divider);
 }
 .preview-markdown :deep(h3) {
   font-size: 1.25em;
@@ -247,8 +229,6 @@ watch(
   margin: 16px 0;
   padding: 12px 16px;
   color: var(--noobot-preview-text);
-  background-color: var(--noobot-panel-muted);
-  border-left: 4px solid var(--noobot-panel-border);
   border-radius: 0 6px 6px 0;
   font-style: italic;
 }
@@ -269,11 +249,8 @@ watch(
   margin-top: 16px;
 }
 .preview-markdown :deep(ul li::marker) {
-  color: var(--noobot-text-muted);
 }
 .preview-markdown :deep(ol li::marker) {
-  color: var(--noobot-text-secondary);
-  font-weight: 500;
 }
 
 .preview-markdown :deep(code) {
@@ -301,7 +278,6 @@ watch(
   color: var(--noobot-preview-text);
 }
 .preview-markdown :deep(tr:nth-child(even)) {
-  background-color: color-mix(in srgb, var(--noobot-panel-muted) 72%, transparent);
 }
 .preview-markdown :deep(tr:hover) {
   background-color: var(--noobot-accent-soft);
@@ -310,13 +286,9 @@ watch(
 .preview-markdown :deep(.mermaid) {
   margin: 20px 0;
   padding: 12px;
-  border: 1px solid var(--noobot-preview-border);
-  border-radius: 8px;
-  background: var(--noobot-preview-bg);
   overflow-x: auto;
   display: flex;
   justify-content: center;
-  box-shadow: none;
 }
 .preview-markdown :deep(.mermaid svg) {
   max-width: 100% !important;
@@ -324,12 +296,6 @@ watch(
   display: block;
 }
 .preview-markdown :deep(.mermaid-render-error) {
-  color: var(--noobot-preview-danger-text);
-  background: var(--noobot-preview-danger-bg);
-  border: 1px solid var(--noobot-preview-danger-border);
-  border-radius: 8px;
   padding: 12px;
-  white-space: pre-wrap;
-  font-family: monospace;
 }
 </style>

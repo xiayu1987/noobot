@@ -278,7 +278,7 @@ defineExpose({
       @remove-upload="onRemoveUpload"
     />
 
-    <div class="composer">
+    <div class="composer noobot-composer-surface">
       <!-- 连接器面板 -->
       <el-collapse-transition>
         <div v-show="effectiveMorePanelVisible" class="more-panel-overlay">
@@ -362,7 +362,7 @@ defineExpose({
     </div>
 
     <div v-if="fileDragActive" class="composer-drop-overlay" aria-hidden="true">
-      <div class="composer-drop-target">
+      <div class="composer-drop-target noobot-drop-surface">
         {{ translate("composer.dropFilesToAttach") }}
       </div>
     </div>
@@ -412,10 +412,6 @@ defineExpose({
 .composer-drop-target {
   width: min(800px, 100%);
   min-height: 88px;
-  border: 1px dashed color-mix(in srgb, var(--noobot-base-blue-500, #3b82f6) 62%, var(--noobot-panel-border, #e4e4e7));
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--noobot-surface-sidebar, #ffffff) 88%, var(--noobot-base-blue-500, #3b82f6));
-  color: var(--noobot-text-strong, #18181b);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -427,23 +423,11 @@ defineExpose({
   position: relative;
   max-width: 800px;
   margin: 0 auto;
-  /* 更多操作面板需要实底，避免使用带 transparent 的 panel token 导致透出背景 */
-  background: var(--noobot-surface-sidebar, #ffffff);
-  border: 1px solid color-mix(in srgb, var(--noobot-base-blue-500, #3b82f6) 24%, var(--noobot-panel-border, #e4e4e7));
-  border-radius: 16px; /* 更现代的大圆角 */
   padding: 12px 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  transition: border-color 0.25s ease, box-shadow 0.25s ease;
   width: 100%;
-  box-sizing: border-box;
-  box-shadow: none;
-}
-
-.composer:focus-within {
-  border-color: color-mix(in srgb, var(--noobot-base-blue-500) 36%, transparent);
-  box-shadow: var(--noobot-focus-ring);
 }
 
 /* ================= 更多面板 (扁平化) ================= */
