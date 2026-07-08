@@ -107,7 +107,10 @@ export function getConnectorTimestamp(connectorItem = {}) {
 export function formatLocalTime(value, options = {}) {
   const ms = parseTimeMs(value);
   if (ms <= 0) return "";
-  return new Date(ms).toLocaleTimeString([], {
+  return new Date(ms).toLocaleString([], {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
     ...options,

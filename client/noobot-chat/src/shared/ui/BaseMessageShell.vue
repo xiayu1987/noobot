@@ -4,6 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
+import noobotIcon from "../assets/noobot.svg";
 import { useLocale } from "../i18n/useLocale";
 
 defineProps({
@@ -21,7 +22,7 @@ const { translate } = useLocale();
     <div class="base-message-header" :class="{ user: role === 'user' }">
       <div class="base-message-avatar noobot-message-avatar">
         <template v-if="role === 'user'">{{ translate("message.me") }}</template>
-        <span v-else>AI</span>
+        <img v-else class="base-message-assistant-icon" :src="noobotIcon" alt="Noobot" />
       </div>
       <div class="base-message-meta">
         <span v-if="ts">{{ formatTime(ts) }}</span>
@@ -79,6 +80,13 @@ const { translate } = useLocale();
   font-weight: 600;
   flex-shrink: 0;
   overflow: hidden;
+}
+
+.base-message-assistant-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 .base-message-meta {
