@@ -32,7 +32,7 @@ defineEmits(["click"]);
   padding: 0 6px;
   font-size: 11px;
   line-height: 1.2;
-  border-radius: 999px;
+  border-radius: var(--noobot-radius-pill);
 }
 
 .base-pill-btn:hover {

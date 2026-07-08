@@ -87,7 +87,7 @@ defineExpose({
 }
 
 .poe-upload-btn {
-  border-radius: 999px;
+  border-radius: var(--noobot-radius-pill);
   padding: 0 12px;
   flex-shrink: 0;
   transition: all 0.2s;
@@ -136,7 +136,7 @@ defineExpose({
   min-width: 20px;
   padding: 0;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--noobot-radius-pill);
   color: var(--noobot-text-secondary);
   background: transparent;
   cursor: pointer;

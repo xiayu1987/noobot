@@ -392,7 +392,7 @@ defineExpose({
   width: 28px;
   height: 28px;
   place-items: center;
-  border-radius: 10px;
+  border-radius: var(--noobot-radius-sm);
   color: var(--el-color-primary);
   background: color-mix(in srgb, var(--el-color-primary) 12%, transparent);
   font-weight: 700;

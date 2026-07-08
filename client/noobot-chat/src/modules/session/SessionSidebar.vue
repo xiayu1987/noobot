@@ -235,7 +235,7 @@ const { translate } = useLocale();
   flex: 0 0 32px;
   padding: 0;
   line-height: 1;
-  border-radius: 8px;
+  border-radius: var(--noobot-radius-xs);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -264,9 +264,9 @@ const { translate } = useLocale();
 
 /* 自定义输入框样式覆盖 */
 .custom-input :deep(.el-input__wrapper) {
-  border-radius: 8px;
+  border-radius: var(--noobot-radius-xs);
   background-color: transparent;
-  box-shadow: 0 0 0 1px var(--noobot-border-soft) inset;
+  box-shadow: var(--noobot-input-ring);
   transition: all 0.2s ease;
   padding: 0 12px;
 }
@@ -274,7 +274,7 @@ const { translate } = useLocale();
 .custom-input :deep(.el-input__wrapper.is-focus),
 .custom-input :deep(.el-input__wrapper:hover) {
   background-color: transparent;
-  box-shadow: 0 0 0 1px var(--noobot-border-primary) inset;
+  box-shadow: var(--noobot-input-ring-focus);
 }
 
 .custom-input :deep(.el-input__inner) {
@@ -311,7 +311,7 @@ const { translate } = useLocale();
   flex: 1 1 0;
   min-width: 0;
   height: 36px;
-  border-radius: 8px;
+  border-radius: var(--noobot-radius-xs);
   font-weight: 600;
   letter-spacing: 0.5px;
 }
@@ -341,7 +341,7 @@ const { translate } = useLocale();
   flex: 0 0 36px;
   width: 36px;
   height: 36px;
-  border-radius: 8px;
+  border-radius: var(--noobot-radius-xs);
   background: var(--noobot-btn-soft-bg);
   border: 1px solid var(--noobot-btn-soft-border);
   color: var(--noobot-btn-soft-text);

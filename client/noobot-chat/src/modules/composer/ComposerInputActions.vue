@@ -162,11 +162,11 @@ function onInputKeydown(event) {
   background: transparent;
   font-size: 15px;
   line-height: 1.5;
-  color: var(--noobot-text-main, #18181b);
+  color: var(--noobot-text-main, var(--noobot-text-strong));
 }
 
 .chat-input :deep(.el-textarea__inner::placeholder) {
-  color: var(--noobot-text-muted, #a1a1aa);
+  color: var(--noobot-text-muted, var(--noobot-text-muted));
 }
 
 .composer-icon-btn {
@@ -178,19 +178,19 @@ function onInputKeydown(event) {
   border-radius: var(--composer-icon-radius) !important;
   border: 1px solid transparent !important;
   background: transparent !important;
-  color: var(--noobot-text-secondary, #52525b) !important;
+  color: var(--noobot-text-secondary, var(--noobot-text-secondary)) !important;
   transition: background-color 0.2s ease, color 0.2s ease;
   box-shadow: none !important;
 }
 
 .composer-icon-btn:hover {
-  background: var(--noobot-fill-soft, #f4f4f5) !important;
-  color: var(--noobot-text-main, #18181b) !important;
+  background: var(--noobot-fill-soft, var(--noobot-fill-soft)) !important;
+  color: var(--noobot-text-main, var(--noobot-text-strong)) !important;
 }
 
 .composer-icon-btn.is-recording {
-  color: var(--noobot-status-error, #ef4444) !important;
-  background: color-mix(in srgb, var(--noobot-status-error, #ef4444) 10%, transparent) !important;
+  color: var(--noobot-status-error, var(--noobot-status-error)) !important;
+  background: color-mix(in srgb, var(--noobot-status-error, var(--noobot-status-error)) 10%, transparent) !important;
 }
 
 .send-btn {
@@ -226,7 +226,7 @@ function onInputKeydown(event) {
 
 .mic-status-text {
   font-size: 12px;
-  color: var(--noobot-text-secondary, #52525b);
+  color: var(--noobot-text-secondary, var(--noobot-text-secondary));
 }
 
 @media (max-width: 768px) {

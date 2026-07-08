@@ -191,7 +191,7 @@ function handleHeaderAction(command = "") {
 }
 
 .workspace-btn {
-  border-radius: 10px !important;
+  border-radius: var(--noobot-radius-sm) !important;
 }
 
 .desktop-header-actions {

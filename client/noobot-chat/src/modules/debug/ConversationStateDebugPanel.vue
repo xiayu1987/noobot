@@ -69,7 +69,7 @@ const snapshotList = computed(() =>
   font-size: 11px;
   background: var(--noobot-panel-bg);
   border: 1px solid var(--noobot-divider);
-  border-radius: 6px;
+  border-radius: var(--noobot-radius-xs);
   padding: 6px;
 }
 </style>

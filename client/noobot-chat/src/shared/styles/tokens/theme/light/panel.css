@@ -11,4 +11,20 @@
   --noobot-danger-soft: color-mix(in srgb, var(--noobot-base-red-500) 12%, transparent);
   --noobot-panel-muted: color-mix(in srgb, var(--noobot-base-slate-900) 6%, transparent);
   --noobot-accent-soft: color-mix(in srgb, var(--noobot-base-blue-700) 14%, transparent);
+  --noobot-overlay-solid-bg: linear-gradient(180deg, color-mix(in srgb, var(--noobot-base-white) 96%, var(--noobot-base-blue-500)), color-mix(in srgb, var(--noobot-panel-bg) 98%, var(--noobot-base-blue-500)));
+  --noobot-overlay-head-bg: linear-gradient(90deg, color-mix(in srgb, var(--noobot-base-white) 90%, var(--noobot-base-blue-500)), color-mix(in srgb, var(--noobot-base-white) 96%, var(--noobot-base-blue-500)));
+  --noobot-overlay-border: color-mix(in srgb, var(--noobot-base-blue-500) 18%, var(--noobot-panel-border));
+  --noobot-overlay-outline: color-mix(in srgb, var(--noobot-base-white) 70%, transparent);
+  --noobot-shadow-overlay: 0 18px 46px color-mix(in srgb, var(--noobot-base-black) 12%, transparent), 0 1px 0 color-mix(in srgb, var(--noobot-base-white) 70%, transparent) inset;
+  --noobot-shadow-panel: 0 8px 24px color-mix(in srgb, var(--noobot-base-blue-500) 7%, transparent), 0 1px 0 color-mix(in srgb, var(--noobot-base-white) 65%, transparent) inset;
+  --noobot-input-ring: 0 0 0 1px var(--noobot-border-soft) inset;
+  --noobot-input-ring-focus: 0 0 0 1px var(--noobot-border-primary) inset;
+  --noobot-control-shadow: var(--noobot-input-ring), 0 1px 0 color-mix(in srgb, var(--noobot-base-black) 4%, transparent);
+  --noobot-control-shadow-focus: var(--noobot-input-ring-focus), 0 8px 20px color-mix(in srgb, var(--noobot-base-blue-500) 10%, transparent);
+  --noobot-attachment-hover-bg: var(--noobot-surface-soft-hover);
+  --noobot-attachment-hover-border: color-mix(in srgb, var(--noobot-panel-border) 120%, var(--noobot-base-blue-500));
+  --noobot-attachment-icon-bg: var(--noobot-surface-primary-soft);
+  --noobot-attachment-icon-border: color-mix(in srgb, var(--noobot-border-primary) 70%, transparent);
+  --noobot-attachment-icon-text: var(--noobot-text-accent);
+  --noobot-footer-border: var(--noobot-panel-border);
 }

@@ -162,7 +162,7 @@
 
 .noobot-workspace-layout .custom-tree .el-tree-node__content {
   height: 32px;
-  border-radius: 6px;
+  border-radius: var(--noobot-radius-xs);
   margin-bottom: 2px;
 }
 
@@ -219,7 +219,7 @@
   background: transparent;
   border: 1px solid var(--noobot-panel-border);
   box-shadow: none !important;
-  border-radius: 4px;
+  border-radius: var(--noobot-radius-xs);
 }
 
 .noobot-workspace-layout .row-input .el-input__inner {
@@ -234,7 +234,7 @@
   overflow: hidden;
   background: transparent !important;
   border: 1px solid var(--noobot-panel-border) !important;
-  border-radius: 6px;
+  border-radius: var(--noobot-radius-xs);
 }
 
 .noobot-workspace-head {
