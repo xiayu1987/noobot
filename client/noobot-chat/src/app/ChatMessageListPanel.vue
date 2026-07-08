@@ -265,7 +265,7 @@ defineExpose({
   justify-content: center;
   height: 40vh;
   color: var(--noobot-text-secondary);
-  font-size: 15px;
+  font-size: var(--noobot-font-size-lg);
 }
 
 .empty-icon {

@@ -52,7 +52,7 @@ const { translate } = useLocale();
 }
 
 .connector-summary-title {
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
   font-weight: 600;
   color: var(--noobot-text-secondary);
   margin-bottom: 10px;
@@ -71,7 +71,7 @@ const { translate } = useLocale();
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
   line-height: 1.5;
   padding: 4px 8px;
 }
@@ -89,7 +89,7 @@ const { translate } = useLocale();
 }
 
 .connector-summary-status {
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
 }
 
 .connector-summary-status.status-connected {

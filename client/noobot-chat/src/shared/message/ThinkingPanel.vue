@@ -768,7 +768,7 @@ onBeforeUnmount(() => {
 }
 
 .thinking-elapsed {
-  font-size: 11px;
+  font-size: var(--noobot-font-size-xs);
   color: var(--noobot-thinking-muted);
   gap: 4px;
   padding: 0 6px;

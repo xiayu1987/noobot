@@ -157,9 +157,8 @@
 
 .noobot-message-avatar {
   border-radius: 50%;
-  color: var(--el-color-primary);
+  color: var(--noobot-msg-avatar-text);
   background: var(--noobot-msg-avatar-bg);
-  border: 1px solid color-mix(in srgb, var(--el-color-primary) 18%, var(--noobot-panel-border));
   box-shadow: none;
 }
 
@@ -359,7 +358,7 @@
   background: var(--el-bg-color-overlay);
   box-shadow: none;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
   font-weight: 500;
   line-height: 1;
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
@@ -416,7 +415,7 @@
   margin: 0;
   padding: 4px 9px;
   border-radius: var(--noobot-radius-pill);
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
   font-weight: 600;
   line-height: 16px;
   transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
@@ -557,7 +556,7 @@
   align-items: center;
   justify-content: center;
   backdrop-filter: none;
-  font-size: 16px;
+  font-size: var(--noobot-font-size-xl);
 }
 
 .noobot-tail-btn .el-icon {

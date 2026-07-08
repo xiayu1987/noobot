@@ -121,7 +121,7 @@ defineExpose({
 }
 
 .attachment-name {
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
   color: var(--noobot-text-main);
   white-space: nowrap;
   overflow: hidden;

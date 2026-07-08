@@ -210,14 +210,14 @@ function toggleConnectorPanelExpanded() {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
   font-weight: 500;
   color: var(--noobot-text-secondary);
   flex-shrink: 0;
 }
 
 .title-icon {
-  font-size: 14px;
+  font-size: var(--noobot-font-size-base);
   color: var(--noobot-text-accent);
 }
 
@@ -242,7 +242,7 @@ function toggleConnectorPanelExpanded() {
 }
 
 .connector-summary-empty {
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
   color: var(--noobot-text-muted);
 }
 
@@ -250,7 +250,7 @@ function toggleConnectorPanelExpanded() {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
   color: var(--noobot-text-muted);
   flex-shrink: 0;
   padding: 4px 8px;
@@ -297,7 +297,7 @@ function toggleConnectorPanelExpanded() {
 }
 
 .connector-group-title {
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
   font-weight: 600;
   color: var(--noobot-text-strong, var(--noobot-text-secondary));
   margin-bottom: 8px;
@@ -348,7 +348,7 @@ function toggleConnectorPanelExpanded() {
 }
 
 .connector-status-icon {
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
   display: flex;
   align-items: center;
   flex-shrink: 0;
@@ -365,7 +365,7 @@ function toggleConnectorPanelExpanded() {
 }
 
 .connector-name {
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
   color: var(--noobot-text-main);
   max-width: 100%;
   overflow: hidden;
@@ -376,7 +376,7 @@ function toggleConnectorPanelExpanded() {
 }
 
 .empty-group-tip {
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
   color: var(--noobot-text-muted);
   padding: 4px 0;
 }

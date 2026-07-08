@@ -45,13 +45,13 @@ function applyInlineStylesForCopy(htmlContent = "") {
     setStyle(elementNode, { margin: "0 0 12px 0" });
   });
   wrapper.querySelectorAll("a").forEach((elementNode) => {
-    setStyle(elementNode, { color: "#2563eb", "text-decoration": "none" });
+    setStyle(elementNode, { color: "var(--noobot-base-blue-600)", "text-decoration": "none" });
   });
   wrapper.querySelectorAll("pre").forEach((elementNode) => {
     setStyle(elementNode, {
-      background: "#1e293b",
-      color: "#e2e8f0",
-      border: "1px solid #e5e7eb",
+      background: "var(--noobot-base-slate-800)",
+      color: "var(--noobot-base-slate-200)",
+      border: "1px solid var(--noobot-base-slate-200)",
       "border-radius": "8px",
       padding: "12px",
       "overflow-x": "auto",
@@ -60,8 +60,8 @@ function applyInlineStylesForCopy(htmlContent = "") {
   });
   wrapper.querySelectorAll("code").forEach((elementNode) => {
     setStyle(elementNode, {
-      background: "#f3f4f6",
-      color: "#111827",
+      background: "var(--noobot-base-slate-100)",
+      color: "var(--noobot-base-slate-900)",
       padding: "2px 6px",
       "border-radius": "4px",
       "font-family": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
@@ -75,20 +75,20 @@ function applyInlineStylesForCopy(htmlContent = "") {
       width: "100%",
       "border-collapse": "collapse",
       margin: "12px 0",
-      "font-size": "13px",
-      border: "1px solid #d1d5db",
+      "font-size": "var(--noobot-font-size-md)",
+      border: "1px solid var(--noobot-base-slate-200)",
     });
   });
   wrapper.querySelectorAll("th, td").forEach((elementNode) => {
     setStyle(elementNode, {
-      border: "1px solid #d1d5db",
+      border: "1px solid var(--noobot-base-slate-200)",
       padding: "8px 10px",
       "text-align": "left",
       "vertical-align": "top",
     });
   });
   wrapper.querySelectorAll("th").forEach((elementNode) => {
-    setStyle(elementNode, { background: "#eef2ff", "font-weight": "600" });
+    setStyle(elementNode, { background: "var(--noobot-base-indigo-50)", "font-weight": "600" });
   });
   wrapper.querySelectorAll("ul, ol").forEach((elementNode) => {
     setStyle(elementNode, { margin: "8px 0 12px 20px", "padding-left": "16px" });
@@ -100,9 +100,9 @@ function applyInlineStylesForCopy(htmlContent = "") {
     setStyle(elementNode, {
       margin: "12px 0",
       padding: "10px",
-      border: "1px solid #d1d5db",
+      border: "1px solid var(--noobot-base-slate-200)",
       "border-radius": "8px",
-      background: "#ffffff",
+      background: "var(--noobot-base-white)",
       "overflow-x": "auto",
       "max-width": "760px",
     });
@@ -127,24 +127,24 @@ function buildHtmlDocumentForCopy(htmlBodyContent = "") {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Noobot Markdown Preview</title>
   <style>
-    body { margin: 0; padding: 16px; color: #111827; background: #ffffff; line-height: 1.6; font-size: 14px; }
+    body { margin: 0; padding: 16px; color: var(--noobot-base-slate-900); background: var(--noobot-base-white); line-height: 1.6; font-size: var(--noobot-font-size-base); }
     p { margin: 0 0 12px 0; }
-    a { color: #2563eb; text-decoration: none; }
+    a { color: var(--noobot-base-blue-600); text-decoration: none; }
     a:hover { text-decoration: underline; }
-    pre { background: #f8fafc; color: #111827; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; overflow-x: auto; margin: 12px 0; }
-    code { background: #f3f4f6; color: #111827; padding: 2px 6px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    pre { background: var(--noobot-base-slate-50); color: var(--noobot-base-slate-900); border: 1px solid var(--noobot-base-slate-200); border-radius: 8px; padding: 12px; overflow-x: auto; margin: 12px 0; }
+    code { background: var(--noobot-base-slate-100); color: var(--noobot-base-slate-900); padding: 2px 6px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
     pre code { background: transparent; padding: 0; }
-    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; border: 1px solid #d1d5db; }
-    th, td { border: 1px solid #d1d5db; padding: 8px 10px; text-align: left; vertical-align: top; }
-    th { background: #eef2ff; font-weight: 600; }
-    tr:nth-child(even) td { background: #f8fafc; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: var(--noobot-font-size-md); border: 1px solid var(--noobot-base-slate-200); }
+    th, td { border: 1px solid var(--noobot-base-slate-200); padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: var(--noobot-base-indigo-50); font-weight: 600; }
+    tr:nth-child(even) td { background: var(--noobot-base-slate-50); }
     ul, ol { margin: 8px 0 12px 20px; padding-left: 16px; }
     li { margin: 4px 0; line-height: 1.7; }
-    ul li::marker { color: #60a5fa; }
-    ol li::marker { color: #93c5fd; font-weight: 600; }
-    .mermaid { margin: 12px 0; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; background: #ffffff; overflow-x: auto; max-width: 760px; }
+    ul li::marker { color: var(--noobot-base-blue-400); }
+    ol li::marker { color: var(--noobot-base-blue-400); font-weight: 600; }
+    .mermaid { margin: 12px 0; padding: 10px; border: 1px solid var(--noobot-base-slate-200); border-radius: 8px; background: var(--noobot-base-white); overflow-x: auto; max-width: 760px; }
     .mermaid svg { width: 100%; max-width: 760px; height: auto; display: block; }
-    .mermaid-render-error { color: #b91c1c; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 10px; white-space: pre-wrap; }
+    .mermaid-render-error { color: var(--noobot-base-red-500); background: var(--noobot-base-rose-50); border: 1px solid var(--noobot-base-red-200); border-radius: 8px; padding: 10px; white-space: pre-wrap; }
   </style>
 </head>
 <body>
@@ -185,25 +185,25 @@ export async function copyMarkdownRichAsHtmlPage(rawHtmlContent = "") {
   const exportStyles = `
       <style>
         .markdown-export-container {
-          color: #1f2937; font-size: 15px; line-height: 1.7; word-wrap: break-word;
+          color: var(--noobot-base-slate-800); font-size: var(--noobot-font-size-lg); line-height: 1.7; word-wrap: break-word;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
           padding: 20px; max-width: 900px; margin: 0 auto;
         }
         .markdown-export-container p { margin-top: 0; margin-bottom: 16px; }
-        .markdown-export-container a { color: #3b82f6; text-decoration: none; }
-        .markdown-export-container hr { height: 1px; margin: 24px 0; background-color: #e5e7eb; border: 0; }
-        .markdown-export-container h1, .markdown-export-container h2, .markdown-export-container h3, .markdown-export-container h4 { margin-top: 24px; margin-bottom: 16px; font-weight: 600; color: #111827; }
-        .markdown-export-container h1 { font-size: 1.8em; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.3em; }
-        .markdown-export-container h2 { font-size: 1.5em; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.3em; }
-        .markdown-export-container blockquote { margin: 16px 0; padding: 12px 16px; color: #4b5563; background-color: #f9fafb; border-left: 4px solid #d1d5db; font-style: italic; }
+        .markdown-export-container a { color: var(--noobot-base-blue-500); text-decoration: none; }
+        .markdown-export-container hr { height: 1px; margin: 24px 0; background-color: var(--noobot-base-slate-200); border: 0; }
+        .markdown-export-container h1, .markdown-export-container h2, .markdown-export-container h3, .markdown-export-container h4 { margin-top: 24px; margin-bottom: 16px; font-weight: 600; color: var(--noobot-base-slate-900); }
+        .markdown-export-container h1 { font-size: 1.8em; border-bottom: 1px solid var(--noobot-base-slate-200); padding-bottom: 0.3em; }
+        .markdown-export-container h2 { font-size: 1.5em; border-bottom: 1px solid var(--noobot-base-slate-200); padding-bottom: 0.3em; }
+        .markdown-export-container blockquote { margin: 16px 0; padding: 12px 16px; color: var(--noobot-base-slate-500); background-color: var(--noobot-base-slate-50); border-left: 4px solid var(--noobot-base-slate-200); font-style: italic; }
         .markdown-export-container ul, .markdown-export-container ol { margin-bottom: 16px; padding-left: 2em; }
-        .markdown-export-container code { background-color: #f3f4f6; color: #db2777; padding: 0.2em 0.4em; border-radius: 4px; font-family: monospace; font-size: 0.9em; }
-        .markdown-export-container pre { background-color: #1e293b; color: #e2e8f0; border-radius: 8px; padding: 16px; overflow-x: auto; }
+        .markdown-export-container code { background-color: var(--noobot-base-slate-100); color: var(--noobot-base-red-500); padding: 0.2em 0.4em; border-radius: 4px; font-family: monospace; font-size: 0.9em; }
+        .markdown-export-container pre { background-color: var(--noobot-base-slate-800); color: var(--noobot-base-slate-200); border-radius: 8px; padding: 16px; overflow-x: auto; }
         .markdown-export-container pre code { background-color: transparent; color: inherit; padding: 0; }
         .markdown-export-container table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-        .markdown-export-container th, .markdown-export-container td { border: 1px solid #d1d5db; padding: 10px 14px; text-align: left; }
-        .markdown-export-container th { background-color: #f3f4f6; font-weight: 600; }
-        .markdown-export-container .mermaid { margin: 20px 0; padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff; overflow-x: auto; text-align: center; max-width: 760px; }
+        .markdown-export-container th, .markdown-export-container td { border: 1px solid var(--noobot-base-slate-200); padding: 10px 14px; text-align: left; }
+        .markdown-export-container th { background-color: var(--noobot-base-slate-100); font-weight: 600; }
+        .markdown-export-container .mermaid { margin: 20px 0; padding: 16px; border: 1px solid var(--noobot-base-slate-200); border-radius: 8px; background: var(--noobot-base-white); overflow-x: auto; text-align: center; max-width: 760px; }
         .markdown-export-container .mermaid svg { width: 100%; max-width: 760px; height: auto; display: block; margin: 0 auto; }
       </style>
     `;

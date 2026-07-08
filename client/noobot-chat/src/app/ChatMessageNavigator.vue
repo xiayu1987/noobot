@@ -83,7 +83,7 @@ const emit = defineEmits(["select"]);
   color: var(--noobot-text-secondary, var(--el-text-color-secondary));
   background: var(--noobot-fill-soft, var(--el-fill-color-lighter));
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 56%, transparent);
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
   line-height: 1.35;
   transition:
     color 0.18s ease,
@@ -105,7 +105,7 @@ const emit = defineEmits(["select"]);
   min-width: 28px;
   padding: 2px 7px;
   border-radius: var(--noobot-radius-pill);
-  font-size: 10px;
+  font-size: var(--noobot-font-size-2xs);
   line-height: 1.25;
   font-weight: 800;
   letter-spacing: 0.035em;
@@ -184,7 +184,7 @@ const emit = defineEmits(["select"]);
   :deep(.el-anchor__link) {
     max-width: none;
     padding: 10px 14px 10px 16px;
-    font-size: 13px;
+    font-size: var(--noobot-font-size-md);
   }
 }
 </style>

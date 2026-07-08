@@ -563,6 +563,6 @@ watch(
 
 .allow-ide-label {
   color: var(--noobot-text-secondary);
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
 }
 </style>

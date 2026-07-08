@@ -190,7 +190,7 @@ watch(
 }
 
 .session-icon {
-  font-size: 16px;
+  font-size: var(--noobot-font-size-xl);
 }
 
 .session-info {
@@ -245,7 +245,7 @@ watch(
 }
 
 .title {
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
   font-weight: 500;
   color: var(--noobot-text-main);
   white-space: nowrap;
@@ -260,7 +260,7 @@ watch(
 }
 
 .sid {
-  font-size: 11px;
+  font-size: var(--noobot-font-size-xs);
   color: var(--noobot-text-muted);
   display: flex;
   align-items: center;

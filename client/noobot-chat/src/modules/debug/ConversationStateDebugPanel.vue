@@ -45,7 +45,7 @@ const snapshotList = computed(() =>
 
 .conversation-state-debug summary {
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
   color: var(--noobot-text-secondary);
 }
 
@@ -54,19 +54,19 @@ const snapshotList = computed(() =>
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 8px;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
 }
 
 .state-block h4 {
   margin: 8px 0 4px;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-sm);
 }
 
 .state-block pre {
   margin: 0;
   max-height: 160px;
   overflow: auto;
-  font-size: 11px;
+  font-size: var(--noobot-font-size-xs);
   background: var(--noobot-panel-bg);
   border: 1px solid var(--noobot-divider);
   border-radius: var(--noobot-radius-xs);

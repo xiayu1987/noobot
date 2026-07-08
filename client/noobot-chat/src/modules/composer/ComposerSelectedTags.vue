@@ -85,7 +85,7 @@ function onRemoveUpload(uploadFileIndex) {
   white-space: nowrap;
   color: var(--noobot-text-secondary, var(--noobot-text-secondary));
   padding: 4px 14px;
-  font-size: 13px;
+  font-size: var(--noobot-font-size-md);
   font-weight: 500;
 }
 

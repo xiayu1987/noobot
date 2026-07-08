@@ -216,7 +216,7 @@ const { translate } = useLocale();
 }
 
 .brand-text {
-  font-size: 16px;
+  font-size: var(--noobot-font-size-xl);
   font-weight: 800;
   background: var(--noobot-cyber-gradient);
   -webkit-background-clip: text;
@@ -283,7 +283,7 @@ const { translate } = useLocale();
 }
 
 .input-icon {
-  font-size: 16px;
+  font-size: var(--noobot-font-size-xl);
   opacity: 0.7;
   color: var(--noobot-text-secondary);
 }
@@ -349,7 +349,7 @@ const { translate } = useLocale();
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: var(--noobot-font-size-xl);
   margin-left: 0;
   transition: all 0.2s ease;
 }
@@ -378,7 +378,7 @@ const { translate } = useLocale();
 }
 
 .status-icon {
-  font-size: 16px;
+  font-size: var(--noobot-font-size-xl);
 }
 
 /* 折叠状态处理 */
