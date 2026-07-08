@@ -2,8 +2,8 @@
   /* Component · Message */
   --noobot-msg-assistant-bg: var(--noobot-base-white);
   --noobot-msg-assistant-text: var(--noobot-base-slate-900);
-  --noobot-msg-user-bg: color-mix(in srgb, var(--noobot-base-blue-500) 16%, var(--noobot-base-white));
-  --noobot-msg-user-border: color-mix(in srgb, var(--noobot-base-slate-900) 8%, transparent);
+  --noobot-msg-user-bg: color-mix(in srgb, var(--noobot-base-blue-500) 6%, var(--noobot-base-slate-50));
+  --noobot-msg-user-border: color-mix(in srgb, var(--noobot-base-blue-500) 16%, var(--noobot-base-slate-200));
   --noobot-msg-user-text: var(--noobot-base-slate-900);
   --noobot-msg-tag-bg: var(--noobot-base-slate-200);
   --noobot-msg-tag-text: var(--noobot-base-slate-700);

@@ -201,6 +201,14 @@ const { translate } = useLocale();
 }
 
 .brand-logo {
+  width: var(--noobot-msg-avatar-size);
+  height: var(--noobot-msg-avatar-size);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 var(--noobot-msg-avatar-size);
+  background: var(--noobot-msg-avatar-bg);
   filter: none;
   transition: transform 0.3s ease;
 }
@@ -210,8 +218,8 @@ const { translate } = useLocale();
 }
 
 .brand-logo-img {
-  width: 30px;
-  height: 30px;
+  width: calc(var(--noobot-msg-avatar-size) * 0.72);
+  height: calc(var(--noobot-msg-avatar-size) * 0.72);
   display: block;
 }
 
