@@ -319,7 +319,9 @@ describe("ChatMessageListPanel", () => {
 
     const assistant = activeSession.messages[1];
     expect(assistant.pending).toBe(true);
-    expect(assistant.channelState).toMatchObject({ state: "sending", createdAt: startedAt });
+    expect(assistant.channelState).toMatchObject({ state: "sending" });
+    expect(assistant.channelState?.createdAt).toBeUndefined();
+    expect(assistant.channelState?.createdAtMs).toBeUndefined();
     expect(assistant.thinkingStartedAt).toBe(startedAt);
   });
 

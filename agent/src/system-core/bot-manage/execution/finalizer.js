@@ -204,6 +204,7 @@ export class SessionExecutionFinalizer {
     caller = CALLER_ROLE.USER,
     dialogProcessId = "",
     turnScopeId = "",
+    thinkingStartedAt = "",
     agentResult = {},
     executionStartIndex = 0,
     runtimeEventListener = null,
@@ -220,6 +221,7 @@ export class SessionExecutionFinalizer {
             }),
           ];
     const turnMessages = promoteGeneratedTransfersToFinalAssistant(rawTurnMessages);
+    const thinkingFinishedAt = this.now();
 
     await this.turnPersister.appendAgentMessages({
       userId,
@@ -229,6 +231,8 @@ export class SessionExecutionFinalizer {
       dialogProcessId,
       parentDialogProcessId,
       turnScopeId: String(turnScopeId || "").trim(),
+      thinkingStartedAt,
+      thinkingFinishedAt,
       eventListener: runtimeEventListener,
     });
     await this.session.saveCurrentTurnTasks({

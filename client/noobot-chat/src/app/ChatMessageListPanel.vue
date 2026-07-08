@@ -103,10 +103,6 @@ function applyMessageRuntimePatch(messageItem = {}, patch = {}) {
     messageItem.channelState = {
       ...channelState,
       ...patch.channelState,
-      createdAtMs: patch.channelState.createdAtMs || Number(channelState?.createdAtMs || 0),
-      updatedAtMs: patch.channelState.updatedAtMs || Number(channelState?.updatedAtMs || 0),
-      createdAt: patch.channelState.createdAt || String(channelState?.createdAt || "").trim(),
-      updatedAt: patch.channelState.updatedAt || String(channelState?.updatedAt || "").trim(),
     };
   }
   if (Object.prototype.hasOwnProperty.call(patch, "pending")) {

@@ -16,9 +16,7 @@ import {
 } from "../../composables/infra/messageIdentity";
 import { sanitizeExecutionLogForDisplay } from "../../composables/chat/chatEngine/utils";
 import { resolveSessionRunMessageRuntimeView } from "../../composables/chat/sessionRunStateMachine";
-import { resolveThinkingTiming } from "../../composables/chat/thinkingTimingRegistry";
 import {
-  getMessageTimestamp,
   getThinkingFinishedAt,
   getThinkingStartedAt,
   formatDurationMs,
@@ -52,6 +50,7 @@ const hasThinking = computed(
 );
 const { translate } = useLocale();
 const nowTick = ref(nowMs());
+const thinkingDurationLabel = ref(formatDurationMs(0));
 const detailExpansionTick = ref(0);
 let timer = null;
 const EXECUTION_LOG_DISPLAY_LIMIT = QUANTITY_THRESHOLDS.client.executionLogDisplayLimit;
@@ -521,74 +520,30 @@ function parseAnyTimeMs(...values) {
 
 
 function getThinkingDurationMs(messageItem = {}) {
-  const hasMessageTurnScopeId = Boolean(getMessageTurnScopeId(messageItem));
   const runtimeView = resolveSessionRunMessageRuntimeView(messageItem);
-  const channelState = runtimeView.channelState || {};
-  const msgTs = parseAnyTimeMs(getMessageTimestamp(messageItem));
-  const canUseAssociatedTurnTiming = !isAssistantWithoutTurnScope(messageItem);
-  const channelStartedAt = canUseAssociatedTurnTiming
-    ? parseAnyTimeMs(
-        channelState?.createdAt,
-        channelState?.createdAtMs,
-      )
-    : 0;
-  const channelUpdatedAt = canUseAssociatedTurnTiming
-    ? parseAnyTimeMs(
-        channelState?.updatedAt,
-        channelState?.updatedAtMs,
-        channelState?.timestamp,
-      )
-    : 0;
-  const sessionId = getMessageSessionId(messageItem) || String(channelState?.sessionId || "").trim();
-  const turnScopeId = hasMessageTurnScopeId ? getMessageTurnScopeId(messageItem) : "";
-  const dialogProcessId = getMessageDialogProcessId(messageItem) || String(channelState?.dialogProcessId || "").trim();
-  const timingScope = turnScopeId ? { sessionId, turnScopeId } : null;
   const startedAt = parseAnyTimeMs(getThinkingStartedAt(messageItem));
   const finishedAt = parseAnyTimeMs(getThinkingFinishedAt(messageItem));
-  const persistedTiming = timingScope ? resolveThinkingTiming(timingScope) || {} : {};
-  const persistedStartedAt = parseAnyTimeMs(persistedTiming?.startedAtMs, persistedTiming?.startedAt);
-  const persistedFinishedAt = parseAnyTimeMs(persistedTiming?.finishedAtMs, persistedTiming?.finishedAt);
-  const realtimeLogs = getAllRealtimeLogs(messageItem);
-  const completedToolLogs = getCompletedToolLogsForMessage(messageItem);
-  const logTimes = [...realtimeLogs, ...completedToolLogs]
-    .map((logItem) =>
-      parseAnyTimeMs(getMessageTimestamp(logItem)),
-    )
-    .filter((timeValue) => timeValue > 0);
-  const fallbackStartedAt = parseAnyTimeMs(
-    ...(logTimes.length ? [Math.min(...logTimes)] : []),
-    msgTs,
-  );
-  const fallbackFinishedAt = parseAnyTimeMs(
-    ...(logTimes.length ? [Math.max(...logTimes)] : []),
-    msgTs,
-  );
   return resolveThinkingDurationMs({
     messageStartedAt: startedAt,
     messageFinishedAt: finishedAt,
-    channelStartedAt,
-    channelFinishedAt: channelUpdatedAt,
-    cachedStartedAt: persistedStartedAt,
-    cachedFinishedAt: persistedFinishedAt,
-    fallbackStartedAt,
-    fallbackFinishedAt,
     now: nowTick.value,
     pending: runtimeView.running,
   });
+}
+
+function refreshThinkingDurationLabel() {
+  thinkingDurationLabel.value = formatDurationMs(getThinkingDurationMs(props.messageItem));
 }
 
 function isThinkingRuntimeRunning(messageItem = {}) {
   return resolveSessionRunMessageRuntimeView(messageItem).running;
 }
 
-function getThinkingDurationLabel(messageItem = {}) {
-  return formatDurationMs(getThinkingDurationMs(messageItem));
-}
-
 function startTimer() {
   if (timer) return;
   timer = setInterval(() => {
     nowTick.value = nowMs();
+    refreshThinkingDurationLabel();
   }, 1000);
 }
 
@@ -602,6 +557,7 @@ function stopTimer() {
 watch(
   () => isThinkingRuntimeRunning(props.messageItem),
   (running) => {
+    refreshThinkingDurationLabel();
     if (running) startTimer();
     else stopTimer();
   },
@@ -609,11 +565,15 @@ watch(
 );
 
 watch(
-  () => isThinkingRuntimeRunning(props.messageItem),
-  (running) => {
-    if (running) startTimer();
+  () => [
+    getThinkingStartedAt(props.messageItem),
+    getThinkingFinishedAt(props.messageItem),
+    props.messageItem?.pending,
+  ],
+  () => {
+    refreshThinkingDurationLabel();
   },
-  { immediate: true },
+  { immediate: true, deep: false },
 );
 
 onBeforeUnmount(() => {
@@ -633,7 +593,7 @@ onBeforeUnmount(() => {
           <BaseSectionHeader :title="translate('message.thinkingExpand')" class="thinking-title-row">
             <template #extra>
               <span class="thinking-elapsed noobot-flat-chip">
-                {{ translate("message.thinkingElapsed", { duration: getThinkingDurationLabel(messageItem) }) }}
+                {{ translate("message.thinkingElapsed", { duration: thinkingDurationLabel }) }}
               </span>
             </template>
           </BaseSectionHeader>

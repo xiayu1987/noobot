@@ -31,35 +31,8 @@ import {
   setThinkingFinishedAt,
   setThinkingStartedAt,
 } from "../../infra/timeFields";
-import {
-  bindThinkingDialogProcess,
-  rememberThinkingFinished,
-  rememberThinkingStarted,
-} from "../thinkingTimingRegistry";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { logResendDebug, summarizeDebugMessage } from "../debug/resendDebugLogger";
-
-function parseThinkingTimingMs(value) {
-  return parseTimeMs(value);
-}
-
-function applyMissingThinkingStartedAt(targetAssistantMessage = null, nextStartedAt = "") {
-  if (!targetAssistantMessage) return;
-  const currentStartedAtMs = parseThinkingTimingMs(getThinkingStartedAt(targetAssistantMessage));
-  if (currentStartedAtMs > 0) return;
-  const nextStartedAtMs = parseThinkingTimingMs(nextStartedAt);
-  if (nextStartedAtMs <= 0) return;
-  setThinkingStartedAt(targetAssistantMessage, nextStartedAtMs);
-}
-
-function resolveThinkingStartedAtMs(targetAssistantMessage = null, fallbackMs = 0) {
-  return (
-    Number(fallbackMs || 0) ||
-    parseTimeMs(getThinkingStartedAt(targetAssistantMessage)) ||
-    parseTimeMs(targetAssistantMessage?.channelState?.createdAtMs) ||
-    nowMs()
-  );
-}
 
 
 export function emitSyntheticReconnectErrorConversationState({
@@ -99,9 +72,6 @@ function applyReconnectChannelTimingToMessage({
     targetAssistantMessage.sessionId = targetAssistantMessage.sessionId || sessionId;
     targetAssistantMessage.session_id = targetAssistantMessage.session_id || sessionId;
   }
-  if (dialogProcessId) {
-    bindThinkingDialogProcess({ sessionId, dialogProcessId, turnScopeId });
-  }
   const timing = normalizeReconnectChannelTiming(stateData);
   const previousChannelState =
     targetAssistantMessage.channelState &&
@@ -117,18 +87,10 @@ function applyReconnectChannelTimingToMessage({
     turnScopeId,
     sourceEvent: _trimStr(stateData?.sourceEvent),
     seq: Number(stateData?.seq || 0),
-    createdAtMs: timing.createdAtMs || Number(previousChannelState?.createdAtMs || 0),
-    updatedAtMs: timing.updatedAtMs,
-    createdAt: timing.createdAt || _trimStr(previousChannelState?.createdAt || targetAssistantMessage?.thinkingStartedAt),
-    updatedAt: timing.updatedAt,
   };
   targetAssistantMessage.channelState = channelState;
-  applyMissingThinkingStartedAt(targetAssistantMessage, channelState.createdAt || channelState.createdAtMs);
-  if (terminal) {
-    setThinkingFinishedAt(
-      targetAssistantMessage,
-      getThinkingFinishedAt(targetAssistantMessage) || channelState.updatedAt || channelState.createdAt || nowIso(),
-    );
+  if (terminal && !getThinkingFinishedAt(targetAssistantMessage)) {
+    setThinkingFinishedAt(targetAssistantMessage, nowIso());
   }
 }
 
@@ -255,13 +217,6 @@ export async function applyReconnectChannelState({
     targetAssistantMessage: summarizeDebugMessage(targetAssistantMessage),
   });
   if (isInFlightConversationState(state)) {
-    rememberThinkingStarted({
-      sessionId,
-      dialogProcessId,
-      turnScopeId,
-      startedAtMs: resolveThinkingStartedAtMs(targetAssistantMessage, timing.createdAtMs),
-      updatedAtMs: timing.updatedAtMs,
-    });
     if (applyRunStateEvent) {
       applyRunStateEvent({
         type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
@@ -362,13 +317,6 @@ export async function applyReconnectChannelState({
       chatWebSocketClient.clearStopRequested();
     }
     clearRememberedStopRequests({ sessionId, dialogProcessId, turnScopeId });
-    rememberThinkingFinished({
-      sessionId,
-      dialogProcessId,
-      turnScopeId,
-      finishedAtMs: timing.updatedAtMs || nowMs(),
-      finishedAt: timing.updatedAt,
-    });
     interactionSubmitting.value = false;
     if (state === BackendChannelState.EXPIRED) {
       scheduleCacheExpiredSessionRefresh({ sessionId, dialogProcessId, targetAssistantMessage });

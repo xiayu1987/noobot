@@ -138,6 +138,9 @@ export function createSessionDetailApplicator({
     const detailMessages = Array.isArray(mainSessionDoc.messages)
       ? mainSessionDoc.messages
       : [];
+    const turnTimings = Array.isArray(mainSessionDoc.turnTimings)
+      ? mainSessionDoc.turnTimings
+      : [];
     const detailTurnScopeIds = new Set(
       detailMessages.map((messageItem) => getMessageTurnScopeId(messageItem)).filter(Boolean),
     );
@@ -173,6 +176,7 @@ export function createSessionDetailApplicator({
       detailMessages,
       sessionDocs,
       rootSessionId: detail.sessionId,
+      turnTimings,
       makeViewMessage,
       foldMessagesForView,
       isSummaryDetail,

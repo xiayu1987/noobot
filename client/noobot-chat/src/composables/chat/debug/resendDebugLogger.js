@@ -31,6 +31,8 @@ export function summarizeDebugMessage(message = {}) {
     status: message.status || "",
     state: message.state || "",
     channelState: channelState?.state || "",
+    thinkingStartedAt: message.thinkingStartedAt || "",
+    thinkingFinishedAt: message.thinkingFinishedAt || "",
     contentLength: String(message.content || message.text || message.message || "").length,
     attachments: summarizeDebugAttachments(message.attachments),
   };
