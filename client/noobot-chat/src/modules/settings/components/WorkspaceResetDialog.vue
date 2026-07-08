@@ -112,7 +112,7 @@ defineEmits([
 }
 
 .reset-section-item {
-  margin-right: 0 !important;
+  margin-right: 0;
 }
 
 .reset-dialog-note {
@@ -132,9 +132,9 @@ defineEmits([
   }
 
   :deep(.workspace-reset-dialog .el-dialog) {
-    width: calc(100vw - 24px) !important;
+    width: calc(100vw - 24px);
     max-width: 560px;
-    margin-top: 8vh !important;
+    margin-top: 8vh;
   }
 
   :deep(.workspace-reset-dialog .el-dialog__body) {

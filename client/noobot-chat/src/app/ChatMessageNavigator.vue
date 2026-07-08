@@ -56,10 +56,10 @@ const emit = defineEmits(["select"]);
   box-sizing: border-box;
 }
 
-:deep(.el-anchor__list) {
+.chat-message-navigator :deep(.el-anchor__list) {
   padding: 0;
-  padding-left: 0 !important;
-  margin-left: 0;
+  padding-inline-start: 0;
+  margin: 0;
 }
 
 :deep(.el-anchor__marker) {

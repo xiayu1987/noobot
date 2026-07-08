@@ -244,7 +244,7 @@ const { translate } = useLocale();
 }
 
 .collapse-btn :deep(.el-icon) {
-  margin: 0 !important;
+  margin: 0;
 }
 
 .collapse-btn:hover {
@@ -350,12 +350,12 @@ const { translate } = useLocale();
   align-items: center;
   justify-content: center;
   font-size: 16px;
-  margin-left: 0 !important;
+  margin-left: 0;
   transition: all 0.2s ease;
 }
 
 .tail-btn :deep(.el-icon) {
-  margin: 0 !important;
+  margin: 0;
 }
 
 .refresh-btn:not(:disabled):hover {
@@ -400,8 +400,8 @@ const { translate } = useLocale();
   top: 0;
   left: 0;
   bottom: 0;
-  width: min(86vw, 320px) !important;
-  min-width: min(86vw, 320px) !important;
+  width: min(86vw, 320px);
+  min-width: min(86vw, 320px);
   transform: translateX(-100%);
   z-index: 100;
 }

@@ -131,20 +131,20 @@ function buildHtmlDocumentForCopy(htmlBodyContent = "") {
     p { margin: 0 0 12px 0; }
     a { color: #2563eb; text-decoration: none; }
     a:hover { text-decoration: underline; }
-    pre { background: #f8fafc !important; color: #111827 !important; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; overflow-x: auto; margin: 12px 0; }
-    code { background: #f3f4f6 !important; color: #111827 !important; padding: 2px 6px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-    pre code { background: transparent !important; padding: 0; }
+    pre { background: #f8fafc; color: #111827; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; overflow-x: auto; margin: 12px 0; }
+    code { background: #f3f4f6; color: #111827; padding: 2px 6px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    pre code { background: transparent; padding: 0; }
     table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; border: 1px solid #d1d5db; }
     th, td { border: 1px solid #d1d5db; padding: 8px 10px; text-align: left; vertical-align: top; }
-    th { background: #eef2ff !important; font-weight: 600; }
-    tr:nth-child(even) td { background: #f8fafc !important; }
+    th { background: #eef2ff; font-weight: 600; }
+    tr:nth-child(even) td { background: #f8fafc; }
     ul, ol { margin: 8px 0 12px 20px; padding-left: 16px; }
     li { margin: 4px 0; line-height: 1.7; }
     ul li::marker { color: #60a5fa; }
     ol li::marker { color: #93c5fd; font-weight: 600; }
-    .mermaid { margin: 12px 0; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; background: #ffffff !important; overflow-x: auto; max-width: 760px; }
-    .mermaid svg { width: 100% !important; max-width: 760px !important; height: auto !important; display: block; }
-    .mermaid-render-error { color: #b91c1c; background: #fff1f2 !important; border: 1px solid #fecdd3; border-radius: 8px; padding: 10px; white-space: pre-wrap; }
+    .mermaid { margin: 12px 0; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; background: #ffffff; overflow-x: auto; max-width: 760px; }
+    .mermaid svg { width: 100%; max-width: 760px; height: auto; display: block; }
+    .mermaid-render-error { color: #b91c1c; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 10px; white-space: pre-wrap; }
   </style>
 </head>
 <body>
@@ -173,7 +173,7 @@ export async function copyMarkdownRichAsHtmlPage(rawHtmlContent = "") {
 
   rawHtml = rawHtml.replace(
     /<svg\s+/gi,
-    '<svg style="max-width: 100% !important; height: auto !important; display: block; margin: 0 auto;" ',
+    '<svg style="max-width: 100%; height: auto; display: block; margin: 0 auto;" ',
   );
   rawHtml = `<div class="markdown-export-container">${rawHtml}</div>`;
   const normalizedHtmlContent = applyInlineStylesForCopy(
@@ -204,7 +204,7 @@ export async function copyMarkdownRichAsHtmlPage(rawHtmlContent = "") {
         .markdown-export-container th, .markdown-export-container td { border: 1px solid #d1d5db; padding: 10px 14px; text-align: left; }
         .markdown-export-container th { background-color: #f3f4f6; font-weight: 600; }
         .markdown-export-container .mermaid { margin: 20px 0; padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff; overflow-x: auto; text-align: center; max-width: 760px; }
-        .markdown-export-container .mermaid svg { width: 100% !important; max-width: 760px !important; height: auto !important; display: block; margin: 0 auto; }
+        .markdown-export-container .mermaid svg { width: 100%; max-width: 760px; height: auto; display: block; margin: 0 auto; }
       </style>
     `;
   if (htmlPageContent.includes("</head>")) {

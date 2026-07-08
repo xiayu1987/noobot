@@ -171,13 +171,13 @@ function handleHeaderAction(command = "") {
   max-width: 34px;
   max-height: 34px;
   flex: 0 0 34px;
-  padding: 0 !important;
+  padding: 0;
   line-height: 1;
   aspect-ratio: 1 / 1;
 }
 
 .mobile-menu-btn :deep(.el-icon) {
-  margin: 0 !important;
+  margin: 0;
 }
 
 .header-info {
@@ -191,7 +191,7 @@ function handleHeaderAction(command = "") {
 }
 
 .workspace-btn {
-  border-radius: var(--noobot-radius-sm) !important;
+  border-radius: var(--noobot-radius-sm);
 }
 
 .desktop-header-actions {
@@ -203,7 +203,7 @@ function handleHeaderAction(command = "") {
 .settings-btn {
   width: 36px;
   min-width: 36px;
-  padding: 0 !important;
+  padding: 0;
 }
 
 .locale-select {

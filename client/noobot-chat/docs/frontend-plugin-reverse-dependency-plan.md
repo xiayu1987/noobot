@@ -192,7 +192,7 @@ npm run -s generate:frontend-plugin-entries
 - [x] 2026-06-05 21:23：新增 M4 样式治理阶段与优先级盘点（为后续“插件样式缺失”问题逐步收敛）。
 - [x] 2026-06-05 21:25：完成 M4-2 第一轮收敛：`WorkflowMessageCard.vue` 清理历史遗留样式，改为 `WorkflowSessionMessageItem` 容器化渲染并增强 drawer body/header 选择器兜底。
 - [x] 2026-06-05 21:25：完成本轮验证（`npm run -s check:plugin-frontend-reverse-deps` / `npm test` / `npm run build`）。
-- [x] 2026-06-05 21:27：完成 M4-3 第一轮收敛：`ThinkingPanel.vue` 去除 `!important`、合并重复布局样式（`thinking-single-line` / `thinking-detail-step`）。
+- [x] 2026-06-05 21:27：完成 M4-3 第一轮收敛：`ThinkingPanel.vue` 去除强制优先级样式写法、合并重复布局样式（`thinking-single-line` / `thinking-detail-step`）。
 - [x] 2026-06-05 21:27：完成本轮验证（`npm run -s check:plugin-frontend-reverse-deps` / `npm test` / `npm run build`）。
 - [x] 2026-06-05 21:29：完成 M4-3 第二轮收敛：新增 `src/shared/ui/file-card-common.css`，`MessageAttachments.vue` / `MessageWrittenFiles.vue` 复用统一文件卡片样式。
 - [x] 2026-06-05 21:29：完成本轮验证（`npm run -s check:plugin-frontend-reverse-deps` / `npm test` / `npm run build`）。
@@ -201,7 +201,7 @@ npm run -s generate:frontend-plugin-entries
 - [x] 2026-06-05 21:32：完成 M4-4 第二轮收敛：`workflow-graph` 与 `WorkflowMessageCard` 统一圆角/间距/阴影 token，减少硬编码视觉参数。
 - [x] 2026-06-05 21:32：完成本轮验证（`npm run -s check:plugin-frontend-reverse-deps` / `npm test` / `npm run build`）。
 - [x] 2026-06-05 21:34：完成 M4 收尾：新增视觉回归清单 `frontend-plugin-visual-regression-checklist.md`，沉淀当前状态与剩余高风险点。
-- [x] 2026-06-05 21:34：清理残余 `!important`（`MessageAttachments.vue` parsed-result 操作按钮）。
+- [x] 2026-06-05 21:34：清理残余强制优先级样式写法（`MessageAttachments.vue` parsed-result 操作按钮）。
 - [x] 2026-06-05 21:36：完成 P0 复用收敛：新增 `BasePreviewContent.vue`（shared/ui），`ChatMessageItem.vue` 与 `WorkflowSessionMessageItem.vue` 统一复用预览内容组件并删除历史重复实现。
 - [x] 2026-06-05 21:39：完成 P1 第一轮复用：新增 `BaseMessageTypeTag.vue` / `BaseMessageErrorAlert.vue`，`ChatMessageItem.vue` 与 `WorkflowSessionMessageItem.vue` 统一替换消息类型标签与错误提示结构。
 - [x] 2026-06-05 21:40：完成 P1 第二轮清理：移除 `ChatMessageItem.vue` 历史遗留且未被模板使用的 `.msg-wrapper/.bubble/.md` 样式块，减少样式负担。

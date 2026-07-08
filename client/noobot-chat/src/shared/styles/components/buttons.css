@@ -1,7 +1,7 @@
 /* 统一功能性按钮基类 */
 .noobot-action-btn {
-  border-radius: var(--noobot-btn-radius) !important;
-  font-weight: var(--noobot-btn-font-weight) !important;
+  border-radius: var(--noobot-btn-radius);
+  font-weight: var(--noobot-btn-font-weight);
   backdrop-filter: none;
   transition: var(--noobot-btn-transition);
 }
@@ -12,8 +12,8 @@
 
 .noobot-action-btn:not(:disabled):hover,
 .noobot-action-btn:not(:disabled):active {
-  transform: none !important;
-  box-shadow: none !important;
+  transform: none;
+  box-shadow: none;
 }
 
 /* 聊天气泡相关通用语义类（统一收敛） */
@@ -413,7 +413,7 @@
 .noobot-pill-option.el-button {
   min-height: 28px;
   box-sizing: border-box;
-  margin: 0 !important;
+  margin: 0;
   padding: 4px 9px;
   border-radius: var(--noobot-radius-pill);
   font-size: 12px;
@@ -513,7 +513,7 @@
 .el-button.noobot-flat-soft-btn,
 .el-button.noobot-flat-icon-btn,
 .el-button.noobot-flat-inline-icon-btn {
-  border-color: color-mix(in srgb, var(--noobot-panel-border) 42%, transparent) !important;
+  border-color: color-mix(in srgb, var(--noobot-panel-border) 42%, transparent);
 }
 
 .attachment-download-btn.noobot-flat-icon-btn,
@@ -522,9 +522,9 @@
 .workspace-btn.noobot-flat-soft-btn,
 .dark-btn.noobot-flat-soft-btn,
 .collapse-btn.noobot-flat-soft-btn {
-  border-color: transparent !important;
-  background: color-mix(in srgb, var(--noobot-panel-muted) 72%, transparent) !important;
-  color: var(--noobot-text-strong) !important;
+  border-color: transparent;
+  background: color-mix(in srgb, var(--noobot-panel-muted) 72%, transparent);
+  color: var(--noobot-text-strong);
 }
 
 .attachment-download-btn.noobot-flat-icon-btn:hover,
@@ -532,16 +532,16 @@
 .workspace-btn.noobot-flat-soft-btn:hover,
 .dark-btn.noobot-flat-soft-btn:hover,
 .collapse-btn.noobot-flat-soft-btn:hover {
-  border-color: color-mix(in srgb, var(--noobot-panel-border) 18%, transparent) !important;
-  background: color-mix(in srgb, var(--noobot-panel-muted) 88%, transparent) !important;
-  color: var(--noobot-base-white) !important;
+  border-color: color-mix(in srgb, var(--noobot-panel-border) 18%, transparent);
+  background: color-mix(in srgb, var(--noobot-panel-muted) 88%, transparent);
+  color: var(--noobot-base-white);
 }
 
 .attachment-download-btn.noobot-flat-icon-btn .el-icon,
 .workspace-btn.noobot-flat-soft-btn .el-icon,
 .dark-btn.noobot-flat-soft-btn .el-icon,
 .collapse-btn.noobot-flat-soft-btn .el-icon {
-  color: inherit !important;
+  color: inherit;
   opacity: 0.98;
 }
 
@@ -561,5 +561,5 @@
 }
 
 .noobot-tail-btn .el-icon {
-  margin: 0 !important;
+  margin: 0;
 }

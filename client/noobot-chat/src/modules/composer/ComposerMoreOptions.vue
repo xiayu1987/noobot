@@ -607,11 +607,11 @@ function resolveComposerExtensionProps(renderer = {}) {
 }
 
 :global(.noobot-composer-select-popper) {
-  width: auto !important;
+  width: auto;
   max-width: calc(100vw - 32px);
   border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 82%, transparent);
-  background: var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) !important;
-  overflow: hidden !important;
+  background: var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
+  overflow: hidden;
   border-radius: var(--noobot-radius-md);
   box-shadow: var(--noobot-shadow-overlay);
 }
@@ -621,12 +621,12 @@ function resolveComposerExtensionProps(renderer = {}) {
 :global(.noobot-composer-select-popper .el-scrollbar),
 :global(.noobot-composer-select-popper .el-scrollbar__view),
 :global(.noobot-composer-select-popper .el-select-dropdown__list) {
-  background: var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) !important;
+  background: var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
 }
 
 :global(.noobot-composer-select-popper .el-select-dropdown__wrap) {
   max-height: min(40vh, 300px);
-  background: var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) !important;
+  background: var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
 }
 
 :global(.noobot-composer-select-popper .el-select-dropdown__list) {
@@ -642,53 +642,53 @@ function resolveComposerExtensionProps(renderer = {}) {
   border-radius: var(--noobot-radius-xs);
   line-height: 1.35;
   color: var(--noobot-text-main, var(--el-text-color-primary));
-  background: transparent !important;
+  background: transparent;
   white-space: normal;
 }
 
 :global(.noobot-composer-select-popper .el-select-dropdown__item.hover),
 :global(.noobot-composer-select-popper .el-select-dropdown__item:hover) {
-  color: var(--noobot-text-strong, var(--el-text-color-primary)) !important;
-  background: color-mix(in srgb, var(--el-color-primary) 10%, var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)))) !important;
+  color: var(--noobot-text-strong, var(--el-text-color-primary));
+  background: color-mix(in srgb, var(--el-color-primary) 10%, var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))));
 }
 
 :global(.noobot-composer-select-popper .el-select-dropdown__item.is-selected) {
-  color: var(--el-color-primary) !important;
-  background: color-mix(in srgb, var(--el-color-primary) 14%, var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)))) !important;
+  color: var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 14%, var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))));
 }
 
 :global(.noobot-composer-select-popper .el-select-dropdown__item.is-selected.hover),
 :global(.noobot-composer-select-popper .el-select-dropdown__item.is-selected:hover) {
-  background: color-mix(in srgb, var(--el-color-primary) 18%, var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)))) !important;
+  background: color-mix(in srgb, var(--el-color-primary) 18%, var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))));
 }
 
 :global(.noobot-composer-select-popper .el-select-dropdown__empty) {
   color: var(--noobot-text-muted, var(--el-text-color-secondary));
-  background: var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) !important;
+  background: var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
 }
 
 :global(.noobot-composer-select-popper .el-popper__arrow::before) {
-  background: var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) !important;
-  border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 82%, transparent) !important;
+  background: var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
+  border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 82%, transparent);
 }
 
 @media (max-width: 768px) {
   :global(.noobot-composer-select-popper) {
-    min-width: 0 !important;
-    max-width: calc(100vw - 32px) !important;
-    max-height: min(44vh, 320px) !important;
-    border-radius: var(--noobot-radius-md) !important;
-    overflow: hidden auto !important;
+    min-width: 0;
+    max-width: calc(100vw - 32px);
+    max-height: min(44vh, 320px);
+    border-radius: var(--noobot-radius-md);
+    overflow: hidden auto;
     overscroll-behavior: contain;
-    box-shadow: var(--noobot-shadow-overlay) !important;
+    box-shadow: var(--noobot-shadow-overlay);
   }
 
   :global(.noobot-composer-select-popper[data-popper-placement^="bottom"]) {
-    margin-top: 6px !important;
+    margin-top: 6px;
   }
 
   :global(.noobot-composer-select-popper[data-popper-placement^="top"]) {
-    margin-bottom: 6px !important;
+    margin-bottom: 6px;
   }
 
   :global(.noobot-composer-select-popper .el-select-dropdown__wrap) {

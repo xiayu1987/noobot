@@ -291,8 +291,8 @@ watch(
   justify-content: center;
 }
 .preview-markdown :deep(.mermaid svg) {
-  max-width: 100% !important;
-  height: auto !important;
+  max-width: 100%;
+  height: auto;
   display: block;
 }
 .preview-markdown :deep(.mermaid-render-error) {

@@ -193,7 +193,7 @@
 
 .noobot-workspace-layout .icon-btn.danger-text:hover {
   color: var(--noobot-status-error);
-  background: var(--noobot-danger-soft) !important;
+  background: var(--noobot-danger-soft);
 }
 
 .noobot-workspace-layout .refresh-btn:not(:disabled):hover {
@@ -305,7 +305,7 @@
 .noobot-workspace-layout .row-input .el-input__wrapper {
   background: color-mix(in srgb, var(--noobot-panel-bg) 52%, transparent);
   border: 1px solid transparent;
-  box-shadow: none !important;
+  box-shadow: none;
   border-radius: 10px;
   transition:
     background 0.16s ease,
@@ -328,10 +328,10 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: color-mix(in srgb, var(--noobot-panel-bg) 64%, transparent) !important;
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 72%, transparent) !important;
+  background: color-mix(in srgb, var(--noobot-panel-bg) 64%, transparent);
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 72%, transparent);
   border-radius: 16px;
-  box-shadow: none !important;
+  box-shadow: none;
 }
 
 .noobot-workspace-head {
@@ -340,8 +340,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 0 14px;
-  background: transparent !important;
-  border-bottom: 1px solid color-mix(in srgb, var(--noobot-divider) 70%, transparent) !important;
+  background: transparent;
+  border-bottom: 1px solid color-mix(in srgb, var(--noobot-divider) 70%, transparent);
 }
 
 .noobot-workspace-title {
@@ -356,7 +356,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: transparent !important;
+  background: transparent;
 }
 
 .noobot-list-row {
@@ -364,18 +364,18 @@
   flex-direction: column;
   gap: var(--noobot-space-xs);
   padding: 12px;
-  background: color-mix(in srgb, var(--noobot-surface-sidebar) 54%, transparent) !important;
-  border: 1px solid color-mix(in srgb, var(--noobot-border-weak) 70%, transparent) !important;
+  background: color-mix(in srgb, var(--noobot-surface-sidebar) 54%, transparent);
+  border: 1px solid color-mix(in srgb, var(--noobot-border-weak) 70%, transparent);
   border-radius: 14px;
-  box-shadow: none !important;
+  box-shadow: none;
   transition:
     background 0.16s ease,
     border-color 0.16s ease;
 }
 
 .noobot-list-row:hover {
-  background: color-mix(in srgb, var(--noobot-panel-bg) 82%, transparent) !important;
-  border-color: color-mix(in srgb, var(--noobot-cyber-cyan) 24%, var(--noobot-border-weak)) !important;
+  background: color-mix(in srgb, var(--noobot-panel-bg) 82%, transparent);
+  border-color: color-mix(in srgb, var(--noobot-cyber-cyan) 24%, var(--noobot-border-weak));
 }
 
 /* 编辑器 textarea：桌面端填满面板，移动端在媒体查询里交给 autosize 自增高。 */
@@ -392,12 +392,12 @@
 .noobot-editor-textarea .el-textarea__inner {
   height: 100%;
   min-height: 180px;
-  overflow: auto !important;
-  background: color-mix(in srgb, var(--noobot-surface-sidebar) 38%, transparent) !important;
-  color: var(--noobot-text-main) !important;
-  border: none !important;
-  border-color: var(--noobot-panel-border) !important;
-  box-shadow: none !important;
+  overflow: auto;
+  background: color-mix(in srgb, var(--noobot-surface-sidebar) 38%, transparent);
+  color: var(--noobot-text-main);
+  border: none;
+  border-color: var(--noobot-panel-border);
+  box-shadow: none;
   border-radius: 0 0 16px 16px;
   padding: 16px;
   font-family:
@@ -409,7 +409,7 @@
 }
 
 .noobot-editor-textarea .el-textarea__inner::placeholder {
-  color: var(--noobot-text-muted) !important;
+  color: var(--noobot-text-muted);
 }
 
 .noobot-editor-textarea .el-textarea__inner:focus {
@@ -473,8 +473,8 @@
   .noobot-workspace-layout .noobot-editor-textarea .el-textarea__inner {
     box-sizing: border-box;
     min-height: 240px;
-    overflow: hidden !important;
-    padding: 0 !important;
+    overflow: hidden;
+    padding: 0;
   }
 
   .noobot-workspace-layout .empty-tip {
@@ -502,7 +502,7 @@
 }
 
 .noobot-workspace-layout .el-card {
-  border: 1px solid var(--noobot-panel-border) !important;
-  box-shadow: none !important;
-  background: transparent !important;
+  border: 1px solid var(--noobot-panel-border);
+  box-shadow: none;
+  background: transparent;
 }
