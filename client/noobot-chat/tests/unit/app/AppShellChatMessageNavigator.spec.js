@@ -128,8 +128,7 @@ describe("AppShell chat message navigator", () => {
     expect(appShellDrawersSource).toContain("@closed=\"emit('mobile-chat-navigator-closed')\"");
     expect(appShellSource).toContain("@mobile-chat-navigator-closed=\"handleMobileChatNavigatorClosed\"");
     expect(chatMessageNavigatorStateSource).toContain("replacePseudoRoute(buildChatMessageNavigatorCloseRoute({");
-    expect(appShellLayoutSource).toContain("background: var(--noobot-panel-bg);");
-    expect(appShellLayoutSource).toContain("border: 1px solid var(--noobot-border-soft);");
+    expect(appShellLayoutSource).toContain("class=\"mobile-chat-message-nav-trigger noobot-floating-action-btn\"");
   });
 
   it("lets users drag and persist the mobile navigator trigger position", () => {

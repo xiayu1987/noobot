@@ -17,7 +17,7 @@ describe("ChatMessageNavigator theme colors", () => {
     expect(navigatorSource).toContain("class=\"chat-message-navigator noobot-surface-card\"");
     expect(navigatorSource).toContain("--el-anchor-bg-color: transparent;");
     expect(navigatorSource).toContain("--el-anchor-text-color: var(--noobot-text-secondary, var(--el-text-color-secondary));");
-    expect(navigatorSource).toContain("padding-left: 0;");
+    expect(navigatorSource).toContain("padding-inline-start: 0;");
   });
 
   it("uses theme-aware item container colors for base, hover, and current states", () => {

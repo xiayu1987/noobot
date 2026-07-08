@@ -179,7 +179,9 @@ describe("useChatEngine.send-stream", () => {
   });
 
   it("channel_state sending preserves thinking elapsed start on assistant message", async () => {
-    const startedAt = "2026-06-22T10:00:00.000Z";
+    const messageStartedAt = "2026-06-22T10:00:05.000Z";
+    const channelStartedAt = "2026-06-22T10:00:00.000Z";
+    const finishedAt = "2026-06-22T10:00:12.000Z";
     const stream = vi.fn(async (_payload, onEvent) => {
       onEvent({
         event: StreamEventEnum.CHANNEL_STATE,
@@ -187,10 +189,10 @@ describe("useChatEngine.send-stream", () => {
           sessionId: "local-time",
           dialogProcessId: "dp-time",
           state: "sending",
-          createdAt: startedAt,
-          createdAtMs: Date.parse(startedAt),
-          updatedAt: startedAt,
-          updatedAtMs: Date.parse(startedAt),
+          createdAt: channelStartedAt,
+          createdAtMs: Date.parse(channelStartedAt),
+          updatedAt: channelStartedAt,
+          updatedAtMs: Date.parse(channelStartedAt),
         },
       });
       onEvent({
@@ -203,10 +205,10 @@ describe("useChatEngine.send-stream", () => {
           sessionId: "local-time",
           dialogProcessId: "dp-time",
           state: "completed",
-          createdAt: startedAt,
-          createdAtMs: Date.parse(startedAt),
-          updatedAt: "2026-06-22T10:00:12.000Z",
-          updatedAtMs: Date.parse("2026-06-22T10:00:12.000Z"),
+          createdAt: channelStartedAt,
+          createdAtMs: Date.parse(channelStartedAt),
+          updatedAt: finishedAt,
+          updatedAtMs: Date.parse(finishedAt),
         },
       });
       onEvent({
@@ -216,17 +218,23 @@ describe("useChatEngine.send-stream", () => {
     });
     const { engine, activeSession } = createHarness({ sessionId: "local-time", stream });
 
-    await engine.send();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(messageStartedAt));
+    try {
+      await engine.send();
+    } finally {
+      vi.useRealTimers();
+    }
 
     const assistant = assistantMessage(activeSession);
     expect(assistant?.channelState).toMatchObject({
       state: FrontendRunState.FRONTEND_COMPLETED,
-      createdAt: startedAt,
-      createdAtMs: Date.parse(startedAt),
+      createdAt: channelStartedAt,
+      createdAtMs: Date.parse(channelStartedAt),
     });
-    expect(assistant?.thinkingStartedAt).toBe(startedAt);
+    expect(assistant?.thinkingStartedAt).toBe(messageStartedAt);
     expect(assistant?.thinking_started_at).toBeUndefined();
-    expect(assistant?.thinkingFinishedAt).toBe("2026-06-22T10:00:12.000Z");
+    expect(assistant?.thinkingFinishedAt).toBe(finishedAt);
   });
 
   it("frontend completion detail apply clears pending and keeps normalized attachments on current assistant", async () => {
