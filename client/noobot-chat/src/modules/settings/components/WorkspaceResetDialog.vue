@@ -28,7 +28,7 @@ defineEmits([
     :title="title"
     width="min(92vw, 420px)"
     append-to-body
-    class="workspace-reset-dialog"
+    class="workspace-reset-dialog noobot-dialog-surface"
     @update:model-value="$emit('update:visible', $event)"
   >
     <div class="reset-dialog-tip noobot-flat-card">
@@ -66,11 +66,6 @@ defineEmits([
 </template>
 
 <style scoped>
-:deep(.workspace-reset-dialog .el-dialog) {
-  border: 1px solid var(--noobot-panel-border);
-  background: var(--noobot-panel-bg);
-}
-
 :deep(.workspace-reset-dialog .el-dialog__header) {
   border-bottom: 1px solid var(--noobot-divider);
   margin-right: 0;

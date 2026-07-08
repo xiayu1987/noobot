@@ -15,7 +15,7 @@ const emit = defineEmits(["select"]);
 <template>
   <el-anchor
     v-if="items.length"
-    class="chat-message-navigator"
+    class="chat-message-navigator noobot-surface-card"
     :container="null"
     :marker="false"
     :offset="16"
@@ -46,9 +46,6 @@ const emit = defineEmits(["select"]);
   max-height: min(70vh, 560px);
   overflow: auto;
   padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 72%, transparent);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--noobot-panel-bg, var(--el-bg-color)) 92%, var(--noobot-surface-sidebar, var(--el-fill-color-lighter)));
   color: var(--noobot-text-main, var(--el-text-color-primary));
   --el-anchor-marker-bg-color: var(--el-color-primary);
   --el-anchor-bg-color: transparent;

@@ -152,7 +152,7 @@ function toggleConnectorPanelExpanded() {
                 v-for="connectorItem in connectorGroups[groupDefinition.key]"
                 :key="`${groupDefinition.key}-${connectorItem.connectorName}`"
                 :value="connectorItem.connectorName"
-                class="custom-radio"
+                class="custom-radio noobot-selectable-row"
               >
                 <span class="connector-option">
                   <el-icon
@@ -320,12 +320,6 @@ function toggleConnectorPanelExpanded() {
   margin-right: 0;
   height: 30px;
   padding: 3px 6px;
-  border-radius: 8px;
-  transition: background-color 0.16s ease;
-}
-
-.custom-radio:hover {
-  background: color-mix(in srgb, var(--el-color-primary) 8%, transparent);
 }
 
 .custom-radio :deep(.el-radio__input) {

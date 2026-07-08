@@ -134,7 +134,7 @@ function resolveComposerExtensionProps(renderer = {}) {
 
 <template>
   <div class="composer-options">
-    <div class="composer-toggle-panel">
+    <div class="composer-toggle-panel noobot-soft-card">
       <el-switch
         :model-value="allowUserInteraction"
         inline-prompt
@@ -161,14 +161,14 @@ function resolveComposerExtensionProps(renderer = {}) {
       />
     </div>
 
-    <div class="option-selector scenario-selector">
+    <div class="option-selector scenario-selector noobot-soft-card">
       <span class="scenario-selector-label">{{ translate("composer.botScenario") }}</span>
       <div v-if="normalizedScenarioOptions.length" class="option-button-group scenario-button-group">
         <el-button
           v-for="scenarioItem in normalizedScenarioOptions"
           :key="scenarioItem.key"
           size="small"
-          class="composer-option-button scenario-option-button"
+          class="composer-option-button scenario-option-button noobot-pill-option"
           :type="String(botScenario || '').trim() === scenarioItem.key ? 'primary' : 'default'"
           :title="scenarioItem.description || resolveScenarioLabel(scenarioItem)"
           @click="emit('select-scenario', scenarioItem.key)"
@@ -179,7 +179,7 @@ function resolveComposerExtensionProps(renderer = {}) {
       <el-button
         v-else
         size="small"
-        class="composer-option-button scenario-option-button"
+        class="composer-option-button scenario-option-button noobot-pill-option"
         :type="String(botScenario || '').trim().toLowerCase() === 'programming' ? 'primary' : 'default'"
         @click="emit('toggle-programming-scenario')"
       >
@@ -187,14 +187,14 @@ function resolveComposerExtensionProps(renderer = {}) {
       </el-button>
     </div>
 
-    <div class="option-selector plugin-selector">
+    <div class="option-selector plugin-selector noobot-soft-card">
       <span class="scenario-selector-label">{{ translate("composer.availablePlugins") }}</span>
       <div v-if="normalizedPluginOptions.length" class="option-button-group plugin-button-group">
         <el-button
           v-for="pluginItem in normalizedPluginOptions"
           :key="pluginItem.key"
           size="small"
-          class="composer-option-button plugin-option-button"
+          class="composer-option-button plugin-option-button noobot-pill-option"
           :type="selectedPluginKeySet.has(pluginItem.key) ? 'primary' : 'default'"
           :disabled="pluginItem.enabled === false"
           :title="pluginItem.description || pluginItem.label"
@@ -206,7 +206,7 @@ function resolveComposerExtensionProps(renderer = {}) {
       <span v-else class="plugin-empty-text">{{ translate("composer.noAvailablePlugins") }}</span>
     </div>
 
-    <section class="model-config-panel">
+    <section class="model-config-panel noobot-panel-card">
       <div class="model-config-heading">
         <div>
           <div class="model-config-header">{{ translate("composer.modelSelection") }}</div>
@@ -216,7 +216,7 @@ function resolveComposerExtensionProps(renderer = {}) {
           {{ getSelectedModelLabel() }}
         </el-tag>
       </div>
-      <div class="model-select-card">
+      <div class="model-select-card noobot-soft-card">
         <div class="model-field-copy">
           <span class="model-field-label">{{ translate("composer.mainFlowModel") }}</span>
           <span class="model-field-hint">{{ translate("composer.mainFlowModelHint") }}</span>
@@ -249,7 +249,7 @@ function resolveComposerExtensionProps(renderer = {}) {
         <span v-if="!hasModelOptions" class="plugin-empty-text">{{ translate("composer.noAvailableModels") }}</span>
       </div>
 
-      <div class="model-select-card">
+      <div class="model-select-card noobot-soft-card">
         <div class="model-field-copy">
           <span class="model-field-label">{{ translate("composer.memoryExperienceModel") }}</span>
           <span class="model-field-hint">{{ translate("composer.memoryExperienceModelHint") }}</span>
@@ -317,21 +317,6 @@ function resolveComposerExtensionProps(renderer = {}) {
   --el-switch-off-color: var(--noobot-status-idle, #d4d4d8);
 }
 
-.composer-toggle-panel,
-.option-selector,
-.model-select-card {
-  box-sizing: border-box;
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 56%, transparent);
-  border-radius: 12px;
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 97%, var(--el-fill-color-light)),
-      color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 93%, var(--el-color-primary))
-    );
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--noobot-base-white, #ffffff) 35%, transparent) inset;
-}
-
 .composer-toggle-panel {
   display: inline-flex;
   align-items: center;
@@ -367,52 +352,7 @@ function resolveComposerExtensionProps(renderer = {}) {
 }
 
 .composer-option-button {
-  min-height: 28px;
-  box-sizing: border-box;
-  margin: 0 !important;
-  padding: 4px 9px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 16px;
-  transition:
-    background-color 0.18s ease,
-    border-color 0.18s ease,
-    color 0.18s ease,
-    box-shadow 0.18s ease;
-}
-
-.composer-option-button.el-button--default {
-  color: var(--noobot-text-main, var(--el-text-color-primary));
-  border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 82%, transparent);
-  background: var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--noobot-base-black, #000000) 5%, transparent);
-}
-
-.composer-option-button.el-button--default:hover,
-.composer-option-button.el-button--default:focus {
-  color: var(--el-color-primary);
-  border-color: color-mix(in srgb, var(--el-color-primary) 48%, var(--noobot-panel-border, var(--el-border-color)));
-  background: color-mix(in srgb, var(--el-color-primary) 9%, var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))));
-}
-
-.composer-option-button.el-button--primary {
-  border-color: color-mix(in srgb, var(--el-color-primary) 72%, var(--noobot-panel-border, var(--el-border-color)));
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--el-color-primary) 92%, var(--noobot-panel-bg, var(--el-bg-color-overlay))),
-    color-mix(in srgb, var(--el-color-primary) 76%, var(--noobot-cyber-cyan, #0ea5e9))
-  );
-  box-shadow: 0 3px 10px color-mix(in srgb, var(--el-color-primary) 14%, transparent);
-}
-
-.composer-option-button.is-disabled,
-.composer-option-button.is-disabled:hover,
-.composer-option-button.is-disabled:focus {
-  color: var(--noobot-text-muted, var(--el-text-color-placeholder));
-  border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 58%, transparent);
-  background: color-mix(in srgb, var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 72%, transparent);
-  box-shadow: none;
+  /* keep component hook; visual style comes from .noobot-pill-option */
 }
 
 .composer-select {
@@ -466,17 +406,6 @@ function resolveComposerExtensionProps(renderer = {}) {
   width: 100%;
   min-width: 0;
   padding: 14px;
-  border: 1px solid color-mix(in srgb, var(--el-color-primary) 16%, var(--noobot-panel-border, var(--el-border-color)));
-  border-radius: 16px;
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--noobot-panel-bg, var(--el-bg-color-overlay)) 98%, var(--el-color-primary)),
-      color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 96%, var(--noobot-cyber-cyan, #0ea5e9))
-    );
-  box-shadow:
-    0 8px 24px color-mix(in srgb, var(--el-color-primary) 7%, transparent),
-    0 1px 0 color-mix(in srgb, var(--noobot-base-white, #ffffff) 45%, transparent) inset;
 }
 
 .model-config-heading,

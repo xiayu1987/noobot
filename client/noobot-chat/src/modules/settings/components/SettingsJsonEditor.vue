@@ -21,7 +21,7 @@ function handleInput(value = "") {
 </script>
 
 <template>
-  <div v-if="parseError" class="json-error">⚠️ {{ parseError }}</div>
+  <div v-if="parseError" class="json-error noobot-error-surface">⚠️ {{ parseError }}</div>
   <el-input
     :model-value="modelValue"
     @update:model-value="handleInput"
@@ -37,10 +37,7 @@ function handleInput(value = "") {
 
 <style scoped>
 .json-error {
-  background: var(--noobot-danger-soft);
-  color: var(--noobot-status-error);
   font-size: 12px;
   padding: 8px 16px;
-  border-bottom: 1px solid color-mix(in srgb, var(--noobot-status-error) 40%, transparent);
 }
 </style>

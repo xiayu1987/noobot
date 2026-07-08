@@ -30,6 +30,231 @@
   box-shadow: none;
 }
 
+/* 通用轻量卡片：用于表单分组、选择区域、面板内信息块 */
+.noobot-soft-card {
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 56%, transparent);
+  border-radius: var(--noobot-radius-md);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 97%, var(--el-fill-color-light)),
+    color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 93%, var(--el-color-primary))
+  );
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--noobot-base-white, #ffffff) 35%, transparent) inset;
+}
+
+.noobot-panel-card {
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--el-color-primary) 16%, var(--noobot-panel-border, var(--el-border-color)));
+  border-radius: var(--noobot-radius-lg);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--noobot-panel-bg, var(--el-bg-color-overlay)) 98%, var(--el-color-primary)),
+    color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 96%, var(--noobot-cyber-cyan, #0ea5e9))
+  );
+  box-shadow:
+    0 8px 24px color-mix(in srgb, var(--el-color-primary) 7%, transparent),
+    0 1px 0 color-mix(in srgb, var(--noobot-base-white, #ffffff) 45%, transparent) inset;
+}
+
+.noobot-surface-card {
+  box-sizing: border-box;
+  border: 1px solid var(--noobot-panel-border);
+  border-radius: var(--noobot-radius-md);
+  background: var(--noobot-panel-bg);
+  box-shadow: none;
+}
+
+.noobot-subtle-row {
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 20%, transparent);
+  border-radius: var(--noobot-radius-sm);
+  background: color-mix(in srgb, var(--noobot-panel-bg) 78%, transparent);
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.noobot-subtle-row:hover {
+  background: var(--noobot-panel-muted);
+  border-color: color-mix(in srgb, var(--noobot-panel-border) 28%, transparent);
+}
+
+.noobot-subtle-row.is-active,
+.noobot-subtle-row.active {
+  background: color-mix(in srgb, var(--noobot-surface-primary-soft) 68%, var(--noobot-panel-bg));
+  border-color: color-mix(in srgb, var(--noobot-panel-border) 35%, transparent);
+  box-shadow: none;
+}
+
+.noobot-soft-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--noobot-text-strong);
+  background: var(--noobot-panel-muted);
+  border: 0;
+  box-shadow: none;
+}
+
+.noobot-soft-badge.is-agent,
+.noobot-soft-badge.is-primary {
+  color: color-mix(in srgb, var(--el-color-primary) 78%, var(--noobot-base-white, #fff));
+  border: 1px solid color-mix(in srgb, var(--el-color-primary) 35%, transparent);
+  background: color-mix(in srgb, var(--el-color-primary) 14%, transparent);
+}
+
+.noobot-soft-badge.is-plugin,
+.noobot-soft-badge.is-warning {
+  color: color-mix(in srgb, var(--el-color-warning) 80%, var(--noobot-base-white, #fff));
+  border: 1px solid color-mix(in srgb, var(--el-color-warning) 35%, transparent);
+  background: color-mix(in srgb, var(--el-color-warning) 14%, transparent);
+}
+
+.noobot-soft-badge.is-recognized,
+.noobot-soft-badge.is-success {
+  color: color-mix(in srgb, var(--el-color-success) 82%, var(--noobot-base-white, #fff));
+  border: 1px solid color-mix(in srgb, var(--el-color-success) 35%, transparent);
+  background: color-mix(in srgb, var(--el-color-success) 14%, transparent);
+}
+
+.noobot-inline-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 46%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--noobot-panel-muted) 76%, transparent);
+  white-space: nowrap;
+}
+
+.noobot-selectable-row {
+  border-radius: var(--noobot-radius-sm);
+  transition: background-color 0.16s ease, border-color 0.16s ease;
+}
+
+.noobot-selectable-row:hover {
+  background: color-mix(in srgb, var(--el-color-primary) 8%, transparent);
+}
+
+.noobot-message-avatar {
+  border-radius: 50%;
+  color: var(--el-color-primary);
+  background: var(--noobot-msg-avatar-bg);
+  border: 1px solid color-mix(in srgb, var(--el-color-primary) 18%, var(--noobot-panel-border));
+  box-shadow: none;
+}
+
+.noobot-message-bubble {
+  border-radius: var(--noobot-radius-lg);
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 62%, transparent);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.noobot-message-bubble:hover {
+  border-color: color-mix(in srgb, var(--el-color-primary) 24%, var(--noobot-panel-border));
+  box-shadow: none;
+}
+
+.noobot-message-bubble.is-assistant {
+  background: transparent;
+  border-color: transparent;
+  color: var(--noobot-msg-assistant-text);
+}
+
+.noobot-message-bubble.is-assistant:hover {
+  background: transparent;
+  border-color: transparent;
+}
+
+.noobot-message-bubble.is-user {
+  background: var(--noobot-msg-user-bg);
+  border-color: var(--noobot-msg-user-border);
+  color: var(--noobot-msg-user-text);
+}
+
+.noobot-error-surface {
+  border-radius: var(--noobot-radius-sm);
+  background: var(--noobot-msg-error-bg);
+  border: 1px solid var(--noobot-msg-error-border);
+  color: var(--noobot-msg-error-text);
+  box-shadow: none;
+}
+
+.noobot-preview-surface {
+  background: var(--noobot-preview-bg);
+  color: var(--noobot-preview-text);
+  border: 1px solid var(--noobot-preview-border);
+  border-radius: var(--noobot-radius-sm);
+  box-shadow: none;
+}
+
+.noobot-rich-content :where(code) {
+  background: var(--noobot-msg-inline-code-bg);
+  color: var(--noobot-msg-inline-code-text);
+  border-radius: var(--noobot-radius-xs);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.noobot-rich-content :where(pre) {
+  background: var(--noobot-msg-code-block-bg);
+  color: var(--noobot-msg-code-block-text);
+  border-radius: var(--noobot-radius-md);
+  border: 1px solid var(--noobot-panel-border);
+  box-shadow: none;
+  overflow-x: auto;
+}
+
+.noobot-rich-content :where(.mermaid) {
+  background: var(--noobot-panel-bg);
+  border: 1px solid var(--noobot-panel-border);
+  border-radius: var(--noobot-radius-md);
+  box-shadow: none;
+}
+
+.noobot-rich-content :where(pre code) {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  border-radius: 0;
+}
+
+.noobot-rich-content :where(table) {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.noobot-rich-content :where(th, td) {
+  border: 1px solid var(--noobot-panel-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.noobot-rich-content :where(th) {
+  background: var(--noobot-panel-muted);
+  font-weight: 600;
+}
+
+.noobot-rich-content :where(blockquote) {
+  background: var(--noobot-panel-muted);
+  border-left: 4px solid var(--noobot-panel-border);
+}
+
+.noobot-sticky-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  border-top: 1px solid var(--noobot-panel-border);
+  background: var(--noobot-panel-bg);
+}
+
+.noobot-dialog-surface .el-dialog {
+  border: 1px solid var(--noobot-panel-border);
+  background: var(--noobot-panel-bg);
+}
+
 .noobot-flat-chip {
   display: inline-flex;
   align-items: center;
@@ -41,6 +266,58 @@
   background: var(--noobot-panel-muted);
   border: 1px solid var(--noobot-panel-border);
   box-shadow: none;
+}
+
+.noobot-pill-option.el-button {
+  min-height: 28px;
+  box-sizing: border-box;
+  margin: 0 !important;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.noobot-pill-option.el-button--default {
+  color: var(--noobot-text-main, var(--el-text-color-primary));
+  border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 82%, transparent);
+  background: var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--noobot-base-black, #000000) 5%, transparent);
+}
+
+.noobot-pill-option.el-button--default:hover,
+.noobot-pill-option.el-button--default:focus {
+  color: var(--el-color-primary);
+  border-color: color-mix(in srgb, var(--el-color-primary) 48%, var(--noobot-panel-border, var(--el-border-color)));
+  background: color-mix(in srgb, var(--el-color-primary) 9%, var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))));
+}
+
+.noobot-pill-option.el-button--primary {
+  border-color: color-mix(in srgb, var(--el-color-primary) 72%, var(--noobot-panel-border, var(--el-border-color)));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--el-color-primary) 92%, var(--noobot-panel-bg, var(--el-bg-color-overlay))),
+    color-mix(in srgb, var(--el-color-primary) 76%, var(--noobot-cyber-cyan, #0ea5e9))
+  );
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--el-color-primary) 14%, transparent);
+}
+
+.noobot-pill-option.is-disabled,
+.noobot-pill-option.is-disabled:hover,
+.noobot-pill-option.is-disabled:focus {
+  color: var(--noobot-text-muted, var(--el-text-color-placeholder));
+  border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 58%, transparent);
+  background: color-mix(in srgb, var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 72%, transparent);
+  box-shadow: none;
+}
+
+.noobot-floating-action-btn.el-button {
+  border: 1px solid color-mix(in srgb, var(--el-color-primary) 24%, transparent);
+  background: var(--noobot-panel-bg);
+  color: var(--el-color-primary);
+  box-shadow: var(--noobot-card-shadow);
 }
 
 .noobot-flat-icon-btn,

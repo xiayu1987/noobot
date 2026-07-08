@@ -112,21 +112,21 @@ function emitPreview() {
         <div class="file-name" :title="resolvedTitle">{{ resolvedName }}</div>
         <span
           v-if="showCustomBadge"
-          class="attachment-owner-badge"
+          class="attachment-owner-badge noobot-soft-badge"
           :class="customBadgeClass"
         >
           {{ customBadgeText }}
         </span>
-        <span v-else-if="showPluginBadge" class="attachment-owner-badge is-plugin">
+        <span v-else-if="showPluginBadge" class="attachment-owner-badge noobot-soft-badge is-plugin">
           {{ translate("message.pluginAttachment") }}
         </span>
-        <span v-else-if="showAgentBadge" class="attachment-owner-badge is-agent">
+        <span v-else-if="showAgentBadge" class="attachment-owner-badge noobot-soft-badge is-agent">
           {{ translate("message.agentAttachment") }}
         </span>
       </div>
       <div v-if="showSize" class="file-size">{{ formatFileSize(resolvedSize) }}</div>
 
-      <div v-if="hasParsedResult" class="parsed-result-row">
+      <div v-if="hasParsedResult" class="parsed-result-row noobot-inline-pill">
         <span class="parsed-result-label">{{ translate("message.parsedResultLabel") }}</span>
         <button
           type="button"
@@ -172,29 +172,10 @@ function emitPreview() {
 <style scoped>
 .attachment-owner-badge {
   flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
   height: 18px;
   padding: 0 6px;
-  border-radius: 999px;
   font-size: 10px;
   line-height: 1;
-  border: 1px solid transparent;
-}
-.attachment-owner-badge.is-agent {
-  color: color-mix(in srgb, var(--el-color-primary) 78%, #fff);
-  border-color: color-mix(in srgb, var(--el-color-primary) 35%, transparent);
-  background: color-mix(in srgb, var(--el-color-primary) 14%, transparent);
-}
-.attachment-owner-badge.is-plugin {
-  color: color-mix(in srgb, var(--el-color-warning) 80%, #fff);
-  border-color: color-mix(in srgb, var(--el-color-warning) 35%, transparent);
-  background: color-mix(in srgb, var(--el-color-warning) 14%, transparent);
-}
-.attachment-owner-badge.is-recognized {
-  color: color-mix(in srgb, var(--el-color-success) 82%, #fff);
-  border-color: color-mix(in srgb, var(--el-color-success) 35%, transparent);
-  background: color-mix(in srgb, var(--el-color-success) 14%, transparent);
 }
 .file-size {
   font-size: var(--noobot-msg-file-size-font-size);
@@ -204,14 +185,7 @@ function emitPreview() {
   width: fit-content;
   max-width: 100%;
   margin-top: 6px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
   padding: 3px 5px 3px 8px;
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 46%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--noobot-panel-muted) 76%, transparent);
-  white-space: nowrap;
 }
 .parsed-result-label {
   flex: 0 0 auto;

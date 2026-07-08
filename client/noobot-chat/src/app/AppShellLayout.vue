@@ -195,7 +195,7 @@ defineExpose({
 
         <aside
           v-if="!isMobile && chatMessageNavItems.length"
-          class="chat-message-nav-panel noobot-flat-card"
+          class="chat-message-nav-panel noobot-panel-card"
         >
           <div class="chat-message-nav-header">
             <div class="chat-message-nav-title-group">
@@ -226,7 +226,7 @@ defineExpose({
 
         <el-button
           v-if="isMobile && chatMessageNavItems.length"
-          class="mobile-chat-message-nav-trigger"
+          class="mobile-chat-message-nav-trigger noobot-floating-action-btn"
           :class="{ 'is-dragging': mobileChatNavigatorTriggerDragging }"
           :style="mobileChatNavigatorTriggerStyle"
           type="primary"
@@ -368,12 +368,6 @@ defineExpose({
   width: 236px;
   max-width: 24vw;
   padding: 12px;
-  border: 1px solid var(--noobot-border-soft);
-  border-radius: 18px;
-  background:
-    linear-gradient(145deg, color-mix(in srgb, var(--el-color-primary) 10%, transparent), transparent 62%),
-    var(--noobot-panel-bg);
-  box-shadow: var(--noobot-card-shadow);
   backdrop-filter: blur(14px);
 }
 
@@ -428,10 +422,6 @@ defineExpose({
   z-index: 16;
   width: 44px;
   height: 44px;
-  border: 1px solid color-mix(in srgb, var(--el-color-primary) 24%, transparent);
-  background: var(--noobot-panel-bg);
-  color: var(--el-color-primary);
-  box-shadow: var(--noobot-card-shadow);
   touch-action: none;
   overscroll-behavior: none;
   cursor: grab;

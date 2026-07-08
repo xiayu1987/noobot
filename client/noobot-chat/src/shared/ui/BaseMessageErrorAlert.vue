@@ -15,7 +15,7 @@ const normalizedError = computed(() => String(props.error || "").trim());
 </script>
 
 <template>
-  <div v-if="normalizedError" class="base-message-error-alert">
+  <div v-if="normalizedError" class="base-message-error-alert noobot-error-surface">
     <el-icon class="base-message-error-icon"><WarningFilled /></el-icon>
     {{ normalizedError }}
   </div>
@@ -28,12 +28,7 @@ const normalizedError = computed(() => String(props.error || "").trim());
   gap: var(--noobot-space-xs);
   margin-bottom: var(--noobot-space-md);
   padding: var(--noobot-space-sm) var(--noobot-space-lg);
-  border-radius: var(--noobot-radius-sm);
-  background: var(--noobot-msg-error-bg);
-  border: 1px solid var(--noobot-msg-error-border);
-  color: var(--noobot-msg-error-text);
   font-size: var(--noobot-msg-caption-font-size);
-  box-shadow: none;
 }
 
 .base-message-error-icon {
