@@ -92,6 +92,119 @@ for (const action of ['continue', 'resume']) {
   });
 }
 
+test('ws router stop forwards request without synthesizing user_stopped', () => {
+  const calls = {
+    updateState: [],
+    forward: [],
+    push: [],
+    mark: [],
+    broadcast: [],
+    errors: [],
+  };
+  const targetChannel = {
+    key: 'channel-1',
+    eventSequence: 7,
+  };
+  const channelManager = {
+    resolveChannelFromSocketMessage() {
+      return targetChannel;
+    },
+    hasChannelPermission() {
+      return true;
+    },
+    updateConversationState(channel, state) {
+      calls.updateState.push({ channel, state });
+    },
+    forwardToUpstream(channel, payload) {
+      calls.forward.push({ channel, payload });
+      return true;
+    },
+    pushChannelEvent(channel, eventName, data) {
+      calls.push.push({ channel, eventName, data });
+      return { event: eventName, data };
+    },
+    markChannelTerminal(channel, status) {
+      calls.mark.push({ channel, status });
+    },
+    broadcastChannelEvent(channel, envelope) {
+      calls.broadcast.push({ channel, envelope });
+    },
+    sendSocketError(socket, message) {
+      calls.errors.push({ socket, message });
+    },
+  };
+  const socket = createMockSocket();
+  const payload = {
+    action: 'stop',
+    userId: 'user-1',
+    sessionId: 'session-1',
+    dialogProcessId: 'dialog-1',
+    turnScopeId: 'turn-1',
+  };
+
+  new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
+  socket.emit(CHANNEL_EVENT.MESSAGE, JSON.stringify(payload));
+
+  assert.equal(calls.errors.length, 0);
+  assert.equal(calls.forward.length, 1);
+  assert.equal(calls.updateState[0]?.state?.state, 'stopping');
+  assert.equal(calls.push.length, 0);
+  assert.equal(calls.mark.length, 0);
+  assert.equal(calls.broadcast.length, 0);
+});
+
+test('ws router stop reports error when upstream cannot receive stop', () => {
+  const calls = {
+    push: [],
+    mark: [],
+    broadcast: [],
+    errors: [],
+  };
+  const targetChannel = { key: 'channel-1', eventSequence: 3 };
+  const channelManager = {
+    resolveChannelFromSocketMessage() {
+      return targetChannel;
+    },
+    hasChannelPermission() {
+      return true;
+    },
+    updateConversationState() {},
+    forwardToUpstream() {
+      return false;
+    },
+    pushChannelEvent(channel, eventName, data) {
+      calls.push.push({ channel, eventName, data });
+      return { event: eventName, data };
+    },
+    markChannelTerminal(channel, status) {
+      calls.mark.push({ channel, status });
+    },
+    broadcastChannelEvent(channel, envelope) {
+      calls.broadcast.push({ channel, envelope });
+    },
+    sendSocketError(socket, message) {
+      calls.errors.push({ socket, message });
+    },
+  };
+  const socket = createMockSocket();
+
+  new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
+  socket.emit(CHANNEL_EVENT.MESSAGE, JSON.stringify({
+    action: 'stop',
+    userId: 'user-1',
+    sessionId: 'session-1',
+    dialogProcessId: 'dialog-1',
+    turnScopeId: 'turn-1',
+  }));
+
+  assert.equal(calls.errors.length, 0);
+  assert.equal(calls.push.length, 1);
+  assert.equal(calls.push[0].eventName, 'error');
+  assert.equal(calls.push[0].data.error, AGENT_PROXY_ERROR.UPSTREAM_NOT_RUNNING);
+  assert.equal(calls.mark[0].status, 'error');
+  assert.equal(calls.broadcast[0].envelope.event, 'error');
+});
+
 test('ws router reports upstream unavailable when continue action has no target channel', () => {
   const channelManager = createForwardingChannelManager({ targetChannel: null });
   const socket = createMockSocket();

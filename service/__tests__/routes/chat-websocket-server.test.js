@@ -357,6 +357,42 @@ test("chat-websocket-server: stopped event and persistence backfill assistant id
   }
 });
 
+test("chat-websocket-server: non-user abort does not persist or emit user_stopped", async () => {
+  let persistCalled = false;
+  const server = await startServerWithWs({
+    bot: {
+      persistStoppedAssistantMessage: async () => {
+        persistCalled = true;
+      },
+      runSession: async () => {
+        const error = new Error("upstream aborted unexpectedly");
+        error.name = "AbortError";
+        throw error;
+      },
+    },
+  });
+  try {
+    const { port } = server.address();
+    const events = await callChatWs({
+      port,
+      payload: {
+        userId: "u1",
+        sessionId: "s-non-user-abort",
+        message: "hello",
+        turnScopeId: "turn-non-user-abort",
+        config: { locale: "zh-CN" },
+      },
+    });
+
+    assert.equal(persistCalled, false);
+    assert.equal(events.some((item) => item?.event === "user_stopped"), false);
+    const errorEvent = events.find((item) => item?.event === "error");
+    assert.match(String(errorEvent?.data?.error || ""), /upstream aborted unexpectedly/);
+  } finally {
+    await closeServer(server);
+  }
+});
+
 test("chat-websocket-server: idle stop request records pending stop without faking stopped", async () => {
   const server = await startServerWithWs();
   try {

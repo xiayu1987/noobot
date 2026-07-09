@@ -161,6 +161,11 @@ export function createMonotonicMessageActions({
     targetMessage = null,
     originalTargetMessage = null,
   } = {}) {
+    const rejectStopPrecondition = () => {
+      const message = translate("chat.monotonicActionStopTimeout");
+      notify({ type: "warning", message });
+      throw new Error(message);
+    };
     const stoppedTurnMessage = getStoppedTurnMessage({ targetMessage, originalTargetMessage });
     if (sending?.value && stoppedTurnMessage) {
       const session = activeSession?.value || {};
@@ -189,9 +194,10 @@ export function createMonotonicMessageActions({
     stopSending();
     const settled = await waitForSendingSettled({ timeoutMs, pollIntervalMs });
     if (!settled) {
-      const message = translate("chat.monotonicActionStopTimeout");
-      notify({ type: "warning", message });
-      throw new Error(message);
+      rejectStopPrecondition();
+    }
+    if (evaluateSessionRunState(runStateSnapshot?.value).state === BackendChannelState.ERROR) {
+      rejectStopPrecondition();
     }
     return true;
   }

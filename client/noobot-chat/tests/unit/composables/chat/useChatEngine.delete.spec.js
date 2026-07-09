@@ -49,7 +49,7 @@ describe("useChatEngine.delete", () => {
     expect(activeSession.value.lastMessage).toBe(null);
   });
 
-  it("deleteMonotonicMessage stops before cascading deletion from resolved user message", async () => {
+  it("deleteMonotonicMessage waits for confirmed stop before cascading deletion from resolved user message", async () => {
     const { engine, activeSession, sending, canStop, deps } = createHarness({ sessionId: "local-delete" });
     const first = { id: "m1", turnScopeId: "client-turn:resend-stale", role: RoleEnum.USER, content: "first" };
     const target = { id: "m2", turnScopeId: "client-turn:resend-stale", role: RoleEnum.ASSISTANT, content: "target", pending: true };
@@ -57,8 +57,17 @@ describe("useChatEngine.delete", () => {
     activeSession.value.rawMessages = [first, target];
     sending.value = true;
     canStop.value = true;
-    deps.chatWebSocketClient.requestStop.mockImplementation((_payload, onForceStop) => {
-      onForceStop();
+    deps.chatWebSocketClient.requestStop.mockImplementation(() => {
+      queueMicrotask(() => {
+        target.stopState = "user_stopped";
+        target.channelState = {
+          state: BackendChannelState.USER_STOPPED,
+          turnScopeId: target.turnScopeId,
+          dialogProcessId: target.dialogProcessId,
+        };
+        sending.value = false;
+        canStop.value = false;
+      });
       return true;
     });
 
@@ -68,7 +77,7 @@ describe("useChatEngine.delete", () => {
     expect(activeSession.value.messages).toEqual([]);
   });
 
-  it("resendMonotonicMessage stops, cascades deletion, then sends edited content", async () => {
+  it("resendMonotonicMessage does not continue when stop confirmation is still pending", async () => {
     const stream = vi.fn(async () => {});
     const { engine, activeSession, sending, canStop, deps, input } = createHarness({
       sessionId: "local-resend",
@@ -80,12 +89,12 @@ describe("useChatEngine.delete", () => {
     activeSession.value.rawMessages = [first, target];
     sending.value = true;
     canStop.value = true;
-    deps.chatWebSocketClient.requestStop.mockImplementation((_payload, onForceStop) => {
-      onForceStop();
+    deps.chatWebSocketClient.requestStop.mockImplementation((_payload, onStopConfirmationTimeout) => {
+      onStopConfirmationTimeout();
       return true;
     });
 
-    await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(false);
+    await expect(engine.resendMonotonicMessage(target, "edited question")).rejects.toThrow("chat.monotonicActionStopTimeout");
 
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledTimes(1);
     expect(stream).not.toHaveBeenCalled();

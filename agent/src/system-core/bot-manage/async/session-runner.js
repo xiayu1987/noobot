@@ -20,6 +20,7 @@ import {
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
 import { summarizeExecutionLogs } from "../../tracking/execution-log/execution-log-summary.js";
+import { isUserStopAbort } from "../../utils/error-utils.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const POLL_INTERVAL_MS = TIME_THRESHOLDS.async.sessionRunnerPollIntervalMs;
@@ -240,7 +241,7 @@ export class AsyncSessionRunner {
         const current = this.jobs.get(key) || {};
         const endedAt = now();
         const message = error?.message || String(error);
-        const status = /abort|stopped/i.test(message)
+        const status = isUserStopAbort(error, abortSignal)
           ? SESSION_ASYNC_STATUS.USER_STOPPED
           : SESSION_ASYNC_STATUS.FAILED;
         this.jobs.set(key, {

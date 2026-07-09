@@ -198,6 +198,7 @@ export const zhCNMessages = {
     "unknownError": "未知错误",
     "occurredError": "发生错误：{error}",
     "sendFailed": "发送失败",
+    "stopRequestTimeout": "停止请求超时，请重试",
     "expiredRefreshFailed": "会话已过期，请新建对话",
     "sessionStateOutOfSync": "会话状态不同步，请刷新后重试"
   },

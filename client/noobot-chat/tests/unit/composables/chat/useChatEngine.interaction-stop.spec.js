@@ -624,7 +624,7 @@ describe("useChatEngine.interaction-stop", () => {
     });
   });
 
-  it("prepareMonotonicMessageAction stops first and waits until sending settles", async () => {
+  it("prepareMonotonicMessageAction treats stop confirmation timeout as stop precondition failure", async () => {
     vi.useFakeTimers();
     const { engine, deps, sending, canStop, activeSession } = createHarness({
       sessionId: "local-monotonic-stop",
@@ -647,21 +647,23 @@ describe("useChatEngine.interaction-stop", () => {
     });
     sending.value = true;
     canStop.value = true;
-    deps.chatWebSocketClient.requestStop.mockImplementation((_payload, onForceStop) => {
-      setTimeout(onForceStop, 20);
+    deps.chatWebSocketClient.requestStop.mockImplementation((_payload, onStopConfirmationTimeout) => {
+      setTimeout(onStopConfirmationTimeout, 20);
       return true;
     });
 
     const actionPromise = engine.prepareMonotonicMessageAction();
+    const rejectionExpectation = expect(actionPromise).rejects.toThrow("chat.monotonicActionStopTimeout");
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledTimes(1);
 
-    await vi.advanceTimersByTimeAsync(30);
-    await expect(actionPromise).resolves.toBe(true);
+    await vi.advanceTimersByTimeAsync(510);
+    await rejectionExpectation;
     expect(sending.value).toBe(false);
+    expect(canStop.value).toBe(false);
     vi.useRealTimers();
   });
 
-  it("ignores stale force-stop finalization for a previous turn", () => {
+  it("ignores stale stop confirmation timeout for a previous turn", () => {
     const { engine, deps, activeSession, sending, canStop } = createHarness({
       sessionId: "local-stale-stop-timeout",
     });
@@ -682,8 +684,8 @@ describe("useChatEngine.interaction-stop", () => {
     ];
     sending.value = true;
     canStop.value = true;
-    deps.chatWebSocketClient.requestStop.mockImplementation((_payload, onForceStop) => {
-      onForceStop({
+    deps.chatWebSocketClient.requestStop.mockImplementation((_payload, onStopConfirmationTimeout) => {
+      onStopConfirmationTimeout({
         sessionId: "local-stale-stop-timeout",
         dialogProcessId: "dp-old",
         turnScopeId: "turn-old",

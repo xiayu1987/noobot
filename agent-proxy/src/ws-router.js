@@ -91,23 +91,21 @@ export class WsRouter {
         createdAtMs: Number(payload?.createdAtMs || payload?.timestamp || 0),
       });
       const forwarded = this.channelManager.forwardToUpstream(targetChannel, payload);
-      const stoppedEnvelope = this.channelManager.pushChannelEvent(
+      if (forwarded) return;
+
+      const errorEnvelope = this.channelManager.pushChannelEvent(
         targetChannel,
-        CHANNEL_EVENT.USER_STOPPED,
-        forwarded
-          ? {
-              sessionId: String(payload?.sessionId || "").trim(),
-              dialogProcessId: String(payload?.dialogProcessId || "").trim(),
-              turnScopeId: String(payload?.turnScopeId || "").trim(),
-              createdAtMs: Number(payload?.createdAtMs || payload?.timestamp || 0),
-              message: "stop requested",
-            }
-          : {
-              message: AGENT_PROXY_ERROR.UPSTREAM_NOT_RUNNING,
-            },
+        CHANNEL_EVENT.ERROR,
+        {
+          sessionId: String(payload?.sessionId || "").trim(),
+          dialogProcessId: String(payload?.dialogProcessId || "").trim(),
+          turnScopeId: String(payload?.turnScopeId || "").trim(),
+          createdAtMs: Number(payload?.createdAtMs || payload?.timestamp || 0),
+          error: AGENT_PROXY_ERROR.UPSTREAM_NOT_RUNNING,
+        },
       );
-      this.channelManager.markChannelTerminal(targetChannel, CHANNEL_STATUS.USER_STOPPED);
-      this.channelManager.broadcastChannelEvent(targetChannel, stoppedEnvelope);
+      this.channelManager.markChannelTerminal(targetChannel, CHANNEL_STATUS.ERROR);
+      this.channelManager.broadcastChannelEvent(targetChannel, errorEnvelope);
     },
 
     [WS_ACTION.CONTINUE](socket, payload) {

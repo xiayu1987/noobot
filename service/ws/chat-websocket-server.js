@@ -274,6 +274,26 @@ function isAbortLikeError(error) {
   );
 }
 
+function isUserStopAbortReason(reason = {}) {
+  return reason && typeof reason === "object" && String(reason?.type || "").trim() === "user_stop";
+}
+
+function isUserStopRunAbort({ stopRequested = false, abortSignal = null } = {}) {
+  return stopRequested === true || isUserStopAbortReason(abortSignal?.reason);
+}
+
+function buildAbortErrorMessage({ error = null, abortSignal = null, currentLocale = "", translateText = (key) => key } = {}) {
+  const reason = abortSignal?.reason;
+  const reasonType = reason && typeof reason === "object" ? String(reason?.type || "").trim() : "";
+  const reasonText = reason && typeof reason === "object" ? String(reason?.reason || "").trim() : "";
+  return (
+    String(error?.message || "").trim() ||
+    reasonText ||
+    (reasonType ? `run aborted: ${reasonType}` : "") ||
+    translateText("ws.unknownError", currentLocale)
+  );
+}
+
 function normalizeWsText(value = "") {
   return String(value || "").trim();
 }
@@ -987,7 +1007,7 @@ export function registerChatWebSocketServer(
           return;
         }
 
-        if (stopRequested || currentAbortSignal?.aborted) {
+        if (isUserStopRunAbort({ stopRequested, abortSignal: currentAbortSignal })) {
           const stopPayload = currentStopPayload || currentAbortSignal?.reason?.stopPayload || {};
           const stoppedMessage = stopPayload?.message || translateText("ws.dialogStoppedByUser", currentLocale);
           const stoppedPartialAssistant = buildStoppedPartialAssistant({
@@ -1049,7 +1069,7 @@ export function registerChatWebSocketServer(
               dialogProcessId: currentRunMeta?.dialogProcessId || "",
             });
             webSocket.close(1011, "timeout");
-          } else {
+          } else if (isUserStopRunAbort({ stopRequested, abortSignal: currentAbortSignal })) {
             const stopPayload = currentStopPayload || currentAbortSignal?.reason?.stopPayload || {};
             const stoppedMessage = stopPayload?.message || translateText("ws.dialogStoppedByUser", currentLocale);
             const stoppedPartialAssistant = buildStoppedPartialAssistant({
@@ -1084,6 +1104,35 @@ export function registerChatWebSocketServer(
               turnScopeId: stoppedPartialAssistant.turnScopeId || currentTurnScopeId || "",
             });
             webSocket.close(1000, "user_stopped");
+          } else {
+            const errorMessage = buildAbortErrorMessage({
+              error,
+              abortSignal: currentAbortSignal,
+              currentLocale,
+              translateText,
+            });
+            void recordServiceWebSocketRuntimeError({
+              sessionLogConfig,
+              event: "service.websocket.run.aborted",
+              userId: currentRunMeta?.userId || "",
+              sessionId: currentRunMeta?.sessionId || "",
+              parentSessionId: currentRunMeta?.parentSessionId || "",
+              dialogProcessId: currentRunMeta?.dialogProcessId || "",
+              turnScopeId: currentRunMeta?.turnScopeId || currentTurnScopeId || "",
+              error,
+              data: {
+                abortReasonType:
+                  currentAbortSignal?.reason && typeof currentAbortSignal.reason === "object"
+                    ? String(currentAbortSignal.reason?.type || "").trim()
+                    : "",
+              },
+            });
+            sendEvent("error", {
+              error: errorMessage,
+              sessionId: currentRunMeta?.sessionId || "",
+              dialogProcessId: currentRunMeta?.dialogProcessId || "",
+            });
+            webSocket.close(1011, "aborted");
           }
           return;
         }
