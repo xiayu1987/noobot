@@ -382,6 +382,67 @@ test("runSession persists stopped model message snapshot from runtime candidate 
   assert.equal(stoppedEvent?.data?.stoppedSnapshotPersistence?.messageCount, 1);
 });
 
+test("runSession persists stopped model message snapshot for plain user_stop error objects", async () => {
+  const callOrder = [];
+  const events = [];
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-runner-plain-user-stop-snapshot-"));
+  const runtime = {
+    attachmentMetas: [],
+    globalConfig: { workspaceRoot },
+    stoppedModelMessageSnapshotCandidate: {
+      userId: "u1",
+      sessionId: "session-used",
+      parentSessionId: "",
+      dialogProcessId: "dialog-2",
+      turnScopeId: "turn-2",
+      messages: [{ type: "human", content: "second stop snapshot" }],
+      messageBlocks: {
+        system: [{ type: "system", content: "system second" }],
+        history: [{ type: "ai", content: "previous assistant" }],
+        incremental: [{ type: "human", content: "second stop snapshot" }],
+      },
+    },
+  };
+  const eventListener = {
+    onEvent(event) {
+      events.push(event);
+    },
+  };
+  const runner = createRunner({
+    callOrder,
+    eventListener,
+    runtime,
+    runConfig: { turnScopeId: "turn-2" },
+    agentRunner: async () => {
+      throw { type: "user_stop", message: "second user stop" };
+    },
+    finalizeRunSession: async () => ({ ok: true }),
+  });
+
+  await assert.rejects(
+    () => runner.runSession({ userId: "u1", sessionId: "s1", message: "hello" }),
+    (error) => error?.type === "user_stop" && error?.message === "second user stop",
+  );
+
+  const loaded = await loadStoppedModelMessageSnapshot({
+    globalConfig: { workspaceRoot },
+    identity: {
+      userId: "u1",
+      sessionId: "session-used",
+      dialogProcessId: "dialog-2",
+      turnScopeId: "turn-2",
+    },
+  });
+  assert.equal(loaded.messages[0].content, "second stop snapshot");
+  assert.equal(loaded.messageBlocks.system[0].content, "system second");
+  const savedEvent = events.find((item) => item.event === "stopped_model_message_snapshot_saved");
+  assert.equal(savedEvent?.data?.source, "runner_user_stop_catch");
+  const stoppedEvent = findStoppedLifecycleEvent(events);
+  assert.equal(stoppedEvent?.data?.state, AGENT_LIFECYCLE_BRANCH_STATE.USER_STOPPED);
+  assert.equal(stoppedEvent?.data?.stoppedSnapshotPersistence?.status, "saved");
+  assert.equal(stoppedEvent?.data?.canResume, true);
+});
+
 test("runSession persists stopped snapshot when abort signal fires before abort error bubbles", async () => {
   const callOrder = [];
   const events = [];
