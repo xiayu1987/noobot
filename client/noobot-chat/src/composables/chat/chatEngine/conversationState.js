@@ -372,16 +372,21 @@ export function createChatEngineConversationState({
     );
     const forActiveSession = isStateForActiveSession(sessionId) || botMessageInActiveSession;
     const turnMeta = normalizeTurnMeta(statePayload);
-    const turnScopeId = String(turnMeta.turnScopeId || "").trim();
     const explicitDialogProcessId = String(statePayload?.dialogProcessId || "").trim();
+    const fallbackDialogProcessIdValue = String(fallbackDialogProcessId || "").trim();
+    const canUseFallbackTurnScopeId = Boolean(explicitDialogProcessId || fallbackDialogProcessIdValue);
+    const turnScopeId = String(
+      turnMeta.turnScopeId || (canUseFallbackTurnScopeId ? fallbackTurnScopeId : "") || "",
+    ).trim();
+    const dialogProcessId = String(
+      explicitDialogProcessId || fallbackDialogProcessIdValue || "",
+    ).trim();
     if (typeof onConversationState === "function") {
       onConversationState({
         source: "stream",
         state,
         sessionId,
-        dialogProcessId: String(
-          statePayload?.dialogProcessId || fallbackDialogProcessId || "",
-        ).trim(),
+        dialogProcessId,
         turnScopeId,
         sourceEvent: String(statePayload?.sourceEvent || "").trim(),
         seq: Number(statePayload?.seq || 0),
@@ -393,13 +398,10 @@ export function createChatEngineConversationState({
       });
     }
     if (!forActiveSession) return;
-    const dialogProcessId = String(
-      explicitDialogProcessId || "",
-    ).trim();
     const targetAssistantMessage = findTargetAssistantMessageByIdentity({
       botMessage,
       turnScopeId,
-      dialogProcessId: explicitDialogProcessId,
+      dialogProcessId,
     });
     logResendDebug("conversationState.target", {
       state,

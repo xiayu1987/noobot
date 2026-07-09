@@ -78,6 +78,130 @@ describe("useChatEngine.send-stream", () => {
     }));
   });
 
+  it("ignores another session in-flight run state while sending and finalizing the active session", async () => {
+    const stream = vi.fn(async (_payload, onEvent) => {
+      onEvent({
+        event: StreamEventEnum.THINKING,
+        data: {
+          sessionId: "s-active-send",
+          dialogProcessId: "dp-active-send",
+          event: "tool_call",
+          type: "tool_call",
+          category: "tool",
+          text: "running tool",
+        },
+      });
+      onEvent({
+        event: StreamEventEnum.DONE,
+        data: {
+          sessionId: "s-active-send",
+          dialogProcessId: "dp-active-send",
+          messages: [
+            { role: RoleEnum.USER, content: "hello" },
+            {
+              role: RoleEnum.ASSISTANT,
+              dialogProcessId: "dp-active-send",
+              content: "done",
+            },
+          ],
+        },
+      });
+    });
+    const applySessionDetail = vi.fn(async () => {
+      const assistant = assistantMessage(activeSession);
+      assistant.content = "done";
+      assistant.pending = false;
+    });
+    const { engine, activeSession, runStateSnapshot, deps } = createHarness({
+      sessionId: "s-active-send",
+      stream,
+      deps: {
+        fetchSessionDetail: vi.fn(async () => ({ sessionId: "s-active-send" })),
+        applySessionDetail,
+      },
+    });
+    runStateSnapshot.value = {
+      state: BackendChannelState.SENDING,
+      sessionId: "s-other",
+      dialogProcessId: "dp-other",
+      turnScopeId: "turn-other",
+    };
+
+    const result = await engine.send();
+
+    const assistant = assistantMessage(activeSession);
+    expect(result).toBe(true);
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(deps.notify).not.toHaveBeenCalledWith(expect.objectContaining({
+      message: "chat.sessionStateOutOfSync",
+    }));
+    expect(assistant?.realtimeLogs).toEqual([
+      expect.objectContaining({ event: "tool_call", text: expect.stringContaining("running tool") }),
+    ]);
+    expect(runStateSnapshot.value?.state).toBe(FrontendRunState.FRONTEND_COMPLETED);
+    expect(runStateSnapshot.value?.sessionId).toBe("s-active-send");
+  });
+
+  it("accepts active stream events without turnScopeId and still finalizes frontend completion", async () => {
+    const stream = vi.fn(async (_payload, onEvent) => {
+      onEvent({
+        event: StreamEventEnum.THINKING,
+        data: {
+          sessionId: "s-missing-turn",
+          dialogProcessId: "dp-missing-turn",
+          event: "tool_call",
+          type: "tool_call",
+          category: "tool",
+          text: "thinking without frontend turn scope",
+        },
+      });
+      onEvent({
+        event: StreamEventEnum.DONE,
+        data: {
+          sessionId: "s-missing-turn",
+          dialogProcessId: "dp-missing-turn",
+          messages: [
+            { role: RoleEnum.USER, content: "hello" },
+            {
+              role: RoleEnum.ASSISTANT,
+              dialogProcessId: "dp-missing-turn",
+              content: "final without frontend turn scope",
+            },
+          ],
+        },
+      });
+    });
+    const applySessionDetail = vi.fn(async () => {
+      const assistant = assistantMessage(activeSession);
+      assistant.content = "final without frontend turn scope";
+      assistant.pending = false;
+    });
+    const { engine, activeSession, runStateSnapshot } = createHarness({
+      sessionId: "s-missing-turn",
+      stream,
+      autoPatchStreamTurnScopeId: false,
+      deps: {
+        fetchSessionDetail: vi.fn(async () => ({ sessionId: "s-missing-turn" })),
+        applySessionDetail,
+      },
+    });
+
+    const result = await engine.send();
+
+    const assistant = assistantMessage(activeSession);
+    expect(result).toBe(true);
+    expect(assistant?.dialogProcessId).toBe("dp-missing-turn");
+    expect(assistant?.realtimeLogs).toEqual([
+      expect.objectContaining({ text: expect.stringContaining("thinking without frontend turn scope") }),
+    ]);
+    expect(runStateSnapshot.value).toEqual(expect.objectContaining({
+      state: FrontendRunState.FRONTEND_COMPLETED,
+      sessionId: "s-missing-turn",
+      dialogProcessId: "dp-missing-turn",
+      turnScopeId: assistant?.turnScopeId,
+    }));
+  });
+
   it("DONE patches overlay but waits for frontend completion detail while stream promise stays open", async () => {
     let releaseStream;
     const stream = vi.fn(async (_payload, onEvent) => {

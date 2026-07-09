@@ -51,8 +51,9 @@ function createTurnScopeId() {
 
 function isEventForCurrentTurn(data = {}, botMessage = {}) {
   const botTurnScopeId = getMessageTurnScopeId(botMessage);
-  if (!botTurnScopeId) return true;
-  return normalizeTrimmedString(data?.turnScopeId) === botTurnScopeId;
+  const eventTurnScopeId = normalizeTrimmedString(data?.turnScopeId);
+  if (!botTurnScopeId || !eventTurnScopeId) return true;
+  return eventTurnScopeId === botTurnScopeId;
 }
 
 function isTerminalUserStopStateEvent(event = "", data = {}) {
@@ -65,6 +66,14 @@ function isTerminalUserStopStateEvent(event = "", data = {}) {
 function isTerminalCompletedStateEvent(event = "", data = {}) {
   if (normalizeTrimmedString(event) !== StreamEventEnum.CHANNEL_STATE) return false;
   return normalizeTrimmedString(data?.state) === "completed";
+}
+
+function hasCompletableRunIdentity(data = {}, botMessage = {}) {
+  return Boolean(
+    normalizeTrimmedString(data?.turnScopeId) ||
+      normalizeTrimmedString(data?.dialogProcessId) ||
+      normalizeTrimmedString(botMessage?.dialogProcessId),
+  );
 }
 
 function buildFinalDoneEventData({ data = {}, activeSession, botMessage } = {}) {
@@ -99,7 +108,22 @@ function hasMatchingInFlightAssistant({ activeSession, runStateSnapshot } = {}) 
   return hasMatchingInFlightAssistantMessage(messages, { turnScopeId: runTurnScopeId });
 }
 
+function isRunStateForActiveSession({ activeSession, runStateSnapshot } = {}) {
+  const runSessionId = normalizeTrimmedString(runStateSnapshot?.value?.sessionId);
+  if (!runSessionId) return true;
+  const session = activeSession?.value || {};
+  const activeIds = [
+    session.backendSessionId,
+    session.sessionId,
+    session.id,
+  ].map((item) => normalizeTrimmedString(item)).filter(Boolean);
+  return !activeIds.length || activeIds.includes(runSessionId);
+}
+
 function hasConsistentSendingState({ sending, activeSession, runStateSnapshot } = {}) {
+  if (!isRunStateForActiveSession({ activeSession, runStateSnapshot })) {
+    return !sending?.value;
+  }
   if (!sending?.value && !isInFlightSessionRunState(runStateSnapshot?.value?.state)) return true;
   return hasMatchingInFlightAssistant({ activeSession, runStateSnapshot });
 }
@@ -415,7 +439,7 @@ export function createChatEngineSender({
               dialogProcessId: data?.dialogProcessId || normalizeTrimmedString(botMsg.dialogProcessId),
             };
           }
-          if (isTerminalCompletedStateEvent(event, data || {})) {
+          if (isTerminalCompletedStateEvent(event, data || {}) && hasCompletableRunIdentity(data || {}, botMsg)) {
             finalDoneEventData = buildFinalDoneEventData({
               data,
               activeSession,

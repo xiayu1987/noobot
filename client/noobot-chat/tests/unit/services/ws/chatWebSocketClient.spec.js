@@ -170,6 +170,58 @@ describe("chatWebSocketClient", () => {
     expect(settled).toBe(false);
   });
 
+  it("does not settle a scoped stream from an unscoped no_conversation prelude", async () => {
+    const client = createChatWebSocketClient({
+      resolveWebSocketUrl: () => "ws://test",
+      terminalChannelStateGraceMs: 20,
+    });
+    client.connect();
+    const socket = MockWebSocket.instances[0];
+    const onEvent = vi.fn();
+    let resolved = false;
+
+    const streamPromise = client
+      .stream({ action: "chat", sessionId: "s-1", turnScopeId: "turn-live" }, onEvent)
+      .then(() => {
+        resolved = true;
+      });
+
+    socket.emit(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1",
+      state: "no_conversation",
+      seq: 0,
+    });
+    await vi.advanceTimersByTimeAsync(30);
+    await flushPromises();
+
+    expect(resolved).toBe(false);
+
+    socket.emit(StreamEventEnum.THINKING, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-live",
+      turnScopeId: "turn-live",
+      seq: 1,
+      text: "still running",
+    });
+    expect(onEvent).toHaveBeenCalledWith({
+      event: StreamEventEnum.THINKING,
+      data: expect.objectContaining({
+        dialogProcessId: "dp-live",
+        turnScopeId: "turn-live",
+      }),
+    });
+    expect(resolved).toBe(false);
+
+    socket.emit(StreamEventEnum.DONE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-live",
+      turnScopeId: "turn-live",
+      seq: 2,
+    });
+    await streamPromise;
+    expect(resolved).toBe(true);
+  });
+
   it("does not treat stop-requested socket close as successful final state", async () => {
     const client = createChatWebSocketClient({
       resolveWebSocketUrl: () => "ws://test",
