@@ -47,6 +47,7 @@ export const createHarness = ({
   stream,
   pendingInteraction = null,
   interactionSubmittingValue = false,
+  autoPatchStreamTurnScopeId = true,
   deps = {},
 } = {}) => {
   const activeSessionId = ref(sessionId);
@@ -110,7 +111,12 @@ export const createHarness = ({
               const data = envelope?.data && typeof envelope.data === "object" && !Array.isArray(envelope.data)
                 ? envelope.data
                 : null;
-              if (data && data.turnScopeId === undefined && String(data?.dialogProcessId || "").trim()) {
+              if (
+                autoPatchStreamTurnScopeId &&
+                data &&
+                data.turnScopeId === undefined &&
+                String(data?.dialogProcessId || "").trim()
+              ) {
                 onEvent({ ...envelope, data: { ...data, turnScopeId: currentStreamTurnScopeId } });
                 return;
               }

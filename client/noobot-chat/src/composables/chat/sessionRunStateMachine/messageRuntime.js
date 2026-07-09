@@ -274,6 +274,7 @@ export function resolveSessionRunMessageRuntimePatch({
   messageItem = {},
   activeSession = {},
 } = {}) {
+  const stateBelongsToActiveSession = isRunStateForActiveSession(stateSnapshot, activeSession);
   const stateItem = resolveSessionRunStateForMessage({
     stateSnapshot,
     messageItem,
@@ -291,6 +292,7 @@ export function resolveSessionRunMessageRuntimePatch({
     };
   }
   if (
+    stateBelongsToActiveSession &&
     (
       normalizeState(stateSnapshot?.state) === FrontendRunState.USER_STOP_COMPLETED ||
       normalizeState(stateSnapshot?.backendState) === BackendChannelState.USER_STOPPED
@@ -311,6 +313,7 @@ export function resolveSessionRunMessageRuntimePatch({
     };
   }
   if (
+    stateBelongsToActiveSession &&
     normalizeState(stateSnapshot?.state) === BackendChannelState.ERROR &&
     messageItem?.[SESSION_RUN_MESSAGE_RUNTIME_MARK]
   ) {
@@ -321,6 +324,7 @@ export function resolveSessionRunMessageRuntimePatch({
     };
   }
   if (
+    stateBelongsToActiveSession &&
     normalizeState(stateSnapshot?.state) === FrontendRunState.FRONTEND_COMPLETED &&
     messageItem?.[SESSION_RUN_MESSAGE_RUNTIME_MARK]
   ) {

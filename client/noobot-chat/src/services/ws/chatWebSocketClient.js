@@ -43,6 +43,17 @@ function isEventForStreamScope(data = {}, payload = {}) {
   return true;
 }
 
+function canSettleStreamForEvent(data = {}, payload = {}) {
+  if (!isEventForStreamScope(data, payload)) return false;
+  const payloadTurnScopeId = normalizeTrimmedString(payload?.turnScopeId);
+  const payloadDialogProcessId = normalizeTrimmedString(payload?.dialogProcessId);
+  if (!payloadTurnScopeId && !payloadDialogProcessId) return true;
+  return Boolean(
+    normalizeTrimmedString(data?.turnScopeId) ||
+      normalizeTrimmedString(data?.dialogProcessId),
+  );
+}
+
 export function createChatWebSocketClient({
   resolveWebSocketUrl = () => "",
   stopConfirmationTimeoutMs,
@@ -365,17 +376,18 @@ export function createChatWebSocketClient({
             }
             onEvent({ event, data });
             const eventMatchesCurrentStream = isEventForStreamScope(data, payload);
+            const eventCanSettleCurrentStream = canSettleStreamForEvent(data, payload);
             if (event === StreamEventEnum.ERROR && eventMatchesCurrentStream) {
               finalize(() => reject(createStreamEventError(data)));
               return;
             }
-            if (event === StreamEventEnum.DONE && eventMatchesCurrentStream) {
+            if (event === StreamEventEnum.DONE && eventCanSettleCurrentStream) {
               doneReceived = true;
               finalize(() => resolve());
-            } else if (event === StreamEventEnum.USER_STOPPED && eventMatchesCurrentStream) {
+            } else if (event === StreamEventEnum.USER_STOPPED && eventCanSettleCurrentStream) {
               doneReceived = true;
               finalize(() => resolve());
-            } else if (eventMatchesCurrentStream && isTerminalChannelStateEvent(event, data)) {
+            } else if (eventCanSettleCurrentStream && isTerminalChannelStateEvent(event, data)) {
               scheduleTerminalChannelStateFinalize(data);
             }
           } catch (error) {
