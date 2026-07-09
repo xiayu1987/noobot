@@ -34,6 +34,7 @@ export function createSessionListActions({
   applySessionDetail,
   createLocalSession,
   refreshSessionConnectorsAsync,
+  onSessionDetailApplied = null,
   translate,
   notify = () => {},
 } = {}) {
@@ -65,6 +66,17 @@ export function createSessionListActions({
       return;
     }
     if (target.loaded && !force) {
+      onSessionDetailApplied?.({
+        detail: {
+          sessionId: target.backendSessionId || target.sessionId || target.id || targetPrimaryId,
+          sessions: target.sessionDocs || [],
+          source: "selectSession.loadedSnapshot",
+        },
+        sessionItem: target,
+        mainSessionDoc: Array.isArray(target.sessionDocs) ? target.sessionDocs[0] || {} : {},
+        normalizedDetailMessages: Array.isArray(target.messages) ? target.messages : [],
+        preserveCurrentMessages: true,
+      });
       refreshSessionConnectorsAsync(targetPrimaryId);
       return;
     }

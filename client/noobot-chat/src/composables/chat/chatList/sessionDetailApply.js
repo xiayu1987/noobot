@@ -47,6 +47,7 @@ export function createSessionDetailApplicator({
   scrollBottom,
   isSameSessionIdentity,
   processStore = null,
+  onSessionDetailApplied = null,
 } = {}) {
   function hydrateProcessSnapshotsFromMessages(messages = []) {
     if (!processStore) return;
@@ -246,6 +247,13 @@ export function createSessionDetailApplicator({
       applyCompletedToolLogsToMessages(sessionItem.messages, sessionDocs);
     }
     hydrateProcessSnapshotsFromMessages(sessionItem.messages);
+    onSessionDetailApplied?.({
+      detail,
+      sessionItem,
+      mainSessionDoc,
+      normalizedDetailMessages,
+      preserveCurrentMessages,
+    });
     sessionItem.messageCount = sessionItem.messages.length;
     sessionItem.lastMessage = findVisibleLastMessage(sessionItem.messages);
 

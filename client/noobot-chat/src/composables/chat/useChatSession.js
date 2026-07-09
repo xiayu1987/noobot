@@ -45,7 +45,11 @@ import { useReconnectReplay } from "./useReconnectReplay";
 import { useChatStore } from "../../shared/stores/useChatStore";
 import { useProcessStore } from "../../shared/stores/useProcessStore";
 import { useLocale } from "../../shared/i18n/useLocale";
-import { getMessageRole } from "../infra/messageIdentity";
+import {
+  getMessageDialogProcessId,
+  getMessageRole,
+  getMessageTurnScopeId,
+} from "../infra/messageIdentity";
 import {
   applySessionRunStateEvent,
   BackendChannelState,
@@ -98,20 +102,69 @@ export function useChatSession({
   } = storeToRefs(chatStore);
   const conversationStateSnapshot = ref({});
   const conversationStateTimeline = ref([]);
-  const composerActionState = computed(() => {
-    const evaluation = evaluateSessionRunState(runStateSnapshot.value);
+  function resolveActiveSessionIdentity() {
+    return String(activeSession.value?.backendSessionId || activeSession.value?.sessionId || activeSession.value?.id || activeSessionId.value || "").trim();
+  }
+
+  function isRunStateForActiveSession(stateSnapshot = {}) {
+    const runSessionId = String(stateSnapshot?.sessionId || "").trim();
+    const state = String(stateSnapshot?.state || "").trim();
+    const backendState = String(stateSnapshot?.backendState || "").trim();
+    if (!runSessionId) {
+      return state !== FrontendRunState.USER_STOP_COMPLETED && backendState !== BackendChannelState.USER_STOPPED;
+    }
+    const activeId = resolveActiveSessionIdentity();
+    return Boolean(activeId && runSessionId === activeId);
+  }
+
+  function getActiveStoppedResumeSnapshot() {
+    const activeId = resolveActiveSessionIdentity();
+    return activeId ? chatStore.getUserStoppedResumeSnapshot(activeId) : null;
+  }
+
+  function buildStoppedRunStateFromActiveRegistry() {
+    const activeId = resolveActiveSessionIdentity();
+    const snapshot = getActiveStoppedResumeSnapshot();
+    if (!activeId || !snapshot?.dialogProcessId || !snapshot?.turnScopeId) return null;
     return {
-    sendRequesting: Boolean(runStateSnapshot.value?.composerActionState?.sendRequesting),
-    continueRequesting: Boolean(runStateSnapshot.value?.composerActionState?.continueRequesting),
-    stopRequesting: Boolean(runStateSnapshot.value?.composerActionState?.stopRequesting),
-    stopPendingUntilBackendReady: Boolean(runStateSnapshot.value?.composerActionState?.stopPendingUntilBackendReady),
-    canStartNewSend: evaluation.canStartNewSend !== false,
-    canRetryMessage: evaluation.canRetryMessage !== false,
-    canDeleteMessage: evaluation.canDeleteMessage !== false,
-    stopInFlight: Boolean(evaluation.stopInFlight),
-    awaitingBackendStop: Boolean(evaluation.awaitingBackendStop),
-    userStopped: evaluation.state === FrontendRunState.USER_STOP_COMPLETED,
-    state: evaluation.state || "",
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
+      sessionId: activeId,
+      dialogProcessId: snapshot.dialogProcessId,
+      turnScopeId: snapshot.turnScopeId,
+      seq: Number(snapshot.seq || 0),
+      source: snapshot.source || "user_stopped_resume_registry",
+      sourceEvent: "user_stopped_resume_registry",
+      composerActionState: {},
+    };
+  }
+
+  function resolveActiveSessionRunStateSnapshot() {
+    if (isRunStateForActiveSession(runStateSnapshot.value)) return runStateSnapshot.value;
+    return buildStoppedRunStateFromActiveRegistry() || {};
+  }
+
+  function evaluateActiveSessionRunState() {
+    return evaluateSessionRunState(resolveActiveSessionRunStateSnapshot());
+  }
+
+  const composerActionState = computed(() => {
+    const activeRunStateSnapshot = resolveActiveSessionRunStateSnapshot();
+    const runStateInActiveSession = isRunStateForActiveSession(activeRunStateSnapshot);
+    const evaluation = evaluateSessionRunState(activeRunStateSnapshot);
+    const composerSnapshot = runStateInActiveSession ? activeRunStateSnapshot?.composerActionState || {} : {};
+    return {
+      sendRequesting: Boolean(composerSnapshot?.sendRequesting),
+      continueRequesting: Boolean(composerSnapshot?.continueRequesting),
+      stopRequesting: Boolean(composerSnapshot?.stopRequesting),
+      stopPendingUntilBackendReady: Boolean(composerSnapshot?.stopPendingUntilBackendReady),
+      canStartNewSend: evaluation.canStartNewSend !== false,
+      canRetryMessage: evaluation.canRetryMessage !== false,
+      canDeleteMessage: evaluation.canDeleteMessage !== false,
+      stopInFlight: Boolean(evaluation.stopInFlight),
+      awaitingBackendStop: Boolean(evaluation.awaitingBackendStop),
+      userStopped: evaluation.state === FrontendRunState.USER_STOP_COMPLETED,
+      state: evaluation.state || "",
     };
   });
 
@@ -123,6 +176,7 @@ export function useChatSession({
   });
 
   function replayPendingStopWhenBackendReady() {
+    if (!isRunStateForActiveSession(runStateSnapshot.value)) return false;
     const evaluation = evaluateSessionRunState(runStateSnapshot.value);
     if (!evaluation.composerActionState?.stopPendingUntilBackendReady) return false;
     if (!evaluation.backendCanStop) return false;
@@ -223,6 +277,74 @@ export function useChatSession({
         updatedAt,
       });
     }
+    if (
+      state === BackendChannelState.COMPLETED &&
+      sessionId &&
+      nextRunState.state === FrontendRunState.FRONTEND_COMPLETED &&
+      nextRunState.sessionId === sessionId
+    ) {
+      chatStore.clearUserStoppedResumeSnapshot(sessionId);
+    }
+  }
+
+  function isStoppedAssistantDetailMessage(messageItem = {}) {
+    if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) return false;
+    const channelState = messageItem?.channelState && typeof messageItem.channelState === "object"
+      ? messageItem.channelState
+      : {};
+    return [
+      messageItem?.stopState,
+      messageItem?.status,
+      messageItem?.state,
+      channelState?.state,
+    ].some((state) => String(state || "").trim() === BackendChannelState.USER_STOPPED);
+  }
+
+  function findLatestStoppedDetailIdentity(messages = []) {
+    const sourceMessages = Array.isArray(messages) ? messages : [];
+    for (let index = sourceMessages.length - 1; index >= 0; index -= 1) {
+      const messageItem = sourceMessages[index];
+      if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) continue;
+      if (isStoppedAssistantDetailMessage(messageItem)) {
+        const dialogProcessId = getMessageDialogProcessId(messageItem);
+        const turnScopeId = getMessageTurnScopeId(messageItem);
+        if (!dialogProcessId || !turnScopeId) return null;
+        return { dialogProcessId, turnScopeId };
+      }
+      return null;
+    }
+    return undefined;
+  }
+
+  function canHydrateStoppedRunStateFromDetail(sessionId = "") {
+    const evaluation = evaluateSessionRunState(runStateSnapshot.value);
+    const state = evaluation.state;
+    if (state === FrontendRunState.IDLE || state === FrontendRunState.USER_STOP_COMPLETED) return true;
+    if (evaluation.awaitingBackendStop === true) return true;
+    if (!sessionId) return false;
+    return String(runStateSnapshot.value?.sessionId || "").trim() !== String(sessionId || "").trim();
+  }
+
+  function hydrateStoppedRunStateFromSessionDetail({ sessionItem = null } = {}) {
+    const sessionId = String(sessionItem?.backendSessionId || sessionItem?.sessionId || sessionItem?.id || "").trim();
+    if (!sessionId) return;
+    const stoppedIdentity = findLatestStoppedDetailIdentity(sessionItem?.messages || []);
+    if (stoppedIdentity === undefined) return;
+    if (!stoppedIdentity) {
+      chatStore.clearUserStoppedResumeSnapshot(sessionId);
+      return;
+    }
+    if (!canHydrateStoppedRunStateFromDetail(sessionId)) return;
+    trackConversationState({
+      source: "session_detail",
+      sourceEvent: "session_detail_user_stopped",
+      state: BackendChannelState.USER_STOPPED,
+      sessionId,
+      dialogProcessId: stoppedIdentity.dialogProcessId,
+      turnScopeId: stoppedIdentity.turnScopeId,
+      seq: 0,
+      applied: true,
+    });
   }
 
   const {
@@ -342,6 +464,7 @@ export function useChatSession({
     clearUploads,
     notify,
     processStore,
+    onSessionDetailApplied: hydrateStoppedRunStateFromSessionDetail,
   });
 
   const chatEngine = useChatEngine({
@@ -439,7 +562,7 @@ export function useChatSession({
   );
 
   async function sendWithComposerActionState(...args) {
-    const runStateEvaluation = evaluateSessionRunState(runStateSnapshot.value);
+    const runStateEvaluation = evaluateActiveSessionRunState();
     if (runStateEvaluation.canStartNewSend === false) return false;
     const isContinueFromUserStopped = runStateEvaluation.state === FrontendRunState.USER_STOP_COMPLETED;
     if (composerActionState.value.sendRequesting || composerActionState.value.continueRequesting) return false;

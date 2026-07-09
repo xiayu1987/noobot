@@ -553,6 +553,182 @@ describe("useChatSession reconnect replay", () => {
     });
   });
 
+  it("hydrates stopped run state and resume identity from session detail after refresh", async () => {
+    const store = useChatStore();
+    store.sessions = [createSessionFixture({
+      id: "s-detail-stopped",
+      backendSessionId: "s-detail-stopped",
+      loaded: false,
+    })];
+    store.activeSessionId = "s-detail-stopped";
+    const authFetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        exists: true,
+        sessionId: "s-detail-stopped",
+        sessions: [{
+          sessionId: "s-detail-stopped",
+          messages: [
+            { role: RoleEnum.USER, content: "question", turnScopeId: "turn-detail-stopped" },
+            {
+              role: RoleEnum.ASSISTANT,
+              content: "stopped partial",
+              dialogProcessId: "dp-detail-stopped",
+              turnScopeId: "turn-detail-stopped",
+              stopState: "user_stopped",
+              channelState: {
+                state: "user_stopped",
+                dialogProcessId: "dp-detail-stopped",
+                turnScopeId: "turn-detail-stopped",
+              },
+            },
+          ],
+        }],
+      }),
+    }));
+
+    const session = createChatSession({ authFetch });
+    await session.selectSession("s-detail-stopped", { force: true });
+    await nextTick();
+
+    expect(store.runStateSnapshot).toMatchObject({
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
+      sessionId: "s-detail-stopped",
+      dialogProcessId: "dp-detail-stopped",
+      turnScopeId: "turn-detail-stopped",
+    });
+    expect(store.getUserStoppedResumeSnapshot("s-detail-stopped")).toMatchObject({
+      sessionId: "s-detail-stopped",
+      dialogProcessId: "dp-detail-stopped",
+      turnScopeId: "turn-detail-stopped",
+      source: "session_detail_user_stopped",
+    });
+    expect(session.composerActionState.value.userStopped).toBe(true);
+  });
+
+  it("clears historical stopped resume identity when completion detail has a newer assistant", async () => {
+    const store = useChatStore();
+    store.sessions = [createSessionFixture({
+      id: "s-detail-completed-after-stop",
+      backendSessionId: "s-detail-completed-after-stop",
+      loaded: false,
+    })];
+    store.activeSessionId = "s-detail-completed-after-stop";
+    store.runStateSnapshot = {
+      ...store.runStateSnapshot,
+      state: FrontendRunState.FRONTEND_COMPLETION_REQUESTING,
+      backendState: BackendChannelState.COMPLETED,
+      sessionId: "s-detail-completed-after-stop",
+      dialogProcessId: "dp-new-completed",
+      turnScopeId: "turn-new-completed",
+    };
+    store.rememberUserStoppedResumeSnapshot({
+      sessionId: "s-detail-completed-after-stop",
+      dialogProcessId: "dp-old-stopped",
+      turnScopeId: "turn-old-stopped",
+      seq: 3,
+      source: "user_stopped",
+    });
+    const authFetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        exists: true,
+        sessionId: "s-detail-completed-after-stop",
+        sessions: [{
+          sessionId: "s-detail-completed-after-stop",
+          messages: [
+            { role: RoleEnum.USER, content: "first", turnScopeId: "turn-old-stopped" },
+            {
+              role: RoleEnum.ASSISTANT,
+              content: "stopped partial",
+              dialogProcessId: "dp-old-stopped",
+              turnScopeId: "turn-old-stopped",
+              stopState: "user_stopped",
+            },
+            { role: RoleEnum.USER, content: "continue", turnScopeId: "turn-new-completed" },
+            {
+              role: RoleEnum.ASSISTANT,
+              content: "completed answer",
+              dialogProcessId: "dp-new-completed",
+              turnScopeId: "turn-new-completed",
+              channelState: { state: "completed" },
+            },
+          ],
+        }],
+      }),
+    }));
+
+    const session = createChatSession({ authFetch });
+    await session.selectSession("s-detail-completed-after-stop", { force: true });
+    await nextTick();
+
+    expect(store.getUserStoppedResumeSnapshot("s-detail-completed-after-stop")).toBe(null);
+    expect(session.composerActionState.value.userStopped).toBe(false);
+  });
+
+  it("reconciles stopped resume identity when switching to an already loaded completed session", async () => {
+    const store = useChatStore();
+    store.sessions = [
+      createSessionFixture({ id: "s-other", backendSessionId: "s-other" }),
+      createSessionFixture({
+        id: "s-loaded-completed-after-stop",
+        backendSessionId: "s-loaded-completed-after-stop",
+        loaded: true,
+        messages: [
+          { role: RoleEnum.USER, content: "first", turnScopeId: "turn-old-stopped" },
+          {
+            role: RoleEnum.ASSISTANT,
+            content: "stopped partial",
+            dialogProcessId: "dp-old-stopped",
+            turnScopeId: "turn-old-stopped",
+            stopState: "user_stopped",
+          },
+          { role: RoleEnum.USER, content: "next", turnScopeId: "turn-new-completed" },
+          {
+            role: RoleEnum.ASSISTANT,
+            content: "completed answer",
+            dialogProcessId: "dp-new-completed",
+            turnScopeId: "turn-new-completed",
+            channelState: { state: "completed" },
+          },
+        ],
+      }),
+    ];
+    store.activeSessionId = "s-other";
+    store.runStateSnapshot = {
+      ...store.runStateSnapshot,
+      state: FrontendRunState.FRONTEND_COMPLETED,
+      backendState: BackendChannelState.COMPLETED,
+      sessionId: "s-other",
+      dialogProcessId: "dp-other",
+      turnScopeId: "turn-other",
+    };
+    store.rememberUserStoppedResumeSnapshot({
+      sessionId: "s-loaded-completed-after-stop",
+      dialogProcessId: "dp-old-stopped",
+      turnScopeId: "turn-old-stopped",
+      seq: 3,
+      source: "user_stopped",
+    });
+    const authFetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ ok: true, connectors: [] }),
+    }));
+
+    const session = createChatSession({ authFetch });
+    await session.selectSession("s-loaded-completed-after-stop");
+    await nextTick();
+
+    expect(authFetch).not.toHaveBeenCalledWith(
+      "/api/internal/session/u-1/s-loaded-completed-after-stop",
+    );
+    expect(store.getUserStoppedResumeSnapshot("s-loaded-completed-after-stop")).toBe(null);
+    expect(session.composerActionState.value.userStopped).toBe(false);
+  });
+
   it("does not re-register stale user_stop replay for an older turn", async () => {
     const store = useChatStore();
     store.sessions = [createSessionFixture({ id: "s-stale-replay", backendSessionId: "s-stale-replay" })];
@@ -726,6 +902,126 @@ describe("useChatSession reconnect replay", () => {
     });
     expect(payload.config.resumeTurnScopeId).not.toBe(payload.turnScopeId);
     expect(store.getUserStoppedResumeSnapshot("s-continue")).toBe(null);
+  });
+
+  it("does not leak stopped continue state across active sessions", async () => {
+    const store = useChatStore();
+    store.sessions = [
+      createSessionFixture({ id: "s-stopped-a", backendSessionId: "s-stopped-a" }),
+      createSessionFixture({ id: "s-normal-b", backendSessionId: "s-normal-b" }),
+    ];
+    store.activeSessionId = "s-normal-b";
+    store.input = "new message in b";
+    store.runStateSnapshot = {
+      ...store.runStateSnapshot,
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
+      sessionId: "s-stopped-a",
+      dialogProcessId: "dp-stopped-a",
+      turnScopeId: "turn-stopped-a",
+    };
+    store.rememberUserStoppedResumeSnapshot({
+      sessionId: "s-stopped-a",
+      dialogProcessId: "dp-stopped-a",
+      turnScopeId: "turn-stopped-a",
+      seq: 3,
+      source: "user_stopped",
+    });
+    wsClientMock.stream.mockImplementation(async () => ({}));
+
+    const session = createChatSession();
+
+    expect(session.composerActionState.value.userStopped).toBe(false);
+    expect(session.composerActionState.value.canStartNewSend).toBe(true);
+
+    const result = await session.send();
+
+    expect(result).toBe(true);
+    expect(wsClientMock.stream).toHaveBeenCalledTimes(1);
+    const payload = wsClientMock.stream.mock.calls[0][0];
+    expect(payload.sessionId).toBe("s-normal-b");
+    expect(payload.action).toBeUndefined();
+    expect(payload.config?.resumeDialogProcessId).toBeUndefined();
+    expect(payload.config?.resumeTurnScopeId).toBeUndefined();
+    expect(store.getUserStoppedResumeSnapshot("s-stopped-a")).toMatchObject({
+      dialogProcessId: "dp-stopped-a",
+      turnScopeId: "turn-stopped-a",
+    });
+    expect(session.composerActionState.value.userStopped).toBe(false);
+  });
+
+  it("does not project unscoped stopped state as active-session continue state", async () => {
+    const store = useChatStore();
+    store.sessions = [createSessionFixture({ id: "s-normal", backendSessionId: "s-normal" })];
+    store.activeSessionId = "s-normal";
+    store.input = "new message";
+    store.runStateSnapshot = {
+      ...store.runStateSnapshot,
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
+      sessionId: "",
+      dialogProcessId: "dp-unscoped",
+      turnScopeId: "turn-unscoped",
+    };
+    wsClientMock.stream.mockImplementation(async () => ({}));
+
+    const session = createChatSession();
+
+    expect(session.composerActionState.value.userStopped).toBe(false);
+
+    const result = await session.send();
+
+    expect(result).toBe(true);
+    const payload = wsClientMock.stream.mock.calls[0][0];
+    expect(payload.sessionId).toBe("s-normal");
+    expect(payload.action).toBeUndefined();
+    expect(payload.config?.resumeDialogProcessId).toBeUndefined();
+    expect(payload.config?.resumeTurnScopeId).toBeUndefined();
+  });
+
+  it("restores continue affordance from the active session stopped registry after switching back", async () => {
+    const store = useChatStore();
+    store.sessions = [
+      createSessionFixture({ id: "s-stopped-a", backendSessionId: "s-stopped-a" }),
+      createSessionFixture({ id: "s-normal-b", backendSessionId: "s-normal-b" }),
+    ];
+    store.activeSessionId = "s-stopped-a";
+    store.input = "continue a";
+    store.runStateSnapshot = {
+      ...store.runStateSnapshot,
+      state: FrontendRunState.FRONTEND_COMPLETED,
+      backendState: BackendChannelState.COMPLETED,
+      sessionId: "s-normal-b",
+      dialogProcessId: "dp-done-b",
+      turnScopeId: "turn-done-b",
+    };
+    store.rememberUserStoppedResumeSnapshot({
+      sessionId: "s-stopped-a",
+      dialogProcessId: "dp-stopped-a",
+      turnScopeId: "turn-stopped-a",
+      seq: 3,
+      source: "user_stopped",
+    });
+    wsClientMock.stream.mockImplementation(async (_payload, _onEvent, options) => {
+      options?.onPayloadSent?.(_payload);
+      return {};
+    });
+
+    const session = createChatSession();
+
+    expect(session.composerActionState.value.userStopped).toBe(true);
+
+    const result = await session.send();
+
+    expect(result).toBe(true);
+    const payload = wsClientMock.stream.mock.calls[0][0];
+    expect(payload.sessionId).toBe("s-stopped-a");
+    expect(payload.action).toBe("continue");
+    expect(payload.config).toMatchObject({
+      resumeDialogProcessId: "dp-stopped-a",
+      resumeTurnScopeId: "turn-stopped-a",
+    });
+    expect(store.getUserStoppedResumeSnapshot("s-stopped-a")).toBe(null);
   });
 
   it("keeps stopped resume registry when continue stream fails before payload is sent", async () => {
