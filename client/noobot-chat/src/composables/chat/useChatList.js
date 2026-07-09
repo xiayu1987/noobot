@@ -40,6 +40,7 @@ export function useChatList({
   clearUploads,
   notify = () => {},
   processStore = null,
+  onSessionDetailApplied = null,
 } = {}) {
   const { translate } = useLocale();
   const { isSameSessionIdentity } = createSessionIdentityHelpers({ sessions });
@@ -73,6 +74,7 @@ export function useChatList({
     scrollBottom,
     isSameSessionIdentity,
     processStore,
+    onSessionDetailApplied,
   });
 
   const {
@@ -115,6 +117,7 @@ export function useChatList({
     applySessionDetail,
     createLocalSession,
     refreshSessionConnectorsAsync,
+    onSessionDetailApplied,
     translate,
     notify,
   });
