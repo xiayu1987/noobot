@@ -145,7 +145,7 @@ describe("applyReconnectDataReplay", () => {
             hasRunningTask: true,
             conversationStates: [
               { sessionId: "s-1", dialogProcessId: "dp-stop", state: "sending", seq: 11 },
-              { sessionId: "s-1", dialogProcessId: "dp-stop", state: "stopped", seq: 12 },
+              { sessionId: "s-1", dialogProcessId: "dp-stop", state: "user_stopped", seq: 12 },
             ],
             dialogProcesses: [],
           },

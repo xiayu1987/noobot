@@ -123,7 +123,7 @@ describe("useChatEngine.resend replace turn", () => {
       turnScopeId: "client-turn:attachments-old",
       role: RoleEnum.ASSISTANT,
       content: "partial",
-      stopState: "stopped",
+      stopState: "user_stopped",
     };
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
@@ -185,7 +185,7 @@ describe("useChatEngine.resend replace turn", () => {
       turnScopeId: "client-turn:unchanged-attachment-old",
       role: RoleEnum.ASSISTANT,
       content: "partial",
-      stopState: "stopped",
+      stopState: "user_stopped",
     };
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
@@ -262,7 +262,7 @@ describe("useChatEngine.resend replace turn", () => {
       turnScopeId: "client-turn:rich-raw-old",
       role: RoleEnum.ASSISTANT,
       content: "partial",
-      stopState: "stopped",
+      stopState: "user_stopped",
     };
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
@@ -322,7 +322,7 @@ describe("useChatEngine.resend replace turn", () => {
       turnScopeId: "client-turn:delete-attachments-old",
       role: RoleEnum.ASSISTANT,
       content: "partial",
-      stopState: "stopped",
+      stopState: "user_stopped",
     };
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
@@ -347,7 +347,7 @@ describe("useChatEngine.resend replace turn", () => {
         revision: 5,
         messages: [
           { turnScopeId: "client-turn:old-version", role: RoleEnum.USER, content: "old" },
-          { turnScopeId: "client-turn:old-version", role: RoleEnum.ASSISTANT, content: "stopped", stopState: "stopped" },
+          { turnScopeId: "client-turn:old-version", role: RoleEnum.ASSISTANT, content: "stopped", stopState: "user_stopped" },
         ],
       })],
     }));
@@ -376,7 +376,7 @@ describe("useChatEngine.resend replace turn", () => {
       deps: { replaceSessionTurnApi, fetchSessionDetail, applySessionDetail },
     });
     const stoppedUser = { turnScopeId: "client-turn:old-version", role: RoleEnum.USER, content: "old" };
-    const stoppedAssistant = { turnScopeId: "client-turn:old-version", role: RoleEnum.ASSISTANT, content: "partial", stopState: "stopped" };
+    const stoppedAssistant = { turnScopeId: "client-turn:old-version", role: RoleEnum.ASSISTANT, content: "partial", stopState: "user_stopped" };
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
     activeSession.value.version = 3;
@@ -427,7 +427,7 @@ describe("useChatEngine.resend replace turn", () => {
       deps: { replaceSessionTurnApi, fetchSessionDetail, applySessionDetail },
     });
     const stoppedUser = { turnScopeId: "client-turn:no-change", role: RoleEnum.USER, content: "old" };
-    const stoppedAssistant = { turnScopeId: "client-turn:no-change", role: RoleEnum.ASSISTANT, content: "partial", stopState: "stopped" };
+    const stoppedAssistant = { turnScopeId: "client-turn:no-change", role: RoleEnum.ASSISTANT, content: "partial", stopState: "user_stopped" };
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
     activeSession.value.version = 3;
@@ -457,8 +457,8 @@ describe("useChatEngine.resend replace turn", () => {
         content: "old stopped partial",
         pending: false,
         statusLabel: "chat.stopped",
-        stopState: "stopped",
-        channelState: { state: "stopped", turnScopeId },
+        stopState: "user_stopped",
+        channelState: { state: "user_stopped", turnScopeId },
       };
       return {
         ok: true,
@@ -481,7 +481,7 @@ describe("useChatEngine.resend replace turn", () => {
       turnScopeId: "client-turn:first-old",
       role: RoleEnum.USER,
       content: "first stopped",
-      stopState: "stopped",
+      stopState: "user_stopped",
     };
     const stoppedAssistant = {
       turnScopeId: "client-turn:first-old",
@@ -489,8 +489,8 @@ describe("useChatEngine.resend replace turn", () => {
       content: "partial",
       pending: false,
       statusLabel: "chat.stopped",
-      stopState: "stopped",
-      channelState: { state: "stopped", turnScopeId: "client-turn:first-old" },
+      stopState: "user_stopped",
+      channelState: { state: "user_stopped", turnScopeId: "client-turn:first-old" },
     };
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [...activeSession.value.messages];
@@ -512,7 +512,7 @@ describe("useChatEngine.resend replace turn", () => {
       turnScopeId: replacementUser.turnScopeId,
     }));
     expect(activeSession.value.messages).toHaveLength(2);
-    expect(activeSession.value.messages.some((message) => message.stopState === "stopped")).toBe(false);
+    expect(activeSession.value.messages.some((message) => message.stopState === "user_stopped")).toBe(false);
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
     expect(runStateSnapshot.value).toEqual(expect.objectContaining({

@@ -65,7 +65,7 @@ export class ParentAsyncTaskManager {
     parentAsyncResultContainer.updatedAt = this.now();
     let hasFailed = false;
     let hasRunning = false;
-    let hasStopped = false;
+    let hasUserStopped = false;
     let allCompleted = taskList.length > 0;
     for (const taskItem of taskList) {
       const status = (taskItem?.status || SESSION_ASYNC_STATUS.RUNNING || "")
@@ -73,7 +73,7 @@ export class ParentAsyncTaskManager {
         .toLowerCase();
       if (status === SESSION_ASYNC_STATUS.FAILED) hasFailed = true;
       if (status === SESSION_ASYNC_STATUS.RUNNING) hasRunning = true;
-      if (status === SESSION_ASYNC_STATUS.STOPPED) hasStopped = true;
+      if (status === SESSION_ASYNC_STATUS.USER_STOPPED) hasUserStopped = true;
       if (status !== SESSION_ASYNC_STATUS.COMPLETED) allCompleted = false;
     }
     if (hasFailed) {
@@ -82,8 +82,8 @@ export class ParentAsyncTaskManager {
       parentAsyncResultContainer.status = SESSION_ASYNC_STATUS.RUNNING;
     } else if (allCompleted) {
       parentAsyncResultContainer.status = SESSION_ASYNC_STATUS.COMPLETED;
-    } else if (hasStopped) {
-      parentAsyncResultContainer.status = SESSION_ASYNC_STATUS.STOPPED;
+    } else if (hasUserStopped) {
+      parentAsyncResultContainer.status = SESSION_ASYNC_STATUS.USER_STOPPED;
     } else {
       parentAsyncResultContainer.status = SESSION_ASYNC_STATUS.RUNNING;
     }

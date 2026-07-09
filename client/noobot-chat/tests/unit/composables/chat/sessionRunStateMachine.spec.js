@@ -1167,7 +1167,7 @@ describe("sessionRunStateMachine", () => {
         sessionId: "s1",
         dialogProcessId: "d1",
         turnScopeId: "turn-1",
-        sourceEvent: "stopped",
+        sourceEvent: "user_stopped",
         priority: 100,
       }),
       messageItem: assistant,

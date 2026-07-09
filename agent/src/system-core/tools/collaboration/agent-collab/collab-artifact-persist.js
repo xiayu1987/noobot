@@ -114,7 +114,7 @@ export function createCollabArtifactPersistor({
         const sessionId = normalizeString(item?.request?.sessionId);
         if (!sessionId) return false;
         if (
-          ![TASK_STATUS.COMPLETED, TASK_STATUS.FAILED, TASK_STATUS.STOPPED].includes(
+          ![TASK_STATUS.COMPLETED, TASK_STATUS.FAILED, TASK_STATUS.USER_STOPPED].includes(
             status,
           )
         ) {

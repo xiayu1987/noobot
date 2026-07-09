@@ -60,10 +60,10 @@ export function summarizeTaskResultsStatus(taskResults = []) {
       item?.ok === false,
   );
   if (failed) return SESSION_ASYNC_STATUS.FAILED;
-  const stopped = taskResults.some(
-    (item) => String(item?.status || "") === SESSION_ASYNC_STATUS.STOPPED,
+  const userStopped = taskResults.some(
+    (item) => String(item?.status || "") === SESSION_ASYNC_STATUS.USER_STOPPED,
   );
-  if (stopped) return SESSION_ASYNC_STATUS.STOPPED;
+  if (userStopped) return SESSION_ASYNC_STATUS.USER_STOPPED;
   const completed = taskResults.every(
     (item) => String(item?.status || "") === SESSION_ASYNC_STATUS.COMPLETED,
   );

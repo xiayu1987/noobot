@@ -42,7 +42,7 @@ test("collab-container-store: create + patch + status aggregation", () => {
   assert.equal(patchedTask?.attachmentId, "att_1");
 });
 
-test("collab-container-store: status resolver honors failed > completed/stopped", () => {
+test("collab-container-store: status resolver honors failed > completed/user_stopped", () => {
   const runtime = {};
   const store = createCollabContainerStore({ runtime });
 
@@ -55,9 +55,9 @@ test("collab-container-store: status resolver honors failed > completed/stopped"
   );
   assert.equal(
     store.updateContainerStatusByTasks({
-      tasks: [{ status: "running" }, { status: "stopped" }],
+      tasks: [{ status: "running" }, { status: "user_stopped" }],
     }),
-    "stopped",
+    "user_stopped",
   );
   assert.equal(
     store.updateContainerStatusByTasks({

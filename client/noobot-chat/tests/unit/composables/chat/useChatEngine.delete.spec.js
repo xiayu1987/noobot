@@ -240,7 +240,7 @@ describe("useChatEngine.delete", () => {
       dialogProcessId: "dp-stopped-sending",
       role: RoleEnum.USER,
       content: "first",
-      stopState: "stopped",
+      stopState: "user_stopped",
       monotonicState: "monotonic",
       isMonotonic: true,
       monotonic: true,

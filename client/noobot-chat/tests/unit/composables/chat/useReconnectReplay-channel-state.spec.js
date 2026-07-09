@@ -177,7 +177,7 @@ describe("useReconnectReplay", () => {
       sessionId: "s-1",
       dialogProcessId: "dp-old",
       turnScopeId: "client-turn:old",
-      state: "stopped",
+      state: "user_stopped",
       sourceEvent: "stop",
     });
 

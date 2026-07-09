@@ -241,7 +241,7 @@ export class AsyncSessionRunner {
         const endedAt = now();
         const message = error?.message || String(error);
         const status = /abort|stopped/i.test(message)
-          ? SESSION_ASYNC_STATUS.STOPPED
+          ? SESSION_ASYNC_STATUS.USER_STOPPED
           : SESSION_ASYNC_STATUS.FAILED;
         this.jobs.set(key, {
           ...current,

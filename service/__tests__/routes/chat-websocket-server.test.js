@@ -137,7 +137,7 @@ async function requestRawUpgrade({ port, pathName = "/chat/ws" } = {}) {
   });
 }
 
-test("chat-websocket-server: stop persists and emits the stopped turnScopeId", async () => {
+test("chat-websocket-server: stop persists and emits the user_stopped turnScopeId", async () => {
   let capturedStopPayload = null;
   const server = await startServerWithWs({
     bot: {
@@ -180,7 +180,7 @@ test("chat-websocket-server: stop persists and emits the stopped turnScopeId", a
     });
 
     assert.equal(capturedStopPayload?.partialAssistant?.turnScopeId, "turn-new");
-    const stoppedEvent = events.find((item) => item?.event === "stopped");
+    const stoppedEvent = events.find((item) => item?.event === "user_stopped");
     assert.equal(stoppedEvent?.data?.turnScopeId, "turn-new");
   } finally {
     await closeServer(server);
@@ -235,7 +235,7 @@ test("chat-websocket-server: stop emits non-terminal stopping before run settles
         if (parsed?.event === "channel_state" && parsed?.data?.state === "stopping") {
           resolve(parsed);
         }
-        if (parsed?.event === "stopped" || parsed?.event === "done") {
+        if (parsed?.event === "user_stopped" || parsed?.event === "done") {
           reject(new Error(`unexpected terminal event before run settled: ${parsed.event}`));
         }
       });
@@ -252,7 +252,7 @@ test("chat-websocket-server: stop emits non-terminal stopping before run settles
   }
 });
 
-test("chat-websocket-server: stop request emits stopped even when runSession completes normally", async () => {
+test("chat-websocket-server: stop request emits user_stopped even when runSession completes normally", async () => {
   let capturedStopPayload = null;
   const server = await startServerWithWs({
     bot: {
@@ -296,7 +296,7 @@ test("chat-websocket-server: stop request emits stopped even when runSession com
 
     assert.equal(events.some((item) => item?.event === "done"), false);
     assert.equal(capturedStopPayload?.partialAssistant?.turnScopeId, "turn-normal-after-stop");
-    const stoppedEvent = events.find((item) => item?.event === "stopped");
+    const stoppedEvent = events.find((item) => item?.event === "user_stopped");
     assert.equal(stoppedEvent?.data?.dialogProcessId, "dp-normal-after-stop");
     assert.equal(stoppedEvent?.data?.turnScopeId, "turn-normal-after-stop");
   } finally {
@@ -343,15 +343,15 @@ test("chat-websocket-server: stopped event and persistence backfill assistant id
       },
     });
 
-    const stoppedEvent = events.find((item) => item?.event === "stopped");
+    const stoppedEvent = events.find((item) => item?.event === "user_stopped");
     assert.equal(stoppedEvent?.data?.sessionId, "s-backfill");
     assert.equal(stoppedEvent?.data?.dialogProcessId, "dp-result-backfill");
     assert.equal(stoppedEvent?.data?.turnScopeId, "turn-backfill");
     assert.equal(capturedStopPayload?.partialAssistant?.sessionId, "s-backfill");
     assert.equal(capturedStopPayload?.partialAssistant?.dialogProcessId, "dp-result-backfill");
     assert.equal(capturedStopPayload?.partialAssistant?.turnScopeId, "turn-backfill");
-    assert.equal(capturedStopPayload?.partialAssistant?.state, "stopped");
-    assert.equal(capturedStopPayload?.partialAssistant?.channelState, "stopped");
+    assert.equal(capturedStopPayload?.partialAssistant?.state, "user_stopped");
+    assert.equal(capturedStopPayload?.partialAssistant?.channelState, "user_stopped");
   } finally {
     await closeServer(server);
   }
@@ -406,7 +406,7 @@ test("chat-websocket-server: idle stop request records pending stop without faki
     assert.equal(stoppingEvent?.data?.turnScopeId, "turn-idle-stop");
     assert.equal(stoppingEvent?.data?.dialogProcessId, "dp-idle-stop");
     assert.equal(stoppingEvent?.data?.sourceEvent, "stop_requested_pending");
-    assert.equal(events.some((item) => item?.event === "stopped"), false);
+    assert.equal(events.some((item) => item?.event === "user_stopped"), false);
     assert.equal(events.some((item) => item?.event === "error"), false);
   } finally {
     await closeServer(server);
@@ -466,7 +466,7 @@ test("chat-websocket-server: pending stop is consumed by a later run with the sa
       },
     });
 
-    const stoppedEvent = events.find((item) => item?.event === "stopped");
+    const stoppedEvent = events.find((item) => item?.event === "user_stopped");
     assert.equal(stoppedEvent?.data?.sessionId, "s-pending");
     assert.equal(stoppedEvent?.data?.turnScopeId, "turn-pending");
     assert.equal(stoppedEvent?.data?.dialogProcessId, "dp-pending");
@@ -544,20 +544,20 @@ test("chat-websocket-server: stop from a new websocket aborts an active run by t
       runWs.on("message", (raw) => {
         const parsed = JSON.parse(String(raw || "{}"));
         runEvents.push(parsed);
-        if (parsed?.event === "stopped") {
+        if (parsed?.event === "user_stopped") {
           clearTimeout(timer);
           resolve();
         }
       });
       runWs.on("close", () => {
-        if (runEvents.some((item) => item?.event === "stopped")) {
+        if (runEvents.some((item) => item?.event === "user_stopped")) {
           clearTimeout(timer);
           resolve();
         }
       });
       runWs.on("error", (error) => { clearTimeout(timer); reject(error); });
     });
-    const stoppedEvent = runEvents.find((item) => item?.event === "stopped");
+    const stoppedEvent = runEvents.find((item) => item?.event === "user_stopped");
     assert.equal(stoppedEvent?.data?.sessionId, "s-cross-stop");
     assert.equal(stoppedEvent?.data?.turnScopeId, "turn-cross-stop");
     assert.equal(capturedStopPayload?.partialAssistant?.turnScopeId, "turn-cross-stop");
@@ -615,7 +615,7 @@ test("chat-websocket-server: stop closes run and next websocket run can start", 
         },
       },
     });
-    assert.ok(stoppedEvents.some((item) => item?.event === "stopped"));
+    assert.ok(stoppedEvents.some((item) => item?.event === "user_stopped"));
 
     const nextEvents = await callChatWs({
       port,
@@ -1069,7 +1069,7 @@ test("chat-websocket-server: continue action requires stopped dialogProcessId an
   }
 });
 
-test("chat-websocket-server: stop during continue request keeps stopping and ends stopped", async () => {
+test("chat-websocket-server: stop during continue request keeps stopping and ends user_stopped", async () => {
   let capturedStopPayload = null;
   const server = await startServerWithWs({
     bot: {
@@ -1109,7 +1109,7 @@ test("chat-websocket-server: stop during continue request keeps stopping and end
     });
 
     assert.equal(events.some((item) => item?.event === "channel_state" && item?.data?.state === "stopping"), true);
-    const stoppedEvent = events.find((item) => item?.event === "stopped");
+    const stoppedEvent = events.find((item) => item?.event === "user_stopped");
     assert.equal(stoppedEvent?.data?.sessionId, "s-continue-stop");
     assert.equal(stoppedEvent?.data?.turnScopeId, "turn-new");
     assert.equal(capturedStopPayload?.partialAssistant?.turnScopeId, "turn-new");

@@ -191,7 +191,7 @@ test("reconnect state should be consistent for all same-user clients across chan
     { status: "connecting", hasRunningTask: true },
     { status: "running", hasRunningTask: true },
     { status: "done", hasRunningTask: false },
-    { status: "stopped", hasRunningTask: false },
+    { status: "user_stopped", hasRunningTask: false },
     { status: "error", hasRunningTask: false },
   ];
 
@@ -240,7 +240,7 @@ test("reconnect state should be consistent for all same-user clients across chan
       item.hasRunningTask,
       `unexpected hasRunningTask for status=${item.status}`,
     );
-    if (["done", "stopped", "error"].includes(item.status)) {
+    if (["done", "user_stopped", "error"].includes(item.status)) {
       assert.equal(
         sessionEntry.dialogProcesses.length,
         0,
@@ -257,7 +257,7 @@ test("reconnect state should be consistent for all same-user clients across chan
       ? rawSessionEntry.conversationStates
       : [];
     assert.equal(stateList.length > 0, true);
-    if (["done", "stopped", "error"].includes(item.status)) {
+    if (["done", "user_stopped", "error"].includes(item.status)) {
       assert.equal(stateList.some((stateItem) => stateItem?.state === "sending"), true);
     }
   }
@@ -627,14 +627,14 @@ test("stop action should broadcast stopping state before terminal", () => {
     sourceEvent: "stop",
     seq: 1,
   });
-  manager.pushChannelEvent(channel, "stopped", {
+  manager.pushChannelEvent(channel, "user_stopped", {
     sessionId: "session-1",
     dialogProcessId: "dp-1",
     seq: 2,
   });
   const stateEvents = listEvents(client, "channel_state");
   assert.equal(stateEvents.some((item) => item?.data?.state === "stopping"), true);
-  assert.equal(stateEvents.some((item) => item?.data?.state === "stopped"), true);
+  assert.equal(stateEvents.some((item) => item?.data?.state === "user_stopped"), true);
 });
 
 test("accepted stop should immediately make reconnect non-running", () => {
@@ -672,16 +672,16 @@ test("accepted stop should immediately make reconnect non-running", () => {
     dialogProcessId: "dp-stop",
   });
   assert.equal(forwarded, true);
-  const stoppedEnvelope = manager.pushChannelEvent(channel, "stopped", {
+  const stoppedEnvelope = manager.pushChannelEvent(channel, "user_stopped", {
     sessionId: "session-stop",
     dialogProcessId: "dp-stop",
     message: "stop requested",
   });
-  manager.markChannelTerminal(channel, "stopped");
+  manager.markChannelTerminal(channel, "user_stopped");
   manager.broadcastChannelEvent(channel, stoppedEnvelope);
 
   assert.equal(upstreamMessages.length, 1);
-  assert.equal(channel.status, "stopped");
+  assert.equal(channel.status, "user_stopped");
   const reconnectClient = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.handleReconnect(reconnectClient, { currentSessionId: "session-stop", lastReceivedSeqMap: {} });
 
@@ -693,7 +693,7 @@ test("accepted stop should immediately make reconnect non-running", () => {
   assert.equal(sessionEntry.hasRunningTask, false);
   assert.equal(Array.isArray(sessionEntry.dialogProcesses) ? sessionEntry.dialogProcesses.length : 0, 0);
   assert.equal(
-    (sessionEntry.conversationStates || []).some((item) => item?.state === "stopped"),
+    (sessionEntry.conversationStates || []).some((item) => item?.state === "user_stopped"),
     true,
   );
 });
