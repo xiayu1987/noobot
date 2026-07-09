@@ -122,7 +122,7 @@ const sendDisabled = computed(() => {
     sendRequesting,
     continueRequesting,
     canStartNewSend,
-    stopped: Boolean(props.composerActionState?.stopped),
+    userStopped: Boolean(props.composerActionState?.userStopped),
     canStop: props.canStop,
     interactionActive: props.interactionActive,
     inputLength,
@@ -205,7 +205,7 @@ const sendButtonText = computed(() => {
   const continueRequesting = Boolean(props.composerActionState?.continueRequesting);
   if (continueRequesting) return translate("composer.continueRequesting");
   if (sendRequesting || props.sending) return translate("composer.sending");
-  if (props.composerActionState?.stopped) return translate("composer.continue");
+  if (props.composerActionState?.userStopped) return translate("composer.continue");
   return translate("composer.send");
 });
 

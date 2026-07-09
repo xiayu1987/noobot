@@ -637,6 +637,68 @@ test("stop action should broadcast stopping state before terminal", () => {
   assert.equal(stateEvents.some((item) => item?.data?.state === "user_stopped"), true);
 });
 
+test("startOrJoinChannel restarts running channel when upstream socket is not open", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-stale" });
+  const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-stale" });
+  channel.status = "running";
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  channel.upstreamSocket = { readyState: 3, close() {} };
+
+  let closeCount = 0;
+  let connectCount = 0;
+  manager.closeUpstreamChannel = (targetChannel) => {
+    assert.equal(targetChannel, channel);
+    closeCount += 1;
+    targetChannel.upstreamSocket = null;
+  };
+  manager.connectUpstreamChannel = (targetChannel, apiKey) => {
+    assert.equal(targetChannel, channel);
+    assert.equal(apiKey, "api-key-1");
+    connectCount += 1;
+    targetChannel.status = "connecting";
+    targetChannel.upstreamSocket = { readyState: 0 };
+  };
+
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.startOrJoinChannel({
+    socket: client,
+    connectionApiKey: "api-key-1",
+    payload: { userId: "user-1", sessionId: "session-stale", action: "start" },
+  });
+
+  assert.equal(closeCount, 1);
+  assert.equal(connectCount, 1);
+  assert.equal(channel.startPayload?.sessionId, "session-stale");
+  assert.equal(channel.eventLog.length, 0);
+});
+
+test("startOrJoinChannel keeps running channel when upstream socket is open", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-live" });
+  const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-live" });
+  channel.status = "running";
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  channel.upstreamSocket = { readyState: 1, close() {} };
+
+  let connectCount = 0;
+  manager.connectUpstreamChannel = () => {
+    connectCount += 1;
+  };
+
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.startOrJoinChannel({
+    socket: client,
+    connectionApiKey: "api-key-1",
+    payload: { userId: "user-1", sessionId: "session-live", action: "start" },
+  });
+
+  assert.equal(connectCount, 0);
+  assert.equal(channel.upstreamSocket.readyState, 1);
+});
+
 test("accepted stop should immediately make reconnect non-running", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-stop" });
@@ -791,6 +853,42 @@ test("interaction_response should resolve channel by pending requestId", () => {
       requestId: "req-resolve",
     },
   );
+
+  assert.equal(resolvedChannel, channel);
+});
+
+test("resolveChannelFromSocketMessage rejects explicit channelKey from another session", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const oldKey = createChannelKey({ userId: "user-1", sessionId: "session-old" });
+  manager.ensureChannel(oldKey, { userId: "user-1", sessionId: "session-old" });
+
+  const resolvedChannel = manager.resolveChannelFromSocketMessage(
+    createMockSocket({ apiKey: "api-key-1", userId: "user-1" }),
+    {
+      action: "continue",
+      channelKey: oldKey,
+      sessionId: "session-new",
+      userId: "user-1",
+    },
+  );
+
+  assert.equal(resolvedChannel, null);
+});
+
+test("resolveChannelFromSocketMessage uses socket userId when continue payload omits userId", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-new" });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId: "session-new",
+  });
+  const socket = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  socket.__agentProxyActiveChannelKey = createChannelKey({ userId: "user-1", sessionId: "session-old" });
+
+  const resolvedChannel = manager.resolveChannelFromSocketMessage(socket, {
+    action: "continue",
+    sessionId: "session-new",
+  });
 
   assert.equal(resolvedChannel, channel);
 });

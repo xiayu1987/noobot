@@ -350,7 +350,7 @@ describe("useChatEngine.send-stream", () => {
       });
       emitChannelState(onEvent, "local-2", "dp-state", "user_stopped");
       onEvent({
-        event: StreamEventEnum.STOPPED,
+        event: StreamEventEnum.USER_STOPPED,
         data: { sessionId: "local-2", dialogProcessId: "dp-state" },
       });
     });
@@ -388,7 +388,7 @@ describe("useChatEngine.send-stream", () => {
         seq: 2,
       });
       onEvent({
-        event: StreamEventEnum.STOPPED,
+        event: StreamEventEnum.USER_STOPPED,
         data: { sessionId: "local-stop-refresh", dialogProcessId: "dp-stop-refresh" },
       });
     });
@@ -436,7 +436,7 @@ describe("useChatEngine.send-stream", () => {
         turnScopeId: payload.turnScopeId,
       });
       onEvent({
-        event: StreamEventEnum.STOPPED,
+        event: StreamEventEnum.USER_STOPPED,
         data: {
           sessionId: "local-stop-detail-preserve",
           dialogProcessId: "dp-new",

@@ -563,12 +563,17 @@ export class SessionExecutionEngine {
     const runConfig = payload?.runConfig && typeof payload.runConfig === "object"
       ? payload.runConfig
       : {};
+    const resumeDialogProcessId = String(runConfig.resumeDialogProcessId || "").trim();
+    const resumeTurnScopeId = String(runConfig.resumeTurnScopeId || "").trim();
+    if (!resumeDialogProcessId || !resumeTurnScopeId) {
+      throw new Error("stopped snapshot resume requires resumeDialogProcessId and resumeTurnScopeId");
+    }
     const identity = {
       userId: String(payload?.userId || "").trim(),
       sessionId: String(payload?.sessionId || "").trim(),
       parentSessionId: String(payload?.parentSessionId || "").trim(),
-      dialogProcessId: String(runConfig.resumeDialogProcessId || payload?.dialogProcessId || "").trim(),
-      turnScopeId: String(runConfig.resumeTurnScopeId || payload?.turnScopeId || runConfig.turnScopeId || "").trim(),
+      dialogProcessId: resumeDialogProcessId,
+      turnScopeId: resumeTurnScopeId,
     };
     const snapshot = await loadStoppedModelMessageSnapshot({
       globalConfig: this.globalConfig,

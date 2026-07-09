@@ -80,6 +80,7 @@ export function forceStopUiFinalize({
   findTargetAssistantMessage,
   applyConversationState,
   chatWebSocketClient,
+  stopScope = {},
 } = {}) {
   if (!sending?.value) return;
   const pendingAssistantMessage = findTargetAssistantMessage?.() ||
@@ -88,12 +89,32 @@ export function forceStopUiFinalize({
       .find(
         (messageItem) => isInFlightAssistantMessage(messageItem),
       );
+  const expectedDialogProcessId = normalizeTrimmedString(stopScope?.dialogProcessId);
+  const expectedTurnScopeId = normalizeTrimmedString(stopScope?.turnScopeId);
+  const pendingDialogProcessIdForScope = getMessageDialogProcessId(pendingAssistantMessage);
+  const pendingTurnScopeIdForScope = getMessageTurnScopeId(pendingAssistantMessage);
+  const staleStopScope = expectedTurnScopeId
+    ? pendingTurnScopeIdForScope !== expectedTurnScopeId
+    : expectedDialogProcessId
+      ? pendingDialogProcessIdForScope !== expectedDialogProcessId
+      : false;
+  if (staleStopScope) {
+    logStopDebug("stop.timeout.staleIgnored", {
+      stopScope,
+      pendingAssistant: summarizeDebugMessage(pendingAssistantMessage),
+      messages: summarizeDebugMessages(activeSession?.value?.messages),
+    });
+    return;
+  }
   logStopDebug("stop.timeout.noBackendConfirmation", {
+    stopScope,
     pendingAssistant: summarizeDebugMessage(pendingAssistantMessage),
     messages: summarizeDebugMessages(activeSession?.value?.messages),
   });
-  const fallbackDialogProcessId = getMessageDialogProcessId(pendingAssistantMessage);
-  const fallbackTurnScopeId = getMessageTurnScopeId(pendingAssistantMessage);
+  const fallbackDialogProcessId =
+    expectedDialogProcessId || getMessageDialogProcessId(pendingAssistantMessage);
+  const fallbackTurnScopeId =
+    expectedTurnScopeId || getMessageTurnScopeId(pendingAssistantMessage);
   const finalizedAtMs = nowMs();
   if (applyRunStateEvent) {
     applyRunStateEvent({

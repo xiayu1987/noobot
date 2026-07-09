@@ -88,7 +88,7 @@ describe("useReconnectReplay", () => {
 
   it.each([
     StreamEventEnum.DONE,
-    StreamEventEnum.STOPPED,
+    StreamEventEnum.USER_STOPPED,
     StreamEventEnum.ERROR,
   ])("FN-01: %s duplicate replay does not trigger terminal cleanup without channel_state", async (terminalEvent) => {
     const { api, refs, mocks } = createFixture();

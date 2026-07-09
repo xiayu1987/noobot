@@ -746,20 +746,18 @@ export function registerChatWebSocketServer(
           turnScopeId: String(turnScopeId || config?.turnScopeId || "").trim(),
         };
         if (isContinueAction) {
+          const resumeDialogProcessId = String(config?.resumeDialogProcessId || "").trim();
+          const resumeTurnScopeId = String(config?.resumeTurnScopeId || config?.stoppedTurnScopeId || "").trim();
           normalizedRunConfig.resumeFromStoppedSnapshot = true;
-          normalizedRunConfig.resumeDialogProcessId = String(
-            config?.resumeDialogProcessId || config?.dialogProcessId || dialogProcessId || "",
-          ).trim();
-          normalizedRunConfig.resumeTurnScopeId = String(
-            config?.resumeTurnScopeId || config?.stoppedTurnScopeId || "",
-          ).trim();
+          normalizedRunConfig.resumeDialogProcessId = resumeDialogProcessId;
+          normalizedRunConfig.resumeTurnScopeId = resumeTurnScopeId;
           if (!normalizedRunConfig.resumeDialogProcessId || !normalizedRunConfig.resumeTurnScopeId) {
-            throw new Error("continue requires dialogProcessId and turnScopeId");
+            throw new Error("continue requires resumeDialogProcessId and resumeTurnScopeId");
           }
         }
         if (isPluginDebugEnabled()) {
           await writeRoutedRuntimeEvent({
-      scope: "session",
+            scope: "session",
             source: "service",
             channel: RUNTIME_EVENT_CHANNELS.DIRECT,
             category: "debug",
@@ -843,10 +841,11 @@ export function registerChatWebSocketServer(
         } else if (isContinueAction) {
           sendEvent("channel_state", {
             sessionId: currentRunMeta?.sessionId || "",
-            dialogProcessId: normalizedRunConfig?.resumeDialogProcessId || "",
             turnScopeId: currentRunMeta?.turnScopeId || currentTurnScopeId || "",
             state: "sending",
             sourceEvent: "continue_started",
+            resumeDialogProcessId: normalizedRunConfig?.resumeDialogProcessId || "",
+            resumeTurnScopeId: normalizedRunConfig?.resumeTurnScopeId || "",
           });
         }
 

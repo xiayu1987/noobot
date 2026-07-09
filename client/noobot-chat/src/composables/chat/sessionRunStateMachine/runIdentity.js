@@ -9,7 +9,7 @@ import {
   FrontendRunState,
   SESSION_RUN_EVENT,
   SESSION_RUN_TRANSITION_RULE,
-  STOP_LOCK_REOPEN_STATES,
+  USER_STOP_LOCK_REOPEN_STATES,
 } from "./constants";
 import { normalizeState, trim } from "./normalize";
 
@@ -108,13 +108,28 @@ export function hasEventState(event = {}) {
 export function isSameConversationScopeOrNewTurn({ current = {}, event = {}, startsNewTurn = false } = {}) {
   if (isUnscopedLocalFailureForScopedTurn({ current, event, startsNewTurn })) return false;
   if (isUnscopedBackendStateForScopedTurn({ current, event, startsNewTurn })) return false;
+  if (isSameSessionUserStoppedRefresh({ current, event })) return true;
   return sameConversationScope(current, event) || startsNewTurn || canBindBackendDialogProcessIdByTurnScope(current, event);
 }
 
-export function isNotReopeningStopLock({ event = {}, startsNewTurn = false, currentRule = "" } = {}) {
-  if (currentRule !== SESSION_RUN_TRANSITION_RULE.STOP_LOCKED) return true;
+export function isSameSessionUserStoppedRefresh({ current = {}, event = {} } = {}) {
+  if (normalizeState(event.backendState) !== BackendChannelState.USER_STOPPED) return false;
+  const currentSessionId = trim(current.sessionId);
+  const eventSessionId = trim(event.sessionId);
+  if (currentSessionId && eventSessionId && currentSessionId !== eventSessionId) return false;
+  if (!hasRunIdentity(event)) return false;
+  if (hasRunIdentity(current)) {
+    return sameConversationScope(current, event);
+  }
+  const currentSeq = Number(current.seq || 0);
+  const eventSeq = Number(event.seq || 0);
+  return eventSeq > 0 && eventSeq > currentSeq;
+}
+
+export function isNotReopeningStopLock({ current = {}, event = {}, startsNewTurn = false, currentRule = "" } = {}) {
+  if (currentRule !== SESSION_RUN_TRANSITION_RULE.USER_STOP_LOCKED) return true;
   if (startsNewTurn) return true;
-  return !STOP_LOCK_REOPEN_STATES.includes(event.state);
+  return !USER_STOP_LOCK_REOPEN_STATES.includes(event.state);
 }
 
 export function isNotLeavingTerminal({ event = {}, startsNewTurn = false, currentRule = "" } = {}) {
@@ -123,7 +138,7 @@ export function isNotLeavingTerminal({ event = {}, startsNewTurn = false, curren
   const currentState = normalizeState(arguments[0]?.current?.state);
   const nextState = normalizeState(event.state);
   if (!FrontendTerminalStates.includes(nextState)) return false;
-  if ([BackendChannelState.ERROR, BackendChannelState.USER_STOPPED, FrontendRunState.CANCELLED].includes(currentState)) {
+  if ([BackendChannelState.ERROR, FrontendRunState.USER_STOP_COMPLETED, FrontendRunState.CANCELLED].includes(currentState)) {
     return nextState === currentState;
   }
   return true;
@@ -147,7 +162,7 @@ export function isBackendRunStateEvent(event = {}) {
 
 export function isUnscopedBackendProtectedState(state = "") {
   return [
-    BackendChannelState.STOPPING,
+    FrontendRunState.USER_STOPPING,
     ...FrontendTerminalStates,
   ].includes(normalizeState(state));
 }

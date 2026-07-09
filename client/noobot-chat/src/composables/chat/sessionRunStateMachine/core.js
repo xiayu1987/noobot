@@ -8,6 +8,7 @@ import { evaluateSessionRunState } from "./evaluation";
 import { normalizeSessionRunEvent } from "./eventNormalization";
 import { transitionPriority, transitionRule, trim } from "./normalize";
 import { resolveRunTurnScopeId, shouldStartNewTurn } from "./runIdentity";
+import { logStopButtonEvaluation } from "../debug/stopContinueDebugLogger";
 import {
   createInitialSessionRunState,
   applySessionRunActionEventPatch,
@@ -81,10 +82,10 @@ function isComposerActionEvent(type = "") {
     SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_SETTLED,
     SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED,
     SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_SETTLED,
-    SESSION_RUN_EVENT.LOCAL_STOP_REQUEST_STARTED,
-    SESSION_RUN_EVENT.LOCAL_STOP_REQUEST_SETTLED,
-    SESSION_RUN_EVENT.LOCAL_STOP_PENDING_BACKEND_READY,
-    SESSION_RUN_EVENT.LOCAL_STOP_PENDING_CLEARED,
+    SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
+    SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_SETTLED,
+    SESSION_RUN_EVENT.LOCAL_USER_STOP_PENDING_BACKEND_READY,
+    SESSION_RUN_EVENT.LOCAL_USER_STOP_PENDING_CLEARED,
   ].includes(type);
 }
 
@@ -102,6 +103,7 @@ export function applySessionRunStateEvent({ stateRef, sending, canStop, event } 
   const evaluation = evaluateSessionRunState(nextState);
   if (sending) sending.value = evaluation.sending;
   if (canStop) canStop.value = evaluation.canStop;
+  logStopButtonEvaluation({ previousState, nextState, event, evaluation, changed: previousState !== nextState });
   return { previousState, nextState, evaluation, changed: previousState !== nextState };
 }
 
@@ -112,6 +114,7 @@ export function applySessionRunStateEvents({ stateRef, sending, canStop, events 
   const evaluation = evaluateSessionRunState(nextState);
   if (sending) sending.value = evaluation.sending;
   if (canStop) canStop.value = evaluation.canStop;
+  logStopButtonEvaluation({ previousState, nextState, event: { type: "batch", count: Array.isArray(events) ? events.length : 0 }, evaluation, changed: previousState !== nextState });
   return { previousState, nextState, evaluation, changed: previousState !== nextState };
 }
 

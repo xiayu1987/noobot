@@ -60,10 +60,19 @@ describe("sessionRunStateMachine", () => {
     expect(event.state).toBe(BackendChannelState.SENDING);
     expect(event.sessionId).toBe("s1");
     expect(event.turnScopeId).toBe("c1");
-    expect(evaluateSessionRunState({ state: BackendChannelState.STOPPING })).toMatchObject({
+    const stoppingEvent = normalizeSessionRunEvent({
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: BackendChannelState.STOPPING,
+      sessionId: "s1",
+    });
+    expect(stoppingEvent).toMatchObject({
+      state: FrontendRunState.USER_STOPPING,
+      backendState: BackendChannelState.STOPPING,
+    });
+    expect(evaluateSessionRunState({ state: FrontendRunState.USER_STOPPING })).toMatchObject({
       sending: true,
       canStop: false,
-      assistantStatus: "stopping",
+      assistantStatus: "user_stopping",
       stopLocked: true,
     });
   });
@@ -98,7 +107,7 @@ describe("sessionRunStateMachine", () => {
     });
 
     const stopRequesting = transitionSessionRunState(backendSending, {
-      type: SESSION_RUN_EVENT.LOCAL_STOP_REQUEST_STARTED,
+      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
     });
     expect(evaluateSessionRunState(stopRequesting).composerActionState).toEqual({
       sendRequesting: false,
@@ -108,7 +117,7 @@ describe("sessionRunStateMachine", () => {
     });
 
     const stopRequested = transitionSessionRunState(stopRequesting, {
-      type: SESSION_RUN_EVENT.LOCAL_STOP_REQUESTED,
+      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED,
       sessionId: "s1",
       turnScopeId: "client-1",
     });
@@ -131,7 +140,8 @@ describe("sessionRunStateMachine", () => {
       turnScopeId: "client-1",
     });
     expect(stopped).toMatchObject({
-      state: BackendChannelState.USER_STOPPED,
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
       sessionId: "s1",
       dialogProcessId: "dialog-1",
       turnScopeId: "client-1",
@@ -151,7 +161,8 @@ describe("sessionRunStateMachine", () => {
       type: SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED,
     });
     expect(continueRequesting).toMatchObject({
-      state: BackendChannelState.USER_STOPPED,
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
       sessionId: "s1",
       dialogProcessId: "dialog-1",
       turnScopeId: "client-1",
@@ -167,7 +178,8 @@ describe("sessionRunStateMachine", () => {
       type: SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_SETTLED,
     });
     expect(continueSettled).toMatchObject({
-      state: BackendChannelState.USER_STOPPED,
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
       sessionId: "s1",
       dialogProcessId: "dialog-1",
       turnScopeId: "client-1",
@@ -241,7 +253,7 @@ describe("sessionRunStateMachine", () => {
       type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
     });
     const pendingStop = transitionSessionRunState(sendRequesting, {
-      type: SESSION_RUN_EVENT.LOCAL_STOP_PENDING_BACKEND_READY,
+      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_PENDING_BACKEND_READY,
     });
     expect(evaluateSessionRunState(pendingStop)).toMatchObject({
       sending: false,
@@ -288,7 +300,7 @@ describe("sessionRunStateMachine", () => {
       turnScopeId: "client-1",
     });
     const stopRequesting = transitionSessionRunState(sending, {
-      type: SESSION_RUN_EVENT.LOCAL_STOP_REQUEST_STARTED,
+      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
     });
     expect(evaluateSessionRunState(stopRequesting)).toMatchObject({
       stopInFlight: true,
@@ -385,7 +397,8 @@ describe("sessionRunStateMachine", () => {
       seq: 3,
     });
     expect(stopped).toMatchObject({
-      state: BackendChannelState.USER_STOPPED,
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
       turnScopeId: "turn-old",
     });
 
@@ -433,7 +446,7 @@ describe("sessionRunStateMachine", () => {
       dialogProcessId: "",
       turnScopeId: "turn-old",
     })).toMatchObject({
-      state: FrontendRunState.STOP_REQUESTED,
+      state: FrontendRunState.USER_STOP_REQUESTED,
       turnScopeId: "turn-old",
     });
   });
@@ -623,6 +636,56 @@ describe("sessionRunStateMachine", () => {
     });
   });
 
+  it("keeps continue resume identity out of the current run dialog binding", () => {
+    const localStarted = transitionSessionRunState(createInitialSessionRunState({
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
+      sessionId: "s1",
+      dialogProcessId: "dp-stopped",
+      turnScopeId: "turn-stopped",
+    }), {
+      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+      sessionId: "s1",
+      turnScopeId: "turn-new",
+      source: "continue",
+    });
+
+    expect(localStarted.backendState).toBe("");
+    const continueStarted = transitionSessionRunState(localStarted, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: BackendChannelState.SENDING,
+      sessionId: "s1",
+      turnScopeId: "turn-new",
+      sourceEvent: "continue_started",
+      resumeDialogProcessId: "dp-stopped",
+      resumeTurnScopeId: "turn-stopped",
+      seq: 2,
+    });
+
+    expect(continueStarted).toMatchObject({
+      state: BackendChannelState.SENDING,
+      backendState: BackendChannelState.SENDING,
+      sessionId: "s1",
+      dialogProcessId: "",
+      turnScopeId: "turn-new",
+    });
+
+    const realRunBound = transitionSessionRunState(continueStarted, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: BackendChannelState.SENDING,
+      sessionId: "s1",
+      dialogProcessId: "dp-new",
+      turnScopeId: "turn-new",
+      seq: 3,
+    });
+
+    expect(realRunBound).toMatchObject({
+      state: BackendChannelState.SENDING,
+      dialogProcessId: "dp-new",
+      turnScopeId: "turn-new",
+    });
+  });
+
   it("resolves event scope from turn identity only", () => {
     expect(resolveEventScope({ dialogProcessId: " dialog-1 ", turnScopeId: " client-1 " })).toBe("client-1");
     expect(resolveEventScope({ turnScopeId: " turn-1 " })).toBe("turn-1");
@@ -654,10 +717,10 @@ describe("sessionRunStateMachine", () => {
     },
     {
       name: "keeps stop lock against stale running event",
-      current: { state: FrontendRunState.STOP_REQUESTED, sessionId: "s1", seq: 2 },
+      current: { state: FrontendRunState.USER_STOP_REQUESTED, sessionId: "s1", seq: 2 },
       event: { type: SESSION_RUN_EVENT.BACKEND_RECOVERABLE_RUNNING, state: "reconnecting", sessionId: "s1", seq: 1 },
       canApply: false,
-      nextState: FrontendRunState.STOP_REQUESTED,
+      nextState: FrontendRunState.USER_STOP_REQUESTED,
     },
     {
       name: "keeps terminal state against non-terminal event",
@@ -714,11 +777,11 @@ describe("sessionRunStateMachine", () => {
     },
     {
       name: "stop lock reopen",
-      current: { state: FrontendRunState.STOP_REQUESTED, sessionId: "s1" },
+      current: { state: FrontendRunState.USER_STOP_REQUESTED, sessionId: "s1" },
       event: { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "sending", sessionId: "s1" },
-      reason: SESSION_RUN_TRANSITION_DECISION_REASON.STOP_LOCK_REOPEN,
+      reason: SESSION_RUN_TRANSITION_DECISION_REASON.USER_STOP_LOCK_REOPEN,
       canApply: false,
-      nextState: FrontendRunState.STOP_REQUESTED,
+      nextState: FrontendRunState.USER_STOP_REQUESTED,
     },
     {
       name: "terminal lock reopen",
@@ -730,11 +793,11 @@ describe("sessionRunStateMachine", () => {
     },
     {
       name: "stale seq regression",
-      current: { state: BackendChannelState.STOPPING, sessionId: "s1", seq: 3 },
-      event: { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "stop_requested", sessionId: "s1", seq: 2 },
+      current: { state: FrontendRunState.USER_STOPPING, sessionId: "s1", seq: 3 },
+      event: { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: FrontendRunState.USER_STOP_REQUESTED, sessionId: "s1", seq: 2 },
       reason: SESSION_RUN_TRANSITION_DECISION_REASON.STALE_SEQ_REGRESSION,
       canApply: false,
-      nextState: BackendChannelState.STOPPING,
+      nextState: FrontendRunState.USER_STOPPING,
     },
     {
       name: "priority regression",
@@ -764,7 +827,7 @@ describe("sessionRunStateMachine", () => {
     const orderedGuardReasons = [
       SESSION_RUN_TRANSITION_DECISION_REASON.MISSING_EVENT_STATE,
       SESSION_RUN_TRANSITION_DECISION_REASON.DIFFERENT_SCOPE,
-      SESSION_RUN_TRANSITION_DECISION_REASON.STOP_LOCK_REOPEN,
+      SESSION_RUN_TRANSITION_DECISION_REASON.USER_STOP_LOCK_REOPEN,
       SESSION_RUN_TRANSITION_DECISION_REASON.TERMINAL_LOCK_REOPEN,
       SESSION_RUN_TRANSITION_DECISION_REASON.STALE_SEQ_REGRESSION,
       SESSION_RUN_TRANSITION_DECISION_REASON.PRIORITY_REGRESSION,
@@ -784,10 +847,10 @@ describe("sessionRunStateMachine", () => {
       "no_stale_seq_regression",
       "priority_forward_or_new_turn",
     ]);
-    expect(SESSION_RUN_TRANSITION_TABLE[FrontendRunState.STOP_REQUESTED].guards).toEqual([
+    expect(SESSION_RUN_TRANSITION_TABLE[FrontendRunState.USER_STOP_REQUESTED].guards).toEqual([
       "has_event_state",
       "same_conversation_scope_or_new_turn",
-      "stop_lock_not_reopened",
+      "user_stop_lock_not_reopened",
       "no_stale_seq_regression",
       "priority_forward_or_new_turn",
     ]);
@@ -818,7 +881,9 @@ describe("sessionRunStateMachine", () => {
       BackendChannelState.NO_CONVERSATION,
     ]);
     expect(FrontendTerminalStates).toContain(FrontendRunState.FRONTEND_COMPLETED);
+    expect(FrontendTerminalStates).toContain(FrontendRunState.USER_STOP_COMPLETED);
     expect(FrontendTerminalStates).not.toContain(BackendChannelState.COMPLETED);
+    expect(FrontendTerminalStates).not.toContain(BackendChannelState.USER_STOPPED);
     expect(evaluateSessionRunState({ state: BackendChannelState.COMPLETED })).toMatchObject({
       sending: true,
       terminal: false,
@@ -829,36 +894,42 @@ describe("sessionRunStateMachine", () => {
     });
   });
 
-  it("keeps stop_requested locked when stale running/reconnecting events arrive", () => {
+  it("keeps user_stop_requested locked when stale running/reconnecting events arrive", () => {
     const stopped = reduceSessionRunEvents(createInitialSessionRunState(), [
       { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED, sessionId: "s1", seq: 1 },
-      { type: SESSION_RUN_EVENT.LOCAL_STOP_REQUESTED, sessionId: "s1", seq: 2 },
+      { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED, sessionId: "s1", seq: 2 },
       { type: SESSION_RUN_EVENT.BACKEND_RECOVERABLE_RUNNING, state: "reconnecting", sessionId: "s1", seq: 1 },
     ]);
-    expect(stopped.state).toBe(FrontendRunState.STOP_REQUESTED);
+    expect(stopped.state).toBe(FrontendRunState.USER_STOP_REQUESTED);
     expect(evaluateSessionRunState(stopped)).toMatchObject({ sending: true, canStop: false });
   });
 
-  it("reduces same batch running plus stopping/stopped to terminal stopped", () => {
+  it("reduces same batch running plus stopping/stopped to frontend user-stop completion", () => {
     const state = reduceSessionRunEvents(createInitialSessionRunState(), [
       { type: SESSION_RUN_EVENT.BACKEND_RECOVERABLE_RUNNING, sessionId: "s1", seq: 1 },
       { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "stopping", sessionId: "s1", seq: 2 },
       { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "user_stopped", sessionId: "s1", seq: 3 },
       { type: SESSION_RUN_EVENT.BACKEND_RECOVERABLE_RUNNING, sessionId: "s1", seq: 1 },
     ]);
-    expect(state.state).toBe(BackendChannelState.USER_STOPPED);
+    expect(state.state).toBe(FrontendRunState.USER_STOP_COMPLETED);
+    expect(state.backendState).toBe(BackendChannelState.USER_STOPPED);
     expect(evaluateSessionRunState(state)).toMatchObject({ sending: false, canStop: false, terminal: true });
   });
 
   it("filters different scope but allows a new send turn after terminal", () => {
-    const current = createInitialSessionRunState({ state: BackendChannelState.USER_STOPPED, sessionId: "s1", dialogProcessId: "d1" });
-    expect(transitionSessionRunState(current, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "sending", sessionId: "s2" }).state).toBe(BackendChannelState.USER_STOPPED);
+    const current = createInitialSessionRunState({
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
+      sessionId: "s1",
+      dialogProcessId: "d1",
+    });
+    expect(transitionSessionRunState(current, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "sending", sessionId: "s2" }).state).toBe(FrontendRunState.USER_STOP_COMPLETED);
     expect(transitionSessionRunState(current, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED, sessionId: "s1" }).state).toBe(BackendChannelState.SENDING);
   });
 
   it("keeps a new local send scoped by turnScopeId until backend binds dialog id", () => {
     const current = createInitialSessionRunState({
-      state: FrontendRunState.STOP_REQUESTED,
+      state: FrontendRunState.USER_STOP_REQUESTED,
       sessionId: "s1",
       dialogProcessId: "old-dialog",
       turnScopeId: "client-old",
@@ -903,6 +974,29 @@ describe("sessionRunStateMachine", () => {
       updatedAt: Date.parse("2026-06-22T08:00:00.000Z"),
     });
     expect(evaluateSessionRunState(bound)).toMatchObject({ sending: true, canStop: true });
+  });
+
+  it("ignores stale user_stop replay for a different identified turn", () => {
+    const current = createInitialSessionRunState({
+      state: BackendChannelState.ERROR,
+      sessionId: "s1",
+      dialogProcessId: "dialog-new",
+      turnScopeId: "turn-new",
+      seq: 0,
+      priority: 120,
+    });
+
+    const staleReplay = transitionSessionRunState(current, {
+      type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
+      state: BackendChannelState.USER_STOPPED,
+      sessionId: "s1",
+      dialogProcessId: "dialog-old",
+      turnScopeId: "turn-old",
+      seq: 57,
+      source: "reconnect",
+    });
+
+    expect(staleReplay).toBe(current);
   });
 
   it("requires matching turnScopeId after backend dialogProcessId is bound", () => {
@@ -970,10 +1064,10 @@ describe("sessionRunStateMachine", () => {
     applySessionRunStateEvent({ stateRef, sending, canStop, event: { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED, sessionId: "s1" } });
     expect([stateRef.value.state, sending.value, canStop.value]).toEqual([BackendChannelState.SENDING, true, true]);
     applySessionRunStateEvents({ stateRef, sending, canStop, events: [
-      { type: SESSION_RUN_EVENT.LOCAL_STOP_REQUESTED, sessionId: "s1" },
+      { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED, sessionId: "s1" },
       { type: SESSION_RUN_EVENT.BACKEND_RECOVERABLE_RUNNING, sessionId: "s1" },
     ] });
-    expect([stateRef.value.state, sending.value, canStop.value]).toEqual([FrontendRunState.STOP_REQUESTED, true, false]);
+    expect([stateRef.value.state, sending.value, canStop.value]).toEqual([FrontendRunState.USER_STOP_REQUESTED, true, false]);
   });
 
   it("persists remembered stop requests and clears them on terminal", () => {
@@ -991,7 +1085,7 @@ describe("sessionRunStateMachine", () => {
       sessionId: "s1",
       dialogProcessId: "d1",
       turnScopeId: "turn-1",
-    })?.state).toBe(FrontendRunState.STOP_REQUESTED);
+    })?.state).toBe(FrontendRunState.USER_STOP_REQUESTED);
     clearRememberedStopRequests({ sessionId: "s1", dialogProcessId: "d1", turnScopeId: "turn-1" });
     expect(resolveRememberedStopRequestedEvent({
       sessionId: "s1",
@@ -1135,11 +1229,12 @@ describe("sessionRunStateMachine", () => {
 
     expect(resolveSessionRunMessageRuntimePatch({
       stateSnapshot: createInitialSessionRunState({
-        state: BackendChannelState.STOPPING,
+        state: FrontendRunState.USER_STOPPING,
+        backendState: BackendChannelState.STOPPING,
         sessionId: "s1",
         dialogProcessId: "d1",
         turnScopeId: "turn-1",
-        sourceEvent: "stop_requested_registry",
+        sourceEvent: "user_stop_requested_registry",
         priority: 70,
       }),
       messageItem: assistant,
@@ -1163,7 +1258,8 @@ describe("sessionRunStateMachine", () => {
 
     expect(resolveSessionRunMessageRuntimePatch({
       stateSnapshot: createInitialSessionRunState({
-        state: BackendChannelState.USER_STOPPED,
+        state: FrontendRunState.USER_STOP_COMPLETED,
+        backendState: BackendChannelState.USER_STOPPED,
         sessionId: "s1",
         dialogProcessId: "d1",
         turnScopeId: "turn-1",
@@ -1278,10 +1374,10 @@ describe("sessionRunStateMachine", () => {
 
     expect(resolveSessionRunMessageRuntimeView({
       role: "assistant",
-      status: "stop_requested",
+      status: FrontendRunState.USER_STOP_REQUESTED,
       pending: true,
     })).toMatchObject({
-      state: FrontendRunState.STOP_REQUESTED,
+      state: FrontendRunState.USER_STOP_REQUESTED,
       running: true,
       inFlightAssistant: true,
       canStopTarget: false,

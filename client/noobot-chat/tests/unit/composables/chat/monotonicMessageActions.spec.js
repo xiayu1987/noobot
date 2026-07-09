@@ -76,7 +76,7 @@ describe("monotonicMessageActions stop-window gates", () => {
     const runStateSnapshot = ref(createInitialSessionRunState());
     applySessionRunStateEvent({
       stateRef: runStateSnapshot,
-      event: { type: SESSION_RUN_EVENT.LOCAL_STOP_REQUEST_STARTED, source: "test" },
+      event: { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED, source: "test" },
     });
     const { actions, activeSession, userMessage, deleteSessionMessagesFromApi } = createActions({ runStateSnapshot });
 
@@ -91,7 +91,7 @@ describe("monotonicMessageActions stop-window gates", () => {
     const runStateSnapshot = ref(createInitialSessionRunState());
     applySessionRunStateEvent({
       stateRef: runStateSnapshot,
-      event: { type: SESSION_RUN_EVENT.LOCAL_STOP_REQUEST_STARTED, source: "test" },
+      event: { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED, source: "test" },
     });
     applySessionRunStateEvent({
       stateRef: runStateSnapshot,

@@ -1040,7 +1040,9 @@ test("chat-websocket-server: continue action passes stopped snapshot identity an
     assert.equal(capturedPayload?.runConfig?.turnScopeId, "turn-new");
     const sendingEvent = events.find((item) => item?.event === "channel_state" && item?.data?.state === "sending");
     assert.equal(sendingEvent?.data?.sourceEvent, "continue_started");
-    assert.equal(sendingEvent?.data?.dialogProcessId, "dp-stopped");
+    assert.equal(sendingEvent?.data?.dialogProcessId || "", "");
+    assert.equal(sendingEvent?.data?.resumeDialogProcessId, "dp-stopped");
+    assert.equal(sendingEvent?.data?.resumeTurnScopeId, "turn-stopped");
     assert.equal(sendingEvent?.data?.turnScopeId, "turn-new");
   } finally {
     await closeServer(server);
@@ -1063,7 +1065,37 @@ test("chat-websocket-server: continue action requires stopped dialogProcessId an
       },
     });
     const errorEvent = events.find((item) => item?.event === "error");
-    assert.match(String(errorEvent?.data?.error || ""), /continue requires dialogProcessId and turnScopeId/);
+    assert.match(String(errorEvent?.data?.error || ""), /continue requires resumeDialogProcessId and resumeTurnScopeId/);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("chat-websocket-server: continue action does not fallback to current dialogProcessId", async () => {
+  let runSessionCalled = false;
+  const server = await startServerWithWs({
+    runSession: async () => {
+      runSessionCalled = true;
+      return { sessionId: "s1", dialogProcessId: "dp-current", answer: "unexpected" };
+    },
+  });
+  try {
+    const { port } = server.address();
+    const events = await callChatWs({
+      port,
+      payload: {
+        action: "continue",
+        userId: "u1",
+        sessionId: "s1",
+        dialogProcessId: "dp-current",
+        message: "continue",
+        turnScopeId: "turn-new",
+        config: { locale: "zh-CN", resumeTurnScopeId: "turn-stopped" },
+      },
+    });
+    const errorEvent = events.find((item) => item?.event === "error");
+    assert.match(String(errorEvent?.data?.error || ""), /continue requires resumeDialogProcessId and resumeTurnScopeId/);
+    assert.equal(runSessionCalled, false);
   } finally {
     await closeServer(server);
   }
@@ -1098,7 +1130,7 @@ test("chat-websocket-server: stop during continue request keeps stopping and end
         dialogProcessId: "dp-stopped",
         message: "continue",
         turnScopeId: "turn-new",
-        config: { locale: "zh-CN", resumeTurnScopeId: "turn-stopped" },
+        config: { locale: "zh-CN", resumeDialogProcessId: "dp-stopped", resumeTurnScopeId: "turn-stopped" },
       },
       stopPayload: {
         sessionId: "s-continue-stop",

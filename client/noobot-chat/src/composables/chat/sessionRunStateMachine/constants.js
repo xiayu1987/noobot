@@ -5,8 +5,8 @@
  */
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
-export const STOP_REQUEST_STORAGE_KEY = "noobot:session-run-state-machine:stop-requests:v1";
-export const STOP_REQUEST_TTL_MS = TIME_THRESHOLDS.client.stopRequestTtlMs;
+export const USER_STOP_REQUEST_STORAGE_KEY = "noobot:session-run-state-machine:user-stop-requests:v1";
+export const USER_STOP_REQUEST_TTL_MS = TIME_THRESHOLDS.client.stopRequestTtlMs;
 export const SESSION_RUN_MESSAGE_RUNTIME_MARK = "__noobotRuntimeRunStateKey";
 export const SESSION_RUN_MESSAGE_RUNTIME_ACTION = Object.freeze({
   NONE: "none",
@@ -43,7 +43,9 @@ export const FrontendRunState = Object.freeze({
   RESEND_REPLACING_TURN: "resend_replacing_turn",
   RESEND_STREAMING: "resend_streaming",
   CONTINUE_REQUESTING: "continue_requesting",
-  STOP_REQUESTED: "stop_requested",
+  USER_STOP_REQUESTED: "frontend_user_stop_requested",
+  USER_STOPPING: "frontend_user_stopping",
+  USER_STOP_COMPLETED: "frontend_user_stop_completed",
   FRONTEND_COMPLETION_REQUESTING: "frontend_completion_requesting",
   FRONTEND_COMPLETED: "frontend_completed",
   CANCELLED: "cancelled",
@@ -51,8 +53,8 @@ export const FrontendRunState = Object.freeze({
 
 export const FrontendTerminalStates = Object.freeze([
   FrontendRunState.FRONTEND_COMPLETED,
+  FrontendRunState.USER_STOP_COMPLETED,
   FrontendRunState.CANCELLED,
-  BackendChannelState.USER_STOPPED,
   BackendChannelState.ERROR,
   BackendChannelState.EXPIRED,
   BackendChannelState.NO_CONVERSATION,
@@ -72,11 +74,11 @@ export const SESSION_RUN_EVENT = Object.freeze({
   LOCAL_FRONTEND_COMPLETION_REQUEST_STARTED: "local_frontend_completion_request_started",
   LOCAL_FRONTEND_COMPLETION_APPLIED: "local_frontend_completion_applied",
   LOCAL_FRONTEND_COMPLETION_FAILED: "local_frontend_completion_failed",
-  LOCAL_STOP_REQUESTED: "local_stop_requested",
-  LOCAL_STOP_REQUEST_STARTED: "local_stop_request_started",
-  LOCAL_STOP_REQUEST_SETTLED: "local_stop_request_settled",
-  LOCAL_STOP_PENDING_BACKEND_READY: "local_stop_pending_backend_ready",
-  LOCAL_STOP_PENDING_CLEARED: "local_stop_pending_cleared",
+  LOCAL_USER_STOP_REQUESTED: "local_user_stop_requested",
+  LOCAL_USER_STOP_REQUEST_STARTED: "local_user_stop_request_started",
+  LOCAL_USER_STOP_REQUEST_SETTLED: "local_user_stop_request_settled",
+  LOCAL_USER_STOP_PENDING_BACKEND_READY: "local_user_stop_pending_backend_ready",
+  LOCAL_USER_STOP_PENDING_CLEARED: "local_user_stop_pending_cleared",
   BACKEND_RECOVERABLE_RUNNING: "backend_recoverable_running",
   BACKEND_CONVERSATION_STATE: "backend_conversation_state",
   BACKEND_CHANNEL_STATE: "backend_channel_state",
@@ -93,8 +95,8 @@ export const IN_FLIGHT_STATES = Object.freeze([
   FrontendRunState.RESEND_STREAMING,
   BackendChannelState.COMPLETED,
   FrontendRunState.FRONTEND_COMPLETION_REQUESTING,
-  FrontendRunState.STOP_REQUESTED,
-  BackendChannelState.STOPPING,
+  FrontendRunState.USER_STOP_REQUESTED,
+  FrontendRunState.USER_STOPPING,
 ]);
 
 export const MESSAGE_IN_FLIGHT_CHANNEL_STATES = Object.freeze([
@@ -104,17 +106,15 @@ export const MESSAGE_IN_FLIGHT_CHANNEL_STATES = Object.freeze([
   FrontendRunState.CONTINUE_REQUESTING,
   FrontendRunState.RESEND_REPLACING_TURN,
   FrontendRunState.RESEND_STREAMING,
-  BackendChannelState.STOPPING,
+  FrontendRunState.USER_STOPPING,
 ]);
 
-export const STOP_LOCK_STATES = Object.freeze([
-  FrontendRunState.STOP_REQUESTED,
-  BackendChannelState.STOPPING,
-  BackendChannelState.USER_STOPPED,
-  FrontendRunState.CANCELLED,
+export const USER_STOP_LOCK_STATES = Object.freeze([
+  FrontendRunState.USER_STOP_REQUESTED,
+  FrontendRunState.USER_STOPPING,
 ]);
 
-export const STOP_LOCK_REOPEN_STATES = Object.freeze([
+export const USER_STOP_LOCK_REOPEN_STATES = Object.freeze([
   BackendChannelState.SENDING,
   BackendChannelState.RECONNECTING,
   FrontendRunState.CONTINUE_REQUESTING,
@@ -124,14 +124,14 @@ export const STOP_LOCK_REOPEN_STATES = Object.freeze([
 
 export const SESSION_RUN_TRANSITION_RULE = Object.freeze({
   PRIORITY_FORWARD: "priority_forward",
-  STOP_LOCKED: "stop_locked",
+  USER_STOP_LOCKED: "user_stop_locked",
   TERMINAL_LOCKED: "terminal_locked",
 });
 
 export const SESSION_RUN_TRANSITION_GUARD_ID = Object.freeze({
   HAS_EVENT_STATE: "has_event_state",
   SAME_CONVERSATION_SCOPE_OR_NEW_TURN: "same_conversation_scope_or_new_turn",
-  STOP_LOCK_NOT_REOPENED: "stop_lock_not_reopened",
+  USER_STOP_LOCK_NOT_REOPENED: "user_stop_lock_not_reopened",
   TERMINAL_NOT_REOPENED: "terminal_not_reopened",
   NO_STALE_SEQ_REGRESSION: "no_stale_seq_regression",
   PRIORITY_FORWARD_OR_NEW_TURN: "priority_forward_or_new_turn",
@@ -142,7 +142,7 @@ export const SESSION_RUN_TRANSITION_DECISION_REASON = Object.freeze({
   LOCAL_RESET: "local_reset",
   MISSING_EVENT_STATE: "missing_event_state",
   DIFFERENT_SCOPE: "different_scope",
-  STOP_LOCK_REOPEN: "stop_lock_reopen",
+  USER_STOP_LOCK_REOPEN: "user_stop_lock_reopen",
   TERMINAL_LOCK_REOPEN: "terminal_lock_reopen",
   STALE_SEQ_REGRESSION: "stale_seq_regression",
   PRIORITY_REGRESSION: "priority_regression",
@@ -160,8 +160,8 @@ export const FINAL_TRANSITION_GUARD_IDS = Object.freeze([
 
 export const SESSION_RUN_TRANSITION_RULE_GUARDS = Object.freeze({
   [SESSION_RUN_TRANSITION_RULE.PRIORITY_FORWARD]: Object.freeze([]),
-  [SESSION_RUN_TRANSITION_RULE.STOP_LOCKED]: Object.freeze([
-    SESSION_RUN_TRANSITION_GUARD_ID.STOP_LOCK_NOT_REOPENED,
+  [SESSION_RUN_TRANSITION_RULE.USER_STOP_LOCKED]: Object.freeze([
+    SESSION_RUN_TRANSITION_GUARD_ID.USER_STOP_LOCK_NOT_REOPENED,
   ]),
   [SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED]: Object.freeze([
     SESSION_RUN_TRANSITION_GUARD_ID.TERMINAL_NOT_REOPENED,
@@ -188,14 +188,14 @@ export const SESSION_RUN_TRANSITION_TABLE = Object.freeze({
   [BackendChannelState.INTERACTION_PENDING]: createTransitionConfig(50),
   [FrontendRunState.RESEND_REPLACING_TURN]: createTransitionConfig(55),
   [FrontendRunState.RESEND_STREAMING]: createTransitionConfig(60),
-  [FrontendRunState.STOP_REQUESTED]: createTransitionConfig(70, SESSION_RUN_TRANSITION_RULE.STOP_LOCKED),
-  [BackendChannelState.STOPPING]: createTransitionConfig(80, SESSION_RUN_TRANSITION_RULE.STOP_LOCKED),
+  [FrontendRunState.USER_STOP_REQUESTED]: createTransitionConfig(70, SESSION_RUN_TRANSITION_RULE.USER_STOP_LOCKED),
+  [FrontendRunState.USER_STOPPING]: createTransitionConfig(80, SESSION_RUN_TRANSITION_RULE.USER_STOP_LOCKED),
   [BackendChannelState.COMPLETED]: createTransitionConfig(90),
   [FrontendRunState.FRONTEND_COMPLETION_REQUESTING]: createTransitionConfig(95),
   [FrontendRunState.FRONTEND_COMPLETED]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
+  [FrontendRunState.USER_STOP_COMPLETED]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
   [BackendChannelState.ERROR]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
   [BackendChannelState.EXPIRED]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
   [BackendChannelState.NO_CONVERSATION]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
-  [BackendChannelState.USER_STOPPED]: createTransitionConfig(110, SESSION_RUN_TRANSITION_RULE.STOP_LOCKED),
-  [FrontendRunState.CANCELLED]: createTransitionConfig(110, SESSION_RUN_TRANSITION_RULE.STOP_LOCKED),
+  [FrontendRunState.CANCELLED]: createTransitionConfig(110, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
 });

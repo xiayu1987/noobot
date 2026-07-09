@@ -127,7 +127,7 @@ describe("useReconnectReplay", () => {
       { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-stopped", content: "A", pending: true },
     ];
 
-    await api.applyReconnectEvent(StreamEventEnum.STOPPED, {
+    await api.applyReconnectEvent(StreamEventEnum.USER_STOPPED, {
       sessionId: "s-1",
       dialogProcessId: "dp-stopped",
       seq: 2,

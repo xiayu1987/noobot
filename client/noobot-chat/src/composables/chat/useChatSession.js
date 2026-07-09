@@ -50,11 +50,16 @@ import {
   applySessionRunStateEvent,
   BackendChannelState,
   evaluateSessionRunState,
+  FrontendRunState,
   SESSION_RUN_EVENT,
 } from "./sessionRunStateMachine";
 import { setStateMachineDebugLogSink } from "./debug/stateMachineLogger";
 import { setResendDebugLogSink } from "./debug/resendDebugLogger";
 import { setStopDebugLogSink } from "./debug/stopDebugLogger";
+import {
+  logContinueResumeIdentitySelection,
+  setStopContinueDebugLogSink,
+} from "./debug/stopContinueDebugLogger";
 
 export function useChatSession({
   userId,
@@ -84,6 +89,7 @@ export function useChatSession({
     sending,
     canStop,
     runStateSnapshot,
+    userStoppedResumeSnapshots,
     sessions,
     activeSessionId,
     activeSession,
@@ -104,7 +110,7 @@ export function useChatSession({
     canDeleteMessage: evaluation.canDeleteMessage !== false,
     stopInFlight: Boolean(evaluation.stopInFlight),
     awaitingBackendStop: Boolean(evaluation.awaitingBackendStop),
-    stopped: evaluation.state === BackendChannelState.USER_STOPPED,
+    userStopped: evaluation.state === FrontendRunState.USER_STOP_COMPLETED,
     state: evaluation.state || "",
     };
   });
@@ -123,7 +129,7 @@ export function useChatSession({
     const requested = chatEngine.stopSending();
     if (requested) {
       applyComposerActionStateEvent({
-        type: SESSION_RUN_EVENT.LOCAL_STOP_PENDING_CLEARED,
+        type: SESSION_RUN_EVENT.LOCAL_USER_STOP_PENDING_CLEARED,
         source: "use_chat_session",
       });
     }
@@ -177,7 +183,7 @@ export function useChatSession({
       turnScopeId,
       data: normalizedEntry,
     });
-    applySessionRunStateEvent({
+    const transitionResult = applySessionRunStateEvent({
       stateRef: runStateSnapshot,
       sending,
       canStop,
@@ -196,6 +202,27 @@ export function useChatSession({
         updatedAt,
       },
     });
+    const nextRunState = transitionResult?.nextState || {};
+    if (
+      state === BackendChannelState.USER_STOPPED &&
+      sessionId &&
+      dialogProcessId &&
+      turnScopeId &&
+      nextRunState.state === FrontendRunState.USER_STOP_COMPLETED &&
+      nextRunState.backendState === BackendChannelState.USER_STOPPED &&
+      nextRunState.sessionId === sessionId &&
+      nextRunState.dialogProcessId === dialogProcessId &&
+      nextRunState.turnScopeId === turnScopeId
+    ) {
+      chatStore.rememberUserStoppedResumeSnapshot({
+        sessionId,
+        dialogProcessId,
+        turnScopeId,
+        seq: normalizedEntry.seq,
+        source: normalizedEntry.sourceEvent || normalizedEntry.source || "conversation_state",
+        updatedAt,
+      });
+    }
   }
 
   const {
@@ -223,6 +250,7 @@ export function useChatSession({
   setStateMachineDebugLogSink(sessionLogWebSocketClient);
   setResendDebugLogSink(sessionLogWebSocketClient);
   setStopDebugLogSink(sessionLogWebSocketClient);
+  setStopContinueDebugLogSink(sessionLogWebSocketClient);
 
   function logSessionSystemEvent(event, payload = {}) {
     sessionLogWebSocketClient.log({
@@ -413,12 +441,32 @@ export function useChatSession({
   async function sendWithComposerActionState(...args) {
     const runStateEvaluation = evaluateSessionRunState(runStateSnapshot.value);
     if (runStateEvaluation.canStartNewSend === false) return false;
-    const isContinueFromStopped = runStateEvaluation.state === BackendChannelState.USER_STOPPED;
+    const isContinueFromUserStopped = runStateEvaluation.state === FrontendRunState.USER_STOP_COMPLETED;
     if (composerActionState.value.sendRequesting || composerActionState.value.continueRequesting) return false;
-    const composerEventType = isContinueFromStopped
+    const resumeSessionId = String(activeSession.value?.backendSessionId || activeSession.value?.id || activeSessionId.value || "").trim();
+    const userStoppedResumeSnapshot = isContinueFromUserStopped
+      ? chatStore.getUserStoppedResumeSnapshot(resumeSessionId)
+      : null;
+    if (isContinueFromUserStopped && !userStoppedResumeSnapshot) {
+      logContinueResumeIdentitySelection({
+        runState: runStateSnapshot.value,
+        selected: {
+          continueFromUserStopped: true,
+          resumeDialogProcessId: "",
+          resumeTurnScopeId: "",
+        },
+        options: { resumeIdentitySource: "missing_user_stopped_resume_registry" },
+      });
+      notify?.({
+        type: "warning",
+        message: translate("chat.sessionStateOutOfSync") || "Session state is out of sync. Refresh and try again.",
+      });
+      return false;
+    }
+    const composerEventType = isContinueFromUserStopped
       ? SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED
       : SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED;
-    const composerSettledEventType = isContinueFromStopped
+    const composerSettledEventType = isContinueFromUserStopped
       ? SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_SETTLED
       : SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_SETTLED;
     applyComposerActionStateEvent({
@@ -427,14 +475,27 @@ export function useChatSession({
     });
     try {
       const [options = {}, ...restArgs] = args;
-      const sendOptions = isContinueFromStopped
+      const sendOptions = isContinueFromUserStopped
         ? {
             ...(options && typeof options === "object" ? options : {}),
-            continueFromStopped: true,
-            resumeDialogProcessId: runStateSnapshot.value?.dialogProcessId || "",
-            resumeTurnScopeId: runStateSnapshot.value?.turnScopeId || "",
+            continueFromUserStopped: true,
+            resumeDialogProcessId: userStoppedResumeSnapshot?.dialogProcessId || "",
+            resumeTurnScopeId: userStoppedResumeSnapshot?.turnScopeId || "",
+            onContinueUserStoppedResumeSnapshotCommitted: () => {
+              chatStore.consumeUserStoppedResumeSnapshot(resumeSessionId);
+            },
           }
         : options;
+      if (isContinueFromUserStopped) {
+        logContinueResumeIdentitySelection({
+          runState: runStateSnapshot.value,
+          selected: sendOptions,
+          options: {
+            ...(options && typeof options === "object" ? options : {}),
+            userStoppedResumeSnapshot,
+          },
+        });
+      }
       return await chatEngine.send(sendOptions, ...restArgs);
     } finally {
       replayPendingStopWhenBackendReady();
@@ -448,20 +509,20 @@ export function useChatSession({
   function stopSendingWithComposerActionState(...args) {
     if (composerActionState.value.stopRequesting) return false;
     applyComposerActionStateEvent({
-      type: SESSION_RUN_EVENT.LOCAL_STOP_REQUEST_STARTED,
+      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
       source: "use_chat_session",
     });
     const requested = chatEngine.stopSending(...args);
     if (!requested) {
       if (composerActionState.value.sendRequesting || composerActionState.value.continueRequesting) {
         applyComposerActionStateEvent({
-          type: SESSION_RUN_EVENT.LOCAL_STOP_PENDING_BACKEND_READY,
+          type: SESSION_RUN_EVENT.LOCAL_USER_STOP_PENDING_BACKEND_READY,
           source: "use_chat_session",
         });
         return true;
       }
       applyComposerActionStateEvent({
-        type: SESSION_RUN_EVENT.LOCAL_STOP_REQUEST_SETTLED,
+        type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_SETTLED,
         source: "use_chat_session",
       });
     }
@@ -513,6 +574,7 @@ export function useChatSession({
     activeSessionId,
     activeSession,
     runStateSnapshot,
+    userStoppedResumeSnapshots,
     loadingSessions,
     loadingSessionDetail,
     newSession: chatList.newSession,

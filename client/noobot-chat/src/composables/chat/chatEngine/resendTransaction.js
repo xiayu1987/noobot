@@ -142,7 +142,7 @@ function isStoppedAssistantSnapshot(message = {}) {
     message?.state,
     getMessageRuntimeChannelState(message)?.state,
   ].map(normalizeState);
-  return states.some((state) => ["user_stopped", "cancelled", "aborted"].includes(state));
+  return states.some((state) => state === "user_stopped");
 }
 
 function findReplacementUserMessage({ session, turnScopeId }) {

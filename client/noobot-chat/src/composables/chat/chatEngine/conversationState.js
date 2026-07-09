@@ -345,8 +345,7 @@ export function createChatEngineConversationState({
       (
         isTerminalConversationState(runtimeState) ||
         isTerminalConversationState(directState) ||
-        stopState === BackendChannelState.USER_STOPPED ||
-        stopState === FrontendRunState.CANCELLED
+        stopState === BackendChannelState.USER_STOPPED
       )
     );
   }
@@ -589,7 +588,6 @@ export function createChatEngineConversationState({
           FrontendRunState.FRONTEND_COMPLETED,
           BackendChannelState.ERROR,
           BackendChannelState.USER_STOPPED,
-          FrontendRunState.CANCELLED,
         ].includes(currentMessageState)
       ) {
         logResendDebug("conversationState.backendCompleted.skipFinalized", {
@@ -621,11 +619,20 @@ export function createChatEngineConversationState({
       });
       return;
     }
-    if (state === BackendChannelState.USER_STOPPED || state === FrontendRunState.CANCELLED) {
+    if (state === BackendChannelState.USER_STOPPED) {
       targetAssistantMessage.statusLabel = translate("chat.stopped");
       if (!String(targetAssistantMessage.content || "").trim()) {
         targetAssistantMessage.content = translate("chat.stoppedContent");
       }
+      logResendDebug("conversationState.terminal.apply", {
+        state, sessionId, dialogProcessId, turnScopeId,
+        before: beforeTerminalApply,
+        after: summarizeDebugMessage(targetAssistantMessage),
+      });
+      return;
+    }
+    if (state === FrontendRunState.CANCELLED) {
+      targetAssistantMessage.statusLabel = translate("chat.failed");
       logResendDebug("conversationState.terminal.apply", {
         state, sessionId, dialogProcessId, turnScopeId,
         before: beforeTerminalApply,

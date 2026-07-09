@@ -9,8 +9,8 @@ import { normalizeState } from "./normalize";
 export function isTerminalSessionRunState(state = "") {
   return [
     FrontendRunState.FRONTEND_COMPLETED,
+    FrontendRunState.USER_STOP_COMPLETED,
     BackendChannelState.ERROR,
-    BackendChannelState.USER_STOPPED,
     FrontendRunState.CANCELLED,
     FrontendRunState.IDLE,
   ].includes(normalizeState(state));
@@ -24,15 +24,15 @@ export function isInFlightSessionRunState(state = "") {
     FrontendRunState.RESEND_STREAMING,
     BackendChannelState.COMPLETED,
     FrontendRunState.FRONTEND_COMPLETION_REQUESTING,
-    FrontendRunState.STOP_REQUESTED,
-    BackendChannelState.STOPPING,
+    FrontendRunState.USER_STOP_REQUESTED,
+    FrontendRunState.USER_STOPPING,
     BackendChannelState.RECONNECTING,
     BackendChannelState.INTERACTION_PENDING,
   ].includes(normalizeState(state));
 }
 
 export function isStopLockedSessionRunState(state = "") {
-  return [FrontendRunState.STOP_REQUESTED, BackendChannelState.STOPPING].includes(normalizeState(state));
+  return [FrontendRunState.USER_STOP_REQUESTED, FrontendRunState.USER_STOPPING].includes(normalizeState(state));
 }
 
 export function evaluateSessionRunState(stateSnapshot = {}) {
@@ -54,8 +54,8 @@ export function evaluateSessionRunState(stateSnapshot = {}) {
   const awaitingBackendStop = Boolean(
     composerActionState.stopRequesting ||
     composerActionState.stopPendingUntilBackendReady ||
-    state === FrontendRunState.STOP_REQUESTED ||
-    state === BackendChannelState.STOPPING,
+    state === FrontendRunState.USER_STOP_REQUESTED ||
+    state === FrontendRunState.USER_STOPPING,
   );
   const canStartNewSend = !awaitingBackendStop;
   return {
@@ -72,8 +72,8 @@ export function evaluateSessionRunState(stateSnapshot = {}) {
     interactionSubmitting: state === BackendChannelState.INTERACTION_PENDING ? false : undefined,
     pendingInteractionPolicy: state === BackendChannelState.INTERACTION_PENDING ? "await_payload" : "unchanged",
     assistantStatus:
-      state === BackendChannelState.STOPPING || state === FrontendRunState.STOP_REQUESTED
-        ? "stopping"
+      state === FrontendRunState.USER_STOPPING || state === FrontendRunState.USER_STOP_REQUESTED
+        ? "user_stopping"
         : state === FrontendRunState.RESEND_REPLACING_TURN
           ? "resend_replacing_turn"
           : state === FrontendRunState.RESEND_STREAMING
@@ -85,9 +85,11 @@ export function evaluateSessionRunState(stateSnapshot = {}) {
           ? "reconnecting"
           : state === FrontendRunState.FRONTEND_COMPLETED
             ? "generated"
-            : [BackendChannelState.USER_STOPPED, FrontendRunState.CANCELLED].includes(state)
+            : state === FrontendRunState.USER_STOP_COMPLETED
               ? "user_stopped"
-              : state === BackendChannelState.ERROR
+              : state === FrontendRunState.CANCELLED
+                ? "cancelled"
+                : state === BackendChannelState.ERROR
                 ? "failed"
                 : "",
     terminal: isTerminalSessionRunState(state),

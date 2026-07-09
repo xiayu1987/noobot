@@ -3,13 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { FrontendRunState } from "./constants";
+import { FrontendRunState, SESSION_RUN_EVENT } from "./constants";
 import { toIsoTime } from "../../infra/timeFields";
 import { transitionPriority } from "./normalize";
 
 export function createInitialSessionRunState(overrides = {}) {
   return {
     state: FrontendRunState.IDLE,
+    backendState: "",
     sessionId: "",
     dialogProcessId: "",
     turnScopeId: "",
@@ -46,13 +47,13 @@ export function applySessionRunActionEventPatch({ current, event }) {
   if (event.type === "local_send_request_settled") nextComposerActionState.sendRequesting = false;
   if (event.type === "local_continue_request_started") nextComposerActionState.continueRequesting = true;
   if (event.type === "local_continue_request_settled") nextComposerActionState.continueRequesting = false;
-  if (event.type === "local_stop_request_started") nextComposerActionState.stopRequesting = true;
-  if (event.type === "local_stop_request_settled") nextComposerActionState.stopRequesting = false;
-  if (event.type === "local_stop_pending_backend_ready") {
+  if (event.type === SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED) nextComposerActionState.stopRequesting = true;
+  if (event.type === SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_SETTLED) nextComposerActionState.stopRequesting = false;
+  if (event.type === SESSION_RUN_EVENT.LOCAL_USER_STOP_PENDING_BACKEND_READY) {
     nextComposerActionState.stopRequesting = true;
     nextComposerActionState.stopPendingUntilBackendReady = true;
   }
-  if (event.type === "local_stop_pending_cleared") {
+  if (event.type === SESSION_RUN_EVENT.LOCAL_USER_STOP_PENDING_CLEARED) {
     nextComposerActionState.stopPendingUntilBackendReady = false;
   }
   return {
@@ -70,6 +71,7 @@ export function applySessionRunActionEventPatch({ current, event }) {
 export function applySessionRunEventPatch({ current, event, startsNewTurn, nextDialogProcessId, nextTurnScopeId }) {
   return {
     state: event.state,
+    backendState: event.backendState || "",
     sessionId: event.sessionId || current.sessionId,
     dialogProcessId: nextDialogProcessId,
     turnScopeId: nextTurnScopeId,
@@ -95,7 +97,7 @@ export function applySessionRunEventPatch({ current, event, startsNewTurn, nextD
         : toIsoTime(event.timestamp)),
     updatedAt: event.timestamp,
     stopRequestedAt:
-      event.state === FrontendRunState.STOP_REQUESTED
+      event.state === FrontendRunState.USER_STOP_REQUESTED
         ? event.timestamp
         : startsNewTurn
           ? 0
@@ -104,7 +106,7 @@ export function applySessionRunEventPatch({ current, event, startsNewTurn, nextD
       sendRequesting: false,
       continueRequesting: false,
       stopRequesting:
-        event.state === FrontendRunState.STOP_REQUESTED
+        event.state === FrontendRunState.USER_STOP_REQUESTED
           ? Boolean(current?.composerActionState?.stopRequesting)
           : false,
       stopPendingUntilBackendReady: false,

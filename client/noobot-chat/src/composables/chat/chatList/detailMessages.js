@@ -45,8 +45,6 @@ import {
 
 const TERMINAL_STOP_CHANNEL_STATES = new Set([
   "user_stopped",
-  "cancelled",
-  "aborted",
 ]);
 
 const FINALIZED_ASSISTANT_STATES = new Set([

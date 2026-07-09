@@ -380,7 +380,7 @@ export async function applyReconnectChannelState({
         if (state === BackendChannelState.USER_STOPPED) {
           targetAssistantMessage.statusLabel = translate("chat.stopped");
         } else if (state === FrontendRunState.CANCELLED) {
-          targetAssistantMessage.statusLabel = translate("chat.stopped");
+          targetAssistantMessage.statusLabel = translate("chat.failed");
         } else if (state === BackendChannelState.ERROR) {
           targetAssistantMessage.statusLabel = translate("chat.failed");
         }

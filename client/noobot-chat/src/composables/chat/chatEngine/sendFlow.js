@@ -55,11 +55,11 @@ function isEventForCurrentTurn(data = {}, botMessage = {}) {
   return normalizeTrimmedString(data?.turnScopeId) === botTurnScopeId;
 }
 
-function isTerminalStopStateEvent(event = "", data = {}) {
+function isTerminalUserStopStateEvent(event = "", data = {}) {
   const normalizedEvent = normalizeTrimmedString(event);
   if (normalizedEvent === StreamEventEnum.USER_STOPPED) return true;
   if (normalizedEvent !== StreamEventEnum.CHANNEL_STATE) return false;
-  return ["user_stopped", "cancelled"].includes(normalizeTrimmedString(data?.state));
+  return normalizeTrimmedString(data?.state) === "user_stopped";
 }
 
 function isTerminalCompletedStateEvent(event = "", data = {}) {
@@ -172,7 +172,7 @@ export function createChatEngineSender({
     const explicitTransportAttachments = Array.isArray(options?.transportAttachments) ? options.transportAttachments : null;
     const hasExplicitAttachments = Boolean(explicitAttachmentFiles?.length || explicitTransportAttachments?.length);
     const hasTextToSend = Boolean(explicitMessageText || input.value.trim());
-    const continueFromStopped = options?.continueFromStopped === true;
+    const continueFromUserStopped = options?.continueFromUserStopped === true;
     const resumeDialogProcessId = normalizeTrimmedString(options?.resumeDialogProcessId);
     const resumeTurnScopeId = normalizeTrimmedString(options?.resumeTurnScopeId);
     if (!ensureConnected()) return false;
@@ -250,7 +250,7 @@ export function createChatEngineSender({
 
     let lastStreamErrorEventData = null;
     let finalDoneEventData = null;
-    let finalStopEventData = null;
+    let finalUserStopEventData = null;
     let finalDoneDetailPromise = null;
     try {
       if (!explicitAttachmentFiles) clearUploads();
@@ -288,9 +288,9 @@ export function createChatEngineSender({
         locale,
         selectedPlugins,
         turnScopeId,
-        action: continueFromStopped ? "continue" : "",
-        resumeDialogProcessId: continueFromStopped ? resumeDialogProcessId : "",
-        resumeTurnScopeId: continueFromStopped ? resumeTurnScopeId : "",
+        action: continueFromUserStopped ? "continue" : "",
+        resumeDialogProcessId: continueFromUserStopped ? resumeDialogProcessId : "",
+        resumeTurnScopeId: continueFromUserStopped ? resumeTurnScopeId : "",
         thinkingStartedAt: botMsg?.thinkingStartedAt || "",
         uploadHint: translate("chat.uploadHint"),
         reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
@@ -396,7 +396,7 @@ export function createChatEngineSender({
           botMessage: summarizeDebugMessage(botMsg),
         });
         if (!isEventForCurrentTurn(data || {}, botMsg)) return;
-        if (isTerminalStopStateEvent(event, data || {}) && hasDialogProcessConflictForTurn({
+        if (isTerminalUserStopStateEvent(event, data || {}) && hasDialogProcessConflictForTurn({
           activeSession,
           data: data || {},
           botMessage: botMsg,
@@ -408,8 +408,8 @@ export function createChatEngineSender({
         });
         if (event === StreamEventEnum.CHANNEL_STATE) {
           const channelState = normalizeTrimmedString(data?.state);
-          if (["user_stopped", "cancelled"].includes(channelState)) {
-            finalStopEventData = {
+          if (channelState === "user_stopped") {
+            finalUserStopEventData = {
               ...(data || {}),
               sessionId: data?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || "",
               dialogProcessId: data?.dialogProcessId || normalizeTrimmedString(botMsg.dialogProcessId),
@@ -495,12 +495,21 @@ export function createChatEngineSender({
             suppressCompletionConversationState: Boolean(finalDoneDetailPromise),
           });
         } else if (event === StreamEventEnum.USER_STOPPED) {
-          finalStopEventData = {
+          finalUserStopEventData = {
             ...(data || {}),
             sessionId: data?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || "",
             dialogProcessId: data?.dialogProcessId || normalizeTrimmedString(botMsg.dialogProcessId),
           };
         }
+      }, {
+        onPayloadSent: continueFromUserStopped && typeof options?.onContinueUserStoppedResumeSnapshotCommitted === "function"
+          ? () => options.onContinueUserStoppedResumeSnapshotCommitted({
+              sessionId,
+              turnScopeId,
+              resumeDialogProcessId,
+              resumeTurnScopeId,
+            })
+          : undefined,
       });
       logStateMachineDebug("stateMachine.stream.resolved", {
         hasFinalDoneEventData: Boolean(finalDoneEventData),
@@ -539,30 +548,30 @@ export function createChatEngineSender({
         applyConversationState,
       });
 
-      const stoppedByFinalEvent = Boolean(finalStopEventData);
-      const stoppedByStopRequest = !finalDoneEventData && applyStopRequestedState({
+      const userStoppedByFinalEvent = Boolean(finalUserStopEventData);
+      const userStoppedByUserStopRequest = !finalDoneEventData && applyStopRequestedState({
         chatWebSocketClient,
         activeSession,
         botMessage: botMsg,
         applyConversationState,
-        backendStopEventData: finalStopEventData,
+        backendStopEventData: finalUserStopEventData,
       });
       logResendDebug("send.stopCheck", {
         turnScopeId,
-        stoppedByFinalEvent,
-        stoppedByStopRequest,
-        finalStopEventData,
+        userStoppedByFinalEvent,
+        userStoppedByUserStopRequest,
+        finalUserStopEventData,
         hasFinalDoneEventData: Boolean(finalDoneEventData),
         messages: summarizeDebugMessages(activeSession?.value?.messages),
       });
-      if (stoppedByFinalEvent || stoppedByStopRequest) {
-        if (stoppedByFinalEvent && !stoppedByStopRequest) {
+      if (userStoppedByFinalEvent || userStoppedByUserStopRequest) {
+        if (userStoppedByFinalEvent && !userStoppedByUserStopRequest) {
           applyStopRequestedState({
             chatWebSocketClient: { isStopRequested: () => true },
             activeSession,
             botMessage: botMsg,
             applyConversationState,
-            backendStopEventData: finalStopEventData,
+            backendStopEventData: finalUserStopEventData,
           });
         }
         locateDoneMessage?.();
