@@ -33,8 +33,8 @@ export const SESSION_RUN_TRANSITION_GUARDS = Object.freeze([
     passes: isSameConversationScopeOrNewTurn,
   }),
   Object.freeze({
-    id: SESSION_RUN_TRANSITION_GUARD_ID.STOP_LOCK_NOT_REOPENED,
-    reason: SESSION_RUN_TRANSITION_DECISION_REASON.STOP_LOCK_REOPEN,
+    id: SESSION_RUN_TRANSITION_GUARD_ID.USER_STOP_LOCK_NOT_REOPENED,
+    reason: SESSION_RUN_TRANSITION_DECISION_REASON.USER_STOP_LOCK_REOPEN,
     passes: isNotReopeningStopLock,
   }),
   Object.freeze({

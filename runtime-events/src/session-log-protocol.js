@@ -35,6 +35,8 @@ export const SESSION_LOG_DEBUG_CONTROL_KEYS = Object.freeze({
   resend: "resendDebug",
   stop: "stopDebug",
   "session-log-ws": "sessionLogWsDebug",
+  "stop-continue": "frontendStopContinueDebug",
+  "agent-proxy-route": "agentProxyRouteDebug",
 });
 
 export const SESSION_LOG_RECORD_FIELDS = Object.freeze([
@@ -90,7 +92,9 @@ export function getSessionLogDebugControlKey(event = {}) {
   if (SESSION_LOG_DEBUG_CONTROL_KEYS[debugType]) return SESSION_LOG_DEBUG_CONTROL_KEYS[debugType];
   if (debugType.includes("state")) return SESSION_LOG_DEBUG_CONTROL_KEYS["state-machine"];
   if (debugType.includes("resend")) return SESSION_LOG_DEBUG_CONTROL_KEYS.resend;
+  if (debugType.includes("stop-continue") || (debugType.includes("continue") && debugType.includes("stop"))) return SESSION_LOG_DEBUG_CONTROL_KEYS["stop-continue"];
   if (debugType.includes("stop")) return SESSION_LOG_DEBUG_CONTROL_KEYS.stop;
+  if (debugType.includes("agent-proxy-route") || (debugType.includes("agent-proxy") && debugType.includes("route"))) return SESSION_LOG_DEBUG_CONTROL_KEYS["agent-proxy-route"];
   if (debugType.includes("session-log") || debugType.includes("log-ws") || debugType.includes("websocket")) return SESSION_LOG_DEBUG_CONTROL_KEYS["session-log-ws"];
   return "";
 }
@@ -105,7 +109,8 @@ export function shouldRecordSessionLog(event = {}, options = {}) {
 }
 
 export function buildSessionLogRecord(event = {}, options = {}) {
-  const data = event.data && typeof event.data === "object" ? event.data : {};
+  const data = event.data && typeof event.data === "object" ? { ...event.data } : {};
+  if (event.debugType && !data.debugType) data.debugType = event.debugType;
   const fallbackCategory = options.defaultCategory || SESSION_LOG_DEFAULT_CATEGORY;
   const category = normalizeSessionLogCategory(event.category || event.type, fallbackCategory);
   const includeTimestamp = options.includeTimestamp !== false;

@@ -6,6 +6,7 @@ import { useChatSession } from "../../../../src/composables/chat/useChatSession"
 import { logResendDebug, setResendDebugLogSink } from "../../../../src/composables/chat/debug/resendDebugLogger";
 import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
 import {
+  BackendChannelState,
   FrontendRunState,
   SESSION_RUN_EVENT,
   applySessionRunStateEvent,
@@ -476,7 +477,7 @@ describe("useChatSession reconnect replay", () => {
       stateRef: toRef(store, "runStateSnapshot"),
       sending: toRef(store, "sending"),
       canStop: toRef(store, "canStop"),
-      event: { type: SESSION_RUN_EVENT.LOCAL_STOP_REQUEST_STARTED, source: "test" },
+      event: { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED, source: "test" },
     });
 
     wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
@@ -500,13 +501,95 @@ describe("useChatSession reconnect replay", () => {
     await session.handleReconnect();
     await nextTick();
 
-    expect(store.runStateSnapshot.state).toBe("user_stopped");
+    expect(store.runStateSnapshot.state).toBe(FrontendRunState.USER_STOP_COMPLETED);
+    expect(store.runStateSnapshot.backendState).toBe(BackendChannelState.USER_STOPPED);
     expect(store.runStateSnapshot.dialogProcessId).toBe("dp-stopped-sync");
     expect(store.runStateSnapshot.turnScopeId).toBe("turn-stopped-sync");
     expect(store.runStateSnapshot.composerActionState.stopRequesting).toBe(false);
+    expect(store.getUserStoppedResumeSnapshot("s-stopped-sync")).toMatchObject({
+      sessionId: "s-stopped-sync",
+      dialogProcessId: "dp-stopped-sync",
+      turnScopeId: "turn-stopped-sync",
+      seq: 2,
+    });
     expect(session.composerActionState.value.stopRequesting).toBe(false);
     expect(session.composerActionState.value.awaitingBackendStop).toBe(false);
     expect(session.composerActionState.value.canDeleteMessage).toBe(true);
+  });
+
+  it("remembers complete stopped resume identity when reconnect activates a stopped session", async () => {
+    const store = useChatStore();
+    store.sessions = [
+      createSessionFixture({ id: "s-active", backendSessionId: "s-active" }),
+      createSessionFixture({ id: "s-inactive-stopped", backendSessionId: "s-inactive-stopped" }),
+    ];
+    store.activeSessionId = "s-active";
+
+    wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
+      onReconnectData({
+        event: StreamEventEnum.CHANNEL_STATE,
+        data: {
+          sessionId: "s-inactive-stopped",
+          turnScopeId: "turn-inactive-stopped",
+          dialogProcessId: "dp-inactive-stopped",
+          state: BackendChannelState.USER_STOPPED,
+          seq: 7,
+        },
+      });
+    });
+
+    const session = createChatSession();
+    await session.handleReconnect();
+    await nextTick();
+
+    expect(store.runStateSnapshot.sessionId).toBe("s-inactive-stopped");
+    expect(store.runStateSnapshot.state).toBe(FrontendRunState.USER_STOP_COMPLETED);
+    expect(store.runStateSnapshot.backendState).toBe(BackendChannelState.USER_STOPPED);
+    expect(store.getUserStoppedResumeSnapshot("s-inactive-stopped")).toMatchObject({
+      sessionId: "s-inactive-stopped",
+      dialogProcessId: "dp-inactive-stopped",
+      turnScopeId: "turn-inactive-stopped",
+      seq: 7,
+    });
+  });
+
+  it("does not re-register stale user_stop replay for an older turn", async () => {
+    const store = useChatStore();
+    store.sessions = [createSessionFixture({ id: "s-stale-replay", backendSessionId: "s-stale-replay" })];
+    store.activeSessionId = "s-stale-replay";
+    store.runStateSnapshot = {
+      ...store.runStateSnapshot,
+      state: BackendChannelState.ERROR,
+      sessionId: "s-stale-replay",
+      dialogProcessId: "dp-new",
+      turnScopeId: "turn-new",
+      seq: 0,
+    };
+
+    wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
+      onReconnectData({
+        event: StreamEventEnum.CHANNEL_STATE,
+        data: {
+          sessionId: "s-stale-replay",
+          turnScopeId: "turn-old",
+          dialogProcessId: "dp-old",
+          state: BackendChannelState.USER_STOPPED,
+          seq: 57,
+        },
+      });
+    });
+
+    const session = createChatSession();
+    await session.handleReconnect();
+    await nextTick();
+
+    expect(store.runStateSnapshot).toMatchObject({
+      state: BackendChannelState.ERROR,
+      sessionId: "s-stale-replay",
+      dialogProcessId: "dp-new",
+      turnScopeId: "turn-new",
+    });
+    expect(store.getUserStoppedResumeSnapshot("s-stale-replay")).toBe(null);
   });
 
   it("send marks the current turn as stoppable through the session store", async () => {
@@ -600,6 +683,105 @@ describe("useChatSession reconnect replay", () => {
     await firstSend;
   });
 
+  it("continues only from the per-session stopped resume registry", async () => {
+    const store = useChatStore();
+    store.sessions = [createSessionFixture({ id: "s-continue", backendSessionId: "s-continue" })];
+    store.activeSessionId = "s-continue";
+    store.input = "continue with more context";
+    wsClientMock.stream.mockImplementation(async (_payload, _onEvent, options) => {
+      options?.onPayloadSent?.(_payload);
+      return {};
+    });
+
+    store.runStateSnapshot = {
+      ...store.runStateSnapshot,
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
+      sessionId: "s-continue",
+      dialogProcessId: "dialog-current-running",
+      turnScopeId: "turn-current-running",
+    };
+    store.rememberUserStoppedResumeSnapshot({
+      sessionId: "s-continue",
+      dialogProcessId: "dialog-latest-stop",
+      turnScopeId: "turn-latest-stop",
+      seq: 12,
+      source: "user_stopped",
+    });
+
+    const session = createChatSession();
+    await session.send();
+
+    expect(wsClientMock.stream).toHaveBeenCalledTimes(1);
+    const payload = wsClientMock.stream.mock.calls[0][0];
+    expect(payload.action).toBe("continue");
+    expect(payload.turnScopeId).toBeTruthy();
+    expect(payload.turnScopeId).toMatch(/^client-turn:/);
+    expect(payload.turnScopeId).not.toBe("turn-current-running");
+    expect(payload.turnScopeId).not.toBe("turn-latest-stop");
+    expect(payload.config).toMatchObject({
+      resumeDialogProcessId: "dialog-latest-stop",
+      resumeTurnScopeId: "turn-latest-stop",
+      stoppedTurnScopeId: "turn-latest-stop",
+    });
+    expect(payload.config.resumeTurnScopeId).not.toBe(payload.turnScopeId);
+    expect(store.getUserStoppedResumeSnapshot("s-continue")).toBe(null);
+  });
+
+  it("keeps stopped resume registry when continue stream fails before payload is sent", async () => {
+    const store = useChatStore();
+    store.sessions = [createSessionFixture({ id: "s-continue-fail", backendSessionId: "s-continue-fail" })];
+    store.activeSessionId = "s-continue-fail";
+    store.input = "continue with more context";
+    wsClientMock.stream.mockRejectedValueOnce(new Error("socket not open"));
+    store.runStateSnapshot = {
+      ...store.runStateSnapshot,
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
+      sessionId: "s-continue-fail",
+      dialogProcessId: "dialog-stale",
+      turnScopeId: "turn-stale",
+    };
+    store.rememberUserStoppedResumeSnapshot({
+      sessionId: "s-continue-fail",
+      dialogProcessId: "dialog-latest-stop",
+      turnScopeId: "turn-latest-stop",
+      seq: 12,
+      source: "user_stopped",
+    });
+
+    const session = createChatSession();
+    const result = await session.send();
+
+    expect(result).toBe(false);
+    expect(wsClientMock.stream).toHaveBeenCalledTimes(1);
+    expect(store.getUserStoppedResumeSnapshot("s-continue-fail")).toMatchObject({
+      dialogProcessId: "dialog-latest-stop",
+      turnScopeId: "turn-latest-stop",
+    });
+  });
+
+  it("does not continue from a stopped run without a complete registry identity", async () => {
+    const store = useChatStore();
+    store.sessions = [createSessionFixture({ id: "s-missing-resume", backendSessionId: "s-missing-resume" })];
+    store.activeSessionId = "s-missing-resume";
+    store.input = "continue with more context";
+    store.runStateSnapshot = {
+      ...store.runStateSnapshot,
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
+      sessionId: "s-missing-resume",
+      dialogProcessId: "dialog-stale",
+      turnScopeId: "turn-stale",
+    };
+
+    const session = createChatSession();
+    const result = await session.send();
+
+    expect(result).toBe(false);
+    expect(wsClientMock.stream).not.toHaveBeenCalled();
+  });
+
   it("drives stop requesting, duplicate-stop guard, and terminal cleanup from the state machine", async () => {
     const store = useChatStore();
     store.sessions = [createSessionFixture({
@@ -641,7 +823,7 @@ describe("useChatSession reconnect replay", () => {
     expect(requested).toBe(true);
     expect(wsClientMock.requestStop).toHaveBeenCalledTimes(1);
     expect(session.composerActionState.value.stopRequesting).toBe(true);
-    expect(store.runStateSnapshot.state).toBe("stop_requested");
+    expect(store.runStateSnapshot.state).toBe(FrontendRunState.USER_STOP_REQUESTED);
 
     const duplicateStop = session.stopSending();
     expect(duplicateStop).toBe(false);

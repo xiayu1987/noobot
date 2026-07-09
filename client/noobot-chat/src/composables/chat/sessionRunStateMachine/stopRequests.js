@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { FrontendRunState, SESSION_RUN_EVENT, STOP_REQUEST_STORAGE_KEY, STOP_REQUEST_TTL_MS } from "./constants";
+import { FrontendRunState, SESSION_RUN_EVENT, USER_STOP_REQUEST_STORAGE_KEY, USER_STOP_REQUEST_TTL_MS } from "./constants";
 import { normalizeSessionRunEvent } from "./core";
 import { trim } from "./normalize";
 import { nowMs } from "../../infra/timeFields";
@@ -12,7 +12,7 @@ export function readStopRequests() {
   try {
     const storage = globalThis?.localStorage;
     if (!storage) return [];
-    const rawValue = storage.getItem(STOP_REQUEST_STORAGE_KEY);
+    const rawValue = storage.getItem(USER_STOP_REQUEST_STORAGE_KEY);
     const parsed = rawValue ? JSON.parse(rawValue) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -24,19 +24,19 @@ export function writeStopRequests(entries = []) {
   try {
     const storage = globalThis?.localStorage;
     if (!storage) return;
-    storage.setItem(STOP_REQUEST_STORAGE_KEY, JSON.stringify(entries));
+    storage.setItem(USER_STOP_REQUEST_STORAGE_KEY, JSON.stringify(entries));
   } catch {}
 }
 
 export function isFreshStopRequest(entry = {}, timestamp = nowMs()) {
-  return Number(timestamp || 0) - Number(entry?.timestamp || 0) <= STOP_REQUEST_TTL_MS;
+  return Number(timestamp || 0) - Number(entry?.timestamp || 0) <= USER_STOP_REQUEST_TTL_MS;
 }
 
 export function rememberStopRequestedEvent(rawEvent = {}) {
   const event = normalizeSessionRunEvent({
     ...rawEvent,
-    type: SESSION_RUN_EVENT.LOCAL_STOP_REQUESTED,
-    state: FrontendRunState.STOP_REQUESTED,
+    type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED,
+    state: FrontendRunState.USER_STOP_REQUESTED,
   });
   if (!event.sessionId) return event;
   const entries = readStopRequests().filter((entry) => {
@@ -73,8 +73,8 @@ export function resolveRememberedStopRequestedEvent({ sessionId = "", dialogProc
   });
   if (!match) return null;
   return normalizeSessionRunEvent({
-    type: SESSION_RUN_EVENT.LOCAL_STOP_REQUESTED,
-    state: FrontendRunState.STOP_REQUESTED,
+    type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED,
+    state: FrontendRunState.USER_STOP_REQUESTED,
     sessionId: normalizedSessionId,
     dialogProcessId: normalizedDialogProcessId || trim(match.dialogProcessId),
     turnScopeId: trim(match.turnScopeId),

@@ -45,7 +45,7 @@
 Session 日志 WebSocket：
 - 入口：后端 `/logs/ws`，前端通常通过 `/api/logs/ws` 访问，agent-proxy 通过后端 upstream 访问。
 - 鉴权：复用现有 API key WebSocket 鉴权。
-- 存储：后端按 `sessionId` 建目录，并按分类写 JSONL 文件（`state`、`message`、`interaction`、`transport`、`debug`、`agent-proxy`、`system`）。
+- 存储：后端按 `sessionId` 建目录，并按分类写 JSONL 文件（`state`、`message`、`interaction`、`transport`、`agent-proxy`、`system`）；debug 日志按 `data.debugType` 继续拆分为 `debug-<debugType>.jsonl`，没有明确 `debugType` 时写入 `debug.jsonl`。
 - 主要字段：`source`、`category`、`event`、`sessionId`，可选 `dialogProcessId` / `turnScopeId`，以及用于状态机、消息流、前后端交互和 agent-proxy 事件的精简 `data` 载荷。
 - 控制：前端和 agent-proxy 只通过日志 WebSocket 发送事件；是否记录统一由 runtime-events 按 `runtime-events-config.mjs` 中的具体业务小类型开关决定。日志专项默认开启，debug 专项默认关闭。
 

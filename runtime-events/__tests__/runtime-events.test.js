@@ -60,6 +60,9 @@ test('session log protocol exports stable categories and helpers from runtime-ev
   assert.equal(normalizeSessionLogCategory('DEBUG'), SESSION_LOG_DEBUG_CATEGORY);
   assert.equal(getSessionLogControlKey({ category: 'message' }, 'message'), 'messageLog');
   assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'state-machine' } }), 'stateMachineDebug');
+  assert.equal(getSessionLogDebugControlKey({ debugType: 'stop-continue' }), 'frontendStopContinueDebug');
+  assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'stop-continue' } }), 'frontendStopContinueDebug');
+  assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'agent-proxy-route' } }), 'agentProxyRouteDebug');
 
   const record = buildSessionLogRecord({
     source: 'frontend',
@@ -81,6 +84,21 @@ test('session log protocol exports stable categories and helpers from runtime-ev
     message: 'hello',
     data: { turnScopeId: 'turn-1' },
   });
+});
+
+test('session log record preserves top-level debug type in data', () => {
+  const record = buildSessionLogRecord({
+    source: 'frontend',
+    category: 'debug',
+    level: 'debug',
+    debugType: 'stop-continue',
+    event: 'frontend.stopContinue.stopButtonEvaluated',
+    sessionId: 'session-1',
+    data: { changed: true },
+  }, { includeTimestamp: false });
+
+  assert.equal(record.data.debugType, 'stop-continue');
+  assert.equal(getSessionLogDebugControlKey(record), 'frontendStopContinueDebug');
 });
 
 test('normalizeRuntimeEvent builds a sanitized structured record', () => {
@@ -639,6 +657,38 @@ test('runtime-events writer filters session logs by business log control', async
   assert.equal((await readJsonl(recorded.file)).length, 1);
 });
 
+test('runtime-events writer separates debug session logs by debug type', async () => {
+  const root = await tempRoot();
+  const stateMachine = await writeRuntimeEvent({
+    source: 'frontend',
+    scope: 'session',
+    category: 'debug',
+    level: 'debug',
+    event: 'state.transition',
+    userId: 'admin',
+    sessionId: 'session-debug-files',
+    data: { debugType: 'state-machine' },
+  }, { root, includeProcess: false, stateMachineDebug: true, resendDebug: true });
+  const resend = await writeRuntimeEvent({
+    source: 'frontend',
+    scope: 'session',
+    category: 'debug',
+    level: 'debug',
+    event: 'resend.tick',
+    userId: 'admin',
+    sessionId: 'session-debug-files',
+    data: { debugType: 'resend' },
+  }, { root, includeProcess: false, stateMachineDebug: true, resendDebug: true });
+
+  assert.equal(stateMachine.ok, true);
+  assert.equal(resend.ok, true);
+  assert.match(stateMachine.file, /session-debug-files\/debug-state-machine\.jsonl$/);
+  assert.match(resend.file, /session-debug-files\/debug-resend\.jsonl$/);
+  assert.notEqual(stateMachine.file, resend.file);
+  assert.equal((await readJsonl(stateMachine.file))[0].category, 'debug');
+  assert.equal((await readJsonl(resend.file))[0].category, 'debug');
+});
+
 test('runtime-events writer filters debug session logs by business debug control', async () => {
   const root = await tempRoot();
   const skipped = await writeRuntimeEvent({
@@ -665,6 +715,7 @@ test('runtime-events writer filters debug session logs by business debug control
   assert.equal(skipped.ok, true);
   assert.equal(skipped.skipped, true);
   assert.equal(recorded.ok, true);
+  assert.match(recorded.file, /session-debug-type\/debug-state-machine\.jsonl$/);
   assert.equal((await readJsonl(recorded.file)).length, 1);
 });
 

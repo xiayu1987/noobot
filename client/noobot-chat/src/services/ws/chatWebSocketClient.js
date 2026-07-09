@@ -54,6 +54,10 @@ export function createChatWebSocketClient({
   let stopRequestedTurnScopeId = "";
   let forceStopFinalizeTimer = null;
   let resolveCurrentStream = null;
+  let streamSerial = 0;
+  let activeStreamContext = null;
+  let stopLeaseSerial = 0;
+  let activeStopLease = null;
 
   // Reconnect state
   let lastReceivedSeqMap = {};
@@ -63,11 +67,23 @@ export function createChatWebSocketClient({
   let reconnectTimeout = null;
   const RECONNECT_TIMEOUT_MS = TIME_THRESHOLDS.client.wsReconnectTimeoutMs;
 
-  function clearTimers() {
+  function normalizeScopeFromPayload(payload = {}) {
+    return {
+      sessionId: normalizeTrimmedString(payload?.sessionId),
+      dialogProcessId: normalizeTrimmedString(payload?.dialogProcessId),
+      turnScopeId: normalizeTrimmedString(payload?.turnScopeId),
+    };
+  }
+
+  function clearForceStopFinalizeTimer() {
     if (forceStopFinalizeTimer) {
       clearTimeout(forceStopFinalizeTimer);
       forceStopFinalizeTimer = null;
     }
+  }
+
+  function clearTimers() {
+    clearForceStopFinalizeTimer();
     if (reconnectTimeout) {
       clearTimeout(reconnectTimeout);
       reconnectTimeout = null;
@@ -91,6 +107,8 @@ export function createChatWebSocketClient({
   function clearStopRequested() {
     stopRequested = false;
     stopRequestedTurnScopeId = "";
+    activeStopLease = null;
+    clearForceStopFinalizeTimer();
   }
 
   function getStopRequestedTurnScopeId() {
@@ -203,8 +221,18 @@ export function createChatWebSocketClient({
     };
   }
 
-  async function stream(payload = {}, onEvent = () => {}) {
+  async function stream(payload = {}, onEvent = () => {}, options = {}) {
     return new Promise((resolve, reject) => {
+      const currentStreamSerial = ++streamSerial;
+      const streamScope = normalizeScopeFromPayload(payload);
+      activeStreamContext = {
+        serial: currentStreamSerial,
+        payload,
+        scope: streamScope,
+        socket: null,
+      };
+      activeStopLease = null;
+      clearForceStopFinalizeTimer();
       stopRequested = false;
       let settled = false;
       let doneReceived = false;
@@ -216,8 +244,16 @@ export function createChatWebSocketClient({
           clearTimeout(terminalChannelStateTimer);
           terminalChannelStateTimer = null;
         }
-        clearTimers();
-        resolveCurrentStream = null;
+        clearForceStopFinalizeTimer();
+        if (activeStopLease?.streamSerial === currentStreamSerial) {
+          activeStopLease = null;
+        }
+        if (activeStreamContext?.serial === currentStreamSerial) {
+          activeStreamContext = null;
+        }
+        if (resolveCurrentStream?.serial === currentStreamSerial) {
+          resolveCurrentStream = null;
+        }
         fn();
       };
 
@@ -271,10 +307,22 @@ export function createChatWebSocketClient({
           return;
         }
         activeSocket = ws;
-        resolveCurrentStream = () => finalize(() => resolve());
+        if (activeStreamContext?.serial === currentStreamSerial) {
+          activeStreamContext = {
+            ...activeStreamContext,
+            socket: ws,
+          };
+        }
+        resolveCurrentStream = {
+          serial: currentStreamSerial,
+          fn: () => finalize(() => resolve()),
+        };
         bindStreamSocketHandlers(ws);
 
         ws.send(JSON.stringify(payload || {}));
+        if (typeof options?.onPayloadSent === "function") {
+          options.onPayloadSent(payload || {});
+        }
       }
 
       function bindStreamSocketHandlers(streamSocket) {
@@ -449,45 +497,80 @@ export function createChatWebSocketClient({
     const requestedTurnScopeId = normalizeTrimmedString(normalizedStopPayload?.turnScopeId);
     stopRequested = true;
     stopRequestedTurnScopeId = requestedTurnScopeId;
+    const stopScope = normalizeScopeFromPayload(normalizedStopPayload);
+    const stoppedStreamContext = activeStreamContext;
+    const stopLease = {
+      serial: ++stopLeaseSerial,
+      streamSerial: stoppedStreamContext?.serial || 0,
+      socket: ws || null,
+      scope: stopScope,
+      cancelled: false,
+    };
+    activeStopLease = stopLease;
+
+    const forceFinalizeIfLeaseStillCurrent = ({ closeSocket = false } = {}) => {
+      if (activeStopLease !== stopLease || stopLease.cancelled) return;
+      const streamContext = activeStreamContext;
+      const streamStillMatches =
+        streamContext &&
+        streamContext.serial === stopLease.streamSerial &&
+        (!stopLease.socket || streamContext.socket === stopLease.socket);
+      if (!streamStillMatches) return;
+      const resolveStream = resolveCurrentStream;
+      if (
+        resolveStream &&
+        resolveStream.serial === stopLease.streamSerial &&
+        typeof resolveStream.fn === "function"
+      ) {
+        resolveStream.fn();
+      }
+      if (
+        closeSocket &&
+        stopLease.socket &&
+        (stopLease.socket.readyState === WebSocket.OPEN ||
+          stopLease.socket.readyState === WebSocket.CONNECTING)
+      ) {
+        stopLease.socket.close(1000, "stop_force_finalize");
+      }
+      forceFinalize({
+        sessionId: stopScope.sessionId,
+        dialogProcessId: stopScope.dialogProcessId,
+        turnScopeId: stopScope.turnScopeId,
+        stopLeaseSerial: stopLease.serial,
+        streamSerial: stopLease.streamSerial,
+      });
+    };
 
     if (ws && ws.readyState === WebSocket.OPEN) {
       try {
         ws.send(JSON.stringify({ action: "stop", ...normalizedStopPayload }));
       } catch {}
-      clearTimers();
+      clearForceStopFinalizeTimer();
       forceStopFinalizeTimer = setTimeout(() => {
-        const latestSocket = activeSocket;
-        const resolveStream = resolveCurrentStream;
-        if (typeof resolveStream === "function") {
-          resolveStream();
-        }
-        if (
-          latestSocket &&
-          (latestSocket.readyState === WebSocket.OPEN ||
-            latestSocket.readyState === WebSocket.CONNECTING)
-        ) {
-          latestSocket.close(1000, "stop_force_finalize");
-        }
-        forceFinalize();
+        forceStopFinalizeTimer = null;
+        forceFinalizeIfLeaseStillCurrent({ closeSocket: true });
       }, forceStopFinalizeMs);
       return true;
     }
 
     if (ws && ws.readyState === WebSocket.CONNECTING) {
       ws.close(1000, "stop_requested");
-      clearTimers();
+      clearForceStopFinalizeTimer();
       forceStopFinalizeTimer = setTimeout(() => {
-        const resolveStream = resolveCurrentStream;
-        if (typeof resolveStream === "function") {
-          resolveStream();
-        }
-        forceFinalize();
+        forceStopFinalizeTimer = null;
+        forceFinalizeIfLeaseStillCurrent({ closeSocket: false });
       }, forceStopFinalizeMs);
       return true;
     }
 
     if (stopRequested) {
-      forceFinalize();
+      forceFinalize({
+        sessionId: stopScope.sessionId,
+        dialogProcessId: stopScope.dialogProcessId,
+        turnScopeId: stopScope.turnScopeId,
+        stopLeaseSerial: stopLease.serial,
+        streamSerial: stopLease.streamSerial,
+      });
       return true;
     }
     return false;
@@ -511,6 +594,8 @@ export function createChatWebSocketClient({
       activeSocket = null;
     }
     resolveCurrentStream = null;
+    activeStreamContext = null;
+    activeStopLease = null;
     stopRequested = false;
     stopRequestedTurnScopeId = "";
     reconnecting = false;

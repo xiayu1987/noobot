@@ -36,8 +36,8 @@ const MESSAGE_RUNNING_CHANNEL_STATES = Object.freeze([
   FrontendRunState.RESEND_REPLACING_TURN,
   FrontendRunState.RESEND_STREAMING,
   FrontendRunState.FRONTEND_COMPLETION_REQUESTING,
-  FrontendRunState.STOP_REQUESTED,
-  BackendChannelState.STOPPING,
+  FrontendRunState.USER_STOP_REQUESTED,
+  FrontendRunState.USER_STOPPING,
 ]);
 
 const MESSAGE_CAN_STOP_TARGET_STATES = Object.freeze([
@@ -179,7 +179,7 @@ export function isMessageInFlightAssistant(messageItem = {}) {
 export function buildInFlightMessageRuntimePatch(stateItem = {}) {
   const timing = normalizeTimePair(stateItem);
   const channelState = {
-    state: normalizeState(stateItem?.state),
+    state: normalizeState(stateItem?.backendState) || normalizeState(stateItem?.state),
     sessionId: trim(stateItem?.sessionId),
     dialogProcessId: trim(stateItem?.dialogProcessId),
     turnScopeId: trim(stateItem?.turnScopeId),
@@ -291,11 +291,14 @@ export function resolveSessionRunMessageRuntimePatch({
     };
   }
   if (
-    normalizeState(stateSnapshot?.state) === BackendChannelState.USER_STOPPED &&
+    (
+      normalizeState(stateSnapshot?.state) === FrontendRunState.USER_STOP_COMPLETED ||
+      normalizeState(stateSnapshot?.backendState) === BackendChannelState.USER_STOPPED
+    ) &&
     (
       messageItem?.[SESSION_RUN_MESSAGE_RUNTIME_MARK] ||
       resolveSessionRunStateForMessage({
-        stateSnapshot: { ...stateSnapshot, state: BackendChannelState.STOPPING },
+        stateSnapshot: { ...stateSnapshot, state: FrontendRunState.USER_STOPPING },
         messageItem,
         activeSession,
       })

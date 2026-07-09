@@ -3,6 +3,8 @@ import { RUNTIME_EVENT_SCOPES } from './constants.js';
 import { resolveDefaultRuntimeEventsConfig } from './config.js';
 import { safeSegment } from './sanitize.js';
 
+const DEBUG_CATEGORY = 'debug';
+
 export function resolveRuntimeEventsConfig(options = {}) {
   const defaults = resolveDefaultRuntimeEventsConfig();
   return {
@@ -29,5 +31,13 @@ export function resolveRuntimeEventDir(record, config = resolveRuntimeEventsConf
 }
 
 export function resolveRuntimeEventFile(record, config = resolveRuntimeEventsConfig(record)) {
-  return path.join(resolveRuntimeEventDir(record, config), `${safeSegment(record.category)}.jsonl`);
+  return path.join(resolveRuntimeEventDir(record, config), `${resolveRuntimeEventFileCategory(record)}.jsonl`);
+}
+
+export function resolveRuntimeEventFileCategory(record = {}) {
+  const category = safeSegment(record.category);
+  if (record.scope !== RUNTIME_EVENT_SCOPES.SESSION || category !== DEBUG_CATEGORY) return category;
+
+  const debugType = safeSegment(record.debugType || record.data?.debugType || '');
+  return debugType && debugType !== 'unknown' ? `${DEBUG_CATEGORY}-${debugType}` : DEBUG_CATEGORY;
 }

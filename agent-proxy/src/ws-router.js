@@ -14,6 +14,7 @@ import {
   WS_ACTION,
 } from "./constants.js";
 import { writeAgentProxyInvalidJsonPayloadEvent } from "./ws-runtime-events.js";
+import { writeAgentProxyRouteDebugEvent } from "./route-debug-runtime-events.js";
 
 export class WsRouter {
   constructor(channelManager) {
@@ -193,6 +194,7 @@ export class WsRouter {
   _forwardRunAction(socket, payload, action) {
     const targetChannel = this.channelManager.resolveChannelFromSocketMessage(socket, payload);
     if (!targetChannel) {
+      void writeAgentProxyRouteDebugEvent({ event: "agentProxy.route.forwardRun.unavailable", payload, socket, data: { action, reason: "target_channel_not_found" } });
       this.channelManager.sendSocketError(
         socket,
         AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE,
@@ -206,6 +208,7 @@ export class WsRouter {
         String(socket?.__agentProxyUserId || "").trim(),
       )
     ) {
+      void writeAgentProxyRouteDebugEvent({ event: "agentProxy.route.forwardRun.permissionDenied", payload, socket, channel: targetChannel, data: { action, reason: "permission_denied" } });
       this.channelManager.sendSocketError(
         socket,
         AGENT_PROXY_ERROR.PERMISSION_DENIED_FOR_ACTION(action),
@@ -213,6 +216,7 @@ export class WsRouter {
       return;
     }
     const forwarded = this.channelManager.forwardToUpstream(targetChannel, payload);
+    void writeAgentProxyRouteDebugEvent({ event: "agentProxy.route.forwardRun.forwardResult", payload, socket, channel: targetChannel, data: { action, forwarded } });
     if (forwarded) return;
 
     if (
@@ -220,9 +224,11 @@ export class WsRouter {
       action === WS_ACTION.RESUME
     ) {
       const restarted = this._restartUpstreamRunAction(socket, targetChannel, payload);
+      void writeAgentProxyRouteDebugEvent({ event: "agentProxy.route.forwardRun.restartResult", payload, socket, channel: targetChannel, data: { action, restarted } });
       if (restarted) return;
     }
 
+    void writeAgentProxyRouteDebugEvent({ event: "agentProxy.route.forwardRun.unavailable", payload, socket, channel: targetChannel, data: { action, reason: "forward_and_restart_failed" } });
     this.channelManager.sendSocketError(
       socket,
       AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE,

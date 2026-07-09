@@ -168,7 +168,7 @@ export function useChatEngine({
     applyAssistantFailureState,
   });
 
-  function forceStopUiFinalize() {
+  function forceStopUiFinalize(stopScope = {}) {
     return finalizeForceStopUi({
       sending,
       canStop,
@@ -178,6 +178,7 @@ export function useChatEngine({
       findTargetAssistantMessage,
       applyConversationState,
       chatWebSocketClient,
+      stopScope,
     });
   }
 

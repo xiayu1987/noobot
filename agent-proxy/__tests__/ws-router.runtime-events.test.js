@@ -104,6 +104,53 @@ test('ws router reports upstream unavailable when continue action has no target 
   assert.equal(channelManager.calls.errors[0].message, AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE);
 });
 
+test('ws router does not reuse previous session active channel for another session continue', () => {
+  const previousSessionChannel = { key: 'user-1::session-old::' };
+  const calls = {
+    permission: [],
+    forward: [],
+    errors: [],
+  };
+  const channelManager = {
+    calls,
+    resolveChannelFromSocketMessage(socket, payload = {}) {
+      const sessionId = String(payload?.sessionId || '').trim();
+      const activeChannelKey = String(socket?.__agentProxyActiveChannelKey || '').trim();
+      if (activeChannelKey === previousSessionChannel.key) {
+        const activeSessionId = activeChannelKey.split('::')[1] || '';
+        if (sessionId && activeSessionId !== sessionId) return null;
+        return previousSessionChannel;
+      }
+      return null;
+    },
+    hasChannelPermission(channel, apiKey, userId) {
+      calls.permission.push({ channel, apiKey, userId });
+      return true;
+    },
+    forwardToUpstream(channel, payload) {
+      calls.forward.push({ channel, payload });
+      return true;
+    },
+    sendSocketError(socket, message) {
+      calls.errors.push({ socket, message });
+    },
+  };
+  const socket = createMockSocket();
+  socket.__agentProxyActiveChannelKey = previousSessionChannel.key;
+
+  new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
+  socket.emit(CHANNEL_EVENT.MESSAGE, JSON.stringify({
+    action: 'continue',
+    userId: 'user-1',
+    sessionId: 'session-new',
+  }));
+
+  assert.equal(channelManager.calls.permission.length, 0);
+  assert.equal(channelManager.calls.forward.length, 0);
+  assert.equal(channelManager.calls.errors.length, 1);
+  assert.equal(channelManager.calls.errors[0].message, AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE);
+});
+
 test('ws router restarts upstream on existing channel when continue action has closed upstream', () => {
   const targetChannel = {
     key: 'channel-1',

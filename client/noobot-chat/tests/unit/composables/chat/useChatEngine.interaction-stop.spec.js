@@ -17,7 +17,7 @@ describe("useChatEngine.interaction-stop", () => {
     const stream = vi.fn(async (_payload, onEvent) => {
       emitChannelState(onEvent, "local-expired", "dp-expired", "expired");
       onEvent({
-        event: StreamEventEnum.STOPPED,
+        event: StreamEventEnum.USER_STOPPED,
         data: { sessionId: "local-expired", dialogProcessId: "dp-expired" },
       });
     });
@@ -64,7 +64,7 @@ describe("useChatEngine.interaction-stop", () => {
       });
       emitChannelState(onEvent, "local-int", "dp-int", "user_stopped", { seq: 3 });
       onEvent({
-        event: StreamEventEnum.STOPPED,
+        event: StreamEventEnum.USER_STOPPED,
         data: { sessionId: "local-int", dialogProcessId: "dp-int" },
       });
     });
@@ -121,7 +121,7 @@ describe("useChatEngine.interaction-stop", () => {
       emitChannelState(onEvent, "local-flight", "dp-flight", "reconnecting");
       emitChannelState(onEvent, "local-flight", "dp-flight", "user_stopped");
       onEvent({
-        event: StreamEventEnum.STOPPED,
+        event: StreamEventEnum.USER_STOPPED,
         data: { sessionId: "local-flight", dialogProcessId: "dp-flight" },
       });
     });
@@ -659,6 +659,48 @@ describe("useChatEngine.interaction-stop", () => {
     await expect(actionPromise).resolves.toBe(true);
     expect(sending.value).toBe(false);
     vi.useRealTimers();
+  });
+
+  it("ignores stale force-stop finalization for a previous turn", () => {
+    const { engine, deps, activeSession, sending, canStop } = createHarness({
+      sessionId: "local-stale-stop-timeout",
+    });
+    activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "old question", turnScopeId: "turn-old" },
+      {
+        role: RoleEnum.ASSISTANT,
+        content: "continuing",
+        pending: true,
+        dialogProcessId: "dp-new",
+        turnScopeId: "turn-new",
+        channelState: {
+          state: BackendChannelState.SENDING,
+          dialogProcessId: "dp-new",
+          turnScopeId: "turn-new",
+        },
+      },
+    ];
+    sending.value = true;
+    canStop.value = true;
+    deps.chatWebSocketClient.requestStop.mockImplementation((_payload, onForceStop) => {
+      onForceStop({
+        sessionId: "local-stale-stop-timeout",
+        dialogProcessId: "dp-old",
+        turnScopeId: "turn-old",
+      });
+      return true;
+    });
+
+    expect(engine.stopSending()).toBe(true);
+
+    expect(sending.value).toBe(true);
+    expect(canStop.value).toBe(false);
+    expect(activeSession.value.messages[1]).toMatchObject({
+      pending: true,
+      dialogProcessId: "dp-new",
+      turnScopeId: "turn-new",
+    });
+    expect(deps.chatWebSocketClient.dispose).not.toHaveBeenCalled();
   });
 
   it("prepareMonotonicMessageAction warns and rejects when stop does not settle", async () => {

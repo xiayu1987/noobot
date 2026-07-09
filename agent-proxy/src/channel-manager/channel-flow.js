@@ -8,6 +8,7 @@ import {
   WS_ACTION,
 } from "../constants.js";
 import { normalizeApiKey, createChannelKey, buildFingerprint } from "../utils.js";
+import { writeAgentProxyRouteDebugEvent } from "../route-debug-runtime-events.js";
 
 class ChannelFlowMethods {
 // ---- Channel Resolution ----
@@ -16,14 +17,23 @@ resolveChannelFromSocketMessage(socket, payload = {}) {
   const action = String(payload?.action || "").trim().toLowerCase();
   if (action === WS_ACTION.INTERACTION_RESPONSE) {
     const channel = this.getChannelByRequestId(payload?.requestId);
-    if (channel) return channel;
-  }
-  const explicitChannelKey = String(payload?.channelKey || "").trim();
-  if (explicitChannelKey && this.hasChannel(explicitChannelKey)) {
-    return this.getChannel(explicitChannelKey);
+    if (channel) {
+      void writeAgentProxyRouteDebugEvent({ event: "agentProxy.route.resolve.matched", payload, socket, channel, data: { routeSource: "request_id" } });
+      return channel;
+    }
   }
   const sessionId = String(payload?.sessionId || "").trim();
-  const userId = String(payload?.userId || "").trim();
+  const explicitChannelKey = String(payload?.channelKey || "").trim();
+  if (explicitChannelKey && this.hasChannel(explicitChannelKey)) {
+    if (sessionId && this._extractSessionIdFromChannelKey?.(explicitChannelKey) !== sessionId) {
+      void writeAgentProxyRouteDebugEvent({ event: "agentProxy.route.resolve.rejected", payload, socket, data: { reason: "explicit_channel_session_mismatch", explicitChannelKey } });
+      return null;
+    }
+    const channel = this.getChannel(explicitChannelKey);
+    void writeAgentProxyRouteDebugEvent({ event: "agentProxy.route.resolve.matched", payload, socket, channel, data: { routeSource: "explicit_channel_key" } });
+    return channel;
+  }
+  const userId = String(payload?.userId || socket?.__agentProxyUserId || "").trim();
   if (sessionId && userId) {
     const constructedKey = createChannelKey({
       userId,
@@ -31,12 +41,24 @@ resolveChannelFromSocketMessage(socket, payload = {}) {
       parentSessionId: payload?.parentSessionId,
       parentDialogProcessId: payload?.parentDialogProcessId,
     });
-    if (this.hasChannel(constructedKey)) return this.getChannel(constructedKey);
+    if (this.hasChannel(constructedKey)) {
+      const channel = this.getChannel(constructedKey);
+      void writeAgentProxyRouteDebugEvent({ event: "agentProxy.route.resolve.matched", payload, socket, channel, data: { routeSource: "constructed_key", usedSocketUserId: !payload?.userId && Boolean(socket?.__agentProxyUserId) } });
+      return channel;
+    }
+    void writeAgentProxyRouteDebugEvent({ event: "agentProxy.route.resolve.missed", payload, socket, data: { routeSource: "constructed_key", usedSocketUserId: !payload?.userId && Boolean(socket?.__agentProxyUserId) } });
   }
   const activeChannelKey = String(socket?.__agentProxyActiveChannelKey || "").trim();
   if (activeChannelKey && this.hasChannel(activeChannelKey)) {
-    return this.getChannel(activeChannelKey);
+    if (sessionId && this._extractSessionIdFromChannelKey?.(activeChannelKey) !== sessionId) {
+      void writeAgentProxyRouteDebugEvent({ event: "agentProxy.route.resolve.rejected", payload, socket, data: { reason: "active_channel_session_mismatch", activeChannelKey } });
+      return null;
+    }
+    const channel = this.getChannel(activeChannelKey);
+    void writeAgentProxyRouteDebugEvent({ event: "agentProxy.route.resolve.matched", payload, socket, channel, data: { routeSource: "active_channel" } });
+    return channel;
   }
+  void writeAgentProxyRouteDebugEvent({ event: "agentProxy.route.resolve.notFound", payload, socket, data: { reason: "no_matching_channel", hasSessionId: Boolean(sessionId), hasUserId: Boolean(userId), hasActiveChannelKey: Boolean(activeChannelKey), hasExplicitChannelKey: Boolean(explicitChannelKey) } });
   return null;
 }
 
@@ -44,6 +66,7 @@ resolveChannelFromSocketMessage(socket, payload = {}) {
 
 forwardToUpstream(channel, payload = {}) {
   if (!channel?.upstreamSocket || channel.upstreamSocket.readyState !== this.WebSocket.OPEN) {
+    void writeAgentProxyRouteDebugEvent({ event: "agentProxy.route.forward.skipped", payload, channel, data: { reason: "upstream_not_open" } });
     this.logSessionEvent(channel, {
       category: "transport",
       level: "warn",
@@ -54,6 +77,7 @@ forwardToUpstream(channel, payload = {}) {
   }
   try {
     channel.upstreamSocket.send(JSON.stringify(payload || {}));
+    void writeAgentProxyRouteDebugEvent({ event: "agentProxy.route.forward.sent", payload, channel, data: { reason: "forwarded" } });
     this.logSessionEvent(channel, {
       category: "transport",
       event: "agentProxy.upstream.forward",
@@ -105,6 +129,7 @@ forwardToUpstream(channel, payload = {}) {
     }
     return true;
   } catch (error) {
+    void writeAgentProxyRouteDebugEvent({ event: "agentProxy.route.forward.error", payload, channel, data: { reason: "send_error", errorMessage: String(error?.message || error || "send failed").slice(0, 300) } });
     this.logSessionEvent(channel, {
       category: "transport",
       level: "warn",
@@ -154,9 +179,12 @@ startOrJoinChannel({ socket, payload, connectionApiKey, connectionLocale }) {
   }
 
   const nextPayloadFingerprint = buildFingerprint(payload);
-  const keepExistingRun =
+  const hasReusableUpstream =
+    channel?.upstreamSocket?.readyState === this.WebSocket.OPEN;
+  const isActiveChannelStatus =
     channel.status === CHANNEL_STATUS.RUNNING ||
     channel.status === CHANNEL_STATUS.CONNECTING;
+  const keepExistingRun = isActiveChannelStatus && hasReusableUpstream;
   const shouldStartNewRun = !keepExistingRun;
 
   this.attachSubscriber(channel, socket);
@@ -164,7 +192,16 @@ startOrJoinChannel({ socket, payload, connectionApiKey, connectionLocale }) {
   this.logSessionEvent(channel, {
     category: "interaction",
     event: shouldStartNewRun ? "agentProxy.channel.start" : "agentProxy.channel.join",
-    data: { channelKey: channel.key, socketId: socket?.__agentProxySocketId, keepExistingRun, sessionId, userId },
+    data: {
+      channelKey: channel.key,
+      socketId: socket?.__agentProxySocketId,
+      keepExistingRun,
+      sessionId,
+      userId,
+      channelStatus: channel.status,
+      hasReusableUpstream,
+      upstreamReadyState: channel?.upstreamSocket?.readyState,
+    },
   });
 
   if (keepExistingRun) return;
@@ -184,6 +221,19 @@ startOrJoinChannel({ socket, payload, connectionApiKey, connectionLocale }) {
   channel.cleanupAfterMs = 0;
   channel.upstreamClosed = false;
   channel._errorHandled = false;
+  if (isActiveChannelStatus && !hasReusableUpstream) {
+    void writeAgentProxyRouteDebugEvent({
+      event: "agentProxy.route.startOrJoin.restartStaleUpstream",
+      payload,
+      socket,
+      channel,
+      data: {
+        reason: "active_channel_without_open_upstream",
+        previousStatus: channel.status,
+        upstreamReadyState: channel?.upstreamSocket?.readyState,
+      },
+    });
+  }
   this.closeUpstreamChannel(channel, 1000, UPSTREAM_CLOSE_REASON.RESTART);
   this.connectUpstreamChannel(channel, normalizedConnectionApiKey, String(connectionLocale || "").trim());
 }

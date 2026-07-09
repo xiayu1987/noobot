@@ -48,17 +48,17 @@ function isStoppedMonotonicMessage(message = {}) {
 function isStoppingAssistantMessage(message = {}) {
   if (getMessageRole(message) !== "assistant") return false;
   const channelState = getMessageRuntimeChannelState(message);
-  return ["stopping", "user_stopped", "cancelled"].includes(
+  return ["frontend_user_stopping", "stopping", "user_stopped"].includes(
     normalizeTrimmedString(channelState?.state || message?.state || message?.status),
   );
 }
 
-function isStopPendingRunState(state = "") {
+function isUserStopPendingRunState(state = "") {
   return [
-    FrontendRunState.STOP_REQUESTED,
-    BackendChannelState.STOPPING,
+    FrontendRunState.USER_STOP_REQUESTED,
+    FrontendRunState.USER_STOPPING,
+    FrontendRunState.USER_STOP_COMPLETED,
     BackendChannelState.USER_STOPPED,
-    FrontendRunState.CANCELLED,
   ].includes(normalizeTrimmedString(state));
 }
 
@@ -164,7 +164,7 @@ export function createMonotonicMessageActions({
     const stoppedTurnMessage = getStoppedTurnMessage({ targetMessage, originalTargetMessage });
     if (sending?.value && stoppedTurnMessage) {
       const session = activeSession?.value || {};
-      if (isStopPendingRunState(runStateSnapshot?.value?.state)) {
+      if (isUserStopPendingRunState(runStateSnapshot?.value?.state)) {
         applyRunStateEvent?.({
           type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
           state: BackendChannelState.USER_STOPPED,

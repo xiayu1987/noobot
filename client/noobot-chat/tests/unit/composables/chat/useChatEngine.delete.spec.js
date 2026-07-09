@@ -260,7 +260,7 @@ describe("useChatEngine.delete", () => {
     sending.value = true;
     canStop.value = false;
     runStateSnapshot.value = {
-      state: FrontendRunState.STOP_REQUESTED,
+      state: FrontendRunState.USER_STOP_REQUESTED,
       sessionId: "local-delete-stopped-sending",
       turnScopeId: "turn-stopped-sending",
       dialogProcessId: "dp-stopped-sending",
@@ -272,7 +272,8 @@ describe("useChatEngine.delete", () => {
     expect(sending.value).toBe(false);
     expect(canStop.value).toBe(false);
     expect(runStateSnapshot.value).toEqual(expect.objectContaining({
-      state: BackendChannelState.USER_STOPPED,
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
       turnScopeId: "turn-stopped-sending",
       dialogProcessId: "dp-stopped-sending",
     }));

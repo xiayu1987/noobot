@@ -23,7 +23,18 @@ function normalizeTimestamp(rawEvent = {}) {
 export function normalizeSessionRunEvent(rawEvent = {}) {
   const turnMeta = normalizeTurnMeta(rawEvent);
   const type = trim(rawEvent?.type || rawEvent?.event || SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE);
-  let state = normalizeState(rawEvent?.state);
+  const wireState = normalizeState(rawEvent?.state);
+  let state = wireState;
+  const isBackendStateEvent = [
+    SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+    SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
+  ].includes(type);
+  if (isBackendStateEvent && wireState === BackendChannelState.USER_STOPPED) {
+    state = FrontendRunState.USER_STOP_COMPLETED;
+  }
+  if (isBackendStateEvent && wireState === BackendChannelState.STOPPING) {
+    state = FrontendRunState.USER_STOPPING;
+  }
   if (!state) {
     if (type === SESSION_RUN_EVENT.LOCAL_SEND_STARTED) state = BackendChannelState.SENDING;
     if (type === SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED) {
@@ -41,7 +52,7 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
       state = FrontendRunState.FRONTEND_COMPLETED;
     }
     if (type === SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED) state = BackendChannelState.ERROR;
-    if (type === SESSION_RUN_EVENT.LOCAL_STOP_REQUESTED) state = FrontendRunState.STOP_REQUESTED;
+    if (type === SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED) state = FrontendRunState.USER_STOP_REQUESTED;
     if (type === SESSION_RUN_EVENT.BACKEND_RECOVERABLE_RUNNING) state = BackendChannelState.RECONNECTING;
     if (type === SESSION_RUN_EVENT.LOCAL_FAILURE) state = BackendChannelState.ERROR;
     if (type === SESSION_RUN_EVENT.LOCAL_RESET) state = FrontendRunState.IDLE;
@@ -50,6 +61,7 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
   return {
     type,
     state,
+    backendState: wireState,
     sessionId: trim(rawEvent?.sessionId),
     dialogProcessId: type === SESSION_RUN_EVENT.LOCAL_SEND_STARTED
       ? ""

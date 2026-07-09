@@ -216,7 +216,86 @@ describe("chatWebSocketClient", () => {
 
     expect(socket.readyState).toBe(MockWebSocket.CLOSED);
     expect(forceFinalize).toHaveBeenCalledTimes(1);
+    expect(forceFinalize).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: "s-1",
+      turnScopeId: "turn-stop",
+    }));
     expect(settled).toBe(true);
+  });
+
+  it("does not let a stale stop timeout finalize a later continue stream", async () => {
+    const client = createChatWebSocketClient({
+      resolveWebSocketUrl: () => "ws://test",
+      forceStopFinalizeMs: 1000,
+    });
+    client.connect();
+    const socket = MockWebSocket.instances[0];
+    const forceFinalize = vi.fn();
+    let continueSettled = false;
+
+    client.stream({
+      action: "chat",
+      sessionId: "s-1",
+      dialogProcessId: "dp-stop",
+      turnScopeId: "turn-stop",
+    }, vi.fn());
+    expect(client.requestStop({
+      sessionId: "s-1",
+      dialogProcessId: "dp-stop",
+      turnScopeId: "turn-stop",
+    }, forceFinalize)).toBe(true);
+
+    const continuePromise = client.stream({
+      action: "continue",
+      sessionId: "s-1",
+      dialogProcessId: "dp-continue",
+      turnScopeId: "turn-continue",
+    }, vi.fn()).then(() => {
+      continueSettled = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(1000);
+    await flushPromises();
+
+    expect(forceFinalize).not.toHaveBeenCalled();
+    expect(socket.readyState).toBe(MockWebSocket.OPEN);
+    expect(continueSettled).toBe(false);
+
+    socket.emit(StreamEventEnum.DONE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-continue",
+      turnScopeId: "turn-continue",
+    });
+    await continuePromise;
+    expect(continueSettled).toBe(true);
+  });
+
+  it("calls onPayloadSent only after the stream payload is written to the websocket", async () => {
+    const client = createChatWebSocketClient({
+      resolveWebSocketUrl: () => "ws://test",
+    });
+    client.connect();
+    const socket = MockWebSocket.instances[0];
+    const onPayloadSent = vi.fn();
+
+    const streamPromise = client.stream(
+      { action: "continue", turnScopeId: "turn-continue" },
+      vi.fn(),
+      { onPayloadSent },
+    );
+
+    expect(socket.sent.map((item) => JSON.parse(item))).toContainEqual({
+      action: "continue",
+      turnScopeId: "turn-continue",
+    });
+    expect(onPayloadSent).toHaveBeenCalledTimes(1);
+    expect(onPayloadSent).toHaveBeenCalledWith({
+      action: "continue",
+      turnScopeId: "turn-continue",
+    });
+
+    socket.emit(StreamEventEnum.DONE, { turnScopeId: "turn-continue" });
+    await streamPromise;
   });
 
   it("repeat requestStop keeps stop state and sends latest stop payload", () => {
@@ -321,7 +400,7 @@ describe("chatWebSocketClient", () => {
 
   it.each([
     [StreamEventEnum.DONE, { turnScopeId: "doc-turn", dialogProcessId: "doc-dp" }],
-    [StreamEventEnum.STOPPED, { turnScopeId: "doc-turn", dialogProcessId: "doc-dp" }],
+    [StreamEventEnum.USER_STOPPED, { turnScopeId: "doc-turn", dialogProcessId: "doc-dp" }],
     [StreamEventEnum.ERROR, { turnScopeId: "doc-turn", dialogProcessId: "doc-dp", error: "doc2data failed" }],
     [StreamEventEnum.CHANNEL_STATE, { turnScopeId: "doc-turn", dialogProcessId: "doc-dp", state: "user_stopped" }],
   ])("does not settle current stream for unrelated %s events", async (event, data) => {
@@ -387,5 +466,37 @@ describe("chatWebSocketClient", () => {
 
     await streamPromise;
     expect(resolved).toBe(true);
+  });
+
+  it.each([
+    [StreamEventEnum.USER_STOPPED, { turnScopeId: "main-turn", dialogProcessId: "main-dp" }],
+    [StreamEventEnum.CHANNEL_STATE, { turnScopeId: "main-turn", dialogProcessId: "main-dp", state: "user_stopped" }],
+  ])("cancels force-stop timeout after matching %s stop confirmation", async (event, data) => {
+    const client = createChatWebSocketClient({
+      resolveWebSocketUrl: () => "ws://test",
+      forceStopFinalizeMs: 1000,
+      terminalChannelStateGraceMs: 20,
+    });
+    client.connect();
+    const socket = MockWebSocket.instances[0];
+    const forceFinalize = vi.fn();
+    let resolved = false;
+
+    const streamPromise = client
+      .stream({ action: "chat", turnScopeId: "main-turn", dialogProcessId: "main-dp" }, vi.fn())
+      .then(() => {
+        resolved = true;
+      });
+
+    expect(client.requestStop({ turnScopeId: "main-turn", dialogProcessId: "main-dp" }, forceFinalize)).toBe(true);
+    socket.emit(event, { sessionId: "s-1", seq: 12, ...data });
+    if (event === StreamEventEnum.CHANNEL_STATE) {
+      await vi.advanceTimersByTimeAsync(20);
+    }
+    await streamPromise;
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(resolved).toBe(true);
+    expect(forceFinalize).not.toHaveBeenCalled();
   });
 });

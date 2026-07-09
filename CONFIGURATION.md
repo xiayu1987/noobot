@@ -45,7 +45,7 @@ Based on latest examples:
 Session log WebSocket:
 - Endpoint: `/logs/ws` on the backend, usually reached by the frontend through `/api/logs/ws` and by agent-proxy through the backend upstream.
 - Auth: reuses the existing API key WebSocket authentication.
-- Storage: backend writes one directory per `sessionId`, and one JSONL file per category (`state`, `message`, `interaction`, `transport`, `debug`, `agent-proxy`, `system`).
+- Storage: backend writes one directory per `sessionId`, and one JSONL file per category (`state`, `message`, `interaction`, `transport`, `agent-proxy`, `system`); debug logs are further split by `data.debugType` into `debug-<debugType>.jsonl`, or `debug.jsonl` when no explicit `debugType` is present.
 - Main fields: `source`, `category`, `event`, `sessionId`, optional `dialogProcessId` / `turnScopeId`, and compact `data` payloads for state-machine, message-flow, frontend/backend interaction, and agent-proxy events.
 - Control: frontend and agent-proxy only send events through the log WebSocket. Runtime-events is the single control point that decides whether to record by the specific business-type switches in `runtime-events-config.mjs`. Log-specific switches default to enabled; debug-specific switches default to disabled.
 
