@@ -6,7 +6,12 @@
 
 import { tEngine } from "../i18n-adapter.js";
 
-export { isAbortError } from "../../../utils/error-utils.js";
+export {
+  isAbortError,
+  isUserStopAbort,
+  readAbortReason,
+  resolveAbortStopType,
+} from "../../../utils/error-utils.js";
 
 export function assertNotAborted(signal = null, runtime = {}) {
   if (!signal?.aborted) return;

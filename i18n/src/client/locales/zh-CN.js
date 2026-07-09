@@ -275,6 +275,8 @@ export const zhCNMessages = {
     "scenarioText": "文本",
     "sending": "发送中",
     "send": "发送",
+    "continue": "继续",
+    "continueRequesting": "继续请求中",
     "attachments": "附件",
     "removeAttachment": "移除附件 {name}",
     "dropFilesToAttach": "释放以添加附件",

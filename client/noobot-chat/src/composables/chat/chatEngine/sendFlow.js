@@ -57,9 +57,9 @@ function isEventForCurrentTurn(data = {}, botMessage = {}) {
 
 function isTerminalStopStateEvent(event = "", data = {}) {
   const normalizedEvent = normalizeTrimmedString(event);
-  if (normalizedEvent === StreamEventEnum.STOPPED) return true;
+  if (normalizedEvent === StreamEventEnum.USER_STOPPED) return true;
   if (normalizedEvent !== StreamEventEnum.CHANNEL_STATE) return false;
-  return ["stopped", "cancelled"].includes(normalizeTrimmedString(data?.state));
+  return ["user_stopped", "cancelled"].includes(normalizeTrimmedString(data?.state));
 }
 
 function isTerminalCompletedStateEvent(event = "", data = {}) {
@@ -172,6 +172,9 @@ export function createChatEngineSender({
     const explicitTransportAttachments = Array.isArray(options?.transportAttachments) ? options.transportAttachments : null;
     const hasExplicitAttachments = Boolean(explicitAttachmentFiles?.length || explicitTransportAttachments?.length);
     const hasTextToSend = Boolean(explicitMessageText || input.value.trim());
+    const continueFromStopped = options?.continueFromStopped === true;
+    const resumeDialogProcessId = normalizeTrimmedString(options?.resumeDialogProcessId);
+    const resumeTurnScopeId = normalizeTrimmedString(options?.resumeTurnScopeId);
     if (!ensureConnected()) return false;
     if (options?.allowDuringResend !== true && !hasConsistentSendingState({ sending, activeSession, runStateSnapshot })) {
       notify?.({
@@ -285,6 +288,9 @@ export function createChatEngineSender({
         locale,
         selectedPlugins,
         turnScopeId,
+        action: continueFromStopped ? "continue" : "",
+        resumeDialogProcessId: continueFromStopped ? resumeDialogProcessId : "",
+        resumeTurnScopeId: continueFromStopped ? resumeTurnScopeId : "",
         thinkingStartedAt: botMsg?.thinkingStartedAt || "",
         uploadHint: translate("chat.uploadHint"),
         reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
@@ -402,7 +408,7 @@ export function createChatEngineSender({
         });
         if (event === StreamEventEnum.CHANNEL_STATE) {
           const channelState = normalizeTrimmedString(data?.state);
-          if (["stopped", "cancelled"].includes(channelState)) {
+          if (["user_stopped", "cancelled"].includes(channelState)) {
             finalStopEventData = {
               ...(data || {}),
               sessionId: data?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || "",
@@ -488,7 +494,7 @@ export function createChatEngineSender({
             locateSendingStartedMessageOnce,
             suppressCompletionConversationState: Boolean(finalDoneDetailPromise),
           });
-        } else if (event === StreamEventEnum.STOPPED) {
+        } else if (event === StreamEventEnum.USER_STOPPED) {
           finalStopEventData = {
             ...(data || {}),
             sessionId: data?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || "",

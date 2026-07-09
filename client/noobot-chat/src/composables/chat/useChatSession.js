@@ -48,6 +48,7 @@ import { useLocale } from "../../shared/i18n/useLocale";
 import { getMessageRole } from "../infra/messageIdentity";
 import {
   applySessionRunStateEvent,
+  BackendChannelState,
   evaluateSessionRunState,
   SESSION_RUN_EVENT,
 } from "./sessionRunStateMachine";
@@ -91,16 +92,22 @@ export function useChatSession({
   } = storeToRefs(chatStore);
   const conversationStateSnapshot = ref({});
   const conversationStateTimeline = ref([]);
-  const composerActionState = computed(() => ({
+  const composerActionState = computed(() => {
+    const evaluation = evaluateSessionRunState(runStateSnapshot.value);
+    return {
     sendRequesting: Boolean(runStateSnapshot.value?.composerActionState?.sendRequesting),
+    continueRequesting: Boolean(runStateSnapshot.value?.composerActionState?.continueRequesting),
     stopRequesting: Boolean(runStateSnapshot.value?.composerActionState?.stopRequesting),
     stopPendingUntilBackendReady: Boolean(runStateSnapshot.value?.composerActionState?.stopPendingUntilBackendReady),
-    canStartNewSend: evaluateSessionRunState(runStateSnapshot.value).canStartNewSend !== false,
-    canRetryMessage: evaluateSessionRunState(runStateSnapshot.value).canRetryMessage !== false,
-    canDeleteMessage: evaluateSessionRunState(runStateSnapshot.value).canDeleteMessage !== false,
-    stopInFlight: Boolean(evaluateSessionRunState(runStateSnapshot.value).stopInFlight),
-    awaitingBackendStop: Boolean(evaluateSessionRunState(runStateSnapshot.value).awaitingBackendStop),
-  }));
+    canStartNewSend: evaluation.canStartNewSend !== false,
+    canRetryMessage: evaluation.canRetryMessage !== false,
+    canDeleteMessage: evaluation.canDeleteMessage !== false,
+    stopInFlight: Boolean(evaluation.stopInFlight),
+    awaitingBackendStop: Boolean(evaluation.awaitingBackendStop),
+    stopped: evaluation.state === BackendChannelState.USER_STOPPED,
+    state: evaluation.state || "",
+    };
+  });
 
   const applyComposerActionStateEvent = (event) => applySessionRunStateEvent({
     stateRef: runStateSnapshot,
@@ -404,18 +411,35 @@ export function useChatSession({
   );
 
   async function sendWithComposerActionState(...args) {
-    if (evaluateSessionRunState(runStateSnapshot.value).canStartNewSend === false) return false;
-    if (composerActionState.value.sendRequesting) return false;
+    const runStateEvaluation = evaluateSessionRunState(runStateSnapshot.value);
+    if (runStateEvaluation.canStartNewSend === false) return false;
+    const isContinueFromStopped = runStateEvaluation.state === BackendChannelState.USER_STOPPED;
+    if (composerActionState.value.sendRequesting || composerActionState.value.continueRequesting) return false;
+    const composerEventType = isContinueFromStopped
+      ? SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED
+      : SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED;
+    const composerSettledEventType = isContinueFromStopped
+      ? SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_SETTLED
+      : SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_SETTLED;
     applyComposerActionStateEvent({
-      type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
+      type: composerEventType,
       source: "use_chat_session",
     });
     try {
-      return await chatEngine.send(...args);
+      const [options = {}, ...restArgs] = args;
+      const sendOptions = isContinueFromStopped
+        ? {
+            ...(options && typeof options === "object" ? options : {}),
+            continueFromStopped: true,
+            resumeDialogProcessId: runStateSnapshot.value?.dialogProcessId || "",
+            resumeTurnScopeId: runStateSnapshot.value?.turnScopeId || "",
+          }
+        : options;
+      return await chatEngine.send(sendOptions, ...restArgs);
     } finally {
       replayPendingStopWhenBackendReady();
       applyComposerActionStateEvent({
-        type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_SETTLED,
+        type: composerSettledEventType,
         source: "use_chat_session",
       });
     }
@@ -429,7 +453,7 @@ export function useChatSession({
     });
     const requested = chatEngine.stopSending(...args);
     if (!requested) {
-      if (composerActionState.value.sendRequesting) {
+      if (composerActionState.value.sendRequesting || composerActionState.value.continueRequesting) {
         applyComposerActionStateEvent({
           type: SESSION_RUN_EVENT.LOCAL_STOP_PENDING_BACKEND_READY,
           source: "use_chat_session",

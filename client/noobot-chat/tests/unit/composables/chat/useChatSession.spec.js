@@ -486,7 +486,7 @@ describe("useChatSession reconnect replay", () => {
           sessionId: "s-stopped-sync",
           turnScopeId: "turn-stopped-sync",
           dialogProcessId: "dp-stopped-sync",
-          state: "stopped",
+          state: "user_stopped",
           seq: 2,
         },
       });
@@ -500,7 +500,9 @@ describe("useChatSession reconnect replay", () => {
     await session.handleReconnect();
     await nextTick();
 
-    expect(store.runStateSnapshot.state).toBe("stopped");
+    expect(store.runStateSnapshot.state).toBe("user_stopped");
+    expect(store.runStateSnapshot.dialogProcessId).toBe("dp-stopped-sync");
+    expect(store.runStateSnapshot.turnScopeId).toBe("turn-stopped-sync");
     expect(store.runStateSnapshot.composerActionState.stopRequesting).toBe(false);
     expect(session.composerActionState.value.stopRequesting).toBe(false);
     expect(session.composerActionState.value.awaitingBackendStop).toBe(false);
@@ -651,7 +653,7 @@ describe("useChatSession reconnect replay", () => {
       canStop: toRef(store, "canStop"),
       event: {
         type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-        state: "stopped",
+        state: "user_stopped",
         sessionId: "s-stop-request",
         turnScopeId: "turn-stop",
         dialogProcessId: "dp-stop",

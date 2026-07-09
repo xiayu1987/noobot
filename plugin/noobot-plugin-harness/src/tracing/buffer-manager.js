@@ -82,6 +82,35 @@ function markPolicyPromptRefreshed(ctx = {}, activeDynamicPolicyPrompt = null) {
   }
 }
 
+function resolveAgentRuntimeFromContext(ctx = {}) {
+  return ctx?.agentContext?.execution?.controllers?.runtime || ctx?.agentContext?.runtime || ctx?.runtime || null;
+}
+
+function isStoppedSnapshotResumeInitializingFirstLlmCall(ctx = {}) {
+  const runtime = resolveAgentRuntimeFromContext(ctx);
+  if (!runtime || runtime.resumeFromStoppedSnapshot !== true) return false;
+  if (
+    runtime.resumedStoppedSnapshotMessageBlocks &&
+    typeof runtime.resumedStoppedSnapshotMessageBlocks === "object"
+  ) {
+    return true;
+  }
+  if (
+    runtime.resumedStoppedSnapshotIdentity &&
+    typeof runtime.resumedStoppedSnapshotIdentity === "object"
+  ) {
+    return true;
+  }
+  const lifecycleState = String(
+    runtime.agentLifecycleState ||
+      runtime.agentLifecycleInitialState ||
+      runtime.agentLifecycle?.state ||
+      "",
+  ).trim();
+  if (lifecycleState && lifecycleState !== "resume_initializing") return false;
+  return Number(ctx?.turn) === 1;
+}
+
 function resolveFlushReasonByPoint(point = "") {
   if (
     point === HARNESS_HOOK_POINTS.AFTER_TURN ||
@@ -170,6 +199,12 @@ export async function updateManifest(paths, ctx = {}, patch = {}, options = {}, 
 
 export async function injectPrompt(point, ctx, options, plugin = {}) {
   if (!options.enabled || !options.promptPolicy) return;
+  if (
+    point === HARNESS_HOOK_POINTS.BEFORE_LLM_CALL &&
+    isStoppedSnapshotResumeInitializingFirstLlmCall(ctx)
+  ) {
+    return;
+  }
   const id =
     point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT
       ? "noobot-harness-final-response"

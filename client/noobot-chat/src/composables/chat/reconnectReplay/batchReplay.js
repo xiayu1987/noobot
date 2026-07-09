@@ -390,7 +390,7 @@ export function applyReconnectEnvelopeToTargetMessage({
     if (Array.isArray(eventData?.messages) && eventData.messages.length) {
       onDoneMessages?.(eventData);
     }
-  } else if (eventName === StreamEventEnum.STOPPED) {
+  } else if (eventName === StreamEventEnum.USER_STOPPED) {
     terminalDialogProcessIdSet?.add?.(normalizedDpId);
   } else if (eventName === StreamEventEnum.ERROR) {
     targetMessage.error = String(eventData?.error || targetMessage?.error || "");

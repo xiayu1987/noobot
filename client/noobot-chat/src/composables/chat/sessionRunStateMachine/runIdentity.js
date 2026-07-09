@@ -123,7 +123,7 @@ export function isNotLeavingTerminal({ event = {}, startsNewTurn = false, curren
   const currentState = normalizeState(arguments[0]?.current?.state);
   const nextState = normalizeState(event.state);
   if (!FrontendTerminalStates.includes(nextState)) return false;
-  if ([BackendChannelState.ERROR, BackendChannelState.STOPPED, FrontendRunState.CANCELLED].includes(currentState)) {
+  if ([BackendChannelState.ERROR, BackendChannelState.USER_STOPPED, FrontendRunState.CANCELLED].includes(currentState)) {
     return nextState === currentState;
   }
   return true;

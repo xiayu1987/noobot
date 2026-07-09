@@ -345,7 +345,7 @@ export function createChatEngineConversationState({
       (
         isTerminalConversationState(runtimeState) ||
         isTerminalConversationState(directState) ||
-        stopState === BackendChannelState.STOPPED ||
+        stopState === BackendChannelState.USER_STOPPED ||
         stopState === FrontendRunState.CANCELLED
       )
     );
@@ -588,7 +588,7 @@ export function createChatEngineConversationState({
         [
           FrontendRunState.FRONTEND_COMPLETED,
           BackendChannelState.ERROR,
-          BackendChannelState.STOPPED,
+          BackendChannelState.USER_STOPPED,
           FrontendRunState.CANCELLED,
         ].includes(currentMessageState)
       ) {
@@ -621,7 +621,7 @@ export function createChatEngineConversationState({
       });
       return;
     }
-    if (state === BackendChannelState.STOPPED || state === FrontendRunState.CANCELLED) {
+    if (state === BackendChannelState.USER_STOPPED || state === FrontendRunState.CANCELLED) {
       targetAssistantMessage.statusLabel = translate("chat.stopped");
       if (!String(targetAssistantMessage.content || "").trim()) {
         targetAssistantMessage.content = translate("chat.stoppedContent");

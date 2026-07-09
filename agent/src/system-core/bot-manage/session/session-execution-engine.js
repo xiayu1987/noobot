@@ -40,6 +40,7 @@ import {
   createRunConfigPluginPreparerFromRuntimeBundle,
   getDefaultSessionPluginRuntime,
 } from "../../plugin/session-plugin-runtime-provider.js";
+import { loadStoppedModelMessageSnapshot } from "../../agent/core/resume/model-message-snapshot-store.js";
 
 export class SessionExecutionEngine {
   constructor({
@@ -506,13 +507,19 @@ export class SessionExecutionEngine {
       payload?.contextBuilder && typeof payload.contextBuilder === "object"
         ? payload.contextBuilder
         : this._buildContextBuilder(payload);
-    const prepared = await this.agentRuntimeFacade.prepareTurnExecution({
-      buildContextPayload: {
-        ...payload,
-        contextBuilder,
-      },
-      abortSignal,
-    });
+    const prepared = payload?.runConfig?.resumeFromStoppedSnapshot === true
+      ? await this._prepareStoppedSnapshotResumeTurnExecution({
+          payload,
+          contextBuilder,
+          abortSignal,
+        })
+      : await this.agentRuntimeFacade.prepareTurnExecution({
+          buildContextPayload: {
+            ...payload,
+            contextBuilder,
+          },
+          abortSignal,
+        });
     const preparedRuntime = getRuntimeFromAgentContext(prepared?.agentContext || {});
     const preparedRuntimeAttachments = Array.isArray(preparedRuntime?.userMessageAttachments)
       ? preparedRuntime.userMessageAttachments
@@ -542,6 +549,63 @@ export class SessionExecutionEngine {
         fallbackMimeType: MIME_TYPE.APPLICATION_OCTET_STREAM,
         userId: String(payload?.userId || "").trim(),
       }),
+    };
+  }
+
+  async _prepareStoppedSnapshotResumeTurnExecution({
+    payload = {},
+    contextBuilder = null,
+    abortSignal = null,
+  } = {}) {
+    if (!contextBuilder || typeof contextBuilder._buildAgentContext !== "function") {
+      throw new Error("stopped snapshot resume requires a compatible contextBuilder");
+    }
+    const runConfig = payload?.runConfig && typeof payload.runConfig === "object"
+      ? payload.runConfig
+      : {};
+    const identity = {
+      userId: String(payload?.userId || "").trim(),
+      sessionId: String(payload?.sessionId || "").trim(),
+      parentSessionId: String(payload?.parentSessionId || "").trim(),
+      dialogProcessId: String(runConfig.resumeDialogProcessId || payload?.dialogProcessId || "").trim(),
+      turnScopeId: String(runConfig.resumeTurnScopeId || payload?.turnScopeId || runConfig.turnScopeId || "").trim(),
+    };
+    const snapshot = await loadStoppedModelMessageSnapshot({
+      globalConfig: this.globalConfig,
+      identity,
+    });
+    const systemMessages = Array.isArray(snapshot?.messageBlocks?.system)
+      ? snapshot.messageBlocks.system
+      : [];
+    const historyMessages = [
+      ...(Array.isArray(snapshot?.messageBlocks?.history) ? snapshot.messageBlocks.history : []),
+    ];
+    const agentContext = await contextBuilder._buildAgentContext(
+      systemMessages,
+      historyMessages,
+      {
+        dialogProcessId: String(payload?.dialogProcessId || identity.dialogProcessId || "").trim(),
+        attachments: Array.isArray(payload?.userMessageAttachments)
+          ? payload.userMessageAttachments
+          : [],
+      },
+    );
+    const scopedAgentContext = this._applyRunConfigToolPolicy(agentContext, runConfig);
+    const runtimeAgentContext = this.agentRuntimeFacade.buildRunTurnContext(
+      scopedAgentContext,
+      abortSignal,
+    );
+    const runtime = getRuntimeFromAgentContext(runtimeAgentContext);
+    runtime.resumeFromStoppedSnapshot = true;
+    runtime.resumedStoppedSnapshotIdentity = identity;
+    runtime.resumedStoppedSnapshotMessageBlocks = {
+      system: Array.isArray(snapshot?.messageBlocks?.system) ? snapshot.messageBlocks.system : [],
+      history: Array.isArray(snapshot?.messageBlocks?.history) ? snapshot.messageBlocks.history : [],
+      incremental: Array.isArray(snapshot?.messageBlocks?.incremental) ? snapshot.messageBlocks.incremental : [],
+    };
+    return {
+      agentContext: scopedAgentContext,
+      runtimeAgentContext,
     };
   }
 

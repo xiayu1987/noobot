@@ -154,6 +154,15 @@ export function createStateBuilder({
       errorLogger,
     };
     canonicalizeMessageStore(loopState);
+    runtime.stoppedModelMessageSnapshotCandidate = {
+      userId: String(runtime?.userId || sys?.userId || agentContext?.environment?.identity?.userId || "").trim(),
+      sessionId: String(sys?.sessionId || runtime?.sessionId || agentContext?.session?.current?.id || "").trim(),
+      parentSessionId: String(sys?.parentSessionId || agentContext?.session?.parent?.id || "").trim(),
+      dialogProcessId: String(dialogProcessId || sys?.dialogProcessId || "").trim(),
+      turnScopeId: String(runConfig?.turnScopeId || sys?.turnScopeId || sys?.config?.turnScopeId || "").trim(),
+      messages: loopState.messages,
+      messageBlocks: loopState.messageBlocks,
+    };
     emitModelContextTrace(runtime, "agent_state_built", {
       dialogProcessId,
       payloadMessages: {

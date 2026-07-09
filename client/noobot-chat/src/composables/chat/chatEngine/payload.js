@@ -34,6 +34,9 @@ export function buildChatPayload({
   uploadHint = "",
   reuseExistingUserTurn = false,
   turnScopeId = "",
+  action = "",
+  resumeDialogProcessId = "",
+  resumeTurnScopeId = "",
   thinkingStartedAt = "",
 } = {}) {
   const normalizedScenario = normalizeTrimmedString(botScenario?.value ?? botScenario);
@@ -41,8 +44,12 @@ export function buildChatPayload({
   const normalizedMemoryModel = normalizeTrimmedString(memoryModel?.value ?? memoryModel);
   const normalizedPluginModelConfig = pluginModelConfig?.value ?? pluginModelConfig;
   const normalizedTurnScopeId = normalizeTrimmedString(turnScopeId);
+  const normalizedAction = normalizeTrimmedString(action);
+  const normalizedResumeDialogProcessId = normalizeTrimmedString(resumeDialogProcessId);
+  const normalizedResumeTurnScopeId = normalizeTrimmedString(resumeTurnScopeId);
   const normalizedThinkingStartedAt = normalizeTrimmedString(thinkingStartedAt);
   return {
+    ...(normalizedAction ? { action: normalizedAction } : {}),
     userId: userId?.value ?? userId,
     sessionId: activeSession?.value?.backendSessionId || activeSession?.value?.sessionId || activeSession?.value?.id,
     turnScopeId: normalizedTurnScopeId,
@@ -64,6 +71,11 @@ export function buildChatPayload({
       ),
       selectedPlugins: normalizeSelectedPluginKeys(selectedPlugins),
       ...(normalizedThinkingStartedAt ? { thinkingStartedAt: normalizedThinkingStartedAt } : {}),
+      ...(normalizedResumeDialogProcessId ? { resumeDialogProcessId: normalizedResumeDialogProcessId } : {}),
+      ...(normalizedResumeTurnScopeId ? {
+        resumeTurnScopeId: normalizedResumeTurnScopeId,
+        stoppedTurnScopeId: normalizedResumeTurnScopeId,
+      } : {}),
       ...(reuseExistingUserTurn ? {
         reuseExistingUserTurn: true,
       } : {}),

@@ -10,6 +10,7 @@ import {
   CHANNEL_STATUS,
   CONVERSATION_STATE,
   CONVERSATION_SOURCE_EVENT,
+  UPSTREAM_CLOSE_REASON,
   WS_ACTION,
 } from "./constants.js";
 import { writeAgentProxyInvalidJsonPayloadEvent } from "./ws-runtime-events.js";
@@ -91,7 +92,7 @@ export class WsRouter {
       const forwarded = this.channelManager.forwardToUpstream(targetChannel, payload);
       const stoppedEnvelope = this.channelManager.pushChannelEvent(
         targetChannel,
-        CHANNEL_EVENT.STOPPED,
+        CHANNEL_EVENT.USER_STOPPED,
         forwarded
           ? {
               sessionId: String(payload?.sessionId || "").trim(),
@@ -104,8 +105,16 @@ export class WsRouter {
               message: AGENT_PROXY_ERROR.UPSTREAM_NOT_RUNNING,
             },
       );
-      this.channelManager.markChannelTerminal(targetChannel, CHANNEL_STATUS.STOPPED);
+      this.channelManager.markChannelTerminal(targetChannel, CHANNEL_STATUS.USER_STOPPED);
       this.channelManager.broadcastChannelEvent(targetChannel, stoppedEnvelope);
+    },
+
+    [WS_ACTION.CONTINUE](socket, payload) {
+      this._forwardRunAction(socket, payload, WS_ACTION.CONTINUE);
+    },
+
+    [WS_ACTION.RESUME](socket, payload) {
+      this._forwardRunAction(socket, payload, WS_ACTION.RESUME);
     },
 
     [WS_ACTION.INTERACTION_RESPONSE](socket, payload) {
@@ -180,4 +189,71 @@ export class WsRouter {
       this.channelManager.handleReconnect(socket, payload);
     },
   };
+
+  _forwardRunAction(socket, payload, action) {
+    const targetChannel = this.channelManager.resolveChannelFromSocketMessage(socket, payload);
+    if (!targetChannel) {
+      this.channelManager.sendSocketError(
+        socket,
+        AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE,
+      );
+      return;
+    }
+    if (
+      !this.channelManager.hasChannelPermission(
+        targetChannel,
+        socket.__agentProxyApiKey,
+        String(socket?.__agentProxyUserId || "").trim(),
+      )
+    ) {
+      this.channelManager.sendSocketError(
+        socket,
+        AGENT_PROXY_ERROR.PERMISSION_DENIED_FOR_ACTION(action),
+      );
+      return;
+    }
+    const forwarded = this.channelManager.forwardToUpstream(targetChannel, payload);
+    if (forwarded) return;
+
+    if (
+      action === WS_ACTION.CONTINUE ||
+      action === WS_ACTION.RESUME
+    ) {
+      const restarted = this._restartUpstreamRunAction(socket, targetChannel, payload);
+      if (restarted) return;
+    }
+
+    this.channelManager.sendSocketError(
+      socket,
+      AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE,
+    );
+  }
+
+  _restartUpstreamRunAction(socket, targetChannel, payload) {
+    if (
+      typeof this.channelManager?.connectUpstreamChannel !== "function" ||
+      typeof this.channelManager?.closeUpstreamChannel !== "function"
+    ) {
+      return false;
+    }
+
+    targetChannel.startPayload = { ...(payload || {}) };
+    targetChannel.startFingerprint = "";
+    targetChannel.cleanupAfterMs = 0;
+    targetChannel.upstreamClosed = false;
+    targetChannel._errorHandled = false;
+    targetChannel.status = CHANNEL_STATUS.CONNECTING;
+
+    this.channelManager.closeUpstreamChannel(
+      targetChannel,
+      1000,
+      UPSTREAM_CLOSE_REASON.RESTART,
+    );
+    this.channelManager.connectUpstreamChannel(
+      targetChannel,
+      String(socket?.__agentProxyApiKey || targetChannel?.apiKey || "").trim(),
+      String(targetChannel?.locale || "").trim(),
+    );
+    return true;
+  }
 }

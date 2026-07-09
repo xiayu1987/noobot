@@ -511,8 +511,8 @@ export class SessionTurnPersister {
       sessionId,
       parentSessionId,
       turnScopeId,
-      state: "stopped",
-      stopState: "stopped",
+      state: "user_stopped",
+      stopState: "user_stopped",
     });
     if (!userId || !sessionId || !content || !dialogProcessId) return false;
     const sessionBundle = await this.session.getSessionBundle({
@@ -544,10 +544,10 @@ export class SessionTurnPersister {
       isMonotonic: true,
       monotonic: true,
       monotonicState: "monotonic",
-      stopState: "stopped",
-      state: "stopped",
-      status: "stopped",
-      channelState: "stopped",
+      stopState: "user_stopped",
+      state: "user_stopped",
+      status: "user_stopped",
+      channelState: "user_stopped",
       eventListener: null,
     });
     return true;

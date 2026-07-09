@@ -272,7 +272,7 @@ describe("useChatEngine.delete", () => {
     expect(sending.value).toBe(false);
     expect(canStop.value).toBe(false);
     expect(runStateSnapshot.value).toEqual(expect.objectContaining({
-      state: BackendChannelState.STOPPED,
+      state: BackendChannelState.USER_STOPPED,
       turnScopeId: "turn-stopped-sending",
       dialogProcessId: "dp-stopped-sending",
     }));

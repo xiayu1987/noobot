@@ -17,3 +17,25 @@ export function isAbortError(error) {
     message.includes("aborted")
   );
 }
+
+export function readAbortReason(error = null, abortSignal = null) {
+  const signalReason = abortSignal?.reason;
+  if (signalReason && typeof signalReason === "object") return signalReason;
+  const errorReason = error?.reason || error?.cause?.reason;
+  if (errorReason && typeof errorReason === "object") return errorReason;
+  return signalReason || errorReason || null;
+}
+
+export function isUserStopAbort(error = null, abortSignal = null) {
+  const reason = readAbortReason(error, abortSignal);
+  return String(reason?.type || reason?.stopType || "").trim() === "user_stop";
+}
+
+export function resolveAbortStopType(error = null, abortSignal = null) {
+  if (isUserStopAbort(error, abortSignal)) return "user_stop";
+  if (isAbortError(error) || isAbortError(error?.cause) || abortSignal?.aborted) {
+    const reason = readAbortReason(error, abortSignal);
+    return String(reason?.type || reason?.stopType || "").trim() || "interrupted";
+  }
+  return "";
+}

@@ -38,7 +38,7 @@ function isUserMessage(message = {}) {
 
 function isStoppedMonotonicMessage(message = {}) {
   return Boolean(
-    message?.stopState === "stopped" ||
+    message?.stopState === "user_stopped" ||
     message?.monotonicState === "monotonic" ||
     message?.isMonotonic === true ||
     message?.monotonic === true,
@@ -48,7 +48,7 @@ function isStoppedMonotonicMessage(message = {}) {
 function isStoppingAssistantMessage(message = {}) {
   if (getMessageRole(message) !== "assistant") return false;
   const channelState = getMessageRuntimeChannelState(message);
-  return ["stopping", "stopped", "cancelled"].includes(
+  return ["stopping", "user_stopped", "cancelled"].includes(
     normalizeTrimmedString(channelState?.state || message?.state || message?.status),
   );
 }
@@ -57,7 +57,7 @@ function isStopPendingRunState(state = "") {
   return [
     FrontendRunState.STOP_REQUESTED,
     BackendChannelState.STOPPING,
-    BackendChannelState.STOPPED,
+    BackendChannelState.USER_STOPPED,
     FrontendRunState.CANCELLED,
   ].includes(normalizeTrimmedString(state));
 }
@@ -167,7 +167,7 @@ export function createMonotonicMessageActions({
       if (isStopPendingRunState(runStateSnapshot?.value?.state)) {
         applyRunStateEvent?.({
           type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
-          state: BackendChannelState.STOPPED,
+          state: BackendChannelState.USER_STOPPED,
           sessionId: normalizeTrimmedString(session.backendSessionId || session.sessionId || session.id || activeSessionId?.value),
           dialogProcessId: getMessageDialogProcessId(stoppedTurnMessage),
           turnScopeId: getMessageTurnScopeId(stoppedTurnMessage),

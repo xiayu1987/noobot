@@ -76,6 +76,7 @@ describe("sessionRunStateMachine", () => {
     expect(sendRequesting.state).toBe(FrontendRunState.IDLE);
     expect(evaluateSessionRunState(sendRequesting).composerActionState).toEqual({
       sendRequesting: true,
+      continueRequesting: false,
       stopRequesting: false,
       stopPendingUntilBackendReady: false,
     });
@@ -90,6 +91,7 @@ describe("sessionRunStateMachine", () => {
       canStop: true,
       composerActionState: {
         sendRequesting: false,
+        continueRequesting: false,
         stopRequesting: false,
         stopPendingUntilBackendReady: false,
       },
@@ -100,6 +102,7 @@ describe("sessionRunStateMachine", () => {
     });
     expect(evaluateSessionRunState(stopRequesting).composerActionState).toEqual({
       sendRequesting: false,
+      continueRequesting: false,
       stopRequesting: true,
       stopPendingUntilBackendReady: false,
     });
@@ -114,6 +117,7 @@ describe("sessionRunStateMachine", () => {
       canStop: false,
       composerActionState: {
         sendRequesting: false,
+        continueRequesting: false,
         stopRequesting: true,
         stopPendingUntilBackendReady: false,
       },
@@ -121,8 +125,15 @@ describe("sessionRunStateMachine", () => {
 
     const stopped = transitionSessionRunState(stopRequested, {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-      state: "stopped",
+      state: "user_stopped",
       sessionId: "s1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "client-1",
+    });
+    expect(stopped).toMatchObject({
+      state: BackendChannelState.USER_STOPPED,
+      sessionId: "s1",
+      dialogProcessId: "dialog-1",
       turnScopeId: "client-1",
     });
     expect(evaluateSessionRunState(stopped)).toMatchObject({
@@ -130,6 +141,39 @@ describe("sessionRunStateMachine", () => {
       canStop: false,
       composerActionState: {
         sendRequesting: false,
+        continueRequesting: false,
+        stopRequesting: false,
+        stopPendingUntilBackendReady: false,
+      },
+    });
+
+    const continueRequesting = transitionSessionRunState(stopped, {
+      type: SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED,
+    });
+    expect(continueRequesting).toMatchObject({
+      state: BackendChannelState.USER_STOPPED,
+      sessionId: "s1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "client-1",
+      composerActionState: {
+        sendRequesting: false,
+        continueRequesting: true,
+        stopRequesting: false,
+        stopPendingUntilBackendReady: false,
+      },
+    });
+
+    const continueSettled = transitionSessionRunState(continueRequesting, {
+      type: SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_SETTLED,
+    });
+    expect(continueSettled).toMatchObject({
+      state: BackendChannelState.USER_STOPPED,
+      sessionId: "s1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "client-1",
+      composerActionState: {
+        sendRequesting: false,
+        continueRequesting: false,
         stopRequesting: false,
         stopPendingUntilBackendReady: false,
       },
@@ -270,7 +314,7 @@ describe("sessionRunStateMachine", () => {
 
     const stopped = transitionSessionRunState(stopping, {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-      state: "stopped",
+      state: "user_stopped",
       sessionId: "s1",
       turnScopeId: "client-1",
     });
@@ -335,13 +379,13 @@ describe("sessionRunStateMachine", () => {
   it("reopens an old stopped turn when resend starts with a fresh turnScopeId", () => {
     const stopped = transitionSessionRunState(createInitialSessionRunState(), {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-      state: "stopped",
+      state: "user_stopped",
       sessionId: "s1",
       turnScopeId: "turn-old",
       seq: 3,
     });
     expect(stopped).toMatchObject({
-      state: BackendChannelState.STOPPED,
+      state: BackendChannelState.USER_STOPPED,
       turnScopeId: "turn-old",
     });
 
@@ -768,7 +812,7 @@ describe("sessionRunStateMachine", () => {
 
     expect(BackendTerminalStates).toEqual([
       BackendChannelState.COMPLETED,
-      BackendChannelState.STOPPED,
+      BackendChannelState.USER_STOPPED,
       BackendChannelState.ERROR,
       BackendChannelState.EXPIRED,
       BackendChannelState.NO_CONVERSATION,
@@ -799,16 +843,16 @@ describe("sessionRunStateMachine", () => {
     const state = reduceSessionRunEvents(createInitialSessionRunState(), [
       { type: SESSION_RUN_EVENT.BACKEND_RECOVERABLE_RUNNING, sessionId: "s1", seq: 1 },
       { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "stopping", sessionId: "s1", seq: 2 },
-      { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "stopped", sessionId: "s1", seq: 3 },
+      { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "user_stopped", sessionId: "s1", seq: 3 },
       { type: SESSION_RUN_EVENT.BACKEND_RECOVERABLE_RUNNING, sessionId: "s1", seq: 1 },
     ]);
-    expect(state.state).toBe(BackendChannelState.STOPPED);
+    expect(state.state).toBe(BackendChannelState.USER_STOPPED);
     expect(evaluateSessionRunState(state)).toMatchObject({ sending: false, canStop: false, terminal: true });
   });
 
   it("filters different scope but allows a new send turn after terminal", () => {
-    const current = createInitialSessionRunState({ state: BackendChannelState.STOPPED, sessionId: "s1", dialogProcessId: "d1" });
-    expect(transitionSessionRunState(current, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "sending", sessionId: "s2" }).state).toBe(BackendChannelState.STOPPED);
+    const current = createInitialSessionRunState({ state: BackendChannelState.USER_STOPPED, sessionId: "s1", dialogProcessId: "d1" });
+    expect(transitionSessionRunState(current, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "sending", sessionId: "s2" }).state).toBe(BackendChannelState.USER_STOPPED);
     expect(transitionSessionRunState(current, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED, sessionId: "s1" }).state).toBe(BackendChannelState.SENDING);
   });
 
@@ -835,7 +879,7 @@ describe("sessionRunStateMachine", () => {
 
     const staleTerminal = transitionSessionRunState(next, {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-      state: "stopped",
+      state: "user_stopped",
       sessionId: "s1",
       dialogProcessId: "old-dialog",
       turnScopeId: "client-old",
@@ -1080,7 +1124,7 @@ describe("sessionRunStateMachine", () => {
       pending: false,
       dialogProcessId: "d1",
       turnScopeId: "turn-1",
-      channelState: { state: BackendChannelState.STOPPED, dialogProcessId: "d1", turnScopeId: "turn-1" },
+      channelState: { state: BackendChannelState.USER_STOPPED, dialogProcessId: "d1", turnScopeId: "turn-1" },
       statusLabel: "已停止",
     };
     const activeSession = {
@@ -1119,7 +1163,7 @@ describe("sessionRunStateMachine", () => {
 
     expect(resolveSessionRunMessageRuntimePatch({
       stateSnapshot: createInitialSessionRunState({
-        state: BackendChannelState.STOPPED,
+        state: BackendChannelState.USER_STOPPED,
         sessionId: "s1",
         dialogProcessId: "d1",
         turnScopeId: "turn-1",
@@ -1134,7 +1178,7 @@ describe("sessionRunStateMachine", () => {
       patch: {
         pending: false,
         channelState: {
-          state: BackendChannelState.STOPPED,
+          state: BackendChannelState.USER_STOPPED,
           sessionId: "s1",
           dialogProcessId: "d1",
           turnScopeId: "turn-1",

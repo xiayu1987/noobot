@@ -7,7 +7,7 @@ import { StreamEventEnum } from "../../shared/constants/chatConstants";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const TERMINAL_CHANNEL_STATES = Object.freeze([
-  "stopped",
+  "user_stopped",
   "error",
   "no_conversation",
   "expired",
@@ -152,7 +152,7 @@ export function createChatWebSocketClient({
             ...eventData,
             dialogProcessId: String(eventData?.dialogProcessId || dialogProcessId || "").trim(),
           });
-          if (event === StreamEventEnum.DONE || event === StreamEventEnum.STOPPED) {
+          if (event === StreamEventEnum.DONE || event === StreamEventEnum.USER_STOPPED) {
             removeLastReceivedSeq(dialogProcessId || eventData?.dialogProcessId || "");
           }
         }
@@ -184,7 +184,7 @@ export function createChatWebSocketClient({
         const event = String(parsed?.event || "message");
         const data = parsed?.data || {};
         trackIncomingEvent(data);
-        if (event === StreamEventEnum.DONE || event === StreamEventEnum.STOPPED) {
+        if (event === StreamEventEnum.DONE || event === StreamEventEnum.USER_STOPPED) {
           const dialogProcessId = String(data?.dialogProcessId || "");
           if (dialogProcessId) {
             removeLastReceivedSeq(dialogProcessId);
@@ -286,7 +286,7 @@ export function createChatWebSocketClient({
             const data = parsed?.data || {};
             trackIncomingEvent(data);
             // Clear seq on done/stopped
-            if (event === StreamEventEnum.DONE || event === StreamEventEnum.STOPPED) {
+            if (event === StreamEventEnum.DONE || event === StreamEventEnum.USER_STOPPED) {
               if (data?.dialogProcessId) {
                 removeLastReceivedSeq(data.dialogProcessId);
               }
@@ -300,7 +300,7 @@ export function createChatWebSocketClient({
             if (event === StreamEventEnum.DONE && eventMatchesCurrentStream) {
               doneReceived = true;
               finalize(() => resolve());
-            } else if (event === StreamEventEnum.STOPPED && eventMatchesCurrentStream) {
+            } else if (event === StreamEventEnum.USER_STOPPED && eventMatchesCurrentStream) {
               doneReceived = true;
               finalize(() => resolve());
             } else if (eventMatchesCurrentStream && isTerminalChannelStateEvent(event, data)) {

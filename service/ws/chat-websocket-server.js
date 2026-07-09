@@ -132,10 +132,10 @@ function buildStoppedPartialAssistant({ stopPayload = {}, runMeta = {}, result =
     sessionId,
     dialogProcessId,
     turnScopeId,
-    state: "stopped",
-    status: "stopped",
-    channelState: "stopped",
-    stopState: "stopped",
+    state: "user_stopped",
+    status: "user_stopped",
+    channelState: "user_stopped",
+    stopState: "user_stopped",
     monotonicState: "monotonic",
     isMonotonic: true,
     monotonic: true,
@@ -617,6 +617,7 @@ export function registerChatWebSocketServer(
       try {
         const payload = JSON.parse(String(rawMessage || "{}"));
         const action = String(payload?.action || "").trim().toLowerCase();
+        const isContinueAction = action === "continue" || action === "resume";
         if (action === "interaction_response") {
           const requestId = String(payload?.requestId || "").trim();
           const requestItem = pendingInteractionRequests.get(requestId);
@@ -703,6 +704,7 @@ export function registerChatWebSocketServer(
           userId,
           sessionId,
           parentSessionId = "",
+          dialogProcessId = "",
           parentDialogProcessId = "",
           message,
           attachments = [],
@@ -743,6 +745,18 @@ export function registerChatWebSocketServer(
           ...normalizeRunConfig(config),
           turnScopeId: String(turnScopeId || config?.turnScopeId || "").trim(),
         };
+        if (isContinueAction) {
+          normalizedRunConfig.resumeFromStoppedSnapshot = true;
+          normalizedRunConfig.resumeDialogProcessId = String(
+            config?.resumeDialogProcessId || config?.dialogProcessId || dialogProcessId || "",
+          ).trim();
+          normalizedRunConfig.resumeTurnScopeId = String(
+            config?.resumeTurnScopeId || config?.stoppedTurnScopeId || "",
+          ).trim();
+          if (!normalizedRunConfig.resumeDialogProcessId || !normalizedRunConfig.resumeTurnScopeId) {
+            throw new Error("continue requires dialogProcessId and turnScopeId");
+          }
+        }
         if (isPluginDebugEnabled()) {
           await writeRoutedRuntimeEvent({
       scope: "session",
@@ -825,6 +839,14 @@ export function registerChatWebSocketServer(
             turnScopeId: currentStopPayload?.turnScopeId || currentRunMeta?.turnScopeId || "",
             state: "stopping",
             sourceEvent: "stop_requested",
+          });
+        } else if (isContinueAction) {
+          sendEvent("channel_state", {
+            sessionId: currentRunMeta?.sessionId || "",
+            dialogProcessId: normalizedRunConfig?.resumeDialogProcessId || "",
+            turnScopeId: currentRunMeta?.turnScopeId || currentTurnScopeId || "",
+            state: "sending",
+            sourceEvent: "continue_started",
           });
         }
 
@@ -995,13 +1017,13 @@ export function registerChatWebSocketServer(
               error: persistError,
             });
           }
-          sendEvent("stopped", {
+          sendEvent("user_stopped", {
             message: stoppedMessage,
             sessionId: stoppedPartialAssistant.sessionId || "",
             dialogProcessId: stoppedPartialAssistant.dialogProcessId || "",
             turnScopeId: stoppedPartialAssistant.turnScopeId || currentTurnScopeId || "",
           });
-          webSocket.close(1000, "stopped");
+          webSocket.close(1000, "user_stopped");
           return;
         }
 
@@ -1056,13 +1078,13 @@ export function registerChatWebSocketServer(
                 error: persistError,
               });
             }
-            sendEvent("stopped", {
+            sendEvent("user_stopped", {
               message: stoppedMessage,
               sessionId: stoppedPartialAssistant.sessionId || "",
               dialogProcessId: stoppedPartialAssistant.dialogProcessId || "",
               turnScopeId: stoppedPartialAssistant.turnScopeId || currentTurnScopeId || "",
             });
-            webSocket.close(1000, "stopped");
+            webSocket.close(1000, "user_stopped");
           }
           return;
         }

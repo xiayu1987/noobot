@@ -246,11 +246,11 @@ export function buildStoppedMessageRuntimePatch({
     clearRuntimeMark: true,
     pending: false,
     channelState: {
-      state: BackendChannelState.STOPPED,
+      state: BackendChannelState.USER_STOPPED,
       sessionId: trim(stateSnapshot?.sessionId) || trim(channelState?.sessionId),
       dialogProcessId: trim(stateSnapshot?.dialogProcessId) || trim(channelState?.dialogProcessId),
       turnScopeId: trim(stateSnapshot?.turnScopeId) || trim(channelState?.turnScopeId),
-      sourceEvent: trim(stateSnapshot?.sourceEvent) || trim(channelState?.sourceEvent) || "stopped",
+      sourceEvent: trim(stateSnapshot?.sourceEvent) || trim(channelState?.sourceEvent) || "user_stopped",
       seq: Number(stateSnapshot?.seq || channelState?.seq || 0),
     },
     thinkingFinishedAt: finishedAt,
@@ -291,7 +291,7 @@ export function resolveSessionRunMessageRuntimePatch({
     };
   }
   if (
-    normalizeState(stateSnapshot?.state) === BackendChannelState.STOPPED &&
+    normalizeState(stateSnapshot?.state) === BackendChannelState.USER_STOPPED &&
     (
       messageItem?.[SESSION_RUN_MESSAGE_RUNTIME_MARK] ||
       resolveSessionRunStateForMessage({

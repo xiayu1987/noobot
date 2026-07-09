@@ -1000,6 +1000,124 @@ test("chat-websocket-server: edit resend turnScopeId reaches runConfig", async (
   }
 });
 
+test("chat-websocket-server: continue action passes stopped snapshot identity and emits sending", async () => {
+  let capturedPayload = null;
+  const server = await startServerWithWs({
+    runSession: async (payload) => {
+      capturedPayload = payload;
+      return {
+        sessionId: "s1",
+        dialogProcessId: "dp-new",
+        answer: "continued",
+        messages: [],
+        traces: [],
+        executionLogs: [],
+      };
+    },
+  });
+  try {
+    const { port } = server.address();
+    const events = await callChatWs({
+      port,
+      payload: {
+        action: "continue",
+        userId: "u1",
+        sessionId: "s1",
+        message: "continue",
+        turnScopeId: "turn-new",
+        config: {
+          locale: "zh-CN",
+          resumeDialogProcessId: "dp-stopped",
+          resumeTurnScopeId: "turn-stopped",
+          selectedModel: "main",
+        },
+      },
+    });
+
+    assert.equal(capturedPayload?.runConfig?.resumeFromStoppedSnapshot, true);
+    assert.equal(capturedPayload?.runConfig?.resumeDialogProcessId, "dp-stopped");
+    assert.equal(capturedPayload?.runConfig?.resumeTurnScopeId, "turn-stopped");
+    assert.equal(capturedPayload?.runConfig?.turnScopeId, "turn-new");
+    const sendingEvent = events.find((item) => item?.event === "channel_state" && item?.data?.state === "sending");
+    assert.equal(sendingEvent?.data?.sourceEvent, "continue_started");
+    assert.equal(sendingEvent?.data?.dialogProcessId, "dp-stopped");
+    assert.equal(sendingEvent?.data?.turnScopeId, "turn-new");
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("chat-websocket-server: continue action requires stopped dialogProcessId and turnScopeId", async () => {
+  const server = await startServerWithWs();
+  try {
+    const { port } = server.address();
+    const events = await callChatWs({
+      port,
+      payload: {
+        action: "continue",
+        userId: "u1",
+        sessionId: "s1",
+        message: "continue",
+        turnScopeId: "turn-new",
+        config: { locale: "zh-CN" },
+      },
+    });
+    const errorEvent = events.find((item) => item?.event === "error");
+    assert.match(String(errorEvent?.data?.error || ""), /continue requires dialogProcessId and turnScopeId/);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("chat-websocket-server: stop during continue request keeps stopping and ends stopped", async () => {
+  let capturedStopPayload = null;
+  const server = await startServerWithWs({
+    bot: {
+      persistStoppedAssistantMessage: async (payload = {}) => {
+        capturedStopPayload = payload;
+      },
+      runSession: async ({ abortSignal }) => {
+        await new Promise((resolve) => {
+          if (abortSignal?.aborted) return resolve();
+          abortSignal?.addEventListener?.("abort", resolve, { once: true });
+        });
+        const error = new Error("continue aborted");
+        error.name = "AbortError";
+        throw error;
+      },
+    },
+  });
+  try {
+    const { port } = server.address();
+    const events = await stopChatWs({
+      port,
+      payload: {
+        action: "continue",
+        userId: "u1",
+        sessionId: "s-continue-stop",
+        dialogProcessId: "dp-stopped",
+        message: "continue",
+        turnScopeId: "turn-new",
+        config: { locale: "zh-CN", resumeTurnScopeId: "turn-stopped" },
+      },
+      stopPayload: {
+        sessionId: "s-continue-stop",
+        turnScopeId: "turn-new",
+        dialogProcessId: "dp-stopped",
+        partialAssistant: { content: "partial", dialogProcessId: "dp-new", turnScopeId: "turn-new" },
+      },
+    });
+
+    assert.equal(events.some((item) => item?.event === "channel_state" && item?.data?.state === "stopping"), true);
+    const stoppedEvent = events.find((item) => item?.event === "stopped");
+    assert.equal(stoppedEvent?.data?.sessionId, "s-continue-stop");
+    assert.equal(stoppedEvent?.data?.turnScopeId, "turn-new");
+    assert.equal(capturedStopPayload?.partialAssistant?.turnScopeId, "turn-new");
+  } finally {
+    await closeServer(server);
+  }
+});
+
 test("chat-websocket-server: invalid upgrade URL writes sanitized system runtime event", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-chat-ws-system-"));
   const server = await startServerWithWs({ sessionLogConfig: { workspaceRoot } });

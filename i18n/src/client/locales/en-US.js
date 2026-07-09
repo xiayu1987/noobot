@@ -275,6 +275,8 @@ export const enUSMessages = {
     "scenarioText": "Text",
     "sending": "Sending",
     "send": "Send",
+    "continue": "Continue",
+    "continueRequesting": "Continuing",
     "attachments": "Attachments",
     "removeAttachment": "Remove attachment {name}",
     "dropFilesToAttach": "Drop to attach files",

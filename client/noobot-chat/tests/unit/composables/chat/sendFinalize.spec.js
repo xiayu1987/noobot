@@ -41,7 +41,7 @@ describe("sendFinalize", () => {
     expect(userMessage.monotonic).toBe(true);
     expect(applyConversationState).toHaveBeenCalledWith(
       {
-        state: "stopped",
+        state: "user_stopped",
         sessionId: "backend-stop",
         dialogProcessId: "dp-stop",
         turnScopeId: "turn-stop",

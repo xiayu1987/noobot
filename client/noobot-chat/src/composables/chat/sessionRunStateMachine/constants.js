@@ -25,14 +25,14 @@ export const BackendChannelState = Object.freeze({
   STOPPING: "stopping",
   RECONNECTING: "reconnecting",
   COMPLETED: "completed",
-  STOPPED: "stopped",
+  USER_STOPPED: "user_stopped",
   ERROR: "error",
   EXPIRED: "expired",
 });
 
 export const BackendTerminalStates = Object.freeze([
   BackendChannelState.COMPLETED,
-  BackendChannelState.STOPPED,
+  BackendChannelState.USER_STOPPED,
   BackendChannelState.ERROR,
   BackendChannelState.EXPIRED,
   BackendChannelState.NO_CONVERSATION,
@@ -42,6 +42,7 @@ export const FrontendRunState = Object.freeze({
   IDLE: "idle",
   RESEND_REPLACING_TURN: "resend_replacing_turn",
   RESEND_STREAMING: "resend_streaming",
+  CONTINUE_REQUESTING: "continue_requesting",
   STOP_REQUESTED: "stop_requested",
   FRONTEND_COMPLETION_REQUESTING: "frontend_completion_requesting",
   FRONTEND_COMPLETED: "frontend_completed",
@@ -51,7 +52,7 @@ export const FrontendRunState = Object.freeze({
 export const FrontendTerminalStates = Object.freeze([
   FrontendRunState.FRONTEND_COMPLETED,
   FrontendRunState.CANCELLED,
-  BackendChannelState.STOPPED,
+  BackendChannelState.USER_STOPPED,
   BackendChannelState.ERROR,
   BackendChannelState.EXPIRED,
   BackendChannelState.NO_CONVERSATION,
@@ -61,6 +62,8 @@ export const SESSION_RUN_EVENT = Object.freeze({
   LOCAL_SEND_STARTED: "local_send_started",
   LOCAL_SEND_REQUEST_STARTED: "local_send_request_started",
   LOCAL_SEND_REQUEST_SETTLED: "local_send_request_settled",
+  LOCAL_CONTINUE_REQUEST_STARTED: "local_continue_request_started",
+  LOCAL_CONTINUE_REQUEST_SETTLED: "local_continue_request_settled",
   LOCAL_RESEND_STARTED: "local_resend_started",
   LOCAL_RESEND_REPLACING_TURN: "local_resend_replacing_turn",
   LOCAL_RESEND_STREAMING: "local_resend_streaming",
@@ -85,6 +88,7 @@ export const IN_FLIGHT_STATES = Object.freeze([
   BackendChannelState.SENDING,
   BackendChannelState.RECONNECTING,
   BackendChannelState.INTERACTION_PENDING,
+  FrontendRunState.CONTINUE_REQUESTING,
   FrontendRunState.RESEND_REPLACING_TURN,
   FrontendRunState.RESEND_STREAMING,
   BackendChannelState.COMPLETED,
@@ -97,6 +101,7 @@ export const MESSAGE_IN_FLIGHT_CHANNEL_STATES = Object.freeze([
   BackendChannelState.SENDING,
   BackendChannelState.RECONNECTING,
   BackendChannelState.INTERACTION_PENDING,
+  FrontendRunState.CONTINUE_REQUESTING,
   FrontendRunState.RESEND_REPLACING_TURN,
   FrontendRunState.RESEND_STREAMING,
   BackendChannelState.STOPPING,
@@ -105,13 +110,14 @@ export const MESSAGE_IN_FLIGHT_CHANNEL_STATES = Object.freeze([
 export const STOP_LOCK_STATES = Object.freeze([
   FrontendRunState.STOP_REQUESTED,
   BackendChannelState.STOPPING,
-  BackendChannelState.STOPPED,
+  BackendChannelState.USER_STOPPED,
   FrontendRunState.CANCELLED,
 ]);
 
 export const STOP_LOCK_REOPEN_STATES = Object.freeze([
   BackendChannelState.SENDING,
   BackendChannelState.RECONNECTING,
+  FrontendRunState.CONTINUE_REQUESTING,
   FrontendRunState.RESEND_REPLACING_TURN,
   FrontendRunState.RESEND_STREAMING,
 ]);
@@ -178,6 +184,7 @@ export const SESSION_RUN_TRANSITION_TABLE = Object.freeze({
   [FrontendRunState.IDLE]: createTransitionConfig(0),
   [BackendChannelState.SENDING]: createTransitionConfig(40),
   [BackendChannelState.RECONNECTING]: createTransitionConfig(40),
+  [FrontendRunState.CONTINUE_REQUESTING]: createTransitionConfig(45),
   [BackendChannelState.INTERACTION_PENDING]: createTransitionConfig(50),
   [FrontendRunState.RESEND_REPLACING_TURN]: createTransitionConfig(55),
   [FrontendRunState.RESEND_STREAMING]: createTransitionConfig(60),
@@ -189,6 +196,6 @@ export const SESSION_RUN_TRANSITION_TABLE = Object.freeze({
   [BackendChannelState.ERROR]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
   [BackendChannelState.EXPIRED]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
   [BackendChannelState.NO_CONVERSATION]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
-  [BackendChannelState.STOPPED]: createTransitionConfig(110, SESSION_RUN_TRANSITION_RULE.STOP_LOCKED),
+  [BackendChannelState.USER_STOPPED]: createTransitionConfig(110, SESSION_RUN_TRANSITION_RULE.STOP_LOCKED),
   [FrontendRunState.CANCELLED]: createTransitionConfig(110, SESSION_RUN_TRANSITION_RULE.STOP_LOCKED),
 });

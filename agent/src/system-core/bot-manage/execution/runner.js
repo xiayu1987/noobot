@@ -6,7 +6,7 @@
 
 import { emitEvent } from "../../event/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
-import { isAbortError } from "../../utils/error-utils.js";
+import { isAbortError, isUserStopAbort, resolveAbortStopType } from "../../utils/error-utils.js";
 import {
   BOT_HOOK_POINTS,
   runBotRuntimeHook,
@@ -33,6 +33,13 @@ import {
 } from "../../context/compatibility-deprecation.js";
 import { PLUGIN_SLOT_KEY } from "../../plugin/plugin-constants.js";
 import { applyRuntimeUserMessageAttachments } from "../../attach/index.js";
+import {
+  bindLifecycleToRuntime,
+  createAgentLifecycleMachine,
+  resolveInitialLifecycleState,
+  syncLifecycleRuntimeState,
+} from "../../agent/core/lifecycle/state-machine.js";
+import { saveStoppedModelMessageSnapshotCandidate } from "../../agent/core/resume/model-message-snapshot-store.js";
 
 function summarizeDebugAttachments(attachments) {
   if (!Array.isArray(attachments)) {
@@ -172,6 +179,37 @@ export class SessionExecutionRunner {
     let resolvedUsedSessionId = sessionId;
     let resolvedDialogProcessId = parentDialogProcessId;
     let resolvedRuntimeEventListener = eventListener;
+    let lifecycle = null;
+    let lifecycleRuntime = null;
+    let stoppedSnapshotPersistencePromise = null;
+    let stoppedSnapshotAbortListenerAttached = false;
+    const persistStoppedSnapshotFromRuntime = (source = "") => {
+      if (stoppedSnapshotPersistencePromise) return stoppedSnapshotPersistencePromise;
+      stoppedSnapshotPersistencePromise = saveStoppedModelMessageSnapshotCandidate({
+        globalConfig: lifecycleRuntime?.globalConfig || {},
+        candidate: lifecycleRuntime?.stoppedModelMessageSnapshotCandidate,
+        eventListener: resolvedRuntimeEventListener,
+        source,
+      });
+      return stoppedSnapshotPersistencePromise;
+    };
+    const attachStoppedSnapshotAbortListener = () => {
+      if (stoppedSnapshotAbortListenerAttached || !abortSignal) return;
+      if (!lifecycleRuntime || typeof lifecycleRuntime !== "object") return;
+      stoppedSnapshotAbortListenerAttached = true;
+      const onAbort = () => {
+        if (isUserStopAbort(null, abortSignal)) {
+          void persistStoppedSnapshotFromRuntime("runner_user_stop_signal");
+        }
+      };
+      if (abortSignal.aborted) {
+        onAbort();
+        return;
+      }
+      if (typeof abortSignal.addEventListener === "function") {
+        abortSignal.addEventListener("abort", onAbort, { once: true });
+      }
+    };
     resetAgentContextCompatFieldHitStats();
     const flushCompatFieldHitStats = () => {
       const stats = getAgentContextCompatFieldHitStats();
@@ -230,6 +268,17 @@ export class SessionExecutionRunner {
             })
           : scenarioResolvedRunConfig;
       const resolvedTurnScopeId = String(resolvedRunConfig?.turnScopeId || "").trim();
+      lifecycle = createAgentLifecycleMachine({
+        eventListener: runtimeEventListener,
+        now: () => this.now(),
+        basePayload: {
+          sessionId: usedSessionId,
+          dialogProcessId,
+          turnScopeId: resolvedTurnScopeId,
+          resumeFromStoppedSnapshot: resolvedRunConfig?.resumeFromStoppedSnapshot === true,
+        },
+      });
+      lifecycle.transition(resolveInitialLifecycleState(resolvedRunConfig));
       if (
         !String(resolvedRunConfig?.runtimeModel || "").trim() &&
         !readSelectedModelValue(
@@ -322,7 +371,10 @@ export class SessionExecutionRunner {
         this._normalizePreparedAgentTurnExecution(preparedAgentTurnExecution);
       const dispatchRuntime = runtimeAgentContext?.execution?.controllers?.runtime;
       if (dispatchRuntime && typeof dispatchRuntime === "object") {
+        lifecycleRuntime = dispatchRuntime;
         applyRuntimeUserMessageAttachments(dispatchRuntime, userMessageAttachments);
+        bindLifecycleToRuntime(dispatchRuntime, lifecycle);
+        attachStoppedSnapshotAbortListener();
       }
       emitEvent(runtimeEventListener, "debug_resend_runner_prepared", {
         sessionId: usedSessionId,
@@ -330,7 +382,7 @@ export class SessionExecutionRunner {
         turnScopeId: resolvedTurnScopeId,
         resolvedThinkingStartedAt: String(resolvedRunConfig?.thinkingStartedAt || "").trim(),
         reuseExistingUserTurn: resolvedRunConfig?.reuseExistingUserTurn === true,
-        userMessageAttachments: summarizeDebugAttachments(attachments),
+        requestAttachments: summarizeDebugAttachments(attachments),
         userMessageAttachments: summarizeDebugAttachments(userMessageAttachments),
       });
       if (resolvedRunConfig?.reuseExistingUserTurn === true) {
@@ -431,6 +483,8 @@ export class SessionExecutionRunner {
         };
       } else {
         try {
+          lifecycle.enterRunning();
+          syncLifecycleRuntimeState(dispatchRuntime, lifecycle);
           agentResult = await this.agentRunner({
             errorLogger: this.errorLogger,
             agentContext: runtimeAgentContext,
@@ -483,6 +537,7 @@ export class SessionExecutionRunner {
         runtimeEventListener,
         userConfig,
         resolvedParentAsyncResultContainer,
+        lifecycle,
       });
       emitEvent(runtimeEventListener, "agent_done", {
         sessionId: usedSessionId,
@@ -502,6 +557,32 @@ export class SessionExecutionRunner {
       flushCompatFieldHitStats();
       return finalizedResult;
     } catch (error) {
+      if (isAbortError(error)) {
+        if (isUserStopAbort(error, abortSignal)) {
+          const stoppedSnapshotPersistence = await persistStoppedSnapshotFromRuntime("runner_user_stop_catch");
+          lifecycle?.userStop?.({
+            reason: tSystem("ws.dialogStoppedByUser"),
+            stoppedSnapshotPersistence,
+          });
+        } else {
+          lifecycle?.interrupt?.({
+            reason: error?.message || String(error),
+            stopType: resolveAbortStopType(error, abortSignal),
+            stoppedSnapshotPersistence: {
+              status: "skipped",
+              reason: "non_user_abort",
+              source: "runner_abort_catch",
+              messageCount: 0,
+              systemCount: 0,
+              historyCount: 0,
+              incrementalCount: 0,
+            },
+          });
+        }
+      } else {
+        lifecycle?.fail?.({ error });
+      }
+      syncLifecycleRuntimeState(lifecycleRuntime, lifecycle);
       await runBotRuntimeHook({
         runtime: {
           eventListener: resolvedRuntimeEventListener,
@@ -537,11 +618,11 @@ export class SessionExecutionRunner {
         sessionId,
         parentSessionId,
         patch: {
-          status: isAbortError(error)
+          status: isAbortError(error) && isUserStopAbort(error, abortSignal)
             ? SESSION_ASYNC_STATUS.STOPPED
             : SESSION_ASYNC_STATUS.FAILED,
           endedAt: this.now(),
-          error: isAbortError(error)
+          error: isAbortError(error) && isUserStopAbort(error, abortSignal)
             ? tSystem("ws.dialogStoppedByUser")
             : error?.message || String(error),
           result: null,

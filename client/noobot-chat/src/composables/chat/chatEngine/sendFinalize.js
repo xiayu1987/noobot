@@ -33,7 +33,7 @@ function markLatestUserMessageStopped(activeSession, botMessage = null) {
     if (botDialogProcessId && !userDialogProcessId) {
       messageItem.dialogProcessId = botDialogProcessId;
     }
-    messageItem.stopState = "stopped";
+    messageItem.stopState = "user_stopped";
     messageItem.monotonicState = "monotonic";
     messageItem.isMonotonic = true;
     messageItem.monotonic = true;
@@ -118,7 +118,7 @@ export function applyStopRequestedState({
   markLatestUserMessageStopped(activeSession, botMessage);
   applyConversationState(
     {
-      state: BackendChannelState.STOPPED,
+      state: BackendChannelState.USER_STOPPED,
       sessionId: String(stopEvent?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
       dialogProcessId: String(stopEvent?.dialogProcessId || getMessageDialogProcessId(botMessage) || ""),
       ...(comparableBotTurnScopeId ? { turnScopeId: String(comparableBotTurnScopeId || "") } : {}),

@@ -42,7 +42,7 @@ test("SessionTurnPersister scopes stopped assistant persistence by turnScopeId",
   assert.equal(appendedTurns.length, 1);
   assert.equal(appendedTurns[0].turnScopeId, "turn-new");
   assert.equal(appendedTurns[0].dialogProcessId, "dp-reused");
-  assert.equal(appendedTurns[0].stopState, "stopped");
+  assert.equal(appendedTurns[0].stopState, "user_stopped");
 });
 
 test("SessionTurnPersister persists tool transfer envelopes into session turns", async () => {
