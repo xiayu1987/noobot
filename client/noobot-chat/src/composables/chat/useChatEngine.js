@@ -8,7 +8,7 @@ import { useLocale } from "../../shared/i18n/useLocale";
 import { createAssistantMessageHelpers } from "./chatEngine/assistantMessage";
 import { createChatEngineConversationState } from "./chatEngine/conversationState";
 import {
-  forceStopUiFinalize as finalizeForceStopUi,
+  handleStopConfirmationTimeout,
   stopSending as requestStopSending,
 } from "./chatEngine/stop";
 import { createMonotonicMessageActions } from "./chatEngine/monotonicMessageActions";
@@ -168,8 +168,8 @@ export function useChatEngine({
     applyAssistantFailureState,
   });
 
-  function forceStopUiFinalize(stopScope = {}) {
-    return finalizeForceStopUi({
+  function onStopConfirmationTimeout(stopScope = {}) {
+    return handleStopConfirmationTimeout({
       sending,
       canStop,
       runStateSnapshot,
@@ -189,7 +189,7 @@ export function useChatEngine({
       userId,
       activeSession,
       chatWebSocketClient,
-      onForceStopUiFinalize: forceStopUiFinalize,
+      onStopConfirmationTimeout,
       applyRunStateEvent,
     });
   }

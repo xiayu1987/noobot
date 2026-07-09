@@ -72,7 +72,7 @@ function findLatestUserTurnScopeIdForAssistant(messages = [], { dialogProcessId 
   return getMessageTurnScopeId(targetUserMessage);
 }
 
-export function forceStopUiFinalize({
+export function handleStopConfirmationTimeout({
   sending,
   canStop,
   applyRunStateEvent,
@@ -126,15 +126,13 @@ export function forceStopUiFinalize({
       createdAtMs: finalizedAtMs,
       updatedAtMs: finalizedAtMs,
       source: "stop_request_timeout",
+      sourceEvent: "stop_request_timeout",
       error: new Error("stop request timed out before backend confirmation"),
     });
   } else {
     // Compatibility fallback for callers that do not provide the run state machine bridge.
-    sending.value = false;
     if (canStop) canStop.value = false;
   }
-  chatWebSocketClient?.clearLastReceivedSeqMap?.();
-  chatWebSocketClient?.dispose?.();
 }
 
 function buildStopPayload({ userId, activeSession, pendingAssistantMessage } = {}) {
@@ -180,7 +178,7 @@ export function stopSending({
   activeSession,
   userId,
   chatWebSocketClient,
-  onForceStopUiFinalize,
+  onStopConfirmationTimeout,
   applyRunStateEvent,
 } = {}) {
   if (!sending?.value) return false;
@@ -257,7 +255,7 @@ export function stopSending({
   try {
     const requestResult = chatWebSocketClient?.requestStop?.(
       stopPayload,
-      onForceStopUiFinalize,
+      onStopConfirmationTimeout,
     );
     if (requestResult && typeof requestResult.catch === "function") {
       return requestResult.catch(applyStopRequestFailure);

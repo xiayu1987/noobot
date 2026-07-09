@@ -173,7 +173,7 @@ describe("chatWebSocketClient", () => {
   it("does not treat stop-requested socket close as successful final state", async () => {
     const client = createChatWebSocketClient({
       resolveWebSocketUrl: () => "ws://test",
-      forceStopFinalizeMs: 1000,
+      stopConfirmationTimeoutMs: 1000,
       translateText: (key) => key,
     });
     client.connect();
@@ -186,21 +186,29 @@ describe("chatWebSocketClient", () => {
     await expect(streamPromise).rejects.toThrow("infra.websocketStreamError");
   });
 
-  it("requestStop sends stop payload and force-finalizes UI when backend stays busy", async () => {
+  it("requestStop rejects the stream when backend stop confirmation times out", async () => {
     const client = createChatWebSocketClient({
       resolveWebSocketUrl: () => "ws://test",
-      forceStopFinalizeMs: 1000,
+      stopConfirmationTimeoutMs: 1000,
     });
     client.connect();
     const socket = MockWebSocket.instances[0];
-    const forceFinalize = vi.fn();
+    const onStopConfirmationTimeout = vi.fn();
     let settled = false;
 
-    client.stream({ action: "chat", turnScopeId: "turn-stop" }, vi.fn()).then(() => {
-      settled = true;
+    const streamPromise = client.stream({ action: "chat", turnScopeId: "turn-stop" }, vi.fn())
+      .finally(() => {
+        settled = true;
+      });
+    const rejectionExpectation = expect(streamPromise).rejects.toMatchObject({
+      code: "STOP_CONFIRMATION_TIMEOUT",
+      data: expect.objectContaining({
+        sessionId: "s-1",
+        turnScopeId: "turn-stop",
+      }),
     });
 
-    const result = client.requestStop({ turnScopeId: "turn-stop", sessionId: "s-1" }, forceFinalize);
+    const result = client.requestStop({ turnScopeId: "turn-stop", sessionId: "s-1" }, onStopConfirmationTimeout);
 
     expect(result).toBe(true);
     expect(JSON.parse(socket.sent.at(-1))).toEqual(expect.objectContaining({
@@ -208,29 +216,36 @@ describe("chatWebSocketClient", () => {
       turnScopeId: "turn-stop",
       sessionId: "s-1",
     }));
-    expect(forceFinalize).not.toHaveBeenCalled();
+    expect(onStopConfirmationTimeout).not.toHaveBeenCalled();
     expect(settled).toBe(false);
 
     await vi.advanceTimersByTimeAsync(1000);
     await flushPromises();
 
-    expect(socket.readyState).toBe(MockWebSocket.CLOSED);
-    expect(forceFinalize).toHaveBeenCalledTimes(1);
-    expect(forceFinalize).toHaveBeenCalledWith(expect.objectContaining({
+    expect(socket.readyState).toBe(MockWebSocket.OPEN);
+    expect(onStopConfirmationTimeout).toHaveBeenCalledTimes(1);
+    expect(onStopConfirmationTimeout).toHaveBeenCalledWith(expect.objectContaining({
       sessionId: "s-1",
       turnScopeId: "turn-stop",
     }));
+    await rejectionExpectation;
+    expect(settled).toBe(true);
+
+    socket.emit(StreamEventEnum.USER_STOPPED, {
+      sessionId: "s-1",
+      turnScopeId: "turn-stop",
+    });
     expect(settled).toBe(true);
   });
 
   it("does not let a stale stop timeout finalize a later continue stream", async () => {
     const client = createChatWebSocketClient({
       resolveWebSocketUrl: () => "ws://test",
-      forceStopFinalizeMs: 1000,
+      stopConfirmationTimeoutMs: 1000,
     });
     client.connect();
     const socket = MockWebSocket.instances[0];
-    const forceFinalize = vi.fn();
+    const onStopConfirmationTimeout = vi.fn();
     let continueSettled = false;
 
     client.stream({
@@ -243,7 +258,7 @@ describe("chatWebSocketClient", () => {
       sessionId: "s-1",
       dialogProcessId: "dp-stop",
       turnScopeId: "turn-stop",
-    }, forceFinalize)).toBe(true);
+    }, onStopConfirmationTimeout)).toBe(true);
 
     const continuePromise = client.stream({
       action: "continue",
@@ -257,7 +272,7 @@ describe("chatWebSocketClient", () => {
     await vi.advanceTimersByTimeAsync(1000);
     await flushPromises();
 
-    expect(forceFinalize).not.toHaveBeenCalled();
+    expect(onStopConfirmationTimeout).not.toHaveBeenCalled();
     expect(socket.readyState).toBe(MockWebSocket.OPEN);
     expect(continueSettled).toBe(false);
 
@@ -471,15 +486,15 @@ describe("chatWebSocketClient", () => {
   it.each([
     [StreamEventEnum.USER_STOPPED, { turnScopeId: "main-turn", dialogProcessId: "main-dp" }],
     [StreamEventEnum.CHANNEL_STATE, { turnScopeId: "main-turn", dialogProcessId: "main-dp", state: "user_stopped" }],
-  ])("cancels force-stop timeout after matching %s stop confirmation", async (event, data) => {
+  ])("cancels stop confirmation timeout after matching %s stop confirmation", async (event, data) => {
     const client = createChatWebSocketClient({
       resolveWebSocketUrl: () => "ws://test",
-      forceStopFinalizeMs: 1000,
+      stopConfirmationTimeoutMs: 1000,
       terminalChannelStateGraceMs: 20,
     });
     client.connect();
     const socket = MockWebSocket.instances[0];
-    const forceFinalize = vi.fn();
+    const onStopConfirmationTimeout = vi.fn();
     let resolved = false;
 
     const streamPromise = client
@@ -488,7 +503,7 @@ describe("chatWebSocketClient", () => {
         resolved = true;
       });
 
-    expect(client.requestStop({ turnScopeId: "main-turn", dialogProcessId: "main-dp" }, forceFinalize)).toBe(true);
+    expect(client.requestStop({ turnScopeId: "main-turn", dialogProcessId: "main-dp" }, onStopConfirmationTimeout)).toBe(true);
     socket.emit(event, { sessionId: "s-1", seq: 12, ...data });
     if (event === StreamEventEnum.CHANNEL_STATE) {
       await vi.advanceTimersByTimeAsync(20);
@@ -497,6 +512,6 @@ describe("chatWebSocketClient", () => {
 
     await vi.advanceTimersByTimeAsync(1000);
     expect(resolved).toBe(true);
-    expect(forceFinalize).not.toHaveBeenCalled();
+    expect(onStopConfirmationTimeout).not.toHaveBeenCalled();
   });
 });

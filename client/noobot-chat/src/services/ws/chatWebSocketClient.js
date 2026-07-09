@@ -45,14 +45,21 @@ function isEventForStreamScope(data = {}, payload = {}) {
 
 export function createChatWebSocketClient({
   resolveWebSocketUrl = () => "",
-  forceStopFinalizeMs = TIME_THRESHOLDS.client.wsForceStopFinalizeMs,
+  stopConfirmationTimeoutMs,
+  forceStopFinalizeMs,
   terminalChannelStateGraceMs = TIME_THRESHOLDS.client.wsTerminalChannelStateGraceMs,
   translateText = (key = "") => String(key || ""),
 } = {}) {
+  const resolvedStopConfirmationTimeoutMs =
+    Number.isFinite(Number(stopConfirmationTimeoutMs))
+      ? Number(stopConfirmationTimeoutMs)
+      : Number.isFinite(Number(forceStopFinalizeMs))
+        ? Number(forceStopFinalizeMs)
+        : TIME_THRESHOLDS.client.wsForceStopFinalizeMs;
   let activeSocket = null;
   let stopRequested = false;
   let stopRequestedTurnScopeId = "";
-  let forceStopFinalizeTimer = null;
+  let stopConfirmationTimer = null;
   let resolveCurrentStream = null;
   let streamSerial = 0;
   let activeStreamContext = null;
@@ -75,15 +82,15 @@ export function createChatWebSocketClient({
     };
   }
 
-  function clearForceStopFinalizeTimer() {
-    if (forceStopFinalizeTimer) {
-      clearTimeout(forceStopFinalizeTimer);
-      forceStopFinalizeTimer = null;
+  function clearStopConfirmationTimer() {
+    if (stopConfirmationTimer) {
+      clearTimeout(stopConfirmationTimer);
+      stopConfirmationTimer = null;
     }
   }
 
   function clearTimers() {
-    clearForceStopFinalizeTimer();
+    clearStopConfirmationTimer();
     if (reconnectTimeout) {
       clearTimeout(reconnectTimeout);
       reconnectTimeout = null;
@@ -108,7 +115,7 @@ export function createChatWebSocketClient({
     stopRequested = false;
     stopRequestedTurnScopeId = "";
     activeStopLease = null;
-    clearForceStopFinalizeTimer();
+    clearStopConfirmationTimer();
   }
 
   function getStopRequestedTurnScopeId() {
@@ -148,6 +155,21 @@ export function createChatWebSocketClient({
     const error = new Error(data?.error || translateText("infra.websocketStreamError"));
     error.event = StreamEventEnum.ERROR;
     error.data = data || {};
+    return error;
+  }
+
+  function createStopConfirmationTimeoutError(data = {}) {
+    const error = new Error(
+      translateText("chat.stopRequestTimeout") ||
+        translateText("infra.websocketStreamError") ||
+        "Stop request timed out before backend confirmation",
+    );
+    error.event = "stop_confirmation_timeout";
+    error.code = "STOP_CONFIRMATION_TIMEOUT";
+    error.data = {
+      error: error.message,
+      ...(data || {}),
+    };
     return error;
   }
 
@@ -232,7 +254,7 @@ export function createChatWebSocketClient({
         socket: null,
       };
       activeStopLease = null;
-      clearForceStopFinalizeTimer();
+      clearStopConfirmationTimer();
       stopRequested = false;
       let settled = false;
       let doneReceived = false;
@@ -244,7 +266,7 @@ export function createChatWebSocketClient({
           clearTimeout(terminalChannelStateTimer);
           terminalChannelStateTimer = null;
         }
-        clearForceStopFinalizeTimer();
+        clearStopConfirmationTimer();
         if (activeStopLease?.streamSerial === currentStreamSerial) {
           activeStopLease = null;
         }
@@ -316,6 +338,7 @@ export function createChatWebSocketClient({
         resolveCurrentStream = {
           serial: currentStreamSerial,
           fn: () => finalize(() => resolve()),
+          reject: (error) => finalize(() => reject(error)),
         };
         bindStreamSocketHandlers(ws);
 
@@ -328,6 +351,7 @@ export function createChatWebSocketClient({
       function bindStreamSocketHandlers(streamSocket) {
         if (!streamSocket) return;
         streamSocket.onmessage = (messageEvent) => {
+          if (settled) return;
           try {
             const parsed = JSON.parse(String(messageEvent?.data || "{}"));
             const event = String(parsed?.event || "message");
@@ -479,20 +503,20 @@ export function createChatWebSocketClient({
     });
   }
 
-  function requestStop(stopPayloadOrFinalize = {}, onForceFinalize = () => {}) {
+  function requestStop(stopPayloadOrTimeout = {}, onStopConfirmationTimeout = () => {}) {
     const ws = activeSocket;
-    const firstArgIsFinalize = typeof stopPayloadOrFinalize === "function";
+    const firstArgIsTimeoutCallback = typeof stopPayloadOrTimeout === "function";
     const normalizedStopPayload =
-      !firstArgIsFinalize &&
-      stopPayloadOrFinalize &&
-      typeof stopPayloadOrFinalize === "object"
-        ? stopPayloadOrFinalize
+      !firstArgIsTimeoutCallback &&
+      stopPayloadOrTimeout &&
+      typeof stopPayloadOrTimeout === "object"
+        ? stopPayloadOrTimeout
         : {};
-    const forceFinalize =
-      firstArgIsFinalize
-        ? stopPayloadOrFinalize
-        : typeof onForceFinalize === "function"
-        ? onForceFinalize
+    const notifyStopConfirmationTimeout =
+      firstArgIsTimeoutCallback
+        ? stopPayloadOrTimeout
+        : typeof onStopConfirmationTimeout === "function"
+        ? onStopConfirmationTimeout
         : () => {};
     const requestedTurnScopeId = normalizeTrimmedString(normalizedStopPayload?.turnScopeId);
     stopRequested = true;
@@ -508,7 +532,7 @@ export function createChatWebSocketClient({
     };
     activeStopLease = stopLease;
 
-    const forceFinalizeIfLeaseStillCurrent = ({ closeSocket = false } = {}) => {
+    const notifyStopConfirmationTimeoutIfLeaseStillCurrent = () => {
       if (activeStopLease !== stopLease || stopLease.cancelled) return;
       const streamContext = activeStreamContext;
       const streamStillMatches =
@@ -516,63 +540,49 @@ export function createChatWebSocketClient({
         streamContext.serial === stopLease.streamSerial &&
         (!stopLease.socket || streamContext.socket === stopLease.socket);
       if (!streamStillMatches) return;
-      const resolveStream = resolveCurrentStream;
-      if (
-        resolveStream &&
-        resolveStream.serial === stopLease.streamSerial &&
-        typeof resolveStream.fn === "function"
-      ) {
-        resolveStream.fn();
-      }
-      if (
-        closeSocket &&
-        stopLease.socket &&
-        (stopLease.socket.readyState === WebSocket.OPEN ||
-          stopLease.socket.readyState === WebSocket.CONNECTING)
-      ) {
-        stopLease.socket.close(1000, "stop_force_finalize");
-      }
-      forceFinalize({
+      notifyStopConfirmationTimeout({
         sessionId: stopScope.sessionId,
         dialogProcessId: stopScope.dialogProcessId,
         turnScopeId: stopScope.turnScopeId,
         stopLeaseSerial: stopLease.serial,
         streamSerial: stopLease.streamSerial,
       });
+      const rejectStream = resolveCurrentStream;
+      if (
+        rejectStream &&
+        rejectStream.serial === stopLease.streamSerial &&
+        typeof rejectStream.reject === "function"
+      ) {
+        rejectStream.reject(createStopConfirmationTimeoutError({
+          sessionId: stopScope.sessionId,
+          dialogProcessId: stopScope.dialogProcessId,
+          turnScopeId: stopScope.turnScopeId,
+        }));
+      }
     };
 
     if (ws && ws.readyState === WebSocket.OPEN) {
       try {
         ws.send(JSON.stringify({ action: "stop", ...normalizedStopPayload }));
       } catch {}
-      clearForceStopFinalizeTimer();
-      forceStopFinalizeTimer = setTimeout(() => {
-        forceStopFinalizeTimer = null;
-        forceFinalizeIfLeaseStillCurrent({ closeSocket: true });
-      }, forceStopFinalizeMs);
+      clearStopConfirmationTimer();
+      stopConfirmationTimer = setTimeout(() => {
+        stopConfirmationTimer = null;
+        notifyStopConfirmationTimeoutIfLeaseStillCurrent();
+      }, resolvedStopConfirmationTimeoutMs);
       return true;
     }
 
     if (ws && ws.readyState === WebSocket.CONNECTING) {
       ws.close(1000, "stop_requested");
-      clearForceStopFinalizeTimer();
-      forceStopFinalizeTimer = setTimeout(() => {
-        forceStopFinalizeTimer = null;
-        forceFinalizeIfLeaseStillCurrent({ closeSocket: false });
-      }, forceStopFinalizeMs);
+      clearStopConfirmationTimer();
+      stopConfirmationTimer = setTimeout(() => {
+        stopConfirmationTimer = null;
+        notifyStopConfirmationTimeoutIfLeaseStillCurrent();
+      }, resolvedStopConfirmationTimeoutMs);
       return true;
     }
 
-    if (stopRequested) {
-      forceFinalize({
-        sessionId: stopScope.sessionId,
-        dialogProcessId: stopScope.dialogProcessId,
-        turnScopeId: stopScope.turnScopeId,
-        stopLeaseSerial: stopLease.serial,
-        streamSerial: stopLease.streamSerial,
-      });
-      return true;
-    }
     return false;
   }
 
