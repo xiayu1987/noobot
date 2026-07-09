@@ -259,7 +259,7 @@ describe("detailMessages", () => {
         content: "old stopped",
         turnScopeId: "turn-old",
         dialogProcessId: "dp-old",
-        channelState: { state: "stopped" },
+        channelState: { state: "user_stopped" },
       },
       {
         role: RoleEnum.ASSISTANT,
@@ -340,7 +340,7 @@ describe("detailMessages", () => {
         turnScopeId: "client-turn:old",
         dialogProcessId: "dp-reused",
         pending: false,
-        channelState: { state: "stopped", turnScopeId: "client-turn:old" },
+        channelState: { state: "user_stopped", turnScopeId: "client-turn:old" },
         statusLabel: "chat.stopped",
       },
     ]);

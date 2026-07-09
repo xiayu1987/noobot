@@ -323,7 +323,7 @@ describe("chatWebSocketClient", () => {
     [StreamEventEnum.DONE, { turnScopeId: "doc-turn", dialogProcessId: "doc-dp" }],
     [StreamEventEnum.STOPPED, { turnScopeId: "doc-turn", dialogProcessId: "doc-dp" }],
     [StreamEventEnum.ERROR, { turnScopeId: "doc-turn", dialogProcessId: "doc-dp", error: "doc2data failed" }],
-    [StreamEventEnum.CHANNEL_STATE, { turnScopeId: "doc-turn", dialogProcessId: "doc-dp", state: "stopped" }],
+    [StreamEventEnum.CHANNEL_STATE, { turnScopeId: "doc-turn", dialogProcessId: "doc-dp", state: "user_stopped" }],
   ])("does not settle current stream for unrelated %s events", async (event, data) => {
     const client = createChatWebSocketClient({
       resolveWebSocketUrl: () => "ws://test",
@@ -376,12 +376,14 @@ describe("chatWebSocketClient", () => {
         resolved = true;
       });
 
-    socket.emit(StreamEventEnum.STOPPED, {
+    socket.emit(StreamEventEnum.CHANNEL_STATE, {
       sessionId: "s-1",
       turnScopeId: "main-turn",
       dialogProcessId: "main-dp",
+      state: "user_stopped",
       seq: 12,
     });
+    await vi.advanceTimersByTimeAsync(20);
 
     await streamPromise;
     expect(resolved).toBe(true);

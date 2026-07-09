@@ -30,12 +30,12 @@ describe("noobot-chat monotonic message action rules", () => {
     expect(action.match({ isMonotonic: true })).toBe(true);
     expect(action.match({ monotonic: true })).toBe(true);
     expect(action.match({ monotonicState: "monotonic" })).toBe(true);
-    expect(action.match({ stopState: "stopped" })).toBe(true);
+    expect(action.match({ stopState: "user_stopped" })).toBe(true);
     expect(action.match({ status: "completed" })).toBe(true);
     expect(action.match({ state: "done" })).toBe(true);
-    expect(action.match({ channelState: "stopped" })).toBe(true);
-    expect(action.match({ channelState: { state: "stopped" } })).toBe(true);
-    expect(action.match({ channelState: { status: "stopped" } })).toBe(true);
+    expect(action.match({ channelState: "user_stopped" })).toBe(true);
+    expect(action.match({ channelState: { state: "user_stopped" } })).toBe(true);
+    expect(action.match({ channelState: { status: "user_stopped" } })).toBe(true);
     expect(action.match({ statusLabel: "已生成" })).toBe(true);
     expect(action.match({ status: "running" })).toBe(false);
   });
@@ -56,7 +56,7 @@ describe("noobot-chat monotonic message action rules", () => {
       role: "assistant",
       turnScopeId: "turn-stopped-object",
       dialogProcessId: "dp-stopped-object",
-      channelState: { state: "stopped", turnScopeId: "turn-stopped-object" },
+      channelState: { state: "user_stopped", turnScopeId: "turn-stopped-object" },
     };
     const allMessages = [userMessage, stoppedAssistant];
 
@@ -105,7 +105,7 @@ describe("noobot-chat monotonic message action rules", () => {
       type: "message",
       pending: false,
       channelState: {
-        state: "stopped",
+        state: "user_stopped",
         sessionId: oldSessionId,
         dialogProcessId: "3b2a4540-89c6-48bd-9cb2-4cde447ce582",
         turnScopeId: "client-turn:mr4cncpk:522h4o4b",
@@ -187,7 +187,7 @@ describe("noobot-chat monotonic message action rules", () => {
       id: "a-reload-1",
       role: "assistant",
       dialogProcessId: "dp-reload-1",
-      state: "stopped",
+      state: "user_stopped",
     };
     const allMessages = [userMessage, stoppedAssistant];
 
@@ -284,7 +284,7 @@ describe("noobot-chat monotonic message action rules", () => {
       turnScopeId: "client-turn:message-id",
       role: "assistant",
       dialogProcessId: "dp-message-id",
-      channelState: "stopped",
+      channelState: "user_stopped",
     };
     const allMessages = [userMessage, assistantMessage];
     const deleteMonotonicMessage = vi.fn();
@@ -339,7 +339,7 @@ describe("noobot-chat monotonic message action rules", () => {
     const assistantMessage = {
       id: "a-adjacent",
       role: "assistant",
-      state: "stopped",
+      state: "user_stopped",
     };
     const allMessages = [userMessage, assistantMessage];
 
@@ -351,7 +351,7 @@ describe("noobot-chat monotonic message action rules", () => {
     const userMessage = {
       id: "u-persisted-marker",
       role: "user",
-      stopState: "stopped",
+      stopState: "user_stopped",
       isMonotonic: true,
       content: "question",
     };

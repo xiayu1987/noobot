@@ -135,7 +135,7 @@ describe("useReconnectReplay", () => {
     await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
       sessionId: "s-1",
       dialogProcessId: "dp-stopped",
-      state: "stopped",
+      state: "user_stopped",
       seq: 3,
     });
 

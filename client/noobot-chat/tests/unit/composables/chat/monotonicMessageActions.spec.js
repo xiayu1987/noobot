@@ -97,7 +97,7 @@ describe("monotonicMessageActions stop-window gates", () => {
       stateRef: runStateSnapshot,
       event: {
         type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
-        state: "stopped",
+        state: "user_stopped",
         sessionId: "s1",
         dialogProcessId: "dp1",
         turnScopeId: "turn-1",

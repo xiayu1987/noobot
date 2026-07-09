@@ -219,8 +219,8 @@ export function createWaitAsyncTaskResultTool({
         failed: allTaskResults.filter(
           (item) => String(item?.status || "") === SESSION_ASYNC_STATUS.FAILED,
         ).length,
-        stopped: allTaskResults.filter(
-          (item) => String(item?.status || "") === SESSION_ASYNC_STATUS.STOPPED,
+        user_stopped: allTaskResults.filter(
+          (item) => String(item?.status || "") === SESSION_ASYNC_STATUS.USER_STOPPED,
         ).length,
         invalid_request: allTaskResults.filter(
           (item) =>
@@ -257,13 +257,13 @@ export function createWaitAsyncTaskResultTool({
         });
       }
 
-      const hasStoppedTask = containerResults.some(
-        (item) => String(item?.status || "") === SESSION_ASYNC_STATUS.STOPPED,
+      const hasUserStoppedTask = containerResults.some(
+        (item) => String(item?.status || "") === SESSION_ASYNC_STATUS.USER_STOPPED,
       );
-      if (hasStoppedTask) {
+      if (hasUserStoppedTask) {
         return buildWaitAsyncTaskResultPayload({
           ok: true,
-          status: SESSION_ASYNC_STATUS.STOPPED,
+          status: SESSION_ASYNC_STATUS.USER_STOPPED,
           nextPollInMs: resolvedPollIntervalMs,
           containers,
           containerStatuses,

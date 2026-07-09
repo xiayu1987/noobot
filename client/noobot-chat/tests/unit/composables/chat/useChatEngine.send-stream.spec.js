@@ -57,7 +57,7 @@ describe("useChatEngine.send-stream", () => {
         pending: false,
         statusLabel: "chat.stopped",
         turnScopeId: "turn-old",
-        channelState: { state: "stopped", turnScopeId: "turn-old" },
+        channelState: { state: "user_stopped", turnScopeId: "turn-old" },
       },
     ];
     activeSession.value.rawMessages = [...activeSession.value.messages];
@@ -348,7 +348,7 @@ describe("useChatEngine.send-stream", () => {
         event: StreamEventEnum.DELTA,
         data: { sessionId: "local-2", dialogProcessId: "dp-state", text: "partial" },
       });
-      emitChannelState(onEvent, "local-2", "dp-state", "stopped");
+      emitChannelState(onEvent, "local-2", "dp-state", "user_stopped");
       onEvent({
         event: StreamEventEnum.STOPPED,
         data: { sessionId: "local-2", dialogProcessId: "dp-state" },
@@ -384,7 +384,7 @@ describe("useChatEngine.send-stream", () => {
     }));
     const applySessionDetail = vi.fn();
     const stream = vi.fn(async (_payload, onEvent) => {
-      emitChannelState(onEvent, "local-stop-refresh", "dp-stop-refresh", "stopped", {
+      emitChannelState(onEvent, "local-stop-refresh", "dp-stop-refresh", "user_stopped", {
         seq: 2,
       });
       onEvent({
@@ -423,8 +423,8 @@ describe("useChatEngine.send-stream", () => {
               content: "old partial",
               turnScopeId: staleStoppedTurnScopeId,
               statusLabel: "chat.stopped",
-              stopState: "stopped",
-              channelState: { state: "stopped", turnScopeId: staleStoppedTurnScopeId },
+              stopState: "user_stopped",
+              channelState: { state: "user_stopped", turnScopeId: staleStoppedTurnScopeId },
             },
           ],
         },
@@ -432,7 +432,7 @@ describe("useChatEngine.send-stream", () => {
     }));
     const stream = vi.fn(async (payload, onEvent) => {
       replacementTurnScopeId = payload.turnScopeId;
-      emitChannelState(onEvent, "local-stop-detail-preserve", "dp-new", "stopped", {
+      emitChannelState(onEvent, "local-stop-detail-preserve", "dp-new", "user_stopped", {
         turnScopeId: payload.turnScopeId,
       });
       onEvent({

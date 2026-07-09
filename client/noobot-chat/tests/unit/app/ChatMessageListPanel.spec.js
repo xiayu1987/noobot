@@ -238,7 +238,7 @@ describe("ChatMessageListPanel", () => {
           turnScopeId: "client-turn:old",
           pending: false,
           statusLabel: "chat.stopped",
-          channelState: { state: "stopped", turnScopeId: "client-turn:old" },
+          channelState: { state: "user_stopped", turnScopeId: "client-turn:old" },
         },
       ],
     });
@@ -425,7 +425,7 @@ describe("ChatMessageListPanel", () => {
         content: "",
         pending: false,
         turnScopeId: "turn-new",
-        channelState: { state: "stopped", turnScopeId: "turn-new" },
+        channelState: { state: "user_stopped", turnScopeId: "turn-new" },
       },
     ];
 

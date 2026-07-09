@@ -619,7 +619,7 @@ export class SessionExecutionRunner {
         parentSessionId,
         patch: {
           status: isAbortError(error) && isUserStopAbort(error, abortSignal)
-            ? SESSION_ASYNC_STATUS.STOPPED
+            ? SESSION_ASYNC_STATUS.USER_STOPPED
             : SESSION_ASYNC_STATUS.FAILED,
           endedAt: this.now(),
           error: isAbortError(error) && isUserStopAbort(error, abortSignal)

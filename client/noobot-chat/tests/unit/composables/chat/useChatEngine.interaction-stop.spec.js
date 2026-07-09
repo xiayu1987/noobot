@@ -62,7 +62,7 @@ describe("useChatEngine.interaction-stop", () => {
         seq: 2,
         pendingInteraction,
       });
-      emitChannelState(onEvent, "local-int", "dp-int", "stopped", { seq: 3 });
+      emitChannelState(onEvent, "local-int", "dp-int", "user_stopped", { seq: 3 });
       onEvent({
         event: StreamEventEnum.STOPPED,
         data: { sessionId: "local-int", dialogProcessId: "dp-int" },
@@ -119,7 +119,7 @@ describe("useChatEngine.interaction-stop", () => {
     const stream = vi.fn(async (_payload, onEvent) => {
       emitChannelState(onEvent, "local-flight", "dp-flight", "stopping");
       emitChannelState(onEvent, "local-flight", "dp-flight", "reconnecting");
-      emitChannelState(onEvent, "local-flight", "dp-flight", "stopped");
+      emitChannelState(onEvent, "local-flight", "dp-flight", "user_stopped");
       onEvent({
         event: StreamEventEnum.STOPPED,
         data: { sessionId: "local-flight", dialogProcessId: "dp-flight" },
@@ -576,7 +576,7 @@ describe("useChatEngine.interaction-stop", () => {
       expect.any(Function),
     );
     expect(activeSession.value.messages[0]).not.toMatchObject({
-      stopState: "stopped",
+      stopState: "user_stopped",
       monotonicState: "monotonic",
     });
   });
@@ -619,7 +619,7 @@ describe("useChatEngine.interaction-stop", () => {
       expect.any(Function),
     );
     expect(activeSession.value.messages[0]).not.toMatchObject({
-      stopState: "stopped",
+      stopState: "user_stopped",
       monotonicState: "monotonic",
     });
   });

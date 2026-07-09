@@ -35,7 +35,7 @@ describe("sendFinalize", () => {
 
     expect(applied).toBe(true);
     expect(userMessage.dialogProcessId).toBe("dp-stop");
-    expect(userMessage.stopState).toBe("stopped");
+    expect(userMessage.stopState).toBe("user_stopped");
     expect(userMessage.monotonicState).toBe("monotonic");
     expect(userMessage.isMonotonic).toBe(true);
     expect(userMessage.monotonic).toBe(true);

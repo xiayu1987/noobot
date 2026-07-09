@@ -105,8 +105,8 @@ export function createCollabContainerStore({ runtime }) {
     ) {
       return TASK_STATUS.COMPLETED;
     }
-    if (taskList.some((task) => String(task?.status || "") === TASK_STATUS.STOPPED)) {
-      return TASK_STATUS.STOPPED;
+    if (taskList.some((task) => String(task?.status || "") === TASK_STATUS.USER_STOPPED)) {
+      return TASK_STATUS.USER_STOPPED;
     }
     return TASK_STATUS.RUNNING;
   };

@@ -18,7 +18,7 @@ describe("useChatEngine.resend stopped state", () => {
       turnScopeId: "client-turn:stopped-old",
       role: RoleEnum.USER,
       content: "stopped question",
-      stopState: "stopped",
+      stopState: "user_stopped",
       monotonicState: "monotonic",
     };
     const staleStoppedAssistant = {
@@ -26,7 +26,7 @@ describe("useChatEngine.resend stopped state", () => {
       role: RoleEnum.ASSISTANT,
       content: "partial stopped",
       statusLabel: "chat.stopped",
-      stopState: "stopped",
+      stopState: "user_stopped",
     };
     const replaceSessionTurnApi = vi.fn(async () => ({
       ok: true,
@@ -83,7 +83,7 @@ describe("useChatEngine.resend stopped state", () => {
       turnScopeId: "client-turn:repeat-old",
       role: RoleEnum.USER,
       content: "first stopped",
-      stopState: "stopped",
+      stopState: "user_stopped",
       monotonicState: "monotonic",
     };
     const stoppedAssistant = {
@@ -91,7 +91,7 @@ describe("useChatEngine.resend stopped state", () => {
       role: RoleEnum.ASSISTANT,
       content: "partial",
       statusLabel: "chat.stopped",
-      stopState: "stopped",
+      stopState: "user_stopped",
     };
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
@@ -146,7 +146,7 @@ describe("useChatEngine.resend stopped state", () => {
         turnScopeId: "client-turn:old",
         role: RoleEnum.USER,
         content: "first stopped",
-        stopState: "stopped",
+        stopState: "user_stopped",
       },
       {
         turnScopeId: "client-turn:old",
@@ -154,8 +154,8 @@ describe("useChatEngine.resend stopped state", () => {
         content: "partial",
         pending: false,
         statusLabel: "chat.stopped",
-        stopState: "stopped",
-        channelState: { state: "stopped", turnScopeId: "client-turn:old" },
+        stopState: "user_stopped",
+        channelState: { state: "user_stopped", turnScopeId: "client-turn:old" },
       },
     ];
     activeSession.value.rawMessages = [...activeSession.value.messages];
@@ -170,7 +170,7 @@ describe("useChatEngine.resend stopped state", () => {
     firstReplacementAssistant.pending = false;
     firstReplacementAssistant.statusLabel = "chat.stopped";
     firstReplacementAssistant.stopState = "stopped";
-    firstReplacementAssistant.channelState = { state: "stopped", turnScopeId: firstTurnScopeId };
+    firstReplacementAssistant.channelState = { state: "user_stopped", turnScopeId: firstTurnScopeId };
     runStateSnapshot.value = {
       state: BackendChannelState.STOPPED,
       sessionId: "local-resend-second-stopped",
@@ -195,7 +195,7 @@ describe("useChatEngine.resend stopped state", () => {
       turnScopeId: secondReplacementUser.turnScopeId,
     }));
     expect(secondPlaceholder.stopState).toBeUndefined();
-    expect(secondPlaceholder.channelState?.state).not.toBe("stopped");
+    expect(secondPlaceholder.channelState?.state).not.toBe("user_stopped");
     expect(runStateSnapshot.value).toMatchObject({
       state: FrontendRunState.RESEND_STREAMING,
       turnScopeId: secondReplacementUser.turnScopeId,
@@ -210,7 +210,7 @@ describe("useChatEngine.resend stopped state", () => {
     const stream = vi.fn(async (payload, onEvent) => {
       streamCallCount += 1;
       if (streamCallCount === 2) {
-        emitChannelState(onEvent, "local-resend-stale-stop-replay", "dp-old-stopped", "stopped", {
+        emitChannelState(onEvent, "local-resend-stale-stop-replay", "dp-old-stopped", "user_stopped", {
           turnScopeId: payload.turnScopeId,
         });
       }
@@ -231,7 +231,7 @@ describe("useChatEngine.resend stopped state", () => {
               role: RoleEnum.USER,
               content: "historical stopped",
               dialogProcessId: "dp-old-stopped",
-              stopState: "stopped",
+              stopState: "user_stopped",
             },
             {
               turnScopeId: "client-turn:history",
@@ -240,7 +240,7 @@ describe("useChatEngine.resend stopped state", () => {
               pending: false,
               statusLabel: "chat.stopped",
               dialogProcessId: "dp-old-stopped",
-              channelState: { state: "stopped", dialogProcessId: "dp-old-stopped", turnScopeId: "client-turn:history" },
+              channelState: { state: "user_stopped", dialogProcessId: "dp-old-stopped", turnScopeId: "client-turn:history" },
             },
             replacementUser,
           ],
@@ -258,14 +258,14 @@ describe("useChatEngine.resend stopped state", () => {
       deps: { replaceSessionTurnApi, applySessionDetail },
     });
     activeSession.value.messages = [
-      { turnScopeId: "client-turn:first", role: RoleEnum.USER, content: "first", stopState: "stopped" },
+      { turnScopeId: "client-turn:first", role: RoleEnum.USER, content: "first", stopState: "user_stopped" },
       {
         turnScopeId: "client-turn:first",
         role: RoleEnum.ASSISTANT,
         content: "partial",
         pending: false,
         statusLabel: "chat.stopped",
-        channelState: { state: "stopped", turnScopeId: "client-turn:first" },
+        channelState: { state: "user_stopped", turnScopeId: "client-turn:first" },
       },
     ];
     activeSession.value.rawMessages = [...activeSession.value.messages];
@@ -274,7 +274,7 @@ describe("useChatEngine.resend stopped state", () => {
     const firstAssistant = activeSession.value.messages.find((message) => message.role === RoleEnum.ASSISTANT && message.pending === true);
     firstAssistant.pending = false;
     firstAssistant.statusLabel = "chat.stopped";
-    firstAssistant.channelState = { state: "stopped", turnScopeId: firstAssistant.turnScopeId };
+    firstAssistant.channelState = { state: "user_stopped", turnScopeId: firstAssistant.turnScopeId };
     runStateSnapshot.value = {
       state: BackendChannelState.STOPPED,
       sessionId: "local-resend-stale-stop-replay",
@@ -295,7 +295,7 @@ describe("useChatEngine.resend stopped state", () => {
       statusLabel: "",
       turnScopeId: expect.stringMatching(/^client-turn:/),
     }));
-    expect(freshPlaceholder.channelState?.state).not.toBe("stopped");
+    expect(freshPlaceholder.channelState?.state).not.toBe("user_stopped");
     expect(runStateSnapshot.value).toMatchObject({
       state: FrontendRunState.RESEND_STREAMING,
       turnScopeId: freshPlaceholder.turnScopeId,
@@ -322,7 +322,7 @@ describe("useChatEngine.resend stopped state", () => {
       turnScopeId: "client-turn:old-stopped",
       role: RoleEnum.USER,
       content: "old stopped",
-      stopState: "stopped",
+      stopState: "user_stopped",
     };
     const stoppedAssistant = {
       turnScopeId: "client-turn:old-stopped",
@@ -330,7 +330,7 @@ describe("useChatEngine.resend stopped state", () => {
       content: "partial",
       pending: false,
       statusLabel: "chat.stopped",
-      channelState: { state: "stopped", turnScopeId: "client-turn:old-stopped" },
+      channelState: { state: "user_stopped", turnScopeId: "client-turn:old-stopped" },
     };
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
@@ -360,7 +360,7 @@ describe("useChatEngine.resend stopped state", () => {
       role: RoleEnum.ASSISTANT,
       content: "old stopped partial",
       statusLabel: "chat.stopped",
-      stopState: "stopped",
+      stopState: "user_stopped",
     };
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {
       const replacementUser = {
@@ -389,7 +389,7 @@ describe("useChatEngine.resend stopped state", () => {
       turnScopeId: "client-turn:old-stopped",
       role: RoleEnum.USER,
       content: "old",
-      stopState: "stopped",
+      stopState: "user_stopped",
     };
     activeSession.value.messages = [oldUser, staleStoppedAssistant];
     activeSession.value.rawMessages = [oldUser, staleStoppedAssistant];
