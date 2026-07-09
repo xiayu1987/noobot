@@ -27,7 +27,7 @@ export const StreamEventEnum = Object.freeze({
   DELTA: "delta",
   DONE: "done",
   ERROR: "error",
-  STOPPED: "stopped",
+  USER_STOPPED: "user_stopped",
   INTERACTION_REQUEST: "interaction_request",
   CONNECTOR_STATUS: "connector_status",
   ATTACHMENTS: "attachments",

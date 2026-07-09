@@ -197,8 +197,8 @@ _applyConversationStateFromEnvelope(channel, envelope = {}) {
     nextState = CONVERSATION_STATE.INTERACTION_PENDING;
   } else if (eventName === CHANNEL_EVENT.DONE) {
     nextState = CONVERSATION_STATE.COMPLETED;
-  } else if (eventName === CHANNEL_EVENT.STOPPED) {
-    nextState = CONVERSATION_STATE.STOPPED;
+  } else if (eventName === CHANNEL_EVENT.USER_STOPPED) {
+    nextState = CONVERSATION_STATE.USER_STOPPED;
   } else if (eventName === CHANNEL_EVENT.ERROR) {
     nextState = CONVERSATION_STATE.ERROR;
   }

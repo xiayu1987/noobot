@@ -51,7 +51,7 @@ function markLatestUserMessageStopped(activeSession, pendingAssistantMessage = n
     if (pendingDialogProcessId && !getMessageDialogProcessId(messageItem)) {
       messageItem.dialogProcessId = pendingDialogProcessId;
     }
-    messageItem.stopState = "stopped";
+    messageItem.stopState = "user_stopped";
     messageItem.monotonicState = "monotonic";
     messageItem.isMonotonic = true;
     messageItem.monotonic = true;

@@ -44,7 +44,7 @@ import {
 } from "../debug/stateMachineLogger";
 
 const TERMINAL_STOP_CHANNEL_STATES = new Set([
-  "stopped",
+  "user_stopped",
   "cancelled",
   "aborted",
 ]);
@@ -52,7 +52,7 @@ const TERMINAL_STOP_CHANNEL_STATES = new Set([
 const FINALIZED_ASSISTANT_STATES = new Set([
   "completed",
   "frontend_completed",
-  "stopped",
+  "user_stopped",
   "cancelled",
   "aborted",
   "error",

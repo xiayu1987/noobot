@@ -10,11 +10,14 @@ import { createStateBuilder } from "../../../../src/system-core/agent/core/state
 
 function createRuntime() {
   return {
+    userId: "admin",
     globalConfig: {},
     userConfig: {},
-    runConfig: {},
+    runConfig: { turnScopeId: "turn-1" },
     systemRuntime: {
       sessionId: "s1",
+      parentSessionId: "parent-s1",
+      dialogProcessId: "dlg-1",
       toolLoopExecutionCount: 0,
       phaseSummaryLoopCount: 0,
       toolConsecutiveFailureCount: 0,
@@ -46,18 +49,21 @@ test("state-builder canonicalizes model messages and block views through one sto
     resolveToolFailureHelpCountFn: () => 0,
   });
 
-  const { loopState } = buildAgentState({
-    agentContext: {
+  const runtime = createRuntime();
+  const agentContext = {
       payload: {
         messages: { history: [] },
         tools: { registry: [] },
       },
       execution: {
         controllers: {
-          runtime: createRuntime(),
+          runtime,
         },
       },
-    },
+    };
+
+  const { loopState } = buildAgentState({
+    agentContext,
     userMessage: "current task",
   });
 
@@ -68,4 +74,13 @@ test("state-builder canonicalizes model messages and block views through one sto
   assert.equal(loopState.messages[2], loopState.messageBlocks.incremental[0]);
   assert.ok(loopState.messages[2].additional_kwargs?.noobotMessageId);
   assert.equal(loopState.messageBlocks.incrementalIds, undefined);
+  assert.deepEqual(agentContext.execution.controllers.runtime.stoppedModelMessageSnapshotCandidate, {
+    userId: "admin",
+    sessionId: "s1",
+    parentSessionId: "parent-s1",
+    dialogProcessId: "dlg-1",
+    turnScopeId: "turn-1",
+    messages: loopState.messages,
+    messageBlocks: loopState.messageBlocks,
+  });
 });

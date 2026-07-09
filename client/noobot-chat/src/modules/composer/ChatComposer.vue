@@ -97,27 +97,32 @@ const sendDisabled = computed(() => {
   const noInput = !inputLength && !attachmentCount.value;
   const disconnected = !props.connected;
   const sendRequesting = Boolean(props.composerActionState?.sendRequesting);
+  const continueRequesting = Boolean(props.composerActionState?.continueRequesting);
   const canStartNewSend = props.composerActionState?.canStartNewSend !== false;
   const blockedBySendingInteraction = props.interactionActive && props.sending;
-  const disabled = noInput || disconnected || sendRequesting || !canStartNewSend || blockedBySendingInteraction;
+  const disabled = noInput || disconnected || sendRequesting || continueRequesting || !canStartNewSend || blockedBySendingInteraction;
   const disabledReason = noInput
     ? "empty"
     : disconnected
       ? "disconnected"
       : sendRequesting
         ? "sendRequesting"
-        : !canStartNewSend
-          ? "stopInFlight"
-          : blockedBySendingInteraction
-            ? "interactionActiveAndSending"
-          : "";
+        : continueRequesting
+          ? "continueRequesting"
+          : !canStartNewSend
+            ? "stopInFlight"
+            : blockedBySendingInteraction
+              ? "interactionActiveAndSending"
+            : "";
   logResendDebug("ui.sendDisabled", {
     disabled,
     disabledReason,
     connected: props.connected,
     sending: props.sending,
     sendRequesting,
+    continueRequesting,
     canStartNewSend,
+    stopped: Boolean(props.composerActionState?.stopped),
     canStop: props.canStop,
     interactionActive: props.interactionActive,
     inputLength,
@@ -197,7 +202,11 @@ function onComposerDrop(event) {
 const sendButtonText = computed(() => {
   if (micRecording.value) return recordingTimeText.value;
   const sendRequesting = Boolean(props.composerActionState?.sendRequesting);
-  return sendRequesting || props.sending ? translate("composer.sending") : translate("composer.send");
+  const continueRequesting = Boolean(props.composerActionState?.continueRequesting);
+  if (continueRequesting) return translate("composer.continueRequesting");
+  if (sendRequesting || props.sending) return translate("composer.sending");
+  if (props.composerActionState?.stopped) return translate("composer.continue");
+  return translate("composer.send");
 });
 
 const sendRequesting = computed(() => Boolean(props.composerActionState?.sendRequesting));

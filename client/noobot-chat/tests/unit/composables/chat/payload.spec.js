@@ -60,4 +60,41 @@ describe("buildChatPayload model preferences", () => {
 
     expect(payload.config.selectedPlugins).toEqual(["harness", "workflow"]);
   });
+
+  it("builds independent continue payload with new turn and stopped snapshot identity", () => {
+    const payload = buildChatPayload({
+      userId: "admin",
+      activeSession: { value: { sessionId: "s1" } },
+      message: "continue question",
+      action: "continue",
+      turnScopeId: "turn-resume-new",
+      resumeDialogProcessId: "dlg-stopped",
+      resumeTurnScopeId: "turn-stopped",
+      allowUserInteraction: true,
+      forceTool: false,
+      requestedTextStreaming: false,
+      botScenario: "programming",
+      selectedModel: "main-model",
+      attachments: [{ attachmentId: "att-1", name: "a.txt" }],
+    });
+
+    expect(payload).toMatchObject({
+      action: "continue",
+      userId: "admin",
+      sessionId: "s1",
+      turnScopeId: "turn-resume-new",
+      message: "continue question",
+      attachments: [{ attachmentId: "att-1", name: "a.txt" }],
+    });
+    expect(payload.config).toMatchObject({
+      streaming: false,
+      scenario: "programming",
+      selectedModel: "main-model",
+      resumeDialogProcessId: "dlg-stopped",
+      resumeTurnScopeId: "turn-stopped",
+      stoppedTurnScopeId: "turn-stopped",
+    });
+    expect(payload.dialogProcessId).toBeUndefined();
+    expect(payload.config.reuseExistingUserTurn).toBeUndefined();
+  });
 });

@@ -31,7 +31,7 @@ import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 function isReconnectTerminalEvent(eventName = "") {
   return [
     StreamEventEnum.DONE,
-    StreamEventEnum.STOPPED,
+    StreamEventEnum.USER_STOPPED,
     StreamEventEnum.ERROR,
   ].includes(String(eventName || "").trim());
 }

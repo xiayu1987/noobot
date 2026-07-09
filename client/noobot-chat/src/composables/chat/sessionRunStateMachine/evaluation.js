@@ -10,7 +10,7 @@ export function isTerminalSessionRunState(state = "") {
   return [
     FrontendRunState.FRONTEND_COMPLETED,
     BackendChannelState.ERROR,
-    BackendChannelState.STOPPED,
+    BackendChannelState.USER_STOPPED,
     FrontendRunState.CANCELLED,
     FrontendRunState.IDLE,
   ].includes(normalizeState(state));
@@ -19,6 +19,7 @@ export function isTerminalSessionRunState(state = "") {
 export function isInFlightSessionRunState(state = "") {
   return [
     BackendChannelState.SENDING,
+    FrontendRunState.CONTINUE_REQUESTING,
     FrontendRunState.RESEND_REPLACING_TURN,
     FrontendRunState.RESEND_STREAMING,
     BackendChannelState.COMPLETED,
@@ -40,9 +41,11 @@ export function evaluateSessionRunState(stateSnapshot = {}) {
     sendRequesting: Boolean(stateSnapshot?.composerActionState?.sendRequesting),
     stopRequesting: Boolean(stateSnapshot?.composerActionState?.stopRequesting),
     stopPendingUntilBackendReady: Boolean(stateSnapshot?.composerActionState?.stopPendingUntilBackendReady),
+    continueRequesting: Boolean(stateSnapshot?.composerActionState?.continueRequesting),
   };
   const backendCanStop = [
     BackendChannelState.SENDING,
+    FrontendRunState.CONTINUE_REQUESTING,
     FrontendRunState.RESEND_REPLACING_TURN,
     FrontendRunState.RESEND_STREAMING,
     BackendChannelState.RECONNECTING,
@@ -60,10 +63,10 @@ export function evaluateSessionRunState(stateSnapshot = {}) {
     composerActionState,
     sending: isInFlightSessionRunState(state),
     backendCanStop,
-    canStop: backendCanStop || composerActionState.sendRequesting || composerActionState.stopPendingUntilBackendReady,
+    canStop: backendCanStop || composerActionState.sendRequesting || composerActionState.continueRequesting || composerActionState.stopPendingUntilBackendReady,
     stopInFlight: awaitingBackendStop,
     awaitingBackendStop,
-    canStartNewSend,
+    canStartNewSend: canStartNewSend && !composerActionState.continueRequesting,
     canRetryMessage: canStartNewSend,
     canDeleteMessage: canStartNewSend,
     interactionSubmitting: state === BackendChannelState.INTERACTION_PENDING ? false : undefined,
@@ -82,8 +85,8 @@ export function evaluateSessionRunState(stateSnapshot = {}) {
           ? "reconnecting"
           : state === FrontendRunState.FRONTEND_COMPLETED
             ? "generated"
-            : [BackendChannelState.STOPPED, FrontendRunState.CANCELLED].includes(state)
-              ? "stopped"
+            : [BackendChannelState.USER_STOPPED, FrontendRunState.CANCELLED].includes(state)
+              ? "user_stopped"
               : state === BackendChannelState.ERROR
                 ? "failed"
                 : "",

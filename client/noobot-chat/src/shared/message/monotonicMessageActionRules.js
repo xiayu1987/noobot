@@ -72,12 +72,12 @@ export function isMonotonicMessage(messageItem = {}) {
   if (!messageItem || typeof messageItem !== "object") return false;
   if (messageItem.isMonotonic === true || messageItem.monotonic === true) return true;
   if (normalizeText(messageItem.monotonicState) === "monotonic") return true;
-  if (normalizeText(messageItem.stopState) === "stopped") return true;
+  if (normalizeText(messageItem.stopState) === "user_stopped") return true;
   const channelState = getMessageRuntimeChannelState(messageItem);
   const state = normalizeText(channelState?.state || messageItem.state || messageItem.status);
-  if (["completed", "done", "stopped"].includes(state)) return true;
+  if (["completed", "done", "user_stopped"].includes(state)) return true;
   const label = normalizeText(messageItem.statusLabel);
-  return ["generated", GENERATED_STATUS_LABEL, "stopped", STOPPED_STATUS_LABEL].includes(label);
+  return ["generated", GENERATED_STATUS_LABEL, "user_stopped", STOPPED_STATUS_LABEL].includes(label);
 }
 
 export function isUserMessage(messageItem = {}) { return normalizeMessageRole(messageItem) === "user"; }

@@ -665,6 +665,126 @@ test("harness policy prompt matrix exposes scenario without workflow mode", asyn
   assert.match(defaultPrompt, /最小切片/);
 });
 
+test("harness policy prompt is not reinjected during stopped snapshot resume initialization", async () => {
+  const existingPolicy = [
+    "[HARNESS_POLICY_SELECTION]",
+    "scenario = programming",
+    "policy_prompt = harness_policy/programming",
+    "[/HARNESS_POLICY_SELECTION]",
+  ].join("\n");
+  const ctx = {
+    turn: 1,
+    messages: [
+      { role: "system", content: existingPolicy },
+      { role: "user", content: "ID: dialog-a\nPATCH: continue" },
+    ],
+    agentContext: {
+      execution: {
+        controllers: {
+          runtime: {
+            resumeFromStoppedSnapshot: true,
+            agentLifecycleState: "resume_initializing",
+            agentLifecycleInitialState: "resume_initializing",
+          },
+        },
+      },
+    },
+  };
+
+  await injectPrompt("before_llm_call", ctx, {
+    enabled: true,
+    promptPolicy: true,
+    promptText: "",
+    promptPriority: 80,
+    writePrompts: false,
+  });
+
+  const policyMessages = ctx.messages.filter((message = {}) =>
+    String(message.content || "").includes("HARNESS_POLICY_SELECTION"),
+  );
+  assert.equal(policyMessages.length, 1);
+  assert.equal(policyMessages[0].content, existingPolicy);
+});
+
+test("harness policy prompt is not reinjected after stopped snapshot blocks are restored", async () => {
+  const existingPolicy = [
+    "[HARNESS_POLICY_SELECTION]",
+    "scenario = programming",
+    "policy_prompt = harness_policy/programming",
+    "[/HARNESS_POLICY_SELECTION]",
+  ].join("\n");
+  const ctx = {
+    turn: 2,
+    messages: [
+      { role: "system", content: existingPolicy },
+      { role: "user", content: "继续" },
+    ],
+    agentContext: {
+      execution: {
+        controllers: {
+          runtime: {
+            resumeFromStoppedSnapshot: true,
+            agentLifecycleState: "running",
+            resumedStoppedSnapshotIdentity: {
+              dialogProcessId: "dp-stopped",
+              turnScopeId: "turn-stopped",
+            },
+            resumedStoppedSnapshotMessageBlocks: {
+              system: [{ role: "system", content: existingPolicy }],
+              history: [],
+              incremental: [],
+            },
+          },
+        },
+      },
+    },
+  };
+
+  await injectPrompt("before_llm_call", ctx, {
+    enabled: true,
+    promptPolicy: true,
+    promptText: "",
+    promptPriority: 80,
+    writePrompts: false,
+  });
+
+  const policyMessages = ctx.messages.filter((message = {}) =>
+    String(message.content || "").includes("HARNESS_POLICY_SELECTION"),
+  );
+  assert.equal(policyMessages.length, 1);
+  assert.equal(policyMessages[0].content, existingPolicy);
+});
+
+test("harness policy prompt is injected for normal first llm call", async () => {
+  const ctx = {
+    turn: 1,
+    messages: [{ role: "user", content: "hello" }],
+    agentContext: {
+      execution: {
+        controllers: {
+          runtime: {
+            resumeFromStoppedSnapshot: false,
+            agentLifecycleState: "initializing",
+          },
+        },
+      },
+    },
+  };
+
+  await injectPrompt("before_llm_call", ctx, {
+    enabled: true,
+    promptPolicy: true,
+    promptText: "",
+    promptPriority: 80,
+    writePrompts: false,
+  });
+
+  assert.equal(
+    ctx.messages.some((message = {}) => String(message.content || "").includes("HARNESS_POLICY_SELECTION")),
+    true,
+  );
+});
+
 
 test("harness policy selection resolver maps scenario to i18n keys", () => {
   assert.deepEqual(

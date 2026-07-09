@@ -55,6 +55,39 @@ function isTaskSummaryToolResultMessage(msg = {}) {
   }
 }
 
+function resolveMessageRole(msg = {}) {
+  const explicitType = String(msg?.type || msg?.lc_kwargs?.type || "").trim().toLowerCase();
+  const langChainType = typeof msg?._getType === "function"
+    ? String(msg._getType() || "").trim().toLowerCase()
+    : "";
+  const type = explicitType || langChainType;
+  if (type === "human") return MESSAGE_ROLE.USER;
+  if (type === "ai") return MESSAGE_ROLE.ASSISTANT;
+  if (type === "tool" || type === "tool_result") return MESSAGE_ROLE.TOOL;
+  if (type === "system") return MESSAGE_ROLE.SYSTEM;
+  const explicitRole = String(msg?.role || "").trim().toLowerCase();
+  if (explicitRole) return explicitRole;
+  return "";
+}
+
+function resolveMessageToolCalls(msg = {}) {
+  if (Array.isArray(msg?.tool_calls)) return msg.tool_calls;
+  if (Array.isArray(msg?.lc_kwargs?.tool_calls)) return msg.lc_kwargs.tool_calls;
+  if (Array.isArray(msg?.additional_kwargs?.tool_calls)) return msg.additional_kwargs.tool_calls;
+  return [];
+}
+
+function resolveMessageToolCallId(msg = {}) {
+  return String(
+    msg?.tool_call_id ||
+      msg?.toolCallId ||
+      msg?.lc_kwargs?.tool_call_id ||
+      msg?.lc_kwargs?.toolCallId ||
+      msg?.additional_kwargs?.tool_call_id ||
+      "",
+  ).trim();
+}
+
 
 function extractTaskSummaryTextFromToolResult(msg = {}) {
   const rawContent = String(msg?.content || "").trim();
@@ -195,13 +228,14 @@ function buildUserMetaInfoContent(runtime = {}, msg = {}, fallbackMeta = {}) {
     parentDialogProcessId: String(
       msg?.parentDialogProcessId || fallbackMeta?.parentDialogProcessId || "",
     ).trim(),
+    turnScopeId: String(msg?.turnScopeId || fallbackMeta?.turnScopeId || "").trim(),
     attachments: attachments.map((attachmentItem) => buildUserMetaAttachmentInfo(attachmentItem)),
   };
   const userMetaTag = tEngine(runtime, "agent.userMetaTag");
   return `[${userMetaTag}]\n${JSON.stringify(payload, null, 2)}\n[/${userMetaTag}]`;
 }
 
-function buildHumanMessagesForUser(runtime = {}, msg = {}, fallbackMeta = {}) {
+export function buildHumanMessagesForUser(runtime = {}, msg = {}, fallbackMeta = {}) {
   const contentText = buildHumanMessageContent(
     msg,
     resolveFallbackAttachments(fallbackMeta),
@@ -323,8 +357,8 @@ function buildHistoryMessages({
   const knownHistoryToolCallIds = new Set();
   for (const msg of effectiveHistoryMessages) {
     if (shouldSkipSummarizedHistoryMessage(msg)) continue;
-    if ((msg?.role || "") !== MESSAGE_ROLE.ASSISTANT) continue;
-    const normalizedToolCalls = toLangChainToolCalls(msg.tool_calls || []);
+    if (resolveMessageRole(msg) !== MESSAGE_ROLE.ASSISTANT) continue;
+    const normalizedToolCalls = toLangChainToolCalls(resolveMessageToolCalls(msg));
     for (const toolCall of normalizedToolCalls) {
       const toolCallId = String(toolCall?.id || "").trim();
       if (toolCallId) knownHistoryToolCallIds.add(toolCallId);
@@ -332,7 +366,7 @@ function buildHistoryMessages({
   }
   for (const msg of effectiveHistoryMessages) {
     if (shouldSkipSummarizedHistoryMessage(msg)) continue;
-    const role = msg.role || "";
+    const role = resolveMessageRole(msg);
     if (role === MESSAGE_ROLE.SYSTEM) {
       history.push(new SystemMessage({
         content: msg.content || "",
@@ -341,7 +375,7 @@ function buildHistoryMessages({
       continue;
     }
     if (role === MESSAGE_ROLE.ASSISTANT) {
-      const toolCalls = toLangChainToolCalls(msg.tool_calls || []);
+      const toolCalls = toLangChainToolCalls(resolveMessageToolCalls(msg));
       const resolvedAssistantContent =
         typeof msg?.rawModelContent === "string" || Array.isArray(msg?.rawModelContent)
           ? msg.rawModelContent
@@ -356,7 +390,7 @@ function buildHistoryMessages({
       continue;
     }
     if (role === MESSAGE_ROLE.TOOL) {
-      const toolCallId = String(msg?.tool_call_id || "").trim();
+      const toolCallId = resolveMessageToolCallId(msg);
       if (toolCallId && !knownHistoryToolCallIds.has(toolCallId)) {
         if (isTaskSummaryToolResultMessage(msg)) {
           const fallbackSummaryMessage = buildTaskSummaryFallbackHumanMessage(msg);
@@ -423,8 +457,20 @@ export function buildContextMessageBlocks(
   const systemMessages = Array.isArray(agentContext?.payload?.messages?.system)
     ? agentContext.payload.messages.system
     : [];
+  const resumedStoppedSnapshotMessageBlocks =
+    runtime?.resumeFromStoppedSnapshot === true &&
+    runtime?.resumedStoppedSnapshotMessageBlocks &&
+    typeof runtime.resumedStoppedSnapshotMessageBlocks === "object" &&
+    !Array.isArray(runtime.resumedStoppedSnapshotMessageBlocks)
+      ? runtime.resumedStoppedSnapshotMessageBlocks
+      : null;
   const rawHistoryMessages = Array.isArray(agentContext?.payload?.messages?.history)
     ? agentContext.payload.messages.history
+    : [];
+  const rawResumedSnapshotIncrementalMessages = Array.isArray(
+    resumedStoppedSnapshotMessageBlocks?.incremental,
+  )
+    ? resumedStoppedSnapshotMessageBlocks.incremental
     : [];
   const currentTurnScopeId = String(
     systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || "",
@@ -469,7 +515,10 @@ export function buildContextMessageBlocks(
   const resolvedMainBlocks = resolveMainModelFinalMessages({
     systemMessages,
     historyMessages,
-    incrementalMessages: rawIncrementalMessages,
+    incrementalMessages: [
+      ...rawResumedSnapshotIncrementalMessages,
+      ...rawIncrementalMessages,
+    ],
   });
 
   const system = [];
@@ -490,8 +539,22 @@ export function buildContextMessageBlocks(
     includeUserMeta: false,
   });
   const incremental = [];
+  const restoredSnapshotIncrementalMessages = resolvedMainBlocks.incremental.filter((msg) =>
+    rawResumedSnapshotIncrementalMessages.includes(msg),
+  );
+  if (restoredSnapshotIncrementalMessages.length) {
+    incremental.push(
+      ...buildHistoryMessages({
+        effectiveHistoryMessages: restoredSnapshotIncrementalMessages,
+        runtime,
+        fallbackUserMeta,
+        includeUserMeta: false,
+      }),
+    );
+  }
   for (const msg of resolvedMainBlocks.incremental) {
-    const role = msg?.role || "";
+    if (rawResumedSnapshotIncrementalMessages.includes(msg)) continue;
+    const role = resolveMessageRole(msg);
     if (role === MESSAGE_ROLE.USER || msg?.frontendUserMessage === true) {
       incremental.push(...buildHumanMessagesForUser(runtime, msg, fallbackUserMeta));
     } else {

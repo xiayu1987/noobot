@@ -50,6 +50,7 @@ import {
   summarizeDiagnosticMessages,
 } from "../message-context/context-diagnostics.js";
 import { peekMainFlowFinalNoToolsTurnInstruction } from "../main-flow-control.js";
+import { isResumeInitializingFirstModelTurn } from "../lifecycle/state-machine.js";
 export { normalizeToolResultAttachments } from "./tool-result-normalizer.js";
 export {
   buildAssistantModelMessageForToolCalls,
@@ -108,6 +109,10 @@ function syncMessagesFromBlocks(loopState = {}) {
   return loopState.messages;
 }
 
+function shouldSkipBeforeLlmHookMessageAdoption(runtime = {}, turn = 0) {
+  return isResumeInitializingFirstModelTurn(runtime, turn);
+}
+
 export async function invokeNoToolsTurn({
   modelState,
   loopState,
@@ -153,8 +158,10 @@ export async function invokeNoToolsTurn({
     hookBlocks: summarizeDiagnosticBlocks(beforeLlmHookContext.messageBlocks),
     hookMessages: summarizeDiagnosticMessages(beforeLlmHookContext.messages),
   });
-  reconcileHookContextToLoopState(loopState, beforeLlmHookContext);
-  syncMessagesFromBlocks(loopState);
+  if (!shouldSkipBeforeLlmHookMessageAdoption(runtime, turn)) {
+    reconcileHookContextToLoopState(loopState, beforeLlmHookContext);
+    syncMessagesFromBlocks(loopState);
+  }
   traceLoopStateContext(runtime, "before_llm_final_composed", loopState, { turn, mode: "no_tools" });
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const locale = String(systemRuntime?.locale || "zh-CN");
@@ -350,8 +357,10 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     hookBlocks: summarizeDiagnosticBlocks(beforeLlmHookContext.messageBlocks),
     hookMessages: summarizeDiagnosticMessages(beforeLlmHookContext.messages),
   });
-  reconcileHookContextToLoopState(loopState, beforeLlmHookContext);
-  syncMessagesFromBlocks(loopState);
+  if (!shouldSkipBeforeLlmHookMessageAdoption(runtime, turn)) {
+    reconcileHookContextToLoopState(loopState, beforeLlmHookContext);
+    syncMessagesFromBlocks(loopState);
+  }
   traceLoopStateContext(runtime, "before_llm_final_composed", loopState, { turn, mode: "with_tools" });
 
   const mainFlowFinalNoToolsInstruction =

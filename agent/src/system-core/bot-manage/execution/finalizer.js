@@ -21,7 +21,6 @@ import {
 } from "../../session/transfer-attachment-refs.js";
 import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
 import { summarizeExecutionLogs } from "../../tracking/execution-log/execution-log-summary.js";
-
 const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
   "doc_to_data_tool",
   "media_to_data_tool",
@@ -210,6 +209,7 @@ export class SessionExecutionFinalizer {
     runtimeEventListener = null,
     userConfig = {},
     resolvedParentAsyncResultContainer = null,
+    lifecycle = null,
   }) {
     const rawTurnMessages =
       Array.isArray(agentResult?.turnMessages) && agentResult.turnMessages.length
@@ -223,6 +223,7 @@ export class SessionExecutionFinalizer {
     const turnMessages = promoteGeneratedTransfersToFinalAssistant(rawTurnMessages);
     const thinkingFinishedAt = this.now();
 
+    lifecycle?.enterPersisting?.();
     await this.turnPersister.appendAgentMessages({
       userId,
       sessionId,
@@ -242,6 +243,7 @@ export class SessionExecutionFinalizer {
       currentTurnTasks: agentResult?.turnTasks || [],
     });
 
+    lifecycle?.enterMemory?.();
     const memoryPostProcessAsyncEnabled =
       this.resolveMemoryPostProcessAsyncEnabled(userConfig);
     if (memoryPostProcessAsyncEnabled) {
@@ -273,6 +275,8 @@ export class SessionExecutionFinalizer {
         mode: "sync",
       });
     }
+
+    lifecycle?.complete?.();
 
     const executionBundleTimeoutMs = this.resolveExecutionBundleTimeoutMs(userConfig);
     let executionLogs = [];

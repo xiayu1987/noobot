@@ -377,7 +377,7 @@ export async function applyReconnectChannelState({
         shouldFinalizeCompletedReplay = true;
       } else {
         targetAssistantMessage.pending = false;
-        if (state === BackendChannelState.STOPPED) {
+        if (state === BackendChannelState.USER_STOPPED) {
           targetAssistantMessage.statusLabel = translate("chat.stopped");
         } else if (state === FrontendRunState.CANCELLED) {
           targetAssistantMessage.statusLabel = translate("chat.stopped");

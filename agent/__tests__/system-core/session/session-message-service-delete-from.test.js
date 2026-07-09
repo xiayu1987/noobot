@@ -154,8 +154,8 @@ test("SessionMessageService.markUserMessageMonotonic persists stopped monotonic 
   assert.equal(saved[0].messages[2].isMonotonic, true);
   assert.equal(saved[0].messages[2].monotonic, true);
   assert.equal(saved[0].messages[2].monotonicState, "monotonic");
-  assert.equal(saved[0].messages[2].stopState, "stopped");
-  assert.equal(saved[0].messages[2].state, "stopped");
+  assert.equal(saved[0].messages[2].stopState, "user_stopped");
+  assert.equal(saved[0].messages[2].state, "user_stopped");
   assert.equal(saved[0].version, 8);
   assert.equal(saved[0].revision, 8);
 });
@@ -208,5 +208,5 @@ test("SessionMessageService.markUserMessageMonotonic marks only the matching tur
   assert.equal(result.messageIndex, 1);
   assert.equal(saved.length, 1);
   assert.equal(saved[0].messages[0].stopState, undefined);
-  assert.equal(saved[0].messages[1].stopState, "stopped");
+  assert.equal(saved[0].messages[1].stopState, "user_stopped");
 });

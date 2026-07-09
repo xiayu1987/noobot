@@ -9,13 +9,13 @@ export const CHANNEL_STATUS = {
   CONNECTING: "connecting",
   RUNNING: "running",
   DONE: "done",
-  STOPPED: "stopped",
+  USER_STOPPED: "user_stopped",
   ERROR: "error",
 };
 
 export const CHANNEL_TERMINAL_STATUSES = Object.freeze([
   CHANNEL_STATUS.DONE,
-  CHANNEL_STATUS.STOPPED,
+  CHANNEL_STATUS.USER_STOPPED,
   CHANNEL_STATUS.ERROR,
 ]);
 
@@ -24,7 +24,7 @@ export const CONVERSATION_STATE = {
   SENDING: "sending",
   INTERACTION_PENDING: "interaction_pending",
   COMPLETED: "completed",
-  STOPPED: "stopped",
+  USER_STOPPED: "user_stopped",
   ERROR: "error",
   STOPPING: "stopping",
   RECONNECTING: "reconnecting",
@@ -43,7 +43,7 @@ export const CHANNEL_EVENT = {
   INTERACTION_REQUEST: "interaction_request",
   INTERACTION_RESPONSE: "interaction_response",
   DONE: "done",
-  STOPPED: "stopped",
+  USER_STOPPED: "user_stopped",
   ERROR: "error",
   CHANNEL_STATE: "channel_state",
   RECONNECT_DATA: "reconnect_data",
@@ -52,6 +52,8 @@ export const CHANNEL_EVENT = {
 
 export const WS_ACTION = {
   STOP: "stop",
+  CONTINUE: "continue",
+  RESUME: "resume",
   INTERACTION_RESPONSE: "interaction_response",
   JOIN: "join",
   RECONNECT: "reconnect",
@@ -63,6 +65,8 @@ export const CONVERSATION_SOURCE_EVENT = {
   CHANNEL_STATUS: "channel_status",
   RECONNECT_CACHE_EXPIRED: "reconnect_cache_expired",
   STOP: WS_ACTION.STOP,
+  CONTINUE: WS_ACTION.CONTINUE,
+  RESUME: WS_ACTION.RESUME,
   INTERACTION_RESPONSE: WS_ACTION.INTERACTION_RESPONSE,
 };
 

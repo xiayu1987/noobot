@@ -290,6 +290,180 @@ test("buildContextMessageBlocks splits system/history/incremental and preserves 
   assert.equal(blocks.messages[3]?.content, "u-1");
 });
 
+test("buildContextMessageBlocks appends resume user message meta with attachments", () => {
+  const blocks = buildContextMessageBlocks(
+    {
+      execution: {
+        controllers: {
+          runtime: {
+            userId: "admin",
+            userMessageAttachments: [
+              {
+                attachmentId: "att-1",
+                name: "resume.txt",
+                mimeType: "text/plain",
+                attachmentSource: "user",
+                sessionId: "s1",
+                parsedResult: { text: "parsed attachment" },
+              },
+            ],
+            systemRuntime: {
+              sessionId: "s1",
+              parentSessionId: "parent-s1",
+              dialogProcessId: "dlg-resume-new",
+              parentDialogProcessId: "dlg-stopped",
+              turnScopeId: "turn-resume-new",
+            },
+          },
+        },
+      },
+      payload: {
+        messages: {
+          system: ["snapshot system"],
+          history: [
+            { role: "user", content: "snapshot user", dialogProcessId: "dlg-stopped", turnScopeId: "turn-stopped" },
+            { role: "assistant", content: "snapshot assistant", dialogProcessId: "dlg-stopped", turnScopeId: "turn-stopped" },
+          ],
+        },
+      },
+    },
+    { currentUserMessage: "resume question" },
+  );
+
+  assert.equal(blocks.system[0]?.content, "snapshot system");
+  assert.equal(blocks.history[0]?.content, "snapshot user");
+  assert.equal(
+    blocks.history.some((message) => message?.content === "snapshot assistant"),
+    true,
+  );
+  assert.equal(
+    blocks.history.some(
+      (message) => message?.additional_kwargs?.noobotInternalMessageType === "user_meta" &&
+        String(message?.content || "").includes('"dialogProcessId": "dlg-stopped"'),
+    ),
+    true,
+  );
+  assert.equal(blocks.incremental[0]?.content, "resume question");
+  const meta = blocks.incremental[1]?.content || "";
+  assert.match(meta, /\[用户元信息\]/);
+  assert.match(meta, /"attachmentId": "att-1"/);
+  assert.match(meta, /"name": "resume.txt"/);
+  assert.match(meta, /"dialogProcessId": "dlg-resume-new"/);
+  assert.match(meta, /"turnScopeId": "turn-resume-new"/);
+});
+
+test("buildContextMessageBlocks restores stopped snapshot incremental before current resume input", () => {
+  const blocks = buildContextMessageBlocks(
+    {
+      execution: {
+        controllers: {
+          runtime: {
+            userId: "admin",
+            resumeFromStoppedSnapshot: true,
+            resumedStoppedSnapshotMessageBlocks: {
+              system: ["[HARNESS_POLICY_SELECTION]\nsnapshot policy"],
+              history: [
+                { role: "user", content: "snapshot history user", dialogProcessId: "dlg-stopped", turnScopeId: "turn-stopped" },
+              ],
+              incremental: [
+                { role: "assistant", content: "snapshot partial assistant", dialogProcessId: "dlg-stopped", turnScopeId: "turn-stopped" },
+              ],
+            },
+            userMessageAttachments: [
+              { attachmentId: "att-resume", name: "resume.png", mimeType: "image/png" },
+            ],
+            systemRuntime: {
+              sessionId: "s1",
+              dialogProcessId: "dlg-current",
+              parentDialogProcessId: "dlg-stopped",
+              turnScopeId: "turn-current",
+            },
+          },
+        },
+      },
+      payload: {
+        messages: {
+          system: ["[HARNESS_POLICY_SELECTION]\nsnapshot policy"],
+          history: [
+            { role: "user", content: "snapshot history user", dialogProcessId: "dlg-stopped", turnScopeId: "turn-stopped" },
+          ],
+        },
+      },
+    },
+    { currentUserMessage: "resume user input" },
+  );
+
+  assert.equal(blocks.system.length, 1);
+  assert.equal(blocks.system[0]?.content, "[HARNESS_POLICY_SELECTION]\nsnapshot policy");
+  assert.equal(blocks.history[0]?.content, "snapshot history user");
+  assert.equal(blocks.incremental[0]?.content, "snapshot partial assistant");
+  assert.equal(blocks.incremental[1]?.content, "resume user input");
+  assert.match(String(blocks.incremental[2]?.content || ""), /\[用户元信息\]/);
+  assert.match(String(blocks.incremental[2]?.content || ""), /"attachmentId": "att-resume"/);
+  const contents = blocks.messages.map((message) => message?.content);
+  assert.equal(contents[0], "[HARNESS_POLICY_SELECTION]\nsnapshot policy");
+  assert.equal(contents[1], "snapshot history user");
+  assert.equal(contents.indexOf("snapshot partial assistant") < contents.indexOf("resume user input"), true);
+  assert.equal(contents.indexOf("resume user input") < contents.length - 1, true);
+  assert.match(String(contents[contents.length - 1] || ""), /"dialogProcessId": "dlg-current"/);
+});
+
+test("buildContextMessageBlocks preserves LangChain stopped snapshot tool messages on resume", async () => {
+  const { AIMessage, ToolMessage } = await import("@langchain/core/messages");
+  const blocks = buildContextMessageBlocks(
+    {
+      execution: {
+        controllers: {
+          runtime: {
+            userId: "admin",
+            resumeFromStoppedSnapshot: true,
+            resumedStoppedSnapshotMessageBlocks: {
+              system: ["snapshot system"],
+              history: [],
+              incremental: [
+                new AIMessage({
+                  content: "",
+                  tool_calls: [{ id: "call_resume_1", name: "read_file", args: { filePath: "a.txt" } }],
+                }),
+                new ToolMessage({
+                  tool_call_id: "call_resume_1",
+                  content: "tool result text",
+                }),
+              ],
+            },
+            userMessageAttachments: [],
+            systemRuntime: {
+              sessionId: "s1",
+              dialogProcessId: "dlg-current",
+              parentDialogProcessId: "dlg-stopped",
+              turnScopeId: "turn-current",
+            },
+          },
+        },
+      },
+      payload: {
+        messages: {
+          system: ["snapshot system"],
+          history: [],
+        },
+      },
+    },
+    { currentUserMessage: "resume user input" },
+  );
+
+  assert.equal(blocks.incremental[0]?._getType?.(), "ai");
+  assert.equal(blocks.incremental[0]?.tool_calls?.[0]?.id, "call_resume_1");
+  assert.equal(blocks.incremental[1]?._getType?.(), "tool");
+  assert.equal(blocks.incremental[1]?.tool_call_id, "call_resume_1");
+  assert.equal(blocks.incremental[1]?.content, "tool result text");
+  assert.equal(blocks.incremental[2]?._getType?.(), "human");
+  assert.equal(blocks.incremental[2]?.content, "resume user input");
+  assert.equal(
+    blocks.messages.some((message) => message?._getType?.() === "human" && String(message?.content || "") === ""),
+    false,
+  );
+});
+
 test("buildContextMessageBlocks removes current turn user residue from history", () => {
   const blocks = buildContextMessageBlocks(
     {
@@ -489,6 +663,12 @@ test("buildContextMessageBlocks builds user_meta with source info for historical
       path: "",
       relativePath: "runtime/attach/scoped/s-history/user/att-history-1.md",
       sandboxPath: "/workspace/primary-user/runtime/attach/scoped/s-history/user/att-history-1.md",
+      downloadUrl: "",
+      previewUrl: "",
+      parsedResultUrl: "",
+      parsedResultName: "",
+      parsedResultAttachmentId: "",
+      transferFilePath: "",
       size: 42,
       isSandbox: true,
     },

@@ -503,8 +503,8 @@ export class SessionMessageService {
     sessionId,
     parentSessionId = "",
     turnScopeId = "",
-    state = "stopped",
-    stopState = "stopped",
+    state = "user_stopped",
+    stopState = "user_stopped",
   } = {}) {
     if (!userId || !sessionId) return { marked: false, reason: "missing_session" };
     const normalizedTurnScopeId = String(turnScopeId || "").trim();

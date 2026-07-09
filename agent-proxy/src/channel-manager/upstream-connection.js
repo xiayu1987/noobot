@@ -130,8 +130,8 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
       this.broadcastChannelEvent(channel, eventEnvelope);
       if (eventName === CHANNEL_EVENT.DONE) {
         this.markChannelTerminal(channel, CHANNEL_STATUS.DONE);
-      } else if (eventName === CHANNEL_EVENT.STOPPED) {
-        this.markChannelTerminal(channel, CHANNEL_STATUS.STOPPED);
+      } else if (eventName === CHANNEL_EVENT.USER_STOPPED) {
+        this.markChannelTerminal(channel, CHANNEL_STATUS.USER_STOPPED);
       } else if (eventName === CHANNEL_EVENT.ERROR) {
         this.markChannelTerminal(channel, CHANNEL_STATUS.ERROR);
       } else if (!isTerminalStatus(channel.status)) {
@@ -173,8 +173,8 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
       data: { channelKey: channel.key, closeCode: normalizedCloseCode, closeReason },
     });
     if (!isTerminalStatus(channel.status)) {
-      this.markChannelTerminal(channel, CHANNEL_STATUS.STOPPED);
-      const stoppedEnvelope = this.pushChannelEvent(channel, CHANNEL_EVENT.STOPPED, {
+      this.markChannelTerminal(channel, CHANNEL_STATUS.USER_STOPPED);
+      const stoppedEnvelope = this.pushChannelEvent(channel, CHANNEL_EVENT.USER_STOPPED, {
         message: "upstream socket closed",
         upstreamCloseCode: normalizedCloseCode,
         upstreamCloseReason: closeReason || "upstream socket closed",

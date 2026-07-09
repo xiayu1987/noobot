@@ -258,6 +258,106 @@ test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invo
   assert.equal(loopState.messageBlocks.system.at(-1), harnessSystem);
 });
 
+test("invokeWithToolsTurn does not adopt before_llm_call injected messages on first stopped-snapshot resume turn", async () => {
+  let capturedMessages = [];
+  const harnessSystem = { role: "developer", content: "harness-policy" };
+  const runtime = {
+    resumeFromStoppedSnapshot: true,
+    systemRuntime: {},
+    hookManager: {
+      async emit(point, ctx = {}) {
+        if (point !== "before_llm_call") return [];
+        ctx.messageBlocks = {
+          system: [...(ctx.messageBlocks?.system || []), harnessSystem],
+          history: [...(ctx.messageBlocks?.history || [])],
+          incremental: [
+            ...(ctx.messageBlocks?.incremental || []),
+            { role: "developer", content: "harness-incremental" },
+          ],
+        };
+        ctx.messages = [{ role: "developer", content: "harness-flat-message" }];
+        return [];
+      },
+    },
+  };
+  const llm = {
+    bindTools() {
+      return {
+        async invoke(messages) {
+          capturedMessages = (Array.isArray(messages) ? messages : []).map((item) => ({
+            role: item.role || (typeof item._getType === "function" ? item._getType() : ""),
+            content: item.content,
+            dialogProcessId: item.dialogProcessId || item.additional_kwargs?.dialogProcessId || "",
+            turnScopeId: item.turnScopeId || item.additional_kwargs?.turnScopeId || "",
+            internalType: item.additional_kwargs?.noobotInternalMessageType || "",
+          }));
+          return { content: "ok", tool_calls: [], additional_kwargs: {}, response_metadata: {} };
+        },
+      };
+    },
+  };
+
+  const snapshotSystem = { role: "system", content: "snapshot-system" };
+  const snapshotHistory = { role: "assistant", content: "snapshot-history", dialogProcessId: "d-stopped" };
+  const resumedUser = {
+    role: "user",
+    content: "resume-user",
+    additional_kwargs: { dialogProcessId: "d-resume", turnScopeId: "turn-current" },
+  };
+  const userMeta = {
+    role: "user",
+    content: '[用户元信息]\n{"dialogProcessId":"d-resume","turnScopeId":"turn-current"}\n[/用户元信息]',
+    additional_kwargs: {
+      dialogProcessId: "d-resume",
+      turnScopeId: "turn-current",
+      noobotInternalMessageType: "user_meta",
+    },
+  };
+  const modelState = {
+    llm,
+    runtime,
+    eventListener: null,
+    abortSignal: null,
+    defaultModelSpec: {},
+  };
+  const loopState = {
+    messages: [snapshotSystem, snapshotHistory, resumedUser, userMeta],
+    messageBlocks: {
+      system: [snapshotSystem],
+      history: [snapshotHistory],
+      incremental: [resumedUser, userMeta],
+    },
+    traces: [],
+    tools: [{ name: "execute_script" }],
+    turnMessages: [],
+    turnTasks: [],
+    currentTurnMessages: null,
+    currentTurnTasks: null,
+    dialogProcessId: "d-resume",
+    maxTurns: 1,
+  };
+
+  await invokeWithToolsTurn({ modelState, loopState, turn: 1 });
+
+  assert.deepEqual(capturedMessages, [
+    { role: "system", content: "snapshot-system", dialogProcessId: "", turnScopeId: "", internalType: "" },
+    { role: "assistant", content: "snapshot-history", dialogProcessId: "d-stopped", turnScopeId: "", internalType: "" },
+    { role: "user", content: "resume-user", dialogProcessId: "d-resume", turnScopeId: "turn-current", internalType: "" },
+    {
+      role: "user",
+      content: '[用户元信息]\n{"dialogProcessId":"d-resume","turnScopeId":"turn-current"}\n[/用户元信息]',
+      dialogProcessId: "d-resume",
+      turnScopeId: "turn-current",
+      internalType: "user_meta",
+    },
+  ]);
+  assert.equal(loopState.messageBlocks.system.includes(harnessSystem), false);
+  assert.equal(
+    loopState.messages.some((message) => message?.content === "harness-flat-message" || message?.content === "harness-incremental"),
+    false,
+  );
+});
+
 test("invokeWithToolsTurn rehydrates missing system and history blocks from agentContext before llm invoke", async () => {
   let capturedMessages = [];
   const runtime = {

@@ -26,6 +26,9 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
   let state = normalizeState(rawEvent?.state);
   if (!state) {
     if (type === SESSION_RUN_EVENT.LOCAL_SEND_STARTED) state = BackendChannelState.SENDING;
+    if (type === SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED) {
+      state = FrontendRunState.CONTINUE_REQUESTING;
+    }
     if (type === SESSION_RUN_EVENT.LOCAL_RESEND_STARTED) state = FrontendRunState.RESEND_REPLACING_TURN;
     if (type === SESSION_RUN_EVENT.LOCAL_RESEND_REPLACING_TURN) state = FrontendRunState.RESEND_REPLACING_TURN;
     if (type === SESSION_RUN_EVENT.LOCAL_RESEND_STREAMING) state = FrontendRunState.RESEND_STREAMING;

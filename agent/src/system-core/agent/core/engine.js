@@ -24,11 +24,12 @@ import { buildAgentState } from "./state-builder.js";
 import { runFunctionCallLoop } from "./turn/orchestrator.js";
 import { readFinalStreamingResultMeta } from "./turn/turn-result-aggregator.js";
 import { runAgentRuntimeHook, AGENT_HOOK_POINTS } from "../../hook/index.js";
-import { isAbortError } from "./utils/error-utils.js";
+import { isAbortError, isUserStopAbort } from "./utils/error-utils.js";
 import { buildHookContext } from "./hook/hook-context-builder.js";
 import { emitEvent } from "../../event/index.js";
 import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
+import { saveStoppedModelMessageSnapshotCandidate } from "./resume/model-message-snapshot-store.js";
 
 export function emitFinalStreamingAppendDeltaAfterHooks({ result = {}, runtime = {} } = {}) {
   const meta = readFinalStreamingResultMeta(result);
@@ -127,6 +128,14 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
     return result;
   } catch (error) {
     const failedAtMs = Date.now();
+    if (isUserStopAbort(error, runtime?.abortSignal) || isUserStopAbort(error?.cause, runtime?.abortSignal)) {
+      await saveStoppedModelMessageSnapshotCandidate({
+        globalConfig: runtime?.globalConfig || {},
+        candidate: runtime?.stoppedModelMessageSnapshotCandidate,
+        eventListener: runtime?.eventListener || null,
+        source: "engine_user_stop_catch",
+      });
+    }
     if (isAbortError(error) || isAbortError(error?.cause)) {
       await runAgentRuntimeHook({
         runtime,

@@ -25,6 +25,7 @@ export function createInitialSessionRunState(overrides = {}) {
     stopRequestedAt: 0,
     composerActionState: {
       sendRequesting: false,
+      continueRequesting: false,
       stopRequesting: false,
       stopPendingUntilBackendReady: false,
     },
@@ -37,11 +38,14 @@ export function applySessionRunActionEventPatch({ current, event }) {
   const currentComposerActionState = current?.composerActionState || {};
   const nextComposerActionState = {
     sendRequesting: Boolean(currentComposerActionState.sendRequesting),
+    continueRequesting: Boolean(currentComposerActionState.continueRequesting),
     stopRequesting: Boolean(currentComposerActionState.stopRequesting),
     stopPendingUntilBackendReady: Boolean(currentComposerActionState.stopPendingUntilBackendReady),
   };
   if (event.type === "local_send_request_started") nextComposerActionState.sendRequesting = true;
   if (event.type === "local_send_request_settled") nextComposerActionState.sendRequesting = false;
+  if (event.type === "local_continue_request_started") nextComposerActionState.continueRequesting = true;
+  if (event.type === "local_continue_request_settled") nextComposerActionState.continueRequesting = false;
   if (event.type === "local_stop_request_started") nextComposerActionState.stopRequesting = true;
   if (event.type === "local_stop_request_settled") nextComposerActionState.stopRequesting = false;
   if (event.type === "local_stop_pending_backend_ready") {
@@ -98,6 +102,7 @@ export function applySessionRunEventPatch({ current, event, startsNewTurn, nextD
         : Number(current.stopRequestedAt || 0),
     composerActionState: {
       sendRequesting: false,
+      continueRequesting: false,
       stopRequesting:
         event.state === FrontendRunState.STOP_REQUESTED
           ? Boolean(current?.composerActionState?.stopRequesting)
