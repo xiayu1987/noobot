@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildContextMessages } from "../../../../src/system-core/agent/core/context/message-builder.js";
+import {
+  buildContextMessages,
+  buildHumanMessagesForUser,
+} from "../../../../src/system-core/agent/core/context/message-builder.js";
 
 function findUserMetaMessage(messages) {
   return messages.find((message) => String(message?.content || "").startsWith("[用户元信息]"));
@@ -243,4 +246,210 @@ test("buildContextMessages preserves rich attachment fields in user meta", () =>
   assert.equal(attachment.parsedResultAttachmentId, "parsed-rich");
   assert.equal(attachment.transferFilePath.includes("att-rich"), true);
   assert.equal(attachment.parsedResult.attachmentId, "parsed-rich");
+});
+
+test("buildContextMessages does not copy current-turn attachments into historical user metadata", () => {
+  const fallbackMeta = {
+    userName: "admin",
+    sessionId: "session-a",
+    turnScopeId: "turn-latest",
+    userMessageAttachments: [
+      { attachmentId: "latest-only", name: "latest.docx", mimeType: "application/docx" },
+    ],
+  };
+  const attachmentFreeHistory = buildHumanMessagesForUser(
+    {},
+    { role: "user", content: "first", turnScopeId: "turn-1", attachments: [] },
+    fallbackMeta,
+    { allowFallbackAttachments: false },
+  );
+  const attachedHistory = buildHumanMessagesForUser(
+    {},
+    {
+      role: "user",
+      content: "historical attachment",
+      turnScopeId: "turn-2",
+      attachments: [
+        { attachmentId: "history-only", name: "history.txt", mimeType: "text/plain" },
+      ],
+    },
+    fallbackMeta,
+    { allowFallbackAttachments: false },
+  );
+
+  const emptyMeta = parseUserMeta(attachmentFreeHistory[1].content);
+  const historyMeta = parseUserMeta(attachedHistory[1].content);
+  assert.deepEqual(emptyMeta.attachments, []);
+  assert.deepEqual(historyMeta.attachments.map((item) => item.attachmentId), ["history-only"]);
+  assert.notStrictEqual(emptyMeta.attachments, historyMeta.attachments);
+});
+
+test("buildContextMessages keeps complete metadata per historical user turn without current-turn fallback", () => {
+  const messages = buildContextMessages(
+    {
+      execution: {
+        controllers: {
+          runtime: {
+            userId: "current-admin",
+            userMessageAttachments: [
+              { attachmentId: "latest-only", name: "latest.docx", mimeType: "application/docx" },
+            ],
+            systemRuntime: {
+              sessionId: "current-session",
+              dialogProcessId: "current-dialog",
+              turnScopeId: "current-turn",
+            },
+          },
+        },
+      },
+      payload: {
+        messages: {
+          system: [],
+          history: [
+            {
+              role: "user",
+              content: "first historical turn",
+              frontendUserMessage: true,
+              userName: "historical-admin",
+              sessionId: "historical-session",
+              parentSessionId: "historical-parent-session",
+              dialogProcessId: "historical-dialog",
+              parentDialogProcessId: "historical-parent-dialog",
+              turnScopeId: "historical-turn",
+              attachments: [],
+            },
+            {
+              role: "assistant",
+              content: "first historical answer",
+              dialogProcessId: "historical-dialog",
+              turnScopeId: "historical-turn",
+            },
+            {
+              role: "user",
+              content: "legacy history missing identity",
+              frontendUserMessage: true,
+              dialogProcessId: "legacy-dialog",
+              turnScopeId: "legacy-turn",
+              attachments: [],
+            },
+            {
+              role: "assistant",
+              content: "legacy historical answer",
+              dialogProcessId: "legacy-dialog",
+              turnScopeId: "legacy-turn",
+            },
+          ],
+        },
+      },
+    },
+    { currentUserMessage: "current turn" },
+  );
+
+  const metas = messages
+    .filter((message) => String(message?.content || "").startsWith("[用户元信息]"))
+    .map((message) => parseUserMeta(message.content));
+
+  assert.equal(metas.length, 3);
+  assert.deepEqual(metas[0], {
+    userName: "historical-admin",
+    sessionId: "historical-session",
+    parentSessionId: "historical-parent-session",
+    dialogProcessId: "historical-dialog",
+    parentDialogProcessId: "historical-parent-dialog",
+    turnScopeId: "historical-turn",
+    attachments: [],
+  });
+  assert.deepEqual(metas[1], {
+    userName: "",
+    sessionId: "",
+    parentSessionId: "",
+    dialogProcessId: "legacy-dialog",
+    parentDialogProcessId: "",
+    turnScopeId: "legacy-turn",
+    attachments: [],
+  });
+  assert.equal(metas[2].userName, "current-admin");
+  assert.equal(metas[2].sessionId, "current-session");
+  assert.equal(metas[2].dialogProcessId, "current-dialog");
+  assert.equal(metas[2].turnScopeId, "current-turn");
+  assert.deepEqual(metas[2].attachments.map((item) => item.attachmentId), ["latest-only"]);
+});
+
+test("buildContextMessages rebuilds metadata beside every legacy stopped/resend user turn", () => {
+  const history = [
+    {
+      role: "user",
+      content: "你好",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+      attachments: [],
+    },
+    { role: "assistant", content: "answer-1", dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
+    {
+      role: "user",
+      content: "你好",
+      dialogProcessId: "dialog-2",
+      turnScopeId: "turn-2",
+      attachments: [],
+    },
+    { role: "assistant", content: "answer-2", dialogProcessId: "dialog-2", turnScopeId: "turn-2" },
+    {
+      role: "user",
+      content: "你好",
+      dialogProcessId: "dialog-3",
+      turnScopeId: "turn-3",
+      attachments: [
+        { attachmentId: "last-turn-only", name: "last.docx", mimeType: "application/docx" },
+      ],
+    },
+  ];
+  const messages = buildContextMessages(
+    {
+      execution: {
+        controllers: {
+          runtime: {
+            userId: "current-admin",
+            userMessageAttachments: [],
+            systemRuntime: {
+              sessionId: "current-session",
+              dialogProcessId: "dialog-current",
+              turnScopeId: "turn-current",
+            },
+          },
+        },
+      },
+      payload: { messages: { system: [], history } },
+    },
+    { currentUserMessage: "current" },
+  );
+
+  // LangChain HumanMessage instances expose their type through _getType(),
+  // rather than a persisted `role` property.
+  const historicalBodies = messages.filter(
+    (message) => message?.content === "你好" && message?._getType?.() === "human",
+  );
+  assert.equal(historicalBodies.length, 3);
+  for (const body of historicalBodies) {
+    const bodyIndex = messages.indexOf(body);
+    const metaMessage = messages[bodyIndex + 1];
+    assert.equal(String(metaMessage?.content || "").startsWith("[用户元信息]"), true);
+  }
+
+  const historicalMetas = historicalBodies.map((body) => {
+    const bodyIndex = messages.indexOf(body);
+    return parseUserMeta(messages[bodyIndex + 1].content);
+  });
+  assert.deepEqual(
+    historicalMetas.map(({ dialogProcessId, turnScopeId }) => ({ dialogProcessId, turnScopeId })),
+    [
+      { dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
+      { dialogProcessId: "dialog-2", turnScopeId: "turn-2" },
+      { dialogProcessId: "dialog-3", turnScopeId: "turn-3" },
+    ],
+  );
+  assert.deepEqual(historicalMetas.map((meta) => meta.attachments.map((item) => item.attachmentId)), [
+    [],
+    [],
+    ["last-turn-only"],
+  ]);
 });

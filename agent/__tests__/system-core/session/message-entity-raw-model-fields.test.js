@@ -162,6 +162,28 @@ test("normalizeMessageEntity preserves user attachment source fields for history
   assert.equal("raw" in normalized.attachments[0], false);
 });
 
+test("normalizeMessageEntity preserves message-scoped user identity for history rebuild", () => {
+  const normalized = normalizeMessageEntity({
+    role: "user",
+    content: "hello",
+    userName: "admin",
+    sessionId: "session-history",
+    parentSessionId: "parent-history",
+    dialogProcessId: "dialog-history",
+    parentDialogProcessId: "parent-dialog-history",
+    turnScopeId: "turn-history",
+    frontendUserMessage: true,
+  });
+
+  assert.equal(normalized.userName, "admin");
+  assert.equal(normalized.sessionId, "session-history");
+  assert.equal(normalized.parentSessionId, "parent-history");
+  assert.equal(normalized.dialogProcessId, "dialog-history");
+  assert.equal(normalized.parentDialogProcessId, "parent-dialog-history");
+  assert.equal(normalized.turnScopeId, "turn-history");
+  assert.equal(normalized.frontendUserMessage, true);
+});
+
 test("normalizeMessageEntity ignores legacy attachment mirror fields", () => {
   const camelAttachments = [{ attachmentId: "att_camel", filename: "camel.txt" }];
   const snakeAttachments = [{ attachmentId: "att_snake", filename: "snake.txt" }];

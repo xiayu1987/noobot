@@ -206,36 +206,55 @@ function buildUserMetaAttachmentInfo(attachmentItem = {}) {
   };
 }
 
-function buildUserMetaInfoContent(runtime = {}, msg = {}, fallbackMeta = {}) {
-  const fallbackAttachments = resolveFallbackAttachments(fallbackMeta);
+function buildUserMetaInfoContent(
+  runtime = {},
+  msg = {},
+  fallbackMeta = {},
+  {
+    allowFallbackAttachments = true,
+    allowFallbackIdentity = true,
+  } = {},
+) {
+  const identityFallback = allowFallbackIdentity ? fallbackMeta : {};
+  const fallbackAttachments = allowFallbackAttachments
+    ? resolveFallbackAttachments(fallbackMeta)
+    : [];
   const attachments = resolveAttachments(msg, fallbackAttachments);
   const fallbackParentSessionId = resolveParentSessionId({
     runtime,
-    parentSessionId: fallbackMeta?.parentSessionId,
+    parentSessionId: identityFallback?.parentSessionId,
   });
   const messageParentSessionId = normalizeParentSessionId(msg?.parentSessionId);
   const payload = {
-    userName: String(msg?.userName || fallbackMeta?.userName || "").trim(),
-    sessionId: String(msg?.sessionId || fallbackMeta?.sessionId || "").trim(),
+    userName: String(msg?.userName || identityFallback?.userName || "").trim(),
+    sessionId: String(msg?.sessionId || identityFallback?.sessionId || "").trim(),
     parentSessionId: messageParentSessionId
       ? messageParentSessionId
       : fallbackParentSessionId,
     dialogProcessId:
       resolveMessageDialogProcessId(msg) ||
       resolveDialogProcessIdFromContext({
-        dialogProcessId: fallbackMeta?.dialogProcessId,
+        dialogProcessId: identityFallback?.dialogProcessId,
       }),
     parentDialogProcessId: String(
-      msg?.parentDialogProcessId || fallbackMeta?.parentDialogProcessId || "",
+      msg?.parentDialogProcessId || identityFallback?.parentDialogProcessId || "",
     ).trim(),
-    turnScopeId: String(msg?.turnScopeId || fallbackMeta?.turnScopeId || "").trim(),
+    turnScopeId: String(msg?.turnScopeId || identityFallback?.turnScopeId || "").trim(),
     attachments: attachments.map((attachmentItem) => buildUserMetaAttachmentInfo(attachmentItem)),
   };
   const userMetaTag = tEngine(runtime, "agent.userMetaTag");
   return `[${userMetaTag}]\n${JSON.stringify(payload, null, 2)}\n[/${userMetaTag}]`;
 }
 
-export function buildHumanMessagesForUser(runtime = {}, msg = {}, fallbackMeta = {}) {
+export function buildHumanMessagesForUser(
+  runtime = {},
+  msg = {},
+  fallbackMeta = {},
+  {
+    allowFallbackAttachments = true,
+    allowFallbackIdentity = true,
+  } = {},
+) {
   const contentText = buildHumanMessageContent(
     msg,
     resolveFallbackAttachments(fallbackMeta),
@@ -255,7 +274,10 @@ export function buildHumanMessagesForUser(runtime = {}, msg = {}, fallbackMeta =
         additional_kwargs: identityKwargs,
       });
   const metaMessage = new HumanMessage({
-    content: buildUserMetaInfoContent(runtime, msg, fallbackMeta),
+    content: buildUserMetaInfoContent(runtime, msg, fallbackMeta, {
+      allowFallbackAttachments,
+      allowFallbackIdentity,
+    }),
     additional_kwargs: {
       ...identityKwargs,
       noobotInternalMessageType: "user_meta",
@@ -264,8 +286,20 @@ export function buildHumanMessagesForUser(runtime = {}, msg = {}, fallbackMeta =
   return [contentMessage, metaMessage];
 }
 
-function shouldBuildUserMetaForHistoryMessage(msg = {}, fallbackMeta = {}) {
-  return resolveAttachments(msg, resolveFallbackAttachments(fallbackMeta)).length > 0;
+function shouldBuildUserMetaForHistoryMessage(msg = {}) {
+  if (resolveMessageRole(msg) !== MESSAGE_ROLE.USER) return false;
+  if (msg?.phaseSummaryMemory === true) return false;
+  if (msg?.injectedMessage === true || msg?.pluginMessage === true) return false;
+  if (String(msg?.injectedMessageType || msg?.injected_message_type || "").trim()) return false;
+  // Older persisted frontend messages predate frontendUserMessage. A durable
+  // turn identity is sufficient to recognize those messages without treating
+  // internal Agent user messages as frontend input.
+  return (
+    msg?.frontendUserMessage === true ||
+    Boolean(String(msg?.turnScopeId || "").trim()) ||
+    Boolean(resolveMessageDialogProcessId(msg)) ||
+    resolveAttachments(msg, []).length > 0
+  );
 }
 
 function buildModelMessageIdentityKwargs(msg = {}, fallbackMeta = {}) {
@@ -418,8 +452,17 @@ function buildHistoryMessages({
       );
       continue;
     }
-    if (includeUserMeta || shouldBuildUserMetaForHistoryMessage(msg, fallbackUserMeta)) {
-      history.push(...buildHumanMessagesForUser(runtime, msg, fallbackUserMeta));
+    if (
+      includeUserMeta ||
+      msg?.frontendUserMessage === true ||
+      shouldBuildUserMetaForHistoryMessage(msg)
+    ) {
+      history.push(...buildHumanMessagesForUser(runtime, msg, fallbackUserMeta, {
+        // Historical metadata is message-scoped. Never fill a historical
+        // message with the current request's identity or attachments.
+        allowFallbackAttachments: false,
+        allowFallbackIdentity: false,
+      }));
     } else {
       history.push(
         new HumanMessage({
