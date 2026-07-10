@@ -115,6 +115,123 @@ describe("useChatEngine.resend stopped state", () => {
     expect(stream).toHaveBeenCalledTimes(1);
   });
 
+  it("can stop and edit-resend twice through persisted USER_STOPPED events", async () => {
+    const sessionId = "local-resend-two-real-stops";
+    const stoppedTurns = [];
+    const stream = vi.fn(async (payload, onEvent) => {
+      const index = stoppedTurns.length + 1;
+      const dialogProcessId = `dp-resend-stop-${index}`;
+      stoppedTurns.push({
+        turnScopeId: payload.turnScopeId,
+        dialogProcessId,
+        content: payload.message,
+      });
+      emitChannelState(onEvent, sessionId, dialogProcessId, "sending", {
+        turnScopeId: payload.turnScopeId,
+      });
+      onEvent({
+        event: StreamEventEnum.USER_STOPPED,
+        data: {
+          sessionId,
+          dialogProcessId,
+          turnScopeId: payload.turnScopeId,
+          turnStatus: {
+            status: "user_stopped",
+            dialogProcessId,
+            turnScopeId: payload.turnScopeId,
+          },
+        },
+      });
+    });
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {
+      const replacementUser = {
+        role: RoleEnum.USER,
+        content: newContent,
+        turnScopeId,
+        dialogProcessId: "",
+      };
+      return {
+        ok: true,
+        session: makeSession(sessionId, {
+          messages: [replacementUser],
+          rawMessages: [replacementUser],
+        }),
+      };
+    });
+    const fetchSessionDetail = vi.fn(async () => {
+      const stopped = stoppedTurns[stoppedTurns.length - 1];
+      const user = {
+        role: RoleEnum.USER,
+        content: stopped.content,
+        turnScopeId: stopped.turnScopeId,
+      };
+      const assistant = {
+        role: RoleEnum.ASSISTANT,
+        content: "partial",
+        pending: false,
+        statusLabel: "chat.stopped",
+        turnScopeId: stopped.turnScopeId,
+        dialogProcessId: stopped.dialogProcessId,
+        channelState: {
+          state: "user_stopped",
+          turnScopeId: stopped.turnScopeId,
+          dialogProcessId: stopped.dialogProcessId,
+        },
+      };
+      return {
+        sessionId,
+        sessions: [makeSession(sessionId, {
+          messages: [user, assistant],
+          rawMessages: [user, assistant],
+          turnStatuses: [{
+            status: "user_stopped",
+            turnScopeId: stopped.turnScopeId,
+            dialogProcessId: stopped.dialogProcessId,
+          }],
+        })],
+      };
+    });
+    const applySessionDetail = vi.fn((detail) => {
+      const session = detail.sessions?.[0];
+      if (session) activeSession.value = { ...activeSession.value, ...session };
+    });
+    const { engine, activeSession } = createHarness({
+      sessionId,
+      stream,
+      deps: { replaceSessionTurnApi, fetchSessionDetail, applySessionDetail },
+    });
+    activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "original", turnScopeId: "client-turn:original" },
+      {
+        role: RoleEnum.ASSISTANT,
+        content: "partial original",
+        pending: false,
+        turnScopeId: "client-turn:original",
+        dialogProcessId: "dp-original",
+        channelState: { state: "user_stopped", turnScopeId: "client-turn:original", dialogProcessId: "dp-original" },
+      },
+    ];
+    activeSession.value.rawMessages = [...activeSession.value.messages];
+
+    await expect(engine.resendMonotonicMessage(activeSession.value.messages[1], "first edit")).resolves.toBe(true);
+    const firstStoppedAssistant = activeSession.value.messages.find((message) => message.role === RoleEnum.ASSISTANT);
+    await expect(engine.resendMonotonicMessage(firstStoppedAssistant, "second edit")).resolves.toBe(true);
+
+    expect(stream).toHaveBeenCalledTimes(2);
+    expect(replaceSessionTurnApi).toHaveBeenCalledTimes(2);
+    const firstReplaceScope = replaceSessionTurnApi.mock.calls[0][0].turnScopeId;
+    const secondReplaceScope = replaceSessionTurnApi.mock.calls[1][0].turnScopeId;
+    expect(firstReplaceScope).not.toBe(secondReplaceScope);
+    expect(stream.mock.calls[0][0].turnScopeId).toBe(firstReplaceScope);
+    expect(stream.mock.calls[1][0].turnScopeId).toBe(secondReplaceScope);
+    expect(stoppedTurns[0].dialogProcessId).not.toBe(stoppedTurns[1].dialogProcessId);
+    expect(activeSession.value.turnStatuses.at(-1)).toMatchObject({
+      status: "user_stopped",
+      turnScopeId: secondReplaceScope,
+      dialogProcessId: "dp-resend-stop-2",
+    });
+  });
+
   it("resendMonotonicMessage keeps the second replacement turn running instead of inheriting stopped state", async () => {
     const stream = vi.fn(async () => {});
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {

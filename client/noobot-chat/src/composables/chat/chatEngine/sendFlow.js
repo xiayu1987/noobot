@@ -686,7 +686,13 @@ export function createChatEngineSender({
           runState: runStateSnapshot?.value,
           messages: summarizeDebugMessages(activeSession?.value?.messages),
         });
-        return;
+        // A persisted USER_STOPPED event is a successful terminal outcome for
+        // the request. In particular, resendTransaction must not interpret it
+        // as a transport failure and restore the snapshot from before
+        // replace-turn; doing so resurrects the previous stopped turn and
+        // prevents the next stop -> edit -> resend cycle from finding the
+        // freshly persisted replacement turn.
+        return true;
       }
       logResendDebug("send.doneReturn", {
         turnScopeId,
