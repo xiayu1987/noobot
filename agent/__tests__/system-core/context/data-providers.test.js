@@ -120,7 +120,11 @@ test("toConversationMessages preserves model payload fields and attachments", ()
     {
       role: "assistant",
       content: "x",
+      userName: "admin",
+      sessionId: "session-1",
+      parentSessionId: "parent-1",
       dialogProcessId: "dlg_1",
+      parentDialogProcessId: "parent-dlg-1",
       turnScopeId: "client-turn:1",
       summarized: false,
       injectedMessage: true,
@@ -137,6 +141,10 @@ test("toConversationMessages preserves model payload fields and attachments", ()
   assert.equal(output.length, 1);
   assert.deepEqual(output[0].rawModelContent, [{ type: "text", text: "raw" }]);
   assert.equal(output[0].dialogProcessId, "dlg_1");
+  assert.equal(output[0].userName, "admin");
+  assert.equal(output[0].sessionId, "session-1");
+  assert.equal(output[0].parentSessionId, "parent-1");
+  assert.equal(output[0].parentDialogProcessId, "parent-dlg-1");
   assert.equal(output[0].turnScopeId, "client-turn:1");
   assert.equal(output[0].summarized, false);
   assert.equal(output[0].injectedMessage, true);

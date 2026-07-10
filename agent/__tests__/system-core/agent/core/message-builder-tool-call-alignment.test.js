@@ -321,7 +321,14 @@ test("buildContextMessageBlocks appends resume user message meta with attachment
         messages: {
           system: ["snapshot system"],
           history: [
-            { role: "user", content: "snapshot user", dialogProcessId: "dlg-stopped", turnScopeId: "turn-stopped" },
+            {
+              role: "user",
+              content: "snapshot user",
+              frontendUserMessage: true,
+              dialogProcessId: "dlg-stopped",
+              turnScopeId: "turn-stopped",
+              attachments: [],
+            },
             { role: "assistant", content: "snapshot assistant", dialogProcessId: "dlg-stopped", turnScopeId: "turn-stopped" },
           ],
         },

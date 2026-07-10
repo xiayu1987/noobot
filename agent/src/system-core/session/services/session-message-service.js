@@ -177,6 +177,7 @@ export class SessionMessageService {
   async appendTurn({
     userId,
     sessionId,
+    userName = userId,
     role,
     content,
     type = "",
@@ -240,6 +241,9 @@ export class SessionMessageService {
       role,
       content,
       type: type || "",
+      userName: String(userName || "").trim(),
+      sessionId: String(sessionId || "").trim(),
+      parentSessionId: String(resolvedParentSessionId || "").trim(),
       dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
       parentDialogProcessId: parentDialogProcessId || "",
       turnScopeId: String(turnScopeId || "").trim(),

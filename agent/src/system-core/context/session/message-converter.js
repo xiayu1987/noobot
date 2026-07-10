@@ -27,7 +27,11 @@ export function toConversationMessages(sessionRecords = []) {
           ? item.rawModelContent
           : null,
       type: item.type || "",
+      userName: item.userName || "",
+      sessionId: item.sessionId || "",
+      parentSessionId: item.parentSessionId || "",
       dialogProcessId: item.dialogProcessId || item.dialogId || "",
+      parentDialogProcessId: item.parentDialogProcessId || "",
       turnScopeId: item.turnScopeId || "",
       summarized: item.summarized === true,
       injectedMessage: item.injectedMessage === true,
