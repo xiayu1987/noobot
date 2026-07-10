@@ -287,9 +287,15 @@ export function shouldKeepForModelContext(messageItem = {}) {
 }
 
 export function filterForModelContext(messages = [], { keepLatestInjectedOnly = false } = {}) {
-  const keptMessages = (Array.isArray(messages) ? messages : []).filter((messageItem) =>
-    shouldKeepForModelContext(messageItem),
-  );
+  const keptMessages = (Array.isArray(messages) ? messages : []).filter((messageItem) => {
+    const isTurnStatusPlaceholder = messageItem?.turnStatusPlaceholder === true || Boolean(
+      messageItem?.synthetic === true &&
+      messageItem?.placeholder === true &&
+      messageItem?.turnStatus &&
+      typeof messageItem.turnStatus === "object",
+    );
+    return !isTurnStatusPlaceholder && shouldKeepForModelContext(messageItem);
+  });
   const source = keepLatestInjectedOnly
     ? filterLatestInjectedMessagesByType(keptMessages)
     : keptMessages;

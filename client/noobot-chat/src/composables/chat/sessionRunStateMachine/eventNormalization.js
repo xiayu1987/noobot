@@ -63,7 +63,12 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
     state,
     backendState: wireState,
     sessionId: trim(rawEvent?.sessionId),
-    dialogProcessId: type === SESSION_RUN_EVENT.LOCAL_SEND_STARTED
+    dialogProcessId: [
+      SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+      SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED,
+      SESSION_RUN_EVENT.LOCAL_RESEND_STARTED,
+      SESSION_RUN_EVENT.LOCAL_RESEND_REPLACING_TURN,
+    ].includes(type)
       ? ""
       : trim(rawEvent?.dialogProcessId),
     turnScopeId: turnMeta.turnScopeId,

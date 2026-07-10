@@ -48,6 +48,17 @@ test("filterForModelContext keeps unsummarized injected history messages without
   ]);
 });
 
+test("filterForModelContext excludes derived turn status placeholders only", () => {
+  const ordinarySynthetic = { role: "assistant", content: "ordinary", synthetic: true };
+  const result = filterForModelContext([
+    { role: "user", content: "hello" },
+    { role: "assistant", content: "stopped", turnStatusPlaceholder: true },
+    { role: "assistant", content: "timeout", synthetic: true, placeholder: true, turnStatus: { status: "timeout" } },
+    ordinarySynthetic,
+  ]);
+  assert.deepEqual(result.map((item) => item.content), ["hello", "ordinary"]);
+});
+
 
 test("task_summary pair is not marked summarized and remains in model context", () => {
   const messages = [

@@ -36,13 +36,9 @@ function isUserMessage(message = {}) {
   return getMessageRole(message).toLowerCase() === "user";
 }
 
-function isStoppedMonotonicMessage(message = {}) {
-  return Boolean(
-    message?.stopState === "user_stopped" ||
-    message?.monotonicState === "monotonic" ||
-    message?.isMonotonic === true ||
-    message?.monotonic === true,
-  );
+function isStoppedTurnStatusPlaceholder(message = {}) {
+  return message?.turnStatusPlaceholder === true &&
+    normalizeTrimmedString(message?.turnStatus?.status || message?.status) === "user_stopped";
 }
 
 function isStoppingAssistantMessage(message = {}) {
@@ -71,8 +67,8 @@ function hasMatchingInFlightAssistant({ activeSession, runStateSnapshot } = {}) 
 }
 
 function getStoppedTurnMessage({ targetMessage = null, originalTargetMessage = null } = {}) {
-  if (isStoppedMonotonicMessage(targetMessage)) return targetMessage;
-  if (isStoppedMonotonicMessage(originalTargetMessage)) return originalTargetMessage;
+  if (isStoppedTurnStatusPlaceholder(targetMessage)) return targetMessage;
+  if (isStoppedTurnStatusPlaceholder(originalTargetMessage)) return originalTargetMessage;
   if (isStoppingAssistantMessage(originalTargetMessage)) return originalTargetMessage;
   if (isStoppingAssistantMessage(targetMessage)) return targetMessage;
   return null;

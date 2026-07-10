@@ -762,6 +762,10 @@ export class SessionExecutionEngine {
     return this.session?.stampReusedUserTurnDialogProcessId?.(payload);
   }
 
+  async upsertTurnStatus(payload = {}) {
+    return this.session?.upsertTurnStatus?.(payload);
+  }
+
   async persistStoppedAssistantMessage({
     userId,
     sessionId,

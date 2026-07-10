@@ -25,6 +25,7 @@ import {
 import { normalizeTrimmedString } from "./utils";
 import {
   SESSION_RUN_EVENT,
+  FrontendRunState,
   isInFlightSessionRunState,
 } from "../sessionRunStateMachine";
 import {
@@ -56,16 +57,45 @@ function isEventForCurrentTurn(data = {}, botMessage = {}) {
   return eventTurnScopeId === botTurnScopeId;
 }
 
-function isTerminalUserStopStateEvent(event = "", data = {}) {
-  const normalizedEvent = normalizeTrimmedString(event);
-  if (normalizedEvent === StreamEventEnum.USER_STOPPED) return true;
-  if (normalizedEvent !== StreamEventEnum.CHANNEL_STATE) return false;
-  return normalizeTrimmedString(data?.state) === "user_stopped";
+function isUserStoppedEvent(event = "", data = {}) {
+  return normalizeTrimmedString(event) === StreamEventEnum.USER_STOPPED;
 }
 
-function isTerminalCompletedStateEvent(event = "", data = {}) {
-  if (normalizeTrimmedString(event) !== StreamEventEnum.CHANNEL_STATE) return false;
-  return normalizeTrimmedString(data?.state) === "completed";
+function isCompletedChannelStateEvent(event = "", data = {}) {
+  return normalizeTrimmedString(event) === StreamEventEnum.CHANNEL_STATE &&
+    normalizeTrimmedString(data?.state) === "completed";
+}
+
+function requirePersistedTurnStatus(data = {}, expectedStatus = "") {
+  const turnStatus = data?.turnStatus;
+  // Terminal channel state/DONE envelopes from an older proxy or from replay
+  // may not carry the newly added turnStatus projection. The session detail
+  // refresh remains authoritative, so absence must not turn a successfully
+  // persisted completion into a frontend error (and a sticky Continue state).
+  if (!turnStatus) return null;
+  const actualStatus = normalizeTrimmedString(turnStatus?.status).toLowerCase();
+  if (actualStatus !== expectedStatus) {
+    const error = new Error(
+      `terminal event is missing persisted turn status confirmation: expected ${expectedStatus || "unknown"}`,
+    );
+    error.code = "invalid_terminal_turn_status";
+    error.data = data;
+    throw error;
+  }
+  const eventTurnScopeId = normalizeTrimmedString(data?.turnScopeId);
+  const eventDialogProcessId = normalizeTrimmedString(data?.dialogProcessId);
+  const statusTurnScopeId = normalizeTrimmedString(turnStatus?.turnScopeId);
+  const statusDialogProcessId = normalizeTrimmedString(turnStatus?.dialogProcessId);
+  if (
+    (eventTurnScopeId && statusTurnScopeId && eventTurnScopeId !== statusTurnScopeId) ||
+    (eventDialogProcessId && statusDialogProcessId && eventDialogProcessId !== statusDialogProcessId)
+  ) {
+    const error = new Error("terminal event turn identity does not match persisted turn status");
+    error.code = "invalid_terminal_turn_status_identity";
+    error.data = data;
+    throw error;
+  }
+  return turnStatus;
 }
 
 function hasCompletableRunIdentity(data = {}, botMessage = {}) {
@@ -120,9 +150,18 @@ function isRunStateForActiveSession({ activeSession, runStateSnapshot } = {}) {
   return !activeIds.length || activeIds.includes(runSessionId);
 }
 
-function hasConsistentSendingState({ sending, activeSession, runStateSnapshot } = {}) {
+function hasConsistentSendingState({ sending, activeSession, runStateSnapshot, continueFromUserStopped = false } = {}) {
   if (!isRunStateForActiveSession({ activeSession, runStateSnapshot })) {
     return !sending?.value;
+  }
+  if (
+    continueFromUserStopped === true &&
+    [
+      FrontendRunState.USER_STOP_COMPLETED,
+      FrontendRunState.CONTINUE_REQUESTING,
+    ].includes(normalizeTrimmedString(runStateSnapshot?.value?.state))
+  ) {
+    return true;
   }
   if (!sending?.value && !isInFlightSessionRunState(runStateSnapshot?.value?.state)) return true;
   return hasMatchingInFlightAssistant({ activeSession, runStateSnapshot });
@@ -200,15 +239,21 @@ export function createChatEngineSender({
     const resumeDialogProcessId = normalizeTrimmedString(options?.resumeDialogProcessId);
     const resumeTurnScopeId = normalizeTrimmedString(options?.resumeTurnScopeId);
     if (!ensureConnected()) return false;
-    if (options?.allowDuringResend !== true && !hasConsistentSendingState({ sending, activeSession, runStateSnapshot })) {
+    if (options?.allowDuringResend !== true && !hasConsistentSendingState({
+      sending,
+      activeSession,
+      runStateSnapshot,
+      continueFromUserStopped,
+    })) {
       notify?.({
         type: "warning",
         message: translate("chat.sessionStateOutOfSync") || "Session state is out of sync. Refresh and try again.",
       });
       return false;
     }
-    if ((sending.value && options?.allowDuringResend !== true) || !activeSession.value) return false;
-    if (!hasTextToSend && uploadFiles.value.length === 0 && !hasExplicitAttachments) return false;
+    const allowCurrentContinuationRequest = continueFromUserStopped === true;
+    if ((sending.value && options?.allowDuringResend !== true && !allowCurrentContinuationRequest) || !activeSession.value) return false;
+    if (!continueFromUserStopped && !hasTextToSend && uploadFiles.value.length === 0 && !hasExplicitAttachments) return false;
 
     const turnScopeId = normalizeTrimmedString(options?.turnScopeId) || createTurnScopeId();
     const sessionId = String(activeSession.value?.backendSessionId || activeSession.value?.id || activeSessionId?.value || "");
@@ -420,7 +465,7 @@ export function createChatEngineSender({
           botMessage: summarizeDebugMessage(botMsg),
         });
         if (!isEventForCurrentTurn(data || {}, botMsg)) return;
-        if (isTerminalUserStopStateEvent(event, data || {}) && hasDialogProcessConflictForTurn({
+        if (isUserStoppedEvent(event, data || {}) && hasDialogProcessConflictForTurn({
           activeSession,
           data: data || {},
           botMessage: botMsg,
@@ -432,14 +477,11 @@ export function createChatEngineSender({
         });
         if (event === StreamEventEnum.CHANNEL_STATE) {
           const channelState = normalizeTrimmedString(data?.state);
-          if (channelState === "user_stopped") {
-            finalUserStopEventData = {
-              ...(data || {}),
-              sessionId: data?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || "",
-              dialogProcessId: data?.dialogProcessId || normalizeTrimmedString(botMsg.dialogProcessId),
-            };
-          }
-          if (isTerminalCompletedStateEvent(event, data || {}) && hasCompletableRunIdentity(data || {}, botMsg)) {
+          // DONE is normally the persisted completion envelope, but older or
+          // interrupted streams may resolve after only the terminal channel
+          // state. Keep that terminal fact as a completion input so the UI can
+          // still run the authoritative detail refresh and leave `sending`.
+          if (isCompletedChannelStateEvent(event, data || {}) && hasCompletableRunIdentity(data || {}, botMsg)) {
             finalDoneEventData = buildFinalDoneEventData({
               data,
               activeSession,
@@ -487,6 +529,7 @@ export function createChatEngineSender({
             setPendingInteractionRequest,
           });
         } else if (event === StreamEventEnum.DONE) {
+          requirePersistedTurnStatus(data, "completed");
           finalDoneEventData = buildFinalDoneEventData({
             data,
             activeSession,
@@ -519,6 +562,7 @@ export function createChatEngineSender({
             suppressCompletionConversationState: Boolean(finalDoneDetailPromise),
           });
         } else if (event === StreamEventEnum.USER_STOPPED) {
+          requirePersistedTurnStatus(data, "user_stopped");
           finalUserStopEventData = {
             ...(data || {}),
             sessionId: data?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || "",
@@ -566,7 +610,10 @@ export function createChatEngineSender({
       // an error and must not be overwritten by a late completed fallback.
       applyStreamCompletedFallback({
         sending,
-        finalDoneEventData: finalDoneEventData ? null : finalDoneEventData,
+        // The detail chain is the primary completion path. This fallback is
+        // intentionally used only when a terminal completion was observed but
+        // no detail request could be started (for example a missing session id).
+        finalDoneEventData: finalDoneEventData && !finalDoneDetailPromise ? finalDoneEventData : null,
         activeSession,
         botMessage: botMsg,
         applyConversationState,
@@ -597,6 +644,38 @@ export function createChatEngineSender({
             applyConversationState,
             backendStopEventData: finalUserStopEventData,
           });
+        }
+        // The websocket event only confirms that the backend persisted the
+        // terminal fact. Re-read session detail so the rendered placeholder is
+        // always derived from session.turnStatuses, not from a second frontend
+        // copy of the event payload.
+        const stoppedSessionId = normalizeTrimmedString(
+          finalUserStopEventData?.sessionId ||
+          activeSession?.value?.backendSessionId ||
+          activeSession?.value?.id,
+        );
+        if (stoppedSessionId && finalUserStopEventData?.turnStatus) {
+          try {
+            const stoppedDetail = await fetchSessionDetail(stoppedSessionId, {
+              source: "userStoppedFinalStatus",
+              force: true,
+              reuseRecentlyLoaded: false,
+            });
+            if (stoppedDetail) {
+              applySessionDetail(stoppedDetail, {
+                preserveCurrentMessages: false,
+                scrollToBottom: false,
+              });
+            }
+          } catch (detailError) {
+            // Stop is already confirmed and persisted. A read-after-write UI
+            // refresh failure must not turn that terminal outcome into send error.
+            logResendDebug("send.stopDetailRefresh.failed", {
+              sessionId: stoppedSessionId,
+              turnScopeId,
+              error: String(detailError?.message || detailError || ""),
+            });
+          }
         }
         locateDoneMessage?.();
         finalizePendingResendOperation?.({ finalOnly: true });

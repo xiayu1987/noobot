@@ -229,8 +229,8 @@ export function createSessionFacade(runtime = {}) {
       return sessionMessageService.replaceTurn(payload);
     },
 
-    async markUserMessageMonotonic(payload = {}) {
-      return sessionMessageService.markUserMessageMonotonic(payload);
+    async upsertTurnStatus(payload = {}) {
+      return sessionMessageService.upsertTurnStatus(payload);
     },
 
     async stampReusedUserTurnDialogProcessId(payload = {}) {

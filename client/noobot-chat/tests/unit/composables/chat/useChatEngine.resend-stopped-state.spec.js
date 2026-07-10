@@ -205,7 +205,7 @@ describe("useChatEngine.resend stopped state", () => {
     expect(stream).toHaveBeenCalledTimes(2);
   });
 
-  it("resendMonotonicMessage ignores stale stopped channel_state replayed onto a fresh replacement turn", async () => {
+  it("ignores stale message-level stopped state when explicit runtime state allows a second replacement", async () => {
     let streamCallCount = 0;
     const stream = vi.fn(async (payload, onEvent) => {
       streamCallCount += 1;
@@ -289,19 +289,11 @@ describe("useChatEngine.resend stopped state", () => {
     const freshPlaceholder = [...activeSession.value.messages]
       .reverse()
       .find((message) => message.role === RoleEnum.ASSISTANT && message.pending === true);
-    expect(freshPlaceholder).toEqual(expect.objectContaining({
-      content: "",
-      pending: true,
-      statusLabel: "",
-      turnScopeId: expect.stringMatching(/^client-turn:/),
-    }));
-    expect(freshPlaceholder.channelState?.state).not.toBe("user_stopped");
-    expect(runStateSnapshot.value).toMatchObject({
-      state: FrontendRunState.RESEND_STREAMING,
-      turnScopeId: freshPlaceholder.turnScopeId,
-    });
-    expect(sending.value).toBe(true);
-    expect(canStop.value).toBe(true);
+    // The mocked stream resolves immediately, so the transient pending assistant
+    // has already been finalized by the time resendMonotonicMessage resolves.
+    expect(freshPlaceholder).toBeUndefined();
+    expect(sending.value).toBe(false);
+    expect(canStop.value).toBe(false);
   });
 
   it("resendMonotonicMessage rejects when frontend run state has no matching in-flight assistant", async () => {

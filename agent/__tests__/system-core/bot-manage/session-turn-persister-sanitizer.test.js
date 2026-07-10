@@ -5,10 +5,20 @@ import { SessionTurnPersister } from "../../../src/system-core/bot-manage/execut
 
 test("SessionTurnPersister scopes stopped assistant persistence by turnScopeId", async () => {
   const appendedTurns = [];
-  const markedTurns = [];
+  const savedStatuses = [];
   const session = {
-    markUserMessageMonotonic: async (payload = {}) => {
-      markedTurns.push(payload);
+    upsertTurnStatus: async (payload = {}) => {
+      savedStatuses.push(payload);
+      assert.equal(payload.command, "user_stopped");
+      assert.equal(payload.status, undefined);
+      assert.equal(payload.reason, undefined);
+      return { turnStatus: {
+        turnScopeId: payload.turnScopeId,
+        dialogProcessId: payload.dialogProcessId,
+        status: "user_stopped",
+        reason: "user_stop",
+        description: payload.description,
+      } };
     },
     getSessionBundle: async () => ({
       session: {
@@ -35,14 +45,18 @@ test("SessionTurnPersister scopes stopped assistant persistence by turnScopeId",
     },
   });
 
-  assert.equal(saved, true);
-  assert.equal(markedTurns.length, 1);
-  assert.equal(markedTurns[0].turnScopeId, "turn-new");
-  assert.equal(markedTurns[0].dialogProcessId, undefined);
+  assert.equal(saved.status, "user_stopped");
+  assert.equal(savedStatuses.length, 1);
+  assert.equal(savedStatuses[0].turnScopeId, "turn-new");
+  assert.equal(savedStatuses[0].dialogProcessId, "dp-reused");
+  assert.equal(savedStatuses[0].command, "user_stopped");
   assert.equal(appendedTurns.length, 1);
   assert.equal(appendedTurns[0].turnScopeId, "turn-new");
   assert.equal(appendedTurns[0].dialogProcessId, "dp-reused");
-  assert.equal(appendedTurns[0].stopState, "user_stopped");
+  assert.equal(appendedTurns[0].stopState, undefined);
+  assert.equal(appendedTurns[0].state, undefined);
+  assert.equal(appendedTurns[0].status, undefined);
+  assert.equal(appendedTurns[0].channelState, undefined);
 });
 
 test("SessionTurnPersister persists tool transfer envelopes into session turns", async () => {

@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { getMessageRuntimeChannelState } from "../../composables/chat/sessionRunStateMachine";
-
 function normalizeText(value = "") {
   return String(value || "").trim().toLowerCase();
 }
@@ -66,6 +65,7 @@ function findMessageIdentityIndex(targetMessage = {}, allMessages = []) {
   return messages.findIndex((candidateMessage) => isSameMessageIdentity(targetMessage, candidateMessage));
 }
 
+export function isUserMessage(messageItem = {}) { return normalizeMessageRole(messageItem) === "user"; }
 const GENERATED_STATUS_LABEL = "已生成";
 const STOPPED_STATUS_LABEL = "已停止";
 export function isMonotonicMessage(messageItem = {}) {
@@ -79,8 +79,6 @@ export function isMonotonicMessage(messageItem = {}) {
   const label = normalizeText(messageItem.statusLabel);
   return ["generated", GENERATED_STATUS_LABEL, "user_stopped", STOPPED_STATUS_LABEL].includes(label);
 }
-
-export function isUserMessage(messageItem = {}) { return normalizeMessageRole(messageItem) === "user"; }
 function isPlainUserMessage(messageItem = {}) { if (!isUserMessage(messageItem)) return false; const type = normalizeText(messageItem?.type || messageItem?.messageType); return !type || type === "message" || type === "user"; }
 function findMessageIndex(targetMessage = {}, allMessages = []) { return findMessageIdentityIndex(targetMessage, allMessages); }
 
@@ -105,26 +103,35 @@ export function resolveMonotonicUserTarget(messageItem = {}, allMessages = []) {
   return null;
 }
 
-function attachMonotonicSource(sourceMap, userMessage, sourceMessage) { if (isUserMessage(userMessage) && isMonotonicMessage(sourceMessage) && !sourceMap.has(userMessage)) sourceMap.set(userMessage, sourceMessage); }
-function buildMonotonicSourceMap(allMessages = []) {
+function isTerminalTurnStatusPlaceholder(messageItem = {}) {
+  const status = normalizeText(messageItem?.turnStatus?.status || messageItem?.status);
+  return messageItem?.turnStatusPlaceholder === true && ["user_stopped", "error", "timeout"].includes(status);
+}
+
+function isMonotonicSource(messageItem = {}) {
+  return isTerminalTurnStatusPlaceholder(messageItem) || isMonotonicMessage(messageItem);
+}
+
+function attachTerminalSource(sourceMap, userMessage, sourceMessage) { if (isUserMessage(userMessage) && isMonotonicSource(sourceMessage) && !sourceMap.has(userMessage)) sourceMap.set(userMessage, sourceMessage); }
+function buildTerminalSourceMap(allMessages = []) {
   const messages = Array.isArray(allMessages) ? allMessages : [];
   const sourceMap = new Map();
-  for (const messageItem of messages) if (isUserMessage(messageItem) && isMonotonicMessage(messageItem)) attachMonotonicSource(sourceMap, messageItem, messageItem);
+  for (const messageItem of messages) if (isUserMessage(messageItem) && isMonotonicSource(messageItem)) attachTerminalSource(sourceMap, messageItem, messageItem);
   for (let index = 0; index < messages.length; index += 1) {
     const sourceMessage = messages[index];
-    if (isUserMessage(sourceMessage) || !isMonotonicMessage(sourceMessage)) continue;
+    if (isUserMessage(sourceMessage) || !isMonotonicSource(sourceMessage)) continue;
     const sourceDialogProcessId = getMessageDialogProcessId(sourceMessage);
     if (sourceDialogProcessId) {
       const sameDialogProcessUserMessage = messages.find((item) => isUserMessage(item) && getMessageDialogProcessId(item) === sourceDialogProcessId);
-      if (sameDialogProcessUserMessage) { attachMonotonicSource(sourceMap, sameDialogProcessUserMessage, sourceMessage); continue; }
+      if (sameDialogProcessUserMessage) { attachTerminalSource(sourceMap, sameDialogProcessUserMessage, sourceMessage); continue; }
     }
     const sourceTurnScopeId = getMessageTurnScopeId(sourceMessage);
     if (sourceTurnScopeId) {
       const sourceSessionId = getMessageSessionId(sourceMessage);
       const sameTurnScopeUserMessage = messages.find((item) => isUserMessage(item) && getMessageTurnScopeId(item) === sourceTurnScopeId && (!sourceSessionId || !getMessageSessionId(item) || sourceSessionId === getMessageSessionId(item)));
-      if (sameTurnScopeUserMessage) { attachMonotonicSource(sourceMap, sameTurnScopeUserMessage, sourceMessage); continue; }
+      if (sameTurnScopeUserMessage) { attachTerminalSource(sourceMap, sameTurnScopeUserMessage, sourceMessage); continue; }
     }
-    for (let prevIndex = index - 1; prevIndex >= 0; prevIndex -= 1) if (isUserMessage(messages[prevIndex])) { attachMonotonicSource(sourceMap, messages[prevIndex], sourceMessage); break; }
+    for (let prevIndex = index - 1; prevIndex >= 0; prevIndex -= 1) if (isUserMessage(messages[prevIndex])) { attachTerminalSource(sourceMap, messages[prevIndex], sourceMessage); break; }
   }
   return sourceMap;
 }
@@ -132,8 +139,8 @@ function buildMonotonicSourceMap(allMessages = []) {
 function getMonotonicSourceForUser(userMessage = {}, allMessages = []) {
   if (!isUserMessage(userMessage)) return null;
   const messages = Array.isArray(allMessages) ? allMessages : [];
-  if (!messages.length) return isMonotonicMessage(userMessage) ? userMessage : null;
-  const sourceMap = buildMonotonicSourceMap(messages);
+  if (!messages.length) return isMonotonicSource(userMessage) ? userMessage : null;
+  const sourceMap = buildTerminalSourceMap(messages);
   const directSource = sourceMap.get(userMessage);
   if (directSource) return directSource;
   const userIndex = findMessageIndex(userMessage, messages);
@@ -143,7 +150,7 @@ function getMonotonicSourceForUser(userMessage = {}, allMessages = []) {
 }
 
 function isTailOrphanUserMessage(userMessage = {}, allMessages = []) {
-  if (!isPlainUserMessage(userMessage) || isMonotonicMessage(userMessage)) return false;
+  if (!isPlainUserMessage(userMessage) || isMonotonicSource(userMessage)) return false;
   const messages = Array.isArray(allMessages) ? allMessages : [];
   if (!messages.length) return true;
   const userIndex = findMessageIndex(userMessage, messages);

@@ -197,11 +197,6 @@ function summarizeSessionTurnPayload(fullTurnPayload = {}) {
     pluginMeta: summarizeObject(fullTurnPayload.pluginMeta),
     isMonotonic: fullTurnPayload.isMonotonic === true,
     monotonic: fullTurnPayload.monotonic === true,
-    monotonicState: fullTurnPayload.monotonicState || "",
-    stopState: fullTurnPayload.stopState || "",
-    state: fullTurnPayload.state || "",
-    status: fullTurnPayload.status || "",
-    channelState: fullTurnPayload.channelState || "",
     artifactRef: {
       kind: "session_turn",
       source: "session.messages",
@@ -259,13 +254,6 @@ export class SessionTurnPersister {
     pluginMessage = false,
     pluginMeta = null,
     transferEnvelopes = [],
-    isMonotonic = false,
-    monotonic = false,
-    monotonicState = "",
-    stopState = "",
-    state = "",
-    status = "",
-    channelState = "",
     thinkingStartedAt = "",
     thinkingFinishedAt = "",
     turnTimingThinkingStartedAt = thinkingStartedAt,
@@ -320,13 +308,6 @@ export class SessionTurnPersister {
           ? pluginMeta
           : null,
       ...(sessionTransferEnvelopes.length ? { transferEnvelopes: sessionTransferEnvelopes } : {}),
-      isMonotonic: isMonotonic === true,
-      monotonic: monotonic === true,
-      monotonicState: String(monotonicState || "").trim(),
-      stopState: String(stopState || "").trim(),
-      state: String(state || "").trim(),
-      status: String(status || "").trim(),
-      channelState: String(channelState || "").trim(),
       ...(normalizedThinkingStartedAt ? { thinkingStartedAt: normalizedThinkingStartedAt } : {}),
       ...(normalizedThinkingFinishedAt ? { thinkingFinishedAt: normalizedThinkingFinishedAt } : {}),
       modelResponseMetadata:
@@ -400,13 +381,6 @@ export class SessionTurnPersister {
       pluginMessage,
       pluginMeta,
       ...(sessionTransferEnvelopes.length ? { transferEnvelopes: sessionTransferEnvelopes } : {}),
-      isMonotonic,
-      monotonic,
-      monotonicState,
-      stopState,
-      state,
-      status,
-      channelState,
       thinkingStartedAt: normalizedThinkingStartedAt,
       thinkingFinishedAt: normalizedThinkingFinishedAt,
       turnTimingThinkingStartedAt: normalizedTurnTimingThinkingStartedAt,
@@ -506,15 +480,21 @@ export class SessionTurnPersister {
     const content = (partialAssistant?.content ?? "").trim();
     const dialogProcessId = resolveMessageDialogProcessId(partialAssistant);
     const turnScopeId = String(partialAssistant?.turnScopeId || "").trim();
-    await this.session?.markUserMessageMonotonic?.({
+    const turnStatusResult = await this.session?.upsertTurnStatus?.({
       userId,
       sessionId,
       parentSessionId,
       turnScopeId,
-      state: "user_stopped",
-      stopState: "user_stopped",
+      dialogProcessId,
+      parentDialogProcessId,
+      command: "user_stopped",
+      description: "用户停止了本轮生成",
     });
-    if (!userId || !sessionId || !content || !dialogProcessId) return false;
+    // Persisting the terminal fact does not depend on there being partial model
+    // content. Return the confirmed fact even when no assistant message is added.
+    if (!userId || !sessionId || !content || !dialogProcessId) {
+      return turnStatusResult?.turnStatus || null;
+    }
     const sessionBundle = await this.session.getSessionBundle({
       userId,
       sessionId,
@@ -528,7 +508,7 @@ export class SessionTurnPersister {
         (messageItem?.role ?? "").trim() === MESSAGE_ROLE.ASSISTANT &&
         resolveMessageDialogProcessId(messageItem) === dialogProcessId,
     );
-    if (alreadySaved) return false;
+    if (alreadySaved) return turnStatusResult?.turnStatus || null;
     await this.appendSessionTurn({
       userId,
       sessionId,
@@ -541,15 +521,8 @@ export class SessionTurnPersister {
       turnScopeId,
       modelAlias: (partialAssistant?.modelAlias ?? "").trim(),
       modelName: (partialAssistant?.modelName ?? "").trim(),
-      isMonotonic: true,
-      monotonic: true,
-      monotonicState: "monotonic",
-      stopState: "user_stopped",
-      state: "user_stopped",
-      status: "user_stopped",
-      channelState: "user_stopped",
       eventListener: null,
     });
-    return true;
+    return turnStatusResult?.turnStatus || null;
   }
 }

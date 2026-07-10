@@ -115,7 +115,7 @@ describe("useChatEngine.interaction-stop", () => {
     });
   });
 
-  it("channel_state stopping/reconnecting updates in-flight status label", async () => {
+  it("channel_state stopping/reconnecting drives runtime state without persisting message terminal state", async () => {
     const stream = vi.fn(async (_payload, onEvent) => {
       emitChannelState(onEvent, "local-flight", "dp-flight", "stopping");
       emitChannelState(onEvent, "local-flight", "dp-flight", "reconnecting");
@@ -125,7 +125,7 @@ describe("useChatEngine.interaction-stop", () => {
         data: { sessionId: "local-flight", dialogProcessId: "dp-flight" },
       });
     });
-    const { engine, activeSession, sending, canStop } = createHarness({
+    const { engine, activeSession, sending, canStop, runStateSnapshot } = createHarness({
       sessionId: "local-flight",
       stream,
     });
@@ -137,6 +137,10 @@ describe("useChatEngine.interaction-stop", () => {
     expect(assistant?.pending).toBe(false);
     expect(sending.value).toBe(false);
     expect(canStop.value).toBe(false);
+    expect(runStateSnapshot.value).toMatchObject({
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
+    });
   });
 
   it("channel_state stopping keeps in-flight UI but disables repeated stop", async () => {
@@ -219,7 +223,7 @@ describe("useChatEngine.interaction-stop", () => {
     expect(assistant?.statusLabelKey || assistant?.statusLabel).toBe("chat.failed");
   });
 
-  it("terminal channel_state without DONE still lets send finalize and refresh detail", async () => {
+  it("terminal channel_state without DONE converges through authoritative session detail", async () => {
     const fetchSessionDetail = vi.fn(async () => ({
       sessionId: "local-state-only",
       sessions: [
@@ -260,14 +264,8 @@ describe("useChatEngine.interaction-stop", () => {
     expect(sending.value).toBe(false);
     expect(assistant?.content).toBe("detail answer");
     expect(assistant?.pending).toBe(false);
-    expect(assistant?.channelState?.state).toBe(FrontendRunState.FRONTEND_COMPLETED);
-    expect(assistant?.statusLabelKey).toBe("chat.generated");
     expect(fetchSessionDetail).toHaveBeenCalledWith("local-state-only");
-    expect(applySessionDetail).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: "local-state-only" }),
-      expect.objectContaining({ preserveCurrentMessages: true }),
-    );
-    expect(deps.chatWebSocketClient.clearStopRequested).toHaveBeenCalledTimes(2);
+    expect(applySessionDetail).toHaveBeenCalledTimes(1);
   });
 
   it("interaction_pending without pendingInteraction falls back to error state", async () => {

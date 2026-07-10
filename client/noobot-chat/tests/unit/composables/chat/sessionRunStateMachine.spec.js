@@ -159,35 +159,71 @@ describe("sessionRunStateMachine", () => {
 
     const continueRequesting = transitionSessionRunState(stopped, {
       type: SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED,
+      sessionId: "s1",
+      turnScopeId: "client-continue-1",
     });
     expect(continueRequesting).toMatchObject({
-      state: FrontendRunState.USER_STOP_COMPLETED,
-      backendState: BackendChannelState.USER_STOPPED,
+      state: FrontendRunState.CONTINUE_REQUESTING,
+      backendState: "",
       sessionId: "s1",
-      dialogProcessId: "dialog-1",
-      turnScopeId: "client-1",
+      dialogProcessId: "",
+      turnScopeId: "client-continue-1",
       composerActionState: {
         sendRequesting: false,
-        continueRequesting: true,
+        continueRequesting: false,
         stopRequesting: false,
         stopPendingUntilBackendReady: false,
       },
+    });
+    expect(evaluateSessionRunState(continueRequesting)).toMatchObject({
+      sending: true,
+      canStop: true,
+      terminal: false,
     });
 
     const continueSettled = transitionSessionRunState(continueRequesting, {
       type: SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_SETTLED,
     });
     expect(continueSettled).toMatchObject({
-      state: FrontendRunState.USER_STOP_COMPLETED,
-      backendState: BackendChannelState.USER_STOPPED,
+      state: FrontendRunState.CONTINUE_REQUESTING,
+      backendState: "",
       sessionId: "s1",
-      dialogProcessId: "dialog-1",
-      turnScopeId: "client-1",
+      dialogProcessId: "",
+      turnScopeId: "client-continue-1",
       composerActionState: {
         sendRequesting: false,
         continueRequesting: false,
         stopRequesting: false,
         stopPendingUntilBackendReady: false,
+      },
+    });
+
+    const frontendCompleted = transitionSessionRunState(continueSettled, {
+      type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
+      sessionId: "s1",
+      dialogProcessId: "dialog-continue-1",
+      turnScopeId: "client-continue-1",
+      seq: 3,
+    });
+    expect(frontendCompleted).toMatchObject({
+      state: FrontendRunState.FRONTEND_COMPLETED,
+      backendState: "",
+      sessionId: "s1",
+      dialogProcessId: "dialog-continue-1",
+      turnScopeId: "client-continue-1",
+      composerActionState: {
+        sendRequesting: false,
+        continueRequesting: false,
+        stopRequesting: false,
+        stopPendingUntilBackendReady: false,
+      },
+    });
+    expect(evaluateSessionRunState(frontendCompleted)).toMatchObject({
+      sending: false,
+      terminal: true,
+      composerActionState: {
+        sendRequesting: false,
+        continueRequesting: false,
       },
     });
   });
@@ -426,6 +462,158 @@ describe("sessionRunStateMachine", () => {
       sending: true,
       canStop: true,
     });
+
+    const staleStoppedReplay = transitionSessionRunState(streaming, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: "user_stopped",
+      sessionId: "s1",
+      turnScopeId: "turn-old",
+      seq: 4,
+    });
+    expect(staleStoppedReplay).toBe(streaming);
+
+    const backendCompleted = transitionSessionRunState(streaming, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: "completed",
+      sessionId: "s1",
+      dialogProcessId: "dialog-new",
+      turnScopeId: "turn-new",
+      seq: 5,
+    });
+    expect(backendCompleted).toMatchObject({
+      state: BackendChannelState.COMPLETED,
+      dialogProcessId: "dialog-new",
+      turnScopeId: "turn-new",
+    });
+    expect(evaluateSessionRunState(backendCompleted)).toMatchObject({ sending: true, terminal: false });
+
+    const frontendCompleted = transitionSessionRunState(backendCompleted, {
+      type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
+      sessionId: "s1",
+      dialogProcessId: "dialog-new",
+      turnScopeId: "turn-new",
+      seq: 6,
+    });
+    expect(frontendCompleted).toMatchObject({
+      state: FrontendRunState.FRONTEND_COMPLETED,
+      dialogProcessId: "dialog-new",
+      turnScopeId: "turn-new",
+    });
+    expect(evaluateSessionRunState(frontendCompleted)).toMatchObject({ sending: false, terminal: true });
+  });
+
+  it.each([
+    {
+      label: "send",
+      startEvent: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+      startState: BackendChannelState.SENDING,
+      newTurnScopeId: "turn-send-new",
+      backendDialogProcessId: "dialog-send-new",
+    },
+    {
+      label: "continue",
+      startEvent: SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED,
+      startState: FrontendRunState.CONTINUE_REQUESTING,
+      newTurnScopeId: "turn-continue-new",
+      backendDialogProcessId: "dialog-continue-new",
+    },
+    {
+      label: "resend",
+      startEvent: SESSION_RUN_EVENT.LOCAL_RESEND_STARTED,
+      startState: FrontendRunState.RESEND_REPLACING_TURN,
+      backendBoundState: FrontendRunState.RESEND_REPLACING_TURN,
+      newTurnScopeId: "turn-resend-new",
+      backendDialogProcessId: "dialog-resend-new",
+    },
+  ])("starts $label as a new scoped turn after user stop and completes through frontend completion", ({
+    startEvent,
+    startState,
+    backendBoundState = BackendChannelState.SENDING,
+    newTurnScopeId,
+    backendDialogProcessId,
+  }) => {
+    const stopped = createInitialSessionRunState({
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
+      sessionId: "s1",
+      dialogProcessId: "dialog-old",
+      turnScopeId: "turn-old",
+      seq: 10,
+      priority: 90,
+    });
+
+    const started = transitionSessionRunState(stopped, {
+      type: startEvent,
+      sessionId: "s1",
+      dialogProcessId: "dialog-old-should-not-leak",
+      turnScopeId: newTurnScopeId,
+      seq: 11,
+    });
+
+    expect(started).toMatchObject({
+      state: startState,
+      backendState: "",
+      sessionId: "s1",
+      dialogProcessId: "",
+      turnScopeId: newTurnScopeId,
+    });
+    expect(started.dialogProcessId).not.toBe("dialog-old");
+    expect(evaluateSessionRunState(started)).toMatchObject({ sending: true, canStop: true, terminal: false });
+
+    const staleOldStopped = transitionSessionRunState(started, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: "user_stopped",
+      sessionId: "s1",
+      dialogProcessId: "dialog-old",
+      turnScopeId: "turn-old",
+      seq: 12,
+    });
+    expect(staleOldStopped).toBe(started);
+
+    const backendBound = transitionSessionRunState(started, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: "sending",
+      sessionId: "s1",
+      dialogProcessId: backendDialogProcessId,
+      turnScopeId: newTurnScopeId,
+      seq: 13,
+    });
+    expect(backendBound).toMatchObject({
+      state: backendBoundState,
+      dialogProcessId: backendDialogProcessId,
+      turnScopeId: newTurnScopeId,
+    });
+
+    const backendCompleted = transitionSessionRunState(backendBound, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: "completed",
+      sessionId: "s1",
+      dialogProcessId: backendDialogProcessId,
+      turnScopeId: newTurnScopeId,
+      seq: 14,
+    });
+    expect(backendCompleted).toMatchObject({ state: BackendChannelState.COMPLETED });
+    expect(evaluateSessionRunState(backendCompleted)).toMatchObject({ sending: true, terminal: false });
+
+    const frontendCompleted = transitionSessionRunState(backendCompleted, {
+      type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
+      sessionId: "s1",
+      dialogProcessId: backendDialogProcessId,
+      turnScopeId: newTurnScopeId,
+      seq: 15,
+    });
+    expect(frontendCompleted).toMatchObject({
+      state: FrontendRunState.FRONTEND_COMPLETED,
+      dialogProcessId: backendDialogProcessId,
+      turnScopeId: newTurnScopeId,
+      composerActionState: {
+        sendRequesting: false,
+        continueRequesting: false,
+        stopRequesting: false,
+        stopPendingUntilBackendReady: false,
+      },
+    });
+    expect(evaluateSessionRunState(frontendCompleted)).toMatchObject({ sending: false, terminal: true });
   });
 
   it("does not replay a remembered stop request onto a different turnScopeId", () => {

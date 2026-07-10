@@ -5,6 +5,11 @@
  */
 import { normalizeMessageEntity } from "../entities/session-entity.js";
 import {
+  buildTurnTerminalCommand,
+  isSameTurnStatus,
+  upsertTurnStatusEntity,
+} from "../entities/turn-status-entity.js";
+import {
   resolveDialogProcessIdFromContext,
   resolveMessageDialogProcessId,
 } from "../../context/session/dialog-process-id-resolver.js";
@@ -67,7 +72,6 @@ function clearReplacementUserRuntimeState(message = {}) {
     "status",
     "statusLabel",
     "state",
-    "stopState",
     "thinkingFinishedAt",
     "thinkingStartedAt",
     "__noobotRuntimeRunStateKey",
@@ -129,6 +133,12 @@ function pruneSessionTurnTimings(session = {}) {
   const liveKeys = new Set(messages.map(resolveTurnTimingKey).filter(Boolean));
   session.turnTimings = (Array.isArray(session.turnTimings) ? session.turnTimings : [])
     .filter((item) => liveKeys.has(resolveTurnTimingKey(item)));
+}
+
+function pruneSessionTurnStatuses(session = {}) {
+  const messages = Array.isArray(session.messages) ? session.messages : [];
+  session.turnStatuses = (Array.isArray(session.turnStatuses) ? session.turnStatuses : [])
+    .filter((status) => messages.some((message) => isSameTurnStatus(status, message)));
 }
 
 function buildTurnScopeReplacement({
@@ -193,13 +203,6 @@ export class SessionMessageService {
     pluginMessage = false,
     pluginMeta = null,
     transferEnvelopes = [],
-    isMonotonic = false,
-    monotonic = false,
-    monotonicState = "",
-    stopState = "",
-    state = "",
-    status = "",
-    channelState = "",
     thinkingStartedAt = "",
     thinkingFinishedAt = "",
     turnTimingThinkingStartedAt = thinkingStartedAt,
@@ -260,13 +263,6 @@ export class SessionMessageService {
           ? pluginMeta
           : null,
       transferEnvelopes: Array.isArray(transferEnvelopes) ? transferEnvelopes : [],
-      isMonotonic: isMonotonic === true,
-      monotonic: monotonic === true,
-      monotonicState: String(monotonicState || "").trim(),
-      stopState: String(stopState || "").trim(),
-      state: String(state || "").trim(),
-      status: String(status || "").trim(),
-      channelState: String(channelState || "").trim(),
       ...(String(thinkingStartedAt || "").trim() ? { thinkingStartedAt: String(thinkingStartedAt || "").trim() } : {}),
       ...(String(thinkingFinishedAt || "").trim() ? { thinkingFinishedAt: String(thinkingFinishedAt || "").trim() } : {}),
       ts: this.now(),
@@ -359,6 +355,7 @@ export class SessionMessageService {
     const deletedCount = messages.length - anchorIndex;
     session.messages = messages.slice(0, anchorIndex);
     pruneSessionTurnTimings(session);
+    pruneSessionTurnStatuses(session);
     session.updatedAt = this.now();
     session.version = currentVersion + 1;
     session.revision = session.version;
@@ -458,14 +455,12 @@ export class SessionMessageService {
       pending: false,
       error: false,
       done: true,
-      isMonotonic: true,
-      monotonic: true,
-      monotonicState: "monotonic",
       ts: nowValue,
       ...(nextAttachments !== undefined ? { attachments: nextAttachments } : {}),
     }, () => nowValue);
     session.messages = [...messages.slice(0, turnStartIndex), newMessage];
     pruneSessionTurnTimings(session);
+    pruneSessionTurnStatuses(session);
     session.updatedAt = nowValue;
     session.version = nextVersion;
     session.revision = nextVersion;
@@ -498,61 +493,54 @@ export class SessionMessageService {
     };
   }
 
-  async markUserMessageMonotonic({
+  async upsertTurnStatus({
     userId,
     sessionId,
     parentSessionId = "",
     turnScopeId = "",
-    state = "user_stopped",
-    stopState = "user_stopped",
+    dialogProcessId = "",
+    parentDialogProcessId = "",
+    command = "",
+    description = "",
+    error = null,
   } = {}) {
-    if (!userId || !sessionId) return { marked: false, reason: "missing_session" };
-    const normalizedTurnScopeId = String(turnScopeId || "").trim();
-    if (!normalizedTurnScopeId) return { marked: false, reason: "missing_turn_scope" };
+    if (!userId || !sessionId) return { upserted: false, reason: "missing_session" };
     const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
       userId,
       sessionId,
       parentSessionId,
     );
-    const session = await this.sessionRepo.findById(
-      userId,
-      sessionId,
-      resolvedParentSessionId,
-    );
-    if (!session) return { marked: false, reason: "session_not_found" };
-    const messages = Array.isArray(session.messages) ? session.messages : [];
-    const targetIndex = (() => {
-      for (let index = messages.length - 1; index >= 0; index -= 1) {
-        const messageItem = messages[index];
-        if (String(messageItem?.role || "").trim() !== "user") continue;
-        if (String(messageItem?.turnScopeId || "").trim() !== normalizedTurnScopeId) continue;
-        if (messageItem?.injectedMessage === true || messageItem?.pluginMessage === true) continue;
-        return index;
-      }
-      return -1;
-    })();
-    if (targetIndex < 0) return { marked: false, reason: "user_message_not_found" };
-
-    const targetMessage = messages[targetIndex];
-    targetMessage.isMonotonic = true;
-    targetMessage.monotonic = true;
-    targetMessage.monotonicState = "monotonic";
-    const normalizedStopState = String(stopState || "").trim();
-    if (normalizedStopState) targetMessage.stopState = normalizedStopState;
-    const normalizedState = String(state || "").trim();
-    if (normalizedState) targetMessage.state = normalizedState;
-    session.updatedAt = this.now();
+    const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
+    if (!session) return { upserted: false, reason: "session_not_found" };
+    const nowValue = this.now();
+    const incoming = buildTurnTerminalCommand(command, {
+      turnScopeId,
+      dialogProcessId,
+      parentDialogProcessId,
+      description,
+      error,
+      updatedAt: nowValue,
+    });
+    if (!incoming) return { upserted: false, reason: "invalid_turn_status_command" };
+    const upsertResult = upsertTurnStatusEntity({
+      statuses: session.turnStatuses,
+      messages: session.messages,
+      incoming,
+      now: this.now,
+    });
+    const turnStatus = upsertResult.turnStatus;
+    if (!turnStatus) return { upserted: false, reason: "invalid_turn_status" };
+    session.turnStatuses = upsertResult.statuses;
+    if (!upsertResult.changed) {
+      return { upserted: false, reason: "unchanged", session, turnStatus, version: resolveSessionVersion(session) };
+    }
+    session.updatedAt = nowValue;
     const currentVersion = resolveSessionVersion(session);
     session.version = currentVersion + 1;
     session.revision = session.version;
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
     await this.sessionRepo.save(userId, session, resolvedParentSessionId);
-    return {
-      marked: true,
-      session,
-      messageIndex: targetIndex,
-      version: session.version,
-    };
+    return { upserted: true, session, turnStatus, version: session.version };
   }
 
   async stampReusedUserTurnDialogProcessId({

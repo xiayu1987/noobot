@@ -136,13 +136,7 @@ function normalizeState(value = "") {
 
 function isStoppedAssistantSnapshot(message = {}) {
   if (normalizeMessageRole(message) !== "assistant") return false;
-  const states = [
-    message?.stopState,
-    message?.status,
-    message?.state,
-    getMessageRuntimeChannelState(message)?.state,
-  ].map(normalizeState);
-  return states.some((state) => state === "user_stopped");
+  return normalizeState(getMessageRuntimeChannelState(message)?.state) === "user_stopped";
 }
 
 function findReplacementUserMessage({ session, turnScopeId }) {
@@ -184,7 +178,6 @@ function appendReplacementUserMessage(session, sessionDetail, turnScopeId = "", 
   if (existing) return existing;
   const replacementUser = buildReplacementUserMessageFromDetail(sessionDetail, turnScopeId, content);
   if (!replacementUser) return null;
-  delete replacementUser.stopState;
   delete replacementUser.statusLabel;
   session.messages.push(replacementUser);
   syncSessionMessageSummary(session);
@@ -513,7 +506,6 @@ export function createResendMessageTransaction({
       );
       if ("text" in replacementUserMessage) replacementUserMessage.text = text;
       if ("message" in replacementUserMessage) replacementUserMessage.message = text;
-      delete replacementUserMessage.stopState;
       delete replacementUserMessage.statusLabel;
       pruneReplacedTurnMessages(activeSession?.value, {
         replacement: resolveTurnScopeReplacement(payload),

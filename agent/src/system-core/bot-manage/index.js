@@ -166,6 +166,10 @@ export class BotManager {
     return this.sessionRunner.persistStoppedAssistantMessage(payload);
   }
 
+  async upsertTurnStatus(payload = {}) {
+    return this.sessionRunner.upsertTurnStatus(payload);
+  }
+
   runAsyncSession(payload = {}) {
     return this.asyncJobManager.runAsyncSession(payload);
   }

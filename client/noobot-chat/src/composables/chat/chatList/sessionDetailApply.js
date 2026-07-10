@@ -142,6 +142,15 @@ export function createSessionDetailApplicator({
     const turnTimings = Array.isArray(mainSessionDoc.turnTimings)
       ? mainSessionDoc.turnTimings
       : [];
+    const turnStatuses = Array.isArray(mainSessionDoc.turnStatuses)
+      ? mainSessionDoc.turnStatuses
+      : Array.isArray(detail?.turnStatuses)
+        ? detail.turnStatuses
+        : [];
+    // Keep the authoritative session-level facts on the session model. View
+    // messages below are a disposable projection and must not become the
+    // source used by hydration, continue, or resend flows.
+    sessionItem.turnStatuses = turnStatuses.map((item) => ({ ...item }));
     const detailTurnScopeIds = new Set(
       detailMessages.map((messageItem) => getMessageTurnScopeId(messageItem)).filter(Boolean),
     );
@@ -178,6 +187,7 @@ export function createSessionDetailApplicator({
       sessionDocs,
       rootSessionId: detail.sessionId,
       turnTimings,
+      turnStatuses,
       makeViewMessage,
       foldMessagesForView,
       isSummaryDetail,
