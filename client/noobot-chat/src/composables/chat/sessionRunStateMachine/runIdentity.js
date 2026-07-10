@@ -91,6 +91,7 @@ export function resolveRunTurnScopeId(value = {}) {
 export function shouldStartNewTurn(current = {}, event = {}) {
   if (![
     SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+    SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED,
     SESSION_RUN_EVENT.LOCAL_RESEND_STARTED,
     SESSION_RUN_EVENT.LOCAL_RESEND_REPLACING_TURN,
   ].includes(event.type)) return false;
@@ -132,10 +133,10 @@ export function isNotReopeningStopLock({ current = {}, event = {}, startsNewTurn
   return !USER_STOP_LOCK_REOPEN_STATES.includes(event.state);
 }
 
-export function isNotLeavingTerminal({ event = {}, startsNewTurn = false, currentRule = "" } = {}) {
+export function isNotLeavingTerminal({ current = {}, event = {}, startsNewTurn = false, currentRule = "" } = {}) {
   if (currentRule !== SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED) return true;
   if (startsNewTurn) return true;
-  const currentState = normalizeState(arguments[0]?.current?.state);
+  const currentState = normalizeState(current?.state);
   const nextState = normalizeState(event.state);
   if (!FrontendTerminalStates.includes(nextState)) return false;
   if ([BackendChannelState.ERROR, FrontendRunState.USER_STOP_COMPLETED, FrontendRunState.CANCELLED].includes(currentState)) {
@@ -148,7 +149,22 @@ export function isNotStaleSeqRegression({ currentPriority = 0, nextPriority = 0,
   return !(staleSeq && nextPriority <= currentPriority);
 }
 
-export function isPriorityForwardOrNewTurn({ currentPriority = 0, nextPriority = 0, startsNewTurn = false } = {}) {
+function isBackendRunningFeedbackForFrontendRequestState(current = {}, event = {}) {
+  const currentState = normalizeState(current.state);
+  const nextState = normalizeState(event.state);
+  return [
+    FrontendRunState.CONTINUE_REQUESTING,
+    FrontendRunState.RESEND_REPLACING_TURN,
+    FrontendRunState.RESEND_STREAMING,
+  ].includes(currentState) && [
+    BackendChannelState.SENDING,
+    BackendChannelState.RECONNECTING,
+    BackendChannelState.INTERACTION_PENDING,
+  ].includes(nextState) && hasMatchingRunTurnIdentity(current, event);
+}
+
+export function isPriorityForwardOrNewTurn({ current = {}, event = {}, currentPriority = 0, nextPriority = 0, startsNewTurn = false } = {}) {
+  if (isBackendRunningFeedbackForFrontendRequestState(current, event)) return true;
   return startsNewTurn || nextPriority >= currentPriority;
 }
 

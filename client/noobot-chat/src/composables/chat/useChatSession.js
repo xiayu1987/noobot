@@ -13,7 +13,7 @@ import {
   foldConversationMessages,
   isHarnessInjectedMessage,
 } from "../infra/messageModel";
-import { normalizeTimePair, nowIso } from "../infra/timeFields";
+import { normalizeTimePair, nowIso, nowMs } from "../infra/timeFields";
 import {
   buildChatWebSocketUrl,
   buildLogWebSocketUrl,
@@ -106,6 +106,22 @@ export function useChatSession({
     return String(activeSession.value?.backendSessionId || activeSession.value?.sessionId || activeSession.value?.id || activeSessionId.value || "").trim();
   }
 
+  function createTurnScopeId() {
+    const randomUuid = globalThis?.crypto?.randomUUID?.();
+    if (randomUuid) return `client-turn:${randomUuid}`;
+    return `client-turn:${nowMs().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  function resolveActiveSessionIdentityCandidates() {
+    return [
+      activeSession.value?.backendSessionId,
+      activeSession.value?.sessionId,
+      activeSession.value?.id,
+      activeSessionId.value,
+    ].map((id) => String(id || "").trim()).filter(Boolean)
+      .filter((id, index, list) => list.indexOf(id) === index);
+  }
+
   function isRunStateForActiveSession(stateSnapshot = {}) {
     const runSessionId = String(stateSnapshot?.sessionId || "").trim();
     const state = String(stateSnapshot?.state || "").trim();
@@ -118,8 +134,16 @@ export function useChatSession({
   }
 
   function getActiveStoppedResumeSnapshot() {
-    const activeId = resolveActiveSessionIdentity();
-    return activeId ? chatStore.getUserStoppedResumeSnapshot(activeId) : null;
+    const matched = getActiveStoppedResumeSnapshotWithKey();
+    return matched?.snapshot || null;
+  }
+
+  function getActiveStoppedResumeSnapshotWithKey() {
+    for (const sessionId of resolveActiveSessionIdentityCandidates()) {
+      const snapshot = chatStore.getUserStoppedResumeSnapshot(sessionId);
+      if (snapshot) return { sessionId, snapshot };
+    }
+    return null;
   }
 
   function buildStoppedRunStateFromActiveRegistry() {
@@ -287,33 +311,22 @@ export function useChatSession({
     }
   }
 
-  function isStoppedAssistantDetailMessage(messageItem = {}) {
-    if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) return false;
-    const channelState = messageItem?.channelState && typeof messageItem.channelState === "object"
-      ? messageItem.channelState
-      : {};
-    return [
-      messageItem?.stopState,
-      messageItem?.status,
-      messageItem?.state,
-      channelState?.state,
-    ].some((state) => String(state || "").trim() === BackendChannelState.USER_STOPPED);
-  }
-
-  function findLatestStoppedDetailIdentity(messages = []) {
-    const sourceMessages = Array.isArray(messages) ? messages : [];
-    for (let index = sourceMessages.length - 1; index >= 0; index -= 1) {
-      const messageItem = sourceMessages[index];
-      if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) continue;
-      if (isStoppedAssistantDetailMessage(messageItem)) {
-        const dialogProcessId = getMessageDialogProcessId(messageItem);
-        const turnScopeId = getMessageTurnScopeId(messageItem);
-        if (!dialogProcessId || !turnScopeId) return null;
-        return { dialogProcessId, turnScopeId };
-      }
-      return null;
+  function findLatestStoppedDetailIdentity(turnStatuses = []) {
+    const statuses = Array.isArray(turnStatuses) ? turnStatuses : [];
+    for (let index = statuses.length - 1; index >= 0; index -= 1) {
+      const item = statuses[index];
+      const status = String(item?.status || "").trim().toLowerCase();
+      if (!status) continue;
+      // turnStatuses is the persisted run history in chronological order. Only
+      // its latest fact may restore the composer state; an older stopped turn
+      // must not make a session resumable after a newer turn completed.
+      if (status !== "user_stopped") return null;
+      const dialogProcessId = String(item?.dialogProcessId || "").trim();
+      const turnScopeId = String(item?.turnScopeId || "").trim();
+      if (!dialogProcessId || !turnScopeId) return null;
+      return { dialogProcessId, turnScopeId };
     }
-    return undefined;
+    return null;
   }
 
   function canHydrateStoppedRunStateFromDetail(sessionId = "") {
@@ -328,8 +341,7 @@ export function useChatSession({
   function hydrateStoppedRunStateFromSessionDetail({ sessionItem = null } = {}) {
     const sessionId = String(sessionItem?.backendSessionId || sessionItem?.sessionId || sessionItem?.id || "").trim();
     if (!sessionId) return;
-    const stoppedIdentity = findLatestStoppedDetailIdentity(sessionItem?.messages || []);
-    if (stoppedIdentity === undefined) return;
+    const stoppedIdentity = findLatestStoppedDetailIdentity(sessionItem?.turnStatuses || []);
     if (!stoppedIdentity) {
       chatStore.clearUserStoppedResumeSnapshot(sessionId);
       return;
@@ -566,10 +578,13 @@ export function useChatSession({
     if (runStateEvaluation.canStartNewSend === false) return false;
     const isContinueFromUserStopped = runStateEvaluation.state === FrontendRunState.USER_STOP_COMPLETED;
     if (composerActionState.value.sendRequesting || composerActionState.value.continueRequesting) return false;
-    const resumeSessionId = String(activeSession.value?.backendSessionId || activeSession.value?.id || activeSessionId.value || "").trim();
-    const userStoppedResumeSnapshot = isContinueFromUserStopped
-      ? chatStore.getUserStoppedResumeSnapshot(resumeSessionId)
+    const stoppedResumeMatch = isContinueFromUserStopped
+      ? getActiveStoppedResumeSnapshotWithKey()
       : null;
+    const resumeSessionId = String(
+      stoppedResumeMatch?.sessionId || activeSession.value?.backendSessionId || activeSession.value?.id || activeSessionId.value || "",
+    ).trim();
+    const userStoppedResumeSnapshot = stoppedResumeMatch?.snapshot || null;
     if (isContinueFromUserStopped && !userStoppedResumeSnapshot) {
       logContinueResumeIdentitySelection({
         runState: runStateSnapshot.value,
@@ -592,8 +607,11 @@ export function useChatSession({
     const composerSettledEventType = isContinueFromUserStopped
       ? SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_SETTLED
       : SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_SETTLED;
+    const continuingTurnScopeId = isContinueFromUserStopped ? createTurnScopeId() : "";
     applyComposerActionStateEvent({
       type: composerEventType,
+      sessionId: isContinueFromUserStopped ? resumeSessionId : undefined,
+      turnScopeId: continuingTurnScopeId || undefined,
       source: "use_chat_session",
     });
     try {
@@ -602,6 +620,7 @@ export function useChatSession({
         ? {
             ...(options && typeof options === "object" ? options : {}),
             continueFromUserStopped: true,
+            turnScopeId: continuingTurnScopeId,
             resumeDialogProcessId: userStoppedResumeSnapshot?.dialogProcessId || "",
             resumeTurnScopeId: userStoppedResumeSnapshot?.turnScopeId || "",
             onContinueUserStoppedResumeSnapshotCommitted: () => {

@@ -12,17 +12,63 @@ import {
   registerChatWebSocketServer,
 } from "../../ws/chat-websocket-server.js";
 
-async function startServerWithWs({ runSession = async () => ({}), bot = null, sessionLogConfig = undefined } = {}) {
+async function startServerWithWs({
+  runSession = async () => ({}),
+  bot = null,
+  sessionLogConfig = undefined,
+  resolveAuthByApiKey = () => ({ userId: "primary-user" }),
+  isForbiddenUserScope = () => false,
+} = {}) {
   const server = createServer((_req, res) => {
     res.statusCode = 404;
     res.end("not-found");
   });
 
+  const suppliedBot = bot || { runSession };
+  const testBot = {
+    ...suppliedBot,
+    upsertTurnStatus: suppliedBot.upsertTurnStatus || (async (payload = {}) => {
+      const contract = {
+        completed: ["completed", "run_completed"],
+        user_stopped: ["user_stopped", "user_stop"],
+        error: ["error", "run_error"],
+        aborted: ["error", "run_aborted"],
+        timeout: ["timeout", "run_timeout"],
+      }[payload.command];
+      assert.ok(contract, `unexpected terminal command: ${payload.command}`);
+      assert.equal(payload.status, undefined);
+      assert.equal(payload.reason, undefined);
+      return { turnStatus: {
+        turnScopeId: payload.turnScopeId || "",
+        dialogProcessId: payload.dialogProcessId || "",
+        parentDialogProcessId: payload.parentDialogProcessId || "",
+        status: contract[0],
+        reason: contract[1],
+        description: payload.description || "",
+      } };
+    }),
+  };
+  if (typeof suppliedBot.persistStoppedAssistantMessage === "function") {
+    testBot.persistStoppedAssistantMessage = async (payload = {}) => {
+      const persisted = await suppliedBot.persistStoppedAssistantMessage(payload);
+      if (persisted) return persisted;
+      const assistant = payload.partialAssistant || {};
+      return {
+        turnScopeId: assistant.turnScopeId || "",
+        dialogProcessId: assistant.dialogProcessId || "",
+        parentDialogProcessId: payload.parentDialogProcessId || "",
+        status: "user_stopped",
+        reason: "user_stop",
+        description: "用户停止了本轮生成",
+      };
+    };
+  }
+
   const registered = registerChatWebSocketServer(server, {
-    getBot: () => bot || ({ runSession }),
+    getBot: () => testBot,
     resolveRequestLocale: () => "zh-CN",
-    resolveAuthByApiKey: () => ({ userId: "primary-user" }),
-    isForbiddenUserScope: () => false,
+    resolveAuthByApiKey,
+    isForbiddenUserScope,
     normalizeRunConfig: (config = {}) => config || {},
     normalizeLocale: (locale = "") => String(locale || "zh-CN"),
     defaultLocale: "zh-CN",
@@ -143,6 +189,13 @@ test("chat-websocket-server: stop persists and emits the user_stopped turnScopeI
     bot: {
       persistStoppedAssistantMessage: async (payload = {}) => {
         capturedStopPayload = payload;
+        return {
+          turnScopeId: payload?.turnScopeId,
+          dialogProcessId: payload?.dialogProcessId,
+          status: "user_stopped",
+          reason: "user_stop",
+          description: "用户停止了本轮生成",
+        };
       },
       runSession: async ({ abortSignal }) => {
         await new Promise((resolve) => {
@@ -350,8 +403,18 @@ test("chat-websocket-server: stopped event and persistence backfill assistant id
     assert.equal(capturedStopPayload?.partialAssistant?.sessionId, "s-backfill");
     assert.equal(capturedStopPayload?.partialAssistant?.dialogProcessId, "dp-result-backfill");
     assert.equal(capturedStopPayload?.partialAssistant?.turnScopeId, "turn-backfill");
-    assert.equal(capturedStopPayload?.partialAssistant?.state, "user_stopped");
-    assert.equal(capturedStopPayload?.partialAssistant?.channelState, "user_stopped");
+    assert.equal(capturedStopPayload?.partialAssistant?.state, undefined);
+    assert.equal(capturedStopPayload?.partialAssistant?.status, undefined);
+    assert.equal(capturedStopPayload?.partialAssistant?.channelState, undefined);
+    assert.equal(capturedStopPayload?.partialAssistant?.stopState, undefined);
+    assert.deepEqual(stoppedEvent?.data?.turnStatus, {
+      turnScopeId: "turn-backfill",
+      dialogProcessId: "dp-result-backfill",
+      parentDialogProcessId: "",
+      status: "user_stopped",
+      reason: "user_stop",
+      description: "用户停止了本轮生成",
+    });
   } finally {
     await closeServer(server);
   }
@@ -388,6 +451,44 @@ test("chat-websocket-server: non-user abort does not persist or emit user_stoppe
     assert.equal(events.some((item) => item?.event === "user_stopped"), false);
     const errorEvent = events.find((item) => item?.event === "error");
     assert.match(String(errorEvent?.data?.error || ""), /upstream aborted unexpectedly/);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("chat-websocket-server: forbidden user scope does not run or persist a turn status", async () => {
+  let runCalls = 0;
+  let turnStatusWrites = 0;
+  const server = await startServerWithWs({
+    bot: {
+      runSession: async () => {
+        runCalls += 1;
+        return {};
+      },
+      upsertTurnStatus: async () => {
+        turnStatusWrites += 1;
+        return null;
+      },
+    },
+    isForbiddenUserScope: () => true,
+  });
+  try {
+    const { port } = server.address();
+    const events = await callChatWs({
+      port,
+      payload: {
+        userId: "forbidden-user",
+        sessionId: "s-forbidden",
+        message: "hello",
+        turnScopeId: "turn-forbidden",
+        config: { locale: "zh-CN" },
+      },
+    });
+
+    assert.equal(runCalls, 0);
+    assert.equal(turnStatusWrites, 0);
+    assert.equal(events.some((item) => item?.event === "done"), false);
+    assert.equal(events.some((item) => item?.event === "error"), true);
   } finally {
     await closeServer(server);
   }
@@ -1086,7 +1187,16 @@ test("chat-websocket-server: continue action passes stopped snapshot identity an
 });
 
 test("chat-websocket-server: continue action requires stopped dialogProcessId and turnScopeId", async () => {
-  const server = await startServerWithWs();
+  let turnStatusWrites = 0;
+  const server = await startServerWithWs({
+    bot: {
+      runSession: async () => ({}),
+      upsertTurnStatus: async () => {
+        turnStatusWrites += 1;
+        return null;
+      },
+    },
+  });
   try {
     const { port } = server.address();
     const events = await callChatWs({
@@ -1102,6 +1212,7 @@ test("chat-websocket-server: continue action requires stopped dialogProcessId an
     });
     const errorEvent = events.find((item) => item?.event === "error");
     assert.match(String(errorEvent?.data?.error || ""), /continue requires resumeDialogProcessId and resumeTurnScopeId/);
+    assert.equal(turnStatusWrites, 0);
   } finally {
     await closeServer(server);
   }
@@ -1109,10 +1220,17 @@ test("chat-websocket-server: continue action requires stopped dialogProcessId an
 
 test("chat-websocket-server: continue action does not fallback to current dialogProcessId", async () => {
   let runSessionCalled = false;
+  let turnStatusWrites = 0;
   const server = await startServerWithWs({
-    runSession: async () => {
-      runSessionCalled = true;
-      return { sessionId: "s1", dialogProcessId: "dp-current", answer: "unexpected" };
+    bot: {
+      runSession: async () => {
+        runSessionCalled = true;
+        return { sessionId: "s1", dialogProcessId: "dp-current", answer: "unexpected" };
+      },
+      upsertTurnStatus: async () => {
+        turnStatusWrites += 1;
+        return null;
+      },
     },
   });
   try {
@@ -1132,6 +1250,7 @@ test("chat-websocket-server: continue action does not fallback to current dialog
     const errorEvent = events.find((item) => item?.event === "error");
     assert.match(String(errorEvent?.data?.error || ""), /continue requires resumeDialogProcessId and resumeTurnScopeId/);
     assert.equal(runSessionCalled, false);
+    assert.equal(turnStatusWrites, 0);
   } finally {
     await closeServer(server);
   }

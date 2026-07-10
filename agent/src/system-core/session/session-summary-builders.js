@@ -87,11 +87,6 @@ function buildMessageSummary(message = {}) {
     "frontendUserMessage",
     "isMonotonic",
     "monotonic",
-    "monotonicState",
-    "stopState",
-    "state",
-    "status",
-    "channelState",
     "pluginMessage",
     "tool_call_id",
     "toolName",
@@ -476,6 +471,7 @@ function resolveThinkingDetailCountForDisplayMessage(message = {}, countsByKey =
 export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
   const messages = Array.isArray(session?.messages) ? session.messages : [];
   const turnTimings = Array.isArray(session?.turnTimings) ? session.turnTimings : [];
+  const turnStatuses = Array.isArray(session?.turnStatuses) ? session.turnStatuses : [];
   const sessionId = String(session?.sessionId || "").trim();
   const firstUserMessage = messages.find(
     (messageItem) =>
@@ -521,6 +517,7 @@ export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
     revision: session?.revision,
     depth: Number.isFinite(Number(depth)) ? Number(depth) : 0,
     turnTimings,
+    turnStatuses,
     messages: displayMessages,
     toolLogSummaries,
     stats: {

@@ -82,6 +82,45 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
   assert.equal(saved[0].updatedAt, "2026-06-22T00:00:00.000Z");
 });
 
+test("SessionMessageService.replaceTurn cleans only the owning session turn statuses", async () => {
+  const parent = createService({
+    initialSession: baseSession({
+      turnStatuses: [
+        { turnScopeId: "scope-keep", dialogProcessId: "dp-keep", status: "completed", reason: "run_completed" },
+        { turnScopeId: "scope-old", dialogProcessId: "dp-old", status: "error", reason: "run_error" },
+        { turnScopeId: "scope-tail", status: "timeout", reason: "run_timeout" },
+      ],
+    }),
+  });
+  const child = createService({
+    initialSession: {
+      sessionId: "child",
+      parentSessionId: "s1",
+      messages: [{ turnScopeId: "child-turn", role: "user", content: "child" }],
+      turnStatuses: [
+        { turnScopeId: "child-turn", status: "user_stopped", reason: "user_stop" },
+      ],
+    },
+  });
+
+  await parent.service.replaceTurn({
+    userId: "u1",
+    sessionId: "s1",
+    anchor: { turnScopeId: "scope-old" },
+    newContent: "edited",
+    turnScopeId: "scope-new",
+  });
+
+  assert.deepEqual(
+    parent.getSession().turnStatuses.map((item) => item.turnScopeId),
+    ["scope-keep"],
+  );
+  assert.deepEqual(
+    child.getSession().turnStatuses.map((item) => item.turnScopeId),
+    ["child-turn"],
+  );
+});
+
 test("SessionMessageService.replaceTurn preserves rich attachment fields when payload is raw", async () => {
   const richAttachment = {
     attachmentId: "att-rich",

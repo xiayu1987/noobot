@@ -115,14 +115,12 @@ describe("useChatEngine.session-detail", () => {
             turnScopeId: staleStoppedTurnScopeId,
             dialogProcessId: "dp-old-apply",
             statusLabel: "chat.stopped",
-            stopState: "user_stopped",
-            channelState: { state: "user_stopped", turnScopeId: staleStoppedTurnScopeId },
           },
         ],
       }],
     }, { preserveCurrentMessages: false });
 
-    expect(activeSession.messages).toHaveLength(2);
+    expect(activeSession.messages).toHaveLength(3);
     expect(activeSession.messages).toEqual(expect.arrayContaining([
       expect.objectContaining({ role: RoleEnum.USER, content: "edited again", turnScopeId: freshTurnScopeId }),
       expect.objectContaining({
@@ -131,7 +129,9 @@ describe("useChatEngine.session-detail", () => {
         pending: true,
       }),
     ]));
-    expect(activeSession.messages.some((message) => message.turnScopeId === staleStoppedTurnScopeId)).toBe(false);
+    expect(activeSession.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: RoleEnum.ASSISTANT, turnScopeId: staleStoppedTurnScopeId }),
+    ]));
   });
 
   it("applySessionDetail does not roll back a newer local session version", () => {
@@ -185,7 +185,7 @@ describe("useChatEngine.session-detail", () => {
     expect(activeSession.revision).toBe(10);
   });
 
-  it("applySessionDetail does not let stopped detail overwrite an in-flight assistant with the same turnScopeId", () => {
+  it("applySessionDetail lets an authoritative stopped turn replace matching in-flight content", () => {
     const freshTurnScopeId = "client-turn:fresh-same-scope";
     const activeSession = {
       id: "s-apply-same-scope-stopped",
@@ -222,6 +222,12 @@ describe("useChatEngine.session-detail", () => {
       sessionId: "s-apply-same-scope-stopped",
       sessions: [{
         sessionId: "s-apply-same-scope-stopped",
+        turnStatuses: [{
+          status: "user_stopped",
+          reason: "user_stop",
+          turnScopeId: freshTurnScopeId,
+          dialogProcessId: "dp-stale-stopped",
+        }],
         messages: [
           { role: RoleEnum.USER, content: "edited question", turnScopeId: freshTurnScopeId },
           {
@@ -231,23 +237,25 @@ describe("useChatEngine.session-detail", () => {
             dialogProcessId: "dp-stale-stopped",
             pending: false,
             statusLabel: "chat.stopped",
-            stopState: "user_stopped",
-            channelState: { state: "user_stopped", turnScopeId: freshTurnScopeId },
           },
         ],
       }],
     }, { preserveCurrentMessages: true });
 
-    const assistant = activeSession.messages.find((message) => message.role === RoleEnum.ASSISTANT);
+    const assistant = activeSession.messages.find(
+      (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-stale-stopped",
+    );
     expect(assistant).toEqual(expect.objectContaining({
-      content: "",
+      content: "已停止",
       turnScopeId: freshTurnScopeId,
-      dialogProcessId: "dp-local-pending",
+      dialogProcessId: "dp-stale-stopped",
       pending: true,
-      statusLabel: "",
+      statusLabel: "chat.stopped",
     }));
     expect(assistant.channelState).toEqual(expect.objectContaining({ state: "sending" }));
-    expect(assistant.stopState).toBeUndefined();
+    expect(activeSession.turnStatuses).toEqual([
+      expect.objectContaining({ status: "user_stopped", turnScopeId: freshTurnScopeId }),
+    ]);
   });
 
   it("applySessionDetail still merges completed detail into an in-flight assistant with the same turnScopeId", () => {

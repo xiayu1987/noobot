@@ -6,6 +6,7 @@
 
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import { compactAttachmentRef, compactTransferEnvelopes, dedupeAttachmentRefs } from "../transfer-attachment-refs.js";
+import { normalizeTurnStatusesEntity } from "./turn-status-entity.js";
 
 function normalizeTransferEnvelopesFromMessage(message = {}) {
   const seen = new Set();
@@ -80,16 +81,6 @@ export function normalizeMessageEntity(
     normalizedMessage.isMonotonic = true;
     normalizedMessage.monotonic = true;
   }
-  const monotonicState = String(message?.monotonicState || "").trim();
-  if (monotonicState) normalizedMessage.monotonicState = monotonicState;
-  const stopState = String(message?.stopState || "").trim();
-  if (stopState) normalizedMessage.stopState = stopState;
-  const state = String(message?.state || "").trim();
-  if (state) normalizedMessage.state = state;
-  const status = String(message?.status || "").trim();
-  if (status) normalizedMessage.status = status;
-  const channelState = String(message?.channelState || "").trim();
-  if (channelState) normalizedMessage.channelState = channelState;
   const thinkingStartedAt = String(message?.thinkingStartedAt || "").trim();
   if (thinkingStartedAt) normalizedMessage.thinkingStartedAt = thinkingStartedAt;
   const thinkingFinishedAt = String(message?.thinkingFinishedAt || "").trim();
@@ -192,6 +183,7 @@ export function normalizeSessionEntity(
       : 0,
     messages: normalizeMessagesEntity(session?.messages || [], now),
     turnTimings: normalizeTurnTimingsEntity(session?.turnTimings || []),
+    turnStatuses: normalizeTurnStatusesEntity(session?.turnStatuses || [], now),
     selectedConnectors: normalizeSelectedConnectors(session?.selectedConnectors || {}),
     createdAt: String(session?.createdAt || "").trim() || nowValue,
     updatedAt: String(session?.updatedAt || "").trim() || nowValue,

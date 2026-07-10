@@ -132,13 +132,6 @@ function buildStoppedPartialAssistant({ stopPayload = {}, runMeta = {}, result =
     sessionId,
     dialogProcessId,
     turnScopeId,
-    state: "user_stopped",
-    status: "user_stopped",
-    channelState: "user_stopped",
-    stopState: "user_stopped",
-    monotonicState: "monotonic",
-    isMonotonic: true,
-    monotonic: true,
   };
 }
 
@@ -446,6 +439,49 @@ export function registerChatWebSocketServer(
     return bot;
   };
 
+  const persistTurnStatus = async ({
+    runMeta = {},
+    command = "",
+    description = "",
+    error = null,
+  } = {}) => {
+    const normalizedCommand = String(command || "").trim();
+    const userId = String(runMeta?.userId || "").trim();
+    const sessionId = String(runMeta?.sessionId || "").trim();
+    const turnScopeId = String(runMeta?.turnScopeId || "").trim();
+    const dialogProcessId = String(runMeta?.dialogProcessId || "").trim();
+    if (!normalizedCommand || !userId || !sessionId || (!turnScopeId && !dialogProcessId)) {
+      return null;
+    }
+    try {
+      const result = await resolveBot()?.upsertTurnStatus?.({
+        userId,
+        sessionId,
+        parentSessionId: String(runMeta?.parentSessionId || "").trim(),
+        parentDialogProcessId: String(runMeta?.parentDialogProcessId || "").trim(),
+        turnScopeId,
+        dialogProcessId,
+        command: normalizedCommand,
+        description,
+        error,
+      });
+      return result?.turnStatus || null;
+    } catch (persistError) {
+      void recordServiceWebSocketRuntimeError({
+        sessionLogConfig,
+        event: "service.websocket.upsertTurnStatus.failed",
+        userId,
+        sessionId,
+        parentSessionId: String(runMeta?.parentSessionId || "").trim(),
+        dialogProcessId,
+        turnScopeId,
+        error: persistError,
+        data: { command: normalizedCommand },
+      });
+      return null;
+    }
+  };
+
   const webSocketServer = new WebSocketServer({ noServer: true });
 
   server.on("upgrade", (request, socket, head) => {
@@ -538,6 +574,20 @@ export function registerChatWebSocketServer(
           error,
         });
       }
+    };
+
+    const rejectUnpersistedTurnStatus = ({ runMeta = {}, status = "" } = {}) => {
+      const errorCode = "turn_status_persistence_failed";
+      const errorMessage = `failed to persist terminal turn status: ${String(status || "unknown").trim()}`;
+      sendEvent("error", {
+        error: errorMessage,
+        errorCode,
+        sessionId: String(runMeta?.sessionId || "").trim(),
+        dialogProcessId: String(runMeta?.dialogProcessId || "").trim(),
+        turnScopeId: String(runMeta?.turnScopeId || currentTurnScopeId || "").trim(),
+        turnStatus: null,
+      });
+      webSocket.close(1011, errorCode);
     };
 
     const rejectAllPendingInteractions = (error) => {
@@ -714,12 +764,6 @@ export function registerChatWebSocketServer(
           sendEvent("error", { error: translateText("ws.sessionAlreadyRunning", currentLocale) });
           return;
         }
-        isRunning = true;
-        runMessageStarted = true;
-        currentAbortController = new AbortController();
-        currentRunTimedOut = false;
-        currentAbortSignal = currentAbortController.signal;
-
         const {
           userId,
           sessionId,
@@ -775,6 +819,11 @@ export function registerChatWebSocketServer(
             throw new Error("continue requires resumeDialogProcessId and resumeTurnScopeId");
           }
         }
+        isRunning = true;
+        runMessageStarted = true;
+        currentAbortController = new AbortController();
+        currentRunTimedOut = false;
+        currentAbortSignal = currentAbortController.signal;
         if (isPluginDebugEnabled()) {
           await writeRoutedRuntimeEvent({
             scope: "session",
@@ -998,10 +1047,22 @@ export function registerChatWebSocketServer(
         });
 
         if (currentRunTimedOut && currentAbortSignal?.aborted) {
+          const turnStatus = await persistTurnStatus({
+            runMeta: currentRunMeta,
+            command: "timeout",
+            description: `run timeout after ${runTimeoutMs}ms`,
+            error: { message: `run timeout after ${runTimeoutMs}ms`, code: "run_timeout" },
+          });
+          if (!turnStatus) {
+            rejectUnpersistedTurnStatus({ runMeta: currentRunMeta, status: "timeout" });
+            return;
+          }
           sendEvent("error", {
             error: `run timeout after ${runTimeoutMs}ms`,
             sessionId: currentRunMeta?.sessionId || "",
             dialogProcessId: currentRunMeta?.dialogProcessId || "",
+            turnScopeId: currentRunMeta?.turnScopeId || currentTurnScopeId || "",
+            turnStatus,
           });
           webSocket.close(1011, "timeout");
           return;
@@ -1016,8 +1077,9 @@ export function registerChatWebSocketServer(
             result,
             fallbackMessage: stoppedMessage,
           });
+          let turnStatus = null;
           try {
-            await resolveBot()?.persistStoppedAssistantMessage?.({
+            turnStatus = await resolveBot()?.persistStoppedAssistantMessage?.({
               userId: currentRunMeta?.userId || "",
               sessionId: currentRunMeta?.sessionId || "",
               parentSessionId: currentRunMeta?.parentSessionId || "",
@@ -1036,16 +1098,34 @@ export function registerChatWebSocketServer(
               error: persistError,
             });
           }
+          if (!turnStatus) {
+            rejectUnpersistedTurnStatus({ runMeta: currentRunMeta, status: "user_stopped" });
+            return;
+          }
           sendEvent("user_stopped", {
             message: stoppedMessage,
             sessionId: stoppedPartialAssistant.sessionId || "",
             dialogProcessId: stoppedPartialAssistant.dialogProcessId || "",
             turnScopeId: stoppedPartialAssistant.turnScopeId || currentTurnScopeId || "",
+            turnStatus,
           });
           webSocket.close(1000, "user_stopped");
           return;
         }
 
+        const turnStatus = await persistTurnStatus({
+          runMeta: {
+            ...currentRunMeta,
+            sessionId: result.sessionId || currentRunMeta?.sessionId || "",
+            dialogProcessId: result.dialogProcessId || currentRunMeta?.dialogProcessId || "",
+          },
+          command: "completed",
+          description: "本轮对话已正常完成",
+        });
+        if (!turnStatus) {
+          rejectUnpersistedTurnStatus({ runMeta: currentRunMeta, status: "completed" });
+          return;
+        }
         sendEvent("done", {
           sessionId: result.sessionId,
           answer: result.answer,
@@ -1058,15 +1138,38 @@ export function registerChatWebSocketServer(
           messages: result.messages || [],
           traces: result.traces || [],
           executionLogs: result.executionLogs || [],
+          turnStatus,
         });
         webSocket.close(1000, "done");
       } catch (error) {
+        // Request/auth/resume validation errors are protocol failures, not turn
+        // execution outcomes. A turn only owns a persisted terminal status
+        // after the execution lifecycle has actually started.
+        if (!runMessageStarted) {
+          sendEvent("error", {
+            error: error?.message || translateText("ws.unknownError", currentLocale),
+          });
+          webSocket.close(1008, "invalid request");
+          return;
+        }
         if (currentAbortSignal?.aborted || isAbortLikeError(error)) {
           if (currentRunTimedOut) {
+            const turnStatus = await persistTurnStatus({
+              runMeta: currentRunMeta,
+              command: "timeout",
+              description: error?.message || "run timeout",
+              error,
+            });
+            if (!turnStatus) {
+              rejectUnpersistedTurnStatus({ runMeta: currentRunMeta, status: "timeout" });
+              return;
+            }
             sendEvent("error", {
               error: error?.message || "run timeout",
               sessionId: currentRunMeta?.sessionId || "",
               dialogProcessId: currentRunMeta?.dialogProcessId || "",
+              turnScopeId: currentRunMeta?.turnScopeId || currentTurnScopeId || "",
+              turnStatus,
             });
             webSocket.close(1011, "timeout");
           } else if (isUserStopRunAbort({ stopRequested, abortSignal: currentAbortSignal })) {
@@ -1077,8 +1180,9 @@ export function registerChatWebSocketServer(
               runMeta: currentRunMeta,
               fallbackMessage: stoppedMessage,
             });
+            let turnStatus = null;
             try {
-              await resolveBot()?.persistStoppedAssistantMessage?.({
+              turnStatus = await resolveBot()?.persistStoppedAssistantMessage?.({
                 userId: currentRunMeta?.userId || "",
                 sessionId: currentRunMeta?.sessionId || "",
                 parentSessionId: currentRunMeta?.parentSessionId || "",
@@ -1097,11 +1201,16 @@ export function registerChatWebSocketServer(
                 error: persistError,
               });
             }
+            if (!turnStatus) {
+              rejectUnpersistedTurnStatus({ runMeta: currentRunMeta, status: "user_stopped" });
+              return;
+            }
             sendEvent("user_stopped", {
               message: stoppedMessage,
               sessionId: stoppedPartialAssistant.sessionId || "",
               dialogProcessId: stoppedPartialAssistant.dialogProcessId || "",
               turnScopeId: stoppedPartialAssistant.turnScopeId || currentTurnScopeId || "",
+              turnStatus,
             });
             webSocket.close(1000, "user_stopped");
           } else {
@@ -1127,10 +1236,22 @@ export function registerChatWebSocketServer(
                     : "",
               },
             });
+            const turnStatus = await persistTurnStatus({
+              runMeta: currentRunMeta,
+              command: "aborted",
+              description: errorMessage,
+              error,
+            });
+            if (!turnStatus) {
+              rejectUnpersistedTurnStatus({ runMeta: currentRunMeta, status: "error" });
+              return;
+            }
             sendEvent("error", {
               error: errorMessage,
               sessionId: currentRunMeta?.sessionId || "",
               dialogProcessId: currentRunMeta?.dialogProcessId || "",
+              turnScopeId: currentRunMeta?.turnScopeId || currentTurnScopeId || "",
+              turnStatus,
             });
             webSocket.close(1011, "aborted");
           }
@@ -1146,10 +1267,23 @@ export function registerChatWebSocketServer(
           turnScopeId: currentRunMeta?.turnScopeId || currentTurnScopeId || "",
           error,
         });
+        const errorMessage = error.message || translateText("ws.unknownError", currentLocale);
+        const turnStatus = await persistTurnStatus({
+          runMeta: currentRunMeta,
+          command: "error",
+          description: errorMessage,
+          error,
+        });
+        if (!turnStatus) {
+          rejectUnpersistedTurnStatus({ runMeta: currentRunMeta, status: "error" });
+          return;
+        }
         sendEvent("error", {
-          error: error.message || translateText("ws.unknownError", currentLocale),
+          error: errorMessage,
           sessionId: currentRunMeta?.sessionId || "",
           dialogProcessId: currentRunMeta?.dialogProcessId || "",
+          turnScopeId: currentRunMeta?.turnScopeId || currentTurnScopeId || "",
+          turnStatus,
         });
         webSocket.close(1011, "error");
       } finally {

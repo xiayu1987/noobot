@@ -338,15 +338,9 @@ export function createChatEngineConversationState({
     const runtimeState = normalizeTrimmedString(
       getMessageRuntimeChannelState(messageItem)?.state || messageItem?.channelState,
     );
-    const directState = normalizeTrimmedString(messageItem?.state || messageItem?.status);
-    const stopState = normalizeTrimmedString(messageItem?.stopState);
     return (
       messageItem.pending === false &&
-      (
-        isTerminalConversationState(runtimeState) ||
-        isTerminalConversationState(directState) ||
-        stopState === BackendChannelState.USER_STOPPED
-      )
+      isTerminalConversationState(runtimeState)
     );
   }
 

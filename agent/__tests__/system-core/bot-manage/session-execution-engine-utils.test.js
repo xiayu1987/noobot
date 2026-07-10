@@ -240,6 +240,7 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
     currentTaskId: "",
     shortMemoryCheckpoint: 0,
     turnTimings: [],
+    turnStatuses: [],
     messages: [
       {
         role: "assistant",

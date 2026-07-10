@@ -56,7 +56,7 @@ function isTerminalMessageRuntimeState(state = "") {
 function isFinalizedAssistantMessage(messageItem = {}) {
   if (getMessageRole(messageItem) !== "assistant") return false;
   const channelState = getMessageChannelState(messageItem);
-  const state = normalizeState(channelState?.state || messageItem?.status || messageItem?.state || messageItem?.stopState);
+  const state = normalizeState(channelState?.state);
   return messageItem?.pending === false && isTerminalMessageRuntimeState(state);
 }
 

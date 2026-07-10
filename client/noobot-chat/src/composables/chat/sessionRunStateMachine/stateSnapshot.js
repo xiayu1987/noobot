@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { FrontendRunState, SESSION_RUN_EVENT } from "./constants";
+import { BackendChannelState, FrontendRunState, SESSION_RUN_EVENT } from "./constants";
 import { toIsoTime } from "../../infra/timeFields";
 import { transitionPriority } from "./normalize";
 
@@ -69,8 +69,9 @@ export function applySessionRunActionEventPatch({ current, event }) {
 }
 
 export function applySessionRunEventPatch({ current, event, startsNewTurn, nextDialogProcessId, nextTurnScopeId }) {
+  const nextState = resolveNextFrontendState({ current, event });
   return {
-    state: event.state,
+    state: nextState,
     backendState: event.backendState || "",
     sessionId: event.sessionId || current.sessionId,
     dialogProcessId: nextDialogProcessId,
@@ -78,7 +79,7 @@ export function applySessionRunEventPatch({ current, event, startsNewTurn, nextD
     source: event.source,
     sourceEvent: event.sourceEvent,
     seq: Math.max(Number(current.seq || 0), Number(event.seq || 0)),
-    priority: transitionPriority(event.state),
+    priority: transitionPriority(nextState),
     createdAtMs:
       event.createdAtMs ||
       (startsNewTurn ? event.timestamp : Number(current.createdAtMs || 0)),
@@ -97,7 +98,7 @@ export function applySessionRunEventPatch({ current, event, startsNewTurn, nextD
         : toIsoTime(event.timestamp)),
     updatedAt: event.timestamp,
     stopRequestedAt:
-      event.state === FrontendRunState.USER_STOP_REQUESTED
+      nextState === FrontendRunState.USER_STOP_REQUESTED
         ? event.timestamp
         : startsNewTurn
           ? 0
@@ -106,11 +107,25 @@ export function applySessionRunEventPatch({ current, event, startsNewTurn, nextD
       sendRequesting: false,
       continueRequesting: false,
       stopRequesting:
-        event.state === FrontendRunState.USER_STOP_REQUESTED
+        nextState === FrontendRunState.USER_STOP_REQUESTED
           ? Boolean(current?.composerActionState?.stopRequesting)
           : false,
       stopPendingUntilBackendReady: false,
     },
     lastEventType: event.type,
   };
+}
+
+function resolveNextFrontendState({ current = {}, event = {} } = {}) {
+  const currentState = current?.state;
+  if (
+    [FrontendRunState.RESEND_REPLACING_TURN, FrontendRunState.RESEND_STREAMING].includes(currentState) &&
+    [BackendChannelState.SENDING, BackendChannelState.RECONNECTING, BackendChannelState.INTERACTION_PENDING].includes(event.state) &&
+    current?.turnScopeId &&
+    event?.turnScopeId &&
+    current.turnScopeId === event.turnScopeId
+  ) {
+    return currentState;
+  }
+  return event.state;
 }

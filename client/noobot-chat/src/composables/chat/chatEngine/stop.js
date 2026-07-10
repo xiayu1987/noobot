@@ -26,39 +26,6 @@ import {
 } from "../debug/resendDebugLogger";
 import { logStopDebug } from "../debug/stopDebugLogger";
 
-function markLatestUserMessageStopped(activeSession, pendingAssistantMessage = null) {
-  const messages = Array.isArray(activeSession?.value?.messages)
-    ? activeSession.value.messages
-    : [];
-  const pendingChannelState = getMessageRuntimeChannelState(pendingAssistantMessage);
-  const pendingDialogProcessId = getMessageDialogProcessId(pendingAssistantMessage) ||
-    normalizeTrimmedString(pendingChannelState?.dialogProcessId);
-  const pendingTurnScopeId = getMessageTurnScopeId(pendingAssistantMessage) ||
-    normalizeTrimmedString(pendingChannelState?.turnScopeId) ||
-    findLatestUserTurnScopeIdForAssistant(messages, { dialogProcessId: pendingDialogProcessId });
-  if (!pendingTurnScopeId) return;
-  const targetUserMessageIndex = messages
-    .map((messageItem, index) => ({ messageItem, index }))
-    .reverse()
-    .find(({ messageItem }) => {
-      if (getMessageRole(messageItem) !== RoleEnum.USER) return false;
-      return getMessageTurnScopeId(messageItem) === pendingTurnScopeId;
-    });
-  const targetUserMessage = targetUserMessageIndex?.messageItem;
-  if (!targetUserMessage) return;
-  const markStopped = (messageItem) => {
-    if (!messageItem || typeof messageItem !== "object") return;
-    if (pendingDialogProcessId && !getMessageDialogProcessId(messageItem)) {
-      messageItem.dialogProcessId = pendingDialogProcessId;
-    }
-    messageItem.stopState = "user_stopped";
-    messageItem.monotonicState = "monotonic";
-    messageItem.isMonotonic = true;
-    messageItem.monotonic = true;
-  };
-  markStopped(targetUserMessage);
-}
-
 function findLatestUserTurnScopeIdForAssistant(messages = [], { dialogProcessId = "" } = {}) {
   const normalizedDialogProcessId = normalizeTrimmedString(dialogProcessId);
   const sourceMessages = Array.isArray(messages) ? messages : [];

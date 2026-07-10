@@ -27,7 +27,6 @@ export function summarizeDebugMessage(message = {}) {
     parentDialogProcessId: message.parentDialogProcessId || message.parent_dialog_process_id || "",
     pending: message.pending === true,
     statusLabel: message.statusLabel || "",
-    stopState: message.stopState || "",
     status: message.status || "",
     state: message.state || "",
     channelState: channelState?.state || "",

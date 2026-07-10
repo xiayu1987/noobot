@@ -17,37 +17,6 @@ function normalizeTrimmedString(value = "") {
   return String(value || "").trim();
 }
 
-function markLatestUserMessageStopped(activeSession, botMessage = null) {
-  const messages = Array.isArray(activeSession?.value?.messages)
-    ? activeSession.value.messages
-    : [];
-  if (!messages.length) return false;
-  const botTurnScopeId = getMessageTurnScopeId(botMessage);
-  if (!botTurnScopeId) return false;
-  const botDialogProcessId = getMessageDialogProcessId(botMessage);
-  const botIndex = botMessage ? messages.findIndex((messageItem) => messageItem === botMessage) : -1;
-  const startIndex = botIndex >= 0 ? botIndex - 1 : messages.length - 1;
-  const markStopped = (messageItem) => {
-    if (!messageItem || typeof messageItem !== "object") return;
-    const userDialogProcessId = getMessageDialogProcessId(messageItem);
-    if (botDialogProcessId && !userDialogProcessId) {
-      messageItem.dialogProcessId = botDialogProcessId;
-    }
-    messageItem.stopState = "user_stopped";
-    messageItem.monotonicState = "monotonic";
-    messageItem.isMonotonic = true;
-    messageItem.monotonic = true;
-  };
-  for (let index = startIndex; index >= 0; index -= 1) {
-    const messageItem = messages[index];
-    if (getMessageRole(messageItem) !== RoleEnum.USER) continue;
-    if (getMessageTurnScopeId(messageItem) !== botTurnScopeId) continue;
-    markStopped(messageItem);
-    return true;
-  }
-  return false;
-}
-
 export function applyStreamCompletedFallback({
   sending,
   finalDoneEventData,
@@ -115,7 +84,6 @@ export function applyStopRequestedState({
     botTurnScopeId: comparableBotTurnScopeId,
     botMessage: summarizeDebugMessage(botMessage),
   });
-  markLatestUserMessageStopped(activeSession, botMessage);
   applyConversationState(
     {
       state: BackendChannelState.USER_STOPPED,

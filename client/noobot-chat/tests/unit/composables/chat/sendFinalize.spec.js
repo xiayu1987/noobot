@@ -3,7 +3,7 @@ import { applyStopRequestedState } from "../../../../src/composables/chat/chatEn
 import { RoleEnum } from "../../../../src/shared/constants/chatConstants";
 
 describe("sendFinalize", () => {
-  it("marks the latest user message as stopped monotonic when stop is requested", () => {
+  it("applies the runtime stop state without mutating persisted message state", () => {
     const userMessage = { role: RoleEnum.USER, content: "question", turnScopeId: "turn-stop" };
     const assistantMessage = {
       role: RoleEnum.ASSISTANT,
@@ -34,11 +34,11 @@ describe("sendFinalize", () => {
     });
 
     expect(applied).toBe(true);
-    expect(userMessage.dialogProcessId).toBe("dp-stop");
-    expect(userMessage.stopState).toBe("user_stopped");
-    expect(userMessage.monotonicState).toBe("monotonic");
-    expect(userMessage.isMonotonic).toBe(true);
-    expect(userMessage.monotonic).toBe(true);
+    expect(userMessage).toEqual({
+      role: RoleEnum.USER,
+      content: "question",
+      turnScopeId: "turn-stop",
+    });
     expect(applyConversationState).toHaveBeenCalledWith(
       {
         state: "user_stopped",
@@ -80,7 +80,7 @@ describe("sendFinalize", () => {
     });
 
     expect(applied).toBe(false);
-    expect(userMessage.stopState).toBeUndefined();
+    expect(userMessage).toEqual({ role: RoleEnum.USER, content: "new question", turnScopeId: "turn-new" });
     expect(assistantMessage.pending).toBe(true);
     expect(applyConversationState).not.toHaveBeenCalled();
   });
