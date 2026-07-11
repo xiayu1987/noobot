@@ -22,6 +22,7 @@ const draftContent = ref("");
 const textareaRef = ref(null);
 const fileInputRef = ref(null);
 const editAttachments = ref([]);
+const removedHistoryAttachmentKeys = ref([]);
 const attachmentStats = computed(() => {
   const items = Array.isArray(editAttachments.value) ? editAttachments.value : [];
   return {
@@ -122,6 +123,7 @@ function initEditAttachments() {
   const source = Array.isArray(props.messageItem?.attachments) ? props.messageItem.attachments : [];
   const seen = new Set();
   const next = [];
+  removedHistoryAttachmentKeys.value = [];
   for (const attachment of source) {
     if (!attachment || typeof attachment !== "object") continue;
     const meta = cloneHistoryAttachment(attachment);
@@ -150,6 +152,10 @@ function rawFileKey(file = {}) {
   ].join("|");
 }
 
+function createClientAttachmentId() {
+  return globalThis?.crypto?.randomUUID?.() || `client-attachment:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function handleChooseFiles() {
   if (props.disabled || operating.value) return;
   fileInputRef.value?.click?.();
@@ -169,6 +175,7 @@ function handleAttachmentInput(event) {
     next.push({
       kind: "new",
       key,
+      clientAttachmentId: createClientAttachmentId(),
       name: file.name,
       mimeType,
       size: file.size || 0,
@@ -185,6 +192,11 @@ function removeEditAttachment(index) {
   if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= editAttachments.value.length) return;
   const next = [...editAttachments.value];
   const [removed] = next.splice(targetIndex, 1);
+  if (removed?.kind === "history" && removed.key) {
+    removedHistoryAttachmentKeys.value = [
+      ...new Set([...removedHistoryAttachmentKeys.value, removed.key]),
+    ];
+  }
   revokeEditAttachmentUrls([removed]);
   editAttachments.value = next;
 }
@@ -196,7 +208,14 @@ function buildEditAttachmentPayload() {
       .map((item) => cloneHistoryAttachment(item.meta || {})),
     attachmentFiles: editAttachments.value
       .filter((item) => item?.kind === "new" && item.raw)
-      .map((item) => ({ raw: item.raw, name: item.name, mimeType: item.mimeType, size: item.size })),
+      .map((item) => ({
+        raw: item.raw,
+        clientAttachmentId: item.clientAttachmentId,
+        name: item.name,
+        mimeType: item.mimeType,
+        size: item.size,
+      })),
+    removedAttachmentKeys: [...removedHistoryAttachmentKeys.value],
   };
 }
 
@@ -238,6 +257,7 @@ function handleCancelEdit() {
   markEditing(false);
   draftContent.value = "";
   resetEditAttachments();
+  removedHistoryAttachmentKeys.value = [];
 }
 
 async function handleSendEdited() {
@@ -250,6 +270,7 @@ async function handleSendEdited() {
     await props.onResend(props.messageItem, nextContent, buildEditAttachmentPayload());
     markEditing(false);
     resetEditAttachments();
+    removedHistoryAttachmentKeys.value = [];
   });
 }
 

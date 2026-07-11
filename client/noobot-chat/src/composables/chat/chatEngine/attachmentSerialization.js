@@ -28,6 +28,9 @@ export async function serializeAttachments(files = []) {
     const rawFile = resolveRawAttachmentFile(fileItem);
     if (!rawFile) continue;
     output.push({
+      ...((fileItem.clientAttachmentId || fileItem.draftAttachmentId)
+        ? { clientAttachmentId: String(fileItem.clientAttachmentId || fileItem.draftAttachmentId) }
+        : {}),
       name: fileItem.name || rawFile.name || "attachment",
       mimeType: fileItem.mimeType || rawFile.type || "application/octet-stream",
       contentBase64: await attachmentFileToBase64(rawFile),

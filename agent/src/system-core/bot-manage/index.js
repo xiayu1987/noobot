@@ -14,6 +14,8 @@ import { SessionExecutionEngine } from "./session/session-execution-engine.js";
 import { WorkspaceService } from "./workspace-infra/workspace-service.js";
 import path from "node:path";
 import { rm } from "node:fs/promises";
+import { mergeConfig } from "../config/index.js";
+import { resolveAttachments } from "../context/providers/attachment-resolver.js";
 
 export * as hook from "./hook/index.js";
 
@@ -73,6 +75,30 @@ export class BotManager {
 
   async syncUserWorkspace(userId) {
     return this.workspaceService.syncUserWorkspace(userId);
+  }
+
+  async replaceSessionTurn(payload = {}) {
+    const userId = String(payload?.userId || "").trim();
+    const sessionId = String(payload?.sessionId || "").trim();
+    const attachments = Array.isArray(payload?.attachments) ? payload.attachments : undefined;
+    let canonicalAttachments = attachments;
+    if (attachments) {
+      await this.ensureUserWorkspace(userId);
+      const runtimeBasePath = this.getWorkspacePath(userId);
+      const userConfig = await this.loadUserConfig(runtimeBasePath);
+      canonicalAttachments = await resolveAttachments({
+        attachmentService: this.attach,
+        runtimeBasePath,
+        effectiveConfig: mergeConfig(this.globalConfig, userConfig),
+        userMessageAttachments: attachments,
+        userId,
+        sessionId,
+      });
+    }
+    return this.session.replaceTurn({
+      ...payload,
+      ...(canonicalAttachments !== undefined ? { attachments: canonicalAttachments } : {}),
+    });
   }
 
   getAttachmentById({

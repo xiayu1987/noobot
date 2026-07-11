@@ -238,6 +238,7 @@ export function mapAttachmentRecordsToMetas(
     const parsedResult = normalizeAttachmentParsedResultMeta(item);
     return {
       attachmentId: safeStr(item?.attachmentId),
+      ...(safeStr(item?.clientAttachmentId) ? { clientAttachmentId: safeStr(item.clientAttachmentId) } : {}),
       sessionId: safeStr(item?.sessionId, DEFAULT_ATTACHMENT_SESSION_ID),
       attachmentSource: safeStr(item?.attachmentSource, DEFAULT_ATTACHMENT_SOURCE),
       name: safeStr(item?.name),

@@ -6,6 +6,7 @@
 
 import path from "node:path";
 import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
 import { v4 as uuidv4 } from "uuid";
 
 import { fsMkdir, fsWriteFile } from "../../store/fs-adapter.js";
@@ -49,6 +50,8 @@ export async function saveAttachmentRecord({
   turnScopeId = "",
   dialogProcessId = "",
   isSandbox = undefined,
+  clientAttachmentId = "",
+  contentSha256 = "",
 }) {
   const attachmentId = uuidv4();
   const extension = normalizeExtension(name, mimeType);
@@ -60,6 +63,8 @@ export async function saveAttachmentRecord({
 
   const record = buildPublicRecord(basePath, {
     attachmentId,
+    clientAttachmentId,
+    contentSha256,
     name: safeStr(name),
     mimeType: safeStr(mimeType, DEFAULT_MIME_TYPE),
     size: contentBytes.length,
@@ -131,6 +136,22 @@ export async function ingestAttachments(service, { userId, sessionId = "", attac
     }
 
     const bytes = Buffer.from(contentBase64, "base64");
+    const clientAttachmentId = safeStr(item?.clientAttachmentId);
+    const contentSha256 = createHash("sha256").update(bytes).digest("hex");
+    if (clientAttachmentId) {
+      const existing = Object.values(index.attachments || {}).find(
+        (record) => safeStr(record?.clientAttachmentId) === clientAttachmentId,
+      );
+      if (existing) {
+        if (safeStr(existing?.contentSha256) && safeStr(existing.contentSha256) !== contentSha256) {
+          const error = new Error("clientAttachmentId cannot be reused for different attachment content");
+          error.code = "CLIENT_ATTACHMENT_ID_CONFLICT";
+          throw error;
+        }
+        saved.push(existing);
+        continue;
+      }
+    }
 
     if (policy.maxFileSizeBytes > 0 && bytes.length > policy.maxFileSizeBytes) {
       throw recoverableToolError(
@@ -170,6 +191,8 @@ export async function ingestAttachments(service, { userId, sessionId = "", attac
       mimeType: normalizedMime,
       contentBytes: bytes,
       isSandbox: resolveAttachmentIsSandbox(item) ?? defaultIsSandbox,
+      clientAttachmentId,
+      contentSha256,
     });
     saved.push(record);
   }

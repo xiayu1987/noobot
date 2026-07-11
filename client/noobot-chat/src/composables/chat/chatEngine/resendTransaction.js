@@ -59,6 +59,16 @@ function dedupeAttachmentMetas(attachments = []) {
   return out;
 }
 
+function attachmentIdentityKey(attachment = {}) {
+  return String(attachment?.attachmentId || attachment?.id || "").trim() || [
+    String(attachment?.path || "").trim(),
+    String(attachment?.relativePath || "").trim(),
+    String(attachment?.name || attachment?.filename || attachment?.fileName || "").trim(),
+    String(attachment?.size || 0),
+    String(attachment?.mimeType || attachment?.type || "").trim(),
+  ].join("|");
+}
+
 function mergeAttachmentMetas(historyAttachments = [], transportAttachments = []) {
   // raw transport attachments are payloads only. When writing back to
   // the local user message, always merge with the richer history/session meta so
@@ -359,9 +369,17 @@ export function createResendMessageTransaction({
     if (!userTargetMessage) return false;
 
     const originalSession = activeSession?.value;
-    const keptAttachments = Array.isArray(options?.attachments)
-      ? dedupeAttachmentMetas(options.attachments)
-      : dedupeAttachmentMetas(userTargetMessage?.attachments || []);
+    const removedAttachmentKeys = new Set(
+      (Array.isArray(options?.removedAttachmentKeys) ? options.removedAttachmentKeys : [])
+        .map((key) => String(key || "").trim())
+        .filter(Boolean),
+    );
+    const authoritativeAttachments = dedupeAttachmentMetas(userTargetMessage?.attachments || [])
+      .filter((attachment) => !removedAttachmentKeys.has(attachmentIdentityKey(attachment)));
+    const keptAttachments = dedupeAttachmentMetas([
+      ...authoritativeAttachments,
+      ...(Array.isArray(options?.attachments) ? options.attachments : []),
+    ]);
     const attachmentFiles = Array.isArray(options?.attachmentFiles) ? options.attachmentFiles : [];
     const serializedNewAttachments = await serializeAttachments?.(attachmentFiles) || [];
     const pendingDisplayAttachments = serializedNewAttachments
@@ -432,10 +450,9 @@ export function createResendMessageTransaction({
           expectedVersion,
           idempotencyKey: operation?.opId || "",
           attempt,
-          // replace-turn owns the edited persisted set, so it receives only
-          // retained canonical attachments. New raw files belong to the
-          // following model-run upload transaction.
-          attachments: keptAttachments,
+          // The backend transaction ingests raw files before replacing the
+          // turn, so the returned user message is canonical and durable.
+          attachments: finalAttachments,
         }),
       });
       let { result, payload, expectedVersion } = mutationResult || {};
@@ -584,10 +601,7 @@ export function createResendMessageTransaction({
         allowDuringResend: true,
         attachmentFiles: [],
         userAttachments: replacementUserMessage.attachments,
-        // The replace-turn response is the display/persistence snapshot. New
-        // files may not be canonical until Agent ingests the original upload
-        // payload, so the WebSocket transport must retain contentBase64.
-        transportAttachments: finalAttachments,
+        transportAttachments: replacementUserMessage.attachments,
       });
       logResendDebug("resend.send.after", {
         sessionId,

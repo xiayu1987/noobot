@@ -56,6 +56,39 @@ test("AttachmentService.ingest + getAttachmentById keeps core behavior", async (
   });
 });
 
+test("AttachmentService.ingest is idempotent by clientAttachmentId", async () => {
+  await withTempDir(async (workspaceRoot) => {
+    const service = new AttachmentService({ workspaceRoot });
+    const basePayload = {
+      userId: "u1",
+      sessionId: "s1",
+      attachmentSource: "user",
+      attachments: [{
+        clientAttachmentId: "client-1",
+        name: "note.txt",
+        mimeType: "text/plain",
+        contentBase64: Buffer.from("same", "utf8").toString("base64"),
+      }],
+    };
+
+    const first = await service.ingest(basePayload);
+    const replay = await service.ingest(basePayload);
+    assert.equal(replay[0].attachmentId, first[0].attachmentId);
+    assert.equal(replay[0].clientAttachmentId, "client-1");
+
+    await assert.rejects(
+      service.ingest({
+        ...basePayload,
+        attachments: [{
+          ...basePayload.attachments[0],
+          contentBase64: Buffer.from("different", "utf8").toString("base64"),
+        }],
+      }),
+      (error) => error?.code === "CLIENT_ATTACHMENT_ID_CONFLICT",
+    );
+  });
+});
+
 test("AttachmentService.ingestGeneratedArtifacts preserves attachment owner metadata", async () => {
   await withTempDir(async (workspaceRoot) => {
     const service = new AttachmentService({ workspaceRoot });

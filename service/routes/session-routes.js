@@ -112,7 +112,10 @@ export function registerSessionRoutes(
         idempotencyKey: String(req.body?.idempotencyKey || "").trim(),
       };
       if (Array.isArray(req.body?.attachments)) payload.attachments = req.body.attachments;
-      const result = await bot.session.replaceTurn(payload);
+      const replaceSessionTurn = typeof bot?.replaceSessionTurn === "function"
+        ? bot.replaceSessionTurn.bind(bot)
+        : bot.session.replaceTurn.bind(bot.session);
+      const result = await replaceSessionTurn(payload);
       res.json({ ok: true, ...result });
     });
 

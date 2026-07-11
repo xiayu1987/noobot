@@ -187,6 +187,7 @@ function buildUserMetaAttachmentInfo(attachmentItem = {}) {
   const size = Number(attachmentItem?.size);
   return {
     attachmentId: String(attachmentItem?.attachmentId || "").trim(),
+    clientAttachmentId: String(attachmentItem?.clientAttachmentId || "").trim(),
     name: String(attachmentItem?.name || "").trim(),
     mimeType: String(attachmentItem?.mimeType || "").trim(),
     attachmentSource: String(attachmentItem?.attachmentSource || "").trim(),

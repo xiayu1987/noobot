@@ -38,6 +38,8 @@ export function buildPublicRecord(basePath, record) {
   const parsedResult = normalizeAttachmentParsedResultMeta(record);
   return {
     attachmentId: safeStr(record.attachmentId),
+    ...(safeStr(record.clientAttachmentId) ? { clientAttachmentId: safeStr(record.clientAttachmentId) } : {}),
+    ...(safeStr(record.contentSha256) ? { contentSha256: safeStr(record.contentSha256) } : {}),
     name: safeStr(record.name),
     mimeType: safeStr(record.mimeType, DEFAULT_MIME_TYPE),
     size: safeNum(record.size),
