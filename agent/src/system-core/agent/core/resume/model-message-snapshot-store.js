@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 import fs from "node:fs/promises";
-import path from "node:path";
+import { filePath as path } from "../../../utils/path-resolver.js";
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 
 function cleanId(value = "") {

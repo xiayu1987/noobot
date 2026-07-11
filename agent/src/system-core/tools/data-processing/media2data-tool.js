@@ -5,7 +5,7 @@
  */
 import { existsSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";

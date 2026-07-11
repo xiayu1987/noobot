@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { readdir } from "node:fs/promises";
-import path from "node:path";
+import { filePath as path, isAbsolutePathForPlatform } from "../../utils/path-resolver.js";
 import { fileURLToPath } from "node:url";
 import { recoverableToolError } from "../../error/index.js";
 import { ERROR_CODE } from "../../error/constants.js";
@@ -88,7 +88,7 @@ function buildPatchPathVariants(filePath = "", agentContext = {}) {
   const parts = normalized.split("/").filter(Boolean);
   const workspaceBaseName = path.basename(path.resolve(getBasePathFromAgentContext(agentContext) || "."));
   const virtualRoots = new Set([...VIRTUAL_PATCH_ROOTS, workspaceBaseName].filter(Boolean));
-  if ((path.isAbsolute(normalized) || path.win32.isAbsolute(normalized)) && !virtualRoots.has(parts[0])) {
+  if ((path.isAbsolute(normalized) || isAbsolutePathForPlatform(normalized)) && !virtualRoots.has(parts[0])) {
     return [normalized];
   }
   const variants = [parts.join("/") || normalized];

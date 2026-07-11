@@ -16,5 +16,5 @@ export {
   buildTransferFileEntry,
   resolveTransferFilePath,
   resolveTransferPathView,
-} from "./storage/path-resolver.js";
+} from "./storage/transfer-path-view.js";
 export * from "./transfer/index.js";

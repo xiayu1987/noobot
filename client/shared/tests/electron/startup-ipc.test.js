@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
-import path from "node:path";
+import { clientFilePath as path } from "../../path-resolver.js";
 import test from "node:test";
 import { registerStartupIpcHandlers } from "../../electron/startup-ipc.js";
 

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import fs from "node:fs";
-import path from "node:path";
+import { filePath as path } from "../path-resolver.js";
 import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";

@@ -6,7 +6,7 @@
 import { isTransferEnvelope } from "../envelope/envelope.js";
 import { normalizeTransferEnvelopes } from "../envelope/envelope-utils.js";
 import { emitEvent } from "../../event/index.js";
-import { resolveTransferFilePath } from "./path-resolver.js";
+import { resolveTransferFilePath } from "./transfer-path-view.js";
 import { firstNormalizedString } from "../core/compact.js";
 
 function isPlainObject(value) {

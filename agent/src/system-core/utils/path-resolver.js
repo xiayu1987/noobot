@@ -4,6 +4,170 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeSandboxProvider } from "../config/index.js";
+import nodePath from "node:path";
+
+// Local filesystem operations also pass through this module. Cross-platform
+// payload paths must use the explicit *ForPlatform/view conversion APIs below.
+export const filePath = Object.freeze({
+  basename: (...args) => nodePath.basename(...args),
+  dirname: (...args) => nodePath.dirname(...args),
+  extname: (...args) => nodePath.extname(...args),
+  format: (...args) => nodePath.format(...args),
+  isAbsolute: (...args) => nodePath.isAbsolute(...args),
+  join: (...args) => nodePath.join(...args),
+  normalize: (...args) => nodePath.normalize(...args),
+  parse: (...args) => nodePath.parse(...args),
+  relative: (...args) => nodePath.relative(...args),
+  resolve: (...args) => nodePath.resolve(...args),
+  delimiter: nodePath.delimiter,
+  sep: nodePath.sep,
+});
+
+export default filePath;
+
+export const PATH_PLATFORMS = Object.freeze({
+  WINDOWS: "windows",
+  MACOS: "macos",
+  LINUX: "linux",
+});
+
+export const PATH_VIEWS = Object.freeze({
+  HOST: "host",
+  SANDBOX: "sandbox",
+  CLIENT: "client",
+});
+
+function normalizePlatform(platform = "") {
+  const value = String(platform || "").trim().toLowerCase();
+  if (["win", "win32", "windows"].includes(value)) return PATH_PLATFORMS.WINDOWS;
+  if (["mac", "macos", "darwin", "osx"].includes(value)) return PATH_PLATFORMS.MACOS;
+  if (["linux", "posix"].includes(value)) return PATH_PLATFORMS.LINUX;
+  return "";
+}
+
+function normalizeView(view = "") {
+  const value = String(view || "").trim().toLowerCase();
+  return Object.values(PATH_VIEWS).includes(value) ? value : "";
+}
+
+function resolveHostPlatform(agentContext = null) {
+  return normalizePlatform(
+    agentContext?.environment?.os?.platform ||
+    agentContext?.environment?.platform ||
+    agentContext?.platform ||
+    "",
+  );
+}
+
+function explicitViewMappings(context = {}) {
+  const mappings = Array.isArray(context?.mappings) ? context.mappings : [];
+  return mappings.map((item = {}) => ({
+    host: normalizeSlashPath(item.host || item.hostPath || item.source || ""),
+    sandbox: normalizeSlashPath(item.sandbox || item.sandboxPath || item.target || ""),
+    client: normalizeSlashPath(item.client || item.clientPath || ""),
+  }));
+}
+
+export function convertPathView({
+  path = "", sourceView = "", targetView = "", sourcePlatform = "",
+  targetPlatform = "", runtime = {}, agentContext = null, mappings = [],
+} = {}) {
+  const from = normalizeView(sourceView);
+  const to = normalizeView(targetView);
+  if (!from || !to) throw new TypeError("sourceView and targetView must be host, sandbox, or client");
+  const hostPlatform = resolveHostPlatform(agentContext);
+  const fromPlatformHint = normalizePlatform(sourcePlatform) || (from === PATH_VIEWS.HOST ? hostPlatform : "");
+  const normalized = normalizePathForPlatform(path, { platform: fromPlatformHint });
+  const fromPlatform = fromPlatformHint || detectPathPlatform(normalized);
+  const toPlatform = normalizePlatform(targetPlatform) || (to === PATH_VIEWS.HOST ? hostPlatform : "") || fromPlatform;
+  let converted = normalized;
+  let mapped = from === to;
+  const allMappings = explicitViewMappings({ mappings: [
+    ...resolveSandboxPathMappings(runtime).map(({ source, target }) => ({ host: source, sandbox: target })),
+    ...mappings,
+  ] });
+  if (!mapped) {
+    const candidates = allMappings
+      .filter((item) => item[from] && item[to])
+      .sort((a, b) => b[from].length - a[from].length);
+    for (const item of candidates) {
+      if (normalized === item[from] || normalized.startsWith(`${item[from]}/`)) {
+        converted = `${item[to]}${normalized.slice(item[from].length)}`;
+        mapped = true;
+        break;
+      }
+    }
+  }
+  return {
+    path: normalizePathForPlatform(converted, { platform: toPlatform }),
+    sourcePath: normalized,
+    sourcePlatform: fromPlatform,
+    sourceView: from,
+    targetPlatform: toPlatform,
+    targetView: to,
+    mapped,
+  };
+}
+
+export const toHostPath = (options = {}) => convertPathView({ ...options, targetView: PATH_VIEWS.HOST });
+export const toSandboxPath = (options = {}) => convertPathView({ ...options, targetView: PATH_VIEWS.SANDBOX });
+export const toClientPath = (options = {}) => convertPathView({ ...options, targetView: PATH_VIEWS.CLIENT });
+
+export function detectPathPlatform(value = "", platformHint = "") {
+  const hinted = normalizePlatform(platformHint);
+  if (hinted) return hinted;
+  const source = String(value || "").trim();
+  if (/^(?:[a-z]:[\\/]|\\\\|\/\/[^/\\]+[/\\][^/\\]+)/i.test(source)) {
+    return PATH_PLATFORMS.WINDOWS;
+  }
+  // A leading slash identifies POSIX syntax, not a specific source OS.
+  // Callers that need macOS/Linux provenance must provide platformHint.
+  return "";
+}
+
+function decodeFileUrl(value = "") {
+  const source = String(value || "").trim();
+  if (!/^file:/i.test(source)) return source;
+  try {
+    const url = new URL(source);
+    const pathname = decodeURIComponent(url.pathname);
+    if (url.host) return `//${url.host}${pathname}`;
+    return /^\/[a-z]:\//i.test(pathname) ? pathname.slice(1) : pathname;
+  } catch {
+    return source;
+  }
+}
+
+export function normalizePathForPlatform(value = "", { platform = "", trailingSlash = false } = {}) {
+  const decoded = decodeFileUrl(value);
+  const resolvedPlatform = detectPathPlatform(decoded, platform);
+  let normalized = decoded.replaceAll("\\", "/");
+  const prefix = normalized.startsWith("//") ? "//" : normalized.startsWith("/") ? "/" : "";
+  const body = normalized.slice(prefix.length);
+  const parts = [];
+  for (const part of body.split("/")) {
+    if (!part || part === ".") continue;
+    if (part === ".." && parts.length && parts.at(-1) !== ".." && !/^[a-z]:$/i.test(parts.at(-1))) parts.pop();
+    else if (part !== ".." || !prefix) parts.push(part);
+  }
+  normalized = `${prefix}${parts.join("/")}` || prefix;
+  if (trailingSlash && normalized && !normalized.endsWith("/")) normalized += "/";
+  if (resolvedPlatform === PATH_PLATFORMS.WINDOWS) return normalized;
+  return normalized;
+}
+
+export function isAbsolutePathForPlatform(value = "", platform = "") {
+  const normalized = normalizePathForPlatform(value, { platform });
+  const resolvedPlatform = detectPathPlatform(value, platform);
+  return resolvedPlatform === PATH_PLATFORMS.WINDOWS
+    ? /^(?:[a-z]:\/|\/\/[^/]+\/[^/]+)/i.test(normalized)
+    : normalized.startsWith("/");
+}
+
+export function joinPathForPlatform(basePath = "", ...segments) {
+  const platform = detectPathPlatform(basePath);
+  return normalizePathForPlatform([basePath, ...segments].filter(Boolean).join("/"), { platform });
+}
 
 export function normalizeSlashPath(value = "") {
   return String(value || "").trim().replaceAll("\\", "/");

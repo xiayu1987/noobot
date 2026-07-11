@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { mkdir, readFile, stat, writeFile, readdir } from "node:fs/promises";
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 import { randomUUID } from "node:crypto";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { HumanMessage } from "@langchain/core/messages";

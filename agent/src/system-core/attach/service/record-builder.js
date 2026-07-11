@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 
 import { DEFAULT_ATTACHMENT_SESSION_ID, DEFAULT_ATTACHMENT_SOURCE, DEFAULT_MIME_TYPE, MIME_TO_EXTENSION, MAX_EXTENSION_LENGTH } from "../constants.js";
 import {
@@ -22,7 +22,7 @@ import { safeNum, safeStr } from "../../utils/shared-utils.js";
  * @returns {string}
  */
 export function normalizeRelativePath(basePath, absolutePath) {
-  return path.relative(basePath, absolutePath).split(path.sep).join(path.posix.sep);
+  return path.relative(basePath, absolutePath).split(path.sep).join("/");
 }
 
 /**

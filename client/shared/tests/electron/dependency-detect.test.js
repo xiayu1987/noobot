@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import path from "node:path";
+import { clientFilePath as path } from "../../path-resolver.js";
 import { createGzip } from "node:zlib";
 import { pipeline } from "node:stream/promises";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
@@ -145,7 +145,7 @@ test("darwin managed dependency probe falls back to --version when no version ar
 test("win32 registry default value is parsed and checked for executable candidates", async () => {
   await withPlatform("win32", async () => {
     const installPath = "C:\\Program Files\\LibreOffice";
-    const existingPath = path.join(installPath, "program", "soffice.exe");
+    const existingPath = "C:/Program Files/LibreOffice/program/soffice.exe";
     const detector = createDependencyDetector({
       runProcess: async (command, args) => {
         assert.equal(command, "reg");
@@ -155,7 +155,7 @@ test("win32 registry default value is parsed and checked for executable candidat
           stdout: `HKEY_LOCAL_MACHINE\\SOFTWARE\\LibreOffice\\UNO\\InstallPath\r\n    (Default)    REG_SZ    ${installPath}\r\n`,
         };
       },
-      hasExistingFile: (filePath) => filePath === existingPath,
+      hasExistingFile: (filePath) => String(filePath).replaceAll("\\", "/") === existingPath,
     });
 
     const installed = await detector.isDependencyInstalled({
@@ -482,5 +482,33 @@ test("dependency runtime env resolves managed ffmpeg, sibling ffprobe and LibreO
     } finally {
       await rm(rootDir, { recursive: true, force: true });
     }
+  });
+});
+
+test("win32 dependency runtime env uses semicolon PATH semantics with slash-normalized candidates", async () => {
+  await withPlatform("linux", async () => {
+    const existing = new Set([
+      "C:/Tools/ffmpeg/bin/ffmpeg.exe",
+      "C:/Tools/ffmpeg/bin/ffprobe.exe",
+      "C:/Program Files/LibreOffice/program/soffice.exe",
+      "C:/Tools/node/bin/node.exe",
+    ]);
+    const runtimeEnv = buildDependencyRuntimeEnv({
+      env: {
+        PATH: "C:\\Tools\\ffmpeg\\bin;C:\\Tools\\node\\bin;C:\\Windows\\System32",
+        PROGRAMFILES: "C:\\Program Files",
+      },
+      platform: "win32",
+      exists: (candidatePath) => existing.has(String(candidatePath).replaceAll("\\", "/")),
+    });
+
+    assert.equal(runtimeEnv.NOOBOT_FFMPEG_PATH, "C:/Tools/ffmpeg/bin/ffmpeg.exe");
+    assert.equal(runtimeEnv.NOOBOT_FFPROBE_PATH, "C:/Tools/ffmpeg/bin/ffprobe.exe");
+    assert.equal(runtimeEnv.LIBRE_OFFICE_EXE, "C:/Program Files/LibreOffice/program/soffice.exe");
+    assert.equal(runtimeEnv.PATH.split(";")[0], "C:/Program Files/LibreOffice/program");
+    assert.equal(
+      runtimeEnv.PATH,
+      "C:/Program Files/LibreOffice/program;C:\\Tools\\ffmpeg\\bin;C:\\Tools\\node\\bin;C:\\Windows\\System32",
+    );
   });
 });

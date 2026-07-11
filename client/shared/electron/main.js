@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { app } from "electron";
-import path from "node:path";
+import { clientFilePath as path } from "../path-resolver.js";
 import { fileURLToPath } from "node:url";
 import { appendEarlyLog, createStartupLogger, desktopAppName, installEarlyDiagnostics } from "./startup-logging.js";
 import { createDesktopConfigManager } from "./desktop-config.js";

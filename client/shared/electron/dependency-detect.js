@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import path from "node:path";
+import { joinClientPath } from "../path-resolver.js";
 import fs from "node:fs";
 import { desktopDependencyTimeouts } from "./dependency-specs.js";
 import { sleep } from "./dependency-process.js";
@@ -38,8 +38,8 @@ export function createDependencyDetector({
   function hasMacAppBundle(appName) {
     if (process.platform !== "darwin") return false;
     const candidates = [
-      path.join("/Applications", appName),
-      path.join(process.env.HOME || "", "Applications", appName),
+      joinClientPath("/Applications", appName),
+      joinClientPath(process.env.HOME || "", "Applications", appName),
     ].filter(Boolean);
     appendEarlyLog(`[dependency:installed:mac-app:start] app=${appName}; candidates=${candidates.join(" | ")}`);
     for (const candidate of candidates) {
@@ -74,10 +74,10 @@ export function createDependencyDetector({
       const installPath = parseWindowsRegistryDefaultValue(result.stdout);
       if (!installPath) continue;
       const candidates = [
-        path.join(installPath, "soffice.exe"),
-        path.join(installPath, "libreoffice.exe"),
-        path.join(installPath, "program", "soffice.exe"),
-        path.join(installPath, "program", "libreoffice.exe"),
+        joinClientPath(installPath, "soffice.exe"),
+        joinClientPath(installPath, "libreoffice.exe"),
+        joinClientPath(installPath, "program", "soffice.exe"),
+        joinClientPath(installPath, "program", "libreoffice.exe"),
       ];
       if (candidates.some(hasExistingFile)) return true;
     }
@@ -163,7 +163,7 @@ export function createDependencyDetector({
       const roots = [process.env.ProgramFiles, process.env["ProgramFiles(x86)"], process.env.ProgramData, process.env.LOCALAPPDATA, process.env.APPDATA, "C:\\"].filter(Boolean);
       for (const root of roots) {
         for (const relative of spec.win32ExecutableCandidates || []) {
-          if (hasExistingFile(path.join(root, relative))) return true;
+          if (hasExistingFile(joinClientPath(root, relative))) return true;
         }
       }
       if (await hasWindowsWingetPackage(spec)) return true;

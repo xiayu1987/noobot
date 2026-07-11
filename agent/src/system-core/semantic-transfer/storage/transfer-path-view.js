@@ -4,11 +4,18 @@
  * SPDX-License-Identifier: MIT
  */
 import {
+  PATH_VIEWS,
+  convertPathView,
+  detectPathPlatform,
   resolveAttachmentDisplayPath,
   resolveSandboxPath,
-} from "../../utils/sandbox-path-resolver.js";
+} from "../../utils/path-resolver.js";
 import { firstNormalizedString } from "../core/compact.js";
 
+// Transfer path views keep multiple path roles explicit:
+// - path follows targetView and is the canonical path for that view.
+// - hostPath, sandboxPath, and relativePath preserve their named meanings.
+// - displayPath is the model/user-facing fallback and may differ from path.
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -45,27 +52,12 @@ function buildTransferPathResolverPayload({
     hostPath: resolvedHostPath,
     relativePath: resolvedRelativePath,
     ...(typeof isSandbox === "boolean" ? { isSandbox } : {}),
+    sourcePlatform: normalizeString(sourceMeta?.sourcePlatform || sourceMeta?.pathPlatform),
+    sourceView: normalizeString(sourceMeta?.sourceView || sourceMeta?.pathView) || (isSandbox === true ? PATH_VIEWS.HOST : ""),
     runtime,
     agentContext,
     purpose,
   };
-}
-
-function resolveViaRuntimeTransferPathResolvers(payload = {}) {
-  const resolverCandidates = [
-    payload?.runtime?.sharedTools?.resolveAttachmentDisplayPath,
-  ];
-
-  for (const resolver of resolverCandidates) {
-    if (typeof resolver !== "function") continue;
-    try {
-      const resolved = normalizeString(resolver(payload));
-      if (resolved) return resolved;
-    } catch {
-      // Keep the historical fallback behavior: ignore resolver errors.
-    }
-  }
-  return "";
 }
 
 export function resolveTransferFilePath({
@@ -78,29 +70,30 @@ export function resolveTransferFilePath({
   relativePath = "",
   purpose = "semantic_transfer_file_path",
 } = {}) {
-  const resolverPayload = buildTransferPathResolverPayload({
-    runtime,
-    agentContext,
-    attachmentMeta,
-    meta,
-    path,
-    hostPath,
-    relativePath,
-    purpose,
+  const payload = buildTransferPathResolverPayload({
+    runtime, agentContext, attachmentMeta, meta, path, hostPath, relativePath, purpose,
   });
-
-  const sandboxPath = resolveSandboxPath(resolverPayload);
-  if (sandboxPath) return sandboxPath;
-
-  const runtimeResolvedPath = resolveViaRuntimeTransferPathResolvers(resolverPayload);
-  if (runtimeResolvedPath) return runtimeResolvedPath;
-
-  return firstNormalizedString(
-    resolveAttachmentDisplayPath(resolverPayload),
-    resolverPayload.relativePath,
-    resolverPayload.hostPath,
-    resolverPayload.meta?.name,
-  );
+  if (payload.isSandbox === true) {
+    const sandboxPath = resolveSandboxPath(payload);
+    if (sandboxPath) return sandboxPath;
+  }
+  if (payload.isSandbox === false) {
+    return firstNormalizedString(
+      payload.relativePath,
+      payload.hostPath,
+      payload.meta?.name,
+    );
+  }
+  const runtimeResolver = runtime?.sharedTools?.resolveAttachmentDisplayPath;
+  if (typeof runtimeResolver === "function") {
+    try {
+      const resolved = normalizeString(runtimeResolver(payload));
+      if (resolved) return resolved;
+    } catch {
+      // Preserve fallback behavior when an optional runtime resolver fails.
+    }
+  }
+  return resolveAttachmentDisplayPath(payload);
 }
 
 
@@ -129,8 +122,27 @@ export function resolveTransferPathView({
     ...resolverPayload,
     attachmentMeta: resolverPayload.meta,
   });
+  const sourcePath = resolverPayload.hostPath || resolverPayload.relativePath;
+  const sourcePlatform = resolverPayload.sourcePlatform || detectPathPlatform(sourcePath);
+  const sourceView = resolverPayload.sourceView || PATH_VIEWS.HOST;
+  const targetView = sandboxPath ? PATH_VIEWS.SANDBOX : sourceView;
+  const semanticView = convertPathView({
+    path: sourcePath,
+    sourcePlatform,
+    sourceView,
+    targetPlatform: sandboxPath ? "linux" : sourcePlatform,
+    targetView,
+    runtime,
+    agentContext,
+  });
+  const targetPath = sandboxPath || semanticView.path;
   return {
     displayPath,
+    path: targetPath,
+    sourcePlatform: semanticView.sourcePlatform,
+    sourceView: semanticView.sourceView,
+    targetPlatform: semanticView.targetPlatform,
+    targetView: semanticView.targetView,
     ...(sandboxPath ? { sandboxPath } : {}),
     ...(resolverPayload.hostPath ? { hostPath: resolverPayload.hostPath } : {}),
     ...(resolverPayload.relativePath ? { relativePath: resolverPayload.relativePath } : {}),

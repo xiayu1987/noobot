@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import path from "node:path";
+import { filePath as path } from "../../../utils/path-resolver.js";
 import { access, readFile, realpath, stat } from "node:fs/promises";
 import { BUILTIN_THRESHOLDS, normalizeConnectorType } from "../../../config/index.js";
 import { recoverableToolError } from "../../../error/index.js";

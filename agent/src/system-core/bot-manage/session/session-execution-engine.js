@@ -30,7 +30,7 @@ import {
   readAttachIndex,
 } from "../../attach/index.js";
 import { MIME_TYPE } from "../../constants/index.js";
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 import { normalizeTrimmedStringList } from "./session-execution-engine-utils.js";
 import { createDetachedSubSessionRunner } from "./detached-subsession-runner.js";
 import { ModelMessageRuntimeHelpers } from "./model-message-runtime-helpers.js";

@@ -6,7 +6,7 @@
  * Tool compatibility logging: build log lines and append to file.
  */
 import { appendFile, mkdir } from "node:fs/promises";
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
 
 /**

@@ -7,7 +7,7 @@ import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { createRequire } from "node:module";
 import os from "node:os";
-import path from "node:path";
+import { filePath as path } from "../../../utils/path-resolver.js";
 import { promisify } from "node:util";
 import { DOC2DATA_PARSE_ENGINE } from "../../../config/core/enums.js";
 import { recoverableToolError } from "../../../error/index.js";

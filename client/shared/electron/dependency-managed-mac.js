@@ -5,7 +5,7 @@
  */
 import fs from "node:fs";
 import os from "node:os";
-import path from "node:path";
+import { clientPathDelimiter, clientPathDirname, joinClientPath } from "../path-resolver.js";
 import { pipeline } from "node:stream/promises";
 import zlib from "node:zlib";
 import { dependencySpecs, desktopDependencyTimeouts } from "./dependency-specs.js";
@@ -26,17 +26,17 @@ export function createMacDependencyInstallerTools({
   }
   function getManagedDependenciesRoot() {
     const base = app.isReady() ? app.getPath("userData") : (process.env.HOME || os.tmpdir());
-    return path.join(base, "managed-dependencies");
+    return joinClientPath(base, "managed-dependencies");
   }
 
   function getManagedDependencyDir(key) {
-    return path.join(getManagedDependenciesRoot(), key);
+    return joinClientPath(getManagedDependenciesRoot(), key);
   }
 
   function getManagedBinDirs() {
     return [
-      path.join(getManagedDependencyDir("ffmpeg"), "bin"),
-      path.join(getManagedDependencyDir("nodejs"), "bin"),
+      joinClientPath(getManagedDependencyDir("ffmpeg"), "bin"),
+      joinClientPath(getManagedDependencyDir("nodejs"), "bin"),
     ];
   }
 
@@ -48,7 +48,7 @@ export function createMacDependencyInstallerTools({
 
   function prependManagedDependencyPath() {
     if (process.platform !== "darwin") return;
-    const delimiter = path.delimiter;
+    const delimiter = clientPathDelimiter("macos");
     const current = String(process.env.PATH || "");
     const parts = current.split(delimiter).filter(Boolean);
     const managed = getManagedBinDirs().filter((dir) => hasExistingFile(dir));
@@ -121,12 +121,12 @@ export function createMacDependencyInstallerTools({
   }
 
   function findLibreOfficeAppInVolume(volumePath) {
-    const direct = path.join(volumePath, "LibreOffice.app");
+    const direct = joinClientPath(volumePath, "LibreOffice.app");
     if (hasExistingFile(direct)) return direct;
     try {
       const entries = fs.readdirSync(volumePath, { withFileTypes: true });
       const match = entries.find((entry) => entry.isDirectory() && entry.name.toLowerCase() === "libreoffice.app");
-      return match ? path.join(volumePath, match.name) : "";
+      return match ? joinClientPath(volumePath, match.name) : "";
     } catch {
       return "";
     }
@@ -177,8 +177,8 @@ export function createMacDependencyInstallerTools({
 
   async function installLibreOfficeFromDmg(spec) {
     if (process.platform !== "darwin" || spec.label !== "LibreOffice") return null;
-    const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "noobot-libreoffice-"));
-    const dmgPath = path.join(tempDir, "LibreOffice.dmg");
+    const tempDir = await fs.promises.mkdtemp(joinClientPath(os.tmpdir(), "noobot-libreoffice-"));
+    const dmgPath = joinClientPath(tempDir, "LibreOffice.dmg");
     let mountPoint = "";
     try {
       sendStatus({ phase: "dependency", message: `Downloading ${spec.label} from the official LibreOffice site...` });
@@ -233,7 +233,7 @@ export function createMacDependencyInstallerTools({
 
   function getMacManagedCommandPath(key, command) {
     if (process.platform !== "darwin") return "";
-    return path.join(getManagedDependencyDir(key), "bin", command);
+    return joinClientPath(getManagedDependencyDir(key), "bin", command);
   }
 
   async function runManagedCommand(key, command, args = []) {
@@ -261,7 +261,7 @@ export function createMacDependencyInstallerTools({
         continue;
       }
       for (const entry of entries) {
-        const fullPath = path.join(current, entry.name);
+        const fullPath = joinClientPath(current, entry.name);
         if (entry.isDirectory()) {
           stack.push(fullPath);
           continue;
@@ -333,7 +333,7 @@ export function createMacDependencyInstallerTools({
   async function extractFfmpegArchive({ archivePath, extractDir, selectedUrl }) {
     if (isGzipArchiveUrl(selectedUrl)) {
       await fs.promises.mkdir(extractDir, { recursive: true });
-      const outputPath = path.join(extractDir, "ffmpeg");
+      const outputPath = joinClientPath(extractDir, "ffmpeg");
       writeDependencyLog("managed:ffmpeg:extract:start", { archive: archivePath, destination: outputPath, format: "gzip", timeoutMs: desktopDependencyTimeouts.installMs });
       await pipeline(
         fs.createReadStream(archivePath),
@@ -353,12 +353,12 @@ export function createMacDependencyInstallerTools({
 
   async function installFfmpegManagedMac(spec) {
     if (process.platform !== "darwin") return null;
-    const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "noobot-ffmpeg-"));
-    const archivePath = path.join(tempDir, "ffmpeg.archive");
-    const extractDir = path.join(tempDir, "extract");
-    const targetBinDir = path.join(getManagedDependencyDir("ffmpeg"), "bin");
-    const targetPath = path.join(targetBinDir, "ffmpeg");
-    const targetFfprobePath = path.join(targetBinDir, "ffprobe");
+    const tempDir = await fs.promises.mkdtemp(joinClientPath(os.tmpdir(), "noobot-ffmpeg-"));
+    const archivePath = joinClientPath(tempDir, "ffmpeg.archive");
+    const extractDir = joinClientPath(tempDir, "extract");
+    const targetBinDir = joinClientPath(getManagedDependencyDir("ffmpeg"), "bin");
+    const targetPath = joinClientPath(targetBinDir, "ffmpeg");
+    const targetFfprobePath = joinClientPath(targetBinDir, "ffprobe");
     try {
       sendStatus({ phase: "dependency", message: `Downloading ${spec.label} binary...` });
       const selectedUrl = await downloadFirstAvailableFile({
@@ -386,7 +386,7 @@ export function createMacDependencyInstallerTools({
       if (!sourcePath) throw createDependencyError("FFmpeg archive did not contain ffmpeg binary.", { failureKind: "package" });
       sendStatus({ phase: "dependency", message: `Installing ${spec.label} to managed dependencies...` });
       writeDependencyLog("managed:ffmpeg:copy:start", { source: sourcePath, target: targetPath });
-      await fs.promises.rm(path.dirname(targetBinDir), { recursive: true, force: true });
+      await fs.promises.rm(clientPathDirname(targetBinDir), { recursive: true, force: true });
       await fs.promises.mkdir(targetBinDir, { recursive: true });
       await fs.promises.copyFile(sourcePath, targetPath);
       await fs.promises.chmod(targetPath, 0o755);
@@ -414,9 +414,9 @@ export function createMacDependencyInstallerTools({
 
   async function installNodeManagedMac(spec) {
     if (process.platform !== "darwin") return null;
-    const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "noobot-nodejs-"));
-    const archivePath = path.join(tempDir, "node.tar.xz");
-    const extractDir = path.join(tempDir, "extract");
+    const tempDir = await fs.promises.mkdtemp(joinClientPath(os.tmpdir(), "noobot-nodejs-"));
+    const archivePath = joinClientPath(tempDir, "node.tar.xz");
+    const extractDir = joinClientPath(tempDir, "extract");
     const targetDir = getManagedDependencyDir("nodejs");
     try {
       sendStatus({ phase: "dependency", message: `Downloading ${spec.label} from nodejs.org...` });
@@ -435,10 +435,10 @@ export function createMacDependencyInstallerTools({
       const tarResult = await runProcess("tar", ["-xJf", archivePath, "-C", extractDir, "--strip-components", "1"], { timeoutMs: desktopDependencyTimeouts.installMs });
       if (!tarResult.ok) throw createDependencyError(`Failed to extract Node.js.${String(tarResult.stderr || tarResult.error || "").slice(0, 1000)}`, { failureKind: "package" });
       await fs.promises.rm(targetDir, { recursive: true, force: true });
-      await fs.promises.mkdir(path.dirname(targetDir), { recursive: true });
+      await fs.promises.mkdir(clientPathDirname(targetDir), { recursive: true });
       await fs.promises.rename(extractDir, targetDir);
-      await fs.promises.chmod(path.join(targetDir, "bin", "node"), 0o755).catch(() => {});
-      await fs.promises.chmod(path.join(targetDir, "bin", "npm"), 0o755).catch(() => {});
+      await fs.promises.chmod(joinClientPath(targetDir, "bin", "node"), 0o755).catch(() => {});
+      await fs.promises.chmod(joinClientPath(targetDir, "bin", "npm"), 0o755).catch(() => {});
       prependManagedDependencyPath();
       const nodeVerify = await verifyManagedCommand("nodejs", "node", ["--version"]);
       if (!nodeVerify.ok) throw createDependencyError(`Managed Node.js verification failed.${String(nodeVerify.stderr || nodeVerify.error || "").slice(0, 1000)}`, { failureKind: "verification" });

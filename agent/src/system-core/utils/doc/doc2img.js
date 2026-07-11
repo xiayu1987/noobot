@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { mkdir, readFile, writeFile, readdir, access } from "node:fs/promises";
-import path from "node:path";
+import { filePath as path } from "../path-resolver.js";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { Poppler } from "node-poppler";

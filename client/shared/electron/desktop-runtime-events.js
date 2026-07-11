@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import path from "node:path";
 import { writeRoutedRuntimeEvent } from "@noobot/runtime-events";
+import { joinClientPath } from "../path-resolver.js";
 
 const DESKTOP_RUNTIME_EVENTS_ROOT_ENV = "NOOBOT_RUNTIME_EVENTS_ROOT";
 const SENSITIVE_KEY_PATTERN = /(token|cookie|authorization|secret|apikey|apiKey|headers|body|url|href|password|path|file)/i;
@@ -13,7 +13,7 @@ export function getDesktopRuntimeEventsRoot(app) {
   if (!app || typeof app.getPath !== "function") {
     throw new Error("getDesktopRuntimeEventsRoot requires an Electron app");
   }
-  return path.join(app.getPath("userData"), "runtime", "events");
+  return joinClientPath(app.getPath("userData"), "runtime", "events");
 }
 
 export function initializeDesktopRuntimeEvents(app, { env = process.env, runtimeEventsRoot } = {}) {

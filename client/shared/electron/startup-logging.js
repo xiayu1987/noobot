@@ -5,7 +5,7 @@
  */
 import fs from "node:fs";
 import os from "node:os";
-import path from "node:path";
+import { clientFilePath as path } from "../path-resolver.js";
 import { createDesktopRuntimeEventWriter } from "./desktop-runtime-events.js";
 
 export const desktopAppName = "Noobot";

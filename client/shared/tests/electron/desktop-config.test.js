@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
+import { clientFilePath as path } from "../../path-resolver.js";
 import test from "node:test";
 import { createDesktopConfigManager } from "../../electron/desktop-config.js";
 

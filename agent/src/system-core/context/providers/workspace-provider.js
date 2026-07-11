@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { access, readdir } from "node:fs/promises";
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 
 export async function resolveWorkspaceDirectories(runtimeBasePath = "") {
   const basePath = String(runtimeBasePath || "").trim();
@@ -36,7 +36,7 @@ export async function resolveWorkspaceDirectories(runtimeBasePath = "") {
     }
     for (const entry of runtimeLevel1Entries) {
       if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
-      directories.add(path.posix.join("runtime", entry.name));
+      directories.add(["runtime", entry.name].join("/"));
     }
   } catch {
     // runtime/ is optional; ignore when missing or inaccessible.

@@ -27,7 +27,7 @@ import {
   resolveAttachmentDisplayPath,
   resolveHostPath,
   resolveSandboxPath,
-} from "../../utils/sandbox-path-resolver.js";
+} from "../../utils/path-resolver.js";
 import {
   transferSemanticContent,
 } from "../../semantic-transfer/index.js";

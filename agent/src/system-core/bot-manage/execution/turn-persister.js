@@ -9,6 +9,7 @@ import {
   resolveDialogProcessIdFromContext,
   resolveMessageDialogProcessId,
 } from "../../context/session/dialog-process-id-resolver.js";
+import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
 import { MessagePersister } from "../session/message-persister.js";
 import { compactTransferEnvelopes } from "../../session/transfer-attachment-refs.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
@@ -261,6 +262,7 @@ export class SessionTurnPersister {
     turnTimingThinkingFinishedAt = thinkingFinishedAt,
   }) {
     const sessionAttachments = filterSessionAttachments(attachments);
+    const normalizedParentSessionId = normalizeParentSessionId(parentSessionId);
     const normalizedTurnScopeId = String(turnScopeId || "").trim();
     const normalizedThinkingStartedAt = normalizeIsoTime(thinkingStartedAt);
     const normalizedThinkingFinishedAt = normalizeIsoTime(thinkingFinishedAt);
@@ -277,7 +279,7 @@ export class SessionTurnPersister {
       type: type || "",
       userName: String(userName || "").trim(),
       sessionId: String(sessionId || "").trim(),
-      parentSessionId: String(parentSessionId || "").trim(),
+      parentSessionId: normalizedParentSessionId,
       taskId: taskId ?? "",
       taskStatus: taskStatus ?? "",
       dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
@@ -325,7 +327,7 @@ export class SessionTurnPersister {
       await this.messagePersister.appendExecutionLog({
         userId,
         sessionId,
-        parentSessionId,
+        parentSessionId: normalizedParentSessionId,
         dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
         event: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
         category: MESSAGE_ROLE.SYSTEM,
@@ -336,7 +338,7 @@ export class SessionTurnPersister {
         await this.messagePersister.appendExecutionLog({
           userId,
           sessionId,
-          parentSessionId,
+          parentSessionId: normalizedParentSessionId,
           dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
           event: "debug_turn_timing_append",
           category: MESSAGE_ROLE.SYSTEM,
@@ -359,7 +361,7 @@ export class SessionTurnPersister {
     await this.messagePersister.appendTurn({
       userId,
       sessionId,
-      parentSessionId,
+      parentSessionId: normalizedParentSessionId,
       role,
       content: sessionContent,
       type,

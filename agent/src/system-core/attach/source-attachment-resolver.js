@@ -3,13 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import path from "node:path";
+import { filePath as path } from "../utils/path-resolver.js";
 import {
   getBasePathFromAgentContext,
   getRuntimeFromAgentContext,
   getSessionIdsFromAgentContext,
 } from "../context/agent-context-accessor.js";
 import { resolveRuntimeUserMessageAttachments } from "./runtime-user-message-attachments.js";
+import { resolveAttachmentDisplayPath } from "../utils/path-resolver.js";
 
 function normalizeComparablePath(filePath = "", basePath = "") {
   const normalizedPath = String(filePath || "").trim();
@@ -65,6 +66,11 @@ export async function resolveCanonicalUserSourceAttachment({
     sessionId: sourceSessionId,
     attachmentId: normalizedAttachmentId,
     attachmentSource: "user",
-    filePath: String(filePath || "").trim(),
+    filePath: resolveAttachmentDisplayPath({
+      runtime,
+      agentContext,
+      path: filePath,
+      purpose: "source_attachment_compat_file_path",
+    }),
   });
 }

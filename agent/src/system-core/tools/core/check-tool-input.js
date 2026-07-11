@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { access } from "node:fs/promises";
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 import {
   getBasePathFromAgentContext,
   getRuntimeFromAgentContext,
@@ -17,7 +17,7 @@ import { ERROR_CODE } from "../../error/constants.js";
 import {
   resolveHostPath,
   resolveSandboxPathMappings,
-} from "../../utils/sandbox-path-resolver.js";
+} from "../../utils/path-resolver.js";
 import { isSuperUserAgentContext } from "../../utils/super-user.js";
 
 function tCheckInput(agentContext = {}, key = "") {

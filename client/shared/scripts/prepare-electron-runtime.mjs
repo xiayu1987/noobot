@@ -1,5 +1,5 @@
 import { cp, mkdir, rm, stat } from 'node:fs/promises';
-import path from 'node:path';
+import { clientFilePath as path } from "../path-resolver.js";
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
 

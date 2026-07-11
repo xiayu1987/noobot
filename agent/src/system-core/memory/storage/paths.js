@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 
 export function resolveBasePath({ workspaceRoot = "", userId = "" } = {}) {
   return path.resolve(String(workspaceRoot || "").trim(), String(userId || "").trim());

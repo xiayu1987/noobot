@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import path from "node:path";
+import { filePath as path } from "../../../utils/path-resolver.js";
 import { buildTextResultFields, buildTransferFileEntry, createTransferEnvelope, getTransferAttachmentMetas, materializeTextForToolResult, resolveToolResultInlineTextLimit, TRANSFER_REASON, TRANSFER_SOURCE } from "../../../semantic-transfer/index.js";
 import { MIME_TYPE } from "../../../constants/index.js";
 import { ARTIFACT_GENERATION_SOURCE, TOOL_ATTACHMENT_SOURCE, TOOL_NAME } from "../../constants/index.js";

@@ -5,7 +5,7 @@
  */
 import fs from "node:fs";
 import os from "node:os";
-import path from "node:path";
+import { clientPathDelimiter, clientPathDirname, joinClientPath, normalizeClientPath } from "../path-resolver.js";
 
 function normalizeString(value = "") {
   return String(value || "").trim();
@@ -31,8 +31,8 @@ function pathExists(filePath = "", exists = fs.existsSync) {
   }
 }
 
-function splitPathEnv(pathValue = "") {
-  return normalizeString(pathValue).split(path.delimiter).map(normalizeString).filter(Boolean);
+function splitPathEnv(pathValue = "", platform = process.platform) {
+  return normalizeString(pathValue).split(clientPathDelimiter(platform)).map(normalizeString).filter(Boolean);
 }
 
 function resolveExecutableName(command = "", platform = process.platform) {
@@ -49,8 +49,8 @@ function findExecutableInPath(command = "", {
 } = {}) {
   const executableName = resolveExecutableName(command, platform);
   if (!executableName) return "";
-  for (const directory of splitPathEnv(env.PATH || "")) {
-    const candidate = path.join(directory, executableName);
+  for (const directory of splitPathEnv(env.PATH || "", platform)) {
+    const candidate = joinClientPath(directory, executableName);
     if (pathExists(candidate, exists)) return candidate;
   }
   return "";
@@ -66,14 +66,14 @@ function getUserDataPath(app = null) {
 }
 
 function getManagedDependenciesRoot({ app = null } = {}) {
-  return path.join(getUserDataPath(app), "managed-dependencies");
+  return joinClientPath(getUserDataPath(app), "managed-dependencies");
 }
 
 function getManagedBinDirs({ app = null } = {}) {
   const root = getManagedDependenciesRoot({ app });
   return [
-    path.join(root, "ffmpeg", "bin"),
-    path.join(root, "nodejs", "bin"),
+    joinClientPath(root, "ffmpeg", "bin"),
+    joinClientPath(root, "nodejs", "bin"),
   ];
 }
 
@@ -97,8 +97,8 @@ function resolveLibreOfficeExecutable({
     const macCandidates = [
       "/Applications/LibreOffice.app/Contents/MacOS/soffice",
       "/Applications/LibreOffice.app/Contents/MacOS/soffice.bin",
-      path.join(env.HOME || "", "Applications", "LibreOffice.app", "Contents", "MacOS", "soffice"),
-      path.join(env.HOME || "", "Applications", "LibreOffice.app", "Contents", "MacOS", "soffice.bin"),
+      joinClientPath(env.HOME || "", "Applications", "LibreOffice.app", "Contents", "MacOS", "soffice"),
+      joinClientPath(env.HOME || "", "Applications", "LibreOffice.app", "Contents", "MacOS", "soffice.bin"),
     ];
     return (
       resolveFirstExistingPath([...configuredCandidates, ...macCandidates], exists) ||
@@ -115,10 +115,10 @@ function resolveLibreOfficeExecutable({
       env.PROGRAMFILES_X86 ||
       "C:\\Program Files (x86)";
     const winCandidates = [
-      path.join(programFiles, "LibreOffice", "program", "soffice.exe"),
-      path.join(programFiles, "LibreOffice", "program", "libreoffice.exe"),
-      path.join(programFilesX86, "LibreOffice", "program", "soffice.exe"),
-      path.join(programFilesX86, "LibreOffice", "program", "libreoffice.exe"),
+      joinClientPath(programFiles, "LibreOffice", "program", "soffice.exe"),
+      joinClientPath(programFiles, "LibreOffice", "program", "libreoffice.exe"),
+      joinClientPath(programFilesX86, "LibreOffice", "program", "soffice.exe"),
+      joinClientPath(programFilesX86, "LibreOffice", "program", "libreoffice.exe"),
     ];
     return (
       resolveFirstExistingPath([...configuredCandidates, ...winCandidates], exists) ||
@@ -152,7 +152,7 @@ function resolveManagedBinaryPath(command = "", {
   const executableName = resolveExecutableName(command, platform);
   if (!executableName) return "";
   for (const directory of getManagedBinDirs({ app })) {
-    const candidate = path.join(directory, executableName);
+    const candidate = joinClientPath(directory, executableName);
     if (pathExists(candidate, exists)) return candidate;
   }
   return "";
@@ -174,10 +174,15 @@ function resolveBinaryPath(command = "", {
   );
 }
 
-function prependPathDirs(pathValue = "", dirs = []) {
-  const existingParts = splitPathEnv(pathValue);
-  const prependParts = uniqueTruthyStrings(dirs).filter((directory) => !existingParts.includes(directory));
-  return [...prependParts, ...existingParts].join(path.delimiter);
+function pathCompareKey(filePath = "", platform = process.platform) {
+  return normalizeClientPath(filePath, { platform: platform === "win32" ? "windows" : platform });
+}
+
+function prependPathDirs(pathValue = "", dirs = [], platform = process.platform) {
+  const existingParts = splitPathEnv(pathValue, platform);
+  const existingKeys = new Set(existingParts.map((directory) => pathCompareKey(directory, platform)));
+  const prependParts = uniqueTruthyStrings(dirs).filter((directory) => !existingKeys.has(pathCompareKey(directory, platform)));
+  return [...prependParts, ...existingParts].join(clientPathDelimiter(platform));
 }
 
 export function buildDependencyRuntimeEnv({
@@ -191,12 +196,12 @@ export function buildDependencyRuntimeEnv({
   const libreOfficePath = resolveLibreOfficeExecutable({ env, platform, exists });
   const dependencyDirs = uniqueTruthyStrings([
     ...getManagedBinDirs({ app }).filter((directory) => pathExists(directory, exists)),
-    ffmpegPath && path.dirname(ffmpegPath),
-    ffprobePath && path.dirname(ffprobePath),
-    libreOfficePath && path.dirname(libreOfficePath),
+    ffmpegPath && clientPathDirname(ffmpegPath),
+    ffprobePath && clientPathDirname(ffprobePath),
+    libreOfficePath && clientPathDirname(libreOfficePath),
   ]);
   const output = {
-    PATH: prependPathDirs(env.PATH || "", dependencyDirs),
+    PATH: prependPathDirs(env.PATH || "", dependencyDirs, platform),
   };
   if (ffmpegPath) output.NOOBOT_FFMPEG_PATH = ffmpegPath;
   if (ffprobePath) output.NOOBOT_FFPROBE_PATH = ffprobePath;
@@ -353,4 +358,3 @@ export function summarizeDependencyRuntimeEnv(runtimeEnv = {}) {
     pathPrefix: splitPathEnv(runtimeEnv.PATH || "").slice(0, 5).join(" | "),
   };
 }
-

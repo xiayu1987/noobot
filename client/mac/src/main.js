@@ -3,13 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { applyDesktopPathEnvironment, CLIENT_PATH_PLATFORMS } from "../../shared/path-resolver.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-process.env.NOOBOT_DESKTOP_PROJECT_DIR ||= path.resolve(__dirname, "..", "..");
-process.env.NOOBOT_DESKTOP_REPO_ROOT ||= path.resolve(__dirname, "..", "..", "..", "..");
-process.env.NOOBOT_DESKTOP_WINDOW_ICON ||= path.join(__dirname, "..", "..", "assets", "noobot.svg");
+applyDesktopPathEnvironment({ entryUrl: import.meta.url, platform: CLIENT_PATH_PLATFORMS.MACOS, iconName: "noobot.svg" });
 
 await import("../../shared/electron/main.js");

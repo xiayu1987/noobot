@@ -1,5 +1,5 @@
 import { cp, mkdir, rm, writeFile, readFile, access } from 'node:fs/promises';
-import path from 'node:path';
+import { clientFilePath as path } from "../path-resolver.js";
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
@@ -149,6 +149,8 @@ async function main() {
 
   await assertExists(path.join(backendRoot, 'service/app.js'), 'Prepared backend entry');
   await assertExists(path.join(backendRoot, 'agent/src/system-core/system-prompt/base.md'), 'Prepared backend system prompt');
+  await assertExists(path.join(backendRoot, 'agent/src/system-core/system-prompt/base.zh-CN.md'), 'Prepared backend Chinese system prompt');
+  await assertExists(path.join(backendRoot, 'agent/src/system-core/system-prompt/base.en-US.md'), 'Prepared backend English system prompt');
   await assertExists(path.join(backendRoot, 'node_modules/noobot-agent/package.json'), 'Prepared backend dependency noobot-agent');
   await assertExists(path.join(backendRoot, 'node_modules/express/package.json'), 'Prepared backend dependency express');
   log(`Prepared backend runtime: ${backendRoot}`);

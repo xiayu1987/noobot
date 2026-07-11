@@ -11,7 +11,7 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 import {
   MEMORY_FILE_SPLIT_MAX_CHARS,
   getMemoryFileSplitMaxChars,

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import fs from "node:fs/promises";
-import path from "node:path";
+import { clientFilePath as path } from "../../shared/path-resolver.js";
 
 const projectRoot = path.resolve(process.cwd());
 const repoRoot = path.resolve(projectRoot, "../..");

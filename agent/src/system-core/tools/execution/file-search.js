@@ -5,7 +5,7 @@
  */
 import { lstat, readFile, readdir } from "node:fs/promises";
 import { execFile as execFileCallback } from "node:child_process";
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 import { promisify } from "node:util";
 import { recoverableToolError } from "../../error/index.js";
 import { ERROR_CODE } from "../../error/constants.js";
