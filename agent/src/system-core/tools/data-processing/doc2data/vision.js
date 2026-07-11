@@ -10,8 +10,7 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { DOC2DATA_PARSE_ENGINE, normalizeDoc2DataParseEngine } from "../../../config/core/enums.js";
 import { recoverableToolError } from "../../../error/index.js";
 import { ERROR_CODE } from "../../../error/constants.js";
-import { getRuntimeFromAgentContext } from "../../../context/agent-context-accessor.js";
-import { resolveRuntimeUserMessageAttachments } from "../../../attach/index.js";
+import { resolveCanonicalUserSourceAttachment } from "../../../attach/index.js";
 import { tTool } from "../../core/tool-i18n.js";
 
 const MAX_BATCH_BYTES = LENGTH_THRESHOLDS.dataProcessing.batchBytes;
@@ -144,34 +143,10 @@ export function isLegacyDocInputFile(filePath = "") {
 }
 
 export async function resolveDocInputAttachmentMeta(filePath = "", agentContext = {}, attachmentId = "") {
-  const normalizedInputPath = String(filePath || "").trim();
-  const runtime = getRuntimeFromAgentContext(agentContext);
-  const runtimeAttachmentMetas = resolveRuntimeUserMessageAttachments(runtime);
-  const normalizedAttachmentId = String(attachmentId || "").trim();
-  const runtimeMatch = (
-    runtimeAttachmentMetas.find((attachmentItem) => {
-      const metaPath = String(attachmentItem?.path || "").trim();
-      const metaAttachmentId = String(attachmentItem?.attachmentId || "").trim();
-      return (
-        (normalizedAttachmentId && metaAttachmentId === normalizedAttachmentId) ||
-        (normalizedInputPath && metaPath && path.resolve(metaPath) === path.resolve(normalizedInputPath))
-      );
-    }) || null
-  );
-  if (runtimeMatch) return runtimeMatch;
-
-  const attachmentService = runtime?.attachmentService;
-  const userId = String(runtime?.userId || "").trim();
-  const sessionId = String(
-    runtime?.systemRuntime?.sessionId || runtime?.systemRuntime?.rootSessionId || "",
-  ).trim();
-  if (!attachmentService?.resolveSourceAttachment || !userId || !sessionId) return null;
-  return attachmentService.resolveSourceAttachment({
-    userId,
-    sessionId,
-    attachmentId: normalizedAttachmentId,
-    attachmentSource: "user",
-    filePath: normalizedInputPath,
+  return resolveCanonicalUserSourceAttachment({
+    filePath,
+    attachmentId,
+    agentContext,
   });
 }
 
