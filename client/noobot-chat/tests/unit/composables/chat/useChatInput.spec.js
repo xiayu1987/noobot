@@ -39,6 +39,7 @@ describe("useChatInput", () => {
     const attachments = await serializeAttachments(uploadFiles.value);
     expect(attachments).toEqual([
       {
+        clientAttachmentId: uploadFiles.value[0].draftAttachmentId,
         name: "hello.txt",
         mimeType: "text/plain",
         contentBase64: "aGVsbG8=",

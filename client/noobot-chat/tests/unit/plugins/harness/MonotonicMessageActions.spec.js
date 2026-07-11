@@ -85,6 +85,7 @@ describe("MonotonicMessageActions", () => {
     expect(onResend).toHaveBeenCalledWith(messageItem, "edited content", {
       attachments: [],
       attachmentFiles: [],
+      removedAttachmentKeys: [],
     });
     expect(messageItem.__monotonicEditing).toBe(false);
   });

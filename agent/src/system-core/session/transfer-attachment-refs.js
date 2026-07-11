@@ -29,6 +29,7 @@ function firstValue(...values) {
 function compactRefFields(ref = {}) {
   const picked = {};
   const attachmentId = trimString(firstValue(ref.attachmentId, ref.attachment_id, ref.id, ref.fileId, ref.file_id));
+  const clientAttachmentId = trimString(firstValue(ref.clientAttachmentId, ref.client_attachment_id));
   const mimeType = trimString(firstValue(ref.mimeType, ref.type, ref.mime));
   const attachmentSource = trimString(firstValue(ref.attachmentSource, ref.attachment_source, ref.source));
   const sessionId = trimString(firstValue(ref.sessionId, ref.session_id, ref.backendSessionId));
@@ -48,6 +49,7 @@ function compactRefFields(ref = {}) {
   if (attachmentId) {
     picked.attachmentId = attachmentId;
   }
+  if (clientAttachmentId) picked.clientAttachmentId = clientAttachmentId;
   if (name) picked.name = name;
   if (mimeType) {
     picked.mimeType = mimeType;
