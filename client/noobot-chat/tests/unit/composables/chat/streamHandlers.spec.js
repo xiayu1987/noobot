@@ -5,6 +5,7 @@ import {
   handleDoneStreamEvent,
   handleThinkingStreamEvent,
 } from "../../../../src/composables/chat/chatEngine/streamHandlers";
+import { buildViewMessage } from "../../../../src/composables/infra/messageModel";
 
 describe("chatEngine streamHandlers", () => {
   const makeBotMessage = () => ({
@@ -103,6 +104,49 @@ describe("chatEngine streamHandlers", () => {
     expect(currentUserMessage.attachments[0]).toEqual(expect.objectContaining({
       clientAttachmentId: "draft-current",
       parsedResult: expect.objectContaining({ attachmentId: "parsed-current" }),
+    }));
+  });
+
+  it("builds realtime parsed-result preview url from nested parsedResult metadata", () => {
+    const currentUserMessage = buildViewMessage(
+      {
+        role: "user",
+        attachments: [{
+          attachmentId: "source-att",
+          sessionId: "session-1",
+          attachmentSource: "user",
+          name: "source.docx",
+          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        }],
+      },
+      { userId: "admin" },
+    );
+
+    handleAttachmentParsedStreamEvent({
+      data: {
+        attachments: [{
+          attachmentId: "source-att",
+          sessionId: "session-1",
+          attachmentSource: "user",
+          name: "source.docx",
+          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          parsedResult: {
+            attachmentId: "parsed-att",
+            relativePath: "runtime/attach/session-1/model/parsed.md",
+            tool: "doc_to_data",
+          },
+        }],
+      },
+      activeSession: { value: { messages: [currentUserMessage] } },
+      makeViewMessage: (message) => buildViewMessage(message, { userId: "admin" }),
+    });
+
+    expect(currentUserMessage.attachments[0]).toEqual(expect.objectContaining({
+      attachmentId: "source-att",
+      parsedResult: expect.objectContaining({ attachmentId: "parsed-att" }),
+      parsedResultAttachmentId: "parsed-att",
+      parsedResultName: "parsed.md",
+      parsedResultUrl: "/api/internal/attachment/admin/parsed-att?sessionId=session-1&attachmentSource=model",
     }));
   });
 

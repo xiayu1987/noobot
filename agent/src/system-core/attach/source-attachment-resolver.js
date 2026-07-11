@@ -10,7 +10,7 @@ import {
   getSessionIdsFromAgentContext,
 } from "../context/agent-context-accessor.js";
 import { resolveRuntimeUserMessageAttachments } from "./runtime-user-message-attachments.js";
-import { resolveAttachmentDisplayPath } from "../utils/path-resolver.js";
+import { resolveAttachmentDisplayPath, resolveHostPath } from "../utils/path-resolver.js";
 
 function normalizeComparablePath(filePath = "", basePath = "") {
   const normalizedPath = String(filePath || "").trim();
@@ -61,16 +61,34 @@ export async function resolveCanonicalUserSourceAttachment({
   const sourceSessionId = rootSessionId || parentSessionId || sessionId;
   if (!attachmentService?.resolveSourceAttachment || !userId || !sourceSessionId) return null;
 
-  return attachmentService.resolveSourceAttachment({
-    userId,
-    sessionId: sourceSessionId,
-    attachmentId: normalizedAttachmentId,
-    attachmentSource: "user",
-    filePath: resolveAttachmentDisplayPath({
-      runtime,
-      agentContext,
-      path: filePath,
-      purpose: "source_attachment_compat_file_path",
-    }),
-  });
+  const pathCandidates = [];
+  const pushPathCandidate = (value = "") => {
+    const normalized = String(value || "").trim();
+    if (normalized && !pathCandidates.includes(normalized)) pathCandidates.push(normalized);
+  };
+  pushPathCandidate(filePath);
+  pushPathCandidate(resolveHostPath({
+    runtime,
+    agentContext,
+    path: filePath,
+  }));
+  pushPathCandidate(resolveAttachmentDisplayPath({
+    runtime,
+    agentContext,
+    path: filePath,
+    purpose: "source_attachment_compat_file_path",
+  }));
+  if (!pathCandidates.length) pathCandidates.push("");
+
+  for (const candidatePath of pathCandidates) {
+    const resolved = await attachmentService.resolveSourceAttachment({
+      userId,
+      sessionId: sourceSessionId,
+      attachmentId: normalizedAttachmentId,
+      attachmentSource: "user",
+      filePath: candidatePath,
+    });
+    if (resolved) return resolved;
+  }
+  return null;
 }
