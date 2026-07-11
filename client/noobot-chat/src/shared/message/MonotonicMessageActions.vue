@@ -655,7 +655,6 @@ async function handleDelete() {
 
 .monotonic-attachment-item:hover {
   box-shadow: none;
-  transform: translateY(-1px);
 }
 
 .monotonic-attachment-preview,

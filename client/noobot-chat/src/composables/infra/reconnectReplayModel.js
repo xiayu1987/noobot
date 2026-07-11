@@ -44,7 +44,15 @@ function isPendingInteractionReplay(envelope = {}) {
 }
 
 function isSessionEntryRunning(sessionEntry = {}) {
-  return sessionEntry?.hasRunningTask === true;
+  if (sessionEntry?.hasRunningTask !== true) return false;
+  const sessionId = String(sessionEntry?.sessionId || "").trim();
+  const currentRunSessionId = String(sessionEntry?.currentRun?.sessionId || "").trim();
+  const currentRunTurnScopeId = String(sessionEntry?.currentRun?.turnScopeId || "").trim();
+  return Boolean(
+    sessionId &&
+    currentRunSessionId === sessionId &&
+    currentRunTurnScopeId,
+  );
 }
 
 function hasPendingInteractionReplayEvents(messages = []) {

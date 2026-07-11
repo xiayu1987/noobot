@@ -22,6 +22,25 @@ import {
 } from "../sessionRunStateMachine";
 import { normalizeTurnMeta } from "../../infra/messageIdentity";
 
+function resolveAuthoritativeConversationStates(sessionEntry = {}) {
+  const sessionId = _trimStr(sessionEntry?.sessionId);
+  const authoritativeRun = sessionEntry?.currentRun;
+  const authoritativeRunMeta = normalizeTurnMeta(authoritativeRun);
+  const hasConsistentAuthoritativeRun =
+    _trimStr(authoritativeRunMeta.sessionId) === sessionId &&
+    Boolean(_trimStr(authoritativeRunMeta.turnScopeId));
+  if (hasConsistentAuthoritativeRun) {
+    return [{
+      ...authoritativeRun,
+      authoritativeSnapshot: true,
+      sessionId: authoritativeRunMeta.sessionId,
+      dialogProcessId: authoritativeRunMeta.dialogProcessId,
+      turnScopeId: authoritativeRunMeta.turnScopeId,
+    }];
+  }
+  return [];
+}
+
 function createReconnectRunStateEvents(reconnectSessions = [], recoverableSessionId = "") {
   const events = [];
   if (recoverableSessionId) {
@@ -38,9 +57,7 @@ function createReconnectRunStateEvents(reconnectSessions = [], recoverableSessio
   }
   reconnectSessions.forEach((sessionEntry) => {
     const sessionId = _trimStr(sessionEntry?.sessionId);
-    const stateEntries = Array.isArray(sessionEntry?.conversationStates)
-      ? sessionEntry.conversationStates
-      : [];
+    const stateEntries = resolveAuthoritativeConversationStates(sessionEntry);
     stateEntries.forEach((stateEntry) => {
       const turnMeta = normalizeTurnMeta(stateEntry);
       const rememberedStopEvent = resolveRememberedStopRequestedEvent({
@@ -66,9 +83,7 @@ function createReconnectRunStateEvents(reconnectSessions = [], recoverableSessio
 }
 
 function resolveReconnectSessionRunningStateFromStates(sessionEntry = null) {
-  const stateEntries = Array.isArray(sessionEntry?.conversationStates)
-    ? sessionEntry.conversationStates
-    : [];
+  const stateEntries = resolveAuthoritativeConversationStates(sessionEntry);
   if (!stateEntries.length) return null;
   let restoredState = null;
   for (const stateEntry of stateEntries) {
@@ -164,9 +179,7 @@ export async function applyReconnectDataReplay({
   }
 
   for (const sessionEntry of reconnectSessions) {
-    const stateEntries = Array.isArray(sessionEntry?.conversationStates)
-      ? sessionEntry.conversationStates
-      : [];
+    const stateEntries = resolveAuthoritativeConversationStates(sessionEntry);
     for (const stateEntry of stateEntries) {
       await applyChannelState(stateEntry);
     }

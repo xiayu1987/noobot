@@ -1223,6 +1223,34 @@ describe("sessionRunStateMachine", () => {
     expect(delayedOtherCompletion).toBe(stopped);
   });
 
+  it("lets an authoritative reconnect snapshot replace an older stopped turn", () => {
+    const stopped = createInitialSessionRunState({
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
+      sessionId: "s1",
+      dialogProcessId: "dialog-stopped",
+      turnScopeId: "turn-stopped",
+      seq: 10,
+    });
+    const completed = transitionSessionRunState(stopped, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: BackendChannelState.COMPLETED,
+      sessionId: "s1",
+      dialogProcessId: "dialog-current",
+      turnScopeId: "turn-current",
+      seq: 21,
+      authoritativeSnapshot: true,
+    });
+    expect(completed).toMatchObject({
+      state: BackendChannelState.COMPLETED,
+      backendState: BackendChannelState.COMPLETED,
+      sessionId: "s1",
+      dialogProcessId: "dialog-current",
+      turnScopeId: "turn-current",
+      seq: 21,
+    });
+  });
+
   it("keeps a new local send scoped by turnScopeId until backend binds dialog id", () => {
     const current = createInitialSessionRunState({
       state: FrontendRunState.USER_STOP_REQUESTED,

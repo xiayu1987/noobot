@@ -53,6 +53,7 @@ describe("useReconnectReplay", () => {
       state: BackendChannelState.ERROR,
       sessionId: "s-1",
       dialogProcessId: "dp-missing",
+      turnScopeId: "",
       source: "interaction_payload_missing",
     });
     expect(sending.value).toBe(true);
@@ -325,7 +326,7 @@ describe("useReconnectReplay", () => {
     expect(api.__test.replayCache["s-2"]).toBeUndefined();
   });
 
-  it("RT-05: reconnect conversationStates can restore sending=true", async () => {
+  it("RT-05: reconnect currentRun can restore sending=true", async () => {
     const { api, refs } = createFixture();
     refs.sending.value = false;
 
@@ -333,6 +334,13 @@ describe("useReconnectReplay", () => {
       sessions: [
         {
           sessionId: "s-1",
+          currentRun: {
+            sessionId: "s-1",
+            dialogProcessId: "dp-state",
+            turnScopeId: "turn-state",
+            state: "sending",
+            seq: 9,
+          },
           conversationStates: [
             {
               sessionId: "s-1",
@@ -381,6 +389,13 @@ describe("useReconnectReplay", () => {
       sessions: [
         {
           sessionId: "s-1",
+          currentRun: {
+            sessionId: "s-1",
+            dialogProcessId: "dp-expired",
+            turnScopeId: "turn-expired",
+            state: "expired",
+            seq: 11,
+          },
           conversationStates: [
             {
               sessionId: "s-1",
@@ -408,6 +423,7 @@ describe("useReconnectReplay", () => {
       {
         role: RoleEnum.ASSISTANT,
         dialogProcessId: "dp-completed",
+        turnScopeId: "turn-completed",
         content: "answer",
         pending: true,
         channelState: { state: "sending", dialogProcessId: "dp-completed" },
@@ -418,10 +434,18 @@ describe("useReconnectReplay", () => {
       sessions: [
         {
           sessionId: "s-1",
+          currentRun: {
+            sessionId: "s-1",
+            dialogProcessId: "dp-completed",
+            turnScopeId: "turn-completed",
+            state: "completed",
+            seq: 12,
+          },
           conversationStates: [
             {
               sessionId: "s-1",
               dialogProcessId: "dp-completed",
+              turnScopeId: "turn-completed",
               state: "completed",
               seq: 12,
             },
@@ -465,6 +489,13 @@ describe("useReconnectReplay", () => {
         sessions: [
           {
             sessionId: "s-1",
+            currentRun: {
+              sessionId: "s-1",
+              dialogProcessId: `dp-${state}`,
+              turnScopeId: `turn-${state}`,
+              state,
+              seq: 12,
+            },
             conversationStates: [
               {
                 sessionId: "s-1",

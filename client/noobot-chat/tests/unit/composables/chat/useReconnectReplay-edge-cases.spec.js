@@ -13,6 +13,7 @@ describe("useReconnectReplay", () => {
       sessions: [
         {
           sessionId: "s-1",
+          currentRun: { sessionId: "s-1", dialogProcessId: "dp-order", turnScopeId: "turn-order", state: "error", seq: 3 },
           dialogProcesses: [
             {
               dialogProcessId: "dp-order",
@@ -39,13 +40,14 @@ describe("useReconnectReplay", () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, content: "", pending: true, statusLabel: "" },
+      { role: RoleEnum.ASSISTANT, content: "", pending: true, statusLabel: "", turnScopeId: "turn-missing" },
     ];
 
     await api.applyReconnectData({
       sessions: [
         {
           sessionId: "s-1",
+          currentRun: { sessionId: "s-1", dialogProcessId: "dp-missing", turnScopeId: "turn-missing", state: "interaction_pending", seq: 10 },
           conversationStates: [
             {
               sessionId: "s-1",
@@ -82,7 +84,7 @@ describe("useReconnectReplay", () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, content: "", pending: true, statusLabel: "" },
+      { role: RoleEnum.ASSISTANT, content: "", pending: true, statusLabel: "", turnScopeId: "turn-missing" },
     ];
 
     await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
@@ -117,7 +119,7 @@ describe("useReconnectReplay", () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, content: "", pending: true, statusLabel: "" },
+      { role: RoleEnum.ASSISTANT, content: "", pending: true, statusLabel: "", turnScopeId: "turn-expired" },
     ];
     mocks.chatList.fetchSessions.mockResolvedValue(false);
 
@@ -125,6 +127,7 @@ describe("useReconnectReplay", () => {
       sessions: [
         {
           sessionId: "s-1",
+          currentRun: { sessionId: "s-1", dialogProcessId: "dp-expired", turnScopeId: "turn-expired", state: "expired", seq: 11 },
           conversationStates: [
             {
               sessionId: "s-1",

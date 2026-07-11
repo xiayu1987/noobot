@@ -15,10 +15,21 @@ describe("reconnectReplayModel", () => {
   it("isDialogProcessRecoverable respects running/pending interaction only", () => {
     expect(
       isDialogProcessRecoverable(
-        { hasRunningTask: true },
+        {
+          sessionId: "s-1",
+          hasRunningTask: true,
+          currentRun: { sessionId: "s-1", turnScopeId: "turn-1", state: "sending" },
+        },
         [{ event: StreamEventEnum.DELTA, data: { text: "x" } }],
       ),
     ).toBe(true);
+
+    expect(
+      isDialogProcessRecoverable(
+        { sessionId: "s-1", hasRunningTask: true },
+        [{ event: StreamEventEnum.DELTA, data: { text: "x" } }],
+      ),
+    ).toBe(false);
 
     expect(
       isDialogProcessRecoverable(

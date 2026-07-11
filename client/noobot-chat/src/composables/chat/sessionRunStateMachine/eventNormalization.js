@@ -73,6 +73,7 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
       : trim(rawEvent?.dialogProcessId),
     turnScopeId: turnMeta.turnScopeId,
     source: trim(rawEvent?.source || type),
+    authoritativeSnapshot: rawEvent?.authoritativeSnapshot === true,
     sourceEvent: trim(rawEvent?.sourceEvent),
     seq: Number(rawEvent?.seq || 0),
     timestamp,

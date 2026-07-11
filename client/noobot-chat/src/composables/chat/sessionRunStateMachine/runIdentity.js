@@ -90,6 +90,15 @@ export function resolveRunTurnScopeId(value = {}) {
 }
 
 export function shouldStartNewTurn(current = {}, event = {}) {
+  if (event?.authoritativeSnapshot === true) {
+    const currentSessionId = trim(current?.sessionId);
+    const eventSessionId = trim(event?.sessionId);
+    return Boolean(
+      eventSessionId &&
+      (!currentSessionId || currentSessionId === eventSessionId) &&
+      resolveEventScope(event),
+    );
+  }
   if (![
     SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
     SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED,
