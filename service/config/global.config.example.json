@@ -216,6 +216,29 @@
       "frequency_penalty": 0.1,
       "presence_penalty": 0.1
     },
+    "gpt_5_6_sol": {
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${OPENAI_API_KEY}",
+      "base_url": "${OPENAI_API_ADDRESS}",
+      "model": "gpt-5.6-sol",
+      "format": "openai_compatible",
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "low",
+      "temperature": 0.7,
+      "max_tokens": 10000,
+      "description": "擅长编码",
+      "multimodal_generation": {
+        "support_understanding": true,
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      },
+      "top_p": 0.95,
+      "frequency_penalty": 0.1,
+      "presence_penalty": 0.1
+    },
     "nano_banana": {
       "enabled": true,
       "used_for_conversation": false,

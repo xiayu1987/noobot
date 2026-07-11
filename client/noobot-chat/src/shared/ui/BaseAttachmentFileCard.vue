@@ -58,6 +58,7 @@ const hasParsedResult = computed(
     props.showParsedResult &&
     Boolean(props.attachmentItem?.parsedResultUrl),
 );
+const parsedResultPreviewEnabled = computed(() => hasParsedResult.value && previewEnabled.value);
 
 function emitPreview() {
   if (!previewEnabled.value) return;
@@ -129,6 +130,7 @@ function emitPreview() {
       <div v-if="hasParsedResult" class="parsed-result-row noobot-inline-pill">
         <span class="parsed-result-label">{{ translate("message.parsedResultLabel") }}</span>
         <button
+          v-if="parsedResultPreviewEnabled"
           type="button"
           class="parsed-result-action noobot-flat-soft-btn"
           :title="

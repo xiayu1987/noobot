@@ -71,6 +71,7 @@ const {
   attachmentPreviewError,
   attachmentPreviewTextContent,
   canPreviewAttachment,
+  canPreviewFile,
   openAttachmentPreview,
   closeAttachmentPreview,
   openFilePreview,
@@ -261,12 +262,12 @@ async function handleCopyAssistantMessageText() {
         :key="`written-file:${fileItem.relativePath || fileItem.resolvedPath || fileItem.fileName || ''}`"
         :attachment-item="fileItem"
         :is-image-mime="isImageMime"
-        :can-preview-attachment="() => Boolean(fileItem.relativePath || fileItem.resolvedPath || fileItem.path)"
+        :can-preview-attachment="canPreviewFile"
         :format-file-size="formatFileSize"
         :translate="translate"
         :name-text="fileItem.fileName || fileItem.relativePath || fileItem.resolvedPath || ''"
         :title-text="fileItem.relativePath || fileItem.resolvedPath || fileItem.fileName || ''"
-        :size-value="0"
+        :size-value="fileItem.size || 0"
         :show-size="false"
         :custom-badge-text="fileItem.recognized ? translate('message.recognizedFile') : translate('message.generatedFile')"
         :custom-badge-class="fileItem.recognized ? 'is-recognized' : 'is-agent'"

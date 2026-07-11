@@ -125,6 +125,7 @@ const OFFICE_EXTS = new Set([
   "odp",
 ]);
 const MARKDOWN_MIMES = new Set(["text/markdown", "text/x-markdown", "application/markdown", "application/x-markdown"]);
+const NON_IMAGE_PREVIEW_MAX_BYTES = 1024 * 1024;
 
 // --- 通用工具函数 ---
 
@@ -199,6 +200,31 @@ function isTextPreviewMime(mimeType = "") {
 function isImagePreviewType(mimeType = "", fileName = "", isImageMimeChecker = () => false) {
   const mime = String(mimeType || "").trim().toLowerCase();
   return Boolean(isImageMimeChecker(mime)) || mime.startsWith("image/") || isImageFile(fileName);
+}
+
+function resolveKnownFileSize(fileItem = {}) {
+  for (const value of [
+    fileItem?.size,
+    fileItem?.fileSize,
+    fileItem?.bytes,
+    fileItem?.contentLength,
+    fileItem?.content_length,
+  ]) {
+    const size = Number(value);
+    if (Number.isFinite(size) && size >= 0) return size;
+  }
+  return null;
+}
+
+function isNonImagePreviewOverSizeLimit({
+  fileItem = {},
+  mimeType = "",
+  fileName = "",
+  isImageMimeChecker = () => false,
+} = {}) {
+  if (isImagePreviewType(mimeType, fileName, isImageMimeChecker)) return false;
+  const size = resolveKnownFileSize(fileItem);
+  return size !== null && size > NON_IMAGE_PREVIEW_MAX_BYTES;
 }
 
 function isAudioPreviewMime(mimeType = "") {
@@ -604,6 +630,18 @@ export function useMessagePreview({
     const useHostChannel = isSandbox === false && Boolean(hostPath);
     const missingSandboxFlag = typeof isSandbox !== "boolean";
     const fileName = resolveFileItemName(fileItem, relativePath);
+    const mimeType = String(fileItem?.mimeType || fileItem?.type || "").trim();
+    if (
+      isNonImagePreviewOverSizeLimit({
+        fileItem,
+        mimeType,
+        fileName,
+        isImageMimeChecker: isImageMime,
+      })
+    ) {
+      notify({ type: "warning", message: translate("message.previewFileTooLarge") });
+      return;
+    }
     logFileAccess("preview.click", {
       traceId,
       isSandbox,
@@ -766,6 +804,16 @@ export function useMessagePreview({
   function canPreviewAttachment(attachmentItem = {}) {
     const mimeType = String(attachmentItem?.mimeType || "").trim();
     const name = String(attachmentItem?.name || "").trim();
+    if (
+      isNonImagePreviewOverSizeLimit({
+        fileItem: attachmentItem,
+        mimeType,
+        fileName: name,
+        isImageMimeChecker: isImageMime,
+      })
+    ) {
+      return false;
+    }
     const officeLike = isOfficeMime(mimeType) || isOfficeFile(name);
     if (officeLike) return hasParsedResult(attachmentItem);
     // Source preview is allowed for image/audio/video/text.
@@ -779,10 +827,36 @@ export function useMessagePreview({
     );
   }
 
+  function canPreviewFile(fileItem = {}) {
+    const normalizedUserId = String(userId || "").trim();
+    const relativePath = resolveFileItemRelativePath(fileItem, normalizedUserId);
+    const fileName = resolveFileItemName(fileItem, relativePath);
+    const mimeType = String(fileItem?.mimeType || fileItem?.type || "").trim();
+    const hasPreviewPath = Boolean(relativePath || resolveFileItemHostPath(fileItem) || fileItem?.resolvedPath || fileItem?.path);
+    if (!hasPreviewPath) return false;
+    return !isNonImagePreviewOverSizeLimit({
+      fileItem,
+      mimeType,
+      fileName,
+      isImageMimeChecker: isImageMime,
+    });
+  }
+
   async function openAttachmentPreview(attachmentItem = {}) {
     resetAttachmentPreviewState();
     const mimeType = String(attachmentItem?.mimeType || "").trim();
     const name = String(attachmentItem?.name || "").trim();
+    if (
+      isNonImagePreviewOverSizeLimit({
+        fileItem: attachmentItem,
+        mimeType,
+        fileName: name,
+        isImageMimeChecker: isImageMime,
+      })
+    ) {
+      notify({ type: "warning", message: translate("message.previewFileTooLarge") });
+      return;
+    }
     const officeLike = isOfficeMime(mimeType) || isOfficeFile(name);
     const parsedResultUrl = String(attachmentItem?.parsedResultUrl || "").trim();
     const sourceUrl = resolveAttachmentUrl(attachmentItem);
@@ -919,6 +993,7 @@ export function useMessagePreview({
     attachmentPreviewTextContent: attachmentPreview.textContent,
     // 方法
     canPreviewAttachment,
+    canPreviewFile,
     openAttachmentPreview,
     closeAttachmentPreview,
     openFilePreview,
