@@ -238,3 +238,31 @@ test("resolveScenarioRunConfig should preserve explicit runtimeModel", () => {
   assert.equal(resolved.runtimeModel, "explicit-runtime-model");
   assert.equal(resolved.selectedModel, "frontend-model");
 });
+
+test("resolveScenarioRunConfig should remove denied tools from allowToolNames", () => {
+  const resolver = new RunConfigResolver({
+    globalConfig: {
+      scenarios: {
+        definitions: {
+          programming: {
+            tools: ["read_file", "task_summary", "execute_script"],
+          },
+        },
+      },
+    },
+  });
+
+  const resolved = resolver.resolveScenarioRunConfig(
+    {
+      scenario: "programming",
+      toolPolicy: {
+        allowToolNames: ["read_file", "task_summary", "execute_script"],
+        denyToolNames: ["task_summary"],
+      },
+    },
+    {},
+  );
+
+  assert.deepEqual(resolved.toolPolicy.allowToolNames, ["read_file", "execute_script"]);
+  assert.deepEqual(resolved.toolPolicy.denyToolNames, ["task_summary"]);
+});
