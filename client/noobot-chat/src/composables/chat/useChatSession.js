@@ -305,19 +305,19 @@ export function useChatSession({
         updatedAt,
       });
     }
-    const acceptedTerminalFactMatchesStoppedRegistry = Boolean(
+    const acceptedTerminalFactAdvancesStoppedSession = Boolean(
       stoppedResumeBeforeTransition &&
       transitionResult?.changed === true &&
       sessionId &&
       dialogProcessId &&
       turnScopeId &&
-      stoppedResumeBeforeTransition.dialogProcessId === dialogProcessId &&
-      stoppedResumeBeforeTransition.turnScopeId === turnScopeId &&
       nextRunState.sessionId === sessionId &&
+      nextRunState.dialogProcessId === dialogProcessId &&
+      nextRunState.turnScopeId === turnScopeId &&
       BackendTerminalStates.includes(nextRunState.backendState) &&
       nextRunState.backendState !== BackendChannelState.USER_STOPPED
     );
-    if (acceptedTerminalFactMatchesStoppedRegistry) {
+    if (acceptedTerminalFactAdvancesStoppedSession) {
       chatStore.clearUserStoppedResumeSnapshot(sessionId);
     }
   }

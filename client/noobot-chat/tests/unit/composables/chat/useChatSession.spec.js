@@ -769,6 +769,48 @@ describe("useChatSession reconnect replay", () => {
     expect(session.composerActionState.value.userStopped).toBe(false);
   });
 
+  it("clears an older stopped resume snapshot when the current different turn completes", async () => {
+    const store = useChatStore();
+    store.sessions = [createSessionFixture({ id: "s-new-turn-completed", backendSessionId: "s-new-turn-completed" })];
+    store.activeSessionId = "s-new-turn-completed";
+    store.runStateSnapshot = {
+      ...store.runStateSnapshot,
+      state: BackendChannelState.SENDING,
+      backendState: BackendChannelState.SENDING,
+      sessionId: "s-new-turn-completed",
+      dialogProcessId: "dialog-current",
+      turnScopeId: "turn-current",
+      seq: 20,
+    };
+    store.rememberUserStoppedResumeSnapshot({
+      sessionId: "s-new-turn-completed",
+      dialogProcessId: "dialog-old-stopped",
+      turnScopeId: "turn-old-stopped",
+      seq: 8,
+      source: "user_stopped",
+    });
+    wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
+      onReconnectData?.({
+        event: StreamEventEnum.CHANNEL_STATE,
+        data: {
+          state: BackendChannelState.COMPLETED,
+          sessionId: "s-new-turn-completed",
+          dialogProcessId: "dialog-current",
+          turnScopeId: "turn-current",
+          seq: 21,
+        },
+      });
+    });
+
+    const session = createChatSession();
+    await session.handleReconnect();
+    await nextTick();
+
+    expect(store.getUserStoppedResumeSnapshot("s-new-turn-completed")).toBe(null);
+    expect(session.composerActionState.value.userStopped).toBe(false);
+    expect(session.composerActionState.value.canStartNewSend).toBe(true);
+  });
+
   it("reconciles stopped resume identity when switching to an already loaded completed session", async () => {
     const store = useChatStore();
     store.sessions = [

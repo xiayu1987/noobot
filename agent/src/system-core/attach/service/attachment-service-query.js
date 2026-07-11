@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import path from "node:path";
 import { fsAccess, fsReadFile, fsStat } from "../../store/fs-adapter.js";
 import { safeNum, safeStr } from "../../utils/shared-utils.js";
 import { readAttachIndex } from "../index-manager.js";
@@ -52,6 +53,69 @@ export async function readAttachmentMetas(service, { userId, sessionId = "", att
   const scope = resolveAttachmentScope({ sessionId, attachmentSource });
   const index = await readAttachIndex(basePath, scope);
   return Object.values(index?.attachments || {}).map((record) => buildPublicRecord(basePath, record));
+}
+
+function normalizeComparablePath(basePath, filePath = "") {
+  const normalized = safeStr(filePath);
+  if (!normalized) return "";
+  return path.resolve(path.isAbsolute(normalized) ? normalized : path.join(basePath, normalized));
+}
+
+/**
+ * Resolve the canonical source attachment for a tool input inside one session.
+ * Identity is preferred; path matching is exact and scoped, never filename based.
+ */
+export async function resolveSourceAttachment(service, {
+  userId,
+  sessionId = "",
+  attachmentId = "",
+  attachmentSource = "user",
+  filePath = "",
+  clientAttachmentId = "",
+  contentSha256 = "",
+} = {}) {
+  const normalizedSessionId = safeStr(sessionId);
+  if (!normalizedSessionId) return null;
+
+  const normalizedAttachmentId = safeStr(attachmentId);
+  if (normalizedAttachmentId) {
+    return getAttachmentById(service, {
+      userId,
+      attachmentId: normalizedAttachmentId,
+      sessionId: normalizedSessionId,
+      attachmentSource,
+    });
+  }
+
+  const basePath = resolveBasePath(service.globalConfig, userId);
+  const metas = await readAttachmentMetas(service, {
+    userId,
+    sessionId: normalizedSessionId,
+    attachmentSource,
+  });
+  const normalizedClientAttachmentId = safeStr(clientAttachmentId);
+  if (normalizedClientAttachmentId) {
+    const matchedByClientId = metas.find(
+      (item) => safeStr(item?.clientAttachmentId) === normalizedClientAttachmentId,
+    );
+    if (matchedByClientId) return matchedByClientId;
+  }
+
+  const comparableInputPath = normalizeComparablePath(basePath, filePath);
+  if (comparableInputPath) {
+    const matchedByPath = metas.find((item) => {
+      const recordPath = normalizeComparablePath(basePath, item?.path);
+      const relativePath = normalizeComparablePath(basePath, item?.relativePath);
+      return recordPath === comparableInputPath || relativePath === comparableInputPath;
+    });
+    if (matchedByPath) return matchedByPath;
+  }
+
+  const normalizedContentSha256 = safeStr(contentSha256);
+  if (normalizedContentSha256) {
+    return metas.find((item) => safeStr(item?.contentSha256) === normalizedContentSha256) || null;
+  }
+  return null;
 }
 
 /**

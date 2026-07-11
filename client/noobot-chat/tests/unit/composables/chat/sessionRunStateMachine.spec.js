@@ -284,6 +284,43 @@ describe("sessionRunStateMachine", () => {
     });
   });
 
+  it("resets backend sequence when continue starts a new turn", () => {
+    const stopped = createInitialSessionRunState({
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
+      sessionId: "s1",
+      dialogProcessId: "dialog-stopped",
+      turnScopeId: "turn-stopped",
+      seq: 38,
+    });
+    const continued = transitionSessionRunState(stopped, {
+      type: SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED,
+      sessionId: "s1",
+      turnScopeId: "turn-current",
+    });
+    const firstBackendState = transitionSessionRunState(continued, {
+      type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
+      state: BackendChannelState.SENDING,
+      sessionId: "s1",
+      dialogProcessId: "dialog-current",
+      turnScopeId: "turn-current",
+      seq: 1,
+    });
+
+    expect(continued).toMatchObject({
+      state: FrontendRunState.CONTINUE_REQUESTING,
+      dialogProcessId: "",
+      turnScopeId: "turn-current",
+      seq: 0,
+    });
+    expect(firstBackendState).toMatchObject({
+      state: BackendChannelState.SENDING,
+      dialogProcessId: "dialog-current",
+      turnScopeId: "turn-current",
+      seq: 1,
+    });
+  });
+
   it("keeps an early stop intent pending until backend stop is available", () => {
     const sendRequesting = transitionSessionRunState(createInitialSessionRunState(), {
       type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,

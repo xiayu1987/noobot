@@ -122,17 +122,18 @@ export function createDoc2DataTool({ agentContext }) {
     description: tTool(runtime, "tools.doc2data.description"),
     schema: z.object({
       filePath: z.string().describe(tTool(runtime, "tools.doc2data.fieldFilePath")),
+      attachmentId: z.string().optional().describe("Canonical source attachment ID when the input is a session attachment."),
       prompt: z.string().optional().describe(tTool(runtime, "tools.doc2data.fieldPrompt")),
       dpi: z.number().optional().describe(tTool(runtime, "tools.doc2data.fieldDpi")),
       parseEngine: z.string().optional().describe(tTool(runtime, "tools.doc2data.fieldParseEngine")),
     }),
-    func: async ({ filePath, prompt, dpi, parseEngine }) => {
+    func: async ({ filePath, attachmentId, prompt, dpi, parseEngine }) => {
       const resolvedParseEngine = resolveDoc2DataParseEngine(runtime, parseEngine, userConfig, globalConfig);
       const normalizedDpi = Number(dpi);
       const resolvedDpi = Number.isFinite(normalizedDpi) && normalizedDpi > 0 ? Math.floor(normalizedDpi) : 180;
       let effectiveParseEngine = resolvedParseEngine;
       const inputFile = await assertAndResolveUserWorkspaceFilePath({ filePath, agentContext, fieldName: "filePath", mustExist: true });
-      const sourceAttachmentMeta = resolveDocInputAttachmentMeta(inputFile, agentContext);
+      const sourceAttachmentMeta = await resolveDocInputAttachmentMeta(inputFile, agentContext, attachmentId);
       const generatedArtifactMeta = resolveGeneratedDataProcessingArtifactMeta(inputFile, runtime);
       if (isImageInputFile(inputFile)) {
         throw recoverableToolError(tTool(runtime, "tools.doc2data.imageFileUseMedia2Data"), {

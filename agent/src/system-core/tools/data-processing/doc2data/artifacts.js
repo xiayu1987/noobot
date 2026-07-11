@@ -182,11 +182,14 @@ async function backwriteParsedResultToSourceAttachment({
       sourceSessionId: String(sourceAttachmentMeta?.sessionId || "").trim(),
       sourceAttachmentSource: String(sourceAttachmentMeta?.attachmentSource || "").trim(),
       sourceAttachmentPath: String(sourceAttachmentMeta?.path || "").trim(),
+      sourceTurnScopeId: String(sourceAttachmentMeta?.turnScope?.turnScopeId || "").trim(),
+      requestedInTurnScopeId: String(runtime?.systemRuntime?.turnScopeId || "").trim(),
     });
     updateRuntimeUserMessageAttachment(runtime, sourceAttachmentId, updatedSourceAttachment || {});
     if (updatedSourceAttachment) {
       emitEvent(runtime?.eventListener || null, "attachment_parsed", {
         dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
+        turnScopeId: String(runtime?.systemRuntime?.turnScopeId || "").trim(),
         attachments: [updatedSourceAttachment],
       });
     }

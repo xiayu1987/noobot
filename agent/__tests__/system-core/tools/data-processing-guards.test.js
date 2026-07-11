@@ -197,7 +197,7 @@ test("doc_to_data: direct text result returns preview when over semantic-transfe
 });
 
 
-test("doc_to_data: backwrites parsed result to source attachment from userMessageAttachments", async () => {
+test("doc_to_data: resolves a historical session attachment only after the model invokes parsing", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-backwrite-input-"));
   const textPath = path.join(basePath, "runtime", "ops_workdir", "source.md");
   await fs.mkdir(path.dirname(textPath), { recursive: true });
@@ -205,6 +205,23 @@ test("doc_to_data: backwrites parsed result to source attachment from userMessag
 
   const linkCalls = [];
   const attachmentService = {
+    async resolveSourceAttachment(payload = {}) {
+      assert.equal(payload.userId, "primary-user");
+      assert.equal(payload.sessionId, "s1");
+      assert.equal(payload.attachmentSource, "user");
+      assert.equal(payload.filePath, textPath);
+      return {
+        attachmentId: "source-att",
+        sessionId: "s1",
+        attachmentSource: "user",
+        name: "source.md",
+        mimeType: "text/markdown",
+        size: (await fs.stat(textPath)).size,
+        path: textPath,
+        relativePath: path.relative(basePath, textPath),
+        turnScope: { turnScopeId: "stopped-turn" },
+      };
+    },
     async ingestGeneratedArtifacts(payload = {}) {
       const outputDir = path.join(basePath, "runtime", "attach", "scoped", "s1", "model");
       await fs.mkdir(outputDir, { recursive: true });
@@ -248,25 +265,18 @@ test("doc_to_data: backwrites parsed result to source attachment from userMessag
   const runtime = agentContext.execution.controllers.runtime;
   const emittedEvents = [];
   runtime.userId = "primary-user";
-  runtime.systemRuntime = { sessionId: "s1", dialogProcessId: "dialog-parent" };
+  runtime.systemRuntime = {
+    sessionId: "s1",
+    dialogProcessId: "dialog-parent",
+    turnScopeId: "continue-turn",
+  };
   runtime.eventListener = {
     onEvent(event) {
       emittedEvents.push(event);
     },
   };
   runtime.attachmentService = attachmentService;
-  runtime.userMessageAttachments = [
-    {
-      attachmentId: "source-att",
-      sessionId: "s1",
-      attachmentSource: "user",
-      name: "source.md",
-      mimeType: "text/markdown",
-      size: (await fs.stat(textPath)).size,
-      path: textPath,
-      relativePath: path.relative(basePath, textPath),
-    },
-  ];
+  runtime.userMessageAttachments = [];
   runtime.attachments = [
     {
       attachmentId: "source-att",
@@ -292,13 +302,13 @@ test("doc_to_data: backwrites parsed result to source attachment from userMessag
   assert.equal(linkCalls[0]?.sourceAttachmentSource, "user");
   assert.equal(linkCalls[0]?.sourceAttachmentPath, textPath);
   assert.equal(linkCalls[0]?.parsedAttachmentMeta?.attachmentId, "parsed-1");
-  assert.equal(runtime.userMessageAttachments[0]?.parsedResult?.attachmentId, "parsed-1");
-  assert.equal(runtime.userMessageAttachments[0]?.parsedResult?.tool, TOOL_NAME.DOC_TO_DATA);
-  assert.equal(runtime.userMessageAttachments[0]?.parsedResult?.attachmentId, "parsed-1");
-  assert.equal(runtime.userMessageAttachments[0]?.parsedResult?.tool, TOOL_NAME.DOC_TO_DATA);
+  assert.equal(linkCalls[0]?.sourceTurnScopeId, "stopped-turn");
+  assert.equal(linkCalls[0]?.requestedInTurnScopeId, "continue-turn");
+  assert.equal(runtime.userMessageAttachments.length, 0);
   assert.equal(runtime.attachments[0]?.parsedResult, undefined);
   const parsedEvent = emittedEvents.find((event) => event?.event === "attachment_parsed");
   assert.equal(parsedEvent?.data?.dialogProcessId, "dialog-parent");
+  assert.equal(parsedEvent?.data?.turnScopeId, "continue-turn");
   assert.equal(parsedEvent?.data?.attachments?.[0]?.attachmentId, "source-att");
   assert.equal(parsedEvent?.data?.attachments?.[0]?.parsedResult?.attachmentId, "parsed-1");
 });
