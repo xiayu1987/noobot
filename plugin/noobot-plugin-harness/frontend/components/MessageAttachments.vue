@@ -6,25 +6,34 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useLocale } from "../../../../client/noobot-chat/src/shared/i18n/useLocale";
-import { buildAttachmentUrl } from "../../../../client/noobot-chat/src/services/api/chatApi";
+import {
+  resolveAttachmentAccessMeta,
+  resolveBaseName,
+  resolveParsedResultAccessMeta,
+} from "../../../../client/noobot-chat/src/services/api/attachmentAccess";
 import { BaseAttachmentFileCard, BaseFileCardList } from "../../../../client/noobot-chat/src/shared/ui";
 
 const props = defineProps({
   attachments: { type: Array, default: () => [] },
   isImageMime: { type: Function, required: true },
   canPreviewAttachment: { type: Function, required: true },
+  canPreviewParsedResult: { type: Function, default: null },
   formatFileSize: { type: Function, required: true },
   userId: { type: String, default: "" },
   authFetch: { type: Function, default: null },
 });
 
-const emit = defineEmits(["preview", "download"]);
+const emit = defineEmits(["preview", "preview-resolved", "download"]);
 const { translate } = useLocale();
 const attachments = computed(() =>
   (Array.isArray(props.attachments) ? props.attachments : []),
 );
 const isImageMime = (...args) => props.isImageMime(...args);
 const canPreviewAttachment = (...args) => props.canPreviewAttachment(...args);
+const canPreviewParsedResult = (...args) =>
+  typeof props.canPreviewParsedResult === "function"
+    ? props.canPreviewParsedResult(...args)
+    : props.canPreviewAttachment(...args);
 const formatFileSize = (...args) => props.formatFileSize(...args);
 const pluginAttachmentsCollapsed = ref(true);
 const normalAttachments = computed(() =>
@@ -113,56 +122,19 @@ function dedupeAttachments(list = []) {
   return out;
 }
 
-function resolveParsedResultMeta(attachmentItem = {}) {
-  const parsedResult = attachmentItem?.parsedResult &&
-    typeof attachmentItem.parsedResult === "object" &&
-    !Array.isArray(attachmentItem.parsedResult)
-    ? attachmentItem.parsedResult
-    : {};
-  return {
-    attachmentId: String(
-      parsedResult?.attachmentId ||
-        parsedResult?.id ||
-        attachmentItem?.parsedResultAttachmentId ||
-        "",
-    ).trim(),
-    name: String(
-      parsedResult?.name ||
-        attachmentItem?.parsedResultName ||
-        "",
-    ).trim(),
-    url: String(
-      attachmentItem?.parsedResultUrl ||
-        parsedResult?.url ||
-        parsedResult?.previewUrl ||
-        parsedResult?.downloadUrl ||
-        "",
-    ).trim(),
-  };
-}
-
-function resolveBaseName(filePath = "") {
-  const normalized = String(filePath || "").trim().replaceAll("\\", "/");
-  if (!normalized) return "";
-  const parts = normalized.split("/");
-  return String(parts[parts.length - 1] || "").trim();
+function resolveParsedResultUrl(attachmentItem = {}) {
+  return resolveParsedResultAccessMeta(attachmentItem, {
+    userId: String(props.userId || "").trim(),
+  }).url;
 }
 
 function normalizeAttachmentParsedResultForDisplay(attachmentItem = {}) {
-  const parsedResult = resolveParsedResultMeta(attachmentItem);
-  const parsedResultPath = String(
-    attachmentItem?.parsedResult?.path || "",
-  ).trim();
-  const parsedResultRelativePath = String(
-    attachmentItem?.parsedResult?.relativePath || "",
-  ).trim();
-  const parsedResultUrl = parsedResult.url ||
-    (parsedResult.attachmentId
-      ? buildAttachmentUrl({
-          userId: String(props.userId || "").trim(),
-          attachmentId: parsedResult.attachmentId,
-        })
-      : "");
+  const parsedResult = resolveParsedResultAccessMeta(attachmentItem, {
+    userId: String(props.userId || "").trim(),
+  });
+  const parsedResultPath = parsedResult.path;
+  const parsedResultRelativePath = parsedResult.relativePath;
+  const parsedResultUrl = resolveParsedResultUrl(attachmentItem);
   const parsedResultName = parsedResult.name ||
     resolveBaseName(parsedResultRelativePath) ||
     resolveBaseName(parsedResultPath);
@@ -208,16 +180,9 @@ function clearAllThumbnailUrls() {
 }
 
 function resolveAttachmentFetchUrl(attachmentItem = {}) {
-  const directUrl = String(attachmentItem?.previewUrl || "").trim();
-  if (directUrl) return directUrl;
-  const attachmentId = String(attachmentItem?.attachmentId || "").trim();
-  if (!attachmentId) return "";
-  return buildAttachmentUrl({
+  return resolveAttachmentAccessMeta(attachmentItem, {
     userId: String(props.userId || "").trim(),
-    attachmentId,
-    sessionId: String(attachmentItem?.sessionId || "").trim(),
-    attachmentSource: String(attachmentItem?.attachmentSource || "").trim(),
-  });
+  }).url;
 }
 
 function isMediaThumbnailCandidate(attachmentItem = {}) {
@@ -297,31 +262,35 @@ onBeforeUnmount(() => {
 });
 
 function emitPreviewParsedResult(attachmentItem = {}) {
-  const parsedResult = resolveParsedResultMeta(attachmentItem);
+  const parsedResult = resolveParsedResultAccessMeta(attachmentItem, {
+    userId: String(props.userId || "").trim(),
+  });
   const url = parsedResult.url;
   if (!url) return;
-  emit("preview", {
-    ...attachmentItem,
+  emit("preview-resolved", {
     attachmentId: parsedResult.attachmentId,
     name:
       parsedResult.name ||
       translate("message.parsedResultDefaultName"),
-    mimeType: "text/markdown",
+    mimeType: parsedResult.mimeType || "text/markdown",
+    ...(Number.isFinite(parsedResult.size) && parsedResult.size > 0 ? { size: parsedResult.size } : {}),
     previewUrl: url,
   });
 }
 
 function emitDownloadParsedResult(attachmentItem = {}) {
-  const parsedResult = resolveParsedResultMeta(attachmentItem);
+  const parsedResult = resolveParsedResultAccessMeta(attachmentItem, {
+    userId: String(props.userId || "").trim(),
+  });
   const url = parsedResult.url;
   if (!url) return;
   emit("download", {
-    ...attachmentItem,
     attachmentId: parsedResult.attachmentId,
     name:
       parsedResult.name ||
       translate("message.parsedResultDefaultName"),
-    mimeType: "text/markdown",
+    mimeType: parsedResult.mimeType || "text/markdown",
+    ...(Number.isFinite(parsedResult.size) && parsedResult.size > 0 ? { size: parsedResult.size } : {}),
     previewUrl: url,
   });
 }
@@ -336,6 +305,7 @@ function emitDownloadParsedResult(attachmentItem = {}) {
       :thumbnail-url="resolveThumbnailUrl(attachmentItem, attachmentIndex)"
       :is-image-mime="isImageMime"
       :can-preview-attachment="canPreviewAttachment"
+      :can-preview-parsed-result="canPreviewParsedResult"
       :format-file-size="formatFileSize"
       :translate="translate"
       badge-mode="auto"

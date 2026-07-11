@@ -134,6 +134,7 @@ export function normalizeAttachmentParsedResultMeta(attachmentItem = {}) {
       "filename",
       "type",
       "mime",
+      "bytes",
       "sandboxEnabled",
       "sandbox_enabled",
     ]),
@@ -146,6 +147,9 @@ export function normalizeAttachmentParsedResultMeta(attachmentItem = {}) {
     )),
     name: safeStr(firstValue(baseParsedResult.name, baseParsedResult.fileName, baseParsedResult.filename)),
     mimeType: safeStr(firstValue(baseParsedResult.mimeType, baseParsedResult.type, baseParsedResult.mime)),
+    ...(safeNum(firstValue(baseParsedResult.size, baseParsedResult.bytes)) > 0
+      ? { size: safeNum(firstValue(baseParsedResult.size, baseParsedResult.bytes)) }
+      : {}),
     path: safeStr(firstValue(baseParsedResult.path, baseParsedResult.filePath, baseParsedResult.file_path)),
     relativePath: safeStr(firstValue(baseParsedResult.relativePath, baseParsedResult.relative_path)),
     tool: safeStr(baseParsedResult.tool),

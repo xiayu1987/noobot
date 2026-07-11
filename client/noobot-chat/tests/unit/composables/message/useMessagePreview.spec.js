@@ -113,4 +113,118 @@ describe("useMessagePreview attachment downloads", () => {
     expect(preview.attachmentPreviewType.value).toBe("text");
     expect(preview.attachmentPreviewTextContent.value).toBe("hello\nworld");
   });
+
+  it("previews parsed result from nested attachment metadata when parsedResultUrl is missing", async () => {
+    const authFetch = vi.fn(async () => createTextResponse("# parsed"));
+    const preview = useMessagePreview({ userId: "admin", authFetch });
+    const attachment = {
+      attachmentId: "source-1",
+      sessionId: "session-1",
+      attachmentSource: "upload",
+      name: "report.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      size: 2 * 1024 * 1024,
+      parsedResult: {
+        attachmentId: "parsed-1",
+        sessionId: "session-1",
+        attachmentSource: "model",
+        name: "report.md",
+        mimeType: "text/markdown",
+        size: 256,
+      },
+    };
+
+    expect(preview.canPreviewAttachment(attachment)).toBe(false);
+    expect(preview.canPreviewParsedResult(attachment)).toBe(true);
+
+    await preview.openParsedResultPreview(attachment);
+
+    expect(authFetch).toHaveBeenCalledWith(
+      "/api/internal/attachment/admin/parsed-1?sessionId=session-1&attachmentSource=model",
+    );
+    expect(preview.attachmentPreviewVisible.value).toBe(true);
+    expect(preview.attachmentPreviewType.value).toBe("markdown");
+    expect(preview.attachmentPreviewName.value).toBe("report.md");
+    expect(preview.attachmentPreviewTextContent.value).toBe("# parsed");
+  });
+
+  it("source attachment preview delegates office attachments to parsed result preview", async () => {
+    const authFetch = vi.fn(async () => createTextResponse("# parsed from office"));
+    const preview = useMessagePreview({ userId: "admin", authFetch });
+
+    await preview.openAttachmentPreview({
+      attachmentId: "source-1",
+      sessionId: "session-1",
+      attachmentSource: "upload",
+      name: "report.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      parsedResult: {
+        attachmentId: "parsed-1",
+        sessionId: "session-1",
+        attachmentSource: "model",
+        name: "report.md",
+      },
+    });
+
+    expect(authFetch).toHaveBeenCalledWith(
+      "/api/internal/attachment/admin/parsed-1?sessionId=session-1&attachmentSource=model",
+    );
+    expect(preview.attachmentPreviewType.value).toBe("markdown");
+    expect(preview.attachmentPreviewTextContent.value).toBe("# parsed from office");
+  });
+
+  it("downloads parsed result from nested attachment metadata", async () => {
+    const authFetch = vi.fn(async () => createBlobResponse());
+    const { onDownloadParsedResult } = useMessagePreview({ userId: "admin", authFetch });
+
+    await onDownloadParsedResult({
+      sessionId: "session-1",
+      parsedResult: {
+        attachmentId: "parsed-1",
+        sessionId: "session-1",
+        attachmentSource: "model",
+        name: "report.md",
+      },
+    });
+
+    expect(authFetch).toHaveBeenCalledWith(
+      "/api/internal/attachment/admin/parsed-1?sessionId=session-1&attachmentSource=model",
+    );
+  });
+
+  it("previews an already-resolved attachment payload through the resolved preview entrypoint", async () => {
+    const authFetch = vi.fn(async () => createTextResponse("# parsed payload"));
+    const preview = useMessagePreview({ userId: "admin", authFetch });
+
+    await preview.openResolvedAttachmentPreview({
+      attachmentId: "parsed-1",
+      name: "report.md",
+      mimeType: "text/markdown",
+      previewUrl: "/api/attachments/parsed-1",
+    });
+
+    expect(authFetch).toHaveBeenCalledWith("/api/attachments/parsed-1");
+    expect(preview.attachmentPreviewVisible.value).toBe(true);
+    expect(preview.attachmentPreviewType.value).toBe("markdown");
+    expect(preview.attachmentPreviewTextContent.value).toBe("# parsed payload");
+  });
+
+  it("keeps legacy parsedResult option compatible for resolved attachment payloads", async () => {
+    const authFetch = vi.fn(async () => createTextResponse("# compat payload"));
+    const preview = useMessagePreview({ userId: "admin", authFetch });
+
+    await preview.openAttachmentPreview(
+      {
+        attachmentId: "parsed-1",
+        name: "report.md",
+        mimeType: "text/markdown",
+        previewUrl: "/api/attachments/parsed-1",
+      },
+      { parsedResult: true },
+    );
+
+    expect(authFetch).toHaveBeenCalledWith("/api/attachments/parsed-1");
+    expect(preview.attachmentPreviewType.value).toBe("markdown");
+    expect(preview.attachmentPreviewTextContent.value).toBe("# compat payload");
+  });
 });

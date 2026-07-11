@@ -5,15 +5,16 @@
  */
 import { onBeforeUnmount, ref } from "vue";
 import {
-  buildAttachmentUrl,
   downloadHostFileApi,
   downloadWorkspaceFileApi,
   getHostFileApi,
   getWorkspaceFileApi,
-  resolveAttachmentId,
-  resolveAttachmentSessionId,
-  resolveAttachmentSource,
 } from "../../services/api/chatApi";
+import {
+  buildParsedResultPreviewItem,
+  resolveAttachmentAccessMeta,
+  resolveParsedResultAccessMeta,
+} from "../../services/api/attachmentAccess";
 import {
   copyMarkdownRichAsHtmlPage,
   copyMarkdownText,
@@ -21,6 +22,7 @@ import {
 import { useLocale } from "../../shared/i18n/useLocale";
 import { zhCNMessages } from "noobot-i18n/client/locales/zh-CN";
 import { enUSMessages } from "noobot-i18n/client/locales/en-US";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 // --- 常量集合（避免每次调用 new Set） ---
 const MARKDOWN_EXTS = new Set(["md", "markdown", "mdx"]);
@@ -125,7 +127,7 @@ const OFFICE_EXTS = new Set([
   "odp",
 ]);
 const MARKDOWN_MIMES = new Set(["text/markdown", "text/x-markdown", "application/markdown", "application/x-markdown"]);
-const NON_IMAGE_PREVIEW_MAX_BYTES = 1024 * 1024;
+const NON_IMAGE_PREVIEW_MAX_BYTES = LENGTH_THRESHOLDS.clientPreview.nonImageMaxBytes;
 
 // --- 通用工具函数 ---
 
@@ -245,10 +247,7 @@ function isOfficeMime(mimeType = "") {
 }
 
 function hasParsedResult(attachmentItem = {}) {
-  return Boolean(
-    String(attachmentItem?.parsedResult?.attachmentId || "").trim() ||
-      String(attachmentItem?.parsedResultUrl || "").trim(),
-  );
+  return resolveParsedResultAccessMeta(attachmentItem).hasIdentity;
 }
 
 function parseContentDisposition(contentDisposition = "") {
@@ -461,17 +460,15 @@ export function useMessagePreview({
   }
 
   function resolveAttachmentUrl(attachmentItem = {}) {
-    const attachmentId = resolveAttachmentId(attachmentItem);
-    if (!attachmentId) return String(attachmentItem?.previewUrl || "").trim();
-    return String(
-      attachmentItem?.previewUrl ||
-        buildAttachmentUrl({
-          userId: String(userId || "").trim(),
-          attachmentId,
-          sessionId: resolveAttachmentSessionId(attachmentItem),
-          attachmentSource: resolveAttachmentSource(attachmentItem),
-        }) || "",
-    ).trim();
+    return resolveAttachmentAccessMeta(attachmentItem, {
+      userId: String(userId || "").trim(),
+    }).url;
+  }
+
+  function resolveParsedResultUrl(attachmentItem = {}) {
+    return resolveParsedResultAccessMeta(attachmentItem, {
+      userId: String(userId || "").trim(),
+    }).url;
   }
 
   async function runDownloadFromUrl({
@@ -615,6 +612,18 @@ export function useMessagePreview({
     await runDownloadFromUrl({
       url: resolveAttachmentUrl(attachmentItem),
       fileName: attachmentItem?.name || "attachment",
+      errorI18nKey: "message.downloadFailed",
+    });
+  }
+
+  async function onDownloadParsedResult(attachmentItem = {}) {
+    const parsedItem = buildParsedResultPreviewItem(attachmentItem);
+    await runDownloadFromUrl({
+      url: resolveParsedResultUrl(attachmentItem),
+      fileName:
+        parsedItem?.name ||
+        attachmentItem?.parsedResultName ||
+        translate("message.parsedResultDefaultName"),
       errorI18nKey: "message.downloadFailed",
     });
   }
@@ -827,6 +836,17 @@ export function useMessagePreview({
     );
   }
 
+  function canPreviewParsedResult(attachmentItem = {}) {
+    if (!hasParsedResult(attachmentItem)) return false;
+    const parsedItem = buildParsedResultPreviewItem(attachmentItem);
+    return !isNonImagePreviewOverSizeLimit({
+      fileItem: parsedItem,
+      mimeType: parsedItem.mimeType,
+      fileName: parsedItem.name,
+      isImageMimeChecker: isImageMime,
+    });
+  }
+
   function canPreviewFile(fileItem = {}) {
     const normalizedUserId = String(userId || "").trim();
     const relativePath = resolveFileItemRelativePath(fileItem, normalizedUserId);
@@ -842,7 +862,7 @@ export function useMessagePreview({
     });
   }
 
-  async function openAttachmentPreview(attachmentItem = {}) {
+  async function openResolvedAttachmentPreview(attachmentItem = {}) {
     resetAttachmentPreviewState();
     const mimeType = String(attachmentItem?.mimeType || "").trim();
     const name = String(attachmentItem?.name || "").trim();
@@ -858,9 +878,7 @@ export function useMessagePreview({
       return;
     }
     const officeLike = isOfficeMime(mimeType) || isOfficeFile(name);
-    const parsedResultUrl = String(attachmentItem?.parsedResultUrl || "").trim();
-    const sourceUrl = resolveAttachmentUrl(attachmentItem);
-    const targetUrl = officeLike ? parsedResultUrl : sourceUrl;
+    const targetUrl = resolveAttachmentUrl(attachmentItem);
     if (!targetUrl) return;
 
     const isImage = !officeLike && isImagePreviewType(mimeType, name, isImageMime);
@@ -913,6 +931,35 @@ export function useMessagePreview({
     } finally {
       attachmentPreview.loading.value = false;
     }
+  }
+
+  async function openParsedResultPreview(attachmentItem = {}) {
+    const parsedItem = buildParsedResultPreviewItem(attachmentItem, {
+      userId: String(userId || "").trim(),
+    });
+    const parsedResultUrl = resolveParsedResultUrl(attachmentItem);
+    await openResolvedAttachmentPreview({
+      ...parsedItem,
+      previewUrl: parsedResultUrl,
+    });
+  }
+
+  async function openAttachmentPreview(attachmentItem = {}, options = {}) {
+    if (options?.parsedResult === true) {
+      if (hasParsedResult(attachmentItem)) {
+        await openParsedResultPreview(attachmentItem);
+      } else {
+        await openResolvedAttachmentPreview(attachmentItem);
+      }
+      return;
+    }
+    const mimeType = String(attachmentItem?.mimeType || "").trim();
+    const name = String(attachmentItem?.name || "").trim();
+    if ((isOfficeMime(mimeType) || isOfficeFile(name)) && hasParsedResult(attachmentItem)) {
+      await openParsedResultPreview(attachmentItem);
+      return;
+    }
+    await openResolvedAttachmentPreview(attachmentItem);
   }
 
   function closeAttachmentPreview() {
@@ -993,13 +1040,17 @@ export function useMessagePreview({
     attachmentPreviewTextContent: attachmentPreview.textContent,
     // 方法
     canPreviewAttachment,
+    canPreviewParsedResult,
     canPreviewFile,
     openAttachmentPreview,
+    openParsedResultPreview,
+    openResolvedAttachmentPreview,
     closeAttachmentPreview,
     openFilePreview,
     closePreviewDialog,
     onDownloadFile,
     onDownloadAttachment,
+    onDownloadParsedResult,
     onCopyMarkdownRich,
     onCopyMarkdownText,
     onCopyAttachmentMarkdownRich,

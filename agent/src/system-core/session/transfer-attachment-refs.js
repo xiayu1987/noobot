@@ -85,6 +85,7 @@ function compactParsedResultRef(parsedResult = null) {
   const status = trimString(parsedResult.status);
   const updatedAt = trimString(firstValue(parsedResult.updatedAt, parsedResult.updated_at));
   const mimeType = trimString(firstValue(parsedResult.mimeType, parsedResult.type, parsedResult.mime));
+  const size = Number(firstValue(parsedResult.size, parsedResult.bytes));
   const sandboxFlag = typeof parsedResult.isSandbox === "boolean" ? parsedResult.isSandbox : parsedResult.sandboxEnabled;
 
   if (attachmentId) picked.attachmentId = attachmentId;
@@ -95,6 +96,7 @@ function compactParsedResultRef(parsedResult = null) {
   if (status) picked.status = status;
   if (updatedAt) picked.updatedAt = updatedAt;
   if (mimeType) picked.mimeType = mimeType;
+  if (Number.isFinite(size) && size > 0) picked.size = size;
   if (typeof sandboxFlag === "boolean") picked.isSandbox = sandboxFlag === true;
   return Object.keys(picked).length ? picked : null;
 }
