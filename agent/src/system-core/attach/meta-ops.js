@@ -64,6 +64,19 @@ function cleanPlainObject(value = {}) {
   return Object.keys(out).length ? out : null;
 }
 
+function omitKeys(source = {}, keys = []) {
+  const out = { ...(isPlainObject(source) ? source : {}) };
+  for (const key of keys) delete out[key];
+  return out;
+}
+
+function firstValue(...values) {
+  for (const value of values) {
+    if (value !== undefined && value !== null && value !== "") return value;
+  }
+  return "";
+}
+
 /**
  * 归一化附件 owner 元数据。
  * owner 是唯一承载入口，结构为 { type, id, ... }。
@@ -91,10 +104,10 @@ export function normalizeAttachmentTurnScopeMeta(attachmentItem = {}, normalized
   const ownerTurnScope = isPlainObject(owner?.turnScope) ? owner.turnScope : null;
   const baseTurnScope = cleanPlainObject(explicitTurnScope || ownerTurnScope) || {};
   const normalized = {
-    ...baseTurnScope,
-    turnScopeId: safeStr(baseTurnScope.turnScopeId),
-    dialogProcessId: safeStr(baseTurnScope.dialogProcessId || baseTurnScope.dialog_process_id),
-    sessionId: safeStr(baseTurnScope.sessionId),
+    ...omitKeys(baseTurnScope, ["dialog_process_id", "turn_scope_id", "session_id"]),
+    turnScopeId: safeStr(firstValue(baseTurnScope.turnScopeId, baseTurnScope.turn_scope_id)),
+    dialogProcessId: safeStr(firstValue(baseTurnScope.dialogProcessId, baseTurnScope.dialog_process_id)),
+    sessionId: safeStr(firstValue(baseTurnScope.sessionId, baseTurnScope.session_id)),
   };
   return cleanPlainObject(normalized);
 }
@@ -109,12 +122,41 @@ export function normalizeAttachmentParsedResultMeta(attachmentItem = {}) {
     : null;
   const baseParsedResult = cleanPlainObject(explicitParsedResult) || {};
   const normalized = {
-    ...baseParsedResult,
-    attachmentId: safeStr(baseParsedResult.attachmentId || baseParsedResult.id),
-    path: safeStr(baseParsedResult.path),
-    relativePath: safeStr(baseParsedResult.relativePath),
+    ...omitKeys(baseParsedResult, [
+      "id",
+      "attachment_id",
+      "file_id",
+      "updated_at",
+      "relative_path",
+      "filePath",
+      "file_path",
+      "fileName",
+      "filename",
+      "type",
+      "mime",
+      "sandboxEnabled",
+      "sandbox_enabled",
+    ]),
+    attachmentId: safeStr(firstValue(
+      baseParsedResult.attachmentId,
+      baseParsedResult.attachment_id,
+      baseParsedResult.id,
+      baseParsedResult.fileId,
+      baseParsedResult.file_id,
+    )),
+    name: safeStr(firstValue(baseParsedResult.name, baseParsedResult.fileName, baseParsedResult.filename)),
+    mimeType: safeStr(firstValue(baseParsedResult.mimeType, baseParsedResult.type, baseParsedResult.mime)),
+    path: safeStr(firstValue(baseParsedResult.path, baseParsedResult.filePath, baseParsedResult.file_path)),
+    relativePath: safeStr(firstValue(baseParsedResult.relativePath, baseParsedResult.relative_path)),
     tool: safeStr(baseParsedResult.tool),
-    updatedAt: safeStr(baseParsedResult.updatedAt || baseParsedResult.updated_at),
+    updatedAt: safeStr(firstValue(baseParsedResult.updatedAt, baseParsedResult.updated_at)),
+    ...(typeof baseParsedResult?.isSandbox === "boolean"
+      ? { isSandbox: baseParsedResult.isSandbox }
+      : typeof baseParsedResult?.sandboxEnabled === "boolean"
+        ? { isSandbox: baseParsedResult.sandboxEnabled }
+        : typeof baseParsedResult?.sandbox_enabled === "boolean"
+          ? { isSandbox: baseParsedResult.sandbox_enabled }
+          : {}),
   };
   return cleanPlainObject(normalized);
 }
@@ -207,18 +249,65 @@ export function normalizeAttachmentMetas(attachmentMetas = []) {
       }
       if (!attachmentItem || typeof attachmentItem !== "object") return null;
       const normalized = {
-        attachmentId: safeStr(attachmentItem?.attachmentId),
-        name: safeStr(attachmentItem?.name),
-        mimeType: safeStr(attachmentItem?.mimeType || attachmentItem?.type),
-        size: safeNum(attachmentItem?.size),
-        path: safeStr(attachmentItem?.path),
-        ...(typeof attachmentItem?.isSandbox === "boolean" ? { isSandbox: attachmentItem.isSandbox } : {}),
+        attachmentId: safeStr(firstValue(
+          attachmentItem?.attachmentId,
+          attachmentItem?.attachment_id,
+          attachmentItem?.id,
+          attachmentItem?.fileId,
+          attachmentItem?.file_id,
+        )),
+        clientAttachmentId: safeStr(firstValue(
+          attachmentItem?.clientAttachmentId,
+          attachmentItem?.client_attachment_id,
+        )),
+        contentSha256: safeStr(firstValue(
+          attachmentItem?.contentSha256,
+          attachmentItem?.content_sha256,
+        )),
+        sessionId: safeStr(firstValue(
+          attachmentItem?.sessionId,
+          attachmentItem?.session_id,
+          attachmentItem?.backendSessionId,
+        )),
+        attachmentSource: safeStr(firstValue(
+          attachmentItem?.attachmentSource,
+          attachmentItem?.attachment_source,
+        )),
+        name: safeStr(firstValue(attachmentItem?.name, attachmentItem?.fileName, attachmentItem?.filename)),
+        mimeType: safeStr(firstValue(attachmentItem?.mimeType, attachmentItem?.type, attachmentItem?.mime)),
+        size: safeNum(firstValue(attachmentItem?.size, attachmentItem?.bytes)),
+        path: safeStr(firstValue(attachmentItem?.path, attachmentItem?.filePath, attachmentItem?.file_path)),
+        relativePath: safeStr(firstValue(attachmentItem?.relativePath, attachmentItem?.relative_path)),
+        sandboxPath: safeStr(firstValue(
+          attachmentItem?.sandboxPath,
+          attachmentItem?.sandboxViewPath,
+          attachmentItem?.sandbox_path,
+          attachmentItem?.sandbox_view_path,
+        )),
+        generationSource: safeStr(firstValue(
+          attachmentItem?.generationSource,
+          attachmentItem?.generation_source,
+        )),
+        ...(typeof attachmentItem?.isSandbox === "boolean"
+          ? { isSandbox: attachmentItem.isSandbox }
+          : typeof attachmentItem?.sandboxEnabled === "boolean"
+            ? { isSandbox: attachmentItem.sandboxEnabled }
+            : typeof attachmentItem?.sandbox_enabled === "boolean"
+              ? { isSandbox: attachmentItem.sandbox_enabled }
+              : {}),
       };
       if (!normalized.attachmentId) delete normalized.attachmentId;
+      if (!normalized.clientAttachmentId) delete normalized.clientAttachmentId;
+      if (!normalized.contentSha256) delete normalized.contentSha256;
+      if (!normalized.sessionId) delete normalized.sessionId;
+      if (!normalized.attachmentSource) delete normalized.attachmentSource;
       if (!normalized.name) delete normalized.name;
       if (!normalized.mimeType) delete normalized.mimeType;
       if (!normalized.size) delete normalized.size;
       if (!normalized.path) delete normalized.path;
+      if (!normalized.relativePath) delete normalized.relativePath;
+      if (!normalized.sandboxPath) delete normalized.sandboxPath;
+      if (!normalized.generationSource) delete normalized.generationSource;
       return Object.keys(normalized).length > 0 ? normalized : null;
     })
     .filter(Boolean);
@@ -236,18 +325,19 @@ export function mapAttachmentRecordsToMetas(
     const owner = normalizeAttachmentOwnerMeta(item);
     const turnScope = normalizeAttachmentTurnScopeMeta(item, owner);
     const parsedResult = normalizeAttachmentParsedResultMeta(item);
+    const canonicalMeta = normalizeAttachmentMetas([item])[0] || {};
     return {
-      attachmentId: safeStr(item?.attachmentId),
-      ...(safeStr(item?.clientAttachmentId) ? { clientAttachmentId: safeStr(item.clientAttachmentId) } : {}),
-      ...(safeStr(item?.contentSha256) ? { contentSha256: safeStr(item.contentSha256) } : {}),
-      sessionId: safeStr(item?.sessionId, DEFAULT_ATTACHMENT_SESSION_ID),
-      attachmentSource: safeStr(item?.attachmentSource, DEFAULT_ATTACHMENT_SOURCE),
-      name: safeStr(item?.name),
-      mimeType: safeStr(item?.mimeType, fallbackMimeType),
-      size: safeNum(item?.size),
-      path: safeStr(item?.path),
-      relativePath: safeStr(item?.relativePath),
-      sandboxPath: safeStr(item?.sandboxPath || item?.sandboxViewPath),
+      attachmentId: safeStr(canonicalMeta.attachmentId),
+      ...(safeStr(canonicalMeta.clientAttachmentId) ? { clientAttachmentId: safeStr(canonicalMeta.clientAttachmentId) } : {}),
+      ...(safeStr(canonicalMeta.contentSha256) ? { contentSha256: safeStr(canonicalMeta.contentSha256) } : {}),
+      sessionId: safeStr(canonicalMeta.sessionId, DEFAULT_ATTACHMENT_SESSION_ID),
+      attachmentSource: safeStr(canonicalMeta.attachmentSource, DEFAULT_ATTACHMENT_SOURCE),
+      name: safeStr(canonicalMeta.name),
+      mimeType: safeStr(canonicalMeta.mimeType, fallbackMimeType),
+      size: safeNum(canonicalMeta.size),
+      path: safeStr(canonicalMeta.path),
+      relativePath: safeStr(canonicalMeta.relativePath),
+      sandboxPath: safeStr(canonicalMeta.sandboxPath),
       downloadUrl: safeStr(item?.downloadUrl),
       previewUrl: safeStr(item?.previewUrl),
       parsedResultUrl: safeStr(item?.parsedResultUrl),
@@ -255,8 +345,8 @@ export function mapAttachmentRecordsToMetas(
       parsedResultAttachmentId: safeStr(item?.parsedResultAttachmentId),
       transferFilePath: safeStr(item?.transferFilePath),
       generatedByModel: item?.generatedByModel === true,
-      generationSource: safeStr(item?.generationSource, fallbackGenerationSource),
-      ...(typeof item?.isSandbox === "boolean" ? { isSandbox: item.isSandbox } : {}),
+      generationSource: safeStr(canonicalMeta.generationSource, fallbackGenerationSource),
+      ...(typeof canonicalMeta?.isSandbox === "boolean" ? { isSandbox: canonicalMeta.isSandbox } : {}),
       ...(owner ? { owner } : {}),
       ...(turnScope ? { turnScope } : {}),
       ...(parsedResult ? { parsedResult } : {}),
@@ -270,8 +360,10 @@ export function mapAttachmentRecordsToMetas(
  * 调用方不应再把 attachmentMetas 作为新的标准输出 mirror。
  */
 export function buildTransferPayloadFromAttachmentMetas(attachmentMetas = []) {
-  const metas = (Array.isArray(attachmentMetas) ? attachmentMetas : [])
-    .filter((item) => item && typeof item === "object" && !Array.isArray(item));
+  const metas = mapAttachmentRecordsToMetas(
+    (Array.isArray(attachmentMetas) ? attachmentMetas : [])
+      .filter((item) => item && typeof item === "object" && !Array.isArray(item)),
+  );
   if (!metas.length) {
     return { transferEnvelopes: [] };
   }

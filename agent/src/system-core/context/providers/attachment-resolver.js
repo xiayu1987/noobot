@@ -3,9 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { safeNum } from "../../utils/shared-utils.js";
-import { MIME_TYPE } from "../../constants/index.js";
-import { normalizeAttachmentParsedResultMeta } from "../../attach/index.js";
+import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
 
 export async function resolveAttachments({
   attachmentService = null,
@@ -27,25 +25,13 @@ export async function resolveAttachments({
   const isCanonical = (attachmentItem) =>
     String(attachmentItem?.attachmentId || "").trim() &&
     String(attachmentItem?.path || "").trim();
-  const mapCanonical = (attachmentItem) => {
-      const parsedResult = normalizeAttachmentParsedResultMeta(attachmentItem);
-      return {
-        attachmentId: String(attachmentItem?.attachmentId || ""),
-        ...(String(attachmentItem?.clientAttachmentId || "").trim()
-          ? { clientAttachmentId: String(attachmentItem.clientAttachmentId).trim() }
-          : {}),
-        sessionId: String(attachmentItem?.sessionId || sessionId || ""),
-        attachmentSource: String(attachmentItem?.attachmentSource || "user").trim(),
-        name: String(attachmentItem?.name || ""),
-        mimeType: String(
-          attachmentItem?.mimeType || MIME_TYPE.APPLICATION_OCTET_STREAM,
-        ),
-        size: safeNum(attachmentItem?.size),
-        path: String(attachmentItem?.path || ""),
-        relativePath: String(attachmentItem?.relativePath || ""),
-        ...(parsedResult ? { parsedResult } : {}),
-      };
-    };
+  const mapCanonical = (attachmentItem) =>
+    mapAttachmentRecordsToMetas([{
+      ...attachmentItem,
+      sessionId: attachmentItem?.sessionId || attachmentItem?.session_id || sessionId,
+      attachmentSource:
+        attachmentItem?.attachmentSource || attachmentItem?.attachment_source || "user",
+    }])[0] || null;
   const rawAttachments = sourceAttachments.filter((attachmentItem) => !isCanonical(attachmentItem));
   const ingested = rawAttachments.length ? await attachmentService.ingest({
     userId,
@@ -56,7 +42,10 @@ export async function resolveAttachments({
   }) : [];
   let ingestedIndex = 0;
   return sourceAttachments.flatMap((attachmentItem) => {
-    if (isCanonical(attachmentItem)) return [mapCanonical(attachmentItem)];
+    if (isCanonical(attachmentItem)) {
+      const mapped = mapCanonical(attachmentItem);
+      return mapped ? [mapped] : [];
+    }
     const resolved = ingested[ingestedIndex];
     ingestedIndex += 1;
     return resolved ? [resolved] : [];
