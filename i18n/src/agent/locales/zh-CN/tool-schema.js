@@ -399,6 +399,10 @@ export const TOOL_SCHEMA_BY_TOOL = {
         "key": "tools.script.fieldCommand",
         "text": "Shell 命令。"
       },
+      "executionMode": {
+        "key": "tools.script.fieldExecutionMode",
+        "text": "执行模式：foreground（默认）直接返回 stdout/stderr；background 由工具托管执行，将 stdout/stderr 保存为附件并返回附件路径。background 模式下不要在命令里再使用 &/nohup/disown。"
+      },
       "includeLineNumbers": {
         "key": "tools.script.fieldIncludeLineNumbers",
         "text": "stdout/stderr 是否带行号（默认关闭）。"

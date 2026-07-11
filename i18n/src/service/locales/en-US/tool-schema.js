@@ -395,6 +395,10 @@ export const TOOL_SCHEMA_BY_TOOL = {
         "key": "tools.script.fieldCommand",
         "text": "Shell command."
       },
+      "executionMode": {
+        "key": "tools.script.fieldExecutionMode",
+        "text": "Execution mode: foreground (default) returns stdout/stderr directly; background runs under tool management, saves stdout/stderr as attachments, and returns attachment paths. In background mode, do not add &/nohup/disown inside the command."
+      },
       "includeLineNumbers": {
         "key": "tools.script.fieldIncludeLineNumbers",
         "text": "Whether stdout/stderr should include line numbers (disabled by default)."

@@ -3,9 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { exec, execFile } from "node:child_process";
-import { mkdir } from "node:fs/promises";
-import { filePath as path } from "../../utils/path-resolver.js";
+import { execFile, spawn } from "node:child_process";
+import { createWriteStream } from "node:fs";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { filePath as path, resolveAttachmentDisplayPath } from "../../utils/path-resolver.js";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
@@ -44,6 +46,10 @@ const DOCKER_SANDBOX_DEFAULT = SANDBOX_CONFIG.DOCKER;
 const SANDBOX_COMMAND = SANDBOX_CONFIG.COMMANDS;
 const dockerContainerQueueMap = new Map();
 const SCRIPT_WORKDIR_RELATIVE_PATH = "runtime/ops_workdir";
+const SCRIPT_EXECUTION_MODE = Object.freeze({
+  FOREGROUND: "foreground",
+  BACKGROUND: "background",
+});
 const ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS = normalizeTimeMs(
   process.env.NOOBOT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
   {
@@ -54,11 +60,154 @@ const ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS = normalizeTimeMs(
 
 function run(cmd, cwd, timeoutMs) {
   return new Promise((resolve) => {
-    exec(cmd, { cwd, timeout: timeoutMs }, (error, stdout, stderr) => {
+    // cross-platform-allow: preserve previous exec(command) shell semantics for this tool
+    const child = spawn(cmd, {
+      cwd,
+      shell: true,
+      windowsHide: true,
+    });
+    const stdoutChunks = [];
+    const stderrChunks = [];
+    let spawnError = null;
+    let timedOut = false;
+    const timeout = Number(timeoutMs || 0) > 0
+      ? setTimeout(() => {
+        timedOut = true;
+        // cross-platform-allow: Node child.kill handles Windows direct-child termination
+        child.kill("SIGTERM");
+      }, Number(timeoutMs))
+      : null;
+
+    child.stdout?.on("data", (chunk) => {
+      stdoutChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+    });
+    child.stderr?.on("data", (chunk) => {
+      stderrChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+    });
+    child.on("error", (error) => {
+      spawnError = error;
+    });
+    child.on("close", (code, signal) => {
+      if (timeout) clearTimeout(timeout);
+      const stdout = Buffer.concat(stdoutChunks).toString("utf8");
+      const rawStderr = Buffer.concat(stderrChunks).toString("utf8");
+      const fallbackStderr = spawnError?.message || (timedOut ? `command timed out after ${Number(timeoutMs)}ms` : "");
+      const resultCode = Number.isFinite(Number(code))
+        ? Number(code)
+        : timedOut
+          ? 124
+          : Number(spawnError?.code || 0) || 0;
       resolve({
-        code: error?.code || 0,
+        code: resultCode,
         stdout,
-        stderr: stderr || error?.message || "",
+        stderr: rawStderr || fallbackStderr,
+        ...(signal ? { signal } : {}),
+      });
+    });
+  });
+}
+
+function normalizeExecutionMode(value = "") {
+  return String(value || "").trim().toLowerCase() === SCRIPT_EXECUTION_MODE.BACKGROUND
+    ? SCRIPT_EXECUTION_MODE.BACKGROUND
+    : SCRIPT_EXECUTION_MODE.FOREGROUND;
+}
+
+function waitForWritableFinished(stream) {
+  return new Promise((resolve, reject) => {
+    stream.once("finish", resolve);
+    stream.once("error", reject);
+  });
+}
+
+function pipeReadableToWritable(readable, writable) {
+  if (!readable) {
+    writable.end();
+    return;
+  }
+  readable.on("data", (chunk) => {
+    if (writable.write(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))) === false) {
+      readable.pause();
+    }
+  });
+  writable.on("drain", () => readable.resume());
+  readable.on("end", () => writable.end());
+  readable.on("error", (error) => writable.destroy(error));
+}
+
+function terminateChild(child) {
+  if (!child) return;
+  if (process.platform !== "win32" && Number.isFinite(Number(child.pid))) {
+    try {
+      process.kill(-Number(child.pid), "SIGTERM");
+      return;
+    } catch {
+      // Fall back to killing the direct shell process.
+    }
+  }
+  // cross-platform-allow: fallback direct-child termination uses Node's cross-platform kill shim
+  child.kill("SIGTERM");
+}
+
+async function runFileBacked(cmd, cwd, timeoutMs) {
+  const outputDir = path.join(cwd, ".execute-script-background", `${Date.now()}-${randomUUID()}`);
+  await mkdir(outputDir, { recursive: true });
+  const stdoutPath = path.join(outputDir, "stdout.txt");
+  const stderrPath = path.join(outputDir, "stderr.txt");
+  const stdoutStream = createWriteStream(stdoutPath);
+  const stderrStream = createWriteStream(stderrPath);
+  const stdoutFinished = waitForWritableFinished(stdoutStream);
+  const stderrFinished = waitForWritableFinished(stderrStream);
+
+  return await new Promise((resolve) => {
+    // cross-platform-allow: background mode also preserves shell command semantics
+    const child = spawn(cmd, {
+      cwd,
+      shell: true,
+      detached: process.platform !== "win32",
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let spawnError = null;
+    let timedOut = false;
+    const timeout = Number(timeoutMs || 0) > 0
+      ? setTimeout(() => {
+        timedOut = true;
+        terminateChild(child);
+      }, Number(timeoutMs))
+      : null;
+
+    pipeReadableToWritable(child.stdout, stdoutStream);
+    pipeReadableToWritable(child.stderr, stderrStream);
+    child.on("error", (error) => {
+      spawnError = error;
+    });
+    child.on("close", async (code, signal) => {
+      if (timeout) clearTimeout(timeout);
+      try {
+        await Promise.all([stdoutFinished, stderrFinished]);
+      } catch {
+        // Keep script results recoverable; stderr fallback below carries process-level failures.
+      }
+      if (spawnError || timedOut) {
+        const fallbackMessage = spawnError?.message || `command timed out after ${Number(timeoutMs)}ms`;
+        const existingStderr = await readFile(stderrPath, "utf8").catch(() => "");
+        if (!existingStderr) await writeFile(stderrPath, fallbackMessage, "utf8");
+      }
+      const stdoutStat = await stat(stdoutPath).catch(() => ({ size: 0 }));
+      const stderrStat = await stat(stderrPath).catch(() => ({ size: 0 }));
+      const resultCode = Number.isFinite(Number(code))
+        ? Number(code)
+        : timedOut
+          ? 124
+          : Number(spawnError?.code || 0) || 0;
+      resolve({
+        code: resultCode,
+        ...(signal ? { signal } : {}),
+        stdoutPath,
+        stderrPath,
+        stdoutBytes: Number(stdoutStat?.size || 0),
+        stderrBytes: Number(stderrStat?.size || 0),
       });
     });
   });
@@ -379,6 +528,151 @@ export function buildScriptExecutionMeta({
   });
 }
 
+function resolveRuntimeUserId(runtime = {}, agentContext = null) {
+  return String(
+    runtime?.systemRuntime?.userId ||
+      runtime?.userId ||
+      agentContext?.environment?.identity?.userId ||
+      "",
+  ).trim();
+}
+
+function resolveRuntimeSessionId(runtime = {}, agentContext = null) {
+  return String(
+    runtime?.systemRuntime?.sessionId ||
+      runtime?.sessionId ||
+      agentContext?.session?.current?.id ||
+      agentContext?.session?.id ||
+      "",
+  ).trim();
+}
+
+function buildScriptOutputFileView({
+  runtime = {},
+  agentContext = null,
+  basePath = "",
+  filePath = "",
+  bytes = 0,
+  role = "",
+} = {}) {
+  const relativePath = basePath && filePath.startsWith(basePath)
+    ? path.relative(basePath, filePath).split(path.sep).join("/")
+    : "";
+  return compactObject({
+    role,
+    filePath,
+    relativePath,
+    displayPath: resolveAttachmentDisplayPath({
+      path: filePath,
+      hostPath: filePath,
+      relativePath,
+      runtime,
+      agentContext,
+      purpose: "execute_script_output_file",
+    }),
+    bytes: Number(bytes || 0),
+  });
+}
+
+async function buildBackgroundOutputArtifact({ filePath = "", name = "", role = "" } = {}) {
+  const bytes = await readFile(filePath).catch(() => Buffer.alloc(0));
+  if (!bytes.length) return null;
+  return {
+    name,
+    mimeType: "text/plain",
+    contentBase64: bytes.toString("base64"),
+    meta: { role },
+  };
+}
+
+function buildAttachmentView({
+  record = {},
+  runtime = {},
+  agentContext = null,
+} = {}) {
+  return compactObject({
+    attachmentId: record.attachmentId,
+    name: record.name,
+    mimeType: record.mimeType,
+    size: record.size,
+    path: record.path,
+    relativePath: record.relativePath,
+    displayPath: resolveAttachmentDisplayPath({
+      meta: record,
+      runtime,
+      agentContext,
+      purpose: "execute_script_output_attachment",
+    }),
+  });
+}
+
+async function persistBackgroundScriptOutput({
+  runtime = {},
+  agentContext = null,
+  result = {},
+} = {}) {
+  const service = runtime?.attachmentService || null;
+  const userId = resolveRuntimeUserId(runtime, agentContext);
+  const sessionId = resolveRuntimeSessionId(runtime, agentContext);
+  if (!service || typeof service.ingestGeneratedArtifacts !== "function" || !userId || !sessionId) {
+    return [];
+  }
+  const artifacts = [
+    await buildBackgroundOutputArtifact({
+      filePath: result.stdoutPath,
+      name: "execute-script-stdout.txt",
+      role: "stdout",
+    }),
+    await buildBackgroundOutputArtifact({
+      filePath: result.stderrPath,
+      name: "execute-script-stderr.txt",
+      role: "stderr",
+    }),
+  ].filter(Boolean);
+  if (!artifacts.length) return [];
+  return service.ingestGeneratedArtifacts({
+    userId,
+    sessionId,
+    attachmentSource: "model",
+    generationSource: "execute_script_background",
+    artifacts,
+  });
+}
+
+async function toolFileBackedExecResult(mode, r = {}, extra = {}, options = {}) {
+  const runtime = options?.runtime || {};
+  const agentContext = options?.agentContext || null;
+  const basePath = String(options?.basePath || "").trim();
+  const records = await persistBackgroundScriptOutput({ runtime, agentContext, result: r });
+  return toToolJsonResult(EXECUTE_SCRIPT_TOOL_NAME, {
+    ok: Number(r?.code || 0) === 0,
+    mode,
+    executionMode: SCRIPT_EXECUTION_MODE.BACKGROUND,
+    ...extra,
+    code: Number(r?.code || 0),
+    ...(r?.signal ? { signal: r.signal } : {}),
+    outputFiles: {
+      stdout: buildScriptOutputFileView({
+        runtime,
+        agentContext,
+        basePath,
+        filePath: r.stdoutPath,
+        bytes: r.stdoutBytes,
+        role: "stdout",
+      }),
+      stderr: buildScriptOutputFileView({
+        runtime,
+        agentContext,
+        basePath,
+        filePath: r.stderrPath,
+        bytes: r.stderrBytes,
+        role: "stderr",
+      }),
+    },
+    attachments: records.map((record) => buildAttachmentView({ record, runtime, agentContext })),
+  });
+}
+
 function missingCommandError(mode, commandName = "", runtime = {}) {
   return recoverableToolError(
     tScript(runtime, "commandNotInstalled", { commandName }),
@@ -410,13 +704,14 @@ async function runDockerCommand({
   workspace,
   timeout,
   scriptConfig = {},
+  runner = run,
 }) {
   const built = buildDockerCommand({ userRoot, userId, command, scriptConfig });
   let result = null;
   try {
     result = await enqueueDockerContainerTask({
       containerName: built.containerName,
-      task: async () => run(built.cmd, workspace, timeout),
+      task: async () => runner(built.cmd, workspace, timeout),
       lockWaitTimeoutMs:
         scriptConfig?.dockerLockWaitTimeoutMs ||
         DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
@@ -459,6 +754,7 @@ async function tryDockerFallback({
   fallbackFrom,
   warning,
   includeLineNumbers = false,
+  executionMode = SCRIPT_EXECUTION_MODE.FOREGROUND,
 }) {
   const dockerInstalled = await hasCommand(SANDBOX_COMMAND.DOCKER);
   if (!dockerInstalled) return null;
@@ -469,25 +765,29 @@ async function tryDockerFallback({
     workspace,
     timeout,
     scriptConfig,
+    runner: executionMode === SCRIPT_EXECUTION_MODE.BACKGROUND ? runFileBacked : run,
   });
-  return toolExecResult(
-    SANDBOX_PROVIDER_NAME.DOCKER,
-    dr,
-    {
-      fallbackFrom,
-      warning,
-      ...buildScriptExecutionMeta({
-        sandboxEnabled: true,
-        sandboxProvider: SANDBOX_PROVIDER_NAME.DOCKER,
-        dockerConfig: scriptConfig,
-        docker,
-        workspace,
-        runtime,
-        agentContext,
-      }),
-    },
-    { includeLineNumbers },
-  );
+  const meta = {
+    fallbackFrom,
+    warning,
+    ...buildScriptExecutionMeta({
+      sandboxEnabled: true,
+      sandboxProvider: SANDBOX_PROVIDER_NAME.DOCKER,
+      dockerConfig: scriptConfig,
+      docker,
+      workspace,
+      runtime,
+      agentContext,
+    }),
+  };
+  if (executionMode === SCRIPT_EXECUTION_MODE.BACKGROUND) {
+    return toolFileBackedExecResult(SANDBOX_PROVIDER_NAME.DOCKER, dr, meta, {
+      runtime,
+      agentContext,
+      basePath: runtime?.basePath || "",
+    });
+  }
+  return toolExecResult(SANDBOX_PROVIDER_NAME.DOCKER, dr, meta, { includeLineNumbers });
 }
 
 function buildScriptToolDescription({
@@ -588,16 +888,36 @@ export function createScriptTool({ agentContext }) {
     description,
     schema: z.object({
       command: z.string().describe(tTool(runtime, "tools.script.fieldCommand")),
+      executionMode: z.enum([SCRIPT_EXECUTION_MODE.FOREGROUND, SCRIPT_EXECUTION_MODE.BACKGROUND])
+        .optional()
+        .default(SCRIPT_EXECUTION_MODE.FOREGROUND)
+        .describe(tTool(runtime, "tools.script.fieldExecutionMode")),
       includeLineNumbers: z.boolean().optional().default(false).describe(tTool(runtime, "tools.script.fieldIncludeLineNumbers")),
     }),
-    func: async ({ command, includeLineNumbers = false }) => {
+    func: async ({ command, executionMode = SCRIPT_EXECUTION_MODE.FOREGROUND, includeLineNumbers = false }) => {
       await mkdir(workspace, { recursive: true });
       const normalizedCommand = String(command || "");
+      const requestedExecutionMode = normalizeExecutionMode(executionMode);
       const shouldIncludeLineNumbers = includeLineNumbers === true;
       const timeout = BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs;
 
       if (!sandboxEnabled) {
-        const runResult = await run(normalizedCommand, workspace, timeout);
+        const runResult = requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND
+          ? await runFileBacked(normalizedCommand, workspace, timeout)
+          : await run(normalizedCommand, workspace, timeout);
+        if (requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND) {
+          return toolFileBackedExecResult(
+            "local",
+            runResult,
+            buildScriptExecutionMeta({
+              sandboxEnabled: false,
+              workspace,
+              runtime,
+              agentContext,
+            }),
+            { runtime, agentContext, basePath },
+          );
+        }
         return toolExecResult(
           "local",
           runResult,
@@ -646,6 +966,7 @@ export function createScriptTool({ agentContext }) {
             agentContext,
             fallbackFrom: SANDBOX_PROVIDER_NAME.BUBBLEWRAP,
             warning: tScript(runtime, "fallbackOverlaySrc"),
+            executionMode: requestedExecutionMode,
           });
           if (fallbackResult) return fallbackResult;
           throw scriptRuntimeError(tScript(runtime, "overlaySrcUnsupported"), {
@@ -734,7 +1055,12 @@ export function createScriptTool({ agentContext }) {
       let runResult = null;
       if (mode === SANDBOX_PROVIDER_NAME.DOCKER && dockerRunInput) {
         const { result: dockerResult, docker: built } = await runDockerCommand(
-          dockerRunInput,
+          {
+            ...dockerRunInput,
+            runner: requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND
+              ? runFileBacked
+              : run,
+          },
         );
         runResult = dockerResult;
         extra = {
@@ -750,7 +1076,9 @@ export function createScriptTool({ agentContext }) {
           }),
         };
       } else {
-        runResult = await run(sandboxCmd, workspace, timeout);
+        runResult = requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND
+          ? await runFileBacked(sandboxCmd, workspace, timeout)
+          : await run(sandboxCmd, workspace, timeout);
       }
       if (
         mode === SANDBOX_PROVIDER_NAME.BUBBLEWRAP &&
@@ -771,6 +1099,7 @@ export function createScriptTool({ agentContext }) {
           fallbackFrom: SANDBOX_PROVIDER_NAME.BUBBLEWRAP,
           warning: tScript(runtime, "fallbackUserxattr"),
           includeLineNumbers: shouldIncludeLineNumbers,
+          executionMode: requestedExecutionMode,
         });
         if (fallbackResult) return fallbackResult;
         runResult = {
@@ -779,6 +1108,13 @@ export function createScriptTool({ agentContext }) {
             stderr: String(runResult?.stderr || ""),
           }),
         };
+      }
+      if (requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND) {
+        return toolFileBackedExecResult(mode, runResult, extra, {
+          runtime,
+          agentContext,
+          basePath,
+        });
       }
       return toolExecResult(mode, runResult, extra, {
         includeLineNumbers: shouldIncludeLineNumbers,
