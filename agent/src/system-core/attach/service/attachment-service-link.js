@@ -179,7 +179,16 @@ export async function linkParsedResultInScopes({
         updatedAt: new Date().toISOString(),
       },
     };
-    index.attachments[normalizedSourceId] = nextRecord;
+    const sourceContentSha256 = safeStr(sourceRecord?.contentSha256);
+    for (const [attachmentId, record] of Object.entries(index.attachments || {})) {
+      const sameAttachment = attachmentId === normalizedSourceId;
+      const sameContent = sourceContentSha256 && safeStr(record?.contentSha256) === sourceContentSha256;
+      if (!sameAttachment && !sameContent) continue;
+      index.attachments[attachmentId] = {
+        ...record,
+        parsedResult: nextRecord.parsedResult,
+      };
+    }
     await writeAttachIndex(basePath, index, scope);
     return buildPublicRecord(basePath, nextRecord);
   }
@@ -215,6 +224,7 @@ export async function syncParsedResultToSessionSnapshots({
     ? updatedSourceAttachment.parsedResult
     : {};
   const normalizedSourcePath = safeStr(sourceAttachmentPath);
+  const normalizedContentSha256 = safeStr(updatedSourceAttachment?.contentSha256);
 
   for (const sessionJsonFile of sessionJsonFiles) {
     let raw = "";
@@ -239,8 +249,11 @@ export async function syncParsedResultToSessionSnapshots({
       const nextItems = attachmentItems.map((attachmentItem) => {
         const attachmentId = safeStr(attachmentItem?.attachmentId);
         const attachmentPath = safeStr(attachmentItem?.path);
-        const isMatchedAttachment = attachmentId === normalizedAttachmentId &&
+        const sameAttachmentId = attachmentId === normalizedAttachmentId &&
           isAttachmentPathMatch({ expectedPath: normalizedSourcePath, actualPath: attachmentPath });
+        const sameContent = normalizedContentSha256 &&
+          safeStr(attachmentItem?.contentSha256) === normalizedContentSha256;
+        const isMatchedAttachment = sameAttachmentId || sameContent;
         if (!isMatchedAttachment) return attachmentItem;
         bucketChanged = true;
         return {

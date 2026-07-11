@@ -50,6 +50,35 @@ describe("chatEngine streamHandlers", () => {
     expect(assistantMessage.attachments).toEqual([]);
   });
 
+  it("matches parsed results by content hash without replacing canonical identity", () => {
+    const userMessage = {
+      role: "user",
+      attachments: [{
+        attachmentId: "current-att",
+        contentSha256: "same-content",
+        path: "/current.docx",
+      }],
+    };
+    handleAttachmentParsedStreamEvent({
+      data: {
+        attachments: [{
+          attachmentId: "stale-att",
+          contentSha256: "same-content",
+          path: "/stale.docx",
+          parsedResult: { attachmentId: "parsed-att", path: "/parsed.md" },
+        }],
+      },
+      activeSession: { value: { messages: [userMessage] } },
+      makeViewMessage: (message) => message,
+    });
+
+    expect(userMessage.attachments[0]).toEqual(expect.objectContaining({
+      attachmentId: "current-att",
+      path: "/current.docx",
+      parsedResult: expect.objectContaining({ attachmentId: "parsed-att" }),
+    }));
+  });
+
   it("ignores thinking logs when classifier returns null", () => {
     const botMessage = makeBotMessage();
     const scrollOnFirstResponseOnce = vi.fn();
