@@ -171,6 +171,31 @@ export class RunConfigResolver {
     return scenarioItems.filter((name) => currentSet.has(name));
   }
 
+  normalizeToolPolicyConflicts(toolPolicy = {}) {
+    if (!isPlainObject(toolPolicy)) return toolPolicy;
+    const allowToolNames = this.normalizeStringArray(toolPolicy?.allowToolNames);
+    if (!allowToolNames.length) return toolPolicy;
+    const denySet = new Set([
+      ...this.normalizeStringArray(toolPolicy?.denyToolNames),
+      ...this.normalizeStringArray(toolPolicy?.deny_tool_names),
+    ]);
+    if (!denySet.size) return toolPolicy;
+    return {
+      ...toolPolicy,
+      allowToolNames: allowToolNames.filter((toolName) => !denySet.has(toolName)),
+    };
+  }
+
+  normalizeRunConfigToolPolicyConflicts(runConfig = {}) {
+    if (!isPlainObject(runConfig?.toolPolicy)) return runConfig;
+    const nextToolPolicy = this.normalizeToolPolicyConflicts(runConfig.toolPolicy);
+    if (nextToolPolicy === runConfig.toolPolicy) return runConfig;
+    return {
+      ...runConfig,
+      toolPolicy: nextToolPolicy,
+    };
+  }
+
   resolveScenarioRunConfig(runConfig = {}, userConfig = {}) {
     const normalizedRunConfig = isPlainObject(runConfig) ? runConfig : {};
     const effectiveConfig = mergeConfig(
@@ -189,7 +214,9 @@ export class RunConfigResolver {
         ? normalizedRunConfig?.scenario || ""
         : scenarioConfig?.default || "",
     ).trim();
-    if (!resolvedScenarioKey) return normalizedRunConfig;
+    if (!resolvedScenarioKey) {
+      return this.normalizeRunConfigToolPolicyConflicts(normalizedRunConfig);
+    }
     const scenarioDefinitions = isPlainObject(scenarioConfig?.definitions)
       ? scenarioConfig.definitions
       : {};
@@ -199,10 +226,10 @@ export class RunConfigResolver {
       ? scenarioDefinitions[resolvedScenarioKey]
       : null;
     if (!scenarioDefinition) {
-      return {
+      return this.normalizeRunConfigToolPolicyConflicts({
         ...normalizedRunConfig,
         scenario: resolvedScenarioKey,
-      };
+      });
     }
     const normalizeStringArray = (value = []) => this.normalizeStringArray(value);
     const scenarioToolNamesRaw = normalizeStringArray(scenarioDefinition?.tools);
@@ -278,6 +305,6 @@ export class RunConfigResolver {
         includeContextKeys: mergedContextKeys,
       };
     }
-    return resolvedRunConfig;
+    return this.normalizeRunConfigToolPolicyConflicts(resolvedRunConfig);
   }
 }

@@ -10,6 +10,27 @@ function normalizeStringArrayFallback(input = []) {
     : [];
 }
 
+function removeDeniedToolNamesFromAllow({
+  toolPolicy = {},
+  normalizeStringArray = normalizeStringArrayFallback,
+} = {}) {
+  const policy = toolPolicy && typeof toolPolicy === "object" ? toolPolicy : {};
+  const normalize = typeof normalizeStringArray === "function"
+    ? normalizeStringArray
+    : normalizeStringArrayFallback;
+  const allowToolNames = normalize(policy?.allowToolNames);
+  if (!allowToolNames.length) return policy;
+  const denySet = new Set([
+    ...normalize(policy?.denyToolNames),
+    ...normalize(policy?.deny_tool_names),
+  ]);
+  if (!denySet.size) return policy;
+  return {
+    ...policy,
+    allowToolNames: allowToolNames.filter((toolName) => !denySet.has(toolName)),
+  };
+}
+
 export function mergeToolPolicyDenyToolNames({
   toolPolicy = {},
   appendToolNames = [],
@@ -26,10 +47,14 @@ export function mergeToolPolicyDenyToolNames({
       ...normalize(appendToolNames),
     ]),
   );
-  return {
+  const policyWithMergedDeny = {
     ...basePolicy,
     denyToolNames: mergedDenyToolNames,
   };
+  return removeDeniedToolNamesFromAllow({
+    toolPolicy: policyWithMergedDeny,
+    normalizeStringArray: normalize,
+  });
 }
 
 export function mergeToolPolicyPatch({

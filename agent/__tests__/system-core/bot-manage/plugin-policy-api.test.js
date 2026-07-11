@@ -45,6 +45,21 @@ test("createPluginPolicyApi appends deny tool names without dropping base policy
   assert.deepEqual(merged.denyToolNames, ["delegate_task_async"]);
 });
 
+test("mergeToolPolicyPatch removes denied tools from allowToolNames", () => {
+  const merged = mergeToolPolicyPatch({
+    baseToolPolicy: {
+      allowToolNames: ["read_file", "task_summary", "execute_script"],
+    },
+    toolPolicyPatch: {
+      denyToolNames: ["task_summary"],
+    },
+    normalizeStringArray,
+  });
+
+  assert.deepEqual(merged.allowToolNames, ["read_file", "execute_script"]);
+  assert.deepEqual(merged.denyToolNames, ["task_summary"]);
+});
+
 test("hasToolPolicyPatchContent handles empty/deny-only patches", () => {
   assert.equal(hasToolPolicyPatchContent({ toolPolicyPatch: {}, normalizeStringArray }), false);
   assert.equal(
