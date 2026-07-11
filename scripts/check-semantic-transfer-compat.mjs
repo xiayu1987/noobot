@@ -3,9 +3,12 @@
  * semantic-transfer compatibility guard
  *
  * Goal:
- * - Keep legacy transfer compatibility fields from spreading to new files.
+ * - Keep legacy transfer/attachment compatibility fields from spreading to new files.
  * - Existing compatibility/migration files are explicitly allowlisted.
  * - Overflow legacy fields must be generated only by semantic-transfer legacy adapter.
+ *
+ * Path fields such as filePath/filePaths are intentionally out of scope here:
+ * path handling is owned by utils/path-resolver.js and the bare-file-path guard.
  *
  * This is intentionally a source-level guard, not a semantic JS parser. If a
  * legitimate new compatibility site is added, add the file to the allowlist
@@ -32,8 +35,6 @@ const IGNORE_PATH_PARTS = [
 const LEGACY_FIELD_REGEXES = [
   { field: "attachmentMetas", regex: /(^|[,{(\s])attachmentMetas\s*:/ },
   { field: "attachmentMeta", regex: /(^|[,{(\s])attachmentMeta\s*:/ },
-  { field: "filePath", regex: /(^|[,{(\s])filePath\s*:/ },
-  { field: "filePaths", regex: /(^|[,{(\s])filePaths\s*:/ },
 ];
 
 const OVERFLOW_FIELD_REGEXES = [
@@ -114,7 +115,6 @@ const LEGACY_FIELD_ALLOWED_FILES = new Map(Object.entries({
   "agent/src/system-core/agent/core/media/artifact-service.js": "artifact extraction compatibility reads legacy + transfer",
   "agent/src/system-core/attach/meta-ops.js": "legacy attachment meta normalization utility",
   "agent/src/system-core/attach/runtime-attachment.js": "runtime attachment legacy store",
-  "agent/src/system-core/attach/source-attachment-resolver.js": "ordinary source attachment service boundary requires its legacy filePath lookup field; display-path selection uses the shared sandbox path resolver",
   "agent/src/system-core/attach/service/attachment-service.js": "attachment service rewrites persisted message metas",
   "agent/src/system-core/bot-manage/execution/runner.js": "session runner attachment compatibility",
   "agent/src/system-core/bot-manage/execution/finalizer.js": "final assistant aggregation keeps attachmentMetas compatibility for persisted turn schema",
@@ -135,14 +135,8 @@ const LEGACY_FIELD_ALLOWED_FILES = new Map(Object.entries({
   "agent/src/system-core/semantic-transfer/storage/transfer-path-view.js": "semantic-transfer path-view compatibility (semantic dir layout)",
   "agent/src/system-core/tools/ai-models/multimodal-generate-tool.js": "multimodal tool returns attachmentMetas from attachmentService for existing consumers",
   "agent/src/system-core/tools/connectors/connector-toolkit/tool-access-connector.js": "connector output keeps attachmentMetas compatibility; ordinary email attachment save stays on attachmentService",
-  "agent/src/system-core/tools/core/check-tool-input.js": "tool input schema/error details use filePath as user field",
   "agent/src/system-core/tools/data-processing/doc2data-tool.js": "tool input/output compatibility",
   "agent/src/system-core/tools/data-processing/media2data-tool.js": "tool input/output compatibility",
-  "agent/src/system-core/tools/data-processing/web2data-tool.js": "tool input path schema",
-  "agent/src/system-core/tools/execution/file-patch.js": "file patch public API uses filePath-style variable/detail names unrelated to semantic-transfer output",
-  "agent/src/system-core/tools/execution/file-search.js": "file search public result schema uses filePath for searched workspace files",
-  "agent/src/system-core/tools/execution/file-tools.js": "file tool public schema/results use filePath as user-facing workspace file address",
-  "agent/src/system-core/tools/execution/file-tool.js": "file tool public input schema",
   "agent/src/system-core/tools/collaboration/agent-collab/collab-artifact-persist.js": "agent-collab async result output keeps attachmentMetas compatibility; ordinary save stays on attachmentService",
   "agent/src/system-core/tools/collaboration/agent-collab/collab-task-utils.js": "agent-collab payload compatibility",
   "agent/src/system-core/tools/collaboration/agent-collab/tool-wait-async-result.js": "agent-collab wait result compatibility",
