@@ -499,10 +499,18 @@ export function createResendMessageTransaction({
         input.value = snapshot.inputValue;
         return false;
       }
+      // replace-turn has already persisted raw uploads and returned the
+      // canonical attachment snapshot in session detail. From this point on
+      // that snapshot is the source of truth; the base64 transport objects are
+      // only upload payloads and must never be sent to Agent as metadata.
+      const persistedAttachments = dedupeAttachmentMetas(replacementUserMessage.attachments || []);
+      const attachmentsForSend = persistedAttachments.length > 0
+        ? persistedAttachments
+        : finalAttachments;
       replacementUserMessage.content = text;
       replacementUserMessage.attachments = mergeAttachmentMetas(
-        replacementUserMessage.attachments,
-        finalAttachments,
+        attachmentsForSend,
+        persistedAttachments,
       );
       if ("text" in replacementUserMessage) replacementUserMessage.text = text;
       if ("message" in replacementUserMessage) replacementUserMessage.message = text;
@@ -552,7 +560,7 @@ export function createResendMessageTransaction({
       logResendDebug("resend.send.before", {
         sessionId,
         turnScopeId: resendTurnScopeId,
-        finalAttachments: summarizeDebugAttachments(finalAttachments),
+        finalAttachments: summarizeDebugAttachments(replacementUserMessage.attachments),
         messages: summarizeDebugMessages(activeSession?.value?.messages),
       });
       const sent = await send?.({
@@ -561,8 +569,8 @@ export function createResendMessageTransaction({
         turnScopeId: resendTurnScopeId,
         allowDuringResend: true,
         attachmentFiles: [],
-        userAttachments: finalAttachments,
-        transportAttachments: finalAttachments,
+        userAttachments: replacementUserMessage.attachments,
+        transportAttachments: replacementUserMessage.attachments,
       });
       logResendDebug("resend.send.after", {
         sessionId,
