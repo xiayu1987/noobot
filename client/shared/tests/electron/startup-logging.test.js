@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
+import { clientFilePath as path } from "../../path-resolver.js";
 import test from "node:test";
 import { DESKTOP_LOG_FILES, createStartupLogger } from "../../electron/startup-logging.js";
 

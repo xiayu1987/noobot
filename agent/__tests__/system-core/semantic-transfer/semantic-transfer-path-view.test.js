@@ -57,13 +57,11 @@ test("resolveTransferFilePath follows sandbox/non-sandbox path view", () => {
   );
 });
 test("resolveTransferPathView keeps sandboxPath semantic separate from relative display fallback", () => {
-  assert.deepEqual(
-    resolveTransferPathView({ attachmentMeta: { relativePath: "attachments/a.md", name: "a.md" } }),
-    {
-      displayPath: "attachments/a.md",
-      relativePath: "attachments/a.md",
-    },
-  );
+  const relativeView = resolveTransferPathView({ attachmentMeta: { relativePath: "attachments/a.md", name: "a.md" } });
+  assert.equal(relativeView.displayPath, "attachments/a.md");
+  assert.equal(relativeView.relativePath, "attachments/a.md");
+  assert.equal(relativeView.sourceView, "host");
+  assert.equal(relativeView.targetView, "host");
   assert.equal(
     resolveTransferPathView({
       runtime: buildSandboxRuntime(true),
@@ -149,9 +147,43 @@ test("persisted semantic-transfer file uses sandbox view when sandbox is enabled
 
   const file = transferred?.transferEnvelopes?.[0]?.files?.[0] || {};
   assert.equal(file.filePath, "/workspace/primary-user/attachments/sandbox-output.txt");
+  assert.equal(file.pathView?.path, "/workspace/primary-user/attachments/sandbox-output.txt");
   assert.equal(file.pathView?.displayPath, "/workspace/primary-user/attachments/sandbox-output.txt");
   assert.equal(file.pathView?.sandboxPath, "/workspace/primary-user/attachments/sandbox-output.txt");
   assert.equal(file.pathView?.hostPath, "/host/users/primary-user/attachments/sandbox-output.txt");
+  assert.equal(file.pathView?.sourceView, "host");
+  assert.equal(file.pathView?.targetView, "sandbox");
+  const restored = JSON.parse(JSON.stringify(transferred));
+  const restoredView = restored.transferEnvelopes[0].files[0].pathView;
+  assert.equal(restoredView.sourceView, file.pathView.sourceView);
+  assert.equal(restoredView.targetView, file.pathView.targetView);
+  assert.equal(restoredView.sourcePlatform, file.pathView.sourcePlatform);
+  assert.equal(restoredView.targetPlatform, file.pathView.targetPlatform);
+});
+test("persisted semantic-transfer file uses non-sandbox view when sandbox is disabled", async () => {
+  const attachmentService = {
+    async ingestGeneratedArtifacts(payload) {
+      return payload.artifacts.map((artifact) => ({
+        attachmentId: "att-host-view",
+        name: artifact.name,
+        path: `/host/users/primary-user/attachments/${artifact.name}`,
+        relativePath: `attachments/${artifact.name}`,
+      }));
+    },
+  };
+  const runtime = buildSandboxRuntime(false, {
+    systemRuntime: { userId: "primary-user", sessionId: "s1" },
+    attachmentService,
+  });
+  const transferred = await transferSemanticContent({
+    scenario: "tool", strategy: "tool_output", runtime, content: "abc",
+    name: "host-output.txt", mimeType: "text/plain", forceAttachment: true,
+    source: "tool", reason: "tool_result_overflow",
+  });
+  const file = transferred?.transferEnvelopes?.[0]?.files?.[0] || {};
+  assert.equal(file.filePath, "attachments/host-output.txt");
+  assert.equal(file.pathView?.displayPath, "attachments/host-output.txt");
+  assert.equal(file.pathView?.isSandbox, false);
 });
 test("transferSemanticContent tool_input overflow returns sandbox path view when sandbox is enabled", async () => {
   const attachmentService = {
@@ -188,6 +220,7 @@ test("transferSemanticContent tool_input overflow returns sandbox path view when
 
   const file = transferred?.transferEnvelopes?.[0]?.files?.[0] || {};
   assert.equal(file.filePath, "/workspace/primary-user/attachments/large.txt.tool-input.txt");
+  assert.equal(file.pathView?.path, "/workspace/primary-user/attachments/large.txt.tool-input.txt");
   assert.equal(file.pathView?.displayPath, "/workspace/primary-user/attachments/large.txt.tool-input.txt");
   assert.equal(file.pathView?.sandboxPath, "/workspace/primary-user/attachments/large.txt.tool-input.txt");
   assert.equal(file.pathView?.hostPath, "/host/users/primary-user/attachments/large.txt.tool-input.txt");
@@ -248,6 +281,7 @@ test("transferSemanticContent sandbox view prefers default workspace over /proje
   const wrongProjectPath = "/project/workspace/primary-user/runtime/ops_workdir/large_file_test.txt.tool-input.txt";
   const file = transferred?.transferEnvelopes?.[0]?.files?.[0] || {};
   assert.equal(file.filePath, expectedPath);
+  assert.equal(file.pathView?.path, expectedPath);
   assert.equal(file.pathView?.displayPath, expectedPath);
   assert.equal(file.pathView?.sandboxPath, expectedPath);
   assert.notEqual(file.filePath, wrongProjectPath);

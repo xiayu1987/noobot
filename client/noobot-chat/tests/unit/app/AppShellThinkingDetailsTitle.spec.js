@@ -1,23 +1,23 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
+import { clientFilePath as path } from "../../../../shared/path-resolver.js";
 import { describe, expect, it } from "vitest";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appShellSource = readFileSync(
-  resolve(__dirname, "../../../src/app/AppShell.vue"),
+  path.resolve(__dirname, "../../../src/app/AppShell.vue"),
   "utf8",
 );
 const thinkingDetailsStateSource = readFileSync(
-  resolve(__dirname, "../../../src/app/state/thinkingDetailsState.js"),
+  path.resolve(__dirname, "../../../src/app/state/thinkingDetailsState.js"),
   "utf8",
 );
 const useThinkingDetailsPanelSource = readFileSync(
-  resolve(__dirname, "../../../src/app/useThinkingDetailsPanel.js"),
+  path.resolve(__dirname, "../../../src/app/useThinkingDetailsPanel.js"),
   "utf8",
 );
 const drawerPanelsStateSource = readFileSync(
-  resolve(__dirname, "../../../src/app/state/drawerPanelsState.js"),
+  path.resolve(__dirname, "../../../src/app/state/drawerPanelsState.js"),
   "utf8",
 );
 

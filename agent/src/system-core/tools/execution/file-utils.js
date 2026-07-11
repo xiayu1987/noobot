@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { access } from "node:fs/promises";
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
@@ -90,7 +90,7 @@ export function matchesGlob(relativePath = "", glob = "") {
   const normalizedGlob = normalizeSlash(glob).trim();
   if (!normalizedGlob) return true;
   const normalizedPath = normalizeSlash(relativePath);
-  const fileName = path.posix.basename(normalizedPath);
+  const fileName = normalizedPath.split("/").at(-1) || "";
   const matcher = globToRegExp(normalizedGlob);
   if (!matcher) return true;
   return matcher.test(normalizedPath) || matcher.test(fileName);

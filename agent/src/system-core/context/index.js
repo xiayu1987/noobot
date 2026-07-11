@@ -355,6 +355,7 @@ export class ContextBuilder {
     const includeMcpServers = this._isContextSectionEnabled(includeSet, "mcp_servers");
     const includeConnectors = this._isContextSectionEnabled(includeSet, "connectors");
     const includeAttachments = this._isContextSectionEnabled(includeSet, "attachments");
+    const locale = this.runConfig?.locale || "zh-CN";
 
     const treeInfo = await resolveSessionTreeWithRootSessionId({
       runtimeBasePath,
@@ -366,7 +367,7 @@ export class ContextBuilder {
 
     const [systemPrompt, skills, attachments, workspaceDirectories] =
       await Promise.all([
-        includeBasePrompt ? loadSystemPrompt() : "",
+        includeBasePrompt ? loadSystemPrompt({ locale }) : "",
         includeSkills
           ? resolveSkills({
               skillService: this.skillService,
@@ -449,7 +450,7 @@ export class ContextBuilder {
     const normalizedLongMemory = includeLongMemory ? longMemory : null;
 
     const systemContext = composeSystemInfoSections({
-      locale: this.runConfig?.locale || "zh-CN",
+      locale,
       systemPrompt,
       staticInfo,
       dynamicInfo,

@@ -5,7 +5,7 @@
  */
 import { defineConfig, loadEnv } from "vite";
 import vue from "@vitejs/plugin-vue";
-import path from "node:path";
+import { clientFilePath as path } from "../shared/path-resolver.js";
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {

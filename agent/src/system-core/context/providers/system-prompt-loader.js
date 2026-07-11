@@ -5,27 +5,32 @@
  */
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import path from "node:path";
+import { normalizeLocale } from "noobot-i18n/shared";
+import { filePath as path } from "../../utils/path-resolver.js";
 
-let systemPromptCachePromise = null;
+const systemPromptCachePromises = new Map();
 
 function resolveDefaultSystemPromptPath({
   cwd = process.cwd(),
   env = process.env,
+  locale = "zh-CN",
 } = {}) {
   const rawEnvPath = String(env?.AGENT_SYSTEM_PROMPT_PATH || "").trim();
   if (rawEnvPath) return path.resolve(cwd, rawEnvPath);
-  return fileURLToPath(new URL("../../system-prompt/base.md", import.meta.url));
+  const normalizedLocale = normalizeLocale(locale, "zh-CN");
+  const fileName = normalizedLocale === "en-US" ? "base.en-US.md" : "base.zh-CN.md";
+  return fileURLToPath(new URL(`../../system-prompt/${fileName}`, import.meta.url));
 }
 
-export async function loadSystemPrompt() {
-  if (!systemPromptCachePromise) {
-    const systemPromptPath = resolveDefaultSystemPromptPath();
-    systemPromptCachePromise = readFile(systemPromptPath, "utf8")
+export async function loadSystemPrompt(options = {}) {
+  const systemPromptPath = resolveDefaultSystemPromptPath(options);
+  if (!systemPromptCachePromises.has(systemPromptPath)) {
+    const systemPromptCachePromise = readFile(systemPromptPath, "utf8")
       .catch((error) => {
-        systemPromptCachePromise = null;
+        systemPromptCachePromises.delete(systemPromptPath);
         throw error;
       });
+    systemPromptCachePromises.set(systemPromptPath, systemPromptCachePromise);
   }
-  return systemPromptCachePromise;
+  return systemPromptCachePromises.get(systemPromptPath);
 }

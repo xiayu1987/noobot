@@ -1,11 +1,11 @@
 import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { clientFilePath as path } from "../../../../shared/path-resolver.js";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const navigatorSource = readFileSync(
-  resolve(__dirname, "../../../src/app/ChatMessageNavigator.vue"),
+  path.resolve(__dirname, "../../../src/app/ChatMessageNavigator.vue"),
   "utf8",
 );
 

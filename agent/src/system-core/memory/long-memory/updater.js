@@ -5,7 +5,7 @@
  */
 import { isBlankLongMemoryContent } from "../utils/format.js";
 import { parseIdPatchCommands, parseKvPayload } from "../parsers/id-patch-parser.js";
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 
 const MEMORY_LINE_RE = /^\s*(\d+)\.\s+(.+?)\s*$/;
 

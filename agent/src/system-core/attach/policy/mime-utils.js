@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 
 import { safeStr } from "../../utils/shared-utils.js";
 import { MIME_TO_EXTENSION } from "../constants.js";

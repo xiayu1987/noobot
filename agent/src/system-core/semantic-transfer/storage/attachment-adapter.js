@@ -5,7 +5,7 @@
  */
 import { Buffer } from "node:buffer";
 import fs from "node:fs/promises";
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 import { AttachmentService } from "../../attach/service/attachment-service.js";
 import { mapAttachmentRecordsToMetas, normalizeAttachmentTurnScopeMeta } from "../../attach/index.js";
 import {
@@ -20,7 +20,7 @@ import { createTransferEnvelope } from "../envelope/envelope.js";
 import { resolveTransferIntent } from "../core/intent.js";
 import { createTransferResult, TRANSFER_RESULT_STATUS } from "../core/result.js";
 import { firstNormalizedString } from "../core/compact.js";
-import { buildTransferFileEntry } from "./path-resolver.js";
+import { buildTransferFileEntry } from "./transfer-path-view.js";
 
 function normalizeString(value = "") {
   return String(value || "").trim();
@@ -257,7 +257,14 @@ export async function persistTransferArtifacts({
     });
   }
   if (!records.length) return emptyPersistResult();
-  const attachmentMetas = mapAttachmentRecordsToMetas(records, {
+  const configuredIsSandbox = resolveRuntimeIsSandbox({ runtime, agentContext });
+  const normalizedRecords = records.map((record) => ({
+    ...record,
+    ...(typeof resolveArtifactIsSandbox(record) === "boolean"
+      ? {}
+      : { isSandbox: configuredIsSandbox }),
+  }));
+  const attachmentMetas = mapAttachmentRecordsToMetas(normalizedRecords, {
     fallbackMimeType: firstNormalizedString(fallbackMimeType, DEFAULT_TRANSFER_MIME_TYPE),
     fallbackGenerationSource: resolvedGenerationSource,
   });
@@ -294,7 +301,7 @@ export async function persistTransferArtifacts({
   });
   return {
     transferEnvelopes: [envelope],
-    records,
+    records: normalizedRecords,
   };
 }
 

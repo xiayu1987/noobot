@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 import { readdir } from "node:fs/promises";
 
 import { fsRm } from "../../store/fs-adapter.js";
 import { safeStr } from "../../utils/shared-utils.js";
 import { DEFAULT_ATTACHMENT_SESSION_ID } from "../constants.js";
-import { attachScopedRoot, resolveBasePath } from "./path-resolver.js";
+import { attachScopedRoot, resolveBasePath } from "./attachment-scope-resolver.js";
 
 /**
  * 批量删除指定会话的 scoped 附件目录。

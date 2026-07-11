@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 import { fsAccess, fsReadFile, fsStat } from "../../store/fs-adapter.js";
 import { safeNum, safeStr } from "../../utils/shared-utils.js";
 import { readAttachIndex } from "../index-manager.js";
-import { findRecordAcrossScopedIndexes, resolveAttachmentScope, resolveBasePath } from "./path-resolver.js";
+import { findRecordAcrossScopedIndexes, resolveAttachmentScope, resolveBasePath } from "./attachment-scope-resolver.js";
 import { buildPublicRecord } from "./record-builder.js";
 
 /**

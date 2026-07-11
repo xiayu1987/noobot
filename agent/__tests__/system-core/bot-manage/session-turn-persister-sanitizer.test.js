@@ -3,6 +3,40 @@ import assert from "node:assert/strict";
 
 import { SessionTurnPersister } from "../../../src/system-core/bot-manage/execution/turn-persister.js";
 
+test("SessionTurnPersister normalizes parentSessionId once for every persistence outlet", async () => {
+  const appendedTurns = [];
+  const executionLogs = [];
+  const session = {
+    appendExecutionLog: async (payload = {}) => executionLogs.push(payload),
+    appendTurn: async (payload = {}) => appendedTurns.push(payload),
+  };
+  const persister = new SessionTurnPersister({ session });
+  const rawParentSessionId = `  ${"p".repeat(205)}  `;
+
+  await persister.appendAgentMessages({
+    userId: "u1",
+    sessionId: "s1",
+    parentSessionId: rawParentSessionId,
+    messages: [{ role: "assistant", content: "done" }],
+    dialogProcessId: "dp1",
+  });
+
+  const expected = "p".repeat(200);
+  assert.equal(appendedTurns[0].parentSessionId, expected);
+  assert.equal(executionLogs[0].parentSessionId, expected);
+
+  appendedTurns.length = 0;
+  executionLogs.length = 0;
+  await persister.appendAgentMessages({
+    userId: "u1",
+    sessionId: "s1",
+    parentSessionId: "   ",
+    messages: [{ role: "assistant", content: "done" }],
+  });
+  assert.equal(appendedTurns[0].parentSessionId, "");
+  assert.equal(executionLogs[0].parentSessionId, "");
+});
+
 test("SessionTurnPersister scopes stopped assistant persistence by turnScopeId", async () => {
   const appendedTurns = [];
   const savedStatuses = [];

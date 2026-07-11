@@ -1,10 +1,12 @@
 import { cp, rm, stat } from 'node:fs/promises';
-import path from 'node:path';
+import { clientFilePath as path } from "../path-resolver.js";
 
 const requiredBackendRuntimeFiles = [
   'service/app.js',
   'node_modules/noobot-agent/package.json',
   'node_modules/noobot-agent/src/system-core/system-prompt/base.md',
+  'node_modules/noobot-agent/src/system-core/system-prompt/base.zh-CN.md',
+  'node_modules/noobot-agent/src/system-core/system-prompt/base.en-US.md',
   'node_modules/express/package.json',
   'plugin/noobot-plugin-harness/manifest.json',
   'plugin/noobot-plugin-workflow/manifest.json',

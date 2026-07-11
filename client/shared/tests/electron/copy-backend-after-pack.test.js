@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
+import { clientFilePath as path } from "../../path-resolver.js";
 import test from "node:test";
 import copyBackendAfterPack from "../../scripts/copy-backend-after-pack.mjs";
 
@@ -29,6 +29,16 @@ async function createFixture() {
     backendSource,
     "node_modules/noobot-agent/src/system-core/system-prompt/base.md",
     "base prompt",
+  );
+  await writeRuntimeFile(
+    backendSource,
+    "node_modules/noobot-agent/src/system-core/system-prompt/base.zh-CN.md",
+    "zh prompt",
+  );
+  await writeRuntimeFile(
+    backendSource,
+    "node_modules/noobot-agent/src/system-core/system-prompt/base.en-US.md",
+    "en prompt",
   );
   await writeRuntimeFile(backendSource, "node_modules/express/package.json", "{}");
   await writeRuntimeFile(backendSource, "plugin/noobot-plugin-harness/manifest.json", "{}");
@@ -67,7 +77,155 @@ test("copyBackendAfterPack copies backend plugins into packaged resources", asyn
   }
 });
 
-test("copyBackendAfterPack copies bundled agent system prompt into packaged resources", async () => {
+test("copyBackendAfterPack copies bundled agent system prompts into packaged resources", async () => {
+  const fixture = await createFixture();
+  try {
+    await copyBackendAfterPack(fixture.context);
+
+    const backendDestination = path.join(fixture.appOutDir, "resources", "backend");
+    const systemPromptDir = path.join(
+      backendDestination,
+      "node_modules",
+      "noobot-agent",
+      "src",
+      "system-core",
+      "system-prompt",
+    );
+    assert.equal(await readFile(path.join(systemPromptDir, "base.md"), "utf8"), "base prompt");
+    assert.equal(await readFile(path.join(systemPromptDir, "base.zh-CN.md"), "utf8"), "zh prompt");
+    assert.equal(await readFile(path.join(systemPromptDir, "base.en-US.md"), "utf8"), "en prompt");
+  } finally {
+    await rm(fixture.rootDir, { recursive: true, force: true });
+  }
+});
+
+test("copyBackendAfterPack fails when prepared backend runtime is missing locale system prompts", async () => {
+  const fixture = await createFixture();
+  try {
+    await rm(
+      path.join(
+        fixture.backendSource,
+        "node_modules",
+        "noobot-agent",
+        "src",
+        "system-core",
+        "system-prompt",
+        "base.en-US.md",
+      ),
+      { force: true },
+    );
+
+    await assert.rejects(
+      () => copyBackendAfterPack(fixture.context),
+      /Missing required backend runtime file after prepare: node_modules\/noobot-agent\/src\/system-core\/system-prompt\/base\.en-US\.md/,
+    );
+  } finally {
+    await rm(fixture.rootDir, { recursive: true, force: true });
+  }
+});
+
+test("copyBackendAfterPack copies bundled agent system prompts into macOS app resources", async () => {
+  const fixture = await createFixture();
+  try {
+    const macContext = {
+      ...fixture.context,
+      electronPlatformName: "darwin",
+      packager: {
+        ...fixture.context.packager,
+        appInfo: {
+          productFilename: "Noobot",
+        },
+      },
+    };
+    await copyBackendAfterPack(macContext);
+
+    const systemPromptDir = path.join(
+      fixture.appOutDir,
+      "Noobot.app",
+      "Contents",
+      "Resources",
+      "backend",
+      "node_modules",
+      "noobot-agent",
+      "src",
+      "system-core",
+      "system-prompt",
+    );
+    assert.equal(await readFile(path.join(systemPromptDir, "base.zh-CN.md"), "utf8"), "zh prompt");
+    assert.equal(await readFile(path.join(systemPromptDir, "base.en-US.md"), "utf8"), "en prompt");
+  } finally {
+    await rm(fixture.rootDir, { recursive: true, force: true });
+  }
+});
+
+test("copyBackendAfterPack keeps legacy bundled agent system prompt required", async () => {
+  const fixture = await createFixture();
+  try {
+    await rm(
+      path.join(
+        fixture.backendSource,
+        "node_modules",
+        "noobot-agent",
+        "src",
+        "system-core",
+        "system-prompt",
+        "base.md",
+      ),
+      { force: true },
+    );
+
+    await assert.rejects(
+      () => copyBackendAfterPack(fixture.context),
+      /Missing required backend runtime file after prepare: node_modules\/noobot-agent\/src\/system-core\/system-prompt\/base\.md/,
+    );
+  } finally {
+    await rm(fixture.rootDir, { recursive: true, force: true });
+  }
+});
+
+test("copyBackendAfterPack fails when prepared backend runtime is missing bundled agent system prompt directory", async () => {
+  const fixture = await createFixture();
+  try {
+    await rm(
+      path.join(fixture.backendSource, "node_modules", "noobot-agent", "src", "system-core", "system-prompt"),
+      { recursive: true, force: true },
+    );
+
+    await assert.rejects(
+      () => copyBackendAfterPack(fixture.context),
+      /Missing required backend runtime file after prepare: node_modules\/noobot-agent\/src\/system-core\/system-prompt\/base\.md/,
+    );
+  } finally {
+    await rm(fixture.rootDir, { recursive: true, force: true });
+  }
+});
+
+test("copyBackendAfterPack fails when prepared backend runtime is missing bundled agent Chinese system prompt", async () => {
+  const fixture = await createFixture();
+  try {
+    await rm(
+      path.join(
+        fixture.backendSource,
+        "node_modules",
+        "noobot-agent",
+        "src",
+        "system-core",
+        "system-prompt",
+        "base.zh-CN.md",
+      ),
+      { force: true },
+    );
+
+    await assert.rejects(
+      () => copyBackendAfterPack(fixture.context),
+      /Missing required backend runtime file after prepare: node_modules\/noobot-agent\/src\/system-core\/system-prompt\/base\.zh-CN\.md/,
+    );
+  } finally {
+    await rm(fixture.rootDir, { recursive: true, force: true });
+  }
+});
+
+test("copyBackendAfterPack preserves the legacy base prompt content", async () => {
   const fixture = await createFixture();
   try {
     await copyBackendAfterPack(fixture.context);
@@ -115,23 +273,6 @@ test("copyBackendAfterPack fails when prepared backend runtime is missing defaul
     await assert.rejects(
       () => copyBackendAfterPack(fixture.context),
       /Missing required backend runtime file after prepare: user-template\/default-user\/config\.example\.json/,
-    );
-  } finally {
-    await rm(fixture.rootDir, { recursive: true, force: true });
-  }
-});
-
-test("copyBackendAfterPack fails when prepared backend runtime is missing bundled agent system prompt", async () => {
-  const fixture = await createFixture();
-  try {
-    await rm(
-      path.join(fixture.backendSource, "node_modules", "noobot-agent", "src", "system-core", "system-prompt"),
-      { recursive: true, force: true },
-    );
-
-    await assert.rejects(
-      () => copyBackendAfterPack(fixture.context),
-      /Missing required backend runtime file after prepare: node_modules\/noobot-agent\/src\/system-core\/system-prompt\/base\.md/,
     );
   } finally {
     await rm(fixture.rootDir, { recursive: true, force: true });

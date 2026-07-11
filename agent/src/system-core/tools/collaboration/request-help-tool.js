@@ -5,7 +5,7 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { HumanMessage } from "@langchain/core/messages";
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 import { z } from "zod";
 import { mergeConfig } from "../../config/index.js";
 import {

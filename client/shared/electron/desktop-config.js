@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import fs from "node:fs";
-import path from "node:path";
+import { clientFilePath as path } from "../path-resolver.js";
 
 export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appendDesktopLog = () => {} } = {}) {
   const desktopConfigSyncSkipTopLevelKeys = new Set([

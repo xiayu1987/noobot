@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { readFile, stat } from "node:fs/promises";
-import path from "node:path";
+import { filePath as path } from "../../../utils/path-resolver.js";
 import { DEFAULT_MIME_TYPE, IMAGE_EXTENSION_TO_MIME, IMAGE_EXTENSIONS, TEXT_EXTENSIONS } from "../file-extension-constants.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { DOC2DATA_PARSE_ENGINE, normalizeDoc2DataParseEngine } from "../../../config/core/enums.js";

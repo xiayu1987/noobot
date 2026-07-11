@@ -12,7 +12,7 @@ import { SystemErrorLogger } from "../tracking/index.js";
 import { AsyncJobManager } from "./async-job-manager.js";
 import { SessionExecutionEngine } from "./session/session-execution-engine.js";
 import { WorkspaceService } from "./workspace-infra/workspace-service.js";
-import path from "node:path";
+import { filePath as path } from "../utils/path-resolver.js";
 import { rm } from "node:fs/promises";
 import { mergeConfig } from "../config/index.js";
 import { resolveAttachments } from "../context/providers/attachment-resolver.js";

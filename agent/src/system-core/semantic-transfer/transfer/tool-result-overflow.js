@@ -5,7 +5,7 @@
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 import { randomUUID } from "node:crypto";
 import { toToolJsonResult } from "../../tools/core/tool-json-result.js";
 import { compactToolResultTextForModel, firstNormalizedString } from "../core/compact.js";
@@ -22,7 +22,7 @@ import {
   materializeTextForToolResult,
   resolveToolResultInlineTextLimit,
 } from "./tool-result-text.js";
-import { resolveTransferPathView } from "../storage/path-resolver.js";
+import { resolveTransferPathView } from "../storage/transfer-path-view.js";
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);

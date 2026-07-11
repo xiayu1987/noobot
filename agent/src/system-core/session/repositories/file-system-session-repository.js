@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { fatalSystemError } from "../../error/index.js";
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 import { randomUUID } from "node:crypto";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../error/constants.js";

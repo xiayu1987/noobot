@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { v4 as uuidv4 } from "uuid";
@@ -16,7 +16,7 @@ import { readAttachIndex, writeAttachIndex } from "../index-manager.js";
 import { resolveAttachmentPolicy, isMimeTypeAllowed, isExtensionAllowed } from "../policy/policy-validator.js";
 import { recoverableToolError } from "../../error/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
-import { attachScopeRoot, resolveBasePath, resolveAttachmentScope } from "./path-resolver.js";
+import { attachScopeRoot, resolveBasePath, resolveAttachmentScope } from "./attachment-scope-resolver.js";
 import { buildPublicRecord, normalizeExtension } from "./record-builder.js";
 import { ERROR_CODE } from "../../error/constants.js";
 

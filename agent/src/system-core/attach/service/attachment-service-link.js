@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 import { readdir } from "node:fs/promises";
 
 import { fsReadFile, fsWriteFile } from "../../store/fs-adapter.js";
 import { safeStr } from "../../utils/shared-utils.js";
 import { readAttachIndex, writeAttachIndex } from "../index-manager.js";
-import { attachScopedRoot, resolveBasePath } from "./path-resolver.js";
+import { attachScopedRoot, resolveBasePath } from "./attachment-scope-resolver.js";
 import { buildPublicRecord } from "./record-builder.js";
 import { buildSessionDisplaySummary } from "../../session/session-summary-builders.js";
 

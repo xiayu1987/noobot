@@ -5,7 +5,7 @@
  */
 import { app, dialog, ipcMain } from "electron";
 import fs from "node:fs";
-import path from "node:path";
+import { clientPathBasename, clientPathDirname, isAbsoluteClientPath, joinClientPath, normalizeClientPath } from "../path-resolver.js";
 
 export function registerFileIpcHandlers({ appendDesktopLog = () => {}, getMainWindow = () => null } = {}) {
   function sanitizeDownloadFileName(fileName = "") {
@@ -50,7 +50,7 @@ export function registerFileIpcHandlers({ appendDesktopLog = () => {}, getMainWi
   }
 
   function maskHostPath(pathValue = "") {
-    const normalized = String(pathValue || "").trim().replaceAll("\\", "/");
+    const normalized = normalizeClientPath(String(pathValue || "").trim());
     if (!normalized) return "";
     const parts = normalized.split("/").filter(Boolean);
     if (parts.length <= 2) return normalized;
@@ -73,7 +73,7 @@ export function registerFileIpcHandlers({ appendDesktopLog = () => {}, getMainWi
       error.code = "missing_path";
       throw error;
     }
-    if (!path.isAbsolute(targetPath)) {
+    if (!isAbsoluteClientPath(targetPath)) {
       const error = new Error("Host file path must be absolute.");
       error.code = "not_absolute";
       throw error;
@@ -89,13 +89,13 @@ export function registerFileIpcHandlers({ appendDesktopLog = () => {}, getMainWi
 
   ipcMain.handle("noobot:save-download", async (_event, { fileName = "download", bytes } = {}) => {
     const buffer = normalizeDownloadBytes(bytes);
-    const defaultPath = path.join(app.getPath("downloads"), sanitizeDownloadFileName(fileName));
+    const defaultPath = joinClientPath(app.getPath("downloads"), sanitizeDownloadFileName(fileName));
     const result = await dialog.showSaveDialog(getMainWindow() || undefined, {
       defaultPath,
       properties: ["createDirectory", "showOverwriteConfirmation"],
     });
     if (result.canceled || !result.filePath) return { ok: false, canceled: true };
-    await fs.promises.mkdir(path.dirname(result.filePath), { recursive: true });
+    await fs.promises.mkdir(clientPathDirname(result.filePath), { recursive: true });
     await fs.promises.writeFile(result.filePath, buffer);
     return { ok: true, filePath: result.filePath };
   });
@@ -114,7 +114,7 @@ export function registerFileIpcHandlers({ appendDesktopLog = () => {}, getMainWi
       const isText = !buffer.includes(0);
       const content = isText ? buffer.toString("utf8") : "";
       logHostFileAccess("host.read.response", { traceId, hostPath: maskHostPath(targetPath), isText, size: stats.size });
-      return { ok: true, path: targetPath, fileName: path.basename(targetPath), isText, size: stats.size, content };
+      return { ok: true, path: targetPath, fileName: clientPathBasename(targetPath), isText, size: stats.size, content };
     } catch (error) {
       logHostFileAccess("host.read.failed", { traceId, hostPath: maskHostPath(hostPath), errorCode: error?.code || "host_read_failed", error: error?.message || String(error) });
       return { ok: false, errorCode: error?.code || "host_read_failed", error: error?.message || String(error) };
@@ -126,8 +126,8 @@ export function registerFileIpcHandlers({ appendDesktopLog = () => {}, getMainWi
     try {
       logHostFileAccess("host.download.request", { traceId, hostPath: maskHostPath(hostPath), hasPath: Boolean(hostPath) });
       const { targetPath, stats } = await resolveHostFile(hostPath);
-      const fileName = path.basename(targetPath);
-      const defaultPath = path.join(app.getPath("downloads"), sanitizeDownloadFileName(fileName));
+      const fileName = clientPathBasename(targetPath);
+      const defaultPath = joinClientPath(app.getPath("downloads"), sanitizeDownloadFileName(fileName));
       const result = await dialog.showSaveDialog(getMainWindow() || undefined, {
         defaultPath,
         properties: ["createDirectory", "showOverwriteConfirmation"],
@@ -136,7 +136,7 @@ export function registerFileIpcHandlers({ appendDesktopLog = () => {}, getMainWi
         logHostFileAccess("host.download.response", { traceId, hostPath: maskHostPath(targetPath), canceled: true, size: stats.size });
         return { ok: false, canceled: true, fileName, size: stats.size };
       }
-      await fs.promises.mkdir(path.dirname(result.filePath), { recursive: true });
+      await fs.promises.mkdir(clientPathDirname(result.filePath), { recursive: true });
       await fs.promises.copyFile(targetPath, result.filePath);
       logHostFileAccess("host.download.response", { traceId, hostPath: maskHostPath(targetPath), savedPath: maskHostPath(result.filePath), size: stats.size });
       return { ok: true, path: targetPath, savedPath: result.filePath, fileName, size: stats.size };

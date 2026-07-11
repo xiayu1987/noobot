@@ -14,7 +14,7 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
-import path from "node:path";
+import { filePath as path } from "../utils/path-resolver.js";
 import { fatalSystemError } from "../error/index.js";
 import { deepMerge } from "../utils/shared-utils.js";
 import { tSystem } from "noobot-i18n/agent/system-text";

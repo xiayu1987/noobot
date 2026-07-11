@@ -7,7 +7,7 @@
  * Pure infrastructure: path resolution, record building, append.
  */
 import { appendFile, mkdir } from "node:fs/promises";
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 import { fatalSystemError } from "../../error/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../error/constants.js";

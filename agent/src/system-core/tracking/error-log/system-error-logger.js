@@ -7,7 +7,7 @@
  * Auto-resolves basePath via workspaceService.
  */
 import { appendSystemErrorLog } from "./system-error-log.js";
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 import { logError } from "../console/logger.js";
 
 function resolveErrorStatus(error = {}) {

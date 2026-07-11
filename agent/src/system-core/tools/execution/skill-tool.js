@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { access, readdir } from "node:fs/promises";
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
@@ -12,7 +12,7 @@ import { normalizeSkillAction, SKILL_ACTION } from "../../config/core/enums.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { recoverableToolError } from "../../error/index.js";
 import { safeJoin } from "../../utils/fs-safe.js";
-import { resolveSandboxPath } from "../../utils/sandbox-path-resolver.js";
+import { resolveSandboxPath } from "../../utils/path-resolver.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";

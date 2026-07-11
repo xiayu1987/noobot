@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import path from "node:path";
+import { filePath as path } from "../utils/path-resolver.js";
 import { fsMkdir, fsReadFile, fsWriteFile } from "../store/fs-adapter.js";
 
 /**

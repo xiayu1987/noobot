@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { filePath as path } from "../../utils/path-resolver.js";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {

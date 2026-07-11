@@ -1,43 +1,43 @@
 import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { clientFilePath as path } from "../../../../shared/path-resolver.js";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appShellSource = readFileSync(
-  resolve(__dirname, "../../../src/app/AppShell.vue"),
+  path.resolve(__dirname, "../../../src/app/AppShell.vue"),
   "utf8",
 );
 const appShellLayoutSource = readFileSync(
-  resolve(__dirname, "../../../src/app/AppShellLayout.vue"),
+  path.resolve(__dirname, "../../../src/app/AppShellLayout.vue"),
   "utf8",
 );
 const appShellDrawersSource = readFileSync(
-  resolve(__dirname, "../../../src/app/AppShellDrawers.vue"),
+  path.resolve(__dirname, "../../../src/app/AppShellDrawers.vue"),
   "utf8",
 );
 const chatMessageNavigatorPanelSource = readFileSync(
-  resolve(__dirname, "../../../src/app/useChatMessageNavigatorPanel.js"),
+  path.resolve(__dirname, "../../../src/app/useChatMessageNavigatorPanel.js"),
   "utf8",
 );
 const mobileChatNavigatorTriggerPositionSource = readFileSync(
-  resolve(__dirname, "../../../src/app/mobileChatNavigatorTriggerPosition.js"),
+  path.resolve(__dirname, "../../../src/app/mobileChatNavigatorTriggerPosition.js"),
   "utf8",
 );
 const mobileChatNavigatorTriggerSource = readFileSync(
-  resolve(__dirname, "../../../src/app/useMobileChatNavigatorTrigger.js"),
+  path.resolve(__dirname, "../../../src/app/useMobileChatNavigatorTrigger.js"),
   "utf8",
 );
 const chatMessageScrollSyncSource = readFileSync(
-  resolve(__dirname, "../../../src/app/chatMessageScrollSync.js"),
+  path.resolve(__dirname, "../../../src/app/chatMessageScrollSync.js"),
   "utf8",
 );
 const chatMessageNavigatorStateSource = readFileSync(
-  resolve(__dirname, "../../../src/app/state/chatMessageNavigatorState.js"),
+  path.resolve(__dirname, "../../../src/app/state/chatMessageNavigatorState.js"),
   "utf8",
 );
 const chatMessageNavItemsStateSource = readFileSync(
-  resolve(__dirname, "../../../src/app/state/chatMessageNavItemsState.js"),
+  path.resolve(__dirname, "../../../src/app/state/chatMessageNavItemsState.js"),
   "utf8",
 );
 
