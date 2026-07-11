@@ -173,6 +173,9 @@ export async function linkParsedResultInScopes({
       ...sourceRecord,
       parsedResult: {
         attachmentId: safeStr(parsedAttachmentMeta?.attachmentId),
+        name: safeStr(parsedAttachmentMeta?.name),
+        mimeType: safeStr(parsedAttachmentMeta?.mimeType),
+        size: Number(parsedAttachmentMeta?.size || 0),
         path: safeStr(parsedAttachmentMeta?.path),
         relativePath: safeStr(parsedAttachmentMeta?.relativePath),
         tool: safeStr(toolName),

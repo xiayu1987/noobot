@@ -151,6 +151,7 @@ export function registerFrontendPlugin(ctx = {}) {
             : [],
           isImageMime: context?.isImageMime,
           canPreviewAttachment: context?.canPreviewAttachment,
+          canPreviewParsedResult: context?.canPreviewParsedResult,
           formatFileSize: context?.formatFileSize,
           userId: String(context?.userId || ""),
           authFetch:
@@ -160,6 +161,10 @@ export function registerFrontendPlugin(ctx = {}) {
           preview:
             typeof context?.onOpenAttachmentPreview === "function"
               ? context.onOpenAttachmentPreview
+              : null,
+          "preview-resolved":
+            typeof context?.onOpenResolvedAttachmentPreview === "function"
+              ? context.onOpenResolvedAttachmentPreview
               : null,
           download:
             typeof context?.onDownloadAttachment === "function"

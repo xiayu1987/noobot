@@ -4,11 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  buildAttachmentUrl,
-  resolveAttachmentId,
-  resolveAttachmentSessionId,
-  resolveAttachmentSource,
-} from "../../services/api/chatApi";
+  resolveAttachmentAccessMeta,
+  resolveParsedResultAccessMeta,
+} from "../../services/api/attachmentAccess";
 import { mergeAttachments } from "./dialogProcessChain";
 import {
   getMessageTransferAttachments,
@@ -86,13 +84,6 @@ function enrichTransferAttachmentScope(attachmentItem = {}, messageItem = {}) {
 
 const EXECUTION_LOG_DISPLAY_LIMIT = QUANTITY_THRESHOLDS.client.executionLogDisplayLimit;
 
-function resolveBaseName(filePath = "") {
-  const normalized = String(filePath || "").trim().replaceAll("\\", "/");
-  if (!normalized) return "";
-  const parts = normalized.split("/");
-  return String(parts[parts.length - 1] || "").trim();
-}
-
 function buildModelRunLabel(messageItem = {}) {
   const modelAlias = String(messageItem?.modelAlias || "").trim();
   const modelName = String(
@@ -106,82 +97,43 @@ function normalizeAttachment(
   attachmentItem = {},
   { userId = "", isImageMime = () => false } = {},
 ) {
-  const attachmentId = resolveAttachmentId(attachmentItem);
+  const attachmentAccess = resolveAttachmentAccessMeta(attachmentItem, { userId });
+  const parsedAccess = resolveParsedResultAccessMeta(attachmentItem, { userId });
+  const attachmentId = attachmentAccess.attachmentId;
   const mimeType = String(
     attachmentItem?.mimeType || "application/octet-stream",
   );
-  const sessionId = resolveAttachmentSessionId(attachmentItem);
-  const attachmentSource = resolveAttachmentSource(attachmentItem);
-  const attachmentUrl = attachmentId
-    ? buildAttachmentUrl({
-        userId,
-        attachmentId,
-        sessionId,
-        attachmentSource,
-      })
-    : "";
-  const parsedResult = attachmentItem?.parsedResult &&
-    typeof attachmentItem.parsedResult === "object" &&
-    !Array.isArray(attachmentItem.parsedResult)
-    ? attachmentItem.parsedResult
-    : {};
-  const parsedAttachmentId = String(
-    parsedResult?.attachmentId || parsedResult?.id || attachmentItem?.parsedResultAttachmentId || "",
-  ).trim();
-  const parsedSessionId = String(
-    parsedResult?.sessionId || parsedResult?.session_id || attachmentItem?.parsedResultSessionId || sessionId || "",
-  ).trim();
-  const parsedAttachmentSource = String(
-    parsedResult?.attachmentSource || parsedResult?.source || attachmentItem?.parsedResultAttachmentSource || "model",
-  ).trim();
-  const parsedPath = String(
-    parsedResult?.path || attachmentItem?.parsedResultPath || "",
-  ).trim();
-  const parsedRelativePath = String(
-    parsedResult?.relativePath || attachmentItem?.parsedResultRelativePath || "",
-  ).trim();
-  const existingParsedResultUrl = String(
-    attachmentItem?.parsedResultUrl || parsedResult?.url || parsedResult?.previewUrl || parsedResult?.downloadUrl || "",
-  ).trim();
-  const parsedResultUrl = parsedAttachmentId
-    ? buildAttachmentUrl({
-        userId,
-        attachmentId: parsedAttachmentId,
-        sessionId: parsedSessionId,
-        attachmentSource: parsedAttachmentSource,
-      }) || existingParsedResultUrl
-    : existingParsedResultUrl;
-  const parsedResultName =
-    String(attachmentItem?.parsedResultName || parsedResult?.name || "").trim() ||
-    resolveBaseName(parsedRelativePath) ||
-    resolveBaseName(parsedPath) ||
-    "";
+  const sessionId = attachmentAccess.sessionId;
+  const attachmentSource = attachmentAccess.attachmentSource;
+  const parsedResultSize = parsedAccess.size;
   return {
     ...attachmentItem,
     attachmentId,
     sessionId,
     attachmentSource,
     mimeType,
-    url: attachmentUrl,
+    url: attachmentAccess.url,
     previewUrl:
       String(attachmentItem?.previewUrl || ""),
-    parsedResult: parsedAttachmentId || parsedResultUrl
+    parsedResult: parsedAccess.hasIdentity
       ? {
-          ...parsedResult,
-          ...(parsedAttachmentId ? { attachmentId: parsedAttachmentId } : {}),
-          ...(parsedSessionId ? { sessionId: parsedSessionId } : {}),
-          ...(parsedAttachmentSource ? { attachmentSource: parsedAttachmentSource } : {}),
-          ...(parsedPath ? { path: parsedPath } : {}),
-          ...(parsedRelativePath ? { relativePath: parsedRelativePath } : {}),
+          ...parsedAccess.raw,
+          ...(parsedAccess.attachmentId ? { attachmentId: parsedAccess.attachmentId } : {}),
+          ...(parsedAccess.sessionId ? { sessionId: parsedAccess.sessionId } : {}),
+          ...(parsedAccess.attachmentSource ? { attachmentSource: parsedAccess.attachmentSource } : {}),
+          ...(parsedResultSize !== null && parsedResultSize > 0 ? { size: parsedResultSize } : {}),
+          ...(parsedAccess.path ? { path: parsedAccess.path } : {}),
+          ...(parsedAccess.relativePath ? { relativePath: parsedAccess.relativePath } : {}),
         }
       : attachmentItem?.parsedResult,
-    parsedResultAttachmentId: parsedAttachmentId,
-    parsedResultPath: parsedPath,
-    parsedResultRelativePath: parsedRelativePath,
-    parsedResultSessionId: parsedSessionId,
-    parsedResultAttachmentSource: parsedAttachmentSource,
-    parsedResultUrl,
-    parsedResultName,
+    parsedResultAttachmentId: parsedAccess.attachmentId,
+    parsedResultPath: parsedAccess.path,
+    parsedResultRelativePath: parsedAccess.relativePath,
+    parsedResultSessionId: parsedAccess.sessionId,
+    parsedResultAttachmentSource: parsedAccess.attachmentSource,
+    ...(parsedResultSize !== null && parsedResultSize > 0 ? { parsedResultSize } : {}),
+    parsedResultUrl: parsedAccess.url,
+    parsedResultName: parsedAccess.name,
   };
 }
 

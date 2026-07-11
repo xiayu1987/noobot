@@ -28,6 +28,7 @@
  * Byte tiers:
  * - 256 KiB: generated command artifacts.
  * - ~0.8 MiB: batched extraction payloads.
+ * - 1 MiB: client non-image preview guard.
  * - 2 MiB: per-file search/read guard.
  * - 5 MiB: JSONL buffer guard.
  * - 8-10 MiB: direct text read and single attachment tiers.
@@ -89,6 +90,7 @@ const LENGTH_TIERS = deepFreeze({
   bytes: {
     connectorCommandFile: 256 * KiB,
     batchPayload: Math.floor(0.8 * MiB),
+    clientNonImagePreview: 1 * MiB,
     searchFile: 2 * MiB,
     jsonlBuffer: 5 * MiB,
     directText: 8 * MiB,
@@ -136,6 +138,11 @@ export const LENGTH_THRESHOLDS = deepFreeze({
 
     // Max total bytes accepted across uploaded attachments.
     maxTotalSizeBytes: LENGTH_TIERS.bytes.attachmentTotal,
+  },
+
+  clientPreview: {
+    // Max known file bytes for non-image client previews. Images remain previewable above this limit.
+    nonImageMaxBytes: LENGTH_TIERS.bytes.clientNonImagePreview,
   },
 
   toolIO: {

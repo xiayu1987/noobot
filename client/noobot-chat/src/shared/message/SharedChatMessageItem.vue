@@ -71,13 +71,17 @@ const {
   attachmentPreviewError,
   attachmentPreviewTextContent,
   canPreviewAttachment,
+  canPreviewParsedResult,
   canPreviewFile,
   openAttachmentPreview,
+  openParsedResultPreview,
+  openResolvedAttachmentPreview,
   closeAttachmentPreview,
   openFilePreview,
   closePreviewDialog,
   onDownloadFile,
   onDownloadAttachment,
+  onDownloadParsedResult,
   onCopyMarkdownRich,
   onCopyMarkdownText,
   onCopyAttachmentMarkdownRich,
@@ -161,9 +165,12 @@ function resolveRendererContext() {
     displayedAttachments: displayedAttachments.value,
     displayedAttachmentMetas: displayedAttachments.value,
     canPreviewAttachment,
+    canPreviewParsedResult,
     onOpenFilePreview: openFilePreview,
     onDownloadFile,
     onOpenAttachmentPreview: openAttachmentPreview,
+    onOpenParsedResultPreview: openParsedResultPreview,
+    onOpenResolvedAttachmentPreview: openResolvedAttachmentPreview,
     onDownloadAttachment,
     onOpenThinkingDetails: handleOpenThinkingDetails,
   };
@@ -248,13 +255,14 @@ async function handleCopyAssistantMessageText() {
         :thumbnail-url="attachmentItem.thumbnailUrl || attachmentItem.previewUrl || ''"
         :is-image-mime="isImageMime"
         :can-preview-attachment="canPreviewAttachment"
+        :can-preview-parsed-result="canPreviewParsedResult"
         :format-file-size="formatFileSize"
         :translate="translate"
         show-parsed-result
         @preview="openAttachmentPreview"
         @download="onDownloadAttachment"
-        @preview-parsed-result="openAttachmentPreview"
-        @download-parsed-result="onDownloadAttachment"
+        @preview-parsed-result="openParsedResultPreview"
+        @download-parsed-result="onDownloadParsedResult"
       />
 
       <BaseAttachmentFileCard

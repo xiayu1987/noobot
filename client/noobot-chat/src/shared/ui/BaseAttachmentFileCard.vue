@@ -6,12 +6,14 @@
 <script setup>
 import { computed } from "vue";
 import { Document, Download } from "@element-plus/icons-vue";
+import { resolveParsedResultAccessMeta } from "../../services/api/attachmentAccess";
 
 const props = defineProps({
   attachmentItem: { type: Object, required: true },
   thumbnailUrl: { type: String, default: "" },
   isImageMime: { type: Function, required: true },
   canPreviewAttachment: { type: Function, required: true },
+  canPreviewParsedResult: { type: Function, default: null },
   formatFileSize: { type: Function, required: true },
   translate: { type: Function, default: (key = "") => key },
   badgeMode: { type: String, default: "auto" }, // auto | plugin
@@ -56,9 +58,14 @@ const showCustomBadge = computed(() => Boolean(String(props.customBadgeText || "
 const hasParsedResult = computed(
   () =>
     props.showParsedResult &&
-    Boolean(props.attachmentItem?.parsedResultUrl),
+    resolveParsedResultAccessMeta(props.attachmentItem).hasIdentity,
 );
-const parsedResultPreviewEnabled = computed(() => hasParsedResult.value && previewEnabled.value);
+const parsedResultPreviewEnabled = computed(() =>
+  hasParsedResult.value &&
+    (typeof props.canPreviewParsedResult === "function"
+      ? props.canPreviewParsedResult(props.attachmentItem)
+      : previewEnabled.value),
+);
 
 function emitPreview() {
   if (!previewEnabled.value) return;

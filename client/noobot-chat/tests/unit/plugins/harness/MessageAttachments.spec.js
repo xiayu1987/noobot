@@ -103,12 +103,13 @@ describe("MessageAttachments parsed result", () => {
     await previewButton.trigger("click");
     await downloadButton.trigger("click");
 
-    expect(wrapper.emitted("preview")?.[0]?.[0]).toMatchObject({
+    expect(wrapper.emitted("preview-resolved")?.[0]?.[0]).toMatchObject({
       attachmentId: "parsed-1",
       name: "source.md",
       mimeType: "text/markdown",
       previewUrl: "/api/attachments/parsed-1",
     });
+    expect(wrapper.emitted("preview-resolved")?.[0]?.[1]).toBeUndefined();
     expect(wrapper.emitted("download")?.[0]?.[0]).toMatchObject({
       attachmentId: "parsed-1",
       name: "source.md",
@@ -190,11 +191,12 @@ describe("MessageAttachments parsed result", () => {
 
     await previewButton.trigger("click");
 
-    expect(wrapper.emitted("preview")?.[0]?.[0]).toMatchObject({
+    expect(wrapper.emitted("preview-resolved")?.[0]?.[0]).toMatchObject({
       attachmentId: "parsed-1",
       name: "source.doc2data.md",
       mimeType: "text/markdown",
-      previewUrl: "/api/internal/attachment/admin/parsed-1",
+      previewUrl: "/api/internal/attachment/admin/parsed-1?sessionId=session-1&attachmentSource=model",
     });
+    expect(wrapper.emitted("preview-resolved")?.[0]?.[1]).toBeUndefined();
   });
 });
