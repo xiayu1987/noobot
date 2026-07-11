@@ -89,6 +89,49 @@ test("AttachmentService.ingest is idempotent by clientAttachmentId", async () =>
   });
 });
 
+test("AttachmentService shares parsed results across identical canonical content", async () => {
+  await withTempDir(async (workspaceRoot) => {
+    const service = new AttachmentService({ workspaceRoot });
+    const contentBase64 = Buffer.from("same document", "utf8").toString("base64");
+    const saved = await service.ingest({
+      userId: "u1",
+      sessionId: "s1",
+      attachmentSource: "user",
+      attachments: [
+        { clientAttachmentId: "client-a", name: "a.txt", mimeType: "text/plain", contentBase64 },
+        { clientAttachmentId: "client-b", name: "b.txt", mimeType: "text/plain", contentBase64 },
+      ],
+    });
+    const [parsed] = await service.ingestGeneratedArtifacts({
+      userId: "u1",
+      sessionId: "s1",
+      artifacts: [{
+        name: "parsed.md",
+        mimeType: "text/markdown",
+        contentBase64: Buffer.from("parsed", "utf8").toString("base64"),
+      }],
+    });
+
+    await service.linkParsedResultToAttachment({
+      userId: "u1",
+      sourceAttachmentId: saved[0].attachmentId,
+      sourceSessionId: "s1",
+      sourceAttachmentSource: "user",
+      sourceAttachmentPath: saved[0].path,
+      parsedAttachmentMeta: parsed,
+      toolName: "doc_to_data",
+    });
+
+    const equivalent = await service.getAttachmentById({
+      userId: "u1",
+      sessionId: "s1",
+      attachmentSource: "user",
+      attachmentId: saved[1].attachmentId,
+    });
+    assert.equal(equivalent.parsedResult?.attachmentId, parsed.attachmentId);
+  });
+});
+
 test("AttachmentService.ingestGeneratedArtifacts preserves attachment owner metadata", async () => {
   await withTempDir(async (workspaceRoot) => {
     const service = new AttachmentService({ workspaceRoot });

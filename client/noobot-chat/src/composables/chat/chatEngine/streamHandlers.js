@@ -164,15 +164,31 @@ export function handleAttachmentParsedStreamEvent({
     : [];
   for (const message of messages) {
     if (message?.role !== "user" || !Array.isArray(message?.attachments)) continue;
-    const matching = normalized.filter((attachment) => {
-      const attachmentId = normalizeTrimmedString(attachment?.attachmentId || attachment?.id);
-      return attachmentId && message.attachments.some((existing) =>
-        normalizeTrimmedString(existing?.attachmentId || existing?.id) === attachmentId
-      );
+    message.attachments = message.attachments.map((existing) => {
+      const matching = normalized.find((attachment) => {
+        const attachmentId = normalizeTrimmedString(attachment?.attachmentId || attachment?.id);
+        const existingAttachmentId = normalizeTrimmedString(existing?.attachmentId || existing?.id);
+        const clientAttachmentId = normalizeTrimmedString(attachment?.clientAttachmentId);
+        const existingClientAttachmentId = normalizeTrimmedString(existing?.clientAttachmentId);
+        const contentSha256 = normalizeTrimmedString(attachment?.contentSha256);
+        const existingContentSha256 = normalizeTrimmedString(existing?.contentSha256);
+        return Boolean(
+          (attachmentId && attachmentId === existingAttachmentId) ||
+          (clientAttachmentId && clientAttachmentId === existingClientAttachmentId) ||
+          (contentSha256 && contentSha256 === existingContentSha256)
+        );
+      });
+      if (!matching) return existing;
+      return {
+        ...existing,
+        ...(matching?.parsedResult ? { parsedResult: matching.parsedResult } : {}),
+        ...(matching?.parsedResultUrl ? { parsedResultUrl: matching.parsedResultUrl } : {}),
+        ...(matching?.parsedResultName ? { parsedResultName: matching.parsedResultName } : {}),
+        ...(matching?.parsedResultAttachmentId
+          ? { parsedResultAttachmentId: matching.parsedResultAttachmentId }
+          : {}),
+      };
     });
-    if (matching.length) {
-      message.attachments = mergeAttachments(message.attachments, matching);
-    }
   }
 }
 

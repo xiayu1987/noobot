@@ -239,6 +239,7 @@ export function mapAttachmentRecordsToMetas(
     return {
       attachmentId: safeStr(item?.attachmentId),
       ...(safeStr(item?.clientAttachmentId) ? { clientAttachmentId: safeStr(item.clientAttachmentId) } : {}),
+      ...(safeStr(item?.contentSha256) ? { contentSha256: safeStr(item.contentSha256) } : {}),
       sessionId: safeStr(item?.sessionId, DEFAULT_ATTACHMENT_SESSION_ID),
       attachmentSource: safeStr(item?.attachmentSource, DEFAULT_ATTACHMENT_SOURCE),
       name: safeStr(item?.name),

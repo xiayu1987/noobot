@@ -30,6 +30,7 @@ function compactRefFields(ref = {}) {
   const picked = {};
   const attachmentId = trimString(firstValue(ref.attachmentId, ref.attachment_id, ref.id, ref.fileId, ref.file_id));
   const clientAttachmentId = trimString(firstValue(ref.clientAttachmentId, ref.client_attachment_id));
+  const contentSha256 = trimString(firstValue(ref.contentSha256, ref.content_sha256));
   const mimeType = trimString(firstValue(ref.mimeType, ref.type, ref.mime));
   const attachmentSource = trimString(firstValue(ref.attachmentSource, ref.attachment_source, ref.source));
   const sessionId = trimString(firstValue(ref.sessionId, ref.session_id, ref.backendSessionId));
@@ -50,6 +51,7 @@ function compactRefFields(ref = {}) {
     picked.attachmentId = attachmentId;
   }
   if (clientAttachmentId) picked.clientAttachmentId = clientAttachmentId;
+  if (contentSha256) picked.contentSha256 = contentSha256;
   if (name) picked.name = name;
   if (mimeType) {
     picked.mimeType = mimeType;
