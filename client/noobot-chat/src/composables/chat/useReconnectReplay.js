@@ -164,12 +164,14 @@ export function useReconnectReplay({
   function emitSyntheticErrorConversationState({
     sessionId = "",
     dialogProcessId = "",
+    turnScopeId = "",
     sourceEvent = "",
   } = {}) {
     return emitSyntheticReconnectErrorConversationState({
       onConversationState,
       sessionId,
       dialogProcessId,
+      turnScopeId,
       sourceEvent,
     });
   }
@@ -177,6 +179,7 @@ export function useReconnectReplay({
   function scheduleMissingInteractionPayloadFailure({
     sessionId = "",
     dialogProcessId = "",
+    turnScopeId = "",
     targetAssistantMessage = null,
   } = {}) {
     return scheduleMissingInteractionPayloadFailureWithContext({
@@ -184,6 +187,7 @@ export function useReconnectReplay({
       missingInteractionPayloadTimers,
       sessionId,
       dialogProcessId,
+      turnScopeId,
       targetAssistantMessage,
       sending,
       canStop,

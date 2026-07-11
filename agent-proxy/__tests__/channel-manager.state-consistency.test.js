@@ -165,6 +165,16 @@ test("reconnect replaces initial no_conversation with sending for running channe
     (item) => String(item?.sessionId || "") === "session-running-empty",
   );
   assert.equal(sessionEntry?.hasRunningTask, true);
+  assert.deepEqual(sessionEntry?.currentRun, {
+    sessionId: "session-running-empty",
+    dialogProcessId: "",
+    turnScopeId: "turn-scope-running",
+    state: "sending",
+    sourceEvent: "channel_status",
+    seq: 0,
+    createdAtMs: channel.createdAtMs,
+    updatedAtMs: channel.updatedAtMs,
+  });
   const stateList = Array.isArray(sessionEntry?.conversationStates)
     ? sessionEntry.conversationStates
     : [];
@@ -604,6 +614,57 @@ test("reconnect should include conversationStates snapshot", () => {
   assert.equal(
     String(interactionPendingState?.pendingInteraction?.dialogProcessId || ""),
     "dp-1",
+  );
+  assert.equal(sessionEntry?.currentRun, null);
+});
+
+test("reconnect exposes the completed current run separately from historical stopped turns", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-current-run" });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId: "session-current-run",
+    turnScopeId: "turn-current",
+  });
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  manager.updateConversationState(channel, {
+    sessionId: "session-current-run",
+    dialogProcessId: "dp-old",
+    turnScopeId: "turn-old",
+    state: "user_stopped",
+    seq: 12,
+  });
+  manager.updateConversationState(channel, {
+    sessionId: "session-current-run",
+    dialogProcessId: "dp-current",
+    turnScopeId: "turn-current",
+    state: "completed",
+    seq: 20,
+  });
+  channel.status = "done";
+
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.handleReconnect(client, {
+    currentSessionId: "session-current-run",
+    lastReceivedSeqMap: {},
+  });
+
+  const reconnectData = getEvent(client, "reconnect_data");
+  const sessionEntry = (reconnectData?.data?.sessions || []).find(
+    (item) => String(item?.sessionId || "") === "session-current-run",
+  );
+  assert.equal(sessionEntry?.hasRunningTask, false);
+  assert.equal(sessionEntry?.currentRun?.sessionId, "session-current-run");
+  assert.equal(sessionEntry?.currentRun?.dialogProcessId, "dp-current");
+  assert.equal(sessionEntry?.currentRun?.turnScopeId, "turn-current");
+  assert.equal(sessionEntry?.currentRun?.state, "completed");
+  assert.equal(sessionEntry?.currentRun?.seq, 20);
+  assert.equal(
+    (sessionEntry?.conversationStates || []).some(
+      (item) => item?.state === "user_stopped" && item?.turnScopeId === "turn-old",
+    ),
+    true,
   );
 });
 

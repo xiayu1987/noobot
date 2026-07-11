@@ -72,16 +72,17 @@ handleReconnect(socket, payload = {}) {
       sessionsMap.set(channelSessionId, {
         sessionId: channelSessionId,
         hasRunningTask: false,
+        currentRun: null,
         dialogProcesses: [],
         conversationStates: [],
       });
     }
 
     const sessionEntry = sessionsMap.get(channelSessionId);
-    if (
+    const isActiveChannel =
       channel.status === CHANNEL_STATUS.RUNNING ||
-      channel.status === CHANNEL_STATUS.CONNECTING
-    ) {
+      channel.status === CHANNEL_STATUS.CONNECTING;
+    if (isActiveChannel) {
       sessionEntry.hasRunningTask = true;
     }
     const stateByDialogProcessId = new Map(
@@ -144,6 +145,43 @@ handleReconnect(socket, payload = {}) {
         sessionEntry.conversationStates.push(nextSessionScopeState);
       } else {
         sessionEntry.conversationStates[existingSessionScopeStateIndex] = nextSessionScopeState;
+      }
+    }
+
+    const channelTurnScopeId = String(channel?.startPayload?.turnScopeId || "").trim();
+    if (channelTurnScopeId) {
+      const currentRunStates = sessionEntry.conversationStates
+        .filter(
+          (stateItem) =>
+            String(stateItem?.turnScopeId || "").trim() === channelTurnScopeId,
+        )
+        .sort(
+          (left, right) =>
+            Number(right?.updatedAtMs || right?.seq || 0) -
+            Number(left?.updatedAtMs || left?.seq || 0),
+        );
+      const currentRunState = currentRunStates[0];
+      if (currentRunState) {
+        const currentDialogState = currentRunStates.find(
+          (stateItem) => String(stateItem?.dialogProcessId || "").trim(),
+        );
+        const nextCurrentRun = {
+          ...currentRunState,
+          sessionId: channelSessionId,
+          dialogProcessId: String(
+            channel?.startPayload?.dialogProcessId ||
+              currentDialogState?.dialogProcessId ||
+              "",
+          ).trim(),
+          turnScopeId: channelTurnScopeId,
+        };
+        if (
+          !sessionEntry.currentRun ||
+          Number(nextCurrentRun.updatedAtMs || 0) >=
+            Number(sessionEntry.currentRun.updatedAtMs || 0)
+        ) {
+          sessionEntry.currentRun = nextCurrentRun;
+        }
       }
     }
 

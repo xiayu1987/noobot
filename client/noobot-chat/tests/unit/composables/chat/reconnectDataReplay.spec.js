@@ -29,6 +29,7 @@ describe("applyReconnectDataReplay", () => {
           {
             sessionId: "s-1",
             hasRunningTask: true,
+            currentRun: { sessionId: "s-1", dialogProcessId: "dp-1", turnScopeId: "turn-1", state: "sending", seq: 1 },
             dialogProcesses: [{ dialogProcessId: "dp-1", messages }],
           },
         ],
@@ -72,9 +73,9 @@ describe("applyReconnectDataReplay", () => {
     });
   });
 
-  it("applies conversation states and schedules cache expired refresh", async () => {
+  it("applies currentRun and schedules cache expired refresh", async () => {
     const fixture = createFixture();
-    const stateEntry = { sessionId: "s-1", dialogProcessId: "dp-state", state: "sending" };
+    const stateEntry = { sessionId: "s-1", dialogProcessId: "dp-state", turnScopeId: "turn-state", state: "sending" };
 
     await applyReconnectDataReplay({
       reconnectData: {
@@ -82,6 +83,7 @@ describe("applyReconnectDataReplay", () => {
         sessions: [
           {
             sessionId: "s-1",
+            currentRun: stateEntry,
             conversationStates: [stateEntry],
             dialogProcesses: [],
           },
@@ -90,8 +92,31 @@ describe("applyReconnectDataReplay", () => {
       ...fixture,
     });
 
-    expect(fixture.applyChannelState).toHaveBeenCalledWith(stateEntry);
+    expect(fixture.applyChannelState).toHaveBeenCalledWith({
+      ...stateEntry,
+      authoritativeSnapshot: true,
+    });
     expect(fixture.scheduleCacheExpiredSessionRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not project conversationStates when currentRun is missing", async () => {
+    const fixture = createFixture();
+
+    await applyReconnectDataReplay({
+      reconnectData: {
+        sessions: [{
+          sessionId: "s-1",
+          hasRunningTask: false,
+          conversationStates: [
+            { sessionId: "s-1", dialogProcessId: "dp-old", turnScopeId: "turn-old", state: "user_stopped", seq: 12 },
+          ],
+          dialogProcesses: [],
+        }],
+      },
+      ...fixture,
+    });
+
+    expect(fixture.applyChannelState).not.toHaveBeenCalled();
   });
 
 
@@ -110,6 +135,7 @@ describe("applyReconnectDataReplay", () => {
           {
             sessionId: "s-1",
             hasRunningTask: true,
+            currentRun: { sessionId: "s-1", dialogProcessId: "", turnScopeId: "client-turn-r", state: "sending", seq: 0 },
             conversationStates: [
               { sessionId: "s-1", dialogProcessId: "", turnScopeId: "client-turn-r", state: "sending", seq: 0 },
             ],
@@ -134,6 +160,94 @@ describe("applyReconnectDataReplay", () => {
     expect(fixture.canStop.value).toBe(true);
   });
 
+  it("ignores historical stopped turns when reconnect declares an active running turn", async () => {
+    const appliedEvents = [];
+    const appliedChannelStates = [];
+    const fixture = createFixture({
+      applyRunStateEvents: vi.fn((events) => appliedEvents.push(...events)),
+      applyChannelState: vi.fn(async (stateEntry) => appliedChannelStates.push(stateEntry)),
+    });
+
+    await applyReconnectDataReplay({
+      reconnectData: {
+        sessions: [{
+          sessionId: "s-1",
+          hasRunningTask: true,
+          currentRun: {
+            sessionId: "s-1",
+            dialogProcessId: "dp-current",
+            turnScopeId: "turn-current",
+            state: "sending",
+            seq: 80,
+          },
+          conversationStates: [
+            { sessionId: "s-1", dialogProcessId: "dp-old-1", turnScopeId: "turn-old-1", state: "user_stopped", seq: 31 },
+            { sessionId: "s-1", dialogProcessId: "dp-current", turnScopeId: "turn-current", state: "sending", seq: 12 },
+            { sessionId: "s-1", dialogProcessId: "dp-old-2", turnScopeId: "turn-old-2", state: "user_stopped", seq: 34 },
+            { sessionId: "s-1", dialogProcessId: "", turnScopeId: "turn-current", state: "sending", seq: 80 },
+          ],
+          dialogProcesses: [],
+        }],
+      },
+      ...fixture,
+    });
+
+    expect(appliedEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({ state: "sending", turnScopeId: "turn-current" }),
+    ]));
+    expect(appliedEvents.some((event) => event.state === "user_stopped")).toBe(false);
+    expect(appliedChannelStates).toHaveLength(1);
+    expect(appliedChannelStates.every((state) => state.turnScopeId === "turn-current")).toBe(true);
+    expect(appliedChannelStates[0]).toEqual(expect.objectContaining({
+      sessionId: "s-1",
+      dialogProcessId: "dp-current",
+      turnScopeId: "turn-current",
+      state: "sending",
+      seq: 80,
+    }));
+  });
+
+  it("uses the completed current run instead of a historical stopped turn", async () => {
+    const appliedEvents = [];
+    const appliedChannelStates = [];
+    const fixture = createFixture({
+      applyRunStateEvents: vi.fn((events) => appliedEvents.push(...events)),
+      applyChannelState: vi.fn(async (stateEntry) => appliedChannelStates.push(stateEntry)),
+    });
+
+    await applyReconnectDataReplay({
+      reconnectData: {
+        sessions: [{
+          sessionId: "s-1",
+          hasRunningTask: false,
+          currentRun: {
+            sessionId: "s-1",
+            dialogProcessId: "dp-current",
+            turnScopeId: "turn-current",
+            state: "completed",
+            seq: 198,
+          },
+          conversationStates: [
+            { sessionId: "s-1", dialogProcessId: "dp-old", turnScopeId: "turn-old", state: "user_stopped", seq: 123 },
+            { sessionId: "s-1", dialogProcessId: "dp-current", turnScopeId: "turn-current", state: "completed", seq: 198 },
+          ],
+          dialogProcesses: [],
+        }],
+      },
+      ...fixture,
+    });
+
+    expect(appliedEvents).toEqual([]);
+    expect(appliedChannelStates).toEqual([
+      expect.objectContaining({
+        state: "completed",
+        dialogProcessId: "dp-current",
+        turnScopeId: "turn-current",
+        authoritativeSnapshot: true,
+      }),
+    ]);
+  });
+
   it("restores stopped state after recoverable reconnect data replay", async () => {
     const fixture = createFixture();
 
@@ -142,10 +256,11 @@ describe("applyReconnectDataReplay", () => {
         sessions: [
           {
             sessionId: "s-1",
-            hasRunningTask: true,
+            hasRunningTask: false,
+            currentRun: { sessionId: "s-1", dialogProcessId: "dp-stop", turnScopeId: "turn-stop", state: "user_stopped", seq: 12 },
             conversationStates: [
-              { sessionId: "s-1", dialogProcessId: "dp-stop", state: "sending", seq: 11 },
-              { sessionId: "s-1", dialogProcessId: "dp-stop", state: "user_stopped", seq: 12 },
+              { sessionId: "s-1", dialogProcessId: "dp-stop", turnScopeId: "turn-stop", state: "sending", seq: 11 },
+              { sessionId: "s-1", dialogProcessId: "dp-stop", turnScopeId: "turn-stop", state: "user_stopped", seq: 12 },
             ],
             dialogProcesses: [],
           },
@@ -154,7 +269,6 @@ describe("applyReconnectDataReplay", () => {
       ...fixture,
     });
 
-    expect(fixture.ensureReconnectSessionActive).toHaveBeenCalledWith("s-1");
     expect(fixture.sending.value).toBe(false);
     expect(fixture.canStop.value).toBe(false);
   });
@@ -168,8 +282,9 @@ describe("applyReconnectDataReplay", () => {
           {
             sessionId: "s-1",
             hasRunningTask: true,
+            currentRun: { sessionId: "s-1", dialogProcessId: "dp-stop", turnScopeId: "turn-stop", state: "stopping", seq: 12 },
             conversationStates: [
-              { sessionId: "s-1", dialogProcessId: "dp-stop", state: "stopping", seq: 12 },
+              { sessionId: "s-1", dialogProcessId: "dp-stop", turnScopeId: "turn-stop", state: "stopping", seq: 12 },
             ],
             dialogProcesses: [],
           },
@@ -193,10 +308,11 @@ describe("applyReconnectDataReplay", () => {
           sessions: [
             {
               sessionId: "s-1",
-              hasRunningTask: true,
+              hasRunningTask: false,
+              currentRun: { sessionId: "s-1", dialogProcessId: "dp-stop", turnScopeId: "turn-stop", state: terminalState, seq: 12 },
               conversationStates: [
-                { sessionId: "s-1", dialogProcessId: "dp-stop", state: "sending", seq: 11 },
-                { sessionId: "s-1", dialogProcessId: "dp-stop", state: terminalState, seq: 12 },
+                { sessionId: "s-1", dialogProcessId: "dp-stop", turnScopeId: "turn-stop", state: "sending", seq: 11 },
+                { sessionId: "s-1", dialogProcessId: "dp-stop", turnScopeId: "turn-stop", state: terminalState, seq: 12 },
               ],
               dialogProcesses: [],
             },

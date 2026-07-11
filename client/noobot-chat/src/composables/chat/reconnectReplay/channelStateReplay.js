@@ -39,6 +39,7 @@ export function emitSyntheticReconnectErrorConversationState({
   onConversationState,
   sessionId = "",
   dialogProcessId = "",
+  turnScopeId = "",
   sourceEvent = "",
 } = {}) {
   if (typeof onConversationState !== "function") return;
@@ -47,6 +48,7 @@ export function emitSyntheticReconnectErrorConversationState({
     state: BackendChannelState.ERROR,
     sessionId: _trimStr(sessionId),
     dialogProcessId: _trimStr(dialogProcessId),
+    turnScopeId: _trimStr(turnScopeId),
     sourceEvent: _trimStr(sourceEvent),
     seq: 0,
     applied: true,
@@ -99,6 +101,7 @@ export function scheduleMissingInteractionPayloadFailure({
   missingInteractionPayloadTimers,
   sessionId = "",
   dialogProcessId = "",
+  turnScopeId = "",
   targetAssistantMessage = null,
   sending,
   canStop,
@@ -124,6 +127,7 @@ export function scheduleMissingInteractionPayloadFailure({
         state: BackendChannelState.ERROR,
         sessionId,
         dialogProcessId,
+        turnScopeId,
         source: "interaction_payload_missing",
       });
     } else {
@@ -141,6 +145,7 @@ export function scheduleMissingInteractionPayloadFailure({
     emitSyntheticErrorConversationState({
       sessionId,
       dialogProcessId,
+      turnScopeId,
       sourceEvent: "interaction_payload_missing",
     });
     notify({ type: "error", message: missingInteractionError });
@@ -191,6 +196,7 @@ export async function applyReconnectChannelState({
       updatedAtMs: timing.updatedAtMs,
       createdAt: timing.createdAt,
       updatedAt: timing.updatedAt,
+      authoritativeSnapshot: stateData?.authoritativeSnapshot === true,
       applied: forActiveSession,
     });
   }
@@ -231,6 +237,7 @@ export async function applyReconnectChannelState({
         updatedAtMs: timing.updatedAtMs,
         createdAt: timing.createdAt,
         updatedAt: timing.updatedAt,
+        authoritativeSnapshot: stateData?.authoritativeSnapshot === true,
       });
     } else {
       // Compatibility fallback for callers that do not provide the run state machine bridge.
@@ -285,6 +292,7 @@ export async function applyReconnectChannelState({
         scheduleMissingInteractionPayloadFailure({
           sessionId,
           dialogProcessId,
+          turnScopeId,
           targetAssistantMessage,
         });
         return;
@@ -335,6 +343,7 @@ export async function applyReconnectChannelState({
         updatedAtMs: timing.updatedAtMs,
         createdAt: timing.createdAt,
         updatedAt: timing.updatedAt,
+        authoritativeSnapshot: stateData?.authoritativeSnapshot === true,
       });
     } else {
       // Compatibility fallback for callers that do not provide the run state machine bridge.
