@@ -5,6 +5,7 @@ import path from "node:path";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 
 import { AttachmentService } from "../../../src/system-core/attach/service/attachment-service.js";
+import { resolveCanonicalUserSourceAttachment } from "../../../src/system-core/attach/source-attachment-resolver.js";
 import { BUILTIN_ATTACHMENT_POLICY } from "../../../src/system-core/config/index.js";
 import {
   readAttachIndex,
@@ -125,6 +126,60 @@ test("AttachmentService.resolveSourceAttachment uses session-scoped identity or 
     assert.equal(conflictingIdentity, null);
     assert.equal(filenameOnly, null);
     assert.notEqual(otherSource.attachmentId, source.attachmentId);
+  });
+});
+
+test("resolveCanonicalUserSourceAttachment keeps source path matching before display path conversion", async () => {
+  await withTempDir(async (workspaceRoot) => {
+    const service = new AttachmentService({ workspaceRoot });
+    const [source] = await service.ingest({
+      userId: "u1",
+      sessionId: "s1",
+      attachmentSource: "user",
+      attachments: [{
+        name: "source.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        contentBase64: Buffer.from("source", "utf8").toString("base64"),
+      }],
+    });
+    const runtime = {
+      userId: "u1",
+      basePath: workspaceRoot,
+      attachmentService: service,
+      userMessageAttachments: [],
+      userConfig: {
+        tools: {
+          execute_script: {
+            sandboxMode: true,
+            sandboxProvider: {
+              default: "docker",
+              docker: { dockerContainerScope: "user" },
+            },
+          },
+        },
+      },
+      systemRuntime: {
+        sessionId: "s1",
+        config: {},
+      },
+    };
+    const agentContext = {
+      runtime,
+      environment: {
+        workspace: { basePath: workspaceRoot },
+      },
+      session: {
+        userId: "u1",
+        sessionId: "s1",
+      },
+    };
+
+    const resolved = await resolveCanonicalUserSourceAttachment({
+      filePath: source.path,
+      agentContext,
+    });
+
+    assert.equal(resolved?.attachmentId, source.attachmentId);
   });
 });
 
