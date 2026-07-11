@@ -160,28 +160,41 @@ function normalizeMediaInputPath(rawFilePath = "") {
   }
 }
 
-function resolveMediaInputPathFromAttachmentMetas(filePath = "", agentContext = {}) {
+async function resolveMediaInputPathFromAttachmentMetas(filePath = "", agentContext = {}, attachmentId = "") {
   const normalizedInputPath = normalizeMediaInputPath(filePath);
   const runtime = getRuntimeFromAgentContext(agentContext);
   const runtimeAttachmentMetas = resolveRuntimeUserMessageAttachments(runtime);
-  if (!normalizedInputPath || !runtimeAttachmentMetas.length) {
-    return {
-      resolvedInputPath: normalizedInputPath,
-      sourceAttachmentMeta: null,
-    };
-  }
-  const inputBaseName = path.basename(normalizedInputPath);
-  const inputAttachmentId = String(inputBaseName || "").split(".")[0];
+  const normalizedAttachmentId = String(attachmentId || "").trim();
   const matchedMeta = runtimeAttachmentMetas.find((attachmentItem) => {
     const metaPath = normalizeMediaInputPath(String(attachmentItem?.path || ""));
-    if (!metaPath) return false;
-    const metaBaseName = path.basename(metaPath);
     const metaAttachmentId = String(attachmentItem?.attachmentId || "").trim();
     return (
-      (inputBaseName && metaBaseName === inputBaseName) ||
-      (inputAttachmentId && metaAttachmentId && inputAttachmentId === metaAttachmentId)
+      (normalizedAttachmentId && metaAttachmentId === normalizedAttachmentId) ||
+      (normalizedInputPath && metaPath && path.resolve(metaPath) === path.resolve(normalizedInputPath))
     );
   });
+  if (!matchedMeta) {
+    const attachmentService = runtime?.attachmentService;
+    const userId = String(runtime?.userId || "").trim();
+    const sessionId = String(
+      runtime?.systemRuntime?.sessionId || runtime?.systemRuntime?.rootSessionId || "",
+    ).trim();
+    if (attachmentService?.resolveSourceAttachment && userId && sessionId) {
+      const sessionAttachment = await attachmentService.resolveSourceAttachment({
+        userId,
+        sessionId,
+        attachmentId: normalizedAttachmentId,
+        attachmentSource: "user",
+        filePath: normalizedInputPath,
+      });
+      if (sessionAttachment) {
+        return {
+          resolvedInputPath: normalizeMediaInputPath(String(sessionAttachment.path || normalizedInputPath)),
+          sourceAttachmentMeta: sessionAttachment,
+        };
+      }
+    }
+  }
   const matchedMetaPath = normalizeMediaInputPath(String(matchedMeta?.path || ""));
   return {
     resolvedInputPath: matchedMetaPath || normalizedInputPath,
@@ -523,11 +536,14 @@ async function backwriteParsedResultToSourceAttachment({
       sourceSessionId: String(sourceAttachmentMeta?.sessionId || "").trim(),
       sourceAttachmentSource: String(sourceAttachmentMeta?.attachmentSource || "").trim(),
       sourceAttachmentPath: String(sourceAttachmentMeta?.path || "").trim(),
+      sourceTurnScopeId: String(sourceAttachmentMeta?.turnScope?.turnScopeId || "").trim(),
+      requestedInTurnScopeId: String(runtime?.systemRuntime?.turnScopeId || "").trim(),
     });
     updateRuntimeUserMessageAttachment(runtime, sourceAttachmentId, updatedSourceAttachment || {});
     if (updatedSourceAttachment) {
       emitEvent(runtime?.eventListener || null, "attachment_parsed", {
         dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
+        turnScopeId: String(runtime?.systemRuntime?.turnScopeId || "").trim(),
         attachments: [updatedSourceAttachment],
       });
     }
@@ -550,17 +566,19 @@ export function createMedia2DataTool({ agentContext }) {
     description: tTool(runtime, "tools.media2data.description"),
     schema: z.object({
       filePath: z.string().describe(tTool(runtime, "tools.media2data.fieldFilePath")),
+      attachmentId: z.string().optional().describe("Canonical source attachment ID when the input is a session attachment."),
       prompt: z
         .string()
         .optional()
         .describe(tTool(runtime, "tools.media2data.fieldPrompt")),
     }),
-    func: async ({ filePath, prompt }) => {
+    func: async ({ filePath, attachmentId, prompt }) => {
       const { resolvedInputPath: resolvedInputHintPath, sourceAttachmentMeta } =
-        resolveMediaInputPathFromAttachmentMetas(
-        filePath,
-        agentContext,
-      );
+        await resolveMediaInputPathFromAttachmentMetas(
+          filePath,
+          agentContext,
+          attachmentId,
+        );
       const inputFile = await assertAndResolveUserWorkspaceFilePath({
         filePath: resolvedInputHintPath,
         agentContext,

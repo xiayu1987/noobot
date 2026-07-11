@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { ElMessageBox } from "element-plus";
 import { ChatDotRound, Delete, EditPen } from "@element-plus/icons-vue";
 import { useLocale } from "../../shared/i18n/useLocale";
@@ -22,6 +22,49 @@ const { translate } = useLocale();
 const sessionListRef = ref(null);
 const lastSessionListScrollTop = ref(0);
 const listWrapEl = shallowRef(null);
+const expandedDateGroups = ref([]);
+
+function sessionTimeMs(sessionItem = {}) {
+  const timeMs = Date.parse(sessionItem.updatedAt || sessionItem.createdAt || "");
+  return Number.isFinite(timeMs) ? timeMs : 0;
+}
+
+function dateGroupKey(sessionItem = {}) {
+  const timeMs = sessionTimeMs(sessionItem);
+  if (!timeMs) return "unknown";
+  const date = new Date(timeMs);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+const groupedSessions = computed(() => {
+  const groupsByDate = new Map();
+  const sortedSessions = [...props.sessions].sort(
+    (leftSession, rightSession) => sessionTimeMs(rightSession) - sessionTimeMs(leftSession),
+  );
+  for (const sessionItem of sortedSessions) {
+    const key = dateGroupKey(sessionItem);
+    if (!groupsByDate.has(key)) groupsByDate.set(key, []);
+    groupsByDate.get(key).push(sessionItem);
+  }
+  return [...groupsByDate].map(([key, items]) => ({
+    key,
+    label: key === "unknown" ? translate("common.unknown") : key,
+    items,
+  }));
+});
+
+watch(
+  () => groupedSessions.value[0]?.key || "",
+  (latestDateKey, previousLatestDateKey) => {
+    if (latestDateKey && latestDateKey !== previousLatestDateKey) {
+      expandedDateGroups.value = [latestDateKey];
+    }
+  },
+  { immediate: true },
+);
 
 function onSessionListScroll() {
   if (!listWrapEl.value) return;
@@ -93,9 +136,16 @@ watch(
 <template>
   <div class="session-list-panel" :class="{ collapsed }">
     <el-scrollbar ref="sessionListRef" class="session-list">
-      <div class="session-list-inner">
-        <div
-          v-for="sessionItem in sessions"
+      <el-collapse v-model="expandedDateGroups" class="session-date-collapse">
+        <el-collapse-item
+          v-for="dateGroup in groupedSessions"
+          :key="dateGroup.key"
+          :name="dateGroup.key"
+          :title="dateGroup.label"
+        >
+          <div class="session-list-inner">
+            <div
+              v-for="sessionItem in dateGroup.items"
           :key="sessionItem.id"
           class="session-item noobot-subtle-row"
           :class="{ active: sessionItem.id === activeSessionId }"
@@ -133,8 +183,10 @@ watch(
             <el-icon><Delete /></el-icon>
             </button>
           </div>
-        </div>
-      </div>
+            </div>
+          </div>
+        </el-collapse-item>
+      </el-collapse>
     </el-scrollbar>
   </div>
 </template>
@@ -150,10 +202,34 @@ watch(
 }
 
 .session-list-inner {
-  padding: 4px 12px 12px;
+  padding: 4px 12px 8px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.session-date-collapse {
+  --el-collapse-border-color: transparent;
+  border: 0;
+}
+
+.session-date-collapse :deep(.el-collapse-item__header) {
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  color: var(--noobot-text-muted);
+  font-size: var(--noobot-font-size-sm);
+  font-weight: 600;
+}
+
+.session-date-collapse :deep(.el-collapse-item__wrap) {
+  border: 0;
+  background: transparent;
+}
+
+.session-date-collapse :deep(.el-collapse-item__content) {
+  padding: 0;
 }
 
 .session-item {
@@ -307,6 +383,13 @@ watch(
 
 .session-list-panel.collapsed .session-list-inner {
   align-items: center;
+  padding-inline: 4px;
+}
+
+.session-list-panel.collapsed .session-date-collapse :deep(.el-collapse-item__header) {
+  justify-content: center;
+  padding: 0;
+  font-size: 0;
 }
 
 .session-list-panel.collapsed .session-icon-wrapper {

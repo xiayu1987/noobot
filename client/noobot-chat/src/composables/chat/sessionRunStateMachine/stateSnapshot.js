@@ -78,7 +78,9 @@ export function applySessionRunEventPatch({ current, event, startsNewTurn, nextD
     turnScopeId: nextTurnScopeId,
     source: event.source,
     sourceEvent: event.sourceEvent,
-    seq: Math.max(Number(current.seq || 0), Number(event.seq || 0)),
+    seq: startsNewTurn
+      ? Number(event.seq || 0)
+      : Math.max(Number(current.seq || 0), Number(event.seq || 0)),
     priority: transitionPriority(nextState),
     createdAtMs:
       event.createdAtMs ||

@@ -79,6 +79,33 @@ describe("chatEngine streamHandlers", () => {
     }));
   });
 
+  it("matches a newly uploaded live attachment by client attachment identity", () => {
+    const currentUserMessage = {
+      role: "user",
+      attachments: [{
+        clientAttachmentId: "draft-current",
+        name: "current.docx",
+      }],
+    };
+    handleAttachmentParsedStreamEvent({
+      data: {
+        attachments: [{
+          attachmentId: "canonical-current",
+          clientAttachmentId: "draft-current",
+          contentSha256: "current-content",
+          parsedResult: { attachmentId: "parsed-current", path: "/parsed-current.md" },
+        }],
+      },
+      activeSession: { value: { messages: [currentUserMessage] } },
+      makeViewMessage: (message) => message,
+    });
+
+    expect(currentUserMessage.attachments[0]).toEqual(expect.objectContaining({
+      clientAttachmentId: "draft-current",
+      parsedResult: expect.objectContaining({ attachmentId: "parsed-current" }),
+    }));
+  });
+
   it("ignores thinking logs when classifier returns null", () => {
     const botMessage = makeBotMessage();
     const scrollOnFirstResponseOnce = vi.fn();

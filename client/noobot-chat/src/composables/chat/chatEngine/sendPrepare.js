@@ -31,14 +31,20 @@ export function prepareChatSend({
   input.value = "";
 
   const filesToSend = Array.isArray(attachmentFiles) ? [...attachmentFiles] : [...uploadFiles.value];
-  const resolvedUserAttachments = Array.isArray(userAttachments) ? [...userAttachments] : filesToSend.map((fileItem) => ({
-    name: fileItem.name,
-    mimeType: fileItem.mimeType,
-    size: fileItem.size,
-    previewUrl: isImageMime(fileItem.mimeType || "")
-      ? URL.createObjectURL(fileItem.raw)
-      : "",
-  }));
+  const resolvedUserAttachments = Array.isArray(userAttachments) ? [...userAttachments] : filesToSend.map((fileItem) => {
+    const clientAttachmentId = String(
+      fileItem?.clientAttachmentId || fileItem?.draftAttachmentId || "",
+    ).trim();
+    return {
+      ...(clientAttachmentId ? { clientAttachmentId } : {}),
+      name: fileItem.name,
+      mimeType: fileItem.mimeType,
+      size: fileItem.size,
+      previewUrl: isImageMime(fileItem.mimeType || "")
+        ? URL.createObjectURL(fileItem.raw)
+        : "",
+    };
+  });
   const userMessage = reuseExistingUserTurn
     ? (activeSession.value?.messages || []).find((message) => (
       message?.role === RoleEnum.USER &&

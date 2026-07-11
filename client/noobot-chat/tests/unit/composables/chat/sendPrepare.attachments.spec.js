@@ -32,6 +32,32 @@ function createPrepareHarness({ existingMessages = [] } = {}) {
 }
 
 describe("prepareChatSend attachment architecture", () => {
+  it("keeps the draft client identity on the live user-message attachment", () => {
+    const harness = createPrepareHarness();
+    const uploadEntry = {
+      draftAttachmentId: "draft-current",
+      raw: { name: "current.docx", type: "application/docx", size: 456 },
+      name: "current.docx",
+      mimeType: "application/docx",
+      size: 456,
+    };
+    harness.uploadFiles.value = [uploadEntry];
+
+    const result = prepareChatSend({
+      ...harness,
+      messageText: "parse current attachment",
+      turnScopeId: "client-turn:current",
+    });
+
+    expect(result.userMessage.attachments).toEqual([
+      expect.objectContaining({
+        clientAttachmentId: "draft-current",
+        name: "current.docx",
+        size: 456,
+      }),
+    ]);
+  });
+
   it("keeps rich user-message attachment fields when reuse turn receives raw userAttachments", () => {
     const richAttachment = {
       attachmentId: "att-rich",

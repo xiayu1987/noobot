@@ -143,25 +143,36 @@ export function isLegacyDocInputFile(filePath = "") {
   return path.extname(String(filePath || "")).toLowerCase() === ".doc";
 }
 
-export function resolveDocInputAttachmentMeta(filePath = "", agentContext = {}) {
+export async function resolveDocInputAttachmentMeta(filePath = "", agentContext = {}, attachmentId = "") {
   const normalizedInputPath = String(filePath || "").trim();
   const runtime = getRuntimeFromAgentContext(agentContext);
   const runtimeAttachmentMetas = resolveRuntimeUserMessageAttachments(runtime);
-  if (!normalizedInputPath || !runtimeAttachmentMetas.length) return null;
-  const inputBaseName = path.basename(normalizedInputPath);
-  const inputAttachmentId = String(inputBaseName || "").split(".")[0];
-  return (
+  const normalizedAttachmentId = String(attachmentId || "").trim();
+  const runtimeMatch = (
     runtimeAttachmentMetas.find((attachmentItem) => {
       const metaPath = String(attachmentItem?.path || "").trim();
-      if (!metaPath) return false;
-      const metaBaseName = path.basename(metaPath);
       const metaAttachmentId = String(attachmentItem?.attachmentId || "").trim();
       return (
-        (inputBaseName && metaBaseName === inputBaseName) ||
-        (inputAttachmentId && metaAttachmentId && inputAttachmentId === metaAttachmentId)
+        (normalizedAttachmentId && metaAttachmentId === normalizedAttachmentId) ||
+        (normalizedInputPath && metaPath && path.resolve(metaPath) === path.resolve(normalizedInputPath))
       );
     }) || null
   );
+  if (runtimeMatch) return runtimeMatch;
+
+  const attachmentService = runtime?.attachmentService;
+  const userId = String(runtime?.userId || "").trim();
+  const sessionId = String(
+    runtime?.systemRuntime?.sessionId || runtime?.systemRuntime?.rootSessionId || "",
+  ).trim();
+  if (!attachmentService?.resolveSourceAttachment || !userId || !sessionId) return null;
+  return attachmentService.resolveSourceAttachment({
+    userId,
+    sessionId,
+    attachmentId: normalizedAttachmentId,
+    attachmentSource: "user",
+    filePath: normalizedInputPath,
+  });
 }
 
 export async function buildImageBatches(imagePaths) {

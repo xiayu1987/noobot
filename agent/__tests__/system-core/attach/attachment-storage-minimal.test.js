@@ -56,6 +56,53 @@ test("AttachmentService.ingest + getAttachmentById keeps core behavior", async (
   });
 });
 
+test("AttachmentService.resolveSourceAttachment uses session-scoped identity or exact path", async () => {
+  await withTempDir(async (workspaceRoot) => {
+    const service = new AttachmentService({ workspaceRoot });
+    const [source] = await service.ingest({
+      userId: "u1",
+      sessionId: "s1",
+      attachmentSource: "user",
+      attachments: [{
+        clientAttachmentId: "client-source",
+        name: "same-name.txt",
+        mimeType: "text/plain",
+        contentBase64: Buffer.from("source", "utf8").toString("base64"),
+      }],
+    });
+    await service.ingest({
+      userId: "u1",
+      sessionId: "s2",
+      attachmentSource: "user",
+      attachments: [{
+        name: "same-name.txt",
+        mimeType: "text/plain",
+        contentBase64: Buffer.from("other session", "utf8").toString("base64"),
+      }],
+    });
+
+    const byId = await service.resolveSourceAttachment({
+      userId: "u1",
+      sessionId: "s1",
+      attachmentId: source.attachmentId,
+    });
+    const byPath = await service.resolveSourceAttachment({
+      userId: "u1",
+      sessionId: "s1",
+      filePath: source.path,
+    });
+    const filenameOnly = await service.resolveSourceAttachment({
+      userId: "u1",
+      sessionId: "s1",
+      filePath: source.name,
+    });
+
+    assert.equal(byId?.attachmentId, source.attachmentId);
+    assert.equal(byPath?.attachmentId, source.attachmentId);
+    assert.equal(filenameOnly, null);
+  });
+});
+
 test("AttachmentService.ingest is idempotent by clientAttachmentId", async () => {
   await withTempDir(async (workspaceRoot) => {
     const service = new AttachmentService({ workspaceRoot });
