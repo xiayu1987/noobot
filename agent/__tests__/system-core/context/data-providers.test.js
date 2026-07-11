@@ -121,6 +121,47 @@ test("resolveAttachments preserves canonical attachments and ingests only raw it
   assert.deepEqual(result.map((attachment) => attachment.attachmentId), ["existing", "canonicalized"]);
 });
 
+test("resolveAttachments canonicalizes existing attachment aliases through attach mapper", async () => {
+  let ingestCalled = false;
+  const result = await resolveAttachments({
+    attachmentService: {
+      async ingest() {
+        ingestCalled = true;
+        return [];
+      },
+    },
+    runtimeBasePath: "/workspace/u1",
+    userMessageAttachments: [
+      {
+        attachmentId: "existing",
+        path: "/tmp/existing.txt",
+        session_id: "session_alias",
+        attachment_source: "user",
+        type: "text/plain",
+        sandboxViewPath: "/workspace/existing.txt",
+        sandboxEnabled: true,
+        parsedResult: {
+          id: "parsed_alias",
+          updated_at: "2026-07-11T00:00:00.000Z",
+        },
+      },
+    ],
+    userId: "u1",
+    sessionId: "fallback_session",
+  });
+
+  assert.equal(ingestCalled, false);
+  assert.equal(result[0]?.sessionId, "session_alias");
+  assert.equal(result[0]?.attachmentSource, "user");
+  assert.equal(result[0]?.mimeType, "text/plain");
+  assert.equal(result[0]?.sandboxPath, "/workspace/existing.txt");
+  assert.equal(result[0]?.isSandbox, true);
+  assert.equal(result[0]?.parsedResult?.attachmentId, "parsed_alias");
+  assert.equal(result[0]?.parsedResult?.updatedAt, "2026-07-11T00:00:00.000Z");
+  assert.equal(JSON.stringify(result[0]).includes("sandboxViewPath"), false);
+  assert.equal(JSON.stringify(result[0]).includes("updated_at"), false);
+});
+
 test("resolveAttachments reads only userMessageAttachments", async () => {
   let receivedPayload = null;
   const result = await resolveAttachments({

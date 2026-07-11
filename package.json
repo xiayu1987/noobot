@@ -32,7 +32,7 @@
     "dev:mac": "npm run -w client/mac dev",
     "build:windows": "npm run -w client/windows build:win",
     "build:mac": "npm run -w client/mac build:mac",
-    "test": "npm run -s check:bare-file-paths && npm run -s test:bare-file-paths-guard && npm run -s check:numeric-literal-style && npm run -s check:shared-thresholds && npm run -s check:cross-platform-compat && npm run -s check:semantic-transfer-protocol-fields && npm run -s check:model-context-convergence && npm run --workspaces --if-present test",
+    "test": "npm run -s check:bare-file-paths && npm run -s test:bare-file-paths-guard && npm run -s check:numeric-literal-style && npm run -s check:shared-thresholds && npm run -s check:cross-platform-compat && npm run -s check:semantic-transfer-protocol-fields && npm run -s check:attachment-protocol-fields && npm run -s check:model-context-convergence && npm run --workspaces --if-present test",
     "check:i18n-imports": "npm run --workspaces --if-present check:i18n-imports",
     "check:plugin-frontend-i18n": "node ./scripts/check-plugin-frontend-i18n.mjs",
     "check:semantic-transfer-compat": "node ./scripts/check-semantic-transfer-compat.mjs",
@@ -48,6 +48,7 @@
     "check:shared-thresholds": "node ./scripts/check-shared-thresholds.mjs",
     "check:cross-platform-compat": "node ./scripts/check-cross-platform-compat.mjs",
     "check:semantic-transfer-protocol-fields": "node ./scripts/check-semantic-transfer-protocol-fields.mjs",
+    "check:attachment-protocol-fields": "node ./scripts/check-attachment-protocol-fields.mjs",
     "check:model-context-convergence": "node ./scripts/check-model-context-convergence.mjs",
     "check:bare-file-paths": "node ./scripts/check-bare-file-paths.mjs",
     "test:bare-file-paths-guard": "node --test ./scripts/check-bare-file-paths.test.mjs"
