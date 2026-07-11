@@ -70,7 +70,7 @@ test("AttachmentService.resolveSourceAttachment uses session-scoped identity or 
         contentBase64: Buffer.from("source", "utf8").toString("base64"),
       }],
     });
-    await service.ingest({
+    const [otherSource] = await service.ingest({
       userId: "u1",
       sessionId: "s2",
       attachmentSource: "user",
@@ -78,6 +78,16 @@ test("AttachmentService.resolveSourceAttachment uses session-scoped identity or 
         name: "same-name.txt",
         mimeType: "text/plain",
         contentBase64: Buffer.from("other session", "utf8").toString("base64"),
+      }],
+    });
+    const [sameSessionOtherSource] = await service.ingest({
+      userId: "u1",
+      sessionId: "s1",
+      attachmentSource: "user",
+      attachments: [{
+        name: "other.txt",
+        mimeType: "text/plain",
+        contentBase64: Buffer.from("same session other", "utf8").toString("base64"),
       }],
     });
 
@@ -96,10 +106,25 @@ test("AttachmentService.resolveSourceAttachment uses session-scoped identity or 
       sessionId: "s1",
       filePath: source.name,
     });
+    const malformedIdWithExactPath = await service.resolveSourceAttachment({
+      userId: "u1",
+      sessionId: "s1",
+      attachmentId: `${source.attachmentId}.txt`,
+      filePath: source.relativePath,
+    });
+    const conflictingIdentity = await service.resolveSourceAttachment({
+      userId: "u1",
+      sessionId: "s1",
+      attachmentId: sameSessionOtherSource.attachmentId,
+      filePath: source.relativePath,
+    });
 
     assert.equal(byId?.attachmentId, source.attachmentId);
     assert.equal(byPath?.attachmentId, source.attachmentId);
+    assert.equal(malformedIdWithExactPath?.attachmentId, source.attachmentId);
+    assert.equal(conflictingIdentity, null);
     assert.equal(filenameOnly, null);
+    assert.notEqual(otherSource.attachmentId, source.attachmentId);
   });
 });
 

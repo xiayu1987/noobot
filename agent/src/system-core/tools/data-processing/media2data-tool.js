@@ -23,7 +23,7 @@ import {
 } from "../../model/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import {
-  resolveRuntimeUserMessageAttachments,
+  resolveCanonicalUserSourceAttachment,
   updateRuntimeUserMessageAttachment,
 } from "../../attach/index.js";
 import { assertAndResolveUserWorkspaceFilePath } from "../core/check-tool-input.js";
@@ -162,39 +162,11 @@ function normalizeMediaInputPath(rawFilePath = "") {
 
 async function resolveMediaInputPathFromAttachmentMetas(filePath = "", agentContext = {}, attachmentId = "") {
   const normalizedInputPath = normalizeMediaInputPath(filePath);
-  const runtime = getRuntimeFromAgentContext(agentContext);
-  const runtimeAttachmentMetas = resolveRuntimeUserMessageAttachments(runtime);
-  const normalizedAttachmentId = String(attachmentId || "").trim();
-  const matchedMeta = runtimeAttachmentMetas.find((attachmentItem) => {
-    const metaPath = normalizeMediaInputPath(String(attachmentItem?.path || ""));
-    const metaAttachmentId = String(attachmentItem?.attachmentId || "").trim();
-    return (
-      (normalizedAttachmentId && metaAttachmentId === normalizedAttachmentId) ||
-      (normalizedInputPath && metaPath && path.resolve(metaPath) === path.resolve(normalizedInputPath))
-    );
+  const matchedMeta = await resolveCanonicalUserSourceAttachment({
+    filePath: normalizedInputPath,
+    attachmentId,
+    agentContext,
   });
-  if (!matchedMeta) {
-    const attachmentService = runtime?.attachmentService;
-    const userId = String(runtime?.userId || "").trim();
-    const sessionId = String(
-      runtime?.systemRuntime?.sessionId || runtime?.systemRuntime?.rootSessionId || "",
-    ).trim();
-    if (attachmentService?.resolveSourceAttachment && userId && sessionId) {
-      const sessionAttachment = await attachmentService.resolveSourceAttachment({
-        userId,
-        sessionId,
-        attachmentId: normalizedAttachmentId,
-        attachmentSource: "user",
-        filePath: normalizedInputPath,
-      });
-      if (sessionAttachment) {
-        return {
-          resolvedInputPath: normalizeMediaInputPath(String(sessionAttachment.path || normalizedInputPath)),
-          sourceAttachmentMeta: sessionAttachment,
-        };
-      }
-    }
-  }
   const matchedMetaPath = normalizeMediaInputPath(String(matchedMeta?.path || ""));
   return {
     resolvedInputPath: matchedMetaPath || normalizedInputPath,

@@ -12,6 +12,7 @@ function createFixture(overrides = {}) {
     applyReconnectMessagesToActiveSession: vi.fn(async () => {}),
     applyChannelState: vi.fn(),
     scheduleCacheExpiredSessionRefresh: vi.fn(),
+    reconcileSessionState: vi.fn(async () => true),
     ...overrides,
   };
 }
@@ -58,6 +59,8 @@ describe("applyReconnectDataReplay", () => {
         sessions: [
           {
             sessionId: " s-2 ",
+            hasRunningTask: true,
+            currentRun: { sessionId: "s-2", dialogProcessId: "dp-2", turnScopeId: "turn-2", state: "sending", seq: 1 },
             dialogProcesses: [{ dialogProcessId: " dp-2 ", messages }],
           },
         ],
@@ -117,6 +120,11 @@ describe("applyReconnectDataReplay", () => {
     });
 
     expect(fixture.applyChannelState).not.toHaveBeenCalled();
+    expect(fixture.reconcileSessionState).toHaveBeenCalledWith({
+      sessionId: "s-1",
+      hasRunningTask: false,
+      reason: "invalid_current_run",
+    });
   });
 
 

@@ -238,6 +238,8 @@ describe("useReconnectReplay", () => {
       sessions: [
         {
           sessionId: "s-1",
+          hasRunningTask: true,
+          currentRun: { sessionId: "s-1", dialogProcessId: "dp-a", turnScopeId: "turn-a", state: "sending", seq: 1 },
           dialogProcesses: [
             {
               dialogProcessId: "dp-a",
@@ -247,6 +249,8 @@ describe("useReconnectReplay", () => {
         },
         {
           sessionId: "s-2",
+          hasRunningTask: true,
+          currentRun: { sessionId: "s-2", dialogProcessId: "dp-b", turnScopeId: "turn-b", state: "sending", seq: 1 },
           dialogProcesses: [
             {
               dialogProcessId: "dp-b",
@@ -355,6 +359,32 @@ describe("useReconnectReplay", () => {
     });
 
     expect(refs.sending.value).toBe(true);
+  });
+
+  it("reconciles session detail and retries runtime snapshot when currentRun is invalid", async () => {
+    const { api, mocks } = createFixture();
+
+    await api.applyReconnectData({
+      sessions: [{
+        sessionId: "s-1",
+        hasRunningTask: true,
+        conversationStates: [
+          { sessionId: "s-1", dialogProcessId: "dp-old", turnScopeId: "turn-old", state: "user_stopped" },
+        ],
+        dialogProcesses: [],
+      }],
+    });
+
+    expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1", {
+      source: "reconnectProtocolReconcile",
+    });
+    expect(mocks.chatList.applySessionDetail).toHaveBeenCalledWith(
+      expect.any(Object),
+      { preserveCurrentMessages: false, scrollToBottom: false },
+    );
+    expect(mocks.chatWebSocketClient.reconnect).toHaveBeenCalledWith(
+      expect.objectContaining({ currentSessionId: "s-1" }),
+    );
   });
 
   it("EV-03e: connector_status is informational and should not create pending interaction", async () => {

@@ -41,6 +41,19 @@ function resolveAuthoritativeConversationStates(sessionEntry = {}) {
   return [];
 }
 
+function hasValidCurrentRun(sessionEntry = {}) {
+  return resolveAuthoritativeConversationStates(sessionEntry).length === 1;
+}
+
+function requiresSessionReconciliation(sessionEntry = {}) {
+  if (hasValidCurrentRun(sessionEntry)) return false;
+  return Boolean(
+    sessionEntry?.hasRunningTask === true ||
+    (Array.isArray(sessionEntry?.conversationStates) && sessionEntry.conversationStates.length) ||
+    (Array.isArray(sessionEntry?.dialogProcesses) && sessionEntry.dialogProcesses.length),
+  );
+}
+
 function createReconnectRunStateEvents(reconnectSessions = [], recoverableSessionId = "") {
   const events = [];
   if (recoverableSessionId) {
@@ -113,10 +126,22 @@ export async function applyReconnectDataReplay({
   applyReconnectMessagesToActiveSession,
   applyChannelState,
   scheduleCacheExpiredSessionRefresh,
+  reconcileSessionState,
 } = {}) {
-  const reconnectSessions = Array.isArray(reconnectData?.sessions)
+  const receivedSessions = Array.isArray(reconnectData?.sessions)
     ? reconnectData.sessions
     : [];
+  const invalidSessions = receivedSessions.filter(requiresSessionReconciliation);
+  const reconnectSessions = receivedSessions.filter(
+    (sessionEntry) => !requiresSessionReconciliation(sessionEntry),
+  );
+  for (const sessionEntry of invalidSessions) {
+    await reconcileSessionState?.({
+      sessionId: _trimStr(sessionEntry?.sessionId),
+      hasRunningTask: sessionEntry?.hasRunningTask === true,
+      reason: "invalid_current_run",
+    });
+  }
   const recoverableSessionId = findRecoverableReconnectSessionId(reconnectSessions);
   const applyReconnectRunState = () => applyRunStateEvents?.(
     createReconnectRunStateEvents(reconnectSessions, recoverableSessionId),

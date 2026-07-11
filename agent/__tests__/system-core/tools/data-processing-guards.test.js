@@ -313,6 +313,66 @@ test("doc_to_data: resolves a historical session attachment only after the model
   assert.equal(parsedEvent?.data?.attachments?.[0]?.parsedResult?.attachmentId, "parsed-1");
 });
 
+test("doc_to_data: child run resolves source identity from the root session and exact path", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-child-source-"));
+  const relativePath = path.join("runtime", "attach", "scoped", "root-session", "user", "source.md");
+  const textPath = path.join(basePath, relativePath);
+  await fs.mkdir(path.dirname(textPath), { recursive: true });
+  await fs.writeFile(textPath, "child source\n", "utf8");
+
+  const resolveCalls = [];
+  const linkCalls = [];
+  const agentContext = buildAgentContext(basePath);
+  const runtime = agentContext.execution.controllers.runtime;
+  runtime.userId = "primary-user";
+  runtime.systemRuntime = {
+    sessionId: "child-session",
+    parentSessionId: "root-session",
+    rootSessionId: "root-session",
+    dialogProcessId: "parent-dialog",
+    turnScopeId: "parent-turn",
+  };
+  runtime.attachmentService = {
+    async resolveSourceAttachment(payload = {}) {
+      resolveCalls.push(payload);
+      return {
+        attachmentId: "source-att",
+        sessionId: "root-session",
+        attachmentSource: "user",
+        path: textPath,
+        relativePath,
+      };
+    },
+    async ingestGeneratedArtifacts(payload = {}) {
+      return [{
+        attachmentId: "parsed-att",
+        sessionId: "root-session",
+        attachmentSource: "model",
+        path: path.join(basePath, "parsed.md"),
+        relativePath: "parsed.md",
+        name: payload.artifacts?.[0]?.name || "parsed.md",
+      }];
+    },
+    async linkParsedResultToAttachment(payload = {}) {
+      linkCalls.push(payload);
+      return { attachmentId: payload.sourceAttachmentId, parsedResult: { attachmentId: "parsed-att" } };
+    },
+  };
+
+  const tool = createDoc2DataTool({ agentContext })[0];
+  const payload = JSON.parse(await tool.invoke({
+    filePath: relativePath,
+    attachmentId: "source-att.md",
+  }));
+
+  assert.equal(payload.summary.source_attachment_backwritten, true);
+  assert.equal(resolveCalls.length, 1);
+  assert.equal(resolveCalls[0]?.sessionId, "root-session");
+  assert.equal(resolveCalls[0]?.attachmentId, "source-att.md");
+  assert.equal(resolveCalls[0]?.filePath, textPath);
+  assert.equal(linkCalls[0]?.sourceAttachmentId, "source-att");
+});
+
 test("doc_to_data: reuses generated data artifact instead of creating recursive copies", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-reuse-"));
   const textPath = path.join(basePath, "runtime", "attach", "scoped", "s1", "model", "existing.md");

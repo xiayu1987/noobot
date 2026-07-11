@@ -78,13 +78,15 @@ export async function resolveSourceAttachment(service, {
   if (!normalizedSessionId) return null;
 
   const normalizedAttachmentId = safeStr(attachmentId);
+  let matchedById = null;
   if (normalizedAttachmentId) {
-    return getAttachmentById(service, {
+    matchedById = await getAttachmentById(service, {
       userId,
       attachmentId: normalizedAttachmentId,
       sessionId: normalizedSessionId,
       attachmentSource,
     });
+    if (matchedById && !safeStr(filePath)) return matchedById;
   }
 
   const basePath = resolveBasePath(service.globalConfig, userId);
@@ -108,6 +110,12 @@ export async function resolveSourceAttachment(service, {
       const relativePath = normalizeComparablePath(basePath, item?.relativePath);
       return recordPath === comparableInputPath || relativePath === comparableInputPath;
     });
+    if (matchedById && matchedByPath) {
+      return safeStr(matchedById?.attachmentId) === safeStr(matchedByPath?.attachmentId)
+        ? matchedById
+        : null;
+    }
+    if (matchedById) return null;
     if (matchedByPath) return matchedByPath;
   }
 

@@ -77,6 +77,8 @@ describe("useReconnectReplay", () => {
       sessions: [
         {
           sessionId: "s-1",
+          hasRunningTask: true,
+          currentRun: { sessionId: "s-1", dialogProcessId: "dp-mix", turnScopeId: "turn-mix", state: "sending", seq: 2 },
           dialogProcesses: [
             {
               dialogProcessId: "dp-mix",
@@ -127,6 +129,8 @@ describe("useReconnectReplay", () => {
         sessions: [
           {
             sessionId: "s-1",
+            hasRunningTask: true,
+            currentRun: { sessionId: "s-1", dialogProcessId: "dp-big", turnScopeId: "turn-big", state: "sending", seq: 1200 },
             dialogProcesses: [{ dialogProcessId: "dp-big", messages: bigBatch }],
           },
         ],

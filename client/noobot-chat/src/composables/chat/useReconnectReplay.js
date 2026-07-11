@@ -62,7 +62,12 @@ import {
 } from "./reconnectReplay/doneReplay";
 import { createReconnectReplayPublicApi } from "./reconnectReplay/publicApi";
 import { registerReconnectReplayLifecycleCleanup } from "./reconnectReplay/lifecycle";
-import { applySessionRunStateEvent, applySessionRunStateEvents } from "./sessionRunStateMachine";
+import {
+  BackendChannelState,
+  SESSION_RUN_EVENT,
+  applySessionRunStateEvent,
+  applySessionRunStateEvents,
+} from "./sessionRunStateMachine";
 import { refreshFinalSessionDetail } from "./chatEngine/sessionFinalize";
 
 export function useReconnectReplay({
@@ -100,6 +105,7 @@ export function useReconnectReplay({
   const { replayCache, appliedReconnectSeqByDialogProcessId, terminalDialogProcessIdSet, missingInteractionPayloadTimers } =
     reconnectReplayContext;
   let { cacheExpiredRefreshTimer, replayHydrationPromise } = reconnectReplayContext;
+  const protocolReconcileAttempts = new Map();
 
   const applyRunStateEvent = (event) => applySessionRunStateEvent({
     stateRef: runStateSnapshot,
@@ -234,7 +240,58 @@ export function useReconnectReplay({
       applyReconnectMessagesToActiveSession,
       applyChannelState,
       scheduleCacheExpiredSessionRefresh,
+      reconcileSessionState,
     });
+  }
+
+  async function reconcileSessionState({
+    sessionId = "",
+    hasRunningTask = false,
+  } = {}) {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) return false;
+    let detailApplied = false;
+    if (
+      typeof chatList?.fetchSessionDetail === "function" &&
+      typeof chatList?.applySessionDetail === "function"
+    ) {
+      const detail = await chatList.fetchSessionDetail(normalizedSessionId, {
+        source: "reconnectProtocolReconcile",
+      }).catch(() => null);
+      if (detail) {
+        chatList.applySessionDetail(detail, {
+          preserveCurrentMessages: false,
+          scrollToBottom: false,
+        });
+        detailApplied = true;
+      }
+    }
+    if (!hasRunningTask) return detailApplied;
+
+    const attempts = Number(protocolReconcileAttempts.get(normalizedSessionId) || 0);
+    if (attempts >= 1 || typeof chatWebSocketClient?.reconnect !== "function") {
+      applyRunStateEvent({
+        type: SESSION_RUN_EVENT.LOCAL_FAILURE,
+        state: BackendChannelState.ERROR,
+        sessionId: normalizedSessionId,
+        source: "reconnect_protocol_mismatch",
+      });
+      notify({ type: "warning", message: translate("infra.reconnectFailed") });
+      return false;
+    }
+
+    protocolReconcileAttempts.set(normalizedSessionId, attempts + 1);
+    setTimeout(() => protocolReconcileAttempts.delete(normalizedSessionId), 5000);
+    await chatWebSocketClient.reconnect({
+      currentSessionId: normalizedSessionId,
+      onReconnectData: (payload) => {
+        if (payload?.sessions) void applyReconnectData(payload);
+        if (payload?.event && payload?.data) {
+          void applyReconnectEvent(payload.event, payload.data);
+        }
+      },
+    }).catch(() => null);
+    return true;
   }
 
   function applyChannelState(stateData = {}) {
