@@ -318,7 +318,8 @@ assertFileContains("agent/src/system-core/agent/core/turn/turn-executor.js", [
 ]);
 
 assertFileContains("agent/src/system-core/context/index.js", [
-  { name: "initial context resolves session history", pattern: /async\s+buildInitialContext[\s\S]*?_resolveSessionRecords/ },
+  { name: "new-session context resolves session history", pattern: /async\s+buildNewSessionContext[\s\S]*?_resolveSessionRecords/ },
+  { name: "existing-session context resolves session history", pattern: /async\s+buildExistingSessionContext[\s\S]*?_resolveSessionRecords/ },
   { name: "context passes current turnScopeId to session history", pattern: /currentTurnScopeId:\s*String\(this\.runConfig\?\.turnScopeId/ },
 ]);
 

@@ -40,7 +40,17 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
       async captureSessionToShortMemory() {},
       async maybeSummarize() {},
     },
-    attach: {},
+    attach: {
+      async ingest({ sessionId, attachments = [] } = {}) {
+        return attachments.map((attachment, index) => ({
+          attachmentId: attachment.attachmentId || attachment.id || `input-${index}`,
+          sessionId,
+          name: attachment.name || "input",
+          mimeType: attachment.mimeType || attachment.type || "application/octet-stream",
+          path: attachment.path || `/tmp/noobot-test/input-${index}`,
+        }));
+      },
+    },
     skill: {},
     configService: {
       async loadUserConfig() {
@@ -215,6 +225,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
     userId: "u1",
     sessionId,
     message: "请切换模型并输出附件",
+    turnScopeId: "turn-closure",
     attachments: [
       {
         name: "input.png",
@@ -248,7 +259,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   const userTurn = persistedTurns.find((turn) => turn.role === "user");
   assert.ok(userTurn);
   assert.equal(userTurn.content, "请切换模型并输出附件");
-  assert.equal(userTurn.attachments?.[0]?.attachmentId, "att-in-1");
+  assert.equal(userTurn.attachments?.[0]?.attachmentId, "input-0");
 
   const finalAssistantTurn = [...persistedTurns]
     .reverse()
@@ -398,6 +409,7 @@ test("continue mode closed-loop: should build continue context and persist paren
     caller: "bot",
     parentDialogProcessId: "dp-parent-1",
     message: "continue run",
+    turnScopeId: "turn-existing-session",
     attachments: [],
     eventListener: {
       onEvent(evt = {}) {

@@ -191,7 +191,7 @@ test("createDetachedSubSessionRunner prepares context, runs agent, emits runtime
   assert.equal("botHooks" in calls.prepareRunConfigPayload.runConfig, false);
 
   const buildContextPayload = calls.prepareAgentTurnExecutionPayload.buildContextPayload;
-  assert.equal(buildContextPayload.mode, "initial");
+  assert.equal(buildContextPayload.mode, "new_session");
   assert.equal(buildContextPayload.userId, "u1");
   assert.equal(buildContextPayload.sessionId, "sub1");
   assert.equal(buildContextPayload.caller, CALLER_ROLE.BOT);

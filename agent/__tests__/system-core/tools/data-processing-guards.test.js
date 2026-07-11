@@ -246,8 +246,14 @@ test("doc_to_data: backwrites parsed result to source attachment from userMessag
   };
   const agentContext = buildAgentContext(basePath);
   const runtime = agentContext.execution.controllers.runtime;
+  const emittedEvents = [];
   runtime.userId = "primary-user";
-  runtime.systemRuntime = { sessionId: "s1" };
+  runtime.systemRuntime = { sessionId: "s1", dialogProcessId: "dialog-parent" };
+  runtime.eventListener = {
+    onEvent(event) {
+      emittedEvents.push(event);
+    },
+  };
   runtime.attachmentService = attachmentService;
   runtime.userMessageAttachments = [
     {
@@ -291,6 +297,10 @@ test("doc_to_data: backwrites parsed result to source attachment from userMessag
   assert.equal(runtime.userMessageAttachments[0]?.parsedResult?.attachmentId, "parsed-1");
   assert.equal(runtime.userMessageAttachments[0]?.parsedResult?.tool, TOOL_NAME.DOC_TO_DATA);
   assert.equal(runtime.attachments[0]?.parsedResult, undefined);
+  const parsedEvent = emittedEvents.find((event) => event?.event === "attachment_parsed");
+  assert.equal(parsedEvent?.data?.dialogProcessId, "dialog-parent");
+  assert.equal(parsedEvent?.data?.attachments?.[0]?.attachmentId, "source-att");
+  assert.equal(parsedEvent?.data?.attachments?.[0]?.parsedResult?.attachmentId, "parsed-1");
 });
 
 test("doc_to_data: reuses generated data artifact instead of creating recursive copies", async () => {

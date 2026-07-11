@@ -78,6 +78,7 @@ function compactParsedResultRef(parsedResult = null) {
   const path = trimString(firstValue(parsedResult.path, parsedResult.filePath, parsedResult.file_path));
   const relativePath = trimString(firstValue(parsedResult.relativePath, parsedResult.relative_path));
   const tool = trimString(parsedResult.tool);
+  const status = trimString(parsedResult.status);
   const updatedAt = trimString(firstValue(parsedResult.updatedAt, parsedResult.updated_at));
   const mimeType = trimString(firstValue(parsedResult.mimeType, parsedResult.type, parsedResult.mime));
   const sandboxFlag = typeof parsedResult.isSandbox === "boolean" ? parsedResult.isSandbox : parsedResult.sandboxEnabled;
@@ -87,6 +88,7 @@ function compactParsedResultRef(parsedResult = null) {
   if (path) picked.path = path;
   if (relativePath) picked.relativePath = relativePath;
   if (tool) picked.tool = tool;
+  if (status) picked.status = status;
   if (updatedAt) picked.updatedAt = updatedAt;
   if (mimeType) picked.mimeType = mimeType;
   if (typeof sandboxFlag === "boolean") picked.isSandbox = sandboxFlag === true;

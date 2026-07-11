@@ -4,9 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { fatalSystemError } from "../../error/index.js";
+import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../error/constants.js";
-import { fsMkdir, fsReaddir, fsRm } from "../../store/fs-adapter.js";
+import { fsMkdir, fsReadFile, fsReaddir, fsRm, fsStat, fsWriteFile } from "../../store/fs-adapter.js";
 import { normalizeSessionEntity } from "../entities/session-entity.js";
 import {
   buildSessionSummary,
@@ -28,6 +30,9 @@ export class FileSystemSessionRepository {
     normalizeSelectedConnectors,
     now = () => new Date().toISOString(),
     deletedSessionGuardTtlMs = 15 * 60 * 1000,
+    mutationLockTimeoutMs = 30000,
+    mutationLockStaleMs = 60000,
+    mutationLockPollMs = 10,
   } = {}) {
     this.pathResolver = pathResolver;
     this.sessionPathResolver = sessionPathResolver;
@@ -39,7 +44,65 @@ export class FileSystemSessionRepository {
       Number.isFinite(Number(deletedSessionGuardTtlMs)) && Number(deletedSessionGuardTtlMs) > 0
         ? Number(deletedSessionGuardTtlMs)
         : 15 * 60 * 1000;
+    this.mutationLockTimeoutMs = Math.max(1, Number(mutationLockTimeoutMs) || 30000);
+    this.mutationLockStaleMs = Math.max(1, Number(mutationLockStaleMs) || 60000);
+    this.mutationLockPollMs = Math.max(1, Number(mutationLockPollMs) || 10);
     this._deletedSessionCache = new Map(); // userId -> { sessions, updatedAt }
+  }
+
+  async withSessionMutation(userId, sessionId, parentSessionId = "", operation) {
+    const { sessionDir } = await this.resolveSessionScope(userId, sessionId, parentSessionId);
+    return this._withMutationLock(`${sessionDir}.mutation-lock`, operation);
+  }
+
+  async _withMutationLock(lockDir, operation) {
+    const deadline = Date.now() + this.mutationLockTimeoutMs;
+    const ownerFile = path.join(lockDir, "owner");
+    const ownerToken = `${process.pid}:${randomUUID()}`;
+    await fsMkdir(path.dirname(lockDir), { recursive: true });
+    while (true) {
+      try {
+        await fsMkdir(lockDir);
+        await fsWriteFile(ownerFile, ownerToken, "utf8");
+        break;
+      } catch (error) {
+        if (error?.code !== "EEXIST") throw error;
+        try {
+          const stat = await fsStat(ownerFile).catch(() => fsStat(lockDir));
+          if (Date.now() - stat.mtimeMs > this.mutationLockStaleMs) {
+            await fsRm(lockDir, { recursive: true, force: true });
+            continue;
+          }
+        } catch (statError) {
+          if (statError?.code === "ENOENT") continue;
+          throw statError;
+        }
+        if (Date.now() >= deadline) {
+          const timeout = new Error("session mutation lock timeout");
+          timeout.statusCode = 409;
+          timeout.errorCode = "SESSION_MUTATION_BUSY";
+          throw timeout;
+        }
+        await new Promise((resolve) => setTimeout(resolve, this.mutationLockPollMs));
+      }
+    }
+    const heartbeat = setInterval(() => {
+      void fsWriteFile(ownerFile, ownerToken, "utf8").catch(() => {});
+    }, Math.max(1000, Math.floor(this.mutationLockStaleMs / 3)));
+    heartbeat.unref?.();
+    try {
+      return await operation();
+    } finally {
+      clearInterval(heartbeat);
+      const currentOwner = await fsReadFile(ownerFile, "utf8").catch(() => "");
+      if (currentOwner === ownerToken) {
+        await fsRm(lockDir, { recursive: true, force: true });
+      }
+    }
+  }
+
+  async _withSessionSummaryMutation(userId, operation) {
+    return this._withMutationLock(`${this._sessionsSummaryFile(userId)}.mutation-lock`, operation);
   }
 
   _basePath(userId = "") {
@@ -114,11 +177,13 @@ export class FileSystemSessionRepository {
   async upsertSessionSummary(userId = "", session = {}, { sessionTree = null } = {}) {
     const summary = this._withSummaryDepth(session, sessionTree);
     if (!summary.sessionId) return null;
-    const current = await this.readSessionsSummary(userId);
-    const nextMap = new Map(current.sessions.map((item) => [item.sessionId, item]));
-    nextMap.set(summary.sessionId, summary);
-    await this.writeSessionsSummary(userId, Array.from(nextMap.values()));
-    return summary;
+    return this._withSessionSummaryMutation(userId, async () => {
+      const current = await this.readSessionsSummary(userId);
+      const nextMap = new Map(current.sessions.map((item) => [item.sessionId, item]));
+      nextMap.set(summary.sessionId, summary);
+      await this.writeSessionsSummary(userId, Array.from(nextMap.values()));
+      return summary;
+    });
   }
 
   async removeSessionSummaries(userId = "", sessionIds = []) {
@@ -128,11 +193,13 @@ export class FileSystemSessionRepository {
         .filter(Boolean),
     );
     if (!ids.size) return 0;
-    const current = await this.readSessionsSummary(userId);
-    const next = current.sessions.filter((item) => !ids.has(item.sessionId));
-    if (next.length === current.sessions.length) return 0;
-    await this.writeSessionsSummary(userId, next);
-    return current.sessions.length - next.length;
+    return this._withSessionSummaryMutation(userId, async () => {
+      const current = await this.readSessionsSummary(userId);
+      const next = current.sessions.filter((item) => !ids.has(item.sessionId));
+      if (next.length === current.sessions.length) return 0;
+      await this.writeSessionsSummary(userId, next);
+      return current.sessions.length - next.length;
+    });
   }
 
   async rebuildSessionsSummary(userId = "", { sessionTree = null } = {}) {
@@ -356,7 +423,7 @@ export class FileSystemSessionRepository {
         storageService: this.storageService,
         sessionDir,
         sessionPayload: payload,
-        atomic: false,
+        atomic: true,
       });
       await this.upsertSessionSummary(userId, payload);
     }
@@ -386,7 +453,7 @@ export class FileSystemSessionRepository {
     return session;
   }
 
-  async save(userId, session = {}, parentSessionId = "") {
+  async save(userId, session = {}, parentSessionId = "", { expectedVersion } = {}) {
     const sessionId = String(session?.sessionId || "").trim();
     if (!sessionId) {
       throw fatalSystemError(tSystem("common.sessionIdRequired"), {
@@ -399,6 +466,17 @@ export class FileSystemSessionRepository {
       sessionId,
       parentSessionId || session?.parentSessionId || "",
     );
+    if (expectedVersion !== undefined && expectedVersion !== null) {
+      const persisted = await this.findById(userId, sessionId, resolvedParentSessionId);
+      const actualVersion = Number(persisted?.version ?? persisted?.revision ?? 0);
+      if (actualVersion !== Number(expectedVersion)) {
+        const error = new Error("session version conflict");
+        error.statusCode = 409;
+        error.errorCode = "SESSION_VERSION_CONFLICT";
+        error.currentVersion = actualVersion;
+        throw error;
+      }
+    }
     const payload = normalizeSessionEntity(
       {
         ...session,
@@ -414,7 +492,7 @@ export class FileSystemSessionRepository {
       storageService: this.storageService,
       sessionDir,
       sessionPayload: payload,
-      atomic: false,
+      atomic: true,
     });
     await this.upsertSessionSummary(userId, payload);
     return true;

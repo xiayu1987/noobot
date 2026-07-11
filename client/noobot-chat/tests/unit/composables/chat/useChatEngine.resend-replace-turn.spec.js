@@ -94,7 +94,12 @@ describe("useChatEngine.resend replace turn", () => {
     const newAttachment = { name: "new.txt", mimeType: "text/plain", contentBase64: "bmV3" };
     const localFile = new File(["new"], "new.txt", { type: "text/plain" });
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments }) => {
-      const replacementUser = { turnScopeId, role: RoleEnum.USER, content: newContent, attachments };
+      const replacementUser = {
+        turnScopeId,
+        role: RoleEnum.USER,
+        content: newContent,
+        attachments: attachments.map(({ contentBase64, ...attachment }) => attachment),
+      };
       return {
         ok: true,
         session: makeSession("local-resend-attachments", {
@@ -137,14 +142,18 @@ describe("useChatEngine.resend replace turn", () => {
     const expectedAttachments = [keptAttachment, newAttachment];
     expect(replaceSessionTurnApi).toHaveBeenCalledWith(expect.objectContaining({
       newContent: "edited with attachments",
-      attachments: expectedAttachments,
+      attachments: [keptAttachment],
     }), expect.any(Object));
     expect(stream).toHaveBeenCalledTimes(1);
     expect(stream.mock.calls[0][0]).toEqual(expect.objectContaining({
       message: "edited with attachments",
       attachments: expectedAttachments,
     }));
-    expect(activeSession.value.messages[0].attachments).toEqual(expectedAttachments);
+    expect(activeSession.value.messages[0].attachments).toEqual([
+      keptAttachment,
+      { name: "new.txt", mimeType: "text/plain" },
+    ]);
+    expect(activeSession.value.messages[0].attachments[1]).not.toHaveProperty("contentBase64");
   });
 
   it("resendMonotonicMessage keeps original attachment when editing without attachment changes", async () => {
@@ -353,7 +362,13 @@ describe("useChatEngine.resend replace turn", () => {
     }));
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, expectedVersion }) => {
       if (expectedVersion === 3) {
-        return { ok: false, status: 409, statusText: "Conflict", error: "session version conflict" };
+        return {
+          ok: false,
+          status: 409,
+          statusText: "Conflict",
+          error: "session version conflict",
+          errorCode: "SESSION_VERSION_CONFLICT",
+        };
       }
       const replacementUser = { turnScopeId, role: RoleEnum.USER, content: newContent };
       return {
@@ -387,7 +402,9 @@ describe("useChatEngine.resend replace turn", () => {
     expect(replaceSessionTurnApi).toHaveBeenCalledTimes(2);
     expect(replaceSessionTurnApi.mock.calls[0][0]).toEqual(expect.objectContaining({ expectedVersion: 3 }));
     expect(replaceSessionTurnApi.mock.calls[1][0]).toEqual(expect.objectContaining({ expectedVersion: 5 }));
-    expect(replaceSessionTurnApi.mock.calls[1][0].idempotencyKey).toContain("retry-version");
+    expect(replaceSessionTurnApi.mock.calls[1][0].idempotencyKey).toBe(
+      replaceSessionTurnApi.mock.calls[0][0].idempotencyKey,
+    );
     expect(fetchSessionDetail).toHaveBeenCalledWith("local-resend-version-retry", expect.objectContaining({
       force: true,
       reuseRecentlyLoaded: false,
@@ -416,6 +433,7 @@ describe("useChatEngine.resend replace turn", () => {
       status: 409,
       statusText: "Conflict",
       error: "session version conflict",
+      errorCode: "SESSION_VERSION_CONFLICT",
     }));
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};

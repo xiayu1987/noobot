@@ -221,6 +221,10 @@ export function createSessionFacade(runtime = {}) {
       return sessionMessageService.appendTurn(payload);
     },
 
+    async commitTurn(payload = {}) {
+      return sessionMessageService.commitTurn(payload);
+    },
+
     async deleteFromMessage(payload = {}) {
       return sessionMessageService.deleteFromMessage(payload);
     },

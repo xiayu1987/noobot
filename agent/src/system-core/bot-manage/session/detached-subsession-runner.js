@@ -118,7 +118,7 @@ export function createDetachedSubSessionRunner({
 
     const preparedAgentTurnExecution = await prepareAgentTurnExecution({
       buildContextPayload: {
-        mode: "initial",
+        mode: "new_session",
         userId,
         sessionId: subSessionId,
         caller: CALLER_ROLE.BOT,

@@ -41,6 +41,7 @@ import {
   getDefaultSessionPluginRuntime,
 } from "../../plugin/session-plugin-runtime-provider.js";
 import { loadStoppedModelMessageSnapshot } from "../../agent/core/resume/model-message-snapshot-store.js";
+import { resolveAttachments } from "../../context/providers/attachment-resolver.js";
 
 export class SessionExecutionEngine {
   constructor({
@@ -205,11 +206,15 @@ export class SessionExecutionEngine {
       resolveScenarioRunConfig: (runConfig = {}, userConfig = {}) =>
         this._resolveScenarioRunConfig(runConfig, userConfig),
       prepareRunConfig: (payload = {}) => this._prepareRunConfig(payload),
+      prepareTurnInput: (payload = {}) => this._prepareTurnInput(payload),
       prepareAgentTurnExecution: (payload = {}) =>
         this._prepareAgentTurnExecution(payload),
     };
     const runnerPersistenceDeps = {
       appendSessionTurn: (payload = {}) => this._appendSessionTurn(payload),
+      commitSessionTurn: typeof this.session?.commitTurn === "function"
+        ? (payload = {}) => this.session.commitTurn(payload)
+        : null,
       stampReusedUserTurnDialogProcessId: (payload = {}) =>
         this._stampReusedUserTurnDialogProcessId(payload),
       finalizeRunSession: (payload = {}) => this._finalizeRunSession(payload),
@@ -495,6 +500,30 @@ export class SessionExecutionEngine {
     });
   }
 
+  async _prepareTurnInput({ buildContextPayload = {} } = {}) {
+    const payload = buildContextPayload && typeof buildContextPayload === "object"
+      ? buildContextPayload
+      : {};
+    const contextBuilder = this._buildContextBuilder(payload);
+    const runtimeBasePath = typeof contextBuilder._resolveRuntimeBasePath === "function"
+      ? contextBuilder._resolveRuntimeBasePath()
+      : await this._resolveAttachmentIndexBasePath(String(payload.userId || "").trim());
+    const effectiveConfig = typeof contextBuilder._getEffectiveConfig === "function"
+      ? contextBuilder._getEffectiveConfig()
+      : this.globalConfig;
+    const userMessageAttachments = await resolveAttachments({
+      attachmentService: contextBuilder.attachmentService || this.attach,
+      runtimeBasePath,
+      effectiveConfig,
+      userMessageAttachments: Array.isArray(payload.userMessageAttachments)
+        ? payload.userMessageAttachments
+        : [],
+      userId: String(payload.userId || "").trim(),
+      sessionId: String(payload.sessionId || "").trim(),
+    });
+    return { contextBuilder, userMessageAttachments };
+  }
+
   async _prepareAgentTurnExecution({
     buildContextPayload = {},
     abortSignal = null,
@@ -579,6 +608,10 @@ export class SessionExecutionEngine {
       globalConfig: this.globalConfig,
       identity,
     });
+    const userMessageAttachments = await this._resolveStoppedResumeAttachments({
+      contextBuilder,
+      payload,
+    });
     const systemMessages = Array.isArray(snapshot?.messageBlocks?.system)
       ? snapshot.messageBlocks.system
       : [];
@@ -590,9 +623,7 @@ export class SessionExecutionEngine {
       historyMessages,
       {
         dialogProcessId: String(payload?.dialogProcessId || identity.dialogProcessId || "").trim(),
-        attachments: Array.isArray(payload?.userMessageAttachments)
-          ? payload.userMessageAttachments
-          : [],
+        attachments: userMessageAttachments,
       },
     );
     const scopedAgentContext = this._applyRunConfigToolPolicy(agentContext, runConfig);
@@ -611,7 +642,26 @@ export class SessionExecutionEngine {
     return {
       agentContext: scopedAgentContext,
       runtimeAgentContext,
+      userMessageAttachments,
     };
+  }
+
+  async _resolveStoppedResumeAttachments({ contextBuilder = null, payload = {} } = {}) {
+    if (!contextBuilder) return [];
+    return resolveAttachments({
+      attachmentService: contextBuilder.attachmentService,
+      runtimeBasePath: typeof contextBuilder._resolveRuntimeBasePath === "function"
+        ? contextBuilder._resolveRuntimeBasePath()
+        : "",
+      effectiveConfig: typeof contextBuilder._getEffectiveConfig === "function"
+        ? contextBuilder._getEffectiveConfig()
+        : {},
+      userMessageAttachments: Array.isArray(payload?.userMessageAttachments)
+        ? payload.userMessageAttachments
+        : [],
+      userId: String(payload?.userId || "").trim(),
+      sessionId: String(payload?.sessionId || "").trim(),
+    });
   }
 
   async _resolveExistingUserMessageAttachments({

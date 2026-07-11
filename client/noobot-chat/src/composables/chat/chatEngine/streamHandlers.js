@@ -29,6 +29,7 @@ import {
   resolveConnectorStatusPayload,
 } from "../interactionPayload";
 import { BackendChannelState } from "../sessionRunStateMachine";
+import { mergeAttachments } from "../../infra/dialogProcessChain";
 
 function markFirstStreamEvent(botMessage) {
   if (!botMessage) return;
@@ -146,6 +147,33 @@ export function handleAttachmentsStreamEvent({
   if (!getMessageTurnScopeId(botMessage)) return;
   mergeAssistantAttachments(botMessage, data?.attachments || []);
   scrollOnFirstResponseOnce();
+}
+
+export function handleAttachmentParsedStreamEvent({
+  data,
+  activeSession,
+  makeViewMessage,
+}) {
+  const incoming = Array.isArray(data?.attachments) ? data.attachments : [];
+  if (!incoming.length || !activeSession?.value) return;
+  const normalized = typeof makeViewMessage === "function"
+    ? makeViewMessage({ attachments: incoming })?.attachments || incoming
+    : incoming;
+  const messages = Array.isArray(activeSession.value.messages)
+    ? activeSession.value.messages
+    : [];
+  for (const message of messages) {
+    if (message?.role !== "user" || !Array.isArray(message?.attachments)) continue;
+    const matching = normalized.filter((attachment) => {
+      const attachmentId = normalizeTrimmedString(attachment?.attachmentId || attachment?.id);
+      return attachmentId && message.attachments.some((existing) =>
+        normalizeTrimmedString(existing?.attachmentId || existing?.id) === attachmentId
+      );
+    });
+    if (matching.length) {
+      message.attachments = mergeAttachments(message.attachments, matching);
+    }
+  }
 }
 
 export function handleInteractionRequestStreamEvent({
@@ -282,6 +310,10 @@ export function handleBasicStreamEvent(event, context = {}) {
   }
   if (event === StreamEventEnum.ATTACHMENTS) {
     handleAttachmentsStreamEvent(context);
+    return true;
+  }
+  if (event === StreamEventEnum.ATTACHMENT_PARSED) {
+    handleAttachmentParsedStreamEvent(context);
     return true;
   }
   return false;

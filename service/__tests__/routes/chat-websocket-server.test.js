@@ -817,11 +817,11 @@ test("chat-websocket-server: streaming=false 仍推系统事件且不推 delta",
   }
 });
 
-test("chat-websocket-server: attachment and delta events keep request turnScopeId", async () => {
+test("chat-websocket-server: parsed attachment updates and delta events keep request turnScopeId", async () => {
   const server = await startServerWithWs({
     runSession: async ({ eventListener }) => {
       eventListener?.onEvent?.({
-        event: "attachments_saved",
+        event: "attachment_parsed",
         data: {
           dialogProcessId: "dp-attachments",
           sessionId: "sub-session-from-parser",
@@ -865,7 +865,7 @@ test("chat-websocket-server: attachment and delta events keep request turnScopeI
       },
     });
 
-    const attachmentsEvent = events.find((item) => item?.event === "attachments");
+    const attachmentsEvent = events.find((item) => item?.event === "attachment_parsed");
     assert.equal(attachmentsEvent?.data?.sessionId, "s1");
     assert.equal(attachmentsEvent?.data?.turnScopeId, "turn-parent");
     assert.deepEqual(attachmentsEvent?.data?.attachments, [{ id: "att-1", name: "a.txt" }]);

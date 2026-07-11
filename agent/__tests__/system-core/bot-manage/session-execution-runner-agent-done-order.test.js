@@ -43,14 +43,18 @@ function createRunner({
     initializeRunSessionRuntime: async () => ({
       usedSessionId: "session-used",
       dialogProcessId: "dialog-1",
-      isContinue: false,
+      sessionLoadState: "created",
       userConfig: {},
       currentSessionModelAlias: "",
       executionStartIndex: 0,
       runtimeEventListener: eventListener,
     }),
     resolveScenarioRunConfig: (runConfig) => runConfig,
-    prepareRunConfig: ({ runConfig: inputRunConfig }) => ({ ...inputRunConfig, ...runConfig }),
+    prepareRunConfig: ({ runConfig: inputRunConfig }) => ({
+      turnScopeId: inputRunConfig?.turnScopeId || runConfig?.turnScopeId || "turn-default",
+      ...inputRunConfig,
+      ...runConfig,
+    }),
     prepareAgentTurnExecution: prepareAgentTurnExecution || (async () => ({
       agentContext: {
         execution: {
@@ -194,7 +198,11 @@ test("runSession emits resume-send lifecycle sequence", async () => {
   const runner = createRunner({
     callOrder,
     eventListener,
-    runConfig: { resumeFromStoppedSnapshot: true },
+    runConfig: {
+      resumeFromStoppedSnapshot: true,
+      resumeDialogProcessId: "dialog-stopped",
+      resumeTurnScopeId: "turn-stopped",
+    },
     finalizeRunSession: async ({ lifecycle }) => {
       lifecycle.transition(AGENT_LIFECYCLE_STATE.PERSISTING);
       lifecycle.transition(AGENT_LIFECYCLE_STATE.MEMORY);

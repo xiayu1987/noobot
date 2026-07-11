@@ -96,6 +96,31 @@ test("resolveAttachments should call ingest when attachments are raw", async () 
   assert.deepEqual(result, [{ attachmentId: "att-ingested" }]);
 });
 
+test("resolveAttachments ingests mixed canonical and raw attachments together", async () => {
+  let ingestPayload = null;
+  const attachmentService = {
+    async ingest(payload) {
+      ingestPayload = payload;
+      return [{ attachmentId: "canonicalized", sessionId: payload.sessionId, path: "/tmp/new.txt" }];
+    },
+  };
+  const source = [
+    { attachmentId: "existing", sessionId: "s1", path: "/tmp/existing.txt" },
+    { name: "new.txt", type: "text/plain" },
+  ];
+
+  const result = await resolveAttachments({
+    attachmentService,
+    runtimeBasePath: "/tmp/runtime",
+    userMessageAttachments: source,
+    userId: "u1",
+    sessionId: "s1",
+  });
+
+  assert.deepEqual(ingestPayload.attachments, source);
+  assert.equal(result[0].attachmentId, "canonicalized");
+});
+
 test("resolveAttachments reads only userMessageAttachments", async () => {
   let receivedPayload = null;
   const result = await resolveAttachments({

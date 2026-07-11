@@ -774,6 +774,8 @@ export function registerChatWebSocketServer(
           attachments = [],
           config = {},
           turnScopeId = "",
+          idempotencyKey = "",
+          expectedVersion = undefined,
         } = payload || {};
         currentTurnScopeId =
           String(turnScopeId || config?.turnScopeId || "").trim() ||
@@ -808,6 +810,8 @@ export function registerChatWebSocketServer(
         const normalizedRunConfig = {
           ...normalizeRunConfig(config),
           turnScopeId: String(turnScopeId || config?.turnScopeId || "").trim(),
+          idempotencyKey: String(idempotencyKey || config?.idempotencyKey || turnScopeId || config?.turnScopeId || "").trim(),
+          expectedVersion,
         };
         if (isContinueAction) {
           const resumeDialogProcessId = String(config?.resumeDialogProcessId || "").trim();
@@ -981,6 +985,21 @@ export function registerChatWebSocketServer(
               });
               return;
             }
+            if (eventName === "attachment_parsed") {
+              const parentOwnedData = childRunEvent
+                ? parentOwnsChildRunEventData(eventData, {
+                    rootSessionId: sessionId,
+                    parentDialogProcessId,
+                  })
+                : eventData;
+              sendEvent("attachment_parsed", {
+                ...parentOwnedData,
+                sessionId: String(sessionId || ""),
+                turnScopeId: currentRunMeta?.turnScopeId || currentTurnScopeId || "",
+                attachments: Array.isArray(eventData?.attachments) ? eventData.attachments : [],
+              });
+              return;
+            }
             if (
               eventName === "attachments_saved" ||
               eventName === "model_generated_attachments_saved"
@@ -1148,6 +1167,11 @@ export function registerChatWebSocketServer(
         if (!runMessageStarted) {
           sendEvent("error", {
             error: error?.message || translateText("ws.unknownError", currentLocale),
+            status: Number(error?.statusCode || error?.status || 0) || undefined,
+            errorCode: String(error?.errorCode || error?.code || "").trim() || undefined,
+            currentVersion: error?.currentVersion,
+            sessionId: currentRunMeta?.sessionId || "",
+            turnScopeId: currentRunMeta?.turnScopeId || currentTurnScopeId || "",
           });
           webSocket.close(1008, "invalid request");
           return;
@@ -1280,6 +1304,9 @@ export function registerChatWebSocketServer(
         }
         sendEvent("error", {
           error: errorMessage,
+          status: Number(error?.statusCode || error?.status || 0) || undefined,
+          errorCode: String(error?.errorCode || error?.code || "").trim() || undefined,
+          currentVersion: error?.currentVersion,
           sessionId: currentRunMeta?.sessionId || "",
           dialogProcessId: currentRunMeta?.dialogProcessId || "",
           turnScopeId: currentRunMeta?.turnScopeId || currentTurnScopeId || "",

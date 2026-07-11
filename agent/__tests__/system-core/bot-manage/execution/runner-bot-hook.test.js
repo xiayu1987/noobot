@@ -27,7 +27,7 @@ function createRunner({
   initializeRunSessionRuntime = async ({ eventListener = null } = {}) => ({
     usedSessionId: "s1",
     dialogProcessId: "dp1",
-    isContinue: false,
+    sessionLoadState: "created",
     userConfig: {},
     currentSessionModelAlias: "",
     executionStartIndex: 0,
@@ -36,8 +36,11 @@ function createRunner({
   resolveScenarioRunConfig = (runConfig = {}) => runConfig,
   prepareRunConfig = (payload = {}) => ({
     ...(payload?.runConfig || {}),
+    turnScopeId: payload?.runConfig?.turnScopeId || "turn-default",
     botHookManager,
   }),
+  prepareTurnInput = null,
+  commitSessionTurn = null,
   stampReusedUserTurnDialogProcessId = async () => {},
 } = {}) {
   return new SessionExecutionRunner({
@@ -50,8 +53,10 @@ function createRunner({
     initializeRunSessionRuntime,
     resolveScenarioRunConfig,
     prepareRunConfig,
+    prepareTurnInput,
     prepareAgentTurnExecution,
     appendSessionTurn: async () => {},
+    commitSessionTurn,
     stampReusedUserTurnDialogProcessId,
     finalizeRunSession: async () => ({ answer: "ok" }),
     upsertParentAsyncTask: () => {},
@@ -178,6 +183,87 @@ test("SessionExecutionRunner merges top-level turnScopeId before context buildin
   assert.equal(appendedTurnScopeId, "client-turn:top-level");
 });
 
+test("SessionExecutionRunner commits a normal send for a new turn in an existing session", async () => {
+  let committedPayload = null;
+  let beforeRunContext = null;
+  const botHookManager = createBotHookManager();
+  botHookManager.on(BOT_HOOK_POINTS.BEFORE_SESSION_RUN, (context = {}) => {
+    beforeRunContext = context;
+  });
+  const runner = createRunner({
+    botHookManager,
+    initializeRunSessionRuntime: async ({ eventListener = null } = {}) => ({
+      usedSessionId: "s1",
+      dialogProcessId: "dp-next",
+      sessionLoadState: "loaded",
+      userConfig: {},
+      currentSessionModelAlias: "",
+      executionStartIndex: 0,
+      runtimeEventListener: eventListener,
+    }),
+    commitSessionTurn: async (payload = {}) => {
+      committedPayload = payload;
+      return { attachments: [], version: 2 };
+    },
+  });
+
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "normal next message",
+    runConfig: { turnScopeId: "turn-next" },
+  });
+
+  assert.equal(committedPayload?.action, "send");
+  assert.equal(committedPayload?.resumeDialogProcessId, undefined);
+  assert.equal(committedPayload?.resumeTurnScopeId, undefined);
+  assert.equal(beforeRunContext?.sessionLoadState, "loaded");
+  assert.equal(beforeRunContext?.isContinue, false);
+});
+
+test("SessionExecutionRunner commits continue only for a stopped snapshot resume", async () => {
+  let committedPayload = null;
+  let beforeRunContext = null;
+  const botHookManager = createBotHookManager();
+  botHookManager.on(BOT_HOOK_POINTS.BEFORE_SESSION_RUN, (context = {}) => {
+    beforeRunContext = context;
+  });
+  const runner = createRunner({
+    botHookManager,
+    initializeRunSessionRuntime: async ({ eventListener = null } = {}) => ({
+      usedSessionId: "s1",
+      dialogProcessId: "dp-resumed",
+      sessionLoadState: "loaded",
+      userConfig: {},
+      currentSessionModelAlias: "",
+      executionStartIndex: 0,
+      runtimeEventListener: eventListener,
+    }),
+    commitSessionTurn: async (payload = {}) => {
+      committedPayload = payload;
+      return { attachments: [], version: 2 };
+    },
+  });
+
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "resume stopped turn",
+    runConfig: {
+      turnScopeId: "turn-resumed",
+      resumeFromStoppedSnapshot: true,
+      resumeDialogProcessId: "dp-stopped",
+      resumeTurnScopeId: "turn-stopped",
+    },
+  });
+
+  assert.equal(committedPayload?.action, "continue");
+  assert.equal(committedPayload?.resumeDialogProcessId, "dp-stopped");
+  assert.equal(committedPayload?.resumeTurnScopeId, "turn-stopped");
+  assert.equal(beforeRunContext?.sessionLoadState, "loaded");
+  assert.equal(beforeRunContext?.isContinue, true);
+});
+
 test("SessionExecutionRunner stamps reused user with prepared attachments after context building", async () => {
   const calls = [];
   let capturedBuildContextPayload = null;
@@ -185,7 +271,7 @@ test("SessionExecutionRunner stamps reused user with prepared attachments after 
     initializeRunSessionRuntime: async ({ eventListener = null } = {}) => ({
       usedSessionId: "s1",
       dialogProcessId: "dp-new",
-      isContinue: true,
+      sessionLoadState: "loaded",
       userConfig: {},
       currentSessionModelAlias: "",
       executionStartIndex: 0,
@@ -194,6 +280,17 @@ test("SessionExecutionRunner stamps reused user with prepared attachments after 
     stampReusedUserTurnDialogProcessId: async (payload = {}) => {
       calls.push({ type: "stamp", payload });
     },
+    prepareTurnInput: async () => ({
+      userMessageAttachments: [
+        {
+          attachmentId: "rich-att",
+          sessionId: "s1",
+          name: "doc.docx",
+          path: "/workspace/doc.docx",
+          parsedResult: { attachmentId: "parsed-md" },
+        },
+      ],
+    }),
     prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
       calls.push({ type: "prepare" });
       capturedBuildContextPayload = buildContextPayload;
@@ -227,8 +324,8 @@ test("SessionExecutionRunner stamps reused user with prepared attachments after 
     },
   });
 
-  assert.deepEqual(calls.map((item) => item.type), ["prepare", "stamp"]);
-  assert.deepEqual(calls[1].payload, {
+  assert.deepEqual(calls.map((item) => item.type), ["stamp", "prepare"]);
+  assert.deepEqual(calls[0].payload, {
     userId: "u1",
     sessionId: "s1",
     parentSessionId: "",
@@ -237,6 +334,7 @@ test("SessionExecutionRunner stamps reused user with prepared attachments after 
     attachments: [
       {
         attachmentId: "rich-att",
+        sessionId: "s1",
         name: "doc.docx",
         path: "/workspace/doc.docx",
         parsedResult: { attachmentId: "parsed-md" },
@@ -252,7 +350,7 @@ test("SessionExecutionRunner stamps reused user with generated dialogProcessId a
     initializeRunSessionRuntime: async ({ eventListener = null } = {}) => ({
       usedSessionId: "s1",
       dialogProcessId: "dp-new",
-      isContinue: true,
+      sessionLoadState: "loaded",
       userConfig: {},
       currentSessionModelAlias: "",
       executionStartIndex: 0,
@@ -369,7 +467,7 @@ test("SessionExecutionRunner does not let currentSessionModelAlias override sele
     initializeRunSessionRuntime: async ({ eventListener = null } = {}) => ({
       usedSessionId: "s1",
       dialogProcessId: "dp1",
-      isContinue: false,
+      sessionLoadState: "created",
       userConfig: {},
       currentSessionModelAlias: "history-model",
       executionStartIndex: 0,
@@ -407,7 +505,7 @@ test("SessionExecutionRunner restores currentSessionModelAlias when selectedMode
     initializeRunSessionRuntime: async ({ eventListener = null } = {}) => ({
       usedSessionId: "s1",
       dialogProcessId: "dp1",
-      isContinue: true,
+      sessionLoadState: "loaded",
       userConfig: {},
       currentSessionModelAlias: "history-model",
       executionStartIndex: 0,
@@ -452,4 +550,3 @@ test("SessionExecutionRunner preserves provided thinkingStartedAt", async () => 
 
   assert.equal(capturedFinalizePayload?.thinkingStartedAt, providedThinkingStartedAt);
 });
-

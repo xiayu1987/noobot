@@ -118,7 +118,12 @@ describe("monotonicMessageActions stop-window gates", () => {
       .mockResolvedValueOnce({
         ok: false,
         status: 409,
-        json: async () => ({ ok: false, error: "session version conflict", currentVersion: 2 }),
+        json: async () => ({
+          ok: false,
+          error: "session version conflict",
+          errorCode: "SESSION_VERSION_CONFLICT",
+          currentVersion: 2,
+        }),
       })
       .mockResolvedValueOnce({
         ok: true,

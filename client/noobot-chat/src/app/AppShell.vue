@@ -183,7 +183,6 @@ const {
   pendingInteractionRequest,
   interactionSubmitting,
   submitInteractionResponse,
-  onUploadChange,
   appendUploads,
   clearUploads,
   removeUpload,
@@ -529,7 +528,6 @@ const drawerPanels = computed(() =>
       @interaction-confirm="handleInteractionConfirm"
       @interaction-cancel="handleInteractionCancel"
       @update:input="input = $event"
-      @upload-change="onUploadChange"
       @append-uploads="appendUploads"
       @remove-upload="removeUpload"
       @update:allow-user-interaction="onAllowUserInteractionUpdate"

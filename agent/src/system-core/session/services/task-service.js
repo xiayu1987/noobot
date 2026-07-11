@@ -16,6 +16,13 @@ export class TaskService {
     this.now = now;
   }
 
+  async _withSessionMutation(userId, sessionId, parentSessionId, operation) {
+    if (typeof this.sessionRepo?.withSessionMutation === "function") {
+      return this.sessionRepo.withSessionMutation(userId, sessionId, parentSessionId, operation);
+    }
+    return operation();
+  }
+
   async startSkillTask({
     userId,
     sessionId,
@@ -24,6 +31,7 @@ export class TaskService {
     meta = {},
     parentSessionId = "",
   }) {
+    return this._withSessionMutation(userId, sessionId, parentSessionId, async () => {
     const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
       userId,
       sessionId,
@@ -81,6 +89,7 @@ export class TaskService {
     }
     await this.sessionRepo.save(userId, session, resolvedParentSessionId);
     return task;
+    });
   }
 
   async finishSkillTask({
@@ -90,6 +99,7 @@ export class TaskService {
     result = "",
     parentSessionId = "",
   }) {
+    return this._withSessionMutation(userId, sessionId, parentSessionId, async () => {
     const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
       userId,
       sessionId,
@@ -144,6 +154,7 @@ export class TaskService {
     }
     await this.sessionRepo.save(userId, session, resolvedParentSessionId);
     return task;
+    });
   }
 
   async saveCurrentTurnTasks({
@@ -152,6 +163,7 @@ export class TaskService {
     parentSessionId = "",
     currentTurnTasks = [],
   }) {
+    return this._withSessionMutation(userId, sessionId, parentSessionId, async () => {
     const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
       userId,
       sessionId,
@@ -190,5 +202,6 @@ export class TaskService {
     await this.sessionRepo.save(userId, session, resolvedParentSessionId);
 
     return this.taskRepo.getBundle(userId, sessionId, resolvedParentSessionId);
+    });
   }
 }

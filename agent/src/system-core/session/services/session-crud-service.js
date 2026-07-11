@@ -21,6 +21,13 @@ export class SessionCrudService {
     this.now = now;
   }
 
+  async _withSessionMutation(userId, sessionId, parentSessionId, operation) {
+    if (typeof this.sessionRepo?.withSessionMutation === "function") {
+      return this.sessionRepo.withSessionMutation(userId, sessionId, parentSessionId, operation);
+    }
+    return operation();
+  }
+
   async listSessionIds({ userId }) {
     return this.sessionRepo.listSessionIds(userId);
   }
@@ -277,6 +284,7 @@ export class SessionCrudService {
   }
 
   async setSessionModelAlias({ userId, sessionId, modelAlias }) {
+    return this._withSessionMutation(userId, sessionId, "", async () => {
     const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
       userId,
       sessionId,
@@ -292,6 +300,7 @@ export class SessionCrudService {
     session.updatedAt = this.now();
     await this.sessionRepo.save(userId, session, resolvedParentSessionId);
     return session;
+    });
   }
 
 
@@ -302,6 +311,7 @@ export class SessionCrudService {
       error.statusCode = 400;
       throw error;
     }
+    return this._withSessionMutation(userId, sessionId, "", async () => {
     const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
       userId,
       sessionId,
@@ -317,6 +327,7 @@ export class SessionCrudService {
     session.updatedAt = this.now();
     await this.sessionRepo.save(userId, session, resolvedParentSessionId);
     return session;
+    });
   }
 
   async getRootSessionSelectedConnectors({ userId, sessionId }) {
@@ -334,6 +345,7 @@ export class SessionCrudService {
       ? await this.sessionTreeService.getRootSessionId({ userId, sessionId })
       : String(sessionId || "").trim();
     if (!rootSessionId) return normalizeSelectedConnectors({});
+    return this._withSessionMutation(userId, rootSessionId, "", async () => {
     const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
       userId,
       rootSessionId,
@@ -349,5 +361,6 @@ export class SessionCrudService {
     session.updatedAt = this.now();
     await this.sessionRepo.save(userId, session, resolvedParentSessionId);
     return session.selectedConnectors;
+    });
   }
 }

@@ -46,7 +46,7 @@ export class SessionExecutionInitializer {
       sessionId: usedSessionId,
       parentSessionId,
     });
-    const isContinue = Boolean(sessionBundle?.exists);
+    const sessionLoadState = sessionBundle?.exists ? "loaded" : "created";
     const userConfig = await this.configService.loadUserConfig(basePath);
 
     await this.session.createSession({
@@ -73,20 +73,20 @@ export class SessionExecutionInitializer {
     });
 
     emitEvent(runtimeEventListener, "session_starting", {
-      mode: isContinue ? "continue" : "new",
-      ...(isContinue ? { sessionId: usedSessionId } : {}),
+      mode: sessionLoadState === "loaded" ? "existing_session" : "new_session",
+      ...(sessionLoadState === "loaded" ? { sessionId: usedSessionId } : {}),
     });
     emitEvent(runtimeEventListener, "workspace_ready", { userId });
     emitEvent(
       runtimeEventListener,
-      isContinue ? "session_loaded" : "session_created",
+      sessionLoadState === "loaded" ? "session_loaded" : "session_created",
       { sessionId: usedSessionId },
     );
 
     return {
       usedSessionId,
       dialogProcessId,
-      isContinue,
+      sessionLoadState,
       userConfig,
       currentSessionModelAlias: String(sessionBundle?.session?.modelAlias || "").trim(),
       executionStartIndex,

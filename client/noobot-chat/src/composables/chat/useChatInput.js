@@ -11,9 +11,14 @@ export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
   const chatStore = useChatStore();
   const { input, uploadFiles } = storeToRefs(chatStore);
 
+  function createDraftAttachmentId() {
+    return globalThis?.crypto?.randomUUID?.() || `draft-attachment:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
+  }
+
   function createUploadEntry(rawFile) {
     const mimeType = rawFile.type || "application/octet-stream";
     return {
+      draftAttachmentId: createDraftAttachmentId(),
       raw: rawFile,
       name: rawFile.name,
       mimeType,
@@ -32,39 +37,25 @@ export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
     ].join("|");
   }
 
-  function dedupeUploadEntries(files = []) {
-    const out = [];
-    const seen = new Set();
-    for (const fileItem of Array.isArray(files) ? files : []) {
-      const key = getUploadEntryKey(fileItem);
-      if (key && seen.has(key)) continue;
-      if (key) seen.add(key);
-      out.push(fileItem);
-    }
-    return out;
-  }
-
   function revokePreviewUrls(files = []) {
     for (const uploadFile of Array.isArray(files) ? files : []) {
       if (uploadFile.previewUrl) URL.revokeObjectURL(uploadFile.previewUrl);
     }
   }
 
-  function onUploadChange(file, fileList) {
-    revokePreviewUrls(uploadFiles.value);
-    const nextFileList = Array.isArray(fileList) ? fileList : [file].filter(Boolean);
-    uploadFiles.value = dedupeUploadEntries(nextFileList)
-      .map((fileItem) => resolveRawAttachmentFile(fileItem))
-      .filter(Boolean)
-      .map((rawFile) => createUploadEntry(rawFile));
-  }
-
   function appendUploads(rawFiles = []) {
-    const nextFiles = (Array.isArray(rawFiles) ? rawFiles : [])
-      .filter(Boolean)
-      .map((rawFile) => createUploadEntry(rawFile));
+    const seen = new Set(uploadFiles.value.map((fileItem) => getUploadEntryKey(fileItem)));
+    const nextFiles = [];
+    for (const fileItem of Array.isArray(rawFiles) ? rawFiles : []) {
+      const rawFile = resolveRawAttachmentFile(fileItem);
+      if (!rawFile) continue;
+      const key = getUploadEntryKey(rawFile);
+      if (key && seen.has(key)) continue;
+      if (key) seen.add(key);
+      nextFiles.push(createUploadEntry(rawFile));
+    }
     if (!nextFiles.length) return;
-    uploadFiles.value = dedupeUploadEntries([...uploadFiles.value, ...nextFiles]);
+    uploadFiles.value = [...uploadFiles.value, ...nextFiles];
   }
 
   function clearUploads() {
@@ -73,19 +64,18 @@ export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
     clearUploadSelection();
   }
 
-  function removeUpload(uploadIndex) {
-    const index = Number(uploadIndex);
-    if (!Number.isInteger(index) || index < 0 || index >= uploadFiles.value.length) return;
-    const nextUploadFiles = [...uploadFiles.value];
-    const [removedFile] = nextUploadFiles.splice(index, 1);
+  function removeUpload(draftAttachmentId = "") {
+    const normalizedId = String(draftAttachmentId || "").trim();
+    if (!normalizedId) return;
+    const removedFile = uploadFiles.value.find((fileItem) => fileItem?.draftAttachmentId === normalizedId);
+    if (!removedFile) return;
     revokePreviewUrls([removedFile]);
-    uploadFiles.value = nextUploadFiles;
+    uploadFiles.value = uploadFiles.value.filter((fileItem) => fileItem?.draftAttachmentId !== normalizedId);
   }
 
   return {
     input,
     uploadFiles,
-    onUploadChange,
     appendUploads,
     clearUploads,
     removeUpload,

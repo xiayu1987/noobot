@@ -30,6 +30,7 @@ import { assertAndResolveUserWorkspaceFilePath } from "../core/check-tool-input.
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import { emitEvent } from "../../event/index.js";
 import {
   ARTIFACT_GENERATION_SOURCE,
   TOOL_ATTACHMENT_SOURCE,
@@ -524,6 +525,12 @@ async function backwriteParsedResultToSourceAttachment({
       sourceAttachmentPath: String(sourceAttachmentMeta?.path || "").trim(),
     });
     updateRuntimeUserMessageAttachment(runtime, sourceAttachmentId, updatedSourceAttachment || {});
+    if (updatedSourceAttachment) {
+      emitEvent(runtime?.eventListener || null, "attachment_parsed", {
+        dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
+        attachments: [updatedSourceAttachment],
+      });
+    }
     return updatedSourceAttachment;
   } catch {
     return null;

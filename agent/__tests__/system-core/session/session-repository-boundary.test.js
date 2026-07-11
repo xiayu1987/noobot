@@ -383,6 +383,34 @@ test("session summaries should be maintained and rebuilt for list API", async ()
   });
 });
 
+test("concurrent saves for different sessions preserve every sessions summary entry", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u1";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    const runtime = createSessionServices({ workspaceRoot });
+    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "A" });
+    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "B" });
+    await runtime.sessionCrudService.ensureSession(userId, "A", "");
+    await runtime.sessionCrudService.ensureSession(userId, "B", "");
+    const [sessionA, sessionB] = await Promise.all([
+      runtime.repositories.sessionRepository.findById(userId, "A", ""),
+      runtime.repositories.sessionRepository.findById(userId, "B", ""),
+    ]);
+    sessionA.messages = [{ role: "user", content: "updated A" }];
+    sessionB.messages = [{ role: "user", content: "updated B" }];
+
+    await Promise.all([
+      runtime.repositories.sessionRepository.save(userId, sessionA, ""),
+      runtime.repositories.sessionRepository.save(userId, sessionB, ""),
+    ]);
+
+    const summary = await runtime.repositories.sessionRepository.readSessionsSummary(userId);
+    assert.deepEqual(summary.sessions.map((item) => item.sessionId).sort(), ["A", "B"]);
+    assert.equal(summary.sessions.find((item) => item.sessionId === "A").title, "updated A");
+    assert.equal(summary.sessions.find((item) => item.sessionId === "B").title, "updated B");
+  });
+});
+
 test("renameSession should persist custom title to full, display summary and sessions summary", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";

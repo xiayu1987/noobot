@@ -109,7 +109,6 @@ const emit = defineEmits([
   "update:selected-plugins",
   "update:stream-output",
   "update:user-id",
-  "upload-change",
   "interaction-confirm",
   "interaction-cancel",
   "send",
@@ -294,7 +293,6 @@ defineExpose({
           :selected-plugins="selectedPlugins"
           :interaction-active="Boolean(pendingInteractionRequest)"
           @update:model-value="emit('update:input', $event)"
-          @upload-change="(file, fileList) => emit('upload-change', file, fileList)"
           @append-uploads="emit('append-uploads', $event)"
           @remove-upload="emit('remove-upload', $event)"
           @update:allow-user-interaction="emit('update:allow-user-interaction', $event)"

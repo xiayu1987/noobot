@@ -5,6 +5,7 @@
  */
 import {
   BackendChannelState,
+  BackendTerminalStates,
   FrontendTerminalStates,
   FrontendRunState,
   SESSION_RUN_EVENT,
@@ -138,11 +139,33 @@ export function isNotLeavingTerminal({ current = {}, event = {}, startsNewTurn =
   if (startsNewTurn) return true;
   const currentState = normalizeState(current?.state);
   const nextState = normalizeState(event.state);
+  if (isNewerBackendTerminalFactForSameRun({ current, event })) return true;
   if (!FrontendTerminalStates.includes(nextState)) return false;
   if ([BackendChannelState.ERROR, FrontendRunState.USER_STOP_COMPLETED, FrontendRunState.CANCELLED].includes(currentState)) {
     return nextState === currentState;
   }
   return true;
+}
+
+export function isNewerBackendTerminalFactForSameRun({ current = {}, event = {} } = {}) {
+  const currentBackendState = normalizeState(current?.backendState);
+  const eventBackendState = normalizeState(event?.backendState);
+  if (!BackendTerminalStates.includes(currentBackendState)) return false;
+  if (!BackendTerminalStates.includes(eventBackendState)) return false;
+  const currentSeq = Number(current?.seq || 0);
+  const eventSeq = Number(event?.seq || 0);
+  if (!(currentSeq > 0 && eventSeq > currentSeq)) return false;
+  const currentSessionId = trim(current?.sessionId);
+  const eventSessionId = trim(event?.sessionId);
+  const currentDialogProcessId = trim(current?.dialogProcessId);
+  const eventDialogProcessId = trim(event?.dialogProcessId);
+  const currentTurnScopeId = trim(current?.turnScopeId);
+  const eventTurnScopeId = trim(event?.turnScopeId);
+  return Boolean(
+    currentSessionId && eventSessionId && currentSessionId === eventSessionId &&
+    currentDialogProcessId && eventDialogProcessId && currentDialogProcessId === eventDialogProcessId &&
+    currentTurnScopeId && eventTurnScopeId && currentTurnScopeId === eventTurnScopeId
+  );
 }
 
 export function isNotStaleSeqRegression({ currentPriority = 0, nextPriority = 0, staleSeq = false } = {}) {
@@ -164,6 +187,7 @@ function isBackendRunningFeedbackForFrontendRequestState(current = {}, event = {
 }
 
 export function isPriorityForwardOrNewTurn({ current = {}, event = {}, currentPriority = 0, nextPriority = 0, startsNewTurn = false } = {}) {
+  if (isNewerBackendTerminalFactForSameRun({ current, event })) return true;
   if (isBackendRunningFeedbackForFrontendRequestState(current, event)) return true;
   return startsNewTurn || nextPriority >= currentPriority;
 }

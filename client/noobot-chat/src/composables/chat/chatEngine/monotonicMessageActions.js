@@ -255,20 +255,21 @@ export function createMonotonicMessageActions({
       );
       const anchor = buildMessageAnchor(userTargetMessage);
       if (!Object.keys(anchor).length) return false;
+      const deleteIdempotencyKey = `delete:${sessionId}:${anchor.turnScopeId || anchor.dialogProcessId || anchor.id || "anchor"}`;
       const sessionVersionManager = createSessionVersionManager({
         activeSession,
         fetchSessionDetail,
         applySessionDetail,
       });
       const mutationResult = await sessionVersionManager.runVersionedMutation({
-        mutate: async ({ expectedVersion, attempt }) => {
+        mutate: async ({ expectedVersion }) => {
           const result = await deleteSessionMessagesFromApi({
             userId: userId?.value || userId,
             sessionId,
             parentSessionId: normalizeTrimmedString(activeSession.value?.parentSessionId),
             anchor,
             expectedVersion,
-            idempotencyKey: attempt > 1 ? `${anchor.turnScopeId || "delete"}:retry-version` : "",
+            idempotencyKey: deleteIdempotencyKey,
           }, { fetcher: authFetch });
           const payload = typeof result?.json === "function" ? await result.json() : result;
           return { result, payload };

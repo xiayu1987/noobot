@@ -453,3 +453,190 @@ test("buildContextMessages rebuilds metadata beside every legacy stopped/resend 
     ["last-turn-only"],
   ]);
 });
+
+test("buildContextMessages discards restored user_meta projections before rebuilding", () => {
+  const messages = buildContextMessages(
+    {
+      execution: {
+        controllers: {
+          runtime: {
+            resumeFromStoppedSnapshot: true,
+            userId: "admin",
+            userMessageAttachments: [],
+            systemRuntime: {
+              sessionId: "s1",
+              dialogProcessId: "dialog-current",
+              turnScopeId: "turn-current",
+            },
+            resumedStoppedSnapshotMessageBlocks: {
+              incremental: [
+                {
+                  role: "user",
+                  content: "hello",
+                  frontendUserMessage: true,
+                  dialogProcessId: "dialog-current",
+                  turnScopeId: "turn-current",
+                },
+                {
+                  role: "user",
+                  content: '[用户元信息]\n{"dialogProcessId":"dialog-current"}\n[/用户元信息]',
+                  additional_kwargs: { noobotInternalMessageType: "user_meta" },
+                },
+                {
+                  role: "user",
+                  content: '[用户元信息]\n{}\n[/用户元信息]',
+                },
+              ],
+            },
+          },
+        },
+      },
+      payload: { messages: { system: [], history: [] } },
+    },
+    { currentUserMessage: "" },
+  );
+
+  assert.equal(messages.filter((message) => message?.content === "hello").length, 1);
+  assert.equal(
+    messages.filter((message) => String(message?.content || "").startsWith("[用户元信息]")).length,
+    1,
+  );
+});
+
+test("buildContextMessages restores stopped source attachments by exact turn identity", () => {
+  const messages = buildContextMessages(
+    {
+      execution: {
+        controllers: {
+          runtime: {
+            resumeFromStoppedSnapshot: true,
+            userId: "admin",
+            userMessageAttachments: [{ attachmentId: "attachment-b", name: "continue.docx" }],
+            systemRuntime: {
+              sessionId: "s1",
+              dialogProcessId: "dialog-continue",
+              turnScopeId: "turn-continue",
+            },
+            resumedStoppedSnapshotMessageBlocks: {
+              incremental: [
+                {
+                  type: "human",
+                  content: "parse attachment",
+                  additional_kwargs: {
+                    dialogProcessId: "dialog-stopped",
+                    turnScopeId: "turn-stopped",
+                    frontendUserMessage: true,
+                  },
+                },
+                {
+                  type: "human",
+                  content: '[用户元信息]\n{"userName":"admin","sessionId":"s1","parentSessionId":"parent-1","dialogProcessId":"dialog-stopped","parentDialogProcessId":"parent-dialog-1","turnScopeId":"turn-stopped","attachments":[{"attachmentId":"attachment-a","name":"stopped.docx"}]}\n[/用户元信息]',
+                  additional_kwargs: {
+                    dialogProcessId: "dialog-stopped",
+                    turnScopeId: "turn-stopped",
+                    noobotInternalMessageType: "user_meta",
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+      payload: { messages: { system: [], history: [] } },
+    },
+    { currentUserMessage: "continue" },
+  );
+
+  const bodies = messages.filter((message) =>
+    ["parse attachment", "continue"].includes(String(message?.content || "")),
+  );
+  assert.equal(bodies.length, 2);
+  const metas = bodies.map((body) => parseUserMeta(messages[messages.indexOf(body) + 1].content));
+  assert.deepEqual(
+    metas.map(({ userName, sessionId, parentSessionId, dialogProcessId, parentDialogProcessId, turnScopeId, attachments }) => ({
+      userName,
+      sessionId,
+      parentSessionId,
+      dialogProcessId,
+      parentDialogProcessId,
+      turnScopeId,
+      attachmentIds: attachments.map((attachment) => attachment.attachmentId),
+    })),
+    [
+      {
+        userName: "admin",
+        sessionId: "s1",
+        parentSessionId: "parent-1",
+        dialogProcessId: "dialog-stopped",
+        parentDialogProcessId: "parent-dialog-1",
+        turnScopeId: "turn-stopped",
+        attachmentIds: ["attachment-a"],
+      },
+      {
+        userName: "admin",
+        sessionId: "s1",
+        parentSessionId: "",
+        dialogProcessId: "dialog-continue",
+        parentDialogProcessId: "",
+        turnScopeId: "turn-continue",
+        attachmentIds: ["attachment-b"],
+      },
+    ],
+  );
+  assert.equal(
+    messages.filter((message) => String(message?.content || "").startsWith("[用户元信息]")).length,
+    2,
+  );
+});
+
+test("buildContextMessages does not project frontend user metadata for internal prompts", () => {
+  const messages = buildContextMessages({
+    execution: {
+      controllers: {
+        runtime: {
+          userId: "admin",
+          userMessageAttachments: [],
+          systemRuntime: { sessionId: "child", dialogProcessId: "dialog-child" },
+        },
+      },
+    },
+    payload: {
+      messages: {
+        system: [],
+        history: [{
+          role: "user",
+          content: "internal task",
+          messageOrigin: "internal",
+          dialogProcessId: "dialog-previous-child",
+          turnScopeId: "internal-turn:1",
+        }],
+      },
+    },
+  });
+  assert.equal(messages.some((message) => message?.content === "internal task"), true);
+  assert.equal(
+    messages.some((message) => String(message?.content || "").startsWith("[用户元信息]")),
+    false,
+  );
+
+  const currentMessages = buildContextMessages(
+    {
+      execution: {
+        controllers: {
+          runtime: {
+            userId: "admin",
+            userMessageAttachments: [],
+            systemRuntime: { sessionId: "child", dialogProcessId: "dialog-child", caller: "bot" },
+          },
+        },
+      },
+      payload: { messages: { system: [], history: [] } },
+    },
+    { currentUserMessage: "current internal task" },
+  );
+  assert.equal(currentMessages.some((message) => message?.content === "current internal task"), true);
+  assert.equal(
+    currentMessages.some((message) => String(message?.content || "").startsWith("[用户元信息]")),
+    false,
+  );
+});

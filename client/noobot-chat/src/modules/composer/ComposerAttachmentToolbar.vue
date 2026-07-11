@@ -12,26 +12,36 @@ const props = defineProps({
   uploadFiles: { type: Array, default: () => [] },
 });
 
-const emit = defineEmits(["upload-change", "clear-uploads", "remove-upload"]);
+const emit = defineEmits(["append-uploads", "clear-uploads", "remove-upload"]);
 
-const uploadRef = ref();
+const fileInputRef = ref();
 const { translate } = useLocale();
 const attachmentCount = computed(() => (props.uploadFiles || []).length);
 
-function onUploadChange(file, fileList) {
-  emit("upload-change", file, fileList);
+function openFilePicker() {
+  const input = fileInputRef.value;
+  if (!input) return;
+  input.value = "";
+  input.click();
+}
+
+function onFileSelected(event) {
+  const input = event?.target;
+  const files = Array.from(input?.files || []).filter(Boolean);
+  if (files.length) emit("append-uploads", files);
+  if (input) input.value = "";
 }
 
 function clearUploadSelection() {
-  uploadRef.value?.clearFiles?.();
+  if (fileInputRef.value) fileInputRef.value.value = "";
 }
 
 function onClearUploads() {
   emit("clear-uploads");
 }
 
-function onRemoveUpload(uploadFileIndex) {
-  emit("remove-upload", uploadFileIndex);
+function onRemoveUpload(draftAttachmentId) {
+  emit("remove-upload", draftAttachmentId);
 }
 
 defineExpose({
@@ -41,24 +51,26 @@ defineExpose({
 
 <template>
   <div class="toolbar">
-    <el-upload
-      ref="uploadRef"
-      :auto-upload="false"
-      :show-file-list="false"
-      :on-change="onUploadChange"
+    <input
+      ref="fileInputRef"
+      class="native-file-input"
+      type="file"
       multiple
-      class="upload-btn"
+      @change="onFileSelected"
+    />
+    <el-button
+      size="small"
+      class="poe-upload-btn noobot-action-btn noobot-flat-soft-btn"
+      @click="openFilePicker"
     >
-      <el-button size="small" class="poe-upload-btn noobot-action-btn noobot-flat-soft-btn">
-        <el-icon class="btn-icon"><Paperclip /></el-icon>
-        {{ translate("composer.attachments") }}
-      </el-button>
-    </el-upload>
+      <el-icon class="btn-icon"><Paperclip /></el-icon>
+      {{ translate("composer.attachments") }}
+    </el-button>
     <div class="attachment-tags" v-if="attachmentCount">
       <div
         class="attachment-pill noobot-flat-chip"
-        v-for="(uploadFile, uploadFileIndex) in uploadFiles"
-        :key="`${uploadFile.name}-${uploadFileIndex}`"
+        v-for="uploadFile in uploadFiles"
+        :key="uploadFile.draftAttachmentId"
       >
         <span class="attachment-name" :title="uploadFile.name">{{ uploadFile.name }}</span>
         <button
@@ -66,7 +78,7 @@ defineExpose({
           class="attachment-remove-btn noobot-flat-icon-btn"
           :title="translate('composer.removeAttachment', { name: uploadFile.name || '' })"
           :aria-label="translate('composer.removeAttachment', { name: uploadFile.name || '' })"
-          @click.stop="onRemoveUpload(uploadFileIndex)"
+          @click.stop="onRemoveUpload(uploadFile.draftAttachmentId)"
         >
           <el-icon><Close /></el-icon>
         </button>
@@ -84,6 +96,10 @@ defineExpose({
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.native-file-input {
+  display: none;
 }
 
 .poe-upload-btn {

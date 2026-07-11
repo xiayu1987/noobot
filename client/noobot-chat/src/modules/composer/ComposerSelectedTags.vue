@@ -17,8 +17,8 @@ const props = defineProps({
 const { translate } = useLocale();
 const emit = defineEmits(["remove-upload"]);
 
-function onRemoveUpload(uploadFileIndex) {
-  emit("remove-upload", uploadFileIndex);
+function onRemoveUpload(draftAttachmentId) {
+  emit("remove-upload", draftAttachmentId);
 }
 </script>
 
@@ -48,8 +48,8 @@ function onRemoveUpload(uploadFileIndex) {
       {{ pluginLabel }}
     </span>
     <span
-      v-for="(uploadFile, uploadFileIndex) in uploadFiles"
-      :key="`attachment-${uploadFile.name}-${uploadFileIndex}`"
+      v-for="uploadFile in uploadFiles"
+      :key="uploadFile.draftAttachmentId"
       class="selected-connector-name selected-attachment-name noobot-inline-pill"
       :title="uploadFile.name"
     >
@@ -59,7 +59,7 @@ function onRemoveUpload(uploadFileIndex) {
         class="selected-attachment-remove-btn noobot-flat-icon-btn"
         :title="translate('composer.removeAttachment', { name: uploadFile.name || '' })"
         :aria-label="translate('composer.removeAttachment', { name: uploadFile.name || '' })"
-        @click.stop="onRemoveUpload(uploadFileIndex)"
+        @click.stop="onRemoveUpload(uploadFile.draftAttachmentId)"
       >
         <el-icon><Close /></el-icon>
       </button>
