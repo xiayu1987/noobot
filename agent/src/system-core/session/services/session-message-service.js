@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeMessageEntity } from "../entities/session-entity.js";
+import { createHash } from "node:crypto";
 import {
   buildTurnTerminalCommand,
   isSameTurnStatus,
@@ -48,6 +49,21 @@ function normalizeIncomingAttachmentsForSessionMessage(existingAttachments = [],
   }));
 }
 
+function assertCanonicalAttachments(attachments = [], sessionId = "") {
+  for (const item of Array.isArray(attachments) ? attachments : []) {
+    const attachmentId = String(item?.attachmentId || item?.id || "").trim();
+    const ownerSessionId = String(item?.sessionId || "").trim();
+    const parsed = item?.parsedResult && typeof item.parsedResult === "object" ? item.parsedResult : {};
+    const address = String(item?.path || item?.relativePath || item?.sandboxPath || item?.url || parsed?.path || parsed?.relativePath || "").trim();
+    if (!attachmentId || !ownerSessionId || ownerSessionId !== String(sessionId || "").trim() || !address) {
+      const error = new Error("attachment must be canonical and belong to the current session");
+      error.statusCode = 400;
+      error.errorCode = "INVALID_CANONICAL_ATTACHMENT";
+      throw error;
+    }
+  }
+}
+
 function normalizeAnchorValue(value = "") {
   return String(value || "").trim();
 }
@@ -59,6 +75,43 @@ function resolveTurnScopeId(message = {}) {
 function resolveSessionVersion(session = {}) {
   const version = Number(session?.version ?? session?.revision ?? 0);
   return Number.isFinite(version) ? version : 0;
+}
+
+function createRequestHash(payload = {}) {
+  return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+}
+
+function assertIdempotencyRequestMatches(storedHash = "", requestHash = "") {
+  if (!storedHash || storedHash === requestHash) return;
+  const error = new Error("idempotency key was reused with a different request");
+  error.statusCode = 409;
+  error.errorCode = "IDEMPOTENCY_KEY_REUSED";
+  throw error;
+}
+
+function findMutationReceipt(session = {}, operation = "", idempotencyKey = "") {
+  if (!idempotencyKey) return null;
+  return (Array.isArray(session?.mutationReceipts) ? session.mutationReceipts : []).find((receipt) =>
+    receipt?.operation === operation && receipt?.idempotencyKey === idempotencyKey) || null;
+}
+
+function rememberMutationReceipt(session = {}, receipt = {}) {
+  session.mutationReceipts = [
+    ...(Array.isArray(session.mutationReceipts) ? session.mutationReceipts : []),
+    receipt,
+  ].slice(-100);
+}
+
+function normalizeExpectedVersion(expectedVersion) {
+  if (expectedVersion === null || expectedVersion === undefined || expectedVersion === "") return null;
+  const normalized = Number(expectedVersion);
+  if (!Number.isSafeInteger(normalized) || normalized < 0) {
+    const error = new Error("expectedVersion must be a non-negative safe integer");
+    error.statusCode = 400;
+    error.errorCode = "INVALID_SESSION_VERSION";
+    throw error;
+  }
+  return normalized;
 }
 
 function clearReplacementUserRuntimeState(message = {}) {
@@ -172,6 +225,105 @@ export class SessionMessageService {
     this.sessionRepo = sessionRepo;
     this.sessionCrudService = sessionCrudService;
     this.now = now;
+    // File repositories provide atomic replacement of one artifact, but not a
+    // read/modify/write transaction.  Serialize mutations per logical session
+    // so concurrent websocket deliveries cannot overwrite each other.
+    this._mutationTails = new Map();
+  }
+
+  async _withSessionMutation(userId, sessionId, operation) {
+    const key = `${String(userId || "").trim()}\u0000${String(sessionId || "").trim()}`;
+    const previous = this._mutationTails.get(key) || Promise.resolve();
+    let release;
+    const current = new Promise((resolve) => { release = resolve; });
+    this._mutationTails.set(key, current);
+    await previous.catch(() => {});
+    try {
+      if (typeof this.sessionRepo?.withSessionMutation === "function") {
+        return await this.sessionRepo.withSessionMutation(userId, sessionId, "", operation);
+      }
+      return await operation();
+    } finally {
+      release();
+      if (this._mutationTails.get(key) === current) this._mutationTails.delete(key);
+    }
+  }
+
+  async commitTurn({
+    userId, sessionId, parentSessionId = "", content = "", action = "send",
+    turnScopeId = "", dialogProcessId = "", parentDialogProcessId = "",
+    attachments = [], expectedVersion = null, idempotencyKey = "",
+    resumeDialogProcessId = "", resumeTurnScopeId = "",
+    frontendUserMessage = true,
+  } = {}) {
+    if (!userId || !sessionId) {
+      const error = new Error("userId and sessionId are required"); error.statusCode = 400; throw error;
+    }
+    const normalizedContent = String(content || "").trim();
+    const normalizedTurnScopeId = String(turnScopeId || "").trim();
+    const normalizedAction = String(action || "send").trim().toLowerCase() === "continue" ? "continue" : "send";
+    const normalizedIdempotencyKey = String(idempotencyKey || normalizedTurnScopeId).trim();
+    const normalizedExpectedVersion = normalizeExpectedVersion(expectedVersion);
+    const requestHash = createRequestHash({
+      operation: normalizedAction,
+      content: normalizedContent,
+      turnScopeId: normalizedTurnScopeId,
+      resumeDialogProcessId: String(resumeDialogProcessId || "").trim(),
+      resumeTurnScopeId: String(resumeTurnScopeId || "").trim(),
+      attachmentIds: (Array.isArray(attachments) ? attachments : []).map((item) => String(item?.attachmentId || "").trim()),
+    });
+    if (!normalizedContent || !normalizedTurnScopeId || !normalizedIdempotencyKey) {
+      const error = new Error("content, turnScopeId and idempotencyKey are required"); error.statusCode = 400; throw error;
+    }
+    return this._withSessionMutation(userId, sessionId, async () => {
+      const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(userId, sessionId, parentSessionId);
+      if (this.sessionCrudService) await this.sessionCrudService.ensureSession(userId, sessionId, resolvedParentSessionId);
+      else await this.sessionRepo.ensureSession({ userId, sessionId, parentSessionId: resolvedParentSessionId });
+      const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
+      if (!session) { const error = new Error("session not found"); error.statusCode = 404; throw error; }
+      const messages = Array.isArray(session.messages) ? session.messages : [];
+      const existing = messages.find((item) =>
+        item?.role === "user" && (String(item?.turnScopeId || "") === normalizedTurnScopeId ||
+          String(item?.turnCommit?.idempotencyKey || "") === normalizedIdempotencyKey));
+      if (existing) {
+        assertIdempotencyRequestMatches(existing?.turnCommit?.requestHash, requestHash);
+        return { session, userMessage: existing, attachments: existing.attachments || [], version: resolveSessionVersion(session), deduplicated: true, turnScopeId: normalizedTurnScopeId, dialogProcessId: resolveMessageDialogProcessId(existing), runState: existing?.turnCommit?.runState || "pending_start" };
+      }
+      const currentVersion = resolveSessionVersion(session);
+      if (normalizedExpectedVersion !== null && normalizedExpectedVersion !== currentVersion) {
+        const error = new Error("session version conflict"); error.statusCode = 409; error.errorCode = "SESSION_VERSION_CONFLICT"; error.currentVersion = currentVersion; throw error;
+      }
+      const resumeDialog = String(resumeDialogProcessId || "").trim();
+      const resumeScope = String(resumeTurnScopeId || "").trim();
+      if (normalizedAction === "continue") {
+        const sourceMessage = messages.find((item) => String(item?.turnScopeId || "") === resumeScope && resolveMessageDialogProcessId(item) === resumeDialog);
+        const stopped = (Array.isArray(session.turnStatuses) ? session.turnStatuses : []).find((item) => isSameTurnStatus(item, { turnScopeId: resumeScope, dialogProcessId: resumeDialog }) && item?.status === "user_stopped");
+        if (!resumeDialog || !resumeScope || !sourceMessage || !stopped) {
+          const error = new Error("continue source is not a stopped turn in this session"); error.statusCode = 409; error.errorCode = "INVALID_CONTINUE_SOURCE"; throw error;
+        }
+        const consumed = messages.find((item) => item?.turnCommit?.action === "continue" && item?.turnCommit?.resumeTurnScopeId === resumeScope && item?.turnCommit?.resumeDialogProcessId === resumeDialog);
+        if (consumed) { const error = new Error("stopped turn has already been continued"); error.statusCode = 409; error.errorCode = "CONTINUE_SOURCE_CONSUMED"; throw error; }
+      }
+      const nowValue = this.now();
+      assertCanonicalAttachments(attachments, sessionId);
+      const canonicalAttachments = dedupeAttachments(Array.isArray(attachments) ? attachments : []);
+      const userMessage = normalizeMessageEntity({ role: "user", type: "message", content: normalizedContent,
+        userName: String(userId), sessionId, parentSessionId: resolvedParentSessionId,
+        dialogProcessId: String(dialogProcessId || "").trim(), parentDialogProcessId: String(parentDialogProcessId || "").trim(),
+        turnScopeId: normalizedTurnScopeId,
+        frontendUserMessage: frontendUserMessage === true,
+        messageOrigin: frontendUserMessage === true ? "user" : "internal",
+        attachments: canonicalAttachments,
+        turnCommit: { action: normalizedAction, idempotencyKey: normalizedIdempotencyKey, requestHash, runState: "pending_start", ...(normalizedAction === "continue" ? { resumeDialogProcessId: String(resumeDialogProcessId).trim(), resumeTurnScopeId: String(resumeTurnScopeId).trim() } : {}) }, ts: nowValue,
+      }, () => nowValue);
+      session.messages = [...messages, userMessage];
+      session.version = currentVersion + 1; session.revision = session.version; session.updatedAt = nowValue;
+      if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
+      await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: currentVersion });
+      const savedSession = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId) || session;
+      const savedMessage = (savedSession.messages || []).find((item) => item?.role === "user" && String(item?.turnScopeId || "") === normalizedTurnScopeId) || userMessage;
+      return { session: savedSession, userMessage: savedMessage, attachments: savedMessage.attachments || [], version: resolveSessionVersion(savedSession), deduplicated: false, turnScopeId: normalizedTurnScopeId, dialogProcessId: resolveMessageDialogProcessId(savedMessage), runState: savedMessage?.turnCommit?.runState || "pending_start" };
+    });
   }
 
   async appendTurn({
@@ -209,6 +361,7 @@ export class SessionMessageService {
     turnTimingThinkingStartedAt = thinkingStartedAt,
     turnTimingThinkingFinishedAt = thinkingFinishedAt,
   }) {
+    return this._withSessionMutation(userId, sessionId, async () => {
     const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
       userId,
       sessionId,
@@ -301,6 +454,8 @@ export class SessionMessageService {
     session.updatedAt = this.now();
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
     await this.sessionRepo.save(userId, session, resolvedParentSessionId);
+    return turn;
+    });
   }
 
   async deleteFromMessage({
@@ -318,11 +473,15 @@ export class SessionMessageService {
       throw error;
     }
     const matcher = createMessageAnchorMatcher(anchor);
+    const normalizedExpectedVersion = normalizeExpectedVersion(expectedVersion);
+    const normalizedIdempotencyKey = String(idempotencyKey || "").trim();
+    const requestHash = createRequestHash({ operation: "delete_from", anchor });
     if (!matcher) {
       const error = new Error("message anchor is required");
       error.statusCode = 400;
       throw error;
     }
+    return this._withSessionMutation(userId, sessionId, async () => {
     const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
       userId,
       sessionId,
@@ -338,10 +497,14 @@ export class SessionMessageService {
       error.statusCode = 404;
       throw error;
     }
+    const replay = findMutationReceipt(session, "delete_from", normalizedIdempotencyKey);
+    if (replay) {
+      assertIdempotencyRequestMatches(replay.requestHash, requestHash);
+      return { session, ...replay.result, version: resolveSessionVersion(session), committedVersion: replay.version, idempotencyKey: normalizedIdempotencyKey, deduplicated: true };
+    }
     const currentVersion = resolveSessionVersion(session);
-    if (expectedVersion !== null && expectedVersion !== undefined && expectedVersion !== "") {
-      const normalizedExpectedVersion = Number(expectedVersion);
-      if (!Number.isFinite(normalizedExpectedVersion) || normalizedExpectedVersion !== currentVersion) {
+    if (normalizedExpectedVersion !== null) {
+      if (normalizedExpectedVersion !== currentVersion) {
         const error = new Error("session version conflict");
         error.statusCode = 409;
         error.errorCode = "SESSION_VERSION_CONFLICT";
@@ -363,9 +526,21 @@ export class SessionMessageService {
     session.updatedAt = this.now();
     session.version = currentVersion + 1;
     session.revision = session.version;
+    const result = { deletedCount, anchorIndex };
+    if (normalizedIdempotencyKey) {
+      rememberMutationReceipt(session, {
+        operation: "delete_from",
+        idempotencyKey: normalizedIdempotencyKey,
+        version: session.version,
+        requestHash,
+        result,
+        committedAt: this.now(),
+      });
+    }
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
-    await this.sessionRepo.save(userId, session, resolvedParentSessionId);
-    return { session, deletedCount, anchorIndex, version: session.version, idempotencyKey };
+    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: currentVersion });
+    return { session, ...result, version: session.version, idempotencyKey: normalizedIdempotencyKey, deduplicated: false };
+    });
   }
 
   async replaceTurn({
@@ -391,11 +566,21 @@ export class SessionMessageService {
       throw error;
     }
     const matcher = createMessageAnchorMatcher(anchor);
+    const normalizedExpectedVersion = normalizeExpectedVersion(expectedVersion);
+    const normalizedIdempotencyKey = String(idempotencyKey || "").trim();
+    const requestHash = createRequestHash({
+      operation: "replace_turn",
+      anchor,
+      newContent: normalizedNewContent,
+      turnScopeId: String(turnScopeId || "").trim(),
+      attachmentIds: (Array.isArray(attachments) ? attachments : []).map((item) => String(item?.attachmentId || "").trim()),
+    });
     if (!matcher) {
       const error = new Error("message anchor is required");
       error.statusCode = 400;
       throw error;
     }
+    return this._withSessionMutation(userId, sessionId, async () => {
     const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
       userId,
       sessionId,
@@ -411,12 +596,17 @@ export class SessionMessageService {
       error.statusCode = 404;
       throw error;
     }
+    const replay = findMutationReceipt(session, "replace_turn", normalizedIdempotencyKey);
+    if (replay) {
+      assertIdempotencyRequestMatches(replay.requestHash, requestHash);
+      return { session, ...replay.result, version: resolveSessionVersion(session), committedVersion: replay.version, idempotencyKey: normalizedIdempotencyKey, deduplicated: true };
+    }
     const currentVersion = resolveSessionVersion(session);
-    if (expectedVersion !== null && expectedVersion !== undefined && expectedVersion !== "") {
-      const normalizedExpectedVersion = Number(expectedVersion);
-      if (!Number.isFinite(normalizedExpectedVersion) || normalizedExpectedVersion !== currentVersion) {
+    if (normalizedExpectedVersion !== null) {
+      if (normalizedExpectedVersion !== currentVersion) {
         const error = new Error("session version conflict");
         error.statusCode = 409;
+        error.errorCode = "SESSION_VERSION_CONFLICT";
         error.currentVersion = currentVersion;
         throw error;
       }
@@ -468,15 +658,12 @@ export class SessionMessageService {
     session.updatedAt = nowValue;
     session.version = nextVersion;
     session.revision = nextVersion;
-    if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
-    await this.sessionRepo.save(userId, session, resolvedParentSessionId);
     const turnScopeReplacement = buildTurnScopeReplacement({
       replacedMessages,
       replacementMessages: [newMessage],
       replacementUserMessage: newMessage,
     });
-    return {
-      session,
+    const result = {
       replacedTurn: {
         anchorIndex,
         turnStartIndex,
@@ -492,9 +679,28 @@ export class SessionMessageService {
       anchorIndex,
       turnStartIndex,
       deletedCount: replacedMessages.length,
-      version: session.version,
-      idempotencyKey,
     };
+    if (normalizedIdempotencyKey) {
+      const receiptResult = {
+        newTurn: result.newTurn,
+        turnScopeReplacement,
+        anchorIndex,
+        turnStartIndex,
+        deletedCount: replacedMessages.length,
+      };
+      rememberMutationReceipt(session, {
+        operation: "replace_turn",
+        idempotencyKey: normalizedIdempotencyKey,
+        version: session.version,
+        requestHash,
+        result: receiptResult,
+        committedAt: nowValue,
+      });
+    }
+    if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
+    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: currentVersion });
+    return { session, ...result, version: session.version, idempotencyKey: normalizedIdempotencyKey, deduplicated: false };
+    });
   }
 
   async upsertTurnStatus({
@@ -509,6 +715,7 @@ export class SessionMessageService {
     error = null,
   } = {}) {
     if (!userId || !sessionId) return { upserted: false, reason: "missing_session" };
+    return this._withSessionMutation(userId, sessionId, async () => {
     const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
       userId,
       sessionId,
@@ -539,12 +746,10 @@ export class SessionMessageService {
       return { upserted: false, reason: "unchanged", session, turnStatus, version: resolveSessionVersion(session) };
     }
     session.updatedAt = nowValue;
-    const currentVersion = resolveSessionVersion(session);
-    session.version = currentVersion + 1;
-    session.revision = session.version;
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
     await this.sessionRepo.save(userId, session, resolvedParentSessionId);
-    return { upserted: true, session, turnStatus, version: session.version };
+    return { upserted: true, session, turnStatus, version: resolveSessionVersion(session) };
+    });
   }
 
   async stampReusedUserTurnDialogProcessId({
@@ -560,6 +765,7 @@ export class SessionMessageService {
     if (!normalizedTurnScopeId) return { stamped: false, reason: "missing_turn_scope" };
     const normalizedDialogProcessId = resolveDialogProcessIdFromContext({ dialogProcessId });
     if (!normalizedDialogProcessId) return { stamped: false, reason: "missing_dialog_process_id" };
+    return this._withSessionMutation(userId, sessionId, async () => {
     const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
       userId,
       sessionId,
@@ -610,18 +816,16 @@ export class SessionMessageService {
       targetMessage.attachments = nextAttachments;
     }
     session.updatedAt = this.now();
-    const currentVersion = resolveSessionVersion(session);
-    session.version = currentVersion + 1;
-    session.revision = session.version;
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
     await this.sessionRepo.save(userId, session, resolvedParentSessionId);
     return {
       stamped: true,
       session,
       messageIndex: targetIndex,
-      version: session.version,
+      version: resolveSessionVersion(session),
       dialogProcessId: normalizedDialogProcessId,
     };
+    });
   }
 
   async markSessionMessagesSummarized({
@@ -631,10 +835,16 @@ export class SessionMessageService {
     shouldMark = null,
   } = {}) {
     if (!userId || !sessionId) return 0;
-    const session = await this.sessionRepo.findById(
+    return this._withSessionMutation(userId, sessionId, async () => {
+    const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
       userId,
       sessionId,
       parentSessionId,
+    );
+    const session = await this.sessionRepo.findById(
+      userId,
+      sessionId,
+      resolvedParentSessionId,
     );
     if (!session) return 0;
     const messages = Array.isArray(session.messages) ? session.messages : [];
@@ -647,9 +857,10 @@ export class SessionMessageService {
       return { ...messageItem, summarized: true };
     });
     if (updatedCount > 0) {
-      await this.sessionRepo.save(userId, session, parentSessionId);
+      await this.sessionRepo.save(userId, session, resolvedParentSessionId);
     }
     return updatedCount;
+    });
   }
 
   async getSessionTurns({ userId, sessionId }) {

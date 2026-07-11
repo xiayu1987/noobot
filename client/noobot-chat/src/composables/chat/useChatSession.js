@@ -53,6 +53,7 @@ import {
 import {
   applySessionRunStateEvent,
   BackendChannelState,
+  BackendTerminalStates,
   evaluateSessionRunState,
   FrontendRunState,
   SESSION_RUN_EVENT,
@@ -261,6 +262,9 @@ export function useChatSession({
       turnScopeId,
       data: normalizedEntry,
     });
+    const stoppedResumeBeforeTransition = sessionId
+      ? chatStore.getUserStoppedResumeSnapshot(sessionId)
+      : null;
     const transitionResult = applySessionRunStateEvent({
       stateRef: runStateSnapshot,
       sending,
@@ -301,12 +305,19 @@ export function useChatSession({
         updatedAt,
       });
     }
-    if (
-      state === BackendChannelState.COMPLETED &&
+    const acceptedTerminalFactMatchesStoppedRegistry = Boolean(
+      stoppedResumeBeforeTransition &&
+      transitionResult?.changed === true &&
       sessionId &&
-      nextRunState.state === FrontendRunState.FRONTEND_COMPLETED &&
-      nextRunState.sessionId === sessionId
-    ) {
+      dialogProcessId &&
+      turnScopeId &&
+      stoppedResumeBeforeTransition.dialogProcessId === dialogProcessId &&
+      stoppedResumeBeforeTransition.turnScopeId === turnScopeId &&
+      nextRunState.sessionId === sessionId &&
+      BackendTerminalStates.includes(nextRunState.backendState) &&
+      nextRunState.backendState !== BackendChannelState.USER_STOPPED
+    );
+    if (acceptedTerminalFactMatchesStoppedRegistry) {
       chatStore.clearUserStoppedResumeSnapshot(sessionId);
     }
   }
@@ -362,7 +373,6 @@ export function useChatSession({
   const {
     input,
     uploadFiles,
-    onUploadChange,
     appendUploads,
     clearUploads,
     removeUpload,
@@ -576,16 +586,27 @@ export function useChatSession({
   async function sendWithComposerActionState(...args) {
     const runStateEvaluation = evaluateActiveSessionRunState();
     if (runStateEvaluation.canStartNewSend === false) return false;
-    const isContinueFromUserStopped = runStateEvaluation.state === FrontendRunState.USER_STOP_COMPLETED;
     if (composerActionState.value.sendRequesting || composerActionState.value.continueRequesting) return false;
-    const stoppedResumeMatch = isContinueFromUserStopped
+    const stoppedResumeMatch = runStateEvaluation.state === FrontendRunState.USER_STOP_COMPLETED
       ? getActiveStoppedResumeSnapshotWithKey()
       : null;
+    const activeRunState = resolveActiveSessionRunStateSnapshot();
+    // A registry entry is only a cache of the persisted stopped identity.  It
+    // must never turn a newer completed/current turn into a continuation.  In
+    // particular, delayed detail/events can leave an older registry entry
+    // behind after the session has already advanced to another turn.
+    const isContinueFromUserStopped = Boolean(
+      stoppedResumeMatch?.snapshot &&
+      runStateEvaluation.state === FrontendRunState.USER_STOP_COMPLETED &&
+      String(activeRunState?.backendState || "").trim() === BackendChannelState.USER_STOPPED &&
+      String(activeRunState?.dialogProcessId || "").trim() === String(stoppedResumeMatch.snapshot.dialogProcessId || "").trim() &&
+      String(activeRunState?.turnScopeId || "").trim() === String(stoppedResumeMatch.snapshot.turnScopeId || "").trim()
+    );
     const resumeSessionId = String(
       stoppedResumeMatch?.sessionId || activeSession.value?.backendSessionId || activeSession.value?.id || activeSessionId.value || "",
     ).trim();
     const userStoppedResumeSnapshot = stoppedResumeMatch?.snapshot || null;
-    if (isContinueFromUserStopped && !userStoppedResumeSnapshot) {
+    if (runStateEvaluation.state === FrontendRunState.USER_STOP_COMPLETED && !isContinueFromUserStopped) {
       logContinueResumeIdentitySelection({
         runState: runStateSnapshot.value,
         selected: {
@@ -738,7 +759,6 @@ export function useChatSession({
     pendingInteractionRequest,
     interactionSubmitting,
     submitInteractionResponse,
-    onUploadChange,
     appendUploads,
     clearUploads,
     removeUpload,

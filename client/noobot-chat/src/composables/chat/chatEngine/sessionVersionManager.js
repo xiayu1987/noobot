@@ -20,7 +20,7 @@ export function getCurrentSessionVersion(activeSession) {
 }
 
 export function isSessionVersionConflict(result, payload) {
-  if (result?.status === 409) return true;
+  if (String(payload?.errorCode || "").trim() === "SESSION_VERSION_CONFLICT") return true;
   const errorText = String(payload?.error || payload?.message || "").toLowerCase();
   return errorText.includes("version") && errorText.includes("conflict");
 }

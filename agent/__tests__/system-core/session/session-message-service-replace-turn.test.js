@@ -366,7 +366,7 @@ test("SessionMessageService.stampReusedUserTurnDialogProcessId updates the reuse
   assert.equal(saved[0].messages[0].dialogProcessId, "dp-keep");
   assert.equal(saved[0].messages[1].dialogProcessId, "dp-new");
   assert.equal(saved[0].messages[2].dialogProcessId, "dp-old");
-  assert.equal(saved[0].version, 3);
+  assert.equal(saved[0].version, 2);
 });
 
 test("SessionMessageService.stampReusedUserTurnDialogProcessId syncs reused user attachments", async () => {
@@ -402,7 +402,7 @@ test("SessionMessageService.stampReusedUserTurnDialogProcessId syncs reused user
   assert.equal(saved.length, 1);
   assert.equal(saved[0].messages[1].dialogProcessId, "dp-new");
   assert.deepEqual(saved[0].messages[1].attachments, nextAttachments);
-  assert.equal(saved[0].version, 3);
+  assert.equal(saved[0].version, 2);
 });
 
 test("SessionMessageService.stampReusedUserTurnDialogProcessId preserves rich fields when prepared payload is raw-matching", async () => {

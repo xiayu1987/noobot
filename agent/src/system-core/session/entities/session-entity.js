@@ -59,6 +59,24 @@ export function normalizeMessageEntity(
     summarized: message?.summarized === true,
     ts: String(message?.ts || "").trim() || now(),
   };
+  if (message?.turnCommit && typeof message.turnCommit === "object" && !Array.isArray(message.turnCommit)) {
+    const action = String(message.turnCommit.action || "").trim().toLowerCase();
+    const idempotencyKey = String(message.turnCommit.idempotencyKey || "").trim();
+    const runState = String(message.turnCommit.runState || "").trim().toLowerCase();
+    if (idempotencyKey) {
+      normalizedMessage.turnCommit = {
+        action: action === "continue" ? "continue" : "send",
+        idempotencyKey,
+        runState: runState || "pending_start",
+      };
+      const requestHash = String(message.turnCommit.requestHash || "").trim();
+      if (requestHash) normalizedMessage.turnCommit.requestHash = requestHash;
+      for (const key of ["resumeDialogProcessId", "resumeTurnScopeId"]) {
+        const value = String(message.turnCommit[key] || "").trim();
+        if (value) normalizedMessage.turnCommit[key] = value;
+      }
+    }
+  }
   if (normalizedAttachments.length) {
     normalizedMessage.attachments = normalizedAttachments;
   }
@@ -79,6 +97,10 @@ export function normalizeMessageEntity(
   }
   if (message?.frontendUserMessage === true) {
     normalizedMessage.frontendUserMessage = true;
+  }
+  const messageOrigin = String(message?.messageOrigin || "").trim().toLowerCase();
+  if (messageOrigin === "user" || messageOrigin === "internal") {
+    normalizedMessage.messageOrigin = messageOrigin;
   }
   if (message?.isMonotonic === true || message?.monotonic === true) {
     normalizedMessage.isMonotonic = true;
@@ -159,6 +181,25 @@ export function normalizeTurnTimingsEntity(turnTimings = []) {
   return [...byKey.values()];
 }
 
+function normalizeMutationReceipts(receipts = []) {
+  return (Array.isArray(receipts) ? receipts : []).map((receipt) => {
+    if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return null;
+    const operation = String(receipt.operation || "").trim();
+    const idempotencyKey = String(receipt.idempotencyKey || "").trim();
+    if (!operation || !idempotencyKey) return null;
+    return {
+      operation,
+      idempotencyKey,
+      version: Number(receipt.version || 0),
+      requestHash: String(receipt.requestHash || "").trim(),
+      result: receipt.result && typeof receipt.result === "object" && !Array.isArray(receipt.result)
+        ? receipt.result
+        : {},
+      committedAt: String(receipt.committedAt || "").trim(),
+    };
+  }).filter(Boolean).slice(-100);
+}
+
 export function normalizeSessionEntity(
   session = {},
   {
@@ -174,6 +215,7 @@ export function normalizeSessionEntity(
   ).trim();
   const normalizedShortMemoryCheckpoint = Number(session?.shortMemoryCheckpoint);
   const normalizedCustomTitle = String(session?.customTitle || "").trim();
+  const normalizedMutationReceipts = normalizeMutationReceipts(session?.mutationReceipts || []);
   const normalizedSession = {
     ...(session && typeof session === "object" ? session : {}),
     sessionId: normalizedSessionId,
@@ -193,6 +235,8 @@ export function normalizeSessionEntity(
   };
   if (normalizedCustomTitle) normalizedSession.customTitle = normalizedCustomTitle;
   else delete normalizedSession.customTitle;
+  if (normalizedMutationReceipts.length) normalizedSession.mutationReceipts = normalizedMutationReceipts;
+  else delete normalizedSession.mutationReceipts;
   return normalizedSession;
 }
 

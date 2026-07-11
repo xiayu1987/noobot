@@ -1115,6 +1115,77 @@ describe("sessionRunStateMachine", () => {
     expect(transitionSessionRunState(current, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED, sessionId: "s1" }).state).toBe(BackendChannelState.SENDING);
   });
 
+  it("accepts a newer backend terminal fact for the same run identity", () => {
+    const stopped = createInitialSessionRunState({
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
+      sessionId: "s1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+      seq: 10,
+    });
+    const completed = transitionSessionRunState(stopped, {
+      type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
+      state: "completed",
+      sessionId: "s1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+      seq: 11,
+    });
+    expect(completed).toMatchObject({
+      state: BackendChannelState.COMPLETED,
+      backendState: BackendChannelState.COMPLETED,
+      sessionId: "s1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+      seq: 11,
+    });
+  });
+
+  it("applies the same terminal fact rule without depending on user_stopped", () => {
+    const failed = createInitialSessionRunState({
+      state: BackendChannelState.ERROR,
+      backendState: BackendChannelState.ERROR,
+      sessionId: "s1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+      seq: 20,
+    });
+    const corrected = transitionSessionRunState(failed, {
+      type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
+      state: BackendChannelState.COMPLETED,
+      sessionId: "s1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+      seq: 21,
+    });
+    expect(corrected).toMatchObject({
+      state: BackendChannelState.COMPLETED,
+      backendState: BackendChannelState.COMPLETED,
+      seq: 21,
+    });
+  });
+
+  it("does not let another turn completion clear user_stopped", () => {
+    const stopped = createInitialSessionRunState({
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
+      sessionId: "s1",
+      dialogProcessId: "dialog-stopped",
+      turnScopeId: "turn-stopped",
+      seq: 10,
+    });
+    const delayedOtherCompletion = transitionSessionRunState(stopped, {
+      type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
+      state: "completed",
+      sessionId: "s1",
+      dialogProcessId: "dialog-other",
+      turnScopeId: "turn-other",
+      seq: 11,
+    });
+    expect(delayedOtherCompletion).toBe(stopped);
+  });
+
   it("keeps a new local send scoped by turnScopeId until backend binds dialog id", () => {
     const current = createInitialSessionRunState({
       state: FrontendRunState.USER_STOP_REQUESTED,

@@ -40,6 +40,7 @@ import {
   syncLifecycleRuntimeState,
 } from "../../agent/core/lifecycle/state-machine.js";
 import { saveStoppedModelMessageSnapshotCandidate } from "../../agent/core/resume/model-message-snapshot-store.js";
+import { createTurnCommand, resolveRunTurnScopeId, toCommitTurnPayload } from "./turn-command.js";
 
 function summarizeDebugAttachments(attachments) {
   if (!Array.isArray(attachments)) {
@@ -84,8 +85,10 @@ export class SessionExecutionRunner {
     initializeRunSessionRuntime,
     resolveScenarioRunConfig,
     prepareRunConfig,
+    prepareTurnInput,
     prepareAgentTurnExecution,
     appendSessionTurn,
+    commitSessionTurn,
     stampReusedUserTurnDialogProcessId,
     finalizeRunSession,
     upsertParentAsyncTask,
@@ -99,8 +102,10 @@ export class SessionExecutionRunner {
     this.initializeRunSessionRuntime = initializeRunSessionRuntime;
     this.resolveScenarioRunConfig = resolveScenarioRunConfig;
     this.prepareRunConfig = prepareRunConfig;
+    this.prepareTurnInput = prepareTurnInput;
     this.prepareAgentTurnExecution = prepareAgentTurnExecution;
     this.appendSessionTurn = appendSessionTurn;
+    this.commitSessionTurn = commitSessionTurn;
     this.stampReusedUserTurnDialogProcessId = stampReusedUserTurnDialogProcessId;
     this.finalizeRunSession = finalizeRunSession;
     this.upsertParentAsyncTask = upsertParentAsyncTask;
@@ -226,6 +231,10 @@ export class SessionExecutionRunner {
     try {
       const normalizedMessage = this.normalizeRunMessage(message);
       this.validateRunInput({ userId, sessionId, caller, parentSessionId });
+      const normalizedRequestTurnScopeId = resolveRunTurnScopeId({
+        caller,
+        turnScopeId: turnScopeId || runConfig?.turnScopeId,
+      });
       resolvedParentAsyncResultContainer = this.ensureParentAsyncResultContainer({
         parentAsyncResultContainer,
         caller,
@@ -235,7 +244,7 @@ export class SessionExecutionRunner {
       const {
         usedSessionId,
         dialogProcessId,
-        isContinue,
+        sessionLoadState,
         userConfig,
         currentSessionModelAlias,
         executionStartIndex,
@@ -246,9 +255,8 @@ export class SessionExecutionRunner {
         parentSessionId,
         caller,
         eventListener,
-        turnScopeId: String(turnScopeId || runConfig?.turnScopeId || "").trim(),
+        turnScopeId: normalizedRequestTurnScopeId,
       });
-      const normalizedRequestTurnScopeId = String(turnScopeId || runConfig?.turnScopeId || "").trim();
       const requestRunConfig = {
         ...(runConfig && typeof runConfig === "object" && !Array.isArray(runConfig)
           ? runConfig
@@ -268,6 +276,8 @@ export class SessionExecutionRunner {
             })
           : scenarioResolvedRunConfig;
       const resolvedTurnScopeId = String(resolvedRunConfig?.turnScopeId || "").trim();
+      const resumeFromStoppedSnapshot = resolvedRunConfig?.resumeFromStoppedSnapshot === true;
+      const contextMode = sessionLoadState === "loaded" ? "existing_session" : "new_session";
       lifecycle = createAgentLifecycleMachine({
         eventListener: runtimeEventListener,
         now: () => this.now(),
@@ -275,7 +285,7 @@ export class SessionExecutionRunner {
           sessionId: usedSessionId,
           dialogProcessId,
           turnScopeId: resolvedTurnScopeId,
-          resumeFromStoppedSnapshot: resolvedRunConfig?.resumeFromStoppedSnapshot === true,
+          resumeFromStoppedSnapshot,
         },
       });
       lifecycle.transition(resolveInitialLifecycleState(resolvedRunConfig));
@@ -326,13 +336,15 @@ export class SessionExecutionRunner {
         context: {
           ...botHookBase,
           message: normalizedMessage,
-          isContinue,
+          isContinue: resumeFromStoppedSnapshot,
+          sessionLoadState,
+          resumeFromStoppedSnapshot,
         },
         eventListener: runtimeEventListener,
       });
 
       const buildContextPayload = {
-        mode: isContinue ? "continue" : "initial",
+        mode: contextMode,
         userId,
         sessionId: usedSessionId,
         caller,
@@ -360,6 +372,55 @@ export class SessionExecutionRunner {
         attachments: summarizeDebugAttachments(attachments),
         userMessageAttachments: summarizeDebugAttachments(buildContextPayload.userMessageAttachments),
       });
+      const preparedTurnInput = typeof this.prepareTurnInput === "function"
+        ? await this.prepareTurnInput({ buildContextPayload })
+        : { userMessageAttachments: attachments };
+      const canonicalAttachments = Array.isArray(preparedTurnInput?.userMessageAttachments)
+        ? preparedTurnInput.userMessageAttachments
+        : [];
+      buildContextPayload.userMessageAttachments = canonicalAttachments;
+      if (preparedTurnInput?.contextBuilder) buildContextPayload.contextBuilder = preparedTurnInput.contextBuilder;
+      if (resolvedRunConfig?.reuseExistingUserTurn === true) {
+        await this.stampReusedUserTurnDialogProcessId?.({
+          userId,
+          sessionId: usedSessionId,
+          parentSessionId,
+          turnScopeId: resolvedTurnScopeId,
+          dialogProcessId,
+          attachments: canonicalAttachments,
+        });
+      } else {
+        const turnCommand = createTurnCommand({
+          userId,
+          sessionId: usedSessionId,
+          parentSessionId,
+          dialogProcessId,
+          parentDialogProcessId,
+          turnScopeId: resolvedTurnScopeId,
+          message: normalizedMessage,
+          attachments: canonicalAttachments,
+          runConfig: resolvedRunConfig,
+          caller,
+        });
+        const commitPayload = toCommitTurnPayload(turnCommand);
+        const commitResult = typeof this.commitSessionTurn === "function"
+          ? await this.commitSessionTurn(commitPayload)
+          : await this.appendSessionTurn({
+              ...commitPayload,
+              role: MESSAGE_ROLE.USER,
+              type: MESSAGE_TYPE.MESSAGE,
+              frontendUserMessage: commitPayload.frontendUserMessage === true,
+              messageOrigin: commitPayload.frontendUserMessage === true ? "user" : "internal",
+              eventListener: runtimeEventListener,
+            }).then(() => ({ attachments: canonicalAttachments }));
+        canonicalAttachments.splice(0, canonicalAttachments.length, ...(commitResult?.attachments || []));
+        emitEvent(runtimeEventListener, "turn_committed", {
+          sessionId: commitResult?.sessionId || usedSessionId,
+          sessionVersion: commitResult?.version ?? commitResult?.sessionVersion,
+          dialogProcessId,
+          turnScopeId: resolvedTurnScopeId,
+        });
+      }
       if (typeof this.prepareAgentTurnExecution !== "function") {
         throw new Error("prepareAgentTurnExecution is required");
       }
@@ -392,14 +453,6 @@ export class SessionExecutionRunner {
           turnScopeId: resolvedTurnScopeId,
           attachments: summarizeDebugAttachments(userMessageAttachments),
         });
-        await this.stampReusedUserTurnDialogProcessId?.({
-          userId,
-          sessionId: usedSessionId,
-          parentSessionId,
-          turnScopeId: resolvedTurnScopeId,
-          dialogProcessId,
-          attachments: userMessageAttachments,
-        });
         emitEvent(runtimeEventListener, "debug_resend_runner_reuse_after_stamp", {
           sessionId: usedSessionId,
           dialogProcessId,
@@ -412,22 +465,7 @@ export class SessionExecutionRunner {
         ? runtimeAgentContext.payload.messages.history
         : [];
 
-      if (resolvedRunConfig?.reuseExistingUserTurn !== true) {
-        await this.appendSessionTurn({
-          userId,
-          sessionId: usedSessionId,
-          parentSessionId,
-          role: MESSAGE_ROLE.USER,
-          content: normalizedMessage,
-          type: MESSAGE_TYPE.MESSAGE,
-          frontendUserMessage: true,
-          attachments: userMessageAttachments,
-          dialogProcessId,
-          parentDialogProcessId,
-          turnScopeId: resolvedTurnScopeId,
-          eventListener: runtimeEventListener,
-        });
-      } else {
+      if (resolvedRunConfig?.reuseExistingUserTurn === true) {
         emitEvent(runtimeEventListener, "user_message_reused", {
           sessionId: usedSessionId,
           dialogProcessId,
@@ -549,7 +587,9 @@ export class SessionExecutionRunner {
         context: {
           ...botHookBase,
           message: normalizedMessage,
-          isContinue,
+          isContinue: resumeFromStoppedSnapshot,
+          sessionLoadState,
+          resumeFromStoppedSnapshot,
           result: finalizedResult,
         },
         eventListener: runtimeEventListener,

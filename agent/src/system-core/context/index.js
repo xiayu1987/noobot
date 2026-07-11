@@ -472,13 +472,13 @@ export class ContextBuilder {
     };
   }
 
-  async buildInitialContext({ dialogProcessId = "" } = {}) {
+  async buildNewSessionContext({ dialogProcessId = "" } = {}) {
     const sessionRecords = await this._resolveSessionRecords({
       sessionId: this.sessionId || "",
       dialogProcessId,
     });
     emitModelContextTrace({ ...(this.runConfig || {}), eventListener: this.eventListener }, "context_records_resolved", {
-      mode: "initial",
+      mode: "new_session",
       sessionId: this.sessionId || "",
       dialogProcessId,
       currentTurnScopeId: String(this.runConfig?.turnScopeId || "").trim(),
@@ -500,13 +500,13 @@ export class ContextBuilder {
     });
   }
 
-  async buildContinueContext({ dialogProcessId = "" } = {}) {
+  async buildExistingSessionContext({ dialogProcessId = "" } = {}) {
     const sessionRecords = await this._resolveSessionRecords({
       sessionId: this.sessionId || "",
       dialogProcessId,
     });
     emitModelContextTrace({ ...(this.runConfig || {}), eventListener: this.eventListener }, "context_records_resolved", {
-      mode: "continue",
+      mode: "existing_session",
       sessionId: this.sessionId || "",
       dialogProcessId,
       currentTurnScopeId: String(this.runConfig?.turnScopeId || "").trim(),
@@ -535,5 +535,13 @@ export class ContextBuilder {
         attachments,
       },
     );
+  }
+
+  async buildInitialContext(payload = {}) {
+    return this.buildNewSessionContext(payload);
+  }
+
+  async buildContinueContext(payload = {}) {
+    return this.buildExistingSessionContext(payload);
   }
 }

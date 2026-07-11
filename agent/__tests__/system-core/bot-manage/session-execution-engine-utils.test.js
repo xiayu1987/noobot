@@ -245,6 +245,9 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
       {
         role: "assistant",
         content: "canonical attachment",
+        userName: "",
+        sessionId: "",
+        parentSessionId: "",
         type: "",
         dialogProcessId: "",
         parentDialogProcessId: "",

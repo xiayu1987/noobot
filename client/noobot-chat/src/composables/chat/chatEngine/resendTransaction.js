@@ -32,6 +32,13 @@ function normalizeAttachmentMeta(attachment = {}) {
   return out;
 }
 
+function toPendingDisplayAttachment(attachment = {}) {
+  const meta = normalizeAttachmentMeta(attachment);
+  if (!meta) return null;
+  delete meta.contentBase64;
+  return meta;
+}
+
 function dedupeAttachmentMetas(attachments = []) {
   const seen = new Set();
   const out = [];
@@ -357,6 +364,9 @@ export function createResendMessageTransaction({
       : dedupeAttachmentMetas(userTargetMessage?.attachments || []);
     const attachmentFiles = Array.isArray(options?.attachmentFiles) ? options.attachmentFiles : [];
     const serializedNewAttachments = await serializeAttachments?.(attachmentFiles) || [];
+    const pendingDisplayAttachments = serializedNewAttachments
+      .map((attachment) => toPendingDisplayAttachment(attachment))
+      .filter(Boolean);
     const finalAttachments = mergeAttachmentMetas(keptAttachments, serializedNewAttachments);
     const snapshot = createSessionSnapshot(originalSession, input?.value);
     const originalCascadeStartIndex = findMessageCascadeStartIndex?.(userTargetMessage) ?? -1;
@@ -420,9 +430,12 @@ export function createResendMessageTransaction({
           text,
           resendTurnScopeId,
           expectedVersion,
-          idempotencyKey: attempt > 1 ? `${operation?.opId || "resend"}:retry-version` : operation?.opId || "",
+          idempotencyKey: operation?.opId || "",
           attempt,
-          attachments: finalAttachments,
+          // replace-turn owns the edited persisted set, so it receives only
+          // retained canonical attachments. New raw files belong to the
+          // following model-run upload transaction.
+          attachments: keptAttachments,
         }),
       });
       let { result, payload, expectedVersion } = mutationResult || {};
@@ -504,12 +517,13 @@ export function createResendMessageTransaction({
       // that snapshot is the source of truth; the base64 transport objects are
       // only upload payloads and must never be sent to Agent as metadata.
       const persistedAttachments = dedupeAttachmentMetas(replacementUserMessage.attachments || []);
-      const attachmentsForSend = persistedAttachments.length > 0
-        ? persistedAttachments
-        : finalAttachments;
+      const attachmentsForDisplay = mergeAttachmentMetas(
+        persistedAttachments,
+        pendingDisplayAttachments,
+      );
       replacementUserMessage.content = text;
       replacementUserMessage.attachments = mergeAttachmentMetas(
-        attachmentsForSend,
+        attachmentsForDisplay,
         persistedAttachments,
       );
       if ("text" in replacementUserMessage) replacementUserMessage.text = text;
@@ -570,7 +584,10 @@ export function createResendMessageTransaction({
         allowDuringResend: true,
         attachmentFiles: [],
         userAttachments: replacementUserMessage.attachments,
-        transportAttachments: replacementUserMessage.attachments,
+        // The replace-turn response is the display/persistence snapshot. New
+        // files may not be canonical until Agent ingests the original upload
+        // payload, so the WebSocket transport must retain contentBase64.
+        transportAttachments: finalAttachments,
       });
       logResendDebug("resend.send.after", {
         sessionId,

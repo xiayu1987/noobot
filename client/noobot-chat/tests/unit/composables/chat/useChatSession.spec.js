@@ -728,6 +728,47 @@ describe("useChatSession reconnect replay", () => {
     expect(session.composerActionState.value.userStopped).toBe(false);
   });
 
+  it("clears continue state when the same stopped turn is corrected to completed", async () => {
+    const store = useChatStore();
+    store.sessions = [createSessionFixture({ id: "s-stop-corrected", backendSessionId: "s-stop-corrected" })];
+    store.activeSessionId = "s-stop-corrected";
+    store.runStateSnapshot = {
+      ...store.runStateSnapshot,
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
+      sessionId: "s-stop-corrected",
+      dialogProcessId: "dialog-same",
+      turnScopeId: "turn-same",
+      seq: 7,
+    };
+    store.rememberUserStoppedResumeSnapshot({
+      sessionId: "s-stop-corrected",
+      dialogProcessId: "dialog-same",
+      turnScopeId: "turn-same",
+      seq: 7,
+      source: "user_stopped",
+    });
+    wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
+      onReconnectData?.({
+        event: StreamEventEnum.CHANNEL_STATE,
+        data: {
+          state: BackendChannelState.COMPLETED,
+          sessionId: "s-stop-corrected",
+          dialogProcessId: "dialog-same",
+          turnScopeId: "turn-same",
+          seq: 8,
+        },
+      });
+    });
+
+    const session = createChatSession();
+    await session.handleReconnect();
+    await nextTick();
+
+    expect(store.getUserStoppedResumeSnapshot("s-stop-corrected")).toBe(null);
+    expect(session.composerActionState.value.userStopped).toBe(false);
+  });
+
   it("reconciles stopped resume identity when switching to an already loaded completed session", async () => {
     const store = useChatStore();
     store.sessions = [
@@ -918,7 +959,7 @@ describe("useChatSession reconnect replay", () => {
     await firstSend;
   });
 
-  it("continues only from the per-session stopped resume registry", async () => {
+  it("does not continue when the stopped registry does not match the current stopped turn", async () => {
     const store = useChatStore();
     store.sessions = [createSessionFixture({ id: "s-continue", backendSessionId: "s-continue" })];
     store.activeSessionId = "s-continue";
@@ -945,22 +986,14 @@ describe("useChatSession reconnect replay", () => {
     });
 
     const session = createChatSession();
-    await session.send();
+    const result = await session.send();
 
-    expect(wsClientMock.stream).toHaveBeenCalledTimes(1);
-    const payload = wsClientMock.stream.mock.calls[0][0];
-    expect(payload.action).toBe("continue");
-    expect(payload.turnScopeId).toBeTruthy();
-    expect(payload.turnScopeId).toMatch(/^client-turn:/);
-    expect(payload.turnScopeId).not.toBe("turn-current-running");
-    expect(payload.turnScopeId).not.toBe("turn-latest-stop");
-    expect(payload.config).toMatchObject({
-      resumeDialogProcessId: "dialog-latest-stop",
-      resumeTurnScopeId: "turn-latest-stop",
-      stoppedTurnScopeId: "turn-latest-stop",
+    expect(result).toBe(false);
+    expect(wsClientMock.stream).not.toHaveBeenCalled();
+    expect(store.getUserStoppedResumeSnapshot("s-continue")).toMatchObject({
+      dialogProcessId: "dialog-latest-stop",
+      turnScopeId: "turn-latest-stop",
     });
-    expect(payload.config.resumeTurnScopeId).not.toBe(payload.turnScopeId);
-    expect(store.getUserStoppedResumeSnapshot("s-continue")).toBe(null);
   });
 
   it("continues from stopped registry when active local id differs from backend session id", async () => {
@@ -1002,6 +1035,56 @@ describe("useChatSession reconnect replay", () => {
       stoppedTurnScopeId: "turn-stopped-backend",
     });
     expect(store.getUserStoppedResumeSnapshot("backend-session-continue")).toBe(null);
+  });
+
+  it("does not let completion from another turn invalidate the current stopped source", async () => {
+    const store = useChatStore();
+    store.sessions = [createSessionFixture({ id: "s-completed", backendSessionId: "s-completed" })];
+    store.activeSessionId = "s-completed";
+    store.input = "next message";
+    store.runStateSnapshot = {
+      ...store.runStateSnapshot,
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
+      sessionId: "s-completed",
+      dialogProcessId: "dp-stopped",
+      turnScopeId: "turn-stopped",
+    };
+    store.rememberUserStoppedResumeSnapshot({
+      sessionId: "s-completed",
+      dialogProcessId: "dp-stopped",
+      turnScopeId: "turn-stopped",
+      seq: 1,
+      source: "user_stopped",
+    });
+    wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
+      onReconnectData({
+        event: StreamEventEnum.CHANNEL_STATE,
+        data: {
+          sessionId: "s-completed",
+          dialogProcessId: "dp-completed",
+          turnScopeId: "turn-completed",
+          state: BackendChannelState.COMPLETED,
+          seq: 2,
+        },
+      });
+    });
+    wsClientMock.stream.mockImplementation(async () => ({}));
+
+    const session = createChatSession();
+    await session.handleReconnect();
+
+    expect(store.getUserStoppedResumeSnapshot("s-completed")).toMatchObject({
+      dialogProcessId: "dp-stopped",
+      turnScopeId: "turn-stopped",
+    });
+    expect(store.runStateSnapshot).toMatchObject({
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
+      dialogProcessId: "dp-stopped",
+      turnScopeId: "turn-stopped",
+    });
+    expect(wsClientMock.stream).not.toHaveBeenCalled();
   });
 
   it("does not leak stopped continue state across active sessions", async () => {
@@ -1135,8 +1218,8 @@ describe("useChatSession reconnect replay", () => {
       state: FrontendRunState.USER_STOP_COMPLETED,
       backendState: BackendChannelState.USER_STOPPED,
       sessionId: "s-continue-fail",
-      dialogProcessId: "dialog-stale",
-      turnScopeId: "turn-stale",
+      dialogProcessId: "dialog-latest-stop",
+      turnScopeId: "turn-latest-stop",
     };
     store.rememberUserStoppedResumeSnapshot({
       sessionId: "s-continue-fail",

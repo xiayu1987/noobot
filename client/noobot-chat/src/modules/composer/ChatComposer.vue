@@ -51,7 +51,6 @@ const emit = defineEmits([
   "update:pluginModelConfig",
   "update:selectedPlugins",
   "update:morePanelVisible",
-  "upload-change",
   "append-uploads",
   "clear-uploads",
   "remove-upload",
@@ -216,10 +215,6 @@ function onInputChange(value) {
   emit("update:modelValue", value);
 }
 
-function onUploadChange(file, fileList) {
-  emit("upload-change", file, fileList);
-}
-
 function clearUploadSelection() {
   attachmentToolbarRef.value?.clearUploadSelection?.();
 }
@@ -228,8 +223,8 @@ function onClearUploads() {
   emit("clear-uploads");
 }
 
-function onRemoveUpload(uploadFileIndex) {
-  emit("remove-upload", uploadFileIndex);
+function onRemoveUpload(draftAttachmentId) {
+  emit("remove-upload", draftAttachmentId);
 }
 
 function onSend() {
@@ -338,7 +333,7 @@ defineExpose({
               <ComposerAttachmentToolbar
                 ref="attachmentToolbarRef"
                 :upload-files="uploadFiles"
-                @upload-change="onUploadChange"
+                @append-uploads="emitAppendUploads"
                 @clear-uploads="onClearUploads"
                 @remove-upload="onRemoveUpload"
               />

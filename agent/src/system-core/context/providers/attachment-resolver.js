@@ -23,12 +23,13 @@ export async function resolveAttachments({
   const sourceAttachments = Array.isArray(userMessageAttachments)
     ? userMessageAttachments
     : [];
-  const hasIngestedRecords = sourceAttachments.some(
+  if (!sourceAttachments.length) return [];
+  const hasOnlyIngestedRecords = sourceAttachments.length > 0 && sourceAttachments.every(
     (attachmentItem) =>
       String(attachmentItem?.attachmentId || "").trim() &&
       String(attachmentItem?.path || "").trim(),
   );
-  if (hasIngestedRecords) {
+  if (hasOnlyIngestedRecords) {
     return sourceAttachments.map((attachmentItem) => {
       const parsedResult = normalizeAttachmentParsedResultMeta(attachmentItem);
       return {

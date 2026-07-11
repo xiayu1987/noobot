@@ -8,6 +8,7 @@ import { buildTextResultFields, buildTransferFileEntry, createTransferEnvelope, 
 import { MIME_TYPE } from "../../../constants/index.js";
 import { ARTIFACT_GENERATION_SOURCE, TOOL_ATTACHMENT_SOURCE, TOOL_NAME } from "../../constants/index.js";
 import { updateRuntimeUserMessageAttachment } from "../../../attach/index.js";
+import { emitEvent } from "../../../event/index.js";
 
 const DATA_PROCESSING_ARTIFACT_SOURCES = new Set([
   ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
@@ -183,6 +184,12 @@ async function backwriteParsedResultToSourceAttachment({
       sourceAttachmentPath: String(sourceAttachmentMeta?.path || "").trim(),
     });
     updateRuntimeUserMessageAttachment(runtime, sourceAttachmentId, updatedSourceAttachment || {});
+    if (updatedSourceAttachment) {
+      emitEvent(runtime?.eventListener || null, "attachment_parsed", {
+        dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
+        attachments: [updatedSourceAttachment],
+      });
+    }
     return updatedSourceAttachment;
   } catch {
     return null;

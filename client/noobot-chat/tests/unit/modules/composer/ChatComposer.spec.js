@@ -298,18 +298,18 @@ describe("ChatComposer interactions", () => {
       setup() {
         const composerRef = ref(null);
         const uploadFiles = ref([]);
-        function onUploadChange(file, fileList) {
-          uploadFiles.value = fileList;
+        function onAppendUploads(files) {
+          uploadFiles.value = [...uploadFiles.value, ...files];
         }
         function onClearUploads() {
           ownerClearUploads();
           uploadFiles.value = [];
           composerRef.value?.clearUploadSelection?.();
         }
-        return { composerRef, uploadFiles, onUploadChange, onClearUploads };
+        return { composerRef, uploadFiles, onAppendUploads, onClearUploads };
       },
       template:
-        '<ChatComposer ref="composerRef" :connected="true" :upload-files="uploadFiles" @upload-change="onUploadChange" @clear-uploads="onClearUploads" />',
+        '<ChatComposer ref="composerRef" :connected="true" :upload-files="uploadFiles" @append-uploads="onAppendUploads" @clear-uploads="onClearUploads" />',
     });
 
     const wrapper = mount(OwnerHarness, {
@@ -320,18 +320,40 @@ describe("ChatComposer interactions", () => {
     await wrapper.find("[title='更多操作']").trigger("click");
 
     const toolbar = wrapper.findComponent(ComposerAttachmentToolbar);
-    toolbar.vm.$emit("upload-change", file, [file]);
+    toolbar.vm.$emit("append-uploads", [file]);
     await nextTick();
-    expect(composer.emitted("upload-change")?.[0]).toEqual([file, [file]]);
+    expect(composer.emitted("append-uploads")?.[0]).toEqual([[file]]);
 
-    wrapper.vm.onUploadChange(file, [file]);
-    await nextTick();
     expect(wrapper.vm.uploadFiles).toEqual([file]);
 
     toolbar.vm.$emit("clear-uploads");
     await nextTick();
     expect(ownerClearUploads).toHaveBeenCalledTimes(1);
     expect(wrapper.vm.uploadFiles).toEqual([]);
+  });
+
+  it("uses only the current native file selection after an attachment is removed", async () => {
+    const firstFile = new File(["first"], "first.txt", { type: "text/plain" });
+    const secondFile = new File(["second"], "second.txt", { type: "text/plain" });
+    const wrapper = mount(ComposerAttachmentToolbar, {
+      props: { uploadFiles: [] },
+      global: globalMountOptions,
+    });
+    const input = wrapper.find("input[type='file']");
+
+    Object.defineProperty(input.element, "files", {
+      configurable: true,
+      value: [firstFile],
+    });
+    await input.trigger("change");
+    expect(wrapper.emitted("append-uploads")?.[0]).toEqual([[firstFile]]);
+
+    Object.defineProperty(input.element, "files", {
+      configurable: true,
+      value: [secondFile],
+    });
+    await input.trigger("change");
+    expect(wrapper.emitted("append-uploads")?.[1]).toEqual([[secondFile]]);
   });
 
   it("appends camera input photos as attachments", async () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  handleAttachmentParsedStreamEvent,
   handleDeltaStreamEvent,
   handleDoneStreamEvent,
   handleThinkingStreamEvent,
@@ -10,6 +11,43 @@ describe("chatEngine streamHandlers", () => {
     dialogProcessId: "",
     realtimeLogs: [],
     executionLogTotal: 0,
+  });
+
+  it("merges parsed results into the original user attachment", () => {
+    const userMessage = {
+      role: "user",
+      attachments: [{
+        attachmentId: "source-att",
+        name: "source.docx",
+        previewUrl: "/source-preview",
+      }],
+    };
+    const assistantMessage = { role: "assistant", attachments: [] };
+    const activeSession = { value: { messages: [userMessage, assistantMessage] } };
+
+    handleAttachmentParsedStreamEvent({
+      data: {
+        attachments: [{
+          attachmentId: "source-att",
+          name: "source.docx",
+          parsedResult: { attachmentId: "parsed-att", name: "source.md" },
+          parsedResultUrl: "/parsed-preview",
+          parsedResultName: "source.md",
+        }],
+      },
+      activeSession,
+      makeViewMessage: (message) => message,
+    });
+
+    expect(userMessage.attachments).toHaveLength(1);
+    expect(userMessage.attachments[0]).toEqual(expect.objectContaining({
+      attachmentId: "source-att",
+      previewUrl: "/source-preview",
+      parsedResultUrl: "/parsed-preview",
+      parsedResultName: "source.md",
+      parsedResult: expect.objectContaining({ attachmentId: "parsed-att" }),
+    }));
+    expect(assistantMessage.attachments).toEqual([]);
   });
 
   it("ignores thinking logs when classifier returns null", () => {

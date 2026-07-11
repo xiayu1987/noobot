@@ -38,6 +38,8 @@ export function buildChatPayload({
   resumeDialogProcessId = "",
   resumeTurnScopeId = "",
   thinkingStartedAt = "",
+  expectedVersion = undefined,
+  idempotencyKey = "",
 } = {}) {
   const normalizedScenario = normalizeTrimmedString(botScenario?.value ?? botScenario);
   const normalizedSelectedModel = normalizeTrimmedString(selectedModel?.value ?? selectedModel);
@@ -53,6 +55,8 @@ export function buildChatPayload({
     userId: userId?.value ?? userId,
     sessionId: activeSession?.value?.backendSessionId || activeSession?.value?.sessionId || activeSession?.value?.id,
     turnScopeId: normalizedTurnScopeId,
+    idempotencyKey: normalizeTrimmedString(idempotencyKey) || normalizedTurnScopeId,
+    ...(expectedVersion !== undefined && expectedVersion !== null && expectedVersion !== "" ? { expectedVersion } : {}),
     message: message || uploadHint,
     attachments,
     config: {

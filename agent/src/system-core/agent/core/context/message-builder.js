@@ -288,6 +288,7 @@ export function buildHumanMessagesForUser(
 
 function shouldBuildUserMetaForHistoryMessage(msg = {}) {
   if (resolveMessageRole(msg) !== MESSAGE_ROLE.USER) return false;
+  if (String(msg?.messageOrigin || "").trim().toLowerCase() === "internal") return false;
   if (msg?.phaseSummaryMemory === true) return false;
   if (msg?.injectedMessage === true || msg?.pluginMessage === true) return false;
   if (String(msg?.injectedMessageType || msg?.injected_message_type || "").trim()) return false;
@@ -300,6 +301,104 @@ function shouldBuildUserMetaForHistoryMessage(msg = {}) {
     Boolean(resolveMessageDialogProcessId(msg)) ||
     resolveAttachments(msg, []).length > 0
   );
+}
+
+function isDerivedUserMetaMessage(msg = {}, runtime = {}) {
+  const internalType = String(
+    msg?.additional_kwargs?.noobotInternalMessageType ||
+      msg?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
+      msg?.metadata?.noobotInternalMessageType ||
+      "",
+  ).trim();
+  if (internalType === "user_meta") return true;
+  const content = String(msg?.content || "").trimStart();
+  const localizedTag = String(tEngine(runtime, "agent.userMetaTag") || "").trim();
+  return Boolean(
+    content.startsWith("[用户元信息]") ||
+      content.startsWith("[User Metadata]") ||
+      (localizedTag && content.startsWith(`[${localizedTag}]`))
+  );
+}
+
+function resolveMessageTurnScopeId(msg = {}) {
+  return String(
+    msg?.turnScopeId ||
+      msg?.additional_kwargs?.turnScopeId ||
+      msg?.lc_kwargs?.turnScopeId ||
+      msg?.lc_kwargs?.additional_kwargs?.turnScopeId ||
+      "",
+  ).trim();
+}
+
+function buildUserSourceIdentityKey(msg = {}) {
+  const dialogProcessId = resolveMessageDialogProcessId(msg);
+  const turnScopeId = resolveMessageTurnScopeId(msg);
+  if (!dialogProcessId || !turnScopeId) return "";
+  return `${dialogProcessId}\u0000${turnScopeId}`;
+}
+
+function parseDerivedUserMeta(msg = {}, runtime = {}) {
+  if (!isDerivedUserMetaMessage(msg, runtime)) return null;
+  const content = String(msg?.content || "");
+  const jsonStart = content.indexOf("{");
+  const jsonEnd = content.lastIndexOf("}");
+  if (jsonStart < 0 || jsonEnd < jsonStart) return null;
+  try {
+    const parsed = JSON.parse(content.slice(jsonStart, jsonEnd + 1));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildRestoredUserMetaIndex(messages = [], runtime = {}) {
+  const index = new Map();
+  for (const msg of Array.isArray(messages) ? messages : []) {
+    const parsed = parseDerivedUserMeta(msg, runtime);
+    if (!parsed) continue;
+    const key = buildUserSourceIdentityKey({
+      dialogProcessId: parsed.dialogProcessId || resolveMessageDialogProcessId(msg),
+      turnScopeId: parsed.turnScopeId || resolveMessageTurnScopeId(msg),
+    });
+    if (!key) continue;
+    index.set(key, parsed);
+  }
+  return index;
+}
+
+function normalizeRestoredUserSource(msg = {}, restoredUserMetaIndex = new Map()) {
+  if (resolveMessageRole(msg) !== MESSAGE_ROLE.USER) return msg;
+  const dialogProcessId = resolveMessageDialogProcessId(msg);
+  const turnScopeId = resolveMessageTurnScopeId(msg);
+  const restoredMeta = restoredUserMetaIndex.get(buildUserSourceIdentityKey({
+    dialogProcessId,
+    turnScopeId,
+  }));
+  const sourceAttachments = resolveAttachments(msg, []);
+  const restoredAttachments = Array.isArray(restoredMeta?.attachments)
+    ? restoredMeta.attachments
+    : [];
+  const restoreStringField = (fieldName) => {
+    const sourceValue = String(msg?.[fieldName] || "").trim();
+    const restoredValue = String(restoredMeta?.[fieldName] || "").trim();
+    return sourceValue || restoredValue;
+  };
+  const userName = restoreStringField("userName");
+  const sessionId = restoreStringField("sessionId");
+  const parentSessionId = restoreStringField("parentSessionId");
+  const parentDialogProcessId = restoreStringField("parentDialogProcessId");
+  return {
+    ...msg,
+    ...(userName ? { userName } : {}),
+    ...(sessionId ? { sessionId } : {}),
+    ...(parentSessionId ? { parentSessionId } : {}),
+    ...(dialogProcessId ? { dialogProcessId } : {}),
+    ...(parentDialogProcessId ? { parentDialogProcessId } : {}),
+    ...(turnScopeId ? { turnScopeId } : {}),
+    ...(!sourceAttachments.length && restoredAttachments.length
+      ? { attachments: restoredAttachments }
+      : {}),
+  };
 }
 
 function buildModelMessageIdentityKwargs(msg = {}, fallbackMeta = {}) {
@@ -389,6 +488,7 @@ function buildHistoryMessages({
 } = {}) {
   const history = [];
   const knownHistoryToolCallIds = new Set();
+  const restoredUserMetaIndex = buildRestoredUserMetaIndex(effectiveHistoryMessages, runtime);
   for (const msg of effectiveHistoryMessages) {
     if (shouldSkipSummarizedHistoryMessage(msg)) continue;
     if (resolveMessageRole(msg) !== MESSAGE_ROLE.ASSISTANT) continue;
@@ -398,8 +498,12 @@ function buildHistoryMessages({
       if (toolCallId) knownHistoryToolCallIds.add(toolCallId);
     }
   }
-  for (const msg of effectiveHistoryMessages) {
+  for (const sourceMessage of effectiveHistoryMessages) {
+    const msg = normalizeRestoredUserSource(sourceMessage, restoredUserMetaIndex);
     if (shouldSkipSummarizedHistoryMessage(msg)) continue;
+    // Metadata is derived from a real user message. Restored snapshots may
+    // contain an older projection, which must not become a new user source.
+    if (isDerivedUserMetaMessage(msg, runtime)) continue;
     const role = resolveMessageRole(msg);
     if (role === MESSAGE_ROLE.SYSTEM) {
       history.push(new SystemMessage({
@@ -541,10 +645,14 @@ export function buildContextMessageBlocks(
   const rawIncrementalMessages = [];
   const normalizedCurrentUserMessage = String(currentUserMessage || "").trim();
   if (normalizedCurrentUserMessage) {
+    const currentMessageOrigin = String(systemRuntime?.caller || "user").trim().toLowerCase() === "bot"
+      ? "internal"
+      : "user";
     rawIncrementalMessages.push({
       role: MESSAGE_ROLE.USER,
       content: normalizedCurrentUserMessage,
-      frontendUserMessage: true,
+      frontendUserMessage: currentMessageOrigin === "user",
+      messageOrigin: currentMessageOrigin,
       userName: fallbackUserMeta.userName,
       attachments: fallbackUserMeta.attachments,
       sessionId: fallbackUserMeta.sessionId,
@@ -599,7 +707,16 @@ export function buildContextMessageBlocks(
     if (rawResumedSnapshotIncrementalMessages.includes(msg)) continue;
     const role = resolveMessageRole(msg);
     if (role === MESSAGE_ROLE.USER || msg?.frontendUserMessage === true) {
-      incremental.push(...buildHumanMessagesForUser(runtime, msg, fallbackUserMeta));
+      if (shouldBuildUserMetaForHistoryMessage(msg)) {
+        incremental.push(...buildHumanMessagesForUser(runtime, msg, fallbackUserMeta));
+      } else {
+        incremental.push(
+          new HumanMessage({
+            content: buildHumanMessageContent(msg, resolveFallbackAttachments(fallbackUserMeta)),
+            additional_kwargs: buildModelMessageIdentityKwargs(msg, fallbackUserMeta),
+          }),
+        );
+      }
     } else {
       incremental.push(
         ...buildHistoryMessages({

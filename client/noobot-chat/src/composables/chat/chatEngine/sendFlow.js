@@ -33,7 +33,6 @@ import {
   getMessageDialogProcessId,
   getMessageTurnScopeId,
 } from "../../infra/messageIdentity";
-import { mergeAttachments } from "../../infra/dialogProcessChain";
 import { nowMs } from "../../infra/timeFields";
 import { hasMatchingInFlightAssistantMessage } from "./messageStateGuards";
 import {
@@ -43,6 +42,11 @@ import {
   summarizeDebugMessages,
 } from "../debug/resendDebugLogger";
 import { logStateMachineDebug, summarizeStateMachineMessage } from "../debug/stateMachineLogger";
+import {
+  applyLatestSessionVersion,
+  getCurrentSessionVersion,
+  isNewerSessionVersion,
+} from "./sessionVersionManager";
 
 function createTurnScopeId() {
   const randomUuid = globalThis?.crypto?.randomUUID?.();
@@ -324,29 +328,14 @@ export function createChatEngineSender({
     try {
       if (!explicitAttachmentFiles) clearUploads();
       const attachments = explicitTransportAttachments || await serializeAttachments(filesToSend);
-      const preparedUserMessage = options?.reuseExistingUserTurn === true
-        ? (activeSession.value?.messages || []).find((messageItem) => (
-          messageItem?.role === "user" &&
-          String(messageItem?.turnScopeId || "").trim() === turnScopeId
-        ))
-        : null;
-      if (preparedUserMessage && Array.isArray(attachments)) {
-        // Serialized attachments are transport payloads. For reused user turns,
-        // keep the session message as the display/edit authority and merge
-        // payload fields into it so parsedResult/path/preview fields are not
-        // downgraded by raw { name, mimeType, size } metas. An explicit empty
-        // transport array still means "delete all attachments".
-        preparedUserMessage.attachments = explicitTransportAttachments?.length === 0
-          ? []
-          : mergeAttachments(preparedUserMessage.attachments || [], attachments)
-            .map((attachment) => ({ ...attachment }));
-      }
       const requestedTextStreaming = streamOutput?.value !== false;
 
-      const payload = buildChatPayload({
+      const buildPayloadForCurrentVersion = () => buildChatPayload({
         userId,
         activeSession,
         message: text,
+        idempotencyKey: turnScopeId,
+        expectedVersion: activeSession?.value?.version ?? activeSession?.value?.revision,
         attachments,
         allowUserInteraction,
         forceTool,
@@ -364,6 +353,7 @@ export function createChatEngineSender({
         uploadHint: translate("chat.uploadHint"),
         reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
       });
+      let payload = buildPayloadForCurrentVersion();
       logSessionEvent({
         category: "transport",
         event: "stream.start",
@@ -443,7 +433,7 @@ export function createChatEngineSender({
         return finalDoneDetailPromise;
       };
 
-      await chatWebSocketClient.stream(payload, ({ event, data }) => {
+      const streamOnce = (streamPayload) => chatWebSocketClient.stream(streamPayload, ({ event, data }) => {
         logSessionEvent({
           category: event === StreamEventEnum.INTERACTION_REQUEST ? "interaction" : "transport",
           event: `stream.${event || "event"}`,
@@ -465,6 +455,22 @@ export function createChatEngineSender({
           botMessage: summarizeDebugMessage(botMsg),
         });
         if (!isEventForCurrentTurn(data || {}, botMsg)) return;
+        if (event === "turn_committed") {
+          const eventSessionId = normalizeTrimmedString(data?.sessionId);
+          const targetSessionId = normalizeTrimmedString(
+            activeSession?.value?.backendSessionId || activeSession?.value?.id || sessionId,
+          );
+          if (eventSessionId === targetSessionId && isNewerSessionVersion(
+            data?.sessionVersion,
+            getCurrentSessionVersion(activeSession),
+          )) {
+            applyLatestSessionVersion(activeSession.value, {
+              version: data.sessionVersion,
+              revision: data.sessionVersion,
+            });
+          }
+          return;
+        }
         if (isUserStoppedEvent(event, data || {}) && hasDialogProcessConflictForTurn({
           activeSession,
           data: data || {},
@@ -514,6 +520,7 @@ export function createChatEngineSender({
             upsertConnectedConnectorInPanelState,
             refreshSessionConnectorsAsync,
             mergeAssistantAttachments,
+            makeViewMessage,
             processStore: activeProcessStore,
             locateSendingStartedMessageOnce,
           })
@@ -579,6 +586,29 @@ export function createChatEngineSender({
             })
           : undefined,
       });
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
+        try {
+          await streamOnce(payload);
+          break;
+        } catch (streamError) {
+          const errorData = streamError?.data || lastStreamErrorEventData || {};
+          const versionConflict = normalizeTrimmedString(errorData?.errorCode) === "SESSION_VERSION_CONFLICT";
+          if (!versionConflict || attempt >= 2) throw streamError;
+          const previousVersion = getCurrentSessionVersion(activeSession);
+          const detail = await fetchSessionDetail(sessionId, {
+            source: "sendVersionConflict",
+            force: true,
+            reuseRecentlyLoaded: false,
+          });
+          if (!detail) throw streamError;
+          applySessionDetail(detail, { preserveCurrentMessages: true, scrollToBottom: false });
+          if (!isNewerSessionVersion(getCurrentSessionVersion(activeSession), previousVersion)) {
+            throw streamError;
+          }
+          lastStreamErrorEventData = null;
+          payload = buildPayloadForCurrentVersion();
+        }
+      }
       logStateMachineDebug("stateMachine.stream.resolved", {
         hasFinalDoneEventData: Boolean(finalDoneEventData),
         hasFinalDoneDetailPromise: Boolean(finalDoneDetailPromise),

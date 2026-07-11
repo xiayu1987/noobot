@@ -21,14 +21,15 @@ describe("useChatInput", () => {
 
   it("keeps native File entries from upload change and serializes non-empty base64", async () => {
     const file = new File(["hello"], "hello.txt", { type: "text/plain" });
-    const { uploadFiles, onUploadChange, serializeAttachments } = useChatInput({
+    const { uploadFiles, appendUploads, serializeAttachments } = useChatInput({
       isImageMime: () => false,
     });
 
-    onUploadChange(file, [file]);
+    appendUploads([file]);
 
     expect(uploadFiles.value).toHaveLength(1);
     expect(uploadFiles.value[0]).toMatchObject({
+      draftAttachmentId: expect.any(String),
       raw: file,
       name: "hello.txt",
       mimeType: "text/plain",
@@ -46,13 +47,13 @@ describe("useChatInput", () => {
     expect(attachments[0].contentBase64).not.toBe("");
   });
 
-  it("uses current file when upload change is called without a file list", async () => {
+  it("adds a selected file without depending on a component file list", async () => {
     const file = new File(["single"], "single.txt", { type: "text/plain" });
-    const { uploadFiles, onUploadChange, serializeAttachments } = useChatInput({
+    const { uploadFiles, appendUploads, serializeAttachments } = useChatInput({
       isImageMime: () => false,
     });
 
-    onUploadChange(file, undefined);
+    appendUploads([file]);
 
     expect(uploadFiles.value).toHaveLength(1);
     expect(uploadFiles.value[0]).toMatchObject({
@@ -76,24 +77,43 @@ describe("useChatInput", () => {
       lastModified: 123,
     });
     const uploadItem = { name: "dupe.txt", raw: file, size: file.size };
-    const { uploadFiles, onUploadChange } = useChatInput({
+    const { uploadFiles, appendUploads } = useChatInput({
       isImageMime: () => false,
     });
 
-    onUploadChange(uploadItem, [uploadItem, file]);
+    appendUploads([uploadItem, file]);
 
     expect(uploadFiles.value).toHaveLength(1);
     expect(uploadFiles.value[0].name).toBe("dupe.txt");
   });
 
-  it("keeps Element Plus upload items from upload change and serializes non-empty base64", async () => {
-    const file = new File(["world"], "world.txt", { type: "text/plain" });
-    const uploadItem = { name: "world.txt", raw: file, size: file.size };
-    const { uploadFiles, onUploadChange, serializeAttachments } = useChatInput({
+  it("does not restore a removed attachment from the upload component stale file list", () => {
+    const removed = new File(["old"], "old.txt", { type: "text/plain", lastModified: 1 });
+    const added = new File(["new"], "new.txt", { type: "text/plain", lastModified: 2 });
+    const removedItem = { name: "old.txt", raw: removed, size: removed.size };
+    const addedItem = { name: "new.txt", raw: added, size: added.size };
+    const { uploadFiles, appendUploads, removeUpload } = useChatInput({
       isImageMime: () => false,
     });
 
-    onUploadChange(uploadItem, [uploadItem]);
+    appendUploads([removedItem]);
+    removeUpload(uploadFiles.value[0].draftAttachmentId);
+    expect(uploadFiles.value).toEqual([]);
+
+    appendUploads([addedItem]);
+
+    expect(uploadFiles.value).toHaveLength(1);
+    expect(uploadFiles.value[0]).toMatchObject({ name: "new.txt", raw: added });
+  });
+
+  it("keeps Element Plus upload items from upload change and serializes non-empty base64", async () => {
+    const file = new File(["world"], "world.txt", { type: "text/plain" });
+    const uploadItem = { name: "world.txt", raw: file, size: file.size };
+    const { uploadFiles, appendUploads, serializeAttachments } = useChatInput({
+      isImageMime: () => false,
+    });
+
+    appendUploads([uploadItem]);
 
     expect(uploadFiles.value).toHaveLength(1);
     expect(uploadFiles.value[0].raw).toBe(file);
