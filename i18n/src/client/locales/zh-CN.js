@@ -212,6 +212,7 @@ export const zhCNMessages = {
     "previewFailedHttp": "预览失败: HTTP {status}",
     "attachmentPreviewFailed": "附件预览失败",
     "previewFailed": "预览失败",
+    "previewFileTooLarge": "文件超过 1 MiB，无法预览，请下载后查看",
     "fileTypeNotSupported": "当前文件类型暂不支持预览",
     "copiedHtml": "已复制为 HTML 页面",
     "copyFormatFailed": "格式复制失败",
