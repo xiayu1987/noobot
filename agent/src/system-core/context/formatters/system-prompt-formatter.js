@@ -86,10 +86,9 @@ function buildPathGuidanceSection(staticInfo = {}, contextPromptI18n = {}) {
     sandboxEnabled
       ? pathGuidanceI18n.sandboxView
       : pathGuidanceI18n.hostView,
-    sandboxEnabled && (
-      Array.isArray(sandbox?.extraMountTargets) ||
-      (Array.isArray(sandbox?.allowedRoots) && sandbox.allowedRoots.length > 1)
-    )
+    sandboxEnabled &&
+    Array.isArray(sandbox?.extraMountTargets) &&
+    sandbox.extraMountTargets.length
       ? pathGuidanceI18n.sandboxMounts
       : "",
     !sandboxEnabled && identity?.isSuperUser === true

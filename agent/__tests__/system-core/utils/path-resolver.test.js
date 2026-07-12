@@ -385,3 +385,68 @@ test("resolves tool path policy with separate relative root and allowed roots", 
   assert.deepEqual(policy.allowedRoots, ["/host/workspaces/u1"]);
   assert.equal(policy.superUserBypassesDirectoryScope, false);
 });
+
+test("resolves /project as rootDirectory compatibility only when sandbox is disabled", () => {
+  const hostProject = resolveToolInputPath({
+    inputPath: "/project/client/noobot-chat/src/app/App.vue",
+    workspacePath: "/host/workspaces/u1/noobot",
+    workspaceRoot: "/host/workspaces",
+    runtime: {
+      basePath: "/host/workspaces/u1",
+      globalConfig: {
+        tools: {
+          execute_script: { sandboxMode: false },
+        },
+      },
+    },
+  });
+  assert.equal(hostProject.ok, true);
+  assert.equal(hostProject.resolvedPath, "/host/workspaces/u1/noobot/client/noobot-chat/src/app/App.vue");
+
+  const sandboxProject = resolveToolInputPath({
+    inputPath: "/project/client/noobot-chat/src/app/App.vue",
+    workspacePath: "/host/workspaces/u1/noobot",
+    workspaceRoot: "/host/workspaces",
+    runtime: {
+      basePath: "/host/workspaces/u1/noobot",
+      globalConfig: {
+        tools: {
+          execute_script: {
+            sandboxMode: true,
+            sandboxProvider: {
+              default: "docker",
+              docker: { dockerContainerScope: "global" },
+            },
+          },
+        },
+      },
+    },
+  });
+  assert.equal(sandboxProject.ok, false);
+  assert.equal(sandboxProject.error, "sandbox_path_not_mapped");
+});
+
+test("resolves docker global sandbox user root from systemRuntime userId", () => {
+  const resolvedPath = resolveToolInputPath({
+    inputPath: "/workspace/primary-user/src/a.js",
+    workspacePath: "/host/workspaces/primary-user",
+    workspaceRoot: "/host/workspaces",
+    runtime: {
+      basePath: "/host/workspaces/primary-user",
+      systemRuntime: { userId: "primary-user" },
+      globalConfig: {
+        tools: {
+          execute_script: {
+            sandboxMode: true,
+            sandboxProvider: {
+              default: "docker",
+              docker: { dockerContainerScope: "global" },
+            },
+          },
+        },
+      },
+    },
+  });
+  assert.equal(resolvedPath.ok, true);
+  assert.equal(resolvedPath.resolvedPath, "/host/workspaces/primary-user/src/a.js");
+});

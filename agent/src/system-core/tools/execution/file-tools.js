@@ -101,17 +101,17 @@ function buildPatchFieldDescription(agentContext = {}, fieldName = "") {
     if (fieldName === "fieldPatch") {
       if (isSandbox) {
         return isChinese
-          ? "当前为沙箱视角：patch 相对路径基于 directories.rootDirectory；绝对路径只用 directories.allowedRoots/extraMountTargets 中出现的路径。"
-          : "Current view: sandbox. Patch relative paths resolve from directories.rootDirectory; absolute paths must come from directories.allowedRoots/extraMountTargets.";
+          ? "沙箱视角：相对路径基于 directories.rootDirectory；绝对路径只用 directories.allowedRoots。"
+          : "Sandbox view: relative paths use directories.rootDirectory; absolute paths must use directories.allowedRoots.";
       }
       if (isSuperUser) {
         return isChinese
-          ? "当前为 host/workspace 视角且是超级管理员：相对路径基于 directories.rootDirectory；必要时可使用 Windows/macOS/Linux host 绝对路径。"
-          : "Current view: host/workspace with super-user access. Relative paths resolve from directories.rootDirectory; host absolute paths are allowed when needed on Windows/macOS/Linux.";
+          ? "Host 视角，超级管理员：相对路径基于 directories.rootDirectory；可使用 Windows/macOS/Linux host 绝对路径。"
+          : "Host view, super user: relative paths use directories.rootDirectory; Windows/macOS/Linux host absolute paths are allowed.";
       }
       return isChinese
-        ? "当前为 host/workspace 视角：相对路径基于 directories.rootDirectory；绝对路径需位于工作区或已挂载根内。"
-        : "Current view: host/workspace. Relative paths resolve from directories.rootDirectory; absolute paths must stay inside the workspace or mounted roots.";
+        ? "Host 视角：相对路径基于 directories.rootDirectory；绝对路径必须位于 directories.allowedRoots 内。"
+        : "Host view: relative paths use directories.rootDirectory; absolute paths must stay inside directories.allowedRoots.";
     }
     if (fieldName === "fieldRoot") {
       if (isSandbox) {

@@ -66,14 +66,28 @@ function applyProcessEventsToMessage({ botMessage, processStore, events = [] }) 
   applyProcessCompatViewToMessage({ botMessage, processStore, processId });
 }
 
+function resolveFirstResponseNavigator({
+  navigateOnFirstResponseOnce,
+  scrollOnFirstResponseOnce,
+} = {}) {
+  if (typeof navigateOnFirstResponseOnce === "function") return navigateOnFirstResponseOnce;
+  if (typeof scrollOnFirstResponseOnce === "function") return scrollOnFirstResponseOnce;
+  return () => {};
+}
+
 export function handleThinkingStreamEvent({
   data,
   botMessage,
   classifyRealtimeLog,
   navigateOnFirstResponseOnce,
+  scrollOnFirstResponseOnce,
   processStore,
   locateSendingStartedMessageOnce,
 }) {
+  const notifyFirstResponse = resolveFirstResponseNavigator({
+    navigateOnFirstResponseOnce,
+    scrollOnFirstResponseOnce,
+  });
   const item = sanitizeExecutionLogForDisplay(classifyRealtimeLog(data));
   if (!item || !normalizeTrimmedString(item.text)) {
     return;
@@ -98,15 +112,20 @@ export function handleThinkingStreamEvent({
   if (processEvent) {
     applyProcessEventsToMessage({ botMessage, processStore, events: [processEvent] });
   }
-  navigateOnFirstResponseOnce();
+  notifyFirstResponse();
 }
 
 export function handleDeltaStreamEvent({
   data,
   botMessage,
   navigateOnFirstResponseOnce,
+  scrollOnFirstResponseOnce,
   locateSendingStartedMessageOnce,
 }) {
+  const notifyFirstResponse = resolveFirstResponseNavigator({
+    navigateOnFirstResponseOnce,
+    scrollOnFirstResponseOnce,
+  });
   const chunkText = stripInternalEventPlaceholderLines(data?.text || "");
   if (data?.dialogProcessId && !getMessageDialogProcessId(botMessage)) {
     botMessage.dialogProcessId = normalizeTrimmedString(data.dialogProcessId);
@@ -115,7 +134,7 @@ export function handleDeltaStreamEvent({
   botMessage.content += chunkText;
   if (chunkText) {
     markFirstStreamEvent(botMessage);
-    navigateOnFirstResponseOnce();
+    notifyFirstResponse();
   }
 }
 
@@ -142,11 +161,16 @@ export function handleAttachmentsStreamEvent({
   botMessage,
   mergeAssistantAttachments,
   navigateOnFirstResponseOnce,
+  scrollOnFirstResponseOnce,
 }) {
+  const notifyFirstResponse = resolveFirstResponseNavigator({
+    navigateOnFirstResponseOnce,
+    scrollOnFirstResponseOnce,
+  });
   markFirstStreamEvent(botMessage);
   if (!getMessageTurnScopeId(botMessage)) return;
   mergeAssistantAttachments(botMessage, data?.attachments || []);
-  navigateOnFirstResponseOnce();
+  notifyFirstResponse();
 }
 
 export function handleAttachmentParsedStreamEvent({
@@ -196,9 +220,14 @@ export function handleInteractionRequestStreamEvent({
   data,
   clearMissingInteractionPayloadTimer,
   navigateOnFirstResponseOnce,
+  scrollOnFirstResponseOnce,
   tryAutoResolveInteraction,
   setPendingInteractionRequest,
 }) {
+  const notifyFirstResponse = resolveFirstResponseNavigator({
+    navigateOnFirstResponseOnce,
+    scrollOnFirstResponseOnce,
+  });
   const normalizedInteractionRequest = normalizeInteractionRequestPayload({
     ...(data || {}),
     interactionType: normalizeTrimmedString(data?.interactionType),
@@ -207,7 +236,7 @@ export function handleInteractionRequestStreamEvent({
     sessionId: normalizeTrimmedString(normalizedInteractionRequest?.sessionId),
     dialogProcessId: normalizeTrimmedString(normalizedInteractionRequest?.dialogProcessId),
   });
-  navigateOnFirstResponseOnce();
+  notifyFirstResponse();
   if (tryAutoResolveInteraction(normalizedInteractionRequest)) {
     return true;
   }
@@ -224,6 +253,7 @@ export function handleDoneStreamEvent({
   clearPendingInteraction,
   classifyRealtimeLog,
   navigateOnFirstResponseOnce,
+  scrollOnFirstResponseOnce,
   makeViewMessage,
   foldMessagesForView,
   mergeAssistantAttachments,
@@ -233,6 +263,10 @@ export function handleDoneStreamEvent({
   locateSendingStartedMessageOnce,
   suppressCompletionConversationState,
 }) {
+  const notifyFirstResponse = resolveFirstResponseNavigator({
+    navigateOnFirstResponseOnce,
+    scrollOnFirstResponseOnce,
+  });
   clearPendingInteraction();
   markFirstStreamEvent(botMessage);
   botMessage.dialogProcessId = data?.dialogProcessId || getMessageDialogProcessId(botMessage) || "";
@@ -274,7 +308,7 @@ export function handleDoneStreamEvent({
         source: ProcessEventSource.STREAM,
       });
       applyProcessEventsToMessage({ botMessage, processStore, events: processEvents });
-      navigateOnFirstResponseOnce();
+      notifyFirstResponse();
     }
   }
   const returnedId = data?.sessionId || activeSession.value.backendSessionId;

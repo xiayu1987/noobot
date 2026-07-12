@@ -70,10 +70,30 @@ test("composeSystemInfoSections adds concise path guidance for only the active p
   });
   const regularSandboxText = regularSandboxSections.join("\n\n");
   assert.equal(regularSandboxText.includes("# Path rules"), true);
-  assert.equal(regularSandboxText.includes("Current view is sandbox"), true);
+  assert.equal(regularSandboxText.includes("Sandbox view"), true);
   assert.equal(regularSandboxText.includes("host absolute paths"), false);
+  assert.equal(regularSandboxText.includes("Super user"), false);
+  assert.equal(regularSandboxText.includes("Extra mounts"), false);
   assert.equal(regularSandboxText.includes("Sandbox is disabled"), false);
   assert.equal(regularSandboxText.includes("/project"), false);
+
+  const mountedSandboxSections = composeSystemInfoSections({
+    locale: "en-US",
+    systemPrompt: "base",
+    staticInfo: {
+      sandbox: {
+        enabled: true,
+        allowedRoots: ["/workspace", "/data"],
+        extraMountTargets: ["/data"],
+      },
+      identity: { isSuperUser: true },
+    },
+  });
+  const mountedSandboxText = mountedSandboxSections.join("\n\n");
+  assert.equal(mountedSandboxText.includes("Sandbox view"), true);
+  assert.equal(mountedSandboxText.includes("Extra mounts"), true);
+  assert.equal(mountedSandboxText.includes("Super user"), false);
+  assert.equal(mountedSandboxText.includes("Host view"), false);
 
   const superHostSections = composeSystemInfoSections({
     locale: "en-US",
@@ -83,8 +103,8 @@ test("composeSystemInfoSections adds concise path guidance for only the active p
     },
   });
   const superHostText = superHostSections.join("\n\n");
-  assert.equal(superHostText.includes("Current view is host/workspace"), true);
-  assert.equal(superHostText.includes("host absolute paths are allowed"), true);
+  assert.equal(superHostText.includes("Host view"), true);
+  assert.equal(superHostText.includes("Super user"), true);
   assert.equal(superHostText.includes("sandbox"), false);
 });
 

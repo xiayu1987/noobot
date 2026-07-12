@@ -134,6 +134,44 @@ test("read_file: 相对路径优先基于 directories.rootDirectory", async () =
   assert.equal(result.content, "navigator");
 });
 
+test("read_file: 非沙箱兼容 /project 前缀到 directories.rootDirectory", async () => {
+  const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-read-project-alias-"));
+  const repoPath = path.join(workspacePath, "noobot");
+  await fs.mkdir(path.join(repoPath, "client/noobot-chat/src/app"), { recursive: true });
+  await fs.writeFile(path.join(repoPath, "client/noobot-chat/src/app/ChatMessageNavigator.vue"), "navigator\n", "utf8");
+  const tools = createFileTool({
+    agentContext: buildAgentContext(workspacePath, "u-test", {
+      runtime: {
+        globalConfig: {
+          tools: {
+            execute_script: { sandboxMode: false },
+          },
+        },
+        systemRuntime: {
+          staticInfo: {
+            directories: {
+              view: "host",
+              rootDirectory: repoPath,
+              currentDirectory: repoPath,
+              opsWorkdir: path.join(repoPath, "runtime/ops_workdir"),
+              allowedRoots: [workspacePath],
+            },
+          },
+        },
+      },
+    }),
+  });
+  const readTool = tools.find((item) => item?.name === "read_file");
+  assert.ok(readTool);
+
+  const result = parseToolResult(await readTool.invoke({
+    filePath: "/project/client/noobot-chat/src/app/ChatMessageNavigator.vue",
+    includeLineNumbers: false,
+  }));
+  assert.equal(result.ok, true);
+  assert.equal(result.content, "navigator");
+});
+
 test("patch_file: schema path hints only describe the active path view", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-schema-workspace-root-"));
   const basePath = path.join(workspaceRoot, "u-test");
@@ -147,7 +185,8 @@ test("patch_file: schema path hints only describe the active path view", async (
     }),
   }).find((item) => item?.name === "patch_file");
   const regularHostDescription = regularHostTool?.schema?.shape?.patch?.description || "";
-  assert.match(regularHostDescription, /host\/workspace/);
+  assert.match(regularHostDescription, /Host 视角/);
+  assert.match(regularHostDescription, /directories\.allowedRoots/);
   assert.doesNotMatch(regularHostDescription, /sandbox|超级管理员|super user/i);
 
   const superHostTool = createFileTool({
