@@ -12,6 +12,8 @@ import {
   normalizePathForPlatform,
   resolveAgentPathContext,
   resolvePathUnderRoot,
+  resolveToolInputPath,
+  resolveToolPathPolicy,
   TOOL_PATH_VIEWS,
 } from "../../utils/path-resolver.js";
 import { recoverableToolError } from "../../error/index.js";
@@ -20,6 +22,7 @@ import {
   assertAndResolveUserWorkspaceFilePath,
   assertValidFileNameFromPath,
 } from "../core/check-tool-input.js";
+import { tTool } from "../core/tool-i18n.js";
 import {
   exists,
   isForbiddenWorkspaceRelativePath,
@@ -97,7 +100,11 @@ function buildPatchPathVariants(filePath = "", agentContext = {}, { patchRoot = 
   if (isAbsolutePathAnyPlatform(normalized) && !virtualRoots.has(parts[0])) {
     return [normalized];
   }
-  const variants = [parts.join("/") || normalized];
+  const variants = [normalized];
+  const pathWithoutLeadingSlash = parts.join("/");
+  if (pathWithoutLeadingSlash && pathWithoutLeadingSlash !== normalized) {
+    variants.push(pathWithoutLeadingSlash);
+  }
   if (virtualRoots.has(parts[0]) && parts.length > 1) {
     variants.push(parts.slice(1).join("/"));
   }
@@ -126,6 +133,21 @@ function resolvePatchDefaultRoot(agentContext = {}) {
 
 function resolvePatchValidationRoot(agentContext = {}) {
   return path.resolve(getBasePathFromAgentContext(agentContext) || ".");
+}
+
+function resolvePatchRootInvalidHint(agentContext = {}) {
+  const runtime = getRuntimeFromAgentContext(agentContext);
+  const context = resolveAgentPathContext({
+    runtime,
+    agentContext,
+    runtimeBasePath: getBasePathFromAgentContext(agentContext),
+  });
+  if (context?.sandboxEnabled === true || context?.view === "sandbox") {
+    return tTool(agentContext, "tools.patch_file.rootInvalidHintSandbox");
+  }
+  return isSuperUserAgentContext(agentContext)
+    ? tTool(agentContext, "tools.patch_file.rootInvalidHintSuperHost")
+    : tTool(agentContext, "tools.patch_file.rootInvalidHintHost");
 }
 
 function formatDisplayPath({ workspacePath = "", rootPath = "", candidatePath = "", resolvedPath = "" } = {}) {
@@ -212,7 +234,7 @@ async function resolvePatchRoot({ root = "", agentContext = {} } = {}) {
         field: "root",
         root: normalizedRoot,
         pathView: classifiedRoot.view,
-        hint: "Do not use root:'..' or sandbox paths as root. Use workspace-relative patch paths, or use /project/... / /workspace/... directly in the patch path.",
+        hint: resolvePatchRootInvalidHint(agentContext),
       },
     });
   }
@@ -239,10 +261,55 @@ async function resolvePatchRoot({ root = "", agentContext = {} } = {}) {
 async function buildPatchPathCandidates(filePath = "", agentContext = {}, { root = "" } = {}) {
   const workspacePath = resolvePatchDefaultRoot(agentContext);
   const validationWorkspacePath = resolvePatchValidationRoot(agentContext);
+  const runtime = getRuntimeFromAgentContext(agentContext);
+  const workspaceRoot = String(runtime?.globalConfig?.workspaceRoot || "").trim();
+  const pathPolicy = resolveToolPathPolicy({
+    runtime,
+    agentContext,
+    runtimeBasePath: validationWorkspacePath,
+    workspacePath: validationWorkspacePath,
+    workspaceRoot,
+    isSuperUser: isSuperUserAgentContext(agentContext),
+  });
   const rootInfo = await resolvePatchRoot({ root, agentContext });
   const explicitRootPath = rootInfo.displayPath ? rootInfo.resolvedPath : "";
   const variants = buildPatchPathVariants(filePath, agentContext, { patchRoot: rootInfo.displayPath });
-  const hasAbsolutePatchPath = variants.some((candidatePath) => isAbsolutePathAnyPlatform(candidatePath));
+  const toolPathCandidates = variants
+    .map((candidatePath, index) => {
+      const resolvedToolPath = resolveToolInputPath({
+        inputPath: candidatePath,
+        runtime,
+        workspacePath: explicitRootPath || pathPolicy.relativeHostRoot || workspacePath,
+        workspaceRoot,
+        agentContext,
+        allowHostAbsolute: true,
+        allowSandbox: true,
+        allowVirtualRelative: true,
+      });
+      if (!resolvedToolPath.ok || !resolvedToolPath.mapped) return null;
+      return {
+        candidatePath,
+        inputPath: resolvedToolPath.resolvedPath,
+        displayPath: formatDisplayPath({
+          workspacePath,
+          rootPath: explicitRootPath || pathPolicy.relativeHostRoot || workspacePath,
+          candidatePath,
+          resolvedPath: resolvedToolPath.resolvedPath,
+        }),
+        rootPath: explicitRootPath || pathPolicy.relativeHostRoot || workspacePath,
+        priority: index,
+        reason: resolvedToolPath.view === TOOL_PATH_VIEWS.SANDBOX_ABSOLUTE
+          ? "sandbox-path-mapped"
+          : "tool-path-mapped",
+      };
+    })
+    .filter(Boolean);
+  const hasAbsolutePatchPath = variants.some((candidatePath) => {
+    const classified = classifyToolInputPath(candidatePath, { agentContext });
+    return isAbsolutePathAnyPlatform(candidatePath) &&
+      classified.view !== TOOL_PATH_VIEWS.SANDBOX_ABSOLUTE &&
+      classified.view !== TOOL_PATH_VIEWS.VIRTUAL_RELATIVE;
+  });
   const baseCandidates = variants.map((candidatePath, index) => ({
     candidatePath,
     inputPath: resolvePathUnderRoot(explicitRootPath, candidatePath),
@@ -261,7 +328,7 @@ async function buildPatchPathCandidates(filePath = "", agentContext = {}, { root
       : (index === 0 ? "workspace" : "virtual-root-stripped"),
   }));
 
-  if (explicitRootPath || hasAbsolutePatchPath) return baseCandidates;
+  if (explicitRootPath || hasAbsolutePatchPath) return [...toolPathCandidates, ...baseCandidates];
 
   const roots = isSuperUserAgentContext(agentContext)
     ? await discoverSuperUserPatchRoots(agentContext)
@@ -285,7 +352,7 @@ async function buildPatchPathCandidates(filePath = "", agentContext = {}, { root
       });
     }
   }
-  return candidates;
+  return [...toolPathCandidates, ...candidates];
 }
 
 function dedupeResolvedCandidates(candidates = [], agentContext = {}) {

@@ -147,6 +147,28 @@ export function useChatSession({
     return null;
   }
 
+  // The registry snapshot is only a cache of the persisted stopped identity.
+  // session.turnStatuses is the authoritative run history: cross-check the
+  // cached resume identity against it so a stale cache (whose stopped turn was
+  // deleted, pruned, or advanced to a terminal/error state) can never drive a
+  // continue that the backend must reject with 409. When no turnStatuses have
+  // been loaded we cannot contradict the registry and keep the cache as before.
+  function isStoppedResumeIdentityBackedByTurnStatuses(dialogProcessId = "", turnScopeId = "") {
+    const statuses = Array.isArray(activeSession.value?.turnStatuses)
+      ? activeSession.value.turnStatuses
+      : [];
+    if (!statuses.length) return true;
+    const dialog = String(dialogProcessId || "").trim();
+    const scope = String(turnScopeId || "").trim();
+    if (!dialog || !scope) return false;
+    return statuses.some(
+      (item) =>
+        String(item?.dialogProcessId || "").trim() === dialog &&
+        String(item?.turnScopeId || "").trim() === scope &&
+        String(item?.status || "").trim().toLowerCase() === "user_stopped",
+    );
+  }
+
   function buildStoppedRunStateFromActiveRegistry() {
     const activeId = resolveActiveSessionIdentity();
     const snapshot = getActiveStoppedResumeSnapshot();
@@ -600,13 +622,31 @@ export function useChatSession({
       runStateEvaluation.state === FrontendRunState.USER_STOP_COMPLETED &&
       String(activeRunState?.backendState || "").trim() === BackendChannelState.USER_STOPPED &&
       String(activeRunState?.dialogProcessId || "").trim() === String(stoppedResumeMatch.snapshot.dialogProcessId || "").trim() &&
-      String(activeRunState?.turnScopeId || "").trim() === String(stoppedResumeMatch.snapshot.turnScopeId || "").trim()
+      String(activeRunState?.turnScopeId || "").trim() === String(stoppedResumeMatch.snapshot.turnScopeId || "").trim() &&
+      isStoppedResumeIdentityBackedByTurnStatuses(
+        stoppedResumeMatch.snapshot.dialogProcessId,
+        stoppedResumeMatch.snapshot.turnScopeId,
+      )
     );
     const resumeSessionId = String(
       stoppedResumeMatch?.sessionId || activeSession.value?.backendSessionId || activeSession.value?.id || activeSessionId.value || "",
     ).trim();
     const userStoppedResumeSnapshot = stoppedResumeMatch?.snapshot || null;
     if (runStateEvaluation.state === FrontendRunState.USER_STOP_COMPLETED && !isContinueFromUserStopped) {
+      // The cached resume identity is contradicted by the authoritative
+      // turnStatuses (its stopped turn was deleted/pruned/advanced to a terminal
+      // state). Drop the stale cache so we stop firing continue requests that the
+      // backend rejects with 409. A plain mismatch against a newer running turn
+      // keeps the cache: that stopped turn may still be resumable later.
+      if (
+        stoppedResumeMatch?.sessionId &&
+        !isStoppedResumeIdentityBackedByTurnStatuses(
+          stoppedResumeMatch.snapshot?.dialogProcessId,
+          stoppedResumeMatch.snapshot?.turnScopeId,
+        )
+      ) {
+        chatStore.clearUserStoppedResumeSnapshot(stoppedResumeMatch.sessionId);
+      }
       logContinueResumeIdentitySelection({
         runState: runStateSnapshot.value,
         selected: {

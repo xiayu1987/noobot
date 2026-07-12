@@ -186,7 +186,8 @@ test("patch_file: schema path hints only describe the active path view", async (
   }).find((item) => item?.name === "patch_file");
   const regularHostDescription = regularHostTool?.schema?.shape?.patch?.description || "";
   assert.match(regularHostDescription, /Host 视角/);
-  assert.match(regularHostDescription, /directories\.allowedRoots/);
+  assert.match(regularHostDescription, /rootDirectory/);
+  assert.match(regularHostDescription, /allowedRoots/);
   assert.doesNotMatch(regularHostDescription, /sandbox|超级管理员|super user/i);
 
   const superHostTool = createFileTool({
@@ -237,7 +238,8 @@ test("patch_file: schema path hints only describe the active path view", async (
     }),
   }).find((item) => item?.name === "patch_file");
   const sandboxDescription = sandboxTool?.schema?.shape?.patch?.description || "";
-  assert.match(sandboxDescription, /directories\.allowedRoots/);
+  assert.match(sandboxDescription, /rootDirectory/);
+  assert.match(sandboxDescription, /allowedRoots/);
   assert.doesNotMatch(sandboxDescription, /host absolute|超级管理员|super user/i);
 });
 
@@ -783,6 +785,60 @@ test("patch_file: 支持 /project 沙箱绝对路径视角", async () => {
   );
 });
 
+test("patch_file: 沙箱 /project 挂载到 workspace 外项目时仍按沙箱视角解析", async () => {
+  const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-project-mount-"));
+  const userWorkspacePath = path.join(rootPath, "workspace/admin");
+  const projectPath = path.join(rootPath, "noobot");
+  await fs.mkdir(path.join(projectPath, "client/noobot-chat/src/composables/chat"), { recursive: true });
+  await fs.mkdir(userWorkspacePath, { recursive: true });
+  const targetFile = path.join(projectPath, "client/noobot-chat/src/composables/chat/useChatSession.js");
+  await fs.writeFile(targetFile, "function existing() {\n  return true;\n}\n", "utf8");
+  const tools = createFileTool({
+    agentContext: buildAgentContext(userWorkspacePath, "admin", {
+      runtime: {
+        userId: "admin",
+        globalConfig: {
+          workspaceRoot: path.join(rootPath, "workspace"),
+          tools: {
+            execute_script: {
+              sandboxMode: true,
+              sandboxProvider: {
+                default: "docker",
+                docker: {
+                  dockerContainerScope: "global",
+                  dockerMounts: [{ source: projectPath, target: "/project" }],
+                },
+              },
+            },
+          },
+        },
+      },
+    }),
+  });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const patchText = [
+    "*** Begin Patch",
+    "*** Update File: /project/client/noobot-chat/src/composables/chat/useChatSession.js",
+    "@@",
+    " function existing() {",
+    "-  return true;",
+    "+  return \"sandbox-project\";",
+    " }",
+    "*** End Patch",
+    "",
+  ].join("\n");
+
+  const result = parseToolResult(await tool.invoke({ format: "apply_patch", patch: patchText }));
+  assert.equal(result.ok, true);
+  assert.equal(result.resolvedFiles[0].resolvedPath, targetFile);
+  assert.equal(
+    await fs.readFile(targetFile, "utf8"),
+    "function existing() {\n  return \"sandbox-project\";\n}\n",
+  );
+});
+
 test("patch_file: root 参数拒绝沙箱路径并返回明确提示", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-root-sandbox-"));
   await fs.mkdir(path.join(basePath, "src"), { recursive: true });
@@ -806,7 +862,45 @@ test("patch_file: root 参数拒绝沙箱路径并返回明确提示", async () 
     (error) => {
       assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
       assert.equal(error.details?.field, "root");
-      assert.match(error.details?.hint || "", /root|workspace/i);
+      assert.match(error.details?.hint || "", /沙箱绝对路径/);
+      return true;
+    },
+  );
+});
+
+test("patch_file: root 参数 host 错误提示不暗示沙箱路径", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-root-host-"));
+  await fs.writeFile(path.join(basePath, "a.txt"), "one\ntwo\n", "utf8");
+  const tools = createFileTool({
+    agentContext: buildAgentContext(basePath, "u-test", {
+      runtime: {
+        globalConfig: {
+          tools: {
+            execute_script: { sandboxMode: false },
+          },
+        },
+      },
+    }),
+  });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const diff = [
+    "--- a/a.txt",
+    "+++ b/a.txt",
+    "@@ -1,2 +1,2 @@",
+    " one",
+    "-two",
+    "+TWO",
+    "",
+  ].join("\n");
+
+  await assert.rejects(
+    () => tool.invoke({ format: "unified_diff", patch: diff, root: "/project" }),
+    (error) => {
+      assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
+      assert.equal(error.details?.field, "root");
+      assert.doesNotMatch(error.details?.hint || "", /\/project|\/workspace|沙箱|sandbox/i);
       return true;
     },
   );

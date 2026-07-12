@@ -230,6 +230,50 @@ describe("useChatSession reconnect replay", () => {
     });
   });
 
+  it("does not continue and clears the cache when turnStatuses no longer marks the stopped turn as user_stopped", async () => {
+    const store = useChatStore();
+    store.sessions = [
+      createSessionFixture({
+        id: "s-pruned",
+        backendSessionId: "s-pruned",
+        // Authoritative run history: the previously stopped turn advanced to an
+        // error state (or was deleted and re-run), so it is no longer resumable.
+        turnStatuses: [
+          { dialogProcessId: "dialog-stopped", turnScopeId: "turn-stopped", status: "error" },
+        ],
+      }),
+    ];
+    store.activeSessionId = "s-pruned";
+    store.input = "continue with more context";
+    wsClientMock.stream.mockImplementation(async (_payload, _onEvent, options) => {
+      options?.onPayloadSent?.(_payload);
+      return {};
+    });
+
+    store.runStateSnapshot = {
+      ...store.runStateSnapshot,
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
+      sessionId: "s-pruned",
+      dialogProcessId: "dialog-stopped",
+      turnScopeId: "turn-stopped",
+    };
+    store.rememberUserStoppedResumeSnapshot({
+      sessionId: "s-pruned",
+      dialogProcessId: "dialog-stopped",
+      turnScopeId: "turn-stopped",
+      seq: 7,
+      source: "user_stopped",
+    });
+
+    const session = createChatSession();
+    const result = await session.send();
+
+    expect(result).toBe(false);
+    expect(wsClientMock.stream).not.toHaveBeenCalled();
+    expect(store.getUserStoppedResumeSnapshot("s-pruned")).toBe(null);
+  });
+
   it("continues from stopped registry when active local id differs from backend session id", async () => {
     const store = useChatStore();
     store.sessions = [createSessionFixture({ id: "local-temp-session", backendSessionId: "backend-session-continue" })];
