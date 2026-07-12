@@ -103,6 +103,40 @@ test("separate_model analysis uses aligned agent context then user request and u
   );
 });
 
+test("separate_model skips analysis when trailing assistant tool call has content", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const invocations = [];
+  const agentContext = createAgentContext({ pending: { analysis: true } });
+  const ctx = {
+    messages: [{
+      role: "assistant",
+      content: "先检查相关代码。",
+      tool_calls: [{ id: "call-1", function: { name: "read_file", arguments: "{}" } }],
+    }],
+    agentContext,
+  };
+  const meta = {
+    harness: {
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async (payload = {}) => {
+        invocations.push(payload);
+        return { content: "不应调用" };
+      },
+    },
+  };
+
+  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+
+  assert.equal(invocations.length, 0);
+  assert.equal(agentContext.payload.harness.state.pending.analysis, true);
+
+  ctx.messages.push({ role: "tool", content: "读取完成", tool_call_id: "call-1" });
+  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+
+  assert.equal(invocations.length, 1);
+  assert.equal(agentContext.payload.harness.state.pending.analysis, false);
+});
+
 test("separate_model guidance pending triggers guidance invoker without analysis flow", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const invocations = [];
