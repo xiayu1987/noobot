@@ -187,7 +187,7 @@ test("patch_file: schema path hints only describe the active path view", async (
   const regularHostDescription = regularHostTool?.schema?.shape?.patch?.description || "";
   assert.match(regularHostDescription, /Host 视角/);
   assert.match(regularHostDescription, /rootDirectory/);
-  assert.match(regularHostDescription, /allowedRoots/);
+  assert.doesNotMatch(regularHostDescription, /allowedRoots/);
   assert.doesNotMatch(regularHostDescription, /sandbox|超级管理员|super user/i);
 
   const superHostTool = createFileTool({
@@ -208,7 +208,8 @@ test("patch_file: schema path hints only describe the active path view", async (
     }),
   }).find((item) => item?.name === "patch_file");
   const superHostDescription = superHostTool?.schema?.shape?.patch?.description || "";
-  assert.match(superHostDescription, /Windows\/macOS\/Linux/);
+  assert.match(superHostDescription, /Windows/);
+  assert.match(superHostDescription, /macOS\/Linux/);
   assert.doesNotMatch(superHostDescription, /sandbox/i);
 
   const sandboxTool = createFileTool({
@@ -906,7 +907,7 @@ test("patch_file: root 参数 host 错误提示不暗示沙箱路径", async () 
   );
 });
 
-test("patch_file: 路径不存在时返回 workspace 与候选路径诊断", async () => {
+test("patch_file: 沙箱视角下路径不存在时诊断脱敏为沙箱路径", async () => {
   const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-diagnostics-"));
   await fs.mkdir(path.join(workspacePath, "noobot/service/ws"), { recursive: true });
   await fs.writeFile(path.join(workspacePath, "noobot/service/ws/chat-websocket-server.js"), "one\ntwo\n", "utf8");
@@ -928,9 +929,53 @@ test("patch_file: 路径不存在时返回 workspace 与候选路径诊断", asy
     async () => tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_FILE_NOT_FOUND");
-      assert.equal(error.details?.basePath, workspacePath);
+      // Sandbox view (docker global scope): the host tmp base path must never
+      // leak; it is mapped to the sandbox user root instead.
+      assert.equal(error.details?.basePath, "/workspace/u-test");
+      assert.doesNotMatch(error.details?.basePath || "", /^\/tmp\//);
       assert.equal(error.details?.filePath, "service/ws/chat-websocket-server.js");
       assert.match(error.details?.hint || "", /root/);
+      assert.equal(error.details?.attemptedPaths?.[0]?.path, "service/ws/chat-websocket-server.js");
+      for (const attempt of error.details?.attemptedPaths || []) {
+        assert.doesNotMatch(attempt.rootPath || "", /^\/tmp\//, "rootPath must not leak host path");
+        assert.doesNotMatch(attempt.inputPath || "", /^\/tmp\//, "inputPath must not leak host path");
+      }
+      return true;
+    },
+  );
+});
+
+test("patch_file: host 视角下路径不存在时诊断保留真实工作区根", async () => {
+  const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-diagnostics-host-"));
+  await fs.mkdir(path.join(workspacePath, "noobot/service/ws"), { recursive: true });
+  await fs.writeFile(path.join(workspacePath, "noobot/service/ws/chat-websocket-server.js"), "one\ntwo\n", "utf8");
+  const tools = createFileTool({
+    agentContext: buildAgentContext(workspacePath, "u-test", {
+      runtime: {
+        globalConfig: { tools: { execute_script: { sandboxMode: false } } },
+      },
+    }),
+  });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const diff = [
+    "--- a/service/ws/chat-websocket-server.js",
+    "+++ b/service/ws/chat-websocket-server.js",
+    "@@ -1,2 +1,2 @@",
+    " one",
+    "-two",
+    "+TWO",
+    "",
+  ].join("\n");
+
+  await assert.rejects(
+    async () => tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }),
+    (error) => {
+      assert.equal(error.code, "RECOVERABLE_FILE_NOT_FOUND");
+      // Host view: no sandbox mapping, so diagnostics keep the real workspace root.
+      assert.equal(error.details?.basePath, workspacePath);
+      assert.equal(error.details?.filePath, "service/ws/chat-websocket-server.js");
       assert.equal(error.details?.attemptedPaths?.[0]?.path, "service/ws/chat-websocket-server.js");
       return true;
     },
