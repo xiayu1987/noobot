@@ -6,9 +6,14 @@ import {
   PATH_VIEWS,
   convertPathView,
   detectPathPlatform,
+  isAbsolutePathAnyPlatform,
   isAbsolutePathForPlatform,
+  isCaseInsensitivePathContext,
+  isCaseInsensitivePathPlatform,
   joinPathForPlatform,
   normalizePathForPlatform,
+  resolvePathPlatformFromContext,
+  resolvePathUnderRoot,
 } from "../../../src/system-core/utils/path-resolver.js";
 
 test("detects foreign platform paths without using process.platform", () => {
@@ -82,9 +87,29 @@ test("checks absoluteness according to the path platform", () => {
   assert.equal(isAbsolutePathForPlatform("\\\\server\\share\\a", "windows"), true);
   assert.equal(isAbsolutePathForPlatform("/home/me", "linux"), true);
   assert.equal(isAbsolutePathForPlatform("home/me", "linux"), false);
+  assert.equal(isAbsolutePathAnyPlatform("C:\\Users\\me"), true);
+  assert.equal(isAbsolutePathAnyPlatform("\\\\server\\share\\a"), true);
+  assert.equal(isAbsolutePathAnyPlatform("home/me"), false);
 });
 
 test("joins paths using the source path semantics", () => {
   assert.equal(joinPathForPlatform("C:\\Users\\me", "docs", "../file.txt"), "C:/Users/me/file.txt");
   assert.equal(joinPathForPlatform("/Users/me", "docs", "file.txt"), "/Users/me/docs/file.txt");
+});
+
+test("resolves path platform and case-sensitivity from context", () => {
+  assert.equal(resolvePathPlatformFromContext({ environment: { os: { platform: "win32" } } }), PATH_PLATFORMS.WINDOWS);
+  assert.equal(resolvePathPlatformFromContext({ environment: { platform: "darwin" } }), PATH_PLATFORMS.MACOS);
+  assert.equal(isCaseInsensitivePathPlatform("windows"), true);
+  assert.equal(isCaseInsensitivePathPlatform("darwin"), true);
+  assert.equal(isCaseInsensitivePathPlatform("linux"), false);
+  assert.equal(isCaseInsensitivePathContext({ environment: { os: { platform: "win32" } } }), true);
+});
+
+test("resolves relative targets under root without corrupting foreign absolute paths", () => {
+  assert.equal(resolvePathUnderRoot("/workspace/app", "src/file.js"), "/workspace/app/src/file.js");
+  assert.equal(resolvePathUnderRoot("C:\\work\\app", "src\\file.js"), "C:/work/app/src/file.js");
+  assert.equal(resolvePathUnderRoot("/workspace/app", "C:\\work\\src\\file.js"), "C:/work/src/file.js");
+  assert.equal(resolvePathUnderRoot("/workspace/app", "file:///C:/work/src/file.js"), "C:/work/src/file.js");
+  assert.equal(resolvePathUnderRoot("/workspace/app", "\\\\server\\share\\file.js"), "//server/share/file.js");
 });

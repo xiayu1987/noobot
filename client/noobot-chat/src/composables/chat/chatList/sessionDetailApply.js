@@ -44,7 +44,7 @@ export function createSessionDetailApplicator({
   foldMessagesForView,
   sessionTitleFromMessages,
   applyCompletedToolLogsToMessages,
-  scrollBottom,
+  navigateToLastMessage,
   isSameSessionIdentity,
   processStore = null,
   onSessionDetailApplied = null,
@@ -272,7 +272,8 @@ export function createSessionDetailApplicator({
         sessionItem.messages,
         sessionItem.title || detail.sessionId.slice(0, 8),
       );
-      if (options.scrollToBottom !== false) scrollBottom();
+      const shouldNavigateToLastMessage = options.navigateToLastMessage !== false;
+      if (shouldNavigateToLastMessage) navigateToLastMessage?.();
     } else if (serverSessionTitle) {
       sessionItem.title = serverSessionTitle;
     }

@@ -36,6 +36,10 @@ const chatMessageNavigatorStateSource = readFileSync(
   path.resolve(__dirname, "../../../src/app/state/chatMessageNavigatorState.js"),
   "utf8",
 );
+const chatMessageNavigatorComponentSource = readFileSync(
+  path.resolve(__dirname, "../../../src/app/ChatMessageNavigator.vue"),
+  "utf8",
+);
 const chatMessageNavItemsStateSource = readFileSync(
   path.resolve(__dirname, "../../../src/app/state/chatMessageNavItemsState.js"),
   "utf8",
@@ -51,11 +55,26 @@ describe("AppShell chat message navigator", () => {
     expect(chatMessageNavItemsStateSource).toContain("shouldRenderMessageInChat");
     expect(chatMessageNavItemsStateSource).toContain("getMessageAnchorId(messageItem, messageIndex)");
     expect(chatMessageNavItemsStateSource).toContain("content.slice(0, 28)");
+    expect(chatMessageNavItemsStateSource).toContain("title: `${messageIndex + 1}. ${roleLabel}${content ? `：${content}` : \"\"}`");
+    expect(chatMessageNavigatorComponentSource).toContain(':title="item.title"');
     expect(chatMessageNavigatorPanelSource).toContain("function handleSelectChatMessageNavItem(item = {})");
     expect(chatMessageNavigatorPanelSource).toContain("selectChatMessageNavigatorItem({");
     expect(chatMessageNavigatorStateSource).toContain("function normalizeChatMessageNavigatorAnchor(item = {})");
     expect(chatMessageNavigatorStateSource).toContain("return String(item?.id || \"\").trim();");
     expect(chatMessageNavigatorStateSource).toContain("messageListPanelRef.value?.scrollToMessageAnchor?.(anchor)");
+  });
+
+  it("navigates to the last message through navigator selection instead of direct bottom scroll", () => {
+    expect(chatMessageNavigatorPanelSource).toContain("function navigateToLastMessage()");
+    expect(chatMessageNavigatorPanelSource).toContain("const lastItem = items[items.length - 1] || null;");
+    expect(chatMessageNavigatorPanelSource).toContain("handleSelectChatMessageNavItem(lastItem);");
+    expect(chatMessageNavigatorComponentSource).toContain("function syncCurrentNavigatorItemIntoView()");
+    expect(chatMessageNavigatorComponentSource).toContain("currentLink?.scrollIntoView?.({");
+    expect(chatMessageNavigatorComponentSource).toContain(':data-chat-message-nav-id="item.id"');
+    expect(appShellSource).toContain("function navigateToLastMessage()");
+    expect(appShellSource).not.toContain("setScrollTop(top)");
+    expect(appShellSource).not.toContain("scrollHeight");
+    expect(appShellSource).not.toContain("scrollToBottom");
   });
 
   it("syncs the highlighted navigator item from scroll position", () => {

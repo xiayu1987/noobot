@@ -27,7 +27,13 @@ import {
   toPositiveInt,
 } from "./file-utils.js";
 import { collectSearchFiles, hasRipgrep, searchFilesWithRipgrep, searchInText } from "./file-search.js";
-import { applySearchHunks, applyUnifiedHunks, parseApplyPatch, parseUnifiedDiff, resolvePatchTargets } from "./file-patch.js";
+import {
+  applySearchHunks,
+  applyUnifiedHunks,
+  parseApplyPatch,
+  parseUnifiedDiff,
+  resolvePatchTargetsWithOptions,
+} from "./file-patch.js";
 
 function buildLineNumberedNearbyContent(content = "", targetLine = 1, radius = 3) {
   const rawContent = String(content || "");
@@ -290,9 +296,10 @@ export function createFileTool({ agentContext }) {
       format: z.enum(["unified_diff", "apply_patch"]).optional().describe(tTool(agentContext, "tools.patch_file.fieldFormat")),
       patch: z.string().describe(tTool(agentContext, "tools.patch_file.fieldPatch")),
       strip: z.number().int().optional().default(1).describe(tTool(agentContext, "tools.patch_file.fieldStrip")),
+      root: z.string().optional().default("").describe(tTool(agentContext, "tools.patch_file.fieldRoot")),
       dryRun: z.boolean().optional().default(false).describe(tTool(agentContext, "tools.patch_file.fieldDryRun")),
     }),
-    func: async ({ format, patch = "", strip = 1, dryRun = false }) => {
+    func: async ({ format, patch = "", strip = 1, root = "", dryRun = false }) => {
       const requestedFormat = String(format || "").trim();
       const normalizedFormat = requestedFormat === "apply_patch"
         ? "apply_patch"
@@ -304,7 +311,7 @@ export function createFileTool({ agentContext }) {
       const parsed = normalizedFormat === "unified_diff"
         ? parseUnifiedDiff(patch, strip)
         : parseApplyPatch(patch);
-      const targets = await resolvePatchTargets({ patches: parsed, agentContext });
+      const targets = await resolvePatchTargetsWithOptions({ patches: parsed, agentContext, root });
       const writePlans = [];
       const deletePlans = [];
       for (const item of targets) {
@@ -362,8 +369,21 @@ export function createFileTool({ agentContext }) {
         ok: true,
         format: normalizedFormat,
         dryRun: dryRun === true,
+        root: String(root || ""),
         changedFiles: writePlans.map((item) => item.displayPath),
         deletedFiles: deletePlans.map((item) => item.displayPath),
+        resolvedFiles: [
+          ...writePlans.map((item) => ({
+            path: item.displayPath,
+            resolvedPath: item.filePath,
+            action: "write",
+          })),
+          ...deletePlans.map((item) => ({
+            path: item.displayPath,
+            resolvedPath: item.filePath,
+            action: "delete",
+          })),
+        ],
       });
     },
   });

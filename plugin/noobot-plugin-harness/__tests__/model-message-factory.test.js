@@ -30,7 +30,7 @@ test("buildCapabilityModelMessages rewrites assistant tool_calls into semantic u
 
   assert.equal(output.length, 1);
   assert.equal(output[0].role, "user");
-  assert.equal(output[0].content, "语义执行 execute_script脚本,参数{\"command\":\"ls -la\"}");
+  assert.equal(output[0].content, "工具调用记录：execute_script脚本被调用,参数{\"command\":\"ls -la\"}");
 });
 
 test("buildCapabilityModelMessages rewrites tool role into assistant role", () => {
@@ -113,7 +113,7 @@ test("buildCapabilityModelMessages only keeps role and content for converted mes
     ],
   });
   assert.deepEqual(output, [
-    { role: "user", content: "语义执行 execute_script脚本,参数{\"command\":\"pwd\"}" },
+    { role: "user", content: "工具调用记录：execute_script脚本被调用,参数{\"command\":\"pwd\"}" },
     { role: "assistant", content: "{\"ok\":true}" },
   ]);
   assert.deepEqual(Object.keys(output[0]).sort(), ["content", "role"]);

@@ -4,17 +4,38 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-defineProps({
+import { nextTick, ref, watch } from "vue";
+
+const props = defineProps({
   items: { type: Array, default: () => [] },
   currentId: { type: String, default: "" },
 });
 
 const emit = defineEmits(["select"]);
+const navigatorRef = ref(null);
+
+function syncCurrentNavigatorItemIntoView() {
+  const root = navigatorRef.value?.$el || navigatorRef.value;
+  const currentId = String(props.currentId || "").trim();
+  if (!root || !currentId) return;
+  const currentLink = root.querySelector?.(`[data-chat-message-nav-id="${CSS.escape(currentId)}"]`);
+  currentLink?.scrollIntoView?.({
+    block: "nearest",
+    inline: "nearest",
+  });
+}
+
+watch(
+  () => [props.currentId, props.items.length],
+  () => nextTick(syncCurrentNavigatorItemIntoView),
+  { flush: "post", immediate: true },
+);
 </script>
 
 <template>
   <el-anchor
     v-if="items.length"
+    ref="navigatorRef"
     class="chat-message-navigator noobot-surface-card"
     :container="null"
     :marker="false"
@@ -27,12 +48,14 @@ const emit = defineEmits(["select"]);
       :key="item.id"
       :href="`#${item.id}`"
       :title="item.title"
+      :data-chat-message-nav-id="item.id"
       :class="{ 'is-current': item.id === currentId }"
       @click="emit('select', item)"
     >
       <span
         class="chat-message-navigator__item"
         :class="`is-${String(item.role || 'session').trim().toLowerCase() || 'session'}`"
+        :title="item.title"
       >
         <span class="chat-message-navigator__role">{{ item.roleLabel || item.role }}</span>
         <span v-if="item.preview" class="chat-message-navigator__content">{{ item.preview }}</span>

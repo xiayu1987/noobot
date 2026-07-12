@@ -15,6 +15,7 @@ import {
   parseToolResult,
   buildAttachmentService,
 } from "./helpers/file-script-length-guards-helper.js";
+import { parseUnifiedDiff } from "../../../src/system-core/tools/execution/file-patch.js";
 
 test("search: 支持搜索文件和文本", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-search-"));
@@ -248,6 +249,128 @@ test("patch_file: 超级管理员可将虚拟 project 路径解析到 workspace 
   assert.equal(result.ok, true);
   assert.deepEqual(result.changedFiles, ["noobot/client/noobot-chat/src/a.txt"]);
   assert.equal(await fs.readFile(path.join(repoPath, "client/noobot-chat/src/a.txt"), "utf8"), "one\nTWO\n");
+});
+
+test("patch_file: root 参数可将补丁路径解析到 workspace 子项目", async () => {
+  const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-root-"));
+  const repoPath = path.join(workspacePath, "noobot");
+  await fs.mkdir(path.join(repoPath, "service/ws"), { recursive: true });
+  await fs.writeFile(path.join(repoPath, "service/ws/chat-websocket-server.js"), "one\ntwo\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(workspacePath) });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const diff = [
+    "--- a/service/ws/chat-websocket-server.js",
+    "+++ b/service/ws/chat-websocket-server.js",
+    "@@ -1,2 +1,2 @@",
+    " one",
+    "-two",
+    "+TWO",
+    "",
+  ].join("\n");
+
+  const dryRunResult = parseToolResult(
+    await tool.invoke({ format: "unified_diff", patch: diff, strip: 1, root: "noobot", dryRun: true }),
+  );
+  assert.equal(dryRunResult.ok, true);
+  assert.equal(dryRunResult.dryRun, true);
+  assert.deepEqual(dryRunResult.changedFiles, ["noobot/service/ws/chat-websocket-server.js"]);
+  assert.equal(dryRunResult.resolvedFiles[0]?.path, "noobot/service/ws/chat-websocket-server.js");
+  assert.equal(
+    await fs.readFile(path.join(repoPath, "service/ws/chat-websocket-server.js"), "utf8"),
+    "one\ntwo\n",
+  );
+
+  const result = parseToolResult(
+    await tool.invoke({ format: "unified_diff", patch: diff, strip: 1, root: "noobot" }),
+  );
+  assert.equal(result.ok, true);
+  assert.equal(await fs.readFile(path.join(repoPath, "service/ws/chat-websocket-server.js"), "utf8"), "one\nTWO\n");
+});
+
+test("patch_file: root 参数兼容 Windows 风格反斜杠 diff 路径", async () => {
+  const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-root-win-"));
+  const appPath = path.join(workspacePath, "app");
+  await fs.mkdir(path.join(appPath, "service/ws"), { recursive: true });
+  await fs.writeFile(path.join(appPath, "service/ws/chat-websocket-server.js"), "one\ntwo\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(workspacePath) });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const diff = [
+    "--- a\\service\\ws\\chat-websocket-server.js",
+    "+++ b\\service\\ws\\chat-websocket-server.js",
+    "@@ -1,2 +1,2 @@",
+    " one",
+    "-two",
+    "+TWO",
+    "",
+  ].join("\n");
+
+  const result = parseToolResult(
+    await tool.invoke({ format: "unified_diff", patch: diff, strip: 1, root: "app\\" }),
+  );
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.changedFiles, ["app/service/ws/chat-websocket-server.js"]);
+  assert.equal(await fs.readFile(path.join(appPath, "service/ws/chat-websocket-server.js"), "utf8"), "one\nTWO\n");
+});
+
+test("patch_file: unified_diff 保留 Windows 绝对路径与 file URL 语义", () => {
+  const driveDiff = [
+    "--- C:\\work\\src\\a.txt",
+    "+++ C:\\work\\src\\a.txt",
+    "@@ -1,1 +1,1 @@",
+    "-old",
+    "+new",
+    "",
+  ].join("\n");
+  const drivePatch = parseUnifiedDiff(driveDiff, 1)[0];
+  assert.equal(drivePatch.oldPath, "C:/work/src/a.txt");
+  assert.equal(drivePatch.newPath, "C:/work/src/a.txt");
+
+  const fileUrlDiff = [
+    "--- file:///C:/work/src/a.txt",
+    "+++ file:///C:/work/src/a.txt",
+    "@@ -1,1 +1,1 @@",
+    "-old",
+    "+new",
+    "",
+  ].join("\n");
+  const fileUrlPatch = parseUnifiedDiff(fileUrlDiff, 1)[0];
+  assert.equal(fileUrlPatch.oldPath, "C:/work/src/a.txt");
+  assert.equal(fileUrlPatch.newPath, "C:/work/src/a.txt");
+});
+
+test("patch_file: 路径不存在时返回 workspace 与候选路径诊断", async () => {
+  const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-diagnostics-"));
+  await fs.mkdir(path.join(workspacePath, "noobot/service/ws"), { recursive: true });
+  await fs.writeFile(path.join(workspacePath, "noobot/service/ws/chat-websocket-server.js"), "one\ntwo\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(workspacePath) });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const diff = [
+    "--- a/service/ws/chat-websocket-server.js",
+    "+++ b/service/ws/chat-websocket-server.js",
+    "@@ -1,2 +1,2 @@",
+    " one",
+    "-two",
+    "+TWO",
+    "",
+  ].join("\n");
+
+  await assert.rejects(
+    async () => tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }),
+    (error) => {
+      assert.equal(error.code, "RECOVERABLE_FILE_NOT_FOUND");
+      assert.equal(error.details?.basePath, workspacePath);
+      assert.equal(error.details?.filePath, "service/ws/chat-websocket-server.js");
+      assert.match(error.details?.hint || "", /root/);
+      assert.equal(error.details?.attemptedPaths?.[0]?.path, "service/ws/chat-websocket-server.js");
+      return true;
+    },
+  );
 });
 
 test("patch_file: 普通用户不会跨 workspace 子项目猜测虚拟 project 路径", async () => {

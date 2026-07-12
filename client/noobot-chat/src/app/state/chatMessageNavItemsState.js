@@ -40,7 +40,7 @@ export function buildChatMessageNavItem({
     roleLabel,
     content,
     preview,
-    title: `${messageIndex + 1}. ${roleLabel}${preview ? `：${preview}` : ""}`,
+    title: `${messageIndex + 1}. ${roleLabel}${content ? `：${content}` : ""}`,
   };
 }
 

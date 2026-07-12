@@ -160,6 +160,97 @@ test("buildModelKwargs strips OpenAI prompt cache fields for non-OpenAI cache ve
   }
 });
 
+test("buildModelKwargs enables Claude prompt cache control without OpenAI cache fields", () => {
+  const defaultKwargs = buildModelKwargs({
+    format: "openai_compatible",
+    model: "claude-opus-4-8",
+    base_url: "https://api.aicodewith.com/v1",
+    prompt_cache_key: "should-not-leak",
+    prompt_cache_retention: "24h",
+  });
+  const ttlKwargs = buildModelKwargs({
+    format: "openai_compatible",
+    model: "claude-sonnet-4",
+    prompt_cache_control: { type: "ephemeral", ttl: "1h" },
+  });
+  const disabledKwargs = buildModelKwargs({
+    format: "openai_compatible",
+    model: "claude-sonnet-4",
+    prompt_cache_control: false,
+    extra_body: {
+      cache_control: { type: "ephemeral" },
+    },
+  });
+
+  assert.deepEqual(defaultKwargs.cache_control, { type: "ephemeral" });
+  assert.equal("prompt_cache_key" in defaultKwargs, false);
+  assert.equal("prompt_cache_retention" in defaultKwargs, false);
+  assert.deepEqual(ttlKwargs.cache_control, { type: "ephemeral", ttl: "1h" });
+  assert.equal("cache_control" in disabledKwargs, false);
+});
+
+test("buildModelKwargs strips Claude cache control for non-Claude vendors", () => {
+  const kwargs = buildModelKwargs({
+    format: "openai_compatible",
+    model: "gpt-5.5",
+    extra_body: {
+      cache_control: { type: "ephemeral" },
+    },
+  });
+
+  assert.equal("cache_control" in kwargs, false);
+  assert.equal(kwargs.prompt_cache_key, "noobot-main-gpt-5-5");
+});
+
+test("buildModelKwargs maps Gemini explicit cached content without OpenAI or Claude cache fields", () => {
+  const explicitKwargs = buildModelKwargs({
+    format: "openai_compatible",
+    model: "gemini-2.5-pro",
+    base_url: "https://generativelanguage.googleapis.com/v1beta/openai",
+    cachedContent: "  cachedContents/noobot-shared-prefix  ",
+    prompt_cache_key: "should-not-leak",
+    prompt_cache_retention: "24h",
+    extra_body: {
+      cache_control: { type: "ephemeral" },
+    },
+  });
+  const extraBodyKwargs = buildModelKwargs({
+    format: "openai_compatible",
+    model: "gemini-2.5-flash",
+    extra_body: {
+      cached_content: "cachedContents/from-extra-body",
+      cachedContent: "cachedContents/camel-extra-body",
+    },
+  });
+  const implicitKwargs = buildModelKwargs({
+    format: "openai_compatible",
+    model: "gemini-2.5-flash",
+  });
+
+  assert.equal(explicitKwargs.cached_content, "cachedContents/noobot-shared-prefix");
+  assert.equal("prompt_cache_key" in explicitKwargs, false);
+  assert.equal("prompt_cache_retention" in explicitKwargs, false);
+  assert.equal("cache_control" in explicitKwargs, false);
+  assert.equal(extraBodyKwargs.cached_content, "cachedContents/from-extra-body");
+  assert.equal("cachedContent" in extraBodyKwargs, false);
+  assert.equal("cached_content" in implicitKwargs, false);
+});
+
+test("buildModelKwargs strips Gemini cached content for non-Gemini vendors", () => {
+  const kwargs = buildModelKwargs({
+    format: "openai_compatible",
+    model: "claude-sonnet-4",
+    cached_content: "cachedContents/should-not-leak",
+    extra_body: {
+      cachedContent: "cachedContents/camel-should-not-leak",
+    },
+  });
+
+  assert.equal("cached_content" in kwargs, false);
+  assert.equal("cachedContent" in kwargs, false);
+  assert.deepEqual(kwargs.cache_control, { type: "ephemeral" });
+});
+
 test("createChatModelFromSpec maps prompt cache settings to LangChain native fields", () => {
   const originalOpenAiApiKey = process.env.OPENAI_API_KEY;
   process.env.OPENAI_API_KEY = "test-key";
@@ -173,6 +264,52 @@ test("createChatModelFromSpec maps prompt cache settings to LangChain native fie
     assert.equal(chat.promptCacheKey, "noobot-main-gpt-5-5");
     assert.equal(chat.promptCacheRetention, "24h");
     assert.equal(chat.useResponsesApi, false);
+  } finally {
+    if (originalOpenAiApiKey === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = originalOpenAiApiKey;
+    }
+  }
+});
+
+test("createChatModelFromSpec maps Claude cache control into request body kwargs", () => {
+  const originalOpenAiApiKey = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = "test-key";
+  try {
+    const chat = createChatModelFromSpec({
+      format: "openai_compatible",
+      model: "claude-opus-4-8",
+      base_url: "https://api.aicodewith.com/v1",
+    });
+
+    assert.deepEqual(chat.modelKwargs.cache_control, { type: "ephemeral" });
+    assert.equal(chat.promptCacheKey, undefined);
+    assert.equal("prompt_cache_key" in chat.modelKwargs, false);
+  } finally {
+    if (originalOpenAiApiKey === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = originalOpenAiApiKey;
+    }
+  }
+});
+
+test("createChatModelFromSpec maps Gemini cached content into request body kwargs", () => {
+  const originalOpenAiApiKey = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = "test-key";
+  try {
+    const chat = createChatModelFromSpec({
+      format: "openai_compatible",
+      model: "gemini-2.5-pro",
+      base_url: "https://generativelanguage.googleapis.com/v1beta/openai",
+      cached_content: "cachedContents/noobot-shared-prefix",
+    });
+
+    assert.equal(chat.modelKwargs.cached_content, "cachedContents/noobot-shared-prefix");
+    assert.equal(chat.promptCacheKey, undefined);
+    assert.equal("cache_control" in chat.modelKwargs, false);
+    assert.equal("prompt_cache_key" in chat.modelKwargs, false);
   } finally {
     if (originalOpenAiApiKey === undefined) {
       delete process.env.OPENAI_API_KEY;

@@ -285,7 +285,7 @@ test("model-context rules 2: phase acceptance separate model uses six ordered co
   const agentSystemIndex = indexOf(/agent-system/);
   const historyUserIndex = indexOf(/history-user-first/);
   const historyAssistantIndex = indexOf(/history-assistant-latest/);
-  const toolCallSemanticIndex = indexOf(/语义执行 execute_script脚本/);
+  const toolCallSemanticIndex = indexOf(/工具调用记录：execute_script脚本被调用/);
   const toolResultIndex = messages.findIndex((item = {}) => String(item.content || "").includes('"stdout":"/workspace"'));
   const summaryIndex = indexOf(/harness-summary-reports/);
   const planIndex = indexOf(/harness-acceptance-main-plan/);

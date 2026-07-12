@@ -34,6 +34,7 @@ export function createSessionListActions({
   applySessionDetail,
   createLocalSession,
   refreshSessionConnectorsAsync,
+  navigateToLastMessage,
   onSessionDetailApplied = null,
   translate,
   notify = () => {},
@@ -43,7 +44,7 @@ export function createSessionListActions({
       force = false,
       preserveCurrentMessages = false,
       requireFresh = false,
-      scrollToBottom = true,
+      shouldNavigateToLastMessage = options.navigateToLastMessage !== false,
       silent = false,
     } = options;
     if (!sessionId) return;
@@ -63,6 +64,7 @@ export function createSessionListActions({
     activeSessionId.value = targetPrimaryId;
     if (target.isLocal) {
       refreshSessionConnectorsAsync(targetPrimaryId);
+      if (shouldNavigateToLastMessage) navigateToLastMessage?.();
       return;
     }
     if (target.loaded && !force) {
@@ -78,6 +80,7 @@ export function createSessionListActions({
         preserveCurrentMessages: true,
       });
       refreshSessionConnectorsAsync(targetPrimaryId);
+      if (shouldNavigateToLastMessage) navigateToLastMessage?.();
       return;
     }
 
@@ -96,7 +99,7 @@ export function createSessionListActions({
             Boolean(preserveCurrentMessages) &&
             Array.isArray(target?.messages) &&
             target.messages.length > 0,
-          scrollToBottom,
+          navigateToLastMessage: shouldNavigateToLastMessage,
         });
       }
       refreshSessionConnectorsAsync(targetPrimaryId);
@@ -111,7 +114,7 @@ export function createSessionListActions({
     const {
       silent = false,
       preserveCurrentMessages = true,
-      scrollToBottom = true,
+      shouldNavigateToLastMessage = options.navigateToLastMessage !== false,
       forceCurrentSessionRerender = false,
     } = options;
     if (!ensureConnected()) return false;
@@ -171,7 +174,7 @@ export function createSessionListActions({
           Boolean(existingNextSession) &&
           Array.isArray(existingNextSession?.messages) &&
           existingNextSession.messages.length > 0,
-        scrollToBottom,
+        navigateToLastMessage: shouldNavigateToLastMessage,
         requireFresh: forceCurrentSessionRerender,
       });
       return true;

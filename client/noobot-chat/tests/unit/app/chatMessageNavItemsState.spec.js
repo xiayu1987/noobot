@@ -32,7 +32,7 @@ describe("chatMessageNavItemsState", () => {
       roleLabel: "AI",
       content: "abcdefghijklmnopqrstuvwxyz0123456789",
       preview: "abcdefghijklmnopqrstuvwxyz01",
-      title: "3. AI：abcdefghijklmnopqrstuvwxyz01",
+      title: "3. AI：abcdefghijklmnopqrstuvwxyz0123456789",
     });
 
     expect(buildChatMessageNavItem({

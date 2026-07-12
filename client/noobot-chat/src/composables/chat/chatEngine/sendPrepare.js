@@ -18,7 +18,7 @@ export function prepareChatSend({
   activeSession,
   applyConversationState,
   translate,
-  scrollBottom,
+  navigateToLastMessage,
   messageText = "",
   turnScopeId = "",
   reuseExistingUserTurn = false,
@@ -102,10 +102,11 @@ export function prepareChatSend({
     { botMessage },
   );
 
-  let scrolledOnFirstResponse = false;
-  const scrollOnFirstResponseOnce = () => {
-    if (scrolledOnFirstResponse) return;
-    scrolledOnFirstResponse = true;
+  let navigatedOnFirstResponse = false;
+  const navigateOnFirstResponseOnce = () => {
+    if (navigatedOnFirstResponse) return;
+    navigatedOnFirstResponse = true;
+    navigateToLastMessage?.();
   };
 
   return {
@@ -113,6 +114,6 @@ export function prepareChatSend({
     filesToSend,
     userMessage,
     botMessage,
-    scrollOnFirstResponseOnce,
+    navigateOnFirstResponseOnce,
   };
 }

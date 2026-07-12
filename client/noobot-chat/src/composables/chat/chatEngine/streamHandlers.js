@@ -70,7 +70,7 @@ export function handleThinkingStreamEvent({
   data,
   botMessage,
   classifyRealtimeLog,
-  scrollOnFirstResponseOnce,
+  navigateOnFirstResponseOnce,
   processStore,
   locateSendingStartedMessageOnce,
 }) {
@@ -98,13 +98,13 @@ export function handleThinkingStreamEvent({
   if (processEvent) {
     applyProcessEventsToMessage({ botMessage, processStore, events: [processEvent] });
   }
-  scrollOnFirstResponseOnce();
+  navigateOnFirstResponseOnce();
 }
 
 export function handleDeltaStreamEvent({
   data,
   botMessage,
-  scrollOnFirstResponseOnce,
+  navigateOnFirstResponseOnce,
   locateSendingStartedMessageOnce,
 }) {
   const chunkText = stripInternalEventPlaceholderLines(data?.text || "");
@@ -115,7 +115,7 @@ export function handleDeltaStreamEvent({
   botMessage.content += chunkText;
   if (chunkText) {
     markFirstStreamEvent(botMessage);
-    scrollOnFirstResponseOnce();
+    navigateOnFirstResponseOnce();
   }
 }
 
@@ -141,12 +141,12 @@ export function handleAttachmentsStreamEvent({
   data,
   botMessage,
   mergeAssistantAttachments,
-  scrollOnFirstResponseOnce,
+  navigateOnFirstResponseOnce,
 }) {
   markFirstStreamEvent(botMessage);
   if (!getMessageTurnScopeId(botMessage)) return;
   mergeAssistantAttachments(botMessage, data?.attachments || []);
-  scrollOnFirstResponseOnce();
+  navigateOnFirstResponseOnce();
 }
 
 export function handleAttachmentParsedStreamEvent({
@@ -195,7 +195,7 @@ export function handleAttachmentParsedStreamEvent({
 export function handleInteractionRequestStreamEvent({
   data,
   clearMissingInteractionPayloadTimer,
-  scrollOnFirstResponseOnce,
+  navigateOnFirstResponseOnce,
   tryAutoResolveInteraction,
   setPendingInteractionRequest,
 }) {
@@ -207,7 +207,7 @@ export function handleInteractionRequestStreamEvent({
     sessionId: normalizeTrimmedString(normalizedInteractionRequest?.sessionId),
     dialogProcessId: normalizeTrimmedString(normalizedInteractionRequest?.dialogProcessId),
   });
-  scrollOnFirstResponseOnce();
+  navigateOnFirstResponseOnce();
   if (tryAutoResolveInteraction(normalizedInteractionRequest)) {
     return true;
   }
@@ -223,7 +223,7 @@ export function handleDoneStreamEvent({
   activeSessionId,
   clearPendingInteraction,
   classifyRealtimeLog,
-  scrollOnFirstResponseOnce,
+  navigateOnFirstResponseOnce,
   makeViewMessage,
   foldMessagesForView,
   mergeAssistantAttachments,
@@ -274,7 +274,7 @@ export function handleDoneStreamEvent({
         source: ProcessEventSource.STREAM,
       });
       applyProcessEventsToMessage({ botMessage, processStore, events: processEvents });
-      scrollOnFirstResponseOnce();
+      navigateOnFirstResponseOnce();
     }
   }
   const returnedId = data?.sessionId || activeSession.value.backendSessionId;

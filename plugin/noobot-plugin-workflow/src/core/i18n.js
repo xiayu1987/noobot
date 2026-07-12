@@ -96,7 +96,7 @@ const WORKFLOW_I18N_TEXT = Object.freeze({
       "如果某个 action 节点应使用工具，请把合适的工具名写进该 NODE 的 task。不要臆造工具名；如果没有相关工具，就按普通任务描述。",
     workflowToolCallUnknownScript: "未知脚本",
     workflowToolCallNoArguments: "无参数",
-    workflowToolCallSemanticLine: "语义执行 {name}脚本,参数{args}",
+    workflowToolCallSemanticLine: "工具调用记录：{name}脚本被调用,参数{args}",
     workflowSemanticPlanByContext: "请基于以上会话上下文和以下当前用户消息规划工作流。",
     workflowSemanticCurrentUserMessage: "当前用户消息:\n{message}",
     workflowSemanticSourceInput: "主模型回复/工作流源输入:\n{source}",
@@ -164,7 +164,7 @@ const WORKFLOW_I18N_TEXT = Object.freeze({
       "When a workflow action should use tools, write the suitable tool name(s) into that NODE task. Do not invent tool names; if no listed tool is relevant, describe the task normally.",
     workflowToolCallUnknownScript: "unknown_script",
     workflowToolCallNoArguments: "none",
-    workflowToolCallSemanticLine: "Semantic execution: run {name} script with arguments {args}",
+    workflowToolCallSemanticLine: "Observed tool call: {name} script was called with arguments {args}",
     workflowSemanticPlanByContext:
       "Please plan the workflow based on the above conversation context and the following current user message.",
     workflowSemanticCurrentUserMessage: "Current user message:\n{message}",

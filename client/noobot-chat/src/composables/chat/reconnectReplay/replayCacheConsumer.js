@@ -58,7 +58,7 @@ export async function applyReconnectMessagesToActiveSessionReplay({
   applyDoneMessages,
   envelopeCallbacks,
   markReconnectSequenceApplied: markSequenceApplied,
-  scrollBottom,
+  navigateToLastMessage,
   processStore,
   onHydrationError,
 } = {}) {
@@ -82,7 +82,7 @@ export async function applyReconnectMessagesToActiveSessionReplay({
     applyDoneMessages,
     envelopeCallbacks,
     markReconnectSequenceApplied: markSequenceApplied,
-    scrollBottom,
+    navigateToLastMessage,
     processStore,
   });
 }

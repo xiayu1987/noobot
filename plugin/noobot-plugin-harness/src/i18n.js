@@ -681,7 +681,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
       "工具主动请求强制验收",
     messageFactoryToolCallUnknownScript: "未知脚本",
     messageFactoryToolCallNoArguments: "无参数",
-    messageFactoryToolCallSemanticLine: "语义执行 {name}脚本,参数{args}",
+    messageFactoryToolCallSemanticLine: "工具调用记录：{name}脚本被调用,参数{args}",
     summaryDetailPathsHeader: "【SUMMARY_DETAIL_PATHS】",
     summaryDetailPathsFooter: "【SUMMARY_DETAIL_PATHS_END】",
   }),
@@ -942,7 +942,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     messageFactoryToolCallUnknownScript: "unknown_script",
     messageFactoryToolCallNoArguments: "none",
     messageFactoryToolCallSemanticLine:
-      "Semantic execution: run {name} script with arguments {args}",
+      "Observed tool call: {name} script was called with arguments {args}",
     summaryDetailPathsHeader: "[SUMMARY_DETAIL_PATHS]",
     summaryDetailPathsFooter: "[SUMMARY_DETAIL_PATHS_END]",
   }),
