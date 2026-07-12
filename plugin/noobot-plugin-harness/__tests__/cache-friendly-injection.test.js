@@ -110,3 +110,58 @@ test("dynamic harness system injections compose before history", async () => {
   );
   assert.equal(ctx.messageBlocks.system.at(-1)?.content, "dynamic planning context");
 });
+
+test("main model incremental context keeps unsummarized same-type harness relays append-only", () => {
+  const relayOne = {
+    role: "user",
+    content: "[来自harness外部模型输出/guidance]\nfirst guidance",
+    injectedMessage: true,
+    injectedBy: "harness-plugin",
+    injectedMessageType: "separate_model_relay:guidance",
+  };
+  const assistant = {
+    role: "assistant",
+    content: "",
+    tool_calls: [{ id: "call-1", name: "read_file", args: {}, type: "tool_call" }],
+  };
+  const tool = {
+    role: "tool",
+    content: "{\"toolName\":\"read_file\",\"ok\":true}",
+    tool_call_id: "call-1",
+  };
+  const relayTwo = {
+    role: "user",
+    content: "[来自harness外部模型输出/guidance]\nsecond guidance",
+    injectedMessage: true,
+    injectedBy: "harness-plugin",
+    injectedMessageType: "separate_model_relay:guidance",
+  };
+
+  const beforeSummary = resolveMainModelFinalMessages({
+    incrementalMessages: [relayOne, assistant, tool, relayTwo],
+  }).messages;
+
+  assert.deepEqual(
+    beforeSummary.map((item) => item.content),
+    [
+      "[来自harness外部模型输出/guidance]\nfirst guidance",
+      "",
+      "{\"toolName\":\"read_file\",\"ok\":true}",
+      "[来自harness外部模型输出/guidance]\nsecond guidance",
+    ],
+  );
+
+  relayOne.summarized = true;
+  const afterSummary = resolveMainModelFinalMessages({
+    incrementalMessages: [relayOne, assistant, tool, relayTwo],
+  }).messages;
+
+  assert.deepEqual(
+    afterSummary.map((item) => item.content),
+    [
+      "",
+      "{\"toolName\":\"read_file\",\"ok\":true}",
+      "[来自harness外部模型输出/guidance]\nsecond guidance",
+    ],
+  );
+});

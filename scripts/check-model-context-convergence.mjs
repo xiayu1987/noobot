@@ -297,6 +297,37 @@ if (historyLimitUsesTurnThreshold && centralizedHistoryLimitIsValid) {
   );
 }
 
+const mainIncrementalResolverMatch = normalizerText.match(
+  /export\s+function\s+resolveMainModelIncrementalMessages\s*\([\s\S]*?\n}\n/,
+);
+const mainIncrementalResolverText = mainIncrementalResolverMatch
+  ? mainIncrementalResolverMatch[0]
+  : "";
+if (!mainIncrementalResolverText) {
+  fail(
+    "main incremental resolver body missing",
+    "resolveMainModelIncrementalMessages must remain explicit so append-only incremental semantics can be guarded.",
+  );
+} else if (
+  /\bkeepLatestInjectedOnly\b/.test(mainIncrementalResolverText) ||
+  /\bfilterLatestInjectedMessagesByType\b/.test(mainIncrementalResolverText) ||
+  /\bfilterInjectedMessagesForDialog\b/.test(mainIncrementalResolverText)
+) {
+  fail(
+    "main incremental resolver compacts injected messages",
+    "Main incremental context must stay append-only before summary: do not apply latest-injected or dialog injected compaction in resolveMainModelIncrementalMessages.",
+  );
+} else if (
+  !/return\s+filterForModelContext\(\s*sourceMessages\s*\)\s*;/.test(mainIncrementalResolverText)
+) {
+  fail(
+    "main incremental resolver drifted from append-only filter",
+    "resolveMainModelIncrementalMessages must filter only summarized/invalid tool-pair messages via filterForModelContext(sourceMessages).",
+  );
+} else {
+  pass("main incremental keeps unsummarized injected messages append-only");
+}
+
 const helpersText = assertFileContains("agent/src/system-core/bot-manage/session/model-message-runtime-helpers.js", [
   { name: "uses central final resolver", pattern: /resolveMainModelFinalMessages/ },
   { name: "reads messageBlocks", pattern: /ctx\?\.messageBlocks/ },
