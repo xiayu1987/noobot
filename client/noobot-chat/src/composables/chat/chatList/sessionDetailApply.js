@@ -272,7 +272,8 @@ export function createSessionDetailApplicator({
         sessionItem.messages,
         sessionItem.title || detail.sessionId.slice(0, 8),
       );
-      const shouldNavigateToLastMessage = options.navigateToLastMessage !== false;
+      const shouldNavigateToLastMessage =
+        options.navigateToLastMessage !== false && options.scrollToBottom !== false;
       if (shouldNavigateToLastMessage) navigateToLastMessage?.();
     } else if (serverSessionTitle) {
       sessionItem.title = serverSessionTitle;

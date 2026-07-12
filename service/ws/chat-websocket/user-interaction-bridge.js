@@ -4,13 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomBytes } from "node:crypto";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
   writeRoutedRuntimeEvent,
 } from "@noobot/runtime-events";
 
-const USER_INTERACTION_TIMEOUT_MS = 10 * 60 * 1000;
+const USER_INTERACTION_TIMEOUT_MS = TIME_THRESHOLDS.service.userInteractionTimeoutMs;
 
 /**
  * Builds the user-interaction bridge plus a helper to reject all pending

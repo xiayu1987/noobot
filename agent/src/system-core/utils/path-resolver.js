@@ -364,6 +364,21 @@ export function resolveToolInputPath({
         hint: "Sandbox paths are not allowed here.",
       };
     }
+    if (classified.sandboxRoot === "project" && normalizedWorkspace && !resolveSandboxUserRoot(runtime)) {
+      const normalizedProjectPath = normalizeSlashPath(classified.normalized);
+      const resolvedPath = normalizedProjectPath === "/project"
+        ? normalizedWorkspace
+        : filePath.resolve(normalizedWorkspace, normalizedProjectPath.slice("/project/".length));
+      return {
+        ...classified,
+        ok: true,
+        resolvedPath,
+        workspaceRelativePath: "",
+        mapped: true,
+        error: "",
+        hint: "",
+      };
+    }
     if (classified.sandboxRoot === "workspace" && normalizedWorkspaceRoot) {
       const normalizedSandboxPath = normalizeSlashPath(classified.normalized);
       const sandboxUserRoot = normalizeSlashPath(resolveSandboxUserRoot(runtime));
@@ -980,7 +995,7 @@ function resolveSandboxUserRoot(runtime = {}) {
     .trim()
     .toLowerCase();
   if (scope === "user") return "/workspace";
-  const userPart = sanitizeSandboxUserPart(runtime?.userId || "user") || "user";
+  const userPart = sanitizeSandboxUserPart(resolveRuntimeUserId({ runtime }) || "user") || "user";
   return `/workspace/${userPart}`;
 }
 

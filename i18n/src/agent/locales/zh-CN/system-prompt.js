@@ -68,12 +68,12 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     },
     pathGuidance: {
       preferRelative: "默认目录见 directories：currentDirectory、rootDirectory、opsWorkdir。",
-      sandboxView: "当前为沙箱视角；文件/patch 相对路径基于 directories.rootDirectory，execute_script 默认目录为 directories.opsWorkdir，绝对路径只使用 directories.allowedRoots。",
-      sandboxMounts: "挂载目录只使用 directories.extraMountTargets/allowedRoots 中出现的路径。",
-      hostView: "当前为 host/workspace 视角；文件/patch 相对路径基于 directories.rootDirectory，execute_script 默认目录为 directories.opsWorkdir，cwd/currentDirectory 仅说明当前进程目录。",
-      superUserHost: "当前是超级管理员；必要时可使用 Windows/macOS/Linux host 绝对路径。",
-      regularHost: "绝对路径需位于工作区或已挂载根内。",
-      patchRoot: "patch root 通常省略；若填写，只能是工作区相对子目录。",
+      sandboxView: "沙箱视角：相对路径基于 rootDirectory；脚本默认在 opsWorkdir；绝对路径只用 allowedRoots。",
+      sandboxMounts: "额外挂载只用 extraMountTargets 中的路径。",
+      hostView: "Host 视角：相对路径基于 rootDirectory；脚本默认在 opsWorkdir；currentDirectory 仅说明当前目录。",
+      superUserHost: "超级管理员：可使用 Windows/macOS/Linux host 绝对路径。",
+      regularHost: "绝对路径必须位于 allowedRoots 内。",
+      patchRoot: "patch root 通常省略；填写时只能是工作区相对子目录。",
     },
   },
   memoryPrompt: {

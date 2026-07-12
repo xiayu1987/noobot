@@ -261,7 +261,7 @@ export function useReconnectReplay({
       if (detail) {
         chatList.applySessionDetail(detail, {
           preserveCurrentMessages: false,
-          navigateToLastMessage: false,
+          scrollToBottom: false,
         });
         detailApplied = true;
       }

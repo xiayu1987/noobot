@@ -600,7 +600,7 @@ export function createChatEngineSender({
             reuseRecentlyLoaded: false,
           });
           if (!detail) throw streamError;
-          applySessionDetail(detail, { preserveCurrentMessages: true, navigateToLastMessage: false });
+          applySessionDetail(detail, { preserveCurrentMessages: true, scrollToBottom: false });
           if (!isNewerSessionVersion(getCurrentSessionVersion(activeSession), previousVersion)) {
             throw streamError;
           }
@@ -693,7 +693,7 @@ export function createChatEngineSender({
             if (stoppedDetail) {
               applySessionDetail(stoppedDetail, {
                 preserveCurrentMessages: false,
-                navigateToLastMessage: false,
+                scrollToBottom: false,
               });
             }
           } catch (detailError) {

@@ -65,6 +65,7 @@ watch(
           <span
             class="chat-message-navigator__item"
             :class="`is-${String(item.role || 'session').trim().toLowerCase() || 'session'}`"
+            :title="item.title"
           >
             <span class="chat-message-navigator__role">{{ item.roleLabel || item.role }}</span>
             <span v-if="item.preview" class="chat-message-navigator__content">{{ item.preview }}</span>
