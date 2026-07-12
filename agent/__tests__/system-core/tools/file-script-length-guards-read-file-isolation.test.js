@@ -426,3 +426,22 @@ test("read_file: 默认返回行号且可关闭行号", async () => {
   assert.equal(withoutLines.content, "b\nc");
   assert.equal(withoutLines.includeLineNumbers, false);
 });
+
+test("read_file: 默认读取行数阈值为 1000", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-read-default-lines-"));
+  const content = Array.from({ length: 1001 }, (_, index) => `line-${index + 1}`).join("\n");
+  await fs.writeFile(path.join(basePath, "long.txt"), content, "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === "read_file");
+  assert.ok(tool);
+
+  const result = parseToolResult(await tool.invoke({ filePath: "long.txt", includeLineNumbers: false }));
+
+  assert.equal(result.ok, true);
+  assert.equal(result.startLine, 1);
+  assert.equal(result.endLine, 1000);
+  assert.equal(result.totalLines, 1001);
+  assert.equal(result.truncated, true);
+  assert.equal(result.content.split("\n").length, 1000);
+  assert.equal(result.content.endsWith("line-1000"), true);
+});

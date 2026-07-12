@@ -1,0 +1,10 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+
+export const LOCALE = Object.freeze({
+  ZH_CN: "zh-CN",
+  EN_US: "en-US",
+});

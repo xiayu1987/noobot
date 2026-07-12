@@ -100,3 +100,41 @@ test("adaptToolsForBinding keeps tool_choice as auto even when runtime marks req
 
   assert.equal(adapted.bindOptions.tool_choice, "auto");
 });
+
+test("adaptToolsForBinding omits tool_choice for AWS Bedrock compatible providers", () => {
+  const adapted = adaptToolsForBinding([{ name: "read_file" }], {
+    activeModelName: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    activeModelAlias: "bedrock_claude",
+    activeModelSpec: {
+      provider: "aws_bedrock",
+      base_url: "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1",
+      model: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    },
+    globalConfig: {},
+    userConfig: {},
+  });
+
+  assert.deepEqual(adapted.bindOptions, {});
+  assert.equal(adapted.toolChoiceDisabled, true);
+});
+
+test("adaptToolsForBinding omits tool_choice for Claude compatible providers", () => {
+  const adapted = adaptToolsForBinding([{ name: "read_file" }], {
+    activeModelName: "claude-sonnet-via-gateway",
+    activeModelAlias: "third_party_claude",
+    defaultModelSpec: {
+      alias: "third_party_claude",
+      base_url: "https://llm-gateway.example.com/v1",
+      model: "claude-sonnet-via-gateway",
+    },
+    globalConfig: {},
+    userConfig: {},
+  });
+
+  assert.deepEqual(adapted.bindOptions, {});
+  assert.deepEqual(
+    adapted.tools.map((toolItem) => toolItem.name),
+    ["read_file"],
+  );
+  assert.equal(adapted.toolChoiceDisabled, true);
+});

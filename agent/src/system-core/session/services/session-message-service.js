@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeMessageEntity } from "../entities/session-entity.js";
-import { createHash } from "node:crypto";
 import {
   buildTurnTerminalCommand,
   isSameTurnStatus,
@@ -16,205 +15,30 @@ import {
 } from "../../context/session/dialog-process-id-resolver.js";
 import { getTransferAttachmentMetas } from "../../semantic-transfer/storage/consumer.js";
 import {
-  attachmentMatchKeys,
-  findMatchingAttachmentMeta,
-  mergeAttachmentMetaPreferRich,
-} from "../../attach/index.js";
-
-function dedupeAttachments(attachments = []) {
-  const source = Array.isArray(attachments) ? attachments : [];
-  const seen = new Set();
-  return source.filter((item = {}) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
-    const key = String(item?.attachmentId || "").trim() ||
-      `${String(item?.path || "").trim()}|${String(item?.relativePath || "").trim()}|${String(item?.name || "").trim()}`;
-    if (!key) return true;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-function normalizeIncomingAttachmentsForSessionMessage(existingAttachments = [], incomingAttachments = []) {
-  if (!Array.isArray(incomingAttachments)) return undefined;
-  if (incomingAttachments.length === 0) return [];
-  // Payload attachments may be raw transport refs ({ name, mimeType, size }).
-  // Session user-message attachments are the display/edit-back carrier, so write
-  // paths must merge rich-first instead of letting raw refs downgrade parsedResult
-  // or preview/download addressing.  Only preserve rich fields for attachments
-  // still present in the explicit incoming set; [] remains delete-all.
-  return dedupeAttachments(incomingAttachments.map((incoming) => {
-    const existing = findMatchingAttachmentMeta(incoming, existingAttachments);
-    return existing ? mergeAttachmentMetaPreferRich(existing, incoming) : incoming;
-  }));
-}
-
-function assertCanonicalAttachments(attachments = [], sessionId = "") {
-  for (const item of Array.isArray(attachments) ? attachments : []) {
-    const attachmentId = String(item?.attachmentId || item?.id || "").trim();
-    const ownerSessionId = String(item?.sessionId || "").trim();
-    const parsed = item?.parsedResult && typeof item.parsedResult === "object" ? item.parsedResult : {};
-    const address = String(item?.path || item?.relativePath || item?.sandboxPath || item?.url || parsed?.path || parsed?.relativePath || "").trim();
-    if (!attachmentId || !ownerSessionId || ownerSessionId !== String(sessionId || "").trim() || !address) {
-      const error = new Error("attachment must be canonical and belong to the current session");
-      error.statusCode = 400;
-      error.errorCode = "INVALID_CANONICAL_ATTACHMENT";
-      throw error;
-    }
-  }
-}
-
-function normalizeAnchorValue(value = "") {
-  return String(value || "").trim();
-}
-
-function resolveTurnScopeId(message = {}) {
-  return normalizeAnchorValue(message?.turnScopeId || "");
-}
-
-function resolveSessionVersion(session = {}) {
-  const version = Number(session?.version ?? session?.revision ?? 0);
-  return Number.isFinite(version) ? version : 0;
-}
-
-function createRequestHash(payload = {}) {
-  return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
-}
-
-function assertIdempotencyRequestMatches(storedHash = "", requestHash = "") {
-  if (!storedHash || storedHash === requestHash) return;
-  const error = new Error("idempotency key was reused with a different request");
-  error.statusCode = 409;
-  error.errorCode = "IDEMPOTENCY_KEY_REUSED";
-  throw error;
-}
-
-function findMutationReceipt(session = {}, operation = "", idempotencyKey = "") {
-  if (!idempotencyKey) return null;
-  return (Array.isArray(session?.mutationReceipts) ? session.mutationReceipts : []).find((receipt) =>
-    receipt?.operation === operation && receipt?.idempotencyKey === idempotencyKey) || null;
-}
-
-function rememberMutationReceipt(session = {}, receipt = {}) {
-  session.mutationReceipts = [
-    ...(Array.isArray(session.mutationReceipts) ? session.mutationReceipts : []),
-    receipt,
-  ].slice(-100);
-}
-
-function normalizeExpectedVersion(expectedVersion) {
-  if (expectedVersion === null || expectedVersion === undefined || expectedVersion === "") return null;
-  const normalized = Number(expectedVersion);
-  if (!Number.isSafeInteger(normalized) || normalized < 0) {
-    const error = new Error("expectedVersion must be a non-negative safe integer");
-    error.statusCode = 400;
-    error.errorCode = "INVALID_SESSION_VERSION";
-    throw error;
-  }
-  return normalized;
-}
-
-function clearReplacementUserRuntimeState(message = {}) {
-  if (!message || typeof message !== "object" || Array.isArray(message)) return {};
-  const nextMessage = { ...message };
-  for (const key of [
-    "channelState",
-    "dialogId",
-    "dialog_id",
-    "dialog_process_id",
-    "status",
-    "statusLabel",
-    "state",
-    "thinkingFinishedAt",
-    "thinkingStartedAt",
-    "__noobotRuntimeRunStateKey",
-  ]) {
-    delete nextMessage[key];
-  }
-  return nextMessage;
-}
-
-function createMessageAnchorMatcher(anchor = {}) {
-  const turnScopeId = normalizeAnchorValue(anchor?.turnScopeId);
-  if (turnScopeId) {
-    return (messageItem) => resolveTurnScopeId(messageItem) === turnScopeId;
-  }
-  return null;
-}
-
-function resolveUserTurnStartIndex(messages = [], anchorIndex = -1) {
-  if (anchorIndex < 0) return -1;
-  for (let index = anchorIndex; index >= 0; index -= 1) {
-    if (normalizeAnchorValue(messages[index]?.role) === "user") return index;
-  }
-  return anchorIndex;
-}
-
-function uniqueValues(values = []) {
-  return [...new Set(values.map((value) => normalizeAnchorValue(value)).filter(Boolean))];
-}
-
-function resolveTurnTimingKey(item = {}) {
-  return normalizeAnchorValue(item?.turnScopeId) || resolveMessageDialogProcessId(item);
-}
-
-function upsertSessionTurnTiming(session = {}, timing = {}) {
-  const turnScopeId = normalizeAnchorValue(timing?.turnScopeId);
-  const dialogProcessId = resolveMessageDialogProcessId(timing);
-  const thinkingStartedAt = normalizeAnchorValue(timing?.thinkingStartedAt);
-  const thinkingFinishedAt = normalizeAnchorValue(timing?.thinkingFinishedAt);
-  if ((!turnScopeId && !dialogProcessId) || (!thinkingStartedAt && !thinkingFinishedAt)) return;
-  const incoming = {
-    turnScopeId,
-    dialogProcessId,
-    ...(thinkingStartedAt ? { thinkingStartedAt } : {}),
-    ...(thinkingFinishedAt ? { thinkingFinishedAt } : {}),
-  };
-  const incomingKey = resolveTurnTimingKey(incoming);
-  const source = Array.isArray(session.turnTimings) ? session.turnTimings : [];
-  let matched = false;
-  session.turnTimings = source.map((item) => {
-    if (resolveTurnTimingKey(item) !== incomingKey) return item;
-    matched = true;
-    return { ...item, ...incoming };
-  });
-  if (!matched) session.turnTimings.push(incoming);
-}
-
-function pruneSessionTurnTimings(session = {}) {
-  const messages = Array.isArray(session.messages) ? session.messages : [];
-  const liveKeys = new Set(messages.map(resolveTurnTimingKey).filter(Boolean));
-  session.turnTimings = (Array.isArray(session.turnTimings) ? session.turnTimings : [])
-    .filter((item) => liveKeys.has(resolveTurnTimingKey(item)));
-}
-
-function pruneSessionTurnStatuses(session = {}) {
-  const messages = Array.isArray(session.messages) ? session.messages : [];
-  session.turnStatuses = (Array.isArray(session.turnStatuses) ? session.turnStatuses : [])
-    .filter((status) => messages.some((message) => isSameTurnStatus(status, message)));
-}
-
-function buildTurnScopeReplacement({
-  replacedMessages = [],
-  replacementMessages = [],
-  replacementUserMessage = {},
-} = {}) {
-  const pickTurnScopeIds = (messages = []) => uniqueValues(messages.map(resolveTurnScopeId));
-  const pickDialogProcessIds = (messages = []) => uniqueValues(messages.map(resolveMessageDialogProcessId));
-  const replacedDialogProcessIds = pickDialogProcessIds(replacedMessages);
-  const replacementDialogProcessIds = pickDialogProcessIds(replacementMessages)
-    .filter((dialogProcessId) => !replacedDialogProcessIds.includes(dialogProcessId));
-  return {
-    replacedTurnScopeIds: pickTurnScopeIds(replacedMessages),
-    replacementTurnScopeId: resolveTurnScopeId(replacementUserMessage) ||
-      pickTurnScopeIds(replacementMessages)[0] ||
-      "",
-    replacementTurnScopeIds: pickTurnScopeIds(replacementMessages),
-    replacedDialogProcessIds,
-    replacementDialogProcessId: replacementDialogProcessIds[0] || "",
-    replacementDialogProcessIds,
-  };
-}
+  dedupeAttachments,
+  normalizeIncomingAttachmentsForSessionMessage,
+  assertCanonicalAttachments,
+} from "./session-message-service/attachment-helpers.js";
+import {
+  resolveTurnScopeId,
+  resolveSessionVersion,
+  createMessageAnchorMatcher,
+  resolveUserTurnStartIndex,
+  clearReplacementUserRuntimeState,
+} from "./session-message-service/anchor-utils.js";
+import {
+  createRequestHash,
+  assertIdempotencyRequestMatches,
+  findMutationReceipt,
+  rememberMutationReceipt,
+  normalizeExpectedVersion,
+} from "./session-message-service/idempotency-guards.js";
+import {
+  upsertSessionTurnTiming,
+  pruneSessionTurnTimings,
+  pruneSessionTurnStatuses,
+  buildTurnScopeReplacement,
+} from "./session-message-service/turn-timing.js";
 
 export class SessionMessageService {
   constructor({

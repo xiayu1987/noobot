@@ -90,6 +90,71 @@ function resolveFileToolIsSandbox(agentContext = {}) {
   return scriptConfig?.sandboxMode === true || scriptConfig?.sandbox_mode === true;
 }
 
+function uniqueNumbers(values = []) {
+  return Array.from(new Set(values
+    .map((item) => Number(item))
+    .filter((item) => Number.isInteger(item) && item >= 0)));
+}
+
+function buildPatchParseAttempts({ format = "", patch = "", strip = 1 } = {}) {
+  const requestedFormat = String(format || "").trim();
+  const trimmedPatch = String(patch || "").trimStart();
+  const stripAttempts = uniqueNumbers([strip, 1, 0, 2]);
+  const unifiedAttempts = stripAttempts.map((stripValue) => ({
+    format: "unified_diff",
+    strip: stripValue,
+  }));
+  const applyAttempt = { format: "apply_patch", strip };
+
+  if (requestedFormat === "apply_patch") return [applyAttempt, ...unifiedAttempts];
+  if (requestedFormat === "unified_diff") return [...unifiedAttempts, applyAttempt];
+  if (trimmedPatch.startsWith("*** Begin Patch")) return [applyAttempt, ...unifiedAttempts];
+  return [...unifiedAttempts, applyAttempt];
+}
+
+function parsePatchAttempt({ patch = "", attempt = {} } = {}) {
+  return attempt.format === "apply_patch"
+    ? parseApplyPatch(patch)
+    : parseUnifiedDiff(patch, attempt.strip);
+}
+
+async function preparePatchExecution({ format = "", patch = "", strip = 1, root = "", agentContext = {} } = {}) {
+  const attempts = buildPatchParseAttempts({ format, patch, strip });
+  const failures = [];
+  for (const attempt of attempts) {
+    let parsed = null;
+    try {
+      parsed = parsePatchAttempt({ patch, attempt });
+    } catch (error) {
+      failures.push({ ...attempt, stage: "parse", error });
+      continue;
+    }
+    try {
+      const targets = await resolvePatchTargetsWithOptions({ patches: parsed, agentContext, root });
+      return { ...attempt, parsed, targets };
+    } catch (error) {
+      failures.push({ ...attempt, stage: "resolve", error });
+    }
+  }
+  const resolveFailures = failures.filter((item) => item.stage === "resolve");
+  const firstFailure = failures[0]?.error;
+  const firstResolveFailure = resolveFailures[0]?.error;
+  const lastFailure = failures[failures.length - 1]?.error;
+  const error = firstResolveFailure || lastFailure || firstFailure;
+  if (error?.details && typeof error.details === "object") {
+    error.details.patchAttempts = failures.map((item) => ({
+      format: item.format,
+      strip: item.strip,
+      stage: item.stage,
+      message: item.error?.message || String(item.error),
+    }));
+  }
+  throw error || recoverableToolError("invalid patch", {
+    code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+    details: { field: "patch" },
+  });
+}
+
 export function createFileTool({ agentContext }) {
   const isSandbox = resolveFileToolIsSandbox(agentContext);
   const runtime = agentContext?.execution?.controllers?.runtime || {};
@@ -300,18 +365,10 @@ export function createFileTool({ agentContext }) {
       dryRun: z.boolean().optional().default(false).describe(tTool(agentContext, "tools.patch_file.fieldDryRun")),
     }),
     func: async ({ format, patch = "", strip = 1, root = "", dryRun = false }) => {
-      const requestedFormat = String(format || "").trim();
-      const normalizedFormat = requestedFormat === "apply_patch"
-        ? "apply_patch"
-        : requestedFormat === "unified_diff"
-          ? "unified_diff"
-          : String(patch || "").trimStart().startsWith("*** Begin Patch")
-            ? "apply_patch"
-            : "unified_diff";
-      const parsed = normalizedFormat === "unified_diff"
-        ? parseUnifiedDiff(patch, strip)
-        : parseApplyPatch(patch);
-      const targets = await resolvePatchTargetsWithOptions({ patches: parsed, agentContext, root });
+      const prepared = await preparePatchExecution({ format, patch, strip, root, agentContext });
+      const normalizedFormat = prepared.format;
+      const resolvedStrip = prepared.strip;
+      const targets = prepared.targets;
       const writePlans = [];
       const deletePlans = [];
       for (const item of targets) {
@@ -335,7 +392,7 @@ export function createFileTool({ agentContext }) {
         const original = await readFile(item.resolvedOldPath, "utf8");
         let nextContent = "";
         try {
-          nextContent = normalizedFormat === "unified_diff"
+          nextContent = normalizedFormat === "unified_diff" && !(item.hunks || []).some((hunk) => hunk?.searchOnly)
             ? applyUnifiedHunks(original, item.hunks || [])
             : applySearchHunks(original, item.hunks || []);
         } catch (error) {
@@ -368,6 +425,7 @@ export function createFileTool({ agentContext }) {
       return toToolJsonResult(TOOL_NAME.PATCH_FILE, {
         ok: true,
         format: normalizedFormat,
+        strip: normalizedFormat === "unified_diff" ? resolvedStrip : undefined,
         dryRun: dryRun === true,
         root: String(root || ""),
         changedFiles: writePlans.map((item) => item.displayPath),
