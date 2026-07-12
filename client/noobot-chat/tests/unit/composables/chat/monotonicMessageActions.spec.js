@@ -8,7 +8,10 @@ import {
 } from "../../../../src/composables/chat/sessionRunStateMachine";
 import { RoleEnum } from "../../../../src/shared/constants/chatConstants";
 
-function createActions({ runStateSnapshot = ref(createInitialSessionRunState()) } = {}) {
+function createActions({
+  runStateSnapshot = ref(createInitialSessionRunState()),
+  applyRunStateEvent = vi.fn(),
+} = {}) {
   const userMessage = {
     id: "u1",
     role: RoleEnum.USER,
@@ -66,9 +69,17 @@ function createActions({ runStateSnapshot = ref(createInitialSessionRunState()) 
     messageOperationStore: {},
     monotonicActionStopTimeoutMs: 1,
     monotonicActionStopPollIntervalMs: 1,
-    applyRunStateEvent: vi.fn(),
+    applyRunStateEvent,
   });
-  return { actions, activeSession, userMessage, deleteSessionMessagesFromApi, fetchSessionDetail, applySessionDetail };
+  return {
+    actions,
+    activeSession,
+    userMessage,
+    deleteSessionMessagesFromApi,
+    fetchSessionDetail,
+    applySessionDetail,
+    applyRunStateEvent,
+  };
 }
 
 describe("monotonicMessageActions stop-window gates", () => {
@@ -140,5 +151,64 @@ describe("monotonicMessageActions stop-window gates", () => {
     expect(deleteSessionMessagesFromApi).toHaveBeenCalledTimes(2);
     expect(deleteSessionMessagesFromApi.mock.calls[0][0].expectedVersion).toBe(1);
     expect(deleteSessionMessagesFromApi.mock.calls[1][0].expectedVersion).toBe(2);
+  });
+
+  it("applies the top-level mutation version after deleting a stopped turn", async () => {
+    const { actions, activeSession, userMessage, deleteSessionMessagesFromApi } = createActions();
+    deleteSessionMessagesFromApi.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        sessionId: "s1",
+        sessionVersion: 2,
+        session: { ...activeSession.value, messages: [], rawMessages: [] },
+      }),
+    });
+
+    expect(await actions.deleteMonotonicMessage(userMessage)).toBe(true);
+    expect(activeSession.value.version).toBe(2);
+    expect(activeSession.value.revision).toBe(2);
+  });
+
+  it("resets the run state to idle after deleting a stopped turn so a later continue is not blocked", async () => {
+    const runStateSnapshot = ref(createInitialSessionRunState());
+    applySessionRunStateEvent({
+      stateRef: runStateSnapshot,
+      event: { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED, source: "test" },
+    });
+    applySessionRunStateEvent({
+      stateRef: runStateSnapshot,
+      event: {
+        type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
+        state: "user_stopped",
+        sessionId: "s1",
+        dialogProcessId: "dp1",
+        turnScopeId: "turn-1",
+        source: "test",
+      },
+    });
+    const applyRunStateEvent = vi.fn();
+    const { actions, activeSession, userMessage, deleteSessionMessagesFromApi } = createActions({
+      runStateSnapshot,
+      applyRunStateEvent,
+    });
+    deleteSessionMessagesFromApi.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        sessionId: "s1",
+        sessionVersion: 2,
+        session: { ...activeSession.value, messages: [], rawMessages: [] },
+      }),
+    });
+
+    expect(await actions.deleteMonotonicMessage(userMessage)).toBe(true);
+    expect(activeSession.value.messages).toHaveLength(0);
+    expect(applyRunStateEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: SESSION_RUN_EVENT.LOCAL_RESET,
+        turnScopeId: "turn-1",
+      }),
+    );
   });
 });

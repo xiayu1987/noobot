@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
-import { filePath as path } from "../../utils/path-resolver.js";
+import { filePath as path, isAbsolutePathAnyPlatform } from "../../utils/path-resolver.js";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
@@ -410,7 +410,16 @@ export function createFileTool({ agentContext }) {
     func: async ({ format, patch = "", strip = 1, root = "", dryRun = false }) => {
       const prepared = await preparePatchExecution({ format, patch, strip, root, agentContext });
       const normalizedFormat = prepared.format;
-      const resolvedStrip = prepared.strip;
+      // strip only affects relative diff prefixes (git a/, b/, etc). When every
+      // target path is absolute, strip is never applied, so the retry-loop value
+      // in prepared.strip is meaningless; report null to avoid a misleading echo.
+      const stripAppliesToTargets = prepared.targets.some((item) => {
+        const oldPath = String(item.oldPath || "");
+        const newPath = String(item.newPath || "");
+        const relevant = [oldPath, newPath].filter((value) => value && value !== "/dev/null");
+        return relevant.some((value) => !isAbsolutePathAnyPlatform(value));
+      });
+      const resolvedStrip = stripAppliesToTargets ? prepared.strip : null;
       const resolvedRoot = prepared.root;
       const targets = prepared.targets;
       const writePlans = [];
