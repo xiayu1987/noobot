@@ -56,7 +56,8 @@ describe("AppShell chat message navigator", () => {
     expect(chatMessageNavItemsStateSource).toContain("getMessageAnchorId(messageItem, messageIndex)");
     expect(chatMessageNavItemsStateSource).toContain("content.slice(0, 28)");
     expect(chatMessageNavItemsStateSource).toContain("title: `${messageIndex + 1}. ${roleLabel}${content ? `：${content}` : \"\"}`");
-    expect(chatMessageNavigatorComponentSource).toContain(':title="item.title"');
+    expect(chatMessageNavigatorComponentSource).toContain('popper-class="chat-message-navigator-popover"');
+    expect(chatMessageNavigatorComponentSource).not.toContain(':title="item.title"');
     expect(chatMessageNavigatorPanelSource).toContain("function handleSelectChatMessageNavItem(item = {})");
     expect(chatMessageNavigatorPanelSource).toContain("selectChatMessageNavigatorItem({");
     expect(chatMessageNavigatorStateSource).toContain("function normalizeChatMessageNavigatorAnchor(item = {})");

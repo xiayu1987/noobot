@@ -10,10 +10,11 @@ const sessionListPanelSource = readFileSync(
 );
 
 describe("SessionListPanel", () => {
-  it("exposes complete session information through hover titles", () => {
-    expect(sessionListPanelSource).toContain("function getSessionHoverTitle(sessionItem = {})");
-    expect(sessionListPanelSource).toContain("const backendSessionId = String(sessionItem?.backendSessionId || \"\").trim();");
-    expect(sessionListPanelSource).toContain("return [title, ...idLines].filter(Boolean).join(\"\\n\");");
-    expect(sessionListPanelSource).toContain(':title="getSessionHoverTitle(sessionItem)"');
+  it("exposes complete session information through the custom hover popover only", () => {
+    expect(sessionListPanelSource).toContain('popper-class="session-hover-popover"');
+    expect(sessionListPanelSource).toContain('translate("common.sessionBackendId")');
+    expect(sessionListPanelSource).toContain('translate("common.sessionLocalId")');
+    expect(sessionListPanelSource).not.toContain("function getSessionHoverTitle(sessionItem = {})");
+    expect(sessionListPanelSource).not.toContain(':title="getSessionHoverTitle(sessionItem)"');
   });
 });

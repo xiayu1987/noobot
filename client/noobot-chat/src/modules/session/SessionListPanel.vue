@@ -118,19 +118,6 @@ function formatSessionTime(value = "") {
   return new Date(timeMs).toLocaleString();
 }
 
-function getSessionHoverTitle(sessionItem = {}) {
-  const title = String(sessionItem?.title || "").trim();
-  const backendSessionId = String(sessionItem?.backendSessionId || "").trim();
-  const localSessionId = String(sessionItem?.id || "").trim();
-  const idLines = [
-    backendSessionId ? `${translate("common.sessionBackendId")}: ${backendSessionId}` : "",
-    localSessionId && localSessionId !== backendSessionId
-      ? `${translate("common.sessionLocalId")}: ${localSessionId}`
-      : "",
-  ];
-  return [title, ...idLines].filter(Boolean).join("\n");
-}
-
 async function promptRenameSession(sessionItem = {}) {
   if (props.sending) return;
   const currentTitle = String(sessionItem?.title || "").trim();
@@ -189,7 +176,6 @@ watch(
                 <div
                   class="session-item noobot-subtle-row"
                   :class="{ active: sessionItem.id === activeSessionId }"
-                  :title="getSessionHoverTitle(sessionItem)"
                   @click="emit('select-session', sessionItem.id)"
                 >
                   <div class="session-icon-wrapper">
