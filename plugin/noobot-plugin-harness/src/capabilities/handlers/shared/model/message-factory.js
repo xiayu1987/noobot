@@ -151,11 +151,17 @@ function rewriteMessageForCapabilityContext(message = {}, locale = "zh-CN") {
   if (normalized.role === "assistant" && Array.isArray(normalized.tool_calls) && normalized.tool_calls.length) {
     const semanticContent = buildToolCallSemanticText(normalized.tool_calls, locale);
     if (!semanticContent) return null;
-    const rewritten = {
-      role: "user",
-      content: semanticContent,
-    };
-    return markContextOriginFromNormalized(rewritten, normalized);
+    const records = [];
+    if (normalized.content) {
+      records.push(markContextOriginFromNormalized({
+        role: "user",
+        content: translateI18nText(locale, HARNESS_I18N_KEYSET.MESSAGE_FACTORY.ANALYSIS_SEMANTIC_LINE, {
+          content: normalized.content,
+        }),
+      }, normalized));
+    }
+    records.push(markContextOriginFromNormalized({ role: "user", content: semanticContent }, normalized));
+    return records;
   }
 
   const passthrough = {
@@ -198,7 +204,7 @@ export function buildCapabilityModelMessages({
   const normalizedPostTaskSystemMessages = normalizeTextList(postTaskSystemMessages);
   const normalizedPostTaskMessages = normalizeTextList(postTaskMessages);
   const flattenedAgentMessages = (Array.isArray(agentMessages) ? agentMessages : [])
-    .map((item = {}) => rewriteMessageForCapabilityContext(item, locale))
+    .flatMap((item = {}) => rewriteMessageForCapabilityContext(item, locale) || [])
     .filter((item) => item && String(item.content || "").trim());
   const constraintMessages = normalizeTextList(constraints)
     .map((content) => markProtocolMessage({ role: "system", content }, "constraint"));

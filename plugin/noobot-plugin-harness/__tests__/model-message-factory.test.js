@@ -33,6 +33,22 @@ test("buildCapabilityModelMessages rewrites assistant tool_calls into semantic u
   assert.equal(output[0].content, "工具调用记录：execute_script脚本被调用,参数{\"command\":\"ls -la\"}");
 });
 
+test("buildCapabilityModelMessages puts non-empty tool call content in an analysis record first", () => {
+  const output = buildCapabilityModelMessages({
+    locale: "zh-CN",
+    agentMessages: [{
+      role: "assistant",
+      content: "先检查当前配置",
+      tool_calls: [{ function: { name: "read_file", arguments: "{\"filePath\":\"a.js\"}" } }],
+    }],
+  });
+
+  assert.deepEqual(output.map(({ role, content }) => ({ role, content })), [
+    { role: "user", content: "分析记录：先检查当前配置" },
+    { role: "user", content: "工具调用记录：read_file脚本被调用,参数{\"filePath\":\"a.js\"}" },
+  ]);
+});
+
 test("buildCapabilityModelMessages rewrites tool role into assistant role", () => {
   const output = buildCapabilityModelMessages({
     locale: "zh-CN",

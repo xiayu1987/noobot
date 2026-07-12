@@ -56,6 +56,7 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     FORCED_REASON_TOOL_REQUESTED: "taskAcceptanceForcedReasonToolRequested",
   }),
   MESSAGE_FACTORY: Object.freeze({
+    ANALYSIS_SEMANTIC_LINE: "messageFactoryAnalysisSemanticLine",
     TOOL_CALL_UNKNOWN_SCRIPT: "messageFactoryToolCallUnknownScript",
     TOOL_CALL_NO_ARGUMENTS: "messageFactoryToolCallNoArguments",
     TOOL_CALL_SEMANTIC_LINE: "messageFactoryToolCallSemanticLine",
