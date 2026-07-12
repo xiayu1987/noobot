@@ -168,7 +168,9 @@ export function resolveMainModelHistoryMessages({
 export function resolveMainModelIncrementalMessages({
   sourceMessages = [],
 } = {}) {
-  return filterForModelContext(sourceMessages, { keepLatestInjectedOnly: true });
+  // Main incremental context must stay append-only until summary marks older
+  // messages. Do not apply latest-injected compaction here.
+  return filterForModelContext(sourceMessages);
 }
 
 export function resolveMainModelConversationMessages({
