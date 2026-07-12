@@ -80,7 +80,10 @@ function stripDiffPath(rawPath = "", strip = 1) {
   if (!withoutTimestamp || withoutTimestamp === "/dev/null") return withoutTimestamp;
   const parts = withoutTimestamp.split("/").filter(Boolean);
   if (/^[A-Za-z]:$/.test(parts[0] || "")) return withoutTimestamp;
-  if (withoutTimestamp.startsWith("/") && !VIRTUAL_PATCH_ROOTS.has(parts[0])) return withoutTimestamp;
+  // Absolute paths (sandbox-absolute like /project or /workspace, or host-absolute)
+  // are preserved verbatim and handed to the shared resolver; the numeric strip
+  // only applies to relative diff prefixes such as git a/ and b/.
+  if (withoutTimestamp.startsWith("/")) return withoutTimestamp;
   const stripCount = toPositiveInt(strip, 1, 0, 10);
   return parts.slice(stripCount).join("/") || withoutTimestamp;
 }
@@ -221,11 +224,17 @@ async function resolvePatchRoot({ root = "", agentContext = {} } = {}) {
     };
   }
   const classifiedRoot = classifyToolInputPath(normalizedRoot, { agentContext });
+  // The root parameter only accepts workspace-relative child directories.
+  // Absolute paths (host or sandbox-absolute like /project) and virtual-relative
+  // roots must be written in the diff header instead, where stripDiffPath
+  // preserves them verbatim. Rejecting them here keeps user isolation intact:
+  // a non-super user must never map a host-absolute root through this parameter.
   if (
     normalizedRoot === ".." ||
     normalizedRoot.startsWith("../") ||
     isAbsolutePathAnyPlatform(normalizedRoot) ||
     classifiedRoot.view === TOOL_PATH_VIEWS.SANDBOX_ABSOLUTE ||
+    classifiedRoot.view === TOOL_PATH_VIEWS.HOST_ABSOLUTE ||
     classifiedRoot.view === TOOL_PATH_VIEWS.VIRTUAL_RELATIVE
   ) {
     throw recoverableToolError(`patch root must be a workspace-relative child directory: ${normalizedRoot}`, {

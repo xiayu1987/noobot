@@ -93,6 +93,14 @@ function normalizeSessionDetailSnapshot(payload = {}, fallbackSessionId = "") {
     sessions: [
       {
         ...session,
+        // Mutation responses expose the authoritative revision at the top
+        // level. Carry it into the document consumed by applySessionDetail so
+        // a subsequent continue does not reuse the pre-delete revision.
+        ...(source.version !== undefined ? { version: source.version } : {}),
+        ...(source.revision !== undefined ? { revision: source.revision } : {}),
+        ...(source.sessionVersion !== undefined
+          ? { version: source.sessionVersion, revision: source.sessionVersion }
+          : {}),
         sessionId: normalizeTrimmedString(session.sessionId || sessionId),
       },
     ],
@@ -240,6 +248,33 @@ export function createMonotonicMessageActions({
     return true;
   }
 
+  // Deleting a stopped turn (user_stopped) removes the messages that the run
+  // state snapshot is still pinned to. Left untouched, runStateSnapshot stays at
+  // USER_STOP_COMPLETED referencing a turnScopeId that no longer exists, so the
+  // next send/continue is rejected by hasConsistentSendingState with
+  // chat.sessionStateOutOfSync. Dispatch LOCAL_RESET to pull the run state back
+  // to IDLE once its turn is gone from the active session.
+  function resetRunStateWhenTurnRemoved({ sessionId } = {}) {
+    if (typeof applyRunStateEvent !== "function") return false;
+    const runTurnScopeId = normalizeTrimmedString(runStateSnapshot?.value?.turnScopeId);
+    if (!runTurnScopeId) return false;
+    const messages = Array.isArray(activeSession.value?.messages)
+      ? activeSession.value.messages
+      : [];
+    const turnStillPresent = messages.some(
+      (message) => getMessageTurnScopeId(message) === runTurnScopeId,
+    );
+    if (turnStillPresent) return false;
+    applyRunStateEvent({
+      type: SESSION_RUN_EVENT.LOCAL_RESET,
+      sessionId: normalizeTrimmedString(sessionId),
+      turnScopeId: runTurnScopeId,
+      source: "monotonic_delete_reset",
+      updatedAtMs: nowMs(),
+    });
+    return true;
+  }
+
   async function deleteMonotonicMessage(targetMessage = {}, options = {}) {
     const userTargetMessage = resolveMonotonicUserTarget(targetMessage);
     if (!userTargetMessage) return false;
@@ -290,10 +325,13 @@ export function createMonotonicMessageActions({
         mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
         preserveCurrentMessages: false,
       });
+      resetRunStateWhenTurnRemoved({ sessionId });
       clearPendingInteraction?.();
       return true;
     }
-    return cascadeDeleteMessagesFrom(userTargetMessage);
+    const cascaded = cascadeDeleteMessagesFrom(userTargetMessage);
+    if (cascaded) resetRunStateWhenTurnRemoved({});
+    return cascaded;
   }
 
   const resendTransaction = createResendMessageTransaction({
