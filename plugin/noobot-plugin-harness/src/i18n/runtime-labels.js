@@ -264,6 +264,7 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
       "上下文溢出_流程内强制验收",
     taskAcceptanceForcedReasonToolRequested:
       "工具主动请求强制验收",
+    messageFactoryAnalysisSemanticLine: "分析记录：{content}",
     messageFactoryToolCallUnknownScript: "未知脚本",
     messageFactoryToolCallNoArguments: "无参数",
     messageFactoryToolCallSemanticLine: "工具调用记录：{name}脚本被调用,参数{args}",
@@ -524,6 +525,7 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
       "Context overflow (in-flow forced acceptance)",
     taskAcceptanceForcedReasonToolRequested:
       "Tool-requested forced acceptance",
+    messageFactoryAnalysisSemanticLine: "Analysis record: {content}",
     messageFactoryToolCallUnknownScript: "unknown_script",
     messageFactoryToolCallNoArguments: "none",
     messageFactoryToolCallSemanticLine:
