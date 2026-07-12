@@ -72,6 +72,26 @@ test("normalizeSseLogEvent maps guidance analysis response to thinking and prese
   assert.equal(normalized.data.model, "m1");
 });
 
+test("normalizeSseLogEvent maps main model content to thinking and mirrors text into output", () => {
+  const normalized = normalizeSseLogEvent({
+    event: "main_model_content",
+    data: {
+      turn: 2,
+      dialogProcessId: "dp2",
+      text: "main model tool-turn content",
+    },
+    ts: "2026-06-08T00:00:00.000Z",
+  });
+  assert.equal(normalized.event, "thinking");
+  assert.equal(normalized.data.category, "system");
+  assert.equal(normalized.data.type, "main_model_content");
+  assert.equal(normalized.data.event, "main_model_content");
+  assert.equal(normalized.data.rawEvent, "main_model_content");
+  assert.equal(normalized.data.text, "main model tool-turn content");
+  assert.equal(normalized.data.output, "main model tool-turn content");
+  assert.equal(normalized.data.dialogProcessId, "dp2");
+});
+
 
 
 test("normalizeSseLogEvent keeps tool_call_start text compact", () => {

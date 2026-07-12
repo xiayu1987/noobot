@@ -14,6 +14,7 @@ import {
   resolvePathUnderRoot,
   resolveToolInputPath,
   resolveToolPathPolicy,
+  resolveSandboxPath,
   TOOL_PATH_VIEWS,
 } from "../../utils/path-resolver.js";
 import { recoverableToolError } from "../../error/index.js";
@@ -110,10 +111,18 @@ function buildPatchPathVariants(filePath = "", agentContext = {}, { patchRoot = 
   }
   if (virtualRoots.has(parts[0]) && parts.length > 1) {
     variants.push(parts.slice(1).join("/"));
+    // A virtual-root prefix (project/, workspace/, ...) is ambiguous: it can mean
+    // either a workspace-relative path (prefix stripped, above) or a sandbox-absolute
+    // path under that mount. Emit the sandbox-absolute form so the shared resolver
+    // (resolveToolInputPath -> SANDBOX_ABSOLUTE) can map it through the mount, the
+    // same single source of truth read_file/write_file use. Non-mount roots simply
+    // fail to resolve and get filtered out downstream.
+    variants.push(`/${parts.join("/")}`);
   }
   if (["a", "b"].includes(parts[0]) && virtualRoots.has(parts[1]) && parts.length > 2) {
     variants.push(parts.slice(1).join("/"));
     variants.push(parts.slice(2).join("/"));
+    variants.push(`/${parts.slice(1).join("/")}`);
   }
   return uniqueStrings(variants);
 }
@@ -391,6 +400,34 @@ function throwAmbiguousPatchPath({ filePath = "", fieldName = "filePath", matche
   });
 }
 
+// Diagnostics must never leak host-absolute paths back to the model in sandbox
+// view (hostPathHidden). The single source of truth for the active view is
+// resolveAgentPathContext; when the sandbox is enabled we map host paths to
+// their sandbox equivalent via resolveSandboxPath. In host view we return the
+// path unchanged so host-scenario diagnostics keep their real base path.
+function buildDiagnosticPathMapper(agentContext = {}) {
+  const runtime = getRuntimeFromAgentContext(agentContext);
+  const context = resolveAgentPathContext({
+    runtime,
+    agentContext,
+    runtimeBasePath: getBasePathFromAgentContext(agentContext),
+  });
+  const sandboxView = context?.sandboxEnabled === true || context?.view === "sandbox";
+  if (!sandboxView) return (value = "") => normalizeSlash(value);
+  return (value = "") => {
+    const normalized = normalizeSlash(value);
+    if (!normalized) return normalized;
+    if (!isAbsolutePathAnyPlatform(normalized)) return normalized;
+    const sandboxPath = resolveSandboxPath({
+      path: normalized,
+      hostPath: normalized,
+      runtime,
+      agentContext,
+    });
+    return sandboxPath ? normalizeSlash(sandboxPath) : normalized;
+  };
+}
+
 function buildPathAttemptDetails({
   filePath = "",
   fieldName = "filePath",
@@ -399,6 +436,7 @@ function buildPathAttemptDetails({
   root = "",
 } = {}) {
   const workspacePath = resolvePatchDefaultRoot(agentContext);
+  const toDiagnosticPath = buildDiagnosticPathMapper(agentContext);
   const classifiedInput = classifyToolInputPath(filePath, { agentContext });
   const virtualRelativeSuggestion = classifiedInput.view === TOOL_PATH_VIEWS.VIRTUAL_RELATIVE
     ? {
@@ -410,16 +448,22 @@ function buildPathAttemptDetails({
     : {};
   const suggestedRoots = uniqueStrings(candidates
     .filter((item) => item.reason && String(item.reason).includes("discovered-project-root"))
-    .map((item) => toWorkspaceRelativePath(workspacePath, item.rootPath || "")));
+    .map((item) => toWorkspaceRelativePath(workspacePath, item.rootPath || ""))
+    // resolvePatchRoot only accepts workspace-relative child directories, so a
+    // discovered root that resolves to a parent ("..") or an absolute path is
+    // not a legal root value. Drop it instead of suggesting a root the tool
+    // would immediately reject.
+    .filter((relativeRoot) => relativeRoot &&
+      relativeRoot !== ".." && !relativeRoot.startsWith("../") && !isAbsolutePathAnyPlatform(relativeRoot)));
   return {
     field: fieldName,
     filePath,
     root: normalizePatchPathInput(root),
-    basePath: workspacePath,
+    basePath: toDiagnosticPath(workspacePath),
     attemptedPaths: candidates.map((item) => ({
       path: item.displayPath || item.candidatePath,
-      inputPath: normalizeSlash(item.inputPath || item.candidatePath),
-      rootPath: normalizeSlash(item.rootPath || workspacePath),
+      inputPath: toDiagnosticPath(item.inputPath || item.candidatePath),
+      rootPath: toDiagnosticPath(item.rootPath || workspacePath),
       reason: item.reason,
     })),
     suggestedRoots,

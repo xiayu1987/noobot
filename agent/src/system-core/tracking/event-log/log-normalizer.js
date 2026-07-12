@@ -15,6 +15,7 @@ const SEMANTIC_TRANSFER_EVENTS = new Set([
   "semantic_transfer_legacy_input_warning",
 ]);
 const GUIDANCE_ANALYSIS_RESPONSE_EVENT = "guidance_analysis_response";
+const MAIN_MODEL_CONTENT_EVENT = "main_model_content";
 
 function buildToolText(tool = "", suffix = "") {
   return [String(tool || "").trim(), String(suffix || "").trim()]
@@ -133,6 +134,27 @@ export function normalizeSseLogEvent(evt = {}) {
         ...data,
         dialogProcessId,
         text: String(data.text || data.output || "").trim(),
+      },
+    };
+  }
+
+  if (rawEvent === MAIN_MODEL_CONTENT_EVENT) {
+    const dialogProcessId = resolveDialogProcessIdFromContext({
+      dialogProcessId: data.dialogProcessId,
+    });
+    const text = String(data.text || data.output || "").trim();
+    return {
+      event: "thinking",
+      data: {
+        category: "system",
+        type: "main_model_content",
+        event: MAIN_MODEL_CONTENT_EVENT,
+        rawEvent,
+        ts,
+        ...data,
+        dialogProcessId,
+        text,
+        output: text,
       },
     };
   }

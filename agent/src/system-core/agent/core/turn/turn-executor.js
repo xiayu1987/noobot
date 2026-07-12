@@ -509,6 +509,15 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     modelName: currentModelInfo.modelName,
   });
 
+  const mainModelToolTurnContent = String(aiContentText || "").trim();
+  if (calls.length && mainModelToolTurnContent) {
+    emitEvent(eventListener, "main_model_content", {
+      turn,
+      text: mainModelToolTurnContent,
+      output: mainModelToolTurnContent,
+    });
+  }
+
   await persistModelGeneratedArtifacts({
     aiContent: ai?.content,
     runtime,

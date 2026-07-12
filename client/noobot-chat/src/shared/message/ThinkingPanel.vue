@@ -59,6 +59,7 @@ function getRealtimeLogs(messageItem = {}) {
   return getAllRealtimeLogs(messageItem)
     .filter((logItem) => !isPluginCapabilityResponseLog(logItem))
     .filter((logItem) => !isGuidanceAnalysisResponseLog(logItem))
+    .filter((logItem) => !isMainModelContentLog(logItem))
     .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
     .filter(Boolean)
     .slice(-EXECUTION_LOG_DISPLAY_LIMIT);
@@ -127,6 +128,27 @@ function isGuidanceAnalysisResponseLog(logItem = {}) {
   return isGuidanceAnalysisEventName(eventName);
 }
 
+function isMainModelContentLog(logItem = {}) {
+  const eventName = normalizeLogString(logItem?.event || logItem?.type || logItem?.rawEvent);
+  return eventName === "main_model_content";
+}
+
+function getMainModelContentLogOutput(logItem = {}) {
+  return String(logItem?.output ?? logItem?.data?.output ?? logItem?.text ?? logItem?.data?.text ?? "").trim();
+}
+
+function getLatestMainModelContentLog(messageItem = {}) {
+  const logs = [
+    ...getAllRealtimeLogs(messageItem),
+    ...getAllCompletedLogs(messageItem),
+  ].filter(isMainModelContentLog);
+  for (let index = logs.length - 1; index >= 0; index -= 1) {
+    const output = getMainModelContentLogOutput(logs[index]);
+    if (output) return { ...logs[index], output };
+  }
+  return null;
+}
+
 function isPluginCapabilityResponseLog(logItem = {}) {
   const eventName = normalizeLogString(logItem?.event || logItem?.type);
   return eventName === "plugin_capability_response" || eventName === "harness_capability_response";
@@ -161,12 +183,12 @@ function getExecutionLogCount(messageItem = {}) {
     const hiddenAnalysisLogCount = [
       ...getAllRealtimeLogs(messageItem),
       ...getAllCompletedLogs(messageItem),
-    ].filter((logItem) => isPluginCapabilityResponseLog(logItem) || isGuidanceAnalysisResponseLog(logItem)).length;
+    ].filter((logItem) => isPluginCapabilityResponseLog(logItem) || isGuidanceAnalysisResponseLog(logItem) || isMainModelContentLog(logItem)).length;
     return Math.max(0, explicitTotal - hiddenAnalysisLogCount);
   }
 
   const realtimeLogs = getAllRealtimeLogs(messageItem).filter(
-    (logItem) => !isPluginCapabilityResponseLog(logItem) && !isGuidanceAnalysisResponseLog(logItem),
+    (logItem) => !isPluginCapabilityResponseLog(logItem) && !isGuidanceAnalysisResponseLog(logItem) && !isMainModelContentLog(logItem),
   );
   if (realtimeLogs.length > 0) return realtimeLogs.length;
 
@@ -603,6 +625,12 @@ onBeforeUnmount(() => {
             <BaseMetaLabel class="thinking-analysis-title" text="分析流程" />
             <BaseNoteBlock
               :content="getLatestPluginAnalysisLog(messageItem).output"
+            />
+          </div>
+          <div v-if="getLatestMainModelContentLog(messageItem)" class="thinking-analysis-block">
+            <BaseMetaLabel class="thinking-analysis-title" text="模型分析" />
+            <BaseNoteBlock
+              :content="getLatestMainModelContentLog(messageItem).output"
             />
           </div>
           <div class="thinking-realtime-log-stream">
