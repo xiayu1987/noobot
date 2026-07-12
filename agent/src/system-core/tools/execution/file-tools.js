@@ -14,7 +14,7 @@ import {
 import { recoverableToolError } from "../../error/index.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
-import { resolveToolLocale, tTool } from "../core/tool-i18n.js";
+import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME, TOOL_RESULT_STATE } from "../constants/index.js";
 import { isSuperUserAgentContext } from "../../utils/super-user.js";
 import {
@@ -92,41 +92,27 @@ function resolveFileToolIsSandbox(agentContext = {}) {
 }
 
 function buildPatchFieldDescription(agentContext = {}, fieldName = "") {
-  const locale = resolveToolLocale(agentContext);
-  const isChinese = locale !== "en-US";
   const isSandbox = resolveFileToolIsSandbox(agentContext);
   const isSuperUser = isSuperUserAgentContext(agentContext);
   const baseText = tTool(agentContext, `tools.patch_file.${fieldName}`);
   const modeText = (() => {
     if (fieldName === "fieldPatch") {
       if (isSandbox) {
-        return isChinese
-          ? "沙箱视角：相对路径基于 directories.rootDirectory；绝对路径只用 directories.allowedRoots。"
-          : "Sandbox view: relative paths use directories.rootDirectory; absolute paths must use directories.allowedRoots.";
+        return tTool(agentContext, "tools.patch_file.fieldPatchPathHintSandbox");
       }
       if (isSuperUser) {
-        return isChinese
-          ? "Host 视角，超级管理员：相对路径基于 directories.rootDirectory；可使用 Windows/macOS/Linux host 绝对路径。"
-          : "Host view, super user: relative paths use directories.rootDirectory; Windows/macOS/Linux host absolute paths are allowed.";
+        return tTool(agentContext, "tools.patch_file.fieldPatchPathHintSuperHost");
       }
-      return isChinese
-        ? "Host 视角：相对路径基于 directories.rootDirectory；绝对路径必须位于 directories.allowedRoots 内。"
-        : "Host view: relative paths use directories.rootDirectory; absolute paths must stay inside directories.allowedRoots.";
+      return tTool(agentContext, "tools.patch_file.fieldPatchPathHintHost");
     }
     if (fieldName === "fieldRoot") {
       if (isSandbox) {
-        return isChinese
-          ? "root 不是沙箱绝对路径入口。"
-          : "root is not an entry point for sandbox absolute paths.";
+        return tTool(agentContext, "tools.patch_file.fieldRootPathHintSandbox");
       }
       if (isSuperUser) {
-        return isChinese
-          ? "root 不是 host 绝对路径入口。"
-          : "root is not an entry point for host absolute paths.";
+        return tTool(agentContext, "tools.patch_file.fieldRootPathHintSuperHost");
       }
-      return isChinese
-        ? "root 只用于选择工作区子目录。"
-        : "root only selects a workspace child directory.";
+      return tTool(agentContext, "tools.patch_file.fieldRootPathHintHost");
     }
     return "";
   })();
