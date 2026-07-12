@@ -53,7 +53,19 @@ export const enUSMessages = {
     "emptyChatHint": "Start a new conversation with Noobot",
     "chatNavigator": "Conversation navigation",
     "showChatNavigator": "Show conversation navigation",
-    "hideChatNavigator": "Hide conversation navigation"
+    "hideChatNavigator": "Hide conversation navigation",
+    "sessionStatus": "Status",
+    "sessionBackendId": "Session ID",
+    "sessionLocalId": "Local ID",
+    "sessionUpdatedAt": "Updated",
+    "sessionCreatedAt": "Created",
+    "sessionMessageCount": "Messages",
+    "statusIdle": "Idle",
+    "statusRunning": "Running",
+    "statusDone": "Done",
+    "statusError": "Error",
+    "navRole": "Role",
+    "navContent": "Content"
   },
   "settings": {
     "userParams": "User Params",

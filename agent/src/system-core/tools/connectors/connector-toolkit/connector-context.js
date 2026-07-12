@@ -28,6 +28,7 @@ function createConnectorToolContext(agentContext = {}) {
   const historyStore = runtime?.sharedTools?.connectorHistoryStore || null;
   const connectorEventListener = runtime?.sharedTools?.connectorEventListener || null;
   return {
+    agentContext,
     runtime,
     effectiveConfig,
     sessionId,

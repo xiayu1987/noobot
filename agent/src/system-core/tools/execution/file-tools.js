@@ -14,8 +14,9 @@ import {
 import { recoverableToolError } from "../../error/index.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
-import { tTool } from "../core/tool-i18n.js";
+import { resolveToolLocale, tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME, TOOL_RESULT_STATE } from "../constants/index.js";
+import { isSuperUserAgentContext } from "../../utils/super-user.js";
 import {
   DEFAULT_MAX_SEARCH_FILES,
   DEFAULT_READ_MAX_LINES,
@@ -90,6 +91,48 @@ function resolveFileToolIsSandbox(agentContext = {}) {
   return scriptConfig?.sandboxMode === true || scriptConfig?.sandbox_mode === true;
 }
 
+function buildPatchFieldDescription(agentContext = {}, fieldName = "") {
+  const locale = resolveToolLocale(agentContext);
+  const isChinese = locale !== "en-US";
+  const isSandbox = resolveFileToolIsSandbox(agentContext);
+  const isSuperUser = isSuperUserAgentContext(agentContext);
+  const baseText = tTool(agentContext, `tools.patch_file.${fieldName}`);
+  const modeText = (() => {
+    if (fieldName === "fieldPatch") {
+      if (isSandbox) {
+        return isChinese
+          ? "当前为沙箱视角：patch 相对路径基于 directories.rootDirectory；绝对路径只用 directories.allowedRoots/extraMountTargets 中出现的路径。"
+          : "Current view: sandbox. Patch relative paths resolve from directories.rootDirectory; absolute paths must come from directories.allowedRoots/extraMountTargets.";
+      }
+      if (isSuperUser) {
+        return isChinese
+          ? "当前为 host/workspace 视角且是超级管理员：相对路径基于 directories.rootDirectory；必要时可使用 Windows/macOS/Linux host 绝对路径。"
+          : "Current view: host/workspace with super-user access. Relative paths resolve from directories.rootDirectory; host absolute paths are allowed when needed on Windows/macOS/Linux.";
+      }
+      return isChinese
+        ? "当前为 host/workspace 视角：相对路径基于 directories.rootDirectory；绝对路径需位于工作区或已挂载根内。"
+        : "Current view: host/workspace. Relative paths resolve from directories.rootDirectory; absolute paths must stay inside the workspace or mounted roots.";
+    }
+    if (fieldName === "fieldRoot") {
+      if (isSandbox) {
+        return isChinese
+          ? "root 不是沙箱绝对路径入口。"
+          : "root is not an entry point for sandbox absolute paths.";
+      }
+      if (isSuperUser) {
+        return isChinese
+          ? "root 不是 host 绝对路径入口。"
+          : "root is not an entry point for host absolute paths.";
+      }
+      return isChinese
+        ? "root 只用于选择工作区子目录。"
+        : "root only selects a workspace child directory.";
+    }
+    return "";
+  })();
+  return [baseText, modeText].map((item) => String(item || "").trim()).filter(Boolean).join(" ");
+}
+
 function uniqueNumbers(values = []) {
   return Array.from(new Set(values
     .map((item) => Number(item))
@@ -112,6 +155,16 @@ function buildPatchParseAttempts({ format = "", patch = "", strip = 1 } = {}) {
   return [...unifiedAttempts, applyAttempt];
 }
 
+function buildPatchRootAttempts(root = "") {
+  const normalizedRoot = String(root || "").trim();
+  if (!normalizedRoot) return [""];
+  const attempts = [normalizedRoot];
+  if (normalizedRoot === ".." || normalizedRoot.startsWith("../") || normalizedRoot.startsWith("..\\")) {
+    attempts.push("");
+  }
+  return Array.from(new Set(attempts));
+}
+
 function parsePatchAttempt({ patch = "", attempt = {} } = {}) {
   return attempt.format === "apply_patch"
     ? parseApplyPatch(patch)
@@ -120,20 +173,23 @@ function parsePatchAttempt({ patch = "", attempt = {} } = {}) {
 
 async function preparePatchExecution({ format = "", patch = "", strip = 1, root = "", agentContext = {} } = {}) {
   const attempts = buildPatchParseAttempts({ format, patch, strip });
+  const rootAttempts = buildPatchRootAttempts(root);
   const failures = [];
-  for (const attempt of attempts) {
-    let parsed = null;
-    try {
-      parsed = parsePatchAttempt({ patch, attempt });
-    } catch (error) {
-      failures.push({ ...attempt, stage: "parse", error });
-      continue;
-    }
-    try {
-      const targets = await resolvePatchTargetsWithOptions({ patches: parsed, agentContext, root });
-      return { ...attempt, parsed, targets };
-    } catch (error) {
-      failures.push({ ...attempt, stage: "resolve", error });
+  for (const rootAttempt of rootAttempts) {
+    for (const attempt of attempts) {
+      let parsed = null;
+      try {
+        parsed = parsePatchAttempt({ patch, attempt });
+      } catch (error) {
+        failures.push({ ...attempt, root: rootAttempt, stage: "parse", error });
+        continue;
+      }
+      try {
+        const targets = await resolvePatchTargetsWithOptions({ patches: parsed, agentContext, root: rootAttempt });
+        return { ...attempt, root: rootAttempt, parsed, targets };
+      } catch (error) {
+        failures.push({ ...attempt, root: rootAttempt, stage: "resolve", error });
+      }
     }
   }
   const resolveFailures = failures.filter((item) => item.stage === "resolve");
@@ -145,6 +201,7 @@ async function preparePatchExecution({ format = "", patch = "", strip = 1, root 
     error.details.patchAttempts = failures.map((item) => ({
       format: item.format,
       strip: item.strip,
+      root: item.root,
       stage: item.stage,
       message: item.error?.message || String(item.error),
     }));
@@ -359,15 +416,16 @@ export function createFileTool({ agentContext }) {
     description: tTool(agentContext, "tools.patch_file.description"),
     schema: z.object({
       format: z.enum(["unified_diff", "apply_patch"]).optional().describe(tTool(agentContext, "tools.patch_file.fieldFormat")),
-      patch: z.string().describe(tTool(agentContext, "tools.patch_file.fieldPatch")),
+      patch: z.string().describe(buildPatchFieldDescription(agentContext, "fieldPatch")),
       strip: z.number().int().optional().default(1).describe(tTool(agentContext, "tools.patch_file.fieldStrip")),
-      root: z.string().optional().default("").describe(tTool(agentContext, "tools.patch_file.fieldRoot")),
+      root: z.string().optional().default("").describe(buildPatchFieldDescription(agentContext, "fieldRoot")),
       dryRun: z.boolean().optional().default(false).describe(tTool(agentContext, "tools.patch_file.fieldDryRun")),
     }),
     func: async ({ format, patch = "", strip = 1, root = "", dryRun = false }) => {
       const prepared = await preparePatchExecution({ format, patch, strip, root, agentContext });
       const normalizedFormat = prepared.format;
       const resolvedStrip = prepared.strip;
+      const resolvedRoot = prepared.root;
       const targets = prepared.targets;
       const writePlans = [];
       const deletePlans = [];
@@ -427,7 +485,8 @@ export function createFileTool({ agentContext }) {
         format: normalizedFormat,
         strip: normalizedFormat === "unified_diff" ? resolvedStrip : undefined,
         dryRun: dryRun === true,
-        root: String(root || ""),
+        root: String(resolvedRoot || ""),
+        requestedRoot: String(root || ""),
         changedFiles: writePlans.map((item) => item.displayPath),
         deletedFiles: deletePlans.map((item) => item.displayPath),
         resolvedFiles: [

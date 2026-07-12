@@ -287,6 +287,46 @@ test("connector-toolkit/access_connector: command_file_path 应可读取文件�
   }
 });
 
+test("connector-toolkit/access_connector: command_file_path 相对路径基于 directories.rootDirectory", async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-access-root-directory-"));
+  try {
+    const repoRoot = path.join(workspaceRoot, "noobot");
+    const sqlPath = path.join(repoRoot, "queries", "demo.sql");
+    await mkdir(path.dirname(sqlPath), { recursive: true });
+    await writeFile(sqlPath, "select 3 where 3=3;", "utf8");
+    let executed = null;
+    const runtime = buildAccessConnectorRuntime({
+      basePath: workspaceRoot,
+      connectorType: "database",
+      connectorName: "db-main",
+      onExecute: (payload) => {
+        executed = payload;
+      },
+    });
+    runtime.systemRuntime.staticInfo = {
+      directories: {
+        view: "host",
+        rootDirectory: repoRoot,
+        currentDirectory: repoRoot,
+        opsWorkdir: path.join(repoRoot, "runtime/ops_workdir"),
+        allowedRoots: [workspaceRoot],
+      },
+    };
+    const tools = createConnectorTools({ agentContext: { runtime } });
+    const accessTool = tools.find((tool) => tool?.name === "access_connector");
+    assert.ok(accessTool, "access_connector 工具应存在");
+
+    const result = parseToolJson(await accessTool.invoke({
+      connector_type: "database",
+      command_file_path: "queries/demo.sql",
+    }));
+    assert.equal(result.ok, true);
+    assert.equal(String(executed?.command || ""), "select 3 where 3=3;");
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
 test("connector-toolkit/access_connector: command 与 command_file_path 同时传入应拒绝", async () => {
   const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-access-file-"));
   try {

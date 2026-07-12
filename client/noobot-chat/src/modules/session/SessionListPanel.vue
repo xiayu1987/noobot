@@ -100,15 +100,22 @@ onBeforeUnmount(() => {
   if (listWrapEl.value) listWrapEl.value.removeEventListener("scroll", onSessionListScroll);
 });
 
-function getSessionHoverTitle(sessionItem = {}) {
-  const title = String(sessionItem?.title || "").trim();
-  const backendSessionId = String(sessionItem?.backendSessionId || "").trim();
-  const localSessionId = String(sessionItem?.id || "").trim();
-  const idLines = backendSessionId
-    ? [`#${backendSessionId}`]
-    : [translate("common.notStarted")];
-  if (localSessionId && localSessionId !== backendSessionId) idLines.push(localSessionId);
-  return [title, ...idLines].filter(Boolean).join("\n");
+const statusKeyMap = {
+  idle: "common.statusIdle",
+  running: "common.statusRunning",
+  done: "common.statusDone",
+  error: "common.statusError",
+};
+
+function formatSessionStatus(status = "") {
+  const normalized = String(status || "").trim().toLowerCase();
+  return translate(statusKeyMap[normalized] || "common.statusIdle");
+}
+
+function formatSessionTime(value = "") {
+  const timeMs = Date.parse(value || "");
+  if (!Number.isFinite(timeMs)) return "";
+  return new Date(timeMs).toLocaleString();
 }
 
 async function promptRenameSession(sessionItem = {}) {
@@ -155,47 +162,89 @@ watch(
           :title="dateGroup.label"
         >
           <div class="session-list-inner">
-            <div
+            <el-popover
               v-for="sessionItem in dateGroup.items"
               :key="sessionItem.id"
-              class="session-item noobot-subtle-row"
-              :class="{ active: sessionItem.id === activeSessionId }"
-              :title="getSessionHoverTitle(sessionItem)"
-              @click="emit('select-session', sessionItem.id)"
+              trigger="hover"
+              placement="right"
+              :width="264"
+              :show-after="220"
+              :hide-after="80"
+              popper-class="session-hover-popover"
             >
-              <div class="session-icon-wrapper">
-                <el-icon class="session-icon"><ChatDotRound /></el-icon>
-              </div>
-              <div class="session-info">
-                <div class="title" :title="getSessionHoverTitle(sessionItem)">{{ sessionItem.title }}</div>
-                <div class="sid">
-                  <span class="status-dot" :class="sessionItem.currentTaskStatus"></span>
-                  #{{ sessionItem.backendSessionId ? sessionItem.backendSessionId.slice(0, 8) : translate("common.notStarted") }}
+              <template #reference>
+                <div
+                  class="session-item noobot-subtle-row"
+                  :class="{ active: sessionItem.id === activeSessionId }"
+                  @click="emit('select-session', sessionItem.id)"
+                >
+                  <div class="session-icon-wrapper">
+                    <el-icon class="session-icon"><ChatDotRound /></el-icon>
+                  </div>
+                  <div class="session-info">
+                    <div class="title">{{ sessionItem.title }}</div>
+                    <div class="sid">
+                      <span class="status-dot" :class="sessionItem.currentTaskStatus"></span>
+                      #{{ sessionItem.backendSessionId ? sessionItem.backendSessionId.slice(0, 8) : translate("common.notStarted") }}
+                    </div>
+                  </div>
+                  <div class="session-actions">
+                    <button
+                      type="button"
+                      class="session-rename-btn noobot-action-btn noobot-flat-icon-btn"
+                      :title="translate('common.renameSession')"
+                      :aria-label="translate('common.renameSession')"
+                      :disabled="sending"
+                      @click.stop="promptRenameSession(sessionItem)"
+                    >
+                      <el-icon><EditPen /></el-icon>
+                    </button>
+                    <button
+                      type="button"
+                      class="session-delete-btn noobot-action-btn noobot-flat-icon-btn"
+                      :title="translate('common.deleteSession')"
+                      :aria-label="translate('common.deleteSession')"
+                      :disabled="sending"
+                      @click.stop="emit('delete-session', sessionItem.id)"
+                    >
+                      <el-icon><Delete /></el-icon>
+                    </button>
+                  </div>
                 </div>
+              </template>
+              <div class="session-popover">
+                <div class="session-popover__title">{{ sessionItem.title }}</div>
+                <ul class="session-popover__meta">
+                  <li>
+                    <span class="k">{{ translate("common.sessionStatus") }}</span>
+                    <span class="v">
+                      <span class="status-dot" :class="sessionItem.currentTaskStatus"></span>
+                      {{ formatSessionStatus(sessionItem.currentTaskStatus) }}
+                    </span>
+                  </li>
+                  <li>
+                    <span class="k">{{ translate("common.sessionBackendId") }}</span>
+                    <span class="v">{{ sessionItem.backendSessionId || translate("common.notStarted") }}</span>
+                  </li>
+                  <li v-if="sessionItem.id && sessionItem.id !== sessionItem.backendSessionId">
+                    <span class="k">{{ translate("common.sessionLocalId") }}</span>
+                    <span class="v">{{ sessionItem.id }}</span>
+                  </li>
+                  <li>
+                    <span class="k">{{ translate("common.sessionMessageCount") }}</span>
+                    <span class="v">{{ sessionItem.messageCount || 0 }}</span>
+                  </li>
+                  <li v-if="formatSessionTime(sessionItem.updatedAt)">
+                    <span class="k">{{ translate("common.sessionUpdatedAt") }}</span>
+                    <span class="v">{{ formatSessionTime(sessionItem.updatedAt) }}</span>
+                  </li>
+                  <li v-if="formatSessionTime(sessionItem.createdAt)">
+                    <span class="k">{{ translate("common.sessionCreatedAt") }}</span>
+                    <span class="v">{{ formatSessionTime(sessionItem.createdAt) }}</span>
+                  </li>
+                </ul>
               </div>
-              <div class="session-actions">
-                <button
-                  type="button"
-                  class="session-rename-btn noobot-action-btn noobot-flat-icon-btn"
-                  :title="translate('common.renameSession')"
-                  :aria-label="translate('common.renameSession')"
-                  :disabled="sending"
-                  @click.stop="promptRenameSession(sessionItem)"
-                >
-                  <el-icon><EditPen /></el-icon>
-                </button>
-                <button
-                  type="button"
-                  class="session-delete-btn noobot-action-btn noobot-flat-icon-btn"
-                  :title="translate('common.deleteSession')"
-                  :aria-label="translate('common.deleteSession')"
-                  :disabled="sending"
-                  @click.stop="emit('delete-session', sessionItem.id)"
-                >
-                  <el-icon><Delete /></el-icon>
-                </button>
-              </div>
-            </div>
+            </el-popover>
           </div>
         </el-collapse-item>
       </el-collapse>
@@ -406,5 +455,79 @@ watch(
 
 .session-list-panel.collapsed .session-icon-wrapper {
   margin: 0;
+}
+</style>
+
+<style>
+.session-hover-popover.el-popover.el-popper {
+  padding: 12px 14px;
+  background: var(--noobot-panel-bg);
+  border: 1px solid var(--noobot-panel-border);
+  color: var(--noobot-text-strong);
+}
+
+.session-hover-popover.el-popover.el-popper .el-popper__arrow::before {
+  background: var(--noobot-panel-bg);
+  border: 1px solid var(--noobot-panel-border);
+}
+
+.session-popover__title {
+  font-weight: 600;
+  font-size: var(--noobot-font-size-md);
+  margin-bottom: 8px;
+  word-break: break-word;
+  color: var(--noobot-text-strong);
+}
+
+.session-popover__meta {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.session-popover__meta li {
+  display: flex;
+  gap: 8px;
+  font-size: var(--noobot-font-size-sm);
+  line-height: 1.4;
+}
+
+.session-popover__meta .k {
+  flex: 0 0 auto;
+  min-width: 56px;
+  color: var(--noobot-text-secondary);
+}
+
+.session-popover__meta .v {
+  flex: 1;
+  min-width: 0;
+  word-break: break-all;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--noobot-text-strong);
+}
+
+.session-popover__meta .status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--noobot-status-idle);
+  flex: 0 0 auto;
+}
+
+.session-popover__meta .status-dot.running {
+  background-color: var(--noobot-status-running);
+}
+
+.session-popover__meta .status-dot.done {
+  background-color: var(--noobot-status-done);
+}
+
+.session-popover__meta .status-dot.error {
+  background-color: var(--noobot-status-error);
 }
 </style>

@@ -45,6 +45,25 @@ function resolveRuntimeSuperUserFlag({ globalConfig = {}, userId = "" } = {}) {
   return String(userId || "").trim() === configuredSuperUserId;
 }
 
+function applyIdentityToStaticPathInfo(staticInfo = {}, identityInfo = {}) {
+  const sourceInfo = staticInfo && typeof staticInfo === "object" ? staticInfo : {};
+  const directories =
+    sourceInfo?.directories && typeof sourceInfo.directories === "object"
+      ? sourceInfo.directories
+      : null;
+  if (!directories || directories.view !== "host" || identityInfo?.isSuperUser !== true) {
+    return sourceInfo;
+  }
+  return {
+    ...sourceInfo,
+    directories: {
+      ...directories,
+      allowedRoots: ["<host-filesystem>"],
+      hostAbsolutePaths: true,
+    },
+  };
+}
+
 function normalizeAdditionalSystemMessages(input = []) {
   if (!Array.isArray(input)) return [];
   return input
@@ -430,7 +449,7 @@ export class ContextBuilder {
     };
 
     const staticInfo = includeSystemRuntime
-      ? {
+      ? applyIdentityToStaticPathInfo({
           ...buildSandboxViewStaticInfo({
             runtimeBasePath,
             userId: this.userId,
@@ -438,7 +457,7 @@ export class ContextBuilder {
             effectiveConfig,
           }),
           identity: identityInfo,
-        }
+        }, identityInfo)
       : { identity: identityInfo };
     const dynamicInfo = includeSystemRuntime
       ? this._buildSystemRuntime({

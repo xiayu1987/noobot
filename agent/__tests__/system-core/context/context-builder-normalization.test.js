@@ -149,6 +149,10 @@ test("buildInitialContext marks normalized superAdmin user as super user", async
     context.payload.messages.system.join("\n").includes("\"isSuperUser\": true"),
     true,
   );
+  assert.equal(
+    context.payload.messages.system.join("\n").includes("\"allowedRoots\": [\n      \"<host-filesystem>\""),
+    true,
+  );
 });
 
 test("buildInitialContext keeps super user identity in system message when system_runtime is excluded", async () => {

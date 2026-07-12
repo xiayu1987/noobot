@@ -4,9 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { readFile } from "node:fs/promises";
-import { filePath as path, resolveAttachmentDisplayPath } from "../../../utils/path-resolver.js";
-import { normalizeSandboxProvider } from "../../../config/index.js";
-import { normalizeDockerMounts } from "../../../sandbox/docker-sandbox.js";
+import {
+  filePath as path,
+  resolveAttachmentDisplayPath,
+  resolveRuntimePathContext,
+} from "../../../utils/path-resolver.js";
 import { toToolJsonResult } from "../../core/tool-json-result.js";
 import {
   EXECUTE_SCRIPT_TOOL_NAME,
@@ -14,38 +16,6 @@ import {
   SCRIPT_EXECUTION_MODE,
   SCRIPT_WORKDIR_RELATIVE_PATH,
 } from "./constants.js";
-
-function resolveSandboxPathView({
-  runtime = {},
-  agentContext = null,
-  hostPath = "",
-  relativePath = "",
-} = {}) {
-  const normalizedHostPath = String(hostPath || "").trim();
-  if (!normalizedHostPath && !String(relativePath || "").trim()) return "";
-  const payload = {
-    path: normalizedHostPath,
-    hostPath: normalizedHostPath,
-    relativePath: String(relativePath || "").trim(),
-    runtime,
-    agentContext,
-  };
-  const resolverCandidates = [
-    runtime?.sharedTools?.resolveSandboxPath,
-    runtime?.sharedTools?.toSandboxPath,
-    runtime?.sharedTools?.pathMapper?.toSandboxPath,
-  ];
-  for (const resolver of resolverCandidates) {
-    if (typeof resolver !== "function") continue;
-    try {
-      const resolved = String(resolver(payload) || "").trim();
-      if (resolved) return resolved;
-    } catch {
-      // Keep tool output deterministic: ignore resolver failures and fallback.
-    }
-  }
-  return "";
-}
 
 function normalizePathForTool(value = "") {
   return String(value || "").trim().replaceAll("\\", "/");
@@ -62,50 +32,61 @@ function compactObject(value = {}) {
   );
 }
 
-function resolveSandboxRuntimePathDefaults({
+function buildSandboxPathContext({
   sandboxProvider = SANDBOX_PROVIDER_NAME.DOCKER,
   dockerConfig = {},
   docker = {},
   runtime = {},
   agentContext = null,
   workspace = "",
+  pathContext = {},
 } = {}) {
-  const normalizedProvider = normalizeSandboxProvider(sandboxProvider || SANDBOX_PROVIDER_NAME.DOCKER);
-  const workspaceHost = normalizePathForTool(workspace);
-  const sandboxDefaultWorkdir = normalizePathForTool(
-    docker?.workdir ||
-      resolveSandboxPathView({
-        runtime,
-        agentContext,
-        hostPath: workspaceHost,
-        relativePath: SCRIPT_WORKDIR_RELATIVE_PATH,
-      }),
+  if (pathContext?.view === "sandbox") return pathContext;
+  const runtimeBasePath = normalizePathForTool(
+    runtime?.basePath ||
+      agentContext?.environment?.workspace?.basePath ||
+      workspace.replace(/\/runtime\/ops_workdir\/?$/, ""),
   );
-  const fallbackWorkdirMap = {
-    [SANDBOX_PROVIDER_NAME.BUBBLEWRAP]: "/workspace/runtime/sandbox/persist",
-    [SANDBOX_PROVIDER_NAME.FIREJAIL]: "$HOME/runtime/sandbox/persist",
-    [SANDBOX_PROVIDER_NAME.DOCKER]: sandboxDefaultWorkdir,
-  };
-  const sandboxRootMap = {
-    [SANDBOX_PROVIDER_NAME.BUBBLEWRAP]: "/workspace",
-    [SANDBOX_PROVIDER_NAME.FIREJAIL]: "$HOME",
-    [SANDBOX_PROVIDER_NAME.DOCKER]: "/workspace",
-  };
-  const extraMountTargets = normalizedProvider === SANDBOX_PROVIDER_NAME.DOCKER
-    ? Array.from(
-        new Set(
-          [
-            ...(Array.isArray(docker?.dockerMounts) ? docker.dockerMounts : []),
-            ...normalizeDockerMounts(dockerConfig),
-          ]
-            .map((item = {}) => normalizePathForTool(item?.target || item?.mountTarget || ""))
-            .filter(Boolean),
-        ),
-      )
-    : [];
-  const sandboxRoot = sandboxRootMap[normalizedProvider] || sandboxRootMap[SANDBOX_PROVIDER_NAME.DOCKER];
-  const defaultWorkdir = sandboxDefaultWorkdir || fallbackWorkdirMap[normalizedProvider] || "";
-  const allowedRoots = Array.from(new Set([sandboxRoot, ...extraMountTargets].filter(Boolean)));
+  return resolveRuntimePathContext({
+    runtime,
+    agentContext,
+    runtimeBasePath,
+    workspacePath: runtimeBasePath,
+    userId: runtime?.userId || "",
+    effectiveConfig: {
+      tools: {
+        execute_script: {
+          sandboxMode: true,
+          sandboxProvider: {
+            default: sandboxProvider || SANDBOX_PROVIDER_NAME.DOCKER,
+            [sandboxProvider || SANDBOX_PROVIDER_NAME.DOCKER]: dockerConfig,
+          },
+        },
+      },
+    },
+  });
+}
+
+function resolveSandboxRuntimePathDefaults(options = {}) {
+  const pathContext = buildSandboxPathContext(options);
+  const directories = pathContext?.directories || {};
+  const sandboxRoot = pathContext?.sandboxRoot || "";
+  const defaultWorkdir = normalizePathForTool(
+    options?.docker?.workdir ||
+      directories.opsWorkdir ||
+      pathContext?.opsWorkdir ||
+      "",
+  );
+  const extraMountTargets = Array.isArray(directories.extraMountTargets)
+    ? directories.extraMountTargets
+    : Array.isArray(pathContext?.extraMountTargets)
+      ? pathContext.extraMountTargets
+      : [];
+  const allowedRoots = Array.from(new Set((Array.isArray(directories.allowedRoots)
+    ? directories.allowedRoots
+    : Array.isArray(pathContext?.allowedRoots)
+      ? pathContext.allowedRoots
+      : [sandboxRoot].filter(Boolean)).filter(Boolean)));
   return compactObject({
     defaultWorkdir,
     sandboxRoot,
@@ -123,6 +104,7 @@ export function buildExecutionWorkspaceMeta({
   agentContext = null,
   dockerConfig = {},
   docker = {},
+  pathContext = {},
 } = {}) {
   const workspaceHost = normalizePathForTool(workspace);
   if (!sandboxEnabled) {
@@ -139,6 +121,7 @@ export function buildExecutionWorkspaceMeta({
     runtime,
     agentContext,
     workspace: workspaceHost,
+    pathContext,
   });
   return {
     relativePath: SCRIPT_WORKDIR_RELATIVE_PATH,
@@ -156,6 +139,7 @@ export function buildScriptExecutionMeta({
   agentContext = null,
   dockerConfig = {},
   docker = {},
+  pathContext = {},
 } = {}) {
   return compactObject({
     runtime: compactObject({
@@ -169,6 +153,7 @@ export function buildScriptExecutionMeta({
       agentContext,
       dockerConfig,
       docker,
+      pathContext,
     }),
   });
 }

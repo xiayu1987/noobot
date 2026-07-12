@@ -3,7 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeSandboxProvider } from "../config/index.js";
+import {
+  normalizeDockerContainerScope,
+  normalizeSandboxProvider,
+} from "../config/index.js";
 import nodePath from "node:path";
 
 // Local filesystem operations also pass through this module. Cross-platform
@@ -36,6 +39,17 @@ export const PATH_VIEWS = Object.freeze({
   SANDBOX: "sandbox",
   CLIENT: "client",
 });
+
+export const TOOL_PATH_VIEWS = Object.freeze({
+  WORKSPACE_RELATIVE: "workspace-relative",
+  SANDBOX_ABSOLUTE: "sandbox-absolute",
+  HOST_ABSOLUTE: "host-absolute",
+  VIRTUAL_RELATIVE: "virtual-relative",
+  EMPTY: "",
+});
+
+const VIRTUAL_TOOL_PATH_ROOTS = new Set(["project", "workspace", "workdir", "repo", "repository"]);
+const OPS_WORKDIR_RELATIVE_PATH = "runtime/ops_workdir";
 
 function normalizePlatform(platform = "") {
   const value = String(platform || "").trim().toLowerCase();
@@ -206,12 +220,656 @@ export function normalizeSlashPath(value = "") {
   return String(value || "").trim().replaceAll("\\", "/");
 }
 
+function normalizeWorkspaceRootAlias(value = "") {
+  const normalized = normalizeSlashPath(value);
+  if (normalized === "/workspace" || normalized.startsWith("/workspace/")) return "workspace";
+  if (normalized === "/project" || normalized.startsWith("/project/")) return "project";
+  return "";
+}
+
+export function classifyToolInputPath(inputPath = "", { agentContext = null } = {}) {
+  const raw = String(inputPath || "").trim();
+  if (!raw) {
+    return {
+      view: TOOL_PATH_VIEWS.EMPTY,
+      raw,
+      normalized: "",
+      virtualRoot: "",
+      sandboxRoot: "",
+    };
+  }
+  const normalized = normalizePathForPlatform(raw, {
+    platform: resolvePathPlatformFromContext(agentContext, ""),
+  });
+  if (!normalized && (raw === "." || raw === "./")) {
+    return {
+      view: TOOL_PATH_VIEWS.WORKSPACE_RELATIVE,
+      raw,
+      normalized: ".",
+      virtualRoot: "",
+      sandboxRoot: "",
+    };
+  }
+  const sandboxRoot = normalizeWorkspaceRootAlias(normalized);
+  if (sandboxRoot) {
+    return {
+      view: TOOL_PATH_VIEWS.SANDBOX_ABSOLUTE,
+      raw,
+      normalized,
+      virtualRoot: "",
+      sandboxRoot,
+    };
+  }
+  if (isAbsolutePathAnyPlatform(normalized)) {
+    return {
+      view: TOOL_PATH_VIEWS.HOST_ABSOLUTE,
+      raw,
+      normalized,
+      virtualRoot: "",
+      sandboxRoot: "",
+    };
+  }
+  const firstSegment = normalized.split("/").filter(Boolean)[0] || "";
+  if (VIRTUAL_TOOL_PATH_ROOTS.has(firstSegment)) {
+    return {
+      view: TOOL_PATH_VIEWS.VIRTUAL_RELATIVE,
+      raw,
+      normalized,
+      virtualRoot: firstSegment,
+      sandboxRoot: "",
+    };
+  }
+  return {
+    view: TOOL_PATH_VIEWS.WORKSPACE_RELATIVE,
+    raw,
+    normalized,
+    virtualRoot: "",
+    sandboxRoot: "",
+  };
+}
+
+function resolveSharedToolHostPath({ inputPath = "", runtime = {}, agentContext = null } = {}) {
+  const payload = {
+    path: inputPath,
+    sandboxPath: inputPath,
+    runtime,
+    agentContext,
+  };
+  const resolverCandidates = [
+    runtime?.sharedTools?.resolveHostPath,
+    runtime?.sharedTools?.toHostPath,
+    runtime?.sharedTools?.pathMapper?.toHostPath,
+  ];
+  for (const resolver of resolverCandidates) {
+    if (typeof resolver !== "function") continue;
+    try {
+      const resolved = String(resolver(payload) || "").trim();
+      if (resolved) return filePath.resolve(resolved);
+    } catch {
+      // Ignore resolver errors; path validation remains deterministic.
+    }
+  }
+  return "";
+}
+
+export function resolveToolInputPath({
+  inputPath = "",
+  agentContext = null,
+  runtime = {},
+  workspacePath = "",
+  workspaceRoot = "",
+  allowHostAbsolute = false,
+  allowSandbox = true,
+  allowVirtualRelative = true,
+} = {}) {
+  const classified = classifyToolInputPath(inputPath, { agentContext });
+  const normalizedWorkspace = workspacePath ? filePath.resolve(workspacePath) : "";
+  const normalizedWorkspaceRoot = workspaceRoot ? filePath.resolve(workspaceRoot) : "";
+  if (!classified.normalized) {
+    return {
+      ...classified,
+      ok: false,
+      error: "empty_path",
+      resolvedPath: "",
+      workspaceRelativePath: "",
+      hint: "Path is required.",
+    };
+  }
+
+  const sharedResolved = resolveSharedToolHostPath({
+    inputPath: classified.normalized,
+    runtime,
+    agentContext,
+  });
+  if (sharedResolved) {
+    return {
+      ...classified,
+      ok: true,
+      resolvedPath: sharedResolved,
+      workspaceRelativePath: "",
+      mapped: true,
+      error: "",
+      hint: "",
+    };
+  }
+
+  if (classified.view === TOOL_PATH_VIEWS.SANDBOX_ABSOLUTE) {
+    if (!allowSandbox) {
+      return {
+        ...classified,
+        ok: false,
+        resolvedPath: "",
+        workspaceRelativePath: "",
+        error: "sandbox_path_not_allowed",
+        hint: "Sandbox paths are not allowed here.",
+      };
+    }
+    if (classified.sandboxRoot === "workspace" && normalizedWorkspaceRoot) {
+      const normalizedSandboxPath = normalizeSlashPath(classified.normalized);
+      const sandboxUserRoot = normalizeSlashPath(resolveSandboxUserRoot(runtime));
+      if (sandboxUserRoot === "/workspace" && normalizedWorkspace) {
+        const resolvedPath = normalizedSandboxPath === "/workspace"
+          ? normalizedWorkspace
+          : filePath.resolve(normalizedWorkspace, normalizedSandboxPath.slice("/workspace/".length));
+        return {
+          ...classified,
+          ok: true,
+          resolvedPath,
+          workspaceRelativePath: "",
+          mapped: true,
+          error: "",
+          hint: "",
+        };
+      }
+      if (sandboxUserRoot.startsWith("/workspace/")) {
+        const resolvedPath = normalizedSandboxPath === "/workspace"
+          ? normalizedWorkspaceRoot
+          : filePath.resolve(normalizedWorkspaceRoot, normalizedSandboxPath.slice("/workspace/".length));
+        return {
+          ...classified,
+          ok: true,
+          resolvedPath,
+          workspaceRelativePath: "",
+          mapped: true,
+          error: "",
+          hint: "",
+        };
+      }
+      if (!sandboxUserRoot) {
+        const resolvedPath = normalizedSandboxPath === "/workspace"
+          ? normalizedWorkspaceRoot
+          : filePath.resolve(normalizedWorkspaceRoot, normalizedSandboxPath.slice("/workspace/".length));
+        return {
+          ...classified,
+          ok: true,
+          resolvedPath,
+          workspaceRelativePath: "",
+          mapped: true,
+          error: "",
+          hint: "",
+        };
+      }
+    }
+    const mappedBySandbox = resolveHostPath({
+      path: classified.normalized,
+      sandboxPath: classified.normalized,
+      runtime: { ...runtime, basePath: runtime?.basePath || normalizedWorkspace },
+      agentContext,
+    });
+    if (mappedBySandbox) {
+      return {
+        ...classified,
+        ok: true,
+        resolvedPath: filePath.resolve(mappedBySandbox),
+        workspaceRelativePath: "",
+        mapped: true,
+        error: "",
+        hint: "",
+      };
+    }
+    return {
+      ...classified,
+      ok: false,
+      resolvedPath: "",
+      workspaceRelativePath: "",
+      error: "sandbox_path_not_mapped",
+      hint: "Sandbox path is not mapped to a host path.",
+    };
+  }
+
+  if (classified.view === TOOL_PATH_VIEWS.HOST_ABSOLUTE) {
+    if (!allowHostAbsolute) {
+      return {
+        ...classified,
+        ok: false,
+        resolvedPath: "",
+        workspaceRelativePath: "",
+        error: "host_absolute_not_allowed",
+        hint: "Host absolute paths are only allowed for super users.",
+      };
+    }
+    return {
+      ...classified,
+      ok: true,
+      resolvedPath: normalizePathForPlatform(classified.normalized),
+      workspaceRelativePath: "",
+      mapped: false,
+      error: "",
+      hint: "",
+    };
+  }
+
+  if (classified.view === TOOL_PATH_VIEWS.VIRTUAL_RELATIVE && !allowVirtualRelative) {
+    const relativeWithoutVirtualRoot = classified.normalized.split("/").slice(1).join("/");
+    return {
+      ...classified,
+      ok: false,
+      resolvedPath: "",
+      workspaceRelativePath: "",
+      candidateWorkspaceRelativePath: relativeWithoutVirtualRoot,
+      candidateSandboxPath: `/${classified.normalized}`,
+      error: "virtual_relative_path_ambiguous",
+      hint: `Use /${classified.virtualRoot}/... for sandbox paths, or remove '${classified.virtualRoot}/' for workspace-relative paths.`,
+    };
+  }
+
+  return {
+    ...classified,
+    ok: true,
+    resolvedPath: filePath.resolve(normalizedWorkspace || ".", classified.normalized),
+    workspaceRelativePath: classified.normalized,
+    mapped: false,
+    error: "",
+    hint: "",
+  };
+}
+
 function sanitizeSandboxUserPart(input = "") {
   return String(input || "")
     .toLowerCase()
     .replace(/[^a-z0-9_.-]/g, "-")
     .replace(/^-+/, "")
     .replace(/-+$/, "");
+}
+
+function resolveRuntimeUserId({ runtime = {}, agentContext = null, userId = "" } = {}) {
+  return String(
+    userId ||
+      runtime?.systemRuntime?.userId ||
+      runtime?.userId ||
+      agentContext?.environment?.identity?.userId ||
+      "",
+  ).trim();
+}
+
+function resolveRuntimeHostRoot({
+  runtime = {},
+  agentContext = null,
+  runtimeBasePath = "",
+  workspacePath = "",
+} = {}) {
+  return String(
+    runtimeBasePath ||
+      workspacePath ||
+      runtime?.basePath ||
+      agentContext?.environment?.workspace?.basePath ||
+      agentContext?.environment?.staticInfo?.basePath ||
+      "",
+  ).trim();
+}
+
+function resolveRuntimeWorkspaceRoot({
+  runtime = {},
+  globalConfig = {},
+  workspaceRoot = "",
+} = {}) {
+  return String(
+    workspaceRoot ||
+      globalConfig?.workspaceRoot ||
+      runtime?.globalConfig?.workspaceRoot ||
+      "",
+  ).trim();
+}
+
+function resolveEffectiveExecuteScriptConfig({
+  runtime = {},
+  effectiveConfig = {},
+} = {}) {
+  const effectiveScriptConfig =
+    effectiveConfig?.tools?.execute_script &&
+    typeof effectiveConfig.tools.execute_script === "object"
+      ? effectiveConfig.tools.execute_script
+      : null;
+  if (effectiveScriptConfig) return effectiveScriptConfig;
+  return resolveExecuteScriptConfig(runtime);
+}
+
+function resolveSandboxProviderContext(scriptConfig = {}) {
+  const sandboxProviderCfg =
+    ((scriptConfig?.sandboxProvider &&
+      typeof scriptConfig.sandboxProvider === "object"
+      ? scriptConfig.sandboxProvider
+      : null) ||
+      (scriptConfig?.sandbox_provider &&
+      typeof scriptConfig.sandbox_provider === "object"
+        ? scriptConfig.sandbox_provider
+        : null) ||
+      {});
+  const provider = normalizeSandboxProvider(
+    sandboxProviderCfg?.default || "docker",
+  );
+  const providerDetail =
+    sandboxProviderCfg?.[provider] && typeof sandboxProviderCfg[provider] === "object"
+      ? sandboxProviderCfg[provider]
+      : {};
+  return { provider, providerDetail, providerConfig: sandboxProviderCfg };
+}
+
+function resolveRuntimePathMappingRuntime({
+  runtime = {},
+  effectiveConfig = {},
+} = {}) {
+  if (effectiveConfig?.tools && typeof effectiveConfig.tools === "object") {
+    return {
+      ...runtime,
+      globalConfig: effectiveConfig,
+      userConfig: {},
+    };
+  }
+  return runtime;
+}
+
+function uniqueNormalizedPaths(paths = []) {
+  return Array.from(
+    new Set(
+      paths
+        .map((item) => normalizeSlashPath(item))
+        .filter(Boolean),
+    ),
+  );
+}
+
+function objectOrEmpty(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function resolveStaticPathDirectories({ runtime = {}, agentContext = null } = {}) {
+  const contextStaticInfo = objectOrEmpty(agentContext?.environment?.staticInfo);
+  const runtimeStaticInfo = objectOrEmpty(runtime?.systemRuntime?.staticInfo);
+  return objectOrEmpty(contextStaticInfo.directories || runtimeStaticInfo.directories);
+}
+
+function isHostFilesystemSentinel(value = "") {
+  return String(value || "").trim() === "<host-filesystem>";
+}
+
+export function resolveRuntimePathContext({
+  runtime = {},
+  agentContext = null,
+  runtimeBasePath = "",
+  workspacePath = "",
+  workspaceRoot = "",
+  userId = "",
+  globalConfig = {},
+  effectiveConfig = {},
+} = {}) {
+  const resolvedUserId = resolveRuntimeUserId({ runtime, agentContext, userId });
+  const hostRootDirectory = resolveRuntimeHostRoot({
+    runtime,
+    agentContext,
+    runtimeBasePath,
+    workspacePath,
+  });
+  const hostWorkspaceRoot = resolveRuntimeWorkspaceRoot({
+    runtime,
+    globalConfig,
+    workspaceRoot,
+  });
+  const hostOpsWorkdir = hostRootDirectory
+    ? filePath.join(hostRootDirectory, OPS_WORKDIR_RELATIVE_PATH)
+    : "";
+  const scriptConfig = resolveEffectiveExecuteScriptConfig({ runtime, effectiveConfig });
+  const sandboxEnabled =
+    scriptConfig?.sandboxMode === true || scriptConfig?.sandbox_mode === true;
+  const { provider: sandboxProvider, providerDetail } =
+    resolveSandboxProviderContext(scriptConfig);
+  const mappingRuntime = resolveRuntimePathMappingRuntime({ runtime, effectiveConfig });
+  const sandboxPathMappings = resolveSandboxPathMappings(mappingRuntime);
+  const hostMountSources = uniqueNormalizedPaths(
+    sandboxPathMappings.map((item = {}) => item.source),
+  );
+  const sandboxMountTargets = uniqueNormalizedPaths(
+    sandboxPathMappings.map((item = {}) => item.target),
+  );
+  const hostDirectories = {
+    view: "host",
+    currentDirectory: process.cwd(),
+    rootDirectory: hostRootDirectory,
+    opsWorkdir: hostOpsWorkdir,
+    relativePathBase: "rootDirectory",
+    allowedRoots: uniqueNormalizedPaths([hostRootDirectory]),
+  };
+  const hostContext = {
+    view: "host",
+    sandboxEnabled: false,
+    sandboxProvider: "",
+    sandboxScope: "",
+    isDockerGlobal: false,
+    currentDirectory: hostDirectories.currentDirectory,
+    rootDirectory: hostDirectories.rootDirectory,
+    opsWorkdir: hostDirectories.opsWorkdir,
+    sandboxRoot: "",
+    userRoot: hostRootDirectory,
+    relativePathBase: hostDirectories.relativePathBase,
+    allowedRoots: hostDirectories.allowedRoots,
+    extraMountTargets: [],
+    hostRootDirectory,
+    hostWorkspaceRoot,
+    hostOpsWorkdir,
+    hostAllowedRoots: [],
+    hostMountSources,
+    sandboxMountTargets,
+    sandboxPathMappings,
+    directories: hostDirectories,
+  };
+  if (!sandboxEnabled) return hostContext;
+
+  if (sandboxProvider === "firejail") {
+    const sandboxRoot = "$HOME";
+    const opsWorkdir = "$HOME/runtime/sandbox/persist";
+    const allowedRoots = uniqueNormalizedPaths([sandboxRoot, ...sandboxMountTargets]);
+    const directories = {
+      view: "sandbox",
+      currentDirectory: opsWorkdir,
+      rootDirectory: sandboxRoot,
+      opsWorkdir,
+      relativePathBase: "rootDirectory",
+      allowedRoots,
+      ...(sandboxMountTargets.length ? { extraMountTargets: sandboxMountTargets } : {}),
+    };
+    return {
+      ...hostContext,
+      view: "sandbox",
+      sandboxEnabled: true,
+      sandboxProvider,
+      currentDirectory: opsWorkdir,
+      rootDirectory: sandboxRoot,
+      opsWorkdir,
+      sandboxRoot,
+      userRoot: sandboxRoot,
+      allowedRoots,
+      extraMountTargets: sandboxMountTargets,
+      directories,
+    };
+  }
+
+  if (sandboxProvider === "bubblewrap") {
+    const sandboxRoot = "/workspace";
+    const opsWorkdir = "/workspace/runtime/sandbox/persist";
+    const allowedRoots = uniqueNormalizedPaths([sandboxRoot, ...sandboxMountTargets]);
+    const directories = {
+      view: "sandbox",
+      currentDirectory: opsWorkdir,
+      rootDirectory: sandboxRoot,
+      opsWorkdir,
+      relativePathBase: "rootDirectory",
+      allowedRoots,
+      ...(sandboxMountTargets.length ? { extraMountTargets: sandboxMountTargets } : {}),
+    };
+    return {
+      ...hostContext,
+      view: "sandbox",
+      sandboxEnabled: true,
+      sandboxProvider,
+      currentDirectory: opsWorkdir,
+      rootDirectory: sandboxRoot,
+      opsWorkdir,
+      sandboxRoot,
+      userRoot: sandboxRoot,
+      allowedRoots,
+      extraMountTargets: sandboxMountTargets,
+      directories,
+    };
+  }
+
+  const sandboxScope = normalizeDockerContainerScope(
+    providerDetail?.dockerContainerScope ||
+      providerDetail?.docker_container_scope ||
+      "global",
+  );
+  const userPart = sanitizeSandboxUserPart(resolvedUserId || "user") || "user";
+  const sandboxRoot = "/workspace";
+  const isDockerGlobal = sandboxScope !== "user";
+  const userRoot = isDockerGlobal ? `/workspace/${userPart}` : "/workspace";
+  const opsWorkdir = `${userRoot}/${OPS_WORKDIR_RELATIVE_PATH}`;
+  const allowedRoots = uniqueNormalizedPaths([sandboxRoot, ...sandboxMountTargets]);
+  const directories = {
+    view: "sandbox",
+    currentDirectory: opsWorkdir,
+    rootDirectory: userRoot,
+    opsWorkdir,
+    relativePathBase: "rootDirectory",
+    allowedRoots,
+    ...(sandboxMountTargets.length ? { extraMountTargets: sandboxMountTargets } : {}),
+  };
+  return {
+    ...hostContext,
+    view: "sandbox",
+    sandboxEnabled: true,
+    sandboxProvider,
+    sandboxScope,
+    isDockerGlobal,
+    currentDirectory: opsWorkdir,
+    rootDirectory: userRoot,
+    opsWorkdir,
+    sandboxRoot,
+    userRoot,
+    allowedRoots,
+    extraMountTargets: sandboxMountTargets,
+    directories,
+  };
+}
+
+export function resolveAgentPathContext({
+  runtime = {},
+  agentContext = null,
+  runtimeBasePath = "",
+  workspacePath = "",
+  workspaceRoot = "",
+  userId = "",
+  globalConfig = {},
+  effectiveConfig = {},
+} = {}) {
+  const baseContext = resolveRuntimePathContext({
+    runtime,
+    agentContext,
+    runtimeBasePath,
+    workspacePath,
+    workspaceRoot,
+    userId,
+    globalConfig,
+    effectiveConfig,
+  });
+  const staticDirectories = resolveStaticPathDirectories({ runtime, agentContext });
+  if (!Object.keys(staticDirectories).length) return baseContext;
+
+  const directoryView = String(staticDirectories.view || baseContext.directories.view || baseContext.view || "").trim();
+  const directories = {
+    ...baseContext.directories,
+    ...staticDirectories,
+    view: directoryView || baseContext.directories.view,
+    allowedRoots: Array.isArray(staticDirectories.allowedRoots)
+      ? uniqueNormalizedPaths(staticDirectories.allowedRoots)
+      : baseContext.directories.allowedRoots,
+  };
+  const isSandboxView = directories.view === PATH_VIEWS.SANDBOX;
+  const staticRootDirectory = String(directories.rootDirectory || "").trim();
+  const hostRootDirectory = !isSandboxView && staticRootDirectory
+    ? staticRootDirectory
+    : baseContext.hostRootDirectory;
+  const hostAllowedRoots = !isSandboxView && Array.isArray(directories.allowedRoots)
+    ? uniqueNormalizedPaths(directories.allowedRoots.filter((item) => !isHostFilesystemSentinel(item)))
+    : [];
+
+  return {
+    ...baseContext,
+    view: directories.view || baseContext.view,
+    currentDirectory: directories.currentDirectory || baseContext.currentDirectory,
+    rootDirectory: directories.rootDirectory || baseContext.rootDirectory,
+    opsWorkdir: directories.opsWorkdir || baseContext.opsWorkdir,
+    relativePathBase: directories.relativePathBase || baseContext.relativePathBase,
+    allowedRoots: directories.allowedRoots || baseContext.allowedRoots,
+    extraMountTargets: Array.isArray(directories.extraMountTargets)
+      ? directories.extraMountTargets
+      : baseContext.extraMountTargets,
+    hostRootDirectory,
+    hostAllowedRoots,
+    directories,
+  };
+}
+
+export function resolveToolPathPolicy({
+  runtime = {},
+  agentContext = null,
+  runtimeBasePath = "",
+  workspacePath = "",
+  workspaceRoot = "",
+  userId = "",
+  globalConfig = {},
+  effectiveConfig = {},
+  isSuperUser = false,
+} = {}) {
+  const pathContext = resolveAgentPathContext({
+    runtime,
+    agentContext,
+    runtimeBasePath,
+    workspacePath,
+    workspaceRoot,
+    userId,
+    globalConfig,
+    effectiveConfig,
+  });
+  const validationRoot = workspacePath || runtimeBasePath || pathContext.hostRootDirectory;
+  const relativeHostRoot = pathContext.hostRootDirectory || validationRoot || ".";
+  const sandboxModeEnabled = pathContext.sandboxEnabled;
+  const allowedRoots = uniqueNormalizedPaths([
+    validationRoot,
+    ...pathContext.hostAllowedRoots,
+    ...(isSuperUser && sandboxModeEnabled && pathContext.isDockerGlobal && workspaceRoot
+      ? [workspaceRoot]
+      : []),
+    ...pathContext.hostMountSources,
+  ])
+    .filter((item) => !isHostFilesystemSentinel(item))
+    .map((item) => filePath.resolve(item));
+  return {
+    pathContext,
+    relativeHostRoot: filePath.resolve(relativeHostRoot),
+    validationRoot: validationRoot ? filePath.resolve(validationRoot) : "",
+    allowedRoots,
+    sandboxModeEnabled,
+    superUserBypassesDirectoryScope: isSuperUser && !sandboxModeEnabled,
+  };
 }
 
 function resolveExecuteScriptConfig(runtime = {}) {

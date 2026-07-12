@@ -68,6 +68,43 @@ function buildWorkspaceDirectorySection({
   return JSON.stringify(directoryItems, null, 2);
 }
 
+function buildPathGuidanceSection(staticInfo = {}, contextPromptI18n = {}) {
+  const pathGuidanceI18n =
+    contextPromptI18n?.pathGuidance &&
+    typeof contextPromptI18n.pathGuidance === "object"
+      ? contextPromptI18n.pathGuidance
+      : {};
+  const sandbox = staticInfo?.sandbox && typeof staticInfo.sandbox === "object"
+    ? staticInfo.sandbox
+    : {};
+  const identity = staticInfo?.identity && typeof staticInfo.identity === "object"
+    ? staticInfo.identity
+    : {};
+  const sandboxEnabled = sandbox?.enabled === true;
+  const lines = [
+    pathGuidanceI18n.preferRelative,
+    sandboxEnabled
+      ? pathGuidanceI18n.sandboxView
+      : pathGuidanceI18n.hostView,
+    sandboxEnabled && (
+      Array.isArray(sandbox?.extraMountTargets) ||
+      (Array.isArray(sandbox?.allowedRoots) && sandbox.allowedRoots.length > 1)
+    )
+      ? pathGuidanceI18n.sandboxMounts
+      : "",
+    !sandboxEnabled && identity?.isSuperUser === true
+      ? pathGuidanceI18n.superUserHost
+      : "",
+    !sandboxEnabled && identity?.isSuperUser !== true
+      ? pathGuidanceI18n.regularHost
+      : "",
+    pathGuidanceI18n.patchRoot,
+  ]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+  return lines.join("\n");
+}
+
 function toJsonSection(title, value, { allowEmpty = false, emptyValueText = "(none)" } = {}) {
   if (!allowEmpty && !hasValue(value)) return "";
   return toSystemSection(
@@ -177,12 +214,19 @@ export function composeSystemInfoSections({
     workspaceDirectoryDescriptions,
     defaultWorkspaceDescription,
   });
+  const normalizedPathGuidance = buildPathGuidanceSection(staticInfo, contextPromptI18n);
   const normalizedAttachmentMetas = normalizeAttachmentMetas(
     Array.isArray(attachments) ? attachments : [],
   );
   return [
     normalizedSystemPrompt,
     toJsonSection(String(sections?.staticInfo || "").trim(), staticInfo, { emptyValueText }),
+    hasValue(normalizedPathGuidance)
+      ? toSystemSection(
+          String(sections?.pathGuidance || "").trim(),
+          normalizedPathGuidance,
+        )
+      : "",
     toJsonSection(String(sections?.dynamicInfo || "").trim(), normalizedDynamicInfo, { emptyValueText }),
     toJsonSection(String(sections?.scenario || "").trim(), scenarioSection, { emptyValueText }),
     hasValue(normalizedWorkspaceSection)

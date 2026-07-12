@@ -3,7 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath as path } from "../../../utils/path-resolver.js";
+import {
+  filePath as path,
+  resolveToolInputPath,
+  resolveToolPathPolicy,
+} from "../../../utils/path-resolver.js";
 import { access, readFile, realpath, stat } from "node:fs/promises";
 import { BUILTIN_THRESHOLDS, normalizeConnectorType } from "../../../config/index.js";
 import { recoverableToolError } from "../../../error/index.js";
@@ -74,6 +78,10 @@ function resolveWorkspaceBasePath(runtime = {}) {
   return path.resolve(basePath);
 }
 
+function uniquePaths(paths = []) {
+  return Array.from(new Set(paths.map((item) => String(item || "").trim()).filter(Boolean)));
+}
+
 function dedupeAttachments(attachments = []) {
   const source = Array.isArray(attachments) ? attachments : [];
   const seen = new Set();
@@ -91,6 +99,7 @@ function dedupeAttachments(attachments = []) {
 function resolveAccessConnectorFilePolicy({
   effectiveConfig = {},
   runtime = {},
+  agentContext = null,
   connectorType = "",
 } = {}) {
   const toolsConfig =
@@ -110,25 +119,36 @@ function resolveAccessConnectorFilePolicy({
         ? accessConfig.command_file
         : {};
   const workspaceBasePath = resolveWorkspaceBasePath(runtime);
+  const workspaceRoot = String(runtime?.globalConfig?.workspaceRoot || "").trim();
+  const toolPolicy = resolveToolPathPolicy({
+    runtime,
+    agentContext,
+    runtimeBasePath: workspaceBasePath,
+    workspacePath: workspaceBasePath,
+    workspaceRoot,
+    isSuperUser: isSuperUserRuntime(runtime),
+  });
   const configuredRoots = Array.isArray(commandFileConfig?.allowedRoots)
     ? commandFileConfig.allowedRoots
     : Array.isArray(commandFileConfig?.allowed_roots)
       ? commandFileConfig.allowed_roots
       : [];
-  const roots = configuredRoots.length
-    ? configuredRoots
-        .map((item) => String(item || "").trim())
-        .filter(Boolean)
-        .map((item) =>
-          path.isAbsolute(item)
-            ? path.resolve(item)
-            : workspaceBasePath
-              ? path.resolve(workspaceBasePath, item)
-              : path.resolve(item),
-        )
-    : workspaceBasePath
-      ? [workspaceBasePath]
-      : [];
+  const configuredAllowedRoots = configuredRoots
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .map((item) =>
+      path.isAbsolute(item)
+        ? path.resolve(item)
+        : toolPolicy.relativeHostRoot
+          ? path.resolve(toolPolicy.relativeHostRoot, item)
+          : workspaceBasePath
+            ? path.resolve(workspaceBasePath, item)
+            : path.resolve(item),
+    );
+  const roots = uniquePaths([
+    ...toolPolicy.allowedRoots,
+    ...configuredAllowedRoots,
+  ]);
   const defaultExtensionsByType =
     BUILTIN_THRESHOLDS.connectorCommandFile.allowedExtensionsByType?.[connectorType] || [];
   return {
@@ -138,6 +158,8 @@ function resolveAccessConnectorFilePolicy({
     ),
     maxBytes: BUILTIN_THRESHOLDS.connectorCommandFile.maxBytes,
     allowedRoots: roots,
+    relativeHostRoot: toolPolicy.relativeHostRoot,
+    superUserBypassesDirectoryScope: toolPolicy.superUserBypassesDirectoryScope,
     allowedExtensions: normalizeExtensionList(defaultExtensionsByType, defaultExtensionsByType),
   };
 }
@@ -147,6 +169,7 @@ async function resolveCommandFromFile({
   connectorType = "",
   effectiveConfig = {},
   runtime = {},
+  agentContext = null,
 } = {}) {
   const normalizedFilePath = String(commandFilePath || "").trim();
   if (!normalizedFilePath) {
@@ -169,6 +192,7 @@ async function resolveCommandFromFile({
   const policy = resolveAccessConnectorFilePolicy({
     effectiveConfig,
     runtime,
+    agentContext,
     connectorType,
   });
   const isSuperUser = isSuperUserRuntime(runtime);
@@ -185,14 +209,33 @@ async function resolveCommandFromFile({
     });
   }
 
-  const resolvedInputPath = path.isAbsolute(normalizedFilePath)
-    ? path.resolve(normalizedFilePath)
-    : path.resolve(policy.allowedRoots[0] || resolveWorkspaceBasePath(runtime) || process.cwd(), normalizedFilePath);
+  const resolvedToolPath = resolveToolInputPath({
+    inputPath: normalizedFilePath,
+    runtime,
+    agentContext,
+    workspacePath: policy.relativeHostRoot || resolveWorkspaceBasePath(runtime),
+    workspaceRoot: String(runtime?.globalConfig?.workspaceRoot || "").trim(),
+    allowHostAbsolute: true,
+    allowSandbox: true,
+    allowVirtualRelative: true,
+  });
+  if (!resolvedToolPath.ok) {
+    throw recoverableToolError(resolvedToolPath.hint || "command_file_path invalid", {
+      code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+      details: {
+        field: "command_file_path",
+        file_path: normalizedFilePath,
+        path_view: resolvedToolPath.view,
+        error: resolvedToolPath.error,
+      },
+    });
+  }
+  const resolvedInputPath = path.resolve(resolvedToolPath.resolvedPath);
 
   const inAllowedRoots = policy.allowedRoots.some((rootPath) =>
     isPathUnderRoot(rootPath, resolvedInputPath),
   );
-  if (!isSuperUser && !inAllowedRoots) {
+  if (!policy.superUserBypassesDirectoryScope && !inAllowedRoots) {
     throw recoverableToolError("command_file_path out of allowed roots", {
       code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
       details: {
@@ -219,7 +262,7 @@ async function resolveCommandFromFile({
   const realInAllowedRoots = policy.allowedRoots.some((rootPath) =>
     isPathUnderRoot(rootPath, resolvedRealPath),
   );
-  if (!isSuperUser && !realInAllowedRoots) {
+  if (!policy.superUserBypassesDirectoryScope && !realInAllowedRoots) {
     throw recoverableToolError("command_file_path out of allowed roots", {
       code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
       details: {
@@ -319,6 +362,7 @@ function resolveSelectedConnectorName({
 
 function buildAccessConnectorTool(context = {}) {
   const {
+    agentContext,
     runtime,
     effectiveConfig,
     store,
@@ -458,6 +502,7 @@ function buildAccessConnectorTool(context = {}) {
         connectorType,
         effectiveConfig,
         runtime,
+        agentContext,
       }));
       const requestedConnectorName = String(connector_name || "").trim();
       const selectedResolution = resolveSelectedConnectorName({

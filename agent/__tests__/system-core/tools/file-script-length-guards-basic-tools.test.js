@@ -101,6 +101,107 @@ test("read_file: 超级管理员可以读取工作区外文件", async () => {
   assert.equal(result.content, "outside\ncontent");
 });
 
+test("read_file: 相对路径优先基于 directories.rootDirectory", async () => {
+  const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-read-root-directory-"));
+  const repoPath = path.join(workspacePath, "noobot");
+  await fs.mkdir(path.join(repoPath, "client/noobot-chat/src/app"), { recursive: true });
+  await fs.writeFile(path.join(repoPath, "client/noobot-chat/src/app/ChatMessageNavigator.vue"), "navigator\n", "utf8");
+  const tools = createFileTool({
+    agentContext: buildAgentContext(workspacePath, "u-test", {
+      runtime: {
+        systemRuntime: {
+          staticInfo: {
+            directories: {
+              view: "host",
+              rootDirectory: repoPath,
+              currentDirectory: repoPath,
+              opsWorkdir: path.join(repoPath, "runtime/ops_workdir"),
+              allowedRoots: [workspacePath],
+            },
+          },
+        },
+      },
+    }),
+  });
+  const readTool = tools.find((item) => item?.name === "read_file");
+  assert.ok(readTool);
+
+  const result = parseToolResult(await readTool.invoke({
+    filePath: "client/noobot-chat/src/app/ChatMessageNavigator.vue",
+    includeLineNumbers: false,
+  }));
+  assert.equal(result.ok, true);
+  assert.equal(result.content, "navigator");
+});
+
+test("patch_file: schema path hints only describe the active path view", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-schema-workspace-root-"));
+  const basePath = path.join(workspaceRoot, "u-test");
+  await fs.mkdir(basePath, { recursive: true });
+
+  const regularHostTool = createFileTool({
+    agentContext: buildAgentContext(basePath, "u-test", {
+      runtime: {
+        globalConfig: { workspaceRoot },
+      },
+    }),
+  }).find((item) => item?.name === "patch_file");
+  const regularHostDescription = regularHostTool?.schema?.shape?.patch?.description || "";
+  assert.match(regularHostDescription, /host\/workspace/);
+  assert.doesNotMatch(regularHostDescription, /sandbox|超级管理员|super user/i);
+
+  const superHostTool = createFileTool({
+    agentContext: buildAgentContext(basePath, "super-root-user", {
+      runtime: {
+        systemRuntime: {
+          userId: "super-root-user",
+          sessionId: "s-1",
+          rootSessionId: "s-1",
+          isSuperUser: true,
+          config: {},
+        },
+        globalConfig: {
+          workspaceRoot,
+          super_admin: { user_id: "super-root-user" },
+        },
+      },
+    }),
+  }).find((item) => item?.name === "patch_file");
+  const superHostDescription = superHostTool?.schema?.shape?.patch?.description || "";
+  assert.match(superHostDescription, /Windows\/macOS\/Linux/);
+  assert.doesNotMatch(superHostDescription, /sandbox/i);
+
+  const sandboxTool = createFileTool({
+    agentContext: buildAgentContext(basePath, "super-root-user", {
+      runtime: {
+        systemRuntime: {
+          userId: "super-root-user",
+          sessionId: "s-1",
+          rootSessionId: "s-1",
+          isSuperUser: true,
+          config: {},
+        },
+        globalConfig: {
+          workspaceRoot,
+          super_admin: { user_id: "super-root-user" },
+          tools: {
+            execute_script: {
+              sandboxMode: true,
+              sandboxProvider: {
+                default: "docker",
+                docker: { dockerContainerScope: "global" },
+              },
+            },
+          },
+        },
+      },
+    }),
+  }).find((item) => item?.name === "patch_file");
+  const sandboxDescription = sandboxTool?.schema?.shape?.patch?.description || "";
+  assert.match(sandboxDescription, /directories\.allowedRoots/);
+  assert.doesNotMatch(sandboxDescription, /host absolute|超级管理员|super user/i);
+});
+
 test("patch_file: 支持 apply_patch 和 unified_diff 协议", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-"));
   await fs.writeFile(path.join(basePath, "a.txt"), "one\ntwo\nthree\n", "utf8");
@@ -566,6 +667,112 @@ test("patch_file: apply_patch supports mapped Windows absolute paths", async () 
   assert.equal(await fs.readFile(outsideFile, "utf8"), "one\nTWO\n");
 });
 
+test("patch_file: 兼容模型误用 root=.. 和 project/ 虚拟相对前缀", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-project-prefix-"));
+  await fs.mkdir(path.join(basePath, "i18n/src/client/locales"), { recursive: true });
+  const localeFile = path.join(basePath, "i18n/src/client/locales/zh-CN.js");
+  await fs.writeFile(localeFile, "export default {\n  \"hideChatNavigator\": \"隐藏对话导航\"\n};\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const patchText = [
+    "*** Begin Patch",
+    "*** Update File: project/i18n/src/client/locales/zh-CN.js",
+    "@@",
+    " export default {",
+    "-  \"hideChatNavigator\": \"隐藏对话导航\"",
+    "+  \"hideChatNavigator\": \"隐藏对话导航\",",
+    "+  \"sessionStatus\": \"状态\"",
+    " };",
+    "*** End Patch",
+    "",
+  ].join("\n");
+
+  const result = parseToolResult(await tool.invoke({ format: "apply_patch", patch: patchText, root: ".." }));
+  assert.equal(result.ok, true);
+  assert.equal(result.requestedRoot, "..");
+  assert.equal(result.root, "");
+  assert.deepEqual(result.changedFiles, ["i18n/src/client/locales/zh-CN.js"]);
+  assert.equal(
+    await fs.readFile(localeFile, "utf8"),
+    "export default {\n  \"hideChatNavigator\": \"隐藏对话导航\",\n  \"sessionStatus\": \"状态\"\n};\n",
+  );
+});
+
+test("patch_file: 支持 /project 沙箱绝对路径视角", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-project-sandbox-"));
+  await fs.mkdir(path.join(basePath, "i18n/src/client/locales"), { recursive: true });
+  const localeFile = path.join(basePath, "i18n/src/client/locales/en-US.js");
+  await fs.writeFile(localeFile, "export default {\n  \"hideChatNavigator\": \"Hide conversation navigation\"\n};\n", "utf8");
+  const tools = createFileTool({
+    agentContext: buildAgentContext(basePath, "u-test", {
+      runtime: {
+        userId: "u-test",
+        userConfig: {
+          tools: {
+            sandboxPathMappings: [
+              { source: basePath, target: "/project" },
+            ],
+          },
+        },
+      },
+    }),
+  });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const patchText = [
+    "*** Begin Patch",
+    "*** Update File: /project/i18n/src/client/locales/en-US.js",
+    "@@",
+    " export default {",
+    "-  \"hideChatNavigator\": \"Hide conversation navigation\"",
+    "+  \"hideChatNavigator\": \"Hide conversation navigation\",",
+    "+  \"sessionStatus\": \"Status\"",
+    " };",
+    "*** End Patch",
+    "",
+  ].join("\n");
+
+  const result = parseToolResult(await tool.invoke({ format: "apply_patch", patch: patchText }));
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.changedFiles, ["i18n/src/client/locales/en-US.js"]);
+  assert.equal(
+    await fs.readFile(localeFile, "utf8"),
+    "export default {\n  \"hideChatNavigator\": \"Hide conversation navigation\",\n  \"sessionStatus\": \"Status\"\n};\n",
+  );
+});
+
+test("patch_file: root 参数拒绝沙箱路径并返回明确提示", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-root-sandbox-"));
+  await fs.mkdir(path.join(basePath, "src"), { recursive: true });
+  await fs.writeFile(path.join(basePath, "src/a.txt"), "one\ntwo\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const diff = [
+    "--- a/src/a.txt",
+    "+++ b/src/a.txt",
+    "@@ -1,2 +1,2 @@",
+    " one",
+    "-two",
+    "+TWO",
+    "",
+  ].join("\n");
+
+  await assert.rejects(
+    () => tool.invoke({ format: "unified_diff", patch: diff, root: "/project" }),
+    (error) => {
+      assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
+      assert.equal(error.details?.field, "root");
+      assert.match(error.details?.hint || "", /root|workspace/i);
+      return true;
+    },
+  );
+});
+
 test("patch_file: 路径不存在时返回 workspace 与候选路径诊断", async () => {
   const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-diagnostics-"));
   await fs.mkdir(path.join(workspacePath, "noobot/service/ws"), { recursive: true });
@@ -621,6 +828,124 @@ test("patch_file: 普通用户可在唯一命中时解析 workspace 子项目路
   assert.equal(result.ok, true);
   assert.deepEqual(result.changedFiles, ["noobot/client/noobot-chat/src/a.txt"]);
   assert.equal(await fs.readFile(path.join(repoPath, "client/noobot-chat/src/a.txt"), "utf8"), "one\nTWO\n");
+});
+
+test("patch_file: strip=0 时兼容 git 前缀叠加 project 虚拟根", async () => {
+  const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-git-project-prefix-"));
+  const repoPath = path.join(workspacePath, "noobot");
+  await fs.mkdir(path.join(repoPath, ".git"), { recursive: true });
+  await fs.mkdir(path.join(repoPath, "client/noobot-chat/src/app"), { recursive: true });
+  const targetFile = path.join(repoPath, "client/noobot-chat/src/app/ChatMessageNavigator.vue");
+  await fs.writeFile(targetFile, [
+    ".chat-message-navigator__role {",
+    "  background: color-mix(in srgb, var(--noobot-fill-soft, var(--el-fill-color-lighter)) 70%, white);",
+    "}",
+    "",
+  ].join("\n"), "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(workspacePath) });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const diff = [
+    "--- a/project/client/noobot-chat/src/app/ChatMessageNavigator.vue",
+    "+++ b/project/client/noobot-chat/src/app/ChatMessageNavigator.vue",
+    "@@ -1,3 +1,3 @@",
+    " .chat-message-navigator__role {",
+    "-  background: color-mix(in srgb, var(--noobot-fill-soft, var(--el-fill-color-lighter)) 70%, white);",
+    "+  background: color-mix(in srgb, var(--noobot-fill-soft, var(--el-fill-color-lighter)) 70%, var(--noobot-panel-bg, var(--el-bg-color-overlay)));",
+    " }",
+    "",
+  ].join("\n");
+
+  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: diff, strip: 0 }));
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.changedFiles, ["noobot/client/noobot-chat/src/app/ChatMessageNavigator.vue"]);
+  assert.match(
+    await fs.readFile(targetFile, "utf8"),
+    /var\(--noobot-panel-bg, var\(--el-bg-color-overlay\)\)/,
+  );
+});
+
+test("patch_file: 父工作区下唯一子项目可解析标准 git diff 路径", async () => {
+  const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-parent-workspace-"));
+  const repoPath = path.join(workspacePath, "noobot");
+  await fs.mkdir(path.join(repoPath, ".git"), { recursive: true });
+  await fs.mkdir(path.join(repoPath, "client/noobot-chat/src/modules/session"), { recursive: true });
+  const targetFile = path.join(repoPath, "client/noobot-chat/src/modules/session/SessionListPanel.vue");
+  await fs.writeFile(targetFile, [
+    ".session-hover-popover.el-popover.el-popper {",
+    "  padding: 12px 14px;",
+    "}",
+    "",
+  ].join("\n"), "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(workspacePath) });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const diff = [
+    "--- a/client/noobot-chat/src/modules/session/SessionListPanel.vue",
+    "+++ b/client/noobot-chat/src/modules/session/SessionListPanel.vue",
+    "@@ -1,3 +1,4 @@",
+    " .session-hover-popover.el-popover.el-popper {",
+    "   padding: 12px 14px;",
+    "+  background: var(--noobot-panel-bg);",
+    " }",
+    "",
+  ].join("\n");
+
+  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }));
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.changedFiles, ["noobot/client/noobot-chat/src/modules/session/SessionListPanel.vue"]);
+  assert.match(await fs.readFile(targetFile, "utf8"), /background: var\(--noobot-panel-bg\)/);
+});
+
+test("patch_file: 默认相对路径优先基于 directories.rootDirectory", async () => {
+  const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-root-directory-"));
+  const repoPath = path.join(workspacePath, "noobot");
+  await fs.mkdir(path.join(repoPath, ".git"), { recursive: true });
+  await fs.mkdir(path.join(repoPath, "client/noobot-chat/src/app"), { recursive: true });
+  const targetFile = path.join(repoPath, "client/noobot-chat/src/app/ChatMessageNavigator.vue");
+  await fs.writeFile(targetFile, [
+    ".chat-message-navigator-popover.el-popover.el-popper {",
+    "  padding: 12px 14px;",
+    "}",
+    "",
+  ].join("\n"), "utf8");
+  const tools = createFileTool({
+    agentContext: buildAgentContext(workspacePath, "u-test", {
+      runtime: {
+        systemRuntime: {
+          staticInfo: {
+            directories: {
+              view: "host",
+              rootDirectory: repoPath,
+              currentDirectory: repoPath,
+              opsWorkdir: path.join(repoPath, "runtime/ops_workdir"),
+              allowedRoots: [workspacePath],
+            },
+          },
+        },
+      },
+    }),
+  });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const diff = [
+    "--- a/client/noobot-chat/src/app/ChatMessageNavigator.vue",
+    "+++ b/client/noobot-chat/src/app/ChatMessageNavigator.vue",
+    "@@ -1,3 +1,4 @@",
+    " .chat-message-navigator-popover.el-popover.el-popper {",
+    "   padding: 12px 14px;",
+    "+  background: var(--noobot-panel-bg);",
+    " }",
+    "",
+  ].join("\n");
+
+  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }));
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.changedFiles, ["client/noobot-chat/src/app/ChatMessageNavigator.vue"]);
+  assert.match(await fs.readFile(targetFile, "utf8"), /background: var\(--noobot-panel-bg\)/);
 });
 
 test("patch_file: 超级管理员虚拟路径命中多个项目根时返回歧义错误", async () => {
