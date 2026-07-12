@@ -6,10 +6,9 @@
 import { access } from "node:fs/promises";
 import {
   filePath as path,
-  isAbsolutePathAnyPlatform,
   normalizePathForPlatform,
-  resolveHostPath,
-  resolveSandboxPathMappings,
+  resolveToolPathPolicy,
+  resolveToolInputPath,
 } from "../../utils/path-resolver.js";
 import {
   getBasePathFromAgentContext,
@@ -69,103 +68,6 @@ function resolveWorkspaceRoot(agentContext = {}) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const workspaceRoot = String(runtime?.globalConfig?.workspaceRoot || "").trim();
   return workspaceRoot ? path.resolve(workspaceRoot) : "";
-}
-
-function resolveExecuteScriptConfig(runtime = {}) {
-  const globalCfg =
-    runtime?.globalConfig?.tools?.execute_script &&
-    typeof runtime.globalConfig.tools.execute_script === "object"
-      ? runtime.globalConfig.tools.execute_script
-      : {};
-  const userCfg =
-    runtime?.userConfig?.tools?.execute_script &&
-    typeof runtime.userConfig.tools.execute_script === "object"
-      ? runtime.userConfig.tools.execute_script
-      : {};
-  return {
-    ...globalCfg,
-    ...userCfg,
-  };
-}
-
-function resolveAdditionalAllowedRoots(agentContext = {}) {
-  const runtime = getRuntimeFromAgentContext(agentContext);
-  const mappedRoots = resolveSandboxPathMappings(runtime)
-    .map((item = {}) => String(item?.source || "").trim())
-    .filter(Boolean);
-  const scriptConfig = resolveExecuteScriptConfig(runtime);
-  const sandboxProviderConfig =
-    scriptConfig?.sandboxProvider &&
-    typeof scriptConfig.sandboxProvider === "object"
-      ? scriptConfig.sandboxProvider
-      : scriptConfig?.sandbox_provider &&
-          typeof scriptConfig.sandbox_provider === "object"
-        ? scriptConfig.sandbox_provider
-        : {};
-  const providerName = String(sandboxProviderConfig?.default || "docker")
-    .trim()
-    .toLowerCase();
-  const providerDetail =
-    sandboxProviderConfig?.[providerName] &&
-    typeof sandboxProviderConfig[providerName] === "object"
-      ? sandboxProviderConfig[providerName]
-      : {};
-  const dockerMounts = Array.isArray(providerDetail?.dockerMounts)
-    ? providerDetail.dockerMounts
-    : Array.isArray(providerDetail?.docker_mounts)
-      ? providerDetail.docker_mounts
-      : [];
-  const dockerMountSources = dockerMounts
-    .map((item) => (item && typeof item === "object" ? item : {}))
-    .map((item) =>
-      String(item?.source || item?.mountSource || item?.mount_source || "").trim(),
-    )
-    .filter(Boolean);
-  return Array.from(new Set([...mappedRoots, ...dockerMountSources]))
-    .map((item) => path.resolve(item))
-    .filter(Boolean);
-}
-
-function resolveInputPathToHostPath({ inputPath = "", workspacePath = "", agentContext = {} } = {}) {
-  const runtime = getRuntimeFromAgentContext(agentContext);
-  if (isSuperUserAgentContext(agentContext)) {
-    const workspaceRoot = resolveWorkspaceRoot(agentContext);
-    const normalizedInputPath = String(inputPath || "").trim();
-    if (workspaceRoot) {
-      const normalizedSandboxPath = normalizedInputPath.replaceAll("\\", "/");
-      if (normalizedSandboxPath === "/workspace") return workspaceRoot;
-      if (normalizedSandboxPath.startsWith("/workspace/")) {
-        return path.resolve(workspaceRoot, normalizedSandboxPath.slice("/workspace/".length));
-      }
-    }
-  }
-  const payload = {
-    path: inputPath,
-    sandboxPath: inputPath,
-    runtime,
-    agentContext,
-  };
-  const resolverCandidates = [
-    runtime?.sharedTools?.resolveHostPath,
-    runtime?.sharedTools?.toHostPath,
-    runtime?.sharedTools?.pathMapper?.toHostPath,
-  ];
-  for (const resolver of resolverCandidates) {
-    if (typeof resolver !== "function") continue;
-    try {
-      const resolved = String(resolver(payload) || "").trim();
-      if (resolved) return path.resolve(resolved);
-    } catch {
-      // Keep path validation deterministic: ignore resolver errors and use fallback.
-    }
-  }
-  const resolvedByDefault = resolveHostPath({
-    path: inputPath,
-    sandboxPath: inputPath,
-    runtime: { ...runtime, basePath: runtime?.basePath || workspacePath },
-    agentContext,
-  });
-  return resolvedByDefault ? path.resolve(resolvedByDefault) : "";
 }
 
 function resolveSessionContext(agentContext = {}) {
@@ -360,21 +262,48 @@ export async function assertAndResolveUserWorkspaceFilePath({
   }
 
   const workspacePath = resolveUserWorkspacePath(agentContext);
-  const hostMappedPath = resolveInputPathToHostPath({
-    inputPath: normalizedPath,
-    workspacePath,
-    agentContext,
-  });
-  const resolvedTargetPath = hostMappedPath || (isAbsolutePathAnyPlatform(normalizedPath)
-    ? normalizePathForPlatform(normalizedPath)
-    : path.resolve(workspacePath, normalizedPath));
-
+  const runtime = getRuntimeFromAgentContext(agentContext);
   const isSuperUser = isSuperUserAgentContext(agentContext);
-  const allowedRoots = [
+  const workspaceRoot = resolveWorkspaceRoot(agentContext);
+  const pathPolicy = resolveToolPathPolicy({
+    runtime,
+    agentContext,
+    runtimeBasePath: workspacePath,
     workspacePath,
-    ...resolveAdditionalAllowedRoots(agentContext),
-  ].filter(Boolean);
-  const inAllowedScope = isSuperUser || allowedRoots.some((rootPath) =>
+    workspaceRoot,
+    isSuperUser,
+  });
+  const resolvedToolPath = resolveToolInputPath({
+    inputPath: normalizedPath,
+    runtime,
+    workspacePath: pathPolicy.relativeHostRoot,
+    workspaceRoot,
+    agentContext,
+    allowHostAbsolute: true,
+    allowSandbox: true,
+    allowVirtualRelative: true,
+  });
+  if (!resolvedToolPath.ok) {
+    throw recoverableToolError(resolvedToolPath.hint || `${fieldName} ${tCheckInput(agentContext, "fieldRequired")}`, {
+      code: resolvedToolPath.error === "host_absolute_not_allowed" ||
+        resolvedToolPath.error === "sandbox_path_not_allowed"
+        ? ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE
+        : ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+      details: {
+        field: fieldName,
+        filePath: normalizedPath,
+        pathView: resolvedToolPath.view,
+        error: resolvedToolPath.error,
+        hint: resolvedToolPath.hint,
+        suggestedPath: resolvedToolPath.candidateWorkspaceRelativePath || "",
+        suggestedSandboxPath: resolvedToolPath.candidateSandboxPath || "",
+      },
+    });
+  }
+  const resolvedTargetPath = resolvedToolPath.resolvedPath;
+
+  const allowedRoots = pathPolicy.allowedRoots;
+  const inAllowedScope = pathPolicy.superUserBypassesDirectoryScope || allowedRoots.some((rootPath) =>
     isWithinBasePath(rootPath, resolvedTargetPath),
   );
   if (!inAllowedScope) {

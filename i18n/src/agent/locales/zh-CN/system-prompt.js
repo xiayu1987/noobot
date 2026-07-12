@@ -54,6 +54,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     },
     sections: {
       staticInfo: "系统运行环境",
+      pathGuidance: "路径规则",
       dynamicInfo: "当前会话动态上下文",
       scenario: "当前场景配置（名称、描述、约束）",
       workspaceDirectories: "工作区目录",
@@ -64,6 +65,15 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       mcpServers: "可用 MCP 服务器（name + type + description）",
       connectors: "当前连接器信息",
       attachments: "当前附件元信息",
+    },
+    pathGuidance: {
+      preferRelative: "默认目录见 directories：currentDirectory、rootDirectory、opsWorkdir。",
+      sandboxView: "当前为沙箱视角；文件/patch 相对路径基于 directories.rootDirectory，execute_script 默认目录为 directories.opsWorkdir，绝对路径只使用 directories.allowedRoots。",
+      sandboxMounts: "挂载目录只使用 directories.extraMountTargets/allowedRoots 中出现的路径。",
+      hostView: "当前为 host/workspace 视角；文件/patch 相对路径基于 directories.rootDirectory，execute_script 默认目录为 directories.opsWorkdir，cwd/currentDirectory 仅说明当前进程目录。",
+      superUserHost: "当前是超级管理员；必要时可使用 Windows/macOS/Linux host 绝对路径。",
+      regularHost: "绝对路径需位于工作区或已挂载根内。",
+      patchRoot: "patch root 通常省略；若填写，只能是工作区相对子目录。",
     },
   },
   memoryPrompt: {

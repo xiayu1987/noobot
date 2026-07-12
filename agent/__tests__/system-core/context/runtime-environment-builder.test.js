@@ -5,6 +5,10 @@ import {
   buildRuntimeContext,
   initializeRuntimeEnvironment,
 } from "../../../src/system-core/context/builders/runtime-environment-builder.js";
+import {
+  buildSandboxViewStaticInfo,
+  buildStaticInfo,
+} from "../../../src/system-core/context/providers/environment-provider.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 test("buildRuntimeContext keeps sharedTools passthrough and creates turn stores", () => {
@@ -35,6 +39,79 @@ test("buildRuntimeContext keeps sharedTools passthrough and creates turn stores"
   assert.equal(typeof runtime.currentTurnTasks.push, "function");
   assert.deepEqual(runtime.userMessageAttachments, [{ attachmentId: "att_1" }]);
   assert.deepEqual(runtime.attachments, []);
+});
+
+test("buildStaticInfo exposes host default directories", () => {
+  const staticInfo = buildStaticInfo({
+    runtimeBasePath: "/host/workspaces/u1",
+    userId: "u1",
+    globalConfig: { workspaceRoot: "/host/workspaces" },
+  });
+
+  assert.equal(staticInfo.directories?.view, "host");
+  assert.equal(staticInfo.directories?.rootDirectory, "/host/workspaces/u1");
+  assert.equal(staticInfo.directories?.opsWorkdir, "/host/workspaces/u1/runtime/ops_workdir");
+  assert.equal(staticInfo.directories?.currentDirectory, process.cwd());
+  assert.deepEqual(staticInfo.directories?.allowedRoots, ["/host/workspaces/u1"]);
+});
+
+test("buildSandboxViewStaticInfo exposes configured sandbox mount targets", () => {
+  const staticInfo = buildSandboxViewStaticInfo({
+    runtimeBasePath: "/host/workspaces/u1",
+    userId: "u1",
+    effectiveConfig: {
+      tools: {
+        sandboxPathMappings: [
+          { source: "/host/project", target: "/repo" },
+        ],
+        execute_script: {
+          sandboxMode: true,
+          sandboxProvider: {
+            default: "docker",
+            docker: {
+              dockerContainerScope: "user",
+              dockerMounts: [
+                { source: "/host/data", target: "/data" },
+              ],
+            },
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(staticInfo.sandbox?.enabled, true);
+  assert.equal(staticInfo.directories?.view, "sandbox");
+  assert.equal(staticInfo.directories?.rootDirectory, "/workspace");
+  assert.equal(staticInfo.directories?.opsWorkdir, "/workspace/runtime/ops_workdir");
+  assert.equal(staticInfo.directories?.currentDirectory, "/workspace/runtime/ops_workdir");
+  assert.deepEqual(staticInfo.sandbox?.allowedRoots?.sort(), ["/data", "/repo", "/workspace"]);
+  assert.deepEqual(staticInfo.sandbox?.extraMountTargets?.sort(), ["/data", "/repo"]);
+});
+
+test("buildSandboxViewStaticInfo separates sandbox root from user root for docker global scope", () => {
+  const staticInfo = buildSandboxViewStaticInfo({
+    runtimeBasePath: "/host/workspaces/primary-user",
+    userId: "primary-user",
+    effectiveConfig: {
+      tools: {
+        execute_script: {
+          sandboxMode: true,
+          sandboxProvider: {
+            default: "docker",
+            docker: {
+              dockerContainerScope: "global",
+            },
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(staticInfo.sandbox?.sandboxRoot, "/workspace");
+  assert.equal(staticInfo.directories?.rootDirectory, "/workspace/primary-user");
+  assert.equal(staticInfo.directories?.opsWorkdir, "/workspace/primary-user/runtime/ops_workdir");
+  assert.deepEqual(staticInfo.directories?.allowedRoots, ["/workspace"]);
 });
 
 test("initializeRuntimeEnvironment wires shared tools and connector runtime", async () => {

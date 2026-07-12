@@ -72,6 +72,7 @@ export async function tryDockerFallback({
   scriptConfig = {},
   runtime = {},
   agentContext = null,
+  pathContext = {},
   fallbackFrom,
   warning,
   includeLineNumbers = false,
@@ -99,6 +100,7 @@ export async function tryDockerFallback({
       workspace,
       runtime,
       agentContext,
+      pathContext,
     }),
   };
   if (executionMode === SCRIPT_EXECUTION_MODE.BACKGROUND) {

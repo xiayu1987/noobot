@@ -55,6 +55,39 @@ test("composeSystemInfoSections includes MCP/connectors/attachments when data ex
   assert.equal(joined.includes("Current attachment metadata"), true);
 });
 
+test("composeSystemInfoSections adds concise path guidance for only the active path view", () => {
+  const regularSandboxSections = composeSystemInfoSections({
+    locale: "en-US",
+    systemPrompt: "base",
+    staticInfo: {
+      sandbox: {
+        enabled: true,
+        allowedRoots: ["/runtime-root"],
+        defaultWorkdir: "/runtime-root/work",
+      },
+      identity: { isSuperUser: false },
+    },
+  });
+  const regularSandboxText = regularSandboxSections.join("\n\n");
+  assert.equal(regularSandboxText.includes("# Path rules"), true);
+  assert.equal(regularSandboxText.includes("Current view is sandbox"), true);
+  assert.equal(regularSandboxText.includes("host absolute paths"), false);
+  assert.equal(regularSandboxText.includes("Sandbox is disabled"), false);
+  assert.equal(regularSandboxText.includes("/project"), false);
+
+  const superHostSections = composeSystemInfoSections({
+    locale: "en-US",
+    systemPrompt: "base",
+    staticInfo: {
+      identity: { isSuperUser: true },
+    },
+  });
+  const superHostText = superHostSections.join("\n\n");
+  assert.equal(superHostText.includes("Current view is host/workspace"), true);
+  assert.equal(superHostText.includes("host absolute paths are allowed"), true);
+  assert.equal(superHostText.includes("sandbox"), false);
+});
+
 test("composeSystemInfoSections uses attachments as attachment context", () => {
   const sections = composeSystemInfoSections({
     locale: "en-US",

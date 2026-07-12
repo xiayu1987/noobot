@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { mkdir } from "node:fs/promises";
-import { filePath as path } from "../../utils/path-resolver.js";
+import {
+  filePath as path,
+  resolveRuntimePathContext,
+} from "../../utils/path-resolver.js";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { BUILTIN_THRESHOLDS, mergeConfig } from "../../config/index.js";
@@ -62,13 +65,21 @@ export function createScriptTool({ agentContext }) {
   const { provider: sandboxProvider, providerDetail } =
     resolveSandboxProviderConfig(scriptConfig);
   const dockerConfig = resolveDockerScriptConfig(scriptConfig, providerDetail);
+  const pathContext = resolveRuntimePathContext({
+    runtime,
+    agentContext,
+    runtimeBasePath: basePath,
+    workspaceRoot: globalConfig?.workspaceRoot || "",
+    userId,
+    globalConfig,
+    effectiveConfig,
+  });
   const description = buildScriptToolDescription({
     runtime,
     sandboxEnabled,
     sandboxProvider,
     workspace,
-    dockerConfig,
-    userId,
+    pathContext,
   });
 
   const execute_script = new DynamicStructuredTool({
@@ -102,6 +113,7 @@ export function createScriptTool({ agentContext }) {
               workspace,
               runtime,
               agentContext,
+              pathContext,
             }),
             { runtime, agentContext, basePath },
           );
@@ -114,6 +126,7 @@ export function createScriptTool({ agentContext }) {
             workspace,
             runtime,
             agentContext,
+            pathContext,
           }),
           { includeLineNumbers: shouldIncludeLineNumbers },
         );
@@ -128,6 +141,7 @@ export function createScriptTool({ agentContext }) {
         runtime,
         agentContext,
         dockerConfig,
+        pathContext,
       });
       let dockerRunInput = null;
 
@@ -152,6 +166,7 @@ export function createScriptTool({ agentContext }) {
             scriptConfig: dockerConfig,
             runtime,
             agentContext,
+            pathContext,
             fallbackFrom: SANDBOX_PROVIDER_NAME.BUBBLEWRAP,
             warning: tScript(runtime, "fallbackOverlaySrc"),
             executionMode: requestedExecutionMode,
@@ -199,6 +214,7 @@ export function createScriptTool({ agentContext }) {
           runtime,
           agentContext,
           dockerConfig,
+          pathContext,
         });
       } else if (sandboxProvider === SANDBOX_PROVIDER_NAME.FIREJAIL) {
         const firejailInstalled = await hasCommand(SANDBOX_COMMAND.FIREJAIL);
@@ -220,6 +236,7 @@ export function createScriptTool({ agentContext }) {
           runtime,
           agentContext,
           dockerConfig,
+          pathContext,
         });
       } else {
         const dockerInstalled = await hasCommand(SANDBOX_COMMAND.DOCKER);
@@ -261,6 +278,7 @@ export function createScriptTool({ agentContext }) {
             workspace,
             runtime,
             agentContext,
+            pathContext,
           }),
         };
       } else {

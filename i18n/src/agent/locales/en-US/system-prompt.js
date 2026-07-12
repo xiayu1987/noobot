@@ -56,6 +56,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     },
     sections: {
       staticInfo: "System runtime environment",
+      pathGuidance: "Path rules",
       dynamicInfo: "Current session dynamic context",
       scenario: "Current scenario config (name, description, constraints)",
       workspaceDirectories: "Workspace directories",
@@ -67,6 +68,15 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       mcpServers: "Available MCP servers (name + type + description)",
       connectors: "Current connector information",
       attachments: "Current attachment metadata",
+    },
+    pathGuidance: {
+      preferRelative: "Default directories are in directories: currentDirectory, rootDirectory, opsWorkdir.",
+      sandboxView: "Current view is sandbox; file/patch relative paths resolve from directories.rootDirectory, execute_script defaults to directories.opsWorkdir, and absolute paths must use directories.allowedRoots.",
+      sandboxMounts: "Use mounted directories only when they appear in directories.extraMountTargets/allowedRoots.",
+      hostView: "Current view is host/workspace; file/patch relative paths resolve from directories.rootDirectory, execute_script defaults to directories.opsWorkdir, while cwd/currentDirectory only describes the current process directory.",
+      superUserHost: "Current user is a super user; host absolute paths are allowed when needed on Windows/macOS/Linux.",
+      regularHost: "Absolute paths must stay inside the workspace or mounted roots.",
+      patchRoot: "For patch_file, usually omit root; if set, root must be a workspace-relative child directory.",
     },
   },
   memoryPrompt: {

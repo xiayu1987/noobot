@@ -6,10 +6,13 @@
 import { readdir } from "node:fs/promises";
 import {
   filePath as path,
+  classifyToolInputPath,
   isAbsolutePathAnyPlatform,
   isCaseInsensitivePathContext,
   normalizePathForPlatform,
+  resolveAgentPathContext,
   resolvePathUnderRoot,
+  TOOL_PATH_VIEWS,
 } from "../../utils/path-resolver.js";
 import { recoverableToolError } from "../../error/index.js";
 import { ERROR_CODE } from "../../error/constants.js";
@@ -87,7 +90,7 @@ function buildPatchPathVariants(filePath = "", agentContext = {}, { patchRoot = 
   const normalized = normalizePatchPathInput(filePath);
   if (!normalized || normalized === "/dev/null") return [normalized];
   const parts = normalized.split("/").filter(Boolean);
-  const workspaceBaseName = path.basename(path.resolve(getBasePathFromAgentContext(agentContext) || "."));
+  const workspaceBaseName = path.basename(resolvePatchDefaultRoot(agentContext));
   const patchRootParts = normalizePatchPathInput(patchRoot).split("/").filter(Boolean);
   const patchRootBaseName = patchRootParts[patchRootParts.length - 1] || "";
   const virtualRoots = new Set([...VIRTUAL_PATCH_ROOTS, workspaceBaseName, patchRootBaseName].filter(Boolean));
@@ -98,6 +101,10 @@ function buildPatchPathVariants(filePath = "", agentContext = {}, { patchRoot = 
   if (virtualRoots.has(parts[0]) && parts.length > 1) {
     variants.push(parts.slice(1).join("/"));
   }
+  if (["a", "b"].includes(parts[0]) && virtualRoots.has(parts[1]) && parts.length > 2) {
+    variants.push(parts.slice(1).join("/"));
+    variants.push(parts.slice(2).join("/"));
+  }
   return uniqueStrings(variants);
 }
 
@@ -105,6 +112,20 @@ function isWithinBasePath(basePath = "", targetPath = "") {
   const rel = path.relative(basePath, targetPath);
   if (!rel) return true;
   return !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
+function resolvePatchDefaultRoot(agentContext = {}) {
+  const runtime = getRuntimeFromAgentContext(agentContext);
+  const context = resolveAgentPathContext({
+    runtime,
+    agentContext,
+    runtimeBasePath: getBasePathFromAgentContext(agentContext),
+  });
+  return path.resolve(context.hostRootDirectory || getBasePathFromAgentContext(agentContext) || ".");
+}
+
+function resolvePatchValidationRoot(agentContext = {}) {
+  return path.resolve(getBasePathFromAgentContext(agentContext) || ".");
 }
 
 function formatDisplayPath({ workspacePath = "", rootPath = "", candidatePath = "", resolvedPath = "" } = {}) {
@@ -128,7 +149,7 @@ async function looksLikeProjectRoot(rootPath = "") {
 }
 
 async function discoverSuperUserPatchRoots(agentContext = {}) {
-  const workspacePath = path.resolve(getBasePathFromAgentContext(agentContext) || ".");
+  const workspacePath = resolvePatchDefaultRoot(agentContext);
   const runtime = getRuntimeFromAgentContext(agentContext);
   const roots = [workspacePath];
   const workspaceRoot = String(runtime?.globalConfig?.workspaceRoot || "").trim();
@@ -150,7 +171,7 @@ async function discoverSuperUserPatchRoots(agentContext = {}) {
 }
 
 async function discoverWorkspaceChildProjectRoots(agentContext = {}) {
-  const workspacePath = path.resolve(getBasePathFromAgentContext(agentContext) || ".");
+  const workspacePath = resolvePatchDefaultRoot(agentContext);
   let entries = [];
   try {
     entries = await readdir(workspacePath, { withFileTypes: true });
@@ -170,12 +191,30 @@ async function discoverWorkspaceChildProjectRoots(agentContext = {}) {
 async function resolvePatchRoot({ root = "", agentContext = {} } = {}) {
   const normalizedRoot = normalizePatchPathInput(root);
   if (!normalizedRoot || normalizedRoot === ".") {
-    const workspacePath = path.resolve(getBasePathFromAgentContext(agentContext) || ".");
+    const workspacePath = resolvePatchDefaultRoot(agentContext);
     return {
       displayPath: "",
       resolvedPath: workspacePath,
       inputPath: "",
     };
+  }
+  const classifiedRoot = classifyToolInputPath(normalizedRoot, { agentContext });
+  if (
+    normalizedRoot === ".." ||
+    normalizedRoot.startsWith("../") ||
+    isAbsolutePathAnyPlatform(normalizedRoot) ||
+    classifiedRoot.view === TOOL_PATH_VIEWS.SANDBOX_ABSOLUTE ||
+    classifiedRoot.view === TOOL_PATH_VIEWS.VIRTUAL_RELATIVE
+  ) {
+    throw recoverableToolError(`patch root must be a workspace-relative child directory: ${normalizedRoot}`, {
+      code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
+      details: {
+        field: "root",
+        root: normalizedRoot,
+        pathView: classifiedRoot.view,
+        hint: "Do not use root:'..' or sandbox paths as root. Use workspace-relative patch paths, or use /project/... / /workspace/... directly in the patch path.",
+      },
+    });
   }
   if (isForbiddenWorkspaceRelativePath(normalizedRoot)) {
     throw recoverableToolError(`patch root is not allowed: ${normalizedRoot}`, {
@@ -198,7 +237,8 @@ async function resolvePatchRoot({ root = "", agentContext = {} } = {}) {
 }
 
 async function buildPatchPathCandidates(filePath = "", agentContext = {}, { root = "" } = {}) {
-  const workspacePath = path.resolve(getBasePathFromAgentContext(agentContext) || ".");
+  const workspacePath = resolvePatchDefaultRoot(agentContext);
+  const validationWorkspacePath = resolvePatchValidationRoot(agentContext);
   const rootInfo = await resolvePatchRoot({ root, agentContext });
   const explicitRootPath = rootInfo.displayPath ? rootInfo.resolvedPath : "";
   const variants = buildPatchPathVariants(filePath, agentContext, { patchRoot: rootInfo.displayPath });
@@ -235,7 +275,7 @@ async function buildPatchPathCandidates(filePath = "", agentContext = {}, { root
       const resolvedPath = path.resolve(rootPath, candidatePath);
       candidates.push({
         candidatePath,
-        inputPath: rootPath === workspacePath ? candidatePath : resolvedPath,
+        inputPath: rootPath === validationWorkspacePath ? candidatePath : resolvedPath,
         displayPath: formatDisplayPath({ workspacePath, rootPath, candidatePath, resolvedPath }),
         rootPath,
         priority: (rootIndex * 10) + variantIndex,
@@ -282,7 +322,16 @@ function buildPathAttemptDetails({
   agentContext = {},
   root = "",
 } = {}) {
-  const workspacePath = path.resolve(getBasePathFromAgentContext(agentContext) || ".");
+  const workspacePath = resolvePatchDefaultRoot(agentContext);
+  const classifiedInput = classifyToolInputPath(filePath, { agentContext });
+  const virtualRelativeSuggestion = classifiedInput.view === TOOL_PATH_VIEWS.VIRTUAL_RELATIVE
+    ? {
+      pathView: classifiedInput.view,
+      suggestedPatchPath: classifiedInput.normalized.split("/").slice(1).join("/"),
+      suggestedSandboxPath: `/${classifiedInput.normalized}`,
+      pathHint: `Path '${classifiedInput.normalized}' looks like a virtual relative path. Use '/${classifiedInput.virtualRoot}/...' for sandbox paths, or remove '${classifiedInput.virtualRoot}/' for workspace-relative paths.`,
+    }
+    : {};
   const suggestedRoots = uniqueStrings(candidates
     .filter((item) => item.reason && String(item.reason).includes("discovered-project-root"))
     .map((item) => toWorkspaceRelativePath(workspacePath, item.rootPath || "")));
@@ -299,9 +348,11 @@ function buildPathAttemptDetails({
     })),
     suggestedRoots,
     suggestedRoot: suggestedRoots.length === 1 ? suggestedRoots[0] : "",
+    ...virtualRelativeSuggestion,
     hint: root
       ? "Patch path was resolved under the requested root. Check strip/root or use a path that exists under root."
-      : "Patch paths are resolved from the current workspace root. If target files are in a child project, include that project directory in the patch path or pass root.",
+      : virtualRelativeSuggestion.pathHint ||
+        "Patch paths are resolved from the current workspace root. If target files are in a child project, include that project directory in the patch path or pass root.",
   };
 }
 

@@ -5,6 +5,7 @@
 -->
 <script setup>
 import { nextTick, ref, watch } from "vue";
+import { useLocale } from "../shared/i18n/useLocale";
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
@@ -12,6 +13,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["select"]);
+const { translate } = useLocale();
 const navigatorRef = ref(null);
 
 function syncCurrentNavigatorItemIntoView() {
@@ -47,19 +49,40 @@ watch(
       v-for="item in items"
       :key="item.id"
       :href="`#${item.id}`"
-      :title="item.title"
       :data-chat-message-nav-id="item.id"
       :class="{ 'is-current': item.id === currentId }"
       @click="emit('select', item)"
     >
-      <span
-        class="chat-message-navigator__item"
-        :class="`is-${String(item.role || 'session').trim().toLowerCase() || 'session'}`"
-        :title="item.title"
+      <el-popover
+        trigger="hover"
+        placement="left"
+        :width="264"
+        :show-after="220"
+        :hide-after="80"
+        popper-class="chat-message-navigator-popover"
       >
-        <span class="chat-message-navigator__role">{{ item.roleLabel || item.role }}</span>
-        <span v-if="item.preview" class="chat-message-navigator__content">{{ item.preview }}</span>
-      </span>
+        <template #reference>
+          <span
+            class="chat-message-navigator__item"
+            :class="`is-${String(item.role || 'session').trim().toLowerCase() || 'session'}`"
+          >
+            <span class="chat-message-navigator__role">{{ item.roleLabel || item.role }}</span>
+            <span v-if="item.preview" class="chat-message-navigator__content">{{ item.preview }}</span>
+          </span>
+        </template>
+        <div class="chat-nav-popover">
+          <ul class="chat-nav-popover__meta">
+            <li>
+              <span class="k">{{ translate("common.navRole") }}</span>
+              <span class="v">{{ item.roleLabel || item.role }}</span>
+            </li>
+            <li v-if="item.content">
+              <span class="k">{{ translate("common.navContent") }}</span>
+              <span class="v">{{ item.content }}</span>
+            </li>
+          </ul>
+        </div>
+      </el-popover>
     </el-anchor-link>
   </el-anchor>
 </template>
@@ -134,7 +157,7 @@ watch(
   letter-spacing: 0.035em;
   text-align: center;
   color: var(--noobot-text-strong, var(--el-text-color-primary));
-  background: color-mix(in srgb, var(--noobot-fill-soft, var(--el-fill-color-lighter)) 70%, white);
+  background: color-mix(in srgb, var(--noobot-fill-soft, var(--el-fill-color-lighter)) 70%, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 70%, transparent);
   box-shadow: none;
 }
@@ -147,14 +170,14 @@ watch(
 }
 
 .chat-message-navigator__item.is-user .chat-message-navigator__role {
-  color: color-mix(in srgb, var(--el-color-primary) 88%, var(--noobot-base-slate-800));
-  background: color-mix(in srgb, var(--el-color-primary-light-9) 86%, white);
+  color: color-mix(in srgb, var(--el-color-primary) 88%, var(--noobot-text-strong, var(--el-text-color-primary)));
+  background: color-mix(in srgb, var(--el-color-primary-light-9) 86%, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
   border-color: color-mix(in srgb, var(--el-color-primary) 30%, transparent);
 }
 
 .chat-message-navigator__item.is-assistant .chat-message-navigator__role {
-  color: color-mix(in srgb, var(--el-color-success) 78%, var(--noobot-base-slate-800));
-  background: color-mix(in srgb, var(--el-color-success-light-9) 86%, white);
+  color: color-mix(in srgb, var(--el-color-success) 78%, var(--noobot-text-strong, var(--el-text-color-primary)));
+  background: color-mix(in srgb, var(--el-color-success-light-9) 86%, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
   border-color: color-mix(in srgb, var(--el-color-success) 30%, transparent);
 }
 
@@ -209,5 +232,48 @@ watch(
     padding: 10px 14px 10px 16px;
     font-size: var(--noobot-font-size-md);
   }
+}
+</style>
+
+<style>
+.chat-message-navigator-popover.el-popover.el-popper {
+  padding: 12px 14px;
+  background: var(--noobot-panel-bg);
+  border: 1px solid var(--noobot-panel-border);
+  color: var(--noobot-text-strong);
+}
+
+.chat-message-navigator-popover.el-popover.el-popper .el-popper__arrow::before {
+  background: var(--noobot-panel-bg);
+  border: 1px solid var(--noobot-panel-border);
+}
+
+.chat-nav-popover__meta {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chat-nav-popover__meta li {
+  display: flex;
+  gap: 8px;
+  font-size: var(--noobot-font-size-sm);
+  line-height: 1.45;
+}
+
+.chat-nav-popover__meta .k {
+  flex: 0 0 auto;
+  min-width: 40px;
+  color: var(--noobot-text-secondary);
+}
+
+.chat-nav-popover__meta .v {
+  flex: 1;
+  min-width: 0;
+  color: var(--noobot-text-strong);
+  word-break: break-word;
 }
 </style>

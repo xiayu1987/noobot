@@ -53,7 +53,19 @@ export const zhCNMessages = {
     "emptyChatHint": "开始与 Noobot 的全新对话",
     "chatNavigator": "对话导航",
     "showChatNavigator": "显示对话导航",
-    "hideChatNavigator": "隐藏对话导航"
+    "hideChatNavigator": "隐藏对话导航",
+    "sessionStatus": "状态",
+    "sessionBackendId": "会话 ID",
+    "sessionLocalId": "本地 ID",
+    "sessionUpdatedAt": "更新时间",
+    "sessionCreatedAt": "创建时间",
+    "sessionMessageCount": "消息数",
+    "statusIdle": "空闲",
+    "statusRunning": "运行中",
+    "statusDone": "已完成",
+    "statusError": "出错",
+    "navRole": "角色",
+    "navContent": "内容"
   },
   "settings": {
     "userParams": "用户参数",
