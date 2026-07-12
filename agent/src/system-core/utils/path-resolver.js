@@ -45,6 +45,29 @@ function normalizePlatform(platform = "") {
   return "";
 }
 
+export function normalizePathPlatform(platform = "") {
+  return normalizePlatform(platform);
+}
+
+export function resolvePathPlatformFromContext(agentContext = {}, fallback = process.platform) {
+  return normalizePlatform(
+    agentContext?.environment?.os?.platform ||
+    agentContext?.environment?.platform ||
+    agentContext?.platform ||
+    fallback ||
+    "",
+  );
+}
+
+export function isCaseInsensitivePathPlatform(platform = "") {
+  const normalized = normalizePlatform(platform);
+  return normalized === PATH_PLATFORMS.WINDOWS || normalized === PATH_PLATFORMS.MACOS;
+}
+
+export function isCaseInsensitivePathContext(agentContext = {}, fallback = process.platform) {
+  return isCaseInsensitivePathPlatform(resolvePathPlatformFromContext(agentContext, fallback));
+}
+
 function normalizeView(view = "") {
   const value = String(view || "").trim().toLowerCase();
   return Object.values(PATH_VIEWS).includes(value) ? value : "";
@@ -162,6 +185,16 @@ export function isAbsolutePathForPlatform(value = "", platform = "") {
   return resolvedPlatform === PATH_PLATFORMS.WINDOWS
     ? /^(?:[a-z]:\/|\/\/[^/]+\/[^/]+)/i.test(normalized)
     : normalized.startsWith("/");
+}
+
+export function isAbsolutePathAnyPlatform(value = "", platform = "") {
+  return nodePath.isAbsolute(String(value || "")) || isAbsolutePathForPlatform(value, platform);
+}
+
+export function resolvePathUnderRoot(rootPath = "", targetPath = "", { platform = "" } = {}) {
+  const normalizedTarget = normalizePathForPlatform(targetPath, { platform });
+  if (!rootPath || isAbsolutePathAnyPlatform(normalizedTarget, platform)) return normalizedTarget;
+  return joinPathForPlatform(rootPath, normalizedTarget);
 }
 
 export function joinPathForPlatform(basePath = "", ...segments) {

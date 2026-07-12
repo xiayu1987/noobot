@@ -4,8 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { readdir } from "node:fs/promises";
-import { filePath as path, isAbsolutePathForPlatform } from "../../utils/path-resolver.js";
-import { fileURLToPath } from "node:url";
+import {
+  filePath as path,
+  isAbsolutePathAnyPlatform,
+  isCaseInsensitivePathContext,
+  normalizePathForPlatform,
+  resolvePathUnderRoot,
+} from "../../utils/path-resolver.js";
 import { recoverableToolError } from "../../error/index.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import {
@@ -58,14 +63,7 @@ const PROJECT_ROOT_MARKERS = [
 function normalizePatchPathInput(rawPath = "") {
   const trimmed = String(rawPath || "").trim();
   if (!trimmed) return "";
-  if (/^file:\/\//i.test(trimmed)) {
-    try {
-      return normalizeSlash(fileURLToPath(trimmed));
-    } catch {
-      return normalizeSlash(trimmed.replace(/^file:\/+/i, ""));
-    }
-  }
-  return normalizeSlash(trimmed);
+  return normalizePathForPlatform(trimmed);
 }
 
 function stripDiffPath(rawPath = "", strip = 1) {
@@ -82,13 +80,15 @@ function uniqueStrings(values = []) {
   return Array.from(new Set(values.map((item) => String(item || "").trim()).filter(Boolean)));
 }
 
-function buildPatchPathVariants(filePath = "", agentContext = {}) {
+function buildPatchPathVariants(filePath = "", agentContext = {}, { patchRoot = "" } = {}) {
   const normalized = normalizePatchPathInput(filePath);
   if (!normalized || normalized === "/dev/null") return [normalized];
   const parts = normalized.split("/").filter(Boolean);
   const workspaceBaseName = path.basename(path.resolve(getBasePathFromAgentContext(agentContext) || "."));
-  const virtualRoots = new Set([...VIRTUAL_PATCH_ROOTS, workspaceBaseName].filter(Boolean));
-  if ((path.isAbsolute(normalized) || isAbsolutePathForPlatform(normalized)) && !virtualRoots.has(parts[0])) {
+  const patchRootParts = normalizePatchPathInput(patchRoot).split("/").filter(Boolean);
+  const patchRootBaseName = patchRootParts[patchRootParts.length - 1] || "";
+  const virtualRoots = new Set([...VIRTUAL_PATCH_ROOTS, workspaceBaseName, patchRootBaseName].filter(Boolean));
+  if (isAbsolutePathAnyPlatform(normalized) && !virtualRoots.has(parts[0])) {
     return [normalized];
   }
   const variants = [parts.join("/") || normalized];
@@ -146,18 +146,60 @@ async function discoverSuperUserPatchRoots(agentContext = {}) {
   return uniqueStrings(roots.map((item) => path.resolve(item)));
 }
 
-async function buildPatchPathCandidates(filePath = "", agentContext = {}) {
+async function resolvePatchRoot({ root = "", agentContext = {} } = {}) {
+  const normalizedRoot = normalizePatchPathInput(root);
+  if (!normalizedRoot || normalizedRoot === ".") {
+    const workspacePath = path.resolve(getBasePathFromAgentContext(agentContext) || ".");
+    return {
+      displayPath: "",
+      resolvedPath: workspacePath,
+      inputPath: "",
+    };
+  }
+  if (isForbiddenWorkspaceRelativePath(normalizedRoot)) {
+    throw recoverableToolError(`patch root is not allowed: ${normalizedRoot}`, {
+      code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
+      details: { field: "root", root: normalizedRoot },
+    });
+  }
+  assertValidFileNameFromPath({ filePath: normalizedRoot, fieldName: "root" });
+  const resolvedPath = await assertAndResolveUserWorkspaceFilePath({
+    filePath: normalizedRoot,
+    agentContext,
+    fieldName: "root",
+    mustExist: true,
+  });
+  return {
+    displayPath: normalizedRoot,
+    resolvedPath,
+    inputPath: normalizedRoot,
+  };
+}
+
+async function buildPatchPathCandidates(filePath = "", agentContext = {}, { root = "" } = {}) {
   const workspacePath = path.resolve(getBasePathFromAgentContext(agentContext) || ".");
-  const variants = buildPatchPathVariants(filePath, agentContext);
+  const rootInfo = await resolvePatchRoot({ root, agentContext });
+  const explicitRootPath = rootInfo.displayPath ? rootInfo.resolvedPath : "";
+  const variants = buildPatchPathVariants(filePath, agentContext, { patchRoot: rootInfo.displayPath });
   const baseCandidates = variants.map((candidatePath, index) => ({
     candidatePath,
-    displayPath: candidatePath,
-    rootPath: workspacePath,
+    inputPath: resolvePathUnderRoot(explicitRootPath, candidatePath),
+    displayPath: explicitRootPath
+      ? formatDisplayPath({
+        workspacePath,
+        rootPath: explicitRootPath,
+        candidatePath,
+        resolvedPath: resolvePathUnderRoot(explicitRootPath, candidatePath),
+      })
+      : candidatePath,
+    rootPath: explicitRootPath || workspacePath,
     priority: index,
-    reason: index === 0 ? "workspace" : "virtual-root-stripped",
+    reason: explicitRootPath
+      ? (index === 0 ? "explicit-root" : "explicit-root + virtual-root-stripped")
+      : (index === 0 ? "workspace" : "virtual-root-stripped"),
   }));
 
-  if (!isSuperUserAgentContext(agentContext)) return baseCandidates;
+  if (explicitRootPath || !isSuperUserAgentContext(agentContext)) return baseCandidates;
 
   const roots = await discoverSuperUserPatchRoots(agentContext);
   const candidates = [];
@@ -179,10 +221,10 @@ async function buildPatchPathCandidates(filePath = "", agentContext = {}) {
   return candidates;
 }
 
-function dedupeResolvedCandidates(candidates = []) {
+function dedupeResolvedCandidates(candidates = [], agentContext = {}) {
   const seen = new Set();
   const result = [];
-  const caseInsensitivePath = process.platform === "win32" || process.platform === "darwin";
+  const caseInsensitivePath = isCaseInsensitivePathContext(agentContext);
   for (const item of candidates) {
     const normalizedKey = normalizeSlash(path.resolve(item.resolvedPath || ""));
     const key = caseInsensitivePath ? normalizedKey.toLowerCase() : normalizedKey;
@@ -206,13 +248,54 @@ function throwAmbiguousPatchPath({ filePath = "", fieldName = "filePath", matche
   });
 }
 
+function buildPathAttemptDetails({
+  filePath = "",
+  fieldName = "filePath",
+  candidates = [],
+  agentContext = {},
+  root = "",
+} = {}) {
+  const workspacePath = path.resolve(getBasePathFromAgentContext(agentContext) || ".");
+  return {
+    field: fieldName,
+    filePath,
+    root: normalizePatchPathInput(root),
+    basePath: workspacePath,
+    attemptedPaths: candidates.map((item) => ({
+      path: item.displayPath || item.candidatePath,
+      inputPath: normalizeSlash(item.inputPath || item.candidatePath),
+      rootPath: normalizeSlash(item.rootPath || workspacePath),
+      reason: item.reason,
+    })),
+    hint: root
+      ? "Patch path was resolved under the requested root. Check strip/root or use a path that exists under root."
+      : "Patch paths are resolved from the current workspace root. If target files are in a child directory, include that directory in the patch path or pass root.",
+  };
+}
+
+function throwPatchFileNotFound({
+  filePath = "",
+  fieldName = "filePath",
+  candidates = [],
+  agentContext = {},
+  root = "",
+  cause = null,
+} = {}) {
+  throw recoverableToolError(`file not found: ${filePath}`, {
+    code: ERROR_CODE.RECOVERABLE_FILE_NOT_FOUND,
+    cause,
+    details: buildPathAttemptDetails({ filePath, fieldName, candidates, agentContext, root }),
+  });
+}
+
 async function resolveCompatibleWorkspaceFilePath({
   filePath = "",
   agentContext = {},
   fieldName = "filePath",
   mustExist = false,
+  root = "",
 } = {}) {
-  const candidates = await buildPatchPathCandidates(filePath, agentContext);
+  const candidates = await buildPatchPathCandidates(filePath, agentContext, { root });
   let firstError = null;
   if (mustExist) {
     const matches = [];
@@ -231,7 +314,7 @@ async function resolveCompatibleWorkspaceFilePath({
         firstError ||= error;
       }
     }
-    const uniqueMatches = dedupeResolvedCandidates(matches);
+    const uniqueMatches = dedupeResolvedCandidates(matches, agentContext);
     if (uniqueMatches.length === 1) {
       const match = uniqueMatches[0];
       return { displayPath: match.displayPath, resolvedPath: match.resolvedPath };
@@ -239,11 +322,7 @@ async function resolveCompatibleWorkspaceFilePath({
     if (uniqueMatches.length > 1) {
       throwAmbiguousPatchPath({ filePath, fieldName, matches: uniqueMatches });
     }
-    if (firstError && candidates.length === 1) throw firstError;
-    return {
-      displayPath: filePath,
-      resolvedPath: await assertAndResolveUserWorkspaceFilePath({ filePath, agentContext, fieldName, mustExist: true }),
-    };
+    throwPatchFileNotFound({ filePath, fieldName, candidates, agentContext, root, cause: firstError });
   }
 
   const matches = [];
@@ -262,7 +341,7 @@ async function resolveCompatibleWorkspaceFilePath({
       firstError ||= error;
     }
   }
-  const uniqueMatches = dedupeResolvedCandidates(matches);
+  const uniqueMatches = dedupeResolvedCandidates(matches, agentContext);
   if (uniqueMatches.length === 1) {
     const match = uniqueMatches[0];
     return { displayPath: match.displayPath, resolvedPath: match.resolvedPath };
@@ -533,6 +612,14 @@ export function applySearchHunks(originalContent = "", hunks = []) {
 }
 
 export async function resolvePatchTargets({ patches = [], agentContext = {} } = {}) {
+  return resolvePatchTargetsWithOptions({ patches, agentContext });
+}
+
+export async function resolvePatchTargetsWithOptions({
+  patches = [],
+  agentContext = {},
+  root = "",
+} = {}) {
   const resolved = [];
   for (const item of patches) {
     const targetPath = item.newPath && item.newPath !== "/dev/null" ? item.newPath : item.oldPath;
@@ -549,6 +636,7 @@ export async function resolvePatchTargets({ patches = [], agentContext = {} } = 
         agentContext,
         fieldName: "patch.oldPath",
         mustExist: item.mode !== "add",
+        root,
       })
       : { displayPath: item.oldPath, resolvedPath: "" };
     const newInfo = item.newPath && item.newPath !== "/dev/null"
@@ -559,6 +647,7 @@ export async function resolvePatchTargets({ patches = [], agentContext = {} } = 
           agentContext,
           fieldName: "patch.newPath",
           mustExist: false,
+          root,
         })
       : { displayPath: item.newPath, resolvedPath: "" };
     resolved.push({

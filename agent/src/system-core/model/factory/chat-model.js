@@ -26,6 +26,7 @@ const DEFAULT_MAIN_PURPOSE = "main_agent";
 const DEFAULT_MAIN_DOMAIN = "primary";
 const DEFAULT_PROMPT_CACHE_RETENTION = "24h";
 const DEFAULT_PROMPT_CACHE_KEY_PREFIX = "noobot-main";
+const DEFAULT_CLAUDE_PROMPT_CACHE_CONTROL = Object.freeze({ type: "ephemeral" });
 const DASHSCOPE_SESSION_CACHE_HEADER_KEY = "x-dashscope-session-cache";
 const CACHE_VENDOR = Object.freeze({
   OPENAI: "openai",
@@ -106,6 +107,24 @@ function normalizePromptCacheKey(value) {
   const normalized = String(value).trim();
   if (!normalized) return "";
   return normalized.slice(0, 200);
+}
+
+function normalizeClaudePromptCacheControl(value) {
+  if (value === false || value === null) return null;
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const type = String(value.type || "ephemeral").trim() || "ephemeral";
+    const ttl = String(value.ttl || "").trim();
+    return {
+      type,
+      ...(ttl === "1h" ? { ttl } : {}),
+    };
+  }
+  return { ...DEFAULT_CLAUDE_PROMPT_CACHE_CONTROL };
+}
+
+function normalizeGeminiCachedContent(value) {
+  const normalized = String(value || "").trim();
+  return normalized || "";
 }
 
 function buildDefaultPromptCacheKey(modelSpec = {}) {
@@ -206,6 +225,40 @@ export function buildModelKwargs(modelSpec = {}) {
     out.prompt_cache_retention = promptCacheRetention;
   } else if ("prompt_cache_retention" in out) {
     delete out.prompt_cache_retention;
+  }
+  if (cacheVendor === CACHE_VENDOR.ANTHROPIC) {
+    const cacheControl = normalizeClaudePromptCacheControl(
+      normalizedSpec.cache_control ??
+        normalizedSpec.prompt_cache_control ??
+        normalizedSpec.promptCacheControl ??
+        out.cache_control,
+    );
+    if (cacheControl) {
+      out.cache_control = cacheControl;
+    } else {
+      delete out.cache_control;
+    }
+  } else if ("cache_control" in out) {
+    delete out.cache_control;
+  }
+  if (cacheVendor === CACHE_VENDOR.GEMINI) {
+    const cachedContent = normalizeGeminiCachedContent(
+      normalizedSpec.cached_content ??
+        normalizedSpec.cachedContent ??
+        normalizedSpec.gemini_cached_content ??
+        normalizedSpec.geminiCachedContent ??
+        out.cached_content ??
+        out.cachedContent,
+    );
+    if (cachedContent) {
+      out.cached_content = cachedContent;
+    } else {
+      delete out.cached_content;
+    }
+    delete out.cachedContent;
+  } else {
+    delete out.cached_content;
+    delete out.cachedContent;
   }
   if (normalizedSpec.reasoning_effort !== undefined)
     out.reasoning_effort = normalizedSpec.reasoning_effort;

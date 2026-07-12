@@ -15,387 +15,37 @@ import {
   resolveAttachmentAccessMeta,
   resolveParsedResultAccessMeta,
 } from "../../services/api/attachmentAccess";
-import {
-  copyMarkdownRichAsHtmlPage,
-  copyMarkdownText,
-} from "../../shared/utils/markdown-copy";
 import { useLocale } from "../../shared/i18n/useLocale";
-import { zhCNMessages } from "noobot-i18n/client/locales/zh-CN";
-import { enUSMessages } from "noobot-i18n/client/locales/en-US";
-import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-
-// --- 常量集合（避免每次调用 new Set） ---
-const MARKDOWN_EXTS = new Set(["md", "markdown", "mdx"]);
-const IMAGE_EXTS = new Set([
-  "png",
-  "jpg",
-  "jpeg",
-  "jfif",
-  "pjpeg",
-  "pjp",
-  "gif",
-  "webp",
-  "bmp",
-  "svg",
-  "ico",
-  "avif",
-  "apng",
-  "tif",
-  "tiff",
-  "heic",
-  "heif",
-]);
-const TEXT_PREVIEW_EXTS = new Set([
-  "txt",
-  "text",
-  "log",
-  "csv",
-  "tsv",
-  "json",
-  "jsonl",
-  "ndjson",
-  "xml",
-  "yaml",
-  "yml",
-  "toml",
-  "ini",
-  "conf",
-  "config",
-  "env",
-  "properties",
-  "gitignore",
-  "gitattributes",
-  "editorconfig",
-  "npmrc",
-  "yarnrc",
-  "dockerignore",
-  "sql",
-  "graphql",
-  "gql",
-  "html",
-  "htm",
-  "css",
-  "scss",
-  "sass",
-  "less",
-  "js",
-  "jsx",
-  "mjs",
-  "cjs",
-  "ts",
-  "tsx",
-  "vue",
-  "svelte",
-  "py",
-  "rb",
-  "php",
-  "java",
-  "c",
-  "cc",
-  "cpp",
-  "cxx",
-  "h",
-  "hpp",
-  "cs",
-  "go",
-  "rs",
-  "swift",
-  "kt",
-  "kts",
-  "scala",
-  "sh",
-  // cross-platform-allow: this is a file extension label, not a shell execution dependency.
-  "bash",
-  "zsh",
-  "fish",
-  "ps1",
-  "bat",
-  "cmd",
-  "dockerfile",
-  "makefile",
-]);
-const OFFICE_EXTS = new Set([
-  "doc",
-  "docx",
-  "xls",
-  "xlsx",
-  "ppt",
-  "pptx",
-  "rtf",
-  "odt",
-  "ods",
-  "odp",
-]);
-const MARKDOWN_MIMES = new Set(["text/markdown", "text/x-markdown", "application/markdown", "application/x-markdown"]);
-const NON_IMAGE_PREVIEW_MAX_BYTES = LENGTH_THRESHOLDS.clientPreview.nonImageMaxBytes;
-
-// --- 通用工具函数 ---
-
-function buildNoCopyableSet(translate, key) {
-  return new Set([
-    key,
-    String(zhCNMessages?.message?.[key] || "").trim(),
-    String(enUSMessages?.message?.[key] || "").trim(),
-    String(translate(`message.${key}`) || "").trim(),
-  ]);
-}
-
-function matchesAnyText(messageText = "", textSet) {
-  return [...textSet].filter(Boolean).some((candidateText) =>
-    String(messageText || "").includes(candidateText),
-  );
-}
-
-function getFileExtension(fileName = "") {
-  const normalized = String(fileName || "").trim().toLowerCase();
-  const idx = normalized.lastIndexOf(".");
-  return idx < 0 ? "" : normalized.slice(idx + 1);
-}
-
-function isMarkdownFile(fileName = "") {
-  return MARKDOWN_EXTS.has(getFileExtension(fileName));
-}
-
-function isImageFile(fileName = "") {
-  return IMAGE_EXTS.has(getFileExtension(fileName));
-}
-
-function isTextPreviewFile(fileName = "") {
-  const normalized = String(fileName || "").trim().toLowerCase();
-  if (!normalized) return false;
-  if (isMarkdownFile(normalized)) return true;
-  if (["dockerfile", "makefile", "license", "readme", "changelog"].includes(normalized)) return true;
-  return TEXT_PREVIEW_EXTS.has(getFileExtension(normalized));
-}
-
-function isOfficeFile(fileName = "") {
-  return OFFICE_EXTS.has(getFileExtension(fileName));
-}
-
-function isMarkdownMime(mimeType = "", fileName = "") {
-  const mime = String(mimeType || "").trim().toLowerCase();
-  const name = String(fileName || "").trim().toLowerCase();
-  return MARKDOWN_MIMES.has(mime) || name.endsWith(".md") || name.endsWith(".markdown") || name.endsWith(".mdx");
-}
-
-function isTextPreviewMime(mimeType = "") {
-  const mime = String(mimeType || "").trim().toLowerCase();
-  if (!mime) return false;
-  return mime.startsWith("text/") || [
-    "json",
-    "xml",
-    "yaml",
-    "yml",
-    "toml",
-    "csv",
-    "javascript",
-    "ecmascript",
-    "typescript",
-    "x-sh",
-    "shellscript",
-    "sql",
-    "graphql",
-    "x-www-form-urlencoded",
-  ].some((kw) => mime.includes(kw));
-}
-
-function isImagePreviewType(mimeType = "", fileName = "", isImageMimeChecker = () => false) {
-  const mime = String(mimeType || "").trim().toLowerCase();
-  return Boolean(isImageMimeChecker(mime)) || mime.startsWith("image/") || isImageFile(fileName);
-}
-
-function resolveKnownFileSize(fileItem = {}) {
-  for (const value of [
-    fileItem?.size,
-    fileItem?.fileSize,
-    fileItem?.bytes,
-    fileItem?.contentLength,
-    fileItem?.content_length,
-  ]) {
-    const size = Number(value);
-    if (Number.isFinite(size) && size >= 0) return size;
-  }
-  return null;
-}
-
-function isNonImagePreviewOverSizeLimit({
-  fileItem = {},
-  mimeType = "",
-  fileName = "",
-  isImageMimeChecker = () => false,
-} = {}) {
-  if (isImagePreviewType(mimeType, fileName, isImageMimeChecker)) return false;
-  const size = resolveKnownFileSize(fileItem);
-  return size !== null && size > NON_IMAGE_PREVIEW_MAX_BYTES;
-}
-
-function isAudioPreviewMime(mimeType = "") {
-  const mime = String(mimeType || "").trim().toLowerCase();
-  return mime.startsWith("audio/");
-}
-
-function isOfficeMime(mimeType = "") {
-  const mime = String(mimeType || "").trim().toLowerCase();
-  return (
-    mime.includes("msword") ||
-    mime.includes("officedocument") ||
-    mime.includes("ms-excel") ||
-    mime.includes("ms-powerpoint") ||
-    mime.includes("opendocument") ||
-    mime.includes("rtf")
-  );
-}
-
-function hasParsedResult(attachmentItem = {}) {
-  return resolveParsedResultAccessMeta(attachmentItem).hasIdentity;
-}
-
-function parseContentDisposition(contentDisposition = "") {
-  if (!contentDisposition) return "";
-  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
-  if (utf8Match?.[1]) {
-    try { return decodeURIComponent(String(utf8Match[1]).trim()); } catch { return String(utf8Match[1]).trim(); }
-  }
-  const basicMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
-  return String(basicMatch?.[1] || "").trim();
-}
-
-function sanitizeWorkspaceRelativePath(pathValue = "") {
-  const normalized = String(pathValue || "")
-    .trim()
-    .replaceAll("\\", "/")
-    .replace(/^\.\//, "")
-    .replace(/^\/+/, "");
-  if (!normalized) return "";
-  if (normalized.startsWith("../")) return "";
-  if (normalized.includes("/../")) return "";
-  if (normalized.endsWith("/..")) return "";
-  return normalized;
-}
-
-function resolveWorkspaceRelativePath(pathValue = "", userId = "") {
-  const normalizedPath = String(pathValue || "").trim().replaceAll("\\", "/");
-  if (!normalizedPath) return "";
-  if (!normalizedPath.startsWith("/") && !/^[a-zA-Z]:\//.test(normalizedPath)) {
-    return sanitizeWorkspaceRelativePath(normalizedPath);
-  }
-  const normalizedUserId = String(userId || "").trim();
-  if (normalizedUserId) {
-    const marker = `/workspace/${normalizedUserId}/`;
-    const markerIndex = normalizedPath.indexOf(marker);
-    if (markerIndex >= 0) {
-      return sanitizeWorkspaceRelativePath(normalizedPath.slice(markerIndex + marker.length));
-    }
-  }
-  const workspaceMarker = "/workspace/";
-  const markerIndex = normalizedPath.indexOf(workspaceMarker);
-  if (markerIndex < 0) return "";
-  const relativeWithUser = sanitizeWorkspaceRelativePath(
-    normalizedPath.slice(markerIndex + workspaceMarker.length),
-  );
-  const slashIndex = relativeWithUser.indexOf("/");
-  if (slashIndex > 0) {
-    return sanitizeWorkspaceRelativePath(relativeWithUser.slice(slashIndex + 1));
-  }
-  return relativeWithUser;
-}
-
-function resolveFileItemRelativePath(fileItem = {}, userId = "") {
-  return resolveWorkspaceRelativePath(fileItem?.relativePath || "", userId);
-}
-
-function isHostAbsolutePath(pathValue = "") {
-  const normalized = String(pathValue || "").trim().replaceAll("\\", "/");
-  return /^[a-zA-Z]:\//.test(normalized) || normalized.startsWith("/");
-}
-
-function resolveFileItemHostPath(fileItem = {}) {
-  for (const value of [fileItem?.hostPath, fileItem?.resolvedPath, fileItem?.path]) {
-    const normalized = String(value || "").trim();
-    if (normalized && isHostAbsolutePath(normalized)) return normalized;
-  }
-  return "";
-}
-
-function resolveFileItemName(fileItem = {}, relativePath = "") {
-  const explicitName = String(fileItem?.fileName || fileItem?.name || "").trim();
-  if (explicitName) return explicitName;
-  const normalizedPath = String(relativePath || fileItem?.resolvedPath || fileItem?.path || "")
-    .trim()
-    .replaceAll("\\", "/");
-  return String(normalizedPath.split("/").pop() || "").trim();
-}
-
-function createFileAccessTraceId(prefix = "preview") {
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function maskWorkspacePath(pathValue = "") {
-  const normalized = String(pathValue || "").trim().replaceAll("\\", "/");
-  if (!normalized) return "";
-  const parts = normalized.split("/").filter(Boolean);
-  if (parts.length <= 2) return normalized;
-  return `${parts.slice(0, 2).join("/")}/.../${parts.at(-1)}`;
-}
-
-function maskHostPath(pathValue = "") {
-  const normalized = String(pathValue || "").trim().replaceAll("\\", "/");
-  if (!normalized) return "";
-  const parts = normalized.split("/").filter(Boolean);
-  if (parts.length <= 2) return normalized;
-  return `${parts[0]}/.../${parts.at(-1)}`;
-}
-
-function logFileAccess(event, payload = {}) {
-  try {
-    const entry = {
-      layer: "client.messagePreview",
-      event,
-      ...payload,
-    };
-    window?.noobotDesktop?.logFileAccess?.(entry).catch?.(() => {});
-  } catch {}
-}
-
-async function triggerBlobDownload(blob, fileName, translate, notify) {
-  const traceId = createFileAccessTraceId("save");
-  logFileAccess("blobDownload.start", {
-    traceId,
-    fileName: String(fileName || "download"),
-    size: Number(blob?.size || 0),
-    type: String(blob?.type || ""),
-  });
-  const downloadUrl = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = downloadUrl;
-  anchor.download = String(fileName || "download");
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(downloadUrl);
-  logFileAccess("blobDownload.done", { traceId, fileName: String(fileName || "download") });
-}
-
-async function handleCopyMarkdown({ textContent, renderMarkdown, translate, notify, noCopyableContentTexts, noCopyableTextTexts, rich = true }) {
-  try {
-    if (rich) {
-      const rawHtmlContent = String(textContent || renderMarkdown(textContent) || "").trim();
-      await copyMarkdownRichAsHtmlPage(rawHtmlContent);
-      notify({ type: "success", message: translate("message.copiedHtml") });
-    } else {
-      await copyMarkdownText(String(textContent || ""));
-      notify({ type: "success", message: translate("message.copiedMarkdown") });
-    }
-  } catch (error) {
-    const errorMessage = String(error?.message || translate(rich ? "message.copyFormatFailed" : "message.copyTextFailed"));
-    const targetSet = rich ? noCopyableContentTexts : noCopyableTextTexts;
-    if (matchesAnyText(errorMessage, targetSet)) {
-      notify({ type: "warning", message: errorMessage });
-      return;
-    }
-    notify({ type: "error", message: errorMessage });
-  }
-}
+import {
+  hasParsedResult,
+  isAudioPreviewMime,
+  isImageFile,
+  isImagePreviewType,
+  isMarkdownFile,
+  isMarkdownMime,
+  isNonImagePreviewOverSizeLimit,
+  isOfficeFile,
+  isOfficeMime,
+  isTextPreviewFile,
+  isTextPreviewMime,
+} from "./useMessagePreview/file-type";
+import {
+  createFileAccessTraceId,
+  maskHostPath,
+  maskWorkspacePath,
+  parseContentDisposition,
+  resolveFileItemHostPath,
+  resolveFileItemName,
+  resolveFileItemRelativePath,
+} from "./useMessagePreview/path-utils";
+import {
+  logFileAccess,
+  triggerBlobDownload,
+} from "./useMessagePreview/file-access-log";
+import {
+  buildNoCopyableSet,
+  handleCopyMarkdown,
+} from "./useMessagePreview/markdown-copy";
 
 export function useMessagePreview({
   userId = "",
@@ -486,7 +136,7 @@ export function useMessagePreview({
         );
       }
       const blob = await response.blob();
-      await triggerBlobDownload(blob, fileName, translate, notify);
+      await triggerBlobDownload(blob, fileName);
     } catch (error) {
       notify({ type: "error", message: error?.message || translate(errorI18nKey) });
     }
@@ -552,7 +202,7 @@ export function useMessagePreview({
         if (!res.ok) throw new Error(translate("message.downloadFailedHttp", { status: res.status }));
         const blob = await res.blob();
         const fileName = parseContentDisposition(res.headers?.get("content-disposition") || "") || resolveFileItemName(fileItem, hostPath) || "download";
-        await triggerBlobDownload(blob, fileName, translate, notify);
+        await triggerBlobDownload(blob, fileName);
         return;
       } catch (error) {
         logFileAccess("download.failed", { traceId, channel: window?.noobotDesktop?.downloadHostFile ? "desktop-host-ipc" : "backend-host-api", error: String(error?.message || error || "") });
@@ -601,7 +251,7 @@ export function useMessagePreview({
       }
       const blob = await res.blob();
       const fileName = parseContentDisposition(res.headers?.get("content-disposition") || "") || resolveFileItemName(fileItem, relativePath) || "download";
-      await triggerBlobDownload(blob, fileName, translate, notify);
+      await triggerBlobDownload(blob, fileName);
     } catch (error) {
       logFileAccess("download.failed", { traceId, error: String(error?.message || error || "") });
       notify({ type: "error", message: error?.message || translate("message.downloadFailed") });

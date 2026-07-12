@@ -94,7 +94,7 @@ export function useReconnectReplay({
   upsertConnectedConnectorInPanelState,
   refreshSessionConnectorsAsync,
   classifyRealtimeLog,
-  scrollBottom,
+  navigateToLastMessage,
   translate,
   onConversationState,
   sessionLogWebSocketClient,
@@ -261,7 +261,7 @@ export function useReconnectReplay({
       if (detail) {
         chatList.applySessionDetail(detail, {
           preserveCurrentMessages: false,
-          scrollToBottom: false,
+          navigateToLastMessage: false,
         });
         detailApplied = true;
       }
@@ -509,7 +509,7 @@ export function useReconnectReplay({
       applyDoneMessages: applyDoneMessagesFromReconnect,
       envelopeCallbacks: createReconnectReplayEnvelopeCallbacks(),
       markReconnectSequenceApplied,
-      scrollBottom,
+      navigateToLastMessage,
       processStore,
       onHydrationError: (error) => logReconnectReplaySystemEvent("reconnectReplay.hydration.failed", {
         dialogProcessId,

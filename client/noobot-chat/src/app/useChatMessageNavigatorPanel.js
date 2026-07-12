@@ -53,7 +53,7 @@ export function useChatMessageNavigatorPanel({
     });
   }
 
-  function locateLastChatMessageNavItem() {
+  function navigateToLastMessage() {
     nextTick(() => {
       const items = Array.isArray(chatMessageNavItems.value) ? chatMessageNavItems.value : [];
       const lastItem = items[items.length - 1] || null;
@@ -63,11 +63,11 @@ export function useChatMessageNavigatorPanel({
   }
 
   function locateSendingStartedMessage() {
-    locateLastChatMessageNavItem();
+    navigateToLastMessage();
   }
 
   function locateDoneMessage() {
-    locateLastChatMessageNavItem();
+    navigateToLastMessage();
   }
 
   function openChatMessageNavigator() {
@@ -131,7 +131,8 @@ export function useChatMessageNavigatorPanel({
     currentMessageAnchorId,
     chatMessageNavItems,
     handleSelectChatMessageNavItem,
-    locateLastChatMessageNavItem,
+    navigateToLastMessage,
+    locateLastChatMessageNavItem: navigateToLastMessage,
     locateSendingStartedMessage,
     locateDoneMessage,
     openChatMessageNavigator,

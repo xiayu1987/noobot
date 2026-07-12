@@ -460,11 +460,11 @@ export function finalizeReconnectReplayBatch({
   normalizedDpId = "",
   maxAppliedSeq = 0,
   markReconnectSequenceApplied,
-  scrollBottom,
-  shouldScroll = false,
+  navigateToLastMessage,
+  shouldNavigate = false,
 } = {}) {
   markReconnectSequenceApplied?.(normalizedDpId, maxAppliedSeq);
-  if (shouldScroll) scrollBottom?.();
+  if (shouldNavigate) navigateToLastMessage?.();
 }
 
 
@@ -488,7 +488,7 @@ export async function applyReconnectReplayBatchToActiveSession({
   applyDoneMessages,
   envelopeCallbacks = {},
   markReconnectSequenceApplied,
-  scrollBottom,
+  navigateToLastMessage,
   processStore,
 } = {}) {
   if (!activeSession?.value) return false;
@@ -512,8 +512,8 @@ export async function applyReconnectReplayBatchToActiveSession({
       normalizedDpId,
       maxAppliedSeq: maxSequence,
       markReconnectSequenceApplied,
-      scrollBottom,
-      shouldScroll: false,
+      navigateToLastMessage,
+      shouldNavigate: false,
     });
     return true;
   }
@@ -540,7 +540,7 @@ export async function applyReconnectReplayBatchToActiveSession({
       normalizedDpId,
       maxAppliedSeq: maxSequence,
       markReconnectSequenceApplied,
-      scrollBottom,
+      navigateToLastMessage,
     });
     return true;
   }
@@ -557,7 +557,7 @@ export async function applyReconnectReplayBatchToActiveSession({
       normalizedDpId,
       maxAppliedSeq: maxSequence,
       markReconnectSequenceApplied,
-      scrollBottom,
+      navigateToLastMessage,
     });
     return true;
   }
@@ -577,7 +577,7 @@ export async function applyReconnectReplayBatchToActiveSession({
     normalizedDpId,
     maxAppliedSeq,
     markReconnectSequenceApplied,
-    scrollBottom,
+    navigateToLastMessage,
   });
   return true;
 }

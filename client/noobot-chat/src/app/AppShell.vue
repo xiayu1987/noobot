@@ -73,15 +73,15 @@ let appShellPanelActions = null;
 
 async function locateDoneMessageAfterRender() {
   await nextTick();
-  locateDoneMessage();
+  navigateToLastMessage();
 }
 
 function locateSendingStartedMessage() {
-  chatMessageNavigatorPanel?.locateSendingStartedMessage?.();
+  chatMessageNavigatorPanel?.navigateToLastMessage?.();
 }
 
 function locateDoneMessage() {
-  chatMessageNavigatorPanel?.locateDoneMessage?.();
+  chatMessageNavigatorPanel?.navigateToLastMessage?.();
 }
 
 const {
@@ -128,7 +128,7 @@ const {
   notify: notifyUi,
   onConnected: async () => {
     const route = parsePseudoRouteFromLocation();
-    await fetchSessions(route.sessionId || "", { scrollToBottom: false });
+    await fetchSessions(route.sessionId || "", { navigateToLastMessage: false });
     await applyPseudoRoute(route);
     await locateDoneMessageAfterRender();
     chatWebSocketClient.connect();
@@ -137,15 +137,8 @@ const {
 });
 bindScenarioConfig(scenarioConfig);
 
-function scrollBottom() {
-  nextTick(() => {
-    const panel = messageListPanelRef.value;
-    const wrapRef = panel?.getWrapRef?.();
-    if (!wrapRef) return;
-    const top = Number(wrapRef.scrollHeight || 0);
-    if (typeof panel?.setScrollTop === "function") panel.setScrollTop(top);
-    else wrapRef.scrollTop = top;
-  });
+function navigateToLastMessage() {
+  chatMessageNavigatorPanel?.navigateToLastMessage?.();
 }
 
 function refreshSessionsFromSidebar() {
@@ -210,7 +203,7 @@ const {
   authFetch,
   isImageMime,
   classifyRealtimeLog,
-  scrollBottom,
+  navigateToLastMessage,
   locateSendingStartedMessage,
   locateDoneMessage,
   notify: notifyUi,
@@ -404,7 +397,7 @@ async function onAppMounted() {
     replacePseudoRoute();
     return;
   }
-  await initSessionsAfterMount({ scrollToBottom: false });
+  await initSessionsAfterMount({ navigateToLastMessage: false });
   replacePseudoRoute();
   await locateDoneMessageAfterRender();
 }

@@ -59,10 +59,6 @@ const messageItemSharedProps = computed(() => ({
   resendMonotonicMessage: props.resendMonotonicMessage,
 }));
 
-function setScrollTop(top = 0) {
-  listRef.value?.setScrollTop?.(Number(top || 0));
-}
-
 function getWrapRef() {
   return listRef.value?.wrapRef || null;
 }
@@ -182,7 +178,6 @@ function scrollToMessageAnchor(anchorId = "") {
 }
 
 defineExpose({
-  setScrollTop,
   getWrapRef,
   getMessageAnchorId,
   scrollToMessageAnchor,

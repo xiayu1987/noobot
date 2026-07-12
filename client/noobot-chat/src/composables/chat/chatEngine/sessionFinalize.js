@@ -113,7 +113,7 @@ export async function refreshFinalSessionDetail({
     });
     applySessionDetail(detail, {
       preserveCurrentMessages: shouldPreserveCurrentMessages,
-      scrollToBottom: false,
+      navigateToLastMessage: false,
     });
     logStateMachineDebug("detailApply.apply.success", {
       ...completionEventScope,

@@ -204,7 +204,7 @@ export function createChatEngineSender({
   pendingInteractionRequest,
   pluginModelConfig,
   refreshSessionConnectorsAsync,
-  scrollBottom,
+  navigateToLastMessage,
   selectedModel,
   selectedPlugins,
   sending,
@@ -295,7 +295,7 @@ export function createChatEngineSender({
       text,
       filesToSend,
       botMessage: botMsg,
-      scrollOnFirstResponseOnce,
+      navigateOnFirstResponseOnce,
     } = prepareChatSend({
       input,
       uploadFiles,
@@ -304,7 +304,7 @@ export function createChatEngineSender({
       activeSession,
       applyConversationState,
       translate,
-      scrollBottom,
+      navigateToLastMessage,
       messageText: explicitMessageText,
       turnScopeId,
       reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
@@ -382,10 +382,9 @@ export function createChatEngineSender({
       const activeProcessStore = getResolvedProcessStore();
       let locatedSendingStartedMessage = false;
       const locateSendingStartedMessageOnce = () => {
-        // Do not navigate while the assistant response is still streaming.
-        // The final navigation is performed once after DONE/finalize below.
         if (locatedSendingStartedMessage) return;
         locatedSendingStartedMessage = true;
+        locateSendingStartedMessage?.();
       };
       const startFinalDoneSessionDetailOnce = (source = "") => {
         if (!finalDoneEventData || finalDoneDetailPromise) return finalDoneDetailPromise;
@@ -514,7 +513,7 @@ export function createChatEngineSender({
             data,
             botMessage: botMsg,
             classifyRealtimeLog,
-            scrollOnFirstResponseOnce,
+            navigateOnFirstResponseOnce,
             activeSession,
             connectorTypeSet,
             upsertConnectedConnectorInPanelState,
@@ -531,7 +530,7 @@ export function createChatEngineSender({
           handleInteractionRequestStreamEvent({
             data,
             clearMissingInteractionPayloadTimer,
-            scrollOnFirstResponseOnce,
+            navigateOnFirstResponseOnce,
             tryAutoResolveInteraction,
             setPendingInteractionRequest,
           });
@@ -558,7 +557,7 @@ export function createChatEngineSender({
             activeSessionId,
             clearPendingInteraction,
             classifyRealtimeLog,
-            scrollOnFirstResponseOnce,
+            navigateOnFirstResponseOnce,
             makeViewMessage,
             foldMessagesForView,
             mergeAssistantAttachments,
@@ -601,7 +600,7 @@ export function createChatEngineSender({
             reuseRecentlyLoaded: false,
           });
           if (!detail) throw streamError;
-          applySessionDetail(detail, { preserveCurrentMessages: true, scrollToBottom: false });
+          applySessionDetail(detail, { preserveCurrentMessages: true, navigateToLastMessage: false });
           if (!isNewerSessionVersion(getCurrentSessionVersion(activeSession), previousVersion)) {
             throw streamError;
           }
@@ -694,7 +693,7 @@ export function createChatEngineSender({
             if (stoppedDetail) {
               applySessionDetail(stoppedDetail, {
                 preserveCurrentMessages: false,
-                scrollToBottom: false,
+                navigateToLastMessage: false,
               });
             }
           } catch (detailError) {

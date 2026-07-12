@@ -100,6 +100,17 @@ onBeforeUnmount(() => {
   if (listWrapEl.value) listWrapEl.value.removeEventListener("scroll", onSessionListScroll);
 });
 
+function getSessionHoverTitle(sessionItem = {}) {
+  const title = String(sessionItem?.title || "").trim();
+  const backendSessionId = String(sessionItem?.backendSessionId || "").trim();
+  const localSessionId = String(sessionItem?.id || "").trim();
+  const idLines = backendSessionId
+    ? [`#${backendSessionId}`]
+    : [translate("common.notStarted")];
+  if (localSessionId && localSessionId !== backendSessionId) idLines.push(localSessionId);
+  return [title, ...idLines].filter(Boolean).join("\n");
+}
+
 async function promptRenameSession(sessionItem = {}) {
   if (props.sending) return;
   const currentTitle = String(sessionItem?.title || "").trim();
@@ -146,43 +157,44 @@ watch(
           <div class="session-list-inner">
             <div
               v-for="sessionItem in dateGroup.items"
-          :key="sessionItem.id"
-          class="session-item noobot-subtle-row"
-          :class="{ active: sessionItem.id === activeSessionId }"
-          @click="emit('select-session', sessionItem.id)"
-        >
-          <div class="session-icon-wrapper">
-            <el-icon class="session-icon"><ChatDotRound /></el-icon>
-          </div>
-          <div class="session-info">
-            <div class="title">{{ sessionItem.title }}</div>
-            <div class="sid">
-              <span class="status-dot" :class="sessionItem.currentTaskStatus"></span>
-              #{{ sessionItem.backendSessionId ? sessionItem.backendSessionId.slice(0, 8) : translate("common.notStarted") }}
-            </div>
-          </div>
-          <div class="session-actions">
-            <button
-              type="button"
-              class="session-rename-btn noobot-action-btn noobot-flat-icon-btn"
-              :title="translate('common.renameSession')"
-              :aria-label="translate('common.renameSession')"
-              :disabled="sending"
-              @click.stop="promptRenameSession(sessionItem)"
+              :key="sessionItem.id"
+              class="session-item noobot-subtle-row"
+              :class="{ active: sessionItem.id === activeSessionId }"
+              :title="getSessionHoverTitle(sessionItem)"
+              @click="emit('select-session', sessionItem.id)"
             >
-              <el-icon><EditPen /></el-icon>
-            </button>
-            <button
-            type="button"
-            class="session-delete-btn noobot-action-btn noobot-flat-icon-btn"
-            :title="translate('common.deleteSession')"
-            :aria-label="translate('common.deleteSession')"
-            :disabled="sending"
-            @click.stop="emit('delete-session', sessionItem.id)"
-          >
-            <el-icon><Delete /></el-icon>
-            </button>
-          </div>
+              <div class="session-icon-wrapper">
+                <el-icon class="session-icon"><ChatDotRound /></el-icon>
+              </div>
+              <div class="session-info">
+                <div class="title" :title="getSessionHoverTitle(sessionItem)">{{ sessionItem.title }}</div>
+                <div class="sid">
+                  <span class="status-dot" :class="sessionItem.currentTaskStatus"></span>
+                  #{{ sessionItem.backendSessionId ? sessionItem.backendSessionId.slice(0, 8) : translate("common.notStarted") }}
+                </div>
+              </div>
+              <div class="session-actions">
+                <button
+                  type="button"
+                  class="session-rename-btn noobot-action-btn noobot-flat-icon-btn"
+                  :title="translate('common.renameSession')"
+                  :aria-label="translate('common.renameSession')"
+                  :disabled="sending"
+                  @click.stop="promptRenameSession(sessionItem)"
+                >
+                  <el-icon><EditPen /></el-icon>
+                </button>
+                <button
+                  type="button"
+                  class="session-delete-btn noobot-action-btn noobot-flat-icon-btn"
+                  :title="translate('common.deleteSession')"
+                  :aria-label="translate('common.deleteSession')"
+                  :disabled="sending"
+                  @click.stop="emit('delete-session', sessionItem.id)"
+                >
+                  <el-icon><Delete /></el-icon>
+                </button>
+              </div>
             </div>
           </div>
         </el-collapse-item>
