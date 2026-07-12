@@ -4,7 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { access } from "node:fs/promises";
-import { filePath as path } from "../../utils/path-resolver.js";
+import {
+  filePath as path,
+  isAbsolutePathAnyPlatform,
+  normalizePathForPlatform,
+  resolveHostPath,
+  resolveSandboxPathMappings,
+} from "../../utils/path-resolver.js";
 import {
   getBasePathFromAgentContext,
   getRuntimeFromAgentContext,
@@ -14,10 +20,6 @@ import { normalizeParentSessionId } from "../../context/parent-session-id-resolv
 import { recoverableToolError } from "../../error/index.js";
 import { tTool } from "./tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import {
-  resolveHostPath,
-  resolveSandboxPathMappings,
-} from "../../utils/path-resolver.js";
 import { isSuperUserAgentContext } from "../../utils/super-user.js";
 
 function tCheckInput(agentContext = {}, key = "") {
@@ -129,7 +131,7 @@ function resolveInputPathToHostPath({ inputPath = "", workspacePath = "", agentC
   if (isSuperUserAgentContext(agentContext)) {
     const workspaceRoot = resolveWorkspaceRoot(agentContext);
     const normalizedInputPath = String(inputPath || "").trim();
-    if (workspaceRoot && path.isAbsolute(normalizedInputPath)) {
+    if (workspaceRoot) {
       const normalizedSandboxPath = normalizedInputPath.replaceAll("\\", "/");
       if (normalizedSandboxPath === "/workspace") return workspaceRoot;
       if (normalizedSandboxPath.startsWith("/workspace/")) {
@@ -232,7 +234,8 @@ export function assertValidFileNameFromPath({
       },
     );
   }
-  const parsedName = path.basename(path.normalize(normalizedPath));
+  const normalizedPathForName = normalizePathForPlatform(normalizedPath);
+  const parsedName = path.basename(path.normalize(normalizedPathForName));
   if (!parsedName || parsedName === "." || parsedName === path.sep) {
     throw recoverableToolError(
       `${fieldName} ${tCheckInput({}, "fileNameIncludedRequired")}`,
@@ -362,8 +365,8 @@ export async function assertAndResolveUserWorkspaceFilePath({
     workspacePath,
     agentContext,
   });
-  const resolvedTargetPath = hostMappedPath || (path.isAbsolute(normalizedPath)
-    ? path.resolve(normalizedPath)
+  const resolvedTargetPath = hostMappedPath || (isAbsolutePathAnyPlatform(normalizedPath)
+    ? normalizePathForPlatform(normalizedPath)
     : path.resolve(workspacePath, normalizedPath));
 
   const isSuperUser = isSuperUserAgentContext(agentContext);

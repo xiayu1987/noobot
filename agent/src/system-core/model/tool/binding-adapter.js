@@ -43,6 +43,56 @@ function resolveStrictToolSchemaPolicy(modelState = {}) {
   );
 }
 
+function collectModelSourceTokens(modelState = {}) {
+  const specs = [
+    modelState?.activeModelSpec,
+    modelState?.defaultModelSpec,
+    modelState?.modelSpec,
+  ].filter((spec) => spec && typeof spec === "object");
+  const fields = [
+    modelState?.activeModelName,
+    modelState?.activeModelAlias,
+    modelState?.provider,
+    modelState?.providerName,
+  ];
+  for (const spec of specs) {
+    fields.push(
+      spec?.alias,
+      spec?.model,
+      spec?.provider,
+      spec?.provider_name,
+      spec?.providerName,
+      spec?.base_url,
+      spec?.baseURL,
+      spec?.format,
+    );
+  }
+  return fields
+    .map((item) => String(item || "").trim().toLowerCase())
+    .filter(Boolean)
+    .join(" ");
+}
+
+function isBedrockLikeModel(modelState = {}) {
+  const source = collectModelSourceTokens(modelState);
+  return /\bbedrock\b|amazonaws\.com|amazon-bedrock|aws_bedrock|aws-bedrock/.test(source);
+}
+
+function isClaudeLikeModel(modelState = {}) {
+  const source = collectModelSourceTokens(modelState);
+  return /\bclaude\b|\banthropic\b/.test(source);
+}
+
+/**
+ * Resolve whether tool_choice should be sent when binding tools.
+ * Claude-compatible adapters can reject tool_choice/tool_search payload fields.
+ * @param {object} modelState
+ * @returns {boolean}
+ */
+function resolveToolChoiceBindingPolicy(modelState = {}) {
+  return !(isClaudeLikeModel(modelState) || isBedrockLikeModel(modelState));
+}
+
 /**
  * Adapt tools for model binding: validate, deduplicate, resolve strict mode.
  * @param {Array<object>} tools
@@ -75,9 +125,10 @@ export function adaptToolsForBinding(tools = [], modelState = {}) {
     .filter((n) => STRICT_INCOMPATIBLE_TOOL_NAMES.has(n));
   const strict = strictByPolicy && strictIncompatibleTools.length === 0;
   const toolChoice = "auto";
+  const enableToolChoice = resolveToolChoiceBindingPolicy(modelState);
   const bindOptions = validTools.length
     ? {
-        tool_choice: toolChoice,
+        ...(enableToolChoice ? { tool_choice: toolChoice } : {}),
         ...(strict ? { strict: true } : {}),
       }
     : {};
@@ -87,6 +138,7 @@ export function adaptToolsForBinding(tools = [], modelState = {}) {
     droppedToolNames,
     strictDowngradedTools:
       strictByPolicy && !strict ? strictIncompatibleTools : [],
+    toolChoiceDisabled: validTools.length > 0 && !enableToolChoice,
     bindOptions,
   };
 }

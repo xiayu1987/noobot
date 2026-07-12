@@ -57,7 +57,7 @@ export const QUANTITY_THRESHOLDS = deepFreeze({
 
   toolIO: {
     // Default line window for workspace file reads.
-    readMaxLines: 500,
+    readMaxLines: 1000,
 
     // Default result count for workspace search.
     searchMaxResults: QUANTITY_TIERS.standardBatch,

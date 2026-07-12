@@ -20,18 +20,6 @@ import { RunConfigResolver } from "../config/run-config-resolver.js";
 import { MemoryPostProcessService } from "../execution/memory-postprocess.js";
 import { CALLER_ROLE } from "../config/constants.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import {
-  getRuntimeFromAgentContext,
-} from "../../context/agent-context-accessor.js";
-import {
-  findMatchingAttachmentMeta,
-  mapAttachmentRecordsToMetas,
-  mergeAttachmentMetaPreferRich,
-  readAttachIndex,
-} from "../../attach/index.js";
-import { MIME_TYPE } from "../../constants/index.js";
-import { filePath as path } from "../../utils/path-resolver.js";
-import { normalizeTrimmedStringList } from "./session-execution-engine-utils.js";
 import { createDetachedSubSessionRunner } from "./detached-subsession-runner.js";
 import { ModelMessageRuntimeHelpers } from "./model-message-runtime-helpers.js";
 import { ScopedArtifactPersistenceHelpers } from "./scoped-artifact-persistence-helpers.js";
@@ -40,8 +28,18 @@ import {
   createRunConfigPluginPreparerFromRuntimeBundle,
   getDefaultSessionPluginRuntime,
 } from "../../plugin/session-plugin-runtime-provider.js";
-import { loadStoppedModelMessageSnapshot } from "../../agent/core/resume/model-message-snapshot-store.js";
-import { resolveAttachments } from "../../context/providers/attachment-resolver.js";
+import {
+  resolveExistingUserMessageAttachments,
+  enrichUserInputAttachmentsFromIndex,
+  resolveAttachmentIndexBasePath,
+} from "./turn-attachment-enricher.js";
+import {
+  prepareTurnInput,
+  prepareAgentTurnExecution,
+  prepareStoppedSnapshotResumeTurnExecution,
+  resolveStoppedResumeAttachments,
+} from "./turn-execution-preparer.js";
+import { mergeRunConfigWithPluginStrategy } from "./run-config-plugin-strategy.js";
 
 export class SessionExecutionEngine {
   constructor({
@@ -380,32 +378,11 @@ export class SessionExecutionEngine {
     runConfigPatch = {},
     disabledPlugins = [],
   } = {}) {
-    const merged = {
-      ...(baseRunConfig && typeof baseRunConfig === "object" ? baseRunConfig : {}),
-      ...(runConfigPatch && typeof runConfigPatch === "object" ? runConfigPatch : {}),
-    };
-    const disabledSet = new Set(normalizeTrimmedStringList(disabledPlugins));
-    if (!disabledSet.size) return merged;
-    const selectedPlugins = Array.isArray(merged?.selectedPlugins)
-      ? merged.selectedPlugins
-      : [];
-    merged.selectedPlugins = normalizeTrimmedStringList(selectedPlugins)
-      .filter((item) => !disabledSet.has(item));
-    const plugins = merged?.plugins && typeof merged.plugins === "object" ? merged.plugins : {};
-    const nextPlugins = { ...plugins };
-    for (const pluginName of disabledSet) {
-      const current =
-        nextPlugins?.[pluginName] && typeof nextPlugins[pluginName] === "object"
-          ? nextPlugins[pluginName]
-          : {};
-      nextPlugins[pluginName] = {
-        ...current,
-        enabled: false,
-        mode: "off",
-      };
-    }
-    merged.plugins = nextPlugins;
-    return merged;
+    return mergeRunConfigWithPluginStrategy({
+      baseRunConfig,
+      runConfigPatch,
+      disabledPlugins,
+    });
   }
 
   _resolveScopedOutputDir(payload = {}) {
@@ -501,84 +478,14 @@ export class SessionExecutionEngine {
   }
 
   async _prepareTurnInput({ buildContextPayload = {} } = {}) {
-    const payload = buildContextPayload && typeof buildContextPayload === "object"
-      ? buildContextPayload
-      : {};
-    const contextBuilder = this._buildContextBuilder(payload);
-    const runtimeBasePath = typeof contextBuilder._resolveRuntimeBasePath === "function"
-      ? contextBuilder._resolveRuntimeBasePath()
-      : await this._resolveAttachmentIndexBasePath(String(payload.userId || "").trim());
-    const effectiveConfig = typeof contextBuilder._getEffectiveConfig === "function"
-      ? contextBuilder._getEffectiveConfig()
-      : this.globalConfig;
-    const userMessageAttachments = await resolveAttachments({
-      attachmentService: contextBuilder.attachmentService || this.attach,
-      runtimeBasePath,
-      effectiveConfig,
-      userMessageAttachments: Array.isArray(payload.userMessageAttachments)
-        ? payload.userMessageAttachments
-        : [],
-      userId: String(payload.userId || "").trim(),
-      sessionId: String(payload.sessionId || "").trim(),
-    });
-    return { contextBuilder, userMessageAttachments };
+    return prepareTurnInput(this, { buildContextPayload });
   }
 
   async _prepareAgentTurnExecution({
     buildContextPayload = {},
     abortSignal = null,
   } = {}) {
-    const payload =
-      buildContextPayload && typeof buildContextPayload === "object"
-        ? buildContextPayload
-        : {};
-    const contextBuilder =
-      payload?.contextBuilder && typeof payload.contextBuilder === "object"
-        ? payload.contextBuilder
-        : this._buildContextBuilder(payload);
-    const prepared = payload?.runConfig?.resumeFromStoppedSnapshot === true
-      ? await this._prepareStoppedSnapshotResumeTurnExecution({
-          payload,
-          contextBuilder,
-          abortSignal,
-        })
-      : await this.agentRuntimeFacade.prepareTurnExecution({
-          buildContextPayload: {
-            ...payload,
-            contextBuilder,
-          },
-          abortSignal,
-        });
-    const preparedRuntime = getRuntimeFromAgentContext(prepared?.agentContext || {});
-    const preparedRuntimeAttachments = Array.isArray(preparedRuntime?.userMessageAttachments)
-      ? preparedRuntime.userMessageAttachments
-      : null;
-    const payloadUserMessageAttachments = Array.isArray(payload?.userMessageAttachments)
-      ? payload.userMessageAttachments
-      : [];
-    const runtimeAttachments = Array.isArray(preparedRuntimeAttachments) && preparedRuntimeAttachments.length > 0
-      ? preparedRuntimeAttachments
-      : payloadUserMessageAttachments;
-    const existingSessionAttachments = await this._resolveExistingUserMessageAttachments({
-      userId: String(payload?.userId || "").trim(),
-      sessionId: String(payload?.sessionId || "").trim(),
-      parentSessionId: String(payload?.parentSessionId || "").trim(),
-      turnScopeId: String(payload?.turnScopeId || payload?.runConfig?.turnScopeId || "").trim(),
-      dialogProcessId: String(payload?.dialogProcessId || "").trim(),
-    });
-    const enrichedRuntimeAttachments = await this._enrichUserInputAttachmentsFromIndex({
-      userId: String(payload?.userId || "").trim(),
-      sessionId: String(payload?.sessionId || "").trim(),
-      attachments: runtimeAttachments,
-      existingAttachments: existingSessionAttachments,
-    });
-    return {
-      ...(prepared && typeof prepared === "object" ? prepared : {}),
-      userMessageAttachments: mapAttachmentRecordsToMetas(enrichedRuntimeAttachments, {
-        fallbackMimeType: MIME_TYPE.APPLICATION_OCTET_STREAM,
-        userId: String(payload?.userId || "").trim(),
-      }),
-    };
+    return prepareAgentTurnExecution(this, { buildContextPayload, abortSignal });
   }
 
   async _prepareStoppedSnapshotResumeTurnExecution({
@@ -586,82 +493,15 @@ export class SessionExecutionEngine {
     contextBuilder = null,
     abortSignal = null,
   } = {}) {
-    if (!contextBuilder || typeof contextBuilder._buildAgentContext !== "function") {
-      throw new Error("stopped snapshot resume requires a compatible contextBuilder");
-    }
-    const runConfig = payload?.runConfig && typeof payload.runConfig === "object"
-      ? payload.runConfig
-      : {};
-    const resumeDialogProcessId = String(runConfig.resumeDialogProcessId || "").trim();
-    const resumeTurnScopeId = String(runConfig.resumeTurnScopeId || "").trim();
-    if (!resumeDialogProcessId || !resumeTurnScopeId) {
-      throw new Error("stopped snapshot resume requires resumeDialogProcessId and resumeTurnScopeId");
-    }
-    const identity = {
-      userId: String(payload?.userId || "").trim(),
-      sessionId: String(payload?.sessionId || "").trim(),
-      parentSessionId: String(payload?.parentSessionId || "").trim(),
-      dialogProcessId: resumeDialogProcessId,
-      turnScopeId: resumeTurnScopeId,
-    };
-    const snapshot = await loadStoppedModelMessageSnapshot({
-      globalConfig: this.globalConfig,
-      identity,
-    });
-    const userMessageAttachments = await this._resolveStoppedResumeAttachments({
-      contextBuilder,
+    return prepareStoppedSnapshotResumeTurnExecution(this, {
       payload,
-    });
-    const systemMessages = Array.isArray(snapshot?.messageBlocks?.system)
-      ? snapshot.messageBlocks.system
-      : [];
-    const historyMessages = [
-      ...(Array.isArray(snapshot?.messageBlocks?.history) ? snapshot.messageBlocks.history : []),
-    ];
-    const agentContext = await contextBuilder._buildAgentContext(
-      systemMessages,
-      historyMessages,
-      {
-        dialogProcessId: String(payload?.dialogProcessId || identity.dialogProcessId || "").trim(),
-        attachments: userMessageAttachments,
-      },
-    );
-    const scopedAgentContext = this._applyRunConfigToolPolicy(agentContext, runConfig);
-    const runtimeAgentContext = this.agentRuntimeFacade.buildRunTurnContext(
-      scopedAgentContext,
+      contextBuilder,
       abortSignal,
-    );
-    const runtime = getRuntimeFromAgentContext(runtimeAgentContext);
-    runtime.resumeFromStoppedSnapshot = true;
-    runtime.resumedStoppedSnapshotIdentity = identity;
-    runtime.resumedStoppedSnapshotMessageBlocks = {
-      system: Array.isArray(snapshot?.messageBlocks?.system) ? snapshot.messageBlocks.system : [],
-      history: Array.isArray(snapshot?.messageBlocks?.history) ? snapshot.messageBlocks.history : [],
-      incremental: Array.isArray(snapshot?.messageBlocks?.incremental) ? snapshot.messageBlocks.incremental : [],
-    };
-    return {
-      agentContext: scopedAgentContext,
-      runtimeAgentContext,
-      userMessageAttachments,
-    };
+    });
   }
 
   async _resolveStoppedResumeAttachments({ contextBuilder = null, payload = {} } = {}) {
-    if (!contextBuilder) return [];
-    return resolveAttachments({
-      attachmentService: contextBuilder.attachmentService,
-      runtimeBasePath: typeof contextBuilder._resolveRuntimeBasePath === "function"
-        ? contextBuilder._resolveRuntimeBasePath()
-        : "",
-      effectiveConfig: typeof contextBuilder._getEffectiveConfig === "function"
-        ? contextBuilder._getEffectiveConfig()
-        : {},
-      userMessageAttachments: Array.isArray(payload?.userMessageAttachments)
-        ? payload.userMessageAttachments
-        : [],
-      userId: String(payload?.userId || "").trim(),
-      sessionId: String(payload?.sessionId || "").trim(),
-    });
+    return resolveStoppedResumeAttachments(this, { contextBuilder, payload });
   }
 
   async _resolveExistingUserMessageAttachments({
@@ -671,69 +511,26 @@ export class SessionExecutionEngine {
     turnScopeId = "",
     dialogProcessId = "",
   } = {}) {
-    if (!userId || !sessionId || !this.session?.findById) return [];
-    let sessionDoc = null;
-    try {
-      sessionDoc = await this.session.findById(userId, sessionId, parentSessionId);
-    } catch {
-      return [];
-    }
-    const messages = Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : [];
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-      const messageItem = messages[index];
-      if (String(messageItem?.role || "").trim() !== "user") continue;
-      if (messageItem?.injectedMessage === true || messageItem?.pluginMessage === true) continue;
-      const sameTurn = turnScopeId && String(messageItem?.turnScopeId || "").trim() === turnScopeId;
-      const sameDialog = dialogProcessId && String(messageItem?.dialogProcessId || "").trim() === dialogProcessId;
-      if (!sameTurn && !sameDialog) continue;
-      return Array.isArray(messageItem?.attachments) ? messageItem.attachments : [];
-    }
-    return [];
+    return resolveExistingUserMessageAttachments(this, {
+      userId,
+      sessionId,
+      parentSessionId,
+      turnScopeId,
+      dialogProcessId,
+    });
   }
 
   async _enrichUserInputAttachmentsFromIndex({ userId = "", sessionId = "", attachments = [], existingAttachments = [] } = {}) {
-    const sourceAttachments = Array.isArray(attachments) ? attachments : [];
-    if (!sourceAttachments.length) return sourceAttachments;
-    const normalizedSessionId = String(sessionId || "").trim();
-    const basePath = await this._resolveAttachmentIndexBasePath(userId);
-    let index = null;
-    if (basePath && normalizedSessionId) {
-      try {
-        index = await readAttachIndex(basePath, {
-          sessionId: normalizedSessionId,
-          attachmentSource: "user",
-        });
-      } catch {
-        index = null;
-      }
-    }
-    const indexedAttachments = Object.values(index?.attachments || {}).filter(
-      (item) => item && typeof item === "object" && !Array.isArray(item),
-    );
-    const richCandidates = [
-      ...(Array.isArray(existingAttachments) ? existingAttachments : []),
-      ...indexedAttachments,
-    ];
-    if (!richCandidates.length) return sourceAttachments;
-    return sourceAttachments.map((attachmentItem) => {
-      const match = findMatchingAttachmentMeta(attachmentItem, richCandidates);
-      return match ? mergeAttachmentMetaPreferRich(match, attachmentItem) : attachmentItem;
+    return enrichUserInputAttachmentsFromIndex(this, {
+      userId,
+      sessionId,
+      attachments,
+      existingAttachments,
     });
   }
 
   async _resolveAttachmentIndexBasePath(userId = "") {
-    const normalizedUserId = String(userId || "").trim();
-    if (!normalizedUserId) return "";
-    if (this.workspaceService?.ensureUserWorkspace) {
-      try {
-        const basePath = await this.workspaceService.ensureUserWorkspace(normalizedUserId);
-        if (basePath) return String(basePath || "").trim();
-      } catch {
-        // fall through to globalConfig workspaceRoot
-      }
-    }
-    const workspaceRoot = String(this.globalConfig?.workspaceRoot || "").trim();
-    return workspaceRoot ? path.resolve(workspaceRoot, normalizedUserId) : "";
+    return resolveAttachmentIndexBasePath(this, userId);
   }
 
   async _appendSessionTurn({

@@ -316,6 +316,80 @@ test("patch_file: root 参数兼容 Windows 风格反斜杠 diff 路径", async 
   assert.equal(await fs.readFile(path.join(appPath, "service/ws/chat-websocket-server.js"), "utf8"), "one\nTWO\n");
 });
 
+test("patch_file: 兼容模型混用 unified 文件头和 apply_patch 风格 @@ hunk", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-mixed-format-"));
+  await fs.mkdir(path.join(basePath, "agent/src"), { recursive: true });
+  await fs.writeFile(path.join(basePath, "agent/src/a.js"), "import a from \"a\";\nimport b from \"b\";\nrun();\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const mixedPatch = [
+    "--- a/agent/src/a.js",
+    "+++ b/agent/src/a.js",
+    "@@",
+    " import a from \"a\";",
+    "-import b from \"b\";",
+    "+import c from \"c\";",
+    " run();",
+    "",
+  ].join("\n");
+
+  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: mixedPatch }));
+  assert.equal(result.ok, true);
+  assert.equal(result.format, "unified_diff");
+  assert.equal(await fs.readFile(path.join(basePath, "agent/src/a.js"), "utf8"), "import a from \"a\";\nimport c from \"c\";\nrun();\n");
+});
+
+test("patch_file: format 传错时自动回退到实际协议", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-format-fallback-"));
+  await fs.writeFile(path.join(basePath, "a.txt"), "one\ntwo\nthree\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const applyPatch = [
+    "*** Begin Patch",
+    "*** Update File: a.txt",
+    "@@",
+    " one",
+    "-two",
+    "+TWO",
+    " three",
+    "*** End Patch",
+    "",
+  ].join("\n");
+
+  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: applyPatch }));
+  assert.equal(result.ok, true);
+  assert.equal(result.format, "apply_patch");
+  assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\nTWO\nthree\n");
+});
+
+test("patch_file: strip 传错时自动尝试无前缀路径", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-strip-fallback-"));
+  await fs.mkdir(path.join(basePath, "agent/src"), { recursive: true });
+  await fs.writeFile(path.join(basePath, "agent/src/a.js"), "one\ntwo\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const diff = [
+    "--- agent/src/a.js",
+    "+++ agent/src/a.js",
+    "@@ -1,2 +1,2 @@",
+    " one",
+    "-two",
+    "+TWO",
+    "",
+  ].join("\n");
+
+  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }));
+  assert.equal(result.ok, true);
+  assert.equal(result.strip, 0);
+  assert.equal(await fs.readFile(path.join(basePath, "agent/src/a.js"), "utf8"), "one\nTWO\n");
+});
+
 test("patch_file: unified_diff 保留 Windows 绝对路径与 file URL 语义", () => {
   const driveDiff = [
     "--- C:\\work\\src\\a.txt",
@@ -340,6 +414,156 @@ test("patch_file: unified_diff 保留 Windows 绝对路径与 file URL 语义", 
   const fileUrlPatch = parseUnifiedDiff(fileUrlDiff, 1)[0];
   assert.equal(fileUrlPatch.oldPath, "C:/work/src/a.txt");
   assert.equal(fileUrlPatch.newPath, "C:/work/src/a.txt");
+});
+
+test("patch_file: 普通用户不能修改 workspace 外绝对路径", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-workspace-root-"));
+  const outsideRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-outside-root-"));
+  const basePath = path.join(workspaceRoot, "primary-user");
+  const outsideFile = path.join(outsideRoot, "blocked.txt");
+  await fs.mkdir(basePath, { recursive: true });
+  await fs.writeFile(outsideFile, "one\ntwo\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath, "primary-user", {
+    runtime: { globalConfig: { workspaceRoot } },
+  }) });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const diff = [
+    `--- ${outsideFile}`,
+    `+++ ${outsideFile}`,
+    "@@ -1,2 +1,2 @@",
+    " one",
+    "-two",
+    "+TWO",
+    "",
+  ].join("\n");
+
+  await assert.rejects(
+    () => tool.invoke({ format: "unified_diff", patch: diff }),
+    /路径超出允许范围|path out of scope/i,
+  );
+  assert.equal(await fs.readFile(outsideFile, "utf8"), "one\ntwo\n");
+});
+
+test("patch_file: super user can patch an absolute file outside workspace root", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-workspace-root-"));
+  const outsideRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-outside-root-"));
+  const basePath = path.join(workspaceRoot, "super-root-user");
+  const outsideFile = path.join(outsideRoot, "visible.txt");
+  await fs.mkdir(basePath, { recursive: true });
+  await fs.writeFile(outsideFile, "one\ntwo\n", "utf8");
+  const agentContext = buildAgentContext(basePath, "super-root-user", {
+    runtime: {
+      systemRuntime: { userId: "super-root-user", sessionId: "s-1", rootSessionId: "s-1", isSuperUser: true, config: {} },
+      globalConfig: { workspaceRoot, super_admin: { user_id: "super-root-user" } },
+    },
+  });
+  const tools = createFileTool({ agentContext });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const diff = [
+    `--- ${outsideFile}`,
+    `+++ ${outsideFile}`,
+    "@@ -1,2 +1,2 @@",
+    " one",
+    "-two",
+    "+TWO",
+    "",
+  ].join("\n");
+
+  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: diff }));
+  assert.equal(result.ok, true);
+  assert.equal(result.resolvedFiles[0]?.resolvedPath, outsideFile);
+  assert.equal(await fs.readFile(outsideFile, "utf8"), "one\nTWO\n");
+});
+
+test("patch_file: super user can patch a mapped Windows absolute path outside workspace root", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-win-workspace-root-"));
+  const outsideRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-win-outside-root-"));
+  const basePath = path.join(workspaceRoot, "super-root-user");
+  const outsideFile = path.join(outsideRoot, "visible.txt");
+  const windowsFile = "C:\\outside\\visible.txt";
+  await fs.mkdir(basePath, { recursive: true });
+  await fs.writeFile(outsideFile, "one\ntwo\n", "utf8");
+  const agentContext = buildAgentContext(basePath, "super-root-user", {
+    runtime: {
+      systemRuntime: { userId: "super-root-user", sessionId: "s-1", rootSessionId: "s-1", isSuperUser: true, config: {} },
+      globalConfig: { workspaceRoot, super_admin: { user_id: "super-root-user" } },
+      sharedTools: {
+        resolveHostPath(payload = {}) {
+          return String(payload.path || payload.sandboxPath || "").replaceAll("\\", "/") === "C:/outside/visible.txt"
+            ? outsideFile
+            : "";
+        },
+      },
+    },
+  });
+  agentContext.environment.os = { platform: "win32" };
+  const tools = createFileTool({ agentContext });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const diff = [
+    `--- ${windowsFile}`,
+    `+++ ${windowsFile}`,
+    "@@ -1,2 +1,2 @@",
+    " one",
+    "-two",
+    "+TWO",
+    "",
+  ].join("\n");
+
+  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: diff }));
+  assert.equal(result.ok, true);
+  assert.equal(result.resolvedFiles[0]?.path, "C:/outside/visible.txt");
+  assert.equal(result.resolvedFiles[0]?.resolvedPath, outsideFile);
+  assert.equal(await fs.readFile(outsideFile, "utf8"), "one\nTWO\n");
+});
+
+test("patch_file: apply_patch supports mapped Windows absolute paths", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-apply-win-workspace-root-"));
+  const outsideRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-apply-win-outside-root-"));
+  const basePath = path.join(workspaceRoot, "super-root-user");
+  const outsideFile = path.join(outsideRoot, "visible.txt");
+  const windowsFile = "C:\\outside\\visible.txt";
+  await fs.mkdir(basePath, { recursive: true });
+  await fs.writeFile(outsideFile, "one\ntwo\n", "utf8");
+  const agentContext = buildAgentContext(basePath, "super-root-user", {
+    runtime: {
+      systemRuntime: { userId: "super-root-user", sessionId: "s-1", rootSessionId: "s-1", isSuperUser: true, config: {} },
+      globalConfig: { workspaceRoot, super_admin: { user_id: "super-root-user" } },
+      sharedTools: {
+        resolveHostPath(payload = {}) {
+          return String(payload.path || payload.sandboxPath || "").replaceAll("\\", "/") === "C:/outside/visible.txt"
+            ? outsideFile
+            : "";
+        },
+      },
+    },
+  });
+  agentContext.environment.os = { platform: "win32" };
+  const tools = createFileTool({ agentContext });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const patchText = [
+    "*** Begin Patch",
+    `*** Update File: ${windowsFile}`,
+    "@@",
+    " one",
+    "-two",
+    "+TWO",
+    "*** End Patch",
+    "",
+  ].join("\n");
+
+  const result = parseToolResult(await tool.invoke({ format: "apply_patch", patch: patchText }));
+  assert.equal(result.ok, true);
+  assert.equal(result.resolvedFiles[0]?.path, "C:/outside/visible.txt");
+  assert.equal(result.resolvedFiles[0]?.resolvedPath, outsideFile);
+  assert.equal(await fs.readFile(outsideFile, "utf8"), "one\nTWO\n");
 });
 
 test("patch_file: 路径不存在时返回 workspace 与候选路径诊断", async () => {
@@ -373,7 +597,7 @@ test("patch_file: 路径不存在时返回 workspace 与候选路径诊断", asy
   );
 });
 
-test("patch_file: 普通用户不会跨 workspace 子项目猜测虚拟 project 路径", async () => {
+test("patch_file: 普通用户可在唯一命中时解析 workspace 子项目路径", async () => {
   const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-normal-root-"));
   const repoPath = path.join(workspacePath, "noobot");
   await fs.mkdir(path.join(repoPath, ".git"), { recursive: true });
@@ -393,11 +617,10 @@ test("patch_file: 普通用户不会跨 workspace 子项目猜测虚拟 project 
     "",
   ].join("\n");
 
-  await assert.rejects(
-    () => tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }),
-    /文件不存在|file not found/i,
-  );
-  assert.equal(await fs.readFile(path.join(repoPath, "client/noobot-chat/src/a.txt"), "utf8"), "one\ntwo\n");
+  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }));
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.changedFiles, ["noobot/client/noobot-chat/src/a.txt"]);
+  assert.equal(await fs.readFile(path.join(repoPath, "client/noobot-chat/src/a.txt"), "utf8"), "one\nTWO\n");
 });
 
 test("patch_file: 超级管理员虚拟路径命中多个项目根时返回歧义错误", async () => {
