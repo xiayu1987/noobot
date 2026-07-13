@@ -18,7 +18,7 @@ export function classifyEngineError(error = null) {
       error?.cause?.statusCode,
   );
 
-  if ([408, 409, 429, 500, 502, 503, 504].includes(status)) {
+  if ([400, 408, 409, 429, 500, 502, 503, 504].includes(status)) {
     return "retryable";
   }
 

@@ -51,8 +51,8 @@ export const TURN_THRESHOLDS = deepFreeze({
     // Consecutive tool failures before help prompt guidance is injected.
     toolFailureHelpCount: 3,
 
-    // Maximum attempts for transient LLM invocation retry.
-    transientLlmMaxAttempts: 2,
+    // Initial LLM invocation plus up to two retries for transient errors.
+    transientLlmMaxAttempts: 3,
 
     // Streaming retry fallback starts after this many repeated tool-call mismatches.
     streamingToolCallMismatchThreshold: 2,

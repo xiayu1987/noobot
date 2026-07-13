@@ -53,6 +53,73 @@ test("invokeLlmWithTransientRetry: transient error should retry and then succeed
   assert.equal(retryEvent?.data?.nextAttempt, 2);
 });
 
+test("invokeLlmWithTransientRetry: HTTP 400 should retry once", async () => {
+  let attempts = 0;
+  const { events, listener } = createEventCollector();
+
+  const result = await invokeLlmWithTransientRetry({
+    modelState: {
+      activeModelAlias: "openai",
+      activeModelName: "gpt-4o",
+      eventListener: listener,
+      abortSignal: null,
+    },
+    turn: 1,
+    mode: "test",
+    invoke: async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        const error = new Error("upstream request rejected");
+        error.status = 400;
+        throw error;
+      }
+      return "ok";
+    },
+  });
+
+  assert.equal(result, "ok");
+  assert.equal(attempts, 2);
+  const retryEvent = events.find((item) => item?.event === "llm_call_retry");
+  assert.ok(retryEvent, "HTTP 400 should emit llm_call_retry");
+  assert.equal(retryEvent?.data?.status, 400);
+  assert.equal(retryEvent?.data?.nextAttempt, 2);
+});
+
+test("invokeLlmWithTransientRetry: persistent transient errors should attempt three times", async () => {
+  let attempts = 0;
+  const { events, listener } = createEventCollector();
+
+  await assert.rejects(
+    () =>
+      invokeLlmWithTransientRetry({
+        modelState: {
+          activeModelAlias: "openai",
+          activeModelName: "gpt-4o",
+          eventListener: listener,
+          abortSignal: null,
+        },
+        turn: 1,
+        mode: "test",
+        invoke: async () => {
+          attempts += 1;
+          const error = new Error("upstream temporarily unavailable");
+          error.status = 503;
+          throw error;
+        },
+      }),
+    /temporarily unavailable/i,
+  );
+
+  assert.equal(attempts, 3);
+  assert.equal(
+    events.filter((item) => item?.event === "llm_call_retry").length,
+    2,
+  );
+  const finalErrorEvent = events.find((item) => item?.event === "llm_call_error");
+  assert.equal(finalErrorEvent?.data?.attempt, 3);
+  assert.equal(finalErrorEvent?.data?.maxAttempts, 3);
+});
+
 test("invokeLlmWithTransientRetry: if token already streamed, should not retry", async () => {
   let attempts = 0;
   const { events, listener } = createEventCollector();

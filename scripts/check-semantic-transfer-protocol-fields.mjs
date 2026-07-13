@@ -61,9 +61,19 @@ const ATTACHMENT_LEGACY_ALLOWED_PREFIXES = [
   "agent/src/system-core/attach/",
   "agent/src/system-core/semantic-transfer/",
 ];
+// Runtime context compatibility boundary. This facade only forwards the
+// attachment-layer input; it does not produce or consume semantic-transfer
+// protocol payloads.
+const ATTACHMENT_LEGACY_ALLOWED_FILES = new Set([
+  // Media artifact extraction consumes attachment metadata from tool results;
+  // it is not a semantic-transfer protocol boundary.
+  "agent/src/system-core/agent/core/media/artifact-service.js",
+  "agent/src/system-core/agent/core/runtime/agent-runtime-facade.js",
+]);
 
 function isAttachmentLegacyAllowed(relPath = "") {
-  return ATTACHMENT_LEGACY_ALLOWED_PREFIXES.some((prefix) => relPath.startsWith(prefix));
+  return ATTACHMENT_LEGACY_ALLOWED_FILES.has(relPath)
+    || ATTACHMENT_LEGACY_ALLOWED_PREFIXES.some((prefix) => relPath.startsWith(prefix));
 }
 
 function toPosix(filePath) {
