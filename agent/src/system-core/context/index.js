@@ -265,6 +265,7 @@ export class ContextBuilder {
       sessionTree = null,
       rootSessionId = "",
       attachments = [],
+      incrementalMessages = [],
     } = {},
   ) {
     const effectiveSystemMessages = [
@@ -327,6 +328,7 @@ export class ContextBuilder {
       now: this._now(),
       systemMessages: effectiveSystemMessages,
       conversationMessages,
+      incrementalMessages,
       globalConfig: this.globalConfig,
     });
     const builtTools = await buildTools({

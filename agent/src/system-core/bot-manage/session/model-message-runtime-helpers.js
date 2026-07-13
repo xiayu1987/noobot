@@ -7,14 +7,14 @@ import {
   resolveMainModelFinalMessages,
 } from "../../session/utils/context-window-normalizer.js";
 import {
+  collectLatestTaskSummaryMessageIndexes,
   shouldMarkCurrentTurnSummarizedMessage,
-  shouldMarkCurrentTurnSummarizedModelMessage,
+  shouldMarkCurrentTurnSummarizedMessageInScope,
 } from "../../context/session/summarized-message-policy.js";
 import {
   collectLatestInjectedMessageIndexes,
   filterForModelContext,
   filterInjectedMessagesForDialog,
-  isInjectedMessage,
 } from "../../context/session/message-context-policy.js";
 import {
   getRuntimeFromAgentContext,
@@ -172,26 +172,7 @@ export class ModelMessageRuntimeHelpers {
 
   createMarkMessagesSummarized() {
     const shouldMark = (messageItem = {}, taskSummaryToolName = "task_summary") =>
-      shouldMarkCurrentTurnSummarizedMessage(messageItem, { taskSummaryToolName }) ||
-      shouldMarkCurrentTurnSummarizedModelMessage(messageItem, { taskSummaryToolName });
-    const shouldPreserveInjectedAtIndex = (messages = [], index = -1, latestInjectedIndexes = null) => {
-      if (!Array.isArray(messages) || index < 0) return false;
-      if (!isInjectedMessage(messages[index])) return false;
-      const latestIndexes = latestInjectedIndexes instanceof Set
-        ? latestInjectedIndexes
-        : collectLatestInjectedMessageIndexes(messages);
-      return latestIndexes.has(index);
-    };
-    const shouldMarkInScope = (messageItem = {}, {
-      messages = [],
-      index = -1,
-      latestInjectedIndexes = null,
-      taskSummaryToolName = "task_summary",
-    } = {}) => {
-      if (shouldPreserveInjectedAtIndex(messages, index, latestInjectedIndexes)) return false;
-      if (isInjectedMessage(messageItem)) return true;
-      return shouldMark(messageItem, taskSummaryToolName);
-    };
+      shouldMarkCurrentTurnSummarizedMessage(messageItem, { taskSummaryToolName });
     const isSummarized = (messageItem = {}) =>
       messageItem?.summarized === true || messageItem?.lc_kwargs?.summarized === true;
     const markMessage = (messageItem = null) => {
@@ -226,13 +207,17 @@ export class ModelMessageRuntimeHelpers {
           normalizedScope?.applyToStores === false ||
           normalizedScope?.applyToSession === false);
       const latestSourceInjectedIndexes = collectLatestInjectedMessageIndexes(source);
+      const latestSourceTaskSummaryIndexes = collectLatestTaskSummaryMessageIndexes(source, {
+        taskSummaryToolName: normalizedTaskSummaryToolName,
+      });
       let changedCount = 0;
       for (let index = 0; index < scopedSourceLimit; index += 1) {
         const messageItem = source[index];
-        if (!shouldMarkInScope(messageItem, {
+        if (!shouldMarkCurrentTurnSummarizedMessageInScope(messageItem, {
           messages: source,
           index,
           latestInjectedIndexes: latestSourceInjectedIndexes,
+          latestTaskSummaryIndexes: latestSourceTaskSummaryIndexes,
           taskSummaryToolName: normalizedTaskSummaryToolName,
         })) continue;
         if (markMessage(messageItem)) changedCount += 1;
@@ -247,14 +232,19 @@ export class ModelMessageRuntimeHelpers {
         const currentTurnScope =
           typeof currentTurnMessages.toArray === "function" ? currentTurnMessages.toArray() : [];
         const latestCurrentTurnInjectedIndexes = collectLatestInjectedMessageIndexes(currentTurnScope);
+        const latestCurrentTurnTaskSummaryIndexes = collectLatestTaskSummaryMessageIndexes(
+          currentTurnScope,
+          { taskSummaryToolName: normalizedTaskSummaryToolName },
+        );
         changedCount += currentTurnMessages.updateWhere(
           { summarized: true },
           (messageItem, index) =>
             !isSummarized(messageItem) &&
-            shouldMarkInScope(messageItem, {
+            shouldMarkCurrentTurnSummarizedMessageInScope(messageItem, {
               messages: currentTurnScope,
               index,
               latestInjectedIndexes: latestCurrentTurnInjectedIndexes,
+              latestTaskSummaryIndexes: latestCurrentTurnTaskSummaryIndexes,
               taskSummaryToolName: normalizedTaskSummaryToolName,
             }),
         );

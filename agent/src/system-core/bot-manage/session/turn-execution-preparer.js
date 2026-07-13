@@ -154,10 +154,13 @@ export async function prepareStoppedSnapshotResumeTurnExecution(engine, {
   });
   const agentContext = await contextBuilder._buildAgentContext(
     resumedSystemMessages,
-    [...resumedHistoryMessages, ...resumedIncrementalMessages],
+    resumedHistoryMessages,
     {
       dialogProcessId: String(payload?.dialogProcessId || identity.dialogProcessId || "").trim(),
       attachments: userMessageAttachments,
+      // Preserve the persisted block boundary. Incremental messages are
+      // append-only and must not pass through history's dialog grouping.
+      incrementalMessages: resumedIncrementalMessages,
     },
   );
   const scopedAgentContext = engine._applyRunConfigToolPolicy(agentContext, runConfig);
