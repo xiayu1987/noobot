@@ -249,7 +249,7 @@ export function createStateCommitter({
         }),
       });
     },
-    async appendAttachments(attachments = []) {
+    async appendAttachmentMetas(attachments = []) {
       if (!Array.isArray(attachments) || !attachments.length) return;
       const ownedAttachments = annotateAttachments(attachments, ownership);
       await runAgentRuntimeHook({
@@ -287,6 +287,9 @@ export function createStateCommitter({
           agentContext,
         }),
       });
+    },
+    async appendAttachments(attachments = []) {
+      return this.appendAttachmentMetas(attachments);
     },
   };
 }

@@ -255,7 +255,35 @@ export async function persistModelGeneratedArtifacts({
   return ownedAttachments;
 }
 
-export function extractAttachmentsFromToolResult(toolName = "", toolResultText = "") {
+function normalizeToolResultAttachmentMetas(attachmentMetas = []) {
+  const attachments = (Array.isArray(attachmentMetas) ? attachmentMetas : [])
+    .filter(isRuntimeAttachmentMeta);
+  if (!attachments.length) return [];
+  const seen = new Set();
+  return attachments.filter((attachmentItem = {}) => {
+    const key = String(attachmentItem?.attachmentId || "").trim() ||
+      `${String(attachmentItem?.path || "").trim()}|${String(attachmentItem?.relativePath || "").trim()}|${String(attachmentItem?.name || "").trim()}`;
+    if (key && seen.has(key)) return false;
+    if (key) seen.add(key);
+    return true;
+  }).map((attachmentItem) => ({
+    attachmentId: String(attachmentItem?.attachmentId || "").trim(),
+    name: String(attachmentItem?.name || "").trim(),
+    mimeType: String(
+      attachmentItem?.mimeType || MIME_TYPE.APPLICATION_OCTET_STREAM,
+    ).trim(),
+    size: safeNum(attachmentItem?.size),
+    sessionId: String(attachmentItem?.sessionId || "").trim(),
+    attachmentSource: String(attachmentItem?.attachmentSource || "").trim(),
+    path: String(attachmentItem?.path || "").trim(),
+    relativePath: String(attachmentItem?.relativePath || "").trim(),
+    generatedByModel: attachmentItem?.generatedByModel === true,
+    generationSource: String(attachmentItem?.generationSource || "").trim(),
+    ...(typeof attachmentItem?.isSandbox === "boolean" ? { isSandbox: attachmentItem.isSandbox } : {}),
+  }));
+}
+
+export function extractAttachmentMetasFromToolResult(toolName = "", toolResultText = "") {
   void toolName;
   const normalizedToolResultText = String(toolResultText || "").trim();
   if (!normalizedToolResultText) return [];
@@ -264,41 +292,21 @@ export function extractAttachmentsFromToolResult(toolName = "", toolResultText =
     const transferAttachmentMetas = getTransferAttachmentMetas(
       Array.isArray(parsedResult?.transferEnvelopes) ? parsedResult.transferEnvelopes : [],
     );
-    const directAttachmentMetas = Array.isArray(parsedResult?.attachments)
+    const directAttachmentMetas = Array.isArray(parsedResult?.attachmentMetas)
+      ? parsedResult.attachmentMetas
+      : Array.isArray(parsedResult?.attachments)
       ? parsedResult.attachments
       : [];
     const preferredAttachments = transferAttachmentMetas.length
       ? transferAttachmentMetas
       : directAttachmentMetas;
-    const attachments = preferredAttachments
-      .filter(isRuntimeAttachmentMeta);
-    if (!attachments.length) return [];
-    const seen = new Set();
-    return attachments.filter((attachmentItem = {}) => {
-      const key = String(attachmentItem?.attachmentId || "").trim() ||
-        `${String(attachmentItem?.path || "").trim()}|${String(attachmentItem?.relativePath || "").trim()}|${String(attachmentItem?.name || "").trim()}`;
-      if (key && seen.has(key)) return false;
-      if (key) seen.add(key);
-      return true;
-    }).map((attachmentItem) => ({
-      attachmentId: String(attachmentItem?.attachmentId || "").trim(),
-      name: String(attachmentItem?.name || "").trim(),
-      mimeType: String(
-        attachmentItem?.mimeType || MIME_TYPE.APPLICATION_OCTET_STREAM,
-      ).trim(),
-      size: safeNum(attachmentItem?.size),
-      sessionId: String(attachmentItem?.sessionId || "").trim(),
-      attachmentSource: String(attachmentItem?.attachmentSource || "").trim(),
-      path: String(attachmentItem?.path || "").trim(),
-      relativePath: String(attachmentItem?.relativePath || "").trim(),
-      generatedByModel: attachmentItem?.generatedByModel === true,
-      generationSource: String(attachmentItem?.generationSource || "").trim(),
-      ...(typeof attachmentItem?.isSandbox === "boolean" ? { isSandbox: attachmentItem.isSandbox } : {}),
-    }));
+    return normalizeToolResultAttachmentMetas(preferredAttachments);
   } catch {
     return [];
   }
 }
+
+export const extractAttachmentsFromToolResult = extractAttachmentMetasFromToolResult;
 
 function isRuntimeAttachmentMeta(attachmentItem = {}) {
   if (!attachmentItem || typeof attachmentItem !== "object" || Array.isArray(attachmentItem)) {
