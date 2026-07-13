@@ -43,7 +43,7 @@ import { finalizeNoToolsStreamingTurn } from "./no-tools-final-stream-stage.js";
 import { commitNoToolsTurnState } from "./no-tools-commit-stage.js";
 import { maybeCreateRequiredToolChoiceUnsupportedFallbackAi } from "./tool-choice-fallback-stage.js";
 import { handleRequiredToolChoiceNotFollowed } from "./tool-choice-required-stage.js";
-import { appendMessage } from "../message-context/message-store.js";
+import { appendMessage, replaceMessages } from "../message-context/message-store.js";
 import {
   emitModelContextTrace,
   summarizeDiagnosticBlocks,
@@ -75,7 +75,7 @@ function reconcileHookContextToLoopState(loopState = {}, hookContext = {}) {
     loopState.messageBlocks = hookContext.messageBlocks;
   }
   if (Array.isArray(hookContext.messages) && Array.isArray(loopState.messages) && hookContext.messages !== loopState.messages) {
-    loopState.messages.splice(0, loopState.messages.length, ...hookContext.messages);
+    replaceMessages(loopState, hookContext.messages);
   }
   return loopState;
 }
@@ -106,7 +106,7 @@ function syncMessagesFromBlocks(loopState = {}) {
     incrementalMessages: normalizeBlockList(blocks.incremental),
   });
   const composed = Array.isArray(resolved?.messages) ? resolved.messages : [];
-  loopState.messages.splice(0, loopState.messages.length, ...composed);
+  replaceMessages(loopState, composed);
   return loopState.messages;
 }
 
