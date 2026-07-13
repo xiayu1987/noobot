@@ -11,6 +11,7 @@ const CJK_RE = /[\u4e00-\u9fff]/;
 const CJK_ALLOWED_FILES = new Set([
   "plugin/noobot-plugin-harness/src/i18n.js",
 ]);
+const CJK_ALLOWED_DIR = "plugin/noobot-plugin-harness/src/i18n";
 
 function walkFiles(dir) {
   const result = [];
@@ -50,7 +51,11 @@ const files = walkFiles(absDir);
 const problems = [];
 for (const file of files) {
   const relPath = path.relative(ROOT, file);
-  if (CJK_ALLOWED_FILES.has(relPath)) continue;
+  if (
+    CJK_ALLOWED_FILES.has(relPath)
+    || relPath === CJK_ALLOWED_DIR
+    || relPath.startsWith(`${CJK_ALLOWED_DIR}${path.sep}`)
+  ) continue;
   const hits = checkFile(file);
   if (!hits.length) continue;
   problems.push({ file: relPath, hits });
