@@ -73,24 +73,25 @@ function collectModelSourceTokens(modelState = {}) {
     .join(" ");
 }
 
-function isBedrockLikeModel(modelState = {}) {
-  const source = collectModelSourceTokens(modelState);
-  return /\bbedrock\b|amazonaws\.com|amazon-bedrock|aws_bedrock|aws-bedrock/.test(source);
-}
-
 function isClaudeLikeModel(modelState = {}) {
   const source = collectModelSourceTokens(modelState);
   return /\bclaude\b|\banthropic\b/.test(source);
 }
 
-/**
- * Resolve whether tool_choice should be sent when binding tools.
- * Claude-compatible adapters can reject tool_choice/tool_search payload fields.
- * @param {object} modelState
- * @returns {boolean}
- */
-function resolveToolChoiceBindingPolicy(modelState = {}) {
-  return !(isClaudeLikeModel(modelState) || isBedrockLikeModel(modelState));
+function removeToolSearchDeferral(toolItem = {}) {
+  if (
+    !Object.prototype.hasOwnProperty.call(toolItem, "defer_loading") &&
+    !Object.prototype.hasOwnProperty.call(toolItem, "deferLoading")
+  ) {
+    return toolItem;
+  }
+  const normalizedTool = Object.assign(
+    Object.create(Object.getPrototypeOf(toolItem)),
+    toolItem,
+  );
+  delete normalizedTool.defer_loading;
+  delete normalizedTool.deferLoading;
+  return normalizedTool;
 }
 
 /**
@@ -104,16 +105,27 @@ export function adaptToolsForBinding(tools = [], modelState = {}) {
   const seenNames = new Set();
   const validTools = [];
   const droppedToolNames = [];
+  const disableClaudeToolSearch = isClaudeLikeModel(modelState);
 
   for (const toolItem of sourceTools) {
     const toolName = String(toolItem?.name || "").trim();
+    const toolType = String(toolItem?.type || "").trim().toLowerCase();
+    if (
+      disableClaudeToolSearch &&
+      (toolName.toLowerCase() === "tool_search" || toolType.startsWith("tool_search"))
+    ) {
+      droppedToolNames.push(toolName || toolType || "tool_search");
+      continue;
+    }
     if (!toolName || !OPENAI_TOOL_NAME_PATTERN.test(toolName)) {
       droppedToolNames.push(toolName || "(empty)");
       continue;
     }
     if (seenNames.has(toolName)) continue;
     seenNames.add(toolName);
-    validTools.push(toolItem);
+    validTools.push(
+      disableClaudeToolSearch ? removeToolSearchDeferral(toolItem) : toolItem,
+    );
   }
   validTools.sort((left, right) =>
     String(left?.name || "").localeCompare(String(right?.name || ""), "en"),
@@ -125,10 +137,9 @@ export function adaptToolsForBinding(tools = [], modelState = {}) {
     .filter((n) => STRICT_INCOMPATIBLE_TOOL_NAMES.has(n));
   const strict = strictByPolicy && strictIncompatibleTools.length === 0;
   const toolChoice = "auto";
-  const enableToolChoice = resolveToolChoiceBindingPolicy(modelState);
   const bindOptions = validTools.length
     ? {
-        ...(enableToolChoice ? { tool_choice: toolChoice } : {}),
+        tool_choice: toolChoice,
         ...(strict ? { strict: true } : {}),
       }
     : {};
@@ -138,7 +149,6 @@ export function adaptToolsForBinding(tools = [], modelState = {}) {
     droppedToolNames,
     strictDowngradedTools:
       strictByPolicy && !strict ? strictIncompatibleTools : [],
-    toolChoiceDisabled: validTools.length > 0 && !enableToolChoice,
     bindOptions,
   };
 }
