@@ -101,7 +101,7 @@ test("adaptToolsForBinding keeps tool_choice as auto even when runtime marks req
   assert.equal(adapted.bindOptions.tool_choice, "auto");
 });
 
-test("adaptToolsForBinding omits tool_choice for AWS Bedrock compatible providers", () => {
+test("adaptToolsForBinding keeps standard tool_choice for AWS Bedrock compatible providers", () => {
   const adapted = adaptToolsForBinding([{ name: "read_file" }], {
     activeModelName: "anthropic.claude-3-5-sonnet-20241022-v2:0",
     activeModelAlias: "bedrock_claude",
@@ -114,11 +114,10 @@ test("adaptToolsForBinding omits tool_choice for AWS Bedrock compatible provider
     userConfig: {},
   });
 
-  assert.deepEqual(adapted.bindOptions, {});
-  assert.equal(adapted.toolChoiceDisabled, true);
+  assert.deepEqual(adapted.bindOptions, { tool_choice: "auto" });
 });
 
-test("adaptToolsForBinding omits tool_choice for Claude compatible providers", () => {
+test("adaptToolsForBinding keeps standard tool_choice for Claude compatible providers", () => {
   const adapted = adaptToolsForBinding([{ name: "read_file" }], {
     activeModelName: "claude-sonnet-via-gateway",
     activeModelAlias: "third_party_claude",
@@ -131,10 +130,64 @@ test("adaptToolsForBinding omits tool_choice for Claude compatible providers", (
     userConfig: {},
   });
 
-  assert.deepEqual(adapted.bindOptions, {});
+  assert.deepEqual(adapted.bindOptions, { tool_choice: "auto" });
   assert.deepEqual(
     adapted.tools.map((toolItem) => toolItem.name),
     ["read_file"],
   );
-  assert.equal(adapted.toolChoiceDisabled, true);
+});
+
+test("adaptToolsForBinding drops tool_search definitions for Claude models", () => {
+  const adapted = adaptToolsForBinding(
+    [
+      { name: "read_file", defer_loading: true },
+      { name: "write_file", deferLoading: true },
+      { name: "tool_search" },
+      { name: "tool_search_regex", type: "tool_search_tool_regex_20251119" },
+      { name: "tool_search_bm25", type: "tool_search_tool_bm25_20251119" },
+    ],
+    {
+      activeModelName: "claude-opus-4-8",
+      activeModelAlias: "claude",
+      globalConfig: {},
+      userConfig: {},
+    },
+  );
+
+  assert.deepEqual(
+    adapted.tools.map((toolItem) => toolItem.name),
+    ["read_file", "write_file"],
+  );
+  assert.equal("defer_loading" in adapted.tools[0], false);
+  assert.equal("deferLoading" in adapted.tools[1], false);
+  assert.deepEqual(adapted.droppedToolNames, [
+    "tool_search",
+    "tool_search_regex",
+    "tool_search_bm25",
+  ]);
+});
+
+test("adaptToolsForBinding keeps tool_search definitions for non-Claude models", () => {
+  const adapted = adaptToolsForBinding(
+    [
+      {
+        name: "tool_search_regex",
+        type: "tool_search_tool_regex_20251119",
+        defer_loading: true,
+      },
+    ],
+    {
+      activeModelName: "gpt-5.5",
+      activeModelAlias: "openai",
+      globalConfig: {},
+      userConfig: {},
+    },
+  );
+
+  assert.deepEqual(
+    adapted.tools.map((toolItem) => toolItem.name),
+    ["tool_search_regex"],
+  );
+  assert.deepEqual(adapted.droppedToolNames, []);
+  assert.equal(adapted.tools[0].defer_loading, true);
 });

@@ -468,6 +468,13 @@ watch(
   color: var(--noobot-text-strong);
 }
 
+.session-popover {
+  max-height: min(420px, calc(100dvh - 32px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
 .session-hover-popover.el-popover.el-popper .el-popper__arrow::before {
   background: var(--noobot-panel-bg);
   border: 1px solid var(--noobot-panel-border);
