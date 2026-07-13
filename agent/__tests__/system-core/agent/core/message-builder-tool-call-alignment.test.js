@@ -904,6 +904,64 @@ test("buildContextMessageBlocks replays 71ad4373 stopped snapshot without tool o
   assert.deepEqual(blocks.messages, [...blocks.system, ...blocks.history, ...blocks.incremental]);
 });
 
+test("buildContextMessageBlocks resume keeps tool pairing, single user_meta and no guidance meta", () => {
+  const toolCallId = "call_resume_lock_1";
+  const realDialogProcessId = "dlg-real-user";
+  const realTurnScopeId = "client-turn:real-user";
+  const guidanceDialogProcessId = "dlg-guidance";
+  const history = [
+    new HumanMessage({
+      content: "测试所有工具",
+      additional_kwargs: {
+        dialogProcessId: realDialogProcessId,
+        turnScopeId: realTurnScopeId,
+        frontendUserMessage: true,
+      },
+    }),
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: toolCallId, name: "write_file", args: { filePath: "a.txt" } }],
+    }),
+    new ToolMessage({ tool_call_id: toolCallId, content: '{"ok":true}' }),
+    new HumanMessage({
+      content: "继续推进任务",
+      additional_kwargs: {
+        dialogProcessId: guidanceDialogProcessId,
+        turnScopeId: "client-turn:guidance",
+        injectedMessage: true,
+        injectedBy: "harness-plugin",
+        injectedMessageType: "guidance",
+      },
+    }),
+  ];
+
+  const blocks = buildContextMessageBlocks({
+    execution: { controllers: { runtime: {
+      userId: "admin",
+      resumeFromStoppedSnapshot: true,
+      userMessageAttachments: [],
+      systemRuntime: {
+        sessionId: "session-resume-lock",
+        dialogProcessId: "dlg-current",
+        turnScopeId: "client-turn:current",
+      },
+    } } },
+    payload: { messages: { system: [], history } },
+  });
+  const all = blocks.messages;
+  assert.equal(all.find((message) => message?._getType?.() === "ai")?.tool_calls?.[0]?.id, toolCallId);
+  assert.equal(all.find((message) => message?._getType?.() === "tool")?.tool_call_id, toolCallId);
+
+  const metaPayloads = all
+    .filter((message) => message?.additional_kwargs?.noobotInternalMessageType === "user_meta")
+    .map((message) => JSON.parse(String(message.content).match(/\{[\s\S]*\}/)?.[0] || "{}"));
+  assert.equal(metaPayloads.length, 1);
+  assert.equal(metaPayloads[0].dialogProcessId, realDialogProcessId);
+  assert.equal(metaPayloads[0].turnScopeId, realTurnScopeId);
+  assert.equal(metaPayloads.some((payload) => payload.dialogProcessId === guidanceDialogProcessId), false);
+  assert.ok(all.some((message) => message?.content === "继续推进任务"));
+});
+
 test("buildContextMessageBlocks rebuilds user_meta on first continue from 4c18984a stopped snapshot", () => {
   const stoppedDialogProcessId = "231ff8d0-1d49-44ee-9dd6-693ef2f007c1";
   const stoppedTurnScopeId = "client-turn:mrhzxp9r:hrrrdmu4";
