@@ -309,16 +309,23 @@ function shouldBuildUserMetaForHistoryMessage(
   { restorableUserMetaKeys = null } = {},
 ) {
   if (resolveMessageRole(msg) !== MESSAGE_ROLE.USER) return false;
-  if (String(msg?.messageOrigin || "").trim().toLowerCase() === "internal") return false;
+  const kwargs = msg?.additional_kwargs || msg?.lc_kwargs?.additional_kwargs || {};
+  if (String(msg?.messageOrigin || kwargs?.messageOrigin || "").trim().toLowerCase() === "internal") return false;
   if (msg?.phaseSummaryMemory === true) return false;
-  if (msg?.injectedMessage === true || msg?.pluginMessage === true) return false;
-  if (String(msg?.injectedMessageType || msg?.injected_message_type || "").trim()) return false;
+  if (
+    msg?.injectedMessage === true || kwargs?.injectedMessage === true ||
+    msg?.pluginMessage === true || kwargs?.pluginMessage === true
+  ) return false;
+  if (String(
+    msg?.injectedMessageType || msg?.injected_message_type ||
+    kwargs?.injectedMessageType || kwargs?.injected_message_type || "",
+  ).trim()) return false;
   if (msg?.frontendUserMessage === true) return true;
   const identityKey = buildUserSourceIdentityKey(msg);
   if (identityKey && restorableUserMetaKeys?.has?.(identityKey)) return true;
-  // A stopped/resend snapshot may contain legacy real user messages without
-  // the frontend marker. Require the full round identity so injected/internal
-  // messages that merely share a dialog id do not get a derived user_meta.
+  // Legacy stopped/resend snapshots may not have the frontend marker. Their
+  // full round identity remains the compatibility signal; injected messages
+  // are rejected above using the semantics preserved in additional_kwargs.
   return Boolean(resolveMessageDialogProcessId(msg) && resolveMessageTurnScopeId(msg));
 }
 
@@ -464,6 +471,15 @@ function buildModelMessageIdentityKwargs(msg = {}, fallbackMeta = {}) {
     ...(parentDialogProcessId ? { parentDialogProcessId } : {}),
     ...(turnScopeId ? { turnScopeId } : {}),
     ...(msg?.frontendUserMessage === true ? { frontendUserMessage: true } : {}),
+    ...(msg?.injectedMessage === true ? { injectedMessage: true } : {}),
+    ...(String(msg?.injectedBy || "").trim() ? { injectedBy: String(msg.injectedBy).trim() } : {}),
+    ...(String(msg?.injectedMessageType || msg?.injected_message_type || "").trim()
+      ? { injectedMessageType: String(msg?.injectedMessageType || msg?.injected_message_type).trim() }
+      : {}),
+    ...(msg?.pluginMessage === true ? { pluginMessage: true } : {}),
+    ...(String(msg?.messageOrigin || "").trim()
+      ? { messageOrigin: String(msg.messageOrigin).trim() }
+      : {}),
   };
 }
 
@@ -535,6 +551,7 @@ function buildHistoryMessages({
   runtime = {},
   fallbackUserMeta = {},
   includeUserMeta = true,
+  allowMessageAttachments = true,
 } = {}) {
   const history = [];
   const knownHistoryToolCallIds = new Set();
@@ -607,16 +624,13 @@ function buildHistoryMessages({
       );
       continue;
     }
-    if (
-      includeUserMeta ||
-      msg?.frontendUserMessage === true ||
-      shouldBuildUserMetaForHistoryMessage(msg, runtime, { restorableUserMetaKeys })
-    ) {
+    if (shouldBuildUserMetaForHistoryMessage(msg, runtime, { restorableUserMetaKeys })) {
       history.push(...buildHumanMessagesForUser(runtime, msg, fallbackUserMeta, {
         // Historical metadata is message-scoped. Never fill a historical
         // message with the current request's identity or attachments.
         allowFallbackAttachments: false,
         allowFallbackIdentity: false,
+        allowMessageAttachments,
         allowFallbackRoundIdentity: false,
       }));
     } else {
@@ -740,34 +754,16 @@ export function buildContextMessageBlocks(
     fallbackUserMeta,
     includeUserMeta: false,
   });
-  const incremental = [];
-  for (const msg of resolvedMainBlocks.incremental) {
-    const role = resolveMessageRole(msg);
-    if (role === MESSAGE_ROLE.USER || msg?.frontendUserMessage === true) {
-      if (shouldBuildUserMetaForHistoryMessage(msg, runtime)) {
-        incremental.push(...buildHumanMessagesForUser(runtime, msg, fallbackUserMeta, {
-          allowFallbackAttachments: false,
-          allowMessageAttachments: true,
-        }));
-      } else {
-        incremental.push(
-          new HumanMessage({
-            content: buildHumanMessageContent(msg, resolveFallbackAttachments(fallbackUserMeta)),
-            additional_kwargs: buildModelMessageIdentityKwargs(msg, fallbackUserMeta),
-          }),
-        );
-      }
-    } else {
-      incremental.push(
-        ...buildHistoryMessages({
-          effectiveHistoryMessages: [msg],
-          runtime,
-          fallbackUserMeta,
-          includeUserMeta: true,
-        }),
-      );
-    }
-  }
+  // Process the complete incremental block together. Building each message in
+  // isolation prevented a ToolMessage from seeing its preceding
+  // AIMessage.tool_calls, so restored tool results were discarded.
+  const incremental = buildHistoryMessages({
+    effectiveHistoryMessages: resolvedMainBlocks.incremental,
+    runtime,
+    fallbackUserMeta,
+    includeUserMeta: false,
+    allowMessageAttachments: true,
+  });
   return {
     system,
     history,
