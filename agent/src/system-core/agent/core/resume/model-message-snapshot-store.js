@@ -29,6 +29,18 @@ function cloneJson(value) {
   try { return JSON.parse(JSON.stringify(value)); } catch { return value; }
 }
 
+const LANGCHAIN_SERIALIZATION_KEYS = new Set([
+  "lc",
+  "id",
+  "kwargs",
+  "type",
+  "lc_namespace",
+  "lc_serializable",
+  "lc_aliases",
+  "lc_attributes",
+  "lc_secrets",
+]);
+
 function serializeMessage(message = {}) {
   const type = messageType(message);
   const rawKwargs = message?.additional_kwargs || message?.lc_kwargs?.additional_kwargs || {};
@@ -39,11 +51,25 @@ function serializeMessage(message = {}) {
       : type === "tool" || type === "tool_result"
         ? "tool"
         : "human";
+  const raw = {};
   const serialized = {
+    raw,
     type: normalizedType,
     content: typeof message?.content === "string" ? message.content : message?.content ?? "",
     additional_kwargs: cloneJson(rawKwargs) || {},
+    lc_kwargs: cloneJson(message?.lc_kwargs) || {},
+    summarized: message?.summarized === true || message?.lc_kwargs?.summarized === true || rawKwargs?.summarized === true,
   };
+  for (const key of Object.keys(message || {})) {
+    if (
+      key in serialized
+      || ["content", "additional_kwargs", "lc_kwargs"].includes(key)
+      || LANGCHAIN_SERIALIZATION_KEYS.has(key)
+      || String(key || "").startsWith("lc_")
+    ) continue;
+    const value = cloneJson(message[key]);
+    if (value !== undefined) serialized.raw[key] = value;
+  }
   if (normalizedType === "ai") {
     if (Array.isArray(message?.tool_calls)) serialized.tool_calls = cloneJson(message.tool_calls) || [];
     if (Array.isArray(message?.invalid_tool_calls)) serialized.invalid_tool_calls = cloneJson(message.invalid_tool_calls) || [];
@@ -59,24 +85,66 @@ function serializeMessage(message = {}) {
 
 function deserializeMessage(item = {}) {
   const payload = { content: item?.content ?? "", additional_kwargs: cloneJson(item?.additional_kwargs) || {} };
-  if (item?.type === "system") return new SystemMessage(payload);
-  if (item?.type === "ai") return new AIMessage({
+  let message;
+  if (item?.type === "system") message = new SystemMessage(payload);
+  else if (item?.type === "ai") message = new AIMessage({
     ...payload,
     tool_calls: cloneJson(item?.tool_calls) || [],
     invalid_tool_calls: cloneJson(item?.invalid_tool_calls) || [],
   });
-  if (item?.type === "tool") return new ToolMessage({
+  else if (item?.type === "tool") message = new ToolMessage({
     ...payload,
     tool_call_id: item?.tool_call_id || "",
     name: item?.name,
     status: item?.status,
     artifact: cloneJson(item?.artifact),
   });
-  return new HumanMessage(payload);
+  else message = new HumanMessage(payload);
+  const raw = item?.raw && typeof item.raw === "object" ? cloneJson(item.raw) : null;
+  if (raw) {
+    for (const [key, value] of Object.entries(raw)) {
+      if (
+        !["content", "additional_kwargs", "tool_calls", "invalid_tool_calls", "tool_call_id"].includes(key)
+        && !LANGCHAIN_SERIALIZATION_KEYS.has(key)
+        && !String(key || "").startsWith("lc_")
+      ) {
+        try { message[key] = value; } catch {}
+      }
+    }
+    message.additional_kwargs = { ...(raw.additional_kwargs || {}), ...(message.additional_kwargs || {}) };
+    if (raw.lc_kwargs && typeof raw.lc_kwargs === "object") message.lc_kwargs = raw.lc_kwargs;
+  }
+  if (item?.lc_kwargs && typeof item.lc_kwargs === "object") message.lc_kwargs = cloneJson(item.lc_kwargs);
+  if (item?.summarized === true || raw?.summarized === true || raw?.lc_kwargs?.summarized === true) message.summarized = true;
+  return message;
+}
+
+export function syncStoppedModelMessageSnapshotCandidate(runtime = {}, modelMessages = []) {
+  const candidate = runtime?.stoppedModelMessageSnapshotCandidate;
+  if (!candidate || !Array.isArray(modelMessages)) return candidate || null;
+  // `modelMessages` is the final LLM input projection after
+  // filterForModelContext().  It may flatten assistant/tool messages into
+  // human text, inject derived user_meta messages and reorder the model input
+  // for provider compatibility.  Stopped snapshots must persist the canonical
+  // message fact source instead: candidate.messageBlocks is initialized from
+  // loopState.messageBlocks and appendMessage() keeps that same block object up
+  // to date during the turn.  Never rebuild snapshot history from the projected
+  // model input, otherwise a resume->stop lifecycle progressively degrades
+  // ai/tool messages into empty human messages and duplicates user_meta.
+  return runtime.stoppedModelMessageSnapshotCandidate;
 }
 
 function serializeList(list = []) {
   return (Array.isArray(list) ? list : []).map(serializeMessage).filter(Boolean);
+}
+
+function composeMessagesFromBlocks(messageBlocks = {}) {
+  if (!messageBlocks || typeof messageBlocks !== "object" || Array.isArray(messageBlocks)) return [];
+  return [
+    ...(Array.isArray(messageBlocks.system) ? messageBlocks.system : []),
+    ...(Array.isArray(messageBlocks.history) ? messageBlocks.history : []),
+    ...(Array.isArray(messageBlocks.incremental) ? messageBlocks.incremental : []),
+  ];
 }
 
 function deserializeList(list = []) {
@@ -92,11 +160,14 @@ function assertIdentity(snapshot = {}, identity = {}) {
 }
 
 function countSnapshotMessages(candidate = {}) {
+  const systemCount = Array.isArray(candidate.messageBlocks?.system) ? candidate.messageBlocks.system.length : 0;
+  const historyCount = Array.isArray(candidate.messageBlocks?.history) ? candidate.messageBlocks.history.length : 0;
+  const incrementalCount = Array.isArray(candidate.messageBlocks?.incremental) ? candidate.messageBlocks.incremental.length : 0;
   return {
-    messageCount: Array.isArray(candidate.messages) ? candidate.messages.length : 0,
-    systemCount: Array.isArray(candidate.messageBlocks?.system) ? candidate.messageBlocks.system.length : 0,
-    historyCount: Array.isArray(candidate.messageBlocks?.history) ? candidate.messageBlocks.history.length : 0,
-    incrementalCount: Array.isArray(candidate.messageBlocks?.incremental) ? candidate.messageBlocks.incremental.length : 0,
+    messageCount: systemCount + historyCount + incrementalCount,
+    systemCount,
+    historyCount,
+    incrementalCount,
   };
 }
 
@@ -122,8 +193,9 @@ export async function saveStoppedModelMessageSnapshot({ globalConfig = {}, ident
   };
   if (!normalizedIdentity.userId || !normalizedIdentity.sessionId || !normalizedIdentity.dialogProcessId || !normalizedIdentity.turnScopeId) return null;
   const now = new Date().toISOString();
+  const factSourceMessages = composeMessagesFromBlocks(messageBlocks);
   const snapshot = {
-    version: 1,
+    version: 2,
     ...normalizedIdentity,
     createdAt: now,
     updatedAt: now,
@@ -132,7 +204,7 @@ export async function saveStoppedModelMessageSnapshot({ globalConfig = {}, ident
       history: serializeList(messageBlocks.history),
       incremental: serializeList(messageBlocks.incremental),
     },
-    messages: serializeList(messages),
+    messages: serializeList(factSourceMessages),
   };
   const filePath = snapshotPath(normalizedIdentity, globalConfig);
   await fs.mkdir(path.dirname(filePath), { recursive: true });

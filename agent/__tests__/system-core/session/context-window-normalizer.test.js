@@ -247,7 +247,7 @@ test("resolveMainModelHistoryMessages orders dialog groups by first natural occu
   );
 });
 
-test("resolveMainModelHistoryMessages ignores messages without dialogProcessId", () => {
+test("resolveMainModelHistoryMessages preserves legacy messages without dialogProcessId", () => {
   const result = resolveMainModelHistoryMessages({
     sourceMessages: [
       { role: "user", content: "u1-first" },
@@ -261,7 +261,7 @@ test("resolveMainModelHistoryMessages ignores messages without dialogProcessId",
 
   assert.deepEqual(
     result.map((item) => item.content),
-    [],
+    ["u1-first", "u1-second", "a1", "u2", "a2"],
   );
 });
 

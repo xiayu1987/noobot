@@ -29,7 +29,6 @@ export class FileSystemSessionRepository {
     normalizeMessages,
     normalizeSelectedConnectors,
     now = () => new Date().toISOString(),
-    deletedSessionGuardTtlMs = 15 * 60 * 1000,
     mutationLockTimeoutMs = 30000,
     mutationLockStaleMs = 60000,
     mutationLockPollMs = 10,
@@ -40,10 +39,6 @@ export class FileSystemSessionRepository {
     this.normalizeMessages = normalizeMessages;
     this.normalizeSelectedConnectors = normalizeSelectedConnectors;
     this.now = now;
-    this.deletedSessionGuardTtlMs =
-      Number.isFinite(Number(deletedSessionGuardTtlMs)) && Number(deletedSessionGuardTtlMs) > 0
-        ? Number(deletedSessionGuardTtlMs)
-        : 15 * 60 * 1000;
     this.mutationLockTimeoutMs = Math.max(1, Number(mutationLockTimeoutMs) || 30000);
     this.mutationLockStaleMs = Math.max(1, Number(mutationLockStaleMs) || 60000);
     this.mutationLockPollMs = Math.max(1, Number(mutationLockPollMs) || 10);
@@ -225,18 +220,12 @@ export class FileSystemSessionRepository {
       raw?.sessions && typeof raw.sessions === "object" && !Array.isArray(raw.sessions)
         ? raw.sessions
         : {};
-    const nowMs = Date.now();
-    const ttlMs = this.deletedSessionGuardTtlMs;
     let pruned = false;
     const nextSessions = {};
     for (const [sessionId, deletedAt] of Object.entries(currentSessions)) {
       const normalizedSessionId = String(sessionId || "").trim();
       const deletedAtMs = Number(deletedAt);
       if (!normalizedSessionId || !Number.isFinite(deletedAtMs)) {
-        pruned = true;
-        continue;
-      }
-      if (nowMs - deletedAtMs > ttlMs) {
         pruned = true;
         continue;
       }

@@ -5,6 +5,7 @@
  */
 import { filterForModelContext } from "../../../context/session/message-context-policy.js";
 import { invokeLlmWithTransientRetry } from "../llm-invoker.js";
+import { syncStoppedModelMessageSnapshotCandidate } from "../resume/model-message-snapshot-store.js";
 import {
   applyBoundToolModelRequestOverridesToLlm,
   resolveBoundToolModelRequestOverrides,
@@ -61,6 +62,7 @@ export function createBoundLlmToolChoiceInvoker({
           boundToolOverrides,
         );
         const modelMessages = filterForModelContext(messages);
+        syncStoppedModelMessageSnapshotCandidate(runtime, modelMessages);
         emitModelContextTrace(runtime, "llm_invoke_messages", {
           turn,
           mode: invokeMode,

@@ -137,12 +137,26 @@ export function resolveMainModelHistoryMessages({
 } = {}) {
   const source = Array.isArray(sourceMessages) ? sourceMessages : [];
   const groupsByDialog = new Map();
+  let activeDialogKey = "";
+  let leadingGroupKey = "";
 
   source.forEach((messageItem, index) => {
     const explicitKey = resolveMessageDialogProcessId(messageItem);
     if (explicitKey) {
       appendDialogGroupMessage(groupsByDialog, explicitKey, messageItem, index);
+      activeDialogKey = explicitKey;
+      return;
     }
+
+    // Model messages from legacy snapshots (notably AI/tool messages) did not
+    // always carry turn identity. They still belong to the surrounding dialog
+    // and must not disappear merely because grouping metadata is absent.
+    if (activeDialogKey) {
+      appendDialogGroupMessage(groupsByDialog, activeDialogKey, messageItem, index);
+      return;
+    }
+    if (!leadingGroupKey) leadingGroupKey = "__no_dialog_leading__";
+    appendDialogGroupMessage(groupsByDialog, leadingGroupKey, messageItem, index);
   });
 
   const rounds = [];

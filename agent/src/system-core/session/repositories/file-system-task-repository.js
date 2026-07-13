@@ -12,12 +12,14 @@ export class FileSystemTaskRepository {
     sessionPathResolver,
     storageService,
     normalizeTask,
+    sessionRepository = null,
     now = () => new Date().toISOString(),
   } = {}) {
     this.pathResolver = pathResolver;
     this.sessionPathResolver = sessionPathResolver;
     this.storageService = storageService;
     this.normalizeTask = normalizeTask;
+    this.sessionRepository = sessionRepository;
     this.now = now;
   }
 
@@ -61,6 +63,7 @@ export class FileSystemTaskRepository {
   }
 
   async save(userId, sessionId, task, parentSessionId = "") {
+    if (await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
     const { sessionDir } = await this._resolveTaskScope(
       userId,
       sessionId,
@@ -94,6 +97,7 @@ export class FileSystemTaskRepository {
         updatedAt: bundle.updatedAt,
       },
     });
+    return true;
   }
 
   async saveBatch(
@@ -103,6 +107,7 @@ export class FileSystemTaskRepository {
     parentSessionId = "",
     currentTaskId = "",
   ) {
+    if (await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
     const { sessionDir } = await this._resolveTaskScope(
       userId,
       sessionId,
@@ -144,5 +149,6 @@ export class FileSystemTaskRepository {
         updatedAt: bundle.updatedAt,
       },
     });
+    return true;
   }
 }

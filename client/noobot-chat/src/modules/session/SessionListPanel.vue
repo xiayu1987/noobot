@@ -14,6 +14,7 @@ const props = defineProps({
   activeSessionId: { type: String, default: "" },
   sending: { type: Boolean, default: false },
   collapsed: { type: Boolean, default: false },
+  isMobile: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(["select-session", "delete-session", "rename-session"]);
@@ -166,6 +167,7 @@ watch(
               v-for="sessionItem in dateGroup.items"
               :key="sessionItem.id"
               trigger="hover"
+              :disabled="isMobile"
               placement="right"
               :width="264"
               :show-after="220"
