@@ -149,6 +149,105 @@ test("process_content_task: 透传父 runConfig 显式 streaming=false 到子 se
   assert.equal(calls[0]?.runConfig?.streaming, false);
 });
 
+test("process_content_task: 缺省 modelName 时继承父运行时模型", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-process-content-model-"));
+  const calls = [];
+  const botManager = {
+    async runSession(payload = {}) {
+      calls.push(payload);
+      return {
+        sessionId: payload.sessionId,
+        answer: "ok",
+        traces: [],
+        messages: [],
+      };
+    },
+  };
+  const tools = createContentProcessTool({
+    agentContext: {
+      execution: {
+        controllers: {
+          runtime: {
+            basePath,
+            userId: "primary-user",
+            runtimeModel: "gpt_5_6",
+            globalConfig: {},
+            userConfig: {},
+            botManager,
+            sharedTools: {},
+            systemRuntime: {
+              sessionId: "parent-session",
+              config: {},
+            },
+          },
+        },
+      },
+    },
+  });
+  const tool = tools.find((item) => item?.name === TOOL_NAME.PROCESS_CONTENT_TASK);
+  assert.ok(tool);
+
+  const resultText = await tool.invoke({
+    task: "parse content",
+    contentPath: "runtime/attach/file.png",
+  });
+  const result = JSON.parse(resultText);
+
+  assert.equal(result.ok, true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.runConfig?.runtimeModel, "gpt_5_6");
+});
+
+test("process_content_task: 显式 modelName 优先于父运行时模型", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-process-content-model-priority-"));
+  const calls = [];
+  const botManager = {
+    async runSession(payload = {}) {
+      calls.push(payload);
+      return {
+        sessionId: payload.sessionId,
+        answer: "ok",
+        traces: [],
+        messages: [],
+      };
+    },
+  };
+  const tools = createContentProcessTool({
+    agentContext: {
+      execution: {
+        controllers: {
+          runtime: {
+            basePath,
+            userId: "primary-user",
+            runtimeModel: "gpt_5_6",
+            globalConfig: {},
+            userConfig: {},
+            botManager,
+            sharedTools: {},
+            systemRuntime: {
+              sessionId: "parent-session",
+              config: {},
+            },
+          },
+        },
+      },
+    },
+  });
+  const tool = tools.find((item) => item?.name === TOOL_NAME.PROCESS_CONTENT_TASK);
+  assert.ok(tool);
+
+  const resultText = await tool.invoke({
+    task: "parse content",
+    contentPath: "runtime/attach/file.png",
+    modelName: "custom-model",
+  });
+  const result = JSON.parse(resultText);
+
+  assert.equal(result.ok, true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.runConfig?.runtimeModel, "custom-model");
+});
+
 test("process_connector_tool: detached runtime uses durable parent session", async () => {
   const calls = [];
   const botManager = {

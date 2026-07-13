@@ -152,7 +152,8 @@ export function createContentProcessTool({ agentContext }) {
               mode: SANDBOX_CONFIG.TOOL_POLICY_MODE.CUSTOM_ONLY,
               customTools: contentProcessTools,
             },
-            runtimeModel: resolvedModelName || "",
+            runtimeModel:
+              resolvedModelName || String(runtime?.runtimeModel || "").trim(),
             maxToolLoopTurns: resolvedMaxToolLoopTurns,
             sharedTools:
               runtime?.sharedTools && typeof runtime.sharedTools === "object"
