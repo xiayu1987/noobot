@@ -7,7 +7,7 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
 export const PLUGIN_NAME = "noobot-plugin-harness";
-export const PLUGIN_VERSION = "4.0.3";
+export const PLUGIN_VERSION = "4.0.4";
 
 export const HARNESS_RUN_STATUS = Object.freeze({
   RUNNING: "running",

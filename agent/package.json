@@ -1,6 +1,6 @@
 {
   "name": "noobot-agent",
-  "version": "4.0.3",
+  "version": "4.0.4",
   "private": true,
   "type": "module",
   "main": "src/index.js",
