@@ -23,6 +23,7 @@ export function mapToAgentContextSchema({
   now = new Date().toISOString(),
   systemMessages = [],
   conversationMessages = [],
+  incrementalMessages = [],
   globalConfig = {},
 } = {}) {
   const runtimeRef = runtime && typeof runtime === "object" ? runtime : {};
@@ -115,6 +116,7 @@ export function mapToAgentContextSchema({
       messages: {
         system: Array.isArray(systemMessages) ? systemMessages : [],
         history: Array.isArray(conversationMessages) ? conversationMessages : [],
+        incremental: Array.isArray(incrementalMessages) ? incrementalMessages : [],
       },
       tools,
     },

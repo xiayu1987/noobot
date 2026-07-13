@@ -5,7 +5,6 @@
  */
 import { computed, nextTick, ref, watch } from "vue";
 import { createChatMessageScrollSync } from "./chatMessageScrollSync";
-import { useMobileChatNavigatorTrigger } from "./useMobileChatNavigatorTrigger";
 import {
   closeChatMessageNavigator,
   openChatMessageNavigator as openChatMessageNavigatorState,
@@ -89,19 +88,6 @@ export function useChatMessageNavigatorPanel({
   }
 
   const {
-    mobileChatNavigatorTriggerStyle,
-    mobileChatNavigatorTriggerDragging,
-    handleMobileChatNavigatorTriggerClick,
-    handleMobileChatNavigatorTriggerPointerDown,
-    handleMobileChatNavigatorTriggerPointerMove,
-    handleMobileChatNavigatorTriggerPointerUp,
-    releaseMobileChatNavigatorTrigger,
-  } = useMobileChatNavigatorTrigger({
-    isMobile,
-    openChatMessageNavigator,
-  });
-
-  const {
     bindChatMessageScrollSync,
     unbindChatMessageScrollSync,
   } = createChatMessageScrollSync({
@@ -137,13 +123,6 @@ export function useChatMessageNavigatorPanel({
     locateDoneMessage,
     openChatMessageNavigator,
     handleMobileChatNavigatorClosed,
-    mobileChatNavigatorTriggerStyle,
-    mobileChatNavigatorTriggerDragging,
-    handleMobileChatNavigatorTriggerClick,
-    handleMobileChatNavigatorTriggerPointerDown,
-    handleMobileChatNavigatorTriggerPointerMove,
-    handleMobileChatNavigatorTriggerPointerUp,
-    releaseMobileChatNavigatorTrigger,
     bindChatMessageScrollSync,
     unbindChatMessageScrollSync,
   };

@@ -387,11 +387,3 @@ export function shouldMarkCurrentTurnSummarizedByPolicy(messageItem = {}) {
   if (role === "tool" || isSystemLikeMessageRole(role)) return true;
   return false;
 }
-
-export function shouldMarkCurrentTurnModelSummarizedByPolicy(messageItem = {}) {
-  const role = resolveMessageRole(messageItem);
-  if (role === "user") return false;
-  if (role === "assistant") return getMessageToolCalls(messageItem).length > 0;
-  if (role === "tool" || isSystemLikeMessageRole(role)) return true;
-  return false;
-}

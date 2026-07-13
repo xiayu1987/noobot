@@ -10,7 +10,6 @@ import {
   getMessageToolCalls,
   isInjectedMessage,
   shouldMarkCurrentTurnSummarizedByPolicy,
-  shouldMarkCurrentTurnModelSummarizedByPolicy,
 } from "./message-context-policy.js";
 
 export const DEFAULT_TASK_SUMMARY_TOOL_NAME = "task_summary";
@@ -145,7 +144,7 @@ export function shouldMarkCurrentTurnSummarizedModelMessage(
 ) {
   if (hasTaskSummaryToolCall(messageItem, { taskSummaryToolName })) return false;
   if (isTaskSummaryToolMessage(messageItem, { taskSummaryToolName })) return false;
-  return shouldMarkCurrentTurnModelSummarizedByPolicy(messageItem);
+  return shouldMarkCurrentTurnSummarizedByPolicy(messageItem);
 }
 
 function shouldPreserveInjectedMessageAtIndex(
@@ -163,7 +162,7 @@ function shouldPreserveInjectedMessageAtIndex(
   return latestIndexes.has(index);
 }
 
-function shouldMarkCurrentTurnSummarizedMessageInScope(
+export function shouldMarkCurrentTurnSummarizedMessageInScope(
   messageItem = {},
   {
     messages = [],
@@ -242,15 +241,17 @@ export function markCurrentTurnModelMessagesSummarized(
   { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
 ) {
   if (!Array.isArray(messages)) return;
+  const latestInjectedIndexes = collectLatestInjectedMessageIndexes(messages);
   const latestTaskSummaryIndexes = collectLatestTaskSummaryMessageIndexes(messages, {
     taskSummaryToolName,
   });
   for (const [index, messageItem] of messages.entries()) {
-    if (isTaskSummaryMessage(messageItem, { taskSummaryToolName })) {
-      if (latestTaskSummaryIndexes.has(index)) continue;
-      if (!shouldMarkCurrentTurnModelSummarizedByPolicy(messageItem)) continue;
-    } else if (
-      !shouldMarkCurrentTurnSummarizedModelMessage(messageItem, {
+    if (
+      !shouldMarkCurrentTurnSummarizedMessageInScope(messageItem, {
+        messages,
+        index,
+        latestInjectedIndexes,
+        latestTaskSummaryIndexes,
         taskSummaryToolName,
       })
     ) {

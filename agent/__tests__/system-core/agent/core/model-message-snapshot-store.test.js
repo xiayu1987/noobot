@@ -12,6 +12,7 @@ import {
   loadStoppedModelMessageSnapshot,
   clearStoppedModelMessageSnapshot,
 } from "../../../../src/system-core/agent/core/resume/model-message-snapshot-store.js";
+import { projectRecoveredMessagesToIdentity } from "../../../../src/system-core/bot-manage/session/turn-execution-preparer.js";
 
 async function createWorkspace() {
   return fs.mkdtemp(path.join(os.tmpdir(), "noobot-stopped-snapshot-"));
@@ -144,6 +145,96 @@ test("stopped model message snapshot v2 preserves ids, summary state, lc metadat
   assert.deepEqual(loaded.messages[0].lc_kwargs.custom, { kept: true });
   assert.deepEqual(loaded.messages[0].noobotBusinessMeta, { kept: true });
   assert.deepEqual(loaded.messages[0].additional_kwargs.attachmentMetas, [{ attachmentId: "att-1" }]);
+});
+
+test("stopped snapshot round trip preserves injected messages by block, order, source, type and round identity", async () => {
+  const workspaceRoot = await createWorkspace();
+  const injected = ({ MessageClass, content, injectedBy, injectedMessageType, dialogProcessId, turnScopeId }) => {
+    const message = new MessageClass({
+      content,
+      additional_kwargs: { injectedMessageType, marker: `${content}-marker` },
+    });
+    message.injectedMessage = true;
+    message.injectedBy = injectedBy;
+    message.injectedMessageType = injectedMessageType;
+    message.dialogProcessId = dialogProcessId;
+    message.turnScopeId = turnScopeId;
+    return message;
+  };
+  const systemInjection = injected({
+    MessageClass: SystemMessage,
+    content: "system injection",
+    injectedBy: "botPlugin",
+    injectedMessageType: "workflow_system_context",
+    dialogProcessId: "dialog-system",
+    turnScopeId: "turn-system",
+  });
+  const historyInjection = injected({
+    MessageClass: HumanMessage,
+    content: "history injection",
+    injectedBy: "harness-plugin",
+    injectedMessageType: "guidance",
+    dialogProcessId: "dialog-history",
+    turnScopeId: "turn-history",
+  });
+  const incrementalInjection = injected({
+    MessageClass: HumanMessage,
+    content: "incremental injection",
+    injectedBy: "harness-plugin",
+    injectedMessageType: "planning",
+    dialogProcessId: "dialog-incremental",
+    turnScopeId: "turn-incremental",
+  });
+
+  await saveStoppedModelMessageSnapshot({
+    globalConfig: { workspaceRoot },
+    identity,
+    messageBlocks: {
+      system: [new SystemMessage("base system"), systemInjection],
+      history: [new HumanMessage("history user"), historyInjection],
+      incremental: [incrementalInjection, new AIMessage("after injection")],
+    },
+  });
+
+  const loaded = await loadStoppedModelMessageSnapshot({ globalConfig: { workspaceRoot }, identity });
+  assert.deepEqual(loaded.messageBlocks.system.map((message) => message.content), ["base system", "system injection"]);
+  assert.deepEqual(loaded.messageBlocks.history.map((message) => message.content), ["history user", "history injection"]);
+  assert.deepEqual(loaded.messageBlocks.incremental.map((message) => message.content), ["incremental injection", "after injection"]);
+
+  const loadedInjections = [
+    loaded.messageBlocks.system[1],
+    loaded.messageBlocks.history[1],
+    loaded.messageBlocks.incremental[0],
+  ];
+  assert.deepEqual(loadedInjections.map((message) => ({
+    injectedMessage: message.injectedMessage,
+    injectedBy: message.injectedBy,
+    injectedMessageType: message.injectedMessageType,
+    dialogProcessId: message.dialogProcessId,
+    turnScopeId: message.turnScopeId,
+    additionalType: message.additional_kwargs.injectedMessageType,
+  })), [
+    { injectedMessage: true, injectedBy: "botPlugin", injectedMessageType: "workflow_system_context", dialogProcessId: "dialog-system", turnScopeId: "turn-system", additionalType: "workflow_system_context" },
+    { injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "guidance", dialogProcessId: "dialog-history", turnScopeId: "turn-history", additionalType: "guidance" },
+    { injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "planning", dialogProcessId: "dialog-incremental", turnScopeId: "turn-incremental", additionalType: "planning" },
+  ]);
+
+  const projectedHistory = projectRecoveredMessagesToIdentity(
+    [...loaded.messageBlocks.history, ...loaded.messageBlocks.incremental],
+    { userName: "admin", sessionId: "session-a", dialogProcessId: "dialog-current", turnScopeId: "turn-current" },
+    { preserveHistoricalRoundIdentity: true, fillMissingHistoricalRoundIdentity: false },
+  );
+  const projectedInjections = projectedHistory.filter((message) => message.injectedMessage === true);
+  assert.deepEqual(projectedInjections.map((message) => [
+    message.content,
+    message.injectedBy,
+    message.injectedMessageType,
+    message.dialogProcessId,
+    message.turnScopeId,
+  ]), [
+    ["history injection", "harness-plugin", "guidance", "dialog-history", "turn-history"],
+    ["incremental injection", "harness-plugin", "planning", "dialog-incremental", "turn-incremental"],
+  ]);
 });
 
 test("stopped model message snapshot validates identity on load", async () => {

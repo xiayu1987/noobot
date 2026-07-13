@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
 import { clientFilePath as path } from "../../../../shared/path-resolver.js";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { mount } from "@vue/test-utils";
+import { defineComponent, h, nextTick, ref } from "vue";
+import { describe, expect, it, vi } from "vitest";
+import AppShellLayout from "../../../src/app/AppShellLayout.vue";
+import AppShellDrawers from "../../../src/app/AppShellDrawers.vue";
+import { openChatMessageNavigator } from "../../../src/app/state/chatMessageNavigatorState.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appShellSource = readFileSync(
@@ -18,14 +23,6 @@ const appShellDrawersSource = readFileSync(
 );
 const chatMessageNavigatorPanelSource = readFileSync(
   path.resolve(__dirname, "../../../src/app/useChatMessageNavigatorPanel.js"),
-  "utf8",
-);
-const mobileChatNavigatorTriggerPositionSource = readFileSync(
-  path.resolve(__dirname, "../../../src/app/mobileChatNavigatorTriggerPosition.js"),
-  "utf8",
-);
-const mobileChatNavigatorTriggerSource = readFileSync(
-  path.resolve(__dirname, "../../../src/app/useMobileChatNavigatorTrigger.js"),
   "utf8",
 );
 const chatMessageScrollSyncSource = readFileSync(
@@ -46,6 +43,104 @@ const chatMessageNavItemsStateSource = readFileSync(
 );
 
 describe("AppShell chat message navigator", () => {
+  it("opens the mobile drawer through a real mounted trigger click", async () => {
+    const pushPseudoRoute = vi.fn();
+    let visibleState;
+    const Harness = defineComponent({
+      setup() {
+        const mobileChatNavigatorVisible = ref(false);
+        visibleState = mobileChatNavigatorVisible;
+        const openNavigator = () => openChatMessageNavigator({
+          mobileChatNavigatorVisible,
+          activeSessionId: ref("session-1"),
+          currentMessageAnchorId: ref("message-1"),
+          chatNavigatorPanel: "chat-navigator",
+          pushPseudoRoute,
+        });
+        return () => h("div", [
+          h(AppShellLayout, {
+            isMobile: true,
+            chatMessageNavItems: [{ id: "message-1", title: "Message 1" }],
+            shouldRenderMessageInChat: () => true,
+            authFetch: vi.fn(),
+            renderMarkdown: String,
+            formatTime: String,
+            formatFileSize: String,
+            isImageMime: () => false,
+            deleteMonotonicMessage: vi.fn(),
+            resendMonotonicMessage: vi.fn(),
+            translate: (key) => key,
+            onMobileChatNavigatorTriggerClick: openNavigator,
+          }),
+          h(AppShellDrawers, {
+            isMobile: true,
+            mobileChatNavigatorVisible: mobileChatNavigatorVisible.value,
+            chatMessageNavItems: [{ id: "message-1", title: "Message 1" }],
+            translate: (key) => key,
+          }),
+        ]);
+      },
+    });
+    const passthroughStub = defineComponent({
+      inheritAttrs: false,
+      setup(_, { attrs, slots }) {
+        return () => h("div", attrs, slots.default?.());
+      },
+    });
+    const wrapper = mount(Harness, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          Teleport: false,
+          "el-button": defineComponent({
+            inheritAttrs: false,
+            emits: ["click"],
+            setup(_, { attrs, emit, slots }) {
+              return () => h("button", { ...attrs, onClick: () => emit("click") }, slots.default?.());
+            },
+          }),
+          "el-drawer": defineComponent({
+            inheritAttrs: false,
+            props: { modelValue: Boolean },
+            setup(props, { attrs, slots }) {
+              return () => h("section", {
+                ...attrs,
+                class: ["el-drawer", attrs.class],
+                "data-visible": String(props.modelValue),
+              }, slots.default?.());
+            },
+          }),
+          "el-icon": passthroughStub,
+          ChatMainHeader: passthroughStub,
+          ChatMessageListPanel: passthroughStub,
+          ChatComposer: passthroughStub,
+          ChatMessageNavigator: passthroughStub,
+          ConversationStateDebugPanel: passthroughStub,
+          SessionSidebar: passthroughStub,
+          UserInteractionForm: passthroughStub,
+        },
+      },
+    });
+
+    const trigger = document.body.querySelector(".mobile-chat-message-nav-trigger");
+    expect(trigger).not.toBeNull();
+    trigger.click();
+    await nextTick();
+
+    expect(pushPseudoRoute).toHaveBeenCalledWith({
+      sessionId: "session-1",
+      panel: "chat-navigator",
+      anchor: "message-1",
+    });
+    expect(visibleState.value).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("connects the mobile trigger to the navigator panel open action", () => {
+    expect(appShellSource).toContain("openChatMessageNavigator,\n  handleMobileChatNavigatorClosed,");
+    expect(appShellSource).toContain('@mobile-chat-navigator-trigger-click="openChatMessageNavigator"');
+  });
+
   it("builds navigator items from active session messages and delegates selection to the message list", () => {
     expect(chatMessageNavigatorPanelSource).toContain("const chatMessageNavItems = computed(() =>");
     expect(chatMessageNavigatorPanelSource).toContain("buildChatMessageNavItems({");
@@ -128,14 +223,11 @@ describe("AppShell chat message navigator", () => {
     expect(appShellLayoutSource).toContain("chat-message-nav-title-group");
     expect(appShellLayoutSource).toContain("{{ chatMessageNavItems.length }}");
     expect(appShellLayoutSource).toContain("position: fixed;");
-    expect(mobileChatNavigatorTriggerPositionSource).toContain(
-      "DEFAULT_MOBILE_CHAT_NAVIGATOR_TRIGGER_POSITION = { right: 16, bottom: 112 }",
-    );
-    expect(appShellLayoutSource).toContain(":style=\"mobileChatNavigatorTriggerStyle\"");
-    expect(appShellLayoutSource).toContain("@pointerdown=\"emit('mobile-chat-navigator-trigger-pointer-down', $event)\"");
-    expect(appShellLayoutSource).toContain("@pointermove=\"emit('mobile-chat-navigator-trigger-pointer-move', $event)\"");
-    expect(appShellLayoutSource).toContain("touch-action: none;");
-    expect(appShellLayoutSource).toContain("overscroll-behavior: none;");
+    expect(appShellLayoutSource).toContain("top: calc(56px + 16px + env(safe-area-inset-top));");
+    expect(appShellLayoutSource).toContain("right: calc(16px + env(safe-area-inset-right));");
+    expect(appShellLayoutSource).not.toContain(":style=\"mobileChatNavigatorTriggerStyle\"");
+    expect(appShellLayoutSource).not.toContain("@pointerdown=");
+    expect(appShellLayoutSource).not.toContain("@pointermove=");
     expect(appShellLayoutSource).toContain(":aria-label=\"translate('common.chatNavigator')\"");
   });
 
@@ -155,47 +247,20 @@ describe("AppShell chat message navigator", () => {
     expect(appShellLayoutSource).toContain("class=\"mobile-chat-message-nav-trigger noobot-floating-action-btn\"");
   });
 
-  it("lets users drag and persist the mobile navigator trigger position", () => {
-    expect(mobileChatNavigatorTriggerSource).toContain("} from \"./mobileChatNavigatorTriggerPosition\";");
-    expect(mobileChatNavigatorTriggerPositionSource).toContain(
-      "function loadMobileChatNavigatorTriggerPosition()",
-    );
-    expect(mobileChatNavigatorTriggerPositionSource).toContain(
-      "noobot_mobile_chat_navigator_trigger_position",
-    );
-    expect(mobileChatNavigatorTriggerPositionSource).toContain(
-      "function clampMobileChatNavigatorTriggerPosition(left, top)",
-    );
-    expect(mobileChatNavigatorTriggerPositionSource).toContain(
-      "function persistMobileChatNavigatorTriggerPosition(position = {})",
-    );
-    expect(mobileChatNavigatorTriggerSource).toContain("function handleMobileChatNavigatorTriggerPointerDown(event)");
-    expect(mobileChatNavigatorTriggerSource).toContain("function handleMobileChatNavigatorTriggerPointerMove(event)");
-    expect(mobileChatNavigatorTriggerSource).toContain("function handleMobileChatNavigatorTriggerPointerUp(event)");
-    expect(mobileChatNavigatorTriggerSource).toContain("function preventMobileChatNavigatorTriggerGesture(event)");
-    expect(mobileChatNavigatorTriggerSource).toContain("if (event?.cancelable) event.preventDefault?.();");
-    expect(mobileChatNavigatorTriggerSource).toContain("function preventMobileChatNavigatorDocumentTouch(event)");
-    expect(mobileChatNavigatorTriggerSource).toContain("function setMobileChatNavigatorDragLock(locked)");
-    expect(mobileChatNavigatorTriggerSource).toContain("window?.addEventListener?.(\"touchmove\", preventMobileChatNavigatorDocumentTouch, { passive: false })");
-    expect(mobileChatNavigatorTriggerSource).toContain("setMobileChatNavigatorDragLock(true)");
-    expect(mobileChatNavigatorTriggerSource).toContain("setMobileChatNavigatorDragLock(false)");
-    expect(mobileChatNavigatorTriggerSource).toContain("function handleMobileChatNavigatorTriggerClick()");
+  it("fixes the mobile navigator trigger below the header at the inset right without drag handlers", () => {
     expect(appShellLayoutSource).toContain("@click=\"emit('mobile-chat-navigator-trigger-click')\"");
-    expect(appShellLayoutSource).toContain("@pointercancel=\"emit('mobile-chat-navigator-trigger-pointer-cancel', $event)\"");
-    expect(mobileChatNavigatorTriggerSource).toContain("openChatMessageNavigator?.();\n  }");
-    expect(appShellLayoutSource).toContain("@touchstart.stop.prevent");
-    expect(appShellLayoutSource).toContain("@touchmove.stop.prevent");
-    expect(appShellLayoutSource).toContain("@touchend.stop.prevent");
-    expect(appShellLayoutSource).toContain("@touchcancel.stop.prevent");
-    expect(appShellLayoutSource).toContain(".mobile-chat-message-nav-trigger.is-dragging");
-    expect(appShellLayoutSource).toContain(":global(html.noobot-mobile-chat-navigator-dragging)");
-    expect(appShellLayoutSource).toContain("overscroll-behavior-y: none;");
-    expect(appShellLayoutSource).toContain("overflow: hidden;");
-    expect(appShellLayoutSource).toContain(".chat-content-body,\n.chat-composer-body {\n  overscroll-behavior: none;");
-    expect(appShellLayoutSource).toContain(".main-content {\n  flex: 1;");
-    expect(appShellLayoutSource).toContain("min-height: 0;\n  overscroll-behavior: none;");
-    expect(appShellLayoutSource).toContain(":global(body.noobot-mobile-chat-navigator-dragging) .main-content");
-    expect(appShellLayoutSource).toContain(":global(body.noobot-mobile-chat-navigator-dragging) .chat-content-body");
+    expect(appShellLayoutSource).toContain("position: fixed;");
+    expect(appShellLayoutSource).toContain("top: calc(56px + 16px + env(safe-area-inset-top));");
+    expect(appShellLayoutSource).toContain("right: calc(16px + env(safe-area-inset-right));");
+    expect(appShellLayoutSource).toContain('<Teleport to="body">');
+    expect(appShellLayoutSource).toContain("z-index: 2001;");
+    expect(appShellLayoutSource).toContain("pointer-events: auto;");
+    expect(appShellLayoutSource.indexOf('class=\"chat-content-body\"')).toBeLessThan(appShellLayoutSource.indexOf('class=\"mobile-chat-message-nav-trigger noobot-floating-action-btn\"'));
+    expect(appShellLayoutSource.indexOf('class=\"mobile-chat-message-nav-trigger noobot-floating-action-btn\"')).toBeLessThan(appShellLayoutSource.indexOf('class=\"chat-composer-body\"'));
+    expect(appShellLayoutSource).not.toContain("@pointercancel=");
+    expect(appShellLayoutSource).not.toContain("@touchstart.stop.prevent");
+    expect(appShellLayoutSource).not.toContain("is-dragging");
+    expect(appShellSource).not.toContain("mobile-chat-navigator-trigger-pointer");
   });
 
 });

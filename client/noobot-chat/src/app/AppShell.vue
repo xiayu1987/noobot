@@ -232,14 +232,8 @@ const {
   currentMessageAnchorId,
   chatMessageNavItems,
   handleSelectChatMessageNavItem,
+  openChatMessageNavigator,
   handleMobileChatNavigatorClosed,
-  mobileChatNavigatorTriggerStyle,
-  mobileChatNavigatorTriggerDragging,
-  handleMobileChatNavigatorTriggerClick,
-  handleMobileChatNavigatorTriggerPointerDown,
-  handleMobileChatNavigatorTriggerPointerMove,
-  handleMobileChatNavigatorTriggerPointerUp,
-  releaseMobileChatNavigatorTrigger,
   unbindChatMessageScrollSync,
 } = chatMessageNavigatorPanel;
 
@@ -405,7 +399,6 @@ async function onAppMounted() {
 function onAppUnmounted() {
   removePseudoRoutePopStateListener();
   unbindChatMessageScrollSync();
-  releaseMobileChatNavigatorTrigger();
   releaseAllPreviewUrls();
 }
 
@@ -472,8 +465,6 @@ const drawerPanels = computed(() =>
       :chat-message-nav-items="chatMessageNavItems"
       :chat-navigator-visible="chatNavigatorVisible"
       :current-message-anchor-id="currentMessageAnchorId"
-      :mobile-chat-navigator-trigger-dragging="mobileChatNavigatorTriggerDragging"
-      :mobile-chat-navigator-trigger-style="mobileChatNavigatorTriggerStyle"
       :input="input"
       :composer-more-panel-visible="composerMorePanelVisible"
       :upload-files="uploadFiles"
@@ -513,11 +504,7 @@ const drawerPanels = computed(() =>
       @open-thinking-details="openThinkingDetailsPanel"
       @toggle-chat-navigator-visible="chatNavigatorVisible = !chatNavigatorVisible"
       @select-chat-message-nav-item="handleSelectChatMessageNavItem"
-      @mobile-chat-navigator-trigger-click="handleMobileChatNavigatorTriggerClick"
-      @mobile-chat-navigator-trigger-pointer-down="handleMobileChatNavigatorTriggerPointerDown"
-      @mobile-chat-navigator-trigger-pointer-move="handleMobileChatNavigatorTriggerPointerMove"
-      @mobile-chat-navigator-trigger-pointer-up="handleMobileChatNavigatorTriggerPointerUp"
-      @mobile-chat-navigator-trigger-pointer-cancel="handleMobileChatNavigatorTriggerPointerUp"
+      @mobile-chat-navigator-trigger-click="openChatMessageNavigator"
       @interaction-confirm="handleInteractionConfirm"
       @interaction-cancel="handleInteractionCancel"
       @update:input="input = $event"
@@ -563,10 +550,6 @@ const drawerPanels = computed(() =>
   overscroll-behavior: none;
 }
 
-:global(body.noobot-mobile-chat-navigator-dragging) .app-shell-root {
-  overscroll-behavior: none;
-  touch-action: none;
-}
 
 :deep(.workspace-drawer .el-tree) {
   --el-tree-node-hover-bg-color: var(--noobot-surface-item-hover);

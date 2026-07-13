@@ -306,7 +306,7 @@ export function buildHumanMessagesForUser(
 function shouldBuildUserMetaForHistoryMessage(
   msg = {},
   runtime = {},
-  { hasDuplicateUserContent = false } = {},
+  { restorableUserMetaKeys = null } = {},
 ) {
   if (resolveMessageRole(msg) !== MESSAGE_ROLE.USER) return false;
   if (String(msg?.messageOrigin || "").trim().toLowerCase() === "internal") return false;
@@ -314,9 +314,12 @@ function shouldBuildUserMetaForHistoryMessage(
   if (msg?.injectedMessage === true || msg?.pluginMessage === true) return false;
   if (String(msg?.injectedMessageType || msg?.injected_message_type || "").trim()) return false;
   if (msg?.frontendUserMessage === true) return true;
-  const hasRoundIdentity = Boolean(String(msg?.turnScopeId || "").trim()) || Boolean(resolveMessageDialogProcessId(msg));
-  if (hasRoundIdentity) return true;
-  return hasDuplicateUserContent;
+  const identityKey = buildUserSourceIdentityKey(msg);
+  if (identityKey && restorableUserMetaKeys?.has?.(identityKey)) return true;
+  // A stopped/resend snapshot may contain legacy real user messages without
+  // the frontend marker. Require the full round identity so injected/internal
+  // messages that merely share a dialog id do not get a derived user_meta.
+  return Boolean(resolveMessageDialogProcessId(msg) && resolveMessageTurnScopeId(msg));
 }
 
 function isDerivedUserMetaMessage(msg = {}, runtime = {}) {
@@ -537,13 +540,6 @@ function buildHistoryMessages({
   const knownHistoryToolCallIds = new Set();
   const restoredUserMetaIndex = buildRestoredUserMetaIndex(effectiveHistoryMessages, runtime);
   const restorableUserMetaKeys = buildRestorableUserMetaKeys(effectiveHistoryMessages, runtime);
-  const userContentCounts = new Map();
-  for (const source of effectiveHistoryMessages) {
-    if (isDerivedUserMetaMessage(source, runtime)) continue;
-    if (resolveMessageRole(source) !== MESSAGE_ROLE.USER) continue;
-    const content = String(source?.content || "");
-    userContentCounts.set(content, (userContentCounts.get(content) || 0) + 1);
-  }
   for (const msg of effectiveHistoryMessages) {
     if (shouldSkipSummarizedHistoryMessage(msg)) continue;
     if (resolveMessageRole(msg) !== MESSAGE_ROLE.ASSISTANT) continue;
@@ -614,9 +610,7 @@ function buildHistoryMessages({
     if (
       includeUserMeta ||
       msg?.frontendUserMessage === true ||
-      shouldBuildUserMetaForHistoryMessage(msg, runtime, {
-        hasDuplicateUserContent: (userContentCounts.get(String(msg?.content || "")) || 0) > 1,
-      })
+      shouldBuildUserMetaForHistoryMessage(msg, runtime, { restorableUserMetaKeys })
     ) {
       history.push(...buildHumanMessagesForUser(runtime, msg, fallbackUserMeta, {
         // Historical metadata is message-scoped. Never fill a historical
@@ -665,6 +659,9 @@ export function buildContextMessageBlocks(
   const rawHistoryMessages = Array.isArray(agentContext?.payload?.messages?.history)
     ? agentContext.payload.messages.history
     : [];
+  const restoredIncrementalMessages = Array.isArray(agentContext?.payload?.messages?.incremental)
+    ? agentContext.payload.messages.incremental
+    : [];
   const currentTurnScopeId = String(
     systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || "",
   ).trim();
@@ -692,24 +689,32 @@ export function buildContextMessageBlocks(
     messages: historyMessages,
   });
   fallbackUserMeta.dialogProcessId = resolvedDialogProcessId;
-  const rawIncrementalMessages = [];
+  const rawIncrementalMessages = [...restoredIncrementalMessages];
   if (normalizedCurrentUserMessage) {
     const currentMessageOrigin = String(systemRuntime?.caller || "user").trim().toLowerCase() === "bot"
       ? "internal"
       : "user";
-    rawIncrementalMessages.push({
-      role: MESSAGE_ROLE.USER,
-      content: normalizedCurrentUserMessage,
-      frontendUserMessage: currentMessageOrigin === "user",
-      messageOrigin: currentMessageOrigin,
-      userName: fallbackUserMeta.userName,
-      attachments: fallbackUserMeta.attachments,
-      sessionId: fallbackUserMeta.sessionId,
-      parentSessionId: fallbackUserMeta.parentSessionId,
-      dialogProcessId: fallbackUserMeta.dialogProcessId,
-      parentDialogProcessId: fallbackUserMeta.parentDialogProcessId,
-      turnScopeId: currentTurnScopeId,
-    });
+    const currentAlreadyInIncremental = rawIncrementalMessages.some((msg = {}) =>
+      resolveMessageRole(msg) === MESSAGE_ROLE.USER &&
+        String(msg?.content || "").trim() === normalizedCurrentUserMessage &&
+        resolveMessageDialogProcessId(msg) === fallbackUserMeta.dialogProcessId &&
+        resolveMessageTurnScopeId(msg) === currentTurnScopeId
+    );
+    if (!currentAlreadyInIncremental) {
+      rawIncrementalMessages.push({
+        role: MESSAGE_ROLE.USER,
+        content: normalizedCurrentUserMessage,
+        frontendUserMessage: currentMessageOrigin === "user",
+        messageOrigin: currentMessageOrigin,
+        userName: fallbackUserMeta.userName,
+        attachments: fallbackUserMeta.attachments,
+        sessionId: fallbackUserMeta.sessionId,
+        parentSessionId: fallbackUserMeta.parentSessionId,
+        dialogProcessId: fallbackUserMeta.dialogProcessId,
+        parentDialogProcessId: fallbackUserMeta.parentDialogProcessId,
+        turnScopeId: currentTurnScopeId,
+      });
+    }
   }
 
   const resolvedMainBlocks = resolveMainModelFinalMessages({

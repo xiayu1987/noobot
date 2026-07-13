@@ -285,14 +285,20 @@ test("buildContextMessageBlocks splits system/history/incremental and preserves 
   assert.equal(Array.isArray(blocks.history), true);
   assert.equal(Array.isArray(blocks.incremental), true);
   assert.equal(blocks.system.length, 1);
-  assert.equal(blocks.history.length, 3);
+  // The history user carries only a dialogProcessId (no turnScopeId, no
+  // frontendUserMessage, no restorable snapshot user_meta), so it is not a
+  // real frontend user turn and must not gain a derived user_meta.
+  assert.equal(blocks.history.length, 2);
   assert.equal(blocks.incremental.length, 2);
-  assert.equal(blocks.messages.length, 6);
+  assert.equal(blocks.messages.length, 5);
   assert.equal(blocks.messages[0]?.content, "sys-1");
   assert.equal(blocks.messages[1]?.content, "h-u");
-  assert.equal(blocks.messages[2]?.additional_kwargs?.noobotInternalMessageType, "user_meta");
-  assert.equal(blocks.messages[3]?.content, "h-1");
-  assert.equal(blocks.messages[4]?.content, "u-1");
+  assert.equal(blocks.messages[2]?.content, "h-1");
+  assert.equal(blocks.messages[3]?.content, "u-1");
+  assert.equal(
+    blocks.messages[4]?.additional_kwargs?.noobotInternalMessageType,
+    "user_meta",
+  );
 });
 
 test("buildContextMessageBlocks appends resume user message meta with attachments", () => {
@@ -671,7 +677,7 @@ test("buildContextMessageBlocks builds user_meta with source info for historical
   ]);
 });
 
-test("buildContextMessageBlocks rebuilds metadata for historical user with partial round identity", () => {
+test("buildContextMessageBlocks does not infer frontend user metadata from round identity", () => {
   const blocks = buildContextMessageBlocks({
     execution: { controllers: { runtime: { userId: "u1", systemRuntime: { sessionId: "s1" } } } },
     payload: {
@@ -685,15 +691,10 @@ test("buildContextMessageBlocks rebuilds metadata for historical user with parti
     },
   });
 
-  assert.equal(blocks.history.length, 3);
+  assert.equal(blocks.history.length, 2);
   assert.equal(blocks.history[0]?.content, "无附件历史");
   assert.equal(blocks.history[0]?.additional_kwargs?.noobotInternalMessageType, undefined);
-  assert.equal(blocks.history[1]?.additional_kwargs?.noobotInternalMessageType, "user_meta");
-  const meta = JSON.parse(String(blocks.history[1]?.content || "{}").match(/\{[\s\S]*\}/)?.[0] || "{}");
-  assert.equal(meta.dialogProcessId, "dlg-plain");
-  assert.equal(meta.sessionId, "");
-  assert.equal(meta.attachments.length, 0);
-  assert.equal(blocks.history[2]?.content, "普通回答");
+  assert.equal(blocks.history[1]?.content, "普通回答");
 });
 
 test("buildContextMessageBlocks keeps previous history rounds with same user text", () => {

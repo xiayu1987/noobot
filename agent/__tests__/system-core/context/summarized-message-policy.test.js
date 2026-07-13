@@ -4,9 +4,11 @@ import {
   filterSummarizedMessages,
   markCurrentTurnArraySummarized,
   markCurrentTurnModelMessagesSummarized,
+  markCurrentTurnStoreSummarized,
   shouldMarkCurrentTurnSummarizedMessage,
   shouldMarkCurrentTurnSummarizedModelMessage,
 } from "../../../src/system-core/context/session/summarized-message-policy.js";
+import { createCurrentTurnMessagesStore } from "../../../src/system-core/context/session/current-turn-store.js";
 
 test("markCurrentTurnArraySummarized preserves only latest task_summary call and result", () => {
   const oldAssistantMessage = {
@@ -92,6 +94,59 @@ test("non-summary empty assistant tool_call can be summarized with its tool resu
 
   assert.equal(shouldMarkCurrentTurnSummarizedMessage(assistantMessage), true);
   assert.equal(shouldMarkCurrentTurnSummarizedMessage(toolMessage), true);
+});
+
+test("summarization includes every restored incremental tool call and result without duplication", () => {
+  const restoredIncremental = [
+    {
+      type: "ai",
+      content: "",
+      tool_calls: [{ id: "call_search", name: "search", args: {}, type: "tool_call" }],
+      lc_kwargs: {},
+    },
+    {
+      type: "tool",
+      content: "search-result",
+      tool_call_id: "call_search",
+      toolName: "search",
+      lc_kwargs: {},
+    },
+    {
+      type: "ai",
+      content: "",
+      tool_calls: [{ id: "call_read", name: "read_file", args: {}, type: "tool_call" }],
+      lc_kwargs: {},
+    },
+    {
+      type: "tool",
+      content: "read-result",
+      tool_call_id: "call_read",
+      toolName: "read_file",
+      lc_kwargs: {},
+    },
+  ];
+  const latestSummaryCall = {
+    type: "ai",
+    content: "",
+    tool_calls: [{ id: "call_summary", name: "task_summary", args: {}, type: "tool_call" }],
+    lc_kwargs: {},
+  };
+  const messages = [
+    { type: "human", content: "restored task", lc_kwargs: {} },
+    ...restoredIncremental,
+    latestSummaryCall,
+  ];
+
+  markCurrentTurnModelMessagesSummarized(messages);
+
+  assert.equal(messages.length, 6);
+  assert.deepEqual(
+    messages.slice(1, 5).map((message) => message.tool_call_id || message.tool_calls?.[0]?.id),
+    ["call_search", "call_search", "call_read", "call_read"],
+  );
+  assert.ok(messages.slice(1, 5).every((message) => message.summarized === true));
+  assert.ok(messages.slice(1, 5).every((message) => message.lc_kwargs.summarized === true));
+  assert.equal(latestSummaryCall.summarized, undefined);
 });
 
 test("LangChain AIMessage-like task_summary tool_call is not marked summarized", () => {
@@ -221,6 +276,48 @@ test("markCurrentTurnArraySummarized preserves only latest injected message per 
   assert.equal(result[0].summarized, true);
   assert.equal(result[1].summarized, undefined);
   assert.equal(result[2].summarized, undefined);
+});
+
+test("markCurrentTurnModelMessagesSummarized includes restored old injections and preserves latest per type", () => {
+  const messages = [
+    { type: "human", content: "old guidance", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "guidance", lc_kwargs: {} },
+    { type: "human", content: "planning", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "planning", lc_kwargs: {} },
+    { type: "human", content: "new guidance", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "guidance", lc_kwargs: {} },
+    { type: "ai", content: "", tool_calls: [{ id: "call_summary", name: "task_summary", args: {}, type: "tool_call" }], lc_kwargs: {} },
+  ];
+
+  markCurrentTurnModelMessagesSummarized(messages);
+
+  assert.equal(messages[0].summarized, true);
+  assert.equal(messages[0].lc_kwargs.summarized, true);
+  assert.equal(messages[1].summarized, undefined);
+  assert.equal(messages[2].summarized, undefined);
+  assert.equal(messages[3].summarized, undefined);
+});
+
+test("model and store projections apply one summarization scope policy", () => {
+  const source = [
+    { role: "user", content: "old guidance", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "guidance", lc_kwargs: {} },
+    { role: "assistant", content: "", tool_calls: [{ id: "call_search", function: { name: "search", arguments: "{}" } }], lc_kwargs: {} },
+    { role: "tool", content: "search-result", tool_call_id: "call_search", toolName: "search", lc_kwargs: {} },
+    { role: "user", content: "new guidance", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "guidance", lc_kwargs: {} },
+    { role: "assistant", content: "", tool_calls: [{ id: "call_summary", function: { name: "task_summary", arguments: "{}" } }], lc_kwargs: {} },
+    { role: "tool", content: JSON.stringify({ toolName: "task_summary", ok: true }), tool_call_id: "call_summary", toolName: "task_summary", lc_kwargs: {} },
+  ];
+  const modelMessages = structuredClone(source);
+  const store = createCurrentTurnMessagesStore(structuredClone(source));
+
+  markCurrentTurnModelMessagesSummarized(modelMessages);
+  markCurrentTurnStoreSummarized(store);
+
+  assert.deepEqual(
+    modelMessages.map((message) => message.summarized === true),
+    store.toArray().map((message) => message.summarized === true),
+  );
+  assert.deepEqual(
+    modelMessages.map((message) => message.summarized === true),
+    [true, true, true, false, false, false],
+  );
 });
 
 test("filterSummarizedMessages keeps latest injected message for each injected type", () => {

@@ -46,8 +46,6 @@ defineProps({
   chatMessageNavItems: { type: Array, default: () => [] },
   chatNavigatorVisible: { type: Boolean, default: true },
   currentMessageAnchorId: { type: String, default: "" },
-  mobileChatNavigatorTriggerDragging: { type: Boolean, default: false },
-  mobileChatNavigatorTriggerStyle: { type: Object, default: () => ({}) },
   input: { type: String, default: "" },
   composerMorePanelVisible: { type: Boolean, default: false },
   uploadFiles: { type: Array, default: () => [] },
@@ -81,10 +79,6 @@ const emit = defineEmits([
   "delete-session",
   "rename-session",
   "mobile-chat-navigator-trigger-click",
-  "mobile-chat-navigator-trigger-pointer-cancel",
-  "mobile-chat-navigator-trigger-pointer-down",
-  "mobile-chat-navigator-trigger-pointer-move",
-  "mobile-chat-navigator-trigger-pointer-up",
   "new-session",
   "open-config-params",
   "open-openvscode",
@@ -236,28 +230,21 @@ defineExpose({
           </el-affix>
         </aside>
 
+      </div>
+
+      <Teleport to="body">
         <el-button
           v-if="isMobile && chatMessageNavItems.length"
           class="mobile-chat-message-nav-trigger noobot-floating-action-btn"
-          :class="{ 'is-dragging': mobileChatNavigatorTriggerDragging }"
-          :style="mobileChatNavigatorTriggerStyle"
           type="primary"
           circle
           size="large"
           :aria-label="translate('common.chatNavigator')"
           @click="emit('mobile-chat-navigator-trigger-click')"
-          @pointerdown="emit('mobile-chat-navigator-trigger-pointer-down', $event)"
-          @pointermove="emit('mobile-chat-navigator-trigger-pointer-move', $event)"
-          @pointerup="emit('mobile-chat-navigator-trigger-pointer-up', $event)"
-          @pointercancel="emit('mobile-chat-navigator-trigger-pointer-cancel', $event)"
-          @touchstart.stop.prevent
-          @touchmove.stop.prevent
-          @touchend.stop.prevent
-          @touchcancel.stop.prevent
         >
           <el-icon class="mobile-chat-message-nav-trigger-icon"><Tickets /></el-icon>
         </el-button>
-      </div>
+      </Teleport>
 
       <div
         class="chat-composer-body"
@@ -462,35 +449,13 @@ defineExpose({
 
 .mobile-chat-message-nav-trigger {
   position: fixed;
-  z-index: 16;
+  top: calc(56px + 16px + env(safe-area-inset-top));
+  right: calc(16px + env(safe-area-inset-right));
+  z-index: 2001;
   width: 44px;
   height: 44px;
-  touch-action: none;
-  overscroll-behavior: none;
-  cursor: grab;
+  pointer-events: auto;
   user-select: none;
-}
-
-.mobile-chat-message-nav-trigger.is-dragging {
-  cursor: grabbing;
-  opacity: 0.92;
-}
-
-:global(html.noobot-mobile-chat-navigator-dragging),
-:global(body.noobot-mobile-chat-navigator-dragging) {
-  overscroll-behavior-y: none;
-  touch-action: none;
-}
-
-:global(body.noobot-mobile-chat-navigator-dragging) {
-  overflow: hidden;
-}
-
-:global(body.noobot-mobile-chat-navigator-dragging) .chat-page,
-:global(body.noobot-mobile-chat-navigator-dragging) .main-content,
-:global(body.noobot-mobile-chat-navigator-dragging) .chat-content-body {
-  overscroll-behavior: none;
-  touch-action: none;
 }
 
 .mobile-chat-message-nav-trigger-icon {
