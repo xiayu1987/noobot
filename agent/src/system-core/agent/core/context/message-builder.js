@@ -710,7 +710,6 @@ export function buildContextMessageBlocks(
       : "user";
     const currentAlreadyInIncremental = rawIncrementalMessages.some((msg = {}) =>
       resolveMessageRole(msg) === MESSAGE_ROLE.USER &&
-        String(msg?.content || "").trim() === normalizedCurrentUserMessage &&
         resolveMessageDialogProcessId(msg) === fallbackUserMeta.dialogProcessId &&
         resolveMessageTurnScopeId(msg) === currentTurnScopeId
     );

@@ -86,7 +86,7 @@ function isAbortLikeError(error = {}) {
 function isTransientLlmError(error = {}) {
   if (isAbortLikeError(error)) return false;
   const status = getLlmErrorStatus(error);
-  if ([408, 409, 429, 500, 502, 503, 504].includes(status)) return true;
+  if ([400, 408, 409, 429, 500, 502, 503, 504].includes(status)) return true;
   const message = String(error?.message || "").toLowerCase();
   return (
     message.includes("internal server error") ||
@@ -183,7 +183,7 @@ function resolveRuntimeErrorContext(modelState = {}) {
 
 /**
  * Invokes the LLM with transient retry logic.
- * Retries up to TRANSIENT_LLM_MAX_ATTEMPTS times for transient errors
+ * Attempts up to TRANSIENT_LLM_MAX_ATTEMPTS times for transient errors
  * when no tokens have been streamed yet.
  */
 export async function invokeLlmWithTransientRetry({
