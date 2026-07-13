@@ -98,7 +98,7 @@ test("model-context rules 1.2: historyMessages keeps non-system unsummarized mes
   );
 });
 
-test("model-context rules 1.2: historyMessages ignores messages without dialogProcessId", () => {
+test("model-context rules 1.2: historyMessages preserves legacy messages without dialogProcessId", () => {
   const result = resolveMainModelHistoryMessages({
     sourceMessages: [
       { role: "user", content: "legacy-u1" },
@@ -109,6 +109,7 @@ test("model-context rules 1.2: historyMessages ignores messages without dialogPr
   });
 
   assert.deepEqual(contents(result), [
+    "legacy-u1", "legacy-a1", "legacy-u2", "legacy-a2",
   ]);
 });
 

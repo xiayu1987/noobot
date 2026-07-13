@@ -10,6 +10,10 @@ const navigatorSource = readFileSync(
 );
 
 describe("ChatMessageNavigator theme colors", () => {
+  it("disables hover details on mobile", () => {
+    expect(navigatorSource).toContain(':disabled="isMobile"');
+  });
+
   it("uses theme-aware el-anchor container colors", () => {
     expect(navigatorSource).toContain("class=\"chat-message-navigator noobot-surface-card\"");
     expect(navigatorSource).toContain(":marker=\"false\"");

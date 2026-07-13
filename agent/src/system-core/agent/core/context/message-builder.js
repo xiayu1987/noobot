@@ -168,6 +168,10 @@ function resolveAttachments(msg = {}, fallbackAttachments = []) {
   );
   if (transferAttachments.length) return transferAttachments;
   if (Array.isArray(msg?.attachments)) return msg.attachments;
+  if (Array.isArray(msg?.additional_kwargs?.attachments)) return msg.additional_kwargs.attachments;
+  if (Array.isArray(msg?.lc_kwargs?.additional_kwargs?.attachments)) {
+    return msg.lc_kwargs.additional_kwargs.attachments;
+  }
   return Array.isArray(fallbackAttachments) ? fallbackAttachments : [];
 }
 
@@ -187,7 +191,6 @@ function buildUserMetaAttachmentInfo(attachmentItem = {}) {
   const size = Number(attachmentItem?.size);
   return {
     attachmentId: String(attachmentItem?.attachmentId || "").trim(),
-    clientAttachmentId: String(attachmentItem?.clientAttachmentId || "").trim(),
     name: String(attachmentItem?.name || "").trim(),
     mimeType: String(attachmentItem?.mimeType || "").trim(),
     attachmentSource: String(attachmentItem?.attachmentSource || "").trim(),
@@ -201,6 +204,9 @@ function buildUserMetaAttachmentInfo(attachmentItem = {}) {
     parsedResultName: String(attachmentItem?.parsedResultName || "").trim(),
     parsedResultAttachmentId: String(attachmentItem?.parsedResultAttachmentId || "").trim(),
     transferFilePath: String(attachmentItem?.transferFilePath || "").trim(),
+    ...(String(attachmentItem?.clientAttachmentId || "").trim()
+      ? { clientAttachmentId: String(attachmentItem.clientAttachmentId).trim() }
+      : {}),
     ...(Number.isFinite(size) ? { size } : {}),
     ...(typeof attachmentItem?.isSandbox === "boolean" ? { isSandbox: attachmentItem.isSandbox } : {}),
     ...(parsedResult ? { parsedResult } : {}),
@@ -214,13 +220,15 @@ function buildUserMetaInfoContent(
   {
     allowFallbackAttachments = true,
     allowFallbackIdentity = true,
+    allowMessageAttachments = true,
+    allowFallbackRoundIdentity = true,
   } = {},
 ) {
   const identityFallback = allowFallbackIdentity ? fallbackMeta : {};
   const fallbackAttachments = allowFallbackAttachments
     ? resolveFallbackAttachments(fallbackMeta)
     : [];
-  const attachments = resolveAttachments(msg, fallbackAttachments);
+  const attachments = allowMessageAttachments ? resolveAttachments(msg, fallbackAttachments) : [];
   const fallbackParentSessionId = resolveParentSessionId({
     runtime,
     parentSessionId: identityFallback?.parentSessionId,
@@ -234,13 +242,17 @@ function buildUserMetaInfoContent(
       : fallbackParentSessionId,
     dialogProcessId:
       resolveMessageDialogProcessId(msg) ||
-      resolveDialogProcessIdFromContext({
-        dialogProcessId: identityFallback?.dialogProcessId,
-      }),
+      (allowFallbackRoundIdentity
+        ? resolveDialogProcessIdFromContext({
+            dialogProcessId: identityFallback?.dialogProcessId,
+          })
+        : ""),
     parentDialogProcessId: String(
       msg?.parentDialogProcessId || identityFallback?.parentDialogProcessId || "",
     ).trim(),
-    turnScopeId: String(msg?.turnScopeId || identityFallback?.turnScopeId || "").trim(),
+    turnScopeId: String(
+      msg?.turnScopeId || (allowFallbackRoundIdentity ? identityFallback?.turnScopeId : "") || "",
+    ).trim(),
     attachments: attachments.map((attachmentItem) => buildUserMetaAttachmentInfo(attachmentItem)),
   };
   const userMetaTag = tEngine(runtime, "agent.userMetaTag");
@@ -254,6 +266,8 @@ export function buildHumanMessagesForUser(
   {
     allowFallbackAttachments = true,
     allowFallbackIdentity = true,
+    allowMessageAttachments = true,
+    allowFallbackRoundIdentity = true,
   } = {},
 ) {
   const contentText = buildHumanMessageContent(
@@ -278,6 +292,8 @@ export function buildHumanMessagesForUser(
     content: buildUserMetaInfoContent(runtime, msg, fallbackMeta, {
       allowFallbackAttachments,
       allowFallbackIdentity,
+      allowMessageAttachments,
+      allowFallbackRoundIdentity,
     }),
     additional_kwargs: {
       ...identityKwargs,
@@ -287,21 +303,20 @@ export function buildHumanMessagesForUser(
   return [contentMessage, metaMessage];
 }
 
-function shouldBuildUserMetaForHistoryMessage(msg = {}) {
+function shouldBuildUserMetaForHistoryMessage(
+  msg = {},
+  runtime = {},
+  { hasDuplicateUserContent = false } = {},
+) {
   if (resolveMessageRole(msg) !== MESSAGE_ROLE.USER) return false;
   if (String(msg?.messageOrigin || "").trim().toLowerCase() === "internal") return false;
   if (msg?.phaseSummaryMemory === true) return false;
   if (msg?.injectedMessage === true || msg?.pluginMessage === true) return false;
   if (String(msg?.injectedMessageType || msg?.injected_message_type || "").trim()) return false;
-  // Older persisted frontend messages predate frontendUserMessage. A durable
-  // turn identity is sufficient to recognize those messages without treating
-  // internal Agent user messages as frontend input.
-  return (
-    msg?.frontendUserMessage === true ||
-    Boolean(String(msg?.turnScopeId || "").trim()) ||
-    Boolean(resolveMessageDialogProcessId(msg)) ||
-    resolveAttachments(msg, []).length > 0
-  );
+  if (msg?.frontendUserMessage === true) return true;
+  const hasRoundIdentity = Boolean(String(msg?.turnScopeId || "").trim()) || Boolean(resolveMessageDialogProcessId(msg));
+  if (hasRoundIdentity) return true;
+  return hasDuplicateUserContent;
 }
 
 function isDerivedUserMetaMessage(msg = {}, runtime = {}) {
@@ -365,6 +380,37 @@ function buildRestoredUserMetaIndex(messages = [], runtime = {}) {
     index.set(key, parsed);
   }
   return index;
+}
+
+function buildRestorableUserMetaKeys(messages = [], runtime = {}) {
+  const metaIndex = buildRestoredUserMetaIndex(messages, runtime);
+  const keys = new Set();
+  for (const msg of Array.isArray(messages) ? messages : []) {
+    if (isDerivedUserMetaMessage(msg, runtime)) continue;
+    if (resolveMessageRole(msg) !== MESSAGE_ROLE.USER) continue;
+    const key = buildUserSourceIdentityKey(msg);
+    if (key && metaIndex.has(key)) keys.add(key);
+  }
+  return keys;
+}
+
+function canRestoreUserMetaProjection(parsedMeta = null, msg = {}, messages = []) {
+  if (!parsedMeta) return false;
+  const dialogProcessId = String(
+    parsedMeta.dialogProcessId || resolveMessageDialogProcessId(msg) || "",
+  ).trim();
+  const turnScopeId = String(
+    parsedMeta.turnScopeId || resolveMessageTurnScopeId(msg) || "",
+  ).trim();
+  if (!dialogProcessId && !turnScopeId) return true;
+  return (Array.isArray(messages) ? messages : []).some((source) => {
+    if (isDerivedUserMetaMessage(source, {})) return false;
+    if (resolveMessageRole(source) !== MESSAGE_ROLE.USER) return false;
+    const sourceDialog = resolveMessageDialogProcessId(source);
+    const sourceTurn = resolveMessageTurnScopeId(source);
+    return (!dialogProcessId || sourceDialog === dialogProcessId) &&
+      (!turnScopeId || sourceTurn === turnScopeId);
+  });
 }
 
 function normalizeRestoredUserSource(msg = {}, restoredUserMetaIndex = new Map()) {
@@ -490,6 +536,14 @@ function buildHistoryMessages({
   const history = [];
   const knownHistoryToolCallIds = new Set();
   const restoredUserMetaIndex = buildRestoredUserMetaIndex(effectiveHistoryMessages, runtime);
+  const restorableUserMetaKeys = buildRestorableUserMetaKeys(effectiveHistoryMessages, runtime);
+  const userContentCounts = new Map();
+  for (const source of effectiveHistoryMessages) {
+    if (isDerivedUserMetaMessage(source, runtime)) continue;
+    if (resolveMessageRole(source) !== MESSAGE_ROLE.USER) continue;
+    const content = String(source?.content || "");
+    userContentCounts.set(content, (userContentCounts.get(content) || 0) + 1);
+  }
   for (const msg of effectiveHistoryMessages) {
     if (shouldSkipSummarizedHistoryMessage(msg)) continue;
     if (resolveMessageRole(msg) !== MESSAGE_ROLE.ASSISTANT) continue;
@@ -560,13 +614,16 @@ function buildHistoryMessages({
     if (
       includeUserMeta ||
       msg?.frontendUserMessage === true ||
-      shouldBuildUserMetaForHistoryMessage(msg)
+      shouldBuildUserMetaForHistoryMessage(msg, runtime, {
+        hasDuplicateUserContent: (userContentCounts.get(String(msg?.content || "")) || 0) > 1,
+      })
     ) {
       history.push(...buildHumanMessagesForUser(runtime, msg, fallbackUserMeta, {
         // Historical metadata is message-scoped. Never fill a historical
         // message with the current request's identity or attachments.
         allowFallbackAttachments: false,
         allowFallbackIdentity: false,
+        allowFallbackRoundIdentity: false,
       }));
     } else {
       history.push(
@@ -605,32 +662,24 @@ export function buildContextMessageBlocks(
   const systemMessages = Array.isArray(agentContext?.payload?.messages?.system)
     ? agentContext.payload.messages.system
     : [];
-  const resumedStoppedSnapshotMessageBlocks =
-    runtime?.resumeFromStoppedSnapshot === true &&
-    runtime?.resumedStoppedSnapshotMessageBlocks &&
-    typeof runtime.resumedStoppedSnapshotMessageBlocks === "object" &&
-    !Array.isArray(runtime.resumedStoppedSnapshotMessageBlocks)
-      ? runtime.resumedStoppedSnapshotMessageBlocks
-      : null;
   const rawHistoryMessages = Array.isArray(agentContext?.payload?.messages?.history)
     ? agentContext.payload.messages.history
-    : [];
-  const rawResumedSnapshotIncrementalMessages = Array.isArray(
-    resumedStoppedSnapshotMessageBlocks?.incremental,
-  )
-    ? resumedStoppedSnapshotMessageBlocks.incremental
     : [];
   const currentTurnScopeId = String(
     systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || "",
   ).trim();
   fallbackUserMeta.turnScopeId = currentTurnScopeId;
-  const historyMessages = filterCurrentTurnUserMessageFromHistory(
-    normalizeUnpairedTaskSummaryToolResults(rawHistoryMessages),
-    {
-      turnScopeId: currentTurnScopeId,
-      currentDialogProcessId: systemRuntime?.dialogProcessId,
-    },
-  );
+  const normalizedCurrentUserMessage = String(currentUserMessage || "").trim();
+  const normalizedHistoryMessages = normalizeUnpairedTaskSummaryToolResults(rawHistoryMessages);
+  const historyMessages = normalizedCurrentUserMessage
+    ? filterCurrentTurnUserMessageFromHistory(
+        normalizedHistoryMessages,
+        {
+          turnScopeId: currentTurnScopeId,
+          currentDialogProcessId: systemRuntime?.dialogProcessId,
+        },
+      )
+    : normalizedHistoryMessages;
   const resolvedDialogProcessId = resolveDialogProcessId({
     ctx: {
       agentContext: {
@@ -644,7 +693,6 @@ export function buildContextMessageBlocks(
   });
   fallbackUserMeta.dialogProcessId = resolvedDialogProcessId;
   const rawIncrementalMessages = [];
-  const normalizedCurrentUserMessage = String(currentUserMessage || "").trim();
   if (normalizedCurrentUserMessage) {
     const currentMessageOrigin = String(systemRuntime?.caller || "user").trim().toLowerCase() === "bot"
       ? "internal"
@@ -667,10 +715,7 @@ export function buildContextMessageBlocks(
   const resolvedMainBlocks = resolveMainModelFinalMessages({
     systemMessages,
     historyMessages,
-    incrementalMessages: [
-      ...rawResumedSnapshotIncrementalMessages,
-      ...rawIncrementalMessages,
-    ],
+    incrementalMessages: rawIncrementalMessages,
   });
 
   const system = [];
@@ -691,25 +736,14 @@ export function buildContextMessageBlocks(
     includeUserMeta: false,
   });
   const incremental = [];
-  const restoredSnapshotIncrementalMessages = resolvedMainBlocks.incremental.filter((msg) =>
-    rawResumedSnapshotIncrementalMessages.includes(msg),
-  );
-  if (restoredSnapshotIncrementalMessages.length) {
-    incremental.push(
-      ...buildHistoryMessages({
-        effectiveHistoryMessages: restoredSnapshotIncrementalMessages,
-        runtime,
-        fallbackUserMeta,
-        includeUserMeta: false,
-      }),
-    );
-  }
   for (const msg of resolvedMainBlocks.incremental) {
-    if (rawResumedSnapshotIncrementalMessages.includes(msg)) continue;
     const role = resolveMessageRole(msg);
     if (role === MESSAGE_ROLE.USER || msg?.frontendUserMessage === true) {
-      if (shouldBuildUserMetaForHistoryMessage(msg)) {
-        incremental.push(...buildHumanMessagesForUser(runtime, msg, fallbackUserMeta));
+      if (shouldBuildUserMetaForHistoryMessage(msg, runtime)) {
+        incremental.push(...buildHumanMessagesForUser(runtime, msg, fallbackUserMeta, {
+          allowFallbackAttachments: false,
+          allowMessageAttachments: true,
+        }));
       } else {
         incremental.push(
           new HumanMessage({

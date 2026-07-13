@@ -230,6 +230,7 @@ defineExpose({
               v-show="chatNavigatorVisible"
               :items="chatMessageNavItems"
               :current-id="currentMessageAnchorId"
+              :is-mobile="isMobile"
               @select="emit('select-chat-message-nav-item', $event)"
             />
           </el-affix>

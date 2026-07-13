@@ -10,6 +10,7 @@ import { useLocale } from "../shared/i18n/useLocale";
 const props = defineProps({
   items: { type: Array, default: () => [] },
   currentId: { type: String, default: "" },
+  isMobile: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(["select"]);
@@ -55,6 +56,7 @@ watch(
     >
       <el-popover
         trigger="hover"
+        :disabled="isMobile"
         placement="left"
         :width="264"
         :show-after="220"

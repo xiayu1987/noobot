@@ -7,6 +7,8 @@ import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/
 
 import {
   saveStoppedModelMessageSnapshot,
+  saveStoppedModelMessageSnapshotCandidate,
+  syncStoppedModelMessageSnapshotCandidate,
   loadStoppedModelMessageSnapshot,
   clearStoppedModelMessageSnapshot,
 } from "../../../../src/system-core/agent/core/resume/model-message-snapshot-store.js";
@@ -59,6 +61,8 @@ test("stopped model message snapshot keeps message tool calls and tool results",
   assert.deepEqual(loaded.messageBlocks.history.map((item) => item.content), ["old user", "", "tool output"]);
   assert.deepEqual(loaded.messageBlocks.incremental.map((item) => item.content), ["current user"]);
   assert.deepEqual(loaded.messages.map((item) => item.content), ["system prompt", "old user", "", "tool output", "current user"]);
+  assert.deepEqual(loaded.messageBlocks.history.map((item) => item._getType()), ["human", "ai", "tool"]);
+  assert.deepEqual(loaded.messages.map((item) => item._getType()), ["system", "human", "ai", "tool", "human"]);
   const loadedToolCallingAi = loaded.messages.find((item) => item instanceof AIMessage);
   assert.deepEqual(loadedToolCallingAi.tool_calls, [{ id: "call-1", name: "x", args: {} }]);
   assert.deepEqual(loadedToolCallingAi.additional_kwargs.tool_calls, [
@@ -73,6 +77,73 @@ test("stopped model message snapshot keeps message tool calls and tool results",
     () => loadStoppedModelMessageSnapshot({ globalConfig: { workspaceRoot }, identity }),
     /ENOENT/,
   );
+});
+
+test("stopped snapshot candidate sync never persists projected model input as history", async () => {
+  const workspaceRoot = await createWorkspace();
+  const toolCallingAi = new AIMessage({
+    content: "",
+    additional_kwargs: {
+      tool_calls: [{ id: "call-1", type: "function", function: { name: "execute_script", arguments: "{}" } }],
+    },
+  });
+  const toolResult = new ToolMessage({ content: "tool output", tool_call_id: "call-1" });
+  const runtime = {
+    stoppedModelMessageSnapshotCandidate: {
+      ...identity,
+      messages: [new SystemMessage("system prompt"), new HumanMessage("real user"), toolCallingAi, toolResult],
+      messageBlocks: {
+        system: [new SystemMessage("system prompt")],
+        history: [new HumanMessage("real user"), toolCallingAi, toolResult],
+        incremental: [],
+      },
+    },
+  };
+
+  syncStoppedModelMessageSnapshotCandidate(runtime, [
+    new SystemMessage("system prompt"),
+    new HumanMessage("real user"),
+    new HumanMessage("[用户元信息]\n{}\n[/用户元信息]"),
+    new HumanMessage(""),
+    new HumanMessage("tool output"),
+  ]);
+
+  await saveStoppedModelMessageSnapshotCandidate({
+    globalConfig: { workspaceRoot },
+    candidate: runtime.stoppedModelMessageSnapshotCandidate,
+  });
+  const loaded = await loadStoppedModelMessageSnapshot({ globalConfig: { workspaceRoot }, identity });
+
+  assert.deepEqual(loaded.messageBlocks.history.map((item) => item._getType()), ["human", "ai", "tool"]);
+  assert.equal(loaded.messageBlocks.history.filter((item) => String(item.content || "").includes("[用户元信息]")).length, 0);
+  assert.equal(loaded.messageBlocks.history[1] instanceof AIMessage, true);
+  assert.deepEqual(loaded.messageBlocks.history[1].tool_calls, [{ id: "call-1", name: "execute_script", args: {} }]);
+  assert.equal(loaded.messageBlocks.history[2] instanceof ToolMessage, true);
+  assert.equal(loaded.messageBlocks.history[2].tool_call_id, "call-1");
+  assert.deepEqual(loaded.messages.map((item) => item._getType()), ["system", "human", "ai", "tool"]);
+});
+
+test("stopped model message snapshot v2 preserves ids, summary state, lc metadata and arbitrary fields", async () => {
+  const workspaceRoot = await createWorkspace();
+  const message = new HumanMessage({
+    content: "full context",
+    additional_kwargs: { noobotMessageId: "am_full", attachmentMetas: [{ attachmentId: "att-1" }] },
+  });
+  message.summarized = true;
+  message.lc_kwargs = { content: "full context", summarized: true, custom: { kept: true } };
+  message.noobotBusinessMeta = { kept: true };
+  await saveStoppedModelMessageSnapshot({
+    globalConfig: { workspaceRoot }, identity,
+    messageBlocks: { system: [], history: [message], incremental: [] },
+    messages: [message],
+  });
+  const loaded = await loadStoppedModelMessageSnapshot({ globalConfig: { workspaceRoot }, identity });
+  assert.equal(loaded.version, 2);
+  assert.equal(loaded.messages[0].additional_kwargs.noobotMessageId, "am_full");
+  assert.equal(loaded.messages[0].summarized, true);
+  assert.deepEqual(loaded.messages[0].lc_kwargs.custom, { kept: true });
+  assert.deepEqual(loaded.messages[0].noobotBusinessMeta, { kept: true });
+  assert.deepEqual(loaded.messages[0].additional_kwargs.attachmentMetas, [{ attachmentId: "att-1" }]);
 });
 
 test("stopped model message snapshot validates identity on load", async () => {

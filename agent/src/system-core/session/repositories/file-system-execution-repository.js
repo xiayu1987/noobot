@@ -16,11 +16,13 @@ export class FileSystemExecutionRepository {
     pathResolver,
     sessionPathResolver,
     storageService,
+    sessionRepository = null,
     now = () => new Date().toISOString(),
   } = {}) {
     this.pathResolver = pathResolver;
     this.sessionPathResolver = sessionPathResolver;
     this.storageService = storageService;
+    this.sessionRepository = sessionRepository;
     this.now = now;
   }
 
@@ -65,6 +67,7 @@ export class FileSystemExecutionRepository {
   }
 
   async saveBundle(userId, sessionId, executionBundle = {}, parentSessionId = "") {
+    if (await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
     const { sessionDir } = await this._resolveExecutionScope(
       userId,
       sessionId,
@@ -80,9 +83,11 @@ export class FileSystemExecutionRepository {
         updatedAt: this.now(),
       },
     });
+    return true;
   }
 
   async appendLog(userId, sessionId, executionLog = {}, executionBundle = {}, parentSessionId = "") {
+    if (await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
     const { sessionDir } = await this._resolveExecutionScope(
       userId,
       sessionId,
@@ -100,5 +105,6 @@ export class FileSystemExecutionRepository {
       },
       resetExecutionLogs: executionBundle?.resetExecutionLogs === true,
     });
+    return true;
   }
 }

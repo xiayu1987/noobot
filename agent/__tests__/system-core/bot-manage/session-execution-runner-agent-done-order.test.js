@@ -372,7 +372,8 @@ test("runSession persists stopped model message snapshot from runtime candidate 
       turnScopeId: "turn-1",
     },
   });
-  assert.equal(loaded.messages[0].content, "hello");
+  assert.equal(loaded.messages[0].content, "system");
+  assert.equal(loaded.messages.at(-1).content, "hello");
   assert.equal(loaded.messageBlocks.system[0].content, "system");
   const savedEvent = events.find((item) => item.event === "stopped_model_message_snapshot_saved");
   assert.equal(savedEvent?.data?.source, "runner_user_stop_catch");
@@ -387,7 +388,7 @@ test("runSession persists stopped model message snapshot from runtime candidate 
     dialogProcessId: "dialog-1",
     turnScopeId: "turn-1",
   });
-  assert.equal(stoppedEvent?.data?.stoppedSnapshotPersistence?.messageCount, 1);
+  assert.equal(stoppedEvent?.data?.stoppedSnapshotPersistence?.messageCount, 2);
 });
 
 test("runSession persists stopped model message snapshot for plain user_stop error objects", async () => {
@@ -441,7 +442,9 @@ test("runSession persists stopped model message snapshot for plain user_stop err
       turnScopeId: "turn-2",
     },
   });
-  assert.equal(loaded.messages[0].content, "second stop snapshot");
+  assert.equal(loaded.messages[0].content, "system second");
+  assert.equal(loaded.messages[1].content, "previous assistant");
+  assert.equal(loaded.messages.at(-1).content, "second stop snapshot");
   assert.equal(loaded.messageBlocks.system[0].content, "system second");
   const savedEvent = events.find((item) => item.event === "stopped_model_message_snapshot_saved");
   assert.equal(savedEvent?.data?.source, "runner_user_stop_catch");
@@ -512,7 +515,8 @@ test("runSession persists stopped snapshot when abort signal fires before abort 
       turnScopeId: "turn-signal",
     },
   });
-  assert.equal(loaded.messages[0].content, "hello before signal");
+  assert.equal(loaded.messages[0].content, "system");
+  assert.equal(loaded.messages.at(-1).content, "hello before signal");
   const savedEvent = events.find((item) => item.event === "stopped_model_message_snapshot_saved");
   assert.equal(savedEvent?.data?.source, "runner_user_stop_signal");
   const stoppedEvent = findStoppedLifecycleEvent(events);

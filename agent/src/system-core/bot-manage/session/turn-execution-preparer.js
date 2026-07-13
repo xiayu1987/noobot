@@ -126,15 +126,35 @@ export async function prepareStoppedSnapshotResumeTurnExecution(engine, {
     contextBuilder,
     payload,
   });
-  const systemMessages = Array.isArray(snapshot?.messageBlocks?.system)
-    ? snapshot.messageBlocks.system
+  // Keep the persisted block boundary: history retains its landed identity,
+  // while system/incremental belong to the current resumed execution.
+  const systemMessages = Array.isArray(snapshot?.messageBlocks?.system) ? snapshot.messageBlocks.system : [];
+  const historyMessages = Array.isArray(snapshot?.messageBlocks?.history) ? snapshot.messageBlocks.history : [];
+  const incrementalMessages = Array.isArray(snapshot?.messageBlocks?.incremental)
+    ? snapshot.messageBlocks.incremental
     : [];
-  const historyMessages = [
-    ...(Array.isArray(snapshot?.messageBlocks?.history) ? snapshot.messageBlocks.history : []),
-  ];
+  const currentMessageIdentity = {
+    userName: String(payload?.userName || payload?.userId || "").trim(),
+    sessionId: String(payload?.sessionId || "").trim(),
+    parentSessionId: String(payload?.parentSessionId || "").trim(),
+    dialogProcessId: String(payload?.dialogProcessId || "").trim(),
+    parentDialogProcessId: String(payload?.parentDialogProcessId || "").trim(),
+    turnScopeId: String(payload?.turnScopeId || runConfig?.turnScopeId || "").trim(),
+  };
+  const resumedSystemMessages = projectRecoveredMessagesToIdentity(systemMessages, currentMessageIdentity, {
+    preserveHistoricalRoundIdentity: false,
+  });
+  const resumedHistoryMessages = projectRecoveredMessagesToIdentity(historyMessages, currentMessageIdentity, {
+    preserveHistoricalRoundIdentity: true,
+    fillMissingHistoricalRoundIdentity: false,
+  });
+  const resumedIncrementalMessages = projectRecoveredMessagesToIdentity(incrementalMessages, currentMessageIdentity, {
+    preserveHistoricalRoundIdentity: true,
+    fillMissingHistoricalRoundIdentity: false,
+  });
   const agentContext = await contextBuilder._buildAgentContext(
-    systemMessages,
-    historyMessages,
+    resumedSystemMessages,
+    [...resumedHistoryMessages, ...resumedIncrementalMessages],
     {
       dialogProcessId: String(payload?.dialogProcessId || identity.dialogProcessId || "").trim(),
       attachments: userMessageAttachments,
@@ -148,16 +168,49 @@ export async function prepareStoppedSnapshotResumeTurnExecution(engine, {
   const runtime = getRuntimeFromAgentContext(runtimeAgentContext);
   runtime.resumeFromStoppedSnapshot = true;
   runtime.resumedStoppedSnapshotIdentity = identity;
-  runtime.resumedStoppedSnapshotMessageBlocks = {
-    system: Array.isArray(snapshot?.messageBlocks?.system) ? snapshot.messageBlocks.system : [],
-    history: Array.isArray(snapshot?.messageBlocks?.history) ? snapshot.messageBlocks.history : [],
-    incremental: Array.isArray(snapshot?.messageBlocks?.incremental) ? snapshot.messageBlocks.incremental : [],
-  };
   return {
     agentContext: scopedAgentContext,
     runtimeAgentContext,
     userMessageAttachments,
   };
+}
+
+/**
+ * Rebind recovered messages to the current session without destroying their
+ * historical turn identity. dialogProcessId and turnScopeId are also used as
+ * round/deduplication keys, so replacing them with the current turn would make
+ * the restored history look like duplicate incremental input.
+ */
+export function projectRecoveredMessagesToDialog(messages = [], dialogProcessId = "") {
+  return projectRecoveredMessagesToIdentity(messages, { dialogProcessId });
+}
+
+export function projectRecoveredMessagesToIdentity(messages = [], identity = {}, {
+  preserveHistoricalRoundIdentity = true,
+  fillMissingHistoricalRoundIdentity = true,
+} = {}) {
+  const currentIdentity = Object.fromEntries(
+    ["userName", "sessionId", "parentSessionId", "dialogProcessId", "parentDialogProcessId", "turnScopeId"]
+      .map((field) => [field, String(identity?.[field] || "").trim()]),
+  );
+  return (Array.isArray(messages) ? messages : []).map((message) => {
+    if (!message || typeof message !== "object") return message;
+    for (const field of ["userName", "sessionId", "parentSessionId", "parentDialogProcessId"]) {
+      if (currentIdentity[field]) message[field] = currentIdentity[field];
+    }
+    // Preserve existing historical round keys. For restored snapshot history,
+    // absence of dialogProcessId/turnScopeId is meaningful in v2 blocks: adding
+    // the current turn identity would make the entire recovered history look
+    // like duplicate incremental input and the message builder would drop it.
+    const shouldFillMissingRoundIdentity = !preserveHistoricalRoundIdentity || fillMissingHistoricalRoundIdentity;
+    if ((!preserveHistoricalRoundIdentity || (shouldFillMissingRoundIdentity && !String(message.dialogProcessId || "").trim())) && currentIdentity.dialogProcessId) {
+      message.dialogProcessId = currentIdentity.dialogProcessId;
+    }
+    if ((!preserveHistoricalRoundIdentity || (shouldFillMissingRoundIdentity && !String(message.turnScopeId || "").trim())) && currentIdentity.turnScopeId) {
+      message.turnScopeId = currentIdentity.turnScopeId;
+    }
+    return message;
+  });
 }
 
 export async function resolveStoppedResumeAttachments(engine, { contextBuilder = null, payload = {} } = {}) {

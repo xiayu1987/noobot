@@ -51,6 +51,7 @@ import {
 } from "../message-context/context-diagnostics.js";
 import { peekMainFlowFinalNoToolsTurnInstruction } from "../main-flow-control.js";
 import { isResumeInitializingFirstModelTurn } from "../lifecycle/state-machine.js";
+import { syncStoppedModelMessageSnapshotCandidate } from "../resume/model-message-snapshot-store.js";
 export { normalizeToolResultAttachments } from "./tool-result-normalizer.js";
 export {
   buildAssistantModelMessageForToolCalls,
@@ -173,6 +174,7 @@ export async function invokeNoToolsTurn({
       mode: "no_tools",
       invoke: ({ callbacks }) => {
         const modelMessages = filterForModelContext(messages);
+        syncStoppedModelMessageSnapshotCandidate(runtime, modelMessages);
         emitModelContextTrace(runtime, "llm_invoke_messages", {
           turn,
           mode: "no_tools",

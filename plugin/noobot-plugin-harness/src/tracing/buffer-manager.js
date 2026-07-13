@@ -90,12 +90,6 @@ function isStoppedSnapshotResumeInitializingFirstLlmCall(ctx = {}) {
   const runtime = resolveAgentRuntimeFromContext(ctx);
   if (!runtime || runtime.resumeFromStoppedSnapshot !== true) return false;
   if (
-    runtime.resumedStoppedSnapshotMessageBlocks &&
-    typeof runtime.resumedStoppedSnapshotMessageBlocks === "object"
-  ) {
-    return true;
-  }
-  if (
     runtime.resumedStoppedSnapshotIdentity &&
     typeof runtime.resumedStoppedSnapshotIdentity === "object"
   ) {

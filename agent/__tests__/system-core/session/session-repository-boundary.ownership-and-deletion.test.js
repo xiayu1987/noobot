@@ -190,5 +190,46 @@ test("appendTurn should not recreate session after deletion marker is set", asyn
   });
 });
 
+test("task and execution writes should not recreate a deleted session directory", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u1";
+    const sessionId = "deleted-write-barrier";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    const runtime = createSessionServices({ workspaceRoot });
+
+    await runtime.sessionCrudService.ensureSession(userId, sessionId);
+    const scope = await runtime.repositories.sessionRepository.resolveSessionScope(userId, sessionId);
+    await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionId });
+
+    assert.equal(await runtime.repositories.taskRepository.save(userId, sessionId, {
+      taskId: "late-task",
+      taskName: "late task",
+      taskStatus: "start",
+    }), false);
+    assert.equal(await runtime.repositories.fileSystemExecutionRepository.saveBundle(userId, sessionId, {}), false);
+    assert.equal(await runtime.repositories.fileSystemExecutionRepository.appendLog(
+      userId,
+      sessionId,
+      { event: "late-log" },
+    ), false);
+    assert.equal(await exists(scope.sessionDir), false);
+
+    const restartedRuntime = createSessionServices({ workspaceRoot });
+    assert.equal(
+      await restartedRuntime.repositories.sessionRepository.isSessionDeleted(userId, sessionId),
+      true,
+    );
+    assert.equal(
+      await restartedRuntime.repositories.fileSystemExecutionRepository.appendLog(
+        userId,
+        sessionId,
+        { event: "late-log-after-restart" },
+      ),
+      false,
+    );
+    assert.equal(await exists(scope.sessionDir), false);
+  });
+});
+
 
 

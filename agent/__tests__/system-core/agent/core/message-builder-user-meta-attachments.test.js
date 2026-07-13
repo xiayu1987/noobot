@@ -468,8 +468,13 @@ test("buildContextMessages discards restored user_meta projections before rebuil
               dialogProcessId: "dialog-current",
               turnScopeId: "turn-current",
             },
-            resumedStoppedSnapshotMessageBlocks: {
-              incremental: [
+          },
+        },
+      },
+      payload: {
+        messages: {
+          system: [],
+          history: [
                 {
                   role: "user",
                   content: "hello",
@@ -486,12 +491,9 @@ test("buildContextMessages discards restored user_meta projections before rebuil
                   role: "user",
                   content: '[用户元信息]\n{}\n[/用户元信息]',
                 },
-              ],
-            },
-          },
+          ],
         },
       },
-      payload: { messages: { system: [], history: [] } },
     },
     { currentUserMessage: "" },
   );
@@ -517,8 +519,13 @@ test("buildContextMessages restores stopped source attachments by exact turn ide
               dialogProcessId: "dialog-continue",
               turnScopeId: "turn-continue",
             },
-            resumedStoppedSnapshotMessageBlocks: {
-              incremental: [
+          },
+        },
+      },
+      payload: {
+        messages: {
+          system: [],
+          history: [
                 {
                   type: "human",
                   content: "parse attachment",
@@ -537,12 +544,9 @@ test("buildContextMessages restores stopped source attachments by exact turn ide
                     noobotInternalMessageType: "user_meta",
                   },
                 },
-              ],
-            },
-          },
+          ],
         },
       },
-      payload: { messages: { system: [], history: [] } },
     },
     { currentUserMessage: "continue" },
   );

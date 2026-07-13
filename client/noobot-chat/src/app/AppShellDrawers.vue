@@ -55,6 +55,7 @@ const emit = defineEmits([
     <ChatMessageNavigator
       :items="chatMessageNavItems"
       :current-id="currentMessageAnchorId"
+      :is-mobile="isMobile"
       @select="emit('select-chat-message-nav-item', $event)"
     />
   </el-drawer>

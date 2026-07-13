@@ -14,7 +14,7 @@ function createSessionContextService(messages = [], { globalConfig = {} } = {}) 
   });
 }
 
-test("getRecentSessionMessages returns only complete history rounds", async () => {
+test("getRecentSessionMessages preserves legacy history without dialog identity", async () => {
   const messages = [
     {
       role: "assistant",
@@ -42,7 +42,7 @@ test("getRecentSessionMessages returns only complete history rounds", async () =
     sessionId: "s1",
   });
 
-  assert.deepEqual(result, []);
+  assert.deepEqual(result, messages);
 });
 
 test("getRecentSessionMessages keeps explicit dialog group content in original order", async () => {

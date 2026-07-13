@@ -155,6 +155,7 @@ const { translate } = useLocale();
       :active-session-id="activeSessionId"
       :sending="sending"
       :collapsed="sidebarCollapsed && !isMobile"
+      :is-mobile="isMobile"
       @select-session="emit('select-session', $event)"
       @delete-session="emit('delete-session', $event)"
       @rename-session="emit('rename-session', $event)"

@@ -73,6 +73,7 @@ export function createSessionServices(globalConfig = {}, { now = null } = {}) {
     sessionPathResolver,
     storageService,
     normalizeTask: normalizeTaskEntity,
+    sessionRepository,
     now: nowFn,
   });
 
@@ -80,6 +81,7 @@ export function createSessionServices(globalConfig = {}, { now = null } = {}) {
     pathResolver,
     sessionPathResolver,
     storageService,
+    sessionRepository,
     now: nowFn,
   });
 

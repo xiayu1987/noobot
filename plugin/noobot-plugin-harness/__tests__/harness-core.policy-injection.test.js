@@ -193,11 +193,6 @@ test("harness policy prompt is not reinjected after stopped snapshot blocks are 
               dialogProcessId: "dp-stopped",
               turnScopeId: "turn-stopped",
             },
-            resumedStoppedSnapshotMessageBlocks: {
-              system: [{ role: "system", content: existingPolicy }],
-              history: [],
-              incremental: [],
-            },
           },
         },
       },
