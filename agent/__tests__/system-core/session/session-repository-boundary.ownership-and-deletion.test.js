@@ -231,5 +231,31 @@ test("task and execution writes should not recreate a deleted session directory"
   });
 });
 
+test("late execution initialization should not restore a deleted session tree node", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u1";
+    const sessionId = "deleted-tree-node";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    const runtime = createSessionServices({ workspaceRoot });
+
+    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
+    await runtime.sessionCrudService.ensureSession(userId, sessionId);
+    await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionId });
+
+    assert.equal(
+      await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId }),
+      false,
+    );
+    const tree = await runtime.sessionTreeService.getSessionTree({ userId });
+    assert.equal(Boolean(tree.nodes[sessionId]), false);
+    assert.equal(tree.roots.includes(sessionId), false);
+    assert.deepEqual(
+      (await runtime.sessionCrudService.getAllSessionSummaries({ userId }))
+        .map((item) => item.sessionId),
+      [],
+    );
+  });
+});
+
 
 
