@@ -457,10 +457,6 @@ export function createChatWebSocketClient({
           const event = String(parsed?.event || "message");
           const data = parsed?.data || {};
 
-          if (event === StreamEventEnum.ERROR) {
-            throw new Error(data?.error || translateText("infra.reconnectError"));
-          }
-
           if (event === StreamEventEnum.RECONNECT_DATA) {
             trackReconnectData(data);
             onReconnectData(data);

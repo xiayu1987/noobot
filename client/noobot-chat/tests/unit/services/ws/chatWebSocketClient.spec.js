@@ -75,6 +75,35 @@ describe("chatWebSocketClient", () => {
     await reconnectPromise;
   });
 
+  it("delivers replayed errors without rejecting reconnect", async () => {
+    const onReconnectData = vi.fn();
+    const client = createChatWebSocketClient({
+      resolveWebSocketUrl: () => "ws://test",
+    });
+    const reconnectPromise = client.reconnect({
+      currentSessionId: "s-1",
+      userId: "u-1",
+      onReconnectData,
+    });
+    const socket = MockWebSocket.instances[0];
+
+    socket.onopen?.();
+    const errorData = {
+      sessionId: "s-1",
+      dialogProcessId: "dp-failed",
+      seq: 36,
+      error: "failed attempt",
+    };
+    socket.emit(StreamEventEnum.ERROR, errorData);
+    socket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 1, cacheExpired: false });
+
+    await expect(reconnectPromise).resolves.toEqual({ totalSessions: 1, cacheExpired: false });
+    expect(onReconnectData).toHaveBeenCalledWith({
+      event: StreamEventEnum.ERROR,
+      data: errorData,
+    });
+  });
+
   it("scopes stopRequested to the stopped turnScopeId", () => {
     const client = createChatWebSocketClient({
       resolveWebSocketUrl: () => "ws://test",

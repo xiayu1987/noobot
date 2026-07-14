@@ -15,6 +15,7 @@ import {
   ensureHarnessBucket,
   extractRawTextContent,
   translateI18nText,
+  shouldSkipAnalysisForTrailingToolCallContent,
 } from "./deps.js";
 import { isSummaryCompletionMarked } from "../model-response-parser.js";
 import {
@@ -330,6 +331,7 @@ function maybeScheduleGuidanceAnalysis(ctx = {}, meta = {}) {
   if (!holder?.state) return false;
   const state = holder.state;
   if (!state.counters || typeof state.counters !== "object") state.counters = {};
+  if (shouldSkipAnalysisForTrailingToolCallContent(ctx?.messages)) return false;
   if (!isMainPlanReadyForGuidanceAnalysis(holder.bucket, state, meta)) return false;
   if (state.pending?.summary === true) return false;
   if (state.pending?.analysis === true) return false;

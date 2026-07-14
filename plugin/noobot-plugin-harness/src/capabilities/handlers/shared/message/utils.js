@@ -28,6 +28,42 @@ export function extractRawTextContent(input) {
     .trim();
 }
 
+function resolveMessageToolCalls(message = {}) {
+  if (Array.isArray(message?.tool_calls)) return message.tool_calls;
+  if (Array.isArray(message?.toolCalls)) return message.toolCalls;
+  if (Array.isArray(message?.additional_kwargs?.tool_calls)) {
+    return message.additional_kwargs.tool_calls;
+  }
+  if (Array.isArray(message?.lc_kwargs?.tool_calls)) return message.lc_kwargs.tool_calls;
+  return [];
+}
+
+/**
+ * 判断当前轮主流程最后一条模型返回消息是否同时带工具调用且 content 非空。
+ * 从消息序列尾部向前查找最近一条非 harness 注入的 assistant 消息（排期分析时
+ * 序列末尾常为 tool 结果消息），命中则本轮跳过分析排期。
+ * 单一事实源：inject 与 separate_model 两条分析路径共用此守卫。
+ */
+export function shouldSkipAnalysisForTrailingToolCallContent(messages = []) {
+  const items = Array.isArray(messages) ? messages : [];
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const message = items[index];
+    if (!message || typeof message !== "object") continue;
+    if (isHarnessInjectedMessage(message)) continue;
+    const role = String(message?.role || message?.lc_kwargs?.role || "")
+      .trim()
+      .toLowerCase();
+    if (role !== "assistant") continue;
+    const toolCalls = resolveMessageToolCalls(message);
+    if (!toolCalls.length) return false;
+    const content = extractRawTextContent(
+      message?.content ?? message?.lc_kwargs?.content ?? "",
+    );
+    return Boolean(String(content || "").trim());
+  }
+  return false;
+}
+
 export function safeJsonStringify(value = null, space = 2) {
   const seen = new WeakSet();
   try {

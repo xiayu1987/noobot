@@ -24,6 +24,7 @@ import {
   resolveCapabilityModelName,
   resolveCapabilityToolAllowlist,
   translateI18nText,
+  shouldSkipAnalysisForTrailingToolCallContent,
 } from "./deps.js";
 import { isSummaryCompletionMarked } from "../model-response-parser.js";
 import { runPlanningRefinementBySeparateModel } from "../planning/refinement-runner.js";
@@ -72,25 +73,6 @@ import { clearIncrementalCapabilityMessageCacheForContext } from "../shared/mode
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
-
-function shouldSkipAnalysisForTrailingToolCallContent(messages = []) {
-  const items = Array.isArray(messages) ? messages : [];
-  const message = items[items.length - 1];
-  if (!message || typeof message !== "object") return false;
-  const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
-  if (role !== "assistant") return false;
-  const toolCalls = Array.isArray(message?.tool_calls)
-    ? message.tool_calls
-    : Array.isArray(message?.toolCalls)
-      ? message.toolCalls
-      : Array.isArray(message?.additional_kwargs?.tool_calls)
-        ? message.additional_kwargs.tool_calls
-        : Array.isArray(message?.lc_kwargs?.tool_calls)
-          ? message.lc_kwargs.tool_calls
-          : [];
-  if (!toolCalls.length) return false;
-  return Boolean(String(extractRawTextContent(message?.content ?? message?.lc_kwargs?.content ?? "") || "").trim());
-}
 
 function resolveDetailPath(meta = {}) {
   const relativePath = String(meta?.relativePath || "").trim();
