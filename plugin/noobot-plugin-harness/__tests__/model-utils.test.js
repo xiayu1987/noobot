@@ -32,6 +32,12 @@ function protocolMessage(message = {}, key = "") {
   return markMessageAsProtocol(message, key);
 }
 
+function withoutNoScriptConstraint(messages = []) {
+  return messages.filter(
+    (item = {}) => !String(item?.content || "").includes("禁止直接输出可执行脚本或命令"),
+  );
+}
+
 test("resolveCapabilityModelMessages respects empty array from resolver", () => {
   const result = resolveCapabilityModelMessages(
     {
@@ -157,14 +163,16 @@ test("invokeWithReasoningRetry preserves provided messages before invoking capab
   });
 
   assert.equal(response.content, "ok");
-  assert.deepEqual(capturedMessages.map((item) => item.content), ["keep", "drop"]);
+  assert.equal(capturedMessages[0]?.role, "system");
+  assert.match(capturedMessages[0]?.content, /禁止直接输出可执行脚本或命令/);
+  assert.deepEqual(capturedMessages.slice(1).map((item) => item.content), ["keep", "drop"]);
 });
 
 test("invokeWithReasoningRetry reuses previous capability messages and appends current increment", async () => {
   const captured = [];
   const ctx = { sessionId: "incremental-cache-session-1" };
   const invoker = async ({ messages = [] } = {}) => {
-    captured.push(messages.map((item = {}) => item.content));
+    captured.push(withoutNoScriptConstraint(messages).map((item = {}) => item.content));
     return { content: "ok" };
   };
 
@@ -218,7 +226,7 @@ test("incremental capability message cache can be cleared for summary reset", as
   const captured = [];
   const ctx = { sessionId: "incremental-cache-session-2" };
   const invoker = async ({ messages = [] } = {}) => {
-    captured.push(messages.map((item = {}) => item.content));
+    captured.push(withoutNoScriptConstraint(messages).map((item = {}) => item.content));
     return { content: "ok" };
   };
 
@@ -272,7 +280,7 @@ test("incremental capability message cache is cleared when agent turn ends", asy
     },
   };
   const invoker = async ({ messages = [] } = {}) => {
-    captured.push(messages.map((item = {}) => item.content));
+    captured.push(withoutNoScriptConstraint(messages).map((item = {}) => item.content));
     return { content: "ok" };
   };
 
@@ -317,7 +325,7 @@ test("incremental capability message cache keeps purpose lanes isolated", async 
   const captured = [];
   const ctx = { sessionId: "incremental-cache-purpose-isolation" };
   const invoker = async ({ messages = [] } = {}) => {
-    captured.push(messages.map((item = {}) => item.content));
+    captured.push(withoutNoScriptConstraint(messages).map((item = {}) => item.content));
     return { content: "ok" };
   };
 
@@ -350,7 +358,7 @@ test("incremental capability message cache keeps purpose lanes isolated", async 
 test("incremental capability message cache keeps sessions isolated", async () => {
   const captured = [];
   const invoker = async ({ messages = [] } = {}) => {
-    captured.push(messages.map((item = {}) => item.content));
+    captured.push(withoutNoScriptConstraint(messages).map((item = {}) => item.content));
     return { content: "ok" };
   };
 
@@ -384,7 +392,7 @@ test("incremental capability message cache keeps sessions isolated", async () =>
 test("incremental capability message cache is disabled when session id is missing", async () => {
   const captured = [];
   const invoker = async ({ messages = [] } = {}) => {
-    captured.push(messages.map((item = {}) => item.content));
+    captured.push(withoutNoScriptConstraint(messages).map((item = {}) => item.content));
     return { content: "ok" };
   };
 
@@ -597,7 +605,7 @@ test("invokeWithReasoningRetry uses non-enumerable source markers and strips the
   const captured = [];
   const ctx = { sessionId: "incremental-cache-nonenumerable-source-id" };
   const invoker = async ({ messages = [] } = {}) => {
-    captured.push(messages.map((item = {}) => ({
+    captured.push(withoutNoScriptConstraint(messages).map((item = {}) => ({
       content: item.content,
       keys: Object.keys(item).sort(),
       origin: item[HARNESS_MESSAGE_ORIGIN_FIELD],

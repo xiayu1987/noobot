@@ -65,8 +65,10 @@ test("separate_model analysis uses aligned agent context then user request and u
   assert.equal(capturedPayload?.purpose, "guidance");
   assert.equal(capturedPayload?.pluginFlow, "analysis");
   assert.equal(capturedPayload?.chain, "auxiliary");
+  assert.equal(capturedPayload.messages[0]?.role, "system");
+  assert.match(capturedPayload.messages[0]?.content, /禁止直接输出可执行脚本或命令/);
   assert.deepEqual(
-    capturedPayload.messages.slice(0, 2).map((item = {}) => [item.role, item.content]),
+    capturedPayload.messages.slice(1, 3).map((item = {}) => [item.role, item.content]),
     [
       ["user", "历史上下文"],
       ["assistant", "当前增量"],

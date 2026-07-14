@@ -75,6 +75,7 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     DEFAULT_PLAN_TEXT: "planningDefaultPlanText",
   }),
   WORKFLOW_PROMPTS: Object.freeze({
+    AUXILIARY_MODEL_NO_SCRIPT_CONSTRAINT: "auxiliaryModelNoScriptConstraint",
     PLANNING_TOOL_DESCRIPTION_FALLBACK: "planningToolDescriptionFallback",
     PLANNING_PROMPT_TOOLS_HEADER: "planningPromptToolsHeader",
     PLANNING_CONTEXT_SUMMARY_HEADER: "planningContextSummaryHeader",

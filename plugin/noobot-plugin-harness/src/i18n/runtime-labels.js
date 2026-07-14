@@ -62,6 +62,8 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     acceptanceSignalSubtaskStartKeywords: "开启|start",
     acceptanceSignalSubtaskWaitKeywords: "等待|wait",
     planningToolDescriptionFallback: "（无说明）",
+    auxiliaryModelNoScriptConstraint:
+      "Harness 非主链路输出约束：禁止直接输出可执行脚本或命令；仅返回当前流程要求的内容。",
     planningLatestUserGoalFallback: "（未获取到用户目标）",
     planningPromptToolsHeader: "可用工具（name/description），规划必须参考：",
     planningContextSummaryHeader: "规划输入上下文摘要（精简）如下，必须完整参考：",
@@ -325,6 +327,8 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     acceptanceSignalSubtaskStartKeywords: "start|开启",
     acceptanceSignalSubtaskWaitKeywords: "wait|等待",
     planningToolDescriptionFallback: "(no description)",
+    auxiliaryModelNoScriptConstraint:
+      "Harness auxiliary-flow output constraint: Do not directly output executable scripts or commands. Return only the content requested by the current flow.",
     planningLatestUserGoalFallback: "N/A",
     planningPromptToolsHeader: "Available tools (name/description), must be referenced:",
     planningContextSummaryHeader: "Planning context summary (compact). Must be fully considered:",

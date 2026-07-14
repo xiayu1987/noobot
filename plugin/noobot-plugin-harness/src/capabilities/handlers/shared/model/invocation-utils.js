@@ -5,12 +5,24 @@
  */
 import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
 import { ensureHarnessBucket } from "../bucket-utils.js";
+import { HARNESS_I18N_KEYSET, resolveLocale, translateI18nText } from "../i18n.js";
 import { isHarnessAgentTurnEnded } from "../runtime/lifecycle-utils.js";
 import { resolveIncrementalCapabilityMessages } from "./incremental-message-cache.js";
+import { markMessageAsProtocol } from "./message-metadata.js";
 
 const THINK_BLOCK_RE = /<think>([\s\S]*?)<\/think>/gi;
 const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
 const WORKFLOW_EVENTS = WORKFLOW_PARAMS.workflow.events;
+
+function buildAuxiliaryModelNoScriptMessage(ctx = {}) {
+  return markMessageAsProtocol({
+    role: "system",
+    content: translateI18nText(
+      resolveLocale(ctx),
+      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.AUXILIARY_MODEL_NO_SCRIPT_CONSTRAINT,
+    ),
+  }, "harness:auxiliary-model-no-script-constraint");
+}
 
 function extractTextContent(content = "") {
   if (typeof content === "string") return content;
@@ -108,6 +120,7 @@ export async function invokeWithReasoningRetry({
     purpose: purpose || payload?.purpose,
     messages: Array.isArray(payload?.messages) ? payload.messages : [],
   });
+  runtimeMessages = [buildAuxiliaryModelNoScriptMessage(ctx), ...runtimeMessages];
   let response = null;
 
   for (let attempt = 0; attempt <= Math.max(0, Number(maxReasoningRetries) || 0); attempt += 1) {
