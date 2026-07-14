@@ -3,6 +3,7 @@ import { normalizeRuntimeEvent } from './schema.js';
 import { resolveRuntimeEventFile, resolveRuntimeEventsConfig } from './paths.js';
 import { appendJsonLine } from './transports/jsonl.js';
 import { shouldRecordSessionLog } from './session-log-protocol.js';
+import { isWorkspaceSessionDeleted } from './session-deletion-guard.js';
 
 export async function writeRuntimeEvent(event = {}, options = {}) {
   try {
@@ -11,6 +12,13 @@ export async function writeRuntimeEvent(event = {}, options = {}) {
     const config = resolveRuntimeEventsConfig({ ...defaults, ...options, workspaceRoot: record.workspaceRoot || defaults.workspaceRoot });
     if (record.scope === RUNTIME_EVENT_SCOPES.SESSION && !shouldRecordSessionLog(record, { ...defaults, ...options, ...config })) {
       return { ok: true, skipped: true, record };
+    }
+    if (record.scope === RUNTIME_EVENT_SCOPES.SESSION && !config.root && await isWorkspaceSessionDeleted({
+      workspaceRoot: record.workspaceRoot || config.workspaceRoot,
+      userId: record.userId,
+      sessionId: record.sessionId,
+    })) {
+      return { ok: true, skipped: true, deleted: true, record };
     }
     const file = resolveRuntimeEventFile(record, config);
     const writeResult = await appendJsonLine(file, record, {

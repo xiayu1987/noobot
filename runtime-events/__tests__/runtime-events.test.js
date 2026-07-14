@@ -16,6 +16,7 @@ import {
   writeSystemRuntimeEvent,
 } from '../src/index.js';
 import { writeSessionChannelEvent, SESSION_CHANNELS } from '../src/session-channel.js';
+import { resolveWorkspaceSessionPaths } from '../src/session-deletion-guard.js';
 import {
   buildSessionLogRecord,
   getSessionLogControlKey,
@@ -43,6 +44,15 @@ async function pathExists(file) {
   } catch {
     return false;
   }
+}
+
+async function markSessionDeleted(workspaceRoot, userId, sessionId) {
+  const paths = resolveWorkspaceSessionPaths({ workspaceRoot, userId, sessionId });
+  await fs.mkdir(path.dirname(paths.markerFile), { recursive: true });
+  await fs.writeFile(paths.markerFile, JSON.stringify({
+    sessions: { [sessionId]: { deletedAt: new Date().toISOString() } },
+  }), 'utf8');
+  return paths;
 }
 
 async function writeArchive(file, ageMs = 0) {
@@ -594,6 +604,35 @@ test('existing session-channel API remains available', async () => {
 
   assert.equal(result.ok, true);
   assert.match(result.file, /session-1\/system\.jsonl$/);
+});
+
+test('session-channel does not recreate a deleted session directory', async () => {
+  const workspaceRoot = await tempRoot();
+  const userId = 'admin';
+  const sessionId = 'deleted-channel-session';
+  const { sessionDir } = await markSessionDeleted(workspaceRoot, userId, sessionId);
+  const result = await writeSessionChannelEvent({
+    source: 'agent', category: 'system', event: 'late.log', userId, sessionId,
+  }, { workspaceRoot, dirName: 'logs' });
+  assert.equal(result.ok, true);
+  assert.equal(result.skipped, true);
+  assert.equal(result.deleted, true);
+  assert.equal(await pathExists(sessionDir), false);
+});
+
+test('runtime event writer does not recreate a deleted session directory', async () => {
+  const workspaceRoot = await tempRoot();
+  const userId = 'admin';
+  const sessionId = 'deleted-runtime-session';
+  const { sessionDir } = await markSessionDeleted(workspaceRoot, userId, sessionId);
+  const result = await writeRuntimeEvent({
+    source: 'frontend', scope: 'session', category: 'message', event: 'late.event',
+    userId, sessionId, workspaceRoot,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.skipped, true);
+  assert.equal(result.deleted, true);
+  assert.equal(await pathExists(sessionDir), false);
 });
 
 test('runtime-events writer records normal session logs by default', async () => {

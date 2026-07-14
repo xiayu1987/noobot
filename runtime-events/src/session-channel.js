@@ -10,6 +10,7 @@ import {
   SESSION_LOG_AGENT_PROXY_DEFAULT_CATEGORY,
   SESSION_LOG_DEFAULT_CATEGORY,
 } from "./session-log-protocol.js";
+import { isWorkspaceSessionDeleted } from "./session-deletion-guard.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
@@ -101,6 +102,13 @@ export async function writeSessionChannelEvent(event = {}, config = resolveSessi
   record.source = safeSessionChannelSegment(record.source || "unknown");
   if (!shouldRecordSessionLog(record, config)) return { ok: true, skipped: true };
   const dir = resolveSessionChannelDir({ sessionId, userId }, config);
+  if (!(config.root || config.logRoot) && await isWorkspaceSessionDeleted({
+    workspaceRoot: config.workspaceRoot,
+    userId,
+    sessionId,
+  })) {
+    return { ok: true, skipped: true, deleted: true };
+  }
   await fs.mkdir(dir, { recursive: true });
   const file = path.join(dir, `${record.category}.jsonl`);
   await fs.appendFile(file, `${JSON.stringify(record)}\n`, "utf8");
