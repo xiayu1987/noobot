@@ -209,6 +209,18 @@ handleReconnect(socket, payload = {}) {
         const envDpId = String(envelope?.data?.dialogProcessId || "").trim();
         if (envDpId !== dpId) return false;
 
+        // A terminal error is already represented by the conversation/current-run
+        // snapshot. Replaying the error envelope makes reconnect itself fail and can
+        // leak the previous failed attempt into a later retry of the same session.
+        // Keep non-terminal/live errors unchanged; only suppress historical terminal
+        // error envelopes during replay.
+        if (
+          isTerminalStatus(channel.status) &&
+          String(envelope?.event || "").trim() === CHANNEL_EVENT.ERROR
+        ) {
+          return false;
+        }
+
         // Reconnect replay should only include unresolved interaction requests.
         // Resolved requests are historical records and would reopen stale UI prompts.
         if (
