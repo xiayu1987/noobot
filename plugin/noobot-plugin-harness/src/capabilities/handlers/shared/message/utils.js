@@ -38,6 +38,25 @@ function resolveMessageToolCalls(message = {}) {
   return [];
 }
 
+function resolveMessageRole(message = {}) {
+  const role = String(message?.role || message?.lc_kwargs?.role || "")
+    .trim()
+    .toLowerCase();
+  if (role === "ai") return "assistant";
+  if (role === "human") return "user";
+  if (role) return role;
+  const type = String(
+    message?.type ||
+      message?.lc_kwargs?.type ||
+      (typeof message?._getType === "function" ? message._getType() : ""),
+  )
+    .trim()
+    .toLowerCase();
+  if (type === "ai") return "assistant";
+  if (type === "human") return "user";
+  return type;
+}
+
 /**
  * 判断当前轮主流程最后一条模型返回消息是否同时带工具调用且 content 非空。
  * 从消息序列尾部向前查找最近一条非 harness 注入的 assistant 消息（排期分析时
@@ -50,9 +69,7 @@ export function shouldSkipAnalysisForTrailingToolCallContent(messages = []) {
     const message = items[index];
     if (!message || typeof message !== "object") continue;
     if (isHarnessInjectedMessage(message)) continue;
-    const role = String(message?.role || message?.lc_kwargs?.role || "")
-      .trim()
-      .toLowerCase();
+    const role = resolveMessageRole(message);
     if (role !== "assistant") continue;
     const toolCalls = resolveMessageToolCalls(message);
     if (!toolCalls.length) return false;
