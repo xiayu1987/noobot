@@ -152,15 +152,19 @@ export function injectTurnStatusPlaceholders(messages = [], turnStatuses = []) {
   const statusMap = buildTurnStatusMap(turnStatuses);
   if (!sourceMessages.length || !statusMap.size) return sourceMessages;
   const output = [];
-  const injectedKeys = new Set();
+  const placeholdersByKey = new Map();
   for (const messageItem of sourceMessages) {
     if (messageItem?.turnStatusPlaceholder !== true) continue;
     const turnScopeId = normalizeText(getMessageTurnScopeId(messageItem));
     const dialogProcessId = normalizeText(getMessageDialogProcessId(messageItem));
-    if (turnScopeId) injectedKeys.add(`turn:${turnScopeId}`);
-    if (dialogProcessId) injectedKeys.add(`dialog:${dialogProcessId}`);
+    if (turnScopeId) placeholdersByKey.set(`turn:${turnScopeId}`, messageItem);
+    if (dialogProcessId) placeholdersByKey.set(`dialog:${dialogProcessId}`, messageItem);
   }
+  const injectedKeys = new Set();
   for (const messageItem of sourceMessages) {
+    // Reinsert persisted/synthetic placeholders beside their owning user
+    // message. Their timestamps may otherwise place them above that message.
+    if (messageItem?.turnStatusPlaceholder === true) continue;
     output.push(messageItem);
     if (getMessageRole(messageItem) !== RoleEnum.USER) continue;
     const messageTurnScopeId = normalizeText(getMessageTurnScopeId(messageItem));
@@ -174,11 +178,11 @@ export function injectTurnStatusPlaceholders(messages = [], turnStatuses = []) {
       (messageTurnScopeId ? statusMap.get(`turn:${messageTurnScopeId}`) : null) ||
       (messageDialogProcessId ? statusMap.get(`dialog:${messageDialogProcessId}`) : null);
     if (!turnStatus) continue;
-    // Abnormal terminal outcomes always get an explicit status row. Any partial
-    // assistant content remains visible above/below it; it is not evidence that
-    // the turn completed normally.
     if (!shouldInjectTurnStatusPlaceholder(turnStatus, false)) continue;
-    output.push(buildTurnStatusPlaceholderMessage(messageItem, turnStatus));
+    const existingPlaceholder = turnKeys
+      .map((key) => placeholdersByKey.get(key))
+      .find(Boolean);
+    output.push(existingPlaceholder || buildTurnStatusPlaceholderMessage(messageItem, turnStatus));
     turnKeys.forEach((key) => injectedKeys.add(key));
   }
   return output;
