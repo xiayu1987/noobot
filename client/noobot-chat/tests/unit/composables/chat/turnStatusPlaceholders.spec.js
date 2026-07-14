@@ -56,4 +56,10 @@ describe("turn status placeholders", () => {
     const twice = injectTurnStatusPlaceholders(once, [status("user_stopped")]);
     expect(twice.filter((item) => item.turnStatusPlaceholder)).toHaveLength(1);
   });
+
+  it("moves an existing placeholder below its owning user message", () => {
+    const placeholder = injectTurnStatusPlaceholders([user], [status("user_stopped")])[1];
+    const result = injectTurnStatusPlaceholders([placeholder, user], [status("user_stopped")]);
+    expect(result).toEqual([user, placeholder]);
+  });
 });
