@@ -14,6 +14,7 @@ class ReconnectMethods {
 
 handleReconnect(socket, payload = {}) {
   const lastReceivedSeqMap = payload?.lastReceivedSeqMap || {};
+  const lastReceivedTurnScopeIdMap = payload?.lastReceivedTurnScopeIdMap || {};
   const currentSessionId = String(payload?.currentSessionId || "").trim();
   const reconnectChannelKeys = this._resolveReconnectChannelKeys(socket, currentSessionId, payload);
   if (!reconnectChannelKeys.length) {
@@ -200,6 +201,9 @@ handleReconnect(socket, payload = {}) {
 
     for (const dpId of dialogProcessIdsInLog) {
       const lastSeq = Number(lastReceivedSeqMap[dpId] || 0);
+      const reconnectTurnScopeId = String(
+        lastReceivedTurnScopeIdMap?.[dpId] || payload?.currentTurnScopeId || "",
+      ).trim();
       if (lastSeq <= 0 && isTerminalStatus(channel.status)) {
         continue;
       }
@@ -208,6 +212,19 @@ handleReconnect(socket, payload = {}) {
       const missingEvents = channel.eventLog.filter((envelope) => {
         const envDpId = String(envelope?.data?.dialogProcessId || "").trim();
         if (envDpId !== dpId) return false;
+
+        // Sequence numbers are only meaningful inside one run. A channel is reused
+        // across turns, so never replay an envelope from another turn into the run
+        // the client is resuming. Keep the legacy behaviour only for clients/events
+        // that predate turnScopeId.
+        const envelopeTurnScopeId = String(envelope?.data?.turnScopeId || "").trim();
+        if (
+          reconnectTurnScopeId &&
+          envelopeTurnScopeId &&
+          envelopeTurnScopeId !== reconnectTurnScopeId
+        ) {
+          return false;
+        }
 
         // A terminal error is already represented by the conversation/current-run
         // snapshot. Replaying the error envelope makes reconnect itself fail and can
@@ -248,8 +265,13 @@ handleReconnect(socket, payload = {}) {
         : Array.from(channel.pendingInteractionRequests.values())
             .filter((envelope) => {
               const envDpId = String(envelope?.data?.dialogProcessId || "").trim();
+              const envelopeTurnScopeId = String(envelope?.data?.turnScopeId || "").trim();
               const requestId = String(envelope?.data?.requestId || "").trim();
-              return envDpId === dpId && requestId && !missingRequestIds.has(requestId);
+              const matchesRun =
+                !reconnectTurnScopeId ||
+                !envelopeTurnScopeId ||
+                envelopeTurnScopeId === reconnectTurnScopeId;
+              return envDpId === dpId && matchesRun && requestId && !missingRequestIds.has(requestId);
             })
             .map((envelope) => ({
               ...envelope,
