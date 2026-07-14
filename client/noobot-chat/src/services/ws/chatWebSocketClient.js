@@ -79,6 +79,7 @@ export function createChatWebSocketClient({
 
   // Reconnect state
   let lastReceivedSeqMap = {};
+  let lastReceivedTurnScopeIdMap = {};
   let reconnecting = false;
   let reconnectResolve = null;
   let reconnectReject = null;
@@ -139,18 +140,23 @@ export function createChatWebSocketClient({
 
   function clearLastReceivedSeqMap() {
     lastReceivedSeqMap = {};
+    lastReceivedTurnScopeIdMap = {};
   }
 
   function hasReconnectState() {
     return Object.keys(lastReceivedSeqMap).length > 0;
   }
 
-  function updateLastReceivedSeq(dialogProcessId, seq) {
+  function updateLastReceivedSeq(dialogProcessId, seq, turnScopeId = "") {
     const dpId = String(dialogProcessId || "").trim();
     if (!dpId) return;
     const currentSeq = Number(lastReceivedSeqMap[dpId] || 0);
     if (Number(seq || 0) > currentSeq) {
       lastReceivedSeqMap[dpId] = Number(seq);
+    }
+    const normalizedTurnScopeId = String(turnScopeId || "").trim();
+    if (normalizedTurnScopeId) {
+      lastReceivedTurnScopeIdMap[dpId] = normalizedTurnScopeId;
     }
   }
 
@@ -158,7 +164,7 @@ export function createChatWebSocketClient({
     const dialogProcessId = String(data?.dialogProcessId || "").trim();
     const sequence = Number(data?.seq || 0);
     if (dialogProcessId && sequence > 0) {
-      updateLastReceivedSeq(dialogProcessId, sequence);
+      updateLastReceivedSeq(dialogProcessId, sequence, data?.turnScopeId);
     }
   }
 
@@ -213,7 +219,10 @@ export function createChatWebSocketClient({
 
   function removeLastReceivedSeq(dialogProcessId) {
     const dpId = String(dialogProcessId || "").trim();
-    if (dpId) delete lastReceivedSeqMap[dpId];
+    if (dpId) {
+      delete lastReceivedSeqMap[dpId];
+      delete lastReceivedTurnScopeIdMap[dpId];
+    }
   }
 
   function connect() {
@@ -446,6 +455,8 @@ export function createChatWebSocketClient({
         ws.send(JSON.stringify({
           action: "reconnect",
           lastReceivedSeqMap: { ...lastReceivedSeqMap },
+          lastReceivedTurnScopeIdMap: { ...lastReceivedTurnScopeIdMap },
+          currentTurnScopeId: String(activeStreamContext?.scope?.turnScopeId || "").trim(),
           currentSessionId: String(currentSessionId || "").trim(),
           userId: String(userId || "").trim(),
         }));

@@ -286,3 +286,42 @@ test("reconnect should not replay a terminal error from a failed attempt", () =>
   const replayMessages = listReplayMessages(reconnectDataEvent);
   assert.equal(replayMessages.some((envelope) => envelope?.event === "error"), false);
 });
+
+test("reconnect replay is isolated by turnScopeId", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-runs" });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId: "session-runs",
+    turnScopeId: "turn-current",
+  });
+  channel.status = "running";
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+
+  manager.pushChannelEvent(channel, "delta", {
+    sessionId: "session-runs",
+    dialogProcessId: "dp-shared",
+    turnScopeId: "turn-old",
+    seq: 2,
+    text: "old run",
+  });
+  manager.pushChannelEvent(channel, "delta", {
+    sessionId: "session-runs",
+    dialogProcessId: "dp-shared",
+    turnScopeId: "turn-current",
+    seq: 3,
+    text: "current run",
+  });
+
+  const socket = createMockSocket();
+  socket.__agentProxyChannelKeys.add(channelKey);
+  manager.handleReconnect(socket, {
+    currentSessionId: "session-runs",
+    lastReceivedSeqMap: { "dp-shared": 1 },
+    lastReceivedTurnScopeIdMap: { "dp-shared": "turn-current" },
+  });
+
+  const replayMessages = listReplayMessages(getReconnectDataEvent(socket));
+  assert.deepEqual(replayMessages.map((item) => item?.data?.text), ["current run"]);
+});
