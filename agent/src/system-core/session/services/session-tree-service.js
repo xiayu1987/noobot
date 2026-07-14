@@ -21,12 +21,25 @@ export class SessionTreeService {
   }
 
   async upsertSessionTree({ userId, sessionId, parentSessionId = "" }) {
-    if (!sessionId) return;
-    await this.treeRepo.withLock(userId, async () => {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) return false;
+    return this.treeRepo.withLock(userId, async () => {
+      // Deletion and tree mutation share this lock. Checking the durable
+      // repository tombstone here prevents a late execution initializer from
+      // adding a session back after deleteSessionBranch has completed.
+      if (await this.sessionRepo.isSessionDeleted(userId, normalizedSessionId)) {
+        return false;
+      }
       const sessionTree = await this.treeRepo.getTree(userId);
       const now = this.now();
-      const normalizedSessionId = String(sessionId || "").trim();
       const normalizedParentSessionId = String(parentSessionId || "").trim();
+
+      if (
+        normalizedParentSessionId &&
+        await this.sessionRepo.isSessionDeleted(userId, normalizedParentSessionId)
+      ) {
+        return false;
+      }
 
       if (!sessionTree.nodes[normalizedSessionId]) {
         sessionTree.nodes[normalizedSessionId] = {
@@ -87,6 +100,7 @@ export class SessionTreeService {
       }
 
       await this.treeRepo.saveTree(userId, sessionTree);
+      return true;
     });
   }
 
