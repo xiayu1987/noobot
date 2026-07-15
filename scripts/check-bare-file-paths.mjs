@@ -11,6 +11,7 @@ const sourceExtension = /\.(?:[cm]?js|jsx|ts|tsx)$/;
 const resolverFiles = new Set([
   "client/shared/path-resolver.js",
   "agent/src/system-core/utils/path-resolver.js",
+  "agent/src/system-core/utils/path-resolver/platform.js",
 ]);
 const violations = [];
 export const directPathModulePattern = /(?:\bfrom\s*|\brequire\s*\(\s*|\bimport\s*\(\s*)["'](?:node:)?path(?:\/(?:posix|win32))?["']/g;
