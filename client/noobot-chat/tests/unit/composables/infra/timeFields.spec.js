@@ -25,7 +25,7 @@ describe("timeFields thinking duration responsibilities", () => {
       cachedFinishedAt: "2026-06-22T10:00:20.000Z",
       fallbackStartedAt: "2026-06-22T10:00:02.000Z",
       fallbackFinishedAt: "2026-06-22T10:00:09.000Z",
-    })).toBe(0);
+    })).toBeNull();
   });
 
   it("freezes on message finish even when pending is true", () => {
@@ -36,7 +36,7 @@ describe("timeFields thinking duration responsibilities", () => {
       messageStartedAt: "2026-06-22T10:00:10.000Z",
       messageFinishedAt: "2026-06-22T10:00:15.000Z",
       now: "2026-06-22T10:00:30.000Z",
-      pending: true,
+      running: true,
     })).toBe(5000);
 
     vi.useRealTimers();
@@ -46,13 +46,21 @@ describe("timeFields thinking duration responsibilities", () => {
     expect(resolveThinkingDurationMs({
       messageStartedAt: "2026-06-22T10:00:10.000Z",
       now: "2026-06-22T10:00:30.000Z",
-      pending: true,
+      running: true,
     })).toBe(20000);
 
     expect(resolveThinkingDurationMs({
       messageStartedAt: "2026-06-22T10:00:10.000Z",
       now: "2026-06-22T10:00:30.000Z",
-      pending: false,
-    })).toBe(0);
+      running: false,
+    })).toBeNull();
+  });
+
+  it("returns unknown for missing or invalid persisted timing", () => {
+    expect(resolveThinkingDurationMs()).toBeNull();
+    expect(resolveThinkingDurationMs({
+      messageStartedAt: "2026-06-22T10:00:20.000Z",
+      messageFinishedAt: "2026-06-22T10:00:10.000Z",
+    })).toBeNull();
   });
 });

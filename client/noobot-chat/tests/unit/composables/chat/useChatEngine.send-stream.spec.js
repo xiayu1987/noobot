@@ -302,7 +302,7 @@ describe("useChatEngine.send-stream", () => {
     expect(sending.value).toBe(false);
   });
 
-  it("channel_state sending preserves thinking elapsed start on assistant message", async () => {
+  it("channel_state sending preserves thinking elapsed start in the turn timing store", async () => {
     const messageStartedAt = "2026-06-22T10:00:05.000Z";
     const channelStartedAt = "2026-06-22T10:00:00.000Z";
     const finishedAt = "2026-06-22T10:00:12.000Z";
@@ -356,8 +356,12 @@ describe("useChatEngine.send-stream", () => {
     });
     expect(assistant?.channelState?.createdAt).toBeUndefined();
     expect(assistant?.channelState?.createdAtMs).toBeUndefined();
-    expect(assistant?.thinkingStartedAt).toBe(messageStartedAt);
-    expect(assistant?.thinkingFinishedAt).toBe(messageStartedAt);
+    expect(assistant?.thinkingStartedAt).toBeUndefined();
+    expect(assistant?.thinkingFinishedAt).toBeUndefined();
+    expect(activeSession.value.turnTimingsByTurnScopeId?.[assistant?.turnScopeId]).toEqual({
+      thinkingStartedAt: messageStartedAt,
+      thinkingFinishedAt: messageStartedAt,
+    });
   });
 
   it("frontend completion detail apply clears pending and keeps normalized attachments on current assistant", async () => {

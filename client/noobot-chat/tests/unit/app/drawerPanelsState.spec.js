@@ -90,6 +90,7 @@ describe("drawerPanelsState", () => {
     expect(panels[2].props).toEqual({
       messageItem: {},
       allMessages: [],
+      turnTimingsByTurnScopeId: {},
       variant: "details",
     });
     expect(panels[3].props.active).toBe(false);

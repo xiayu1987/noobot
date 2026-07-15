@@ -20,13 +20,6 @@ import {
   getMessageTurnScopeId,
   isAssistantWithoutTurnScope,
 } from "../../infra/messageIdentity";
-import {
-  getThinkingFinishedAt,
-  getThinkingStartedAt,
-  resolveTimeIso,
-  setThinkingFinishedAt,
-  setThinkingStartedAt,
-} from "../../infra/timeFields";
 import { getMessageAttachments } from "../../infra/messageModel";
 import {
   getMessageRuntimeChannelState,
@@ -236,8 +229,6 @@ function snapshotFrozenAssistantDisplayFields(messageItem = {}) {
     created_at: messageItem?.created_at,
     updatedAt: messageItem?.updatedAt,
     updated_at: messageItem?.updated_at,
-    thinkingStartedAt: getThinkingStartedAt(messageItem),
-    thinkingFinishedAt: getThinkingFinishedAt(messageItem),
     channelState:
       messageItem?.channelState && typeof messageItem.channelState === "object" && !Array.isArray(messageItem.channelState)
         ? { ...messageItem.channelState }
@@ -253,40 +244,8 @@ function restoreFrozenAssistantDisplayFields(messageItem = {}, frozen = null) {
   ["content", "ts", "timestamp", "createdAt", "created_at", "updatedAt", "updated_at", "status", "state", "stopState"].forEach((key) => {
     if (frozen[key] !== undefined) messageItem[key] = frozen[key];
   });
-  if (frozen.thinkingStartedAt) setThinkingStartedAt(messageItem, frozen.thinkingStartedAt);
-  if (frozen.thinkingFinishedAt) setThinkingFinishedAt(messageItem, frozen.thinkingFinishedAt);
   if (frozen.channelState !== undefined) messageItem.channelState = frozen.channelState;
   messageItem.pending = false;
-}
-
-function resolveTurnTimingKey(item = {}) {
-  return getMessageTurnScopeId(item) || getMessageDialogProcessId(item) || "";
-}
-
-function buildTurnTimingMap(turnTimings = []) {
-  const map = new Map();
-  for (const item of Array.isArray(turnTimings) ? turnTimings : []) {
-    const key = resolveTurnTimingKey(item);
-    if (!key) continue;
-    map.set(key, {
-      thinkingStartedAt: resolveTimeIso(item?.thinkingStartedAt),
-      thinkingFinishedAt: resolveTimeIso(item?.thinkingFinishedAt),
-    });
-  }
-  return map;
-}
-
-function applyTurnTimingsToMessages(messages = [], turnTimings = []) {
-  const timingMap = buildTurnTimingMap(turnTimings);
-  if (!timingMap.size) return messages;
-  for (const messageItem of Array.isArray(messages) ? messages : []) {
-    if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) continue;
-    const timing = timingMap.get(resolveTurnTimingKey(messageItem));
-    if (!timing) continue;
-    if (timing.thinkingStartedAt) setThinkingStartedAt(messageItem, timing.thinkingStartedAt);
-    if (timing.thinkingFinishedAt) setThinkingFinishedAt(messageItem, timing.thinkingFinishedAt);
-  }
-  return messages;
 }
 
 function conflictsWithInFlightAssistant(existingMessages = [], detailMessageItem = {}) {
@@ -309,18 +268,10 @@ function preserveRunningThinkingState(existingMessage = {}, detailMessageItem = 
     !Array.isArray(existingMessage.channelState)
       ? existingMessage.channelState
       : null;
-  const existingThinkingStartedAt = getThinkingStartedAt(existingMessage);
-  const existingThinkingFinishedAt = getThinkingFinishedAt(existingMessage);
   const existingPending = existingMessage?.pending === true;
   return () => {
     if (existingChannelState && !detailMessageItem?.channelState) {
       existingMessage.channelState = existingChannelState;
-    }
-    if (existingThinkingStartedAt && !getThinkingStartedAt(detailMessageItem)) {
-      setThinkingStartedAt(existingMessage, existingThinkingStartedAt);
-    }
-    if (existingThinkingFinishedAt && !getThinkingFinishedAt(detailMessageItem)) {
-      setThinkingFinishedAt(existingMessage, existingThinkingFinishedAt);
     }
     const runtimeView = resolveSessionRunMessageRuntimeView(existingMessage);
     if (existingPending && runtimeView.inFlightAssistant) {
@@ -539,7 +490,6 @@ export function buildNormalizedDetailMessages({
       makeViewMessage,
     });
   }
-  applyTurnTimingsToMessages(normalizedMessages, turnTimings);
   return injectTurnStatusPlaceholders(normalizedMessages, turnStatuses);
 }
 

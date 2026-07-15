@@ -17,12 +17,6 @@ import {
   getMessageTurnScopeId,
   getMessageRole,
 } from "../composables/infra/messageIdentity";
-import {
-  getThinkingFinishedAt,
-  getThinkingStartedAt,
-  setThinkingFinishedAt,
-  setThinkingStartedAt,
-} from "../composables/infra/timeFields";
 
 defineEmits(["open-thinking-details"]);
 
@@ -48,6 +42,7 @@ const { translate } = useLocale();
 const messageItemSharedProps = computed(() => ({
   allMessages: props.activeSession?.messages || [],
   sessionDocs: props.activeSession?.sessionDocs || [],
+  turnTimingsByTurnScopeId: props.activeSession?.turnTimingsByTurnScopeId || {},
   userId: props.userId,
   authFetch: props.authFetch,
   renderMarkdown: props.renderMarkdown,
@@ -104,17 +99,21 @@ function applyMessageRuntimePatch(messageItem = {}, patch = {}) {
   if (Object.prototype.hasOwnProperty.call(patch, "pending")) {
     messageItem.pending = patch.pending === true;
   }
-  if (
-    patch.thinkingStartedAt &&
-    (patch.thinkingStartedAtPolicy !== "if_missing" || !getThinkingStartedAt(messageItem))
-  ) {
-    setThinkingStartedAt(messageItem, patch.thinkingStartedAt);
-  }
-  if (
-    patch.thinkingFinishedAt &&
-    (patch.thinkingFinishedAtPolicy !== "if_missing" || !getThinkingFinishedAt(messageItem))
-  ) {
-    setThinkingFinishedAt(messageItem, patch.thinkingFinishedAt);
+  const turnScopeId = getMessageTurnScopeId(messageItem);
+  if (turnScopeId && (patch.thinkingStartedAt || patch.thinkingFinishedAt)) {
+    const existingTiming = props.activeSession?.turnTimingsByTurnScopeId?.[turnScopeId] || {};
+    props.activeSession.turnTimingsByTurnScopeId = {
+      ...(props.activeSession.turnTimingsByTurnScopeId || {}),
+      [turnScopeId]: {
+        ...existingTiming,
+        ...(patch.thinkingStartedAt && !existingTiming.thinkingStartedAt
+          ? { thinkingStartedAt: patch.thinkingStartedAt }
+          : {}),
+        ...(patch.thinkingFinishedAt && !existingTiming.thinkingFinishedAt
+          ? { thinkingFinishedAt: patch.thinkingFinishedAt }
+          : {}),
+      },
+    };
   }
   if (
     patch.statusLabelKey &&

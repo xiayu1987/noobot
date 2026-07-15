@@ -68,6 +68,7 @@ export function registerFrontendPlugin(ctx = {}) {
         resolveProps: (context = {}) => ({
           messageItem: context?.messageItem || {},
           allMessages: Array.isArray(context?.allMessages) ? context.allMessages : [],
+          turnTimingsByTurnScopeId: context?.turnTimingsByTurnScopeId || {},
         }),
         resolveListeners: (context = {}) => ({
           "open-thinking-details": (payload = {}) => {

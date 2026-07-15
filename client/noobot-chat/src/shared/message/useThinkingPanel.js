@@ -16,8 +16,6 @@ import {
 import { sanitizeExecutionLogForDisplay } from "../../composables/chat/chatEngine/utils";
 import { resolveSessionRunMessageRuntimeView } from "../../composables/chat/sessionRunStateMachine";
 import {
-  getThinkingFinishedAt,
-  getThinkingStartedAt,
   formatDurationMs,
   nowMs,
   resolveThinkingDurationMs,
@@ -638,25 +636,31 @@ export function useThinkingPanel(props, emit) {
   }
 
   function getThinkingDurationMs(messageItem = {}) {
-    const runtimeView = resolveSessionRunMessageRuntimeView(messageItem);
-    const startedAt = parseAnyTimeMs(getThinkingStartedAt(messageItem));
-    const finishedAt = parseAnyTimeMs(getThinkingFinishedAt(messageItem));
+    const turnScopeId = getMessageTurnScopeId(messageItem);
+    const persistedTiming = turnScopeId
+      ? props.turnTimingsByTurnScopeId?.[turnScopeId]
+      : null;
+    const runtimeView = resolveSessionRunMessageRuntimeView(messageItem, persistedTiming);
+    const startedAt = parseAnyTimeMs(persistedTiming?.thinkingStartedAt);
+    const finishedAt = parseAnyTimeMs(persistedTiming?.thinkingFinishedAt);
     return resolveThinkingDurationMs({
       messageStartedAt: startedAt,
       messageFinishedAt: finishedAt,
       now: nowTick.value,
-      pending: runtimeView.running,
+      running: runtimeView.running,
     });
   }
 
   function refreshThinkingDurationLabel() {
-    thinkingDurationLabel.value = formatDurationMs(
-      getThinkingDurationMs(props.messageItem),
-    );
+    const durationMs = getThinkingDurationMs(props.messageItem);
+    thinkingDurationLabel.value = durationMs === null
+      ? "--:--"
+      : formatDurationMs(durationMs);
   }
 
   function isThinkingRuntimeRunning(messageItem = {}) {
-    return resolveSessionRunMessageRuntimeView(messageItem).running;
+    const timing = props.turnTimingsByTurnScopeId?.[getMessageTurnScopeId(messageItem)] || null;
+    return resolveSessionRunMessageRuntimeView(messageItem, timing).running;
   }
 
   function startTimer() {
@@ -685,8 +689,8 @@ export function useThinkingPanel(props, emit) {
 
   watch(
     () => [
-      getThinkingStartedAt(props.messageItem),
-      getThinkingFinishedAt(props.messageItem),
+      props.turnTimingsByTurnScopeId?.[getMessageTurnScopeId(props.messageItem)]?.thinkingStartedAt,
+      props.turnTimingsByTurnScopeId?.[getMessageTurnScopeId(props.messageItem)]?.thinkingFinishedAt,
       props.messageItem?.pending,
     ],
     () => {

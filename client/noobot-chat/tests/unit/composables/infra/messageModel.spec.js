@@ -71,7 +71,7 @@ describe("messageModel semantic transfer", () => {
     });
   });
 
-  it("preserves thinking timing fields from backend messages after refresh", () => {
+  it("keeps thinking timing fields out of backend view messages after refresh", () => {
     const message = buildViewMessage({
       role: "assistant",
       content: "running",
@@ -79,8 +79,8 @@ describe("messageModel semantic transfer", () => {
       thinkingFinishedAt: "2026-06-22T10:00:12.000Z",
     });
 
-    expect(message.thinkingStartedAt).toBe("2026-06-22T10:00:00.000Z");
-    expect(message.thinkingFinishedAt).toBe("2026-06-22T10:00:12.000Z");
+    expect(message.thinkingStartedAt).toBeUndefined();
+    expect(message.thinkingFinishedAt).toBeUndefined();
   });
 
   it("uses backend createdAt as message timestamp so pending thinking elapsed does not reset after refresh", () => {
@@ -609,7 +609,7 @@ describe("messageModel execution logs", () => {
     expect(messages[0].executionLogTotal).toBe(12);
   });
 
-  it("uses the latest thinking interval when continuing the same turn", () => {
+  it("keeps thinking intervals out of folded messages when continuing the same turn", () => {
     const messages = foldConversationMessages([
       {
         role: "assistant",
@@ -630,7 +630,7 @@ describe("messageModel execution logs", () => {
     ], buildViewMessage);
 
     expect(messages).toHaveLength(1);
-    expect(new Date(messages[0].thinkingStartedAt).getTime()).toBe(1700000010000);
-    expect(new Date(messages[0].thinkingFinishedAt).getTime()).toBe(1700000012000);
+    expect(messages[0].thinkingStartedAt).toBeUndefined();
+    expect(messages[0].thinkingFinishedAt).toBeUndefined();
   });
 });

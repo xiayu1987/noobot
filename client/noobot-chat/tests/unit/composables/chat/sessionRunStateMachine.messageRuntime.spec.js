@@ -341,7 +341,6 @@ describe("sessionRunStateMachine message runtime", () => {
         createdAt: "2026-01-01T00:00:00.000Z",
         createdAtMs: 1000,
       },
-      thinkingStartedAt: "2026-01-01T00:00:00.000Z",
     };
     expect(getMessageRuntimeChannelState(sendingMessage)).toMatchObject({
       state: BackendChannelState.SENDING,
@@ -349,7 +348,9 @@ describe("sessionRunStateMachine message runtime", () => {
       dialogProcessId: "d1",
       turnScopeId: "turn-1",
     });
-    expect(resolveSessionRunMessageRuntimeView(sendingMessage)).toMatchObject({
+    expect(resolveSessionRunMessageRuntimeView(sendingMessage, {
+      thinkingStartedAt: "2026-01-01T00:00:00.000Z",
+    })).toMatchObject({
       state: BackendChannelState.SENDING,
       pending: true,
       running: true,

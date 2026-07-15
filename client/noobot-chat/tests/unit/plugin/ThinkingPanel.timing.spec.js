@@ -14,14 +14,21 @@ describe("ThinkingPanel", () => {
   it("keeps pending elapsed time from message thinking start", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-22T10:00:12.000Z"));
-    const wrapper = mountThinkingPanel({
+    const messageItem = {
       role: "assistant",
       pending: true,
       sessionId: "backend-session-after-refresh",
       turnScopeId: "client-turn-orphan-resend",
-      thinkingStartedAt: "2026-06-22T10:00:00.000Z",
       ts: "2026-06-22T10:00:12.000Z",
       channelState: { state: "sending" },
+    };
+    const wrapper = mountThinkingPanel(messageItem, {
+      turnTimingsByTurnScopeId: {
+        [messageItem.turnScopeId]: {
+          thinkingStartedAt: "2026-06-22T10:00:00.000Z",
+          thinkingFinishedAt: null,
+        },
+      },
     });
 
     expect(wrapper.text()).toContain("00:12");
@@ -33,52 +40,74 @@ describe("ThinkingPanel", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-22T10:00:16.000Z"));
 
-    const wrapper = mountThinkingPanel({
+    const messageItem = {
       role: "assistant",
       pending: false,
       sessionId: "session-finished",
       turnScopeId: "client-turn-finished",
-      thinkingStartedAt: "2026-06-22T10:00:00.000Z",
-      thinkingFinishedAt: "2026-06-22T10:00:15.000Z",
       ts: "2026-06-22T10:05:00.000Z",
       completedToolLogs: [{ type: "tool_result", text: "done", ts: "2026-06-22T10:05:00.000Z" }],
+    };
+    const wrapper = mountThinkingPanel(messageItem, {
+      turnTimingsByTurnScopeId: {
+        [messageItem.turnScopeId]: {
+          thinkingStartedAt: "2026-06-22T10:00:00.000Z",
+          thinkingFinishedAt: "2026-06-22T10:00:15.000Z",
+        },
+      },
     });
 
     expect(wrapper.text()).toContain("00:15");
     expect(wrapper.text()).not.toContain("05:00");
   });
 
-  it("prefers refreshed message thinking timestamps over stale local timing", () => {
+  it("prefers persisted turn timing over stale message timing", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-22T10:00:30.000Z"));
 
-    const wrapper = mountThinkingPanel({
+    const messageItem = {
       role: "assistant",
       pending: false,
       sessionId: "session-refreshed-server-time",
       turnScopeId: "client-turn-refreshed-server-time",
-      thinkingStartedAt: "2026-06-22T10:00:05.000Z",
-      thinkingFinishedAt: "2026-06-22T10:00:12.000Z",
+      thinkingStartedAt: "2026-06-22T10:00:00.000Z",
+      thinkingFinishedAt: "2026-06-22T10:00:20.000Z",
       completedToolLogs: [{ type: "tool_result", text: "done", ts: "2026-06-22T10:00:12.000Z" }],
+    };
+    const wrapper = mountThinkingPanel(messageItem, {
+      turnTimingsByTurnScopeId: {
+        [messageItem.turnScopeId]: {
+          thinkingStartedAt: "2026-06-22T10:00:05.000Z",
+          thinkingFinishedAt: "2026-06-22T10:00:12.000Z",
+        },
+      },
     });
 
     expect(wrapper.text()).toContain("00:07");
     expect(wrapper.text()).not.toContain("00:20");
   });
 
-  it("uses message thinking start instead of stale local or channel timing", () => {
+  it("uses turn timing start instead of stale message or channel timing", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-22T10:00:20.000Z"));
 
-    const wrapper = mountThinkingPanel({
+    const messageItem = {
       role: "assistant",
       pending: true,
       sessionId: "session-running-channel-time",
       turnScopeId: "client-turn-running-channel-time",
-      thinkingStartedAt: "2026-06-22T10:00:05.000Z",
+      thinkingStartedAt: "2026-06-22T10:00:00.000Z",
       channelState: {
         state: "sending",
         createdAt: "2026-06-22T10:00:08.000Z",
+      },
+    };
+    const wrapper = mountThinkingPanel(messageItem, {
+      turnTimingsByTurnScopeId: {
+        [messageItem.turnScopeId]: {
+          thinkingStartedAt: "2026-06-22T10:00:05.000Z",
+          thinkingFinishedAt: null,
+        },
       },
     });
 
@@ -102,7 +131,7 @@ describe("ThinkingPanel", () => {
       },
     });
 
-    expect(wrapper.text()).toContain("00:00");
+    expect(wrapper.text()).toContain("--:--");
     expect(wrapper.text()).not.toContain("00:12");
   });
 
@@ -154,7 +183,7 @@ describe("ThinkingPanel", () => {
       },
     });
 
-    expect(wrapper.text()).toContain("00:00");
+    expect(wrapper.text()).toContain("--:--");
     expect(wrapper.text()).not.toContain("00:12");
   });
 

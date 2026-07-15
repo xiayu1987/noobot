@@ -22,8 +22,6 @@ import {
 } from "./messageIdentity";
 import {
   getMessageTimestamp,
-  getThinkingFinishedAt,
-  getThinkingStartedAt,
   nowIso,
   nowMs,
 } from "./timeFields";
@@ -186,8 +184,6 @@ function createMessageModel(messageItem = {}) {
   const workflowMeta = normalizeWorkflowMeta(messageItem);
   const turnScopeId = getMessageTurnScopeId(messageItem);
   const sessionId = String(messageItem?.sessionId || messageItem?.session_id || "").trim();
-  const thinkingStartedAt = getThinkingStartedAt(messageItem);
-  const thinkingFinishedAt = getThinkingFinishedAt(messageItem);
   const messageTimestamp = getMessageTimestamp(messageItem);
   const messageRole = getMessageRole(messageItem) || "assistant";
   return {
@@ -218,8 +214,6 @@ function createMessageModel(messageItem = {}) {
     thinkingDetailCount: Number(
       messageItem?.thinkingDetailCount ?? messageItem?.thinking_detail_count ?? 0,
     ),
-    thinkingStartedAt,
-    thinkingFinishedAt,
     thinkingOpenNames: normalizeArray(messageItem.thinkingOpenNames),
     expandedDetailLogKeys: normalizeArray(messageItem.expandedDetailLogKeys),
     error: messageItem.error || "",
@@ -356,12 +350,6 @@ function foldConversationMessages(messages = [], buildView) {
       Number(previousMessage?.thinkingDetailCount || 0),
       Number(currentMessage?.thinkingDetailCount || 0),
     );
-    if (currentMessage.thinkingStartedAt) {
-      previousMessage.thinkingStartedAt = currentMessage.thinkingStartedAt;
-    }
-    if (currentMessage.thinkingFinishedAt) {
-      previousMessage.thinkingFinishedAt = currentMessage.thinkingFinishedAt;
-    }
     const currentAttachments = normalizeArray(currentMessage?.attachments);
     const previousAttachments = normalizeArray(previousMessage?.attachments);
 

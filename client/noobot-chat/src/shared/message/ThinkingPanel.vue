@@ -12,6 +12,7 @@ import ThinkingPanelDetails from "./ThinkingPanelDetails.vue";
 const props = defineProps({
   messageItem: { type: Object, default: () => ({}) },
   allMessages: { type: Array, default: () => [] },
+  turnTimingsByTurnScopeId: { type: Object, default: () => ({}) },
   variant: { type: String, default: "panel" },
 });
 const emit = defineEmits(["open-thinking-details"]);

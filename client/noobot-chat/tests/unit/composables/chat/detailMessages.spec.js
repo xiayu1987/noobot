@@ -616,7 +616,7 @@ describe("detailMessages", () => {
       { attachmentId: "completed-tool-1", name: "completed-tool.md" },
     ]);
   });
-  it("merges same-turn assistant thinking start and finish for reload display", () => {
+  it("keeps same-turn assistant thinking timing out of reloaded messages", () => {
     const startedAt = "2026-06-22T10:00:05.000Z";
     const finishedAt = "2026-06-22T10:00:12.000Z";
     const normalizedMessages = buildNormalizedDetailMessages({
@@ -645,8 +645,8 @@ describe("detailMessages", () => {
     });
 
     expect(normalizedMessages).toHaveLength(1);
-    expect(normalizedMessages[0].thinkingStartedAt).toBe(startedAt);
-    expect(normalizedMessages[0].thinkingFinishedAt).toBe(finishedAt);
+    expect(normalizedMessages[0].thinkingStartedAt).toBeUndefined();
+    expect(normalizedMessages[0].thinkingFinishedAt).toBeUndefined();
     expect(normalizedMessages[0].content).toBe("first chunk\n\nfinal chunk");
   });
 
