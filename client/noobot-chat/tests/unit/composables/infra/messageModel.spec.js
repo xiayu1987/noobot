@@ -608,4 +608,29 @@ describe("messageModel execution logs", () => {
     expect(messages[0].realtimeLogs[9].text).toBe("log-12");
     expect(messages[0].executionLogTotal).toBe(12);
   });
+
+  it("uses the latest thinking interval when continuing the same turn", () => {
+    const messages = foldConversationMessages([
+      {
+        role: "assistant",
+        content: "initial attempt",
+        turnScopeId: "client-turn:continue",
+        dialogProcessId: "dp-continue",
+        thinkingStartedAt: 1700000000000,
+        thinkingFinishedAt: 1700000001000,
+      },
+      {
+        role: "assistant",
+        content: "continued attempt",
+        turnScopeId: "client-turn:continue",
+        dialogProcessId: "dp-continue",
+        thinkingStartedAt: 1700000010000,
+        thinkingFinishedAt: 1700000012000,
+      },
+    ], buildViewMessage);
+
+    expect(messages).toHaveLength(1);
+    expect(new Date(messages[0].thinkingStartedAt).getTime()).toBe(1700000010000);
+    expect(new Date(messages[0].thinkingFinishedAt).getTime()).toBe(1700000012000);
+  });
 });
