@@ -146,12 +146,27 @@ export function injectTurnStatusPlaceholders(messages = [], turnStatuses = []) {
   if (!sourceMessages.length || !statusMap.size) return sourceMessages;
   const output = [];
   const placeholdersByKey = new Map();
+  const assistantResponseKeys = new Set();
   for (const messageItem of sourceMessages) {
-    if (messageItem?.turnStatusPlaceholder !== true) continue;
     const turnScopeId = normalizeText(getMessageTurnScopeId(messageItem));
     const dialogProcessId = normalizeText(getMessageDialogProcessId(messageItem));
-    if (turnScopeId) placeholdersByKey.set(`turn:${turnScopeId}`, messageItem);
-    if (dialogProcessId) placeholdersByKey.set(`dialog:${dialogProcessId}`, messageItem);
+    const keys = [
+      turnScopeId ? `turn:${turnScopeId}` : "",
+      dialogProcessId ? `dialog:${dialogProcessId}` : "",
+    ].filter(Boolean);
+    if (messageItem?.turnStatusPlaceholder === true) {
+      keys.forEach((key) => placeholdersByKey.set(key, messageItem));
+      continue;
+    }
+    // Only an authoritative, finalized assistant response suppresses the
+    // terminal-status placeholder. Keep the placeholder beside partial
+    // streamed content so the terminal reason remains visible.
+    if (
+      getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
+      messageItem?.pending === false
+    ) {
+      keys.forEach((key) => assistantResponseKeys.add(key));
+    }
   }
   const injectedKeys = new Set();
   for (const messageItem of sourceMessages) {
@@ -171,7 +186,8 @@ export function injectTurnStatusPlaceholders(messages = [], turnStatuses = []) {
       (messageTurnScopeId ? statusMap.get(`turn:${messageTurnScopeId}`) : null) ||
       (messageDialogProcessId ? statusMap.get(`dialog:${messageDialogProcessId}`) : null);
     if (!turnStatus) continue;
-    if (!shouldInjectTurnStatusPlaceholder(turnStatus, false)) continue;
+    const hasAssistantResponse = turnKeys.some((key) => assistantResponseKeys.has(key));
+    if (!shouldInjectTurnStatusPlaceholder(turnStatus, hasAssistantResponse)) continue;
     const existingPlaceholder = turnKeys
       .map((key) => placeholdersByKey.get(key))
       .find(Boolean);
@@ -186,8 +202,8 @@ function countCompletedToolLogAttachments(messageItem = {}) {
     .reduce((total, logItem) => total + (Array.isArray(logItem?.attachments) ? logItem.attachments.length : 0), 0);
 }
 
-function isInFlightAssistantMessage(messageItem = {}) {
-  return isMessageInFlightAssistant(messageItem);
+function isInFlightAssistantMessage(messageItem = {}, turnStatus = null) {
+  return resolveSessionRunMessageRuntimeView(messageItem, null, turnStatus).inFlightAssistant;
 }
 
 function isTerminalStopAssistantDetail(messageItem = {}) {
@@ -248,20 +264,23 @@ function restoreFrozenAssistantDisplayFields(messageItem = {}, frozen = null) {
   messageItem.pending = false;
 }
 
-function conflictsWithInFlightAssistant(existingMessages = [], detailMessageItem = {}) {
+function conflictsWithInFlightAssistant(existingMessages = [], detailMessageItem = {}, statusMap = new Map()) {
   const detailTurnScopeId = getMessageTurnScopeId(detailMessageItem);
   const detailDialogProcessId = getMessageDialogProcessId(detailMessageItem);
   return (Array.isArray(existingMessages) ? existingMessages : []).some((messageItem) => {
-    if (!isInFlightAssistantMessage(messageItem)) return false;
     const existingTurnScopeId = getMessageTurnScopeId(messageItem);
     const existingDialogProcessId = getMessageDialogProcessId(messageItem);
+    const turnStatus =
+      (existingTurnScopeId ? statusMap.get(`turn:${existingTurnScopeId}`) : null) ||
+      (existingDialogProcessId ? statusMap.get(`dialog:${existingDialogProcessId}`) : null);
+    if (!isInFlightAssistantMessage(messageItem, turnStatus)) return false;
     if (detailTurnScopeId && existingTurnScopeId) return detailTurnScopeId === existingTurnScopeId;
     if (detailDialogProcessId && existingDialogProcessId) return detailDialogProcessId === existingDialogProcessId;
     return false;
   });
 }
 
-function preserveRunningThinkingState(existingMessage = {}, detailMessageItem = {}) {
+function preserveRunningThinkingState(existingMessage = {}, detailMessageItem = {}, turnStatus = null) {
   const existingChannelState =
     existingMessage?.channelState &&
     typeof existingMessage.channelState === "object" &&
@@ -270,10 +289,15 @@ function preserveRunningThinkingState(existingMessage = {}, detailMessageItem = 
       : null;
   const existingPending = existingMessage?.pending === true;
   return () => {
-    if (existingChannelState && !detailMessageItem?.channelState) {
-      existingMessage.channelState = existingChannelState;
+    const runtimeView = resolveSessionRunMessageRuntimeView(existingMessage, null, turnStatus);
+    if (runtimeView.inFlightAssistant) {
+      if (existingChannelState && !detailMessageItem?.channelState) {
+        existingMessage.channelState = existingChannelState;
+      }
+    } else if (runtimeView.source === "persisted") {
+      delete existingMessage.channelState;
+      existingMessage.pending = false;
     }
-    const runtimeView = resolveSessionRunMessageRuntimeView(existingMessage);
     if (existingPending && runtimeView.inFlightAssistant) {
       existingMessage.pending = true;
     }
@@ -358,16 +382,22 @@ export function findExistingMessageIndexForDetailMessage(existingMessages = [], 
   return matchingUserIndexes.length === 1 ? matchingUserIndexes[0] : -1;
 }
 
-export function mergePreservedDetailMessages(existingMessages = [], detailMessages = []) {
+export function mergePreservedDetailMessages(existingMessages = [], detailMessages = [], { turnStatuses = [] } = {}) {
   if (!Array.isArray(existingMessages) || !Array.isArray(detailMessages) || !detailMessages.length) {
     return;
   }
+  const statusMap = buildTurnStatusMap(turnStatuses);
   for (const detailMessageItem of detailMessages) {
     if (detailMessageItem?.workflowMessage === true) continue;
     const detailIdentity = buildMessageIdentity(detailMessageItem);
     const existingIndex = findExistingMessageIndexForDetailMessage(existingMessages, detailMessageItem);
     if (existingIndex >= 0) {
       const existingMessage = existingMessages[existingIndex];
+      const existingTurnScopeId = getMessageTurnScopeId(existingMessage);
+      const existingDialogProcessId = getMessageDialogProcessId(existingMessage);
+      const existingTurnStatus =
+        (existingTurnScopeId ? statusMap.get(`turn:${existingTurnScopeId}`) : null) ||
+        (existingDialogProcessId ? statusMap.get(`dialog:${existingDialogProcessId}`) : null);
       logResendDebug("detail.merge.match", {
         identity: detailIdentity,
         existingIndex,
@@ -375,7 +405,7 @@ export function mergePreservedDetailMessages(existingMessages = [], detailMessag
         detail: summarizeDebugMessage(detailMessageItem),
       });
       if (
-        isInFlightAssistantMessage(existingMessage) &&
+        isInFlightAssistantMessage(existingMessage, existingTurnStatus) &&
         (detailMessageItem?.turnStatusPlaceholder === true || isTerminalStopAssistantDetail(detailMessageItem))
       ) {
         logResendDebug("detail.merge.skipStoppedOverInFlight", {
@@ -402,6 +432,7 @@ export function mergePreservedDetailMessages(existingMessages = [], detailMessag
       const restoreRunningThinkingState = preserveRunningThinkingState(
         existingMessage,
         detailMessageItem,
+        existingTurnStatus,
       );
       const frozenAssistantDisplayFields = isFinalizedAssistantMessage(existingMessage)
         ? snapshotFrozenAssistantDisplayFields(existingMessage)
@@ -452,7 +483,7 @@ export function mergePreservedDetailMessages(existingMessages = [], detailMessag
     }
     if (
       hasReliableCompletedAssistantIdentity(detailMessageItem) &&
-      !conflictsWithInFlightAssistant(existingMessages, detailMessageItem)
+      !conflictsWithInFlightAssistant(existingMessages, detailMessageItem, statusMap)
     ) {
       existingMessages.push(detailMessageItem);
     } else {

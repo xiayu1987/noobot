@@ -130,9 +130,23 @@ export function getMessageChannelState(messageItem = {}) {
 
 export const getMessageRuntimeChannelState = getMessageChannelState;
 
-export function resolveSessionRunMessageRuntimeView(messageItem = {}, turnTiming = null) {
+export function resolveTurnRuntimeView({
+  messageItem = {},
+  turnTiming = null,
+  turnStatus = null,
+  realtimeState = null,
+} = {}) {
   const channelState = getMessageChannelState(messageItem);
-  const state = normalizeState(channelState?.state || messageItem?.status || messageItem?.state);
+  const realtimeStatus = normalizeState(
+    realtimeState?.backendState || realtimeState?.state || channelState?.state,
+  );
+  const persistedStatus = normalizeState(turnStatus?.status || turnStatus?.state);
+  const messageStatus = normalizeState(messageItem?.status || messageItem?.state);
+  // A persisted terminal fact is monotonic and must win over a late realtime
+  // event. Before persistence catches up, the realtime state fills the gap.
+  const state = isTerminalMessageRuntimeState(persistedStatus)
+    ? persistedStatus
+    : realtimeStatus || persistedStatus || messageStatus;
   const pending = messageItem?.pending === true;
   const hasFinishedAt = Boolean(turnTiming?.thinkingFinishedAt);
   const terminal = isTerminalMessageRuntimeState(state);
@@ -152,7 +166,18 @@ export function resolveSessionRunMessageRuntimeView(messageItem = {}, turnTiming
     canStopTarget,
     startedAt: turnTiming?.thinkingStartedAt || "",
     finishedAt: turnTiming?.thinkingFinishedAt || "",
+    source: isTerminalMessageRuntimeState(persistedStatus)
+      ? "persisted"
+      : realtimeStatus
+        ? "realtime"
+        : persistedStatus
+          ? "persisted"
+          : "message",
   };
+}
+
+export function resolveSessionRunMessageRuntimeView(messageItem = {}, turnTiming = null, turnStatus = null) {
+  return resolveTurnRuntimeView({ messageItem, turnTiming, turnStatus });
 }
 
 export function isMessageRunning(messageItem = {}) {

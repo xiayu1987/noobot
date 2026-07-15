@@ -249,10 +249,10 @@ describe("useChatEngine.session-detail", () => {
       content: "已停止",
       turnScopeId: freshTurnScopeId,
       dialogProcessId: "dp-stale-stopped",
-      pending: true,
+      pending: false,
       statusLabel: "chat.stopped",
     }));
-    expect(assistant.channelState).toEqual(expect.objectContaining({ state: "sending" }));
+    expect(assistant.channelState).toBeUndefined();
     expect(activeSession.turnStatuses).toEqual([
       expect.objectContaining({ status: "user_stopped", turnScopeId: freshTurnScopeId }),
     ]);

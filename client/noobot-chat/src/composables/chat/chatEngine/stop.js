@@ -54,7 +54,9 @@ export function handleStopConfirmationTimeout({
     [...(activeSession?.value?.messages || [])]
       .reverse()
       .find(
-        (messageItem) => isInFlightAssistantMessage(messageItem),
+        (messageItem) => isInFlightAssistantMessage(messageItem, {
+          turnStatuses: activeSession?.value?.turnStatuses,
+        }),
       );
   const expectedDialogProcessId = normalizeTrimmedString(stopScope?.dialogProcessId);
   const expectedTurnScopeId = normalizeTrimmedString(stopScope?.turnScopeId);
@@ -160,7 +162,9 @@ export function stopSending({
   }
   const pendingAssistantMessage = [...(activeSession?.value?.messages || [])]
     .reverse()
-    .find((messageItem) => isInFlightAssistantMessage(messageItem));
+    .find((messageItem) => isInFlightAssistantMessage(messageItem, {
+      turnStatuses: activeSession?.value?.turnStatuses,
+    }));
   if (!pendingAssistantMessage) {
     logStopDebug("stop.skip.noPendingAssistant", {
       sessionId: String(activeSession?.value?.backendSessionId || activeSession?.value?.sessionId || activeSession?.value?.id || ""),

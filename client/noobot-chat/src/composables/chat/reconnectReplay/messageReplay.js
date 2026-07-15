@@ -10,6 +10,7 @@ import {
   mergeCurrentUserMessagesIntoFoldedMessages,
   patchMessageObjectPreservingUiState,
 } from "../../infra/reconnectReplayModel";
+import { findMessageTurnStatus } from "../chatEngine/messageStateGuards";
 import { getMessageDialogProcessId } from "../../infra/messageIdentity";
 import { _ensureArray, _isAssistantRole, _matchesDialogProcessId, _trimStr } from "./utils";
 import {
@@ -92,7 +93,11 @@ export function applyFoldedMessagesToActiveSession(activeSession, foldedMessages
   }).map((nextMessage) => {
     const reusableMessage = findReusableMessageObject(nextMessage, existingMessages);
     return reusableMessage
-      ? patchMessageObjectPreservingUiState(reusableMessage, nextMessage)
+      ? patchMessageObjectPreservingUiState(
+        reusableMessage,
+        nextMessage,
+        findMessageTurnStatus(reusableMessage, activeSession.value.turnStatuses),
+      )
       : nextMessage;
   });
   if (activeSession.value.messages !== existingMessages) {
@@ -135,7 +140,11 @@ export function applyFoldedMessagesForDialogProcess(activeSession, foldedMessage
     }
     if (!reusableMessage) continue;
     reusableMessage.dialogProcessId = normalizedDpId;
-    patchMessageObjectPreservingUiState(reusableMessage, nextMessage);
+    patchMessageObjectPreservingUiState(
+      reusableMessage,
+      nextMessage,
+      findMessageTurnStatus(reusableMessage, activeSession.value.turnStatuses),
+    );
   }
   return existingMessages;
 }

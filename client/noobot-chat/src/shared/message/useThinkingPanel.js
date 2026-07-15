@@ -39,6 +39,24 @@ export function useThinkingPanel(props, emit) {
   const EXECUTION_LOG_DISPLAY_LIMIT =
     QUANTITY_THRESHOLDS.client.executionLogDisplayLimit;
 
+  function getTurnStatus(messageItem = {}) {
+    const turnScopeId = getMessageTurnScopeId(messageItem);
+    if (!turnScopeId) return null;
+    const statuses = Array.isArray(props.turnStatuses) ? props.turnStatuses : [];
+    return [...statuses].reverse().find((item = {}) =>
+      String(item?.turnScopeId || "").trim() === turnScopeId,
+    ) || null;
+  }
+
+  function getRuntimeView(messageItem = {}) {
+    const turnScopeId = getMessageTurnScopeId(messageItem);
+    return resolveSessionRunMessageRuntimeView(
+      messageItem,
+      props.turnTimingsByTurnScopeId?.[turnScopeId] || null,
+      getTurnStatus(messageItem),
+    );
+  }
+
   function getRealtimeLogs(messageItem = {}) {
     return getAllRealtimeLogs(messageItem)
       .filter((logItem) => !isPluginCapabilityResponseLog(logItem))
@@ -255,7 +273,7 @@ export function useThinkingPanel(props, emit) {
   function hasThinkingLogs(messageItem = {}) {
     if (!messageItem || getMessageRole(messageItem) !== "assistant")
       return false;
-    if (resolveSessionRunMessageRuntimeView(messageItem).running) return true;
+    if (getRuntimeView(messageItem).running) return true;
     if (hasSummaryThinkingDetails(messageItem)) return true;
     if (getLatestPluginAnalysisLog(messageItem)) return true;
     const hasRealtimeLogs =
@@ -268,7 +286,7 @@ export function useThinkingPanel(props, emit) {
   }
 
   function isMessageRuntimeRunning(messageItem = {}) {
-    return resolveSessionRunMessageRuntimeView(messageItem).running;
+    return getRuntimeView(messageItem).running;
   }
 
   function isSameFrontendTurnScope(target = {}, candidate = {}) {
@@ -640,7 +658,7 @@ export function useThinkingPanel(props, emit) {
     const persistedTiming = turnScopeId
       ? props.turnTimingsByTurnScopeId?.[turnScopeId]
       : null;
-    const runtimeView = resolveSessionRunMessageRuntimeView(messageItem, persistedTiming);
+    const runtimeView = getRuntimeView(messageItem);
     const startedAt = parseAnyTimeMs(persistedTiming?.thinkingStartedAt);
     const finishedAt = parseAnyTimeMs(persistedTiming?.thinkingFinishedAt);
     return resolveThinkingDurationMs({
@@ -659,8 +677,7 @@ export function useThinkingPanel(props, emit) {
   }
 
   function isThinkingRuntimeRunning(messageItem = {}) {
-    const timing = props.turnTimingsByTurnScopeId?.[getMessageTurnScopeId(messageItem)] || null;
-    return resolveSessionRunMessageRuntimeView(messageItem, timing).running;
+    return getRuntimeView(messageItem).running;
   }
 
   function startTimer() {

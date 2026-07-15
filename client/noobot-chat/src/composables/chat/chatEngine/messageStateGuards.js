@@ -27,9 +27,27 @@ export function normalizeSessionDetailApplyMode(value = "") {
     : SESSION_DETAIL_APPLY_MODE.AUTO;
 }
 
-export function isInFlightAssistantMessage(messageItem = {}) {
+export function findMessageTurnStatus(messageItem = {}, turnStatuses = []) {
+  const turnScopeId = getMessageTurnScopeId(messageItem);
+  const dialogProcessId = getMessageDialogProcessId(messageItem);
+  return (Array.isArray(turnStatuses) ? turnStatuses : []).find((turnStatus) => {
+    if (!turnStatus || typeof turnStatus !== "object" || Array.isArray(turnStatus)) return false;
+    const statusTurnScopeId = normalizeTrimmedString(turnStatus.turnScopeId);
+    const statusDialogProcessId = normalizeTrimmedString(
+      turnStatus.dialogProcessId || getMessageDialogProcessId(turnStatus),
+    );
+    if (turnScopeId && statusTurnScopeId) return turnScopeId === statusTurnScopeId;
+    return Boolean(dialogProcessId && statusDialogProcessId && dialogProcessId === statusDialogProcessId);
+  }) || null;
+}
+
+export function isInFlightAssistantMessage(messageItem = {}, { turnStatuses = [] } = {}) {
   if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) return false;
-  const runtimeView = resolveSessionRunMessageRuntimeView(messageItem);
+  const runtimeView = resolveSessionRunMessageRuntimeView(
+    messageItem,
+    null,
+    findMessageTurnStatus(messageItem, turnStatuses),
+  );
   if (!runtimeView.inFlightAssistant) return false;
   const runtimeChannelState = runtimeView.channelState || {};
   const hasRuntimeIdentity = Boolean(
@@ -47,10 +65,10 @@ export function isMessageInRunScope(messageItem = {}, { turnScopeId = "" } = {})
   return getMessageTurnScopeId(messageItem) === normalizedTurnScopeId;
 }
 
-export function hasMatchingInFlightAssistantMessage(messages = [], { turnScopeId = "" } = {}) {
+export function hasMatchingInFlightAssistantMessage(messages = [], { turnScopeId = "", turnStatuses = [] } = {}) {
   const sourceMessages = Array.isArray(messages) ? messages : [];
   return sourceMessages.some((messageItem) => (
-    isInFlightAssistantMessage(messageItem) &&
+    isInFlightAssistantMessage(messageItem, { turnStatuses }) &&
     isMessageInRunScope(messageItem, { turnScopeId })
   ));
 }
@@ -58,6 +76,7 @@ export function hasMatchingInFlightAssistantMessage(messages = [], { turnScopeId
 export function hasInFlightAssistantMissingFromDetail({
   currentMessages = [],
   detailMessages = [],
+  turnStatuses = [],
 } = {}) {
   const detailTurnScopeIds = new Set(
     (Array.isArray(detailMessages) ? detailMessages : [])
@@ -69,7 +88,7 @@ export function hasInFlightAssistantMissingFromDetail({
     return Boolean(
       turnScopeId &&
       !detailTurnScopeIds.has(turnScopeId) &&
-      isInFlightAssistantMessage(messageItem),
+      isInFlightAssistantMessage(messageItem, { turnStatuses }),
     );
   });
 }

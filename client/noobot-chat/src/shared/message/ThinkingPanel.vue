@@ -13,6 +13,7 @@ const props = defineProps({
   messageItem: { type: Object, default: () => ({}) },
   allMessages: { type: Array, default: () => [] },
   turnTimingsByTurnScopeId: { type: Object, default: () => ({}) },
+  turnStatuses: { type: Array, default: () => [] },
   variant: { type: String, default: "panel" },
 });
 const emit = defineEmits(["open-thinking-details"]);

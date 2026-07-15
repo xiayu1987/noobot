@@ -166,6 +166,7 @@ export function createSessionDetailApplicator({
       hasInFlightAssistantMissingFromDetail({
         currentMessages: currentRenderedMessages,
         detailMessages,
+        turnStatuses,
       });
     const preserveCurrentMessages =
       requestedPreserveCurrentMessages || hasCurrentInFlightTurnMissingFromDetail;
@@ -221,7 +222,7 @@ export function createSessionDetailApplicator({
         currentMessages: summarizeDebugMessages(sessionItem.messages),
       });
       const existingMessages = Array.isArray(sessionItem.messages) ? sessionItem.messages : [];
-      mergePreservedDetailMessages(existingMessages, normalizedDetailMessages);
+      mergePreservedDetailMessages(existingMessages, normalizedDetailMessages, { turnStatuses });
       const workflowMessages = normalizedDetailMessages.filter(
         (messageItem) =>
           getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
