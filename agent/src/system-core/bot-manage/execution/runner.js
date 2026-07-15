@@ -573,7 +573,12 @@ export class SessionExecutionRunner {
         agentResult,
         executionStartIndex,
         runtimeEventListener,
-        userConfig,
+        userConfig: {
+          ...(userConfig && typeof userConfig === "object" ? userConfig : {}),
+          ...(String(resolvedRunConfig?.memoryModel || "").trim()
+            ? { memoryModel: String(resolvedRunConfig.memoryModel).trim() }
+            : {}),
+        },
         resolvedParentAsyncResultContainer,
         lifecycle,
       });
