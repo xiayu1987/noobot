@@ -11,6 +11,8 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
   [LOCALE.ZH_CN]: Object.freeze({
     forcedAcceptanceHeader: "[Harness-Forced-Acceptance]",
     separateModelRelayPrefix: "[来自harness外部模型输出/{purpose}]",
+    separateModelScriptContentRiskNotice:
+      "[风险等级：高：原因：因未按照外部模型输出规范禁止输出脚本内容]",
     reviewHeader: "[Harness-Review]",
     harnessPolicyGeneralPrompt:
       "Noobot Harness 通用策略：遵守用户隔离；附件先转文本再处理；未知规则、模板、路径、配置先读后用；先读必要上下文，做最小切片可逆动作；循环执行 -> 验证/反馈 -> 修正 -> 继续，不断推进任务。验证是完成条件：优先跑相关测试/检查/构建，失败先修复重试；无法验证必须说明原因。仅在不可逆/破坏性、安全隐私、生产/资金、高成本外部动作或需求冲突时停下确认。最终回复简洁说明结果与验证。",
@@ -276,6 +278,8 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
   [LOCALE.EN_US]: Object.freeze({
     forcedAcceptanceHeader: "[Harness-Forced-Acceptance]",
     separateModelRelayPrefix: "[Relay from harness external model/{purpose}]",
+    separateModelScriptContentRiskNotice:
+      "[Risk level: high: reason: script content was output contrary to the external model output specification]",
     reviewHeader: "[Harness-Review]",
     harnessPolicyGeneralPrompt:
       "Noobot Harness general policy: enforce user isolation; convert attachments to text before processing; read unknown rules/templates/paths/configuration before use; read necessary context, then take the smallest reversible action; loop execute -> verify/observe -> fix -> continue. Verification is required for completion: prefer relevant tests/checks/builds; fix failures and retry, or state why verification was impossible. Stop for confirmation only for irreversible/destructive, security/privacy, production/money, costly external actions, or requirement conflicts. Final response: concise result and validation.",

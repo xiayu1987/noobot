@@ -63,6 +63,7 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
   }),
   RELAY: Object.freeze({
     SEPARATE_MODEL_PREFIX: "separateModelRelayPrefix",
+    SCRIPT_CONTENT_RISK_NOTICE: "separateModelScriptContentRiskNotice",
   }),
   STRUCTURED_ENVELOPE: Object.freeze({
     AGENT_HEADER: "structuredEnvelopeAgentHeader",
