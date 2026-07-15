@@ -43,6 +43,7 @@ const messageItemSharedProps = computed(() => ({
   allMessages: props.activeSession?.messages || [],
   sessionDocs: props.activeSession?.sessionDocs || [],
   turnTimingsByTurnScopeId: props.activeSession?.turnTimingsByTurnScopeId || {},
+  turnStatuses: props.activeSession?.turnStatuses || [],
   userId: props.userId,
   authFetch: props.authFetch,
   renderMarkdown: props.renderMarkdown,

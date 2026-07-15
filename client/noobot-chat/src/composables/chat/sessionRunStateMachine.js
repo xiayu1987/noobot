@@ -40,6 +40,7 @@ export {
   resolveSessionRunMessageRuntimeEffect,
   resolveSessionRunMessageRuntimePatch,
   resolveSessionRunMessageRuntimeView,
+  resolveTurnRuntimeView,
   resolveSessionRunStateForMessage,
 } from "./sessionRunStateMachine/messageRuntime";
 export {

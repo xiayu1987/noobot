@@ -28,6 +28,7 @@ import {
   isMessageInFlightAssistant,
   isMessageRunning,
   resolveSessionRunMessageRuntimeView,
+  resolveTurnRuntimeView,
   resolveSessionRunMessageRuntimePatch,
   resolveSessionRunStateForMessage,
   resolveTransitionDecision,
@@ -49,6 +50,39 @@ function installStorage() {
 
 describe("sessionRunStateMachine message runtime", () => {
   beforeEach(() => installStorage());
+
+  it("uses persisted terminal turn status over stale realtime message state", () => {
+    const view = resolveTurnRuntimeView({
+      messageItem: {
+        role: "assistant",
+        pending: true,
+        channelState: { state: BackendChannelState.SENDING },
+      },
+      turnStatus: { status: BackendChannelState.COMPLETED },
+    });
+
+    expect(view).toMatchObject({
+      state: BackendChannelState.COMPLETED,
+      running: false,
+      inFlightAssistant: false,
+      source: "persisted",
+    });
+  });
+
+  it("uses realtime state while persisted turn status has not caught up", () => {
+    const view = resolveTurnRuntimeView({
+      messageItem: { role: "assistant", pending: false },
+      turnStatus: { status: "queued" },
+      realtimeState: { state: BackendChannelState.SENDING },
+    });
+
+    expect(view).toMatchObject({
+      state: BackendChannelState.SENDING,
+      running: true,
+      inFlightAssistant: true,
+      source: "realtime",
+    });
+  });
 
   it("resolves in-flight state for a matching assistant message", () => {
     const assistant = { role: "assistant", dialogProcessId: "d1", turnScopeId: "turn-1", content: "" };

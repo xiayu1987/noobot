@@ -321,7 +321,7 @@ function findReusableMessageObject(nextMessage = {}, existingMessages = []) {
   );
 }
 
-function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage = {}) {
+function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage = {}, turnStatus = null) {
   const sourceRole = getMessageRole(sourceMessage);
   const sourceTurnScopeId = getMessageTurnScopeId(sourceMessage);
   const sourceCanUseTurnScopedAssets = canUseTurnScopedAssets(sourceMessage);
@@ -353,7 +353,7 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   const existingPending = targetMessage?.pending === true;
   const existingTransferEnvelopes = getMessageTransferEnvelopes(targetMessage);
   const sourceTransferEnvelopes = getMessageTransferEnvelopes(sourceMessage);
-  const existingRuntimeView = resolveSessionRunMessageRuntimeView(targetMessage);
+  const existingRuntimeView = resolveSessionRunMessageRuntimeView(targetMessage, null, turnStatus);
 
   Object.assign(targetMessage, sourceMessage);
 
@@ -401,7 +401,7 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
     clearTurnScopedAssets(targetMessage);
     delete targetMessage.turnScopeId;
   }
-  const runtimeView = resolveSessionRunMessageRuntimeView(targetMessage);
+  const runtimeView = resolveSessionRunMessageRuntimeView(targetMessage, null, turnStatus);
   if (existingPending && runtimeView.inFlightAssistant) {
     targetMessage.pending = true;
   }
