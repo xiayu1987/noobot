@@ -1,10 +1,4 @@
 {
-  "patterns": [
-    "service/src/**/*.{js,ts,jsx,tsx}",
-    "client/**/*.{js,ts,jsx,tsx}",
-    "agent-proxy/**/*.{js,ts}",
-    "model-proxy/**/*.{js,ts}"
-  ],
   "ignore": [
     "**/node_modules/**",
     "**/dist/**",
@@ -15,12 +9,16 @@
     "**/__tests__/**",
     "**/__mocks__/**",
     "**/*.d.ts",
+    "**/*.md",
+    "**/*.svg",
+    "**/*.txt",
     "**/workspace/**",
     "**/report/**"
   ],
   "minLines": 5,
   "minTokens": 70,
-  "reporters": ["json"],
-  "output": "/project/report/jscpd-report.json",
+  "threshold": 3,
+  "reporters": ["console", "json"],
+  "output": "/project/report",
   "absolute": true
 }

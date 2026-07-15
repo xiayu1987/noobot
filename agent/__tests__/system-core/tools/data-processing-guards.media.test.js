@@ -24,29 +24,7 @@ import { createWeb2DataTool } from "../../../src/system-core/tools/data-processi
 import { createConnectorAccessTool } from "../../../src/system-core/tools/connectors/connector-access-tool.js";
 import { ERROR_CODE } from "../../../src/system-core/error/constants.js";
 import { TOOL_NAME } from "../../../src/system-core/tools/constants/index.js";
-
-function buildAgentContext(basePath = "") {
-  return {
-    environment: {
-      workspace: { basePath },
-    },
-    execution: {
-      controllers: {
-        runtime: {
-          basePath,
-          globalConfig: {},
-          userConfig: {},
-          sharedTools: {},
-        },
-      },
-    },
-  };
-}
-
-async function readJsonl(filePath) {
-  const content = await fs.readFile(filePath, "utf8");
-  return content.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
-}
+import { buildAgentContext } from "./data-processing-guards.test-helpers.js";
 
 
 test("media_to_data: non-media file should fail with unsupported media file type", async () => {

@@ -37,21 +37,30 @@ function hasRecognitionFailure(report = {}) {
   return false;
 }
 
-function renderRawAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
+function extractAcceptanceReportFields(report = {}) {
   const data = report && typeof report === "object" ? report : {};
-  const mode = String(data.mode || "").trim() || "active";
-  const forcedReason = String(data.forcedReason || "").trim();
-  const acceptedAt = String(data.acceptedAt || "").trim() || "";
-  const planText = String(data.planText || data?.plan?.planText || "").trim();
-  const checklist = Array.isArray(data.finalPlanChecklist) ? data.finalPlanChecklist : [];
-  const summary = data?.summary && typeof data.summary === "object" ? data.summary : {};
-  const semanticValidation = data?.semanticValidation && typeof data.semanticValidation === "object"
-    ? data.semanticValidation
-    : null;
-  const modelAcceptance = data?.modelAcceptance && typeof data.modelAcceptance === "object"
-    ? data.modelAcceptance
-    : null;
-  const summaryDetailPaths = Array.isArray(data?.summaryDetailPaths) ? data.summaryDetailPaths : [];
+  return {
+    mode: String(data.mode || "").trim() || "active",
+    forcedReason: String(data.forcedReason || "").trim(),
+    acceptedAt: String(data.acceptedAt || "").trim() || "",
+    planText: String(data.planText || data?.plan?.planText || "").trim(),
+    checklist: Array.isArray(data.finalPlanChecklist) ? data.finalPlanChecklist : [],
+    summary: data?.summary && typeof data.summary === "object" ? data.summary : {},
+    semanticValidation: data?.semanticValidation && typeof data.semanticValidation === "object"
+      ? data.semanticValidation
+      : null,
+    modelAcceptance: data?.modelAcceptance && typeof data.modelAcceptance === "object"
+      ? data.modelAcceptance
+      : null,
+    summaryDetailPaths: Array.isArray(data?.summaryDetailPaths) ? data.summaryDetailPaths : [],
+  };
+}
+
+function renderRawAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
+  const {
+    mode, forcedReason, acceptedAt, planText, checklist, summary,
+    semanticValidation, modelAcceptance, summaryDetailPaths,
+  } = extractAcceptanceReportFields(report);
   const title = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_TITLE);
   const forcedReasonField = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_FORCED_REASON_FIELD);
   const planTextField = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_PLAN_TEXT_FIELD);
@@ -99,20 +108,10 @@ function renderRawAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
 }
 
 function renderBeautifiedAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
-  const data = report && typeof report === "object" ? report : {};
-  const mode = String(data.mode || "").trim() || "active";
-  const forcedReason = String(data.forcedReason || "").trim();
-  const acceptedAt = String(data.acceptedAt || "").trim() || "";
-  const planText = String(data.planText || data?.plan?.planText || "").trim();
-  const checklist = Array.isArray(data.finalPlanChecklist) ? data.finalPlanChecklist : [];
-  const summary = data?.summary && typeof data.summary === "object" ? data.summary : {};
-  const semanticValidation = data?.semanticValidation && typeof data.semanticValidation === "object"
-    ? data.semanticValidation
-    : null;
-  const modelAcceptance = data?.modelAcceptance && typeof data.modelAcceptance === "object"
-    ? data.modelAcceptance
-    : null;
-  const summaryDetailPaths = Array.isArray(data?.summaryDetailPaths) ? data.summaryDetailPaths : [];
+  const {
+    mode, forcedReason, acceptedAt, planText, checklist, summary,
+    semanticValidation, modelAcceptance, summaryDetailPaths,
+  } = extractAcceptanceReportFields(report);
   const title = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_TITLE);
   const modeLabel = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.MODE_LABEL);
   const forcedReasonLabel = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.FORCED_REASON_LABEL);

@@ -58,10 +58,11 @@ function resolveMessageRole(message = {}) {
 }
 
 /**
- * 判断当前轮主流程最后一条模型返回消息是否同时带工具调用且 content 非空。
- * 从消息序列尾部向前查找最近一条非 harness 注入的 assistant 消息（排期分析时
- * 序列末尾常为 tool 结果消息），命中则本轮跳过分析排期。
- * 单一事实源：inject 与 separate_model 两条分析路径共用此守卫。
+ * Determine whether the latest model response in the main flow contains both
+ * tool calls and non-empty content. Search backward for the nearest assistant
+ * message not injected by the harness because tool results may trail it during
+ * scheduling analysis. Both inject and separate_model analysis paths share
+ * this guard as their single source of truth.
  */
 export function shouldSkipAnalysisForTrailingToolCallContent(messages = []) {
   const items = Array.isArray(messages) ? messages : [];

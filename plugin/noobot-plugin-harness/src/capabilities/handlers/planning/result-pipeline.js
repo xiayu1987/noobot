@@ -24,6 +24,7 @@ import {
 } from "../shared/plan/text-protocol.js";
 import { executePlanMutation } from "../shared/plan/mutation-facade.js";
 import { resetPlanAcceptanceStatusForPlanChange } from "../shared/plan/acceptance-status.js";
+import { extractChangedMainStepIndexes } from "../shared/plan/revision-helpers.js";
 import { resolveOperationDirectoryContext } from "../shared/operation-directory.js";
 import {
   buildHarnessInjectedMessage,
@@ -48,29 +49,6 @@ function resolveDefaultPlanReasonLabel(locale = LOCALE.ZH_CN, reason = "") {
   const key = DEFAULT_PLAN_REASON_I18N_KEY[normalizedReason];
   if (!key) return normalizedReason;
   return translateI18nText(locale, key) || normalizedReason;
-}
-
-function extractChangedMainStepIndexes(previousDocument = {}, nextDocument = {}) {
-  const previousMainPlans = Array.isArray(previousDocument?.mainPlans) ? previousDocument.mainPlans : [];
-  const nextMainPlans = Array.isArray(nextDocument?.mainPlans) ? nextDocument.mainPlans : [];
-  const previousMap = new Map(
-    previousMainPlans
-      .map((item = {}) => [Number(item.id), String(item.content || "").trim()])
-      .filter(([id, content]) => Number.isFinite(id) && id > 0 && content),
-  );
-  const nextMap = new Map(
-    nextMainPlans
-      .map((item = {}) => [Number(item.id), String(item.content || "").trim()])
-      .filter(([id, content]) => Number.isFinite(id) && id > 0 && content),
-  );
-  const changed = new Set();
-  for (const id of previousMap.keys()) {
-    if (!nextMap.has(id)) changed.add(id);
-  }
-  for (const [id, content] of nextMap.entries()) {
-    if (!previousMap.has(id) || previousMap.get(id) !== content) changed.add(id);
-  }
-  return [...changed].sort((a, b) => a - b);
 }
 
 function increasePlanningCaptureAttempts(state = {}) {
