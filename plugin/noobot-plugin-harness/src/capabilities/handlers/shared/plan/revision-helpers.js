@@ -36,7 +36,7 @@ function normalizeMainStepIndexes(indexes = []) {
   )].sort((a, b) => a - b);
 }
 
-function extractChangedMainStepIndexes(previousDocument = {}, nextDocument = {}) {
+export function extractChangedMainStepIndexes(previousDocument = {}, nextDocument = {}) {
   const previousMainPlans = Array.isArray(previousDocument?.mainPlans) ? previousDocument.mainPlans : [];
   const nextMainPlans = Array.isArray(nextDocument?.mainPlans) ? nextDocument.mainPlans : [];
   const previousMap = new Map(

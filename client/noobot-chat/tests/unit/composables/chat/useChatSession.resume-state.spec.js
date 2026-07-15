@@ -1,8 +1,14 @@
+import {
+  createChatSession,
+  createSessionFixture,
+  sessionLogClientMock,
+  wsClientMock,
+} from "./useChatSession.test-helpers.js";
+import { useChatSession } from "../../../../src/composables/chat/useChatSession";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick, ref, toRef } from "vue";
 import { useChatStore } from "../../../../src/shared/stores/useChatStore";
-import { useChatSession } from "../../../../src/composables/chat/useChatSession";
 import { logResendDebug, setResendDebugLogSink } from "../../../../src/composables/chat/debug/resendDebugLogger";
 import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
 import {
@@ -11,80 +17,6 @@ import {
   SESSION_RUN_EVENT,
   applySessionRunStateEvent,
 } from "../../../../src/composables/chat/sessionRunStateMachine";
-
-vi.mock("../../../../src/shared/i18n/useLocale", () => ({
-  useLocale: () => ({
-    translate: (key) => key,
-  }),
-}));
-
-const wsClientMock = {
-  connect: vi.fn(),
-  dispose: vi.fn(),
-  sendJson: vi.fn(),
-  stream: vi.fn(),
-  requestStop: vi.fn(),
-  clearLastReceivedSeqMap: vi.fn(),
-  clearStopRequested: vi.fn(),
-  isStopRequested: vi.fn(() => false),
-  reconnect: vi.fn(async () => {}),
-};
-
-const sessionLogClientMock = vi.hoisted(() => ({
-  log: vi.fn(() => true),
-  debug: vi.fn(() => true),
-  dispose: vi.fn(),
-}));
-
-function createSessionFixture(overrides = {}) {
-  return {
-    id: "s-action-state",
-    backendSessionId: "s-action-state",
-    title: "session",
-    isLocal: false,
-    loaded: true,
-    messages: [],
-    rawMessages: [],
-    sessionDocs: [],
-    connectorPanelState: { selectedConnectors: {} },
-    currentTaskId: "",
-    currentTaskStatus: "idle",
-    messageCount: 0,
-    lastMessage: null,
-    createdAt: "",
-    updatedAt: "",
-    ...overrides,
-  };
-}
-
-function createChatSession(options = {}) {
-  return useChatSession({
-    userId: ref("u-1"),
-    apiKey: ref(""),
-    allowUserInteraction: ref(true),
-    safeConfirm: ref(true),
-    streamOutput: ref(true),
-    botScenario: ref(""),
-    connected: ref(true),
-    ensureConnected: vi.fn(() => true),
-    authFetch: null,
-    isImageMime: () => false,
-    classifyRealtimeLog: (item) => item,
-    scrollBottom: vi.fn(),
-    notify: vi.fn(),
-    clearUploadSelection: vi.fn(),
-    ...options,
-  });
-}
-
-vi.mock("../../../../src/services/ws/chatWebSocketClient", () => ({
-  createChatWebSocketClient: () => wsClientMock,
-}));
-
-vi.mock("../../../../src/services/ws/sessionLogWebSocketClient", () => ({
-  createSessionLogWebSocketClient: () => sessionLogClientMock,
-}));
-
 describe("useChatSession reconnect replay", () => {
   beforeEach(() => {
     setActivePinia(createPinia());

@@ -48,7 +48,10 @@ export function mapPlanAcceptanceStatusToTaskStatus(status = "") {
   return "";
 }
 
-export function parsePlanAcceptanceItemsFromText(text = "") {
+export function parseAcceptanceItemsFromText(text = "", {
+  normalizePlanId: normalizePlanIdValue = normalizePlanId,
+  normalizeStatus: normalizeStatusValue = normalizeAcceptanceStatus,
+} = {}) {
   const raw = String(text || "").trim();
   if (!raw) return [];
   const lines = raw.replace(/\r\n?/g, "\n").split("\n");
@@ -69,8 +72,8 @@ export function parsePlanAcceptanceItemsFromText(text = "") {
       evidence = (conclusionStart >= 0 ? evidenceTail.slice(0, conclusionStart) : evidenceTail).trim();
     }
     const conclusionMatch = tail.match(/\[([^\]]+)\]\s*$/);
-    const planId = normalizePlanId(planMatch?.[1]);
-    const status = normalizeAcceptanceStatus(statusMatch?.[1]);
+    const planId = normalizePlanIdValue(planMatch?.[1]);
+    const status = normalizeStatusValue(statusMatch?.[1]);
     if (!planId || !status) continue;
     items.push({
       action: String(match[1] || "").trim().toUpperCase(),
@@ -84,6 +87,10 @@ export function parsePlanAcceptanceItemsFromText(text = "") {
     });
   }
   return items;
+}
+
+export function parsePlanAcceptanceItemsFromText(text = "") {
+  return parseAcceptanceItemsFromText(text);
 }
 
 function flattenPlanDocument(planDocument = {}) {

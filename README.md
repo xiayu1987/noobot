@@ -110,6 +110,43 @@ Optional system deps:
 - `ffmpeg` (audio/video processing)
 - `docker` / `bubblewrap` / `firejail` (script sandbox)
 
+## Desktop Packaging
+
+Install dependencies first from the repository root:
+
+```bash
+npm install --workspaces
+```
+
+Then choose one of the following equivalent approaches.
+
+From the repository root (the root scripts already select the workspace with
+`-w`):
+
+```bash
+# Build the Windows desktop package
+npm run build:windows
+
+# Build the macOS desktop package
+npm run build:mac
+```
+
+Or run the workspace script from the corresponding desktop client directory:
+
+```bash
+# Windows (run from client/windows)
+cd client/windows
+npm run build:win
+
+# macOS (run from client/mac)
+cd ../mac
+npm run build:mac
+```
+
+The commands prepare the frontend, Electron client, and backend before invoking
+`electron-builder`. The generated artifacts are written to the corresponding
+desktop client's `dist/` directory.
+
 ## Config
 
 - Main config doc: [`CONFIGURATION.md`](./CONFIGURATION.md)

@@ -20,6 +20,7 @@ import { resolveAttachmentDisplayPath } from "../shared/sandbox-path.js";
 import {
   getPlanAcceptanceStatusMap,
   mapPlanAcceptanceStatusToTaskStatus,
+  parseAcceptanceItemsFromText,
   parsePlanAcceptanceItemsFromText,
   resolvePlanAcceptanceForChecklistItem,
 } from "../shared/plan/acceptance-status.js";
@@ -29,8 +30,6 @@ const TASK_STATUS = Object.freeze({
   IN_PROGRESS: "in_progress",
   PENDING: "pending",
 });
-
-const MODEL_ACCEPTANCE_LINE_RE = /^\s*(ADD|UPDATE)\s+A([A-Za-z0-9._-]+)\s+(.+?)\s*$/i;
 
 function resolveKeywordSet(i18nKey = "") {
   const values = [LOCALE.ZH_CN, LOCALE.EN_US]
@@ -52,41 +51,10 @@ function includesAnyKeyword(text = "", keywords = []) {
 }
 
 function parseModelAcceptanceItemsFromText(text = "") {
-  const raw = String(text || "").trim();
-  if (!raw) return [];
-  const lines = raw.replace(/\r\n?/g, "\n").split("\n");
-  const items = [];
-  for (const line of lines) {
-    const match = String(line || "").trim().match(MODEL_ACCEPTANCE_LINE_RE);
-    if (!match) continue;
-    const tail = String(match[3] || "").trim();
-    const planMatch = tail.match(/(?:^|\s)plan=\[?([0-9]+(?:\.[0-9]+)?)\]?/i);
-    const statusMatch = tail.match(/(?:^|\s)status=(pass|warn|fail)/i);
-    const riskMatch = tail.match(/(?:^|\s)risk=(low|medium|high)/i);
-    const evidencePos = tail.search(/(?:^|\s)evidence=/i);
-    let evidence = "";
-    if (evidencePos >= 0) {
-      const evidenceStart = tail.slice(0, evidencePos).length + (tail.slice(evidencePos).startsWith("evidence=") ? 9 : 10);
-      const evidenceTail = tail.slice(evidenceStart).trim();
-      const conclusionStart = evidenceTail.search(/\s+\[[^\]]+\]\s*$/);
-      evidence = (conclusionStart >= 0 ? evidenceTail.slice(0, conclusionStart) : evidenceTail).trim();
-    }
-    const conclusionMatch = tail.match(/\[([^\]]+)\]\s*$/);
-    const planId = String(planMatch?.[1] || "").trim();
-    const status = String(statusMatch?.[1] || "").trim().toLowerCase();
-    if (!planId || !status) continue;
-    items.push({
-      action: String(match[1] || "").trim().toUpperCase(),
-      acceptanceId: `A${String(match[2] || "").trim()}`,
-      planId,
-      status,
-      risk: String(riskMatch?.[1] || "").trim().toLowerCase(),
-      evidence,
-      conclusion: String(conclusionMatch?.[1] || "").trim(),
-      raw: String(line || "").trim(),
-    });
-  }
-  return items;
+  return parseAcceptanceItemsFromText(text, {
+    normalizePlanId: (value = "") => String(value || "").trim(),
+    normalizeStatus: (value = "") => String(value || "").trim().toLowerCase(),
+  });
 }
 
 function parseSemanticAcceptanceItemsFromText(text = "") {

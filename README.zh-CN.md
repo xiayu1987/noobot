@@ -110,6 +110,41 @@ npm run -w client/noobot-chat build
 - `ffmpeg`（音视频处理）
 - `docker` / `bubblewrap` / `firejail`（脚本沙箱）
 
+## 桌面端打包
+
+先在仓库根目录安装依赖：
+
+```bash
+npm install --workspaces
+```
+
+然后任选以下一种等效方式执行。
+
+在仓库根目录执行（根脚本内部已经通过 `-w` 指定对应 workspace）：
+
+```bash
+# 构建 Windows 桌面安装包
+npm run build:windows
+
+# 构建 macOS 桌面安装包
+npm run build:mac
+```
+
+也可以进入对应桌面客户端目录，直接执行子项目脚本：
+
+```bash
+# Windows（在 client/windows 目录执行）
+cd client/windows
+npm run build:win
+
+# macOS（在 client/mac 目录执行）
+cd ../mac
+npm run build:mac
+```
+
+这两个命令会依次准备前端、Electron 客户端和后端，然后调用
+`electron-builder`。生成的文件位于对应桌面客户端的 `dist/` 目录。
+
 ## 配置说明
 
 - 核心配置文档：[`CONFIGURATION.zh-CN.md`](./CONFIGURATION.zh-CN.md)

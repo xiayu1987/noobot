@@ -25,6 +25,7 @@
     "install:all": "npm install --workspaces",
     "build": "npm run -w client/startup build && npm run -w client/noobot-chat build",
     "check:legacy-time-keys": "node ./scripts/check-legacy-time-keys.mjs",
+    "check:duplication": "npx --yes jscpd@5.0.11 service/src client agent-proxy model-proxy --config ./jscpd-config.json",
     "dev:service": "npm run -w service dev",
     "dev:agent-proxy": "npm run -w agent-proxy dev",
     "dev:client": "npm run -w client/noobot-chat dev",
