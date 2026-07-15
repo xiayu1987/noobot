@@ -27,7 +27,6 @@ import { assertNotAborted } from "../utils/error-utils.js";
 import { processToolResults } from "./response-processor.js";
 import { invokeNoToolsTurn, invokeWithToolsTurn } from "./turn-executor.js";
 import { buildLoopResult } from "./turn-result-aggregator.js";
-import { resolveForceToolCall } from "../../../utils/shared-utils.js";
 import { resolveDialogProcessIdFromContext } from "../../../context/session/dialog-process-id-resolver.js";
 import { getSystemRuntimeFromRuntime } from "../../../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../../../context/parent-session-id-resolver.js";
@@ -242,44 +241,17 @@ export function createTurnOrchestrator({
             finalStreaming: withToolsResult.finalStreaming,
           });
         }
-        const forceTool = resolveForceToolCall(systemRuntime?.config || {});
-        if (!forceTool) {
-          loopState.toolChoiceRetryPrompted = false;
-          removeToolChoiceRequiredRetryPrompts(loopState.messages);
-          return buildLoopResultFn({
-            output: aiContentText,
-            traces,
-            loopState,
-            turnTaskStore,
-            turnMessageStore,
-            modelMessages: loopState.messages,
-            finalStreaming: withToolsResult.finalStreaming,
-          });
-        }
-        if (loopState?.toolChoiceRetryPrompted === true) {
-          loopState.toolChoiceRetryPrompted = false;
-          return buildLoopResultFn({
-            output: aiContentText,
-            traces,
-            loopState,
-            turnTaskStore,
-            turnMessageStore,
-            modelMessages: loopState.messages,
-            finalStreaming: withToolsResult.finalStreaming,
-          });
-        }
-        if (Array.isArray(loopState?.messages)) {
-          removeToolChoiceRequiredRetryPrompts(loopState.messages);
-        }
-        appendMessage(loopState, new HumanMessage({
-          content: tEngine(runtime, "toolChoiceRequiredRetryPrompt"),
-          additional_kwargs: {
-            noobotInternalMessageType: "tool_choice_required_retry_prompt",
-          },
-        }), { block: "incremental" });
-        loopState.toolChoiceRetryPrompted = true;
-        emitEvent(eventListener, "tool_choice_required_retry_prompted", { turn });
-        return runFunctionCallLoop({ modelState, loopState, turn: turn + 1 });
+        loopState.toolChoiceRetryPrompted = false;
+        removeToolChoiceRequiredRetryPrompts(loopState.messages);
+        return buildLoopResultFn({
+          output: aiContentText,
+          traces,
+          loopState,
+          turnTaskStore,
+          turnMessageStore,
+          modelMessages: loopState.messages,
+          finalStreaming: withToolsResult.finalStreaming,
+        });
       }
       loopState.toolChoiceRetryPrompted = false;
 

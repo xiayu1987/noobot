@@ -70,7 +70,7 @@ export function useChatSession({
   userId,
   apiKey,
   allowUserInteraction,
-  forceTool,
+  safeConfirm,
   streamOutput,
   botScenario,
   selectedModel,
@@ -514,7 +514,7 @@ export function useChatSession({
   const chatEngine = useChatEngine({
     userId,
     allowUserInteraction,
-    forceTool,
+    safeConfirm,
     streamOutput,
     botScenario,
     selectedModel,

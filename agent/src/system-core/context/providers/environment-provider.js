@@ -7,7 +7,6 @@ import {
   filePath as path,
   resolveRuntimePathContext,
 } from "../../utils/path-resolver.js";
-import { resolveForceToolCall } from "../../utils/shared-utils.js";
 import { resolveDialogProcessIdFromContext } from "../session/dialog-process-id-resolver.js";
 import { normalizeParentSessionId } from "../parent-session-id-resolver.js";
 import {
@@ -100,7 +99,6 @@ export function buildDynamicInfo({
   runConfig = {},
   now = new Date().toISOString(),
 } = {}) {
-  const forceTool = resolveForceToolCall(runConfig);
   const normalizedTurnScopeId = String(runConfig?.turnScopeId || "").trim();
   const toolPolicy =
     runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object"
@@ -120,7 +118,7 @@ export function buildDynamicInfo({
   );
   const config = {
     allowUserInteraction: runConfig?.allowUserInteraction !== false,
-    forceTool,
+    safeConfirm: runConfig?.safeConfirm !== false,
     ...(hasOwnConfigKey(runConfig, "streaming")
       ? { streaming: normalizeBooleanLike(runConfig?.streaming, false) }
       : {}),

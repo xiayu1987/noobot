@@ -72,7 +72,7 @@ export const createHarness = ({
   const defaultDeps = {
     userId: ref("u-1"),
     allowUserInteraction: ref(true),
-    forceTool: ref(false),
+    safeConfirm: ref(true),
     botScenario: ref(""),
     isImageMime: () => false,
     classifyRealtimeLog: (d) => d,

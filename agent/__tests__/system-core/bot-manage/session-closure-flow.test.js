@@ -100,7 +100,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
       );
       assert.deepEqual(
         toolNames,
-        ["task_summary"],
+        ["task_summary", "user_interaction"],
         "工具链应按内置编程场景策略收敛",
       );
       return {

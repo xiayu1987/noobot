@@ -9,8 +9,7 @@ function parseToolJson(text = "") {
 
 function createAgentContext({
   runConfigPassthrough = null,
-  parentForceToolCall = false,
-  parentForceTool = null,
+  parentSafeConfirm = true,
   parentToolPolicy = null,
   parentStreamingSet = false,
   parentStreaming = false,
@@ -42,9 +41,7 @@ function createAgentContext({
       dialogProcessId: "dp_parent_1",
       config: {
         allowUserInteraction: true,
-        ...(parentForceTool !== null
-          ? { forceTool: parentForceTool === true }
-          : { forceToolCall: parentForceToolCall }),
+        safeConfirm: parentSafeConfirm !== false,
         ...(normalizedToolPolicy ? { toolPolicy: normalizedToolPolicy } : {}),
         ...(parentStreamingSet ? { streaming: parentStreaming === true } : {}),
       },
@@ -87,43 +84,28 @@ async function invokeDelegateTask({ agentContext }) {
   return parseToolJson(raw);
 }
 
-test("delegate_task_async: 默认不透传 forceToolCall/toolPolicy", async () => {
+test("delegate_task_async: 默认透传 safeConfirm 且不透传 toolPolicy", async () => {
   const { agentContext, runCalls } = createAgentContext({
-    parentForceToolCall: true,
+    parentSafeConfirm: false,
     parentToolPolicy: { allowToolNames: ["execute_script"] },
   });
   const payload = await invokeDelegateTask({ agentContext });
   assert.equal(payload.ok, true);
   assert.equal(runCalls.length, 1);
   const childRunConfig = runCalls[0]?.runConfig || {};
-  assert.equal("forceToolCall" in childRunConfig, false);
+  assert.equal(childRunConfig.safeConfirm, false);
   assert.equal("toolPolicy" in childRunConfig, false);
 });
 
-test("delegate_task_async: 配置后透传 canonical forceTool", async () => {
+test("delegate_task_async: 默认开启 safeConfirm", async () => {
   const { agentContext, runCalls } = createAgentContext({
-    runConfigPassthrough: { forceToolCall: true },
-    parentForceToolCall: true,
+    parentSafeConfirm: true,
   });
   const payload = await invokeDelegateTask({ agentContext });
   assert.equal(payload.ok, true);
   assert.equal(runCalls.length, 1);
   const childRunConfig = runCalls[0]?.runConfig || {};
-  assert.equal(childRunConfig.forceTool, true);
-  assert.equal("forceToolCall" in childRunConfig, false);
-});
-
-test("delegate_task_async: 支持以 forceTool 作为父配置来源", async () => {
-  const { agentContext, runCalls } = createAgentContext({
-    runConfigPassthrough: { forceTool: true },
-    parentForceTool: true,
-  });
-  const payload = await invokeDelegateTask({ agentContext });
-  assert.equal(payload.ok, true);
-  assert.equal(runCalls.length, 1);
-  const childRunConfig = runCalls[0]?.runConfig || {};
-  assert.equal(childRunConfig.forceTool, true);
-  assert.equal("forceToolCall" in childRunConfig, false);
+  assert.equal(childRunConfig.safeConfirm, true);
 });
 
 test("delegate_task_async: 配置后透传 toolPolicy（拷贝）", async () => {
@@ -165,8 +147,8 @@ test("delegate_task_async: 记录 runconfig 透传事件日志", async () => {
     allowToolNames: ["execute_script"],
   };
   const { agentContext, events } = createAgentContext({
-    runConfigPassthrough: { forceToolCall: true, toolPolicy: true },
-    parentForceToolCall: true,
+    runConfigPassthrough: { toolPolicy: true },
+    parentSafeConfirm: false,
     parentToolPolicy,
   });
   const payload = await invokeDelegateTask({ agentContext });
@@ -175,14 +157,9 @@ test("delegate_task_async: 记录 runconfig 透传事件日志", async () => {
     (item = {}) => item?.event === "subagent_runconfig_passthrough_applied",
   );
   assert.ok(passthroughEvent);
-  assert.equal(passthroughEvent.data?.passthrough?.forceTool, true);
-  assert.equal("forceToolCall" in (passthroughEvent.data?.passthrough || {}), false);
+  assert.equal("safeConfirm" in (passthroughEvent.data?.passthrough || {}), false);
   assert.equal(passthroughEvent.data?.passthrough?.toolPolicy, true);
-  assert.equal(passthroughEvent.data?.effectiveRunConfig?.forceTool, true);
-  assert.equal(
-    "forceToolCall" in (passthroughEvent.data?.effectiveRunConfig || {}),
-    false,
-  );
+  assert.equal(passthroughEvent.data?.effectiveRunConfig?.safeConfirm, false);
   assert.equal(passthroughEvent.data?.effectiveRunConfig?.hasToolPolicy, true);
   assert.deepEqual(passthroughEvent.data?.effectiveRunConfig?.toolPolicyKeys, [
     "allowToolNames",

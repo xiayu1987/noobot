@@ -275,6 +275,7 @@ test("mergeConfig: full/programming/text 为内置情景且用户只能覆盖内
     "patch_file",
     "execute_script",
     "process_content_task",
+    "user_interaction",
     "task_summary",
     "request_help",
     "web_search",

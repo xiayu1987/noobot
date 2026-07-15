@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { RunConfigResolver } from "../../../src/system-core/bot-manage/config/run-config-resolver.js";
 
-test("applyRunConfigToolPolicy should keep final_answer tool when forceTool is enabled", () => {
+test("applyRunConfigToolPolicy should only keep tools allowed by runtime policy", () => {
   const resolver = new RunConfigResolver();
   const agentContext = {
     payload: {
@@ -13,7 +13,7 @@ test("applyRunConfigToolPolicy should keep final_answer tool when forceTool is e
     },
   };
   const runConfig = {
-    forceTool: true,
+    safeConfirm: true,
     toolPolicy: {
       allowToolNames: ["read_file"],
     },
@@ -22,10 +22,10 @@ test("applyRunConfigToolPolicy should keep final_answer tool when forceTool is e
   const nextContext = resolver.applyRunConfigToolPolicy(agentContext, runConfig);
   const toolNames = (nextContext?.payload?.tools?.registry || []).map((tool) => tool.name);
 
-  assert.deepEqual(toolNames.sort(), ["final_answer", "read_file"]);
+  assert.deepEqual(toolNames, ["read_file"]);
 });
 
-test("applyRunConfigToolPolicy should not force keep final_answer tool when forceTool is disabled", () => {
+test("applyRunConfigToolPolicy should not force keep final_answer when safety confirmation is disabled", () => {
   const resolver = new RunConfigResolver();
   const agentContext = {
     payload: {
@@ -35,7 +35,7 @@ test("applyRunConfigToolPolicy should not force keep final_answer tool when forc
     },
   };
   const runConfig = {
-    forceTool: false,
+    safeConfirm: false,
     toolPolicy: {
       allowToolNames: ["read_file"],
     },
@@ -170,6 +170,7 @@ test("resolveScenarioRunConfig should use builtin programming shape and only acc
     "patch_file",
     "execute_script",
     "process_content_task",
+    "user_interaction",
     "task_summary",
     "request_help",
     "web_search",

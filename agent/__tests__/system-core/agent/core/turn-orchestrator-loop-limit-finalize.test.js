@@ -79,7 +79,7 @@ function createModelState(llm, defaultModelSpec = null) {
     eventListener: null,
     runtime: {
       systemRuntime: {
-        config: { forceTool: true },
+        config: { safeConfirm: true },
       },
     },
     globalConfig: {},
@@ -173,7 +173,7 @@ test("loop over max turns: inject finalize prompt, allow 5-turn buffer, then no-
   assert.equal(loopState.messageBlocks.incrementalIds, undefined);
 });
 
-test("when model returns no tool calls, add a user prompt to use tools and retry", async () => {
+test("when model returns no tool calls, return directly without a retry prompt", async () => {
   const tool = {
     name: "execute_script",
     async invoke() {
@@ -209,14 +209,10 @@ test("when model returns no tool calls, add a user prompt to use tools and retry
     turn: 1,
   });
 
-  assert.equal(result.output, "还是直接回答");
-  assert.equal(capturedInvocations.length, 2);
+  assert.equal(result.output, "我先直接回答");
+  assert.equal(capturedInvocations.length, 1);
   assert.equal(capturedNoToolInvokeOptions[0]?.tool_choice, "auto");
-  assert.equal(capturedNoToolInvokeOptions[1]?.tool_choice, "auto");
-  assert.ok(
-    events.some((item) => item?.event === "tool_choice_required_retry_prompted"),
-    "should emit retry prompt event when model does not call tools",
-  );
+  assert.equal(events.some((item) => item?.event === "tool_choice_required_retry_prompted"), false);
   const retryPrompt = loopState.messageBlocks.incremental.find((messageItem) => {
     const marker =
       messageItem?.additional_kwargs?.noobotInternalMessageType ||
@@ -224,12 +220,11 @@ test("when model returns no tool calls, add a user prompt to use tools and retry
       "";
     return marker === "tool_choice_required_retry_prompt";
   });
-  assert.ok(retryPrompt);
-  assert.ok(retryPrompt.additional_kwargs.noobotMessageId);
+  assert.equal(retryPrompt, undefined);
   assert.equal(loopState.messageBlocks.incrementalIds, undefined);
 });
 
-test("when forceTool is disabled, no-tool response should return directly without retry prompt", async () => {
+test("safeConfirm does not force tool calls", async () => {
   const tool = {
     name: "execute_script",
     async invoke() {
@@ -247,7 +242,7 @@ test("when forceTool is disabled, no-tool response should return directly withou
 
   const events = [];
   const modelState = createModelState(llm);
-  modelState.runtime.systemRuntime.config = { forceTool: false };
+  modelState.runtime.systemRuntime.config = { safeConfirm: false };
   modelState.eventListener = {
     onEvent(payload = {}) {
       events.push(payload);
@@ -267,7 +262,7 @@ test("when forceTool is disabled, no-tool response should return directly withou
   );
 });
 
-test("retry prompt should only happen once; next no-tool response ends by original logic", async () => {
+test("no-tool response returns immediately without retrying", async () => {
   const tool = {
     name: "execute_script",
     async invoke() {
@@ -285,21 +280,8 @@ test("retry prompt should only happen once; next no-tool response ends by origin
     turn: 1,
   });
 
-  assert.equal(result.output, "第二次无工具");
-  assert.equal(capturedInvocations.length, 2);
-  const secondInvocationMessages = capturedInvocations[1] || [];
-  const retryPromptsInSecondInvocation = secondInvocationMessages.filter((messageItem) => {
-    const marker =
-      messageItem?.additional_kwargs?.noobotInternalMessageType ||
-      messageItem?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
-      "";
-    return marker === "tool_choice_required_retry_prompt";
-  });
-  assert.equal(
-    retryPromptsInSecondInvocation.length,
-    1,
-    "should append exactly one retry prompt before the final retry",
-  );
+  assert.equal(result.output, "第一次无工具");
+  assert.equal(capturedInvocations.length, 1);
 });
 
 test("final_answer tool: next model call uses tool_choice none and exits loop", async () => {
@@ -727,7 +709,7 @@ test("multiple tool calls stay in one tool turn and advance loop turns by tool c
   hookManager.on("before_tool_calls", (ctx = {}) => beforeToolCallContexts.push(ctx));
   hookManager.on("after_tool_calls", (ctx = {}) => afterToolCallContexts.push(ctx));
   modelState.runtime.hookManager = hookManager;
-  modelState.runtime.systemRuntime.config = { forceTool: false };
+  modelState.runtime.systemRuntime.config = { safeConfirm: false };
   const result = await runFunctionCallLoop({
     modelState,
     loopState,

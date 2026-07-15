@@ -87,7 +87,7 @@ function locateDoneMessage() {
 const {
   userId,
   allowUserInteraction,
-  forceTool,
+  safeConfirm,
   streamOutput,
   botScenario,
   selectedModel,
@@ -99,7 +99,7 @@ const {
   availablePlugins,
   bindScenarioConfig,
   onAllowUserInteractionUpdate,
-  onForceToolUpdate,
+  onSafeConfirmUpdate,
   onStreamOutputUpdate,
   onBotScenarioUpdate,
   onSelectedModelUpdate,
@@ -191,7 +191,7 @@ const {
   userId,
   apiKey,
   allowUserInteraction,
-  forceTool,
+  safeConfirm,
   streamOutput,
   botScenario,
   selectedModel,
@@ -470,7 +470,7 @@ const drawerPanels = computed(() =>
       :upload-files="uploadFiles"
       :can-stop="canStop"
       :allow-user-interaction="allowUserInteraction"
-      :force-tool="forceTool"
+      :safe-confirm="safeConfirm"
       :stream-output="streamOutput"
       :bot-scenario="botScenario"
       :selected-model="selectedModel"
@@ -511,7 +511,7 @@ const drawerPanels = computed(() =>
       @append-uploads="appendUploads"
       @remove-upload="removeUpload"
       @update:allow-user-interaction="onAllowUserInteractionUpdate"
-      @update:force-tool="onForceToolUpdate"
+      @update:safe-confirm="onSafeConfirmUpdate"
       @update:stream-output="onStreamOutputUpdate"
       @update:bot-scenario="onBotScenarioUpdate"
       @update:selected-model="onSelectedModelUpdate"

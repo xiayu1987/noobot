@@ -118,6 +118,7 @@ test("resolveScenarioProfile supports builtin text scenario without a hard-coded
     "patch_file",
     "execute_script",
     "process_content_task",
+    "user_interaction",
     "task_summary",
     "request_help",
     "web_search",

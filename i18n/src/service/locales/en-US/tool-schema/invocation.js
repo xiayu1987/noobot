@@ -106,6 +106,10 @@ export const INVOCATION_TOOL_SCHEMA = {
       "includeLineNumbers": {
         "key": "tools.script.fieldIncludeLineNumbers",
         "text": "Whether stdout/stderr should include line numbers (disabled by default)."
+      },
+      "riskLevel": {
+        "key": "tools.script.fieldRiskLevel",
+        "text": "Required script risk level: low, medium, high, or critical. Destructive scripts must be marked critical."
       }
     },
     "texts": {
@@ -115,6 +119,10 @@ export const INVOCATION_TOOL_SCHEMA = {
       "tools.script.bubblewrap.title": "Bubblewrap + overlayfs notes:",
       "tools.script.commandNotInstalled": (params = {}) =>
     `${String(params.commandName || "").trim()} is not installed. Please install ${String(params.commandName || "").trim()} first.`,
+      "tools.script.criticalCancelled": "The critical-risk script was not confirmed by the user and execution was cancelled.",
+      "tools.script.criticalConfirmation": (params = {}) =>
+    `A critical-risk and potentially destructive script is about to run. Do you confirm execution?\n\nCommand:\n${String(params.command || "")}`,
+      "tools.script.criticalConfirmationUnavailable": "Critical-risk scripts require user confirmation before execution, but the user interaction channel is unavailable.",
       "tools.script.concise.lineWorkdir": (params = {}) =>
     `Default working directory: ${String(params.workdir || "").trim()}`,
       "tools.script.concise.lineRelativeBase": (params = {}) =>

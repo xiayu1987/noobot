@@ -5,7 +5,7 @@
  */
 
 import { PROGRAMMING_REQUIRED_TOOL_NAMES, mergeConfig } from "../../config/index.js";
-import { isPlainObject, resolveForceToolCall } from "../../utils/shared-utils.js";
+import { isPlainObject } from "../../utils/shared-utils.js";
 
 const CODING_SCENARIO_KEYS = new Set(["coding", "programming"]);
 const CODING_REQUIRED_TOOL_NAMES = PROGRAMMING_REQUIRED_TOOL_NAMES;
@@ -45,9 +45,7 @@ export class RunConfigResolver {
   }
 
   resolveAlwaysIncludedToolNames(runConfig = {}) {
-    const alwaysIncludedToolNames = new Set(
-      resolveForceToolCall(runConfig) ? ["final_answer"] : [],
-    );
+    const alwaysIncludedToolNames = new Set();
     const scenario = String(runConfig?.scenario || "").trim().toLowerCase();
     const scenarioProfileKey = String(runConfig?.scenarioProfile?.key || "")
       .trim()

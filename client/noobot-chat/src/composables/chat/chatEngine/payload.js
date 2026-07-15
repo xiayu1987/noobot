@@ -23,7 +23,7 @@ export function buildChatPayload({
   message,
   attachments = [],
   allowUserInteraction,
-  forceTool,
+  safeConfirm,
   requestedTextStreaming = true,
   botScenario,
   selectedModel,
@@ -61,7 +61,7 @@ export function buildChatPayload({
     attachments,
     config: {
       allowUserInteraction: allowUserInteraction?.value === false ? false : true,
-      forceTool: forceTool?.value === true,
+      safeConfirm: safeConfirm?.value === false ? false : true,
       streaming: requestedTextStreaming,
       ...(normalizedScenario ? { scenario: normalizedScenario } : {}),
       ...(normalizedSelectedModel ? { selectedModel: normalizedSelectedModel } : {}),

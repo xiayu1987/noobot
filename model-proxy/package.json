@@ -7,6 +7,7 @@
   "type": "commonjs",
   "main": "model-proxy.js",
   "scripts": {
+    "test": "node --test __tests__/*.test.js",
     "start": "node model-proxy.js",
     "dev": "node --watch model-proxy.js",
     "pm2:start": "PM2_HOME=../.pm2 npx pm2 start model-proxy.js --name noobot-model-proxy",

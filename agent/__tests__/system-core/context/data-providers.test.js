@@ -236,12 +236,12 @@ test("resolveLongMemory only reads static long memory payload from memoryService
   assert.equal(longMemory, "static-long-memory-only");
 });
 
-test("buildDynamicInfo only exposes canonical forceTool in config", () => {
+test("buildDynamicInfo exposes safeConfirm in config", () => {
   const dynamic = buildDynamicInfo({
     runConfig: {
-      forceTool: true,
+      safeConfirm: true,
     },
   });
-  assert.equal(dynamic.config.forceTool, true);
-  assert.equal("forceToolCall" in dynamic.config, false);
+  assert.equal(dynamic.config.safeConfirm, true);
+  assert.equal("forceTool" in dynamic.config, false);
 });

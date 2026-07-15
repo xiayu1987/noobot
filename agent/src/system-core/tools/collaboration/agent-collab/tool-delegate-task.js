@@ -14,7 +14,6 @@ import { tTool } from "../../core/tool-i18n.js";
 import { ERROR_CODE } from "../../../error/constants.js";
 import { TOOL_NAME, TOOL_RESULT_STATUS } from "../../constants/index.js";
 import { hasOwnConfigKey } from "../../../config/index.js";
-import { resolveForceToolCall } from "../../../utils/shared-utils.js";
 import {
   buildDelegateTaskFailureResult,
   cloneData,
@@ -29,7 +28,6 @@ export function createDelegateTaskTool({
   botManager,
   userId,
   runtimeEventListener,
-  passthroughForceToolCall,
   passthroughToolPolicy,
   runConfig,
   userInteractionBridge,
@@ -68,12 +66,11 @@ export function createDelegateTaskTool({
       emitEvent(runtimeEventListener, "subagent_runconfig_passthrough_applied", {
         sourceTool: TOOL_NAME.DELEGATE_TASK_ASYNC,
         passthrough: {
-          forceTool: passthroughForceToolCall,
           toolPolicy: passthroughToolPolicy,
           streaming: hasOwnConfigKey(runConfig, "streaming"),
         },
         effectiveRunConfig: {
-          forceTool: resolveForceToolCall(runConfig),
+          safeConfirm: runConfig?.safeConfirm !== false,
           ...(hasOwnConfigKey(runConfig, "streaming") ? { streaming: runConfig.streaming } : {}),
           hasToolPolicy: runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object",
           toolPolicyKeys:
