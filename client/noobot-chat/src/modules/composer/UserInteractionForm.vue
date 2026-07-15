@@ -53,10 +53,11 @@ function onConfirm() {
       }
       payload[key] = value;
     }
+    payload.confirmed = true;
     emit("confirm", payload);
     return;
   }
-  emit("confirm", { response: "confirmed" });
+  emit("confirm", { confirmed: true, response: "confirmed" });
 }
 
 function onCancel() {
