@@ -336,8 +336,7 @@ export function useChatSession({
       nextRunState.sessionId === sessionId &&
       nextRunState.dialogProcessId === dialogProcessId &&
       nextRunState.turnScopeId === turnScopeId &&
-      BackendTerminalStates.includes(nextRunState.backendState) &&
-      nextRunState.backendState !== BackendChannelState.USER_STOPPED
+      nextRunState.backendState === BackendChannelState.COMPLETED
     );
     if (acceptedTerminalFactAdvancesStoppedSession) {
       chatStore.clearUserStoppedResumeSnapshot(sessionId);
