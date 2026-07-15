@@ -15,7 +15,7 @@ import {
   syncBotScenarioWithConfig,
   updateAllowUserInteractionPreference,
   updateBotScenarioPreference,
-  updateForceToolPreference,
+  updateSafeConfirmPreference,
   updatePluginModelConfigPreference,
   updateStreamOutputPreference,
   writeStorageValue,
@@ -36,7 +36,7 @@ describe("ui preferences storage", () => {
     expect(loadUiPreferences()).toEqual({
       userId: "user-001",
       allowUserInteraction: true,
-      forceTool: false,
+      safeConfirm: true,
       streamOutput: true,
       botScenario: "",
       selectedModel: "",
@@ -47,14 +47,14 @@ describe("ui preferences storage", () => {
 
     storage.set(UI_PREFERENCE_STORAGE_KEYS.userId, "admin");
     storage.set(UI_PREFERENCE_STORAGE_KEYS.allowUserInteraction, "false");
-    storage.set(UI_PREFERENCE_STORAGE_KEYS.forceTool, "true");
+    storage.set(UI_PREFERENCE_STORAGE_KEYS.safeConfirm, "false");
     storage.set(UI_PREFERENCE_STORAGE_KEYS.streamOutput, "false");
     storage.set(UI_PREFERENCE_STORAGE_KEYS.botScenario, " workflow ");
 
     expect(loadUiPreferences()).toEqual({
       userId: "admin",
       allowUserInteraction: false,
-      forceTool: true,
+      safeConfirm: false,
       streamOutput: false,
       botScenario: "workflow",
       selectedModel: "",
@@ -146,18 +146,18 @@ describe("ui preferences storage", () => {
 
   it("updates boolean preferences and persists string booleans", () => {
     const allowUserInteraction = { value: true };
-    const forceTool = { value: false };
+    const safeConfirm = { value: true };
     const streamOutput = { value: true };
 
     updateAllowUserInteractionPreference({ preferenceRef: allowUserInteraction, value: 0 });
-    updateForceToolPreference({ preferenceRef: forceTool, value: 1 });
+    updateSafeConfirmPreference({ preferenceRef: safeConfirm, value: 0 });
     updateStreamOutputPreference({ preferenceRef: streamOutput, value: false });
 
     expect(allowUserInteraction.value).toBe(false);
-    expect(forceTool.value).toBe(true);
+    expect(safeConfirm.value).toBe(false);
     expect(streamOutput.value).toBe(false);
     expect(localStorage.getItem(UI_PREFERENCE_STORAGE_KEYS.allowUserInteraction)).toBe("false");
-    expect(localStorage.getItem(UI_PREFERENCE_STORAGE_KEYS.forceTool)).toBe("true");
+    expect(localStorage.getItem(UI_PREFERENCE_STORAGE_KEYS.safeConfirm)).toBe("false");
     expect(localStorage.getItem(UI_PREFERENCE_STORAGE_KEYS.streamOutput)).toBe("false");
   });
 

@@ -10,10 +10,7 @@ import {
   getSystemRuntimeFromRuntime,
 } from "../../context/agent-context-accessor.js";
 import { tTool } from "../core/tool-i18n.js";
-import {
-  normalizeSelectedConnectors,
-  resolveForceToolCall,
-} from "../../utils/shared-utils.js";
+import { normalizeSelectedConnectors } from "../../utils/shared-utils.js";
 import { createCollabContainerStore } from "./agent-collab/collab-container-store.js";
 import { createCollabArtifactPersistor } from "./agent-collab/collab-artifact-persist.js";
 import { createDelegateTaskTool } from "./agent-collab/tool-delegate-task.js";
@@ -42,9 +39,7 @@ export function createAgentCollabTool({ agentContext }) {
       ? delegateTaskAsyncConfig.runConfigPassthrough
       : {};
 
-  const passthroughForceToolCall = resolveForceToolCall(runConfigPassthrough);
   const passthroughToolPolicy = runConfigPassthrough?.toolPolicy === true;
-  const parentForceToolCall = resolveForceToolCall(systemRuntime?.config || {});
   const parentToolPolicy =
     systemRuntime?.config?.toolPolicy && typeof systemRuntime.config.toolPolicy === "object"
       ? cloneData(systemRuntime.config.toolPolicy)
@@ -53,6 +48,7 @@ export function createAgentCollabTool({ agentContext }) {
 
   const runConfig = {
     allowUserInteraction: systemRuntime?.config?.allowUserInteraction !== false,
+    safeConfirm: systemRuntime?.config?.safeConfirm !== false,
     ...(hasParentStreamingConfig
       ? { streaming: normalizeBooleanLike(systemRuntime?.config?.streaming, false) }
       : {}),
@@ -64,12 +60,6 @@ export function createAgentCollabTool({ agentContext }) {
       runtime?.sharedTools && typeof runtime.sharedTools === "object"
         ? runtime.sharedTools
         : {},
-    ...(passthroughForceToolCall
-      ? {
-          // vNext+2: only write canonical field; keep compatibility reads via resolveForceToolCall.
-          forceTool: parentForceToolCall,
-        }
-      : {}),
     ...(passthroughToolPolicy && parentToolPolicy ? { toolPolicy: parentToolPolicy } : {}),
   };
 
@@ -115,7 +105,6 @@ export function createAgentCollabTool({ agentContext }) {
     botManager,
     userId,
     runtimeEventListener,
-    passthroughForceToolCall,
     passthroughToolPolicy,
     runConfig,
     userInteractionBridge,

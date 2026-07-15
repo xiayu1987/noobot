@@ -26,7 +26,7 @@ const DEFAULT_MONOTONIC_ACTION_STOP_POLL_INTERVAL_MS =
 export function useChatEngine({
   userId,
   allowUserInteraction,
-  forceTool,
+  safeConfirm,
   streamOutput,
   botScenario,
   selectedModel,
@@ -216,7 +216,7 @@ export function useChatEngine({
     ensureConnected,
     fetchSessionDetail,
     foldMessagesForView,
-    forceTool,
+    safeConfirm,
     input,
     interactionSubmitting,
     isImageMime,

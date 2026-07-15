@@ -25,7 +25,7 @@ const props = defineProps({
   connected: { type: Boolean, default: false },
   canStop: { type: Boolean, default: false },
   allowUserInteraction: { type: Boolean, default: true },
-  forceTool: { type: Boolean, default: false },
+  safeConfirm: { type: Boolean, default: true },
   streamOutput: { type: Boolean, default: true },
   botScenario: { type: String, default: "" },
   scenarioOptions: { type: Array, default: () => [] },
@@ -43,7 +43,7 @@ const props = defineProps({
 const emit = defineEmits([
   "update:modelValue",
   "update:allowUserInteraction",
-  "update:forceTool",
+  "update:safeConfirm",
   "update:streamOutput",
   "update:botScenario",
   "update:selectedModel",
@@ -240,8 +240,8 @@ function onAllowUserInteractionChange(value) {
   emit("update:allowUserInteraction", Boolean(value));
 }
 
-function onForceToolChange(value) {
-  emit("update:forceTool", Boolean(value));
+function onSafeConfirmChange(value) {
+  emit("update:safeConfirm", Boolean(value));
 }
 
 function onStreamOutputChange(value) {
@@ -307,7 +307,7 @@ defineExpose({
 
               <ComposerMoreOptions
                 :allow-user-interaction="allowUserInteraction"
-                :force-tool="forceTool"
+                :safe-confirm="safeConfirm"
                 :stream-output="streamOutput"
                 :bot-scenario="botScenario"
                 :selected-model="selectedModel"
@@ -320,7 +320,7 @@ defineExpose({
                 :selected-plugin-key-set="selectedPluginKeySet"
                 :resolve-scenario-label="resolveScenarioLabel"
                 @update:allow-user-interaction="onAllowUserInteractionChange"
-                @update:force-tool="onForceToolChange"
+                @update:safe-confirm="onSafeConfirmChange"
                 @update:stream-output="onStreamOutputChange"
                 @update:selected-model="emit('update:selectedModel', $event)"
                 @update:memory-model="emit('update:memoryModel', $event)"

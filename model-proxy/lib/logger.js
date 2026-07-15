@@ -8,6 +8,39 @@ const path = require('path');
 const { pad, tryParseJson } = require('./common');
 const { normalizeUsageCacheDiagnostics } = require('./cache-diagnostics');
 
+const REDACTED_VALUE = '[REDACTED]';
+const SENSITIVE_HEADER_PATTERN = /^(?:authorization|proxy-authorization|cookie|set-cookie|x-api-key|api-key|apikey|x-auth-token|x-access-token)$/i;
+const SENSITIVE_QUERY_PATTERN = /^(?:authorization|cookie|api[-_]?key|apikey|access[-_]?token|auth[-_]?token|token|secret)$/i;
+
+function sanitizeHeaders(headers = {}) {
+  if (!headers || typeof headers !== 'object') return {};
+  return Object.fromEntries(
+    Object.entries(headers).map(([key, value]) => [
+      key,
+      SENSITIVE_HEADER_PATTERN.test(String(key || '').trim()) ? REDACTED_VALUE : value,
+    ]),
+  );
+}
+
+function sanitizeUrl(rawUrl = '') {
+  const value = String(rawUrl || '');
+  if (!value || !value.includes('?')) return value;
+  try {
+    const parsed = new URL(value, 'http://model-proxy.local');
+    for (const key of parsed.searchParams.keys()) {
+      if (SENSITIVE_QUERY_PATTERN.test(key)) parsed.searchParams.set(key, REDACTED_VALUE);
+    }
+    return value.startsWith('http://') || value.startsWith('https://')
+      ? parsed.toString()
+      : `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch (_) {
+    return value.replace(
+      /([?&](?:authorization|cookie|api[-_]?key|apikey|access[-_]?token|auth[-_]?token|token|secret)=)[^&#]*/gi,
+      `$1${REDACTED_VALUE}`,
+    );
+  }
+}
+
 function createLogger({
   logDir,
   logPrefix,
@@ -204,9 +237,9 @@ Model: ${modelName}
 Flow: ${flowName}
 SessionId: ${sessionId}
 ParentSessionId: ${parentSessionId || '[root]'}
-URL: ${req.url}
+URL: ${sanitizeUrl(req.url)}
 Method: ${req.method}
-Headers: ${JSON.stringify(req.headers, null, 2)}
+Headers: ${JSON.stringify(sanitizeHeaders(req.headers), null, 2)}
 CacheDiagnostics: ${JSON.stringify(cacheDiagnostics, null, 2)}
 Body:
 ${bodyText}
@@ -234,7 +267,7 @@ Flow: ${flowName}
 SessionId: ${sessionId}
 ParentSessionId: ${parentSessionId || '[root]'}
 Status: ${proxyRes.statusCode}
-Headers: ${JSON.stringify(proxyRes.headers, null, 2)}
+Headers: ${JSON.stringify(sanitizeHeaders(proxyRes.headers), null, 2)}
 CacheDiagnostics: ${JSON.stringify(cacheDiagnostics, null, 2)}
 Body:
 ${bodyText}
@@ -254,4 +287,6 @@ ${bodyText}
 
 module.exports = {
   createLogger,
+  sanitizeHeaders,
+  sanitizeUrl,
 };

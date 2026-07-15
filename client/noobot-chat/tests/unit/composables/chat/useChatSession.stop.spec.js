@@ -62,7 +62,7 @@ function createChatSession(options = {}) {
     userId: ref("u-1"),
     apiKey: ref(""),
     allowUserInteraction: ref(true),
-    forceTool: ref(false),
+    safeConfirm: ref(true),
     streamOutput: ref(true),
     botScenario: ref(""),
     connected: ref(true),

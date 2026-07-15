@@ -51,7 +51,7 @@ defineProps({
   uploadFiles: { type: Array, default: () => [] },
   canStop: { type: Boolean, default: false },
   allowUserInteraction: { type: Boolean, default: false },
-  forceTool: { type: Boolean, default: false },
+  safeConfirm: { type: Boolean, default: true },
   streamOutput: { type: Boolean, default: false },
   botScenario: { type: String, default: "" },
   selectedModel: { type: String, default: "" },
@@ -95,7 +95,7 @@ const emit = defineEmits([
   "update:allow-user-interaction",
   "update:bot-scenario",
   "update:connect-code",
-  "update:force-tool",
+  "update:safe-confirm",
   "update:input",
   "update:more-panel-visible",
   "update:plugin-model-config",
@@ -269,7 +269,7 @@ defineExpose({
           :can-stop="canStop"
           :connected="connected"
           :allow-user-interaction="allowUserInteraction"
-          :force-tool="forceTool"
+          :safe-confirm="safeConfirm"
           :stream-output="streamOutput"
           :bot-scenario="botScenario"
           :selected-model="selectedModel"
@@ -284,7 +284,7 @@ defineExpose({
           @append-uploads="emit('append-uploads', $event)"
           @remove-upload="emit('remove-upload', $event)"
           @update:allow-user-interaction="emit('update:allow-user-interaction', $event)"
-          @update:force-tool="emit('update:force-tool', $event)"
+          @update:safe-confirm="emit('update:safe-confirm', $event)"
           @update:stream-output="emit('update:stream-output', $event)"
           @update:bot-scenario="emit('update:bot-scenario', $event)"
           @update:selected-model="emit('update:selected-model', $event)"

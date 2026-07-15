@@ -13,7 +13,7 @@ import {
 
 const props = defineProps({
   allowUserInteraction: { type: Boolean, default: true },
-  forceTool: { type: Boolean, default: false },
+  safeConfirm: { type: Boolean, default: true },
   streamOutput: { type: Boolean, default: true },
   botScenario: { type: String, default: "" },
   normalizedScenarioOptions: { type: Array, default: () => [] },
@@ -29,7 +29,7 @@ const props = defineProps({
 
 const emit = defineEmits([
   "update:allowUserInteraction",
-  "update:forceTool",
+  "update:safeConfirm",
   "update:streamOutput",
   "select-scenario",
   "toggle-programming-scenario",
@@ -144,12 +144,12 @@ function resolveComposerExtensionProps(renderer = {}) {
         @update:model-value="emit('update:allowUserInteraction', $event)"
       />
       <el-switch
-        :model-value="forceTool"
+        :model-value="safeConfirm"
         inline-prompt
-        :active-text="translate('composer.forceTool')"
-        :inactive-text="translate('composer.notForceTool')"
+        :active-text="translate('composer.safeConfirm')"
+        :inactive-text="translate('composer.notSafeConfirm')"
         class="interaction-switch"
-        @update:model-value="emit('update:forceTool', $event)"
+        @update:model-value="emit('update:safeConfirm', $event)"
       />
       <el-switch
         :model-value="streamOutput"

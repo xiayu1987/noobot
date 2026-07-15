@@ -17,7 +17,7 @@ import {
   syncBotScenarioWithConfig as syncBotScenarioWithConfigState,
   updateAllowUserInteractionPreference,
   updateBotScenarioPreference,
-  updateForceToolPreference,
+  updateSafeConfirmPreference,
   updatePluginModelConfigPreference,
   persistMemoryModelPreference,
   updateSelectedModelPreference,
@@ -67,7 +67,7 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
   const uiPreferences = loadUiPreferences();
   const userId = ref(uiPreferences.userId);
   const allowUserInteraction = ref(uiPreferences.allowUserInteraction);
-  const forceTool = ref(uiPreferences.forceTool);
+  const safeConfirm = ref(uiPreferences.safeConfirm);
   const streamOutput = ref(uiPreferences.streamOutput);
   const botScenario = ref(uiPreferences.botScenario);
   const selectedModel = ref(uiPreferences.selectedModel);
@@ -147,8 +147,8 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
     updateAllowUserInteractionPreference({ preferenceRef: allowUserInteraction, value });
   }
 
-  function onForceToolUpdate(value) {
-    updateForceToolPreference({ preferenceRef: forceTool, value });
+  function onSafeConfirmUpdate(value) {
+    updateSafeConfirmPreference({ preferenceRef: safeConfirm, value });
   }
 
   function onStreamOutputUpdate(value) {
@@ -219,7 +219,7 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
   return {
     userId,
     allowUserInteraction,
-    forceTool,
+    safeConfirm,
     streamOutput,
     botScenario,
     selectedModel,
@@ -231,7 +231,7 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
     availablePlugins,
     bindScenarioConfig,
     onAllowUserInteractionUpdate,
-    onForceToolUpdate,
+    onSafeConfirmUpdate,
     onStreamOutputUpdate,
     onBotScenarioUpdate,
     onSelectedModelUpdate,

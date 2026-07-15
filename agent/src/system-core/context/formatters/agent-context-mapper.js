@@ -6,7 +6,6 @@
 import {
   safeNum,
   normalizeSelectedConnectors,
-  resolveForceToolCall,
 } from "../../utils/shared-utils.js";
 import { resolveDialogProcessId } from "../session/dialog-process-id-resolver.js";
 import { resolveParentSessionId } from "../parent-session-id-resolver.js";
@@ -84,7 +83,7 @@ export function mapToAgentContextSchema({
       timestamp: String(systemRuntime?.now || now).trim(),
       flags: {
         allowUserInteraction: systemRuntime?.config?.allowUserInteraction !== false,
-        forceTool: resolveForceToolCall(systemRuntime?.config || {}),
+        safeConfirm: systemRuntime?.config?.safeConfirm !== false,
         maxToolLoopTurns: safeNum(systemRuntime?.config?.maxToolLoopTurns),
       },
       models: {

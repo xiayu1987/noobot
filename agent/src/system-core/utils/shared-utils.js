@@ -74,20 +74,3 @@ export function normalizeText(value = "") {
   return String(value).replace(/\s+/g, " ").trim();
 }
 
-/**
- * Resolve whether tool-calling should be forced in runtime.
- * Default: false.
- */
-export function resolveForceToolCall(config = {}) {
-  const source =
-    config && typeof config === "object" && !Array.isArray(config) ? config : {};
-  const explicitValue =
-    source.forceTool ??
-    source.force_tool ??
-    source.forceToolCall ??
-    source.force_tool_call ??
-    source.requireToolCall ??
-    source.require_tool_call;
-  if (explicitValue === undefined) return false;
-  return explicitValue === true;
-}

@@ -16,13 +16,8 @@ import { createWebSearchTool } from "./ai-models/web-search-tool.js";
 import { createMultimodalGenerateTool } from "./ai-models/multimodal-generate-tool.js";
 import { createTaskSummaryTool } from "./collaboration/task-summary-tool.js";
 import { createRequestHelpTool } from "./collaboration/request-help-tool.js";
-import {
-  FINAL_ANSWER_TOOL_NAME,
-  createFinalAnswerTool,
-} from "./collaboration/final-answer-tool.js";
 import { emitEvent } from "../event/index.js";
 import { BUILTIN_THRESHOLDS, mergeConfig } from "../config/index.js";
-import { resolveForceToolCall } from "../utils/shared-utils.js";
 import { CONNECTOR_TYPE, TOOL_CONFIG_ALIAS_KEY, TOOL_NAME } from "./constants/index.js";
 import { runBuildToolsAdapter } from "./adapter.js";
 import { resolveParentSessionId } from "../context/parent-session-id-resolver.js";
@@ -76,9 +71,7 @@ function resolveAlwaysIncludedToolNames(runtime = {}) {
     runtime?.runConfig && typeof runtime.runConfig === "object"
       ? runtime.runConfig
       : {};
-  const alwaysIncludedToolNames = new Set(
-    resolveForceToolCall(runConfig) ? [FINAL_ANSWER_TOOL_NAME] : [],
-  );
+  const alwaysIncludedToolNames = new Set();
   const scenario = String(runConfig?.scenario || "").trim().toLowerCase();
   const scenarioProfileKey = String(runConfig?.scenarioProfile?.key || "")
     .trim()
@@ -240,9 +233,6 @@ async function buildToolsDefault(ctx) {
   const allowUserInteraction =
     ctx?.agentContext?.runtime?.systemRuntime?.config?.allowUserInteraction !==
     false;
-  const forceTool = resolveForceToolCall(
-    ctx?.agentContext?.runtime?.systemRuntime?.config || {},
-  );
   const enableMultimodalGenerateTool = hasEnabledMultimodalGenerationProvider(
     effectiveConfig,
   );
@@ -262,7 +252,6 @@ async function buildToolsDefault(ctx) {
     ...createModelTool(ctx),
     ...createTaskSummaryTool(ctx),
     ...createRequestHelpTool(ctx),
-    ...(forceTool ? createFinalAnswerTool(ctx) : []),
     ...(allowUserInteraction ? createUserInteractionTool(ctx) : []),
   ];
   const enabledTools = filterToolsByConfigEnabled(

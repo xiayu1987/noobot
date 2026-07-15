@@ -71,7 +71,7 @@ describe("buildChatPayload model preferences", () => {
       resumeDialogProcessId: "dlg-stopped",
       resumeTurnScopeId: "turn-stopped",
       allowUserInteraction: true,
-      forceTool: false,
+      safeConfirm: false,
       requestedTextStreaming: false,
       botScenario: "programming",
       selectedModel: "main-model",

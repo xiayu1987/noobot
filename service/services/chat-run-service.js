@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveForceToolCall } from "#agent/utils";
 import { HTTP_STATUS } from "#agent/constants";
 import { hasOwnConfigKey, normalizeBooleanLike, resolveTimeMs } from "#agent/config";
 
@@ -103,7 +102,9 @@ export function createChatRunService({
     const allowUserInteractionRaw = input?.allowUserInteraction;
     const allowUserInteraction =
       allowUserInteractionRaw === undefined ? true : Boolean(allowUserInteractionRaw);
-    const forceTool = resolveForceToolCall(source);
+    const safeConfirm = source?.safeConfirm === undefined
+      ? true
+      : Boolean(source.safeConfirm);
     const locale = normalizeLocale(input?.locale || defaultLocale);
     const hasScenarioField = Object.prototype.hasOwnProperty.call(source, "scenario");
     const scenario = hasScenarioField ? String(source?.scenario || "").trim() : undefined;
@@ -142,7 +143,7 @@ export function createChatRunService({
     };
     return {
       allowUserInteraction,
-      forceTool,
+      safeConfirm,
       ...(hasStreamingField ? { streaming } : {}),
       locale,
       scenario,

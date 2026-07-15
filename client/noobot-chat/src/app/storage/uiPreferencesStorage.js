@@ -1,7 +1,7 @@
 export const UI_PREFERENCE_STORAGE_KEYS = Object.freeze({
   userId: "noobot_user_id",
   allowUserInteraction: "noobot_allow_user_interaction",
-  forceTool: "noobot_force_tool",
+  safeConfirm: "noobot_safe_confirm",
   streamOutput: "noobot_stream_output",
   botScenario: "noobot_bot_scenario",
   selectedModel: "noobot_selected_model",
@@ -155,7 +155,7 @@ export function loadUiPreferences() {
   return {
     userId: readStorageValue(UI_PREFERENCE_STORAGE_KEYS.userId, "user-001") || "user-001",
     allowUserInteraction: loadBooleanPreference(UI_PREFERENCE_STORAGE_KEYS.allowUserInteraction, true),
-    forceTool: loadBooleanPreference(UI_PREFERENCE_STORAGE_KEYS.forceTool, false),
+    safeConfirm: loadBooleanPreference(UI_PREFERENCE_STORAGE_KEYS.safeConfirm, true),
     streamOutput: loadBooleanPreference(UI_PREFERENCE_STORAGE_KEYS.streamOutput, true),
     botScenario,
     selectedModel: readSelectedModelPreference(botScenario),
@@ -420,10 +420,10 @@ export function updateAllowUserInteractionPreference({ preferenceRef, value } = 
   });
 }
 
-export function updateForceToolPreference({ preferenceRef, value } = {}) {
+export function updateSafeConfirmPreference({ preferenceRef, value } = {}) {
   return updateBooleanPreference({
     preferenceRef,
-    key: UI_PREFERENCE_STORAGE_KEYS.forceTool,
+    key: UI_PREFERENCE_STORAGE_KEYS.safeConfirm,
     value,
   });
 }

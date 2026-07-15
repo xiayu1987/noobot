@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-export { resolveForceToolCall } from "noobot-agent/utils/shared-utils";
 export { safeJoin } from "noobot-agent/utils/fs-safe";
 export {
   isSuperAdminRole,
