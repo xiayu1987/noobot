@@ -7,7 +7,7 @@ import { RoleEnum } from "../../../shared/constants/chatConstants";
 import { zhCNMessages } from "noobot-i18n/client/locales/zh-CN";
 import { enUSMessages } from "noobot-i18n/client/locales/en-US";
 import { BackendChannelState } from "../sessionRunStateMachine";
-import { nowMs, toIsoTime, setThinkingStartedAt } from "../../infra/timeFields";
+import { nowMs, toIsoTime } from "../../infra/timeFields";
 import { mergeAttachments } from "../../infra/dialogProcessChain";
 
 export function prepareChatSend({
@@ -81,7 +81,6 @@ export function prepareChatSend({
   const thinkingStartedAt = toIsoTime(turnStartedAtMs);
   botMessage.sessionId = sessionId;
   botMessage.session_id = sessionId;
-  setThinkingStartedAt(botMessage, thinkingStartedAt);
   botMessage.pending = true;
   botMessage.hasFirstStreamEvent = false;
   botMessage.statusLabel = "";
@@ -91,6 +90,15 @@ export function prepareChatSend({
   botMessage.tool_calls = [];
   botMessage.executionLogTotal = 0;
   botMessage.turnScopeId = normalizedTurnScopeId;
+  if (normalizedTurnScopeId) {
+    activeSession.value.turnTimingsByTurnScopeId = {
+      ...(activeSession.value.turnTimingsByTurnScopeId || {}),
+      [normalizedTurnScopeId]: {
+        thinkingStartedAt,
+        thinkingFinishedAt: null,
+      },
+    };
+  }
   applyConversationState(
     {
       state: BackendChannelState.SENDING,

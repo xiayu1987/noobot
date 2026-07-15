@@ -14,6 +14,7 @@ export function buildAppShellDrawerPanels({
   isSuperAdmin,
   thinkingDetailsMessageItem,
   thinkingDetailsAllMessages,
+  turnTimingsByTurnScopeId,
   getThinkingDetailsTitle,
   handleWorkspaceReset,
 } = {}) {
@@ -57,6 +58,7 @@ export function buildAppShellDrawerPanels({
       props: {
         messageItem,
         allMessages: thinkingDetailsAllMessages || [],
+        turnTimingsByTurnScopeId: turnTimingsByTurnScopeId || {},
         variant: "details",
       },
     },

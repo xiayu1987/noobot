@@ -20,7 +20,6 @@ import {
   isPendingInteractionReplay,
 } from "../../infra/reconnectReplayModel";
 import { getMessageDialogProcessId } from "../../infra/messageIdentity";
-import { getThinkingFinishedAt, nowIso, setThinkingFinishedAt } from "../../infra/timeFields";
 import { _ensureArray, _trimStr } from "./utils";
 import {
   hydrateSessionBeforeReconnectReplayIfNeeded,
@@ -346,7 +345,6 @@ export function applyReconnectEnvelopeToTargetMessage({
     terminalDialogProcessIdSet?.add?.(normalizedDpId);
     targetMessage.pending = false;
     targetMessage.statusLabel = "chat.generated";
-    setThinkingFinishedAt(targetMessage, getThinkingFinishedAt(targetMessage) || nowIso());
     const executionSummarySteps = Array.isArray(eventData?.executionSummary?.steps)
       ? eventData.executionSummary.steps
       : [];

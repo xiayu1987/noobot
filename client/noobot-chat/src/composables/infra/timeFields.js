@@ -154,17 +154,19 @@ export function resolveThinkingDurationMs({
   messageStartedAt = 0,
   messageFinishedAt = 0,
   now = nowMs(),
-  pending = false,
+  running = false,
 } = {}) {
   const startMs = resolveTimeMs(messageStartedAt);
-  if (startMs <= 0) return 0;
+  if (startMs <= 0) return null;
   const finishedMs = resolveTimeMs(messageFinishedAt);
-  const endMs = finishedMs > 0
-    ? finishedMs
-    : pending
-      ? parseTimeMs(now) || nowMs()
-      : startMs;
-  return Math.max(0, endMs - startMs);
+  // Persisted start/finish facts always win over transient runtime state.
+  // Runtime state is only allowed to advance a timing that has no finish.
+  if (finishedMs > 0) {
+    return finishedMs >= startMs ? finishedMs - startMs : null;
+  }
+  if (!running) return null;
+  const currentMs = parseTimeMs(now) || nowMs();
+  return Math.max(0, currentMs - startMs);
 }
 
 export function preserveThinkingTimes(targetMessage = {}, sourceMessage = {}) {

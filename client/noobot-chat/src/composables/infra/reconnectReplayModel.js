@@ -18,13 +18,7 @@ import {
   getMessageTurnScopeId,
   hasMessageTurnScopeConflict,
 } from "./messageIdentity";
-import {
-  getThinkingFinishedAt,
-  getThinkingStartedAt,
-  parseTimeMs,
-  setThinkingFinishedAt,
-  setThinkingStartedAt,
-} from "./timeFields";
+import { parseTimeMs } from "./timeFields";
 import { resolveSessionRunMessageRuntimeView } from "../chat/sessionRunStateMachine";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
@@ -355,8 +349,6 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
     !Array.isArray(targetMessage.channelState)
       ? targetMessage.channelState
       : null;
-  const existingThinkingStartedAt = getThinkingStartedAt(targetMessage);
-  const existingThinkingFinishedAt = getThinkingFinishedAt(targetMessage);
   const existingTurnScopeId = getMessageTurnScopeId(targetMessage);
   const existingPending = targetMessage?.pending === true;
   const existingTransferEnvelopes = getMessageTransferEnvelopes(targetMessage);
@@ -401,12 +393,6 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   if (expandedDetailLogKeys) targetMessage.expandedDetailLogKeys = expandedDetailLogKeys;
   if (existingChannelState && !sourceMessage?.channelState) {
     targetMessage.channelState = existingChannelState;
-  }
-  if (existingThinkingStartedAt && !getThinkingStartedAt(sourceMessage)) {
-    setThinkingStartedAt(targetMessage, existingThinkingStartedAt);
-  }
-  if (existingThinkingFinishedAt && !getThinkingFinishedAt(sourceMessage)) {
-    setThinkingFinishedAt(targetMessage, existingThinkingFinishedAt);
   }
   if (sourceCanUseTurnScopedAssets && existingTurnScopeId && !getMessageTurnScopeId(sourceMessage)) {
     targetMessage.turnScopeId = existingTurnScopeId;

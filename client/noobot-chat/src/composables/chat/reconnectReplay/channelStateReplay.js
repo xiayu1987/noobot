@@ -21,16 +21,7 @@ import {
   clearRememberedStopRequests,
 } from "../sessionRunStateMachine";
 import { normalizeTurnMeta } from "../../infra/messageIdentity";
-import {
-  getThinkingFinishedAt,
-  getThinkingStartedAt,
-  normalizeTimePair,
-  nowIso,
-  nowMs,
-  parseTimeMs,
-  setThinkingFinishedAt,
-  setThinkingStartedAt,
-} from "../../infra/timeFields";
+import { normalizeTimePair } from "../../infra/timeFields";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { logResendDebug, summarizeDebugMessage } from "../debug/resendDebugLogger";
 
@@ -91,9 +82,6 @@ function applyReconnectChannelTimingToMessage({
     seq: Number(stateData?.seq || 0),
   };
   targetAssistantMessage.channelState = channelState;
-  if (terminal && !getThinkingFinishedAt(targetAssistantMessage)) {
-    setThinkingFinishedAt(targetAssistantMessage, nowIso());
-  }
 }
 
 export function scheduleMissingInteractionPayloadFailure({

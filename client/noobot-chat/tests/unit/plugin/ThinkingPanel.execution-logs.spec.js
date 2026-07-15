@@ -26,7 +26,7 @@ describe("ThinkingPanel", () => {
       channelState: { state: "sending" },
     });
 
-    expect(wrapper.text()).toContain("00:00");
+    expect(wrapper.text()).toContain("--:--");
     expect(wrapper.text()).not.toContain("00:12");
   });
 

@@ -9,11 +9,8 @@ import {
   getMessageTurnScopeId,
 } from "../../infra/messageIdentity";
 import {
-  getThinkingFinishedAt,
-  getThinkingStartedAt,
   normalizeTimePair,
   nowMs,
-  parseTimeMs,
   toIsoTime,
 } from "../../infra/timeFields";
 import {
@@ -133,17 +130,11 @@ export function getMessageChannelState(messageItem = {}) {
 
 export const getMessageRuntimeChannelState = getMessageChannelState;
 
-function resolveRuntimeTimestamp({ thinkingStartedAt = "", thinkingFinishedAt = "" } = {}) {
-  const startedAt = parseTimeMs(thinkingStartedAt) > 0 ? thinkingStartedAt : "";
-  const finishedAt = parseTimeMs(thinkingFinishedAt) > 0 ? thinkingFinishedAt : "";
-  return { startedAt, finishedAt };
-}
-
-export function resolveSessionRunMessageRuntimeView(messageItem = {}) {
+export function resolveSessionRunMessageRuntimeView(messageItem = {}, turnTiming = null) {
   const channelState = getMessageChannelState(messageItem);
   const state = normalizeState(channelState?.state || messageItem?.status || messageItem?.state);
   const pending = messageItem?.pending === true;
-  const hasFinishedAt = Boolean(getThinkingFinishedAt(messageItem));
+  const hasFinishedAt = Boolean(turnTiming?.thinkingFinishedAt);
   const terminal = isTerminalMessageRuntimeState(state);
   const running = !hasFinishedAt && !terminal && (pending || MESSAGE_RUNNING_CHANNEL_STATES.includes(state));
   const inFlightAssistant = getMessageRole(messageItem) === "assistant" && (
@@ -152,10 +143,6 @@ export function resolveSessionRunMessageRuntimeView(messageItem = {}) {
   const canStopTarget = inFlightAssistant && (
     MESSAGE_CAN_STOP_TARGET_STATES.includes(state) || (pending && !state)
   );
-  const messageTiming = resolveRuntimeTimestamp({
-    thinkingStartedAt: getThinkingStartedAt(messageItem),
-    thinkingFinishedAt: getThinkingFinishedAt(messageItem),
-  });
   return {
     state,
     channelState,
@@ -163,8 +150,8 @@ export function resolveSessionRunMessageRuntimeView(messageItem = {}) {
     running,
     inFlightAssistant,
     canStopTarget,
-    startedAt: messageTiming.startedAt || "",
-    finishedAt: messageTiming.finishedAt || "",
+    startedAt: turnTiming?.thinkingStartedAt || "",
+    finishedAt: turnTiming?.thinkingFinishedAt || "",
   };
 }
 

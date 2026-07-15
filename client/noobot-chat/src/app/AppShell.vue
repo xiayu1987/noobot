@@ -426,6 +426,7 @@ const drawerPanels = computed(() =>
     isSuperAdmin: isSuperAdmin.value,
     thinkingDetailsMessageItem: thinkingDetailsMessageItem.value || {},
     thinkingDetailsAllMessages: thinkingDetailsAllMessages.value,
+    turnTimingsByTurnScopeId: activeSession.value?.turnTimingsByTurnScopeId || {},
     getThinkingDetailsTitle,
     handleWorkspaceReset,
   })

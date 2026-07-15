@@ -12,26 +12,18 @@ import {
   logStateMachineDebug,
   summarizeStateMachineMessage,
 } from "../debug/stateMachineLogger";
+import { getMessageTurnScopeId } from "../../infra/messageIdentity";
 
 export function applyRunStateMessagePatch(message, patch = {}) {
   if (!message || !patch || typeof patch !== "object") return;
   const {
     clearRuntimeMark,
-    thinkingStartedAtPolicy,
-    thinkingFinishedAtPolicy,
     statusLabelPolicy,
     ...restPatch
   } = patch;
 
   Object.entries(restPatch).forEach(([key, value]) => {
-    if (key === "thinkingStartedAt" && thinkingStartedAtPolicy === "if_missing") {
-      if (!message.thinkingStartedAt) message.thinkingStartedAt = value;
-      return;
-    }
-    if (key === "thinkingFinishedAt" && thinkingFinishedAtPolicy === "if_missing") {
-      if (!message.thinkingFinishedAt) message.thinkingFinishedAt = value;
-      return;
-    }
+    if (key === "thinkingStartedAt" || key === "thinkingFinishedAt") return;
     if (key === "statusLabelKey" && statusLabelPolicy === "if_empty") {
       if (!message.statusLabelKey && !message.statusLabel) message.statusLabelKey = value;
       return;
@@ -88,6 +80,23 @@ export function applyRunStateMessageRuntimePatch({
       clearRuntimeMark: effect?.patch?.clearRuntimeMark === true,
     });
     if (effect?.action !== SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE) return;
+    const turnScopeId = getMessageTurnScopeId(message);
+    const timingPatch = effect.patch || {};
+    if (turnScopeId && (timingPatch.thinkingStartedAt || timingPatch.thinkingFinishedAt)) {
+      const existingTiming = session.turnTimingsByTurnScopeId?.[turnScopeId] || {};
+      session.turnTimingsByTurnScopeId = {
+        ...(session.turnTimingsByTurnScopeId || {}),
+        [turnScopeId]: {
+          ...existingTiming,
+          ...(timingPatch.thinkingStartedAt && !existingTiming.thinkingStartedAt
+            ? { thinkingStartedAt: timingPatch.thinkingStartedAt }
+            : {}),
+          ...(timingPatch.thinkingFinishedAt && !existingTiming.thinkingFinishedAt
+            ? { thinkingFinishedAt: timingPatch.thinkingFinishedAt }
+            : {}),
+        },
+      };
+    }
     applyRunStateMessagePatch(message, effect.patch);
   });
 }

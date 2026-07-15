@@ -151,6 +151,14 @@ export function createSessionDetailApplicator({
     // messages below are a disposable projection and must not become the
     // source used by hydration, continue, or resend flows.
     sessionItem.turnStatuses = turnStatuses.map((item) => ({ ...item }));
+    sessionItem.turnTimingsByTurnScopeId = Object.fromEntries(
+      turnTimings
+        .map((item) => [getMessageTurnScopeId(item), {
+          thinkingStartedAt: item?.thinkingStartedAt || null,
+          thinkingFinishedAt: item?.thinkingFinishedAt || null,
+        }])
+        .filter(([turnScopeId]) => Boolean(turnScopeId)),
+    );
     const detailTurnScopeIds = new Set(
       detailMessages.map((messageItem) => getMessageTurnScopeId(messageItem)).filter(Boolean),
     );

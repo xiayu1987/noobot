@@ -30,14 +30,10 @@ import {
   normalizeTurnMeta,
 } from "../../infra/messageIdentity";
 import {
-  getThinkingFinishedAt,
-  getThinkingStartedAt,
   normalizeTimePair,
   nowIso,
   nowMs,
   parseTimeMs,
-  setThinkingFinishedAt,
-  setThinkingStartedAt,
 } from "../../infra/timeFields";
 import { logResendDebug, summarizeDebugMessage } from "../debug/resendDebugLogger";
 
@@ -70,6 +66,21 @@ export function createChatEngineConversationState({
   let cacheExpiredRefreshTimer = null;
   const missingInteractionPayloadTimers = new Map();
   const connectorConnectedAckedRequestIds = new Set();
+
+  function finishTurnTiming(targetMessage, value = nowIso()) {
+    const turnScopeId = getMessageTurnScopeId(targetMessage);
+    const sessionItem = activeSession?.value;
+    if (!turnScopeId || !sessionItem) return;
+    const timings = sessionItem.turnTimingsByTurnScopeId || {};
+    const current = timings[turnScopeId] || {};
+    sessionItem.turnTimingsByTurnScopeId = {
+      ...timings,
+      [turnScopeId]: {
+        ...current,
+        thinkingFinishedAt: current.thinkingFinishedAt || value,
+      },
+    };
+  }
 
   function tryAutoResolveInteraction(rawRequest = {}) {
     const request = normalizeInteractionRequestPayload(rawRequest || {});
@@ -594,7 +605,7 @@ export function createChatEngineConversationState({
         return;
       }
       targetAssistantMessage.channelState = channelStateView;
-      setThinkingFinishedAt(targetAssistantMessage, getThinkingFinishedAt(targetAssistantMessage) || nowIso());
+      finishTurnTiming(targetAssistantMessage);
       logResendDebug("conversationState.backendCompleted.apply", {
         state, sessionId, dialogProcessId, turnScopeId,
         before: beforeTerminalApply,
@@ -604,7 +615,7 @@ export function createChatEngineConversationState({
     }
     const beforeTerminalApply = summarizeDebugMessage(targetAssistantMessage);
     targetAssistantMessage.channelState = channelStateView;
-    setThinkingFinishedAt(targetAssistantMessage, getThinkingFinishedAt(targetAssistantMessage) || nowIso());
+    finishTurnTiming(targetAssistantMessage);
     targetAssistantMessage.pending = false;
     if (state === FrontendRunState.FRONTEND_COMPLETED) {
       targetAssistantMessage.statusLabel = translate("chat.generated");

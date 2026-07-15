@@ -322,7 +322,8 @@ describe("ChatMessageListPanel", () => {
     expect(assistant.channelState).toMatchObject({ state: "sending" });
     expect(assistant.channelState?.createdAt).toBeUndefined();
     expect(assistant.channelState?.createdAtMs).toBeUndefined();
-    expect(assistant.thinkingStartedAt).toBe(startedAt);
+    expect(activeSession.turnTimingsByTurnScopeId?.["turn-live"]?.thinkingStartedAt).toBe(startedAt);
+    expect(assistant.thinkingStartedAt).toBeUndefined();
   });
 
   it("clears runtime-applied pending state when runStateSnapshot becomes terminal", async () => {
@@ -369,7 +370,8 @@ describe("ChatMessageListPanel", () => {
 
     expect(assistant.pending).toBe(false);
     expect(assistant.channelState).toMatchObject({ state: "frontend_completed" });
-    expect(assistant.thinkingFinishedAt).toBeTruthy();
+    expect(activeSession.turnTimingsByTurnScopeId?.["turn-live"]?.thinkingFinishedAt).toBeTruthy();
+    expect(assistant.thinkingFinishedAt).toBeUndefined();
   });
 
   it("clears obsolete previous pending assistants while keeping the latest run pending", () => {
