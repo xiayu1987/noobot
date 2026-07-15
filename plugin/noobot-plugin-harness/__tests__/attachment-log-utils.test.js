@@ -1,6 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mergeAttachments } from "../src/capabilities/handlers/shared/attachment-log-utils.js";
+import {
+  mergeAttachments,
+} from "../src/capabilities/handlers/shared/attachment-log-utils.js";
+import { containsExecutableScriptText } from "../src/capabilities/handlers/shared/script-content-risk.js";
+
+test("containsExecutableScriptText recognizes executable script signals only", () => {
+  assert.equal(containsExecutableScriptText("```bash\nrm -rf /tmp/demo\n```"), true);
+  assert.equal(containsExecutableScriptText("说明代码函数 foo() 的用途"), false);
+});
 
 test("mergeAttachments promotes duplicate attachment metadata to plugin ownership", () => {
   const merged = mergeAttachments(

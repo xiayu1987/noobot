@@ -1,3 +1,4 @@
+import { relaySeparateModelOutputAsUserMessage } from "./relay-model-output.js";
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
@@ -35,8 +36,9 @@ export {
   appendCapabilityModelTraceLog,
   mapAttachmentRecordsToMetas,
   mergeAttachments,
-  relaySeparateModelOutputAsUserMessage,
 } from "./attachment-log-utils.js";
+
+export { relaySeparateModelOutputAsUserMessage } from "./relay-model-output.js";
 
 export {
   resolveCapabilityModelInvoker,

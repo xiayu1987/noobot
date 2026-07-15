@@ -1,3 +1,4 @@
+export { relaySeparateModelOutputAsUserMessage } from "../shared/relay-model-output.js";
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
@@ -19,7 +20,6 @@ export {
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
   getTransferPayloadFromAttachments,
-  relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsTransferArtifacts,
 } from "../shared/attachment-log-utils.js";
 
