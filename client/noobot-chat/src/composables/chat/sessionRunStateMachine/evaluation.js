@@ -3,95 +3,58 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { BackendChannelState, FrontendRunState } from "./constants";
+import { FrontendRunState } from "./constants";
 import { normalizeState } from "./normalize";
 
 export function isTerminalSessionRunState(state = "") {
-  return [
-    FrontendRunState.FRONTEND_COMPLETED,
-    FrontendRunState.USER_STOP_COMPLETED,
-    BackendChannelState.ERROR,
-    FrontendRunState.CANCELLED,
-    FrontendRunState.IDLE,
-  ].includes(normalizeState(state));
+  return normalizeState(state) === FrontendRunState.IDLE;
 }
 
 export function isInFlightSessionRunState(state = "") {
   return [
-    BackendChannelState.SENDING,
-    FrontendRunState.CONTINUE_REQUESTING,
-    FrontendRunState.RESEND_REPLACING_TURN,
-    FrontendRunState.RESEND_STREAMING,
-    BackendChannelState.COMPLETED,
+    FrontendRunState.ACTION_REQUESTING,
+    FrontendRunState.PROCESSING,
     FrontendRunState.FRONTEND_COMPLETION_REQUESTING,
-    FrontendRunState.USER_STOP_REQUESTED,
     FrontendRunState.USER_STOPPING,
-    BackendChannelState.RECONNECTING,
-    BackendChannelState.INTERACTION_PENDING,
   ].includes(normalizeState(state));
 }
 
 export function isStopLockedSessionRunState(state = "") {
-  return [FrontendRunState.USER_STOP_REQUESTED, FrontendRunState.USER_STOPPING].includes(normalizeState(state));
+  return normalizeState(state) === FrontendRunState.USER_STOPPING;
 }
 
 export function evaluateSessionRunState(stateSnapshot = {}) {
-  const state = normalizeState(stateSnapshot?.state) || FrontendRunState.IDLE;
+  const normalizedState = normalizeState(stateSnapshot?.state);
+  const state = isInFlightSessionRunState(normalizedState)
+    ? normalizedState
+    : FrontendRunState.IDLE;
   const composerActionState = {
-    sendRequesting: Boolean(stateSnapshot?.composerActionState?.sendRequesting),
-    stopRequesting: Boolean(stateSnapshot?.composerActionState?.stopRequesting),
-    stopPendingUntilBackendReady: Boolean(stateSnapshot?.composerActionState?.stopPendingUntilBackendReady),
-    continueRequesting: Boolean(stateSnapshot?.composerActionState?.continueRequesting),
+    sendRequesting: state === FrontendRunState.ACTION_REQUESTING,
+    continueRequesting: false,
+    stopRequesting: state === FrontendRunState.USER_STOPPING,
+    stopPendingUntilBackendReady: false,
   };
-  const backendCanStop = [
-    BackendChannelState.SENDING,
-    FrontendRunState.CONTINUE_REQUESTING,
-    FrontendRunState.RESEND_REPLACING_TURN,
-    FrontendRunState.RESEND_STREAMING,
-    BackendChannelState.RECONNECTING,
-    BackendChannelState.INTERACTION_PENDING,
-  ].includes(state);
-  const awaitingBackendStop = Boolean(
-    composerActionState.stopRequesting ||
-    composerActionState.stopPendingUntilBackendReady ||
-    state === FrontendRunState.USER_STOP_REQUESTED ||
-    state === FrontendRunState.USER_STOPPING,
-  );
-  const canStartNewSend = !awaitingBackendStop;
+  const backendCanStop = state === FrontendRunState.PROCESSING;
+  const awaitingBackendStop = state === FrontendRunState.USER_STOPPING;
+  // The state machine is the final action mutex.  Do not let a local composer
+  // flag reopen send/resend/continue while the current run is still in flight
+  // (including completion and stop-summary convergence).
+  const actionLocked = state !== FrontendRunState.IDLE;
+  const canStartNewSend = !actionLocked;
   return {
     state,
     composerActionState,
-    sending: isInFlightSessionRunState(state),
+    sending: actionLocked,
     backendCanStop,
-    canStop: backendCanStop || composerActionState.sendRequesting || composerActionState.continueRequesting || composerActionState.stopPendingUntilBackendReady,
+    canStop: backendCanStop && !awaitingBackendStop,
     stopInFlight: awaitingBackendStop,
     awaitingBackendStop,
     canStartNewSend: canStartNewSend && !composerActionState.continueRequesting,
     canRetryMessage: canStartNewSend,
     canDeleteMessage: canStartNewSend,
-    interactionSubmitting: state === BackendChannelState.INTERACTION_PENDING ? false : undefined,
-    pendingInteractionPolicy: state === BackendChannelState.INTERACTION_PENDING ? "await_payload" : "unchanged",
-    assistantStatus:
-      state === FrontendRunState.USER_STOPPING || state === FrontendRunState.USER_STOP_REQUESTED
-        ? "user_stopping"
-        : state === FrontendRunState.RESEND_REPLACING_TURN
-          ? "resend_replacing_turn"
-          : state === FrontendRunState.RESEND_STREAMING
-            ? "resend_streaming"
-            : state === BackendChannelState.COMPLETED ||
-                state === FrontendRunState.FRONTEND_COMPLETION_REQUESTING
-              ? ""
-        : state === BackendChannelState.RECONNECTING
-          ? "reconnecting"
-          : state === FrontendRunState.FRONTEND_COMPLETED
-            ? "generated"
-            : state === FrontendRunState.USER_STOP_COMPLETED
-              ? "user_stopped"
-              : state === FrontendRunState.CANCELLED
-                ? "cancelled"
-                : state === BackendChannelState.ERROR
-                ? "failed"
-                : "",
+    interactionSubmitting: undefined,
+    pendingInteractionPolicy: "unchanged",
+    assistantStatus: state === FrontendRunState.USER_STOPPING ? "user_stopping" : "",
     terminal: isTerminalSessionRunState(state),
     stopLocked: isStopLockedSessionRunState(state),
   };

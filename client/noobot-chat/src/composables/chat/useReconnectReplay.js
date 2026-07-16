@@ -331,6 +331,15 @@ export function useReconnectReplay({
     stateData = {},
   } = {}) {
     if (typeof chatList?.fetchSessionDetail !== "function" || typeof chatList?.applySessionDetail !== "function") {
+      // A backend terminal fact is not the authoritative frontend summary.
+      // Without a detail client completion cannot be applied successfully.
+      applyRunStateEvent?.({
+        type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED,
+        sessionId,
+        dialogProcessId,
+        turnScopeId,
+        source: "reconnect_completed_detail_unavailable",
+      });
       return false;
     }
     return refreshFinalSessionDetail({

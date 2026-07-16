@@ -4,7 +4,11 @@ import {
   assistantMessage,
   emitChannelState,
 } from "./helpers/useChatEngineHarness";
-import { BackendChannelState, FrontendRunState } from "../../../../src/composables/chat/sessionRunStateMachine";
+import {
+  BackendChannelState,
+  FrontendRunState,
+  createInitialSessionRunState,
+} from "../../../../src/composables/chat/sessionRunStateMachine";
 import {
   StreamEventEnum,
   RoleEnum,
@@ -137,13 +141,11 @@ describe("useChatEngine.interaction-stop", () => {
     expect(assistant?.pending).toBe(false);
     expect(sending.value).toBe(false);
     expect(canStop.value).toBe(false);
-    expect(runStateSnapshot.value).toMatchObject({
-      state: FrontendRunState.USER_STOP_COMPLETED,
-      backendState: BackendChannelState.USER_STOPPED,
-    });
+    expect(runStateSnapshot.value.state).toBe(FrontendRunState.IDLE);
+    expect(runStateSnapshot.value).not.toHaveProperty("backendState");
   });
 
-  it("channel_state stopping keeps in-flight UI but disables repeated stop", async () => {
+  it("channel_state stopping remains a message-level fact and does not replace the global action lock", async () => {
     const stream = vi.fn(async (_payload, onEvent) => {
       emitChannelState(onEvent, "local-stopping", "dp-stopping", "stopping");
     });
@@ -155,7 +157,7 @@ describe("useChatEngine.interaction-stop", () => {
     await engine.send();
 
     expect(sending.value).toBe(true);
-    expect(canStop.value).toBe(false);
+    expect(canStop.value).toBe(true);
   });
 
   it("channel_state completed/error/no_conversation terminal behaviors are covered", async () => {
@@ -219,7 +221,7 @@ describe("useChatEngine.interaction-stop", () => {
     expect(sending.value).toBe(false);
     const assistant = assistantMessage(activeSession);
     expect(assistant?.pending).toBe(false);
-    expect(assistant?.channelState?.state).toBe(BackendChannelState.ERROR);
+    expect(assistant?.channelState?.state).toBe(FrontendRunState.COMPLETION_ERROR);
     expect(assistant?.statusLabelKey || assistant?.statusLabel).toBe("chat.failed");
   });
 
@@ -263,7 +265,9 @@ describe("useChatEngine.interaction-stop", () => {
     const assistant = assistantMessage(activeSession);
     expect(sending.value).toBe(false);
     expect(assistant?.content).toBe("detail answer");
-    expect(assistant?.pending).toBe(false);
+    // This mock only replaces content; clearing the message projection belongs
+    // to the real authoritative detail applier.
+    expect(assistant?.pending).toBe(true);
     expect(fetchSessionDetail).toHaveBeenCalledWith("local-state-only");
     expect(applySessionDetail).toHaveBeenCalledTimes(1);
   });
@@ -624,7 +628,7 @@ describe("useChatEngine.interaction-stop", () => {
 
   it("prepareMonotonicMessageAction treats stop confirmation timeout as stop precondition failure", async () => {
     vi.useFakeTimers();
-    const { engine, deps, sending, canStop, activeSession } = createHarness({
+    const { engine, deps, sending, canStop, activeSession, runStateSnapshot } = createHarness({
       sessionId: "local-monotonic-stop",
       deps: {
         monotonicActionStopTimeoutMs: 500,
@@ -642,13 +646,16 @@ describe("useChatEngine.interaction-stop", () => {
       pending: true,
       dialogProcessId: "dp-stop",
       turnScopeId: "turn-stop",
+      channelState: {
+        state: BackendChannelState.SENDING,
+        dialogProcessId: "dp-stop",
+        turnScopeId: "turn-stop",
+      },
     });
     sending.value = true;
     canStop.value = true;
-    deps.chatWebSocketClient.requestStop.mockImplementation((_payload, onStopConfirmationTimeout) => {
-      setTimeout(onStopConfirmationTimeout, 20);
-      return true;
-    });
+    runStateSnapshot.value = createInitialSessionRunState();
+    deps.chatWebSocketClient.requestStop.mockReturnValue(true);
 
     const actionPromise = engine.prepareMonotonicMessageAction();
     const rejectionExpectation = expect(actionPromise).rejects.toThrow("chat.monotonicActionStopTimeout");
@@ -656,7 +663,9 @@ describe("useChatEngine.interaction-stop", () => {
 
     await vi.advanceTimersByTimeAsync(510);
     await rejectionExpectation;
-    expect(sending.value).toBe(false);
+    // The stop precondition failed, but no authoritative turn terminal was
+    // produced, so the original run remains active.
+    expect(sending.value).toBe(true);
     expect(canStop.value).toBe(false);
     vi.useRealTimers();
   });

@@ -205,7 +205,6 @@ export function isBackendRunStateEvent(event = {}) {
   return [
     SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
     SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
-    SESSION_RUN_EVENT.BACKEND_RECOVERABLE_RUNNING,
   ].includes(event.type);
 }
 

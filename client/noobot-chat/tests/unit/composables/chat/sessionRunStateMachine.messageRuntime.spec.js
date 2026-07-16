@@ -84,22 +84,9 @@ describe("sessionRunStateMachine message runtime", () => {
     });
   });
 
-  it("resolves in-flight state for a matching assistant message", () => {
-    const assistant = { role: "assistant", dialogProcessId: "d1", turnScopeId: "turn-1", content: "" };
-    const activeSession = {
-      id: "s1",
-      backendSessionId: "s1",
-      messages: [{ role: "user", content: "q" }, assistant],
-    };
-    const stateSnapshot = createInitialSessionRunState({
-      state: BackendChannelState.SENDING,
-      sessionId: "s1",
-      dialogProcessId: "d1",
-      turnScopeId: "turn-1",
-      priority: 40,
-    });
-
-    expect(resolveSessionRunStateForMessage({ stateSnapshot, messageItem: assistant, activeSession })).toBe(stateSnapshot);
+  it("does not resolve message runtime from the identity-free global lock", () => {
+    const assistant = { role: "assistant", dialogProcessId: "d1", turnScopeId: "turn-1" };
+    expect(resolveSessionRunStateForMessage({ stateSnapshot: createInitialSessionRunState({ state: FrontendRunState.ACTION_REQUESTING }), messageItem: assistant, activeSession: { id: "s1", messages: [assistant] } })).toBeNull();
   });
 
   it("does not resolve terminal or different-session run state for a message", () => {
@@ -132,74 +119,9 @@ describe("sessionRunStateMachine message runtime", () => {
     })).toBeNull();
   });
 
-  it("resolves message runtime effects from state machine rules", () => {
-    const assistant = { role: "assistant", dialogProcessId: "d1", turnScopeId: "turn-1", content: "" };
-    const activeSession = {
-      id: "s1",
-      backendSessionId: "s1",
-      messages: [{ role: "user", content: "q" }, assistant],
-    };
-    const stateSnapshot = createInitialSessionRunState({
-      state: BackendChannelState.SENDING,
-      sessionId: "s1",
-      dialogProcessId: "d1",
-      turnScopeId: "turn-1",
-      priority: 40,
-    });
-
-    expect(resolveSessionRunMessageRuntimePatch({
-      stateSnapshot,
-      messageItem: assistant,
-      activeSession,
-    })).toMatchObject({
-      action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
-      reason: SESSION_RUN_MESSAGE_RUNTIME_REASON.IN_FLIGHT_MATCH,
-      patch: {
-        runtimeMark: "sending|s1|d1|turn-1|",
-        pending: true,
-        channelState: {
-          state: BackendChannelState.SENDING,
-          sessionId: "s1",
-          dialogProcessId: "d1",
-          turnScopeId: "turn-1",
-        },
-      },
-    });
-
-    assistant[SESSION_RUN_MESSAGE_RUNTIME_MARK] = "sending|s1|d1||0";
-    expect(resolveSessionRunMessageRuntimePatch({
-      stateSnapshot: createInitialSessionRunState({
-        state: FrontendRunState.FRONTEND_COMPLETED,
-        sessionId: "s1",
-        dialogProcessId: "d1",
-        priority: 100,
-      }),
-      messageItem: assistant,
-      activeSession,
-    })).toMatchObject({
-      action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
-      reason: SESSION_RUN_MESSAGE_RUNTIME_REASON.RUNTIME_STATE_NO_LONGER_MATCHES,
-      patch: {
-        clearRuntimeMark: true,
-        pending: false,
-        channelState: { state: FrontendRunState.FRONTEND_COMPLETED },
-        statusLabelKey: "chat.generated",
-      },
-    });
-
-    expect(resolveSessionRunMessageRuntimePatch({
-      stateSnapshot: createInitialSessionRunState({
-        state: BackendChannelState.COMPLETED,
-        sessionId: "s1",
-        dialogProcessId: "other-dialog",
-        turnScopeId: "other-turn",
-        priority: 90,
-      }),
-      messageItem: assistant,
-      activeSession,
-    })).toMatchObject({
-      action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.NONE,
-    });
+  it("does not patch message runtime from the identity-free global lock", () => {
+    const assistant = { role: "assistant", dialogProcessId: "d1", turnScopeId: "turn-1" };
+    expect(resolveSessionRunMessageRuntimePatch({ stateSnapshot: createInitialSessionRunState({ state: FrontendRunState.ACTION_REQUESTING }), messageItem: assistant, activeSession: { id: "s1", messages: [assistant] } })).toMatchObject({ action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.NONE });
   });
 
   it("does not clear active message runtime from another session terminal state", () => {
@@ -284,46 +206,9 @@ describe("sessionRunStateMachine message runtime", () => {
     })).toMatchObject({ action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.NONE });
   });
 
-  it("applies backend stopped snapshot to refreshed pending assistant matched by dialogProcessId", () => {
-    const assistant = {
-      role: "assistant",
-      pending: true,
-      dialogProcessId: "d1",
-      turnScopeId: "",
-      content: "",
-    };
-    const activeSession = {
-      id: "s1",
-      backendSessionId: "s1",
-      messages: [{ role: "user", content: "q", turnScopeId: "turn-1" }, assistant],
-    };
-
-    expect(resolveSessionRunMessageRuntimePatch({
-      stateSnapshot: createInitialSessionRunState({
-        state: FrontendRunState.USER_STOP_COMPLETED,
-        backendState: BackendChannelState.USER_STOPPED,
-        sessionId: "s1",
-        dialogProcessId: "d1",
-        turnScopeId: "turn-1",
-        sourceEvent: "user_stopped",
-        priority: 100,
-      }),
-      messageItem: assistant,
-      activeSession,
-    })).toMatchObject({
-      action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
-      reason: SESSION_RUN_MESSAGE_RUNTIME_REASON.RUNTIME_STATE_NO_LONGER_MATCHES,
-      patch: {
-        pending: false,
-        channelState: {
-          state: BackendChannelState.USER_STOPPED,
-          sessionId: "s1",
-          dialogProcessId: "d1",
-          turnScopeId: "turn-1",
-        },
-        statusLabelKey: "chat.stopped",
-      },
-    });
+  it("applies persisted stopped turn status to a refreshed pending assistant", () => {
+    const assistant = { role: "assistant", pending: true, dialogProcessId: "d1", turnScopeId: "turn-1", channelState: { state: "sending" } };
+    expect(resolveTurnRuntimeView({ messageItem: assistant, turnStatus: { status: BackendChannelState.USER_STOPPED, dialogProcessId: "d1", turnScopeId: "turn-1" } })).toMatchObject({ state: BackendChannelState.USER_STOPPED, running: false, source: "persisted" });
   });
 
   it("resolves obsolete previous pending assistant as clear_runtime", () => {
@@ -417,10 +302,10 @@ describe("sessionRunStateMachine message runtime", () => {
 
     expect(resolveSessionRunMessageRuntimeView({
       role: "assistant",
-      status: FrontendRunState.USER_STOP_REQUESTED,
+      status: FrontendRunState.USER_STOPPING,
       pending: true,
     })).toMatchObject({
-      state: FrontendRunState.USER_STOP_REQUESTED,
+      state: FrontendRunState.USER_STOPPING,
       running: true,
       inFlightAssistant: true,
       canStopTarget: false,

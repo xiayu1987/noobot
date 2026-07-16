@@ -35,6 +35,9 @@ vi.mock("../../../../src/shared/i18n/useLocale", () => ({
         "composer.scenarioProgramming": "编程",
         "composer.send": "发送",
         "composer.sending": "发送中",
+        "composer.requesting": "请求中",
+        "composer.completing": "完成中",
+        "composer.stopping": "停止中",
         "composer.stop": "停止",
       };
       return labels[key] || key;
@@ -249,12 +252,13 @@ describe("ChatComposer interactions", () => {
     expect(inputActions(wrapper).props("sending")).toBe(true);
   });
 
-  it("uses composer action state for frontend send and stop request controls", async () => {
+  it("uses the last-message display state for send and stop request controls", async () => {
     const wrapper = mountComposer({
       modelValue: "hello",
       sending: false,
       canStop: true,
       composerActionState: {
+        displayState: "requesting",
         sendRequesting: true,
         stopRequesting: true,
       },
@@ -262,8 +266,8 @@ describe("ChatComposer interactions", () => {
 
     expect(inputActions(wrapper).props("sendRequesting")).toBe(true);
     expect(inputActions(wrapper).props("stopRequesting")).toBe(true);
-    expect(inputActions(wrapper).props("sendDisabled")).toBe(true);
-    expect(inputActions(wrapper).props("sendButtonText")).toBe("发送中");
+    expect(inputActions(wrapper).props("sendDisabled")).toBe(false);
+    expect(inputActions(wrapper).props("sendButtonText")).toBe("请求中");
 
     inputActions(wrapper).vm.$emit("send");
     inputActions(wrapper).vm.$emit("stop");
@@ -277,6 +281,7 @@ describe("ChatComposer interactions", () => {
       sending: true,
       canStop: true,
       composerActionState: {
+        displayState: "sending",
         sendRequesting: false,
         stopRequesting: false,
       },

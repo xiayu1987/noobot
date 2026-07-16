@@ -3,22 +3,18 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { SESSION_RUN_EVENT } from "./constants";
+import { FrontendRunState, SESSION_RUN_EVENT } from "./constants";
 import { evaluateSessionRunState } from "./evaluation";
 import { normalizeSessionRunEvent } from "./eventNormalization";
-import { transitionPriority, transitionRule, trim } from "./normalize";
-import { resolveRunTurnScopeId, shouldStartNewTurn } from "./runIdentity";
+import { transitionPriority, transitionRule } from "./normalize";
+import { shouldStartNewTurn } from "./runIdentity";
 import { logStopButtonEvaluation } from "../debug/stopContinueDebugLogger";
-import {
-  createInitialSessionRunState,
-  applySessionRunActionEventPatch,
-  applySessionRunEventPatch,
-} from "./stateSnapshot";
+import { createInitialSessionRunState } from "./stateSnapshot";
 import { canApplyNormalizedEvent, resolveNormalizedTransitionDecision } from "./transitionDecision";
 
 export function normalizeTransitionInputs(currentState = createInitialSessionRunState(), rawEvent = {}) {
   const current = currentState || createInitialSessionRunState();
-  const event = normalizeSessionRunEvent(rawEvent);
+  const event = normalizeSessionRunEvent(classifyFailureEvent(current, rawEvent));
   const startsNewTurn = shouldStartNewTurn(current, event);
   const currentPriority = transitionPriority(current.state);
   const nextPriority = transitionPriority(event.state);
@@ -38,6 +34,21 @@ export function normalizeTransitionInputs(currentState = createInitialSessionRun
   };
 }
 
+function classifyFailureEvent(current = {}, rawEvent = {}) {
+  if (rawEvent?.type !== SESSION_RUN_EVENT.LOCAL_FAILURE || rawEvent?.failureState) return rawEvent;
+  const state = current?.state;
+  const failureState = state === "frontend_completion_requesting"
+    ? "frontend_completion_error"
+    : state === "frontend_user_stopping"
+      ? "frontend_stop_error"
+      : state === "frontend_action_requesting"
+        ? "frontend_action_request_error"
+        : ["sending", "continue_requesting", "resend_replacing_turn", "resend_streaming", "completed", "interaction_pending", "reconnecting"].includes(state)
+        ? "frontend_processing_error"
+        : "frontend_action_request_error";
+  return { ...rawEvent, failureState };
+}
+
 export function canApplyEvent(currentState = createInitialSessionRunState(), rawEvent = {}) {
   return canApplyNormalizedEvent(normalizeTransitionInputs(currentState, rawEvent));
 }
@@ -50,42 +61,58 @@ export function resolveNextStateByTransitionTable(currentState = createInitialSe
   return resolveTransitionDecision(currentState, rawEvent).nextState;
 }
 
-function resolveNextDialogProcessId(current = {}, event = {}, { startsNewTurn = false } = {}) {
-  if (startsNewTurn) return trim(event.dialogProcessId);
-  return trim(event.dialogProcessId) || trim(current.dialogProcessId);
-}
-
-function resolveNextTurnScopeId(current = {}, event = {}, { startsNewTurn = false } = {}) {
-  if (startsNewTurn) return resolveRunTurnScopeId(event);
-  return resolveRunTurnScopeId(event) || resolveRunTurnScopeId(current);
-}
-
 export function transitionSessionRunState(currentState = createInitialSessionRunState(), rawEvent = {}) {
-  const transition = normalizeTransitionInputs(currentState, rawEvent);
-  const { current, event, startsNewTurn } = transition;
-  if (isComposerActionEvent(event.type)) return applySessionRunActionEventPatch({ current, event });
-  if (!canApplyNormalizedEvent(transition)) return current;
-  if (event.type === SESSION_RUN_EVENT.LOCAL_RESET) return createInitialSessionRunState({ updatedAt: event.timestamp });
-
-  return applySessionRunEventPatch({
-    current,
-    event,
-    startsNewTurn,
-    nextDialogProcessId: resolveNextDialogProcessId(current, event, { startsNewTurn }),
-    nextTurnScopeId: resolveNextTurnScopeId(current, event, { startsNewTurn }),
-  });
-}
-
-function isComposerActionEvent(type = "") {
-  return [
+  const current = currentState || createInitialSessionRunState();
+  const event = normalizeSessionRunEvent(classifyFailureEvent(current, rawEvent));
+  if (event.type === SESSION_RUN_EVENT.LOCAL_RESET || event.type === SESSION_RUN_EVENT.LOCAL_FAILURE || [
+    SESSION_RUN_EVENT.LOCAL_RESEND_COMPLETED,
+    SESSION_RUN_EVENT.LOCAL_RESEND_FAILED,
+    SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
+    SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED,
+    SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED,
+    SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_FAILED,
+  ].includes(event.type)) {
+    return createInitialSessionRunState({ updatedAt: event.timestamp, updatedAtMs: event.timestamp, lastEventType: event.type });
+  }
+  let state = current.state || FrontendRunState.IDLE;
+  if ([
+    SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
     SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
-    SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_SETTLED,
-    SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_SETTLED,
+    SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED,
+    SESSION_RUN_EVENT.LOCAL_RESEND_STARTED,
+    SESSION_RUN_EVENT.LOCAL_RESEND_REPLACING_TURN,
+    SESSION_RUN_EVENT.LOCAL_RESEND_STREAMING,
+  ].includes(event.type)) state = FrontendRunState.ACTION_REQUESTING;
+  if (event.type === SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_REQUEST_STARTED) {
+    state = FrontendRunState.FRONTEND_COMPLETION_REQUESTING;
+  }
+  if ([
+    SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
+    SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+  ].includes(event.type) && [
+    "sending",
+    "reconnecting",
+    "interaction_pending",
+  ].includes(event.state)) {
+    state = FrontendRunState.PROCESSING;
+  }
+  if ([
+    SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED,
     SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
-    SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_SETTLED,
     SESSION_RUN_EVENT.LOCAL_USER_STOP_PENDING_BACKEND_READY,
-    SESSION_RUN_EVENT.LOCAL_USER_STOP_PENDING_CLEARED,
-  ].includes(type);
+  ].includes(event.type)) state = FrontendRunState.USER_STOPPING;
+  // Backend/reconnect in-flight facts also restore the temporary processing
+  // lock. Persisted turn results remain owned by the session summary.
+  return {
+    ...createInitialSessionRunState(),
+    state,
+    source: event.source,
+    sourceEvent: event.sourceEvent,
+    updatedAt: event.timestamp,
+    updatedAtMs: event.timestamp,
+    updatedAtIso: event.updatedAt || "",
+    lastEventType: event.type,
+  };
 }
 
 export function reduceSessionRunEvents(initialState = createInitialSessionRunState(), rawEvents = []) {

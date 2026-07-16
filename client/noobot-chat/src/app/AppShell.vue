@@ -484,7 +484,6 @@ const drawerPanels = computed(() =>
       :pending-interaction-request="pendingInteractionRequest"
       :interaction-submitting="interactionSubmitting"
       :show-conversation-state-debug-panel="showConversationStateDebugPanel"
-      :run-state-snapshot="runStateSnapshot"
       :conversation-state-snapshot="conversationStateSnapshot"
       :conversation-state-timeline="conversationStateTimeline"
       :translate="translate"

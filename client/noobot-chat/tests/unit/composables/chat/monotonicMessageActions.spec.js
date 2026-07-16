@@ -115,6 +115,16 @@ describe("monotonicMessageActions stop-window gates", () => {
         source: "test",
       },
     });
+    applySessionRunStateEvent({
+      stateRef: runStateSnapshot,
+      event: {
+        type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED,
+        sessionId: "s1",
+        dialogProcessId: "dp1",
+        turnScopeId: "turn-1",
+        source: "test",
+      },
+    });
     const { actions, userMessage, deleteSessionMessagesFromApi } = createActions({ runStateSnapshot });
 
     const result = await actions.deleteMonotonicMessage(userMessage);
@@ -170,7 +180,7 @@ describe("monotonicMessageActions stop-window gates", () => {
     expect(activeSession.value.revision).toBe(2);
   });
 
-  it("resets the run state to idle after deleting a stopped turn so a later continue is not blocked", async () => {
+  it("deletes a stopped turn after its authoritative summary clears the temporary lock", async () => {
     const runStateSnapshot = ref(createInitialSessionRunState());
     applySessionRunStateEvent({
       stateRef: runStateSnapshot,
@@ -179,11 +189,7 @@ describe("monotonicMessageActions stop-window gates", () => {
     applySessionRunStateEvent({
       stateRef: runStateSnapshot,
       event: {
-        type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
-        state: "user_stopped",
-        sessionId: "s1",
-        dialogProcessId: "dp1",
-        turnScopeId: "turn-1",
+        type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED,
         source: "test",
       },
     });
@@ -204,11 +210,7 @@ describe("monotonicMessageActions stop-window gates", () => {
 
     expect(await actions.deleteMonotonicMessage(userMessage)).toBe(true);
     expect(activeSession.value.messages).toHaveLength(0);
-    expect(applyRunStateEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: SESSION_RUN_EVENT.LOCAL_RESET,
-        turnScopeId: "turn-1",
-      }),
-    );
+    expect(runStateSnapshot.value.state).toBe("idle");
+    expect(applyRunStateEvent).not.toHaveBeenCalled();
   });
 });

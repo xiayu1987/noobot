@@ -281,6 +281,44 @@ describe("applyReconnectDataReplay", () => {
     expect(fixture.canStop.value).toBe(false);
   });
 
+  it("does not resurrect a terminal currentRun when channel running lags behind", async () => {
+    const appliedEvents = [];
+    const appliedChannelStates = [];
+    const fixture = createFixture({
+      applyRunStateEvents: vi.fn((events) => appliedEvents.push(...events)),
+      applyChannelState: vi.fn(async (stateEntry) => appliedChannelStates.push(stateEntry)),
+    });
+
+    await applyReconnectDataReplay({
+      reconnectData: {
+        sessions: [{
+          sessionId: "s-1",
+          hasRunningTask: true,
+          currentRun: {
+            sessionId: "s-1",
+            dialogProcessId: "dp-stop",
+            turnScopeId: "turn-stop",
+            state: "user_stopped",
+            seq: 12,
+          },
+          conversationStates: [],
+          dialogProcesses: [],
+        }],
+      },
+      ...fixture,
+    });
+
+    expect(fixture.ensureReconnectSessionActive).not.toHaveBeenCalled();
+    expect(appliedEvents.some((event) => event.type === "backend_recoverable_running")).toBe(false);
+    expect(appliedChannelStates).toEqual([
+      expect.objectContaining({
+        state: "user_stopped",
+        dialogProcessId: "dp-stop",
+        turnScopeId: "turn-stop",
+      }),
+    ]);
+  });
+
   it("restores stopping as in-flight but not stoppable after recoverable replay", async () => {
     const fixture = createFixture();
 

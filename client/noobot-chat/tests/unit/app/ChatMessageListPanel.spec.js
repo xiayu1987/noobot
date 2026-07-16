@@ -292,7 +292,7 @@ describe("ChatMessageListPanel", () => {
     expect(wrapper.findAll(".chat-message-item-stub")[1].text()).toBe("");
   });
 
-  it("hydrates latest assistant running time from runStateSnapshot during render", () => {
+  it("does not derive message runtime or timing from the global interaction lock", () => {
     const startedAt = "2026-06-22T10:00:00.000Z";
     const activeSession = {
       id: "s-1",
@@ -318,15 +318,13 @@ describe("ChatMessageListPanel", () => {
     });
 
     const assistant = activeSession.messages[1];
-    expect(assistant.pending).toBe(true);
-    expect(assistant.channelState).toMatchObject({ state: "sending" });
-    expect(assistant.channelState?.createdAt).toBeUndefined();
-    expect(assistant.channelState?.createdAtMs).toBeUndefined();
-    expect(activeSession.turnTimingsByTurnScopeId?.["turn-live"]?.thinkingStartedAt).toBe(startedAt);
+    expect(assistant.pending).toBe(false);
+    expect(assistant.channelState).toBeUndefined();
+    expect(activeSession.turnTimingsByTurnScopeId).toBeUndefined();
     expect(assistant.thinkingStartedAt).toBeUndefined();
   });
 
-  it("clears runtime-applied pending state when runStateSnapshot becomes terminal", async () => {
+  it("ignores global interaction-lock transitions when projecting message runtime", async () => {
     const startedAt = "2026-06-22T10:00:00.000Z";
     const activeSession = reactive({
       id: "s-1",
@@ -353,8 +351,8 @@ describe("ChatMessageListPanel", () => {
     });
 
     const assistant = activeSession.messages[1];
-    expect(assistant.pending).toBe(true);
-    expect(assistant.channelState).toMatchObject({ state: "sending" });
+    expect(assistant.pending).toBe(false);
+    expect(assistant.channelState).toBeUndefined();
 
     wrapper.unmount();
     mountPanel({
@@ -369,12 +367,12 @@ describe("ChatMessageListPanel", () => {
     await nextTick();
 
     expect(assistant.pending).toBe(false);
-    expect(assistant.channelState).toMatchObject({ state: "frontend_completed" });
-    expect(activeSession.turnTimingsByTurnScopeId?.["turn-live"]?.thinkingFinishedAt).toBeTruthy();
+    expect(assistant.channelState).toBeUndefined();
+    expect(activeSession.turnTimingsByTurnScopeId).toBeUndefined();
     expect(assistant.thinkingFinishedAt).toBeUndefined();
   });
 
-  it("clears obsolete previous pending assistants while keeping the latest run pending", () => {
+  it("does not use the global interaction lock to choose a pending assistant", () => {
     const activeSession = {
       id: "s-1",
       backendSessionId: "s-1",
@@ -404,7 +402,7 @@ describe("ChatMessageListPanel", () => {
 
     expect(activeSession.messages[1].pending).toBe(false);
     expect(activeSession.messages[1].channelState).toMatchObject({ state: "frontend_completed" });
-    expect(activeSession.messages[3].pending).toBe(true);
+    expect(activeSession.messages[3].pending).toBe(false);
   });
 
   it("passes rendered messages before stale rawMessages to message actions in old sessions", () => {

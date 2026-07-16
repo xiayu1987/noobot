@@ -61,11 +61,9 @@ import {
 import { setStateMachineDebugLogSink } from "./debug/stateMachineLogger";
 import { setResendDebugLogSink } from "./debug/resendDebugLogger";
 import { setStopDebugLogSink } from "./debug/stopDebugLogger";
-import {
-  logContinueResumeIdentitySelection,
-  setStopContinueDebugLogSink,
-} from "./debug/stopContinueDebugLogger";
+import { setStopContinueDebugLogSink } from "./debug/stopContinueDebugLogger";
 import { setReconnectTimingDebugLogSink } from "./debug/reconnectTimingDebugLogger";
+import { deriveLastTurnActions } from "./turnActions";
 
 export function useChatSession({
   userId,
@@ -95,7 +93,6 @@ export function useChatSession({
     sending,
     canStop,
     runStateSnapshot,
-    userStoppedResumeSnapshots,
     sessions,
     activeSessionId,
     activeSession,
@@ -114,105 +111,29 @@ export function useChatSession({
     return `client-turn:${nowMs().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
   }
 
-  function resolveActiveSessionIdentityCandidates() {
-    return [
-      activeSession.value?.backendSessionId,
-      activeSession.value?.sessionId,
-      activeSession.value?.id,
-      activeSessionId.value,
-    ].map((id) => String(id || "").trim()).filter(Boolean)
-      .filter((id, index, list) => list.indexOf(id) === index);
-  }
-
-  function isRunStateForActiveSession(stateSnapshot = {}) {
-    const runSessionId = String(stateSnapshot?.sessionId || "").trim();
-    const state = String(stateSnapshot?.state || "").trim();
-    const backendState = String(stateSnapshot?.backendState || "").trim();
-    if (!runSessionId) {
-      return state !== FrontendRunState.USER_STOP_COMPLETED && backendState !== BackendChannelState.USER_STOPPED;
-    }
-    const activeId = resolveActiveSessionIdentity();
-    return Boolean(activeId && runSessionId === activeId);
-  }
-
-  function getActiveStoppedResumeSnapshot() {
-    const matched = getActiveStoppedResumeSnapshotWithKey();
-    return matched?.snapshot || null;
-  }
-
-  function getActiveStoppedResumeSnapshotWithKey() {
-    for (const sessionId of resolveActiveSessionIdentityCandidates()) {
-      const snapshot = chatStore.getUserStoppedResumeSnapshot(sessionId);
-      if (snapshot) return { sessionId, snapshot };
-    }
-    return null;
-  }
-
-  // The registry snapshot is only a cache of the persisted stopped identity.
-  // session.turnStatuses is the authoritative run history: cross-check the
-  // cached resume identity against it so a stale cache (whose stopped turn was
-  // deleted, pruned, or advanced to a terminal/error state) can never drive a
-  // continue that the backend must reject with 409. When no turnStatuses have
-  // been loaded we cannot contradict the registry and keep the cache as before.
-  function isStoppedResumeIdentityBackedByTurnStatuses(dialogProcessId = "", turnScopeId = "") {
-    const statuses = Array.isArray(activeSession.value?.turnStatuses)
-      ? activeSession.value.turnStatuses
-      : [];
-    if (!statuses.length) return true;
-    const dialog = String(dialogProcessId || "").trim();
-    const scope = String(turnScopeId || "").trim();
-    if (!dialog || !scope) return false;
-    return statuses.some(
-      (item) =>
-        String(item?.dialogProcessId || "").trim() === dialog &&
-        String(item?.turnScopeId || "").trim() === scope &&
-        String(item?.status || "").trim().toLowerCase() === "user_stopped",
-    );
-  }
-
-  function buildStoppedRunStateFromActiveRegistry() {
-    const activeId = resolveActiveSessionIdentity();
-    const snapshot = getActiveStoppedResumeSnapshot();
-    if (!activeId || !snapshot?.dialogProcessId || !snapshot?.turnScopeId) return null;
-    return {
-      state: FrontendRunState.USER_STOP_COMPLETED,
-      backendState: BackendChannelState.USER_STOPPED,
-      sessionId: activeId,
-      dialogProcessId: snapshot.dialogProcessId,
-      turnScopeId: snapshot.turnScopeId,
-      seq: Number(snapshot.seq || 0),
-      source: snapshot.source || "user_stopped_resume_registry",
-      sourceEvent: "user_stopped_resume_registry",
-      composerActionState: {},
-    };
-  }
-
-  function resolveActiveSessionRunStateSnapshot() {
-    if (isRunStateForActiveSession(runStateSnapshot.value)) return runStateSnapshot.value;
-    return buildStoppedRunStateFromActiveRegistry() || {};
-  }
-
-  function evaluateActiveSessionRunState() {
-    return evaluateSessionRunState(resolveActiveSessionRunStateSnapshot());
-  }
-
   const composerActionState = computed(() => {
-    const activeRunStateSnapshot = resolveActiveSessionRunStateSnapshot();
-    const runStateInActiveSession = isRunStateForActiveSession(activeRunStateSnapshot);
-    const evaluation = evaluateSessionRunState(activeRunStateSnapshot);
-    const composerSnapshot = runStateInActiveSession ? activeRunStateSnapshot?.composerActionState || {} : {};
+    const turnActions = deriveLastTurnActions(
+      activeSession.value?.messages || [],
+      activeSession.value?.turnStatuses || [],
+      activeSession.value?.turnTimingsByTurnScopeId || {},
+    );
     return {
-      sendRequesting: Boolean(composerSnapshot?.sendRequesting),
-      continueRequesting: Boolean(composerSnapshot?.continueRequesting),
-      stopRequesting: Boolean(composerSnapshot?.stopRequesting),
-      stopPendingUntilBackendReady: Boolean(composerSnapshot?.stopPendingUntilBackendReady),
-      canStartNewSend: evaluation.canStartNewSend !== false,
-      canRetryMessage: evaluation.canRetryMessage !== false,
-      canDeleteMessage: evaluation.canDeleteMessage !== false,
-      stopInFlight: Boolean(evaluation.stopInFlight),
-      awaitingBackendStop: Boolean(evaluation.awaitingBackendStop),
-      userStopped: evaluation.state === FrontendRunState.USER_STOP_COMPLETED,
-      state: evaluation.state || "",
+      sendRequesting: turnActions.displayState === "requesting",
+      continueRequesting: false,
+      stopRequesting: turnActions.displayState === "stopping",
+      stopPendingUntilBackendReady: false,
+      canStartNewSend: true,
+      canRetryMessage: true,
+      canDeleteMessage: true,
+      stopInFlight: turnActions.displayState === "stopping",
+      awaitingBackendStop: turnActions.displayState === "stopping",
+      userStopped: turnActions.userStopped,
+      primaryAction: turnActions.action,
+      canContinue: turnActions.canContinue,
+      canResend: turnActions.canResend,
+      state: turnActions.displayState,
+      displayState: turnActions.displayState,
+      canStop: turnActions.canStop,
     };
   });
 
@@ -222,21 +143,6 @@ export function useChatSession({
     canStop,
     event,
   });
-
-  function replayPendingStopWhenBackendReady() {
-    if (!isRunStateForActiveSession(runStateSnapshot.value)) return false;
-    const evaluation = evaluateSessionRunState(runStateSnapshot.value);
-    if (!evaluation.composerActionState?.stopPendingUntilBackendReady) return false;
-    if (!evaluation.backendCanStop) return false;
-    const requested = chatEngine.stopSending();
-    if (requested) {
-      applyComposerActionStateEvent({
-        type: SESSION_RUN_EVENT.LOCAL_USER_STOP_PENDING_CLEARED,
-        source: "use_chat_session",
-      });
-    }
-    return requested;
-  }
 
   function trackConversationState(stateEntry = {}) {
     const state = String(stateEntry?.state || "").trim();
@@ -285,10 +191,7 @@ export function useChatSession({
       turnScopeId,
       data: normalizedEntry,
     });
-    const stoppedResumeBeforeTransition = sessionId
-      ? chatStore.getUserStoppedResumeSnapshot(sessionId)
-      : null;
-    const transitionResult = applySessionRunStateEvent({
+    applySessionRunStateEvent({
       stateRef: runStateSnapshot,
       sending,
       canStop,
@@ -307,88 +210,20 @@ export function useChatSession({
         updatedAt,
       },
     });
-    const nextRunState = transitionResult?.nextState || {};
-    if (
-      state === BackendChannelState.USER_STOPPED &&
-      sessionId &&
-      dialogProcessId &&
-      turnScopeId &&
-      nextRunState.state === FrontendRunState.USER_STOP_COMPLETED &&
-      nextRunState.backendState === BackendChannelState.USER_STOPPED &&
-      nextRunState.sessionId === sessionId &&
-      nextRunState.dialogProcessId === dialogProcessId &&
-      nextRunState.turnScopeId === turnScopeId
-    ) {
-      chatStore.rememberUserStoppedResumeSnapshot({
-        sessionId,
-        dialogProcessId,
-        turnScopeId,
-        seq: normalizedEntry.seq,
-        source: normalizedEntry.sourceEvent || normalizedEntry.source || "conversation_state",
-        updatedAt,
-      });
-    }
-    const acceptedTerminalFactAdvancesStoppedSession = Boolean(
-      stoppedResumeBeforeTransition &&
-      transitionResult?.changed === true &&
-      sessionId &&
-      dialogProcessId &&
-      turnScopeId &&
-      nextRunState.sessionId === sessionId &&
-      nextRunState.dialogProcessId === dialogProcessId &&
-      nextRunState.turnScopeId === turnScopeId &&
-      nextRunState.backendState === BackendChannelState.COMPLETED
-    );
-    if (acceptedTerminalFactAdvancesStoppedSession) {
-      chatStore.clearUserStoppedResumeSnapshot(sessionId);
-    }
-  }
-
-  function findLatestStoppedDetailIdentity(turnStatuses = []) {
-    const statuses = Array.isArray(turnStatuses) ? turnStatuses : [];
-    for (let index = statuses.length - 1; index >= 0; index -= 1) {
-      const item = statuses[index];
-      const status = String(item?.status || "").trim().toLowerCase();
-      if (!status) continue;
-      // turnStatuses is the persisted run history in chronological order. Only
-      // its latest fact may restore the composer state; an older stopped turn
-      // must not make a session resumable after a newer turn completed.
-      if (status !== "user_stopped") return null;
-      const dialogProcessId = String(item?.dialogProcessId || "").trim();
-      const turnScopeId = String(item?.turnScopeId || "").trim();
-      if (!dialogProcessId || !turnScopeId) return null;
-      return { dialogProcessId, turnScopeId };
-    }
-    return null;
-  }
-
-  function canHydrateStoppedRunStateFromDetail(sessionId = "") {
-    const evaluation = evaluateSessionRunState(runStateSnapshot.value);
-    const state = evaluation.state;
-    if (state === FrontendRunState.IDLE || state === FrontendRunState.USER_STOP_COMPLETED) return true;
-    if (evaluation.awaitingBackendStop === true) return true;
-    if (!sessionId) return false;
-    return String(runStateSnapshot.value?.sessionId || "").trim() !== String(sessionId || "").trim();
   }
 
   function hydrateStoppedRunStateFromSessionDetail({ sessionItem = null } = {}) {
-    const sessionId = String(sessionItem?.backendSessionId || sessionItem?.sessionId || sessionItem?.id || "").trim();
-    if (!sessionId) return;
-    const stoppedIdentity = findLatestStoppedDetailIdentity(sessionItem?.turnStatuses || []);
-    if (!stoppedIdentity) {
-      chatStore.clearUserStoppedResumeSnapshot(sessionId);
-      return;
-    }
-    if (!canHydrateStoppedRunStateFromDetail(sessionId)) return;
-    trackConversationState({
-      source: "session_detail",
-      sourceEvent: "session_detail_user_stopped",
-      state: BackendChannelState.USER_STOPPED,
-      sessionId,
-      dialogProcessId: stoppedIdentity.dialogProcessId,
-      turnScopeId: stoppedIdentity.turnScopeId,
-      seq: 0,
-      applied: true,
+    // A successfully applied session summary is the synchronization boundary:
+    // turnStatuses now owns every persisted turn result, so the global state is
+    // only a temporary frontend interaction lock and must always be released.
+    applySessionRunStateEvent({
+      stateRef: runStateSnapshot,
+      sending,
+      canStop,
+      event: {
+        type: SESSION_RUN_EVENT.LOCAL_RESET,
+        source: "session_detail_applied",
+      },
     });
   }
 
@@ -595,122 +430,18 @@ export function useChatSession({
     processStore,
   });
 
-  watch(
-    () => [
-      runStateSnapshot.value?.state,
-      runStateSnapshot.value?.sessionId,
-      runStateSnapshot.value?.dialogProcessId,
-      runStateSnapshot.value?.turnScopeId,
-      runStateSnapshot.value?.composerActionState?.stopPendingUntilBackendReady,
-    ],
-    () => replayPendingStopWhenBackendReady(),
-  );
-
   async function sendWithComposerActionState(...args) {
-    const runStateEvaluation = evaluateActiveSessionRunState();
-    if (runStateEvaluation.canStartNewSend === false) return false;
-    if (composerActionState.value.sendRequesting || composerActionState.value.continueRequesting) return false;
-    const activeRunState = resolveActiveSessionRunStateSnapshot();
-    const cachedStoppedResumeMatch = runStateEvaluation.state === FrontendRunState.USER_STOP_COMPLETED
-      ? getActiveStoppedResumeSnapshotWithKey()
-      : null;
-    // user_stopped is the authoritative end of the previous turn. The
-    // registry is only a cache and may not have been populated yet when the
-    // user immediately starts the next turn, so fall back to that persisted
-    // run identity instead of reporting a local state mismatch.
-    const persistedStoppedIdentity = findLatestStoppedDetailIdentity(
+    const turnActions = deriveLastTurnActions(
+      activeSession.value?.messages || [],
       activeSession.value?.turnStatuses || [],
+      activeSession.value?.turnTimingsByTurnScopeId || {},
     );
-    const activeStoppedSnapshot = (
-      runStateEvaluation.state === FrontendRunState.USER_STOP_COMPLETED && persistedStoppedIdentity
-    ) ? {
-        dialogProcessId: persistedStoppedIdentity.dialogProcessId,
-        turnScopeId: persistedStoppedIdentity.turnScopeId,
-      } : null;
-    // Prefer the persisted latest turn identity. A registry entry is only a
-    // cache and can still describe an older stopped turn after refresh.
-    const stoppedResumeMatch = (activeStoppedSnapshot ? {
-      sessionId: resolveActiveSessionIdentity(),
-      snapshot: activeStoppedSnapshot,
-    } : null) || cachedStoppedResumeMatch;
-    const stoppedResumeIdentityFromPersistedStatus = Boolean(activeStoppedSnapshot);
-    // A registry entry is only a cache of the persisted stopped identity.  It
-    // must never turn a newer completed/current turn into a continuation.  In
-    // particular, delayed detail/events can leave an older registry entry
-    // behind after the session has already advanced to another turn.
-    const isContinueFromUserStopped = Boolean(
-      stoppedResumeMatch?.snapshot &&
-      runStateEvaluation.state === FrontendRunState.USER_STOP_COMPLETED &&
-      (stoppedResumeIdentityFromPersistedStatus || (
-        String(activeRunState?.backendState || "").trim() === BackendChannelState.USER_STOPPED &&
-        String(activeRunState?.dialogProcessId || "").trim() === String(stoppedResumeMatch.snapshot.dialogProcessId || "").trim() &&
-        String(activeRunState?.turnScopeId || "").trim() === String(stoppedResumeMatch.snapshot.turnScopeId || "").trim()
-      )) &&
-      isStoppedResumeIdentityBackedByTurnStatuses(
-        stoppedResumeMatch.snapshot.dialogProcessId,
-        stoppedResumeMatch.snapshot.turnScopeId,
-      )
-    );
-    const resumeSessionId = String(
-      stoppedResumeMatch?.sessionId || activeSession.value?.backendSessionId || activeSession.value?.id || activeSessionId.value || "",
-    ).trim();
-    const userStoppedResumeSnapshot = stoppedResumeMatch?.snapshot || null;
-    logContinueResumeIdentitySelection({
-      runState: activeRunState || runStateSnapshot.value || {},
-      selected: {
-        continueFromUserStopped: isContinueFromUserStopped,
-        resumeDialogProcessId: stoppedResumeMatch?.snapshot?.dialogProcessId || "",
-        resumeTurnScopeId: stoppedResumeMatch?.snapshot?.turnScopeId || "",
-      },
-      options: {
-        resumeIdentitySource: stoppedResumeIdentityFromPersistedStatus
-          ? "persisted_user_stopped_status"
-          : stoppedResumeMatch
-            ? "user_stopped_resume_registry"
-            : "missing_user_stopped_identity",
-        userStoppedResumeSnapshot,
-        evaluationState: runStateEvaluation.state,
-        persistedStoppedIdentity,
-        cachedStoppedResumeMatch: cachedStoppedResumeMatch?.snapshot || null,
-        activeRunBackendState: activeRunState?.backendState || "",
-        activeRunDialogProcessId: activeRunState?.dialogProcessId || "",
-        activeRunTurnScopeId: activeRunState?.turnScopeId || "",
-        backedByTurnStatuses: Boolean(
-          stoppedResumeMatch?.snapshot &&
-            isStoppedResumeIdentityBackedByTurnStatuses(
-              stoppedResumeMatch.snapshot.dialogProcessId,
-              stoppedResumeMatch.snapshot.turnScopeId,
-            ),
-        ),
-      },
-    });
-    if (
-      runStateEvaluation.state === FrontendRunState.USER_STOP_COMPLETED &&
-      !isContinueFromUserStopped
-    ) {
-      // The cached resume identity is contradicted by the authoritative
-      // turnStatuses (its stopped turn was deleted/pruned/advanced to a terminal
-      // state). Drop the stale cache so we stop firing continue requests that the
-      // backend rejects with 409. A plain mismatch against a newer running turn
-      // keeps the cache: that stopped turn may still be resumable later.
-      if (
-        stoppedResumeMatch?.sessionId &&
-        !isStoppedResumeIdentityBackedByTurnStatuses(
-          stoppedResumeMatch.snapshot?.dialogProcessId,
-          stoppedResumeMatch.snapshot?.turnScopeId,
-        )
-      ) {
-        chatStore.clearUserStoppedResumeSnapshot(stoppedResumeMatch.sessionId);
-      }
-      logContinueResumeIdentitySelection({
-        runState: runStateSnapshot.value,
-        selected: {
-          continueFromUserStopped: true,
-          resumeDialogProcessId: "",
-          resumeTurnScopeId: "",
-        },
-        options: { resumeIdentitySource: "missing_user_stopped_resume_registry" },
-      });
+    const stoppedTurn = turnActions.userStopped ? turnActions.lastTurn : null;
+    const resumeDialogProcessId = String(stoppedTurn?.dialogProcessId || "").trim();
+    const resumeTurnScopeId = String(stoppedTurn?.turnScopeId || "").trim();
+    const resumeSessionId = resolveActiveSessionIdentity();
+    const isContinueFromUserStopped = Boolean(stoppedTurn && resumeDialogProcessId && resumeTurnScopeId);
+    if (turnActions.userStopped && !isContinueFromUserStopped) {
       notify?.({
         type: "warning",
         message: translate("chat.sessionStateOutOfSync") || "Session state is out of sync. Refresh and try again.",
@@ -735,28 +466,18 @@ export function useChatSession({
       const sendOptions = isContinueFromUserStopped
         ? {
             ...(options && typeof options === "object" ? options : {}),
+            composerRequestStarted: true,
             continueFromUserStopped: true,
             turnScopeId: continuingTurnScopeId,
-            resumeDialogProcessId: userStoppedResumeSnapshot?.dialogProcessId || "",
-            resumeTurnScopeId: userStoppedResumeSnapshot?.turnScopeId || "",
-            onContinueUserStoppedResumeSnapshotCommitted: () => {
-              chatStore.consumeUserStoppedResumeSnapshot(resumeSessionId);
-            },
+            resumeDialogProcessId,
+            resumeTurnScopeId,
           }
-        : options;
-      if (isContinueFromUserStopped) {
-        logContinueResumeIdentitySelection({
-          runState: runStateSnapshot.value,
-          selected: sendOptions,
-          options: {
+        : {
             ...(options && typeof options === "object" ? options : {}),
-            userStoppedResumeSnapshot,
-          },
-        });
-      }
+            composerRequestStarted: true,
+          };
       return await chatEngine.send(sendOptions, ...restArgs);
     } finally {
-      replayPendingStopWhenBackendReady();
       applyComposerActionStateEvent({
         type: composerSettledEventType,
         source: "use_chat_session",
@@ -765,25 +486,11 @@ export function useChatSession({
   }
 
   function stopSendingWithComposerActionState(...args) {
-    if (composerActionState.value.stopRequesting) return false;
-    applyComposerActionStateEvent({
-      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
-      source: "use_chat_session",
-    });
+    if (!composerActionState.value.canStop) return false;
+    // chatEngine.stopSending atomically records LOCAL_USER_STOP_REQUEST_STARTED
+    // after it has resolved the active assistant identity. Dispatching it here
+    // first would turn canStop off and make the engine reject its own request.
     const requested = chatEngine.stopSending(...args);
-    if (!requested) {
-      if (composerActionState.value.sendRequesting || composerActionState.value.continueRequesting) {
-        applyComposerActionStateEvent({
-          type: SESSION_RUN_EVENT.LOCAL_USER_STOP_PENDING_BACKEND_READY,
-          source: "use_chat_session",
-        });
-        return true;
-      }
-      applyComposerActionStateEvent({
-        type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_SETTLED,
-        source: "use_chat_session",
-      });
-    }
     return requested;
   }
 
@@ -832,7 +539,6 @@ export function useChatSession({
     activeSessionId,
     activeSession,
     runStateSnapshot,
-    userStoppedResumeSnapshots,
     loadingSessions,
     loadingSessionDetail,
     newSession: chatList.newSession,

@@ -15,6 +15,7 @@ import {
 import { prepareChatSend } from "./sendPrepare";
 import {
   finalizeDoneSessionDetail,
+  finalizeStoppedSessionDetail,
   refreshFinalSessionDetail,
 } from "./sessionFinalize";
 import {
@@ -134,46 +135,36 @@ function hasDialogProcessConflictForTurn({ activeSession, data = {}, botMessage 
   });
 }
 
-function hasMatchingInFlightAssistant({ activeSession, runStateSnapshot } = {}) {
+function hasMatchingInFlightAssistant({ activeSession } = {}) {
   const messages = Array.isArray(activeSession?.value?.messages)
     ? activeSession.value.messages
     : [];
-  const runTurnScopeId = normalizeTrimmedString(runStateSnapshot?.value?.turnScopeId);
-  return hasMatchingInFlightAssistantMessage(messages, { turnScopeId: runTurnScopeId });
+  return hasMatchingInFlightAssistantMessage(messages, {
+    turnStatuses: activeSession?.value?.turnStatuses,
+  });
 }
 
-function isRunStateForActiveSession({ activeSession, runStateSnapshot } = {}) {
+function isRunStateForAnotherSession({ activeSession, runStateSnapshot } = {}) {
   const runSessionId = normalizeTrimmedString(runStateSnapshot?.value?.sessionId);
-  if (!runSessionId) return true;
-  const session = activeSession?.value || {};
-  const activeIds = [
-    session.backendSessionId,
-    session.sessionId,
-    session.id,
-  ].map((item) => normalizeTrimmedString(item)).filter(Boolean);
-  return !activeIds.length || activeIds.includes(runSessionId);
+  const activeSessionIds = [
+    activeSession?.value?.backendSessionId,
+    activeSession?.value?.sessionId,
+    activeSession?.value?.id,
+  ].map(normalizeTrimmedString).filter(Boolean);
+  return Boolean(runSessionId && activeSessionIds.length > 0 && !activeSessionIds.includes(runSessionId));
 }
 
 function hasConsistentSendingState({ sending, activeSession, runStateSnapshot, continueFromUserStopped = false } = {}) {
-  if (!isRunStateForActiveSession({ activeSession, runStateSnapshot })) {
-    return !sending?.value;
-  }
-  if (
-    continueFromUserStopped === true &&
-    [
-      FrontendRunState.USER_STOP_COMPLETED,
-      FrontendRunState.CONTINUE_REQUESTING,
-    ].includes(normalizeTrimmedString(runStateSnapshot?.value?.state))
-  ) {
-    return true;
-  }
+  if (continueFromUserStopped === true) return true;
+  if (isRunStateForAnotherSession({ activeSession, runStateSnapshot })) return true;
   if (!sending?.value && !isInFlightSessionRunState(runStateSnapshot?.value?.state)) return true;
-  return hasMatchingInFlightAssistant({ activeSession, runStateSnapshot });
+  return hasMatchingInFlightAssistant({ activeSession });
 }
 
 export function createChatEngineSender({
   activeSession,
   activeSessionId,
+  applyAssistantFailureState,
   allowUserInteraction,
   applyConversationState,
   applyConversationStateFromEvent,
@@ -240,10 +231,11 @@ export function createChatEngineSender({
     const hasExplicitAttachments = Boolean(explicitAttachmentFiles?.length || explicitTransportAttachments?.length);
     const hasTextToSend = Boolean(explicitMessageText || input.value.trim());
     const continueFromUserStopped = options?.continueFromUserStopped === true;
+    const composerRequestStarted = options?.composerRequestStarted === true;
     const resumeDialogProcessId = normalizeTrimmedString(options?.resumeDialogProcessId);
     const resumeTurnScopeId = normalizeTrimmedString(options?.resumeTurnScopeId);
     if (!ensureConnected()) return false;
-    if (options?.allowDuringResend !== true && !hasConsistentSendingState({
+    if (!composerRequestStarted && options?.allowDuringResend !== true && !hasConsistentSendingState({
       sending,
       activeSession,
       runStateSnapshot,
@@ -256,7 +248,8 @@ export function createChatEngineSender({
       return false;
     }
     const allowCurrentContinuationRequest = continueFromUserStopped === true;
-    if ((sending.value && options?.allowDuringResend !== true && !allowCurrentContinuationRequest) || !activeSession.value) return false;
+    const anotherSessionIsSending = isRunStateForAnotherSession({ activeSession, runStateSnapshot });
+    if ((sending.value && !composerRequestStarted && !anotherSessionIsSending && options?.allowDuringResend !== true && !allowCurrentContinuationRequest) || !activeSession.value) return false;
     if (!continueFromUserStopped && !hasTextToSend && uploadFiles.value.length === 0 && !hasExplicitAttachments) return false;
 
     const turnScopeId = normalizeTrimmedString(options?.turnScopeId) || createTurnScopeId();
@@ -403,6 +396,7 @@ export function createChatEngineSender({
           finalDoneEventData,
           fetchSessionDetail,
           applySessionDetail,
+          applyAssistantFailureState,
           applyRunStateEvent,
           refreshSessionConnectorsAsync,
         }).then((applied) => {
@@ -576,15 +570,6 @@ export function createChatEngineSender({
             dialogProcessId: data?.dialogProcessId || normalizeTrimmedString(botMsg.dialogProcessId),
           };
         }
-      }, {
-        onPayloadSent: continueFromUserStopped && typeof options?.onContinueUserStoppedResumeSnapshotCommitted === "function"
-          ? () => options.onContinueUserStoppedResumeSnapshotCommitted({
-              sessionId,
-              turnScopeId,
-              resumeDialogProcessId,
-              resumeTurnScopeId,
-            })
-          : undefined,
       });
       for (let attempt = 1; attempt <= 2; attempt += 1) {
         try {
@@ -684,29 +669,19 @@ export function createChatEngineSender({
           activeSession?.value?.backendSessionId ||
           activeSession?.value?.id,
         );
-        if (stoppedSessionId && finalUserStopEventData?.turnStatus) {
-          try {
-            const stoppedDetail = await fetchSessionDetail(stoppedSessionId, {
-              source: "userStoppedFinalStatus",
-              force: true,
-              reuseRecentlyLoaded: false,
-            });
-            if (stoppedDetail) {
-              applySessionDetail(stoppedDetail, {
-                preserveCurrentMessages: false,
-                scrollToBottom: false,
-              });
-            }
-          } catch (detailError) {
-            // Stop is already confirmed and persisted. A read-after-write UI
-            // refresh failure must not turn that terminal outcome into send error.
-            logResendDebug("send.stopDetailRefresh.failed", {
-              sessionId: stoppedSessionId,
-              turnScopeId,
-              error: String(detailError?.message || detailError || ""),
-            });
-          }
-        }
+        await finalizeStoppedSessionDetail({
+          activeSession,
+          activeSessionId,
+          botMessage: botMsg,
+          finalEventData: {
+            ...finalUserStopEventData,
+            sessionId: stoppedSessionId,
+            turnScopeId: finalUserStopEventData?.turnScopeId || turnScopeId,
+          },
+          fetchSessionDetail,
+          applySessionDetail,
+          applyRunStateEvent,
+        });
         locateDoneMessage?.();
         finalizePendingResendOperation?.({ finalOnly: true });
         logResendDebug("send.stopReturn", {
@@ -782,6 +757,7 @@ export function createChatEngineSender({
         finalDoneEventData: lastStreamErrorEventData || error?.data || null,
         fetchSessionDetail,
         applySessionDetail,
+        applyAssistantFailureState,
         applyRunStateEvent,
         refreshSessionConnectorsAsync,
       });

@@ -181,10 +181,8 @@ describe("useChatSession reconnect replay", () => {
     expect(newAssistant.pending).toBe(false);
     expect(authFetch).toHaveBeenCalledWith("/api/internal/session/u-1/s-1");
     expect(store.runStateSnapshot).toMatchObject({
-      state: FrontendRunState.FRONTEND_COMPLETED,
+      state: FrontendRunState.IDLE,
       lastEventType: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
-      sessionId: "s-1",
-      dialogProcessId: "dp-new",
     });
     expect(store.sending).toBe(false);
     expect(store.pendingInteractionRequest).toBeNull();

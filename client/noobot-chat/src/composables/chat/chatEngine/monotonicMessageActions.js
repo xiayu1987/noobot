@@ -51,19 +51,27 @@ function isStoppingAssistantMessage(message = {}) {
 
 function isUserStopPendingRunState(state = "") {
   return [
-    FrontendRunState.USER_STOP_REQUESTED,
     FrontendRunState.USER_STOPPING,
     FrontendRunState.USER_STOP_COMPLETED,
     BackendChannelState.USER_STOPPED,
   ].includes(normalizeTrimmedString(state));
 }
 
-function hasMatchingInFlightAssistant({ activeSession, runStateSnapshot } = {}) {
+function isUserStopConfirmedRunState(state = "") {
+  return [
+    FrontendRunState.USER_STOPPING,
+    FrontendRunState.USER_STOP_COMPLETED,
+    BackendChannelState.USER_STOPPED,
+  ].includes(normalizeTrimmedString(state));
+}
+
+function hasMatchingInFlightAssistant({ activeSession } = {}) {
   const messages = Array.isArray(activeSession?.value?.messages)
     ? activeSession.value.messages
     : [];
-  const runTurnScopeId = normalizeTrimmedString(runStateSnapshot?.value?.turnScopeId);
-  return hasMatchingInFlightAssistantMessage(messages, { turnScopeId: runTurnScopeId });
+  return hasMatchingInFlightAssistantMessage(messages, {
+    turnStatuses: activeSession?.value?.turnStatuses,
+  });
 }
 
 function getStoppedTurnMessage({ targetMessage = null, originalTargetMessage = null } = {}) {
@@ -139,7 +147,7 @@ export function createMonotonicMessageActions({
 
   function hasConsistentSendingState() {
     if (!sending?.value && !isInFlightSessionRunState(runStateSnapshot?.value?.state)) return true;
-    return hasMatchingInFlightAssistant({ activeSession, runStateSnapshot });
+    return hasMatchingInFlightAssistant({ activeSession });
   }
 
   async function waitForSendingSettled({
@@ -170,24 +178,21 @@ export function createMonotonicMessageActions({
       notify({ type: "warning", message });
       throw new Error(message);
     };
-    const stoppedTurnMessage = getStoppedTurnMessage({ targetMessage, originalTargetMessage });
-    if (sending?.value && stoppedTurnMessage) {
-      const session = activeSession?.value || {};
-      if (isUserStopPendingRunState(runStateSnapshot?.value?.state)) {
-        applyRunStateEvent?.({
-          type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
-          state: BackendChannelState.USER_STOPPED,
-          sessionId: normalizeTrimmedString(session.backendSessionId || session.sessionId || session.id || activeSessionId?.value),
-          dialogProcessId: getMessageDialogProcessId(stoppedTurnMessage),
-          turnScopeId: getMessageTurnScopeId(stoppedTurnMessage),
-          source: "monotonic_delete_stopped_turn",
-          updatedAtMs: nowMs(),
-        });
-        return true;
-      }
-    }
+    const targetTurnScopeId = getMessageTurnScopeId(targetMessage) || getMessageTurnScopeId(originalTargetMessage);
+    const stoppedTurnMessage = getStoppedTurnMessage({ targetMessage, originalTargetMessage }) ||
+      (targetTurnScopeId
+        ? (Array.isArray(activeSession?.value?.messages) ? activeSession.value.messages : []).find(
+            (message) =>
+              getMessageTurnScopeId(message) === targetTurnScopeId &&
+              (isStoppedTurnStatusPlaceholder(message) || isStoppingAssistantMessage(message)),
+          )
+        : null);
+    if (stoppedTurnMessage) return true;
     const runStateEvaluation = evaluateSessionRunState(runStateSnapshot?.value);
-    if (runStateEvaluation.canRetryMessage === false || runStateEvaluation.canDeleteMessage === false) {
+    // This helper is the internal stop-and-settle gate used by delete/resend.
+    // The public action mutex must reject a second action, but it must not
+    // prevent this helper from stopping the currently active run first.
+    if (!sending?.value && (runStateEvaluation.canRetryMessage === false || runStateEvaluation.canDeleteMessage === false)) {
       return false;
     }
     if (!sending?.value) return true;
@@ -200,7 +205,14 @@ export function createMonotonicMessageActions({
     if (!settled) {
       rejectStopPrecondition();
     }
-    if (evaluateSessionRunState(runStateSnapshot?.value).state === BackendChannelState.ERROR) {
+    const settledState = evaluateSessionRunState(runStateSnapshot?.value).state;
+    if ([
+      BackendChannelState.ERROR,
+      FrontendRunState.ACTION_REQUEST_ERROR,
+      FrontendRunState.PROCESSING_ERROR,
+      FrontendRunState.COMPLETION_ERROR,
+      FrontendRunState.STOP_ERROR,
+    ].includes(settledState)) {
       rejectStopPrecondition();
     }
     return true;
@@ -245,33 +257,6 @@ export function createMonotonicMessageActions({
     session.messages = messages.slice(0, startIndex);
     syncSessionMessageSummary(session);
     clearPendingInteraction?.();
-    return true;
-  }
-
-  // Deleting a stopped turn (user_stopped) removes the messages that the run
-  // state snapshot is still pinned to. Left untouched, runStateSnapshot stays at
-  // USER_STOP_COMPLETED referencing a turnScopeId that no longer exists, so the
-  // next send/continue is rejected by hasConsistentSendingState with
-  // chat.sessionStateOutOfSync. Dispatch LOCAL_RESET to pull the run state back
-  // to IDLE once its turn is gone from the active session.
-  function resetRunStateWhenTurnRemoved({ sessionId } = {}) {
-    if (typeof applyRunStateEvent !== "function") return false;
-    const runTurnScopeId = normalizeTrimmedString(runStateSnapshot?.value?.turnScopeId);
-    if (!runTurnScopeId) return false;
-    const messages = Array.isArray(activeSession.value?.messages)
-      ? activeSession.value.messages
-      : [];
-    const turnStillPresent = messages.some(
-      (message) => getMessageTurnScopeId(message) === runTurnScopeId,
-    );
-    if (turnStillPresent) return false;
-    applyRunStateEvent({
-      type: SESSION_RUN_EVENT.LOCAL_RESET,
-      sessionId: normalizeTrimmedString(sessionId),
-      turnScopeId: runTurnScopeId,
-      source: "monotonic_delete_reset",
-      updatedAtMs: nowMs(),
-    });
     return true;
   }
 
@@ -325,12 +310,10 @@ export function createMonotonicMessageActions({
         mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
         preserveCurrentMessages: false,
       });
-      resetRunStateWhenTurnRemoved({ sessionId });
       clearPendingInteraction?.();
       return true;
     }
     const cascaded = cascadeDeleteMessagesFrom(userTargetMessage);
-    if (cascaded) resetRunStateWhenTurnRemoved({});
     return cascaded;
   }
 

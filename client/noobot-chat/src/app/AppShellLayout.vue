@@ -64,7 +64,6 @@ defineProps({
   pendingInteractionRequest: { type: Object, default: null },
   interactionSubmitting: { type: Boolean, default: false },
   showConversationStateDebugPanel: { type: Boolean, default: false },
-  runStateSnapshot: { type: Object, default: () => ({}) },
   conversationStateSnapshot: { type: Object, default: () => ({}) },
   conversationStateTimeline: { type: Array, default: () => [] },
   translate: { type: Function, required: true },
@@ -183,7 +182,6 @@ defineExpose({
           :is-image-mime="isImageMime"
           :empty-logo-src="emptyLogoSrc"
           :sending="sending"
-          :run-state-snapshot="runStateSnapshot"
           :delete-monotonic-message="deleteMonotonicMessage"
           :resend-monotonic-message="resendMonotonicMessage"
           @open-thinking-details="emit('open-thinking-details', $event)"

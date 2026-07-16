@@ -72,7 +72,7 @@ describe("useReconnectReplay", () => {
     expect(refs.sending.value).toBe(false);
   });
 
-  it("EV-01d: channel_state sending event restores sending=true", async () => {
+  it("EV-01d: channel_state sending restores the global processing lock", async () => {
     const { api, refs } = createFixture();
     refs.sending.value = false;
 
@@ -86,7 +86,7 @@ describe("useReconnectReplay", () => {
     expect(refs.sending.value).toBe(true);
   });
 
-  it("EV-01e: channel_state reconnecting keeps sending=true", async () => {
+  it("EV-01e: channel_state reconnecting restores the global processing lock", async () => {
     const { api, refs } = createFixture();
     refs.sending.value = false;
 
@@ -100,7 +100,7 @@ describe("useReconnectReplay", () => {
     expect(refs.sending.value).toBe(true);
   });
 
-  it("EV-01f: channel_state stopping keeps sending=true and marks assistant status", async () => {
+  it("EV-01f: channel_state stopping only marks the assistant and does not acquire the global lock", async () => {
     const { api, refs } = createFixture();
     refs.sending.value = false;
     refs.activeSession.value.messages = [
@@ -118,7 +118,7 @@ describe("useReconnectReplay", () => {
     const assistant = refs.activeSession.value.messages.find(
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-stop",
     );
-    expect(refs.sending.value).toBe(true);
+    expect(refs.sending.value).toBe(false);
     expect(assistant?.statusLabel).toBe("chat.stopping");
     expect(assistant?.pending).toBe(true);
   });
@@ -142,11 +142,11 @@ describe("useReconnectReplay", () => {
       seq: 99,
     });
 
-    expect(refs.sending.value).toBe(true);
-    expect(refs.canStop.value).toBe(true);
-    expect(refs.runStateSnapshot.value.state).toBe(BackendChannelState.SENDING);
-    expect(refs.runStateSnapshot.value.turnScopeId).toBe("client-current");
-    expect(refs.runStateSnapshot.value.dialogProcessId).toBe("");
+    expect(refs.sending.value).toBe(false);
+    expect(refs.canStop.value).toBe(false);
+    expect(refs.runStateSnapshot.value.state).toBe("idle");
+    expect(refs.runStateSnapshot.value).not.toHaveProperty("turnScopeId");
+    expect(refs.runStateSnapshot.value).not.toHaveProperty("dialogProcessId");
   });
 
   it("EV-02b: replay in-flight THINKING does not restore sending without channel_state", async () => {

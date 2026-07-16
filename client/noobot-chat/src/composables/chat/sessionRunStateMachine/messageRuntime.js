@@ -33,7 +33,6 @@ const MESSAGE_RUNNING_CHANNEL_STATES = Object.freeze([
   FrontendRunState.RESEND_REPLACING_TURN,
   FrontendRunState.RESEND_STREAMING,
   FrontendRunState.FRONTEND_COMPLETION_REQUESTING,
-  FrontendRunState.USER_STOP_REQUESTED,
   FrontendRunState.USER_STOPPING,
 ]);
 
@@ -266,9 +265,9 @@ export function buildStoppedMessageRuntimePatch({
     pending: false,
     channelState: {
       state: BackendChannelState.USER_STOPPED,
-      sessionId: trim(stateSnapshot?.sessionId) || trim(channelState?.sessionId),
-      dialogProcessId: trim(stateSnapshot?.dialogProcessId) || trim(channelState?.dialogProcessId),
-      turnScopeId: trim(stateSnapshot?.turnScopeId) || trim(channelState?.turnScopeId),
+      sessionId: trim(channelState?.sessionId),
+      dialogProcessId: getMessageDialogProcessId(messageItem) || trim(channelState?.dialogProcessId),
+      turnScopeId: getMessageTurnScopeId(messageItem) || trim(channelState?.turnScopeId),
       sourceEvent: trim(stateSnapshot?.sourceEvent) || trim(channelState?.sourceEvent) || "user_stopped",
       seq: Number(stateSnapshot?.seq || channelState?.seq || 0),
     },

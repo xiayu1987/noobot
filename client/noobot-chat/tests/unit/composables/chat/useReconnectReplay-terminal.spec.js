@@ -67,10 +67,8 @@ describe("useReconnectReplay", () => {
     expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1");
     expect(mocks.chatList.applySessionDetail).toHaveBeenCalled();
     expect(refs.runStateSnapshot.value).toMatchObject({
-      state: FrontendRunState.FRONTEND_COMPLETED,
+      state: FrontendRunState.IDLE,
       lastEventType: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
-      sessionId: "s-1",
-      dialogProcessId: "dp-done-only",
     });
     expect(refs.sending.value).toBe(false);
     expect(refs.interactionSubmitting.value).toBe(false);
@@ -107,10 +105,8 @@ describe("useReconnectReplay", () => {
     expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1");
     expect(mocks.chatList.applySessionDetail).toHaveBeenCalled();
     expect(refs.runStateSnapshot.value).toMatchObject({
-      state: FrontendRunState.FRONTEND_COMPLETED,
+      state: FrontendRunState.IDLE,
       lastEventType: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
-      sessionId: "s-1",
-      dialogProcessId: "dp-done",
     });
     expect(refs.sending.value).toBe(false);
     expect(refs.interactionSubmitting.value).toBe(false);
@@ -118,6 +114,52 @@ describe("useReconnectReplay", () => {
       sessionId: "s-1",
       dialogProcessId: "dp-done",
     });
+  });
+
+  it.each([
+    ["detail client unavailable", "unavailable"],
+    ["detail request failure", "rejected"],
+    ["empty detail", "empty"],
+    ["mismatched detail identity", "mismatch"],
+  ])("EV-04b: %s releases the global lock after summary failure", async (_label, mode) => {
+    const { api, refs, mocks } = createFixture();
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "q" },
+      {
+        role: RoleEnum.ASSISTANT,
+        dialogProcessId: "dp-detail-failure",
+        turnScopeId: "turn-detail-failure",
+        content: "A",
+        pending: true,
+      },
+    ];
+    if (mode === "unavailable") {
+      mocks.chatList.fetchSessionDetail = undefined;
+    } else if (mode === "rejected") {
+      mocks.chatList.fetchSessionDetail.mockRejectedValueOnce(new Error("detail unavailable"));
+    } else if (mode === "empty") {
+      mocks.chatList.fetchSessionDetail.mockResolvedValueOnce({ sessions: [] });
+    } else {
+      mocks.chatList.fetchSessionDetail.mockResolvedValueOnce({
+        sessionId: "s-other",
+        sessions: [{ id: "s-other", sessionId: "s-other" }],
+      });
+    }
+
+    await api.applyReconnectEvent(StreamEventEnum.DONE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-detail-failure",
+      turnScopeId: "turn-detail-failure",
+      seq: 2,
+    });
+
+    expect(mocks.chatList.applySessionDetail).not.toHaveBeenCalled();
+    expect(refs.runStateSnapshot.value).toMatchObject({
+      state: FrontendRunState.IDLE,
+      lastEventType: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED,
+    });
+    expect(refs.sending.value).toBe(false);
+    expect(refs.canStop.value).toBe(false);
   });
 
   it("EV-05: channel_state stopped sets stopped status", async () => {
@@ -144,6 +186,8 @@ describe("useReconnectReplay", () => {
     );
     expect(assistant?.pending).toBe(false);
     expect(assistant?.statusLabel).toBe("chat.stopped");
+    // Replayed backend facts update the message projection, but never own the
+    // global interaction lock. Persisted turn status comes from session detail.
     expect(refs.sending.value).toBe(false);
     expect(refs.interactionSubmitting.value).toBe(false);
     expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({

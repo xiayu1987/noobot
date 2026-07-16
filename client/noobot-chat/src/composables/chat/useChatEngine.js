@@ -202,6 +202,7 @@ export function useChatEngine({
     allowUserInteraction,
     applyConversationState,
     applyConversationStateFromEvent,
+    applyAssistantFailureState,
     applySessionDetail,
     appendMessage,
     botScenario,

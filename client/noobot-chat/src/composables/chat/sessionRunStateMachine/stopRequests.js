@@ -36,7 +36,7 @@ export function rememberStopRequestedEvent(rawEvent = {}) {
   const event = normalizeSessionRunEvent({
     ...rawEvent,
     type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED,
-    state: FrontendRunState.USER_STOP_REQUESTED,
+    state: FrontendRunState.USER_STOPPING,
   });
   if (!event.sessionId) return event;
   const entries = readStopRequests().filter((entry) => {
@@ -74,7 +74,7 @@ export function resolveRememberedStopRequestedEvent({ sessionId = "", dialogProc
   if (!match) return null;
   return normalizeSessionRunEvent({
     type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED,
-    state: FrontendRunState.USER_STOP_REQUESTED,
+    state: FrontendRunState.USER_STOPPING,
     sessionId: normalizedSessionId,
     dialogProcessId: normalizedDialogProcessId || trim(match.dialogProcessId),
     turnScopeId: trim(match.turnScopeId),
