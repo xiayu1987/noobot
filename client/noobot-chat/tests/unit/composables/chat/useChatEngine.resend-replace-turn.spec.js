@@ -5,7 +5,10 @@ import {
   assistantMessage,
   emitChannelState,
 } from "./helpers/useChatEngineHarness";
-import { FrontendRunState } from "../../../../src/composables/chat/sessionRunStateMachine";
+import {
+  BackendChannelState,
+  FrontendRunState,
+} from "../../../../src/composables/chat/sessionRunStateMachine";
 import {
   RoleEnum,
   StreamEventEnum,
@@ -72,11 +75,9 @@ describe("useChatEngine.resend replace turn", () => {
     }));
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
-    expect(runStateSnapshot.value).toEqual(expect.objectContaining({
-      state: FrontendRunState.RESEND_STREAMING,
-      dialogProcessId: "",
-      turnScopeId: expect.any(String),
-    }));
+    expect(runStateSnapshot.value.state).toBe(FrontendRunState.PROCESSING);
+    expect(runStateSnapshot.value).not.toHaveProperty("turnScopeId");
+    expect(runStateSnapshot.value).not.toHaveProperty("dialogProcessId");
     expect(appendMessage).toHaveBeenCalledTimes(1);
     expect(appendMessage).not.toHaveBeenCalledWith(RoleEnum.USER, "edited question", []);
     expect(appendMessage).toHaveBeenCalledWith(RoleEnum.ASSISTANT, "", []);
@@ -605,9 +606,7 @@ describe("useChatEngine.resend replace turn", () => {
     expect(activeSession.value.messages.some((message) => message.stopState === "user_stopped")).toBe(false);
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
-    expect(runStateSnapshot.value).toEqual(expect.objectContaining({
-      state: FrontendRunState.RESEND_STREAMING,
-      turnScopeId: replacementUser.turnScopeId,
-    }));
+    expect(runStateSnapshot.value.state).toBe(FrontendRunState.PROCESSING);
+    expect(runStateSnapshot.value).not.toHaveProperty("turnScopeId");
   });
 });

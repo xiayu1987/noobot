@@ -7,7 +7,7 @@ import { RoleEnum } from "../../../shared/constants/chatConstants";
 import { normalizeTrimmedString } from "./utils";
 import { getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity";
 import { getMessageAttachments } from "../../infra/messageModel";
-import { SESSION_RUN_EVENT } from "../sessionRunStateMachine";
+import { SESSION_RUN_EVENT, FrontendRunState } from "../sessionRunStateMachine";
 import {
   logStateMachineDebug,
   summarizeStateMachineMessage,
@@ -49,6 +49,7 @@ export async function refreshFinalSessionDetail({
   finalEventData,
   fetchSessionDetail,
   applySessionDetail,
+  applyAssistantFailureState,
   applyRunStateEvent,
   refreshSessionConnectorsAsync,
   preserveCurrentMessages,
@@ -92,7 +93,22 @@ export async function refreshFinalSessionDetail({
     });
     const detail = await fetchSessionDetail(doneSessionId);
     const sessionDocs = Array.isArray(detail?.sessions) ? detail.sessions : [];
-    const mainSessionDoc = sessionDocs.find((doc) => doc?.sessionId === doneSessionId) || sessionDocs[0] || {};
+    const detailSessionId = normalizeTrimmedString(
+      detail?.sessionId || detail?.backendSessionId || detail?.id,
+    );
+    const explicitlyScopedDocs = sessionDocs.filter((doc) => normalizeTrimmedString(doc?.sessionId));
+    const matchingSessionDoc = sessionDocs.find((doc) =>
+      normalizeTrimmedString(doc?.sessionId || doc?.backendSessionId || doc?.id) === doneSessionId,
+    );
+    if (
+      !detail ||
+      (sessionDocs.length === 0 && !detailSessionId) ||
+      (detailSessionId && detailSessionId !== doneSessionId) ||
+      (explicitlyScopedDocs.length > 0 && !matchingSessionDoc)
+    ) {
+      throw new Error("final session summary identity mismatch or empty");
+    }
+    const mainSessionDoc = matchingSessionDoc || sessionDocs[0];
     const detailMessages = Array.isArray(mainSessionDoc?.messages) ? mainSessionDoc.messages : [];
     logStateMachineDebug("detailApply.fetch.success", {
       ...completionEventScope,
@@ -152,15 +168,123 @@ export async function refreshFinalSessionDetail({
       error: String(loadDetailError?.message || loadDetailError || ""),
       botMessage: summarizeFinalizeMessage(botMessage),
     });
+    // The detail request is asynchronous.  A resend, session switch, or a
+    // replacement assistant message may have made this completion obsolete;
+    // stale failures must never overwrite the currently active run.
+    const currentMessages = Array.isArray(activeSession?.value?.messages)
+      ? activeSession.value.messages
+      : [];
+    const currentMessage = currentMessages.includes(botMessage)
+      ? botMessage
+      : currentMessages.find((messageItem) =>
+          messageItem &&
+          getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
+          normalizeTrimmedString(getMessageDialogProcessId(messageItem)) === completionEventScope.dialogProcessId &&
+          normalizeTrimmedString(messageItem.turnScopeId) === completionEventScope.turnScopeId,
+        );
+    const activeSessionMatches =
+      String(activeSession?.value?.backendSessionId || "") === completionEventScope.sessionId &&
+      String(activeSession?.value?.id || "") === String(activeSessionId?.value || "");
+    const isCurrentCompletion = activeSessionMatches && (
+      // Authoritative reconnect snapshots can complete a run before its
+      // assistant message has been hydrated. In that case the state-machine
+      // identity guards, rather than a missing message object, decide whether
+      // the scoped failure still belongs to the current run.
+      !botMessage ||
+      (
+        currentMessage === botMessage &&
+        normalizeTrimmedString(getMessageDialogProcessId(botMessage)) === completionEventScope.dialogProcessId &&
+        normalizeTrimmedString(botMessage?.turnScopeId) === completionEventScope.turnScopeId
+      )
+    );
+    if (!isCurrentCompletion) {
+      logStateMachineDebug("stateMachine.detailRequest.failed.ignored_stale", {
+        ...completionEventScope,
+        activeSessionId: activeSessionId?.value || "",
+        botMessage: summarizeFinalizeMessage(botMessage),
+      });
+      return false;
+    }
     applyRunStateEvent?.({
       type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED,
       ...completionEventScope,
       source: "final_session_detail",
     });
+    // The backend turn is already terminal at this point.  Do not leave the
+    // local assistant message pending while the authoritative detail request
+    // failure is represented by the frontend state machine.
+    if (botMessage) {
+      applyAssistantFailureState?.(botMessage, loadDetailError);
+      botMessage.channelState = {
+        ...(botMessage.channelState && typeof botMessage.channelState === "object"
+          ? botMessage.channelState
+          : {}),
+        state: FrontendRunState.COMPLETION_ERROR,
+        sessionId: completionEventScope.sessionId,
+        dialogProcessId: completionEventScope.dialogProcessId,
+        turnScopeId: completionEventScope.turnScopeId,
+        sourceEvent: "final_session_detail",
+      };
+    }
     return false;
   }
 }
 
 export async function finalizeDoneSessionDetail(options = {}) {
   return refreshFinalSessionDetail(options);
+}
+
+/**
+ * Read-after-write convergence for a persisted user stop.  USER_STOPPED is a
+ * backend terminal fact, not the frontend terminal: only applying this summary
+ * may move USER_STOPPING to USER_STOP_COMPLETED.
+ */
+export async function finalizeStoppedSessionDetail({
+  activeSession,
+  activeSessionId,
+  botMessage,
+  finalEventData,
+  fetchSessionDetail,
+  applySessionDetail,
+  applyRunStateEvent,
+} = {}) {
+  const sessionId = resolveFinalizeSessionId({ activeSession, finalEventData });
+  const scope = {
+    sessionId,
+    dialogProcessId: normalizeTrimmedString(
+      finalEventData?.dialogProcessId || getMessageDialogProcessId(botMessage),
+    ),
+    turnScopeId: normalizeTrimmedString(finalEventData?.turnScopeId || botMessage?.turnScopeId),
+  };
+  if (!sessionId) {
+    applyRunStateEvent?.({
+      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_FAILED,
+      ...scope,
+      source: "stopped_session_detail",
+    });
+    return false;
+  }
+  try {
+    const detail = await fetchSessionDetail(sessionId, {
+      source: "userStoppedFinalStatus",
+      force: true,
+      reuseRecentlyLoaded: false,
+    });
+    if (!detail) throw new Error("stopped session summary is empty");
+    applySessionDetail(detail, { preserveCurrentMessages: false, scrollToBottom: false });
+    applyRunStateEvent?.({
+      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED,
+      ...scope,
+      source: "stopped_session_detail",
+    });
+    return true;
+  } catch (error) {
+    applyRunStateEvent?.({
+      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_FAILED,
+      ...scope,
+      source: "stopped_session_detail",
+      error,
+    });
+    return false;
+  }
 }

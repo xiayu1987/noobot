@@ -40,15 +40,20 @@ export const BackendTerminalStates = Object.freeze([
 
 export const FrontendRunState = Object.freeze({
   IDLE: "idle",
+  ACTION_REQUESTING: "frontend_action_requesting",
+  PROCESSING: "frontend_processing",
   RESEND_REPLACING_TURN: "resend_replacing_turn",
   RESEND_STREAMING: "resend_streaming",
   CONTINUE_REQUESTING: "continue_requesting",
-  USER_STOP_REQUESTED: "frontend_user_stop_requested",
   USER_STOPPING: "frontend_user_stopping",
   USER_STOP_COMPLETED: "frontend_user_stop_completed",
   FRONTEND_COMPLETION_REQUESTING: "frontend_completion_requesting",
   FRONTEND_COMPLETED: "frontend_completed",
   CANCELLED: "cancelled",
+  ACTION_REQUEST_ERROR: "frontend_action_request_error",
+  PROCESSING_ERROR: "frontend_processing_error",
+  COMPLETION_ERROR: "frontend_completion_error",
+  STOP_ERROR: "frontend_stop_error",
 });
 
 export const FrontendTerminalStates = Object.freeze([
@@ -58,6 +63,10 @@ export const FrontendTerminalStates = Object.freeze([
   BackendChannelState.ERROR,
   BackendChannelState.EXPIRED,
   BackendChannelState.NO_CONVERSATION,
+  FrontendRunState.ACTION_REQUEST_ERROR,
+  FrontendRunState.PROCESSING_ERROR,
+  FrontendRunState.COMPLETION_ERROR,
+  FrontendRunState.STOP_ERROR,
 ]);
 
 export const SESSION_RUN_EVENT = Object.freeze({
@@ -79,7 +88,8 @@ export const SESSION_RUN_EVENT = Object.freeze({
   LOCAL_USER_STOP_REQUEST_SETTLED: "local_user_stop_request_settled",
   LOCAL_USER_STOP_PENDING_BACKEND_READY: "local_user_stop_pending_backend_ready",
   LOCAL_USER_STOP_PENDING_CLEARED: "local_user_stop_pending_cleared",
-  BACKEND_RECOVERABLE_RUNNING: "backend_recoverable_running",
+  LOCAL_USER_STOP_SUMMARY_APPLIED: "local_user_stop_summary_applied",
+  LOCAL_USER_STOP_SUMMARY_FAILED: "local_user_stop_summary_failed",
   BACKEND_CONVERSATION_STATE: "backend_conversation_state",
   BACKEND_CHANNEL_STATE: "backend_channel_state",
   LOCAL_FAILURE: "local_failure",
@@ -87,6 +97,8 @@ export const SESSION_RUN_EVENT = Object.freeze({
 });
 
 export const IN_FLIGHT_STATES = Object.freeze([
+  FrontendRunState.ACTION_REQUESTING,
+  FrontendRunState.PROCESSING,
   BackendChannelState.SENDING,
   BackendChannelState.RECONNECTING,
   BackendChannelState.INTERACTION_PENDING,
@@ -95,11 +107,11 @@ export const IN_FLIGHT_STATES = Object.freeze([
   FrontendRunState.RESEND_STREAMING,
   BackendChannelState.COMPLETED,
   FrontendRunState.FRONTEND_COMPLETION_REQUESTING,
-  FrontendRunState.USER_STOP_REQUESTED,
   FrontendRunState.USER_STOPPING,
 ]);
 
 export const MESSAGE_IN_FLIGHT_CHANNEL_STATES = Object.freeze([
+  FrontendRunState.ACTION_REQUESTING,
   BackendChannelState.SENDING,
   BackendChannelState.RECONNECTING,
   BackendChannelState.INTERACTION_PENDING,
@@ -110,11 +122,11 @@ export const MESSAGE_IN_FLIGHT_CHANNEL_STATES = Object.freeze([
 ]);
 
 export const USER_STOP_LOCK_STATES = Object.freeze([
-  FrontendRunState.USER_STOP_REQUESTED,
   FrontendRunState.USER_STOPPING,
 ]);
 
 export const USER_STOP_LOCK_REOPEN_STATES = Object.freeze([
+  FrontendRunState.ACTION_REQUESTING,
   BackendChannelState.SENDING,
   BackendChannelState.RECONNECTING,
   FrontendRunState.CONTINUE_REQUESTING,
@@ -182,13 +194,14 @@ function createTransitionConfig(priority, rule = SESSION_RUN_TRANSITION_RULE.PRI
 
 export const SESSION_RUN_TRANSITION_TABLE = Object.freeze({
   [FrontendRunState.IDLE]: createTransitionConfig(0),
+  [FrontendRunState.ACTION_REQUESTING]: createTransitionConfig(30),
+  [FrontendRunState.PROCESSING]: createTransitionConfig(40),
   [BackendChannelState.SENDING]: createTransitionConfig(40),
   [BackendChannelState.RECONNECTING]: createTransitionConfig(40),
   [FrontendRunState.CONTINUE_REQUESTING]: createTransitionConfig(45),
   [BackendChannelState.INTERACTION_PENDING]: createTransitionConfig(50),
   [FrontendRunState.RESEND_REPLACING_TURN]: createTransitionConfig(55),
   [FrontendRunState.RESEND_STREAMING]: createTransitionConfig(60),
-  [FrontendRunState.USER_STOP_REQUESTED]: createTransitionConfig(70, SESSION_RUN_TRANSITION_RULE.USER_STOP_LOCKED),
   [FrontendRunState.USER_STOPPING]: createTransitionConfig(80, SESSION_RUN_TRANSITION_RULE.USER_STOP_LOCKED),
   [BackendChannelState.COMPLETED]: createTransitionConfig(90),
   [FrontendRunState.FRONTEND_COMPLETION_REQUESTING]: createTransitionConfig(95),
@@ -198,4 +211,8 @@ export const SESSION_RUN_TRANSITION_TABLE = Object.freeze({
   [BackendChannelState.EXPIRED]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
   [BackendChannelState.NO_CONVERSATION]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
   [FrontendRunState.CANCELLED]: createTransitionConfig(110, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
+  [FrontendRunState.ACTION_REQUEST_ERROR]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
+  [FrontendRunState.PROCESSING_ERROR]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
+  [FrontendRunState.COMPLETION_ERROR]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
+  [FrontendRunState.STOP_ERROR]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
 });

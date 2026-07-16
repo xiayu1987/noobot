@@ -73,7 +73,7 @@ export function createMessageHandler({
     requestItem.resolve(payload?.response ?? {});
   };
 
-  const handleStop = (payload) => {
+  const handleStop = async (payload) => {
     state.stopRequested = true;
     state.currentTurnScopeId =
       String(payload?.turnScopeId || payload?.partialAssistant?.turnScopeId || "").trim() ||
@@ -114,11 +114,48 @@ export function createMessageHandler({
       return;
     }
     if (!state.isRunning || !state.currentAbortController) {
-      rememberPendingStop(state.currentStopPayload, state.currentStopPayload);
+      const stopPayload = state.currentStopPayload;
+      const userId = String(authInfo?.userId || payload?.userId || "").trim();
+      let turnStatus = null;
+      try {
+        turnStatus = await resolveBot()?.persistStoppedAssistantMessage?.({
+          userId,
+          sessionId: stopPayload.sessionId,
+          parentSessionId: String(payload?.parentSessionId || "").trim(),
+          parentDialogProcessId: String(payload?.parentDialogProcessId || "").trim(),
+          partialAssistant: {
+            ...(stopPayload.partialAssistant || {}),
+            sessionId: stopPayload.sessionId,
+            dialogProcessId: stopPayload.dialogProcessId,
+            turnScopeId: stopPayload.turnScopeId,
+          },
+        });
+      } catch {
+        turnStatus = null;
+      }
+      if (turnStatus?.status === "user_stopped") {
+        sendEvent("channel_state", {
+          ...stopPayload,
+          state: "stopping",
+          sourceEvent: "stop_requested_idle_persisted",
+          turnStatus,
+        });
+        sendEvent("user_stopped", {
+          ...stopPayload,
+          turnStatus,
+        });
+        return;
+      }
+      // A pre-existing terminal status (for example completed) wins. Only keep
+      // a pending stop when no authoritative terminal fact could be persisted.
+      if (!turnStatus) {
+        rememberPendingStop(stopPayload, stopPayload);
+      }
       sendEvent("channel_state", {
-        ...state.currentStopPayload,
-        state: "stopping",
-        sourceEvent: "stop_requested_pending",
+        ...stopPayload,
+        state: turnStatus?.status || "stopping",
+        sourceEvent: turnStatus ? "stop_requested_terminal_exists" : "stop_requested_pending",
+        turnStatus: turnStatus || undefined,
       });
       return;
     }
@@ -355,7 +392,7 @@ export function createMessageHandler({
         return;
       }
       if (action === "stop") {
-        handleStop(payload);
+        await handleStop(payload);
         return;
       }
       if (state.isRunning) {

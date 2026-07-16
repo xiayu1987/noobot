@@ -86,10 +86,10 @@ describe("useChatEngine.send-stream", () => {
     }));
     expect(assistant?.turnScopeId).toBe(capturedPayload.turnScopeId);
     expect(runStateSnapshot.value).toEqual(expect.objectContaining({
-      state: BackendChannelState.SENDING,
-      dialogProcessId: "",
-      turnScopeId: capturedPayload.turnScopeId,
+      state: FrontendRunState.PROCESSING,
     }));
+    expect(runStateSnapshot.value).not.toHaveProperty("dialogProcessId");
+    expect(runStateSnapshot.value).not.toHaveProperty("turnScopeId");
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
   });
@@ -163,7 +163,7 @@ describe("useChatEngine.send-stream", () => {
       assistant.content = "done";
       assistant.pending = false;
     });
-    const { engine, activeSession, runStateSnapshot, deps } = createHarness({
+    const { engine, activeSession, runStateSnapshot, sending, deps } = createHarness({
       sessionId: "s-active-send",
       stream,
       deps: {
@@ -177,6 +177,7 @@ describe("useChatEngine.send-stream", () => {
       dialogProcessId: "dp-other",
       turnScopeId: "turn-other",
     };
+    sending.value = true;
 
     const result = await engine.send();
 
@@ -189,8 +190,8 @@ describe("useChatEngine.send-stream", () => {
     expect(assistant?.realtimeLogs).toEqual([
       expect.objectContaining({ event: "tool_call", text: expect.stringContaining("running tool") }),
     ]);
-    expect(runStateSnapshot.value?.state).toBe(FrontendRunState.FRONTEND_COMPLETED);
-    expect(runStateSnapshot.value?.sessionId).toBe("s-active-send");
+    expect(runStateSnapshot.value?.state).toBe(FrontendRunState.IDLE);
+    expect(runStateSnapshot.value).not.toHaveProperty("sessionId");
   });
 
   it("accepts active stream events without turnScopeId and still finalizes frontend completion", async () => {
@@ -245,15 +246,13 @@ describe("useChatEngine.send-stream", () => {
     expect(assistant?.realtimeLogs).toEqual([
       expect.objectContaining({ text: expect.stringContaining("thinking without frontend turn scope") }),
     ]);
-    expect(runStateSnapshot.value).toEqual(expect.objectContaining({
-      state: FrontendRunState.FRONTEND_COMPLETED,
-      sessionId: "s-missing-turn",
-      dialogProcessId: "dp-missing-turn",
-      turnScopeId: assistant?.turnScopeId,
-    }));
+    expect(runStateSnapshot.value?.state).toBe(FrontendRunState.IDLE);
+    expect(runStateSnapshot.value).not.toHaveProperty("sessionId");
+    expect(runStateSnapshot.value).not.toHaveProperty("dialogProcessId");
+    expect(runStateSnapshot.value).not.toHaveProperty("turnScopeId");
   });
 
-  it("DONE patches overlay but waits for frontend completion detail while stream promise stays open", async () => {
+  it("DONE patches the overlay and clears the global lock when completion detail fails", async () => {
     let releaseStream;
     const stream = vi.fn(async (_payload, onEvent) => {
       onEvent({
@@ -287,11 +286,16 @@ describe("useChatEngine.send-stream", () => {
     const assistant = assistantMessage(activeSession);
     expect(assistant?.pending).toBe(true);
     expect(assistant?.statusLabel).not.toBe("chat.generated");
+    // DONE starts the frontend completion request. The mutex remains held
+    // until that request either applies the authoritative summary or fails.
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(false);
 
     releaseStream();
     await sendPromise;
+    // This harness makes the completion-detail request fail. Any request
+    // failure releases the global interaction mutex back to idle.
+    expect(sending.value).toBe(false);
   });
 
   it("DONE patches current assistant turn and promotes session identity without frontend completion", async () => {
@@ -348,7 +352,7 @@ describe("useChatEngine.send-stream", () => {
     expect(botMessage.tool_calls).toEqual([{ id: "tc1" }]);
     expect(botMessage.pending).toBe(false);
     expect(botMessage.channelState).toMatchObject({
-      state: BackendChannelState.ERROR,
+      state: FrontendRunState.COMPLETION_ERROR,
     });
     expect(sending.value).toBe(false);
   });
@@ -391,7 +395,13 @@ describe("useChatEngine.send-stream", () => {
         data: { sessionId: "local-time", dialogProcessId: "dp-time" },
       });
     });
-    const { engine, activeSession } = createHarness({ sessionId: "local-time", stream });
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-time",
+      stream,
+      deps: {
+        fetchSessionDetail: vi.fn(async () => ({ sessionId: "local-time" })),
+      },
+    });
 
     vi.useFakeTimers();
     vi.setSystemTime(new Date(messageStartedAt));
@@ -402,9 +412,7 @@ describe("useChatEngine.send-stream", () => {
     }
 
     const assistant = assistantMessage(activeSession);
-    expect(assistant?.channelState).toMatchObject({
-      state: FrontendRunState.FRONTEND_COMPLETED,
-    });
+    expect(assistant?.channelState).toMatchObject({ state: BackendChannelState.COMPLETED });
     expect(assistant?.channelState?.createdAt).toBeUndefined();
     expect(assistant?.channelState?.createdAtMs).toBeUndefined();
     expect(assistant?.thinkingStartedAt).toBeUndefined();
@@ -438,6 +446,7 @@ describe("useChatEngine.send-stream", () => {
       const assistant = assistantMessage(activeSession);
       assistant.content = "normalized answer";
       assistant.attachments = [normalizedAttachment];
+      assistant.pending = false;
       assistant.completedToolLogs = {
         attachments: [{ id: "log-att-1", name: "tool.log" }],
       };
@@ -464,13 +473,9 @@ describe("useChatEngine.send-stream", () => {
       { id: "log-att-1", name: "tool.log" },
     ]);
     expect(assistant?.pending).toBe(false);
-    expect(assistant?.channelState).toMatchObject({
-      state: FrontendRunState.FRONTEND_COMPLETED,
-    });
-    expect(assistant?.statusLabelKey).toBe("chat.generated");
     expect(sending.value).toBe(false);
     expect(canStop.value).toBe(false);
-    expect(runStateSnapshot.value?.state).toBe(FrontendRunState.FRONTEND_COMPLETED);
+    expect(runStateSnapshot.value?.state).toBe(FrontendRunState.IDLE);
   });
 
   it("terminal completed channel_state triggers frontend completion detail without DONE event", async () => {
@@ -491,6 +496,7 @@ describe("useChatEngine.send-stream", () => {
       const assistant = assistantMessage(activeSession);
       assistant.content = "normalized channel answer";
       assistant.attachments = [normalizedAttachment];
+      assistant.pending = false;
     });
     const { engine, activeSession, sending, canStop, runStateSnapshot } = createHarness({
       sessionId: "local-channel-complete",
@@ -511,13 +517,9 @@ describe("useChatEngine.send-stream", () => {
     expect(assistant?.content).toBe("normalized channel answer");
     expect(assistant?.attachments).toEqual([normalizedAttachment]);
     expect(assistant?.pending).toBe(false);
-    expect(assistant?.channelState).toMatchObject({
-      state: FrontendRunState.FRONTEND_COMPLETED,
-    });
-    expect(assistant?.statusLabelKey).toBe("chat.generated");
     expect(sending.value).toBe(false);
     expect(canStop.value).toBe(false);
-    expect(runStateSnapshot.value?.state).toBe(FrontendRunState.FRONTEND_COMPLETED);
+    expect(runStateSnapshot.value?.state).toBe(FrontendRunState.IDLE);
   });
 
   it("channel_state drives assistant status transition", async () => {
@@ -544,7 +546,7 @@ describe("useChatEngine.send-stream", () => {
     expect(sending.value).toBe(false);
   });
 
-  it("does not refresh current session detail after stopped final event", async () => {
+  it("fetches and applies the authoritative session summary once after a stopped final event", async () => {
     const fetchSessionDetail = vi.fn(async () => ({
       sessionId: "local-stop-refresh",
       sessions: [
@@ -582,8 +584,13 @@ describe("useChatEngine.send-stream", () => {
 
     await engine.send();
 
-    expect(fetchSessionDetail).not.toHaveBeenCalled();
-    expect(applySessionDetail).not.toHaveBeenCalled();
+    expect(fetchSessionDetail).toHaveBeenCalledTimes(1);
+    expect(fetchSessionDetail).toHaveBeenCalledWith("local-stop-refresh", {
+      source: "userStoppedFinalStatus",
+      force: true,
+      reuseRecentlyLoaded: false,
+    });
+    expect(applySessionDetail).toHaveBeenCalledTimes(1);
     expect(deps.chatWebSocketClient.isStopRequested).toHaveBeenCalled();
   });
 

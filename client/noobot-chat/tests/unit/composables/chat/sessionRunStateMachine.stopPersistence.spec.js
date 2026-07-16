@@ -65,7 +65,7 @@ describe("sessionRunStateMachine remembered stop requests", () => {
       sessionId: "s1",
       dialogProcessId: "d1",
       turnScopeId: "turn-1",
-    })?.state).toBe(FrontendRunState.USER_STOP_REQUESTED);
+    })?.state).toBe(FrontendRunState.USER_STOPPING);
     clearRememberedStopRequests({ sessionId: "s1", dialogProcessId: "d1", turnScopeId: "turn-1" });
     expect(resolveRememberedStopRequestedEvent({
       sessionId: "s1",

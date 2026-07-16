@@ -314,8 +314,23 @@ test("chat-websocket-server: forbidden user scope does not run or persist a turn
   }
 });
 
-test("chat-websocket-server: idle stop request records pending stop without faking stopped", async () => {
-  const server = await startServerWithWs();
+test("chat-websocket-server: idle stop persists an authoritative user_stopped terminal fact", async () => {
+  let persistedStopPayload = null;
+  const server = await startServerWithWs({
+    bot: {
+      runSession: async () => ({}),
+      persistStoppedAssistantMessage: async (payload = {}) => {
+        persistedStopPayload = payload;
+        return {
+          turnScopeId: payload?.partialAssistant?.turnScopeId || "",
+          dialogProcessId: payload?.partialAssistant?.dialogProcessId || "",
+          status: "user_stopped",
+          reason: "user_stop",
+          description: "用户停止了本轮生成",
+        };
+      },
+    },
+  });
   try {
     const { port } = server.address();
     const events = await new Promise((resolve, reject) => {
@@ -341,8 +356,8 @@ test("chat-websocket-server: idle stop request records pending stop without faki
         try {
           const parsed = JSON.parse(String(raw || "{}"));
           messages.push(parsed);
-          if (parsed?.event === "channel_state" && parsed?.data?.state === "stopping") {
-            ws.close(1000, "pending_stop_recorded");
+          if (parsed?.event === "user_stopped") {
+            ws.close(1000, "idle_stop_persisted");
           }
         } catch (error) {
           clearTimeout(timer);
@@ -362,8 +377,11 @@ test("chat-websocket-server: idle stop request records pending stop without faki
     const stoppingEvent = events.find((item) => item?.event === "channel_state" && item?.data?.state === "stopping");
     assert.equal(stoppingEvent?.data?.turnScopeId, "turn-idle-stop");
     assert.equal(stoppingEvent?.data?.dialogProcessId, "dp-idle-stop");
-    assert.equal(stoppingEvent?.data?.sourceEvent, "stop_requested_pending");
-    assert.equal(events.some((item) => item?.event === "user_stopped"), false);
+    assert.equal(stoppingEvent?.data?.sourceEvent, "stop_requested_idle_persisted");
+    const stoppedEvent = events.find((item) => item?.event === "user_stopped");
+    assert.equal(stoppedEvent?.data?.turnScopeId, "turn-idle-stop");
+    assert.equal(stoppedEvent?.data?.turnStatus?.status, "user_stopped");
+    assert.equal(persistedStopPayload?.partialAssistant?.turnScopeId, "turn-idle-stop");
     assert.equal(events.some((item) => item?.event === "error"), false);
   } finally {
     await closeServer(server);
@@ -372,10 +390,23 @@ test("chat-websocket-server: idle stop request records pending stop without faki
 
 test("chat-websocket-server: pending stop is consumed by a later run with the same turnScopeId", async () => {
   let capturedStopPayload = null;
+  let persistStopCalls = 0;
   const server = await startServerWithWs({
     bot: {
       persistStoppedAssistantMessage: async (payload = {}) => {
+        persistStopCalls += 1;
+        // Simulate the only case that should retain a pending stop: the idle
+        // request could not persist an authoritative terminal fact. The later
+        // run then consumes that pending stop and persists it successfully.
+        if (persistStopCalls === 1) throw new Error("temporary persistence failure");
         capturedStopPayload = payload;
+        return {
+          turnScopeId: payload?.partialAssistant?.turnScopeId || "",
+          dialogProcessId: payload?.partialAssistant?.dialogProcessId || "",
+          status: "user_stopped",
+          reason: "user_stop",
+          description: "用户停止了本轮生成",
+        };
       },
       runSession: async ({ abortSignal }) => {
         await new Promise((resolve) => {

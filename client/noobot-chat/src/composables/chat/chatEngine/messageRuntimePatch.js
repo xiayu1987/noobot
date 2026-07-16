@@ -65,7 +65,6 @@ export function applyRunStateMessageRuntimePatch({
   if (!messages.length) return;
   messages.forEach((message) => {
     const effect = resolveSessionRunMessageRuntimePatch({
-      stateSnapshot: runStateSnapshot?.value,
       messageItem: message,
       activeSession: session,
     });

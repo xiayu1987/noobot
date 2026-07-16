@@ -94,7 +94,7 @@ describe("useChatEngine.delete", () => {
       return true;
     });
 
-    await expect(engine.resendMonotonicMessage(target, "edited question")).rejects.toThrow("chat.monotonicActionStopTimeout");
+    await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(false);
 
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledTimes(1);
     expect(stream).not.toHaveBeenCalled();
@@ -269,23 +269,19 @@ describe("useChatEngine.delete", () => {
     sending.value = true;
     canStop.value = false;
     runStateSnapshot.value = {
-      state: FrontendRunState.USER_STOP_REQUESTED,
-      sessionId: "local-delete-stopped-sending",
-      turnScopeId: "turn-stopped-sending",
-      dialogProcessId: "dp-stopped-sending",
+      state: FrontendRunState.USER_STOPPING,
     };
 
     await expect(engine.deleteMonotonicMessage(target, { timeoutMs: 20, pollIntervalMs: 5 })).resolves.toBe(true);
 
     expect(deps.chatWebSocketClient.requestStop).not.toHaveBeenCalled();
-    expect(sending.value).toBe(false);
+    // Deleting a message-level stopped turn does not mutate the independent
+    // global interaction lock; only detail application or failure clears it.
+    expect(sending.value).toBe(true);
     expect(canStop.value).toBe(false);
-    expect(runStateSnapshot.value).toEqual(expect.objectContaining({
-      state: FrontendRunState.IDLE,
-      backendState: "",
-      turnScopeId: "",
-      dialogProcessId: "",
-    }));
+    // Deletion does not own or rewrite the global stop lock. The session-detail
+    // apply/failure path is responsible for clearing it.
+    expect(runStateSnapshot.value.state).toBe(FrontendRunState.USER_STOPPING);
     expect(deleteSessionMessagesFromApi).toHaveBeenCalledWith(expect.objectContaining({
       anchor: { turnScopeId: "turn-stopped-sending" },
       expectedVersion: 7,

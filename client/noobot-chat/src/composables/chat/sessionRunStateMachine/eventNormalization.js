@@ -8,6 +8,25 @@ import { nowMs } from "../../infra/timeFields";
 import { BackendChannelState, FrontendRunState, SESSION_RUN_EVENT } from "./constants";
 import { normalizeState, trim } from "./normalize";
 
+const LOCAL_EVENT_STATE_BY_TYPE = Object.freeze({
+  [SESSION_RUN_EVENT.LOCAL_SEND_STARTED]: FrontendRunState.ACTION_REQUESTING,
+  [SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED]: FrontendRunState.ACTION_REQUESTING,
+  [SESSION_RUN_EVENT.LOCAL_RESEND_STARTED]: FrontendRunState.ACTION_REQUESTING,
+  // Replacing the old turn and opening the stream are still request work.
+  // Only an identity-matched backend `sending` fact starts processing.
+  [SESSION_RUN_EVENT.LOCAL_RESEND_REPLACING_TURN]: FrontendRunState.ACTION_REQUESTING,
+  [SESSION_RUN_EVENT.LOCAL_RESEND_STREAMING]: FrontendRunState.ACTION_REQUESTING,
+  [SESSION_RUN_EVENT.LOCAL_RESEND_COMPLETED]: FrontendRunState.FRONTEND_COMPLETED,
+  [SESSION_RUN_EVENT.LOCAL_RESEND_FAILED]: FrontendRunState.ACTION_REQUEST_ERROR,
+  [SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_REQUEST_STARTED]: FrontendRunState.FRONTEND_COMPLETION_REQUESTING,
+  [SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED]: FrontendRunState.FRONTEND_COMPLETED,
+  [SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED]: FrontendRunState.COMPLETION_ERROR,
+  [SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED]: FrontendRunState.USER_STOPPING,
+  [SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED]: FrontendRunState.USER_STOP_COMPLETED,
+  [SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_FAILED]: FrontendRunState.STOP_ERROR,
+  [SESSION_RUN_EVENT.LOCAL_RESET]: FrontendRunState.IDLE,
+});
+
 function normalizeTimestamp(rawEvent = {}) {
   const numericTimestamp = Number(
     rawEvent?.timestamp || rawEvent?.updatedAtMs || rawEvent?.createdAtMs || 0,
@@ -24,44 +43,35 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
   const turnMeta = normalizeTurnMeta(rawEvent);
   const type = trim(rawEvent?.type || rawEvent?.event || SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE);
   const wireState = normalizeState(rawEvent?.state);
-  let state = wireState;
+  // A local failure belongs to the frontend phase in which it happened.  Some
+  // callers also carry `state: error`; do not let that backend-shaped value
+  // erase the more precise action/processing/completion/stop attribution.
+  let state = type === SESSION_RUN_EVENT.LOCAL_FAILURE
+    ? normalizeState(rawEvent?.failureState)
+    : wireState;
   const isBackendStateEvent = [
     SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
     SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
   ].includes(type);
   if (isBackendStateEvent && wireState === BackendChannelState.USER_STOPPED) {
-    state = FrontendRunState.USER_STOP_COMPLETED;
+    // Backend persistence is confirmed, but the frontend still has to read and
+    // apply the authoritative session summary before exposing its stop terminal.
+    state = FrontendRunState.USER_STOPPING;
   }
   if (isBackendStateEvent && wireState === BackendChannelState.STOPPING) {
     state = FrontendRunState.USER_STOPPING;
   }
   if (!state) {
-    if (type === SESSION_RUN_EVENT.LOCAL_SEND_STARTED) state = BackendChannelState.SENDING;
-    if (type === SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED) {
-      state = FrontendRunState.CONTINUE_REQUESTING;
-    }
-    if (type === SESSION_RUN_EVENT.LOCAL_RESEND_STARTED) state = FrontendRunState.RESEND_REPLACING_TURN;
-    if (type === SESSION_RUN_EVENT.LOCAL_RESEND_REPLACING_TURN) state = FrontendRunState.RESEND_REPLACING_TURN;
-    if (type === SESSION_RUN_EVENT.LOCAL_RESEND_STREAMING) state = FrontendRunState.RESEND_STREAMING;
-    if (type === SESSION_RUN_EVENT.LOCAL_RESEND_COMPLETED) state = FrontendRunState.FRONTEND_COMPLETED;
-    if (type === SESSION_RUN_EVENT.LOCAL_RESEND_FAILED) state = BackendChannelState.ERROR;
-    if (type === SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_REQUEST_STARTED) {
-      state = FrontendRunState.FRONTEND_COMPLETION_REQUESTING;
-    }
-    if (type === SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED) {
-      state = FrontendRunState.FRONTEND_COMPLETED;
-    }
-    if (type === SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED) state = BackendChannelState.ERROR;
-    if (type === SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED) state = FrontendRunState.USER_STOP_REQUESTED;
-    if (type === SESSION_RUN_EVENT.BACKEND_RECOVERABLE_RUNNING) state = BackendChannelState.RECONNECTING;
-    if (type === SESSION_RUN_EVENT.LOCAL_FAILURE) state = BackendChannelState.ERROR;
-    if (type === SESSION_RUN_EVENT.LOCAL_RESET) state = FrontendRunState.IDLE;
+    state = type === SESSION_RUN_EVENT.LOCAL_FAILURE
+      ? normalizeState(rawEvent?.failureState) || BackendChannelState.ERROR
+      : LOCAL_EVENT_STATE_BY_TYPE[type] || "";
   }
   const timestamp = normalizeTimestamp(rawEvent);
   return {
     type,
     state,
     backendState: wireState,
+    action: trim(rawEvent?.action),
     sessionId: trim(rawEvent?.sessionId),
     dialogProcessId: [
       SESSION_RUN_EVENT.LOCAL_SEND_STARTED,

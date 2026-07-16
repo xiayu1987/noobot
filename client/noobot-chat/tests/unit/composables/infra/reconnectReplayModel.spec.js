@@ -26,6 +26,22 @@ describe("reconnectReplayModel", () => {
 
     expect(
       isDialogProcessRecoverable(
+        {
+          sessionId: "s-1",
+          hasRunningTask: true,
+          currentRun: {
+            sessionId: "s-1",
+            dialogProcessId: "dp-stopped",
+            turnScopeId: "turn-stopped",
+            state: "user_stopped",
+          },
+        },
+        [{ event: StreamEventEnum.DELTA, data: { text: "history" } }],
+      ),
+    ).toBe(false);
+
+    expect(
+      isDialogProcessRecoverable(
         { sessionId: "s-1", hasRunningTask: true },
         [{ event: StreamEventEnum.DELTA, data: { text: "x" } }],
       ),

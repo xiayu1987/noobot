@@ -65,6 +65,19 @@ describe("useChatSession reconnect replay", () => {
         source: "test",
       },
     });
+    applySessionRunStateEvent({
+      stateRef: toRef(store, "runStateSnapshot"),
+      sending: toRef(store, "sending"),
+      canStop: toRef(store, "canStop"),
+      event: {
+        type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+        state: BackendChannelState.SENDING,
+        sessionId: "s-stop-request",
+        turnScopeId: "turn-stop",
+        dialogProcessId: "dp-stop",
+        source: "test",
+      },
+    });
     wsClientMock.requestStop.mockReturnValue(true);
 
     const session = createChatSession();
@@ -75,7 +88,7 @@ describe("useChatSession reconnect replay", () => {
     expect(requested).toBe(true);
     expect(wsClientMock.requestStop).toHaveBeenCalledTimes(1);
     expect(session.composerActionState.value.stopRequesting).toBe(true);
-    expect(store.runStateSnapshot.state).toBe(FrontendRunState.USER_STOP_REQUESTED);
+    expect(store.runStateSnapshot.state).toBe(FrontendRunState.USER_STOPPING);
 
     const duplicateStop = session.stopSending();
     expect(duplicateStop).toBe(false);
@@ -96,9 +109,9 @@ describe("useChatSession reconnect replay", () => {
     });
     await nextTick();
 
-    expect(session.composerActionState.value.stopRequesting).toBe(false);
-    expect(store.runStateSnapshot.composerActionState.stopRequesting).toBe(false);
-    expect(store.sending).toBe(false);
+    expect(session.composerActionState.value.stopRequesting).toBe(true);
+    expect(store.runStateSnapshot.state).toBe(FrontendRunState.USER_STOPPING);
+    expect(store.sending).toBe(true);
     expect(store.canStop).toBe(false);
   });
 
@@ -133,6 +146,19 @@ describe("useChatSession reconnect replay", () => {
         source: "test",
       },
     });
+    applySessionRunStateEvent({
+      stateRef: toRef(store, "runStateSnapshot"),
+      sending: toRef(store, "sending"),
+      canStop: toRef(store, "canStop"),
+      event: {
+        type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+        state: BackendChannelState.SENDING,
+        sessionId: "s-stop-error",
+        turnScopeId: "turn-stop-error",
+        dialogProcessId: "dp-stop-error",
+        source: "test",
+      },
+    });
     const stopError = new Error("conversation not found");
     stopError.response = { status: 404 };
     wsClientMock.requestStop.mockImplementationOnce(() => {
@@ -144,7 +170,7 @@ describe("useChatSession reconnect replay", () => {
     await nextTick();
 
     expect(requested).toBe(false);
-    expect(store.runStateSnapshot.state).toBe("error");
+    expect(store.runStateSnapshot.state).toBe(FrontendRunState.IDLE);
     expect(session.composerActionState.value.stopRequesting).toBe(false);
     expect(session.composerActionState.value.awaitingBackendStop).toBe(false);
     expect(session.composerActionState.value.canStartNewSend).toBe(true);
@@ -185,6 +211,19 @@ describe("useChatSession reconnect replay", () => {
         source: "test",
       },
     });
+    applySessionRunStateEvent({
+      stateRef: toRef(store, "runStateSnapshot"),
+      sending: toRef(store, "sending"),
+      canStop: toRef(store, "canStop"),
+      event: {
+        type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+        state: BackendChannelState.SENDING,
+        sessionId: "s-stop-async-error",
+        turnScopeId: "turn-stop-async-error",
+        dialogProcessId: "dp-stop-async-error",
+        source: "test",
+      },
+    });
     const stopError = new Error("conversation conflict");
     stopError.response = { status: 409 };
     wsClientMock.requestStop.mockRejectedValueOnce(stopError);
@@ -194,7 +233,7 @@ describe("useChatSession reconnect replay", () => {
     await nextTick();
 
     expect(requested).toBe(false);
-    expect(store.runStateSnapshot.state).toBe("error");
+    expect(store.runStateSnapshot.state).toBe(FrontendRunState.IDLE);
     expect(session.composerActionState.value.stopRequesting).toBe(false);
     expect(session.composerActionState.value.awaitingBackendStop).toBe(false);
     expect(session.composerActionState.value.canStartNewSend).toBe(true);

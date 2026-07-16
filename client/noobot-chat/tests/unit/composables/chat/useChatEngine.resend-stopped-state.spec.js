@@ -313,10 +313,8 @@ describe("useChatEngine.resend stopped state", () => {
     }));
     expect(secondPlaceholder.stopState).toBeUndefined();
     expect(secondPlaceholder.channelState?.state).not.toBe("user_stopped");
-    expect(runStateSnapshot.value).toMatchObject({
-      state: FrontendRunState.RESEND_STREAMING,
-      turnScopeId: secondReplacementUser.turnScopeId,
-    });
+    expect(runStateSnapshot.value.state).toBe(FrontendRunState.PROCESSING);
+    expect(runStateSnapshot.value).not.toHaveProperty("turnScopeId");
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
     expect(stream).toHaveBeenCalledTimes(2);
@@ -409,8 +407,11 @@ describe("useChatEngine.resend stopped state", () => {
     // The mocked stream resolves immediately, so the transient pending assistant
     // has already been finalized by the time resendMonotonicMessage resolves.
     expect(freshPlaceholder).toBeUndefined();
-    expect(sending.value).toBe(false);
-    expect(canStop.value).toBe(false);
+    // A bare backend stop fact cannot become a global terminal state. The
+    // current frontend action remains the only interaction lock until detail
+    // or an error clears it.
+    expect(sending.value).toBe(true);
+    expect(canStop.value).toBe(true);
   });
 
   it("resendMonotonicMessage rejects when frontend run state has no matching in-flight assistant", async () => {

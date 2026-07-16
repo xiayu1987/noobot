@@ -370,7 +370,7 @@ describe("useReconnectReplay", () => {
     expect(api.__test.replayCache["s-2"]).toBeUndefined();
   });
 
-  it("RT-05: reconnect currentRun can restore sending=true", async () => {
+  it("RT-05: reconnect currentRun restores the processing lock and stop action", async () => {
     const { api, refs } = createFixture();
     refs.sending.value = false;
 
@@ -398,7 +398,9 @@ describe("useReconnectReplay", () => {
       ],
     });
 
+    expect(refs.runStateSnapshot.value.state).toBe(FrontendRunState.PROCESSING);
     expect(refs.sending.value).toBe(true);
+    expect(refs.canStop.value).toBe(true);
   });
 
   it("reconciles session detail and retries runtime snapshot when currentRun is invalid", async () => {
@@ -529,10 +531,8 @@ describe("useReconnectReplay", () => {
     expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1");
     expect(mocks.chatList.applySessionDetail).toHaveBeenCalledTimes(1);
     expect(refs.runStateSnapshot.value).toMatchObject({
-      state: FrontendRunState.FRONTEND_COMPLETED,
+      state: FrontendRunState.IDLE,
       lastEventType: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
-      sessionId: "s-1",
-      dialogProcessId: "dp-completed",
     });
     expect(refs.sending.value).toBe(false);
     expect(refs.canStop.value).toBe(false);

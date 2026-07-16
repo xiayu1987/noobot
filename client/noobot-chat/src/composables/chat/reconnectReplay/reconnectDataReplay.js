@@ -57,16 +57,16 @@ function requiresSessionReconciliation(sessionEntry = {}) {
 function createReconnectRunStateEvents(reconnectSessions = [], recoverableSessionId = "") {
   const events = [];
   if (recoverableSessionId) {
+    const recoverableSessionEntry = reconnectSessions.find(
+      (sessionEntry) => _trimStr(sessionEntry?.sessionId) === recoverableSessionId,
+    );
+    const recoverableRunMeta = normalizeTurnMeta(recoverableSessionEntry?.currentRun || {});
     const rememberedStopEvent = resolveRememberedStopRequestedEvent({
       sessionId: recoverableSessionId,
+      dialogProcessId: recoverableRunMeta.dialogProcessId,
+      turnScopeId: recoverableRunMeta.turnScopeId,
     });
     if (rememberedStopEvent) events.push(rememberedStopEvent);
-    events.push({
-      type: SESSION_RUN_EVENT.BACKEND_RECOVERABLE_RUNNING,
-      state: BackendChannelState.RECONNECTING,
-      sessionId: recoverableSessionId,
-      source: "reconnect_data",
-    });
   }
   reconnectSessions.forEach((sessionEntry) => {
     const sessionId = _trimStr(sessionEntry?.sessionId);

@@ -33,7 +33,6 @@ const props = defineProps({
   sending: { type: Boolean, default: false },
   deleteMonotonicMessage: { type: Function, default: null },
   resendMonotonicMessage: { type: Function, default: null },
-  runStateSnapshot: { type: Object, default: () => ({}) },
   emptyLogoSrc: { type: String, default: "" },
 });
 
@@ -130,7 +129,6 @@ function applyConversationStateRuntimeToMessages() {
     : [];
   messageList.forEach((messageItem) => {
     const runtimeEffect = resolveSessionRunMessageRuntimePatch({
-      stateSnapshot: props.runStateSnapshot,
       messageItem,
       activeSession: props.activeSession,
     });
@@ -144,21 +142,10 @@ watchEffect(() => {
   props.activeSession?.id;
   props.activeSession?.backendSessionId;
   Array.isArray(props.activeSession?.messages) ? props.activeSession.messages.length : 0;
-  props.runStateSnapshot?.state;
-  props.runStateSnapshot?.sessionId;
-  props.runStateSnapshot?.dialogProcessId;
-  props.runStateSnapshot?.turnScopeId;
-  props.runStateSnapshot?.createdAtMs;
-  props.runStateSnapshot?.updatedAtMs;
-  props.runStateSnapshot?.seq;
+  props.activeSession?.turnStatuses;
+  props.activeSession?.turnTimingsByTurnScopeId;
   applyConversationStateRuntimeToMessages();
 });
-
-watch(
-  () => props.runStateSnapshot?.state,
-  () => applyConversationStateRuntimeToMessages(),
-  { flush: "sync" },
-);
 
 function getMessageAnchorId(messageItem = {}, messageIndex = 0) {
   return `chat-message-${getMessageRenderKey(messageItem, messageIndex)

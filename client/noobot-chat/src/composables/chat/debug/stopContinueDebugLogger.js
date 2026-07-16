@@ -49,9 +49,6 @@ export function logStopContinueDebug(event, payload = {}) {
 }
 
 export function logContinueResumeIdentitySelection({ runState = {}, selected = {}, options = {} } = {}) {
-  const registrySnapshot = options?.userStoppedResumeSnapshot || null;
-  const registryDialog = String(registrySnapshot?.dialogProcessId || "");
-  const registryTurn = String(registrySnapshot?.turnScopeId || "");
   const currentDialog = String(runState?.dialogProcessId || "");
   const currentTurn = String(runState?.turnScopeId || "");
   const resumeDialogProcessId = String(selected?.resumeDialogProcessId || "");
@@ -64,9 +61,7 @@ export function logContinueResumeIdentitySelection({ runState = {}, selected = {
     runState: summarizeStopContinueRunState(runState),
     resumeDialogProcessId,
     resumeTurnScopeId,
-    userStoppedResumeSnapshot: registrySnapshot,
-    resumeIdentitySource: explicitSource || (registryDialog && registryTurn ? "user_stopped_resume_registry" : "missing_user_stopped_resume_registry"),
-    hasUserStoppedResumeIdentity: Boolean(registryDialog && registryTurn),
+    resumeIdentitySource: explicitSource || (resumeDialogProcessId && resumeTurnScopeId ? "turn_status" : "missing_turn_status_identity"),
     hasOptionResumeIdentity: Boolean(options?.resumeDialogProcessId || options?.resumeTurnScopeId),
   });
 }

@@ -19,8 +19,7 @@ export async function applyReconnectEventReplay({
   applyChannelState,
 } = {}) {
   if (_trimStr(event) === StreamEventEnum.CHANNEL_STATE) {
-    applyChannelState(data || {});
-    return;
+    return applyChannelState(data || {});
   }
 
   const dialogProcessId = _trimStr(data?.dialogProcessId);
@@ -29,7 +28,7 @@ export async function applyReconnectEventReplay({
     await consumeReplayCacheForSession(sessionId);
     await applyReconnectMessagesToActiveSession([{ event, data }], dialogProcessId);
     if (_trimStr(event) === StreamEventEnum.DONE) {
-      applyChannelState({
+      await applyChannelState({
         ...(data || {}),
         sessionId,
         dialogProcessId,
@@ -43,7 +42,7 @@ export async function applyReconnectEventReplay({
   if (!sessionId && dialogProcessId && isCurrentActiveDialogProcess?.(dialogProcessId)) {
     await applyReconnectMessagesToActiveSession([{ event, data }], dialogProcessId);
     if (_trimStr(event) === StreamEventEnum.DONE) {
-      applyChannelState({
+      await applyChannelState({
         ...(data || {}),
         dialogProcessId,
         state: BackendChannelState.COMPLETED,
