@@ -148,9 +148,16 @@ export function resolveTurnRuntimeView({
     ? persistedStatus
     : realtimeStatus || persistedStatus || messageStatus;
   const pending = messageItem?.pending === true;
+  const hasStartedAt = Boolean(turnTiming?.thinkingStartedAt);
   const hasFinishedAt = Boolean(turnTiming?.thinkingFinishedAt);
   const terminal = isTerminalMessageRuntimeState(state);
-  const running = !hasFinishedAt && !terminal && (pending || MESSAGE_RUNNING_CHANNEL_STATES.includes(state));
+  // Session detail snapshots intentionally do not persist transient message
+  // channelState/pending fields.  A persisted start without a finish or a
+  // terminal status is therefore the authoritative in-flight fact after a
+  // refresh.
+  const running = !hasFinishedAt && !terminal && (
+    hasStartedAt || pending || MESSAGE_RUNNING_CHANNEL_STATES.includes(state)
+  );
   const inFlightAssistant = getMessageRole(messageItem) === "assistant" && (
     running || (!hasFinishedAt && !terminal && MESSAGE_IN_FLIGHT_CHANNEL_STATES.includes(state))
   );

@@ -13,6 +13,57 @@ import {
 } from "../../../../src/shared/constants/chatConstants";
 
 describe("useChatEngine.send-stream", () => {
+  it("sends the locally recorded thinking start so refresh can hydrate the duration", async () => {
+    let capturedPayload = null;
+    const stream = vi.fn(async (payload) => {
+      capturedPayload = payload;
+    });
+    const { engine, activeSession } = createHarness({
+      sessionId: "s-thinking-start",
+      stream,
+    });
+
+    await engine.send();
+
+    const assistant = assistantMessage(activeSession);
+    const persistedStart = activeSession.value.turnTimingsByTurnScopeId?.[assistant.turnScopeId]?.thinkingStartedAt;
+    expect(persistedStart).toEqual(expect.any(String));
+    expect(capturedPayload?.config?.thinkingStartedAt).toBe(persistedStart);
+  });
+
+  it("records a finished turn timing when completed arrives after local finalization", async () => {
+    const stream = vi.fn(async (payload, onEvent) => {
+      emitChannelState(onEvent, "s-late-completed", "dp-late-completed", "sending", {
+        turnScopeId: payload.turnScopeId,
+      });
+      const session = activeSession.value;
+      const assistant = assistantMessage(activeSession);
+      assistant.pending = false;
+      assistant.channelState = { state: FrontendRunState.FRONTEND_COMPLETED };
+      session.turnTimingsByTurnScopeId = {
+        [payload.turnScopeId]: {
+          thinkingStartedAt: "2026-07-15T10:00:00.000Z",
+          thinkingFinishedAt: null,
+        },
+      };
+      emitChannelState(onEvent, "s-late-completed", "dp-late-completed", "completed", {
+        turnScopeId: payload.turnScopeId,
+      });
+    });
+    const { engine, activeSession } = createHarness({
+      sessionId: "s-late-completed",
+      stream,
+    });
+
+    await engine.send();
+
+    const assistant = assistantMessage(activeSession);
+    expect(activeSession.value.turnTimingsByTurnScopeId?.[assistant.turnScopeId]).toEqual({
+      thinkingStartedAt: "2026-07-15T10:00:00.000Z",
+      thinkingFinishedAt: expect.any(String),
+    });
+  });
+
   it("send carries turnScopeId through backend payload and ignores stale unscoped terminal state", async () => {
     let capturedPayload = null;
     const stream = vi.fn(async (payload, onEvent) => {

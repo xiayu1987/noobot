@@ -597,6 +597,10 @@ export function createChatEngineConversationState({
           BackendChannelState.USER_STOPPED,
         ].includes(currentMessageState)
       ) {
+        // A local/frontend completion can finalize the message before the
+        // backend COMPLETED event arrives. Runtime UI state is already final in
+        // that case, but the turn-level timing still needs its terminal fact.
+        finishTurnTiming(targetAssistantMessage);
         logResendDebug("conversationState.backendCompleted.skipFinalized", {
           state, sessionId, dialogProcessId, turnScopeId,
           currentMessageState,

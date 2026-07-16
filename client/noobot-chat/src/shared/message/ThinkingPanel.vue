@@ -22,7 +22,7 @@ const panel = useThinkingPanel(props, emit);
 const {
   injectedMessages,
   hasThinking,
-  thinkingDurationLabel,
+  getThinkingDurationLabel,
   isThinkingRuntimeRunning,
   getLatestPluginAnalysisLog,
   getLatestMainModelContentLog,
@@ -47,7 +47,7 @@ const {
     v-if="variant !== 'details' && hasThinking"
     :message-item="messageItem"
     :translate="translate"
-    :thinking-duration-label="thinkingDurationLabel"
+    :thinking-duration-label="getThinkingDurationLabel()"
     :is-running="isThinkingRuntimeRunning(messageItem)"
     :latest-plugin-analysis-log="getLatestPluginAnalysisLog(messageItem)"
     :latest-main-model-content-log="getLatestMainModelContentLog(messageItem)"

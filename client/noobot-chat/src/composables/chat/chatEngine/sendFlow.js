@@ -349,7 +349,8 @@ export function createChatEngineSender({
         action: continueFromUserStopped ? "continue" : "",
         resumeDialogProcessId: continueFromUserStopped ? resumeDialogProcessId : "",
         resumeTurnScopeId: continueFromUserStopped ? resumeTurnScopeId : "",
-        thinkingStartedAt: botMsg?.thinkingStartedAt || "",
+        thinkingStartedAt:
+          activeSession?.value?.turnTimingsByTurnScopeId?.[turnScopeId]?.thinkingStartedAt || "",
         uploadHint: translate("chat.uploadHint"),
         reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
       });

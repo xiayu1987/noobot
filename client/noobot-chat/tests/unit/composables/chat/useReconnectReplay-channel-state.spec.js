@@ -160,6 +160,46 @@ describe("useReconnectReplay", () => {
     expect(assistant.thinkingStartedAt).toBeUndefined();
   });
 
+  it("writes reconnect turn identity onto an in-flight assistant created after refresh", async () => {
+    const { api, refs } = createFixture();
+    refs.activeSession.value.messages = [{ role: RoleEnum.USER, content: "q" }];
+
+    await api.applyReconnectData({
+      sessions: [{
+        sessionId: "s-1",
+        hasRunningTask: true,
+        currentRun: {
+          sessionId: "s-1",
+          dialogProcessId: "dp-refresh-running",
+          turnScopeId: "turn-refresh-running",
+          state: BackendChannelState.SENDING,
+          seq: 4,
+        },
+        conversationStates: [{
+          sessionId: "s-1",
+          dialogProcessId: "dp-refresh-running",
+          turnScopeId: "turn-refresh-running",
+          state: BackendChannelState.SENDING,
+          seq: 4,
+        }],
+        dialogProcesses: [],
+      }],
+    });
+
+    const assistant = refs.activeSession.value.messages.find(
+      (message) => message.role === RoleEnum.ASSISTANT,
+    );
+    expect(assistant).toMatchObject({
+      pending: true,
+      dialogProcessId: "dp-refresh-running",
+      turnScopeId: "turn-refresh-running",
+      channelState: {
+        state: BackendChannelState.SENDING,
+        turnScopeId: "turn-refresh-running",
+      },
+    });
+  });
+
   it("does not apply a stale stopped channel_state to a newer resend placeholder", async () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [

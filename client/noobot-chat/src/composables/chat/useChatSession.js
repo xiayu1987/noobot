@@ -65,6 +65,7 @@ import {
   logContinueResumeIdentitySelection,
   setStopContinueDebugLogSink,
 } from "./debug/stopContinueDebugLogger";
+import { setReconnectTimingDebugLogSink } from "./debug/reconnectTimingDebugLogger";
 
 export function useChatSession({
   userId,
@@ -416,6 +417,7 @@ export function useChatSession({
   setResendDebugLogSink(sessionLogWebSocketClient);
   setStopDebugLogSink(sessionLogWebSocketClient);
   setStopContinueDebugLogSink(sessionLogWebSocketClient);
+  setReconnectTimingDebugLogSink(sessionLogWebSocketClient);
 
   function logSessionSystemEvent(event, payload = {}) {
     sessionLogWebSocketClient.log({
@@ -608,10 +610,30 @@ export function useChatSession({
     const runStateEvaluation = evaluateActiveSessionRunState();
     if (runStateEvaluation.canStartNewSend === false) return false;
     if (composerActionState.value.sendRequesting || composerActionState.value.continueRequesting) return false;
-    const stoppedResumeMatch = runStateEvaluation.state === FrontendRunState.USER_STOP_COMPLETED
+    const activeRunState = resolveActiveSessionRunStateSnapshot();
+    const cachedStoppedResumeMatch = runStateEvaluation.state === FrontendRunState.USER_STOP_COMPLETED
       ? getActiveStoppedResumeSnapshotWithKey()
       : null;
-    const activeRunState = resolveActiveSessionRunStateSnapshot();
+    // user_stopped is the authoritative end of the previous turn. The
+    // registry is only a cache and may not have been populated yet when the
+    // user immediately starts the next turn, so fall back to that persisted
+    // run identity instead of reporting a local state mismatch.
+    const persistedStoppedIdentity = findLatestStoppedDetailIdentity(
+      activeSession.value?.turnStatuses || [],
+    );
+    const activeStoppedSnapshot = (
+      runStateEvaluation.state === FrontendRunState.USER_STOP_COMPLETED && persistedStoppedIdentity
+    ) ? {
+        dialogProcessId: persistedStoppedIdentity.dialogProcessId,
+        turnScopeId: persistedStoppedIdentity.turnScopeId,
+      } : null;
+    // Prefer the persisted latest turn identity. A registry entry is only a
+    // cache and can still describe an older stopped turn after refresh.
+    const stoppedResumeMatch = (activeStoppedSnapshot ? {
+      sessionId: resolveActiveSessionIdentity(),
+      snapshot: activeStoppedSnapshot,
+    } : null) || cachedStoppedResumeMatch;
+    const stoppedResumeIdentityFromPersistedStatus = Boolean(activeStoppedSnapshot);
     // A registry entry is only a cache of the persisted stopped identity.  It
     // must never turn a newer completed/current turn into a continuation.  In
     // particular, delayed detail/events can leave an older registry entry
@@ -619,9 +641,11 @@ export function useChatSession({
     const isContinueFromUserStopped = Boolean(
       stoppedResumeMatch?.snapshot &&
       runStateEvaluation.state === FrontendRunState.USER_STOP_COMPLETED &&
-      String(activeRunState?.backendState || "").trim() === BackendChannelState.USER_STOPPED &&
-      String(activeRunState?.dialogProcessId || "").trim() === String(stoppedResumeMatch.snapshot.dialogProcessId || "").trim() &&
-      String(activeRunState?.turnScopeId || "").trim() === String(stoppedResumeMatch.snapshot.turnScopeId || "").trim() &&
+      (stoppedResumeIdentityFromPersistedStatus || (
+        String(activeRunState?.backendState || "").trim() === BackendChannelState.USER_STOPPED &&
+        String(activeRunState?.dialogProcessId || "").trim() === String(stoppedResumeMatch.snapshot.dialogProcessId || "").trim() &&
+        String(activeRunState?.turnScopeId || "").trim() === String(stoppedResumeMatch.snapshot.turnScopeId || "").trim()
+      )) &&
       isStoppedResumeIdentityBackedByTurnStatuses(
         stoppedResumeMatch.snapshot.dialogProcessId,
         stoppedResumeMatch.snapshot.turnScopeId,
@@ -631,7 +655,39 @@ export function useChatSession({
       stoppedResumeMatch?.sessionId || activeSession.value?.backendSessionId || activeSession.value?.id || activeSessionId.value || "",
     ).trim();
     const userStoppedResumeSnapshot = stoppedResumeMatch?.snapshot || null;
-    if (runStateEvaluation.state === FrontendRunState.USER_STOP_COMPLETED && !isContinueFromUserStopped) {
+    logContinueResumeIdentitySelection({
+      runState: activeRunState || runStateSnapshot.value || {},
+      selected: {
+        continueFromUserStopped: isContinueFromUserStopped,
+        resumeDialogProcessId: stoppedResumeMatch?.snapshot?.dialogProcessId || "",
+        resumeTurnScopeId: stoppedResumeMatch?.snapshot?.turnScopeId || "",
+      },
+      options: {
+        resumeIdentitySource: stoppedResumeIdentityFromPersistedStatus
+          ? "persisted_user_stopped_status"
+          : stoppedResumeMatch
+            ? "user_stopped_resume_registry"
+            : "missing_user_stopped_identity",
+        userStoppedResumeSnapshot,
+        evaluationState: runStateEvaluation.state,
+        persistedStoppedIdentity,
+        cachedStoppedResumeMatch: cachedStoppedResumeMatch?.snapshot || null,
+        activeRunBackendState: activeRunState?.backendState || "",
+        activeRunDialogProcessId: activeRunState?.dialogProcessId || "",
+        activeRunTurnScopeId: activeRunState?.turnScopeId || "",
+        backedByTurnStatuses: Boolean(
+          stoppedResumeMatch?.snapshot &&
+            isStoppedResumeIdentityBackedByTurnStatuses(
+              stoppedResumeMatch.snapshot.dialogProcessId,
+              stoppedResumeMatch.snapshot.turnScopeId,
+            ),
+        ),
+      },
+    });
+    if (
+      runStateEvaluation.state === FrontendRunState.USER_STOP_COMPLETED &&
+      !isContinueFromUserStopped
+    ) {
       // The cached resume identity is contradicted by the authoritative
       // turnStatuses (its stopped turn was deleted/pruned/advanced to a terminal
       // state). Drop the stale cache so we stop firing continue requests that the

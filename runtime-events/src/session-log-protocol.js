@@ -36,6 +36,7 @@ export const SESSION_LOG_DEBUG_CONTROL_KEYS = Object.freeze({
   stop: "stopDebug",
   "session-log-ws": "sessionLogWsDebug",
   "stop-continue": "frontendStopContinueDebug",
+  "reconnect-timing": "frontendReconnectTimingDebug",
   "agent-proxy-route": "agentProxyRouteDebug",
 });
 

@@ -239,6 +239,10 @@ export function createSessionFacade(runtime = {}) {
       return sessionMessageService.upsertTurnStatus(payload);
     },
 
+    async upsertTurnTiming(payload = {}) {
+      return sessionMessageService.upsertTurnTiming(payload);
+    },
+
     async stampReusedUserTurnDialogProcessId(payload = {}) {
       return sessionMessageService.stampReusedUserTurnDialogProcessId(payload);
     },

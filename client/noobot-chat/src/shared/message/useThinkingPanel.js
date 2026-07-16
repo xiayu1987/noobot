@@ -22,6 +22,7 @@ import {
   resolveTimeMs,
 } from "../../composables/infra/timeFields";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { logReconnectTimingDebug } from "../../composables/chat/debug/reconnectTimingDebugLogger";
 
 export function useThinkingPanel(props, emit) {
   const injectedMessages = computed(() =>
@@ -33,7 +34,10 @@ export function useThinkingPanel(props, emit) {
   );
   const { translate } = useLocale();
   const nowTick = ref(nowMs());
-  const thinkingDurationLabel = ref(formatDurationMs(0));
+  function getThinkingDurationLabel() {
+    const durationMs = getThinkingDurationMs(props.messageItem);
+    return durationMs === null ? "--:--" : formatDurationMs(durationMs);
+  }
   const detailExpansionTick = ref(0);
   let timer = null;
   const EXECUTION_LOG_DISPLAY_LIMIT =
@@ -661,19 +665,29 @@ export function useThinkingPanel(props, emit) {
     const runtimeView = getRuntimeView(messageItem);
     const startedAt = parseAnyTimeMs(persistedTiming?.thinkingStartedAt);
     const finishedAt = parseAnyTimeMs(persistedTiming?.thinkingFinishedAt);
-    return resolveThinkingDurationMs({
+    const durationMs = resolveThinkingDurationMs({
       messageStartedAt: startedAt,
       messageFinishedAt: finishedAt,
       now: nowTick.value,
       running: runtimeView.running,
     });
-  }
-
-  function refreshThinkingDurationLabel() {
-    const durationMs = getThinkingDurationMs(props.messageItem);
-    thinkingDurationLabel.value = durationMs === null
-      ? "--:--"
-      : formatDurationMs(durationMs);
+    logReconnectTimingDebug("frontend.reconnectTiming.durationResolved", {
+      sessionId: getMessageSessionId(messageItem),
+      dialogProcessId: getMessageDialogProcessId(messageItem),
+      turnScopeId,
+      messageRole: getMessageRole(messageItem),
+      messagePending: messageItem?.pending === true,
+      runtimeState: runtimeView.state,
+      running: runtimeView.running,
+      timingFound: Boolean(persistedTiming),
+      thinkingStartedAt: persistedTiming?.thinkingStartedAt || "",
+      thinkingFinishedAt: persistedTiming?.thinkingFinishedAt || "",
+      startedAtMs: startedAt,
+      finishedAtMs: finishedAt,
+      nowMs: nowTick.value,
+      durationMs,
+    });
+    return durationMs;
   }
 
   function isThinkingRuntimeRunning(messageItem = {}) {
@@ -684,7 +698,6 @@ export function useThinkingPanel(props, emit) {
     if (timer) return;
     timer = setInterval(() => {
       nowTick.value = nowMs();
-      refreshThinkingDurationLabel();
     }, 1000);
   }
 
@@ -697,23 +710,10 @@ export function useThinkingPanel(props, emit) {
   watch(
     () => isThinkingRuntimeRunning(props.messageItem),
     (running) => {
-      refreshThinkingDurationLabel();
       if (running) startTimer();
       else stopTimer();
     },
     { immediate: true },
-  );
-
-  watch(
-    () => [
-      props.turnTimingsByTurnScopeId?.[getMessageTurnScopeId(props.messageItem)]?.thinkingStartedAt,
-      props.turnTimingsByTurnScopeId?.[getMessageTurnScopeId(props.messageItem)]?.thinkingFinishedAt,
-      props.messageItem?.pending,
-    ],
-    () => {
-      refreshThinkingDurationLabel();
-    },
-    { immediate: true, deep: false },
   );
 
   onBeforeUnmount(() => {
@@ -724,7 +724,7 @@ export function useThinkingPanel(props, emit) {
     injectedMessages,
     hasThinking,
     translate,
-    thinkingDurationLabel,
+    getThinkingDurationLabel,
     isThinkingRuntimeRunning,
     getLatestPluginAnalysisLog,
     getLatestMainModelContentLog,

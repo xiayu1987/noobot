@@ -269,12 +269,14 @@ export function resolveReconnectTargetOrApplyFallbackAssistant({
   appendMessage,
   messages = [],
   normalizedDpId = "",
+  turnScopeId = "",
   allowCreate = true,
 } = {}) {
   const targetMessage = resolveReconnectTargetAssistantMessage({
     activeSession,
     appendMessage,
     dialogProcessId: normalizedDpId,
+    turnScopeId,
     allowCreate,
   });
   if (targetMessage) {
@@ -473,6 +475,7 @@ export async function applyReconnectReplayBatchToActiveSession({
   chatList,
   messages = [],
   dialogProcessId = "",
+  turnScopeId = "",
   allowCreate = true,
   lastAppliedSeq = 0,
   terminalDialogProcessIdSet,
@@ -500,6 +503,7 @@ export async function applyReconnectReplayBatchToActiveSession({
     messages,
     lastAppliedSeq,
     normalizedDpId,
+    turnScopeId,
     terminalDialogProcessIdSet,
     isReconnectTerminalBatch,
     allowCreate,

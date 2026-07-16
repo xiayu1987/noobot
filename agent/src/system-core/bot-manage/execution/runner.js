@@ -256,6 +256,7 @@ export class SessionExecutionRunner {
         caller,
         eventListener,
         turnScopeId: normalizedRequestTurnScopeId,
+        thinkingStartedAt: String(runConfig?.thinkingStartedAt || "").trim(),
       });
       const requestRunConfig = {
         ...(runConfig && typeof runConfig === "object" && !Array.isArray(runConfig)

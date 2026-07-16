@@ -354,12 +354,13 @@ export function useReconnectReplay({
 
   function resolveReconnectTargetAssistantMessage(
     dialogProcessId = "",
-    { allowCreate = true } = {},
+    { allowCreate = true, turnScopeId = "" } = {},
   ) {
     return resolveReconnectTargetAssistantMessageWithContext({
       activeSession,
       appendMessage,
       dialogProcessId,
+      turnScopeId,
       allowCreate,
     });
   }
@@ -488,7 +489,7 @@ export function useReconnectReplay({
   async function applyReconnectMessagesToActiveSession(
     messages,
     dialogProcessId,
-    { allowCreate = true } = {},
+    { allowCreate = true, turnScopeId = "" } = {},
   ) {
     return applyReconnectMessagesToActiveSessionReplay({
       activeSession,
@@ -497,6 +498,7 @@ export function useReconnectReplay({
       chatList,
       messages,
       dialogProcessId,
+      turnScopeId,
       allowCreate,
       appliedReconnectSeqByDialogProcessId,
       terminalDialogProcessIdSet,

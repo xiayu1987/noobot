@@ -13,15 +13,18 @@ import {
   findAssistantMessageByDialogProcessId,
   hasAssistantMessageWithContent,
 } from "./messageLookup";
+import { logReconnectTimingDebug } from "../debug/reconnectTimingDebugLogger";
 
 export function resolveReconnectTargetAssistantMessage({
   activeSession,
   appendMessage,
   dialogProcessId = "",
+  turnScopeId = "",
   allowCreate = true,
 } = {}) {
   if (!activeSession?.value) return null;
   const normalizedDpId = _trimStr(dialogProcessId);
+  const normalizedTurnScopeId = _trimStr(turnScopeId);
   const messageList = Array.isArray(activeSession.value.messages)
     ? activeSession.value.messages
     : [];
@@ -32,6 +35,16 @@ export function resolveReconnectTargetAssistantMessage({
       _matchesDialogProcessId(messageItem, normalizedDpId),
   );
   if (matchedAssistantMessage) {
+    if (normalizedTurnScopeId && !matchedAssistantMessage.turnScopeId) {
+      matchedAssistantMessage.turnScopeId = normalizedTurnScopeId;
+    }
+    logReconnectTimingDebug("frontend.reconnectTiming.assistantResolved", {
+      dialogProcessId: normalizedDpId,
+      inputTurnScopeId: normalizedTurnScopeId,
+      messageTurnScopeId: _trimStr(matchedAssistantMessage.turnScopeId),
+      matched: Boolean(normalizedTurnScopeId && normalizedTurnScopeId === _trimStr(matchedAssistantMessage.turnScopeId)),
+      resolution: "dialog-process-match",
+    });
     return matchedAssistantMessage.pending ? matchedAssistantMessage : null;
   }
 
@@ -44,6 +57,15 @@ export function resolveReconnectTargetAssistantMessage({
     if (normalizedDpId && !latestPendingDpId) {
       latestPendingAssistant.dialogProcessId = normalizedDpId;
     }
+    if (normalizedTurnScopeId && !latestPendingAssistant.turnScopeId) {
+      latestPendingAssistant.turnScopeId = normalizedTurnScopeId;
+    }
+    logReconnectTimingDebug("frontend.reconnectTiming.assistantResolved", {
+      dialogProcessId: normalizedDpId,
+      inputTurnScopeId: normalizedTurnScopeId,
+      messageTurnScopeId: _trimStr(latestPendingAssistant.turnScopeId),
+      resolution: "latest-pending-match",
+    });
     return latestPendingAssistant;
   }
   if (!allowCreate) return null;
@@ -53,6 +75,15 @@ export function resolveReconnectTargetAssistantMessage({
   if (normalizedDpId) {
     appendedMessage.dialogProcessId = normalizedDpId;
   }
+  if (normalizedTurnScopeId) {
+    appendedMessage.turnScopeId = normalizedTurnScopeId;
+  }
+  logReconnectTimingDebug("frontend.reconnectTiming.assistantResolved", {
+    dialogProcessId: normalizedDpId,
+    inputTurnScopeId: normalizedTurnScopeId,
+    messageTurnScopeId: _trimStr(appendedMessage.turnScopeId),
+    resolution: "created",
+  });
   return appendedMessage;
 }
 
