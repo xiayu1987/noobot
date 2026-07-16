@@ -636,6 +636,7 @@ export class SessionExecutionEngine {
     caller = CALLER_ROLE.USER,
     eventListener = null,
     turnScopeId = "",
+    thinkingStartedAt = "",
   }) {
     return this.initializer.initializeRunSessionRuntime({
       userId,
@@ -644,6 +645,7 @@ export class SessionExecutionEngine {
       caller,
       eventListener,
       turnScopeId,
+      thinkingStartedAt,
     });
   }
 

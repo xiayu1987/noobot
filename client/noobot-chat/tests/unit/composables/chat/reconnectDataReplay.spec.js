@@ -41,7 +41,7 @@ describe("applyReconnectDataReplay", () => {
     expect(fixture.applyReconnectMessagesToActiveSession).toHaveBeenCalledWith(
       messages,
       "dp-1",
-      { allowCreate: true },
+      { allowCreate: true, turnScopeId: "turn-1" },
     );
     expect(fixture.replayCache).toEqual({});
   });

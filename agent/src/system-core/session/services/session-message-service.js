@@ -576,6 +576,41 @@ export class SessionMessageService {
     });
   }
 
+  async upsertTurnTiming({
+    userId,
+    sessionId,
+    parentSessionId = "",
+    turnScopeId = "",
+    dialogProcessId = "",
+    thinkingStartedAt = "",
+    thinkingFinishedAt = "",
+  } = {}) {
+    if (!userId || !sessionId) return { upserted: false, reason: "missing_session" };
+    return this._withSessionMutation(userId, sessionId, async () => {
+      const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+        userId,
+        sessionId,
+        parentSessionId,
+      );
+      const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
+      if (!session) return { upserted: false, reason: "session_not_found" };
+      const before = JSON.stringify(session.turnTimings || []);
+      upsertSessionTurnTiming(session, {
+        turnScopeId,
+        dialogProcessId,
+        thinkingStartedAt,
+        thinkingFinishedAt,
+      });
+      if (JSON.stringify(session.turnTimings || []) === before) {
+        return { upserted: false, reason: "unchanged", session };
+      }
+      session.updatedAt = this.now();
+      if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
+      await this.sessionRepo.save(userId, session, resolvedParentSessionId);
+      return { upserted: true, session };
+    });
+  }
+
   async stampReusedUserTurnDialogProcessId({
     userId,
     sessionId,

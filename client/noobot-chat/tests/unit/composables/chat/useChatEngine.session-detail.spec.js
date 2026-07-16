@@ -34,6 +34,63 @@ function createApplySessionDetailHarness({ sessionId = "s-apply-mode", messages 
 }
 
 describe("useChatEngine.session-detail", () => {
+  it("keeps a locally completed turn timing when an early detail omits its finish", () => {
+    const turnScopeId = "client-turn:timing-race";
+    const { activeSession, applySessionDetail } = createApplySessionDetailHarness({
+      sessionId: "s-timing-race",
+      messages: [{ role: RoleEnum.ASSISTANT, turnScopeId, dialogProcessId: "dp-timing-race" }],
+    });
+    activeSession.turnTimingsByTurnScopeId = {
+      [turnScopeId]: {
+        thinkingStartedAt: "2026-07-15T10:00:00.000Z",
+        thinkingFinishedAt: "2026-07-15T10:00:05.000Z",
+      },
+    };
+
+    applySessionDetail({
+      sessionId: "s-timing-race",
+      sessions: [{
+        sessionId: "s-timing-race",
+        messages: [{ role: RoleEnum.ASSISTANT, turnScopeId, dialogProcessId: "dp-timing-race" }],
+        turnTimings: [{
+          turnScopeId,
+          dialogProcessId: "dp-timing-race",
+          thinkingStartedAt: "2026-07-15T10:00:00.000Z",
+        }],
+      }],
+    });
+
+    expect(activeSession.turnTimingsByTurnScopeId[turnScopeId]).toEqual({
+      thinkingStartedAt: "2026-07-15T10:00:00.000Z",
+      thinkingFinishedAt: "2026-07-15T10:00:05.000Z",
+    });
+  });
+
+  it("keys a persisted timing without turnScopeId through its matching message", () => {
+    const turnScopeId = "client-turn:hydrated-timing";
+    const { activeSession, applySessionDetail } = createApplySessionDetailHarness({
+      sessionId: "s-hydrated-timing",
+    });
+
+    applySessionDetail({
+      sessionId: "s-hydrated-timing",
+      sessions: [{
+        sessionId: "s-hydrated-timing",
+        messages: [{ role: RoleEnum.ASSISTANT, turnScopeId, dialogProcessId: "dp-hydrated-timing" }],
+        turnTimings: [{
+          dialogProcessId: "dp-hydrated-timing",
+          thinkingStartedAt: "2026-07-15T10:00:00.000Z",
+          thinkingFinishedAt: "2026-07-15T10:00:05.000Z",
+        }],
+      }],
+    });
+
+    expect(activeSession.turnTimingsByTurnScopeId[turnScopeId]).toEqual({
+      thinkingStartedAt: "2026-07-15T10:00:00.000Z",
+      thinkingFinishedAt: "2026-07-15T10:00:05.000Z",
+    });
+  });
+
   it("applySessionDetail keeps server renamed title instead of deriving it from messages", () => {
     const sessionTitleFromMessages = vi.fn(() => "old message title");
     const activeSession = {

@@ -247,6 +247,46 @@ describe("useChatSession reconnect replay", () => {
     expect(store.getUserStoppedResumeSnapshot("backend-session-continue")).toBe(null);
   });
 
+  it("continues from the authoritative stopped run when the resume cache is not populated yet", async () => {
+    const store = useChatStore();
+    store.sessions = [createSessionFixture({
+      id: "s-immediate-continue",
+      backendSessionId: "s-immediate-continue",
+      turnStatuses: [{
+        status: BackendChannelState.USER_STOPPED,
+        dialogProcessId: "dp-immediate-stop",
+        turnScopeId: "turn-immediate-stop",
+      }],
+    })];
+    store.activeSessionId = "s-immediate-continue";
+    store.input = "continue immediately";
+    store.runStateSnapshot = {
+      ...store.runStateSnapshot,
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      backendState: BackendChannelState.USER_STOPPED,
+      sessionId: "s-immediate-continue",
+      dialogProcessId: "dp-immediate-stop",
+      turnScopeId: "turn-immediate-stop",
+    };
+    wsClientMock.stream.mockImplementation(async (_payload, _onEvent, options) => {
+      options?.onPayloadSent?.(_payload);
+      return {};
+    });
+
+    const session = createChatSession();
+    const result = await session.send();
+
+    expect(result).toBe(true);
+    expect(wsClientMock.stream).toHaveBeenCalledTimes(1);
+    expect(wsClientMock.stream.mock.calls[0][0]).toMatchObject({
+      action: "continue",
+      config: {
+        resumeDialogProcessId: "dp-immediate-stop",
+        resumeTurnScopeId: "turn-immediate-stop",
+      },
+    });
+  });
+
   it("does not let completion from another turn invalidate the current stopped source", async () => {
     const store = useChatStore();
     store.sessions = [createSessionFixture({ id: "s-completed", backendSessionId: "s-completed" })];

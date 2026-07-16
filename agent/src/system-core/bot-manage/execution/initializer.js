@@ -29,6 +29,7 @@ export class SessionExecutionInitializer {
     caller = CALLER_ROLE.USER,
     eventListener = null,
     turnScopeId = "",
+    thinkingStartedAt = "",
   }) {
     const usedSessionId = sessionId;
     const upstreamListener = eventListener;
@@ -55,6 +56,15 @@ export class SessionExecutionInitializer {
       parentSessionId,
       caller,
       modelAlias: "",
+    });
+
+    await this.session.upsertTurnTiming?.({
+      userId,
+      sessionId: usedSessionId,
+      parentSessionId,
+      turnScopeId,
+      dialogProcessId,
+      thinkingStartedAt,
     });
 
     const executionStartIndex =

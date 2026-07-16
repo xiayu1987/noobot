@@ -167,7 +167,13 @@ export async function applyReconnectDataReplay({
       (dialogProcess) => Array.isArray(dialogProcess?.messages) && dialogProcess.messages.length,
     );
     if (!hasReconnectMessages && isCurrentActiveSession(recoverableSessionId)) {
-      resolveReconnectTargetAssistantMessage("", { allowCreate: true });
+      const currentRunMeta = normalizeTurnMeta(recoverableSessionEntry?.currentRun || {});
+      // Diagnostic data is emitted by the caller-facing replay bridge when available.
+      // Keep the raw identity visible to that bridge, including an empty value.
+      resolveReconnectTargetAssistantMessage(currentRunMeta.dialogProcessId, {
+        allowCreate: true,
+        turnScopeId: currentRunMeta.turnScopeId,
+      });
     }
   }
 
@@ -197,6 +203,8 @@ export async function applyReconnectDataReplay({
         } else {
           await applyReconnectMessagesToActiveSession(messages, dpId, {
             allowCreate: isDialogProcessRecoverable(sessionEntry, messages),
+            turnScopeId: normalizeTurnMeta(dp).turnScopeId ||
+              normalizeTurnMeta(sessionEntry?.currentRun || {}).turnScopeId,
           });
         }
       }

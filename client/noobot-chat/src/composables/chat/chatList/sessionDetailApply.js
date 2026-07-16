@@ -30,6 +30,7 @@ import {
   logResendDebug,
   summarizeDebugMessages,
 } from "../debug/resendDebugLogger";
+import { logReconnectTimingDebug } from "../debug/reconnectTimingDebugLogger";
 import { applyLatestSessionVersion } from "../chatEngine/sessionVersionManager";
 import {
   SESSION_DETAIL_APPLY_MODE,
@@ -151,12 +152,43 @@ export function createSessionDetailApplicator({
     // messages below are a disposable projection and must not become the
     // source used by hydration, continue, or resend flows.
     sessionItem.turnStatuses = turnStatuses.map((item) => ({ ...item }));
+    const currentTurnTimings = sessionItem.turnTimingsByTurnScopeId || {};
     sessionItem.turnTimingsByTurnScopeId = Object.fromEntries(
       turnTimings
-        .map((item) => [getMessageTurnScopeId(item), {
-          thinkingStartedAt: item?.thinkingStartedAt || null,
-          thinkingFinishedAt: item?.thinkingFinishedAt || null,
-        }])
+        .map((item) => {
+          const timingDialogProcessId = getMessageDialogProcessId(item);
+          const matchingMessage = timingDialogProcessId
+            ? detailMessages.find(
+              (messageItem) => getMessageDialogProcessId(messageItem) === timingDialogProcessId,
+            )
+            : null;
+          // Older/in-flight snapshots can persist a timing before turnScopeId is
+          // stamped on it. Canonicalize it through the matching message so the
+          // view always reads timings with the message turn key.
+          const turnScopeId = getMessageTurnScopeId(item) || getMessageTurnScopeId(matchingMessage);
+          const current = currentTurnTimings[turnScopeId] || {};
+          const hydratedThinkingStartedAt = item?.thinkingStartedAt || current.thinkingStartedAt || null;
+          const hydratedThinkingFinishedAt = item?.thinkingFinishedAt || current.thinkingFinishedAt || null;
+          logReconnectTimingDebug("frontend.reconnectTiming.timingHydrated", {
+            sessionId: detail.sessionId,
+            dialogProcessId: timingDialogProcessId,
+            timingTurnScopeId: getMessageTurnScopeId(item),
+            matchingMessageTurnScopeId: getMessageTurnScopeId(matchingMessage),
+            resolvedTurnScopeId: turnScopeId,
+            timingMapKeys: Object.keys(currentTurnTimings),
+            detailThinkingStartedAt: item?.thinkingStartedAt || null,
+            detailThinkingFinishedAt: item?.thinkingFinishedAt || null,
+            previousThinkingStartedAt: current.thinkingStartedAt || null,
+            previousThinkingFinishedAt: current.thinkingFinishedAt || null,
+            hydratedThinkingStartedAt,
+            hydratedThinkingFinishedAt,
+            retained: Boolean(turnScopeId),
+          });
+          return [turnScopeId, {
+            thinkingStartedAt: hydratedThinkingStartedAt,
+            thinkingFinishedAt: hydratedThinkingFinishedAt,
+          }];
+        })
         .filter(([turnScopeId]) => Boolean(turnScopeId)),
     );
     const detailTurnScopeIds = new Set(

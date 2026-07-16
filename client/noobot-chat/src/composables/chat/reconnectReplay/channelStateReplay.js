@@ -65,6 +65,16 @@ function applyReconnectChannelTimingToMessage({
     targetAssistantMessage.sessionId = targetAssistantMessage.sessionId || sessionId;
     targetAssistantMessage.session_id = targetAssistantMessage.session_id || sessionId;
   }
+  // Reconnect may create the in-flight assistant before session detail has an
+  // assistant message for this turn. Keep the canonical message identity in
+  // sync with channelState: consumers such as ThinkingPanel key persisted turn
+  // timing by the message-level turnScopeId.
+  if (turnScopeId) {
+    targetAssistantMessage.turnScopeId = targetAssistantMessage.turnScopeId || turnScopeId;
+  }
+  if (dialogProcessId) {
+    targetAssistantMessage.dialogProcessId = targetAssistantMessage.dialogProcessId || dialogProcessId;
+  }
   const timing = normalizeReconnectChannelTiming(stateData);
   const previousChannelState =
     targetAssistantMessage.channelState &&
