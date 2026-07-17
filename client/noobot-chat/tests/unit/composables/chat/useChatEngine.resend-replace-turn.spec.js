@@ -84,6 +84,13 @@ describe("useChatEngine.resend replace turn", () => {
     expect(activeSession.value.messages.filter((message) => message.role === RoleEnum.USER)).toHaveLength(1);
     expect(activeSession.value.messages.map((message) => message.content)).toEqual(["edited question", ""]);
     expect(activeSession.value.messages[0].turnScopeId).toBe(activeSession.value.messages[1].turnScopeId);
+    const replacementUserIndex = activeSession.value.messages.findIndex(
+      (message) => message.role === RoleEnum.USER && message.content === "edited question",
+    );
+    const placeholderIndex = activeSession.value.messages.findIndex(
+      (message) => message.role === RoleEnum.ASSISTANT && message.turnPlaceholder === true,
+    );
+    expect(placeholderIndex).toBeGreaterThan(replacementUserIndex);
     expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
     expect(input.value).toBe("");
   });

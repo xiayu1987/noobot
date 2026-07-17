@@ -63,7 +63,12 @@ import { setResendDebugLogSink } from "./debug/resendDebugLogger";
 import { setStopDebugLogSink } from "./debug/stopDebugLogger";
 import { setStopContinueDebugLogSink } from "./debug/stopContinueDebugLogger";
 import { setReconnectTimingDebugLogSink } from "./debug/reconnectTimingDebugLogger";
-import { deriveLastTurnActions } from "./turnActions";
+import {
+  applyTurnRuntimeEvent,
+  hydrateSessionTurnRuntime,
+  resolveSessionTurnRuntime,
+  turnRuntimeDisplayState,
+} from "./sessionRunStateMachine/turnRuntimeRegistry";
 
 export function useChatSession({
   userId,
@@ -93,6 +98,7 @@ export function useChatSession({
     sending,
     canStop,
     runStateSnapshot,
+    turnRuntimeRegistry,
     sessions,
     activeSessionId,
     activeSession,
@@ -111,38 +117,54 @@ export function useChatSession({
     return `client-turn:${nowMs().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
   }
 
+  // Session documents may already be present when this composable is created
+  // (initial bootstrap, tests, or a restored Pinia snapshot). Hydrate only from
+  // authoritative turnStatuses; never infer runtime state from message order.
+  for (const sessionItem of sessions.value) {
+    hydrateSessionTurnRuntime(turnRuntimeRegistry.value, sessionItem);
+  }
+
+  // Reconcile replacements, refreshes, reconnects, and non-active sessions
+  // from authoritative turnStatuses only; message order is never consulted.
+  watch(
+    sessions,
+    (sessionItems) => {
+      for (const sessionItem of Array.isArray(sessionItems) ? sessionItems : []) {
+        hydrateSessionTurnRuntime(turnRuntimeRegistry.value, sessionItem);
+      }
+    },
+    { deep: true },
+  );
+
   const composerActionState = computed(() => {
-    const turnActions = deriveLastTurnActions(
-      activeSession.value?.messages || [],
-      activeSession.value?.turnStatuses || [],
-      activeSession.value?.turnTimingsByTurnScopeId || {},
-    );
+    const sessionId = resolveActiveSessionIdentity();
+    const turn = resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionId);
+    const displayState = turnRuntimeDisplayState(turn);
+    const userStopped = turn?.terminal === "user_stopped";
     return {
-      sendRequesting: turnActions.displayState === "requesting",
+      sendRequesting: displayState === "requesting",
       continueRequesting: false,
-      stopRequesting: turnActions.displayState === "stopping",
+      stopRequesting: displayState === "stopping",
       stopPendingUntilBackendReady: false,
       canStartNewSend: true,
       canRetryMessage: true,
       canDeleteMessage: true,
-      stopInFlight: turnActions.displayState === "stopping",
-      awaitingBackendStop: turnActions.displayState === "stopping",
-      userStopped: turnActions.userStopped,
-      primaryAction: turnActions.action,
-      canContinue: turnActions.canContinue,
-      canResend: turnActions.canResend,
-      state: turnActions.displayState,
-      displayState: turnActions.displayState,
-      canStop: turnActions.canStop,
+      stopInFlight: displayState === "stopping",
+      awaitingBackendStop: displayState === "stopping",
+      userStopped,
+      primaryAction: userStopped ? "continue" : "send",
+      canContinue: userStopped,
+      canResend: userStopped,
+      state: displayState,
+      displayState,
+      canStop: displayState === "sending" && turn?.canStop === true,
     };
   });
 
-  const applyComposerActionStateEvent = (event) => applySessionRunStateEvent({
-    stateRef: runStateSnapshot,
-    sending,
-    canStop,
-    event,
-  });
+  const applyComposerActionStateEvent = (event) => {
+    applyTurnRuntimeEvent(turnRuntimeRegistry.value, event, { fallbackSessionId: resolveActiveSessionIdentity() });
+    return applySessionRunStateEvent({ stateRef: runStateSnapshot, sending, canStop, event });
+  };
 
   function trackConversationState(stateEntry = {}) {
     const state = String(stateEntry?.state || "").trim();
@@ -213,6 +235,7 @@ export function useChatSession({
   }
 
   function hydrateStoppedRunStateFromSessionDetail({ sessionItem = null } = {}) {
+    if (sessionItem) hydrateSessionTurnRuntime(turnRuntimeRegistry.value, sessionItem);
     // A successfully applied session summary is the synchronization boundary:
     // turnStatuses now owns every persisted turn result, so the global state is
     // only a temporary frontend interaction lock and must always be released.
@@ -326,6 +349,7 @@ export function useChatSession({
     sending,
     canStop,
     runStateSnapshot,
+    turnRuntimeRegistry,
     createConnectorPanelState,
     generateSessionId,
     sessionTitleFromMessages,
@@ -366,6 +390,7 @@ export function useChatSession({
     sending,
     canStop,
     runStateSnapshot,
+    turnRuntimeRegistry,
     input,
     uploadFiles,
     clearUploads,
@@ -431,17 +456,14 @@ export function useChatSession({
   });
 
   async function sendWithComposerActionState(...args) {
-    const turnActions = deriveLastTurnActions(
-      activeSession.value?.messages || [],
-      activeSession.value?.turnStatuses || [],
-      activeSession.value?.turnTimingsByTurnScopeId || {},
-    );
-    const stoppedTurn = turnActions.userStopped ? turnActions.lastTurn : null;
+    const sessionRuntimeIdValue = resolveActiveSessionIdentity();
+    const currentTurn = resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionRuntimeIdValue);
+    const stoppedTurn = currentTurn?.terminal === "user_stopped" ? currentTurn : null;
     const resumeDialogProcessId = String(stoppedTurn?.dialogProcessId || "").trim();
     const resumeTurnScopeId = String(stoppedTurn?.turnScopeId || "").trim();
     const resumeSessionId = resolveActiveSessionIdentity();
     const isContinueFromUserStopped = Boolean(stoppedTurn && resumeDialogProcessId && resumeTurnScopeId);
-    if (turnActions.userStopped && !isContinueFromUserStopped) {
+    if (currentTurn?.terminal === "user_stopped" && !isContinueFromUserStopped) {
       notify?.({
         type: "warning",
         message: translate("chat.sessionStateOutOfSync") || "Session state is out of sync. Refresh and try again.",

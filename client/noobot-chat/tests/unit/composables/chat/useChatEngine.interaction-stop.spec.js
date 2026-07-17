@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createHarness,
   assistantMessage,
+  activateRuntimeTurn,
   emitChannelState,
 } from "./helpers/useChatEngineHarness";
 import {
@@ -465,11 +466,12 @@ describe("useChatEngine.interaction-stop", () => {
   });
 
   it("stopSending disables repeated stop and sends stable channel identity payload", async () => {
-    const { engine, deps, sending, canStop, activeSession } = createHarness({
+    const { engine, deps, sending, canStop, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId: "local-stop-payload",
     });
     activeSession.value.backendSessionId = "backend-stop-payload";
     activeSession.value.parentSessionId = "parent-session";
+    activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "backend-stop-payload", turnScopeId: "turn-stop-payload", dialogProcessId: "dp-stop-payload" });
     activeSession.value.messages.push({
       role: RoleEnum.ASSISTANT,
       content: "partial answer",
@@ -506,10 +508,11 @@ describe("useChatEngine.interaction-stop", () => {
   });
 
   it("stopSending can stop a refreshed in-flight assistant with channelState but no pending flag", async () => {
-    const { engine, deps, sending, canStop, activeSession } = createHarness({
+    const { engine, deps, sending, canStop, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId: "local-stop-refreshed",
     });
     activeSession.value.backendSessionId = "backend-stop-refreshed";
+    activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "backend-stop-refreshed", turnScopeId: "turn-refreshed", dialogProcessId: "dp-refreshed" });
     activeSession.value.messages = [
       { role: RoleEnum.USER, content: "edited", turnScopeId: "turn-refreshed" },
       {
@@ -541,11 +544,12 @@ describe("useChatEngine.interaction-stop", () => {
     );
   });
 
-  it("stopSending can stop a refreshed in-flight assistant when identity only exists in channelState", async () => {
-    const { engine, deps, sending, canStop, activeSession } = createHarness({
+  it("stopSending uses Registry identity when the message has no direct turn identity", async () => {
+    const { engine, deps, sending, canStop, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId: "local-stop-channel-identity",
     });
     activeSession.value.backendSessionId = "backend-stop-channel-identity";
+    activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "backend-stop-channel-identity", turnScopeId: "turn-channel-identity", dialogProcessId: "dp-channel-identity" });
     activeSession.value.messages = [
       { role: RoleEnum.USER, content: "running", turnScopeId: "turn-channel-identity" },
       {
@@ -570,7 +574,7 @@ describe("useChatEngine.interaction-stop", () => {
         dialogProcessId: "dp-channel-identity",
         turnScopeId: "turn-channel-identity",
         partialAssistant: expect.objectContaining({
-          content: "partial after refresh",
+          content: "",
           dialogProcessId: "dp-channel-identity",
           turnScopeId: "turn-channel-identity",
         }),
@@ -584,10 +588,11 @@ describe("useChatEngine.interaction-stop", () => {
   });
 
   it("stopSending can recover turnScopeId from the latest matching user message after refresh", async () => {
-    const { engine, deps, sending, canStop, activeSession } = createHarness({
+    const { engine, deps, sending, canStop, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId: "local-stop-user-turn-fallback",
     });
     activeSession.value.backendSessionId = "backend-stop-user-turn-fallback";
+    activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "backend-stop-user-turn-fallback", turnScopeId: "turn-user-fallback", dialogProcessId: "dp-user-turn-fallback" });
     activeSession.value.messages = [
       {
         role: RoleEnum.USER,
@@ -628,7 +633,7 @@ describe("useChatEngine.interaction-stop", () => {
 
   it("prepareMonotonicMessageAction treats stop confirmation timeout as stop precondition failure", async () => {
     vi.useFakeTimers();
-    const { engine, deps, sending, canStop, activeSession, runStateSnapshot } = createHarness({
+    const { engine, deps, sending, canStop, activeSession, runStateSnapshot, turnRuntimeRegistry } = createHarness({
       sessionId: "local-monotonic-stop",
       deps: {
         monotonicActionStopTimeoutMs: 500,
@@ -640,6 +645,7 @@ describe("useChatEngine.interaction-stop", () => {
       content: "question",
       turnScopeId: "turn-stop",
     });
+    activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "local-monotonic-stop", turnScopeId: "turn-stop", dialogProcessId: "dp-stop" });
     activeSession.value.messages.push({
       role: RoleEnum.ASSISTANT,
       content: "partial",
@@ -671,7 +677,7 @@ describe("useChatEngine.interaction-stop", () => {
   });
 
   it("ignores stale stop confirmation timeout for a previous turn", () => {
-    const { engine, deps, activeSession, sending, canStop } = createHarness({
+    const { engine, deps, activeSession, sending, canStop, turnRuntimeRegistry } = createHarness({
       sessionId: "local-stale-stop-timeout",
     });
     activeSession.value.messages = [
@@ -689,6 +695,7 @@ describe("useChatEngine.interaction-stop", () => {
         },
       },
     ];
+    activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "local-stale-stop-timeout", turnScopeId: "turn-new", dialogProcessId: "dp-new" });
     sending.value = true;
     canStop.value = true;
     deps.chatWebSocketClient.requestStop.mockImplementation((_payload, onStopConfirmationTimeout) => {
@@ -715,7 +722,7 @@ describe("useChatEngine.interaction-stop", () => {
   it("prepareMonotonicMessageAction warns and rejects when stop does not settle", async () => {
     vi.useFakeTimers();
     const notify = vi.fn();
-    const { engine, deps, activeSession, sending, runStateSnapshot } = createHarness({
+    const { engine, deps, activeSession, sending, runStateSnapshot, turnRuntimeRegistry } = createHarness({
       sessionId: "local-monotonic-timeout",
       deps: {
         notify,
@@ -740,6 +747,11 @@ describe("useChatEngine.interaction-stop", () => {
       sessionId: "local-monotonic-timeout",
       turnScopeId: "turn-timeout",
     };
+    activateRuntimeTurn({
+      turnRuntimeRegistry,
+      sessionId: "local-monotonic-timeout",
+      turnScopeId: "turn-timeout",
+    });
     deps.chatWebSocketClient.requestStop.mockReturnValue(true);
 
     const actionPromise = engine.prepareMonotonicMessageAction();

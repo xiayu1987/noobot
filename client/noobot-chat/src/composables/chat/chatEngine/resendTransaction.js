@@ -22,6 +22,11 @@ import {
 import { createSessionVersionManager } from "./sessionVersionManager";
 import { serializeAttachments } from "./attachmentSerialization";
 import { mergeAttachments } from "../../infra/dialogProcessChain";
+import {
+  createTurnPlaceholderMessage,
+  findTurnPlaceholderMessage,
+  removeTurnPlaceholderMessages,
+} from "./turnPlaceholder";
 
 
 function normalizeAttachmentMeta(attachment = {}) {
@@ -292,6 +297,7 @@ export function createResendMessageTransaction({
   resolveMonotonicUserTarget,
   send,
   userId,
+  appendMessage,
 } = {}) {
   function applyResendReconcile(operation, options = {}) {
     const session = activeSession?.value;
@@ -422,6 +428,20 @@ export function createResendMessageTransaction({
       originalCascadeStartIndex,
       removedMessagesBeforeResend,
     }));
+    const oldTurnScopeId = getMessageTurnScopeId(userTargetMessage);
+    let resendPlaceholder = null;
+    if (activeSession?.value && Array.isArray(activeSession.value.messages)) {
+      activeSession.value.messages = removeTurnPlaceholderMessages(
+        activeSession.value.messages,
+        { turnScopeId: oldTurnScopeId },
+      );
+      resendPlaceholder = createTurnPlaceholderMessage({
+        appendMessage,
+        sessionId,
+        turnScopeId: resendTurnScopeId,
+      });
+      syncSessionMessageSummary(activeSession.value);
+    }
     applyRunStateEvent?.({
       type: SESSION_RUN_EVENT.LOCAL_RESEND_STARTED,
       sessionId,
@@ -503,9 +523,6 @@ export function createResendMessageTransaction({
           messages: summarizeDebugMessages(activeSession?.value?.messages),
         });
         applySessionDetail?.(sessionDetail, { preserveCurrentMessages: true });
-        if (Array.isArray(activeSession?.value?.messages)) {
-          activeSession.value.messages = [...activeSession.value.messages];
-        }
         logResendDebug("resend.detail.apply.after", {
           sessionId,
           turnScopeId: resendTurnScopeId,
@@ -528,6 +545,18 @@ export function createResendMessageTransaction({
         restoreSessionSnapshot(activeSession?.value, snapshot);
         input.value = snapshot.inputValue;
         return false;
+      }
+      if (resendPlaceholder && Array.isArray(activeSession?.value?.messages)) {
+        // The replacement user can be appended only after detail reconciliation.
+        // Reinsert the single resend placeholder afterwards so the visual turn
+        // order is always replacement user -> assistant placeholder.
+        activeSession.value.messages = [
+          ...removeTurnPlaceholderMessages(activeSession.value.messages, {
+            turnScopeId: resendTurnScopeId,
+          }),
+          resendPlaceholder,
+        ];
+        syncSessionMessageSummary(activeSession.value);
       }
       // replace-turn has already persisted raw uploads and returned the
       // canonical attachment snapshot in session detail. From this point on

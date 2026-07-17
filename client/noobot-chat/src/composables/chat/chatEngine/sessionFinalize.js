@@ -271,7 +271,11 @@ export async function finalizeStoppedSessionDetail({
       reuseRecentlyLoaded: false,
     });
     if (!detail) throw new Error("stopped session summary is empty");
-    applySessionDetail(detail, { preserveCurrentMessages: false, scrollToBottom: false });
+    // Keep the live turn placeholder and converge it with the authoritative
+    // turnStatus from the summary. Replacing the whole message array here used
+    // to discard the reactive placeholder and inject a second synthetic one,
+    // which broke its position, status-step updates, and last-message actions.
+    applySessionDetail(detail, { preserveCurrentMessages: true, scrollToBottom: false });
     applyRunStateEvent?.({
       type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED,
       ...scope,

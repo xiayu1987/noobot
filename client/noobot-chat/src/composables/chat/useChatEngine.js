@@ -18,6 +18,7 @@ import { createPendingMessageOperationStore } from "./chatEngine/messageOperatio
 import { applySessionRunStateEvent } from "./sessionRunStateMachine";
 import { logStateMachineDebug } from "./debug/stateMachineLogger";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { applyTurnRuntimeEvent } from "./sessionRunStateMachine/turnRuntimeRegistry";
 
 const DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS =
   TIME_THRESHOLDS.client.monotonicActionStopTimeoutMs;
@@ -42,6 +43,7 @@ export function useChatEngine({
   sending,
   canStop,
   runStateSnapshot,
+  turnRuntimeRegistry,
   input,
   uploadFiles,
   clearUploads,
@@ -75,6 +77,9 @@ export function useChatEngine({
 } = {}) {
   const { translate, locale } = useLocale();
   const applyRunStateEvent = (event) => {
+    applyTurnRuntimeEvent(turnRuntimeRegistry?.value, event, {
+      fallbackSessionId: String(activeSession?.value?.backendSessionId || activeSession?.value?.id || activeSessionId?.value || ""),
+    });
     const previousRunState = runStateSnapshot?.value?.state || "";
     logStateMachineDebug("stateMachine.event", {
       eventType: event?.type || "",
@@ -151,6 +156,7 @@ export function useChatEngine({
     sending,
     canStop,
     runStateSnapshot,
+    turnRuntimeRegistry,
     applyRunStateEvent,
     interactionSubmitting,
     pendingInteractionRequest,
@@ -184,10 +190,9 @@ export function useChatEngine({
 
   function stopSending() {
     return requestStopSending({
-      sending,
-      canStop,
       userId,
       activeSession,
+      turnRuntimeRegistry,
       chatWebSocketClient,
       onStopConfirmationTimeout,
       applyRunStateEvent,
@@ -236,6 +241,7 @@ export function useChatEngine({
     sending,
     canStop,
     runStateSnapshot,
+    turnRuntimeRegistry,
     applyRunStateEvent,
     serializeAttachments,
     streamOutput,
@@ -267,10 +273,11 @@ export function useChatEngine({
     applySessionDetail,
     fetchSessionDetail,
     applyRunStateEvent,
-    runStateSnapshot,
+    turnRuntimeRegistry,
     messageOperationStore,
     monotonicActionStopTimeoutMs,
     monotonicActionStopPollIntervalMs,
+    appendMessage,
   });
   const {
     prepareMonotonicMessageAction,

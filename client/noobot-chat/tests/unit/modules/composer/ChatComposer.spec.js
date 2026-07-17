@@ -266,7 +266,7 @@ describe("ChatComposer interactions", () => {
 
     expect(inputActions(wrapper).props("sendRequesting")).toBe(true);
     expect(inputActions(wrapper).props("stopRequesting")).toBe(true);
-    expect(inputActions(wrapper).props("sendDisabled")).toBe(false);
+    expect(inputActions(wrapper).props("sendDisabled")).toBe(true);
     expect(inputActions(wrapper).props("sendButtonText")).toBe("请求中");
 
     inputActions(wrapper).vm.$emit("send");
@@ -289,7 +289,7 @@ describe("ChatComposer interactions", () => {
 
     expect(inputActions(backendSendingWrapper).props("sendRequesting")).toBe(false);
     expect(inputActions(backendSendingWrapper).props("stopRequesting")).toBe(false);
-    expect(inputActions(backendSendingWrapper).props("sendDisabled")).toBe(false);
+    expect(inputActions(backendSendingWrapper).props("sendDisabled")).toBe(true);
     expect(inputActions(backendSendingWrapper).props("sendButtonText")).toBe("发送中");
     expect(inputActions(backendSendingWrapper).props("sending")).toBe(true);
     expect(inputActions(backendSendingWrapper).props("canStop")).toBe(true);

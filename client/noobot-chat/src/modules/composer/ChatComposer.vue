@@ -95,14 +95,16 @@ const sendDisabled = computed(() => {
   const inputLength = String(props.modelValue || "").trim().length;
   const noInput = !inputLength && !attachmentCount.value;
   const disconnected = !props.connected;
-  const blockedBySendingInteraction = props.interactionActive && props.sending;
-  const disabled = noInput || disconnected || blockedBySendingInteraction;
+  const blockedByMessageState = ["requesting", "sending", "completing", "stopping"].includes(
+    props.composerActionState?.displayState,
+  );
+  const disabled = noInput || disconnected || blockedByMessageState;
   const disabledReason = noInput
     ? "empty"
     : disconnected
       ? "disconnected"
-      : blockedBySendingInteraction
-        ? "interactionActiveAndSending"
+      : blockedByMessageState
+        ? "lastMessageInFlight"
         : "";
   logResendDebug("ui.sendDisabled", {
     disabled,

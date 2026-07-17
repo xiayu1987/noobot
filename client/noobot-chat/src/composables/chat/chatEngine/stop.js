@@ -7,8 +7,8 @@ import { RoleEnum } from "../../../shared/constants/chatConstants";
 import { normalizeTrimmedString } from "./utils";
 import {
   BackendChannelState,
+  FrontendRunState,
   SESSION_RUN_EVENT,
-  getMessageRuntimeChannelState,
   rememberStopRequestedEvent,
 } from "../sessionRunStateMachine";
 import { isInFlightAssistantMessage } from "./messageStateGuards";
@@ -25,19 +25,10 @@ import {
   summarizeDebugMessages,
 } from "../debug/resendDebugLogger";
 import { logStopDebug } from "../debug/stopDebugLogger";
-
-function findLatestUserTurnScopeIdForAssistant(messages = [], { dialogProcessId = "" } = {}) {
-  const normalizedDialogProcessId = normalizeTrimmedString(dialogProcessId);
-  const sourceMessages = Array.isArray(messages) ? messages : [];
-  const targetUserMessage = [...sourceMessages].reverse().find((messageItem) => {
-    if (getMessageRole(messageItem) !== RoleEnum.USER) return false;
-    const userTurnScopeId = getMessageTurnScopeId(messageItem);
-    if (!userTurnScopeId) return false;
-    if (!normalizedDialogProcessId) return true;
-    return getMessageDialogProcessId(messageItem) === normalizedDialogProcessId;
-  });
-  return getMessageTurnScopeId(targetUserMessage);
-}
+import {
+  resolveSessionTurnRuntime,
+  sessionRuntimeId,
+} from "../sessionRunStateMachine/turnRuntimeRegistry";
 
 export function handleStopConfirmationTimeout({
   sending,
@@ -104,15 +95,10 @@ export function handleStopConfirmationTimeout({
   }
 }
 
-function buildStopPayload({ userId, activeSession, pendingAssistantMessage } = {}) {
+function buildStopPayload({ userId, activeSession, pendingAssistantMessage, turnRuntime } = {}) {
   const session = activeSession?.value || {};
-  const messages = Array.isArray(session?.messages) ? session.messages : [];
-  const channelState = getMessageRuntimeChannelState(pendingAssistantMessage);
-  const dialogProcessId = getMessageDialogProcessId(pendingAssistantMessage) ||
-    normalizeTrimmedString(channelState?.dialogProcessId);
-  const turnScopeId = getMessageTurnScopeId(pendingAssistantMessage) ||
-    normalizeTrimmedString(channelState?.turnScopeId) ||
-    findLatestUserTurnScopeIdForAssistant(messages, { dialogProcessId });
+  const dialogProcessId = normalizeTrimmedString(turnRuntime?.dialogProcessId);
+  const turnScopeId = normalizeTrimmedString(turnRuntime?.turnScopeId);
   const createdAtMs = nowMs();
   const payload = {
     userId: String(userId?.value ?? userId ?? ""),
@@ -142,45 +128,40 @@ function buildStopPayload({ userId, activeSession, pendingAssistantMessage } = {
 }
 
 export function stopSending({
-  sending,
-  canStop,
   activeSession,
+  turnRuntimeRegistry,
   userId,
   chatWebSocketClient,
   onStopConfirmationTimeout,
   applyRunStateEvent,
 } = {}) {
-  if (!sending?.value) return false;
-  if (canStop && canStop.value === false) {
-    logStopDebug("stop.skip.canStopFalse", {
-      sessionId: String(activeSession?.value?.backendSessionId || activeSession?.value?.sessionId || activeSession?.value?.id || ""),
-      sending: sending?.value,
-      canStop: canStop?.value,
-      messages: summarizeDebugMessages(activeSession?.value?.messages),
+  const sessionId = sessionRuntimeId(activeSession?.value);
+  const turnRuntime = resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId);
+  if (!turnRuntime?.canStop || turnRuntime?.terminal) {
+    logStopDebug("stop.skip.turnNotStoppable", {
+      sessionId,
+      turnScopeId: turnRuntime?.turnScopeId || "",
+      dialogProcessId: turnRuntime?.dialogProcessId || "",
+      state: turnRuntime?.state || "",
+      terminal: turnRuntime?.terminal || null,
     });
     return false;
   }
-  const pendingAssistantMessage = [...(activeSession?.value?.messages || [])]
-    .reverse()
-    .find((messageItem) => isInFlightAssistantMessage(messageItem, {
-      turnStatuses: activeSession?.value?.turnStatuses,
-    }));
-  if (!pendingAssistantMessage) {
-    logStopDebug("stop.skip.noPendingAssistant", {
-      sessionId: String(activeSession?.value?.backendSessionId || activeSession?.value?.sessionId || activeSession?.value?.id || ""),
-      sending: sending?.value,
-      canStop: canStop?.value,
-      messages: summarizeDebugMessages(activeSession?.value?.messages),
-    });
-    return false;
-  }
+  const expectedTurnScopeId = normalizeTrimmedString(turnRuntime.turnScopeId);
+  const expectedDialogProcessId = normalizeTrimmedString(turnRuntime.dialogProcessId);
+  const pendingAssistantMessage = (activeSession?.value?.messages || []).find((messageItem) => {
+    if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) return false;
+    const messageTurnScopeId = getMessageTurnScopeId(messageItem);
+    if (expectedTurnScopeId && messageTurnScopeId === expectedTurnScopeId) return true;
+    return !expectedTurnScopeId && expectedDialogProcessId &&
+      getMessageDialogProcessId(messageItem) === expectedDialogProcessId;
+  });
   logResendDebug("stop.request", {
     pendingAssistant: summarizeDebugMessage(pendingAssistantMessage),
-    sending: sending?.value,
-    canStop: canStop?.value,
+    turnRuntime,
     messages: summarizeDebugMessages(activeSession?.value?.messages),
   });
-  const stopPayload = buildStopPayload({ userId, activeSession, pendingAssistantMessage });
+  const stopPayload = buildStopPayload({ userId, activeSession, pendingAssistantMessage, turnRuntime });
   logStopDebug("stop.payload", {
     sessionId: stopPayload.sessionId,
     dialogProcessId: stopPayload.dialogProcessId,
@@ -200,13 +181,43 @@ export function stopSending({
     createdAtMs: stopPayload.createdAtMs,
     source: "stop_sending",
   });
+  // The assistant placeholder is the source for composer action rendering.
+  // Record the local stopping phase on that same turn before dispatching the
+  // request; the global run snapshot is only a transport/lifecycle bridge and
+  // must not be required to render "stopping" or guard a duplicate stop.
+  if (pendingAssistantMessage) {
+    pendingAssistantMessage.pending = true;
+    pendingAssistantMessage.channelState = {
+      ...(pendingAssistantMessage.channelState && typeof pendingAssistantMessage.channelState === "object"
+        ? pendingAssistantMessage.channelState
+        : {}),
+      state: FrontendRunState.USER_STOPPING,
+      sessionId: stopPayload.sessionId,
+      dialogProcessId: stopPayload.dialogProcessId,
+      turnScopeId: stopPayload.turnScopeId,
+      sourceEvent: "stop_sending",
+    };
+  }
   if (applyRunStateEvent) {
     applyRunStateEvent(stopEvent);
-  } else if (canStop) {
-    // Compatibility fallback for callers that do not provide the run state machine bridge.
-    canStop.value = false;
   }
   const applyStopRequestFailure = (error) => {
+    // The stop request never reached an active stopping phase. Settle the same
+    // placeholder that was marked above so the last-message action immediately
+    // falls back to "send" instead of leaving a stale "stopping" projection.
+    if (pendingAssistantMessage) {
+      pendingAssistantMessage.pending = false;
+      pendingAssistantMessage.channelState = {
+        ...(pendingAssistantMessage.channelState && typeof pendingAssistantMessage.channelState === "object"
+          ? pendingAssistantMessage.channelState
+          : {}),
+        state: BackendChannelState.ERROR,
+        sessionId: stopPayload.sessionId,
+        dialogProcessId: stopPayload.dialogProcessId,
+        turnScopeId: stopPayload.turnScopeId,
+        sourceEvent: "stop_sending_request_failed",
+      };
+    }
     if (applyRunStateEvent) {
       applyRunStateEvent({
         type: SESSION_RUN_EVENT.LOCAL_FAILURE,
@@ -217,9 +228,6 @@ export function stopSending({
         source: "stop_sending_request_failed",
         error,
       });
-    } else if (canStop) {
-      // Compatibility fallback for callers that do not provide the run state machine bridge.
-      canStop.value = false;
     }
     return false;
   };

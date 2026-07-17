@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createHarness,
   assistantMessage,
+  activateRuntimeTurn,
   emitChannelState,
 } from "./helpers/useChatEngineHarness";
 import { createSessionDetailApplicator } from "../../../../src/composables/chat/chatList/sessionDetailApply";
@@ -94,9 +95,9 @@ describe("useChatEngine.send-stream", () => {
     expect(canStop.value).toBe(true);
   });
 
-  it("send rejects when frontend run state has no matching in-flight assistant", async () => {
+  it("send rejects when the current session already has an in-flight Registry turn", async () => {
     const stream = vi.fn(async () => {});
-    const { engine, activeSession, runStateSnapshot, sending, deps, appendMessage } = createHarness({
+    const { engine, activeSession, turnRuntimeRegistry, appendMessage } = createHarness({
       sessionId: "local-send-state-mismatch",
       stream,
     });
@@ -112,21 +113,16 @@ describe("useChatEngine.send-stream", () => {
       },
     ];
     activeSession.value.rawMessages = [...activeSession.value.messages];
-    sending.value = true;
-    runStateSnapshot.value = {
-      state: BackendChannelState.SENDING,
+    activateRuntimeTurn({
+      turnRuntimeRegistry,
       sessionId: "local-send-state-mismatch",
       turnScopeId: "turn-missing",
-    };
+    });
 
     await expect(engine.send()).resolves.toBe(false);
 
     expect(stream).not.toHaveBeenCalled();
     expect(appendMessage).not.toHaveBeenCalled();
-    expect(deps.notify).toHaveBeenCalledWith(expect.objectContaining({
-      type: "warning",
-      message: "chat.sessionStateOutOfSync",
-    }));
   });
 
   it("ignores another session in-flight run state while sending and finalizing the active session", async () => {

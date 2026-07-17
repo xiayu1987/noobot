@@ -192,6 +192,22 @@ export class WsRouter {
   _forwardRunAction(socket, payload, action) {
     const targetChannel = this.channelManager.resolveChannelFromSocketMessage(socket, payload);
     if (!targetChannel) {
+      const userId = String(payload?.userId || socket?.__agentProxyUserId || "").trim();
+      const sessionId = String(payload?.sessionId || "").trim();
+      if (
+        userId &&
+        sessionId &&
+        typeof this.channelManager?.startOrJoinChannel === "function"
+      ) {
+        this.channelManager.startOrJoinChannel({
+          socket,
+          payload: { ...(payload || {}), userId, sessionId },
+          connectionApiKey: String(socket?.__agentProxyApiKey || "").trim(),
+          connectionLocale: String(socket?.__agentProxyLocale || "").trim(),
+        });
+        void writeAgentProxyRouteDebugEvent({ event: "agentProxy.route.forwardRun.recreated", payload, socket, data: { action, reason: "target_channel_not_found" } });
+        return;
+      }
       void writeAgentProxyRouteDebugEvent({ event: "agentProxy.route.forwardRun.unavailable", payload, socket, data: { action, reason: "target_channel_not_found" } });
       this.channelManager.sendSocketError(
         socket,

@@ -417,6 +417,59 @@ describe("useChatList", () => {
     expect(session.messageCount).toBe(2);
   });
 
+  it("applySessionDetail reuses a turn placeholder for the completed assistant reply", () => {
+    const { api, refs } = createUseChatListFixture();
+    const turnScopeId = "client-turn:completed-placeholder";
+    const userMessage = { role: RoleEnum.USER, content: "question", turnScopeId };
+    const placeholder = {
+      role: RoleEnum.ASSISTANT,
+      content: "",
+      turnScopeId,
+      turnPlaceholder: true,
+      placeholder: true,
+      pending: true,
+    };
+    const session = {
+      id: "local-completed-placeholder",
+      backendSessionId: "backend-completed-placeholder",
+      title: "session",
+      isLocal: true,
+      loaded: true,
+      messages: [userMessage, placeholder],
+      rawMessages: [],
+      sessionDocs: [],
+      connectorPanelState: { selectedConnectors: {} },
+      createdAt: "2026-05-14T00:00:00.000Z",
+      updatedAt: "2026-05-14T00:00:00.000Z",
+      currentTaskId: "",
+      currentTaskStatus: "idle",
+      messageCount: 2,
+      lastMessage: placeholder,
+    };
+    refs.sessions.value.push(session);
+    refs.activeSessionId.value = session.id;
+
+    api.applySessionDetail({
+      sessionId: session.backendSessionId,
+      sessions: [{
+        sessionId: session.backendSessionId,
+        messages: [
+          { role: RoleEnum.USER, content: "question", turnScopeId, dialogProcessId: "dp-completed" },
+          { role: RoleEnum.ASSISTANT, content: "final answer", turnScopeId, dialogProcessId: "dp-completed" },
+        ],
+      }],
+    }, { preserveCurrentMessages: true });
+
+    const assistantMessages = session.messages.filter((message) => message.role === RoleEnum.ASSISTANT);
+    expect(assistantMessages).toHaveLength(1);
+    expect(assistantMessages[0]).toBe(placeholder);
+    expect(assistantMessages[0]).toEqual(expect.objectContaining({
+      content: "final answer",
+      dialogProcessId: "dp-completed",
+      pending: false,
+    }));
+  });
+
   it("applySessionDetail preserves one inline editing user message when stop refresh returns original content", () => {
     const { api, refs } = createUseChatListFixture();
     const editingUserMessage = {
@@ -583,7 +636,7 @@ describe("useChatList", () => {
     expect(mocks.scrollBottom).not.toHaveBeenCalled();
   });
 
-  it("selectSession blocks noisy user switch while sending but allows silent internal switch", async () => {
+  it("selectSession allows switching while another session is sending", async () => {
     const { api, refs, mocks } = createUseChatListFixture();
     refs.sessions.value = [
       {
@@ -613,13 +666,7 @@ describe("useChatList", () => {
     refs.sending.value = true;
 
     await api.selectSession("s-2", { silent: false });
-    expect(refs.activeSessionId.value).toBe("s-1");
-    expect(mocks.notify).toHaveBeenCalledWith({
-      type: "warning",
-      message: "chat.keepCurrentWhenSending",
-    });
-
-    await api.selectSession("s-2", { silent: true });
     expect(refs.activeSessionId.value).toBe("s-2");
+    expect(mocks.notify).not.toHaveBeenCalled();
   });
 });

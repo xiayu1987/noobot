@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
 import { useChatStore } from "../../../../src/shared/stores/useChatStore";
-import { deriveLastTurnActions } from "../../../../src/composables/chat/turnActions";
 import {
   createChatSession,
   createSessionFixture,
@@ -75,22 +74,29 @@ describe("useChatSession send/continue actions", () => {
   });
 
   it.each(["completed", "error", "expired", undefined])(
-    "derives normal send for last turn status %s",
+    "derives normal send from the Session turn Registry for terminal status %s",
     (status) => {
+      const store = useChatStore();
       const current = sessionWithTurn(status);
-      const actions = deriveLastTurnActions(current.messages, current.turnStatuses);
-      expect(actions).toMatchObject({ action: "send", userStopped: false, canSend: true, canContinue: false });
+      store.sessions = [current];
+      store.activeSessionId = current.id;
+      const session = createChatSession();
+      expect(session.composerActionState.value).toMatchObject({
+        primaryAction: "send",
+        userStopped: false,
+      });
     },
   );
 
-  it("derives continue and resend only from the last message's authoritative user_stopped turn", () => {
+  it("derives continue from the Session turn Registry's authoritative user_stopped terminal", () => {
+    const store = useChatStore();
     const current = sessionWithTurn("user_stopped");
-    expect(deriveLastTurnActions(current.messages, current.turnStatuses)).toMatchObject({
-      action: "continue",
+    store.sessions = [current];
+    store.activeSessionId = current.id;
+    const session = createChatSession();
+    expect(session.composerActionState.value).toMatchObject({
+      primaryAction: "continue",
       userStopped: true,
-      canContinue: true,
-      canResend: true,
-      canSend: false,
     });
   });
 
@@ -126,14 +132,33 @@ describe("useChatSession send/continue actions", () => {
     expect(store.runStateSnapshot).not.toHaveProperty("turnScopeId");
   });
 
-  it("does not continue an older stopped turn when a newer visible turn exists", () => {
+  it("sends a new turn instead of continuing an older stopped turn after completion", async () => {
+    const store = useChatStore();
     const oldMessages = turnMessages({ dialogProcessId: "dp-old", turnScopeId: "turn-old" });
     const newMessages = turnMessages({ dialogProcessId: "dp-new", turnScopeId: "turn-new" });
-    const actions = deriveLastTurnActions([...oldMessages, ...newMessages], [
-      { status: "user_stopped", dialogProcessId: "dp-old", turnScopeId: "turn-old" },
-      { status: "completed", dialogProcessId: "dp-new", turnScopeId: "turn-new" },
-    ]);
-    expect(actions).toMatchObject({ action: "send", userStopped: false });
+    const current = createSessionFixture({
+      id: "s-latest-terminal",
+      backendSessionId: "s-latest-terminal",
+      messages: [...oldMessages, ...newMessages],
+      turnStatuses: [
+        { status: "user_stopped", dialogProcessId: "dp-old", turnScopeId: "turn-old" },
+        { status: "completed", dialogProcessId: "dp-new", turnScopeId: "turn-new" },
+      ],
+    });
+    store.sessions = [current];
+    store.activeSessionId = current.id;
+    store.input = "next question";
+    wsClientMock.stream.mockResolvedValue({});
+    const session = createChatSession();
+    expect(session.composerActionState.value).toMatchObject({
+      primaryAction: "send",
+      userStopped: false,
+    });
+    await expect(session.send()).resolves.toBe(true);
+    const payload = wsClientMock.stream.mock.calls[0][0];
+    expect(payload.action).toBeUndefined();
+    expect(payload.config.resumeDialogProcessId).toBeUndefined();
+    expect(payload.config.resumeTurnScopeId).toBeUndefined();
   });
 
   it("does not continue when the stopped status lacks a complete matching identity", async () => {

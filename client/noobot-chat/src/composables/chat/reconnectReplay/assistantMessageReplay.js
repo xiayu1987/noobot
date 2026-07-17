@@ -14,6 +14,10 @@ import {
   hasAssistantMessageWithContent,
 } from "./messageLookup";
 import { logReconnectTimingDebug } from "../debug/reconnectTimingDebugLogger";
+import {
+  createTurnPlaceholderMessage,
+  findTurnPlaceholderMessage,
+} from "../chatEngine/turnPlaceholder";
 
 export function resolveReconnectTargetAssistantMessage({
   activeSession,
@@ -28,6 +32,15 @@ export function resolveReconnectTargetAssistantMessage({
   const messageList = Array.isArray(activeSession.value.messages)
     ? activeSession.value.messages
     : [];
+  const matchedPlaceholder = findTurnPlaceholderMessage(messageList, {
+    turnScopeId: normalizedTurnScopeId,
+    dialogProcessId: normalizedDpId,
+  });
+  if (matchedPlaceholder) {
+    if (normalizedDpId && !matchedPlaceholder.dialogProcessId) matchedPlaceholder.dialogProcessId = normalizedDpId;
+    if (normalizedTurnScopeId && !matchedPlaceholder.turnScopeId) matchedPlaceholder.turnScopeId = normalizedTurnScopeId;
+    return matchedPlaceholder.pending ? matchedPlaceholder : null;
+  }
   const matchedAssistantMessage = messageList.find(
     (messageItem) =>
       normalizedDpId &&
@@ -69,15 +82,12 @@ export function resolveReconnectTargetAssistantMessage({
     return latestPendingAssistant;
   }
   if (!allowCreate) return null;
-  const appendedMessage = appendMessage(RoleEnum.ASSISTANT, "");
-  appendedMessage.pending = true;
-  appendedMessage.statusLabel = "";
-  if (normalizedDpId) {
-    appendedMessage.dialogProcessId = normalizedDpId;
-  }
-  if (normalizedTurnScopeId) {
-    appendedMessage.turnScopeId = normalizedTurnScopeId;
-  }
+  const appendedMessage = createTurnPlaceholderMessage({
+    appendMessage,
+    sessionId: activeSession.value?.backendSessionId || activeSession.value?.id,
+    dialogProcessId: normalizedDpId,
+    turnScopeId: normalizedTurnScopeId,
+  });
   logReconnectTimingDebug("frontend.reconnectTiming.assistantResolved", {
     dialogProcessId: normalizedDpId,
     inputTurnScopeId: normalizedTurnScopeId,

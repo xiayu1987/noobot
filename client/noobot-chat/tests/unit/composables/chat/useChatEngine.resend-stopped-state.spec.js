@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createHarness,
+  activateRuntimeTurn,
   makeSession,
   assistantMessage,
   emitChannelState,
 } from "./helpers/useChatEngineHarness";
 import { BackendChannelState, FrontendRunState } from "../../../../src/composables/chat/sessionRunStateMachine";
+import { SESSION_RUN_EVENT } from "../../../../src/composables/chat/sessionRunStateMachine";
+import { applyTurnRuntimeEvent } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 import {
   RoleEnum,
   StreamEventEnum,
@@ -253,7 +256,7 @@ describe("useChatEngine.resend stopped state", () => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value = { ...activeSession.value, ...mainSession };
     });
-    const { engine, activeSession, runStateSnapshot, sending, canStop } = createHarness({
+    const { engine, activeSession, runStateSnapshot, sending, canStop, turnRuntimeRegistry } = createHarness({
       sessionId: "local-resend-second-stopped",
       stream,
       deps: { replaceSessionTurnApi, applySessionDetail },
@@ -288,6 +291,11 @@ describe("useChatEngine.resend stopped state", () => {
     firstReplacementAssistant.statusLabel = "chat.stopped";
     firstReplacementAssistant.stopState = "stopped";
     firstReplacementAssistant.channelState = { state: "user_stopped", turnScopeId: firstTurnScopeId };
+    applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
+      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED,
+      sessionId: "local-resend-second-stopped",
+      turnScopeId: firstTurnScopeId,
+    });
     runStateSnapshot.value = {
       state: BackendChannelState.STOPPED,
       sessionId: "local-resend-second-stopped",
@@ -367,7 +375,7 @@ describe("useChatEngine.resend stopped state", () => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value = { ...activeSession.value, ...mainSession };
     });
-    const { engine, activeSession, runStateSnapshot, sending, canStop } = createHarness({
+    const { engine, activeSession, runStateSnapshot, sending, canStop, turnRuntimeRegistry } = createHarness({
       sessionId: "local-resend-stale-stop-replay",
       stream,
       deps: { replaceSessionTurnApi, applySessionDetail },
@@ -390,6 +398,11 @@ describe("useChatEngine.resend stopped state", () => {
     firstAssistant.pending = false;
     firstAssistant.statusLabel = "chat.stopped";
     firstAssistant.channelState = { state: "user_stopped", turnScopeId: firstAssistant.turnScopeId };
+    applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
+      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED,
+      sessionId: "local-resend-stale-stop-replay",
+      turnScopeId: firstAssistant.turnScopeId,
+    });
     runStateSnapshot.value = {
       state: BackendChannelState.STOPPED,
       sessionId: "local-resend-stale-stop-replay",
@@ -414,7 +427,7 @@ describe("useChatEngine.resend stopped state", () => {
     expect(canStop.value).toBe(true);
   });
 
-  it("resendMonotonicMessage rejects when frontend run state has no matching in-flight assistant", async () => {
+  it("resendMonotonicMessage ignores stale global run state when Registry has no active turn", async () => {
     const stream = vi.fn(async () => {});
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => ({
       ok: true,
@@ -452,13 +465,11 @@ describe("useChatEngine.resend stopped state", () => {
       turnScopeId: "client-turn:missing-in-flight",
     };
   
-    await expect(engine.resendMonotonicMessage(stoppedAssistant, "retry")).resolves.toBe(false);
+    await expect(engine.resendMonotonicMessage(stoppedAssistant, "retry")).resolves.toBe(true);
   
-    expect(replaceSessionTurnApi).not.toHaveBeenCalled();
-    expect(stream).not.toHaveBeenCalled();
-    expect(activeSession.value.messages).toEqual([stoppedUser, stoppedAssistant]);
-    expect(deps.notify).toHaveBeenCalledWith(expect.objectContaining({
-      type: "warning",
+    expect(replaceSessionTurnApi).toHaveBeenCalledTimes(1);
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(deps.notify).not.toHaveBeenCalledWith(expect.objectContaining({
       message: "chat.sessionStateOutOfSync",
     }));
   });
