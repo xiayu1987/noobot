@@ -5,6 +5,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { execFile } from "node:child_process";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { promisify } from "node:util";
 import { bumpVersion, normalizeVersion, assertVersion, run } from "./bump-version.mjs";
 
@@ -101,10 +103,21 @@ async function runOrPrint(command, args, { dryRun = false } = {}) {
   await run(command, args);
 }
 
+async function resolveReleaseNotes(tagName = "") {
+  const notesPath = path.join(".github", "release-notes", `${tagName}.md`);
+  try {
+    await fs.access(notesPath);
+    return notesPath;
+  } catch {
+    return "";
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const tagName = `v${args.version}`;
   const branch = await resolveBranch(args.branch);
+  const releaseNotes = await resolveReleaseNotes(tagName);
 
   await assertCleanWorkingTree();
   await assertTagDoesNotExist(tagName, args.remote);
@@ -118,7 +131,10 @@ async function main() {
 
   await runOrPrint("git", ["add", "."], args);
   await runOrPrint("git", ["commit", "-m", `chore: release ${tagName}`], args);
-  await runOrPrint("git", ["tag", tagName], args);
+  const tagArgs = releaseNotes
+    ? ["tag", "--annotate", tagName, "--file", releaseNotes]
+    : ["tag", tagName];
+  await runOrPrint("git", tagArgs, args);
   if (!args.skipPush) {
     await runOrPrint("git", ["push", args.remote, branch], args);
     await runOrPrint("git", ["push", args.remote, tagName], args);
