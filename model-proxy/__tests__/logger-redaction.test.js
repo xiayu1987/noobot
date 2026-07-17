@@ -3,10 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const { sanitizeHeaders, sanitizeUrl } = require('../lib/logger');
+import { sanitizeHeaders, sanitizeUrl } from '../src/logger.js';
 
 test('sanitizeHeaders redacts request and response credentials case-insensitively', () => {
   const sanitized = sanitizeHeaders({

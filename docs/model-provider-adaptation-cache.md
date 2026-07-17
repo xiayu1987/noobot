@@ -7,7 +7,7 @@
 - `agent/src/system-core/model/factory/chat-model.js`
 - `agent/src/system-core/model/spec/defaults.js`
 - `agent/src/system-core/model/tool/binding-adapter.js`
-- `model-proxy/lib/cache-diagnostics.js`
+- `model-proxy/src/cache-diagnostics.js`
 
 ## 1. 目标
 

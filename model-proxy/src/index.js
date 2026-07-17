@@ -3,19 +3,22 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-const path = require('path');
-const {
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
   DEFAULT_CONFIG,
   loadConfig,
   normalizeHeaderKeyCandidates,
   normalizeProxyEntries,
-} = require('./lib/config');
-const { createRequestCacheDiagnosticsTracker } = require('./lib/cache-diagnostics');
-const { createLogger } = require('./lib/logger');
-const {
+} from './config.js';
+import { createRequestCacheDiagnosticsTracker } from './cache-diagnostics.js';
+import { createLogger } from './logger.js';
+import {
   createHeaderExtractors,
   createProxyServer,
-} = require('./lib/server');
+} from './server.js';
+
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const config = loadConfig();
 const proxyHost = String(config.proxyHost || DEFAULT_CONFIG.proxyHost).trim() || DEFAULT_CONFIG.proxyHost;
@@ -24,7 +27,7 @@ const unknownModelName = String(config.unknownModelName || DEFAULT_CONFIG.unknow
 const unknownFlowName = String(config.unknownFlowName || DEFAULT_CONFIG.unknownFlowName);
 const unknownSessionId = String(config.unknownSessionId || DEFAULT_CONFIG.unknownSessionId);
 const logger = createLogger({
-  logDir: path.resolve(__dirname, String(config.logDir || DEFAULT_CONFIG.logDir)),
+  logDir: path.resolve(projectRoot, String(config.logDir || DEFAULT_CONFIG.logDir)),
   logPrefix: String(config.logPrefix || DEFAULT_CONFIG.logPrefix),
   unknownModelName,
   unknownFlowName,

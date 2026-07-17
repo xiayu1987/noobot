@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-const crypto = require('crypto');
+import crypto from 'node:crypto';
 
 function pad(numberValue, lengthValue = 2) {
   return String(numberValue).padStart(lengthValue, '0');
@@ -47,7 +47,7 @@ function getHeaderValue(headers = {}, candidateKeys = []) {
   return '';
 }
 
-module.exports = {
+export {
   getHeaderValue,
   pad,
   sha256Text,

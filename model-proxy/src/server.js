@@ -3,13 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-const http = require('http');
-const httpProxy = require('http-proxy');
-const { getHeaderValue } = require('./common');
-const {
+import http from 'node:http';
+import httpProxy from 'http-proxy';
+import { getHeaderValue } from './common.js';
+import {
   decodeBodyByEncoding,
   resolveFinalResponseBodyText,
-} = require('./response-body');
+} from './response-body.js';
 
 function createHeaderExtractors({
   modelNameHeaderKey,
@@ -164,7 +164,7 @@ function createProxyServer({
   return server;
 }
 
-module.exports = {
+export {
   createHeaderExtractors,
   createProxyServer,
 };

@@ -92,7 +92,7 @@ cleanup_orphaned_agent_proxy_processes() {
 
 cleanup_orphaned_model_proxy_processes() {
   log "清理遗留模型代理进程..."
-  pkill -f "$ROOT_DIR/model-proxy/model-proxy.js" || true
+  pkill -f "$ROOT_DIR/model-proxy/src/index.js" || true
 }
 
 main() {

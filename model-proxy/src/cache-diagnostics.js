@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-const { sha256Text, tryParseJson } = require('./common');
+import { sha256Text, tryParseJson } from './common.js';
 
 function getJsonPathValue(source, pathItems = []) {
   let current = source;
@@ -149,7 +149,7 @@ function normalizeUsageCacheDiagnostics(responseObject = null) {
   };
 }
 
-module.exports = {
+export {
   createRequestCacheDiagnosticsTracker,
   normalizeUsageCacheDiagnostics,
 };

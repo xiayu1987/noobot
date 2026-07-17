@@ -3,8 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-const fs = require('fs');
-const path = require('path');
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const CONFIG_FILE_PATH = path.join(__dirname, '..', 'model-proxy.config.json');
 
@@ -93,7 +96,7 @@ function normalizeHeaderKeyCandidates(primaryKeys = [], fallbackKeys = []) {
   return Array.from(new Set(keys));
 }
 
-module.exports = {
+export {
   DEFAULT_CONFIG,
   loadConfig,
   normalizeHeaderKeyCandidates,
