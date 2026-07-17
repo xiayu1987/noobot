@@ -18,6 +18,8 @@ import {
   updateAllowUserInteractionPreference,
   updateBotScenarioPreference,
   updateSafeConfirmPreference,
+  updateSafeConfirmLevelPreference,
+  updateSanitizeOutputPreference,
   updatePluginModelConfigPreference,
   persistMemoryModelPreference,
   updateSelectedModelPreference,
@@ -68,6 +70,8 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
   const userId = ref(uiPreferences.userId);
   const allowUserInteraction = ref(uiPreferences.allowUserInteraction);
   const safeConfirm = ref(uiPreferences.safeConfirm);
+  const safeConfirmLevel = ref(uiPreferences.safeConfirmLevel);
+  const sanitizeOutput = ref(uiPreferences.sanitizeOutput);
   const streamOutput = ref(uiPreferences.streamOutput);
   const botScenario = ref(uiPreferences.botScenario);
   const selectedModel = ref(uiPreferences.selectedModel);
@@ -151,6 +155,14 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
     updateSafeConfirmPreference({ preferenceRef: safeConfirm, value });
   }
 
+  function onSafeConfirmLevelUpdate(value) {
+    updateSafeConfirmLevelPreference({ preferenceRef: safeConfirmLevel, value });
+  }
+
+  function onSanitizeOutputUpdate(value) {
+    updateSanitizeOutputPreference({ preferenceRef: sanitizeOutput, value });
+  }
+
   function onStreamOutputUpdate(value) {
     updateStreamOutputPreference({ preferenceRef: streamOutput, value });
   }
@@ -220,6 +232,8 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
     userId,
     allowUserInteraction,
     safeConfirm,
+    safeConfirmLevel,
+    sanitizeOutput,
     streamOutput,
     botScenario,
     selectedModel,
@@ -232,6 +246,8 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
     bindScenarioConfig,
     onAllowUserInteractionUpdate,
     onSafeConfirmUpdate,
+    onSafeConfirmLevelUpdate,
+    onSanitizeOutputUpdate,
     onStreamOutputUpdate,
     onBotScenarioUpdate,
     onSelectedModelUpdate,

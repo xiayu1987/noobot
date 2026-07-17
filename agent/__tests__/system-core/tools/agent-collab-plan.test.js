@@ -69,7 +69,7 @@ test("plan_multi_task_collaboration: JSON parse fallbacks write runtime-events w
   }
 });
 
-test("plan_multi_task_collaboration: JSON parse fallback without session writes routed system telemetry", async () => {
+test("plan_multi_task_collaboration: JSON parse fallback without session writes routed system runtime event", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-plan-collab-nosession-"));
   installFakeModel("not json");
 

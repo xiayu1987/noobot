@@ -50,7 +50,7 @@ test("chat-websocket-server: invalid upgrade URL writes sanitized system runtime
 });
 
 test("chat-websocket-server: service websocket send failures write direct system runtime event", async () => {
-  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-service-telemetry-"));
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-service-runtime-events-"));
   await recordServiceWebSocketSendFailure({
     sessionLogConfig: { workspaceRoot },
     eventName: "done",
@@ -84,7 +84,7 @@ test("chat-websocket-server: service websocket send failures write direct system
 });
 
 test("chat-websocket-server: service websocket runtime errors write direct system runtime event", async () => {
-  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-service-runtime-telemetry-"));
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-service-runtime-events-error-"));
   await recordServiceWebSocketRuntimeError({
     sessionLogConfig: { workspaceRoot },
     event: "service.websocket.run.failed",

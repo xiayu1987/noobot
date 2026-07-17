@@ -104,8 +104,8 @@ test("appendLog mirrors session execution logs to runtime-events session events"
     ts: "2026-05-13T00:00:01.000Z",
   }, "p1");
 
-  const telemetryFile = path.join(workspaceRoot, "u1", "runtime", "session", "s1", "events", "interaction.jsonl");
-  const records = await readJsonLines(telemetryFile);
+  const runtimeEventFile = path.join(workspaceRoot, "u1", "runtime", "session", "s1", "events", "interaction.jsonl");
+  const records = await readJsonLines(runtimeEventFile);
   assert.equal(records.length, 1);
   assert.equal(records[0].source, "agent");
   assert.equal(records[0].channel, "direct");

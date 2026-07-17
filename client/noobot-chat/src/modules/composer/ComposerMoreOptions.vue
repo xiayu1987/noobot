@@ -14,6 +14,8 @@ import {
 const props = defineProps({
   allowUserInteraction: { type: Boolean, default: true },
   safeConfirm: { type: Boolean, default: true },
+  safeConfirmLevel: { type: String, default: "low" },
+  sanitizeOutput: { type: Boolean, default: true },
   streamOutput: { type: Boolean, default: true },
   botScenario: { type: String, default: "" },
   normalizedScenarioOptions: { type: Array, default: () => [] },
@@ -30,6 +32,8 @@ const props = defineProps({
 const emit = defineEmits([
   "update:allowUserInteraction",
   "update:safeConfirm",
+  "update:safeConfirmLevel",
+  "update:sanitizeOutput",
   "update:streamOutput",
   "select-scenario",
   "toggle-programming-scenario",
@@ -40,6 +44,13 @@ const emit = defineEmits([
 ]);
 
 const { translate } = useLocale();
+const safeConfirmLevels = ["low", "medium", "high", "critical"];
+const safeConfirmMarks = computed(() => Object.fromEntries(safeConfirmLevels.map((level, index) => [index, translate(`composer.safeConfirmLevel.${level}`)])));
+const safeConfirmSliderValue = computed(() => Math.max(0, safeConfirmLevels.indexOf(props.safeConfirmLevel)));
+
+function updateSafeConfirmSlider(value) {
+  emit("update:safeConfirmLevel", safeConfirmLevels[Math.round(Number(value))] || "low");
+}
 
 const normalizedModelOptions = computed(() => {
   const optionMap = new Map();
@@ -144,14 +155,6 @@ function resolveComposerExtensionProps(renderer = {}) {
         @update:model-value="emit('update:allowUserInteraction', $event)"
       />
       <el-switch
-        :model-value="safeConfirm"
-        inline-prompt
-        :active-text="translate('composer.safeConfirm')"
-        :inactive-text="translate('composer.notSafeConfirm')"
-        class="interaction-switch"
-        @update:model-value="emit('update:safeConfirm', $event)"
-      />
-      <el-switch
         :model-value="streamOutput"
         inline-prompt
         :active-text="translate('composer.streaming')"
@@ -159,6 +162,35 @@ function resolveComposerExtensionProps(renderer = {}) {
         class="interaction-switch"
         @update:model-value="emit('update:streamOutput', $event)"
       />
+      <el-switch
+        :model-value="sanitizeOutput"
+        inline-prompt
+        :active-text="translate('composer.sanitizeOutput')"
+        :inactive-text="translate('composer.unsanitizedOutput')"
+        class="interaction-switch"
+        @update:model-value="emit('update:sanitizeOutput', $event)"
+      />
+      <el-switch
+        :model-value="safeConfirm"
+        inline-prompt
+        :active-text="translate('composer.safeConfirm')"
+        :inactive-text="translate('composer.notSafeConfirm')"
+        class="interaction-switch"
+        @update:model-value="emit('update:safeConfirm', $event)"
+      />
+      <div v-if="safeConfirm" class="safe-confirm-level">
+        <span class="safe-confirm-level-label">{{ translate("composer.safeConfirmLevelLabel") }}</span>
+        <el-slider
+          class="safe-confirm-level-slider"
+          :model-value="safeConfirmSliderValue"
+          :min="0"
+          :max="3"
+          :step="1"
+          :marks="safeConfirmMarks"
+          :show-tooltip="false"
+          @update:model-value="updateSafeConfirmSlider"
+        />
+      </div>
     </div>
 
     <div class="option-selector scenario-selector noobot-soft-card">
@@ -324,6 +356,72 @@ function resolveComposerExtensionProps(renderer = {}) {
   gap: 10px;
   min-width: 0;
   padding: 10px 12px;
+}
+
+.safe-confirm-level {
+  display: grid;
+  grid-template-columns: auto minmax(220px, 1fr);
+  align-items: center;
+  column-gap: 18px;
+  flex: 1 0 100%;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 10px 14px;
+  border-top: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 55%, transparent);
+}
+
+.safe-confirm-level-label {
+  color: var(--noobot-text-secondary, var(--el-text-color-regular));
+  font-size: var(--noobot-font-size-xs, 12px);
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.safe-confirm-level-slider {
+  min-width: 0;
+  padding: 0 8px;
+}
+
+.safe-confirm-level-slider :deep(.el-slider__runway) {
+  height: 4px;
+  margin: 14px 0 18px;
+}
+
+.safe-confirm-level-slider :deep(.el-slider__bar) {
+  height: 4px;
+}
+
+.safe-confirm-level-slider :deep(.el-slider__button-wrapper) {
+  top: -16px;
+}
+
+.safe-confirm-level-slider :deep(.el-slider__button) {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+  box-shadow: 0 2px 7px color-mix(in srgb, var(--el-color-primary) 24%, transparent);
+}
+
+.safe-confirm-level-slider :deep(.el-slider__marks-text) {
+  margin-top: 8px;
+  color: var(--noobot-text-tertiary, var(--el-text-color-secondary));
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 14px;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .safe-confirm-level {
+    grid-template-columns: 1fr;
+    row-gap: 2px;
+    padding-inline: 4px;
+  }
+
+  .safe-confirm-level-slider {
+    padding-inline: 12px;
+  }
 }
 
 .option-selector {

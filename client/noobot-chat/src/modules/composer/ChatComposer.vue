@@ -26,6 +26,8 @@ const props = defineProps({
   canStop: { type: Boolean, default: false },
   allowUserInteraction: { type: Boolean, default: true },
   safeConfirm: { type: Boolean, default: true },
+  safeConfirmLevel: { type: String, default: "low" },
+  sanitizeOutput: { type: Boolean, default: true },
   streamOutput: { type: Boolean, default: true },
   botScenario: { type: String, default: "" },
   scenarioOptions: { type: Array, default: () => [] },
@@ -44,6 +46,8 @@ const emit = defineEmits([
   "update:modelValue",
   "update:allowUserInteraction",
   "update:safeConfirm",
+  "update:safeConfirmLevel",
+  "update:sanitizeOutput",
   "update:streamOutput",
   "update:botScenario",
   "update:selectedModel",
@@ -237,6 +241,14 @@ function onSafeConfirmChange(value) {
   emit("update:safeConfirm", Boolean(value));
 }
 
+function onSafeConfirmLevelChange(value) {
+  emit("update:safeConfirmLevel", value);
+}
+
+function onSanitizeOutputChange(value) {
+  emit("update:sanitizeOutput", Boolean(value));
+}
+
 function onStreamOutputChange(value) {
   emit("update:streamOutput", Boolean(value));
 }
@@ -301,6 +313,8 @@ defineExpose({
               <ComposerMoreOptions
                 :allow-user-interaction="allowUserInteraction"
                 :safe-confirm="safeConfirm"
+                :safe-confirm-level="safeConfirmLevel"
+                :sanitize-output="sanitizeOutput"
                 :stream-output="streamOutput"
                 :bot-scenario="botScenario"
                 :selected-model="selectedModel"
@@ -314,6 +328,8 @@ defineExpose({
                 :resolve-scenario-label="resolveScenarioLabel"
                 @update:allow-user-interaction="onAllowUserInteractionChange"
                 @update:safe-confirm="onSafeConfirmChange"
+                @update:safe-confirm-level="onSafeConfirmLevelChange"
+                @update:sanitize-output="onSanitizeOutputChange"
                 @update:stream-output="onStreamOutputChange"
                 @update:selected-model="emit('update:selectedModel', $event)"
                 @update:memory-model="emit('update:memoryModel', $event)"

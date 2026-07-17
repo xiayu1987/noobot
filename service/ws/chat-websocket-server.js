@@ -7,7 +7,7 @@ import { WebSocketServer } from "ws";
 import {
   recordServiceWebSocketRuntimeError,
   recordServiceWebSocketSendFailure,
-} from "./chat-websocket/telemetry.js";
+} from "./chat-websocket/runtime-events.js";
 import { registerWebSocketUpgrade } from "./chat-websocket/connection-upgrade.js";
 import { createUserInteractionBridge } from "./chat-websocket/user-interaction-bridge.js";
 import {

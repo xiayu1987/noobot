@@ -2,6 +2,8 @@ export const UI_PREFERENCE_STORAGE_KEYS = Object.freeze({
   userId: "noobot_user_id",
   allowUserInteraction: "noobot_allow_user_interaction",
   safeConfirm: "noobot_safe_confirm",
+  safeConfirmLevel: "noobot_safe_confirm_level",
+  sanitizeOutput: "noobot_sanitize_output",
   streamOutput: "noobot_stream_output",
   botScenario: "noobot_bot_scenario",
   selectedModel: "noobot_selected_model",
@@ -145,6 +147,11 @@ export function loadBooleanPreference(key, defaultValue = true) {
   return storedValue === "true";
 }
 
+export function normalizeSafeConfirmLevel(value) {
+  const normalized = normalizePreferenceString(value).toLowerCase();
+  return ["low", "medium", "high", "critical"].includes(normalized) ? normalized : "low";
+}
+
 export function persistBooleanPreference(key, value) {
   return writeStorageValue(key, Boolean(value) ? "true" : "false");
 }
@@ -156,6 +163,8 @@ export function loadUiPreferences() {
     userId: readStorageValue(UI_PREFERENCE_STORAGE_KEYS.userId, "user-001") || "user-001",
     allowUserInteraction: loadBooleanPreference(UI_PREFERENCE_STORAGE_KEYS.allowUserInteraction, true),
     safeConfirm: loadBooleanPreference(UI_PREFERENCE_STORAGE_KEYS.safeConfirm, true),
+    safeConfirmLevel: normalizeSafeConfirmLevel(readStorageValue(UI_PREFERENCE_STORAGE_KEYS.safeConfirmLevel, "low")),
+    sanitizeOutput: loadBooleanPreference(UI_PREFERENCE_STORAGE_KEYS.sanitizeOutput, true),
     streamOutput: loadBooleanPreference(UI_PREFERENCE_STORAGE_KEYS.streamOutput, true),
     botScenario,
     selectedModel: readSelectedModelPreference(botScenario),
@@ -424,6 +433,21 @@ export function updateSafeConfirmPreference({ preferenceRef, value } = {}) {
   return updateBooleanPreference({
     preferenceRef,
     key: UI_PREFERENCE_STORAGE_KEYS.safeConfirm,
+    value,
+  });
+}
+
+export function updateSafeConfirmLevelPreference({ preferenceRef, value } = {}) {
+  const nextValue = normalizeSafeConfirmLevel(value);
+  if (preferenceRef && typeof preferenceRef === "object" && "value" in preferenceRef) preferenceRef.value = nextValue;
+  writeStorageValue(UI_PREFERENCE_STORAGE_KEYS.safeConfirmLevel, nextValue);
+  return nextValue;
+}
+
+export function updateSanitizeOutputPreference({ preferenceRef, value } = {}) {
+  return updateBooleanPreference({
+    preferenceRef,
+    key: UI_PREFERENCE_STORAGE_KEYS.sanitizeOutput,
     value,
   });
 }

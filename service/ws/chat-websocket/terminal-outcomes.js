@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { recordServiceWebSocketRuntimeError } from "./telemetry.js";
+import { recordServiceWebSocketRuntimeError } from "./runtime-events.js";
 import {
   buildAbortErrorMessage,
   buildStoppedPartialAssistant,
