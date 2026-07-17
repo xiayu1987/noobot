@@ -28,6 +28,7 @@ import {
   toPositiveInt,
 } from "./file-utils.js";
 import { collectSearchFiles, hasRipgrep, searchFilesWithRipgrep, searchInText } from "./file-search.js";
+import { confirmCriticalToolOperation, createRiskLevelSchema } from "./tool-risk.js";
 import {
   applySearchHunks,
   applyUnifiedHunks,
@@ -211,8 +212,10 @@ export function createFileTool({ agentContext }) {
       endLine: z.number().int().optional().describe(tTool(agentContext, "tools.file.readEndLineField")),
       includeLineNumbers: z.boolean().optional().default(true).describe(tTool(agentContext, "tools.file.readIncludeLineNumbersField")),
       maxLines: z.number().int().optional().default(DEFAULT_READ_MAX_LINES).describe(tTool(agentContext, "tools.file.readMaxLinesField")),
+      riskLevel: createRiskLevelSchema(agentContext, "tools.file.readRiskLevelField"),
     }),
-    func: async ({ filePath, startLine, endLine, includeLineNumbers = true, maxLines = DEFAULT_READ_MAX_LINES }) => {
+    func: async ({ filePath, startLine, endLine, includeLineNumbers = true, maxLines = DEFAULT_READ_MAX_LINES, riskLevel }) => {
+      await confirmCriticalToolOperation({ runtime, riskLevel, toolName: TOOL_NAME.READ_FILE, operation: "read file", target: "the requested file", reason: "The file may contain privacy information, credentials, tokens, or secrets." });
       assertValidFileNameFromPath({ filePath, fieldName: "filePath" });
       const resolvedPath = await assertAndResolveUserWorkspaceFilePath({
         filePath,
@@ -259,8 +262,10 @@ export function createFileTool({ agentContext }) {
       filePath: z.string().describe(tTool(agentContext, "tools.file.writeFilePathField")),
       content: z.string().describe(tTool(agentContext, "tools.file.writeContentField")),
       overwrite: z.boolean().optional().default(true).describe(tTool(agentContext, "tools.file.writeOverwriteField")),
+      riskLevel: createRiskLevelSchema(agentContext, "tools.file.writeRiskLevelField"),
     }),
-    func: async ({ filePath, content, overwrite = true }) => {
+    func: async ({ filePath, content, overwrite = true, riskLevel }) => {
+      await confirmCriticalToolOperation({ runtime, riskLevel, toolName: TOOL_NAME.WRITE_FILE, operation: "write file", target: "the requested file", reason: "The write may make destructive or security-sensitive changes." });
       assertValidFileNameFromPath({ filePath, fieldName: "filePath" });
       const resolvedPath = await assertAndResolveUserWorkspaceFilePath({
         filePath,
@@ -301,8 +306,10 @@ export function createFileTool({ agentContext }) {
       text: z.string().optional().describe(tTool(agentContext, "tools.search.fieldText")),
       contextLines: z.number().int().optional().default(DEFAULT_SEARCH_CONTEXT_LINES).describe(tTool(agentContext, "tools.search.fieldContextLines")),
       maxResults: z.number().int().optional().default(DEFAULT_SEARCH_MAX_RESULTS).describe(tTool(agentContext, "tools.search.fieldMaxResults")),
+      riskLevel: createRiskLevelSchema(agentContext, "tools.search.fieldRiskLevel"),
     }),
-    func: async ({ source = "files", query, isRegex = false, caseSensitive = false, path: inputPath = ".", glob = "", text = "", contextLines = DEFAULT_SEARCH_CONTEXT_LINES, maxResults = DEFAULT_SEARCH_MAX_RESULTS }) => {
+    func: async ({ source = "files", query, isRegex = false, caseSensitive = false, path: inputPath = ".", glob = "", text = "", contextLines = DEFAULT_SEARCH_CONTEXT_LINES, maxResults = DEFAULT_SEARCH_MAX_RESULTS, riskLevel }) => {
+      await confirmCriticalToolOperation({ runtime, riskLevel, toolName: TOOL_NAME.SEARCH, operation: source === "text" ? "search provided text" : "search local files", target: source === "text" ? "caller-provided text" : "the requested file scope", reason: "Search results may contain privacy information, credentials, tokens, or secrets." });
       const normalizedSource = String(source || "files").trim() === "text" ? "text" : "files";
       const normalizedQuery = String(query || "");
       if (!normalizedQuery) {
@@ -406,8 +413,10 @@ export function createFileTool({ agentContext }) {
       strip: z.number().int().optional().default(1).describe(tTool(agentContext, "tools.patch_file.fieldStrip")),
       root: z.string().optional().default("").describe(buildPatchFieldDescription(agentContext, "fieldRoot")),
       dryRun: z.boolean().optional().default(false).describe(tTool(agentContext, "tools.patch_file.fieldDryRun")),
+      riskLevel: createRiskLevelSchema(agentContext, "tools.patch_file.fieldRiskLevel"),
     }),
-    func: async ({ format, patch = "", strip = 1, root = "", dryRun = false }) => {
+    func: async ({ format, patch = "", strip = 1, root = "", dryRun = false, riskLevel }) => {
+      await confirmCriticalToolOperation({ runtime, riskLevel, toolName: TOOL_NAME.PATCH_FILE, operation: dryRun ? "validate file patch" : "apply file patch", target: "the requested file scope", reason: "The patch may add, modify, move, or delete files." });
       const prepared = await preparePatchExecution({ format, patch, strip, root, agentContext });
       const normalizedFormat = prepared.format;
       // strip only affects relative diff prefixes (git a/, b/, etc). When every

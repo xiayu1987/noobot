@@ -17,12 +17,6 @@ export const SCRIPT_EXECUTION_MODE = Object.freeze({
   FOREGROUND: "foreground",
   BACKGROUND: "background",
 });
-export const SCRIPT_RISK_LEVEL = Object.freeze({
-  LOW: "low",
-  MEDIUM: "medium",
-  HIGH: "high",
-  CRITICAL: "critical",
-});
 export const ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS = normalizeTimeMs(
   process.env.NOOBOT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
   {

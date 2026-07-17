@@ -27,7 +27,7 @@ test("search: 支持搜索文件和文本", async () => {
   assert.ok(tool);
 
   const fileResult = parseToolResult(
-    await tool.invoke({ source: "files", query: "alpha", path: "src", glob: "*.js", maxResults: 5 }),
+    await tool.invoke({ riskLevel: "low", source: "files", query: "alpha", path: "src", glob: "*.js", maxResults: 5 }),
   );
   assert.equal(fileResult.ok, true);
   assert.equal(fileResult.matches.length, 2);
@@ -36,7 +36,7 @@ test("search: 支持搜索文件和文本", async () => {
   assert.equal(fileResult.matches[1].line, 3);
 
   const textResult = parseToolResult(
-    await tool.invoke({ source: "text", query: "b.t", isRegex: true, text: "aa\nbet\ncc" }),
+    await tool.invoke({ riskLevel: "low", source: "text", query: "b.t", isRegex: true, text: "aa\nbet\ncc" }),
   );
   assert.equal(textResult.ok, true);
   assert.equal(textResult.matches.length, 1);
@@ -58,7 +58,7 @@ test("search: files search rejects promptly when runtime abort signal is already
   assert.ok(tool);
 
   await assert.rejects(
-    () => tool.invoke({ source: "files", query: "alpha", path: "src", glob: "*.js" }),
+    () => tool.invoke({ riskLevel: "low", source: "files", query: "alpha", path: "src", glob: "*.js" }),
     (error) => error?.name === "AbortError" || /stop requested|aborted/i.test(String(error?.message || error)),
   );
 });
@@ -80,7 +80,7 @@ test("read_file: 超级管理员可以读取工作区外文件", async () => {
   const regularReadTool = regularTools.find((item) => item?.name === "read_file");
   assert.ok(regularReadTool);
   await assert.rejects(
-    () => regularReadTool.invoke({ filePath: outsidePath, includeLineNumbers: false }),
+    () => regularReadTool.invoke({ riskLevel: "low", filePath: outsidePath, includeLineNumbers: false }),
     /路径超出允许范围|path out of scope/,
   );
 
@@ -95,7 +95,7 @@ test("read_file: 超级管理员可以读取工作区外文件", async () => {
   const superReadTool = superTools.find((item) => item?.name === "read_file");
   assert.ok(superReadTool);
   const result = parseToolResult(
-    await superReadTool.invoke({ filePath: outsidePath, includeLineNumbers: false }),
+    await superReadTool.invoke({ riskLevel: "low", filePath: outsidePath, includeLineNumbers: false }),
   );
   assert.equal(result.ok, true);
   assert.equal(result.content, "outside\ncontent");
@@ -126,7 +126,7 @@ test("read_file: 相对路径优先基于 directories.rootDirectory", async () =
   const readTool = tools.find((item) => item?.name === "read_file");
   assert.ok(readTool);
 
-  const result = parseToolResult(await readTool.invoke({
+  const result = parseToolResult(await readTool.invoke({ riskLevel: "low",
     filePath: "client/noobot-chat/src/app/ChatMessageNavigator.vue",
     includeLineNumbers: false,
   }));
@@ -164,7 +164,7 @@ test("read_file: 非沙箱兼容 /project 前缀到 directories.rootDirectory", 
   const readTool = tools.find((item) => item?.name === "read_file");
   assert.ok(readTool);
 
-  const result = parseToolResult(await readTool.invoke({
+  const result = parseToolResult(await readTool.invoke({ riskLevel: "low",
     filePath: "/project/client/noobot-chat/src/app/ChatMessageNavigator.vue",
     includeLineNumbers: false,
   }));
@@ -262,7 +262,7 @@ test("patch_file: 支持 apply_patch 和 unified_diff 协议", async () => {
     "*** End Patch",
     "",
   ].join("\n");
-  const applyResult = parseToolResult(await tool.invoke({ format: "apply_patch", patch: applyPatch }));
+  const applyResult = parseToolResult(await tool.invoke({ riskLevel: "low", format: "apply_patch", patch: applyPatch }));
   assert.equal(applyResult.ok, true);
   assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\nTWO\nthree\n");
 
@@ -277,12 +277,12 @@ test("patch_file: 支持 apply_patch 和 unified_diff 协议", async () => {
     "",
   ].join("\n");
   const dryRunResult = parseToolResult(
-    await tool.invoke({ format: "unified_diff", patch: diff, strip: 1, dryRun: true }),
+    await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1, dryRun: true }),
   );
   assert.equal(dryRunResult.ok, true);
   assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\nTWO\nthree\n");
 
-  const diffResult = parseToolResult(await tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }));
+  const diffResult = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }));
   assert.equal(diffResult.ok, true);
   assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\ntwo\nthree\n");
 });
@@ -308,7 +308,7 @@ test("patch_file: 默认使用主流 git diff/unified_diff 并兼容 git 元数�
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ patch: gitDiff }));
+  const result = parseToolResult(await tool.invoke({ riskLevel: "low", patch: gitDiff }));
   assert.equal(result.ok, true);
   assert.equal(result.format, "unified_diff");
   assert.equal(await fs.readFile(path.join(basePath, "src/a.txt"), "utf8"), "one\n--- changed literal\nthree\n");
@@ -332,7 +332,7 @@ test("patch_file: unified_diff hunk 行数不准时自动按内容重算", async
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: badCountDiff, strip: 1 }));
+  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: badCountDiff, strip: 1 }));
   assert.equal(result.ok, true);
   assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\nTWO\nthree\n");
 });
@@ -355,7 +355,7 @@ test("patch_file: unified_diff 兼容 /project 虚拟路径前缀", async () => 
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }));
+  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }));
   assert.equal(result.ok, true);
   assert.deepEqual(result.changedFiles, ["client/a.txt"]);
   assert.equal(await fs.readFile(path.join(basePath, "client/a.txt"), "utf8"), "one\nTWO\n");
@@ -388,7 +388,7 @@ test("patch_file: 超级管理员可将虚拟 project 路径解析到 workspace 
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }));
+  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }));
   assert.equal(result.ok, true);
   assert.deepEqual(result.changedFiles, ["noobot/client/noobot-chat/src/a.txt"]);
   assert.equal(await fs.readFile(path.join(repoPath, "client/noobot-chat/src/a.txt"), "utf8"), "one\nTWO\n");
@@ -414,7 +414,7 @@ test("patch_file: root 参数可将补丁路径解析到 workspace 子项目", a
   ].join("\n");
 
   const dryRunResult = parseToolResult(
-    await tool.invoke({ format: "unified_diff", patch: diff, strip: 1, root: "noobot", dryRun: true }),
+    await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1, root: "noobot", dryRun: true }),
   );
   assert.equal(dryRunResult.ok, true);
   assert.equal(dryRunResult.dryRun, true);
@@ -426,7 +426,7 @@ test("patch_file: root 参数可将补丁路径解析到 workspace 子项目", a
   );
 
   const result = parseToolResult(
-    await tool.invoke({ format: "unified_diff", patch: diff, strip: 1, root: "noobot" }),
+    await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1, root: "noobot" }),
   );
   assert.equal(result.ok, true);
   assert.equal(await fs.readFile(path.join(repoPath, "service/ws/chat-websocket-server.js"), "utf8"), "one\nTWO\n");
@@ -452,7 +452,7 @@ test("patch_file: root 参数兼容 Windows 风格反斜杠 diff 路径", async 
   ].join("\n");
 
   const result = parseToolResult(
-    await tool.invoke({ format: "unified_diff", patch: diff, strip: 1, root: "app\\" }),
+    await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1, root: "app\\" }),
   );
   assert.equal(result.ok, true);
   assert.deepEqual(result.changedFiles, ["app/service/ws/chat-websocket-server.js"]);
@@ -478,7 +478,7 @@ test("patch_file: 兼容模型混用 unified 文件头和 apply_patch 风格 @@ 
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: mixedPatch }));
+  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: mixedPatch }));
   assert.equal(result.ok, true);
   assert.equal(result.format, "unified_diff");
   assert.equal(await fs.readFile(path.join(basePath, "agent/src/a.js"), "utf8"), "import a from \"a\";\nimport c from \"c\";\nrun();\n");
@@ -503,7 +503,7 @@ test("patch_file: format 传错时自动回退到实际协议", async () => {
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: applyPatch }));
+  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: applyPatch }));
   assert.equal(result.ok, true);
   assert.equal(result.format, "apply_patch");
   assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\nTWO\nthree\n");
@@ -527,7 +527,7 @@ test("patch_file: strip 传错时自动尝试无前缀路径", async () => {
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }));
+  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }));
   assert.equal(result.ok, true);
   assert.equal(result.strip, 0);
   assert.equal(await fs.readFile(path.join(basePath, "agent/src/a.js"), "utf8"), "one\nTWO\n");
@@ -583,7 +583,7 @@ test("patch_file: 普通用户不能修改 workspace 外绝对路径", async () 
   ].join("\n");
 
   await assert.rejects(
-    () => tool.invoke({ format: "unified_diff", patch: diff }),
+    () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff }),
     /路径超出允许范围|path out of scope/i,
   );
   assert.equal(await fs.readFile(outsideFile, "utf8"), "one\ntwo\n");
@@ -616,7 +616,7 @@ test("patch_file: super user can patch an absolute file outside workspace root",
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: diff }));
+  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff }));
   assert.equal(result.ok, true);
   assert.equal(result.resolvedFiles[0]?.resolvedPath, outsideFile);
   assert.equal(await fs.readFile(outsideFile, "utf8"), "one\nTWO\n");
@@ -658,7 +658,7 @@ test("patch_file: super user can patch a mapped Windows absolute path outside wo
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: diff }));
+  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff }));
   assert.equal(result.ok, true);
   assert.equal(result.resolvedFiles[0]?.path, "C:/outside/visible.txt");
   assert.equal(result.resolvedFiles[0]?.resolvedPath, outsideFile);
@@ -702,7 +702,7 @@ test("patch_file: apply_patch supports mapped Windows absolute paths", async () 
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ format: "apply_patch", patch: patchText }));
+  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "apply_patch", patch: patchText }));
   assert.equal(result.ok, true);
   assert.equal(result.resolvedFiles[0]?.path, "C:/outside/visible.txt");
   assert.equal(result.resolvedFiles[0]?.resolvedPath, outsideFile);
@@ -731,7 +731,7 @@ test("patch_file: 兼容模型误用 root=.. 和 project/ 虚拟相对前缀", a
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ format: "apply_patch", patch: patchText, root: ".." }));
+  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "apply_patch", patch: patchText, root: ".." }));
   assert.equal(result.ok, true);
   assert.equal(result.requestedRoot, "..");
   assert.equal(result.root, "");
@@ -777,7 +777,7 @@ test("patch_file: 支持 /project 沙箱绝对路径视角", async () => {
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ format: "apply_patch", patch: patchText }));
+  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "apply_patch", patch: patchText }));
   assert.equal(result.ok, true);
   assert.deepEqual(result.changedFiles, ["i18n/src/client/locales/en-US.js"]);
   assert.equal(
@@ -831,7 +831,7 @@ test("patch_file: 沙箱 /project 挂载到 workspace 外项目时仍按沙箱�
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ format: "apply_patch", patch: patchText }));
+  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "apply_patch", patch: patchText }));
   assert.equal(result.ok, true);
   assert.equal(result.resolvedFiles[0].resolvedPath, targetFile);
   assert.equal(
@@ -859,7 +859,7 @@ test("patch_file: root 参数拒绝沙箱路径并返回明确提示", async () 
   ].join("\n");
 
   await assert.rejects(
-    () => tool.invoke({ format: "unified_diff", patch: diff, root: "/project" }),
+    () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, root: "/project" }),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
       assert.equal(error.details?.field, "root");
@@ -897,7 +897,7 @@ test("patch_file: root 参数 host 错误提示不暗示沙箱路径", async () 
   ].join("\n");
 
   await assert.rejects(
-    () => tool.invoke({ format: "unified_diff", patch: diff, root: "/project" }),
+    () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, root: "/project" }),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
       assert.equal(error.details?.field, "root");
@@ -926,7 +926,7 @@ test("patch_file: 沙箱视角下路径不存在时诊断脱敏为沙箱路径",
   ].join("\n");
 
   await assert.rejects(
-    async () => tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }),
+    async () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_FILE_NOT_FOUND");
       // Sandbox view (docker global scope): the host tmp base path must never
@@ -970,7 +970,7 @@ test("patch_file: host 视角下路径不存在时诊断保留真实工作区根
   ].join("\n");
 
   await assert.rejects(
-    async () => tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }),
+    async () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_FILE_NOT_FOUND");
       // Host view: no sandbox mapping, so diagnostics keep the real workspace root.
@@ -1002,7 +1002,7 @@ test("patch_file: 普通用户可在唯一命中时解析 workspace 子项目路
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }));
+  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }));
   assert.equal(result.ok, true);
   assert.deepEqual(result.changedFiles, ["noobot/client/noobot-chat/src/a.txt"]);
   assert.equal(await fs.readFile(path.join(repoPath, "client/noobot-chat/src/a.txt"), "utf8"), "one\nTWO\n");
@@ -1035,7 +1035,7 @@ test("patch_file: strip=0 时兼容 git 前缀叠加 project 虚拟根", async (
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: diff, strip: 0 }));
+  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 0 }));
   assert.equal(result.ok, true);
   assert.deepEqual(result.changedFiles, ["noobot/client/noobot-chat/src/app/ChatMessageNavigator.vue"]);
   assert.match(
@@ -1071,7 +1071,7 @@ test("patch_file: 父工作区下唯一子项目可解析标准 git diff 路径"
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }));
+  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }));
   assert.equal(result.ok, true);
   assert.deepEqual(result.changedFiles, ["noobot/client/noobot-chat/src/modules/session/SessionListPanel.vue"]);
   assert.match(await fs.readFile(targetFile, "utf8"), /background: var\(--noobot-panel-bg\)/);
@@ -1120,7 +1120,7 @@ test("patch_file: 默认相对路径优先基于 directories.rootDirectory", asy
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }));
+  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }));
   assert.equal(result.ok, true);
   assert.deepEqual(result.changedFiles, ["client/noobot-chat/src/app/ChatMessageNavigator.vue"]);
   assert.match(await fs.readFile(targetFile, "utf8"), /background: var\(--noobot-panel-bg\)/);
@@ -1155,7 +1155,7 @@ test("patch_file: 超级管理员虚拟路径命中多个项目根时返回歧�
   ].join("\n");
 
   await assert.rejects(
-    () => tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }),
+    () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
     /ambiguous patch path/i,
   );
 });
@@ -1179,7 +1179,7 @@ test("patch_file: 不填 format 时仍自动识别旧 apply_patch 格式", async
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ patch: applyPatch }));
+  const result = parseToolResult(await tool.invoke({ riskLevel: "low", patch: applyPatch }));
   assert.equal(result.ok, true);
   assert.equal(result.format, "apply_patch");
   assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\nTWO\nthree\n");
@@ -1203,7 +1203,7 @@ test("patch_file: hunk 不匹配时返回带行号上下文", async () => {
     "*** End Patch",
     "",
   ].join("\n");
-  const result = parseToolResult(await tool.invoke({ format: "apply_patch", patch: badPatch }));
+  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "apply_patch", patch: badPatch }));
 
   assert.equal(result.toolName, "patch_file");
   assert.equal(result.ok, false);

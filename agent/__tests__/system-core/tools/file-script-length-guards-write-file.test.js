@@ -89,7 +89,7 @@ test("write_file: 非沙箱返回 host 工作区路径视角", async () => {
     call: {
       id: "call_write_non_sandbox",
       name: "write_file",
-      args: { filePath: "runtime/ops_workdir/write-ok.txt", content: "ok" },
+      args: { riskLevel: "low", filePath: "runtime/ops_workdir/write-ok.txt", content: "ok" },
     },
     tool,
     runtime,
@@ -144,7 +144,7 @@ test("write_file: 启用沙箱返回沙箱路径视角", async () => {
     call: {
       id: "call_write_sandbox",
       name: "write_file",
-      args: { filePath: "runtime/ops_workdir/write-ok.txt", content: "ok" },
+      args: { riskLevel: "low", filePath: "runtime/ops_workdir/write-ok.txt", content: "ok" },
     },
     tool,
     runtime,
@@ -178,7 +178,7 @@ test("write_file: super user can write an absolute file outside workspace root",
     call: {
       id: "call_super_user_write_outside_absolute_path",
       name: "write_file",
-      args: { filePath: outsideFile, content: "write-outside" },
+      args: { riskLevel: "low", filePath: outsideFile, content: "write-outside" },
     },
     tool,
     runtime: agentContext.execution.controllers.runtime,
