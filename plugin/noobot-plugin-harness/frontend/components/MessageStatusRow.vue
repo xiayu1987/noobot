@@ -59,28 +59,34 @@ const stepView = computed(() => {
 </template>
 
 <style scoped>
-/* 1. 胶囊式极简容器 */
+/* 与思考过程面板共用同一套卡片语言，仅以状态色区分运行结果。 */
 .message-status-steps {
-  width: fit-content;
-  min-width: 280px;
+  box-sizing: border-box;
+  width: 100%;
   max-width: 100%;
-  margin: 6px 0 10px;
-  padding: 12px 24px 8px; /* 调整内边距适应小圆点 */
-  border-radius: 99px; /* 胶囊圆角 */
-  color: var(--noobot-text-secondary, var(--el-text-color-regular));
-  background: var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-fill-color-light)));
-  border: 1px solid var(--noobot-panel-border, var(--el-border-color-lighter));
-  transition: all 0.3s ease;
+  margin: 0 0 var(--noobot-space-md);
+  padding: 12px var(--noobot-space-md) 10px;
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 72%, transparent);
+  border-radius: var(--noobot-radius-xs);
+  color: var(--noobot-text-secondary);
+  background: var(--noobot-thinking-bg);
+  overflow: hidden;
+  transition: border-color 0.2s ease, background 0.2s ease;
 }
 
 .message-status-steps.is-running {
-  background: color-mix(in srgb, var(--el-color-primary) 8%, var(--noobot-control-bg, var(--el-fill-color-light)));
+  border-color: color-mix(in srgb, var(--el-color-primary) 55%, var(--noobot-panel-border));
+  background: color-mix(in srgb, var(--el-color-primary) 10%, var(--noobot-thinking-bg));
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--el-color-primary) 16%, transparent);
+  animation: running-card-glow 2.4s ease-in-out infinite;
 }
 .message-status-steps.is-error {
-  background: color-mix(in srgb, var(--el-color-danger) 8%, var(--noobot-control-bg, var(--el-fill-color-light)));
+  border-color: color-mix(in srgb, var(--noobot-status-error) 32%, var(--noobot-panel-border));
+  background: color-mix(in srgb, var(--noobot-status-error) 5%, var(--noobot-thinking-bg));
 }
 .message-status-steps.is-warning {
-  background: color-mix(in srgb, var(--el-color-warning) 8%, var(--noobot-control-bg, var(--el-fill-color-light)));
+  border-color: color-mix(in srgb, var(--noobot-status-warning) 32%, var(--noobot-panel-border));
+  background: color-mix(in srgb, var(--noobot-status-warning) 5%, var(--noobot-thinking-bg));
 }
 
 /* 2. 隐藏默认的粗糙元素，重塑节点为“微型圆点” */
@@ -89,7 +95,7 @@ const stepView = computed(() => {
   height: 6px !important;
   border: none !important;
   border-radius: 50%;
-  background-color: var(--noobot-panel-border, var(--el-border-color-dark));
+  background-color: var(--noobot-panel-border);
   transition: all 0.3s ease;
 }
 
@@ -102,7 +108,7 @@ const stepView = computed(() => {
 .message-status-steps :deep(.el-step__line) {
   top: 3px !important; /* (6px圆点 / 2) */
   height: 1px !important;
-  background-color: var(--noobot-panel-border, var(--el-border-color-lighter));
+  background-color: var(--noobot-divider);
   left: 50% !important;
   right: -50% !important;
 }
@@ -116,7 +122,7 @@ const stepView = computed(() => {
   line-height: 1 !important;
   margin-top: 8px !important;
   font-weight: 400 !important;
-  color: var(--noobot-text-secondary, var(--el-text-color-secondary));
+  color: var(--noobot-thinking-muted);
   letter-spacing: 0.5px;
 }
 
@@ -125,11 +131,11 @@ const stepView = computed(() => {
 /* 已完成的节点 */
 .message-status-steps :deep(.el-step__head.is-success .el-step__icon),
 .message-status-steps :deep(.el-step__head.is-finish .el-step__icon) {
-  background-color: var(--el-text-color-placeholder);
+  background-color: var(--noobot-text-muted);
 }
 .message-status-steps :deep(.el-step__title.is-success),
 .message-status-steps :deep(.el-step__title.is-finish) {
-  color: var(--el-text-color-regular);
+  color: var(--noobot-text-secondary);
 }
 
 /* 当前进行中的节点 (高亮 + 荧光呼吸) */
@@ -139,46 +145,68 @@ const stepView = computed(() => {
   transform: scale(1.2);
 }
 .message-status-steps.is-running :deep(.el-step__head.is-process .el-step__icon) {
-  animation: dot-glow 1.5s ease-in-out infinite alternate;
+  width: 8px !important;
+  height: 8px !important;
+  animation: dot-glow 1.25s ease-in-out infinite alternate;
 }
 .message-status-steps :deep(.el-step__title.is-process) {
   color: var(--el-color-primary);
   font-weight: 600 !important;
 }
+.message-status-steps.is-running :deep(.el-step__title.is-process) {
+  letter-spacing: 0.65px;
+  text-shadow: 0 0 12px color-mix(in srgb, var(--el-color-primary) 36%, transparent);
+}
 
 /* 错误与警告状态 */
 .message-status-steps.is-error :deep(.el-step__head.is-error .el-step__icon) {
-  background-color: var(--el-color-danger);
-  box-shadow: 0 0 6px var(--el-color-danger-light-5);
+  background-color: var(--noobot-status-error);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--noobot-status-error) 45%, transparent);
 }
 .message-status-steps.is-error :deep(.el-step__title.is-error) {
-  color: var(--el-color-danger);
+  color: var(--noobot-status-error);
 }
 
 .message-status-steps.is-warning :deep(.el-step__head.is-warning .el-step__icon) {
-  background-color: var(--el-color-warning);
-  box-shadow: 0 0 6px var(--el-color-warning-light-5);
+  background-color: var(--noobot-status-warning);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--noobot-status-warning) 45%, transparent);
 }
 .message-status-steps.is-warning :deep(.el-step__title.is-warning) {
-  color: var(--el-color-warning);
+  color: var(--noobot-status-warning);
 }
 
 /* 呼吸灯动画 */
 @keyframes dot-glow {
   0% {
-    box-shadow: 0 0 2px 0px color-mix(in srgb, var(--el-color-primary) 40%, transparent);
+    box-shadow: 0 0 3px 0 color-mix(in srgb, var(--el-color-primary) 50%, transparent);
+    transform: scale(1.15);
   }
   100% {
-    box-shadow: 0 0 8px 2px color-mix(in srgb, var(--el-color-primary) 80%, transparent);
+    box-shadow: 0 0 12px 4px color-mix(in srgb, var(--el-color-primary) 80%, transparent);
+    transform: scale(1.42);
+  }
+}
+
+@keyframes running-card-glow {
+  0%, 100% {
+    border-color: color-mix(in srgb, var(--el-color-primary) 48%, var(--noobot-panel-border));
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--el-color-primary) 72%, var(--noobot-panel-border));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-status-steps.is-running,
+  .message-status-steps.is-running :deep(.el-step__head.is-process .el-step__icon) {
+    animation: none;
   }
 }
 
 /* 移动端微调 */
 @media (max-width: 560px) {
   .message-status-steps {
-    min-width: 100%;
-    padding: 10px 16px 6px;
-    border-radius: 12px; /* 移动端屏幕窄，改回小圆角 */
+    padding: 10px var(--noobot-space-md) 8px;
   }
   .message-status-steps :deep(.el-step__title) {
     font-size: 10px !important;
