@@ -12,6 +12,7 @@ import { getDesktopRipgrepPackages, getRipgrepBinaryRelativePath } from './deskt
 const __filename = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(__filename), '../../..');
 const desktopProjectDir = process.env.NOOBOT_DESKTOP_PROJECT_DIR || process.cwd();
+const desktopTargetArch = process.env.NOOBOT_DESKTOP_ARCH || process.env.npm_config_arch || process.arch;
 const outRoot = path.join(desktopProjectDir, 'build/backend-runtime');
 const backendRoot = path.join(outRoot, 'backend');
 
@@ -57,6 +58,7 @@ function fail(message, error) {
   console.error(`  repoRoot: ${repoRoot}`);
   console.error(`  outRoot: ${outRoot}`);
   console.error(`  backendRoot: ${backendRoot}`);
+  console.error(`  desktopTargetArch: ${desktopTargetArch}`);
   process.exit(1);
 }
 
@@ -123,7 +125,7 @@ function getNpmCommand() {
 async function main() {
   log(`repoRoot=${repoRoot}`);
   log(`backendRoot=${backendRoot}`);
-  log(`Node=${process.version}; platform=${process.platform}; arch=${process.arch}`);
+  log(`Node=${process.version}; platform=${process.platform}; arch=${process.arch}; targetArch=${desktopTargetArch}`);
 
   log(`Cleaning ${outRoot}`);
   await rm(outRoot, { recursive: true, force: true });
@@ -156,13 +158,14 @@ async function main() {
     cwd: backendRoot,
   });
 
-  // npm only installs optional dependencies for the build host. Desktop builds
-  // can target a different OS/architecture, so explicitly keep every binary
-  // supported by that desktop client in the self-contained backend runtime.
+  // npm filters optional dependencies by CPU. electron-builder also targets the
+  // current architecture by default, so bundle the matching binary only.
   const ripgrepVersion = agentPkg.dependencies?.['@vscode/ripgrep'];
   if (!ripgrepVersion) fail('agent dependency @vscode/ripgrep is missing');
-  const ripgrepPackages = getDesktopRipgrepPackages(desktopPkg.name, ripgrepVersion);
-  if (ripgrepPackages.length) {
+  const ripgrepPackages = getDesktopRipgrepPackages(desktopPkg.name, ripgrepVersion, desktopTargetArch);
+  if (!ripgrepPackages.length) {
+    fail(`No bundled ripgrep package mapping for ${desktopPkg.name} on ${desktopTargetArch}`);
+  } else {
     run(npmCommand.command, [
       ...npmCommand.argsPrefix,
       'install',
