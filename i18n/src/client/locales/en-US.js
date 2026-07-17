@@ -277,8 +277,18 @@ export const enUSMessages = {
     "allowInteraction": "Allow Interaction",
     "disallowInteraction": "Disallow Interaction",
     "safeConfirm": "Safety Confirmation",
+    "notSafeConfirm": "No Safety Confirmation",
+    "safeConfirmLevelLabel": "Confirmation level",
+    "safeConfirmLevel": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "critical": "Maximum"
+    },
     "streaming": "Streaming",
     "nonStreaming": "Non-Streaming",
+    "sanitizeOutput": "Sanitize",
+    "unsanitizedOutput": "Unsanitized",
     "botScenario": "Bot Scenario",
     "availablePlugins": "Available plugins",
     "selectedPlugins": "Selected plugins",

@@ -497,7 +497,7 @@ test("doc_to_data: libreoffice abort propagates instead of falling back to visio
 });
 
 test("doc_to_data: libreoffice fallback writes runtime-events session system event", async () => {
-  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-telemetry-"));
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-runtime-events-"));
   const docPath = path.join(basePath, "runtime", "ops_workdir", "input.docx");
   await fs.mkdir(path.dirname(docPath), { recursive: true });
   await fs.writeFile(docPath, Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00, 0xff]));

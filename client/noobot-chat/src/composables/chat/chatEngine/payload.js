@@ -24,6 +24,8 @@ export function buildChatPayload({
   attachments = [],
   allowUserInteraction,
   safeConfirm,
+  safeConfirmLevel,
+  sanitizeOutput,
   requestedTextStreaming = true,
   botScenario,
   selectedModel,
@@ -60,8 +62,12 @@ export function buildChatPayload({
     message: message || uploadHint,
     attachments,
     config: {
-      allowUserInteraction: allowUserInteraction?.value === false ? false : true,
-      safeConfirm: safeConfirm?.value === false ? false : true,
+      allowUserInteraction: (allowUserInteraction?.value ?? allowUserInteraction) === false ? false : true,
+      safeConfirm: (safeConfirm?.value ?? safeConfirm) === false ? false : true,
+      sanitizeOutput: (sanitizeOutput?.value ?? sanitizeOutput) === false ? false : true,
+      safeConfirmLevel: ["low", "medium", "high", "critical"].includes(String((safeConfirmLevel?.value ?? safeConfirmLevel) || "").trim().toLowerCase())
+        ? String(safeConfirmLevel?.value ?? safeConfirmLevel).trim().toLowerCase()
+        : "low",
       streaming: requestedTextStreaming,
       ...(normalizedScenario ? { scenario: normalizedScenario } : {}),
       ...(normalizedSelectedModel ? { selectedModel: normalizedSelectedModel } : {}),

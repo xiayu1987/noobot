@@ -49,6 +49,8 @@ export function createAgentCollabTool({ agentContext }) {
   const runConfig = {
     allowUserInteraction: systemRuntime?.config?.allowUserInteraction !== false,
     safeConfirm: systemRuntime?.config?.safeConfirm !== false,
+    safeConfirmLevel: String(systemRuntime?.config?.safeConfirmLevel || "low"),
+    sanitizeOutput: systemRuntime?.config?.sanitizeOutput !== false,
     ...(hasParentStreamingConfig
       ? { streaming: normalizeBooleanLike(systemRuntime?.config?.streaming, false) }
       : {}),

@@ -119,6 +119,10 @@ export function buildDynamicInfo({
   const config = {
     allowUserInteraction: runConfig?.allowUserInteraction !== false,
     safeConfirm: runConfig?.safeConfirm !== false,
+    sanitizeOutput: runConfig?.sanitizeOutput !== false,
+    safeConfirmLevel: ["low", "medium", "high", "critical"].includes(String(runConfig?.safeConfirmLevel || "").trim().toLowerCase())
+      ? String(runConfig.safeConfirmLevel).trim().toLowerCase()
+      : "low",
     ...(hasOwnConfigKey(runConfig, "streaming")
       ? { streaming: normalizeBooleanLike(runConfig?.streaming, false) }
       : {}),

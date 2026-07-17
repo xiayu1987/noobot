@@ -646,7 +646,7 @@ export async function parseDocumentToTextViaLibreOffice({
     };
   } catch (error) {
     if (isAbortError(error)) throw error;
-    const telemetryResult = await recordLibreOfficeParseFailed({
+    const runtimeEventResult = await recordLibreOfficeParseFailed({
       runtime,
       inputFile,
       error,
@@ -657,7 +657,7 @@ export async function parseDocumentToTextViaLibreOffice({
     }).catch(() => {
       return { ok: false };
     });
-    void telemetryResult;
+    void runtimeEventResult;
     throw recoverableToolError(tTool(runtime, "tools.doc2data.libreofficeParseFailed"), {
       code: ERROR_CODE.RECOVERABLE_TOOL_ERROR,
       cause: error?.message || String(error || ""),

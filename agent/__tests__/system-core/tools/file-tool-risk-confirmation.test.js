@@ -8,8 +8,9 @@ import {
   buildAgentContext,
   parseToolResult,
 } from "./helpers/file-script-length-guards-helper.js";
+import { shouldConfirmToolRisk } from "../../../src/system-core/tools/execution/tool-risk.js";
 
-function createContext(basePath, { safeConfirm = true, confirmed = true, requests = [] } = {}) {
+function createContext(basePath, { safeConfirm = true, safeConfirmLevel = "low", confirmed = true, requests = [] } = {}) {
   const bridge = {
     async requestUserInteraction(payload) {
       requests.push(payload);
@@ -22,12 +23,40 @@ function createContext(basePath, { safeConfirm = true, confirmed = true, request
         userId: "u-risk",
         sessionId: "s-risk",
         rootSessionId: "s-risk",
-        config: { safeConfirm },
+        config: { safeConfirm, safeConfirmLevel },
       },
       userInteractionBridge: bridge,
     },
   });
 }
+
+test("safety confirmation threshold covers the complete 4x4 risk matrix", () => {
+  const levels = ["low", "medium", "high", "critical"];
+  const expected = {
+    low: [false, false, false, true],
+    medium: [false, false, true, true],
+    high: [false, true, true, true],
+    critical: [true, true, true, true],
+  };
+  for (const safeConfirmLevel of levels) {
+    levels.forEach((riskLevel, index) => {
+      assert.equal(shouldConfirmToolRisk({ safeConfirm: true, safeConfirmLevel, riskLevel }), expected[safeConfirmLevel][index]);
+    });
+  }
+  assert.equal(shouldConfirmToolRisk({ safeConfirm: false, safeConfirmLevel: "critical", riskLevel: "critical" }), false);
+  assert.equal(shouldConfirmToolRisk({ safeConfirm: true, safeConfirmLevel: "invalid", riskLevel: "high" }), false);
+});
+
+test("non-critical file risk confirms when selected threshold covers it", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-risk-threshold-"));
+  await fs.writeFile(path.join(basePath, "a.txt"), "safe", "utf8");
+  const requests = [];
+  const tool = getTool(createContext(basePath, { safeConfirmLevel: "high", requests }), "read_file");
+  await tool.invoke({ filePath: "a.txt", riskLevel: "medium" });
+  await tool.invoke({ filePath: "a.txt", riskLevel: "low" });
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].content, /medium/);
+});
 
 function getTool(context, name) {
   const tool = createFileTool({ agentContext: context }).find((item) => item?.name === name);

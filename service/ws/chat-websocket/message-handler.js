@@ -15,7 +15,7 @@ import {
   rememberPendingStop,
   unregisterActiveRun,
 } from "./run-registry.js";
-import { summarizeDebugAttachments } from "./telemetry.js";
+import { summarizeDebugAttachments } from "./runtime-events.js";
 import {
   isPluginDebugEnabled,
   resolveEffectiveRunTimeoutMs,

@@ -277,8 +277,18 @@ export const zhCNMessages = {
     "allowInteraction": "允许交互",
     "disallowInteraction": "禁止交互",
     "safeConfirm": "安全确认",
+    "notSafeConfirm": "非安全确认",
+    "safeConfirmLevelLabel": "安全等级",
+    "safeConfirmLevel": {
+      "low": "低",
+      "medium": "中",
+      "high": "高",
+      "critical": "最高"
+    },
     "streaming": "流式",
     "nonStreaming": "非流式",
+    "sanitizeOutput": "脱敏",
+    "unsanitizedOutput": "非脱敏",
     "botScenario": "Bot情景",
     "availablePlugins": "可用插件",
     "selectedPlugins": "已选插件",

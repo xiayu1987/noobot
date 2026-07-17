@@ -3,6 +3,15 @@ import { describe, expect, it } from "vitest";
 import { buildChatPayload } from "../../../../src/composables/chat/chatEngine/payload";
 
 describe("buildChatPayload model preferences", () => {
+  it("enables output sanitization by default and sends an explicit opt-out", () => {
+    expect(buildChatPayload({ message: "x" }).config.sanitizeOutput).toBe(true);
+    expect(buildChatPayload({ message: "x", sanitizeOutput: false }).config.sanitizeOutput).toBe(false);
+  });
+
+  it("normalizes and sends the safety confirmation level", () => {
+    expect(buildChatPayload({ message: "x", safeConfirmLevel: { value: "HIGH" } }).config.safeConfirmLevel).toBe("high");
+    expect(buildChatPayload({ message: "x", safeConfirmLevel: "invalid" }).config.safeConfirmLevel).toBe("low");
+  });
   it("writes selectedModel and current scenario pluginModelConfig to config payload", () => {
     const payload = buildChatPayload({
       userId: "admin",

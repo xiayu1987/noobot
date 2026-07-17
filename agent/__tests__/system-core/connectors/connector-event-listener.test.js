@@ -104,7 +104,7 @@ test("ConnectorEventListener.notifyConnectorConnected: fallback to requestUserIn
 });
 
 test("ConnectorEventListener.notifyConnectorConnected: failed bridge writes runtime-events session system event", async () => {
-  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-connector-telemetry-"));
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-connector-runtime-events-"));
   const listener = createBaseListener({
     workspaceRoot,
     bridge: {

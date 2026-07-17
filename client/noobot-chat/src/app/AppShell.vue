@@ -88,6 +88,8 @@ const {
   userId,
   allowUserInteraction,
   safeConfirm,
+  safeConfirmLevel,
+  sanitizeOutput,
   streamOutput,
   botScenario,
   selectedModel,
@@ -100,6 +102,8 @@ const {
   bindScenarioConfig,
   onAllowUserInteractionUpdate,
   onSafeConfirmUpdate,
+  onSafeConfirmLevelUpdate,
+  onSanitizeOutputUpdate,
   onStreamOutputUpdate,
   onBotScenarioUpdate,
   onSelectedModelUpdate,
@@ -192,6 +196,8 @@ const {
   apiKey,
   allowUserInteraction,
   safeConfirm,
+  safeConfirmLevel,
+  sanitizeOutput,
   streamOutput,
   botScenario,
   selectedModel,
@@ -472,6 +478,8 @@ const drawerPanels = computed(() =>
       :can-stop="canStop"
       :allow-user-interaction="allowUserInteraction"
       :safe-confirm="safeConfirm"
+      :safe-confirm-level="safeConfirmLevel"
+      :sanitize-output="sanitizeOutput"
       :stream-output="streamOutput"
       :bot-scenario="botScenario"
       :selected-model="selectedModel"
@@ -512,6 +520,8 @@ const drawerPanels = computed(() =>
       @remove-upload="removeUpload"
       @update:allow-user-interaction="onAllowUserInteractionUpdate"
       @update:safe-confirm="onSafeConfirmUpdate"
+      @update:safe-confirm-level="onSafeConfirmLevelUpdate"
+      @update:sanitize-output="onSanitizeOutputUpdate"
       @update:stream-output="onStreamOutputUpdate"
       @update:bot-scenario="onBotScenarioUpdate"
       @update:selected-model="onSelectedModelUpdate"

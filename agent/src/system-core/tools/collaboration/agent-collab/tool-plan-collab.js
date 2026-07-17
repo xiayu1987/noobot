@@ -118,7 +118,7 @@ export function createPlanMultiTaskCollaborationTool({
         parsedPlan = JSON.parse(content);
       } catch (error) {
         const match = String(content).match(/```json\s*([\s\S]*?)\s*```/i);
-        const telemetryResult = await recordPlanJsonParseFallback({
+        const runtimeEventResult = await recordPlanJsonParseFallback({
           runtime,
           event: "agent.collab.planJsonParse.fallbackToMarkdown",
           error,
@@ -128,7 +128,7 @@ export function createPlanMultiTaskCollaborationTool({
           try {
             parsedPlan = JSON.parse(match[1]);
           } catch (error) {
-            const telemetryResult = await recordPlanJsonParseFallback({
+            const runtimeEventResult = await recordPlanJsonParseFallback({
               runtime,
               event: "agent.collab.planMarkdownJsonParse.failed",
               error,

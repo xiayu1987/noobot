@@ -52,6 +52,8 @@ defineProps({
   canStop: { type: Boolean, default: false },
   allowUserInteraction: { type: Boolean, default: false },
   safeConfirm: { type: Boolean, default: true },
+  safeConfirmLevel: { type: String, default: "low" },
+  sanitizeOutput: { type: Boolean, default: true },
   streamOutput: { type: Boolean, default: false },
   botScenario: { type: String, default: "" },
   selectedModel: { type: String, default: "" },
@@ -95,6 +97,8 @@ const emit = defineEmits([
   "update:bot-scenario",
   "update:connect-code",
   "update:safe-confirm",
+  "update:safe-confirm-level",
+  "update:sanitize-output",
   "update:input",
   "update:more-panel-visible",
   "update:plugin-model-config",
@@ -268,6 +272,8 @@ defineExpose({
           :connected="connected"
           :allow-user-interaction="allowUserInteraction"
           :safe-confirm="safeConfirm"
+          :safe-confirm-level="safeConfirmLevel"
+          :sanitize-output="sanitizeOutput"
           :stream-output="streamOutput"
           :bot-scenario="botScenario"
           :selected-model="selectedModel"
@@ -283,6 +289,8 @@ defineExpose({
           @remove-upload="emit('remove-upload', $event)"
           @update:allow-user-interaction="emit('update:allow-user-interaction', $event)"
           @update:safe-confirm="emit('update:safe-confirm', $event)"
+          @update:safe-confirm-level="emit('update:safe-confirm-level', $event)"
+          @update:sanitize-output="emit('update:sanitize-output', $event)"
           @update:stream-output="emit('update:stream-output', $event)"
           @update:bot-scenario="emit('update:bot-scenario', $event)"
           @update:selected-model="emit('update:selected-model', $event)"

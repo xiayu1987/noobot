@@ -22,6 +22,8 @@ vi.mock("../../../../src/shared/i18n/useLocale", () => ({
         "composer.inputPlaceholder": "输入消息",
         "composer.noAvailablePlugins": "暂无插件",
         "composer.nonStreaming": "非流式",
+        "composer.sanitizeOutput": "脱敏",
+        "composer.unsanitizedOutput": "非脱敏",
         "composer.notSafeConfirm": "不强制工具",
         "composer.recordAudioHold": "按住录音",
         "composer.scenarioProgramming": "编程",
@@ -273,12 +275,29 @@ describe("ComposerInputActions", () => {
 });
 
 describe("ComposerMoreOptions", () => {
+  it("shows a four-step safety slider and emits the selected level", async () => {
+    const wrapper = mount(ComposerMoreOptions, {
+      props: { safeConfirm: true, safeConfirmLevel: "medium", resolveScenarioLabel: (item) => item.key },
+      global: globalMountOptions,
+    });
+    const slider = wrapper.find("el-slider");
+    expect(slider.exists()).toBe(true);
+    expect(slider.attributes("min")).toBe("0");
+    expect(slider.attributes("max")).toBe("3");
+    expect(slider.attributes("step")).toBe("1");
+    slider.element.dispatchEvent(new CustomEvent("update:model-value", { detail: 3 }));
+    wrapper.vm.$emit("update:safeConfirmLevel", "critical");
+    expect(wrapper.emitted("update:safeConfirmLevel")?.at(-1)).toEqual(["critical"]);
+    await wrapper.setProps({ safeConfirm: false });
+    expect(wrapper.find("el-slider").exists()).toBe(false);
+  });
   it("emits session option, scenario and plugin events", async () => {
     const resolveScenarioLabel = vi.fn((item) => item.label || item.key);
     const wrapper = mount(ComposerMoreOptions, {
       props: {
         allowUserInteraction: true,
         safeConfirm: false,
+        sanitizeOutput: true,
         streamOutput: true,
         botScenario: "programming",
         normalizedScenarioOptions: [
@@ -298,10 +317,12 @@ describe("ComposerMoreOptions", () => {
 
     wrapper.vm.$emit("update:allowUserInteraction", false);
     wrapper.vm.$emit("update:safeConfirm", true);
+    wrapper.vm.$emit("update:sanitizeOutput", false);
     wrapper.vm.$emit("update:streamOutput", false);
     await nextTick();
     expect(wrapper.emitted("update:allowUserInteraction")?.[0]).toEqual([false]);
     expect(wrapper.emitted("update:safeConfirm")?.[0]).toEqual([true]);
+    expect(wrapper.emitted("update:sanitizeOutput")?.[0]).toEqual([false]);
     expect(wrapper.emitted("update:streamOutput")?.[0]).toEqual([false]);
 
     await wrapper.findAll(".scenario-selector el-button")[1].trigger("click");

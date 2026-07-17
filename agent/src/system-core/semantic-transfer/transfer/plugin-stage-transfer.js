@@ -9,7 +9,7 @@ import {
   normalizeTransferEnvelopesWithPolicy,
 } from "../envelope/envelope-utils.js";
 import { resolveTransferIntent } from "../core/intent.js";
-import { emitSemanticTransferValidation } from "../core/telemetry.js";
+import { emitSemanticTransferValidation } from "../core/validation-events.js";
 import { firstNormalizedString } from "../core/compact.js";
 
 function normalizeString(value = "") {
