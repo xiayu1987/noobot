@@ -57,10 +57,6 @@ export function useChatList({
   }
 
   function newSession() {
-    if (sending.value) {
-      notify({ type: "warning", message: translate("chat.cannotCreateWhileSending") });
-      return;
-    }
     createLocalSession();
   }
 

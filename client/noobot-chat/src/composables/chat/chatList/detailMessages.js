@@ -124,6 +124,7 @@ function buildTurnStatusPlaceholderMessage(userMessage = {}, turnStatus = {}) {
     pending: false,
     synthetic: true,
     placeholder: true,
+    turnPlaceholder: true,
     turnStatusPlaceholder: true,
     turnStatus: { ...turnStatus },
     status: turnStatus?.status,
@@ -356,9 +357,21 @@ function isInlineEditingUserMessage(messageItem = {}) {
 
 export function findExistingMessageIndexForDetailMessage(existingMessages = [], detailMessageItem = {}) {
   if (buildMessageIdentity(detailMessageItem)) {
-    return findMessageIdentityIndex(detailMessageItem, existingMessages);
+    const identityIndex = findMessageIdentityIndex(detailMessageItem, existingMessages);
+    if (identityIndex >= 0) return identityIndex;
   }
   const detailRole = normalizeMessageRole(detailMessageItem);
+  const detailTurnScopeId = getMessageTurnScopeId(detailMessageItem);
+  if (detailTurnScopeId) {
+    const matchingTurnIndexes = existingMessages
+      .map((messageItem, index) => ({ messageItem, index }))
+      .filter(({ messageItem }) =>
+        normalizeMessageRole(messageItem) === detailRole &&
+        getMessageTurnScopeId(messageItem) === detailTurnScopeId,
+      )
+      .map(({ index }) => index);
+    if (matchingTurnIndexes.length === 1) return matchingTurnIndexes[0];
+  }
   const detailDialogProcessId = getMessageDialogProcessId(detailMessageItem);
   if (detailDialogProcessId) {
     const matchingDialogIndexes = existingMessages

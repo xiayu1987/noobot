@@ -1,6 +1,7 @@
 import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h } from "vue";
+import { createPinia, setActivePinia } from "pinia";
 import SharedChatMessageItem from "../../../src/shared/message/SharedChatMessageItem.vue";
 import { registerFrontendPlugin } from "../../../src/plugins/frontend-plugin-registry";
 
@@ -94,6 +95,8 @@ const AssetRenderer = defineComponent({
 });
 
 function mountItem(props = {}) {
+  const pinia = createPinia();
+  setActivePinia(pinia);
   return mount(SharedChatMessageItem, {
     props: {
       messageItem: {
@@ -118,6 +121,7 @@ function mountItem(props = {}) {
       ...props,
     },
     global: {
+      plugins: [pinia],
       stubs: {
         "el-dialog": true,
       },

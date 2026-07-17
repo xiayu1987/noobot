@@ -217,6 +217,32 @@ test('ws router reports upstream unavailable when continue action has no target 
   assert.equal(channelManager.calls.errors[0].message, AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE);
 });
 
+test('ws router recreates a missing continue channel after proxy restart', () => {
+  const channelManager = createForwardingChannelManager({ targetChannel: null });
+  channelManager.calls.start = [];
+  channelManager.startOrJoinChannel = (options) => channelManager.calls.start.push(options);
+  const socket = createMockSocket();
+  socket.__agentProxyLocale = 'zh-CN';
+  const payload = {
+    action: 'continue',
+    sessionId: 'session-1',
+    config: {
+      resumeDialogProcessId: 'dialog-stopped',
+      resumeTurnScopeId: 'turn-stopped',
+    },
+  };
+
+  new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
+  socket.emit(CHANNEL_EVENT.MESSAGE, JSON.stringify(payload));
+
+  assert.equal(channelManager.calls.errors.length, 0);
+  assert.equal(channelManager.calls.start.length, 1);
+  assert.equal(channelManager.calls.start[0].connectionApiKey, 'api-key-1');
+  assert.equal(channelManager.calls.start[0].connectionLocale, 'zh-CN');
+  assert.equal(channelManager.calls.start[0].payload.userId, 'user-1');
+  assert.equal(channelManager.calls.start[0].payload.sessionId, 'session-1');
+});
+
 test('ws router does not reuse previous session active channel for another session continue', () => {
   const previousSessionChannel = { key: 'user-1::session-old::' };
   const calls = {

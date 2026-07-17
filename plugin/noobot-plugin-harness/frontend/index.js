@@ -49,6 +49,7 @@ export function registerFrontendPlugin(ctx = {}) {
           statusLabel: context?.messageItem?.statusLabel,
           showSubTask: context?.showSubTaskActivity === true,
           subTaskStatusText: context?.subTaskStatusText,
+          statusStepState: context?.statusStepState,
         }),
       },
     ],

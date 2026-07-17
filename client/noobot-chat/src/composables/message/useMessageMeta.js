@@ -8,9 +8,16 @@ import { useLocale } from "../../shared/i18n/useLocale";
 import { zhCNMessages } from "noobot-i18n/client/locales/zh-CN";
 import { enUSMessages } from "noobot-i18n/client/locales/en-US";
 import { logResendDebug, summarizeDebugMessage } from "../chat/debug/resendDebugLogger";
+import { getMessageTurnScopeId } from "../infra/messageIdentity";
+import { storeToRefs } from "pinia";
+import { useChatStore } from "../../shared/stores/useChatStore";
+import { turnRuntimeDisplayState } from "../chat/sessionRunStateMachine/turnRuntimeRegistry";
 
-export function useMessageMeta({ getMessageItem = () => ({}) } = {}) {
+export function useMessageMeta({
+  getMessageItem = () => ({}),
+} = {}) {
   const { translate } = useLocale();
+  const { turnRuntimeRegistry } = storeToRefs(useChatStore());
   const messageModelLabel = computed(() => {
     const messageItem = getMessageItem() || {};
     const modelRuns = Array.isArray(messageItem?.modelRuns)
@@ -65,9 +72,24 @@ export function useMessageMeta({ getMessageItem = () => ({}) } = {}) {
     return result;
   });
 
+  const statusStepState = computed(() => {
+    const messageItem = getMessageItem() || {};
+    const turnScopeId = getMessageTurnScopeId(messageItem);
+    const turnRuntime = turnScopeId ? turnRuntimeRegistry.value?.turns?.[turnScopeId] : null;
+    if (!turnRuntime) return "";
+    if (turnRuntime.terminal === "completed") return "completed";
+    if (turnRuntime.terminal === "user_stopped") return "stopped";
+    if (turnRuntime.terminal) return "error";
+    const displayState = turnRuntimeDisplayState(turnRuntime);
+    return ["requesting", "sending", "completing", "stopping"].includes(displayState)
+      ? displayState
+      : "";
+  });
+
   return {
     messageModelLabel,
     showSubTaskActivity,
     subTaskStatusText,
+    statusStepState,
   };
 }

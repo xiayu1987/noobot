@@ -17,16 +17,16 @@ import {
 import { nowMs } from "../../infra/timeFields";
 import {
   SESSION_RUN_EVENT,
-  BackendChannelState,
   FrontendRunState,
-  evaluateSessionRunState,
-  isInFlightSessionRunState,
   getMessageRuntimeChannelState,
 } from "../sessionRunStateMachine";
+import { SESSION_DETAIL_APPLY_MODE } from "./messageStateGuards";
 import {
-  SESSION_DETAIL_APPLY_MODE,
-  hasMatchingInFlightAssistantMessage,
-} from "./messageStateGuards";
+  resolveSessionTurnRuntime,
+  removeTurnRuntime,
+  sessionRuntimeId,
+  turnRuntimeDisplayState,
+} from "../sessionRunStateMachine/turnRuntimeRegistry";
 
 const delay = (ms) => new Promise((resolve) => {
   setTimeout(resolve, ms);
@@ -49,29 +49,12 @@ function isStoppingAssistantMessage(message = {}) {
   );
 }
 
-function isUserStopPendingRunState(state = "") {
-  return [
-    FrontendRunState.USER_STOPPING,
-    FrontendRunState.USER_STOP_COMPLETED,
-    BackendChannelState.USER_STOPPED,
-  ].includes(normalizeTrimmedString(state));
-}
-
 function isUserStopConfirmedRunState(state = "") {
   return [
     FrontendRunState.USER_STOPPING,
     FrontendRunState.USER_STOP_COMPLETED,
-    BackendChannelState.USER_STOPPED,
+    "user_stopped",
   ].includes(normalizeTrimmedString(state));
-}
-
-function hasMatchingInFlightAssistant({ activeSession } = {}) {
-  const messages = Array.isArray(activeSession?.value?.messages)
-    ? activeSession.value.messages
-    : [];
-  return hasMatchingInFlightAssistantMessage(messages, {
-    turnStatuses: activeSession?.value?.turnStatuses,
-  });
 }
 
 function getStoppedTurnMessage({ targetMessage = null, originalTargetMessage = null } = {}) {
@@ -132,11 +115,12 @@ export function createMonotonicMessageActions({
   userId,
   applySessionDetail,
   fetchSessionDetail,
-  runStateSnapshot,
+  turnRuntimeRegistry,
   messageOperationStore,
   monotonicActionStopTimeoutMs,
   monotonicActionStopPollIntervalMs,
   applyRunStateEvent,
+  appendMessage,
 }) {
   function notifyStateMismatch() {
     notify({
@@ -145,20 +129,26 @@ export function createMonotonicMessageActions({
     });
   }
 
-  function hasConsistentSendingState() {
-    if (!sending?.value && !isInFlightSessionRunState(runStateSnapshot?.value?.state)) return true;
-    return hasMatchingInFlightAssistant({ activeSession });
+  function activeTurnRuntime() {
+    const sessionId = sessionRuntimeId(activeSession?.value || activeSessionId?.value);
+    return resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId);
+  }
+
+  function isActiveTurnInFlight() {
+    return ["requesting", "sending", "completing", "stopping"].includes(
+      turnRuntimeDisplayState(activeTurnRuntime()),
+    );
   }
 
   async function waitForSendingSettled({
     timeoutMs = monotonicActionStopTimeoutMs,
     pollIntervalMs = monotonicActionStopPollIntervalMs,
   } = {}) {
-    if (!sending?.value) return true;
+    if (!isActiveTurnInFlight()) return true;
     const startedAt = nowMs();
     const normalizedTimeoutMs = Math.max(0, Number(timeoutMs) || 0);
     const normalizedPollIntervalMs = Math.max(1, Number(pollIntervalMs) || 1);
-    while (sending.value) {
+    while (isActiveTurnInFlight()) {
       if (nowMs() - startedAt >= normalizedTimeoutMs) {
         return false;
       }
@@ -188,33 +178,20 @@ export function createMonotonicMessageActions({
           )
         : null);
     if (stoppedTurnMessage) return true;
-    const runStateEvaluation = evaluateSessionRunState(runStateSnapshot?.value);
+    // A stop transaction is already in progress for this Session. Do not issue
+    // a second stop request or mutate messages until its authoritative result
+    // arrives.
+    if (turnRuntimeDisplayState(activeTurnRuntime()) === "stopping") return false;
     // This helper is the internal stop-and-settle gate used by delete/resend.
     // The public action mutex must reject a second action, but it must not
     // prevent this helper from stopping the currently active run first.
-    if (!sending?.value && (runStateEvaluation.canRetryMessage === false || runStateEvaluation.canDeleteMessage === false)) {
-      return false;
-    }
-    if (!sending?.value) return true;
-    if (!hasConsistentSendingState()) {
-      notifyStateMismatch();
-      return false;
-    }
+    if (!isActiveTurnInFlight()) return true;
     stopSending();
     const settled = await waitForSendingSettled({ timeoutMs, pollIntervalMs });
     if (!settled) {
       rejectStopPrecondition();
     }
-    const settledState = evaluateSessionRunState(runStateSnapshot?.value).state;
-    if ([
-      BackendChannelState.ERROR,
-      FrontendRunState.ACTION_REQUEST_ERROR,
-      FrontendRunState.PROCESSING_ERROR,
-      FrontendRunState.COMPLETION_ERROR,
-      FrontendRunState.STOP_ERROR,
-    ].includes(settledState)) {
-      rejectStopPrecondition();
-    }
+    if (activeTurnRuntime()?.terminal === "error") return false;
     return true;
   }
 
@@ -255,6 +232,11 @@ export function createMonotonicMessageActions({
     const messages = Array.isArray(session.messages) ? session.messages : [];
     const removedMessages = messages.slice(startIndex);
     session.messages = messages.slice(0, startIndex);
+    const sessionId = sessionRuntimeId(session || activeSessionId?.value);
+    const removedTurnScopeIds = new Set(removedMessages.map(getMessageTurnScopeId).filter(Boolean));
+    removedTurnScopeIds.forEach((turnScopeId) => {
+      removeTurnRuntime(turnRuntimeRegistry?.value, turnScopeId, { sessionId });
+    });
     syncSessionMessageSummary(session);
     clearPendingInteraction?.();
     return true;
@@ -334,6 +316,7 @@ export function createMonotonicMessageActions({
     resolveMonotonicUserTarget,
     send,
     userId,
+    appendMessage,
   });
 
   return {

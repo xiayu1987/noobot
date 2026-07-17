@@ -9,6 +9,10 @@ import { enUSMessages } from "noobot-i18n/client/locales/en-US";
 import { BackendChannelState } from "../sessionRunStateMachine";
 import { nowMs, toIsoTime } from "../../infra/timeFields";
 import { mergeAttachments } from "../../infra/dialogProcessChain";
+import {
+  createTurnPlaceholderMessage,
+  findTurnPlaceholderMessage,
+} from "./turnPlaceholder";
 
 export function prepareChatSend({
   input,
@@ -75,21 +79,16 @@ export function prepareChatSend({
     activeSession.value.title = text.slice(0, 20);
   }
 
-  const botMessage = appendMessage(RoleEnum.ASSISTANT, "", []);
   const sessionId = String(activeSession.value?.backendSessionId || activeSession.value?.id || "");
+  const botMessage = findTurnPlaceholderMessage(activeSession.value?.messages, {
+    turnScopeId: normalizedTurnScopeId,
+  }) || createTurnPlaceholderMessage({
+    appendMessage,
+    sessionId,
+    turnScopeId: normalizedTurnScopeId,
+  });
   const turnStartedAtMs = nowMs();
   const thinkingStartedAt = toIsoTime(turnStartedAtMs);
-  botMessage.sessionId = sessionId;
-  botMessage.session_id = sessionId;
-  botMessage.pending = true;
-  botMessage.hasFirstStreamEvent = false;
-  botMessage.statusLabel = "";
-  botMessage.attachments = [];
-  botMessage.realtimeLogs = [];
-  botMessage.completedToolLogs = [];
-  botMessage.tool_calls = [];
-  botMessage.executionLogTotal = 0;
-  botMessage.turnScopeId = normalizedTurnScopeId;
   if (normalizedTurnScopeId) {
     activeSession.value.turnTimingsByTurnScopeId = {
       ...(activeSession.value.turnTimingsByTurnScopeId || {}),

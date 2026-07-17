@@ -7,9 +7,14 @@ import {
   createInitialSessionRunState,
 } from "../../../../src/composables/chat/sessionRunStateMachine";
 import { RoleEnum } from "../../../../src/shared/constants/chatConstants";
+import {
+  applyTurnRuntimeEvent,
+  createTurnRuntimeRegistryState,
+} from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 
 function createActions({
   runStateSnapshot = ref(createInitialSessionRunState()),
+  turnRuntimeRegistry = ref(createTurnRuntimeRegistryState()),
   applyRunStateEvent = vi.fn(),
 } = {}) {
   const userMessage = {
@@ -66,10 +71,12 @@ function createActions({
     applySessionDetail,
     fetchSessionDetail,
     runStateSnapshot,
+    turnRuntimeRegistry,
     messageOperationStore: {},
     monotonicActionStopTimeoutMs: 1,
     monotonicActionStopPollIntervalMs: 1,
     applyRunStateEvent,
+    turnRuntimeRegistry,
   });
   return {
     actions,
@@ -89,7 +96,13 @@ describe("monotonicMessageActions stop-window gates", () => {
       stateRef: runStateSnapshot,
       event: { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED, source: "test" },
     });
-    const { actions, activeSession, userMessage, deleteSessionMessagesFromApi } = createActions({ runStateSnapshot });
+    const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
+    applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
+      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
+      sessionId: "s1",
+      turnScopeId: "turn-1",
+    });
+    const { actions, activeSession, userMessage, deleteSessionMessagesFromApi } = createActions({ runStateSnapshot, turnRuntimeRegistry });
 
     const result = await actions.deleteMonotonicMessage(userMessage);
 

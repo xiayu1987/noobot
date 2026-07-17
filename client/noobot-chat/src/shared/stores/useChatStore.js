@@ -6,6 +6,7 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 import { createInitialSessionRunState } from "../../composables/chat/sessionRunStateMachine";
+import { createTurnRuntimeRegistryState } from "../../composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 
 export const useChatStore = defineStore("chat", () => {
   const input = ref("");
@@ -13,6 +14,7 @@ export const useChatStore = defineStore("chat", () => {
   const sending = ref(false);
   const canStop = ref(false);
   const runStateSnapshot = ref(createInitialSessionRunState());
+  const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
   const sessions = ref([]);
   const activeSessionId = ref("");
   const loadingSessions = ref(false);
@@ -31,6 +33,7 @@ export const useChatStore = defineStore("chat", () => {
     sending.value = false;
     canStop.value = false;
     runStateSnapshot.value = createInitialSessionRunState();
+    turnRuntimeRegistry.value = createTurnRuntimeRegistryState();
     sessions.value = [];
     activeSessionId.value = "";
     loadingSessions.value = false;
@@ -46,6 +49,7 @@ export const useChatStore = defineStore("chat", () => {
     sending,
     canStop,
     runStateSnapshot,
+    turnRuntimeRegistry,
     sessions,
     activeSessionId,
     activeSession,

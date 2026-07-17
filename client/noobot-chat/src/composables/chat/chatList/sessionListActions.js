@@ -52,15 +52,6 @@ export function createSessionListActions({
     if (!target) return;
     const targetPrimaryId = String(target.id || sessionId || "").trim();
     if (!force && targetPrimaryId === activeSessionId.value) return;
-    if (sending.value && activeSessionId.value && targetPrimaryId !== activeSessionId.value) {
-      // User-triggered switch should be blocked while sending; internal reconnect
-      // recovery uses silent mode and must be allowed to avoid replay/session drift.
-      if (!silent) {
-        notify({ type: "warning", message: translate("chat.keepCurrentWhenSending") });
-        return;
-      }
-    }
-
     activeSessionId.value = targetPrimaryId;
     if (target.isLocal) {
       refreshSessionConnectorsAsync(targetPrimaryId);
@@ -191,10 +182,6 @@ export function createSessionListActions({
     const targetSessionId = String(sessionId || "").trim();
     const normalizedTitle = String(title || "").trim();
     if (!targetSessionId) return false;
-    if (sending.value) {
-      notify({ type: "warning", message: translate("common.cannotRenameWhileSending") });
-      return false;
-    }
     if (!normalizedTitle) {
       notify({ type: "warning", message: translate("common.sessionTitleRequired") });
       return false;
@@ -226,10 +213,6 @@ export function createSessionListActions({
   async function deleteSession(sessionId = "") {
     const targetSessionId = String(sessionId || "").trim();
     if (!targetSessionId) return false;
-    if (sending.value) {
-      notify({ type: "warning", message: translate("chat.cannotDeleteWhileSending") });
-      return false;
-    }
 
     const index = sessions.value.findIndex((sessionItem) => sessionItem.id === targetSessionId);
     if (index < 0) return false;

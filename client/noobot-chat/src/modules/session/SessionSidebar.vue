@@ -133,7 +133,7 @@ const { translate } = useLocale();
           class="new-chat-btn noobot-action-btn"
           :icon="Plus"
           @click="emit('new-session')"
-          :disabled="sending || !connected"
+          :disabled="!connected"
         >
           {{ translate("common.newSession") }}
         </el-button>
@@ -143,7 +143,7 @@ const { translate } = useLocale();
           :icon="Refresh"
           :loading="loadingSessions"
           @click="emit('refresh-sessions')"
-          :disabled="!connected || sending"
+          :disabled="!connected"
           :title="translate('common.refresh')"
           :aria-label="translate('common.refreshSessionList')"
         />

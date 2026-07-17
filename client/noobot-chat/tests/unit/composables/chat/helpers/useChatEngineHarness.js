@@ -6,6 +6,11 @@ import {
   RoleEnum,
   StreamEventEnum,
 } from "../../../../../src/shared/constants/chatConstants";
+import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../src/composables/chat/sessionRunStateMachine";
+import {
+  applyTurnRuntimeEvent,
+  createTurnRuntimeRegistryState,
+} from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 
 vi.mock("../../../../../src/shared/i18n/useLocale", () => ({
   useLocale: () => ({
@@ -55,6 +60,7 @@ export const createHarness = ({
   const sending = ref(false);
   const canStop = ref(false);
   const runStateSnapshot = ref(null);
+  const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
   const input = ref("hello");
   const uploadFiles = ref([]);
   const pendingInteractionRequest = ref(pendingInteraction);
@@ -82,6 +88,7 @@ export const createHarness = ({
     sending,
     canStop,
     runStateSnapshot,
+    turnRuntimeRegistry,
     input,
     uploadFiles,
     clearUploads: vi.fn(),
@@ -150,12 +157,33 @@ export const createHarness = ({
     sending,
     canStop,
     runStateSnapshot,
+    turnRuntimeRegistry,
     input,
     uploadFiles,
     pendingInteractionRequest,
     interactionSubmitting,
     appendMessage,
   };
+};
+
+export const activateRuntimeTurn = ({
+  turnRuntimeRegistry,
+  sessionId,
+  turnScopeId,
+  dialogProcessId = "",
+} = {}) => {
+  applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
+    type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
+    sessionId,
+    turnScopeId,
+  });
+  applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
+    type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+    sessionId,
+    turnScopeId,
+    dialogProcessId,
+    state: BackendChannelState.SENDING,
+  });
 };
 
 export const assistantMessage = (activeSession) =>

@@ -57,13 +57,13 @@ describe("createSessionListActions.renameSession", () => {
     expect(notify).toHaveBeenCalledWith({ type: "warning", message: "common.sessionTitleRequired" });
   });
 
-  it("rejects while sending without calling backend", async () => {
+  it("allows renaming while another turn is sending", async () => {
     const { actions, notify, renameSessionApi } = createHarness({ sending: ref(true) });
 
-    await expect(actions.renameSession("s1", "New title")).resolves.toBe(false);
+    await expect(actions.renameSession("s1", "New title")).resolves.toBe(true);
 
-    expect(renameSessionApi).not.toHaveBeenCalled();
-    expect(notify).toHaveBeenCalledWith({ type: "warning", message: "common.cannotRenameWhileSending" });
+    expect(renameSessionApi).toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalledWith({ type: "warning", message: "common.cannotRenameWhileSending" });
   });
 
   it("rejects unchanged titles without calling backend", async () => {

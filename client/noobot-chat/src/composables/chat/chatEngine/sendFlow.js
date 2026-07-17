@@ -27,15 +27,18 @@ import { normalizeTrimmedString } from "./utils";
 import {
   SESSION_RUN_EVENT,
   FrontendRunState,
-  isInFlightSessionRunState,
 } from "../sessionRunStateMachine";
+import {
+  resolveSessionTurnRuntime,
+  sessionRuntimeId,
+  turnRuntimeDisplayState,
+} from "../sessionRunStateMachine/turnRuntimeRegistry";
 import {
   getMessageRole,
   getMessageDialogProcessId,
   getMessageTurnScopeId,
 } from "../../infra/messageIdentity";
 import { nowMs } from "../../infra/timeFields";
-import { hasMatchingInFlightAssistantMessage } from "./messageStateGuards";
 import {
   logResendDebug,
   summarizeDebugAttachments,
@@ -135,30 +138,10 @@ function hasDialogProcessConflictForTurn({ activeSession, data = {}, botMessage 
   });
 }
 
-function hasMatchingInFlightAssistant({ activeSession } = {}) {
-  const messages = Array.isArray(activeSession?.value?.messages)
-    ? activeSession.value.messages
-    : [];
-  return hasMatchingInFlightAssistantMessage(messages, {
-    turnStatuses: activeSession?.value?.turnStatuses,
-  });
-}
-
-function isRunStateForAnotherSession({ activeSession, runStateSnapshot } = {}) {
-  const runSessionId = normalizeTrimmedString(runStateSnapshot?.value?.sessionId);
-  const activeSessionIds = [
-    activeSession?.value?.backendSessionId,
-    activeSession?.value?.sessionId,
-    activeSession?.value?.id,
-  ].map(normalizeTrimmedString).filter(Boolean);
-  return Boolean(runSessionId && activeSessionIds.length > 0 && !activeSessionIds.includes(runSessionId));
-}
-
-function hasConsistentSendingState({ sending, activeSession, runStateSnapshot, continueFromUserStopped = false } = {}) {
-  if (continueFromUserStopped === true) return true;
-  if (isRunStateForAnotherSession({ activeSession, runStateSnapshot })) return true;
-  if (!sending?.value && !isInFlightSessionRunState(runStateSnapshot?.value?.state)) return true;
-  return hasMatchingInFlightAssistant({ activeSession });
+function hasActiveTurnInFlight({ activeSession, turnRuntimeRegistry } = {}) {
+  const sessionId = sessionRuntimeId(activeSession?.value);
+  const turn = resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId);
+  return ["requesting", "sending", "completing", "stopping"].includes(turnRuntimeDisplayState(turn));
 }
 
 export function createChatEngineSender({
@@ -201,6 +184,7 @@ export function createChatEngineSender({
   sending,
   canStop,
   runStateSnapshot,
+  turnRuntimeRegistry,
   applyRunStateEvent,
   serializeAttachments,
   streamOutput,
@@ -235,21 +219,9 @@ export function createChatEngineSender({
     const resumeDialogProcessId = normalizeTrimmedString(options?.resumeDialogProcessId);
     const resumeTurnScopeId = normalizeTrimmedString(options?.resumeTurnScopeId);
     if (!ensureConnected()) return false;
-    if (!composerRequestStarted && options?.allowDuringResend !== true && !hasConsistentSendingState({
-      sending,
-      activeSession,
-      runStateSnapshot,
-      continueFromUserStopped,
-    })) {
-      notify?.({
-        type: "warning",
-        message: translate("chat.sessionStateOutOfSync") || "Session state is out of sync. Refresh and try again.",
-      });
-      return false;
-    }
     const allowCurrentContinuationRequest = continueFromUserStopped === true;
-    const anotherSessionIsSending = isRunStateForAnotherSession({ activeSession, runStateSnapshot });
-    if ((sending.value && !composerRequestStarted && !anotherSessionIsSending && options?.allowDuringResend !== true && !allowCurrentContinuationRequest) || !activeSession.value) return false;
+    const currentSessionInFlight = hasActiveTurnInFlight({ activeSession, turnRuntimeRegistry });
+    if ((currentSessionInFlight && !composerRequestStarted && options?.allowDuringResend !== true && !allowCurrentContinuationRequest) || !activeSession.value) return false;
     if (!continueFromUserStopped && !hasTextToSend && uploadFiles.value.length === 0 && !hasExplicitAttachments) return false;
 
     const turnScopeId = normalizeTrimmedString(options?.turnScopeId) || createTurnScopeId();

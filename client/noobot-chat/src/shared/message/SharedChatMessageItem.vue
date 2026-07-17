@@ -110,7 +110,7 @@ const { writtenFiles, displayedAttachments } = useMessageFiles({
   getUserId: () => props.userId,
 });
 
-const { messageModelLabel, showSubTaskActivity, subTaskStatusText } = useMessageMeta({
+const { messageModelLabel, showSubTaskActivity, subTaskStatusText, statusStepState } = useMessageMeta({
   getMessageItem: () => props.messageItem,
 });
 
@@ -165,6 +165,7 @@ function resolveRendererContext() {
     translate,
     showSubTaskActivity: showSubTaskActivity.value,
     subTaskStatusText: subTaskStatusText.value,
+    statusStepState: statusStepState.value,
     writtenFiles: writtenFiles.value,
     displayedAttachments: displayedAttachments.value,
     displayedAttachmentMetas: displayedAttachments.value,

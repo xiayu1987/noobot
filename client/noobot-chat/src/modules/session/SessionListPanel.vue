@@ -120,7 +120,6 @@ function formatSessionTime(value = "") {
 }
 
 async function promptRenameSession(sessionItem = {}) {
-  if (props.sending) return;
   const currentTitle = String(sessionItem?.title || "").trim();
   try {
     const { value } = await ElMessageBox.prompt(
@@ -196,7 +195,6 @@ watch(
                       class="session-rename-btn noobot-action-btn noobot-flat-icon-btn"
                       :title="translate('common.renameSession')"
                       :aria-label="translate('common.renameSession')"
-                      :disabled="sending"
                       @click.stop="promptRenameSession(sessionItem)"
                     >
                       <el-icon><EditPen /></el-icon>
@@ -206,7 +204,6 @@ watch(
                       class="session-delete-btn noobot-action-btn noobot-flat-icon-btn"
                       :title="translate('common.deleteSession')"
                       :aria-label="translate('common.deleteSession')"
-                      :disabled="sending"
                       @click.stop="emit('delete-session', sessionItem.id)"
                     >
                       <el-icon><Delete /></el-icon>

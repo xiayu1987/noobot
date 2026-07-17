@@ -17,6 +17,17 @@ import {
   SESSION_RUN_EVENT,
   applySessionRunStateEvent,
 } from "../../../../src/composables/chat/sessionRunStateMachine";
+import { applyTurnRuntimeEvent } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+
+function applyRuntimeEvent(store, event) {
+  applySessionRunStateEvent({
+    stateRef: toRef(store, "runStateSnapshot"),
+    sending: toRef(store, "sending"),
+    canStop: toRef(store, "canStop"),
+    event,
+  });
+  applyTurnRuntimeEvent(store.turnRuntimeRegistry, event);
+}
 describe("useChatSession reconnect replay", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -54,29 +65,21 @@ describe("useChatSession reconnect replay", () => {
       messageCount: 2,
     })];
     store.activeSessionId = "s-stop-request";
-    applySessionRunStateEvent({
-      stateRef: toRef(store, "runStateSnapshot"),
-      sending: toRef(store, "sending"),
-      canStop: toRef(store, "canStop"),
-      event: {
+    applyRuntimeEvent(store, {
         type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
         sessionId: "s-stop-request",
         turnScopeId: "turn-stop",
         source: "test",
-      },
+
     });
-    applySessionRunStateEvent({
-      stateRef: toRef(store, "runStateSnapshot"),
-      sending: toRef(store, "sending"),
-      canStop: toRef(store, "canStop"),
-      event: {
+    applyRuntimeEvent(store, {
         type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
         state: BackendChannelState.SENDING,
         sessionId: "s-stop-request",
         turnScopeId: "turn-stop",
         dialogProcessId: "dp-stop",
         source: "test",
-      },
+
     });
     wsClientMock.requestStop.mockReturnValue(true);
 
@@ -94,18 +97,14 @@ describe("useChatSession reconnect replay", () => {
     expect(duplicateStop).toBe(false);
     expect(wsClientMock.requestStop).toHaveBeenCalledTimes(1);
 
-    applySessionRunStateEvent({
-      stateRef: toRef(store, "runStateSnapshot"),
-      sending: toRef(store, "sending"),
-      canStop: toRef(store, "canStop"),
-      event: {
+    applyRuntimeEvent(store, {
         type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
         state: "user_stopped",
         sessionId: "s-stop-request",
         turnScopeId: "turn-stop",
         dialogProcessId: "dp-stop",
         source: "test",
-      },
+
     });
     await nextTick();
 
@@ -135,29 +134,21 @@ describe("useChatSession reconnect replay", () => {
       messageCount: 2,
     })];
     store.activeSessionId = "s-stop-error";
-    applySessionRunStateEvent({
-      stateRef: toRef(store, "runStateSnapshot"),
-      sending: toRef(store, "sending"),
-      canStop: toRef(store, "canStop"),
-      event: {
+    applyRuntimeEvent(store, {
         type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
         sessionId: "s-stop-error",
         turnScopeId: "turn-stop-error",
         source: "test",
-      },
+
     });
-    applySessionRunStateEvent({
-      stateRef: toRef(store, "runStateSnapshot"),
-      sending: toRef(store, "sending"),
-      canStop: toRef(store, "canStop"),
-      event: {
+    applyRuntimeEvent(store, {
         type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
         state: BackendChannelState.SENDING,
         sessionId: "s-stop-error",
         turnScopeId: "turn-stop-error",
         dialogProcessId: "dp-stop-error",
         source: "test",
-      },
+
     });
     const stopError = new Error("conversation not found");
     stopError.response = { status: 404 };
@@ -200,29 +191,21 @@ describe("useChatSession reconnect replay", () => {
       messageCount: 2,
     })];
     store.activeSessionId = "s-stop-async-error";
-    applySessionRunStateEvent({
-      stateRef: toRef(store, "runStateSnapshot"),
-      sending: toRef(store, "sending"),
-      canStop: toRef(store, "canStop"),
-      event: {
+    applyRuntimeEvent(store, {
         type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
         sessionId: "s-stop-async-error",
         turnScopeId: "turn-stop-async-error",
         source: "test",
-      },
+
     });
-    applySessionRunStateEvent({
-      stateRef: toRef(store, "runStateSnapshot"),
-      sending: toRef(store, "sending"),
-      canStop: toRef(store, "canStop"),
-      event: {
+    applyRuntimeEvent(store, {
         type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
         state: BackendChannelState.SENDING,
         sessionId: "s-stop-async-error",
         turnScopeId: "turn-stop-async-error",
         dialogProcessId: "dp-stop-async-error",
         source: "test",
-      },
+
     });
     const stopError = new Error("conversation conflict");
     stopError.response = { status: 409 };
