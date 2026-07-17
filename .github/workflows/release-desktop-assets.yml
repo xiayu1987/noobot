@@ -46,6 +46,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
+          body_path: .github/release-notes/${{ env.RELEASE_TAG }}.md
           files: |
             client/windows/dist/Noobot Setup *.exe
             client/windows/dist/*.zip
@@ -79,5 +80,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
+          body_path: .github/release-notes/${{ env.RELEASE_TAG }}.md
           files: |
             client/mac/dist/*.zip
