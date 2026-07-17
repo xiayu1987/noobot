@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 import { computed, ref } from "vue";
 import { messages } from "noobot-i18n/client/messages";
 

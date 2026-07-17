@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";

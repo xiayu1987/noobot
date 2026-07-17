@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 // Tests split by responsibility from ThinkingPanel.spec.js.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick } from "vue";

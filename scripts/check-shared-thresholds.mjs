@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 /*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * Shared threshold guard.
  *
  * Length, quantity, turn/count, and time thresholds must live in @noobot/shared

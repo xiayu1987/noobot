@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 import { config } from "../config.js";
 import { CHANNEL_STATUS, UPSTREAM_CLOSE_REASON } from "../constants.js";
 import { nowMs, isTerminalStatus } from "../utils.js";

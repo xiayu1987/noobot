@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 export const UI_PREFERENCE_STORAGE_KEYS = Object.freeze({
   userId: "noobot_user_id",
   allowUserInteraction: "noobot_allow_user_interaction",

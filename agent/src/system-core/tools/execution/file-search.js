@@ -28,7 +28,7 @@ import {
 } from "./file-utils.js";
 
 const execFile = promisify(execFileCallback);
-let ripgrepAvailablePromise = null;
+let ripgrepPathPromise = null;
 
 function buildSearchMatcher({ query = "", isRegex = false, caseSensitive = false } = {}) {
   const source = String(query || "");
@@ -131,13 +131,38 @@ export async function collectSearchFiles({ rootPath = "", workspacePath = "", gl
   return files;
 }
 
-export async function hasRipgrep() {
-  if (!ripgrepAvailablePromise) {
-    ripgrepAvailablePromise = execFile("rg", ["--version"])
-      .then(() => true)
-      .catch(() => false);
+async function probeRipgrepPath(candidate) {
+  if (!candidate) return "";
+  try {
+    await execFile(candidate, ["--version"]);
+    return candidate;
+  } catch {
+    return "";
   }
-  return ripgrepAvailablePromise;
+}
+
+async function resolveBundledRipgrepPath() {
+  try {
+    const module = await import("@vscode/ripgrep");
+    return String(module?.rgPath || "");
+  } catch {
+    return "";
+  }
+}
+
+export async function resolveRipgrepPath() {
+  if (!ripgrepPathPromise) {
+    ripgrepPathPromise = (async () => {
+      const bundledPath = await probeRipgrepPath(await resolveBundledRipgrepPath());
+      if (bundledPath) return bundledPath;
+      return probeRipgrepPath("rg");
+    })();
+  }
+  return ripgrepPathPromise;
+}
+
+export async function hasRipgrep() {
+  return Boolean(await resolveRipgrepPath());
 }
 
 
@@ -153,6 +178,12 @@ export async function searchFilesWithRipgrep({
   abortSignal = null,
 } = {}) {
   throwIfAborted(abortSignal);
+  const ripgrepPath = await resolveRipgrepPath();
+  if (!ripgrepPath) {
+    const error = new Error("ripgrep executable is not available");
+    error.code = "ENOENT";
+    throw error;
+  }
   const contextCount = toPositiveInt(contextLines, DEFAULT_SEARCH_CONTEXT_LINES, 0, 20);
   const maxCount = toPositiveInt(maxResults, DEFAULT_SEARCH_MAX_RESULTS, 1, 500);
   const args = [
@@ -190,7 +221,7 @@ export async function searchFilesWithRipgrep({
 
   let stdout = "";
   try {
-    const result = await execFile("rg", args, {
+    const result = await execFile(ripgrepPath, args, {
       cwd: rootPath,
       maxBuffer: MAX_SEARCH_BUFFER_SIZE,
       signal: abortSignal || undefined,

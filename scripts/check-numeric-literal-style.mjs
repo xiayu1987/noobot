@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 /*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * Numeric literal style guard:
  * - Use plain decimal digits for numeric literals.
  * - Do not use JavaScript numeric separators such as 18_000_000.

@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 import { describe, it, before, after, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'url';

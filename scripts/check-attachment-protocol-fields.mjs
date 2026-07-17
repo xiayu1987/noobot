@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 /*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * Attachment protocol field guard.
  *
  * Canonical attachment metadata should be emitted as camelCase fields:

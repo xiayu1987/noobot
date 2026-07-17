@@ -1,3 +1,8 @@
+<!--
+  Copyright (c) 2026 xiayu
+  Contact: 126240622+xiayu1987@users.noreply.github.com
+  SPDX-License-Identifier: MIT
+-->
 <template>
   <el-form class="setup-form" label-position="top" @submit.prevent="$emit('submit')">
     <p>Complete the required first-run setup. These values are saved only in your desktop user data directory.</p>

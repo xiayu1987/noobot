@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 /*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * Legacy time-key guard:
  * - Disallow direct legacy key reads like source.run_timeout_ms / source["run_timeout_ms"].
  * - Allow compatibility declarations via resolveTimeMs({ legacyKeys / legacyKey }) and

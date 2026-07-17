@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 export const SELECTED_PLUGINS_STORAGE_KEY = "noobot_selected_plugins";
 export const DEFAULT_ON_PLUGINS_STORAGE_KEY = "noobot_default_on_plugins";
 

@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { bumpVersion, normalizeVersion, assertVersion, run } from "./bump-version.mjs";

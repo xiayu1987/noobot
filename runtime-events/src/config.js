@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 import { DEFAULT_WORKSPACE_ROOT, RUNTIME_EVENTS_DIR } from './constants.js';
 import {
   RUNTIME_EVENTS_CONFIG_DEFAULTS,

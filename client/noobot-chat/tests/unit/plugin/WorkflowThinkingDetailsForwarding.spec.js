@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import WorkflowSessionMessageItem from "../../../../../plugin/noobot-plugin-workflow/frontend/components/WorkflowSessionMessageItem.vue";

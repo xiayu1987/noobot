@@ -1,3 +1,8 @@
+<!--
+  Copyright (c) 2026 xiayu
+  Contact: 126240622+xiayu1987@users.noreply.github.com
+  SPDX-License-Identifier: MIT
+-->
 <template>
   <el-card class="log-panel" shadow="never">
     <template #header><div class="log-header"><span>Startup log</span><span class="log-dots"><i></i><i></i><i></i></span></div></template>
