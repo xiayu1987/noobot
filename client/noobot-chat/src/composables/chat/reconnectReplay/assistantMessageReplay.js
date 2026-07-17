@@ -8,7 +8,7 @@ import {
   collectReconnectDeltaText,
   findLatestPendingAssistantAfterLastUser,
 } from "../../infra/reconnectReplayModel";
-import { _ensureArray, _isAssistantRole, _matchesDialogProcessId, _trimStr } from "./utils";
+import { _ensureArray, _isAssistantRole, _matchesDialogProcessId, _trimStr, normalizeReplayError } from "./utils";
 import {
   findAssistantMessageByDialogProcessId,
   hasAssistantMessageWithContent,
@@ -145,7 +145,7 @@ export function createFinalAssistantFromReconnectReplay({
     .reverse()
     .find((envelope) => _trimStr(envelope?.event) === StreamEventEnum.ERROR);
   if (errorEnvelope) {
-    targetAssistantMessage.error = String(errorEnvelope?.data?.error || "");
+    targetAssistantMessage.error = normalizeReplayError(errorEnvelope?.data?.error);
   }
   return targetAssistantMessage;
 }

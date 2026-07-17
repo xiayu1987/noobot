@@ -74,9 +74,17 @@ export function useMessageMeta({
 
   const statusStepState = computed(() => {
     const messageItem = getMessageItem() || {};
-    const turnScopeId = getMessageTurnScopeId(messageItem);
+    const turnScopeId = String(messageItem?.statusTurnScopeId || getMessageTurnScopeId(messageItem)).trim();
     const turnRuntime = turnScopeId ? turnRuntimeRegistry.value?.turns?.[turnScopeId] : null;
-    if (!turnRuntime) return "";
+    if (!turnRuntime) {
+      const persistedState = String(messageItem?.persistedStatusStepState || "").trim().toLowerCase();
+      if (persistedState === "completed") return "completed";
+      if (persistedState === "user_stopped" || persistedState === "stopped") return "stopped";
+      if (["error", "failed", "expired"].includes(persistedState)) return "error";
+      return ["requesting", "sending", "completing", "stopping"].includes(persistedState)
+        ? persistedState
+        : "";
+    }
     if (turnRuntime.terminal === "completed") return "completed";
     if (turnRuntime.terminal === "user_stopped") return "stopped";
     if (turnRuntime.terminal) return "error";

@@ -145,7 +145,9 @@ const SECRET_RULES = [
   /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g,
   /-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9 ]+ )?PRIVATE KEY-----/g,
 ];
-const BEARER_SECRET = /\bBearer\s+([A-Za-z0-9._~+/=-]{16,})/gi;
+// `Bearer` already provides strong credential context, so do not impose a
+// length/entropy threshold. Short development and test tokens are secrets too.
+const BEARER_SECRET = /\bBearer\s+([A-Za-z0-9._~+/=-]+)/gi;
 const SECRET_ASSIGNMENT = /\b(?:api[_-]?key|secret|token|password|passwd|pwd|client[_-]?secret|access[_-]?token|refresh[_-]?token|private[_-]?key|auth)\b\s*[:=]\s*(['"]?)([^\s'"]{8,})\1/gi;
 function collectSecretRanges(text) {
   const value = String(text || '');

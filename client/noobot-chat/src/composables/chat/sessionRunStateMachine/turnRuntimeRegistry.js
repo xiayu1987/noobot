@@ -80,11 +80,13 @@ export function removeTurnRuntime(registry, turnScopeId, { sessionId = "" } = {}
 
 function terminalFromEvent(event) {
   const backend = text(event.backendState || event.raw?.status || event.raw?.terminal).toLowerCase();
-  // A channel user_stopped event confirms transport state only. The persisted
-  // session summary (authoritativeSnapshot/terminal) is the terminal boundary.
+  // A channel user_stopped only confirms that persistence completed. The
+  // authoritative session summary must be applied before the frontend turn is
+  // terminal, so refreshed and non-refreshed clients converge from one fact.
+  const isChannelUserStopped = backend === "user_stopped" &&
+    event.type === SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE;
   if (TERMINALS.has(backend) && !(
-    backend === "user_stopped" &&
-    event.type === SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE &&
+    isChannelUserStopped &&
     event.raw?.authoritativeSnapshot !== true &&
     !event.raw?.terminal
   )) return backend === "failed" ? "error" : backend;

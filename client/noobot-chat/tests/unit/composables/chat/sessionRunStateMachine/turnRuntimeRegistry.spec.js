@@ -72,6 +72,83 @@ describe("turnRuntimeRegistry", () => {
       canStop: false,
     });
   });
+  it("keeps stopping after real-time user_stopped until the authoritative summary is applied", () => {
+    const registry = createTurnRuntimeRegistryState();
+    sendStart(registry, { sessionId: "s1", turnScopeId: "t1", seq: 1 });
+    backendState(registry, {
+      sessionId: "s1",
+      turnScopeId: "t1",
+      dialogProcessId: "dp1",
+      state: BackendChannelState.SENDING,
+      seq: 2,
+    });
+    applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED,
+      sessionId: "s1",
+      turnScopeId: "t1",
+      dialogProcessId: "dp1",
+      seq: 3,
+    });
+
+    const stopped = backendState(registry, {
+      sessionId: "s1",
+      turnScopeId: "t1",
+      dialogProcessId: "dp1",
+      state: BackendChannelState.USER_STOPPED,
+      seq: 4,
+    });
+
+    expect(stopped.applied).toBe(true);
+    expect(stopped.turn).toMatchObject({
+      state: "frontend_user_stopping",
+      terminal: null,
+      canStop: false,
+    });
+    expect(turnRuntimeDisplayState(stopped.turn)).toBe("stopping");
+
+    const summarized = applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED,
+      sessionId: "s1",
+      turnScopeId: "t1",
+      dialogProcessId: "dp1",
+      seq: 5,
+    });
+    expect(summarized.turn).toMatchObject({
+      terminal: "user_stopped",
+      canStop: false,
+    });
+    expect(turnRuntimeDisplayState(summarized.turn)).toBe("continue");
+  });
+  it("rejects stale or conflicting real-time user_stopped events", () => {
+    const registry = createTurnRuntimeRegistryState();
+    sendStart(registry, { sessionId: "s1", turnScopeId: "t1", seq: 5 });
+    backendState(registry, {
+      sessionId: "s1",
+      turnScopeId: "t1",
+      dialogProcessId: "dp1",
+      state: BackendChannelState.SENDING,
+      seq: 6,
+    });
+
+    expect(backendState(registry, {
+      sessionId: "s1",
+      turnScopeId: "t1",
+      dialogProcessId: "dp1",
+      state: BackendChannelState.USER_STOPPED,
+      seq: 4,
+    }).applied).toBe(false);
+    expect(backendState(registry, {
+      sessionId: "s1",
+      turnScopeId: "t1",
+      dialogProcessId: "other-dialog",
+      state: BackendChannelState.USER_STOPPED,
+      seq: 7,
+    }).applied).toBe(false);
+    expect(resolveSessionTurnRuntime(registry, "s1")).toMatchObject({
+      terminal: null,
+      canStop: true,
+    });
+  });
   it("keeps sessions independent", () => {
     const registry = createTurnRuntimeRegistryState();
     sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });

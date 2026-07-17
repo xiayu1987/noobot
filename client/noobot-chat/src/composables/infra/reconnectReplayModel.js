@@ -41,7 +41,6 @@ function isPendingInteractionReplay(envelope = {}) {
 }
 
 function isSessionEntryRunning(sessionEntry = {}) {
-  if (sessionEntry?.hasRunningTask !== true) return false;
   const sessionId = String(sessionEntry?.sessionId || "").trim();
   const currentRunSessionId = String(sessionEntry?.currentRun?.sessionId || "").trim();
   const currentRunTurnScopeId = String(sessionEntry?.currentRun?.turnScopeId || "").trim();
@@ -49,7 +48,7 @@ function isSessionEntryRunning(sessionEntry = {}) {
   // currentRun is the authoritative run snapshot. A channel can briefly remain
   // RUNNING/CONNECTING after the run has persisted a terminal state; in that
   // window hasRunningTask must not resurrect the terminal turn as recoverable.
-  if (BackendTerminalStates.includes(currentRunState)) return false;
+  if (!currentRunState || BackendTerminalStates.includes(currentRunState)) return false;
   return Boolean(
     sessionId &&
     currentRunSessionId === sessionId &&

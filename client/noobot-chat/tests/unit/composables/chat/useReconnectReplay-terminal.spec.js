@@ -194,6 +194,19 @@ describe("useReconnectReplay", () => {
       sessionId: "s-1",
       dialogProcessId: "dp-stopped",
     });
+    expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1", {
+      source: "userStoppedFinalStatus",
+      force: true,
+      reuseRecentlyLoaded: false,
+    });
+    expect(mocks.chatList.applySessionDetail).toHaveBeenCalledWith(
+      expect.anything(),
+      { preserveCurrentMessages: true, scrollToBottom: false },
+    );
+    expect(refs.runStateSnapshot.value).toMatchObject({
+      state: FrontendRunState.IDLE,
+      lastEventType: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED,
+    });
   });
 
   it("RC-04: terminal event blocks subsequent DELTA mutation", async () => {

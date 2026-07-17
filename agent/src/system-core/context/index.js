@@ -210,6 +210,7 @@ export class ContextBuilder {
     dialogProcessId = "",
     sessionTree = {},
     rootSessionId = "",
+    staticInfo = null,
   } = {}) {
     const dynamicInfo = buildDynamicInfo({
       userId: this.userId,
@@ -242,6 +243,7 @@ export class ContextBuilder {
     const protectedDialogProcessId = String(dynamicInfo?.dialogProcessId || dialogProcessId || "").trim();
     return {
       ...mergedRuntime,
+      ...(staticInfo && typeof staticInfo === "object" ? { staticInfo } : {}),
       ...(protectedDialogProcessId
         ? {
             dialogProcessId: protectedDialogProcessId,
@@ -292,6 +294,30 @@ export class ContextBuilder {
       runtimeBasePath: resolvedRuntimeBasePath,
     });
     const effectiveConfig = this._getEffectiveConfig();
+    const runtimeStaticInfo = applyIdentityToStaticPathInfo(
+      {
+        ...buildSandboxViewStaticInfo({
+          runtimeBasePath: resolvedRuntimeBasePath,
+          userId: this.userId,
+          globalConfig: this.globalConfig,
+          effectiveConfig,
+        }),
+        identity: {
+          userId: String(this.userId || "").trim(),
+          isSuperUser: resolveRuntimeSuperUserFlag({
+            globalConfig: this.globalConfig,
+            userId: this.userId,
+          }),
+        },
+      },
+      {
+        userId: String(this.userId || "").trim(),
+        isSuperUser: resolveRuntimeSuperUserFlag({
+          globalConfig: this.globalConfig,
+          userId: this.userId,
+        }),
+      },
+    );
     const runtime = buildRuntimeContext({
       userId: this.userId,
       basePath: resolvedRuntimeBasePath,
@@ -311,6 +337,7 @@ export class ContextBuilder {
         dialogProcessId,
         sessionTree: resolvedSessionTree,
         rootSessionId: resolvedRootSessionId,
+        staticInfo: runtimeStaticInfo,
       }),
       userMessageAttachments: attachments,
     });

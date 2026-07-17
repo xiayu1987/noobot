@@ -84,4 +84,36 @@ describe("useMessageMeta status steps", () => {
     await nextTick();
     expect(statusStepState.value).toBe("");
   });
+
+  it("uses the persisted main-turn display identity without replacing an internal turn", async () => {
+    const store = useChatStore();
+    const message = {
+      role: "assistant",
+      turnScopeId: "internal-turn:child",
+      statusTurnScopeId: "client-turn:main",
+    };
+    applyEvent(store, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: "completed",
+      sessionId: "session-1",
+      turnScopeId: "client-turn:main",
+      terminal: "completed",
+    });
+    const { statusStepState } = useMessageMeta({ getMessageItem: () => message });
+    await nextTick();
+    expect(statusStepState.value).toBe("completed");
+    expect(message.turnScopeId).toBe("internal-turn:child");
+  });
+
+  it("restores a persisted status before Registry hydration after refresh", async () => {
+    const message = {
+      role: "assistant",
+      turnScopeId: "internal-turn:child",
+      statusTurnScopeId: "client-turn:main",
+      persistedStatusStepState: "completed",
+    };
+    const { statusStepState } = useMessageMeta({ getMessageItem: () => message });
+    await nextTick();
+    expect(statusStepState.value).toBe("completed");
+  });
 });

@@ -24,6 +24,7 @@ ensureChannel(channelKey = "", startPayload = {}) {
     updatedAtMs: nowMs(),
     subscribers: new Set(),
     upstreamSocket: null,
+    upstreamEverConnected: false,
     apiKey: "",
     locale: "",
     startPayload: null,

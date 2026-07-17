@@ -11,6 +11,12 @@ export function _trimStr(x) {
   return String(x || "").trim();
 }
 
+export function normalizeReplayError(value) {
+  if (typeof value === "string") return value.trim();
+  if (!value || typeof value !== "object") return "";
+  return _trimStr(value.message || value.reason || value.description);
+}
+
 export function _ensureArray(x) {
   return Array.isArray(x) ? x : [];
 }

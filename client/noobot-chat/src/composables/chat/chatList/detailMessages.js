@@ -534,7 +534,52 @@ export function buildNormalizedDetailMessages({
       makeViewMessage,
     });
   }
-  return injectTurnStatusPlaceholders(normalizedMessages, turnStatuses);
+  const messagesWithPlaceholders = injectTurnStatusPlaceholders(normalizedMessages, turnStatuses);
+  applyStatusTurnScopeIds({
+    messages: messagesWithPlaceholders,
+    sessionDocs,
+    turnStatuses,
+  });
+  return messagesWithPlaceholders;
+}
+
+export function applyStatusTurnScopeIds({ messages = [], sessionDocs = [], turnStatuses = [] } = {}) {
+  const statusByDialogProcessId = new Map(
+    (Array.isArray(turnStatuses) ? turnStatuses : [])
+      .map((status) => [
+        normalizeText(status?.dialogProcessId || getMessageDialogProcessId(status)),
+        status,
+      ])
+      .filter(([dialogProcessId, status]) => dialogProcessId && normalizeText(status?.turnScopeId)),
+  );
+  if (!statusByDialogProcessId.size) return messages;
+  const allMessages = [
+    ...(Array.isArray(messages) ? messages : []),
+    ...flattenSessionMessages(sessionDocs),
+  ];
+  const parentByDialogProcessId = buildDialogProcessParentMap(allMessages);
+  const rootDialogProcessIdSet = new Set(statusByDialogProcessId.keys());
+  for (const messageItem of Array.isArray(messages) ? messages : []) {
+    const dialogProcessId = getMessageDialogProcessId(messageItem);
+    if (!dialogProcessId) continue;
+    const rootDialogProcessId = rootDialogProcessIdSet.has(dialogProcessId)
+      ? dialogProcessId
+      : resolveRootDialogProcessIdByChain({
+        startDialogProcessId: dialogProcessId,
+        rootDialogProcessIdSet,
+        parentByDialogProcessId,
+      });
+    const turnStatus = statusByDialogProcessId.get(rootDialogProcessId);
+    const statusTurnScopeId = normalizeText(turnStatus?.turnScopeId);
+    if (statusTurnScopeId) {
+      messageItem.statusTurnScopeId = statusTurnScopeId;
+      // Persisted turnStatuses is the refresh-time source of truth. Project the
+      // display state with the identity so rendering does not depend on Registry
+      // hydration order after a reload.
+      messageItem.persistedStatusStepState = normalizeText(turnStatus?.status);
+    }
+  }
+  return messages;
 }
 
 export function buildChildAttachmentsByParentDialogProcessId({

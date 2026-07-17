@@ -174,6 +174,7 @@ export async function applyReconnectChannelState({
   chatWebSocketClient,
   scheduleCacheExpiredSessionRefresh,
   finalizeReplayCompletedSessionDetail,
+  finalizeReplayStoppedSessionDetail,
   clearPendingInteraction,
   translate,
 } = {}) {
@@ -401,7 +402,15 @@ export async function applyReconnectChannelState({
         });
       }
     }
-    if (shouldFinalizeCompletedReplay) {
+    if (state === BackendChannelState.USER_STOPPED) {
+      await finalizeReplayStoppedSessionDetail?.({
+        sessionId,
+        dialogProcessId,
+        turnScopeId,
+        targetAssistantMessage,
+        stateData,
+      });
+    } else if (shouldFinalizeCompletedReplay) {
       await finalizeReplayCompletedSessionDetail?.({
         sessionId,
         dialogProcessId,

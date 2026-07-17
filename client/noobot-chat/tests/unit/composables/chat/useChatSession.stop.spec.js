@@ -108,9 +108,17 @@ describe("useChatSession reconnect replay", () => {
     });
     await nextTick();
 
-    expect(session.composerActionState.value.stopRequesting).toBe(true);
-    expect(store.runStateSnapshot.state).toBe(FrontendRunState.USER_STOPPING);
-    expect(store.sending).toBe(true);
+    expect(session.composerActionState.value).toMatchObject({
+      stopRequesting: true,
+      awaitingBackendStop: true,
+      displayState: "stopping",
+      userStopped: false,
+      canStop: false,
+    });
+    expect(store.turnRuntimeRegistry.turns["turn-stop"]).toMatchObject({
+      terminal: null,
+      canStop: false,
+    });
     expect(store.canStop).toBe(false);
   });
 

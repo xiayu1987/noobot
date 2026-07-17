@@ -58,6 +58,7 @@ export function createFixture({ activeId = "s-1", processStore = null } = {}) {
   const applyCompletedToolLogsToMessages = vi.fn();
   const scrollBottom = vi.fn();
   const notify = vi.fn();
+  const applyTurnRuntimeEvents = vi.fn();
 
   const chatList = {
     fetchSessions: vi.fn(async () => {}),
@@ -128,6 +129,7 @@ export function createFixture({ activeId = "s-1", processStore = null } = {}) {
     translate: (key) => key,
     notify,
     processStore,
+    applyTurnRuntimeEvents,
   });
 
   return {
@@ -154,6 +156,7 @@ export function createFixture({ activeId = "s-1", processStore = null } = {}) {
       notify,
       chatList,
       chatWebSocketClient,
+      applyTurnRuntimeEvents,
     },
   };
 }

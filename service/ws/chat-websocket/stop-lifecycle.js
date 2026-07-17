@@ -55,6 +55,11 @@ export function isUserStopRunAbort({ stopRequested = false, abortSignal = null }
   return stopRequested === true || isUserStopAbortReason(abortSignal?.reason);
 }
 
+export function isSocketCloseRunAbort(abortSignal = null) {
+  const reason = abortSignal?.reason;
+  return reason && typeof reason === "object" && String(reason?.type || "").trim() === "socket_close";
+}
+
 export function buildAbortErrorMessage({ error = null, abortSignal = null, currentLocale = "", translateText = (key) => key } = {}) {
   const reason = abortSignal?.reason;
   const reasonType = reason && typeof reason === "object" ? String(reason?.type || "").trim() : "";
