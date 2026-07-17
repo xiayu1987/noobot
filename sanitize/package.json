@@ -4,11 +4,6 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "exports": {
-    ".": {
-      "import": "./src/index.js",
-      "require": "./src/index.cjs"
-    }
-  },
+  "exports": "./src/index.js",
   "scripts": { "test": "node --test" }
 }

@@ -3,9 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-const zlib = require('zlib');
-const util = require('util');
-const { tryParseJson } = require('./common');
+import zlib from 'node:zlib';
+import util from 'node:util';
+import { tryParseJson } from './common.js';
 
 const gunzip = util.promisify(zlib.gunzip);
 const inflate = util.promisify(zlib.inflate);
@@ -224,7 +224,7 @@ function resolveFinalResponseBodyText(bodyText = '', contentType = '') {
   return normalizedBodyText;
 }
 
-module.exports = {
+export {
   decodeBodyByEncoding,
   resolveFinalResponseBodyText,
 };

@@ -3,11 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-const fs = require('fs');
-const path = require('path');
-const { pad, tryParseJson } = require('./common');
-const { normalizeUsageCacheDiagnostics } = require('./cache-diagnostics');
-const { sanitizeHeaders, sanitizeUrl } = require('@noobot/sanitize');
+import fs from 'node:fs';
+import path from 'node:path';
+import { pad, tryParseJson } from './common.js';
+import { normalizeUsageCacheDiagnostics } from './cache-diagnostics.js';
+import { sanitizeHeaders, sanitizeUrl } from '@noobot/sanitize';
 
 function createLogger({
   logDir,
@@ -253,7 +253,7 @@ ${bodyText}
   };
 }
 
-module.exports = {
+export {
   createLogger,
   sanitizeHeaders,
   sanitizeUrl,
