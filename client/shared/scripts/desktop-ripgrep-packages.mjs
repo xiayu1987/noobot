@@ -6,24 +6,25 @@
 import { clientFilePath as path } from "../path-resolver.js";
 
 const desktopRipgrepPackages = {
-  windows: [
-    "@vscode/ripgrep-win32-x64",
-    "@vscode/ripgrep-win32-arm64",
-    "@vscode/ripgrep-win32-ia32",
-  ],
-  mac: [
-    "@vscode/ripgrep-darwin-x64",
-    "@vscode/ripgrep-darwin-arm64",
-  ],
+  windows: {
+    x64: "@vscode/ripgrep-win32-x64",
+    arm64: "@vscode/ripgrep-win32-arm64",
+    ia32: "@vscode/ripgrep-win32-ia32",
+  },
+  mac: {
+    x64: "@vscode/ripgrep-darwin-x64",
+    arm64: "@vscode/ripgrep-darwin-arm64",
+  },
 };
 
-export function getDesktopRipgrepPackages(desktopPackageName, ripgrepVersion) {
+export function getDesktopRipgrepPackages(desktopPackageName, ripgrepVersion, arch) {
   const platform = desktopPackageName === "noobot-windows-client"
     ? "windows"
     : desktopPackageName === "noobot-mac-client"
       ? "mac"
       : "";
-  return (desktopRipgrepPackages[platform] || []).map((packageName) => `${packageName}@${ripgrepVersion}`);
+  const packageName = desktopRipgrepPackages[platform]?.[arch];
+  return packageName ? [`${packageName}@${ripgrepVersion}`] : [];
 }
 
 export function getRipgrepBinaryRelativePath(packageSpec) {

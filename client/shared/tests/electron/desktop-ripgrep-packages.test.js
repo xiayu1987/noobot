@@ -12,32 +12,30 @@ import {
 
 const version = "^1.18.0";
 
-test("desktop backend runtime includes every supported Windows ripgrep binary", () => {
-  const packages = getDesktopRipgrepPackages("noobot-windows-client", version);
-  assert.deepEqual(packages, [
-    `@vscode/ripgrep-win32-x64@${version}`,
-    `@vscode/ripgrep-win32-arm64@${version}`,
-    `@vscode/ripgrep-win32-ia32@${version}`,
-  ]);
-  assert.deepEqual(packages.map(getRipgrepBinaryRelativePath), [
-    "node_modules/@vscode/ripgrep-win32-x64/bin/rg.exe",
-    "node_modules/@vscode/ripgrep-win32-arm64/bin/rg.exe",
-    "node_modules/@vscode/ripgrep-win32-ia32/bin/rg.exe",
-  ]);
+test("desktop backend runtime selects the Windows ripgrep binary for the build architecture", () => {
+  for (const [arch, packageName] of [
+    ["x64", "@vscode/ripgrep-win32-x64"],
+    ["arm64", "@vscode/ripgrep-win32-arm64"],
+    ["ia32", "@vscode/ripgrep-win32-ia32"],
+  ]) {
+    const packages = getDesktopRipgrepPackages("noobot-windows-client", version, arch);
+    assert.deepEqual(packages, [`${packageName}@${version}`]);
+    assert.equal(getRipgrepBinaryRelativePath(packages[0]), `node_modules/${packageName}/bin/rg.exe`);
+  }
 });
 
-test("desktop backend runtime includes both supported macOS ripgrep binaries", () => {
-  const packages = getDesktopRipgrepPackages("noobot-mac-client", version);
-  assert.deepEqual(packages, [
-    `@vscode/ripgrep-darwin-x64@${version}`,
-    `@vscode/ripgrep-darwin-arm64@${version}`,
-  ]);
-  assert.deepEqual(packages.map(getRipgrepBinaryRelativePath), [
-    "node_modules/@vscode/ripgrep-darwin-x64/bin/rg",
-    "node_modules/@vscode/ripgrep-darwin-arm64/bin/rg",
-  ]);
+test("desktop backend runtime selects the macOS ripgrep binary for the build architecture", () => {
+  for (const [arch, packageName] of [
+    ["x64", "@vscode/ripgrep-darwin-x64"],
+    ["arm64", "@vscode/ripgrep-darwin-arm64"],
+  ]) {
+    const packages = getDesktopRipgrepPackages("noobot-mac-client", version, arch);
+    assert.deepEqual(packages, [`${packageName}@${version}`]);
+    assert.equal(getRipgrepBinaryRelativePath(packages[0]), `node_modules/${packageName}/bin/rg`);
+  }
 });
 
-test("non-desktop packages do not request platform ripgrep binaries", () => {
-  assert.deepEqual(getDesktopRipgrepPackages("noobot-chat", version), []);
+test("unsupported package and architecture combinations do not request a binary", () => {
+  assert.deepEqual(getDesktopRipgrepPackages("noobot-chat", version, "x64"), []);
+  assert.deepEqual(getDesktopRipgrepPackages("noobot-mac-client", version, "ia32"), []);
 });
