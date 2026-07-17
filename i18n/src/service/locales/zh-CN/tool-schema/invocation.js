@@ -120,9 +120,6 @@ export const INVOCATION_TOOL_SCHEMA = {
       "tools.script.commandNotInstalled": (params = {}) =>
     `${String(params.commandName || "").trim()} 未安装，请先安装 ${String(params.commandName || "").trim()}`,
       "tools.script.criticalCancelled": "用户未确认最高风险脚本，已取消执行。",
-      "tools.script.criticalConfirmation": (params = {}) =>
-    `即将执行最高风险且可能具有破坏性的脚本，是否确认执行？\n\n命令：\n${String(params.command || "")}`,
-      "tools.script.criticalConfirmationUnavailable": "最高风险脚本执行前必须由用户确认，但用户交互通道不可用。",
       "tools.script.concise.lineWorkdir": (params = {}) =>
     `默认工作目录：${String(params.workdir || "").trim()}`,
       "tools.script.concise.lineRelativeBase": (params = {}) =>

@@ -21,6 +21,7 @@
     "nodemon": "^3.1.14"
   },
   "dependencies": {
+    "@noobot/sanitize": "file:../sanitize",
     "http-proxy": "^1.18.1"
   }
 }

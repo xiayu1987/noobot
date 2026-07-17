@@ -32,7 +32,7 @@ test("read_file: should map docker sandbox /workspace/<userId> path to user work
     call: {
       id: "call_read_workspace_path",
       name: "read_file",
-      args: { filePath: "/workspace/primary-user/runtime/ops_workdir/result.json" },
+      args: { riskLevel: "low", filePath: "/workspace/primary-user/runtime/ops_workdir/result.json" },
     },
     tool,
     runtime: agentContext.execution.controllers.runtime,
@@ -79,7 +79,7 @@ test("read_file: regular user cannot read another user workspace through /worksp
     call: {
       id: "call_regular_user_read_other_workspace",
       name: "read_file",
-      args: { filePath: "/workspace/other-user/secret.txt" },
+      args: { riskLevel: "low", filePath: "/workspace/other-user/secret.txt" },
     },
     tool,
     runtime: agentContext.execution.controllers.runtime,
@@ -108,7 +108,7 @@ test("read_file: configured super user id does not bypass isolation when runtime
   });
   const tool = createFileTool({ agentContext }).find((item) => item?.name === "read_file");
   const runnerResult = await executeToolCall({
-    call: { id: "call_missing_super_flag", name: "read_file", args: { filePath: "/workspace/other-user/secret.txt" } },
+    call: { id: "call_missing_super_flag", name: "read_file", args: { riskLevel: "low", filePath: "/workspace/other-user/secret.txt" } },
     tool,
     runtime: agentContext.execution.controllers.runtime,
     agentContext,
@@ -134,7 +134,7 @@ test("read_file: non-true super user runtime flag does not bypass isolation", as
   });
   const tool = createFileTool({ agentContext }).find((item) => item?.name === "read_file");
   const runnerResult = await executeToolCall({
-    call: { id: "call_non_true_super_flag", name: "read_file", args: { filePath: "/workspace/other-user/secret.txt" } },
+    call: { id: "call_non_true_super_flag", name: "read_file", args: { riskLevel: "low", filePath: "/workspace/other-user/secret.txt" } },
     tool,
     runtime: agentContext.execution.controllers.runtime,
     agentContext,
@@ -177,7 +177,7 @@ test("read_file: configured super user can read another user workspace through /
     call: {
       id: "call_super_user_read_other_workspace",
       name: "read_file",
-      args: { filePath: "/workspace/other-user/visible.txt" },
+      args: { riskLevel: "low", filePath: "/workspace/other-user/visible.txt" },
     },
     tool,
     runtime: agentContext.execution.controllers.runtime,
@@ -224,7 +224,7 @@ test("read_file: sandboxed super user in docker user scope cannot read another u
     call: {
       id: "call_super_user_docker_user_scope_read_other_workspace",
       name: "read_file",
-      args: { filePath: "/workspace/other-user/hidden.txt" },
+      args: { riskLevel: "low", filePath: "/workspace/other-user/hidden.txt" },
     },
     tool,
     runtime: agentContext.execution.controllers.runtime,
@@ -257,7 +257,7 @@ test("read_file: regular user cannot read an absolute file outside allowed roots
     call: {
       id: "call_regular_user_read_outside_absolute_path",
       name: "read_file",
-      args: { filePath: outsideFile },
+      args: { riskLevel: "low", filePath: outsideFile },
     },
     tool,
     runtime: agentContext.execution.controllers.runtime,
@@ -291,7 +291,7 @@ test("read_file: super user can read an absolute file outside workspace root", a
     call: {
       id: "call_super_user_read_outside_absolute_path",
       name: "read_file",
-      args: { filePath: outsideFile },
+      args: { riskLevel: "low", filePath: outsideFile },
     },
     tool,
     runtime: agentContext.execution.controllers.runtime,
@@ -344,7 +344,7 @@ test("read_file: super user cannot use host absolute paths outside sandbox roots
     call: {
       id: "call_super_user_sandbox_read_outside_absolute_path",
       name: "read_file",
-      args: { filePath: outsideFile },
+      args: { riskLevel: "low", filePath: outsideFile },
     },
     tool,
     runtime: agentContext.execution.controllers.runtime,
@@ -388,7 +388,7 @@ test("read_file: configured super user cross-workspace read still respects mustE
     call: {
       id: "call_super_user_read_missing_other_workspace",
       name: "read_file",
-      args: { filePath: "/workspace/other-user/missing.txt" },
+      args: { riskLevel: "low", filePath: "/workspace/other-user/missing.txt" },
     },
     tool,
     runtime: agentContext.execution.controllers.runtime,
@@ -433,7 +433,7 @@ test("read_file: should allow mapped sandbox path that points to mounted host di
     call: {
       id: "call_read_mounted_path",
       name: "read_file",
-      args: { filePath: "/project/sandbox-mounted.txt" },
+      args: { riskLevel: "low", filePath: "/project/sandbox-mounted.txt" },
     },
     tool,
     runtime: agentContext.execution.controllers.runtime,
@@ -490,7 +490,7 @@ test("read_file: should allow docker mount target path under /project", async ()
     call: {
       id: "call_read_project_mount_path",
       name: "read_file",
-      args: { filePath: "/project/agent/src/system-core/tools/execution/file-tool.js" },
+      args: { riskLevel: "low", filePath: "/project/agent/src/system-core/tools/execution/file-tool.js" },
     },
     tool,
     runtime: agentContext.execution.controllers.runtime,
@@ -512,13 +512,13 @@ test("read_file: 默认返回行号且可关闭行号", async () => {
   const tool = tools.find((item) => item?.name === "read_file");
   assert.ok(tool);
 
-  const withLines = parseToolResult(await tool.invoke({ filePath: "lines.txt", startLine: 2, endLine: 3 }));
+  const withLines = parseToolResult(await tool.invoke({ riskLevel: "low", filePath: "lines.txt", startLine: 2, endLine: 3 }));
   assert.equal(withLines.ok, true);
   assert.equal(withLines.content, "2 | b\n3 | c");
   assert.equal(withLines.includeLineNumbers, true);
 
   const withoutLines = parseToolResult(
-    await tool.invoke({ filePath: "lines.txt", startLine: 2, endLine: 3, includeLineNumbers: false }),
+    await tool.invoke({ riskLevel: "low", filePath: "lines.txt", startLine: 2, endLine: 3, includeLineNumbers: false }),
   );
   assert.equal(withoutLines.ok, true);
   assert.equal(withoutLines.content, "b\nc");
@@ -533,7 +533,7 @@ test("read_file: 默认读取行数阈值为 1000", async () => {
   const tool = tools.find((item) => item?.name === "read_file");
   assert.ok(tool);
 
-  const result = parseToolResult(await tool.invoke({ filePath: "long.txt", includeLineNumbers: false }));
+  const result = parseToolResult(await tool.invoke({ riskLevel: "low", filePath: "long.txt", includeLineNumbers: false }));
 
   assert.equal(result.ok, true);
   assert.equal(result.startLine, 1);

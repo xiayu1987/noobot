@@ -16,6 +16,7 @@ import { buildHookContext } from "../hook/hook-context-builder.js";
 import { normalizeParentSessionId } from "../../../context/parent-session-id-resolver.js";
 import { transferSemanticContent } from "../../../semantic-transfer/transfer/semantic-transfer.js";
 import { compactToolResultTextForModel } from "../../../semantic-transfer/core/compact.js";
+import { sanitizeToolResultText } from "@noobot/sanitize";
 
 const TOOL_INPUT_TRANSFER_TOOL_NAMES = new Set([
   "write_file",
@@ -295,6 +296,7 @@ export async function executeToolCall({
       call?.name,
     );
     rawToolResultText = toolResultText;
+    toolResultText = await sanitizeToolResultText(toolResultText);
   } catch (error) {
     const isAbort = isAbortError(error);
     const isFatal = isFatalError(error);
@@ -340,6 +342,7 @@ export async function executeToolCall({
       ...(errorDetails ? { details: errorDetails } : {}),
     });
     rawToolResultText = toolResultText;
+    toolResultText = await sanitizeToolResultText(toolResultText);
     if (errorLogger && typeof errorLogger.log === "function") {
       const normalizedCause =
         typeof error?.cause === "string"

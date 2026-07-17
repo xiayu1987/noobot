@@ -25,7 +25,7 @@ test("read_file: 具体工具不判断大文件，原始内容交由 semantic-tr
   const tool = tools.find((item) => item?.name === "read_file");
   assert.ok(tool);
 
-  const result = parseToolResult(await tool.invoke({ filePath: "large.txt", includeLineNumbers: false }));
+  const result = parseToolResult(await tool.invoke({ riskLevel: "low", filePath: "large.txt", includeLineNumbers: false }));
 
   assert.equal(result.toolName, "read_file");
   assert.equal(result.ok, true);
@@ -55,7 +55,7 @@ test("read_file: 大文件原始结果由 semantic-transfer 转为沙箱视角 o
   const tool = tools.find((item) => item?.name === "read_file");
   assert.ok(tool);
 
-  const rawToolResultText = await tool.invoke({
+  const rawToolResultText = await tool.invoke({ riskLevel: "low",
       filePath: "/workspace/primary-user/runtime/ops_workdir/large_test_file.txt",
       includeLineNumbers: true,
       maxLines: 500,

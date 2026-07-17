@@ -15,6 +15,7 @@
     "client/noobot-chat",
     "client/startup",
     "runtime-events",
+    "sanitize",
     "client/windows",
     "client/mac"
   ],

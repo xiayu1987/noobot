@@ -52,6 +52,7 @@
     "@langchain/openai": "^1.5.1",
     "@noobot/shared": "file:../shared",
     "@noobot/runtime-events": "file:../runtime-events",
+    "@noobot/sanitize": "file:../sanitize",
     "noobot-i18n": "file:../i18n",
     "openai": "^6.44.0",
     "pino": "^10.3.1",

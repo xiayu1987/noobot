@@ -171,6 +171,57 @@ test("executeToolCall includes error details from recoverable error", async () =
   });
 });
 
+test("executeToolCall redacts sensitive fields from tool results before returning them", async () => {
+  const tool = {
+    invoke: async () => ({
+      ok: true,
+      token: "top-secret-token",
+      nested: {
+        Authorization: "Bearer top-secret-token",
+        cookie: "session=top-secret-cookie",
+        ordinary: "preserved",
+      },
+      items: [{ apiKey: "top-secret-api-key" }, { credential: "top-secret-credential" }],
+    }),
+  };
+
+  const result = await executeToolCall({
+    call: { id: "call_sensitive_result", name: "demo_tool", args: {} },
+    tool,
+    turn: 1,
+  });
+
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.token, "[Redacted]");
+  assert.equal(payload.nested.Authorization, "[Redacted]");
+  assert.equal(payload.nested.cookie, "[Redacted]");
+  assert.equal(payload.nested.ordinary, "preserved");
+  assert.equal(payload.items[0].apiKey, "[Redacted]");
+  assert.equal(payload.items[1].credential, "[Redacted]");
+  assert.doesNotMatch(result.toolResultText, /top-secret/);
+});
+
+test("executeToolCall redacts sensitive fields from recoverable error details", async () => {
+  const tool = {
+    invoke: async () => {
+      const error = new Error("service unavailable");
+      error.details = { endpoint: "weather", accessToken: "top-secret-token" };
+      throw error;
+    },
+  };
+
+  const result = await executeToolCall({
+    call: { id: "call_sensitive_error", name: "demo_tool", args: {} },
+    tool,
+    turn: 1,
+  });
+
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.details.endpoint, "weather");
+  assert.equal(payload.details.accessToken, "[Redacted]");
+  assert.doesNotMatch(result.toolResultText, /top-secret/);
+});
+
 test("executeToolCall hook payload includes normalized runtime meta", async () => {
   const hookManager = createAgentHookManager();
   const starts = [];

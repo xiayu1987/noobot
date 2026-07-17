@@ -13,11 +13,7 @@ import { z } from "zod";
 import { BUILTIN_THRESHOLDS, mergeConfig } from "../../config/index.js";
 import {
   getRuntimeFromAgentContext,
-  getSystemRuntimeFromRuntime,
 } from "../../context/agent-context-accessor.js";
-import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
-import { ERROR_CODE } from "../../error/constants.js";
-import { recoverableToolError } from "../../error/index.js";
 import {
   buildBubblewrapCommand,
   bwrapSupportsOption,
@@ -30,8 +26,8 @@ import {
   SANDBOX_COMMAND,
   SANDBOX_PROVIDER_NAME,
   SCRIPT_EXECUTION_MODE,
-  SCRIPT_RISK_LEVEL,
 } from "./script-tool/constants.js";
+import { confirmCriticalToolOperation, createRiskLevelSchema } from "./tool-risk.js";
 import { run, runFileBacked, hasCommand, normalizeExecutionMode } from "./script-tool/process-exec.js";
 import {
   resolveSandboxProviderConfig,
@@ -49,33 +45,6 @@ import { runDockerCommand, tryDockerFallback } from "./script-tool/docker-runner
 import { buildScriptToolDescription } from "./script-tool/description.js";
 
 export { buildExecutionWorkspaceMeta, buildScriptExecutionMeta };
-
-async function confirmCriticalScript({ runtime, command }) {
-  const bridge = runtime?.userInteractionBridge || null;
-  if (!bridge?.requestUserInteraction) {
-    throw recoverableToolError(tScript(runtime, "criticalConfirmationUnavailable"), {
-      code: ERROR_CODE.RECOVERABLE_USER_INTERACTION_BRIDGE_MISSING,
-    });
-  }
-  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
-  const result = await bridge.requestUserInteraction({
-    content: tScript(runtime, "criticalConfirmation", { command }),
-    fields: [],
-    dialogProcessId: resolveDialogProcessIdFromContext({ runtime }),
-    requireEncryption: false,
-    sessionId: String(systemRuntime?.sessionId || "").trim(),
-    toolName: EXECUTE_SCRIPT_TOOL_NAME,
-    lifecycle: "pending",
-    ackMode: "manual",
-    resolvedBy: "",
-  });
-  if (result?.confirmed !== true) {
-    throw recoverableToolError(tScript(runtime, "criticalCancelled"), {
-      code: ERROR_CODE.RECOVERABLE_USER_CANCELLED,
-      details: { confirmed: false, cancelled: true },
-    });
-  }
-}
 
 export function createScriptTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
@@ -120,12 +89,7 @@ export function createScriptTool({ agentContext }) {
     description,
     schema: z.object({
       command: z.string().describe(tTool(runtime, "tools.script.fieldCommand")),
-      riskLevel: z.enum([
-        SCRIPT_RISK_LEVEL.LOW,
-        SCRIPT_RISK_LEVEL.MEDIUM,
-        SCRIPT_RISK_LEVEL.HIGH,
-        SCRIPT_RISK_LEVEL.CRITICAL,
-      ]).describe(tTool(runtime, "tools.script.fieldRiskLevel")),
+      riskLevel: createRiskLevelSchema(runtime, "tools.script.fieldRiskLevel"),
       executionMode: z.enum([SCRIPT_EXECUTION_MODE.FOREGROUND, SCRIPT_EXECUTION_MODE.BACKGROUND])
         .optional()
         .default(SCRIPT_EXECUTION_MODE.FOREGROUND)
@@ -139,10 +103,13 @@ export function createScriptTool({ agentContext }) {
       const shouldIncludeLineNumbers = includeLineNumbers === true;
       const timeout = BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs;
 
-      const safeConfirm = runtime?.systemRuntime?.config?.safeConfirm !== false;
-      if (safeConfirm && riskLevel === SCRIPT_RISK_LEVEL.CRITICAL) {
-        await confirmCriticalScript({ runtime, command: normalizedCommand });
-      }
+      await confirmCriticalToolOperation({
+        runtime,
+        riskLevel,
+        toolName: EXECUTE_SCRIPT_TOOL_NAME,
+        operation: "execute script",
+        reason: "The command may make destructive or security-sensitive changes.",
+      });
 
       if (!sandboxEnabled) {
         const runResult = requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND

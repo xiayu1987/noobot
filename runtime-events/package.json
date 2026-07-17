@@ -17,7 +17,8 @@
     "./session-log-protocol": "./src/session-log-protocol.js"
   },
   "dependencies": {
-    "@noobot/shared": "file:../shared"
+    "@noobot/shared": "file:../shared",
+    "@noobot/sanitize": "file:../sanitize"
   },
   "scripts": {
     "test": "node --test"
