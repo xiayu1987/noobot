@@ -15,6 +15,9 @@ Noobot 是一个基于 **Node.js + Vue** 的前后端分离智能对话系统。
 - Agent 工具调用与技能扩展
 - SSE 流式输出 + WebSocket 长连接
 - Agent 代理网关（WebSocket 扇出/重放/HTTP 代理）
+- 语义工作流引擎及 Workflow/Harness 插件
+- 共享运行事件、数据清洗、阈值与国际化包
+- Web、启动页、Windows 与 macOS 客户端
 - `start.sh` 一键部署（PM2 + Caddy）
 - 连接器支持（数据库/终端/邮件）
 - MCP 服务集成
@@ -28,13 +31,26 @@ noobot/
 ├── service/                  # Node.js 后端（Express 5 + WebSocket + LangChain）
 ├── agent-proxy/              # Agent 代理网关（WebSocket 扇出、消息重放、HTTP 代理）
 ├── model-proxy/              # 模型代理层
-├── plugin/                   # 内置插件（如 harness）
+├── workflow/                 # 语义工作流引擎
+├── plugin/
+│   ├── noobot-plugin-harness/  # Harness 执行插件
+│   └── noobot-plugin-workflow/ # 工作流集成插件
+├── runtime-events/           # 启动/会话/系统结构化事件库
+├── sanitize/                 # 输出与敏感数据清洗
+├── shared/                   # 共享阈值与运行配置
 ├── i18n/                     # 共享 i18n 包
-├── client/noobot-chat/       # Vue 3 前端（Vite）
+├── client/
+│   ├── noobot-chat/          # Vue 3 Web 客户端（Vite）
+│   ├── startup/              # 启动页
+│   ├── windows/              # Windows Electron 打包
+│   ├── mac/                  # macOS Electron 打包
+│   └── shared/               # 客户端共享代码
+├── scripts/                  # 发布、启动引导与仓库检查脚本
 ├── docs/                     # 架构/重构文档
 ├── user-template/            # 用户工作区模板
-├── workspace/                # 运行时用户数据（会话、文件、附件、配置参数）
+├── workspace/                # 本地运行时用户数据（非源码）
 ├── start.sh                  # 一键启动/部署脚本
+├── close.sh                  # 停止本地 PM2 服务栈
 └── README.md
 ```
 
@@ -99,10 +115,17 @@ npm install --workspaces
 # 运行所有存在 test 脚本的子项目
 npm run test
 
-# 只运行某个子项目脚本
-npm run -w service dev
-npm run -w client/noobot-chat build
+# 启动开发服务
+npm run dev:service
+npm run dev:agent-proxy
+npm run dev:client
+
+# 构建启动页与 Web 客户端
+npm run build
 ```
+
+当前 workspace 列表和仓库级命令以根目录 `package.json` 为准。也可以使用
+`npm run -w <workspace> <script>` 运行单个 workspace 的脚本。
 
 可选系统依赖：
 
@@ -167,8 +190,8 @@ CADDY_ADDR=:8080 API_UPSTREAM=127.0.0.1:3001 AGENT_PROXY_UPSTREAM=127.0.0.1:3002
 
 ## PM2（项目内）
 
-> 注意：`npm run pm2:start` 仅启动后端服务，不包含项目初始化引导。  
-> 首次部署或需要自动配置同步时，请优先使用 `./start.sh`。
+> 以下 PM2 命令每次只管理一个子项目，不执行项目初始化引导。首次部署、
+> 安装依赖、构建前端或需要自动同步配置时，请使用 `./start.sh`。
 
 ```bash
 cd service && npm run pm2:list

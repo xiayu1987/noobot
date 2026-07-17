@@ -140,6 +140,14 @@ Session 日志 WebSocket：
 | `tools.request_help.help_prompt_loop_turns` | number | 触发系统帮助提示的工具循环阈值（默认 50） |
 | `tools.request_help.tool_failure_help_count` | number | 触发用户帮助提示的连续失败阈值（默认 3） |
 | `tools.email_connect_connector.enabled` | boolean | 启用邮件连接器工具 |
+| `tools.web_search.enabled` | boolean | 启用网页搜索工具 |
+| `tools.web_search.mode` | enum | 搜索后端：`responses_api` / `search_engine` |
+| `tools.web_search.responses_api.model` | string | Responses API 网页搜索使用的模型别名/名称 |
+| `tools.web_search.search_engine.prompt` | string | 搜索引擎模式注入的提示词 |
+| `tools.web_search.search_engine.endpoints.search.url` | string(url) | 搜索端点 URL（支持 `${VAR_NAME}`） |
+| `tools.web_search.search_engine.endpoints.search.query_string_format` | string | 搜索查询字符串模板 |
+| `tools.web_search.search_engine.endpoints.search.body_format` | string | 搜索请求体模板 |
+| `tools.web_search.search_engine.endpoints.search.custom_param_format` | string | 自定义端点参数说明 |
 
 大上下文长度阈值默认值：
 - 阶段小结字符阈值：225000
@@ -160,12 +168,14 @@ Session 日志 WebSocket：
 
 | 键名 | 类型 | 说明 |
 |---|---|---|
-| `scenarios.default` | string | 默认情景键（仅支持内置 `full` / `programming`；请求未设置 `config.scenario` 时使用） |
+| `scenarios.default` | string | 默认情景键（支持内置 `full` / `programming` / `text`；请求未设置 `config.scenario` 时使用） |
 | `scenarios.definitions.programming.model` | string | 编程情景默认运行模型别名/模型名（请求未设置 `runtimeModel` 时生效） |
+| `scenarios.definitions.text.model` | string | 文本情景默认运行模型别名/模型名（请求未设置 `runtimeModel` 时生效） |
 
-情景定义现在由系统内置，只保留两个固定情景：
+情景定义由系统内置，包含三个固定情景：
 - `full`（全能，默认）：tools/context/services/mcp_servers 均为 `["*"]`，表示不额外限制。
 - `programming`（编程）：固定使用代码任务策略，包含代码修改必要工具、代码上下文段和 `web_search` 工具；配置文件只允许覆盖 `model`。
+- `text`（文本）：固定使用文本处理策略及对应工具/上下文；配置文件只允许覆盖 `model`。
 
 用户配置或全局配置中的其它字段（如 `name`、`description`、`tools`、`context`、`services`、`mcp_servers`，以及自定义情景定义）会被忽略，避免破坏内置行为。
 
@@ -176,11 +186,17 @@ Session 日志 WebSocket：
 | `plugins.<name>.enabled` | boolean | 插件总开关。为 `false` 时前端不展示且运行时禁用。 |
 | `plugins.<name>.mode` | enum | 插件默认运行模式。目前支持 `on` / `off`（`off` 表示插件可用但默认不激活）。 |
 | `plugins.harness.stepModels.<purpose>` | string | Harness 各步骤模型别名（`planning` / `guidance` / `acceptance` / `default`）。 |
+| `plugins.workflow.semanticModel` | string | Workflow 语义处理使用的模型别名/名称。 |
+| `plugins.workflow.parallelNodeExecution` | boolean | 是否并行执行符合条件的工作流节点。 |
 
 当前仓库插件默认值：
 - `plugins.harness.enabled = true`
 - `plugins.harness.mode = "off"`
-- `plugins.harness.stepModels = { planning, guidance, acceptance, default }`（当前示例中均为 `"qwen3_6_plus"`）
+- `plugins.harness.stepModels = { planning, guidance, acceptance, default }`（当前示例中均为 `"GLM_5_1"`）
+- `plugins.workflow.enabled = true`
+- `plugins.workflow.mode = "off"`
+- `plugins.workflow.semanticModel = "GLM_5_1"`
+- 全局示例中 `plugins.workflow.parallelNodeExecution = true`
 
 ### 3.6 连接器预置
 
@@ -275,7 +291,7 @@ Session 日志 WebSocket：
 | `default_provider` | 用户默认模型 |
 | `attachments` | 用户级附件策略覆盖 |
 | `tools` | 用户级工具开关/参数覆盖 |
-| `scenarios` | 用户级情景选择/编程模型覆盖（只允许 `default` 与 `definitions.programming.model`） |
+| `scenarios` | 用户级情景选择与各情景模型覆盖（只允许 `default`、`definitions.programming.model` 和 `definitions.text.model`） |
 | `plugins` | 用户级插件开关/默认模式覆盖 |
 | `providers` | 用户级模型配置覆盖 |
 | `services` | 用户级外部服务定义（见 §4.1） |
