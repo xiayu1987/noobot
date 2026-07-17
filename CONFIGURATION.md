@@ -140,6 +140,14 @@ Model history is fixed by the agent runtime: it keeps the latest 5 `dialogProces
 | `tools.request_help.help_prompt_loop_turns` | number | Tool loop turns threshold for system help prompt (default 50) |
 | `tools.request_help.tool_failure_help_count` | number | Consecutive tool failures threshold for user help prompt (default 3) |
 | `tools.email_connect_connector.enabled` | boolean | Enable email connector tool |
+| `tools.web_search.enabled` | boolean | Enable web search tool |
+| `tools.web_search.mode` | enum | Search backend: `responses_api` / `search_engine` |
+| `tools.web_search.responses_api.model` | string | Provider alias/name used by Responses API web search |
+| `tools.web_search.search_engine.prompt` | string | Prompt injected for search-engine mode |
+| `tools.web_search.search_engine.endpoints.search.url` | string(url) | Search endpoint URL (`${VAR_NAME}` supported) |
+| `tools.web_search.search_engine.endpoints.search.query_string_format` | string | Search query-string template |
+| `tools.web_search.search_engine.endpoints.search.body_format` | string | Search request-body template |
+| `tools.web_search.search_engine.endpoints.search.custom_param_format` | string | Description of the custom endpoint parameter |
 
 Large-context length defaults:
 - Phase-summary character threshold: 225000
@@ -160,12 +168,14 @@ Notes:
 
 | Key | Type | Description |
 |---|---|---|
-| `scenarios.default` | string | Default scenario key (only built-in `full` / `programming`; used when request does not set `config.scenario`) |
+| `scenarios.default` | string | Default scenario key (built-in `full` / `programming` / `text`; used when request does not set `config.scenario`) |
 | `scenarios.definitions.programming.model` | string | Default runtime model alias/name for the programming scenario (applied when request does not set `runtimeModel`) |
+| `scenarios.definitions.text.model` | string | Default runtime model alias/name for the text scenario (applied when request does not set `runtimeModel`) |
 
-Scenario definitions are now system built-ins with two fixed scenarios:
+Scenario definitions are system built-ins with three fixed scenarios:
 - `full` (all-purpose, default): tools/context/services/mcp_servers are `["*"]`, meaning unrestricted by scenario.
 - `programming`: fixed code-task policy with required coding tools, code context sections, and the `web_search` tool; configuration may override only `model`.
+- `text`: fixed text-processing policy and tool/context selection; configuration may override only `model`.
 
 Other scenario fields in global/user config (`name`, `description`, `tools`, `context`, `services`, `mcp_servers`) and custom scenario definitions are ignored to protect built-in behavior.
 
@@ -176,11 +186,17 @@ Other scenario fields in global/user config (`name`, `description`, `tools`, `co
 | `plugins.<name>.enabled` | boolean | Plugin global switch. When `false`, plugin is hidden in frontend and disabled at runtime. |
 | `plugins.<name>.mode` | enum | Default runtime mode for this plugin. Currently `on` / `off` (`off` means enabled but not active by default). |
 | `plugins.harness.stepModels.<purpose>` | string | Harness step-specific model alias (`planning` / `guidance` / `acceptance` / `default`). |
+| `plugins.workflow.semanticModel` | string | Model alias/name used for workflow semantic processing. |
+| `plugins.workflow.parallelNodeExecution` | boolean | Enable parallel execution for eligible workflow nodes. |
 
 Current plugin defaults in repo:
 - `plugins.harness.enabled = true`
 - `plugins.harness.mode = "off"`
-- `plugins.harness.stepModels = { planning, guidance, acceptance, default }` (all default to `"qwen3_6_plus"` in current example)
+- `plugins.harness.stepModels = { planning, guidance, acceptance, default }` (all default to `"GLM_5_1"` in the current example)
+- `plugins.workflow.enabled = true`
+- `plugins.workflow.mode = "off"`
+- `plugins.workflow.semanticModel = "GLM_5_1"`
+- `plugins.workflow.parallelNodeExecution = true` in the global example
 
 ### 3.6 Connector Presets
 
@@ -273,7 +289,7 @@ User config can override global values.
 | `default_provider` | User default provider |
 | `attachments` | User attachment policy override |
 | `tools` | User tool enable/options override |
-| `scenarios` | User scenario selection / programming model override (only `default` and `definitions.programming.model`) |
+| `scenarios` | User scenario selection and per-scenario model overrides (only `default`, `definitions.programming.model`, and `definitions.text.model`) |
 | `plugins` | User plugin default/enable override |
 | `providers` | User provider override |
 | `services` | User external service definitions (see §4.1) |

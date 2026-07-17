@@ -104,24 +104,24 @@
 ### 6.1 No `console.*` in Core Business Code / 核心业务代码禁止使用 `console.*`
 
 #### EN
-- Do NOT use `console.log`, `console.error`, `console.warn`, `console.info`, or `console.debug` in any core business module under `system-core/`.
+- Do NOT use `console.log`, `console.error`, `console.warn`, `console.info`, or `console.debug` in any core business module under `agent/src/system-core/`.
 - `console.*` output is unstructured, cannot be filtered or routed.
 - Core business code should delegate logging to the designated logging infrastructure.
 
 **Exceptions** (allowed to use `console.*`):
-- `scripts/` — CLI tools and validation scripts
-- `bootstrap/` — startup scripts (e.g., server start message)
-- `tracking/` — the logging infrastructure module itself
+- `scripts/`, `agent/scripts/`, `service/scripts/` — CLI tools and validation scripts
+- `service/bootstrap/` — startup scripts (e.g., server start message)
+- `agent/src/system-core/tracking/` — the logging infrastructure module itself
 
 #### 中文
-- 禁止在 `system-core/` 下的任何核心业务模块中使用 `console.log`、`console.error`、`console.warn`、`console.info` 或 `console.debug`。
+- 禁止在 `agent/src/system-core/` 下的任何核心业务模块中使用 `console.log`、`console.error`、`console.warn`、`console.info` 或 `console.debug`。
 - `console.*` 输出非结构化，无法过滤或路由。
 - 核心业务代码应将日志委托给指定的日志基础设施。
 
 **例外**（允许使用 `console.*`）：
-- `scripts/` — CLI 工具和验证脚本
-- `bootstrap/` — 启动脚本（如服务器启动消息）
-- `tracking/` — 日志基础设施模块本身
+- `scripts/`、`agent/scripts/`、`service/scripts/` — CLI 工具和验证脚本
+- `service/bootstrap/` — 启动脚本（如服务器启动消息）
+- `agent/src/system-core/tracking/` — 日志基础设施模块本身
 
 ---
 

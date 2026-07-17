@@ -15,6 +15,9 @@ Co-creators: Hyler · Epicur · gonglei · Z · Y · C
 - Agent tools + skill extension
 - SSE streaming output + WebSocket long connection
 - Agent proxy gateway for resilient WebSocket fanout/replay
+- Semantic workflow engine and workflow/harness plugins
+- Shared runtime-event logging, sanitization, thresholds, and i18n packages
+- Web, startup, Windows, and macOS clients
 - One-command deployment via `start.sh` (PM2 + Caddy)
 - Connector support (database/terminal/email)
 - MCP server integration
@@ -28,13 +31,26 @@ noobot/
 ├── service/                  # Node.js backend (Express 5 + WebSocket + LangChain)
 ├── agent-proxy/              # Agent proxy gateway (WebSocket fanout, replay, HTTP proxy)
 ├── model-proxy/              # Model proxy layer
-├── plugin/                   # Built-in plugins (e.g. harness)
+├── workflow/                 # Semantic workflow engine
+├── plugin/
+│   ├── noobot-plugin-harness/  # Harness execution plugin
+│   └── noobot-plugin-workflow/ # Workflow integration plugin
+├── runtime-events/           # Structured startup/session/system event library
+├── sanitize/                 # Shared output and sensitive-data sanitization
+├── shared/                   # Shared thresholds and runtime configuration
 ├── i18n/                     # Shared i18n package
-├── client/noobot-chat/       # Vue 3 frontend (Vite)
+├── client/
+│   ├── noobot-chat/          # Vue 3 web client (Vite)
+│   ├── startup/              # Startup UI
+│   ├── windows/              # Windows Electron packaging
+│   ├── mac/                  # macOS Electron packaging
+│   └── shared/               # Client-side shared code
+├── scripts/                  # Release, launcher, and repository checks
 ├── docs/                     # Architecture / refactor docs
 ├── user-template/            # User workspace template
-├── workspace/                # Runtime user data (sessions, files, attachments, config params)
+├── workspace/                # Local runtime user data (not source code)
 ├── start.sh                  # one-command startup/deploy script
+├── close.sh                  # stop the local PM2 stack
 └── README.md
 ```
 
@@ -99,10 +115,18 @@ Useful commands:
 # run all test scripts that exist
 npm run test
 
-# run a script in one workspace
-npm run -w service dev
-npm run -w client/noobot-chat build
+# development servers
+npm run dev:service
+npm run dev:agent-proxy
+npm run dev:client
+
+# build the startup UI and web client
+npm run build
 ```
+
+The root `package.json` is the source of truth for the current workspace list and
+repository-wide scripts. Package-specific scripts can also be run with
+`npm run -w <workspace> <script>`.
 
 Optional system deps:
 
@@ -169,8 +193,9 @@ CADDY_ADDR=:8080 API_UPSTREAM=127.0.0.1:3001 AGENT_PROXY_UPSTREAM=127.0.0.1:3002
 
 ## PM2 (local)
 
-> Note: `npm run pm2:start` only starts the backend service and does not run the project initialization launcher.  
-> For first-time deployment or config auto-sync, use `./start.sh` first.
+> The PM2 scripts below manage one package at a time and do not run the project
+> initialization launcher. For first-time deployment, dependency installation,
+> frontend build, or config auto-sync, use `./start.sh`.
 
 ```bash
 cd service && npm run pm2:list
