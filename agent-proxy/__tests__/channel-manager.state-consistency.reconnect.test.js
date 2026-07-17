@@ -112,6 +112,67 @@ test("reconnect replaces initial no_conversation with sending for running channe
   );
 });
 
+test("reconnect converges a previously connected running channel whose upstream socket disappeared", () => {
+  const manager = new ChannelManager({ CONNECTING: 0, OPEN: 1 });
+  const sessionId = "session-orphaned-running";
+  const channelKey = createChannelKey({ userId: "user-1", sessionId });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId,
+    turnScopeId: "turn-orphaned-running",
+  });
+  channel.status = "running";
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  channel.upstreamEverConnected = true;
+  channel.upstreamSocket = null;
+  channel.upstreamClosed = true;
+
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.handleReconnect(client, { currentSessionId: sessionId, lastReceivedSeqMap: {} });
+
+  const reconnectData = getEvent(client, "reconnect_data");
+  const sessionEntry = (reconnectData?.data?.sessions || []).find(
+    (item) => String(item?.sessionId || "") === sessionId,
+  );
+  assert.equal(channel.status, "error");
+  assert.equal(sessionEntry?.hasRunningTask, false);
+  assert.equal(sessionEntry?.currentRun?.state, "error");
+  assert.equal(sessionEntry?.currentRun?.turnScopeId, "turn-orphaned-running");
+  assert.equal(
+    (sessionEntry?.conversationStates || []).some((item) => item?.state === "sending"),
+    false,
+  );
+});
+
+test("reconnect keeps a genuinely open running channel active", () => {
+  const manager = new ChannelManager({ CONNECTING: 0, OPEN: 1 });
+  const sessionId = "session-live-running";
+  const channelKey = createChannelKey({ userId: "user-1", sessionId });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId,
+    turnScopeId: "turn-live-running",
+  });
+  channel.status = "running";
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  channel.upstreamEverConnected = true;
+  channel.upstreamSocket = { readyState: 1 };
+  channel.upstreamClosed = false;
+
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.handleReconnect(client, { currentSessionId: sessionId, lastReceivedSeqMap: {} });
+
+  const reconnectData = getEvent(client, "reconnect_data");
+  const sessionEntry = (reconnectData?.data?.sessions || []).find(
+    (item) => String(item?.sessionId || "") === sessionId,
+  );
+  assert.equal(channel.status, "running");
+  assert.equal(sessionEntry?.hasRunningTask, true);
+  assert.equal(sessionEntry?.currentRun?.state, "sending");
+});
+
 
 test("reconnect can recover same-user running channel when socket identity is not hydrated", () => {
   const manager = new ChannelManager({ OPEN: 1 });

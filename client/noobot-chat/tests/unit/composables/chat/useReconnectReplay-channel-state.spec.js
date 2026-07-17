@@ -91,7 +91,7 @@ describe("useReconnectReplay", () => {
   });
 
   it("session scoped reconnect channel_state does not restore elapsed from channel timestamps", async () => {
-    const { api, refs } = createFixture();
+    const { api, refs, mocks } = createFixture();
     const startedAt = "2026-06-22T10:00:00.000Z";
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
@@ -115,7 +115,7 @@ describe("useReconnectReplay", () => {
   });
 
   it("session scoped reconnect channel_state does not use channel timestamps as thinking start", async () => {
-    const { api, refs } = createFixture();
+    const { api, refs, mocks } = createFixture();
     const startedAt = "2026-06-22T10:00:00.000Z";
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
@@ -198,6 +198,53 @@ describe("useReconnectReplay", () => {
         turnScopeId: "turn-refresh-running",
       },
     });
+  });
+
+  it("keeps currentRun turn identity when refresh replays buffered messages", async () => {
+    const { api, refs, mocks } = createFixture();
+    refs.activeSession.value.messages = [{ role: RoleEnum.USER, content: "q" }];
+
+    await api.applyReconnectData({
+      sessions: [{
+        sessionId: "s-1",
+        hasRunningTask: true,
+        currentRun: {
+          sessionId: "s-1",
+          dialogProcessId: "dp-refresh-buffered",
+          turnScopeId: "turn-refresh-buffered",
+          state: BackendChannelState.SENDING,
+          seq: 4,
+        },
+        dialogProcesses: [{
+          dialogProcessId: "dp-refresh-buffered",
+          messages: [{
+            event: StreamEventEnum.DELTA,
+            data: { dialogProcessId: "dp-refresh-buffered", seq: 3, text: "partial" },
+          }],
+        }],
+      }],
+    });
+
+    const assistants = refs.activeSession.value.messages.filter(
+      (message) => message.role === RoleEnum.ASSISTANT,
+    );
+    expect(assistants).toHaveLength(1);
+    expect(assistants[0]).toMatchObject({
+      content: "partial",
+      pending: true,
+      dialogProcessId: "dp-refresh-buffered",
+      turnScopeId: "turn-refresh-buffered",
+    });
+    expect(mocks.applyTurnRuntimeEvents).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sessionId: "s-1",
+          dialogProcessId: "dp-refresh-buffered",
+          turnScopeId: "turn-refresh-buffered",
+          state: BackendChannelState.SENDING,
+        }),
+      ]),
+    );
   });
 
   it("does not apply a stale stopped channel_state to a newer resend placeholder", async () => {
@@ -371,7 +418,7 @@ describe("useReconnectReplay", () => {
   });
 
   it("RT-05: reconnect currentRun restores the processing lock and stop action", async () => {
-    const { api, refs } = createFixture();
+    const { api, refs, mocks } = createFixture();
     refs.sending.value = false;
 
     await api.applyReconnectData({
@@ -401,6 +448,14 @@ describe("useReconnectReplay", () => {
     expect(refs.runStateSnapshot.value.state).toBe(FrontendRunState.PROCESSING);
     expect(refs.sending.value).toBe(true);
     expect(refs.canStop.value).toBe(true);
+    expect(mocks.applyTurnRuntimeEvents).toHaveBeenCalledWith([
+      expect.objectContaining({
+        sessionId: "s-1",
+        dialogProcessId: "dp-state",
+        turnScopeId: "turn-state",
+        state: "sending",
+      }),
+    ]);
   });
 
   it("reconciles session detail and retries runtime snapshot when currentRun is invalid", async () => {

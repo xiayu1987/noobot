@@ -56,7 +56,7 @@ export const RUNTIME_EVENTS_CONFIG_DEFAULTS = deepFreeze({
     resendDebug: false,
     stopDebug: false,
     sessionLogWsDebug: false,
-    frontendStopContinueDebug: true,
+    frontendStopContinueDebug: false,
     frontendReconnectTimingDebug: false,
     agentProxyRouteDebug: false,
   },

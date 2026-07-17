@@ -68,7 +68,10 @@ import {
   applySessionRunStateEvent,
   applySessionRunStateEvents,
 } from "./sessionRunStateMachine";
-import { refreshFinalSessionDetail } from "./chatEngine/sessionFinalize";
+import {
+  finalizeStoppedSessionDetail,
+  refreshFinalSessionDetail,
+} from "./chatEngine/sessionFinalize";
 
 export function useReconnectReplay({
   sessions,
@@ -100,6 +103,7 @@ export function useReconnectReplay({
   sessionLogWebSocketClient,
   notify = () => {},
   processStore,
+  applyTurnRuntimeEvents,
 } = {}) {
   const reconnectReplayContext = createReconnectReplayContext();
   const { replayCache, appliedReconnectSeqByDialogProcessId, terminalDialogProcessIdSet, missingInteractionPayloadTimers } =
@@ -114,12 +118,16 @@ export function useReconnectReplay({
     event,
   });
 
-  const applyRunStateEvents = (events) => applySessionRunStateEvents({
-    stateRef: runStateSnapshot,
-    sending,
-    canStop,
-    events,
-  });
+  const applyRunStateEvents = (events) => {
+    const sourceEvents = Array.isArray(events) ? events : [];
+    applyTurnRuntimeEvents?.(sourceEvents);
+    return applySessionRunStateEvents({
+      stateRef: runStateSnapshot,
+      sending,
+      canStop,
+      events: sourceEvents,
+    });
+  };
 
   function applyAssistantFailureState(targetAssistantMessage, errorMessage = "") {
     return applyAssistantFailureStateWithContext({ targetAssistantMessage, errorMessage, translate });
@@ -318,6 +326,7 @@ export function useReconnectReplay({
       chatWebSocketClient,
       scheduleCacheExpiredSessionRefresh,
       finalizeReplayCompletedSessionDetail,
+      finalizeReplayStoppedSessionDetail,
       clearPendingInteraction,
       translate,
     });
@@ -358,6 +367,29 @@ export function useReconnectReplay({
       applyRunStateEvent,
       refreshSessionConnectorsAsync,
       preserveCurrentMessages: true,
+    });
+  }
+
+  async function finalizeReplayStoppedSessionDetail({
+    sessionId = "",
+    dialogProcessId = "",
+    turnScopeId = "",
+    targetAssistantMessage = null,
+    stateData = {},
+  } = {}) {
+    return finalizeStoppedSessionDetail({
+      activeSession,
+      activeSessionId,
+      botMessage: targetAssistantMessage,
+      finalEventData: {
+        ...stateData,
+        sessionId,
+        dialogProcessId,
+        turnScopeId,
+      },
+      fetchSessionDetail: chatList?.fetchSessionDetail,
+      applySessionDetail: chatList?.applySessionDetail,
+      applyRunStateEvent,
     });
   }
 

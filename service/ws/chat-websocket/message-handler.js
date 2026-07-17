@@ -22,7 +22,7 @@ import {
   resolveEffectiveStreamingEnabled,
   summarizePluginConfig,
 } from "./run-config.js";
-import { isAbortLikeError, isUserStopRunAbort } from "./stop-lifecycle.js";
+import { isAbortLikeError, isSocketCloseRunAbort, isUserStopRunAbort } from "./stop-lifecycle.js";
 import { createRunEventListener } from "./run-event-listener.js";
 import { resetRunState } from "./connection-state.js";
 
@@ -428,6 +428,11 @@ export function createMessageHandler({
           isUserStopRunAbort({ stopRequested: state.stopRequested, abortSignal: state.currentAbortSignal })
         ) {
           await finalizeUserStopped(buildRunStateSnapshot());
+        } else if (isSocketCloseRunAbort(state.currentAbortSignal)) {
+          // Refreshing, navigating away, or disposing the client closes the
+          // transport. It cancels local execution but is not a turn error and
+          // must not create an ERROR/run_aborted terminal fact.
+          return;
         } else {
           await finalizeAborted(buildRunStateSnapshot(), { error });
         }

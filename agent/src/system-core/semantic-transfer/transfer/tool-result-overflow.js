@@ -107,9 +107,24 @@ function normalizeToolResultPathViews({
 } = {}) {
   const parsed = parseJsonObjectSafely(text);
   if (!parsed) return String(text || "");
-  const normalized = { ...parsed };
-  const resolvedPath = firstNormalizedString(parsed?.resolvedPath);
-  if (resolvedPath) {
+  const pathKeys = new Set([
+    "resolvedPath",
+    "parsed_result_path",
+    "parsedResultPath",
+    "semantic_transfer_record_path",
+  ]);
+  const normalizeValue = (value, key = "") => {
+    if (Array.isArray(value)) return value.map((item) => normalizeValue(item));
+    if (isPlainObject(value)) {
+      return Object.fromEntries(
+        Object.entries(value).map(([childKey, childValue]) => [
+          childKey,
+          normalizeValue(childValue, childKey),
+        ]),
+      );
+    }
+    const resolvedPath = pathKeys.has(key) ? firstNormalizedString(value) : "";
+    if (!resolvedPath) return value;
     const pathView = resolveTransferPathView({
       runtime,
       agentContext,
@@ -123,8 +138,9 @@ function normalizeToolResultPathViews({
       pathView?.relativePath,
       resolvedPath,
     );
-    if (displayPath) normalized.resolvedPath = displayPath;
-  }
+    return displayPath || value;
+  };
+  const normalized = normalizeValue(parsed);
   return JSON.stringify(normalized);
 }
 
@@ -610,8 +626,13 @@ export async function normalizeToolResultOverflow({
       ...(semanticTransferRecordPath ? { semantic_transfer_record_path: semanticTransferRecordPath } : {}),
     },
   });
+  const normalizedPathViews = normalizeToolResultPathViews({
+    text: normalized,
+    runtime,
+    agentContext,
+  });
   return {
-    toolResultText: normalized,
+    toolResultText: normalizedPathViews,
     overflowed: true,
     rawLength: rawText.length,
     measuredLength: measuredText.length,

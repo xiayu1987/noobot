@@ -276,6 +276,52 @@ test("chat-websocket-server: non-user abort does not persist or emit user_stoppe
   }
 });
 
+test("chat-websocket-server: client disconnect aborts execution without persisting run_aborted", async () => {
+  let terminalStatusWrites = 0;
+  let runAborted = false;
+  const server = await startServerWithWs({
+    bot: {
+      upsertTurnStatus: async () => {
+        terminalStatusWrites += 1;
+        return null;
+      },
+      runSession: async ({ abortSignal }) => new Promise((resolve, reject) => {
+        abortSignal.addEventListener("abort", () => {
+          runAborted = true;
+          const error = new Error("execution aborted after socket close");
+          error.name = "AbortError";
+          reject(error);
+        }, { once: true });
+      }),
+    },
+  });
+  try {
+    const { port } = server.address();
+    const ws = new WebSocket(`ws://localhost:${port}/chat/ws`, {
+      headers: { authorization: "Bearer test-key" },
+    });
+    await new Promise((resolve, reject) => {
+      ws.on("open", () => {
+        ws.send(JSON.stringify({
+          userId: "u1",
+          sessionId: "s-client-disconnect",
+          message: "hello",
+          turnScopeId: "turn-client-disconnect",
+        }));
+        setTimeout(() => ws.close(1000, "dispose"), 10);
+      });
+      ws.on("close", resolve);
+      ws.on("error", reject);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    assert.equal(runAborted, true);
+    assert.equal(terminalStatusWrites, 0);
+  } finally {
+    await closeServer(server);
+  }
+});
+
 test("chat-websocket-server: forbidden user scope does not run or persist a turn status", async () => {
   let runCalls = 0;
   let turnStatusWrites = 0;

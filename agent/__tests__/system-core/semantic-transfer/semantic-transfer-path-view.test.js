@@ -106,6 +106,36 @@ test("resolveTransferFilePath tolerates resolver errors and keeps fallback behav
     "/workspace/primary-user/attachments/a.md",
   );
 });
+test("tool result path normalization rewrites nested path fields and arrays to sandbox view", async () => {
+  const hostRoot = "/host/users/primary-user";
+  const toolResult = {
+    toolName: "doc_to_data",
+    ok: true,
+    summary: {
+      parsed_result_path: `${hostRoot}/runtime/parsed/result.json`,
+      semantic_transfer_record_path: `${hostRoot}/runtime/semantic-transfer/record.json`,
+      items: [
+        { parsedResultPath: `${hostRoot}/runtime/parsed/second.json` },
+        { resolvedPath: `${hostRoot}/runtime/parsed/third.json` },
+      ],
+    },
+  };
+  const transferred = await transferSemanticContent({
+    scenario: "tool",
+    strategy: "tool_result_text",
+    call: { id: "call_nested_paths", name: "doc_to_data" },
+    runtime: buildSandboxRuntime(true),
+    text: JSON.stringify(toolResult),
+    toolResultText: JSON.stringify(toolResult),
+  });
+  const normalized = JSON.parse(transferred.toolResultText);
+
+  assert.equal(normalized.summary.parsed_result_path, "/workspace/primary-user/runtime/parsed/result.json");
+  assert.equal(normalized.summary.semantic_transfer_record_path, "/workspace/primary-user/runtime/semantic-transfer/record.json");
+  assert.equal(normalized.summary.items[0].parsedResultPath, "/workspace/primary-user/runtime/parsed/second.json");
+  assert.equal(normalized.summary.items[1].resolvedPath, "/workspace/primary-user/runtime/parsed/third.json");
+  assert.equal(transferred.toolResultText.includes(hostRoot), false);
+});
 test("persisted semantic-transfer file uses sandbox view when sandbox is enabled", async () => {
   const attachmentService = {
     async ingestGeneratedArtifacts(payload) {

@@ -10,6 +10,15 @@ import MessageWrittenFiles from "./components/MessageWrittenFiles.vue";
 import MessageAttachments from "./components/MessageAttachments.vue";
 import HarnessModelExtension from "./components/HarnessModelExtension.vue";
 
+export function matchesMessageStatusRow(messageItem = {}) {
+  return messageItem?.role === "assistant" && Boolean(
+    messageItem?.pending ||
+    messageItem?.statusLabel ||
+    messageItem?.statusTurnScopeId ||
+    messageItem?.persistedStatusStepState
+  );
+}
+
 export const FRONTEND_PLUGIN_API_VERSION = "1";
 
 export function registerFrontendPlugin(ctx = {}) {
@@ -41,9 +50,7 @@ export function registerFrontendPlugin(ctx = {}) {
         slot: "pre",
         priority: 5,
         component: MessageStatusRow,
-        match: (messageItem = {}) =>
-          messageItem?.role === "assistant" &&
-          Boolean(messageItem?.pending || messageItem?.statusLabel),
+        match: matchesMessageStatusRow,
         resolveProps: (context = {}) => ({
           pending: context?.messageItem?.pending,
           statusLabel: context?.messageItem?.statusLabel,

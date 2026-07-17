@@ -62,6 +62,7 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
   }
   const upstreamSocket = new this.WebSocket(upstreamUrl);
   channel.upstreamSocket = upstreamSocket;
+  channel.upstreamEverConnected = true;
   channel.status = CHANNEL_STATUS.CONNECTING;
   channel.apiKey = String(apiKey || "").trim();
   channel.locale = String(locale || "").trim();

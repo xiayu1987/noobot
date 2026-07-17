@@ -41,6 +41,7 @@ import { useAgentInteraction } from "./useAgentInteraction";
 import { useConnectorPanel } from "../infra/useConnectorPanel";
 import { useChatList } from "./useChatList";
 import { useChatEngine } from "./useChatEngine";
+import { finalizeStoppedSessionDetail } from "./chatEngine/sessionFinalize";
 import { useReconnectReplay } from "./useReconnectReplay";
 import { useChatStore } from "../../shared/stores/useChatStore";
 import { useProcessStore } from "../../shared/stores/useProcessStore";
@@ -54,6 +55,7 @@ import {
   applySessionRunStateEvent,
   BackendChannelState,
   BackendTerminalStates,
+  clearRememberedStopRequests,
   evaluateSessionRunState,
   FrontendRunState,
   SESSION_RUN_EVENT,
@@ -109,6 +111,7 @@ export function useChatSession({
   } = storeToRefs(chatStore);
   const conversationStateSnapshot = ref({});
   const conversationStateTimeline = ref([]);
+  const pendingStoppedSummaryReconciliations = new Map();
   function resolveActiveSessionIdentity() {
     return String(activeSession.value?.backendSessionId || activeSession.value?.sessionId || activeSession.value?.id || activeSessionId.value || "").trim();
   }
@@ -234,13 +237,80 @@ export function useChatSession({
         updatedAt,
       },
     });
+
+    // The realtime event acknowledges that the backend persisted the stop; it
+    // is not a second terminal source. Re-read the authoritative turnStatuses
+    // for the exact active turn, including when this page was created by a
+    // refresh and therefore has no original send() loop left to finalize it.
+    if (state.toLowerCase() === "user_stopped" && sessionId && (turnScopeId || dialogProcessId)) {
+      const currentSessionId = resolveActiveSessionIdentity();
+      const currentTurn = resolveSessionTurnRuntime(turnRuntimeRegistry.value, currentSessionId);
+      const identityMatches = sessionId === currentSessionId && Boolean(currentTurn) && (
+        (turnScopeId && currentTurn.turnScopeId === turnScopeId) ||
+        (!turnScopeId && dialogProcessId && currentTurn.dialogProcessId === dialogProcessId)
+      );
+      const reconciliationKey = `${sessionId}::${turnScopeId || dialogProcessId}`;
+      if (identityMatches && !currentTurn.terminal && !pendingStoppedSummaryReconciliations.has(reconciliationKey)) {
+        const botMessage = (activeSession.value?.messages || []).find((messageItem) =>
+          getMessageRole(messageItem) === RoleEnum.ASSISTANT && (
+            (turnScopeId && getMessageTurnScopeId(messageItem) === turnScopeId) ||
+            (!turnScopeId && getMessageDialogProcessId(messageItem) === dialogProcessId)
+          ));
+        const reconciliation = finalizeStoppedSessionDetail({
+          activeSession,
+          activeSessionId,
+          botMessage,
+          finalEventData: { ...stateEntry, sessionId, turnScopeId, dialogProcessId },
+          fetchSessionDetail: chatList.fetchSessionDetail,
+          applySessionDetail: chatList.applySessionDetail,
+          applyRunStateEvent: applyComposerActionStateEvent,
+        }).finally(() => pendingStoppedSummaryReconciliations.delete(reconciliationKey));
+        pendingStoppedSummaryReconciliations.set(reconciliationKey, reconciliation);
+      }
+    }
   }
 
   function hydrateStoppedRunStateFromSessionDetail({ sessionItem = null } = {}) {
     if (sessionItem) hydrateSessionTurnRuntime(turnRuntimeRegistry.value, sessionItem);
-    // A successfully applied session summary is the synchronization boundary:
-    // turnStatuses now owns every persisted turn result, so the global state is
-    // only a temporary frontend interaction lock and must always be released.
+    const sessionId = String(
+      sessionItem?.backendSessionId || sessionItem?.sessionId || sessionItem?.id || "",
+    ).trim();
+    const terminalStatuses = new Set([
+      "user_stopped", "completed", "error", "failed", "expired", "cancelled", "aborted",
+    ]);
+    const terminalTurn = (Array.isArray(sessionItem?.turnStatuses) ? sessionItem.turnStatuses : [])
+      .filter((status) => terminalStatuses.has(String(status?.status || "").trim().toLowerCase()))
+      .sort((left, right) => {
+        const rightTime = Date.parse(right?.updatedAt || right?.createdAt || "") || Number(right?.revision || 0);
+        const leftTime = Date.parse(left?.updatedAt || left?.createdAt || "") || Number(left?.revision || 0);
+        return rightTime - leftTime;
+      })[0] || null;
+    const turnScopeId = String(terminalTurn?.turnScopeId || "").trim();
+    const dialogProcessId = String(terminalTurn?.dialogProcessId || "").trim();
+    const isCurrentSession = Boolean(sessionId && sessionId === resolveActiveSessionIdentity());
+
+    // Session detail is authoritative after a reload. Clear every frontend stop
+    // lease for this exact persisted turn; otherwise a remembered request or the
+    // WebSocket confirmation timer can put the new page back into "stopping".
+    if (isCurrentSession && terminalTurn && (turnScopeId || dialogProcessId)) {
+      chatWebSocketClient.clearStopRequested();
+      clearRememberedStopRequests({ sessionId, dialogProcessId, turnScopeId });
+    }
+    const terminalState = String(terminalTurn?.status || "").trim().toLowerCase();
+    if (isCurrentSession && terminalState === "user_stopped" && turnScopeId) {
+      applyComposerActionStateEvent({
+        type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED,
+        sessionId,
+        dialogProcessId,
+        turnScopeId,
+        seq: Number(terminalTurn?.seq || terminalTurn?.revision || 0),
+        timestamp: Date.parse(terminalTurn?.updatedAt || terminalTurn?.createdAt || "") || nowMs(),
+        source: "session_detail_applied",
+      });
+      return;
+    }
+    // A successfully applied detail still releases temporary global interaction
+    // locks when there is no scoped user-stopped terminal to project.
     applySessionRunStateEvent({
       stateRef: runStateSnapshot,
       sending,
@@ -457,6 +527,47 @@ export function useChatSession({
     sessionLogWebSocketClient,
     notify,
     processStore,
+    applyTurnRuntimeEvents: (events = []) => {
+      const sourceEvents = Array.isArray(events) ? events : [];
+      // Session detail is the persisted source of truth for terminal turns. A
+      // reconnect snapshot can race behind detail loading and still report the
+      // old sending/stopping currentRun. Remove those stale facts from the
+      // shared batch before it reaches either Registry or the global run state,
+      // otherwise a refreshed stopped turn is resurrected as "stopping".
+      for (let index = sourceEvents.length - 1; index >= 0; index -= 1) {
+        const event = sourceEvents[index] || {};
+        const eventSessionId = String(event.sessionId || resolveActiveSessionIdentity()).trim();
+        const eventTurnScopeId = String(event.turnScopeId || "").trim();
+        const eventDialogProcessId = String(event.dialogProcessId || "").trim();
+        const sessionItem = sessions.value.find((item) => {
+          const id = String(item?.backendSessionId || item?.sessionId || item?.id || "").trim();
+          return id && id === eventSessionId;
+        });
+        const persistedTerminal = (Array.isArray(sessionItem?.turnStatuses) ? sessionItem.turnStatuses : [])
+          .find((status) => {
+            const sameTurn = eventTurnScopeId && String(status?.turnScopeId || "").trim() === eventTurnScopeId;
+            const sameDialog = eventDialogProcessId && String(status?.dialogProcessId || "").trim() === eventDialogProcessId;
+            return sameTurn || sameDialog;
+          });
+        const terminalStates = ["user_stopped", "completed", "error", "failed", "expired", "cancelled", "aborted"];
+        const terminalState = String(persistedTerminal?.status || "").trim().toLowerCase();
+        const incomingState = String(event.state || event.backendState || event.raw?.status || event.raw?.terminal || "")
+          .trim()
+          .toLowerCase();
+        // Persisted terminal state only invalidates an older in-flight replay.
+        // Never discard a matching real-time terminal event: it must still reach
+        // turnRuntimeRegistry so the refreshed composer's stopping state settles
+        // immediately instead of waiting for another detail reload.
+        if (terminalStates.includes(terminalState) && !terminalStates.includes(incomingState)) {
+          sourceEvents.splice(index, 1);
+        }
+      }
+      for (const event of sourceEvents) {
+        applyTurnRuntimeEvent(turnRuntimeRegistry.value, event, {
+          fallbackSessionId: resolveActiveSessionIdentity(),
+        });
+      }
+    },
   });
 
   async function sendWithComposerActionState(...args) {

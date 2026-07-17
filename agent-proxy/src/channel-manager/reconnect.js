@@ -12,6 +12,62 @@ import { nowMs, isTerminalStatus } from "../utils.js";
 class ReconnectMethods {
 // ---- Reconnect ----
 
+_isChannelExecutionAlive(channel) {
+  if (!channel) return false;
+  const status = String(channel.status || "").trim();
+  const readyState = channel?.upstreamSocket?.readyState;
+  // Older/in-memory fixtures may only carry a status. Once a real upstream has
+  // been created, however, its socket lifecycle is the authoritative liveness
+  // source and a missing/closed socket must not be treated as an active run.
+  if (channel.upstreamEverConnected !== true && channel.upstreamClosed !== true) {
+    return status === CHANNEL_STATUS.RUNNING || status === CHANNEL_STATUS.CONNECTING;
+  }
+  if (status === CHANNEL_STATUS.RUNNING) {
+    return readyState === this.WebSocket.OPEN && channel.upstreamClosed !== true;
+  }
+  if (status === CHANNEL_STATUS.CONNECTING) {
+    const connectingState = Number.isFinite(Number(this.WebSocket.CONNECTING))
+      ? Number(this.WebSocket.CONNECTING)
+      : 0;
+    return (
+      channel.upstreamClosed !== true &&
+      (readyState === connectingState || readyState === this.WebSocket.OPEN)
+    );
+  }
+  return false;
+}
+
+_convergeOrphanedActiveChannel(channel, sessionId = "") {
+  const status = String(channel?.status || "").trim();
+  const claimsActive =
+    status === CHANNEL_STATUS.RUNNING || status === CHANNEL_STATUS.CONNECTING;
+  if (!claimsActive || this._isChannelExecutionAlive(channel)) return false;
+
+  const turnScopeId = String(channel?.startPayload?.turnScopeId || "").trim();
+  const dialogProcessId = String(channel?.startPayload?.dialogProcessId || "").trim();
+  this.markChannelTerminal(channel, CHANNEL_STATUS.ERROR);
+  this.updateConversationState(channel, {
+    sessionId,
+    dialogProcessId,
+    turnScopeId,
+    state: CONVERSATION_STATE.ERROR,
+    sourceEvent: CONVERSATION_SOURCE_EVENT.CHANNEL_STATUS,
+    seq: Number(channel?.eventSequence || 0),
+    broadcast: false,
+  });
+  this.logSessionEvent(channel, {
+    category: "state",
+    level: "warn",
+    event: "agentProxy.channel.orphan.converged",
+    data: {
+      previousStatus: status,
+      upstreamReadyState: channel?.upstreamSocket?.readyState ?? null,
+      upstreamClosed: channel?.upstreamClosed === true,
+    },
+  });
+  return true;
+}
+
 handleReconnect(socket, payload = {}) {
   const lastReceivedSeqMap = payload?.lastReceivedSeqMap || {};
   const lastReceivedTurnScopeIdMap = payload?.lastReceivedTurnScopeIdMap || {};
@@ -47,6 +103,12 @@ handleReconnect(socket, payload = {}) {
 
     const channelSessionId = this._extractSessionIdFromChannelKey(channelKey);
     if (!channelSessionId) continue;
+
+    // Channel status is only a projection. After a refresh/restart the upstream
+    // execution may already be gone while the cached channel still says running.
+    // Converge that orphan before producing reconnect state so clients cannot
+    // resurrect a non-existent run as sending/stopping forever.
+    this._convergeOrphanedActiveChannel(channel, channelSessionId);
 
     const preAttachSessionState =
       channel.status === CHANNEL_STATUS.CONNECTING

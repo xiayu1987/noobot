@@ -69,6 +69,13 @@ test('masks structured and contextual secrets but leaves paths and ordinary hash
   assert.match(output, /path=\/home\/admin\/private\/project/);
 });
 
+test('masks short bearer tokens without changing content shape', () => {
+  const input = 'authorization=Bearer test.jwt.token';
+  const output = sanitizeSecrets(input);
+  assert.equal(output.length, input.length);
+  assert.equal(output, 'authorization=Bearer xxxx.xxx.xxxxx');
+});
+
 test('tool result combines field, secret and PII sanitization', async () => {
   const output = await sanitizeToolResultText(JSON.stringify({
     password: 'do-not-return',

@@ -20,7 +20,7 @@ import {
   isPendingInteractionReplay,
 } from "../../infra/reconnectReplayModel";
 import { getMessageDialogProcessId } from "../../infra/messageIdentity";
-import { _ensureArray, _trimStr } from "./utils";
+import { _ensureArray, _trimStr, normalizeReplayError } from "./utils";
 import {
   hydrateSessionBeforeReconnectReplayIfNeeded,
 } from "./hydrationReplay";
@@ -393,7 +393,7 @@ export function applyReconnectEnvelopeToTargetMessage({
   } else if (eventName === StreamEventEnum.USER_STOPPED) {
     terminalDialogProcessIdSet?.add?.(normalizedDpId);
   } else if (eventName === StreamEventEnum.ERROR) {
-    targetMessage.error = String(eventData?.error || targetMessage?.error || "");
+    targetMessage.error = normalizeReplayError(eventData?.error) || normalizeReplayError(targetMessage?.error);
     applyReconnectDoneProcessEvents({
       eventData,
       targetMessage,
@@ -552,6 +552,7 @@ export async function applyReconnectReplayBatchToActiveSession({
     appendMessage,
     messages: nextMessages,
     normalizedDpId,
+    turnScopeId,
     allowCreate: shouldCreateTarget,
   });
   if (usedFallback) {
