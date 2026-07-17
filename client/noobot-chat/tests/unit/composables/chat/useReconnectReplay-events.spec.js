@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createFixture, createFakeProcessStore } from "./helpers/useReconnectReplayHelper";
 import { BackendChannelState, createInitialSessionRunState } from "../../../../src/composables/chat/sessionRunStateMachine";

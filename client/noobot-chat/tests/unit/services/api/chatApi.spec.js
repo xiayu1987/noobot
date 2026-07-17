@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 import { describe, expect, it, vi, afterEach } from "vitest";
 
 import { buildLogWebSocketUrl, renameSessionApi } from "../../../../src/services/api/chatApi.js";

@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 import { ref } from "vue";
 import { vi } from "vitest";
 import { useReconnectReplay } from "../../../../../src/composables/chat/useReconnectReplay";

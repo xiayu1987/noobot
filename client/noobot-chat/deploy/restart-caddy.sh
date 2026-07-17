@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 xiayu
+# Contact: 126240622+xiayu1987@users.noreply.github.com
+# SPDX-License-Identifier: MIT
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

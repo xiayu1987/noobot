@@ -1,7 +1,13 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 import { cp, mkdir, rm, writeFile, readFile, access } from 'node:fs/promises';
 import { clientFilePath as path } from "../path-resolver.js";
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { getDesktopRipgrepPackages, getRipgrepBinaryRelativePath } from './desktop-ripgrep-packages.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(__filename), '../../..');
@@ -134,6 +140,8 @@ async function main() {
   log('Writing runtime package.json');
   const rootPkg = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'));
   const servicePkg = JSON.parse(await readFile(path.join(repoRoot, 'service/package.json'), 'utf8'));
+  const agentPkg = JSON.parse(await readFile(path.join(repoRoot, 'agent/package.json'), 'utf8'));
+  const desktopPkg = JSON.parse(await readFile(path.join(desktopProjectDir, 'package.json'), 'utf8'));
   await writeFile(path.join(backendRoot, 'package.json'), JSON.stringify({
     name: 'noobot-backend-runtime',
     version: rootPkg.version,
@@ -147,6 +155,27 @@ async function main() {
   run(npmCommand.command, [...npmCommand.argsPrefix, 'install', '--omit=dev', '--ignore-scripts', '--no-audit', '--fund=false'], {
     cwd: backendRoot,
   });
+
+  // npm only installs optional dependencies for the build host. Desktop builds
+  // can target a different OS/architecture, so explicitly keep every binary
+  // supported by that desktop client in the self-contained backend runtime.
+  const ripgrepVersion = agentPkg.dependencies?.['@vscode/ripgrep'];
+  if (!ripgrepVersion) fail('agent dependency @vscode/ripgrep is missing');
+  const ripgrepPackages = getDesktopRipgrepPackages(desktopPkg.name, ripgrepVersion);
+  if (ripgrepPackages.length) {
+    run(npmCommand.command, [
+      ...npmCommand.argsPrefix,
+      'install',
+      '--no-save',
+      '--force',
+      '--ignore-scripts',
+      '--no-audit',
+      '--fund=false',
+      ...ripgrepPackages,
+    ], { cwd: backendRoot });
+    await Promise.all(ripgrepPackages.map((packageSpec) =>
+      assertExists(path.join(backendRoot, getRipgrepBinaryRelativePath(packageSpec)), `Bundled ripgrep binary ${packageSpec}`)));
+  }
 
   await assertExists(path.join(backendRoot, 'service/app.js'), 'Prepared backend entry');
   await assertExists(path.join(backendRoot, 'agent/src/system-core/system-prompt/base.md'), 'Prepared backend system prompt');

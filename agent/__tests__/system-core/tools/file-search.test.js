@@ -1,12 +1,21 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { searchFilesWithRipgrep } from "../../../src/system-core/tools/execution/file-search.js";
+import { hasRipgrep, searchFilesWithRipgrep } from "../../../src/system-core/tools/execution/file-search.js";
 
-test("ripgrep file search treats a leading-dash query as a literal pattern", async () => {
+test("ripgrep file search treats a leading-dash query as a literal pattern", async (t) => {
+  if (!(await hasRipgrep())) {
+    t.skip("ripgrep is not installed");
+    return;
+  }
   const rootPath = await mkdtemp(path.join(tmpdir(), "noobot-file-search-"));
   try {
     await writeFile(path.join(rootPath, "theme.css"), ":root { --surface-color: white; }\n", "utf8");

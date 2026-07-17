@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 export const RUNTIME_EVENT_SCOPES = Object.freeze({ STARTUP: 'startup', SESSION: 'session', SYSTEM: 'system' });
 export const RUNTIME_EVENT_LEVELS = Object.freeze({ DEBUG: 'debug', INFO: 'info', WARN: 'warn', ERROR: 'error', FATAL: 'fatal' });
 export const RUNTIME_EVENT_CATEGORIES = Object.freeze({ SYSTEM: 'system', STATE: 'state', MESSAGE: 'message', INTERACTION: 'interaction', TRANSPORT: 'transport', DEBUG: 'debug', SECURITY: 'security', CONFIG: 'config' });

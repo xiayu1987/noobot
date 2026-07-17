@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 import { nowMs } from "../composables/infra/timeFields";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 const CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_KEY = "__noobotChatNavPendingAnchor";

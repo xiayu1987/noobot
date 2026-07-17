@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 export { default as SettingsWorkspaceLayout } from "./SettingsWorkspaceLayout.vue";
 export { default as SettingsWorkspacePanel } from "./SettingsWorkspacePanel.vue";
 export { default as SettingsActionGroup } from "./SettingsActionGroup.vue";
