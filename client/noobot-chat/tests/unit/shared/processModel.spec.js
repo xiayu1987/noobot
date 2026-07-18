@@ -68,8 +68,8 @@ describe("process model", () => {
     expect(view.lastSequence).toBe(2);
     expect(view.executionLogTotal).toBe(2);
     expect(view.completedToolLogs.map((item) => item.text)).toEqual([
-      "开始：执行命令：first",
-      "完成：执行命令：second",
+      "调用：first",
+      "返回：second",
     ]);
   });
 
@@ -89,7 +89,7 @@ describe("process model", () => {
     expect(view.lastSequence).toBe(2);
     expect(view.executionLogTotal).toBe(2);
     expect(view.realtimeLogs).toHaveLength(2);
-    expect(view.completedToolLogs[1].text).toBe("完成：执行命令：ok");
+    expect(view.completedToolLogs[1].text).toBe("返回：ok");
   });
 
   it("keeps eventId stable for equivalent logs without explicit timestamp", () => {

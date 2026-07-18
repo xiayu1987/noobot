@@ -112,7 +112,7 @@ function pickExecutionToolResult(logItem = {}) {
 
 function stripExecutionCommandPrefix(value) {
   let text = normalizeTrimmedString(value);
-  const prefixRe = /^(?:(?:开始|完成)：\s*)?执行命令：\s*|^(?:(?:Started|Completed):\s*)?Command:\s*/i;
+  const prefixRe = /^(?:开始|完成|调用|返回)：\s*(?:执行命令：\s*)?|^执行命令：\s*|^(?:Started|Completed|Call|Return):\s*(?:Command:\s*)?|^Command:\s*/i;
   while (prefixRe.test(text)) text = text.replace(prefixRe, "").trim();
   return text;
 }

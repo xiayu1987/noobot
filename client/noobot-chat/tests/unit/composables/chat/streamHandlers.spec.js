@@ -217,7 +217,7 @@ describe("chatEngine streamHandlers", () => {
     expect(botMessage.dialogProcessId).toBe("dp-1");
     expect(botMessage.executionLogTotal).toBe(1);
     expect(botMessage.realtimeLogs).toEqual([
-      expect.objectContaining({ event: "tool_call", text: "开始：执行命令：npm test" }),
+      expect.objectContaining({ event: "tool_call", text: "调用：npm test" }),
     ]);
     expect(locateSendingStartedMessageOnce).toHaveBeenCalledTimes(1);
     expect(scrollOnFirstResponseOnce).toHaveBeenCalledTimes(1);
@@ -245,7 +245,7 @@ describe("chatEngine streamHandlers", () => {
     expect(botMessage.realtimeLogs).toEqual([
       expect.objectContaining({
         event: "tool_call",
-        text: "开始：执行命令：cd /project/agent && npm test",
+        text: "调用：cd /project/agent && npm test",
       }),
     ]);
     expect(botMessage.executionLogTotal).toBe(1);
@@ -282,7 +282,7 @@ describe("chatEngine streamHandlers", () => {
     });
 
     expect(botMessage.realtimeLogs).toEqual([
-      expect.objectContaining({ text: "完成：执行命令：cd /project/agent && npm test" }),
+      expect.objectContaining({ text: "返回：cd /project/agent && npm test" }),
     ]);
     expect(locateDoneMessage).not.toHaveBeenCalled();
   });
@@ -366,8 +366,8 @@ describe("chatEngine streamHandlers", () => {
 
     expect(botMessage.realtimeLogs).toHaveLength(10);
     expect(botMessage.executionLogTotal).toBe(12);
-    expect(botMessage.realtimeLogs[0].text).toBe("开始：执行命令：cmd-3");
-    expect(botMessage.realtimeLogs[9].text).toBe("开始：执行命令：cmd-12");
+    expect(botMessage.realtimeLogs[0].text).toBe("调用：cmd-3");
+    expect(botMessage.realtimeLogs[9].text).toBe("调用：cmd-12");
     expect(scrollOnFirstResponseOnce).toHaveBeenCalledTimes(12);
   });
 
@@ -430,8 +430,8 @@ describe("chatEngine streamHandlers", () => {
 
     expect(botMessage.realtimeLogs).toHaveLength(10);
     expect(botMessage.executionLogTotal).toBe(12);
-    expect(botMessage.realtimeLogs[0].text).toBe("完成：执行命令：cmd-3");
-    expect(botMessage.realtimeLogs[9].text).toBe("完成：执行命令：cmd-12");
+    expect(botMessage.realtimeLogs[0].text).toBe("返回：cmd-3");
+    expect(botMessage.realtimeLogs[9].text).toBe("返回：cmd-12");
     expect(scrollOnFirstResponseOnce).toHaveBeenCalledTimes(1);
   });
 
@@ -525,7 +525,7 @@ describe("chatEngine streamHandlers", () => {
     });
 
     expect(botMessage.realtimeLogs).toEqual([
-      expect.objectContaining({ event: "tool_result", text: "完成：执行命令：工具执行完成" }),
+      expect.objectContaining({ event: "tool_result", text: "返回：工具执行完成" }),
     ]);
     expect(botMessage.realtimeLogs[0].text).not.toContain("[tool_result]");
     expect(scrollOnFirstResponseOnce).toHaveBeenCalledTimes(1);

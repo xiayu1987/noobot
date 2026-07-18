@@ -66,7 +66,7 @@ describe("ThinkingPanel", () => {
     expect(analysisBlock.text()).not.toContain("old analysis");
 
     const rollingLogs = wrapper.findAll(".execution-log-line").map((line) => line.text());
-    expect(rollingLogs).toEqual(["开始：执行命令：read_file", "完成：执行命令：read_file done"]);
+    expect(rollingLogs).toEqual(["调用：read_file", "返回：read_file done"]);
   });
 
   it("does not render non-guidance analysis logs in the dedicated analysis block", () => {
@@ -90,7 +90,7 @@ describe("ThinkingPanel", () => {
 
     expect(wrapper.find(".thinking-analysis-block").exists()).toBe(false);
     expect(wrapper.findAll(".execution-log-line").map((line) => line.text())).toEqual([
-      "开始：执行命令：execute_script",
+      "调用：execute_script",
     ]);
   });
 

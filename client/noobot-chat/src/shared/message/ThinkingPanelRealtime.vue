@@ -102,6 +102,29 @@ const emit = defineEmits(["open-thinking-details", "collapse"]);
   color: var(--noobot-thinking-header);
   font-weight: 600;
 }
+
+.thinking-realtime-shell.is-running {
+  border: 1px solid color-mix(in srgb, var(--el-color-primary) 55%, var(--noobot-panel-border));
+  background: color-mix(in srgb, var(--el-color-primary) 10%, var(--noobot-thinking-bg));
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--el-color-primary) 16%, transparent);
+  animation: thinking-running-card-glow 2.4s ease-in-out infinite;
+}
+
+@keyframes thinking-running-card-glow {
+  0%, 100% {
+    border-color: color-mix(in srgb, var(--el-color-primary) 48%, var(--noobot-panel-border));
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--el-color-primary) 72%, var(--noobot-panel-border));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-realtime-shell.is-running {
+    animation: none;
+  }
+}
+
 .thinking-elapsed {
   font-size: var(--noobot-font-size-xs);
   color: var(--noobot-thinking-muted);

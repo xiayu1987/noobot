@@ -196,8 +196,8 @@ describe("ThinkingPanel", () => {
     expect(detailPanes[0].attributes("label")).not.toContain("({count})");
     const detailLines = wrapper.findAll(".execution-log-line");
     expect(detailLines).toHaveLength(12);
-    expect(detailLines[0].text()).toBe("完成：执行命令：cmd-1");
-    expect(detailLines[11].text()).toBe("完成：执行命令：cmd-12");
+    expect(detailLines[0].text()).toBe("返回：cmd-1");
+    expect(detailLines[11].text()).toBe("返回：cmd-12");
     expect(wrapper.text()).not.toContain("思考明细 ({count})");
   });
 
@@ -406,10 +406,10 @@ describe("ThinkingPanel", () => {
 
     const lines = wrapper.findAll(".execution-log-line");
     expect(lines.map((line) => line.text())).toEqual([
-      "开始：执行命令：first call",
-      "完成：执行命令：first result",
-      "开始：执行命令：second call",
-      "完成：执行命令：second result",
+      "调用：first call",
+      "返回：first result",
+      "调用：second call",
+      "返回：second result",
     ]);
   });
 
@@ -430,10 +430,10 @@ describe("ThinkingPanel", () => {
 
     expect(wrapper.findAll(".thinking-group")).toHaveLength(1);
     expect(wrapper.findAll(".execution-log-line").map((line) => line.text())).toEqual([
-      "开始：执行命令：main call",
-      "完成：执行命令：main result",
-      "开始：执行命令：child call",
-      "完成：执行命令：child result",
+      "调用：main call",
+      "返回：main result",
+      "调用：child call",
+      "返回：child result",
     ]);
   });
 

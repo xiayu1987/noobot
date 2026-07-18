@@ -4,6 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import { BaseEmptyHint, BaseMessageErrorAlert } from "../../../../../client/noobot-chat/src/shared/ui";
 import WorkflowSessionMessageItem from "../WorkflowSessionMessageItem.vue";
 import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
@@ -38,6 +39,23 @@ defineProps({
 
 const viewerVisible = defineModel("viewerVisible", { type: Boolean, default: false });
 
+const drawerSize = ref("72%");
+let mobileMediaQuery;
+
+function updateDrawerSize(event) {
+  drawerSize.value = event.matches ? "100%" : "72%";
+}
+
+onMounted(() => {
+  mobileMediaQuery = window.matchMedia("(max-width: 720px)");
+  updateDrawerSize(mobileMediaQuery);
+  mobileMediaQuery.addEventListener("change", updateDrawerSize);
+});
+
+onBeforeUnmount(() => {
+  mobileMediaQuery?.removeEventListener("change", updateDrawerSize);
+});
+
 defineEmits(["runtime-step-click", "open-thinking-details"]);
 </script>
 
@@ -45,7 +63,7 @@ defineEmits(["runtime-step-click", "open-thinking-details"]);
   <el-drawer
     v-model="viewerVisible"
     direction="rtl"
-    size="72%"
+    :size="drawerSize"
     destroy-on-close
     :append-to-body="true"
     :title="translate('workflow.nodeSessionTitle', { sessionId: selectedNodeSessionId || '' })"

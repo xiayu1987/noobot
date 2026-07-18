@@ -83,8 +83,8 @@ describe("ThinkingPanel", () => {
     });
     const lines = wrapper.findAll(".execution-log-line");
     expect(lines).toHaveLength(10);
-    expect(lines[0].text()).toBe("完成：执行命令：cmd-3");
-    expect(lines[9].text()).toBe("完成：执行命令：cmd-12");
+    expect(lines[0].text()).toBe("返回：cmd-3");
+    expect(lines[9].text()).toBe("返回：cmd-12");
     expect(wrapper.find("button").text()).toContain("12");
   });
 
