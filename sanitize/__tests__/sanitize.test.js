@@ -50,6 +50,26 @@ test('does not mask invalid international identifiers or file paths', () => {
   assert.equal(sanitizePersonalInformation(input), input);
 });
 
+test('does not mask loopback, private network, or link-local IP addresses', () => {
+  const input = [
+    'loopback 127.0.0.1 127.255.255.254 ::1 0:0:0:0:0:0:0:1',
+    'private 10.0.0.1 172.16.0.1 172.31.255.254 192.168.1.10',
+    'link-local 169.254.10.20 fe80::1 fe9f::1234',
+    'unique-local fc00::1 fd12:3456:789a::1',
+  ].join('\n');
+  assert.equal(sanitizePersonalInformation(input), input);
+});
+
+test('continues masking public IP addresses next to private network boundaries', () => {
+  const input = [
+    'ipv4 9.255.255.255 11.0.0.1 172.15.255.255 172.32.0.1 192.167.1.1',
+    'ipv6 2001:db8::1 fbff::1 fe7f::1 fec0::1',
+  ].join('\n');
+  const output = sanitizePersonalInformation(input);
+  assert.equal(output.length, input.length);
+  assert.doesNotMatch(output, /9\.255|11\.0|172\.15|172\.32|192\.167|2001|fbff|fe7f|fec0/);
+});
+
 test('self-maintained secret rules replace credentials without changing content shape', () => {
   const input = 'github=ghp_1234567890abcdefghijklmnopqrstuvwxyz';
   const output = sanitizeSecrets(input);
