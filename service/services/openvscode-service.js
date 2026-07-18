@@ -325,6 +325,22 @@ export function createOpenVSCodeService({
     };
   }
 
+  async function resolveInstanceFromUrl(url = "") {
+    let pathname = "";
+    try {
+      pathname = new URL(url || "/", "http://localhost").pathname;
+    } catch {
+      pathname = String(url || "").split("?")[0] || "";
+    }
+    const parts = pathname.split("/").filter(Boolean);
+    if (parts[0] !== "ide" || !parts[1]) return null;
+    const basePath = normalizeBasePath(parts[1]);
+    if (!instancesByBasePath.has(basePath)) {
+      await ensureRestoreStarted();
+    }
+    return instancesByBasePath.get(basePath) || null;
+  }
+
   const { proxyHttp, proxyUpgrade, canHandleRequest } = createOpenVSCodeProxy({
     resolveInstanceFromUrl,
     touchInstance,
