@@ -186,6 +186,10 @@ function createMessageModel(messageItem = {}) {
   const sessionId = String(messageItem?.sessionId || messageItem?.session_id || "").trim();
   const messageTimestamp = getMessageTimestamp(messageItem);
   const messageRole = getMessageRole(messageItem) || "assistant";
+  const hasThinkingOpenNames = Object.prototype.hasOwnProperty.call(
+    messageItem,
+    "thinkingOpenNames",
+  );
   return {
     id: messageItem.id || "",
     turnScopeId,
@@ -214,7 +218,11 @@ function createMessageModel(messageItem = {}) {
     thinkingDetailCount: Number(
       messageItem?.thinkingDetailCount ?? messageItem?.thinking_detail_count ?? 0,
     ),
-    thinkingOpenNames: normalizeArray(messageItem.thinkingOpenNames),
+    thinkingOpenNames: hasThinkingOpenNames
+      ? normalizeArray(messageItem.thinkingOpenNames)
+      : messageRole === "assistant" && messageItem.pending === true
+        ? ["thinking-panel"]
+        : [],
     expandedDetailLogKeys: normalizeArray(messageItem.expandedDetailLogKeys),
     error: messageItem.error || "",
     pending: Boolean(messageItem.pending),

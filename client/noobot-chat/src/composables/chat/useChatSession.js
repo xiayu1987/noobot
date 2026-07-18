@@ -67,8 +67,10 @@ import { setReconnectTimingDebugLogSink } from "./debug/reconnectTimingDebugLogg
 import {
   applyTurnRuntimeEvent,
   hydrateSessionTurnRuntime,
+  pruneTerminalTurns,
   resolveSessionTurnRuntime,
   selectSessionTurnRuntime,
+  sessionRuntimeId,
   turnRuntimeDisplayState,
 } from "./sessionRunStateMachine/turnRuntimeRegistry";
 
@@ -124,6 +126,10 @@ export function useChatSession({
   // authoritative turnStatuses; never infer runtime state from message order.
   for (const sessionItem of sessions.value) {
     hydrateSessionTurnRuntime(turnRuntimeRegistry.value, sessionItem);
+    pruneTerminalTurns(turnRuntimeRegistry.value, {
+      sessionId: sessionRuntimeId(sessionItem),
+      referencedTurnScopeIds: (sessionItem?.messages || []).map(getMessageTurnScopeId).filter(Boolean),
+    });
   }
 
   // Reconcile replacements, refreshes, reconnects, and non-active sessions
@@ -133,6 +139,10 @@ export function useChatSession({
     (sessionItems) => {
       for (const sessionItem of Array.isArray(sessionItems) ? sessionItems : []) {
         hydrateSessionTurnRuntime(turnRuntimeRegistry.value, sessionItem);
+        pruneTerminalTurns(turnRuntimeRegistry.value, {
+          sessionId: sessionRuntimeId(sessionItem),
+          referencedTurnScopeIds: (sessionItem?.messages || []).map(getMessageTurnScopeId).filter(Boolean),
+        });
       }
     },
     { deep: true },

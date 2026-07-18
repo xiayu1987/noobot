@@ -11,7 +11,10 @@ import { logResendDebug, summarizeDebugMessage } from "../chat/debug/resendDebug
 import { getMessageTurnScopeId } from "../infra/messageIdentity";
 import { storeToRefs } from "pinia";
 import { useChatStore } from "../../shared/stores/useChatStore";
-import { turnRuntimeDisplayState } from "../chat/sessionRunStateMachine/turnRuntimeRegistry";
+import {
+  resolveTurnRuntimeByScope,
+  turnRuntimeDisplayState,
+} from "../chat/sessionRunStateMachine/turnRuntimeRegistry";
 
 export function useMessageMeta({
   getMessageItem = () => ({}),
@@ -75,7 +78,9 @@ export function useMessageMeta({
   const statusStepState = computed(() => {
     const messageItem = getMessageItem() || {};
     const turnScopeId = String(messageItem?.statusTurnScopeId || getMessageTurnScopeId(messageItem)).trim();
-    const turnRuntime = turnScopeId ? turnRuntimeRegistry.value?.turns?.[turnScopeId] : null;
+    const turnRuntime = resolveTurnRuntimeByScope(turnRuntimeRegistry.value, turnScopeId, {
+      sessionId: String(messageItem?.sessionId || messageItem?.session_id || "").trim(),
+    });
     if (!turnRuntime) {
       const persistedState = String(messageItem?.persistedStatusStepState || "").trim().toLowerCase();
       if (persistedState === "completed") return "completed";

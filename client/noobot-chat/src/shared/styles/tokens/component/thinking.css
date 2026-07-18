@@ -12,5 +12,5 @@
   --noobot-thinking-tab: var(--noobot-text-secondary);
   --noobot-thinking-tab-active: var(--noobot-text-main);
   --noobot-thinking-tab-bar: var(--noobot-border-primary);
-  --noobot-thinking-running-shadow: 0 4px 16px color-mix(in srgb, var(--el-color-primary) 16%, transparent);
+  --noobot-thinking-running-shadow: 0 4px 18px color-mix(in srgb, var(--el-color-primary) 30%, transparent), 0 0 12px color-mix(in srgb, var(--el-color-primary) 24%, transparent);
 }

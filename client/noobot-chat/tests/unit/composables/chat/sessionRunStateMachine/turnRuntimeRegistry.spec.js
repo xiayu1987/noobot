@@ -9,6 +9,9 @@ import {
   applyTurnRuntimeEvent,
   resolveSessionTurnRuntime,
   resolveLatestStoppedTurn,
+  resolveTurnRuntimeByScope,
+  removeSessionRuntime,
+  pruneTerminalTurns,
   selectSessionTurnRuntime,
   selectTurnMessageRuntime,
   turnRuntimeDisplayState,
@@ -35,7 +38,7 @@ describe("turnRuntimeRegistry", () => {
     sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
     backendState(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", state: BackendChannelState.SENDING, seq: 2 });
     expect(resolveSessionTurnRuntime(registry, "s1")).toMatchObject({ dialogProcessId: "dp1", canStop: true });
-    expect(registry.turnByDialogProcess.dp1).toBe("t1");
+    expect(registry.routeIndex.dp1).toEqual({ sessionId: "s1", turnScopeId: "t1" });
   });
   it.each([
     BackendChannelState.RECONNECTING,
@@ -239,7 +242,49 @@ describe("turnRuntimeRegistry", () => {
       { status: "user_stopped", turnScopeId: "t1", dialogProcessId: "dp1" },
       { status: "completed", turnScopeId: "t2", dialogProcessId: "dp2" },
     ]);
-    expect(registry.turns.t1).toMatchObject({ terminal: "user_stopped", canStop: false });
-    expect(registry.turns.t2).toMatchObject({ terminal: "completed", canStop: false });
+    expect(resolveTurnRuntimeByScope(registry, "t1", { sessionId: "s1" })).toMatchObject({ terminal: "user_stopped", canStop: false });
+    expect(resolveTurnRuntimeByScope(registry, "t2", { sessionId: "s1" })).toMatchObject({ terminal: "completed", canStop: false });
+  });
+
+  it("prunes old or excess terminal turns per session while protecting active, stopped, and referenced turns", () => {
+    const registry = createTurnRuntimeRegistryState();
+    const complete = (sessionId, turnScopeId, dialogProcessId, timestamp) => {
+      sendStart(registry, { sessionId, turnScopeId, seq: 1 });
+      applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, sessionId, turnScopeId, dialogProcessId, state: BackendChannelState.SENDING, seq: 2, timestamp });
+      applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, sessionId, turnScopeId, dialogProcessId, state: BackendChannelState.COMPLETED, seq: 3, timestamp });
+      applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED, sessionId, turnScopeId, dialogProcessId, seq: 4, timestamp });
+    };
+    complete("s1", "old", "dp-old", 100);
+    complete("s1", "referenced", "dp-ref", 200);
+    complete("s1", "active", "dp-active", 300);
+    complete("s2", "other-session", "dp-other", 100);
+
+    const result = pruneTerminalTurns(registry, {
+      sessionId: "s1",
+      referencedTurnScopeIds: ["referenced"],
+      retainCount: 0,
+      maxAgeMs: 50,
+      nowMs: 1_000,
+    });
+
+    expect(result.removedTurnScopeIds).toEqual(["old"]);
+    expect(resolveTurnRuntimeByScope(registry, "referenced", { sessionId: "s1" })).not.toBeNull();
+    expect(resolveSessionTurnRuntime(registry, "s1")?.turnScopeId).toBe("active");
+    expect(resolveTurnRuntimeByScope(registry, "other-session", { sessionId: "s2" })).not.toBeNull();
+    expect(registry.routeIndex["dp-old"]).toBeUndefined();
+  });
+
+  it("removes a session bucket and only its route index entries", () => {
+    const registry = createTurnRuntimeRegistryState();
+    sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
+    backendState(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", state: BackendChannelState.SENDING, seq: 2 });
+    sendStart(registry, { sessionId: "s2", turnScopeId: "t2" });
+    backendState(registry, { sessionId: "s2", turnScopeId: "t2", dialogProcessId: "dp2", state: BackendChannelState.SENDING, seq: 2 });
+
+    expect(removeSessionRuntime(registry, "s1")).toBe(true);
+    expect(registry.sessions.s1).toBeUndefined();
+    expect(registry.routeIndex.dp1).toBeUndefined();
+    expect(resolveSessionTurnRuntime(registry, "s2")?.turnScopeId).toBe("t2");
+    expect(registry.routeIndex.dp2).toEqual({ sessionId: "s2", turnScopeId: "t2" });
   });
 });

@@ -10,6 +10,7 @@ import { RoleEnum } from "../../../../../src/shared/constants/chatConstants";
 import {
   applyTurnRuntimeEvent,
   createTurnRuntimeRegistryState,
+  resolveSessionTurnRuntime,
   selectSessionTurnRuntime,
 } from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 
@@ -151,8 +152,7 @@ export function createFixture({ activeId = "s-1", processStore = null } = {}) {
       sending: computed(() => runtimeView.value.sending),
       canStop: computed(() => runtimeView.value.canStop),
       activeTurnRuntime: computed(() => {
-        const scope = turnRuntimeRegistry.value.activeTurnBySession[activeSessionId.value];
-        return scope ? turnRuntimeRegistry.value.turns[scope] || null : null;
+        return resolveSessionTurnRuntime(turnRuntimeRegistry.value, activeSessionId.value);
       }),
       interactionSubmitting,
       pendingInteractionRequest,

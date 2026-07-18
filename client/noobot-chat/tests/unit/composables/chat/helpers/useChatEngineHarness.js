@@ -15,6 +15,7 @@ import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../src/compo
 import {
   applyTurnRuntimeEvent,
   createTurnRuntimeRegistryState,
+  resolveSessionTurnRuntime,
   selectSessionTurnRuntime,
 } from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 
@@ -68,8 +69,7 @@ export const createHarness = ({
   const sending = computed(() => runtimeView.value.sending);
   const canStop = computed(() => runtimeView.value.canStop);
   const activeTurnRuntime = computed(() => {
-    const turnScopeId = turnRuntimeRegistry.value.activeTurnBySession[activeSessionId.value];
-    return turnScopeId ? turnRuntimeRegistry.value.turns[turnScopeId] || null : null;
+    return resolveSessionTurnRuntime(turnRuntimeRegistry.value, activeSessionId.value);
   });
   const input = ref("hello");
   const uploadFiles = ref([]);

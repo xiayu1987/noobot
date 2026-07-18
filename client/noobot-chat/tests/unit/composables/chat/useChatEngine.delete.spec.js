@@ -401,6 +401,6 @@ describe("useChatEngine.delete", () => {
     await expect(engine.deleteMonotonicMessage(target)).resolves.toBe(true);
 
     expect(resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionId)).toBe(null);
-    expect(turnRuntimeRegistry.value.turns[turnScopeId]).toBeUndefined();
+    expect(turnRuntimeRegistry.value.sessions[sessionId]?.turns?.[turnScopeId]).toBeUndefined();
   });
 });

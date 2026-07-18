@@ -15,12 +15,14 @@ import {
   reconcileSessionObject,
   revokeMessagePreviewUrls,
 } from "./sessionRecords";
+import { removeSessionRuntime, sessionRuntimeId } from "../sessionRunStateMachine/turnRuntimeRegistry";
 
 export function createSessionListActions({
   sessions,
   activeSessionId,
   loadingSessions,
   loadingSessionDetail,
+  turnRuntimeRegistry = null,
   userId,
   authFetch,
   ensureConnected,
@@ -216,10 +218,12 @@ export function createSessionListActions({
     const index = sessions.value.findIndex((sessionItem) => sessionItem.id === targetSessionId);
     if (index < 0) return false;
     const targetSession = sessions.value[index];
+    const runtimeSessionId = sessionRuntimeId(targetSession);
 
     if (targetSession?.isLocal) {
       revokeMessagePreviewUrls(targetSession.messages || []);
       sessions.value.splice(index, 1);
+      removeSessionRuntime(turnRuntimeRegistry?.value || turnRuntimeRegistry, runtimeSessionId);
       if (!sessions.value.length) {
         createLocalSession();
       } else if (activeSessionId.value === targetSessionId) {
@@ -242,6 +246,8 @@ export function createSessionListActions({
     if (!res.ok || !data.ok) {
       throw new Error(data.error || translate("chat.deleteSessionFailed"));
     }
+
+    removeSessionRuntime(turnRuntimeRegistry?.value || turnRuntimeRegistry, runtimeSessionId);
 
     await fetchSessions(fallbackNextSessionId);
     return true;
