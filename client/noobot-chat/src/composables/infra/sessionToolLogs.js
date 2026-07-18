@@ -11,7 +11,7 @@ import {
   getMessageRole,
   getMessageTurnScopeId,
 } from "./messageIdentity";
-import { getMessageTimestamp, nowIso, parseTimeMs } from "./timeFields";
+import { getMessageTimestamp, nowIso } from "./timeFields";
 import {
   buildToolCallSummary,
   buildToolResultSummary,
@@ -88,9 +88,6 @@ function buildSessionTreeOrder(sessionDocuments = []) {
     return [...(sessionIds || [])].sort((leftSessionId, rightSessionId) => {
       const leftSessionDocument = sessionById.get(leftSessionId) || {};
       const rightSessionDocument = sessionById.get(rightSessionId) || {};
-      const leftCreatedAt = parseTimeMs(leftSessionDocument?.createdAt);
-      const rightCreatedAt = parseTimeMs(rightSessionDocument?.createdAt);
-      if (leftCreatedAt !== rightCreatedAt) return leftCreatedAt - rightCreatedAt;
       return String(leftSessionId || "").localeCompare(String(rightSessionId || ""));
     });
   }
@@ -157,17 +154,7 @@ function sortLogsBySessionTree(logs = [], sessionOrderById = new Map()) {
       return normalizedLeftSessionOrder - normalizedRightSessionOrder;
     }
 
-    const leftTime = parseTimeMs(leftLog?.ts);
-    const rightTime = parseTimeMs(rightLog?.ts);
-    if (leftTime !== rightTime) return leftTime - rightTime;
-
-    const leftType = String(leftLog?.type || "").trim();
-    const rightType = String(rightLog?.type || "").trim();
-    const leftTypeOrder = Number(logTypeOrder[leftType] || 99);
-    const rightTypeOrder = Number(logTypeOrder[rightType] || 99);
-    if (leftTypeOrder !== rightTypeOrder) return leftTypeOrder - rightTypeOrder;
-
-    return String(leftLog?.text || "").localeCompare(String(rightLog?.text || ""));
+    return 0;
   });
 }
 
@@ -279,11 +266,6 @@ function buildToolLogsFromSessions(sessionDocuments = []) {
       }
     }
   }
-  collectedLogs.sort(
-    (leftLog, rightLog) =>
-      parseTimeMs(leftLog.ts) -
-      parseTimeMs(rightLog.ts),
-  );
   return collectedLogs;
 }
 
