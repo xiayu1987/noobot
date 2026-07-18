@@ -1,3 +1,11 @@
+/* 移动端触摸反馈统一由按钮自身状态绘制，避免系统高亮以方形覆盖圆角。 */
+button,
+.el-button {
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+  isolation: isolate;
+}
+
 /* 统一功能性按钮基类 */
 .noobot-action-btn {
   border-radius: var(--noobot-btn-radius);
