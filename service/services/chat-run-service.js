@@ -112,6 +112,10 @@ export function createChatRunService({
     const streaming = hasStreamingField
       ? normalizeBooleanLike(source?.streaming, false)
       : undefined;
+    const hasSanitizeOutputField = hasOwnConfigKey(source, "sanitizeOutput");
+    const sanitizeOutput = hasSanitizeOutputField
+      ? normalizeBooleanLike(source?.sanitizeOutput, true)
+      : undefined;
     const hasRunTimeout =
       Object.prototype.hasOwnProperty.call(source, "runTimeoutMs") ||
       Object.prototype.hasOwnProperty.call(source, "run_timeout_ms");
@@ -145,6 +149,7 @@ export function createChatRunService({
       allowUserInteraction,
       safeConfirm,
       ...(hasStreamingField ? { streaming } : {}),
+      ...(hasSanitizeOutputField ? { sanitizeOutput } : {}),
       locale,
       scenario,
       ...(selectedModel ? { selectedModel } : {}),

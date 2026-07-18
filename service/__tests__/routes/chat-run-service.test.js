@@ -55,6 +55,18 @@ test("chat-run-service: normalizeRunConfig should omit streaming when not provid
   assert.equal(Object.prototype.hasOwnProperty.call(service.normalizeRunConfig({}), "streaming"), false);
 });
 
+test("chat-run-service: normalizeRunConfig should preserve explicit sanitizeOutput opt-out", () => {
+  const service = createService();
+
+  assert.equal(service.normalizeRunConfig({ sanitizeOutput: false }).sanitizeOutput, false);
+  assert.equal(service.normalizeRunConfig({ sanitizeOutput: "false" }).sanitizeOutput, false);
+  assert.equal(service.normalizeRunConfig({ sanitizeOutput: true }).sanitizeOutput, true);
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(service.normalizeRunConfig({}), "sanitizeOutput"),
+    false,
+  );
+});
+
 test("chat-run-service: normalizeRunConfig should preserve memory model for top-level and agent compat config", () => {
   const service = createService();
   const normalized = service.normalizeRunConfig({ memoryModel: "  memory-gpt  ", scenario: "programming" });
