@@ -9,8 +9,6 @@ import { applyReconnectDataReplay } from "../../../../src/composables/chat/recon
 function createFixture(overrides = {}) {
   return {
     ensureReconnectSessionActive: vi.fn(async () => {}),
-    sending: { value: false },
-    canStop: { value: false },
     isCurrentActiveSession: vi.fn((sessionId) => sessionId === "s-1"),
     resolveReconnectTargetAssistantMessage: vi.fn(),
     replayCache: {},
@@ -134,13 +132,8 @@ describe("applyReconnectDataReplay", () => {
 
 
   it("restores running channel with only session-scope turnScopeId state as stoppable", async () => {
-    let fixture;
-    const applyRunStateEvents = vi.fn((events) => {
-      const latest = events.at(-1);
-      fixture.sending.value = latest?.state === "sending" || latest?.state === "reconnecting";
-      fixture.canStop.value = latest?.state === "sending" || latest?.state === "reconnecting";
-    });
-    fixture = createFixture({ applyRunStateEvents });
+    const applyRunStateEvents = vi.fn();
+    const fixture = createFixture({ applyRunStateEvents });
 
     await applyReconnectDataReplay({
       reconnectData: {
@@ -169,8 +162,6 @@ describe("applyReconnectDataReplay", () => {
         turnScopeId: "client-turn-r",
       }),
     ]));
-    expect(fixture.sending.value).toBe(true);
-    expect(fixture.canStop.value).toBe(true);
   });
 
   it("ignores historical stopped turns when reconnect declares an active running turn", async () => {
@@ -282,8 +273,6 @@ describe("applyReconnectDataReplay", () => {
       ...fixture,
     });
 
-    expect(fixture.sending.value).toBe(false);
-    expect(fixture.canStop.value).toBe(false);
   });
 
   it("does not resurrect a terminal currentRun when channel running lags behind", async () => {
@@ -345,8 +334,12 @@ describe("applyReconnectDataReplay", () => {
     });
 
     expect(fixture.ensureReconnectSessionActive).toHaveBeenCalledWith("s-1");
-    expect(fixture.sending.value).toBe(true);
-    expect(fixture.canStop.value).toBe(false);
+    expect(fixture.applyChannelState).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: "s-1",
+      turnScopeId: "turn-stop",
+      state: "stopping",
+      authoritativeSnapshot: true,
+    }));
   });
 
   it.each(["cancelled", "completed", "error", "expired", "no_conversation"])(
@@ -372,8 +365,6 @@ describe("applyReconnectDataReplay", () => {
         ...fixture,
       });
 
-      expect(fixture.sending.value).toBe(false);
-      expect(fixture.canStop.value).toBe(false);
     },
   );
 });

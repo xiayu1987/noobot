@@ -95,30 +95,9 @@ function createReconnectRunStateEvents(reconnectSessions = [], recoverableSessio
   return events;
 }
 
-function resolveReconnectSessionRunningStateFromStates(sessionEntry = null) {
-  const stateEntries = resolveAuthoritativeConversationStates(sessionEntry);
-  if (!stateEntries.length) return null;
-  let restoredState = null;
-  for (const stateEntry of stateEntries) {
-    const state = _trimStr(stateEntry?.state);
-    if (isInFlightConversationState(state)) {
-      restoredState = {
-        sending: true,
-        canStop: state === BackendChannelState.SENDING || state === BackendChannelState.RECONNECTING,
-      };
-    }
-    if (isTerminalConversationState(state)) {
-      restoredState = { sending: false, canStop: false };
-    }
-  }
-  return restoredState;
-}
-
 export async function applyReconnectDataReplay({
   reconnectData,
   ensureReconnectSessionActive,
-  sending,
-  canStop,
   applyRunStateEvents,
   isCurrentActiveSession,
   resolveReconnectTargetAssistantMessage,
@@ -148,13 +127,7 @@ export async function applyReconnectDataReplay({
   );
   if (recoverableSessionId) {
     await ensureReconnectSessionActive(recoverableSessionId);
-    if (applyRunStateEvents) {
-      applyReconnectRunState();
-    } else {
-      // Compatibility fallback for callers that do not provide the run state machine bridge.
-      sending.value = true;
-      if (canStop) canStop.value = true;
-    }
+    applyReconnectRunState();
     const recoverableSessionEntry = reconnectSessions.find(
       (sessionEntry) => _trimStr(sessionEntry?.sessionId) === recoverableSessionId,
     );
@@ -222,14 +195,7 @@ export async function applyReconnectDataReplay({
     const recoverableSessionEntry = reconnectSessions.find(
       (sessionEntry) => _trimStr(sessionEntry?.sessionId) === recoverableSessionId,
     );
-    const restoredState = resolveReconnectSessionRunningStateFromStates(recoverableSessionEntry);
-    if (applyRunStateEvents) {
-      applyReconnectRunState();
-    } else if (restoredState !== null) {
-      // Compatibility fallback for callers that do not provide the run state machine bridge.
-      sending.value = restoredState.sending;
-      if (canStop) canStop.value = restoredState.canStop;
-    }
+    applyReconnectRunState();
   }
 
   if (reconnectData?.cacheExpired) {

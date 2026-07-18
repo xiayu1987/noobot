@@ -15,10 +15,12 @@ import { createMonotonicMessageActions } from "./chatEngine/monotonicMessageActi
 import { applyRunStateMessageRuntimePatch } from "./chatEngine/messageRuntimePatch";
 import { createChatEngineSender } from "./chatEngine/sendFlow";
 import { createPendingMessageOperationStore } from "./chatEngine/messageOperationStore";
-import { applySessionRunStateEvent } from "./sessionRunStateMachine";
 import { logStateMachineDebug } from "./debug/stateMachineLogger";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import { applyTurnRuntimeEvent } from "./sessionRunStateMachine/turnRuntimeRegistry";
+import {
+  applyTurnRuntimeEvent,
+  selectSessionTurnRuntime,
+} from "./sessionRunStateMachine/turnRuntimeRegistry";
 
 const DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS =
   TIME_THRESHOLDS.client.monotonicActionStopTimeoutMs;
@@ -42,9 +44,7 @@ export function useChatEngine({
   locateDoneMessage,
   activeSession,
   activeSessionId,
-  sending,
-  canStop,
-  runStateSnapshot,
+  sessions,
   turnRuntimeRegistry,
   input,
   uploadFiles,
@@ -79,16 +79,17 @@ export function useChatEngine({
 } = {}) {
   const { translate, locale } = useLocale();
   const applyRunStateEvent = (event) => {
-    applyTurnRuntimeEvent(turnRuntimeRegistry?.value, event, {
-      fallbackSessionId: String(activeSession?.value?.backendSessionId || activeSession?.value?.id || activeSessionId?.value || ""),
-    });
-    const previousRunState = runStateSnapshot?.value?.state || "";
+    const turnResult = applyTurnRuntimeEvent(turnRuntimeRegistry?.value, event);
+    const runtime = selectSessionTurnRuntime(
+      turnRuntimeRegistry?.value,
+      turnResult?.turn?.sessionId || event?.sessionId || "",
+    );
     logStateMachineDebug("stateMachine.event", {
       eventType: event?.type || "",
       sessionId: event?.sessionId || "",
       dialogProcessId: event?.dialogProcessId || "",
       turnScopeId: event?.turnScopeId || "",
-      fromState: previousRunState,
+      toState: runtime.displayState,
     });
     sessionLogWebSocketClient?.log?.({
       category: "state",
@@ -99,21 +100,14 @@ export function useChatEngine({
       data: {
         eventType: event?.type || "",
         source: event?.source || "",
-        fromState: previousRunState,
+        toState: runtime.displayState,
       },
-    });
-    const result = applySessionRunStateEvent({
-      stateRef: runStateSnapshot,
-      sending,
-      canStop,
-      event,
     });
     logStateMachineDebug("stateMachine.transition", {
       eventType: event?.type || "",
-      fromState: previousRunState,
-      toState: runStateSnapshot?.value?.state || "",
-      sending: sending?.value === true,
-      canStop: canStop?.value === true,
+      toState: runtime.displayState,
+      sending: runtime.sending,
+      canStop: runtime.canStop,
       messageCount: Array.isArray(activeSession?.value?.messages) ? activeSession.value.messages.length : 0,
     });
     sessionLogWebSocketClient?.log?.({
@@ -124,18 +118,18 @@ export function useChatEngine({
       turnScopeId: event?.turnScopeId || "",
       data: {
         eventType: event?.type || "",
-        fromState: previousRunState,
-        toState: runStateSnapshot?.value?.state || "",
-        sending: sending?.value === true,
-        canStop: canStop?.value === true,
+        toState: runtime.displayState,
+        sending: runtime.sending,
+        canStop: runtime.canStop,
         messageCount: Array.isArray(activeSession?.value?.messages) ? activeSession.value.messages.length : 0,
       },
     });
     applyRunStateMessageRuntimePatch({
-      activeSession,
-      runStateSnapshot,
+      sessions,
+      turnRuntimeRegistry,
+      event: turnResult?.turn || event,
     });
-    return result;
+    return turnResult;
   };
   const {
     applyAssistantFailureState,
@@ -155,10 +149,6 @@ export function useChatEngine({
   } = createChatEngineConversationState({
     activeSession,
     activeSessionId,
-    sending,
-    canStop,
-    runStateSnapshot,
-    turnRuntimeRegistry,
     applyRunStateEvent,
     interactionSubmitting,
     pendingInteractionRequest,
@@ -178,9 +168,6 @@ export function useChatEngine({
 
   function onStopConfirmationTimeout(stopScope = {}) {
     return handleStopConfirmationTimeout({
-      sending,
-      canStop,
-      runStateSnapshot,
       applyRunStateEvent,
       activeSession,
       findTargetAssistantMessage,
@@ -242,9 +229,6 @@ export function useChatEngine({
     navigateToLastMessage,
     selectedModel,
     selectedPlugins,
-    sending,
-    canStop,
-    runStateSnapshot,
     turnRuntimeRegistry,
     applyRunStateEvent,
     serializeAttachments,
@@ -269,8 +253,6 @@ export function useChatEngine({
     input,
     notify,
     send,
-    sending,
-    canStop,
     stopSending,
     translate,
     userId,

@@ -11,8 +11,6 @@ export function scheduleCacheExpiredSessionRefresh({
   getCacheExpiredRefreshTimer,
   setCacheExpiredRefreshTimer,
   replayCache,
-  sending,
-  canStop,
   interactionSubmitting,
   clearPendingInteraction,
   translate,
@@ -41,19 +39,13 @@ export function scheduleCacheExpiredSessionRefresh({
       targetAssistantMessage: failedTargetAssistantMessage = null,
     } = {}) {
       const normalizedFailedSessionId = _trimStr(failedSessionId || activeSession.value?.id);
-      if (typeof applyRunStateEvent === "function") {
-        applyRunStateEvent({
+      applyRunStateEvent?.({
           type: SESSION_RUN_EVENT.LOCAL_FAILURE,
           state: BackendChannelState.ERROR,
           sessionId: normalizedFailedSessionId,
           dialogProcessId: failedDialogProcessId,
           source: "expired_refresh_failed",
-        });
-      } else {
-        // Compatibility fallback for callers that do not provide the run state machine bridge.
-        sending.value = false;
-        if (canStop) canStop.value = false;
-      }
+      });
       interactionSubmitting.value = false;
       clearPendingInteraction?.();
       const expiredErrorMessage = translate("chat.expiredRefreshFailed");

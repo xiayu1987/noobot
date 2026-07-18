@@ -30,6 +30,7 @@ import {
 } from "../sessionRunStateMachine";
 import {
   resolveSessionTurnRuntime,
+  selectSessionTurnRuntime,
   sessionRuntimeId,
   turnRuntimeDisplayState,
 } from "../sessionRunStateMachine/turnRuntimeRegistry";
@@ -183,9 +184,6 @@ export function createChatEngineSender({
   navigateToLastMessage,
   selectedModel,
   selectedPlugins,
-  sending,
-  canStop,
-  runStateSnapshot,
   turnRuntimeRegistry,
   applyRunStateEvent,
   serializeAttachments,
@@ -228,6 +226,7 @@ export function createChatEngineSender({
 
     const turnScopeId = normalizeTrimmedString(options?.turnScopeId) || createTurnScopeId();
     const sessionId = String(activeSession.value?.backendSessionId || activeSession.value?.id || activeSessionId?.value || "");
+    const runtimeView = () => selectSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId);
     logSessionEvent({
       category: "message",
       event: "send.begin",
@@ -245,9 +244,7 @@ export function createChatEngineSender({
       turnScopeId,
       reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
       allowDuringResend: options?.allowDuringResend === true,
-      sending: sending?.value,
-      canStop: canStop?.value,
-      runState: runStateSnapshot?.value,
+      ...runtimeView(),
       messages: summarizeDebugMessages(activeSession?.value?.messages),
     });
     chatWebSocketClient?.clearStopRequested?.();
@@ -600,7 +597,6 @@ export function createChatEngineSender({
       // completion detail chain exists; otherwise a failed detail request must remain
       // an error and must not be overwritten by a late completed fallback.
       applyStreamCompletedFallback({
-        sending,
         // The detail chain is the primary completion path. This fallback is
         // intentionally used only when a terminal completion was observed but
         // no detail request could be started (for example a missing session id).
@@ -662,9 +658,7 @@ export function createChatEngineSender({
         finalizePendingResendOperation?.({ finalOnly: true });
         logResendDebug("send.stopReturn", {
           turnScopeId,
-          sending: sending?.value,
-          canStop: canStop?.value,
-          runState: runStateSnapshot?.value,
+          ...runtimeView(),
           messages: summarizeDebugMessages(activeSession?.value?.messages),
         });
         // A persisted USER_STOPPED event is a successful terminal outcome for
@@ -741,9 +735,7 @@ export function createChatEngineSender({
     } finally {
       logResendDebug("send.cleanup", {
         turnScopeId,
-        sending: sending?.value,
-        canStop: canStop?.value,
-        runState: runStateSnapshot?.value,
+        ...runtimeView(),
         messages: summarizeDebugMessages(activeSession?.value?.messages),
       });
       logSessionEvent({
@@ -751,7 +743,7 @@ export function createChatEngineSender({
         event: "send.cleanup",
         sessionId,
         turnScopeId,
-        data: { sending: sending?.value, canStop: canStop?.value },
+        data: runtimeView(),
       });
       finalizeSendCleanup({
         chatWebSocketClient,

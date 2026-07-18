@@ -108,8 +108,6 @@ export function createMonotonicMessageActions({
   input,
   notify,
   send,
-  sending,
-  canStop,
   stopSending,
   translate,
   userId,
@@ -181,7 +179,12 @@ export function createMonotonicMessageActions({
     // A stop transaction is already in progress for this Session. Do not issue
     // a second stop request or mutate messages until its authoritative result
     // arrives.
-    if (turnRuntimeDisplayState(activeTurnRuntime()) === "stopping") return false;
+    const runtime = activeTurnRuntime();
+    const runtimeDisplayState = turnRuntimeDisplayState(runtime);
+    if (
+      runtimeDisplayState === "stopping" ||
+      (runtimeDisplayState === "requesting" && runtime?.action === "stop")
+    ) return false;
     // This helper is the internal stop-and-settle gate used by delete/resend.
     // The public action mutex must reject a second action, but it must not
     // prevent this helper from stopping the currently active run first.

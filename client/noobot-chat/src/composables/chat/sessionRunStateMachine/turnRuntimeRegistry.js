@@ -5,26 +5,7 @@
  */
 import { BackendChannelState, FrontendRunState, SESSION_RUN_EVENT } from "./constants";
 import { normalizeSessionRunEvent } from "./eventNormalization";
-
-const TERMINALS = new Set(["completed", "user_stopped", "error", "expired", "failed"]);
-const ERROR_STATES = new Set([
-  FrontendRunState.ACTION_REQUEST_ERROR,
-  FrontendRunState.PROCESSING_ERROR,
-  FrontendRunState.COMPLETION_ERROR,
-  FrontendRunState.STOP_ERROR,
-  BackendChannelState.ERROR,
-  BackendChannelState.EXPIRED,
-]);
-const PHASE_RANK = new Map([
-  [FrontendRunState.ACTION_REQUESTING, 1],
-  [FrontendRunState.CONTINUE_REQUESTING, 1],
-  [FrontendRunState.PROCESSING, 2],
-  [BackendChannelState.SENDING, 2],
-  [BackendChannelState.RECONNECTING, 2],
-  [BackendChannelState.INTERACTION_PENDING, 2],
-  [FrontendRunState.FRONTEND_COMPLETION_REQUESTING, 3],
-  [FrontendRunState.USER_STOPPING, 3],
-]);
+import { deriveTurnCapabilities, isFinalTurnState, reduceTurnRuntimeEvent } from "./turnReducer";
 
 function text(value) {
   return String(value || "").trim();
@@ -56,6 +37,59 @@ export function resolveSessionTurnRuntime(registry, sessionId) {
   return turnScopeId ? registry?.turns?.[turnScopeId] || null : null;
 }
 
+// Public read model for session-scoped UI. Components must consume this
+// projection instead of keeping application-wide `sending`/`canStop` flags.
+export function selectSessionTurnRuntime(registry, sessionId) {
+  const normalizedSessionId = text(sessionId);
+  const turn = resolveSessionTurnRuntime(registry, normalizedSessionId);
+  const displayState = turnRuntimeDisplayState(turn);
+  return {
+    sessionId: normalizedSessionId,
+    turnScopeId: text(turn?.turnScopeId),
+    dialogProcessId: text(turn?.dialogProcessId),
+    displayState,
+    sending: ["requesting", "sending", "completing", "stopping"].includes(displayState),
+    canStop: displayState === "sending" && turn?.canStop === true,
+    terminal: turn?.terminal || null,
+  };
+}
+
+// Message runtime effects are scoped to one concrete turn. This read model is
+// intentionally identity-complete so callers never have to combine a global
+// state snapshot with whichever session happens to be visible.
+export function selectTurnMessageRuntime(registry, { sessionId = "", turnScopeId = "", dialogProcessId = "" } = {}) {
+  const normalizedSessionId = text(sessionId);
+  const normalizedDialogProcessId = text(dialogProcessId);
+  let normalizedTurnScopeId = text(turnScopeId);
+  if (!normalizedTurnScopeId && normalizedDialogProcessId) {
+    normalizedTurnScopeId = text(registry?.turnByDialogProcess?.[normalizedDialogProcessId]);
+  }
+  const turn = normalizedTurnScopeId ? registry?.turns?.[normalizedTurnScopeId] : null;
+  if (!turn) return null;
+  if (normalizedSessionId && turn.sessionId !== normalizedSessionId) return null;
+  if (normalizedDialogProcessId && turn.dialogProcessId && turn.dialogProcessId !== normalizedDialogProcessId) return null;
+  const state = [
+    BackendChannelState.SENDING,
+    BackendChannelState.RECONNECTING,
+    BackendChannelState.INTERACTION_PENDING,
+  ].includes(turn.state)
+    ? FrontendRunState.PROCESSING
+    : turn.state || "";
+  return {
+    state,
+    backendState: turn.backendState || "",
+    sessionId: turn.sessionId,
+    turnScopeId: turn.turnScopeId,
+    dialogProcessId: turn.dialogProcessId || "",
+    source: turn.source || "",
+    sourceEvent: turn.sourceEvent || "",
+    seq: Number(turn.seq || 0),
+    updatedAt: turn.updatedAt || "",
+    updatedAtMs: Number(turn.updatedAtMs || 0),
+    terminal: turn.terminal || null,
+  };
+}
+
 export function resolveLatestStoppedTurn(registry, sessionId) {
   const normalizedSessionId = text(sessionId);
   return Object.values(registry?.turns || {})
@@ -78,83 +112,53 @@ export function removeTurnRuntime(registry, turnScopeId, { sessionId = "" } = {}
   return true;
 }
 
-function terminalFromEvent(event) {
-  const backend = text(event.backendState || event.raw?.status || event.raw?.terminal).toLowerCase();
-  // A channel user_stopped only confirms that persistence completed. The
-  // authoritative session summary must be applied before the frontend turn is
-  // terminal, so refreshed and non-refreshed clients converge from one fact.
-  const isChannelUserStopped = backend === "user_stopped" &&
-    event.type === SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE;
-  if (TERMINALS.has(backend) && !(
-    isChannelUserStopped &&
-    event.raw?.authoritativeSnapshot !== true &&
-    !event.raw?.terminal
-  )) return backend === "failed" ? "error" : backend;
-  if (event.type === SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED) return "user_stopped";
-  if ([SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED, SESSION_RUN_EVENT.LOCAL_RESEND_COMPLETED].includes(event.type)) return "completed";
-  if (ERROR_STATES.has(event.state) || [SESSION_RUN_EVENT.LOCAL_FAILURE, SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED, SESSION_RUN_EVENT.LOCAL_RESEND_FAILED, SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_FAILED].includes(event.type)) return "error";
-  return null;
-}
-
-function runtimeStateFromEvent(event) {
-  if (event.state) return event.state;
-  if ([
-    SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED,
-    SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
-    SESSION_RUN_EVENT.LOCAL_USER_STOP_PENDING_BACKEND_READY,
-  ].includes(event.type)) return FrontendRunState.USER_STOPPING;
-  if ([
-    SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
-    SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED,
-    SESSION_RUN_EVENT.LOCAL_RESEND_STARTED,
-    SESSION_RUN_EVENT.LOCAL_RESEND_REPLACING_TURN,
-    SESSION_RUN_EVENT.LOCAL_RESEND_STREAMING,
-  ].includes(event.type)) return FrontendRunState.ACTION_REQUESTING;
-  return "";
-}
-
-export function applyTurnRuntimeEvent(registry, rawEvent = {}, { fallbackSessionId = "" } = {}) {
+export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
   const next = registry || createTurnRuntimeRegistryState();
   const event = normalizeSessionRunEvent(rawEvent);
   let turnScopeId = text(event.turnScopeId);
   if (!turnScopeId && event.dialogProcessId) turnScopeId = text(next.turnByDialogProcess[event.dialogProcessId]);
-  if (!turnScopeId) return { registry: next, turn: null, applied: false };
+  if (!turnScopeId) return { registry: next, turn: null, applied: false, reason: "missing_turn_identity" };
   const current = next.turns[turnScopeId] || null;
-  const sessionId = text(event.sessionId || current?.sessionId || fallbackSessionId);
-  if (!sessionId) return { registry: next, turn: current, applied: false };
-  if (current?.sessionId && current.sessionId !== sessionId) return { registry: next, turn: current, applied: false };
-  if (current?.dialogProcessId && event.dialogProcessId && current.dialogProcessId !== event.dialogProcessId) return { registry: next, turn: current, applied: false };
-  const eventSeq = Number(event.seq || 0);
-  if (current?.terminal) return { registry: next, turn: current, applied: false };
-  if (eventSeq > 0 && Number(current?.seq || 0) > eventSeq) return { registry: next, turn: current, applied: false };
-  const terminal = terminalFromEvent(event);
-  const runtimeState = runtimeStateFromEvent(event);
-  const currentRank = PHASE_RANK.get(current?.state) || 0;
-  const incomingRank = PHASE_RANK.get(runtimeState) || 0;
-  // Sequence numbers are not guaranteed on every local/reconnect event. Keep
-  // the state machine monotonic even without one, so a late requesting/sending
-  // event cannot move a completing or stopping turn backwards.
-  if (!terminal && incomingRank > 0 && currentRank > incomingRank) {
-    return { registry: next, turn: current, applied: false };
+  const sessionId = text(event.sessionId || current?.sessionId);
+  if (!sessionId) return { registry: next, turn: current, applied: false, reason: "missing_session_identity" };
+  if (current?.sessionId && current.sessionId !== sessionId) return { registry: next, turn: current, applied: false, reason: "session_identity_conflict" };
+  if (current?.dialogProcessId && event.dialogProcessId && current.dialogProcessId !== event.dialogProcessId) return { registry: next, turn: current, applied: false, reason: "dialog_process_identity_conflict" };
+  const dialogOwner = event.dialogProcessId ? next.turnByDialogProcess[event.dialogProcessId] : "";
+  if (dialogOwner && dialogOwner !== turnScopeId) {
+    return { registry: next, turn: current, applied: false, reason: "dialog_process_identity_conflict" };
   }
-  const nextRuntimeState = runtimeState || current?.state || "";
+  const activeTurn = resolveSessionTurnRuntime(next, sessionId);
+  if (!current && activeTurn && !isFinalTurnState(activeTurn.state)) {
+    return { registry: next, turn: activeTurn, applied: false, reason: "active_turn_conflict" };
+  }
+  const transition = reduceTurnRuntimeEvent(current, rawEvent);
+  if (!transition.applied) {
+    return { registry: next, turn: current, applied: false, reason: transition.reason };
+  }
   const turn = {
     ...(current || {}),
+    ...transition.next,
     sessionId,
     turnScopeId,
     dialogProcessId: text(event.dialogProcessId || current?.dialogProcessId),
-    action: text(event.action || current?.action || "send"),
-    state: terminal ? (terminal === "user_stopped" ? FrontendRunState.USER_STOP_COMPLETED : terminal === "completed" ? FrontendRunState.FRONTEND_COMPLETED : nextRuntimeState) : nextRuntimeState,
-    terminal: terminal || null,
-    canStop: !terminal && [FrontendRunState.PROCESSING, BackendChannelState.SENDING].includes(nextRuntimeState),
-    seq: Math.max(Number(current?.seq || 0), eventSeq),
+    action: transition.next.action,
+    backendState: text(event.backendState || current?.backendState),
+    state: transition.next.state,
+    terminal: transition.next.terminal,
+    canStop: deriveTurnCapabilities(transition.next.state, {
+      backendState: transition.next.backendState,
+    }).canStop,
+    seq: transition.next.seq,
     updatedAtMs: Number(event.timestamp || Date.now()),
-    error: terminal === "error" ? text(rawEvent?.error?.message || rawEvent?.error || rawEvent?.reason) : null,
+    updatedAt: text(event.updatedAt || current?.updatedAt),
+    source: text(event.source || current?.source),
+    sourceEvent: text(event.sourceEvent || event.type || current?.sourceEvent),
+    error: transition.next.terminal === "error" ? text(rawEvent?.error?.message || rawEvent?.error || rawEvent?.reason) : null,
   };
   next.turns[turnScopeId] = turn;
   next.activeTurnBySession[sessionId] = turnScopeId;
   if (turn.dialogProcessId) next.turnByDialogProcess[turn.dialogProcessId] = turnScopeId;
-  return { registry: next, turn, applied: true };
+  return { registry: next, turn, applied: true, reason: transition.reason };
 }
 
 export function hydrateSessionTurnRuntime(registry, session, turnStatuses = session?.turnStatuses || []) {
@@ -163,17 +167,30 @@ export function hydrateSessionTurnRuntime(registry, session, turnStatuses = sess
   for (const status of Array.isArray(turnStatuses) ? turnStatuses : []) {
     const turnScopeId = text(status?.turnScopeId);
     if (!turnScopeId) continue;
-    applyTurnRuntimeEvent(registry, {
-      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-      state: status?.status,
+    const scope = {
       sessionId,
       turnScopeId,
       dialogProcessId: status?.dialogProcessId,
-      seq: status?.seq,
       updatedAt: status?.updatedAt,
       authoritativeSnapshot: true,
-      terminal: status?.status,
-    });
+      source: "session_summary_replay",
+    };
+    const terminalStatus = text(status?.status).toLowerCase();
+    // A summary replay reconstructs the same domain phases without repeating
+    // network side effects. The summary-applied event is the only event allowed
+    // to expose a frontend terminal.
+    applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED, ...scope, dialogProcessId: "", seq: 0 });
+    applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, ...scope, state: BackendChannelState.SENDING, seq: 0 });
+    if (terminalStatus === BackendChannelState.USER_STOPPED) {
+      applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED, ...scope, seq: 0 });
+      applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, ...scope, state: BackendChannelState.USER_STOPPED, seq: 0 });
+      applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED, ...scope, seq: Number(status?.seq || 0) });
+    } else if (terminalStatus === BackendChannelState.COMPLETED) {
+      applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, ...scope, state: BackendChannelState.COMPLETED, seq: 0 });
+      applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED, ...scope, seq: Number(status?.seq || 0) });
+    } else {
+      applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, ...scope, state: terminalStatus, seq: Number(status?.seq || 0) });
+    }
   }
   return registry;
 }

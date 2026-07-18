@@ -46,8 +46,6 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
       modelAlias: "alias-a",
       modelName: "model-a",
     });
-    sending.value = true;
-    canStop.value = true;
     deps.chatWebSocketClient.requestStop.mockReturnValue(true);
 
     expect(engine.stopSending()).toBe(true);
@@ -88,8 +86,6 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
       },
     ];
     activeSession.value.rawMessages = [...activeSession.value.messages];
-    sending.value = true;
-    canStop.value = true;
     deps.chatWebSocketClient.requestStop.mockReturnValue(true);
 
     expect(engine.stopSending()).toBe(true);
@@ -127,8 +123,6 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
       },
     ];
     activeSession.value.rawMessages = [...activeSession.value.messages];
-    sending.value = true;
-    canStop.value = true;
     deps.chatWebSocketClient.requestStop.mockReturnValue(true);
 
     expect(engine.stopSending()).toBe(true);
@@ -172,8 +166,6 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
       },
     ];
     activeSession.value.rawMessages = [...activeSession.value.messages];
-    sending.value = true;
-    canStop.value = true;
     deps.chatWebSocketClient.requestStop.mockReturnValue(true);
 
     expect(engine.stopSending()).toBe(true);

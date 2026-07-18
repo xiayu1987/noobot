@@ -12,25 +12,17 @@ import {
 import { useChatSession } from "../../../../src/composables/chat/useChatSession";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
-import { nextTick, ref, toRef } from "vue";
+import { nextTick, ref } from "vue";
 import { useChatStore } from "../../../../src/shared/stores/useChatStore";
 import { logResendDebug, setResendDebugLogSink } from "../../../../src/composables/chat/debug/resendDebugLogger";
 import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
 import {
   BackendChannelState,
-  FrontendRunState,
   SESSION_RUN_EVENT,
-  applySessionRunStateEvent,
 } from "../../../../src/composables/chat/sessionRunStateMachine";
-import { applyTurnRuntimeEvent } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+import { applyTurnRuntimeEvent, selectSessionTurnRuntime } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 
 function applyRuntimeEvent(store, event) {
-  applySessionRunStateEvent({
-    stateRef: toRef(store, "runStateSnapshot"),
-    sending: toRef(store, "sending"),
-    canStop: toRef(store, "canStop"),
-    event,
-  });
   applyTurnRuntimeEvent(store.turnRuntimeRegistry, event);
 }
 describe("useChatSession reconnect replay", () => {
@@ -96,7 +88,11 @@ describe("useChatSession reconnect replay", () => {
     expect(requested).toBe(true);
     expect(wsClientMock.requestStop).toHaveBeenCalledTimes(1);
     expect(session.composerActionState.value.stopRequesting).toBe(true);
-    expect(store.runStateSnapshot.state).toBe(FrontendRunState.USER_STOPPING);
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-stop-request")).toMatchObject({
+      displayState: "requesting",
+      sending: true,
+      canStop: false,
+    });
 
     const duplicateStop = session.stopSending();
     expect(duplicateStop).toBe(false);
@@ -114,7 +110,7 @@ describe("useChatSession reconnect replay", () => {
     await nextTick();
 
     expect(session.composerActionState.value).toMatchObject({
-      stopRequesting: true,
+      stopRequesting: false,
       awaitingBackendStop: true,
       displayState: "stopping",
       userStopped: false,
@@ -124,7 +120,7 @@ describe("useChatSession reconnect replay", () => {
       terminal: null,
       canStop: false,
     });
-    expect(store.canStop).toBe(false);
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-stop-request").canStop).toBe(false);
   });
 
   it("releases stop gates when stop request sending fails with a backend-style 404/409 error", async () => {
@@ -174,14 +170,13 @@ describe("useChatSession reconnect replay", () => {
     await nextTick();
 
     expect(requested).toBe(false);
-    expect(store.runStateSnapshot.state).toBe(FrontendRunState.IDLE);
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-stop-error").displayState).toBe("send");
     expect(session.composerActionState.value.stopRequesting).toBe(false);
     expect(session.composerActionState.value.awaitingBackendStop).toBe(false);
     expect(session.composerActionState.value.canStartNewSend).toBe(true);
     expect(session.composerActionState.value.canRetryMessage).toBe(true);
     expect(session.composerActionState.value.canDeleteMessage).toBe(true);
-    expect(store.sending).toBe(false);
-    expect(store.canStop).toBe(false);
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-stop-error").sending).toBe(false);
   });
 
   it("releases stop gates when stop request asynchronously rejects with a backend-style 404/409 error", async () => {
@@ -229,13 +224,12 @@ describe("useChatSession reconnect replay", () => {
     await nextTick();
 
     expect(requested).toBe(false);
-    expect(store.runStateSnapshot.state).toBe(FrontendRunState.IDLE);
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-stop-async-error").displayState).toBe("send");
     expect(session.composerActionState.value.stopRequesting).toBe(false);
     expect(session.composerActionState.value.awaitingBackendStop).toBe(false);
     expect(session.composerActionState.value.canStartNewSend).toBe(true);
     expect(session.composerActionState.value.canRetryMessage).toBe(true);
     expect(session.composerActionState.value.canDeleteMessage).toBe(true);
-    expect(store.sending).toBe(false);
-    expect(store.canStop).toBe(false);
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-stop-async-error").sending).toBe(false);
   });
 });

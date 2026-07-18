@@ -50,6 +50,15 @@ describe("useMessageMeta status steps", () => {
       turnScopeId: "turn-1",
     });
     await nextTick();
+    expect(statusStepState.value).toBe("requesting");
+
+    applyEvent(store, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: "user_stopped",
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+    });
+    await nextTick();
     expect(statusStepState.value).toBe("stopping");
 
     applyEvent(store, {
@@ -66,6 +75,11 @@ describe("useMessageMeta status steps", () => {
     const message = ref({ role: "assistant", turnPlaceholder: true, turnScopeId: "turn-a" });
     const { statusStepState } = useMessageMeta({ getMessageItem: () => message.value });
 
+    applyEvent(store, {
+      type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
+      sessionId: "session-a",
+      turnScopeId: "turn-a",
+    });
     applyEvent(store, {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: "sending",
@@ -98,11 +112,26 @@ describe("useMessageMeta status steps", () => {
       statusTurnScopeId: "client-turn:main",
     };
     applyEvent(store, {
+      type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
+      sessionId: "session-1",
+      turnScopeId: "client-turn:main",
+    });
+    applyEvent(store, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: "sending",
+      sessionId: "session-1",
+      turnScopeId: "client-turn:main",
+    });
+    applyEvent(store, {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: "completed",
       sessionId: "session-1",
       turnScopeId: "client-turn:main",
-      terminal: "completed",
+    });
+    applyEvent(store, {
+      type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
+      sessionId: "session-1",
+      turnScopeId: "client-turn:main",
     });
     const { statusStepState } = useMessageMeta({ getMessageItem: () => message });
     await nextTick();

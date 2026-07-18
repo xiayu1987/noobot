@@ -13,6 +13,8 @@ import {
   summarizeStateMachineMessage,
 } from "../debug/stateMachineLogger";
 import { getMessageTurnScopeId } from "../../infra/messageIdentity";
+import { getMessageDialogProcessId } from "../../infra/messageIdentity";
+import { selectTurnMessageRuntime, sessionRuntimeId } from "../sessionRunStateMachine/turnRuntimeRegistry";
 
 export function applyRunStateMessagePatch(message, patch = {}) {
   if (!message || !patch || typeof patch !== "object") return;
@@ -57,21 +59,35 @@ export function applyRunStateMessagePatch(message, patch = {}) {
 }
 
 export function applyRunStateMessageRuntimePatch({
-  activeSession,
-  runStateSnapshot,
+  sessions,
+  turnRuntimeRegistry,
+  event,
 } = {}) {
-  const session = activeSession?.value;
+  const registry = turnRuntimeRegistry?.value || turnRuntimeRegistry;
+  const stateSnapshot = selectTurnMessageRuntime(registry, {
+    sessionId: event?.sessionId,
+    turnScopeId: event?.turnScopeId,
+    dialogProcessId: event?.dialogProcessId,
+  });
+  if (!stateSnapshot) return;
+  const sessionItems = Array.isArray(sessions?.value) ? sessions.value : Array.isArray(sessions) ? sessions : [];
+  const session = sessionItems.find((item) => sessionRuntimeId(item) === stateSnapshot.sessionId);
   const messages = Array.isArray(session?.messages) ? session.messages : [];
   if (!messages.length) return;
   messages.forEach((message) => {
+    const messageTurnScopeId = getMessageTurnScopeId(message);
+    const messageDialogProcessId = getMessageDialogProcessId(message);
+    const sameTurn = stateSnapshot.turnScopeId && messageTurnScopeId === stateSnapshot.turnScopeId;
+    const sameDialog = stateSnapshot.dialogProcessId && messageDialogProcessId === stateSnapshot.dialogProcessId;
+    if (!sameTurn && !sameDialog) return;
     const effect = resolveSessionRunMessageRuntimePatch({
-      stateSnapshot: runStateSnapshot?.value,
+      stateSnapshot,
       messageItem: message,
       activeSession: session,
     });
     logStateMachineDebug("stateMachine.messageRuntimePatch.effect", {
-      runState: runStateSnapshot?.value?.state || "",
-      eventType: runStateSnapshot?.value?.sourceEvent || "",
+      runState: stateSnapshot.state || "",
+      eventType: stateSnapshot.sourceEvent || "",
       message: summarizeStateMachineMessage(message),
       hasRuntimeMark: Boolean(message?.[SESSION_RUN_MESSAGE_RUNTIME_MARK] || message?.runtimeMark),
       effectAction: effect?.action || "",

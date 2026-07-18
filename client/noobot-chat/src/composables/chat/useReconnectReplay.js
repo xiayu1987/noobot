@@ -65,8 +65,6 @@ import { registerReconnectReplayLifecycleCleanup } from "./reconnectReplay/lifec
 import {
   BackendChannelState,
   SESSION_RUN_EVENT,
-  applySessionRunStateEvent,
-  applySessionRunStateEvents,
 } from "./sessionRunStateMachine";
 import {
   finalizeStoppedSessionDetail,
@@ -77,9 +75,6 @@ export function useReconnectReplay({
   sessions,
   activeSession,
   activeSessionId,
-  sending,
-  canStop,
-  runStateSnapshot,
   interactionSubmitting,
   chatList,
   chatWebSocketClient,
@@ -111,22 +106,11 @@ export function useReconnectReplay({
   let { cacheExpiredRefreshTimer, replayHydrationPromise } = reconnectReplayContext;
   const protocolReconcileAttempts = new Map();
 
-  const applyRunStateEvent = (event) => applySessionRunStateEvent({
-    stateRef: runStateSnapshot,
-    sending,
-    canStop,
-    event,
-  });
+  const applyRunStateEvent = (event) => applyTurnRuntimeEvents?.([event]);
 
   const applyRunStateEvents = (events) => {
     const sourceEvents = Array.isArray(events) ? events : [];
-    applyTurnRuntimeEvents?.(sourceEvents);
-    return applySessionRunStateEvents({
-      stateRef: runStateSnapshot,
-      sending,
-      canStop,
-      events: sourceEvents,
-    });
+    return applyTurnRuntimeEvents?.(sourceEvents);
   };
 
   function applyAssistantFailureState(targetAssistantMessage, errorMessage = "") {
@@ -203,8 +187,6 @@ export function useReconnectReplay({
       dialogProcessId,
       turnScopeId,
       targetAssistantMessage,
-      sending,
-      canStop,
       applyRunStateEvent,
       interactionSubmitting,
       clearPendingInteraction,
@@ -239,8 +221,6 @@ export function useReconnectReplay({
     return applyReconnectDataReplay({
       reconnectData,
       ensureReconnectSessionActive,
-      sending,
-      canStop,
       applyRunStateEvents,
       isCurrentActiveSession,
       resolveReconnectTargetAssistantMessage,
@@ -310,8 +290,6 @@ export function useReconnectReplay({
       findAssistantMessageByTurnScopeId,
       findAssistantMessageByDialogProcessId,
       findFallbackAssistantMessage: findReconnectChannelStateFallbackAssistant,
-      sending,
-      canStop,
       applyRunStateEvent,
       interactionSubmitting,
       clearPendingInteractionIfObsolete,
@@ -418,8 +396,6 @@ export function useReconnectReplay({
         reconnectReplayContext.cacheExpiredRefreshTimer = timer;
       },
       replayCache,
-      sending,
-      canStop,
       interactionSubmitting,
       clearPendingInteraction,
       translate,

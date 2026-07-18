@@ -52,7 +52,6 @@ import {
   getMessageTurnScopeId,
 } from "../infra/messageIdentity";
 import {
-  applySessionRunStateEvent,
   BackendChannelState,
   BackendTerminalStates,
   clearRememberedStopRequests,
@@ -69,6 +68,7 @@ import {
   applyTurnRuntimeEvent,
   hydrateSessionTurnRuntime,
   resolveSessionTurnRuntime,
+  selectSessionTurnRuntime,
   turnRuntimeDisplayState,
 } from "./sessionRunStateMachine/turnRuntimeRegistry";
 
@@ -99,9 +99,6 @@ export function useChatSession({
   const chatStore = useChatStore();
   const processStore = useProcessStore();
   const {
-    sending,
-    canStop,
-    runStateSnapshot,
     turnRuntimeRegistry,
     sessions,
     activeSessionId,
@@ -144,43 +141,40 @@ export function useChatSession({
   const composerActionState = computed(() => {
     const sessionId = resolveActiveSessionIdentity();
     const turn = resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionId);
-    const displayState = turnRuntimeDisplayState(turn);
+    const runtimeView = selectSessionTurnRuntime(turnRuntimeRegistry.value, sessionId);
+    const displayState = runtimeView.displayState;
     const userStopped = turn?.terminal === "user_stopped";
+    const actionLocked = runtimeView.sending === true;
+    const stopRequesting = displayState === "requesting" && turn?.action === "stop";
+    const awaitingStopSummary = displayState === "stopping";
     return {
-      sendRequesting: displayState === "requesting",
+      sendRequesting: displayState === "requesting" && turn?.action !== "stop",
       continueRequesting: false,
-      stopRequesting: displayState === "stopping",
+      stopRequesting,
       stopPendingUntilBackendReady: false,
-      canStartNewSend: true,
-      canRetryMessage: true,
-      canDeleteMessage: true,
-      stopInFlight: displayState === "stopping",
-      awaitingBackendStop: displayState === "stopping",
+      canStartNewSend: !actionLocked,
+      canRetryMessage: !actionLocked,
+      canDeleteMessage: !actionLocked,
+      stopInFlight: stopRequesting || awaitingStopSummary,
+      awaitingBackendStop: awaitingStopSummary,
       userStopped,
       primaryAction: userStopped ? "continue" : "send",
       canContinue: userStopped,
       canResend: userStopped,
       state: displayState,
       displayState,
-      canStop: displayState === "sending" && turn?.canStop === true,
+      canStop: runtimeView.canStop,
     };
   });
 
-  // UI runtime state must follow the selected session. The legacy `sending`
-  // and `canStop` refs are still used internally while processing events, but
-  // they are application-wide mutable snapshots and therefore must never be
-  // exposed as the active session's state.
-  const activeSessionSending = computed(() => [
-    "requesting",
-    "sending",
-    "completing",
-    "stopping",
-  ].includes(composerActionState.value.displayState));
+  // UI runtime state always follows the selected session's registry projection.
+  const activeSessionSending = computed(() =>
+    selectSessionTurnRuntime(turnRuntimeRegistry.value, resolveActiveSessionIdentity()).sending,
+  );
   const activeSessionCanStop = computed(() => composerActionState.value.canStop === true);
 
   const applyComposerActionStateEvent = (event) => {
-    applyTurnRuntimeEvent(turnRuntimeRegistry.value, event, { fallbackSessionId: resolveActiveSessionIdentity() });
-    return applySessionRunStateEvent({ stateRef: runStateSnapshot, sending, canStop, event });
+    return applyTurnRuntimeEvent(turnRuntimeRegistry.value, event);
   };
 
   function trackConversationState(stateEntry = {}) {
@@ -230,11 +224,7 @@ export function useChatSession({
       turnScopeId,
       data: normalizedEntry,
     });
-    applySessionRunStateEvent({
-      stateRef: runStateSnapshot,
-      sending,
-      canStop,
-      event: {
+    applyComposerActionStateEvent({
         type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
         state,
         sessionId,
@@ -247,7 +237,6 @@ export function useChatSession({
         updatedAtMs,
         createdAt,
         updatedAt,
-      },
     });
 
     // The realtime event acknowledges that the backend persisted the stop; it
@@ -321,17 +310,8 @@ export function useChatSession({
       });
       return;
     }
-    // A successfully applied detail still releases temporary global interaction
-    // locks when there is no scoped user-stopped terminal to project.
-    applySessionRunStateEvent({
-      stateRef: runStateSnapshot,
-      sending,
-      canStop,
-      event: {
-        type: SESSION_RUN_EVENT.LOCAL_RESET,
-        source: "session_detail_applied",
-      },
-    });
+    // No matching terminal turn needs an additional runtime mutation. Hydration
+    // above already reconciled this session without touching other sessions.
   }
 
   const {
@@ -430,9 +410,6 @@ export function useChatSession({
     activeSessionId,
     loadingSessions,
     loadingSessionDetail,
-    sending,
-    canStop,
-    runStateSnapshot,
     turnRuntimeRegistry,
     createConnectorPanelState,
     generateSessionId,
@@ -473,9 +450,7 @@ export function useChatSession({
     locateDoneMessage,
     activeSession,
     activeSessionId,
-    sending,
-    canStop,
-    runStateSnapshot,
+    sessions,
     turnRuntimeRegistry,
     input,
     uploadFiles,
@@ -512,9 +487,6 @@ export function useChatSession({
     sessions,
     activeSession,
     activeSessionId,
-    sending,
-    canStop,
-    runStateSnapshot,
     interactionSubmitting,
     chatList,
     chatWebSocketClient,
@@ -548,7 +520,7 @@ export function useChatSession({
       // otherwise a refreshed stopped turn is resurrected as "stopping".
       for (let index = sourceEvents.length - 1; index >= 0; index -= 1) {
         const event = sourceEvents[index] || {};
-        const eventSessionId = String(event.sessionId || resolveActiveSessionIdentity()).trim();
+        const eventSessionId = String(event.sessionId || "").trim();
         const eventTurnScopeId = String(event.turnScopeId || "").trim();
         const eventDialogProcessId = String(event.dialogProcessId || "").trim();
         const sessionItem = sessions.value.find((item) => {
@@ -575,9 +547,7 @@ export function useChatSession({
         }
       }
       for (const event of sourceEvents) {
-        applyTurnRuntimeEvent(turnRuntimeRegistry.value, event, {
-          fallbackSessionId: resolveActiveSessionIdentity(),
-        });
+        applyTurnRuntimeEvent(turnRuntimeRegistry.value, event);
       }
     },
   });
@@ -687,7 +657,6 @@ export function useChatSession({
     sessions,
     activeSessionId,
     activeSession,
-    runStateSnapshot,
     loadingSessions,
     loadingSessionDetail,
     newSession: chatList.newSession,

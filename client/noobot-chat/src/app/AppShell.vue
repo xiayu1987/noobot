@@ -162,7 +162,6 @@ const {
   sessions,
   activeSessionId,
   activeSession,
-  runStateSnapshot,
   loadingSessions,
   loadingSessionDetail,
   newSession,

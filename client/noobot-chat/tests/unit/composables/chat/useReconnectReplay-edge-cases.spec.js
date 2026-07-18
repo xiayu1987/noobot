@@ -95,6 +95,7 @@ describe("useReconnectReplay", () => {
     await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
       sessionId: "s-1",
       dialogProcessId: "dp-late",
+      turnScopeId: "turn-missing",
       state: "interaction_pending",
       seq: 10,
     });

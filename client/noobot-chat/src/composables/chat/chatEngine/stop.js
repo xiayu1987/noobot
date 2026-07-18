@@ -31,8 +31,7 @@ import {
 } from "../sessionRunStateMachine/turnRuntimeRegistry";
 
 export function handleStopConfirmationTimeout({
-  sending,
-  canStop,
+  turnRuntimeRegistry,
   applyRunStateEvent,
   activeSession,
   findTargetAssistantMessage,
@@ -40,7 +39,9 @@ export function handleStopConfirmationTimeout({
   chatWebSocketClient,
   stopScope = {},
 } = {}) {
-  if (!sending?.value) return;
+  const timeoutSessionId = sessionRuntimeId(activeSession?.value);
+  const timeoutTurn = resolveSessionTurnRuntime(turnRuntimeRegistry?.value, timeoutSessionId);
+  if (!timeoutTurn || timeoutTurn.terminal) return;
   const pendingAssistantMessage = findTargetAssistantMessage?.() ||
     [...(activeSession?.value?.messages || [])]
       .reverse()
@@ -76,8 +77,7 @@ export function handleStopConfirmationTimeout({
   const fallbackTurnScopeId =
     expectedTurnScopeId || getMessageTurnScopeId(pendingAssistantMessage);
   const finalizedAtMs = nowMs();
-  if (applyRunStateEvent) {
-    applyRunStateEvent({
+  applyRunStateEvent?.({
       type: SESSION_RUN_EVENT.LOCAL_FAILURE,
       state: BackendChannelState.ERROR,
       sessionId: String(activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
@@ -88,11 +88,7 @@ export function handleStopConfirmationTimeout({
       source: "stop_request_timeout",
       sourceEvent: "stop_request_timeout",
       error: new Error("stop request timed out before backend confirmation"),
-    });
-  } else {
-    // Compatibility fallback for callers that do not provide the run state machine bridge.
-    if (canStop) canStop.value = false;
-  }
+  });
 }
 
 function buildStopPayload({ userId, activeSession, pendingAssistantMessage, turnRuntime } = {}) {

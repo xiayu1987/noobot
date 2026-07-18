@@ -20,7 +20,6 @@ import {
   BackendChannelState,
   FrontendRunState,
   SESSION_RUN_EVENT,
-  applySessionRunStateEvent,
 } from "../../../../src/composables/chat/sessionRunStateMachine";
 describe("useChatSession reconnect replay", () => {
   beforeEach(() => {
@@ -185,11 +184,8 @@ describe("useChatSession reconnect replay", () => {
     expect(newAssistant.modelAlias).toBe("alias-1");
     expect(newAssistant.pending).toBe(false);
     expect(authFetch).toHaveBeenCalledWith("/api/internal/session/u-1/s-1");
-    expect(store.runStateSnapshot).toMatchObject({
-      state: FrontendRunState.IDLE,
-      lastEventType: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
-    });
-    expect(store.sending).toBe(false);
+    expect(session.sending.value).toBe(false);
+    expect(session.canStop.value).toBe(false);
     expect(store.pendingInteractionRequest).toBeNull();
     expect(store.interactionSubmitting).toBe(false);
   });
@@ -312,9 +308,6 @@ describe("useChatSession reconnect replay", () => {
       }),
     }));
     expect(assistant.pending).toBe(false);
-    expect(store.sending).toBe(false);
-    expect(store.canStop).toBe(false);
-    expect(store.runStateSnapshot.state).toBe("idle");
     expect(session.sending.value).toBe(false);
     expect(session.canStop.value).toBe(false);
   });

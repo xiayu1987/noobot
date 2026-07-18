@@ -101,8 +101,6 @@ export function scheduleMissingInteractionPayloadFailure({
   dialogProcessId = "",
   turnScopeId = "",
   targetAssistantMessage = null,
-  sending,
-  canStop,
   applyRunStateEvent,
   interactionSubmitting,
   clearPendingInteraction,
@@ -119,20 +117,14 @@ export function scheduleMissingInteractionPayloadFailure({
   const timer = setTimeout(() => {
     missingInteractionPayloadTimers.delete(key);
     if (hasPendingInteractionForDialog(pendingInteractionRequest, dialogProcessId)) return;
-    if (typeof applyRunStateEvent === "function") {
-      applyRunStateEvent({
+    applyRunStateEvent?.({
         type: SESSION_RUN_EVENT.LOCAL_FAILURE,
         state: BackendChannelState.ERROR,
         sessionId,
         dialogProcessId,
         turnScopeId,
         source: "interaction_payload_missing",
-      });
-    } else {
-      // Compatibility fallback for callers that do not provide the run state machine bridge.
-      sending.value = false;
-      if (canStop) canStop.value = false;
-    }
+    });
     interactionSubmitting.value = false;
     clearPendingInteraction();
     const missingInteractionError = translate("chat.interactionPayloadMissing");
@@ -158,8 +150,6 @@ export async function applyReconnectChannelState({
   findAssistantMessageByTurnScopeId,
   findAssistantMessageByDialogProcessId,
   findFallbackAssistantMessage,
-  sending,
-  canStop,
   applyRunStateEvent,
   interactionSubmitting,
   clearPendingInteractionIfObsolete,
@@ -222,8 +212,32 @@ export async function applyReconnectChannelState({
     targetAssistantMessage: summarizeDebugMessage(targetAssistantMessage),
   });
   if (isInFlightConversationState(state)) {
-    if (applyRunStateEvent) {
-      applyRunStateEvent({
+    // A standalone reconnect channel_state can be the first fact observed
+    // after a page reload. Rebuild the required action-request phase before
+    // applying the backend processing fact; this is state hydration only and
+    // must not issue another network request. Existing turns reject this
+    // bootstrap event harmlessly and continue with the backend event below.
+    if (
+      sessionId &&
+      turnScopeId &&
+      [
+        BackendChannelState.SENDING,
+        BackendChannelState.RECONNECTING,
+        BackendChannelState.INTERACTION_PENDING,
+      ].includes(state)
+    ) {
+      applyRunStateEvent?.({
+        type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
+        action: "send",
+        sessionId,
+        dialogProcessId,
+        turnScopeId,
+        source: "reconnect_hydration",
+        sourceEvent: "channel_state_bootstrap",
+        authoritativeSnapshot: true,
+      });
+    }
+    applyRunStateEvent?.({
         type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
         state,
         sessionId,
@@ -237,14 +251,7 @@ export async function applyReconnectChannelState({
         createdAt: timing.createdAt,
         updatedAt: timing.updatedAt,
         authoritativeSnapshot: stateData?.authoritativeSnapshot === true,
-      });
-    } else {
-      // Compatibility fallback for callers that do not provide the run state machine bridge.
-      sending.value = true;
-      if (canStop) {
-        canStop.value = state === BackendChannelState.SENDING || state === BackendChannelState.RECONNECTING;
-      }
-    }
+    });
     if (
       state === BackendChannelState.SENDING &&
       _trimStr(stateData?.sourceEvent).toLowerCase() === "interaction_response" &&
@@ -328,8 +335,7 @@ export async function applyReconnectChannelState({
     if (state === BackendChannelState.EXPIRED) {
       scheduleCacheExpiredSessionRefresh({ sessionId, dialogProcessId, targetAssistantMessage });
     }
-    if (applyRunStateEvent) {
-      applyRunStateEvent({
+    applyRunStateEvent?.({
         type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
         state,
         sessionId,
@@ -343,12 +349,7 @@ export async function applyReconnectChannelState({
         createdAt: timing.createdAt,
         updatedAt: timing.updatedAt,
         authoritativeSnapshot: stateData?.authoritativeSnapshot === true,
-      });
-    } else {
-      // Compatibility fallback for callers that do not provide the run state machine bridge.
-      sending.value = false;
-      if (canStop) canStop.value = false;
-    }
+    });
     if (typeof clearPendingInteractionIfObsolete === "function") {
       clearPendingInteractionIfObsolete({ sessionId, dialogProcessId });
     }

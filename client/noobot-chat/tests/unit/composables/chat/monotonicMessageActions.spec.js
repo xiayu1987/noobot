@@ -8,8 +8,6 @@ import { ref } from "vue";
 import { createMonotonicMessageActions } from "../../../../src/composables/chat/chatEngine/monotonicMessageActions";
 import {
   SESSION_RUN_EVENT,
-  applySessionRunStateEvent,
-  createInitialSessionRunState,
 } from "../../../../src/composables/chat/sessionRunStateMachine";
 import { RoleEnum } from "../../../../src/shared/constants/chatConstants";
 import {
@@ -18,7 +16,6 @@ import {
 } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 
 function createActions({
-  runStateSnapshot = ref(createInitialSessionRunState()),
   turnRuntimeRegistry = ref(createTurnRuntimeRegistryState()),
   applyRunStateEvent = vi.fn(),
 } = {}) {
@@ -75,13 +72,11 @@ function createActions({
     userId: ref("user-1"),
     applySessionDetail,
     fetchSessionDetail,
-    runStateSnapshot,
     turnRuntimeRegistry,
     messageOperationStore: {},
     monotonicActionStopTimeoutMs: 1,
     monotonicActionStopPollIntervalMs: 1,
     applyRunStateEvent,
-    turnRuntimeRegistry,
   });
   return {
     actions,
@@ -96,18 +91,13 @@ function createActions({
 
 describe("monotonicMessageActions stop-window gates", () => {
   it("does not delete messages when the session run state machine blocks delete during stop confirmation", async () => {
-    const runStateSnapshot = ref(createInitialSessionRunState());
-    applySessionRunStateEvent({
-      stateRef: runStateSnapshot,
-      event: { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED, source: "test" },
-    });
     const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
     applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
       type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
       sessionId: "s1",
       turnScopeId: "turn-1",
     });
-    const { actions, activeSession, userMessage, deleteSessionMessagesFromApi } = createActions({ runStateSnapshot, turnRuntimeRegistry });
+    const { actions, activeSession, userMessage, deleteSessionMessagesFromApi } = createActions({ turnRuntimeRegistry });
 
     const result = await actions.deleteMonotonicMessage(userMessage);
 
@@ -117,33 +107,7 @@ describe("monotonicMessageActions stop-window gates", () => {
   });
 
   it("allows delete again after the backend stop terminal state releases the gate", async () => {
-    const runStateSnapshot = ref(createInitialSessionRunState());
-    applySessionRunStateEvent({
-      stateRef: runStateSnapshot,
-      event: { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED, source: "test" },
-    });
-    applySessionRunStateEvent({
-      stateRef: runStateSnapshot,
-      event: {
-        type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
-        state: "user_stopped",
-        sessionId: "s1",
-        dialogProcessId: "dp1",
-        turnScopeId: "turn-1",
-        source: "test",
-      },
-    });
-    applySessionRunStateEvent({
-      stateRef: runStateSnapshot,
-      event: {
-        type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED,
-        sessionId: "s1",
-        dialogProcessId: "dp1",
-        turnScopeId: "turn-1",
-        source: "test",
-      },
-    });
-    const { actions, userMessage, deleteSessionMessagesFromApi } = createActions({ runStateSnapshot });
+    const { actions, userMessage, deleteSessionMessagesFromApi } = createActions();
 
     const result = await actions.deleteMonotonicMessage(userMessage);
 
@@ -199,22 +163,9 @@ describe("monotonicMessageActions stop-window gates", () => {
   });
 
   it("deletes a stopped turn after its authoritative summary clears the temporary lock", async () => {
-    const runStateSnapshot = ref(createInitialSessionRunState());
-    applySessionRunStateEvent({
-      stateRef: runStateSnapshot,
-      event: { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED, source: "test" },
-    });
-    applySessionRunStateEvent({
-      stateRef: runStateSnapshot,
-      event: {
-        type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED,
-        source: "test",
-      },
-    });
     const applyRunStateEvent = vi.fn();
     const { actions, activeSession, userMessage, deleteSessionMessagesFromApi } = createActions({
-      runStateSnapshot,
-      applyRunStateEvent,
+        applyRunStateEvent,
     });
     deleteSessionMessagesFromApi.mockResolvedValueOnce({
       ok: true,
@@ -228,7 +179,6 @@ describe("monotonicMessageActions stop-window gates", () => {
 
     expect(await actions.deleteMonotonicMessage(userMessage)).toBe(true);
     expect(activeSession.value.messages).toHaveLength(0);
-    expect(runStateSnapshot.value.state).toBe("idle");
     expect(applyRunStateEvent).not.toHaveBeenCalled();
   });
 });
