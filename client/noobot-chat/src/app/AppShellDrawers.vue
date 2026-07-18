@@ -4,6 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
+import { ref } from "vue";
 import ChatMessageNavigator from "./ChatMessageNavigator.vue";
 
 defineProps({
@@ -22,6 +23,17 @@ const emit = defineEmits([
   "mobile-chat-navigator-closed",
   "select-chat-message-nav-item",
 ]);
+
+const mobileNavigatorOpened = ref(false);
+
+function handleMobileNavigatorOpen() {
+  mobileNavigatorOpened.value = true;
+}
+
+function handleMobileNavigatorClose() {
+  mobileNavigatorOpened.value = false;
+  emit("mobile-chat-navigator-closed");
+}
 </script>
 
 <template>
@@ -47,7 +59,8 @@ const emit = defineEmits([
     :model-value="mobileChatNavigatorVisible"
     @update:model-value="emit('update:mobile-chat-navigator-visible', $event)"
     :title="translate('common.chatNavigator')"
-    @closed="emit('mobile-chat-navigator-closed')"
+    @opened="handleMobileNavigatorOpen"
+    @closed="handleMobileNavigatorClose"
     direction="rtl"
     size="82%"
     class="chat-message-nav-drawer noobot-side-drawer"
@@ -56,6 +69,7 @@ const emit = defineEmits([
       :items="chatMessageNavItems"
       :current-id="currentMessageAnchorId"
       :is-mobile="isMobile"
+      :sync-current-into-view="mobileNavigatorOpened"
       @select="emit('select-chat-message-nav-item', $event)"
     />
   </el-drawer>
