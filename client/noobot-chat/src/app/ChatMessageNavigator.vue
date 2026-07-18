@@ -11,6 +11,7 @@ const props = defineProps({
   items: { type: Array, default: () => [] },
   currentId: { type: String, default: "" },
   isMobile: { type: Boolean, default: false },
+  syncCurrentIntoView: { type: Boolean, default: true },
 });
 
 const emit = defineEmits(["select"]);
@@ -29,9 +30,12 @@ function syncCurrentNavigatorItemIntoView() {
 }
 
 watch(
-  () => [props.currentId, props.items.length],
-  () => nextTick(syncCurrentNavigatorItemIntoView),
-  { flush: "post", immediate: true },
+  () => [props.currentId, props.items.length, props.syncCurrentIntoView],
+  () => {
+    if (!props.syncCurrentIntoView) return;
+    nextTick(syncCurrentNavigatorItemIntoView);
+  },
+  { flush: "post" },
 );
 </script>
 

@@ -12,21 +12,7 @@ import { fileURLToPath } from "node:url";
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
 
-const PROJECT_JSON_FILES = [
-  "package.json",
-  "service/package.json",
-  "agent/package.json",
-  "agent-proxy/package.json",
-  "model-proxy/package.json",
-  "i18n/package.json",
-  "shared/package.json",
-  "workflow/package.json",
-  "plugin/noobot-plugin-harness/package.json",
-  "plugin/noobot-plugin-workflow/package.json",
-  "client/noobot-chat/package.json",
-  "client/startup/package.json",
-  "client/windows/package.json",
-  "client/mac/package.json",
+const PROJECT_MANIFEST_FILES = [
   "plugin/noobot-plugin-harness/manifest.json",
   "plugin/noobot-plugin-workflow/manifest.json",
 ];
@@ -65,14 +51,26 @@ async function updateJsonVersion(relativeFile, version) {
   await writeJson(relativeFile, data);
 }
 
-async function updatePackageLock(version) {
+async function resolveProjectJsonFiles() {
+  const rootPackage = await readJson("package.json");
+  if (!Array.isArray(rootPackage.workspaces)) {
+    throw new Error("Expected package.json workspaces to be an array");
+  }
+  return [
+    "package.json",
+    ...rootPackage.workspaces.map((workspace) => `${workspace}/package.json`),
+    ...PROJECT_MANIFEST_FILES,
+  ];
+}
+
+async function updatePackageLock(version, projectJsonFiles) {
   const lockFile = "package-lock.json";
   const lock = await readJson(lockFile);
   lock.version = version;
   if (lock.packages?.[""]) {
     lock.packages[""].version = version;
   }
-  for (const relativeFile of PROJECT_JSON_FILES) {
+  for (const relativeFile of projectJsonFiles) {
     if (relativeFile === "package.json" || relativeFile.endsWith("/manifest.json")) continue;
     const packageDir = relativeFile.slice(0, -"package.json".length).replace(/\/$/, "");
     const packageKey = packageDir || "";
@@ -119,11 +117,12 @@ export function run(command, args, options = {}) {
 export async function bumpVersion(inputVersion = "") {
   const version = normalizeVersion(inputVersion);
   assertVersion(version);
+  const projectJsonFiles = await resolveProjectJsonFiles();
 
-  for (const relativeFile of PROJECT_JSON_FILES) {
+  for (const relativeFile of projectJsonFiles) {
     await updateJsonVersion(relativeFile, version);
   }
-  await updatePackageLock(version);
+  await updatePackageLock(version, projectJsonFiles);
   for (const relativeFile of PLUGIN_CONSTANT_FILES) {
     await updatePluginConstant(relativeFile, version);
   }
