@@ -246,7 +246,8 @@ describe("AppShell chat message navigator", () => {
     expect(appShellSource).toContain("chatNavigatorPanel: PSEUDO_PANEL.CHAT_NAVIGATOR");
     expect(chatMessageNavigatorPanelSource).toContain("function handleMobileChatNavigatorClosed()");
     expect(chatMessageNavigatorPanelSource).toContain("closeChatMessageNavigator({");
-    expect(appShellDrawersSource).toContain("@closed=\"emit('mobile-chat-navigator-closed')\"");
+    expect(appShellDrawersSource).toContain("@closed=\"handleMobileNavigatorClose\"");
+    expect(appShellDrawersSource).toContain('emit("mobile-chat-navigator-closed")');
     expect(appShellSource).toContain("@mobile-chat-navigator-closed=\"handleMobileChatNavigatorClosed\"");
     expect(chatMessageNavigatorStateSource).toContain("replacePseudoRoute(buildChatMessageNavigatorCloseRoute({");
     expect(appShellLayoutSource).toContain("class=\"mobile-chat-message-nav-trigger noobot-floating-action-btn\"");

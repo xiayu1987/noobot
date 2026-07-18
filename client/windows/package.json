@@ -19,9 +19,9 @@
   },
   "devDependencies": {
     "@noobot/runtime-events": "file:../../runtime-events",
-    "electron": "39.8.10",
-    "electron-builder": "^26.0.12",
-    "esbuild": "^0.27.7"
+    "electron": "43.1.1",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.1"
   },
   "build": {
     "appId": "com.noobot.windows-client",
