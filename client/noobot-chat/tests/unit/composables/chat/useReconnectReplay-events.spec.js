@@ -5,7 +5,8 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createFixture, createFakeProcessStore } from "./helpers/useReconnectReplayHelper";
-import { BackendChannelState, createInitialSessionRunState } from "../../../../src/composables/chat/sessionRunStateMachine";
+import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../src/composables/chat/sessionRunStateMachine";
+import { applyTurnRuntimeEvent } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
 
 afterEach(() => {
@@ -64,7 +65,6 @@ describe("useReconnectReplay", () => {
 
   it("EV-01c: replay in-flight DELTA does not restore sending without channel_state", async () => {
     const { api, refs } = createFixture();
-    refs.sending.value = false;
     refs.activeSession.value.messages = [{ role: RoleEnum.USER, content: "q" }];
 
     await api.applyReconnectEvent(StreamEventEnum.DELTA, {
@@ -79,10 +79,15 @@ describe("useReconnectReplay", () => {
 
   it("EV-01d: channel_state sending restores the global processing lock", async () => {
     const { api, refs } = createFixture();
-    refs.sending.value = false;
+    applyTurnRuntimeEvent(refs.turnRuntimeRegistry.value, {
+      type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
+      sessionId: "s-1",
+      turnScopeId: "turn-cs",
+    });
 
     await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
       sessionId: "s-1",
+      turnScopeId: "turn-cs",
       dialogProcessId: "dp-cs",
       state: "sending",
       seq: 11,
@@ -93,10 +98,15 @@ describe("useReconnectReplay", () => {
 
   it("EV-01e: channel_state reconnecting restores the global processing lock", async () => {
     const { api, refs } = createFixture();
-    refs.sending.value = false;
+    applyTurnRuntimeEvent(refs.turnRuntimeRegistry.value, {
+      type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
+      sessionId: "s-1",
+      turnScopeId: "turn-reconnecting",
+    });
 
     await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
       sessionId: "s-1",
+      turnScopeId: "turn-reconnecting",
       dialogProcessId: "",
       state: "reconnecting",
       seq: 12,
@@ -107,7 +117,6 @@ describe("useReconnectReplay", () => {
 
   it("EV-01f: channel_state stopping only marks the assistant and does not acquire the global lock", async () => {
     const { api, refs } = createFixture();
-    refs.sending.value = false;
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
       { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-stop", content: "", pending: true },
@@ -130,14 +139,16 @@ describe("useReconnectReplay", () => {
 
   it("EV-01g: stale terminal channel_state does not clear current local turn scope", async () => {
     const { api, refs } = createFixture();
-    refs.sending.value = true;
-    refs.canStop.value = true;
-    refs.runStateSnapshot.value = createInitialSessionRunState({
-      state: BackendChannelState.SENDING,
+    applyTurnRuntimeEvent(refs.turnRuntimeRegistry.value, {
+      type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
       sessionId: "s-1",
-      dialogProcessId: "",
       turnScopeId: "client-current",
-      source: "local",
+    });
+    applyTurnRuntimeEvent(refs.turnRuntimeRegistry.value, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      sessionId: "s-1",
+      turnScopeId: "client-current",
+      state: BackendChannelState.SENDING,
     });
 
     await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
@@ -147,16 +158,12 @@ describe("useReconnectReplay", () => {
       seq: 99,
     });
 
-    expect(refs.sending.value).toBe(false);
-    expect(refs.canStop.value).toBe(false);
-    expect(refs.runStateSnapshot.value.state).toBe("idle");
-    expect(refs.runStateSnapshot.value).not.toHaveProperty("turnScopeId");
-    expect(refs.runStateSnapshot.value).not.toHaveProperty("dialogProcessId");
+    expect(refs.sending.value).toBe(true);
+    expect(refs.activeTurnRuntime.value?.turnScopeId).toBe("client-current");
   });
 
   it("EV-02b: replay in-flight THINKING does not restore sending without channel_state", async () => {
     const { api, refs } = createFixture();
-    refs.sending.value = false;
     refs.activeSession.value.messages = [{ role: RoleEnum.USER, content: "q" }];
 
     await api.applyReconnectEvent(StreamEventEnum.THINKING, {

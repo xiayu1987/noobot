@@ -21,7 +21,6 @@ export function createSessionListActions({
   activeSessionId,
   loadingSessions,
   loadingSessionDetail,
-  sending,
   userId,
   authFetch,
   ensureConnected,

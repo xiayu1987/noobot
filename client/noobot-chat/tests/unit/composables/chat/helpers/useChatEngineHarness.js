@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { vi } from "vitest";
 import { useChatEngine } from "../../../../../src/composables/chat/useChatEngine";
 import { createSessionDetailApplicator } from "../../../../../src/composables/chat/chatList/sessionDetailApply";
@@ -15,6 +15,7 @@ import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../src/compo
 import {
   applyTurnRuntimeEvent,
   createTurnRuntimeRegistryState,
+  selectSessionTurnRuntime,
 } from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 
 vi.mock("../../../../../src/shared/i18n/useLocale", () => ({
@@ -62,10 +63,14 @@ export const createHarness = ({
 } = {}) => {
   const activeSessionId = ref(sessionId);
   const activeSession = ref(makeSession(sessionId));
-  const sending = ref(false);
-  const canStop = ref(false);
-  const runStateSnapshot = ref(null);
   const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
+  const runtimeView = computed(() => selectSessionTurnRuntime(turnRuntimeRegistry.value, activeSessionId.value));
+  const sending = computed(() => runtimeView.value.sending);
+  const canStop = computed(() => runtimeView.value.canStop);
+  const activeTurnRuntime = computed(() => {
+    const turnScopeId = turnRuntimeRegistry.value.activeTurnBySession[activeSessionId.value];
+    return turnScopeId ? turnRuntimeRegistry.value.turns[turnScopeId] || null : null;
+  });
   const input = ref("hello");
   const uploadFiles = ref([]);
   const pendingInteractionRequest = ref(pendingInteraction);
@@ -90,9 +95,6 @@ export const createHarness = ({
     scrollBottom: vi.fn(),
     activeSession,
     activeSessionId,
-    sending,
-    canStop,
-    runStateSnapshot,
     turnRuntimeRegistry,
     input,
     uploadFiles,
@@ -161,7 +163,7 @@ export const createHarness = ({
     activeSessionId,
     sending,
     canStop,
-    runStateSnapshot,
+    activeTurnRuntime,
     turnRuntimeRegistry,
     input,
     uploadFiles,

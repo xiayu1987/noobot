@@ -41,7 +41,7 @@ describe("useChatEngine.resend replace turn", () => {
       activeSession.value = { ...activeSession.value, ...mainSession };
       input.value = "";
     });
-    const { engine, activeSession, input, appendMessage, sending, canStop, runStateSnapshot } = createHarness({
+    const { engine, activeSession, input, appendMessage, sending, canStop, activeTurnRuntime } = createHarness({
       sessionId: "local-resend-replace-success",
       stream,
       deps: { replaceSessionTurnApi, deleteSessionMessagesFromApi, applySessionDetail },
@@ -80,10 +80,10 @@ describe("useChatEngine.resend replace turn", () => {
     }));
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
-    expect(runStateSnapshot.value.state).toBe(FrontendRunState.PROCESSING);
-    expect(runStateSnapshot.value).not.toHaveProperty("turnScopeId");
-    expect(runStateSnapshot.value).not.toHaveProperty("dialogProcessId");
-    expect(appendMessage).toHaveBeenCalledTimes(1);
+    expect(activeTurnRuntime.value.state).toBe(FrontendRunState.PROCESSING);
+    expect(activeTurnRuntime.value.backendState).toBe(BackendChannelState.SENDING);
+    expect(activeTurnRuntime.value.turnScopeId).toBeTruthy();
+        expect(appendMessage).toHaveBeenCalledTimes(1);
     expect(appendMessage).not.toHaveBeenCalledWith(RoleEnum.USER, "edited question", []);
     expect(appendMessage).toHaveBeenCalledWith(RoleEnum.ASSISTANT, "", []);
     expect(activeSession.value.messages.filter((message) => message.role === RoleEnum.USER)).toHaveLength(1);
@@ -575,7 +575,7 @@ describe("useChatEngine.resend replace turn", () => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value = { ...activeSession.value, ...mainSession };
     });
-    const { engine, activeSession, sending, canStop, runStateSnapshot } = createHarness({
+    const { engine, activeSession, sending, canStop, activeTurnRuntime } = createHarness({
       sessionId: "local-resend-fresh-stopped-assistant",
       stream,
       deps: { replaceSessionTurnApi, applySessionDetail },
@@ -618,7 +618,8 @@ describe("useChatEngine.resend replace turn", () => {
     expect(activeSession.value.messages.some((message) => message.stopState === "user_stopped")).toBe(false);
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
-    expect(runStateSnapshot.value.state).toBe(FrontendRunState.PROCESSING);
-    expect(runStateSnapshot.value).not.toHaveProperty("turnScopeId");
+    expect(activeTurnRuntime.value.state).toBe(FrontendRunState.PROCESSING);
+    expect(activeTurnRuntime.value.backendState).toBe(BackendChannelState.SENDING);
+    expect(activeTurnRuntime.value.turnScopeId).toBeTruthy();
   });
 });

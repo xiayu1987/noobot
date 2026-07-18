@@ -5,153 +5,97 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  BackendChannelState,
   FrontendRunState,
   SESSION_RUN_EVENT,
   clearRememberedStopRequests,
-  createInitialSessionRunState,
-  evaluateSessionRunState,
   rememberStopRequestedEvent,
   resolveEventScope,
   resolveRememberedStopRequestedEvent,
-  transitionSessionRunState,
 } from "../../../../src/composables/chat/sessionRunStateMachine";
+import { reduceTurnRuntimeEvent, TURN_TRANSITION_REASON } from "../../../../src/composables/chat/sessionRunStateMachine/turnReducer";
 
 function installStorage() {
   const map = new Map();
-  Object.defineProperty(globalThis, "localStorage", {
-    configurable: true,
-    value: {
-      getItem: (key) => (map.has(key) ? map.get(key) : null),
-      setItem: (key, value) => map.set(key, String(value)),
-      removeItem: (key) => map.delete(key),
-      clear: () => map.clear(),
-    },
-  });
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: {
+    getItem: (key) => (map.has(key) ? map.get(key) : null),
+    setItem: (key, value) => map.set(key, String(value)),
+    removeItem: (key) => map.delete(key), clear: () => map.clear(),
+  } });
 }
 
-const identity = {
-  sessionId: "s1",
-  dialogProcessId: "dialog-1",
-  turnScopeId: "turn-1",
-};
-
-function expectNoTurnIdentity(state) {
-  expect(state).not.toHaveProperty("sessionId");
-  expect(state).not.toHaveProperty("dialogProcessId");
-  expect(state).not.toHaveProperty("turnScopeId");
-  expect(state).not.toHaveProperty("backendState");
-  expect(state).not.toHaveProperty("action");
+const identity = { sessionId: "s1", dialogProcessId: "dialog-1", turnScopeId: "turn-1" };
+function apply(current, event) {
+  const result = reduceTurnRuntimeEvent(current, { ...identity, ...event });
+  expect(result.applied, result.reason).toBe(true);
+  return { ...result.next, ...identity };
 }
 
 describe("sessionRunStateMachine scope separation", () => {
-  beforeEach(() => {
-    installStorage();
-    clearRememberedStopRequests();
-  });
+  beforeEach(() => { installStorage(); clearRememberedStopRequests(); });
 
   it.each([
     SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
     SESSION_RUN_EVENT.LOCAL_RESEND_STARTED,
     SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED,
-  ])("uses a global action lock for %s without retaining the new turn identity", (type) => {
-    const next = transitionSessionRunState(createInitialSessionRunState(), { type, ...identity });
-
-    expect(next.state).toBe(FrontendRunState.ACTION_REQUESTING);
-    expect(evaluateSessionRunState(next)).toMatchObject({
-      sending: true,
-      canStartNewSend: false,
-      canRetryMessage: false,
-      canDeleteMessage: false,
-    });
-    expectNoTurnIdentity(next);
+  ])("retains the new Turn identity for %s", (type) => {
+    const turn = apply(null, { type });
+    expect(turn).toMatchObject({ ...identity, state: FrontendRunState.ACTION_REQUESTING });
   });
 
-  it("promotes backend in-flight facts to the identity-free processing lock", () => {
-    const started = transitionSessionRunState(createInitialSessionRunState(), {
-      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
-      ...identity,
-    });
-
-    for (const state of ["sending", "interaction_pending"]) {
-      const next = transitionSessionRunState(started, {
-        type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-        state,
-        ...identity,
+  it("keeps processing facts scoped to their exact Turn", () => {
+    const started = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
+    for (const state of [BackendChannelState.SENDING, BackendChannelState.INTERACTION_PENDING]) {
+      expect(apply(started, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state })).toMatchObject({
+        ...identity, state: FrontendRunState.PROCESSING,
       });
-      expect(next.state).toBe(FrontendRunState.PROCESSING);
-      expectNoTurnIdentity(next);
     }
   });
 
-  it("uses distinct completion and stop locks without retaining turn identity", () => {
-    const completion = transitionSessionRunState(createInitialSessionRunState(), {
-      type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_REQUEST_STARTED,
-      ...identity,
-    });
-    const stopping = transitionSessionRunState(createInitialSessionRunState(), {
-      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
-      ...identity,
-    });
-
+  it("uses distinct completion and stop phases on the same Turn", () => {
+    let processing = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
+    processing = apply(processing, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.SENDING });
+    const completion = apply(processing, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.COMPLETED });
+    const stopRequest = apply(processing, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED });
     expect(completion.state).toBe(FrontendRunState.FRONTEND_COMPLETION_REQUESTING);
-    expect(stopping.state).toBe(FrontendRunState.USER_STOPPING);
-    expectNoTurnIdentity(completion);
-    expectNoTurnIdentity(stopping);
+    expect(stopRequest).toMatchObject({ state: FrontendRunState.ACTION_REQUESTING, action: "stop" });
   });
 
-  it.each([
-    SESSION_RUN_EVENT.LOCAL_FAILURE,
-    SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED,
-    SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_FAILED,
-  ])("clears the global lock on scoped or unscoped failure %s", (type) => {
-    const started = transitionSessionRunState(createInitialSessionRunState(), {
-      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+  it("rejects a differently scoped event instead of clearing another Turn lock", () => {
+    const started = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
+    // The pure reducer owns lifecycle semantics; the Registry owns identity
+    // routing and must not call it when this identity differs.
+    expect(identity.sessionId).not.toBe("another-session");
+    expect(reduceTurnRuntimeEvent(started, {
       ...identity,
-    });
-    const failed = transitionSessionRunState(started, { type, sessionId: "another-session" });
-
-    expect(failed.state).toBe(FrontendRunState.IDLE);
-    expect(evaluateSessionRunState(failed).sending).toBe(false);
-    expectNoTurnIdentity(failed);
+      type: SESSION_RUN_EVENT.LOCAL_RESEND_STARTED,
+      sessionId: "another-session",
+    })).toMatchObject({ applied: false, reason: TURN_TRANSITION_REASON.ILLEGAL_TRANSITION });
+    expect(started.state).toBe(FrontendRunState.ACTION_REQUESTING);
   });
 
-  it.each([
-    SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
-    SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED,
-  ])("clears the global lock after authoritative summary application via %s", (type) => {
-    const locked = transitionSessionRunState(createInitialSessionRunState(), {
-      type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_REQUEST_STARTED,
-      ...identity,
-    });
-    const applied = transitionSessionRunState(locked, { type, ...identity });
+  it("settles summaries into explicit terminal states rather than identity-free idle", () => {
+    let processing = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
+    processing = apply(processing, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.SENDING });
+    let completion = apply(processing, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.COMPLETED });
+    completion = apply(completion, { type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED });
+    expect(completion).toMatchObject({ ...identity, state: FrontendRunState.FRONTEND_COMPLETED });
 
-    expect(applied.state).toBe(FrontendRunState.IDLE);
-    expectNoTurnIdentity(applied);
+    let stopping = apply(processing, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED });
+    stopping = apply(stopping, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.USER_STOPPED });
+    stopping = apply(stopping, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED });
+    expect(stopping).toMatchObject({ ...identity, state: FrontendRunState.USER_STOP_COMPLETED });
   });
 
-  it("keeps remembered stop requests scoped to the exact turn outside the global lock", () => {
-    rememberStopRequestedEvent({
-      sessionId: "s1",
-      dialogProcessId: "dialog-old",
-      turnScopeId: "turn-old",
-    });
-
-    expect(resolveRememberedStopRequestedEvent({
-      sessionId: "s1",
-      dialogProcessId: "dialog-old",
-      turnScopeId: "turn-new",
-    })).toBeNull();
-    expect(resolveRememberedStopRequestedEvent({
-      sessionId: "s1",
-      dialogProcessId: "dialog-old",
-      turnScopeId: "turn-old",
-    })).toMatchObject({ turnScopeId: "turn-old" });
+  it("keeps remembered stop requests scoped to the exact Turn", () => {
+    rememberStopRequestedEvent({ sessionId: "s1", dialogProcessId: "dialog-old", turnScopeId: "turn-old" });
+    expect(resolveRememberedStopRequestedEvent({ sessionId: "s1", dialogProcessId: "dialog-old", turnScopeId: "turn-new" })).toBeNull();
+    expect(resolveRememberedStopRequestedEvent({ sessionId: "s1", dialogProcessId: "dialog-old", turnScopeId: "turn-old" })).toMatchObject({ turnScopeId: "turn-old" });
   });
 
   it("resolves event scope from turnScopeId only", () => {
     expect(resolveEventScope({ dialogProcessId: " dialog-1 ", turnScopeId: " client-1 " })).toBe("client-1");
     expect(resolveEventScope({ turnScopeId: " turn-1 " })).toBe("turn-1");
     expect(resolveEventScope({ dialogProcessId: " dialog-1 " })).toBe("");
-    expect(resolveEventScope({ dialogProcessId: " ", turnScopeId: " " })).toBe("");
   });
 });

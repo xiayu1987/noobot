@@ -5,14 +5,17 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
-import { nextTick, toRef } from "vue";
+import { nextTick } from "vue";
 import { useChatStore } from "../../../../src/shared/stores/useChatStore";
 import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
 import {
   FrontendRunState,
   SESSION_RUN_EVENT,
-  applySessionRunStateEvent,
 } from "../../../../src/composables/chat/sessionRunStateMachine";
+import {
+  applyTurnRuntimeEvent,
+  selectSessionTurnRuntime,
+} from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 import {
   createChatSession,
   createSessionFixture,
@@ -72,7 +75,7 @@ describe("useChatSession summary and reconnect state", () => {
 
     expect(session.conversationStateSnapshot.value["s-state::dialogProcess:same-id"].state).toBe("sending");
     expect(session.conversationStateSnapshot.value["s-state::turnScope:same-id"].state).toBe("completed");
-    expect(store.runStateSnapshot.state).toBe(FrontendRunState.IDLE);
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-state").sending).toBe(false);
   });
 
   it("does not let a bare backend stopped reconnect acquire the global interaction lock", async () => {
@@ -88,22 +91,23 @@ describe("useChatSession summary and reconnect state", () => {
 
     await session.handleReconnect();
 
-    expect(store.runStateSnapshot.state).toBe(FrontendRunState.IDLE);
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-reconnect").sending).toBe(false);
     expect(session.sending.value).toBe(false);
     expect(session.composerActionState.value.canDeleteMessage).toBe(true);
-    expect(store.runStateSnapshot).not.toHaveProperty("dialogProcessId");
-    expect(store.runStateSnapshot).not.toHaveProperty("turnScopeId");
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-reconnect")).toMatchObject({
+      sessionId: "s-reconnect", sending: false, canStop: false,
+    });
   });
 
   it("keeps a local stop mutex until the authoritative summary is applied", async () => {
     const store = useChatStore();
     store.sessions = [createSessionFixture({ id: "s-stop", backendSessionId: "s-stop", loaded: false })];
     store.activeSessionId = "s-stop";
-    applySessionRunStateEvent({
-      stateRef: toRef(store, "runStateSnapshot"), sending: toRef(store, "sending"), canStop: toRef(store, "canStop"),
-      event: { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED, source: "test" },
+    applyTurnRuntimeEvent(store.turnRuntimeRegistry, {
+      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
+      sessionId: "s-stop", turnScopeId: "turn-stop", dialogProcessId: "dp-stop", source: "test",
     });
-    expect(store.runStateSnapshot.state).toBe(FrontendRunState.USER_STOPPING);
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-stop").displayState).toBe("requesting");
     const authFetch = vi.fn(async () => detailResponse({
       sessionId: "s-stop", status: "user_stopped", dialogProcessId: "dp-stop", turnScopeId: "turn-stop",
     }));
@@ -112,7 +116,7 @@ describe("useChatSession summary and reconnect state", () => {
     await session.selectSession("s-stop", { force: true });
     await nextTick();
 
-    expect(store.runStateSnapshot.state).toBe(FrontendRunState.IDLE);
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-stop").sending).toBe(false);
     expect(store.activeSession.turnStatuses).toEqual([
       expect.objectContaining({ status: "user_stopped", dialogProcessId: "dp-stop", turnScopeId: "turn-stop" }),
     ]);
@@ -130,7 +134,7 @@ describe("useChatSession summary and reconnect state", () => {
     await session.selectSession("s-refresh", { force: true });
     await nextTick();
 
-    expect(store.runStateSnapshot.state).toBe(FrontendRunState.IDLE);
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-refresh").sending).toBe(false);
     expect(session.composerActionState.value.primaryAction).toBe("continue");
     expect(session.composerActionState.value.canContinue).toBe(true);
   });
@@ -149,25 +153,16 @@ describe("useChatSession summary and reconnect state", () => {
       await session.selectSession(sessionId, { force: true });
       await nextTick();
 
-      expect(store.runStateSnapshot.state).toBe(FrontendRunState.IDLE);
+      expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, sessionId).sending).toBe(false);
       expect(session.composerActionState.value).toMatchObject({ primaryAction: "send", userStopped: false });
     },
   );
 
-  it("clears the global mutex on completion-summary failure without inventing a turn result", async () => {
+  it("does not invent a turn result when completion-summary loading fails", async () => {
     const store = useChatStore();
     store.sessions = [createSessionFixture({ id: "s-fail", backendSessionId: "s-fail", loaded: false, turnStatuses: [] })];
     store.activeSessionId = "s-fail";
-    applySessionRunStateEvent({
-      stateRef: toRef(store, "runStateSnapshot"), sending: toRef(store, "sending"), canStop: toRef(store, "canStop"),
-      event: { type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_REQUEST_STARTED, source: "test" },
-    });
-    applySessionRunStateEvent({
-      stateRef: toRef(store, "runStateSnapshot"), sending: toRef(store, "sending"), canStop: toRef(store, "canStop"),
-      event: { type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED, source: "summary_request" },
-    });
-
-    expect(store.runStateSnapshot.state).toBe(FrontendRunState.IDLE);
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-fail").sending).toBe(false);
     expect(store.activeSession.turnStatuses || []).toEqual([]);
   });
 

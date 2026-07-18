@@ -71,10 +71,8 @@ describe("useReconnectReplay", () => {
     expect(assistant?.statusLabel).toBe("chat.generated");
     expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1");
     expect(mocks.chatList.applySessionDetail).toHaveBeenCalled();
-    expect(refs.runStateSnapshot.value).toMatchObject({
-      state: FrontendRunState.IDLE,
-      lastEventType: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
-    });
+    expect(refs.sending.value).toBe(false);
+    expect(refs.canStop.value).toBe(false);
     expect(refs.sending.value).toBe(false);
     expect(refs.interactionSubmitting.value).toBe(false);
     expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
@@ -109,10 +107,8 @@ describe("useReconnectReplay", () => {
     expect(assistant?.statusLabel).toBe("chat.generated");
     expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1");
     expect(mocks.chatList.applySessionDetail).toHaveBeenCalled();
-    expect(refs.runStateSnapshot.value).toMatchObject({
-      state: FrontendRunState.IDLE,
-      lastEventType: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
-    });
+    expect(refs.sending.value).toBe(false);
+    expect(refs.canStop.value).toBe(false);
     expect(refs.sending.value).toBe(false);
     expect(refs.interactionSubmitting.value).toBe(false);
     expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
@@ -159,10 +155,8 @@ describe("useReconnectReplay", () => {
     });
 
     expect(mocks.chatList.applySessionDetail).not.toHaveBeenCalled();
-    expect(refs.runStateSnapshot.value).toMatchObject({
-      state: FrontendRunState.IDLE,
-      lastEventType: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED,
-    });
+    expect(refs.sending.value).toBe(false);
+    expect(refs.canStop.value).toBe(false);
     expect(refs.sending.value).toBe(false);
     expect(refs.canStop.value).toBe(false);
   });
@@ -208,10 +202,8 @@ describe("useReconnectReplay", () => {
       expect.anything(),
       { preserveCurrentMessages: true, scrollToBottom: false },
     );
-    expect(refs.runStateSnapshot.value).toMatchObject({
-      state: FrontendRunState.IDLE,
-      lastEventType: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED,
-    });
+    expect(refs.sending.value).toBe(false);
+    expect(refs.canStop.value).toBe(false);
   });
 
   it("RC-04: terminal event blocks subsequent DELTA mutation", async () => {

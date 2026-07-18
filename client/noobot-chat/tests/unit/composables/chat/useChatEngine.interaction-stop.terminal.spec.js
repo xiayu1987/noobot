@@ -5,8 +5,9 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { createHarness, assistantMessage, emitChannelState } from "./helpers/useChatEngineHarness";
-import { FrontendRunState } from "../../../../src/composables/chat/sessionRunStateMachine";
 import { StreamEventEnum, RoleEnum } from "../../../../src/shared/constants/chatConstants";
+import { FrontendRunState } from "../../../../src/composables/chat/sessionRunStateMachine";
+import { selectSessionTurnRuntime } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 
 describe("useChatEngine.interaction-stop: terminal", () => {
   it("channel_state stopping/reconnecting drives runtime state without persisting message terminal state", async () => {
@@ -19,7 +20,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
         data: { sessionId: "local-flight", dialogProcessId: "dp-flight" },
       });
     });
-    const { engine, activeSession, sending, canStop, runStateSnapshot } = createHarness({
+    const { engine, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId: "local-flight",
       stream,
     });
@@ -29,25 +30,24 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     const assistant = assistantMessage(activeSession);
     expect(assistant?.statusLabel).toBe("chat.stopped");
     expect(assistant?.pending).toBe(false);
-    expect(sending.value).toBe(false);
-    expect(canStop.value).toBe(false);
-    expect(runStateSnapshot.value.state).toBe(FrontendRunState.IDLE);
-    expect(runStateSnapshot.value).not.toHaveProperty("backendState");
+    expect(selectSessionTurnRuntime(turnRuntimeRegistry.value, "local-flight").sending).toBe(false);
   });
 
   it("channel_state stopping remains a message-level fact and does not replace the global action lock", async () => {
     const stream = vi.fn(async (_payload, onEvent) => {
       emitChannelState(onEvent, "local-stopping", "dp-stopping", "stopping");
     });
-    const { engine, sending, canStop } = createHarness({
+    const { engine, turnRuntimeRegistry } = createHarness({
       sessionId: "local-stopping",
       stream,
     });
 
     await engine.send();
 
-    expect(sending.value).toBe(true);
-    expect(canStop.value).toBe(true);
+    expect(selectSessionTurnRuntime(turnRuntimeRegistry.value, "local-stopping")).toMatchObject({
+      sending: true,
+      canStop: false,
+    });
   });
 
   it("channel_state completed/error/no_conversation terminal behaviors are covered", async () => {

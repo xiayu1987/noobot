@@ -18,13 +18,12 @@ function normalizeTrimmedString(value = "") {
 }
 
 export function applyStreamCompletedFallback({
-  sending,
   finalDoneEventData,
   activeSession,
   botMessage,
   applyConversationState,
 } = {}) {
-  if (!sending?.value || !finalDoneEventData) return false;
+  if (!finalDoneEventData) return false;
   const turnMeta = normalizeTurnMeta(finalDoneEventData);
   applyConversationState(
     {

@@ -19,19 +19,12 @@ export {
 export { resolveEventScope } from "./sessionRunStateMachine/runIdentity";
 export { SESSION_RUN_TRANSITION_GUARDS } from "./sessionRunStateMachine/transitionDecision";
 export {
-  applySessionRunStateEvent,
-  applySessionRunStateEvents,
-  canApplyEvent,
   createInitialSessionRunState,
   evaluateSessionRunState,
   isInFlightSessionRunState,
   isStopLockedSessionRunState,
   isTerminalSessionRunState,
   normalizeSessionRunEvent,
-  reduceSessionRunEvents,
-  resolveNextStateByTransitionTable,
-  resolveTransitionDecision,
-  transitionSessionRunState,
 } from "./sessionRunStateMachine/core";
 export {
   getMessageRuntimeChannelState,

@@ -11,7 +11,7 @@ import { RoleEnum } from "../../../../src/shared/constants/chatConstants";
 describe("useChatEngine.interaction-stop: monotonic-stop", () => {
   it("prepareMonotonicMessageAction treats stop confirmation timeout as stop precondition failure", async () => {
     vi.useFakeTimers();
-    const { engine, deps, sending, canStop, activeSession, runStateSnapshot, turnRuntimeRegistry } = createHarness({
+    const { engine, deps, sending, canStop, activeSession, activeTurnRuntime, turnRuntimeRegistry } = createHarness({
       sessionId: "local-monotonic-stop",
       deps: {
         monotonicActionStopTimeoutMs: 500,
@@ -36,9 +36,6 @@ describe("useChatEngine.interaction-stop: monotonic-stop", () => {
         turnScopeId: "turn-stop",
       },
     });
-    sending.value = true;
-    canStop.value = true;
-    runStateSnapshot.value = createInitialSessionRunState();
     deps.chatWebSocketClient.requestStop.mockReturnValue(true);
 
     const actionPromise = engine.prepareMonotonicMessageAction();
@@ -74,8 +71,6 @@ describe("useChatEngine.interaction-stop: monotonic-stop", () => {
       },
     ];
     activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "local-stale-stop-timeout", turnScopeId: "turn-new", dialogProcessId: "dp-new" });
-    sending.value = true;
-    canStop.value = true;
     deps.chatWebSocketClient.requestStop.mockImplementation((_payload, onStopConfirmationTimeout) => {
       onStopConfirmationTimeout({
         sessionId: "local-stale-stop-timeout",
@@ -100,7 +95,7 @@ describe("useChatEngine.interaction-stop: monotonic-stop", () => {
   it("prepareMonotonicMessageAction warns and rejects when stop does not settle", async () => {
     vi.useFakeTimers();
     const notify = vi.fn();
-    const { engine, deps, activeSession, sending, runStateSnapshot, turnRuntimeRegistry } = createHarness({
+    const { engine, deps, activeSession, sending, activeTurnRuntime, turnRuntimeRegistry } = createHarness({
       sessionId: "local-monotonic-timeout",
       deps: {
         notify,
@@ -119,12 +114,6 @@ describe("useChatEngine.interaction-stop: monotonic-stop", () => {
       },
     ];
     activeSession.value.rawMessages = [...activeSession.value.messages];
-    sending.value = true;
-    runStateSnapshot.value = {
-      state: BackendChannelState.SENDING,
-      sessionId: "local-monotonic-timeout",
-      turnScopeId: "turn-timeout",
-    };
     activateRuntimeTurn({
       turnRuntimeRegistry,
       sessionId: "local-monotonic-timeout",

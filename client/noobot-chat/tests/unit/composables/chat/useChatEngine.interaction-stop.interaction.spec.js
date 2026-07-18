@@ -130,7 +130,9 @@ describe("useChatEngine.interaction-stop: interaction", () => {
 
     const assistant = assistantMessage(activeSession);
     expect(sending.value).toBe(true);
-    expect(canStop.value).toBe(true);
+    // An interaction without a payload remains in flight while recovery is
+    // pending, but it is not an actionable backend turn that can be stopped.
+    expect(canStop.value).toBe(false);
     expect(assistant?.pending).toBe(true);
     expect(notify).not.toHaveBeenCalled();
 

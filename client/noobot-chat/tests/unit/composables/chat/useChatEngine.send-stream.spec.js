@@ -79,7 +79,7 @@ describe("useChatEngine.send-stream", () => {
       });
       emitChannelState(onEvent, "local-client-turn", "", "completed");
     });
-    const { engine, activeSession, sending, canStop, runStateSnapshot } = createHarness({
+    const { engine, activeSession, sending, canStop, activeTurnRuntime } = createHarness({
       sessionId: "local-client-turn",
       stream,
     });
@@ -91,11 +91,12 @@ describe("useChatEngine.send-stream", () => {
       turnScopeId: expect.stringMatching(/^client-turn:/),
     }));
     expect(assistant?.turnScopeId).toBe(capturedPayload.turnScopeId);
-    expect(runStateSnapshot.value).toEqual(expect.objectContaining({
+    expect(activeTurnRuntime.value).toEqual(expect.objectContaining({
       state: FrontendRunState.PROCESSING,
+      backendState: BackendChannelState.SENDING,
     }));
-    expect(runStateSnapshot.value).not.toHaveProperty("dialogProcessId");
-    expect(runStateSnapshot.value).not.toHaveProperty("turnScopeId");
+    expect(activeTurnRuntime.value.turnScopeId).toBeTruthy();
+    expect(activeTurnRuntime.value.turnScopeId).toBeTruthy();
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
   });
@@ -164,7 +165,7 @@ describe("useChatEngine.send-stream", () => {
       assistant.content = "done";
       assistant.pending = false;
     });
-    const { engine, activeSession, runStateSnapshot, sending, deps } = createHarness({
+    const { engine, activeSession, activeTurnRuntime, sending, deps } = createHarness({
       sessionId: "s-active-send",
       stream,
       deps: {
@@ -172,14 +173,6 @@ describe("useChatEngine.send-stream", () => {
         applySessionDetail,
       },
     });
-    runStateSnapshot.value = {
-      state: BackendChannelState.SENDING,
-      sessionId: "s-other",
-      dialogProcessId: "dp-other",
-      turnScopeId: "turn-other",
-    };
-    sending.value = true;
-
     const result = await engine.send();
 
     const assistant = assistantMessage(activeSession);
@@ -191,8 +184,8 @@ describe("useChatEngine.send-stream", () => {
     expect(assistant?.realtimeLogs).toEqual([
       expect.objectContaining({ event: "tool_call", text: expect.stringContaining("running tool") }),
     ]);
-    expect(runStateSnapshot.value?.state).toBe(FrontendRunState.IDLE);
-    expect(runStateSnapshot.value).not.toHaveProperty("sessionId");
+    expect(sending.value).toBe(false);
+    expect(activeTurnRuntime.value?.sessionId).toBe(activeSession.value.id);
   });
 
   it("accepts active stream events without turnScopeId and still finalizes frontend completion", async () => {
@@ -229,7 +222,7 @@ describe("useChatEngine.send-stream", () => {
       assistant.content = "final without frontend turn scope";
       assistant.pending = false;
     });
-    const { engine, activeSession, runStateSnapshot } = createHarness({
+    const { engine, activeSession, activeTurnRuntime, sending } = createHarness({
       sessionId: "s-missing-turn",
       stream,
       autoPatchStreamTurnScopeId: false,
@@ -247,10 +240,10 @@ describe("useChatEngine.send-stream", () => {
     expect(assistant?.realtimeLogs).toEqual([
       expect.objectContaining({ text: expect.stringContaining("thinking without frontend turn scope") }),
     ]);
-    expect(runStateSnapshot.value?.state).toBe(FrontendRunState.IDLE);
-    expect(runStateSnapshot.value).not.toHaveProperty("sessionId");
-    expect(runStateSnapshot.value).not.toHaveProperty("dialogProcessId");
-    expect(runStateSnapshot.value).not.toHaveProperty("turnScopeId");
+    expect(sending.value).toBe(false);
+    expect(activeTurnRuntime.value?.sessionId).toBe(activeSession.value.id);
+    expect(activeTurnRuntime.value.turnScopeId).toBeTruthy();
+    expect(activeTurnRuntime.value.turnScopeId).toBeTruthy();
   });
 
   it("DONE patches the overlay and clears the global lock when completion detail fails", async () => {
@@ -452,7 +445,7 @@ describe("useChatEngine.send-stream", () => {
         attachments: [{ id: "log-att-1", name: "tool.log" }],
       };
     });
-    const { engine, activeSession, sending, canStop, runStateSnapshot } = createHarness({
+    const { engine, activeSession, sending, canStop, activeTurnRuntime } = createHarness({
       sessionId: "local-frontend-complete",
       stream,
       deps: {
@@ -476,7 +469,7 @@ describe("useChatEngine.send-stream", () => {
     expect(assistant?.pending).toBe(false);
     expect(sending.value).toBe(false);
     expect(canStop.value).toBe(false);
-    expect(runStateSnapshot.value?.state).toBe(FrontendRunState.IDLE);
+    expect(sending.value).toBe(false);
   });
 
   it("terminal completed channel_state triggers frontend completion detail without DONE event", async () => {
@@ -499,7 +492,7 @@ describe("useChatEngine.send-stream", () => {
       assistant.attachments = [normalizedAttachment];
       assistant.pending = false;
     });
-    const { engine, activeSession, sending, canStop, runStateSnapshot } = createHarness({
+    const { engine, activeSession, sending, canStop, activeTurnRuntime } = createHarness({
       sessionId: "local-channel-complete",
       stream,
       deps: {
@@ -520,7 +513,7 @@ describe("useChatEngine.send-stream", () => {
     expect(assistant?.pending).toBe(false);
     expect(sending.value).toBe(false);
     expect(canStop.value).toBe(false);
-    expect(runStateSnapshot.value?.state).toBe(FrontendRunState.IDLE);
+    expect(sending.value).toBe(false);
   });
 
   it("channel_state drives assistant status transition", async () => {

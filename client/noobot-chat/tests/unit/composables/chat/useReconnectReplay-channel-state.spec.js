@@ -8,9 +8,9 @@ import { createFixture, createFakeProcessStore } from "./helpers/useReconnectRep
 import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
 import {
   BackendChannelState,
-  FrontendRunState,
   SESSION_RUN_EVENT,
 } from "../../../../src/composables/chat/sessionRunStateMachine";
+import { selectSessionTurnRuntime } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 import {
   scheduleMissingInteractionPayloadFailure,
 } from "../../../../src/composables/chat/reconnectReplay/channelStateReplay";
@@ -66,33 +66,6 @@ describe("useReconnectReplay", () => {
     expect(interactionSubmitting.value).toBe(false);
     expect(clearPendingInteraction).toHaveBeenCalledTimes(1);
     expect(notify).toHaveBeenCalledWith({ type: "error", message: "chat.interactionPayloadMissing" });
-  });
-
-  it("missing interaction payload timeout keeps compatibility fallback without run state machine", async () => {
-    vi.useFakeTimers();
-    const sending = { value: true };
-    const canStop = { value: true };
-
-    scheduleMissingInteractionPayloadFailure({
-      pendingInteractionRequest: { value: null },
-      missingInteractionPayloadTimers: new Map(),
-      sessionId: "s-1",
-      dialogProcessId: "dp-missing-fallback",
-      sending,
-      canStop,
-      interactionSubmitting: { value: true },
-      clearPendingInteraction: vi.fn(),
-      translate: (key) => key,
-      applyAssistantFailureState: vi.fn(),
-      emitSyntheticErrorConversationState: vi.fn(),
-      notify: vi.fn(),
-      timeoutMs: 10,
-    });
-
-    await vi.advanceTimersByTimeAsync(10);
-
-    expect(sending.value).toBe(false);
-    expect(canStop.value).toBe(false);
   });
 
   it("session scoped reconnect channel_state does not restore elapsed from channel timestamps", async () => {
@@ -424,7 +397,6 @@ describe("useReconnectReplay", () => {
 
   it("RT-05: reconnect currentRun restores the processing lock and stop action", async () => {
     const { api, refs, mocks } = createFixture();
-    refs.sending.value = false;
 
     await api.applyReconnectData({
       sessions: [
@@ -450,9 +422,7 @@ describe("useReconnectReplay", () => {
       ],
     });
 
-    expect(refs.runStateSnapshot.value.state).toBe(FrontendRunState.PROCESSING);
-    expect(refs.sending.value).toBe(true);
-    expect(refs.canStop.value).toBe(true);
+    expect(selectSessionTurnRuntime(refs.turnRuntimeRegistry.value, "s-1")).toMatchObject({ sending: true, canStop: true });
     expect(mocks.applyTurnRuntimeEvents).toHaveBeenCalledWith([
       expect.objectContaining({
         sessionId: "s-1",
@@ -514,7 +484,6 @@ describe("useReconnectReplay", () => {
 
   it("RT-06: expired state clears pending interaction and stops sending", async () => {
     const { api, refs, mocks } = createFixture();
-    refs.sending.value = true;
     refs.interactionSubmitting.value = true;
 
     await api.applyReconnectData({
@@ -541,15 +510,13 @@ describe("useReconnectReplay", () => {
       ],
     });
 
-    expect(refs.sending.value).toBe(false);
+    expect(selectSessionTurnRuntime(refs.turnRuntimeRegistry.value, "s-1").sending).toBe(false);
     expect(refs.interactionSubmitting.value).toBe(false);
     expect(mocks.clearPendingInteraction).toHaveBeenCalled();
   });
 
   it("RT-06a: backend completed replay finalizes through session detail flow", async () => {
     const { api, refs, mocks } = createFixture();
-    refs.sending.value = true;
-    refs.canStop.value = true;
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
       {
@@ -590,12 +557,7 @@ describe("useReconnectReplay", () => {
     const assistant = refs.activeSession.value.messages[1];
     expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1");
     expect(mocks.chatList.applySessionDetail).toHaveBeenCalledTimes(1);
-    expect(refs.runStateSnapshot.value).toMatchObject({
-      state: FrontendRunState.IDLE,
-      lastEventType: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
-    });
-    expect(refs.sending.value).toBe(false);
-    expect(refs.canStop.value).toBe(false);
+    expect(selectSessionTurnRuntime(refs.turnRuntimeRegistry.value, "s-1").sending).toBe(false);
     expect(assistant.pending).toBe(false);
     expect(assistant.channelState).toMatchObject({
       state: "completed",
@@ -612,7 +574,6 @@ describe("useReconnectReplay", () => {
     "RT-06b: %s state clears pending interaction and stops sending",
     async (state) => {
       const { api, refs, mocks } = createFixture();
-      refs.sending.value = true;
       refs.interactionSubmitting.value = true;
 
       await api.applyReconnectData({
@@ -639,7 +600,7 @@ describe("useReconnectReplay", () => {
         ],
       });
 
-      expect(refs.sending.value).toBe(false);
+      expect(selectSessionTurnRuntime(refs.turnRuntimeRegistry.value, "s-1").sending).toBe(false);
       expect(refs.interactionSubmitting.value).toBe(false);
       expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
         sessionId: "s-1",

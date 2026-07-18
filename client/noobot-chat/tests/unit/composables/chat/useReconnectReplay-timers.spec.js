@@ -57,7 +57,6 @@ describe("useReconnectReplay", () => {
 
   it("FN-02c: channel_state no_conversation clears pending interaction", async () => {
     const { api, refs, mocks } = createFixture();
-    refs.sending.value = true;
     refs.interactionSubmitting.value = true;
 
     await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {

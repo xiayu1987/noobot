@@ -3,11 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { vi } from "vitest";
 import { useReconnectReplay } from "../../../../../src/composables/chat/useReconnectReplay";
-import { createInitialSessionRunState } from "../../../../../src/composables/chat/sessionRunStateMachine";
 import { RoleEnum } from "../../../../../src/shared/constants/chatConstants";
+import {
+  applyTurnRuntimeEvent,
+  createTurnRuntimeRegistryState,
+  selectSessionTurnRuntime,
+} from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 
 function createSession(id) {
   return {
@@ -49,21 +53,24 @@ export function createFixture({ activeId = "s-1", processStore = null } = {}) {
   const sessions = ref([s1, s2]);
   const activeSessionId = ref(activeId);
   const activeSession = ref(sessions.value.find((s) => s.id === activeId));
-  const sending = ref(true);
-  const canStop = ref(true);
-  const runStateSnapshot = ref(createInitialSessionRunState());
+  const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
+  const runtimeView = computed(() => selectSessionTurnRuntime(turnRuntimeRegistry.value, activeSessionId.value));
   const interactionSubmitting = ref(true);
   const pendingInteractionRequest = ref(null);
 
   const clearPendingInteraction = vi.fn();
   const clearPendingInteractionIfObsolete = vi.fn();
-  const setPendingInteractionRequest = vi.fn();
+  const setPendingInteractionRequest = vi.fn((request) => {
+    pendingInteractionRequest.value = request || null;
+  });
   const upsertConnectedConnectorInPanelState = vi.fn();
   const refreshSessionConnectorsAsync = vi.fn();
   const applyCompletedToolLogsToMessages = vi.fn();
   const scrollBottom = vi.fn();
   const notify = vi.fn();
-  const applyTurnRuntimeEvents = vi.fn();
+  const applyTurnRuntimeEvents = vi.fn((events = []) =>
+    events.map((event) => applyTurnRuntimeEvent(turnRuntimeRegistry.value, event)),
+  );
 
   const chatList = {
     fetchSessions: vi.fn(async () => {}),
@@ -110,9 +117,6 @@ export function createFixture({ activeId = "s-1", processStore = null } = {}) {
     sessions,
     activeSession,
     activeSessionId,
-    sending,
-    canStop,
-    runStateSnapshot,
     interactionSubmitting,
     chatList,
     chatWebSocketClient,
@@ -143,9 +147,13 @@ export function createFixture({ activeId = "s-1", processStore = null } = {}) {
       sessions,
       activeSession,
       activeSessionId,
-      sending,
-      canStop,
-      runStateSnapshot,
+      turnRuntimeRegistry,
+      sending: computed(() => runtimeView.value.sending),
+      canStop: computed(() => runtimeView.value.canStop),
+      activeTurnRuntime: computed(() => {
+        const scope = turnRuntimeRegistry.value.activeTurnBySession[activeSessionId.value];
+        return scope ? turnRuntimeRegistry.value.turns[scope] || null : null;
+      }),
       interactionSubmitting,
       pendingInteractionRequest,
     },

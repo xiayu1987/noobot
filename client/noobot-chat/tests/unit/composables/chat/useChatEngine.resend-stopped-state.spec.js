@@ -261,7 +261,7 @@ describe("useChatEngine.resend stopped state", () => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value = { ...activeSession.value, ...mainSession };
     });
-    const { engine, activeSession, runStateSnapshot, sending, canStop, turnRuntimeRegistry } = createHarness({
+    const { engine, activeSession, activeTurnRuntime, sending, canStop, turnRuntimeRegistry } = createHarness({
       sessionId: "local-resend-second-stopped",
       stream,
       deps: { replaceSessionTurnApi, applySessionDetail },
@@ -301,16 +301,6 @@ describe("useChatEngine.resend stopped state", () => {
       sessionId: "local-resend-second-stopped",
       turnScopeId: firstTurnScopeId,
     });
-    runStateSnapshot.value = {
-      state: BackendChannelState.STOPPED,
-      sessionId: "local-resend-second-stopped",
-      dialogProcessId: "",
-      turnScopeId: firstTurnScopeId,
-      seq: 0,
-    };
-    sending.value = false;
-    canStop.value = false;
-  
     await expect(engine.resendMonotonicMessage(firstReplacementAssistant, "third")).resolves.toBe(true);
   
     const [secondReplacementUser, secondPlaceholder] = activeSession.value.messages;
@@ -326,8 +316,9 @@ describe("useChatEngine.resend stopped state", () => {
     }));
     expect(secondPlaceholder.stopState).toBeUndefined();
     expect(secondPlaceholder.channelState?.state).not.toBe("user_stopped");
-    expect(runStateSnapshot.value.state).toBe(FrontendRunState.PROCESSING);
-    expect(runStateSnapshot.value).not.toHaveProperty("turnScopeId");
+    expect(activeTurnRuntime.value.state).toBe(FrontendRunState.PROCESSING);
+    expect(activeTurnRuntime.value.backendState).toBe(BackendChannelState.SENDING);
+    expect(activeTurnRuntime.value.turnScopeId).toBeTruthy();
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
     expect(stream).toHaveBeenCalledTimes(2);
@@ -380,7 +371,7 @@ describe("useChatEngine.resend stopped state", () => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value = { ...activeSession.value, ...mainSession };
     });
-    const { engine, activeSession, runStateSnapshot, sending, canStop, turnRuntimeRegistry } = createHarness({
+    const { engine, activeSession, activeTurnRuntime, sending, canStop, turnRuntimeRegistry } = createHarness({
       sessionId: "local-resend-stale-stop-replay",
       stream,
       deps: { replaceSessionTurnApi, applySessionDetail },
@@ -408,15 +399,7 @@ describe("useChatEngine.resend stopped state", () => {
       sessionId: "local-resend-stale-stop-replay",
       turnScopeId: firstAssistant.turnScopeId,
     });
-    runStateSnapshot.value = {
-      state: BackendChannelState.STOPPED,
-      sessionId: "local-resend-stale-stop-replay",
-      turnScopeId: firstAssistant.turnScopeId,
-      seq: 0,
-    };
-    sending.value = false;
-    canStop.value = false;
-  
+
     await expect(engine.resendMonotonicMessage(firstAssistant, "third")).resolves.toBe(true);
   
     const freshPlaceholder = [...activeSession.value.messages]
@@ -429,7 +412,7 @@ describe("useChatEngine.resend stopped state", () => {
     // current frontend action remains the only interaction lock until detail
     // or an error clears it.
     expect(sending.value).toBe(true);
-    expect(canStop.value).toBe(true);
+    expect(canStop.value).toBe(false);
   });
 
   it("resendMonotonicMessage ignores stale global run state when Registry has no active turn", async () => {
@@ -441,7 +424,7 @@ describe("useChatEngine.resend stopped state", () => {
         rawMessages: [{ turnScopeId, role: RoleEnum.USER, content: newContent }],
       }),
     }));
-    const { engine, activeSession, runStateSnapshot, sending, canStop, deps } = createHarness({
+    const { engine, activeSession, activeTurnRuntime, sending, canStop, deps } = createHarness({
       sessionId: "local-resend-state-mismatch",
       stream,
       deps: { replaceSessionTurnApi },
@@ -462,14 +445,6 @@ describe("useChatEngine.resend stopped state", () => {
     };
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
-    sending.value = true;
-    canStop.value = false;
-    runStateSnapshot.value = {
-      state: FrontendRunState.RESEND_STREAMING,
-      sessionId: "local-resend-state-mismatch",
-      turnScopeId: "client-turn:missing-in-flight",
-    };
-  
     await expect(engine.resendMonotonicMessage(stoppedAssistant, "retry")).resolves.toBe(true);
   
     expect(replaceSessionTurnApi).toHaveBeenCalledTimes(1);

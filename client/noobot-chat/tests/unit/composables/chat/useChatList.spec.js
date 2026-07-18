@@ -668,8 +668,6 @@ describe("useChatList", () => {
       },
     ];
     refs.activeSessionId.value = "s-1";
-    refs.sending.value = true;
-
     await api.selectSession("s-2", { silent: false });
     expect(refs.activeSessionId.value).toBe("s-2");
     expect(mocks.notify).not.toHaveBeenCalled();

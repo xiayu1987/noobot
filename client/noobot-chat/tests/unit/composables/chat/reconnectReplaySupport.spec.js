@@ -175,34 +175,4 @@ describe("reconnectReplay support modules", () => {
     vi.useRealTimers();
   });
 
-  it("falls back to closing sending/canStop when expired refresh fails without state machine bridge", async () => {
-    vi.useFakeTimers();
-    const sending = { value: true };
-    const canStop = { value: true };
-
-    scheduleCacheExpiredSessionRefresh({
-      getCacheExpiredRefreshTimer: vi.fn(() => null),
-      setCacheExpiredRefreshTimer: vi.fn(),
-      replayCache: {},
-      sending,
-      canStop,
-      interactionSubmitting: { value: true },
-      clearPendingInteraction: vi.fn(),
-      translate: vi.fn((key) => key),
-      activeSession: { value: { id: "active-s", messages: [] } },
-      activeSessionId: { value: "active-s" },
-      chatList: { fetchSessions: vi.fn(async () => false) },
-      applyAssistantFailureState: vi.fn(),
-      emitSyntheticErrorConversationState: vi.fn(),
-      notify: vi.fn(),
-      sessionId: "failed-s",
-      dialogProcessId: "dp-fallback",
-    });
-
-    await vi.advanceTimersByTimeAsync(1200);
-
-    expect(sending.value).toBe(false);
-    expect(canStop.value).toBe(false);
-    vi.useRealTimers();
-  });
 });

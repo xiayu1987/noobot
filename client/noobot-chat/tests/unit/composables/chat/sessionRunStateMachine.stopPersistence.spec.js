@@ -17,17 +17,12 @@ import {
   SESSION_RUN_TRANSITION_DECISION_REASON,
   SESSION_RUN_TRANSITION_GUARDS,
   SESSION_RUN_TRANSITION_TABLE,
-  applySessionRunStateEvent,
-  applySessionRunStateEvents,
   clearRememberedStopRequests,
   createInitialSessionRunState,
   evaluateSessionRunState,
-  canApplyEvent,
   normalizeSessionRunEvent,
-  reduceSessionRunEvents,
   rememberStopRequestedEvent,
   resolveEventScope,
-  resolveNextStateByTransitionTable,
   resolveRememberedStopRequestedEvent,
   getMessageRuntimeChannelState,
   isMessageInFlightAssistant,
@@ -35,8 +30,6 @@ import {
   resolveSessionRunMessageRuntimeView,
   resolveSessionRunMessageRuntimePatch,
   resolveSessionRunStateForMessage,
-  resolveTransitionDecision,
-  transitionSessionRunState,
 } from "../../../../src/composables/chat/sessionRunStateMachine";
 
 function installStorage() {

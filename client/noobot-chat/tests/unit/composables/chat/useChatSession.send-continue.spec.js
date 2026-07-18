@@ -133,8 +133,7 @@ describe("useChatSession send/continue actions", () => {
     });
     expect(payload.turnScopeId).toMatch(/^client-turn:/);
     expect(payload.turnScopeId).not.toBe("turn-stopped");
-    expect(store.runStateSnapshot).not.toHaveProperty("dialogProcessId");
-    expect(store.runStateSnapshot).not.toHaveProperty("turnScopeId");
+    expect(session.sending.value).toBe(true);
   });
 
   it("sends a new turn instead of continuing an older stopped turn after completion", async () => {

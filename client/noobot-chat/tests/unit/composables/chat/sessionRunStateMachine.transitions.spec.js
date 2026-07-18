@@ -4,37 +4,26 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { ref } from "vue";
 import {
+  BackendChannelState,
   FrontendRunState,
   SESSION_RUN_EVENT,
-  applySessionRunStateEvent,
-  applySessionRunStateEvents,
-  createInitialSessionRunState,
-  evaluateSessionRunState,
-  reduceSessionRunEvents,
-  transitionSessionRunState,
 } from "../../../../src/composables/chat/sessionRunStateMachine";
+import {
+  deriveTurnCapabilities,
+  reduceTurnRuntimeEvent,
+  TURN_TRANSITION_REASON,
+} from "../../../../src/composables/chat/sessionRunStateMachine/turnReducer";
 
-const transientStates = [
-  FrontendRunState.ACTION_REQUESTING,
-  FrontendRunState.PROCESSING,
-  FrontendRunState.FRONTEND_COMPLETION_REQUESTING,
-  FrontendRunState.USER_STOPPING,
-];
+const identity = { sessionId: "s1", turnScopeId: "turn-1", dialogProcessId: "dp-1" };
 
-const resetEvents = [
-  SESSION_RUN_EVENT.LOCAL_RESET,
-  SESSION_RUN_EVENT.LOCAL_FAILURE,
-  SESSION_RUN_EVENT.LOCAL_RESEND_COMPLETED,
-  SESSION_RUN_EVENT.LOCAL_RESEND_FAILED,
-  SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
-  SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED,
-  SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED,
-  SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_FAILED,
-];
+function apply(current, event) {
+  const result = reduceTurnRuntimeEvent(current, { ...identity, ...event });
+  expect(result.applied, result.reason).toBe(true);
+  return { ...result.next, ...identity };
+}
 
-describe("sessionRunStateMachine interaction lock", () => {
+describe("turn runtime interaction lifecycle", () => {
   it.each([
     SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
     SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
@@ -42,123 +31,78 @@ describe("sessionRunStateMachine interaction lock", () => {
     SESSION_RUN_EVENT.LOCAL_RESEND_STARTED,
     SESSION_RUN_EVENT.LOCAL_RESEND_REPLACING_TURN,
     SESSION_RUN_EVENT.LOCAL_RESEND_STREAMING,
-  ])("maps %s to the frontend action lock without retaining turn identity", (type) => {
-    const next = transitionSessionRunState(createInitialSessionRunState(), {
-      type,
-      sessionId: "s1",
-      dialogProcessId: "dp1",
-      turnScopeId: "turn1",
-    });
-    expect(next.state).toBe(FrontendRunState.ACTION_REQUESTING);
-    expect(next).not.toHaveProperty("sessionId");
-    expect(next).not.toHaveProperty("dialogProcessId");
-    expect(next).not.toHaveProperty("turnScopeId");
+  ])("starts %s as a new identity-bound action request", (type) => {
+    const next = apply(null, { type });
+    expect(next).toMatchObject({ ...identity, state: FrontendRunState.ACTION_REQUESTING });
+    expect(deriveTurnCapabilities(next.state, next)).toMatchObject({ sending: true, canStop: false });
   });
 
-  it("uses distinct completion and stop locks", () => {
-    expect(transitionSessionRunState({}, {
-      type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_REQUEST_STARTED,
-    }).state).toBe(FrontendRunState.FRONTEND_COMPLETION_REQUESTING);
-    expect(transitionSessionRunState({}, {
-      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
-    }).state).toBe(FrontendRunState.USER_STOPPING);
-  });
-
-  it.each(resetEvents)("clears the interaction lock on %s", (type) => {
-    for (const state of transientStates) {
-      const next = transitionSessionRunState({ ...createInitialSessionRunState(), state }, { type });
-      expect(next.state).toBe(FrontendRunState.IDLE);
-      expect(evaluateSessionRunState(next)).toMatchObject({ sending: false, terminal: true });
-    }
-  });
-
-  it("enters processing only for backend in-flight acknowledgements", () => {
-    const current = { ...createInitialSessionRunState(), state: FrontendRunState.ACTION_REQUESTING };
-    for (const event of [
-      { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "sending" },
-      { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "reconnecting" },
-      { type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE, state: "interaction_pending" },
+  it("enters processing only after a backend in-flight acknowledgement", () => {
+    const requesting = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED });
+    for (const state of [
+      BackendChannelState.SENDING,
+      BackendChannelState.RECONNECTING,
+      BackendChannelState.INTERACTION_PENDING,
     ]) {
-      expect(transitionSessionRunState(current, event).state).toBe(FrontendRunState.PROCESSING);
-    }
-    expect(transitionSessionRunState(current, {
-      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-      state: "completed",
-    }).state).toBe(FrontendRunState.ACTION_REQUESTING);
-  });
-
-  it("locks every interaction in the explicit request and processing states", () => {
-    for (const state of transientStates) {
-      expect(evaluateSessionRunState({ state })).toMatchObject({
-        sending: true,
-        canStartNewSend: false,
-        canRetryMessage: false,
-        canDeleteMessage: false,
-        terminal: false,
-      });
-    }
-    expect(evaluateSessionRunState(createInitialSessionRunState())).toMatchObject({
-      sending: false,
-      canStartNewSend: true,
-      canRetryMessage: true,
-      canDeleteMessage: true,
-      terminal: true,
-    });
-    for (const state of [null, undefined, "", "unknown", "sending", "completed"]) {
-      expect(evaluateSessionRunState({ state })).toMatchObject({
-        state: FrontendRunState.IDLE,
-        sending: false,
-        canStartNewSend: true,
-        terminal: true,
-      });
+      const processing = apply(requesting, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state });
+      expect(processing.state).toBe(FrontendRunState.PROCESSING);
     }
   });
 
-  it("shows stop only after the backend acknowledges processing", () => {
-    const stateRef = ref(createInitialSessionRunState());
-    const sending = ref(false);
-    const canStop = ref(false);
-    applySessionRunStateEvent({
-      stateRef,
-      sending,
-      canStop,
-      event: { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED },
-    });
-    expect([stateRef.value.state, sending.value, canStop.value]).toEqual([
-      FrontendRunState.ACTION_REQUESTING,
-      true,
-      false,
-    ]);
-    applySessionRunStateEvent({
-      stateRef,
-      sending,
-      canStop,
-      event: { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: "sending", source: "reconnect" },
-    });
-    expect([stateRef.value.state, sending.value, canStop.value]).toEqual([
-      FrontendRunState.PROCESSING,
-      true,
-      true,
-    ]);
-    applySessionRunStateEvents({
-      stateRef,
-      sending,
-      canStop,
-      events: [{ type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED }],
-    });
-    expect([stateRef.value.state, sending.value, canStop.value]).toEqual([
-      FrontendRunState.IDLE,
-      false,
-      false,
-    ]);
+  it("runs completion through processing, completion request, and summary application", () => {
+    let turn = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED });
+    turn = apply(turn, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.SENDING });
+    turn = apply(turn, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.COMPLETED });
+    expect(turn.state).toBe(FrontendRunState.FRONTEND_COMPLETION_REQUESTING);
+    turn = apply(turn, { type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED });
+    expect(turn.state).toBe(FrontendRunState.FRONTEND_COMPLETED);
+    expect(deriveTurnCapabilities(turn.state, turn)).toMatchObject({ sending: false, terminal: true });
   });
 
-  it("reduces sequential local actions deterministically", () => {
-    const next = reduceSessionRunEvents(createInitialSessionRunState(), [
-      { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED },
-      { type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_REQUEST_STARTED },
-      { type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED },
-    ]);
-    expect(next.state).toBe(FrontendRunState.IDLE);
+  it("keeps stop in action-requesting until backend confirms stopping", () => {
+    let turn = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED });
+    turn = apply(turn, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.SENDING });
+    turn = apply(turn, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED });
+    expect(turn).toMatchObject({ state: FrontendRunState.ACTION_REQUESTING, action: "stop" });
+    expect(deriveTurnCapabilities(turn.state, turn)).toMatchObject({ sending: true, canStop: false });
+    turn = apply(turn, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.USER_STOPPED });
+    expect(turn.state).toBe(FrontendRunState.USER_STOPPING);
+    turn = apply(turn, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED });
+    expect(turn.state).toBe(FrontendRunState.USER_STOP_COMPLETED);
+  });
+
+  it("classifies failures by the active phase", () => {
+    const requesting = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED });
+    expect(apply(requesting, { type: SESSION_RUN_EVENT.LOCAL_FAILURE }).state).toBe(FrontendRunState.ACTION_REQUEST_ERROR);
+
+    const processing = apply(requesting, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.SENDING });
+    expect(apply(processing, { type: SESSION_RUN_EVENT.LOCAL_FAILURE }).state).toBe(FrontendRunState.PROCESSING_ERROR);
+
+    const completing = apply(processing, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.COMPLETED });
+    expect(apply(completing, { type: SESSION_RUN_EVENT.LOCAL_FAILURE }).state).toBe(FrontendRunState.COMPLETION_ERROR);
+
+    const stopRequesting = apply(processing, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED });
+    const stopping = apply(stopRequesting, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.USER_STOPPED });
+    expect(apply(stopping, { type: SESSION_RUN_EVENT.LOCAL_FAILURE }).state).toBe(FrontendRunState.STOP_ERROR);
+  });
+
+  it("rejects an illegal second action and stale or terminal events", () => {
+    const requesting = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED, seq: 2 });
+    expect(reduceTurnRuntimeEvent(requesting, { ...identity, type: SESSION_RUN_EVENT.LOCAL_RESEND_STARTED, seq: 3 })).toMatchObject({
+      applied: false,
+      reason: TURN_TRANSITION_REASON.ILLEGAL_TRANSITION,
+    });
+    expect(reduceTurnRuntimeEvent(requesting, { ...identity, type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.SENDING, seq: 1 })).toMatchObject({
+      applied: false,
+      reason: TURN_TRANSITION_REASON.STALE_SEQUENCE,
+    });
+
+    let completed = apply(requesting, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.SENDING, seq: 3 });
+    completed = apply(completed, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.COMPLETED, seq: 4 });
+    completed = apply(completed, { type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED, seq: 5 });
+    expect(reduceTurnRuntimeEvent(completed, { ...identity, type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.SENDING, seq: 6 })).toMatchObject({
+      applied: false,
+      reason: TURN_TRANSITION_REASON.TERMINAL_LOCKED,
+    });
   });
 });

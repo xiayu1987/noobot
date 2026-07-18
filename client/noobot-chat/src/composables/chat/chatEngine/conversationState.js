@@ -45,8 +45,6 @@ function parseThinkingTimingMs(value) {
 export function createChatEngineConversationState({
   activeSession,
   activeSessionId,
-  sending,
-  canStop,
   applyRunStateEvent,
   interactionSubmitting,
   pendingInteractionRequest,
@@ -177,20 +175,14 @@ export function createChatEngineConversationState({
     const timer = setTimeout(() => {
       missingInteractionPayloadTimers.delete(key);
       if (hasPendingInteractionForDialog(dialogProcessId)) return;
-      if (applyRunStateEvent) {
-        applyRunStateEvent({
+      applyRunStateEvent?.({
           type: SESSION_RUN_EVENT.LOCAL_FAILURE,
           state: BackendChannelState.ERROR,
           sessionId,
           dialogProcessId,
           turnScopeId,
           source: "interaction_payload_missing",
-        });
-      } else {
-        // Compatibility fallback for callers that do not provide the run state machine bridge.
-        sending.value = false;
-        if (canStop) canStop.value = false;
-      }
+      });
       clearPendingInteraction();
       const missingInteractionError = translate("chat.interactionPayloadMissing");
       applyAssistantFailureState(targetAssistantMessage, missingInteractionError);
@@ -222,19 +214,13 @@ export function createChatEngineConversationState({
       )
         .then((ok) => {
           if (ok !== false) return;
-          if (applyRunStateEvent) {
-            applyRunStateEvent({
+          applyRunStateEvent?.({
               type: SESSION_RUN_EVENT.LOCAL_FAILURE,
               state: BackendChannelState.ERROR,
               sessionId: normalizeTrimmedString(sessionId || activeSession.value?.id),
               dialogProcessId,
               source: "expired_refresh_failed",
-            });
-          } else {
-            // Compatibility fallback for callers that do not provide the run state machine bridge.
-            sending.value = false;
-            if (canStop) canStop.value = false;
-          }
+          });
           interactionSubmitting.value = false;
           clearPendingInteraction();
           const expiredErrorMessage = translate("chat.expiredRefreshFailed");
@@ -247,19 +233,13 @@ export function createChatEngineConversationState({
           notify({ type: "error", message: expiredErrorMessage });
         })
         .catch(() => {
-          if (applyRunStateEvent) {
-            applyRunStateEvent({
+          applyRunStateEvent?.({
               type: SESSION_RUN_EVENT.LOCAL_FAILURE,
               state: BackendChannelState.ERROR,
               sessionId: normalizeTrimmedString(sessionId || activeSession.value?.id),
               dialogProcessId,
               source: "expired_refresh_failed",
-            });
-          } else {
-            // Compatibility fallback for callers that do not provide the run state machine bridge.
-            sending.value = false;
-            if (canStop) canStop.value = false;
-          }
+          });
           interactionSubmitting.value = false;
           clearPendingInteraction();
           const expiredErrorMessage = translate("chat.expiredRefreshFailed");
@@ -452,8 +432,7 @@ export function createChatEngineConversationState({
         });
         return;
       }
-      if (applyRunStateEvent) {
-        applyRunStateEvent({
+      applyRunStateEvent?.({
           type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
           state,
           sessionId,
@@ -466,18 +445,7 @@ export function createChatEngineConversationState({
           updatedAtMs,
           createdAt,
           updatedAt,
-        });
-      } else {
-        // Compatibility fallback for callers that do not provide the run state machine bridge.
-        sending.value = true;
-        if (canStop) {
-          canStop.value = [
-            BackendChannelState.SENDING,
-            BackendChannelState.RECONNECTING,
-            BackendChannelState.INTERACTION_PENDING,
-          ].includes(state);
-        }
-      }
+      });
       if (
         state === BackendChannelState.SENDING &&
         String(statePayload?.sourceEvent || "").trim().toLowerCase() === "interaction_response" &&
@@ -549,8 +517,7 @@ export function createChatEngineConversationState({
     }
     if (!isTerminalConversationState(state)) return;
     clearRememberedStopRequests({ sessionId, dialogProcessId, turnScopeId });
-    if (applyRunStateEvent) {
-      applyRunStateEvent({
+    applyRunStateEvent?.({
         type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
         state,
         sessionId,
@@ -563,12 +530,7 @@ export function createChatEngineConversationState({
         updatedAtMs,
         createdAt,
         updatedAt,
-      });
-    } else {
-      // Compatibility fallback for callers that do not provide the run state machine bridge.
-      sending.value = false;
-      if (canStop) canStop.value = false;
-    }
+    });
     if (typeof clearPendingInteractionIfObsolete === "function") {
       clearPendingInteractionIfObsolete({ sessionId, dialogProcessId });
     }
