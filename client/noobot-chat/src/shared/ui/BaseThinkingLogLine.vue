@@ -98,7 +98,7 @@ function handleToggle() {
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
-  border-radius: 4px;
+  border-radius: var(--noobot-thinking-log-detail-radius);
   background: var(--noobot-thinking-detail-background, rgba(127, 127, 127, 0.08));
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
@@ -113,7 +113,7 @@ function handleToggle() {
 .base-thinking-log-line__event {
   flex: 0 0 auto;
   padding: 1px 5px;
-  border-radius: 3px;
+  border-radius: var(--noobot-thinking-log-event-radius);
   color: var(--noobot-thinking-muted);
   background: var(--noobot-thinking-detail-background, rgba(127, 127, 127, 0.08));
   font-weight: 600;

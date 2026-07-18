@@ -424,7 +424,7 @@ watch(
 .active-file {
   border: none;
   background: color-mix(in srgb, var(--noobot-panel-muted) 58%, transparent);
-  border-radius: 999px;
+  border-radius: var(--noobot-radius-pill);
 }
 
 .list-empty-tip {

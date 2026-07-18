@@ -26,7 +26,7 @@ const { translate } = useLocale();
       </div>
       <div class="base-message-meta">
         <span v-if="ts">{{ formatTime(ts) }}</span>
-        <span v-if="role === 'assistant' && modelLabel" class="base-message-model-label">
+        <span v-if="role === 'assistant' && modelLabel" class="base-message-model-label noobot-soft-badge">
           {{ modelLabel }}
         </span>
       </div>
@@ -110,11 +110,8 @@ const { translate } = useLocale();
   color: var(--noobot-msg-tag-text);
   background: var(--noobot-msg-tag-bg);
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 62%, transparent);
-  border-radius: var(--noobot-radius-pill);
   padding: 1px 7px;
   line-height: 1.4;
-  display: inline-flex;
-  align-items: center;
 }
 
 .base-message-content {

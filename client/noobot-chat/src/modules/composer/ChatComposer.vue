@@ -291,8 +291,8 @@ defineExpose({
       <!-- 连接器面板 -->
       <el-collapse-transition>
         <div v-show="effectiveMorePanelVisible" class="more-panel-overlay">
-          <div class="more-panel">
-            <div class="more-actions-row">
+          <div class="more-panel noobot-overlay-card">
+            <div class="more-actions-row noobot-overlay-card-header">
               <span class="more-panel-title">{{ translate("common.moreActions") }}</span>
               <el-button
                 class="more-collapse-btn"
@@ -457,13 +457,7 @@ defineExpose({
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  /* 更多操作面板需要实底，避免使用带 transparent 的 panel token 导致透出背景 */
-  background: var(--noobot-overlay-solid-bg);
-  border: 1px solid var(--noobot-overlay-border);
-  outline: 1px solid var(--noobot-overlay-outline);
-  border-radius: var(--noobot-radius-lg);
   overflow-x: hidden; overflow-y: auto; /* 确保内部元素不溢出圆角，同时允许垂直滚动 */
-  box-shadow: var(--noobot-shadow-overlay);
 }
 
 .more-actions-row {
@@ -474,16 +468,6 @@ defineExpose({
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background: var(--noobot-overlay-head-bg);
-  border-bottom: 1px solid var(--noobot-overlay-border);
-}
-
-:root[data-theme="light"] .more-panel {
-  background: color-mix(in srgb, var(--noobot-surface-sidebar, var(--noobot-base-white)) 94%, var(--noobot-base-blue-500, var(--noobot-base-blue-500)));
-}
-
-:root[data-theme="light"] .more-actions-row {
-  background: color-mix(in srgb, var(--noobot-surface-sidebar, var(--noobot-base-white)) 90%, var(--noobot-base-blue-500, var(--noobot-base-blue-500)));
 }
 
 .more-panel-title {

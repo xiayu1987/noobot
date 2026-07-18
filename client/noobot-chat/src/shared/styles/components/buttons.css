@@ -55,6 +55,21 @@
   box-shadow: var(--noobot-shadow-panel);
 }
 
+/* 具有独立层级的浮层面板：统一实底、描边与投影。 */
+.noobot-overlay-card {
+  box-sizing: border-box;
+  background: var(--noobot-overlay-solid-bg);
+  border: 1px solid var(--noobot-overlay-border);
+  outline: 1px solid var(--noobot-overlay-outline);
+  border-radius: var(--noobot-radius-lg);
+  box-shadow: var(--noobot-shadow-overlay);
+}
+
+.noobot-overlay-card-header {
+  background: var(--noobot-overlay-head-bg);
+  border-bottom: 1px solid var(--noobot-overlay-border);
+}
+
 .noobot-composer-surface {
   box-sizing: border-box;
   background: var(--noobot-surface-sidebar, var(--noobot-base-white));

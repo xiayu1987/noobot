@@ -181,7 +181,7 @@ function toggleConnectorPanelExpanded() {
 <style scoped>
 .connector-panel-shell {
   overflow: hidden;
-  transition: all 0.3s ease;
+  transition: border-color 0.3s ease, background-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .connector-panel-shell.is-expanded {
@@ -255,7 +255,7 @@ function toggleConnectorPanelExpanded() {
   flex-shrink: 0;
   padding: 4px 8px;
   border-radius: var(--noobot-radius-pill);
-  transition: all 0.2s;
+  transition: color 0.2s ease, background-color 0.2s ease;
   margin-left: auto;
 }
 

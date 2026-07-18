@@ -130,7 +130,7 @@
 .settings-tabs .el-tabs__active-bar,
 .thinking-details-tabs .el-tabs__active-bar {
   height: 2px;
-  border-radius: 999px;
+  border-radius: var(--noobot-radius-pill);
   background: var(--noobot-text-main);
 }
 
@@ -306,7 +306,7 @@
   background: color-mix(in srgb, var(--noobot-panel-bg) 52%, transparent);
   border: 1px solid transparent;
   box-shadow: none;
-  border-radius: 10px;
+  border-radius: var(--noobot-radius-sm);
   transition:
     background 0.16s ease,
     border-color 0.16s ease;
@@ -330,7 +330,7 @@
   overflow: hidden;
   background: color-mix(in srgb, var(--noobot-panel-bg) 64%, transparent);
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 72%, transparent);
-  border-radius: 16px;
+  border-radius: var(--noobot-radius-lg);
   box-shadow: none;
 }
 
@@ -366,7 +366,7 @@
   padding: 12px;
   background: color-mix(in srgb, var(--noobot-surface-sidebar) 54%, transparent);
   border: 1px solid color-mix(in srgb, var(--noobot-border-weak) 70%, transparent);
-  border-radius: 14px;
+  border-radius: var(--noobot-radius-md);
   box-shadow: none;
   transition:
     background 0.16s ease,
@@ -398,7 +398,7 @@
   border: none;
   border-color: var(--noobot-panel-border);
   box-shadow: none;
-  border-radius: 0 0 16px 16px;
+  border-radius: 0 0 var(--noobot-radius-lg) var(--noobot-radius-lg);
   padding: 16px;
   font-family:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",

@@ -1,4 +1,6 @@
 :root {
+  --noobot-thinking-log-detail-radius: 4px;
+  --noobot-thinking-log-event-radius: 3px;
   /* ========== Component Tokens · Thinking Panel ========== */
   --noobot-thinking-bg: color-mix(in srgb, var(--noobot-surface-sidebar) 88%, var(--noobot-base-black));
   --noobot-thinking-header: var(--noobot-text-secondary);
@@ -10,4 +12,5 @@
   --noobot-thinking-tab: var(--noobot-text-secondary);
   --noobot-thinking-tab-active: var(--noobot-text-main);
   --noobot-thinking-tab-bar: var(--noobot-border-primary);
+  --noobot-thinking-running-shadow: 0 4px 16px color-mix(in srgb, var(--el-color-primary) 16%, transparent);
 }
