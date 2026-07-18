@@ -16,10 +16,7 @@ import {
   buildToolCallSummary,
   buildToolResultSummary,
 } from "./toolLogFormatting";
-
-function logKey(item = {}) {
-  return `${item.sessionId || ""}|${item.turnScopeId || ""}|${item.toolCallId || ""}|${item.type || ""}|${item.event || ""}|${item.text || ""}|${item.ts || ""}`;
-}
+import { deduplicateToolLogs } from "./toolLogIdentity";
 
 function buildTurnScopeGroupKey(sessionId = "", turnScopeId = "") {
   const normalizedSessionId = String(sessionId || "").trim();
@@ -30,15 +27,7 @@ function buildTurnScopeGroupKey(sessionId = "", turnScopeId = "") {
 }
 
 function mergeUniqueLogs(existing = [], incoming = []) {
-  const out = [...(existing || [])];
-  const seen = new Set(out.map(logKey));
-  for (const item of incoming || []) {
-    const itemKey = logKey(item);
-    if (seen.has(itemKey)) continue;
-    seen.add(itemKey);
-    out.push(item);
-  }
-  return out;
+  return deduplicateToolLogs([...(existing || []), ...(incoming || [])]);
 }
 
 function pickRootSessionDocument(sessionDocuments = []) {
@@ -84,12 +73,8 @@ function buildSessionTreeOrder(sessionDocuments = []) {
     ]);
   }
 
-  function sortSessionIdsByCreatedAt(sessionIds = []) {
-    return [...(sessionIds || [])].sort((leftSessionId, rightSessionId) => {
-      const leftSessionDocument = sessionById.get(leftSessionId) || {};
-      const rightSessionDocument = sessionById.get(rightSessionId) || {};
-      return String(leftSessionId || "").localeCompare(String(rightSessionId || ""));
-    });
+  function preserveDocumentOrder(sessionIds = []) {
+    return [...(sessionIds || [])];
   }
 
   const rootSessionDocument = pickRootSessionDocument(sessionDocuments);
@@ -106,7 +91,7 @@ function buildSessionTreeOrder(sessionDocuments = []) {
   }
   const orderedRootSessionIds = [
     ...rootSessionIds,
-    ...sortSessionIdsByCreatedAt(additionalRootSessionIds),
+    ...preserveDocumentOrder(additionalRootSessionIds),
   ];
 
   const visitedSessionIds = new Set();
@@ -116,7 +101,7 @@ function buildSessionTreeOrder(sessionDocuments = []) {
     if (!normalizedSessionId || visitedSessionIds.has(normalizedSessionId)) return;
     visitedSessionIds.add(normalizedSessionId);
     orderedSessionIds.push(normalizedSessionId);
-    const childSessionIds = sortSessionIdsByCreatedAt(
+    const childSessionIds = preserveDocumentOrder(
       childSessionIdsByParentId.get(normalizedSessionId) || [],
     );
     for (const childSessionId of childSessionIds) {

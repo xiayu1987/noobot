@@ -56,7 +56,8 @@ export function useThinkingDetailsPanel({
   const thinkingDetailsVisible = ref(false);
   const thinkingDetailsMessageItem = ref(null);
   const thinkingDetailsAllMessages = ref([]);
-  const thinkingDetailsFetchDetail = ref(null);
+  let currentFetchDetail = null;
+  let detailRequestVersion = 0;
 
   function resolveFallbackThinkingDetailsPayload() {
     return resolveFallbackThinkingDetailsPayloadState(activeSession?.value);
@@ -64,7 +65,8 @@ export function useThinkingDetailsPanel({
 
   function closeThinkingDetailsPanel() {
     thinkingDetailsVisible.value = false;
-    thinkingDetailsFetchDetail.value = null;
+    currentFetchDetail = null;
+    detailRequestVersion += 1;
   }
 
   function getThinkingDetailsTitle(messageItem = {}) {
@@ -81,8 +83,8 @@ export function useThinkingDetailsPanel({
     if (!dialogProcessId && !turnScopeId) return null;
     const runFetchDetail = typeof fetchDetailOverride === "function"
       ? fetchDetailOverride
-      : typeof thinkingDetailsFetchDetail.value === "function"
-        ? thinkingDetailsFetchDetail.value
+      : typeof currentFetchDetail === "function"
+        ? currentFetchDetail
         : fetchThinkingDetail;
     if (typeof runFetchDetail !== "function") return null;
     return runFetchDetail(activeSessionId?.value, { dialogProcessId, turnScopeId });
@@ -108,7 +110,8 @@ export function useThinkingDetailsPanel({
     // Select the fetcher for this request before loading anything. Otherwise
     // a normal message opened after a workflow node can reuse the node fetcher
     // that is still stored from the previous drawer contents.
-    thinkingDetailsFetchDetail.value = requestFetchDetail;
+    currentFetchDetail = requestFetchDetail || fetchThinkingDetail;
+    const openRequestVersion = ++detailRequestVersion;
     const needsFullDetail =
       initialMessageItem &&
       payload?.skipFetch !== true &&
@@ -123,7 +126,9 @@ export function useThinkingDetailsPanel({
     if (needsFullDetail) {
       try {
         loadedThinkingDetail = await fetchThinkingDetailForMessage(initialMessageItem, requestFetchDetail);
+        if (openRequestVersion !== detailRequestVersion) return;
       } catch (error) {
+        if (openRequestVersion !== detailRequestVersion) return;
         notify?.({ type: "warning", message: error?.message || translate?.("chat.loadSessionDetailFailed") });
       }
     }
@@ -156,12 +161,14 @@ export function useThinkingDetailsPanel({
     () => {
       if (!thinkingDetailsVisible.value) return "";
       const dialogProcessId = normalizeDialogProcessId(thinkingDetailsMessageItem.value);
-      if (!dialogProcessId) return "";
+      const turnScopeId = String(thinkingDetailsMessageItem.value?.turnScopeId || thinkingDetailsMessageItem.value?.turn_scope_id || "").trim();
+      if (!dialogProcessId && !turnScopeId) return "";
       const sourceMessage = (activeSession?.value?.messages || [])
         .find((item = {}) => normalizeDialogProcessId(item) === dialogProcessId && getMessageRole(item) === "assistant") || {};
       return [
         activeSessionId?.value,
         dialogProcessId,
+        turnScopeId,
         sourceMessage?.pending === true ? "pending" : "done",
         Number(sourceMessage?.thinkingDetailCount || 0),
       ].join("::");
@@ -170,10 +177,15 @@ export function useThinkingDetailsPanel({
       if (!thinkingDetailsVisible.value) return;
       const currentMessage = thinkingDetailsMessageItem.value;
       const dialogProcessId = normalizeDialogProcessId(currentMessage);
-      if (!dialogProcessId) return;
+      const turnScopeId = String(currentMessage?.turnScopeId || currentMessage?.turn_scope_id || "").trim();
+      if (!dialogProcessId && !turnScopeId) return;
+      const requestVersion = ++detailRequestVersion;
       try {
         const detail = await fetchThinkingDetailForMessage(currentMessage);
-        if (!detail || normalizeDialogProcessId(thinkingDetailsMessageItem.value) !== dialogProcessId) return;
+        const latestMessage = thinkingDetailsMessageItem.value || {};
+        if (requestVersion !== detailRequestVersion || !detail ||
+            normalizeDialogProcessId(latestMessage) !== dialogProcessId ||
+            String(latestMessage?.turnScopeId || latestMessage?.turn_scope_id || "").trim() !== turnScopeId) return;
         thinkingDetailsMessageItem.value = detail.messageItem || currentMessage;
         const detailSessionDocs = getSessionDocsFromDetail(detail);
         thinkingDetailsAllMessages.value = mergeSessionMessagesForThinkingDetail(

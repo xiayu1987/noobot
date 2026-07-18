@@ -15,6 +15,7 @@ import {
   buildToolNameByCallId,
   stringifyToolValue,
 } from "./toolLogFormatting";
+import { deduplicateToolLogs } from "./toolLogIdentity";
 
 function eventName(item = {}) {
   return String(item?.event || item?.type || "").trim().toLowerCase();
@@ -141,56 +142,5 @@ export function normalizeThinkingToolLogs({
       return !projectedKeys.has(key) && eventName(item) !== "tool_call";
     }));
   }
-  const deduplicated = [];
-  const indexByEventAndCallId = new Map();
-  const resultIndexByContent = new Map();
-  for (const item of merged) {
-    const callId = String(item?.toolCallId || item?.tool_call_id || "").trim();
-    const event = eventName(item);
-    const resultContent = event === "tool_result" ? resultContentKey(item) : "";
-    const contentMatchIndex = resultContent
-      ? resultIndexByContent.get(resultContent)
-      : undefined;
-    if (!callId) {
-      // Compact results can omit callId while the full projection of the same
-      // persisted result contains it. Reconcile those two shapes by their raw
-      // result content instead of treating the id-less shape as a new event.
-      if (event === "tool_result" && contentMatchIndex !== undefined) {
-        const existing = deduplicated[contentMatchIndex];
-        if (!String(existing?.text || "").trim() && String(item?.text || "").trim()) {
-          deduplicated[contentMatchIndex] = item;
-        }
-        continue;
-      }
-      deduplicated.push(item);
-      if (resultContent) resultIndexByContent.set(resultContent, deduplicated.length - 1);
-      continue;
-    }
-    const key = `${event}:${callId}`;
-    const existingIndex = indexByEventAndCallId.get(key);
-    if (existingIndex === undefined) {
-      if (event === "tool_result" && contentMatchIndex !== undefined &&
-          !String(deduplicated[contentMatchIndex]?.toolCallId || deduplicated[contentMatchIndex]?.tool_call_id || "").trim()) {
-        const existing = deduplicated[contentMatchIndex];
-        deduplicated[contentMatchIndex] = String(item?.text || "").trim() || !String(existing?.text || "").trim()
-          ? item
-          : { ...item, text: existing.text };
-        indexByEventAndCallId.set(key, contentMatchIndex);
-      } else {
-        indexByEventAndCallId.set(key, deduplicated.length);
-        deduplicated.push(item);
-        if (resultContent) resultIndexByContent.set(resultContent, deduplicated.length - 1);
-      }
-      continue;
-    }
-    // The same persisted result may be present twice: the compact projection
-    // can have no text while the full projection has readable text. They are
-    // one event, not two display rows. Keep its original position and replace
-    // only when the duplicate carries the missing readable representation.
-    const existing = deduplicated[existingIndex];
-    const existingText = String(existing?.text || "").trim();
-    const incomingText = String(item?.text || "").trim();
-    if (!existingText && incomingText) deduplicated[existingIndex] = item;
-  }
-  return deduplicated;
+  return deduplicateToolLogs(merged);
 }
