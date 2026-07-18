@@ -8,46 +8,17 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const sourceRoots = [
-  "agent/src",
-  "agent-proxy/agent-proxy.js",
-  "agent-proxy/src",
-  "client/mac/src",
-  "client/noobot-chat/src",
-  "client/shared/electron",
-  "client/shared/path-resolver.js",
-  "client/startup/src",
-  "client/windows/src",
-  "i18n/src",
-  "model-proxy/src",
-  "plugin/noobot-plugin-harness/frontend",
-  "plugin/noobot-plugin-harness/src",
-  "plugin/noobot-plugin-workflow/frontend",
-  "plugin/noobot-plugin-workflow/src",
-  "runtime-events/src",
-  "sanitize/src",
-  "service/app.js",
-  "service/bootstrap",
-  "service/deps",
-  "service/routes",
-  "service/services",
-  "service/ws",
-  "shared",
-  "workflow/src",
-];
+const sourceRoots = ["."];
 const ignoredDirectories = new Set([
   ".git",
-  "__tests__",
   "assets",
   "build",
   "coverage",
   "dist",
-  "examples",
   "generated",
   "node_modules",
-  "scripts",
-  "test",
-  "tests",
+  "vendor",
+  "workspace",
 ]);
 const sourceExtension = /\.(?:[cm]?js|jsx|ts|tsx|vue)$/i;
 const requiredHeaderLines = [
@@ -55,14 +26,28 @@ const requiredHeaderLines = [
   "Contact: 126240622+xiayu1987@users.noreply.github.com",
   "SPDX-License-Identifier: MIT",
 ];
+const canonicalContact = "Contact: 126240622+xiayu1987@users.noreply.github.com";
+const maskedContactLine = /^([ \t]*(?:\*|\/\/)?[ \t]*)Contact:[^\r\n]*x{3,}[^\r\n]*$/gim;
 const violations = [];
 let inspectedFileCount = 0;
+let repairedFileCount = 0;
 
 function inspect(relativePath) {
   if (!sourceExtension.test(relativePath)) return;
   inspectedFileCount += 1;
-  const prefix = fs.readFileSync(path.join(root, relativePath), "utf8").slice(0, 1024);
-  const missingLines = requiredHeaderLines.filter((line) => !prefix.includes(line));
+  const absolutePath = path.join(root, relativePath);
+  let source = fs.readFileSync(absolutePath, "utf8");
+  const prefix = source.slice(0, 1024);
+  const repairedPrefix = prefix.replace(
+    maskedContactLine,
+    (_, linePrefix) => `${linePrefix}${canonicalContact}`,
+  );
+  if (repairedPrefix !== prefix) {
+    source = repairedPrefix + source.slice(1024);
+    fs.writeFileSync(absolutePath, source, "utf8");
+    repairedFileCount += 1;
+  }
+  const missingLines = requiredHeaderLines.filter((line) => !repairedPrefix.includes(line));
   if (missingLines.length) {
     violations.push(`${relativePath}: missing ${missingLines.join("; ")}`);
   }
@@ -91,4 +76,5 @@ if (violations.length) {
   process.exit(1);
 }
 
-console.log(`Source license header guard passed (${inspectedFileCount} source files).`);
+const repairSummary = repairedFileCount ? `; repaired ${repairedFileCount} masked contact header(s)` : "";
+console.log(`Source license header guard passed (${inspectedFileCount} source files${repairSummary}).`);

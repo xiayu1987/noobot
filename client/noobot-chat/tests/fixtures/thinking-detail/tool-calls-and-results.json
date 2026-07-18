@@ -1,0 +1,47 @@
+{
+  "messageItem": {
+    "role": "assistant",
+    "sessionId": "session-real-shape",
+    "dialogProcessId": "dialog-real-shape",
+    "turnScopeId": "client-turn:real-shape",
+    "completedToolLogs": [
+      { "event": "tool_call", "type": "tool_call", "text": "", "ts": "2026-07-18T01:00:00.000Z" },
+      { "event": "tool_result", "type": "tool_result", "text": "search ok=true", "detailText": "{\"toolName\":\"search\",\"ok\":true}", "toolCallId": "call-search", "ts": "2026-07-18T01:00:01.000Z" },
+      { "event": "tool_result", "type": "tool_result", "text": "read_file ok=true", "detailText": "{\"toolName\":\"read_file\",\"ok\":true}", "toolCallId": "call-read", "ts": "2026-07-18T01:00:03.000Z" }
+    ]
+  },
+  "allMessages": [
+    {
+      "role": "assistant",
+      "type": "tool_call",
+      "sessionId": "session-real-shape",
+      "dialogProcessId": "dialog-real-shape",
+      "turnScopeId": "client-turn:real-shape",
+      "ts": "2026-07-18T01:00:00.000Z",
+      "tool_calls": [
+        { "id": "call-search", "type": "function", "function": { "name": "search", "arguments": "{\"query\":\"completedToolLogs\"}" } }
+      ]
+    },
+    {
+      "role": "tool",
+      "type": "tool_result",
+      "sessionId": "session-real-shape",
+      "dialogProcessId": "dialog-real-shape",
+      "turnScopeId": "client-turn:real-shape",
+      "tool_call_id": "call-search",
+      "content": "{\"toolName\":\"search\",\"ok\":true}",
+      "ts": "2026-07-18T01:00:01.000Z"
+    },
+    {
+      "role": "assistant",
+      "type": "tool_call",
+      "sessionId": "session-real-shape",
+      "dialogProcessId": "dialog-real-shape",
+      "turnScopeId": "client-turn:real-shape",
+      "ts": "2026-07-18T01:00:02.000Z",
+      "tool_calls": [
+        { "id": "call-read", "type": "function", "function": { "name": "read_file", "arguments": "{\"filePath\":\"/project/example.js\"}" } }
+      ]
+    }
+  ]
+}

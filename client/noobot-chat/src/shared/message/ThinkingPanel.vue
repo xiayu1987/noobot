@@ -12,6 +12,7 @@ import ThinkingPanelDetails from "./ThinkingPanelDetails.vue";
 const props = defineProps({
   messageItem: { type: Object, default: () => ({}) },
   allMessages: { type: Array, default: () => [] },
+  sessionDocs: { type: Array, default: () => [] },
   turnTimingsByTurnScopeId: { type: Object, default: () => ({}) },
   turnStatuses: { type: Array, default: () => [] },
   variant: { type: String, default: "panel" },
