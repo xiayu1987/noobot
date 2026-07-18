@@ -86,6 +86,36 @@ function isValidIban(value) {
   }
   return remainder === 1;
 }
+function isPrivateOrLocalIpv4(value = '') {
+  if (isIP(value) !== 4) return false;
+  const [first, second] = value.split('.').map(Number);
+  return first === 10
+    || first === 127
+    || (first === 169 && second === 254)
+    || (first === 172 && second >= 16 && second <= 31)
+    || (first === 192 && second === 168);
+}
+function expandIpv6(value = '') {
+  if (isIP(value) !== 6) return [];
+  const halves = value.toLowerCase().split('::');
+  const head = halves[0] ? halves[0].split(':') : [];
+  const tail = halves[1] ? halves[1].split(':') : [];
+  const missing = 8 - head.length - tail.length;
+  const sections = halves.length === 1
+    ? head
+    : [...head, ...Array.from({ length: missing }, () => '0'), ...tail];
+  return sections.length === 8 ? sections.map((section) => Number.parseInt(section || '0', 16)) : [];
+}
+function isPrivateOrLocalIpv6(value = '') {
+  const sections = expandIpv6(value);
+  if (sections.length !== 8) return false;
+  const isLoopback = sections.slice(0, 7).every((section) => section === 0)
+    && sections[7] === 1;
+  const firstSection = sections[0];
+  const isUniqueLocal = (firstSection & 0xfe00) === 0xfc00;
+  const isLinkLocal = (firstSection & 0xffc0) === 0xfe80;
+  return isLoopback || isUniqueLocal || isLinkLocal;
+}
 function collectPiiRanges(text) {
   const ranges = [];
   const addMatches = (regex, validator = () => true) => {
@@ -102,10 +132,12 @@ function collectPiiRanges(text) {
   addMatches(/(?<![\d-])\d{3}-\d{2}-\d{4}(?![\d-])/g, isValidUsSsn);
   addMatches(/(?<!\d)(?:\d[ -]?){12,19}(?!\d)/g, isValidBankCard);
   addMatches(/(?<![A-Z0-9])[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]){11,30}(?![A-Z0-9])/gi, isValidIban);
-  addMatches(/(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])/g, (value) => isIP(value) === 4);
+  addMatches(/(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])/g,
+    (value) => isIP(value) === 4 && !isPrivateOrLocalIpv4(value));
   // Let node:net perform the strict validation; the candidate pattern also
   // admits compressed forms such as 2001:db8::1 and ::1.
-  addMatches(/(?<![\w:])(?=[A-F0-9:]*:)[A-F0-9:]{2,39}(?![\w:])/gi, (value) => isIP(value) === 6);
+  addMatches(/(?<![\w:])(?=[A-F0-9:]*:)[A-F0-9:]{2,39}(?![\w:])/gi,
+    (value) => isIP(value) === 6 && !isPrivateOrLocalIpv6(value));
   addMatches(/(?<![A-F0-9])(?:[A-F0-9]{2}[:-]){5}[A-F0-9]{2}(?![A-F0-9])/gi);
 
   // Passport numbers have no safe universal shape. Only mask them when a
