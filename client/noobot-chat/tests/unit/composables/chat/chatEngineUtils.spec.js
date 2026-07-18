@@ -122,7 +122,7 @@ describe("chatEngine utils", () => {
       expect.objectContaining({
         event: "tool_call",
         type: "tool_call",
-        text: "开始：执行命令：npm test",
+        text: "调用：npm test",
       }),
     );
   });
@@ -139,7 +139,7 @@ describe("chatEngine utils", () => {
 
     expect(sanitizeExecutionLogForDisplay(logItem)).toEqual(
       expect.objectContaining({
-        text: "开始：执行命令：read_file /project/client/noobot-chat/package.json",
+        text: "调用：read_file /project/client/noobot-chat/package.json",
       }),
     );
   });
@@ -155,7 +155,7 @@ describe("chatEngine utils", () => {
     });
 
     expect(sanitizeExecutionLogForDisplay(logItem)?.text).toBe(
-      '开始：执行命令：read_file {"filePath":"/project/client/noobot-chat/package.json"}',
+      '调用：read_file {"filePath":"/project/client/noobot-chat/package.json"}',
     );
   });
 
@@ -164,17 +164,17 @@ describe("chatEngine utils", () => {
       sanitizeExecutionLogForDisplay({
         event: "tool_call",
         type: "tool_call",
-        text: "开始：执行命令：开始：执行命令：npm test",
+        text: "调用：调用：npm test",
       })?.text,
-    ).toBe("开始：执行命令：npm test");
+    ).toBe("调用：npm test");
 
     expect(
       sanitizeExecutionLogForDisplay({
         event: "tool_result",
         type: "tool_result",
-        text: "完成：执行命令：完成：执行命令：npm test",
+        text: "返回：返回：npm test",
       })?.text,
-    ).toBe("完成：执行命令：npm test");
+    ).toBe("返回：npm test");
   });
 
   it("falls back to status text without blank or undefined when command fields are missing", () => {
@@ -184,7 +184,7 @@ describe("chatEngine utils", () => {
         type: "tool_call",
         text: "read_file started",
       })?.text,
-    ).toBe("开始：执行命令：read_file started");
+    ).toBe("调用：read_file started");
   });
 
   it("hides internal container events even when they include text", () => {

@@ -26,15 +26,26 @@ const eventLabel = computed(() => {
   if (eventName === "tool_result") return "返回";
   return "工具";
 });
-const resolvedTitle = computed(() => props.titleText || props.contentText || "");
+const contentWithoutEventPrefix = computed(() => {
+  const content = String(props.contentText || "");
+  if (!props.tool) return content;
+  const eventName = String(props.eventText || "").trim().toLowerCase();
+  const prefix = eventName === "tool_call"
+    ? /^(?:调用|call)\s*[:：]?\s*/i
+    : eventName === "tool_result"
+      ? /^(?:返回|return)\s*[:：]?\s*/i
+      : null;
+  return prefix ? content.replace(prefix, "") : content;
+});
+const resolvedTitle = computed(() => props.titleText || contentWithoutEventPrefix.value || "");
 const resolvedDetail = computed(() => {
   if (typeof props.detailText === "string") {
-    return props.detailText || props.contentText;
+    return props.detailText || contentWithoutEventPrefix.value;
   }
   try {
     return JSON.stringify(props.detailText, null, 2);
   } catch {
-    return String(props.detailText || props.contentText || "");
+    return String(props.detailText || contentWithoutEventPrefix.value || "");
   }
 });
 
@@ -58,7 +69,7 @@ function handleToggle() {
       :title="resolvedTitle"
       @click="handleToggle"
     >
-      {{ contentText }}
+      {{ contentWithoutEventPrefix }}
     </span>
     <pre
       v-if="expanded && resolvedDetail"

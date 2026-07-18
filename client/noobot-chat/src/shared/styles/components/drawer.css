@@ -10,8 +10,8 @@
  * the same header/body treatment. `workspace-drawer` is kept as a compatibility
  * alias for the built-in workspace drawer.
  */
-.noobot-side-drawer .el-drawer,
-.workspace-drawer .el-drawer {
+.noobot-side-drawer.el-drawer,
+.workspace-drawer.el-drawer {
   background: var(--noobot-panel-bg);
 }
 
@@ -55,9 +55,10 @@
     width: 100%;
   }
 
-  .noobot-side-drawer .el-drawer,
-  .workspace-drawer .el-drawer {
+  .noobot-side-drawer.el-drawer,
+  .workspace-drawer.el-drawer {
     height: 100svh;
+    width: 100%;
     display: flex;
     flex-direction: column;
   }
