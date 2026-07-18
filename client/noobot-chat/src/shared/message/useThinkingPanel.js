@@ -23,6 +23,7 @@ import {
 } from "../../composables/infra/timeFields";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { logReconnectTimingDebug } from "../../composables/chat/debug/reconnectTimingDebugLogger";
+import { normalizeThinkingToolLogs } from "../../composables/infra/thinkingDetailModel";
 
 export function useThinkingPanel(props, emit) {
   const injectedMessages = computed(() =>
@@ -96,21 +97,17 @@ export function useThinkingPanel(props, emit) {
   }
 
   function getAllCompletedLogs(messageItem = {}) {
-    if (isAssistantWithoutTurnScope(messageItem)) return [];
-    const completedToolLogs = Array.isArray(
-      messageItem?.processCompletedToolLogs,
-    )
-      ? messageItem.processCompletedToolLogs
-      : Array.isArray(messageItem?.completedToolLogs)
-        ? messageItem.completedToolLogs
-        : [];
-    const fallbackToolLogs = buildFallbackCompletedToolLogs(messageItem);
-    if (completedToolLogs.length <= 0) return fallbackToolLogs;
-    if (fallbackToolLogs.length <= 0) return completedToolLogs;
-    return mergeCompletedAndFallbackToolLogs(
-      completedToolLogs,
-      fallbackToolLogs,
-    );
+    if (
+      isAssistantWithoutTurnScope(messageItem) &&
+      String(props.variant || "panel") !== "details"
+    ) return [];
+    return normalizeThinkingToolLogs({
+      messageItem,
+      allMessages: props.allMessages,
+      sessionDocs: props.sessionDocs,
+      variant: props.variant,
+      toolResultFallback: translate("message.toolResultFallback"),
+    });
   }
 
   function normalizeLogString(value = "") {
@@ -280,6 +277,9 @@ export function useThinkingPanel(props, emit) {
     if (getRuntimeView(messageItem).running) return true;
     if (hasSummaryThinkingDetails(messageItem)) return true;
     if (getLatestPluginAnalysisLog(messageItem)) return true;
+    if (String(props.variant || "panel") === "details") {
+      return getCompletedToolLogsForMessage(messageItem).length > 0;
+    }
     const hasRealtimeLogs =
       Array.isArray(messageItem.processRealtimeLogs) ||
       Array.isArray(messageItem.realtimeLogs)
@@ -326,178 +326,25 @@ export function useThinkingPanel(props, emit) {
     });
   }
 
-  function getScopedMessagesForMessage(messageItem = {}) {
-    if (isFreshPendingAssistant(messageItem)) return [];
-    const dialogProcessId = getMessageDialogProcessId(messageItem);
-    const targetTurnScopeId = getMessageTurnScopeId(messageItem);
-    const candidateMessages = Array.isArray(props.allMessages)
-      ? props.allMessages
-      : [];
-    return candidateMessages.filter((item = {}) => {
-      if (targetTurnScopeId) return isSameFrontendTurnScope(messageItem, item);
-      if (
-        dialogProcessId &&
-        getMessageDialogProcessId(item) !== dialogProcessId
-      ) {
-        return false;
-      }
-      return true;
-    });
-  }
-
-  function isToolRelatedMessage(messageItem = {}) {
-    const role = getMessageRole(messageItem).toLowerCase();
-    const type = String(messageItem?.type || "")
-      .trim()
-      .toLowerCase();
-    const toolCalls = Array.isArray(messageItem?.tool_calls)
-      ? messageItem.tool_calls
-      : [];
-    if (toolCalls.length > 0) return true;
-    if (role === "tool") return true;
-    if (type === "tool_call" || type === "tool_result") return true;
-    return false;
-  }
-
-  function stringifyJson(value) {
-    if (value === undefined || value === null) return "";
-    if (typeof value === "string") return value;
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return String(value);
-    }
-  }
-
-  function buildToolCallText(toolCall = {}, fallbackIndex = 0) {
-    const toolName = String(
-      toolCall?.function?.name || toolCall?.name || `tool_${fallbackIndex + 1}`,
-    ).trim();
-    const argsText = stringifyJson(
-      toolCall?.function?.arguments ?? toolCall?.args ?? "",
-    );
-    const normalizedArgs = String(argsText || "").trim();
-    if (!normalizedArgs) return toolName;
-    const shortArgs =
-      normalizedArgs.length > 180
-        ? `${normalizedArgs.slice(0, 180)}...`
-        : normalizedArgs;
-    return `${toolName}(${shortArgs})`;
-  }
-
-  function buildToolResultText(messageItem = {}) {
-    const contentText = String(messageItem?.content || "").trim();
-    if (!contentText) return translate("message.toolResultFallback");
-    try {
-      const parsed = JSON.parse(contentText);
-      const toolName = String(parsed?.toolName || parsed?.name || "").trim();
-      const status = String(parsed?.status || "").trim();
-      const okText = typeof parsed?.ok === "boolean" ? `ok=${parsed.ok}` : "";
-      return [
-        toolName || translate("message.toolResultFallback"),
-        status,
-        okText,
-      ]
-        .filter(Boolean)
-        .join(" ");
-    } catch {
-      const shortText =
-        contentText.length > 180
-          ? `${contentText.slice(0, 180)}...`
-          : contentText;
-      return shortText;
-    }
-  }
-
-  function buildFallbackCompletedToolLogs(messageItem = {}) {
-    const scopedMessages = getScopedMessagesForMessage(messageItem);
-    const fallbackToolLogs = [];
-    for (const item of scopedMessages) {
-      if (!isToolRelatedMessage(item)) continue;
-      const sessionId = String(item?.sessionId || messageItem?.sessionId || "");
-      const dialogProcessId =
-        getMessageDialogProcessId(item) ||
-        getMessageDialogProcessId(messageItem);
-      const timestamp = item?.ts || messageItem?.ts || "";
-      const itemType = String(item?.type || "")
-        .trim()
-        .toLowerCase();
-      const itemRole = getMessageRole(item).toLowerCase();
-      const itemToolCalls = Array.isArray(item?.tool_calls)
-        ? item.tool_calls
-        : [];
-
-      if (itemToolCalls.length > 0 || itemType === "tool_call") {
-        const toolCalls = itemToolCalls.length > 0 ? itemToolCalls : [{}];
-        toolCalls.forEach((toolCall, toolCallIndex) => {
-          fallbackToolLogs.push({
-            sessionId,
-            depth: 1,
-            dialogProcessId,
-            type: "tool_call",
-            event: "tool_call",
-            id: toolCall?.id,
-            tool_call_id: toolCall?.id,
-            text: buildToolCallText(toolCall, toolCallIndex),
-            ts: timestamp,
-          });
-        });
-        continue;
-      }
-
-      if (itemRole === "tool" || itemType === "tool_result") {
-        fallbackToolLogs.push({
-          sessionId,
-          depth: 1,
-          dialogProcessId,
-          type: "tool_result",
-          event: "tool_result",
-          tool_call_id: item?.tool_call_id || item?.toolCallId,
-          text: buildToolResultText(item),
-          ts: timestamp,
-        });
-      }
-    }
-    return fallbackToolLogs;
-  }
-
-  function getToolLogIdentity(logItem = {}) {
-    const eventName = String(logItem?.event || logItem?.type || "")
-      .trim()
-      .toLowerCase();
-    const callId = String(
-      logItem?.tool_call_id ||
-        logItem?.toolCallId ||
-        logItem?.id ||
-        logItem?.callId ||
-        logItem?.data?.tool_call_id ||
-        logItem?.data?.toolCallId ||
-        "",
-    ).trim();
-    if (callId) return `${eventName}|id:${callId}`;
-    return `${eventName}|${String(logItem?.text || "").trim()}|${String(logItem?.ts || "").trim()}`;
-  }
-
-  function mergeCompletedAndFallbackToolLogs(
-    completedToolLogs = [],
-    fallbackToolLogs = [],
-  ) {
-    const mergedLogs = [];
-    const seenKeys = new Set();
-    const appendLog = (logItem = {}) => {
-      const key = getToolLogIdentity(logItem);
-      if (seenKeys.has(key)) return;
-      seenKeys.add(key);
-      mergedLogs.push(logItem);
-    };
-    fallbackToolLogs.forEach(appendLog);
-    completedToolLogs.forEach(appendLog);
-    return mergedLogs;
-  }
-
   function getCompletedToolLogsForMessage(messageItem = {}) {
+    const seen = new Set();
     return getAllCompletedLogs(messageItem)
       .filter((logItem) => !isPluginCapabilityResponseLog(logItem))
+      .filter((logItem) => {
+        // Session hydration can temporarily expose the same result both in
+        // the normalized log list and in the raw message projection. Keep the
+        // first event for a call id; otherwise the details drawer counts one
+        // tool execution twice.
+        const event = String(logItem?.event || logItem?.type || "").trim();
+        const callId = String(
+          logItem?.toolCallId || logItem?.tool_call_id || "",
+        ).trim();
+        if (!callId) return true;
+        const key = `${event}:${callId}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
       .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
       .filter(Boolean);
   }
@@ -543,33 +390,23 @@ export function useThinkingPanel(props, emit) {
   }
 
   function groupCompletedToolLogs(messageItem = {}) {
-    const toolLogs = getCompletedToolLogsForMessage(messageItem);
-    const groupedMap = new Map();
-    const groupedList = [];
-
-    for (const logItem of toolLogs) {
-      const sessionId = String(logItem?.sessionId || "");
-      const depth = Number(logItem?.depth || 0);
-      const turnScopeId = String(
-        logItem?.turnScopeId || logItem?.dialogProcessId || "",
-      );
-      const groupKey = `${sessionId}|${depth}|${turnScopeId}`;
-      let group = groupedMap.get(groupKey);
-      if (!group) {
-        group = {
-          key: groupKey,
-          sessionId,
-          depth,
-          label: formatSessionGroupLabel(sessionId, depth, turnScopeId),
-          items: [],
-        };
-        groupedMap.set(groupKey, group);
-        groupedList.push(group);
-      }
-      group.items.push(logItem);
-    }
-
-    return groupedList;
+    const toolLogs = getCompletedToolLogsForMessage(messageItem)
+      .map((logItem, sourceIndex) => ({ logItem, sourceIndex }))
+      .sort((left, right) => {
+        const leftTime = resolveTimeMs(left.logItem?.ts);
+        const rightTime = resolveTimeMs(right.logItem?.ts);
+        if (leftTime !== null && rightTime !== null && leftTime !== rightTime) {
+          return leftTime - rightTime;
+        }
+        return left.sourceIndex - right.sourceIndex;
+      })
+      .map(({ logItem }) => logItem);
+    if (toolLogs.length <= 0) return [];
+    return [{
+      key: "tool-timeline",
+      label: "",
+      items: toolLogs,
+    }];
   }
 
   function collapseThinkingPanel(messageItem = {}) {
@@ -580,6 +417,7 @@ export function useThinkingPanel(props, emit) {
     emit("open-thinking-details", {
       messageItem: props.messageItem,
       allMessages: props.allMessages,
+      sessionDocs: props.sessionDocs,
     });
   }
 

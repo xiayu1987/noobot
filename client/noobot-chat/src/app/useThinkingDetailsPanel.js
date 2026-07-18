@@ -16,6 +16,31 @@ import {
   isAssistantWithoutTurnScope,
 } from "../composables/infra/messageIdentity";
 
+function getSessionDocsFromDetail(detail = {}) {
+  if (Array.isArray(detail?.sessionDocs)) return detail.sessionDocs;
+  if (Array.isArray(detail?.sessions)) return detail.sessions;
+  return [];
+}
+
+function mergeSessionMessagesForThinkingDetail(messageItem = {}, allMessages = [], sessionDocs = []) {
+  const responseMessages = Array.isArray(allMessages) ? allMessages : [];
+  const turnScopeId = String(messageItem?.turnScopeId || messageItem?.turn_scope_id || "").trim();
+  const dialogProcessId = getMessageDialogProcessId(messageItem);
+  const hasScopedResponseMessages = responseMessages.some((item = {}) => {
+    const itemTurnScopeId = String(item?.turnScopeId || item?.turn_scope_id || "").trim();
+    if (turnScopeId && itemTurnScopeId === turnScopeId) return true;
+    return Boolean(dialogProcessId && (
+      getMessageDialogProcessId(item) === dialogProcessId ||
+      String(item?.parentDialogProcessId || item?.parent_dialog_process_id || "").trim() === dialogProcessId
+    ));
+  });
+  if (hasScopedResponseMessages) return responseMessages;
+  const sessionMessages = (Array.isArray(sessionDocs) ? sessionDocs : []).flatMap((doc = {}) =>
+    Array.isArray(doc.messages) ? doc.messages : (Array.isArray(doc.messageList) ? doc.messageList : []),
+  );
+  return sessionMessages.length > 0 ? [...responseMessages, ...sessionMessages] : responseMessages;
+}
+
 export function useThinkingDetailsPanel({
   activeSession,
   activeSessionId,
@@ -99,15 +124,24 @@ export function useThinkingDetailsPanel({
       }
     }
     const detailPayload = loadedThinkingDetail
-      ? { messageItem: loadedThinkingDetail.messageItem, allMessages: loadedThinkingDetail.allMessages }
+      ? {
+        messageItem: loadedThinkingDetail.messageItem,
+        allMessages: loadedThinkingDetail.allMessages,
+        sessionDocs: getSessionDocsFromDetail(loadedThinkingDetail),
+      }
       : payload;
     const { messageItem, allMessages } = resolveThinkingDetailsPanelPayload(detailPayload, fallbackPayload);
+    const sessionDocs = getSessionDocsFromDetail(detailPayload);
     if (!messageItem) return;
     closeAllDrawers?.();
     closeMobileSidebar?.();
     closeComposerMorePanel?.();
     thinkingDetailsMessageItem.value = messageItem;
-    thinkingDetailsAllMessages.value = allMessages;
+    thinkingDetailsAllMessages.value = mergeSessionMessagesForThinkingDetail(
+      messageItem,
+      allMessages,
+      sessionDocs,
+    );
     thinkingDetailsFetchDetail.value = requestFetchDetail;
     thinkingDetailsVisible.value = true;
     if (payload?.pushRoute !== false) {
@@ -138,7 +172,12 @@ export function useThinkingDetailsPanel({
         const detail = await fetchThinkingDetailForMessage(currentMessage);
         if (!detail || normalizeDialogProcessId(thinkingDetailsMessageItem.value) !== dialogProcessId) return;
         thinkingDetailsMessageItem.value = detail.messageItem || currentMessage;
-        thinkingDetailsAllMessages.value = Array.isArray(detail.allMessages) ? detail.allMessages : [];
+        const detailSessionDocs = getSessionDocsFromDetail(detail);
+        thinkingDetailsAllMessages.value = mergeSessionMessagesForThinkingDetail(
+          detail.messageItem || currentMessage,
+          detail.allMessages,
+          detailSessionDocs,
+        );
       } catch {
         // Keep the already opened panel stable; explicit open still reports load errors.
       }

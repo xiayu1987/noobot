@@ -65,5 +65,58 @@ describe("session tool logs", () => {
       "tool_call",
       "tool_result",
     ]);
+    expect(displayMessages[0].completedToolLogs[1].text).toBe("search");
+    expect(displayMessages[0].completedToolLogs[1].detailText).toBe("ok");
+  });
+
+  it("keeps plain-text tool results out of the summary", () => {
+    const displayMessages = [
+      {
+        role: "assistant",
+        type: "message",
+        sessionId: "session-1",
+        turnScopeId: "turn-1",
+        hasThinkingDetails: true,
+        thinkingDetailCount: 2,
+      },
+    ];
+    const sessionDocuments = [
+      {
+        sessionId: "session-1",
+        parentSessionId: "root-1",
+        caller: "bot",
+        depth: 1,
+        messages: [
+          {
+            role: "assistant",
+            type: "tool_call",
+            sessionId: "session-1",
+            turnScopeId: "turn-1",
+            tool_calls: [
+              {
+                id: "call-1",
+                type: "function",
+                function: { name: "read_file", arguments: "{}" },
+              },
+            ],
+          },
+          {
+            role: "tool",
+            type: "tool_result",
+            sessionId: "session-1",
+            turnScopeId: "turn-1",
+            tool_call_id: "call-1",
+            content: "the complete file content",
+          },
+        ],
+      },
+    ];
+
+    applyCompletedToolLogsToMessages(displayMessages, sessionDocuments);
+
+    expect(displayMessages[0].completedToolLogs[1].text).toBe("read_file");
+    expect(displayMessages[0].completedToolLogs[1].detailText).toBe(
+      "the complete file content",
+    );
   });
 });

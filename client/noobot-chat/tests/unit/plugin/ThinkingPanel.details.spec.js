@@ -272,7 +272,7 @@ describe("ThinkingPanel", () => {
 
   
 
-  it("renders persisted tool calls together with completed tool results in thinking details", () => {
+  it("renders session logs directly without mixing message-derived tool calls", () => {
     const wrapper = mountThinkingPanel(
       {
         role: "assistant",
@@ -319,9 +319,122 @@ describe("ThinkingPanel", () => {
       },
     );
 
-    expect(wrapper.text()).toContain('search({"q":"noobot"})');
     expect(wrapper.text()).toContain("search result ok");
-    expect(wrapper.findAll(".execution-log-line")).toHaveLength(2);
+    expect(wrapper.text()).not.toContain('search({"q":"noobot"})');
+    expect(wrapper.findAll(".execution-log-line")).toHaveLength(1);
+  });
+
+  it("uses only session logs when alternate message representations exist", () => {
+    const wrapper = mountThinkingPanel(
+      {
+        role: "assistant",
+        pending: false,
+        sessionId: "session-1",
+        dialogProcessId: "dialog-1",
+        turnScopeId: "client-turn:duplicate-result",
+        processCompletedToolLogs: [
+          {
+            event: "tool_result",
+            type: "tool_result",
+            text: "read_file ok=true",
+            detailText: "full file content",
+            toolCallId: "call-duplicate",
+            ts: "2026-01-01T00:00:03.000Z",
+          },
+          {
+            event: "tool_result",
+            type: "tool_result",
+            text: "a differently formatted result",
+            tool_call_id: "call-duplicate",
+            ts: "2026-01-01T00:00:04.000Z",
+          },
+        ],
+      },
+      {
+        variant: "details",
+        allMessages: [
+          {
+            role: "assistant",
+            sessionId: "session-1",
+            dialogProcessId: "dialog-1",
+            turnScopeId: "client-turn:duplicate-result",
+            tool_calls: [
+              {
+                id: "call-duplicate",
+                function: { name: "read_file", arguments: "{}" },
+              },
+            ],
+          },
+          {
+            role: "tool",
+            sessionId: "session-1",
+            dialogProcessId: "dialog-1",
+            turnScopeId: "client-turn:duplicate-result",
+            tool_call_id: "call-duplicate",
+            content: "full file content",
+            ts: "2026-01-01T00:00:05.000Z",
+          },
+        ],
+      },
+    );
+
+    const lines = wrapper.findAll(".execution-log-line");
+    expect(lines).toHaveLength(1);
+    expect(lines.map((line) => line.text()).join("\n")).toContain("read_file");
+    expect(lines.map((line) => line.text()).join("\n")).not.toContain(
+      "differently formatted result",
+    );
+  });
+
+  it("renders tool calls and full tool results in actual timestamp order", async () => {
+    const wrapper = mountThinkingPanel(
+      {
+        role: "assistant",
+        pending: false,
+        sessionId: "session-1",
+        dialogProcessId: "dialog-1",
+        turnScopeId: "client-turn:ordered-tools",
+        completedToolLogs: [
+          { event: "tool_result", type: "tool_result", text: "second result", detailText: "full second result", ts: "2026-01-01T00:00:04.000Z", tool_call_id: "call-2" },
+          { event: "tool_call", type: "tool_call", text: "first call", ts: "2026-01-01T00:00:01.000Z", tool_call_id: "call-1" },
+          { event: "tool_result", type: "tool_result", text: "first result", detailText: "full first result", ts: "2026-01-01T00:00:02.000Z", tool_call_id: "call-1" },
+          { event: "tool_call", type: "tool_call", text: "second call", ts: "2026-01-01T00:00:03.000Z", tool_call_id: "call-2" },
+        ],
+      },
+      { variant: "details" },
+    );
+
+    const lines = wrapper.findAll(".execution-log-line");
+    expect(lines.map((line) => line.text())).toEqual([
+      "开始：执行命令：first call",
+      "完成：执行命令：first result",
+      "开始：执行命令：second call",
+      "完成：执行命令：second result",
+    ]);
+  });
+
+  it("excludes unrelated turn scopes while retaining child-process logs", () => {
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: false,
+      dialogProcessId: "main-dialog",
+      turnScopeId: "client-turn:timeline",
+      completedToolLogs: [
+        { event: "tool_result", text: "child result", ts: "2026-01-01T00:00:04.000Z", sessionId: "child", depth: 2, turnScopeId: "child-turn", parentDialogProcessId: "main-dialog" },
+        { event: "tool_call", text: "main call", ts: "2026-01-01T00:00:01.000Z", sessionId: "main", depth: 1, turnScopeId: "client-turn:timeline", dialogProcessId: "main-dialog" },
+        { event: "tool_call", text: "child call", ts: "2026-01-01T00:00:03.000Z", sessionId: "child", depth: 2, turnScopeId: "child-turn", parentDialogProcessId: "main-dialog" },
+        { event: "tool_result", text: "other turn result", ts: "2026-01-01T00:00:02.500Z", sessionId: "main", depth: 1, turnScopeId: "other-turn", dialogProcessId: "other-dialog" },
+        { event: "tool_result", text: "main result", ts: "2026-01-01T00:00:02.000Z", sessionId: "main", depth: 1, turnScopeId: "client-turn:timeline", dialogProcessId: "main-dialog" },
+      ],
+    }, { variant: "details" });
+
+    expect(wrapper.findAll(".thinking-group")).toHaveLength(1);
+    expect(wrapper.findAll(".execution-log-line").map((line) => line.text())).toEqual([
+      "开始：执行命令：main call",
+      "完成：执行命令：main result",
+      "开始：执行命令：child call",
+      "完成：执行命令：child result",
+    ]);
   });
 
   

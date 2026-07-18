@@ -56,6 +56,9 @@ export const QUANTITY_THRESHOLDS = deepFreeze({
   },
 
   toolIO: {
+    // Maximum characters used in compact tool log summaries.
+    logSummaryLimit: 180,
+
     // Default line window for workspace file reads.
     readMaxLines: 1000,
 

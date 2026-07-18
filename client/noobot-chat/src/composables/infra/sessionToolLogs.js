@@ -12,6 +12,10 @@ import {
   getMessageTurnScopeId,
 } from "./messageIdentity";
 import { getMessageTimestamp, nowIso, parseTimeMs } from "./timeFields";
+import {
+  buildToolCallSummary,
+  buildToolResultSummary,
+} from "./toolLogFormatting";
 
 function logKey(item = {}) {
   return `${item.sessionId || ""}|${item.turnScopeId || ""}|${item.toolCallId || ""}|${item.type || ""}|${item.event || ""}|${item.text || ""}|${item.ts || ""}`;
@@ -240,7 +244,11 @@ function buildToolLogsFromSessions(sessionDocuments = []) {
           collectedLogs.push({
             event: "tool_call",
             type: "tool_call",
-            text: `${toolName} ${typeof toolArguments === "string" ? toolArguments : JSON.stringify(toolArguments)}`.trim(),
+            text: buildToolCallSummary(toolCall, toolName),
+            detailText:
+              typeof toolArguments === "string"
+                ? toolArguments
+                : JSON.stringify(toolArguments, null, 2),
             ts: messageTime,
             sessionId,
             depth: sessionDepth,
@@ -258,7 +266,8 @@ function buildToolLogsFromSessions(sessionDocuments = []) {
         collectedLogs.push({
           event: "tool_result",
           type: "tool_result",
-          text: `${toolName} ${String(messageItem?.content || "")}`.trim(),
+          text: buildToolResultSummary(messageItem?.content, toolName),
+          detailText: String(messageItem?.content || ""),
           ts: messageTime,
           sessionId,
           depth: sessionDepth,
@@ -366,11 +375,22 @@ function applyCompletedToolLogsToMessages(messages = [], sessionDocuments = []) 
     const sessionId = rootSessionId || String(messageItem?.sessionId || messageItem?.session_id || "").trim();
     const turnScopeId = getMessageTurnScopeId(messageItem);
     const turnScopeKey = buildTurnScopeGroupKey(sessionId, turnScopeId);
-    const matchedToolLogs = (groupedLogs.get(turnScopeKey) || []).filter(
-      (toolLogItem) => {
-        return buildTurnScopeGroupKey(toolLogItem?.sessionId, toolLogItem?.turnScopeId) === turnScopeKey;
-      },
-    );
+    // The view message can carry the root session id while the persisted
+    // assistant/tool messages are stored in a descendant session.  Matching
+    // by the composite key in that case silently drops the assistant
+    // tool_call rows and leaves only a partial projection (usually results).
+    // Session detail is the source of truth; use the turn scope to locate the
+    // complete session timeline when the exact session key is unavailable.
+    let matchedToolLogs = groupedLogs.get(turnScopeKey) || [];
+    if (!matchedToolLogs.length && turnScopeId) {
+      const suffix = `::${turnScopeId}`;
+      matchedToolLogs = [...groupedLogs.entries()]
+        .filter(([key]) => key.endsWith(suffix))
+        .flatMap(([, logs]) => logs);
+    }
+    matchedToolLogs = matchedToolLogs.filter((toolLogItem) => {
+      return getMessageTurnScopeId(toolLogItem) === turnScopeId;
+    });
     const mergedToolLogs = mergeUniqueLogs([], matchedToolLogs);
     messageItem.completedToolLogs = formatToolLogsTree(mergedToolLogs);
   }

@@ -95,6 +95,46 @@ function createModelState(llm, defaultModelSpec = null) {
   };
 }
 
+test("completed tool loop keeps matching tool_call and tool_result in turnMessages", async () => {
+  const tool = {
+    name: "execute_script",
+    async invoke() {
+      return "{\"ok\":true}";
+    },
+  };
+  const { llm } = createToolCallingLlm([
+    {
+      content: "",
+      tool_calls: [{ id: "call_pair_1", name: "execute_script", args: { command: "true" } }],
+      additional_kwargs: {},
+      response_metadata: {},
+    },
+    {
+      content: "完成",
+      tool_calls: [],
+      additional_kwargs: {},
+      response_metadata: {},
+    },
+  ]);
+
+  const result = await runFunctionCallLoop({
+    modelState: createModelState(llm),
+    loopState: createLoopState({ maxTurns: 3, tool }),
+    turn: 1,
+  });
+
+  const callMessage = result.turnMessages.find(
+    (item = {}) => item?.role === "assistant" && item?.type === "tool_call",
+  );
+  const resultMessage = result.turnMessages.find(
+    (item = {}) => item?.role === "tool" && item?.type === "tool_result",
+  );
+  assert.ok(callMessage, "assistant tool_call must survive into the final turnMessages");
+  assert.ok(resultMessage, "tool_result must survive into the final turnMessages");
+  assert.equal(callMessage.tool_calls?.[0]?.id, "call_pair_1");
+  assert.equal(resultMessage.tool_call_id, "call_pair_1");
+});
+
 test("loop over max turns: inject finalize prompt, allow 5-turn buffer, then no-tools finalize if still asks tools", async () => {
   let toolInvokeCount = 0;
   const tool = {

@@ -38,7 +38,11 @@ const props = defineProps({
               :key="`tool-group-${gi}`"
               class="thinking-group"
             >
-              <BaseMetaLabel class="thinking-group-title" :text="group.label" />
+              <BaseMetaLabel
+                v-if="group.label"
+                class="thinking-group-title"
+                :text="group.label"
+              />
               <div
                 v-for="(item, ii) in group.items"
                 :key="`tool-log-${gi}-${ii}`"
@@ -46,8 +50,9 @@ const props = defineProps({
                 <BaseThinkingLogLine
                   :indent="Number(item.indent || 0)"
                   :prefix-text="getTreePrefix(item)"
-                  :event-text="item.type || item.event"
+                  :event-text="item.event || item.type"
                   :content-text="item.text"
+                  :detail-text="item.detailText || item.detail || item.result || item.data?.result || ''"
                   :tool="true"
                   :expandable="true"
                   :expanded="

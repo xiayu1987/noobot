@@ -8,16 +8,17 @@ import { describe, expect, it } from "vitest";
 import BaseThinkingLogLine from "../../../src/shared/ui/BaseThinkingLogLine.vue";
 
 describe("BaseThinkingLogLine", () => {
-  it("does not render bracketed event text when readable content exists", () => {
+  it("renders a readable call label for tool calls", () => {
     const wrapper = mount(BaseThinkingLogLine, {
       props: {
         eventText: "tool_call",
         contentText: "执行命令：npm test",
+        tool: true,
       },
     });
 
     expect(wrapper.text()).toContain("执行命令：npm test");
-    expect(wrapper.text()).not.toContain("[tool_call]");
+    expect(wrapper.find(".base-thinking-log-line__event").text()).toBe("调用");
   });
 
   it("does not render internal event names without readable content", () => {
@@ -29,5 +30,41 @@ describe("BaseThinkingLogLine", () => {
     });
 
     expect(wrapper.text()).not.toContain("[session_turn_full]");
+  });
+
+  it("renders the full tool result detail when expanded", () => {
+    const wrapper = mount(BaseThinkingLogLine, {
+      props: {
+        eventText: "tool_result",
+        contentText: "read_file ok=true",
+        detailText: '{"toolName":"read_file","ok":true,"content":"full result"}',
+        expandable: true,
+        expanded: true,
+        tool: true,
+      },
+    });
+
+    expect(wrapper.find(".base-thinking-log-line__detail").text()).toContain(
+      '"content":"full result"',
+    );
+    expect(wrapper.find(".base-thinking-log-line__event").text()).toBe("返回");
+  });
+
+  it("uses the same detail block when an expanded item has no separate detail", () => {
+    const wrapper = mount(BaseThinkingLogLine, {
+      props: {
+        eventText: "tool_call",
+        contentText: "执行命令：npm test",
+        expandable: true,
+        expanded: true,
+      },
+    });
+
+    expect(wrapper.find(".base-thinking-log-line__detail").text()).toBe(
+      "执行命令：npm test",
+    );
+    expect(wrapper.find(".base-thinking-log-line__text").classes()).not.toContain(
+      "is-expanded",
+    );
   });
 });
