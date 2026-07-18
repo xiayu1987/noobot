@@ -68,7 +68,7 @@ watch(
             class="chat-message-navigator__item"
             :class="`is-${String(item.role || 'session').trim().toLowerCase() || 'session'}`"
           >
-            <span class="chat-message-navigator__role">{{ item.roleLabel || item.role }}</span>
+            <span class="chat-message-navigator__role noobot-soft-badge">{{ item.roleLabel || item.role }}</span>
             <span v-if="item.preview" class="chat-message-navigator__content">{{ item.preview }}</span>
           </span>
         </template>
@@ -152,16 +152,13 @@ watch(
   flex: 0 0 auto;
   min-width: 28px;
   padding: 2px 7px;
-  border-radius: var(--noobot-radius-pill);
   font-size: var(--noobot-font-size-2xs);
   line-height: 1.25;
   font-weight: 800;
   letter-spacing: 0.035em;
   text-align: center;
-  color: var(--noobot-text-strong, var(--el-text-color-primary));
   background: color-mix(in srgb, var(--noobot-fill-soft, var(--el-fill-color-lighter)) 70%, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 70%, transparent);
-  box-shadow: none;
 }
 
 .chat-message-navigator__content {

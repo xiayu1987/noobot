@@ -315,7 +315,7 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: color 0.2s ease, background-color 0.2s ease;
   color: var(--noobot-text-main);
 }
 

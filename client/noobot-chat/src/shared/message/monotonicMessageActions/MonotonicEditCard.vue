@@ -286,7 +286,7 @@ defineExpose({ focusTextarea });
   box-shadow: inset 0 0 0 1px transparent;
   font-size: var(--noobot-font-size-base);
   line-height: 1.6;
-  transition: all 0.2s ease;
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
 }
 
 .monotonic-edit-textarea :deep(.el-textarea__inner:hover) {
@@ -348,7 +348,7 @@ defineExpose({ focusTextarea });
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  transition: all 0.2s ease;
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
   position: relative;
 }
 
@@ -433,7 +433,7 @@ defineExpose({ focusTextarea });
   cursor: pointer;
   opacity: 0;
   transform: scale(0.9);
-  transition: all 0.2s ease;
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
 }
 
 .monotonic-attachment-item:hover .monotonic-attachment-remove {
@@ -464,7 +464,7 @@ defineExpose({ focusTextarea });
   font-size: var(--noobot-font-size-md);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
 }
 
 .monotonic-add-attachment-btn:hover:not(:disabled) {

@@ -106,7 +106,7 @@ const emit = defineEmits(["open-thinking-details", "collapse"]);
 .thinking-realtime-shell.is-running {
   border: 1px solid color-mix(in srgb, var(--el-color-primary) 55%, var(--noobot-panel-border));
   background: color-mix(in srgb, var(--el-color-primary) 10%, var(--noobot-thinking-bg));
-  box-shadow: 0 4px 16px color-mix(in srgb, var(--el-color-primary) 16%, transparent);
+  box-shadow: var(--noobot-thinking-running-shadow);
   animation: thinking-running-card-glow 2.4s ease-in-out infinite;
 }
 

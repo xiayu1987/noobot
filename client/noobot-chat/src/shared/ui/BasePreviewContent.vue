@@ -121,7 +121,7 @@ watch(
   overflow-y: auto;
   overflow-x: hidden;
   padding: 16px 24px;
-  transition: all 0.3s ease;
+  transition: padding 0.3s ease, max-height 0.3s ease;
 }
 
 .preview-body::-webkit-scrollbar {

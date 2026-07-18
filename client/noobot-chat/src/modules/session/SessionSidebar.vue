@@ -249,7 +249,7 @@ const { translate } = useLocale();
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .collapse-btn :deep(.el-icon) {
@@ -276,7 +276,7 @@ const { translate } = useLocale();
   border-radius: var(--noobot-radius-xs);
   background-color: transparent;
   box-shadow: var(--noobot-input-ring);
-  transition: all 0.2s ease;
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   padding: 0 12px;
 }
 
@@ -330,7 +330,7 @@ const { translate } = useLocale();
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 22%, transparent);
   box-shadow: none;
   color: var(--noobot-base-white);
-  transition: all 0.2s ease;
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .new-chat-btn:not(:disabled):hover {
@@ -360,7 +360,7 @@ const { translate } = useLocale();
   justify-content: center;
   font-size: var(--noobot-font-size-xl);
   margin-left: 0;
-  transition: all 0.2s ease;
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .tail-btn :deep(.el-icon) {
