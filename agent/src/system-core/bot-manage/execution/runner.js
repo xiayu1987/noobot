@@ -31,7 +31,6 @@ import {
   getAgentContextCompatFieldHitStats,
   resetAgentContextCompatFieldHitStats,
 } from "../../context/compatibility-deprecation.js";
-import { PLUGIN_SLOT_KEY } from "../../plugin/plugin-constants.js";
 import { applyRuntimeUserMessageAttachments } from "../../attach/index.js";
 import {
   bindLifecycleToRuntime,
@@ -41,31 +40,8 @@ import {
 } from "../../agent/core/lifecycle/state-machine.js";
 import { saveStoppedModelMessageSnapshotCandidate } from "../../agent/core/resume/model-message-snapshot-store.js";
 import { createTurnCommand, resolveRunTurnScopeId, toCommitTurnPayload } from "./turn-command.js";
-
-function summarizeDebugAttachments(attachments) {
-  if (!Array.isArray(attachments)) {
-    return { kind: attachments === undefined ? "undefined" : "non-array", count: 0, items: [] };
-  }
-  return {
-    kind: "array",
-    count: attachments.length,
-    items: attachments.slice(0, 8).map((attachment = {}) => ({
-      id: String(attachment.id || attachment.fileId || attachment.attachmentId || ""),
-      name: String(attachment.name || attachment.fileName || attachment.filename || ""),
-      type: String(attachment.type || attachment.mimeType || attachment.mime || ""),
-      size: Number.isFinite(Number(attachment.size)) ? Number(attachment.size) : undefined,
-      url: attachment.url ? "present" : "",
-    })),
-  };
-}
-
-function readSelectedModelValue(modelConfig = "") {
-  if (typeof modelConfig === "string") return modelConfig.trim();
-  if (!modelConfig || typeof modelConfig !== "object" || Array.isArray(modelConfig)) return "";
-  return String(
-    modelConfig?.value || modelConfig?.alias || modelConfig?.key || modelConfig?.model || "",
-  ).trim();
-}
+import { summarizeDebugAttachments, readSelectedModelValue } from "./runner/debug-utils.js";
+import { buildSessionRuntimePluginResolvedEvent } from "./runner/plugin-runtime.js";
 
 /**
  * Main execution runner (pipeline orchestration).
@@ -689,62 +665,4 @@ export class SessionExecutionRunner {
       throw error;
     }
   }
-}
-
-function buildSessionRuntimePluginResolvedEvent(runConfig = {}) {
-  const agentPluginOptions = resolveRuntimePluginOptions({
-    runConfig,
-    managerKey: "hookManager",
-    hooksKey: "hooks",
-    runtimeKeys: [PLUGIN_SLOT_KEY.AGENT],
-    pluginKeys: [PLUGIN_SLOT_KEY.AGENT],
-  });
-  const botPluginOptions = resolveRuntimePluginOptions({
-    runConfig,
-    managerKey: "botHookManager",
-    hooksKey: "botHooks",
-    runtimeKeys: [PLUGIN_SLOT_KEY.BOT],
-    pluginKeys: [PLUGIN_SLOT_KEY.BOT],
-  });
-  return {
-    selectedPlugins: Array.isArray(runConfig?.selectedPlugins)
-      ? runConfig.selectedPlugins
-      : [],
-    agentPlugin: buildRuntimePluginState(agentPluginOptions),
-    botPlugin: buildRuntimePluginState(botPluginOptions),
-  };
-}
-
-function resolveRuntimePluginOptions({
-  runConfig = {},
-  managerKey = "",
-  hooksKey = "",
-  runtimeKeys = [],
-  pluginKeys = [],
-} = {}) {
-  const managers = [runConfig?.[managerKey], runConfig?.[hooksKey]].filter(
-    (item) => item && typeof item === "object",
-  );
-  for (const manager of managers) {
-    const runtime = manager?.runtime && typeof manager.runtime === "object" ? manager.runtime : {};
-    for (const runtimeKey of runtimeKeys) {
-      const options = runtime?.[runtimeKey];
-      if (options && typeof options === "object") return options;
-    }
-  }
-  const plugins = runConfig?.plugins && typeof runConfig.plugins === "object"
-    ? runConfig.plugins
-    : {};
-  for (const pluginKey of pluginKeys) {
-    const options = plugins?.[pluginKey];
-    if (options && typeof options === "object") return options;
-  }
-  return {};
-}
-
-function buildRuntimePluginState(options = {}) {
-  return {
-    enabled: options?.enabled === true,
-    mode: String(options?.mode || "").trim().toLowerCase(),
-  };
 }
