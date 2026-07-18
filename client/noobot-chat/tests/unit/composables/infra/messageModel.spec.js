@@ -35,6 +35,24 @@ const envelope = {
 };
 
 describe("messageModel semantic transfer", () => {
+  it("expands current pending assistant thinking while keeping history collapsed", () => {
+    expect(
+      buildViewMessage({ role: "assistant", pending: true }).thinkingOpenNames,
+    ).toEqual([
+      "thinking-panel",
+    ]);
+    expect(buildViewMessage({ role: "assistant" }).thinkingOpenNames).toEqual([]);
+    expect(
+      buildViewMessage({
+        role: "assistant",
+        pending: true,
+        thinkingOpenNames: [],
+      })
+        .thinkingOpenNames,
+    ).toEqual([]);
+    expect(buildViewMessage({ role: "user" }).thinkingOpenNames).toEqual([]);
+  });
+
   it("finds the last user-visible message and skips harness injected relay messages", () => {
     const userMessage = { role: "user", content: "real request" };
     const assistantMessage = { role: "assistant", content: "real answer" };

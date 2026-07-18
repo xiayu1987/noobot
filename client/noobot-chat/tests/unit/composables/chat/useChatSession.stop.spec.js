@@ -116,7 +116,7 @@ describe("useChatSession reconnect replay", () => {
       userStopped: false,
       canStop: false,
     });
-    expect(store.turnRuntimeRegistry.turns["turn-stop"]).toMatchObject({
+    expect(store.turnRuntimeRegistry.sessions["s-stop-request"].turns["turn-stop"]).toMatchObject({
       terminal: null,
       canStop: false,
     });

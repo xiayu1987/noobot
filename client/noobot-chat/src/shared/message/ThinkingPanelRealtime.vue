@@ -113,9 +113,11 @@ const emit = defineEmits(["open-thinking-details", "collapse"]);
 @keyframes thinking-running-card-glow {
   0%, 100% {
     border-color: color-mix(in srgb, var(--el-color-primary) 48%, var(--noobot-panel-border));
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--el-color-primary) 24%, transparent), 0 0 8px color-mix(in srgb, var(--el-color-primary) 18%, transparent);
   }
   50% {
     border-color: color-mix(in srgb, var(--el-color-primary) 72%, var(--noobot-panel-border));
+    box-shadow: 0 6px 24px color-mix(in srgb, var(--el-color-primary) 38%, transparent), 0 0 20px color-mix(in srgb, var(--el-color-primary) 32%, transparent);
   }
 }
 

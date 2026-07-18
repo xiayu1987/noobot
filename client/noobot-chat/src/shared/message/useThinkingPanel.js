@@ -547,9 +547,19 @@ export function useThinkingPanel(props, emit) {
 
   watch(
     () => isThinkingRuntimeRunning(props.messageItem),
-    (running) => {
-      if (running) startTimer();
-      else stopTimer();
+    (running, wasRunning) => {
+      if (running) {
+        startTimer();
+        // Runtime state is the source of truth for the current response. The
+        // message is often created before `pending` is projected, so relying on
+        // the creation-time default leaves the live panel collapsed.
+        props.messageItem.thinkingOpenNames = ["thinking-panel"];
+      } else {
+        stopTimer();
+        // Fold only when the live response actually becomes history. Do not
+        // overwrite a historical panel that the user opened manually.
+        if (wasRunning === true) props.messageItem.thinkingOpenNames = [];
+      }
     },
     { immediate: true },
   );

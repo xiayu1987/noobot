@@ -7,6 +7,9 @@ import { BackendChannelState, FrontendRunState, SESSION_RUN_EVENT } from "./cons
 import { normalizeSessionRunEvent } from "./eventNormalization";
 import { deriveTurnCapabilities, isFinalTurnState, reduceTurnRuntimeEvent } from "./turnReducer";
 
+export const DEFAULT_TERMINAL_RETAIN_PER_SESSION = 10;
+export const DEFAULT_TERMINAL_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
 function text(value) {
   return String(value || "").trim();
 }
@@ -16,7 +19,30 @@ export function sessionRuntimeId(value = {}) {
 }
 
 export function createTurnRuntimeRegistryState() {
-  return { turns: {}, activeTurnBySession: {}, turnByDialogProcess: {} };
+  return { sessions: {}, routeIndex: {} };
+}
+
+function ensureSessionBucket(registry, sessionId) {
+  const id = text(sessionId);
+  if (!registry.sessions) registry.sessions = {};
+  if (!registry.routeIndex) registry.routeIndex = {};
+  if (!registry.sessions[id]) registry.sessions[id] = { activeTurnScopeId: "", turns: {} };
+  return registry.sessions[id];
+}
+
+function findTurnByScope(registry, turnScopeId) {
+  const scope = text(turnScopeId);
+  if (!scope) return null;
+  for (const bucket of Object.values(registry?.sessions || {})) {
+    const turn = bucket?.turns?.[scope];
+    if (turn) return turn;
+  }
+  return null;
+}
+
+function resolveRoute(registry, dialogProcessId) {
+  const id = text(dialogProcessId);
+  return id ? registry?.routeIndex?.[id] || null : null;
 }
 
 export function turnRuntimeDisplayState(turn = null) {
@@ -32,13 +58,18 @@ export function turnRuntimeDisplayState(turn = null) {
 }
 
 export function resolveSessionTurnRuntime(registry, sessionId) {
-  const normalizedSessionId = text(sessionId);
-  const turnScopeId = text(registry?.activeTurnBySession?.[normalizedSessionId]);
-  return turnScopeId ? registry?.turns?.[turnScopeId] || null : null;
+  const bucket = registry?.sessions?.[text(sessionId)];
+  const scope = text(bucket?.activeTurnScopeId);
+  return scope ? bucket?.turns?.[scope] || null : null;
 }
 
-// Public read model for session-scoped UI. Components must consume this
-// projection instead of keeping application-wide `sending`/`canStop` flags.
+export function resolveTurnRuntimeByScope(registry, turnScopeId, { sessionId = "" } = {}) {
+  const scope = text(turnScopeId);
+  const id = text(sessionId);
+  if (!scope) return null;
+  return id ? registry?.sessions?.[id]?.turns?.[scope] || null : findTurnByScope(registry, scope);
+}
+
 export function selectSessionTurnRuntime(registry, sessionId) {
   const normalizedSessionId = text(sessionId);
   const turn = resolveSessionTurnRuntime(registry, normalizedSessionId);
@@ -54,25 +85,23 @@ export function selectSessionTurnRuntime(registry, sessionId) {
   };
 }
 
-// Message runtime effects are scoped to one concrete turn. This read model is
-// intentionally identity-complete so callers never have to combine a global
-// state snapshot with whichever session happens to be visible.
 export function selectTurnMessageRuntime(registry, { sessionId = "", turnScopeId = "", dialogProcessId = "" } = {}) {
   const normalizedSessionId = text(sessionId);
   const normalizedDialogProcessId = text(dialogProcessId);
   let normalizedTurnScopeId = text(turnScopeId);
+  let routeSessionId = "";
   if (!normalizedTurnScopeId && normalizedDialogProcessId) {
-    normalizedTurnScopeId = text(registry?.turnByDialogProcess?.[normalizedDialogProcessId]);
+    const route = resolveRoute(registry, normalizedDialogProcessId);
+    normalizedTurnScopeId = text(route?.turnScopeId);
+    routeSessionId = text(route?.sessionId);
   }
-  const turn = normalizedTurnScopeId ? registry?.turns?.[normalizedTurnScopeId] : null;
+  const turn = normalizedTurnScopeId
+    ? resolveTurnRuntimeByScope(registry, normalizedTurnScopeId, { sessionId: normalizedSessionId || routeSessionId })
+    : null;
   if (!turn) return null;
   if (normalizedSessionId && turn.sessionId !== normalizedSessionId) return null;
   if (normalizedDialogProcessId && turn.dialogProcessId && turn.dialogProcessId !== normalizedDialogProcessId) return null;
-  const state = [
-    BackendChannelState.SENDING,
-    BackendChannelState.RECONNECTING,
-    BackendChannelState.INTERACTION_PENDING,
-  ].includes(turn.state)
+  const state = [BackendChannelState.SENDING, BackendChannelState.RECONNECTING, BackendChannelState.INTERACTION_PENDING].includes(turn.state)
     ? FrontendRunState.PROCESSING
     : turn.state || "";
   return {
@@ -91,40 +120,88 @@ export function selectTurnMessageRuntime(registry, { sessionId = "", turnScopeId
 }
 
 export function resolveLatestStoppedTurn(registry, sessionId) {
-  const normalizedSessionId = text(sessionId);
-  return Object.values(registry?.turns || {})
-    .filter((turn) => turn.sessionId === normalizedSessionId && turn.terminal === "user_stopped")
-    .sort((a, b) => Number(b.updatedAtMs || 0) - Number(a.updatedAtMs || 0))[0] || null;
+  const bucket = registry?.sessions?.[text(sessionId)];
+  return Object.values(bucket?.turns || {})
+    .filter((turn) => turn.terminal === "user_stopped")
+    .sort((a, b) => Number(b.finishedAtMs || b.updatedAtMs || 0) - Number(a.finishedAtMs || a.updatedAtMs || 0))[0] || null;
 }
 
 export function removeTurnRuntime(registry, turnScopeId, { sessionId = "" } = {}) {
   const scope = text(turnScopeId);
   const expectedSessionId = text(sessionId);
-  const turn = scope ? registry?.turns?.[scope] : null;
+  const turn = resolveTurnRuntimeByScope(registry, scope, { sessionId: expectedSessionId });
   if (!turn || (expectedSessionId && turn.sessionId !== expectedSessionId)) return false;
-  delete registry.turns[scope];
-  if (turn.dialogProcessId && registry.turnByDialogProcess?.[turn.dialogProcessId] === scope) {
-    delete registry.turnByDialogProcess[turn.dialogProcessId];
+  const bucket = registry?.sessions?.[turn.sessionId];
+  if (!bucket) return false;
+  delete bucket.turns[scope];
+  if (turn.dialogProcessId && registry.routeIndex?.[turn.dialogProcessId]?.turnScopeId === scope) {
+    delete registry.routeIndex[turn.dialogProcessId];
   }
-  if (registry.activeTurnBySession?.[turn.sessionId] === scope) {
-    delete registry.activeTurnBySession[turn.sessionId];
-  }
+  if (bucket.activeTurnScopeId === scope) bucket.activeTurnScopeId = "";
+  if (!Object.keys(bucket.turns).length) delete registry.sessions[turn.sessionId];
   return true;
+}
+
+export function removeSessionRuntime(registry, sessionId) {
+  const id = text(sessionId);
+  const bucket = registry?.sessions?.[id];
+  if (!bucket) return false;
+  for (const turn of Object.values(bucket.turns || {})) {
+    const route = registry.routeIndex?.[text(turn?.dialogProcessId)];
+    if (route?.sessionId === id && route?.turnScopeId === turn.turnScopeId) delete registry.routeIndex[turn.dialogProcessId];
+  }
+  delete registry.sessions[id];
+  return true;
+}
+
+export function pruneTerminalTurns(registry, {
+  sessionId,
+  referencedTurnScopeIds = [],
+  retainCount = DEFAULT_TERMINAL_RETAIN_PER_SESSION,
+  maxAgeMs = DEFAULT_TERMINAL_MAX_AGE_MS,
+  nowMs = Date.now(),
+} = {}) {
+  const id = text(sessionId);
+  const bucket = registry?.sessions?.[id];
+  if (!bucket) return { removedTurnScopeIds: [] };
+  const referenced = new Set(Array.from(referencedTurnScopeIds || [], text).filter(Boolean));
+  const activeScope = text(bucket.activeTurnScopeId);
+  const latestStoppedScope = text(resolveLatestStoppedTurn(registry, id)?.turnScopeId);
+  const terminalTurns = Object.values(bucket.turns || {})
+    .filter((turn) => Boolean(turn.terminal))
+    .sort((a, b) => Number(b.finishedAtMs || b.updatedAtMs || 0) - Number(a.finishedAtMs || a.updatedAtMs || 0));
+  const removedTurnScopeIds = [];
+  let retainedUnprotectedCount = 0;
+  for (const turn of terminalTurns) {
+    const scope = text(turn.turnScopeId);
+    if (scope === activeScope || scope === latestStoppedScope || referenced.has(scope)) continue;
+    const finishedAtMs = Number(turn.finishedAtMs || turn.updatedAtMs || 0);
+    const tooOld = maxAgeMs >= 0 && finishedAtMs > 0 && Number(nowMs) - finishedAtMs > maxAgeMs;
+    const overCount = retainCount >= 0 && retainedUnprotectedCount >= retainCount;
+    if (tooOld || overCount) {
+      if (removeTurnRuntime(registry, scope, { sessionId: id })) removedTurnScopeIds.push(scope);
+    } else {
+      retainedUnprotectedCount += 1;
+    }
+  }
+  return { removedTurnScopeIds };
 }
 
 export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
   const next = registry || createTurnRuntimeRegistryState();
+  if (!next.sessions) next.sessions = {};
+  if (!next.routeIndex) next.routeIndex = {};
   const event = normalizeSessionRunEvent(rawEvent);
   let turnScopeId = text(event.turnScopeId);
-  if (!turnScopeId && event.dialogProcessId) turnScopeId = text(next.turnByDialogProcess[event.dialogProcessId]);
+  const route = resolveRoute(next, event.dialogProcessId);
+  if (!turnScopeId && route) turnScopeId = text(route.turnScopeId);
   if (!turnScopeId) return { registry: next, turn: null, applied: false, reason: "missing_turn_identity" };
-  const current = next.turns[turnScopeId] || null;
-  const sessionId = text(event.sessionId || current?.sessionId);
+  const current = findTurnByScope(next, turnScopeId);
+  const sessionId = text(event.sessionId || current?.sessionId || route?.sessionId);
   if (!sessionId) return { registry: next, turn: current, applied: false, reason: "missing_session_identity" };
   if (current?.sessionId && current.sessionId !== sessionId) return { registry: next, turn: current, applied: false, reason: "session_identity_conflict" };
   if (current?.dialogProcessId && event.dialogProcessId && current.dialogProcessId !== event.dialogProcessId) return { registry: next, turn: current, applied: false, reason: "dialog_process_identity_conflict" };
-  const dialogOwner = event.dialogProcessId ? next.turnByDialogProcess[event.dialogProcessId] : "";
-  if (dialogOwner && dialogOwner !== turnScopeId) {
+  if (route && (route.turnScopeId !== turnScopeId || route.sessionId !== sessionId)) {
     return { registry: next, turn: current, applied: false, reason: "dialog_process_identity_conflict" };
   }
   const activeTurn = resolveSessionTurnRuntime(next, sessionId);
@@ -132,9 +209,9 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
     return { registry: next, turn: activeTurn, applied: false, reason: "active_turn_conflict" };
   }
   const transition = reduceTurnRuntimeEvent(current, rawEvent);
-  if (!transition.applied) {
-    return { registry: next, turn: current, applied: false, reason: transition.reason };
-  }
+  if (!transition.applied) return { registry: next, turn: current, applied: false, reason: transition.reason };
+  const nowMs = Number(event.timestamp || Date.now());
+  const terminal = transition.next.terminal;
   const turn = {
     ...(current || {}),
     ...transition.next,
@@ -144,20 +221,20 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
     action: transition.next.action,
     backendState: text(event.backendState || current?.backendState),
     state: transition.next.state,
-    terminal: transition.next.terminal,
-    canStop: deriveTurnCapabilities(transition.next.state, {
-      backendState: transition.next.backendState,
-    }).canStop,
+    terminal,
+    canStop: deriveTurnCapabilities(transition.next.state, { backendState: transition.next.backendState }).canStop,
     seq: transition.next.seq,
-    updatedAtMs: Number(event.timestamp || Date.now()),
+    updatedAtMs: nowMs,
     updatedAt: text(event.updatedAt || current?.updatedAt),
     source: text(event.source || current?.source),
     sourceEvent: text(event.sourceEvent || event.type || current?.sourceEvent),
-    error: transition.next.terminal === "error" ? text(rawEvent?.error?.message || rawEvent?.error || rawEvent?.reason) : null,
+    finishedAtMs: terminal ? Number(current?.finishedAtMs || nowMs) : 0,
+    error: terminal === "error" ? text(rawEvent?.error?.message || rawEvent?.error || rawEvent?.reason) : null,
   };
-  next.turns[turnScopeId] = turn;
-  next.activeTurnBySession[sessionId] = turnScopeId;
-  if (turn.dialogProcessId) next.turnByDialogProcess[turn.dialogProcessId] = turnScopeId;
+  const bucket = ensureSessionBucket(next, sessionId);
+  bucket.turns[turnScopeId] = turn;
+  bucket.activeTurnScopeId = turnScopeId;
+  if (turn.dialogProcessId) next.routeIndex[turn.dialogProcessId] = { sessionId, turnScopeId };
   return { registry: next, turn, applied: true, reason: transition.reason };
 }
 
@@ -167,18 +244,8 @@ export function hydrateSessionTurnRuntime(registry, session, turnStatuses = sess
   for (const status of Array.isArray(turnStatuses) ? turnStatuses : []) {
     const turnScopeId = text(status?.turnScopeId);
     if (!turnScopeId) continue;
-    const scope = {
-      sessionId,
-      turnScopeId,
-      dialogProcessId: status?.dialogProcessId,
-      updatedAt: status?.updatedAt,
-      authoritativeSnapshot: true,
-      source: "session_summary_replay",
-    };
+    const scope = { sessionId, turnScopeId, dialogProcessId: status?.dialogProcessId, updatedAt: status?.updatedAt, authoritativeSnapshot: true, source: "session_summary_replay" };
     const terminalStatus = text(status?.status).toLowerCase();
-    // A summary replay reconstructs the same domain phases without repeating
-    // network side effects. The summary-applied event is the only event allowed
-    // to expose a frontend terminal.
     applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED, ...scope, dialogProcessId: "", seq: 0 });
     applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, ...scope, state: BackendChannelState.SENDING, seq: 0 });
     if (terminalStatus === BackendChannelState.USER_STOPPED) {
