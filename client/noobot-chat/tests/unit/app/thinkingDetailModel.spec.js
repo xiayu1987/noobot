@@ -68,6 +68,64 @@ describe("thinking detail model", () => {
     expect(logs[0].text).toBe("search ok=true");
   });
 
+  it("keeps one readable result when duplicate projections differ only by text", () => {
+    const logs = normalizeThinkingToolLogs({
+      messageItem: {
+        ...fixture.messageItem,
+        completedToolLogs: [
+          {
+            event: "tool_result",
+            type: "tool_result",
+            text: "",
+            detailText: "{\"ok\":true}",
+            toolCallId: "call-search",
+          },
+          {
+            event: "tool_result",
+            type: "tool_result",
+            text: "search ok=true",
+            detailText: "{\"ok\":true}",
+            tool_call_id: "call-search",
+          },
+        ],
+      },
+      allMessages: fixture.allMessages,
+      variant: "details",
+    });
+
+    expect(logs).toHaveLength(1);
+    expect(logs[0].text).toBe("search ok=true");
+  });
+
+  it("reconciles an id-less compact result with its identified full projection", () => {
+    const logs = normalizeThinkingToolLogs({
+      messageItem: {
+        ...fixture.messageItem,
+        completedToolLogs: [
+          {
+            event: "tool_result",
+            type: "tool_result",
+            text: "",
+            detailText: "{\"ok\":true}",
+          },
+          {
+            event: "tool_result",
+            type: "tool_result",
+            text: "search ok=true",
+            detailText: "{\"ok\":true}",
+            toolCallId: "call-search",
+          },
+        ],
+      },
+      allMessages: fixture.allMessages,
+      variant: "details",
+    });
+
+    expect(logs).toHaveLength(1);
+    expect(logs[0].toolCallId).toBe("call-search");
+    expect(logs[0].text).toBe("search ok=true");
+  });
+
   it("uses scoped allMessages as the authoritative history source", () => {
     const logs = normalizeThinkingToolLogs({
       messageItem: {
