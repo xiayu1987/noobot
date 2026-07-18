@@ -14,6 +14,12 @@ export const SESSION_LOG_CATEGORIES = Object.freeze([
   "debug",
   "agent-proxy",
   "system",
+  "frontend-lifecycle",
+  "agent-proxy-http",
+  "agent-proxy-websocket",
+  "agent-proxy-route",
+  "backend-websocket",
+  "backend-lifecycle",
 ]);
 
 export const SESSION_LOG_CATEGORY_SET = new Set(SESSION_LOG_CATEGORIES);
@@ -29,6 +35,12 @@ export const SESSION_LOG_CONTROL_KEYS = Object.freeze({
   transport: "transportLog",
   "agent-proxy": "agentProxyLog",
   system: "systemLog",
+  "frontend-lifecycle": "frontendLifecycleLog",
+  "agent-proxy-http": "agentProxyHttpLog",
+  "agent-proxy-websocket": "agentProxyWebSocketLog",
+  "agent-proxy-route": "agentProxyRouteLog",
+  "backend-websocket": "backendWebSocketLog",
+  "backend-lifecycle": "backendLifecycleLog",
 });
 
 export const SESSION_LOG_DEBUG_CONTROL_KEYS = Object.freeze({

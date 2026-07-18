@@ -7,6 +7,7 @@ import { WebSocketServer } from "ws";
 import {
   recordServiceWebSocketRuntimeError,
   recordServiceWebSocketSendFailure,
+  recordServiceWebSocketLifecycle,
 } from "./chat-websocket/runtime-events.js";
 import { registerWebSocketUpgrade } from "./chat-websocket/connection-upgrade.js";
 import { createUserInteractionBridge } from "./chat-websocket/user-interaction-bridge.js";
@@ -98,6 +99,14 @@ export function registerChatWebSocketServer(
       locale: normalizeLocale(request?.locale || defaultLocale),
     });
     const pendingInteractionRequests = new Map();
+
+    const logConnection = (event, data = {}) => {
+      const meta = state.currentRunMeta || {};
+      void recordServiceWebSocketLifecycle({ sessionLogConfig, event, userId: meta.userId, sessionId: meta.sessionId, dialogProcessId: meta.dialogProcessId, turnScopeId: meta.turnScopeId, data });
+    };
+    logConnection("service.websocket.connection.opened", { authenticated: Boolean(authInfo) });
+    webSocket.once("close", (code, reason) => logConnection("service.websocket.connection.closed", { code, reasonLength: String(reason || "").length }));
+    webSocket.once("error", (error) => logConnection("service.websocket.connection.error", { error: error?.message || String(error || "") }));
 
     let eventSequence = 0;
     const sendEvent = (eventName, data = {}) => {

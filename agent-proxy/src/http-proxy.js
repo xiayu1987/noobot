@@ -16,6 +16,7 @@ import {
   writeAgentProxyInvalidRequestUrlEvent,
   writeAgentProxyUpstreamRequestFailedEvent,
   writeAgentProxyHttpTraceEvent,
+  writeAgentProxyHttpLifecycleEvent,
 } from "./http-runtime-events.js";
 
 function resolveSafeErrorMessage(statusCode = 502, message = "Bad Gateway") {
@@ -92,6 +93,7 @@ export function normalizeProxyPathname(pathname = "/", stripPrefix = config.upst
 }
 
 export function proxyHttpRequest(request, response) {
+  const startedAt = Date.now();
   const locale = resolveLocaleFromRequest(request);
   const method = String(request?.method || "GET").trim().toUpperCase() || "GET";
   const traceId = String(request?.headers?.["x-noobot-file-trace-id"] || "").trim();
@@ -124,6 +126,7 @@ export function proxyHttpRequest(request, response) {
       hasSearch: Boolean(targetUrl.search),
     });
   }
+  void writeAgentProxyHttpLifecycleEvent({ event: "agentProxy.http.request.started", method, pathname: targetUrl.pathname, traceId });
   const isHttps = targetUrl.protocol === "https:";
   const requestHeaders = { ...(request?.headers || {}) };
   delete requestHeaders.host;
@@ -141,6 +144,7 @@ export function proxyHttpRequest(request, response) {
     },
     (upstreamResponse) => {
       const statusCode = Number(upstreamResponse?.statusCode || 502);
+      void writeAgentProxyHttpLifecycleEvent({ event: "agentProxy.http.response.received", method, pathname: targetUrl.pathname, traceId, status: statusCode, durationMs: Date.now() - startedAt });
       if (traceId) {
         void writeAgentProxyHttpTraceEvent({
           event: "proxy.response",
@@ -164,6 +168,7 @@ export function proxyHttpRequest(request, response) {
     upstreamRequest.destroy(new Error("upstream timeout"));
   });
   upstreamRequest.on("error", (error) => {
+    void writeAgentProxyHttpLifecycleEvent({ event: "agentProxy.http.request.failed", method, pathname: targetUrl?.pathname || "", traceId, status: 502, durationMs: Date.now() - startedAt });
     void writeAgentProxyUpstreamRequestFailedEvent({
       method,
       pathname: targetUrl?.pathname || "",

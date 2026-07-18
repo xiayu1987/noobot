@@ -11,6 +11,7 @@ import {
   UPSTREAM_CLOSE_REASON,
 } from "../constants.js";
 import { nowMs, isTerminalStatus, buildUpstreamUrl } from "../utils.js";
+import { writeAgentProxyRouteLifecycleEvent } from "../ws-runtime-events.js";
 
 class UpstreamConnectionMethods {
 // ---- Upstream Connection ----
@@ -49,6 +50,11 @@ markChannelTerminal(channel, terminalStatus = CHANNEL_STATUS.DONE) {
 
 connectUpstreamChannel(channel, apiKey = "", locale = "") {
   if (!channel || channel.upstreamSocket) return;
+  void writeAgentProxyRouteLifecycleEvent({
+    event: "agentProxy.route.upstreamConnect.started",
+    channel,
+    data: { localePresent: Boolean(String(locale || "").trim()) },
+  });
   channel._errorHandled = false;
   const upstreamUrl = buildUpstreamUrl(config.upstreamWsUrl, apiKey);
   if (!upstreamUrl) {
@@ -79,6 +85,10 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
   });
 
   upstreamSocket.on("open", () => {
+    void writeAgentProxyRouteLifecycleEvent({
+      event: "agentProxy.route.upstreamConnect.succeeded",
+      channel,
+    });
     if (isTerminalStatus(channel.status)) {
       this.closeUpstreamChannel(channel, 1000, UPSTREAM_CLOSE_REASON.CLOSED);
       return;
@@ -173,6 +183,11 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
           ? closeReasonBuffer.toString("utf8")
           : "";
     const normalizedCloseCode = Number(closeCode || 0) || 0;
+    void writeAgentProxyRouteLifecycleEvent({
+      event: "agentProxy.route.upstreamConnect.closed",
+      channel,
+      data: { closeCode: normalizedCloseCode, reasonLength: closeReason.length },
+    });
     this.logSessionEvent(channel, {
       category: "transport",
       event: "agentProxy.upstream.closed",
@@ -202,6 +217,11 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
   upstreamSocket.on(CHANNEL_EVENT.ERROR, (error) => {
     if (channel._errorHandled) return;
     channel._errorHandled = true;
+    void writeAgentProxyRouteLifecycleEvent({
+      event: "agentProxy.route.upstreamConnect.failed",
+      channel,
+      data: { errorType: error?.name || "Error" },
+    });
     this.logSessionEvent(channel, {
       category: "transport",
       level: "error",

@@ -71,6 +71,13 @@ test('session log protocol exports stable categories and helpers from runtime-ev
   assert.ok(SESSION_LOG_CATEGORIES.includes('system'));
   assert.ok(SESSION_LOG_CATEGORIES.includes(SESSION_LOG_DEBUG_CATEGORY));
   assert.ok(SESSION_LOG_RECORD_FIELDS.includes('sessionId'));
+  for (const category of [
+    'frontend-lifecycle', 'agent-proxy-http', 'agent-proxy-websocket',
+    'agent-proxy-route', 'backend-websocket', 'backend-lifecycle',
+  ]) {
+    assert.ok(SESSION_LOG_CATEGORIES.includes(category), `missing category: ${category}`);
+    assert.equal(normalizeSessionLogCategory(category), category);
+  }
   assert.equal(normalizeSessionLogCategory('missing'), SESSION_LOG_DEFAULT_CATEGORY);
   assert.equal(normalizeSessionLogCategory('DEBUG'), SESSION_LOG_DEBUG_CATEGORY);
   assert.equal(getSessionLogControlKey({ category: 'message' }, 'message'), 'messageLog');

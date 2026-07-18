@@ -108,7 +108,7 @@ export function createStartupLogger({ app, startupDebugEnabled = false } = {}) {
     const detail = formatLogFields(fields);
     const message = `[${scope}:${event}]${detail ? ` ${detail}` : ""}`;
     appendLogFile(DESKTOP_LOG_FILES.STARTUP, message);
-    runtimeEvents.write({ scope: "startup", category: "system", event: `desktop.${scope}.${event}` }, fields).catch(() => {});
+    runtimeEvents.write({ scope: "startup", category: scope === "frontend" ? "frontend-lifecycle" : "backend-lifecycle", event: `desktop.${scope}.${event}` }, fields).catch(() => {});
     if (mirrorToEarly) appendStartupTrace(message);
   }
 
@@ -117,7 +117,7 @@ export function createStartupLogger({ app, startupDebugEnabled = false } = {}) {
     const detail = formatLogFields(fields);
     const message = `[dependency:${event}]${detail ? ` ${detail}` : ""}`;
     appendLogFile(DESKTOP_LOG_FILES.DEPENDENCY, message);
-    runtimeEvents.write({ scope: "startup", category: "system", event: `desktop.dependency.${event}` }, fields).catch(() => {});
+    runtimeEvents.write({ scope: "startup", category: "frontend-lifecycle", event: `desktop.dependency.${event}` }, fields).catch(() => {});
     writeStartupLog("dependency", event, fields, { ...options, mirrorToEarly: false });
   }
 

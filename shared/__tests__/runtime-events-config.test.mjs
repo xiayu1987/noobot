@@ -74,6 +74,24 @@ test('runtime-events session log controls resolve per business env and overrides
   assert.equal(resolved.transportLog, false);
 });
 
+test('runtime-events lifecycle controls can be disabled independently', () => {
+  const env = {
+    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.frontendLifecycleLog]: 'off',
+    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.agentProxyHttpLog]: 'false',
+    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.agentProxyWebSocketLog]: '0',
+    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.agentProxyRouteLog]: 'no',
+    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.backendWebSocketLog]: 'disabled',
+    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.backendLifecycleLog]: 'invalid',
+  };
+  const resolved = resolveRuntimeEventsSessionLogControls(env);
+  assert.equal(resolved.frontendLifecycleLog, false);
+  assert.equal(resolved.agentProxyHttpLog, false);
+  assert.equal(resolved.agentProxyWebSocketLog, false);
+  assert.equal(resolved.agentProxyRouteLog, false);
+  assert.equal(resolved.backendWebSocketLog, false);
+  assert.equal(resolved.backendLifecycleLog, true);
+});
+
 test('hook runtime-events mode defaults to summary and recognizes verbose values', () => {
   assert.equal(resolveHookRuntimeEventsMode({ env: {} }), 'summary');
   assert.equal(isHookRuntimeEventVerboseEnabled({ env: {} }), false);
