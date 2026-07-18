@@ -69,6 +69,14 @@ export function registerWebSocketUpgrade(
 
     const authInfo = resolveAuthByApiKey(request);
     if (!authInfo) {
+      void writeRoutedRuntimeEvent({
+        source: "service",
+        channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+        category: RUNTIME_EVENT_CATEGORIES.BACKEND_WEBSOCKET,
+        level: "warn",
+        event: "service.websocket.upgrade.authentication.failed",
+        data: { pathname: requestPathname },
+      }, sessionLogConfig);
       sendUpgradeError(
         socket,
         HTTP_STATUS.UNAUTHORIZED,
@@ -76,6 +84,13 @@ export function registerWebSocketUpgrade(
       );
       return;
     }
+    void writeRoutedRuntimeEvent({
+      source: "service",
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.BACKEND_WEBSOCKET,
+      event: "service.websocket.upgrade.authentication.succeeded",
+      data: { pathname: requestPathname },
+    }, sessionLogConfig);
     request.auth = authInfo;
     request.locale = requestLocale;
 

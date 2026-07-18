@@ -32,3 +32,19 @@ export function writeAgentProxyInvalidJsonPayloadEvent({
     data: resolveRawDataInfo(rawData),
   });
 }
+
+export function writeAgentProxyWebSocketLifecycleEvent({ event, socket = null, data = {}, workspaceRoot } = {}) {
+  return writeRoutedRuntimeEvent({
+    source: "agent-proxy", channel: RUNTIME_EVENT_CHANNELS.AGENT_PROXY_WEB_SOCKET,
+    category: "agent-proxy-websocket", level: "info", event, workspaceRoot,
+    data: { readyState: socket?.readyState ?? null, ...data },
+  });
+}
+
+export function writeAgentProxyRouteLifecycleEvent({ event, socket = null, channel = null, data = {}, workspaceRoot } = {}) {
+  return writeRoutedRuntimeEvent({
+    source: "agent-proxy", channel: RUNTIME_EVENT_CHANNELS.AGENT_PROXY_WEB_SOCKET,
+    category: RUNTIME_EVENT_CATEGORIES.AGENT_PROXY_ROUTE, level: "info", event, workspaceRoot,
+    data: { channelStatus: String(channel?.status || ""), upstreamReadyState: channel?.upstreamSocket?.readyState ?? null, ...data },
+  });
+}

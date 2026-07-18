@@ -84,3 +84,20 @@ export function recordServiceWebSocketRuntimeError({
     },
   }, sessionLogConfig);
 }
+
+export function recordServiceWebSocketLifecycle({ sessionLogConfig, event, userId = "", sessionId = "", dialogProcessId = "", turnScopeId = "", data = {} } = {}) {
+  const normalizedSessionId = String(sessionId || "").trim();
+  return writeRoutedRuntimeEvent({
+    scope: normalizedSessionId ? "session" : "system",
+    source: "service",
+    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+    category: "backend-websocket",
+    level: "info",
+    event,
+    userId,
+    sessionId: normalizedSessionId,
+    dialogProcessId,
+    turnScopeId,
+    data: { ...data, hasSessionContext: Boolean(normalizedSessionId) },
+  }, sessionLogConfig);
+}

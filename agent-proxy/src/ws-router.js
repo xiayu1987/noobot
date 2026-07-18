@@ -13,8 +13,20 @@ import {
   UPSTREAM_CLOSE_REASON,
   WS_ACTION,
 } from "./constants.js";
-import { writeAgentProxyInvalidJsonPayloadEvent } from "./ws-runtime-events.js";
+import {
+  writeAgentProxyInvalidJsonPayloadEvent,
+  writeAgentProxyWebSocketLifecycleEvent,
+  writeAgentProxyRouteLifecycleEvent,
+} from "./ws-runtime-events.js";
 import { writeAgentProxyRouteDebugEvent } from "./route-debug-runtime-events.js";
+
+function resolveRawMessageInfo(rawData) {
+  const text = String(rawData || "");
+  return {
+    rawDataType: Buffer.isBuffer(rawData) ? "buffer" : typeof rawData,
+    rawDataLength: text.length,
+  };
+}
 
 export class WsRouter {
   constructor(channelManager) {
@@ -22,7 +34,30 @@ export class WsRouter {
   }
 
   handle(socket, connectionApiKey, connectionLocale) {
+    void writeAgentProxyWebSocketLifecycleEvent({
+      event: "agentProxy.ws.connectionOpened",
+      socket,
+    });
+    socket.on("close", (code, reason) => {
+      void writeAgentProxyWebSocketLifecycleEvent({
+        event: "agentProxy.ws.connectionClosed",
+        socket,
+        data: { code: Number(code || 0), reasonLength: String(reason || "").length },
+      });
+    });
+    socket.on(CHANNEL_EVENT.ERROR, (error) => {
+      void writeAgentProxyWebSocketLifecycleEvent({
+        event: "agentProxy.ws.connectionError",
+        socket,
+        data: { error: error?.message || String(error || "unknown") },
+      });
+    });
     socket.on(CHANNEL_EVENT.MESSAGE, (rawData) => {
+      void writeAgentProxyWebSocketLifecycleEvent({
+        event: "agentProxy.ws.messageReceived",
+        socket,
+        data: { ...resolveRawMessageInfo(rawData) },
+      });
       let payload = {};
       try {
         payload = JSON.parse(String(rawData || "{}"));
@@ -36,6 +71,11 @@ export class WsRouter {
       }
 
       const action = String(payload?.action || "").trim().toLowerCase();
+      void writeAgentProxyRouteLifecycleEvent({
+        event: action ? "agentProxy.route.actionReceived" : "agentProxy.route.channelStartReceived",
+        socket,
+        data: { action, hasSessionId: Boolean(String(payload?.sessionId || "").trim()), hasChannelKey: Boolean(String(payload?.channelKey || "").trim()) },
+      });
       if (!action) {
         this.channelManager.startOrJoinChannel({
           socket,
@@ -50,6 +90,7 @@ export class WsRouter {
       if (handler) {
         handler.call(this, socket, payload);
       } else {
+        void writeAgentProxyRouteLifecycleEvent({ event: "agentProxy.route.unsupportedAction", socket, data: { action } });
         this.channelManager.sendSocketError(
           socket,
           AGENT_PROXY_ERROR.UNSUPPORTED_ACTION(action),
@@ -57,6 +98,7 @@ export class WsRouter {
       }
     });
   }
+
 
   _handlers = {
     [WS_ACTION.STOP](socket, payload) {

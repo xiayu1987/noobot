@@ -13,6 +13,7 @@ import {
   RECONNECT_SUGGESTION,
 } from "../constants.js";
 import { nowMs, isTerminalStatus } from "../utils.js";
+import { writeAgentProxyRouteLifecycleEvent } from "../ws-runtime-events.js";
 
 class ReconnectMethods {
 // ---- Reconnect ----
@@ -78,6 +79,14 @@ handleReconnect(socket, payload = {}) {
   const lastReceivedTurnScopeIdMap = payload?.lastReceivedTurnScopeIdMap || {};
   const currentSessionId = String(payload?.currentSessionId || "").trim();
   const reconnectChannelKeys = this._resolveReconnectChannelKeys(socket, currentSessionId, payload);
+  void writeAgentProxyRouteLifecycleEvent({
+    event: "agentProxy.route.reconnect.started",
+    socket,
+    data: {
+      currentSessionIdPresent: Boolean(currentSessionId),
+      channelCount: reconnectChannelKeys.length,
+    },
+  });
   if (!reconnectChannelKeys.length) {
     this.sendSocketEvent(socket, {
       event: CHANNEL_EVENT.RECONNECT_DATA,
@@ -95,6 +104,11 @@ handleReconnect(socket, payload = {}) {
         totalSessions: 0,
         cacheExpired: false,
       },
+    });
+    void writeAgentProxyRouteLifecycleEvent({
+      event: "agentProxy.route.reconnect.completed",
+      socket,
+      data: { totalSessions: 0, cacheExpired: false },
     });
     return;
   }
@@ -397,6 +411,14 @@ handleReconnect(socket, payload = {}) {
     data: {
       totalSessions: sessions.length,
       cacheExpired,
+    },
+  });
+  void writeAgentProxyRouteLifecycleEvent({
+    event: "agentProxy.route.reconnect.completed",
+    socket,
+    data: {
+      totalSessions: sessions.length,
+      cacheExpired: expiredDialogProcessIds.length > 0,
     },
   });
 }

@@ -15,7 +15,7 @@ import {
   rememberPendingStop,
   unregisterActiveRun,
 } from "./run-registry.js";
-import { summarizeDebugAttachments } from "./runtime-events.js";
+import { recordServiceWebSocketLifecycle, summarizeDebugAttachments } from "./runtime-events.js";
 import {
   isPluginDebugEnabled,
   resolveEffectiveRunTimeoutMs,
@@ -97,6 +97,15 @@ export function createMessageHandler({
         "",
       partialAssistant: payload?.partialAssistant || {},
     };
+    void recordServiceWebSocketLifecycle({
+      sessionLogConfig,
+      event: "service.websocket.run.cancel.requested",
+      userId: String(authInfo?.userId || payload?.userId || "").trim(),
+      sessionId: state.currentStopPayload.sessionId,
+      dialogProcessId: state.currentStopPayload.dialogProcessId,
+      turnScopeId: state.currentStopPayload.turnScopeId,
+      data: { activeRunPresent: Boolean(findActiveRun(state.currentStopPayload)) },
+    });
     const activeRun = findActiveRun(state.currentStopPayload);
     if (activeRun && activeRun.abortController && !activeRun.abortController.signal?.aborted) {
       activeRun.stopRequested = true;
@@ -270,6 +279,15 @@ export function createMessageHandler({
     });
     state.currentRunTimeoutTimer = setTimeout(() => {
       state.currentRunTimedOut = true;
+      void recordServiceWebSocketLifecycle({
+        sessionLogConfig,
+        event: "service.websocket.run.timeout",
+        userId: state.currentRunMeta?.userId || userId,
+        sessionId: state.currentRunMeta?.sessionId || sessionId,
+        dialogProcessId: state.currentRunMeta?.dialogProcessId || "",
+        turnScopeId: state.currentRunMeta?.turnScopeId || state.currentTurnScopeId,
+        data: { timeoutMs: runTimeoutMs },
+      });
       if (state.currentAbortController) {
         state.currentAbortController.abort({
           type: "run_timeout",
@@ -407,6 +425,11 @@ export function createMessageHandler({
       // execution outcomes. A turn only owns a persisted terminal status after
       // the execution lifecycle has actually started.
       if (!runMessageStarted || !state.currentRunMeta) {
+        void recordServiceWebSocketLifecycle({
+          sessionLogConfig,
+          event: "service.websocket.request.rejected",
+          data: { errorType: error?.name || "Error", errorCode: String(error?.errorCode || error?.code || "") },
+        });
         sendEvent("error", {
           error: error?.message || translateText("ws.unknownError", state.currentLocale),
           status: Number(error?.statusCode || error?.status || 0) || undefined,
@@ -434,10 +457,22 @@ export function createMessageHandler({
           // must not create an ERROR/run_aborted terminal fact.
           return;
         } else {
+          void recordServiceWebSocketLifecycle({
+            sessionLogConfig,
+            event: "service.websocket.run.aborted",
+            ...state.currentRunMeta,
+            data: { errorType: error?.name || "Error" },
+          });
           await finalizeAborted(buildRunStateSnapshot(), { error });
         }
         return;
       }
+      void recordServiceWebSocketLifecycle({
+        sessionLogConfig,
+        event: "service.websocket.run.failed",
+        ...state.currentRunMeta,
+        data: { errorType: error?.name || "Error" },
+      });
       await finalizeGenericError(buildRunStateSnapshot(), { error });
     } finally {
       if (runMessageStarted) {
@@ -445,6 +480,11 @@ export function createMessageHandler({
           unregisterActiveRun(state.currentRunHandle);
         }
         resetRunState(state);
+        void recordServiceWebSocketLifecycle({
+          sessionLogConfig,
+          event: "service.websocket.run.stateReset",
+          data: { completed: true },
+        });
       }
     }
   };
