@@ -166,6 +166,18 @@ export function useChatSession({
     };
   });
 
+  // UI runtime state must follow the selected session. The legacy `sending`
+  // and `canStop` refs are still used internally while processing events, but
+  // they are application-wide mutable snapshots and therefore must never be
+  // exposed as the active session's state.
+  const activeSessionSending = computed(() => [
+    "requesting",
+    "sending",
+    "completing",
+    "stopping",
+  ].includes(composerActionState.value.displayState));
+  const activeSessionCanStop = computed(() => composerActionState.value.canStop === true);
+
   const applyComposerActionStateEvent = (event) => {
     applyTurnRuntimeEvent(turnRuntimeRegistry.value, event, { fallbackSessionId: resolveActiveSessionIdentity() });
     return applySessionRunStateEvent({ stateRef: runStateSnapshot, sending, canStop, event });
@@ -669,8 +681,8 @@ export function useChatSession({
   return {
     input,
     uploadFiles,
-    sending,
-    canStop,
+    sending: activeSessionSending,
+    canStop: activeSessionCanStop,
     composerActionState,
     sessions,
     activeSessionId,
