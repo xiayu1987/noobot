@@ -19,7 +19,7 @@
     "pretest": "npm run -s check:i18n-imports"
   },
   "dependencies": {
-    "ws": "^8.21.0",
+    "ws": "^8.21.1",
     "noobot-i18n": "file:../i18n",
     "@noobot/shared": "file:../shared",
     "@noobot/runtime-events": "file:../runtime-events"

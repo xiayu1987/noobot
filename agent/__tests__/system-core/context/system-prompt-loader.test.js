@@ -13,7 +13,7 @@ test("loadSystemPrompt selects the Chinese base prompt by default", async () => 
 
   assert.match(prompt, /规则：/);
   assert.match(prompt, /行动优先/);
-  assert.match(prompt, /^3\. 禁止扩大任务范围$/m);
+  assert.match(prompt, /^3\. 禁止臆测：规则、模板、路径、配置。$/m);
 });
 
 test("loadSystemPrompt selects the English base prompt for en-US locale", async () => {
@@ -22,7 +22,7 @@ test("loadSystemPrompt selects the English base prompt for en-US locale", async 
   assert.match(prompt, /Rules:/);
   assert.match(prompt, /Action first/);
   assert.doesNotMatch(prompt, /行动优先/);
-  assert.match(prompt, /^3\. Do not expand the task scope\.$/m);
+  assert.match(prompt, /^3\. Do not hallucinate rules, templates, paths, or configuration\.$/m);
 });
 
 test("loadSystemPrompt normalizes locale aliases", async () => {

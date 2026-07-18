@@ -38,33 +38,33 @@
     "ensure:openvscode-server": "node scripts/install-openvscode-server.mjs"
   },
   "dependencies": {
-    "@langchain/core": "^1.2.0",
-    "@langchain/openai": "^1.5.1",
+    "@langchain/core": "^1.2.3",
+    "@langchain/openai": "^1.5.5",
     "@mozilla/readability": "^0.6.0",
     "better-sqlite3": "^12.11.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "imapflow": "^1.4.2",
-    "jscpd": "^5.0.11",
+    "imapflow": "^1.4.7",
+    "jscpd": "^5.0.12",
     "jsdom": "^29.1.1",
     "libreoffice": "^0.4.5",
-    "mailparser": "^3.9.11",
-    "mysql2": "^3.22.5",
-    "node-poppler": "^9.1.2",
-    "nodemailer": "^9.0.1",
+    "mailparser": "^3.9.14",
+    "mysql2": "^3.23.0",
+    "node-poppler": "^10.0.0",
+    "nodemailer": "^9.0.3",
     "@noobot/shared": "file:../shared",
     "noobot-agent": "file:../agent",
     "noobot-i18n": "file:../i18n",
-    "openai": "^6.44.0",
+    "openai": "^6.48.0",
     "pdf-parse": "^2.4.5",
     "pg": "^8.22.0",
     "pino": "^10.3.1",
-    "playwright": "^1.61.0",
-    "pm2": "^7.0.1",
-    "sharp": "^0.35.2",
+    "playwright": "^1.61.1",
+    "pm2": "^7.0.3",
+    "sharp": "^0.35.3",
     "ssh2": "^1.17.0",
     "uuid": "^14.0.1",
-    "ws": "^8.21.0",
+    "ws": "^8.21.1",
     "yazl": "^3.3.1",
     "zod": "^4.4.3",
     "@noobot/runtime-events": "file:../runtime-events"
@@ -73,6 +73,6 @@
     "systeminformation": "^5.31.7"
   },
   "devDependencies": {
-    "eslint": "^10.5.0"
+    "eslint": "^10.7.0"
   }
 }
