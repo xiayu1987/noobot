@@ -28,9 +28,59 @@ function harness(initial = {}) {
   };
 }
 
+function newSessionHarness() {
+  let persisted = null;
+  const repo = {
+    async withSessionMutation(_u, _s, _p, operation) { return operation(); },
+    async resolveParentSessionId() { return ""; },
+    async ensureSession({ sessionId }) {
+      persisted ??= { sessionId, parentSessionId: "", version: 0, revision: 0, messages: [] };
+    },
+    async findById() {
+      return persisted ? normalizeSessionEntity(structuredClone(persisted), { now }) : null;
+    },
+    async save(_u, next, _p, { expectedVersion } = {}) {
+      assert.equal(expectedVersion, Number(persisted.version ?? persisted.revision ?? 0));
+      persisted = structuredClone(normalizeSessionEntity(next, { now }));
+    },
+  };
+  return {
+    service: new SessionMessageService({ sessionRepo: repo, now }),
+    reload: () => persisted && normalizeSessionEntity(structuredClone(persisted), { now }),
+  };
+}
+
 const event = (eventType, commandId, expectedRevision, extra = {}) => ({
   userId: "u1", sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1",
   eventType, commandId, expectedRevision, ...extra,
+});
+
+test("first send creates the session before committing action accepted", async () => {
+  const h = newSessionHarness();
+  const accepted = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "first-send", 0, {
+      action: "send",
+      phase: TURN_PHASE.ACTION,
+    }),
+  );
+  assert.equal(accepted.applied, true);
+  assert.equal(accepted.turn.state, TURN_STATE.ACTION_REQUESTING);
+  assert.equal(h.reload().turnLifecycle.activeTurnScopeId, "t1");
+});
+
+test("resend and continue do not create a missing session", async () => {
+  for (const action of ["resend", "continue"]) {
+    const h = newSessionHarness();
+    const result = await h.service.applyTurnLifecycleEvent(
+      event(TURN_EVENT.ACTION_ACCEPTED, `missing-${action}`, 0, {
+        action,
+        phase: TURN_PHASE.ACTION,
+      }),
+    );
+    assert.equal(result.applied, false);
+    assert.equal(result.reason, "session_not_found");
+    assert.equal(h.reload(), null);
+  }
 });
 
 test("authoritative lifecycle persists, sequences and restores the complete path", async () => {

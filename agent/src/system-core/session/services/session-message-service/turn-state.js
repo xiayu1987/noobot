@@ -9,7 +9,7 @@ import { dedupeAttachments, normalizeIncomingAttachmentsForSessionMessage } from
 import { resolveSessionVersion } from "./anchor-utils.js";
 import { upsertSessionTurnTiming } from "./turn-timing.js";
 import { normalizeTurnLifecycleEntity, transitionTurnLifecycle, isTerminalTurnLifecycleState } from "../../entities/turn-lifecycle-entity.js";
-import { createTurnLifecycleSnapshot } from "@noobot/shared/turn-lifecycle-protocol";
+import { TURN_EVENT, createTurnLifecycleSnapshot } from "@noobot/shared/turn-lifecycle-protocol";
 
 export async function getTurnLifecycleSnapshot({ userId, sessionId, parentSessionId = "", commandId = "", knownSequence, terminalLimit = 10 } = {}) {
   if (!userId || !sessionId) return { found: false, reason: "missing_session" };
@@ -48,7 +48,23 @@ export async function applyTurnLifecycleEvent({
       sessionId,
       parentSessionId,
     );
-    const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
+    let session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
+    // A brand-new session is persisted by the normal run initializer, but the
+    // authoritative ACTION_ACCEPTED fact must be committed before execution is
+    // started. Create only for a first `send`; resend/continue and every later
+    // lifecycle transition must still require an existing session.
+    if (!session && event.eventType === TURN_EVENT.ACTION_ACCEPTED && event.action === "send") {
+      if (this.sessionCrudService) {
+        await this.sessionCrudService.ensureSession(userId, sessionId, resolvedParentSessionId);
+      } else {
+        await this.sessionRepo.ensureSession?.({
+          userId,
+          sessionId,
+          parentSessionId: resolvedParentSessionId,
+        });
+      }
+      session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
+    }
     if (!session) return { applied: false, reason: "session_not_found" };
     const actualVersion = resolveSessionVersion(session);
     if (expectedSessionVersion !== undefined && Number(expectedSessionVersion) !== actualVersion) {
