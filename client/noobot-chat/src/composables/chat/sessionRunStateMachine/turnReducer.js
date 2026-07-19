@@ -5,6 +5,7 @@
  */
 import { BackendChannelState, FrontendRunState, SESSION_RUN_EVENT } from "./constants";
 import { normalizeSessionRunEvent } from "./eventNormalization";
+import { TURN_EVENT, TURN_PHASE } from "@noobot/shared/turn-lifecycle-protocol";
 
 export const TURN_TRANSITION_REASON = Object.freeze({
   APPLIED: "applied",
@@ -13,6 +14,7 @@ export const TURN_TRANSITION_REASON = Object.freeze({
   STALE_SEQUENCE: "stale_sequence",
   TERMINAL_LOCKED: "terminal_locked",
   STOP_NOT_ALLOWED: "stop_not_allowed",
+  STALE_REVISION: "stale_revision",
 });
 
 const FINAL_STATES = new Set([
@@ -75,6 +77,25 @@ function targetState(current = {}, event = {}) {
   const currentState = text(current.state);
   const backendState = text(event.backendState || event.raw?.state || event.state);
 
+  if (event.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE) {
+    const lifecycleType = text(event.eventType);
+    if (lifecycleType === TURN_EVENT.ACTION_ACCEPTED || lifecycleType === TURN_EVENT.STOP_ACCEPTED) {
+      return FrontendRunState.ACTION_REQUESTING;
+    }
+    if (lifecycleType === TURN_EVENT.PROCESSING_STARTED) return FrontendRunState.PROCESSING;
+    if (lifecycleType === TURN_EVENT.PROCESSING_COMPLETED) return FrontendRunState.FRONTEND_COMPLETION_REQUESTING;
+    if (lifecycleType === TURN_EVENT.STOP_PROCESSING_COMPLETED) return FrontendRunState.USER_STOPPING;
+    if (lifecycleType === TURN_EVENT.COMPLETED) return FrontendRunState.FRONTEND_COMPLETED;
+    if (lifecycleType === TURN_EVENT.STOP_COMPLETED) return FrontendRunState.USER_STOP_COMPLETED;
+    if (lifecycleType === TURN_EVENT.FAILED) {
+      const phase = text(event.phase);
+      if (phase === TURN_PHASE.PROCESSING) return FrontendRunState.PROCESSING_ERROR;
+      if (phase === TURN_PHASE.COMPLETION) return FrontendRunState.COMPLETION_ERROR;
+      if (phase === TURN_PHASE.STOP) return FrontendRunState.STOP_ERROR;
+      return FrontendRunState.ACTION_REQUEST_ERROR;
+    }
+  }
+
   if (event.type === SESSION_RUN_EVENT.LOCAL_FAILURE) return failureStateFor(current);
   if (event.type === SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED) return FrontendRunState.COMPLETION_ERROR;
   if (event.type === SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_FAILED) return FrontendRunState.STOP_ERROR;
@@ -89,7 +110,19 @@ function targetState(current = {}, event = {}) {
     return FrontendRunState.FRONTEND_COMPLETION_REQUESTING;
   }
   if ([SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE].includes(event.type)) {
-    if ([BackendChannelState.SENDING, BackendChannelState.RECONNECTING, BackendChannelState.INTERACTION_PENDING].includes(backendState)) {
+    // Only the Service's explicit processing fact (or the legacy `sending`
+    // projection of that fact) may cross the action -> processing boundary.
+    // Proxy transport reconnecting and interaction waiting never create a
+    // business processing fact by themselves.
+    if (backendState === BackendChannelState.SENDING) {
+      return FrontendRunState.PROCESSING;
+    }
+    // Reconnect and interaction waiting are transport/execution substates of
+    // an already authoritative processing Turn. They must not create the
+    // processing fact from a requesting state, but once processing exists they
+    // update backendState so capabilities (notably canStop) are revoked.
+    if ([BackendChannelState.RECONNECTING, BackendChannelState.INTERACTION_PENDING].includes(backendState) &&
+      currentState === FrontendRunState.PROCESSING) {
       return FrontendRunState.PROCESSING;
     }
     if (backendState === BackendChannelState.COMPLETED) return FrontendRunState.FRONTEND_COMPLETION_REQUESTING;
@@ -113,6 +146,15 @@ function isAllowed(current = {}, event = {}, nextState = "") {
   // as an idempotent same-state update.
   if (ACTION_START_EVENTS.has(event.type)) return false;
   if (nextState === currentState) return true;
+  if (event.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE) {
+    const lifecycleType = text(event.eventType);
+    if (lifecycleType === TURN_EVENT.COMPLETED) {
+      return currentState === FrontendRunState.FRONTEND_COMPLETION_REQUESTING;
+    }
+    if (lifecycleType === TURN_EVENT.STOP_COMPLETED) {
+      return currentState === FrontendRunState.USER_STOPPING;
+    }
+  }
   if (nextState === FrontendRunState.ACTION_REQUESTING) {
     return STOP_REQUEST_EVENTS.has(event.type) && currentState === FrontendRunState.PROCESSING;
   }
@@ -148,11 +190,15 @@ function isAllowed(current = {}, event = {}, nextState = "") {
 export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
   const event = normalizeSessionRunEvent(rawEvent);
   const eventSeq = Number(event.seq || 0);
+  const eventRevision = Number(event.revision || 0);
   if (current && isFinalTurnState(current.state)) {
     return { applied: false, reason: TURN_TRANSITION_REASON.TERMINAL_LOCKED, current, event };
   }
   if (current && eventSeq > 0 && Number(current.seq || 0) > eventSeq) {
     return { applied: false, reason: TURN_TRANSITION_REASON.STALE_SEQUENCE, current, event };
+  }
+  if (current && eventRevision > 0 && Number(current.revision || 0) >= eventRevision) {
+    return { applied: false, reason: TURN_TRANSITION_REASON.STALE_REVISION, current, event };
   }
   if (current && STOP_REQUEST_EVENTS.has(event.type) &&
     !deriveTurnCapabilities(current.state, { backendState: current.backendState }).canStop) {
@@ -188,6 +234,7 @@ export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
       canStop: capabilities.canStop,
       backendState,
       seq: Math.max(Number(current?.seq || 0), eventSeq),
+      revision: Math.max(Number(current?.revision || 0), eventRevision),
     },
   };
 }

@@ -613,6 +613,14 @@ export class SessionExecutionEngine {
     return this.session?.upsertTurnStatus?.(payload);
   }
 
+  async applyTurnLifecycleEvent(payload = {}) {
+    return this.session?.applyTurnLifecycleEvent?.(payload);
+  }
+
+  async getTurnLifecycleSnapshot(payload = {}) {
+    return this.session?.getTurnLifecycleSnapshot?.(payload);
+  }
+
   async persistStoppedAssistantMessage({
     userId,
     sessionId,

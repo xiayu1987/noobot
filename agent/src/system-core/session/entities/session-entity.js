@@ -7,6 +7,7 @@
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import { compactAttachmentRef, compactTransferEnvelopes, dedupeAttachmentRefs } from "../transfer-attachment-refs.js";
 import { normalizeTurnStatusesEntity } from "./turn-status-entity.js";
+import { normalizeTurnLifecycleEntity } from "./turn-lifecycle-entity.js";
 
 function normalizeTransferEnvelopesFromMessage(message = {}) {
   const seen = new Set();
@@ -229,6 +230,7 @@ export function normalizeSessionEntity(
     messages: normalizeMessagesEntity(session?.messages || [], now),
     turnTimings: normalizeTurnTimingsEntity(session?.turnTimings || []),
     turnStatuses: normalizeTurnStatusesEntity(session?.turnStatuses || [], now),
+    turnLifecycle: normalizeTurnLifecycleEntity(session?.turnLifecycle || {}),
     selectedConnectors: normalizeSelectedConnectors(session?.selectedConnectors || {}),
     createdAt: String(session?.createdAt || "").trim() || nowValue,
     updatedAt: String(session?.updatedAt || "").trim() || nowValue,

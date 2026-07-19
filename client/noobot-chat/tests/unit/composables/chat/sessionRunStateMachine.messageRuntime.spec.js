@@ -285,7 +285,7 @@ describe("sessionRunStateMachine message runtime", () => {
       state: BackendChannelState.RECONNECTING,
       running: true,
       inFlightAssistant: true,
-      canStopTarget: true,
+      canStopTarget: false,
     });
 
     expect(resolveSessionRunMessageRuntimeView({
@@ -295,7 +295,7 @@ describe("sessionRunStateMachine message runtime", () => {
       state: BackendChannelState.INTERACTION_PENDING,
       running: true,
       inFlightAssistant: true,
-      canStopTarget: true,
+      canStopTarget: false,
     });
 
     expect(resolveSessionRunMessageRuntimeView({

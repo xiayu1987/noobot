@@ -152,13 +152,13 @@ test('ws router stop forwards request without synthesizing user_stopped', () => 
 
   assert.equal(calls.errors.length, 0);
   assert.equal(calls.forward.length, 1);
-  assert.equal(calls.updateState[0]?.state?.state, 'stopping');
+  assert.equal(calls.updateState.length, 0);
   assert.equal(calls.push.length, 0);
   assert.equal(calls.mark.length, 0);
   assert.equal(calls.broadcast.length, 0);
 });
 
-test('ws router stop reports error when upstream cannot receive stop', () => {
+test('ws router stop reports transport failure without creating a Turn error', () => {
   const calls = {
     push: [],
     mark: [],
@@ -202,12 +202,11 @@ test('ws router stop reports error when upstream cannot receive stop', () => {
     turnScopeId: 'turn-1',
   }));
 
-  assert.equal(calls.errors.length, 0);
-  assert.equal(calls.push.length, 1);
-  assert.equal(calls.push[0].eventName, 'error');
-  assert.equal(calls.push[0].data.error, AGENT_PROXY_ERROR.UPSTREAM_NOT_RUNNING);
-  assert.equal(calls.mark[0].status, 'error');
-  assert.equal(calls.broadcast[0].envelope.event, 'error');
+  assert.equal(calls.errors.length, 1);
+  assert.equal(calls.errors[0].message, AGENT_PROXY_ERROR.UPSTREAM_NOT_RUNNING);
+  assert.equal(calls.push.length, 0);
+  assert.equal(calls.mark.length, 0);
+  assert.equal(calls.broadcast.length, 0);
 });
 
 test('ws router reports upstream unavailable when continue action has no target channel', () => {

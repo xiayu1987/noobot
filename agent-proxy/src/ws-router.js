@@ -101,6 +101,35 @@ export class WsRouter {
 
 
   _handlers = {
+    [WS_ACTION.SNAPSHOT_GET](socket, payload) {
+      const targetChannel = this.channelManager.resolveChannelFromSocketMessage(socket, payload);
+      if (!targetChannel) {
+        this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE);
+        return;
+      }
+      if (!this.channelManager.hasChannelPermission(
+        targetChannel,
+        socket.__agentProxyApiKey,
+        String(socket?.__agentProxyUserId || "").trim(),
+      )) {
+        this.channelManager.sendSocketError(
+          socket,
+          AGENT_PROXY_ERROR.PERMISSION_DENIED_FOR_ACTION(WS_ACTION.SNAPSHOT_GET),
+        );
+        return;
+      }
+      const commandId = String(payload?.commandId || "").trim();
+      if (!commandId) {
+        this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.INVALID_JSON_PAYLOAD);
+        return;
+      }
+      targetChannel.pendingSnapshotRequests ||= new Map();
+      targetChannel.pendingSnapshotRequests.set(commandId, socket);
+      if (this.channelManager.forwardToUpstream(targetChannel, payload)) return;
+      targetChannel.pendingSnapshotRequests.delete(commandId);
+      this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE);
+    },
+
     [WS_ACTION.STOP](socket, payload) {
       const targetChannel = this.channelManager.resolveChannelFromSocketMessage(socket, payload);
       if (!targetChannel) {
@@ -123,31 +152,14 @@ export class WsRouter {
         );
         return;
       }
-      this.channelManager.updateConversationState(targetChannel, {
-        sessionId: String(payload?.sessionId || "").trim(),
-        dialogProcessId: String(payload?.dialogProcessId || "").trim(),
-        turnScopeId: String(payload?.turnScopeId || "").trim(),
-        state: CONVERSATION_STATE.STOPPING,
-        sourceEvent: CONVERSATION_SOURCE_EVENT.STOP,
-        seq: Number(targetChannel?.eventSequence || 0),
-        createdAtMs: Number(payload?.createdAtMs || payload?.timestamp || 0),
-      });
       const forwarded = this.channelManager.forwardToUpstream(targetChannel, payload);
       if (forwarded) return;
-
-      const errorEnvelope = this.channelManager.pushChannelEvent(
-        targetChannel,
-        CHANNEL_EVENT.ERROR,
-        {
-          sessionId: String(payload?.sessionId || "").trim(),
-          dialogProcessId: String(payload?.dialogProcessId || "").trim(),
-          turnScopeId: String(payload?.turnScopeId || "").trim(),
-          createdAtMs: Number(payload?.createdAtMs || payload?.timestamp || 0),
-          error: AGENT_PROXY_ERROR.UPSTREAM_NOT_RUNNING,
-        },
+      // A failed proxy hop is a transport/command failure, not an authoritative
+      // Turn failure. Service lifecycle events remain the only business source.
+      this.channelManager.sendSocketError(
+        socket,
+        AGENT_PROXY_ERROR.UPSTREAM_NOT_RUNNING,
       );
-      this.channelManager.markChannelTerminal(targetChannel, CHANNEL_STATUS.ERROR);
-      this.channelManager.broadcastChannelEvent(targetChannel, errorEnvelope);
     },
 
     [WS_ACTION.CONTINUE](socket, payload) {

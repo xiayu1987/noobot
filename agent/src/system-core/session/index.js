@@ -239,6 +239,14 @@ export function createSessionFacade(runtime = {}) {
       return sessionMessageService.upsertTurnStatus(payload);
     },
 
+    async applyTurnLifecycleEvent(payload = {}) {
+      return sessionMessageService.applyTurnLifecycleEvent(payload);
+    },
+
+    async getTurnLifecycleSnapshot(payload = {}) {
+      return sessionMessageService.getTurnLifecycleSnapshot(payload);
+    },
+
     async upsertTurnTiming(payload = {}) {
       return sessionMessageService.upsertTurnTiming(payload);
     },

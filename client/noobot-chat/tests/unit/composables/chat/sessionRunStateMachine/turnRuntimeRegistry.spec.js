@@ -58,7 +58,7 @@ describe("turnRuntimeRegistry", () => {
     expect(selectSessionTurnRuntime(registry, "s1")).toMatchObject({
       sending: true,
       canStop: false,
-      displayState: "sending",
+      displayState: "requesting",
     });
     const stopped = applyTurnRuntimeEvent(registry, {
       type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,

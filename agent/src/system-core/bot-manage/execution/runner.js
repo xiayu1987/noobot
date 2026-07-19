@@ -484,6 +484,12 @@ export class SessionExecutionRunner {
           : beforeAgentDispatchContext;
       const skipAgentDispatch = effectiveBeforeAgentDispatchContext?.skipAgentDispatch === true;
       if (skipAgentDispatch) {
+        // A hook-provided result still represents Agent-owned turn processing.
+        // Emit the same authoritative RUNNING boundary used by the normal
+        // dispatch path before accepting that result, so Service never has to
+        // infer processing_started from a successful return value.
+        lifecycle.enterRunning({ source: "before_agent_dispatch_override" });
+        syncLifecycleRuntimeState(dispatchRuntime, lifecycle);
         const override =
           effectiveBeforeAgentDispatchContext?.overrideAgentResult &&
           typeof effectiveBeforeAgentDispatchContext.overrideAgentResult === "object"

@@ -39,13 +39,24 @@ describe("turn runtime interaction lifecycle", () => {
 
   it("enters processing only after a backend in-flight acknowledgement", () => {
     const requesting = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED });
-    for (const state of [
-      BackendChannelState.SENDING,
-      BackendChannelState.RECONNECTING,
-      BackendChannelState.INTERACTION_PENDING,
-    ]) {
-      const processing = apply(requesting, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state });
-      expect(processing.state).toBe(FrontendRunState.PROCESSING);
+    const processing = apply(requesting, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: BackendChannelState.SENDING,
+    });
+    expect(processing.state).toBe(FrontendRunState.PROCESSING);
+
+    for (const state of [BackendChannelState.RECONNECTING, BackendChannelState.INTERACTION_PENDING]) {
+      const result = reduceTurnRuntimeEvent(requesting, {
+        ...identity,
+        type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+        state,
+      });
+      expect(result).toMatchObject({ applied: false, reason: TURN_TRANSITION_REASON.ILLEGAL_TRANSITION });
+      expect(requesting.state).toBe(FrontendRunState.ACTION_REQUESTING);
+      expect(deriveTurnCapabilities(requesting.state, requesting)).toMatchObject({
+        sending: true,
+        canStop: false,
+      });
     }
   });
 

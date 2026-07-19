@@ -36,6 +36,8 @@ ensureChannel(channelKey = "", startPayload = {}) {
     startFingerprint: "",
     eventSequence: 0,
     eventLog: [],
+    lifecycleWindowsBySessionId: new Map(),
+    pendingSnapshotRequests: new Map(),
     pendingInteractionRequests: new Map(),
     cleanupAfterMs: 0,
     upstreamClosed: false,
@@ -89,6 +91,9 @@ pushChannelEvent(channel, eventName = "", data = {}) {
   if (channel.eventLog.length > config.maxChannelEvents) {
     channel.eventLog = channel.eventLog.slice(-config.maxChannelEvents);
   }
+  if (envelope.event === CHANNEL_EVENT.TURN_LIFECYCLE) {
+    this.recordTurnLifecycleEnvelope(channel, envelope.data);
+  }
   this.logSessionEvent(channel, {
     category: "message",
     event: "agentProxy.channel.event",
@@ -112,6 +117,43 @@ pushChannelEvent(channel, eventName = "", data = {}) {
   }
   this._applyConversationStateFromEnvelope(channel, envelope);
   return envelope;
+}
+
+recordTurnLifecycleEnvelope(channel, lifecycleEnvelope = {}) {
+  if (!channel || !lifecycleEnvelope || typeof lifecycleEnvelope !== "object") return null;
+  const sessionId = String(lifecycleEnvelope.sessionId || "").trim();
+  const sequence = Number(lifecycleEnvelope.sequence || 0);
+  const revision = Number(lifecycleEnvelope.revision || 0);
+  const eventId = String(lifecycleEnvelope.eventId || "").trim();
+  if (!sessionId || !Number.isInteger(sequence) || sequence < 1 || !eventId) return null;
+  channel.lifecycleWindowsBySessionId ||= new Map();
+  const current = channel.lifecycleWindowsBySessionId.get(sessionId) || [];
+  if (current.some((item) => item.eventId === eventId || item.sequence === sequence)) return null;
+  const next = [...current, { ...lifecycleEnvelope, sequence, revision, eventId }]
+    .sort((left, right) => left.sequence - right.sequence)
+    .slice(-config.maxChannelEvents);
+  channel.lifecycleWindowsBySessionId.set(sessionId, next);
+  return next;
+}
+
+getTurnLifecycleReplay(channel, sessionId = "", knownSequence = 0) {
+  const normalizedSessionId = String(sessionId || "").trim();
+  const sequence = Number(knownSequence || 0);
+  const window = channel?.lifecycleWindowsBySessionId?.get(normalizedSessionId) || [];
+  if (!window.length) return { events: [], requiresSnapshot: sequence > 0 };
+  const first = Number(window[0]?.sequence || 0);
+  let previous = first - 1;
+  const hasGap = window.some((item) => {
+    const current = Number(item?.sequence || 0);
+    const gap = current !== previous + 1;
+    previous = current;
+    return gap;
+  });
+  if (hasGap || sequence < first - 1) return { events: [], requiresSnapshot: true };
+  return {
+    events: window.filter((item) => Number(item.sequence) > sequence),
+    requiresSnapshot: false,
+  };
 }
 
 updateConversationState(

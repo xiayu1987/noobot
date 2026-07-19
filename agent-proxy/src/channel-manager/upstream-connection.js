@@ -64,10 +64,10 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
       event: "agentProxy.upstream.connect.skipped",
       data: { channelKey: channel.key, reason: AGENT_PROXY_ERROR.UPSTREAM_URL_EMPTY },
     });
-    const errorEnvelope = this.pushChannelEvent(channel, CHANNEL_EVENT.ERROR, {
+    const errorEnvelope = this.pushChannelEvent(channel, CHANNEL_EVENT.TRANSPORT_ERROR, {
       error: AGENT_PROXY_ERROR.UPSTREAM_URL_EMPTY,
+      transport: true,
     });
-    this.markChannelTerminal(channel, CHANNEL_STATUS.ERROR);
     this.broadcastChannelEvent(channel, errorEnvelope);
     return;
   }
@@ -93,7 +93,9 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
       this.closeUpstreamChannel(channel, 1000, UPSTREAM_CLOSE_REASON.CLOSED);
       return;
     }
-    channel.status = CHANNEL_STATUS.RUNNING;
+    // OPEN is a transport fact only. Service lifecycle events are the sole
+    // source of authoritative Turn processing state.
+    channel.status = CHANNEL_STATUS.OPEN;
     channel.updatedAtMs = nowMs();
     this.logSessionEvent(channel, {
       category: "transport",
@@ -114,10 +116,10 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
         event: "agentProxy.upstream.initialPayload.error",
         data: { channelKey: channel.key, error: String(error?.message || AGENT_PROXY_ERROR.FAILED_TO_SEND_PAYLOAD) },
       });
-      const errorEnvelope = this.pushChannelEvent(channel, CHANNEL_EVENT.ERROR, {
+      const errorEnvelope = this.pushChannelEvent(channel, CHANNEL_EVENT.TRANSPORT_ERROR, {
         error: String(error?.message || AGENT_PROXY_ERROR.FAILED_TO_SEND_PAYLOAD),
+        transport: true,
       });
-      this.markChannelTerminal(channel, CHANNEL_STATUS.ERROR);
       this.broadcastChannelEvent(channel, errorEnvelope);
       this.closeUpstreamChannel(channel, 1011, UPSTREAM_CLOSE_REASON.SEND_FAILED);
     }
@@ -129,6 +131,15 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
       const eventName = String(parsed?.event || CHANNEL_EVENT.MESSAGE).trim() || CHANNEL_EVENT.MESSAGE;
       const eventData =
         parsed?.data && typeof parsed.data === "object" ? parsed.data : {};
+      if (eventName === CHANNEL_EVENT.TURN_SNAPSHOT) {
+        const commandId = String(eventData?.commandId || "").trim();
+        const requester = commandId ? channel.pendingSnapshotRequests?.get(commandId) : null;
+        if (requester) {
+          channel.pendingSnapshotRequests.delete(commandId);
+          this.sendSocketEvent(requester, { event: eventName, data: eventData });
+        }
+        return;
+      }
       const eventEnvelope = this.pushChannelEvent(channel, eventName, eventData);
       this.logSessionEvent(channel, {
         category: "transport",
@@ -144,15 +155,8 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
         },
       });
       this.broadcastChannelEvent(channel, eventEnvelope);
-      if (eventName === CHANNEL_EVENT.DONE) {
-        this.markChannelTerminal(channel, CHANNEL_STATUS.DONE);
-      } else if (eventName === CHANNEL_EVENT.USER_STOPPED) {
-        this.markChannelTerminal(channel, CHANNEL_STATUS.USER_STOPPED);
-      } else if (eventName === CHANNEL_EVENT.ERROR) {
-        this.markChannelTerminal(channel, CHANNEL_STATUS.ERROR);
-      } else if (!isTerminalStatus(channel.status)) {
-        channel.status = CHANNEL_STATUS.RUNNING;
-      }
+      // Upstream events are forwarded facts. Transport state must not be
+      // promoted to, or terminated by, a business lifecycle projection.
     } catch (error) {
       this.logSessionEvent(channel, {
         category: "transport",
@@ -160,10 +164,10 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
         event: "agentProxy.upstream.message.error",
         data: { channelKey: channel.key, error: String(error?.message || AGENT_PROXY_ERROR.INVALID_UPSTREAM_EVENT) },
       });
-      const errorEnvelope = this.pushChannelEvent(channel, CHANNEL_EVENT.ERROR, {
+      const errorEnvelope = this.pushChannelEvent(channel, CHANNEL_EVENT.TRANSPORT_ERROR, {
         error: String(error?.message || AGENT_PROXY_ERROR.INVALID_UPSTREAM_EVENT),
+        transport: true,
       });
-      this.markChannelTerminal(channel, CHANNEL_STATUS.ERROR);
       this.broadcastChannelEvent(channel, errorEnvelope);
       this.closeUpstreamChannel(
         channel,
@@ -193,25 +197,9 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
       event: "agentProxy.upstream.closed",
       data: { channelKey: channel.key, closeCode: normalizedCloseCode, closeReason },
     });
-    if (!isTerminalStatus(channel.status)) {
-      if (closeReason === "user_stopped") {
-        this.markChannelTerminal(channel, CHANNEL_STATUS.USER_STOPPED);
-        const stoppedEnvelope = this.pushChannelEvent(channel, CHANNEL_EVENT.USER_STOPPED, {
-          message: "upstream confirmed user stop",
-          upstreamCloseCode: normalizedCloseCode,
-          upstreamCloseReason: closeReason,
-        });
-        this.broadcastChannelEvent(channel, stoppedEnvelope);
-        return;
-      }
-      this.markChannelTerminal(channel, CHANNEL_STATUS.ERROR);
-      const errorEnvelope = this.pushChannelEvent(channel, CHANNEL_EVENT.ERROR, {
-        error: "upstream socket closed before terminal event",
-        upstreamCloseCode: normalizedCloseCode,
-        upstreamCloseReason: closeReason || "upstream socket closed",
-      });
-      this.broadcastChannelEvent(channel, errorEnvelope);
-    }
+    // Socket closure is transport metadata. It must never synthesize a Turn
+    // stopped/error terminal fact; reconnect or authoritative snapshot decides
+    // the business lifecycle.
   });
 
   upstreamSocket.on(CHANNEL_EVENT.ERROR, (error) => {
@@ -228,10 +216,10 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
       event: "agentProxy.upstream.error",
       data: { channelKey: channel.key, error: String(error?.message || "upstream websocket error") },
     });
-    const errorEnvelope = this.pushChannelEvent(channel, CHANNEL_EVENT.ERROR, {
+    const errorEnvelope = this.pushChannelEvent(channel, CHANNEL_EVENT.TRANSPORT_ERROR, {
       error: String(error?.message || "upstream websocket error"),
+      transport: true,
     });
-    this.markChannelTerminal(channel, CHANNEL_STATUS.ERROR);
     this.broadcastChannelEvent(channel, errorEnvelope);
   });
 }

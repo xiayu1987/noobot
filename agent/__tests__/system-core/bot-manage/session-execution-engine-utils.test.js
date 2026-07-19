@@ -246,6 +246,12 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
     shortMemoryCheckpoint: 0,
     turnTimings: [],
     turnStatuses: [],
+    turnLifecycle: {
+      activeTurnScopeId: "",
+      sequence: 0,
+      turns: {},
+      commandReceipts: [],
+    },
     messages: [
       {
         role: "assistant",

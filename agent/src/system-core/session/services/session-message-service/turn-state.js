@@ -8,6 +8,61 @@ import { resolveDialogProcessIdFromContext, resolveMessageDialogProcessId } from
 import { dedupeAttachments, normalizeIncomingAttachmentsForSessionMessage } from "./attachment-helpers.js";
 import { resolveSessionVersion } from "./anchor-utils.js";
 import { upsertSessionTurnTiming } from "./turn-timing.js";
+import { normalizeTurnLifecycleEntity, transitionTurnLifecycle, isTerminalTurnLifecycleState } from "../../entities/turn-lifecycle-entity.js";
+import { createTurnLifecycleSnapshot } from "@noobot/shared/turn-lifecycle-protocol";
+
+export async function getTurnLifecycleSnapshot({ userId, sessionId, parentSessionId = "", commandId = "", knownSequence, terminalLimit = 10 } = {}) {
+  if (!userId || !sessionId) return { found: false, reason: "missing_session" };
+  const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(userId, sessionId, parentSessionId);
+  const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
+  if (!session) return { found: false, reason: "session_not_found" };
+  const lifecycle = normalizeTurnLifecycleEntity(session.turnLifecycle || {});
+  const activeTurn = lifecycle.turns[lifecycle.activeTurnScopeId] || null;
+  const limit = Math.max(0, Math.min(100, Number(terminalLimit) || 10));
+  const recentTerminalTurns = Object.values(lifecycle.turns)
+    .filter((turn) => isTerminalTurnLifecycleState(turn.state))
+    .sort((a, b) => Number(b.sequence) - Number(a.sequence))
+    .slice(0, limit);
+  return {
+    found: true,
+    snapshot: createTurnLifecycleSnapshot({
+      commandId, userId, sessionId, sequence: lifecycle.sequence,
+      activeTurnScopeId: lifecycle.activeTurnScopeId, activeTurn, recentTerminalTurns,
+      unchanged: knownSequence !== undefined && Number(knownSequence) === lifecycle.sequence,
+      generatedAt: this.now(),
+    }),
+  };
+}
+
+export async function applyTurnLifecycleEvent({
+  userId,
+  sessionId,
+  parentSessionId = "",
+  expectedSessionVersion,
+  ...event
+} = {}) {
+  if (!userId || !sessionId) return { applied: false, reason: "missing_session" };
+  return this._withSessionMutation(userId, sessionId, async () => {
+    const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+      userId,
+      sessionId,
+      parentSessionId,
+    );
+    const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
+    if (!session) return { applied: false, reason: "session_not_found" };
+    const actualVersion = resolveSessionVersion(session);
+    if (expectedSessionVersion !== undefined && Number(expectedSessionVersion) !== actualVersion) {
+      return { applied: false, reason: "session_version_conflict", currentVersion: actualVersion };
+    }
+    const result = transitionTurnLifecycle(session.turnLifecycle, event, this.now);
+    if (!result.applied) return { ...result, session, version: actualVersion };
+    session.turnLifecycle = result.lifecycle;
+    session.updatedAt = this.now();
+    if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
+    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: actualVersion });
+    return { ...result, session, version: resolveSessionVersion(session) };
+  });
+}
 
 export async function upsertTurnStatus({
     userId,
