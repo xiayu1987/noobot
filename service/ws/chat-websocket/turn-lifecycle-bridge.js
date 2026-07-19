@@ -22,7 +22,12 @@ export function createTurnLifecycleBridge({ resolveBot, sendEvent } = {}) {
     // that an authoritative event was committed. Once capability negotiation
     // says v1 is available, callers receive a real applied/rejected result.
     if (typeof applyLifecycle !== "function") {
-      return { applied: true, skipped: true, reason: "lifecycle_protocol_unavailable" };
+      return {
+        applied: true,
+        skipped: true,
+        legacy: true,
+        reason: "lifecycle_protocol_unavailable",
+      };
     }
     const result = await applyLifecycle.call(bot, {
       ...event,
@@ -51,6 +56,11 @@ export function createTurnLifecycleBridge({ resolveBot, sendEvent } = {}) {
       sequence: turn.sequence,
       phase: turn.phase,
       state: turn.state,
+      action: turn.action,
+      executionState: turn.executionState,
+      summaryVersion: turn.summaryVersion,
+      updatedAt: turn.updatedAt,
+      occurredAt: turn.updatedAt,
       capabilities: deriveAuthoritativeTurnCapabilities(turn),
       failure: turn.failure,
       payload: event.payload,

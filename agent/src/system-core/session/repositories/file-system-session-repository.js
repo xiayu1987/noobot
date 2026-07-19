@@ -419,6 +419,19 @@ export class FileSystemSessionRepository {
     return true;
   }
 
+  createInitialSession({ sessionId, parentSessionId = "", meta = {} } = {}) {
+    return normalizeSessionEntity({
+      sessionId,
+      parentSessionId,
+      caller: meta?.caller || "user",
+      modelAlias: meta?.modelAlias || "",
+      currentTaskId: "",
+      shortMemoryCheckpoint: 0,
+      messages: [],
+      selectedConnectors: {},
+    }, { now: this.now, sessionId, parentSessionId });
+  }
+
   async findById(userId, sessionId, parentSessionId = "") {
     if (await this.isSessionDeleted(userId, sessionId)) return null;
     const { resolvedParentSessionId, sessionFile } = await this.resolveSessionScope(
@@ -442,7 +455,7 @@ export class FileSystemSessionRepository {
     return session;
   }
 
-  async save(userId, session = {}, parentSessionId = "", { expectedVersion } = {}) {
+  async save(userId, session = {}, parentSessionId = "", { expectedVersion, createOnly = false } = {}) {
     const sessionId = String(session?.sessionId || "").trim();
     if (!sessionId) {
       throw fatalSystemError(tSystem("common.sessionIdRequired"), {
@@ -455,6 +468,15 @@ export class FileSystemSessionRepository {
       sessionId,
       parentSessionId || session?.parentSessionId || "",
     );
+    if (createOnly) {
+      const persisted = await this.findById(userId, sessionId, resolvedParentSessionId);
+      if (persisted) {
+        const error = new Error("session already exists");
+        error.statusCode = 409;
+        error.errorCode = "SESSION_ALREADY_EXISTS";
+        throw error;
+      }
+    }
     if (expectedVersion !== undefined && expectedVersion !== null) {
       const persisted = await this.findById(userId, sessionId, resolvedParentSessionId);
       const actualVersion = Number(persisted?.version ?? persisted?.revision ?? 0);
@@ -483,7 +505,20 @@ export class FileSystemSessionRepository {
       sessionPayload: payload,
       atomic: true,
     });
-    await this.upsertSessionSummary(userId, payload);
+    try {
+      await this.upsertSessionSummary(userId, payload);
+    } catch (summaryError) {
+      // The Session artifact is the source of truth and has already been
+      // committed atomically. Repair the derived index before reporting the
+      // mutation as failed, otherwise callers may retry an accepted Turn as
+      // though the Session had never been persisted.
+      try {
+        await this.rebuildSessionsSummary(userId);
+      } catch (rebuildError) {
+        rebuildError.cause = rebuildError.cause || summaryError;
+        throw rebuildError;
+      }
+    }
     return true;
   }
 

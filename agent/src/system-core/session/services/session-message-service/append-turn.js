@@ -50,25 +50,12 @@ export async function appendTurn({
       sessionId,
       parentSessionId,
     );
-    if (this.sessionCrudService) {
-      await this.sessionCrudService.ensureSession(
-        userId,
-        sessionId,
-        resolvedParentSessionId,
-      );
-    } else {
-      await this.sessionRepo.ensureSession({
-        userId,
-        sessionId,
-        parentSessionId: resolvedParentSessionId,
-      });
-    }
     const session = await this.sessionRepo.findById(
       userId,
       sessionId,
       resolvedParentSessionId,
     );
-    if (!session) return;
+    if (!session) return { appended: false, reason: "session_not_found" };
 
     const resolvedTaskId = taskId ?? session?.currentTaskId ?? "";
     const resolvedTaskStatus = taskStatus ?? (resolvedTaskId ? "start" : "");

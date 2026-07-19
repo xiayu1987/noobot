@@ -376,6 +376,7 @@ export function createMessageHandler({
       eventType: TURN_EVENT.ACTION_ACCEPTED,
       phase: TURN_PHASE.ACTION,
       action,
+      createSessionIfAbsent: action === "send",
       expectedRevision: payload?.expectedRevision ?? 0,
     });
     if (!accepted?.applied && !accepted?.deduplicated) {
