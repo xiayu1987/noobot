@@ -92,6 +92,7 @@ export const SESSION_RUN_EVENT = Object.freeze({
   LOCAL_USER_STOP_SUMMARY_FAILED: "local_user_stop_summary_failed",
   BACKEND_CONVERSATION_STATE: "backend_conversation_state",
   BACKEND_CHANNEL_STATE: "backend_channel_state",
+  BACKEND_TURN_LIFECYCLE: "backend_turn_lifecycle",
   LOCAL_FAILURE: "local_failure",
   LOCAL_RESET: "local_reset",
 });

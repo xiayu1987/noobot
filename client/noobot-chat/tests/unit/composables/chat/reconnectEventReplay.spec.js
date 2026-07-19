@@ -8,6 +8,34 @@ import { applyReconnectEventReplay } from "../../../../src/composables/chat/reco
 import { StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
 
 describe("applyReconnectEventReplay", () => {
+  it("routes authoritative TURN_LIFECYCLE envelopes directly to the lifecycle reducer", async () => {
+    const replayCache = {};
+    const applyTurnLifecycleEnvelope = vi.fn(() => ({ applied: true }));
+    const envelope = {
+      eventType: "turn.processing_started",
+      sessionId: "s-1",
+      turnScopeId: "turn-1",
+      revision: 2,
+      sequence: 2,
+    };
+
+    const result = await applyReconnectEventReplay({
+      event: StreamEventEnum.TURN_LIFECYCLE,
+      data: envelope,
+      replayCache,
+      isCurrentActiveSession: vi.fn(() => false),
+      consumeReplayCacheForSession: vi.fn(),
+      applyReconnectMessagesToActiveSession: vi.fn(),
+      applyChannelState: vi.fn(),
+      applyTurnLifecycleEnvelope,
+    });
+
+    expect(result).toEqual({ applied: true });
+    expect(applyTurnLifecycleEnvelope).toHaveBeenCalledOnce();
+    expect(applyTurnLifecycleEnvelope).toHaveBeenCalledWith(envelope);
+    expect(replayCache).toEqual({});
+  });
+
   it("routes CHANNEL_STATE events without touching replay cache", async () => {
     const replayCache = {};
     const applyChannelState = vi.fn();

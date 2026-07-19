@@ -17,7 +17,15 @@ export async function applyReconnectEventReplay({
   consumeReplayCacheForSession,
   applyReconnectMessagesToActiveSession,
   applyChannelState,
+  applyTurnLifecycleEnvelope,
+  applyTurnLifecycleSnapshot,
 } = {}) {
+  if (_trimStr(event) === StreamEventEnum.TURN_SNAPSHOT) {
+    return applyTurnLifecycleSnapshot?.(data || {});
+  }
+  if (_trimStr(event) === StreamEventEnum.TURN_LIFECYCLE) {
+    return applyTurnLifecycleEnvelope?.(data || {});
+  }
   if (_trimStr(event) === StreamEventEnum.CHANNEL_STATE) {
     return applyChannelState(data || {});
   }

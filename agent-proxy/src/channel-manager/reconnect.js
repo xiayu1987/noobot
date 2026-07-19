@@ -18,66 +18,11 @@ import { writeAgentProxyRouteLifecycleEvent } from "../ws-runtime-events.js";
 class ReconnectMethods {
 // ---- Reconnect ----
 
-_isChannelExecutionAlive(channel) {
-  if (!channel) return false;
-  const status = String(channel.status || "").trim();
-  const readyState = channel?.upstreamSocket?.readyState;
-  // Older/in-memory fixtures may only carry a status. Once a real upstream has
-  // been created, however, its socket lifecycle is the authoritative liveness
-  // source and a missing/closed socket must not be treated as an active run.
-  if (channel.upstreamEverConnected !== true && channel.upstreamClosed !== true) {
-    return status === CHANNEL_STATUS.RUNNING || status === CHANNEL_STATUS.CONNECTING;
-  }
-  if (status === CHANNEL_STATUS.RUNNING) {
-    return readyState === this.WebSocket.OPEN && channel.upstreamClosed !== true;
-  }
-  if (status === CHANNEL_STATUS.CONNECTING) {
-    const connectingState = Number.isFinite(Number(this.WebSocket.CONNECTING))
-      ? Number(this.WebSocket.CONNECTING)
-      : 0;
-    return (
-      channel.upstreamClosed !== true &&
-      (readyState === connectingState || readyState === this.WebSocket.OPEN)
-    );
-  }
-  return false;
-}
-
-_convergeOrphanedActiveChannel(channel, sessionId = "") {
-  const status = String(channel?.status || "").trim();
-  const claimsActive =
-    status === CHANNEL_STATUS.RUNNING || status === CHANNEL_STATUS.CONNECTING;
-  if (!claimsActive || this._isChannelExecutionAlive(channel)) return false;
-
-  const turnScopeId = String(channel?.startPayload?.turnScopeId || "").trim();
-  const dialogProcessId = String(channel?.startPayload?.dialogProcessId || "").trim();
-  this.markChannelTerminal(channel, CHANNEL_STATUS.ERROR);
-  this.updateConversationState(channel, {
-    sessionId,
-    dialogProcessId,
-    turnScopeId,
-    state: CONVERSATION_STATE.ERROR,
-    sourceEvent: CONVERSATION_SOURCE_EVENT.CHANNEL_STATUS,
-    seq: Number(channel?.eventSequence || 0),
-    broadcast: false,
-  });
-  this.logSessionEvent(channel, {
-    category: "state",
-    level: "warn",
-    event: "agentProxy.channel.orphan.converged",
-    data: {
-      previousStatus: status,
-      upstreamReadyState: channel?.upstreamSocket?.readyState ?? null,
-      upstreamClosed: channel?.upstreamClosed === true,
-    },
-  });
-  return true;
-}
-
 handleReconnect(socket, payload = {}) {
   const lastReceivedSeqMap = payload?.lastReceivedSeqMap || {};
   const lastReceivedTurnScopeIdMap = payload?.lastReceivedTurnScopeIdMap || {};
   const currentSessionId = String(payload?.currentSessionId || "").trim();
+  const knownLifecycleSequenceMap = payload?.knownLifecycleSequenceMap || {};
   const reconnectChannelKeys = this._resolveReconnectChannelKeys(socket, currentSessionId, payload);
   void writeAgentProxyRouteLifecycleEvent({
     event: "agentProxy.route.reconnect.started",
@@ -123,50 +68,44 @@ handleReconnect(socket, payload = {}) {
     const channelSessionId = this._extractSessionIdFromChannelKey(channelKey);
     if (!channelSessionId) continue;
 
-    // Channel status is only a projection. After a refresh/restart the upstream
-    // execution may already be gone while the cached channel still says running.
-    // Converge that orphan before producing reconnect state so clients cannot
-    // resurrect a non-existent run as sending/stopping forever.
-    this._convergeOrphanedActiveChannel(channel, channelSessionId);
-
-    const preAttachSessionState =
-      channel.status === CHANNEL_STATUS.CONNECTING
-        ? CONVERSATION_STATE.RECONNECTING
-        : channel.status === CHANNEL_STATUS.RUNNING
-        ? CONVERSATION_STATE.SENDING
-        : "";
-    if (preAttachSessionState) {
-      this.updateConversationState(channel, {
-        sessionId: channelSessionId,
-        dialogProcessId: "",
-        turnScopeId: String(channel?.startPayload?.turnScopeId || "").trim(),
-        state: preAttachSessionState,
-        sourceEvent: CONVERSATION_SOURCE_EVENT.CHANNEL_STATUS,
-        seq: Number(channel?.eventSequence || 0),
-        createdAtMs: Number(channel?.createdAtMs || channel?.updatedAtMs || nowMs()),
-        broadcast: false,
-      });
-    }
-
     this.attachSubscriber(channel, socket);
 
     if (!sessionsMap.has(channelSessionId)) {
+      const knownLifecycleSequence = Number(knownLifecycleSequenceMap[channelSessionId] || 0);
+      const lifecycleReplay = this.getTurnLifecycleReplay(
+        channel,
+        channelSessionId,
+        knownLifecycleSequence,
+      );
       sessionsMap.set(channelSessionId, {
         sessionId: channelSessionId,
         hasRunningTask: false,
         currentRun: null,
         dialogProcesses: [],
         conversationStates: [],
+        lifecycleEvents: lifecycleReplay.events.map((data) => ({
+          event: CHANNEL_EVENT.TURN_LIFECYCLE,
+          data,
+        })),
+        lifecycleSnapshotRequested: lifecycleReplay.requiresSnapshot,
       });
+      if (lifecycleReplay.requiresSnapshot) {
+        const commandId = `proxy-snapshot:${channelSessionId}:${nowMs()}`;
+        channel.pendingSnapshotRequests ||= new Map();
+        channel.pendingSnapshotRequests.set(commandId, socket);
+        const forwarded = this.forwardToUpstream(channel, {
+          action: "turn.snapshot.get",
+          commandType: "turn.snapshot.get",
+          commandId,
+          userId: String(socket?.__agentProxyUserId || "").trim(),
+          sessionId: channelSessionId,
+          knownSequence: knownLifecycleSequence,
+        });
+        if (!forwarded) channel.pendingSnapshotRequests.delete(commandId);
+      }
     }
 
     const sessionEntry = sessionsMap.get(channelSessionId);
-    const isActiveChannel =
-      channel.status === CHANNEL_STATUS.RUNNING ||
-      channel.status === CHANNEL_STATUS.CONNECTING;
-    if (isActiveChannel) {
-      sessionEntry.hasRunningTask = true;
-    }
     const stateByDialogProcessId = new Map(
       (Array.isArray(sessionEntry?.conversationStates) ? sessionEntry.conversationStates : []).map(
         (item) => [
@@ -201,71 +140,6 @@ handleReconnect(socket, payload = {}) {
     sessionEntry.conversationStates = Array.from(stateByDialogProcessId.values()).sort(
       (left, right) => Number(left?.updatedAtMs || 0) - Number(right?.updatedAtMs || 0),
     );
-    const derivedSessionState =
-      channel.status === CHANNEL_STATUS.CONNECTING
-        ? CONVERSATION_STATE.RECONNECTING
-        : channel.status === CHANNEL_STATUS.RUNNING
-        ? CONVERSATION_STATE.SENDING
-        : channel.status === CHANNEL_STATUS.IDLE
-        ? CONVERSATION_STATE.NO_CONVERSATION
-        : "";
-    if (derivedSessionState) {
-      const existingSessionScopeStateIndex = sessionEntry.conversationStates.findIndex(
-        (stateItem) => !String(stateItem?.dialogProcessId || "").trim(),
-      );
-      const nextSessionScopeState = {
-        sessionId: channelSessionId,
-        dialogProcessId: "",
-        turnScopeId: String(channel?.startPayload?.turnScopeId || "").trim(),
-        state: derivedSessionState,
-        sourceEvent: CONVERSATION_SOURCE_EVENT.CHANNEL_STATUS,
-        seq: Number(channel?.eventSequence || 0),
-        createdAtMs: Number(channel?.createdAtMs || channel?.updatedAtMs || nowMs()),
-        updatedAtMs: Number(channel?.updatedAtMs || nowMs()),
-      };
-      if (existingSessionScopeStateIndex < 0) {
-        sessionEntry.conversationStates.push(nextSessionScopeState);
-      } else {
-        sessionEntry.conversationStates[existingSessionScopeStateIndex] = nextSessionScopeState;
-      }
-    }
-
-    const channelTurnScopeId = String(channel?.startPayload?.turnScopeId || "").trim();
-    if (channelTurnScopeId) {
-      const currentRunStates = sessionEntry.conversationStates
-        .filter(
-          (stateItem) =>
-            String(stateItem?.turnScopeId || "").trim() === channelTurnScopeId,
-        )
-        .sort(
-          (left, right) =>
-            Number(right?.updatedAtMs || right?.seq || 0) -
-            Number(left?.updatedAtMs || left?.seq || 0),
-        );
-      const currentRunState = currentRunStates[0];
-      if (currentRunState) {
-        const currentDialogState = currentRunStates.find(
-          (stateItem) => String(stateItem?.dialogProcessId || "").trim(),
-        );
-        const nextCurrentRun = {
-          ...currentRunState,
-          sessionId: channelSessionId,
-          dialogProcessId: String(
-            channel?.startPayload?.dialogProcessId ||
-              currentDialogState?.dialogProcessId ||
-              "",
-          ).trim(),
-          turnScopeId: channelTurnScopeId,
-        };
-        if (
-          !sessionEntry.currentRun ||
-          Number(nextCurrentRun.updatedAtMs || 0) >=
-            Number(sessionEntry.currentRun.updatedAtMs || 0)
-        ) {
-          sessionEntry.currentRun = nextCurrentRun;
-        }
-      }
-    }
 
     // Collect all dialogProcessIds from eventLog
     const dialogProcessIdsInLog = new Set();

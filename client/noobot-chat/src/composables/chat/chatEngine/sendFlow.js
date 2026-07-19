@@ -422,6 +422,14 @@ export function createChatEngineSender({
           botMessage: summarizeDebugMessage(botMsg),
         });
         if (!isEventForCurrentTurn(data || {}, botMsg)) return;
+        if (event === StreamEventEnum.TURN_LIFECYCLE) {
+          applyRunStateEvent?.({
+            ...data,
+            type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+            source: "turn_lifecycle",
+          });
+          return;
+        }
         if (event === "turn_committed") {
           const eventSessionId = normalizeTrimmedString(data?.sessionId);
           const targetSessionId = normalizeTrimmedString(

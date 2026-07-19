@@ -95,41 +95,11 @@ forwardToUpstream(channel, payload = {}) {
         requestId: payload?.requestId,
       },
     });
-    if (
-      String(payload?.action || "").trim().toLowerCase() ===
-      WS_ACTION.INTERACTION_RESPONSE
-    ) {
+    if (String(payload?.action || "").trim().toLowerCase() === WS_ACTION.INTERACTION_RESPONSE) {
       const requestId = String(payload?.requestId || "").trim();
       if (requestId) {
-        const requestEnvelope = channel.pendingInteractionRequests.get(requestId) || null;
         channel.pendingInteractionRequests.delete(requestId);
         this.requestChannelMap.delete(requestId);
-        const dialogProcessId = String(requestEnvelope?.data?.dialogProcessId || "").trim();
-        const turnScopeId = String(requestEnvelope?.data?.turnScopeId || "").trim();
-        const sessionId = String(requestEnvelope?.data?.sessionId || "").trim();
-        const remainingPendingInteractions = this._findPendingInteractionsByDialogProcessId(
-          channel,
-          dialogProcessId,
-        );
-        const stateKey = dialogProcessId || CONVERSATION_SCOPE_KEY;
-        const previousStateItem =
-          channel.conversationStateByDialogProcessId.get(stateKey) || null;
-        this.updateConversationState(channel, {
-          dialogProcessId,
-          turnScopeId,
-          sessionId,
-          state: remainingPendingInteractions.length
-            ? CONVERSATION_STATE.INTERACTION_PENDING
-            : CONVERSATION_STATE.SENDING,
-          sourceEvent: CONVERSATION_SOURCE_EVENT.INTERACTION_RESPONSE,
-          seq:
-            Math.max(
-              Number(previousStateItem?.seq || 0),
-              Number(requestEnvelope?.data?.seq || 0),
-              Number(channel?.eventSequence || 0),
-            ) + 1,
-          requestId,
-        });
       }
     }
     return true;

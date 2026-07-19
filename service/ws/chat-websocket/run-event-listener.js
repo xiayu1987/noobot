@@ -28,6 +28,7 @@ export function createRunEventListener({
   getCurrentRunMeta = () => null,
   getCurrentRunHandle = () => null,
   getCurrentTurnScopeId = () => "",
+  onRootRunning = null,
 } = {}) {
   const resolveTurnScopeId = () =>
     getCurrentRunMeta()?.turnScopeId || getCurrentTurnScopeId() || "";
@@ -42,6 +43,23 @@ export function createRunEventListener({
       const childRunEvent = isChildRunEventData(eventData, {
         rootSessionId: sessionId,
       });
+      if (
+        eventName === "agent_lifecycle_state_changed" &&
+        String(eventData?.state || "").trim().toLowerCase() === "running" &&
+        !childRunEvent
+      ) {
+        const expectedTurnScopeId = resolveTurnScopeId();
+        const eventSessionId = String(eventData?.sessionId || "").trim();
+        const eventTurnScopeId = String(eventData?.turnScopeId || "").trim();
+        if (
+          eventSessionId === String(sessionId || "").trim() &&
+          eventTurnScopeId &&
+          eventTurnScopeId === expectedTurnScopeId &&
+          typeof onRootRunning === "function"
+        ) {
+          onRootRunning(eventData);
+        }
+      }
       const parentDialogProcessId =
         currentRunMeta?.dialogProcessId ||
         eventData?.parentDialogProcessId ||

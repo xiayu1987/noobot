@@ -45,11 +45,20 @@ describe("sessionRunStateMachine scope separation", () => {
 
   it("keeps processing facts scoped to their exact Turn", () => {
     const started = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
-    for (const state of [BackendChannelState.SENDING, BackendChannelState.INTERACTION_PENDING]) {
-      expect(apply(started, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state })).toMatchObject({
-        ...identity, state: FrontendRunState.PROCESSING,
-      });
-    }
+    expect(apply(started, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: BackendChannelState.SENDING,
+    })).toMatchObject({ ...identity, state: FrontendRunState.PROCESSING });
+    const transportOnly = reduceTurnRuntimeEvent(started, {
+      ...identity,
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: BackendChannelState.INTERACTION_PENDING,
+    });
+    expect(transportOnly).toMatchObject({
+      applied: false,
+      reason: TURN_TRANSITION_REASON.ILLEGAL_TRANSITION,
+    });
+    expect(started).toMatchObject({ ...identity, state: FrontendRunState.ACTION_REQUESTING });
   });
 
   it("uses distinct completion and stop phases on the same Turn", () => {

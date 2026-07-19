@@ -40,6 +40,8 @@ export function createConnectionState({ locale = "" } = {}) {
     currentTurnScopeId: "",
     currentAbortSignal: null,
     currentRunHandle: null,
+    currentLifecycleCommandId: "",
+    currentLifecyclePhase: "",
   };
 }
 
@@ -64,4 +66,6 @@ export function resetRunState(state) {
   state.currentStopPayload = null;
   state.stopRequested = false;
   state.currentTurnScopeId = "";
+  state.currentLifecycleCommandId = "";
+  state.currentLifecyclePhase = "";
 }

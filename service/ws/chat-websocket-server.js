@@ -17,6 +17,8 @@ import {
 } from "./chat-websocket/terminal-outcomes.js";
 import { createConnectionState } from "./chat-websocket/connection-state.js";
 import { createMessageHandler } from "./chat-websocket/message-handler.js";
+import { createTurnLifecycleBridge } from "./chat-websocket/turn-lifecycle-bridge.js";
+import { recoverTurnFinalize } from "./chat-websocket/finalize-recovery.js";
 
 export { recordServiceWebSocketSendFailure, recordServiceWebSocketRuntimeError };
 
@@ -148,6 +150,13 @@ export function registerChatWebSocketServer(
       webSocket.close(1011, errorCode);
     };
 
+    const commitTurnLifecycle = createTurnLifecycleBridge({ resolveBot, sendEvent });
+    const recoverPersistedTurnFinalize = (request = {}) => recoverTurnFinalize({
+      ...request,
+      bot: resolveBot(),
+      commitTurnLifecycle,
+    });
+
     const {
       finalizeTimeout,
       finalizeUserStopped,
@@ -162,6 +171,7 @@ export function registerChatWebSocketServer(
       translateText,
       sessionLogConfig,
       webSocket,
+      commitTurnLifecycle,
     });
 
     const buildRunStateSnapshot = () =>
@@ -204,6 +214,8 @@ export function registerChatWebSocketServer(
         finalizeCompleted,
         finalizeAborted,
         finalizeGenericError,
+        commitTurnLifecycle,
+        recoverTurnFinalize: recoverPersistedTurnFinalize,
       }),
     );
 

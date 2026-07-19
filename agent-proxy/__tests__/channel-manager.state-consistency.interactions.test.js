@@ -112,7 +112,7 @@ test("interaction_pending channel_state should carry pendingInteractions snapsho
   assert.deepEqual(latestState?.data?.pendingRequestIds, ["req-a", "req-b"]);
 });
 
-test("resolving one concurrent interaction keeps channel_state interaction_pending for remaining requests", () => {
+test("resolving one concurrent interaction does not synthesize a business channel state", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-concurrent" });
   const channel = manager.ensureChannel(channelKey, {
@@ -145,6 +145,7 @@ test("resolving one concurrent interaction keeps channel_state interaction_pendi
     dialogProcessId: "dp-concurrent",
     seq: 3,
   });
+  const stateEventsBeforeResponse = listEvents(client, "channel_state").length;
   const forwarded = manager.forwardToUpstream(channel, {
     action: "interaction_response",
     requestId: "req-a",
@@ -152,13 +153,7 @@ test("resolving one concurrent interaction keeps channel_state interaction_pendi
   });
 
   assert.equal(forwarded, true);
-  const latestState = listEvents(client, "channel_state").at(-1);
-  assert.equal(latestState?.data?.state, "interaction_pending");
-  assert.equal(latestState?.data?.requestId, "req-a");
-  assert.deepEqual(
-    latestState?.data?.pendingInteractions?.map((item) => item.requestId),
-    ["req-b"],
-  );
+  assert.equal(listEvents(client, "channel_state").length, stateEventsBeforeResponse);
   assert.equal(channel.pendingInteractionRequests.has("req-a"), false);
   assert.equal(channel.pendingInteractionRequests.has("req-b"), true);
 });

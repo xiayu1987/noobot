@@ -107,6 +107,12 @@ export function useReconnectReplay({
   const protocolReconcileAttempts = new Map();
 
   const applyRunStateEvent = (event) => applyTurnRuntimeEvents?.([event]);
+  const applyTurnLifecycleEnvelope = (envelope) => applyTurnRuntimeEvents?.([{
+    ...(envelope || {}),
+    type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+    seq: Number(envelope?.sequence || 0),
+    source: "turn_lifecycle_replay",
+  }]);
 
   const applyRunStateEvents = (events) => {
     const sourceEvents = Array.isArray(events) ? events : [];
@@ -548,6 +554,7 @@ export function useReconnectReplay({
       consumeReplayCacheForSession,
       applyReconnectMessagesToActiveSession,
       applyChannelState,
+      applyTurnLifecycleEnvelope,
     });
   }
 

@@ -8,6 +8,7 @@ import {
   buildAbortErrorMessage,
   buildStoppedPartialAssistant,
 } from "./stop-lifecycle.js";
+import { TURN_EVENT, TURN_PHASE } from "@noobot/shared/turn-lifecycle-protocol";
 
 /**
  * Build a read-only snapshot of the connection-level run state that the
@@ -39,6 +40,7 @@ export function createTurnFinalizer({
   translateText,
   sessionLogConfig,
   webSocket,
+  commitTurnLifecycle,
 } = {}) {
   const finalizeTimeout = async (state, { description = "", errorObject = null } = {}) => {
     const turnStatus = await persistTurnStatus({
@@ -95,6 +97,36 @@ export function createTurnFinalizer({
       rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "user_stopped" });
       return;
     }
+    const stopCommandId = String(stopPayload?.commandId || `stop:${stoppedPartialAssistant.turnScopeId}`).trim();
+    const processed = await commitTurnLifecycle({
+      userId: state.runMeta?.userId || "",
+      sessionId: stoppedPartialAssistant.sessionId || state.runMeta?.sessionId || "",
+      parentSessionId: state.runMeta?.parentSessionId || "",
+      turnScopeId: stoppedPartialAssistant.turnScopeId || state.turnScopeId || "",
+      dialogProcessId: stoppedPartialAssistant.dialogProcessId || state.runMeta?.dialogProcessId || "",
+      commandId: `${stopCommandId}:processing-completed`,
+      eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
+      phase: TURN_PHASE.STOP,
+    });
+    if (!processed?.applied && !processed?.deduplicated) {
+      rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "stop_processing_completed" });
+      return;
+    }
+    const completed = await commitTurnLifecycle({
+      userId: state.runMeta?.userId || "",
+      sessionId: stoppedPartialAssistant.sessionId || state.runMeta?.sessionId || "",
+      parentSessionId: state.runMeta?.parentSessionId || "",
+      turnScopeId: stoppedPartialAssistant.turnScopeId || state.turnScopeId || "",
+      dialogProcessId: stoppedPartialAssistant.dialogProcessId || state.runMeta?.dialogProcessId || "",
+      commandId: `${stopCommandId}:completed`,
+      eventType: TURN_EVENT.STOP_COMPLETED,
+      phase: TURN_PHASE.STOP,
+      summaryVersion: Number(turnStatus?.version || 0),
+    });
+    if (!completed?.applied && !completed?.deduplicated) {
+      rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "stop_completed" });
+      return;
+    }
     sendEvent("user_stopped", {
       message: stoppedMessage,
       sessionId: stoppedPartialAssistant.sessionId || "",
@@ -105,7 +137,7 @@ export function createTurnFinalizer({
     webSocket.close(1000, "user_stopped");
   };
 
-  const finalizeCompleted = async (state, { result = {} } = {}) => {
+  const finalizeCompleted = async (state, { result = {}, commandId = "" } = {}) => {
     const turnStatus = await persistTurnStatus({
       runMeta: {
         ...state.runMeta,
@@ -116,6 +148,37 @@ export function createTurnFinalizer({
       description: "本轮对话已正常完成",
     });
     if (!turnStatus) {
+      await commitTurnLifecycle({
+        userId: state.runMeta?.userId || "",
+        sessionId: result.sessionId || state.runMeta?.sessionId || "",
+        parentSessionId: state.runMeta?.parentSessionId || "",
+        turnScopeId: state.runMeta?.turnScopeId || state.turnScopeId || "",
+        dialogProcessId: result.dialogProcessId || state.runMeta?.dialogProcessId || "",
+        commandId: `${String(commandId || state.runMeta?.turnScopeId || "turn").trim()}:failed:completion`,
+        eventType: TURN_EVENT.FAILED,
+        phase: TURN_PHASE.COMPLETION,
+        failure: {
+          phase: TURN_PHASE.COMPLETION,
+          code: "session_summary_persistence_failed",
+          message: "session summary persistence failed",
+          retryable: true,
+        },
+      });
+      rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "completed" });
+      return;
+    }
+    const completed = await commitTurnLifecycle({
+      userId: state.runMeta?.userId || "",
+      sessionId: result.sessionId || state.runMeta?.sessionId || "",
+      parentSessionId: state.runMeta?.parentSessionId || "",
+      turnScopeId: state.runMeta?.turnScopeId || state.turnScopeId || "",
+      dialogProcessId: result.dialogProcessId || state.runMeta?.dialogProcessId || "",
+      commandId: `${String(commandId || state.runMeta?.turnScopeId || "turn").trim()}:completed`,
+      eventType: TURN_EVENT.COMPLETED,
+      phase: TURN_PHASE.COMPLETION,
+      summaryVersion: Number(turnStatus?.version || 0),
+    });
+    if (!completed?.applied && !completed?.deduplicated) {
       rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "completed" });
       return;
     }

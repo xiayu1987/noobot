@@ -7,6 +7,7 @@
 export const CHANNEL_STATUS = {
   IDLE: "idle",
   CONNECTING: "connecting",
+  OPEN: "open",
   RUNNING: "running",
   DONE: "done",
   USER_STOPPED: "user_stopped",
@@ -46,6 +47,9 @@ export const CHANNEL_EVENT = {
   USER_STOPPED: "user_stopped",
   ERROR: "error",
   CHANNEL_STATE: "channel_state",
+  TURN_LIFECYCLE: "turn_lifecycle",
+  TURN_SNAPSHOT: "turn_snapshot",
+  TRANSPORT_ERROR: "transport_error",
   RECONNECT_DATA: "reconnect_data",
   RECONNECT_COMPLETE: "reconnect_complete",
 };
@@ -57,6 +61,7 @@ export const WS_ACTION = {
   INTERACTION_RESPONSE: "interaction_response",
   JOIN: "join",
   RECONNECT: "reconnect",
+  SNAPSHOT_GET: "turn.snapshot.get",
 };
 
 export const CONVERSATION_SOURCE_EVENT = {

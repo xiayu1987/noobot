@@ -26,7 +26,7 @@ function ensureSessionBucket(registry, sessionId) {
   const id = text(sessionId);
   if (!registry.sessions) registry.sessions = {};
   if (!registry.routeIndex) registry.routeIndex = {};
-  if (!registry.sessions[id]) registry.sessions[id] = { activeTurnScopeId: "", turns: {} };
+  if (!registry.sessions[id]) registry.sessions[id] = { activeTurnScopeId: "", authoritativeSequence: 0, protocolVersion: 0, turns: {} };
   return registry.sessions[id];
 }
 
@@ -101,7 +101,7 @@ export function selectTurnMessageRuntime(registry, { sessionId = "", turnScopeId
   if (!turn) return null;
   if (normalizedSessionId && turn.sessionId !== normalizedSessionId) return null;
   if (normalizedDialogProcessId && turn.dialogProcessId && turn.dialogProcessId !== normalizedDialogProcessId) return null;
-  const state = [BackendChannelState.SENDING, BackendChannelState.RECONNECTING, BackendChannelState.INTERACTION_PENDING].includes(turn.state)
+  const state = turn.state === BackendChannelState.SENDING
     ? FrontendRunState.PROCESSING
     : turn.state || "";
   return {
@@ -212,6 +212,7 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
   if (!transition.applied) return { registry: next, turn: current, applied: false, reason: transition.reason };
   const nowMs = Number(event.timestamp || Date.now());
   const terminal = transition.next.terminal;
+  const backendState = text(event.backendState || current?.backendState);
   const turn = {
     ...(current || {}),
     ...transition.next,
@@ -219,10 +220,10 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
     turnScopeId,
     dialogProcessId: text(event.dialogProcessId || current?.dialogProcessId),
     action: transition.next.action,
-    backendState: text(event.backendState || current?.backendState),
+    backendState,
     state: transition.next.state,
     terminal,
-    canStop: deriveTurnCapabilities(transition.next.state, { backendState: transition.next.backendState }).canStop,
+    canStop: deriveTurnCapabilities(transition.next.state, { backendState }).canStop,
     seq: transition.next.seq,
     updatedAtMs: nowMs,
     updatedAt: text(event.updatedAt || current?.updatedAt),
@@ -236,6 +237,76 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
   bucket.activeTurnScopeId = turnScopeId;
   if (turn.dialogProcessId) next.routeIndex[turn.dialogProcessId] = { sessionId, turnScopeId };
   return { registry: next, turn, applied: true, reason: transition.reason };
+}
+
+/** Apply a validated Service lifecycle envelope through the only Turn reducer. */
+export function applyTurnLifecycleEnvelope(registry, envelope = {}) {
+  const result = applyTurnRuntimeEvent(registry, {
+    ...envelope,
+    type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+    seq: Number(envelope?.sequence || 0),
+    source: "turn_lifecycle",
+  });
+  if (result.applied) {
+    const bucket = ensureSessionBucket(registry, envelope.sessionId);
+    bucket.authoritativeSequence = Math.max(Number(bucket.authoritativeSequence || 0), Number(envelope.sequence || 0));
+    bucket.protocolVersion = Number(envelope.protocolVersion || 1);
+  }
+  return result;
+}
+
+const SNAPSHOT_STATE_EVENT = Object.freeze({
+  action_requesting: "turn.action_accepted",
+  processing: "turn.processing_started",
+  completion_requesting: "turn.processing_completed",
+  completed: "turn.completed",
+  stopping: "turn.stop_processing_completed",
+  stop_completed: "turn.stop_completed",
+  action_failed: "turn.failed",
+  processing_failed: "turn.failed",
+  completion_failed: "turn.failed",
+  stop_failed: "turn.failed",
+});
+
+/** Merge a Session-scoped authoritative snapshot without replaying synthetic history. */
+export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
+  const sessionId = text(snapshot.sessionId);
+  const sequence = Number(snapshot.sequence || 0);
+  if (!sessionId || !Number.isInteger(sequence) || sequence < 0) return { applied: false, reason: "invalid_snapshot_identity" };
+  const bucket = ensureSessionBucket(registry, sessionId);
+  if (Number(bucket.authoritativeSequence || 0) > sequence) return { applied: false, reason: "stale_snapshot" };
+  const turns = [snapshot.activeTurn, ...(Array.isArray(snapshot.recentTerminalTurns) ? snapshot.recentTerminalTurns : [])].filter(Boolean);
+  for (const source of turns) {
+    const turnScopeId = text(source.turnScopeId);
+    const revision = Number(source.revision || 0);
+    if (!turnScopeId || !Number.isInteger(revision) || revision < 1 || Number(source.sequence || 0) > sequence) {
+      return { applied: false, reason: "invalid_snapshot_turn" };
+    }
+    const current = bucket.turns[turnScopeId];
+    if (current && Number(current.revision || 0) > revision) continue;
+    if (current?.dialogProcessId && source.dialogProcessId && text(current.dialogProcessId) !== text(source.dialogProcessId)) {
+      return { applied: false, reason: "dialog_process_identity_conflict" };
+    }
+    const eventType = SNAPSHOT_STATE_EVENT[text(source.state)];
+    if (!eventType) return { applied: false, reason: "invalid_snapshot_state" };
+    const phase = text(source.phase || source.failure?.phase);
+    const stateMap = {
+      action_requesting: FrontendRunState.ACTION_REQUESTING, processing: FrontendRunState.PROCESSING,
+      completion_requesting: FrontendRunState.FRONTEND_COMPLETION_REQUESTING, completed: FrontendRunState.FRONTEND_COMPLETED,
+      stopping: FrontendRunState.USER_STOPPING, stop_completed: FrontendRunState.USER_STOP_COMPLETED,
+      action_failed: FrontendRunState.ACTION_REQUEST_ERROR, processing_failed: FrontendRunState.PROCESSING_ERROR,
+      completion_failed: FrontendRunState.COMPLETION_ERROR, stop_failed: FrontendRunState.STOP_ERROR,
+    };
+    const state = stateMap[text(source.state)];
+    const terminal = text(source.state) === "completed" ? "completed" : text(source.state) === "stop_completed" ? "user_stopped" : isFinalTurnState(state) ? "error" : null;
+    const turn = { ...(current || {}), ...source, sessionId, turnScopeId, dialogProcessId: text(source.dialogProcessId), state, phase, revision, seq: Number(source.sequence || 0), backendState: text(source.executionState), canStop: source.capabilities?.canStop === true, terminal, source: "turn_snapshot", authoritativeSnapshot: true };
+    bucket.turns[turnScopeId] = turn;
+    if (turn.dialogProcessId) registry.routeIndex[turn.dialogProcessId] = { sessionId, turnScopeId };
+  }
+  bucket.activeTurnScopeId = text(snapshot.activeTurnScopeId);
+  bucket.authoritativeSequence = sequence;
+  bucket.protocolVersion = Number(snapshot.protocolVersion || 1);
+  return { applied: true, bucket };
 }
 
 export function hydrateSessionTurnRuntime(registry, session, turnStatuses = session?.turnStatuses || []) {

@@ -25,6 +25,7 @@ import {
 import { isAbortLikeError, isSocketCloseRunAbort, isUserStopRunAbort } from "./stop-lifecycle.js";
 import { createRunEventListener } from "./run-event-listener.js";
 import { resetRunState } from "./connection-state.js";
+import { TURN_COMMAND, TURN_EVENT, TURN_PHASE, validateTurnLifecycleSnapshot } from "@noobot/shared/turn-lifecycle-protocol";
 
 /**
  * Build the WebSocket `message` handler for a single connection.
@@ -60,7 +61,31 @@ export function createMessageHandler({
   finalizeCompleted,
   finalizeAborted,
   finalizeGenericError,
+  commitTurnLifecycle,
+  recoverTurnFinalize,
 }) {
+  const commitCurrentFailure = async (error, fallbackPhase = TURN_PHASE.ACTION) => {
+    const phase = state.currentLifecyclePhase || fallbackPhase;
+    const commandBase = String(state.currentLifecycleCommandId || state.currentTurnScopeId || "turn").trim();
+    const failed = await commitTurnLifecycle({
+      userId: state.currentRunMeta?.userId || String(authInfo?.userId || "").trim(),
+      sessionId: state.currentRunMeta?.sessionId || "",
+      parentSessionId: state.currentRunMeta?.parentSessionId || "",
+      turnScopeId: state.currentRunMeta?.turnScopeId || state.currentTurnScopeId || "",
+      dialogProcessId: state.currentRunMeta?.dialogProcessId || "",
+      commandId: `${commandBase}:failed:${phase}`,
+      eventType: TURN_EVENT.FAILED,
+      phase,
+      failure: {
+        phase,
+        code: String(error?.errorCode || error?.code || "turn_failed").trim(),
+        message: String(error?.message || "turn failed"),
+        retryable: false,
+      },
+    });
+    return failed;
+  };
+
   const handleInteractionResponse = (payload) => {
     const requestId = String(payload?.requestId || "").trim();
     const requestItem = pendingInteractionRequests.get(requestId);
@@ -73,18 +98,106 @@ export function createMessageHandler({
     requestItem.resolve(payload?.response ?? {});
   };
 
+  const handleSnapshotGet = async (payload) => {
+    const userId = String(payload?.userId || authInfo?.userId || "").trim();
+    const sessionId = String(payload?.sessionId || "").trim();
+    const commandId = String(payload?.commandId || "").trim();
+    if (!userId || !sessionId || !commandId || isForbiddenUserScope(authInfo, userId)) {
+      sendEvent("error", { errorCode: "invalid_snapshot_request", sessionId, commandId });
+      return;
+    }
+    const bot = resolveBot();
+    const reader = bot?.getTurnLifecycleSnapshot;
+    if (typeof reader !== "function") {
+      sendEvent("error", { errorCode: "lifecycle_snapshot_unavailable", sessionId, commandId });
+      return;
+    }
+    const result = await reader.call(bot, {
+      userId, sessionId, parentSessionId: String(payload?.parentSessionId || "").trim(),
+      commandId, knownSequence: payload?.knownSequence, terminalLimit: payload?.terminalLimit,
+    });
+    if (!result?.found) {
+      sendEvent("error", { errorCode: result?.reason || "snapshot_not_found", sessionId, commandId });
+      return;
+    }
+    const validation = validateTurnLifecycleSnapshot(result.snapshot);
+    if (!validation.valid) {
+      sendEvent("error", { errorCode: "invalid_authoritative_snapshot", errors: validation.errors, sessionId, commandId });
+      return;
+    }
+    sendEvent("turn_snapshot", result.snapshot);
+  };
+
+  const handleFinalize = async (payload) => {
+    const userId = String(payload?.userId || authInfo?.userId || "").trim();
+    const sessionId = String(payload?.sessionId || "").trim();
+    const commandId = String(payload?.commandId || "").trim();
+    if (!userId || !sessionId || !commandId || isForbiddenUserScope(authInfo, userId)) {
+      sendEvent("error", { errorCode: "invalid_finalize_request", sessionId, commandId });
+      return;
+    }
+    const result = await recoverTurnFinalize?.({
+      userId,
+      sessionId,
+      parentSessionId: String(payload?.parentSessionId || "").trim(),
+      commandId,
+      terminalLimit: payload?.terminalLimit,
+    });
+    if (!result?.recovered && result?.reason !== "no_recoverable_finalize") {
+      sendEvent("error", {
+        errorCode: result?.reason || "finalize_recovery_failed",
+        failurePhase: TURN_PHASE.COMPLETION,
+        sessionId,
+        commandId,
+      });
+      return;
+    }
+    const snapshot = result?.result?.snapshot;
+    const validation = validateTurnLifecycleSnapshot(snapshot);
+    if (!validation.valid) {
+      sendEvent("error", { errorCode: "invalid_authoritative_snapshot", errors: validation.errors, sessionId, commandId });
+      return;
+    }
+    sendEvent("turn_snapshot", snapshot);
+  };
+
   const handleStop = async (payload) => {
-    state.stopRequested = true;
-    state.currentTurnScopeId =
+    const targetTurnScopeId =
       String(payload?.turnScopeId || payload?.partialAssistant?.turnScopeId || "").trim() ||
       state.currentTurnScopeId;
+    const targetSessionId =
+      String(payload?.sessionId || payload?.partialAssistant?.sessionId || "").trim() ||
+      state.currentRunMeta?.sessionId || "";
+    const stopCommandId = String(payload?.commandId || payload?.idempotencyKey || `stop:${targetTurnScopeId}`).trim();
+    const accepted = await commitTurnLifecycle({
+      userId: String(authInfo?.userId || payload?.userId || "").trim(),
+      sessionId: targetSessionId,
+      parentSessionId: String(payload?.parentSessionId || "").trim(),
+      turnScopeId: targetTurnScopeId,
+      dialogProcessId: String(payload?.dialogProcessId || payload?.partialAssistant?.dialogProcessId || "").trim(),
+      commandId: stopCommandId,
+      eventType: TURN_EVENT.STOP_ACCEPTED,
+      phase: TURN_PHASE.ACTION,
+      expectedRevision: payload?.expectedRevision,
+    });
+    if (!accepted?.applied && !accepted?.deduplicated) {
+      sendEvent("error", {
+        error: accepted?.reason || "stop_not_allowed",
+        errorCode: accepted?.reason || "stop_not_allowed",
+        failurePhase: TURN_PHASE.ACTION,
+        sessionId: targetSessionId,
+        turnScopeId: targetTurnScopeId,
+        currentRevision: accepted?.currentRevision,
+      });
+      return;
+    }
+    state.stopRequested = true;
+    state.currentTurnScopeId = targetTurnScopeId;
     rejectAllPendingInteractions(new Error(translateText("ws.dialogStoppedByUser", state.currentLocale)));
     state.currentStopPayload = {
       message: translateText("ws.dialogStoppedByUser", state.currentLocale),
       sessionId:
-        String(payload?.sessionId || payload?.partialAssistant?.sessionId || "").trim() ||
-        state.currentRunMeta?.sessionId ||
-        "",
+        targetSessionId,
       dialogProcessId:
         String(payload?.dialogProcessId || "").trim() ||
         String(payload?.partialAssistant?.dialogProcessId || "").trim() ||
@@ -96,6 +209,7 @@ export function createMessageHandler({
         state.currentRunMeta?.turnScopeId ||
         "",
       partialAssistant: payload?.partialAssistant || {},
+      commandId: stopCommandId,
     };
     void recordServiceWebSocketLifecycle({
       sessionLogConfig,
@@ -246,6 +360,32 @@ export function createMessageHandler({
         throw new Error("continue requires resumeDialogProcessId and resumeTurnScopeId");
       }
     }
+    const action = isContinueAction
+      ? "continue"
+      : normalizedRunConfig.reuseExistingUserTurn === true
+        ? "resend"
+        : "send";
+    const commandId = String(payload?.commandId || normalizedRunConfig.idempotencyKey || state.currentTurnScopeId).trim();
+    const accepted = await commitTurnLifecycle({
+      userId,
+      sessionId,
+      parentSessionId,
+      turnScopeId: state.currentTurnScopeId,
+      dialogProcessId,
+      commandId,
+      eventType: TURN_EVENT.ACTION_ACCEPTED,
+      phase: TURN_PHASE.ACTION,
+      action,
+      expectedRevision: payload?.expectedRevision ?? 0,
+    });
+    if (!accepted?.applied && !accepted?.deduplicated) {
+      const error = new Error(accepted?.reason || "action_rejected");
+      error.errorCode = accepted?.reason || "action_rejected";
+      error.currentVersion = accepted?.currentRevision;
+      throw error;
+    }
+    state.currentLifecycleCommandId = commandId;
+    state.currentLifecyclePhase = TURN_PHASE.ACTION;
     state.isRunning = true;
     state.currentAbortController = new AbortController();
     state.currentRunTimedOut = false;
@@ -359,6 +499,7 @@ export function createMessageHandler({
       userId,
       runConfig: normalizedRunConfig,
     });
+    let processingStartedPromise = null;
     const eventListener = createRunEventListener({
       sendEvent,
       sessionId,
@@ -367,6 +508,33 @@ export function createMessageHandler({
       getCurrentRunMeta: () => state.currentRunMeta,
       getCurrentRunHandle: () => state.currentRunHandle,
       getCurrentTurnScopeId: () => state.currentTurnScopeId,
+      onRootRunning: (lifecycleData) => {
+        if (processingStartedPromise) return processingStartedPromise;
+        processingStartedPromise = commitTurnLifecycle({
+          userId,
+          sessionId,
+          parentSessionId,
+          turnScopeId: state.currentTurnScopeId,
+          dialogProcessId: lifecycleData?.dialogProcessId || state.currentRunMeta?.dialogProcessId || dialogProcessId,
+          commandId: `${commandId}:processing-started`,
+          eventType: TURN_EVENT.PROCESSING_STARTED,
+          phase: TURN_PHASE.PROCESSING,
+          executionState: "sending",
+        }).then((started) => {
+          if (!started?.applied && !started?.deduplicated) {
+            throw new Error(started?.reason || "processing_start_failed");
+          }
+          state.currentLifecyclePhase = TURN_PHASE.PROCESSING;
+          sendEvent("channel_state", {
+            sessionId,
+            turnScopeId: state.currentTurnScopeId,
+            state: "sending",
+            sourceEvent: "processing_started",
+          });
+          return started;
+        });
+        return processingStartedPromise;
+      },
     });
 
     const result = await activeBot.runSession({
@@ -383,6 +551,10 @@ export function createMessageHandler({
       runConfig: normalizedRunConfig,
     });
 
+    // The Agent lifecycle RUNNING fact is the only authoritative processing
+    // boundary. Ensure its persistence finishes before any completion fact.
+    if (processingStartedPromise) await processingStartedPromise;
+
     if (state.currentRunTimedOut && state.currentAbortSignal?.aborted) {
       await finalizeTimeout(buildRunStateSnapshot(), {
         description: `run timeout after ${runTimeoutMs}ms`,
@@ -396,7 +568,20 @@ export function createMessageHandler({
       return;
     }
 
-    await finalizeCompleted(buildRunStateSnapshot(), { result });
+    const processed = await commitTurnLifecycle({
+      userId,
+      sessionId: result?.sessionId || sessionId,
+      parentSessionId,
+      turnScopeId: state.currentTurnScopeId,
+      dialogProcessId: result?.dialogProcessId || state.currentRunMeta?.dialogProcessId || dialogProcessId,
+      commandId: `${commandId}:processing-completed`,
+      eventType: TURN_EVENT.PROCESSING_COMPLETED,
+      phase: TURN_PHASE.COMPLETION,
+    });
+    if (!processed?.applied && !processed?.deduplicated) throw new Error(processed?.reason || "processing_completion_failed");
+    state.currentLifecyclePhase = TURN_PHASE.COMPLETION;
+
+    await finalizeCompleted(buildRunStateSnapshot(), { result, commandId });
   };
 
   return async function onMessage(rawMessage) {
@@ -404,6 +589,15 @@ export function createMessageHandler({
     try {
       const payload = JSON.parse(String(rawMessage || "{}"));
       const action = String(payload?.action || "").trim().toLowerCase();
+      const commandType = String(payload?.commandType || "").trim().toLowerCase();
+      if (commandType === TURN_COMMAND.SNAPSHOT_GET) {
+        await handleSnapshotGet(payload);
+        return;
+      }
+      if (commandType === TURN_COMMAND.FINALIZE) {
+        await handleFinalize(payload);
+        return;
+      }
       const isContinueAction = action === "continue" || action === "resume";
       if (action === "interaction_response") {
         handleInteractionResponse(payload);
@@ -463,6 +657,7 @@ export function createMessageHandler({
             ...state.currentRunMeta,
             data: { errorType: error?.name || "Error" },
           });
+          await commitCurrentFailure(error, TURN_PHASE.PROCESSING);
           await finalizeAborted(buildRunStateSnapshot(), { error });
         }
         return;
@@ -473,6 +668,7 @@ export function createMessageHandler({
         ...state.currentRunMeta,
         data: { errorType: error?.name || "Error" },
       });
+      await commitCurrentFailure(error);
       await finalizeGenericError(buildRunStateSnapshot(), { error });
     } finally {
       if (runMessageStarted) {

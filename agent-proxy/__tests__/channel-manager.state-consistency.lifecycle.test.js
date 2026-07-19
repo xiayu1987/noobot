@@ -102,7 +102,7 @@ test("startOrJoinChannel keeps running channel when upstream socket is open", ()
   assert.equal(channel.upstreamSocket.readyState, 1);
 });
 
-test("forwarded stop stays stopping until upstream confirms user_stopped", () => {
+test("forwarded stop does not synthesize stopping before Service confirms it", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-stop" });
   const channel = manager.ensureChannel(channelKey, {
@@ -123,13 +123,6 @@ test("forwarded stop stays stopping until upstream confirms user_stopped", () =>
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.attachSubscriber(channel, client);
 
-  manager.updateConversationState(channel, {
-    sessionId: "session-stop",
-    dialogProcessId: "dp-stop",
-    state: "stopping",
-    sourceEvent: "stop",
-    seq: Number(channel?.eventSequence || 0),
-  });
   const forwarded = manager.forwardToUpstream(channel, {
     action: "stop",
     userId: "user-1",
@@ -149,10 +142,10 @@ test("forwarded stop stays stopping until upstream confirms user_stopped", () =>
     (entry) => String(entry?.sessionId || "") === "session-stop",
   );
   assert.ok(sessionEntry);
-  assert.equal(sessionEntry.hasRunningTask, true);
+  assert.equal(sessionEntry.hasRunningTask, false);
   assert.equal(
     (sessionEntry.conversationStates || []).some((item) => item?.state === "stopping"),
-    true,
+    false,
   );
 
   const stoppedEnvelope = manager.pushChannelEvent(channel, "user_stopped", {
@@ -177,7 +170,7 @@ test("forwarded stop stays stopping until upstream confirms user_stopped", () =>
   );
 });
 
-test("upstream close without terminal event is error, not user_stopped", () => {
+test("upstream close without authoritative event does not synthesize a turn terminal", () => {
   FakeUpstreamWebSocket.instances = [];
   const manager = new ChannelManager(FakeUpstreamWebSocket);
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-upstream-close" });
@@ -197,14 +190,12 @@ test("upstream close without terminal event is error, not user_stopped", () => {
   upstream.emit("open");
   upstream.close(1006, "network_lost");
 
-  assert.equal(channel.status, "error");
+  assert.equal(channel.status, "open");
   assert.equal(listEvents(client, "user_stopped").length, 0);
-  const errorEvent = getEvent(client, "error");
-  assert.equal(errorEvent?.data?.error, "upstream socket closed before terminal event");
-  assert.equal(errorEvent?.data?.upstreamCloseReason, "network_lost");
+  assert.equal(listEvents(client, "error").length, 0);
 });
 
-test("upstream close reason user_stopped is only a fallback confirmation", () => {
+test("upstream close reason user_stopped is transport metadata, not confirmation", () => {
   FakeUpstreamWebSocket.instances = [];
   const manager = new ChannelManager(FakeUpstreamWebSocket);
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-user-close" });
@@ -224,9 +215,8 @@ test("upstream close reason user_stopped is only a fallback confirmation", () =>
   upstream.emit("open");
   upstream.close(1000, "user_stopped");
 
-  assert.equal(channel.status, "user_stopped");
+  assert.equal(channel.status, "open");
   assert.equal(listEvents(client, "error").length, 0);
-  const stoppedEvent = getEvent(client, "user_stopped");
-  assert.equal(stoppedEvent?.data?.upstreamCloseReason, "user_stopped");
+  assert.equal(listEvents(client, "user_stopped").length, 0);
 });
 

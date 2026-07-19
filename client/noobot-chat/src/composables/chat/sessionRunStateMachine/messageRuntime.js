@@ -38,10 +38,6 @@ const MESSAGE_RUNNING_CHANNEL_STATES = Object.freeze([
 
 const MESSAGE_CAN_STOP_TARGET_STATES = Object.freeze([
   BackendChannelState.SENDING,
-  BackendChannelState.RECONNECTING,
-  BackendChannelState.INTERACTION_PENDING,
-  FrontendRunState.RESEND_REPLACING_TURN,
-  FrontendRunState.RESEND_STREAMING,
 ]);
 
 function isTerminalMessageRuntimeState(state = "") {
@@ -160,9 +156,11 @@ export function resolveTurnRuntimeView({
   const inFlightAssistant = getMessageRole(messageItem) === "assistant" && (
     running || (!hasFinishedAt && !terminal && MESSAGE_IN_FLIGHT_CHANNEL_STATES.includes(state))
   );
-  const canStopTarget = inFlightAssistant && (
-    MESSAGE_CAN_STOP_TARGET_STATES.includes(state) || (pending && !state)
-  );
+  // Message projection must obey the same authority boundary as the Turn
+  // reducer: pending/reconnecting/interaction waiting are not proof that the
+  // backend execution is currently stoppable. Only an explicit SENDING fact
+  // may expose a stop target.
+  const canStopTarget = inFlightAssistant && MESSAGE_CAN_STOP_TARGET_STATES.includes(state);
   return {
     state,
     channelState,

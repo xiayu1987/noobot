@@ -196,6 +196,14 @@ export class BotManager {
     return this.sessionRunner.upsertTurnStatus(payload);
   }
 
+  async applyTurnLifecycleEvent(payload = {}) {
+    return this.sessionRunner.applyTurnLifecycleEvent(payload);
+  }
+
+  async getTurnLifecycleSnapshot(payload = {}) {
+    return this.sessionRunner.getTurnLifecycleSnapshot(payload);
+  }
+
   runAsyncSession(payload = {}) {
     return this.asyncJobManager.runAsyncSession(payload);
   }
