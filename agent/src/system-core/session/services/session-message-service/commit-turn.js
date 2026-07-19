@@ -38,8 +38,6 @@ export async function commitTurn({
     }
     return this._withSessionMutation(userId, sessionId, async () => {
       const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(userId, sessionId, parentSessionId);
-      if (this.sessionCrudService) await this.sessionCrudService.ensureSession(userId, sessionId, resolvedParentSessionId);
-      else await this.sessionRepo.ensureSession({ userId, sessionId, parentSessionId: resolvedParentSessionId });
       const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
       if (!session) { const error = new Error("session not found"); error.statusCode = 404; throw error; }
       const messages = Array.isArray(session.messages) ? session.messages : [];

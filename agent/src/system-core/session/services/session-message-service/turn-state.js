@@ -9,7 +9,8 @@ import { dedupeAttachments, normalizeIncomingAttachmentsForSessionMessage } from
 import { resolveSessionVersion } from "./anchor-utils.js";
 import { upsertSessionTurnTiming } from "./turn-timing.js";
 import { normalizeTurnLifecycleEntity, transitionTurnLifecycle, isTerminalTurnLifecycleState } from "../../entities/turn-lifecycle-entity.js";
-import { TURN_EVENT, createTurnLifecycleSnapshot } from "@noobot/shared/turn-lifecycle-protocol";
+import { createTurnLifecycleSnapshot, validateSessionProvisionIntent } from "@noobot/shared/turn-lifecycle-protocol";
+import { normalizeSessionEntity } from "../../entities/session-entity.js";
 
 export async function getTurnLifecycleSnapshot({ userId, sessionId, parentSessionId = "", commandId = "", knownSequence, terminalLimit = 10 } = {}) {
   if (!userId || !sessionId) return { found: false, reason: "missing_session" };
@@ -42,29 +43,20 @@ export async function applyTurnLifecycleEvent({
   ...event
 } = {}) {
   if (!userId || !sessionId) return { applied: false, reason: "missing_session" };
+  const provisionIntent = validateSessionProvisionIntent(event);
+  if (!provisionIntent.valid) return { applied: false, reason: "invalid_session_provision_intent" };
+  if (provisionIntent.requested) {
+    return provisionSessionWithInitialTurn.call(this, {
+      userId, sessionId, parentSessionId, expectedSessionVersion, ...event,
+    });
+  }
   return this._withSessionMutation(userId, sessionId, async () => {
     const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
       userId,
       sessionId,
       parentSessionId,
     );
-    let session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
-    // A brand-new session is persisted by the normal run initializer, but the
-    // authoritative ACTION_ACCEPTED fact must be committed before execution is
-    // started. Create only for a first `send`; resend/continue and every later
-    // lifecycle transition must still require an existing session.
-    if (!session && event.eventType === TURN_EVENT.ACTION_ACCEPTED && event.action === "send") {
-      if (this.sessionCrudService) {
-        await this.sessionCrudService.ensureSession(userId, sessionId, resolvedParentSessionId);
-      } else {
-        await this.sessionRepo.ensureSession?.({
-          userId,
-          sessionId,
-          parentSessionId: resolvedParentSessionId,
-        });
-      }
-      session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
-    }
+    const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
     if (!session) return { applied: false, reason: "session_not_found" };
     const actualVersion = resolveSessionVersion(session);
     if (expectedSessionVersion !== undefined && Number(expectedSessionVersion) !== actualVersion) {
@@ -77,6 +69,41 @@ export async function applyTurnLifecycleEvent({
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
     await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: actualVersion });
     return { ...result, session, version: resolveSessionVersion(session) };
+  });
+}
+
+export async function provisionSessionWithInitialTurn({
+  userId, sessionId, parentSessionId = "", expectedSessionVersion, createSessionIfAbsent, ...event
+} = {}) {
+  const intent = validateSessionProvisionIntent({ ...event, createSessionIfAbsent });
+  if (!intent.valid || !intent.requested) return { applied: false, reason: "invalid_session_provision_intent" };
+  return this._withSessionMutation(userId, sessionId, async () => {
+    const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(userId, sessionId, parentSessionId);
+    let session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
+    const isNew = !session;
+    if (isNew && await this.sessionRepo.isSessionDeleted?.(userId, sessionId)) {
+      return { applied: false, reason: "session_not_found" };
+    }
+    session ||= this.sessionRepo.createInitialSession?.({
+      sessionId, parentSessionId: resolvedParentSessionId,
+    }) || normalizeSessionEntity({ sessionId, parentSessionId: resolvedParentSessionId, messages: [] }, {
+      now: this.now, sessionId, parentSessionId: resolvedParentSessionId,
+    });
+    const actualVersion = resolveSessionVersion(session);
+    if (expectedSessionVersion !== undefined && Number(expectedSessionVersion) !== actualVersion) {
+      return { applied: false, reason: "session_version_conflict", currentVersion: actualVersion };
+    }
+    const result = transitionTurnLifecycle(session.turnLifecycle, event, this.now);
+    if (!result.applied) return { ...result, session: isNew ? null : session, version: actualVersion };
+    session.turnLifecycle = result.lifecycle;
+    session.updatedAt = this.now();
+    if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
+    const saved = await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
+      expectedVersion: isNew ? undefined : actualVersion,
+      createOnly: isNew,
+    });
+    if (saved === false) return { applied: false, reason: "session_not_found" };
+    return { ...result, session, version: resolveSessionVersion(session), sessionCreated: isNew };
   });
 }
 

@@ -16,6 +16,8 @@ import {
   selectTurnMessageRuntime,
   turnRuntimeDisplayState,
   hydrateSessionTurnRuntime,
+  applyTurnLifecycleEnvelope,
+  applyTurnLifecycleSnapshot,
 } from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 import { SESSION_RUN_EVENT, BackendChannelState } from "../../../../../src/composables/chat/sessionRunStateMachine/constants";
 
@@ -24,6 +26,23 @@ function sendStart(registry, { sessionId, turnScopeId, seq = 1 }) {
 }
 function backendState(registry, { sessionId, turnScopeId, dialogProcessId, state, seq }) {
   return applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, sessionId, turnScopeId, dialogProcessId, state, seq });
+}
+
+function snapshot(overrides = {}) {
+  const activeTurn = overrides.activeTurn === undefined ? {
+    turnScopeId: "t1", dialogProcessId: "dp1", commandId: "c1", action: "send",
+    state: "processing", phase: "processing", executionState: "sending",
+    revision: 2, sequence: 2, summaryVersion: 0, failure: null,
+    capabilities: { actionLocked: true, canStop: true },
+    createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:01.000Z",
+  } : overrides.activeTurn;
+  return {
+    protocolVersion: 1, eventType: "turn.snapshot", commandId: "snapshot-1",
+    userId: "u1", sessionId: "s1", sequence: 2,
+    activeTurnScopeId: activeTurn?.turnScopeId || "", activeTurn,
+    recentTerminalTurns: [], unchanged: false, generatedAt: "2026-01-01T00:00:02.000Z",
+    ...overrides,
+  };
 }
 
 describe("turnRuntimeRegistry", () => {
@@ -244,6 +263,66 @@ describe("turnRuntimeRegistry", () => {
     ]);
     expect(resolveTurnRuntimeByScope(registry, "t1", { sessionId: "s1" })).toMatchObject({ terminal: "user_stopped", canStop: false });
     expect(resolveTurnRuntimeByScope(registry, "t2", { sessionId: "s1" })).toMatchObject({ terminal: "completed", canStop: false });
+  });
+
+  it("strictly validates snapshots and rejects same-sequence content conflicts", () => {
+    const registry = createTurnRuntimeRegistryState();
+    expect(applyTurnLifecycleSnapshot(registry, { ...snapshot(), commandId: "" })).toMatchObject({
+      applied: false, reason: "invalid_authoritative_snapshot",
+    });
+    expect(applyTurnLifecycleSnapshot(registry, snapshot())).toMatchObject({ applied: true });
+    expect(applyTurnLifecycleSnapshot(registry, snapshot())).toMatchObject({
+      applied: false, deduplicated: true, reason: "duplicate_snapshot",
+    });
+    expect(applyTurnLifecycleSnapshot(registry, snapshot({ generatedAt: "2026-01-01T00:00:03.000Z" }))).toMatchObject({
+      applied: false, reason: "snapshot_sequence_conflict",
+    });
+  });
+
+  it("rejects malformed authoritative lifecycle envelopes before reducing them", () => {
+    const registry = createTurnRuntimeRegistryState();
+    const result = applyTurnLifecycleEnvelope(registry, {
+      protocolVersion: 1,
+      eventType: "turn.action_accepted",
+      eventId: "",
+      sessionId: "s1",
+      turnScopeId: "t1",
+      revision: 1,
+      sequence: 1,
+    });
+    expect(result).toMatchObject({
+      applied: false,
+      reason: "invalid_authoritative_envelope",
+      errors: expect.arrayContaining(["missing_event_id"]),
+    });
+    expect(registry.sessions.s1).toBeUndefined();
+  });
+
+  it("an empty active snapshot releases routing while retaining recent terminal turns", () => {
+    const registry = createTurnRuntimeRegistryState();
+    applyTurnLifecycleSnapshot(registry, snapshot());
+    const terminal = { ...snapshot().activeTurn, turnScopeId: "done", dialogProcessId: "dp-done", state: "completed", phase: "completion", executionState: "completed", revision: 3, sequence: 3, capabilities: { actionLocked: false, canStop: false } };
+    const result = applyTurnLifecycleSnapshot(registry, snapshot({
+      commandId: "snapshot-2", sequence: 3, activeTurn: null, activeTurnScopeId: "", recentTerminalTurns: [terminal],
+    }));
+    expect(result.applied).toBe(true);
+    expect(registry.routeIndex.dp1).toBeUndefined();
+    expect(resolveTurnRuntimeByScope(registry, "done", { sessionId: "s1" })).toMatchObject({ terminal: "completed" });
+  });
+
+  it("allows legacy hydration until an authoritative snapshot takes ownership", () => {
+    const registry = createTurnRuntimeRegistryState();
+    hydrateSessionTurnRuntime(registry, { backendSessionId: "s1" }, [
+      { status: "completed", turnScopeId: "legacy", dialogProcessId: "legacy-dp" },
+    ]);
+    expect(resolveTurnRuntimeByScope(registry, "legacy", { sessionId: "s1" })?.terminal).toBe("completed");
+    applyTurnLifecycleSnapshot(registry, snapshot());
+    const before = JSON.stringify(registry.sessions.s1);
+    hydrateSessionTurnRuntime(registry, { backendSessionId: "s1" }, [
+      { status: "user_stopped", turnScopeId: "late-legacy", dialogProcessId: "late-dp" },
+    ]);
+    expect(JSON.stringify(registry.sessions.s1)).toBe(before);
+    expect(resolveTurnRuntimeByScope(registry, "late-legacy", { sessionId: "s1" })).toBeNull();
   });
 
   it("prunes old or excess terminal turns per session while protecting active, stopped, and referenced turns", () => {

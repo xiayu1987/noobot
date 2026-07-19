@@ -70,7 +70,7 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
   return {
     type,
     state,
-    backendState: wireState,
+    backendState: trim(rawEvent?.executionState).toLowerCase() || wireState,
     action: trim(rawEvent?.action),
     sessionId: trim(rawEvent?.sessionId),
     dialogProcessId: [

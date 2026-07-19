@@ -13,8 +13,11 @@ import { startServerWithWs, closeServer, callChatWs, stopChatWs } from "./chat-w
 function createAuthoritativeBot({ persistSummary = true, failureAt = "" } = {}) {
   let lifecycle = {};
   const committed = [];
+  const commitInputs = [];
+  let runCount = 0;
   const bot = {
     async applyTurnLifecycleEvent(input) {
+      commitInputs.push(structuredClone(input));
       const result = transitionTurnLifecycle(lifecycle, input);
       if (result.applied) {
         lifecycle = result.lifecycle;
@@ -23,6 +26,7 @@ function createAuthoritativeBot({ persistSummary = true, failureAt = "" } = {}) 
       return result;
     },
     async runSession({ sessionId, runConfig, eventListener }) {
+      runCount += 1;
       if (failureAt === "action") throw Object.assign(new Error("agent initialization failed"), { code: "agent_init_failed" });
       eventListener.onEvent({
         event: "agent_lifecycle_state_changed",
@@ -56,7 +60,13 @@ function createAuthoritativeBot({ persistSummary = true, failureAt = "" } = {}) 
       };
     },
   };
-  return { bot, committed: () => [...committed], lifecycle: () => lifecycle };
+  return {
+    bot,
+    committed: () => [...committed],
+    commitInputs: () => structuredClone(commitInputs),
+    runCount: () => runCount,
+    lifecycle: () => lifecycle,
+  };
 }
 
 const payload = {
@@ -87,6 +97,37 @@ test("authoritative lifecycle follows accepted -> running -> processed -> summar
     const turn = authoritative.lifecycle().turns[payload.turnScopeId];
     assert.equal(turn.state, "completed");
     assert.equal(turn.summaryVersion, 7);
+    const inputs = authoritative.commitInputs();
+    assert.equal(inputs[0].createSessionIfAbsent, true);
+    assert.equal(inputs[0].action, "send");
+    assert.equal(inputs.slice(1).some((input) => "createSessionIfAbsent" in input), false);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("rejected initial provision does not start Agent execution", async () => {
+  const authoritative = createAuthoritativeBot();
+  authoritative.bot.applyTurnLifecycleEvent = async (input) => {
+    assert.equal(input.eventType, TURN_EVENT.ACTION_ACCEPTED);
+    assert.equal(input.createSessionIfAbsent, true);
+    return { applied: false, reason: "session_identity_conflict" };
+  };
+  const server = await startServerWithWs({ bot: authoritative.bot });
+  try {
+    const events = await callChatWs({
+      port: server.address().port,
+      payload: {
+        ...payload,
+        sessionId: "s-provision-rejected",
+        turnScopeId: "turn-provision-rejected",
+        commandId: "command-provision-rejected",
+        config: { turnScopeId: "turn-provision-rejected" },
+      },
+    });
+    assert.equal(authoritative.runCount(), 0);
+    assert.equal(events.some((item) => item?.event === "done"), false);
+    assert.equal(events.some((item) => item?.event === "error"), true);
   } finally {
     await closeServer(server);
   }

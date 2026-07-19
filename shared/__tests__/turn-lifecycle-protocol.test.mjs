@@ -12,6 +12,7 @@ import {
   createTurnLifecycleEnvelope,
   deriveAuthoritativeTurnCapabilities,
   validateTurnLifecycleEnvelope,
+  validateSessionProvisionIntent,
 } from "../turn-lifecycle-protocol.mjs";
 
 test("turn lifecycle envelope requires stable identity and monotonic coordinates", () => {
@@ -55,4 +56,19 @@ test("only authoritative processing/sending is stoppable", () => {
     state: TURN_STATE.COMPLETION_REQUESTING,
     executionState: "sending",
   }).canStop, false);
+});
+
+test("session provision intent is explicit and restricted to the first send acceptance", () => {
+  assert.deepEqual(validateSessionProvisionIntent({
+    createSessionIfAbsent: true,
+    eventType: TURN_EVENT.ACTION_ACCEPTED,
+    action: "send",
+    expectedRevision: 0,
+  }), { valid: true, requested: true, errors: [] });
+  for (const input of [
+    { createSessionIfAbsent: "true", eventType: TURN_EVENT.ACTION_ACCEPTED, action: "send" },
+    { createSessionIfAbsent: true, eventType: TURN_EVENT.ACTION_ACCEPTED, action: "resend" },
+    { createSessionIfAbsent: true, eventType: TURN_EVENT.PROCESSING_STARTED, action: "send" },
+    { createSessionIfAbsent: true, eventType: TURN_EVENT.ACTION_ACCEPTED, action: "send", expectedRevision: 1 },
+  ]) assert.equal(validateSessionProvisionIntent(input).valid, false);
 });

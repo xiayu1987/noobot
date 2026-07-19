@@ -53,6 +53,22 @@ const EVENT_VALUES = new Set(Object.values(TURN_EVENT));
 
 const clean = (value) => String(value || "").trim();
 
+/** Validate the internal mutation intent used to atomically create a Session with its first Turn. */
+export function validateSessionProvisionIntent(input = {}) {
+  if (input.createSessionIfAbsent === undefined || input.createSessionIfAbsent === false) {
+    return { valid: true, requested: false, errors: [] };
+  }
+  const valid = input.createSessionIfAbsent === true &&
+    clean(input.eventType) === TURN_EVENT.ACTION_ACCEPTED &&
+    clean(input.action) === "send" &&
+    Number(input.expectedRevision ?? 0) === 0;
+  return {
+    valid,
+    requested: input.createSessionIfAbsent === true,
+    errors: valid ? [] : ["invalid_session_provision_intent"],
+  };
+}
+
 export function deriveAuthoritativeTurnCapabilities(turn = {}) {
   const state = clean(turn.state);
   const executionState = clean(turn.executionState).toLowerCase();
@@ -141,6 +157,10 @@ export function createTurnLifecycleEnvelope({
   sequence,
   phase,
   state,
+  action = "",
+  executionState = "",
+  summaryVersion = 0,
+  updatedAt = "",
   occurredAt = new Date().toISOString(),
   capabilities,
   failure = null,
@@ -161,6 +181,10 @@ export function createTurnLifecycleEnvelope({
     sequence: Number(sequence || 0),
     phase: clean(phase),
     state: clean(state),
+    action: clean(action),
+    executionState: clean(executionState).toLowerCase(),
+    summaryVersion: Number(summaryVersion || 0),
+    updatedAt: clean(updatedAt),
     occurredAt: clean(occurredAt),
     capabilities: capabilities && typeof capabilities === "object" ? capabilities : undefined,
     failure: failure && typeof failure === "object" ? failure : undefined,

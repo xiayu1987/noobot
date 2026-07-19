@@ -33,14 +33,15 @@ function newSessionHarness() {
   const repo = {
     async withSessionMutation(_u, _s, _p, operation) { return operation(); },
     async resolveParentSessionId() { return ""; },
-    async ensureSession({ sessionId }) {
-      persisted ??= { sessionId, parentSessionId: "", version: 0, revision: 0, messages: [] };
+    createInitialSession({ sessionId }) {
+      return normalizeSessionEntity({ sessionId, parentSessionId: "", version: 0, revision: 0, messages: [] }, { now });
     },
     async findById() {
       return persisted ? normalizeSessionEntity(structuredClone(persisted), { now }) : null;
     },
-    async save(_u, next, _p, { expectedVersion } = {}) {
-      assert.equal(expectedVersion, Number(persisted.version ?? persisted.revision ?? 0));
+    async save(_u, next, _p, { expectedVersion, createOnly } = {}) {
+      if (createOnly) assert.equal(persisted, null);
+      else assert.equal(expectedVersion, Number(persisted.version ?? persisted.revision ?? 0));
       persisted = structuredClone(normalizeSessionEntity(next, { now }));
     },
   };
@@ -61,11 +62,35 @@ test("first send creates the session before committing action accepted", async (
     event(TURN_EVENT.ACTION_ACCEPTED, "first-send", 0, {
       action: "send",
       phase: TURN_PHASE.ACTION,
+      createSessionIfAbsent: true,
     }),
   );
   assert.equal(accepted.applied, true);
   assert.equal(accepted.turn.state, TURN_STATE.ACTION_REQUESTING);
   assert.equal(h.reload().turnLifecycle.activeTurnScopeId, "t1");
+});
+
+test("missing session send requires an explicit provision intent", async () => {
+  const h = newSessionHarness();
+  const result = await h.service.applyTurnLifecycleEvent(event(
+    TURN_EVENT.ACTION_ACCEPTED, "implicit-send", 0, { action: "send", phase: TURN_PHASE.ACTION },
+  ));
+  assert.equal(result.reason, "session_not_found");
+  assert.equal(h.reload(), null);
+});
+
+test("initial provision replay is idempotent and concurrent first actions are mutually exclusive", async () => {
+  const h = newSessionHarness();
+  const first = event(TURN_EVENT.ACTION_ACCEPTED, "provision", 0, {
+    action: "send", phase: TURN_PHASE.ACTION, createSessionIfAbsent: true,
+  });
+  const accepted = await h.service.applyTurnLifecycleEvent(first);
+  const replay = await h.service.applyTurnLifecycleEvent(first);
+  const competing = await h.service.applyTurnLifecycleEvent({ ...first, commandId: "competing", turnScopeId: "t2" });
+  assert.equal(accepted.sessionCreated, true);
+  assert.equal(replay.deduplicated, true);
+  assert.equal(competing.reason, "session_action_conflict");
+  assert.equal(h.reload().turnLifecycle.sequence, 1);
 });
 
 test("resend and continue do not create a missing session", async () => {

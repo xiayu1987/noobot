@@ -6,6 +6,10 @@
 import { BackendChannelState, FrontendRunState, SESSION_RUN_EVENT } from "./constants";
 import { normalizeSessionRunEvent } from "./eventNormalization";
 import { deriveTurnCapabilities, isFinalTurnState, reduceTurnRuntimeEvent } from "./turnReducer";
+import {
+  validateTurnLifecycleEnvelope,
+  validateTurnLifecycleSnapshot,
+} from "@noobot/shared/turn-lifecycle-protocol";
 
 export const DEFAULT_TERMINAL_RETAIN_PER_SESSION = 10;
 export const DEFAULT_TERMINAL_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -241,6 +245,16 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
 
 /** Apply a validated Service lifecycle envelope through the only Turn reducer. */
 export function applyTurnLifecycleEnvelope(registry, envelope = {}) {
+  const validation = validateTurnLifecycleEnvelope(envelope);
+  if (!validation.valid) {
+    return {
+      registry,
+      turn: null,
+      applied: false,
+      reason: "invalid_authoritative_envelope",
+      errors: validation.errors,
+    };
+  }
   const result = applyTurnRuntimeEvent(registry, {
     ...envelope,
     type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
@@ -270,11 +284,18 @@ const SNAPSHOT_STATE_EVENT = Object.freeze({
 
 /** Merge a Session-scoped authoritative snapshot without replaying synthetic history. */
 export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
+  const validation = validateTurnLifecycleSnapshot(snapshot);
+  if (!validation.valid) return { applied: false, reason: "invalid_authoritative_snapshot", errors: validation.errors };
   const sessionId = text(snapshot.sessionId);
   const sequence = Number(snapshot.sequence || 0);
   if (!sessionId || !Number.isInteger(sequence) || sequence < 0) return { applied: false, reason: "invalid_snapshot_identity" };
   const bucket = ensureSessionBucket(registry, sessionId);
   if (Number(bucket.authoritativeSequence || 0) > sequence) return { applied: false, reason: "stale_snapshot" };
+  const fingerprint = JSON.stringify(snapshot);
+  if (Number(bucket.authoritativeSequence || 0) === sequence && bucket.authoritativeSnapshotFingerprint) {
+    if (bucket.authoritativeSnapshotFingerprint === fingerprint) return { applied: false, deduplicated: true, reason: "duplicate_snapshot" };
+    return { applied: false, reason: "snapshot_sequence_conflict" };
+  }
   const turns = [snapshot.activeTurn, ...(Array.isArray(snapshot.recentTerminalTurns) ? snapshot.recentTerminalTurns : [])].filter(Boolean);
   for (const source of turns) {
     const turnScopeId = text(source.turnScopeId);
@@ -303,15 +324,25 @@ export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
     bucket.turns[turnScopeId] = turn;
     if (turn.dialogProcessId) registry.routeIndex[turn.dialogProcessId] = { sessionId, turnScopeId };
   }
+  const previousActiveTurnScopeId = text(bucket.activeTurnScopeId);
   bucket.activeTurnScopeId = text(snapshot.activeTurnScopeId);
+  if (!bucket.activeTurnScopeId && previousActiveTurnScopeId) {
+    const previous = bucket.turns[previousActiveTurnScopeId];
+    if (previous?.dialogProcessId) delete registry.routeIndex[previous.dialogProcessId];
+  }
   bucket.authoritativeSequence = sequence;
   bucket.protocolVersion = Number(snapshot.protocolVersion || 1);
+  bucket.authoritativeSnapshotFingerprint = fingerprint;
   return { applied: true, bucket };
 }
 
 export function hydrateSessionTurnRuntime(registry, session, turnStatuses = session?.turnStatuses || []) {
   const sessionId = sessionRuntimeId(session);
   if (!sessionId) return registry;
+  // turnStatuses is a legacy summary projection. Once this Session has seen
+  // the authoritative lifecycle protocol it must never drive the state
+  // machine again (watchers may invoke hydration repeatedly).
+  if (Number(registry?.sessions?.[sessionId]?.protocolVersion || 0) > 0) return registry;
   for (const status of Array.isArray(turnStatuses) ? turnStatuses : []) {
     const turnScopeId = text(status?.turnScopeId);
     if (!turnScopeId) continue;
