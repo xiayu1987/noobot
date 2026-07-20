@@ -5,6 +5,7 @@
  */
 import { filePath as path } from "../utils/path-resolver.js";
 import { normalizeDockerContainerScope as normalizeDockerContainerScopeEnum } from "../config/index.js";
+import { randomUUID } from "node:crypto";
 
 function sanitizeDockerNamePart(input = "") {
   return String(input || "")
@@ -114,6 +115,7 @@ export function buildDockerCommand({
   const encodedCommand = Buffer.from(String(command || ""), "utf8").toString(
     "base64",
   );
+  const executionToken = randomUUID();
   const containerExecCommand = `'printf "%s" "$NOOBOT_SCRIPT_B64" | base64 -d | bash'`;
 
   const createContainerCmdRaw = `docker create --name ${JSON.stringify(containerName)} -v ${JSON.stringify(mountSource)}:${JSON.stringify(mountTarget)} ${dockerExtraMountArgs.join(" ")} ${JSON.stringify(image)} sleep infinity`;
@@ -132,7 +134,7 @@ export function buildDockerCommand({
   const cmd = [
     ensureContainerCmd,
     `docker start ${JSON.stringify(containerName)} >/dev/null`,
-    `docker exec -e NOOBOT_SCRIPT_B64=${JSON.stringify(encodedCommand)} -w ${JSON.stringify(workdir)} ${JSON.stringify(containerName)} sh -c ${containerExecCommand}`,
+    `docker exec -e NOOBOT_SCRIPT_B64=${JSON.stringify(encodedCommand)} -e NOOBOT_EXECUTION_TOKEN=${JSON.stringify(executionToken)} -w ${JSON.stringify(workdir)} ${JSON.stringify(containerName)} sh -c ${containerExecCommand}`,
   ].join(" &&\n");
 
   return {
@@ -144,5 +146,6 @@ export function buildDockerCommand({
     mountTarget,
     dockerMounts,
     workdir,
+    executionToken,
   };
 }

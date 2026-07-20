@@ -23,6 +23,10 @@ import { SessionContextService } from "./services/session-context-service.js";
 import { TaskService } from "./services/task-service.js";
 import { ExecutionLogRepository } from "../tracking/execution-log/execution-log-repository.js";
 import { ExecutionLogService } from "../tracking/execution-log/execution-log-service.js";
+import {
+  ScopedSessionLocationResolver,
+  createPersistenceContext,
+} from "./session-location-resolver.js";
 
 function createNow(now = null) {
   if (typeof now === "function") return now;
@@ -137,6 +141,17 @@ export function createSessionServices(globalConfig = {}, { now = null } = {}) {
     pathResolver,
     sessionPathResolver,
     storageService,
+    createScopedPersistenceContext({ userId = "", relativeDir = "", allowedRoot = "", metadataContributor = null } = {}) {
+      return createPersistenceContext({
+        locationResolver: new ScopedSessionLocationResolver({
+          pathResolver,
+          userId,
+          relativeDir,
+          allowedRoot,
+        }),
+        metadataContributor,
+      });
+    },
     sessionTreeService,
     sessionCrudService,
     sessionMessageService,
@@ -176,6 +191,13 @@ export function createSessionFacade(runtime = {}) {
   } = services;
 
   return {
+    createScopedPersistenceContext(payload = {}) {
+      if (typeof runtime.createScopedPersistenceContext !== "function") {
+        throw new Error("scoped persistence context factory is unavailable");
+      }
+      return runtime.createScopedPersistenceContext(payload);
+    },
+
     async ensureRuntimeDirs(userId) {
       return sessionTreeService.ensureRuntimeDirs(userId);
     },

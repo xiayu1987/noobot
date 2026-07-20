@@ -96,12 +96,13 @@ export function createScriptTool({ agentContext }) {
         .describe(tTool(runtime, "tools.script.fieldExecutionMode")),
       includeLineNumbers: z.boolean().optional().default(false).describe(tTool(runtime, "tools.script.fieldIncludeLineNumbers")),
     }),
-    func: async ({ command, riskLevel, executionMode = SCRIPT_EXECUTION_MODE.FOREGROUND, includeLineNumbers = false }) => {
+    func: async ({ command, riskLevel, executionMode = SCRIPT_EXECUTION_MODE.FOREGROUND, includeLineNumbers = false }, _runManager, toolConfig = {}) => {
       await mkdir(workspace, { recursive: true });
       const normalizedCommand = String(command || "");
       const requestedExecutionMode = normalizeExecutionMode(executionMode);
       const shouldIncludeLineNumbers = includeLineNumbers === true;
       const timeout = BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs;
+      const abortSignal = toolConfig?.signal || null;
 
       await confirmCriticalToolOperation({
         runtime,
@@ -113,8 +114,8 @@ export function createScriptTool({ agentContext }) {
 
       if (!sandboxEnabled) {
         const runResult = requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND
-          ? await runFileBacked(normalizedCommand, workspace, timeout)
-          : await run(normalizedCommand, workspace, timeout);
+          ? await runFileBacked(normalizedCommand, workspace, timeout, abortSignal)
+          : await run(normalizedCommand, workspace, timeout, abortSignal);
         if (requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND) {
           return toolFileBackedExecResult(
             "local",
@@ -139,7 +140,7 @@ export function createScriptTool({ agentContext }) {
             agentContext,
             pathContext,
           }),
-          { includeLineNumbers: shouldIncludeLineNumbers },
+          { includeLineNumbers: shouldIncludeLineNumbers, runtime, agentContext, basePath },
         );
       }
 
@@ -181,6 +182,7 @@ export function createScriptTool({ agentContext }) {
             fallbackFrom: SANDBOX_PROVIDER_NAME.BUBBLEWRAP,
             warning: tScript(runtime, "fallbackOverlaySrc"),
             executionMode: requestedExecutionMode,
+            abortSignal,
           });
           if (fallbackResult) return fallbackResult;
           throw scriptRuntimeError(tScript(runtime, "overlaySrcUnsupported"), {
@@ -265,6 +267,7 @@ export function createScriptTool({ agentContext }) {
           workspace,
           timeout,
           scriptConfig: dockerConfig,
+          abortSignal,
         };
       }
 
@@ -294,8 +297,8 @@ export function createScriptTool({ agentContext }) {
         };
       } else {
         runResult = requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND
-          ? await runFileBacked(sandboxCmd, workspace, timeout)
-          : await run(sandboxCmd, workspace, timeout);
+          ? await runFileBacked(sandboxCmd, workspace, timeout, abortSignal)
+          : await run(sandboxCmd, workspace, timeout, abortSignal);
       }
       if (
         mode === SANDBOX_PROVIDER_NAME.BUBBLEWRAP &&
@@ -317,6 +320,7 @@ export function createScriptTool({ agentContext }) {
           warning: tScript(runtime, "fallbackUserxattr"),
           includeLineNumbers: shouldIncludeLineNumbers,
           executionMode: requestedExecutionMode,
+          abortSignal,
         });
         if (fallbackResult) return fallbackResult;
         runResult = {
@@ -335,6 +339,9 @@ export function createScriptTool({ agentContext }) {
       }
       return toolExecResult(mode, runResult, extra, {
         includeLineNumbers: shouldIncludeLineNumbers,
+        runtime,
+        agentContext,
+        basePath,
       });
     },
   });

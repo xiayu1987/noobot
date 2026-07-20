@@ -27,25 +27,25 @@ export class FileSystemTaskRepository {
     return this.pathResolver.resolveBasePath(userId);
   }
 
-  async _resolveTaskScope(userId, sessionId, parentSessionId = "") {
+  async _resolveTaskScope(userId, sessionId, parentSessionId = "", persistenceContext = null) {
     const basePath = this._basePath(userId);
     await this.storageService.ensureRuntimeDirsByBasePath(basePath);
-    const { sessionDir } = await this.sessionPathResolver.resolveSessionScope(
+    const resolver = persistenceContext?.locationResolver || this.sessionPathResolver;
+    const { sessionDir, taskFile } = await resolver.resolveSessionScope(
       userId,
       sessionId,
       parentSessionId,
     );
-    const files = buildSessionArtifactFileMap(sessionDir);
-    return { sessionDir, taskFile: files.task };
+    return { sessionDir, taskFile: taskFile || buildSessionArtifactFileMap(sessionDir).task };
   }
 
-  async findBySessionId(userId, sessionId, parentSessionId = "") {
-    const bundle = await this.getBundle(userId, sessionId, parentSessionId);
+  async findBySessionId(userId, sessionId, parentSessionId = "", persistenceContext = null) {
+    const bundle = await this.getBundle(userId, sessionId, parentSessionId, persistenceContext);
     return bundle.tasks;
   }
 
-  async getBundle(userId, sessionId, parentSessionId = "") {
-    const { taskFile } = await this._resolveTaskScope(userId, sessionId, parentSessionId);
+  async getBundle(userId, sessionId, parentSessionId = "", persistenceContext = null) {
+    const { taskFile } = await this._resolveTaskScope(userId, sessionId, parentSessionId, persistenceContext);
     const bundle = await this.storageService.readJson(taskFile, {
       sessionId,
       currentTaskId: "",
@@ -62,16 +62,17 @@ export class FileSystemTaskRepository {
     };
   }
 
-  async save(userId, sessionId, task, parentSessionId = "") {
-    if (await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
+  async save(userId, sessionId, task, parentSessionId = "", persistenceContext = null) {
+    if (!persistenceContext && await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
     const { sessionDir } = await this._resolveTaskScope(
       userId,
       sessionId,
       parentSessionId,
+      persistenceContext,
     );
     await fsMkdir(sessionDir, { recursive: true });
 
-    const bundle = await this.getBundle(userId, sessionId, parentSessionId);
+    const bundle = await this.getBundle(userId, sessionId, parentSessionId, persistenceContext);
     const normalizedTask = this.normalizeTask(task);
     const existingIndex = bundle.tasks.findIndex(
       (taskItem) => taskItem.taskId === normalizedTask.taskId,
@@ -106,16 +107,18 @@ export class FileSystemTaskRepository {
     tasks = [],
     parentSessionId = "",
     currentTaskId = "",
+    persistenceContext = null,
   ) {
-    if (await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
+    if (!persistenceContext && await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
     const { sessionDir } = await this._resolveTaskScope(
       userId,
       sessionId,
       parentSessionId,
+      persistenceContext,
     );
     await fsMkdir(sessionDir, { recursive: true });
 
-    const bundle = await this.getBundle(userId, sessionId, parentSessionId);
+    const bundle = await this.getBundle(userId, sessionId, parentSessionId, persistenceContext);
     const existingTasks = Array.isArray(bundle.tasks) ? bundle.tasks : [];
     const taskIndexMap = new Map(
       existingTasks.map((task, index) => [task.taskId, index]),

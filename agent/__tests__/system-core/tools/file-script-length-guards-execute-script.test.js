@@ -20,6 +20,8 @@ import {
   parseToolResult,
   buildAttachmentService,
 } from "./helpers/file-script-length-guards-helper.js";
+import { run } from "../../../src/system-core/tools/execution/script-tool/process-exec.js";
+import { enqueueDockerContainerTask } from "../../../src/system-core/tools/execution/script-tool/docker-queue.js";
 
 test("execute_script: command 超过 semantic-transfer 阈值时保存附件并直接提示", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-guard-"));
@@ -173,7 +175,7 @@ test("execute_script: foreground 模式保留 shell 管道、stderr 与非零退
   assert.equal(failResult.stderr.trim(), "boom");
 });
 
-test("execute_script: foreground stdout 超过 Node exec 默认 1MiB 时不应被 maxBuffer 截断", async () => {
+test("execute_script: foreground 大输出流式落盘并返回完整文件引用", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-large-output-"));
   const tools = createScriptTool({
     agentContext: buildAgentContext(basePath, "primary-user", {
@@ -200,9 +202,14 @@ test("execute_script: foreground stdout 超过 Node exec 默认 1MiB 时不应�
   );
 
   assert.equal(result.ok, true);
-  assert.equal(result.stdout.length, outputLength);
+  assert.equal(result.outputOverflow, true);
+  assert.equal(result.stdout.length, LENGTH_THRESHOLDS.semanticTransfer.previewChars);
   assert.equal(result.stderr, "");
   assert.equal(result.stdout.endsWith("xxx"), true);
+  assert.equal(result.outputFiles.stdout.bytes, outputLength);
+  const stdoutFile = result.transferEnvelopes[0].files.find((item) => item.attachmentMeta?.name === "execute-script-stdout.txt");
+  assert.equal((await fs.stat(stdoutFile.pathView.hostPath)).size, outputLength);
+  assert.equal(result.stdoutPath, undefined);
 });
 
 test("execute_script: background 模式将 stdout/stderr 交给附件层并返回路径", async () => {
@@ -269,7 +276,7 @@ test("execute_script: background 模式将 stdout/stderr 交给附件层并返�
   assert.equal(result.attachments[0].path.startsWith("/host/background/"), true);
 });
 
-test("execute_script: 大 stdout 经过 foreground semantic-transfer 保存时保留完整内容", async () => {
+test("execute_script: 大 stdout 通过 foreground 原文件 semantic-transfer 保留完整内容", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-large-transfer-"));
   const outputLength = 1024 * 1024 + 12345;
   const savedArtifacts = [];
@@ -335,13 +342,70 @@ test("execute_script: 大 stdout 经过 foreground semantic-transfer 保存时�
     sessionId: "s-script-large-output",
   });
   const result = parseToolResult(runnerResult.toolResultText);
-  const stdoutArtifact = savedArtifacts.find((item) => item.name.includes("stdout.txt"));
+  const stdoutFile = result.transferFiles.find((item) => item.name === "execute-script-stdout.txt");
 
   assert.equal(result.ok, true);
-  assert.equal(result.overflowed, true);
-  assert.ok(stdoutArtifact);
-  assert.equal(stdoutArtifact.content.length, outputLength);
-  assert.equal(stdoutArtifact.content.endsWith("xxx"), true);
+  assert.equal(result.outputOverflow, true);
+  assert.equal(result.overflowed, undefined);
+  assert.equal(savedArtifacts.length, 0);
+  assert.equal(stdoutFile.size, outputLength);
+  assert.match(stdoutFile.transferFilePath, /execute-script-stdout\.txt|stdout\.txt/);
+});
+
+test("execute_script: foreground timeout terminates the process group and settles", async (t) => {
+  if (process.platform === "win32") return t.skip("POSIX process-group semantics");
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-timeout-group-"));
+  const startedAt = Date.now();
+  const result = await run("sh -c 'trap \"\" TERM; while :; do sleep 1; done'", cwd, 50);
+
+  assert.equal(result.code, 124);
+  assert.ok(Date.now() - startedAt < 4000);
+  assert.match(result.stderr, /timed out after 50ms/);
+});
+
+test("execute_script: foreground abort terminates the process group and settles", async (t) => {
+  if (process.platform === "win32") return t.skip("POSIX process-group semantics");
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-abort-group-"));
+  const controller = new AbortController();
+  const startedAt = Date.now();
+  let terminationHookCalls = 0;
+  const pending = run(
+    "sh -c 'trap \"\" TERM; while :; do sleep 1; done'",
+    cwd,
+    60000,
+    controller.signal,
+    { onTerminate: () => { terminationHookCalls += 1; } },
+  );
+  setTimeout(() => controller.abort(), 50);
+  const result = await pending;
+
+  assert.equal(result.code, 130);
+  assert.equal(terminationHookCalls, 1);
+  assert.ok(Date.now() - startedAt < 4000);
+  assert.match(result.stderr, /command aborted/);
+});
+
+test("execute_script: aborted Docker queue entry never starts after lock release", async () => {
+  let releaseFirst;
+  const firstGate = new Promise((resolve) => { releaseFirst = resolve; });
+  const containerName = `script-queue-abort-${Date.now()}`;
+  const first = enqueueDockerContainerTask({
+    containerName,
+    task: async () => firstGate,
+  });
+  const controller = new AbortController();
+  let secondInvoked = false;
+  const second = enqueueDockerContainerTask({
+    containerName,
+    abortSignal: controller.signal,
+    task: async () => { secondInvoked = true; },
+  });
+
+  controller.abort();
+  releaseFirst();
+  await first;
+  await assert.rejects(second, (error) => error?.name === "AbortError");
+  assert.equal(secondInvoked, false);
 });
 
 test("execute_script: 沙箱 workspace 元信息仅包含沙箱视角与 system 环境字段", async () => {

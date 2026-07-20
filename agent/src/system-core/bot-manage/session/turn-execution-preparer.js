@@ -123,9 +123,9 @@ export async function prepareStoppedSnapshotResumeTurnExecution(engine, {
     identity,
     allowMissing: true,
   });
-  // Workflow roots can reach the same stopped lifecycle as a regular Agent
-  // without ever entering the model loop that produces a stopped-message
-  // snapshot. A later "continue" command must therefore degrade to a normal
+  // Non-model orchestration roots can reach the same stopped lifecycle as a
+  // regular Agent without ever entering the model loop that produces a
+  // stopped-message snapshot. A later "continue" command must degrade to a normal
   // turn instead of treating an absent optional recovery artifact as a fatal
   // lifecycle error. Identity/corruption errors remain strict in the loader.
   if (!snapshot) {

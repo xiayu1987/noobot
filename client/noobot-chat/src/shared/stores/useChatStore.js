@@ -57,6 +57,30 @@ function eventContent(eventData = {}) {
   return String(eventData?.content ?? eventData?.delta ?? eventData?.message ?? eventData?.text ?? "");
 }
 
+function subSessionMessageIdentity(eventName = "", eventData = {}) {
+  const explicit = text(eventData?.messageId || eventData?.message?.id || eventData?.message?.messageId);
+  if (explicit) return explicit;
+  const role = text(eventData?.role) || (String(eventName).includes("user") ? "user" : "assistant");
+  const turnScopeId = text(eventData?.turnScopeId);
+  const dialogProcessId = text(eventData?.dialogProcessId);
+  const sessionId = text(eventData?.sessionId || eventData?.subSessionId);
+  const toolCallId = text(eventData?.toolCallId || eventData?.tool_call_id || eventData?.toolCall?.id || eventData?.tool_call?.id || eventData?.toolResult?.tool_call_id || eventData?.tool_result?.tool_call_id);
+  const kind = String(eventName).includes("tool") || toolCallId ? `tool:${toolCallId || "turn"}` : role;
+  const base = turnScopeId || dialogProcessId || sessionId;
+  return `${base}:${kind}`;
+}
+
+function hasSubSessionMessagePayload(eventName = "", eventData = {}, currentMessage = null) {
+  if (eventContent(eventData)) return true;
+  if (eventData?.message && typeof eventData.message === "object") return true;
+  if (eventData?.thinking || eventData?.toolCall || eventData?.tool_call || eventData?.toolResult || eventData?.tool_result) return true;
+  // Lifecycle/status-only events update the sub-session status.  They may enrich
+  // an already materialized runtime message, but must not create an empty
+  // placeholder that later survives alongside the persisted snapshot.
+  if (currentMessage && text(eventData?.status || eventData?.state) && (String(eventName).includes("lifecycle") || String(eventName).includes("status"))) return true;
+  return false;
+}
+
 function normalizeSubSessionMessage(eventName = "", eventData = {}, currentMessage = null) {
   const content = eventContent(eventData);
   const role = text(eventData?.role) || (String(eventName).includes("user") ? "user" : "assistant");
@@ -66,7 +90,7 @@ function normalizeSubSessionMessage(eventName = "", eventData = {}, currentMessa
   return {
     ...(currentMessage || {}),
     ...(eventData?.message && typeof eventData.message === "object" ? eventData.message : {}),
-    id: text(currentMessage?.id || eventData?.messageId || eventData?.id || eventId),
+    id: text(currentMessage?.id || eventData?.messageId || eventData?.message?.id) || subSessionMessageIdentity(eventName, eventData),
     role,
     content: appendDelta ? `${previousContent}${content}` : (content || previousContent),
     sessionId: text(eventData?.sessionId || currentMessage?.sessionId),
@@ -79,6 +103,7 @@ function normalizeSubSessionMessage(eventName = "", eventData = {}, currentMessa
     eventId,
     revision: Number(eventData?.revision ?? currentMessage?.revision ?? 0),
     sequence: Number(eventData?.sequence ?? eventData?.seq ?? currentMessage?.sequence ?? 0),
+    firstSequence: Number(currentMessage?.firstSequence ?? eventData?.sequence ?? eventData?.seq ?? 0),
     status: text(eventData?.status || eventData?.state || currentMessage?.status),
     createdAt: eventData?.createdAt || currentMessage?.createdAt || new Date().toISOString(),
     updatedAt: eventData?.updatedAt || new Date().toISOString(),
@@ -206,14 +231,17 @@ export const useChatStore = defineStore("chat", () => {
     if (eventId && currentSession.eventsById?.[eventId]) {
       return { applied: false, reason: "duplicate", current: currentSession };
     }
-    const messageKey = text(eventData?.messageId || eventData?.turnScopeId || eventId || sessionId);
+    const messageKey = subSessionMessageIdentity(eventName, { ...eventData, sessionId, eventId });
     const messages = Array.isArray(currentSession.messages) ? [...currentSession.messages] : [];
-    const existingIndex = messages.findIndex((message = {}) => text(message?.id || message?.messageId || message?.turnScopeId) === messageKey);
+    const existingIndex = messages.findIndex((message = {}) => text(message?.id || message?.messageId) === messageKey);
     const currentMessage = existingIndex >= 0 ? messages[existingIndex] : null;
-    const nextMessage = normalizeSubSessionMessage(eventName, { ...eventData, sessionId, eventId }, currentMessage);
-    if (existingIndex >= 0) messages[existingIndex] = nextMessage;
-    else messages.push(nextMessage);
-    messages.sort((a = {}, b = {}) => Number(a.sequence || 0) - Number(b.sequence || 0));
+    let nextMessage = currentMessage;
+    if (hasSubSessionMessagePayload(eventName, eventData, currentMessage)) {
+      nextMessage = normalizeSubSessionMessage(eventName, { ...eventData, sessionId, eventId }, currentMessage);
+      if (existingIndex >= 0) messages[existingIndex] = nextMessage;
+      else messages.push(nextMessage);
+    }
+    messages.sort((a = {}, b = {}) => Number(a.firstSequence || a.sequence || 0) - Number(b.firstSequence || b.sequence || 0));
     const nextSession = {
       ...currentSession,
       sessionId,

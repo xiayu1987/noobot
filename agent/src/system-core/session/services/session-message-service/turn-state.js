@@ -12,10 +12,10 @@ import { normalizeTurnLifecycleEntity, transitionTurnLifecycle, isTerminalTurnLi
 import { createTurnLifecycleSnapshot, validateSessionProvisionIntent } from "@noobot/shared/turn-lifecycle-protocol";
 import { normalizeSessionEntity } from "../../entities/session-entity.js";
 
-export async function getTurnLifecycleSnapshot({ userId, sessionId, parentSessionId = "", commandId = "", knownSequence, terminalLimit = 10 } = {}) {
+export async function getTurnLifecycleSnapshot({ userId, sessionId, parentSessionId = "", persistenceContext = null, commandId = "", knownSequence, terminalLimit = 10 } = {}) {
   if (!userId || !sessionId) return { found: false, reason: "missing_session" };
-  const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(userId, sessionId, parentSessionId);
-  const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
+  const resolvedParentSessionId = await this._resolveParentSessionId(userId, sessionId, parentSessionId, persistenceContext);
+  const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId, persistenceContext);
   if (!session) return { found: false, reason: "session_not_found" };
   const lifecycle = normalizeTurnLifecycleEntity(session.turnLifecycle || {});
   const activeTurn = lifecycle.turns[lifecycle.activeTurnScopeId] || null;
@@ -39,6 +39,7 @@ export async function applyTurnLifecycleEvent({
   userId,
   sessionId,
   parentSessionId = "",
+  persistenceContext = null,
   expectedSessionVersion,
   ...event
 } = {}) {
@@ -47,16 +48,17 @@ export async function applyTurnLifecycleEvent({
   if (!provisionIntent.valid) return { applied: false, reason: "invalid_session_provision_intent" };
   if (provisionIntent.requested) {
     return provisionSessionWithInitialTurn.call(this, {
-      userId, sessionId, parentSessionId, expectedSessionVersion, ...event,
+      userId, sessionId, parentSessionId, persistenceContext, expectedSessionVersion, ...event,
     });
   }
   return this._withSessionMutation(userId, sessionId, async () => {
-    const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+    const resolvedParentSessionId = await this._resolveParentSessionId(
       userId,
       sessionId,
       parentSessionId,
+      persistenceContext,
     );
-    const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
+    const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId, persistenceContext);
     if (!session) return { applied: false, reason: "session_not_found" };
     const actualVersion = resolveSessionVersion(session);
     if (expectedSessionVersion !== undefined && Number(expectedSessionVersion) !== actualVersion) {
@@ -67,19 +69,19 @@ export async function applyTurnLifecycleEvent({
     session.turnLifecycle = result.lifecycle;
     session.updatedAt = this.now();
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
-    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: actualVersion });
+    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: actualVersion, persistenceContext });
     return { ...result, session, version: resolveSessionVersion(session) };
-  });
+  }, parentSessionId, persistenceContext);
 }
 
 export async function provisionSessionWithInitialTurn({
-  userId, sessionId, parentSessionId = "", expectedSessionVersion, createSessionIfAbsent, ...event
+  userId, sessionId, parentSessionId = "", persistenceContext = null, expectedSessionVersion, createSessionIfAbsent, ...event
 } = {}) {
   const intent = validateSessionProvisionIntent({ ...event, createSessionIfAbsent });
   if (!intent.valid || !intent.requested) return { applied: false, reason: "invalid_session_provision_intent" };
   return this._withSessionMutation(userId, sessionId, async () => {
-    const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(userId, sessionId, parentSessionId);
-    let session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
+    const resolvedParentSessionId = await this._resolveParentSessionId(userId, sessionId, parentSessionId, persistenceContext);
+    let session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId, persistenceContext);
     const isNew = !session;
     if (isNew && await this.sessionRepo.isSessionDeleted?.(userId, sessionId)) {
       return { applied: false, reason: "session_not_found" };
@@ -101,16 +103,18 @@ export async function provisionSessionWithInitialTurn({
     const saved = await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
       expectedVersion: isNew ? undefined : actualVersion,
       createOnly: isNew,
+      persistenceContext,
     });
     if (saved === false) return { applied: false, reason: "session_not_found" };
     return { ...result, session, version: resolveSessionVersion(session), sessionCreated: isNew };
-  });
+  }, parentSessionId, persistenceContext);
 }
 
 export async function upsertTurnStatus({
     userId,
     sessionId,
     parentSessionId = "",
+    persistenceContext = null,
     turnScopeId = "",
     dialogProcessId = "",
     parentDialogProcessId = "",
@@ -120,12 +124,13 @@ export async function upsertTurnStatus({
   } = {}) {
     if (!userId || !sessionId) return { upserted: false, reason: "missing_session" };
     return this._withSessionMutation(userId, sessionId, async () => {
-    const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+    const resolvedParentSessionId = await this._resolveParentSessionId(
       userId,
       sessionId,
       parentSessionId,
+      persistenceContext,
     );
-    const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
+    const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId, persistenceContext);
     if (!session) return { upserted: false, reason: "session_not_found" };
     const nowValue = this.now();
     const incoming = buildTurnTerminalCommand(command, {
@@ -151,15 +156,16 @@ export async function upsertTurnStatus({
     }
     session.updatedAt = nowValue;
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
-    await this.sessionRepo.save(userId, session, resolvedParentSessionId);
+    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
     return { upserted: true, session, turnStatus, version: resolveSessionVersion(session) };
-    });
+    }, parentSessionId, persistenceContext);
   }
 
 export async function upsertTurnTiming({
     userId,
     sessionId,
     parentSessionId = "",
+    persistenceContext = null,
     turnScopeId = "",
     dialogProcessId = "",
     thinkingStartedAt = "",
@@ -167,12 +173,13 @@ export async function upsertTurnTiming({
   } = {}) {
     if (!userId || !sessionId) return { upserted: false, reason: "missing_session" };
     return this._withSessionMutation(userId, sessionId, async () => {
-      const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+      const resolvedParentSessionId = await this._resolveParentSessionId(
         userId,
         sessionId,
         parentSessionId,
+        persistenceContext,
       );
-      const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
+      const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId, persistenceContext);
       if (!session) return { upserted: false, reason: "session_not_found" };
       const before = JSON.stringify(session.turnTimings || []);
       upsertSessionTurnTiming(session, {
@@ -186,15 +193,16 @@ export async function upsertTurnTiming({
       }
       session.updatedAt = this.now();
       if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
-      await this.sessionRepo.save(userId, session, resolvedParentSessionId);
+      await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
       return { upserted: true, session };
-    });
+    }, parentSessionId, persistenceContext);
   }
 
 export async function stampReusedUserTurnDialogProcessId({
     userId,
     sessionId,
     parentSessionId = "",
+    persistenceContext = null,
     turnScopeId = "",
     dialogProcessId = "",
     attachments = undefined,
@@ -205,15 +213,17 @@ export async function stampReusedUserTurnDialogProcessId({
     const normalizedDialogProcessId = resolveDialogProcessIdFromContext({ dialogProcessId });
     if (!normalizedDialogProcessId) return { stamped: false, reason: "missing_dialog_process_id" };
     return this._withSessionMutation(userId, sessionId, async () => {
-    const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+    const resolvedParentSessionId = await this._resolveParentSessionId(
       userId,
       sessionId,
       parentSessionId,
+      persistenceContext,
     );
     const session = await this.sessionRepo.findById(
       userId,
       sessionId,
       resolvedParentSessionId,
+      persistenceContext,
     );
     if (!session) return { stamped: false, reason: "session_not_found" };
     const messages = Array.isArray(session.messages) ? session.messages : [];
@@ -256,7 +266,7 @@ export async function stampReusedUserTurnDialogProcessId({
     }
     session.updatedAt = this.now();
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
-    await this.sessionRepo.save(userId, session, resolvedParentSessionId);
+    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
     return {
       stamped: true,
       session,
@@ -264,5 +274,5 @@ export async function stampReusedUserTurnDialogProcessId({
       version: resolveSessionVersion(session),
       dialogProcessId: normalizedDialogProcessId,
     };
-    });
+    }, parentSessionId, persistenceContext);
   }

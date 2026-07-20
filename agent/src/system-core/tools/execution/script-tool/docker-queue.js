@@ -16,6 +16,7 @@ export function enqueueDockerContainerTask({
   containerName = "",
   task = async () => ({}),
   lockWaitTimeoutMs = ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS,
+  abortSignal = null,
 } = {}) {
   const key = String(containerName || "").trim() || "__default__";
   const previousTail = dockerContainerQueueMap.get(key) || Promise.resolve();
@@ -50,6 +51,12 @@ export function enqueueDockerContainerTask({
     });
   }
   const runPromise = waitPromise.then(async () => {
+    if (abortSignal?.aborted) {
+      const error = new Error("docker container queue task aborted");
+      error.name = "AbortError";
+      error.code = "ABORT_ERR";
+      throw error;
+    }
     const waitedMs = Date.now() - waitStartedAt;
     if (waitedMs > 0) {
       logDebug("[execute_script][docker_queue_acquired]", {

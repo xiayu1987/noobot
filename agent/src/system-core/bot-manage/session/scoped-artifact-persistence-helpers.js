@@ -4,21 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "../../utils/path-resolver.js";
-import { mkdir, writeFile, appendFile, access } from "node:fs/promises";
-import { emitEvent } from "../../event/index.js";
+import { mkdir, writeFile, appendFile } from "node:fs/promises";
 import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
 import { MIME_TYPE } from "../../constants/index.js";
-import { normalizeSessionEntity } from "../../session/entities/session-entity.js";
 import {
-  RUNTIME_EVENT_CATEGORIES,
-  RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
-} from "@noobot/runtime-events";
-import {
-  applyNormalizedMessageFlags,
   persistSnapshotJsonFiles,
-  resolvePreferredAttachments,
-  resolveTransferEnvelopeListFromMessage,
 } from "./session-execution-engine-utils.js";
 
 export class ScopedArtifactPersistenceHelpers {
@@ -128,100 +118,6 @@ export class ScopedArtifactPersistenceHelpers {
       executionPayload: execution,
       metadata,
     });
-  }
-
-  normalizeDetachedSubSessionMessage(message = {}, now = "") {
-    const ts = String(now || this.now()).trim() || this.now();
-    const normalized = {
-      role: String(message?.role || "").trim() || "assistant",
-      content: message?.content || "",
-      type: String(message?.type || "").trim(),
-      dialogProcessId: String(message?.dialogProcessId || "").trim(),
-      parentDialogProcessId: String(message?.parentDialogProcessId || "").trim(),
-      turnScopeId: String(message?.turnScopeId || "").trim(),
-      taskId: String(message?.taskId || "").trim(),
-      taskStatus: String(message?.taskStatus || "").trim(),
-      modelAlias: String(message?.modelAlias || "").trim(),
-      modelName: String(message?.modelName || "").trim(),
-      summarized: message?.summarized === true,
-      ts,
-    };
-    if (Array.isArray(message?.tool_calls)) normalized.tool_calls = message.tool_calls;
-    if (String(message?.tool_call_id || "").trim()) {
-      normalized.tool_call_id = String(message.tool_call_id || "").trim();
-    }
-    const preferredAttachments = resolvePreferredAttachments(message);
-    if (preferredAttachments.length) normalized.attachments = preferredAttachments;
-    const transferEnvelopes = resolveTransferEnvelopeListFromMessage(message);
-    if (transferEnvelopes.length) normalized.transferEnvelopes = transferEnvelopes;
-    return applyNormalizedMessageFlags(normalized, message);
-  }
-
-  async persistDetachedSubSessionSnapshot({
-    outputDir = "",
-    sessionPayload = {},
-    taskPayload = {},
-    executionPayload = {},
-    metadata = null,
-  } = {}) {
-    if (!outputDir) return null;
-    const normalizedSessionPayload = normalizeSessionEntity(
-      sessionPayload && typeof sessionPayload === "object" ? sessionPayload : {},
-      { now: () => this.now() },
-    );
-    return persistSnapshotJsonFiles({
-      outputDir,
-      sessionPayload: normalizedSessionPayload,
-      taskPayload: taskPayload && typeof taskPayload === "object" ? taskPayload : {},
-      executionPayload: executionPayload && typeof executionPayload === "object" ? executionPayload : {},
-      metadata,
-    });
-  }
-
-  async assertDetachedSubSessionIsolation({
-    userId = "",
-    sessionId = "",
-    eventListener = null,
-    scope = "sub_session",
-  } = {}) {
-    if (!userId || !sessionId) return true;
-    const workspacePath = this.workspaceService.getWorkspacePath(userId);
-    const leakedMainSessionFile = path.resolve(
-      workspacePath,
-      "runtime/session",
-      sessionId,
-      "session.json",
-    );
-    try {
-      await access(leakedMainSessionFile);
-    } catch {
-      return true;
-    }
-    const payload = {
-      scope,
-      userId,
-      sessionId,
-      leakedMainSessionFile,
-      message: "detached sub session leaked into runtime/session main tree",
-    };
-    emitEvent(
-      typeof eventListener === "function" ? eventListener : null,
-      "plugin_subsession_persistence_leak",
-      payload,
-    );
-    await writeRoutedRuntimeEvent({
-      scope: "session",
-      source: "agent",
-      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-      category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
-      event: "plugin_subsession_persistence_leak",
-      userId,
-      sessionId,
-      data: payload,
-    }, {
-      workspaceRoot: path.dirname(workspacePath),
-    }).catch(() => null);
-    return false;
   }
 
   createScopedJsonWriter() {

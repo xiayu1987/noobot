@@ -12,20 +12,32 @@ export class ExecutionLogService {
     this.sessionRepo = sessionRepo;
   }
 
-  async getExecutionBundle({ userId, sessionId }) {
-    const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+  async _resolveParentSessionId(userId, sessionId, parentSessionId = "", persistenceContext = null) {
+    if (typeof this.sessionRepo?.resolveSessionScope === "function") {
+      const scope = await this.sessionRepo.resolveSessionScope(userId, sessionId, parentSessionId, persistenceContext);
+      return scope?.resolvedParentSessionId || "";
+    }
+    return this.sessionRepo.resolveParentSessionId(userId, sessionId, parentSessionId);
+  }
+
+  async getExecutionBundle({ userId, sessionId, parentSessionId = "", persistenceContext = null }) {
+    const resolvedParentSessionId = await this._resolveParentSessionId(
       userId,
       sessionId,
+      parentSessionId,
+      persistenceContext,
     );
     await this.sessionRepo.ensureSession({
       userId,
       sessionId,
       parentSessionId: resolvedParentSessionId,
+      persistenceContext,
     });
     return this.executionRepo.getBundle(
       userId,
       sessionId,
       resolvedParentSessionId,
+      persistenceContext,
     );
   }
 
@@ -39,17 +51,20 @@ export class ExecutionLogService {
     data = {},
     ts = "",
     parentSessionId = "",
+    persistenceContext = null,
   }) {
-    const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+    const resolvedParentSessionId = await this._resolveParentSessionId(
       userId,
       sessionId,
       parentSessionId,
+      persistenceContext,
     );
     await this.executionRepo.appendLog(
       userId,
       sessionId,
       { dialogProcessId, event, category, type, data, ts },
       resolvedParentSessionId,
+      persistenceContext,
     );
   }
 }

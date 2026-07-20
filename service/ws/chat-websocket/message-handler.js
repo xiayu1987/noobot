@@ -306,6 +306,47 @@ export function createMessageHandler({
         turnStatus = null;
       }
       if (turnStatus?.status === "user_stopped") {
+        const lifecycleContext = {
+          userId,
+          sessionId: stopPayload.sessionId,
+          parentSessionId: String(payload?.parentSessionId || "").trim(),
+          turnScopeId: stopPayload.turnScopeId,
+          dialogProcessId: stopPayload.dialogProcessId,
+          phase: TURN_PHASE.STOP,
+        };
+        const processed = await commitTurnLifecycle({
+          ...lifecycleContext,
+          commandId: `${stopCommandId}:processing-completed`,
+          eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
+        });
+        if (!processed?.applied && !processed?.deduplicated) {
+          sendEvent("error", {
+            error: processed?.reason || "stop_processing_completed_failed",
+            errorCode: processed?.reason || "stop_processing_completed_failed",
+            failurePhase: TURN_PHASE.STOP,
+            sessionId: stopPayload.sessionId,
+            dialogProcessId: stopPayload.dialogProcessId,
+            turnScopeId: stopPayload.turnScopeId,
+          });
+          return;
+        }
+        const completed = await commitTurnLifecycle({
+          ...lifecycleContext,
+          commandId: `${stopCommandId}:completed`,
+          eventType: TURN_EVENT.STOP_COMPLETED,
+          summaryVersion: Number(turnStatus?.version || 0),
+        });
+        if (!completed?.applied && !completed?.deduplicated) {
+          sendEvent("error", {
+            error: completed?.reason || "stop_completed_failed",
+            errorCode: completed?.reason || "stop_completed_failed",
+            failurePhase: TURN_PHASE.STOP,
+            sessionId: stopPayload.sessionId,
+            dialogProcessId: stopPayload.dialogProcessId,
+            turnScopeId: stopPayload.turnScopeId,
+          });
+          return;
+        }
         sendEvent("channel_state", {
           ...stopPayload,
           state: "stopping",

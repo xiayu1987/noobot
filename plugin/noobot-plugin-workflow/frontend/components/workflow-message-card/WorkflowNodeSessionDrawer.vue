@@ -158,8 +158,8 @@ watch(
     viewerVisible.value,
     props.selectedNodeSessionId,
     props.displayNodeMessages.length,
-    props.displayNodeMessages.map((item = {}) => `${String(item?.content || "").length}:${Array.isArray(item?.toolLogs) ? item.toolLogs.length : 0}`).join("|"),
-    props.turnStatuses.length,
+    props.displayNodeMessages.map((item = {}) => `${String(item?.content || "").length}:${JSON.stringify(item?.thinking || null).length}:${Array.isArray(item?.thinkingSteps) ? item.thinkingSteps.length : 0}:${Array.isArray(item?.toolLogs) ? item.toolLogs.length : 0}:${JSON.stringify(item?.turnTimings || item?.timings || null).length}`).join("|"),
+    props.turnStatuses.map((item = {}) => `${item?.status || ""}:${JSON.stringify(item?.turnTimings || item?.timings || null).length}`).join("|"),
   ],
   ([visible, sessionId], previous = []) => {
     if (!visible) return;

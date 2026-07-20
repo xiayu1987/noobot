@@ -11,7 +11,6 @@ import path from "node:path";
 
 import { ScopedArtifactPersistenceHelpers } from "../../../src/system-core/bot-manage/session/scoped-artifact-persistence-helpers.js";
 import { MIME_TYPE } from "../../../src/system-core/constants/index.js";
-import { setEventAdapter } from "../../../src/system-core/event/index.js";
 
 async function createTempRoot() {
   return fs.mkdtemp(path.join(os.tmpdir(), "noobot-plugin-persistence-"));
@@ -98,69 +97,6 @@ test("ScopedArtifactPersistenceHelpers scoped writer and event logger write insi
   );
 });
 
-test("ScopedArtifactPersistenceHelpers normalizes detached sub-session messages with transfer and flags", () => {
-  const helpers = createHelpers();
-  const normalized = helpers.normalizeDetachedSubSessionMessage(
-    {
-      role: "tool",
-      content: "payload",
-      type: "tool_result",
-      dialogProcessId: "d1",
-      parentDialogProcessId: "pd1",
-      tool_call_id: "tc1",
-      attachments: [{ attachmentId: "a1", mimeType: "text/plain" }],
-      transferEnvelopes: [{ envelopeId: "e3" }],
-      injectedMessage: true,
-      injectedBy: "botPlugin",
-      injectedMessageType: "workflow_system_context",
-      frontendUserMessage: true,
-    },
-    "2026-02-03T04:05:06.000Z",
-  );
-
-  assert.equal(normalized.role, "tool");
-  assert.equal(normalized.content, "payload");
-  assert.equal(normalized.tool_call_id, "tc1");
-  assert.equal(normalized.ts, "2026-02-03T04:05:06.000Z");
-  assert.deepEqual(normalized.attachments, [{ attachmentId: "a1", mimeType: "text/plain" }]);
-  assert.equal("transferResult" in normalized, false);
-  assert.deepEqual(normalized.transferEnvelopes, [{ envelopeId: "e3" }]);
-  assert.equal(normalized.injectedMessage, true);
-  assert.equal(normalized.injectedBy, "botPlugin");
-  assert.equal(normalized.injectedMessageType, "workflow_system_context");
-  assert.equal(normalized.frontendUserMessage, true);
-});
-
-test("ScopedArtifactPersistenceHelpers persists detached snapshot json files", async () => {
-  const tempRoot = await createTempRoot();
-  const helpers = createHelpers({ baseDir: tempRoot });
-  const outputDir = path.join(tempRoot, "u1", "plugin/node-b");
-
-  const persisted = await helpers.persistDetachedSubSessionSnapshot({
-    outputDir,
-    sessionPayload: {
-      sessionId: "s1",
-      messages: [{ role: "assistant", content: "done" }],
-    },
-    taskPayload: { sessionId: "s1", tasks: [] },
-    executionPayload: { sessionId: "s1", logs: [] },
-    metadata: { pluginNodeId: "node-b" },
-  });
-
-  assert.equal(persisted.outputDir, outputDir);
-  assert.deepEqual(JSON.parse(await fs.readFile(persisted.files.meta, "utf8")), {
-    pluginNodeId: "node-b",
-  });
-  const sessionJson = JSON.parse(await fs.readFile(persisted.files.session, "utf8"));
-  assert.equal(sessionJson.sessionId, "s1");
-  assert.equal(sessionJson.messages[0].content, "done");
-  const sessionSummaryJson = JSON.parse(await fs.readFile(persisted.files.sessionSummary, "utf8"));
-  assert.equal(sessionSummaryJson.schemaVersion, 5);
-  assert.equal(sessionSummaryJson.sessionId, "s1");
-  assert.equal(sessionSummaryJson.stats.messageCount, 1);
-  assert.equal(await fs.readFile(persisted.files.executionEvents, "utf8"), "");
-});
-
 test("ScopedArtifactPersistenceHelpers persists existing sub-session snapshot from session service", async () => {
   const tempRoot = await createTempRoot();
   const outputDir = path.join(tempRoot, "u1", "plugin/node-c");
@@ -195,55 +131,6 @@ test("ScopedArtifactPersistenceHelpers persists existing sub-session snapshot fr
   assert.equal(taskJson.updatedAt, "2026-01-02T03:04:05.000Z");
   assert.deepEqual(executionJson.logs, [{ event: "x" }]);
   assert.equal(await fs.readFile(persisted.files.executionEvents, "utf8"), "{\"event\":\"x\"}\n");
-});
-
-test("ScopedArtifactPersistenceHelpers detects detached sub-session isolation leaks", async () => {
-  const tempRoot = await createTempRoot();
-  const helpers = createHelpers({ baseDir: tempRoot });
-  const leakedFile = path.join(tempRoot, "u1", "runtime/session", "s-leak", "session.json");
-  await fs.mkdir(path.dirname(leakedFile), { recursive: true });
-  await fs.writeFile(leakedFile, "{}\n", "utf8");
-  const events = [];
-  setEventAdapter({
-    emit(payload = {}) {
-      events.push(payload);
-    },
-  });
-  let isolated = false;
-  let leaked = true;
-  try {
-    isolated = await helpers.assertDetachedSubSessionIsolation({
-      userId: "u1",
-      sessionId: "s-ok",
-    });
-    leaked = await helpers.assertDetachedSubSessionIsolation({
-      userId: "u1",
-      sessionId: "s-leak",
-      eventListener: () => {},
-      scope: "test_scope",
-    });
-  } finally {
-    setEventAdapter(null);
-  }
-
-  assert.equal(isolated, true);
-  assert.equal(leaked, false);
-  assert.equal(events[0].event, "plugin_subsession_persistence_leak");
-  assert.equal(events[0].data.scope, "test_scope");
-  assert.equal(events[0].data.leakedMainSessionFile, leakedFile);
-  const runtimeEventFile = path.join(tempRoot, "u1", "runtime/session", "s-leak", "events", "system.jsonl");
-  const runtimeEventRecords = (await fs.readFile(runtimeEventFile, "utf8"))
-    .trim()
-    .split("\n")
-    .map((line) => JSON.parse(line));
-  assert.equal(runtimeEventRecords.length, 1);
-  assert.equal(runtimeEventRecords[0].source, "agent");
-  assert.equal(runtimeEventRecords[0].category, "system");
-  assert.equal(runtimeEventRecords[0].channel, "direct");
-  assert.equal(runtimeEventRecords[0].event, "plugin_subsession_persistence_leak");
-  assert.equal(runtimeEventRecords[0].userId, "u1");
-  assert.equal(runtimeEventRecords[0].sessionId, "s-leak");
-  assert.equal(runtimeEventRecords[0].data.scope, "test_scope");
 });
 
 test("ScopedArtifactPersistenceHelpers generated artifact persister maps records to metas", async () => {

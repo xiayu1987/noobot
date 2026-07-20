@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { ERROR_CODE } from "../../../error/constants.js";
+import { execFile } from "node:child_process";
 import { buildDockerCommand } from "../../../sandbox/docker-sandbox.js";
 import { logWarn } from "../../../tracking/console/logger.js";
 import {
@@ -18,6 +19,51 @@ import { scriptRuntimeError } from "./script-errors.js";
 import { toolExecResult } from "./result-format.js";
 import { buildScriptExecutionMeta, toolFileBackedExecResult } from "./workspace-meta.js";
 
+const DOCKER_FORCE_KILL_GRACE_MS = 2000;
+const DOCKER_CLEANUP_SCRIPT = `
+token=$1
+signal=$2
+pgids=""
+for environ in /proc/[0-9]*/environ; do
+  [ -r "$environ" ] || continue
+  if tr '\\000' '\\n' < "$environ" 2>/dev/null | grep -Fqx "NOOBOT_EXECUTION_TOKEN=$token"; then
+    pid=\${environ#/proc/}
+    pid=\${pid%/environ}
+    pgid=$(awk '{ print $5 }' "/proc/$pid/stat" 2>/dev/null || true)
+    case "$pgid" in
+      ''|*[!0-9]*) continue ;;
+    esac
+    case " $pgids " in
+      *" $pgid "*) ;;
+      *) pgids="$pgids $pgid" ;;
+    esac
+  fi
+done
+for pgid in $pgids; do
+  kill -"$signal" -"$pgid" 2>/dev/null || true
+done
+`;
+
+function signalDockerExecution({ containerName, executionToken }, signal) {
+  return new Promise((resolve) => {
+    execFile(
+      "docker",
+      ["exec", containerName, "sh", "-c", DOCKER_CLEANUP_SCRIPT, "noobot-cleanup", executionToken, signal],
+      { timeout: 10000, windowsHide: true },
+      () => resolve(),
+    );
+  });
+}
+
+export function terminateDockerExecution(built) {
+  void signalDockerExecution(built, "TERM");
+  const forceKillTimer = setTimeout(
+    () => void signalDockerExecution(built, "KILL"),
+    DOCKER_FORCE_KILL_GRACE_MS,
+  );
+  forceKillTimer.unref?.();
+}
+
 export async function runDockerCommand({
   userRoot,
   userId = "",
@@ -26,16 +72,20 @@ export async function runDockerCommand({
   timeout,
   scriptConfig = {},
   runner = run,
+  abortSignal = null,
 }) {
   const built = buildDockerCommand({ userRoot, userId, command, scriptConfig });
   let result = null;
   try {
     result = await enqueueDockerContainerTask({
       containerName: built.containerName,
-      task: async () => runner(built.cmd, workspace, timeout),
+      task: async () => runner(built.cmd, workspace, timeout, abortSignal, {
+        onTerminate: () => terminateDockerExecution(built),
+      }),
       lockWaitTimeoutMs:
         scriptConfig?.dockerLockWaitTimeoutMs ||
         DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
+      abortSignal,
     });
   } catch (error) {
     if (String(error?.code || "") === "DOCKER_CONTAINER_QUEUE_LOCK_TIMEOUT") {
@@ -77,6 +127,7 @@ export async function tryDockerFallback({
   warning,
   includeLineNumbers = false,
   executionMode = SCRIPT_EXECUTION_MODE.FOREGROUND,
+  abortSignal = null,
 }) {
   const dockerInstalled = await hasCommand(SANDBOX_COMMAND.DOCKER);
   if (!dockerInstalled) return null;
@@ -88,6 +139,7 @@ export async function tryDockerFallback({
     timeout,
     scriptConfig,
     runner: executionMode === SCRIPT_EXECUTION_MODE.BACKGROUND ? runFileBacked : run,
+    abortSignal,
   });
   const meta = {
     fallbackFrom,
@@ -110,5 +162,10 @@ export async function tryDockerFallback({
       basePath: runtime?.basePath || "",
     });
   }
-  return toolExecResult(SANDBOX_PROVIDER_NAME.DOCKER, dr, meta, { includeLineNumbers });
+  return toolExecResult(SANDBOX_PROVIDER_NAME.DOCKER, dr, meta, {
+    includeLineNumbers,
+    runtime,
+    agentContext,
+    basePath: runtime?.basePath || "",
+  });
 }

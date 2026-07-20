@@ -30,27 +30,30 @@ export class FileSystemExecutionRepository {
     return this.pathResolver.resolveBasePath(userId);
   }
 
-  async _resolveExecutionScope(userId, sessionId, parentSessionId = "") {
+  async _resolveExecutionScope(userId, sessionId, parentSessionId = "", persistenceContext = null) {
     const basePath = this._basePath(userId);
     await this.storageService.ensureRuntimeDirsByBasePath(basePath);
-    const { sessionDir } = await this.sessionPathResolver.resolveSessionScope(
+    const resolver = persistenceContext?.locationResolver || this.sessionPathResolver;
+    const scope = await resolver.resolveSessionScope(
       userId,
       sessionId,
       parentSessionId,
     );
+    const { sessionDir } = scope;
     const files = buildSessionArtifactFileMap(sessionDir);
     return {
       sessionDir,
-      executionFile: files.execution,
-      executionEventsFile: files.executionEvents,
+      executionFile: scope.executionFile || files.execution,
+      executionEventsFile: scope.executionEventsFile || files.executionEvents,
     };
   }
 
-  async getBundle(userId, sessionId, parentSessionId = "") {
+  async getBundle(userId, sessionId, parentSessionId = "", persistenceContext = null) {
     const { executionFile, executionEventsFile } = await this._resolveExecutionScope(
       userId,
       sessionId,
       parentSessionId,
+      persistenceContext,
     );
     const bundle = await this.storageService.readJson(executionFile, {
       sessionId,
@@ -66,12 +69,13 @@ export class FileSystemExecutionRepository {
     };
   }
 
-  async saveBundle(userId, sessionId, executionBundle = {}, parentSessionId = "") {
-    if (await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
+  async saveBundle(userId, sessionId, executionBundle = {}, parentSessionId = "", persistenceContext = null) {
+    if (!persistenceContext && await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
     const { sessionDir } = await this._resolveExecutionScope(
       userId,
       sessionId,
       parentSessionId,
+      persistenceContext,
     );
     await fsMkdir(sessionDir, { recursive: true });
     await writeExecutionArtifact({
@@ -86,12 +90,13 @@ export class FileSystemExecutionRepository {
     return true;
   }
 
-  async appendLog(userId, sessionId, executionLog = {}, executionBundle = {}, parentSessionId = "") {
-    if (await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
+  async appendLog(userId, sessionId, executionLog = {}, executionBundle = {}, parentSessionId = "", persistenceContext = null) {
+    if (!persistenceContext && await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
     const { sessionDir } = await this._resolveExecutionScope(
       userId,
       sessionId,
       parentSessionId,
+      persistenceContext,
     );
     await fsMkdir(sessionDir, { recursive: true });
     await appendExecutionLogArtifact({

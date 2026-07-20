@@ -397,17 +397,6 @@ export class SessionExecutionEngine {
     return this.scopedArtifactPersistenceHelpers.persistSubSessionSnapshot(payload);
   }
 
-  _normalizeDetachedSubSessionMessage(message = {}, now = "") {
-    return this.scopedArtifactPersistenceHelpers.normalizeDetachedSubSessionMessage(message, now);
-  }
-
-  async _persistDetachedSubSessionSnapshot(payload = {}) {
-    return this.scopedArtifactPersistenceHelpers.persistDetachedSubSessionSnapshot(payload);
-  }
-
-  async _assertDetachedSubSessionIsolation(payload = {}) {
-    return this.scopedArtifactPersistenceHelpers.assertDetachedSubSessionIsolation(payload);
-  }
 
   _createScopedJsonWriter() {
     return this.scopedArtifactPersistenceHelpers.createScopedJsonWriter();
@@ -425,77 +414,15 @@ export class SessionExecutionEngine {
     return createDetachedSubSessionRunner({
       workspaceService: this.workspaceService,
       configService: this.configService,
-      agentRuntimeFacade: this.agentRuntimeFacade,
-      errorLogger: this.errorLogger,
+      sessionRunner: this.runner,
+      session: this.session,
       pluginRuntime: this.pluginRuntimeBundle?.pluginRuntime || getDefaultSessionPluginRuntime(),
       mergeRunConfigWithPluginStrategy: (payload = {}) =>
         this._mergeRunConfigWithPluginStrategy(payload),
       prepareRunConfig: (payload = {}) => this._prepareRunConfig(payload),
-      prepareAgentTurnExecution: (payload = {}) =>
-        this._prepareAgentTurnExecution(payload),
-      resolveScopedOutputDir: (payload = {}) =>
-        this._resolveScopedOutputDir(payload),
-      normalizeDetachedSubSessionMessage: (message = {}, now = "") =>
-        this._normalizeDetachedSubSessionMessage(message, now),
-      persistDetachedSubSessionSnapshot: (payload = {}) =>
-        this._persistDetachedSubSessionSnapshot(payload),
-      persistDetachedSubSessionTerminal: (payload = {}) =>
-        this._persistDetachedSubSessionTerminal(payload),
-      assertDetachedSubSessionIsolation: (payload = {}) =>
-        this._assertDetachedSubSessionIsolation(payload),
-      ...(typeof this.session?.applyTurnLifecycleEvent === "function"
-        ? {
-            applyTurnLifecycleEvent: (payload = {}) =>
-              this.session.applyTurnLifecycleEvent(payload),
-          }
-        : {}),
-      now: () => this._now(),
     });
   }
 
-  async _persistDetachedSubSessionTerminal({
-    userId = "",
-    sessionId = "",
-    parentSessionId = "",
-    parentDialogProcessId = "",
-    dialogProcessId = "",
-    turnScopeId = "",
-    command = "",
-    turnTasks = [],
-  } = {}) {
-    if (!this.session || typeof this.session.upsertTurnStatus !== "function") {
-      const error = new Error("detached sub-session terminal persistence is unavailable");
-      error.code = "SUB_SESSION_TERMINAL_PERSISTENCE_UNAVAILABLE";
-      throw error;
-    }
-    if (typeof this.session.saveCurrentTurnTasks === "function") {
-      await this.session.saveCurrentTurnTasks({
-        userId,
-        sessionId,
-        parentSessionId,
-        currentTurnTasks: Array.isArray(turnTasks) ? turnTasks : [],
-      });
-    }
-    const statusReceipt = await this.session.upsertTurnStatus({
-      userId,
-      sessionId,
-      parentSessionId,
-      parentDialogProcessId,
-      dialogProcessId,
-      turnScopeId,
-      command,
-      description:
-        command === "user_stopped"
-          ? "用户停止了本轮生成"
-          : "子 Agent 已完成本轮生成",
-    });
-    const version = Number(statusReceipt?.version);
-    const committed =
-      (statusReceipt?.upserted === true || statusReceipt?.reason === "unchanged") &&
-      Number.isInteger(version) &&
-      version >= 0;
-    return { committed, version, turnStatus: statusReceipt?.turnStatus || null };
-  }
 
   _buildContextBuilder({
     userId,
@@ -709,6 +636,7 @@ export class SessionExecutionEngine {
     eventListener = null,
     turnScopeId = "",
     thinkingStartedAt = "",
+    persistenceContext = null,
   }) {
     return this.initializer.initializeRunSessionRuntime({
       userId,
@@ -718,6 +646,7 @@ export class SessionExecutionEngine {
       eventListener,
       turnScopeId,
       thinkingStartedAt,
+      persistenceContext,
     });
   }
 
@@ -735,6 +664,7 @@ export class SessionExecutionEngine {
     runtimeEventListener = null,
     userConfig = {},
     resolvedParentAsyncResultContainer = null,
+    persistenceContext = null,
   }) {
     return this.finalizer.finalizeRunSession({
       userId,
@@ -750,6 +680,7 @@ export class SessionExecutionEngine {
       runtimeEventListener,
       userConfig,
       resolvedParentAsyncResultContainer,
+      persistenceContext,
     });
   }
 

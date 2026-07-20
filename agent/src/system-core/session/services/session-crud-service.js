@@ -21,9 +21,9 @@ export class SessionCrudService {
     this.now = now;
   }
 
-  async _withSessionMutation(userId, sessionId, parentSessionId, operation) {
+  async _withSessionMutation(userId, sessionId, parentSessionId, operation, persistenceContext = null) {
     if (typeof this.sessionRepo?.withSessionMutation === "function") {
-      return this.sessionRepo.withSessionMutation(userId, sessionId, parentSessionId, operation);
+      return this.sessionRepo.withSessionMutation(userId, sessionId, parentSessionId, operation, persistenceContext);
     }
     return operation();
   }
@@ -32,12 +32,13 @@ export class SessionCrudService {
     return this.sessionRepo.listSessionIds(userId);
   }
 
-  async ensureSession(userId, sessionId, parentSessionId = "", meta = {}) {
+  async ensureSession(userId, sessionId, parentSessionId = "", meta = {}, persistenceContext = null) {
     await this.sessionRepo.ensureSession({
       userId,
       sessionId,
       parentSessionId,
       meta,
+      persistenceContext,
     });
   }
 
@@ -47,24 +48,26 @@ export class SessionCrudService {
     parentSessionId = "",
     caller = "user",
     modelAlias = "",
+    persistenceContext = null,
   }) {
     await this.ensureSession(userId, sessionId, parentSessionId, {
       caller,
       modelAlias,
-    });
-    return this.getSessionBundle({ userId, sessionId, parentSessionId });
+    }, persistenceContext);
+    return this.getSessionBundle({ userId, sessionId, parentSessionId, persistenceContext });
   }
 
-  async getSessionBundle({ userId, sessionId, parentSessionId = "" }) {
+  async getSessionBundle({ userId, sessionId, parentSessionId = "", persistenceContext = null }) {
     const session = await this.sessionRepo.findById(
       userId,
       sessionId,
       parentSessionId,
+      persistenceContext,
     );
     if (!session) return { exists: false, session: null, task: null };
     const task = this.taskRepo
-      ? await this.taskRepo.getBundle(userId, sessionId, parentSessionId)
-      : await this.sessionRepo.getTaskBundle?.(userId, sessionId, parentSessionId);
+      ? await this.taskRepo.getBundle(userId, sessionId, parentSessionId, persistenceContext)
+      : await this.sessionRepo.getTaskBundle?.(userId, sessionId, parentSessionId, persistenceContext);
     return { exists: true, session, task: task || null };
   }
 
