@@ -117,11 +117,14 @@ test("createRuntimeNodeSessions appends registry-only committed nodes", () => {
       "node-exec-orphan": {
         workflowRunId: "run-1",
         nodeExecutionId: "node-exec-orphan",
+        nodeId: "node-orphan",
+        nodeName: "Orphan Node",
         commandId: "command-orphan",
         sessionId: "session-orphan",
         dialogProcessId: "dialog-orphan",
         turnScopeId: "turn-orphan",
         status: "failed",
+        activeChildExecutionId: "child-exec-orphan",
         failure: { message: "boom" },
         revision: 3,
         sequence: 7,
@@ -135,6 +138,34 @@ test("createRuntimeNodeSessions appends registry-only committed nodes", () => {
   assert.equal(sessions[0].stepStatus, "failed");
   assert.deepEqual(sessions[0].stepFailure, { message: "boom" });
   assert.equal(sessions[0].sessionId, "session-orphan");
+  assert.equal(sessions[0].nodeId, "node-orphan");
+  assert.equal(sessions[0].nodeName, "Orphan Node");
+  assert.equal(sessions[0].stepId, "node-exec-orphan");
+  assert.equal(sessions[0].activeChildExecutionId, "child-exec-orphan");
+  assert.equal(sessions[0].childExecutionId, "child-exec-orphan");
+});
+
+test("createRuntimeNodeSessions preserves enough identity to render a running registry-only step", () => {
+  const sessions = buildSessions({
+    workflowPayload: { workflowRunId: "run-live" },
+    registry: registryWith("run-live", {
+      "node-exec-live": {
+        workflowRunId: "run-live",
+        nodeExecutionId: "node-exec-live",
+        nodeId: "node-live",
+        nodeName: "Live Node",
+        status: "running",
+        activeChildExecutionId: "agent-exec-live",
+        revision: 2,
+        sequence: 3,
+      },
+    }),
+  });
+
+  assert.equal(sessions.length, 1);
+  assert.equal(sessions[0].nodeId, "node-live");
+  assert.equal(sessions[0].stepId, "node-exec-live");
+  assert.equal(sessions[0].childExecutionId, "agent-exec-live");
 });
 
 test("createRuntimeNodeSessions prevents legacy nodeAgentRuns from overwriting authoritative nodeExecutionId entries", () => {

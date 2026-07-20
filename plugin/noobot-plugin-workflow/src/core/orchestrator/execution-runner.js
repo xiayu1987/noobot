@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { randomUUID } from "node:crypto";
 import {
   WORKFLOW_ACTION,
   WORKFLOW_PLUGIN_DEFAULTS,
@@ -381,7 +382,15 @@ export async function runWorkflowExecution({
           upstreamActionSteps,
           completedStepResults,
         });
-        const nodeIdentity = resolvePlanningNodeIdentity({ planningNodeSessions, pendingStep: step });
+        const planningNodeIdentity = resolvePlanningNodeIdentity({ planningNodeSessions, pendingStep: step });
+        // Preallocate the detached child Session so the authoritative RUNNING
+        // node fact and the spawned child lifecycle share one identity.
+        const nodeIdentity = planningNodeIdentity
+          ? {
+              ...planningNodeIdentity,
+              sessionId: String(planningNodeIdentity?.sessionId || "").trim() || randomUUID(),
+            }
+          : null;
         const childExecutionId = String(
           nodeIdentity?.childExecutionId || `agent:${nodeIdentity?.turnScopeId || ""}`,
         ).trim();
@@ -398,6 +407,7 @@ export async function runWorkflowExecution({
             nodeExecutionId: nodeIdentity.nodeExecutionId,
             status: WORKFLOW_NODE_STATUS.RUNNING,
             expectedRevision: currentNodeState?.revision ?? null,
+            sessionId: nodeIdentity.sessionId,
             childExecutionId,
           });
           nodeStateSnapshot = runningFact?.snapshot || nodeStateSnapshot;

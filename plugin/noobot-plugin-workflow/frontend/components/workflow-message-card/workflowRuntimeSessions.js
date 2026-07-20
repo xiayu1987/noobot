@@ -70,12 +70,21 @@ function normalizeCommittedNodeFact(item = {}) {
   return {
     workflowRunId: String(item?.workflowRunId || "").trim(),
     nodeExecutionId: String(item?.nodeExecutionId || "").trim(),
+    // A registry-only running fact must retain its semantic identity so the
+    // runtime mapper can synthesize the state/step boxes before the final
+    // workflow payload (nodeSessions/nodeAgentRuns) exists.
+    nodeId: String(item?.nodeId || "").trim(),
+    nodeName: String(item?.nodeName || item?.nodeId || "").trim(),
+    actionNodeStateId: String(item?.actionNodeStateId || item?.nodeStateId || "").trim(),
+    stepId: String(item?.stepId || item?.nodeExecutionId || "").trim(),
+    stepIndex: Number.isFinite(Number(item?.stepIndex)) ? Number(item.stepIndex) : undefined,
     commandId: String(item?.commandId || "").trim(),
     sessionId: String(item?.sessionId || item?.nodeSessionId || "").trim(),
     parentSessionId: String(item?.parentSessionId || "").trim(),
     dialogProcessId: String(item?.dialogProcessId || item?.nodeDialogProcessId || "").trim(),
     turnScopeId: String(item?.turnScopeId || "").trim(),
     activeChildExecutionId: String(item?.activeChildExecutionId || item?.childExecutionId || "").trim(),
+    childExecutionId: String(item?.childExecutionId || item?.activeChildExecutionId || "").trim(),
     attemptExecutionIds: Array.isArray(item?.attemptExecutionIds) ? item.attemptExecutionIds.map(String) : [],
     status: String(item?.status || item?.stepStatus || "").trim(),
     stepStatus: String(item?.stepStatus || item?.status || "").trim(),
@@ -102,6 +111,16 @@ function mergeCommittedNodeFact(base = {}, fact = {}) {
   if (!fact.sessionId) merged.sessionId = String(base.sessionId || base.nodeSessionId || "").trim();
   if (!fact.dialogProcessId) merged.dialogProcessId = String(base.dialogProcessId || base.nodeDialogProcessId || "").trim();
   if (!fact.turnScopeId) merged.turnScopeId = String(base.turnScopeId || "").trim();
+  if (!fact.nodeId) merged.nodeId = String(base.nodeId || "").trim();
+  if (!fact.nodeName) merged.nodeName = String(base.nodeName || base.nodeId || "").trim();
+  if (!fact.actionNodeStateId) merged.actionNodeStateId = String(base.actionNodeStateId || base.nodeStateId || "").trim();
+  if (!fact.stepId) merged.stepId = String(base.stepId || "").trim();
+  if (!fact.activeChildExecutionId) {
+    merged.activeChildExecutionId = String(base.activeChildExecutionId || base.childExecutionId || "").trim();
+  }
+  if (!fact.childExecutionId) {
+    merged.childExecutionId = String(base.childExecutionId || base.activeChildExecutionId || "").trim();
+  }
   return merged;
 }
 

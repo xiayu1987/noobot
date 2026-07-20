@@ -5,6 +5,9 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import os from "node:os";
+import path from "node:path";
+import fs from "node:fs/promises";
 
 import { SessionExecutionEngine } from "../../../src/system-core/bot-manage/session/session-execution-engine.js";
 import { projectRecoveredMessagesToDialog, projectRecoveredMessagesToIdentity } from "../../../src/system-core/bot-manage/session/turn-execution-preparer.js";
@@ -119,6 +122,45 @@ test("_prepareStoppedSnapshotResumeTurnExecution requires explicit stopped snaps
     }),
     /stopped snapshot resume requires resumeDialogProcessId and resumeTurnScopeId/,
   );
+});
+
+test("stopped snapshot resume degrades to a normal turn when the optional snapshot is missing", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-missing-stopped-snapshot-"));
+  const engine = Object.create(SessionExecutionEngine.prototype);
+  engine.globalConfig = { workspaceRoot };
+  const calls = [];
+  engine.agentRuntimeFacade = {
+    async prepareTurnExecution(input) {
+      calls.push(input);
+      return { degraded: true };
+    },
+  };
+  const contextBuilder = { _buildAgentContext() {} };
+
+  try {
+    const result = await engine._prepareStoppedSnapshotResumeTurnExecution({
+      payload: {
+        userId: "u1",
+        sessionId: "workflow-session",
+        dialogProcessId: "dialog-current",
+        turnScopeId: "turn-current",
+        runConfig: {
+          resumeFromStoppedSnapshot: true,
+          resumeDialogProcessId: "dialog-stopped",
+          resumeTurnScopeId: "turn-stopped",
+        },
+      },
+      contextBuilder,
+    });
+
+    assert.deepEqual(result, { degraded: true });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].buildContextPayload.contextBuilder, contextBuilder);
+    assert.equal(calls[0].buildContextPayload.runConfig.resumeFromStoppedSnapshot, false);
+    assert.equal(calls[0].buildContextPayload.runConfig.resumeSnapshotUnavailable, true);
+  } finally {
+    await fs.rm(workspaceRoot, { recursive: true, force: true });
+  }
 });
 
 test("stopped snapshot resume preserves history and incremental block boundaries", async () => {

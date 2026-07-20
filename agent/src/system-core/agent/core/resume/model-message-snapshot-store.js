@@ -289,7 +289,11 @@ export async function saveStoppedModelMessageSnapshotCandidate({
   }
 }
 
-export async function loadStoppedModelMessageSnapshot({ globalConfig = {}, identity = {} } = {}) {
+export async function loadStoppedModelMessageSnapshot({
+  globalConfig = {},
+  identity = {},
+  allowMissing = false,
+} = {}) {
   const normalizedIdentity = {
     userId: String(identity.userId || "").trim(),
     sessionId: String(identity.sessionId || "").trim(),
@@ -297,7 +301,13 @@ export async function loadStoppedModelMessageSnapshot({ globalConfig = {}, ident
     turnScopeId: String(identity.turnScopeId || "").trim(),
   };
   const filePath = snapshotPath(normalizedIdentity, globalConfig);
-  const raw = await fs.readFile(filePath, "utf8");
+  let raw;
+  try {
+    raw = await fs.readFile(filePath, "utf8");
+  } catch (error) {
+    if (allowMissing === true && error?.code === "ENOENT") return null;
+    throw error;
+  }
   const snapshot = JSON.parse(raw);
   assertIdentity(snapshot, normalizedIdentity);
   return {

@@ -13,6 +13,7 @@ export function useWorkflowMessageCardState(props, emit, translate) {
   const viewerVisible = ref(false);
   const viewerLoading = ref(false);
   const viewerError = ref("");
+  const viewerState = ref("idle");
   const selectedNode = ref(null);
   const selectedRuntimeNode = ref(null);
   const selectedRuntimeStep = ref(null);
@@ -86,6 +87,7 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     viewerVisible,
     viewerLoading,
     viewerError,
+    viewerState,
     selectedNode,
     selectedRuntimeNode,
     selectedRuntimeStep,
@@ -107,6 +109,7 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     viewerVisible,
     viewerLoading,
     viewerError,
+    viewerState,
     selectedNode,
     selectedRuntimeNode,
     selectedRuntimeStep,

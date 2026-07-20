@@ -17,6 +17,7 @@ const props = defineProps({
   translate: { type: Function, required: true },
   viewerLoading: { type: Boolean, default: false },
   viewerError: { type: String, default: "" },
+  viewerState: { type: String, default: "idle" },
   selectedNodeSessionId: { type: String, default: "" },
   selectedExecutionId: { type: String, default: "" },
   executionDirectory: { type: Array, default: () => [] },
@@ -304,8 +305,8 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
           </div>
         </div>
         <AgentExecutionView
-          v-if="selectedExecutionId"
-          :execution-id="selectedExecutionId"
+          v-if="selectedExecutionId || selectedNodeSessionId"
+          :execution-id="selectedExecutionId || selectedNodeSessionId"
           channel-context="workflow-node"
           :messages="displayNodeMessages"
           :all-messages="nodeSessionAllMessages"
@@ -319,7 +320,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
           :format-file-size="formatFileSize"
           :is-image-mime="isImageMime"
           :stop-execution="stopExecution"
-          :empty-text="viewerLoading ? '' : translate('workflow.noNodeSessionContent')"
+          :empty-text="viewerLoading ? '' : (viewerState === 'pending' ? translate('workflow.nodeSessionPending') : translate('workflow.noNodeSessionContent'))"
           attachment-preview-dialog-class="workflow-session-preview-dialog"
           file-preview-dialog-class="workflow-session-preview-dialog"
           @open-thinking-details="$emit('open-thinking-details', $event)"
@@ -327,7 +328,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
         <BaseEmptyHint
           v-else-if="!viewerLoading"
           class="workflow-node-empty"
-          :text="translate('workflow.noNodeSessionContent')"
+          :text="viewerState === 'pending' ? translate('workflow.nodeSessionPending') : translate('workflow.noNodeSessionContent')"
         />
       </template>
     </div>

@@ -8,13 +8,18 @@ import { ElMessage } from "element-plus";
 import { useWorkflowNodeSessionLabels } from "./workflowNodeSessionLabels";
 import { useWorkflowDrawerHistory } from "./workflowDrawerHistory";
 import {
+  fetchExecutionSessionDetail,
   fetchWorkflowNodeSessionDetail,
   fetchWorkflowNodeThinkingDetail,
+  hydrateExecutionSessionDetail,
 } from "./workflowNodeSessionDetail";
 import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
 import {
   buildUnifiedSessionDetail,
   hasNewProtocolNodeIdentity,
+  mergeUnifiedSessionDetail,
+  resolveNodeChildExecutionIds,
+  resolveRuntimeNodeSession,
 } from "./workflowUnifiedSessionDetail.js";
 
 function text(value) {
@@ -30,6 +35,7 @@ export function useWorkflowNodeSessionViewer({
   viewerVisible,
   viewerLoading,
   viewerError,
+  viewerState,
   selectedNode,
   selectedRuntimeNode,
   selectedRuntimeStep,
@@ -89,6 +95,34 @@ export function useWorkflowNodeSessionViewer({
     return true;
   }
 
+  async function loadExecutionSessionDetail(
+    executionId = "",
+    requestToken = nodeSessionRequestToken,
+    { sessionIdHint = "" } = {},
+  ) {
+    const id = text(executionId);
+    const localDetail = typeof props.selectExecutionDetail === "function"
+      ? props.selectExecutionDetail(id)
+      : null;
+    const sessionId = text(
+      localDetail?.execution?.sessionId ||
+      localDetail?.session?.sessionId ||
+      localDetail?.session?.id ||
+      sessionIdHint,
+    );
+    if (!id) return { state: "failed", reason: "missing_execution_id" };
+    if (!sessionId) return { state: "pending", reason: "session_identity_pending" };
+    const detail = await fetchExecutionSessionDetail({ props, translate, sessionId });
+    if (requestToken !== nodeSessionRequestToken) return { state: "stale" };
+    if (detail?.state === "pending") return detail;
+    applySelectedNodeSessionDetail(hydrateExecutionSessionDetail(detail, {
+      executionId: id,
+      execution: localDetail?.execution || null,
+    }));
+    selectedExecutionId.value = id;
+    return { state: detail?.state === "empty" ? "empty" : "ready" };
+  }
+
   function selectExecution(executionId = "") {
     viewerError.value = "";
     if (applyExecutionDetail(executionId)) return true;
@@ -124,18 +158,30 @@ export function useWorkflowNodeSessionViewer({
     selectedExecutionId.value = "";
     executionDirectory.value = [];
     attemptExecutionIds.value = [];
+    viewerState.value = "idle";
   }
 
   function applySelectedNodeSessionDetail(detail = {}) {
-    selectedNodeSessionSummary.value = detail.sessionSummary || null;
-    selectedNodeSessionId.value = detail.sessionId || "";
-    selectedNodeMessages.value = Array.isArray(detail.messages) ? detail.messages : [];
-    selectedNodeRawMessages.value = Array.isArray(detail.rawMessages) ? detail.rawMessages : [];
+    const currentSessionId = text(selectedNodeSessionId.value || selectedNodeSessionSummary.value?.sessionId);
+    const incomingSessionId = text(detail.sessionId || detail.sessionSummary?.sessionId);
+    const currentDetail = currentSessionId && currentSessionId === incomingSessionId
+      ? {
+          sessionId: currentSessionId,
+          sessionSummary: selectedNodeSessionSummary.value || {},
+          messages: selectedNodeMessages.value,
+          rawMessages: selectedNodeRawMessages.value,
+        }
+      : {};
+    const mergedDetail = mergeUnifiedSessionDetail(currentDetail, detail);
+    selectedNodeSessionSummary.value = mergedDetail.sessionSummary || null;
+    selectedNodeSessionId.value = mergedDetail.sessionId || "";
+    selectedNodeMessages.value = mergedDetail.messages;
+    selectedNodeRawMessages.value = mergedDetail.rawMessages;
     if (typeof mergeSubSessionSnapshot === "function") {
       mergeSubSessionSnapshot({
-        ...detail.sessionSummary,
-        sessionId: detail.sessionId || detail.sessionSummary?.sessionId || "",
-        messages: Array.isArray(detail.messages) ? detail.messages : [],
+        ...mergedDetail.sessionSummary,
+        sessionId: mergedDetail.sessionId,
+        messages: mergedDetail.messages,
       });
     }
   }
@@ -161,6 +207,12 @@ export function useWorkflowNodeSessionViewer({
       const id = text(item?.executionId);
       return id && values.findIndex((candidate) => text(candidate?.executionId) === id) === index;
     });
+    // Realtime sub-session events can arrive before the Execution projection.
+    // Once either messages or a live turn projection is available, leave the
+    // passive pending placeholder and let AgentExecutionView replay/stream it.
+    const hasMessages = Array.isArray(detail.messages) && detail.messages.length > 0;
+    const hasRuntime = Boolean(detail.execution || detail.sessionSummary?.turnRuntime);
+    if (hasMessages || hasRuntime) viewerState.value = "streaming";
     return true;
   }
 
@@ -173,12 +225,12 @@ export function useWorkflowNodeSessionViewer({
     if (!sessionId || typeof props.selectSessionMessages !== "function") return false;
     const sessionDoc = props.selectSessionMessages(sessionId);
     if (!sessionDoc || typeof sessionDoc !== "object") return false;
-    selectedNodeSessionId.value = sessionId;
-    selectedNodeSessionSummary.value = sessionDoc;
-    selectedNodeMessages.value = Array.isArray(sessionDoc.messages) ? sessionDoc.messages : [];
-    selectedNodeRawMessages.value = Array.isArray(sessionDoc.rawMessages)
-      ? sessionDoc.rawMessages
-      : selectedNodeMessages.value;
+    applySelectedNodeSessionDetail({
+      sessionId,
+      sessionSummary: sessionDoc,
+      messages: Array.isArray(sessionDoc.messages) ? sessionDoc.messages : [],
+      rawMessages: Array.isArray(sessionDoc.rawMessages) ? sessionDoc.rawMessages : sessionDoc.messages,
+    });
     return true;
   }
 
@@ -197,13 +249,67 @@ export function useWorkflowNodeSessionViewer({
       pushWorkflowDrawerHistory({ dialogProcessId, rootSessionId });
     }
     viewerLoading.value = true;
+    viewerState.value = "loading";
     viewerError.value = "";
     selectedNode.value = nodeItem;
     resetSelectedNodeSession();
     bindSelectedNodeRealtimeProjection(nodeItem);
     if (isNewProtocolNode) {
       applyUnifiedSessionDetailIfAvailable(nodeItem);
-      viewerLoading.value = false;
+      // The node's committed Child Execution reference is authoritative. Do
+      // not wait for its Execution/message projection to already exist in the
+      // local registry: that is precisely when the drawer needs to hydrate it.
+      const childExecutionIds = resolveNodeChildExecutionIds(nodeItem, runtimeNodeSessions);
+      const executionId = text(selectedExecutionId.value || childExecutionIds[0]);
+      const runtimeNode = resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions);
+      const sessionIdHint = text(
+        runtimeNode?.sessionId ||
+        runtimeNode?.nodeSessionId ||
+        nodeItem?.sessionId ||
+        nodeItem?.nodeSessionId,
+      );
+      selectedExecutionId.value = executionId;
+      attemptExecutionIds.value = childExecutionIds;
+      try {
+        if (executionId) {
+          const result = await loadExecutionSessionDetail(executionId, requestToken, { sessionIdHint });
+          if (requestToken === nodeSessionRequestToken && result.state !== "stale") {
+            viewerState.value = result.state;
+          }
+          if (result.state === "failed" && requestToken === nodeSessionRequestToken) {
+            viewerError.value = translate("workflow.readNodeSessionFailed");
+          }
+        } else if (sessionIdHint) {
+          // The preallocated child Session is available before the committed
+          // Child Execution projection in normal runs. Hydrate that Session
+          // directly instead of leaving the drawer permanently pending: its
+          // messages may already have been persisted or reached the REST
+          // projection even though the Execution id has not arrived locally.
+          const detail = await fetchExecutionSessionDetail({
+            props,
+            translate,
+            sessionId: sessionIdHint,
+          });
+          if (requestToken === nodeSessionRequestToken) {
+            if (detail?.state === "pending") {
+              viewerState.value = "pending";
+            } else {
+              applySelectedNodeSessionDetail(hydrateExecutionSessionDetail(detail));
+              viewerState.value = detail?.state === "empty" ? "empty" : "ready";
+            }
+          }
+        } else if (requestToken === nodeSessionRequestToken) {
+          // Neither authoritative identity has reached the client yet.
+          viewerState.value = "pending";
+        }
+      } catch (error) {
+        if (requestToken === nodeSessionRequestToken) {
+          viewerError.value = String(error?.message || error || translate("workflow.readNodeSessionFailed"));
+          viewerState.value = "failed";
+        }
+      } finally {
+        if (requestToken === nodeSessionRequestToken) viewerLoading.value = false;
+      }
       return;
     }
     if (!rootSessionId || !dialogProcessId) {
@@ -220,9 +326,11 @@ export function useWorkflowNodeSessionViewer({
       if (requestToken !== nodeSessionRequestToken) return;
       applySelectedNodeSessionDetail(detail);
       applyUnifiedSessionDetailIfAvailable(nodeItem);
+      viewerState.value = (detail.messages || []).length ? "ready" : "empty";
     } catch (error) {
       if (requestToken !== nodeSessionRequestToken) return;
       viewerError.value = String(error?.message || error || translate("workflow.readNodeSessionFailed"));
+      viewerState.value = "failed";
     } finally {
       if (requestToken === nodeSessionRequestToken) {
         viewerLoading.value = false;
@@ -239,6 +347,7 @@ export function useWorkflowNodeSessionViewer({
     resetSelectedNodeSession();
     viewerError.value = "";
     viewerLoading.value = false;
+    viewerState.value = "idle";
     viewerVisible.value = true;
   }
 

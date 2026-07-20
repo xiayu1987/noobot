@@ -4,9 +4,94 @@
   SPDX-License-Identifier: MIT
 */
 import {
+  getSessionFullDetailApi,
   getWorkflowSessionDetailApi,
   getWorkflowSessionThinkingDetailApi,
-} from "../../../../../client/noobot-chat/src/services/api/chatApi";
+} from "../../../../../client/noobot-chat/src/services/api/chatApi.js";
+
+export function hydrateExecutionSessionDetail(detail = {}, {
+  executionId = "",
+  execution = null,
+} = {}) {
+  const messages = Array.isArray(detail?.messages) ? detail.messages : [];
+  return {
+    ...(detail && typeof detail === "object" ? detail : {}),
+    messages,
+    rawMessages: Array.isArray(detail?.rawMessages) ? detail.rawMessages : messages,
+    sessionSummary: {
+      ...(detail?.sessionSummary && typeof detail.sessionSummary === "object"
+        ? detail.sessionSummary
+        : {}),
+      // The display projection consumes summary.messages first. Always bind
+      // the normalized response so an empty/stale REST summary cannot mask it.
+      messages,
+      executionId: String(executionId || "").trim(),
+      // Execution projection may legitimately arrive after the Session
+      // snapshot while a child Agent is starting.
+      turnRuntime: execution || null,
+    },
+  };
+}
+
+export async function fetchExecutionSessionDetail({
+  props,
+  translate,
+  sessionId = "",
+}) {
+  const normalizedSessionId = String(sessionId || "").trim();
+  if (!props.userId || !normalizedSessionId) {
+    throw new Error(translate("workflow.nodeSessionMissing"));
+  }
+  const response = await getSessionFullDetailApi(
+    { userId: props.userId, sessionId: normalizedSessionId },
+    { fetcher: props.authFetch || fetch },
+  );
+  if (!response.ok) {
+    throw new Error(translate("workflow.readNodeSessionFailed"));
+  }
+  const payload = await response.json();
+  if (!payload?.ok) {
+    throw new Error(String(payload?.error || translate("workflow.readNodeSessionFailed")));
+  }
+  if (!payload?.exists) {
+    return {
+      state: "pending",
+      reason: "session_not_materialized",
+      sessionId: normalizedSessionId,
+    };
+  }
+  const session = (Array.isArray(payload.sessions)
+    ? payload.sessions.find((item = {}) => String(item?.sessionId || item?.id || "").trim() === normalizedSessionId)
+    : null) || payload.session || payload.sessionSummary || {};
+  const messages = Array.isArray(session?.messages)
+    ? session.messages
+    : Array.isArray(payload?.messages)
+      ? payload.messages
+      : [];
+  const turnStatuses = Array.isArray(session?.turnStatuses)
+    ? session.turnStatuses
+    : Array.isArray(payload?.turnStatuses)
+      ? payload.turnStatuses
+      : [];
+  const turnTimings = Array.isArray(session?.turnTimings)
+    ? session.turnTimings
+    : Array.isArray(payload?.turnTimings)
+      ? payload.turnTimings
+      : [];
+  return {
+    state: messages.length ? "ready" : "empty",
+    sessionId: String(session?.sessionId || session?.id || payload.sessionId || normalizedSessionId).trim(),
+    sessionSummary: {
+      ...session,
+      turnStatuses,
+      turnTimings,
+    },
+    messages,
+    rawMessages: messages,
+    turnStatuses,
+    turnTimings,
+  };
+}
 
 export async function fetchWorkflowNodeSessionDetail({
   props,

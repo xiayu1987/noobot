@@ -19,6 +19,48 @@ function text(value) {
   return String(value || "").trim();
 }
 
+function projectionItemKey(item = {}, index = 0) {
+  return text(item?.id || item?.messageId || item?.turnScopeId || item?.dialogProcessId) || `index:${index}`;
+}
+
+function mergeProjectionItems(baseItems = [], incomingItems = []) {
+  const merged = new Map();
+  (Array.isArray(baseItems) ? baseItems : []).forEach((item, index) => {
+    merged.set(projectionItemKey(item, index), item);
+  });
+  (Array.isArray(incomingItems) ? incomingItems : []).forEach((item, index) => {
+    const key = projectionItemKey(item, index);
+    merged.set(key, { ...(merged.get(key) || {}), ...item });
+  });
+  return [...merged.values()];
+}
+
+/** Merge persisted full detail with the realtime projection without allowing a
+ * partial realtime document to erase user messages or turn metadata. */
+export function mergeUnifiedSessionDetail(base = {}, incoming = {}) {
+  const baseSummary = base?.sessionSummary && typeof base.sessionSummary === "object" ? base.sessionSummary : {};
+  const incomingSummary = incoming?.sessionSummary && typeof incoming.sessionSummary === "object" ? incoming.sessionSummary : {};
+  const messages = mergeProjectionItems(
+    Array.isArray(base?.messages) ? base.messages : baseSummary.messages,
+    Array.isArray(incoming?.messages) ? incoming.messages : incomingSummary.messages,
+  );
+  const rawMessages = mergeProjectionItems(base?.rawMessages, incoming?.rawMessages);
+  return {
+    ...base,
+    ...incoming,
+    sessionId: text(incoming?.sessionId || base?.sessionId || incomingSummary.sessionId || baseSummary.sessionId),
+    messages,
+    rawMessages: rawMessages.length ? rawMessages : messages,
+    sessionSummary: {
+      ...baseSummary,
+      ...incomingSummary,
+      messages,
+      turnStatuses: mergeProjectionItems(baseSummary.turnStatuses, incomingSummary.turnStatuses),
+      turnTimings: mergeProjectionItems(baseSummary.turnTimings, incomingSummary.turnTimings),
+    },
+  };
+}
+
 function getSessionBucket(registry = {}, sessionId = "") {
   const sessions = registry?.sessions && typeof registry.sessions === "object" ? registry.sessions : {};
   return sessions[sessionId] || registry?.[sessionId] || null;
@@ -86,34 +128,35 @@ export function buildUnifiedSessionDetail({
   const childExecutionIds = resolveNodeChildExecutionIds(nodeItem, runtimeNodeSessions);
   if (childExecutionIds.length && typeof selectExecutionDetail === "function") {
     const executionDetail = selectExecutionDetail(childExecutionIds[0]);
-    if (!executionDetail) return null;
-    const execution = executionDetail.execution || {};
-    const sessionDoc = executionDetail.session || {};
-    const messages = Array.isArray(executionDetail.messages) ? executionDetail.messages : [];
-    if (!messages.length && !execution && !allowEmptyMessages) return null;
-    return {
-      executionId: text(execution.executionId || childExecutionIds[0]),
-      execution,
-      childExecutions: Array.isArray(executionDetail.children) ? executionDetail.children : [],
-      descendantExecutions: Array.isArray(executionDetail.descendants) ? executionDetail.descendants : [],
-      attemptExecutionIds: childExecutionIds,
-      sessionId: text(execution.sessionId || sessionDoc.sessionId || sessionDoc.id),
-      messages,
-      rawMessages: messages,
-      sessionSummary: {
-        ...sessionDoc,
-        sessionId: text(execution.sessionId || sessionDoc.sessionId || sessionDoc.id),
+    if (executionDetail) {
+      const execution = executionDetail.execution || {};
+      const sessionDoc = executionDetail.session || {};
+      const messages = Array.isArray(executionDetail.messages) ? executionDetail.messages : [];
+      if (!messages.length && !execution && !allowEmptyMessages) return null;
+      return {
         executionId: text(execution.executionId || childExecutionIds[0]),
-        turnScopeId: text(execution.turnScopeId),
-        dialogProcessId: text(execution.dialogProcessId),
-        turnRuntime: execution,
+        execution,
+        childExecutions: Array.isArray(executionDetail.children) ? executionDetail.children : [],
+        descendantExecutions: Array.isArray(executionDetail.descendants) ? executionDetail.descendants : [],
+        attemptExecutionIds: childExecutionIds,
+        sessionId: text(execution.sessionId || sessionDoc.sessionId || sessionDoc.id),
         messages,
-      },
-    };
+        rawMessages: messages,
+        sessionSummary: {
+          ...sessionDoc,
+          sessionId: text(execution.sessionId || sessionDoc.sessionId || sessionDoc.id),
+          executionId: text(execution.executionId || childExecutionIds[0]),
+          turnScopeId: text(execution.turnScopeId),
+          dialogProcessId: text(execution.dialogProcessId),
+          turnRuntime: execution,
+          messages,
+        },
+      };
+    }
   }
-  // New protocol nodes are authoritative by child Execution identity. Never
-  // fall back to session/dialog inference when that identity is present.
-  if (childExecutionIds.length) return null;
+  // Child Execution identity remains authoritative, but its projection can
+  // arrive after sub-session events. Use only the node's preallocated session
+  // identity as the realtime fallback; never infer another child by dialog.
   const sessionId = text(runtimeNode?.sessionId || runtimeNode?.nodeSessionId || nodeItem?.sessionId || nodeItem?.nodeSessionId);
   if (!sessionId || typeof selectSessionMessages !== "function") return null;
   const sessionDoc = selectSessionMessages(sessionId);
@@ -125,7 +168,7 @@ export function buildUnifiedSessionDetail({
   const runtimeTurn = turnScopeId
     ? resolveTurnRuntimeByScope(registry, turnScopeId, { sessionId })
     : selectSessionTurnRuntime(registry, sessionId);
-  if (!messages.length && !runtimeTurn && !allowEmptyMessages) return null;
+  if (!messages.length && !runtimeTurn && !allowEmptyMessages && !childExecutionIds.length) return null;
   const scopedMessages = turnScopeId
     ? messages.filter((messageItem = {}) => {
       const messageTurnScopeId = text(messageItem?.turnScopeId || messageItem?.metadata?.turnScopeId || messageItem?.pluginMeta?.turnScopeId);
@@ -135,8 +178,10 @@ export function buildUnifiedSessionDetail({
       return true;
     })
     : messages;
-  if (!scopedMessages.length && !runtimeTurn && !allowEmptyMessages) return null;
+  if (!scopedMessages.length && !runtimeTurn && !allowEmptyMessages && !childExecutionIds.length) return null;
   return {
+    executionId: text(childExecutionIds[0]),
+    attemptExecutionIds: childExecutionIds,
     sessionId,
     messages: scopedMessages,
     rawMessages: scopedMessages,

@@ -94,6 +94,7 @@ test("runWorkflowExecution carries planning identity through events, strategy an
   assert.equal(subSessionCalls[0].strategy.commandId, identity.commandId);
   assert.equal(subSessionCalls[0].strategy.dialogProcessId, identity.dialogProcessId);
   assert.equal(subSessionCalls[0].strategy.turnScopeId, identity.turnScopeId);
+  assert.ok(subSessionCalls[0].strategy.sessionId);
   assert.equal(subSessionCalls[0].runConfigPatch.workflowNodeExecutionId, identity.nodeExecutionId);
   assert.equal(subSessionCalls[0].metadata.nodeExecutionId, identity.nodeExecutionId);
 
@@ -127,6 +128,7 @@ test("runWorkflowExecution carries planning identity through events, strategy an
   assert.equal(realtimeNodeEvents[0].data.commandId, identity.commandId);
   assert.equal(realtimeNodeEvents[0].data.dialogProcessId, identity.dialogProcessId);
   assert.equal(realtimeNodeEvents[0].data.turnScopeId, identity.turnScopeId);
+  assert.equal(realtimeNodeEvents[0].data.sessionId, subSessionCalls[0].strategy.sessionId);
   assert.equal(realtimeNodeEvents[1].data.sessionId, "child-a");
   assert.equal(realtimeNodeEvents[1].data.eventId, persistedNodeEvents[1].eventId);
 });

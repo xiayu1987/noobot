@@ -21,6 +21,7 @@ import {
 import {
   applySummaryToolLogs,
   buildNormalizedDetailMessages,
+  buildTurnTimingsByTurnScopeId,
   buildWorkflowMessageSignature,
   mergePreservedDetailMessages,
   patchExistingWorkflowMessage,
@@ -153,22 +154,12 @@ export function createSessionDetailApplicator({
     // source used by hydration, continue, or resend flows.
     sessionItem.turnStatuses = turnStatuses.map((item) => ({ ...item }));
     const currentTurnTimings = sessionItem.turnTimingsByTurnScopeId || {};
-    sessionItem.turnTimingsByTurnScopeId = Object.fromEntries(
-      turnTimings
-        .map((item) => {
+    sessionItem.turnTimingsByTurnScopeId = buildTurnTimingsByTurnScopeId({
+      turnTimings,
+      messages: detailMessages,
+      currentTimingsByTurnScopeId: currentTurnTimings,
+      onTimingHydrated: ({ item, matchingMessage, turnScopeId, current, timing }) => {
           const timingDialogProcessId = getMessageDialogProcessId(item);
-          const matchingMessage = timingDialogProcessId
-            ? detailMessages.find(
-              (messageItem) => getMessageDialogProcessId(messageItem) === timingDialogProcessId,
-            )
-            : null;
-          // Older/in-flight snapshots can persist a timing before turnScopeId is
-          // stamped on it. Canonicalize it through the matching message so the
-          // view always reads timings with the message turn key.
-          const turnScopeId = getMessageTurnScopeId(item) || getMessageTurnScopeId(matchingMessage);
-          const current = currentTurnTimings[turnScopeId] || {};
-          const hydratedThinkingStartedAt = item?.thinkingStartedAt || current.thinkingStartedAt || null;
-          const hydratedThinkingFinishedAt = item?.thinkingFinishedAt || current.thinkingFinishedAt || null;
           logReconnectTimingDebug("frontend.reconnectTiming.timingHydrated", {
             sessionId: detail.sessionId,
             dialogProcessId: timingDialogProcessId,
@@ -180,17 +171,12 @@ export function createSessionDetailApplicator({
             detailThinkingFinishedAt: item?.thinkingFinishedAt || null,
             previousThinkingStartedAt: current.thinkingStartedAt || null,
             previousThinkingFinishedAt: current.thinkingFinishedAt || null,
-            hydratedThinkingStartedAt,
-            hydratedThinkingFinishedAt,
+            hydratedThinkingStartedAt: timing.thinkingStartedAt,
+            hydratedThinkingFinishedAt: timing.thinkingFinishedAt,
             retained: Boolean(turnScopeId),
           });
-          return [turnScopeId, {
-            thinkingStartedAt: hydratedThinkingStartedAt,
-            thinkingFinishedAt: hydratedThinkingFinishedAt,
-          }];
-        })
-        .filter(([turnScopeId]) => Boolean(turnScopeId)),
-    );
+      },
+    });
     const detailTurnScopeIds = new Set(
       detailMessages.map((messageItem) => getMessageTurnScopeId(messageItem)).filter(Boolean),
     );

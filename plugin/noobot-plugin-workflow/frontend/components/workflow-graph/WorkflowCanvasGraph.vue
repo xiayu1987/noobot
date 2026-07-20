@@ -543,7 +543,11 @@ function zoomReset() {
 }
 
 function stepHasSession(stepItem = {}) {
-  return Boolean(resolveDialogProcessId(stepItem));
+  return Boolean(
+    String(stepItem?.activeChildExecutionId || stepItem?.childExecutionId || "").trim() ||
+    (Array.isArray(stepItem?.attemptExecutionIds) && stepItem.attemptExecutionIds.some(Boolean)) ||
+    resolveDialogProcessId(stepItem),
+  );
 }
 
 function handleNodeClick(nodeItem = {}) {
