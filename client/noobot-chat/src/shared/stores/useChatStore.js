@@ -57,6 +57,13 @@ function eventContent(eventData = {}) {
   return String(eventData?.content ?? eventData?.delta ?? eventData?.message ?? eventData?.text ?? "");
 }
 
+function isSubSessionToolEvent(eventName = "", eventData = {}) {
+  return String(eventName).includes("tool") || Boolean(
+    eventData?.toolCall || eventData?.tool_call || eventData?.toolResult || eventData?.tool_result ||
+    eventData?.toolCallId || eventData?.tool_call_id,
+  );
+}
+
 function subSessionMessageIdentity(eventName = "", eventData = {}) {
   const explicit = text(eventData?.messageId || eventData?.message?.id || eventData?.message?.messageId);
   if (explicit) return explicit;
@@ -83,7 +90,10 @@ function hasSubSessionMessagePayload(eventName = "", eventData = {}, currentMess
 
 function normalizeSubSessionMessage(eventName = "", eventData = {}, currentMessage = null) {
   const content = eventContent(eventData);
-  const role = text(eventData?.role) || (String(eventName).includes("user") ? "user" : "assistant");
+  const toolEvent = isSubSessionToolEvent(eventName, eventData);
+  const role = toolEvent && currentMessage
+    ? text(currentMessage?.role) || "assistant"
+    : text(eventData?.role) || (String(eventName).includes("user") ? "user" : "assistant");
   const eventId = text(eventData?.eventId || eventData?.id) || `${text(eventData?.turnScopeId)}:${text(eventData?.seq || eventData?.sequence)}:${eventName}`;
   const appendDelta = Boolean(eventData?.delta) || String(eventName).includes("delta");
   const previousContent = String(currentMessage?.content || "");
@@ -92,7 +102,12 @@ function normalizeSubSessionMessage(eventName = "", eventData = {}, currentMessa
     ...(eventData?.message && typeof eventData.message === "object" ? eventData.message : {}),
     id: text(currentMessage?.id || eventData?.messageId || eventData?.message?.id) || subSessionMessageIdentity(eventName, eventData),
     role,
-    content: appendDelta ? `${previousContent}${content}` : (content || previousContent),
+    // Tool payload text belongs in the thinking/tool-log projection. Replacing
+    // assistant content with it makes the assistant thinking card (including a
+    // rendered workflow graph) disappear as soon as the first tool completes.
+    content: toolEvent && currentMessage
+      ? previousContent
+      : (appendDelta ? `${previousContent}${content}` : (content || previousContent)),
     sessionId: text(eventData?.sessionId || currentMessage?.sessionId),
     parentSessionId: text(eventData?.parentSessionId || currentMessage?.parentSessionId),
     dialogProcessId: text(eventData?.dialogProcessId || currentMessage?.dialogProcessId),
@@ -231,13 +246,27 @@ export const useChatStore = defineStore("chat", () => {
     if (eventId && currentSession.eventsById?.[eventId]) {
       return { applied: false, reason: "duplicate", current: currentSession };
     }
-    const messageKey = subSessionMessageIdentity(eventName, { ...eventData, sessionId, eventId });
     const messages = Array.isArray(currentSession.messages) ? [...currentSession.messages] : [];
-    const existingIndex = messages.findIndex((message = {}) => text(message?.id || message?.messageId) === messageKey);
+    const incoming = { ...eventData, sessionId, eventId };
+    const messageKey = subSessionMessageIdentity(eventName, incoming);
+    let existingIndex = messages.findIndex((message = {}) => text(message?.id || message?.messageId) === messageKey);
+    if (existingIndex < 0 && isSubSessionToolEvent(eventName, eventData)) {
+      const turnScopeId = text(eventData?.turnScopeId);
+      // A realtime tool event is part of the current assistant turn, not a new
+      // display message. Attach it to the latest assistant projection so sparse
+      // tool events cannot replace the thinking-bearing message.
+      for (let index = messages.length - 1; index >= 0; index -= 1) {
+        const candidate = messages[index] || {};
+        if (text(candidate?.role) !== "assistant") continue;
+        if (turnScopeId && text(candidate?.turnScopeId) !== turnScopeId) continue;
+        existingIndex = index;
+        break;
+      }
+    }
     const currentMessage = existingIndex >= 0 ? messages[existingIndex] : null;
     let nextMessage = currentMessage;
     if (hasSubSessionMessagePayload(eventName, eventData, currentMessage)) {
-      nextMessage = normalizeSubSessionMessage(eventName, { ...eventData, sessionId, eventId }, currentMessage);
+      nextMessage = normalizeSubSessionMessage(eventName, incoming, currentMessage);
       if (existingIndex >= 0) messages[existingIndex] = nextMessage;
       else messages.push(nextMessage);
     }
