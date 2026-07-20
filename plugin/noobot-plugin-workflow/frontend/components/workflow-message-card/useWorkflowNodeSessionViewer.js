@@ -3,7 +3,7 @@
   Contact: 126240622+xiayu1987@users.noreply.github.com
   SPDX-License-Identifier: MIT
 */
-import { onBeforeUnmount, onMounted, watch } from "vue";
+import { onBeforeUnmount, onMounted, watch, watchEffect } from "vue";
 import { ElMessage } from "element-plus";
 import { useWorkflowNodeSessionLabels } from "./workflowNodeSessionLabels";
 import { useWorkflowDrawerHistory } from "./workflowDrawerHistory";
@@ -12,6 +12,14 @@ import {
   fetchWorkflowNodeThinkingDetail,
 } from "./workflowNodeSessionDetail";
 import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
+import {
+  buildUnifiedSessionDetail,
+  hasNewProtocolNodeIdentity,
+} from "./workflowUnifiedSessionDetail.js";
+
+function text(value) {
+  return String(value || "").trim();
+}
 
 export function useWorkflowNodeSessionViewer({
   props,
@@ -30,7 +38,9 @@ export function useWorkflowNodeSessionViewer({
   selectedNodeSessionSummary,
   selectedNodeSessionId,
   selectedGraphDialogProcessId,
+  runtimeNodeSessions,
   applyingWorkflowDrawerHistory,
+  mergeSubSessionSnapshot,
 }) {
   const {
     resolveStatusLabel,
@@ -51,6 +61,7 @@ export function useWorkflowNodeSessionViewer({
     flowNodes,
     applyingWorkflowDrawerHistory,
   });
+  let nodeSessionRequestToken = 0;
 
   async function fetchSelectedNodeThinkingDetail(_sessionId = "", { dialogProcessId = "", turnScopeId = "" } = {}) {
     const route = buildWorkflowDrawerRoute(selectedNode.value || {});
@@ -84,24 +95,70 @@ export function useWorkflowNodeSessionViewer({
     selectedNodeSessionId.value = detail.sessionId || "";
     selectedNodeMessages.value = Array.isArray(detail.messages) ? detail.messages : [];
     selectedNodeRawMessages.value = Array.isArray(detail.rawMessages) ? detail.rawMessages : [];
+    if (typeof mergeSubSessionSnapshot === "function") {
+      mergeSubSessionSnapshot({
+        ...detail.sessionSummary,
+        sessionId: detail.sessionId || detail.sessionSummary?.sessionId || "",
+        messages: Array.isArray(detail.messages) ? detail.messages : [],
+      });
+    }
+  }
+
+  function applyUnifiedSessionDetailIfAvailable(nodeItem = selectedNode.value || {}) {
+    if (!viewerVisible.value || !selectedNode.value) return false;
+    const detail = buildUnifiedSessionDetail({
+      nodeItem,
+      runtimeNodeSessions,
+      selectSessionMessages: props.selectSessionMessages,
+      turnRuntimeRegistry: props.turnRuntimeRegistry,
+      allowEmptyMessages: false,
+    });
+    if (!detail) return false;
+    applySelectedNodeSessionDetail(detail);
+    return true;
+  }
+
+  function bindSelectedNodeRealtimeProjection(nodeItem = selectedNode.value || {}) {
+    const sessionId = text(
+      nodeItem?.sessionId ||
+      nodeItem?.nodeSessionId ||
+      selectedNodeSessionId.value,
+    );
+    if (!sessionId || typeof props.selectSessionMessages !== "function") return false;
+    const sessionDoc = props.selectSessionMessages(sessionId);
+    if (!sessionDoc || typeof sessionDoc !== "object") return false;
+    selectedNodeSessionId.value = sessionId;
+    selectedNodeSessionSummary.value = sessionDoc;
+    selectedNodeMessages.value = Array.isArray(sessionDoc.messages) ? sessionDoc.messages : [];
+    selectedNodeRawMessages.value = Array.isArray(sessionDoc.rawMessages)
+      ? sessionDoc.rawMessages
+      : selectedNodeMessages.value;
+    return true;
   }
 
   async function openNodeSession(nodeItem = {}, options = {}) {
     const { fromHistory = false } = options || {};
+    const requestToken = ++nodeSessionRequestToken;
     selectedGraphDialogProcessId.value = resolveWorkflowDialogProcessId(nodeItem);
     const { dialogProcessId, rootSessionId } = buildWorkflowDrawerRoute(nodeItem);
-    if (!props.userId || !rootSessionId || !dialogProcessId) {
+    const isNewProtocolNode = hasNewProtocolNodeIdentity(nodeItem);
+    if (!props.userId || (!isNewProtocolNode && (!rootSessionId || !dialogProcessId))) {
       ElMessage.warning(translate("workflow.nodeSessionMissing"));
       return;
     }
     viewerVisible.value = true;
-    if (!fromHistory) {
+    if (!fromHistory && rootSessionId && dialogProcessId) {
       pushWorkflowDrawerHistory({ dialogProcessId, rootSessionId });
     }
     viewerLoading.value = true;
     viewerError.value = "";
     selectedNode.value = nodeItem;
     resetSelectedNodeSession();
+    bindSelectedNodeRealtimeProjection(nodeItem);
+    if (!rootSessionId || !dialogProcessId) {
+      viewerLoading.value = false;
+      return;
+    }
     try {
       const detail = await fetchWorkflowNodeSessionDetail({
         props,
@@ -109,15 +166,21 @@ export function useWorkflowNodeSessionViewer({
         rootSessionId,
         dialogProcessId,
       });
+      if (requestToken !== nodeSessionRequestToken) return;
       applySelectedNodeSessionDetail(detail);
+      applyUnifiedSessionDetailIfAvailable(nodeItem);
     } catch (error) {
+      if (requestToken !== nodeSessionRequestToken) return;
       viewerError.value = String(error?.message || error || translate("workflow.readNodeSessionFailed"));
     } finally {
-      viewerLoading.value = false;
+      if (requestToken === nodeSessionRequestToken) {
+        viewerLoading.value = false;
+      }
     }
   }
 
   function openWorkflowNodePanel(nodeItem = {}) {
+    nodeSessionRequestToken += 1;
     selectedRuntimeNode.value = nodeItem;
     selectedRuntimeStep.value = null;
     selectedNode.value = nodeItem;
@@ -177,6 +240,13 @@ export function useWorkflowNodeSessionViewer({
       replaceWorkflowDrawerHistory({ dialogProcessId: "", rootSessionId: "" });
     },
   );
+
+  watchEffect(() => {
+    if (!viewerVisible.value || !selectedNode.value) return;
+    if (!applyUnifiedSessionDetailIfAvailable(selectedNode.value)) {
+      bindSelectedNodeRealtimeProjection(selectedNode.value);
+    }
+  });
 
   return {
     handleOpenThinkingDetails,

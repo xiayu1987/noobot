@@ -372,14 +372,17 @@ test("workflow hook falls back to main agent when semantic resolution throws in 
   });
   const listener = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
   assert.ok(listener?.handler);
+  const dispatchClaims = [];
   const beforeContext = {
     userId: "u1",
     sessionId: "s1",
     dialogProcessId: "d1",
     userMessage: "main output",
     runConfig: { locale: "zh-CN" },
+    claimAgentDispatch: (claim = {}) => dispatchClaims.push(claim),
   };
   await listener.handler(beforeContext);
+  assert.deepEqual(dispatchClaims, []);
   assert.equal(beforeContext.skipAgentDispatch, false);
   assert.equal(beforeContext.overrideAgentResult, null);
   assert.equal(beforeContext.workflowFallbackToMainAgent, true);
@@ -408,14 +411,17 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
   });
   const listener = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
   assert.ok(listener?.handler);
+  const dispatchClaims = [];
   const beforeContext = {
     userId: "u1",
     sessionId: "s1",
     dialogProcessId: "d1",
     userMessage: "请规划一个流程",
     agentResult: null,
+    claimAgentDispatch: (claim = {}) => dispatchClaims.push(claim),
   };
   await listener.handler(beforeContext);
+  assert.deepEqual(dispatchClaims, [{ source: "workflow_before_agent_dispatch" }]);
   assert.equal(beforeContext.skipAgentDispatch, true);
   assert.ok(beforeContext.overrideAgentResult);
   assert.equal(Array.isArray(beforeContext.overrideAgentResult?.turnMessages), true);

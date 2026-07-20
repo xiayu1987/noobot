@@ -37,10 +37,15 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     nodeSessions,
     runtimeNodeSessions,
     flowNodes,
-  } = useWorkflowRuntimeState(workflowPayload);
+  } = useWorkflowRuntimeState(workflowPayload, {
+    workflowNodeStateRegistry: props.workflowNodeStateRegistry,
+    turnRuntimeRegistry: props.turnRuntimeRegistry,
+  });
 
   const {
     selectedNodeSessionDocs,
+    selectedNodeTurnTimingsByTurnScopeId,
+    selectedNodeTurnStatuses,
     rawNodeSessionMessages,
     selectedNodeToolSessionDocs,
     normalizedNodeSessionMessages,
@@ -85,7 +90,9 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     selectedNodeSessionSummary,
     selectedNodeSessionId,
     selectedGraphDialogProcessId,
+    runtimeNodeSessions,
     applyingWorkflowDrawerHistory,
+    mergeSubSessionSnapshot: props.mergeSubSessionSnapshot,
   });
 
   return {
@@ -111,6 +118,8 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     semanticPreviewLineCount,
     semanticPreviewCollapsible,
     selectedNodeSessionDocs,
+    selectedNodeTurnTimingsByTurnScopeId,
+    selectedNodeTurnStatuses,
     rawNodeSessionMessages,
     selectedNodeToolSessionDocs,
     normalizedNodeSessionMessages,

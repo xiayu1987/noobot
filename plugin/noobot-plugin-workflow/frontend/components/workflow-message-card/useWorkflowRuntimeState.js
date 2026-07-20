@@ -10,7 +10,7 @@ import { createRuntimeNodeSessions } from "./workflowRuntimeSessions.js";
 import { createStepStatusResolver } from "./workflowRuntimeStatus.js";
 import { collectWorkflowDialogProcessIds } from "./workflowDialogProcessIdCompat.js";
 
-export function useWorkflowRuntimeState(workflowPayload) {
+export function useWorkflowRuntimeState(workflowPayload, runtimeRegistries = {}) {
   const nodeSessions = computed(() => {
     const fromPayload = Array.isArray(workflowPayload.value?.nodeSessions)
       ? workflowPayload.value.nodeSessions
@@ -30,6 +30,7 @@ export function useWorkflowRuntimeState(workflowPayload) {
     workflowPayload,
     nodeSessions,
     executionMeta,
+    workflowNodeStateRegistry: runtimeRegistries.workflowNodeStateRegistry,
   });
 
   const semanticNodeMap = computed(() => {

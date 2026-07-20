@@ -5,9 +5,11 @@
  */
 import { defineComponent, nextTick, onMounted, onUnmounted, reactive } from "vue";
 import { mount } from "@vue/test-utils";
-import { describe, expect, it, vi } from "vitest";
+import { createPinia, getActivePinia, setActivePinia } from "pinia";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import ChatMessageListPanel from "../../../src/app/ChatMessageListPanel.vue";
 import { RoleEnum } from "../../../src/shared/constants/chatConstants";
+import { useChatStore } from "../../../src/shared/stores/useChatStore";
 
 const chatMessageItemMock = vi.hoisted(() => ({
   field: "content",
@@ -79,6 +81,7 @@ function mountPanel(props = {}, options = {}) {
       ...props,
     },
     global: {
+      plugins: [getActivePinia()],
       stubs: {
         ChatMessageItem: ChatMessageItemStub,
         "chat-message-item": ChatMessageItemStub,
@@ -99,6 +102,11 @@ function mountPanel(props = {}, options = {}) {
 }
 
 describe("ChatMessageListPanel", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+
+
   it("does not show skeleton when loading detail but messages already exist", () => {
     const wrapper = mountPanel({
       loadingSessionDetail: true,

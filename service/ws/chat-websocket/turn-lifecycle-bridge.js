@@ -12,8 +12,42 @@ import {
 
 const clean = (value) => String(value || "").trim();
 
+/** Publish an already committed lifecycle fact without mutating Agent state. */
+export function createCommittedTurnLifecyclePublisher({ sendEvent } = {}) {
+  return function publishCommittedTurnLifecycle({ event = {}, turn } = {}) {
+    if (!turn || typeof sendEvent !== "function") return null;
+    const envelope = createTurnLifecycleEnvelope({
+      eventType: event.eventType,
+      eventId: clean(event.eventId) || randomUUID(),
+      commandId: event.commandId || turn.commandId,
+      causationId: event.causationId || event.commandId || turn.commandId,
+      correlationId: event.correlationId || event.turnScopeId || turn.turnScopeId,
+      userId: event.userId,
+      sessionId: event.sessionId,
+      parentSessionId: event.parentSessionId || turn.parentSessionId,
+      turnScopeId: event.turnScopeId || turn.turnScopeId,
+      dialogProcessId: turn.dialogProcessId || event.dialogProcessId,
+      revision: turn.revision,
+      sequence: turn.sequence,
+      phase: turn.phase,
+      state: turn.state,
+      action: turn.action,
+      executionState: turn.executionState,
+      summaryVersion: turn.summaryVersion,
+      updatedAt: turn.updatedAt,
+      occurredAt: turn.updatedAt,
+      capabilities: deriveAuthoritativeTurnCapabilities(turn),
+      failure: turn.failure,
+      payload: event.payload,
+    });
+    sendEvent(TURN_LIFECYCLE_WIRE_EVENT, envelope);
+    return envelope;
+  };
+}
+
 /** Persist one authoritative lifecycle fact and emit exactly that committed fact. */
 export function createTurnLifecycleBridge({ resolveBot, sendEvent } = {}) {
+  const publishCommittedTurnLifecycle = createCommittedTurnLifecyclePublisher({ sendEvent });
   return async function commitTurnLifecycle(event = {}) {
     const bot = resolveBot();
     const applyLifecycle = bot?.applyTurnLifecycleEvent;
@@ -42,30 +76,7 @@ export function createTurnLifecycleBridge({ resolveBot, sendEvent } = {}) {
     if (result?.deduplicated) return result;
     const turn = result.turn;
     if (!turn) return { ...result, applied: false, reason: "lifecycle_turn_missing" };
-    const envelope = createTurnLifecycleEnvelope({
-      eventType: event.eventType,
-      eventId: randomUUID(),
-      commandId: event.commandId,
-      causationId: event.causationId || event.commandId,
-      correlationId: event.correlationId || event.turnScopeId,
-      userId: event.userId,
-      sessionId: event.sessionId,
-      turnScopeId: event.turnScopeId,
-      dialogProcessId: turn.dialogProcessId || event.dialogProcessId,
-      revision: turn.revision,
-      sequence: turn.sequence,
-      phase: turn.phase,
-      state: turn.state,
-      action: turn.action,
-      executionState: turn.executionState,
-      summaryVersion: turn.summaryVersion,
-      updatedAt: turn.updatedAt,
-      occurredAt: turn.updatedAt,
-      capabilities: deriveAuthoritativeTurnCapabilities(turn),
-      failure: turn.failure,
-      payload: event.payload,
-    });
-    sendEvent(TURN_LIFECYCLE_WIRE_EVENT, envelope);
+    const envelope = publishCommittedTurnLifecycle({ event, turn });
     return { ...result, envelope };
   };
 }

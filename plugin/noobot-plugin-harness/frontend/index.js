@@ -19,6 +19,10 @@ export function matchesMessageStatusRow(messageItem = {}) {
   );
 }
 
+export function matchesThinkingPanel(messageItem = {}) {
+  return messageItem?.__workflowLiveProjection !== true;
+}
+
 export const FRONTEND_PLUGIN_API_VERSION = "1";
 
 export function registerFrontendPlugin(ctx = {}) {
@@ -72,11 +76,22 @@ export function registerFrontendPlugin(ctx = {}) {
         slot: "pre",
         priority: 10,
         component: ThinkingPanel,
-        match: () => true,
+        // Live workflow projections are rendered through ChatMessageItem so
+        // they can reuse the normal workflow card. Do not attach another
+        // ThinkingPanel to that synthetic message, otherwise it projects the
+        // same workflow again recursively.
+        match: matchesThinkingPanel,
         resolveProps: (context = {}) => ({
           messageItem: context?.messageItem || {},
           allMessages: Array.isArray(context?.allMessages) ? context.allMessages : [],
           turnTimingsByTurnScopeId: context?.turnTimingsByTurnScopeId || {},
+          turnStatuses: context?.turnStatuses || [],
+          userId: String(context?.userId || ""),
+          authFetch: context?.authFetch,
+          renderMarkdown: context?.renderMarkdown,
+          formatTime: context?.formatTime,
+          formatFileSize: context?.formatFileSize,
+          isImageMime: context?.isImageMime,
         }),
         resolveListeners: (context = {}) => ({
           "open-thinking-details": (payload = {}) => {

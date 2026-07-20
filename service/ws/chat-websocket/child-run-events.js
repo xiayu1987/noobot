@@ -58,3 +58,27 @@ export function buildParentOwnedChildRunPayload(normalizedData = {}, parentOwned
     turnScopeId: normalizeWsText(turnScopeId),
   };
 }
+
+export function buildSubSessionWirePayload(eventData = {}, {
+  rootSessionId = "",
+  parentDialogProcessId = "",
+  turnScopeId = "",
+} = {}) {
+  const sessionId = normalizeWsText(eventData?.sessionId || eventData?.subAgentSessionId);
+  return {
+    ...(eventData && typeof eventData === "object" ? eventData : {}),
+    scope: "sub_session",
+    sessionId,
+    subSessionId: sessionId,
+    parentSessionId: normalizeWsText(eventData?.parentSessionId || rootSessionId),
+    dialogProcessId: normalizeWsText(eventData?.dialogProcessId),
+    parentDialogProcessId: normalizeWsText(
+      eventData?.parentDialogProcessId || parentDialogProcessId,
+    ),
+    turnScopeId: normalizeWsText(eventData?.turnScopeId || turnScopeId),
+    workflowRunId: normalizeWsText(eventData?.workflowRunId),
+    nodeExecutionId: normalizeWsText(eventData?.nodeExecutionId),
+    conversationStateOwner: "sub_session",
+    subAgentCall: true,
+  };
+}

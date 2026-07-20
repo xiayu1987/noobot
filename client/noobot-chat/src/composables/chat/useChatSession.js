@@ -488,6 +488,9 @@ export function useChatSession({
     onConversationState: trackConversationState,
     chatWebSocketClient,
     sessionLogWebSocketClient,
+    upsertWorkflowNodeStateEvent: chatStore.upsertWorkflowNodeStateEvent,
+    upsertWorkflowPlanningEvent: chatStore.upsertWorkflowPlanningEvent,
+    upsertSubSessionEvent: chatStore.upsertSubSessionEvent,
     ensureConnected,
     notify,
     processStore,
@@ -523,6 +526,15 @@ export function useChatSession({
     processStore,
     applyTurnRuntimeEvents: (events = []) => {
       const sourceEvents = Array.isArray(events) ? events : [];
+      for (const event of sourceEvents) {
+        const eventName = String(event?.event || event?.type || "").trim();
+        if (eventName === "workflow_planning_message_prepared") {
+          chatStore.upsertWorkflowPlanningEvent?.(event?.data || event);
+        }
+        if (eventName === "workflow_node_state_committed") {
+          chatStore.upsertWorkflowNodeStateEvent?.(event?.data || event);
+        }
+      }
       // Session detail is the persisted source of truth for terminal turns. A
       // reconnect snapshot can race behind detail loading and still report the
       // old sending/stopping currentRun. Remove those stale facts from the

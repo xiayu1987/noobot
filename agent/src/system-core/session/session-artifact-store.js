@@ -112,7 +112,7 @@ export async function writeSessionArtifact({
   await mkdir(sessionDir, { recursive: true });
   const normalizedSessionPayload = normalizeSessionEntity(sessionPayload, { now });
   const summaryPayload = buildSessionDisplaySummary(normalizedSessionPayload, { depth });
-  await Promise.all([
+  const [sessionArtifact] = await Promise.all([
     writeJsonWithStorage({
       storageService,
       artifactPath: files.session,
@@ -234,7 +234,7 @@ export async function persistSessionArtifactSnapshot({
   const executionLogs = Array.isArray(normalizedExecutionPayload?.logs)
     ? normalizedExecutionPayload.logs
     : [];
-  await Promise.all([
+  const [sessionArtifact] = await Promise.all([
     writeSessionArtifact({
       sessionDir: outputDir,
       sessionPayload: sessionPayload && typeof sessionPayload === "object" ? sessionPayload : {},
@@ -254,6 +254,9 @@ export async function persistSessionArtifactSnapshot({
   return {
     outputDir,
     files,
+    session: sessionArtifact?.session || null,
+    sessionSummary: sessionArtifact?.sessionSummary || null,
+    version: Number(sessionArtifact?.session?.version || sessionArtifact?.sessionSummary?.version || 0),
   };
 }
 

@@ -7,13 +7,14 @@
 import { appendWorkflowPlanningMessage, emitWorkflowRuntimeEvent } from "../hooks/persistence.js";
 import { buildWorkflowOrchestrationPayload } from "../orchestration-payload.js";
 
-export function createPlanningExecutionStub() {
+export function createPlanningExecutionStub({ workflowRunId = "", nodeSessions = [] } = {}) {
   return {
     started: false,
-    instanceId: "",
+    instanceId: workflowRunId,
+    workflowRunId,
     autoTransitions: 0,
     completed: false,
-    pendingStepCount: 0,
+    pendingStepCount: nodeSessions.filter((item) => ["pending", "ready"].includes(item?.stepStatus)).length,
     actionRecords: [],
     nodeAgentRuns: [],
   };
@@ -40,6 +41,8 @@ export async function prepareWorkflowPlanningMessage({
   phaseTracker,
   retryMeta = {},
   planningPersistResult = null,
+  workflowRunId = "",
+  planningNodeSessions = [],
 } = {}) {
   const planningWorkflowPayload = buildWorkflowOrchestrationPayload({
     ctx,
@@ -47,13 +50,14 @@ export async function prepareWorkflowPlanningMessage({
     sourceText,
     semanticText,
     semantic,
-    execution: createPlanningExecutionStub(),
+    execution: createPlanningExecutionStub({ workflowRunId, nodeSessions: planningNodeSessions }),
     semanticResolution,
     phaseTimeline: phaseTracker.list(),
     retryMeta,
   });
   attachPlanningDialog(planningWorkflowPayload, ctx, planningPersistResult);
-  planningWorkflowPayload.nodeSessions = [];
+  planningWorkflowPayload.workflowRunId = workflowRunId;
+  planningWorkflowPayload.nodeSessions = planningNodeSessions;
   planningWorkflowPayload.attachments = [];
   await appendWorkflowPlanningMessage({
     options,
@@ -70,7 +74,25 @@ export async function prepareWorkflowPlanningMessage({
     ctx,
     event: "workflow_planning_message_prepared",
     data: {
+      sessionId: String(ctx?.sessionId || "").trim(),
       dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
+      turnScopeId: String(ctx?.turnScopeId || "").trim(),
+      workflowRunId,
+      semanticText,
+      nodeSessions: planningNodeSessions,
     },
   });
+  if (typeof ctx?.eventListener?.onEvent === "function") {
+    await ctx.eventListener.onEvent({
+      event: "workflow_planning_message_prepared",
+      data: {
+        sessionId: String(ctx?.sessionId || "").trim(),
+        dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
+        turnScopeId: String(ctx?.turnScopeId || "").trim(),
+        workflowRunId,
+        semanticText,
+        nodeSessions: planningNodeSessions,
+      },
+    });
+  }
 }

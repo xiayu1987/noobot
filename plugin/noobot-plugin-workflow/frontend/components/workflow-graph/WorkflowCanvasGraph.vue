@@ -549,7 +549,6 @@ function stepHasSession(stepItem = {}) {
 function handleNodeClick(nodeItem = {}) {
   if (nodeItem?._virtualBoundary) return;
   if (!isActionNode(nodeItem)) return;
-  if (nodeItem?._hasRuntimeBoxes !== true) return;
   emit("node-click", nodeItem);
 }
 
@@ -590,7 +589,7 @@ function handleStepClick(stepItem = {}) {
           :node-item="nodeItem"
           :node-index="nodeIndex"
           :style-obj="getNodeStyle(nodeItem)"
-          :clickable="!nodeItem?._virtualBoundary && isActionNode(nodeItem) && nodeItem?._hasRuntimeBoxes === true"
+          :clickable="!nodeItem?._virtualBoundary && isActionNode(nodeItem)"
           :boundary-type="String(nodeItem?._virtualBoundary || '')"
           :selected="nodeContainsDialogProcessId(nodeItem, effectiveSelectedDialogProcessId)"
           :expanded="false"

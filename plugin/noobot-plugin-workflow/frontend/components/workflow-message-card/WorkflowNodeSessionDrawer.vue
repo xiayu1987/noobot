@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { BaseEmptyHint, BaseMessageErrorAlert } from "../../../../../client/noobot-chat/src/shared/ui";
 import WorkflowSessionMessageItem from "../WorkflowSessionMessageItem.vue";
 import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
@@ -13,7 +13,7 @@ function resolveDialogProcessId(item = {}) {
   return resolveWorkflowDialogProcessId(item);
 }
 
-defineProps({
+const props = defineProps({
   translate: { type: Function, required: true },
   viewerLoading: { type: Boolean, default: false },
   viewerError: { type: String, default: "" },
@@ -24,6 +24,8 @@ defineProps({
   displayNodeMessages: { type: Array, default: () => [] },
   nodeSessionAllMessages: { type: Array, default: () => [] },
   selectedNodeSessionDocs: { type: Array, default: () => [] },
+  turnTimingsByTurnScopeId: { type: Object, default: () => ({}) },
+  turnStatuses: { type: Array, default: () => [] },
   userId: { type: String, default: "" },
   authFetch: { type: Function, default: null },
   renderMarkdown: { type: Function, required: true },
@@ -40,7 +42,43 @@ defineProps({
 const viewerVisible = defineModel("viewerVisible", { type: Boolean, default: false });
 
 const drawerSize = ref("72%");
+const messageScrollRef = ref(null);
+const followRealtime = ref(true);
 let mobileMediaQuery;
+
+function getScrollWrap() {
+  return messageScrollRef.value?.wrapRef || null;
+}
+
+function updateFollowRealtime() {
+  const wrap = getScrollWrap();
+  if (!wrap) return;
+  followRealtime.value = wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight <= 48;
+}
+
+async function scrollRealtimeToBottom(force = false) {
+  await nextTick();
+  const wrap = getScrollWrap();
+  if (!wrap || (!force && !followRealtime.value)) return;
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+watch(
+  () => [
+    viewerVisible.value,
+    props.selectedNodeSessionId,
+    props.displayNodeMessages.length,
+    props.displayNodeMessages.map((item = {}) => `${String(item?.content || "").length}:${Array.isArray(item?.toolLogs) ? item.toolLogs.length : 0}`).join("|"),
+    props.turnStatuses.length,
+  ],
+  ([visible, sessionId], previous = []) => {
+    if (!visible) return;
+    const force = !previous[0] || sessionId !== previous[1];
+    if (force) followRealtime.value = true;
+    scrollRealtimeToBottom(force);
+  },
+  { flush: "post" },
+);
 
 function updateDrawerSize(event) {
   drawerSize.value = event.matches ? "100%" : "72%";
@@ -72,6 +110,7 @@ defineEmits(["runtime-step-click", "open-thinking-details"]);
     header-class="workflow-node-session-drawer__header noobot-side-drawer__header"
     class="workflow-node-session-drawer noobot-side-drawer"
   >
+    <el-scrollbar ref="messageScrollRef" class="workflow-node-session-scroll" @scroll="updateFollowRealtime">
     <div
       v-loading="viewerLoading"
       class="workflow-node-session-content"
@@ -144,6 +183,8 @@ defineEmits(["runtime-step-click", "open-thinking-details"]);
             :message-item="messageItem"
             :all-messages="nodeSessionAllMessages"
             :session-docs="selectedNodeSessionDocs"
+            :turn-timings-by-turn-scope-id="turnTimingsByTurnScopeId"
+            :turn-statuses="turnStatuses"
             :user-id="userId"
             :auth-fetch="authFetch"
             :render-markdown="renderMarkdown"
@@ -160,6 +201,7 @@ defineEmits(["runtime-step-click", "open-thinking-details"]);
         />
       </template>
     </div>
+    </el-scrollbar>
   </el-drawer>
 </template>
 
@@ -183,6 +225,11 @@ defineEmits(["runtime-step-click", "open-thinking-details"]);
   min-height: 260px;
   padding: 12px;
   box-sizing: border-box;
+}
+
+.workflow-node-session-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .workflow-node-session-content .el-loading-mask {

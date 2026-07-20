@@ -25,6 +25,7 @@ import {
 import { isAbortLikeError, isSocketCloseRunAbort, isUserStopRunAbort } from "./stop-lifecycle.js";
 import { createRunEventListener } from "./run-event-listener.js";
 import { resetRunState } from "./connection-state.js";
+import { createCommittedTurnLifecyclePublisher } from "./turn-lifecycle-bridge.js";
 import { TURN_COMMAND, TURN_EVENT, TURN_PHASE, validateTurnLifecycleSnapshot } from "@noobot/shared/turn-lifecycle-protocol";
 
 /**
@@ -64,6 +65,9 @@ export function createMessageHandler({
   commitTurnLifecycle,
   recoverTurnFinalize,
 }) {
+  // Detached sub-session facts have already been committed inside Agent. This
+  // publisher projects them onto the wire without re-entering the state machine.
+  const publishCommittedTurnLifecycle = createCommittedTurnLifecyclePublisher({ sendEvent });
   const commitCurrentFailure = async (error, fallbackPhase = TURN_PHASE.ACTION) => {
     const phase = state.currentLifecyclePhase || fallbackPhase;
     const commandBase = String(state.currentLifecycleCommandId || state.currentTurnScopeId || "turn").trim();
@@ -509,6 +513,12 @@ export function createMessageHandler({
       getCurrentRunMeta: () => state.currentRunMeta,
       getCurrentRunHandle: () => state.currentRunHandle,
       getCurrentTurnScopeId: () => state.currentTurnScopeId,
+      onCommittedTurnLifecycle: (committed = {}) => {
+        publishCommittedTurnLifecycle({
+          event: committed,
+          turn: committed?.turn,
+        });
+      },
       onRootRunning: (lifecycleData) => {
         if (processingStartedPromise) return processingStartedPromise;
         processingStartedPromise = commitTurnLifecycle({

@@ -441,6 +441,12 @@ export class SessionExecutionEngine {
         this._persistDetachedSubSessionSnapshot(payload),
       assertDetachedSubSessionIsolation: (payload = {}) =>
         this._assertDetachedSubSessionIsolation(payload),
+      ...(typeof this.session?.applyTurnLifecycleEvent === "function"
+        ? {
+            applyTurnLifecycleEvent: (payload = {}) =>
+              this.session.applyTurnLifecycleEvent(payload),
+          }
+        : {}),
       now: () => this._now(),
     });
   }

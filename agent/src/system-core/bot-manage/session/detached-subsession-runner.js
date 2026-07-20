@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { emitEvent } from "../../event/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { CALLER_ROLE } from "../config/constants.js";
+import { TURN_EVENT, TURN_PHASE } from "@noobot/shared/turn-lifecycle-protocol";
 import {
   normalizeTrimmedStringList,
   resolvePluginOptionsFromConfig,
@@ -31,6 +32,7 @@ export function createDetachedSubSessionRunner({
   normalizeDetachedSubSessionMessage = null,
   persistDetachedSubSessionSnapshot = null,
   assertDetachedSubSessionIsolation = null,
+  applyTurnLifecycleEvent = null,
   now = null,
 } = {}) {
   return async ({
@@ -75,6 +77,19 @@ export function createDetachedSubSessionRunner({
         parentDialogProcessId ||
         subSessionId,
     ).trim();
+    // Detached execution still participates in the shared runtime stream.  Do
+    // not pass the parent's listener through unchanged: low-level model/tool
+    // events do not add session coordinates themselves, so doing so would
+    // make child events indistinguishable from parent events at the consumer.
+    const scopedEventListener = createScopedSubSessionEventListener(eventListener, {
+      userId,
+      sessionId: subSessionId,
+      parentSessionId,
+      dialogProcessId: subDialogProcessId || subSessionId,
+      turnScopeId: String(
+        runConfigPatch?.turnScopeId || strategy?.turnScopeId || metadata?.turnScopeId || "",
+      ).trim(),
+    });
     const mergedRunConfig = mergeRunConfigWithPluginStrategy({
       baseRunConfig: sourceContext?.runConfig || {},
       runConfigPatch,
@@ -107,6 +122,61 @@ export function createDetachedSubSessionRunner({
         metadata?.turnScopeId ||
         "",
     ).trim();
+    const turnScopeId = subSessionTurnScopeId || `${subSessionId}:turn`;
+    const lifecycleCommandId = String(
+      strategy?.commandId || metadata?.commandId || `${subSessionId}:${turnScopeId}`,
+    ).trim();
+    const commitLifecycle = async (eventType, phase, extra = {}, expectedRevision = 0) => {
+      if (typeof applyTurnLifecycleEvent !== "function") return null;
+      const result = await applyTurnLifecycleEvent({
+        userId,
+        sessionId: subSessionId,
+        parentSessionId,
+        turnScopeId,
+        dialogProcessId: subDialogProcessId || subSessionId,
+        commandId: `${lifecycleCommandId}:${eventType}`,
+        eventType,
+        phase,
+        action: extra.action || "send",
+        expectedRevision,
+        ...extra,
+        ...(eventType === TURN_EVENT.ACTION_ACCEPTED ? { createSessionIfAbsent: true } : {}),
+      });
+      if (!result?.applied && !result?.deduplicated) {
+        const error = new Error(result?.reason || "sub-session lifecycle transition failed");
+        error.code = result?.reason || "SUB_SESSION_LIFECYCLE_FAILED";
+        error.lifecycleResult = result;
+        throw error;
+      }
+      // Publish only a newly committed authoritative fact through the same
+      // runtime listener used by the detached execution. Service owns wire
+      // envelope construction; Agent only exposes the committed mutation.
+      if (result?.applied && !result?.deduplicated && result?.turn) {
+        emitEvent(eventListener, "turn_lifecycle_committed", {
+          userId,
+          sessionId: subSessionId,
+          parentSessionId,
+          turnScopeId,
+          dialogProcessId: subDialogProcessId || subSessionId,
+          commandId: `${lifecycleCommandId}:${eventType}`,
+          eventType,
+          turn: result.turn,
+        });
+      }
+      return result;
+    };
+
+    // Provision is deliberately before context construction and runTurn: a
+    // rejected first commit must not create any execution side effects.
+    let committedTurn = await commitLifecycle(
+      TURN_EVENT.ACTION_ACCEPTED,
+      TURN_PHASE.ACTION,
+      { action: "send", executionState: "accepted" },
+      0,
+    );
+    let currentRevision = Number(committedTurn?.turn?.revision || 1);
+    let currentLifecyclePhase = TURN_PHASE.ACTION;
+    let persisted = null;
 
     const runtimePluginState = buildRuntimePluginState({
       effectiveRunConfig,
@@ -127,7 +197,7 @@ export function createDetachedSubSessionRunner({
         userConfig: subSessionUserConfig,
         userMessageAttachments: subSessionAttachments,
         systemMessages: Array.isArray(systemMessages) ? systemMessages : [],
-        eventListener: resolveObjectEventListener(eventListener),
+        eventListener: scopedEventListener,
         userInteractionBridge: inheritedUserInteractionBridge,
         runConfig: effectiveRunConfig,
         parentAsyncResultContainer: null,
@@ -137,11 +207,86 @@ export function createDetachedSubSessionRunner({
     throwIfSubSessionAborted();
 
     const runtimeAgentContext = resolveRuntimeAgentContext(preparedAgentTurnExecution);
-    const agentResult = await agentRuntimeFacade.runTurn({
-      errorLogger,
-      agentContext: runtimeAgentContext,
-      userMessage: String(message || "").trim(),
-    });
+    committedTurn = await commitLifecycle(TURN_EVENT.PROCESSING_STARTED, TURN_PHASE.PROCESSING, {
+      executionState: "processing",
+    }, currentRevision);
+    currentRevision = Number(committedTurn?.turn?.revision || currentRevision);
+    currentLifecyclePhase = TURN_PHASE.PROCESSING;
+    let agentResult;
+    try {
+      agentResult = await agentRuntimeFacade.runTurn({
+        errorLogger,
+        agentContext: runtimeAgentContext,
+        userMessage: String(message || "").trim(),
+      });
+      throwIfSubSessionAborted();
+      committedTurn = await commitLifecycle(TURN_EVENT.PROCESSING_COMPLETED, TURN_PHASE.COMPLETION, {
+        executionState: "completion_requested",
+      }, currentRevision);
+      currentRevision = Number(committedTurn?.turn?.revision || currentRevision);
+      currentLifecyclePhase = TURN_PHASE.COMPLETION;
+      committedTurn = await commitLifecycle(TURN_EVENT.COMPLETED, TURN_PHASE.COMPLETION, {
+        executionState: "completed",
+      }, currentRevision);
+    } catch (error) {
+      try {
+        if (error?.name === "AbortError") {
+          committedTurn = await commitLifecycle(TURN_EVENT.STOP_ACCEPTED, TURN_PHASE.STOP, {
+            action: "stop",
+            executionState: "stop_requested",
+          }, currentRevision);
+          currentRevision = Number(committedTurn?.turn?.revision || currentRevision);
+          committedTurn = await commitLifecycle(TURN_EVENT.STOP_PROCESSING_COMPLETED, TURN_PHASE.STOP, {
+            action: "stop",
+            executionState: "stopping",
+          }, currentRevision);
+          currentRevision = Number(committedTurn?.turn?.revision || currentRevision);
+          // Keep the detached turn contract identical to the root turn: the
+          // terminal stopped fact is not published until its session snapshot
+          // (the child session summary source) has been durably persisted.
+          persisted = await persistPluginSubSessionSnapshot({
+            userId,
+            subSessionId,
+            parentSessionId,
+            parentDialogProcessId,
+            subDialogProcessId,
+            dialogProcessId: subDialogProcessId || subSessionId,
+            turnScopeId: subSessionTurnScopeId,
+            message,
+            systemMessages,
+            subSessionAttachments,
+            strategy,
+            metadata,
+            agentResult: {},
+            turnMessages: [],
+            runtimePluginState,
+            resolveScopedOutputDir: resolveScopedOutputDir || resolvePluginScopedDir,
+            normalizeDetachedSubSessionMessage,
+            persistDetachedSubSessionSnapshot,
+            now,
+          });
+          const summaryVersion = resolvePersistedSessionVersion(persisted);
+          if (summaryVersion <= 0) {
+            const persistenceError = new Error("sub-session stopped snapshot has no authoritative version");
+            persistenceError.code = "SUB_SESSION_SUMMARY_VERSION_MISSING";
+            throw persistenceError;
+          }
+          committedTurn = await commitLifecycle(TURN_EVENT.STOP_COMPLETED, TURN_PHASE.STOP, {
+            action: "stop",
+            executionState: "stopped",
+            summaryVersion,
+          }, currentRevision);
+        } else {
+          await commitLifecycle(TURN_EVENT.FAILED, currentLifecyclePhase, {
+            executionState: "failed",
+            failure: { code: error?.code || error?.name || "SUB_SESSION_FAILED", message: String(error?.message || error) },
+          }, currentRevision);
+        }
+      } catch (lifecycleError) {
+        error.lifecycleError = lifecycleError;
+      }
+      throw error;
+    }
     throwIfSubSessionAborted();
 
     const dialogProcessId = String(
@@ -150,7 +295,7 @@ export function createDetachedSubSessionRunner({
         "",
     ).trim();
     const turnMessages = resolveTurnMessages({ agentResult, dialogProcessId });
-    const persisted = await persistPluginSubSessionSnapshot({
+    persisted = await persistPluginSubSessionSnapshot({
       userId,
       subSessionId,
       parentSessionId,
@@ -184,6 +329,7 @@ export function createDetachedSubSessionRunner({
       parentSessionId,
       dialogProcessId,
       persisted,
+      lifecycle: committedTurn?.turn || null,
       result: {
         sessionId: subSessionId,
         parentSessionId,
@@ -197,6 +343,28 @@ export function createDetachedSubSessionRunner({
         dialogProcessId,
       },
     };
+  };
+}
+
+export function createScopedSubSessionEventListener(eventListener = null, identity = {}) {
+  const target = resolveObjectEventListener(eventListener);
+  if (!target) return null;
+  return {
+    onEvent(event = {}) {
+      const source = event && typeof event === "object" ? event : {};
+      const data = source.data && typeof source.data === "object" ? source.data : {};
+      return target.onEvent({
+        ...source,
+        data: {
+          ...data,
+          userId: String(data.userId || identity.userId || "").trim(),
+          sessionId: String(data.sessionId || identity.sessionId || "").trim(),
+          parentSessionId: String(data.parentSessionId || identity.parentSessionId || "").trim(),
+          dialogProcessId: String(data.dialogProcessId || identity.dialogProcessId || "").trim(),
+          turnScopeId: String(data.turnScopeId || identity.turnScopeId || "").trim(),
+        },
+      });
+    },
   };
 }
 
@@ -412,6 +580,11 @@ async function persistPluginSubSessionSnapshot({
     sessionPayload: {
       sessionId: subSessionId,
       parentSessionId,
+      // A detached node session is persisted as one authoritative snapshot.
+      // Keep its revision in the snapshot itself so the persistence receipt can
+      // supply STOP_COMPLETED with the version that was actually written.
+      version: 1,
+      revision: 1,
       caller: CALLER_ROLE.BOT,
       modelAlias: "",
       currentTaskId: "",
@@ -437,4 +610,11 @@ async function persistPluginSubSessionSnapshot({
       ...(metadata && typeof metadata === "object" ? metadata : {}),
     },
   });
+}
+
+function resolvePersistedSessionVersion(persisted = null) {
+  const version = Number(
+    persisted?.version ?? persisted?.session?.version ?? persisted?.sessionSummary?.version ?? 0,
+  );
+  return Number.isInteger(version) && version > 0 ? version : 0;
 }

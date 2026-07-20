@@ -55,6 +55,14 @@ export function registerFrontendPlugin(ctx = {}) {
           formatTime: context?.formatTime,
           formatFileSize: context?.formatFileSize,
           isImageMime: context?.isImageMime,
+          workflowNodeStateRegistry: context?.workflowNodeStateRegistry || null,
+          turnRuntimeRegistry: context?.turnRuntimeRegistry || null,
+          selectSessionMessages: typeof context?.selectSessionMessages === "function"
+            ? context.selectSessionMessages
+            : null,
+          mergeSubSessionSnapshot: typeof context?.mergeSubSessionSnapshot === "function"
+            ? context.mergeSubSessionSnapshot
+            : null,
         }),
       },
     ],

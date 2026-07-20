@@ -6,7 +6,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createDetachedSubSessionRunner } from "../../../src/system-core/bot-manage/session/detached-subsession-runner.js";
+import {
+  createDetachedSubSessionRunner,
+  createScopedSubSessionEventListener,
+} from "../../../src/system-core/bot-manage/session/detached-subsession-runner.js";
 import { CALLER_ROLE } from "../../../src/system-core/bot-manage/config/constants.js";
 
 function createDefaultDeps(overrides = {}) {
@@ -100,7 +103,7 @@ function createDefaultDeps(overrides = {}) {
     },
     async persistDetachedSubSessionSnapshot(payload = {}) {
       calls.persistDetachedSubSessionSnapshotPayload = payload;
-      return { outputDir: payload.outputDir };
+      return { outputDir: payload.outputDir, version: 7 };
     },
     async assertDetachedSubSessionIsolation(payload = {}) {
       calls.assertDetachedSubSessionIsolationPayload = payload;
@@ -116,6 +119,214 @@ function createDefaultDeps(overrides = {}) {
     },
   };
 }
+
+function createLifecycleMock({ rejectFirst = false, abortOnRun = false } = {}) {
+  const calls = [];
+  let revision = 0;
+  const applyTurnLifecycleEvent = async (payload = {}) => {
+    calls.push({ ...payload });
+    if (rejectFirst && calls.length === 1) {
+      return { applied: false, reason: "session_not_found" };
+    }
+    revision += 1;
+    return {
+      applied: true,
+      turn: {
+        revision,
+        sequence: revision,
+        active: !["completed", "stopped", "failed"].includes(payload.executionState),
+      },
+    };
+  };
+  return { calls, applyTurnLifecycleEvent, abortOnRun };
+}
+
+test("detached sub-session provision rejection has no execution side effects", async () => {
+  const lifecycle = createLifecycleMock({ rejectFirst: true });
+  let prepareCount = 0;
+  let runCount = 0;
+  const { deps } = createDefaultDeps({
+    applyTurnLifecycleEvent: lifecycle.applyTurnLifecycleEvent,
+    async prepareAgentTurnExecution(payload) {
+      prepareCount += 1;
+      return { runtimeAgentContext: { payload } };
+    },
+    agentRuntimeFacade: {
+      async runTurn() {
+        runCount += 1;
+        return {};
+      },
+    },
+  });
+  const runner = createDetachedSubSessionRunner(deps);
+
+  await assert.rejects(
+    () => runner({ parentContext: { userId: "u1", sessionId: "parent1" } }),
+    (error) => error?.code === "session_not_found",
+  );
+  assert.equal(prepareCount, 0);
+  assert.equal(runCount, 0);
+  assert.equal(lifecycle.calls.length, 1);
+  assert.equal(lifecycle.calls[0].createSessionIfAbsent, true);
+  assert.equal(lifecycle.calls[0].expectedRevision, 0);
+});
+
+test("detached sub-session lifecycle uses committed revisions and reaches completion", async () => {
+  const lifecycle = createLifecycleMock();
+  const runtimeEvents = [];
+  const { deps } = createDefaultDeps({
+    applyTurnLifecycleEvent: lifecycle.applyTurnLifecycleEvent,
+  });
+  const runner = createDetachedSubSessionRunner(deps);
+
+  await runner({
+    parentContext: { userId: "u1", sessionId: "parent1" },
+    strategy: { sessionId: "child1" },
+    eventListener: { onEvent: (event) => runtimeEvents.push(event) },
+  });
+  assert.deepEqual(
+    lifecycle.calls.map((call) => call.eventType),
+    ["turn.action_accepted", "turn.processing_started", "turn.processing_completed", "turn.completed"],
+  );
+  assert.deepEqual(
+    lifecycle.calls.map((call) => call.expectedRevision),
+    [0, 1, 2, 3],
+  );
+  assert.deepEqual(
+    lifecycle.calls.map((call) => call.sequence),
+    [undefined, undefined, undefined, undefined],
+  );
+  assert.equal(lifecycle.calls[0].createSessionIfAbsent, true);
+  assert.equal(lifecycle.calls.slice(1).some((call) => call.createSessionIfAbsent), false);
+  const committed = runtimeEvents.filter((event) => event.event === "turn_lifecycle_committed");
+  assert.equal(committed.length, 4);
+  assert.deepEqual(committed.map((event) => event.data.eventType), lifecycle.calls.map((call) => call.eventType));
+  assert.equal(committed.every((event) => event.data.sessionId === "child1"), true);
+  assert.equal(committed.every((event) => event.data.parentSessionId === "parent1"), true);
+  assert.deepEqual(committed.map((event) => event.data.turn.revision), [1, 2, 3, 4]);
+});
+
+test("detached sub-session does not publish rejected or deduplicated lifecycle acknowledgements", async () => {
+  const runtimeEvents = [];
+  let callCount = 0;
+  const { deps } = createDefaultDeps({
+    applyTurnLifecycleEvent: async () => {
+      callCount += 1;
+      if (callCount === 1) return { deduplicated: true, turn: { revision: 1, sequence: 1 } };
+      return { applied: false, reason: "transition_rejected" };
+    },
+  });
+  const runner = createDetachedSubSessionRunner(deps);
+  await assert.rejects(
+    () => runner({
+      parentContext: { userId: "u1", sessionId: "parent1" },
+      eventListener: { onEvent: (event) => runtimeEvents.push(event) },
+    }),
+    (error) => error?.code === "transition_rejected",
+  );
+  assert.equal(runtimeEvents.some((event) => event.event === "turn_lifecycle_committed"), false);
+});
+
+test("detached sub-session abort uses the three stop lifecycle phases", async () => {
+  const lifecycle = createLifecycleMock();
+  const abortController = new AbortController();
+  const { calls, deps } = createDefaultDeps({
+    applyTurnLifecycleEvent: lifecycle.applyTurnLifecycleEvent,
+    resolvePluginScopedDir: () => "/tmp/workflow-child-stop",
+    agentRuntimeFacade: {
+      async runTurn() {
+        abortController.abort();
+        const error = new Error("aborted");
+        error.name = "AbortError";
+        throw error;
+      },
+    },
+  });
+  const runner = createDetachedSubSessionRunner(deps);
+
+  await assert.rejects(
+    () => runner({
+      parentContext: { userId: "u1", sessionId: "parent1" },
+      strategy: { sessionId: "child-stop" },
+      abortSignal: abortController.signal,
+    }),
+    (error) => error?.name === "AbortError",
+  );
+  assert.deepEqual(
+    lifecycle.calls.map((call) => call.eventType),
+    ["turn.action_accepted", "turn.processing_started", "turn.stop_accepted", "turn.stop_processing_completed", "turn.stop_completed"],
+  );
+  assert.equal(lifecycle.calls.some((call) => call.eventType === "turn.failed"), false);
+  assert.ok(calls.persistDetachedSubSessionSnapshotPayload);
+  assert.equal(calls.persistDetachedSubSessionSnapshotPayload.sessionPayload.sessionId, "child-stop");
+  assert.equal(
+    lifecycle.calls.find((call) => call.eventType === "turn.stop_completed")?.summaryVersion,
+    7,
+  );
+});
+
+test("detached sub-session does not commit stop completed without a persisted summary version", async () => {
+  const lifecycle = createLifecycleMock();
+  const abortController = new AbortController();
+  const { deps } = createDefaultDeps({
+    applyTurnLifecycleEvent: lifecycle.applyTurnLifecycleEvent,
+    resolvePluginScopedDir: () => "/tmp/workflow-child-stop-no-version",
+    persistDetachedSubSessionSnapshot: async (payload = {}) => ({ outputDir: payload.outputDir }),
+    agentRuntimeFacade: {
+      async runTurn() {
+        abortController.abort();
+        const error = new Error("aborted");
+        error.name = "AbortError";
+        throw error;
+      },
+    },
+  });
+  const runner = createDetachedSubSessionRunner(deps);
+
+  await assert.rejects(
+    () => runner({
+      parentContext: { userId: "u1", sessionId: "parent1" },
+      strategy: { sessionId: "child-stop-no-version" },
+      abortSignal: abortController.signal,
+    }),
+    (error) => error?.lifecycleError?.code === "SUB_SESSION_SUMMARY_VERSION_MISSING",
+  );
+  assert.equal(
+    lifecycle.calls.some((call) => call.eventType === "turn.stop_completed"),
+    false,
+  );
+});
+
+test("detached sub-session completion commit failure is compensated with the latest revision", async () => {
+  const lifecycle = createLifecycleMock();
+  const originalApply = lifecycle.applyTurnLifecycleEvent;
+  let committedState = null;
+  lifecycle.applyTurnLifecycleEvent = async (payload) => {
+    if (payload.eventType === "turn.completed") {
+      lifecycle.calls.push({ ...payload });
+      return { applied: false, reason: "completion_commit_failed" };
+    }
+    const result = await originalApply(payload);
+    committedState = result.turn;
+    return result;
+  };
+  const { deps } = createDefaultDeps({
+    applyTurnLifecycleEvent: lifecycle.applyTurnLifecycleEvent,
+  });
+  const runner = createDetachedSubSessionRunner(deps);
+
+  await assert.rejects(
+    () => runner({ parentContext: { userId: "u1", sessionId: "parent1" } }),
+    (error) => error?.code === "completion_commit_failed",
+  );
+  assert.deepEqual(
+    lifecycle.calls.map((call) => call.eventType),
+    ["turn.action_accepted", "turn.processing_started", "turn.processing_completed", "turn.completed", "turn.failed"],
+  );
+  assert.equal(lifecycle.calls.at(-1).expectedRevision, 3);
+  assert.equal(committedState?.active, false);
+  assert.equal(lifecycle.calls.at(-1).phase, "completion");
+});
 
 test("createDetachedSubSessionRunner requires userId and parentSessionId", async () => {
   const { deps } = createDefaultDeps();
@@ -422,5 +633,73 @@ test("createDetachedSubSessionRunner falls back to empty userConfig when loading
   assert.deepEqual(
     calls.prepareAgentTurnExecutionPayload.buildContextPayload.userConfig,
     {},
+  );
+});
+
+test("createScopedSubSessionEventListener injects child session coordinates", () => {
+  const received = [];
+  const listener = createScopedSubSessionEventListener(
+    { onEvent: (event) => received.push(event) },
+    {
+      userId: "user-1",
+      sessionId: "child-1",
+      parentSessionId: "parent-1",
+      dialogProcessId: "child-dialog-1",
+      turnScopeId: "child-turn-1",
+    },
+  );
+
+  listener.onEvent({ event: "tool_call", data: { toolName: "search" } });
+
+  assert.equal(received.length, 1);
+  assert.deepEqual(received[0].data, {
+    toolName: "search",
+    userId: "user-1",
+    sessionId: "child-1",
+    parentSessionId: "parent-1",
+    dialogProcessId: "child-dialog-1",
+    turnScopeId: "child-turn-1",
+  });
+});
+
+test("createScopedSubSessionEventListener preserves explicit event coordinates", () => {
+  const received = [];
+  const listener = createScopedSubSessionEventListener(
+    { onEvent: (event) => received.push(event) },
+    {
+      userId: "fallback-user",
+      sessionId: "fallback-child",
+      parentSessionId: "fallback-parent",
+      dialogProcessId: "fallback-dialog",
+      turnScopeId: "fallback-turn",
+    },
+  );
+
+  listener.onEvent({
+    event: "analysis_delta",
+    data: {
+      userId: "event-user",
+      sessionId: "event-child",
+      parentSessionId: "event-parent",
+      dialogProcessId: "event-dialog",
+      turnScopeId: "event-turn",
+      text: "hello",
+    },
+  });
+
+  assert.deepEqual(received[0].data, {
+    userId: "event-user",
+    sessionId: "event-child",
+    parentSessionId: "event-parent",
+    dialogProcessId: "event-dialog",
+    turnScopeId: "event-turn",
+    text: "hello",
+  });
+});
+
+test("createScopedSubSessionEventListener returns null without a listener", () => {
+  assert.equal(
+    createScopedSubSessionEventListener(null, { sessionId: "child-1" }),
+    null,
   );
 });

@@ -185,6 +185,7 @@ export const TIME_THRESHOLDS = deepFreeze({
     panelResizeThrottleMs: TIME_TIERS.uiThrottleMs,
     missingInteractionPayloadTimeoutMs: 1200,
     micMaxDurationSeconds: TIME_TIERS.micDurationSeconds,
+    terminalTurnRetentionMs: TIME_TIERS.oneDayMs,
   },
 
   service: {

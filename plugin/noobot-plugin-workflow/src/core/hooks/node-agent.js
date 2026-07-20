@@ -318,12 +318,28 @@ export async function runNodeAgent({
   instanceId = "",
   pendingStep = {},
   semantic = {},
+  nodeIdentity = null,
   transition = 0,
   upstreamNodeResults = [],
 } = {}) {
   throwIfWorkflowAborted(ctx);
-  const nodeDialogProcessId = `wf_node_${String(instanceId || "inst").replaceAll(/[^a-zA-Z0-9_-]/g, "_")}_${String(transition || 0)}`;
-  const nodeTurnScopeId = `workflow-node:${nodeDialogProcessId}`;
+  const identity = nodeIdentity && typeof nodeIdentity === "object" ? nodeIdentity : null;
+  const legacyDialogProcessId = `wf_node_${String(instanceId || "inst").replaceAll(/[^a-zA-Z0-9_-]/g, "_")}_${String(transition || 0)}`;
+  const nodeDialogProcessId = String(identity?.dialogProcessId || legacyDialogProcessId).trim();
+  const nodeTurnScopeId = String(identity?.turnScopeId || `workflow-node:${nodeDialogProcessId}`).trim();
+  const nodeCommandId = String(identity?.commandId || "").trim();
+  const nodeExecutionId = String(identity?.nodeExecutionId || "").trim();
+  const workflowRunId = String(identity?.workflowRunId || instanceId || "").trim();
+  const resolvedNodeIdentity = {
+    ...(identity || {}),
+    workflowRunId,
+    nodeExecutionId,
+    commandId: nodeCommandId,
+    dialogProcessId: nodeDialogProcessId,
+    turnScopeId: nodeTurnScopeId,
+    nodeId: String(identity?.nodeId || pendingStep?.nodeId || "").trim(),
+    nodeName: String(identity?.nodeName || pendingStep?.nodeName || "").trim(),
+  };
   await emitWorkflowRuntimeEvent({
     options,
     ctx,
@@ -331,10 +347,15 @@ export async function runNodeAgent({
     event: "workflow_node_subsession_started",
     data: {
       instanceId: String(instanceId || "").trim(),
+      workflowRunId,
+      nodeExecutionId,
+      commandId: nodeCommandId,
       transition: Number(transition || 0),
       turnScopeId: nodeTurnScopeId,
-      nodeId: String(pendingStep?.nodeId || "").trim(),
-      nodeName: String(pendingStep?.nodeName || "").trim(),
+      nodeId: resolvedNodeIdentity.nodeId,
+      nodeName: resolvedNodeIdentity.nodeName,
+      dialogProcessId: nodeDialogProcessId,
+      nodeIdentity: resolvedNodeIdentity,
     },
   });
   const semanticNode = resolveSemanticNodeForPendingStep({ semantic, pendingStep }) || {};
@@ -347,6 +368,8 @@ export async function runNodeAgent({
     ...ctx,
     workflow: {
       instanceId,
+      workflowRunId,
+      nodeIdentity: resolvedNodeIdentity,
       pendingStep,
       transition,
       semantic,
@@ -405,10 +428,16 @@ export async function runNodeAgent({
       ? { streaming: parentRunConfig.streaming }
       : {};
     const turnScopePatch = { turnScopeId: nodeTurnScopeId };
+    const workflowIdentityRunConfigPatch = {
+      workflowRunId,
+      workflowNodeExecutionId: nodeExecutionId,
+      workflowNodeCommandId: nodeCommandId,
+    };
     const subSessionRunConfigPatch = parentHarnessEnabled
       ? {
           ...streamingPatch,
           ...turnScopePatch,
+          ...workflowIdentityRunConfigPatch,
           selectedPlugins: Array.from(new Set([...parentSelectedPlugins, "harness"])),
           plugins: {
             harness: {
@@ -421,6 +450,7 @@ export async function runNodeAgent({
       : {
           ...streamingPatch,
           ...turnScopePatch,
+          ...workflowIdentityRunConfigPatch,
         };
     const relativeDir = buildWorkflowDialogRelativeDir({
       ctx,
@@ -432,8 +462,7 @@ export async function runNodeAgent({
       const nodeAgentTimeoutMs = Number.isFinite(Number(options?.nodeAgentTimeoutMs))
         ? Math.max(1000, Math.floor(Number(options.nodeAgentTimeoutMs)))
         : WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_NODE_AGENT_TIMEOUT_MS;
-      subSession = await withTimeout(
-        options.subSessionRunner({
+      const subSessionRunPromise = Promise.resolve(options.subSessionRunner({
           parentContext: ctx,
           abortSignal: resolveWorkflowAbortSignal(ctx),
           message: hookPayload.agentInstruction,
@@ -449,14 +478,19 @@ export async function runNodeAgent({
             parentDialogProcessId: String(ctx?.dialogProcessId || "").trim(),
             dialogProcessId: nodeDialogProcessId,
             turnScopeId: nodeTurnScopeId,
+            commandId: nodeCommandId,
             disabledPlugins: ["workflow"],
             relativeDir,
           },
           metadata: {
             scope: "workflow_node",
             instanceId: String(instanceId || "").trim(),
-            nodeId: String(pendingStep?.nodeId || "").trim(),
-            nodeName: String(pendingStep?.nodeName || "").trim(),
+            workflowRunId,
+            nodeExecutionId,
+            commandId: nodeCommandId,
+            dialogProcessId: nodeDialogProcessId,
+            nodeId: resolvedNodeIdentity.nodeId,
+            nodeName: resolvedNodeIdentity.nodeName,
             transition: Number(transition || 0),
             turnScopeId: nodeTurnScopeId,
             workflowSessionId: String(ctx?.sessionId || "").trim(),
@@ -467,11 +501,24 @@ export async function runNodeAgent({
             inputAttachments: nodeInputAttachments,
             upstreamWorkflowNodeResults: upstreamNodeResults,
           },
-        }),
-        nodeAgentTimeoutMs,
-        `workflow node sub-session timeout (${nodeAgentTimeoutMs}ms)`,
-        { signal: resolveWorkflowAbortSignal(ctx) },
-      );
+        }));
+      try {
+        subSession = await withTimeout(
+          subSessionRunPromise,
+          nodeAgentTimeoutMs,
+          `workflow node sub-session timeout (${nodeAgentTimeoutMs}ms)`,
+          { signal: resolveWorkflowAbortSignal(ctx) },
+        );
+      } catch (error) {
+        // withTimeout rejects as soon as the parent signal fires.  The detached
+        // session receives that same signal, but still needs time to unwind its
+        // agent turn and commit the complete stopped lifecycle.  Do not let the
+        // workflow planner finish before that cleanup has settled.
+        if (isWorkflowAbortError(error, ctx)) {
+          await Promise.allSettled([subSessionRunPromise]);
+        }
+        throw error;
+      }
       throwIfWorkflowAborted(ctx);
       await emitWorkflowRuntimeEvent({
         options,
@@ -480,8 +527,19 @@ export async function runNodeAgent({
         event: "workflow_node_subsession_succeeded",
         data: {
           instanceId: String(instanceId || "").trim(),
+          workflowRunId,
+          nodeExecutionId,
+          commandId: nodeCommandId,
+          dialogProcessId: nodeDialogProcessId,
+          turnScopeId: nodeTurnScopeId,
+          nodeId: resolvedNodeIdentity.nodeId,
+          nodeName: resolvedNodeIdentity.nodeName,
           nodeSessionId: String(subSession?.sessionId || "").trim(),
           persistedDir: String(subSession?.persisted?.outputDir || "").trim(),
+          nodeIdentity: {
+            ...resolvedNodeIdentity,
+            sessionId: String(subSession?.sessionId || "").trim(),
+          },
         },
       });
     } catch (error) {
@@ -502,8 +560,15 @@ export async function runNodeAgent({
         level: "error",
         data: {
           instanceId: String(instanceId || "").trim(),
-          nodeId: String(pendingStep?.nodeId || "").trim(),
+          workflowRunId,
+          nodeExecutionId,
+          commandId: nodeCommandId,
+          dialogProcessId: nodeDialogProcessId,
+          turnScopeId: nodeTurnScopeId,
+          nodeId: resolvedNodeIdentity.nodeId,
+          nodeName: resolvedNodeIdentity.nodeName,
           message: failureMessage,
+          nodeIdentity: resolvedNodeIdentity,
         },
       });
       subSession = null;
@@ -516,6 +581,10 @@ export async function runNodeAgent({
         subSession,
         pendingStep,
         transition,
+        nodeIdentity: {
+          ...resolvedNodeIdentity,
+          sessionId: String(subSession?.sessionId || "").trim(),
+        },
       });
     }
   }
@@ -529,6 +598,7 @@ export async function runNodeAgent({
       },
       subSession,
       nodeDialogProcessId,
+      nodeIdentity: resolvedNodeIdentity,
       stepStatus: "failed",
       stepFailure: subSessionFailure,
     };
@@ -541,6 +611,10 @@ export async function runNodeAgent({
         action: directAction,
         subSession,
         nodeDialogProcessId,
+        nodeIdentity: {
+          ...resolvedNodeIdentity,
+          sessionId: String(subSession?.sessionId || "").trim(),
+        },
       };
     }
   }
@@ -555,6 +629,10 @@ export async function runNodeAgent({
         action,
         subSession,
         nodeDialogProcessId,
+        nodeIdentity: {
+          ...resolvedNodeIdentity,
+          sessionId: String(subSession?.sessionId || "").trim(),
+        },
       };
     }
   }
@@ -562,6 +640,10 @@ export async function runNodeAgent({
     action: { type: WORKFLOW_ACTION.SUBMIT, stepIndex: Number(pendingStep?.index || 0) },
     subSession,
     nodeDialogProcessId,
+    nodeIdentity: {
+      ...resolvedNodeIdentity,
+      sessionId: String(subSession?.sessionId || "").trim(),
+    },
   };
 }
 

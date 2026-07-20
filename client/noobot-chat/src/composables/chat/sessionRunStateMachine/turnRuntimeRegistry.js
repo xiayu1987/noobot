@@ -10,9 +10,10 @@ import {
   validateTurnLifecycleEnvelope,
   validateTurnLifecycleSnapshot,
 } from "@noobot/shared/turn-lifecycle-protocol";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 export const DEFAULT_TERMINAL_RETAIN_PER_SESSION = 10;
-export const DEFAULT_TERMINAL_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+export const DEFAULT_TERMINAL_MAX_AGE_MS = TIME_THRESHOLDS.client.terminalTurnRetentionMs;
 
 function text(value) {
   return String(value || "").trim();

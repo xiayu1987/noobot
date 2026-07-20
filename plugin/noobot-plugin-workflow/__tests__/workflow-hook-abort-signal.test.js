@@ -101,3 +101,66 @@ test("workflow hook aborts node sub-session when parent stop signal fires", asyn
   assert.equal(receivedAbortSignal, abortController.signal);
 });
 
+test("workflow waits for every parallel node sub-session to stop before planner rejects", async () => {
+  const hookManager = createMockBotHookManager();
+  const registerWorkflowHooks = createRegisterWorkflowHooks();
+  const abortController = new AbortController();
+  const settledNodes = [];
+  let startedNodes = 0;
+
+  registerWorkflowHooks({
+    hookManager,
+    options: {
+      enabled: true,
+      mode: "on",
+      semanticModel: "semantic-model",
+      semanticPrompt: "emit parallel workflow dsl",
+      parallelNodeExecution: true,
+      maxParallelNodeAgents: 2,
+      capabilityModelInvoker: async () => ({
+        output: [
+          "WORKFLOW_DSL/1",
+          'NODE id=start type=state stateType=start name="开始"',
+          'NODE id=a type=action name="节点A" task="执行A"',
+          'NODE id=b type=action name="节点B" task="执行B"',
+          'NODE id=end type=state stateType=end name="结束"',
+          'EDGE from=start to=a',
+          'EDGE from=start to=b',
+          'EDGE from=a to=end',
+          'EDGE from=b to=end',
+          "END",
+        ].join("\n"),
+      }),
+      subSessionRunner: async ({ abortSignal, metadata } = {}) => {
+        startedNodes += 1;
+        if (startedNodes === 2) {
+          queueMicrotask(() => abortController.abort({ type: "user_stop", reason: "test stop" }));
+        }
+        await new Promise((resolve) => abortSignal?.addEventListener("abort", resolve, { once: true }));
+        const nodeName = String(metadata?.nodeName || "");
+        await new Promise((resolve) => setTimeout(resolve, nodeName === "节点A" ? 10 : 30));
+        settledNodes.push(nodeName);
+        const error = new Error(`aborted ${nodeName}`);
+        error.name = "AbortError";
+        throw error;
+      },
+      generatedArtifactPersister: async () => [],
+      workflowDialogPersister: async () => null,
+      workflowEventLogger: async () => null,
+    },
+  });
+
+  const beforeDispatch = getBeforeDispatch(hookManager);
+  await assert.rejects(() => beforeDispatch.handler({
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "d1",
+    userMessage: "请并行执行工作流",
+    runConfig: { locale: "zh-CN" },
+    abortSignal: abortController.signal,
+  }), (error) => error?.name === "AbortError");
+
+  assert.equal(startedNodes, 2);
+  assert.deepEqual(new Set(settledNodes), new Set(["节点A", "节点B"]));
+});
+
