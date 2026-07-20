@@ -443,10 +443,26 @@ export class SessionExecutionRunner {
         : [];
 
       let dispatchClaimed = false;
-      const claimAgentDispatch = ({ source = "agent_dispatch" } = {}) => {
+      const claimAgentDispatch = ({
+        source = "agent_dispatch",
+        executionId = "",
+        executionKind = "agent",
+        parentExecutionId = "",
+        rootExecutionId = "",
+        origin = {},
+        stage = "",
+      } = {}) => {
         if (dispatchClaimed) return false;
         dispatchClaimed = true;
-        lifecycle.enterRunning({ source: String(source || "agent_dispatch").trim() || "agent_dispatch" });
+        lifecycle.enterRunning({
+          source: String(source || "agent_dispatch").trim() || "agent_dispatch",
+          executionId: String(executionId || "").trim(),
+          executionKind: String(executionKind || "agent").trim().toLowerCase() || "agent",
+          parentExecutionId: String(parentExecutionId || "").trim(),
+          rootExecutionId: String(rootExecutionId || "").trim(),
+          origin: origin && typeof origin === "object" && !Array.isArray(origin) ? { ...origin } : {},
+          stage: String(stage || "").trim(),
+        });
         syncLifecycleRuntimeState(dispatchRuntime, lifecycle);
         return true;
       };

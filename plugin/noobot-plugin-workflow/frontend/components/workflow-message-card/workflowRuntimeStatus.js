@@ -22,16 +22,23 @@ export function createStepStatusResolver({ nodeRunByDialogProcessId }) {
       return "failed";
     }
 
-    const explicit = normalizeStatus(stepItem?.stepStatus || stepItem?.status || stepItem?._status || "");
-    if (explicit) return explicit;
+    const nodeExecutionId = String(stepItem?.nodeExecutionId || "").trim();
+    // New-protocol nodes have an authoritative Node Repository identity. Old
+    // payload status fields are only a read-only compatibility source for
+    // historical messages that do not have that identity.
+    if (!nodeExecutionId) {
+      const explicit = normalizeStatus(stepItem?.stepStatus || stepItem?.status || stepItem?._status || "");
+      if (explicit) return explicit;
+    }
 
     const dialogProcessId = resolveWorkflowDialogProcessId(stepItem);
     const runItem = dialogProcessId ? nodeRunByDialogProcessId.value.get(dialogProcessId) : null;
     if (runItem?.stepFailure) return "failed";
 
-    const runStatus = normalizeStatus(runItem?.stepStatus || runItem?.status || "");
-    if (runStatus) return runStatus;
-    if (String(stepItem?.sessionId || "").trim() || dialogProcessId) return "success";
+    if (!nodeExecutionId) {
+      const runStatus = normalizeStatus(runItem?.stepStatus || runItem?.status || "");
+      if (runStatus) return runStatus;
+    }
     return "pending";
   };
 }
@@ -47,6 +54,5 @@ export function resolveActionRuntimeStatus(actionNodeStates = [], resolveStepSta
   if (statuses.some((status) => status === "running")) return "running";
   if (statuses.some((status) => status === "failed" || status === "error")) return "failed";
   if (statuses.every((status) => status === "success")) return "success";
-  if (statuses.some((status) => status === "success")) return "success";
   return "pending";
 }

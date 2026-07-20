@@ -6,6 +6,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { useChatStore } from "../../src/shared/stores/useChatStore";
+import { applyExecutionTree } from "../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 
 function createSubSessionEvent(overrides = {}) {
   return {
@@ -146,5 +147,58 @@ describe("useChatStore sub session projection", () => {
     const store = useChatStore();
     expect(store.selectSubSessionMessages("unknown")).toBeNull();
     expect(store.selectSubSessionMessages("")).toBeNull();
+  });
+
+  it("resolves main and child Agent details through the same executionId selector", () => {
+    const store = useChatStore();
+    store.sessions.push({ id: "main-session", messages: [{ id: "main-message", content: "main" }] });
+    store.mergeSubSessionSnapshot({
+      sessionId: "child-session",
+      messages: [{ id: "child-message", content: "child" }],
+    });
+    applyExecutionTree(store.turnRuntimeRegistry, {
+      rootExecutionId: "main-execution",
+      tree: { executions: {
+        "main-execution": {
+          executionId: "main-execution", executionKind: "agent", rootExecutionId: "main-execution",
+          sessionId: "main-session", turnScopeId: "main-turn", revision: 1, sequence: 1,
+        },
+        "child-execution": {
+          executionId: "child-execution", executionKind: "agent", parentExecutionId: "main-execution",
+          rootExecutionId: "main-execution", sessionId: "child-session", turnScopeId: "child-turn",
+          revision: 1, sequence: 1,
+        },
+      } },
+    });
+
+    expect(store.selectExecutionDetail("main-execution")?.messages[0].content).toBe("main");
+    expect(store.selectExecutionDetail("child-execution")?.messages[0].content).toBe("child");
+    expect(store.selectExecutionDetail("main-execution")?.children.map((item) => item.executionId)).toEqual(["child-execution"]);
+    expect(store.selectExecutionDetail("unknown")).toBeNull();
+  });
+
+  it("returns nested descendants once and remains safe for malformed relation cycles", () => {
+    const store = useChatStore();
+    applyExecutionTree(store.turnRuntimeRegistry, {
+      rootExecutionId: "workflow",
+      tree: { executions: {
+        workflow: {
+          executionId: "workflow", executionKind: "workflow", rootExecutionId: "workflow",
+          sessionId: "workflow-session", turnScopeId: "workflow-turn", revision: 1, sequence: 1,
+        },
+        child: {
+          executionId: "child", executionKind: "agent", parentExecutionId: "workflow", rootExecutionId: "workflow",
+          sessionId: "child-session", turnScopeId: "child-turn", revision: 1, sequence: 1,
+        },
+        grandchild: {
+          executionId: "grandchild", executionKind: "agent", parentExecutionId: "child", rootExecutionId: "workflow",
+          sessionId: "grandchild-session", turnScopeId: "grandchild-turn", revision: 1, sequence: 1,
+        },
+      } },
+    });
+    // A corrupted read index must not make the UI selector loop forever.
+    store.turnRuntimeRegistry.childExecutionIdsByParentId.grandchild = ["child"];
+
+    expect(store.selectExecutionDescendants("workflow").map((item) => item.executionId)).toEqual(["child", "grandchild"]);
   });
 });

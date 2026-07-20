@@ -136,6 +136,27 @@ test("command replay is idempotent and conflicting reuse is rejected", async () 
   assert.equal(h.reload().turnLifecycle.sequence, 1);
 });
 
+test("command idempotency fingerprint includes execution ownership metadata", async () => {
+  const h = harness();
+  const input = event(TURN_EVENT.ACTION_ACCEPTED, "same-execution", 0, {
+    action: "send",
+    phase: TURN_PHASE.ACTION,
+    executionKind: "agent",
+    origin: { type: "chat" },
+  });
+  await h.service.applyTurnLifecycleEvent(input);
+  const replay = await h.service.applyTurnLifecycleEvent(input);
+  const conflict = await h.service.applyTurnLifecycleEvent({
+    ...input,
+    executionKind: "workflow",
+    origin: { type: "workflow", workflowRunId: "wf-1" },
+    stage: "planning",
+  });
+  assert.equal(replay.deduplicated, true);
+  assert.equal(conflict.reason, "idempotency_key_reused");
+  assert.equal(h.reload().turnLifecycle.turns.t1.executionKind, "agent");
+});
+
 test("session mutex, turn revision and session version conflicts do not mutate state", async () => {
   const h = harness();
   await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.ACTION_ACCEPTED, "c1", 0, { action: "send", phase: TURN_PHASE.ACTION }));

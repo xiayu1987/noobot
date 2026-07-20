@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import {
   buildUnifiedSessionDetail,
   hasNewProtocolNodeIdentity,
+  resolveNodeChildExecutionIds,
   resolveRuntimeNodeSession,
 } from "../frontend/components/workflow-message-card/workflowUnifiedSessionDetail.js";
 
@@ -37,6 +38,39 @@ function selectSessionMessages(sessionId) {
 test("detects new protocol nodes by nodeExecutionId", () => {
   assert.equal(hasNewProtocolNodeIdentity({ nodeExecutionId: "node-exec-a" }), true);
   assert.equal(hasNewProtocolNodeIdentity({ dialogProcessId: "legacy" }), false);
+});
+
+test("prefers authoritative child Execution detail and exposes its complete subtree", () => {
+  const node = {
+    nodeExecutionId: "node-exec-a",
+    activeChildExecutionId: "agent:attempt-2",
+    attemptExecutionIds: ["agent:attempt-1", "agent:attempt-2"],
+  };
+  assert.deepEqual(resolveNodeChildExecutionIds(node), ["agent:attempt-2", "agent:attempt-1"]);
+  const detail = buildUnifiedSessionDetail({
+    nodeItem: node,
+    selectExecutionDetail: (executionId) => executionId === "agent:attempt-2" ? {
+      execution: { executionId, sessionId: "child-session-a", turnScopeId: "turn-a", state: "processing" },
+      session: { sessionId: "child-session-a" },
+      messages: [{ id: "m-execution", content: "authoritative" }],
+      children: [{ executionId: "agent:grandchild" }],
+      descendants: [{ executionId: "agent:grandchild" }, { executionId: "agent:great-grandchild" }],
+    } : null,
+    selectSessionMessages: () => { throw new Error("new protocol must not infer by session"); },
+  });
+  assert.equal(detail.executionId, "agent:attempt-2");
+  assert.equal(detail.sessionId, "child-session-a");
+  assert.deepEqual(detail.messages.map(({ id }) => id), ["m-execution"]);
+  assert.deepEqual(detail.descendantExecutions.map(({ executionId }) => executionId), ["agent:grandchild", "agent:great-grandchild"]);
+});
+
+test("does not fall back to session inference when authoritative child Execution is missing", () => {
+  const detail = buildUnifiedSessionDetail({
+    nodeItem: { nodeExecutionId: "node-a", activeChildExecutionId: "agent:missing", sessionId: "legacy-session" },
+    selectExecutionDetail: () => null,
+    selectSessionMessages: () => ({ sessionId: "legacy-session", messages: [{ id: "legacy" }] }),
+  });
+  assert.equal(detail, null);
 });
 
 test("resolves runtime node by nodeExecutionId before legacy keys", () => {

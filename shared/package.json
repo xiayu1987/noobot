@@ -7,6 +7,7 @@
     "./length-thresholds": "./length-thresholds.mjs",
     "./quantity-thresholds": "./quantity-thresholds.mjs",
     "./runtime-events-config": "./runtime-events-config.mjs",
+    "./execution-lifecycle-protocol": "./execution-lifecycle-protocol.mjs",
     "./time-thresholds": "./time-thresholds.mjs",
     "./turn-lifecycle-protocol": "./turn-lifecycle-protocol.mjs",
     "./turn-thresholds": "./turn-thresholds.mjs",

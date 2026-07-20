@@ -11,24 +11,35 @@ function safeId(value = "") {
 export function resolveWorkflowRunId(ctx = {}) {
   const provided = String(
     ctx?.workflowRunId || ctx?.workflowInstanceId ||
-    ctx?.runConfig?.workflowRunId || ctx?.runConfig?.workflowInstanceId || "",
+    ctx?.runConfig?.workflowRunId || ctx?.runConfig?.workflowInstanceId ||
+    ctx?.executionId || ctx?.turnScopeId || ctx?.runConfig?.executionId ||
+    ctx?.runConfig?.turnScopeId || "",
   ).trim();
   if (provided) return provided;
   const dialog = safeId(ctx?.dialogProcessId || ctx?.turnScopeId || ctx?.sessionId || "session");
-  return `wf_run_${dialog}`;
+  // dialogProcessId/sessionId identify a conversation, not one workflow run.
+  // Reusing them as the run id lets a later turn attach to a terminal node
+  // repository snapshot from an earlier turn. Keep a generated id on the
+  // dispatch context so every call in this run observes the same identity,
+  // while separate turns remain isolated even when they share a dialog.
+  const generated = `wf_run_${dialog}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  if (ctx && typeof ctx === "object") ctx.workflowRunId = generated;
+  return generated;
 }
 
 export function createWorkflowNodeIdentity({ workflowRunId = "", node = {}, index = 0, attempt = 1 } = {}) {
   const nodeId = String(node?.id || node?.nodeId || node?.stepId || `node_${index}`).trim();
   const nodeExecutionId = `${safeId(workflowRunId || "workflow")}_${safeId(nodeId)}_${Math.max(1, Number(attempt) || 1)}`;
   const dialogProcessId = `wf_node_${nodeExecutionId}`;
+  const turnScopeId = `workflow-node:${nodeExecutionId}`;
   return {
     workflowRunId: String(workflowRunId || "").trim(),
     nodeExecutionId,
     nodeId,
     attempt: Math.max(1, Number(attempt) || 1),
     dialogProcessId,
-    turnScopeId: `workflow-node:${nodeExecutionId}`,
+    turnScopeId,
+    childExecutionId: `agent:${turnScopeId}`,
     commandId: `workflow-node:${nodeExecutionId}:send`,
   };
 }

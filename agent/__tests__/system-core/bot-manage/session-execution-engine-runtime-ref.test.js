@@ -51,7 +51,14 @@ test("detached sub-session runner inherits userInteractionBridge from parent run
   const engine = new SessionExecutionEngine({
     workspaceService: { getWorkspacePath: () => "/tmp" },
     configService: { async loadUserConfig() { return {}; } },
+    session: {
+      async upsertTurnStatus() {
+        return { upserted: true, version: 1, turnStatus: { status: "completed" } };
+      },
+      async saveCurrentTurnTasks() {},
+    },
   });
+  engine.turnPersister = { async appendAgentMessages() {} };
 
   let capturedBuildContextPayload = null;
   engine._prepareRunConfig = ({ runConfig = {} } = {}) => runConfig;

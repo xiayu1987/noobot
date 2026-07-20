@@ -25,6 +25,10 @@ export function useWorkflowMessageCardState(props, emit, translate) {
   const applyingWorkflowDrawerHistory = ref(false);
 
   const {
+    selectedExecutionId,
+    executionDirectory,
+    attemptExecutionIds,
+    selectExecution,
     workflowMeta,
     workflowPayload,
     semanticFlowtos,
@@ -96,6 +100,10 @@ export function useWorkflowMessageCardState(props, emit, translate) {
   });
 
   return {
+    selectedExecutionId,
+    executionDirectory,
+    attemptExecutionIds,
+    selectExecution,
     viewerVisible,
     viewerLoading,
     viewerError,

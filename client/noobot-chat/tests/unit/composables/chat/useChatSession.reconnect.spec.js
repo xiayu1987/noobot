@@ -239,6 +239,77 @@ describe("useChatSession reconnect replay", () => {
     }));
   });
 
+  it("restores a workflow Execution tree before its selected snapshot without double-consuming responses", async () => {
+    const store = useChatStore();
+    store.sessions = [createSessionFixture({ id: "workflow-session", backendSessionId: "workflow-session" })];
+    store.activeSessionId = "workflow-session";
+    store.turnRuntimeRegistry.sessions["workflow-session"] = {
+      activeTurnScopeId: "workflow-turn",
+      authoritativeSequence: 1,
+      protocolVersion: 1,
+      turns: {
+        "workflow-turn": {
+          sessionId: "workflow-session",
+          turnScopeId: "workflow-turn",
+          executionId: "workflow-root",
+          state: FrontendRunState.PROCESSING,
+        },
+      },
+    };
+    store.turnRuntimeRegistry.executionIdByTurnScopeId["workflow-turn"] = "workflow-root";
+    store.turnRuntimeRegistry.executions["workflow-root"] = {
+      executionId: "workflow-root",
+      executionKind: "workflow",
+      rootExecutionId: "workflow-root",
+      sessionId: "workflow-session",
+      turnScopeId: "workflow-turn",
+      revision: 1,
+      sequence: 1,
+      state: "processing",
+    };
+
+    const child = {
+      executionId: "child-agent",
+      executionKind: "agent",
+      parentExecutionId: "workflow-root",
+      rootExecutionId: "workflow-root",
+      sessionId: "child-session",
+      parentSessionId: "workflow-session",
+      turnScopeId: "child-turn",
+      revision: 2,
+      sequence: 2,
+      state: "processing",
+    };
+    const requestOrder = [];
+    wsClientMock.requestJson.mockImplementation(async (payload) => {
+      requestOrder.push(payload.action);
+      if (payload.action === "execution.tree.get") {
+        return {
+          event: StreamEventEnum.EXECUTION_TREE,
+          data: {
+            commandId: payload.commandId,
+            rootExecutionId: "workflow-root",
+            tree: { executions: { "workflow-root": store.turnRuntimeRegistry.executions["workflow-root"], "child-agent": child } },
+          },
+        };
+      }
+      return {
+        event: StreamEventEnum.EXECUTION_SNAPSHOT,
+        data: { commandId: payload.commandId, execution: { ...store.turnRuntimeRegistry.executions["workflow-root"], revision: 2, sequence: 3 } },
+      };
+    });
+    const authFetch = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true, exists: true, messages: [] }) }));
+    const session = createChatSession({ authFetch });
+
+    await session.handleReconnect();
+
+    expect(requestOrder).toEqual(["execution.tree.get", "execution.snapshot.get"]);
+    expect(store.turnRuntimeRegistry.executions["child-agent"]).toMatchObject(child);
+    expect(store.turnRuntimeRegistry.childExecutionIdsByParentId["workflow-root"]).toEqual(["child-agent"]);
+    expect(store.turnRuntimeRegistry.executions["workflow-root"]).toMatchObject({ revision: 2, sequence: 3 });
+    expect(authFetch).toHaveBeenCalledWith("/api/internal/session/u-1/workflow-session?mode=full");
+  });
+
   it.each([
     ["手机端发消息，PC 端刷新", "mobile-sender", "pc-refresh"],
     ["PC 端发消息，手机端刷新", "pc-sender", "mobile-refresh"],

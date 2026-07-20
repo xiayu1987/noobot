@@ -161,6 +161,45 @@ test("before-dispatch takeover can claim root processing before the hook complet
   assert.equal(lifecycleStates.filter((item) => item.state === "running").length, 1);
 });
 
+test("before-dispatch takeover publishes immutable execution ownership metadata once", async () => {
+  const botHookManager = createBotHookManager();
+  const lifecycleStates = [];
+  botHookManager.on(BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH, async (ctx = {}) => {
+    assert.equal(ctx.claimAgentDispatch({
+      source: "workflow_takeover",
+      executionKind: "workflow",
+      origin: { type: "workflow", workflowRunId: "wf-1" },
+      stage: "planning",
+    }), true);
+    assert.equal(ctx.claimAgentDispatch({
+      source: "conflicting_takeover",
+      executionKind: "agent",
+      origin: { type: "chat" },
+    }), false);
+    ctx.skipAgentDispatch = true;
+    ctx.overrideAgentResult = { output: "hook result", traces: [], turnMessages: [] };
+  });
+  const runner = createRunner({ botHookManager });
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "hello",
+    runConfig: {},
+    eventListener: {
+      onEvent(event = {}) {
+        if (event.event === "agent_lifecycle_state_changed" && event.data?.state === "running") {
+          lifecycleStates.push(event.data);
+        }
+      },
+    },
+  });
+
+  assert.equal(lifecycleStates.length, 1);
+  assert.equal(lifecycleStates[0].executionKind, "workflow");
+  assert.equal(lifecycleStates[0].stage, "planning");
+  assert.deepEqual(lifecycleStates[0].origin, { type: "workflow", workflowRunId: "wf-1" });
+});
+
 test("SessionExecutionRunner passes prepared turnScopeId into context building", async () => {
   let capturedRunConfig = null;
   let appendedTurnScopeId = null;

@@ -48,6 +48,7 @@ const props = defineProps({
   sending: { type: Boolean, default: false },
   deleteMonotonicMessage: { type: Function, default: null },
   resendMonotonicMessage: { type: Function, default: null },
+  stopExecution: { type: Function, default: null },
   attachmentPreviewDialogClass: {
     type: String,
     default: "attachment-preview-dialog",
@@ -191,6 +192,8 @@ function resolveRendererContext() {
     turnStatuses: props.turnStatuses,
     workflowNodeStateRegistry: chatStore.workflowNodeStateRegistry,
     turnRuntimeRegistry: chatStore.turnRuntimeRegistry,
+    selectExecutionDetail: chatStore.selectExecutionDetail,
+    stopExecution: props.stopExecution,
     selectSessionMessages,
     mergeSubSessionSnapshot: chatStore.mergeSubSessionSnapshot,
     userId: props.userId,

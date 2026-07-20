@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createHarness, activateRuntimeTurn } from "./helpers/useChatEngineHarness";
 import { BackendChannelState, FrontendRunState } from "../../../../src/composables/chat/sessionRunStateMachine";
 import { RoleEnum } from "../../../../src/shared/constants/chatConstants";
+import { applyExecutionSnapshot } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 
 describe("useChatEngine.interaction-stop: stop-request", () => {
   it("send enables stop while stream is active", async () => {
@@ -185,5 +186,62 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
       stopState: "user_stopped",
       monotonicState: "monotonic",
     });
+  });
+
+  it("stopSending targets a child Agent by executionId with authoritative identity and revision", () => {
+    const { engine, deps, turnRuntimeRegistry } = createHarness({ sessionId: "main-session" });
+    applyExecutionSnapshot(turnRuntimeRegistry.value, {
+      executionId: "child-execution",
+      executionKind: "agent",
+      parentExecutionId: "workflow-execution",
+      rootExecutionId: "workflow-execution",
+      sessionId: "child-session",
+      parentSessionId: "main-session",
+      dialogProcessId: "child-dialog",
+      turnScopeId: "child-turn",
+      state: "processing",
+      terminal: false,
+      revision: 7,
+      sequence: 9,
+      capabilities: { canStop: true },
+    });
+    deps.chatWebSocketClient.requestStop.mockReturnValue(true);
+
+    expect(engine.stopSending("child-execution")).toBe(true);
+    expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledWith(
+      expect.objectContaining({
+        executionId: "child-execution",
+        expectedRevision: 7,
+        sessionId: "child-session",
+        parentSessionId: "main-session",
+        dialogProcessId: "child-dialog",
+        turnScopeId: "child-turn",
+      }),
+      expect.any(Function),
+    );
+  });
+
+  it("stopSending rejects unknown, terminal, and non-stoppable executions", () => {
+    const { engine, deps, turnRuntimeRegistry } = createHarness({ sessionId: "main-session" });
+    const add = (executionId, overrides = {}) => applyExecutionSnapshot(turnRuntimeRegistry.value, {
+      executionId,
+      executionKind: "agent",
+      rootExecutionId: executionId,
+      sessionId: `${executionId}-session`,
+      turnScopeId: `${executionId}-turn`,
+      state: "processing",
+      terminal: false,
+      revision: 1,
+      sequence: 1,
+      capabilities: { canStop: true },
+      ...overrides,
+    });
+    add("terminal-execution", { state: "completed", terminal: true });
+    add("locked-execution", { capabilities: { canStop: false } });
+
+    expect(engine.stopSending("missing-execution")).toBe(false);
+    expect(engine.stopSending("terminal-execution")).toBe(false);
+    expect(engine.stopSending("locked-execution")).toBe(false);
+    expect(deps.chatWebSocketClient.requestStop).not.toHaveBeenCalled();
   });
 });

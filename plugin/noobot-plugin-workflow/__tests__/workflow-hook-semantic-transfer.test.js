@@ -59,6 +59,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
       subSessionRunner: async (payload = {}) => {
         subSessionCalls.push(payload);
         return {
+          lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
           sessionId: "wf-node-session-1",
           dialogProcessId: "wf_node_dialog_1",
           persisted: { outputDir: "/tmp/noobot/workflow/s1/node1" },
@@ -193,8 +194,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   assert.equal(agentResult.workflow.nodeSessions.length, 1);
   assert.equal(agentResult.workflow.nodeSessions[0]?.rootSessionId, "s1");
   assert.equal(agentResult.workflow.nodeSessions[0]?.sessionId, "wf-node-session-1");
-  assert.equal(agentResult.workflow.nodeSessions[0]?.stepStatus, "success");
-  assert.equal(agentResult.workflow?.execution?.nodeAgentRuns?.[0]?.stepStatus, "success");
+  assert.equal(agentResult.workflow?.execution?.nodeAgentRuns?.[0]?.stepStatus, undefined);
   assert.equal(agentResult.workflow?.attachments, undefined);
   assert.equal(agentResult.workflow.nodeSessions[0]?.attachments, undefined);
 
@@ -215,11 +215,11 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   );
   assert.equal(
     workflowTurnMessage?.pluginMeta?.payload?.execution?.nodeAgentRuns?.[0]?.stepStatus,
-    "success",
+    undefined,
   );
   assert.equal(
     workflowTurnMessage?.pluginMeta?.payload?.nodeSessions?.[0]?.stepStatus,
-    "success",
+    undefined,
   );
   const hasPayloadBuiltEvent = eventLogCalls.some(
     (item) => String(item?.event?.event || "").trim() === "workflow_payload_build_succeeded",
@@ -276,7 +276,8 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
           "END",
         ].join("\n"),
       }),
-      subSessionRunner: async () => ({
+      subSessionRunner: async (payload = {}) => ({
+        lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
         sessionId: "wf-semantic-node-session-1",
         dialogProcessId: "wf_semantic_node_dialog_1",
         result: {
@@ -358,7 +359,8 @@ test("workflow hook routes final attachment summary composition through semantic
           "END",
         ].join("\n"),
       }),
-      subSessionRunner: async () => ({
+      subSessionRunner: async (payload = {}) => ({
+        lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
         sessionId: "wf-summary-node-session-1",
         dialogProcessId: "wf_summary_node_dialog_1",
         result: {

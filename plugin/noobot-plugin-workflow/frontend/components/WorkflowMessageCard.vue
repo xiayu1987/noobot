@@ -19,6 +19,8 @@ const props = defineProps({
   isImageMime: { type: Function, default: (mimeType = "") => String(mimeType || "").startsWith("image/") },
   workflowNodeStateRegistry: { type: Object, default: null },
   turnRuntimeRegistry: { type: Object, default: null },
+  selectExecutionDetail: { type: Function, default: null },
+  stopExecution: { type: Function, default: null },
   selectSessionMessages: { type: Function, default: null },
   mergeSubSessionSnapshot: { type: Function, default: null },
 });
@@ -26,6 +28,10 @@ const emit = defineEmits(["open-thinking-details"]);
 const { translate } = useWorkflowLocale();
 
 const {
+  selectedExecutionId,
+  executionDirectory,
+  attemptExecutionIds,
+  selectExecution,
   viewerVisible,
   viewerLoading,
   viewerError,
@@ -78,6 +84,10 @@ const {
     :viewer-loading="viewerLoading"
     :viewer-error="viewerError"
     :selected-node-session-id="selectedNodeSessionId"
+    :selected-execution-id="selectedExecutionId"
+    :execution-directory="executionDirectory"
+    :attempt-execution-ids="attemptExecutionIds"
+    :stop-execution="stopExecution"
     :selected-runtime-node="selectedRuntimeNode"
     :selected-runtime-boxes="selectedRuntimeBoxes"
     :selected-graph-dialog-process-id="selectedGraphDialogProcessId"
@@ -98,6 +108,7 @@ const {
     :resolve-status-label="resolveStatusLabel"
     :step-has-session="stepHasSession"
     @runtime-step-click="handleRuntimeStepClick"
+    @execution-select="selectExecution"
     @open-thinking-details="handleOpenThinkingDetails"
   />
 </template>

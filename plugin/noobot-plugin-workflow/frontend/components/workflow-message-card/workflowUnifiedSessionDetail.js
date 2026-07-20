@@ -49,7 +49,17 @@ function resolveTurnRuntimeByScope(registry = {}, turnScopeId = "", { sessionId 
 }
 
 export function hasNewProtocolNodeIdentity(nodeItem = {}) {
-  return Boolean(text(nodeItem?.nodeExecutionId));
+  return Boolean(text(nodeItem?.activeChildExecutionId || nodeItem?.childExecutionId || nodeItem?.nodeExecutionId));
+}
+
+export function resolveNodeChildExecutionIds(nodeItem = {}, runtimeNodeSessions = []) {
+  const runtimeNode = resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions);
+  const current = text(runtimeNode?.activeChildExecutionId || runtimeNode?.childExecutionId || nodeItem?.activeChildExecutionId || nodeItem?.childExecutionId);
+  const attempts = [
+    ...(Array.isArray(runtimeNode?.attemptExecutionIds) ? runtimeNode.attemptExecutionIds : []),
+    ...(Array.isArray(nodeItem?.attemptExecutionIds) ? nodeItem.attemptExecutionIds : []),
+  ].map(text).filter(Boolean);
+  return Array.from(new Set([current, ...attempts].filter(Boolean)));
 }
 
 export function resolveRuntimeNodeSession(nodeItem = {}, runtimeNodeSessions = []) {
@@ -68,10 +78,42 @@ export function buildUnifiedSessionDetail({
   nodeItem = {},
   runtimeNodeSessions = [],
   selectSessionMessages = null,
+  selectExecutionDetail = null,
   turnRuntimeRegistry = null,
   allowEmptyMessages = false,
 } = {}) {
   const runtimeNode = resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions);
+  const childExecutionIds = resolveNodeChildExecutionIds(nodeItem, runtimeNodeSessions);
+  if (childExecutionIds.length && typeof selectExecutionDetail === "function") {
+    const executionDetail = selectExecutionDetail(childExecutionIds[0]);
+    if (!executionDetail) return null;
+    const execution = executionDetail.execution || {};
+    const sessionDoc = executionDetail.session || {};
+    const messages = Array.isArray(executionDetail.messages) ? executionDetail.messages : [];
+    if (!messages.length && !execution && !allowEmptyMessages) return null;
+    return {
+      executionId: text(execution.executionId || childExecutionIds[0]),
+      execution,
+      childExecutions: Array.isArray(executionDetail.children) ? executionDetail.children : [],
+      descendantExecutions: Array.isArray(executionDetail.descendants) ? executionDetail.descendants : [],
+      attemptExecutionIds: childExecutionIds,
+      sessionId: text(execution.sessionId || sessionDoc.sessionId || sessionDoc.id),
+      messages,
+      rawMessages: messages,
+      sessionSummary: {
+        ...sessionDoc,
+        sessionId: text(execution.sessionId || sessionDoc.sessionId || sessionDoc.id),
+        executionId: text(execution.executionId || childExecutionIds[0]),
+        turnScopeId: text(execution.turnScopeId),
+        dialogProcessId: text(execution.dialogProcessId),
+        turnRuntime: execution,
+        messages,
+      },
+    };
+  }
+  // New protocol nodes are authoritative by child Execution identity. Never
+  // fall back to session/dialog inference when that identity is present.
+  if (childExecutionIds.length) return null;
   const sessionId = text(runtimeNode?.sessionId || runtimeNode?.nodeSessionId || nodeItem?.sessionId || nodeItem?.nodeSessionId);
   if (!sessionId || typeof selectSessionMessages !== "function") return null;
   const sessionDoc = selectSessionMessages(sessionId);

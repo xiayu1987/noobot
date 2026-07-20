@@ -56,7 +56,8 @@ test("workflow semantic planning passes conversation context before current user
           ].join("\n"),
         };
       },
-      subSessionRunner: async () => ({
+      subSessionRunner: async (payload = {}) => ({
+        lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
         sessionId: "wf-node-session-context",
         dialogProcessId: "wf_node_dialog_context",
         result: { answer: "done", messages: [{ role: "assistant", content: "done" }] },
@@ -124,7 +125,8 @@ test("workflow semantic planning falls back to messageBlocks context when ctx.me
           ].join("\n"),
         };
       },
-      subSessionRunner: async () => ({
+      subSessionRunner: async (payload = {}) => ({
+        lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
         sessionId: "wf-node-session-context-blocks",
         dialogProcessId: "wf_node_dialog_context_blocks",
         result: { answer: "done", messages: [{ role: "assistant", content: "done" }] },
@@ -193,7 +195,8 @@ test("workflow semantic planning includes current available tools like harness p
           ].join("\n"),
         };
       },
-      subSessionRunner: async () => ({
+      subSessionRunner: async (payload = {}) => ({
+        lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
         sessionId: "wf-node-session-tools",
         dialogProcessId: "wf_node_dialog_tools",
         result: { answer: "done", messages: [{ role: "assistant", content: "done" }] },
@@ -266,7 +269,8 @@ test("workflow semantic planning reads available tools from runtimeAgentContext"
           ].join("\n"),
         };
       },
-      subSessionRunner: async () => ({
+      subSessionRunner: async (payload = {}) => ({
+        lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
         sessionId: "wf-node-session-runtime-tools",
         dialogProcessId: "wf_node_dialog_runtime_tools",
         result: { answer: "done", messages: [{ role: "assistant", content: "done" }] },
@@ -335,7 +339,8 @@ test("workflow semantic planning falls back to runtimeAgentContext history when 
           ].join("\n"),
         };
       },
-      subSessionRunner: async () => ({
+      subSessionRunner: async (payload = {}) => ({
+        lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
         sessionId: "wf-node-session-runtime-history",
         dialogProcessId: "wf_node_dialog_runtime_history",
         result: { answer: "done", messages: [{ role: "assistant", content: "done" }] },

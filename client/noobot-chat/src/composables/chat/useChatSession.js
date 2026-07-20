@@ -66,6 +66,9 @@ import { setStopContinueDebugLogSink } from "./debug/stopContinueDebugLogger";
 import { setReconnectTimingDebugLogSink } from "./debug/reconnectTimingDebugLogger";
 import {
   applyTurnRuntimeEvent,
+  applyExecutionChildren,
+  applyExecutionSnapshot,
+  applyExecutionTree,
   hydrateSessionTurnRuntime,
   pruneTerminalTurns,
   resolveSessionTurnRuntime,
@@ -524,6 +527,9 @@ export function useChatSession({
     sessionLogWebSocketClient,
     notify,
     processStore,
+    applyExecutionSnapshot: (payload) => applyExecutionSnapshot(turnRuntimeRegistry.value, payload),
+    applyExecutionChildren: (payload) => applyExecutionChildren(turnRuntimeRegistry.value, payload),
+    applyExecutionTree: (payload) => applyExecutionTree(turnRuntimeRegistry.value, payload),
     applyTurnRuntimeEvents: (events = []) => {
       const sourceEvents = Array.isArray(events) ? events : [];
       for (const event of sourceEvents) {
@@ -627,7 +633,11 @@ export function useChatSession({
   }
 
   function stopSendingWithComposerActionState(...args) {
-    if (!composerActionState.value.canStop) return false;
+    // An explicit Execution target owns its own authoritative capabilities.
+    // The composer state only describes the currently opened root turn and
+    // must not block stopping a child/workflow execution in another channel.
+    const explicitExecutionId = String(args[0] || "").trim();
+    if (!explicitExecutionId && !composerActionState.value.canStop) return false;
     // chatEngine.stopSending atomically records LOCAL_USER_STOP_REQUEST_STARTED
     // after it has resolved the active assistant identity. Dispatching it here
     // first would turn canStop off and make the engine reject its own request.
@@ -637,6 +647,7 @@ export function useChatSession({
 
   async function handleReconnect() {
     const pendingReconnectReplays = [];
+    const directExecutionRestoreCommandIds = new Set();
     const trackReconnectReplay = (replayPromise) => {
       pendingReconnectReplays.push(Promise.resolve(replayPromise));
     };
@@ -648,12 +659,56 @@ export function useChatSession({
           trackReconnectReplay(reconnectReplay.applyReconnectData(reconnectPayload));
         }
         if (reconnectPayload?.event && reconnectPayload?.data) {
+          if (directExecutionRestoreCommandIds.has(String(reconnectPayload.data?.commandId || "").trim())) {
+            return;
+          }
           trackReconnectReplay(
             reconnectReplay.applyReconnectEvent(reconnectPayload.event, reconnectPayload.data),
           );
         }
       },
-    }).then(() => Promise.all(pendingReconnectReplays)).catch((error) => {
+    }).then(async () => {
+      await Promise.all(pendingReconnectReplays);
+      if (typeof chatWebSocketClient.requestJson !== "function") return;
+      const sessionId = String(activeSession.value?.backendSessionId || activeSessionId.value || "").trim();
+      const currentTurn = resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionId);
+      const executionId = String(
+        turnRuntimeRegistry.value?.executionIdByTurnScopeId?.[currentTurn?.turnScopeId] ||
+        currentTurn?.executionId ||
+        "",
+      ).trim();
+      if (!executionId) return;
+      const execution = turnRuntimeRegistry.value?.executions?.[executionId] || {};
+      const rootExecutionId = String(execution?.rootExecutionId || executionId).trim();
+      const requestExecution = async (action, payload, expectedEvent) => {
+        const commandId = `reconnect:${action}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+        directExecutionRestoreCommandIds.add(commandId);
+        try {
+          const response = await chatWebSocketClient.requestJson({
+            action,
+            commandId,
+            userId: String(userId?.value || userId || "").trim(),
+            ...payload,
+          }, { expectedEvents: [expectedEvent] });
+          await reconnectReplay.applyReconnectEvent(response?.event, response?.data || {});
+        } finally {
+          directExecutionRestoreCommandIds.delete(commandId);
+        }
+      };
+      try {
+        await requestExecution("execution.tree.get", { rootExecutionId }, StreamEventEnum.EXECUTION_TREE);
+        await requestExecution("execution.snapshot.get", { executionId }, StreamEventEnum.EXECUTION_SNAPSHOT);
+        if (typeof chatList.fetchSessionFullDetail === "function") {
+          await chatList.fetchSessionFullDetail(sessionId);
+        }
+      } catch (error) {
+        logSessionSystemEvent("reconnect.execution_restore_failed", {
+          executionId,
+          rootExecutionId,
+          error: String(error?.message || error || ""),
+        });
+      }
+    }).catch((error) => {
       logSessionSystemEvent("reconnect.failed", {
         error: String(error?.message || error || ""),
       });

@@ -74,6 +74,7 @@ test("workflow hook injects upstream node result attachments into downstream sub
         subSessionCalls.push(payload);
         const nodeName = String(payload?.metadata?.nodeName || payload?.message || "").trim();
         return {
+          lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
           sessionId: `session-${nodeName}`,
           dialogProcessId: `dialog-${nodeName}`,
           result: {
@@ -220,6 +221,7 @@ test("workflow hook injects one upstream action attachments into multiple direct
         subSessionCalls.push(payload);
         const nodeName = String(payload?.metadata?.nodeName || payload?.message || "").trim();
         return {
+          lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
           sessionId: `session-${nodeName}`,
           dialogProcessId: `dialog-${nodeName}`,
           result: {

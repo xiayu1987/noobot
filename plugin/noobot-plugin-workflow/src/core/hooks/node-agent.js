@@ -330,6 +330,13 @@ export async function runNodeAgent({
   const nodeCommandId = String(identity?.commandId || "").trim();
   const nodeExecutionId = String(identity?.nodeExecutionId || "").trim();
   const workflowRunId = String(identity?.workflowRunId || instanceId || "").trim();
+  const childExecutionId = String(identity?.childExecutionId || `agent:${nodeTurnScopeId}`).trim();
+  const workflowExecutionId = String(
+    identity?.workflowExecutionId ||
+      ctx?.executionId ||
+      ctx?.runConfig?.executionId ||
+      `workflow:${workflowRunId}`,
+  ).trim();
   const resolvedNodeIdentity = {
     ...(identity || {}),
     workflowRunId,
@@ -337,6 +344,8 @@ export async function runNodeAgent({
     commandId: nodeCommandId,
     dialogProcessId: nodeDialogProcessId,
     turnScopeId: nodeTurnScopeId,
+    childExecutionId,
+    workflowExecutionId,
     nodeId: String(identity?.nodeId || pendingStep?.nodeId || "").trim(),
     nodeName: String(identity?.nodeName || pendingStep?.nodeName || "").trim(),
   };
@@ -479,6 +488,9 @@ export async function runNodeAgent({
             dialogProcessId: nodeDialogProcessId,
             turnScopeId: nodeTurnScopeId,
             commandId: nodeCommandId,
+            executionId: childExecutionId,
+            parentExecutionId: workflowExecutionId,
+            rootExecutionId: String(ctx?.rootExecutionId || workflowExecutionId).trim(),
             disabledPlugins: ["workflow"],
             relativeDir,
           },
@@ -486,6 +498,14 @@ export async function runNodeAgent({
             scope: "workflow_node",
             instanceId: String(instanceId || "").trim(),
             workflowRunId,
+            executionId: childExecutionId,
+            parentExecutionId: workflowExecutionId,
+            rootExecutionId: String(ctx?.rootExecutionId || workflowExecutionId).trim(),
+            origin: {
+              type: "workflow_node",
+              workflowRunId,
+              workflowNodeExecutionId: nodeExecutionId,
+            },
             nodeExecutionId,
             commandId: nodeCommandId,
             dialogProcessId: nodeDialogProcessId,
@@ -552,6 +572,9 @@ export async function runNodeAgent({
         code: String(error?.code || "WORKFLOW_NODE_SUBSESSION_FAILED").trim(),
         message: failureMessage,
       };
+      if (error?.lifecycle && typeof error.lifecycle === "object") {
+        subSession = { lifecycle: error.lifecycle };
+      }
       await emitWorkflowRuntimeEvent({
         options,
         ctx,
@@ -571,7 +594,7 @@ export async function runNodeAgent({
           nodeIdentity: resolvedNodeIdentity,
         },
       });
-      subSession = null;
+      if (!subSession) subSession = null;
     }
     if (subSession) {
       throwIfWorkflowAborted(ctx);

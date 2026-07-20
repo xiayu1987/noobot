@@ -180,7 +180,7 @@ export function useChatEngine({
     });
   }
 
-  function stopSending() {
+  function stopSending(executionId = "") {
     return requestStopSending({
       userId,
       activeSession,
@@ -188,6 +188,7 @@ export function useChatEngine({
       chatWebSocketClient,
       onStopConfirmationTimeout,
       applyRunStateEvent,
+      executionId,
     });
   }
 

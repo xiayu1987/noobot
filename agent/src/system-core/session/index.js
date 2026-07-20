@@ -18,6 +18,7 @@ import { FileSystemExecutionRepository } from "./repositories/file-system-execut
 import { SessionTreeService } from "./services/session-tree-service.js";
 import { SessionCrudService } from "./services/session-crud-service.js";
 import { SessionMessageService } from "./services/session-message-service.js";
+import { ExecutionReadService } from "./services/execution-read-service.js";
 import { SessionContextService } from "./services/session-context-service.js";
 import { TaskService } from "./services/task-service.js";
 import { ExecutionLogRepository } from "../tracking/execution-log/execution-log-repository.js";
@@ -111,6 +112,11 @@ export function createSessionServices(globalConfig = {}, { now = null } = {}) {
     now: nowFn,
   });
 
+  const executionReadService = new ExecutionReadService({
+    sessionCrudService,
+    now: nowFn,
+  });
+
   const sessionContextService = new SessionContextService({
     globalConfig,
     sessionMessageService,
@@ -134,6 +140,7 @@ export function createSessionServices(globalConfig = {}, { now = null } = {}) {
     sessionTreeService,
     sessionCrudService,
     sessionMessageService,
+    executionReadService,
     sessionContextService,
     taskService,
     executionLogService,
@@ -148,6 +155,7 @@ export function createSessionServices(globalConfig = {}, { now = null } = {}) {
       sessionTreeService,
       sessionCrudService,
       sessionMessageService,
+      executionReadService,
       sessionContextService,
       taskService,
       executionLogService,
@@ -161,6 +169,7 @@ export function createSessionFacade(runtime = {}) {
     sessionTreeService,
     sessionCrudService,
     sessionMessageService,
+    executionReadService,
     sessionContextService,
     taskService,
     executionLogService,
@@ -245,6 +254,18 @@ export function createSessionFacade(runtime = {}) {
 
     async getTurnLifecycleSnapshot(payload = {}) {
       return sessionMessageService.getTurnLifecycleSnapshot(payload);
+    },
+
+    async getExecution(payload = {}) {
+      return executionReadService.getExecution(payload);
+    },
+
+    async getExecutionChildren(payload = {}) {
+      return executionReadService.getExecutionChildren(payload);
+    },
+
+    async getExecutionTree(payload = {}) {
+      return executionReadService.getExecutionTree(payload);
     },
 
     async upsertTurnTiming(payload = {}) {

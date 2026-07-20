@@ -5,7 +5,12 @@
  */
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
-import { createTurnRuntimeRegistryState } from "../../composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+import {
+  createTurnRuntimeRegistryState,
+  selectExecution,
+  selectExecutionChildren,
+  sessionRuntimeId,
+} from "../../composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 
 function text(value) {
   return String(value || "").trim();
@@ -253,6 +258,45 @@ export const useChatStore = defineStore("chat", () => {
     return subSessionMessageRegistry.value?.sessions?.[id] || null;
   }
 
+  function selectExecutionSession(executionId = "") {
+    const execution = selectExecution(turnRuntimeRegistry.value, executionId);
+    if (!execution) return null;
+    const sessionId = text(execution.sessionId);
+    if (!sessionId) return null;
+    const mainSession = sessions.value.find((item = {}) => sessionRuntimeId(item) === sessionId);
+    return mainSession || selectSubSessionMessages(sessionId);
+  }
+
+  function selectExecutionDescendants(executionId = "") {
+    const rootId = text(executionId);
+    if (!rootId || !selectExecution(turnRuntimeRegistry.value, rootId)) return [];
+    const descendants = [];
+    const visited = new Set([rootId]);
+    const queue = [...selectExecutionChildren(turnRuntimeRegistry.value, rootId)];
+    while (queue.length) {
+      const child = queue.shift();
+      const childId = text(child?.executionId);
+      if (!childId || visited.has(childId)) continue;
+      visited.add(childId);
+      descendants.push(child);
+      queue.push(...selectExecutionChildren(turnRuntimeRegistry.value, childId));
+    }
+    return descendants;
+  }
+
+  function selectExecutionDetail(executionId = "") {
+    const execution = selectExecution(turnRuntimeRegistry.value, executionId);
+    if (!execution) return null;
+    const session = selectExecutionSession(execution.executionId);
+    return {
+      execution,
+      session,
+      messages: Array.isArray(session?.messages) ? session.messages : [],
+      children: selectExecutionChildren(turnRuntimeRegistry.value, execution.executionId),
+      descendants: selectExecutionDescendants(execution.executionId),
+    };
+  }
+
   return {
     input,
     uploadFiles,
@@ -272,6 +316,9 @@ export const useChatStore = defineStore("chat", () => {
     upsertSubSessionEvent,
     mergeSubSessionSnapshot,
     selectSubSessionMessages,
+    selectExecutionSession,
+    selectExecutionDescendants,
+    selectExecutionDetail,
     resetChatStore,
   };
 });

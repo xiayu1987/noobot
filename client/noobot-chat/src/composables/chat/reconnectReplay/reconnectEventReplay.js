@@ -19,7 +19,13 @@ export async function applyReconnectEventReplay({
   applyChannelState,
   applyTurnLifecycleEnvelope,
   applyTurnLifecycleSnapshot,
+  applyExecutionSnapshot,
+  applyExecutionChildren,
+  applyExecutionTree,
 } = {}) {
+  if (_trimStr(event) === StreamEventEnum.EXECUTION_SNAPSHOT) return applyExecutionSnapshot?.(data || {});
+  if (_trimStr(event) === StreamEventEnum.EXECUTION_CHILDREN) return applyExecutionChildren?.(data || {});
+  if (_trimStr(event) === StreamEventEnum.EXECUTION_TREE) return applyExecutionTree?.(data || {});
   if (_trimStr(event) === StreamEventEnum.TURN_SNAPSHOT) {
     return applyTurnLifecycleSnapshot?.(data || {});
   }

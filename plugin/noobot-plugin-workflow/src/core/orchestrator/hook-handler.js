@@ -69,8 +69,13 @@ export async function handleBeforeAgentDispatch({
     // can still fall back to the main Agent. Once a valid workflow is accepted,
     // the workflow owns root-turn processing and must publish RUNNING before
     // planning or child sessions begin.
-    ctx?.claimAgentDispatch?.({ source: "workflow_before_agent_dispatch" });
     const workflowRunId = resolveWorkflowRunId(ctx);
+    ctx?.claimAgentDispatch?.({
+      source: "workflow_before_agent_dispatch",
+      executionKind: "workflow",
+      origin: { type: "workflow", workflowRunId },
+      stage: "planning",
+    });
     const planningNodeSessions = buildWorkflowPlanningNodeSessions({ workflowRunId, semantic });
     const planningPersistResult = await persistWorkflowPlanningDialog({
       options,
