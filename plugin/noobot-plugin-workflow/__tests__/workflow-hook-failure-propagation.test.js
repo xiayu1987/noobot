@@ -56,9 +56,10 @@ test("workflow hook marks failed sub-agent step and continues downstream", async
         subSessionCalls.push(payload);
         const nodeName = String(payload?.metadata?.nodeName || "").trim();
         if (nodeName === "节点A") {
-          throw new Error("节点A子agent失败");
+          { const error = new Error("节点A子agent失败"); error.lifecycle = { executionId: payload.strategy.executionId, executionKind: "agent", state: "processing_failed", revision: 3, sequence: 3, failure: { message: error.message } }; throw error; }
         }
         return {
+          lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
           sessionId: `session-${nodeName}`,
           dialogProcessId: `dialog-${nodeName}`,
           result: {
@@ -97,12 +98,12 @@ test("workflow hook marks failed sub-agent step and continues downstream", async
 
   const nodeRuns = beforeContext.overrideAgentResult?.workflow?.execution?.nodeAgentRuns || [];
   const nodeARun = nodeRuns.find((item) => String(item?.step?.nodeName || "") === "节点A");
-  assert.equal(nodeARun?.stepStatus, "failed");
+  assert.equal(nodeARun?.stepStatus, undefined);
   assert.match(String(nodeARun?.stepFailure?.message || ""), /节点A子agent失败/);
   const nodeSessionA = beforeContext.overrideAgentResult?.workflow?.nodeSessions?.find(
     (item) => String(item?.nodeName || "") === "节点A",
   );
-  assert.equal(nodeSessionA?.stepStatus, "failed");
+  assert.equal(nodeSessionA?.stepStatus, undefined);
 });
 
 
@@ -138,8 +139,9 @@ test("workflow hook injects failed upstream task+error from single upstream into
       subSessionRunner: async (payload = {}) => {
         subSessionCalls.push(payload);
         const nodeName = String(payload?.metadata?.nodeName || "").trim();
-        if (nodeName === "节点A") throw new Error("节点A失败");
+        if (nodeName === "节点A") { const error = new Error("节点A失败"); error.lifecycle = { executionId: payload.strategy.executionId, executionKind: "agent", state: "processing_failed", revision: 3, sequence: 3, failure: { message: error.message } }; throw error; }
         return {
+          lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
           sessionId: `session-${nodeName}`,
           dialogProcessId: `dialog-${nodeName}`,
           result: { messages: [{ role: "assistant", content: `ok-${nodeName}` }] },
@@ -201,8 +203,9 @@ test("workflow hook injects failed upstream task+error from multiple upstream in
       subSessionRunner: async (payload = {}) => {
         subSessionCalls.push(payload);
         const nodeName = String(payload?.metadata?.nodeName || "").trim();
-        if (nodeName === "节点A") throw new Error("节点A失败");
+        if (nodeName === "节点A") { const error = new Error("节点A失败"); error.lifecycle = { executionId: payload.strategy.executionId, executionKind: "agent", state: "processing_failed", revision: 3, sequence: 3, failure: { message: error.message } }; throw error; }
         return {
+          lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
           sessionId: `session-${nodeName}`,
           dialogProcessId: `dialog-${nodeName}`,
           result: { messages: [{ role: "assistant", content: `ok-${nodeName}` }] },
@@ -267,8 +270,9 @@ test("workflow hook injects failed upstream task+error from multiple upstream in
       subSessionRunner: async (payload = {}) => {
         subSessionCalls.push(payload);
         const nodeName = String(payload?.metadata?.nodeName || "").trim();
-        if (nodeName === "节点A") throw new Error("节点A失败");
+        if (nodeName === "节点A") { const error = new Error("节点A失败"); error.lifecycle = { executionId: payload.strategy.executionId, executionKind: "agent", state: "processing_failed", revision: 3, sequence: 3, failure: { message: error.message } }; throw error; }
         return {
+          lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
           sessionId: `session-${nodeName}`,
           dialogProcessId: `dialog-${nodeName}`,
           result: { messages: [{ role: "assistant", content: `ok-${nodeName}` }] },

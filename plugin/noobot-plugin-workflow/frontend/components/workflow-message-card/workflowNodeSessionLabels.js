@@ -35,7 +35,11 @@ export function useWorkflowNodeSessionLabels(translate) {
   }
 
   function stepHasSession(stepItem = {}) {
-    return Boolean(resolveWorkflowDialogProcessId(stepItem));
+    return Boolean(
+      String(stepItem?.activeChildExecutionId || stepItem?.childExecutionId || "").trim() ||
+      (Array.isArray(stepItem?.attemptExecutionIds) && stepItem.attemptExecutionIds.some(Boolean)) ||
+      resolveWorkflowDialogProcessId(stepItem),
+    );
   }
 
   return {

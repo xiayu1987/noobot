@@ -31,6 +31,7 @@ export function createDetachedSubSessionRunner({
   resolvePluginScopedDir = null,
   normalizeDetachedSubSessionMessage = null,
   persistDetachedSubSessionSnapshot = null,
+  persistDetachedSubSessionTerminal = null,
   assertDetachedSubSessionIsolation = null,
   applyTurnLifecycleEvent = null,
   now = null,
@@ -126,6 +127,9 @@ export function createDetachedSubSessionRunner({
     const lifecycleCommandId = String(
       strategy?.commandId || metadata?.commandId || `${subSessionId}:${turnScopeId}`,
     ).trim();
+    const executionId = String(strategy?.executionId || metadata?.executionId || `agent:${turnScopeId}`).trim();
+    const parentExecutionId = String(strategy?.parentExecutionId || metadata?.parentExecutionId || "").trim();
+    const rootExecutionId = String(strategy?.rootExecutionId || metadata?.rootExecutionId || parentExecutionId || executionId).trim();
     const commitLifecycle = async (eventType, phase, extra = {}, expectedRevision = 0) => {
       if (typeof applyTurnLifecycleEvent !== "function") return null;
       const result = await applyTurnLifecycleEvent({
@@ -135,6 +139,11 @@ export function createDetachedSubSessionRunner({
         turnScopeId,
         dialogProcessId: subDialogProcessId || subSessionId,
         commandId: `${lifecycleCommandId}:${eventType}`,
+        executionId,
+        executionKind: "agent",
+        parentExecutionId,
+        rootExecutionId,
+        origin: metadata?.origin || { type: "agent_spawn" },
         eventType,
         phase,
         action: extra.action || "send",
@@ -159,6 +168,11 @@ export function createDetachedSubSessionRunner({
           turnScopeId,
           dialogProcessId: subDialogProcessId || subSessionId,
           commandId: `${lifecycleCommandId}:${eventType}`,
+          executionId,
+          executionKind: "agent",
+          parentExecutionId,
+          rootExecutionId,
+          origin: metadata?.origin || { type: "agent_spawn" },
           eventType,
           turn: result.turn,
         });
@@ -225,9 +239,6 @@ export function createDetachedSubSessionRunner({
       }, currentRevision);
       currentRevision = Number(committedTurn?.turn?.revision || currentRevision);
       currentLifecyclePhase = TURN_PHASE.COMPLETION;
-      committedTurn = await commitLifecycle(TURN_EVENT.COMPLETED, TURN_PHASE.COMPLETION, {
-        executionState: "completed",
-      }, currentRevision);
     } catch (error) {
       try {
         if (error?.name === "AbortError") {
@@ -244,6 +255,18 @@ export function createDetachedSubSessionRunner({
           // Keep the detached turn contract identical to the root turn: the
           // terminal stopped fact is not published until its session snapshot
           // (the child session summary source) has been durably persisted.
+          const terminalReceipt = await persistDetachedTerminal({
+            persistDetachedSubSessionTerminal,
+            userId,
+            sessionId: subSessionId,
+            parentSessionId,
+            parentDialogProcessId,
+            dialogProcessId: subDialogProcessId || subSessionId,
+            turnScopeId,
+            command: "user_stopped",
+            messages: [],
+            turnTasks: [],
+          });
           persisted = await persistPluginSubSessionSnapshot({
             userId,
             subSessionId,
@@ -265,19 +288,14 @@ export function createDetachedSubSessionRunner({
             persistDetachedSubSessionSnapshot,
             now,
           });
-          const summaryVersion = resolvePersistedSessionVersion(persisted);
-          if (summaryVersion <= 0) {
-            const persistenceError = new Error("sub-session stopped snapshot has no authoritative version");
-            persistenceError.code = "SUB_SESSION_SUMMARY_VERSION_MISSING";
-            throw persistenceError;
-          }
+          const summaryVersion = resolveTerminalReceiptVersion(terminalReceipt);
           committedTurn = await commitLifecycle(TURN_EVENT.STOP_COMPLETED, TURN_PHASE.STOP, {
             action: "stop",
             executionState: "stopped",
             summaryVersion,
           }, currentRevision);
         } else {
-          await commitLifecycle(TURN_EVENT.FAILED, currentLifecyclePhase, {
+          committedTurn = await commitLifecycle(TURN_EVENT.FAILED, currentLifecyclePhase, {
             executionState: "failed",
             failure: { code: error?.code || error?.name || "SUB_SESSION_FAILED", message: String(error?.message || error) },
           }, currentRevision);
@@ -285,6 +303,7 @@ export function createDetachedSubSessionRunner({
       } catch (lifecycleError) {
         error.lifecycleError = lifecycleError;
       }
+      if (committedTurn?.turn) error.lifecycle = committedTurn.turn;
       throw error;
     }
     throwIfSubSessionAborted();
@@ -295,27 +314,60 @@ export function createDetachedSubSessionRunner({
         "",
     ).trim();
     const turnMessages = resolveTurnMessages({ agentResult, dialogProcessId });
-    persisted = await persistPluginSubSessionSnapshot({
-      userId,
-      subSessionId,
-      parentSessionId,
-      parentDialogProcessId,
-      subDialogProcessId,
-      dialogProcessId,
-      turnScopeId: subSessionTurnScopeId,
-      message,
-      systemMessages,
-      subSessionAttachments,
-      strategy,
-      metadata,
-      agentResult,
-      turnMessages,
-      runtimePluginState,
-      resolveScopedOutputDir: resolveScopedOutputDir || resolvePluginScopedDir,
-      normalizeDetachedSubSessionMessage,
-      persistDetachedSubSessionSnapshot,
-      now,
-    });
+    try {
+      const terminalReceipt = await persistDetachedTerminal({
+        persistDetachedSubSessionTerminal,
+        userId,
+        sessionId: subSessionId,
+        parentSessionId,
+        parentDialogProcessId,
+        dialogProcessId,
+        turnScopeId,
+        command: "completed",
+        messages: turnMessages,
+        turnTasks: Array.isArray(agentResult?.turnTasks) ? agentResult.turnTasks : [],
+      });
+      persisted = await persistPluginSubSessionSnapshot({
+        userId,
+        subSessionId,
+        parentSessionId,
+        parentDialogProcessId,
+        subDialogProcessId,
+        dialogProcessId,
+        turnScopeId: subSessionTurnScopeId,
+        message,
+        systemMessages,
+        subSessionAttachments,
+        strategy,
+        metadata,
+        agentResult,
+        turnMessages,
+        runtimePluginState,
+        resolveScopedOutputDir: resolveScopedOutputDir || resolvePluginScopedDir,
+        normalizeDetachedSubSessionMessage,
+        persistDetachedSubSessionSnapshot,
+        now,
+      });
+      const summaryVersion = resolveTerminalReceiptVersion(terminalReceipt);
+      committedTurn = await commitLifecycle(TURN_EVENT.COMPLETED, TURN_PHASE.COMPLETION, {
+        executionState: "completed",
+        summaryVersion,
+      }, currentRevision);
+    } catch (error) {
+      try {
+        committedTurn = await commitLifecycle(TURN_EVENT.FAILED, TURN_PHASE.COMPLETION, {
+          executionState: "failed",
+          failure: {
+            code: error?.code || error?.name || "SUB_SESSION_COMPLETION_FAILED",
+            message: String(error?.message || error),
+          },
+        }, currentRevision);
+      } catch (lifecycleError) {
+        error.lifecycleError = lifecycleError;
+      }
+      if (committedTurn?.turn) error.lifecycle = committedTurn.turn;
+      throw error;
+    }
 
     await assertDetachedSubSessionIsolation({
       userId,
@@ -612,9 +664,27 @@ async function persistPluginSubSessionSnapshot({
   });
 }
 
-function resolvePersistedSessionVersion(persisted = null) {
-  const version = Number(
-    persisted?.version ?? persisted?.session?.version ?? persisted?.sessionSummary?.version ?? 0,
-  );
-  return Number.isInteger(version) && version > 0 ? version : 0;
+async function persistDetachedTerminal({ persistDetachedSubSessionTerminal, ...payload } = {}) {
+  if (typeof persistDetachedSubSessionTerminal !== "function") {
+    const error = new Error("sub-session terminal Session persistence port is unavailable");
+    error.code = "SUB_SESSION_TERMINAL_PERSISTENCE_UNAVAILABLE";
+    throw error;
+  }
+  const receipt = await persistDetachedSubSessionTerminal(payload);
+  if (!receipt || receipt.committed !== true) {
+    const error = new Error("sub-session terminal Session state was not persisted");
+    error.code = "SUB_SESSION_TERMINAL_PERSISTENCE_FAILED";
+    error.persistenceReceipt = receipt || null;
+    throw error;
+  }
+  return receipt;
+}
+
+function resolveTerminalReceiptVersion(receipt = null) {
+  const version = Number(receipt?.version ?? receipt?.session?.version);
+  if (Number.isInteger(version) && version >= 0) return version;
+  const error = new Error("sub-session terminal Session receipt has no valid version");
+  error.code = "SUB_SESSION_TERMINAL_VERSION_MISSING";
+  error.persistenceReceipt = receipt || null;
+  throw error;
 }

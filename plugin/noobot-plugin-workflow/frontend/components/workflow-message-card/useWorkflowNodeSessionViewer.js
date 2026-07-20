@@ -3,7 +3,7 @@
   Contact: 126240622+xiayu1987@users.noreply.github.com
   SPDX-License-Identifier: MIT
 */
-import { onBeforeUnmount, onMounted, watch, watchEffect } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch, watchEffect } from "vue";
 import { ElMessage } from "element-plus";
 import { useWorkflowNodeSessionLabels } from "./workflowNodeSessionLabels";
 import { useWorkflowDrawerHistory } from "./workflowDrawerHistory";
@@ -62,6 +62,39 @@ export function useWorkflowNodeSessionViewer({
     applyingWorkflowDrawerHistory,
   });
   let nodeSessionRequestToken = 0;
+  const selectedExecutionId = ref("");
+  const executionDirectory = ref([]);
+  const attemptExecutionIds = ref([]);
+
+  function applyExecutionDetail(executionId = "") {
+    const id = text(executionId);
+    if (!id || typeof props.selectExecutionDetail !== "function") return false;
+    const detail = props.selectExecutionDetail(id);
+    if (!detail) return false;
+    const execution = detail.execution || {};
+    const session = detail.session || {};
+    const messages = Array.isArray(detail.messages) ? detail.messages : [];
+    selectedExecutionId.value = id;
+    applySelectedNodeSessionDetail({
+      sessionId: text(execution.sessionId || session.sessionId || session.id),
+      messages,
+      rawMessages: messages,
+      sessionSummary: {
+        ...session,
+        executionId: id,
+        turnRuntime: execution,
+        messages,
+      },
+    });
+    return true;
+  }
+
+  function selectExecution(executionId = "") {
+    viewerError.value = "";
+    if (applyExecutionDetail(executionId)) return true;
+    viewerError.value = `Execution not found: ${text(executionId)}`;
+    return false;
+  }
 
   async function fetchSelectedNodeThinkingDetail(_sessionId = "", { dialogProcessId = "", turnScopeId = "" } = {}) {
     const route = buildWorkflowDrawerRoute(selectedNode.value || {});
@@ -88,6 +121,9 @@ export function useWorkflowNodeSessionViewer({
     selectedNodeRawMessages.value = [];
     selectedNodeSessionSummary.value = null;
     selectedNodeSessionId.value = "";
+    selectedExecutionId.value = "";
+    executionDirectory.value = [];
+    attemptExecutionIds.value = [];
   }
 
   function applySelectedNodeSessionDetail(detail = {}) {
@@ -110,11 +146,21 @@ export function useWorkflowNodeSessionViewer({
       nodeItem,
       runtimeNodeSessions,
       selectSessionMessages: props.selectSessionMessages,
+      selectExecutionDetail: props.selectExecutionDetail,
       turnRuntimeRegistry: props.turnRuntimeRegistry,
       allowEmptyMessages: false,
     });
     if (!detail) return false;
     applySelectedNodeSessionDetail(detail);
+    selectedExecutionId.value = text(detail.executionId);
+    attemptExecutionIds.value = Array.isArray(detail.attemptExecutionIds) ? detail.attemptExecutionIds : [];
+    executionDirectory.value = [
+      ...(detail.execution ? [detail.execution] : []),
+      ...(Array.isArray(detail.descendantExecutions) ? detail.descendantExecutions : []),
+    ].filter((item, index, values) => {
+      const id = text(item?.executionId);
+      return id && values.findIndex((candidate) => text(candidate?.executionId) === id) === index;
+    });
     return true;
   }
 
@@ -155,6 +201,11 @@ export function useWorkflowNodeSessionViewer({
     selectedNode.value = nodeItem;
     resetSelectedNodeSession();
     bindSelectedNodeRealtimeProjection(nodeItem);
+    if (isNewProtocolNode) {
+      applyUnifiedSessionDetailIfAvailable(nodeItem);
+      viewerLoading.value = false;
+      return;
+    }
     if (!rootSessionId || !dialogProcessId) {
       viewerLoading.value = false;
       return;
@@ -249,6 +300,10 @@ export function useWorkflowNodeSessionViewer({
   });
 
   return {
+    selectedExecutionId,
+    executionDirectory,
+    attemptExecutionIds,
+    selectExecution,
     handleOpenThinkingDetails,
     resolveStatusLabel,
     resolveStatusClass,

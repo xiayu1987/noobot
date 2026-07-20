@@ -39,6 +39,12 @@ export function createCommittedTurnLifecyclePublisher({ sendEvent } = {}) {
       capabilities: deriveAuthoritativeTurnCapabilities(turn),
       failure: turn.failure,
       payload: event.payload,
+      executionId: event.executionId || turn.executionId,
+      executionKind: event.executionKind || turn.executionKind,
+      parentExecutionId: event.parentExecutionId || turn.parentExecutionId,
+      rootExecutionId: event.rootExecutionId || turn.rootExecutionId,
+      origin: event.origin || turn.origin,
+      stage: event.stage || turn.stage,
     });
     sendEvent(TURN_LIFECYCLE_WIRE_EVENT, envelope);
     return envelope;

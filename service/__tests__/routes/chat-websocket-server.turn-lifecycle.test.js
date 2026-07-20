@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { transitionTurnLifecycle } from "../../../agent/src/system-core/session/entities/turn-lifecycle-entity.js";
 import { TURN_EVENT } from "@noobot/shared/turn-lifecycle-protocol";
 import { recoverTurnFinalize } from "../../ws/chat-websocket/finalize-recovery.js";
+import { EXECUTION_QUERY_COMMAND } from "@noobot/shared/execution-lifecycle-protocol";
 import { startServerWithWs, closeServer, callChatWs, stopChatWs } from "./chat-websocket-server.test-helpers.js";
 
 function createAuthoritativeBot({ persistSummary = true, failureAt = "" } = {}) {
@@ -344,4 +345,54 @@ test("finalize recovery is idempotent across repeated service recovery attempts"
   assert.equal(lifecycle.turns["turn-recover"].state, "completed");
   assert.equal(lifecycle.turns["turn-recover"].revision, 4);
   assert.equal(lifecycle.sequence, 4);
+});
+
+test("execution queries expose authoritative snapshot, children and tree envelopes", async () => {
+  const sent = [];
+  const root = {
+    executionId: "agent:root", executionKind: "agent", rootExecutionId: "agent:root",
+    sessionId: "root-session", turnScopeId: "root", state: "processing", revision: 2, sequence: 2,
+  };
+  const child = {
+    executionId: "agent:child", executionKind: "agent", parentExecutionId: "agent:root",
+    rootExecutionId: "agent:root", sessionId: "child-session", turnScopeId: "child",
+    state: "processing", revision: 1, sequence: 1,
+  };
+  const bot = {
+    async getExecution() { return { found: true, execution: root, generatedAt: "now" }; },
+    async getExecutionChildren() { return { found: true, execution: root, children: [child], generatedAt: "now" }; },
+    async getExecutionTree() {
+      return { found: true, execution: root, rootExecutionId: root.executionId, tree: {
+        executions: { [root.executionId]: { ...root, childExecutionIds: [child.executionId] }, [child.executionId]: { ...child, childExecutionIds: [] } },
+        rootExecutionIds: [root.executionId],
+      }, generatedAt: "now" };
+    },
+  };
+  const { createMessageHandler } = await import("../../ws/chat-websocket/message-handler.js");
+  const handler = createMessageHandler({
+    state: {}, authInfo: { userId: "u1" }, webSocket: { close() {} },
+    sendEvent: (event, data) => sent.push({ event, data }), resolveBot: () => bot,
+    isForbiddenUserScope: () => false, pendingInteractionRequests: new Map(),
+  });
+  await handler(JSON.stringify({ commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET, executionId: root.executionId, commandId: "q1" }));
+  await handler(JSON.stringify({ commandType: EXECUTION_QUERY_COMMAND.CHILDREN_GET, executionId: root.executionId, commandId: "q2" }));
+  await handler(JSON.stringify({ commandType: EXECUTION_QUERY_COMMAND.TREE_GET, rootExecutionId: root.executionId, commandId: "q3" }));
+  assert.deepEqual(sent.map(({ event }) => event), ["execution_snapshot", "execution_children", "execution_tree"]);
+  assert.deepEqual(sent.map(({ data }) => data.commandId), ["q1", "q2", "q3"]);
+});
+
+test("execution query rejects invalid, forbidden and unavailable requests", async () => {
+  const sent = [];
+  const { createMessageHandler } = await import("../../ws/chat-websocket/message-handler.js");
+  const create = ({ forbidden = false, bot = {} } = {}) => createMessageHandler({
+    state: {}, authInfo: { userId: "u1" }, webSocket: { close() {} },
+    sendEvent: (event, data) => sent.push({ event, data }), resolveBot: () => bot,
+    isForbiddenUserScope: () => forbidden, pendingInteractionRequests: new Map(),
+  });
+  await create()(JSON.stringify({ commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET, commandId: "bad" }));
+  await create({ forbidden: true })(JSON.stringify({ commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET, executionId: "agent:x", commandId: "denied" }));
+  await create()(JSON.stringify({ commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET, executionId: "agent:x", commandId: "missing-reader" }));
+  assert.deepEqual(sent.map(({ data }) => data.errorCode), [
+    "invalid_execution_query", "invalid_execution_query", "execution_query_unavailable",
+  ]);
 });

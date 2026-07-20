@@ -35,6 +35,9 @@ export const StreamEventEnum = Object.freeze({
   CHANNEL_STATE: "channel_state",
   TURN_LIFECYCLE: "turn_lifecycle",
   TURN_SNAPSHOT: "turn_snapshot",
+  EXECUTION_SNAPSHOT: "execution_snapshot",
+  EXECUTION_CHILDREN: "execution_children",
+  EXECUTION_TREE: "execution_tree",
   RECONNECT_DATA: "reconnect_data",
   RECONNECT_COMPLETE: "reconnect_complete",
 });

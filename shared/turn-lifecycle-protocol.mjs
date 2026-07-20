@@ -3,6 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  EXECUTION_KIND,
+  normalizeExecutionIdentity,
+} from "./execution-lifecycle-protocol.mjs";
 
 export const TURN_LIFECYCLE_PROTOCOL_VERSION = 1;
 export const TURN_LIFECYCLE_WIRE_EVENT = "turn_lifecycle";
@@ -86,7 +90,12 @@ export function deriveAuthoritativeTurnCapabilities(turn = {}) {
 }
 
 function snapshotTurn(turn = {}) {
+  const executionIdentity = normalizeExecutionIdentity({
+    ...turn,
+    executionKind: turn.executionKind || EXECUTION_KIND.AGENT,
+  });
   return {
+    ...executionIdentity,
     turnScopeId: clean(turn.turnScopeId),
     dialogProcessId: clean(turn.dialogProcessId),
     commandId: clean(turn.commandId),
@@ -166,7 +175,17 @@ export function createTurnLifecycleEnvelope({
   capabilities,
   failure = null,
   payload = {},
+  executionId = "",
+  executionKind = EXECUTION_KIND.AGENT,
+  parentExecutionId = "",
+  rootExecutionId = "",
+  origin = {},
+  stage = "",
 } = {}) {
+  const executionIdentity = normalizeExecutionIdentity({
+    executionId, executionKind, parentExecutionId, rootExecutionId, origin, stage,
+    sessionId, parentSessionId, turnScopeId, dialogProcessId,
+  });
   const envelope = {
     protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
     eventType: clean(eventType),
@@ -191,6 +210,7 @@ export function createTurnLifecycleEnvelope({
     capabilities: capabilities && typeof capabilities === "object" ? capabilities : undefined,
     failure: failure && typeof failure === "object" ? failure : undefined,
     payload: payload && typeof payload === "object" ? payload : {},
+    ...executionIdentity,
   };
   return envelope;
 }

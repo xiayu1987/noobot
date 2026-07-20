@@ -71,6 +71,7 @@ test("runWorkflowExecution carries planning identity through events, strategy an
       subSessionRunner: async (call) => {
         subSessionCalls.push(call);
         return {
+          lifecycle: { executionId: call?.strategy?.executionId || call?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
           sessionId: "child-a",
           dialogProcessId: call.strategy.dialogProcessId,
           persisted: { outputDir: "runtime/workflow/session/s1/child-a" },

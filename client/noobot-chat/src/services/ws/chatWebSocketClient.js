@@ -84,7 +84,33 @@ export function createChatWebSocketClient({
   let reconnectResolve = null;
   let reconnectReject = null;
   let reconnectTimeout = null;
+  const pendingJsonRequests = new Map();
   const RECONNECT_TIMEOUT_MS = TIME_THRESHOLDS.client.wsReconnectTimeoutMs;
+
+  function rejectPendingJsonRequests(error) {
+    for (const pending of pendingJsonRequests.values()) {
+      clearTimeout(pending.timeout);
+      pending.reject(error);
+    }
+    pendingJsonRequests.clear();
+  }
+
+  function settlePendingJsonRequest(event, data = {}) {
+    const commandId = normalizeTrimmedString(data?.commandId);
+    const pending = commandId ? pendingJsonRequests.get(commandId) : null;
+    if (!pending) return;
+    if (event !== "error" && pending.expectedEvents.size && !pending.expectedEvents.has(event)) return;
+    pendingJsonRequests.delete(commandId);
+    clearTimeout(pending.timeout);
+    if (event === "error") {
+      const error = new Error(data?.error || data?.errorCode || "execution_query_failed");
+      error.event = event;
+      error.data = data;
+      pending.reject(error);
+    } else {
+      pending.resolve({ event, data });
+    }
+  }
 
   function normalizeScopeFromPayload(payload = {}) {
     return {
@@ -487,6 +513,7 @@ export function createChatWebSocketClient({
           trackIncomingEvent(data);
 
           onReconnectData({ event, data });
+          settlePendingJsonRequest(event, data);
         } catch (error) {
           reconnecting = false;
           clearTimers();
@@ -505,10 +532,12 @@ export function createChatWebSocketClient({
         const rejectFn = reconnectReject;
         reconnectReject = null;
         reconnectResolve = null;
+        rejectPendingJsonRequests(new Error(translateText("infra.reconnectConnectFailed")));
         rejectFn?.(new Error(translateText("infra.reconnectConnectFailed")));
       };
 
       ws.onclose = () => {
+        rejectPendingJsonRequests(new Error(translateText("infra.reconnectClosed")));
         if (reconnecting) {
           reconnecting = false;
           clearTimers();
@@ -613,8 +642,36 @@ export function createChatWebSocketClient({
     ws.send(JSON.stringify(payload || {}));
   }
 
+  function requestJson(payload = {}, { expectedEvents = [], timeoutMs = RECONNECT_TIMEOUT_MS } = {}) {
+    const commandId = normalizeTrimmedString(payload?.commandId);
+    if (!commandId) return Promise.reject(new Error("commandId is required"));
+    if (pendingJsonRequests.has(commandId)) {
+      return Promise.reject(new Error("commandId request already pending"));
+    }
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        pendingJsonRequests.delete(commandId);
+        reject(new Error(translateText("infra.websocketRequestTimeout") || "websocket_request_timeout"));
+      }, Number(timeoutMs) > 0 ? Number(timeoutMs) : RECONNECT_TIMEOUT_MS);
+      pendingJsonRequests.set(commandId, {
+        resolve,
+        reject,
+        timeout,
+        expectedEvents: new Set((Array.isArray(expectedEvents) ? expectedEvents : [expectedEvents]).filter(Boolean)),
+      });
+      try {
+        sendJson(payload);
+      } catch (error) {
+        clearTimeout(timeout);
+        pendingJsonRequests.delete(commandId);
+        reject(error);
+      }
+    });
+  }
+
   function dispose() {
     clearTimers();
+    rejectPendingJsonRequests(new Error("websocket_client_disposed"));
     const ws = activeSocket;
     if (ws) {
       try {
@@ -638,6 +695,7 @@ export function createChatWebSocketClient({
     reconnect,
     requestStop,
     sendJson,
+    requestJson,
     getActiveSocket,
     isStopRequested,
     clearStopRequested,

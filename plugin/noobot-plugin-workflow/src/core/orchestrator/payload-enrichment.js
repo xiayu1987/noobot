@@ -46,7 +46,6 @@ export function buildWorkflowNodeSessions({
         transferEnvelopes: Array.isArray(item?.nodeResultTransferEnvelopes)
           ? item.nodeResultTransferEnvelopes
           : [],
-        stepStatus: String(item?.stepFailure ? "failed" : item?.stepStatus || "success").trim(),
         stepFailure:
           item?.stepFailure && typeof item.stepFailure === "object"
             ? item.stepFailure

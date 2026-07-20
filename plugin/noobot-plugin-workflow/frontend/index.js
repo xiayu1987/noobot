@@ -57,6 +57,12 @@ export function registerFrontendPlugin(ctx = {}) {
           isImageMime: context?.isImageMime,
           workflowNodeStateRegistry: context?.workflowNodeStateRegistry || null,
           turnRuntimeRegistry: context?.turnRuntimeRegistry || null,
+          selectExecutionDetail: typeof context?.selectExecutionDetail === "function"
+            ? context.selectExecutionDetail
+            : null,
+          stopExecution: typeof context?.stopExecution === "function"
+            ? context.stopExecution
+            : null,
           selectSessionMessages: typeof context?.selectSessionMessages === "function"
             ? context.selectSessionMessages
             : null,

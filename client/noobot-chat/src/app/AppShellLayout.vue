@@ -43,6 +43,7 @@ defineProps({
   emptyLogoSrc: { type: String, default: "" },
   deleteMonotonicMessage: { type: Function, required: true },
   resendMonotonicMessage: { type: Function, required: true },
+  stopExecution: { type: Function, default: null },
   chatMessageNavItems: { type: Array, default: () => [] },
   chatNavigatorVisible: { type: Boolean, default: true },
   currentMessageAnchorId: { type: String, default: "" },
@@ -188,6 +189,7 @@ defineExpose({
           :sending="sending"
           :delete-monotonic-message="deleteMonotonicMessage"
           :resend-monotonic-message="resendMonotonicMessage"
+          :stop-execution="stopExecution"
           @open-thinking-details="emit('open-thinking-details', $event)"
         />
 

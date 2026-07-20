@@ -4,9 +4,9 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { BaseEmptyHint, BaseMessageErrorAlert } from "../../../../../client/noobot-chat/src/shared/ui";
-import WorkflowSessionMessageItem from "../WorkflowSessionMessageItem.vue";
+import AgentExecutionView from "../../../../../client/noobot-chat/src/shared/execution/AgentExecutionView.vue";
 import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
 
 function resolveDialogProcessId(item = {}) {
@@ -18,6 +18,10 @@ const props = defineProps({
   viewerLoading: { type: Boolean, default: false },
   viewerError: { type: String, default: "" },
   selectedNodeSessionId: { type: String, default: "" },
+  selectedExecutionId: { type: String, default: "" },
+  executionDirectory: { type: Array, default: () => [] },
+  attemptExecutionIds: { type: Array, default: () => [] },
+  stopExecution: { type: Function, default: null },
   selectedRuntimeNode: { type: Object, default: null },
   selectedRuntimeBoxes: { type: Array, default: () => [] },
   selectedGraphDialogProcessId: { type: String, default: "" },
@@ -44,7 +48,92 @@ const viewerVisible = defineModel("viewerVisible", { type: Boolean, default: fal
 const drawerSize = ref("72%");
 const messageScrollRef = ref(null);
 const followRealtime = ref(true);
+const expandedExecutionIds = ref(new Set());
+const stopPendingExecutionId = ref("");
+const stopError = ref("");
 let mobileMediaQuery;
+
+const executionTreeRows = computed(() => {
+  const items = Array.isArray(props.executionDirectory) ? props.executionDirectory : [];
+  const byId = new Map(items.map((item = {}) => [String(item.executionId || "").trim(), item]).filter(([id]) => id));
+  const children = new Map();
+  for (const [id, item] of byId) {
+    const parentId = String(item.parentExecutionId || "").trim();
+    if (!byId.has(parentId) || parentId === id) continue;
+    if (!children.has(parentId)) children.set(parentId, []);
+    children.get(parentId).push(id);
+  }
+  const roots = [...byId.keys()].filter((id) => {
+    const parentId = String(byId.get(id)?.parentExecutionId || "").trim();
+    return !parentId || !byId.has(parentId) || parentId === id;
+  });
+  const rows = [];
+  const visited = new Set();
+  const visit = (id, depth) => {
+    if (visited.has(id)) return;
+    visited.add(id);
+    const childIds = children.get(id) || [];
+    rows.push({ execution: byId.get(id), depth, hasChildren: childIds.length > 0 });
+    if (expandedExecutionIds.value.has(id)) childIds.forEach((childId) => visit(childId, depth + 1));
+  };
+  roots.forEach((id) => visit(id, 0));
+  // Malformed cycles/orphans remain visible without making relationship data
+  // authoritative in this component.
+  [...byId.keys()].filter((id) => !visited.has(id)).forEach((id) => visit(id, 0));
+  return rows;
+});
+
+const selectedExecution = computed(() => {
+  const selectedId = String(props.selectedExecutionId || "").trim();
+  return (Array.isArray(props.executionDirectory) ? props.executionDirectory : [])
+    .find((item = {}) => String(item.executionId || "").trim() === selectedId) || null;
+});
+
+const canStopSelectedExecution = computed(() => Boolean(
+  props.stopExecution &&
+  props.selectedExecutionId &&
+  selectedExecution.value?.capabilities?.canStop === true &&
+  selectedExecution.value?.terminal !== true &&
+  selectedExecution.value?.lifecycle?.terminal !== true,
+));
+
+async function stopSelectedExecution() {
+  const executionId = String(props.selectedExecutionId || "").trim();
+  if (!executionId || !canStopSelectedExecution.value || stopPendingExecutionId.value) return false;
+  stopError.value = "";
+  stopPendingExecutionId.value = executionId;
+  try {
+    const requested = await props.stopExecution(executionId);
+    if (requested === false) stopError.value = "Unable to stop this execution.";
+    return requested !== false;
+  } catch (error) {
+    stopError.value = String(error?.message || error || "Unable to stop this execution.");
+    return false;
+  } finally {
+    if (stopPendingExecutionId.value === executionId) stopPendingExecutionId.value = "";
+  }
+}
+
+watch(() => props.selectedExecutionId, () => {
+  stopError.value = "";
+});
+
+function toggleExecution(executionId = "") {
+  const id = String(executionId || "").trim();
+  if (!id) return;
+  const next = new Set(expandedExecutionIds.value);
+  if (next.has(id)) next.delete(id); else next.add(id);
+  expandedExecutionIds.value = next;
+}
+
+watch(() => props.executionDirectory, (items = []) => {
+  const next = new Set(expandedExecutionIds.value);
+  for (const item of items) {
+    const id = String(item?.executionId || "").trim();
+    if (id && (id === props.selectedExecutionId || !item?.parentExecutionId)) next.add(id);
+  }
+  expandedExecutionIds.value = next;
+}, { immediate: true, deep: true });
 
 function getScrollWrap() {
   return messageScrollRef.value?.wrapRef || null;
@@ -94,7 +183,7 @@ onBeforeUnmount(() => {
   mobileMediaQuery?.removeEventListener("change", updateDrawerSize);
 });
 
-defineEmits(["runtime-step-click", "open-thinking-details"]);
+defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"]);
 </script>
 
 <template>
@@ -119,6 +208,46 @@ defineEmits(["runtime-step-click", "open-thinking-details"]);
     >
       <BaseMessageErrorAlert :error="viewerError" />
       <template v-if="!viewerError">
+        <div v-if="attemptExecutionIds.length || executionDirectory.length" class="workflow-execution-directory">
+          <div class="workflow-execution-directory__title">Agent executions</div>
+          <div v-if="selectedExecutionId" class="workflow-execution-directory__actions">
+            <button
+              type="button"
+              class="workflow-execution-directory__stop"
+              :disabled="!canStopSelectedExecution || Boolean(stopPendingExecutionId)"
+              @click="stopSelectedExecution"
+            >{{ stopPendingExecutionId ? 'Stopping…' : 'Stop execution' }}</button>
+            <span v-if="stopError" class="workflow-execution-directory__stop-error">{{ stopError }}</span>
+          </div>
+          <div v-if="attemptExecutionIds.length" class="workflow-execution-directory__group">
+            <span class="workflow-execution-directory__label">Attempts</span>
+            <button
+              v-for="(executionId, index) in attemptExecutionIds"
+              :key="executionId"
+              type="button"
+              class="workflow-execution-directory__item"
+              :class="{ 'is-selected': executionId === selectedExecutionId }"
+              @click="$emit('execution-select', executionId)"
+            >Attempt {{ index + 1 }}</button>
+          </div>
+          <div v-if="executionDirectory.length" class="workflow-execution-directory__group">
+            <span class="workflow-execution-directory__label">Execution tree</span>
+            <button
+              v-for="row in executionTreeRows"
+              :key="row.execution.executionId"
+              type="button"
+              class="workflow-execution-directory__item"
+              :class="{ 'is-selected': row.execution.executionId === selectedExecutionId }"
+              :style="{ marginLeft: `${row.depth * 16}px` }"
+              @click="$emit('execution-select', row.execution.executionId)"
+            >
+              <span v-if="row.hasChildren" @click.stop="toggleExecution(row.execution.executionId)">
+                {{ expandedExecutionIds.has(row.execution.executionId) ? '▾' : '▸' }}
+              </span>
+              {{ row.execution.executionKind || 'agent' }} · {{ row.execution.stage || row.execution.state || 'pending' }}
+            </button>
+          </div>
+        </div>
         <div v-if="selectedRuntimeNode" class="workflow-runtime-panel">
           <div class="workflow-runtime-panel-header">
             <div>
@@ -174,28 +303,29 @@ defineEmits(["runtime-step-click", "open-thinking-details"]);
             </div>
           </div>
         </div>
-        <div
-          v-for="(messageItem, messageIndex) in displayNodeMessages"
-          :key="`thinking-${String(messageItem?.ts || '')}-${messageIndex}`"
-          class="workflow-node-session-item"
-        >
-          <WorkflowSessionMessageItem
-            :message-item="messageItem"
-            :all-messages="nodeSessionAllMessages"
-            :session-docs="selectedNodeSessionDocs"
-            :turn-timings-by-turn-scope-id="turnTimingsByTurnScopeId"
-            :turn-statuses="turnStatuses"
-            :user-id="userId"
-            :auth-fetch="authFetch"
-            :render-markdown="renderMarkdown"
-            :format-time="formatTime"
-            :format-file-size="formatFileSize"
-            :is-image-mime="isImageMime"
-            @open-thinking-details="$emit('open-thinking-details', $event)"
-          />
-        </div>
+        <AgentExecutionView
+          v-if="selectedExecutionId"
+          :execution-id="selectedExecutionId"
+          channel-context="workflow-node"
+          :messages="displayNodeMessages"
+          :all-messages="nodeSessionAllMessages"
+          :session-docs="selectedNodeSessionDocs"
+          :turn-timings-by-turn-scope-id="turnTimingsByTurnScopeId"
+          :turn-statuses="turnStatuses"
+          :user-id="userId"
+          :auth-fetch="authFetch"
+          :render-markdown="renderMarkdown"
+          :format-time="formatTime"
+          :format-file-size="formatFileSize"
+          :is-image-mime="isImageMime"
+          :stop-execution="stopExecution"
+          :empty-text="viewerLoading ? '' : translate('workflow.noNodeSessionContent')"
+          attachment-preview-dialog-class="workflow-session-preview-dialog"
+          file-preview-dialog-class="workflow-session-preview-dialog"
+          @open-thinking-details="$emit('open-thinking-details', $event)"
+        />
         <BaseEmptyHint
-          v-if="!displayNodeMessages.length && !viewerLoading"
+          v-else-if="!viewerLoading"
           class="workflow-node-empty"
           :text="translate('workflow.noNodeSessionContent')"
         />
@@ -251,6 +381,17 @@ defineEmits(["runtime-step-click", "open-thinking-details"]);
 .workflow-node-session-item {
   margin-bottom: 12px;
 }
+
+.workflow-execution-directory { margin-bottom: 12px; padding: 10px; border: 1px solid var(--noobot-msg-assistant-border); border-radius: 8px; }
+.workflow-execution-directory__title { margin-bottom: 8px; font-weight: 600; }
+.workflow-execution-directory__actions { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.workflow-execution-directory__stop { border: 1px solid var(--el-color-danger); border-radius: 6px; padding: 4px 10px; color: var(--el-color-danger); background: transparent; cursor: pointer; }
+.workflow-execution-directory__stop:disabled { opacity: .45; cursor: not-allowed; }
+.workflow-execution-directory__stop-error { color: var(--el-color-danger); font-size: 12px; }
+.workflow-execution-directory__group { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.workflow-execution-directory__label { flex-basis: 100%; color: var(--noobot-text-secondary); font-size: 12px; }
+.workflow-execution-directory__item { border: 1px solid var(--noobot-msg-assistant-border); border-radius: 6px; padding: 5px 10px; color: var(--noobot-text-main); background: var(--noobot-panel-bg); cursor: pointer; }
+.workflow-execution-directory__item.is-selected { border-color: rgb(var(--workflow-accent-rgb)); color: rgb(var(--workflow-accent-rgb)); }
 
 .workflow-node-session-item:last-child {
   margin-bottom: 0;

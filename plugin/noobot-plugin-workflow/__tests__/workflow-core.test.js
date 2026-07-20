@@ -407,6 +407,17 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
           "END",
         ].join("\n"),
       }),
+      subSessionRunner: async (payload = {}) => ({
+        sessionId: "workflow-core-child",
+        lifecycle: {
+          executionId: payload?.strategy?.executionId,
+          executionKind: "agent",
+          state: "completed",
+          revision: 4,
+          sequence: 4,
+        },
+        result: { messages: [{ role: "assistant", content: "done" }] },
+      }),
     },
   });
   const listener = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
@@ -421,7 +432,13 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
     claimAgentDispatch: (claim = {}) => dispatchClaims.push(claim),
   };
   await listener.handler(beforeContext);
-  assert.deepEqual(dispatchClaims, [{ source: "workflow_before_agent_dispatch" }]);
+  assert.equal(dispatchClaims.length, 1);
+  assert.equal(dispatchClaims[0].source, "workflow_before_agent_dispatch");
+  assert.equal(dispatchClaims[0].executionKind, "workflow");
+  assert.equal(dispatchClaims[0].stage, "planning");
+  assert.equal(dispatchClaims[0].origin?.type, "workflow");
+  assert.equal(dispatchClaims[0].origin?.workflowRunId, dispatchClaims[0].origin?.workflowRunId?.trim());
+  assert.ok(dispatchClaims[0].origin?.workflowRunId);
   assert.equal(beforeContext.skipAgentDispatch, true);
   assert.ok(beforeContext.overrideAgentResult);
   assert.equal(Array.isArray(beforeContext.overrideAgentResult?.turnMessages), true);

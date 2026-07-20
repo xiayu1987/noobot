@@ -27,8 +27,37 @@ import {
 import { logStopDebug } from "../debug/stopDebugLogger";
 import {
   resolveSessionTurnRuntime,
+  selectExecution,
   sessionRuntimeId,
 } from "../sessionRunStateMachine/turnRuntimeRegistry";
+
+function resolveStopTarget({ activeSession, turnRuntimeRegistry, executionId = "" } = {}) {
+  const requestedExecutionId = normalizeTrimmedString(executionId);
+  if (requestedExecutionId) {
+    const execution = selectExecution(turnRuntimeRegistry?.value, requestedExecutionId);
+    if (!execution) return { execution: null, turnRuntime: null, session: null };
+    const sessionId = normalizeTrimmedString(execution.sessionId);
+    const active = activeSession?.value || null;
+    const session = sessionRuntimeId(active) === sessionId
+      ? active
+      : {
+          backendSessionId: sessionId,
+          sessionId,
+          id: sessionId,
+          parentSessionId: execution.parentSessionId || "",
+          parentDialogProcessId: execution.parentDialogProcessId || "",
+          messages: [],
+        };
+    return { execution, turnRuntime: execution, session };
+  }
+  const session = activeSession?.value || null;
+  const sessionId = sessionRuntimeId(session);
+  return {
+    execution: null,
+    turnRuntime: resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId),
+    session,
+  };
+}
 
 export function handleStopConfirmationTimeout({
   turnRuntimeRegistry,
@@ -91,8 +120,8 @@ export function handleStopConfirmationTimeout({
   });
 }
 
-function buildStopPayload({ userId, activeSession, pendingAssistantMessage, turnRuntime } = {}) {
-  const session = activeSession?.value || {};
+function buildStopPayload({ userId, activeSession, session: targetSession, pendingAssistantMessage, turnRuntime, execution } = {}) {
+  const session = targetSession || activeSession?.value || {};
   const dialogProcessId = normalizeTrimmedString(turnRuntime?.dialogProcessId);
   const turnScopeId = normalizeTrimmedString(turnRuntime?.turnScopeId);
   const createdAtMs = nowMs();
@@ -101,6 +130,10 @@ function buildStopPayload({ userId, activeSession, pendingAssistantMessage, turn
     sessionId: String(session.backendSessionId || session.sessionId || session.id || ""),
     dialogProcessId,
     turnScopeId,
+    executionId: normalizeTrimmedString(execution?.executionId),
+    expectedRevision: Number.isFinite(Number(execution?.revision))
+      ? Number(execution.revision)
+      : undefined,
     createdAtMs,
     parentSessionId: String(
       session.parentSessionId || pendingAssistantMessage?.parentSessionId || "",
@@ -130,10 +163,15 @@ export function stopSending({
   chatWebSocketClient,
   onStopConfirmationTimeout,
   applyRunStateEvent,
+  executionId = "",
 } = {}) {
-  const sessionId = sessionRuntimeId(activeSession?.value);
-  const turnRuntime = resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId);
-  if (!turnRuntime?.canStop || turnRuntime?.terminal) {
+  const target = resolveStopTarget({ activeSession, turnRuntimeRegistry, executionId });
+  const { execution, turnRuntime, session } = target;
+  const sessionId = normalizeTrimmedString(turnRuntime?.sessionId) || sessionRuntimeId(session);
+  const canStop = execution
+    ? execution?.capabilities?.canStop === true || execution?.canStop === true
+    : turnRuntime?.canStop === true;
+  if (!turnRuntime || !canStop || turnRuntime?.terminal) {
     logStopDebug("stop.skip.turnNotStoppable", {
       sessionId,
       turnScopeId: turnRuntime?.turnScopeId || "",
@@ -145,7 +183,7 @@ export function stopSending({
   }
   const expectedTurnScopeId = normalizeTrimmedString(turnRuntime.turnScopeId);
   const expectedDialogProcessId = normalizeTrimmedString(turnRuntime.dialogProcessId);
-  const pendingAssistantMessage = (activeSession?.value?.messages || []).find((messageItem) => {
+  const pendingAssistantMessage = (session?.messages || []).find((messageItem) => {
     if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) return false;
     const messageTurnScopeId = getMessageTurnScopeId(messageItem);
     if (expectedTurnScopeId && messageTurnScopeId === expectedTurnScopeId) return true;
@@ -157,7 +195,14 @@ export function stopSending({
     turnRuntime,
     messages: summarizeDebugMessages(activeSession?.value?.messages),
   });
-  const stopPayload = buildStopPayload({ userId, activeSession, pendingAssistantMessage, turnRuntime });
+  const stopPayload = buildStopPayload({
+    userId,
+    activeSession,
+    session,
+    pendingAssistantMessage,
+    turnRuntime,
+    execution,
+  });
   logStopDebug("stop.payload", {
     sessionId: stopPayload.sessionId,
     dialogProcessId: stopPayload.dialogProcessId,

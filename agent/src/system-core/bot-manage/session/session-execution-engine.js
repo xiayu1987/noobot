@@ -439,6 +439,8 @@ export class SessionExecutionEngine {
         this._normalizeDetachedSubSessionMessage(message, now),
       persistDetachedSubSessionSnapshot: (payload = {}) =>
         this._persistDetachedSubSessionSnapshot(payload),
+      persistDetachedSubSessionTerminal: (payload = {}) =>
+        this._persistDetachedSubSessionTerminal(payload),
       assertDetachedSubSessionIsolation: (payload = {}) =>
         this._assertDetachedSubSessionIsolation(payload),
       ...(typeof this.session?.applyTurnLifecycleEvent === "function"
@@ -449,6 +451,63 @@ export class SessionExecutionEngine {
         : {}),
       now: () => this._now(),
     });
+  }
+
+  async _persistDetachedSubSessionTerminal({
+    userId = "",
+    sessionId = "",
+    parentSessionId = "",
+    parentDialogProcessId = "",
+    dialogProcessId = "",
+    turnScopeId = "",
+    command = "",
+    messages = [],
+    turnTasks = [],
+  } = {}) {
+    if (!this.session || typeof this.session.upsertTurnStatus !== "function") {
+      const error = new Error("detached sub-session terminal persistence is unavailable");
+      error.code = "SUB_SESSION_TERMINAL_PERSISTENCE_UNAVAILABLE";
+      throw error;
+    }
+    if (Array.isArray(messages) && messages.length) {
+      await this.turnPersister.appendAgentMessages({
+        userId,
+        sessionId,
+        parentSessionId,
+        messages,
+        dialogProcessId,
+        parentDialogProcessId,
+        turnScopeId,
+        eventListener: null,
+      });
+    }
+    if (typeof this.session.saveCurrentTurnTasks === "function") {
+      await this.session.saveCurrentTurnTasks({
+        userId,
+        sessionId,
+        parentSessionId,
+        currentTurnTasks: Array.isArray(turnTasks) ? turnTasks : [],
+      });
+    }
+    const statusReceipt = await this.session.upsertTurnStatus({
+      userId,
+      sessionId,
+      parentSessionId,
+      parentDialogProcessId,
+      dialogProcessId,
+      turnScopeId,
+      command,
+      description:
+        command === "user_stopped"
+          ? "用户停止了本轮生成"
+          : "子 Agent 已完成本轮生成",
+    });
+    const version = Number(statusReceipt?.version);
+    const committed =
+      (statusReceipt?.upserted === true || statusReceipt?.reason === "unchanged") &&
+      Number.isInteger(version) &&
+      version >= 0;
+    return { committed, version, turnStatus: statusReceipt?.turnStatus || null };
   }
 
   _buildContextBuilder({
@@ -625,6 +684,18 @@ export class SessionExecutionEngine {
 
   async getTurnLifecycleSnapshot(payload = {}) {
     return this.session?.getTurnLifecycleSnapshot?.(payload);
+  }
+
+  async getExecution(payload = {}) {
+    return this.session?.getExecution?.(payload);
+  }
+
+  async getExecutionChildren(payload = {}) {
+    return this.session?.getExecutionChildren?.(payload);
+  }
+
+  async getExecutionTree(payload = {}) {
+    return this.session?.getExecutionTree?.(payload);
   }
 
   async persistStoppedAssistantMessage({

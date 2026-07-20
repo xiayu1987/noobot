@@ -34,6 +34,7 @@ const props = defineProps({
   sending: { type: Boolean, default: false },
   deleteMonotonicMessage: { type: Function, default: null },
   resendMonotonicMessage: { type: Function, default: null },
+  stopExecution: { type: Function, default: null },
   emptyLogoSrc: { type: String, default: "" },
 });
 
@@ -53,6 +54,7 @@ const messageItemSharedProps = computed(() => ({
   sending: props.sending,
   deleteMonotonicMessage: props.deleteMonotonicMessage,
   resendMonotonicMessage: props.resendMonotonicMessage,
+  stopExecution: props.stopExecution,
 }));
 
 function getWrapRef() {

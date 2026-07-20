@@ -75,6 +75,8 @@ function normalizeCommittedNodeFact(item = {}) {
     parentSessionId: String(item?.parentSessionId || "").trim(),
     dialogProcessId: String(item?.dialogProcessId || item?.nodeDialogProcessId || "").trim(),
     turnScopeId: String(item?.turnScopeId || "").trim(),
+    activeChildExecutionId: String(item?.activeChildExecutionId || item?.childExecutionId || "").trim(),
+    attemptExecutionIds: Array.isArray(item?.attemptExecutionIds) ? item.attemptExecutionIds.map(String) : [],
     status: String(item?.status || item?.stepStatus || "").trim(),
     stepStatus: String(item?.stepStatus || item?.status || "").trim(),
     stepFailure: item?.failure && typeof item.failure === "object"

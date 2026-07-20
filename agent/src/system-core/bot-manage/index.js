@@ -204,6 +204,18 @@ export class BotManager {
     return this.sessionRunner.getTurnLifecycleSnapshot(payload);
   }
 
+  async getExecution(payload = {}) {
+    return this.sessionRunner.getExecution(payload);
+  }
+
+  async getExecutionChildren(payload = {}) {
+    return this.sessionRunner.getExecutionChildren(payload);
+  }
+
+  async getExecutionTree(payload = {}) {
+    return this.sessionRunner.getExecutionTree(payload);
+  }
+
   runAsyncSession(payload = {}) {
     return this.asyncJobManager.runAsyncSession(payload);
   }

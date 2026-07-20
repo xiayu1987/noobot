@@ -58,6 +58,7 @@ test("workflow hook passes planned user attachments to node sub-session", async 
       subSessionRunner: async (payload = {}) => {
         subSessionCalls.push(payload);
         return {
+          lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
           sessionId: "node-session-read",
           dialogProcessId: "node-dialog-read",
           result: {

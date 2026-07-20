@@ -468,6 +468,7 @@ const drawerPanels = computed(() =>
       :empty-logo-src="noobotLogo"
       :delete-monotonic-message="deleteMonotonicMessage"
       :resend-monotonic-message="resendMonotonicMessage"
+      :stop-execution="stopSending"
       :chat-message-nav-items="chatMessageNavItems"
       :chat-navigator-visible="chatNavigatorVisible"
       :current-message-anchor-id="currentMessageAnchorId"

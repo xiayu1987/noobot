@@ -99,6 +99,9 @@ export function useReconnectReplay({
   notify = () => {},
   processStore,
   applyTurnRuntimeEvents,
+  applyExecutionSnapshot,
+  applyExecutionChildren,
+  applyExecutionTree,
 } = {}) {
   const reconnectReplayContext = createReconnectReplayContext();
   const { replayCache, appliedReconnectSeqByDialogProcessId, terminalDialogProcessIdSet, missingInteractionPayloadTimers } =
@@ -555,6 +558,9 @@ export function useReconnectReplay({
       applyReconnectMessagesToActiveSession,
       applyChannelState,
       applyTurnLifecycleEnvelope,
+      applyExecutionSnapshot,
+      applyExecutionChildren,
+      applyExecutionTree,
     });
   }
 

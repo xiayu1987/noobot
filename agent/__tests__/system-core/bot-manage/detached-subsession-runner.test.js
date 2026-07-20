@@ -20,6 +20,7 @@ function createDefaultDeps(overrides = {}) {
     runTurnPayload: null,
     resolvePluginScopedDirPayload: null,
     persistDetachedSubSessionSnapshotPayload: null,
+    persistDetachedSubSessionTerminalPayloads: [],
     assertDetachedSubSessionIsolationPayload: null,
     loadedWorkspacePath: "",
   };
@@ -104,6 +105,10 @@ function createDefaultDeps(overrides = {}) {
     async persistDetachedSubSessionSnapshot(payload = {}) {
       calls.persistDetachedSubSessionSnapshotPayload = payload;
       return { outputDir: payload.outputDir, version: 7 };
+    },
+    async persistDetachedSubSessionTerminal(payload = {}) {
+      calls.persistDetachedSubSessionTerminalPayloads.push(payload);
+      return { committed: true, version: 11 };
     },
     async assertDetachedSubSessionIsolation(payload = {}) {
       calls.assertDetachedSubSessionIsolationPayload = payload;
@@ -261,17 +266,18 @@ test("detached sub-session abort uses the three stop lifecycle phases", async ()
   assert.equal(calls.persistDetachedSubSessionSnapshotPayload.sessionPayload.sessionId, "child-stop");
   assert.equal(
     lifecycle.calls.find((call) => call.eventType === "turn.stop_completed")?.summaryVersion,
-    7,
+    11,
   );
 });
 
-test("detached sub-session does not commit stop completed without a persisted summary version", async () => {
+test("detached sub-session terminal version is independent from plugin snapshot version", async () => {
   const lifecycle = createLifecycleMock();
   const abortController = new AbortController();
   const { deps } = createDefaultDeps({
     applyTurnLifecycleEvent: lifecycle.applyTurnLifecycleEvent,
     resolvePluginScopedDir: () => "/tmp/workflow-child-stop-no-version",
     persistDetachedSubSessionSnapshot: async (payload = {}) => ({ outputDir: payload.outputDir }),
+    persistDetachedSubSessionTerminal: async () => ({ committed: true, version: 13 }),
     agentRuntimeFacade: {
       async runTurn() {
         abortController.abort();
@@ -289,11 +295,11 @@ test("detached sub-session does not commit stop completed without a persisted su
       strategy: { sessionId: "child-stop-no-version" },
       abortSignal: abortController.signal,
     }),
-    (error) => error?.lifecycleError?.code === "SUB_SESSION_SUMMARY_VERSION_MISSING",
+    (error) => error?.name === "AbortError",
   );
   assert.equal(
-    lifecycle.calls.some((call) => call.eventType === "turn.stop_completed"),
-    false,
+    lifecycle.calls.find((call) => call.eventType === "turn.stop_completed")?.summaryVersion,
+    13,
   );
 });
 

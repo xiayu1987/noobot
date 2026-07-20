@@ -27,6 +27,13 @@ import { createRunEventListener } from "./run-event-listener.js";
 import { resetRunState } from "./connection-state.js";
 import { createCommittedTurnLifecyclePublisher } from "./turn-lifecycle-bridge.js";
 import { TURN_COMMAND, TURN_EVENT, TURN_PHASE, validateTurnLifecycleSnapshot } from "@noobot/shared/turn-lifecycle-protocol";
+import {
+  EXECUTION_CHILDREN_WIRE_EVENT,
+  EXECUTION_QUERY_COMMAND,
+  EXECUTION_SNAPSHOT_WIRE_EVENT,
+  EXECUTION_TREE_WIRE_EVENT,
+  validateExecutionIdentity,
+} from "@noobot/shared/execution-lifecycle-protocol";
 
 /**
  * Build the WebSocket `message` handler for a single connection.
@@ -130,6 +137,44 @@ export function createMessageHandler({
       return;
     }
     sendEvent("turn_snapshot", result.snapshot);
+  };
+
+  const handleExecutionQuery = async (payload, commandType) => {
+    const userId = String(payload?.userId || authInfo?.userId || "").trim();
+    const executionId = String(payload?.executionId || "").trim();
+    const rootExecutionId = String(payload?.rootExecutionId || "").trim();
+    const commandId = String(payload?.commandId || "").trim();
+    const query = commandType === EXECUTION_QUERY_COMMAND.SNAPSHOT_GET
+      ? { method: "getExecution", event: EXECUTION_SNAPSHOT_WIRE_EVENT, requiresExecutionId: true }
+      : commandType === EXECUTION_QUERY_COMMAND.CHILDREN_GET
+        ? { method: "getExecutionChildren", event: EXECUTION_CHILDREN_WIRE_EVENT, requiresExecutionId: true }
+        : { method: "getExecutionTree", event: EXECUTION_TREE_WIRE_EVENT, requiresExecutionId: false };
+    if (!userId || !commandId || (query.requiresExecutionId ? !executionId : (!executionId && !rootExecutionId)) || isForbiddenUserScope(authInfo, userId)) {
+      sendEvent("error", { errorCode: "invalid_execution_query", executionId, rootExecutionId, commandId });
+      return;
+    }
+    const bot = resolveBot();
+    const reader = bot?.[query.method];
+    if (typeof reader !== "function") {
+      sendEvent("error", { errorCode: "execution_query_unavailable", executionId, rootExecutionId, commandId });
+      return;
+    }
+    const result = await reader.call(bot, { userId, executionId, rootExecutionId });
+    if (!result?.found) {
+      sendEvent("error", { errorCode: result?.reason || "execution_not_found", executionId, rootExecutionId, commandId });
+      return;
+    }
+    const candidates = query.method === "getExecution"
+      ? [result.execution]
+      : query.method === "getExecutionChildren"
+        ? [result.execution, ...(result.children || [])]
+        : Object.values(result.tree?.executions || {});
+    const invalid = candidates.find((item) => !validateExecutionIdentity(item).valid);
+    if (invalid) {
+      sendEvent("error", { errorCode: "invalid_authoritative_execution", executionId, rootExecutionId, commandId });
+      return;
+    }
+    sendEvent(query.event, { ...result, commandId });
   };
 
   const handleFinalize = async (payload) => {
@@ -531,6 +576,12 @@ export function createMessageHandler({
           eventType: TURN_EVENT.PROCESSING_STARTED,
           phase: TURN_PHASE.PROCESSING,
           executionState: "sending",
+          executionId: lifecycleData?.executionId,
+          executionKind: lifecycleData?.executionKind,
+          parentExecutionId: lifecycleData?.parentExecutionId,
+          rootExecutionId: lifecycleData?.rootExecutionId,
+          origin: lifecycleData?.origin,
+          stage: lifecycleData?.stage,
         }).then((started) => {
           if (!started?.applied && !started?.deduplicated) {
             throw new Error(started?.reason || "processing_start_failed");
@@ -601,6 +652,10 @@ export function createMessageHandler({
       const payload = JSON.parse(String(rawMessage || "{}"));
       const action = String(payload?.action || "").trim().toLowerCase();
       const commandType = String(payload?.commandType || "").trim().toLowerCase();
+      if (Object.values(EXECUTION_QUERY_COMMAND).includes(commandType)) {
+        await handleExecutionQuery(payload, commandType);
+        return;
+      }
       if (commandType === TURN_COMMAND.SNAPSHOT_GET) {
         await handleSnapshotGet(payload);
         return;

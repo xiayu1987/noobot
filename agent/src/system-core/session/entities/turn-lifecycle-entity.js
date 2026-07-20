@@ -38,6 +38,12 @@ export function normalizeTurnLifecycleEntity(source = {}) {
     if (!turnScopeId) continue;
     turns[turnScopeId] = {
       turnScopeId,
+      executionId: clean(value.executionId) || `agent:${turnScopeId}`,
+      executionKind: clean(value.executionKind) || "agent",
+      parentExecutionId: clean(value.parentExecutionId),
+      rootExecutionId: clean(value.rootExecutionId) || clean(value.executionId) || `agent:${turnScopeId}`,
+      origin: value.origin && typeof value.origin === "object" && !Array.isArray(value.origin) ? { ...value.origin } : {},
+      stage: clean(value.stage),
       dialogProcessId: clean(value.dialogProcessId),
       commandId: clean(value.commandId),
       action: clean(value.action),
@@ -126,14 +132,31 @@ export function transitionTurnLifecycle(source = {}, input = {}, now = () => new
   const phase = clean(input.phase);
   if (!turnScopeId || !commandId || !eventType) return { applied: false, reason: "invalid_lifecycle_identity", lifecycle };
 
-  const requestHash = JSON.stringify({ eventType, turnScopeId, phase, action: clean(input.action), executionState: clean(input.executionState) });
+  const current = lifecycle.turns[turnScopeId] || null;
+  const requestedExecutionIdentity = {
+    executionId: clean(input.executionId || current?.executionId) || `agent:${turnScopeId}`,
+    executionKind: clean(input.executionKind || current?.executionKind) || "agent",
+    parentExecutionId: clean(input.parentExecutionId || current?.parentExecutionId),
+    rootExecutionId: clean(input.rootExecutionId || current?.rootExecutionId || input.executionId || current?.executionId) || `agent:${turnScopeId}`,
+    origin: input.origin && typeof input.origin === "object" && !Array.isArray(input.origin)
+      ? Object.fromEntries(Object.entries(input.origin).sort(([left], [right]) => left.localeCompare(right)))
+      : current?.origin || {},
+    stage: clean(input.stage || current?.stage),
+  };
+  const requestHash = JSON.stringify({
+    eventType,
+    turnScopeId,
+    phase,
+    action: clean(input.action),
+    executionState: clean(input.executionState),
+    ...requestedExecutionIdentity,
+  });
   const receipt = lifecycle.commandReceipts.find((item) => item.commandId === commandId && item.eventType === eventType);
   if (receipt) {
     if (receipt.requestHash !== requestHash) return { applied: false, reason: "idempotency_key_reused", lifecycle };
     return { applied: false, deduplicated: true, reason: "duplicate_command", lifecycle, turn: lifecycle.turns[receipt.turnScopeId] };
   }
 
-  const current = lifecycle.turns[turnScopeId] || null;
   if (input.expectedRevision !== undefined && Number(input.expectedRevision) !== Number(current?.revision || 0)) {
     return { applied: false, reason: "turn_revision_conflict", currentRevision: Number(current?.revision || 0), lifecycle };
   }
@@ -177,6 +200,7 @@ export function transitionTurnLifecycle(source = {}, input = {}, now = () => new
   const turn = {
     ...(current || {}),
     turnScopeId,
+    ...requestedExecutionIdentity,
     dialogProcessId: clean(input.dialogProcessId || current?.dialogProcessId),
     commandId,
     action,

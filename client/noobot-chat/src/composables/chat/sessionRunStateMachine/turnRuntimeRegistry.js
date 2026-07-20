@@ -10,6 +10,7 @@ import {
   validateTurnLifecycleEnvelope,
   validateTurnLifecycleSnapshot,
 } from "@noobot/shared/turn-lifecycle-protocol";
+import { validateExecutionIdentity } from "@noobot/shared/execution-lifecycle-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 export const DEFAULT_TERMINAL_RETAIN_PER_SESSION = 10;
@@ -19,12 +20,141 @@ function text(value) {
   return String(value || "").trim();
 }
 
+function executionFingerprint(value = {}) {
+  const normalize = (input) => {
+    if (Array.isArray(input)) return input.map(normalize);
+    if (!input || typeof input !== "object") return input;
+    return Object.fromEntries(Object.keys(input).sort().map((key) => [key, normalize(input[key])]));
+  };
+  return JSON.stringify(normalize(value));
+}
+
 export function sessionRuntimeId(value = {}) {
   return text(value?.backendSessionId || value?.sessionId || value?.id || value);
 }
 
 export function createTurnRuntimeRegistryState() {
-  return { sessions: {}, routeIndex: {} };
+  return { sessions: {}, routeIndex: {}, executions: {}, executionIdByTurnScopeId: {}, childExecutionIdsByParentId: {} };
+}
+
+function removeExecutionProjection(registry, executionId) {
+  const execution = registry?.executions?.[executionId];
+  if (!execution) return false;
+  const parentId = text(execution?.parentExecutionId);
+  if (parentId && registry.childExecutionIdsByParentId?.[parentId]) {
+    registry.childExecutionIdsByParentId[parentId] = registry.childExecutionIdsByParentId[parentId]
+      .filter((id) => id !== executionId);
+    if (!registry.childExecutionIdsByParentId[parentId].length) {
+      delete registry.childExecutionIdsByParentId[parentId];
+    }
+  }
+  if (execution?.turnScopeId && registry.executionIdByTurnScopeId?.[execution.turnScopeId] === executionId) {
+    delete registry.executionIdByTurnScopeId[execution.turnScopeId];
+  }
+  delete registry.executions[executionId];
+  delete registry.childExecutionIdsByParentId?.[executionId];
+  return true;
+}
+
+function applyExecutionProjection(registry, source = {}) {
+  const validation = validateExecutionIdentity(source);
+  if (!validation.valid) return { applied: false, reason: "invalid_execution_identity", errors: validation.errors };
+  const current = registry.executions?.[validation.identity.executionId];
+  const execution = { ...(current || {}), ...source, ...validation.identity };
+  if (current && (Number(current.revision || 0) > Number(execution.revision || 0)
+    || (Number(current.revision || 0) === Number(execution.revision || 0) && Number(current.sequence || 0) > Number(execution.sequence || 0)))) {
+    return { applied: false, reason: "stale_execution" };
+  }
+  if (current && Number(current.revision || 0) === Number(execution.revision || 0)
+    && Number(current.sequence || 0) === Number(execution.sequence || 0)) {
+    const currentComparable = { ...current };
+    const executionComparable = { ...execution };
+    delete currentComparable._projectionFingerprint;
+    delete executionComparable._projectionFingerprint;
+    if (executionFingerprint(currentComparable) === executionFingerprint(executionComparable)) {
+      return { applied: false, deduplicated: true, reason: "duplicate_execution" };
+    }
+    return { applied: false, reason: "execution_sequence_conflict" };
+  }
+  if (!registry.executions) registry.executions = {};
+  if (!registry.executionIdByTurnScopeId) registry.executionIdByTurnScopeId = {};
+  if (!registry.childExecutionIdsByParentId) registry.childExecutionIdsByParentId = {};
+  const previousParentExecutionId = text(current?.parentExecutionId);
+  if (previousParentExecutionId && previousParentExecutionId !== execution.parentExecutionId) {
+    registry.childExecutionIdsByParentId[previousParentExecutionId] =
+      (registry.childExecutionIdsByParentId[previousParentExecutionId] || []).filter((id) => id !== execution.executionId);
+    if (!registry.childExecutionIdsByParentId[previousParentExecutionId].length) {
+      delete registry.childExecutionIdsByParentId[previousParentExecutionId];
+    }
+  }
+  registry.executions[execution.executionId] = execution;
+  if (execution.turnScopeId) registry.executionIdByTurnScopeId[execution.turnScopeId] = execution.executionId;
+  if (execution.parentExecutionId) {
+    const children = new Set(registry.childExecutionIdsByParentId[execution.parentExecutionId] || []);
+    children.add(execution.executionId);
+    registry.childExecutionIdsByParentId[execution.parentExecutionId] = [...children];
+  }
+  return { applied: true, execution };
+}
+
+export function applyExecutionSnapshot(registry, payload = {}) {
+  return applyExecutionProjection(registry, payload?.execution || payload);
+}
+
+export function applyExecutionChildren(registry, payload = {}) {
+  const results = [payload?.execution, ...(Array.isArray(payload?.children) ? payload.children : [])]
+    .filter(Boolean).map((item) => applyExecutionProjection(registry, item));
+  return { applied: results.some((item) => item.applied), results };
+}
+
+export function applyExecutionTree(registry, payload = {}) {
+  const rootExecutionId = text(payload?.rootExecutionId);
+  const incoming = Object.values(payload?.tree?.executions || {});
+  if (!rootExecutionId) return { applied: false, reason: "invalid_execution_tree_root", results: [], rootExecutionId };
+  const validations = incoming.map((item) => validateExecutionIdentity(item));
+  if (validations.some((item) => !item.valid)) {
+    return {
+      applied: false,
+      reason: "invalid_execution_tree",
+      errors: validations.flatMap((item) => item.errors || []),
+      results: [],
+      rootExecutionId,
+    };
+  }
+  if (validations.some(({ identity }) => identity.executionId !== rootExecutionId && identity.rootExecutionId !== rootExecutionId)) {
+    return { applied: false, reason: "execution_tree_root_conflict", results: [], rootExecutionId };
+  }
+  // A plain tree snapshot has no tree-wide revision/tombstone coordinate. It
+  // is therefore an authoritative view of the entries it contains, but NOT
+  // proof that a locally newer lifecycle projection was deleted. Destructive
+  // removal is only accepted through explicit, versioned tombstones. This
+  // prevents a delayed reconnect tree from deleting a child introduced by a
+  // newer lifecycle envelope while the request was in flight.
+  const tombstones = Array.isArray(payload?.removedExecutions) ? payload.removedExecutions : [];
+  const removedExecutionIds = [];
+  for (const tombstone of tombstones) {
+    const executionId = text(tombstone?.executionId);
+    const current = registry?.executions?.[executionId];
+    const revision = Number(tombstone?.revision);
+    const sequence = Number(tombstone?.sequence);
+    if (!executionId || !current || text(current?.rootExecutionId || current?.executionId) !== rootExecutionId) continue;
+    if (!Number.isInteger(revision) || revision < 1 || !Number.isInteger(sequence) || sequence < 1) continue;
+    if (Number(current.revision || 0) > revision
+      || (Number(current.revision || 0) === revision && Number(current.sequence || 0) >= sequence)) continue;
+    if (removeExecutionProjection(registry, executionId)) removedExecutionIds.push(executionId);
+  }
+  const results = incoming
+    .map((item) => applyExecutionProjection(registry, item));
+  return { applied: removedExecutionIds.length > 0 || results.some((item) => item.applied), results, removedExecutionIds, rootExecutionId };
+}
+
+export function selectExecution(registry, executionId) {
+  return registry?.executions?.[text(executionId)] || null;
+}
+
+export function selectExecutionChildren(registry, executionId) {
+  return (registry?.childExecutionIdsByParentId?.[text(executionId)] || [])
+    .map((id) => registry?.executions?.[id]).filter(Boolean);
 }
 
 function ensureSessionBucket(registry, sessionId) {
@@ -266,6 +396,7 @@ export function applyTurnLifecycleEnvelope(registry, envelope = {}) {
     const bucket = ensureSessionBucket(registry, envelope.sessionId);
     bucket.authoritativeSequence = Math.max(Number(bucket.authoritativeSequence || 0), Number(envelope.sequence || 0));
     bucket.protocolVersion = Number(envelope.protocolVersion || 1);
+    applyExecutionProjection(registry, envelope);
   }
   return result;
 }
