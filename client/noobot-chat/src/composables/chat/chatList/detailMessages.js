@@ -76,9 +76,8 @@ export function buildTurnTimingsByTurnScopeId({
   const currentTimings = currentTimingsByTurnScopeId && typeof currentTimingsByTurnScopeId === "object"
     ? currentTimingsByTurnScopeId
     : {};
-  return Object.fromEntries(
-    (Array.isArray(turnTimings) ? turnTimings : [])
-      .map((item = {}) => {
+  const projectedEntries = (Array.isArray(turnTimings) ? turnTimings : [])
+    .map((item = {}) => {
         const timingDialogProcessId = getMessageDialogProcessId(item);
         const matchingMessage = timingDialogProcessId
           ? sourceMessages.find(
@@ -94,8 +93,17 @@ export function buildTurnTimingsByTurnScopeId({
         onTimingHydrated?.({ item, matchingMessage, turnScopeId, current, timing });
         return [turnScopeId, timing];
       })
-      .filter(([turnScopeId]) => Boolean(turnScopeId)),
-  );
+    .filter(([turnScopeId]) => Boolean(turnScopeId));
+  const projectedTurnScopeIds = new Set(projectedEntries.map(([turnScopeId]) => turnScopeId));
+  // A sparse realtime update may omit persisted turnTimings while still
+  // carrying the in-flight message. Preserve only timings whose owning turn is
+  // present; never leak an orphan timing into another/session-empty projection.
+  for (const [turnScopeId, timing] of Object.entries(currentTimings)) {
+    if (projectedTurnScopeIds.has(turnScopeId)) continue;
+    if (!sourceMessages.some((messageItem) => getMessageTurnScopeId(messageItem) === turnScopeId)) continue;
+    projectedEntries.push([turnScopeId, timing]);
+  }
+  return Object.fromEntries(projectedEntries);
 }
 
 function normalizeState(value = "") {

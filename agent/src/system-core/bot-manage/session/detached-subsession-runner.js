@@ -264,7 +264,6 @@ export function createDetachedSubSessionRunner({
             dialogProcessId: subDialogProcessId || subSessionId,
             turnScopeId,
             command: "user_stopped",
-            messages: [],
             turnTasks: [],
           });
           persisted = await persistPluginSubSessionSnapshot({
@@ -324,7 +323,6 @@ export function createDetachedSubSessionRunner({
         dialogProcessId,
         turnScopeId,
         command: "completed",
-        messages: turnMessages,
         turnTasks: Array.isArray(agentResult?.turnTasks) ? agentResult.turnTasks : [],
       });
       persisted = await persistPluginSubSessionSnapshot({

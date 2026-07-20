@@ -4,6 +4,7 @@
   SPDX-License-Identifier: MIT
 */
 import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
+import { mergeCanonicalSessionDetail } from "../../../../../client/noobot-chat/src/composables/infra/sessionDetailMerge.js";
 
 function getRegistryValue(registry) {
   if (registry && typeof registry === "object" && "value" in registry) return registry.value || {};
@@ -19,46 +20,10 @@ function text(value) {
   return String(value || "").trim();
 }
 
-function projectionItemKey(item = {}, index = 0) {
-  return text(item?.id || item?.messageId || item?.turnScopeId || item?.dialogProcessId) || `index:${index}`;
-}
-
-function mergeProjectionItems(baseItems = [], incomingItems = []) {
-  const merged = new Map();
-  (Array.isArray(baseItems) ? baseItems : []).forEach((item, index) => {
-    merged.set(projectionItemKey(item, index), item);
-  });
-  (Array.isArray(incomingItems) ? incomingItems : []).forEach((item, index) => {
-    const key = projectionItemKey(item, index);
-    merged.set(key, { ...(merged.get(key) || {}), ...item });
-  });
-  return [...merged.values()];
-}
-
 /** Merge persisted full detail with the realtime projection without allowing a
  * partial realtime document to erase user messages or turn metadata. */
 export function mergeUnifiedSessionDetail(base = {}, incoming = {}) {
-  const baseSummary = base?.sessionSummary && typeof base.sessionSummary === "object" ? base.sessionSummary : {};
-  const incomingSummary = incoming?.sessionSummary && typeof incoming.sessionSummary === "object" ? incoming.sessionSummary : {};
-  const messages = mergeProjectionItems(
-    Array.isArray(base?.messages) ? base.messages : baseSummary.messages,
-    Array.isArray(incoming?.messages) ? incoming.messages : incomingSummary.messages,
-  );
-  const rawMessages = mergeProjectionItems(base?.rawMessages, incoming?.rawMessages);
-  return {
-    ...base,
-    ...incoming,
-    sessionId: text(incoming?.sessionId || base?.sessionId || incomingSummary.sessionId || baseSummary.sessionId),
-    messages,
-    rawMessages: rawMessages.length ? rawMessages : messages,
-    sessionSummary: {
-      ...baseSummary,
-      ...incomingSummary,
-      messages,
-      turnStatuses: mergeProjectionItems(baseSummary.turnStatuses, incomingSummary.turnStatuses),
-      turnTimings: mergeProjectionItems(baseSummary.turnTimings, incomingSummary.turnTimings),
-    },
-  };
+  return mergeCanonicalSessionDetail(base, incoming);
 }
 
 function getSessionBucket(registry = {}, sessionId = "") {
@@ -116,6 +81,22 @@ export function resolveRuntimeNodeSession(nodeItem = {}, runtimeNodeSessions = [
     {};
 }
 
+export function resolveIsolatedNodeSessionId(nodeItem = {}, runtimeNode = {}) {
+  const parentIds = new Set([
+    text(nodeItem?.rootSessionId),
+    text(nodeItem?.parentSessionId),
+    text(runtimeNode?.rootSessionId),
+    text(runtimeNode?.parentSessionId),
+  ].filter(Boolean));
+  const candidates = [
+    runtimeNode?.nodeSessionId,
+    runtimeNode?.sessionId,
+    nodeItem?.nodeSessionId,
+    nodeItem?.sessionId,
+  ].map(text).filter(Boolean);
+  return candidates.find((candidate) => !parentIds.has(candidate)) || "";
+}
+
 export function buildUnifiedSessionDetail({
   nodeItem = {},
   runtimeNodeSessions = [],
@@ -157,7 +138,7 @@ export function buildUnifiedSessionDetail({
   // Child Execution identity remains authoritative, but its projection can
   // arrive after sub-session events. Use only the node's preallocated session
   // identity as the realtime fallback; never infer another child by dialog.
-  const sessionId = text(runtimeNode?.sessionId || runtimeNode?.nodeSessionId || nodeItem?.sessionId || nodeItem?.nodeSessionId);
+  const sessionId = resolveIsolatedNodeSessionId(nodeItem, runtimeNode);
   if (!sessionId || typeof selectSessionMessages !== "function") return null;
   const sessionDoc = selectSessionMessages(sessionId);
   if (!sessionDoc || typeof sessionDoc !== "object") return null;

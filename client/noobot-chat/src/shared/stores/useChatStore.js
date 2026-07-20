@@ -177,7 +177,10 @@ export const useChatStore = defineStore("chat", () => {
     workflowNodeStateRegistry.value = { ...registry, workflows: { ...registry.workflows } };
     const results = nodeSessions.map((nodeSession = {}, index) => upsertWorkflowNodeStateEvent({
       ...(nodeSession || {}),
-      sessionId: text(nodeSession?.sessionId || eventData?.sessionId),
+      // A planned node does not own the workflow's parent Session.  Keep the
+      // child identity empty until the backend allocates it; otherwise the
+      // node drawer can subscribe to and render the main conversation.
+      sessionId: text(nodeSession?.sessionId || nodeSession?.nodeSessionId),
       parentSessionId: text(nodeSession?.parentSessionId || eventData?.sessionId),
       workflowRunId: text(nodeSession?.workflowRunId) || workflowRunId,
       nodeExecutionId: text(nodeSession?.nodeExecutionId),

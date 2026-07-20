@@ -18,6 +18,7 @@ import {
   buildUnifiedSessionDetail,
   hasNewProtocolNodeIdentity,
   mergeUnifiedSessionDetail,
+  resolveIsolatedNodeSessionId,
   resolveNodeChildExecutionIds,
   resolveRuntimeNodeSession,
 } from "./workflowUnifiedSessionDetail.js";
@@ -72,6 +73,21 @@ export function useWorkflowNodeSessionViewer({
   const executionDirectory = ref([]);
   const attemptExecutionIds = ref([]);
 
+  function detailSessionId(detail = {}) {
+    return text(detail?.sessionId || detail?.sessionSummary?.sessionId || detail?.session?.sessionId || detail?.session?.id);
+  }
+
+  function isCurrentSessionRequest(requestToken, targetSessionId = "", detail = null) {
+    if (requestToken !== nodeSessionRequestToken) return false;
+    const expectedSessionId = text(targetSessionId);
+    const responseSessionId = detailSessionId(detail || {});
+    if (expectedSessionId && responseSessionId && expectedSessionId !== responseSessionId) return false;
+    const selectedTargetSessionId = text(
+      selectedNode.value?.sessionId || selectedNode.value?.nodeSessionId,
+    );
+    return !expectedSessionId || !selectedTargetSessionId || expectedSessionId === selectedTargetSessionId;
+  }
+
   function applyExecutionDetail(executionId = "") {
     const id = text(executionId);
     if (!id || typeof props.selectExecutionDetail !== "function") return false;
@@ -112,8 +128,15 @@ export function useWorkflowNodeSessionViewer({
     );
     if (!id) return { state: "failed", reason: "missing_execution_id" };
     if (!sessionId) return { state: "pending", reason: "session_identity_pending" };
-    const detail = await fetchExecutionSessionDetail({ props, translate, sessionId });
-    if (requestToken !== nodeSessionRequestToken) return { state: "stale" };
+    const route = buildWorkflowDrawerRoute(selectedNode.value || {});
+    const detail = await fetchExecutionSessionDetail({
+      props,
+      translate,
+      sessionId,
+      rootSessionId: route.rootSessionId,
+      dialogProcessId: route.dialogProcessId,
+    });
+    if (!isCurrentSessionRequest(requestToken, sessionId, detail)) return { state: "stale" };
     if (detail?.state === "pending") return detail;
     applySelectedNodeSessionDetail(hydrateExecutionSessionDetail(detail, {
       executionId: id,
@@ -182,6 +205,7 @@ export function useWorkflowNodeSessionViewer({
         ...mergedDetail.sessionSummary,
         sessionId: mergedDetail.sessionId,
         messages: mergedDetail.messages,
+        rawMessages: mergedDetail.rawMessages,
       });
     }
   }
@@ -217,11 +241,8 @@ export function useWorkflowNodeSessionViewer({
   }
 
   function bindSelectedNodeRealtimeProjection(nodeItem = selectedNode.value || {}) {
-    const sessionId = text(
-      nodeItem?.sessionId ||
-      nodeItem?.nodeSessionId ||
-      selectedNodeSessionId.value,
-    );
+    const runtimeNode = resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions);
+    const sessionId = resolveIsolatedNodeSessionId(nodeItem, runtimeNode);
     if (!sessionId || typeof props.selectSessionMessages !== "function") return false;
     const sessionDoc = props.selectSessionMessages(sessionId);
     if (!sessionDoc || typeof sessionDoc !== "object") return false;
@@ -262,41 +283,42 @@ export function useWorkflowNodeSessionViewer({
       const childExecutionIds = resolveNodeChildExecutionIds(nodeItem, runtimeNodeSessions);
       const executionId = text(selectedExecutionId.value || childExecutionIds[0]);
       const runtimeNode = resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions);
-      const sessionIdHint = text(
-        runtimeNode?.sessionId ||
-        runtimeNode?.nodeSessionId ||
-        nodeItem?.sessionId ||
-        nodeItem?.nodeSessionId,
-      );
+      const sessionIdHint = resolveIsolatedNodeSessionId(nodeItem, runtimeNode);
       selectedExecutionId.value = executionId;
       attemptExecutionIds.value = childExecutionIds;
       try {
-        if (executionId) {
+        // A local Execution projection is intentionally treated as a live,
+        // sparse projection. Always hydrate its isolated Session through the
+        // full-detail endpoint as well, so user prompts, turn status/timing and
+        // persisted thinking facts are present before realtime deltas merge.
+        if (sessionIdHint) {
+          const detail = await fetchExecutionSessionDetail({
+            props,
+            translate,
+            sessionId: sessionIdHint,
+            rootSessionId,
+            dialogProcessId,
+          });
+          if (isCurrentSessionRequest(requestToken, sessionIdHint, detail)) {
+            if (detail?.state === "pending") {
+              viewerState.value = "pending";
+            } else {
+              applySelectedNodeSessionDetail(hydrateExecutionSessionDetail(detail, {
+                executionId,
+                execution: executionId && typeof props.selectExecutionDetail === "function"
+                  ? props.selectExecutionDetail(executionId)?.execution || null
+                  : null,
+              }));
+              viewerState.value = detail?.state === "empty" ? "empty" : "ready";
+            }
+          }
+        } else if (executionId) {
           const result = await loadExecutionSessionDetail(executionId, requestToken, { sessionIdHint });
           if (requestToken === nodeSessionRequestToken && result.state !== "stale") {
             viewerState.value = result.state;
           }
           if (result.state === "failed" && requestToken === nodeSessionRequestToken) {
             viewerError.value = translate("workflow.readNodeSessionFailed");
-          }
-        } else if (sessionIdHint) {
-          // The preallocated child Session is available before the committed
-          // Child Execution projection in normal runs. Hydrate that Session
-          // directly instead of leaving the drawer permanently pending: its
-          // messages may already have been persisted or reached the REST
-          // projection even though the Execution id has not arrived locally.
-          const detail = await fetchExecutionSessionDetail({
-            props,
-            translate,
-            sessionId: sessionIdHint,
-          });
-          if (requestToken === nodeSessionRequestToken) {
-            if (detail?.state === "pending") {
-              viewerState.value = "pending";
-            } else {
-              applySelectedNodeSessionDetail(hydrateExecutionSessionDetail(detail));
-              viewerState.value = detail?.state === "empty" ? "empty" : "ready";
-            }
           }
         } else if (requestToken === nodeSessionRequestToken) {
           // Neither authoritative identity has reached the client yet.
@@ -323,7 +345,8 @@ export function useWorkflowNodeSessionViewer({
         rootSessionId,
         dialogProcessId,
       });
-      if (requestToken !== nodeSessionRequestToken) return;
+      const targetSessionId = text(nodeItem?.sessionId || nodeItem?.nodeSessionId);
+      if (!isCurrentSessionRequest(requestToken, targetSessionId, detail)) return;
       applySelectedNodeSessionDetail(detail);
       applyUnifiedSessionDetailIfAvailable(nodeItem);
       viewerState.value = (detail.messages || []).length ? "ready" : "empty";

@@ -156,34 +156,22 @@ function resolveRendererContext() {
     // looking at the main session. A node id can legitimately equal a parent
     // session id while the child registry is still receiving live events.
     const workflowPayload = props.messageItem?.pluginMeta?.payload || {};
-    const workflowRunId = String(
-      workflowPayload.workflowRunId || workflowPayload.execution?.workflowRunId || "",
-    ).trim();
-    const nodeExecutionId = String(
-      workflowPayload.nodeExecutionId || workflowPayload.execution?.nodeExecutionId || "",
-    ).trim();
     const subSession = chatStore.selectSubSessionMessages?.(id);
-    if ((workflowRunId || nodeExecutionId) && subSession) {
+    if (subSession) {
       return {
         ...subSession,
         sessionId: String(subSession?.sessionId || subSession?.id || id).trim(),
         messages: Array.isArray(subSession?.messages) ? subSession.messages : [],
       };
     }
-    const session = (chatStore.sessions || []).find((item = {}) => String(item?.id || item?.sessionId || item?.backendSessionId || "").trim() === id);
-    if (session) {
-      return {
-        ...session,
-        sessionId: String(session?.id || session?.sessionId || session?.backendSessionId || id).trim(),
-        messages: Array.isArray(session?.messages) ? session.messages : [],
-      };
-    }
-    if (!subSession) return null;
-    return {
-      ...subSession,
-      sessionId: String(subSession?.sessionId || subSession?.id || id).trim(),
-      messages: Array.isArray(subSession?.messages) ? subSession.messages : [],
-    };
+    // This selector is exposed specifically to the Workflow node drawer.
+    // Never fall back to the main-session collection: a planned/running node
+    // may temporarily carry its parent id before its child Session identity
+    // arrives. REST/Execution hydration will populate the isolated registry.
+    // This callback is only provided to the Workflow renderer. Main-session
+    // messages are already supplied by the host view and are never a valid
+    // fallback for a node drawer, regardless of payload protocol/version.
+    return null;
   };
   return {
     messageItem: props.messageItem,
