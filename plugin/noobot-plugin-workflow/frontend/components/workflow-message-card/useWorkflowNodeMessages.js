@@ -4,12 +4,8 @@
   SPDX-License-Identifier: MIT
 */
 import { computed } from "vue";
-import { applyCompletedToolLogsToMessages } from "../../../../../client/noobot-chat/src/composables/infra/sessionToolLogs";
 import { buildViewMessage, foldConversationMessages } from "../../../../../client/noobot-chat/src/composables/infra/messageModel";
-import {
-  buildNormalizedDetailMessages,
-  buildTurnTimingsByTurnScopeId,
-} from "../../../../../client/noobot-chat/src/composables/chat/chatList/detailMessages";
+import { buildSessionDetailProjection } from "../../../../../client/noobot-chat/src/composables/chat/chatList/sessionDetailProjection";
 
 export function useWorkflowNodeMessages({
   props,
@@ -75,21 +71,24 @@ export function useWorkflowNodeMessages({
     ];
   });
 
-  const selectedNodeTurnTimingsByTurnScopeId = computed(() => {
-    const summary = selectedNodeSessionSummary.value || {};
-    if (summary?.turnTimingsByTurnScopeId && typeof summary.turnTimingsByTurnScopeId === "object") {
-      return summary.turnTimingsByTurnScopeId;
-    }
-    return buildTurnTimingsByTurnScopeId({
-      turnTimings: summary?.turnTimings,
-      messages: Array.isArray(summary?.messages) ? summary.messages : [],
-    });
-  });
+  const selectedNodeProjection = computed(() => buildSessionDetailProjection({
+    sessionDetail: {
+      sessionId: selectedNodeSessionId.value,
+      sessionSummary: selectedNodeSessionSummary.value || {},
+      messages: selectedNodeMessages.value,
+    },
+    sessionDocs: selectedNodeSessionDocs.value,
+    makeViewMessage: buildNodeViewMessage,
+    foldMessagesForView: (messages = []) => foldConversationMessages(messages, buildNodeViewMessage),
+    applyToolLogs: true,
+    toolSessionDocs: selectedNodeToolSessionDocs.value,
+  }));
 
-  const selectedNodeTurnStatuses = computed(() => {
-    const summary = selectedNodeSessionSummary.value || {};
-    return Array.isArray(summary?.turnStatuses) ? summary.turnStatuses : [];
-  });
+  const selectedNodeTurnTimingsByTurnScopeId = computed(
+    () => selectedNodeProjection.value.turnTimingsByTurnScopeId,
+  );
+
+  const selectedNodeTurnStatuses = computed(() => selectedNodeProjection.value.turnStatuses);
   
   const rawNodeSessionMessages = computed(() =>
     (Array.isArray(selectedNodeMessages.value) ? selectedNodeMessages.value : []).map(
@@ -113,19 +112,7 @@ export function useWorkflowNodeMessages({
   });
   
   const normalizedNodeSessionMessages = computed(() => {
-    const sessionDocs = selectedNodeSessionDocs.value;
-    const mainSessionDoc = sessionDocs[0] || {};
-    const foldedMessages = buildNormalizedDetailMessages({
-      detailMessages: Array.isArray(mainSessionDoc?.messages) ? mainSessionDoc.messages : [],
-      sessionDocs,
-      rootSessionId: String(mainSessionDoc?.sessionId || "").trim(),
-      turnTimings: Array.isArray(mainSessionDoc?.turnTimings) ? mainSessionDoc.turnTimings : [],
-      turnStatuses: selectedNodeTurnStatuses.value,
-      makeViewMessage: buildNodeViewMessage,
-      foldMessagesForView: (messages = []) => foldConversationMessages(messages, buildNodeViewMessage),
-    });
-    applyCompletedToolLogsToMessages(foldedMessages, selectedNodeToolSessionDocs.value);
-    return foldedMessages;
+    return selectedNodeProjection.value.messages;
   });
   
   const displayNodeMessages = computed(() =>

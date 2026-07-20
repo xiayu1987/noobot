@@ -143,6 +143,8 @@ describe("useChatStore workflow node state registry", () => {
       plannedAt: "2026-07-19T00:00:00.000Z",
     });
     expect(storedNode(store, "workflow-run-a", "node-a").status).toBe("ready");
+    expect(storedNode(store, "workflow-run-a", "node-a").sessionId).toBe("child-session-a");
+    expect(storedNode(store, "workflow-run-a", "node-a").parentSessionId).toBe("parent-session");
     expect(storedNode(store, "workflow-run-a", "node-a").revision).toBe(1);
     expect(storedNode(store, "workflow-run-a", "node-a").sequence).toBe(1);
     expect(storedNode(store, "workflow-run-a", "node-a").eventId).toBe("workflow-plan:node-a");

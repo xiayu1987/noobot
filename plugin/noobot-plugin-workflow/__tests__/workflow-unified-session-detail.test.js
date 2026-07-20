@@ -10,6 +10,7 @@ import {
   hasNewProtocolNodeIdentity,
   mergeUnifiedSessionDetail,
   resolveNodeChildExecutionIds,
+  resolveIsolatedNodeSessionId,
   resolveRuntimeNodeSession,
 } from "../frontend/components/workflow-message-card/workflowUnifiedSessionDetail.js";
 import {
@@ -67,6 +68,18 @@ function selectSessionMessages(sessionId) {
 test("detects new protocol nodes by nodeExecutionId", () => {
   assert.equal(hasNewProtocolNodeIdentity({ nodeExecutionId: "node-exec-a" }), true);
   assert.equal(hasNewProtocolNodeIdentity({ dialogProcessId: "legacy" }), false);
+});
+
+test("never treats the workflow parent session as a node child session", () => {
+  const node = { sessionId: "main-session", rootSessionId: "main-session", nodeExecutionId: "node-a" };
+  assert.equal(resolveIsolatedNodeSessionId(node, node), "");
+  assert.equal(resolveIsolatedNodeSessionId(node, { ...node, nodeSessionId: "child-session" }), "child-session");
+  const detail = buildUnifiedSessionDetail({
+    nodeItem: node,
+    runtimeNodeSessions: [node],
+    selectSessionMessages: () => { throw new Error("must not read the parent session"); },
+  });
+  assert.equal(detail, null);
 });
 
 test("prefers authoritative child Execution detail and exposes its complete subtree", () => {
@@ -250,18 +263,19 @@ for (const state of ["processing", "completed"]) {
             async json() {
               return {
                 ok: true,
-                exists: true,
                 sessionId: "child-session-a",
-                sessions: [{
-                  sessionId: "child-session-a",
-                  state,
-                  messages: [
+                workflowSession: {
+                  session: {
+                    sessionId: "child-session-a",
+                    state,
+                    messages: [
                     { id: `user-${state}`, role: "user", content: `request-${state}`, turnScopeId: `turn-${state}` },
                     { id: `message-${state}`, role: "assistant", content: state, turnScopeId: `turn-${state}` },
-                  ],
-                  turnStatuses: [{ turnScopeId: `turn-${state}`, status: state === "completed" ? "completed" : "processing" }],
-                  turnTimings: [{ turnScopeId: `turn-${state}`, thinkingStartedAt: "2026-07-20T00:00:00.000Z" }],
-                }],
+                    ],
+                    turnStatuses: [{ turnScopeId: `turn-${state}`, status: state === "completed" ? "completed" : "processing" }],
+                    turnTimings: [{ turnScopeId: `turn-${state}`, thinkingStartedAt: "2026-07-20T00:00:00.000Z" }],
+                  },
+                },
               };
             },
           };
@@ -269,9 +283,11 @@ for (const state of ["processing", "completed"]) {
       },
       translate: (key) => key,
       sessionId: "child-session-a",
+      rootSessionId: "root-session-a",
+      dialogProcessId: "workflow-node-a",
     });
 
-    assert.deepEqual(calls, ["/api/internal/session/user-1/child-session-a?mode=full"]);
+    assert.deepEqual(calls, ["/api/internal/workflow/session/user-1/root-session-a/workflow-node-a"]);
     assert.equal(detail.sessionId, "child-session-a");
     assert.equal(detail.sessionSummary.state, state);
     assert.deepEqual(detail.messages.map(({ id }) => id), [`user-${state}`, `message-${state}`]);
@@ -286,11 +302,13 @@ test("classifies an unmaterialized Execution session as pending", async () => {
       userId: "user-1",
       authFetch: async () => ({
         ok: true,
-        async json() { return { ok: true, exists: false }; },
+        async json() { return { ok: true, workflowSession: {} }; },
       }),
     },
     translate: (key) => key,
     sessionId: "child-session-pending",
+    rootSessionId: "root-session-a",
+    dialogProcessId: "workflow-node-a",
   });
   assert.deepEqual(detail, {
     state: "pending",
@@ -305,11 +323,13 @@ test("classifies a materialized Execution session without messages as empty", as
       userId: "user-1",
       authFetch: async () => ({
         ok: true,
-        async json() { return { ok: true, exists: true, sessionId: "child-session-empty", messages: [] }; },
+        async json() { return { ok: true, workflowSession: { session: { sessionId: "child-session-empty", messages: [] } } }; },
       }),
     },
     translate: (key) => key,
     sessionId: "child-session-empty",
+    rootSessionId: "root-session-a",
+    dialogProcessId: "workflow-node-a",
   });
   assert.equal(detail.state, "empty");
   assert.deepEqual(detail.messages, []);
@@ -326,5 +346,7 @@ test("keeps a Session service failure distinct from pending", async () => {
     },
     translate: (key) => key,
     sessionId: "child-session-failed",
+    rootSessionId: "root-session-a",
+    dialogProcessId: "workflow-node-a",
   }), /permission denied/);
 });

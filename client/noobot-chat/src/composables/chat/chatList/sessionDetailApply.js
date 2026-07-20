@@ -20,12 +20,12 @@ import {
 } from "../../infra/messageIdentity";
 import {
   applySummaryToolLogs,
-  buildNormalizedDetailMessages,
-  buildTurnTimingsByTurnScopeId,
   buildWorkflowMessageSignature,
   mergePreservedDetailMessages,
   patchExistingWorkflowMessage,
 } from "./detailMessages";
+import { buildSessionDetailProjection } from "./sessionDetailProjection";
+import { mergeCanonicalSessionDetail } from "../../infra/sessionDetailMerge";
 import { revokeMessagePreviewUrls } from "./sessionRecords";
 import {
   logResendDebug,
@@ -138,25 +138,41 @@ export function createSessionDetailApplicator({
     const currentRenderedMessages = Array.isArray(sessionItem.messages)
       ? sessionItem.messages
       : [];
-    const detailMessages = Array.isArray(mainSessionDoc.messages)
-      ? mainSessionDoc.messages
-      : [];
-    const turnTimings = Array.isArray(mainSessionDoc.turnTimings)
-      ? mainSessionDoc.turnTimings
-      : [];
-    const turnStatuses = Array.isArray(mainSessionDoc.turnStatuses)
-      ? mainSessionDoc.turnStatuses
-      : Array.isArray(detail?.turnStatuses)
-        ? detail.turnStatuses
-        : [];
+    const canonicalDetail = mergeCanonicalSessionDetail(
+      {
+        sessionId: detailSessionId,
+        messages: sessionItem.detailMessages || [],
+        turnStatuses: sessionItem.turnStatuses || [],
+        turnTimings: sessionItem.turnTimings || [],
+      },
+      {
+        sessionId: detailSessionId,
+        messages: mainSessionDoc.messages,
+        turnStatuses: mainSessionDoc.turnStatuses || detail?.turnStatuses,
+        turnTimings: mainSessionDoc.turnTimings,
+      },
+      {
+        replaceFields: applyMode === SESSION_DETAIL_APPLY_MODE.REPLACE
+          ? ["messages", "turnStatuses", "turnTimings"]
+          : [],
+      },
+    );
+    const detailMessages = canonicalDetail.messages;
+    const turnTimings = canonicalDetail.turnTimings;
+    const turnStatuses = canonicalDetail.turnStatuses;
     // Keep the authoritative session-level facts on the session model. View
     // messages below are a disposable projection and must not become the
     // source used by hydration, continue, or resend flows.
     sessionItem.turnStatuses = turnStatuses.map((item) => ({ ...item }));
+    sessionItem.turnTimings = turnTimings.map((item) => ({ ...item }));
+    sessionItem.detailMessages = detailMessages.map((item) => ({ ...item }));
     const currentTurnTimings = sessionItem.turnTimingsByTurnScopeId || {};
-    sessionItem.turnTimingsByTurnScopeId = buildTurnTimingsByTurnScopeId({
-      turnTimings,
-      messages: detailMessages,
+    const detailProjection = buildSessionDetailProjection({
+      sessionDetail: canonicalDetail,
+      sessionDocs,
+      makeViewMessage,
+      foldMessagesForView,
+      isSummaryDetail,
       currentTimingsByTurnScopeId: currentTurnTimings,
       onTimingHydrated: ({ item, matchingMessage, turnScopeId, current, timing }) => {
           const timingDialogProcessId = getMessageDialogProcessId(item);
@@ -177,6 +193,7 @@ export function createSessionDetailApplicator({
           });
       },
     });
+    sessionItem.turnTimingsByTurnScopeId = detailProjection.turnTimingsByTurnScopeId;
     const detailTurnScopeIds = new Set(
       detailMessages.map((messageItem) => getMessageTurnScopeId(messageItem)).filter(Boolean),
     );
@@ -209,16 +226,7 @@ export function createSessionDetailApplicator({
       detailMessages.length === 0 &&
       isSameSessionIdentity(detailSessionId, activeSessionId.value);
 
-    const normalizedDetailMessages = buildNormalizedDetailMessages({
-      detailMessages,
-      sessionDocs,
-      rootSessionId: detail.sessionId,
-      turnTimings,
-      turnStatuses,
-      makeViewMessage,
-      foldMessagesForView,
-      isSummaryDetail,
-    });
+    const normalizedDetailMessages = detailProjection.messages;
 
     if (!preserveCurrentMessages && !shouldKeepCurrentMessagesForEmptyDetail) {
       logResendDebug("detail.apply.replaceAll", {

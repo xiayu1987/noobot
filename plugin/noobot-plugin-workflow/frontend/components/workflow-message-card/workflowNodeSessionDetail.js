@@ -4,7 +4,6 @@
   SPDX-License-Identifier: MIT
 */
 import {
-  getSessionFullDetailApi,
   getWorkflowSessionDetailApi,
   getWorkflowSessionThinkingDetailApi,
 } from "../../../../../client/noobot-chat/src/services/api/chatApi.js";
@@ -37,13 +36,21 @@ export async function fetchExecutionSessionDetail({
   props,
   translate,
   sessionId = "",
+  rootSessionId = "",
+  dialogProcessId = "",
 }) {
   const normalizedSessionId = String(sessionId || "").trim();
-  if (!props.userId || !normalizedSessionId) {
+  const normalizedRootSessionId = String(rootSessionId || "").trim();
+  const normalizedDialogProcessId = String(dialogProcessId || "").trim();
+  if (!props.userId || !normalizedSessionId || !normalizedRootSessionId || !normalizedDialogProcessId) {
     throw new Error(translate("workflow.nodeSessionMissing"));
   }
-  const response = await getSessionFullDetailApi(
-    { userId: props.userId, sessionId: normalizedSessionId },
+  const response = await getWorkflowSessionDetailApi(
+    {
+      userId: props.userId,
+      sessionId: normalizedRootSessionId,
+      dialogProcessId: normalizedDialogProcessId,
+    },
     { fetcher: props.authFetch || fetch },
   );
   if (!response.ok) {
@@ -53,36 +60,36 @@ export async function fetchExecutionSessionDetail({
   if (!payload?.ok) {
     throw new Error(String(payload?.error || translate("workflow.readNodeSessionFailed")));
   }
-  if (!payload?.exists) {
+  const session = payload?.workflowSession?.session || {};
+  const sessionSummary = payload?.workflowSession?.sessionSummary || {};
+  if (!session?.sessionId && !sessionSummary?.sessionId) {
     return {
       state: "pending",
       reason: "session_not_materialized",
       sessionId: normalizedSessionId,
     };
   }
-  const session = (Array.isArray(payload.sessions)
-    ? payload.sessions.find((item = {}) => String(item?.sessionId || item?.id || "").trim() === normalizedSessionId)
-    : null) || payload.session || payload.sessionSummary || {};
-  const messages = Array.isArray(session?.messages)
-    ? session.messages
-    : Array.isArray(payload?.messages)
-      ? payload.messages
+  const messages = Array.isArray(sessionSummary?.messages)
+    ? sessionSummary.messages
+    : Array.isArray(session?.messages)
+      ? session.messages
       : [];
-  const turnStatuses = Array.isArray(session?.turnStatuses)
-    ? session.turnStatuses
-    : Array.isArray(payload?.turnStatuses)
-      ? payload.turnStatuses
+  const turnStatuses = Array.isArray(sessionSummary?.turnStatuses)
+    ? sessionSummary.turnStatuses
+    : Array.isArray(session?.turnStatuses)
+      ? session.turnStatuses
       : [];
-  const turnTimings = Array.isArray(session?.turnTimings)
-    ? session.turnTimings
-    : Array.isArray(payload?.turnTimings)
-      ? payload.turnTimings
+  const turnTimings = Array.isArray(sessionSummary?.turnTimings)
+    ? sessionSummary.turnTimings
+    : Array.isArray(session?.turnTimings)
+      ? session.turnTimings
       : [];
   return {
     state: messages.length ? "ready" : "empty",
-    sessionId: String(session?.sessionId || session?.id || payload.sessionId || normalizedSessionId).trim(),
+    sessionId: String(sessionSummary?.sessionId || session?.sessionId || session?.id || normalizedSessionId).trim(),
     sessionSummary: {
       ...session,
+      ...sessionSummary,
       turnStatuses,
       turnTimings,
     },

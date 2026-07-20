@@ -461,25 +461,12 @@ export class SessionExecutionEngine {
     dialogProcessId = "",
     turnScopeId = "",
     command = "",
-    messages = [],
     turnTasks = [],
   } = {}) {
     if (!this.session || typeof this.session.upsertTurnStatus !== "function") {
       const error = new Error("detached sub-session terminal persistence is unavailable");
       error.code = "SUB_SESSION_TERMINAL_PERSISTENCE_UNAVAILABLE";
       throw error;
-    }
-    if (Array.isArray(messages) && messages.length) {
-      await this.turnPersister.appendAgentMessages({
-        userId,
-        sessionId,
-        parentSessionId,
-        messages,
-        dialogProcessId,
-        parentDialogProcessId,
-        turnScopeId,
-        eventListener: null,
-      });
     }
     if (typeof this.session.saveCurrentTurnTasks === "function") {
       await this.session.saveCurrentTurnTasks({
