@@ -9,19 +9,22 @@ export async function markSessionMessagesSummarized({
     userId,
     sessionId,
     parentSessionId = "",
+    persistenceContext = null,
     shouldMark = null,
   } = {}) {
     if (!userId || !sessionId) return 0;
     return this._withSessionMutation(userId, sessionId, async () => {
-    const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+    const resolvedParentSessionId = await this._resolveParentSessionId(
       userId,
       sessionId,
       parentSessionId,
+      persistenceContext,
     );
     const session = await this.sessionRepo.findById(
       userId,
       sessionId,
       resolvedParentSessionId,
+      persistenceContext,
     );
     if (!session) return 0;
     const messages = Array.isArray(session.messages) ? session.messages : [];
@@ -34,10 +37,10 @@ export async function markSessionMessagesSummarized({
       return { ...messageItem, summarized: true };
     });
     if (updatedCount > 0) {
-      await this.sessionRepo.save(userId, session, resolvedParentSessionId);
+      await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
     }
     return updatedCount;
-    });
+    }, parentSessionId, persistenceContext);
   }
 
 export async function getSessionTurns({ userId, sessionId }) {
@@ -50,6 +53,7 @@ export async function hasDialogProcessIdInSession({
     sessionId,
     dialogProcessId = "",
     parentSessionId = "",
+    persistenceContext = null,
   }) {
     const normalizedDialogProcessId = resolveDialogProcessIdFromContext({
       dialogProcessId,

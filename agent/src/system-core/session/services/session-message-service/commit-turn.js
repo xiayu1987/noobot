@@ -16,6 +16,7 @@ export async function commitTurn({
     attachments = [], expectedVersion = null, idempotencyKey = "",
     resumeDialogProcessId = "", resumeTurnScopeId = "",
     frontendUserMessage = true,
+    persistenceContext = null,
   } = {}) {
     if (!userId || !sessionId) {
       const error = new Error("userId and sessionId are required"); error.statusCode = 400; throw error;
@@ -37,8 +38,8 @@ export async function commitTurn({
       const error = new Error("content, turnScopeId and idempotencyKey are required"); error.statusCode = 400; throw error;
     }
     return this._withSessionMutation(userId, sessionId, async () => {
-      const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(userId, sessionId, parentSessionId);
-      const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
+      const resolvedParentSessionId = await this._resolveParentSessionId(userId, sessionId, parentSessionId, persistenceContext);
+      const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId, persistenceContext);
       if (!session) { const error = new Error("session not found"); error.statusCode = 404; throw error; }
       const messages = Array.isArray(session.messages) ? session.messages : [];
       const existing = messages.find((item) =>
@@ -78,9 +79,9 @@ export async function commitTurn({
       session.messages = [...messages, userMessage];
       session.version = currentVersion + 1; session.revision = session.version; session.updatedAt = nowValue;
       if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
-      await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: currentVersion });
-      const savedSession = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId) || session;
+      await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: currentVersion, persistenceContext });
+      const savedSession = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId, persistenceContext) || session;
       const savedMessage = (savedSession.messages || []).find((item) => item?.role === "user" && String(item?.turnScopeId || "") === normalizedTurnScopeId) || userMessage;
       return { session: savedSession, userMessage: savedMessage, attachments: savedMessage.attachments || [], version: resolveSessionVersion(savedSession), deduplicated: false, turnScopeId: normalizedTurnScopeId, dialogProcessId: resolveMessageDialogProcessId(savedMessage), runState: savedMessage?.turnCommit?.runState || "pending_start" };
-    });
+    }, parentSessionId, persistenceContext);
   }

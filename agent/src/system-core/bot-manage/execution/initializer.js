@@ -30,22 +30,26 @@ export class SessionExecutionInitializer {
     eventListener = null,
     turnScopeId = "",
     thinkingStartedAt = "",
+    persistenceContext = null,
   }) {
     const usedSessionId = sessionId;
     const upstreamListener = eventListener;
     const basePath = await this.workspaceService.ensureUserWorkspace(userId);
 
-    await this.session.upsertSessionTree({
-      userId,
-      sessionId: usedSessionId,
-      parentSessionId,
-    });
+    if (!persistenceContext?.locationResolver) {
+      await this.session.upsertSessionTree({
+        userId,
+        sessionId: usedSessionId,
+        parentSessionId,
+      });
+    }
 
     const dialogProcessId = uuidv4();
     const sessionBundle = await this.session.getSessionBundle({
       userId,
       sessionId: usedSessionId,
       parentSessionId,
+      persistenceContext,
     });
     const sessionLoadState = sessionBundle?.exists ? "loaded" : "created";
     const userConfig = await this.configService.loadUserConfig(basePath);
@@ -56,6 +60,7 @@ export class SessionExecutionInitializer {
       parentSessionId,
       caller,
       modelAlias: "",
+      persistenceContext,
     });
 
     await this.session.upsertTurnTiming?.({
@@ -65,12 +70,15 @@ export class SessionExecutionInitializer {
       turnScopeId,
       dialogProcessId,
       thinkingStartedAt,
+      persistenceContext,
     });
 
     const executionStartIndex =
       (await this.session.getExecutionBundle({
         userId,
         sessionId: usedSessionId,
+        parentSessionId,
+        persistenceContext,
       }))?.logs?.length || 0;
 
     const runtimeEventListener = createExecutionEventListener({

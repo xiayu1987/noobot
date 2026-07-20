@@ -496,6 +496,7 @@ export async function runNodeAgent({
             rootExecutionId: String(ctx?.rootExecutionId || workflowExecutionId).trim(),
             disabledPlugins: ["workflow"],
             relativeDir,
+            allowedRoot: "runtime/workflow/session",
           },
           metadata: {
             scope: "workflow_node",

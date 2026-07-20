@@ -226,7 +226,7 @@ test("copyBackendAfterPack fails when prepared backend runtime is missing bundle
 
     await assert.rejects(
       () => copyBackendAfterPack(fixture.context),
-      /Missing required backend runtime file after prepare: node_modules\/noobot-agent\/src\/system-core\/system-prompt\/base\.md/,
+      /Missing required backend runtime file after prepare: node_modules\/noobot-agent\/src\/system-core\/system-prompt\/base(\.zh-CN)?\.md/,
     );
   } finally {
     await rm(fixture.rootDir, { recursive: true, force: true });

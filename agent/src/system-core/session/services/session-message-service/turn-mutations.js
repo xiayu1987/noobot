@@ -14,6 +14,7 @@ export async function deleteFromMessage({
     userId,
     sessionId,
     parentSessionId = "",
+    persistenceContext = null,
     anchor = {},
     expectedVersion = null,
     idempotencyKey = "",
@@ -34,15 +35,17 @@ export async function deleteFromMessage({
       throw error;
     }
     return this._withSessionMutation(userId, sessionId, async () => {
-    const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+    const resolvedParentSessionId = await this._resolveParentSessionId(
       userId,
       sessionId,
       parentSessionId,
+      persistenceContext,
     );
     const session = await this.sessionRepo.findById(
       userId,
       sessionId,
       resolvedParentSessionId,
+      persistenceContext,
     );
     if (!session) {
       const error = new Error("session not found");
@@ -90,15 +93,16 @@ export async function deleteFromMessage({
       });
     }
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
-    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: currentVersion });
+    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: currentVersion, persistenceContext });
     return { session, ...result, version: session.version, idempotencyKey: normalizedIdempotencyKey, deduplicated: false };
-    });
+    }, parentSessionId, persistenceContext);
   }
 
 export async function replaceTurn({
     userId,
     sessionId,
     parentSessionId = "",
+    persistenceContext = null,
     anchor = {},
     newContent = "",
     turnScopeId = "",
@@ -133,15 +137,17 @@ export async function replaceTurn({
       throw error;
     }
     return this._withSessionMutation(userId, sessionId, async () => {
-    const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+    const resolvedParentSessionId = await this._resolveParentSessionId(
       userId,
       sessionId,
       parentSessionId,
+      persistenceContext,
     );
     const session = await this.sessionRepo.findById(
       userId,
       sessionId,
       resolvedParentSessionId,
+      persistenceContext,
     );
     if (!session) {
       const error = new Error("session not found");
@@ -250,7 +256,7 @@ export async function replaceTurn({
       });
     }
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
-    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: currentVersion });
+    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: currentVersion, persistenceContext });
     return { session, ...result, version: session.version, idempotencyKey: normalizedIdempotencyKey, deduplicated: false };
-    });
+    }, parentSessionId, persistenceContext);
   }

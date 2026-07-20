@@ -52,33 +52,19 @@ test("detached sub-session runner inherits userInteractionBridge from parent run
     workspaceService: { getWorkspacePath: () => "/tmp" },
     configService: { async loadUserConfig() { return {}; } },
     session: {
-      async upsertTurnStatus() {
-        return { upserted: true, version: 1, turnStatus: { status: "completed" } };
+      createScopedPersistenceContext() {
+        return Object.freeze({ marker: "scoped" });
       },
-      async saveCurrentTurnTasks() {},
     },
   });
-  engine.turnPersister = { async appendAgentMessages() {} };
-
-  let capturedBuildContextPayload = null;
-  engine._prepareRunConfig = ({ runConfig = {} } = {}) => runConfig;
-  engine._prepareAgentTurnExecution = async ({ buildContextPayload = {} } = {}) => {
-    capturedBuildContextPayload = buildContextPayload;
-    return {
-      runtimeAgentContext: {
-        payload: { runtime: { systemRuntime: { dialogProcessId: "sub-dialog" } } },
-      },
-    };
-  };
-  engine.agentRuntimeFacade = {
-    async runTurn() {
-      return {
-        output: "done",
-        dialogProcessId: "sub-dialog",
-        turnMessages: [{ role: "assistant", content: "done" }],
-      };
+  let capturedRunSessionPayload = null;
+  engine.runner = {
+    async runSession(payload = {}) {
+      capturedRunSessionPayload = payload;
+      return { output: "done", dialogProcessId: "sub-dialog" };
     },
   };
+  engine._prepareRunConfig = ({ runConfig = {} } = {}) => runConfig;
 
   const runner = engine._createDetachedSubSessionRunner();
   await runner({
@@ -100,5 +86,5 @@ test("detached sub-session runner inherits userInteractionBridge from parent run
     message: "node task",
   });
 
-  assert.equal(capturedBuildContextPayload?.userInteractionBridge, bridge);
+  assert.equal(capturedRunSessionPayload?.userInteractionBridge, bridge);
 });

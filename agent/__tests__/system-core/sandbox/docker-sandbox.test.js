@@ -32,4 +32,10 @@ test("buildDockerCommand validates mounts through docker inspect template equali
   assert.match(built.cmd, /eq \.Destination \\"\/project\\"/);
   assert.match(built.cmd, /grep -Fqx "__NOOBOT_MOUNT_0__"/);
   assert.match(built.cmd, /grep -Fqx "__NOOBOT_MOUNT_1__"/);
+  assert.match(built.cmd, /-e NOOBOT_EXECUTION_TOKEN=/);
+  assert.match(
+    built.executionToken,
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+  );
+  assert.match(built.cmd, new RegExp(built.executionToken));
 });

@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { WebSocket } from "ws";
 import { startServerWithWs, closeServer, callChatWs, stopChatWs } from "./chat-websocket-server.test-helpers.js";
+import { transitionTurnLifecycle } from "../../../agent/src/system-core/session/entities/turn-lifecycle-entity.js";
 
 test("chat-websocket-server: stop persists and emits the user_stopped turnScopeId", async () => {
   let capturedStopPayload = null;
@@ -367,9 +368,37 @@ test("chat-websocket-server: forbidden user scope does not run or persist a turn
 
 test("chat-websocket-server: idle stop persists an authoritative user_stopped terminal fact", async () => {
   let persistedStopPayload = null;
+  let lifecycle = {};
+  const lifecycleEvents = [];
+  for (const event of [
+    {
+      turnScopeId: "turn-idle-stop",
+      commandId: "turn-idle-stop",
+      eventType: "turn.action_accepted",
+      phase: "action",
+      action: "send",
+    },
+    {
+      turnScopeId: "turn-idle-stop",
+      commandId: "turn-idle-stop:processing-started",
+      eventType: "turn.processing_started",
+      phase: "processing",
+      executionState: "sending",
+    },
+  ]) {
+    const seeded = transitionTurnLifecycle(lifecycle, event);
+    assert.equal(seeded.applied, true);
+    lifecycle = seeded.lifecycle;
+  }
   const server = await startServerWithWs({
     bot: {
       runSession: async () => ({}),
+      applyTurnLifecycleEvent: async (event = {}) => {
+        lifecycleEvents.push(event);
+        const result = transitionTurnLifecycle(lifecycle, event);
+        if (result.applied) lifecycle = result.lifecycle;
+        return result;
+      },
       persistStoppedAssistantMessage: async (payload = {}) => {
         persistedStopPayload = payload;
         return {
@@ -391,11 +420,12 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
       });
       const timer = setTimeout(() => {
         ws.terminate();
-        reject(new Error("idle stop response timeout"));
+        reject(new Error(`idle stop response timeout: ${JSON.stringify(messages)}`));
       }, 1000);
       ws.on("open", () => {
         ws.send(JSON.stringify({
           action: "stop",
+          sessionId: "session-idle-stop",
           turnScopeId: "turn-idle-stop",
           partialAssistant: {
             dialogProcessId: "dp-idle-stop",
@@ -434,6 +464,20 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
     assert.equal(stoppedEvent?.data?.turnStatus?.status, "user_stopped");
     assert.equal(persistedStopPayload?.partialAssistant?.turnScopeId, "turn-idle-stop");
     assert.equal(events.some((item) => item?.event === "error"), false);
+    assert.deepEqual(
+      lifecycleEvents.map((item) => item.eventType),
+      ["turn.stop_accepted", "turn.stop_processing_completed", "turn.stop_completed"],
+    );
+    assert.equal(lifecycle.activeTurnScopeId, "");
+    assert.equal(lifecycle.turns["turn-idle-stop"]?.state, "stop_completed");
+    const nextAction = transitionTurnLifecycle(lifecycle, {
+      turnScopeId: "turn-after-idle-stop",
+      commandId: "turn-after-idle-stop",
+      eventType: "turn.action_accepted",
+      phase: "action",
+      action: "send",
+    });
+    assert.equal(nextAction.applied, true);
   } finally {
     await closeServer(server);
   }

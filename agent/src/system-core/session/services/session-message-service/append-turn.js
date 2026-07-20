@@ -32,6 +32,7 @@ export async function appendTurn({
     modelAdditionalKwargs = null,
     modelResponseMetadata = null,
     parentSessionId = "",
+    persistenceContext = null,
     injectedMessage = false,
     injectedBy = "",
     injectedMessageType = "",
@@ -45,15 +46,17 @@ export async function appendTurn({
     turnTimingThinkingFinishedAt = thinkingFinishedAt,
   }) {
     return this._withSessionMutation(userId, sessionId, async () => {
-    const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+    const resolvedParentSessionId = await this._resolveParentSessionId(
       userId,
       sessionId,
       parentSessionId,
+      persistenceContext,
     );
     const session = await this.sessionRepo.findById(
       userId,
       sessionId,
       resolvedParentSessionId,
+      persistenceContext,
     );
     if (!session) return { appended: false, reason: "session_not_found" };
 
@@ -123,7 +126,7 @@ export async function appendTurn({
     });
     session.updatedAt = this.now();
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
-    await this.sessionRepo.save(userId, session, resolvedParentSessionId);
+    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
     return turn;
-    });
+    }, parentSessionId, persistenceContext);
   }

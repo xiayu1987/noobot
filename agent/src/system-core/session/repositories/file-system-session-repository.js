@@ -45,9 +45,23 @@ export class FileSystemSessionRepository {
     this._deletedSessionCache = new Map(); // userId -> { sessions, updatedAt }
   }
 
-  async withSessionMutation(userId, sessionId, parentSessionId = "", operation) {
-    const { sessionDir } = await this.resolveSessionScope(userId, sessionId, parentSessionId);
-    return this._withMutationLock(`${sessionDir}.mutation-lock`, operation);
+  async withSessionMutation(userId, sessionId, parentSessionId = "", operation, persistenceContext = null) {
+    const scope = await this.resolveSessionScope(userId, sessionId, parentSessionId, persistenceContext);
+    return this._withMutationLock(scope.mutationLockDir, async () => {
+      const result = await operation();
+      if (typeof persistenceContext?.metadataContributor === "function") {
+        const metadata = await persistenceContext.metadataContributor({
+          userId,
+          sessionId,
+          parentSessionId: scope.resolvedParentSessionId,
+          scope,
+        });
+        if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
+          await this.storageService.writeJsonAtomic(scope.metadataFile, metadata);
+        }
+      }
+      return result;
+    });
   }
 
   async _withMutationLock(lockDir, operation) {
@@ -309,8 +323,9 @@ export class FileSystemSessionRepository {
     );
   }
 
-  async resolveSessionScope(userId, sessionId, parentSessionId = "") {
-    return this.sessionPathResolver.resolveSessionScope(
+  async resolveSessionScope(userId, sessionId, parentSessionId = "", persistenceContext = null) {
+    const resolver = persistenceContext?.locationResolver || this.sessionPathResolver;
+    return resolver.resolveSessionScope(
       userId,
       sessionId,
       parentSessionId,
@@ -319,14 +334,14 @@ export class FileSystemSessionRepository {
 
 
   async _sessionDisplaySummaryFile(userId, sessionId, parentSessionId = "") {
-    const { sessionDir } = await this.resolveSessionScope(userId, sessionId, parentSessionId);
+    const { sessionDir } = await this.resolveSessionScope(userId, sessionId, parentSessionId, persistenceContext);
     return buildSessionArtifactFileMap(sessionDir).sessionSummary;
   }
 
-  async readSessionDisplaySummary(userId = "", sessionId = "", parentSessionId = "") {
+  async readSessionDisplaySummary(userId = "", sessionId = "", parentSessionId = "", persistenceContext = null) {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) return null;
-    const { sessionDir } = await this.resolveSessionScope(userId, normalizedSessionId, parentSessionId);
+    const { sessionDir } = await this.resolveSessionScope(userId, normalizedSessionId, parentSessionId, persistenceContext);
     return readSessionDisplaySummaryArtifact({
       storageService: this.storageService,
       sessionDir,
@@ -334,10 +349,10 @@ export class FileSystemSessionRepository {
     });
   }
 
-  async writeSessionDisplaySummary(userId = "", session = {}, { depth = 0 } = {}) {
+  async writeSessionDisplaySummary(userId = "", session = {}, { depth = 0, persistenceContext = null } = {}) {
     const sessionId = String(session?.sessionId || "").trim();
     if (!sessionId) return null;
-    const { sessionDir } = await this.resolveSessionScope(userId, sessionId, session?.parentSessionId || "");
+    const { sessionDir } = await this.resolveSessionScope(userId, sessionId, session?.parentSessionId || "", persistenceContext);
     return rebuildSessionDisplaySummaryArtifact({
       storageService: this.storageService,
       sessionDir,
@@ -346,10 +361,10 @@ export class FileSystemSessionRepository {
     });
   }
 
-  async rebuildSessionDisplaySummary(userId = "", sessionId = "", parentSessionId = "", { depth = 0 } = {}) {
-    const session = await this.findById(userId, sessionId, parentSessionId);
+  async rebuildSessionDisplaySummary(userId = "", sessionId = "", parentSessionId = "", { depth = 0, persistenceContext = null } = {}) {
+    const session = await this.findById(userId, sessionId, parentSessionId, persistenceContext);
     if (!session) return null;
-    return this.writeSessionDisplaySummary(userId, session, { depth });
+    return this.writeSessionDisplaySummary(userId, session, { depth, persistenceContext });
   }
 
   async removeSessionDisplaySummaries(userId = "", sessionIds = []) {
@@ -385,12 +400,12 @@ export class FileSystemSessionRepository {
       .filter((sessionId) => !deletedSet.has(String(sessionId || "").trim()));
   }
 
-  async ensureSession({ userId, sessionId, parentSessionId = "", meta = {} }) {
-    if (await this.isSessionDeleted(userId, sessionId)) return false;
+  async ensureSession({ userId, sessionId, parentSessionId = "", meta = {}, persistenceContext = null }) {
+    if (!persistenceContext && await this.isSessionDeleted(userId, sessionId)) return false;
     const basePath = this._basePath(userId);
     await this.storageService.ensureRuntimeDirsByBasePath(basePath);
     const { resolvedParentSessionId, sessionDir, sessionFile } =
-      await this.resolveSessionScope(userId, sessionId, parentSessionId);
+      await this.resolveSessionScope(userId, sessionId, parentSessionId, persistenceContext);
 
     await fsMkdir(sessionDir, { recursive: true });
 
@@ -414,7 +429,10 @@ export class FileSystemSessionRepository {
         sessionPayload: payload,
         atomic: true,
       });
-      await this.upsertSessionSummary(userId, payload);
+      if (!persistenceContext) {
+        await this.upsertSessionSummary(userId, payload);
+      }
+      await this.writeSessionDisplaySummary(userId, payload, { persistenceContext });
     }
     return true;
   }
@@ -432,12 +450,13 @@ export class FileSystemSessionRepository {
     }, { now: this.now, sessionId, parentSessionId });
   }
 
-  async findById(userId, sessionId, parentSessionId = "") {
-    if (await this.isSessionDeleted(userId, sessionId)) return null;
+  async findById(userId, sessionId, parentSessionId = "", persistenceContext = null) {
+    if (!persistenceContext && await this.isSessionDeleted(userId, sessionId)) return null;
     const { resolvedParentSessionId, sessionFile } = await this.resolveSessionScope(
       userId,
       sessionId,
       parentSessionId,
+      persistenceContext,
     );
     if (!(await this.storageService.exists(sessionFile))) return null;
 
@@ -455,21 +474,22 @@ export class FileSystemSessionRepository {
     return session;
   }
 
-  async save(userId, session = {}, parentSessionId = "", { expectedVersion, createOnly = false } = {}) {
+  async save(userId, session = {}, parentSessionId = "", { expectedVersion, createOnly = false, persistenceContext = null } = {}) {
     const sessionId = String(session?.sessionId || "").trim();
     if (!sessionId) {
       throw fatalSystemError(tSystem("common.sessionIdRequired"), {
         code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
       });
     }
-    if (await this.isSessionDeleted(userId, sessionId)) return false;
+    if (!persistenceContext && await this.isSessionDeleted(userId, sessionId)) return false;
     const { resolvedParentSessionId, sessionDir } = await this.resolveSessionScope(
       userId,
       sessionId,
       parentSessionId || session?.parentSessionId || "",
+      persistenceContext,
     );
     if (createOnly) {
-      const persisted = await this.findById(userId, sessionId, resolvedParentSessionId);
+      const persisted = await this.findById(userId, sessionId, resolvedParentSessionId, persistenceContext);
       if (persisted) {
         const error = new Error("session already exists");
         error.statusCode = 409;
@@ -478,7 +498,7 @@ export class FileSystemSessionRepository {
       }
     }
     if (expectedVersion !== undefined && expectedVersion !== null) {
-      const persisted = await this.findById(userId, sessionId, resolvedParentSessionId);
+      const persisted = await this.findById(userId, sessionId, resolvedParentSessionId, persistenceContext);
       const actualVersion = Number(persisted?.version ?? persisted?.revision ?? 0);
       if (actualVersion !== Number(expectedVersion)) {
         const error = new Error("session version conflict");
@@ -513,7 +533,9 @@ export class FileSystemSessionRepository {
       // mutation as failed, otherwise callers may retry an accepted Turn as
       // though the Session had never been persisted.
       try {
-        await this.rebuildSessionsSummary(userId);
+        if (!persistenceContext) {
+          await this.rebuildSessionsSummary(userId);
+        }
       } catch (rebuildError) {
         rebuildError.cause = rebuildError.cause || summaryError;
         throw rebuildError;
@@ -522,15 +544,18 @@ export class FileSystemSessionRepository {
     return true;
   }
 
-  async delete(userId, sessionId, parentSessionId = "") {
+  async delete(userId, sessionId, parentSessionId = "", persistenceContext = null) {
     const { sessionDir } = await this.resolveSessionScope(
       userId,
       sessionId,
       parentSessionId,
+      persistenceContext,
     );
     await fsRm(sessionDir, { recursive: true, force: true });
-    await this.removeSessionSummaries(userId, [sessionId]);
-    await this.removeSessionDisplaySummaries(userId, [sessionId]);
+    if (!persistenceContext) {
+      await this.removeSessionSummaries(userId, [sessionId]);
+      await this.removeSessionDisplaySummaries(userId, [sessionId]);
+    }
     return true;
   }
 }

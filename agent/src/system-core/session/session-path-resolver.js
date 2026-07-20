@@ -7,6 +7,7 @@ import { filePath as path } from "../utils/path-resolver.js";
 import { fatalSystemError } from "../error/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../error/constants.js";
+import { buildSessionLocationScope } from "./session-location-resolver.js";
 
 export class SessionPathResolver {
   constructor({ pathResolver, treeRepository } = {}) {
@@ -71,12 +72,6 @@ export class SessionPathResolver {
       sessionId,
       resolvedParentSessionId,
     );
-    return {
-      resolvedParentSessionId,
-      sessionDir,
-      sessionFile: path.join(sessionDir, "session.json"),
-      taskFile: path.join(sessionDir, "task.json"),
-      executionFile: path.join(sessionDir, "execution.json"),
-    };
+    return buildSessionLocationScope(sessionDir, resolvedParentSessionId);
   }
 }

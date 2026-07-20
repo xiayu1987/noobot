@@ -407,6 +407,7 @@ export class SessionTurnPersister {
     eventListener,
     thinkingStartedAt = "",
     thinkingFinishedAt = "",
+    persistenceContext = null,
   }) {
     const normalizedThinkingStartedAt = normalizeIsoTime(thinkingStartedAt);
     const normalizedThinkingFinishedAt = normalizeIsoTime(thinkingFinishedAt);
@@ -472,6 +473,7 @@ export class SessionTurnPersister {
         turnTimingThinkingStartedAt: !turnTimingWritten ? normalizedThinkingStartedAt : "",
         turnTimingThinkingFinishedAt: !turnTimingWritten ? normalizedThinkingFinishedAt : "",
         eventListener,
+        persistenceContext,
       });
       turnTimingWritten = true;
     }
@@ -483,6 +485,7 @@ export class SessionTurnPersister {
     parentSessionId = "",
     parentDialogProcessId = "",
     partialAssistant = {},
+    persistenceContext = null,
   } = {}) {
     const content = (partialAssistant?.content ?? "").trim();
     const dialogProcessId = resolveMessageDialogProcessId(partialAssistant);
@@ -496,6 +499,7 @@ export class SessionTurnPersister {
       parentDialogProcessId,
       command: "user_stopped",
       description: "用户停止了本轮生成",
+      persistenceContext,
     });
     // Persisting the terminal fact does not depend on there being partial model
     // content. Return the confirmed fact even when no assistant message is added.
@@ -506,6 +510,7 @@ export class SessionTurnPersister {
       userId,
       sessionId,
       parentSessionId,
+      persistenceContext,
     });
     const messages = Array.isArray(sessionBundle?.session?.messages)
       ? sessionBundle.session.messages
@@ -529,6 +534,7 @@ export class SessionTurnPersister {
       modelAlias: (partialAssistant?.modelAlias ?? "").trim(),
       modelName: (partialAssistant?.modelName ?? "").trim(),
       eventListener: null,
+      persistenceContext,
     });
     return turnStatusResult?.turnStatus || null;
   }

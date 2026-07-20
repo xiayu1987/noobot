@@ -5,56 +5,120 @@
  */
 import { execFile, spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { filePath as path } from "../../../utils/path-resolver.js";
 import { SCRIPT_EXECUTION_MODE } from "./constants.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
-export function run(cmd, cwd, timeoutMs) {
+const FOREGROUND_CAPTURE_BYTES = LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars;
+const FOREGROUND_PREVIEW_BYTES = LENGTH_THRESHOLDS.semanticTransfer.previewChars;
+const FORCE_KILL_GRACE_MS = 2000;
+
+function appendCapture(chunks, chunk, state, maxBytes) {
+  if (state.bytes >= maxBytes) return;
+  const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+  const retained = bytes.subarray(0, Math.max(0, maxBytes - state.bytes));
+  if (retained.length) chunks.push(retained);
+  state.bytes += retained.length;
+}
+
+export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {}) {
+  const outputDir = path.join(cwd, ".execute-script-foreground", `${Date.now()}-${randomUUID()}`);
+  await mkdir(outputDir, { recursive: true });
+  const stdoutPath = path.join(outputDir, "stdout.txt");
+  const stderrPath = path.join(outputDir, "stderr.txt");
+  const stdoutStream = createWriteStream(stdoutPath);
+  const stderrStream = createWriteStream(stderrPath);
+  const stdoutFinished = waitForWritableFinished(stdoutStream);
+  const stderrFinished = waitForWritableFinished(stderrStream);
+
   return new Promise((resolve) => {
     // cross-platform-allow: preserve previous exec(command) shell semantics for this tool
     const child = spawn(cmd, {
       cwd,
       shell: true,
+      detached: process.platform !== "win32",
       windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
     });
     const stdoutChunks = [];
     const stderrChunks = [];
+    const stdoutCapture = { bytes: 0 };
+    const stderrCapture = { bytes: 0 };
     let spawnError = null;
     let timedOut = false;
+    let aborted = abortSignal?.aborted === true;
+    let forceKillTimer = null;
+    let terminationHookCalled = false;
+    const terminate = (reason = "timeout") => {
+      if (reason === "timeout") timedOut = true;
+      else aborted = true;
+      if (!terminationHookCalled) {
+        terminationHookCalled = true;
+        Promise.resolve(options?.onTerminate?.()).catch(() => undefined);
+      }
+      terminateChild(child, "SIGTERM");
+      if (!forceKillTimer) {
+        forceKillTimer = setTimeout(() => terminateChild(child, "SIGKILL"), FORCE_KILL_GRACE_MS);
+        forceKillTimer.unref?.();
+      }
+    };
+    const onAbort = () => terminate("abort");
+    abortSignal?.addEventListener?.("abort", onAbort, { once: true });
+    if (aborted) terminate("abort");
     const timeout = Number(timeoutMs || 0) > 0
-      ? setTimeout(() => {
-        timedOut = true;
-        // cross-platform-allow: Node child.kill handles Windows direct-child termination
-        child.kill("SIGTERM");
-      }, Number(timeoutMs))
+      ? setTimeout(() => terminate("timeout"), Number(timeoutMs))
       : null;
 
-    child.stdout?.on("data", (chunk) => {
-      stdoutChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
-    });
-    child.stderr?.on("data", (chunk) => {
-      stderrChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
-    });
+    pipeReadableToWritable(child.stdout, stdoutStream, (chunk) =>
+      appendCapture(stdoutChunks, chunk, stdoutCapture, FOREGROUND_CAPTURE_BYTES));
+    pipeReadableToWritable(child.stderr, stderrStream, (chunk) =>
+      appendCapture(stderrChunks, chunk, stderrCapture, FOREGROUND_CAPTURE_BYTES));
     child.on("error", (error) => {
       spawnError = error;
     });
-    child.on("close", (code, signal) => {
+    child.on("close", async (code, signal) => {
       if (timeout) clearTimeout(timeout);
-      const stdout = Buffer.concat(stdoutChunks).toString("utf8");
-      const rawStderr = Buffer.concat(stderrChunks).toString("utf8");
-      const fallbackStderr = spawnError?.message || (timedOut ? `command timed out after ${Number(timeoutMs)}ms` : "");
-      const resultCode = Number.isFinite(Number(code))
-        ? Number(code)
-        : timedOut
-          ? 124
+      if (forceKillTimer) clearTimeout(forceKillTimer);
+      abortSignal?.removeEventListener?.("abort", onAbort);
+      await Promise.allSettled([stdoutFinished, stderrFinished]);
+      const stdoutStat = await stat(stdoutPath).catch(() => ({ size: 0 }));
+      const stderrStat = await stat(stderrPath).catch(() => ({ size: 0 }));
+      const stdoutBytes = Number(stdoutStat?.size || 0);
+      const stderrBytes = Number(stderrStat?.size || 0);
+      const outputOverflow = stdoutBytes > FOREGROUND_CAPTURE_BYTES || stderrBytes > FOREGROUND_CAPTURE_BYTES;
+      const stdoutBuffer = Buffer.concat(stdoutChunks);
+      const stderrBuffer = Buffer.concat(stderrChunks);
+      const stdout = (outputOverflow
+        ? stdoutBuffer.subarray(0, FOREGROUND_PREVIEW_BYTES)
+        : stdoutBuffer).toString("utf8");
+      const rawStderr = (outputOverflow
+        ? stderrBuffer.subarray(0, FOREGROUND_PREVIEW_BYTES)
+        : stderrBuffer).toString("utf8");
+      const fallbackStderr = spawnError?.message || (timedOut
+        ? `command timed out after ${Number(timeoutMs)}ms`
+        : aborted ? "command aborted" : "");
+      const resultCode = timedOut || aborted
+        ? timedOut ? 124 : 130
+        : Number.isFinite(Number(code))
+          ? Number(code)
           : Number(spawnError?.code || 0) || 0;
-      resolve({
+      const result = {
         code: resultCode,
         stdout,
         stderr: rawStderr || fallbackStderr,
         ...(signal ? { signal } : {}),
-      });
+        ...(outputOverflow ? {
+          outputOverflow: true,
+          stdoutPath,
+          stderrPath,
+          stdoutBytes,
+          stderrBytes,
+        } : {}),
+      };
+      if (!outputOverflow) await rm(outputDir, { recursive: true, force: true }).catch(() => undefined);
+      resolve(result);
     });
   });
 }
@@ -72,13 +136,15 @@ function waitForWritableFinished(stream) {
   });
 }
 
-function pipeReadableToWritable(readable, writable) {
+function pipeReadableToWritable(readable, writable, onChunk = null) {
   if (!readable) {
     writable.end();
     return;
   }
   readable.on("data", (chunk) => {
-    if (writable.write(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))) === false) {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+    onChunk?.(bytes);
+    if (writable.write(bytes) === false) {
       readable.pause();
     }
   });
@@ -87,21 +153,21 @@ function pipeReadableToWritable(readable, writable) {
   readable.on("error", (error) => writable.destroy(error));
 }
 
-function terminateChild(child) {
+function terminateChild(child, signal = "SIGTERM") {
   if (!child) return;
   if (process.platform !== "win32" && Number.isFinite(Number(child.pid))) {
     try {
-      process.kill(-Number(child.pid), "SIGTERM");
+      process.kill(-Number(child.pid), signal);
       return;
     } catch {
       // Fall back to killing the direct shell process.
     }
   }
   // cross-platform-allow: fallback direct-child termination uses Node's cross-platform kill shim
-  child.kill("SIGTERM");
+  child.kill(signal);
 }
 
-export async function runFileBacked(cmd, cwd, timeoutMs) {
+export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, options = {}) {
   const outputDir = path.join(cwd, ".execute-script-background", `${Date.now()}-${randomUUID()}`);
   await mkdir(outputDir, { recursive: true });
   const stdoutPath = path.join(outputDir, "stdout.txt");
@@ -122,11 +188,27 @@ export async function runFileBacked(cmd, cwd, timeoutMs) {
     });
     let spawnError = null;
     let timedOut = false;
+    let aborted = abortSignal?.aborted === true;
+    let forceKillTimer = null;
+    let terminationHookCalled = false;
+    const terminate = (reason = "timeout") => {
+      if (reason === "timeout") timedOut = true;
+      else aborted = true;
+      if (!terminationHookCalled) {
+        terminationHookCalled = true;
+        Promise.resolve(options?.onTerminate?.()).catch(() => undefined);
+      }
+      terminateChild(child, "SIGTERM");
+      if (!forceKillTimer) {
+        forceKillTimer = setTimeout(() => terminateChild(child, "SIGKILL"), FORCE_KILL_GRACE_MS);
+        forceKillTimer.unref?.();
+      }
+    };
+    const onAbort = () => terminate("abort");
+    abortSignal?.addEventListener?.("abort", onAbort, { once: true });
+    if (aborted) terminate("abort");
     const timeout = Number(timeoutMs || 0) > 0
-      ? setTimeout(() => {
-        timedOut = true;
-        terminateChild(child);
-      }, Number(timeoutMs))
+      ? setTimeout(() => terminate("timeout"), Number(timeoutMs))
       : null;
 
     pipeReadableToWritable(child.stdout, stdoutStream);
@@ -136,22 +218,26 @@ export async function runFileBacked(cmd, cwd, timeoutMs) {
     });
     child.on("close", async (code, signal) => {
       if (timeout) clearTimeout(timeout);
+      if (forceKillTimer) clearTimeout(forceKillTimer);
+      abortSignal?.removeEventListener?.("abort", onAbort);
       try {
         await Promise.all([stdoutFinished, stderrFinished]);
       } catch {
         // Keep script results recoverable; stderr fallback below carries process-level failures.
       }
-      if (spawnError || timedOut) {
-        const fallbackMessage = spawnError?.message || `command timed out after ${Number(timeoutMs)}ms`;
+      if (spawnError || timedOut || aborted) {
+        const fallbackMessage = spawnError?.message || (timedOut
+          ? `command timed out after ${Number(timeoutMs)}ms`
+          : "command aborted");
         const existingStderr = await readFile(stderrPath, "utf8").catch(() => "");
         if (!existingStderr) await writeFile(stderrPath, fallbackMessage, "utf8");
       }
       const stdoutStat = await stat(stdoutPath).catch(() => ({ size: 0 }));
       const stderrStat = await stat(stderrPath).catch(() => ({ size: 0 }));
-      const resultCode = Number.isFinite(Number(code))
-        ? Number(code)
-        : timedOut
-          ? 124
+      const resultCode = timedOut || aborted
+        ? timedOut ? 124 : 130
+        : Number.isFinite(Number(code))
+          ? Number(code)
           : Number(spawnError?.code || 0) || 0;
       resolve({
         code: resultCode,

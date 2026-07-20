@@ -210,6 +210,7 @@ export class SessionExecutionFinalizer {
     userConfig = {},
     resolvedParentAsyncResultContainer = null,
     lifecycle = null,
+    persistenceContext = null,
   }) {
     const rawTurnMessages =
       Array.isArray(agentResult?.turnMessages) && agentResult.turnMessages.length
@@ -235,12 +236,14 @@ export class SessionExecutionFinalizer {
       thinkingStartedAt,
       thinkingFinishedAt,
       eventListener: runtimeEventListener,
+      persistenceContext,
     });
     await this.session.saveCurrentTurnTasks({
       userId,
       sessionId,
       parentSessionId,
       currentTurnTasks: agentResult?.turnTasks || [],
+      persistenceContext,
     });
 
     lifecycle?.enterMemory?.();
@@ -260,6 +263,7 @@ export class SessionExecutionFinalizer {
             userConfig,
             runtimeEventListener,
             mode: "async",
+            persistenceContext,
           }),
         )
         .catch(() => {
@@ -273,6 +277,7 @@ export class SessionExecutionFinalizer {
         userConfig,
         runtimeEventListener,
         mode: "sync",
+        persistenceContext,
       });
     }
 
@@ -285,6 +290,8 @@ export class SessionExecutionFinalizer {
         this.session.getExecutionBundle({
           userId,
           sessionId,
+          parentSessionId,
+          persistenceContext,
         }),
         new Promise((_, reject) =>
           setTimeout(

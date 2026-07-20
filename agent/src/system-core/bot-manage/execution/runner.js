@@ -154,6 +154,7 @@ export class SessionExecutionRunner {
     runConfig = {},
     turnScopeId = "",
     parentAsyncResultContainer = null,
+    persistenceContext = null,
   }) {
     let resolvedParentAsyncResultContainer = parentAsyncResultContainer;
     let resolvedRunConfig = runConfig;
@@ -233,6 +234,7 @@ export class SessionExecutionRunner {
         eventListener,
         turnScopeId: normalizedRequestTurnScopeId,
         thinkingStartedAt: String(runConfig?.thinkingStartedAt || "").trim(),
+        persistenceContext,
       });
       const requestRunConfig = {
         ...(runConfig && typeof runConfig === "object" && !Array.isArray(runConfig)
@@ -335,6 +337,7 @@ export class SessionExecutionRunner {
         runConfig: resolvedRunConfig,
         abortSignal,
         parentAsyncResultContainer: resolvedParentAsyncResultContainer,
+        persistenceContext,
       };
       emitEvent(runtimeEventListener, "debug_resend_runner_received", {
         sessionId: usedSessionId,
@@ -365,6 +368,7 @@ export class SessionExecutionRunner {
           turnScopeId: resolvedTurnScopeId,
           dialogProcessId,
           attachments: canonicalAttachments,
+          persistenceContext,
         });
       } else {
         const turnCommand = createTurnCommand({
@@ -380,10 +384,11 @@ export class SessionExecutionRunner {
           caller,
         });
         const commitPayload = toCommitTurnPayload(turnCommand);
+        const commitPayloadWithPersistence = { ...commitPayload, persistenceContext };
         const commitResult = typeof this.commitSessionTurn === "function"
-          ? await this.commitSessionTurn(commitPayload)
+          ? await this.commitSessionTurn(commitPayloadWithPersistence)
           : await this.appendSessionTurn({
-              ...commitPayload,
+              ...commitPayloadWithPersistence,
               role: MESSAGE_ROLE.USER,
               type: MESSAGE_TYPE.MESSAGE,
               frontendUserMessage: commitPayload.frontendUserMessage === true,
@@ -404,6 +409,7 @@ export class SessionExecutionRunner {
       const preparedAgentTurnExecution = await this.prepareAgentTurnExecution({
         buildContextPayload,
         abortSignal,
+        persistenceContext,
       });
       const { agentContext, runtimeAgentContext, userMessageAttachments } =
         this._normalizePreparedAgentTurnExecution(preparedAgentTurnExecution);
@@ -587,6 +593,7 @@ export class SessionExecutionRunner {
         },
         resolvedParentAsyncResultContainer,
         lifecycle,
+        persistenceContext,
       });
       emitEvent(runtimeEventListener, "agent_done", {
         sessionId: usedSessionId,

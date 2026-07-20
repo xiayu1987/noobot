@@ -17,8 +17,19 @@ export class SessionMessageService {
     this._mutationTails = new Map();
   }
 
-  async _withSessionMutation(userId, sessionId, operation) {
-    const key = `${String(userId || "").trim()}\u0000${String(sessionId || "").trim()}`;
+  async _resolveParentSessionId(userId, sessionId, parentSessionId = "", persistenceContext = null) {
+    if (typeof this.sessionRepo?.resolveSessionScope === "function") {
+      const scope = await this.sessionRepo.resolveSessionScope(userId, sessionId, parentSessionId, persistenceContext);
+      return scope?.resolvedParentSessionId || "";
+    }
+    return this.sessionRepo.resolveParentSessionId(userId, sessionId, parentSessionId);
+  }
+
+  async _withSessionMutation(userId, sessionId, operation, parentSessionId = "", persistenceContext = null) {
+    const scopeKey = persistenceContext?.locationResolver
+      ? JSON.stringify(await persistenceContext.locationResolver.resolveSessionScope(userId, sessionId, parentSessionId))
+      : "";
+    const key = `${String(userId || "").trim()}\u0000${String(sessionId || "").trim()}\u0000${scopeKey}`;
     const previous = this._mutationTails.get(key) || Promise.resolve();
     let release;
     const current = new Promise((resolve) => { release = resolve; });
@@ -26,7 +37,7 @@ export class SessionMessageService {
     await previous.catch(() => {});
     try {
       if (typeof this.sessionRepo?.withSessionMutation === "function") {
-        return await this.sessionRepo.withSessionMutation(userId, sessionId, "", operation);
+        return await this.sessionRepo.withSessionMutation(userId, sessionId, parentSessionId, operation, persistenceContext);
       }
       return await operation();
     } finally {

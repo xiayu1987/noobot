@@ -16,9 +16,17 @@ export class TaskService {
     this.now = now;
   }
 
-  async _withSessionMutation(userId, sessionId, parentSessionId, operation) {
+  async _resolveParentSessionId(userId, sessionId, parentSessionId = "", persistenceContext = null) {
+    if (typeof this.sessionRepo?.resolveSessionScope === "function") {
+      const scope = await this.sessionRepo.resolveSessionScope(userId, sessionId, parentSessionId, persistenceContext);
+      return scope?.resolvedParentSessionId || "";
+    }
+    return this.sessionRepo.resolveParentSessionId(userId, sessionId, parentSessionId);
+  }
+
+  async _withSessionMutation(userId, sessionId, parentSessionId, operation, persistenceContext = null) {
     if (typeof this.sessionRepo?.withSessionMutation === "function") {
-      return this.sessionRepo.withSessionMutation(userId, sessionId, parentSessionId, operation);
+      return this.sessionRepo.withSessionMutation(userId, sessionId, parentSessionId, operation, persistenceContext);
     }
     return operation();
   }
@@ -30,22 +38,26 @@ export class TaskService {
     taskName = "",
     meta = {},
     parentSessionId = "",
+    persistenceContext = null,
   }) {
     return this._withSessionMutation(userId, sessionId, parentSessionId, async () => {
-    const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+    const resolvedParentSessionId = await this._resolveParentSessionId(
       userId,
       sessionId,
       parentSessionId,
+      persistenceContext,
     );
     await this.sessionRepo.ensureSession({
       userId,
       sessionId,
       parentSessionId: resolvedParentSessionId,
+      persistenceContext,
     });
     const session = await this.sessionRepo.findById(
       userId,
       sessionId,
       resolvedParentSessionId,
+      persistenceContext,
     );
     if (!session) return null;
 
@@ -53,6 +65,7 @@ export class TaskService {
       userId,
       sessionId,
       resolvedParentSessionId,
+      persistenceContext,
     );
     const now = this.now();
 
@@ -79,7 +92,7 @@ export class TaskService {
       meta,
     };
 
-    await this.taskRepo.save(userId, sessionId, task, resolvedParentSessionId);
+    await this.taskRepo.save(userId, sessionId, task, resolvedParentSessionId, persistenceContext);
 
     session.currentTaskId = taskId;
     if (session.messages?.length) {
@@ -87,9 +100,9 @@ export class TaskService {
       lastMessage.taskId = taskId;
       lastMessage.taskStatus = "start";
     }
-    await this.sessionRepo.save(userId, session, resolvedParentSessionId);
+    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
     return task;
-    });
+    }, persistenceContext);
   }
 
   async finishSkillTask({
@@ -98,23 +111,27 @@ export class TaskService {
     taskId,
     result = "",
     parentSessionId = "",
+    persistenceContext = null,
   }) {
     return this._withSessionMutation(userId, sessionId, parentSessionId, async () => {
-    const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+    const resolvedParentSessionId = await this._resolveParentSessionId(
       userId,
       sessionId,
       parentSessionId,
+      persistenceContext,
     );
     await this.sessionRepo.ensureSession({
       userId,
       sessionId,
       parentSessionId: resolvedParentSessionId,
+      persistenceContext,
     });
 
     const session = await this.sessionRepo.findById(
       userId,
       sessionId,
       resolvedParentSessionId,
+      persistenceContext,
     );
     if (!session) return null;
 
@@ -122,6 +139,7 @@ export class TaskService {
       userId,
       sessionId,
       resolvedParentSessionId,
+      persistenceContext,
     );
 
     const currentTaskId = taskId || taskBundle.currentTaskId || session.currentTaskId;
@@ -143,6 +161,7 @@ export class TaskService {
       taskBundle.tasks,
       resolvedParentSessionId,
       nextCurrentTaskId,
+      persistenceContext,
     );
 
     if (String(session.currentTaskId || "").trim() === currentTaskId) {
@@ -152,9 +171,9 @@ export class TaskService {
       const lastMessage = session.messages[session.messages.length - 1];
       lastMessage.taskStatus = "completed";
     }
-    await this.sessionRepo.save(userId, session, resolvedParentSessionId);
+    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
     return task;
-    });
+    }, persistenceContext);
   }
 
   async saveCurrentTurnTasks({
@@ -162,23 +181,27 @@ export class TaskService {
     sessionId,
     parentSessionId = "",
     currentTurnTasks = [],
+    persistenceContext = null,
   }) {
     return this._withSessionMutation(userId, sessionId, parentSessionId, async () => {
-    const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+    const resolvedParentSessionId = await this._resolveParentSessionId(
       userId,
       sessionId,
       parentSessionId,
+      persistenceContext,
     );
     await this.sessionRepo.ensureSession({
       userId,
       sessionId,
       parentSessionId: resolvedParentSessionId,
+      persistenceContext,
     });
 
     const session = await this.sessionRepo.findById(
       userId,
       sessionId,
       resolvedParentSessionId,
+      persistenceContext,
     );
     if (!session) return null;
 
@@ -196,12 +219,13 @@ export class TaskService {
       normalizedTurnTasks,
       resolvedParentSessionId,
       currentTaskId,
+      persistenceContext,
     );
 
     session.currentTaskId = currentTaskId;
-    await this.sessionRepo.save(userId, session, resolvedParentSessionId);
+    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
 
-    return this.taskRepo.getBundle(userId, sessionId, resolvedParentSessionId);
-    });
+    return this.taskRepo.getBundle(userId, sessionId, resolvedParentSessionId, persistenceContext);
+    }, persistenceContext);
   }
 }
