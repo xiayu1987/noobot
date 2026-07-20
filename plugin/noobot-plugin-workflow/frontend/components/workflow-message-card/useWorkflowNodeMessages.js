@@ -6,6 +6,10 @@
 import { computed } from "vue";
 import { applyCompletedToolLogsToMessages } from "../../../../../client/noobot-chat/src/composables/infra/sessionToolLogs";
 import { buildViewMessage, foldConversationMessages } from "../../../../../client/noobot-chat/src/composables/infra/messageModel";
+import {
+  buildNormalizedDetailMessages,
+  buildTurnTimingsByTurnScopeId,
+} from "../../../../../client/noobot-chat/src/composables/chat/chatList/detailMessages";
 
 export function useWorkflowNodeMessages({
   props,
@@ -73,9 +77,13 @@ export function useWorkflowNodeMessages({
 
   const selectedNodeTurnTimingsByTurnScopeId = computed(() => {
     const summary = selectedNodeSessionSummary.value || {};
-    return summary?.turnTimingsByTurnScopeId && typeof summary.turnTimingsByTurnScopeId === "object"
-      ? summary.turnTimingsByTurnScopeId
-      : {};
+    if (summary?.turnTimingsByTurnScopeId && typeof summary.turnTimingsByTurnScopeId === "object") {
+      return summary.turnTimingsByTurnScopeId;
+    }
+    return buildTurnTimingsByTurnScopeId({
+      turnTimings: summary?.turnTimings,
+      messages: Array.isArray(summary?.messages) ? summary.messages : [],
+    });
   });
 
   const selectedNodeTurnStatuses = computed(() => {
@@ -107,10 +115,15 @@ export function useWorkflowNodeMessages({
   const normalizedNodeSessionMessages = computed(() => {
     const sessionDocs = selectedNodeSessionDocs.value;
     const mainSessionDoc = sessionDocs[0] || {};
-    const foldedMessages = foldConversationMessages(
-      Array.isArray(mainSessionDoc?.messages) ? mainSessionDoc.messages : [],
-      buildNodeViewMessage,
-    );
+    const foldedMessages = buildNormalizedDetailMessages({
+      detailMessages: Array.isArray(mainSessionDoc?.messages) ? mainSessionDoc.messages : [],
+      sessionDocs,
+      rootSessionId: String(mainSessionDoc?.sessionId || "").trim(),
+      turnTimings: Array.isArray(mainSessionDoc?.turnTimings) ? mainSessionDoc.turnTimings : [],
+      turnStatuses: selectedNodeTurnStatuses.value,
+      makeViewMessage: buildNodeViewMessage,
+      foldMessagesForView: (messages = []) => foldConversationMessages(messages, buildNodeViewMessage),
+    });
     applyCompletedToolLogsToMessages(foldedMessages, selectedNodeToolSessionDocs.value);
     return foldedMessages;
   });

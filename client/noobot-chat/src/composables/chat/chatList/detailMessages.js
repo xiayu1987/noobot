@@ -61,6 +61,43 @@ const FINALIZED_ASSISTANT_STATES = new Set([
   "no_conversation",
 ]);
 
+/**
+ * Project authoritative session turn timings onto the turn identity consumed by
+ * message renderers. Both the primary chat and secondary Agent viewers must use
+ * this projection so refresh-time thinking state cannot diverge by channel.
+ */
+export function buildTurnTimingsByTurnScopeId({
+  turnTimings = [],
+  messages = [],
+  currentTimingsByTurnScopeId = {},
+  onTimingHydrated = null,
+} = {}) {
+  const sourceMessages = Array.isArray(messages) ? messages : [];
+  const currentTimings = currentTimingsByTurnScopeId && typeof currentTimingsByTurnScopeId === "object"
+    ? currentTimingsByTurnScopeId
+    : {};
+  return Object.fromEntries(
+    (Array.isArray(turnTimings) ? turnTimings : [])
+      .map((item = {}) => {
+        const timingDialogProcessId = getMessageDialogProcessId(item);
+        const matchingMessage = timingDialogProcessId
+          ? sourceMessages.find(
+            (messageItem) => getMessageDialogProcessId(messageItem) === timingDialogProcessId,
+          )
+          : null;
+        const turnScopeId = getMessageTurnScopeId(item) || getMessageTurnScopeId(matchingMessage);
+        const current = currentTimings[turnScopeId] || {};
+        const timing = {
+          thinkingStartedAt: item?.thinkingStartedAt || current.thinkingStartedAt || null,
+          thinkingFinishedAt: item?.thinkingFinishedAt || current.thinkingFinishedAt || null,
+        };
+        onTimingHydrated?.({ item, matchingMessage, turnScopeId, current, timing });
+        return [turnScopeId, timing];
+      })
+      .filter(([turnScopeId]) => Boolean(turnScopeId)),
+  );
+}
+
 function normalizeState(value = "") {
   return String(value || "").trim().toLowerCase();
 }

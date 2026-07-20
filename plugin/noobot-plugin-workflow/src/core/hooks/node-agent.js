@@ -331,6 +331,7 @@ export async function runNodeAgent({
   const nodeExecutionId = String(identity?.nodeExecutionId || "").trim();
   const workflowRunId = String(identity?.workflowRunId || instanceId || "").trim();
   const childExecutionId = String(identity?.childExecutionId || `agent:${nodeTurnScopeId}`).trim();
+  const childSessionId = String(identity?.sessionId || "").trim();
   const workflowExecutionId = String(
     identity?.workflowExecutionId ||
       ctx?.executionId ||
@@ -345,6 +346,7 @@ export async function runNodeAgent({
     dialogProcessId: nodeDialogProcessId,
     turnScopeId: nodeTurnScopeId,
     childExecutionId,
+    sessionId: childSessionId,
     workflowExecutionId,
     nodeId: String(identity?.nodeId || pendingStep?.nodeId || "").trim(),
     nodeName: String(identity?.nodeName || pendingStep?.nodeName || "").trim(),
@@ -483,6 +485,7 @@ export async function runNodeAgent({
               ? ctx.eventListener
               : null,
           strategy: {
+            sessionId: childSessionId,
             parentSessionId: String(ctx?.sessionId || "").trim(),
             parentDialogProcessId: String(ctx?.dialogProcessId || "").trim(),
             dialogProcessId: nodeDialogProcessId,

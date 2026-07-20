@@ -45,6 +45,7 @@ const WORKFLOW_FRONTEND_MESSAGES = Object.freeze({
       nodeSessionTitle: "节点会话 {sessionId}",
       loadingNodeSession: "正在加载节点会话...",
       noNodeSessionContent: "暂无节点会话内容",
+      nodeSessionPending: "运行中，等待子 Agent 输出",
     }),
     modelExtension: Object.freeze({
       title: "Workflow 插件",
@@ -90,6 +91,7 @@ const WORKFLOW_FRONTEND_MESSAGES = Object.freeze({
       nodeSessionTitle: "Node Session {sessionId}",
       loadingNodeSession: "Loading node session...",
       noNodeSessionContent: "No node session content",
+      nodeSessionPending: "Running, waiting for the child Agent output",
     }),
     modelExtension: Object.freeze({
       title: "Workflow Plugin",

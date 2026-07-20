@@ -35,6 +35,7 @@ const {
   viewerVisible,
   viewerLoading,
   viewerError,
+  viewerState,
   selectedRuntimeNode,
   selectedNodeSessionId,
   selectedGraphDialogProcessId,
@@ -83,6 +84,7 @@ const {
     :translate="translate"
     :viewer-loading="viewerLoading"
     :viewer-error="viewerError"
+    :viewer-state="viewerState"
     :selected-node-session-id="selectedNodeSessionId"
     :selected-execution-id="selectedExecutionId"
     :execution-directory="executionDirectory"
