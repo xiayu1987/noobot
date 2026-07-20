@@ -16,6 +16,10 @@ import {
   persistWorkflowPlanningDialog,
 } from "../hooks/persistence.js";
 import { prepareWorkflowPlanningMessage } from "./planning-message.js";
+import {
+  buildWorkflowPlanningNodeSessions,
+  resolveWorkflowRunId,
+} from "../workflow-run-identity.js";
 import { handleWorkflowFailure } from "./failure-handler.js";
 import { publishWorkflowResult } from "./result-publisher.js";
 import { buildFinalWorkflowPayload } from "./payload-builder.js";
@@ -57,12 +61,26 @@ export async function handleBeforeAgentDispatch({
       phaseTracker,
     });
     throwIfWorkflowAborted(ctx);
+    const { semantic } = executeWorkflowText({
+      semanticText,
+      options,
+    });
+    // Semantic parsing is the ownership boundary: before this point the hook
+    // can still fall back to the main Agent. Once a valid workflow is accepted,
+    // the workflow owns root-turn processing and must publish RUNNING before
+    // planning or child sessions begin.
+    ctx?.claimAgentDispatch?.({ source: "workflow_before_agent_dispatch" });
+    const workflowRunId = resolveWorkflowRunId(ctx);
+    const planningNodeSessions = buildWorkflowPlanningNodeSessions({ workflowRunId, semantic });
     const planningPersistResult = await persistWorkflowPlanningDialog({
       options,
       ctx,
       sourceText,
       semanticText,
       semanticResolution,
+      semantic,
+      workflowRunId,
+      planningNodeSessions,
     });
     await emitWorkflowRuntimeEvent({
       options,
@@ -72,10 +90,6 @@ export async function handleBeforeAgentDispatch({
         outputDir: String(planningPersistResult?.outputDir || "").trim(),
         outputFile: String(planningPersistResult?.outputFile || "").trim(),
       },
-    });
-    const { semantic } = executeWorkflowText({
-      semanticText,
-      options,
     });
     throwIfWorkflowAborted(ctx);
     await prepareWorkflowPlanningMessage({
@@ -89,6 +103,8 @@ export async function handleBeforeAgentDispatch({
       phaseTracker,
       retryMeta,
       planningPersistResult,
+      workflowRunId,
+      planningNodeSessions,
     });
 
     const { execution, nodeAgentRuns } = await runWorkflowExecutionStage({
@@ -96,6 +112,8 @@ export async function handleBeforeAgentDispatch({
       options,
       ctx,
       semantic,
+      workflowRunId,
+      planningNodeSessions,
       phaseTracker,
     });
     markWorkflowRetrySucceeded(retryMeta);

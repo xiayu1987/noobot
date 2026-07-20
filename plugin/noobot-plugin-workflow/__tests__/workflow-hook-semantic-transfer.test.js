@@ -169,7 +169,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   );
   assert.equal(String(subCall?.message || "").trim(), "请输出：节点A执行完成");
   assert.equal(subCall?.runConfigPatch?.streaming, false);
-  assert.match(String(subCall?.runConfigPatch?.turnScopeId || ""), /^workflow-node:wf_node_/);
+  assert.match(String(subCall?.runConfigPatch?.turnScopeId || ""), /^workflow-node:wf_run_/);
   assert.equal(subCall?.strategy?.turnScopeId, subCall?.runConfigPatch?.turnScopeId);
   assert.equal(subCall?.metadata?.turnScopeId, subCall?.runConfigPatch?.turnScopeId);
   assert.equal(typeof subCall?.eventListener?.onEvent, "function");

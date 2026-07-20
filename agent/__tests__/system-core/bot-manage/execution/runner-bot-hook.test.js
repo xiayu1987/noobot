@@ -127,6 +127,40 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
   ]);
 });
 
+test("before-dispatch takeover can claim root processing before the hook completes", async () => {
+  const botHookManager = createBotHookManager();
+  const lifecycleStates = [];
+  let releaseHook;
+  const hookGate = new Promise((resolve) => { releaseHook = resolve; });
+  let claimedInsideHook = false;
+  botHookManager.on(BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH, async (ctx = {}) => {
+    claimedInsideHook = ctx.claimAgentDispatch({ source: "test_takeover" });
+    ctx.skipAgentDispatch = true;
+    ctx.overrideAgentResult = { output: "hook result", traces: [], turnMessages: [] };
+    await hookGate;
+  });
+  const runner = createRunner({ botHookManager });
+  const runPromise = runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "hello",
+    runConfig: {},
+    eventListener: {
+      onEvent(event = {}) {
+        if (event.event === "agent_lifecycle_state_changed") lifecycleStates.push(event.data);
+      },
+    },
+  });
+
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(claimedInsideHook, true);
+  assert.equal(lifecycleStates.filter((item) => item.state === "running").length, 1);
+  assert.equal(lifecycleStates.find((item) => item.state === "running")?.source, "test_takeover");
+  releaseHook();
+  await runPromise;
+  assert.equal(lifecycleStates.filter((item) => item.state === "running").length, 1);
+});
+
 test("SessionExecutionRunner passes prepared turnScopeId into context building", async () => {
   let capturedRunConfig = null;
   let appendedTurnScopeId = null;

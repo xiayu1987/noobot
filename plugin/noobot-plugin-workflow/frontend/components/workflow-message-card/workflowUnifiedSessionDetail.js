@@ -1,0 +1,111 @@
+/*
+  Copyright (c) 2026 xiayu
+  Contact: 126240622+xiayu1987@users.noreply.github.com
+  SPDX-License-Identifier: MIT
+*/
+import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
+
+function getRegistryValue(registry) {
+  if (registry && typeof registry === "object" && "value" in registry) return registry.value || {};
+  return registry && typeof registry === "object" ? registry : {};
+}
+
+function getListValue(value) {
+  const resolved = value && typeof value === "object" && "value" in value ? value.value : value;
+  return Array.isArray(resolved) ? resolved : [];
+}
+
+function text(value) {
+  return String(value || "").trim();
+}
+
+function getSessionBucket(registry = {}, sessionId = "") {
+  const sessions = registry?.sessions && typeof registry.sessions === "object" ? registry.sessions : {};
+  return sessions[sessionId] || registry?.[sessionId] || null;
+}
+
+function selectSessionTurnRuntime(registry = {}, sessionId = "") {
+  const bucket = getSessionBucket(registry, sessionId);
+  if (!bucket || typeof bucket !== "object") return null;
+  if (bucket.currentTurn && typeof bucket.currentTurn === "object") return bucket.currentTurn;
+  const turns = bucket.turns && typeof bucket.turns === "object" ? bucket.turns : {};
+  const activeKey = text(bucket.activeTurnScopeId || bucket.currentTurnScopeId);
+  if (activeKey && turns[activeKey]) return turns[activeKey];
+  const values = Object.values(turns);
+  return values.length ? values[values.length - 1] : null;
+}
+
+function resolveTurnRuntimeByScope(registry = {}, turnScopeId = "", { sessionId = "" } = {}) {
+  const scope = text(turnScopeId);
+  if (!scope) return selectSessionTurnRuntime(registry, sessionId);
+  const bucket = getSessionBucket(registry, sessionId);
+  const direct = bucket?.turns?.[scope] || bucket?.turnRuntimes?.[scope];
+  if (direct) return direct;
+  const candidates = [];
+  if (bucket?.currentTurn) candidates.push(bucket.currentTurn);
+  if (bucket?.turns && typeof bucket.turns === "object") candidates.push(...Object.values(bucket.turns));
+  if (bucket?.turnRuntimes && typeof bucket.turnRuntimes === "object") candidates.push(...Object.values(bucket.turnRuntimes));
+  return candidates.find((item = {}) => text(item?.turnScopeId || item?.scopeId) === scope) || null;
+}
+
+export function hasNewProtocolNodeIdentity(nodeItem = {}) {
+  return Boolean(text(nodeItem?.nodeExecutionId));
+}
+
+export function resolveRuntimeNodeSession(nodeItem = {}, runtimeNodeSessions = []) {
+  const nodeExecutionId = text(nodeItem?.nodeExecutionId);
+  const dialogProcessId = resolveWorkflowDialogProcessId(nodeItem);
+  const sessionId = text(nodeItem?.sessionId || nodeItem?.nodeSessionId);
+  const nodes = getListValue(runtimeNodeSessions);
+  return nodes.find((item = {}) => nodeExecutionId && text(item?.nodeExecutionId) === nodeExecutionId) ||
+    nodes.find((item = {}) => dialogProcessId && resolveWorkflowDialogProcessId(item) === dialogProcessId) ||
+    nodes.find((item = {}) => sessionId && text(item?.sessionId || item?.nodeSessionId) === sessionId) ||
+    nodeItem ||
+    {};
+}
+
+export function buildUnifiedSessionDetail({
+  nodeItem = {},
+  runtimeNodeSessions = [],
+  selectSessionMessages = null,
+  turnRuntimeRegistry = null,
+  allowEmptyMessages = false,
+} = {}) {
+  const runtimeNode = resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions);
+  const sessionId = text(runtimeNode?.sessionId || runtimeNode?.nodeSessionId || nodeItem?.sessionId || nodeItem?.nodeSessionId);
+  if (!sessionId || typeof selectSessionMessages !== "function") return null;
+  const sessionDoc = selectSessionMessages(sessionId);
+  if (!sessionDoc || typeof sessionDoc !== "object") return null;
+  const messages = Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : [];
+  const registry = getRegistryValue(turnRuntimeRegistry);
+  const turnScopeId = text(runtimeNode?.turnScopeId || nodeItem?.turnScopeId);
+  const dialogProcessId = text(runtimeNode?.dialogProcessId || resolveWorkflowDialogProcessId(runtimeNode) || resolveWorkflowDialogProcessId(nodeItem));
+  const runtimeTurn = turnScopeId
+    ? resolveTurnRuntimeByScope(registry, turnScopeId, { sessionId })
+    : selectSessionTurnRuntime(registry, sessionId);
+  if (!messages.length && !runtimeTurn && !allowEmptyMessages) return null;
+  const scopedMessages = turnScopeId
+    ? messages.filter((messageItem = {}) => {
+      const messageTurnScopeId = text(messageItem?.turnScopeId || messageItem?.metadata?.turnScopeId || messageItem?.pluginMeta?.turnScopeId);
+      const messageDialogProcessId = text(messageItem?.dialogProcessId || messageItem?.metadata?.dialogProcessId || messageItem?.pluginMeta?.dialogProcessId);
+      if (messageTurnScopeId) return messageTurnScopeId === turnScopeId;
+      if (messageDialogProcessId && dialogProcessId) return messageDialogProcessId === dialogProcessId;
+      return true;
+    })
+    : messages;
+  if (!scopedMessages.length && !runtimeTurn && !allowEmptyMessages) return null;
+  return {
+    sessionId,
+    messages: scopedMessages,
+    rawMessages: scopedMessages,
+    sessionSummary: {
+      ...(sessionDoc && typeof sessionDoc === "object" ? sessionDoc : {}),
+      sessionId,
+      parentSessionId: text(runtimeNode?.parentSessionId || sessionDoc?.parentSessionId || nodeItem?.parentSessionId),
+      dialogProcessId,
+      turnScopeId,
+      turnRuntime: runtimeTurn || null,
+      messages: scopedMessages,
+    },
+  };
+}

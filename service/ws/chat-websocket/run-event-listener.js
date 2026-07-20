@@ -6,6 +6,7 @@
 import { normalizeSseLogEvent } from "#agent/event";
 import {
   buildParentOwnedChildRunPayload,
+  buildSubSessionWirePayload,
   isChildRunEventData,
   parentOwnsChildRunEventData,
 } from "./child-run-events.js";
@@ -29,6 +30,7 @@ export function createRunEventListener({
   getCurrentRunHandle = () => null,
   getCurrentTurnScopeId = () => "",
   onRootRunning = null,
+  onCommittedTurnLifecycle = null,
 } = {}) {
   const resolveTurnScopeId = () =>
     getCurrentRunMeta()?.turnScopeId || getCurrentTurnScopeId() || "";
@@ -40,9 +42,18 @@ export function createRunEventListener({
       const eventDialogProcessId = String(eventData?.dialogProcessId || "").trim();
       const currentRunMeta = getCurrentRunMeta();
       const currentRunHandle = getCurrentRunHandle();
+      if (eventName === "turn_lifecycle_committed") {
+        if (typeof onCommittedTurnLifecycle === "function") {
+          onCommittedTurnLifecycle(eventData);
+        }
+        return;
+      }
       const childRunEvent = isChildRunEventData(eventData, {
         rootSessionId: sessionId,
       });
+      const workflowChildRunEvent = Boolean(
+        childRunEvent && (eventData?.workflowRunId || eventData?.nodeExecutionId),
+      );
       if (
         eventName === "agent_lifecycle_state_changed" &&
         String(eventData?.state || "").trim().toLowerCase() === "running" &&
@@ -75,6 +86,18 @@ export function createRunEventListener({
       if (eventName === "llm_delta") {
         if (!textStreamingEnabled) {
           // Non-streaming mode: suppress token deltas, keep other system/tool events.
+          return;
+        }
+        if (workflowChildRunEvent) {
+          sendEvent("subagent_delta", buildSubSessionWirePayload({
+            ...eventData,
+            content: String(eventData.text || ""),
+            delta: String(eventData.text || ""),
+          }, {
+            rootSessionId: sessionId,
+            parentDialogProcessId,
+            turnScopeId: resolveTurnScopeId(),
+          }));
           return;
         }
         if (childRunEvent) {
@@ -145,6 +168,31 @@ export function createRunEventListener({
           turnScopeId: resolveTurnScopeId(),
           attachments,
         });
+        return;
+      }
+      if (typeof eventName === "string" && eventName.startsWith("workflow_")) {
+        sendEvent(eventName, {
+          ...eventData,
+          sessionId: String(eventData?.sessionId || sessionId || ""),
+          turnScopeId: eventData?.turnScopeId || resolveTurnScopeId(),
+        });
+        return;
+      }
+      if (workflowChildRunEvent) {
+        const normalizedEvent = normalizeSseLogEvent(eventPayload);
+        const normalizedType = String(normalizedEvent?.data?.type || eventName || "event")
+          .trim()
+          .replace(/^subagent_/, "")
+          .replace(/[^a-zA-Z0-9_]+/g, "_");
+        sendEvent(`subagent_${normalizedType || "event"}`, buildSubSessionWirePayload({
+          ...eventData,
+          ...normalizedEvent.data,
+          rawEvent: eventName,
+        }, {
+          rootSessionId: sessionId,
+          parentDialogProcessId,
+          turnScopeId: resolveTurnScopeId(),
+        }));
         return;
       }
       const normalizedEvent = normalizeSseLogEvent(

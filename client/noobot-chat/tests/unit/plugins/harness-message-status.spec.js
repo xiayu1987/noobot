@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { matchesMessageStatusRow } from "../../../../../plugin/noobot-plugin-harness/frontend/index.js";
+import {
+  matchesMessageStatusRow,
+  matchesThinkingPanel,
+} from "../../../../../plugin/noobot-plugin-harness/frontend/index.js";
 
 describe("harness message status renderer", () => {
   it("matches a refreshed assistant message with only persisted status", () => {
@@ -27,5 +30,20 @@ describe("harness message status renderer", () => {
       role: "user",
       persistedStatusStepState: "completed",
     })).toBe(false);
+  });
+});
+
+describe("harness thinking panel renderer", () => {
+  it("does not recursively attach to a live workflow projection", () => {
+    expect(matchesThinkingPanel({
+      role: "assistant",
+      type: "workflow",
+      __workflowLiveProjection: true,
+    })).toBe(false);
+  });
+
+  it("continues matching normal and persisted workflow messages", () => {
+    expect(matchesThinkingPanel({ role: "assistant" })).toBe(true);
+    expect(matchesThinkingPanel({ role: "assistant", type: "workflow" })).toBe(true);
   });
 });

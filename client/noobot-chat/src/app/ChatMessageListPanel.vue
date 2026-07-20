@@ -6,6 +6,7 @@
 <script setup>
 import { computed, ref, watch, watchEffect } from "vue";
 import ChatMessageItem from "../modules/message/ChatMessageItem.vue";
+import WorkflowLiveProjectionList from "./WorkflowLiveProjectionList.vue";
 import { useLocale } from "../shared/i18n/useLocale";
 import {
   SESSION_RUN_MESSAGE_RUNTIME_ACTION,

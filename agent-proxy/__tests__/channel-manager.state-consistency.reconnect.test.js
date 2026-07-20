@@ -36,6 +36,25 @@ test("authoritative lifecycle replay is session-scoped, ordered, and deduplicate
   );
 });
 
+test("parent and parallel child lifecycle windows coexist without cross-session replay", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channel = manager.ensureChannel(
+    createChannelKey({ userId: "user-1", sessionId: "parent-session" }),
+    { userId: "user-1", sessionId: "parent-session" },
+  );
+  for (const envelope of [
+    { eventId: "parent-1", sessionId: "parent-session", turnScopeId: "parent-turn", revision: 1, sequence: 1 },
+    { eventId: "child-a-1", sessionId: "child-a", parentSessionId: "parent-session", turnScopeId: "child-a-turn", revision: 1, sequence: 1 },
+    { eventId: "child-b-1", sessionId: "child-b", parentSessionId: "parent-session", turnScopeId: "child-b-turn", revision: 1, sequence: 1 },
+    { eventId: "child-a-2", sessionId: "child-a", parentSessionId: "parent-session", turnScopeId: "child-a-turn", revision: 2, sequence: 2 },
+  ]) manager.pushChannelEvent(channel, "turn_lifecycle", envelope);
+
+  assert.deepEqual(manager.getTurnLifecycleReplay(channel, "parent-session", 0).events.map((e) => e.eventId), ["parent-1"]);
+  assert.deepEqual(manager.getTurnLifecycleReplay(channel, "child-a", 0).events.map((e) => e.eventId), ["child-a-1", "child-a-2"]);
+  assert.deepEqual(manager.getTurnLifecycleReplay(channel, "child-b", 0).events.map((e) => e.eventId), ["child-b-1"]);
+  assert.equal(manager.getTurnLifecycleReplay(channel, "child-a", 0).events.every((e) => e.parentSessionId === "parent-session"), true);
+});
+
 test("lifecycle replay gap requests an authoritative snapshot without inventing state", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const sessionId = "session-lifecycle-gap";

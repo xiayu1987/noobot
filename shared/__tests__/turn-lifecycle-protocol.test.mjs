@@ -30,6 +30,27 @@ test("turn lifecycle envelope requires stable identity and monotonic coordinates
   assert.deepEqual(validateTurnLifecycleEnvelope(envelope), { valid: true, errors: [] });
 });
 
+test("turn lifecycle envelope preserves parent identity without leaking mutation intents", () => {
+  const envelope = createTurnLifecycleEnvelope({
+    eventType: TURN_EVENT.ACTION_ACCEPTED,
+    eventId: "evt-child",
+    commandId: "cmd-child",
+    sessionId: "child-session",
+    parentSessionId: "parent-session",
+    turnScopeId: "child-turn",
+    revision: 1,
+    sequence: 1,
+    phase: TURN_PHASE.ACTION,
+    state: TURN_STATE.ACTION_REQUESTING,
+    createSessionIfAbsent: true,
+    finalizeIntent: { requested: true },
+  });
+  assert.equal(envelope.parentSessionId, "parent-session");
+  assert.equal("createSessionIfAbsent" in envelope, false);
+  assert.equal("finalizeIntent" in envelope, false);
+  assert.deepEqual(validateTurnLifecycleEnvelope(envelope), { valid: true, errors: [] });
+});
+
 test("turn lifecycle envelope rejects missing identity and invalid revision", () => {
   const result = validateTurnLifecycleEnvelope(createTurnLifecycleEnvelope({
     eventType: TURN_EVENT.FAILED,

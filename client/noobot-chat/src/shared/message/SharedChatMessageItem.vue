@@ -11,6 +11,7 @@ import { useMessageFiles } from "../../composables/message/useMessageFiles";
 import { useMessageMeta } from "../../composables/message/useMessageMeta";
 import { getMessageRole } from "../../composables/infra/messageIdentity";
 import { useLocale } from "../i18n/useLocale";
+import { useChatStore } from "../stores/useChatStore";
 import MonotonicMessageActions from "./MonotonicMessageActions.vue";
 import { resolveMonotonicMessageActionProps } from "./monotonicMessageActionRules";
 import {
@@ -116,6 +117,7 @@ const { messageModelLabel, showSubTaskActivity, subTaskStatusText, statusStepSta
 
 const messageMarkdownRef = ref(null);
 const { translate } = useLocale();
+const chatStore = useChatStore();
 
 const preMessageCardRenderers = computed(() =>
   resolveMessageCardRenderers(props.messageItem, { slot: "pre" }),
@@ -146,11 +148,51 @@ function resolveRendererProps(renderer = {}) {
 }
 
 function resolveRendererContext() {
+  const selectSessionMessages = (sessionId = "") => {
+    const id = String(sessionId || "").trim();
+    if (!id) return null;
+    // Workflow node drawers must resolve their isolated child session before
+    // looking at the main session. A node id can legitimately equal a parent
+    // session id while the child registry is still receiving live events.
+    const workflowPayload = props.messageItem?.pluginMeta?.payload || {};
+    const workflowRunId = String(
+      workflowPayload.workflowRunId || workflowPayload.execution?.workflowRunId || "",
+    ).trim();
+    const nodeExecutionId = String(
+      workflowPayload.nodeExecutionId || workflowPayload.execution?.nodeExecutionId || "",
+    ).trim();
+    const subSession = chatStore.selectSubSessionMessages?.(id);
+    if ((workflowRunId || nodeExecutionId) && subSession) {
+      return {
+        ...subSession,
+        sessionId: String(subSession?.sessionId || subSession?.id || id).trim(),
+        messages: Array.isArray(subSession?.messages) ? subSession.messages : [],
+      };
+    }
+    const session = (chatStore.sessions || []).find((item = {}) => String(item?.id || item?.sessionId || item?.backendSessionId || "").trim() === id);
+    if (session) {
+      return {
+        ...session,
+        sessionId: String(session?.id || session?.sessionId || session?.backendSessionId || id).trim(),
+        messages: Array.isArray(session?.messages) ? session.messages : [],
+      };
+    }
+    if (!subSession) return null;
+    return {
+      ...subSession,
+      sessionId: String(subSession?.sessionId || subSession?.id || id).trim(),
+      messages: Array.isArray(subSession?.messages) ? subSession.messages : [],
+    };
+  };
   return {
     messageItem: props.messageItem,
     allMessages: props.allMessages,
     turnTimingsByTurnScopeId: props.turnTimingsByTurnScopeId,
     turnStatuses: props.turnStatuses,
+    workflowNodeStateRegistry: chatStore.workflowNodeStateRegistry,
+    turnRuntimeRegistry: chatStore.turnRuntimeRegistry,
+    selectSessionMessages,
+    mergeSubSessionSnapshot: chatStore.mergeSubSessionSnapshot,
     userId: props.userId,
     authFetch: props.authFetch,
     renderMarkdown: props.renderMarkdown,

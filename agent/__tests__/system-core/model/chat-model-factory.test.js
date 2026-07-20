@@ -87,7 +87,7 @@ test("buildModelKwargs defaults prompt cache key for next-gen OpenAI GPT models"
   assert.equal("prompt_cache_key" in nonOpenAiGptKwargs, false);
 });
 
-test("buildModelKwargs defaults prompt cache retention for next-gen OpenAI GPT models", () => {
+test("buildModelKwargs uses generation-specific OpenAI prompt cache policy", () => {
   const gpt4oKwargs = buildModelKwargs({
     format: "openai_compatible",
     model: "gpt-4o",
@@ -99,6 +99,10 @@ test("buildModelKwargs defaults prompt cache retention for next-gen OpenAI GPT m
   const gpt55Kwargs = buildModelKwargs({
     format: "openai_compatible",
     model: "gpt-5.5",
+  });
+  const gpt56Kwargs = buildModelKwargs({
+    format: "openai_compatible",
+    model: "gpt-5.6-sol",
   });
   const gpt6Kwargs = buildModelKwargs({
     format: "openai_compatible",
@@ -117,9 +121,28 @@ test("buildModelKwargs defaults prompt cache retention for next-gen OpenAI GPT m
   assert.equal("prompt_cache_retention" in gpt4oKwargs, false);
   assert.equal(gpt41Kwargs.prompt_cache_retention, "24h");
   assert.equal(gpt55Kwargs.prompt_cache_retention, "24h");
-  assert.equal(gpt6Kwargs.prompt_cache_retention, "24h");
+  assert.equal("prompt_cache_options" in gpt55Kwargs, false);
+  assert.equal("prompt_cache_retention" in gpt56Kwargs, false);
+  assert.deepEqual(gpt56Kwargs.prompt_cache_options, { ttl: "30m" });
+  assert.equal("prompt_cache_retention" in gpt6Kwargs, false);
+  assert.deepEqual(gpt6Kwargs.prompt_cache_options, { ttl: "30m" });
   assert.equal(explicitKwargs.prompt_cache_retention, "1h");
   assert.equal("prompt_cache_retention" in nonOpenAiGptKwargs, false);
+});
+
+test("buildModelKwargs preserves explicit GPT-5.6 prompt cache options", () => {
+  const kwargs = buildModelKwargs({
+    format: "openai_compatible",
+    model: "gpt-5.6-sol",
+    prompt_cache_options: {
+      mode: "explicit",
+      ttl: "30m",
+    },
+    prompt_cache_retention: "24h",
+  });
+
+  assert.deepEqual(kwargs.prompt_cache_options, { mode: "explicit", ttl: "30m" });
+  assert.equal("prompt_cache_retention" in kwargs, false);
 });
 
 test("buildModelKwargs strips OpenAI prompt cache fields for non-OpenAI cache vendors", () => {
@@ -155,13 +178,16 @@ test("buildModelKwargs strips OpenAI prompt cache fields for non-OpenAI cache ve
       ...spec,
       prompt_cache_key: "should-not-leak",
       prompt_cache_retention: "24h",
+      prompt_cache_options: { ttl: "30m" },
       extra_body: {
         prompt_cache_key: "extra-key",
         prompt_cache_retention: "24h",
+        prompt_cache_options: { ttl: "30m" },
       },
     });
     assert.equal("prompt_cache_key" in kwargs, false, spec.model);
     assert.equal("prompt_cache_retention" in kwargs, false, spec.model);
+    assert.equal("prompt_cache_options" in kwargs, false, spec.model);
   }
 });
 

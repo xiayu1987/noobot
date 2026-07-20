@@ -25,6 +25,7 @@ const DEFAULT_MAIN_FLOW = "agent.main";
 const DEFAULT_MAIN_PURPOSE = "main_agent";
 const DEFAULT_MAIN_DOMAIN = "primary";
 const DEFAULT_PROMPT_CACHE_RETENTION = "24h";
+const DEFAULT_PROMPT_CACHE_OPTIONS = Object.freeze({ ttl: "30m" });
 const DEFAULT_PROMPT_CACHE_KEY_PREFIX = "noobot-main";
 const DEFAULT_CLAUDE_PROMPT_CACHE_CONTROL = Object.freeze({ type: "ephemeral" });
 const DASHSCOPE_SESSION_CACHE_HEADER_KEY = "x-dashscope-session-cache";
@@ -41,12 +42,13 @@ const OPENAI_EXTENDED_PROMPT_CACHE_MODELS = [
   /^gpt-5(?:\b|[-_.])/,
 ];
 
-function parseOpenAiGptMajor(modelName = "") {
+function parseOpenAiGptVersion(modelName = "") {
   const normalized = String(modelName || "").trim().toLowerCase();
-  const match = normalized.match(/\bgpt[-_]?(\d+)(?:\b|[-_.])/);
+  const match = normalized.match(/\bgpt[-_]?(\d+)(?:\.(\d+))?(?:\b|[-_])/);
   if (!match) return null;
   const major = Number(match[1]);
-  return Number.isInteger(major) ? major : null;
+  const minor = match[2] === undefined ? 0 : Number(match[2]);
+  return Number.isInteger(major) && Number.isInteger(minor) ? { major, minor } : null;
 }
 
 function resolveCacheVendor(modelSpec = {}) {
@@ -88,9 +90,25 @@ function isOpenAiPromptCacheCompatibleModel(modelSpec = {}) {
 function supportsOpenAiExtendedPromptCache(modelSpec = {}) {
   if (!isOpenAiPromptCacheCompatibleModel(modelSpec)) return false;
   const modelName = String(modelSpec?.model || "").trim().toLowerCase();
-  const major = parseOpenAiGptMajor(modelName);
-  if (Number.isInteger(major) && major > 5) return true;
+  const version = parseOpenAiGptVersion(modelName);
+  if (version && (version.major > 5 || (version.major === 5 && version.minor >= 6))) {
+    return false;
+  }
   return OPENAI_EXTENDED_PROMPT_CACHE_MODELS.some((pattern) => pattern.test(modelName));
+}
+
+function supportsOpenAiPromptCacheOptions(modelSpec = {}) {
+  if (!isOpenAiPromptCacheCompatibleModel(modelSpec)) return false;
+  const version = parseOpenAiGptVersion(modelSpec?.model);
+  if (!version || (version.major < 5 || (version.major === 5 && version.minor < 6))) {
+    return false;
+  }
+  return true;
+}
+
+function normalizePromptCacheOptions(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return { ...value };
 }
 
 function supportsTopP(modelSpec = {}) {
@@ -162,6 +180,7 @@ function resolvePromptCacheSettings(modelSpec = {}, options = {}) {
     return {
       promptCacheKey: "",
       promptCacheRetention: "",
+      promptCacheOptions: null,
     };
   }
   const out = normalizedSpec.extra_body && typeof normalizedSpec.extra_body === "object"
@@ -176,16 +195,31 @@ function resolvePromptCacheSettings(modelSpec = {}, options = {}) {
   if (!promptCacheKey) {
     promptCacheKey = buildDefaultPromptCacheKeyForFlow(normalizedSpec, options?.flow);
   }
-  const promptCacheRetention = String(
-      normalizedSpec.prompt_cache_retention ??
-      normalizedSpec.promptCacheRetention ??
-      out.prompt_cache_retention ??
-      (supportsOpenAiExtendedPromptCache(normalizedSpec) ? DEFAULT_PROMPT_CACHE_RETENTION : "") ??
-      "",
-  ).trim();
+  const usesPromptCacheOptions = supportsOpenAiPromptCacheOptions(normalizedSpec);
+  const promptCacheRetention = usesPromptCacheOptions
+    ? ""
+    : String(
+        normalizedSpec.prompt_cache_retention ??
+          normalizedSpec.promptCacheRetention ??
+          out.prompt_cache_retention ??
+          (supportsOpenAiExtendedPromptCache(normalizedSpec)
+            ? DEFAULT_PROMPT_CACHE_RETENTION
+            : "") ??
+          "",
+      ).trim();
+  const configuredPromptCacheOptions =
+    normalizedSpec.prompt_cache_options ??
+    normalizedSpec.promptCacheOptions ??
+    out.prompt_cache_options;
+  const promptCacheOptions = usesPromptCacheOptions
+    ? normalizePromptCacheOptions(configuredPromptCacheOptions) || {
+        ...DEFAULT_PROMPT_CACHE_OPTIONS,
+      }
+    : null;
   return {
     promptCacheKey,
     promptCacheRetention,
+    promptCacheOptions,
   };
 }
 
@@ -215,7 +249,8 @@ export function buildModelKwargs(modelSpec = {}) {
   const out = { ...(normalizedSpec.extra_body || {}) };
   const providerFormat = normalizeProviderFormat(normalizedSpec?.format || "");
   const cacheVendor = resolveCacheVendor(normalizedSpec);
-  const { promptCacheKey, promptCacheRetention } = resolvePromptCacheSettings(normalizedSpec);
+  const { promptCacheKey, promptCacheRetention, promptCacheOptions } =
+    resolvePromptCacheSettings(normalizedSpec);
   if (cacheVendor === CACHE_VENDOR.OPENAI && promptCacheKey) {
     out.prompt_cache_key = promptCacheKey;
   } else if ("prompt_cache_key" in out) {
@@ -225,6 +260,11 @@ export function buildModelKwargs(modelSpec = {}) {
     out.prompt_cache_retention = promptCacheRetention;
   } else if ("prompt_cache_retention" in out) {
     delete out.prompt_cache_retention;
+  }
+  if (cacheVendor === CACHE_VENDOR.OPENAI && promptCacheOptions) {
+    out.prompt_cache_options = promptCacheOptions;
+  } else if ("prompt_cache_options" in out) {
+    delete out.prompt_cache_options;
   }
   if (cacheVendor === CACHE_VENDOR.ANTHROPIC) {
     const cacheControl = normalizeClaudePromptCacheControl(
@@ -423,9 +463,10 @@ export function createChatModelFromSpec(modelSpec, options = {}) {
   const configuration = buildChatModelConfiguration(normalizedSpec, options);
   const promptCacheFlow = resolvePromptCacheFlowFromConfiguration(configuration);
   const modelKwargs = buildModelKwargs(normalizedSpec);
-  const { promptCacheKey, promptCacheRetention } = resolvePromptCacheSettings(normalizedSpec, {
-    flow: promptCacheFlow,
-  });
+  const { promptCacheKey, promptCacheRetention } = resolvePromptCacheSettings(
+    normalizedSpec,
+    { flow: promptCacheFlow },
+  );
   if (promptCacheKey && "prompt_cache_key" in modelKwargs) {
     modelKwargs.prompt_cache_key = promptCacheKey;
   }

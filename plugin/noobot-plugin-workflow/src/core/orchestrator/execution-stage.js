@@ -15,6 +15,8 @@ export async function runWorkflowExecutionStage({
   options = {},
   ctx = {},
   semantic = {},
+  workflowRunId = "",
+  planningNodeSessions = [],
   phaseTracker,
 } = {}) {
   phaseTracker.start(WORKFLOW_PHASES.WORKFLOW_EXECUTION);
@@ -30,6 +32,8 @@ export async function runWorkflowExecutionStage({
     options,
     ctx,
     semantic,
+    workflowRunId,
+    planningNodeSessions,
   });
   const executionMeta = {
     completed: execution.completed,

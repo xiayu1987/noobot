@@ -442,6 +442,15 @@ export class SessionExecutionRunner {
         ? runtimeAgentContext.payload.messages.history
         : [];
 
+      let dispatchClaimed = false;
+      const claimAgentDispatch = ({ source = "agent_dispatch" } = {}) => {
+        if (dispatchClaimed) return false;
+        dispatchClaimed = true;
+        lifecycle.enterRunning({ source: String(source || "agent_dispatch").trim() || "agent_dispatch" });
+        syncLifecycleRuntimeState(dispatchRuntime, lifecycle);
+        return true;
+      };
+
       if (resolvedRunConfig?.reuseExistingUserTurn === true) {
         emitEvent(runtimeEventListener, "user_message_reused", {
           sessionId: usedSessionId,
@@ -460,6 +469,7 @@ export class SessionExecutionRunner {
         attachments: userMessageAttachments,
         userMessageAttachments,
         eventListener: runtimeEventListener,
+        claimAgentDispatch,
       };
       const beforeAgentDispatchResult = await runBotRuntimeHook({
         runtime: botHookRuntime,
@@ -484,12 +494,10 @@ export class SessionExecutionRunner {
           : beforeAgentDispatchContext;
       const skipAgentDispatch = effectiveBeforeAgentDispatchContext?.skipAgentDispatch === true;
       if (skipAgentDispatch) {
-        // A hook-provided result still represents Agent-owned turn processing.
-        // Emit the same authoritative RUNNING boundary used by the normal
-        // dispatch path before accepting that result, so Service never has to
-        // infer processing_started from a successful return value.
-        lifecycle.enterRunning({ source: "before_agent_dispatch_override" });
-        syncLifecycleRuntimeState(dispatchRuntime, lifecycle);
+        // Hooks that take over dispatch claim the lifecycle when takeover is
+        // decided. Keep this fallback for hook implementations that only set
+        // the legacy override fields at completion.
+        claimAgentDispatch({ source: "before_agent_dispatch_override" });
         const override =
           effectiveBeforeAgentDispatchContext?.overrideAgentResult &&
           typeof effectiveBeforeAgentDispatchContext.overrideAgentResult === "object"
@@ -504,8 +512,7 @@ export class SessionExecutionRunner {
         };
       } else {
         try {
-          lifecycle.enterRunning();
-          syncLifecycleRuntimeState(dispatchRuntime, lifecycle);
+          claimAgentDispatch({ source: "agent_dispatch" });
           agentResult = await this.agentRunner({
             errorLogger: this.errorLogger,
             agentContext: runtimeAgentContext,

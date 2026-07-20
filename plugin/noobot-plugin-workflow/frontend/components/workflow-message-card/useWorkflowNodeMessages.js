@@ -70,6 +70,18 @@ export function useWorkflowNodeMessages({
       },
     ];
   });
+
+  const selectedNodeTurnTimingsByTurnScopeId = computed(() => {
+    const summary = selectedNodeSessionSummary.value || {};
+    return summary?.turnTimingsByTurnScopeId && typeof summary.turnTimingsByTurnScopeId === "object"
+      ? summary.turnTimingsByTurnScopeId
+      : {};
+  });
+
+  const selectedNodeTurnStatuses = computed(() => {
+    const summary = selectedNodeSessionSummary.value || {};
+    return Array.isArray(summary?.turnStatuses) ? summary.turnStatuses : [];
+  });
   
   const rawNodeSessionMessages = computed(() =>
     (Array.isArray(selectedNodeMessages.value) ? selectedNodeMessages.value : []).map(
@@ -127,6 +139,8 @@ export function useWorkflowNodeMessages({
 
   return {
     selectedNodeSessionDocs,
+    selectedNodeTurnTimingsByTurnScopeId,
+    selectedNodeTurnStatuses,
     rawNodeSessionMessages,
     selectedNodeToolSessionDocs,
     normalizedNodeSessionMessages,

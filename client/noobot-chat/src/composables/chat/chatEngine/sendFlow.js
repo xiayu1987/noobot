@@ -157,6 +157,9 @@ export function createChatEngineSender({
   botScenario,
   chatWebSocketClient,
   sessionLogWebSocketClient,
+  upsertWorkflowNodeStateEvent,
+  upsertWorkflowPlanningEvent,
+  upsertSubSessionEvent,
   classifyRealtimeLog,
   clearMissingInteractionPayloadTimer,
   clearPendingInteraction,
@@ -421,6 +424,34 @@ export function createChatEngineSender({
           state: data?.state,
           botMessage: summarizeDebugMessage(botMsg),
         });
+        if (event === "workflow_node_state_committed") {
+          upsertWorkflowNodeStateEvent?.(data || {});
+          return;
+        }
+        if (event === "workflow_planning_message_prepared") {
+          upsertWorkflowPlanningEvent?.(data || {});
+          return;
+        }
+        const subSessionScopedEvent = data?.scope === "sub_session";
+        if (subSessionScopedEvent || (typeof event === "string" && event.startsWith("subagent_"))) {
+          const subSessionId = normalizeTrimmedString(data?.sessionId || data?.subSessionId);
+          const workflowRunId = normalizeTrimmedString(data?.workflowRunId);
+          const nodeExecutionId = normalizeTrimmedString(data?.nodeExecutionId);
+          if (subSessionId && workflowRunId && nodeExecutionId) {
+            upsertSubSessionEvent?.(event, data || {});
+          }
+          return;
+        }
+        if (event === StreamEventEnum.TURN_LIFECYCLE) {
+          const eventSessionId = normalizeTrimmedString(data?.sessionId);
+          const mainSessionId = normalizeTrimmedString(
+            activeSession?.value?.backendSessionId || activeSession?.value?.id || sessionId,
+          );
+          if (eventSessionId && mainSessionId && eventSessionId !== mainSessionId) {
+            upsertSubSessionEvent?.(event, data || {});
+            return;
+          }
+        }
         if (!isEventForCurrentTurn(data || {}, botMsg)) return;
         if (event === StreamEventEnum.TURN_LIFECYCLE) {
           applyRunStateEvent?.({

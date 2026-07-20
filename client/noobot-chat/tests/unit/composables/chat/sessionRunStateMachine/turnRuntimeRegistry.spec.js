@@ -343,7 +343,7 @@ describe("turnRuntimeRegistry", () => {
       referencedTurnScopeIds: ["referenced"],
       retainCount: 0,
       maxAgeMs: 50,
-      nowMs: 1_000,
+      nowMs: 1000,
     });
 
     expect(result.removedTurnScopeIds).toEqual(["old"]);

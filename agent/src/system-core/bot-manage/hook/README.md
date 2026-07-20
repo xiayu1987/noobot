@@ -31,3 +31,15 @@ await botManager.runSession({
   },
 });
 ```
+
+## Dispatch takeover
+
+A `before_agent_dispatch` hook that replaces the main Agent must call
+`ctx.claimAgentDispatch({ source })` as soon as it has irreversibly accepted
+ownership of the turn. The claim is idempotent and publishes the existing root
+Agent `RUNNING` lifecycle boundary immediately, so cancellation remains
+available while the hook performs its own planning or child execution.
+
+If the hook can still fall back to the main Agent, it must not claim dispatch.
+Setting `ctx.skipAgentDispatch = true` without an earlier claim remains
+supported; the runner claims at hook completion as a compatibility fallback.

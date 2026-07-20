@@ -131,6 +131,7 @@ export async function persistWorkflowNodeResultAttachment({
   subSession = null,
   pendingStep = {},
   transition = 0,
+  nodeIdentity = null,
 } = {}) {
   const locale = resolveWorkflowLocaleFromContext(ctx);
   const persister = typeof options?.generatedArtifactPersister === "function"
@@ -143,8 +144,9 @@ export async function persistWorkflowNodeResultAttachment({
   const userId = String(ctx?.userId || "").trim();
   const sessionId = String(ctx?.sessionId || "").trim();
   if (!userId || !sessionId) return [];
-  const nodeName = String(pendingStep?.nodeName || pendingStep?.nodeId || "workflow-node").trim();
-  const nodeId = String(pendingStep?.nodeId || "").trim();
+  const identity = nodeIdentity && typeof nodeIdentity === "object" ? nodeIdentity : {};
+  const nodeName = String(identity?.nodeName || pendingStep?.nodeName || pendingStep?.nodeId || "workflow-node").trim();
+  const nodeId = String(identity?.nodeId || pendingStep?.nodeId || "").trim();
   const normalizedTransition = Number.isFinite(Number(transition)) ? Math.floor(Number(transition)) : 0;
   const artifactName = [
     "workflow-node",
@@ -195,6 +197,11 @@ export async function persistWorkflowNodeResultAttachment({
             content: body,
             meta: {
               transition: normalizedTransition,
+              workflowRunId: String(identity?.workflowRunId || "").trim(),
+              nodeExecutionId: String(identity?.nodeExecutionId || "").trim(),
+              commandId: String(identity?.commandId || "").trim(),
+              dialogProcessId: String(identity?.dialogProcessId || subSession?.dialogProcessId || "").trim(),
+              turnScopeId: String(identity?.turnScopeId || "").trim(),
               nodeSessionId: String(subSession?.sessionId || "").trim(),
             },
           },
@@ -245,6 +252,9 @@ export async function appendWorkflowPlanningMessage({
   sourceText = "",
   semanticText = "",
   semanticResolution = {},
+  semantic = null,
+  workflowRunId = "",
+  planningNodeSessions = [],
   workflowPayload = null,
   attachments = [],
 } = {}) {
@@ -420,7 +430,10 @@ export async function persistWorkflowPlanningDialog({
   ctx = {},
   sourceText = "",
   semanticText = "",
+  semantic = null,
   semanticResolution = {},
+  workflowRunId = "",
+  planningNodeSessions = [],
 } = {}) {
   if (typeof options?.workflowDialogPersister !== "function") return null;
   const userId = String(ctx?.userId || "").trim();
@@ -441,9 +454,14 @@ export async function persistWorkflowPlanningDialog({
         userId,
         sessionId: String(ctx?.sessionId || "").trim(),
         dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
+        workflowRunId: String(workflowRunId || "").trim(),
+        revision: 1,
+        sequence: 1,
         timestamp: new Date().toISOString(),
         sourceText,
         semanticText,
+        semantic,
+        nodeSessions: Array.isArray(planningNodeSessions) ? planningNodeSessions : [],
         semanticModel: String(options?.semanticModel || "").trim(),
         semanticPrompt: String(options?.semanticPrompt || "").trim(),
         semanticResolution: {

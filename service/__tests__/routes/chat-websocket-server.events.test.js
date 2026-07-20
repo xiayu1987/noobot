@@ -7,6 +7,50 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { startServerWithWs, closeServer, callChatWs } from "./chat-websocket-server.test-helpers.js";
 
+test("chat-websocket-server publishes committed child lifecycle under the child session identity", async () => {
+  const server = await startServerWithWs({
+    runSession: async ({ eventListener }) => {
+      eventListener.onEvent({
+        event: "turn_lifecycle_committed",
+        data: {
+          userId: "u1",
+          sessionId: "child-session",
+          parentSessionId: "parent-session",
+          turnScopeId: "child-turn",
+          dialogProcessId: "child-dialog",
+          commandId: "child-command",
+          eventType: "turn.processing_started",
+          turn: {
+            turnScopeId: "child-turn",
+            dialogProcessId: "child-dialog",
+            commandId: "child-command",
+            revision: 2,
+            sequence: 2,
+            phase: "processing",
+            state: "processing",
+            action: "send",
+            executionState: "sending",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        },
+      });
+      return { sessionId: "parent-session", dialogProcessId: "parent-dialog", answer: "done", messages: [], traces: [], executionLogs: [] };
+    },
+  });
+  try {
+    const events = await callChatWs({ port: server.address().port, payload: {
+      userId: "u1", sessionId: "parent-session", message: "hello", turnScopeId: "parent-turn",
+    } });
+    const child = events.find((item) => item?.event === "turn_lifecycle" && item?.data?.sessionId === "child-session");
+    assert.equal(child?.data?.parentSessionId, "parent-session");
+    assert.equal(child?.data?.turnScopeId, "child-turn");
+    assert.equal(child?.data?.revision, 2);
+    assert.equal(events.some((item) => item?.event === "turn_lifecycle_committed"), false);
+  } finally {
+    await closeServer(server);
+  }
+});
+
 test("chat-websocket-server: streaming=false 仍推系统事件且不推 delta", async () => {
   const server = await startServerWithWs({
     runSession: async ({ eventListener }) => {
