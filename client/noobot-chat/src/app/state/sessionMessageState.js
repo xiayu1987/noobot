@@ -10,13 +10,13 @@ const TOOL_LOG_TYPES = new Set(["tool_call", "tool_result"]);
 
 export function classifyRealtimeLog(data = {}) {
   const authoritativeEventType = String(data.eventType || "").trim();
+  const authoritativeToolEvent = authoritativeEventType === "tool_call_start"
+    ? "tool_call"
+    : authoritativeEventType === "tool_call_end"
+      ? "tool_result"
+      : "";
   const eventName = String(
-    data.event ||
-      (authoritativeEventType === "tool_call_start"
-        ? "tool_call"
-        : authoritativeEventType === "tool_call_end"
-          ? "tool_result"
-          : authoritativeEventType),
+    authoritativeToolEvent || data.event || authoritativeEventType,
   ).trim();
   const text = sanitizeExecutionLogText(
     data.text ?? data.output ?? data.data?.text ?? data.data?.output ?? "",
@@ -33,7 +33,8 @@ export function classifyRealtimeLog(data = {}) {
   return {
     ...data,
     event: eventName || "system",
-    type: type || (isTool ? "tool_call" : "system"),
+    type: authoritativeToolEvent || type ||
+      (TOOL_LOG_TYPES.has(eventName) ? eventName : (isTool ? "tool_call" : "system")),
     text,
     dialogProcessId: String(data.dialogProcessId || ""),
     ts: String(data.ts || nowIso()),

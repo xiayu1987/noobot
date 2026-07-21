@@ -426,6 +426,11 @@ export function useWorkflowNodeSessionViewer({
 
   watchEffect(() => {
     if (!viewerVisible.value || !selectedNode.value) return;
+    // Selector functions close over Pinia state, but invoking them alone does
+    // not give this plugin effect a reactive dependency after props have been
+    // unwrapped. The host-provided token changes with Execution/Turn/session
+    // projections and makes completion snapshots re-enter this merge path.
+    void props.workflowRuntimeProjectionVersion;
     if (!applyUnifiedSessionDetailIfAvailable(selectedNode.value)) {
       bindSelectedNodeRealtimeProjection(selectedNode.value);
     }

@@ -119,6 +119,25 @@ const { messageModelLabel, showSubTaskActivity, subTaskStatusText, statusStepSta
 const messageMarkdownRef = ref(null);
 const { translate } = useLocale();
 const chatStore = useChatStore();
+const workflowRuntimeProjectionVersion = computed(() => {
+  const registry = chatStore.turnRuntimeRegistry || {};
+  const executions = Object.values(registry.executions || {});
+  const turns = Object.values(registry.sessions || {}).flatMap((bucket = {}) =>
+    Object.values(bucket?.turns || {}),
+  );
+  const workflowStates = Object.values(chatStore.workflowNodeStateRegistry?.workflows || {});
+  const subSessions = Object.values(chatStore.subSessionMessageRegistry?.sessions || {});
+  // Reading the terminal/revision fields here deliberately establishes a Vue
+  // dependency even though the plugin receives selector functions and plain
+  // registry objects. The resulting token invalidates an open node drawer
+  // whenever a live Execution/Turn/session projection changes.
+  return JSON.stringify([
+    executions.map((item = {}) => [item.executionId, item.revision, item.sequence, item.state, item.updatedAt]),
+    turns.map((item = {}) => [item.turnScopeId, item.revision, item.seq, item.state, item.terminal, item.finishedAtMs, item.updatedAt]),
+    workflowStates.map((item = {}) => [item.executionId, item.revision, item.sequence, item.state, item.updatedAt]),
+    subSessions.map((item = {}) => [item.sessionId || item.id, item.updatedAt, item.turnStatuses?.length, item.turnTimings?.length, item.messages?.length]),
+  ]);
+});
 
 const preMessageCardRenderers = computed(() =>
   resolveMessageCardRenderers(props.messageItem, { slot: "pre" }),
@@ -180,6 +199,7 @@ function resolveRendererContext() {
     turnStatuses: props.turnStatuses,
     workflowNodeStateRegistry: chatStore.workflowNodeStateRegistry,
     turnRuntimeRegistry: chatStore.turnRuntimeRegistry,
+    workflowRuntimeProjectionVersion: workflowRuntimeProjectionVersion.value,
     selectExecutionDetail: chatStore.selectExecutionDetail,
     stopExecution: props.stopExecution,
     selectSessionMessages,

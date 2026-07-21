@@ -23,13 +23,35 @@ describe("sessionMessageState", () => {
     });
 
     expect(item.event).toBe("tool_result");
-    expect(item.type).toBe("tool_call");
+    expect(item.type).toBe("tool_result");
     expect(item.category).toBe("tool");
     expect(item.text).toContain("[tool] done");
     expect(item.dialogProcessId).toBe("123");
     expect(item.subAgentCall).toBe(true);
     expect(item.subAgentSessionId).toBe(" child ");
     expect(item.ts).toEqual(expect.any(String));
+  });
+
+  it("uses authoritative tool lifecycle types for realtime call and result records", () => {
+    const common = {
+      event: "thinking",
+      type: "tool_call",
+      tool: "read_file",
+      toolCallId: "call-1",
+    };
+    const call = classifyRealtimeLog({
+      ...common,
+      eventType: "tool_call_start",
+      args: { filePath: "a.txt" },
+    });
+    const result = classifyRealtimeLog({
+      ...common,
+      eventType: "tool_call_end",
+      result: { ok: true },
+    });
+
+    expect(call).toMatchObject({ event: "tool_call", type: "tool_call" });
+    expect(result).toMatchObject({ event: "tool_result", type: "tool_result" });
   });
 
   it("classifies regular realtime logs as system defaults", () => {

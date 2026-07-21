@@ -290,6 +290,63 @@ describe("chatEngine streamHandlers", () => {
     expect(botMessage.executionLogTotal).toBe(1);
   });
 
+  it("keeps an authoritative tool result distinct from its call in the thinking panel", () => {
+    const botMessage = makeBotMessage();
+    const common = {
+      executionCategory: "tool",
+      tool: "read_file",
+      toolCallId: "call-real-2",
+      messageId: "msg-real-2",
+      envelopeKind: "noobot.message_event",
+      envelopeVersion: 1,
+      sessionId: "root-session",
+      dialogProcessId: "dp-real-2",
+      turnScopeId: "client-turn:real-2",
+      timestamp: "2026-07-20T15:49:27.996Z",
+    };
+
+    handleThinkingStreamEvent({
+      data: {
+        ...common,
+        eventId: "evt-real-call-2",
+        eventType: "tool_call_start",
+        sequence: 1,
+        args: { filePath: "example.txt" },
+      },
+      botMessage,
+      classifyRealtimeLog,
+      scrollOnFirstResponseOnce: vi.fn(),
+    });
+    handleThinkingStreamEvent({
+      data: {
+        ...common,
+        eventId: "evt-real-result-2",
+        eventType: "tool_call_end",
+        sequence: 2,
+        result: { ok: true },
+      },
+      botMessage,
+      classifyRealtimeLog,
+      scrollOnFirstResponseOnce: vi.fn(),
+    });
+
+    expect(botMessage.realtimeLogs).toEqual([
+      expect.objectContaining({
+        event: "tool_call",
+        type: "tool_call",
+        toolCallId: "call-real-2",
+        text: expect.stringMatching(/^(?:调用|Call)[:：]/),
+      }),
+      expect.objectContaining({
+        event: "tool_result",
+        type: "tool_result",
+        toolCallId: "call-real-2",
+        text: expect.stringMatching(/^(?:返回|Return)[:：]/),
+      }),
+    ]);
+    expect(botMessage.executionLogTotal).toBe(2);
+  });
+
   it("shows done execution log with same concrete command priority", () => {
     const botMessage = makeBotMessage();
     const scrollOnFirstResponseOnce = vi.fn();
