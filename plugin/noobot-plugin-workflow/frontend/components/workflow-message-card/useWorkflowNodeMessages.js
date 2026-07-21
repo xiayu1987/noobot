@@ -67,6 +67,8 @@ export function useWorkflowNodeMessages({
         toolLogSummaries: Array.isArray(summary?.toolLogSummaries)
           ? summary.toolLogSummaries
           : [],
+        turnStatuses: Array.isArray(summary?.turnStatuses) ? summary.turnStatuses : [],
+        turnTimings: Array.isArray(summary?.turnTimings) ? summary.turnTimings : [],
       },
     ];
   });
@@ -76,6 +78,12 @@ export function useWorkflowNodeMessages({
       sessionId: selectedNodeSessionId.value,
       sessionSummary: selectedNodeSessionSummary.value || {},
       messages: selectedNodeMessages.value,
+      turnStatuses: Array.isArray(selectedNodeSessionSummary.value?.turnStatuses)
+        ? selectedNodeSessionSummary.value.turnStatuses
+        : [],
+      turnTimings: Array.isArray(selectedNodeSessionSummary.value?.turnTimings)
+        ? selectedNodeSessionSummary.value.turnTimings
+        : [],
     },
     sessionDocs: selectedNodeSessionDocs.value,
     makeViewMessage: buildNodeViewMessage,

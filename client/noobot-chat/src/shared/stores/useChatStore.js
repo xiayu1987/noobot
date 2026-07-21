@@ -21,6 +21,64 @@ function text(value) {
   return String(value || "").trim();
 }
 
+const SUB_SESSION_TERMINAL_STATUSES = new Set([
+  "completed",
+  "failed",
+  "cancelled",
+  "canceled",
+  "stopped",
+  "aborted",
+  "error",
+]);
+
+function isSubSessionTerminalStatus(value) {
+  return SUB_SESSION_TERMINAL_STATUSES.has(text(value).toLowerCase());
+}
+
+function eventTime(eventData = {}) {
+  return eventData?.timestamp || eventData?.updatedAt || eventData?.createdAt || new Date().toISOString();
+}
+
+function projectSubSessionTurnState(currentSession = {}, eventData = {}) {
+  const turnScopeId = text(eventData?.turnScopeId);
+  if (!turnScopeId) {
+    return {
+      turnStatuses: Array.isArray(currentSession.turnStatuses) ? currentSession.turnStatuses : [],
+      turnTimings: Array.isArray(currentSession.turnTimings) ? currentSession.turnTimings : [],
+    };
+  }
+  const dialogProcessId = text(eventData?.dialogProcessId);
+  const status = text(eventData?.status || eventData?.state).toLowerCase();
+  const terminal = isSubSessionTerminalStatus(status);
+  const timestamp = eventTime(eventData);
+  const turnStatuses = [...(Array.isArray(currentSession.turnStatuses) ? currentSession.turnStatuses : [])];
+  const statusIndex = turnStatuses.findIndex((item = {}) => text(item.turnScopeId) === turnScopeId);
+  const currentStatus = statusIndex >= 0 ? turnStatuses[statusIndex] : {};
+  const nextStatus = {
+    ...currentStatus,
+    turnScopeId,
+    dialogProcessId: dialogProcessId || currentStatus.dialogProcessId || "",
+    status: status || currentStatus.status || "sending",
+    updatedAt: timestamp,
+  };
+  if (statusIndex >= 0) turnStatuses[statusIndex] = nextStatus;
+  else turnStatuses.push(nextStatus);
+
+  const turnTimings = [...(Array.isArray(currentSession.turnTimings) ? currentSession.turnTimings : [])];
+  const timingIndex = turnTimings.findIndex((item = {}) => text(item.turnScopeId) === turnScopeId);
+  const currentTiming = timingIndex >= 0 ? turnTimings[timingIndex] : {};
+  const nextTiming = {
+    ...currentTiming,
+    turnScopeId,
+    dialogProcessId: dialogProcessId || currentTiming.dialogProcessId || "",
+    thinkingStartedAt: currentTiming.thinkingStartedAt || timestamp,
+    thinkingFinishedAt: terminal ? (currentTiming.thinkingFinishedAt || timestamp) : null,
+  };
+  if (timingIndex >= 0) turnTimings[timingIndex] = nextTiming;
+  else turnTimings.push(nextTiming);
+  return { turnStatuses, turnTimings };
+}
+
 function createWorkflowNodeStateRegistry() {
   return { workflows: {} };
 }
@@ -99,6 +157,7 @@ function normalizeSubSessionMessage(eventName = "", eventData = {}, currentMessa
   const previousContent = String(currentMessage?.content || "");
   const { toolCall: canonicalToolCall, toolResult: canonicalToolResult } =
     projectMessageEventToolFacets(eventData);
+  const status = text(eventData?.status || eventData?.state || currentMessage?.status);
   return {
     ...(currentMessage || {}),
     ...(eventData?.message && typeof eventData.message === "object" ? eventData.message : {}),
@@ -122,7 +181,8 @@ function normalizeSubSessionMessage(eventName = "", eventData = {}, currentMessa
     revision: Number(eventData?.revision ?? currentMessage?.revision ?? 0),
     sequence: Number(eventData?.sequence ?? eventData?.seq ?? currentMessage?.sequence ?? 0),
     firstSequence: Number(currentMessage?.firstSequence ?? eventData?.sequence ?? eventData?.seq ?? 0),
-    status: text(eventData?.status || eventData?.state || currentMessage?.status),
+    status,
+    pending: eventData?.pending ?? currentMessage?.pending,
     createdAt: eventData?.createdAt || currentMessage?.createdAt || new Date().toISOString(),
     updatedAt: eventData?.updatedAt || new Date().toISOString(),
     thinking: eventData?.thinking ?? currentMessage?.thinking,
@@ -283,6 +343,7 @@ export const useChatStore = defineStore("chat", () => {
       else messages.push(nextMessage);
     }
     messages.sort((a = {}, b = {}) => Number(a.firstSequence || a.sequence || 0) - Number(b.firstSequence || b.sequence || 0));
+    const turnState = projectSubSessionTurnState(currentSession, eventData);
     const nextSession = {
       ...currentSession,
       sessionId,
@@ -294,6 +355,8 @@ export const useChatStore = defineStore("chat", () => {
       nodeExecutionId: text(eventData?.nodeExecutionId || currentSession.nodeExecutionId),
       status: text(eventData?.status || eventData?.state || currentSession.status),
       messages,
+      turnStatuses: turnState.turnStatuses,
+      turnTimings: turnState.turnTimings,
       eventsById: { ...(currentSession.eventsById || {}), ...(eventId ? { [eventId]: { ...eventData, eventId } } : {}) },
       sequence: Math.max(Number(currentSession.sequence || 0), Number(eventData?.sequence || eventData?.seq || 0)),
       revision: Math.max(Number(currentSession.revision || 0), Number(eventData?.revision || 0)),
@@ -340,6 +403,12 @@ export const useChatStore = defineStore("chat", () => {
       id: sessionId,
       sessionId,
       messages,
+      turnStatuses: Array.isArray(sessionDoc?.turnStatuses)
+        ? sessionDoc.turnStatuses
+        : (current.turnStatuses || []),
+      turnTimings: Array.isArray(sessionDoc?.turnTimings)
+        ? sessionDoc.turnTimings
+        : (current.turnTimings || []),
       eventsById: current.eventsById || {},
       updatedAt: new Date().toISOString(),
     };

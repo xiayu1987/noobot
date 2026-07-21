@@ -18,7 +18,9 @@ import {
   getMessageDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,
+  getMessageTurnScopeIdKey,
   isAssistantWithoutTurnScope,
+  normalizeTurnScopeIdKey,
 } from "../../infra/messageIdentity";
 import { getMessageAttachments } from "../../infra/messageModel";
 import {
@@ -85,13 +87,14 @@ export function buildTurnTimingsByTurnScopeId({
           )
           : null;
         const turnScopeId = getMessageTurnScopeId(item) || getMessageTurnScopeId(matchingMessage);
-        const current = currentTimings[turnScopeId] || {};
+        const turnScopeKey = normalizeTurnScopeIdKey(turnScopeId);
+        const current = currentTimings[turnScopeKey] || currentTimings[turnScopeId] || {};
         const timing = {
           thinkingStartedAt: item?.thinkingStartedAt || current.thinkingStartedAt || null,
           thinkingFinishedAt: item?.thinkingFinishedAt || current.thinkingFinishedAt || null,
         };
-        onTimingHydrated?.({ item, matchingMessage, turnScopeId, current, timing });
-        return [turnScopeId, timing];
+        onTimingHydrated?.({ item, matchingMessage, turnScopeId: turnScopeKey || turnScopeId, current, timing });
+        return [turnScopeKey || turnScopeId, timing];
       })
     .filter(([turnScopeId]) => Boolean(turnScopeId));
   const projectedTurnScopeIds = new Set(projectedEntries.map(([turnScopeId]) => turnScopeId));
@@ -99,9 +102,10 @@ export function buildTurnTimingsByTurnScopeId({
   // carrying the in-flight message. Preserve only timings whose owning turn is
   // present; never leak an orphan timing into another/session-empty projection.
   for (const [turnScopeId, timing] of Object.entries(currentTimings)) {
-    if (projectedTurnScopeIds.has(turnScopeId)) continue;
-    if (!sourceMessages.some((messageItem) => getMessageTurnScopeId(messageItem) === turnScopeId)) continue;
-    projectedEntries.push([turnScopeId, timing]);
+    const turnScopeKey = normalizeTurnScopeIdKey(turnScopeId);
+    if (projectedTurnScopeIds.has(turnScopeKey)) continue;
+    if (!sourceMessages.some((messageItem) => getMessageTurnScopeIdKey(messageItem) === turnScopeKey)) continue;
+    projectedEntries.push([turnScopeKey, timing]);
   }
   return Object.fromEntries(projectedEntries);
 }
@@ -115,7 +119,7 @@ function normalizeText(value = "") {
 }
 
 function resolveTurnStatusKey(item = {}) {
-  return normalizeText(item?.turnScopeId || getMessageTurnScopeId(item)) ||
+  return normalizeTurnScopeIdKey(item?.turnScopeId || getMessageTurnScopeId(item)) ||
     normalizeText(item?.dialogProcessId || getMessageDialogProcessId(item));
 }
 
@@ -124,7 +128,7 @@ function buildTurnStatusMap(turnStatuses = []) {
   for (const item of Array.isArray(turnStatuses) ? turnStatuses : []) {
     if (!item || typeof item !== "object" || Array.isArray(item)) continue;
     const normalized = { ...item, status: normalizeState(item.status) };
-    const turnScopeId = normalizeText(item.turnScopeId);
+    const turnScopeId = normalizeTurnScopeIdKey(item.turnScopeId);
     const dialogProcessId = normalizeText(item.dialogProcessId || getMessageDialogProcessId(item));
     if (turnScopeId) map.set(`turn:${turnScopeId}`, normalized);
     if (dialogProcessId) map.set(`dialog:${dialogProcessId}`, normalized);

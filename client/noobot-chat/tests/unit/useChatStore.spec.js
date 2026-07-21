@@ -70,7 +70,7 @@ describe("useChatStore sub session projection", () => {
 
   it("merges delta, thinking, tool and lifecycle updates in sequence order", () => {
     const store = useChatStore();
-    store.upsertSubSessionEvent("subagent_delta", createSubSessionEvent({ eventId: "event-1", sequence: 1, content: "he" }));
+    store.upsertSubSessionEvent("subagent_delta", createSubSessionEvent({ eventId: "event-1", sequence: 1, content: "he", pending: true, status: "sending" }));
     store.upsertSubSessionEvent("subagent_delta", createSubSessionEvent({ eventId: "event-2", sequence: 2, content: "llo" }));
     store.upsertSubSessionEvent("subagent_thinking", createSubSessionEvent({
       eventId: "event-3",
@@ -99,8 +99,10 @@ describe("useChatStore sub session projection", () => {
 
     const session = store.selectSubSessionMessages("sub-session-1");
     expect(session?.messages).toHaveLength(1);
-    expect(session?.messages[0]).toMatchObject({ content: "hello", thinking: { steps: ["plan"] }, status: "completed" });
+    expect(session?.messages[0]).toMatchObject({ content: "hello", thinking: { steps: ["plan"] }, status: "completed", pending: true });
     expect(session?.messages[0]).toMatchObject({ toolCall: { name: "search" }, toolResult: { output: "ok" } });
+    expect(session?.turnStatuses).toEqual([expect.objectContaining({ turnScopeId: "turn-1", status: "completed" })]);
+    expect(session?.turnTimings).toEqual([expect.objectContaining({ turnScopeId: "turn-1", thinkingFinishedAt: expect.any(String) })]);
     expect(session?.sequence).toBe(6);
     expect(session?.revision).toBe(1);
   });

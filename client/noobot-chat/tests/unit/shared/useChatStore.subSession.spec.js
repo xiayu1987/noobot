@@ -82,4 +82,42 @@ describe("sub-session realtime message projection", () => {
     expect(session.messages).toHaveLength(2);
     expect(session.messages[0].thinking).toBe("planning");
   });
+
+  it("finalizes child runtime by turn instead of mutating message pending", () => {
+    const store = useChatStore();
+    const identity = {
+      sessionId: "child-session",
+      turnScopeId: "turn-completed",
+      dialogProcessId: "dialog-child",
+      messageId: "assistant-completed",
+    };
+    store.upsertSubSessionEvent("thinking", messageEvent("thinking", {
+      ...identity,
+      eventId: "started",
+      sequence: 1,
+      status: "sending",
+      pending: true,
+      timestamp: "2026-01-01T00:00:00.000Z",
+      thinking: "working",
+    }));
+    store.upsertSubSessionEvent("turn_lifecycle", messageEvent("turn_lifecycle", {
+      ...identity,
+      eventId: "completed",
+      sequence: 2,
+      status: "completed",
+      timestamp: "2026-01-01T00:00:05.000Z",
+    }));
+
+    const session = store.selectSubSessionMessages("child-session");
+    expect(session.turnStatuses).toEqual([expect.objectContaining({
+      turnScopeId: "turn-completed",
+      status: "completed",
+    })]);
+    expect(session.turnTimings).toEqual([expect.objectContaining({
+      turnScopeId: "turn-completed",
+      thinkingStartedAt: "2026-01-01T00:00:00.000Z",
+      thinkingFinishedAt: "2026-01-01T00:00:05.000Z",
+    })]);
+    expect(session.messages[0].pending).toBe(true);
+  });
 });

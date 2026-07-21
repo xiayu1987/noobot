@@ -11,7 +11,9 @@ import {
   getMessageRole,
   getMessageSessionId,
   getMessageTurnScopeId,
+  getMessageTurnScopeIdKey,
   isAssistantWithoutTurnScope,
+  normalizeTurnScopeIdKey,
 } from "../../composables/infra/messageIdentity";
 import { sanitizeExecutionLogForDisplay } from "../../composables/chat/chatEngine/utils";
 import { resolveSessionRunMessageRuntimeView } from "../../composables/chat/sessionRunStateMachine";
@@ -23,9 +25,11 @@ import {
 } from "../../composables/infra/timeFields";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { logReconnectTimingDebug } from "../../composables/chat/debug/reconnectTimingDebugLogger";
+import { logWorkflowDiagnostics } from "../../composables/chat/debug/workflowDiagnosticsLogger";
 import { normalizeThinkingToolLogs } from "../../composables/infra/thinkingDetailModel";
 
 export function useThinkingPanel(props, emit) {
+  const workflowRuntimeDiagnosticFingerprints = new Map();
   const injectedMessages = computed(() =>
     getInjectedMessagesForMessage(props.messageItem),
   );
@@ -46,20 +50,53 @@ export function useThinkingPanel(props, emit) {
 
   function getTurnStatus(messageItem = {}) {
     const turnScopeId = getMessageTurnScopeId(messageItem);
-    if (!turnScopeId) return null;
+    const turnScopeKey = getMessageTurnScopeIdKey(messageItem);
+    if (!turnScopeKey) return null;
     const statuses = Array.isArray(props.turnStatuses) ? props.turnStatuses : [];
     return [...statuses].reverse().find((item = {}) =>
-      String(item?.turnScopeId || "").trim() === turnScopeId,
+      normalizeTurnScopeIdKey(item?.turnScopeId) === turnScopeKey,
     ) || null;
   }
 
   function getRuntimeView(messageItem = {}) {
     const turnScopeId = getMessageTurnScopeId(messageItem);
-    return resolveSessionRunMessageRuntimeView(
+    const turnScopeKey = getMessageTurnScopeIdKey(messageItem);
+    const turnTiming = props.turnTimingsByTurnScopeId?.[turnScopeKey] ||
+      props.turnTimingsByTurnScopeId?.[turnScopeId] ||
+      null;
+    const turnStatus = getTurnStatus(messageItem);
+    const runtimeView = resolveSessionRunMessageRuntimeView(
       messageItem,
-      props.turnTimingsByTurnScopeId?.[turnScopeId] || null,
-      getTurnStatus(messageItem),
+      turnTiming,
+      turnStatus,
     );
+    const sessionId = getMessageSessionId(messageItem);
+    const dialogProcessId = getMessageDialogProcessId(messageItem);
+    const identity = `${sessionId}|${dialogProcessId}|${turnScopeId}`;
+    const diagnostic = {
+      sessionId,
+      dialogProcessId,
+      turnScopeId,
+      turnScopeKey,
+      variant: String(props.variant || "panel"),
+      timingMatched: Boolean(turnTiming),
+      thinkingStartedAt: turnTiming?.thinkingStartedAt || "",
+      thinkingFinishedAt: turnTiming?.thinkingFinishedAt || "",
+      statusMatched: Boolean(turnStatus),
+      turnStatus: String(turnStatus?.status || turnStatus?.state || ""),
+      messagePending: messageItem?.pending === true,
+      messageStatus: String(messageItem?.status || messageItem?.state || ""),
+      channelState: String(messageItem?.channelState || ""),
+      running: runtimeView?.running === true,
+      runtimeSource: String(runtimeView?.source || ""),
+      runtimeFinishedAt: runtimeView?.finishedAt || "",
+    };
+    const fingerprint = JSON.stringify(diagnostic);
+    if (workflowRuntimeDiagnosticFingerprints.get(identity) !== fingerprint) {
+      workflowRuntimeDiagnosticFingerprints.set(identity, fingerprint);
+      logWorkflowDiagnostics("frontend.workflow.runtimeResolved", diagnostic);
+    }
+    return runtimeView;
   }
 
   function getRealtimeLogs(messageItem = {}) {
@@ -497,8 +534,9 @@ export function useThinkingPanel(props, emit) {
 
   function getThinkingDurationMs(messageItem = {}) {
     const turnScopeId = getMessageTurnScopeId(messageItem);
-    const persistedTiming = turnScopeId
-      ? props.turnTimingsByTurnScopeId?.[turnScopeId]
+    const turnScopeKey = getMessageTurnScopeIdKey(messageItem);
+    const persistedTiming = turnScopeKey
+      ? props.turnTimingsByTurnScopeId?.[turnScopeKey] || props.turnTimingsByTurnScopeId?.[turnScopeId]
       : null;
     const runtimeView = getRuntimeView(messageItem);
     const startedAt = parseAnyTimeMs(persistedTiming?.thinkingStartedAt);
