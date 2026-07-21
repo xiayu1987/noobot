@@ -80,6 +80,12 @@ export function createDetachedSubSessionRunner({
       runConfigPatch,
       disabledPlugins: strategy?.disabledPlugins || [],
     });
+    mergedRunConfig.executionId = String(strategy?.executionId || metadata?.executionId || "").trim();
+    mergedRunConfig.executionKind = "agent";
+    mergedRunConfig.parentExecutionId = String(strategy?.parentExecutionId || metadata?.parentExecutionId || "").trim();
+    mergedRunConfig.rootExecutionId = String(
+      strategy?.rootExecutionId || metadata?.rootExecutionId || mergedRunConfig.executionId,
+    ).trim();
     delete mergedRunConfig.hookManager;
     delete mergedRunConfig.hooks;
     delete mergedRunConfig.botHookManager;
@@ -113,23 +119,35 @@ export function createDetachedSubSessionRunner({
       }),
     });
 
-    const result = await sessionRunner.runSession({
-      userId,
-      sessionId: subSessionId,
-      parentSessionId,
-      parentDialogProcessId,
-      caller: CALLER_ROLE.BOT,
-      message,
-      attachments: Array.isArray(attachments) ? attachments : [],
-      systemMessages: Array.isArray(systemMessages) ? systemMessages : [],
-      eventListener: scopedEventListener,
-      abortSignal: inheritedAbortSignal,
-      userInteractionBridge: inheritedUserInteractionBridge,
-      runConfig: effectiveRunConfig,
-      turnScopeId,
-      parentAsyncResultContainer: null,
-      persistenceContext,
-    });
+    let result;
+    try {
+      result = await sessionRunner.runSession({
+        userId,
+        sessionId: subSessionId,
+        parentSessionId,
+        parentDialogProcessId,
+        caller: CALLER_ROLE.BOT,
+        message,
+        attachments: Array.isArray(attachments) ? attachments : [],
+        systemMessages: Array.isArray(systemMessages) ? systemMessages : [],
+        eventListener: scopedEventListener,
+        abortSignal: inheritedAbortSignal,
+        userInteractionBridge: inheritedUserInteractionBridge,
+        runConfig: effectiveRunConfig,
+        turnScopeId,
+        parentAsyncResultContainer: null,
+        persistenceContext,
+      });
+    } catch (error) {
+      if (error && typeof error === "object" && error.lifecycle) {
+        error.lifecycle = createDetachedTerminalReceipt({
+          lifecycle: error.lifecycle,
+          executionId: mergedRunConfig.executionId,
+          failed: true,
+        });
+      }
+      throw error;
+    }
 
     const dialogProcessId = String(result?.dialogProcessId || subDialogProcessId || subSessionId).trim();
     return {
@@ -138,7 +156,10 @@ export function createDetachedSubSessionRunner({
       parentSessionId,
       dialogProcessId,
       persisted: result?.session || null,
-      lifecycle: result?.lifecycle || null,
+      lifecycle: createDetachedTerminalReceipt({
+        lifecycle: result?.lifecycle,
+        executionId: mergedRunConfig.executionId,
+      }),
       result: {
         sessionId: subSessionId,
         parentSessionId,
@@ -152,6 +173,32 @@ export function createDetachedSubSessionRunner({
         dialogProcessId,
       },
     };
+  };
+}
+
+export function createDetachedTerminalReceipt({ lifecycle = null, executionId = "", failed = false } = {}) {
+  if (!lifecycle || typeof lifecycle !== "object" || Array.isArray(lifecycle)) return null;
+  const sourceState = String(lifecycle?.state || lifecycle?.branchState || "").trim().toLowerCase();
+  const state = sourceState === "completed"
+    ? "completed"
+    : sourceState === "user_stopped"
+      ? "stop_completed"
+      : failed || ["failed", "interrupted"].includes(sourceState)
+        ? "processing_failed"
+        : sourceState;
+  return {
+    ...lifecycle,
+    executionId: String(lifecycle?.executionId || executionId || "").trim(),
+    executionKind: "agent",
+    state,
+    revision: Number(lifecycle?.revision || 0),
+    sequence: Number(lifecycle?.sequence || 0),
+    failure: failed
+      ? {
+          code: String(lifecycle?.code || lifecycle?.failure?.code || "CHILD_EXECUTION_FAILED").trim(),
+          message: String(lifecycle?.error || lifecycle?.failure?.message || "child execution failed").trim(),
+        }
+      : lifecycle?.failure || null,
   };
 }
 

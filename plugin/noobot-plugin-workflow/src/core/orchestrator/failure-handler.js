@@ -12,6 +12,7 @@ import {
 import { appendWorkflowTrace } from "../hooks/phase.js";
 import { emitWorkflowRuntimeEvent } from "../hooks/persistence.js";
 import { buildWorkflowOrchestrationPayload } from "../orchestration-payload.js";
+import { createBotDispatchHandled } from "@noobot/shared/bot-dispatch-protocol";
 
 function resolveWorkflowErrorMessage(error = null) {
   return String(error?.message || error || "");
@@ -66,7 +67,7 @@ export async function handleWorkflowFailure({
     protocolVersion: workflowPayload.protocolVersion,
     message,
   });
-  if (!beforeDispatchMode) return;
+  if (!beforeDispatchMode) return null;
 
   ctx.skipAgentDispatch = true;
   ctx.overrideAgentResult = agentResult;
@@ -78,6 +79,14 @@ export async function handleWorkflowFailure({
     level: "error",
     data: {
       reason: "workflow_execution_failed",
+      message,
+    },
+  });
+  return createBotDispatchHandled({
+    owner: "workflow",
+    result: agentResult,
+    failure: {
+      code: String(error?.code || "WORKFLOW_EXECUTION_FAILED").trim(),
       message,
     },
   });

@@ -381,8 +381,13 @@ test("workflow hook owns the turn and never falls back to main agent when semant
     runConfig: { locale: "zh-CN" },
     claimAgentDispatch: (claim = {}) => dispatchClaims.push(claim),
   };
-  await listener.handler(beforeContext);
+  const dispatchOutcome = await listener.handler(beforeContext);
   assert.equal(dispatchClaims.length, 1);
+  assert.equal(dispatchOutcome?.kind, "noobot.bot_dispatch_outcome");
+  assert.equal(dispatchOutcome?.disposition, "handled");
+  assert.equal(dispatchOutcome?.owner, "workflow");
+  assert.equal(dispatchOutcome?.failure?.code, "WORKFLOW_EXECUTION_FAILED");
+  assert.equal(dispatchClaims[0].owner, "workflow");
   assert.equal(dispatchClaims[0].source, "workflow_before_agent_dispatch");
   assert.equal(beforeContext.skipAgentDispatch, true);
   assert.ok(beforeContext.overrideAgentResult);
@@ -393,6 +398,7 @@ test("workflow hook owns the turn and never falls back to main agent when semant
 test("workflow hook in before_agent_dispatch mode can request skipping main agent dispatch", async () => {
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
+  let childRunPayload = null;
   registerWorkflowHooks({
     hookManager,
     options: {
@@ -409,17 +415,20 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
           "END",
         ].join("\n"),
       }),
-      subSessionRunner: async (payload = {}) => ({
-        sessionId: "workflow-core-child",
-        lifecycle: {
-          executionId: payload?.strategy?.executionId,
-          executionKind: "agent",
-          state: "completed",
-          revision: 4,
-          sequence: 4,
-        },
-        result: { messages: [{ role: "assistant", content: "done" }] },
-      }),
+      subSessionRunner: async (payload = {}) => {
+        childRunPayload = payload;
+        return {
+          sessionId: "workflow-core-child",
+          lifecycle: {
+            executionId: payload?.strategy?.executionId,
+            executionKind: "agent",
+            state: "completed",
+            revision: 4,
+            sequence: 4,
+          },
+          result: { messages: [{ role: "assistant", content: "done" }] },
+        };
+      },
     },
   });
   const listener = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
@@ -433,9 +442,18 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
     agentResult: null,
     claimAgentDispatch: (claim = {}) => dispatchClaims.push(claim),
   };
-  await listener.handler(beforeContext);
+  const dispatchOutcome = await listener.handler(beforeContext);
   assert.equal(dispatchClaims.length, 1);
+  assert.equal(dispatchOutcome?.kind, "noobot.bot_dispatch_outcome");
+  assert.equal(dispatchOutcome?.disposition, "handled");
+  assert.equal(dispatchOutcome?.owner, "workflow");
+  assert.equal(dispatchOutcome?.failure, null);
+  assert.equal(dispatchClaims[0].owner, "workflow");
   assert.equal(dispatchClaims[0].source, "workflow_before_agent_dispatch");
+  assert.equal(dispatchClaims[0].executionId, `workflow:${dispatchClaims[0].origin?.workflowRunId}`);
+  assert.equal(dispatchClaims[0].rootExecutionId, dispatchClaims[0].executionId);
+  assert.equal(childRunPayload?.strategy?.parentExecutionId, dispatchClaims[0].executionId);
+  assert.equal(childRunPayload?.strategy?.rootExecutionId, dispatchClaims[0].rootExecutionId);
   assert.equal(dispatchClaims[0].executionKind, "workflow");
   assert.equal(dispatchClaims[0].stage, "planning");
   assert.equal(dispatchClaims[0].origin?.type, "workflow");

@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 
 import {
   createDetachedSubSessionRunner,
+  createDetachedTerminalReceipt,
   createScopedSubSessionEventListener,
 } from "../../../src/system-core/bot-manage/session/detached-subsession-runner.js";
 import { CALLER_ROLE } from "../../../src/system-core/bot-manage/config/constants.js";
@@ -113,6 +114,9 @@ test("detached sub-session delegates execution and persistence to the main runne
       parentDialogProcessId: "parent-dialog",
       dialogProcessId: "sub-dialog",
       turnScopeId: "turn-1",
+      executionId: "agent:turn-1",
+      parentExecutionId: "workflow:root",
+      rootExecutionId: "workflow:root",
       disabledPlugins: ["workflow"],
       relativeDir: "runtime/workflow/session/root/node-a",
       allowedRoot: "runtime/workflow/session",
@@ -136,6 +140,10 @@ test("detached sub-session delegates execution and persistence to the main runne
   assert.equal(payload.runConfig.botHookManager, undefined);
   assert.equal(payload.runConfig.botHooks, undefined);
   assert.deepEqual(payload.runConfig.disabledPlugins, ["workflow"]);
+  assert.equal(payload.runConfig.executionId, "agent:turn-1");
+  assert.equal(payload.runConfig.executionKind, "agent");
+  assert.equal(payload.runConfig.parentExecutionId, "workflow:root");
+  assert.equal(payload.runConfig.rootExecutionId, "workflow:root");
   assert.equal(payload.runConfig.systemRuntimePatch.durableParentSessionId, "parent1");
   assert.equal(payload.parentAsyncResultContainer, null);
   assert.ok(payload.persistenceContext);
@@ -186,6 +194,35 @@ test("detached sub-session propagates main runner abort and failure contracts", 
     }),
     (error) => error === abortError,
   );
+});
+
+test("detached terminal receipt adapts persisted Agent success and failure states", () => {
+  const completed = createDetachedTerminalReceipt({
+    executionId: "agent:child-1",
+    lifecycle: { state: "completed", executionId: "agent:child-1", revision: 5, sequence: 5 },
+  });
+  assert.deepEqual(completed, {
+    state: "completed",
+    executionId: "agent:child-1",
+    executionKind: "agent",
+    revision: 5,
+    sequence: 5,
+    failure: null,
+  });
+
+  const failed = createDetachedTerminalReceipt({
+    executionId: "agent:child-1",
+    failed: true,
+    lifecycle: {
+      state: "failed",
+      executionId: "agent:child-1",
+      revision: 4,
+      sequence: 4,
+      error: "model failed",
+    },
+  });
+  assert.equal(failed.state, "processing_failed");
+  assert.deepEqual(failed.failure, { code: "CHILD_EXECUTION_FAILED", message: "model failed" });
 });
 
 test("createDetachedSubSessionRunner requires userId and parentSessionId", async () => {

@@ -93,6 +93,15 @@ export function createAgentLifecycleMachine({
 } = {}) {
   let currentState = "";
   let currentBranchState = "";
+  let revision = 0;
+  let sequence = 0;
+  let latestSnapshot = null;
+  let executionIdentity = {
+    executionId: normalizeText(basePayload?.executionId),
+    executionKind: normalizeText(basePayload?.executionKind) || "agent",
+    parentExecutionId: normalizeText(basePayload?.parentExecutionId),
+    rootExecutionId: normalizeText(basePayload?.rootExecutionId || basePayload?.executionId),
+  };
 
   const emit = (nextState, extra = {}) => {
     const branchState = isBranchState(nextState) ? nextState : "";
@@ -105,6 +114,14 @@ export function createAgentLifecycleMachine({
       currentState = state;
       currentBranchState = "";
     }
+    executionIdentity = {
+      executionId: normalizeText(extra?.executionId || executionIdentity.executionId),
+      executionKind: normalizeText(extra?.executionKind || executionIdentity.executionKind) || "agent",
+      parentExecutionId: normalizeText(extra?.parentExecutionId || executionIdentity.parentExecutionId),
+      rootExecutionId: normalizeText(extra?.rootExecutionId || executionIdentity.rootExecutionId || extra?.executionId || executionIdentity.executionId),
+    };
+    revision += 1;
+    sequence += 1;
     const payload = {
       ...(basePayload && typeof basePayload === "object" ? basePayload : {}),
       ...(extra && typeof extra === "object" ? extra : {}),
@@ -117,7 +134,11 @@ export function createAgentLifecycleMachine({
       dialogProcessId: normalizeText(extra?.dialogProcessId ?? basePayload?.dialogProcessId),
       turnScopeId: normalizeText(extra?.turnScopeId ?? basePayload?.turnScopeId),
       resumeFromStoppedSnapshot: extra?.resumeFromStoppedSnapshot === true || basePayload?.resumeFromStoppedSnapshot === true,
+      ...executionIdentity,
+      revision,
+      sequence,
     };
+    latestSnapshot = { ...payload };
     if (eventListener?.onEvent) {
       eventListener.onEvent({ event: AGENT_LIFECYCLE_EVENT, data: payload });
     }
@@ -170,6 +191,9 @@ export function createAgentLifecycleMachine({
     },
     get branchState() {
       return currentBranchState;
+    },
+    get snapshot() {
+      return latestSnapshot ? { ...latestSnapshot } : null;
     },
   };
 }

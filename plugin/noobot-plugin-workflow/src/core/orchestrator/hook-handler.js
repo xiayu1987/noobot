@@ -27,6 +27,10 @@ import { receiveWorkflowSource } from "./source-receiver.js";
 import { runSemanticResolutionStage } from "./semantic-stage.js";
 import { runWorkflowExecutionStage } from "./execution-stage.js";
 import { createWorkflowRetryMeta, markWorkflowRetrySucceeded } from "./retry-meta.js";
+import {
+  createBotDispatchHandled,
+  createBotDispatchPass,
+} from "@noobot/shared/bot-dispatch-protocol";
 
 export async function handleBeforeAgentDispatch({
   hookManager,
@@ -51,15 +55,26 @@ export async function handleBeforeAgentDispatch({
     hookPoint,
     phaseTracker,
   });
-  if (skipped) return;
+  if (skipped) return createBotDispatchPass({ owner: "workflow" });
 
   // A non-empty request routed to the workflow plugin is exclusively owned by
   // workflow orchestration. Planning, node execution, and failure reporting
   // must never fall through and execute the same user task in the root Agent.
   const workflowRunId = resolveWorkflowRunId(ctx);
+  const workflowExecutionId = String(
+    ctx?.executionId || ctx?.runConfig?.executionId || `workflow:${workflowRunId}`,
+  ).trim();
+  const rootExecutionId = String(
+    ctx?.rootExecutionId || ctx?.runConfig?.rootExecutionId || workflowExecutionId,
+  ).trim();
+  ctx.workflowExecutionId = workflowExecutionId;
+  ctx.rootExecutionId = rootExecutionId;
   ctx?.claimAgentDispatch?.({
+    owner: "workflow",
     source: "workflow_before_agent_dispatch",
+    executionId: workflowExecutionId,
     executionKind: "workflow",
+    rootExecutionId,
     origin: { type: "workflow", workflowRunId },
     stage: "planning",
   });
@@ -148,11 +163,12 @@ export async function handleBeforeAgentDispatch({
       execution,
       beforeDispatchMode,
     });
+    return createBotDispatchHandled({ owner: "workflow", result: agentResult });
   } catch (error) {
     if (isWorkflowAbortError(error, ctx)) {
       throw error;
     }
-    await handleWorkflowFailure({
+    return handleWorkflowFailure({
       error,
       options,
       ctx,
