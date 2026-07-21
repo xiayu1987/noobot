@@ -147,10 +147,16 @@ test("detached sub-session delegates execution and persistence to the main runne
   assert.equal(payload.runConfig.systemRuntimePatch.durableParentSessionId, "parent1");
   assert.equal(payload.parentAsyncResultContainer, null);
   assert.ok(payload.persistenceContext);
+  assert.equal(calls.persistencePayloads[0].sessionId, "sub1");
+  assert.equal(calls.persistencePayloads[0].parentSessionId, "parent1");
+  assert.equal(calls.persistencePayloads[0].scopeId, "agent:turn-1");
 
   assert.equal(calls.persistencePayloads.length, 1);
   assert.deepEqual(calls.persistencePayloads[0], {
     userId: "u1",
+    sessionId: "sub1",
+    parentSessionId: "parent1",
+    scopeId: "agent:turn-1",
     relativeDir: "runtime/workflow/session/root/node-a",
     allowedRoot: "runtime/workflow/session",
     metadataContributor: calls.persistencePayloads[0].metadataContributor,

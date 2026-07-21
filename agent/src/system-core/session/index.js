@@ -25,6 +25,7 @@ import { ExecutionLogRepository } from "../tracking/execution-log/execution-log-
 import { ExecutionLogService } from "../tracking/execution-log/execution-log-service.js";
 import {
   ScopedSessionLocationResolver,
+  assertPersistenceContextIdentity,
   createPersistenceContext,
 } from "./session-location-resolver.js";
 
@@ -141,11 +142,25 @@ export function createSessionServices(globalConfig = {}, { now = null } = {}) {
     pathResolver,
     sessionPathResolver,
     storageService,
-    createScopedPersistenceContext({ userId = "", relativeDir = "", allowedRoot = "", metadataContributor = null } = {}) {
+    createScopedPersistenceContext({
+      userId = "",
+      sessionId = "",
+      parentSessionId = "",
+      scopeId = "",
+      relativeDir = "",
+      allowedRoot = "",
+      metadataContributor = null,
+    } = {}) {
+      if (!String(sessionId || "").trim() || !String(scopeId || "").trim()) {
+        throw new TypeError("scoped persistence context requires sessionId and scopeId");
+      }
       return createPersistenceContext({
         locationResolver: new ScopedSessionLocationResolver({
           pathResolver,
           userId,
+          sessionId,
+          parentSessionId,
+          scopeId,
           relativeDir,
           allowedRoot,
         }),
@@ -196,6 +211,10 @@ export function createSessionFacade(runtime = {}) {
         throw new Error("scoped persistence context factory is unavailable");
       }
       return runtime.createScopedPersistenceContext(payload);
+    },
+
+    assertPersistenceContextIdentity(context = null, identity = {}) {
+      return assertPersistenceContextIdentity(context, identity);
     },
 
     async ensureRuntimeDirs(userId) {

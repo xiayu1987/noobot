@@ -260,6 +260,7 @@ export class SessionTurnPersister {
     thinkingFinishedAt = "",
     turnTimingThinkingStartedAt = thinkingStartedAt,
     turnTimingThinkingFinishedAt = thinkingFinishedAt,
+    persistenceContext = null,
   }) {
     const sessionAttachments = filterSessionAttachments(attachments);
     const normalizedParentSessionId = normalizeParentSessionId(parentSessionId);
@@ -333,6 +334,7 @@ export class SessionTurnPersister {
         category: MESSAGE_ROLE.SYSTEM,
         type: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
         data: summarizeSessionTurnPayload(fullTurnPayload),
+        persistenceContext,
       });
       if (normalizedTurnTimingThinkingStartedAt || normalizedTurnTimingThinkingFinishedAt) {
         await this.messagePersister.appendExecutionLog({
@@ -353,6 +355,7 @@ export class SessionTurnPersister {
             turnTimingThinkingStartedAt: normalizedTurnTimingThinkingStartedAt,
             turnTimingThinkingFinishedAt: normalizedTurnTimingThinkingFinishedAt,
           },
+          persistenceContext,
         });
       }
     } catch {
@@ -392,6 +395,7 @@ export class SessionTurnPersister {
       thinkingFinishedAt: normalizedThinkingFinishedAt,
       turnTimingThinkingStartedAt: normalizedTurnTimingThinkingStartedAt,
       turnTimingThinkingFinishedAt: normalizedTurnTimingThinkingFinishedAt,
+      persistenceContext,
     });
     emitEvent(eventListener, `${role}_message_saved`, { sessionId });
   }

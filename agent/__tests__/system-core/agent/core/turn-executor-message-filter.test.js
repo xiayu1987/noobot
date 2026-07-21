@@ -501,7 +501,11 @@ test("invokeWithToolsTurn does not final-stream when runConfig disables streamin
     llm,
     runtime: {
       runConfig: { streaming: false },
-      systemRuntime: {},
+      systemRuntime: {
+        sessionId: "child-session",
+        dialogProcessId: "d-stream-disabled",
+        turnScopeId: "workflow-node:stream-disabled",
+      },
     },
     globalConfig: { streaming: true },
     userConfig: {},
@@ -533,6 +537,11 @@ test("invokeWithToolsTurn does not final-stream when runConfig disables streamin
     events.some((item) => String(item?.event || "") === "llm_final_stream_start"),
     false,
   );
+  const committedContent = events.find((item) => item?.event === "main_model_content");
+  assert.equal(committedContent?.data?.envelopeKind, "noobot.message_event");
+  assert.equal(committedContent?.data?.eventType, "main_model_content");
+  assert.equal(committedContent?.data?.text, "ok-without-final-stream");
+  assert.equal(committedContent?.data?.messageId, loopState.messages.at(-1)?.messageId);
 });
 
 test("invokeNoToolsTurn stores reasoning-only retry prompt in incremental block", async () => {

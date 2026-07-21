@@ -119,4 +119,59 @@ describe("session tool logs", () => {
       "the complete file content",
     );
   });
+
+  it("renders realtime authoritative tool envelopes before the scoped snapshot is persisted", () => {
+    const turnScopeId = "workflow-node:live";
+    const displayMessages = [{
+      role: "assistant",
+      type: "message",
+      sessionId: "node-live",
+      turnScopeId,
+    }];
+    const sessionDocuments = [{
+      sessionId: "node-live",
+      parentSessionId: "root-1",
+      caller: "bot",
+      depth: 1,
+      messages: [{
+        id: "msg-live",
+        role: "assistant",
+        type: "message",
+        sessionId: "node-live",
+        turnScopeId,
+        rawEvents: [
+          {
+            event: "tool_call_start",
+            data: {
+              eventType: "tool_call_start",
+              tool: "read_file",
+              args: { filePath: "notes.txt" },
+              toolCallId: "call-live",
+              timestamp: "2026-07-21T00:00:00.000Z",
+            },
+          },
+          {
+            event: "tool_call_end",
+            data: {
+              eventType: "tool_call_end",
+              tool: "read_file",
+              result: "file body",
+              success: true,
+              toolCallId: "call-live",
+              timestamp: "2026-07-21T00:00:01.000Z",
+            },
+          },
+        ],
+      }],
+    }];
+
+    applyCompletedToolLogsToMessages(displayMessages, sessionDocuments);
+
+    expect(displayMessages[0].completedToolLogs.map((item) => item.type)).toEqual([
+      "tool_call",
+      "tool_result",
+    ]);
+    expect(displayMessages[0].completedToolLogs[0].text).toBe('read_file({"filePath":"notes.txt"})');
+    expect(displayMessages[0].completedToolLogs[1].detailText).toBe("file body");
+  });
 });

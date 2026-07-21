@@ -11,6 +11,11 @@ import {
   selectExecutionChildren,
   sessionRuntimeId,
 } from "../../composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+import {
+  hasMessageEventToolPayload,
+  isMessageEventEnvelope,
+  projectMessageEventToolFacets,
+} from "@noobot/shared/message-event-protocol";
 
 function text(value) {
   return String(value || "").trim();
@@ -72,6 +77,7 @@ function hasSubSessionMessagePayload(eventName = "", eventData = {}, currentMess
   if (eventContent(eventData)) return true;
   if (eventData?.message && typeof eventData.message === "object") return true;
   if (eventData?.thinking || eventData?.toolCall || eventData?.tool_call || eventData?.toolResult || eventData?.tool_result) return true;
+  if (isSubSessionToolEvent(eventName, eventData) && hasMessageEventToolPayload(eventData)) return true;
   // Lifecycle/status-only events update the sub-session status.  They may enrich
   // an already materialized runtime message, but must not create an empty
   // placeholder that later survives alongside the persisted snapshot.
@@ -91,6 +97,8 @@ function normalizeSubSessionMessage(eventName = "", eventData = {}, currentMessa
   const eventId = text(eventData?.eventId);
   const appendDelta = Boolean(eventData?.delta) || String(eventName).includes("delta");
   const previousContent = String(currentMessage?.content || "");
+  const { toolCall: canonicalToolCall, toolResult: canonicalToolResult } =
+    projectMessageEventToolFacets(eventData);
   return {
     ...(currentMessage || {}),
     ...(eventData?.message && typeof eventData.message === "object" ? eventData.message : {}),
@@ -118,8 +126,8 @@ function normalizeSubSessionMessage(eventName = "", eventData = {}, currentMessa
     createdAt: eventData?.createdAt || currentMessage?.createdAt || new Date().toISOString(),
     updatedAt: eventData?.updatedAt || new Date().toISOString(),
     thinking: eventData?.thinking ?? currentMessage?.thinking,
-    toolCall: eventData?.toolCall ?? eventData?.tool_call ?? currentMessage?.toolCall,
-    toolResult: eventData?.toolResult ?? eventData?.tool_result ?? currentMessage?.toolResult,
+    toolCall: canonicalToolCall ?? currentMessage?.toolCall,
+    toolResult: canonicalToolResult ?? currentMessage?.toolResult,
     rawEvents: [...(Array.isArray(currentMessage?.rawEvents) ? currentMessage.rawEvents : []), { event: eventName, data: eventData }].slice(-50),
   };
 }
@@ -238,7 +246,7 @@ export const useChatStore = defineStore("chat", () => {
   function upsertSubSessionEvent(eventName = "", eventData = {}) {
     // A standard envelope carries semantic type in data. The WebSocket event
     // name is transport routing only and must not influence projection.
-    if (eventData?.envelopeKind !== "noobot.message_event" || Number(eventData?.envelopeVersion) !== 1) {
+    if (!isMessageEventEnvelope(eventData)) {
       return { applied: false, reason: "not_authoritative_message_event" };
     }
     const projectionEventName = text(eventData?.eventType);

@@ -29,6 +29,13 @@ test("createStreamingCallbacks should emit llm_delta event", async () => {
     onEvent(payload = {}) {
       events.push(payload);
     },
+  }, {
+    systemRuntime: {
+      sessionId: "session-1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+      messageEventStream: { sequence: 0, activeMessageId: "message-1" },
+    },
   });
   assert.equal(Array.isArray(callbacks), true);
   await callbacks[0].handleLLMNewToken("hello");

@@ -5,8 +5,10 @@
  */
 
 export {
+  normalizeSseLogEvent,
+} from "noobot-agent/event";
+export {
   MESSAGE_EVENT_ENVELOPE_KIND,
   assertMessageEventEnvelope,
   isMessageEventEnvelope,
-  normalizeSseLogEvent,
-} from "noobot-agent/event";
+} from "@noobot/shared/message-event-protocol";
