@@ -353,6 +353,7 @@ export class SessionExecutionFinalizer {
       executionSummary,
       dialogProcessId,
       turnScopeId: String(turnScopeId || "").trim(),
+      lifecycle: lifecycle?.snapshot || null,
       ...(resolvedParentAsyncResultContainer
         ? { parentAsyncResultContainer: resolvedParentAsyncResultContainer }
         : {}),

@@ -34,12 +34,28 @@ await botManager.runSession({
 
 ## Dispatch takeover
 
-A `before_agent_dispatch` hook that replaces the main Agent must call
-`ctx.claimAgentDispatch({ source })` as soon as it has irreversibly accepted
-ownership of the turn. The claim is idempotent and publishes the existing root
-Agent `RUNNING` lifecycle boundary immediately, so cancellation remains
-available while the hook performs its own planning or child execution.
+A `before_agent_dispatch` hook is an execution router. A hook that replaces the
+main Agent must:
 
-If the hook can still fall back to the main Agent, it must not claim dispatch.
-Setting `ctx.skipAgentDispatch = true` without an earlier claim remains
-supported; the runner claims at hook completion as a compatibility fallback.
+1. call `ctx.claimAgentDispatch({ owner, source, executionId, executionKind,
+   rootExecutionId, origin, stage })` as
+   soon as it accepts exclusive ownership;
+2. return a versioned `bot_dispatch_outcome` from
+   `@noobot/shared/bot-dispatch-protocol`;
+3. return `handled` with its final result, or `handled` with a structured
+   failure; and
+4. never return `pass` after creating side effects or child executions.
+
+The runner rejects competing `handled` owners. Once an owner has claimed the
+Turn, hook errors and handled failures terminate that Turn and can never fall
+back to the root Agent. The claim also publishes the root `RUNNING` lifecycle
+boundary immediately, so cancellation remains available during planning and
+child execution.
+
+A structured `handled` outcome without an earlier claim, a claim followed by
+`pass`, or a claim/outcome owner mismatch is a dispatch protocol violation and
+fails the Turn.
+
+`ctx.skipAgentDispatch` and `ctx.overrideAgentResult` remain read-only
+compatibility inputs for older plugins. New plugins must use the structured
+outcome contract.

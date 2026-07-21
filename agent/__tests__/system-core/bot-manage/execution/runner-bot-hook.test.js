@@ -12,6 +12,7 @@ import {
   createBotHookManager,
 } from "../../../../src/system-core/bot-manage/hook/index.js";
 import { warnAgentContextCompatFieldOnce } from "../../../../src/system-core/context/compatibility-deprecation.js";
+import { createBotDispatchHandled } from "@noobot/shared/bot-dispatch-protocol";
 
 function createRunner({
   botHookManager = createBotHookManager(),
@@ -198,6 +199,175 @@ test("before-dispatch takeover publishes immutable execution ownership metadata 
   assert.equal(lifecycleStates[0].executionKind, "workflow");
   assert.equal(lifecycleStates[0].stage, "planning");
   assert.deepEqual(lifecycleStates[0].origin, { type: "workflow", workflowRunId: "wf-1" });
+});
+
+test("structured dispatch outcome routes exclusively to the workflow owner", async () => {
+  const botHookManager = createBotHookManager();
+  const events = [];
+  let rootAgentCalls = 0;
+  botHookManager.on(BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH, (ctx = {}) => {
+    ctx.claimAgentDispatch({
+      owner: "workflow",
+      source: "workflow_router",
+      executionKind: "workflow",
+      origin: { type: "workflow", workflowRunId: "wf-structured" },
+      stage: "planning",
+    });
+    return createBotDispatchHandled({
+      owner: "workflow",
+      result: { output: "workflow result", traces: [], turnMessages: [], turnTasks: [] },
+    });
+  });
+  const runner = createRunner({
+    botHookManager,
+    agentRunner: async () => {
+      rootAgentCalls += 1;
+      return { output: "wrong", traces: [], turnMessages: [], turnTasks: [] };
+    },
+  });
+
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "workflow task",
+    runConfig: {},
+    eventListener: { onEvent: (event) => events.push(event) },
+  });
+
+  assert.equal(rootAgentCalls, 0);
+  assert.deepEqual(
+    events.find((event) => event?.event === "bot_dispatch_routed")?.data,
+    {
+      disposition: "handled",
+      owner: "workflow",
+      claimed: true,
+      claimedSource: "workflow_router",
+      executionKind: "workflow",
+      stage: "planning",
+      failureCode: "",
+    },
+  );
+});
+
+test("a handled workflow failure terminates the root Turn without Agent fallback", async () => {
+  const botHookManager = createBotHookManager();
+  let rootAgentCalls = 0;
+  botHookManager.on(BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH, (ctx = {}) => {
+    ctx.claimAgentDispatch({ owner: "workflow", source: "workflow_router", executionKind: "workflow" });
+    return createBotDispatchHandled({
+      owner: "workflow",
+      result: { workflow: { failed: true } },
+      failure: { code: "WORKFLOW_NODE_FAILED", message: "node failed" },
+    });
+  });
+  const runner = createRunner({
+    botHookManager,
+    agentRunner: async () => {
+      rootAgentCalls += 1;
+      return { output: "wrong", traces: [], turnMessages: [], turnTasks: [] };
+    },
+  });
+
+  await assert.rejects(
+    () => runner.runSession({ userId: "u1", sessionId: "s1", message: "workflow task", runConfig: {} }),
+    (error) => error?.code === "WORKFLOW_NODE_FAILED" && error?.dispatchOwner === "workflow",
+  );
+  assert.equal(rootAgentCalls, 0);
+});
+
+test("a claimed dispatch hook failure cannot fall back to the root Agent", async () => {
+  const botHookManager = createBotHookManager();
+  let rootAgentCalls = 0;
+  botHookManager.on(BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH, (ctx = {}) => {
+    ctx.claimAgentDispatch({ source: "workflow_router", executionKind: "workflow" });
+    throw new Error("workflow owner failed");
+  });
+  const runner = createRunner({
+    botHookManager,
+    agentRunner: async () => {
+      rootAgentCalls += 1;
+      return { output: "wrong", traces: [], turnMessages: [], turnTasks: [] };
+    },
+  });
+
+  await assert.rejects(
+    () => runner.runSession({ userId: "u1", sessionId: "s1", message: "workflow task", runConfig: {} }),
+    /workflow owner failed/,
+  );
+  assert.equal(rootAgentCalls, 0);
+});
+
+test("a claimed dispatch cannot pass the same task back to the root Agent", async () => {
+  const botHookManager = createBotHookManager();
+  let rootAgentCalls = 0;
+  botHookManager.on(BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH, (ctx = {}) => {
+    ctx.claimAgentDispatch({ owner: "workflow", source: "workflow_router", executionKind: "workflow" });
+    return undefined;
+  });
+  const runner = createRunner({
+    botHookManager,
+    agentRunner: async () => {
+      rootAgentCalls += 1;
+      return { output: "wrong", traces: [], turnMessages: [], turnTasks: [] };
+    },
+  });
+
+  await assert.rejects(
+    () => runner.runSession({ userId: "u1", sessionId: "s1", message: "workflow task", runConfig: {} }),
+    (error) => error?.code === "BOT_DISPATCH_CLAIM_RELEASE_FORBIDDEN",
+  );
+  assert.equal(rootAgentCalls, 0);
+});
+
+test("a structured dispatch takeover must claim ownership before returning handled", async () => {
+  const botHookManager = createBotHookManager();
+  let rootAgentCalls = 0;
+  botHookManager.on(BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH, () => (
+    createBotDispatchHandled({ owner: "workflow", result: { output: "done" } })
+  ));
+  const runner = createRunner({
+    botHookManager,
+    agentRunner: async () => {
+      rootAgentCalls += 1;
+      return { output: "wrong", traces: [], turnMessages: [], turnTasks: [] };
+    },
+  });
+
+  await assert.rejects(
+    () => runner.runSession({ userId: "u1", sessionId: "s1", message: "workflow task", runConfig: {} }),
+    (error) => error?.code === "BOT_DISPATCH_CLAIM_REQUIRED",
+  );
+  assert.equal(rootAgentCalls, 0);
+});
+
+test("runner failures expose the committed execution lifecycle snapshot", async () => {
+  const runner = createRunner({
+    agentRunner: async () => {
+      throw new Error("model failed");
+    },
+  });
+
+  await assert.rejects(
+    () => runner.runSession({
+      userId: "u1",
+      sessionId: "s1",
+      message: "task",
+      runConfig: {
+        executionId: "agent:child-1",
+        parentExecutionId: "workflow:root",
+        rootExecutionId: "workflow:root",
+      },
+    }),
+    (error) => {
+      assert.equal(error?.lifecycle?.state, "failed");
+      assert.equal(error?.lifecycle?.executionId, "agent:child-1");
+      assert.equal(error?.lifecycle?.parentExecutionId, "workflow:root");
+      assert.equal(error?.lifecycle?.rootExecutionId, "workflow:root");
+      assert.ok(error?.lifecycle?.revision >= 3);
+      assert.equal(error?.lifecycle?.revision, error?.lifecycle?.sequence);
+      return true;
+    },
+  );
 });
 
 test("SessionExecutionRunner passes prepared turnScopeId into context building", async () => {

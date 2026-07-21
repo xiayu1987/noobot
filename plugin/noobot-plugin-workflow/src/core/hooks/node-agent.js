@@ -334,6 +334,7 @@ export async function runNodeAgent({
   const childSessionId = String(identity?.sessionId || "").trim();
   const workflowExecutionId = String(
     identity?.workflowExecutionId ||
+      ctx?.workflowExecutionId ||
       ctx?.executionId ||
       ctx?.runConfig?.executionId ||
       `workflow:${workflowRunId}`,
