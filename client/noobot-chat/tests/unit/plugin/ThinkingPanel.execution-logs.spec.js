@@ -31,7 +31,8 @@ describe("ThinkingPanel", () => {
       channelState: { state: "sending" },
     });
 
-    expect(wrapper.text()).toContain("--:--");
+    expect(wrapper.find(".thinking-duration").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("--:--");
     expect(wrapper.text()).not.toContain("00:12");
   });
 

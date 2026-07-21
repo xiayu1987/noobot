@@ -84,8 +84,7 @@ export function registerFrontendPlugin(ctx = {}) {
         resolveProps: (context = {}) => ({
           messageItem: context?.messageItem || {},
           allMessages: Array.isArray(context?.allMessages) ? context.allMessages : [],
-          turnTimingsByTurnScopeId: context?.turnTimingsByTurnScopeId || {},
-          turnStatuses: context?.turnStatuses || [],
+          runtime: context?.messageRuntime || null,
           userId: String(context?.userId || ""),
           authFetch: context?.authFetch,
           renderMarkdown: context?.renderMarkdown,

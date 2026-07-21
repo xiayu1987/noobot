@@ -12,12 +12,25 @@ import {
 } from "@noobot/shared/turn-lifecycle-protocol";
 import { validateExecutionIdentity } from "@noobot/shared/execution-lifecycle-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { normalizeTurnScopeIdKey } from "../../infra/messageIdentity";
 
 export const DEFAULT_TERMINAL_RETAIN_PER_SESSION = 10;
 export const DEFAULT_TERMINAL_MAX_AGE_MS = TIME_THRESHOLDS.client.terminalTurnRetentionMs;
 
 function text(value) {
   return String(value || "").trim();
+}
+
+function turnKey(value) {
+  return normalizeTurnScopeIdKey(value);
+}
+
+export function executionTurnKey(sessionId, turnScopeId) {
+  const normalizedSessionId = text(sessionId);
+  const normalizedTurnScopeId = turnKey(turnScopeId);
+  return normalizedSessionId && normalizedTurnScopeId
+    ? `${normalizedSessionId}::${normalizedTurnScopeId}`
+    : "";
 }
 
 function executionFingerprint(value = {}) {
@@ -48,8 +61,9 @@ function removeExecutionProjection(registry, executionId) {
       delete registry.childExecutionIdsByParentId[parentId];
     }
   }
-  if (execution?.turnScopeId && registry.executionIdByTurnScopeId?.[execution.turnScopeId] === executionId) {
-    delete registry.executionIdByTurnScopeId[execution.turnScopeId];
+  const indexedTurnKey = executionTurnKey(execution?.sessionId, execution?.turnScopeId);
+  if (indexedTurnKey && registry.executionIdByTurnScopeId?.[indexedTurnKey] === executionId) {
+    delete registry.executionIdByTurnScopeId[indexedTurnKey];
   }
   delete registry.executions[executionId];
   delete registry.childExecutionIdsByParentId?.[executionId];
@@ -60,7 +74,17 @@ function applyExecutionProjection(registry, source = {}) {
   const validation = validateExecutionIdentity(source);
   if (!validation.valid) return { applied: false, reason: "invalid_execution_identity", errors: validation.errors };
   const current = registry.executions?.[validation.identity.executionId];
-  const execution = { ...(current || {}), ...source, ...validation.identity };
+  const rawTurnScopeId = text(validation.identity?.turnScopeId || source?.turnScopeId);
+  const canonicalTurnScopeId = turnKey(rawTurnScopeId);
+  const execution = {
+    ...(current || {}),
+    ...source,
+    ...validation.identity,
+    ...(canonicalTurnScopeId ? { turnScopeId: canonicalTurnScopeId } : {}),
+    ...(rawTurnScopeId && rawTurnScopeId !== canonicalTurnScopeId
+      ? { protocolTurnScopeId: rawTurnScopeId }
+      : {}),
+  };
   if (current && (Number(current.revision || 0) > Number(execution.revision || 0)
     || (Number(current.revision || 0) === Number(execution.revision || 0) && Number(current.sequence || 0) > Number(execution.sequence || 0)))) {
     return { applied: false, reason: "stale_execution" };
@@ -88,7 +112,8 @@ function applyExecutionProjection(registry, source = {}) {
     }
   }
   registry.executions[execution.executionId] = execution;
-  if (execution.turnScopeId) registry.executionIdByTurnScopeId[execution.turnScopeId] = execution.executionId;
+  const indexedTurnKey = executionTurnKey(execution.sessionId, execution.turnScopeId);
+  if (indexedTurnKey) registry.executionIdByTurnScopeId[indexedTurnKey] = execution.executionId;
   if (execution.parentExecutionId) {
     const children = new Set(registry.childExecutionIdsByParentId[execution.parentExecutionId] || []);
     children.add(execution.executionId);
@@ -132,6 +157,7 @@ export function applyExecutionTree(registry, payload = {}) {
   // newer lifecycle envelope while the request was in flight.
   const tombstones = Array.isArray(payload?.removedExecutions) ? payload.removedExecutions : [];
   const removedExecutionIds = [];
+  const acceptedTombstones = new Map();
   for (const tombstone of tombstones) {
     const executionId = text(tombstone?.executionId);
     const current = registry?.executions?.[executionId];
@@ -141,9 +167,20 @@ export function applyExecutionTree(registry, payload = {}) {
     if (!Number.isInteger(revision) || revision < 1 || !Number.isInteger(sequence) || sequence < 1) continue;
     if (Number(current.revision || 0) > revision
       || (Number(current.revision || 0) === revision && Number(current.sequence || 0) >= sequence)) continue;
-    if (removeExecutionProjection(registry, executionId)) removedExecutionIds.push(executionId);
+    if (removeExecutionProjection(registry, executionId)) {
+      removedExecutionIds.push(executionId);
+      acceptedTombstones.set(executionId, { revision, sequence });
+    }
   }
   const results = incoming
+    .filter((item = {}) => {
+      const tombstone = acceptedTombstones.get(text(item.executionId));
+      if (!tombstone) return true;
+      const revision = Number(item.revision || 0);
+      const sequence = Number(item.sequence || 0);
+      return revision > tombstone.revision ||
+        (revision === tombstone.revision && sequence > tombstone.sequence);
+    })
     .map((item) => applyExecutionProjection(registry, item));
   return { applied: removedExecutionIds.length > 0 || results.some((item) => item.applied), results, removedExecutionIds, rootExecutionId };
 }
@@ -165,9 +202,11 @@ function ensureSessionBucket(registry, sessionId) {
   return registry.sessions[id];
 }
 
-function findTurnByScope(registry, turnScopeId) {
-  const scope = text(turnScopeId);
+function findTurnByScope(registry, turnScopeId, { sessionId = "" } = {}) {
+  const scope = turnKey(turnScopeId);
   if (!scope) return null;
+  const id = text(sessionId);
+  if (id) return registry?.sessions?.[id]?.turns?.[scope] || null;
   for (const bucket of Object.values(registry?.sessions || {})) {
     const turn = bucket?.turns?.[scope];
     if (turn) return turn;
@@ -199,10 +238,10 @@ export function resolveSessionTurnRuntime(registry, sessionId) {
 }
 
 export function resolveTurnRuntimeByScope(registry, turnScopeId, { sessionId = "" } = {}) {
-  const scope = text(turnScopeId);
+  const scope = turnKey(turnScopeId);
   const id = text(sessionId);
   if (!scope) return null;
-  return id ? registry?.sessions?.[id]?.turns?.[scope] || null : findTurnByScope(registry, scope);
+  return findTurnByScope(registry, scope, { sessionId: id });
 }
 
 export function selectSessionTurnRuntime(registry, sessionId) {
@@ -223,11 +262,11 @@ export function selectSessionTurnRuntime(registry, sessionId) {
 export function selectTurnMessageRuntime(registry, { sessionId = "", turnScopeId = "", dialogProcessId = "" } = {}) {
   const normalizedSessionId = text(sessionId);
   const normalizedDialogProcessId = text(dialogProcessId);
-  let normalizedTurnScopeId = text(turnScopeId);
+  let normalizedTurnScopeId = turnKey(turnScopeId);
   let routeSessionId = "";
   if (!normalizedTurnScopeId && normalizedDialogProcessId) {
     const route = resolveRoute(registry, normalizedDialogProcessId);
-    normalizedTurnScopeId = text(route?.turnScopeId);
+    normalizedTurnScopeId = turnKey(route?.turnScopeId);
     routeSessionId = text(route?.sessionId);
   }
   const turn = normalizedTurnScopeId
@@ -251,6 +290,17 @@ export function selectTurnMessageRuntime(registry, { sessionId = "", turnScopeId
     updatedAt: turn.updatedAt || "",
     updatedAtMs: Number(turn.updatedAtMs || 0),
     terminal: turn.terminal || null,
+    running: !turn.terminal && [
+      FrontendRunState.ACTION_REQUESTING,
+      FrontendRunState.PROCESSING,
+      FrontendRunState.FRONTEND_COMPLETION_REQUESTING,
+      FrontendRunState.USER_STOPPING,
+      BackendChannelState.SENDING,
+      BackendChannelState.RECONNECTING,
+      BackendChannelState.INTERACTION_PENDING,
+    ].includes(turn.state),
+    startedAt: turn.startedAt || turn.thinkingStartedAt || "",
+    finishedAt: turn.finishedAt || turn.thinkingFinishedAt || "",
   };
 }
 
@@ -262,7 +312,7 @@ export function resolveLatestStoppedTurn(registry, sessionId) {
 }
 
 export function removeTurnRuntime(registry, turnScopeId, { sessionId = "" } = {}) {
-  const scope = text(turnScopeId);
+  const scope = turnKey(turnScopeId);
   const expectedSessionId = text(sessionId);
   const turn = resolveTurnRuntimeByScope(registry, scope, { sessionId: expectedSessionId });
   if (!turn || (expectedSessionId && turn.sessionId !== expectedSessionId)) return false;
@@ -299,7 +349,7 @@ export function pruneTerminalTurns(registry, {
   const id = text(sessionId);
   const bucket = registry?.sessions?.[id];
   if (!bucket) return { removedTurnScopeIds: [] };
-  const referenced = new Set(Array.from(referencedTurnScopeIds || [], text).filter(Boolean));
+  const referenced = new Set(Array.from(referencedTurnScopeIds || [], turnKey).filter(Boolean));
   const activeScope = text(bucket.activeTurnScopeId);
   const latestStoppedScope = text(resolveLatestStoppedTurn(registry, id)?.turnScopeId);
   const terminalTurns = Object.values(bucket.turns || {})
@@ -327,12 +377,13 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
   if (!next.sessions) next.sessions = {};
   if (!next.routeIndex) next.routeIndex = {};
   const event = normalizeSessionRunEvent(rawEvent);
-  let turnScopeId = text(event.turnScopeId);
+  let turnScopeId = turnKey(event.turnScopeId);
   const route = resolveRoute(next, event.dialogProcessId);
-  if (!turnScopeId && route) turnScopeId = text(route.turnScopeId);
+  if (!turnScopeId && route) turnScopeId = turnKey(route.turnScopeId);
   if (!turnScopeId) return { registry: next, turn: null, applied: false, reason: "missing_turn_identity" };
-  const current = findTurnByScope(next, turnScopeId);
-  const sessionId = text(event.sessionId || current?.sessionId || route?.sessionId);
+  const requestedSessionId = text(event.sessionId || route?.sessionId);
+  const current = findTurnByScope(next, turnScopeId, { sessionId: requestedSessionId });
+  const sessionId = text(requestedSessionId || current?.sessionId);
   if (!sessionId) return { registry: next, turn: current, applied: false, reason: "missing_session_identity" };
   if (current?.sessionId && current.sessionId !== sessionId) return { registry: next, turn: current, applied: false, reason: "session_identity_conflict" };
   if (current?.dialogProcessId && event.dialogProcessId && current.dialogProcessId !== event.dialogProcessId) return { registry: next, turn: current, applied: false, reason: "dialog_process_identity_conflict" };
@@ -365,6 +416,10 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
     source: text(event.source || current?.source),
     sourceEvent: text(event.sourceEvent || event.type || current?.sourceEvent),
     finishedAtMs: terminal ? Number(current?.finishedAtMs || nowMs) : 0,
+    startedAt: text(rawEvent?.thinkingStartedAt || rawEvent?.startedAt || current?.startedAt),
+    finishedAt: terminal
+      ? text(current?.finishedAt || rawEvent?.thinkingFinishedAt || rawEvent?.finishedAt || event.updatedAt)
+      : text(current?.finishedAt),
     error: terminal === "error" ? text(rawEvent?.error?.message || rawEvent?.error || rawEvent?.reason) : null,
   };
   const bucket = ensureSessionBucket(next, sessionId);
@@ -430,7 +485,7 @@ export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
   }
   const turns = [snapshot.activeTurn, ...(Array.isArray(snapshot.recentTerminalTurns) ? snapshot.recentTerminalTurns : [])].filter(Boolean);
   for (const source of turns) {
-    const turnScopeId = text(source.turnScopeId);
+    const turnScopeId = turnKey(source.turnScopeId);
     const revision = Number(source.revision || 0);
     if (!turnScopeId || !Number.isInteger(revision) || revision < 1 || Number(source.sequence || 0) > sequence) {
       return { applied: false, reason: "invalid_snapshot_turn" };
@@ -452,12 +507,12 @@ export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
     };
     const state = stateMap[text(source.state)];
     const terminal = text(source.state) === "completed" ? "completed" : text(source.state) === "stop_completed" ? "user_stopped" : isFinalTurnState(state) ? "error" : null;
-    const turn = { ...(current || {}), ...source, sessionId, turnScopeId, dialogProcessId: text(source.dialogProcessId), state, phase, revision, seq: Number(source.sequence || 0), backendState: text(source.executionState), canStop: source.capabilities?.canStop === true, terminal, source: "turn_snapshot", authoritativeSnapshot: true, authoritativeLifecycle: true };
+    const turn = { ...(current || {}), ...source, sessionId, turnScopeId, dialogProcessId: text(source.dialogProcessId), state, phase, revision, seq: Number(source.sequence || 0), backendState: text(source.executionState), canStop: source.capabilities?.canStop === true, terminal, startedAt: text(source.startedAt || source.thinkingStartedAt || current?.startedAt), finishedAt: terminal ? text(current?.finishedAt || source.finishedAt || source.thinkingFinishedAt || source.updatedAt) : text(current?.finishedAt), source: "turn_snapshot", authoritativeSnapshot: true, authoritativeLifecycle: true };
     bucket.turns[turnScopeId] = turn;
     if (turn.dialogProcessId) registry.routeIndex[turn.dialogProcessId] = { sessionId, turnScopeId };
   }
   const previousActiveTurnScopeId = text(bucket.activeTurnScopeId);
-  bucket.activeTurnScopeId = text(snapshot.activeTurnScopeId);
+  bucket.activeTurnScopeId = turnKey(snapshot.activeTurnScopeId);
   if (!bucket.activeTurnScopeId && previousActiveTurnScopeId) {
     const previous = bucket.turns[previousActiveTurnScopeId];
     if (previous?.dialogProcessId) delete registry.routeIndex[previous.dialogProcessId];
@@ -476,7 +531,7 @@ export function hydrateSessionTurnRuntime(registry, session, turnStatuses = sess
   // machine again (watchers may invoke hydration repeatedly).
   if (Number(registry?.sessions?.[sessionId]?.protocolVersion || 0) > 0) return registry;
   for (const status of Array.isArray(turnStatuses) ? turnStatuses : []) {
-    const turnScopeId = text(status?.turnScopeId);
+    const turnScopeId = turnKey(status?.turnScopeId);
     if (!turnScopeId) continue;
     const scope = { sessionId, turnScopeId, dialogProcessId: status?.dialogProcessId, updatedAt: status?.updatedAt, authoritativeSnapshot: true, source: "session_summary_replay" };
     const terminalStatus = text(status?.status).toLowerCase();
@@ -492,6 +547,14 @@ export function hydrateSessionTurnRuntime(registry, session, turnStatuses = sess
     } else {
       applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, ...scope, state: terminalStatus, seq: Number(status?.seq || 0) });
     }
+  }
+  const timings = Array.isArray(session?.turnTimings) ? session.turnTimings : [];
+  for (const timing of timings) {
+    const turnScopeId = turnKey(timing?.turnScopeId);
+    const turn = turnScopeId ? registry?.sessions?.[sessionId]?.turns?.[turnScopeId] : null;
+    if (!turn) continue;
+    if (!turn.startedAt) turn.startedAt = text(timing?.thinkingStartedAt);
+    if (!turn.finishedAt) turn.finishedAt = text(timing?.thinkingFinishedAt);
   }
   return registry;
 }

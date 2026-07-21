@@ -18,6 +18,9 @@ import {
   hydrateSessionTurnRuntime,
   applyTurnLifecycleEnvelope,
   applyTurnLifecycleSnapshot,
+  applyExecutionSnapshot,
+  applyExecutionTree,
+  executionTurnKey,
 } from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 import { SESSION_RUN_EVENT, BackendChannelState } from "../../../../../src/composables/chat/sessionRunStateMachine/constants";
 
@@ -46,6 +49,34 @@ function snapshot(overrides = {}) {
 }
 
 describe("turnRuntimeRegistry", () => {
+  it("indexes canonical Execution Turn identities per Session and removes only the targeted Session", () => {
+    const registry = createTurnRuntimeRegistryState();
+    const execution = (executionId, sessionId, turnScopeId) => ({
+      protocolVersion: 1,
+      executionId,
+      rootExecutionId: executionId,
+      parentExecutionId: "",
+      executionKind: "agent",
+      userId: "u1",
+      sessionId,
+      turnScopeId,
+      revision: 1,
+      sequence: 1,
+    });
+
+    expect(applyExecutionSnapshot(registry, execution("e1", "s1", "workflow-node:shared")).applied).toBe(true);
+    expect(applyExecutionSnapshot(registry, execution("e2", "s2", "workflow-node_shared")).applied).toBe(true);
+    expect(registry.executionIdByTurnScopeId[executionTurnKey("s1", "workflow-node_shared")]).toBe("e1");
+    expect(registry.executionIdByTurnScopeId[executionTurnKey("s2", "workflow-node:shared")]).toBe("e2");
+
+    applyExecutionTree(registry, {
+      rootExecutionId: "e1",
+      tree: { executions: { e1: registry.executions.e1 } },
+      removedExecutions: [{ executionId: "e1", revision: 2, sequence: 2 }],
+    });
+    expect(registry.executionIdByTurnScopeId[executionTurnKey("s1", "workflow-node_shared")]).toBeUndefined();
+    expect(registry.executionIdByTurnScopeId[executionTurnKey("s2", "workflow-node_shared")]).toBe("e2");
+  });
   it("creates and activates a session turn", () => {
     const registry = createTurnRuntimeRegistryState();
     sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
@@ -216,6 +247,46 @@ describe("turnRuntimeRegistry", () => {
     backendState(registry, { sessionId: "s2", turnScopeId: "t2", state: BackendChannelState.COMPLETED, seq: 3 });
     expect(turnRuntimeDisplayState(resolveSessionTurnRuntime(registry, "s1"))).toBe("sending");
     expect(turnRuntimeDisplayState(resolveSessionTurnRuntime(registry, "s2"))).toBe("completing");
+  });
+  it("canonicalizes workflow Turn scope variants at the Store boundary", () => {
+    const registry = createTurnRuntimeRegistryState();
+    sendStart(registry, { sessionId: "s1", turnScopeId: "workflow-node:turn-1" });
+    backendState(registry, {
+      sessionId: "s1",
+      turnScopeId: "workflow-node_turn-1",
+      dialogProcessId: "dp1",
+      state: BackendChannelState.SENDING,
+      seq: 2,
+    });
+
+    expect(Object.keys(registry.sessions.s1.turns)).toEqual(["workflow-node_turn-1"]);
+    expect(selectTurnMessageRuntime(registry, {
+      sessionId: "s1",
+      turnScopeId: "workflow-node:turn-1",
+    })).toMatchObject({
+      turnScopeId: "workflow-node_turn-1",
+      running: true,
+    });
+  });
+  it("isolates identical canonical Turn scopes by Session", () => {
+    const registry = createTurnRuntimeRegistryState();
+    sendStart(registry, { sessionId: "s1", turnScopeId: "workflow-node:shared" });
+    sendStart(registry, { sessionId: "s2", turnScopeId: "workflow-node_shared" });
+    backendState(registry, {
+      sessionId: "s1", turnScopeId: "workflow-node_shared", dialogProcessId: "dp1",
+      state: BackendChannelState.SENDING, seq: 2,
+    });
+    backendState(registry, {
+      sessionId: "s2", turnScopeId: "workflow-node:shared", dialogProcessId: "dp2",
+      state: BackendChannelState.SENDING, seq: 2,
+    });
+
+    expect(selectTurnMessageRuntime(registry, {
+      sessionId: "s1", turnScopeId: "workflow-node_shared",
+    })?.dialogProcessId).toBe("dp1");
+    expect(selectTurnMessageRuntime(registry, {
+      sessionId: "s2", turnScopeId: "workflow-node_shared",
+    })?.dialogProcessId).toBe("dp2");
   });
   it("exposes a session-scoped UI projection and never leaks another session's run", () => {
     const registry = createTurnRuntimeRegistryState();

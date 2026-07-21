@@ -29,8 +29,6 @@ const props = defineProps({
   displayNodeMessages: { type: Array, default: () => [] },
   nodeSessionAllMessages: { type: Array, default: () => [] },
   selectedNodeSessionDocs: { type: Array, default: () => [] },
-  turnTimingsByTurnScopeId: { type: Object, default: () => ({}) },
-  turnStatuses: { type: Array, default: () => [] },
   userId: { type: String, default: "" },
   authFetch: { type: Function, default: null },
   renderMarkdown: { type: Function, required: true },
@@ -159,7 +157,6 @@ watch(
     props.selectedNodeSessionId,
     props.displayNodeMessages.length,
     props.displayNodeMessages.map((item = {}) => `${String(item?.content || "").length}:${JSON.stringify(item?.thinking || null).length}:${Array.isArray(item?.thinkingSteps) ? item.thinkingSteps.length : 0}:${Array.isArray(item?.toolLogs) ? item.toolLogs.length : 0}:${JSON.stringify(item?.turnTimings || item?.timings || null).length}`).join("|"),
-    props.turnStatuses.map((item = {}) => `${item?.status || ""}:${JSON.stringify(item?.turnTimings || item?.timings || null).length}`).join("|"),
   ],
   ([visible, sessionId], previous = []) => {
     if (!visible) return;
@@ -311,8 +308,6 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
           :messages="displayNodeMessages"
           :all-messages="nodeSessionAllMessages"
           :session-docs="selectedNodeSessionDocs"
-          :turn-timings-by-turn-scope-id="turnTimingsByTurnScopeId"
-          :turn-statuses="turnStatuses"
           :user-id="userId"
           :auth-fetch="authFetch"
           :render-markdown="renderMarkdown"

@@ -18,8 +18,6 @@ const props = defineProps({
   formatFileSize: { type: Function, default: (value = 0) => `${Number(value || 0)} B` },
   isImageMime: { type: Function, default: (mimeType = "") => String(mimeType || "").startsWith("image/") },
   workflowNodeStateRegistry: { type: Object, default: null },
-  turnRuntimeRegistry: { type: Object, default: null },
-  workflowRuntimeProjectionVersion: { type: String, default: "" },
   selectExecutionDetail: { type: Function, default: null },
   stopExecution: { type: Function, default: null },
   selectSessionMessages: { type: Function, default: null },
@@ -47,8 +45,6 @@ const {
   semanticPreviewLineCount,
   semanticPreviewCollapsible,
   selectedNodeSessionDocs,
-  selectedNodeTurnTimingsByTurnScopeId,
-  selectedNodeTurnStatuses,
   displayNodeMessages,
   nodeSessionAllMessages,
   selectedRuntimeBoxes,
@@ -97,8 +93,6 @@ const {
     :display-node-messages="displayNodeMessages"
     :node-session-all-messages="nodeSessionAllMessages"
     :selected-node-session-docs="selectedNodeSessionDocs"
-    :turn-timings-by-turn-scope-id="selectedNodeTurnTimingsByTurnScopeId"
-    :turn-statuses="selectedNodeTurnStatuses"
     :user-id="userId"
     :auth-fetch="authFetch"
     :render-markdown="renderMarkdown"

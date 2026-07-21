@@ -8,6 +8,16 @@ import {
   getWorkflowSessionThinkingDetailApi,
 } from "../../../../../client/noobot-chat/src/services/api/chatApi.js";
 
+function contentSessionSummary(summary = {}) {
+  const {
+    turnRuntime: _turnRuntime,
+    turnStatuses: _turnStatuses,
+    turnTimings: _turnTimings,
+    ...content
+  } = summary && typeof summary === "object" ? summary : {};
+  return content;
+}
+
 export function hydrateExecutionSessionDetail(detail = {}, {
   executionId = "",
   execution = null,
@@ -18,16 +28,11 @@ export function hydrateExecutionSessionDetail(detail = {}, {
     messages,
     rawMessages: Array.isArray(detail?.rawMessages) ? detail.rawMessages : messages,
     sessionSummary: {
-      ...(detail?.sessionSummary && typeof detail.sessionSummary === "object"
-        ? detail.sessionSummary
-        : {}),
+      ...contentSessionSummary(detail?.sessionSummary),
       // The display projection consumes summary.messages first. Always bind
       // the normalized response so an empty/stale REST summary cannot mask it.
       messages,
       executionId: String(executionId || "").trim(),
-      // Execution projection may legitimately arrive after the Session
-      // snapshot while a child Agent is starting.
-      turnRuntime: execution || null,
     },
   };
 }
@@ -74,29 +79,15 @@ export async function fetchExecutionSessionDetail({
     : Array.isArray(session?.messages)
       ? session.messages
       : [];
-  const turnStatuses = Array.isArray(sessionSummary?.turnStatuses)
-    ? sessionSummary.turnStatuses
-    : Array.isArray(session?.turnStatuses)
-      ? session.turnStatuses
-      : [];
-  const turnTimings = Array.isArray(sessionSummary?.turnTimings)
-    ? sessionSummary.turnTimings
-    : Array.isArray(session?.turnTimings)
-      ? session.turnTimings
-      : [];
   return {
     state: messages.length ? "ready" : "empty",
     sessionId: String(sessionSummary?.sessionId || session?.sessionId || session?.id || normalizedSessionId).trim(),
     sessionSummary: {
-      ...session,
-      ...sessionSummary,
-      turnStatuses,
-      turnTimings,
+      ...contentSessionSummary(session),
+      ...contentSessionSummary(sessionSummary),
     },
     messages,
     rawMessages: messages,
-    turnStatuses,
-    turnTimings,
   };
 }
 

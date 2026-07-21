@@ -56,8 +56,6 @@ export function registerFrontendPlugin(ctx = {}) {
           formatFileSize: context?.formatFileSize,
           isImageMime: context?.isImageMime,
           workflowNodeStateRegistry: context?.workflowNodeStateRegistry || null,
-          turnRuntimeRegistry: context?.turnRuntimeRegistry || null,
-          workflowRuntimeProjectionVersion: String(context?.workflowRuntimeProjectionVersion || ""),
           selectExecutionDetail: typeof context?.selectExecutionDetail === "function"
             ? context.selectExecutionDetail
             : null,

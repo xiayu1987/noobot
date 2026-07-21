@@ -10,8 +10,6 @@ const props = defineProps({
   messageItem: { type: Object, required: true },
   allMessages: { type: Array, default: () => [] },
   sessionDocs: { type: Array, default: () => [] },
-  turnTimingsByTurnScopeId: { type: Object, default: () => ({}) },
-  turnStatuses: { type: Array, default: () => [] },
   userId: { type: String, default: "" },
   authFetch: { type: Function, default: null },
   renderMarkdown: { type: Function, required: true },

@@ -67,8 +67,6 @@ export function useWorkflowNodeMessages({
         toolLogSummaries: Array.isArray(summary?.toolLogSummaries)
           ? summary.toolLogSummaries
           : [],
-        turnStatuses: Array.isArray(summary?.turnStatuses) ? summary.turnStatuses : [],
-        turnTimings: Array.isArray(summary?.turnTimings) ? summary.turnTimings : [],
       },
     ];
   });
@@ -78,12 +76,6 @@ export function useWorkflowNodeMessages({
       sessionId: selectedNodeSessionId.value,
       sessionSummary: selectedNodeSessionSummary.value || {},
       messages: selectedNodeMessages.value,
-      turnStatuses: Array.isArray(selectedNodeSessionSummary.value?.turnStatuses)
-        ? selectedNodeSessionSummary.value.turnStatuses
-        : [],
-      turnTimings: Array.isArray(selectedNodeSessionSummary.value?.turnTimings)
-        ? selectedNodeSessionSummary.value.turnTimings
-        : [],
     },
     sessionDocs: selectedNodeSessionDocs.value,
     makeViewMessage: buildNodeViewMessage,
@@ -92,12 +84,6 @@ export function useWorkflowNodeMessages({
     toolSessionDocs: selectedNodeToolSessionDocs.value,
   }));
 
-  const selectedNodeTurnTimingsByTurnScopeId = computed(
-    () => selectedNodeProjection.value.turnTimingsByTurnScopeId,
-  );
-
-  const selectedNodeTurnStatuses = computed(() => selectedNodeProjection.value.turnStatuses);
-  
   const rawNodeSessionMessages = computed(() =>
     (Array.isArray(selectedNodeMessages.value) ? selectedNodeMessages.value : []).map(
       (messageItem = {}) => buildNodeViewMessage(messageItem),
@@ -127,7 +113,13 @@ export function useWorkflowNodeMessages({
     (Array.isArray(normalizedNodeSessionMessages.value)
       ? normalizedNodeSessionMessages.value
       : []
-    ).map((messageItem = {}) => normalizeNodeMessageForDisplay(messageItem)),
+    ).map((messageItem = {}) => ({
+      ...normalizeNodeMessageForDisplay(messageItem),
+      // Runtime selection is Session-scoped. Persisted child messages can be
+      // sparse, so attach the authoritative drawer Session identity before the
+      // shared message renderer selects the Turn runtime.
+      sessionId: String(messageItem?.sessionId || selectedNodeSessionId.value || "").trim(),
+    })),
   );
   
   const nodeSessionAllMessages = computed(() => {
@@ -147,8 +139,6 @@ export function useWorkflowNodeMessages({
 
   return {
     selectedNodeSessionDocs,
-    selectedNodeTurnTimingsByTurnScopeId,
-    selectedNodeTurnStatuses,
     rawNodeSessionMessages,
     selectedNodeToolSessionDocs,
     normalizedNodeSessionMessages,

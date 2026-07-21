@@ -13,8 +13,6 @@ const props = defineProps({
   messages: { type: Array, default: () => [] },
   allMessages: { type: Array, default: () => [] },
   sessionDocs: { type: Array, default: () => [] },
-  turnTimingsByTurnScopeId: { type: Object, default: () => ({}) },
-  turnStatuses: { type: Array, default: () => [] },
   userId: { type: String, default: "" },
   authFetch: { type: Function, default: null },
   renderMarkdown: { type: Function, required: true },
@@ -56,8 +54,6 @@ function openThinkingDetails(payload = {}, messageItem = {}) {
         :message-item="messageItem"
         :all-messages="allMessages"
         :session-docs="sessionDocs"
-        :turn-timings-by-turn-scope-id="turnTimingsByTurnScopeId"
-        :turn-statuses="turnStatuses"
         :user-id="userId"
         :auth-fetch="authFetch"
         :render-markdown="renderMarkdown"

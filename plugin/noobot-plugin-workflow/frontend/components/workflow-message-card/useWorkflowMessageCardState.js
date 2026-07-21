@@ -44,13 +44,10 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     flowNodes,
   } = useWorkflowRuntimeState(workflowPayload, {
     workflowNodeStateRegistry: props.workflowNodeStateRegistry,
-    turnRuntimeRegistry: props.turnRuntimeRegistry,
   });
 
   const {
     selectedNodeSessionDocs,
-    selectedNodeTurnTimingsByTurnScopeId,
-    selectedNodeTurnStatuses,
     rawNodeSessionMessages,
     selectedNodeToolSessionDocs,
     normalizedNodeSessionMessages,
@@ -129,8 +126,6 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     semanticPreviewLineCount,
     semanticPreviewCollapsible,
     selectedNodeSessionDocs,
-    selectedNodeTurnTimingsByTurnScopeId,
-    selectedNodeTurnStatuses,
     rawNodeSessionMessages,
     selectedNodeToolSessionDocs,
     normalizedNodeSessionMessages,
