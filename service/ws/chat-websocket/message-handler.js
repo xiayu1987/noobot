@@ -27,6 +27,7 @@ import { createRunEventListener } from "./run-event-listener.js";
 import { resetRunState } from "./connection-state.js";
 import { createCommittedTurnLifecyclePublisher } from "./turn-lifecycle-bridge.js";
 import { TURN_COMMAND, TURN_EVENT, TURN_PHASE, validateTurnLifecycleSnapshot } from "@noobot/shared/turn-lifecycle-protocol";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import {
   EXECUTION_CHILDREN_WIRE_EVENT,
   EXECUTION_QUERY_COMMAND,
@@ -75,6 +76,41 @@ export function createMessageHandler({
   // Detached sub-session facts have already been committed inside Agent. This
   // publisher projects them onto the wire without re-entering the state machine.
   const publishCommittedTurnLifecycle = createCommittedTurnLifecyclePublisher({ sendEvent });
+  const recoverOrphanedTurnConflict = async ({ accepted = null, userId = "", sessionId = "", parentSessionId = "" } = {}) => {
+    if (accepted?.reason !== "session_action_conflict") return false;
+    const lifecycle = accepted?.lifecycle;
+    const activeTurnScopeId = String(lifecycle?.activeTurnScopeId || "").trim();
+    const activeTurn = lifecycle?.turns?.[activeTurnScopeId] || null;
+    if (!activeTurnScopeId || !activeTurn) return false;
+    if (findActiveRun({ sessionId, turnScopeId: activeTurnScopeId })) return false;
+    const updatedAtMs = Date.parse(String(activeTurn?.updatedAt || ""));
+    if (
+      !Number.isFinite(updatedAtMs) ||
+      Date.now() - updatedAtMs < TIME_THRESHOLDS.service.orphanedTurnRecoveryGraceMs
+    ) {
+      return false;
+    }
+    const phase = Object.values(TURN_PHASE).includes(activeTurn?.phase)
+      ? activeTurn.phase
+      : TURN_PHASE.PROCESSING;
+    const failed = await commitTurnLifecycle({
+      userId,
+      sessionId,
+      parentSessionId,
+      turnScopeId: activeTurnScopeId,
+      dialogProcessId: String(activeTurn?.dialogProcessId || "").trim(),
+      commandId: `orphaned:${activeTurnScopeId}:failed:${phase}`,
+      eventType: TURN_EVENT.FAILED,
+      phase,
+      failure: {
+        phase,
+        code: "service_restart_orphaned_turn",
+        message: "active turn execution was lost after service restart",
+        retryable: false,
+      },
+    });
+    return failed?.applied === true || failed?.deduplicated === true;
+  };
   const commitCurrentFailure = async (error, fallbackPhase = TURN_PHASE.ACTION) => {
     const phase = state.currentLifecyclePhase || fallbackPhase;
     const commandBase = String(state.currentLifecycleCommandId || state.currentTurnScopeId || "turn").trim();
@@ -456,7 +492,7 @@ export function createMessageHandler({
         ? "resend"
         : "send";
     const commandId = String(payload?.commandId || normalizedRunConfig.idempotencyKey || state.currentTurnScopeId).trim();
-    const accepted = await commitTurnLifecycle({
+    const actionEvent = {
       userId,
       sessionId,
       parentSessionId,
@@ -468,7 +504,15 @@ export function createMessageHandler({
       action,
       createSessionIfAbsent: action === "send",
       expectedRevision: payload?.expectedRevision ?? 0,
-    });
+    };
+    let accepted = await commitTurnLifecycle(actionEvent);
+    if (
+      !accepted?.applied &&
+      !accepted?.deduplicated &&
+      await recoverOrphanedTurnConflict({ accepted, userId, sessionId, parentSessionId })
+    ) {
+      accepted = await commitTurnLifecycle(actionEvent);
+    }
     if (!accepted?.applied && !accepted?.deduplicated) {
       const error = new Error(accepted?.reason || "action_rejected");
       error.errorCode = accepted?.reason || "action_rejected";

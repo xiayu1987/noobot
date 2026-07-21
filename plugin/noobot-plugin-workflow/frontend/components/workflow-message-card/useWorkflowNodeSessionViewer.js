@@ -3,7 +3,7 @@
   Contact: 126240622+xiayu1987@users.noreply.github.com
   SPDX-License-Identifier: MIT
 */
-import { onBeforeUnmount, onMounted, ref, watch, watchEffect } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { useWorkflowNodeSessionLabels } from "./workflowNodeSessionLabels";
 import { useWorkflowDrawerHistory } from "./workflowDrawerHistory";
@@ -195,18 +195,26 @@ export function useWorkflowNodeSessionViewer({
         }
       : {};
     const mergedDetail = mergeUnifiedSessionDetail(currentDetail, detail);
+    const currentComparable = {
+      sessionId: currentSessionId,
+      sessionSummary: selectedNodeSessionSummary.value || null,
+      messages: selectedNodeMessages.value,
+      rawMessages: selectedNodeRawMessages.value,
+    };
+    const nextComparable = {
+      sessionId: mergedDetail.sessionId || "",
+      sessionSummary: mergedDetail.sessionSummary || null,
+      messages: mergedDetail.messages,
+      rawMessages: mergedDetail.rawMessages,
+    };
+    // Repeated Session/Execution snapshots are common at terminal convergence.
+    // Do not replace the message tree when the content projection is unchanged.
+    if (JSON.stringify(currentComparable) === JSON.stringify(nextComparable)) return false;
     selectedNodeSessionSummary.value = mergedDetail.sessionSummary || null;
     selectedNodeSessionId.value = mergedDetail.sessionId || "";
     selectedNodeMessages.value = mergedDetail.messages;
     selectedNodeRawMessages.value = mergedDetail.rawMessages;
-    if (typeof mergeSubSessionSnapshot === "function") {
-      mergeSubSessionSnapshot({
-        ...mergedDetail.sessionSummary,
-        sessionId: mergedDetail.sessionId,
-        messages: mergedDetail.messages,
-        rawMessages: mergedDetail.rawMessages,
-      });
-    }
+    return true;
   }
 
   function applyUnifiedSessionDetailIfAvailable(nodeItem = selectedNode.value || {}) {
@@ -419,12 +427,42 @@ export function useWorkflowNodeSessionViewer({
     },
   );
 
-  watchEffect(() => {
-    if (!viewerVisible.value || !selectedNode.value) return;
-    if (!applyUnifiedSessionDetailIfAvailable(selectedNode.value)) {
-      bindSelectedNodeRealtimeProjection(selectedNode.value);
-    }
-  });
+  // Track content sources in the watch getter and commit in the callback.
+  // A watchEffect used to read selected refs while merging and then write the
+  // same refs, creating a self-triggering projection loop at workflow finish.
+  watch(
+    () => {
+      if (!viewerVisible.value || !selectedNode.value) return null;
+      const detail = buildUnifiedSessionDetail({
+        nodeItem: selectedNode.value,
+        runtimeNodeSessions,
+        selectSessionMessages: props.selectSessionMessages,
+        selectExecutionDetail: props.selectExecutionDetail,
+        allowEmptyMessages: false,
+      });
+      if (detail) return detail;
+      const runtimeNode = resolveRuntimeNodeSession(selectedNode.value, runtimeNodeSessions);
+      const sessionId = resolveIsolatedNodeSessionId(selectedNode.value, runtimeNode);
+      const sessionDoc = sessionId && typeof props.selectSessionMessages === "function"
+        ? props.selectSessionMessages(sessionId)
+        : null;
+      return sessionDoc && typeof sessionDoc === "object"
+        ? { sessionId, sessionSummary: sessionDoc, messages: sessionDoc.messages || [], rawMessages: sessionDoc.rawMessages || sessionDoc.messages || [] }
+        : null;
+    },
+    (detail) => {
+      if (!detail) return;
+      applySelectedNodeSessionDetail(detail);
+      if (detail.executionId) selectedExecutionId.value = text(detail.executionId);
+      if (Array.isArray(detail.attemptExecutionIds)) {
+        const nextAttempts = detail.attemptExecutionIds.map(text);
+        if (JSON.stringify(attemptExecutionIds.value) !== JSON.stringify(nextAttempts)) {
+          attemptExecutionIds.value = nextAttempts;
+        }
+      }
+    },
+    { deep: true },
+  );
 
   return {
     selectedExecutionId,

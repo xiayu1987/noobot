@@ -17,10 +17,7 @@ import { createChatEngineSender } from "./chatEngine/sendFlow";
 import { createPendingMessageOperationStore } from "./chatEngine/messageOperationStore";
 import { logStateMachineDebug } from "./debug/stateMachineLogger";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import {
-  applyTurnRuntimeEvent,
-  selectSessionTurnRuntime,
-} from "./sessionRunStateMachine/turnRuntimeRegistry";
+import { selectSessionTurnRuntime } from "./sessionRunStateMachine/turnRuntimeRegistry";
 
 const DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS =
   TIME_THRESHOLDS.client.monotonicActionStopTimeoutMs;
@@ -46,6 +43,7 @@ export function useChatEngine({
   activeSessionId,
   sessions,
   turnRuntimeRegistry,
+  applyTurnRuntimeEvent,
   input,
   uploadFiles,
   clearUploads,
@@ -82,7 +80,7 @@ export function useChatEngine({
 } = {}) {
   const { translate, locale } = useLocale();
   const applyRunStateEvent = (event) => {
-    const turnResult = applyTurnRuntimeEvent(turnRuntimeRegistry?.value, event);
+    const turnResult = applyTurnRuntimeEvent?.(event);
     const runtime = selectSessionTurnRuntime(
       turnRuntimeRegistry?.value,
       turnResult?.turn?.sessionId || event?.sessionId || "",

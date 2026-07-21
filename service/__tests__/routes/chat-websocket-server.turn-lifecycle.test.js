@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { WebSocket } from "ws";
 import { transitionTurnLifecycle } from "../../../agent/src/system-core/session/entities/turn-lifecycle-entity.js";
 import { TURN_EVENT } from "@noobot/shared/turn-lifecycle-protocol";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { recoverTurnFinalize } from "../../ws/chat-websocket/finalize-recovery.js";
 import { EXECUTION_QUERY_COMMAND } from "@noobot/shared/execution-lifecycle-protocol";
 import { startServerWithWs, closeServer, callChatWs, stopChatWs } from "./chat-websocket-server.test-helpers.js";
@@ -232,6 +233,53 @@ test("socket close terminates an accepted turn and releases the session mutex", 
     assert.deepEqual(authoritative.committed(), [TURN_EVENT.ACTION_ACCEPTED, TURN_EVENT.FAILED]);
     assert.equal(authoritative.lifecycle().activeTurnScopeId, "");
     assert.equal(authoritative.lifecycle().turns[scopedPayload.turnScopeId].state, "action_failed");
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("a new action recovers a stale persisted turn lost after service restart", async () => {
+  const authoritative = createAuthoritativeBot();
+  await authoritative.bot.applyTurnLifecycleEvent({
+    turnScopeId: "turn-before-restart",
+    dialogProcessId: "dialog-before-restart",
+    commandId: "command-before-restart",
+    eventType: TURN_EVENT.ACTION_ACCEPTED,
+    phase: "action",
+    action: "send",
+  });
+  await authoritative.bot.applyTurnLifecycleEvent({
+    turnScopeId: "turn-before-restart",
+    dialogProcessId: "dialog-before-restart",
+    commandId: "command-before-restart:processing-started",
+    eventType: TURN_EVENT.PROCESSING_STARTED,
+    phase: "processing",
+    executionState: "sending",
+  });
+  authoritative.lifecycle().turns["turn-before-restart"].updatedAt = new Date(
+    Date.now() - TIME_THRESHOLDS.service.orphanedTurnRecoveryGraceMs - 1,
+  ).toISOString();
+
+  const server = await startServerWithWs({ bot: authoritative.bot });
+  try {
+    const events = await callChatWs({
+      port: server.address().port,
+      payload: {
+        ...payload,
+        sessionId: "s-after-restart",
+        turnScopeId: "turn-after-restart",
+        commandId: "command-after-restart",
+        config: { turnScopeId: "turn-after-restart" },
+      },
+    });
+
+    assert.equal(authoritative.lifecycle().turns["turn-before-restart"].state, "processing_failed");
+    assert.equal(authoritative.lifecycle().turns["turn-after-restart"].state, "completed");
+    assert.equal(events.some((item) => item?.event === "done"), true);
+    const orphanFailure = authoritative.commitInputs().find(
+      (input) => input.eventType === TURN_EVENT.FAILED && input.turnScopeId === "turn-before-restart",
+    );
+    assert.equal(orphanFailure?.failure?.code, "service_restart_orphaned_turn");
   } finally {
     await closeServer(server);
   }

@@ -271,10 +271,13 @@ export function createChatEngineSender({
     });
     chatWebSocketClient?.clearStopRequested?.();
     logResendDebug("send.clearStopRequested", { turnScopeId });
+    const turnStartedAtMs = Date.now();
+    const thinkingStartedAt = new Date(turnStartedAtMs).toISOString();
     applyRunStateEvent?.({
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId,
       turnScopeId,
+      thinkingStartedAt,
       source: "send_flow",
     });
     const {
@@ -296,6 +299,7 @@ export function createChatEngineSender({
       reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
       attachmentFiles: explicitAttachmentFiles,
       userAttachments: explicitUserAttachments,
+      turnStartedAtMs,
     });
     logResendDebug("send.prepare.after", {
       sessionId,

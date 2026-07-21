@@ -23,7 +23,10 @@ import {
 import { applyTurnRuntimeEvent, selectSessionTurnRuntime } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 
 function applyRuntimeEvent(store, event) {
-  applyTurnRuntimeEvent(store.turnRuntimeRegistry, event);
+  const registry = store.turnRuntimeRegistry;
+  const result = applyTurnRuntimeEvent(registry, event);
+  if (result?.applied) store.turnRuntimeRegistry = { ...registry };
+  return result;
 }
 describe("useChatSession reconnect replay", () => {
   beforeEach(() => {

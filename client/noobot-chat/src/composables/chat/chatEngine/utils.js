@@ -196,7 +196,10 @@ export function buildExecutionLogDisplayText(logItem = {}) {
   }
   if (isToolResult) {
     const commandText = pickExecutionCommandText(logItem) || stripExecutionCommandPrefix(pickExecutionToolResult(logItem));
-    return commandText ? buildToolResultDisplayText(logItem, commandText, text) : "";
+    // Canonical thinking-detail payloads legitimately contain persisted tool
+    // results with only event/type/text. Preserve that already-normalized text
+    // when live command/output fields are unavailable.
+    return commandText ? buildToolResultDisplayText(logItem, commandText, text) : text;
   }
   return text;
 }

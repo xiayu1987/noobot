@@ -136,10 +136,13 @@ export function createSessionDetailRequests({
     return data;
   }
 
-  async function fetchThinkingDetail(sessionId, { dialogProcessId = "" } = {}) {
+  async function fetchThinkingDetail(sessionId, { dialogProcessId = "", turnScopeId = "" } = {}) {
     const normalizedSessionId = normalizeSessionId(sessionId);
     const normalizedDialogProcessId = String(dialogProcessId || "").trim();
-    if (!normalizedDialogProcessId) throw new Error("dialogProcessId is required");
+    const normalizedTurnScopeId = String(turnScopeId || "").trim();
+    if (!normalizedDialogProcessId && !normalizedTurnScopeId) {
+      throw new Error("dialogProcessId or turnScopeId is required");
+    }
     if (typeof getSessionThinkingDetailApi !== "function") {
       throw new Error("thinking detail api is unavailable");
     }
@@ -148,6 +151,7 @@ export function createSessionDetailRequests({
         userId: userId.value,
         sessionId: normalizedSessionId || sessionId,
         dialogProcessId: normalizedDialogProcessId,
+        turnScopeId: normalizedTurnScopeId,
       },
       { fetcher: authFetch },
     );

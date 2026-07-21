@@ -23,14 +23,26 @@ import {
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { logReconnectTimingDebug } from "../../composables/chat/debug/reconnectTimingDebugLogger";
 import { normalizeThinkingToolLogs } from "../../composables/infra/thinkingDetailModel";
+import {
+  getCachedThinkingDetail,
+  loadThinkingDetail,
+  resolveThinkingDetailIdentity,
+} from "./thinkingDetailCache";
 
 export function useThinkingPanel(props, emit) {
+  const thinkingDetailLoadingKey = ref("");
+  const loadedThinkingDetail = ref(null);
   const injectedMessages = computed(() =>
     getInjectedMessagesForMessage(props.messageItem),
   );
   const hasThinking = computed(
-    () =>
-      hasThinkingLogs(props.messageItem) || injectedMessages.value.length > 0,
+    () => {
+      // Read the asynchronously committed detail directly. This computed drives
+      // component mounting, so it must not rely only on an indirect cache lookup.
+      const detailMessageItem = loadedThinkingDetail.value?.messageItem;
+      return hasThinkingLogs(detailMessageItem || props.messageItem) ||
+        injectedMessages.value.length > 0;
+    },
   );
   const { translate } = useLocale();
   const nowTick = ref(nowMs());
@@ -82,14 +94,24 @@ export function useThinkingPanel(props, emit) {
   }
 
   function getAllCompletedLogs(messageItem = {}) {
+    const loadedDetail = getThinkingDetailForMessage(messageItem);
+    const detailMessageItem = loadedDetail?.messageItem || messageItem;
+    const detailAllMessages = Array.isArray(loadedDetail?.allMessages)
+      ? loadedDetail.allMessages
+      : props.allMessages;
+    const detailSessionDocs = Array.isArray(loadedDetail?.sessionDocs)
+      ? loadedDetail.sessionDocs
+      : Array.isArray(loadedDetail?.sessions)
+        ? loadedDetail.sessions
+        : props.sessionDocs;
     if (
-      isAssistantWithoutTurnScope(messageItem) &&
+      isAssistantWithoutTurnScope(detailMessageItem) &&
       String(props.variant || "panel") !== "details"
     ) return [];
     return normalizeThinkingToolLogs({
-      messageItem,
-      allMessages: props.allMessages,
-      sessionDocs: props.sessionDocs,
+      messageItem: detailMessageItem,
+      allMessages: detailAllMessages,
+      sessionDocs: detailSessionDocs,
       variant: props.variant,
       toolResultFallback: translate("message.toolResultFallback"),
     });
@@ -256,11 +278,116 @@ export function useThinkingPanel(props, emit) {
     );
   }
 
+  function hasLocalThinkingDetails(messageItem = {}) {
+    const completedLogs = Array.isArray(messageItem?.completedToolLogs)
+      ? messageItem.completedToolLogs
+      : Array.isArray(messageItem?.processCompletedToolLogs)
+        ? messageItem.processCompletedToolLogs
+        : [];
+    return (
+      getAllRealtimeLogs(messageItem).length > 0 ||
+      completedLogs.length > 0 ||
+      injectedMessages.value.length > 0
+    );
+  }
+
+  function getThinkingDetailForMessage(messageItem = {}) {
+    // Read the reactive ref first so template consumers (getExecutionLogs ->
+    // getAllCompletedLogs) establish a render dependency on loadedThinkingDetail.
+    // The load watcher writes both fetched and cache-hit details into this ref,
+    // so an async assignment always triggers a re-render. The cache lookup is
+    // only a synchronous fallback for the very first access before the watcher
+    // has committed.
+    const loaded = loadedThinkingDetail.value;
+    const identity = resolveThinkingDetailIdentity(messageItem, props.messageItem?.sessionId || "");
+    if (!identity.key) return loaded;
+    if (loaded?.__thinkingDetailIdentity?.key === identity.key) return loaded;
+    return getCachedThinkingDetail(identity) || null;
+  }
+
+  // The template must consume a computed that directly tracks the asynchronously
+  // committed detail ref. Calling getExecutionLogs from the template alone can
+  // retain the initial empty projection when the detail arrives after mount.
+  const currentExecutionLogs = computed(() => {
+    const detail = loadedThinkingDetail.value;
+    return getExecutionLogs(detail?.messageItem || props.messageItem);
+  });
+
+  const thinkingDetailLoadKey = computed(() => {
+    const messageItem = props.messageItem || {};
+    if (String(props.variant || "panel") === "details") return "";
+    if (hasLocalThinkingDetails(messageItem)) return "";
+    // The compact Session projection is allowed to omit thinking summary
+    // fields.  It can also briefly retain a hydrated `running` runtime after a
+    // reload.  Neither is authoritative for detail availability.  A settled
+    // assistant message with a canonical identity must try the scoped detail
+    // endpoint; a missing artifact is handled as a normal cache miss below.
+    // During a live send, pending/local realtime logs continue to own display
+    // and prevent this request.
+    if (messageItem?.pending === true) return "";
+    const identity = resolveThinkingDetailIdentity(messageItem, props.messageItem?.sessionId || "");
+    return identity.key || "";
+  });
+
+  watch(
+    thinkingDetailLoadKey,
+    async (key) => {
+      if (!key) return;
+      const messageItem = props.messageItem || {};
+      const identity = resolveThinkingDetailIdentity(messageItem, props.messageItem?.sessionId || "");
+      if (!identity.key) return;
+      const cached = getCachedThinkingDetail(identity);
+      if (cached) {
+        loadedThinkingDetail.value = { ...cached, __thinkingDetailIdentity: identity };
+        return;
+      }
+      try {
+        thinkingDetailLoadingKey.value = key;
+        const detail = await loadThinkingDetail({
+          userId: props.userId,
+          sessionId: identity.sessionId,
+          messageItem,
+          dialogProcessId: identity.dialogProcessId,
+          turnScopeId: identity.turnScopeId,
+          authFetch: props.authFetch,
+        });
+        // `loadThinkingDetail` writes through the shared cache before resolving.
+        // That cache hit makes `hasLocalThinkingDetails()` true, so
+        // thinkingDetailLoadKey can legitimately clear while this same request is
+        // completing. Do not let the request cancel itself; only discard it when
+        // the panel now points at a different thinking-detail identity.
+        if (!detail) return;
+        // This watcher run owns the captured identity. The cache write performed
+        // by loadThinkingDetail can make thinkingDetailLoadKey clear while the
+        // request is resolving; that is not cancellation and must not prevent
+        // committing the canonical detail to the reactive display source.
+        loadedThinkingDetail.value = { ...detail, __thinkingDetailIdentity: identity };
+      } catch {
+        // Keep summary-only panels stable; the explicit details drawer reports errors.
+      } finally {
+        if (thinkingDetailLoadingKey.value === key) {
+          thinkingDetailLoadingKey.value = "";
+        }
+      }
+    },
+    { immediate: true },
+  );
+
   function hasThinkingLogs(messageItem = {}) {
     if (!messageItem || getMessageRole(messageItem) !== "assistant")
       return false;
     if (getRuntimeView(messageItem).running) return true;
     if (hasSummaryThinkingDetails(messageItem)) return true;
+    // A compact refresh payload may omit hasThinkingDetails/count. Once the
+    // scoped detail request resolves, let that canonical detail itself make the
+    // panel visible instead of continuing to key visibility only off summary
+    // metadata that is not guaranteed to be present.
+    const thinkingDetail = getThinkingDetailForMessage(messageItem);
+    if (thinkingDetail) {
+      return getCompletedToolLogsForMessage(
+        thinkingDetail.messageItem || messageItem,
+      ).length > 0;
+    }
     if (getLatestPluginAnalysisLog(messageItem)) return true;
     if (String(props.variant || "panel") === "details") {
       return getCompletedToolLogsForMessage(messageItem).length > 0;
@@ -330,7 +457,17 @@ export function useThinkingPanel(props, emit) {
         seen.add(key);
         return true;
       })
-      .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
+      // normalizeThinkingToolLogs is the canonical adapter for persisted
+      // thinking details. Its text is already the final persisted display
+      // value; sanitizing it again rewrites text-only tool_result entries into
+      // a generic "completed" label and loses the restored result text.
+      // Keep normalized text intact, while retaining the sanitizer fallback
+      // for legacy entries whose display text still needs to be derived.
+      .map((logItem) => {
+        const normalizedText = String(logItem?.text || "").trim();
+        return normalizedText ? { ...logItem, text: normalizedText }
+          : sanitizeExecutionLogForDisplay(logItem);
+      })
       .filter(Boolean);
   }
 
@@ -559,6 +696,8 @@ export function useThinkingPanel(props, emit) {
     getLatestPluginAnalysisLog,
     getLatestMainModelContentLog,
     getExecutionLogs,
+    currentExecutionLogs,
+    loadedThinkingDetail,
     getExecutionLogCount,
     getThinkingDetailLabel,
     openThinkingDetailDrawer,

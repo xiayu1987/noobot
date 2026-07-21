@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
-import { getMessageId } from "../../../core/message-store.js";
 import {
   CAPABILITY_DOMAIN,
   LOCALE,
@@ -15,6 +14,7 @@ import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
 import { buildPlanChecklistSystemContent } from "../shared/plan/checklist-context.js";
 import { resolvePreviousSummaryContextText } from "./summary-manager.js";
+import { captureGuidanceSummaryCheckpoint } from "./signal-tracker.js";
 import {
   buildPreviousSummaryContextContent,
   buildWorkflowResponsibilityConstraintUserPrompt,
@@ -69,8 +69,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", 
   if (allowSummary && state.pending.summary === true) {
     // Freeze the summary scope at injection time so later tool calls in the same
     // loop are never treated as "already summarized".
-    state.pending.summaryCheckpointMessageCount = messages.length;
-    state.pending.summaryCheckpointMessageIds = messages.map((message) => getMessageId(message)).filter(Boolean);
+    captureGuidanceSummaryCheckpoint(ctx, state);
     const checklistContent = buildPlanChecklistSystemContent({
       locale,
       planText: bucket?.planText || "",

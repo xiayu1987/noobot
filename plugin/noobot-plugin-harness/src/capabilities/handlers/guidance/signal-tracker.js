@@ -31,6 +31,25 @@ function resolveBlockMarkSource(ctx = {}) {
   ];
 }
 
+export function captureGuidanceSummaryCheckpoint(ctx = {}, state = {}) {
+  if (!state || typeof state !== "object") return [];
+  const blockMessages = resolveBlockMarkSource(ctx);
+  const sourceMessages = blockMessages.length
+    ? blockMessages
+    : Array.isArray(ctx?.messages)
+      ? ctx.messages
+      : [];
+  const messageIds = [...new Set(
+    sourceMessages.map((message) => getMessageId(message)).filter(Boolean),
+  )];
+  state.pending = state.pending && typeof state.pending === "object"
+    ? state.pending
+    : {};
+  state.pending.summaryCheckpointMessageCount = sourceMessages.length;
+  state.pending.summaryCheckpointMessageIds = messageIds;
+  return messageIds;
+}
+
 function resolveScopedMessageBlockMarkSource(ctx = {}, scopedMessages = []) {
   const blockMessages = resolveBlockMarkSource(ctx);
   if (!blockMessages.length) return [];

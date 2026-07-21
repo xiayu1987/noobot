@@ -66,12 +66,6 @@ import { setStopContinueDebugLogSink } from "./debug/stopContinueDebugLogger";
 import { setReconnectTimingDebugLogSink } from "./debug/reconnectTimingDebugLogger";
 import { setWorkflowDiagnosticsLogSink } from "./debug/workflowDiagnosticsLogger";
 import {
-  applyTurnRuntimeEvent,
-  applyExecutionChildren,
-  applyExecutionSnapshot,
-  applyExecutionTree,
-  hydrateSessionTurnRuntime,
-  pruneTerminalTurns,
   resolveSessionTurnRuntime,
   selectSessionTurnRuntime,
   sessionRuntimeId,
@@ -129,8 +123,8 @@ export function useChatSession({
   // (initial bootstrap, tests, or a restored Pinia snapshot). Hydrate only from
   // authoritative turnStatuses; never infer runtime state from message order.
   for (const sessionItem of sessions.value) {
-    hydrateSessionTurnRuntime(turnRuntimeRegistry.value, sessionItem);
-    pruneTerminalTurns(turnRuntimeRegistry.value, {
+    chatStore.hydrateSessionTurnRuntime(sessionItem);
+    chatStore.pruneTerminalTurns({
       sessionId: sessionRuntimeId(sessionItem),
       referencedTurnScopeIds: (sessionItem?.messages || []).map(getMessageTurnScopeId).filter(Boolean),
     });
@@ -142,8 +136,8 @@ export function useChatSession({
     sessions,
     (sessionItems) => {
       for (const sessionItem of Array.isArray(sessionItems) ? sessionItems : []) {
-        hydrateSessionTurnRuntime(turnRuntimeRegistry.value, sessionItem);
-        pruneTerminalTurns(turnRuntimeRegistry.value, {
+        chatStore.hydrateSessionTurnRuntime(sessionItem);
+        chatStore.pruneTerminalTurns({
           sessionId: sessionRuntimeId(sessionItem),
           referencedTurnScopeIds: (sessionItem?.messages || []).map(getMessageTurnScopeId).filter(Boolean),
         });
@@ -188,7 +182,7 @@ export function useChatSession({
   const activeSessionCanStop = computed(() => composerActionState.value.canStop === true);
 
   const applyComposerActionStateEvent = (event) => {
-    return applyTurnRuntimeEvent(turnRuntimeRegistry.value, event);
+    return chatStore.applyTurnRuntimeEvent(event);
   };
 
   function trackConversationState(stateEntry = {}) {
@@ -286,7 +280,7 @@ export function useChatSession({
   }
 
   function hydrateStoppedRunStateFromSessionDetail({ sessionItem = null } = {}) {
-    if (sessionItem) hydrateSessionTurnRuntime(turnRuntimeRegistry.value, sessionItem);
+    if (sessionItem) chatStore.hydrateSessionTurnRuntime(sessionItem);
     const sessionId = String(
       sessionItem?.backendSessionId || sessionItem?.sessionId || sessionItem?.id || "",
     ).trim();
@@ -493,6 +487,7 @@ export function useChatSession({
     onConversationState: trackConversationState,
     chatWebSocketClient,
     sessionLogWebSocketClient,
+    applyTurnRuntimeEvent: chatStore.applyTurnRuntimeEvent,
     upsertWorkflowNodeStateEvent: chatStore.upsertWorkflowNodeStateEvent,
     upsertWorkflowPlanningEvent: chatStore.upsertWorkflowPlanningEvent,
     upsertSubSessionEvent: chatStore.upsertSubSessionEvent,
@@ -529,9 +524,9 @@ export function useChatSession({
     sessionLogWebSocketClient,
     notify,
     processStore,
-    applyExecutionSnapshot: (payload) => applyExecutionSnapshot(turnRuntimeRegistry.value, payload),
-    applyExecutionChildren: (payload) => applyExecutionChildren(turnRuntimeRegistry.value, payload),
-    applyExecutionTree: (payload) => applyExecutionTree(turnRuntimeRegistry.value, payload),
+    applyExecutionSnapshot: (payload) => chatStore.applyExecutionSnapshot(payload),
+    applyExecutionChildren: (payload) => chatStore.applyExecutionChildren(payload),
+    applyExecutionTree: (payload) => chatStore.applyExecutionTree(payload),
     applyTurnRuntimeEvents: (events = []) => {
       const sourceEvents = Array.isArray(events) ? events : [];
       for (const event of sourceEvents) {
@@ -577,7 +572,7 @@ export function useChatSession({
         }
       }
       for (const event of sourceEvents) {
-        applyTurnRuntimeEvent(turnRuntimeRegistry.value, event);
+        chatStore.applyTurnRuntimeEvent(event);
       }
     },
   });

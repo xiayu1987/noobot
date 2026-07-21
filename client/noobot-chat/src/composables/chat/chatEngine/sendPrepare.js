@@ -28,6 +28,7 @@ export function prepareChatSend({
   reuseExistingUserTurn = false,
   attachmentFiles = null,
   userAttachments = null,
+  turnStartedAtMs = 0,
 }) {
   const normalizedTurnScopeId = String(turnScopeId || "").trim();
   const explicitText = typeof messageText === "string" ? messageText.trim() : "";
@@ -87,8 +88,10 @@ export function prepareChatSend({
     sessionId,
     turnScopeId: normalizedTurnScopeId,
   });
-  const turnStartedAtMs = nowMs();
-  const thinkingStartedAt = toIsoTime(turnStartedAtMs);
+  const resolvedTurnStartedAtMs = Number(turnStartedAtMs) > 0
+    ? Number(turnStartedAtMs)
+    : nowMs();
+  const thinkingStartedAt = toIsoTime(resolvedTurnStartedAtMs);
   if (normalizedTurnScopeId) {
     activeSession.value.turnTimingsByTurnScopeId = {
       ...(activeSession.value.turnTimingsByTurnScopeId || {}),
@@ -103,7 +106,7 @@ export function prepareChatSend({
       state: BackendChannelState.SENDING,
       sessionId,
       turnScopeId: botMessage.turnScopeId,
-      createdAtMs: turnStartedAtMs,
+      createdAtMs: resolvedTurnStartedAtMs,
       createdAt: thinkingStartedAt,
     },
     { botMessage },
