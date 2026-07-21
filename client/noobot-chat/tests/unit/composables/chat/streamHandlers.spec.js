@@ -290,7 +290,7 @@ describe("chatEngine streamHandlers", () => {
     expect(botMessage.executionLogTotal).toBe(1);
   });
 
-  it("keeps an authoritative tool result distinct from its call in the thinking panel", () => {
+  it("updates one authoritative tool execution from call to result", () => {
     const botMessage = makeBotMessage();
     const common = {
       executionCategory: "tool",
@@ -332,19 +332,16 @@ describe("chatEngine streamHandlers", () => {
 
     expect(botMessage.realtimeLogs).toEqual([
       expect.objectContaining({
-        event: "tool_call",
-        type: "tool_call",
-        toolCallId: "call-real-2",
-        text: expect.stringMatching(/^(?:调用|Call)[:：]/),
-      }),
-      expect.objectContaining({
         event: "tool_result",
         type: "tool_result",
         toolCallId: "call-real-2",
         text: expect.stringMatching(/^(?:返回|Return)[:：]/),
+        status: "succeeded",
+        inputText: expect.stringContaining("example.txt"),
+        outputText: expect.stringContaining('"ok": true'),
       }),
     ]);
-    expect(botMessage.executionLogTotal).toBe(2);
+    expect(botMessage.executionLogTotal).toBe(1);
   });
 
   it("shows done execution log with same concrete command priority", () => {

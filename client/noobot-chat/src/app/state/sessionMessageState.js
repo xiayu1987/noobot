@@ -4,17 +4,18 @@
  * SPDX-License-Identifier: MIT
  */
 import { sanitizeExecutionLogText } from "../../composables/chat/chatEngine/utils";
+import { projectMessageEventToolLifecycle } from "@noobot/shared/message-event-protocol";
 import { formatLocalTime, nowIso } from "../../composables/infra/timeFields";
 
 const TOOL_LOG_TYPES = new Set(["tool_call", "tool_result"]);
 
 export function classifyRealtimeLog(data = {}) {
   const authoritativeEventType = String(data.eventType || "").trim();
-  const authoritativeToolEvent = authoritativeEventType === "tool_call_start"
-    ? "tool_call"
-    : authoritativeEventType === "tool_call_end"
-      ? "tool_result"
-      : "";
+  const toolLifecycle = projectMessageEventToolLifecycle(data);
+  const authoritativeToolEvent = authoritativeEventType === "tool_call_start" ||
+    authoritativeEventType === "tool_call_end"
+    ? toolLifecycle?.event || ""
+    : "";
   const eventName = String(
     authoritativeToolEvent || data.event || authoritativeEventType,
   ).trim();
@@ -33,8 +34,9 @@ export function classifyRealtimeLog(data = {}) {
   return {
     ...data,
     event: eventName || "system",
-    type: authoritativeToolEvent || type ||
-      (TOOL_LOG_TYPES.has(eventName) ? eventName : (isTool ? "tool_call" : "system")),
+    type: authoritativeToolEvent || type || toolLifecycle?.event ||
+      (isTool ? "tool_call" : "system"),
+    status: String(data.status || toolLifecycle?.status || ""),
     text,
     dialogProcessId: String(data.dialogProcessId || ""),
     ts: String(data.ts || nowIso()),

@@ -16,21 +16,17 @@ describe("thinking detail model", () => {
     });
 
     expect(logs.map((item) => item.event)).toEqual([
-      "tool_call",
       "tool_result",
-      "tool_call",
       "tool_result",
     ]);
     expect(logs.map((item) => item.toolCallId || item.tool_call_id)).toEqual([
       "call-search",
-      "call-search",
-      "call-read",
       "call-read",
     ]);
     expect(logs[0].text).toContain("search");
-    expect(logs[0].text).toContain("completedToolLogs");
-    expect(logs[2].text).toContain("read_file");
-    expect(logs[1].detailText).toContain('"ok":true');
+    expect(logs[0].inputText).toContain("completedToolLogs");
+    expect(logs[1].text).toContain("read_file");
+    expect(logs[0].outputText).toContain('"ok":true');
   });
 
   it("keeps non-empty server projections authoritative", () => {
@@ -195,9 +191,10 @@ describe("thinking detail model", () => {
       variant: "details",
     });
 
-    expect(logs.map((item) => item.event)).toEqual(["tool_call", "tool_result"]);
+    expect(logs.map((item) => item.event)).toEqual(["tool_result"]);
     expect(logs[0].text).toContain("workflow_tool");
-    expect(logs[1].detailText).toContain('"ok":true');
+    expect(logs[0].inputText).toContain('"node":1');
+    expect(logs[0].outputText).toContain('"ok":true');
   });
   it("projects child-session tool facets and raw events for the details drawer", () => {
     const scope = {
@@ -220,14 +217,13 @@ describe("thinking detail model", () => {
     });
 
     expect(logs.map((item) => `${item.event}:${item.toolCallId}`)).toEqual([
-      "tool_call:call-facet",
       "tool_result:call-facet",
-      "tool_call:call-raw",
       "tool_result:call-raw",
     ]);
     expect(logs[0].text).toContain("read_file");
-    expect(logs[1].detailText).toContain('"ok":true');
-    expect(logs[2].text).toContain("search");
-    expect(logs[3].detailText).toContain('"matches":1');
+    expect(logs[0].inputText).toContain("a.js");
+    expect(logs[0].outputText).toContain('"ok":true');
+    expect(logs[1].text).toContain("search");
+    expect(logs[1].outputText).toContain('"matches":1');
   });
 });

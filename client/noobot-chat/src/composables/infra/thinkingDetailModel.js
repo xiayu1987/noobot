@@ -15,8 +15,11 @@ import {
   buildToolNameByCallId,
   stringifyToolValue,
 } from "./toolLogFormatting";
-import { deduplicateToolLogs } from "./toolLogIdentity";
-import { projectMessageEventToolFacets } from "@noobot/shared/message-event-protocol";
+import { aggregateToolExecutions } from "./toolLogIdentity";
+import {
+  projectMessageEventToolFacets,
+  projectMessageEventToolLifecycle,
+} from "@noobot/shared/message-event-protocol";
 
 function eventName(item = {}) {
   return String(item?.event || item?.type || "").trim().toLowerCase();
@@ -110,11 +113,13 @@ function buildLogsFromMessages(messageItem, messages, toolResultFallback) {
     for (const rawEvent of Array.isArray(item?.rawEvents) ? item.rawEvents : []) {
       const eventData = rawEvent?.data && typeof rawEvent.data === "object" ? rawEvent.data : {};
       const eventType = String(eventData?.eventType || rawEvent?.event || rawEvent?.type || "").trim().toLowerCase();
-      if (eventType !== "tool_call_start" && eventType !== "tool_call_end") continue;
-      const facets = projectMessageEventToolFacets({ ...eventData, eventType });
+      const authoritativeEvent = { ...eventData, eventType };
+      const lifecycle = projectMessageEventToolLifecycle(authoritativeEvent);
+      if (!lifecycle) continue;
+      const facets = projectMessageEventToolFacets(authoritativeEvent);
       const toolCallId = String(eventData?.toolCallId || eventData?.tool_call_id || facets?.toolCall?.id || facets?.toolResult?.toolCallId || "").trim();
       const rawCommon = { ...common, ts: eventData?.timestamp || rawEvent?.ts || common.ts };
-      if (eventType === "tool_call_start") {
+      if (!lifecycle.terminal) {
         const toolName = String(facets?.toolCall?.name || eventData?.tool || "").trim();
         const toolCall = facets?.toolCall || { id: toolCallId, name: toolName, args: eventData?.args || {} };
         if (toolCallId && toolName) toolNameByCallId.set(toolCallId, toolName);
@@ -171,5 +176,5 @@ export function normalizeThinkingToolLogs({
       return !projectedKeys.has(key) && eventName(item) !== "tool_call";
     }));
   }
-  return deduplicateToolLogs(merged);
+  return aggregateToolExecutions(merged);
 }
