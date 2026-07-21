@@ -16,6 +16,7 @@ import {
   stringifyToolValue,
 } from "./toolLogFormatting";
 import { deduplicateToolLogs } from "./toolLogIdentity";
+import { projectMessageEventToolFacets } from "@noobot/shared/message-event-protocol";
 
 function eventName(item = {}) {
   return String(item?.event || item?.type || "").trim().toLowerCase();
@@ -79,7 +80,8 @@ function buildLogsFromMessages(messageItem, messages, toolResultFallback) {
   for (const item of messages) {
     const type = String(item?.type || "").trim().toLowerCase();
     const role = getMessageRole(item).toLowerCase();
-    const toolCalls = Array.isArray(item?.tool_calls) ? item.tool_calls : [];
+    const toolCalls = Array.isArray(item?.tool_calls) ? item.tool_calls
+      : (item?.toolCall && typeof item.toolCall === "object" ? [item.toolCall] : []);
     const common = {
       sessionId: String(item?.sessionId || messageItem?.sessionId || ""),
       depth: 1,
@@ -89,16 +91,43 @@ function buildLogsFromMessages(messageItem, messages, toolResultFallback) {
     };
     if (toolCalls.length || type === "tool_call") {
       (toolCalls.length ? toolCalls : [{}]).forEach((toolCall, index) => {
-        const toolCallId = String(toolCall?.id || "").trim();
+        const toolCallId = String(toolCall?.id || toolCall?.toolCallId || toolCall?.tool_call_id || "").trim();
+        const toolName = String(toolCall?.function?.name || toolCall?.name || toolCall?.tool || "").trim();
+        if (toolCallId && toolName) toolNameByCallId.set(toolCallId, toolName);
         logs.push({ ...common, event: "tool_call", type: "tool_call", toolCallId,
           text: buildToolCallSummary(toolCall, `tool_${index + 1}`),
           detailText: stringifyToolValue(toolCall?.function?.arguments ?? toolCall?.args ?? "") });
       });
-    } else if (role === "tool" || type === "tool_result") {
-      const toolCallId = String(item?.tool_call_id || item?.toolCallId || "").trim();
-      const toolName = toolNameByCallId.get(toolCallId) || toolResultFallback;
+    }
+    if (role === "tool" || type === "tool_result" || (item?.toolResult && typeof item.toolResult === "object")) {
+      const toolResult = item?.toolResult && typeof item.toolResult === "object" ? item.toolResult : item;
+      const toolCallId = String(toolResult?.toolCallId || toolResult?.tool_call_id || toolResult?.id || item?.tool_call_id || item?.toolCallId || "").trim();
+      const toolName = toolNameByCallId.get(toolCallId) || String(toolResult?.name || toolResult?.tool || "").trim() || toolResultFallback;
+      const resultText = stringifyToolValue(toolResult?.output ?? toolResult?.result ?? item?.content ?? "");
       logs.push({ ...common, event: "tool_result", type: "tool_result", toolCallId,
-        text: buildToolResultSummary(item?.content, toolName), detailText: String(item?.content || "").trim() });
+        text: buildToolResultSummary(resultText, toolName), detailText: resultText });
+    }
+    for (const rawEvent of Array.isArray(item?.rawEvents) ? item.rawEvents : []) {
+      const eventData = rawEvent?.data && typeof rawEvent.data === "object" ? rawEvent.data : {};
+      const eventType = String(eventData?.eventType || rawEvent?.event || rawEvent?.type || "").trim().toLowerCase();
+      if (eventType !== "tool_call_start" && eventType !== "tool_call_end") continue;
+      const facets = projectMessageEventToolFacets({ ...eventData, eventType });
+      const toolCallId = String(eventData?.toolCallId || eventData?.tool_call_id || facets?.toolCall?.id || facets?.toolResult?.toolCallId || "").trim();
+      const rawCommon = { ...common, ts: eventData?.timestamp || rawEvent?.ts || common.ts };
+      if (eventType === "tool_call_start") {
+        const toolName = String(facets?.toolCall?.name || eventData?.tool || "").trim();
+        const toolCall = facets?.toolCall || { id: toolCallId, name: toolName, args: eventData?.args || {} };
+        if (toolCallId && toolName) toolNameByCallId.set(toolCallId, toolName);
+        logs.push({ ...rawCommon, event: "tool_call", type: "tool_call", toolCallId,
+          text: buildToolCallSummary(toolCall, toolName || "unknown_tool"),
+          detailText: stringifyToolValue(toolCall?.args ?? toolCall?.function?.arguments ?? "") });
+      } else {
+        const toolResult = facets?.toolResult || { output: eventData?.result };
+        const resultText = stringifyToolValue(toolResult?.output ?? toolResult?.result ?? "");
+        const toolName = toolNameByCallId.get(toolCallId) || String(toolResult?.name || eventData?.tool || "").trim() || toolResultFallback;
+        logs.push({ ...rawCommon, event: "tool_result", type: "tool_result", toolCallId,
+          text: buildToolResultSummary(resultText, toolName), detailText: resultText });
+      }
     }
   }
   return logs;

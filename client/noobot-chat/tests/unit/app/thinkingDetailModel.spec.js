@@ -199,4 +199,35 @@ describe("thinking detail model", () => {
     expect(logs[0].text).toContain("workflow_tool");
     expect(logs[1].detailText).toContain('"ok":true');
   });
+  it("projects child-session tool facets and raw events for the details drawer", () => {
+    const scope = {
+      role: "assistant",
+      sessionId: "child-session",
+      dialogProcessId: "child-dialog",
+      turnScopeId: "client-turn:child",
+    };
+    const logs = normalizeThinkingToolLogs({
+      messageItem: scope,
+      allMessages: [
+        { ...scope, toolCall: { id: "call-facet", name: "read_file", args: { filePath: "a.js" } } },
+        { ...scope, toolResult: { toolCallId: "call-facet", name: "read_file", output: { ok: true } } },
+        { ...scope, rawEvents: [
+          { event: "tool_call_start", data: { eventType: "tool_call_start", toolCallId: "call-raw", tool: "search", args: { query: "needle" } } },
+          { event: "tool_call_end", data: { eventType: "tool_call_end", toolCallId: "call-raw", tool: "search", result: { matches: 1 } } },
+        ] },
+      ],
+      variant: "details",
+    });
+
+    expect(logs.map((item) => `${item.event}:${item.toolCallId}`)).toEqual([
+      "tool_call:call-facet",
+      "tool_result:call-facet",
+      "tool_call:call-raw",
+      "tool_result:call-raw",
+    ]);
+    expect(logs[0].text).toContain("read_file");
+    expect(logs[1].detailText).toContain('"ok":true');
+    expect(logs[2].text).toContain("search");
+    expect(logs[3].detailText).toContain('"matches":1');
+  });
 });
