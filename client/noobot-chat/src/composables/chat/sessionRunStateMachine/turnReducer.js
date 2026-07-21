@@ -110,28 +110,30 @@ function targetState(current = {}, event = {}) {
     return FrontendRunState.FRONTEND_COMPLETION_REQUESTING;
   }
   if ([SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE].includes(event.type)) {
-    // Only the Service's explicit processing fact (or the legacy `sending`
-    // projection of that fact) may cross the action -> processing boundary.
-    // Proxy transport reconnecting and interaction waiting never create a
-    // business processing fact by themselves.
-    if (backendState === BackendChannelState.SENDING) {
+    // Channel state is a transport projection, never a Turn phase fact. It may
+    // refine capabilities inside an authoritative processing phase, but every
+    // phase boundary is owned exclusively by BACKEND_TURN_LIFECYCLE.
+    if ([
+      BackendChannelState.SENDING,
+      BackendChannelState.RECONNECTING,
+      BackendChannelState.INTERACTION_PENDING,
+    ].includes(backendState) && currentState === FrontendRunState.PROCESSING) {
       return FrontendRunState.PROCESSING;
     }
-    // Reconnect and interaction waiting are transport/execution substates of
-    // an already authoritative processing Turn. They must not create the
-    // processing fact from a requesting state, but once processing exists they
-    // update backendState so capabilities (notably canStop) are revoked.
-    if ([BackendChannelState.RECONNECTING, BackendChannelState.INTERACTION_PENDING].includes(backendState) &&
-      currentState === FrontendRunState.PROCESSING) {
-      return FrontendRunState.PROCESSING;
+    // Compatibility is scoped to Turns that have never negotiated the
+    // authoritative lifecycle protocol. Once a lifecycle envelope owns the
+    // Turn, transport state can no longer move a business phase.
+    if (current.authoritativeLifecycle !== true) {
+      if (backendState === BackendChannelState.SENDING) return FrontendRunState.PROCESSING;
+      if (backendState === BackendChannelState.COMPLETED) return FrontendRunState.FRONTEND_COMPLETION_REQUESTING;
+      if (backendState === BackendChannelState.USER_STOPPED || backendState === BackendChannelState.STOPPING) {
+        return FrontendRunState.USER_STOPPING;
+      }
+      if ([BackendChannelState.ERROR, BackendChannelState.EXPIRED, BackendChannelState.NO_CONVERSATION].includes(backendState)) {
+        return failureStateFor(current);
+      }
     }
-    if (backendState === BackendChannelState.COMPLETED) return FrontendRunState.FRONTEND_COMPLETION_REQUESTING;
-    if (backendState === BackendChannelState.USER_STOPPED || backendState === BackendChannelState.STOPPING) {
-      return FrontendRunState.USER_STOPPING;
-    }
-    if ([BackendChannelState.ERROR, BackendChannelState.EXPIRED, BackendChannelState.NO_CONVERSATION].includes(backendState)) {
-      return failureStateFor(current);
-    }
+    return currentState;
   }
   return text(event.state) || currentState;
 }
@@ -189,7 +191,15 @@ function isAllowed(current = {}, event = {}, nextState = "") {
 
 export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
   const event = normalizeSessionRunEvent(rawEvent);
-  const eventSeq = Number(event.seq || 0);
+  const isTransportProjection = [
+    SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+    SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
+  ].includes(event.type);
+  // Transport sequence numbers belong to the socket/proxy stream and are not
+  // comparable with authoritative Turn lifecycle sequence numbers.
+  const eventSeq = current?.authoritativeLifecycle === true && isTransportProjection
+    ? 0
+    : Number(event.seq || 0);
   const eventRevision = Number(event.revision || 0);
   if (current && isFinalTurnState(current.state)) {
     return { applied: false, reason: TURN_TRANSITION_REASON.TERMINAL_LOCKED, current, event };
@@ -235,6 +245,8 @@ export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
       backendState,
       seq: Math.max(Number(current?.seq || 0), eventSeq),
       revision: Math.max(Number(current?.revision || 0), eventRevision),
+      authoritativeLifecycle: current?.authoritativeLifecycle === true ||
+        event.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
     },
   };
 }

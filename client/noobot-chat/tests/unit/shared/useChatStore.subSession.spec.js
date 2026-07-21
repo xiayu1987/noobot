@@ -2,6 +2,17 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { useChatStore } from "../../../src/shared/stores/useChatStore.js";
 
+function messageEvent(eventType, data = {}) {
+  return {
+    envelopeKind: "noobot.message_event",
+    envelopeVersion: 1,
+    timestamp: "2026-01-01T00:00:00.000Z",
+    sequence: 1,
+    eventType,
+    ...data,
+  };
+}
+
 describe("sub-session realtime message projection", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -14,16 +25,17 @@ describe("sub-session realtime message projection", () => {
       turnScopeId: "workflow-node:execution-1",
       workflowRunId: "workflow-1",
       nodeExecutionId: "execution-1",
+      messageId: "msg-assistant-1",
     };
 
-    store.upsertSubSessionEvent("thinking_delta", {
+    store.upsertSubSessionEvent("thinking_delta", messageEvent("thinking", {
       ...identity,
       eventId: "thinking-1",
       sequence: 1,
       role: "assistant",
       thinking: "```mermaid\ngraph TD; A-->B\n```",
-    });
-    store.upsertSubSessionEvent("tool_result", {
+    }));
+    store.upsertSubSessionEvent("tool_result", messageEvent("tool_call_end", {
       ...identity,
       eventId: "tool-result-1",
       sequence: 2,
@@ -31,7 +43,7 @@ describe("sub-session realtime message projection", () => {
       toolCallId: "call-1",
       content: "tool completed",
       toolResult: { tool_call_id: "call-1", output: "ok" },
-    });
+    }));
 
     const session = store.selectSubSessionMessages("child-session");
     expect(session.messages).toHaveLength(1);
@@ -46,21 +58,25 @@ describe("sub-session realtime message projection", () => {
 
   it("does not attach a tool event to an assistant from another turn", () => {
     const store = useChatStore();
-    store.upsertSubSessionEvent("thinking_delta", {
+    store.upsertSubSessionEvent("thinking_delta", messageEvent("thinking", {
       sessionId: "child-session",
       turnScopeId: "turn-1",
       eventId: "thinking-1",
       role: "assistant",
       thinking: "planning",
-    });
-    store.upsertSubSessionEvent("tool_result", {
+      messageId: "msg-assistant-1",
+      sequence: 1,
+    }));
+    store.upsertSubSessionEvent("tool_result", messageEvent("tool_call_end", {
       sessionId: "child-session",
       turnScopeId: "turn-2",
       eventId: "tool-2",
       role: "tool",
       toolCallId: "call-2",
       content: "result",
-    });
+      messageId: "msg-assistant-2",
+      sequence: 2,
+    }));
 
     const session = store.selectSubSessionMessages("child-session");
     expect(session.messages).toHaveLength(2);

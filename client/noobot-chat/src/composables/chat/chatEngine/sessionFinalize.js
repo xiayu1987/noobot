@@ -53,6 +53,7 @@ export async function refreshFinalSessionDetail({
   applyRunStateEvent,
   refreshSessionConnectorsAsync,
   preserveCurrentMessages,
+  logSessionEvent,
 } = {}) {
   const doneSessionId = resolveFinalizeSessionId({
     activeSession,
@@ -110,6 +111,34 @@ export async function refreshFinalSessionDetail({
     }
     const mainSessionDoc = matchingSessionDoc || sessionDocs[0];
     const detailMessages = Array.isArray(mainSessionDoc?.messages) ? mainSessionDoc.messages : [];
+    logSessionEvent?.({
+      category: "debug",
+      level: "debug",
+      debugType: "workflow-diagnostics",
+      event: "frontend.completionDetail.sourceCandidates",
+      ...completionEventScope,
+      data: {
+        detailSessionId,
+        selectedSessionDocId: String(
+          mainSessionDoc?.sessionId || mainSessionDoc?.backendSessionId || mainSessionDoc?.id || "",
+        ),
+        matchingSessionDocFound: Boolean(matchingSessionDoc),
+        candidates: detailMessages.map((message = {}, index) => ({
+          index,
+          id: String(message?.id || message?.messageId || ""),
+          role: String(message?.role || message?.type || ""),
+          dialogProcessId: String(getMessageDialogProcessId(message) || ""),
+          turnScopeId: String(message?.turnScopeId || ""),
+          workflowRunId: String(
+            message?.pluginMeta?.payload?.workflowRunId ||
+              message?.pluginMeta?.payload?.execution?.workflowRunId ||
+              "",
+          ),
+          pluginKind: String(message?.pluginMeta?.kind || ""),
+          contentLength: String(message?.content || "").length,
+        })),
+      },
+    });
     logStateMachineDebug("detailApply.fetch.success", {
       ...completionEventScope,
       detailMessageCount: detailMessages.length,

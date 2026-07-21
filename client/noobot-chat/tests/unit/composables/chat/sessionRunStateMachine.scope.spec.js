@@ -14,6 +14,12 @@ import {
   resolveRememberedStopRequestedEvent,
 } from "../../../../src/composables/chat/sessionRunStateMachine";
 import { reduceTurnRuntimeEvent, TURN_TRANSITION_REASON } from "../../../../src/composables/chat/sessionRunStateMachine/turnReducer";
+import { TURN_EVENT, TURN_PHASE } from "@noobot/shared/turn-lifecycle-protocol";
+
+const processingStarted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_STARTED, phase: TURN_PHASE.PROCESSING, executionState: BackendChannelState.SENDING };
+const actionAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.ACTION_ACCEPTED, phase: TURN_PHASE.ACTION, action: "send" };
+const processingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_COMPLETED, phase: TURN_PHASE.COMPLETION };
+const stopProcessingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED, phase: TURN_PHASE.STOP };
 
 function installStorage() {
   const map = new Map();
@@ -44,27 +50,24 @@ describe("sessionRunStateMachine scope separation", () => {
   });
 
   it("keeps processing facts scoped to their exact Turn", () => {
-    const started = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
-    expect(apply(started, {
-      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-      state: BackendChannelState.SENDING,
-    })).toMatchObject({ ...identity, state: FrontendRunState.PROCESSING });
+    const localRequest = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
+    const started = apply(localRequest, actionAccepted);
+    const transport = apply(started, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.SENDING });
+    expect(transport).toMatchObject({ ...identity, state: FrontendRunState.ACTION_REQUESTING });
+    expect(apply(transport, processingStarted)).toMatchObject({ ...identity, state: FrontendRunState.PROCESSING });
     const transportOnly = reduceTurnRuntimeEvent(started, {
       ...identity,
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: BackendChannelState.INTERACTION_PENDING,
     });
-    expect(transportOnly).toMatchObject({
-      applied: false,
-      reason: TURN_TRANSITION_REASON.ILLEGAL_TRANSITION,
-    });
+    expect(transportOnly).toMatchObject({ applied: true });
     expect(started).toMatchObject({ ...identity, state: FrontendRunState.ACTION_REQUESTING });
   });
 
   it("uses distinct completion and stop phases on the same Turn", () => {
     let processing = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
-    processing = apply(processing, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.SENDING });
-    const completion = apply(processing, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.COMPLETED });
+    processing = apply(processing, processingStarted);
+    const completion = apply(processing, processingCompleted);
     const stopRequest = apply(processing, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED });
     expect(completion.state).toBe(FrontendRunState.FRONTEND_COMPLETION_REQUESTING);
     expect(stopRequest).toMatchObject({ state: FrontendRunState.ACTION_REQUESTING, action: "stop" });
@@ -85,13 +88,13 @@ describe("sessionRunStateMachine scope separation", () => {
 
   it("settles summaries into explicit terminal states rather than identity-free idle", () => {
     let processing = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
-    processing = apply(processing, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.SENDING });
-    let completion = apply(processing, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.COMPLETED });
+    processing = apply(processing, processingStarted);
+    let completion = apply(processing, processingCompleted);
     completion = apply(completion, { type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED });
     expect(completion).toMatchObject({ ...identity, state: FrontendRunState.FRONTEND_COMPLETED });
 
     let stopping = apply(processing, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED });
-    stopping = apply(stopping, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.USER_STOPPED });
+    stopping = apply(stopping, stopProcessingCompleted);
     stopping = apply(stopping, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED });
     expect(stopping).toMatchObject({ ...identity, state: FrontendRunState.USER_STOP_COMPLETED });
   });

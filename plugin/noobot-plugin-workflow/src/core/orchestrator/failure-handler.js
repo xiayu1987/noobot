@@ -68,14 +68,14 @@ export async function handleWorkflowFailure({
   });
   if (!beforeDispatchMode) return;
 
-  ctx.skipAgentDispatch = false;
-  ctx.overrideAgentResult = null;
-  ctx.workflowFallbackToMainAgent = true;
+  ctx.skipAgentDispatch = true;
+  ctx.overrideAgentResult = agentResult;
+  ctx.workflowFallbackToMainAgent = false;
   await emitWorkflowRuntimeEvent({
     options,
     ctx,
-    event: "workflow_fallback_to_main_agent",
-    level: "warn",
+    event: "workflow_dispatch_failed",
+    level: "error",
     data: {
       reason: "workflow_execution_failed",
       message,

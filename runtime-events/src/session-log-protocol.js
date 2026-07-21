@@ -51,6 +51,7 @@ export const SESSION_LOG_DEBUG_CONTROL_KEYS = Object.freeze({
   "stop-continue": "frontendStopContinueDebug",
   "reconnect-timing": "frontendReconnectTimingDebug",
   "agent-proxy-route": "agentProxyRouteDebug",
+  "workflow-diagnostics": "workflowDiagnosticsDebug",
 });
 
 export const SESSION_LOG_RECORD_FIELDS = Object.freeze([

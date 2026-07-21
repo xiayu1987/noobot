@@ -13,6 +13,12 @@ import {
   normalizeSessionRunEvent,
 } from "../../../../src/composables/chat/sessionRunStateMachine";
 import { deriveTurnCapabilities, reduceTurnRuntimeEvent } from "../../../../src/composables/chat/sessionRunStateMachine/turnReducer";
+import { TURN_EVENT, TURN_PHASE } from "@noobot/shared/turn-lifecycle-protocol";
+
+const processingStarted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_STARTED, phase: TURN_PHASE.PROCESSING, executionState: BackendChannelState.SENDING };
+const actionAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.ACTION_ACCEPTED, phase: TURN_PHASE.ACTION, action: "send" };
+const processingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_COMPLETED, phase: TURN_PHASE.COMPLETION };
+const stopProcessingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED, phase: TURN_PHASE.STOP };
 
 function installStorage() {
   const map = new Map();
@@ -41,9 +47,9 @@ describe("sessionRunStateMachine lifecycle", () => {
   it("keeps every lifecycle phase locked until its terminal summary", () => {
     let turn = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED });
     expect(deriveTurnCapabilities(turn.state, turn).actionLocked).toBe(true);
-    turn = apply(turn, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.SENDING });
+    turn = apply(turn, processingStarted);
     expect(turn.state).toBe(FrontendRunState.PROCESSING);
-    turn = apply(turn, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.COMPLETED });
+    turn = apply(turn, processingCompleted);
     expect(turn.state).toBe(FrontendRunState.FRONTEND_COMPLETION_REQUESTING);
     turn = apply(turn, { type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED });
     expect(turn.state).toBe(FrontendRunState.FRONTEND_COMPLETED);
@@ -55,18 +61,21 @@ describe("sessionRunStateMachine lifecycle", () => {
     expect(turn).toMatchObject({ state: FrontendRunState.ACTION_REQUESTING, action: "continue" });
   });
 
-  it("promotes backend acknowledgement to processing with stop capability", () => {
-    const requesting = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
-    const processing = apply(requesting, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.SENDING });
+  it("promotes only an authoritative lifecycle fact to processing with stop capability", () => {
+    const localRequest = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
+    const requesting = apply(localRequest, actionAccepted);
+    const transport = apply(requesting, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.SENDING });
+    expect(deriveTurnCapabilities(transport.state, transport).canStop).toBe(false);
+    const processing = apply(transport, processingStarted);
     expect(deriveTurnCapabilities(processing.state, processing)).toMatchObject({ sending: true, canStop: true, actionLocked: true });
   });
 
   it("keeps stop locked through request, backend confirmation, and summary", () => {
     let turn = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
-    turn = apply(turn, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.SENDING });
+    turn = apply(turn, processingStarted);
     turn = apply(turn, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED });
     expect(turn).toMatchObject({ state: FrontendRunState.ACTION_REQUESTING, action: "stop" });
-    turn = apply(turn, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.USER_STOPPED });
+    turn = apply(turn, stopProcessingCompleted);
     expect(turn.state).toBe(FrontendRunState.USER_STOPPING);
     turn = apply(turn, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED });
     expect(turn.state).toBe(FrontendRunState.USER_STOP_COMPLETED);

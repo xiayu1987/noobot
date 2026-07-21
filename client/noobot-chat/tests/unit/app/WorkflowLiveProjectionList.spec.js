@@ -101,4 +101,46 @@ describe("WorkflowLiveProjectionList", () => {
     await nextTick();
     expect(wrapper.findAll(".workflow-live-projection-anchor")).toHaveLength(0);
   });
+
+  it("keeps the parent projection when nested planning reuses the workflow id", async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const chatStore = useChatStore(pinia);
+    chatStore.upsertWorkflowPlanningEvent({
+      sessionId: "session-parent",
+      dialogProcessId: "dialog-parent",
+      turnScopeId: "turn-parent",
+      workflowRunId: "workflow-a",
+      semanticText: "WORKFLOW_DSL/1 parent",
+      nodeSessions: [{ nodeExecutionId: "node-a", status: "ready" }],
+    });
+    const wrapper = mount(WorkflowLiveProjectionList, {
+      props: {
+        activeSession: { id: "session-parent", backendSessionId: "session-parent", messages: [] },
+        anchorMessage: { dialogProcessId: "dialog-parent", turnScopeId: "turn-parent" },
+        shouldRenderMessageInChat: () => true,
+        messageItemSharedProps: {},
+      },
+      global: { plugins: [pinia] },
+    });
+    expect(wrapper.findAll(".workflow-live-projection-anchor")).toHaveLength(1);
+
+    chatStore.upsertWorkflowPlanningEvent({
+      sessionId: "session-child",
+      dialogProcessId: "dialog-child",
+      turnScopeId: "workflow-node:node-a",
+      workflowRunId: "workflow-a",
+      semanticText: "WORKFLOW_DSL/1 child",
+      nodeSessions: [{ nodeExecutionId: "nested-node", status: "ready" }],
+    });
+    await nextTick();
+
+    const workflow = chatStore.workflowNodeStateRegistry.workflows["workflow-a"];
+    expect(workflow).toMatchObject({
+      sessionId: "session-parent",
+      dialogProcessId: "dialog-parent",
+      turnScopeId: "turn-parent",
+    });
+    expect(wrapper.findAll(".workflow-live-projection-anchor")).toHaveLength(1);
+  });
 });

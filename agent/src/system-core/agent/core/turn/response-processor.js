@@ -14,6 +14,7 @@ import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
 import { getSystemRuntimeFromRuntime } from "../../../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../../../context/parent-session-id-resolver.js";
+import { currentAssistantMessageId, emitMessageEvent } from "../../../event/message-event-stream.js";
 
 function updateToolFailureState({ modelState, loopState, toolCallResult }) {
   const runtime = modelState?.runtime || {};
@@ -39,6 +40,7 @@ export async function processToolResults({
   const { eventListener, runtime, abortSignal } = modelState;
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const parentSessionId = resolveParentSessionId({ runtime });
+  const messageId = currentAssistantMessageId(runtime);
 
   emitEvent(eventListener, "tool_calls_detected", { turn, count: calls.length });
   await runAgentRuntimeHook({
@@ -56,10 +58,12 @@ export async function processToolResults({
 
   const toolCallResults = await Promise.all(calls.map(async (call) => {
     assertNotAborted(abortSignal, runtime);
-    emitEvent(eventListener, "tool_call_start", {
+    emitMessageEvent(eventListener, runtime, "tool_call_start", {
       turn,
       tool: call.name,
       args: call.args || {},
+      toolCallId: call?.id || call?.tool_call_id || call?.toolCallId || "",
+      messageId,
     });
     const tool = toolMap.get(call.name);
     const toolCallResult = await executeToolCall({
@@ -74,6 +78,7 @@ export async function processToolResults({
       parentSessionId,
       runtime,
       agentContext: modelState?.agentContext || null,
+      messageId,
     });
     return toolCallResult;
   }));

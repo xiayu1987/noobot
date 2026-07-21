@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { emitEvent } from "../../../event/index.js";
+import { emitMessageEvent } from "../../../event/message-event-stream.js";
 import { isFatalError } from "../../../error/index.js";
 import { toToolJsonResult } from "../../../tools/core/tool-json-result.js";
 import { extractAttachmentsFromToolResult } from "../media/artifact-service.js";
@@ -145,6 +146,7 @@ export async function executeToolCall({
   parentSessionId = "",
   runtime = {},
   agentContext = null,
+  messageId = "",
 } = {}) {
   const toolStartedAtMs = Date.now();
   const toolStartedAt = new Date(toolStartedAtMs).toISOString();
@@ -157,10 +159,11 @@ export async function executeToolCall({
       code: ERROR_CODE.RECOVERABLE_TOOL_NOT_FOUND,
       error: `tool not found: ${call?.name}`,
     });
-    emitEvent(eventListener, "tool_call_end", {
+    emitToolCallEndEvent(eventListener, runtime, messageId, {
       turn,
       tool: call?.name,
       result: String(toolResultText).slice(0, 200),
+      toolCallId: call?.id || call?.tool_call_id || call?.toolCallId || "",
     });
     await runAgentRuntimeHook({
       runtime,
@@ -232,11 +235,12 @@ export async function executeToolCall({
           ...toolInputTransferPayload,
         });
         toolResultText = compactToolResultTextForModel(toolResultText);
-        emitEvent(eventListener, "tool_call_end", {
+        emitToolCallEndEvent(eventListener, runtime, messageId, {
           turn,
           tool: call?.name,
           result: String(toolResultText).slice(0, 200),
           success: true,
+          toolCallId: call?.id || call?.tool_call_id || call?.toolCallId || "",
         });
         await runAgentRuntimeHook({
           runtime,
@@ -388,11 +392,12 @@ export async function executeToolCall({
   if (String(call?.name || "").trim() === "task_summary") {
     toolResultText = mergeTaskSummaryTransferPayload(toolResultText, toolInputTransferPayload);
   }
-  emitEvent(eventListener, "tool_call_end", {
+  emitToolCallEndEvent(eventListener, runtime, messageId, {
     turn,
     tool: call?.name,
     result: String(toolResultText).slice(0, 200),
     success: failureState.success,
+    toolCallId: call?.id || call?.tool_call_id || call?.toolCallId || "",
   });
   await runAgentRuntimeHook({
     runtime,
@@ -427,4 +432,19 @@ export async function executeToolCall({
     success: failureState.success,
     failureReason: failureState.reason,
   };
+}
+
+function emitToolCallEndEvent(eventListener, runtime, messageId, data = {}) {
+  const authoritativeMessageId = String(messageId || "").trim();
+  if (authoritativeMessageId) {
+    return emitMessageEvent(eventListener, runtime, "tool_call_end", {
+      ...data,
+      messageId: authoritativeMessageId,
+    });
+  }
+  // executeToolCall is also a public low-level executor used outside an Agent
+  // message turn. Such invocations have no Assistant message to project into;
+  // keep their lifecycle observable without inventing a message identity.
+  emitEvent(eventListener, "tool_call_end", data);
+  return data;
 }

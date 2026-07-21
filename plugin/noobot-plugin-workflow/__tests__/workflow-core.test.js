@@ -357,7 +357,7 @@ test("workflow hook skips when source text is empty", async () => {
   assert.equal(agentResult.traces.length, 0);
 });
 
-test("workflow hook falls back to main agent when semantic resolution throws in before-dispatch", async () => {
+test("workflow hook owns the turn and never falls back to main agent when semantic resolution fails", async () => {
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
   registerWorkflowHooks({
@@ -382,10 +382,12 @@ test("workflow hook falls back to main agent when semantic resolution throws in 
     claimAgentDispatch: (claim = {}) => dispatchClaims.push(claim),
   };
   await listener.handler(beforeContext);
-  assert.deepEqual(dispatchClaims, []);
-  assert.equal(beforeContext.skipAgentDispatch, false);
-  assert.equal(beforeContext.overrideAgentResult, null);
-  assert.equal(beforeContext.workflowFallbackToMainAgent, true);
+  assert.equal(dispatchClaims.length, 1);
+  assert.equal(dispatchClaims[0].source, "workflow_before_agent_dispatch");
+  assert.equal(beforeContext.skipAgentDispatch, true);
+  assert.ok(beforeContext.overrideAgentResult);
+  assert.ok(beforeContext.overrideAgentResult.workflow);
+  assert.equal(beforeContext.workflowFallbackToMainAgent, false);
 });
 
 test("workflow hook in before_agent_dispatch mode can request skipping main agent dispatch", async () => {

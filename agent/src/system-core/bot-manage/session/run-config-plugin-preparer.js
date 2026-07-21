@@ -21,6 +21,7 @@ import {
   mergeToolPolicyPatch,
 } from "./plugin-policy-api.js";
 import {
+  normalizeTrimmedStringList,
   resolvePluginOptionsFromConfig,
   selectHookManager,
 } from "./session-execution-engine-utils.js";
@@ -114,6 +115,13 @@ export class RunConfigPluginPreparer {
 
   resolveAgentPluginOptions({ userId = "", runConfig = {}, userConfig = {} } = {}) {
     const agentPluginSelectors = resolveAgentPluginSelectors(this.pluginRuntime);
+    if (isPluginExplicitlyDisabled(
+      runConfig,
+      agentPluginSelectors,
+      resolveAgentPluginKey(this.pluginRuntime),
+    )) {
+      return { enabled: false, mode: "off" };
+    }
     const effectiveConfig = mergeConfig(
       this.globalConfig || {},
       userConfig && typeof userConfig === "object" ? userConfig : {},
@@ -236,6 +244,13 @@ export class RunConfigPluginPreparer {
 
   resolveBotPluginOptions({ runConfig = {}, userConfig = {} } = {}) {
     const botPluginSelectors = resolveBotPluginSelectors(this.pluginRuntime);
+    if (isPluginExplicitlyDisabled(
+      runConfig,
+      botPluginSelectors,
+      resolveBotPluginKey(this.pluginRuntime),
+    )) {
+      return { enabled: false, mode: "off" };
+    }
     const effectiveConfig = mergeConfig(
       this.globalConfig || {},
       userConfig && typeof userConfig === "object" ? userConfig : {},
@@ -465,6 +480,21 @@ export class RunConfigPluginPreparer {
       },
     };
   }
+}
+
+function isPluginExplicitlyDisabled(
+  runConfig = {},
+  pluginSelectors = new Set(),
+  pluginKey = "",
+) {
+  const disabledPlugins = new Set(normalizeTrimmedStringList(runConfig?.disabledPlugins));
+  const normalizedPluginKey = String(pluginKey || "").trim();
+  if (normalizedPluginKey && disabledPlugins.has(normalizedPluginKey)) return true;
+  for (const selector of pluginSelectors || []) {
+    const normalizedSelector = String(selector || "").trim();
+    if (normalizedSelector && disabledPlugins.has(normalizedSelector)) return true;
+  }
+  return resolvePluginOptionsFromConfig(runConfig, pluginSelectors)?.enabled === false;
 }
 
 function resolveAgentPluginKey(pluginRuntime = {}) {

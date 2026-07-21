@@ -10,6 +10,30 @@ import {
   classifyExecutionEvent,
   normalizeSseLogEvent,
 } from "../../../src/system-core/tracking/event-log/log-normalizer.js";
+import {
+  assertMessageEventEnvelope,
+  isMessageEventEnvelope,
+} from "../../../src/system-core/event/message-event-stream.js";
+
+test("authoritative message envelope validation rejects partial events", () => {
+  const envelope = {
+    envelopeKind: "noobot.message_event",
+    envelopeVersion: 1,
+    eventId: "evt-1",
+    eventType: "llm_delta",
+    sessionId: "session-1",
+    messageId: "message-1",
+    sequence: 1,
+    timestamp: "2026-01-01T00:00:00.000Z",
+  };
+  assert.equal(isMessageEventEnvelope(envelope), true);
+  assert.equal(assertMessageEventEnvelope(envelope), envelope);
+  assert.equal(isMessageEventEnvelope({ ...envelope, messageId: "" }), false);
+  assert.throws(
+    () => assertMessageEventEnvelope({ ...envelope, eventId: "" }),
+    /invalid authoritative message event envelope/,
+  );
+});
 
 test("classifyExecutionEvent classifies semantic-transfer events", () => {
   assert.deepEqual(classifyExecutionEvent("semantic_transfer_validation"), {
@@ -118,6 +142,54 @@ test("normalizeSseLogEvent keeps tool_call_end result intact and text compact", 
   });
   assert.equal(normalized.data.text, "read_file completed");
   assert.equal(normalized.data.result.content.length, 1000);
+});
+
+test("normalizeSseLogEvent preserves authoritative message and workflow scope on tool events", () => {
+  const identity = {
+    eventId: "evt-1",
+    eventType: "tool_call_end",
+    sessionId: "child-session",
+    parentSessionId: "parent-session",
+    dialogProcessId: "child-dialog",
+    turnScopeId: "child-turn",
+    messageId: "msg-1",
+    toolCallId: "call-1",
+    sequence: 7,
+    scope: "sub_session",
+    workflowRunId: "workflow-1",
+    nodeExecutionId: "node-1",
+  };
+  const normalized = normalizeSseLogEvent({
+    event: "tool_call_end",
+    data: { ...identity, tool: "read_file", result: { ok: true } },
+    ts: "2026-06-08T00:00:00.000Z",
+  });
+
+  assert.equal(normalized.event, "thinking");
+  assert.deepEqual(normalized.data, {
+    ...identity,
+    tool: "read_file",
+    result: { ok: true },
+    category: "tool",
+    type: "tool_result",
+    event: "tool_result",
+    rawEvent: "tool_call_end",
+    ts: "2026-06-08T00:00:00.000Z",
+    turn: 0,
+    text: "read_file completed",
+  });
+
+  const started = normalizeSseLogEvent({
+    event: "tool_call_start",
+    data: { ...identity, eventType: "tool_call_start", tool: "read_file", args: { filePath: "a" } },
+    ts: "2026-06-08T00:00:00.000Z",
+  });
+  assert.equal(started.data.messageId, "msg-1");
+  assert.equal(started.data.eventId, "evt-1");
+  assert.equal(started.data.sequence, 7);
+  assert.equal(started.data.scope, "sub_session");
+  assert.equal(started.data.workflowRunId, "workflow-1");
+  assert.equal(started.data.nodeExecutionId, "node-1");
 });
 
 test("normalizeSseLogEvent marks compact text when result has semantic-transfer info", () => {

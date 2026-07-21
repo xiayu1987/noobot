@@ -20,6 +20,7 @@ export async function commitNoToolsTurnState({
   modelResponse = null,
   responseContentText = "",
   turn,
+  messageId = "",
 } = {}) {
   const {
     turnMessages,
@@ -50,6 +51,7 @@ export async function commitNoToolsTurnState({
     toolCalls: [],
     modelAlias: currentModelInfo.modelAlias,
     modelName: currentModelInfo.modelName,
+    messageId,
   });
   await persistModelGeneratedArtifacts({
     aiContent: modelResponse?.content,

@@ -30,6 +30,7 @@ import { emitEvent } from "../../event/index.js";
 import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
 import { saveStoppedModelMessageSnapshotCandidate } from "./resume/model-message-snapshot-store.js";
+import { emitMessageEvent } from "../../event/message-event-stream.js";
 
 export function emitFinalStreamingAppendDeltaAfterHooks({ result = {}, runtime = {} } = {}) {
   const meta = readFinalStreamingResultMeta(result);
@@ -60,7 +61,7 @@ export function emitFinalStreamingAppendDeltaAfterHooks({ result = {}, runtime =
   if (!appendedText) return false;
 
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
-  emitEvent(eventListener, "llm_delta", {
+  emitMessageEvent(eventListener, runtime, "llm_delta", {
     text: appendedText,
     dialogProcessId: resolveDialogProcessIdFromContext({ runtime }),
     sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),

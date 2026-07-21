@@ -3,9 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeSseLogEvent } from "#agent/event";
+import {
+  MESSAGE_EVENT_ENVELOPE_KIND,
+  assertMessageEventEnvelope,
+  isMessageEventEnvelope,
+  normalizeSseLogEvent,
+} from "#agent/event";
 import {
   buildParentOwnedChildRunPayload,
+  buildAuthoritativeMessagePacket,
   buildSubSessionWirePayload,
   isChildRunEventData,
   parentOwnsChildRunEventData,
@@ -31,6 +37,7 @@ export function createRunEventListener({
   getCurrentTurnScopeId = () => "",
   onRootRunning = null,
   onCommittedTurnLifecycle = null,
+  onAuthoritativeMessageRouted = null,
 } = {}) {
   const resolveTurnScopeId = () =>
     getCurrentRunMeta()?.turnScopeId || getCurrentTurnScopeId() || "";
@@ -42,6 +49,11 @@ export function createRunEventListener({
       const eventDialogProcessId = String(eventData?.dialogProcessId || "").trim();
       const currentRunMeta = getCurrentRunMeta();
       const currentRunHandle = getCurrentRunHandle();
+      const parentDialogProcessId =
+        currentRunMeta?.dialogProcessId ||
+        eventData?.parentDialogProcessId ||
+        currentRunMeta?.parentDialogProcessId ||
+        "";
       if (eventName === "turn_lifecycle_committed") {
         if (typeof onCommittedTurnLifecycle === "function") {
           onCommittedTurnLifecycle(eventData);
@@ -54,6 +66,55 @@ export function createRunEventListener({
       const workflowChildRunEvent = Boolean(
         childRunEvent && (eventData?.workflowRunId || eventData?.nodeExecutionId),
       );
+      // A producer that marks an event as authoritative must satisfy the whole
+      // contract. Do not silently downgrade malformed envelopes into the
+      // legacy normalization path: that would reintroduce inferred identity.
+      if (eventData?.envelopeKind === MESSAGE_EVENT_ENVELOPE_KIND) {
+        assertMessageEventEnvelope(eventData);
+      }
+      // Authoritative message envelopes are already the wire contract. Never
+      // normalize, classify, or reconstruct them here: doing so can silently
+      // sever message/tool identity. Transport layers may add scope aliases,
+      // but the envelope itself remains the single source of truth.
+      if (isMessageEventEnvelope(eventData)) {
+        if (eventName === "llm_delta" && !textStreamingEnabled) return;
+        const authoritativeSessionId = String(eventData?.sessionId || "").trim();
+        const rootSessionId = String(sessionId || "").trim();
+        const authoritativeScope = authoritativeSessionId === rootSessionId
+          ? "main_session"
+          : "sub_session";
+        const routedEventName = authoritativeScope === "main_session"
+          ? "message_event"
+          : "subagent_message_event";
+        onAuthoritativeMessageRouted?.({
+          routedEventName,
+          authoritativeScope,
+          rootSessionId,
+          sessionId: authoritativeSessionId,
+          parentSessionId: String(eventData?.parentSessionId || "").trim(),
+          dialogProcessId: String(eventData?.dialogProcessId || "").trim(),
+          parentDialogProcessId: String(parentDialogProcessId || "").trim(),
+          turnScopeId: String(eventData?.turnScopeId || "").trim(),
+          eventType: String(eventData?.eventType || "").trim(),
+          messageId: String(eventData?.messageId || "").trim(),
+          workflowRunId: String(eventData?.workflowRunId || "").trim(),
+          nodeExecutionId: String(eventData?.nodeExecutionId || "").trim(),
+          hasContent: Boolean(eventData?.content || eventData?.delta || eventData?.text),
+          hasTool: Boolean(eventData?.tool),
+          hasResult: eventData?.result !== undefined,
+        });
+        // The authoritative event is an immutable inner contract. Transport
+        // scope lives beside it and can never overwrite message identity.
+        sendEvent(
+          routedEventName,
+          buildAuthoritativeMessagePacket(eventData, {
+          rootSessionId: sessionId,
+          parentDialogProcessId,
+          scope: authoritativeScope,
+          }),
+        );
+        return;
+      }
       if (
         eventName === "agent_lifecycle_state_changed" &&
         String(eventData?.state || "").trim().toLowerCase() === "running" &&
@@ -71,11 +132,6 @@ export function createRunEventListener({
           onRootRunning(eventData);
         }
       }
-      const parentDialogProcessId =
-        currentRunMeta?.dialogProcessId ||
-        eventData?.parentDialogProcessId ||
-        currentRunMeta?.parentDialogProcessId ||
-        "";
       if (eventDialogProcessId && currentRunMeta && !childRunEvent) {
         currentRunMeta.dialogProcessId = eventDialogProcessId;
         if (currentRunHandle) {

@@ -145,8 +145,8 @@ function normalizeLlmError(error = {}, modelState = {}, { turn = 0, mode = "" } 
   };
 }
 
-function createTrackedStreamingCallbacks(eventListener = null) {
-  const callbacks = createStreamingCallbacks(eventListener);
+function createTrackedStreamingCallbacks(eventListener = null, runtime = {}) {
+  const callbacks = createStreamingCallbacks(eventListener, runtime);
   let tokenCount = 0;
   if (!Array.isArray(callbacks)) {
     return {
@@ -196,6 +196,7 @@ export async function invokeLlmWithTransientRetry({
   for (let attempt = 1; attempt <= TRANSIENT_LLM_MAX_ATTEMPTS; attempt += 1) {
     const { callbacks, getTokenCount } = createTrackedStreamingCallbacks(
       modelState?.eventListener,
+      modelState?.runtime,
     );
     try {
       return await invoke({ callbacks });

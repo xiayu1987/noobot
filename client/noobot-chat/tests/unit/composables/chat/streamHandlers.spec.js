@@ -11,6 +11,7 @@ import {
   handleThinkingStreamEvent,
 } from "../../../../src/composables/chat/chatEngine/streamHandlers";
 import { buildViewMessage } from "../../../../src/composables/infra/messageModel";
+import { classifyRealtimeLog } from "../../../../src/app/state/sessionMessageState";
 
 describe("chatEngine streamHandlers", () => {
   const makeBotMessage = () => ({
@@ -246,6 +247,44 @@ describe("chatEngine streamHandlers", () => {
       expect.objectContaining({
         event: "tool_call",
         text: "调用：cd /project/agent && npm test",
+      }),
+    ]);
+    expect(botMessage.executionLogTotal).toBe(1);
+  });
+
+  it("projects a real authoritative tool envelope into the thinking panel", () => {
+    const botMessage = makeBotMessage();
+    const authoritativeToolEvent = {
+      executionCategory: "tool",
+      type: "tool_call",
+      tool: "write_file",
+      args: { filePath: "runtime/ops_workdir/example.txt", overwrite: true },
+      toolCallId: "call-real-1",
+      messageId: "msg-real-1",
+      envelopeKind: "noobot.message_event",
+      envelopeVersion: 1,
+      eventId: "evt-real-1",
+      eventType: "tool_call_start",
+      sessionId: "root-session",
+      dialogProcessId: "dp-real-1",
+      turnScopeId: "client-turn:real",
+      sequence: 1,
+      timestamp: "2026-07-20T15:49:27.996Z",
+    };
+
+    handleThinkingStreamEvent({
+      data: authoritativeToolEvent,
+      botMessage,
+      classifyRealtimeLog,
+      scrollOnFirstResponseOnce: vi.fn(),
+    });
+
+    expect(botMessage.realtimeLogs).toEqual([
+      expect.objectContaining({
+        type: "tool_call",
+        category: "tool",
+        toolCallId: "call-real-1",
+        text: expect.stringContaining("write_file"),
       }),
     ]);
     expect(botMessage.executionLogTotal).toBe(1);

@@ -20,6 +20,14 @@ export function mergeRunConfigWithPluginStrategy({
   };
   const disabledSet = new Set(normalizeTrimmedStringList(disabledPlugins));
   if (!disabledSet.size) return merged;
+  // Keep the strategy-level deny list in the run config. Detached sessions can
+  // pass through run-config preparation more than once; the plugin options
+  // object alone is not a durable deny signal because preparation may rebuild
+  // plugins from user/global configuration.
+  merged.disabledPlugins = Array.from(new Set([
+    ...normalizeTrimmedStringList(merged?.disabledPlugins),
+    ...disabledSet,
+  ]));
   const selectedPlugins = Array.isArray(merged?.selectedPlugins)
     ? merged.selectedPlugins
     : [];

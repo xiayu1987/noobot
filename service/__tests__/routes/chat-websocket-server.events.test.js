@@ -266,6 +266,96 @@ test("chat-websocket-server: child run system events are owned by parent dialog 
   }
 });
 
+test("chat-websocket-server preserves authoritative identity for workflow child tool events", async () => {
+  const identity = {
+    envelopeKind: "noobot.message_event",
+    envelopeVersion: 1,
+    sessionId: "workflow-child-1",
+    parentSessionId: "s1",
+    dialogProcessId: "workflow-child-dialog",
+    parentDialogProcessId: "dp-parent",
+    turnScopeId: "workflow-child-turn",
+    messageId: "msg-workflow-1",
+    scope: "sub_session",
+    workflowRunId: "workflow-1",
+    nodeExecutionId: "node-1",
+    timestamp: "2026-01-01T00:00:00.000Z",
+  };
+  const server = await startServerWithWs({
+    runSession: async ({ eventListener }) => {
+      eventListener?.onEvent?.({
+        event: "main_model_content",
+        data: {
+          ...identity,
+          eventId: "evt-thinking",
+          eventType: "main_model_content",
+          sequence: 1,
+          text: "```mermaid\ngraph TD; A-->B\n```",
+        },
+      });
+      eventListener?.onEvent?.({
+        event: "tool_call_end",
+        data: {
+          ...identity,
+          eventId: "evt-tool-result",
+          eventType: "tool_call_end",
+          sequence: 2,
+          toolCallId: "call-1",
+          tool: "read_file",
+          result: { ok: true },
+        },
+      });
+      return {
+        sessionId: "s1",
+        dialogProcessId: "dp-parent",
+        answer: "done",
+        messages: [],
+        traces: [],
+        executionLogs: [],
+      };
+    },
+  });
+  try {
+    const events = await callChatWs({
+      port: server.address().port,
+      payload: {
+        userId: "u1",
+        sessionId: "s1",
+        message: "hello",
+        turnScopeId: "parent-turn",
+        config: { streaming: true, locale: "zh-CN" },
+      },
+    });
+    const messageEvents = events.filter((item) => item?.event === "subagent_message_event");
+    const thinking = messageEvents.find((item) => item?.data?.event?.eventType === "main_model_content");
+    const toolResult = messageEvents.find((item) => item?.data?.event?.eventType === "tool_call_end");
+    assert.deepEqual(thinking?.data?.event, {
+      ...identity,
+      eventId: "evt-thinking",
+      eventType: "main_model_content",
+      sequence: 1,
+      text: "```mermaid\ngraph TD; A-->B\n```",
+    });
+    assert.deepEqual(toolResult?.data?.event, {
+      ...identity,
+      eventId: "evt-tool-result",
+      eventType: "tool_call_end",
+      sequence: 2,
+      toolCallId: "call-1",
+      tool: "read_file",
+      result: { ok: true },
+    });
+    assert.equal(toolResult?.data?.route?.scope, "sub_session");
+    assert.equal(toolResult?.data?.route?.workflowRunId, "workflow-1");
+    assert.equal(toolResult?.data?.route?.nodeExecutionId, "node-1");
+    assert.equal(Object.hasOwn(toolResult?.data?.route || {}, "messageId"), false);
+    assert.equal(toolResult?.data?.channelKind, "message_event");
+    assert.equal(toolResult?.data?.channelVersion, 1);
+  } finally {
+    await closeServer(server);
+  }
+});
+
 test("chat-websocket-server: streaming=true 保持 delta 推送", async () => {
   const server = await startServerWithWs({
     runSession: async ({ eventListener }) => {

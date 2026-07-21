@@ -166,6 +166,7 @@ export function normalizeSseLogEvent(evt = {}) {
     return {
       event: "thinking",
       data: {
+        ...data,
         category: "tool",
         type: "tool_call",
         event: "tool_call",
@@ -192,6 +193,7 @@ export function normalizeSseLogEvent(evt = {}) {
     return {
       event: "thinking",
       data: {
+        ...data,
         category: "tool",
         type: "tool_result",
         event: "tool_result",

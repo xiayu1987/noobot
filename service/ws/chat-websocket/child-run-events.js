@@ -82,3 +82,26 @@ export function buildSubSessionWirePayload(eventData = {}, {
     subAgentCall: true,
   };
 }
+
+export function buildAuthoritativeMessagePacket(event = {}, {
+  rootSessionId = "",
+  parentDialogProcessId = "",
+  scope = "sub_session",
+} = {}) {
+  const sessionId = normalizeWsText(event?.sessionId);
+  const routeScope = scope === "main_session" ? "main_session" : "sub_session";
+  return {
+    channelKind: "message_event",
+    channelVersion: 1,
+    route: {
+      scope: routeScope,
+      sessionId,
+      ...(routeScope === "sub_session" ? { subSessionId: sessionId } : {}),
+      parentSessionId: normalizeWsText(event?.parentSessionId || rootSessionId),
+      parentDialogProcessId: normalizeWsText(event?.parentDialogProcessId || parentDialogProcessId),
+      workflowRunId: normalizeWsText(event?.workflowRunId),
+      nodeExecutionId: normalizeWsText(event?.nodeExecutionId),
+    },
+    event,
+  };
+}

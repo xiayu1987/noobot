@@ -310,6 +310,37 @@ describe("turnRuntimeRegistry", () => {
     expect(resolveTurnRuntimeByScope(registry, "done", { sessionId: "s1" })).toMatchObject({ terminal: "completed" });
   });
 
+  it("does not let channel state move a snapshot-owned Turn phase", () => {
+    const registry = createTurnRuntimeRegistryState();
+    applyTurnLifecycleSnapshot(registry, snapshot());
+
+    backendState(registry, {
+      sessionId: "s1",
+      turnScopeId: "t1",
+      dialogProcessId: "dp1",
+      state: BackendChannelState.COMPLETED,
+      seq: 999,
+    });
+
+    expect(resolveSessionTurnRuntime(registry, "s1")).toMatchObject({
+      state: "frontend_processing",
+      authoritativeLifecycle: true,
+      terminal: null,
+    });
+
+    const completed = applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+      eventType: "turn.processing_completed",
+      phase: "completion",
+      sessionId: "s1",
+      turnScopeId: "t1",
+      dialogProcessId: "dp1",
+      revision: 3,
+      sequence: 3,
+    });
+    expect(completed).toMatchObject({ applied: true, turn: { state: "frontend_completion_requesting", seq: 3 } });
+  });
+
   it("allows legacy hydration until an authoritative snapshot takes ownership", () => {
     const registry = createTurnRuntimeRegistryState();
     hydrateSessionTurnRuntime(registry, { backendSessionId: "s1" }, [

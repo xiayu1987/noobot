@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { emitEvent } from "../../../event/index.js";
+import { emitMessageEvent } from "../../../event/message-event-stream.js";
 import {
   createChatModel,
   createChatModelByName,
@@ -82,12 +83,12 @@ export function resolveCurrentModelInfo(modelState = {}) {
   };
 }
 
-export function createStreamingCallbacks(eventListener = null) {
+export function createStreamingCallbacks(eventListener = null, runtime = {}) {
   if (!eventListener?.onEvent) return undefined;
   return [
     {
       handleLLMNewToken: (token) =>
-        emitEvent(eventListener, "llm_delta", {
+        emitMessageEvent(eventListener, runtime, "llm_delta", {
           text: String(token || ""),
         }),
     },

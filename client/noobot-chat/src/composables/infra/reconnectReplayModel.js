@@ -357,6 +357,13 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
       ? targetMessage.channelState
       : null;
   const existingTurnScopeId = getMessageTurnScopeId(targetMessage);
+  const existingDialogProcessId = getMessageDialogProcessId(targetMessage);
+  const sourceDialogProcessId = getMessageDialogProcessId(sourceMessage);
+  const sameDialogProcess = Boolean(
+    existingDialogProcessId &&
+    sourceDialogProcessId &&
+    existingDialogProcessId === sourceDialogProcessId,
+  );
   const existingPending = targetMessage?.pending === true;
   const existingTransferEnvelopes = getMessageTransferEnvelopes(targetMessage);
   const sourceTransferEnvelopes = getMessageTransferEnvelopes(sourceMessage);
@@ -401,10 +408,19 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   if (existingChannelState && !sourceMessage?.channelState) {
     targetMessage.channelState = existingChannelState;
   }
-  if (sourceCanUseTurnScopedAssets && existingTurnScopeId && !getMessageTurnScopeId(sourceMessage)) {
+  if (
+    existingTurnScopeId &&
+    !getMessageTurnScopeId(sourceMessage) &&
+    (sourceCanUseTurnScopedAssets || sameDialogProcess)
+  ) {
     targetMessage.turnScopeId = existingTurnScopeId;
   }
-  if (sourceAssistantWithoutTurnScope && !existingRuntimeView.inFlightAssistant) {
+  // A snapshot that omits turnScopeId is incomplete, not proof that the
+  // existing turn-scoped projection is stale. In particular, workflow/tool
+  // snapshots can arrive while the authoritative thinking stream is active.
+  // Only clear assets when the snapshot cannot be tied to the same process;
+  // otherwise keep the authoritative Mermaid/thinking/tool projection.
+  if (sourceAssistantWithoutTurnScope && !sameDialogProcess && !existingRuntimeView.inFlightAssistant) {
     clearTurnScopedAssets(targetMessage);
     delete targetMessage.turnScopeId;
   }

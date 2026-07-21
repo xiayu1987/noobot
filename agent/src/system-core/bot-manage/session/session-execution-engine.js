@@ -664,6 +664,7 @@ export class SessionExecutionEngine {
     runtimeEventListener = null,
     userConfig = {},
     resolvedParentAsyncResultContainer = null,
+    lifecycle = null,
     persistenceContext = null,
   }) {
     return this.finalizer.finalizeRunSession({
@@ -680,6 +681,7 @@ export class SessionExecutionEngine {
       runtimeEventListener,
       userConfig,
       resolvedParentAsyncResultContainer,
+      lifecycle,
       persistenceContext,
     });
   }
