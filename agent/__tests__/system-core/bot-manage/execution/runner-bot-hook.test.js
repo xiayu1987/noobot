@@ -48,6 +48,7 @@ function createRunner({
   prepareTurnInput = null,
   commitSessionTurn = null,
   stampReusedUserTurnDialogProcessId = async () => {},
+  assertPersistenceContextIdentity = null,
 } = {}) {
   return new SessionExecutionRunner({
     agentRunner,
@@ -62,6 +63,7 @@ function createRunner({
     prepareTurnInput,
     prepareAgentTurnExecution,
     appendSessionTurn: async () => {},
+    assertPersistenceContextIdentity,
     commitSessionTurn,
     stampReusedUserTurnDialogProcessId,
     finalizeRunSession: async () => ({ answer: "ok" }),
@@ -69,6 +71,33 @@ function createRunner({
     now: () => new Date().toISOString(),
   });
 }
+
+test("SessionExecutionRunner validates scoped persistence identity before execution", async () => {
+  const calls = [];
+  const persistenceContext = { kind: "noobot.session_persistence_scope" };
+  const runner = createRunner({
+    assertPersistenceContextIdentity: (context, identity) => calls.push({ context, identity }),
+  });
+
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "child-1",
+    parentSessionId: "root-1",
+    message: "task",
+    runConfig: { executionId: "agent:child-1" },
+    persistenceContext,
+  });
+
+  assert.deepEqual(calls, [{
+    context: persistenceContext,
+    identity: {
+      userId: "u1",
+      sessionId: "child-1",
+      parentSessionId: "root-1",
+      scopeId: "agent:child-1",
+    },
+  }]);
+});
 
 test("SessionExecutionRunner emits bot orchestration hooks", async () => {
   const botHookManager = createBotHookManager();

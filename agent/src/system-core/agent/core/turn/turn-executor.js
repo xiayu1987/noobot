@@ -286,6 +286,14 @@ export async function invokeNoToolsTurn({
     turn,
     messageId: assistantMessageId,
   });
+  if (eventListener?.onEvent && responseContentText && finalStreamResult.streamed !== true) {
+    emitMessageEvent(eventListener, runtime, "main_model_content", {
+      turn,
+      text: responseContentText,
+      output: responseContentText,
+      messageId: assistantMessageId,
+    });
+  }
 
   return {
     output: responseContentText,
@@ -523,11 +531,16 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   });
 
   const mainModelToolTurnContent = String(aiContentText || "").trim();
-  if (calls.length && mainModelToolTurnContent) {
+  if (
+    eventListener?.onEvent &&
+    mainModelToolTurnContent &&
+    (calls.length || finalStreamResult?.streamed !== true)
+  ) {
     emitMessageEvent(eventListener, runtime, "main_model_content", {
       turn,
       text: mainModelToolTurnContent,
       output: mainModelToolTurnContent,
+      messageId: assistantMessageId,
     });
   }
 

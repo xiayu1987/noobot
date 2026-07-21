@@ -5,9 +5,19 @@
  */
 import { randomUUID } from "node:crypto";
 import { emitEvent } from "./index.js";
+import {
+  MESSAGE_EVENT_ENVELOPE_KIND,
+  MESSAGE_EVENT_ENVELOPE_VERSION,
+  assertMessageEventEnvelope,
+  isMessageEventEnvelope,
+} from "@noobot/shared/message-event-protocol";
 
-export const MESSAGE_EVENT_ENVELOPE_KIND = "noobot.message_event";
-export const MESSAGE_EVENT_ENVELOPE_VERSION = 1;
+export {
+  MESSAGE_EVENT_ENVELOPE_KIND,
+  MESSAGE_EVENT_ENVELOPE_VERSION,
+  assertMessageEventEnvelope,
+  isMessageEventEnvelope,
+};
 
 function text(value) {
   return String(value || "").trim();
@@ -79,27 +89,4 @@ export function emitMessageEvent(eventListener, runtime = {}, eventType = "", da
   assertMessageEventEnvelope(payload);
   emitEvent(eventListener, eventType, payload);
   return payload;
-}
-
-export function isMessageEventEnvelope(value = {}) {
-  return Boolean(
-    value &&
-      typeof value === "object" &&
-      value.envelopeKind === MESSAGE_EVENT_ENVELOPE_KIND &&
-      Number(value.envelopeVersion) === MESSAGE_EVENT_ENVELOPE_VERSION &&
-      text(value.eventId) &&
-      text(value.eventType) &&
-      text(value.sessionId) &&
-      text(value.messageId) &&
-      Number.isInteger(Number(value.sequence)) &&
-      Number(value.sequence) > 0 &&
-      text(value.timestamp),
-  );
-}
-
-export function assertMessageEventEnvelope(value = {}) {
-  if (!isMessageEventEnvelope(value)) {
-    throw new TypeError("invalid authoritative message event envelope");
-  }
-  return value;
 }

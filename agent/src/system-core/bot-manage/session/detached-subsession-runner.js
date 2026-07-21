@@ -80,7 +80,9 @@ export function createDetachedSubSessionRunner({
       runConfigPatch,
       disabledPlugins: strategy?.disabledPlugins || [],
     });
-    mergedRunConfig.executionId = String(strategy?.executionId || metadata?.executionId || "").trim();
+    mergedRunConfig.executionId = String(
+      strategy?.executionId || metadata?.executionId || `agent:${turnScopeId || subSessionId}`,
+    ).trim();
     mergedRunConfig.executionKind = "agent";
     mergedRunConfig.parentExecutionId = String(strategy?.parentExecutionId || metadata?.parentExecutionId || "").trim();
     mergedRunConfig.rootExecutionId = String(
@@ -106,6 +108,9 @@ export function createDetachedSubSessionRunner({
     const allowedRoot = String(strategy?.allowedRoot || "").trim();
     const persistenceContext = session.createScopedPersistenceContext({
       userId,
+      sessionId: subSessionId,
+      parentSessionId,
+      scopeId: mergedRunConfig.executionId,
       relativeDir,
       allowedRoot,
       metadataContributor: () => ({

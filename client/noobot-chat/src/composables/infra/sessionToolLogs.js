@@ -17,6 +17,7 @@ import {
   buildToolResultSummary,
 } from "./toolLogFormatting";
 import { deduplicateToolLogs } from "./toolLogIdentity";
+import { projectMessageEventToolFacets } from "@noobot/shared/message-event-protocol";
 
 function buildTurnScopeGroupKey(sessionId = "", turnScopeId = "") {
   const normalizedSessionId = String(sessionId || "").trim();
@@ -248,6 +249,53 @@ function buildToolLogsFromSessions(sessionDocuments = []) {
           dialogProcessId,
           parentDialogProcessId,
         });
+      }
+
+      for (const rawEvent of Array.isArray(messageItem?.rawEvents) ? messageItem.rawEvents : []) {
+        const eventData = rawEvent?.data && typeof rawEvent.data === "object" ? rawEvent.data : {};
+        const eventType = String(eventData?.eventType || rawEvent?.event || "").trim();
+        const toolCallId = String(eventData?.toolCallId || eventData?.tool_call_id || "").trim();
+        const toolName = String(eventData?.tool || "").trim() || toolNameByCallId.get(toolCallId) || "unknown_tool";
+        const eventTime = String(eventData?.timestamp || messageTime || nowIso());
+        const facets = projectMessageEventToolFacets({ ...eventData, eventType });
+        if (eventType === "tool_call_start") {
+          const toolCall = facets.toolCall || { id: toolCallId, name: toolName, args: {} };
+          if (toolCallId) toolNameByCallId.set(toolCallId, toolCall.name || toolName);
+          collectedLogs.push({
+            event: "tool_call",
+            type: "tool_call",
+            text: buildToolCallSummary(toolCall, toolName),
+            detailText: typeof toolCall?.args === "string"
+              ? toolCall.args
+              : JSON.stringify(toolCall?.args || {}, null, 2),
+            ts: eventTime,
+            sessionId,
+            depth: sessionDepth,
+            toolCallId,
+            turnScopeId,
+            dialogProcessId,
+            parentDialogProcessId,
+          });
+        } else if (eventType === "tool_call_end") {
+          const toolResult = facets.toolResult || { output: eventData?.result };
+          const resolvedToolName = toolNameByCallId.get(toolCallId) || toolResult.name || toolName || "tool_result";
+          const resultText = typeof toolResult?.output === "string"
+            ? toolResult.output
+            : JSON.stringify(toolResult?.output ?? "", null, 2);
+          collectedLogs.push({
+            event: "tool_result",
+            type: "tool_result",
+            text: buildToolResultSummary(resultText, resolvedToolName),
+            detailText: resultText,
+            ts: eventTime,
+            sessionId,
+            depth: sessionDepth,
+            toolCallId,
+            turnScopeId,
+            dialogProcessId,
+            parentDialogProcessId,
+          });
+        }
       }
     }
   }

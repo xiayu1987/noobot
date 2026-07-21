@@ -105,6 +105,44 @@ describe("useChatStore sub session projection", () => {
     expect(session?.revision).toBe(1);
   });
 
+  it("projects canonical backend tool envelopes into the assistant tool timeline", () => {
+    const store = useChatStore();
+    const started = store.upsertSubSessionEvent("tool_call_start", createSubSessionEvent({
+      eventType: "tool_call_start",
+      eventId: "tool-start-1",
+      sequence: 1,
+      tool: "read_file",
+      args: { filePath: "notes.txt" },
+      toolCallId: "call-1",
+    }));
+    const ended = store.upsertSubSessionEvent("tool_call_end", createSubSessionEvent({
+      eventType: "tool_call_end",
+      eventId: "tool-end-1",
+      sequence: 2,
+      tool: "read_file",
+      result: "file body",
+      success: true,
+      toolCallId: "call-1",
+    }));
+
+    expect(started.applied).toBe(true);
+    expect(ended.applied).toBe(true);
+    const message = store.selectSubSessionMessages("sub-session-1")?.messages?.[0];
+    expect(message?.role).toBe("assistant");
+    expect(message?.toolCall).toEqual({
+      id: "call-1",
+      name: "read_file",
+      args: { filePath: "notes.txt" },
+    });
+    expect(message?.toolResult).toEqual({
+      toolCallId: "call-1",
+      name: "read_file",
+      output: "file body",
+      success: true,
+    });
+    expect(message?.rawEvents).toHaveLength(2);
+  });
+
   it("keeps events ordered when realtime updates arrive out of sequence", () => {
     const store = useChatStore();
     store.upsertSubSessionEvent("subagent_delta", createSubSessionEvent({ eventId: "event-2", sequence: 2, content: "second" }));

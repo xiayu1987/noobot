@@ -69,6 +69,7 @@ export class SessionExecutionRunner {
     prepareTurnInput,
     prepareAgentTurnExecution,
     appendSessionTurn,
+    assertPersistenceContextIdentity,
     commitSessionTurn,
     stampReusedUserTurnDialogProcessId,
     finalizeRunSession,
@@ -86,6 +87,7 @@ export class SessionExecutionRunner {
     this.prepareTurnInput = prepareTurnInput;
     this.prepareAgentTurnExecution = prepareAgentTurnExecution;
     this.appendSessionTurn = appendSessionTurn;
+    this.assertPersistenceContextIdentity = assertPersistenceContextIdentity;
     this.commitSessionTurn = commitSessionTurn;
     this.stampReusedUserTurnDialogProcessId = stampReusedUserTurnDialogProcessId;
     this.finalizeRunSession = finalizeRunSession;
@@ -161,6 +163,12 @@ export class SessionExecutionRunner {
     parentAsyncResultContainer = null,
     persistenceContext = null,
   }) {
+    this.assertPersistenceContextIdentity?.(persistenceContext, {
+      userId,
+      sessionId,
+      parentSessionId,
+      scopeId: String(runConfig?.executionId || "").trim(),
+    });
     let resolvedParentAsyncResultContainer = parentAsyncResultContainer;
     let resolvedRunConfig = runConfig;
     let resolvedUsedSessionId = sessionId;

@@ -209,6 +209,9 @@ export class SessionExecutionEngine {
         this._prepareAgentTurnExecution(payload),
     };
     const runnerPersistenceDeps = {
+      assertPersistenceContextIdentity: typeof this.session?.assertPersistenceContextIdentity === "function"
+        ? (context = null, identity = {}) => this.session.assertPersistenceContextIdentity(context, identity)
+        : null,
       appendSessionTurn: (payload = {}) => this._appendSessionTurn(payload),
       commitSessionTurn: typeof this.session?.commitTurn === "function"
         ? (payload = {}) => this.session.commitTurn(payload)

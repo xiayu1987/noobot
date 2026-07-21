@@ -8,6 +8,32 @@ import assert from "node:assert/strict";
 
 import { SessionTurnPersister } from "../../../src/system-core/bot-manage/execution/turn-persister.js";
 
+test("appendAgentMessages keeps scoped persistence identity for logs and messages", async () => {
+  const executionPayloads = [];
+  const turnPayloads = [];
+  const persistenceContext = { locationResolver: { scope: "workflow-node" } };
+  const persister = new SessionTurnPersister({
+    session: {
+      appendExecutionLog: async (payload = {}) => executionPayloads.push(payload),
+      appendTurn: async (payload = {}) => turnPayloads.push(payload),
+    },
+  });
+
+  await persister.appendAgentMessages({
+    userId: "u1",
+    sessionId: "child-1",
+    parentSessionId: "root-1",
+    turnScopeId: "workflow-node:one",
+    messages: [{ role: "assistant", content: "done" }],
+    persistenceContext,
+  });
+
+  assert.ok(executionPayloads.length >= 1);
+  assert.equal(executionPayloads.every((payload) => payload.persistenceContext === persistenceContext), true);
+  assert.equal(turnPayloads.length, 1);
+  assert.equal(turnPayloads[0].persistenceContext, persistenceContext);
+});
+
 test("SessionTurnPersister normalizes parentSessionId once for every persistence outlet", async () => {
   const appendedTurns = [];
   const executionLogs = [];

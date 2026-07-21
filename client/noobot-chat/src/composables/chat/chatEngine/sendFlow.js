@@ -4,6 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { StreamEventEnum } from "../../../shared/constants/chatConstants";
+import {
+  MESSAGE_EVENT_ENVELOPE_KIND,
+  isMessageEventEnvelope,
+} from "@noobot/shared/message-event-protocol";
 import { useProcessStore } from "../../../shared/stores/useProcessStore";
 import { buildChatPayload } from "./payload";
 import {
@@ -149,7 +153,7 @@ export function shouldProjectSubSessionEvent(event = "", data = {}) {
   return event === "subagent_message_event" &&
     data?.channelKind === "message_event" &&
     Number(data?.channelVersion) === 1 &&
-    data?.event?.envelopeKind === "noobot.message_event";
+    isMessageEventEnvelope(data?.event);
 }
 
 export function shouldProjectMainSessionEvent(event = "", data = {}) {
@@ -157,7 +161,7 @@ export function shouldProjectMainSessionEvent(event = "", data = {}) {
     data?.channelKind === "message_event" &&
     Number(data?.channelVersion) === 1 &&
     data?.route?.scope === "main_session" &&
-    data?.event?.envelopeKind === "noobot.message_event";
+    isMessageEventEnvelope(data?.event);
 }
 
 export function createChatEngineSender({
@@ -425,7 +429,7 @@ export function createChatEngineSender({
           eventName: event === "subagent_message_event",
           channelKind: data?.channelKind === "message_event",
           channelVersion: Number(data?.channelVersion) === 1,
-          envelopeKind: authoritativeEvent?.envelopeKind === "noobot.message_event",
+          envelopeKind: authoritativeEvent?.envelopeKind === MESSAGE_EVENT_ENVELOPE_KIND,
         };
         if (event === "subagent_message_event" || data?.route?.scope === "sub_session") {
           logSessionEvent({
