@@ -53,11 +53,11 @@ describe("process model", () => {
   it("applies events by sequence and ignores duplicate eventId", () => {
     const state = createEmptyProcessState();
     const later = createProcessEventFromLog(
-      { sequence: 2, dialogProcessId: "dialog-2", event: "tool_result", toolCallId: "call-1", text: "second", result: "ok" },
+      { sequence: 2, dialogProcessId: "dialog-2", event: "tool_result", text: "second" },
       { eventId: "same-event", source: ProcessEventSource.STREAM },
     );
     const earlier = createProcessEventFromLog(
-      { sequence: 1, dialogProcessId: "dialog-2", event: "tool_call", toolCallId: "call-1", text: "first", args: { q: "x" } },
+      { sequence: 1, dialogProcessId: "dialog-2", event: "tool_call", text: "first" },
       { source: ProcessEventSource.STREAM },
     );
     const duplicateLater = { ...later };
@@ -66,14 +66,11 @@ describe("process model", () => {
     const view = selectProcessCompatView(state, "dialog-2");
 
     expect(view.lastSequence).toBe(2);
-    expect(view.executionLogTotal).toBe(1);
-    expect(view.completedToolLogs[0]).toMatchObject({
-      event: "tool_result",
-      text: "返回：second",
-      args: { q: "x" },
-      result: "ok",
-      status: "succeeded",
-    });
+    expect(view.executionLogTotal).toBe(2);
+    expect(view.completedToolLogs.map((item) => item.text)).toEqual([
+      "调用：first",
+      "返回：second",
+    ]);
   });
 
   it("hydrates snapshot and exposes compat view fields", () => {
@@ -81,8 +78,8 @@ describe("process model", () => {
     const snapshot = createProcessSnapshotFromLogs({
       processId: "dialog-3",
       logs: [
-        { event: "tool_call", toolCallId: "call-1", text: "read_file", seq: 1 },
-        { event: "tool_result", toolCallId: "call-1", text: "ok", seq: 2 },
+        { event: "tool_call", text: "read_file", seq: 1 },
+        { event: "tool_result", text: "ok", seq: 2 },
       ],
     });
 
@@ -90,9 +87,9 @@ describe("process model", () => {
     const view = selectProcessCompatView(state, "dialog-3");
 
     expect(view.lastSequence).toBe(2);
-    expect(view.executionLogTotal).toBe(1);
-    expect(view.realtimeLogs).toHaveLength(1);
-    expect(view.completedToolLogs[0].text).toBe("返回：ok");
+    expect(view.executionLogTotal).toBe(2);
+    expect(view.realtimeLogs).toHaveLength(2);
+    expect(view.completedToolLogs[1].text).toBe("返回：ok");
   });
 
   it("keeps eventId stable for equivalent logs without explicit timestamp", () => {
