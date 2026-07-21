@@ -71,6 +71,22 @@ export function resolveExplicitProcessTimestamp(input = {}) {
   return normalizeProcessString(input.timestamp || input.ts || input.createdAt || input.updatedAt);
 }
 
+export function mergeProcessNode(previousNode = {}, nextNode = {}) {
+  const previousLog = previousNode?.log && typeof previousNode.log === "object"
+    ? previousNode.log
+    : {};
+  const nextLog = nextNode?.log && typeof nextNode.log === "object"
+    ? nextNode.log
+    : {};
+  return {
+    ...previousNode,
+    ...nextNode,
+    log: { ...previousLog, ...nextLog },
+    startedAt: normalizeProcessString(previousNode.startedAt || nextNode.startedAt),
+    endedAt: normalizeProcessString(nextNode.endedAt || previousNode.endedAt),
+  };
+}
+
 export function buildProcessEventId({
   source = ProcessEventSource.UNKNOWN,
   type = "event",

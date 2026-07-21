@@ -43,12 +43,20 @@ const result = (overrides = {}) => ({ event: "tool_result", type: "tool_result",
     expect(logs).toHaveLength(2);
   });
 
-  it("does not merge tool calls and results", () => {
+  it("merges tool calls and results into one execution", () => {
     const logs = deduplicateToolLogs([
-      { event: "tool_call", toolCallId: "call-1", text: "search" },
-      result({ toolCallId: "call-1", detailText: "search" }),
+      { event: "tool_call", toolCallId: "call-1", text: "search", detailText: "query" },
+      result({ toolCallId: "call-1", text: "search done", detailText: "result" }),
     ]);
-    expect(logs).toHaveLength(2);
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({
+      event: "tool_result",
+      status: "succeeded",
+      inputText: "query",
+      outputText: "result",
+      text: "search done",
+      executionDetail: { input: "query", output: "result" },
+    });
   });
 
   it("keeps id-less tool calls as separate rows", () => {

@@ -30,6 +30,7 @@ import {
 } from "../interactionPayload";
 import { BackendChannelState } from "../sessionRunStateMachine";
 import { mergeAttachments } from "../../infra/dialogProcessChain";
+import { aggregateToolExecutions } from "../../infra/toolLogIdentity";
 
 function markFirstStreamEvent(botMessage) {
   if (!botMessage) return;
@@ -101,8 +102,13 @@ export function handleThinkingStreamEvent({
     Number(botMessage.executionLogTotal || 0),
     Number(botMessage.processExecutionLogTotal || 0),
   );
-  botMessage.executionLogTotal = previousExecutionLogTotal + 1;
-  botMessage.realtimeLogs = [...(botMessage.realtimeLogs || []), item].slice(-10);
+  const previousRealtimeLogs = Array.isArray(botMessage.realtimeLogs)
+    ? botMessage.realtimeLogs
+    : [];
+  const nextRealtimeLogs = aggregateToolExecutions([...previousRealtimeLogs, item]);
+  const addedExecutionCount = Math.max(0, nextRealtimeLogs.length - previousRealtimeLogs.length);
+  botMessage.executionLogTotal = previousExecutionLogTotal + addedExecutionCount;
+  botMessage.realtimeLogs = nextRealtimeLogs.slice(-10);
   const processEvent = createProcessEventFromLog(item, {
     source: ProcessEventSource.STREAM,
     sequence: data?.sequence ?? data?.seq ?? botMessage.executionLogTotal,

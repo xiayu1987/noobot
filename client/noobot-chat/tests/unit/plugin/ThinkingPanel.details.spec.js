@@ -386,7 +386,7 @@ describe("ThinkingPanel", () => {
     );
   });
 
-  it("renders tool calls and full tool results in actual timestamp order", async () => {
+  it("renders one completed record per tool execution in start-time order", async () => {
     const wrapper = mountThinkingPanel(
       {
         role: "assistant",
@@ -406,9 +406,7 @@ describe("ThinkingPanel", () => {
 
     const lines = wrapper.findAll(".execution-log-line");
     expect(lines.map((line) => line.text())).toEqual([
-      "调用：first call",
       "返回：first result",
-      "调用：second call",
       "返回：second result",
     ]);
   });

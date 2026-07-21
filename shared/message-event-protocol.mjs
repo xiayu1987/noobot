@@ -62,6 +62,19 @@ export function projectMessageEventToolFacets(event = {}) {
   return Object.freeze({ toolCall, toolResult });
 }
 
+export function projectMessageEventToolLifecycle(event = {}) {
+  const eventType = text(event?.eventType || event?.rawEvent);
+  const legacyEvent = text(event?.event || event?.type).toLowerCase();
+  const isStart = eventType === "tool_call_start" || legacyEvent === "tool_call";
+  const isEnd = eventType === "tool_call_end" || legacyEvent === "tool_result";
+  if (!isStart && !isEnd) return undefined;
+  return Object.freeze({
+    event: isEnd ? "tool_result" : "tool_call",
+    status: isEnd ? (event?.success === false ? "failed" : "succeeded") : "running",
+    terminal: isEnd,
+  });
+}
+
 export function hasMessageEventToolPayload(event = {}) {
   const { toolCall, toolResult } = projectMessageEventToolFacets(event);
   return toolCall !== undefined || toolResult !== undefined;
