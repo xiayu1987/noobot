@@ -14,8 +14,7 @@ const props = defineProps({
   messageItem: { type: Object, default: () => ({}) },
   allMessages: { type: Array, default: () => [] },
   sessionDocs: { type: Array, default: () => [] },
-  turnTimingsByTurnScopeId: { type: Object, default: () => ({}) },
-  turnStatuses: { type: Array, default: () => [] },
+  runtime: { type: Object, default: null },
   variant: { type: String, default: "panel" },
   userId: { type: String, default: "" },
   authFetch: { type: Function, default: null },
@@ -77,8 +76,6 @@ const workflowProjectionProps = computed(() => ({
     formatTime: props.formatTime,
     formatFileSize: props.formatFileSize,
     isImageMime: props.isImageMime,
-    turnTimingsByTurnScopeId: props.turnTimingsByTurnScopeId,
-    turnStatuses: props.turnStatuses,
   },
 }));
 </script>

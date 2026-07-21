@@ -28,7 +28,7 @@ const runtimeNode = {
   status: "running",
 };
 
-test("realtime projection cannot erase persisted user messages and turn metadata", () => {
+test("realtime projection cannot erase persisted user messages", () => {
   const merged = mergeUnifiedSessionDetail({
     sessionId: "child-session-a",
     messages: [
@@ -48,8 +48,6 @@ test("realtime projection cannot erase persisted user messages and turn metadata
 
   assert.deepEqual(merged.messages.map(({ id }) => id), ["user-1", "assistant-1"]);
   assert.equal(merged.messages[1].content, "streamed");
-  assert.equal(merged.sessionSummary.turnStatuses[0].status, "processing");
-  assert.equal(merged.sessionSummary.turnTimings[0].thinkingStartedAt, "2026-07-20T00:00:00.000Z");
 });
 
 function selectSessionMessages(sessionId) {
@@ -106,7 +104,7 @@ test("prefers authoritative child Execution detail and exposes its complete subt
   assert.deepEqual(detail.descendantExecutions.map(({ executionId }) => executionId), ["agent:grandchild", "agent:great-grandchild"]);
 });
 
-test("preserves terminal turn state from authoritative child Execution detail", () => {
+test("keeps authoritative child Execution detail content-only", () => {
   const turnScopeId = "workflow-node:node-exec-a";
   const turnTimings = [{
     turnScopeId,
@@ -129,8 +127,9 @@ test("preserves terminal turn state from authoritative child Execution detail", 
     }),
   });
 
-  assert.deepEqual(detail.sessionSummary.turnTimings, turnTimings);
-  assert.deepEqual(detail.sessionSummary.turnStatuses, turnStatuses);
+  assert.equal(detail.sessionSummary.turnTimings, undefined);
+  assert.equal(detail.sessionSummary.turnStatuses, undefined);
+  assert.deepEqual(detail.messages.map(({ id }) => id), ["assistant-1"]);
 });
 
 test("uses only the node's preallocated session when authoritative child Execution is missing", () => {
@@ -154,7 +153,7 @@ test("hydrates child messages when the local Execution projection has not arrive
     execution: null,
   });
   assert.equal(hydrated.sessionSummary.executionId, "agent:starting");
-  assert.equal(hydrated.sessionSummary.turnRuntime, null);
+  assert.equal(hydrated.sessionSummary.turnRuntime, undefined);
   assert.deepEqual(hydrated.sessionSummary.messages.map(({ id }) => id), ["live-child-message"]);
   assert.deepEqual(hydrated.rawMessages.map(({ id }) => id), ["live-child-message"]);
 });
@@ -171,7 +170,7 @@ test("resolves runtime node by nodeExecutionId before legacy keys", () => {
   assert.equal(resolved.turnScopeId, "workflow-node:node-exec-a");
 });
 
-test("builds unified detail with scoped messages and turn runtime", () => {
+test("builds content-only unified detail with scoped messages", () => {
   const detail = buildUnifiedSessionDetail({
     nodeItem: { nodeExecutionId: "node-exec-a", activeChildExecutionId: "agent-exec-a" },
     runtimeNodeSessions: [runtimeNode],
@@ -188,12 +187,12 @@ test("builds unified detail with scoped messages and turn runtime", () => {
   });
   assert.equal(detail.sessionId, "child-session-a");
   assert.equal(detail.sessionSummary.turnScopeId, "workflow-node:node-exec-a");
-  assert.equal(detail.sessionSummary.turnRuntime.phase, "processing");
+  assert.equal(detail.sessionSummary.turnRuntime, undefined);
   assert.deepEqual(detail.messages.map((item) => item.id), ["m-1", "m-3"]);
   assert.deepEqual(detail.messages[0].toolLogs, [{ id: "tool-1" }]);
 });
 
-test("preserves terminal turn state from realtime child session projection", () => {
+test("does not copy terminal runtime fields from realtime child session projection", () => {
   const turnScopeId = "workflow-node:node-exec-a";
   const turnTimings = [{
     turnScopeId,
@@ -213,11 +212,12 @@ test("preserves terminal turn state from realtime child session projection", () 
     turnRuntimeRegistry: {},
   });
 
-  assert.deepEqual(detail.sessionSummary.turnTimings, turnTimings);
-  assert.deepEqual(detail.sessionSummary.turnStatuses, turnStatuses);
+  assert.equal(detail.sessionSummary.turnTimings, undefined);
+  assert.equal(detail.sessionSummary.turnStatuses, undefined);
+  assert.deepEqual(detail.messages.map(({ id }) => id), ["assistant-1"]);
 });
 
-test("allows empty running session when lifecycle runtime exists", () => {
+test("allows an empty preallocated session without copying lifecycle runtime", () => {
   const detail = buildUnifiedSessionDetail({
     nodeItem: { nodeExecutionId: "node-exec-a", activeChildExecutionId: "agent-exec-a" },
     runtimeNodeSessions: [runtimeNode],
@@ -234,7 +234,7 @@ test("allows empty running session when lifecycle runtime exists", () => {
   });
   assert.equal(detail.sessionId, "child-session-a");
   assert.equal(detail.messages.length, 0);
-  assert.equal(detail.sessionSummary.turnRuntime.phase, "action");
+  assert.equal(detail.sessionSummary.turnRuntime, undefined);
 });
 
 test("uses the preallocated session realtime projection before Execution projection arrives", () => {
@@ -281,7 +281,7 @@ test("returns null so caller can use REST fallback for legacy missing unified da
   assert.equal(detail, null);
 });
 
-test("supports ref-like runtime node sessions and registry", () => {
+test("supports ref-like runtime node sessions without copying registry runtime", () => {
   const detail = buildUnifiedSessionDetail({
     nodeItem: { nodeExecutionId: "node-exec-a" },
     runtimeNodeSessions: { value: [runtimeNode] },
@@ -298,7 +298,7 @@ test("supports ref-like runtime node sessions and registry", () => {
       },
     },
   });
-  assert.equal(detail.sessionSummary.turnRuntime.phase, "completion");
+  assert.equal(detail.sessionSummary.turnRuntime, undefined);
 });
 
 for (const state of ["processing", "completed"]) {
@@ -342,8 +342,9 @@ for (const state of ["processing", "completed"]) {
     assert.equal(detail.sessionId, "child-session-a");
     assert.equal(detail.sessionSummary.state, state);
     assert.deepEqual(detail.messages.map(({ id }) => id), [`user-${state}`, `message-${state}`]);
-    assert.equal(detail.sessionSummary.turnStatuses[0].turnScopeId, `turn-${state}`);
-    assert.equal(detail.turnTimings[0].thinkingStartedAt, "2026-07-20T00:00:00.000Z");
+    assert.equal(detail.sessionSummary.turnStatuses, undefined);
+    assert.equal(detail.sessionSummary.turnTimings, undefined);
+    assert.equal(detail.turnTimings, undefined);
   });
 }
 

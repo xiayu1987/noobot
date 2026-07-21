@@ -104,7 +104,6 @@ export function useWorkflowNodeSessionViewer({
       sessionSummary: {
         ...session,
         executionId: id,
-        turnRuntime: execution,
         messages,
       },
     });
@@ -217,7 +216,6 @@ export function useWorkflowNodeSessionViewer({
       runtimeNodeSessions,
       selectSessionMessages: props.selectSessionMessages,
       selectExecutionDetail: props.selectExecutionDetail,
-      turnRuntimeRegistry: props.turnRuntimeRegistry,
       allowEmptyMessages: false,
     });
     if (!detail) return false;
@@ -232,11 +230,8 @@ export function useWorkflowNodeSessionViewer({
       return id && values.findIndex((candidate) => text(candidate?.executionId) === id) === index;
     });
     // Realtime sub-session events can arrive before the Execution projection.
-    // Once either messages or a live turn projection is available, leave the
-    // passive pending placeholder and let AgentExecutionView replay/stream it.
     const hasMessages = Array.isArray(detail.messages) && detail.messages.length > 0;
-    const hasRuntime = Boolean(detail.execution || detail.sessionSummary?.turnRuntime);
-    if (hasMessages || hasRuntime) viewerState.value = "streaming";
+    if (hasMessages || detail.execution) viewerState.value = "streaming";
     return true;
   }
 
@@ -426,11 +421,6 @@ export function useWorkflowNodeSessionViewer({
 
   watchEffect(() => {
     if (!viewerVisible.value || !selectedNode.value) return;
-    // Selector functions close over Pinia state, but invoking them alone does
-    // not give this plugin effect a reactive dependency after props have been
-    // unwrapped. The host-provided token changes with Execution/Turn/session
-    // projections and makes completion snapshots re-enter this merge path.
-    void props.workflowRuntimeProjectionVersion;
     if (!applyUnifiedSessionDetailIfAvailable(selectedNode.value)) {
       bindSelectedNodeRealtimeProjection(selectedNode.value);
     }

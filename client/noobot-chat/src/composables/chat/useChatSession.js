@@ -675,7 +675,9 @@ export function useChatSession({
       const sessionId = String(activeSession.value?.backendSessionId || activeSessionId.value || "").trim();
       const currentTurn = resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionId);
       const executionId = String(
-        turnRuntimeRegistry.value?.executionIdByTurnScopeId?.[currentTurn?.turnScopeId] ||
+        turnRuntimeRegistry.value?.executionIdByTurnScopeId?.[
+          `${sessionId}::${currentTurn?.turnScopeId || ""}`
+        ] ||
         currentTurn?.executionId ||
         "",
       ).trim();
