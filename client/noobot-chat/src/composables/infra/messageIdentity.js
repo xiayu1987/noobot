@@ -127,9 +127,29 @@ export function getMessageTurnScopeId(messageItem = {}) {
   return normalizeTurnMeta(messageItem).turnScopeId;
 }
 
+export function normalizeTurnScopeIdKey(value = "") {
+  const turnScopeId = trim(value);
+  if (!turnScopeId) return "";
+  const workflowPrefix = "workflow-node:";
+  if (turnScopeId.startsWith(workflowPrefix)) {
+    return `workflow-node_${turnScopeId.slice(workflowPrefix.length)}`;
+  }
+  return turnScopeId;
+}
+
+export function getMessageTurnScopeIdKey(messageItem = {}) {
+  return normalizeTurnScopeIdKey(getMessageTurnScopeId(messageItem));
+}
+
+export function areTurnScopeIdsEquivalent(left = "", right = "") {
+  const leftKey = normalizeTurnScopeIdKey(left);
+  const rightKey = normalizeTurnScopeIdKey(right);
+  return Boolean(leftKey && rightKey && leftKey === rightKey);
+}
+
 export function getMessageTurnScopeKey(messageItem = {}) {
   const sessionId = getMessageSessionId(messageItem);
-  const turnScopeId = getMessageTurnScopeId(messageItem);
+  const turnScopeId = getMessageTurnScopeIdKey(messageItem);
   return sessionId && turnScopeId ? `${sessionId}::${turnScopeId}` : "";
 }
 
@@ -169,14 +189,14 @@ export function getMessageContentIdentity(messageItem = {}) {
 }
 
 export function buildMessageIdentityKey(messageItem = {}) {
-  const turnScopeId = getMessageTurnScopeId(messageItem);
+  const turnScopeId = getMessageTurnScopeIdKey(messageItem);
   return turnScopeId ? `${getMessageRole(messageItem)}|${turnScopeId}` : "";
 }
 
 export function hasMessageTurnScopeConflict(leftMessage = {}, rightMessage = {}) {
   const leftTurnScopeId = getMessageTurnScopeId(leftMessage);
   const rightTurnScopeId = getMessageTurnScopeId(rightMessage);
-  return Boolean(leftTurnScopeId && rightTurnScopeId && leftTurnScopeId !== rightTurnScopeId);
+  return Boolean(leftTurnScopeId && rightTurnScopeId && !areTurnScopeIdsEquivalent(leftTurnScopeId, rightTurnScopeId));
 }
 
 export function hasExplicitMessageIdentity(messageItem = {}) {
@@ -188,7 +208,7 @@ export function isSameMessageIdentity(targetMessage = {}, candidateMessage = {})
   if (targetMessage === candidateMessage) return true;
 
   const targetTurnScopeId = getMessageTurnScopeId(targetMessage);
-  if (!targetTurnScopeId || getMessageTurnScopeId(candidateMessage) !== targetTurnScopeId) return false;
+  if (!targetTurnScopeId || !areTurnScopeIdsEquivalent(getMessageTurnScopeId(candidateMessage), targetTurnScopeId)) return false;
   const targetRole = lower(getMessageRole(targetMessage));
   const candidateRole = lower(getMessageRole(candidateMessage));
   return Boolean(targetRole && candidateRole && targetRole === candidateRole);
@@ -222,7 +242,7 @@ export function isSameMessageRound(targetMessage = {}, candidateMessage = {}) {
     const targetSessionId = getMessageSessionId(targetMessage);
     const candidateSessionId = getMessageSessionId(candidateMessage);
     if (targetSessionId && candidateSessionId && targetSessionId !== candidateSessionId) return false;
-    return targetTurnScopeId === candidateTurnScopeId;
+    return areTurnScopeIdsEquivalent(targetTurnScopeId, candidateTurnScopeId);
   }
   return false;
 }
@@ -230,7 +250,7 @@ export function isSameMessageRound(targetMessage = {}, candidateMessage = {}) {
 export function isSameExplicitMessageTurn(leftMessage = {}, rightMessage = {}) {
   const leftIdentity = getMessageExplicitTurnIdentity(leftMessage);
   const rightIdentity = getMessageExplicitTurnIdentity(rightMessage);
-  return Boolean(leftIdentity && rightIdentity && leftIdentity === rightIdentity);
+  return areTurnScopeIdsEquivalent(leftIdentity, rightIdentity);
 }
 
 export function shouldCollectAttachmentsFromMessage(targetMessage = {}, candidateMessage = {}) {

@@ -9,10 +9,12 @@ import {
   getMessageDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,
+  getMessageTurnScopeIdKey,
   getMessageExplicitTurnIdentity,
   isSameMessageIdentity,
   isSameExplicitMessageTurn,
   isSameMessageRound,
+  normalizeTurnScopeIdKey,
   shouldCollectAttachmentsFromMessage,
 } from "../../../../src/composables/infra/messageIdentity";
 
@@ -58,6 +60,19 @@ describe("messageIdentity", () => {
       { turnScopeId: "client-1", dialogProcessId: "dp-1" },
       { turnScopeId: "client-2", dialogProcessId: "dp-1" },
     )).toBe(false);
+  });
+
+  it("normalizes workflow-node turn scope keys for persisted/runtime matching", () => {
+    expect(normalizeTurnScopeIdKey("workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1"))
+      .toBe("workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1");
+    expect(getMessageTurnScopeId({ turnScopeId: "workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1" }))
+      .toBe("workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1");
+    expect(getMessageTurnScopeIdKey({ turnScopeId: "workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1" }))
+      .toBe("workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1");
+    expect(isSameMessageRound(
+      { turnScopeId: "workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1" },
+      { turnScopeId: "workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1" },
+    )).toBe(true);
   });
 
   it("does not treat user and assistant in the same turn scope as the same message", () => {

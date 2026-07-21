@@ -130,6 +130,12 @@ export function buildUnifiedSessionDetail({
           turnScopeId: text(execution.turnScopeId),
           dialogProcessId: text(execution.dialogProcessId),
           turnRuntime: execution,
+          turnTimings: Array.isArray(execution.turnTimings)
+            ? execution.turnTimings
+            : (Array.isArray(sessionDoc.turnTimings) ? sessionDoc.turnTimings : []),
+          turnStatuses: Array.isArray(execution.turnStatuses)
+            ? execution.turnStatuses
+            : (Array.isArray(sessionDoc.turnStatuses) ? sessionDoc.turnStatuses : []),
           messages,
         },
       };
@@ -173,6 +179,8 @@ export function buildUnifiedSessionDetail({
       dialogProcessId,
       turnScopeId,
       turnRuntime: runtimeTurn || null,
+      turnTimings: Array.isArray(sessionDoc.turnTimings) ? sessionDoc.turnTimings : [],
+      turnStatuses: Array.isArray(sessionDoc.turnStatuses) ? sessionDoc.turnStatuses : [],
       messages: scopedMessages,
     },
   };

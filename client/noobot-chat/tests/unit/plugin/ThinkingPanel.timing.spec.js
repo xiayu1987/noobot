@@ -204,6 +204,38 @@ describe("ThinkingPanel", () => {
     expect(wrapper.text()).not.toContain("00:20");
   });
 
+  it("stops glowing when workflow-node message and persisted turn timing use equivalent scope formats", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-22T10:00:20.000Z"));
+
+    const messageItem = {
+      role: "assistant",
+      pending: true,
+      sessionId: "workflow-child-session",
+      dialogProcessId: "workflow-child-dialog",
+      turnScopeId: "workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1",
+      completedToolLogs: [{ type: "tool_result", text: "done" }],
+    };
+    const wrapper = mountThinkingPanel(messageItem, {
+      turnTimingsByTurnScopeId: {
+        "workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1": {
+          turnScopeId: "workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1",
+          thinkingStartedAt: "2026-06-22T10:00:05.000Z",
+          thinkingFinishedAt: "2026-06-22T10:00:12.000Z",
+        },
+      },
+      turnStatuses: [{
+        turnScopeId: "workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1",
+        dialogProcessId: "workflow-child-dialog",
+        status: "completed",
+      }],
+    });
+
+    expect(wrapper.text()).toContain("00:07");
+    expect(wrapper.find(".thinking-realtime-shell").classes()).not.toContain("is-running");
+    expect(wrapper.text()).not.toContain("00:15");
+  });
+
   it("does not use channel state createdAt as thinking elapsed source", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-22T10:00:12.000Z"));

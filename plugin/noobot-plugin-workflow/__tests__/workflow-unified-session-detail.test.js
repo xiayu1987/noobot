@@ -106,6 +106,33 @@ test("prefers authoritative child Execution detail and exposes its complete subt
   assert.deepEqual(detail.descendantExecutions.map(({ executionId }) => executionId), ["agent:grandchild", "agent:great-grandchild"]);
 });
 
+test("preserves terminal turn state from authoritative child Execution detail", () => {
+  const turnScopeId = "workflow-node:node-exec-a";
+  const turnTimings = [{
+    turnScopeId,
+    thinkingStartedAt: "2026-07-21T07:29:00.000Z",
+    thinkingFinishedAt: "2026-07-21T07:29:27.000Z",
+  }];
+  const turnStatuses = [{ turnScopeId, status: "completed" }];
+  const detail = buildUnifiedSessionDetail({
+    nodeItem: { nodeExecutionId: "node-exec-a", activeChildExecutionId: "agent:attempt-1" },
+    selectExecutionDetail: () => ({
+      execution: {
+        executionId: "agent:attempt-1",
+        sessionId: "child-session-a",
+        turnScopeId,
+        turnTimings,
+        turnStatuses,
+      },
+      session: { sessionId: "child-session-a" },
+      messages: [{ id: "assistant-1", role: "assistant", turnScopeId }],
+    }),
+  });
+
+  assert.deepEqual(detail.sessionSummary.turnTimings, turnTimings);
+  assert.deepEqual(detail.sessionSummary.turnStatuses, turnStatuses);
+});
+
 test("uses only the node's preallocated session when authoritative child Execution is missing", () => {
   const detail = buildUnifiedSessionDetail({
     nodeItem: { nodeExecutionId: "node-a", activeChildExecutionId: "agent:missing", sessionId: "legacy-session" },
@@ -164,6 +191,30 @@ test("builds unified detail with scoped messages and turn runtime", () => {
   assert.equal(detail.sessionSummary.turnRuntime.phase, "processing");
   assert.deepEqual(detail.messages.map((item) => item.id), ["m-1", "m-3"]);
   assert.deepEqual(detail.messages[0].toolLogs, [{ id: "tool-1" }]);
+});
+
+test("preserves terminal turn state from realtime child session projection", () => {
+  const turnScopeId = "workflow-node:node-exec-a";
+  const turnTimings = [{
+    turnScopeId,
+    thinkingStartedAt: "2026-07-21T07:29:00.000Z",
+    thinkingFinishedAt: "2026-07-21T07:29:27.000Z",
+  }];
+  const turnStatuses = [{ turnScopeId, status: "completed" }];
+  const detail = buildUnifiedSessionDetail({
+    nodeItem: { nodeExecutionId: "node-exec-a", activeChildExecutionId: "agent-exec-a" },
+    runtimeNodeSessions: [runtimeNode],
+    selectSessionMessages: () => ({
+      sessionId: "child-session-a",
+      turnTimings,
+      turnStatuses,
+      messages: [{ id: "assistant-1", role: "assistant", turnScopeId }],
+    }),
+    turnRuntimeRegistry: {},
+  });
+
+  assert.deepEqual(detail.sessionSummary.turnTimings, turnTimings);
+  assert.deepEqual(detail.sessionSummary.turnStatuses, turnStatuses);
 });
 
 test("allows empty running session when lifecycle runtime exists", () => {

@@ -48,4 +48,34 @@ describe("buildSessionDetailProjection", () => {
       thinkingFinishedAt: null,
     });
   });
+
+  it("indexes workflow node timings by normalized turn scope key", () => {
+    const projection = buildSessionDetailProjection({
+      sessionDetail: {
+        sessionId: "session-1",
+        messages: [{
+          role: "assistant",
+          content: "child agent done",
+          turnScopeId: "workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1",
+          dialogProcessId: "dialog-child-1",
+        }],
+        turnTimings: [{
+          turnScopeId: "workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1",
+          dialogProcessId: "dialog-child-1",
+          thinkingStartedAt: "2026-07-21T08:29:00.000Z",
+          thinkingFinishedAt: "2026-07-21T08:30:00.000Z",
+        }],
+      },
+      makeViewMessage: identity,
+      foldMessagesForView: (messages) => messages.map(identity),
+    });
+
+    expect(projection.turnTimingsByTurnScopeId["workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1"])
+      .toEqual({
+        thinkingStartedAt: "2026-07-21T08:29:00.000Z",
+        thinkingFinishedAt: "2026-07-21T08:30:00.000Z",
+      });
+    expect(projection.turnTimingsByTurnScopeId["workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1"])
+      .toBeUndefined();
+  });
 });

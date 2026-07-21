@@ -64,6 +64,7 @@ import { setResendDebugLogSink } from "./debug/resendDebugLogger";
 import { setStopDebugLogSink } from "./debug/stopDebugLogger";
 import { setStopContinueDebugLogSink } from "./debug/stopContinueDebugLogger";
 import { setReconnectTimingDebugLogSink } from "./debug/reconnectTimingDebugLogger";
+import { setWorkflowDiagnosticsLogSink } from "./debug/workflowDiagnosticsLogger";
 import {
   applyTurnRuntimeEvent,
   applyExecutionChildren,
@@ -353,6 +354,7 @@ export function useChatSession({
   setStopDebugLogSink(sessionLogWebSocketClient);
   setStopContinueDebugLogSink(sessionLogWebSocketClient);
   setReconnectTimingDebugLogSink(sessionLogWebSocketClient);
+  setWorkflowDiagnosticsLogSink(sessionLogWebSocketClient);
 
   function logSessionSystemEvent(event, payload = {}) {
     sessionLogWebSocketClient.log({
