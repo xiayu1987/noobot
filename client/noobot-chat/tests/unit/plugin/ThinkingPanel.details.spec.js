@@ -81,7 +81,7 @@ describe("ThinkingPanel", () => {
       allMessages: [],
     });
     expect(wrapper.find(".thinking-detail-drawer").exists()).toBe(false);
-    expect(wrapper.findAll("el-tab-pane")).toHaveLength(0);
+    expect(wrapper.findAll(".tab-pane")).toHaveLength(0);
   });
 
   it("renders thinking entry for summary placeholder without inlined detail logs", async () => {
@@ -95,7 +95,7 @@ describe("ThinkingPanel", () => {
 
     const wrapper = mountThinkingPanel(messageItem);
 
-    expect(wrapper.findAll("el-tab-pane")).toHaveLength(0);
+    expect(wrapper.findAll(".tab-pane")).toHaveLength(0);
     expect(wrapper.text()).toContain("Expand Thinking");
     expect(wrapper.text()).toContain("Thinking Details (5)");
     expect(wrapper.find("button").text()).toContain("5");
@@ -141,9 +141,9 @@ describe("ThinkingPanel", () => {
       },
     );
 
-    const detailPanes = wrapper.findAll("el-tab-pane");
+    const detailPanes = wrapper.findAll(".tab-pane");
     expect(detailPanes).toHaveLength(2);
-    expect(detailPanes[1].attributes("label")).toContain("Injected Messages (1)");
+    expect(detailPanes[1].attributes("data-label")).toContain("Injected Messages (1)");
     expect(wrapper.text()).toContain("current injected context without round");
     expect(wrapper.text()).not.toContain("other dialog injected context");
   });
@@ -169,7 +169,7 @@ describe("ThinkingPanel", () => {
       },
     );
 
-    expect(wrapper.findAll("el-tab-pane")).toHaveLength(0);
+    expect(wrapper.findAll(".tab-pane")).toHaveLength(0);
     expect(wrapper.text()).not.toContain("outer injected context");
     expect(wrapper.text()).toContain("Expand Thinking");
   });
@@ -190,14 +190,14 @@ describe("ThinkingPanel", () => {
     }, { variant: "details" });
 
     expect(wrapper.find(".thinking-detail-drawer").exists()).toBe(false);
-    const detailPanes = wrapper.findAll("el-tab-pane");
+    const detailPanes = wrapper.findAll(".tab-pane");
     expect(detailPanes).toHaveLength(2);
-    expect(detailPanes[0].attributes("label")).toContain("12");
-    expect(detailPanes[0].attributes("label")).not.toContain("({count})");
+    expect(detailPanes[0].attributes("data-label")).toContain("12");
+    expect(detailPanes[0].attributes("data-label")).not.toContain("({count})");
     const detailLines = wrapper.findAll(".execution-log-line");
     expect(detailLines).toHaveLength(12);
-    expect(detailLines[0].text()).toBe("返回：cmd-1");
-    expect(detailLines[11].text()).toBe("返回：cmd-12");
+    expect(detailLines[0].text()).toBe("cmd-1");
+    expect(detailLines[11].text()).toBe("cmd-12");
     expect(wrapper.text()).not.toContain("思考明细 ({count})");
   });
 
@@ -225,7 +225,7 @@ describe("ThinkingPanel", () => {
     expect(wrapper.find(".thinking-details-panel").exists()).toBe(true);
     expect(wrapper.find(".thinking-details-tabs").exists()).toBe(true);
 
-    const panes = wrapper.findAll("el-tab-pane");
+    const panes = wrapper.findAll(".tab-pane");
     expect(panes).toHaveLength(2);
     expect(panes[0].find(".thinking-details-scroll-body.thinking-details-log-body").exists()).toBe(true);
     expect(panes[1].find(".thinking-details-scroll-body.thinking-details-injected-body").exists()).toBe(true);
@@ -406,10 +406,10 @@ describe("ThinkingPanel", () => {
 
     const lines = wrapper.findAll(".execution-log-line");
     expect(lines.map((line) => line.text())).toEqual([
-      "调用：first call",
-      "返回：first result",
-      "调用：second call",
-      "返回：second result",
+      "first call",
+      "first result",
+      "second call",
+      "second result",
     ]);
   });
 
@@ -430,10 +430,10 @@ describe("ThinkingPanel", () => {
 
     expect(wrapper.findAll(".thinking-group")).toHaveLength(1);
     expect(wrapper.findAll(".execution-log-line").map((line) => line.text())).toEqual([
-      "调用：main call",
-      "返回：main result",
-      "调用：child call",
-      "返回：child result",
+      "main call",
+      "main result",
+      "child call",
+      "child result",
     ]);
   });
 

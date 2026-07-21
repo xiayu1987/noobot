@@ -19,6 +19,9 @@
     "client/windows",
     "client/mac"
   ],
+  "devDependencies": {
+    "vue": "3.5.40"
+  },
   "scripts": {
     "project:launcher": "node ./scripts/project-launcher.mjs",
     "release:version": "node ./scripts/bump-version.mjs",

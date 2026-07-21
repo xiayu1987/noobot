@@ -16,6 +16,13 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [vue()],
+    resolve: {
+      // Workspace peer dependencies can otherwise resolve Vue from the repo
+      // root while application modules resolve a nested copy. Separate Vue
+      // runtimes do not share reactivity tracking, so refs update without
+      // scheduling component renders.
+      dedupe: ["vue"],
+    },
     test: {
       environment: "jsdom",
       include: ["tests/unit/**/*.spec.js"],
