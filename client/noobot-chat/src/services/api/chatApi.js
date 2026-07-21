@@ -150,13 +150,22 @@ export async function getSessionFullDetailApi(
 }
 
 export async function getSessionThinkingDetailApi(
-  { userId = "", sessionId = "", dialogProcessId = "" },
+  { userId = "", sessionId = "", dialogProcessId = "", turnScopeId = "" },
   { fetcher } = {},
 ) {
   const runFetch = resolveFetcher(fetcher);
-  const query = `dialogProcessId=${encodeURIComponent(String(dialogProcessId || "").trim())}`;
+  const queryParams = [];
+  const normalizedDialogProcessId = String(dialogProcessId || "").trim();
+  const normalizedTurnScopeId = String(turnScopeId || "").trim();
+  if (normalizedDialogProcessId) {
+    queryParams.push(`dialogProcessId=${encodeURIComponent(normalizedDialogProcessId)}`);
+  }
+  if (normalizedTurnScopeId) {
+    queryParams.push(`turnScopeId=${encodeURIComponent(normalizedTurnScopeId)}`);
+  }
+  const query = queryParams.length ? `?${queryParams.join("&")}` : "";
   return runFetch(
-    `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/thinking-detail?${query}`,
+    `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/thinking-detail${query}`,
   );
 }
 

@@ -190,6 +190,7 @@ export const TIME_THRESHOLDS = deepFreeze({
 
   service: {
     apiKeyTtlMs: TIME_TIERS.oneDayMs,
+    orphanedTurnRecoveryGraceMs: TIME_TIERS.standardCommandMs,
     userInteractionTimeoutMs: 10 * MINUTE_MS,
     sessionLogRetentionMs: 7 * TIME_TIERS.oneDayMs,
     sessionLogCleanupIntervalMs: TIME_TIERS.oneHourMs,

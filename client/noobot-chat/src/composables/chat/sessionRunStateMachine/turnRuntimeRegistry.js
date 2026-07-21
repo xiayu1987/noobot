@@ -262,6 +262,22 @@ export function selectSessionTurnRuntime(registry, sessionId) {
 export function selectTurnMessageRuntime(registry, { sessionId = "", turnScopeId = "", dialogProcessId = "" } = {}) {
   const normalizedSessionId = text(sessionId);
   const normalizedDialogProcessId = text(dialogProcessId);
+  const defaultRuntimeView = {
+    state: "",
+    backendState: "",
+    sessionId: normalizedSessionId,
+    turnScopeId: turnKey(turnScopeId),
+    dialogProcessId: normalizedDialogProcessId,
+    source: "",
+    sourceEvent: "",
+    seq: 0,
+    updatedAt: "",
+    updatedAtMs: 0,
+    terminal: null,
+    running: false,
+    startedAt: "",
+    finishedAt: "",
+  };
   let normalizedTurnScopeId = turnKey(turnScopeId);
   let routeSessionId = "";
   if (!normalizedTurnScopeId && normalizedDialogProcessId) {
@@ -272,9 +288,19 @@ export function selectTurnMessageRuntime(registry, { sessionId = "", turnScopeId
   const turn = normalizedTurnScopeId
     ? resolveTurnRuntimeByScope(registry, normalizedTurnScopeId, { sessionId: normalizedSessionId || routeSessionId })
     : null;
-  if (!turn) return null;
+  if (!turn) {
+    // Distinguish an unknown Turn (safe empty projection) from a known Turn
+    // owned by another Session (identity mismatch). This prevents cross-session
+    // leakage without forcing callers to null-check genuinely absent runtime.
+    const turnInAnotherSession = normalizedSessionId && normalizedTurnScopeId
+      ? resolveTurnRuntimeByScope(registry, normalizedTurnScopeId)
+      : null;
+    return turnInAnotherSession ? null : defaultRuntimeView;
+  }
   if (normalizedSessionId && turn.sessionId !== normalizedSessionId) return null;
-  if (normalizedDialogProcessId && turn.dialogProcessId && turn.dialogProcessId !== normalizedDialogProcessId) return null;
+  // sessionId + canonical turnScopeId is the authoritative Turn identity.
+  // dialogProcessId is only a routing aid when the scope is absent; workflow
+  // projections may legitimately carry a parent/graph dialog id here.
   const state = turn.state === BackendChannelState.SENDING
     ? FrontendRunState.PROCESSING
     : turn.state || "";
@@ -416,7 +442,13 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
     source: text(event.source || current?.source),
     sourceEvent: text(event.sourceEvent || event.type || current?.sourceEvent),
     finishedAtMs: terminal ? Number(current?.finishedAtMs || nowMs) : 0,
-    startedAt: text(rawEvent?.thinkingStartedAt || rawEvent?.startedAt || current?.startedAt),
+    startedAt: text(
+      current?.startedAt ||
+      rawEvent?.thinkingStartedAt ||
+      rawEvent?.startedAt ||
+      event.updatedAt ||
+      (nowMs > 0 ? new Date(nowMs).toISOString() : ""),
+    ),
     finishedAt: terminal
       ? text(current?.finishedAt || rawEvent?.thinkingFinishedAt || rawEvent?.finishedAt || event.updatedAt)
       : text(current?.finishedAt),
@@ -525,27 +557,30 @@ export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
 
 export function hydrateSessionTurnRuntime(registry, session, turnStatuses = session?.turnStatuses || []) {
   const sessionId = sessionRuntimeId(session);
-  if (!sessionId) return registry;
+  if (!sessionId) return { registry, applied: false, reason: "missing_session_identity" };
   // turnStatuses is a legacy summary projection. Once this Session has seen
   // the authoritative lifecycle protocol it must never drive the state
   // machine again (watchers may invoke hydration repeatedly).
-  if (Number(registry?.sessions?.[sessionId]?.protocolVersion || 0) > 0) return registry;
+  if (Number(registry?.sessions?.[sessionId]?.protocolVersion || 0) > 0) {
+    return { registry, applied: false, reason: "authoritative_protocol_present" };
+  }
+  let applied = false;
   for (const status of Array.isArray(turnStatuses) ? turnStatuses : []) {
     const turnScopeId = turnKey(status?.turnScopeId);
     if (!turnScopeId) continue;
     const scope = { sessionId, turnScopeId, dialogProcessId: status?.dialogProcessId, updatedAt: status?.updatedAt, authoritativeSnapshot: true, source: "session_summary_replay" };
     const terminalStatus = text(status?.status).toLowerCase();
-    applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED, ...scope, dialogProcessId: "", seq: 0 });
-    applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, ...scope, state: BackendChannelState.SENDING, seq: 0 });
+    applied = applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED, ...scope, dialogProcessId: "", seq: 0 }).applied || applied;
+    applied = applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, ...scope, state: BackendChannelState.SENDING, seq: 0 }).applied || applied;
     if (terminalStatus === BackendChannelState.USER_STOPPED) {
-      applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED, ...scope, seq: 0 });
-      applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, ...scope, state: BackendChannelState.USER_STOPPED, seq: 0 });
-      applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED, ...scope, seq: Number(status?.seq || 0) });
+      applied = applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED, ...scope, seq: 0 }).applied || applied;
+      applied = applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, ...scope, state: BackendChannelState.USER_STOPPED, seq: 0 }).applied || applied;
+      applied = applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED, ...scope, seq: Number(status?.seq || 0) }).applied || applied;
     } else if (terminalStatus === BackendChannelState.COMPLETED) {
-      applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, ...scope, state: BackendChannelState.COMPLETED, seq: 0 });
-      applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED, ...scope, seq: Number(status?.seq || 0) });
+      applied = applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, ...scope, state: BackendChannelState.COMPLETED, seq: 0 }).applied || applied;
+      applied = applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED, ...scope, seq: Number(status?.seq || 0) }).applied || applied;
     } else {
-      applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, ...scope, state: terminalStatus, seq: Number(status?.seq || 0) });
+      applied = applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, ...scope, state: terminalStatus, seq: Number(status?.seq || 0) }).applied || applied;
     }
   }
   const timings = Array.isArray(session?.turnTimings) ? session.turnTimings : [];
@@ -553,8 +588,16 @@ export function hydrateSessionTurnRuntime(registry, session, turnStatuses = sess
     const turnScopeId = turnKey(timing?.turnScopeId);
     const turn = turnScopeId ? registry?.sessions?.[sessionId]?.turns?.[turnScopeId] : null;
     if (!turn) continue;
-    if (!turn.startedAt) turn.startedAt = text(timing?.thinkingStartedAt);
-    if (!turn.finishedAt) turn.finishedAt = text(timing?.thinkingFinishedAt);
+    const startedAt = text(timing?.thinkingStartedAt);
+    const finishedAt = text(timing?.thinkingFinishedAt);
+    if (!turn.startedAt && startedAt) {
+      turn.startedAt = startedAt;
+      applied = true;
+    }
+    if (!turn.finishedAt && finishedAt) {
+      turn.finishedAt = finishedAt;
+      applied = true;
+    }
   }
-  return registry;
+  return { registry, applied };
 }

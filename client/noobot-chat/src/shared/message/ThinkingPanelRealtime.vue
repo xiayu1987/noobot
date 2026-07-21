@@ -27,12 +27,14 @@ defineProps({
   thinkingDetailLabel: { type: String, default: "" },
   showWorkflowProjection: Boolean,
   workflowProjectionProps: { type: Object, default: () => ({}) },
+  openNames: { type: Array, default: () => [] },
 });
-const emit = defineEmits(["open-thinking-details", "collapse"]);
+const emit = defineEmits(["open-thinking-details", "collapse", "update:openNames"]);
 </script>
 <template>
   <BaseThinkingPanelShell
-    v-model="messageItem.thinkingOpenNames"
+    :model-value="openNames"
+    @update:model-value="emit('update:openNames', $event)"
     item-name="thinking-panel"
     class="thinking-realtime-shell"
     :class="{ 'is-running': isRunning }"

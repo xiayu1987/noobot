@@ -15,6 +15,7 @@ import {
   getMessageRole,
   isAssistantWithoutTurnScope,
 } from "../composables/infra/messageIdentity";
+import { loadThinkingDetail } from "../shared/message/thinkingDetailCache";
 
 function getSessionDocsFromDetail(detail = {}) {
   if (Array.isArray(detail?.sessionDocs)) return detail.sessionDocs;
@@ -87,7 +88,13 @@ export function useThinkingDetailsPanel({
         ? currentFetchDetail
         : fetchThinkingDetail;
     if (typeof runFetchDetail !== "function") return null;
-    return runFetchDetail(activeSessionId?.value, { dialogProcessId, turnScopeId });
+    return loadThinkingDetail({
+      sessionId: activeSessionId?.value,
+      messageItem,
+      dialogProcessId,
+      turnScopeId,
+      fetchThinkingDetail: runFetchDetail,
+    });
   }
 
   async function openThinkingDetailsPanel(payload = {}) {

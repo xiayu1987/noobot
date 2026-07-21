@@ -75,6 +75,12 @@ export const createHarness = ({
   const uploadFiles = ref([]);
   const pendingInteractionRequest = ref(pendingInteraction);
   const interactionSubmitting = ref(interactionSubmittingValue);
+  const commitTurnRuntimeEvent = (event) => {
+    const registry = turnRuntimeRegistry.value;
+    const result = applyTurnRuntimeEvent(registry, event);
+    if (result?.applied !== false) turnRuntimeRegistry.value = { ...registry };
+    return result;
+  };
 
   const appendMessage = vi.fn((role, content = "", attachments = []) => {
     const message = makeMessage(role, content, attachments);
@@ -96,6 +102,7 @@ export const createHarness = ({
     activeSession,
     activeSessionId,
     turnRuntimeRegistry,
+    applyTurnRuntimeEvent: commitTurnRuntimeEvent,
     input,
     uploadFiles,
     clearUploads: vi.fn(),
@@ -179,18 +186,20 @@ export const activateRuntimeTurn = ({
   turnScopeId,
   dialogProcessId = "",
 } = {}) => {
-  applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
+  const registry = turnRuntimeRegistry.value;
+  applyTurnRuntimeEvent(registry, {
     type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
     sessionId,
     turnScopeId,
   });
-  applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
+  applyTurnRuntimeEvent(registry, {
     type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
     sessionId,
     turnScopeId,
     dialogProcessId,
     state: BackendChannelState.SENDING,
   });
+  turnRuntimeRegistry.value = { ...registry };
 };
 
 export const assistantMessage = (activeSession) =>

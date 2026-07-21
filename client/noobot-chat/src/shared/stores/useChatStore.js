@@ -6,7 +6,15 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 import {
+  applyExecutionChildren,
+  applyExecutionSnapshot,
+  applyExecutionTree,
+  applyTurnLifecycleEnvelope,
+  applyTurnLifecycleSnapshot,
+  applyTurnRuntimeEvent,
   createTurnRuntimeRegistryState,
+  hydrateSessionTurnRuntime,
+  pruneTerminalTurns,
   selectExecution,
   selectExecutionChildren,
   sessionRuntimeId,
@@ -209,6 +217,49 @@ export const useChatStore = defineStore("chat", () => {
   const activeSession = computed(() =>
     sessions.value.find((sessionItem) => sessionItem.id === activeSessionId.value),
   );
+
+  // Runtime reducers deliberately mutate one registry instance so a complete
+  // event batch is atomic.  Pinia consumers, however, subscribe at the store
+  // boundary.  Publish a new root after every effective reduction; otherwise
+  // renderers which selected a previously missing Turn are not invalidated.
+  function commitTurnRuntime(reducer, ...args) {
+    const registry = turnRuntimeRegistry.value || createTurnRuntimeRegistryState();
+    const result = reducer(registry, ...args);
+    const applied = result?.applied !== false;
+    if (applied) turnRuntimeRegistry.value = { ...registry };
+    return result;
+  }
+
+  const applyTurnRuntimeEventAction = (event) =>
+    commitTurnRuntime(applyTurnRuntimeEvent, event);
+  const applyTurnLifecycleEnvelopeAction = (envelope) =>
+    commitTurnRuntime(applyTurnLifecycleEnvelope, envelope);
+  const applyTurnLifecycleSnapshotAction = (snapshot) =>
+    commitTurnRuntime(applyTurnLifecycleSnapshot, snapshot);
+  const applyExecutionSnapshotAction = (payload) =>
+    commitTurnRuntime(applyExecutionSnapshot, payload);
+  const applyExecutionChildrenAction = (payload) =>
+    commitTurnRuntime(applyExecutionChildren, payload);
+  const applyExecutionTreeAction = (payload) =>
+    commitTurnRuntime(applyExecutionTree, payload);
+  function hydrateSessionTurnRuntimeAction(session, turnStatuses) {
+    const registry = turnRuntimeRegistry.value || createTurnRuntimeRegistryState();
+    const result = hydrateSessionTurnRuntime(registry, session, turnStatuses);
+    // Session hydration runs on a deep watch over `sessions`; only publish a new
+    // registry root when an authoritative turn was actually reconciled, otherwise
+    // every unrelated session mutation re-roots the registry and can feed the
+    // watch back into itself.
+    if (result?.applied) turnRuntimeRegistry.value = { ...registry };
+    return result;
+  }
+
+  function pruneTerminalTurnsAction(options = {}) {
+    const registry = turnRuntimeRegistry.value || createTurnRuntimeRegistryState();
+    const result = pruneTerminalTurns(registry, options);
+    const applied = Array.isArray(result?.removedTurnScopeIds) && result.removedTurnScopeIds.length > 0;
+    if (applied) turnRuntimeRegistry.value = { ...registry };
+    return { ...(result || {}), applied };
+  }
 
   function resetChatStore() {
     input.value = "";
@@ -475,6 +526,14 @@ export const useChatStore = defineStore("chat", () => {
     pendingInteractionRequest,
     pendingInteractionRequests,
     interactionSubmitting,
+    applyTurnRuntimeEvent: applyTurnRuntimeEventAction,
+    applyTurnLifecycleEnvelope: applyTurnLifecycleEnvelopeAction,
+    applyTurnLifecycleSnapshot: applyTurnLifecycleSnapshotAction,
+    applyExecutionSnapshot: applyExecutionSnapshotAction,
+    applyExecutionChildren: applyExecutionChildrenAction,
+    applyExecutionTree: applyExecutionTreeAction,
+    hydrateSessionTurnRuntime: hydrateSessionTurnRuntimeAction,
+    pruneTerminalTurns: pruneTerminalTurnsAction,
     upsertWorkflowNodeStateEvent,
     upsertWorkflowPlanningEvent,
     upsertSubSessionEvent,

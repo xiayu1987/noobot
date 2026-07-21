@@ -4,9 +4,10 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { useLocale } from "../i18n/useLocale";
 import { useThinkingPanel } from "./useThinkingPanel";
+import { normalizeTurnScopeIdKey } from "../../composables/infra/messageIdentity";
 import ThinkingPanelRealtime from "./ThinkingPanelRealtime.vue";
 import ThinkingPanelDetails from "./ThinkingPanelDetails.vue";
 
@@ -26,6 +27,24 @@ const props = defineProps({
 const emit = defineEmits(["open-thinking-details"]);
 const { translate } = useLocale();
 const panel = useThinkingPanel(props, emit);
+const thinkingOpenNames = ref(
+  Array.isArray(props.messageItem?.thinkingOpenNames)
+    ? [...props.messageItem.thinkingOpenNames]
+    : [],
+);
+const thinkingIdentity = computed(() => [
+  String(props.messageItem?.sessionId || "").trim(),
+  normalizeTurnScopeIdKey(props.messageItem?.turnScopeId),
+  String(props.messageItem?.dialogProcessId || props.messageItem?.id || props.messageItem?.messageId || "").trim(),
+].join("::"));
+watch(thinkingIdentity, () => {
+  thinkingOpenNames.value = Array.isArray(props.messageItem?.thinkingOpenNames)
+    ? [...props.messageItem.thinkingOpenNames]
+    : [];
+});
+function updateThinkingOpenNames(value) {
+  thinkingOpenNames.value = Array.isArray(value) ? value : [];
+}
 const {
   injectedMessages,
   hasThinking,
@@ -34,6 +53,8 @@ const {
   getLatestPluginAnalysisLog,
   getLatestMainModelContentLog,
   getExecutionLogs,
+  currentExecutionLogs,
+  loadedThinkingDetail,
   getExecutionLogCount,
   getThinkingDetailLabel,
   openThinkingDetailDrawer,
@@ -82,23 +103,25 @@ const workflowProjectionProps = computed(() => ({
 
 <template>
   <ThinkingPanelRealtime
-    v-if="variant !== 'details' && hasThinking"
+    v-if="variant !== 'details' && (hasThinking || loadedThinkingDetail)"
     :message-item="messageItem"
     :translate="translate"
     :thinking-duration-label="getThinkingDurationLabel()"
     :is-running="isThinkingRuntimeRunning(messageItem)"
     :latest-plugin-analysis-log="getLatestPluginAnalysisLog(messageItem)"
     :latest-main-model-content-log="getLatestMainModelContentLog(messageItem)"
-    :execution-logs="getExecutionLogs(messageItem)"
+    :execution-logs="currentExecutionLogs"
     :execution-log-count="getExecutionLogCount(messageItem)"
     :thinking-detail-label="getThinkingDetailLabel(messageItem)"
     :show-workflow-projection="ownsWorkflowProjection"
     :workflow-projection-props="workflowProjectionProps"
+    :open-names="thinkingOpenNames"
+    @update:open-names="updateThinkingOpenNames"
     @open-thinking-details="openThinkingDetailDrawer"
-    @collapse="collapseThinkingPanel(messageItem)"
+    @collapse="updateThinkingOpenNames([])"
   />
   <ThinkingPanelDetails
-    v-else-if="hasThinking"
+    v-else-if="hasThinking || loadedThinkingDetail"
     :message-item="messageItem"
     :translate="translate"
     :is-running="isMessageRuntimeRunning(messageItem)"

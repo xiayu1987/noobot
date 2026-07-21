@@ -314,7 +314,9 @@ describe("turnRuntimeRegistry", () => {
     });
     expect(selectTurnMessageRuntime(registry, { sessionId: "s1", dialogProcessId: "dp1" })).toMatchObject({ turnScopeId: "t1" });
     expect(selectTurnMessageRuntime(registry, { sessionId: "s2", turnScopeId: "t1" })).toBeNull();
-    expect(selectTurnMessageRuntime(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "other" })).toBeNull();
+    expect(selectTurnMessageRuntime(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "other" })).toMatchObject({
+      sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", running: true,
+    });
   });
   it("derives continue from the stopped turn", () => {
     const registry = createTurnRuntimeRegistryState();

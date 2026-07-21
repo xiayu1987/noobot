@@ -19,12 +19,70 @@ import { inferFsmTarget, HARNESS_FSM_STATES } from "../src/fsm/transitions.js";
 import { buildEvent } from "../src/data/record-builders.js";
 import { createGuidanceHandler } from "../src/capabilities/handlers/guidance.js";
 import { createPlanningHandler } from "../src/capabilities/handlers/planning.js";
-import { markGuidanceSummarizedMessages } from "../src/capabilities/handlers/guidance/signal-tracker.js";
+import {
+  captureGuidanceSummaryCheckpoint,
+  markGuidanceSummarizedMessages,
+} from "../src/capabilities/handlers/guidance/signal-tracker.js";
 import { invokeWithReasoningRetry } from "../src/capabilities/handlers/shared/model/invocation-utils.js";
 import {
   markMessagesSummarized,
   relaySeparateModelOutputAsUserMessage,
 } from "../src/capabilities/handlers/shared.js";
+
+test("summary checkpoint marks restored incremental messages missing from the flat projection", async () => {
+  const restoredCall = {
+    role: "assistant",
+    content: "",
+    additional_kwargs: { noobotMessageId: "restored-call" },
+    tool_calls: [{ id: "restored", function: { name: "read_file" } }],
+  };
+  const restoredResult = {
+    role: "tool",
+    content: "restored-result",
+    additional_kwargs: { noobotMessageId: "restored-result" },
+    tool_call_id: "restored",
+  };
+  const resumedCall = {
+    role: "assistant",
+    content: "",
+    additional_kwargs: { noobotMessageId: "resumed-call" },
+    tool_calls: [{ id: "resumed", function: { name: "read_file" } }],
+  };
+  const state = { pending: {} };
+  const ctx = {
+    messages: [resumedCall],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [restoredCall, restoredResult, resumedCall],
+    },
+    agentContext: {
+      payload: {
+        harness: {
+          state,
+          taskChecklist: [],
+          acceptanceReports: [],
+          reviewReports: [],
+          planningRawOutputs: [],
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+        messages: { history: [] },
+      },
+    },
+  };
+  normalizeHookContextProtocol("before_llm_call", ctx);
+
+  const ids = captureGuidanceSummaryCheckpoint(ctx, state);
+  const markedCount = await markGuidanceSummarizedMessages(ctx, {});
+
+  assert.deepEqual(ids, ["restored-call", "restored-result", "resumed-call"]);
+  assert.ok(markedCount >= 3);
+  assert.equal(ctx.messageBlocks.incremental[0].summarized, true);
+  assert.equal(ctx.messageBlocks.incremental[1].summarized, true);
+  assert.equal(ctx.messageBlocks.incremental[2].summarized, true);
+  assert.equal(state.pending.summaryCheckpointMessageCount, null);
+  assert.equal(state.pending.summaryCheckpointMessageIds, null);
+});
 
 
 
@@ -408,5 +466,3 @@ test("guidance summary checkpoint prefers message ids over checkpoint count", as
   assert.equal(ctx.messageBlocks.incremental[4].summarized, undefined);
   assert.equal(ctx.agentContext.payload.harness.state.pending.summaryCheckpointMessageIds, null);
 });
-
-
