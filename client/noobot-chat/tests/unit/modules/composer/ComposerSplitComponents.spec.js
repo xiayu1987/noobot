@@ -74,6 +74,18 @@ const ElSwitchStub = defineComponent({
     '<button type="button" class="el-switch-stub" :data-value="modelValue ? \'true\' : \'false\'" @click="$emit(\'update:modelValue\', !modelValue)"><slot /></button>',
 });
 
+const ElSliderStub = defineComponent({
+  name: "ElSlider",
+  props: {
+    modelValue: { type: Number, default: 0 },
+    min: { type: Number, default: 0 },
+    max: { type: Number, default: 100 },
+    step: { type: Number, default: 1 },
+  },
+  emits: ["update:modelValue", "change"],
+  template: '<input class="el-slider-stub" type="range" :value="modelValue" :min="min" :max="max" :step="step" />',
+});
+
 const ElDialogStub = defineComponent({
   name: "ElDialog",
   props: {
@@ -117,6 +129,8 @@ const globalStubs = {
   "el-input": ElInputStub,
   ElSwitch: ElSwitchStub,
   "el-switch": ElSwitchStub,
+  ElSlider: ElSliderStub,
+  "el-slider": ElSliderStub,
   ElDialog: ElDialogStub,
   "el-dialog": ElDialogStub,
   ElTag: ElTagStub,
@@ -181,21 +195,21 @@ describe("ComposerInputActions", () => {
     await nextTick();
     expect(wrapper.emitted("update:modelValue")?.[0]).toEqual(["hello"]);
 
-    const input = wrapper.find("el-input.chat-input");
+    const input = wrapper.find(".chat-input");
     await input.trigger("keydown", { key: "Enter" });
-    await wrapper.find("el-button.send-btn").trigger("click");
+    await wrapper.find(".send-btn").trigger("click");
     expect(wrapper.emitted("send")).toHaveLength(2);
 
-    await wrapper.find("el-button.stop-float-btn").trigger("click");
+    await wrapper.find(".stop-float-btn").trigger("click");
     expect(wrapper.emitted("stop")).toHaveLength(1);
 
-    await wrapper.find("el-button[title='更多操作']").trigger("click");
+    await wrapper.find("button[title='更多操作']").trigger("click");
     expect(wrapper.emitted("toggle-more-panel")).toHaveLength(1);
 
-    await wrapper.find("el-button[title='拍照']").trigger("click");
+    await wrapper.find("button[title='拍照']").trigger("click");
     expect(wrapper.emitted("open-camera-capture")).toHaveLength(1);
 
-    const micButton = wrapper.find("el-button[title='按住录音']");
+    const micButton = wrapper.find("button[title='按住录音']");
     await micButton.trigger("pointerdown");
     await micButton.trigger("pointermove");
     await micButton.trigger("pointerup");
@@ -219,10 +233,10 @@ describe("ComposerInputActions", () => {
       global: globalMountOptions,
     });
 
-    expect(wrapper.find("el-button.send-btn").attributes("disabled")).toBe("true");
-    expect(wrapper.find("el-button.send-btn").attributes("loading")).toBe("true");
-    expect(wrapper.find("el-button[title='拍照']").attributes("disabled")).toBe("true");
-    expect(wrapper.find("el-button[title='按住录音']").classes()).toContain("is-recording");
+    expect(wrapper.find(".send-btn").attributes("disabled")).toBeDefined();
+    expect(wrapper.find(".send-btn").attributes("data-loading")).toBe("true");
+    expect(wrapper.find("button[title='拍照']").attributes("disabled")).toBeDefined();
+    expect(wrapper.find("button[title='按住录音']").classes()).toContain("is-recording");
     expect(wrapper.find(".mic-status-text").text()).toBe("松开发送 1");
   });
 
@@ -237,9 +251,9 @@ describe("ComposerInputActions", () => {
       global: globalMountOptions,
     });
 
-    const sendButton = wrapper.find("el-button.send-btn");
-    expect(sendButton.attributes("loading")).toBe("false");
-    expect(sendButton.attributes("disabled")).toBe("false");
+    const sendButton = wrapper.find(".send-btn");
+    expect(sendButton.attributes("data-loading")).toBe("false");
+    expect(sendButton.attributes("disabled")).toBeUndefined();
     expect(sendButton.text()).toBe("发送中");
   });
 
@@ -253,9 +267,9 @@ describe("ComposerInputActions", () => {
       global: globalMountOptions,
     });
 
-    const stopButton = wrapper.find("el-button.stop-float-btn");
-    expect(stopButton.attributes("loading")).toBe("true");
-    expect(stopButton.attributes("disabled")).toBe("true");
+    const stopButton = wrapper.find(".stop-float-btn");
+    expect(stopButton.attributes("data-loading")).toBe("true");
+    expect(stopButton.attributes("disabled")).toBeDefined();
   });
 
   it("does not send when Enter confirms an active IME composition", async () => {
@@ -267,7 +281,7 @@ describe("ComposerInputActions", () => {
       global: globalMountOptions,
       attachTo: document.body,
     });
-    const input = wrapper.find("el-input.chat-input");
+    const input = wrapper.find(".chat-input");
 
     await dispatchKeydown(input, { isComposing: true });
     await dispatchKeydown(input, { keyCode: 229 });
@@ -285,7 +299,7 @@ describe("ComposerMoreOptions", () => {
       props: { safeConfirm: true, safeConfirmLevel: "medium", resolveScenarioLabel: (item) => item.key },
       global: globalMountOptions,
     });
-    const slider = wrapper.find("el-slider");
+    const slider = wrapper.find(".el-slider-stub");
     expect(slider.exists()).toBe(true);
     expect(slider.attributes("min")).toBe("0");
     expect(slider.attributes("max")).toBe("3");
@@ -294,7 +308,7 @@ describe("ComposerMoreOptions", () => {
     wrapper.vm.$emit("update:safeConfirmLevel", "critical");
     expect(wrapper.emitted("update:safeConfirmLevel")?.at(-1)).toEqual(["critical"]);
     await wrapper.setProps({ safeConfirm: false });
-    expect(wrapper.find("el-slider").exists()).toBe(false);
+    expect(wrapper.find(".el-slider-stub").exists()).toBe(false);
   });
   it("emits session option, scenario and plugin events", async () => {
     const resolveScenarioLabel = vi.fn((item) => item.label || item.key);
@@ -330,10 +344,10 @@ describe("ComposerMoreOptions", () => {
     expect(wrapper.emitted("update:sanitizeOutput")?.[0]).toEqual([false]);
     expect(wrapper.emitted("update:streamOutput")?.[0]).toEqual([false]);
 
-    await wrapper.findAll(".scenario-selector el-button")[1].trigger("click");
+    await wrapper.findAll(".scenario-selector button")[1].trigger("click");
     expect(wrapper.emitted("select-scenario")?.[0]).toEqual(["default"]);
 
-    await wrapper.find(".plugin-button-group el-button").trigger("click");
+    await wrapper.find(".plugin-button-group button").trigger("click");
     expect(wrapper.emitted("toggle-plugin")?.[0]).toEqual(["workflow"]);
     expect(wrapper.find(".scenario-description").text()).toBe("code");
   });
@@ -349,7 +363,7 @@ describe("ComposerMoreOptions", () => {
       global: globalMountOptions,
     });
 
-    await wrapper.find(".scenario-selector el-button").trigger("click");
+    await wrapper.find(".scenario-selector button").trigger("click");
     expect(wrapper.emitted("toggle-programming-scenario")).toHaveLength(1);
     expect(wrapper.find(".plugin-empty-text").text()).toBe("暂无插件");
   });
@@ -402,7 +416,7 @@ describe("ComposerCameraDialog", () => {
       attachTo: document.body,
     });
 
-    expect(wrapper.find("el-dialog").attributes("title")).toBe("拍照");
+    expect(wrapper.find(".el-dialog-stub").attributes("data-title")).toBe("拍照");
 
     await wrapper.find("input.hidden-camera-input").trigger("change");
     expect(wrapper.emitted("camera-capture-change")).toHaveLength(1);

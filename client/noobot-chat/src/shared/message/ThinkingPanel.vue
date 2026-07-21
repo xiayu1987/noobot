@@ -68,7 +68,6 @@ const {
   toggleThinkingDetailExpanded,
   formatInjectedMessageTitle,
 } = panel;
-
 // A turn can be represented by several incremental assistant messages. The
 // thinking card plugin is mounted for each of them, but the live workflow must
 // belong to one card only. Use the last message with the same turn identity as

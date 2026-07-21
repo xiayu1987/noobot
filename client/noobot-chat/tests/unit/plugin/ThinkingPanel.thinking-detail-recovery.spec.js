@@ -135,15 +135,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       authFetch,
       runtime: { running: false, terminal: true, startedAt: "2026-07-21T10:00:00.000Z", finishedAt: "2026-07-21T10:00:01.000Z" },
     });
-    const initialHtml = wrapper.html();
     await flushAsync();
-    process.stdout.write(`FRAME_DIAGNOSTIC ${JSON.stringify({
-      initialHtml,
-      settledHtml: wrapper.html(),
-      hasThinking: wrapper.vm.hasThinking,
-      renderHasThinking: wrapper.vm.renderHasThinking,
-      loaded: Boolean(wrapper.vm.loadedThinkingDetail),
-    })}\n`);
 
     expect(authFetch).not.toHaveBeenCalled();
   });
