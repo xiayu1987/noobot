@@ -19,6 +19,7 @@ const props = defineProps({
   isImageMime: { type: Function, default: (mimeType = "") => String(mimeType || "").startsWith("image/") },
   workflowNodeStateRegistry: { type: Object, default: null },
   turnRuntimeRegistry: { type: Object, default: null },
+  workflowRuntimeProjectionVersion: { type: String, default: "" },
   selectExecutionDetail: { type: Function, default: null },
   stopExecution: { type: Function, default: null },
   selectSessionMessages: { type: Function, default: null },
