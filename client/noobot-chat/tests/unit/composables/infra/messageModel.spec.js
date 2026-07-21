@@ -605,6 +605,31 @@ describe("messageModel execution logs", () => {
     expect(messages[0].thinkingDetailCount).toBe(3);
   });
 
+  it("keeps child-session thinking and tool facets on view messages", () => {
+    const rawEvents = [{
+      event: "tool_call_start",
+      data: { eventType: "tool_call_start", toolCallId: "call-1" },
+    }];
+    const messages = foldConversationMessages([{
+      role: "assistant",
+      content: "done",
+      sessionId: "child-session",
+      turnScopeId: "workflow-node:child",
+      thinking: "checking the workspace",
+      toolCall: { id: "call-1", name: "read_file", args: { filePath: "notes.txt" } },
+      toolResult: { id: "call-1", output: "file body" },
+      rawEvents,
+    }], buildViewMessage);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toEqual(expect.objectContaining({
+      thinking: "checking the workspace",
+      toolCall: expect.objectContaining({ id: "call-1", name: "read_file" }),
+      toolResult: expect.objectContaining({ id: "call-1", output: "file body" }),
+      rawEvents,
+    }));
+  });
+
   it("keeps only latest 10 realtime logs when merging completed assistant messages", () => {
     const messages = foldConversationMessages([
       {

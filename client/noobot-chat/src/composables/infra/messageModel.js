@@ -199,7 +199,15 @@ function createMessageModel(messageItem = {}) {
     content: getMessageContentIdentity(messageItem),
     type: normalizeMessageType(messageItem),
     tool_calls: normalizeArray(messageItem.tool_calls),
+    toolCalls: normalizeArray(messageItem.toolCalls),
     tool_call_id: messageItem.tool_call_id || "",
+    // Child-session realtime projection stores execution facets on the
+    // addressed assistant message. Keep them on the view model so the agent
+    // drawer can render the same thinking/tool timeline as the main chat.
+    thinking: messageItem.thinking,
+    toolCall: messageItem.toolCall,
+    toolResult: messageItem.toolResult,
+    rawEvents: normalizeArray(messageItem.rawEvents),
     dialogProcessId: getMessageDialogProcessId(messageItem),
     parentDialogProcessId: getMessageParentDialogProcessId(messageItem),
     modelAlias: messageItem.modelAlias || "",
