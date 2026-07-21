@@ -124,6 +124,37 @@ function buildExecutionCommandLabel(statusKey = "", commandText = "") {
   return translateClientMessage(statusKey, { command: stripExecutionCommandPrefix(commandText) });
 }
 
+function toolResultStatusKey(logItem = {}) {
+  const status = normalizeTrimmedString(
+    logItem?.status || logItem?.state || logItem?.data?.status || logItem?.data?.state,
+  ).toLowerCase();
+  const success = logItem?.success ?? logItem?.data?.success;
+  if (success === false || ["failed", "failure", "error", "errored"].includes(status)) {
+    return "message.executionStatusFailed";
+  }
+  if (["cancelled", "canceled", "aborted"].includes(status)) {
+    return "message.executionStatusCancelled";
+  }
+  return "message.executionStatusCompleted";
+}
+
+function isToolLifecycleResult(logItem = {}, text = "") {
+  const eventType = normalizeTrimmedString(logItem?.eventType || logItem?.rawEvent).toLowerCase();
+  return eventType === "tool_call_end" || /^[\w.-]+\s+completed(?:\s|$)/i.test(text);
+}
+
+function buildToolResultDisplayText(logItem = {}, commandText = "", text = "") {
+  if (!isToolLifecycleResult(logItem, text)) {
+    return buildExecutionCommandLabel("message.executionCommandCompleted", commandText);
+  }
+  const compactToolName = text.match(/^([\w.-]+)\s+completed(?:\s|$)/i)?.[1] || "";
+  const command = pickExecutionToolName(logItem) || commandText || compactToolName;
+  return translateClientMessage("message.executionCommandCompletedWithStatus", {
+    command: stripExecutionCommandPrefix(command),
+    status: translateClientMessage(toolResultStatusKey(logItem)),
+  });
+}
+
 function pickExecutionCommandText(logItem = {}) {
   const explicitCommand = stringifyExecutionValue(
     logItem?.command ??
@@ -165,7 +196,7 @@ export function buildExecutionLogDisplayText(logItem = {}) {
   }
   if (isToolResult) {
     const commandText = pickExecutionCommandText(logItem) || stripExecutionCommandPrefix(pickExecutionToolResult(logItem));
-    return commandText ? buildExecutionCommandLabel("message.executionCommandCompleted", commandText) : "";
+    return commandText ? buildToolResultDisplayText(logItem, commandText, text) : "";
   }
   return text;
 }

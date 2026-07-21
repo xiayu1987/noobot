@@ -51,16 +51,7 @@ describe("sessionMessageState", () => {
     });
 
     expect(call).toMatchObject({ event: "tool_call", type: "tool_call" });
-    expect(result).toMatchObject({
-      event: "tool_result",
-      type: "tool_result",
-      status: "succeeded",
-    });
-    expect(classifyRealtimeLog({
-      ...common,
-      eventType: "tool_call_end",
-      success: false,
-    }).status).toBe("failed");
+    expect(result).toMatchObject({ event: "tool_result", type: "tool_result" });
   });
 
   it("classifies regular realtime logs as system defaults", () => {

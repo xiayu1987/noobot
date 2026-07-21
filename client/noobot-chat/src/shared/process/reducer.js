@@ -9,7 +9,6 @@ import {
   ProcessEventType,
   ProcessNodeStatus,
   ProcessStatus,
-  mergeProcessNode,
   normalizeProcessString,
   toProcessSequence,
 } from "./protocol";
@@ -107,7 +106,8 @@ export function applyProcessEvent(state, eventItem = {}) {
     const previousNode = state.nodesById[nodeId] || {};
     const nextStatus = normalizeProcessString(node.status) || previousNode.status || ProcessNodeStatus.RUNNING;
     state.nodesById[nodeId] = {
-      ...mergeProcessNode(previousNode, node),
+      ...previousNode,
+      ...node,
       id: nodeId,
       processId,
       status: nextStatus,
@@ -164,16 +164,7 @@ export function selectProcessCompatView(state, processId = {}) {
   const normalizedProcessId = normalizeProcessString(processId);
   const snapshot = selectProcessSnapshot(state, normalizedProcessId);
   if (!snapshot) return { realtimeLogs: [], completedToolLogs: [], executionLogTotal: 0, lastSequence: 0 };
-  const logs = snapshot.nodes.map((node) => {
-    const log = node?.log || node?.payload?.log;
-    if (!log) return null;
-    return {
-      ...log,
-      status: node?.status || log?.status,
-      startedAt: node?.startedAt || log?.startedAt,
-      endedAt: node?.endedAt || log?.endedAt,
-    };
-  }).filter(Boolean);
+  const logs = snapshot.nodes.map((node) => node?.log || node?.payload?.log).filter(Boolean);
   return {
     realtimeLogs: logs.slice(-PROCESS_COMPAT_LOG_LIMIT),
     completedToolLogs: logs,

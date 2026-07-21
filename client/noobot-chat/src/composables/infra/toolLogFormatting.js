@@ -41,6 +41,7 @@ export function buildToolCallSummary(
 export function buildToolResultSummary(
   content,
   fallbackToolName = "tool_result",
+  { success } = {},
 ) {
   const normalizedFallback = String(fallbackToolName || "tool_result").trim();
   const contentText = String(content || "").trim();
@@ -52,10 +53,14 @@ export function buildToolResultSummary(
       parsed?.toolName || parsed?.name || normalizedFallback,
     ).trim();
     const status = String(parsed?.status || "").trim();
-    const okText = typeof parsed?.ok === "boolean" ? `ok=${parsed.ok}` : "";
+    const okText = typeof parsed?.ok === "boolean"
+      ? `ok=${parsed.ok}`
+      : (typeof success === "boolean" ? `ok=${success}` : "");
     return [toolName, status, okText].filter(Boolean).join(" ");
   } catch {
-    return normalizedFallback;
+    return [normalizedFallback, typeof success === "boolean" ? `ok=${success}` : ""]
+      .filter(Boolean)
+      .join(" ");
   }
 }
 

@@ -10,7 +10,6 @@ import {
   assertMessageEventEnvelope,
   hasMessageEventToolPayload,
   projectMessageEventToolFacets,
-  projectMessageEventToolLifecycle,
 } from "../message-event-protocol.mjs";
 
 function envelope(overrides = {}) {
@@ -57,21 +56,4 @@ test("message event protocol projects backend tool fields to canonical facets", 
     success: true,
   });
   assert.equal(hasMessageEventToolPayload(envelope({ tool: "read_file" })), true);
-});
-
-test("message event protocol projects one tool execution lifecycle", () => {
-  assert.deepEqual(projectMessageEventToolLifecycle(envelope()), {
-    event: "tool_call",
-    status: "running",
-    terminal: false,
-  });
-  assert.deepEqual(projectMessageEventToolLifecycle(envelope({
-    eventType: "tool_call_end",
-    success: false,
-  })), {
-    event: "tool_result",
-    status: "failed",
-    terminal: true,
-  });
-  assert.equal(projectMessageEventToolLifecycle({ eventType: "llm_delta" }), undefined);
 });

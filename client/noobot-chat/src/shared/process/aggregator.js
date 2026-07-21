@@ -11,7 +11,6 @@ import {
   ProcessNodeStatus,
   ProcessStatus,
   buildProcessEventId,
-  mergeProcessNode,
   normalizeProcessString,
   resolveExplicitProcessTimestamp,
   resolveProcessId,
@@ -31,7 +30,7 @@ function stableNodeId({
   sequence = 0,
 }) {
   const toolCallId = normalizeProcessString(logItem.toolCallId || logItem.tool_call_id);
-  if (toolCallId) return `${processId}:tool:${toolCallId}`;
+  if (toolCallId) return `${processId}:tool:${toolCallId}:${normalizeProcessString(logItem.event || logItem.type) || "event"}`;
   const resolvedSequence = toProcessSequence(sequence || logItem.sequence || logItem.seq, 0);
   if (resolvedSequence > 0) return `${processId}:seq:${resolvedSequence}`;
   return `${processId}:${source}:${normalizeProcessString(logItem.event || logItem.type) || "event"}:${index}`;
@@ -85,9 +84,7 @@ export function createProcessEventFromLog(rawLog = {}, options = {}) {
     source,
     sequence,
   });
-  const logEvent = normalizeProcessString(logItem.event || logItem.type).toLowerCase();
-  const terminal = options.terminal === true || logEvent === "tool_result" || logEvent.endsWith("_result");
-  const type = terminal ? ProcessEventType.NODE_FINISHED : ProcessEventType.NODE_UPSERTED;
+  const type = options.terminal ? ProcessEventType.NODE_FINISHED : ProcessEventType.NODE_UPSERTED;
   const eventId = normalizeProcessString(logItem.eventId || logItem.id || options.eventId) || buildProcessEventId({
     source,
     type,
@@ -122,12 +119,12 @@ export function createProcessEventFromLog(rawLog = {}, options = {}) {
         id: nodeId,
         processId,
         parentId: normalizeProcessString(options.parentNodeId),
-        status: statusFromLog(logItem, terminal),
+        status: statusFromLog(logItem, options.terminal),
         title: normalizeProcessString(logItem.title || logItem.event || logItem.type || "execution_step"),
         summary: normalizeProcessString(logItem.text),
         log: logItem,
         startedAt: timestamp,
-        endedAt: terminal ? timestamp : "",
+        endedAt: options.terminal ? timestamp : "",
       },
       log: logItem,
       raw: rawLog,
@@ -169,12 +166,7 @@ export function createProcessEventsFromDonePayload(data = {}, options = {}) {
 
 export function createProcessSnapshotFromLogs({ processId = "", logs = [], status = ProcessStatus.SUCCEEDED, source = ProcessEventSource.SNAPSHOT } = {}) {
   const events = createProcessEventsFromLogs(logs, { source, dialogProcessId: processId });
-  const nodesById = new Map();
-  for (const eventItem of events) {
-    const node = eventItem.payload.node;
-    nodesById.set(node.id, mergeProcessNode(nodesById.get(node.id), node));
-  }
-  const nodes = Array.from(nodesById.values());
+  const nodes = events.map((eventItem) => eventItem.payload.node);
   const lastSequence = events.reduce((maxSequence, eventItem) => Math.max(maxSequence, toProcessSequence(eventItem.sequence, 0)), 0);
   return {
     version: PROCESS_EVENT_VERSION,

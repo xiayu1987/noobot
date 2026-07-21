@@ -15,11 +15,8 @@ import {
   buildToolNameByCallId,
   stringifyToolValue,
 } from "./toolLogFormatting";
-import { aggregateToolExecutions } from "./toolLogIdentity";
-import {
-  projectMessageEventToolFacets,
-  projectMessageEventToolLifecycle,
-} from "@noobot/shared/message-event-protocol";
+import { deduplicateToolLogs } from "./toolLogIdentity";
+import { projectMessageEventToolFacets } from "@noobot/shared/message-event-protocol";
 
 function eventName(item = {}) {
   return String(item?.event || item?.type || "").trim().toLowerCase();
@@ -113,13 +110,11 @@ function buildLogsFromMessages(messageItem, messages, toolResultFallback) {
     for (const rawEvent of Array.isArray(item?.rawEvents) ? item.rawEvents : []) {
       const eventData = rawEvent?.data && typeof rawEvent.data === "object" ? rawEvent.data : {};
       const eventType = String(eventData?.eventType || rawEvent?.event || rawEvent?.type || "").trim().toLowerCase();
-      const authoritativeEvent = { ...eventData, eventType };
-      const lifecycle = projectMessageEventToolLifecycle(authoritativeEvent);
-      if (!lifecycle) continue;
-      const facets = projectMessageEventToolFacets(authoritativeEvent);
+      if (eventType !== "tool_call_start" && eventType !== "tool_call_end") continue;
+      const facets = projectMessageEventToolFacets({ ...eventData, eventType });
       const toolCallId = String(eventData?.toolCallId || eventData?.tool_call_id || facets?.toolCall?.id || facets?.toolResult?.toolCallId || "").trim();
       const rawCommon = { ...common, ts: eventData?.timestamp || rawEvent?.ts || common.ts };
-      if (!lifecycle.terminal) {
+      if (eventType === "tool_call_start") {
         const toolName = String(facets?.toolCall?.name || eventData?.tool || "").trim();
         const toolCall = facets?.toolCall || { id: toolCallId, name: toolName, args: eventData?.args || {} };
         if (toolCallId && toolName) toolNameByCallId.set(toolCallId, toolName);
@@ -131,7 +126,9 @@ function buildLogsFromMessages(messageItem, messages, toolResultFallback) {
         const resultText = stringifyToolValue(toolResult?.output ?? toolResult?.result ?? "");
         const toolName = toolNameByCallId.get(toolCallId) || String(toolResult?.name || eventData?.tool || "").trim() || toolResultFallback;
         logs.push({ ...rawCommon, event: "tool_result", type: "tool_result", toolCallId,
-          text: buildToolResultSummary(resultText, toolName), detailText: resultText });
+          text: buildToolResultSummary(resultText, toolName, {
+            success: toolResult?.success ?? eventData?.success,
+          }), detailText: resultText });
       }
     }
   }
@@ -176,5 +173,5 @@ export function normalizeThinkingToolLogs({
       return !projectedKeys.has(key) && eventName(item) !== "tool_call";
     }));
   }
-  return aggregateToolExecutions(merged);
+  return deduplicateToolLogs(merged);
 }

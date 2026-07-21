@@ -177,6 +177,30 @@ describe("chatEngine utils", () => {
     ).toBe("返回：npm test");
   });
 
+  it("keeps authoritative tool result status in the compact display text", () => {
+    expect(
+      sanitizeExecutionLogForDisplay({
+        event: "tool_result",
+        type: "tool_result",
+        eventType: "tool_call_end",
+        tool: "read_file",
+        text: "read_file completed",
+        success: true,
+      })?.text,
+    ).toMatch(/^返回：read_file · 已完成$|^Return: read_file · Completed$/);
+
+    expect(
+      sanitizeExecutionLogForDisplay({
+        event: "tool_result",
+        type: "tool_result",
+        rawEvent: "tool_call_end",
+        tool: "execute_script",
+        text: "execute_script completed",
+        success: false,
+      })?.text,
+    ).toMatch(/^返回：execute_script · 失败$|^Return: execute_script · Failed$/);
+  });
+
   it("falls back to status text without blank or undefined when command fields are missing", () => {
     expect(
       sanitizeExecutionLogForDisplay({

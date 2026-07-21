@@ -16,11 +16,8 @@ import {
   buildToolCallSummary,
   buildToolResultSummary,
 } from "./toolLogFormatting";
-import { aggregateToolExecutions } from "./toolLogIdentity";
-import {
-  projectMessageEventToolFacets,
-  projectMessageEventToolLifecycle,
-} from "@noobot/shared/message-event-protocol";
+import { deduplicateToolLogs } from "./toolLogIdentity";
+import { projectMessageEventToolFacets } from "@noobot/shared/message-event-protocol";
 
 function buildTurnScopeGroupKey(sessionId = "", turnScopeId = "") {
   const normalizedSessionId = String(sessionId || "").trim();
@@ -31,7 +28,7 @@ function buildTurnScopeGroupKey(sessionId = "", turnScopeId = "") {
 }
 
 function mergeUniqueLogs(existing = [], incoming = []) {
-  return aggregateToolExecutions([...(existing || []), ...(incoming || [])]);
+  return deduplicateToolLogs([...(existing || []), ...(incoming || [])]);
 }
 
 function pickRootSessionDocument(sessionDocuments = []) {
@@ -257,13 +254,11 @@ function buildToolLogsFromSessions(sessionDocuments = []) {
       for (const rawEvent of Array.isArray(messageItem?.rawEvents) ? messageItem.rawEvents : []) {
         const eventData = rawEvent?.data && typeof rawEvent.data === "object" ? rawEvent.data : {};
         const eventType = String(eventData?.eventType || rawEvent?.event || "").trim();
-        const lifecycle = projectMessageEventToolLifecycle({ ...eventData, eventType });
-        if (!lifecycle) continue;
         const toolCallId = String(eventData?.toolCallId || eventData?.tool_call_id || "").trim();
         const toolName = String(eventData?.tool || "").trim() || toolNameByCallId.get(toolCallId) || "unknown_tool";
         const eventTime = String(eventData?.timestamp || messageTime || nowIso());
         const facets = projectMessageEventToolFacets({ ...eventData, eventType });
-        if (!lifecycle.terminal) {
+        if (eventType === "tool_call_start") {
           const toolCall = facets.toolCall || { id: toolCallId, name: toolName, args: {} };
           if (toolCallId) toolNameByCallId.set(toolCallId, toolCall.name || toolName);
           collectedLogs.push({
@@ -281,7 +276,7 @@ function buildToolLogsFromSessions(sessionDocuments = []) {
             dialogProcessId,
             parentDialogProcessId,
           });
-        } else {
+        } else if (eventType === "tool_call_end") {
           const toolResult = facets.toolResult || { output: eventData?.result };
           const resolvedToolName = toolNameByCallId.get(toolCallId) || toolResult.name || toolName || "tool_result";
           const resultText = typeof toolResult?.output === "string"
@@ -290,7 +285,9 @@ function buildToolLogsFromSessions(sessionDocuments = []) {
           collectedLogs.push({
             event: "tool_result",
             type: "tool_result",
-            text: buildToolResultSummary(resultText, resolvedToolName),
+            text: buildToolResultSummary(resultText, resolvedToolName, {
+              success: toolResult?.success ?? eventData?.success,
+            }),
             detailText: resultText,
             ts: eventTime,
             sessionId,

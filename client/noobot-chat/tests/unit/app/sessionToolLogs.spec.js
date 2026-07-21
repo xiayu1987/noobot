@@ -60,14 +60,13 @@ describe("session tool logs", () => {
 
     applyCompletedToolLogsToMessages(displayMessages, sessionDocuments);
 
-    expect(displayMessages[0].completedToolLogs).toHaveLength(1);
-    expect(displayMessages[0].completedToolLogs[0]).toMatchObject({
-      type: "tool_result",
-      text: "search",
-      inputText: "{\"q\":\"x\"}",
-      outputText: "ok",
-      detailText: "ok",
-    });
+    expect(displayMessages[0].completedToolLogs).toHaveLength(2);
+    expect(displayMessages[0].completedToolLogs.map((item) => item.type)).toEqual([
+      "tool_call",
+      "tool_result",
+    ]);
+    expect(displayMessages[0].completedToolLogs[1].text).toBe("search");
+    expect(displayMessages[0].completedToolLogs[1].detailText).toBe("ok");
   });
 
   it("keeps plain-text tool results out of the summary", () => {
@@ -115,8 +114,8 @@ describe("session tool logs", () => {
 
     applyCompletedToolLogsToMessages(displayMessages, sessionDocuments);
 
-    expect(displayMessages[0].completedToolLogs[0].text).toBe("read_file");
-    expect(displayMessages[0].completedToolLogs[0].detailText).toBe(
+    expect(displayMessages[0].completedToolLogs[1].text).toBe("read_file");
+    expect(displayMessages[0].completedToolLogs[1].detailText).toBe(
       "the complete file content",
     );
   });
@@ -168,14 +167,12 @@ describe("session tool logs", () => {
 
     applyCompletedToolLogsToMessages(displayMessages, sessionDocuments);
 
-    expect(displayMessages[0].completedToolLogs).toHaveLength(1);
-    expect(displayMessages[0].completedToolLogs[0]).toMatchObject({
-      type: "tool_result",
-      outputText: "file body",
-      detailText: "file body",
-      startedAt: "2026-07-21T00:00:00.000Z",
-      endedAt: "2026-07-21T00:00:01.000Z",
-    });
-    expect(displayMessages[0].completedToolLogs[0].inputText).toContain("notes.txt");
+    expect(displayMessages[0].completedToolLogs.map((item) => item.type)).toEqual([
+      "tool_call",
+      "tool_result",
+    ]);
+    expect(displayMessages[0].completedToolLogs[0].text).toBe('read_file({"filePath":"notes.txt"})');
+    expect(displayMessages[0].completedToolLogs[1].text).toBe("read_file ok=true");
+    expect(displayMessages[0].completedToolLogs[1].detailText).toBe("file body");
   });
 });

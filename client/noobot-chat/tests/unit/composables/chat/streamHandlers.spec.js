@@ -290,7 +290,7 @@ describe("chatEngine streamHandlers", () => {
     expect(botMessage.executionLogTotal).toBe(1);
   });
 
-  it("updates one authoritative tool execution from call to result", () => {
+  it("keeps an authoritative tool result distinct from its call in the thinking panel", () => {
     const botMessage = makeBotMessage();
     const common = {
       executionCategory: "tool",
@@ -332,16 +332,21 @@ describe("chatEngine streamHandlers", () => {
 
     expect(botMessage.realtimeLogs).toEqual([
       expect.objectContaining({
+        event: "tool_call",
+        type: "tool_call",
+        toolCallId: "call-real-2",
+        text: expect.stringMatching(/^(?:调用|Call)[:：]/),
+      }),
+      expect.objectContaining({
         event: "tool_result",
         type: "tool_result",
         toolCallId: "call-real-2",
-        text: expect.stringMatching(/^(?:返回|Return)[:：]/),
-        status: "succeeded",
-        inputText: expect.stringContaining("example.txt"),
-        outputText: expect.stringContaining('"ok": true'),
+        text: expect.stringMatching(
+          /^(?:返回：read_file · 已完成|Return: read_file · Completed)$/,
+        ),
       }),
     ]);
-    expect(botMessage.executionLogTotal).toBe(1);
+    expect(botMessage.executionLogTotal).toBe(2);
   });
 
   it("shows done execution log with same concrete command priority", () => {
@@ -375,7 +380,11 @@ describe("chatEngine streamHandlers", () => {
     });
 
     expect(botMessage.realtimeLogs).toEqual([
-      expect.objectContaining({ text: "返回：cd /project/agent && npm test" }),
+      expect.objectContaining({
+        text: expect.stringMatching(
+          /^(?:返回：cd \/project\/agent && npm test · 已完成|Return: cd \/project\/agent && npm test · Completed)$/,
+        ),
+      }),
     ]);
     expect(locateDoneMessage).not.toHaveBeenCalled();
   });
