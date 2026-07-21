@@ -52,6 +52,11 @@ import {
 import { peekMainFlowFinalNoToolsTurnInstruction } from "../main-flow-control.js";
 import { isResumeInitializingFirstModelTurn } from "../lifecycle/state-machine.js";
 import { syncStoppedModelMessageSnapshotCandidate } from "../resume/model-message-snapshot-store.js";
+import {
+  applyAuthoritativeMessageId,
+  beginAssistantMessageEventStream,
+  emitMessageEvent,
+} from "../../../event/message-event-stream.js";
 export { normalizeToolResultAttachments } from "./tool-result-normalizer.js";
 export {
   buildAssistantModelMessageForToolCalls,
@@ -167,6 +172,7 @@ export async function invokeNoToolsTurn({
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const locale = String(systemRuntime?.locale || "zh-CN");
   let modelResponse = null;
+  const assistantMessageId = beginAssistantMessageEventStream(runtime, { turn });
   try {
     modelResponse = await invokeLlmWithTransientRetry({
       modelState,
@@ -267,6 +273,7 @@ export async function invokeNoToolsTurn({
     forceToolChoiceNone,
   });
   ({ modelResponse, responseContentText } = finalStreamingTurn);
+  applyAuthoritativeMessageId(modelResponse, assistantMessageId);
   const { finalStreamResult } = finalStreamingTurn;
 
   const { turnMessageStore, turnTaskStore } = await commitNoToolsTurnState({
@@ -277,6 +284,7 @@ export async function invokeNoToolsTurn({
     modelResponse,
     responseContentText,
     turn,
+    messageId: assistantMessageId,
   });
 
   return {
@@ -383,6 +391,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   }
 
   let ai = null;
+  const assistantMessageId = beginAssistantMessageEventStream(runtime, { turn });
   try {
     ai = await invokeBoundLlmWithToolChoice();
   } catch (error) {
@@ -443,6 +452,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   if (toolCallStreamingRetry) {
     ({ ai, rawCalls, calls, aiContentText } = toolCallStreamingRetry);
   }
+  applyAuthoritativeMessageId(ai, assistantMessageId);
   await runAgentRuntimeHook({
     runtime,
     point: AGENT_HOOK_POINTS.AFTER_LLM_CALL,
@@ -509,11 +519,12 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     toolCalls: calls.length ? formatToolCallsForStorage(calls) : [],
     modelAlias: currentModelInfo.modelAlias,
     modelName: currentModelInfo.modelName,
+    messageId: assistantMessageId,
   });
 
   const mainModelToolTurnContent = String(aiContentText || "").trim();
   if (calls.length && mainModelToolTurnContent) {
-    emitEvent(eventListener, "main_model_content", {
+    emitMessageEvent(eventListener, runtime, "main_model_content", {
       turn,
       text: mainModelToolTurnContent,
       output: mainModelToolTurnContent,

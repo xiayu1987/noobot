@@ -53,6 +53,17 @@ export async function handleBeforeAgentDispatch({
   });
   if (skipped) return;
 
+  // A non-empty request routed to the workflow plugin is exclusively owned by
+  // workflow orchestration. Planning, node execution, and failure reporting
+  // must never fall through and execute the same user task in the root Agent.
+  const workflowRunId = resolveWorkflowRunId(ctx);
+  ctx?.claimAgentDispatch?.({
+    source: "workflow_before_agent_dispatch",
+    executionKind: "workflow",
+    origin: { type: "workflow", workflowRunId },
+    stage: "planning",
+  });
+
   try {
     const { semanticResolution, semanticText } = await runSemanticResolutionStage({
       options,
@@ -64,17 +75,6 @@ export async function handleBeforeAgentDispatch({
     const { semantic } = executeWorkflowText({
       semanticText,
       options,
-    });
-    // Semantic parsing is the ownership boundary: before this point the hook
-    // can still fall back to the main Agent. Once a valid workflow is accepted,
-    // the workflow owns root-turn processing and must publish RUNNING before
-    // planning or child sessions begin.
-    const workflowRunId = resolveWorkflowRunId(ctx);
-    ctx?.claimAgentDispatch?.({
-      source: "workflow_before_agent_dispatch",
-      executionKind: "workflow",
-      origin: { type: "workflow", workflowRunId },
-      stage: "planning",
     });
     const planningNodeSessions = buildWorkflowPlanningNodeSessions({ workflowRunId, semantic });
     const planningPersistResult = await persistWorkflowPlanningDialog({

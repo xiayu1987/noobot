@@ -64,17 +64,8 @@ function isSubSessionToolEvent(eventName = "", eventData = {}) {
   );
 }
 
-function subSessionMessageIdentity(eventName = "", eventData = {}) {
-  const explicit = text(eventData?.messageId || eventData?.message?.id || eventData?.message?.messageId);
-  if (explicit) return explicit;
-  const role = text(eventData?.role) || (String(eventName).includes("user") ? "user" : "assistant");
-  const turnScopeId = text(eventData?.turnScopeId);
-  const dialogProcessId = text(eventData?.dialogProcessId);
-  const sessionId = text(eventData?.sessionId || eventData?.subSessionId);
-  const toolCallId = text(eventData?.toolCallId || eventData?.tool_call_id || eventData?.toolCall?.id || eventData?.tool_call?.id || eventData?.toolResult?.tool_call_id || eventData?.tool_result?.tool_call_id);
-  const kind = String(eventName).includes("tool") || toolCallId ? `tool:${toolCallId || "turn"}` : role;
-  const base = turnScopeId || dialogProcessId || sessionId;
-  return `${base}:${kind}`;
+function authoritativeSubSessionMessageId(eventData = {}) {
+  return text(eventData?.messageId);
 }
 
 function hasSubSessionMessagePayload(eventName = "", eventData = {}, currentMessage = null) {
@@ -91,16 +82,20 @@ function hasSubSessionMessagePayload(eventName = "", eventData = {}, currentMess
 function normalizeSubSessionMessage(eventName = "", eventData = {}, currentMessage = null) {
   const content = eventContent(eventData);
   const toolEvent = isSubSessionToolEvent(eventName, eventData);
-  const role = toolEvent && currentMessage
-    ? text(currentMessage?.role) || "assistant"
-    : text(eventData?.role) || (String(eventName).includes("user") ? "user" : "assistant");
-  const eventId = text(eventData?.eventId || eventData?.id) || `${text(eventData?.turnScopeId)}:${text(eventData?.seq || eventData?.sequence)}:${eventName}`;
+  // Tool lifecycle is a facet of the addressed Assistant entity. The explicit
+  // eventType defines that projection; a producer-side tool role must not
+  // mutate the owning message entity into a separate Tool message.
+  const role = toolEvent
+    ? (text(currentMessage?.role) || "assistant")
+    : (text(eventData?.role || currentMessage?.role) || "assistant");
+  const eventId = text(eventData?.eventId);
   const appendDelta = Boolean(eventData?.delta) || String(eventName).includes("delta");
   const previousContent = String(currentMessage?.content || "");
   return {
     ...(currentMessage || {}),
     ...(eventData?.message && typeof eventData.message === "object" ? eventData.message : {}),
-    id: text(currentMessage?.id || eventData?.messageId || eventData?.message?.id) || subSessionMessageIdentity(eventName, eventData),
+    id: text(currentMessage?.id) || authoritativeSubSessionMessageId(eventData),
+    messageId: text(currentMessage?.messageId) || authoritativeSubSessionMessageId(eventData),
     role,
     // Tool payload text belongs in the thinking/tool-log projection. Replacing
     // assistant content with it makes the assistant thinking card (including a
@@ -208,9 +203,13 @@ export const useChatStore = defineStore("chat", () => {
     registry.workflows[workflowRunId] = {
       ...currentWorkflow,
       workflowRunId,
-      sessionId: text(eventData?.sessionId || currentWorkflow.sessionId),
-      dialogProcessId: text(eventData?.dialogProcessId || currentWorkflow.dialogProcessId),
-      turnScopeId: text(eventData?.turnScopeId || currentWorkflow.turnScopeId),
+      // The first planning event establishes the parent conversation anchor.
+      // Nested workflow agents may reuse the same workflowRunId while carrying
+      // their child Session/process/turn identity. Do not let that child scope
+      // move the top-level live projection away from its parent thinking card.
+      sessionId: text(currentWorkflow.sessionId || eventData?.sessionId),
+      dialogProcessId: text(currentWorkflow.dialogProcessId || eventData?.dialogProcessId),
+      turnScopeId: text(currentWorkflow.turnScopeId || eventData?.turnScopeId),
       semanticText: text(eventData?.semanticText || currentWorkflow.semanticText),
       plannedAt: eventData?.createdAt || currentWorkflow.plannedAt || new Date().toISOString(),
     };
@@ -237,36 +236,41 @@ export const useChatStore = defineStore("chat", () => {
   }
 
   function upsertSubSessionEvent(eventName = "", eventData = {}) {
+    // A standard envelope carries semantic type in data. The WebSocket event
+    // name is transport routing only and must not influence projection.
+    if (eventData?.envelopeKind !== "noobot.message_event" || Number(eventData?.envelopeVersion) !== 1) {
+      return { applied: false, reason: "not_authoritative_message_event" };
+    }
+    const projectionEventName = text(eventData?.eventType);
     const sessionId = text(eventData?.sessionId || eventData?.subSessionId);
     if (!sessionId) return { applied: false, reason: "missing_session" };
     const registry = subSessionMessageRegistry.value || createSubSessionMessageRegistry();
     if (!registry.sessions) registry.sessions = {};
     const currentSession = registry.sessions[sessionId] || { sessionId, messages: [], eventsById: {}, sequence: 0 };
-    const eventId = text(eventData?.eventId || eventData?.id) || `${text(eventData?.turnScopeId)}:${text(eventData?.seq || eventData?.sequence)}:${eventName}`;
+    const eventId = text(eventData?.eventId);
+    if (!eventId || !projectionEventName || !authoritativeSubSessionMessageId(eventData) || Number(eventData?.sequence) <= 0) {
+      return { applied: false, reason: "invalid_authoritative_message_event" };
+    }
     if (eventId && currentSession.eventsById?.[eventId]) {
       return { applied: false, reason: "duplicate", current: currentSession };
     }
     const messages = Array.isArray(currentSession.messages) ? [...currentSession.messages] : [];
     const incoming = { ...eventData, sessionId, eventId };
-    const messageKey = subSessionMessageIdentity(eventName, incoming);
-    let existingIndex = messages.findIndex((message = {}) => text(message?.id || message?.messageId) === messageKey);
-    if (existingIndex < 0 && isSubSessionToolEvent(eventName, eventData)) {
-      const turnScopeId = text(eventData?.turnScopeId);
-      // A realtime tool event is part of the current assistant turn, not a new
-      // display message. Attach it to the latest assistant projection so sparse
-      // tool events cannot replace the thinking-bearing message.
-      for (let index = messages.length - 1; index >= 0; index -= 1) {
-        const candidate = messages[index] || {};
-        if (text(candidate?.role) !== "assistant") continue;
-        if (turnScopeId && text(candidate?.turnScopeId) !== turnScopeId) continue;
-        existingIndex = index;
-        break;
-      }
-    }
+    const messageKey = authoritativeSubSessionMessageId(incoming);
+    const existingIndex = messageKey
+      ? messages.findIndex((message = {}) => text(message?.messageId || message?.id) === messageKey)
+      : -1;
     const currentMessage = existingIndex >= 0 ? messages[existingIndex] : null;
     let nextMessage = currentMessage;
-    if (hasSubSessionMessagePayload(eventName, eventData, currentMessage)) {
-      nextMessage = normalizeSubSessionMessage(eventName, incoming, currentMessage);
+    const hasMessagePayload = hasSubSessionMessagePayload(projectionEventName, eventData, currentMessage);
+    if (hasMessagePayload && !messageKey) {
+      return { applied: false, reason: "missing_message_identity", current: currentSession };
+    }
+    if (hasMessagePayload) {
+      if (currentMessage && !shouldApplyOrderedEvent(currentMessage, incoming)) {
+        return { applied: false, reason: "stale", current: currentSession, message: currentMessage };
+      }
+      nextMessage = normalizeSubSessionMessage(projectionEventName, incoming, currentMessage);
       if (existingIndex >= 0) messages[existingIndex] = nextMessage;
       else messages.push(nextMessage);
     }
@@ -297,14 +301,37 @@ export const useChatStore = defineStore("chat", () => {
     if (!sessionId) return { applied: false, reason: "missing_session" };
     const registry = subSessionMessageRegistry.value || createSubSessionMessageRegistry();
     const current = registry.sessions?.[sessionId] || { sessionId, messages: [], eventsById: {}, sequence: 0 };
-    const messages = Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : [];
+    const snapshotMessages = Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : [];
+    const realtimeMessages = Array.isArray(current.messages) ? current.messages : [];
+    const realtimeById = new Map(realtimeMessages.map((message = {}) => [text(message.messageId || message.id), message]));
+    const claimedIds = new Set();
+    const messages = snapshotMessages.map((snapshot = {}) => {
+      const messageId = text(snapshot.messageId || snapshot.id || snapshot?.additional_kwargs?.noobotMessageId);
+      const realtime = messageId ? realtimeById.get(messageId) : null;
+      if (messageId) claimedIds.add(messageId);
+      if (!realtime) return snapshot;
+      return {
+        ...realtime,
+        ...snapshot,
+        id: messageId,
+        messageId,
+        thinking: snapshot.thinking ?? realtime.thinking,
+        toolCall: snapshot.toolCall ?? realtime.toolCall,
+        toolResult: snapshot.toolResult ?? realtime.toolResult,
+        rawEvents: realtime.rawEvents,
+      };
+    });
+    for (const realtime of realtimeMessages) {
+      const messageId = text(realtime.messageId || realtime.id);
+      if (!messageId || !claimedIds.has(messageId)) messages.push(realtime);
+    }
     registry.sessions = registry.sessions || {};
     registry.sessions[sessionId] = {
       ...current,
       ...sessionDoc,
       id: sessionId,
       sessionId,
-      messages: messages.length ? messages : (Array.isArray(current.messages) ? current.messages : []),
+      messages,
       eventsById: current.eventsById || {},
       updatedAt: new Date().toISOString(),
     };

@@ -73,9 +73,12 @@ function pickExecutionToolName(logItem = {}) {
     logItem?.toolName ||
       logItem?.name ||
       logItem?.function?.name ||
+      (typeof logItem?.tool === "string" ? logItem.tool : "") ||
       logItem?.tool?.name ||
       logItem?.data?.toolName ||
       logItem?.data?.name ||
+      (typeof logItem?.data?.tool === "string" ? logItem.data.tool : "") ||
+      logItem?.data?.tool?.name ||
       logItem?.data?.function?.name,
   );
 }

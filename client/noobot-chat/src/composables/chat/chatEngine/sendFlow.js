@@ -145,6 +145,21 @@ function hasActiveTurnInFlight({ activeSession, turnRuntimeRegistry } = {}) {
   return ["requesting", "sending", "completing", "stopping"].includes(turnRuntimeDisplayState(turn));
 }
 
+export function shouldProjectSubSessionEvent(event = "", data = {}) {
+  return event === "subagent_message_event" &&
+    data?.channelKind === "message_event" &&
+    Number(data?.channelVersion) === 1 &&
+    data?.event?.envelopeKind === "noobot.message_event";
+}
+
+export function shouldProjectMainSessionEvent(event = "", data = {}) {
+  return event === "message_event" &&
+    data?.channelKind === "message_event" &&
+    Number(data?.channelVersion) === 1 &&
+    data?.route?.scope === "main_session" &&
+    data?.event?.envelopeKind === "noobot.message_event";
+}
+
 export function createChatEngineSender({
   activeSession,
   activeSessionId,
@@ -375,6 +390,7 @@ export function createChatEngineSender({
           applyAssistantFailureState,
           applyRunStateEvent,
           refreshSessionConnectorsAsync,
+          logSessionEvent,
         }).then((applied) => {
           logStateMachineDebug("stateMachine.done.finalize.after", {
             source,
@@ -404,6 +420,37 @@ export function createChatEngineSender({
       };
 
       const streamOnce = (streamPayload) => chatWebSocketClient.stream(streamPayload, ({ event, data }) => {
+        const authoritativeEvent = data?.event || {};
+        const subProjectionChecks = {
+          eventName: event === "subagent_message_event",
+          channelKind: data?.channelKind === "message_event",
+          channelVersion: Number(data?.channelVersion) === 1,
+          envelopeKind: authoritativeEvent?.envelopeKind === "noobot.message_event",
+        };
+        if (event === "subagent_message_event" || data?.route?.scope === "sub_session") {
+          logSessionEvent({
+            category: "debug",
+            level: "debug",
+            debugType: "workflow-diagnostics",
+            event: "frontend.subagentMessage.projectionEvaluated",
+            sessionId: data?.route?.rootSessionId || sessionId,
+            dialogProcessId: authoritativeEvent?.dialogProcessId || data?.dialogProcessId || "",
+            turnScopeId: authoritativeEvent?.turnScopeId || data?.turnScopeId || turnScopeId,
+            data: {
+              projected: Object.values(subProjectionChecks).every(Boolean),
+              checks: subProjectionChecks,
+              eventType: authoritativeEvent?.eventType || "",
+              messageId: authoritativeEvent?.messageId || "",
+              childSessionId: authoritativeEvent?.sessionId || data?.route?.sessionId || "",
+              parentSessionId: authoritativeEvent?.parentSessionId || data?.route?.parentSessionId || "",
+              workflowRunId: authoritativeEvent?.workflowRunId || "",
+              nodeExecutionId: authoritativeEvent?.nodeExecutionId || "",
+              hasContent: Boolean(authoritativeEvent?.content || authoritativeEvent?.delta || authoritativeEvent?.text),
+              hasTool: Boolean(authoritativeEvent?.tool),
+              hasResult: authoritativeEvent?.result !== undefined,
+            },
+          });
+        }
         logSessionEvent({
           category: event === StreamEventEnum.INTERACTION_REQUEST ? "interaction" : "transport",
           event: `stream.${event || "event"}`,
@@ -432,14 +479,32 @@ export function createChatEngineSender({
           upsertWorkflowPlanningEvent?.(data || {});
           return;
         }
+        if (shouldProjectSubSessionEvent(event, data || {})) {
+          // Explicit channel is a type proof. This layer does not inspect
+          // message identity, workflow scope, or event semantics.
+          upsertSubSessionEvent?.(data.event?.eventType, data.event || {});
+          return;
+        }
+        if (shouldProjectMainSessionEvent(event, data || {})) {
+          const messageEvent = data.event || {};
+          const projectionEvent = messageEvent.eventType === "llm_delta"
+            ? StreamEventEnum.DELTA
+            : StreamEventEnum.THINKING;
+          handleBasicStreamEvent(projectionEvent, {
+            data: messageEvent,
+            botMessage: botMsg,
+            classifyRealtimeLog,
+            navigateOnFirstResponseOnce,
+            activeSession,
+            processStore: activeProcessStore,
+            locateSendingStartedMessageOnce,
+          });
+          return;
+        }
         const subSessionScopedEvent = data?.scope === "sub_session";
         if (subSessionScopedEvent || (typeof event === "string" && event.startsWith("subagent_"))) {
-          const subSessionId = normalizeTrimmedString(data?.sessionId || data?.subSessionId);
-          const workflowRunId = normalizeTrimmedString(data?.workflowRunId);
-          const nodeExecutionId = normalizeTrimmedString(data?.nodeExecutionId);
-          if (subSessionId && workflowRunId && nodeExecutionId) {
-            upsertSubSessionEvent?.(event, data || {});
-          }
+          // Legacy/lifecycle child events have no authority to create or alter
+          // messages. They remain available to their dedicated state channels.
           return;
         }
         if (event === StreamEventEnum.TURN_LIFECYCLE) {

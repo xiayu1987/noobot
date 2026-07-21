@@ -54,8 +54,8 @@ function createDeps(overrides = {}) {
       },
     },
     pluginRuntime: {
-      agentPluginKey: "agentPlugin",
-      botPluginKey: "botPlugin",
+      agentPluginKey: "harness",
+      botPluginKey: "workflow",
       agentPluginSelectors: new Set(["agentPlugin"]),
       botPluginSelectors: new Set(["botPlugin"]),
     },
@@ -64,6 +64,7 @@ function createDeps(overrides = {}) {
       return {
         ...payload.baseRunConfig,
         ...payload.runConfigPatch,
+        disabledPlugins: payload.disabledPlugins,
         hookManager: { shouldBeDeleted: true },
         hooks: { shouldBeDeleted: true },
         botHookManager: { shouldBeDeleted: true },
@@ -134,6 +135,7 @@ test("detached sub-session delegates execution and persistence to the main runne
   assert.equal(payload.runConfig.hooks, undefined);
   assert.equal(payload.runConfig.botHookManager, undefined);
   assert.equal(payload.runConfig.botHooks, undefined);
+  assert.deepEqual(payload.runConfig.disabledPlugins, ["workflow"]);
   assert.equal(payload.runConfig.systemRuntimePatch.durableParentSessionId, "parent1");
   assert.equal(payload.parentAsyncResultContainer, null);
   assert.ok(payload.persistenceContext);

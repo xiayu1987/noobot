@@ -223,14 +223,14 @@ describe("reconnectReplayModel", () => {
     expect(reusable).toBe(existing[1]);
   });
 
-  it("patchMessageObjectPreservingUiState clears stale artifacts when source assistant has no turnScopeId", () => {
+  it("patchMessageObjectPreservingUiState preserves authoritative thinking when a same-process snapshot omits turnScopeId", () => {
     const target = {
       role: RoleEnum.ASSISTANT,
       dialogProcessId: "dp-stale",
       turnScopeId: "turn-old",
       attachments: [{ name: "old.txt" }],
       completedToolLogs: [{ id: "old-tool" }],
-      realtimeLogs: [{ id: "old-realtime" }],
+      realtimeLogs: [{ id: "workflow-mermaid", text: "```mermaid\ngraph TD\nA-->B\n```" }],
       processCompletedToolLogs: [{ id: "old-process" }],
       processRealtimeLogs: [{ id: "old-process-realtime" }],
       processExecutionLogTotal: 2,
@@ -242,13 +242,35 @@ describe("reconnectReplayModel", () => {
       content: "new assistant without turn",
     });
 
+    expect(target.turnScopeId).toBe("turn-old");
+    expect(target.attachments).toEqual([{ name: "old.txt" }]);
+    expect(target.completedToolLogs).toEqual([{ id: "old-tool" }]);
+    expect(target.realtimeLogs).toEqual([
+      { id: "workflow-mermaid", text: "```mermaid\ngraph TD\nA-->B\n```" },
+    ]);
+    expect(target.processCompletedToolLogs).toEqual([{ id: "old-process" }]);
+    expect(target.processRealtimeLogs).toEqual([{ id: "old-process-realtime" }]);
+    expect(target.processExecutionLogTotal).toBe(2);
+  });
+
+  it("patchMessageObjectPreservingUiState clears assets when an unscoped snapshot belongs to another process", () => {
+    const target = {
+      role: RoleEnum.ASSISTANT,
+      dialogProcessId: "dp-old",
+      turnScopeId: "turn-old",
+      realtimeLogs: [{ id: "old-realtime" }],
+      completedToolLogs: [{ id: "old-tool" }],
+    };
+
+    patchMessageObjectPreservingUiState(target, {
+      role: RoleEnum.ASSISTANT,
+      dialogProcessId: "dp-new",
+      content: "different process snapshot",
+    });
+
     expect(target.turnScopeId).toBeUndefined();
-    expect(target.attachments).toEqual([]);
-    expect(target.completedToolLogs).toEqual([]);
     expect(target.realtimeLogs).toEqual([]);
-    expect(target.processCompletedToolLogs).toEqual([]);
-    expect(target.processRealtimeLogs).toEqual([]);
-    expect(target.processExecutionLogTotal).toBe(0);
+    expect(target.completedToolLogs).toEqual([]);
   });
 
   it("patchMessageObjectPreservingUiState keeps running assistant turnScopeId for stop after refresh", () => {

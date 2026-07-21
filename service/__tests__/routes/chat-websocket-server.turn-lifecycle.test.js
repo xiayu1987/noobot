@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { WebSocket } from "ws";
 import { transitionTurnLifecycle } from "../../../agent/src/system-core/session/entities/turn-lifecycle-entity.js";
 import { TURN_EVENT } from "@noobot/shared/turn-lifecycle-protocol";
 import { recoverTurnFinalize } from "../../ws/chat-websocket/finalize-recovery.js";
@@ -191,6 +192,50 @@ for (const [failureAt, expectedPhase] of [["action", "action"], ["processing", "
     }
   });
 }
+
+test("socket close terminates an accepted turn and releases the session mutex", async () => {
+  const authoritative = createAuthoritativeBot();
+  authoritative.bot.runSession = async ({ abortSignal }) => {
+    await new Promise((resolve) => abortSignal.addEventListener("abort", resolve, { once: true }));
+    const error = new Error("socket closed");
+    error.name = "AbortError";
+    throw error;
+  };
+  const server = await startServerWithWs({ bot: authoritative.bot });
+  try {
+    const scopedPayload = {
+      ...payload,
+      sessionId: "s-socket-close",
+      turnScopeId: "turn-socket-close",
+      commandId: "command-socket-close",
+      config: { turnScopeId: "turn-socket-close" },
+    };
+    await new Promise((resolve, reject) => {
+      const ws = new WebSocket(`ws://127.0.0.1:${server.address().port}/chat/ws`, {
+        headers: { authorization: "Bearer test-key" },
+      });
+      ws.on("open", () => ws.send(JSON.stringify(scopedPayload)));
+      ws.on("message", (raw) => {
+        const message = JSON.parse(String(raw || "{}"));
+        if (message?.event === "turn_lifecycle" && message?.data?.eventType === TURN_EVENT.ACTION_ACCEPTED) {
+          ws.close(1000, "restart");
+        }
+      });
+      ws.on("close", resolve);
+      ws.on("error", reject);
+    });
+
+    const deadline = Date.now() + 1000;
+    while (authoritative.lifecycle().activeTurnScopeId && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.deepEqual(authoritative.committed(), [TURN_EVENT.ACTION_ACCEPTED, TURN_EVENT.FAILED]);
+    assert.equal(authoritative.lifecycle().activeTurnScopeId, "");
+    assert.equal(authoritative.lifecycle().turns[scopedPayload.turnScopeId].state, "action_failed");
+  } finally {
+    await closeServer(server);
+  }
+});
 
 test("summary failure is classified as completion without authoritative completed", async () => {
   const authoritative = createAuthoritativeBot({ persistSummary: false });

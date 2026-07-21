@@ -4,4 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-export { normalizeSseLogEvent } from "noobot-agent/event";
+export {
+  MESSAGE_EVENT_ENVELOPE_KIND,
+  assertMessageEventEnvelope,
+  isMessageEventEnvelope,
+  normalizeSseLogEvent,
+} from "noobot-agent/event";

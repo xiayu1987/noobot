@@ -12,6 +12,7 @@ import { buildHookContext } from "../hook/hook-context-builder.js";
 import { compactToolResultTextForModel } from "../../../semantic-transfer/core/compact.js";
 import { parseJsonObjectSafely } from "../utils/json-utils.js";
 import { appendMessage } from "../message-context/message-store.js";
+import { applyAuthoritativeMessageId } from "../../../event/message-event-stream.js";
 
 const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
   "doc_to_data_tool",
@@ -132,6 +133,7 @@ export function createStateCommitter({
       toolCalls = [],
       modelAlias = "",
       modelName = "",
+      messageId = "",
     } = {}) {
       if (!turnMessageStore?.push) return;
       const assistantMessage = {
@@ -160,6 +162,7 @@ export function createStateCommitter({
             ? modelResponseMetadata
             : null,
       };
+      applyAuthoritativeMessageId(assistantMessage, messageId);
       await runAgentRuntimeHook({
         runtime,
         point: AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT,

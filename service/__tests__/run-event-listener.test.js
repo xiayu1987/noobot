@@ -113,3 +113,61 @@ test("run-event-listener routes workflow child deltas with sub session identity"
   assert.equal(frames[0]?.data?.turnScopeId, "sub-turn");
   assert.equal(frames[0]?.data?.content, "live token");
 });
+
+test("run-event-listener rejects malformed authoritative envelopes instead of legacy normalization", () => {
+  const frames = [];
+  const listener = createRunEventListener({
+    sendEvent: (event, data) => frames.push({ event, data }),
+    sessionId: "root-session",
+    textStreamingEnabled: true,
+    registerActiveRun: () => {},
+    getCurrentRunMeta: () => ({ dialogProcessId: "parent-dialog", turnScopeId: "parent-turn" }),
+    getCurrentRunHandle: () => null,
+    getCurrentTurnScopeId: () => "parent-turn",
+  });
+
+  assert.throws(
+    () => listener.onEvent({
+      event: "tool_call_end",
+      data: {
+        envelopeKind: "noobot.message_event",
+        envelopeVersion: 1,
+        eventId: "evt-incomplete",
+        eventType: "tool_call_end",
+        sessionId: "sub-session",
+        messageId: "msg-1",
+        sequence: 1,
+        // timestamp is deliberately absent.
+        workflowRunId: "workflow-1",
+        nodeExecutionId: "node-1",
+      },
+    }),
+    /invalid authoritative message event envelope/,
+  );
+  assert.deepEqual(frames, []);
+});
+
+test("run-event-listener separates root and child authoritative message channels", () => {
+  const frames = [];
+  const listener = createRunEventListener({
+    sendEvent: (event, data) => frames.push({ event, data }),
+    sessionId: "root-session",
+    textStreamingEnabled: true,
+    registerActiveRun: () => {},
+  });
+  const base = {
+    envelopeKind: "noobot.message_event", envelopeVersion: 1,
+    eventType: "tool_call_start", messageId: "msg-1", sequence: 1,
+    timestamp: "2026-01-01T00:00:00.000Z",
+  };
+  listener.onEvent({ event: "tool_call_start", data: {
+    ...base, eventId: "evt-root", sessionId: "root-session",
+  } });
+  listener.onEvent({ event: "tool_call_start", data: {
+    ...base, eventId: "evt-child", sessionId: "child-session", parentSessionId: "root-session",
+  } });
+  assert.equal(frames[0].event, "message_event");
+  assert.equal(frames[0].data.route.scope, "main_session");
+  assert.equal(frames[1].event, "subagent_message_event");
+  assert.equal(frames[1].data.route.scope, "sub_session");
+});

@@ -599,6 +599,20 @@ export function createMessageHandler({
       getCurrentRunMeta: () => state.currentRunMeta,
       getCurrentRunHandle: () => state.currentRunHandle,
       getCurrentTurnScopeId: () => state.currentTurnScopeId,
+      onAuthoritativeMessageRouted: (routeData = {}) => {
+        void recordServiceWebSocketLifecycle({
+          sessionLogConfig,
+          category: "debug",
+          level: "debug",
+          debugType: "workflow-diagnostics",
+          event: "service.websocket.authoritativeMessage.routed",
+          userId,
+          sessionId,
+          dialogProcessId: routeData.dialogProcessId || state.currentRunMeta?.dialogProcessId || "",
+          turnScopeId: routeData.turnScopeId || state.currentTurnScopeId || "",
+          data: routeData,
+        });
+      },
       onCommittedTurnLifecycle: (committed = {}) => {
         publishCommittedTurnLifecycle({
           event: committed,
@@ -753,9 +767,10 @@ export function createMessageHandler({
         ) {
           await finalizeUserStopped(buildRunStateSnapshot());
         } else if (isSocketCloseRunAbort(state.currentAbortSignal)) {
-          // Refreshing, navigating away, or disposing the client closes the
-          // transport. It cancels local execution but is not a turn error and
-          // must not create an ERROR/run_aborted terminal fact.
+          // A closed transport aborts this Service-owned execution. It is not
+          // a user stop, but the authoritative Turn must still reach a terminal
+          // state so the Session action mutex cannot remain locked forever.
+          await commitCurrentFailure(error, state.currentLifecyclePhase || TURN_PHASE.ACTION);
           return;
         } else {
           void recordServiceWebSocketLifecycle({

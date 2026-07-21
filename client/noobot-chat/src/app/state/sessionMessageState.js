@@ -9,7 +9,15 @@ import { formatLocalTime, nowIso } from "../../composables/infra/timeFields";
 const TOOL_LOG_TYPES = new Set(["tool_call", "tool_result"]);
 
 export function classifyRealtimeLog(data = {}) {
-  const eventName = String(data.event || "").trim();
+  const authoritativeEventType = String(data.eventType || "").trim();
+  const eventName = String(
+    data.event ||
+      (authoritativeEventType === "tool_call_start"
+        ? "tool_call"
+        : authoritativeEventType === "tool_call_end"
+          ? "tool_result"
+          : authoritativeEventType),
+  ).trim();
   const text = sanitizeExecutionLogText(
     data.text ?? data.output ?? data.data?.text ?? data.data?.output ?? "",
   );

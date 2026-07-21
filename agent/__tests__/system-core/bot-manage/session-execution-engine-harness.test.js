@@ -53,6 +53,33 @@ test("_prepareRunConfig attaches independent botHookManager", () => {
   assert.notEqual(prepared.botHookManager, prepared.hookManager);
 });
 
+test("_finalizeRunSession preserves the child lifecycle terminal receipt", async () => {
+  const engine = new SessionExecutionEngine({
+    workspaceService: createWorkspaceService("/tmp/noobot-test"),
+  });
+  const lifecycle = {
+    executionId: "agent:workflow-node:t1",
+    executionKind: "agent",
+    state: "completed",
+    revision: 4,
+    sequence: 4,
+  };
+  let forwardedLifecycle = null;
+  engine.finalizer.finalizeRunSession = async (payload = {}) => {
+    forwardedLifecycle = payload.lifecycle;
+    return { lifecycle: payload.lifecycle };
+  };
+
+  const result = await engine._finalizeRunSession({
+    userId: "u1",
+    sessionId: "child-s1",
+    lifecycle,
+  });
+
+  assert.equal(forwardedLifecycle, lifecycle);
+  assert.equal(result.lifecycle, lifecycle);
+});
+
 test("RunConfigPluginPreparer.prepareAgentPluginRunConfig registers harness plugin and resolves basePath from user workspace", async () => {
   const tempRoot = await createTempRoot();
   const engine = new SessionExecutionEngine({
@@ -187,6 +214,28 @@ test("RunConfigPluginPreparer.resolveBotPluginOptions respects explicit enabled=
   });
   assert.equal(options.enabled, false);
   assert.equal(options.mode, "off");
+});
+
+test("RunConfigPluginPreparer.resolveBotPluginOptions keeps strategy-disabled workflow off", () => {
+  const engine = new SessionExecutionEngine({
+    globalConfig: { plugins: { workflow: { enabled: true, mode: "on" } } },
+    workspaceService: createWorkspaceService("/tmp/noobot-bot-plugin-test"),
+  });
+  const options = engine.runConfigPluginPreparer.resolveBotPluginOptions({
+    runConfig: {
+      disabledPlugins: ["workflow"],
+      selectedPlugins: ["workflow"],
+      plugins: {
+        workflow: { enabled: true, mode: "on" },
+      },
+    },
+    userConfig: {
+      plugins: {
+        workflow: { enabled: true, mode: "on" },
+      },
+    },
+  });
+  assert.deepEqual(options, { enabled: false, mode: "off" });
 });
 
 test("runSession smoke writes harness artifacts through full execution pipeline", async () => {
