@@ -272,6 +272,7 @@ export const zhCNMessages = {
     "thinkingDetails": "思考明细 ({count})",
     "details": "明细",
     "waitingRealtimeLog": "执行中，等待实时日志...",
+    "analyzingRealtimeLog": "正在思考 / 分析中...",
     "noExecutionLogs": "无执行过程日志",
     "noToolCalls": "暂无工具调用记录",
     "detailsAfterDone": "执行完成后可查看思考明细",

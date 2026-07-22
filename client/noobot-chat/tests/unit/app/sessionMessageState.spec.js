@@ -52,6 +52,10 @@ describe("sessionMessageState", () => {
 
     expect(call).toMatchObject({ event: "tool_call", type: "tool_call" });
     expect(result).toMatchObject({ event: "tool_result", type: "tool_result" });
+    expect(call.text).toContain("[tool] read_file call");
+    expect(call.text).toContain('"filePath":"a.txt"');
+    expect(result.text).toContain("[tool] read_file result");
+    expect(result.text).toContain('"ok":true');
   });
 
   it("classifies regular realtime logs as system defaults", () => {

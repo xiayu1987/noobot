@@ -32,6 +32,7 @@ export const RUNTIME_EVENTS_CONFIG_ENVS = deepFreeze({
     sessionLogWsDebug: "NOOBOT_RUNTIME_EVENT_SESSION_LOG_WS_DEBUG",
     frontendStopContinueDebug: "NOOBOT_RUNTIME_EVENT_FRONTEND_STOP_CONTINUE_DEBUG",
     frontendReconnectTimingDebug: "NOOBOT_RUNTIME_EVENT_FRONTEND_RECONNECT_TIMING_DEBUG",
+    frontendThinkingReplayDebug: "NOOBOT_RUNTIME_EVENT_FRONTEND_THINKING_REPLAY_DEBUG",
     agentProxyRouteDebug: "NOOBOT_RUNTIME_EVENT_AGENT_PROXY_ROUTE_DEBUG",
     workflowDiagnosticsDebug: "NOOBOT_RUNTIME_EVENT_WORKFLOW_DIAGNOSTICS_DEBUG",
     frontendLifecycleLog: "NOOBOT_RUNTIME_EVENT_FRONTEND_LIFECYCLE_LOG",
@@ -65,6 +66,9 @@ export const RUNTIME_EVENTS_CONFIG_DEFAULTS = deepFreeze({
     sessionLogWsDebug: false,
     frontendStopContinueDebug: false,
     frontendReconnectTimingDebug: false,
+    // Temporarily enabled by default while refreshed thinking-detail loading
+    // and visibility projection are under active investigation.
+    frontendThinkingReplayDebug: true,
     agentProxyRouteDebug: false,
     // Temporarily enabled by default while workflow/sub-agent projection and
     // completion-source diagnostics are under active investigation.

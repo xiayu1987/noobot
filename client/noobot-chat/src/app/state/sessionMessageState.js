@@ -8,6 +8,26 @@ import { formatLocalTime, nowIso } from "../../composables/infra/timeFields";
 
 const TOOL_LOG_TYPES = new Set(["tool_call", "tool_result"]);
 
+function formatToolLifecycleText(data = {}, toolEventType = "") {
+  if (!toolEventType) return "";
+  const toolName = String(data.tool || data.name || "tool").trim() || "tool";
+  const payload = toolEventType === "tool_call"
+    ? (data.args ?? data.arguments)
+    : (data.result ?? data.output);
+  let payloadText = "";
+  if (typeof payload === "string") {
+    payloadText = payload;
+  } else if (payload != null) {
+    try {
+      payloadText = JSON.stringify(payload);
+    } catch {
+      payloadText = String(payload);
+    }
+  }
+  const action = toolEventType === "tool_call" ? "call" : "result";
+  return `[tool] ${toolName} ${action}${payloadText ? `: ${payloadText}` : ""}`;
+}
+
 export function classifyRealtimeLog(data = {}) {
   const authoritativeEventType = String(data.eventType || "").trim();
   const authoritativeToolEvent = authoritativeEventType === "tool_call_start"
@@ -18,8 +38,9 @@ export function classifyRealtimeLog(data = {}) {
   const eventName = String(
     authoritativeToolEvent || data.event || authoritativeEventType,
   ).trim();
+  const rawText = data.text ?? data.output ?? data.data?.text ?? data.data?.output ?? "";
   const text = sanitizeExecutionLogText(
-    data.text ?? data.output ?? data.data?.text ?? data.data?.output ?? "",
+    rawText || formatToolLifecycleText(data, authoritativeToolEvent),
   );
   const category = String(data.category || "").trim();
   const type = String(data.type || "").trim();

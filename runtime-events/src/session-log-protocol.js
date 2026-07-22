@@ -50,6 +50,7 @@ export const SESSION_LOG_DEBUG_CONTROL_KEYS = Object.freeze({
   "session-log-ws": "sessionLogWsDebug",
   "stop-continue": "frontendStopContinueDebug",
   "reconnect-timing": "frontendReconnectTimingDebug",
+  "thinking-replay": "frontendThinkingReplayDebug",
   "agent-proxy-route": "agentProxyRouteDebug",
   "workflow-diagnostics": "workflowDiagnosticsDebug",
 });

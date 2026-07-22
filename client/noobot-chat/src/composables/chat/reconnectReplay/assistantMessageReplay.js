@@ -14,6 +14,7 @@ import {
   hasAssistantMessageWithContent,
 } from "./messageLookup";
 import { logReconnectTimingDebug } from "../debug/reconnectTimingDebugLogger";
+import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger";
 import {
   createTurnPlaceholderMessage,
   findTurnPlaceholderMessage,
@@ -32,6 +33,22 @@ export function resolveReconnectTargetAssistantMessage({
   const messageList = Array.isArray(activeSession.value.messages)
     ? activeSession.value.messages
     : [];
+  const sessionId = _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id);
+  const logResolution = (resolution, message = null, extra = {}) => {
+    logThinkingReplayDebug("frontend.thinkingReplay.reconnectTargetResolved", {
+      sessionId,
+      dialogProcessId: normalizedDpId,
+      turnScopeId: normalizedTurnScopeId,
+      resolution,
+      messageFound: Boolean(message),
+      messagePending: message ? message.pending === true : null,
+      messageDialogProcessId: _trimStr(message?.dialogProcessId),
+      messageTurnScopeId: _trimStr(message?.turnScopeId),
+      messageCount: messageList.length,
+      allowCreate: Boolean(allowCreate),
+      ...extra,
+    });
+  };
   const matchedPlaceholder = findTurnPlaceholderMessage(messageList, {
     turnScopeId: normalizedTurnScopeId,
     dialogProcessId: normalizedDpId,
@@ -39,8 +56,17 @@ export function resolveReconnectTargetAssistantMessage({
   if (matchedPlaceholder) {
     if (normalizedDpId && !matchedPlaceholder.dialogProcessId) matchedPlaceholder.dialogProcessId = normalizedDpId;
     if (normalizedTurnScopeId && !matchedPlaceholder.turnScopeId) matchedPlaceholder.turnScopeId = normalizedTurnScopeId;
+    logResolution("placeholder-match", matchedPlaceholder, {
+      accepted: matchedPlaceholder.pending === true,
+    });
     return matchedPlaceholder.pending ? matchedPlaceholder : null;
   }
+  // Reconnect payloads restored from cache may not carry turnScopeId. In that
+  // case, keep dialogProcessId as the stable identity and reuse the existing
+  // assistant message instead of creating a second, scope-less placeholder.
+  // Prefer a pending target below, but also allow a non-pending message here:
+  // the caller replays only events newer than lastAppliedSeq and terminal
+  // handling is responsible for closing the message.
   const matchedAssistantMessage = messageList.find(
     (messageItem) =>
       normalizedDpId &&
@@ -58,13 +84,20 @@ export function resolveReconnectTargetAssistantMessage({
       matched: Boolean(normalizedTurnScopeId && normalizedTurnScopeId === _trimStr(matchedAssistantMessage.turnScopeId)),
       resolution: "dialog-process-match",
     });
-    return matchedAssistantMessage.pending ? matchedAssistantMessage : null;
+    logResolution("dialog-process-match", matchedAssistantMessage, {
+      accepted: true,
+    });
+    return matchedAssistantMessage;
   }
 
   const latestPendingAssistant = findLatestPendingAssistantAfterLastUser(messageList);
   if (latestPendingAssistant) {
     const latestPendingDpId = _trimStr(latestPendingAssistant?.dialogProcessId);
     if (normalizedDpId && latestPendingDpId && latestPendingDpId !== normalizedDpId) {
+      logResolution("latest-pending-dialog-mismatch", latestPendingAssistant, {
+        accepted: false,
+        latestPendingDialogProcessId: latestPendingDpId,
+      });
       return null;
     }
     if (normalizedDpId && !latestPendingDpId) {
@@ -79,9 +112,13 @@ export function resolveReconnectTargetAssistantMessage({
       messageTurnScopeId: _trimStr(latestPendingAssistant.turnScopeId),
       resolution: "latest-pending-match",
     });
+    logResolution("latest-pending-match", latestPendingAssistant, { accepted: true });
     return latestPendingAssistant;
   }
-  if (!allowCreate) return null;
+  if (!allowCreate) {
+    logResolution("no-match-create-disabled", null, { accepted: false });
+    return null;
+  }
   const appendedMessage = createTurnPlaceholderMessage({
     appendMessage,
     sessionId: activeSession.value?.backendSessionId || activeSession.value?.id,
@@ -94,6 +131,7 @@ export function resolveReconnectTargetAssistantMessage({
     messageTurnScopeId: _trimStr(appendedMessage.turnScopeId),
     resolution: "created",
   });
+  logResolution("created", appendedMessage, { accepted: Boolean(appendedMessage) });
   return appendedMessage;
 }
 

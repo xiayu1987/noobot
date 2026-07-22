@@ -152,6 +152,12 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
           dialogProcessId: eventData?.dialogProcessId,
           turnScopeId: eventData?.turnScopeId,
           hasContent: Boolean(eventData?.content || eventData?.text),
+          eventDataKeys: Object.keys(eventData || {}).sort(),
+          logType: Array.isArray(eventData?.log) ? "array" : typeof eventData?.log,
+          logEvent: String(eventData?.log?.event || eventData?.data?.log?.event || ""),
+          logKeys: Object.keys(eventData?.log || {}).sort(),
+          nestedDataKeys: Object.keys(eventData?.data || {}).sort(),
+          nestedLogKeys: Object.keys(eventData?.data?.log || {}).sort(),
         },
       });
       this.broadcastChannelEvent(channel, eventEnvelope);

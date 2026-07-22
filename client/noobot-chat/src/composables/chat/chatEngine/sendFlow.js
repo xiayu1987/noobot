@@ -341,8 +341,10 @@ export function createChatEngineSender({
         action: continueFromUserStopped ? "continue" : "",
         resumeDialogProcessId: continueFromUserStopped ? resumeDialogProcessId : "",
         resumeTurnScopeId: continueFromUserStopped ? resumeTurnScopeId : "",
-        thinkingStartedAt:
-          activeSession?.value?.turnTimingsByTurnScopeId?.[turnScopeId]?.thinkingStartedAt || "",
+        // The send event, optimistic message and transport payload must share
+        // one start instant. In particular, continue creates a fresh Turn scope,
+        // so looking it up in the pre-existing timing index can return empty.
+        thinkingStartedAt,
         uploadHint: translate("chat.uploadHint"),
         reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
       });

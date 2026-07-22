@@ -717,3 +717,73 @@ test("chat-websocket-server: stop closes run and next websocket run can start", 
     await closeServer(server);
   }
 });
+
+test("chat-websocket-server: refreshed websocket rebinds active run tool increments", async () => {
+  let emitAfterRefresh;
+  let finishRun;
+  let runCalls = 0;
+  const server = await startServerWithWs({
+    bot: {
+      runSession: async ({ eventListener }) => {
+        runCalls += 1;
+        await new Promise((resolve) => { emitAfterRefresh = resolve; });
+        eventListener.onEvent({
+          event: "tool_call_start",
+          data: {
+            envelopeKind: "noobot.message_event", envelopeVersion: 1,
+            eventId: "evt-refresh-tool", eventType: "tool_call_start",
+            sessionId: "s-refresh", dialogProcessId: "dp-refresh",
+            turnScopeId: "turn-refresh", sequence: 1,
+            timestamp: new Date().toISOString(), messageId: "msg-refresh",
+            toolCallId: "call-refresh", tool: "read_file", args: {},
+          },
+        });
+        await new Promise((resolve) => { finishRun = resolve; });
+        return { sessionId: "s-refresh", dialogProcessId: "dp-refresh", answer: "ok", messages: [] };
+      },
+    },
+  });
+  const sockets = [];
+  try {
+    const url = `ws://127.0.0.1:${server.address().port}/chat/ws`;
+    const payload = { userId: "u1", sessionId: "s-refresh", message: "run", turnScopeId: "turn-refresh" };
+    const oldWs = new WebSocket(url, { headers: { authorization: "Bearer test-key" } });
+    sockets.push(oldWs);
+    await new Promise((resolve, reject) => {
+      oldWs.on("open", () => { oldWs.send(JSON.stringify(payload)); resolve(); });
+      oldWs.on("error", reject);
+    });
+    while (!emitAfterRefresh) await new Promise((resolve) => setTimeout(resolve, 5));
+
+    const newWs = new WebSocket(url, { headers: { authorization: "Bearer test-key" } });
+    sockets.push(newWs);
+    const receivedFrames = [];
+    let resolveRebound;
+    const reboundFrame = new Promise((resolve) => { resolveRebound = resolve; });
+    const toolFrame = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`rebound tool increment timeout: ${JSON.stringify(receivedFrames)}`)), 1000);
+      newWs.on("message", (raw) => {
+        const parsed = JSON.parse(String(raw || "{}"));
+        receivedFrames.push(parsed);
+        if (parsed?.data?.sourceEvent === "running_transport_rebound") resolveRebound(parsed);
+        if (parsed?.data?.event?.eventType === "tool_call_start") { clearTimeout(timer); resolve(parsed); }
+      });
+      newWs.on("error", reject);
+    });
+    await new Promise((resolve, reject) => {
+      newWs.on("open", () => { newWs.send(JSON.stringify(payload)); resolve(); });
+      newWs.on("error", reject);
+    });
+    await reboundFrame;
+    oldWs.close(1000, "refreshed");
+    emitAfterRefresh();
+    const received = await toolFrame;
+    assert.equal(received.event, "message_event");
+    assert.equal(received.data.event.eventType, "tool_call_start");
+    assert.equal(runCalls, 1);
+    finishRun();
+  } finally {
+    for (const socket of sockets) socket.close();
+    await closeServer(server);
+  }
+});

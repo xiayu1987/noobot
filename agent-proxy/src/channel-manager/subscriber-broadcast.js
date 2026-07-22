@@ -86,6 +86,26 @@ syncSocketToChannelTail(channel, targetSocket) {
 broadcastChannelEvent(channel, envelope) {
   if (!channel || !envelope) return;
   const scopedEnvelope = this._withChannelSessionScope(channel, envelope);
+  const eventData = scopedEnvelope?.data || {};
+  this.logSessionEvent(channel, {
+    category: "transport",
+    event: "agentProxy.channel.broadcast",
+    data: {
+      channelKey: channel.key,
+      event: scopedEnvelope?.event,
+      sequence: scopedEnvelope?.sequence,
+      subscriberCount: channel.subscribers.size,
+      sessionId: eventData?.sessionId,
+      dialogProcessId: eventData?.dialogProcessId,
+      turnScopeId: eventData?.turnScopeId,
+      eventDataKeys: Object.keys(eventData || {}).sort(),
+      logType: Array.isArray(eventData?.log) ? "array" : typeof eventData?.log,
+      logEvent: String(eventData?.log?.event || eventData?.data?.log?.event || ""),
+      logKeys: Object.keys(eventData?.log || {}).sort(),
+      nestedDataKeys: Object.keys(eventData?.data || {}).sort(),
+      nestedLogKeys: Object.keys(eventData?.data?.log || {}).sort(),
+    },
+  });
   for (const subscriberSocket of channel.subscribers) {
     this.sendSocketEvent(subscriberSocket, scopedEnvelope);
     subscriberSocket.__agentProxyLastSequenceByChannel =

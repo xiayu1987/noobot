@@ -338,6 +338,31 @@ describe("turnRuntimeRegistry", () => {
     expect(resolveTurnRuntimeByScope(registry, "t2", { sessionId: "s1" })).toMatchObject({ terminal: "completed", canStop: false });
   });
 
+  it("restores persisted turn timing instead of using hydration update time", () => {
+    const registry = createTurnRuntimeRegistryState();
+    const persistedStartedAt = "2026-07-21T10:00:00.000Z";
+    const hydrationUpdatedAt = "2026-07-21T10:30:00.000Z";
+    hydrateSessionTurnRuntime(registry, {
+      backendSessionId: "s1",
+      turnTimings: [{
+        turnScopeId: "t1",
+        thinkingStartedAt: persistedStartedAt,
+        thinkingFinishedAt: "2026-07-21T10:00:15.000Z",
+      }],
+    }, [{
+      status: "completed",
+      turnScopeId: "t1",
+      updatedAt: hydrationUpdatedAt,
+    }]);
+
+    expect(resolveTurnRuntimeByScope(registry, "t1", { sessionId: "s1" })).toMatchObject({
+      startedAt: persistedStartedAt,
+      finishedAt: "2026-07-21T10:00:15.000Z",
+    });
+    expect(resolveTurnRuntimeByScope(registry, "t1", { sessionId: "s1" })?.startedAt)
+      .not.toBe(hydrationUpdatedAt);
+  });
+
   it("strictly validates snapshots and rejects same-sequence content conflicts", () => {
     const registry = createTurnRuntimeRegistryState();
     expect(applyTurnLifecycleSnapshot(registry, { ...snapshot(), commandId: "" })).toMatchObject({

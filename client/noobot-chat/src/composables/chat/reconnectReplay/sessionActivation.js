@@ -9,11 +9,17 @@ import {
 } from "../../infra/sessionIdentity";
 import { _trimStr } from "./utils";
 
-export function isCurrentActiveSession({ sessionId = "", activeSession, activeSessionId }) {
+export function isCurrentActiveSession({
+  sessionId = "",
+  activeSession,
+  activeSessionId,
+  sessions = [],
+}) {
   return isCurrentActiveSessionId({
     sessionId,
     activeSession,
     activeSessionId,
+    sessionItems: sessions,
   });
 }
 
@@ -31,6 +37,7 @@ export async function ensureReconnectSessionActive({
       sessionId: normalizedSessionId,
       activeSession: activeSession?.value,
       activeSessionId: activeSessionId?.value,
+      sessions: sessions?.value,
     })
   ) {
     return true;
@@ -60,5 +67,6 @@ export async function ensureReconnectSessionActive({
     sessionId: normalizedSessionId,
     activeSession: activeSession?.value,
     activeSessionId: activeSessionId?.value,
+    sessions: sessions?.value,
   });
 }

@@ -112,7 +112,16 @@ export function registerChatWebSocketServer(
 
     let eventSequence = 0;
     const sendEvent = (eventName, data = {}) => {
-      if (webSocket.readyState !== 1) return;
+      const eventType = String(data?.eventType || data?.messageEvent?.eventType || "").trim();
+      const toolFrame = eventType === "tool_call_start" || eventType === "tool_call_end";
+      if (webSocket.readyState !== 1) {
+        if (toolFrame) logConnection("service.websocket.toolFrame.dropped", {
+          eventName, eventType, readyState: webSocket.readyState,
+          sessionId: data?.sessionId, dialogProcessId: data?.dialogProcessId,
+          turnScopeId: data?.turnScopeId,
+        });
+        return;
+      }
       eventSequence += 1;
       const enrichedData = {
         ...(data && typeof data === "object" ? data : {}),
@@ -123,6 +132,12 @@ export function registerChatWebSocketServer(
       };
       try {
         webSocket.send(JSON.stringify({ event: eventName, data: enrichedData }));
+        if (toolFrame) logConnection("service.websocket.toolFrame.sent", {
+          eventName, eventType, seq: eventSequence,
+          sessionId: enrichedData.sessionId,
+          dialogProcessId: enrichedData.dialogProcessId,
+          turnScopeId: enrichedData.turnScopeId,
+        });
       } catch (error) {
         void recordServiceWebSocketSendFailure({
           sessionLogConfig,
@@ -220,7 +235,11 @@ export function registerChatWebSocketServer(
     );
 
     webSocket.on("close", (code, reasonBuffer) => {
-      if (state.currentAbortController) {
+      // After a refresh, the active run may have rebound its output to a newer
+      // socket. Closing the superseded transport must not abort that run.
+      const transportStillOwned =
+        !state.currentRunHandle || state.currentRunHandle.sendEvent === sendEvent;
+      if (state.currentAbortController && transportStillOwned) {
         const reasonText =
           typeof reasonBuffer === "string"
             ? reasonBuffer

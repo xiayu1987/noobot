@@ -57,11 +57,19 @@ function isCurrentActiveSessionId({
   sessionId = "",
   activeSession,
   activeSessionId = "",
+  sessionItems = [],
 } = {}) {
   const normalizedSessionId = normalizeSessionId(sessionId);
   if (!normalizedSessionId) return false;
-  return getActiveSessionIdCandidates({ activeSession, activeSessionId }).has(
-    normalizedSessionId,
+  const activeCandidates = getActiveSessionIdCandidates({ activeSession, activeSessionId });
+  if (activeCandidates.has(normalizedSessionId)) return true;
+
+  // During reload the route/session-list identity can be available before
+  // activeSession is hydrated. Resolve both local and backend ids through the
+  // session list so reconnect events are not incorrectly cached as inactive.
+  const targetSession = findSessionByAnyId(sessionItems, normalizedSessionId);
+  return getSessionIdentityList(targetSession).some((candidate) =>
+    activeCandidates.has(candidate),
   );
 }
 

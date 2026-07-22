@@ -476,6 +476,35 @@ export function createMessageHandler({
       ).trim(),
       expectedVersion,
     };
+
+    // A browser refresh creates a new Service WebSocket while the accepted run
+    // continues in this process. Rebind that run's transport instead of starting
+    // another execution (or leaving its listener writing to the closed socket).
+    // The turn identity is authoritative; never attach by session alone.
+    const runningTurn = findActiveRun({
+      sessionId,
+      turnScopeId: state.currentTurnScopeId,
+      dialogProcessId,
+    });
+    if (runningTurn && !runningTurn.abortController?.signal?.aborted) {
+      runningTurn.sendEvent = sendEvent;
+      sendEvent("channel_state", {
+        sessionId,
+        dialogProcessId: runningTurn.dialogProcessId || dialogProcessId || "",
+        turnScopeId: state.currentTurnScopeId,
+        state: "sending",
+        sourceEvent: "running_transport_rebound",
+      });
+      void recordServiceWebSocketLifecycle({
+        sessionLogConfig,
+        event: "service.websocket.run.transportRebound",
+        userId,
+        sessionId,
+        dialogProcessId: runningTurn.dialogProcessId || dialogProcessId || "",
+        turnScopeId: state.currentTurnScopeId,
+      });
+      return { rebound: true };
+    }
     if (isContinueAction) {
       const resumeDialogProcessId = String(config?.resumeDialogProcessId || "").trim();
       const resumeTurnScopeId = String(config?.resumeTurnScopeId || config?.stoppedTurnScopeId || "").trim();
@@ -585,6 +614,7 @@ export function createMessageHandler({
       dialogProcessId: state.currentRunMeta.dialogProcessId,
       turnScopeId: state.currentRunMeta.turnScopeId,
       abortController: state.currentAbortController,
+      sendEvent,
       stopRequested: false,
       stopPayload: null,
     });
@@ -636,13 +666,29 @@ export function createMessageHandler({
     });
     let processingStartedPromise = null;
     const eventListener = createRunEventListener({
-      sendEvent,
+      sendEvent: (...args) => (state.currentRunHandle?.sendEvent || sendEvent)(...args),
       sessionId,
       textStreamingEnabled,
       registerActiveRun,
       getCurrentRunMeta: () => state.currentRunMeta,
       getCurrentRunHandle: () => state.currentRunHandle,
       getCurrentTurnScopeId: () => state.currentTurnScopeId,
+      onEventReceived: (eventData = {}) => {
+        const eventType = String(eventData.eventType || eventData.eventName || "").trim();
+        if (eventType !== "tool_call_start" && eventType !== "tool_call_end") return;
+        void recordServiceWebSocketLifecycle({
+          sessionLogConfig,
+          category: "debug",
+          level: "debug",
+          debugType: "thinking-replay",
+          event: "service.websocket.runEvent.toolReceived",
+          userId,
+          sessionId: eventData.sessionId || sessionId,
+          dialogProcessId: eventData.dialogProcessId || state.currentRunMeta?.dialogProcessId || "",
+          turnScopeId: eventData.turnScopeId || state.currentTurnScopeId || "",
+          data: eventData,
+        });
+      },
       onAuthoritativeMessageRouted: (routeData = {}) => {
         void recordServiceWebSocketLifecycle({
           sessionLogConfig,
@@ -778,7 +824,8 @@ export function createMessageHandler({
       }
       // The run lifecycle owns a persisted terminal status only after this point.
       runMessageStarted = true;
-      await handleRun(payload, { isContinueAction });
+      const runResult = await handleRun(payload, { isContinueAction });
+      if (runResult?.rebound === true) runMessageStarted = false;
     } catch (error) {
       // Request/auth/resume validation errors are protocol failures, not turn
       // execution outcomes. A turn only owns a persisted terminal status after
