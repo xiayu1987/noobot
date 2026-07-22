@@ -61,6 +61,13 @@ test("ChannelManager writes message and state logs to business session", () => {
     turnScopeId: "turn-1",
     requestId: "request-1",
     hasContent: true,
+    protocolKind: "legacy",
+    transportEvent: "message",
+    transportSequence: 1,
+    eventId: "",
+    eventType: "",
+    messageId: "",
+    authoritativeSequence: 0,
   });
 
   assert.equal(records[1].event.category, "state");

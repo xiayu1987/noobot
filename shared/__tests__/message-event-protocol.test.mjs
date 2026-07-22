@@ -8,6 +8,8 @@ import assert from "node:assert/strict";
 
 import {
   assertMessageEventEnvelope,
+  MESSAGE_EVENT_TYPE,
+  validateMessageEventEnvelope,
   hasMessageEventToolPayload,
   projectMessageEventToolFacets,
 } from "../message-event-protocol.mjs";
@@ -22,6 +24,8 @@ function envelope(overrides = {}) {
     messageId: "message-1",
     sequence: 1,
     timestamp: "2026-07-21T00:00:00.000Z",
+    tool: "read_file",
+    toolCallId: "call-1",
     ...overrides,
   };
 }
@@ -29,6 +33,22 @@ function envelope(overrides = {}) {
 test("message event protocol validates the authoritative identity envelope", () => {
   assert.equal(assertMessageEventEnvelope(envelope()).sessionId, "child-1");
   assert.throws(() => assertMessageEventEnvelope(envelope({ messageId: "" })), /invalid authoritative/);
+});
+
+test("message event protocol validates semantic payloads without requiring display text for tools", () => {
+  assert.deepEqual(validateMessageEventEnvelope(envelope({ args: {} })), { valid: true, errors: [] });
+  assert.deepEqual(
+    validateMessageEventEnvelope(envelope({ eventType: MESSAGE_EVENT_TYPE.LLM_DELTA, text: "token" })),
+    { valid: true, errors: [] },
+  );
+  assert.deepEqual(
+    validateMessageEventEnvelope(envelope({ eventType: MESSAGE_EVENT_TYPE.TOOL_CALL_END, result: { ok: true } })),
+    { valid: true, errors: [] },
+  );
+  assert.deepEqual(
+    validateMessageEventEnvelope(envelope({ toolCallId: "", args: {} })).errors,
+    ["missing_tool_call_id"],
+  );
 });
 
 test("message event protocol projects backend tool fields to canonical facets", () => {

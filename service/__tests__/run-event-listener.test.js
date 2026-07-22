@@ -158,6 +158,7 @@ test("run-event-listener separates root and child authoritative message channels
   const base = {
     envelopeKind: "noobot.message_event", envelopeVersion: 1,
     eventType: "tool_call_start", messageId: "msg-1", sequence: 1,
+    tool: "read_file", toolCallId: "call-1", args: {},
     timestamp: "2026-01-01T00:00:00.000Z",
   };
   listener.onEvent({ event: "tool_call_start", data: {

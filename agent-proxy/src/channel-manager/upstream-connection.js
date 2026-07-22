@@ -10,7 +10,7 @@ import {
   CHANNEL_STATUS,
   UPSTREAM_CLOSE_REASON,
 } from "../constants.js";
-import { nowMs, isTerminalStatus, buildUpstreamUrl } from "../utils.js";
+import { nowMs, isTerminalStatus, buildUpstreamUrl, resolveMessageEventTrace } from "../utils.js";
 import { writeAgentProxyRouteLifecycleEvent } from "../ws-runtime-events.js";
 
 class UpstreamConnectionMethods {
@@ -158,6 +158,7 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
           logKeys: Object.keys(eventData?.log || {}).sort(),
           nestedDataKeys: Object.keys(eventData?.data || {}).sort(),
           nestedLogKeys: Object.keys(eventData?.data?.log || {}).sort(),
+          ...resolveMessageEventTrace(eventName, eventData, eventEnvelope?.sequence),
         },
       });
       this.broadcastChannelEvent(channel, eventEnvelope);

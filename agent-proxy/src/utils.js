@@ -4,7 +4,35 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { randomUUID } from "node:crypto";
 import { CHANNEL_TERMINAL_STATUSES, CLIENT_ROLE } from "./constants.js";
+import { isMessageEventEnvelope } from "../../shared/message-event-protocol.mjs";
+
+export function ensureConnectionId(socket = null) {
+  if (!socket) return "";
+  const existing = String(socket.__agentProxyConnectionId || "").trim();
+  if (existing) return existing;
+  const connectionId = randomUUID();
+  socket.__agentProxyConnectionId = connectionId;
+  return connectionId;
+}
+
+export function resolveMessageEventTrace(eventName = "", data = {}, transportSequence = 0) {
+  const candidate = String(eventName || "").trim() === "message_event" ? data?.event : null;
+  const authoritative = isMessageEventEnvelope(candidate) ? candidate : null;
+  return {
+    protocolKind: authoritative ? "message_event" : "legacy",
+    transportEvent: String(eventName || "").trim(),
+    transportSequence: Number(transportSequence || 0),
+    eventId: String(authoritative?.eventId || "").trim(),
+    eventType: String(authoritative?.eventType || "").trim(),
+    messageId: String(authoritative?.messageId || "").trim(),
+    authoritativeSequence: Number(authoritative?.sequence || 0),
+    sessionId: String(authoritative?.sessionId || data?.sessionId || "").trim(),
+    turnScopeId: String(authoritative?.turnScopeId || data?.turnScopeId || "").trim(),
+    dialogProcessId: String(authoritative?.dialogProcessId || data?.dialogProcessId || "").trim(),
+  };
+}
 
 export function normalizeApiKey(input = "") {
   return String(input || "").trim();

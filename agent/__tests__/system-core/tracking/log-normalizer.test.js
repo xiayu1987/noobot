@@ -25,9 +25,14 @@ test("authoritative message envelope validation rejects partial events", () => {
     messageId: "message-1",
     sequence: 1,
     timestamp: "2026-01-01T00:00:00.000Z",
+    text: "token",
   };
   assert.equal(isMessageEventEnvelope(envelope), true);
   assert.equal(assertMessageEventEnvelope(envelope), envelope);
+  assert.throws(
+    () => assertMessageEventEnvelope({ ...envelope, text: undefined }),
+    /missing_text/,
+  );
   assert.equal(isMessageEventEnvelope({ ...envelope, messageId: "" }), false);
   assert.throws(
     () => assertMessageEventEnvelope({ ...envelope, eventId: "" }),

@@ -223,6 +223,38 @@ test("reconnect should mark cacheExpired when client seq exists but replay cache
   assert.equal(reconnectCompleteEvent?.data?.cacheExpired, true);
 });
 
+test("reconnect records replay filtering and cache expiry reasons", () => {
+  const records = [];
+  const manager = new ChannelManager({ OPEN: 1 }, {
+    sessionLogClient: { log: (_apiKey, event) => records.push(event) },
+  });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
+  const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
+  channel.status = "running";
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  manager.pushChannelEvent(channel, "thinking", {
+    sessionId: "session-1", dialogProcessId: "dp-1", turnScopeId: "turn-old", seq: 1,
+  });
+  const socket = createMockSocket();
+  socket.__agentProxyChannelKeys.add(channelKey);
+
+  manager.handleReconnect(socket, {
+    currentSessionId: "session-1",
+    currentTurnScopeId: "turn-new",
+    lastReceivedSeqMap: { "dp-1": 1 },
+  });
+
+  const evaluated = records.find((item) => item.event === "agentProxy.reconnect.replay.evaluated");
+  assert.ok(evaluated?.data?.connectionId);
+  assert.equal(evaluated.data.result, "empty");
+  assert.equal(evaluated.data.dropReason, "cursor_gap_or_cache_expired");
+  assert.equal(evaluated.data.filteredCounts.turnScopeMismatch, 1);
+  const expired = records.find((item) => item.event === "agentProxy.reconnect.cache.expired");
+  assert.equal(expired?.data?.result, "expired");
+  assert.equal(expired?.data?.dropReason, "cursor_gap_or_cache_expired");
+});
+
 test("reconnect should skip terminal channel replay when lastReceivedSeq is 0", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });

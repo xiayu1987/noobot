@@ -27,6 +27,7 @@ import {
   handleDoneStreamEvent,
   handleInteractionRequestStreamEvent,
 } from "./streamHandlers";
+import { reduceMessageEvent } from "./messageEventReducer";
 import { normalizeTrimmedString } from "./utils";
 import {
   SESSION_RUN_EVENT,
@@ -497,18 +498,32 @@ export function createChatEngineSender({
         }
         if (shouldProjectMainSessionEvent(event, data || {})) {
           const messageEvent = data.event || {};
-          const projectionEvent = messageEvent.eventType === "llm_delta"
-            ? StreamEventEnum.DELTA
-            : StreamEventEnum.THINKING;
-          handleBasicStreamEvent(projectionEvent, {
-            data: messageEvent,
-            botMessage: botMsg,
+          const reduction = reduceMessageEvent({
+            targetMessage: botMsg,
+            event: messageEvent,
             classifyRealtimeLog,
-            navigateOnFirstResponseOnce,
-            activeSession,
-            processStore: activeProcessStore,
-            locateSendingStartedMessageOnce,
           });
+          logSessionEvent({
+            category: "transport",
+            level: reduction.applied ? "debug" : "warn",
+            event: "frontend.messageEvent.reduced",
+            sessionId: messageEvent.sessionId || sessionId,
+            dialogProcessId: messageEvent.dialogProcessId || "",
+            turnScopeId: messageEvent.turnScopeId || turnScopeId,
+            data: {
+              source: "normal_live",
+              eventId: messageEvent.eventId || "",
+              eventType: messageEvent.eventType || "",
+              messageId: messageEvent.messageId || "",
+              sequence: messageEvent.sequence ?? null,
+              result: reduction.result,
+              errors: reduction.errors || [],
+            },
+          });
+          if (reduction.applied) {
+            navigateOnFirstResponseOnce?.();
+            locateSendingStartedMessageOnce?.();
+          }
           return;
         }
         const subSessionScopedEvent = data?.scope === "sub_session";

@@ -48,6 +48,8 @@ describe("authoritative message event end-to-end fidelity", () => {
       parentSessionId: "parent-session",
       dialogProcessId: "child-dialog",
       turnScopeId: "child-turn",
+      text: "```mermaid\ngraph TD; A-->B\n```",
+      output: "```mermaid\ngraph TD; A-->B\n```",
       thinking: "```mermaid\ngraph TD; A-->B\n```",
     }));
     produced.push(emitMessageEvent(listener, runtime, "tool_call_end", {

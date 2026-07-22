@@ -10,7 +10,9 @@ import {
 } from "@noobot/runtime-events";
 import {
   consumePendingStop,
+  attachRunTransport,
   findActiveRun,
+  publishRunEvent,
   registerActiveRun,
   rememberPendingStop,
   unregisterActiveRun,
@@ -73,6 +75,11 @@ export function createMessageHandler({
   commitTurnLifecycle,
   recoverTurnFinalize,
 }) {
+  // Active-run ownership is derived exclusively from the authenticated
+  // connection. Payload userId identifies the requested workspace and is
+  // authorization-checked separately; it must never partition the in-process
+  // run registry because reconnect/stop payloads are not required to repeat it.
+  const canonicalRunOwnerId = String(authInfo?.userId || "").trim();
   // Detached sub-session facts have already been committed inside Agent. This
   // publisher projects them onto the wire without re-entering the state machine.
   const publishCommittedTurnLifecycle = createCommittedTurnLifecyclePublisher({ sendEvent });
@@ -82,7 +89,7 @@ export function createMessageHandler({
     const activeTurnScopeId = String(lifecycle?.activeTurnScopeId || "").trim();
     const activeTurn = lifecycle?.turns?.[activeTurnScopeId] || null;
     if (!activeTurnScopeId || !activeTurn) return false;
-    if (findActiveRun({ sessionId, turnScopeId: activeTurnScopeId })) return false;
+    if (findActiveRun({ userId: canonicalRunOwnerId, sessionId, turnScopeId: activeTurnScopeId })) return false;
     const updatedAtMs = Date.parse(String(activeTurn?.updatedAt || ""));
     if (
       !Number.isFinite(updatedAtMs) ||
@@ -247,6 +254,7 @@ export function createMessageHandler({
   };
 
   const handleStop = async (payload) => {
+    const targetUserId = canonicalRunOwnerId;
     const targetTurnScopeId =
       String(payload?.turnScopeId || payload?.partialAssistant?.turnScopeId || "").trim() ||
       state.currentTurnScopeId;
@@ -255,7 +263,7 @@ export function createMessageHandler({
       state.currentRunMeta?.sessionId || "";
     const stopCommandId = String(payload?.commandId || payload?.idempotencyKey || `stop:${targetTurnScopeId}`).trim();
     const accepted = await commitTurnLifecycle({
-      userId: String(authInfo?.userId || payload?.userId || "").trim(),
+      userId: targetUserId,
       sessionId: targetSessionId,
       parentSessionId: String(payload?.parentSessionId || "").trim(),
       turnScopeId: targetTurnScopeId,
@@ -280,6 +288,7 @@ export function createMessageHandler({
     state.currentTurnScopeId = targetTurnScopeId;
     rejectAllPendingInteractions(new Error(translateText("ws.dialogStoppedByUser", state.currentLocale)));
     state.currentStopPayload = {
+      userId: targetUserId,
       message: translateText("ws.dialogStoppedByUser", state.currentLocale),
       sessionId:
         targetSessionId,
@@ -299,7 +308,7 @@ export function createMessageHandler({
     void recordServiceWebSocketLifecycle({
       sessionLogConfig,
       event: "service.websocket.run.cancel.requested",
-      userId: String(authInfo?.userId || payload?.userId || "").trim(),
+      userId: targetUserId,
       sessionId: state.currentStopPayload.sessionId,
       dialogProcessId: state.currentStopPayload.dialogProcessId,
       turnScopeId: state.currentStopPayload.turnScopeId,
@@ -323,7 +332,7 @@ export function createMessageHandler({
     }
     if (!state.isRunning || !state.currentAbortController) {
       const stopPayload = state.currentStopPayload;
-      const userId = String(authInfo?.userId || payload?.userId || "").trim();
+      const userId = targetUserId;
       let turnStatus = null;
       try {
         turnStatus = await resolveBot()?.persistStoppedAssistantMessage?.({
@@ -482,12 +491,14 @@ export function createMessageHandler({
     // another execution (or leaving its listener writing to the closed socket).
     // The turn identity is authoritative; never attach by session alone.
     const runningTurn = findActiveRun({
+      userId: canonicalRunOwnerId,
       sessionId,
       turnScopeId: state.currentTurnScopeId,
       dialogProcessId,
     });
     if (runningTurn && !runningTurn.abortController?.signal?.aborted) {
-      runningTurn.sendEvent = sendEvent;
+      state.currentRunHandle = runningTurn;
+      state.currentRunTransportBinding = attachRunTransport(runningTurn, sendEvent);
       sendEvent("channel_state", {
         sessionId,
         dialogProcessId: runningTurn.dialogProcessId || dialogProcessId || "",
@@ -602,6 +613,7 @@ export function createMessageHandler({
     }, runTimeoutMs);
     state.currentRunMeta = {
       userId: String(userId || "").trim(),
+      runOwnerId: canonicalRunOwnerId,
       sessionId: String(sessionId || "").trim(),
       parentSessionId: String(parentSessionId || "").trim(),
       parentDialogProcessId: String(parentDialogProcessId || "").trim(),
@@ -609,16 +621,19 @@ export function createMessageHandler({
       turnScopeId: String(normalizedRunConfig?.turnScopeId || state.currentTurnScopeId || "").trim(),
     };
     state.currentRunHandle = registerActiveRun({
-      userId: state.currentRunMeta.userId,
+      userId: state.currentRunMeta.runOwnerId,
       sessionId: state.currentRunMeta.sessionId,
       dialogProcessId: state.currentRunMeta.dialogProcessId,
       turnScopeId: state.currentRunMeta.turnScopeId,
       abortController: state.currentAbortController,
-      sendEvent,
       stopRequested: false,
       stopPayload: null,
     });
-    const pendingStopPayload = consumePendingStop(state.currentRunMeta);
+    state.currentRunTransportBinding = attachRunTransport(state.currentRunHandle, sendEvent);
+    const pendingStopPayload = consumePendingStop({
+      ...state.currentRunMeta,
+      userId: state.currentRunMeta.runOwnerId,
+    });
     if (pendingStopPayload) {
       state.stopRequested = true;
       state.currentStopPayload = {
@@ -666,7 +681,7 @@ export function createMessageHandler({
     });
     let processingStartedPromise = null;
     const eventListener = createRunEventListener({
-      sendEvent: (...args) => (state.currentRunHandle?.sendEvent || sendEvent)(...args),
+      sendEvent: (...args) => publishRunEvent(state.currentRunHandle, ...args),
       sessionId,
       textStreamingEnabled,
       registerActiveRun,
