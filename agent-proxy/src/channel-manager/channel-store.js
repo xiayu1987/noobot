@@ -12,7 +12,7 @@ import {
   CONVERSATION_STATE,
   CONVERSATION_SOURCE_EVENT,
 } from "../constants.js";
-import { normalizeApiKey, nowMs } from "../utils.js";
+import { normalizeApiKey, nowMs, resolveMessageEventTrace } from "../utils.js";
 
 class ChannelStoreMethods {
 // ---- Channel CRUD ----
@@ -106,6 +106,7 @@ pushChannelEvent(channel, eventName = "", data = {}) {
       turnScopeId: envelope.data?.turnScopeId,
       requestId: envelope.data?.requestId,
       hasContent: Boolean(envelope.data?.content || envelope.data?.text),
+      ...resolveMessageEventTrace(envelope.event, envelope.data, envelope.sequence),
     },
   });
   if (String(envelope.event || "") === CHANNEL_EVENT.INTERACTION_REQUEST) {

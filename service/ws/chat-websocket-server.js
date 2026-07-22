@@ -19,6 +19,10 @@ import { createConnectionState } from "./chat-websocket/connection-state.js";
 import { createMessageHandler } from "./chat-websocket/message-handler.js";
 import { createTurnLifecycleBridge } from "./chat-websocket/turn-lifecycle-bridge.js";
 import { recoverTurnFinalize } from "./chat-websocket/finalize-recovery.js";
+import {
+  detachRunTransport,
+  isRunTransportAttached,
+} from "./chat-websocket/run-registry.js";
 
 export { recordServiceWebSocketSendFailure, recordServiceWebSocketRuntimeError };
 
@@ -238,7 +242,8 @@ export function registerChatWebSocketServer(
       // After a refresh, the active run may have rebound its output to a newer
       // socket. Closing the superseded transport must not abort that run.
       const transportStillOwned =
-        !state.currentRunHandle || state.currentRunHandle.sendEvent === sendEvent;
+        !state.currentRunHandle ||
+        isRunTransportAttached(state.currentRunHandle, state.currentRunTransportBinding);
       if (state.currentAbortController && transportStillOwned) {
         const reasonText =
           typeof reasonBuffer === "string"
@@ -251,6 +256,9 @@ export function registerChatWebSocketServer(
           code: Number(code || 0) || undefined,
           reason: reasonText || "websocket closed",
         });
+      }
+      if (transportStillOwned && state.currentRunHandle) {
+        detachRunTransport(state.currentRunHandle, state.currentRunTransportBinding);
       }
       if (state.currentRunTimeoutTimer) {
         clearTimeout(state.currentRunTimeoutTimer);

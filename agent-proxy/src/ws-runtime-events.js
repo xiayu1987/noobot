@@ -8,6 +8,7 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRoutedRuntimeEvent,
 } from "@noobot/runtime-events";
+import { ensureConnectionId } from "./utils.js";
 
 function resolveRawDataInfo(rawData) {
   const rawDataType = Buffer.isBuffer(rawData) ? "buffer" : typeof rawData;
@@ -37,7 +38,7 @@ export function writeAgentProxyWebSocketLifecycleEvent({ event, socket = null, d
   return writeRoutedRuntimeEvent({
     source: "agent-proxy", channel: RUNTIME_EVENT_CHANNELS.AGENT_PROXY_WEB_SOCKET,
     category: "agent-proxy-websocket", level: "info", event, workspaceRoot,
-    data: { readyState: socket?.readyState ?? null, ...data },
+    data: { connectionId: ensureConnectionId(socket), readyState: socket?.readyState ?? null, ...data },
   });
 }
 
@@ -45,6 +46,6 @@ export function writeAgentProxyRouteLifecycleEvent({ event, socket = null, chann
   return writeRoutedRuntimeEvent({
     source: "agent-proxy", channel: RUNTIME_EVENT_CHANNELS.AGENT_PROXY_WEB_SOCKET,
     category: RUNTIME_EVENT_CATEGORIES.AGENT_PROXY_ROUTE, level: "info", event, workspaceRoot,
-    data: { channelStatus: String(channel?.status || ""), upstreamReadyState: channel?.upstreamSocket?.readyState ?? null, ...data },
+    data: { connectionId: ensureConnectionId(socket), channelStatus: String(channel?.status || ""), upstreamReadyState: channel?.upstreamSocket?.readyState ?? null, ...data },
   });
 }

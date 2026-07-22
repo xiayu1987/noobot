@@ -42,7 +42,7 @@ import { useConnectorPanel } from "../infra/useConnectorPanel";
 import { useChatList } from "./useChatList";
 import { useChatEngine } from "./useChatEngine";
 import { shouldProjectMainSessionEvent } from "./chatEngine/sendFlow";
-import { handleBasicStreamEvent } from "./chatEngine/streamHandlers";
+import { reduceMessageEvent } from "./chatEngine/messageEventReducer";
 import { finalizeStoppedSessionDetail } from "./chatEngine/sessionFinalize";
 import { useReconnectReplay } from "./useReconnectReplay";
 import { useChatStore } from "../../shared/stores/useChatStore";
@@ -675,18 +675,23 @@ export function useChatSession({
       });
       return false;
     }
-    handleBasicStreamEvent(
-      messageEvent.eventType === "llm_delta" ? StreamEventEnum.DELTA : StreamEventEnum.THINKING,
-      {
-        data: messageEvent,
-        botMessage,
-        classifyRealtimeLog,
-        navigateOnFirstResponseOnce: () => {},
-        activeSession,
-        processStore,
-        locateSendingStartedMessageOnce: locateSendingStartedMessage,
-      },
-    );
+    const reduction = reduceMessageEvent({
+      targetMessage: botMessage,
+      event: messageEvent,
+      classifyRealtimeLog,
+    });
+    logThinkingReplayDebug("frontend.messageEvent.reduced", {
+      source: "reconnect_live",
+      sessionId: messageEvent.sessionId || resolveActiveSessionIdentity(),
+      dialogProcessId,
+      turnScopeId,
+      messageId: String(messageEvent.messageId || ""),
+      eventId: String(messageEvent.eventId || ""),
+      eventType: String(messageEvent.eventType || ""),
+      sequence: messageEvent.sequence ?? null,
+      result: reduction.result,
+      errors: reduction.errors || [],
+    });
     return true;
   }
 

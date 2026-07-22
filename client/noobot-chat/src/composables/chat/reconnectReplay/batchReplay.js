@@ -33,6 +33,7 @@ import {
 } from "./assistantMessageReplay";
 import { mergeRealtimeLogs } from "./messageLookup";
 import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger";
+import { reduceMessageEvent } from "../chatEngine/messageEventReducer";
 
 export function prepareReconnectReplayMessages({
   messages = [],
@@ -315,7 +316,26 @@ export function applyReconnectEnvelopeToTargetMessage({
   ) {
     return false;
   }
-  if (eventName === StreamEventEnum.DELTA) {
+  if (eventName === "message_event") {
+    const messageEvent = eventData?.event;
+    const reduction = reduceMessageEvent({
+      targetMessage,
+      event: messageEvent,
+      classifyRealtimeLog,
+    });
+    logThinkingReplayDebug("frontend.messageEvent.reduced", {
+      source: "history_replay",
+      sessionId: String(messageEvent?.sessionId || eventData?.sessionId || ""),
+      dialogProcessId: String(messageEvent?.dialogProcessId || eventData?.dialogProcessId || normalizedDpId),
+      turnScopeId: String(messageEvent?.turnScopeId || eventData?.turnScopeId || ""),
+      messageId: String(messageEvent?.messageId || ""),
+      eventId: String(messageEvent?.eventId || ""),
+      eventType: String(messageEvent?.eventType || ""),
+      sequence: messageEvent?.sequence ?? envelope?.sequence ?? null,
+      result: reduction.result,
+      errors: reduction.errors || [],
+    });
+  } else if (eventName === StreamEventEnum.DELTA) {
     targetMessage.content += String(eventData?.text || "");
   } else if (eventName === StreamEventEnum.THINKING) {
     const logItem = sanitizeExecutionLogForDisplay(classifyRealtimeLog(eventData));

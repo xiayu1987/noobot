@@ -19,6 +19,7 @@ import {
   writeAgentProxyRouteLifecycleEvent,
 } from "./ws-runtime-events.js";
 import { writeAgentProxyRouteDebugEvent } from "./route-debug-runtime-events.js";
+import { ensureConnectionId } from "./utils.js";
 
 function resolveRawMessageInfo(rawData) {
   const text = String(rawData || "");
@@ -34,6 +35,7 @@ export class WsRouter {
   }
 
   handle(socket, connectionApiKey, connectionLocale) {
+    ensureConnectionId(socket);
     void writeAgentProxyWebSocketLifecycleEvent({
       event: "agentProxy.ws.connectionOpened",
       socket,

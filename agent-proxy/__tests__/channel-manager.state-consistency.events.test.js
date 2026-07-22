@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { ChannelManager } from "../src/channel-manager.js";
-import { createChannelKey } from "../src/utils.js";
+import { createChannelKey, ensureConnectionId, resolveMessageEventTrace } from "../src/utils.js";
 import { createMockSocket } from "./channel-manager.state-consistency.test-helpers.js";
 
 test("live business event broadcast should include channel sessionId without overriding upstream sessionId", () => {
@@ -98,5 +98,73 @@ test("broadcast event order should be identical across same-channel clients", ()
   );
   assert.equal(clientA.__agentProxyLastSequenceByChannel[channelKey], 5);
   assert.equal(clientB.__agentProxyLastSequenceByChannel[channelKey], 5);
+});
+
+test("connection ids are stable per socket and isolated between sockets", () => {
+  const socketA = createMockSocket();
+  const socketB = createMockSocket();
+  assert.equal(ensureConnectionId(socketA), ensureConnectionId(socketA));
+  assert.notEqual(ensureConnectionId(socketA), ensureConnectionId(socketB));
+});
+
+test("message event tracing only accepts the shared authoritative envelope", () => {
+  const authoritative = {
+    envelopeKind: "noobot.message_event",
+    envelopeVersion: 1,
+    eventId: "event-1",
+    eventType: "tool_call_start",
+    sessionId: "session-1",
+    messageId: "message-1",
+    sequence: 7,
+    timestamp: "2026-07-22T00:00:00.000Z",
+    tool: "read_file",
+    toolCallId: "tool-1",
+    args: {},
+  };
+  assert.deepEqual(resolveMessageEventTrace("message_event", { event: authoritative }, 9), {
+    protocolKind: "message_event",
+    transportEvent: "message_event",
+    transportSequence: 9,
+    eventId: "event-1",
+    eventType: "tool_call_start",
+    messageId: "message-1",
+    authoritativeSequence: 7,
+    sessionId: "session-1",
+    turnScopeId: "",
+    dialogProcessId: "",
+  });
+  assert.equal(resolveMessageEventTrace("thinking", { event: authoritative }, 9).protocolKind, "legacy");
+  assert.equal(resolveMessageEventTrace("message_event", { event: { eventId: "loose" } }, 9).protocolKind, "legacy");
+});
+
+test("broadcast records a delivery result for every subscriber", () => {
+  const records = [];
+  const manager = new ChannelManager({ OPEN: 1 }, {
+    sessionLogClient: { log: (_apiKey, event) => records.push(event) },
+  });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
+  const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
+  channel.ownerApiKey = "api-key-1";
+  const openSocket = createMockSocket();
+  const closedSocket = createMockSocket();
+  closedSocket.readyState = 3;
+  channel.subscribers.add(openSocket);
+  channel.subscribers.add(closedSocket);
+
+  const envelope = manager.pushChannelEvent(channel, "thinking", {
+    sessionId: "session-1", dialogProcessId: "dp-1", seq: 1,
+  });
+  manager.broadcastChannelEvent(channel, envelope);
+
+  const deliveries = records.filter(
+    (item) =>
+      item.event === "agentProxy.channel.broadcast.delivery" &&
+      item.data.transportEvent === "thinking",
+  );
+  assert.deepEqual(deliveries.map((item) => item.data.result).sort(), ["sent", "skipped"]);
+  assert.equal(deliveries.find((item) => item.data.result === "skipped")?.data?.dropReason, "socket_not_open");
+  assert.ok(deliveries.every((item) => item.data.connectionId));
+  assert.equal(openSocket.__agentProxyLastSequenceByChannel[channelKey], 1);
+  assert.equal(closedSocket.__agentProxyLastSequenceByChannel?.[channelKey], undefined);
 });
 

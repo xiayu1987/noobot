@@ -12,7 +12,7 @@ import {
   CONVERSATION_SOURCE_EVENT,
   RECONNECT_SUGGESTION,
 } from "../constants.js";
-import { nowMs, isTerminalStatus } from "../utils.js";
+import { ensureConnectionId, nowMs, isTerminalStatus } from "../utils.js";
 import { writeAgentProxyRouteLifecycleEvent } from "../ws-runtime-events.js";
 
 class ReconnectMethods {
@@ -160,13 +160,37 @@ handleReconnect(socket, payload = {}) {
         lastReceivedTurnScopeIdMap?.[dpId] || payload?.currentTurnScopeId || "",
       ).trim();
       if (lastSeq <= 0 && isTerminalStatus(channel.status)) {
+        this.logSessionEvent(channel, {
+          category: "transport",
+          event: "agentProxy.reconnect.replay.skipped",
+          data: {
+            channelKey,
+            connectionId: ensureConnectionId(socket),
+            sessionId: channelSessionId,
+            dialogProcessId: dpId,
+            turnScopeId: reconnectTurnScopeId,
+            lastSequence: lastSeq,
+            result: "skipped",
+            dropReason: "terminal_without_cursor",
+          },
+        });
         continue;
       }
 
       // Find events for this dialogProcessId with seq > lastSeq
+      const filteredCounts = {
+        dialogProcessMismatch: 0,
+        turnScopeMismatch: 0,
+        terminalError: 0,
+        resolvedInteraction: 0,
+        atOrBeforeCursor: 0,
+      };
       const missingEvents = channel.eventLog.filter((envelope) => {
         const envDpId = String(envelope?.data?.dialogProcessId || "").trim();
-        if (envDpId !== dpId) return false;
+        if (envDpId !== dpId) {
+          filteredCounts.dialogProcessMismatch += 1;
+          return false;
+        }
 
         // Sequence numbers are only meaningful inside one run. A channel is reused
         // across turns, so never replay an envelope from another turn into the run
@@ -178,6 +202,7 @@ handleReconnect(socket, payload = {}) {
           envelopeTurnScopeId &&
           envelopeTurnScopeId !== reconnectTurnScopeId
         ) {
+          filteredCounts.turnScopeMismatch += 1;
           return false;
         }
 
@@ -190,6 +215,7 @@ handleReconnect(socket, payload = {}) {
           isTerminalStatus(channel.status) &&
           String(envelope?.event || "").trim() === CHANNEL_EVENT.ERROR
         ) {
+          filteredCounts.terminalError += 1;
           return false;
         }
 
@@ -201,6 +227,7 @@ handleReconnect(socket, payload = {}) {
         ) {
           const requestId = String(envelope?.data?.requestId || "").trim();
           if (!requestId || !channel.pendingInteractionRequests.has(requestId)) {
+            filteredCounts.resolvedInteraction += 1;
             return false;
           }
         }
@@ -208,7 +235,9 @@ handleReconnect(socket, payload = {}) {
         const upstreamSeq = Number(envelope?.data?.seq || 0);
         const proxySeq = Number(envelope?.sequence || 0);
         const comparableSequence = upstreamSeq > 0 ? upstreamSeq : proxySeq;
-        return comparableSequence > lastSeq;
+        const afterCursor = comparableSequence > lastSeq;
+        if (!afterCursor) filteredCounts.atOrBeforeCursor += 1;
+        return afterCursor;
       });
       const missingRequestIds = new Set(
         missingEvents
@@ -240,6 +269,30 @@ handleReconnect(socket, payload = {}) {
         const rightSeq = Number(right?.data?.seq || right?.sequence || 0);
         return leftSeq - rightSeq;
       });
+      const replayLimit = Math.max(0, Number(config.maxReplayEvents || 0));
+      const replayedCount = replayLimit > 0
+        ? Math.min(replayEvents.length, replayLimit)
+        : replayEvents.length;
+      this.logSessionEvent(channel, {
+        category: "transport",
+        event: "agentProxy.reconnect.replay.evaluated",
+        data: {
+          channelKey,
+          connectionId: ensureConnectionId(socket),
+          sessionId: channelSessionId,
+          dialogProcessId: dpId,
+          turnScopeId: reconnectTurnScopeId,
+          lastSequence: lastSeq,
+          cachedEventCount: channel.eventLog.length,
+          missingEventCount: missingEvents.length,
+          pendingInteractionCount: pendingInteractionEvents.length,
+          replayedCount,
+          truncatedCount: Math.max(0, replayEvents.length - replayedCount),
+          filteredCounts,
+          result: replayEvents.length ? "replayed" : "empty",
+          dropReason: replayEvents.length ? "" : (lastSeq > 0 ? "cursor_gap_or_cache_expired" : "no_events_after_cursor"),
+        },
+      });
 
       if (replayEvents.length > 0) {
         sessionEntry.dialogProcesses.push({
@@ -259,6 +312,21 @@ handleReconnect(socket, payload = {}) {
           sourceEvent: CONVERSATION_SOURCE_EVENT.RECONNECT_CACHE_EXPIRED,
           seq: Number(lastSeq || 0),
           updatedAtMs: nowMs(),
+        });
+        this.logSessionEvent(channel, {
+          category: "transport",
+          level: "warn",
+          event: "agentProxy.reconnect.cache.expired",
+          data: {
+            channelKey,
+            connectionId: ensureConnectionId(socket),
+            sessionId: channelSessionId,
+            dialogProcessId: dpId,
+            turnScopeId: reconnectTurnScopeId,
+            lastSequence: lastSeq,
+            result: "expired",
+            dropReason: "cursor_gap_or_cache_expired",
+          },
         });
       }
     }

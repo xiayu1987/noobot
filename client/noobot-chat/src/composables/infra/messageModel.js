@@ -26,6 +26,7 @@ import {
   nowMs,
 } from "./timeFields";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { initializeMessageEventState } from "./messageEventState";
 
 function normalizeArray(value) {
   return Array.isArray(value) ? value : [];
@@ -190,7 +191,7 @@ function createMessageModel(messageItem = {}) {
     messageItem,
     "thinkingOpenNames",
   );
-  return {
+  return initializeMessageEventState({
     id: messageItem.id || "",
     turnScopeId,
     sessionId,
@@ -221,6 +222,7 @@ function createMessageModel(messageItem = {}) {
         messageItem?.execution_log_total ??
         normalizeArray(messageItem.realtimeLogs).length,
     ),
+    messageEventState: messageItem.messageEventState,
     completedToolLogs: normalizeArray(messageItem.completedToolLogs),
     hasThinkingDetails: messageItem.hasThinkingDetails === true,
     thinkingDetailCount: Number(
@@ -247,7 +249,7 @@ function createMessageModel(messageItem = {}) {
     pluginMessage: messageItem.pluginMessage === true,
     pluginMeta: workflowMeta,
     workflowMeta,
-  };
+  });
 }
 
 function buildAppendMessage(role, content = "", attachments = [], options = {}) {

@@ -9,7 +9,7 @@ import {
   CONVERSATION_STATE,
 } from "../constants.js";
 import { config } from "../config.js";
-import { nowMs, isTerminalStatus } from "../utils.js";
+import { ensureConnectionId, nowMs, isTerminalStatus, resolveMessageEventTrace } from "../utils.js";
 import { localizeAgentProxyMessage } from "noobot-i18n/agent-proxy";
 
 class SubscriberBroadcastMethods {
@@ -104,10 +104,25 @@ broadcastChannelEvent(channel, envelope) {
       logKeys: Object.keys(eventData?.log || {}).sort(),
       nestedDataKeys: Object.keys(eventData?.data || {}).sort(),
       nestedLogKeys: Object.keys(eventData?.data?.log || {}).sort(),
+      ...resolveMessageEventTrace(scopedEnvelope?.event, eventData, scopedEnvelope?.sequence),
     },
   });
   for (const subscriberSocket of channel.subscribers) {
-    this.sendSocketEvent(subscriberSocket, scopedEnvelope);
+    const connectionId = ensureConnectionId(subscriberSocket);
+    const sendResult = this.sendSocketEvent(subscriberSocket, scopedEnvelope);
+    this.logSessionEvent(channel, {
+      category: "transport",
+      level: sendResult.result === "sent" ? "info" : "warn",
+      event: "agentProxy.channel.broadcast.delivery",
+      data: {
+        channelKey: channel.key,
+        connectionId,
+        result: sendResult.result,
+        dropReason: sendResult.reason,
+        ...resolveMessageEventTrace(scopedEnvelope?.event, eventData, scopedEnvelope?.sequence),
+      },
+    });
+    if (sendResult.result !== "sent") continue;
     subscriberSocket.__agentProxyLastSequenceByChannel =
       subscriberSocket.__agentProxyLastSequenceByChannel || {};
     subscriberSocket.__agentProxyLastSequenceByChannel[channel.key] = Number(
@@ -208,7 +223,11 @@ _buildConversationStatePayload(channel, stateItem = {}, overrides = {}) {
 }
 
 sendSocketEvent(targetSocket, envelope) {
-  if (!targetSocket || targetSocket.readyState !== this.WebSocket.OPEN || !envelope) return;
+  if (!targetSocket) return { result: "skipped", reason: "socket_missing" };
+  if (!envelope) return { result: "skipped", reason: "envelope_missing" };
+  if (targetSocket.readyState !== this.WebSocket.OPEN) {
+    return { result: "skipped", reason: "socket_not_open" };
+  }
   try {
     targetSocket.send(
       JSON.stringify({
@@ -216,8 +235,12 @@ sendSocketEvent(targetSocket, envelope) {
         data: envelope.data,
       }),
     );
-  } catch {
-    // ignore send errors
+    return { result: "sent", reason: "" };
+  } catch (error) {
+    return {
+      result: "failed",
+      reason: String(error?.name || "send_error").trim() || "send_error",
+    };
   }
 }
 
