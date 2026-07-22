@@ -18,7 +18,12 @@ function resolveSystemTheme() {
 
 function resolveInitialTheme() {
   if (!isBrowser) return "dark";
-  const savedTheme = String(localStorage.getItem(STORAGE_KEY) || "").trim();
+  let savedTheme = "";
+  try {
+    savedTheme = String(globalThis.localStorage?.getItem?.(STORAGE_KEY) || "").trim();
+  } catch {
+    return "dark";
+  }
   if (SUPPORTED_THEMES.has(savedTheme)) return savedTheme;
   return "dark";
 }
@@ -35,7 +40,11 @@ function applyTheme(nextTheme = "dark") {
   theme.value = resolvedTheme;
   if (!isBrowser) return;
   document.documentElement.setAttribute("data-theme", resolveAppliedTheme(resolvedTheme));
-  localStorage.setItem(STORAGE_KEY, resolvedTheme);
+  try {
+    globalThis.localStorage?.setItem?.(STORAGE_KEY, resolvedTheme);
+  } catch {
+    // Storage can be unavailable in privacy-restricted or sandboxed contexts.
+  }
 }
 
 applyTheme(theme.value);

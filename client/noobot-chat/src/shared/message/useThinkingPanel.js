@@ -29,8 +29,23 @@ import {
   loadThinkingDetail,
   resolveThinkingDetailIdentity,
 } from "./thinkingDetailCache";
+import {
+  getTurnUiState,
+  setTurnThinkingOpenNames,
+  toggleTurnDetailKey,
+} from "../../composables/chat/chatEngine/turnUiStore";
+import {
+  selectToolTimelineCount,
+  selectToolTimelineLogs,
+} from "../../composables/chat/chatEngine/toolTimeline";
+import { selectActivityTimelineLogs } from "../../composables/chat/chatEngine/activityTimeline";
+import { adaptLegacyMessageTimelines } from "../../composables/chat/chatEngine/legacyTimelineAdapter";
 
 export function useThinkingPanel(props, emit) {
+  // Some detail/workflow renderers pass persisted messages directly rather
+  // than through createMessageModel. Normalize that read-only boundary with
+  // the same adapter; never copy legacy fields back into the source object.
+  const timelineMessage = (messageItem = {}) => adaptLegacyMessageTimelines(messageItem);
   const thinkingDetailLoadingKey = ref("");
   const loadedThinkingDetail = ref(null);
   const injectedMessages = computed(() =>
@@ -75,11 +90,7 @@ export function useThinkingPanel(props, emit) {
       realtimeLogCount: allRealtimeLogs.length,
       visibleRealtimeLogCount: visibleRealtimeLogs.length,
       realtimeLogProjection: allRealtimeLogs.slice(-10).map(summarizeRealtimeLog),
-      completedToolLogCount: Array.isArray(messageItem?.completedToolLogs)
-        ? messageItem.completedToolLogs.length
-        : Array.isArray(messageItem?.processCompletedToolLogs)
-          ? messageItem.processCompletedToolLogs.length
-          : 0,
+      completedToolLogCount: selectToolTimelineCount(timelineMessage(messageItem)),
     };
   }
 
@@ -121,25 +132,14 @@ export function useThinkingPanel(props, emit) {
   }
 
   function getAllRealtimeLogs(messageItem = {}) {
-    const processRealtimeLogs = Array.isArray(messageItem?.processRealtimeLogs)
-      ? messageItem.processRealtimeLogs
-      : [];
-    const realtimeLogs = Array.isArray(messageItem?.realtimeLogs)
-      ? messageItem.realtimeLogs
-      : [];
-    // Keep the normalized process projection authoritative when it has at least
-    // one row the panel can actually render. During reconnect it may temporarily
-    // contain only protocol/analysis rows; those are filtered below and used to
-    // hide a populated legacy realtime projection, leaving the open panel empty.
-    const hasDisplayableProcessLog = processRealtimeLogs.some((logItem) => {
-      if (
-        isPluginCapabilityResponseLog(logItem) ||
-        isGuidanceAnalysisResponseLog(logItem) ||
-        isMainModelContentLog(logItem)
-      ) return false;
-      return Boolean(sanitizeExecutionLogForDisplay(logItem));
-    });
-    return hasDisplayableProcessLog ? processRealtimeLogs : realtimeLogs;
+    const canonicalMessage = timelineMessage(messageItem);
+    const activityLogs = selectActivityTimelineLogs(canonicalMessage);
+    const timelineLogs = selectToolTimelineLogs(canonicalMessage);
+    if (activityLogs.length > 0 || timelineLogs.length > 0) {
+      return [...activityLogs, ...timelineLogs].sort((left, right) =>
+        Number(left?.sequence ?? left?.seq ?? 0) - Number(right?.sequence ?? right?.seq ?? 0));
+    }
+    return [];
   }
 
   function isFreshPendingAssistant(messageItem = {}) {
@@ -173,13 +173,18 @@ export function useThinkingPanel(props, emit) {
       isAssistantWithoutTurnScope(detailMessageItem) &&
       String(props.variant || "panel") !== "details"
     ) return [];
-    return normalizeThinkingToolLogs({
+    const normalized = normalizeThinkingToolLogs({
       messageItem: detailMessageItem,
       allMessages: detailAllMessages,
       sessionDocs: detailSessionDocs,
       variant: props.variant,
       toolResultFallback: translate("message.toolResultFallback"),
     });
+    // normalizeThinkingToolLogs is the single scoped display adapter. It reads
+    // the canonical timeline when present and preserves both call/result
+    // facets for completed tools; bypassing it here dropped call rows and also
+    // skipped Turn/child-process scope filtering.
+    return normalized;
   }
 
   function normalizeLogString(value = "") {
@@ -290,11 +295,12 @@ export function useThinkingPanel(props, emit) {
   function getExecutionLogCount(messageItem = {}) {
     const visibleRealtimeLogCount = getRealtimeLogs(messageItem).length;
     const completedToolLogCount = getCompletedToolLogsForMessage(messageItem).length;
-    const explicitTotal = toValidExecutionLogTotal(
-      messageItem.processExecutionLogTotal ??
-        messageItem.executionLogTotal ??
-        messageItem.execution_log_total,
-    );
+    const timelineTotal = selectToolTimelineCount(timelineMessage(messageItem));
+    const explicitTotal = timelineTotal > 0
+      ? timelineTotal
+      : toValidExecutionLogTotal(
+          messageItem.executionLogTotal ?? messageItem.execution_log_total,
+        );
     if (explicitTotal !== null) {
       const hiddenAnalysisLogCount = [
         ...getAllRealtimeLogs(messageItem),
@@ -353,11 +359,10 @@ export function useThinkingPanel(props, emit) {
   }
 
   function hasLocalThinkingDetails(messageItem = {}) {
-    const completedLogs = Array.isArray(messageItem?.completedToolLogs)
-      ? messageItem.completedToolLogs
-      : Array.isArray(messageItem?.processCompletedToolLogs)
-        ? messageItem.processCompletedToolLogs
-        : [];
+    const timelineLogs = selectToolTimelineLogs(timelineMessage(messageItem), { completedOnly: true });
+    const completedLogs = timelineLogs.length > 0
+      ? timelineLogs
+      : (Array.isArray(messageItem?.completedToolLogs) ? messageItem.completedToolLogs : []);
     return (
       getAllRealtimeLogs(messageItem).length > 0 ||
       completedLogs.length > 0 ||
@@ -538,11 +543,7 @@ export function useThinkingPanel(props, emit) {
       result = getCompletedToolLogsForMessage(messageItem).length > 0;
       reason = result ? "details-completed-tools" : reason;
     }
-    const hasRealtimeLogs = !result && (
-      Array.isArray(messageItem.processRealtimeLogs) ||
-      Array.isArray(messageItem.realtimeLogs)
-        ? getRealtimeLogs(messageItem).length > 0
-        : false);
+    const hasRealtimeLogs = !result && getRealtimeLogs(messageItem).length > 0;
     if (hasRealtimeLogs) {
       result = true;
       reason = "realtime";
@@ -699,7 +700,7 @@ export function useThinkingPanel(props, emit) {
   }
 
   function collapseThinkingPanel(messageItem = {}) {
-    messageItem.thinkingOpenNames = [];
+    setTurnThinkingOpenNames(messageItem, []);
   }
 
   function openThinkingDetailDrawer() {
@@ -723,24 +724,12 @@ export function useThinkingPanel(props, emit) {
     // not Pinia/reactive store objects. Track this tick so click-to-expand still
     // forces a render after mutating expandedDetailLogKeys.
     detailExpansionTick.value;
-    return Array.isArray(messageItem?.expandedDetailLogKeys)
-      ? messageItem.expandedDetailLogKeys.includes(detailItemKey)
-      : false;
+    return getTurnUiState(messageItem)?.expandedDetailLogKeys.includes(detailItemKey) === true;
   }
 
   function toggleThinkingDetailExpanded(messageItem = {}, detailItemKey = "") {
     if (!detailItemKey) return;
-    const currentKeys = Array.isArray(messageItem?.expandedDetailLogKeys)
-      ? messageItem.expandedDetailLogKeys
-      : [];
-    if (currentKeys.includes(detailItemKey)) {
-      messageItem.expandedDetailLogKeys = currentKeys.filter(
-        (itemKey) => itemKey !== detailItemKey,
-      );
-      detailExpansionTick.value += 1;
-      return;
-    }
-    messageItem.expandedDetailLogKeys = [...currentKeys, detailItemKey];
+    toggleTurnDetailKey(messageItem, detailItemKey);
     detailExpansionTick.value += 1;
   }
 
@@ -757,18 +746,7 @@ export function useThinkingPanel(props, emit) {
         ? messageItem.tool_calls
         : [];
     if (toolCalls.length > 0) return toolCalls.length;
-    const processRealtimeLogs = Array.isArray(messageItem?.processRealtimeLogs)
-      ? messageItem.processRealtimeLogs
-      : [];
-    const realtimeLogs = processRealtimeLogs.length > 0
-      ? processRealtimeLogs
-      : Array.isArray(messageItem?.realtimeLogs)
-        ? messageItem.realtimeLogs
-        : [];
-    return realtimeLogs.filter((logItem = {}) => {
-      const event = String(logItem?.event || logItem?.type || "").toLowerCase();
-      return event.includes("tool") || event.includes("function");
-    }).length;
+    return selectToolTimelineCount(timelineMessage(messageItem));
   }
 
   function getThinkingDetailLabel(messageItem = {}) {
@@ -842,12 +820,12 @@ export function useThinkingPanel(props, emit) {
         // Runtime state is the source of truth for the current response. The
         // message is often created before `pending` is projected, so relying on
         // the creation-time default leaves the live panel collapsed.
-        props.messageItem.thinkingOpenNames = ["thinking-panel"];
+        setTurnThinkingOpenNames(props.messageItem, ["thinking-panel"]);
       } else {
         stopTimer();
         // Fold only when the live response actually becomes history. Do not
         // overwrite a historical panel that the user opened manually.
-        if (wasRunning === true) props.messageItem.thinkingOpenNames = [];
+        if (wasRunning === true) setTurnThinkingOpenNames(props.messageItem, []);
       }
     },
     { immediate: true },

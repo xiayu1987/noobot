@@ -167,9 +167,7 @@ export function clearTurnScopedAssets(messageItem = {}) {
   messageItem.completedToolLogs = [];
   messageItem.realtimeLogs = [];
   messageItem.executionLogTotal = 0;
-  messageItem.processRealtimeLogs = [];
-  messageItem.processCompletedToolLogs = [];
-  messageItem.processExecutionLogTotal = 0;
+  messageItem.toolTimeline = [];
   return messageItem;
 }
 

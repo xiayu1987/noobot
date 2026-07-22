@@ -7,6 +7,8 @@ import {
   validateMessageEventEnvelope,
 } from "@noobot/shared/message-event-protocol";
 import { initializeMessageEventState } from "../../infra/messageEventState";
+import { reduceToolTimeline } from "./toolTimeline";
+import { reduceActivityTimeline } from "./activityTimeline";
 
 export { initializeMessageEventState } from "../../infra/messageEventState";
 
@@ -56,13 +58,14 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
     targetMessage.content = String(targetMessage.content || "") + event.text;
   } else {
     const log = classifyRealtimeLog?.(event);
-    if (log) {
-      targetMessage.realtimeLogs = [...(targetMessage.realtimeLogs || []), log].slice(-10);
-      targetMessage.executionLogTotal = Math.max(
-        Number(targetMessage.executionLogTotal || 0),
-        Number(targetMessage.processExecutionLogTotal || 0),
-      ) + 1;
-    }
+    targetMessage.toolTimeline = reduceToolTimeline(targetMessage.toolTimeline, event, log);
+    // Tool and non-tool activities are separate projections. The activity
+    // normalizer rejects tool logs, so a transport fact can never be owned by
+    // both timelines.
+    targetMessage.activityTimeline = reduceActivityTimeline(
+      targetMessage.activityTimeline,
+      log ? { ...log, eventId: event.eventId, sequence: event.sequence } : event,
+    );
   }
   if (event.dialogProcessId && !targetMessage.dialogProcessId) targetMessage.dialogProcessId = event.dialogProcessId;
   state.lastSequence = sequence;

@@ -502,17 +502,8 @@ export function createChatEngineConversationState({
           return;
         }
       }
-      if (targetAssistantMessage) {
-        targetAssistantMessage.channelState = channelStateView;
-        targetAssistantMessage.pending = true;
-        if (state === BackendChannelState.STOPPING) {
-          targetAssistantMessage.statusLabel = translate("chat.stopping");
-        } else if (state === BackendChannelState.RECONNECTING) {
-          targetAssistantMessage.statusLabel = translate("chat.reconnecting");
-        } else if (state === BackendChannelState.SENDING) {
-          targetAssistantMessage.statusLabel = "";
-        }
-      }
+      // Runtime display state is projected exclusively from the turn runtime
+      // registry after applyRunStateEvent. Do not mirror it on the message here.
       return;
     }
     if (!isTerminalConversationState(state)) return;
@@ -545,81 +536,13 @@ export function createChatEngineConversationState({
       clearPendingInteraction();
       return;
     }
-    if (!targetAssistantMessage) return;
-    if (state === BackendChannelState.COMPLETED) {
-      const beforeTerminalApply = summarizeDebugMessage(targetAssistantMessage);
-      const currentMessageState = normalizeTrimmedString(
-        getMessageRuntimeChannelState(targetAssistantMessage)?.state,
-      );
-      if (
-        targetAssistantMessage.pending === false ||
-        [
-          FrontendRunState.FRONTEND_COMPLETED,
-          BackendChannelState.ERROR,
-          BackendChannelState.USER_STOPPED,
-        ].includes(currentMessageState)
-      ) {
-        // A local/frontend completion can finalize the message before the
-        // backend COMPLETED event arrives. Runtime UI state is already final in
-        // that case, but the turn-level timing still needs its terminal fact.
-        finishTurnTiming(targetAssistantMessage);
-        logResendDebug("conversationState.backendCompleted.skipFinalized", {
-          state, sessionId, dialogProcessId, turnScopeId,
-          currentMessageState,
-          before: beforeTerminalApply,
-        });
-        return;
-      }
-      targetAssistantMessage.channelState = channelStateView;
-      finishTurnTiming(targetAssistantMessage);
-      logResendDebug("conversationState.backendCompleted.apply", {
-        state, sessionId, dialogProcessId, turnScopeId,
-        before: beforeTerminalApply,
-        after: summarizeDebugMessage(targetAssistantMessage),
-      });
-      return;
-    }
-    const beforeTerminalApply = summarizeDebugMessage(targetAssistantMessage);
-    targetAssistantMessage.channelState = channelStateView;
-    finishTurnTiming(targetAssistantMessage);
-    targetAssistantMessage.pending = false;
-    if (state === FrontendRunState.FRONTEND_COMPLETED) {
-      targetAssistantMessage.statusLabel = translate("chat.generated");
-      logResendDebug("conversationState.terminal.apply", {
-        state, sessionId, dialogProcessId, turnScopeId,
-        before: beforeTerminalApply,
-        after: summarizeDebugMessage(targetAssistantMessage),
-      });
-      return;
-    }
-    if (state === BackendChannelState.USER_STOPPED) {
-      targetAssistantMessage.statusLabel = translate("chat.stopped");
-      if (!String(targetAssistantMessage.content || "").trim()) {
-        targetAssistantMessage.content = translate("chat.stoppedContent");
-      }
-      logResendDebug("conversationState.terminal.apply", {
-        state, sessionId, dialogProcessId, turnScopeId,
-        before: beforeTerminalApply,
-        after: summarizeDebugMessage(targetAssistantMessage),
-      });
-      return;
-    }
-    if (state === FrontendRunState.CANCELLED) {
-      targetAssistantMessage.statusLabel = translate("chat.failed");
-      logResendDebug("conversationState.terminal.apply", {
-        state, sessionId, dialogProcessId, turnScopeId,
-        before: beforeTerminalApply,
-        after: summarizeDebugMessage(targetAssistantMessage),
-      });
-      return;
-    }
-    if (state === BackendChannelState.ERROR) {
-      targetAssistantMessage.statusLabel = translate("chat.failed");
-    }
-    logResendDebug("conversationState.terminal.apply", {
+    // Terminal message runtime (pending/channel state/status label/timing) is
+    // projected exclusively by sessionRunStateMachine -> turnRuntimeRegistry ->
+    // messageRuntimePatch.  Keeping a second mutation path here allowed late
+    // backend terminal events to overwrite a newer continuation turn.
+    logResendDebug("conversationState.terminal.dispatched", {
       state, sessionId, dialogProcessId, turnScopeId,
-      before: beforeTerminalApply,
-      after: summarizeDebugMessage(targetAssistantMessage),
+      target: summarizeDebugMessage(targetAssistantMessage),
     });
   }
 

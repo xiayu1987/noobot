@@ -311,10 +311,8 @@ export function patchAssistantFromWorkflowMessage(targetMessage = null, workflow
   if (!targetMessage || !workflowMessageItem) return false;
   const previousPending = Boolean(targetMessage.pending);
   const previousStatusLabel = String(targetMessage.statusLabel || "");
-  const previousRealtimeLogs = Array.isArray(targetMessage.realtimeLogs)
-    ? targetMessage.realtimeLogs
-    : [];
-  const previousExecutionLogTotal = Number(targetMessage.executionLogTotal || 0);
+  const previousToolTimeline = targetMessage.toolTimeline;
+  const previousActivityTimeline = targetMessage.activityTimeline;
   const previousHasFirstStreamEvent = targetMessage.hasFirstStreamEvent === true;
   const [normalizedWorkflowMessage] = foldConversationMessages(
     [workflowMessageItem],
@@ -324,13 +322,9 @@ export function patchAssistantFromWorkflowMessage(targetMessage = null, workflow
   targetMessage.content = stripInternalEventPlaceholderLines(targetMessage.content);
   targetMessage.pending = previousPending;
   targetMessage.statusLabel = previousStatusLabel;
-  targetMessage.realtimeLogs = previousRealtimeLogs;
+  if (previousToolTimeline !== undefined) targetMessage.toolTimeline = previousToolTimeline;
+  if (previousActivityTimeline !== undefined) targetMessage.activityTimeline = previousActivityTimeline;
   targetMessage.hasFirstStreamEvent = previousHasFirstStreamEvent || workflowMessageItem?.hasFirstStreamEvent === true;
-  targetMessage.executionLogTotal = Math.max(
-    previousExecutionLogTotal,
-    Number(workflowMessageItem?.executionLogTotal || 0),
-    previousRealtimeLogs.length,
-  );
   // Workflow DONE snapshots only patch the current pending/streaming overlay.
   // Do not turn that overlay into a standalone workflow completed message; the
   // completed display source is rebuilt from normalized session detail.

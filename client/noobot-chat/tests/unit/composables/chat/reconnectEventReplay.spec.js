@@ -77,6 +77,7 @@ describe("applyReconnectEventReplay", () => {
     expect(applyReconnectMessagesToActiveSession).toHaveBeenCalledWith(
       [{ event: "message", data: { sessionId: "s-1", dialogProcessId: "dp-1", content: "hello" } }],
       "dp-1",
+      { turnScopeId: "" },
     );
     expect(replayCache).toEqual({});
   });
@@ -126,8 +127,81 @@ describe("applyReconnectEventReplay", () => {
     expect(applyReconnectMessagesToActiveSession).toHaveBeenCalledWith(
       [{ event: StreamEventEnum.THINKING, data: { dialogProcessId: "dp-1", text: "tool running" } }],
       "dp-1",
+      { turnScopeId: "" },
     );
     expect(replayCache).toEqual({});
+  });
+
+  it.each([
+    [StreamEventEnum.DONE, { sessionId: "s-1", turnScopeId: "turn-1", dialogProcessId: "dp-1" }],
+    [StreamEventEnum.CHANNEL_STATE, { sessionId: "s-1", turnScopeId: "turn-1", state: "completed" }],
+    [StreamEventEnum.CHANNEL_STATE, { sessionId: "s-1", turnScopeId: "turn-1", state: "error" }],
+    [StreamEventEnum.CHANNEL_STATE, { sessionId: "s-1", turnScopeId: "turn-1", state: "user_stopped" }],
+  ])("does not grant terminal lifecycle authority without an exact currentRun: %s", async (event, data) => {
+    const applyChannelState = vi.fn();
+    await applyReconnectEventReplay({
+      event,
+      data,
+      replayCache: {},
+      isCurrentActiveSession: vi.fn(() => true),
+      consumeReplayCacheForSession: vi.fn(),
+      applyReconnectMessagesToActiveSession: vi.fn(),
+      applyChannelState,
+      hasAuthoritativeCurrentRun: vi.fn(() => false),
+    });
+
+    expect(applyChannelState).toHaveBeenCalledOnce();
+    expect(applyChannelState.mock.calls[0][0]).toMatchObject({ authoritativeSnapshot: false });
+  });
+
+  it("grants terminal authority only for an exact session and Turn match", async () => {
+    const applyChannelState = vi.fn();
+    const hasAuthoritativeCurrentRun = vi.fn(({ sessionId, turnScopeId }) => (
+      sessionId === "s-1" && turnScopeId === "turn-current"
+    ));
+    await applyReconnectEventReplay({
+      event: StreamEventEnum.DONE,
+      data: { sessionId: "s-1", turnScopeId: "turn-other", dialogProcessId: "shared-dialog" },
+      replayCache: {},
+      isCurrentActiveSession: vi.fn(() => true),
+      consumeReplayCacheForSession: vi.fn(),
+      applyReconnectMessagesToActiveSession: vi.fn(),
+      applyChannelState,
+      hasAuthoritativeCurrentRun,
+    });
+    await applyReconnectEventReplay({
+      event: StreamEventEnum.DONE,
+      data: { sessionId: "s-1", turnScopeId: "turn-current", dialogProcessId: "shared-dialog" },
+      replayCache: {},
+      isCurrentActiveSession: vi.fn(() => true),
+      consumeReplayCacheForSession: vi.fn(),
+      applyReconnectMessagesToActiveSession: vi.fn(),
+      applyChannelState,
+      hasAuthoritativeCurrentRun,
+    });
+
+    expect(applyChannelState.mock.calls[0][0].authoritativeSnapshot).toBe(false);
+    expect(applyChannelState.mock.calls[1][0].authoritativeSnapshot).toBe(true);
+  });
+
+  it("never grants lifecycle authority to dialog-only DONE payloads", async () => {
+    const applyChannelState = vi.fn();
+    await applyReconnectEventReplay({
+      event: StreamEventEnum.DONE,
+      data: { dialogProcessId: "dp-1" },
+      replayCache: {},
+      isCurrentActiveSession: vi.fn(() => false),
+      isCurrentActiveDialogProcess: vi.fn(() => true),
+      consumeReplayCacheForSession: vi.fn(),
+      applyReconnectMessagesToActiveSession: vi.fn(),
+      applyChannelState,
+      hasAuthoritativeCurrentRun: vi.fn(() => true),
+    });
+
+    expect(applyChannelState).toHaveBeenCalledWith(expect.objectContaining({
+      state: "completed",
+      authoritativeSnapshot: false,
+    }));
   });
 
 });

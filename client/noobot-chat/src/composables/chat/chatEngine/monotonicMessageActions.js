@@ -27,6 +27,7 @@ import {
   sessionRuntimeId,
   turnRuntimeDisplayState,
 } from "../sessionRunStateMachine/turnRuntimeRegistry";
+import { clearTurnUiState } from "./turnUiStore";
 
 const delay = (ms) => new Promise((resolve) => {
   setTimeout(resolve, ms);
@@ -239,6 +240,7 @@ export function createMonotonicMessageActions({
     const removedTurnScopeIds = new Set(removedMessages.map(getMessageTurnScopeId).filter(Boolean));
     removedTurnScopeIds.forEach((turnScopeId) => {
       removeTurnRuntime(turnRuntimeRegistry?.value, turnScopeId, { sessionId });
+      clearTurnUiState({ sessionId, turnScopeId });
     });
     syncSessionMessageSummary(session);
     clearPendingInteraction?.();

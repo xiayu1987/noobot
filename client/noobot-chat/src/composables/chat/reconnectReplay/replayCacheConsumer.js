@@ -9,6 +9,7 @@ import {
 } from "../../infra/reconnectReplayModel";
 import {
   markReconnectSequenceApplied as markReconnectSequenceAppliedInCache,
+  normalizeReplayCacheKey,
   takeReplayCacheGroupsForSession,
 } from "./replayCache";
 import {
@@ -28,6 +29,7 @@ export async function consumeReconnectReplayCacheForSession({
   for (const { dialogProcessId, turnScopeId, replayMessages } of replayGroups) {
     await applyReconnectMessagesToActiveSession(replayMessages, dialogProcessId, {
       turnScopeId,
+      ...(!turnScopeId ? { legacyDialogFallback: true } : {}),
     });
   }
 }
@@ -36,11 +38,13 @@ export function markReconnectSequenceApplied(
   appliedReconnectSeqByDialogProcessId,
   dialogProcessId = "",
   sequence = 0,
+  identity = {},
 ) {
   markReconnectSequenceAppliedInCache(
     appliedReconnectSeqByDialogProcessId,
     dialogProcessId,
     sequence,
+    identity,
   );
 }
 
@@ -53,6 +57,8 @@ export async function applyReconnectMessagesToActiveSessionReplay({
   dialogProcessId,
   turnScopeId = "",
   allowCreate = true,
+  authoritativeCurrentRun = false,
+  legacyDialogFallback = false,
   appliedReconnectSeqByDialogProcessId,
   terminalDialogProcessIdSet,
   classifyRealtimeLog,
@@ -74,7 +80,11 @@ export async function applyReconnectMessagesToActiveSessionReplay({
     dialogProcessId,
     turnScopeId,
     allowCreate,
-    lastAppliedSeq: Number(appliedReconnectSeqByDialogProcessId[_trimStr(dialogProcessId)] || 0),
+    authoritativeCurrentRun,
+    legacyDialogFallback: legacyDialogFallback || !_trimStr(turnScopeId),
+    lastAppliedSeq: Number(appliedReconnectSeqByDialogProcessId[
+      normalizeReplayCacheKey(dialogProcessId, activeSessionId?.value, turnScopeId)
+    ] || appliedReconnectSeqByDialogProcessId[_trimStr(dialogProcessId)] || 0),
     terminalDialogProcessIdSet,
     isReconnectTerminalBatch,
     isReconnectTerminalEvent,

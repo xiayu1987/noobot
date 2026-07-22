@@ -10,6 +10,8 @@ import {
   markReconnectSequenceApplied,
 } from "../../../../src/composables/chat/reconnectReplay/replayCacheConsumer";
 import { StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
+import { selectToolTimelineLogs } from "../../../../src/composables/chat/chatEngine/toolTimeline";
+import { selectActivityTimelineLogs } from "../../../../src/composables/chat/chatEngine/activityTimeline";
 
 function createActiveReplayFixture(overrides = {}) {
   const activeSession = {
@@ -87,7 +89,7 @@ describe("replayCacheConsumer", () => {
       2,
       [{ event: StreamEventEnum.DELTA, data: { text: "b" } }],
       "",
-      { turnScopeId: "" },
+      { turnScopeId: "", legacyDialogFallback: true },
     );
     expect(replayCache).toEqual({
       "s-2": {
@@ -121,7 +123,10 @@ describe("replayCacheConsumer", () => {
     });
 
     expect(fixture.activeSession.value.messages[0].content).toBe("new");
-    expect(fixture.markReconnectSequenceApplied).toHaveBeenCalledWith("dp-1", 3);
+    expect(fixture.markReconnectSequenceApplied).toHaveBeenCalledWith("dp-1", 3, {
+      sessionId: "",
+      turnScopeId: "",
+    });
     expect(fixture.scrollBottom).not.toHaveBeenCalled();
   });
 
@@ -139,7 +144,10 @@ describe("replayCacheConsumer", () => {
     });
 
     expect(terminalDialogProcessIdSet.has("dp-1")).toBe(true);
-    expect(fixture.markReconnectSequenceApplied).toHaveBeenLastCalledWith("dp-1", 2);
+    expect(fixture.markReconnectSequenceApplied).toHaveBeenLastCalledWith("dp-1", 2, {
+      sessionId: "",
+      turnScopeId: "",
+    });
     expect(fixture.activeSession.value.messages[0].content).toBe("final");
 
     await applyReconnectMessagesToActiveSessionReplay({
@@ -151,7 +159,10 @@ describe("replayCacheConsumer", () => {
     });
 
     expect(fixture.activeSession.value.messages[0].content).toBe("final");
-    expect(fixture.markReconnectSequenceApplied).toHaveBeenLastCalledWith("dp-1", 3);
+    expect(fixture.markReconnectSequenceApplied).toHaveBeenLastCalledWith("dp-1", 3, {
+      sessionId: "",
+      turnScopeId: "",
+    });
   });
 
   it("continues reconnect thinking execution count and items from refresh hydrated process fields", async () => {
@@ -171,11 +182,8 @@ describe("replayCacheConsumer", () => {
               dialogProcessId: "dp-1",
               content: "",
               pending: true,
-              executionLogTotal: 0,
-              processExecutionLogTotal: 12,
-              processLastSequence: 12,
-              processRealtimeLogs: hydratedCompletedLogs.slice(-10),
-              processCompletedToolLogs: hydratedCompletedLogs,
+              executionLogTotal: 12,
+              realtimeLogs: hydratedCompletedLogs.slice(-10),
             },
           ],
         },
@@ -194,20 +202,12 @@ describe("replayCacheConsumer", () => {
     });
 
     const targetMessage = fixture.activeSession.value.messages[0];
-    expect(processStore.applyEventBatch).toHaveBeenCalledTimes(1);
-    expect(targetMessage.executionLogTotal).toBe(13);
-    expect(targetMessage.processExecutionLogTotal).toBe(13);
-    expect(targetMessage.processLastSequence).toBe(13);
-    expect(processStore.events[0].sequence).toBe(13);
-    expect(targetMessage.processRealtimeLogs).toHaveLength(10);
-    expect(targetMessage.processRealtimeLogs[0].text).toContain("old step 4");
-    expect(targetMessage.processRealtimeLogs[9].text).toContain("next step");
-    expect(targetMessage.processCompletedToolLogs).toHaveLength(13);
-    expect(targetMessage.processCompletedToolLogs[0].text).toContain("old step 1");
-    expect(targetMessage.processCompletedToolLogs[12].text).toContain("next step");
+    expect(processStore.applyEventBatch).not.toHaveBeenCalled();
+    expect(selectToolTimelineLogs(targetMessage)).toHaveLength(1);
+    expect(selectToolTimelineLogs(targetMessage)[0].text).toContain("next step");
   });
 
-  it("syncs reconnect error execution logs into process compat fields", async () => {
+  it("keeps reconnect error execution facts out of process display mirrors", async () => {
     const processStore = createFakeProcessStore();
     const fixture = createActiveReplayFixture({ processStore });
 
@@ -232,15 +232,13 @@ describe("replayCacheConsumer", () => {
 
     const targetMessage = fixture.activeSession.value.messages[0];
     expect(targetMessage.error).toBe("tool failed");
-    expect(processStore.applyEventBatch).toHaveBeenCalledTimes(1);
-    expect(targetMessage.processExecutionLogTotal).toBe(2);
-    expect(targetMessage.processLastSequence).toBe(11);
-    expect(targetMessage.processRealtimeLogs).toHaveLength(2);
-    expect(targetMessage.processRealtimeLogs[1].text).toContain("tool failed");
-    expect(targetMessage.processCompletedToolLogs).toHaveLength(2);
+    expect(processStore.applyEventBatch).not.toHaveBeenCalled();
+    expect(targetMessage.processExecutionLogTotal).toBeUndefined();
+    expect(targetMessage.processRealtimeLogs).toBeUndefined();
+    expect(targetMessage.processCompletedToolLogs).toBeUndefined();
   });
 
-  it("syncs reconnect thinking events into process compat fields after refresh", async () => {
+  it("does not create process display mirrors for reconnect thinking", async () => {
     const processStore = createFakeProcessStore();
     const fixture = createActiveReplayFixture({ processStore });
 
@@ -256,12 +254,11 @@ describe("replayCacheConsumer", () => {
     });
 
     const targetMessage = fixture.activeSession.value.messages[0];
-    expect(processStore.applyEventBatch).toHaveBeenCalledTimes(1);
-    expect(targetMessage.executionLogTotal).toBe(1);
-    expect(targetMessage.processExecutionLogTotal).toBe(1);
-    expect(targetMessage.processLastSequence).toBe(7);
-    expect(targetMessage.processRealtimeLogs[0].text).toContain("searching");
-    expect(targetMessage.processCompletedToolLogs[0].text).toContain("searching");
+    expect(processStore.applyEventBatch).not.toHaveBeenCalled();
+    expect(selectToolTimelineLogs(targetMessage)[0].text).toContain("searching");
+    expect(targetMessage.processExecutionLogTotal).toBeUndefined();
+    expect(targetMessage.processRealtimeLogs).toBeUndefined();
+    expect(targetMessage.processCompletedToolLogs).toBeUndefined();
   });
 
   it("derives the continuation turn from cached envelopes before resolving a reused dialog", async () => {
@@ -301,8 +298,10 @@ describe("replayCacheConsumer", () => {
     });
 
     expect(stoppedAssistant.realtimeLogs).toEqual([]);
+    expect(selectToolTimelineLogs(stoppedAssistant)).toEqual([]);
+    expect(selectActivityTimelineLogs(stoppedAssistant)).toEqual([]);
     expect(continuationAssistant.turnScopeId).toBe("turn-continuation");
-    expect(continuationAssistant.realtimeLogs).toHaveLength(1);
-    expect(continuationAssistant.realtimeLogs[0].text).toContain("continuation tool");
+    expect(selectToolTimelineLogs(continuationAssistant)).toHaveLength(1);
+    expect(selectToolTimelineLogs(continuationAssistant)[0].text).toContain("continuation tool");
   });
 });

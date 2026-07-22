@@ -4,10 +4,11 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, watch } from "vue";
 import { useLocale } from "../i18n/useLocale";
 import { useThinkingPanel } from "./useThinkingPanel";
 import { normalizeTurnScopeIdKey } from "../../composables/infra/messageIdentity";
+import { getTurnUiState, setTurnThinkingOpenNames } from "../../composables/chat/chatEngine/turnUiStore";
 import ThinkingPanelRealtime from "./ThinkingPanelRealtime.vue";
 import ThinkingPanelDetails from "./ThinkingPanelDetails.vue";
 
@@ -27,23 +28,17 @@ const props = defineProps({
 const emit = defineEmits(["open-thinking-details"]);
 const { translate } = useLocale();
 const panel = useThinkingPanel(props, emit);
-const thinkingOpenNames = ref(
-  Array.isArray(props.messageItem?.thinkingOpenNames)
-    ? [...props.messageItem.thinkingOpenNames]
-    : [],
-);
+const thinkingOpenNames = computed(() => getTurnUiState(props.messageItem)?.thinkingOpenNames || []);
 const thinkingIdentity = computed(() => [
   String(props.messageItem?.sessionId || "").trim(),
   normalizeTurnScopeIdKey(props.messageItem?.turnScopeId),
   String(props.messageItem?.dialogProcessId || props.messageItem?.id || props.messageItem?.messageId || "").trim(),
 ].join("::"));
 watch(thinkingIdentity, () => {
-  thinkingOpenNames.value = Array.isArray(props.messageItem?.thinkingOpenNames)
-    ? [...props.messageItem.thinkingOpenNames]
-    : [];
+  getTurnUiState(props.messageItem);
 });
 function updateThinkingOpenNames(value) {
-  thinkingOpenNames.value = Array.isArray(value) ? value : [];
+  setTurnThinkingOpenNames(props.messageItem, value);
 }
 const {
   injectedMessages,

@@ -155,9 +155,9 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     const assistant = assistantMessage(activeSession);
     expect(sending.value).toBe(false);
     expect(assistant?.content).toBe("detail answer");
-    // This mock only replaces content; clearing the message projection belongs
-    // to the real authoritative detail applier.
-    expect(assistant?.pending).toBe(true);
+    // The authoritative detail lifecycle event owns completion even when this
+    // focused mock only replaces content.
+    expect(assistant?.pending).toBe(false);
     expect(fetchSessionDetail).toHaveBeenCalledWith("local-state-only");
     expect(applySessionDetail).toHaveBeenCalledTimes(1);
   });

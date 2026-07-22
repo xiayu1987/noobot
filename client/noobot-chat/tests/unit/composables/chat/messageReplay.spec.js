@@ -8,6 +8,7 @@ import {
   applyFoldedMessagesForDialogProcess,
   applyFoldedMessagesToActiveSession,
 } from "../../../../src/composables/chat/reconnectReplay/messageReplay";
+import { selectToolTimeline } from "../../../../src/composables/chat/chatEngine/toolTimeline";
 
 describe("messageReplay", () => {
   it("patches an existing pending assistant for a reconnect DONE dialog process", () => {
@@ -118,7 +119,13 @@ describe("messageReplay", () => {
       pending: true,
       dialogProcessId: "shared-dialog",
       turnScopeId: "continued-turn",
-      realtimeLogs: [liveToolCall, liveToolResult],
+      toolTimeline: [{
+        toolCallId: "call-1",
+        call: liveToolCall,
+        result: liveToolResult,
+        callSequence: 11,
+        resultSequence: 12,
+      }],
       messageEventState: {
         lastSequence: 12,
         consumedEventIds: ["event-tool-call", "event-tool-result"],
@@ -131,19 +138,16 @@ describe("messageReplay", () => {
       pending: true,
       dialogProcessId: "shared-dialog",
       turnScopeId: "continued-turn",
-      realtimeLogs: [{ eventId: "event-thinking", type: "thinking" }],
+      activityTimeline: [{ activityId: "event-thinking", eventId: "event-thinking", type: "thinking", sequence: 8 }],
       messageEventState: { lastSequence: 8, consumedEventIds: ["event-thinking"] },
     }], "shared-dialog");
 
     expect(activeSession.value.messages[0]).toBe(assistant);
-    expect(assistant.realtimeLogs.map((log) => log.eventId)).toEqual([
-      "event-thinking",
-      "event-tool-call",
-      "event-tool-result",
-    ]);
+    expect(selectToolTimeline(assistant)).toHaveLength(1);
+    expect(selectToolTimeline(assistant)[0]).toMatchObject({ toolCallId: "call-1" });
+    expect(assistant.activityTimeline || []).toEqual([]);
     expect(assistant.messageEventState.lastSequence).toBe(12);
     expect(assistant.messageEventState.consumedEventIds).toEqual([
-      "event-thinking",
       "event-tool-call",
       "event-tool-result",
     ]);

@@ -12,12 +12,16 @@ import {
 } from "../../../../src/composables/chat/chatEngine/streamHandlers";
 import { buildViewMessage } from "../../../../src/composables/infra/messageModel";
 import { classifyRealtimeLog } from "../../../../src/app/state/sessionMessageState";
+import {
+  selectToolTimeline,
+  selectToolTimelineLogs,
+} from "../../../../src/composables/chat/chatEngine/toolTimeline";
 
 describe("chatEngine streamHandlers", () => {
   const makeBotMessage = () => ({
     dialogProcessId: "",
-    realtimeLogs: [],
-    executionLogTotal: 0,
+    toolTimeline: [],
+    activityTimeline: [],
   });
 
   it("merges parsed results into the original user attachment", () => {
@@ -168,8 +172,7 @@ describe("chatEngine streamHandlers", () => {
     });
 
     expect(botMessage.dialogProcessId).toBe("");
-    expect(botMessage.executionLogTotal).toBe(0);
-    expect(botMessage.realtimeLogs).toEqual([]);
+    expect(selectToolTimelineLogs(botMessage)).toEqual([]);
     expect(scrollOnFirstResponseOnce).not.toHaveBeenCalled();
   });
 
@@ -191,8 +194,7 @@ describe("chatEngine streamHandlers", () => {
     });
 
     expect(botMessage.dialogProcessId).toBe("");
-    expect(botMessage.executionLogTotal).toBe(0);
-    expect(botMessage.realtimeLogs).toEqual([]);
+    expect(selectToolTimelineLogs(botMessage)).toEqual([]);
     expect(scrollOnFirstResponseOnce).not.toHaveBeenCalled();
   });
 
@@ -216,8 +218,7 @@ describe("chatEngine streamHandlers", () => {
     });
 
     expect(botMessage.dialogProcessId).toBe("dp-1");
-    expect(botMessage.executionLogTotal).toBe(1);
-    expect(botMessage.realtimeLogs).toEqual([
+    expect(selectToolTimelineLogs(botMessage)).toEqual([
       expect.objectContaining({ event: "tool_call", text: "调用：npm test" }),
     ]);
     expect(locateSendingStartedMessageOnce).toHaveBeenCalledTimes(1);
@@ -243,13 +244,13 @@ describe("chatEngine streamHandlers", () => {
       scrollOnFirstResponseOnce,
     });
 
-    expect(botMessage.realtimeLogs).toEqual([
+    expect(selectToolTimelineLogs(botMessage)).toEqual([
       expect.objectContaining({
         event: "tool_call",
         text: "调用：cd /project/agent && npm test",
       }),
     ]);
-    expect(botMessage.executionLogTotal).toBe(1);
+    expect(selectToolTimeline(botMessage)).toHaveLength(1);
   });
 
   it("projects a real authoritative tool envelope into the thinking panel", () => {
@@ -279,7 +280,7 @@ describe("chatEngine streamHandlers", () => {
       scrollOnFirstResponseOnce: vi.fn(),
     });
 
-    expect(botMessage.realtimeLogs).toEqual([
+    expect(selectToolTimelineLogs(botMessage)).toEqual([
       expect.objectContaining({
         type: "tool_call",
         category: "tool",
@@ -287,7 +288,7 @@ describe("chatEngine streamHandlers", () => {
         text: expect.stringContaining("write_file"),
       }),
     ]);
-    expect(botMessage.executionLogTotal).toBe(1);
+    expect(selectToolTimeline(botMessage)).toHaveLength(1);
   });
 
   it("keeps an authoritative tool result distinct from its call in the thinking panel", () => {
@@ -330,7 +331,7 @@ describe("chatEngine streamHandlers", () => {
       scrollOnFirstResponseOnce: vi.fn(),
     });
 
-    expect(botMessage.realtimeLogs).toEqual([
+    expect(selectToolTimelineLogs(botMessage)).toEqual([
       expect.objectContaining({
         event: "tool_call",
         type: "tool_call",
@@ -346,7 +347,7 @@ describe("chatEngine streamHandlers", () => {
         ),
       }),
     ]);
-    expect(botMessage.executionLogTotal).toBe(2);
+    expect(selectToolTimelineLogs(botMessage)).toHaveLength(2);
   });
 
   it("shows done execution log with same concrete command priority", () => {
@@ -379,7 +380,7 @@ describe("chatEngine streamHandlers", () => {
       locateDoneMessage,
     });
 
-    expect(botMessage.realtimeLogs).toEqual([
+    expect(selectToolTimelineLogs(botMessage)).toEqual([
       expect.objectContaining({
         text: expect.stringMatching(
           /^(?:返回：cd \/project\/agent && npm test · 已完成|Return: cd \/project\/agent && npm test · Completed)$/,
@@ -466,29 +467,23 @@ describe("chatEngine streamHandlers", () => {
       });
     }
 
-    expect(botMessage.realtimeLogs).toHaveLength(10);
-    expect(botMessage.executionLogTotal).toBe(12);
-    expect(botMessage.realtimeLogs[0].text).toBe("调用：cmd-3");
-    expect(botMessage.realtimeLogs[9].text).toBe("调用：cmd-12");
+    const projectedLogs = selectToolTimelineLogs(botMessage);
+    expect(projectedLogs).toHaveLength(12);
+    expect(projectedLogs.slice(-10)[0].text).toBe("调用：cmd-3");
+    expect(projectedLogs.slice(-10)[9].text).toBe("调用：cmd-12");
     expect(scrollOnFirstResponseOnce).toHaveBeenCalledTimes(12);
   });
 
-  it("continues execution count after refresh hydrated process fields", () => {
+  it("projects execution without writing process mirrors", () => {
     const botMessage = {
       ...makeBotMessage(),
       dialogProcessId: "dp-1",
-      processExecutionLogTotal: 12,
     };
     const scrollOnFirstResponseOnce = vi.fn();
     const appliedEvents = [];
     const processStore = {
       applyEventBatch: vi.fn((events) => appliedEvents.push(...events)),
-      getCompatView: vi.fn(() => ({
-        lastSequence: 13,
-        realtimeLogs: botMessage.realtimeLogs,
-        completedToolLogs: botMessage.realtimeLogs,
-        executionLogTotal: appliedEvents.length,
-      })),
+      getCompatView: vi.fn(() => ({ lastSequence: 13 })),
     };
 
     handleThinkingStreamEvent({
@@ -499,10 +494,9 @@ describe("chatEngine streamHandlers", () => {
       processStore,
     });
 
-    expect(botMessage.executionLogTotal).toBe(13);
-    expect(botMessage.processExecutionLogTotal).toBe(13);
-    expect(appliedEvents[0]).toMatchObject({ sequence: 13, processId: "dp-1" });
-    expect(appliedEvents[0].payload.node.id).toBe("dp-1:seq:13");
+    expect(selectToolTimelineLogs(botMessage)).toHaveLength(1);
+    expect(processStore.applyEventBatch).not.toHaveBeenCalled();
+    expect(appliedEvents).toEqual([]);
     expect(scrollOnFirstResponseOnce).toHaveBeenCalledTimes(1);
   });
 
@@ -530,10 +524,10 @@ describe("chatEngine streamHandlers", () => {
       scrollBottom: vi.fn(),
     });
 
-    expect(botMessage.realtimeLogs).toHaveLength(10);
-    expect(botMessage.executionLogTotal).toBe(12);
-    expect(botMessage.realtimeLogs[0].text).toBe("返回：cmd-3");
-    expect(botMessage.realtimeLogs[9].text).toBe("返回：cmd-12");
+    const projectedLogs = selectToolTimelineLogs(botMessage);
+    expect(projectedLogs).toHaveLength(12);
+    expect(projectedLogs.slice(-10)[0].text).toBe("返回：cmd-3");
+    expect(projectedLogs.slice(-10)[9].text).toBe("返回：cmd-12");
     expect(scrollOnFirstResponseOnce).toHaveBeenCalledTimes(1);
   });
 
@@ -596,8 +590,7 @@ describe("chatEngine streamHandlers", () => {
       scrollOnFirstResponseOnce,
     });
 
-    expect(botMessage.realtimeLogs).toEqual([]);
-    expect(botMessage.executionLogTotal).toBe(0);
+    expect(selectToolTimelineLogs(botMessage)).toEqual([]);
     expect(scrollOnFirstResponseOnce).not.toHaveBeenCalled();
   });
 
@@ -626,10 +619,11 @@ describe("chatEngine streamHandlers", () => {
       scrollBottom: vi.fn(),
     });
 
-    expect(botMessage.realtimeLogs).toEqual([
+    const projectedLogs = selectToolTimelineLogs(botMessage);
+    expect(projectedLogs).toEqual([
       expect.objectContaining({ event: "tool_result", text: "返回：工具执行完成" }),
     ]);
-    expect(botMessage.realtimeLogs[0].text).not.toContain("[tool_result]");
+    expect(projectedLogs[0].text).not.toContain("[tool_result]");
     expect(scrollOnFirstResponseOnce).toHaveBeenCalledTimes(1);
   });
 });

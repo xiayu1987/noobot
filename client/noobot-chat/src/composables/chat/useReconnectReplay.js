@@ -98,6 +98,7 @@ export function useReconnectReplay({
   sessionLogWebSocketClient,
   notify = () => {},
   processStore,
+  turnRuntimeRegistry,
   applyTurnRuntimeEvents,
   applyExecutionSnapshot,
   applyExecutionChildren,
@@ -109,7 +110,10 @@ export function useReconnectReplay({
   let { cacheExpiredRefreshTimer, replayHydrationPromise } = reconnectReplayContext;
   const protocolReconcileAttempts = new Map();
 
-  const applyRunStateEvent = (event) => applyTurnRuntimeEvents?.([event]);
+  const applyRunStateEvent = (event) => {
+    const results = applyTurnRuntimeEvents?.([event]);
+    return Array.isArray(results) ? results[0] : results;
+  };
   const applyTurnLifecycleEnvelope = (envelope) => applyTurnRuntimeEvents?.([{
     ...(envelope || {}),
     type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
@@ -298,6 +302,7 @@ export function useReconnectReplay({
       onConversationState,
       isCurrentActiveSession,
       findAssistantMessageByTurnScopeId,
+      turnRuntimeRegistry,
       findAssistantMessageByDialogProcessId,
       findFallbackAssistantMessage: findReconnectChannelStateFallbackAssistant,
       applyRunStateEvent,
@@ -430,11 +435,12 @@ export function useReconnectReplay({
     });
   }
 
-  function markReconnectSequenceApplied(dialogProcessId = "", sequence = 0) {
+  function markReconnectSequenceApplied(dialogProcessId = "", sequence = 0, identity = {}) {
     markReconnectSequenceAppliedInConsumer(
       appliedReconnectSeqByDialogProcessId,
       dialogProcessId,
       sequence,
+      identity,
     );
   }
 
@@ -516,7 +522,7 @@ export function useReconnectReplay({
   async function applyReconnectMessagesToActiveSession(
     messages,
     dialogProcessId,
-    { allowCreate = true, turnScopeId = "" } = {},
+    { allowCreate = true, turnScopeId = "", authoritativeCurrentRun = false } = {},
   ) {
     return applyReconnectMessagesToActiveSessionReplay({
       activeSession,
@@ -527,6 +533,7 @@ export function useReconnectReplay({
       dialogProcessId,
       turnScopeId,
       allowCreate,
+      authoritativeCurrentRun,
       appliedReconnectSeqByDialogProcessId,
       terminalDialogProcessIdSet,
       classifyRealtimeLog,
@@ -558,6 +565,20 @@ export function useReconnectReplay({
       consumeReplayCacheForSession,
       applyReconnectMessagesToActiveSession,
       applyChannelState,
+      hasAuthoritativeCurrentRun: ({ sessionId = "", turnScopeId = "" } = {}) => {
+        const requestedSessionId = String(sessionId || "").trim();
+        const requestedTurnScopeId = String(turnScopeId || "").trim();
+        if (!requestedSessionId || !requestedTurnScopeId) return false;
+        const sessionEntry = (Array.isArray(sessions.value) ? sessions.value : []).find((entry) => {
+          const entrySessionId = String(entry?.backendSessionId || entry?.sessionId || entry?.id || "").trim();
+          return entrySessionId === requestedSessionId;
+        });
+        const currentRun = sessionEntry?.currentRun;
+        return (
+          String(currentRun?.sessionId || requestedSessionId).trim() === requestedSessionId &&
+          String(currentRun?.turnScopeId || "").trim() === requestedTurnScopeId
+        );
+      },
       applyTurnLifecycleEnvelope,
       applyExecutionSnapshot,
       applyExecutionChildren,

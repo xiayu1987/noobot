@@ -27,7 +27,15 @@ export function applyRunStateMessagePatch(message, patch = {}) {
   Object.entries(restPatch).forEach(([key, value]) => {
     if (key === "thinkingStartedAt" || key === "thinkingFinishedAt") return;
     if (key === "statusLabelKey" && statusLabelPolicy === "if_empty") {
-      if (!message.statusLabelKey && !message.statusLabel) message.statusLabelKey = value;
+      if (!message.statusLabelKey && !message.statusLabel) {
+        message.statusLabelKey = value;
+        message.statusLabel = value;
+      }
+      return;
+    }
+    if (key === "statusLabelKey") {
+      message.statusLabelKey = value;
+      message.statusLabel = value;
       return;
     }
     if (key === "channelState" && value && typeof value === "object" && !Array.isArray(value)) {
@@ -60,6 +68,7 @@ export function applyRunStateMessagePatch(message, patch = {}) {
 
 export function applyRunStateMessageRuntimePatch({
   sessions,
+  activeSession,
   turnRuntimeRegistry,
   event,
 } = {}) {
@@ -71,7 +80,13 @@ export function applyRunStateMessageRuntimePatch({
   });
   if (!stateSnapshot) return;
   const sessionItems = Array.isArray(sessions?.value) ? sessions.value : Array.isArray(sessions) ? sessions : [];
-  const session = sessionItems.find((item) => sessionRuntimeId(item) === stateSnapshot.sessionId);
+  const activeSessionValue = activeSession?.value || activeSession;
+  const session = sessionItems.find((item) => sessionRuntimeId(item) === stateSnapshot.sessionId)
+    || ([activeSessionValue?.id, activeSessionValue?.backendSessionId]
+      .map(sessionRuntimeId)
+      .includes(stateSnapshot.sessionId)
+      ? activeSessionValue
+      : null);
   const messages = Array.isArray(session?.messages) ? session.messages : [];
   if (!messages.length) return;
   messages.forEach((message) => {
@@ -79,7 +94,9 @@ export function applyRunStateMessageRuntimePatch({
     const messageDialogProcessId = getMessageDialogProcessId(message);
     const sameTurn = stateSnapshot.turnScopeId && messageTurnScopeId === stateSnapshot.turnScopeId;
     const sameDialog = stateSnapshot.dialogProcessId && messageDialogProcessId === stateSnapshot.dialogProcessId;
-    if (!sameTurn && !sameDialog) return;
+    // A turn-scoped runtime can only project to the same turn. Dialog ids are
+    // execution-chain metadata and may be reused by stop/continue.
+    if (stateSnapshot.turnScopeId ? !sameTurn : !sameDialog) return;
     const effect = resolveSessionRunMessageRuntimePatch({
       stateSnapshot,
       messageItem: message,
@@ -108,7 +125,12 @@ export function applyRunStateMessageRuntimePatch({
             ? { thinkingStartedAt: timingPatch.thinkingStartedAt }
             : {}),
           ...(timingPatch.thinkingFinishedAt && !existingTiming.thinkingFinishedAt
-            ? { thinkingFinishedAt: timingPatch.thinkingFinishedAt }
+            ? {
+                thinkingFinishedAt:
+                  existingTiming.thinkingStartedAt ||
+                  timingPatch.thinkingStartedAt ||
+                  timingPatch.thinkingFinishedAt,
+              }
             : {}),
         },
       };

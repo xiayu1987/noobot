@@ -25,6 +25,7 @@ import {
 } from "./constants";
 import { createInitialSessionRunState, isInFlightSessionRunState } from "./core";
 import { normalizeState, trim } from "./normalize";
+import { TURN_RUNTIME_AUTHORITY } from "./eventNormalization";
 
 const MESSAGE_RUNNING_CHANNEL_STATES = Object.freeze([
   BackendChannelState.SENDING,
@@ -50,6 +51,16 @@ function isFinalizedAssistantMessage(messageItem = {}) {
   const channelState = getMessageChannelState(messageItem);
   const state = normalizeState(channelState?.state);
   return messageItem?.pending === false && isTerminalMessageRuntimeState(state);
+}
+
+function terminalSnapshotOwnsMessage(stateSnapshot = {}, messageItem = {}, activeSession = {}) {
+  if (getMessageRole(messageItem) !== "assistant") return false;
+  if (!isRunStateForActiveSession(stateSnapshot, activeSession)) return false;
+  const runTurnScopeId = trim(stateSnapshot?.turnScopeId);
+  const messageTurnScopeId = getMessageTurnScopeId(messageItem);
+  // Terminal projection is deliberately stricter than the legacy in-flight
+  // matcher: a dialog is an execution-chain route and can span several turns.
+  return Boolean(runTurnScopeId && messageTurnScopeId && runTurnScopeId === messageTurnScopeId);
 }
 
 export function isRunStateForActiveSession(stateSnapshot = {}, activeSession = {}) {
@@ -218,11 +229,17 @@ export function buildClearMessageRuntimePatch({
 } = {}) {
   const stateTiming = normalizeTimePair(stateSnapshot);
   const channelState = getMessageChannelState(messageItem);
-  const finishedAt = stateTiming.updatedAt || toIsoTime(nowMs());
+  // The frontend detail result closes the canonical Turn interval. When the
+  // backend does not persist a separate finish time, use the already confirmed
+  // Turn start rather than a later transport timestamp.
+  const finishedAt = trim(stateSnapshot?.startedAt) || stateTiming.updatedAt || toIsoTime(nowMs());
   return {
     clearRuntimeMark: true,
     pending: false,
     channelState: {
+      // Backend `completed` is only the transport observation. Reaching this
+      // patch requires AUTHORITATIVE_DETAIL_APPLIED, so the message projection
+      // must expose the committed frontend terminal state.
       state: FrontendRunState.FRONTEND_COMPLETED,
     },
     thinkingFinishedAt: finishedAt,
@@ -243,7 +260,7 @@ export function buildFailedMessageRuntimePatch({
     clearRuntimeMark: true,
     pending: false,
     channelState: {
-      state: BackendChannelState.ERROR,
+      state: normalizeState(stateSnapshot?.state) || BackendChannelState.ERROR,
     },
     thinkingFinishedAt: finishedAt,
     thinkingFinishedAtPolicy: "if_missing",
@@ -291,11 +308,28 @@ export function resolveSessionRunMessageRuntimePatch({
   activeSession = {},
 } = {}) {
   const stateBelongsToActiveSession = isRunStateForActiveSession(stateSnapshot, activeSession);
+  const terminalOwnsMessage = terminalSnapshotOwnsMessage(stateSnapshot, messageItem, activeSession);
   const stateItem = resolveSessionRunStateForMessage({
     stateSnapshot,
     messageItem,
     activeSession,
   });
+  // A persisted backend stop observation is sufficient to settle the exact
+  // Turn's transient assistant projection, even though the Turn state itself
+  // deliberately remains USER_STOPPING until the authoritative session summary
+  // is applied.  Handling this before the generic in-flight branch prevents a
+  // just-created resend placeholder from being kept pending by USER_STOPPING.
+  if (
+    stateBelongsToActiveSession &&
+    terminalOwnsMessage &&
+    normalizeState(stateSnapshot?.backendState) === BackendChannelState.USER_STOPPED
+  ) {
+    return {
+      action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
+      reason: SESSION_RUN_MESSAGE_RUNTIME_REASON.RUNTIME_STATE_NO_LONGER_MATCHES,
+      patch: buildStoppedMessageRuntimePatch({ messageItem, stateSnapshot }),
+    };
+  }
   if (stateItem) {
     if (isFinalizedAssistantMessage(messageItem)) {
       return { action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.NONE };
@@ -314,6 +348,7 @@ export function resolveSessionRunMessageRuntimePatch({
       normalizeState(stateSnapshot?.backendState) === BackendChannelState.USER_STOPPED
     ) &&
     (
+      terminalOwnsMessage ||
       messageItem?.[SESSION_RUN_MESSAGE_RUNTIME_MARK] ||
       resolveSessionRunStateForMessage({
         stateSnapshot: { ...stateSnapshot, state: FrontendRunState.USER_STOPPING },
@@ -329,9 +364,17 @@ export function resolveSessionRunMessageRuntimePatch({
     };
   }
   if (
-    stateBelongsToActiveSession &&
-    normalizeState(stateSnapshot?.state) === BackendChannelState.ERROR &&
-    messageItem?.[SESSION_RUN_MESSAGE_RUNTIME_MARK]
+    stateBelongsToActiveSession && terminalOwnsMessage &&
+    [
+      BackendChannelState.ERROR,
+      BackendChannelState.EXPIRED,
+      BackendChannelState.NO_CONVERSATION,
+      FrontendRunState.ACTION_REQUEST_ERROR,
+      FrontendRunState.PROCESSING_ERROR,
+      FrontendRunState.COMPLETION_ERROR,
+      FrontendRunState.STOP_ERROR,
+      FrontendRunState.CANCELLED,
+    ].includes(normalizeState(stateSnapshot?.state))
   ) {
     return {
       action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
@@ -340,9 +383,11 @@ export function resolveSessionRunMessageRuntimePatch({
     };
   }
   if (
-    stateBelongsToActiveSession &&
+    stateBelongsToActiveSession && terminalOwnsMessage &&
     normalizeState(stateSnapshot?.state) === FrontendRunState.FRONTEND_COMPLETED &&
-    messageItem?.[SESSION_RUN_MESSAGE_RUNTIME_MARK]
+    // Completion authority is an explicit Turn fact. Never infer it from the
+    // mutable message projection (`pending`) or from transport completion.
+    stateSnapshot?.authority === TURN_RUNTIME_AUTHORITY.AUTHORITATIVE_DETAIL_APPLIED
   ) {
     return {
       action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
@@ -350,7 +395,7 @@ export function resolveSessionRunMessageRuntimePatch({
       patch: buildClearMessageRuntimePatch({ messageItem, stateSnapshot }),
     };
   }
-  if (isObsoletePendingAssistantMessage(messageItem, activeSession)) {
+  if (stateBelongsToActiveSession && isObsoletePendingAssistantMessage(messageItem, activeSession)) {
     return {
       action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
       reason: SESSION_RUN_MESSAGE_RUNTIME_REASON.OBSOLETE_PENDING_ASSISTANT,

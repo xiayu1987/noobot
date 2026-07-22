@@ -41,14 +41,6 @@ export function hasAssistantMessageWithContent(activeSession, content = "") {
   );
 }
 
-export function mergeRealtimeLogs(targetMessage, newLogs) {
-  if (!targetMessage || !newLogs?.length) return;
-  targetMessage.realtimeLogs = [
-    ...(targetMessage.realtimeLogs || []),
-    ...newLogs,
-  ].slice(-10);
-}
-
 export function findLatestAssistantMessageForRealtimeLogs({
   activeSession,
   normalizedDpId = "",

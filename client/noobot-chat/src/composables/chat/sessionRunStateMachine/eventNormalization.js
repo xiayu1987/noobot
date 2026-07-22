@@ -27,6 +27,31 @@ const LOCAL_EVENT_STATE_BY_TYPE = Object.freeze({
   [SESSION_RUN_EVENT.LOCAL_RESET]: FrontendRunState.IDLE,
 });
 
+export const TURN_RUNTIME_AUTHORITY = Object.freeze({
+  NONE: "none",
+  BACKEND_TERMINAL_OBSERVED: "backend_terminal_observed",
+  AUTHORITATIVE_DETAIL_APPLIED: "authoritative_detail_applied",
+  AUTHORITATIVE_DETAIL_FAILED: "authoritative_detail_failed",
+});
+
+function resolveRuntimeAuthority(type, wireState, rawEvent = {}) {
+  if (rawEvent?.authority) return trim(rawEvent.authority);
+  if (type === SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED) {
+    return TURN_RUNTIME_AUTHORITY.AUTHORITATIVE_DETAIL_APPLIED;
+  }
+  if (type === SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED) {
+    return TURN_RUNTIME_AUTHORITY.AUTHORITATIVE_DETAIL_FAILED;
+  }
+  if (
+    [SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
+      SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE].includes(type) &&
+    wireState === BackendChannelState.COMPLETED
+  ) {
+    return TURN_RUNTIME_AUTHORITY.BACKEND_TERMINAL_OBSERVED;
+  }
+  return TURN_RUNTIME_AUTHORITY.NONE;
+}
+
 function normalizeTimestamp(rawEvent = {}) {
   const numericTimestamp = Number(
     rawEvent?.timestamp || rawEvent?.updatedAtMs || rawEvent?.createdAtMs || 0,
@@ -83,6 +108,7 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
       : trim(rawEvent?.dialogProcessId),
     turnScopeId: turnMeta.turnScopeId,
     source: trim(rawEvent?.source || type),
+    authority: resolveRuntimeAuthority(type, wireState, rawEvent),
     authoritativeSnapshot: rawEvent?.authoritativeSnapshot === true,
     sourceEvent: trim(rawEvent?.sourceEvent),
     seq: Number(rawEvent?.sequence || rawEvent?.seq || 0),

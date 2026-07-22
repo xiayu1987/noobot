@@ -332,21 +332,24 @@ describe("ThinkingPanel", () => {
         sessionId: "session-1",
         dialogProcessId: "dialog-1",
         turnScopeId: "client-turn:duplicate-result",
-        processCompletedToolLogs: [
+        toolTimeline: [
           {
-            event: "tool_result",
-            type: "tool_result",
-            text: "read_file ok=true",
-            detailText: "full file content",
+            key: "call:call-duplicate",
             toolCallId: "call-duplicate",
-            ts: "2026-01-01T00:00:03.000Z",
-          },
-          {
-            event: "tool_result",
-            type: "tool_result",
-            text: "a differently formatted result",
-            tool_call_id: "call-duplicate",
-            ts: "2026-01-01T00:00:04.000Z",
+            tool: "read_file",
+            status: "completed",
+            resultEvent: {
+              eventId: "result-call-duplicate",
+              sequence: 2,
+              log: {
+                event: "tool_result",
+                type: "tool_result",
+                text: "read_file ok=true",
+                detailText: "full file content",
+                toolCallId: "call-duplicate",
+                ts: "2026-01-01T00:00:03.000Z",
+              },
+            },
           },
         ],
       },

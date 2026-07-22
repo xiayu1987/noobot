@@ -4,6 +4,7 @@ import {
   MESSAGE_EVENT_REDUCE_RESULT,
   reduceMessageEvent,
 } from "../../../../../src/composables/chat/chatEngine/messageEventReducer";
+import { selectToolTimeline, selectToolTimelineLogs } from "../../../../../src/composables/chat/chatEngine/toolTimeline";
 
 function event(overrides = {}) {
   return {
@@ -25,10 +26,11 @@ describe("reduceMessageEvent", () => {
   it("applies text and no-text tool lifecycle events", () => {
     const target = message();
     expect(reduce(target, event()).result).toBe(MESSAGE_EVENT_REDUCE_RESULT.APPLIED);
-    expect(target.realtimeLogs[0]).toMatchObject({ type: "tool_call", toolCallId: "call-1" });
+    expect(selectToolTimelineLogs(target)[0]).toMatchObject({ type: "tool_call", toolCallId: "call-1" });
     expect(reduce(target, event({ eventId: "evt-2", eventType: "tool_call_end", sequence: 2, result: { ok: true } })).result)
       .toBe(MESSAGE_EVENT_REDUCE_RESULT.APPLIED);
-    expect(target.realtimeLogs[1].type).toBe("tool_result");
+    expect(selectToolTimelineLogs(target)[1].type).toBe("tool_result");
+    expect(selectToolTimeline(target)).toHaveLength(1);
     expect(reduce(target, event({ eventId: "evt-3", eventType: "llm_delta", sequence: 3, text: "hello" })).result)
       .toBe(MESSAGE_EVENT_REDUCE_RESULT.APPLIED);
     expect(target.content).toBe("hello");

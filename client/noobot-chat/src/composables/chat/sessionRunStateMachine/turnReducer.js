@@ -20,6 +20,7 @@ export const TURN_TRANSITION_REASON = Object.freeze({
 const FINAL_STATES = new Set([
   FrontendRunState.FRONTEND_COMPLETED,
   FrontendRunState.USER_STOP_COMPLETED,
+  FrontendRunState.CANCELLED,
   FrontendRunState.ACTION_REQUEST_ERROR,
   FrontendRunState.PROCESSING_ERROR,
   FrontendRunState.COMPLETION_ERROR,
@@ -124,6 +125,7 @@ function targetState(current = {}, event = {}) {
     // authoritative lifecycle protocol. Once a lifecycle envelope owns the
     // Turn, transport state can no longer move a business phase.
     if (current.authoritativeLifecycle !== true) {
+      if (backendState === FrontendRunState.CANCELLED) return FrontendRunState.CANCELLED;
       if (backendState === BackendChannelState.SENDING) return FrontendRunState.PROCESSING;
       if (backendState === BackendChannelState.COMPLETED) return FrontendRunState.FRONTEND_COMPLETION_REQUESTING;
       if (backendState === BackendChannelState.USER_STOPPED || backendState === BackendChannelState.STOPPING) {

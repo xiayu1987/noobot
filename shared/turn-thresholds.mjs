@@ -34,7 +34,7 @@ function deepFreeze(value) {
 export const TURN_THRESHOLDS = deepFreeze({
   agent: {
     // Main tool-call loop maximum before loop-limit handling starts.
-    maxToolLoopTurns: 600,
+    maxToolLoopTurns: 1000,
 
     // Extra turns allowed after maxToolLoopTurns for finalization/self-correction.
     toolLoopLimitBufferTurns: 5,

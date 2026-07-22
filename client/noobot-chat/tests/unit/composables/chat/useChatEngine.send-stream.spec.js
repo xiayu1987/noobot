@@ -17,6 +17,7 @@ import {
   RoleEnum,
   StreamEventEnum,
 } from "../../../../src/shared/constants/chatConstants";
+import { selectToolTimelineLogs } from "../../../../src/composables/chat/chatEngine/toolTimeline";
 
 describe("useChatEngine.send-stream", () => {
   it("sends the locally recorded thinking start so refresh can hydrate the duration", async () => {
@@ -181,7 +182,7 @@ describe("useChatEngine.send-stream", () => {
     expect(deps.notify).not.toHaveBeenCalledWith(expect.objectContaining({
       message: "chat.sessionStateOutOfSync",
     }));
-    expect(assistant?.realtimeLogs).toEqual([
+    expect(selectToolTimelineLogs(assistant)).toEqual([
       expect.objectContaining({ event: "tool_call", text: expect.stringContaining("running tool") }),
     ]);
     expect(sending.value).toBe(false);
@@ -237,7 +238,7 @@ describe("useChatEngine.send-stream", () => {
     const assistant = assistantMessage(activeSession);
     expect(result).toBe(true);
     expect(assistant?.dialogProcessId).toBe("dp-missing-turn");
-    expect(assistant?.realtimeLogs).toEqual([
+    expect(selectToolTimelineLogs(assistant)).toEqual([
       expect.objectContaining({ text: expect.stringContaining("thinking without frontend turn scope") }),
     ]);
     expect(sending.value).toBe(false);
@@ -406,7 +407,9 @@ describe("useChatEngine.send-stream", () => {
     }
 
     const assistant = assistantMessage(activeSession);
-    expect(assistant?.channelState).toMatchObject({ state: BackendChannelState.COMPLETED });
+    // The backend observation triggers detail hydration; once that authoritative
+    // detail is applied the message exposes the committed frontend terminal.
+    expect(assistant?.channelState).toMatchObject({ state: FrontendRunState.FRONTEND_COMPLETED });
     expect(assistant?.channelState?.createdAt).toBeUndefined();
     expect(assistant?.channelState?.createdAtMs).toBeUndefined();
     expect(assistant?.thinkingStartedAt).toBeUndefined();

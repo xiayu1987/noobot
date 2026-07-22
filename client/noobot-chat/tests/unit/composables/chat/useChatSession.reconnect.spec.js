@@ -17,6 +17,8 @@ import { useChatStore } from "../../../../src/shared/stores/useChatStore";
 import { classifyRealtimeLog } from "../../../../src/app/state/sessionMessageState";
 import { logResendDebug, setResendDebugLogSink } from "../../../../src/composables/chat/debug/resendDebugLogger";
 import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
+import { selectToolTimeline, selectToolTimelineLogs } from "../../../../src/composables/chat/chatEngine/toolTimeline";
+import { selectActivityTimelineLogs } from "../../../../src/composables/chat/chatEngine/activityTimeline";
 import {
   BackendChannelState,
   FrontendRunState,
@@ -127,11 +129,11 @@ describe("useChatSession reconnect replay", () => {
     const restoredAssistant = store.sessions[0].messages.find(
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-live",
     );
-    expect(restoredAssistant.realtimeLogs).toEqual([
+    expect(selectToolTimelineLogs(restoredAssistant)).toEqual([
       expect.objectContaining({ type: "tool_call", toolCallId: "call-live" }),
       expect.objectContaining({ type: "tool_result", toolCallId: "call-live" }),
     ]);
-    expect(restoredAssistant.executionLogTotal).toBe(2);
+    expect(selectToolTimeline(restoredAssistant)).toHaveLength(1);
   });
 
   it("projects a stopped-turn continuation by turnScopeId when both assistants share a dialogProcessId", async () => {
@@ -203,7 +205,7 @@ describe("useChatSession reconnect replay", () => {
     expect(stoppedAssistant.realtimeLogs).toEqual([
       { type: "thinking", text: "old thinking" },
     ]);
-    expect(continuedAssistant.realtimeLogs).toEqual([
+    expect(selectActivityTimelineLogs(continuedAssistant)).toEqual([
       expect.objectContaining({ text: "new thinking" }),
     ]);
     expect(continuedAssistant.messageEventState.consumedEventIds).toEqual([
@@ -211,7 +213,7 @@ describe("useChatSession reconnect replay", () => {
     ]);
   });
 
-  it("reconnect DONE with dialogProcessId only patches that assistant turn", async () => {
+  it("reconnect DONE patches only the assistant identified by turnScopeId", async () => {
     const store = useChatStore();
     store.sessions = [
       {
@@ -222,11 +224,12 @@ describe("useChatSession reconnect replay", () => {
         loaded: true,
         messages: [
           { role: RoleEnum.USER, content: "old q" },
-          { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-old", content: "old keep" },
+          { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-old", turnScopeId: "turn-old", content: "old keep" },
           { role: RoleEnum.USER, content: "new q" },
           {
             role: RoleEnum.ASSISTANT,
             dialogProcessId: "dp-new",
+            turnScopeId: "turn-new",
             content: "",
             pending: true,
             statusLabel: "",
@@ -254,18 +257,21 @@ describe("useChatSession reconnect replay", () => {
         data: {
           sessionId: "s-1",
           dialogProcessId: "dp-new",
+          turnScopeId: "turn-new",
           messages: [
             { role: RoleEnum.USER, content: "old q" },
             // old answer content changed in snapshot: should not overwrite current turn dp-old.
             {
               role: RoleEnum.ASSISTANT,
               dialogProcessId: "dp-old",
+              turnScopeId: "turn-old",
               content: "old overwritten by snapshot",
             },
             { role: RoleEnum.USER, content: "new q" },
             {
               role: RoleEnum.ASSISTANT,
               dialogProcessId: "dp-new",
+              turnScopeId: "turn-new",
               content: "new final answer",
               modelAlias: "alias-1",
             },
@@ -277,6 +283,7 @@ describe("useChatSession reconnect replay", () => {
         data: {
           sessionId: "s-1",
           dialogProcessId: "dp-new",
+          turnScopeId: "turn-new",
           state: "completed",
           seq: 9,
         },
@@ -289,14 +296,31 @@ describe("useChatSession reconnect replay", () => {
         ok: true,
         exists: true,
         sessionId: "s-1",
-        sessions: [],
+        sessions: [
+          {
+            sessionId: "s-1",
+            messages: [
+              { role: RoleEnum.USER, content: "old q" },
+              { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-old", turnScopeId: "turn-old", content: "old keep" },
+              { role: RoleEnum.USER, content: "new q" },
+              {
+                role: RoleEnum.ASSISTANT,
+                dialogProcessId: "dp-new",
+                turnScopeId: "turn-new",
+                content: "new final answer",
+                modelAlias: "alias-1",
+              },
+            ],
+          },
+        ],
         messages: [
           { role: RoleEnum.USER, content: "old q" },
-          { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-old", content: "old keep" },
+          { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-old", turnScopeId: "turn-old", content: "old keep" },
           { role: RoleEnum.USER, content: "new q" },
           {
             role: RoleEnum.ASSISTANT,
             dialogProcessId: "dp-new",
+            turnScopeId: "turn-new",
             content: "new final answer",
             modelAlias: "alias-1",
           },
@@ -333,12 +357,12 @@ describe("useChatSession reconnect replay", () => {
     expect(oldAssistant.content).toBe("old keep");
     expect(newAssistant.content).toBe("new final answer");
     expect(newAssistant.modelAlias).toBe("alias-1");
-    expect(newAssistant.pending).toBe(false);
-    expect(authFetch).toHaveBeenCalledWith("/api/internal/session/u-1/s-1");
-    expect(session.sending.value).toBe(false);
-    expect(session.canStop.value).toBe(false);
-    expect(store.pendingInteractionRequest).toBeNull();
-    expect(store.interactionSubmitting).toBe(false);
+    // A DONE message snapshot owns durable content only. Without an
+    // authoritative currentRun/detail lifecycle it must not manufacture
+    // authoritative_detail_applied or mutate runtime/pending state.
+    expect(authFetch).not.toHaveBeenCalled();
+    expect(store.turnRuntimeRegistry.sessions).toEqual({});
+    expect(newAssistant.pending).toBe(true);
   });
 
 

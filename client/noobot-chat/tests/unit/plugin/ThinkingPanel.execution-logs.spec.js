@@ -44,7 +44,7 @@ describe("ThinkingPanel", () => {
 
   
 
-  it("prefers process-derived execution fields while keeping legacy fallback", () => {
+  it("migrates the isolated process projection without mixing legacy fields", () => {
     const wrapper = mountThinkingPanel({
       role: "assistant",
       pending: false,
@@ -58,7 +58,7 @@ describe("ThinkingPanel", () => {
 
     expect(wrapper.find(".execution-log-line").text()).toContain("process-live");
     expect(wrapper.text()).not.toContain("legacy-live");
-    expect(wrapper.find("button").text()).toContain("1");
+    expect(wrapper.find("button").text()).toContain("2");
   });
 
   it("uses replayed legacy logs when the refreshed process projection is still empty", () => {
@@ -151,8 +151,8 @@ describe("ThinkingPanel", () => {
     });
     const lines = wrapper.findAll(".execution-log-line");
     expect(lines).toHaveLength(10);
-    expect(lines[0].text()).toBe("cmd-3");
-    expect(lines[9].text()).toBe("cmd-12");
+    expect(lines[0].text()).toBe("返回：cmd-3");
+    expect(lines[9].text()).toBe("返回：cmd-12");
     expect(wrapper.find("button").text()).toContain("12");
   });
 
@@ -225,7 +225,7 @@ describe("ThinkingPanel", () => {
     expect(wrapper.findAll(".execution-log-line")).toHaveLength(0);
   });
 
-  it("does not render completed tool logs before assistant turnScopeId is persisted", () => {
+  it("can render isolated legacy history without using dialogProcessId for turn ownership", () => {
     const wrapper = mountThinkingPanel({
       role: "assistant",
       pending: false,
@@ -239,8 +239,8 @@ describe("ThinkingPanel", () => {
     });
 
     expect(wrapper.text()).not.toContain("previous completed tool");
-    expect(wrapper.text()).not.toContain("previous process tool");
-    expect(wrapper.findAll(".execution-log-line")).toHaveLength(0);
+    expect(wrapper.text()).toContain("previous process tool");
+    expect(wrapper.findAll(".execution-log-line")).toHaveLength(1);
   });
 
   it("renders completed tool logs after assistant turnScopeId is persisted", () => {

@@ -5,9 +5,9 @@
 
 /** Initialize event-consumer state without interpreting any event facts. */
 export function initializeMessageEventState(message = {}) {
-  if (!Array.isArray(message.realtimeLogs)) message.realtimeLogs = [];
+  if (!Array.isArray(message.toolTimeline)) message.toolTimeline = [];
+  if (!Array.isArray(message.activityTimeline)) message.activityTimeline = [];
   if (typeof message.content !== "string") message.content = String(message.content || "");
-  if (!Number.isFinite(Number(message.executionLogTotal))) message.executionLogTotal = 0;
   if (!message.messageEventState || typeof message.messageEventState !== "object") {
     message.messageEventState = { lastSequence: 0, consumedEventIds: [] };
   }

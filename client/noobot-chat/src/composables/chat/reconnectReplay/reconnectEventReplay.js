@@ -17,6 +17,7 @@ export async function applyReconnectEventReplay({
   consumeReplayCacheForSession,
   applyReconnectMessagesToActiveSession,
   applyChannelState,
+  hasAuthoritativeCurrentRun,
   applyTurnLifecycleEnvelope,
   applyTurnLifecycleSnapshot,
   applyExecutionSnapshot,
@@ -33,7 +34,26 @@ export async function applyReconnectEventReplay({
     return applyTurnLifecycleEnvelope?.(data || {});
   }
   if (_trimStr(event) === StreamEventEnum.CHANNEL_STATE) {
-    return applyChannelState(data || {});
+    const stateData = data || {};
+    const sessionId = _trimStr(stateData.sessionId);
+    const turnScopeId = _trimStr(stateData.turnScopeId || stateData.messageEvent?.turnScopeId);
+    const state = _trimStr(stateData.state || stateData.channelState);
+    const terminalStates = new Set([
+      BackendChannelState.COMPLETED,
+      BackendChannelState.ERROR,
+      BackendChannelState.USER_STOPPED,
+      BackendChannelState.CANCELLED,
+      BackendChannelState.EXPIRED,
+      BackendChannelState.NO_CONVERSATION,
+    ]);
+    const authoritativeSnapshot =
+      sessionId && turnScopeId && terminalStates.has(state)
+        ? hasAuthoritativeCurrentRun?.({ sessionId, turnScopeId }) === true
+        : stateData.authoritativeSnapshot === true;
+    return applyChannelState({
+      ...stateData,
+      ...(terminalStates.has(state) ? { authoritativeSnapshot } : {}),
+    });
   }
 
   const dialogProcessId = _trimStr(data?.dialogProcessId);
@@ -45,12 +65,17 @@ export async function applyReconnectEventReplay({
       turnScopeId,
     });
     if (_trimStr(event) === StreamEventEnum.DONE) {
+      const authoritativeSnapshot = hasAuthoritativeCurrentRun?.({
+        sessionId,
+        turnScopeId,
+      }) === true;
       await applyChannelState({
         ...(data || {}),
         sessionId,
         dialogProcessId,
         state: BackendChannelState.COMPLETED,
         sourceEvent: "done",
+        authoritativeSnapshot,
       });
     }
     return;
@@ -66,13 +91,18 @@ export async function applyReconnectEventReplay({
         dialogProcessId,
         state: BackendChannelState.COMPLETED,
         sourceEvent: "done",
+        // A dialog-only payload cannot prove Turn ownership and therefore
+        // cannot grant lifecycle completion authority.
+        authoritativeSnapshot: false,
       });
     }
     return;
   }
 
   if (sessionId) {
-    const replayKey = normalizeReplayCacheKey(dialogProcessId, sessionId);
+    // New writes are physically isolated by canonical turn ownership. Legacy
+    // dialog/session keys remain read-only compatible in replayCache.js.
+    const replayKey = normalizeReplayCacheKey(dialogProcessId, sessionId, turnScopeId);
     if (!replayCache[sessionId]) replayCache[sessionId] = {};
     if (!replayCache[sessionId][replayKey]) replayCache[sessionId][replayKey] = [];
     replayCache[sessionId][replayKey].push({ event, data });

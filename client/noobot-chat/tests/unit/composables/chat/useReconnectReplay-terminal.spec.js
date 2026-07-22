@@ -17,21 +17,23 @@ afterEach(() => {
 
 describe("useReconnectReplay", () => {
   it("EV-06/FN-01: channel_state error finalizes terminal state", async () => {
-    const { api, refs, mocks } = createFixture();
+    const { api, refs, mocks } = createFixture({ currentRun: { turnScopeId: "turn-e" } });
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-e", content: "", pending: true },
+      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-e", turnScopeId: "turn-e", content: "", pending: true },
     ];
 
     await api.applyReconnectEvent(StreamEventEnum.ERROR, {
       sessionId: "s-1",
       dialogProcessId: "dp-e",
+      turnScopeId: "turn-e",
       seq: 2,
       error: "boom",
     });
     await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
       sessionId: "s-1",
       dialogProcessId: "dp-e",
+      turnScopeId: "turn-e",
       state: "error",
       seq: 3,
     });
@@ -52,15 +54,16 @@ describe("useReconnectReplay", () => {
   });
 
   it("EV-04a: DONE without channel_state patches overlay clears replay sending state", async () => {
-    const { api, refs, mocks } = createFixture();
+    const { api, refs, mocks } = createFixture({ currentRun: { turnScopeId: "turn-done-only" } });
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-done-only", content: "A", pending: true },
+      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-done-only", turnScopeId: "turn-done-only", content: "A", pending: true },
     ];
 
     await api.applyReconnectEvent(StreamEventEnum.DONE, {
       sessionId: "s-1",
       dialogProcessId: "dp-done-only",
+      turnScopeId: "turn-done-only",
       seq: 2,
     });
 
@@ -82,20 +85,22 @@ describe("useReconnectReplay", () => {
   });
 
   it("EV-04: channel_state completed clears replay sending state", async () => {
-    const { api, refs, mocks } = createFixture();
+    const { api, refs, mocks } = createFixture({ currentRun: { turnScopeId: "turn-done" } });
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-done", content: "A", pending: true },
+      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-done", turnScopeId: "turn-done", content: "A", pending: true },
     ];
 
     await api.applyReconnectEvent(StreamEventEnum.DONE, {
       sessionId: "s-1",
       dialogProcessId: "dp-done",
+      turnScopeId: "turn-done",
       seq: 2,
     });
     await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
       sessionId: "s-1",
       dialogProcessId: "dp-done",
+      turnScopeId: "turn-done",
       state: "completed",
       seq: 3,
     });
@@ -123,7 +128,7 @@ describe("useReconnectReplay", () => {
     ["empty detail", "empty"],
     ["mismatched detail identity", "mismatch"],
   ])("EV-04b: %s releases the global lock after summary failure", async (_label, mode) => {
-    const { api, refs, mocks } = createFixture();
+    const { api, refs, mocks } = createFixture({ currentRun: { turnScopeId: "turn-stopped" } });
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
       {
@@ -162,20 +167,22 @@ describe("useReconnectReplay", () => {
   });
 
   it("EV-05: channel_state stopped sets stopped status", async () => {
-    const { api, refs, mocks } = createFixture();
+    const { api, refs, mocks } = createFixture({ currentRun: { turnScopeId: "turn-stopped" } });
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-stopped", content: "A", pending: true },
+      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-stopped", turnScopeId: "turn-stopped", content: "A", pending: true },
     ];
 
     await api.applyReconnectEvent(StreamEventEnum.USER_STOPPED, {
       sessionId: "s-1",
       dialogProcessId: "dp-stopped",
+      turnScopeId: "turn-stopped",
       seq: 2,
     });
     await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
       sessionId: "s-1",
       dialogProcessId: "dp-stopped",
+      turnScopeId: "turn-stopped",
       state: "user_stopped",
       seq: 3,
     });

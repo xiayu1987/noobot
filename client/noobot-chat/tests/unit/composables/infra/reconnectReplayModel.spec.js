@@ -107,7 +107,7 @@ describe("reconnectReplayModel", () => {
     expect(findReconnectDoneEnvelopeWithMessages(envelopes)?.event).toBe(StreamEventEnum.DONE);
   });
 
-  it("patchMessageObjectPreservingUiState preserves running thinking timing fields", () => {
+  it("patchMessageObjectPreservingUiState does not overwrite runtime state from an unscoped detail patch", () => {
     const startedAt = "2026-06-22T10:00:00.000Z";
     const target = {
       role: "assistant",
@@ -131,7 +131,7 @@ describe("reconnectReplayModel", () => {
     expect(target.pending).toBe(true);
   });
 
-  it("patchMessageObjectPreservingUiState keeps non-degrading fields and UI state", () => {
+  it("patchMessageObjectPreservingUiState keeps non-degrading content and transfer fields", () => {
     const envelope = {
       protocol: "noobot.semantic-transfer",
       version: 1,
@@ -163,12 +163,11 @@ describe("reconnectReplayModel", () => {
     expect(target.content).toBe("existing content");
     expect(target.attachments).toHaveLength(1);
     expect(target.modelRuns).toHaveLength(1);
-    expect(target.completedToolLogs).toHaveLength(1);
-    expect(target.realtimeLogs).toHaveLength(1);
+    expect(target.completedToolLogs).toEqual([{ id: 1 }]);
+    expect(target.realtimeLogs).toEqual([{ id: 1 }]);
     expect(target.transferEnvelopes).toEqual([envelope]);
-    expect(target.thinkingOpenNames).toEqual(["thinking-panel"]);
-    expect(target.expandedDetailLogKeys).toEqual(["k1"]);
-    expect(target.statusLabel).toBe("generated");
+    // Pure UI state is owned by turnUiStore and is not a snapshot concern.
+    expect(target.statusLabel).toBe("pending");
   });
 
   it("patchMessageObjectPreservingUiState merges incoming transfer envelopes", () => {
@@ -253,7 +252,7 @@ describe("reconnectReplayModel", () => {
     expect(target.processExecutionLogTotal).toBe(2);
   });
 
-  it("patchMessageObjectPreservingUiState clears assets when an unscoped snapshot belongs to another process", () => {
+  it("patchMessageObjectPreservingUiState rejects an unscoped snapshot for an already scoped assistant", () => {
     const target = {
       role: RoleEnum.ASSISTANT,
       dialogProcessId: "dp-old",
@@ -268,9 +267,9 @@ describe("reconnectReplayModel", () => {
       content: "different process snapshot",
     });
 
-    expect(target.turnScopeId).toBeUndefined();
-    expect(target.realtimeLogs).toEqual([]);
-    expect(target.completedToolLogs).toEqual([]);
+    expect(target.turnScopeId).toBe("turn-old");
+    expect(target.realtimeLogs).toEqual([{ id: "old-realtime" }]);
+    expect(target.completedToolLogs).toEqual([{ id: "old-tool" }]);
   });
 
   it("patchMessageObjectPreservingUiState keeps running assistant turnScopeId for stop after refresh", () => {

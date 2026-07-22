@@ -4,7 +4,13 @@
  */
 import { describe, expect, it } from "vitest";
 import { applyReconnectEnvelopeToTargetMessage } from "../../../../src/composables/chat/reconnectReplay/batchReplay";
-import { reduceMessageEvent } from "../../../../src/composables/chat/chatEngine/messageEventReducer";
+import {
+  dispatchTurnEnvelope,
+  hydrateTurnSnapshot,
+  TURN_PROJECTION_SOURCE,
+} from "../../../../src/composables/chat/chatEngine/turnProjectionStore";
+import { selectToolTimelineLogs } from "../../../../src/composables/chat/chatEngine/toolTimeline";
+import { selectActivityTimelineLogs } from "../../../../src/composables/chat/chatEngine/activityTimeline";
 
 const classify = (event) => ({
   ...event,
@@ -41,7 +47,6 @@ describe("reconnect authoritative message event replay", () => {
       messageId: "message-1",
       turnScopeId: "turn-1",
       content: "",
-      realtimeLogs: [],
     };
     const start = authoritative("tool_call_start", 1, {
       tool: "read_file",
@@ -58,11 +63,19 @@ describe("reconnect authoritative message event replay", () => {
     applyReconnectEnvelopeToTargetMessage({ envelope: start, targetMessage, classifyRealtimeLog: classify });
     applyReconnectEnvelopeToTargetMessage({ envelope: end, targetMessage, classifyRealtimeLog: classify });
 
-    expect(targetMessage.realtimeLogs).toEqual([
+    expect(selectToolTimelineLogs(targetMessage)).toEqual([
       expect.objectContaining({ type: "tool_call", toolCallId: "call-1" }),
       expect.objectContaining({ type: "tool_result", toolCallId: "call-1" }),
     ]);
-    expect(targetMessage.executionLogTotal).toBe(2);
+    expect(targetMessage.toolTimeline).toEqual([
+      expect.objectContaining({
+        toolCallId: "call-1",
+        tool: "read_file",
+        status: "completed",
+        call: expect.objectContaining({ eventId: "event-1", sequence: 1 }),
+        resultEvent: expect.objectContaining({ eventId: "event-2", sequence: 2 }),
+      }),
+    ]);
     expect(targetMessage.messageEventState).toMatchObject({ lastSequence: 2 });
   });
 
@@ -85,17 +98,100 @@ describe("reconnect authoritative message event replay", () => {
     for (const envelope of events) {
       // Both live transports use this canonical consumer after independently
       // resolving their target message; replay additionally unwraps transport.
-      reduceMessageEvent({ targetMessage: normalLive, event: envelope.data.event, classifyRealtimeLog: classify });
-      reduceMessageEvent({ targetMessage: reconnectLive, event: envelope.data.event, classifyRealtimeLog: classify });
+      dispatchTurnEnvelope({
+        targetMessage: normalLive,
+        envelope: envelope.data.event,
+        classifyRealtimeLog: classify,
+        source: TURN_PROJECTION_SOURCE.NORMAL_LIVE,
+      });
+      dispatchTurnEnvelope({
+        targetMessage: reconnectLive,
+        envelope: envelope.data.event,
+        classifyRealtimeLog: classify,
+        source: TURN_PROJECTION_SOURCE.RECONNECT_LIVE,
+      });
       applyReconnectEnvelopeToTargetMessage({ envelope, targetMessage: historyReplay, classifyRealtimeLog: classify });
     }
 
-    const observableState = ({ content, realtimeLogs, executionLogTotal, messageEventState }) => ({
-      content, realtimeLogs, executionLogTotal, messageEventState,
+    const observableState = ({ content, toolTimeline, activityTimeline, messageEventState }) => ({
+      content, toolTimeline, activityTimeline, messageEventState,
     });
     expect(observableState(reconnectLive)).toEqual(observableState(normalLive));
     expect(observableState(historyReplay)).toEqual(observableState(normalLive));
-    expect(normalLive).toMatchObject({ content: "hello world", executionLogTotal: 2 });
+    expect(normalLive).toMatchObject({ content: "hello world" });
+    expect(selectToolTimelineLogs(normalLive)).toHaveLength(2);
+  });
+
+  it("rejects cross-turn projection even when history target has no session id", () => {
+    const targetMessage = { messageId: "message-1", turnScopeId: "turn-stopped" };
+    const result = dispatchTurnEnvelope({
+      targetMessage,
+      envelope: authoritative("llm_delta", 1, { turnScopeId: "turn-continuation", text: "wrong" }).data.event,
+      classifyRealtimeLog: classify,
+      source: TURN_PROJECTION_SOURCE.HISTORY_REPLAY,
+    });
+
+    expect(result.result).toBe("message_identity_conflict");
+    expect(targetMessage.content).toBeUndefined();
+  });
+
+  it("does not allow an older snapshot boundary to replace newer live projection", () => {
+    const targetMessage = { messageId: "message-1", turnScopeId: "turn-1" };
+    for (const sequence of [1, 2]) {
+      dispatchTurnEnvelope({
+        targetMessage,
+        envelope: authoritative("llm_delta", sequence, { text: String(sequence) }).data.event,
+        classifyRealtimeLog: classify,
+      });
+    }
+    const result = hydrateTurnSnapshot({
+      targetMessage,
+      snapshot: { sessionId: "session-1", turnScopeId: "turn-1", throughSequence: 1 },
+    });
+
+    expect(result).toMatchObject({ applied: false, result: "snapshot_stale", currentSequence: 2 });
+    expect(targetMessage.content).toBe("12");
+  });
+
+  it("buffers sequence gaps so out-of-order replay converges with ordered live state", () => {
+    const ordered = { messageId: "message-1", turnScopeId: "turn-1" };
+    const reordered = { messageId: "message-1", turnScopeId: "turn-1" };
+    const events = [
+      authoritative("llm_delta", 1, { text: "A" }).data.event,
+      authoritative("tool_call_start", 2, { tool: "read_file", toolCallId: "call-1", args: {} }).data.event,
+      authoritative("tool_call_end", 3, { tool: "read_file", toolCallId: "call-1", result: { ok: true } }).data.event,
+      authoritative("llm_delta", 4, { text: "B" }).data.event,
+    ];
+    for (const envelope of events) dispatchTurnEnvelope({ targetMessage: ordered, envelope, classifyRealtimeLog: classify });
+    for (const envelope of [events[0], events[2], events[1], events[3], events[2]]) {
+      dispatchTurnEnvelope({ targetMessage: reordered, envelope, classifyRealtimeLog: classify });
+    }
+    const observable = ({ content, toolTimeline, activityTimeline, messageEventState }) => ({
+      content, toolTimeline, activityTimeline,
+      messageEventState: {
+        lastSequence: messageEventState.lastSequence,
+        consumedEventIds: messageEventState.consumedEventIds,
+      },
+    });
+    expect(observable(reordered)).toEqual(observable(ordered));
+  });
+
+  it("keeps stopped and continuation turns isolated across refresh replay", () => {
+    const stopped = { sessionId: "session-1", messageId: "stopped", turnScopeId: "turn-stopped", content: "old" };
+    const continuation = { sessionId: "session-1", messageId: "message-1", turnScopeId: "turn-1" };
+    const toolCall = authoritative("tool_call_start", 1, {
+      tool: "read_file", toolCallId: "call-continue", args: {}, dialogProcessId: "shared-dialog",
+    }).data.event;
+    const conflict = dispatchTurnEnvelope({ targetMessage: stopped, envelope: toolCall, classifyRealtimeLog: classify });
+    dispatchTurnEnvelope({ targetMessage: continuation, envelope: toolCall, classifyRealtimeLog: classify });
+    const staleSnapshot = hydrateTurnSnapshot({
+      targetMessage: continuation,
+      snapshot: { sessionId: "session-1", turnScopeId: "turn-1", throughSequence: 0 },
+    });
+    expect(conflict.result).toBe("message_identity_conflict");
+    expect(stopped.toolTimeline).toBeUndefined();
+    expect(selectToolTimelineLogs(continuation)).toHaveLength(1);
+    expect(staleSnapshot.result).toBe("snapshot_stale");
   });
 
   it("does not mistake same-sequence legacy and authoritative events for the same fact", () => {
@@ -121,7 +217,10 @@ describe("reconnect authoritative message event replay", () => {
     // producers provide a shared eventId/sourceEventId, neither fact may be
     // silently discarded merely because their sequence happens to match.
     expect(targetMessage.content).toBe("canonical duplicate");
-    expect(targetMessage.realtimeLogs).toHaveLength(2);
-    expect(targetMessage.executionLogTotal).toBe(2);
+    expect([
+      ...selectToolTimelineLogs(targetMessage),
+      ...selectActivityTimelineLogs(targetMessage),
+      ...(targetMessage.realtimeLogs || []), // legacy THINKING until its adapter is migrated
+    ]).toHaveLength(2);
   });
 });

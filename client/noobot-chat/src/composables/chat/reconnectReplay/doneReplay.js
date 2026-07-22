@@ -8,29 +8,24 @@ import { findVisibleLastMessage } from "../../infra/messageModel";
 import { nowIso } from "../../infra/timeFields";
 import { findReconnectDoneEnvelopeWithMessages } from "../../infra/reconnectReplayModel";
 import { sanitizeExecutionLogForDisplay } from "../chatEngine/utils";
+import { buildToolTimelineFromLegacyLogs, mergeToolTimelines } from "../chatEngine/toolTimeline";
 import { _trimStr } from "./utils";
-import {
-  findLatestAssistantMessageForRealtimeLogs,
-  mergeRealtimeLogs,
-} from "./messageLookup";
-import { getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity";
+import { getMessageDialogProcessId, getMessageRole, getMessageTurnScopeId } from "../../infra/messageIdentity";
 import { RoleEnum } from "../../../shared/constants/chatConstants";
+import { promoteSessionTurnUiStates } from "../chatEngine/turnUiStore";
 
-function patchDoneAssistantByDialogProcess({ activeSession, foldedSessionMessages = [], dialogProcessId = "" } = {}) {
-  const normalizedDialogProcessId = _trimStr(dialogProcessId);
-  if (!activeSession?.value || !normalizedDialogProcessId) return;
+function patchDoneAssistantByTurn({ activeSession, foldedSessionMessages = [], turnScopeId = "" } = {}) {
+  const normalizedTurnScopeId = _trimStr(turnScopeId);
+  if (!activeSession?.value || !normalizedTurnScopeId) return;
   const doneAssistant = [...foldedSessionMessages].reverse().find((messageItem) =>
     getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
-    getMessageDialogProcessId(messageItem) === normalizedDialogProcessId,
+    getMessageTurnScopeId(messageItem) === normalizedTurnScopeId,
   );
   if (!doneAssistant) return;
-  const matchingAssistants = (activeSession.value.messages || []).filter((messageItem) =>
+  const targetAssistant = (activeSession.value.messages || []).find((messageItem) =>
     getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
-    getMessageDialogProcessId(messageItem) === normalizedDialogProcessId,
+    getMessageTurnScopeId(messageItem) === normalizedTurnScopeId,
   );
-  const targetAssistant = matchingAssistants.find((messageItem) => !_trimStr(messageItem?.content)) ||
-    matchingAssistants[0] ||
-    null;
   if (!targetAssistant) return;
   const content = _trimStr(doneAssistant?.content);
   if (content) targetAssistant.content = content;
@@ -38,11 +33,6 @@ function patchDoneAssistantByDialogProcess({ activeSession, foldedSessionMessage
   targetAssistant.modelName = _trimStr(doneAssistant?.modelName) || targetAssistant.modelName;
   if (Array.isArray(doneAssistant?.modelRuns)) targetAssistant.modelRuns = doneAssistant.modelRuns;
   targetAssistant.tool_calls = Array.isArray(doneAssistant?.tool_calls) ? doneAssistant.tool_calls : [];
-  activeSession.value.messages = (activeSession.value.messages || []).filter((messageItem) =>
-    messageItem === targetAssistant ||
-    getMessageRole(messageItem) !== RoleEnum.ASSISTANT ||
-    getMessageDialogProcessId(messageItem) !== normalizedDialogProcessId,
-  );
 }
 
 export function applyDoneMessagesFromReconnect({
@@ -53,7 +43,6 @@ export function applyDoneMessagesFromReconnect({
   foldMessagesForView,
   applyCompletedToolLogsToMessages,
   sessionTitleFromMessages,
-  applyFoldedMessagesForDialogProcess,
   applyFoldedMessagesToActiveSession,
 } = {}) {
   if (!activeSession?.value) return false;
@@ -61,11 +50,15 @@ export function applyDoneMessagesFromReconnect({
   if (!sessionMessages.length) return false;
   const returnedSessionId = _trimStr(eventData?.sessionId);
   if (returnedSessionId) {
+    const previousSessionId = _trimStr(activeSession.value.id);
     const promotionResult = promoteSessionIdentityToBackendId({
       sessionItem: activeSession.value,
       backendSessionId: returnedSessionId,
       activeSessionId: activeSessionId.value,
     });
+    if (promotionResult.changed) {
+      promoteSessionTurnUiStates(previousSessionId, returnedSessionId);
+    }
     activeSessionId.value = promotionResult.nextActiveSessionId;
   }
   activeSession.value.loaded = true;
@@ -77,19 +70,20 @@ export function applyDoneMessagesFromReconnect({
     makeViewMessage(messageItem),
   );
   const foldedSessionMessages = foldMessagesForView(replayMessagesForView);
-  const doneDialogProcessId = _trimStr(eventData?.dialogProcessId);
+  const doneTurnScopeId = _trimStr(eventData?.turnScopeId);
   if (
-    doneDialogProcessId &&
+    doneTurnScopeId &&
     Array.isArray(activeSession.value.messages) &&
     activeSession.value.messages.length
   ) {
-    applyFoldedMessagesForDialogProcess(activeSession, foldedSessionMessages, doneDialogProcessId);
-    patchDoneAssistantByDialogProcess({
+    patchDoneAssistantByTurn({
       activeSession,
       foldedSessionMessages,
-      dialogProcessId: doneDialogProcessId,
+      turnScopeId: doneTurnScopeId,
     });
-  } else {
+  } else if (!activeSession.value.messages.length) {
+    // Unscoped legacy DONE is allowed to initialize an empty historical view,
+    // but must never reconcile or fold a live turn by execution-chain identity.
     applyFoldedMessagesToActiveSession(activeSession, foldedSessionMessages);
   }
   applyCompletedToolLogsToMessages(
@@ -116,6 +110,12 @@ export function applyDoneRealtimeLogsFromReconnectBatch({
   const doneEnvelopeWithMessages = findReconnectDoneEnvelopeWithMessages(messages);
   if (!doneEnvelopeWithMessages) return false;
   const doneData = doneEnvelopeWithMessages.data || {};
+  const turnScopeId = _trimStr(doneData?.turnScopeId);
+  // A DONE snapshot belongs to a turn, not to its reusable execution chain.
+  // Legacy snapshots without a turn are intentionally not projected into a
+  // running assistant: session-detail hydration handles those at its isolated
+  // history boundary.
+  if (!turnScopeId) return true;
   const executionSummarySteps = Array.isArray(doneData?.executionSummary?.steps)
     ? doneData.executionSummary.steps
     : [];
@@ -132,15 +132,16 @@ export function applyDoneRealtimeLogsFromReconnectBatch({
     .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
     .filter((logItem) => logItem && _trimStr(logItem.text));
   if (!doneRealtimeLogs.length) return true;
-  const targetMessage = findLatestAssistantMessageForRealtimeLogs({ activeSession, normalizedDpId });
+  const targetMessage = [...(activeSession?.value?.messages || [])].reverse().find(
+    (messageItem) =>
+      getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
+      getMessageTurnScopeId(messageItem) === turnScopeId,
+  );
   if (targetMessage) {
-    targetMessage.executionLogTotal = Math.max(
-      Number(targetMessage.executionLogTotal || 0),
-      doneRealtimeLogs.length,
-      Number(doneData?.executionSummary?.returned || 0),
-      Number(doneData?.executionLogs?.length || 0),
+    targetMessage.toolTimeline = mergeToolTimelines(
+      targetMessage.toolTimeline,
+      buildToolTimelineFromLegacyLogs(doneRealtimeLogs),
     );
-    mergeRealtimeLogs(targetMessage, doneRealtimeLogs);
   }
   return true;
 }

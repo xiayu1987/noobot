@@ -24,7 +24,26 @@ export function applyDoneMessagesPatch({
   }
   const botTurnScopeId = getMessageTurnScopeId(botMessage);
 
-  const rawMessagesForView = data.messages.map((messageItem) => makeViewMessage(messageItem));
+  // DONE is scoped at the envelope level. Older backends do not repeat the
+  // turn identity on each message in the embedded snapshot. Materialize that
+  // identity at this input boundary before folding; otherwise the folded
+  // assistant can replace/patch the current overlay without a TurnKey and the
+  // asynchronous final-detail result is subsequently (and correctly) rejected
+  // as stale. Only assistants selected for the current DONE turn inherit it;
+  // dialogProcessId remains execution-chain metadata, never an ownership key.
+  const doneTurnScopeId = normalizeTrimmedString(data?.turnScopeId || botTurnScopeId);
+  const rawMessagesForView = data.messages.map((messageItem) => {
+    const viewMessage = makeViewMessage(messageItem);
+    if (
+      doneTurnScopeId &&
+      String(viewMessage?.role || viewMessage?.type || "").toLowerCase() === "assistant" &&
+      !getMessageTurnScopeId(viewMessage) &&
+      getMessageDialogProcessId(viewMessage) === normalizeTrimmedString(data?.dialogProcessId)
+    ) {
+      viewMessage.turnScopeId = doneTurnScopeId;
+    }
+    return viewMessage;
+  });
   // DONE messages are a replay snapshot used to patch the current
   // pending/streaming overlay.  Do not publish them into session.rawMessages as
   // another completed-message array; the final display source is normalized
@@ -59,6 +78,7 @@ export function applyDoneMessagesPatch({
       ? lastAssistant.tool_calls
       : [];
     botMessage.dialogProcessId = getMessageDialogProcessId(lastAssistant) || getMessageDialogProcessId(botMessage);
+    if (doneTurnScopeId) botMessage.turnScopeId = doneTurnScopeId;
     botMessage.content = String(mergedAssistantContent || botMessage.content || "");
     botMessage.modelAlias = normalizeTrimmedString(lastAssistant.modelAlias);
     botMessage.modelName = normalizeTrimmedString(lastAssistant.modelName);

@@ -222,43 +222,13 @@ export function stopSending({
     createdAtMs: stopPayload.createdAtMs,
     source: "stop_sending",
   });
-  // The assistant placeholder is the source for composer action rendering.
-  // Record the local stopping phase on that same turn before dispatching the
-  // request; the global run snapshot is only a transport/lifecycle bridge and
-  // must not be required to render "stopping" or guard a duplicate stop.
-  if (pendingAssistantMessage) {
-    pendingAssistantMessage.pending = true;
-    pendingAssistantMessage.channelState = {
-      ...(pendingAssistantMessage.channelState && typeof pendingAssistantMessage.channelState === "object"
-        ? pendingAssistantMessage.channelState
-        : {}),
-      state: FrontendRunState.USER_STOPPING,
-      sessionId: stopPayload.sessionId,
-      dialogProcessId: stopPayload.dialogProcessId,
-      turnScopeId: stopPayload.turnScopeId,
-      sourceEvent: "stop_sending",
-    };
-  }
+  // Runtime display state is projected by the turn runtime registry.  The
+  // placeholder is an identity input only and must not become a second writer.
   if (applyRunStateEvent) {
     applyRunStateEvent(stopEvent);
   }
   const applyStopRequestFailure = (error) => {
-    // The stop request never reached an active stopping phase. Settle the same
-    // placeholder that was marked above so the last-message action immediately
-    // falls back to "send" instead of leaving a stale "stopping" projection.
-    if (pendingAssistantMessage) {
-      pendingAssistantMessage.pending = false;
-      pendingAssistantMessage.channelState = {
-        ...(pendingAssistantMessage.channelState && typeof pendingAssistantMessage.channelState === "object"
-          ? pendingAssistantMessage.channelState
-          : {}),
-        state: BackendChannelState.ERROR,
-        sessionId: stopPayload.sessionId,
-        dialogProcessId: stopPayload.dialogProcessId,
-        turnScopeId: stopPayload.turnScopeId,
-        sourceEvent: "stop_sending_request_failed",
-      };
-    }
+    // Failure is likewise projected from the scoped LOCAL_FAILURE event.
     if (applyRunStateEvent) {
       applyRunStateEvent({
         type: SESSION_RUN_EVENT.LOCAL_FAILURE,

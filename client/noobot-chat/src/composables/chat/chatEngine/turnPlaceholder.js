@@ -35,10 +35,9 @@ export function initializeTurnPlaceholder(message, {
     pending: pending === true,
     statusLabel: "",
     attachments: Array.isArray(message.attachments) ? message.attachments : [],
-    realtimeLogs: Array.isArray(message.realtimeLogs) ? message.realtimeLogs : [],
-    completedToolLogs: Array.isArray(message.completedToolLogs) ? message.completedToolLogs : [],
+    toolTimeline: Array.isArray(message.toolTimeline) ? message.toolTimeline : [],
+    activityTimeline: Array.isArray(message.activityTimeline) ? message.activityTimeline : [],
     tool_calls: Array.isArray(message.tool_calls) ? message.tool_calls : [],
-    executionLogTotal: Number(message.executionLogTotal || 0),
     hasFirstStreamEvent: message.hasFirstStreamEvent === true,
   });
   if (normalizedSessionId) {
