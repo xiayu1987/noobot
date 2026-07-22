@@ -25,8 +25,10 @@ export async function consumeReconnectReplayCacheForSession({
   applyReconnectMessagesToActiveSession,
 } = {}) {
   const replayGroups = takeReplayCacheGroupsForSession(replayCache, sessionId);
-  for (const { dialogProcessId, replayMessages } of replayGroups) {
-    await applyReconnectMessagesToActiveSession(replayMessages, dialogProcessId);
+  for (const { dialogProcessId, turnScopeId, replayMessages } of replayGroups) {
+    await applyReconnectMessagesToActiveSession(replayMessages, dialogProcessId, {
+      turnScopeId,
+    });
   }
 }
 

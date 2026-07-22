@@ -134,6 +134,83 @@ describe("useChatSession reconnect replay", () => {
     expect(restoredAssistant.executionLogTotal).toBe(2);
   });
 
+  it("projects a stopped-turn continuation by turnScopeId when both assistants share a dialogProcessId", async () => {
+    const store = useChatStore();
+    const stoppedAssistant = {
+      role: RoleEnum.ASSISTANT,
+      dialogProcessId: "dp-continued",
+      turnScopeId: "turn-stopped",
+      content: "stopped answer",
+      pending: false,
+      realtimeLogs: [{ type: "thinking", text: "old thinking" }],
+    };
+    const continuedAssistant = {
+      role: RoleEnum.ASSISTANT,
+      dialogProcessId: "dp-continued",
+      turnScopeId: "turn-continued",
+      content: "",
+      pending: true,
+      realtimeLogs: [],
+    };
+    store.sessions = [{
+      id: "s-continue",
+      backendSessionId: "s-continue",
+      title: "continue",
+      isLocal: false,
+      loaded: true,
+      messages: [
+        { role: RoleEnum.USER, content: "first", turnScopeId: "turn-stopped" },
+        stoppedAssistant,
+        { role: RoleEnum.USER, content: "continue", turnScopeId: "turn-continued" },
+        continuedAssistant,
+      ],
+      rawMessages: [],
+      sessionDocs: [],
+      connectorPanelState: { selectedConnectors: {} },
+      currentTaskId: "",
+      currentTaskStatus: "running",
+      messageCount: 4,
+      lastMessage: continuedAssistant,
+    }];
+    store.activeSessionId = "s-continue";
+    wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
+      onReconnectData({
+        event: "message_event",
+        data: {
+          channelKind: "message_event",
+          channelVersion: 1,
+          route: { scope: "main_session", sessionId: "s-continue" },
+          event: {
+            envelopeKind: "noobot.message_event",
+            envelopeVersion: 1,
+            eventId: "evt-continued-thinking",
+            eventType: "thinking",
+            sessionId: "s-continue",
+            messageId: "msg-continued",
+            dialogProcessId: "dp-continued",
+            turnScopeId: "turn-continued",
+            sequence: 1,
+            timestamp: "2026-07-22T04:17:00.000Z",
+            text: "new thinking",
+          },
+        },
+      });
+    });
+
+    const session = createChatSession({ classifyRealtimeLog });
+    await session.handleReconnect();
+
+    expect(stoppedAssistant.realtimeLogs).toEqual([
+      { type: "thinking", text: "old thinking" },
+    ]);
+    expect(continuedAssistant.realtimeLogs).toEqual([
+      expect.objectContaining({ text: "new thinking" }),
+    ]);
+    expect(continuedAssistant.messageEventState.consumedEventIds).toEqual([
+      "evt-continued-thinking",
+    ]);
+  });
+
   it("reconnect DONE with dialogProcessId only patches that assistant turn", async () => {
     const store = useChatStore();
     store.sessions = [

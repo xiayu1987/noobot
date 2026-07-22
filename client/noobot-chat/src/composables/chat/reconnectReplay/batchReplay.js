@@ -569,6 +569,13 @@ export async function applyReconnectReplayBatchToActiveSession({
 } = {}) {
   if (!activeSession?.value) return false;
   const normalizedDpId = _trimStr(dialogProcessId);
+  const envelopeTurnScopeIds = new Set(
+    _ensureArray(messages)
+      .map(({ data } = {}) => _trimStr(data?.turnScopeId || data?.messageEvent?.turnScopeId))
+      .filter(Boolean),
+  );
+  const normalizedTurnScopeId =
+    _trimStr(turnScopeId) || (envelopeTurnScopeIds.size === 1 ? [...envelopeTurnScopeIds][0] : "");
   const {
     nextMessages,
     maxSequence,
@@ -578,7 +585,7 @@ export async function applyReconnectReplayBatchToActiveSession({
     messages,
     lastAppliedSeq,
     normalizedDpId,
-    turnScopeId,
+    turnScopeId: normalizedTurnScopeId,
     terminalDialogProcessIdSet,
     isReconnectTerminalBatch,
     allowCreate,
@@ -586,7 +593,7 @@ export async function applyReconnectReplayBatchToActiveSession({
   logThinkingReplayDebug("frontend.thinkingReplay.reconnectBatchPlanned", {
     sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
     dialogProcessId: normalizedDpId,
-    turnScopeId: _trimStr(turnScopeId),
+    turnScopeId: normalizedTurnScopeId,
     inputCount: _ensureArray(messages).length,
     replayCount: nextMessages.length,
     filteredCount: Math.max(0, _ensureArray(messages).length - nextMessages.length),
@@ -639,14 +646,14 @@ export async function applyReconnectReplayBatchToActiveSession({
     appendMessage,
     messages: nextMessages,
     normalizedDpId,
-    turnScopeId,
+    turnScopeId: normalizedTurnScopeId,
     allowCreate: shouldCreateTarget,
   });
   if (usedFallback) {
     logThinkingReplayDebug("frontend.thinkingReplay.reconnectBatchFallback", {
       sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
       dialogProcessId: normalizedDpId,
-      turnScopeId: _trimStr(turnScopeId),
+      turnScopeId: normalizedTurnScopeId,
       replayCount: nextMessages.length,
       lastAppliedSeq: Number(lastAppliedSeq || 0),
       maxSequence,

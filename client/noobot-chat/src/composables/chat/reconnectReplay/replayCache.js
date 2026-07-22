@@ -33,9 +33,20 @@ export function takeReplayCacheGroupsForSession(replayCache, sessionId = "") {
   if (!sessionReplayCache) return [];
   const replayGroups = Object.entries(sessionReplayCache);
   delete replayCache[normalizedSessionId];
-  return replayGroups.map(([replayKey, replayMessages]) => ({
-    replayKey,
-    dialogProcessId: String(replayKey || "").startsWith("__session__") ? "" : String(replayKey || ""),
-    replayMessages,
-  }));
+  return replayGroups.map(([replayKey, replayMessages]) => {
+    const normalizedReplayMessages = Array.isArray(replayMessages) ? replayMessages : [];
+    const turnScopeIds = new Set(
+      normalizedReplayMessages
+        .map(({ data } = {}) => _trimStr(data?.turnScopeId || data?.messageEvent?.turnScopeId))
+        .filter(Boolean),
+    );
+    return {
+      replayKey,
+      dialogProcessId: String(replayKey || "").startsWith("__session__") ? "" : String(replayKey || ""),
+      // A batch can target a turn only when every scoped event agrees. Never
+      // guess across continuation turns which intentionally reuse a process id.
+      turnScopeId: turnScopeIds.size === 1 ? [...turnScopeIds][0] : "",
+      replayMessages: normalizedReplayMessages,
+    };
+  });
 }

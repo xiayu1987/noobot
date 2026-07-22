@@ -61,7 +61,7 @@ describe("replayCacheConsumer", () => {
   it("consumes cached replay groups for a session and removes the session cache", async () => {
     const replayCache = {
       "s-1": {
-        "dp-1": [{ event: StreamEventEnum.DELTA, data: { text: "a" } }],
+        "dp-1": [{ event: StreamEventEnum.DELTA, data: { text: "a", turnScopeId: "turn-1" } }],
         "__session__s-1": [{ event: StreamEventEnum.DELTA, data: { text: "b" } }],
       },
       "s-2": {
@@ -79,13 +79,15 @@ describe("replayCacheConsumer", () => {
     expect(applyReconnectMessagesToActiveSession).toHaveBeenCalledTimes(2);
     expect(applyReconnectMessagesToActiveSession).toHaveBeenNthCalledWith(
       1,
-      [{ event: StreamEventEnum.DELTA, data: { text: "a" } }],
+      [{ event: StreamEventEnum.DELTA, data: { text: "a", turnScopeId: "turn-1" } }],
       "dp-1",
+      { turnScopeId: "turn-1" },
     );
     expect(applyReconnectMessagesToActiveSession).toHaveBeenNthCalledWith(
       2,
       [{ event: StreamEventEnum.DELTA, data: { text: "b" } }],
       "",
+      { turnScopeId: "" },
     );
     expect(replayCache).toEqual({
       "s-2": {
@@ -260,5 +262,47 @@ describe("replayCacheConsumer", () => {
     expect(targetMessage.processLastSequence).toBe(7);
     expect(targetMessage.processRealtimeLogs[0].text).toContain("searching");
     expect(targetMessage.processCompletedToolLogs[0].text).toContain("searching");
+  });
+
+  it("derives the continuation turn from cached envelopes before resolving a reused dialog", async () => {
+    const stoppedAssistant = {
+      role: "assistant",
+      dialogProcessId: "dp-shared",
+      turnScopeId: "turn-stopped",
+      content: "stopped",
+      pending: false,
+      realtimeLogs: [],
+    };
+    const continuationAssistant = {
+      role: "assistant",
+      dialogProcessId: "dp-shared",
+      turnScopeId: "turn-continuation",
+      content: "",
+      pending: true,
+      realtimeLogs: [],
+    };
+    const fixture = createActiveReplayFixture({
+      activeSession: { value: { id: "s-1", messages: [stoppedAssistant, continuationAssistant] } },
+    });
+
+    await applyReconnectMessagesToActiveSessionReplay({
+      ...fixture,
+      dialogProcessId: "dp-shared",
+      messages: [{
+        event: StreamEventEnum.THINKING,
+        data: {
+          seq: 12,
+          event: "tool_call",
+          text: "continuation tool",
+          dialogProcessId: "dp-shared",
+          turnScopeId: "turn-continuation",
+        },
+      }],
+    });
+
+    expect(stoppedAssistant.realtimeLogs).toEqual([]);
+    expect(continuationAssistant.turnScopeId).toBe("turn-continuation");
+    expect(continuationAssistant.realtimeLogs).toHaveLength(1);
+    expect(continuationAssistant.realtimeLogs[0].text).toContain("continuation tool");
   });
 });

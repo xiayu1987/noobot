@@ -659,13 +659,23 @@ export function useChatSession({
     const messages = Array.isArray(activeSession.value?.messages)
       ? activeSession.value.messages
       : [];
-    const botMessage = [...messages].reverse().find((message) => {
-      if (getMessageRole(message) !== RoleEnum.ASSISTANT) return false;
-      const messageDialogProcessId = getMessageDialogProcessId(message);
-      const messageTurnScopeId = getMessageTurnScopeId(message);
-      if (dialogProcessId) return messageDialogProcessId === dialogProcessId;
-      return Boolean(turnScopeId && messageTurnScopeId === turnScopeId);
-    });
+    // A stopped turn and its continuation may deliberately share a
+    // dialogProcessId while owning different turnScopeIds. The turn is the
+    // authoritative message projection identity; using the dialog first can
+    // project continuation events into the stopped assistant message.
+    const reversedAssistantMessages = [...messages].reverse().filter(
+      (message) => getMessageRole(message) === RoleEnum.ASSISTANT,
+    );
+    const botMessage = turnScopeId
+      ? reversedAssistantMessages.find(
+          (message) => getMessageTurnScopeId(message) === turnScopeId,
+        )
+      : dialogProcessId
+        ? reversedAssistantMessages.find(
+            (message) => message?.pending === true &&
+              getMessageDialogProcessId(message) === dialogProcessId,
+          )
+        : null;
     if (!botMessage) {
       logThinkingReplayDebug("frontend.thinkingReplay.liveProjectionTargetMissing", {
         sessionId: resolveActiveSessionIdentity(),

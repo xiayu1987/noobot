@@ -31,7 +31,11 @@ function conflicts(message, event) {
   if (messageId && messageId !== text(event.messageId)) return true;
   const messageTurn = text(message.turnScopeId || message.turn_scope_id);
   const eventTurn = text(event.turnScopeId);
-  return Boolean(messageTurn && eventTurn && messageTurn !== eventTurn);
+  // Authoritative turn-scoped events must never be reduced into an
+  // unscoped/other-turn message. In particular, stop -> continue can reuse the
+  // dialogProcessId, so dialog identity is not sufficient to establish event
+  // ownership.
+  return Boolean(eventTurn && messageTurn !== eventTurn);
 }
 
 /** The only authoritative main-session event state transition. */
