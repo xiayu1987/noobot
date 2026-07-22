@@ -32,6 +32,7 @@ import {
   summarizeDebugMessages,
 } from "../debug/resendDebugLogger";
 import { logReconnectTimingDebug } from "../debug/reconnectTimingDebugLogger";
+import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger";
 import { applyLatestSessionVersion } from "../chatEngine/sessionVersionManager";
 import {
   SESSION_DETAIL_APPLY_MODE,
@@ -51,20 +52,64 @@ export function createSessionDetailApplicator({
   processStore = null,
   onSessionDetailApplied = null,
 } = {}) {
+  function summarizeToolProjection(messageItem = {}) {
+    const summarize = (items) => (Array.isArray(items) ? items : []).map((item) => ({
+      event: String(item?.event || item?.type || ""),
+      sequence: item?.sequence ?? item?.seq ?? null,
+      toolCallId: String(item?.toolCallId || item?.tool_call_id || ""),
+      hasText: Boolean(String(item?.text ?? item?.output ?? item?.data?.text ?? "").trim()),
+    })).slice(-20);
+    return {
+      role: getMessageRole(messageItem),
+      pending: messageItem?.pending === true,
+      dialogProcessId: getMessageDialogProcessId(messageItem),
+      turnScopeId: getMessageTurnScopeId(messageItem),
+      completedToolLogCount: Array.isArray(messageItem?.completedToolLogs) ? messageItem.completedToolLogs.length : 0,
+      processCompletedToolLogCount: Array.isArray(messageItem?.processCompletedToolLogs) ? messageItem.processCompletedToolLogs.length : 0,
+      realtimeLogCount: Array.isArray(messageItem?.realtimeLogs) ? messageItem.realtimeLogs.length : 0,
+      processRealtimeLogCount: Array.isArray(messageItem?.processRealtimeLogs) ? messageItem.processRealtimeLogs.length : 0,
+      completedToolLogs: summarize(messageItem?.completedToolLogs),
+    };
+  }
+
   function hydrateProcessSnapshotsFromMessages(messages = []) {
-    if (!processStore) return;
+    if (!processStore) {
+      logThinkingReplayDebug("frontend.thinkingReplay.sessionDetailHydrationSkipped", {
+        reason: "process-store-missing",
+        messageCount: Array.isArray(messages) ? messages.length : 0,
+      });
+      return;
+    }
     for (const messageItem of messages || []) {
       if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) continue;
+      const scope = {
+        sessionId: String(messageItem?.sessionId || ""),
+        dialogProcessId: getMessageDialogProcessId(messageItem),
+        turnScopeId: getMessageTurnScopeId(messageItem),
+      };
       if (isAssistantWithoutTurnScope(messageItem)) {
+        logThinkingReplayDebug("frontend.thinkingReplay.sessionDetailHydrationSkipped", {
+          ...scope, reason: "assistant-without-turn-scope", before: summarizeToolProjection(messageItem),
+        });
         clearTurnScopedAssets(messageItem);
         continue;
       }
       const dialogProcessId = getMessageDialogProcessId(messageItem);
-      if (!dialogProcessId) continue;
+      if (!dialogProcessId) {
+        logThinkingReplayDebug("frontend.thinkingReplay.sessionDetailHydrationSkipped", {
+          ...scope, reason: "dialog-process-missing", before: summarizeToolProjection(messageItem),
+        });
+        continue;
+      }
       const completedToolLogs = Array.isArray(messageItem?.completedToolLogs)
         ? messageItem.completedToolLogs
         : [];
-      if (!completedToolLogs.length) continue;
+      if (!completedToolLogs.length) {
+        logThinkingReplayDebug("frontend.thinkingReplay.sessionDetailHydrationSkipped", {
+          ...scope, reason: "completed-tools-empty", before: summarizeToolProjection(messageItem),
+        });
+        continue;
+      }
       const snapshot = createProcessSnapshotFromLogs({
         processId: dialogProcessId,
         logs: completedToolLogs,
@@ -73,12 +118,27 @@ export function createSessionDetailApplicator({
       });
       processStore.hydrateSnapshot?.(snapshot);
       const compatView = processStore.getCompatView?.(dialogProcessId);
-      if (!compatView || compatView.executionLogTotal <= 0) continue;
+      if (!compatView || compatView.executionLogTotal <= 0) {
+        logThinkingReplayDebug("frontend.thinkingReplay.sessionDetailHydrationSkipped", {
+          ...scope,
+          reason: "compat-view-empty",
+          before: summarizeToolProjection(messageItem),
+          compatExecutionLogTotal: Number(compatView?.executionLogTotal || 0),
+        });
+        continue;
+      }
       messageItem.processId = dialogProcessId;
       messageItem.processLastSequence = compatView.lastSequence;
       messageItem.processRealtimeLogs = compatView.realtimeLogs;
       messageItem.processCompletedToolLogs = compatView.completedToolLogs;
       messageItem.processExecutionLogTotal = compatView.executionLogTotal;
+      logThinkingReplayDebug("frontend.thinkingReplay.sessionDetailHydrated", {
+        ...scope,
+        snapshotLogCount: completedToolLogs.length,
+        compatLastSequence: compatView.lastSequence ?? null,
+        compatExecutionLogTotal: compatView.executionLogTotal,
+        after: summarizeToolProjection(messageItem),
+      });
     }
   }
 
@@ -227,6 +287,17 @@ export function createSessionDetailApplicator({
       isSameSessionIdentity(detailSessionId, activeSessionId.value);
 
     const normalizedDetailMessages = detailProjection.messages;
+    logThinkingReplayDebug("frontend.thinkingReplay.sessionDetailSnapshotReceived", {
+      sessionId: detail.sessionId,
+      applyMode,
+      summary: isSummaryDetail,
+      preserveCurrentMessages,
+      rawMessageCount: Array.isArray(mainSessionDoc?.messages) ? mainSessionDoc.messages.length : 0,
+      normalizedMessageCount: normalizedDetailMessages.length,
+      assistantMessages: normalizedDetailMessages
+        .filter((item) => getMessageRole(item) === RoleEnum.ASSISTANT)
+        .map(summarizeToolProjection),
+    });
 
     if (!preserveCurrentMessages && !shouldKeepCurrentMessagesForEmptyDetail) {
       logResendDebug("detail.apply.replaceAll", {
@@ -292,6 +363,15 @@ export function createSessionDetailApplicator({
       applyCompletedToolLogsToMessages(sessionItem.messages, sessionDocs);
     }
     hydrateProcessSnapshotsFromMessages(sessionItem.messages);
+    logThinkingReplayDebug("frontend.thinkingReplay.sessionDetailApplied", {
+      sessionId: detail.sessionId,
+      applyMode,
+      preserveCurrentMessages,
+      renderedMessageCount: sessionItem.messages.length,
+      assistantMessages: sessionItem.messages
+        .filter((item) => getMessageRole(item) === RoleEnum.ASSISTANT)
+        .map(summarizeToolProjection),
+    });
     onSessionDetailApplied?.({
       detail,
       sessionItem,

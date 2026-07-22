@@ -30,6 +30,7 @@ import {
 } from "../interactionPayload";
 import { BackendChannelState } from "../sessionRunStateMachine";
 import { mergeAttachments } from "../../infra/dialogProcessChain";
+import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger";
 
 function markFirstStreamEvent(botMessage) {
   if (!botMessage) return;
@@ -84,12 +85,46 @@ export function handleThinkingStreamEvent({
   processStore,
   locateSendingStartedMessageOnce,
 }) {
+  const scope = {
+    sessionId: String(data?.sessionId || botMessage?.sessionId || ""),
+    dialogProcessId: String(data?.dialogProcessId || getMessageDialogProcessId(botMessage) || ""),
+    turnScopeId: String(data?.turnScopeId || getMessageTurnScopeId(botMessage) || ""),
+  };
   const notifyFirstResponse = resolveFirstResponseNavigator({
     navigateOnFirstResponseOnce,
     scrollOnFirstResponseOnce,
   });
   const item = sanitizeExecutionLogForDisplay(classifyRealtimeLog(data));
   if (!item || !normalizeTrimmedString(item.text)) {
+    const rawTextCandidates = {
+      text: data?.text,
+      output: data?.output,
+      content: data?.content,
+      message: data?.message,
+      displayText: data?.displayText,
+      nestedText: data?.data?.text,
+      nestedOutput: data?.data?.output,
+      nestedContent: data?.data?.content,
+      nestedMessage: data?.data?.message,
+      nestedDisplayText: data?.data?.displayText,
+    };
+    logThinkingReplayDebug("frontend.thinkingReplay.streamThinkingDropped", {
+      ...scope,
+      sequence: data?.sequence ?? data?.seq ?? null,
+      reason: !item ? "classification-empty" : "text-empty",
+      eventKeys: Object.keys(data || {}).sort(),
+      nestedDataKeys: Object.keys(data?.data || {}).sort(),
+      rawTextCandidates: Object.fromEntries(
+        Object.entries(rawTextCandidates).map(([key, value]) => {
+          const text = typeof value === "string"
+            ? value
+            : value == null
+              ? ""
+              : JSON.stringify(value);
+          return [key, { length: text.length, preview: text.slice(0, 500) }];
+        }),
+      ),
+    });
     return;
   }
   if (!item.subAgentCall && item.dialogProcessId) {
@@ -103,6 +138,16 @@ export function handleThinkingStreamEvent({
   );
   botMessage.executionLogTotal = previousExecutionLogTotal + 1;
   botMessage.realtimeLogs = [...(botMessage.realtimeLogs || []), item].slice(-10);
+  logThinkingReplayDebug("frontend.thinkingReplay.streamThinkingAppended", {
+    ...scope,
+    dialogProcessId: String(item.dialogProcessId || scope.dialogProcessId),
+    sequence: data?.sequence ?? data?.seq ?? null,
+    executionLogTotal: botMessage.executionLogTotal,
+    realtimeLogCount: botMessage.realtimeLogs.length,
+    processRealtimeLogCount: Array.isArray(botMessage.processRealtimeLogs)
+      ? botMessage.processRealtimeLogs.length
+      : 0,
+  });
   const processEvent = createProcessEventFromLog(item, {
     source: ProcessEventSource.STREAM,
     sequence: data?.sequence ?? data?.seq ?? botMessage.executionLogTotal,

@@ -53,6 +53,7 @@ test('runtime-events session log controls use business defaults', () => {
   assert.equal(resolveRuntimeEventsSessionLogControls({}).messageLog, true);
   assert.equal(resolveRuntimeEventsSessionLogControls({}).stateMachineDebug, false);
   assert.equal(resolveRuntimeEventsSessionLogControls({}).frontendStopContinueDebug, false);
+  assert.equal(resolveRuntimeEventsSessionLogControls({}).frontendThinkingReplayDebug, true);
   assert.equal(resolveRuntimeEventsSessionLogControls({}).agentProxyRouteDebug, false);
 });
 
@@ -62,6 +63,7 @@ test('runtime-events session log controls resolve per business env and overrides
     [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.stateMachineDebug]: 'on',
     [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.resendDebug]: 'invalid',
     [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.frontendStopContinueDebug]: 'off',
+    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.frontendThinkingReplayDebug]: 'off',
     [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.agentProxyRouteDebug]: 'off',
   };
 
@@ -70,6 +72,7 @@ test('runtime-events session log controls resolve per business env and overrides
   assert.equal(resolved.stateMachineDebug, true);
   assert.equal(resolved.resendDebug, false);
   assert.equal(resolved.frontendStopContinueDebug, false);
+  assert.equal(resolved.frontendThinkingReplayDebug, false);
   assert.equal(resolved.agentProxyRouteDebug, false);
   assert.equal(resolved.transportLog, false);
 });

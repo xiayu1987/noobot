@@ -38,6 +38,7 @@ export function createRunEventListener({
   onRootRunning = null,
   onCommittedTurnLifecycle = null,
   onAuthoritativeMessageRouted = null,
+  onEventReceived = null,
 } = {}) {
   const resolveTurnScopeId = () =>
     getCurrentRunMeta()?.turnScopeId || getCurrentTurnScopeId() || "";
@@ -46,6 +47,19 @@ export function createRunEventListener({
     onEvent: (eventPayload) => {
       const eventName = eventPayload?.event || "thinking";
       const eventData = eventPayload?.data || {};
+      onEventReceived?.({
+        eventName,
+        eventType: String(eventData?.eventType || "").trim(),
+        sessionId: String(eventData?.sessionId || sessionId || "").trim(),
+        dialogProcessId: String(eventData?.dialogProcessId || "").trim(),
+        turnScopeId: String(eventData?.turnScopeId || resolveTurnScopeId() || "").trim(),
+        envelopeKind: String(eventData?.envelopeKind || "").trim(),
+        messageId: String(eventData?.messageId || "").trim(),
+        sequence: Number(eventData?.sequence || 0),
+        hasTool: Boolean(eventData?.tool),
+        hasResult: eventData?.result !== undefined,
+        dataKeys: Object.keys(eventData).sort(),
+      });
       const eventDialogProcessId = String(eventData?.dialogProcessId || "").trim();
       const currentRunMeta = getCurrentRunMeta();
       const currentRunHandle = getCurrentRunHandle();

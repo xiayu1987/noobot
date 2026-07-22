@@ -272,6 +272,7 @@ export const enUSMessages = {
     "thinkingDetails": "Thinking Details ({count})",
     "details": "Details",
     "waitingRealtimeLog": "Running, waiting for realtime logs...",
+    "analyzingRealtimeLog": "Thinking / analyzing...",
     "noExecutionLogs": "No execution logs",
     "noToolCalls": "No tool call records yet",
     "detailsAfterDone": "Thinking details are available after completion",

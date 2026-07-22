@@ -442,12 +442,15 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
     source: text(event.source || current?.source),
     sourceEvent: text(event.sourceEvent || event.type || current?.sourceEvent),
     finishedAtMs: terminal ? Number(current?.finishedAtMs || nowMs) : 0,
+    // An existing Turn owns its start time. Only the event that creates a Turn
+    // may derive a provisional start from its event time; later events must not
+    // move the timer forward. Hydration below can still replace this provisional
+    // value with the persisted canonical turnTimings value.
     startedAt: text(
       current?.startedAt ||
       rawEvent?.thinkingStartedAt ||
       rawEvent?.startedAt ||
-      event.updatedAt ||
-      (nowMs > 0 ? new Date(nowMs).toISOString() : ""),
+      (!current ? (event.updatedAt || event.timestamp) : ""),
     ),
     finishedAt: terminal
       ? text(current?.finishedAt || rawEvent?.thinkingFinishedAt || rawEvent?.finishedAt || event.updatedAt)
@@ -590,11 +593,14 @@ export function hydrateSessionTurnRuntime(registry, session, turnStatuses = sess
     if (!turn) continue;
     const startedAt = text(timing?.thinkingStartedAt);
     const finishedAt = text(timing?.thinkingFinishedAt);
-    if (!turn.startedAt && startedAt) {
+    // Persisted timing is the canonical source on refresh.  Hydration events
+    // may have created the turn without an explicit start timestamp, and must
+    // never replace this value with status.updatedAt/now.
+    if (startedAt && turn.startedAt !== startedAt) {
       turn.startedAt = startedAt;
       applied = true;
     }
-    if (!turn.finishedAt && finishedAt) {
+    if (finishedAt && turn.finishedAt !== finishedAt) {
       turn.finishedAt = finishedAt;
       applied = true;
     }

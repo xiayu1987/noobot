@@ -41,6 +41,8 @@ import { useAgentInteraction } from "./useAgentInteraction";
 import { useConnectorPanel } from "../infra/useConnectorPanel";
 import { useChatList } from "./useChatList";
 import { useChatEngine } from "./useChatEngine";
+import { shouldProjectMainSessionEvent } from "./chatEngine/sendFlow";
+import { handleBasicStreamEvent } from "./chatEngine/streamHandlers";
 import { finalizeStoppedSessionDetail } from "./chatEngine/sessionFinalize";
 import { useReconnectReplay } from "./useReconnectReplay";
 import { useChatStore } from "../../shared/stores/useChatStore";
@@ -65,6 +67,10 @@ import { setStopDebugLogSink } from "./debug/stopDebugLogger";
 import { setStopContinueDebugLogSink } from "./debug/stopContinueDebugLogger";
 import { setReconnectTimingDebugLogSink } from "./debug/reconnectTimingDebugLogger";
 import { setWorkflowDiagnosticsLogSink } from "./debug/workflowDiagnosticsLogger";
+import {
+  logThinkingReplayDebug,
+  setThinkingReplayDebugLogSink,
+} from "./debug/thinkingReplayDebugLogger";
 import {
   resolveSessionTurnRuntime,
   selectSessionTurnRuntime,
@@ -349,6 +355,7 @@ export function useChatSession({
   setStopContinueDebugLogSink(sessionLogWebSocketClient);
   setReconnectTimingDebugLogSink(sessionLogWebSocketClient);
   setWorkflowDiagnosticsLogSink(sessionLogWebSocketClient);
+  setThinkingReplayDebugLogSink(sessionLogWebSocketClient);
 
   function logSessionSystemEvent(event, payload = {}) {
     sessionLogWebSocketClient.log({
@@ -642,20 +649,83 @@ export function useChatSession({
     return requested;
   }
 
+  function projectReconnectedMainSessionEvent(event, data = {}) {
+    if (!shouldProjectMainSessionEvent(event, data)) return false;
+    const messageEvent = data.event || {};
+    const dialogProcessId = String(
+      messageEvent.dialogProcessId || data.dialogProcessId || "",
+    ).trim();
+    const turnScopeId = String(messageEvent.turnScopeId || data.turnScopeId || "").trim();
+    const messages = Array.isArray(activeSession.value?.messages)
+      ? activeSession.value.messages
+      : [];
+    const botMessage = [...messages].reverse().find((message) => {
+      if (getMessageRole(message) !== RoleEnum.ASSISTANT) return false;
+      const messageDialogProcessId = getMessageDialogProcessId(message);
+      const messageTurnScopeId = getMessageTurnScopeId(message);
+      if (dialogProcessId) return messageDialogProcessId === dialogProcessId;
+      return Boolean(turnScopeId && messageTurnScopeId === turnScopeId);
+    });
+    if (!botMessage) {
+      logThinkingReplayDebug("frontend.thinkingReplay.liveProjectionTargetMissing", {
+        sessionId: resolveActiveSessionIdentity(),
+        dialogProcessId,
+        turnScopeId,
+        eventType: String(messageEvent.eventType || ""),
+      });
+      return false;
+    }
+    handleBasicStreamEvent(
+      messageEvent.eventType === "llm_delta" ? StreamEventEnum.DELTA : StreamEventEnum.THINKING,
+      {
+        data: messageEvent,
+        botMessage,
+        classifyRealtimeLog,
+        navigateOnFirstResponseOnce: () => {},
+        activeSession,
+        processStore,
+        locateSendingStartedMessageOnce: locateSendingStartedMessage,
+      },
+    );
+    return true;
+  }
+
   async function handleReconnect() {
     const pendingReconnectReplays = [];
     const directExecutionRestoreCommandIds = new Set();
     const trackReconnectReplay = (replayPromise) => {
       pendingReconnectReplays.push(Promise.resolve(replayPromise));
     };
+    const reconnectSessionId = String(activeSession.value?.backendSessionId || activeSessionId.value || "");
+    logThinkingReplayDebug("frontend.thinkingReplay.reconnectStarted", {
+      sessionId: reconnectSessionId,
+      visibleMessageCount: Array.isArray(activeSession.value?.messages)
+        ? activeSession.value.messages.length
+        : 0,
+    });
     return chatWebSocketClient.reconnect({
-      currentSessionId: String(activeSession.value?.backendSessionId || activeSessionId.value || ""),
+      currentSessionId: reconnectSessionId,
       userId: String(userId?.value || userId || ""),
       onReconnectData: (reconnectPayload) => {
+        logThinkingReplayDebug("frontend.thinkingReplay.reconnectPayloadReceived", {
+          sessionId: reconnectSessionId,
+          protocolEvent: String(reconnectPayload?.event || "reconnect_data"),
+          sessionCount: Array.isArray(reconnectPayload?.sessions) ? reconnectPayload.sessions.length : 0,
+          dataSequence: reconnectPayload?.data?.sequence ?? reconnectPayload?.data?.seq ?? null,
+          dialogProcessId: String(reconnectPayload?.data?.dialogProcessId || ""),
+          turnScopeId: String(reconnectPayload?.data?.turnScopeId || ""),
+          dataKeys: Object.keys(reconnectPayload?.data || {}).sort(),
+        });
         if (reconnectPayload?.sessions) {
           trackReconnectReplay(reconnectReplay.applyReconnectData(reconnectPayload));
         }
         if (reconnectPayload?.event && reconnectPayload?.data) {
+          // After reconnect_complete this socket remains the live transport.
+          // Authoritative main-session events must update the restored message
+          // just like events received by the original send stream.
+          if (projectReconnectedMainSessionEvent(reconnectPayload.event, reconnectPayload.data)) {
+            return;
+          }
           if (directExecutionRestoreCommandIds.has(String(reconnectPayload.data?.commandId || "").trim())) {
             return;
           }
@@ -666,6 +736,16 @@ export function useChatSession({
       },
     }).then(async () => {
       await Promise.all(pendingReconnectReplays);
+      const replayRuntime = resolveSessionTurnRuntime(turnRuntimeRegistry.value, reconnectSessionId);
+      logThinkingReplayDebug("frontend.thinkingReplay.reconnectReplayCommitted", {
+        sessionId: reconnectSessionId,
+        dialogProcessId: String(replayRuntime?.dialogProcessId || ""),
+        turnScopeId: String(replayRuntime?.turnScopeId || ""),
+        state: String(replayRuntime?.state || ""),
+        backendState: String(replayRuntime?.backendState || ""),
+        terminal: replayRuntime?.terminal ?? null,
+        pendingReplayCount: pendingReconnectReplays.length,
+      });
       if (typeof chatWebSocketClient.requestJson !== "function") return;
       const sessionId = String(activeSession.value?.backendSessionId || activeSessionId.value || "").trim();
       const currentTurn = resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionId);
@@ -708,6 +788,10 @@ export function useChatSession({
         });
       }
     }).catch((error) => {
+      logThinkingReplayDebug("frontend.thinkingReplay.reconnectFailed", {
+        sessionId: reconnectSessionId,
+        error: String(error?.message || error || ""),
+      });
       logSessionSystemEvent("reconnect.failed", {
         error: String(error?.message || error || ""),
       });

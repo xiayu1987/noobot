@@ -22,6 +22,7 @@ import {
 } from "../../composables/infra/timeFields";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { logReconnectTimingDebug } from "../../composables/chat/debug/reconnectTimingDebugLogger";
+import { logThinkingReplayDebug } from "../../composables/chat/debug/thinkingReplayDebugLogger";
 import { normalizeThinkingToolLogs } from "../../composables/infra/thinkingDetailModel";
 import {
   getCachedThinkingDetail,
@@ -55,6 +56,56 @@ export function useThinkingPanel(props, emit) {
   const EXECUTION_LOG_DISPLAY_LIMIT =
     QUANTITY_THRESHOLDS.client.executionLogDisplayLimit;
 
+  function thinkingReplayScope(messageItem = props.messageItem || {}) {
+    return {
+      sessionId: getMessageSessionId(messageItem) || props.messageItem?.sessionId || "",
+      dialogProcessId: getMessageDialogProcessId(messageItem),
+      turnScopeId: getMessageTurnScopeId(messageItem),
+    };
+  }
+
+  function summarizeThinkingMessage(messageItem = {}) {
+    const allRealtimeLogs = getAllRealtimeLogs(messageItem);
+    const visibleRealtimeLogs = getRealtimeLogs(messageItem);
+    return {
+      role: getMessageRole(messageItem),
+      pending: messageItem?.pending === true,
+      hasThinkingDetails: messageItem?.hasThinkingDetails === true,
+      thinkingDetailCount: Number(messageItem?.thinkingDetailCount || 0),
+      realtimeLogCount: allRealtimeLogs.length,
+      visibleRealtimeLogCount: visibleRealtimeLogs.length,
+      realtimeLogProjection: allRealtimeLogs.slice(-10).map(summarizeRealtimeLog),
+      completedToolLogCount: Array.isArray(messageItem?.completedToolLogs)
+        ? messageItem.completedToolLogs.length
+        : Array.isArray(messageItem?.processCompletedToolLogs)
+          ? messageItem.processCompletedToolLogs.length
+          : 0,
+    };
+  }
+
+  function summarizeRealtimeLog(logItem = {}) {
+    const text = String(
+      logItem?.text ?? logItem?.output ?? logItem?.data?.text ?? logItem?.data?.output ?? "",
+    );
+    return {
+      event: String(logItem?.event || ""),
+      type: String(logItem?.type || ""),
+      category: String(logItem?.category || ""),
+      sequence: logItem?.sequence ?? logItem?.seq ?? null,
+      textLength: text.length,
+      textPreview: text.slice(0, 240),
+      filteredBy: isPluginCapabilityResponseLog(logItem)
+        ? "plugin-capability"
+        : isGuidanceAnalysisResponseLog(logItem)
+          ? "guidance-analysis"
+          : isMainModelContentLog(logItem)
+            ? "main-model-content"
+            : sanitizeExecutionLogForDisplay(logItem)
+              ? ""
+              : "sanitize-empty",
+    };
+  }
+
   function getRuntimeView() {
     return props.runtime || { running: false, terminal: false, startedAt: "", finishedAt: "" };
   }
@@ -70,11 +121,25 @@ export function useThinkingPanel(props, emit) {
   }
 
   function getAllRealtimeLogs(messageItem = {}) {
-    if (Array.isArray(messageItem?.processRealtimeLogs))
-      return messageItem.processRealtimeLogs;
-    return Array.isArray(messageItem?.realtimeLogs)
+    const processRealtimeLogs = Array.isArray(messageItem?.processRealtimeLogs)
+      ? messageItem.processRealtimeLogs
+      : [];
+    const realtimeLogs = Array.isArray(messageItem?.realtimeLogs)
       ? messageItem.realtimeLogs
       : [];
+    // Keep the normalized process projection authoritative when it has at least
+    // one row the panel can actually render. During reconnect it may temporarily
+    // contain only protocol/analysis rows; those are filtered below and used to
+    // hide a populated legacy realtime projection, leaving the open panel empty.
+    const hasDisplayableProcessLog = processRealtimeLogs.some((logItem) => {
+      if (
+        isPluginCapabilityResponseLog(logItem) ||
+        isGuidanceAnalysisResponseLog(logItem) ||
+        isMainModelContentLog(logItem)
+      ) return false;
+      return Boolean(sanitizeExecutionLogForDisplay(logItem));
+    });
+    return hasDisplayableProcessLog ? processRealtimeLogs : realtimeLogs;
   }
 
   function isFreshPendingAssistant(messageItem = {}) {
@@ -223,6 +288,8 @@ export function useThinkingPanel(props, emit) {
   }
 
   function getExecutionLogCount(messageItem = {}) {
+    const visibleRealtimeLogCount = getRealtimeLogs(messageItem).length;
+    const completedToolLogCount = getCompletedToolLogsForMessage(messageItem).length;
     const explicitTotal = toValidExecutionLogTotal(
       messageItem.processExecutionLogTotal ??
         messageItem.executionLogTotal ??
@@ -238,7 +305,15 @@ export function useThinkingPanel(props, emit) {
           isGuidanceAnalysisResponseLog(logItem) ||
           isMainModelContentLog(logItem),
       ).length;
-      return Math.max(0, explicitTotal - hiddenAnalysisLogCount);
+      // Refresh hydration can initialize the normalized process total to zero
+      // before reconnect replay restores the legacy realtime projection. Never
+      // let that provisional total contradict rows the panel can already render.
+      return Math.max(
+        0,
+        explicitTotal - hiddenAnalysisLogCount,
+        visibleRealtimeLogCount,
+        completedToolLogCount,
+      );
     }
 
     const realtimeLogs = getAllRealtimeLogs(messageItem).filter(
@@ -249,8 +324,7 @@ export function useThinkingPanel(props, emit) {
     );
     if (realtimeLogs.length > 0) return realtimeLogs.length;
 
-    const completedToolLogs = getCompletedToolLogsForMessage(messageItem);
-    if (completedToolLogs.length > 0) return completedToolLogs.length;
+    if (completedToolLogCount > 0) return completedToolLogCount;
 
     const summaryThinkingDetailCount =
       getSummaryThinkingDetailCount(messageItem);
@@ -310,8 +384,36 @@ export function useThinkingPanel(props, emit) {
   // retain the initial empty projection when the detail arrives after mount.
   const currentExecutionLogs = computed(() => {
     const detail = loadedThinkingDetail.value;
+    // A detail response is a point-in-time snapshot. After a refresh it can be
+    // committed while the turn is still running; subsequent websocket/reconnect
+    // events update props.messageItem, not that snapshot. Prefer the live message
+    // as soon as it contains renderable rows, and only use detail as the settled
+    // hydration fallback. Otherwise the panel remains on the snapshot's empty
+    // list and shows "waiting for realtime logs" forever.
+    const liveLogs = getExecutionLogs(props.messageItem);
+    if (liveLogs.length > 0) return liveLogs;
     return getExecutionLogs(detail?.messageItem || props.messageItem);
   });
+  watch(
+    () => ({
+      identity: thinkingReplayScope(props.messageItem),
+      running: getRuntimeView(props.messageItem).running === true,
+      pending: props.messageItem?.pending === true,
+      source: getExecutionLogs(props.messageItem).length > 0 ? "live" : "detail-fallback",
+      visibleLogs: currentExecutionLogs.value.map(summarizeRealtimeLog),
+    }),
+    (projection) => {
+      logThinkingReplayDebug("frontend.thinkingReplay.displayProjectionChanged", {
+        ...projection.identity,
+        running: projection.running,
+        pending: projection.pending,
+        source: projection.source,
+        visibleLogCount: projection.visibleLogs.length,
+        visibleLogs: projection.visibleLogs.slice(-10),
+      });
+    },
+    { immediate: true, deep: true },
+  );
 
   const thinkingDetailLoadKey = computed(() => {
     const messageItem = props.messageItem || {};
@@ -339,10 +441,23 @@ export function useThinkingPanel(props, emit) {
       const cached = getCachedThinkingDetail(identity);
       if (cached) {
         loadedThinkingDetail.value = { ...cached, __thinkingDetailIdentity: identity };
+        logThinkingReplayDebug("frontend.thinkingReplay.detailCacheCommitted", {
+          ...thinkingReplayScope(messageItem),
+          key,
+          identity,
+          detail: summarizeThinkingMessage(cached?.messageItem || {}),
+        });
         return;
       }
       try {
         thinkingDetailLoadingKey.value = key;
+        logThinkingReplayDebug("frontend.thinkingReplay.detailRequestStarted", {
+          ...thinkingReplayScope(messageItem),
+          key,
+          identity,
+          runtime: getRuntimeView(messageItem),
+          message: summarizeThinkingMessage(messageItem),
+        });
         const detail = await loadThinkingDetail({
           userId: props.userId,
           sessionId: identity.sessionId,
@@ -356,13 +471,31 @@ export function useThinkingPanel(props, emit) {
         // thinkingDetailLoadKey can legitimately clear while this same request is
         // completing. Do not let the request cancel itself; only discard it when
         // the panel now points at a different thinking-detail identity.
-        if (!detail) return;
+        if (!detail) {
+          logThinkingReplayDebug("frontend.thinkingReplay.detailRequestEmpty", {
+            ...thinkingReplayScope(messageItem), key, identity,
+          });
+          return;
+        }
         // This watcher run owns the captured identity. The cache write performed
         // by loadThinkingDetail can make thinkingDetailLoadKey clear while the
         // request is resolving; that is not cancellation and must not prevent
         // committing the canonical detail to the reactive display source.
         loadedThinkingDetail.value = { ...detail, __thinkingDetailIdentity: identity };
-      } catch {
+        logThinkingReplayDebug("frontend.thinkingReplay.detailCommitted", {
+          ...thinkingReplayScope(messageItem),
+          key,
+          identity,
+          detail: summarizeThinkingMessage(detail?.messageItem || {}),
+        });
+      } catch (error) {
+        logThinkingReplayDebug("frontend.thinkingReplay.detailRequestFailed", {
+          ...thinkingReplayScope(messageItem),
+          key,
+          identity,
+          errorName: String(error?.name || ""),
+          errorMessage: String(error?.message || error || ""),
+        });
         // Keep summary-only panels stable; the explicit details drawer reports errors.
       } finally {
         if (thinkingDetailLoadingKey.value === key) {
@@ -374,31 +507,65 @@ export function useThinkingPanel(props, emit) {
   );
 
   function hasThinkingLogs(messageItem = {}) {
-    if (!messageItem || getMessageRole(messageItem) !== "assistant")
-      return false;
-    if (getRuntimeView(messageItem).running) return true;
-    if (hasSummaryThinkingDetails(messageItem)) return true;
+    const runtime = getRuntimeView(messageItem);
+    let result = false;
+    let reason = "no-logs";
+    if (!messageItem || getMessageRole(messageItem) !== "assistant") {
+      reason = "not-assistant";
+    } else if (runtime.running) {
+      result = true;
+      reason = "runtime-running";
+    } else if (hasSummaryThinkingDetails(messageItem)) {
+      result = true;
+      reason = "summary";
+    }
     // A compact refresh payload may omit hasThinkingDetails/count. Once the
     // scoped detail request resolves, let that canonical detail itself make the
     // panel visible instead of continuing to key visibility only off summary
     // metadata that is not guaranteed to be present.
-    const thinkingDetail = getThinkingDetailForMessage(messageItem);
-    if (thinkingDetail) {
-      return getCompletedToolLogsForMessage(
-        thinkingDetail.messageItem || messageItem,
-      ).length > 0;
+    const thinkingDetail = result ? null : getThinkingDetailForMessage(messageItem);
+    if (!result && thinkingDetail) {
+      const detailMessage = thinkingDetail.messageItem || messageItem;
+      result = getAllRealtimeLogs(detailMessage).length > 0 ||
+        getCompletedToolLogsForMessage(detailMessage).length > 0;
+      reason = result ? "loaded-detail" : "loaded-detail-empty";
     }
-    if (getLatestPluginAnalysisLog(messageItem)) return true;
-    if (String(props.variant || "panel") === "details") {
-      return getCompletedToolLogsForMessage(messageItem).length > 0;
+    if (!result && getLatestPluginAnalysisLog(messageItem)) {
+      result = true;
+      reason = "plugin-analysis";
     }
-    const hasRealtimeLogs =
+    if (!result && String(props.variant || "panel") === "details") {
+      result = getCompletedToolLogsForMessage(messageItem).length > 0;
+      reason = result ? "details-completed-tools" : reason;
+    }
+    const hasRealtimeLogs = !result && (
       Array.isArray(messageItem.processRealtimeLogs) ||
       Array.isArray(messageItem.realtimeLogs)
         ? getRealtimeLogs(messageItem).length > 0
-        : false;
-    if (hasRealtimeLogs) return true;
-    return getCompletedToolLogsForMessage(messageItem).length > 0;
+        : false);
+    if (hasRealtimeLogs) {
+      result = true;
+      reason = "realtime";
+    }
+    if (!result && getCompletedToolLogsForMessage(messageItem).length > 0) {
+      result = true;
+      reason = "completed-tools";
+    }
+    logThinkingReplayDebug("frontend.thinkingReplay.visibilityEvaluated", {
+      ...thinkingReplayScope(messageItem),
+      variant: String(props.variant || "panel"),
+      result,
+      reason,
+      runtime,
+      loadKey: thinkingDetailLoadKey.value,
+      loadingKey: thinkingDetailLoadingKey.value,
+      hasLoadedDetail: Boolean(loadedThinkingDetail.value),
+      message: summarizeThinkingMessage(messageItem),
+      detail: summarizeThinkingMessage(thinkingDetail?.messageItem || {}),
+      currentExecutionLogCount: currentExecutionLogs.value.length,
+      currentExecutionLogs: currentExecutionLogs.value.slice(-10).map(summarizeRealtimeLog),
+    });
+    return result;
   }
 
   function isMessageRuntimeRunning(messageItem = {}) {
@@ -590,8 +757,11 @@ export function useThinkingPanel(props, emit) {
         ? messageItem.tool_calls
         : [];
     if (toolCalls.length > 0) return toolCalls.length;
-    const realtimeLogs = Array.isArray(messageItem?.processRealtimeLogs)
+    const processRealtimeLogs = Array.isArray(messageItem?.processRealtimeLogs)
       ? messageItem.processRealtimeLogs
+      : [];
+    const realtimeLogs = processRealtimeLogs.length > 0
+      ? processRealtimeLogs
       : Array.isArray(messageItem?.realtimeLogs)
         ? messageItem.realtimeLogs
         : [];

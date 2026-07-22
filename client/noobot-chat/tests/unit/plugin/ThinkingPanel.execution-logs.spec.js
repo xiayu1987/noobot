@@ -61,6 +61,73 @@ describe("ThinkingPanel", () => {
     expect(wrapper.find("button").text()).toContain("1");
   });
 
+  it("uses replayed legacy logs when the refreshed process projection is still empty", () => {
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: true,
+      sessionId: "session-refreshed",
+      turnScopeId: "client-turn:refreshed",
+      processRealtimeLogs: [
+        {
+          event: "guidance_analysis_response",
+          type: "guidance_analysis",
+          purpose: "guidance",
+          pluginFlow: "analysis",
+          chain: "auxiliary",
+          text: "internal analysis",
+        },
+      ],
+      processExecutionLogTotal: 0,
+      realtimeLogs: [
+        { event: "tool_call", type: "tool_call", text: "replayed tool call" },
+      ],
+      executionLogTotal: 1,
+    }, {
+      runtime: {
+        running: true,
+        terminal: false,
+        startedAt: "2026-07-22T01:25:00.000Z",
+        finishedAt: "",
+      },
+    });
+
+    expect(wrapper.findAll(".execution-log-line")).toHaveLength(1);
+    expect(wrapper.find(".execution-log-line").text()).toContain("replayed tool call");
+    expect(wrapper.find(".empty-hint").exists()).toBe(false);
+  });
+
+  it("keeps rendering live rows received after a refreshed detail snapshot", async () => {
+    const messageItem = {
+      role: "assistant",
+      pending: true,
+      sessionId: "session-live-after-refresh",
+      turnScopeId: "client-turn:live-after-refresh",
+      processRealtimeLogs: [],
+      realtimeLogs: [],
+    };
+    const wrapper = mountThinkingPanel(messageItem, {
+      runtime: {
+        running: true,
+        terminal: false,
+        startedAt: "2026-07-22T01:25:00.000Z",
+        finishedAt: "",
+      },
+    });
+
+    await wrapper.setProps({
+      messageItem: {
+        ...messageItem,
+        realtimeLogs: [
+          { event: "tool_call", type: "tool_call", text: "live row after refresh" },
+        ],
+        executionLogTotal: 1,
+      },
+    });
+
+    expect(wrapper.find(".execution-log-line").text()).toContain("live row after refresh");
+    expect(wrapper.find(".empty-hint").exists()).toBe(false);
+  });
+
   
 
   

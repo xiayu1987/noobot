@@ -25,8 +25,11 @@ export function getThinkingDetailsCount(messageItem = {}) {
   if (toolCalls.length > 0) {
     return toolCalls.length;
   }
-  const realtimeLogs = Array.isArray(messageItem?.processRealtimeLogs)
+  const processRealtimeLogs = Array.isArray(messageItem?.processRealtimeLogs)
     ? messageItem.processRealtimeLogs
+    : [];
+  const realtimeLogs = processRealtimeLogs.length > 0
+    ? processRealtimeLogs
     : Array.isArray(messageItem?.realtimeLogs)
     ? messageItem.realtimeLogs
     : [];

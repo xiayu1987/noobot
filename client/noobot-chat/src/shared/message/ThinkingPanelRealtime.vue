@@ -4,6 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
+import { computed } from "vue";
 import {
   BaseEmptyHint,
   BaseMetaLabel,
@@ -15,7 +16,7 @@ import {
   BaseThinkingPanelShell,
 } from "../ui";
 import WorkflowLiveProjectionList from "../../app/WorkflowLiveProjectionList.vue";
-defineProps({
+const props = defineProps({
   messageItem: { type: Object, required: true },
   translate: { type: Function, required: true },
   thinkingDurationLabel: { type: String, default: "0s" },
@@ -30,6 +31,11 @@ defineProps({
   openNames: { type: Array, default: () => [] },
 });
 const emit = defineEmits(["open-thinking-details", "collapse", "update:openNames"]);
+const runningEmptyHintKey = computed(() =>
+  props.latestPluginAnalysisLog || props.latestMainModelContentLog
+    ? "message.analyzingRealtimeLog"
+    : "message.waitingRealtimeLog",
+);
 </script>
 <template>
   <BaseThinkingPanelShell
@@ -80,7 +86,7 @@ const emit = defineEmits(["open-thinking-details", "collapse", "update:openNames
         </div>
         <BaseEmptyHint
           v-if="!executionLogCount && isRunning"
-          :text="translate('message.waitingRealtimeLog')"
+          :text="translate(runningEmptyHintKey)"
         /><BaseEmptyHint
           v-if="!executionLogCount && !isRunning"
           :text="translate('message.noExecutionLogs')"

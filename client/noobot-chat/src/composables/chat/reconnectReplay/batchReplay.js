@@ -32,6 +32,7 @@ import {
   resolveReconnectTargetAssistantMessage,
 } from "./assistantMessageReplay";
 import { mergeRealtimeLogs } from "./messageLookup";
+import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger";
 
 export function prepareReconnectReplayMessages({
   messages = [],
@@ -318,7 +319,61 @@ export function applyReconnectEnvelopeToTargetMessage({
     targetMessage.content += String(eventData?.text || "");
   } else if (eventName === StreamEventEnum.THINKING) {
     const logItem = sanitizeExecutionLogForDisplay(classifyRealtimeLog(eventData));
+    logThinkingReplayDebug("frontend.thinkingReplay.reconnectThinkingClassified", {
+      sessionId: String(eventData?.sessionId || targetMessage?.sessionId || ""),
+      dialogProcessId: String(
+        eventData?.dialogProcessId || getMessageDialogProcessId(targetMessage) || normalizedDpId,
+      ),
+      turnScopeId: String(eventData?.turnScopeId || targetMessage?.turnScopeId || ""),
+      envelopeSequence: envelope?.sequence ?? null,
+      dataSequence: eventData?.sequence ?? eventData?.seq ?? null,
+      eventDataKeys: Object.keys(eventData || {}).sort(),
+      logType: Array.isArray(eventData?.log) ? "array" : typeof eventData?.log,
+      logEvent: String(eventData?.log?.event || eventData?.data?.log?.event || ""),
+      logKeys: Object.keys(eventData?.log || {}).sort(),
+      nestedDataKeys: Object.keys(eventData?.data || {}).sort(),
+      nestedLogKeys: Object.keys(eventData?.data?.log || {}).sort(),
+      classified: Boolean(logItem),
+      classifiedType: String(logItem?.type || logItem?.event || ""),
+      classifiedTextLength: String(logItem?.text || "").length,
+      targetPending: targetMessage?.pending === true,
+      targetRealtimeLogCount: Array.isArray(targetMessage?.realtimeLogs)
+        ? targetMessage.realtimeLogs.length
+        : 0,
+    });
     if (!logItem || !_trimStr(logItem.text)) {
+      const rawTextCandidates = {
+        text: eventData?.text,
+        output: eventData?.output,
+        content: eventData?.content,
+        message: eventData?.message,
+        displayText: eventData?.displayText,
+        nestedText: eventData?.data?.text,
+        nestedOutput: eventData?.data?.output,
+        nestedContent: eventData?.data?.content,
+        nestedMessage: eventData?.data?.message,
+        nestedDisplayText: eventData?.data?.displayText,
+      };
+      logThinkingReplayDebug("frontend.thinkingReplay.reconnectThinkingDropped", {
+        sessionId: String(eventData?.sessionId || targetMessage?.sessionId || ""),
+        dialogProcessId: String(
+          eventData?.dialogProcessId || getMessageDialogProcessId(targetMessage) || normalizedDpId,
+        ),
+        turnScopeId: String(eventData?.turnScopeId || targetMessage?.turnScopeId || ""),
+        sequence: eventData?.sequence ?? eventData?.seq ?? envelope?.sequence ?? null,
+        eventDataKeys: Object.keys(eventData || {}).sort(),
+        nestedDataKeys: Object.keys(eventData?.data || {}).sort(),
+        rawTextCandidates: Object.fromEntries(
+          Object.entries(rawTextCandidates).map(([key, value]) => {
+            const text = typeof value === "string"
+              ? value
+              : value == null
+                ? ""
+                : JSON.stringify(value);
+            return [key, { length: text.length, preview: text.slice(0, 500) }];
+          }),
+        ),
+      });
       return true;
     }
     if (logItem?.dialogProcessId && !getMessageDialogProcessId(targetMessage)) {
@@ -508,6 +563,18 @@ export async function applyReconnectReplayBatchToActiveSession({
     isReconnectTerminalBatch,
     allowCreate,
   });
+  logThinkingReplayDebug("frontend.thinkingReplay.reconnectBatchPlanned", {
+    sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
+    dialogProcessId: normalizedDpId,
+    turnScopeId: _trimStr(turnScopeId),
+    inputCount: _ensureArray(messages).length,
+    replayCount: nextMessages.length,
+    filteredCount: Math.max(0, _ensureArray(messages).length - nextMessages.length),
+    lastAppliedSeq: Number(lastAppliedSeq || 0),
+    maxSequence,
+    shouldSkipAfterTerminal,
+    shouldCreateTarget,
+  });
   if (!nextMessages.length) return false;
   if (shouldSkipAfterTerminal) {
     finalizeReconnectReplayBatch({
@@ -556,6 +623,14 @@ export async function applyReconnectReplayBatchToActiveSession({
     allowCreate: shouldCreateTarget,
   });
   if (usedFallback) {
+    logThinkingReplayDebug("frontend.thinkingReplay.reconnectBatchFallback", {
+      sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
+      dialogProcessId: normalizedDpId,
+      turnScopeId: _trimStr(turnScopeId),
+      replayCount: nextMessages.length,
+      lastAppliedSeq: Number(lastAppliedSeq || 0),
+      maxSequence,
+    });
     finalizeReconnectReplayBatch({
       normalizedDpId,
       maxAppliedSeq: maxSequence,

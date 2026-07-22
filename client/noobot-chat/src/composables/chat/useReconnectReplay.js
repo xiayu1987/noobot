@@ -213,6 +213,7 @@ export function useReconnectReplay({
       sessionId,
       activeSession: activeSession.value,
       activeSessionId: activeSessionId.value,
+      sessions: sessions.value,
     });
   }
 

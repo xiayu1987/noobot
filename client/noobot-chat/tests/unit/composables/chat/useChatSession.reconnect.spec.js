@@ -14,6 +14,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick, ref, toRef } from "vue";
 import { useChatStore } from "../../../../src/shared/stores/useChatStore";
+import { classifyRealtimeLog } from "../../../../src/app/state/sessionMessageState";
 import { logResendDebug, setResendDebugLogSink } from "../../../../src/composables/chat/debug/resendDebugLogger";
 import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
 import {
@@ -58,6 +59,79 @@ describe("useChatSession reconnect replay", () => {
         detail: "through-session-log-client",
       }),
     }));
+  });
+
+  it("projects live tool call and result received after refresh into the restored assistant", async () => {
+    const store = useChatStore();
+    const assistant = {
+      role: RoleEnum.ASSISTANT,
+      dialogProcessId: "dp-live",
+      turnScopeId: "turn-live",
+      content: "",
+      pending: true,
+      realtimeLogs: [],
+    };
+    store.sessions = [{
+      id: "s-live",
+      backendSessionId: "s-live",
+      title: "live",
+      isLocal: false,
+      loaded: true,
+      messages: [{ role: RoleEnum.USER, content: "run" }, assistant],
+      rawMessages: [],
+      sessionDocs: [],
+      connectorPanelState: { selectedConnectors: {} },
+      currentTaskId: "",
+      currentTaskStatus: "running",
+      messageCount: 2,
+      lastMessage: assistant,
+    }];
+    store.activeSessionId = "s-live";
+    const envelope = (eventType, sequence, extra = {}) => ({
+      // `message_event` is the WebSocket routing name. It is intentionally not
+      // part of StreamEventEnum, whose values describe projected stream events.
+      event: "message_event",
+      data: {
+        channelKind: "message_event",
+        channelVersion: 1,
+        route: { scope: "main_session", sessionId: "s-live" },
+        event: {
+          envelopeKind: "noobot.message_event",
+          envelopeVersion: 1,
+          eventId: `evt-${sequence}`,
+          eventType,
+          sessionId: "s-live",
+          messageId: "msg-live",
+          dialogProcessId: "dp-live",
+          turnScopeId: "turn-live",
+          sequence,
+          timestamp: `2026-07-22T04:16:${String(sequence).padStart(2, "0")}.000Z`,
+          tool: "read_file",
+          toolCallId: "call-live",
+          ...extra,
+        },
+      },
+    });
+    wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
+      onReconnectData(envelope("tool_call_start", 1, { args: { filePath: "notes.txt" } }));
+      onReconnectData(envelope("tool_call_end", 2, { result: { ok: true } }));
+    });
+
+    const session = createChatSession({ classifyRealtimeLog });
+    await session.handleReconnect();
+
+    expect(sessionLogClientMock.log).not.toHaveBeenCalledWith(expect.objectContaining({
+      event: "frontend.thinkingReplay.liveProjectionTargetMissing",
+    }));
+
+    const restoredAssistant = store.sessions[0].messages.find(
+      (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-live",
+    );
+    expect(restoredAssistant.realtimeLogs).toEqual([
+      expect.objectContaining({ type: "tool_call", toolCallId: "call-live" }),
+      expect.objectContaining({ type: "tool_result", toolCallId: "call-live" }),
+    ]);
+    expect(restoredAssistant.executionLogTotal).toBe(2);
   });
 
   it("reconnect DONE with dialogProcessId only patches that assistant turn", async () => {
