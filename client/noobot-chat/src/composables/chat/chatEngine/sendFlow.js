@@ -8,7 +8,6 @@ import {
   MESSAGE_EVENT_ENVELOPE_KIND,
   isMessageEventEnvelope,
 } from "@noobot/shared/message-event-protocol";
-import { useProcessStore } from "../../../shared/stores/useProcessStore";
 import { buildChatPayload } from "./payload";
 import {
   applySendErrorState,
@@ -27,7 +26,7 @@ import {
   handleDoneStreamEvent,
   handleInteractionRequestStreamEvent,
 } from "./streamHandlers";
-import { reduceMessageEvent } from "./messageEventReducer";
+import { dispatchTurnEnvelope, TURN_PROJECTION_SOURCE } from "./turnProjectionStore";
 import { normalizeTrimmedString } from "./utils";
 import {
   SESSION_RUN_EVENT,
@@ -217,19 +216,8 @@ export function createChatEngineSender({
   uploadFiles,
   userId,
   finalizePendingResendOperation,
-  processStore = null,
 }) {
-  let resolvedProcessStore = processStore || null;
   const logSessionEvent = (event = {}) => sessionLogWebSocketClient?.log?.(event);
-  function getResolvedProcessStore() {
-    if (resolvedProcessStore) return resolvedProcessStore;
-    try {
-      resolvedProcessStore = useProcessStore();
-    } catch {
-      resolvedProcessStore = null;
-    }
-    return resolvedProcessStore;
-  }
   return async function send(options = {}) {
     const explicitMessageText = typeof options?.messageText === "string" ? options.messageText.trim() : "";
     const explicitAttachmentFiles = Array.isArray(options?.attachmentFiles) ? options.attachmentFiles : null;
@@ -375,7 +363,6 @@ export function createChatEngineSender({
         botThinkingStartedAt: botMsg?.thinkingStartedAt || "",
         payloadThinkingStartedAt: payload?.config?.thinkingStartedAt || "",
       });
-      const activeProcessStore = getResolvedProcessStore();
       let locatedSendingStartedMessage = false;
       const locateSendingStartedMessageOnce = () => {
         if (locatedSendingStartedMessage) return;
@@ -498,10 +485,11 @@ export function createChatEngineSender({
         }
         if (shouldProjectMainSessionEvent(event, data || {})) {
           const messageEvent = data.event || {};
-          const reduction = reduceMessageEvent({
+          const reduction = dispatchTurnEnvelope({
             targetMessage: botMsg,
-            event: messageEvent,
+            envelope: messageEvent,
             classifyRealtimeLog,
+            source: TURN_PROJECTION_SOURCE.NORMAL_LIVE,
           });
           logSessionEvent({
             category: "transport",
@@ -617,7 +605,6 @@ export function createChatEngineSender({
             refreshSessionConnectorsAsync,
             mergeAssistantAttachments,
             makeViewMessage,
-            processStore: activeProcessStore,
             locateSendingStartedMessageOnce,
           })
         ) {
@@ -660,7 +647,6 @@ export function createChatEngineSender({
             mergeAssistantAttachments,
             locateDoneMessage,
             applyConversationState,
-            processStore: activeProcessStore,
             locateSendingStartedMessageOnce,
             suppressCompletionConversationState: Boolean(finalDoneDetailPromise),
           });

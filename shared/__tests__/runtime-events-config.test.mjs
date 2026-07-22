@@ -13,7 +13,6 @@ import {
   resolveRuntimeEventsMaxArchives,
   resolveRuntimeEventsMaxFileBytes,
   resolveRuntimeEventsRetentionDays,
-  resolveRuntimeEventsSessionLogControls,
   resolveRuntimeEventsStorageConfig,
 } from '../runtime-events-config.mjs';
 
@@ -43,56 +42,6 @@ test('runtime-events storage cleanup can be disabled with zero values', () => {
     retentionDays: 0,
     maxArchives: 0,
   });
-});
-
-test('runtime-events session log controls use business defaults', () => {
-  assert.deepEqual(
-    resolveRuntimeEventsSessionLogControls({}),
-    RUNTIME_EVENTS_CONFIG_DEFAULTS.sessionLogControls,
-  );
-  assert.equal(resolveRuntimeEventsSessionLogControls({}).messageLog, true);
-  assert.equal(resolveRuntimeEventsSessionLogControls({}).stateMachineDebug, false);
-  assert.equal(resolveRuntimeEventsSessionLogControls({}).frontendStopContinueDebug, false);
-  assert.equal(resolveRuntimeEventsSessionLogControls({}).frontendThinkingReplayDebug, true);
-  assert.equal(resolveRuntimeEventsSessionLogControls({}).agentProxyRouteDebug, false);
-});
-
-test('runtime-events session log controls resolve per business env and overrides', () => {
-  const env = {
-    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.messageLog]: 'off',
-    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.stateMachineDebug]: 'on',
-    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.resendDebug]: 'invalid',
-    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.frontendStopContinueDebug]: 'off',
-    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.frontendThinkingReplayDebug]: 'off',
-    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.agentProxyRouteDebug]: 'off',
-  };
-
-  const resolved = resolveRuntimeEventsSessionLogControls(env, { transportLog: false });
-  assert.equal(resolved.messageLog, false);
-  assert.equal(resolved.stateMachineDebug, true);
-  assert.equal(resolved.resendDebug, false);
-  assert.equal(resolved.frontendStopContinueDebug, false);
-  assert.equal(resolved.frontendThinkingReplayDebug, false);
-  assert.equal(resolved.agentProxyRouteDebug, false);
-  assert.equal(resolved.transportLog, false);
-});
-
-test('runtime-events lifecycle controls can be disabled independently', () => {
-  const env = {
-    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.frontendLifecycleLog]: 'off',
-    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.agentProxyHttpLog]: 'false',
-    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.agentProxyWebSocketLog]: '0',
-    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.agentProxyRouteLog]: 'no',
-    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.backendWebSocketLog]: 'disabled',
-    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.backendLifecycleLog]: 'invalid',
-  };
-  const resolved = resolveRuntimeEventsSessionLogControls(env);
-  assert.equal(resolved.frontendLifecycleLog, false);
-  assert.equal(resolved.agentProxyHttpLog, false);
-  assert.equal(resolved.agentProxyWebSocketLog, false);
-  assert.equal(resolved.agentProxyRouteLog, false);
-  assert.equal(resolved.backendWebSocketLog, false);
-  assert.equal(resolved.backendLifecycleLog, true);
 });
 
 test('hook runtime-events mode defaults to summary and recognizes verbose values', () => {

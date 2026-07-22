@@ -42,8 +42,9 @@ import { useConnectorPanel } from "../infra/useConnectorPanel";
 import { useChatList } from "./useChatList";
 import { useChatEngine } from "./useChatEngine";
 import { shouldProjectMainSessionEvent } from "./chatEngine/sendFlow";
-import { reduceMessageEvent } from "./chatEngine/messageEventReducer";
+import { dispatchTurnEnvelope, TURN_PROJECTION_SOURCE } from "./chatEngine/turnProjectionStore";
 import { finalizeStoppedSessionDetail } from "./chatEngine/sessionFinalize";
+import { applyRunStateMessageRuntimePatch } from "./chatEngine/messageRuntimePatch";
 import { useReconnectReplay } from "./useReconnectReplay";
 import { useChatStore } from "../../shared/stores/useChatStore";
 import { useProcessStore } from "../../shared/stores/useProcessStore";
@@ -187,8 +188,30 @@ export function useChatSession({
   );
   const activeSessionCanStop = computed(() => composerActionState.value.canStop === true);
 
-  const applyComposerActionStateEvent = (event) => {
-    return chatStore.applyTurnRuntimeEvent(event);
+  // Composition-root boundary for runtime events. Every producer (composer,
+  // stream, reconnect and finalization) submits here so a Registry transition
+  // is projected to messages exactly once.
+  const submitTurnRuntimeEvent = (event) => {
+    const result = chatStore.applyTurnRuntimeEvent(event);
+    // Runtime events have one projection contract regardless of whether they
+    // arrive through the single-event composer/finalization path or reconnect's
+    // batch path.  In particular, a backend event may atomically promote an
+    // optimistic local Session; always project with the Registry's canonical
+    // Turn rather than the pre-promotion input event.
+    applyRunStateMessageRuntimePatch({
+      sessions,
+      activeSession,
+      turnRuntimeRegistry,
+      event: result?.turn || event,
+    });
+    return {
+      ...result,
+      messageEffect: {
+        projected: Boolean(result?.turn),
+        state: result?.turn?.state || "",
+        terminal: result?.turn?.terminal || "",
+      },
+    };
   };
 
   function trackConversationState(stateEntry = {}) {
@@ -238,7 +261,7 @@ export function useChatSession({
       turnScopeId,
       data: normalizedEntry,
     });
-    applyComposerActionStateEvent({
+    submitTurnRuntimeEvent({
         type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
         state,
         sessionId,
@@ -278,7 +301,7 @@ export function useChatSession({
           finalEventData: { ...stateEntry, sessionId, turnScopeId, dialogProcessId },
           fetchSessionDetail: chatList.fetchSessionDetail,
           applySessionDetail: chatList.applySessionDetail,
-          applyRunStateEvent: applyComposerActionStateEvent,
+          applyRunStateEvent: submitTurnRuntimeEvent,
         }).finally(() => pendingStoppedSummaryReconciliations.delete(reconciliationKey));
         pendingStoppedSummaryReconciliations.set(reconciliationKey, reconciliation);
       }
@@ -313,7 +336,7 @@ export function useChatSession({
     }
     const terminalState = String(terminalTurn?.status || "").trim().toLowerCase();
     if (isCurrentSession && terminalState === "user_stopped" && turnScopeId) {
-      applyComposerActionStateEvent({
+      submitTurnRuntimeEvent({
         type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED,
         sessionId,
         dialogProcessId,
@@ -494,19 +517,20 @@ export function useChatSession({
     onConversationState: trackConversationState,
     chatWebSocketClient,
     sessionLogWebSocketClient,
-    applyTurnRuntimeEvent: chatStore.applyTurnRuntimeEvent,
+    applyTurnRuntimeEvent: submitTurnRuntimeEvent,
+    runtimeEventsAlreadyProjected: true,
     upsertWorkflowNodeStateEvent: chatStore.upsertWorkflowNodeStateEvent,
     upsertWorkflowPlanningEvent: chatStore.upsertWorkflowPlanningEvent,
     upsertSubSessionEvent: chatStore.upsertSubSessionEvent,
     ensureConnected,
     notify,
-    processStore,
   });
 
   const reconnectReplay = useReconnectReplay({
     sessions,
     activeSession,
     activeSessionId,
+    turnRuntimeRegistry,
     interactionSubmitting,
     chatList,
     chatWebSocketClient,
@@ -578,9 +602,7 @@ export function useChatSession({
           sourceEvents.splice(index, 1);
         }
       }
-      for (const event of sourceEvents) {
-        chatStore.applyTurnRuntimeEvent(event);
-      }
+      return sourceEvents.map((event) => submitTurnRuntimeEvent(event));
     },
   });
 
@@ -606,7 +628,7 @@ export function useChatSession({
       ? SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_SETTLED
       : SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_SETTLED;
     const continuingTurnScopeId = isContinueFromUserStopped ? createTurnScopeId() : "";
-    applyComposerActionStateEvent({
+    submitTurnRuntimeEvent({
       type: composerEventType,
       sessionId: isContinueFromUserStopped ? resumeSessionId : undefined,
       turnScopeId: continuingTurnScopeId || undefined,
@@ -629,7 +651,7 @@ export function useChatSession({
           };
       return await chatEngine.send(sendOptions, ...restArgs);
     } finally {
-      applyComposerActionStateEvent({
+      submitTurnRuntimeEvent({
         type: composerSettledEventType,
         source: "use_chat_session",
       });
@@ -685,10 +707,11 @@ export function useChatSession({
       });
       return false;
     }
-    const reduction = reduceMessageEvent({
+    const reduction = dispatchTurnEnvelope({
       targetMessage: botMessage,
-      event: messageEvent,
+      envelope: messageEvent,
       classifyRealtimeLog,
+      source: TURN_PROJECTION_SOURCE.RECONNECT_LIVE,
     });
     logThinkingReplayDebug("frontend.messageEvent.reduced", {
       source: "reconnect_live",
@@ -707,6 +730,7 @@ export function useChatSession({
 
   async function handleReconnect() {
     const pendingReconnectReplays = [];
+    let reconnectReplayQueue = Promise.resolve();
     const directExecutionRestoreCommandIds = new Set();
     const trackReconnectReplay = (replayPromise) => {
       pendingReconnectReplays.push(Promise.resolve(replayPromise));
@@ -731,10 +755,11 @@ export function useChatSession({
           turnScopeId: String(reconnectPayload?.data?.turnScopeId || ""),
           dataKeys: Object.keys(reconnectPayload?.data || {}).sort(),
         });
-        if (reconnectPayload?.sessions) {
-          trackReconnectReplay(reconnectReplay.applyReconnectData(reconnectPayload));
-        }
-        if (reconnectPayload?.event && reconnectPayload?.data) {
+        const replayPayload = async () => {
+          if (reconnectPayload?.sessions) {
+            await reconnectReplay.applyReconnectData(reconnectPayload);
+          }
+          if (!(reconnectPayload?.event && reconnectPayload?.data)) return;
           // After reconnect_complete this socket remains the live transport.
           // Authoritative main-session events must update the restored message
           // just like events received by the original send stream.
@@ -744,10 +769,14 @@ export function useChatSession({
           if (directExecutionRestoreCommandIds.has(String(reconnectPayload.data?.commandId || "").trim())) {
             return;
           }
-          trackReconnectReplay(
-            reconnectReplay.applyReconnectEvent(reconnectPayload.event, reconnectPayload.data),
-          );
-        }
+          await reconnectReplay.applyReconnectEvent(reconnectPayload.event, reconnectPayload.data);
+        };
+        // WebSocket callbacks are synchronous but replay/hydration is not. Keep
+        // protocol arrival order across separate callback invocations so a
+        // trailing channel_state cannot race the DONE snapshot that owns its
+        // Session+Turn identity.
+        reconnectReplayQueue = reconnectReplayQueue.then(replayPayload, replayPayload);
+        trackReconnectReplay(reconnectReplayQueue);
       },
     }).then(async () => {
       await Promise.all(pendingReconnectReplays);

@@ -16,14 +16,16 @@ import {
 import { _trimStr } from "./utils";
 import {
   BackendChannelState,
-  FrontendRunState,
   SESSION_RUN_EVENT,
   clearRememberedStopRequests,
 } from "../sessionRunStateMachine";
+import { selectTurnMessageRuntime } from "../sessionRunStateMachine/turnRuntimeRegistry";
 import { normalizeTurnMeta } from "../../infra/messageIdentity";
 import { normalizeTimePair } from "../../infra/timeFields";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { logResendDebug, summarizeDebugMessage } from "../debug/resendDebugLogger";
+import { createTurnObservation } from "../chatEngine/turnObservation";
+import { createTurnKey } from "../chatEngine/turnIdentity";
 
 
 export function emitSyntheticReconnectErrorConversationState({
@@ -50,49 +52,6 @@ function normalizeReconnectChannelTiming(stateData = {}) {
   return normalizeTimePair(stateData);
 }
 
-
-function applyReconnectChannelTimingToMessage({
-  targetAssistantMessage = null,
-  state = "",
-  sessionId = "",
-  dialogProcessId = "",
-  turnScopeId = "",
-  stateData = {},
-  terminal = false,
-} = {}) {
-  if (!targetAssistantMessage) return;
-  if (sessionId) {
-    targetAssistantMessage.sessionId = targetAssistantMessage.sessionId || sessionId;
-    targetAssistantMessage.session_id = targetAssistantMessage.session_id || sessionId;
-  }
-  // Reconnect may create the in-flight assistant before session detail has an
-  // assistant message for this turn. Keep the canonical message identity in
-  // sync with channelState: consumers such as ThinkingPanel key persisted turn
-  // timing by the message-level turnScopeId.
-  if (turnScopeId) {
-    targetAssistantMessage.turnScopeId = targetAssistantMessage.turnScopeId || turnScopeId;
-  }
-  if (dialogProcessId) {
-    targetAssistantMessage.dialogProcessId = targetAssistantMessage.dialogProcessId || dialogProcessId;
-  }
-  const timing = normalizeReconnectChannelTiming(stateData);
-  const previousChannelState =
-    targetAssistantMessage.channelState &&
-    typeof targetAssistantMessage.channelState === "object" &&
-    !Array.isArray(targetAssistantMessage.channelState)
-      ? targetAssistantMessage.channelState
-      : {};
-  const channelState = {
-    ...previousChannelState,
-    state,
-    sessionId,
-    dialogProcessId,
-    turnScopeId,
-    sourceEvent: _trimStr(stateData?.sourceEvent),
-    seq: Number(stateData?.seq || 0),
-  };
-  targetAssistantMessage.channelState = channelState;
-}
 
 export function scheduleMissingInteractionPayloadFailure({
   pendingInteractionRequest,
@@ -148,8 +107,7 @@ export async function applyReconnectChannelState({
   onConversationState,
   isCurrentActiveSession,
   findAssistantMessageByTurnScopeId,
-  findAssistantMessageByDialogProcessId,
-  findFallbackAssistantMessage,
+  turnRuntimeRegistry,
   applyRunStateEvent,
   interactionSubmitting,
   clearPendingInteractionIfObsolete,
@@ -189,20 +147,56 @@ export async function applyReconnectChannelState({
       applied: forActiveSession,
     });
   }
-  if (!forActiveSession) return;
+  if (!forActiveSession) {
+    return {
+      sessionId,
+      turnScopeId: turnMeta.turnScopeId,
+      turnKey: sessionId && turnMeta.turnScopeId ? `${sessionId}:${turnMeta.turnScopeId}` : "",
+      exactTurnMatched: false,
+      pendingBefore: false,
+      applied: false,
+      reason: "inactive_session",
+      transitions: [],
+    };
+  }
   const state = _trimStr(stateData?.state);
   const dialogProcessId = _trimStr(stateData?.dialogProcessId);
   const turnScopeId = turnMeta.turnScopeId;
   const targetAssistantMessage =
     (turnScopeId && typeof findAssistantMessageByTurnScopeId === "function"
       ? findAssistantMessageByTurnScopeId(turnScopeId)
-      : null) ||
-    (!turnScopeId && dialogProcessId && typeof findAssistantMessageByDialogProcessId === "function"
-      ? findAssistantMessageByDialogProcessId(dialogProcessId)
-      : null) ||
-    (!turnScopeId && !dialogProcessId && typeof findFallbackAssistantMessage === "function"
-      ? findFallbackAssistantMessage()
       : null);
+  const transitionResults = [];
+  const applyObservedRunStateEvent = (event, phase) => {
+    const result = applyRunStateEvent?.(event);
+    transitionResults.push({ phase, ...(result || { applied: false, reason: "runtime_dispatch_unavailable" }) });
+    return result;
+  };
+  const replayObservation = () => {
+    const lastTransition = transitionResults.at(-1) || null;
+    const transitionObservation = lastTransition?.observation || lastTransition || {};
+    return createTurnObservation({
+    requestedSessionId: sessionId,
+    canonicalSessionId: transitionObservation.canonicalSessionId || sessionId,
+    turnKey: createTurnKey({ sessionId, turnScopeId }),
+    eventId: _trimStr(stateData?.eventId),
+    sequence: Number(stateData?.seq || stateData?.sequence || 0),
+    source: "reconnect_channel_state",
+    authority: stateData?.authoritativeSnapshot === true ? "authoritative_current_run" : "none",
+    exactTurnMatched: Boolean(targetAssistantMessage),
+    pendingBefore: targetAssistantMessage?.pending === true,
+    applied: transitionResults.some((transition) => transition?.applied === true),
+    reason: transitionResults.find((transition) => transition?.applied === false)?.reason ||
+      (transitionResults.length ? "applied" :
+        (state === BackendChannelState.COMPLETED && stateData?.authoritativeSnapshot !== true
+          ? "lifecycle_authority_missing"
+          : "no_runtime_transition")),
+    aliasPromoted: transitionResults.some((transition) => transition?.aliasPromoted === true),
+    finalState: transitionObservation.finalState || transitionObservation.state || state,
+    messageEffect: transitionObservation.messageEffect || "none",
+    transitions: transitionResults,
+    });
+  };
   logResendDebug("channelStateReplay.target", {
     state,
     sessionId,
@@ -217,7 +211,12 @@ export async function applyReconnectChannelState({
     // applying the backend processing fact; this is state hydration only and
     // must not issue another network request. Existing turns reject this
     // bootstrap event harmlessly and continue with the backend event below.
+    const existingTurnRuntime = selectTurnMessageRuntime(
+      turnRuntimeRegistry?.value || turnRuntimeRegistry,
+      { sessionId, turnScopeId },
+    );
     if (
+      !existingTurnRuntime?.state &&
       sessionId &&
       turnScopeId &&
       [
@@ -226,7 +225,7 @@ export async function applyReconnectChannelState({
         BackendChannelState.INTERACTION_PENDING,
       ].includes(state)
     ) {
-      applyRunStateEvent?.({
+      applyObservedRunStateEvent({
         type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
         action: "send",
         sessionId,
@@ -235,9 +234,9 @@ export async function applyReconnectChannelState({
         source: "reconnect_hydration",
         sourceEvent: "channel_state_bootstrap",
         authoritativeSnapshot: true,
-      });
+      }, "inflight_bootstrap_started");
     }
-    applyRunStateEvent?.({
+    applyObservedRunStateEvent({
         type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
         state,
         sessionId,
@@ -251,7 +250,7 @@ export async function applyReconnectChannelState({
         createdAt: timing.createdAt,
         updatedAt: timing.updatedAt,
         authoritativeSnapshot: stateData?.authoritativeSnapshot === true,
-    });
+    }, "inflight_state");
     if (
       state === BackendChannelState.SENDING &&
       _trimStr(stateData?.sourceEvent).toLowerCase() === "interaction_response" &&
@@ -292,7 +291,7 @@ export async function applyReconnectChannelState({
             existingPendingRequest?.dialogProcessId || "",
           ).trim();
           if (!dialogProcessId || !existingDialogProcessId || existingDialogProcessId === dialogProcessId) {
-            return;
+            return replayObservation();
           }
         }
         scheduleMissingInteractionPayloadFailure({
@@ -301,31 +300,16 @@ export async function applyReconnectChannelState({
           turnScopeId,
           targetAssistantMessage,
         });
-        return;
+        return replayObservation();
       }
     }
-    if (targetAssistantMessage) {
-      const beforeTerminalApply = summarizeDebugMessage(targetAssistantMessage);
-      applyReconnectChannelTimingToMessage({
-        targetAssistantMessage,
-        state,
-        sessionId,
-        dialogProcessId,
-        turnScopeId,
-        stateData,
-      });
-      targetAssistantMessage.pending = true;
-      if (state === BackendChannelState.STOPPING) {
-        targetAssistantMessage.statusLabel = translate("chat.stopping");
-      } else if (state === BackendChannelState.RECONNECTING) {
-        targetAssistantMessage.statusLabel = translate("chat.reconnecting");
-      } else if (state === BackendChannelState.SENDING) {
-        targetAssistantMessage.statusLabel = "";
-      }
-    }
-    return;
+    // Message runtime state is projected exclusively by
+    // turnRuntimeRegistry -> messageRuntimePatch after applyRunStateEvent.
+    // Reconnect replay must not maintain a second mutable runtime mirror.
+    return replayObservation();
   }
   if (isTerminalConversationState(state)) {
+    const hasLifecycleAuthority = stateData?.authoritativeSnapshot === true;
     if (dialogProcessId) terminalDialogProcessIdSet.add(dialogProcessId);
     if (_trimStr(stateData?.sourceEvent) !== "done") {
       chatWebSocketClient.clearStopRequested();
@@ -335,7 +319,40 @@ export async function applyReconnectChannelState({
     if (state === BackendChannelState.EXPIRED) {
       scheduleCacheExpiredSessionRefresh({ sessionId, dialogProcessId, targetAssistantMessage });
     }
-    applyRunStateEvent?.({
+    // A terminal channel fact can be the first runtime fact observed after a
+    // reload.  The Turn reducer deliberately rejects a terminal transition
+    // without a preceding action/processing phase.  Reconstruct that phase
+    // only when an exact Turn-scoped pending assistant proves ownership. Do
+    // not bootstrap from dialogProcessId: an execution chain may span a
+    // stopped Turn and its continuation.
+    if (
+      sessionId &&
+      turnScopeId &&
+      targetAssistantMessage?.pending === true &&
+      hasLifecycleAuthority
+    ) {
+      applyObservedRunStateEvent({
+        type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
+        action: "send",
+        sessionId,
+        dialogProcessId,
+        turnScopeId,
+        source: "reconnect_terminal_hydration",
+        sourceEvent: "terminal_turn_bootstrap",
+        authoritativeSnapshot: true,
+      }, "terminal_bootstrap_started");
+      applyObservedRunStateEvent({
+        type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+        state: BackendChannelState.SENDING,
+        sessionId,
+        dialogProcessId,
+        turnScopeId,
+        source: "reconnect_terminal_hydration",
+        sourceEvent: "terminal_processing_bootstrap",
+        authoritativeSnapshot: true,
+      }, "terminal_bootstrap_sending");
+    }
+    if (state !== BackendChannelState.COMPLETED || hasLifecycleAuthority) applyObservedRunStateEvent({
         type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
         state,
         sessionId,
@@ -348,8 +365,12 @@ export async function applyReconnectChannelState({
         updatedAtMs: timing.updatedAtMs,
         createdAt: timing.createdAt,
         updatedAt: timing.updatedAt,
+        // Identity routes the fact; it does not grant lifecycle authority.
+        // Only currentRun hydration may create a terminal Turn from scratch.
+        // An exact pending assistant is handled by the explicit bootstrap
+        // above, so standalone DONE snapshots remain content-only.
         authoritativeSnapshot: stateData?.authoritativeSnapshot === true,
-    });
+    }, "terminal_state");
     if (typeof clearPendingInteractionIfObsolete === "function") {
       clearPendingInteractionIfObsolete({ sessionId, dialogProcessId });
     }
@@ -357,52 +378,23 @@ export async function applyReconnectChannelState({
     if (state === BackendChannelState.NO_CONVERSATION || state === BackendChannelState.EXPIRED) {
       clearPendingInteraction();
       interactionSubmitting.value = false;
-      if (targetAssistantMessage) targetAssistantMessage.pending = false;
-      return;
+      return replayObservation();
     }
-    let shouldFinalizeCompletedReplay = state === BackendChannelState.COMPLETED;
-    if (targetAssistantMessage) {
-      const beforeTerminalApply = summarizeDebugMessage(targetAssistantMessage);
-      applyReconnectChannelTimingToMessage({
-        targetAssistantMessage,
-        state,
-        sessionId,
-        dialogProcessId,
-        turnScopeId,
-        stateData,
-        terminal: true,
-      });
-      if (state === BackendChannelState.COMPLETED) {
-        logResendDebug("channelStateReplay.backendCompleted.apply", {
-          state,
-          sessionId,
-          dialogProcessId,
-          turnScopeId,
-          before: beforeTerminalApply,
-          after: summarizeDebugMessage(targetAssistantMessage),
-        });
-        targetAssistantMessage.pending = false;
-        targetAssistantMessage.statusLabel = translate("chat.generated");
-        shouldFinalizeCompletedReplay = true;
-      } else {
-        targetAssistantMessage.pending = false;
-        if (state === BackendChannelState.USER_STOPPED) {
-          targetAssistantMessage.statusLabel = translate("chat.stopped");
-        } else if (state === FrontendRunState.CANCELLED) {
-          targetAssistantMessage.statusLabel = translate("chat.failed");
-        } else if (state === BackendChannelState.ERROR) {
-          targetAssistantMessage.statusLabel = translate("chat.failed");
-        }
-        logResendDebug("channelStateReplay.terminal.apply", {
-          state,
-          sessionId,
-          dialogProcessId,
-          turnScopeId,
-          before: beforeTerminalApply,
-          after: summarizeDebugMessage(targetAssistantMessage),
-        });
-      }
-    }
+    // Durable completion hydration is authorized only by the canonical
+    // currentRun snapshot produced by reconnectDataReplay. A standalone DONE
+    // payload may carry a valid Session+Turn identity for content routing, but
+    // it must not manufacture lifecycle authority, fetch final detail, or
+    // clear pending state.
+    const terminalTransitionApplied = transitionResults.some(
+      (transition) => transition?.phase === "terminal_state" && transition?.applied === true,
+    );
+    const shouldFinalizeCompletedReplay =
+      state === BackendChannelState.COMPLETED &&
+      hasLifecycleAuthority &&
+      terminalTransitionApplied;
+    // Completion/stopped/error message fields are derived by the same runtime
+    // projection used by live events. Finalization below only hydrates durable
+    // session content and must not patch runtime presentation state.
     if (state === BackendChannelState.USER_STOPPED) {
       await finalizeReplayStoppedSessionDetail?.({
         sessionId,
@@ -420,5 +412,7 @@ export async function applyReconnectChannelState({
         stateData,
       });
     }
+    return replayObservation();
   }
+  return replayObservation();
 }

@@ -18,6 +18,7 @@ import {
 } from "./toolLogFormatting";
 import { deduplicateToolLogs } from "./toolLogIdentity";
 import { projectMessageEventToolFacets } from "@noobot/shared/message-event-protocol";
+import { buildToolTimelineFromLegacyLogs, mergeToolTimelines } from "../chat/chatEngine/toolTimeline";
 
 function buildTurnScopeGroupKey(sessionId = "", turnScopeId = "") {
   const normalizedSessionId = String(sessionId || "").trim();
@@ -364,7 +365,7 @@ function buildToolLogsByTurnScope(sessionDocuments = []) {
     const sessionId = rootSessionId || String(messageItem?.sessionId || messageItem?.session_id || "").trim();
     const turnScopeId = getMessageTurnScopeId(messageItem);
     if (!turnScopeId) {
-      messageItem.completedToolLogs = [];
+      messageItem.toolTimeline = [];
       continue;
     }
     const turnScopeKey = buildTurnScopeGroupKey(sessionId, turnScopeId);
@@ -409,7 +410,10 @@ function applyCompletedToolLogsToMessages(messages = [], sessionDocuments = []) 
       return getMessageTurnScopeId(toolLogItem) === turnScopeId;
     });
     const mergedToolLogs = mergeUniqueLogs([], matchedToolLogs);
-    messageItem.completedToolLogs = formatToolLogsTree(mergedToolLogs);
+    messageItem.toolTimeline = mergeToolTimelines(
+      messageItem.toolTimeline,
+      buildToolTimelineFromLegacyLogs(formatToolLogsTree(mergedToolLogs)),
+    );
   }
 }
 

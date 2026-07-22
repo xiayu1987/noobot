@@ -13,6 +13,7 @@ import {
   resolveSessionTurnRuntime,
   selectSessionTurnRuntime,
 } from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+import { applyRunStateMessageRuntimePatch } from "../../../../../src/composables/chat/chatEngine/messageRuntimePatch";
 
 function createSession(id) {
   return {
@@ -48,9 +49,10 @@ export function createFakeProcessStore() {
   };
 }
 
-export function createFixture({ activeId = "s-1", processStore = null } = {}) {
+export function createFixture({ activeId = "s-1", processStore = null, currentRun = null } = {}) {
   const s1 = createSession("s-1");
   const s2 = createSession("s-2");
+  if (currentRun) s1.currentRun = { ...currentRun, sessionId: "s-1" };
   const sessions = ref([s1, s2]);
   const activeSessionId = ref(activeId);
   const activeSession = ref(sessions.value.find((s) => s.id === activeId));
@@ -70,7 +72,15 @@ export function createFixture({ activeId = "s-1", processStore = null } = {}) {
   const scrollBottom = vi.fn();
   const notify = vi.fn();
   const applyTurnRuntimeEvents = vi.fn((events = []) =>
-    events.map((event) => applyTurnRuntimeEvent(turnRuntimeRegistry.value, event)),
+    events.map((event) => {
+      const result = applyTurnRuntimeEvent(turnRuntimeRegistry.value, event);
+      applyRunStateMessageRuntimePatch({
+        sessions,
+        turnRuntimeRegistry,
+        event: result?.turn || event,
+      });
+      return result;
+    }),
   );
 
   const chatList = {

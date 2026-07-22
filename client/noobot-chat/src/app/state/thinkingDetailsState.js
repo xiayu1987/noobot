@@ -4,17 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { getMessageRole, isAssistantWithoutTurnScope } from "../../composables/infra/messageIdentity";
+import { hasToolTimeline, selectToolTimelineCount } from "../../composables/chat/chatEngine/toolTimeline";
 
 export function getThinkingDetailsCount(messageItem = {}) {
   if (isAssistantWithoutTurnScope(messageItem)) return 0;
-  const completedToolLogs = Array.isArray(messageItem?.processCompletedToolLogs)
-    ? messageItem.processCompletedToolLogs
-    : Array.isArray(messageItem?.completedToolLogs)
-    ? messageItem.completedToolLogs
-    : [];
-  if (completedToolLogs.length > 0) {
-    return completedToolLogs.length;
-  }
+  if (hasToolTimeline(messageItem)) return selectToolTimelineCount(messageItem);
   const summaryThinkingDetailsCount = getSummaryThinkingDetailsCount(messageItem);
   if (summaryThinkingDetailsCount > 0) return summaryThinkingDetailsCount;
   const toolCalls = Array.isArray(messageItem?.toolCalls)
@@ -24,21 +18,6 @@ export function getThinkingDetailsCount(messageItem = {}) {
     : [];
   if (toolCalls.length > 0) {
     return toolCalls.length;
-  }
-  const processRealtimeLogs = Array.isArray(messageItem?.processRealtimeLogs)
-    ? messageItem.processRealtimeLogs
-    : [];
-  const realtimeLogs = processRealtimeLogs.length > 0
-    ? processRealtimeLogs
-    : Array.isArray(messageItem?.realtimeLogs)
-    ? messageItem.realtimeLogs
-    : [];
-  if (realtimeLogs.length > 0) {
-    const realtimeThinkingDetailCount = realtimeLogs.filter((logItem = {}) => {
-      const event = String(logItem?.event || logItem?.type || "").toLowerCase();
-      return event.includes("tool") || event.includes("function");
-    }).length;
-    if (realtimeThinkingDetailCount > 0) return realtimeThinkingDetailCount;
   }
   return 0;
 }
@@ -61,7 +40,7 @@ export function resolveFallbackThinkingDetailsPayload(activeSession = {}) {
   const messageItem = [...messages].reverse().find((item = {}) =>
     getMessageRole(item) === "assistant" &&
     !isAssistantWithoutTurnScope(item) &&
-    (item?.pending || Array.isArray(item?.realtimeLogs) || Array.isArray(item?.completedToolLogs) || hasThinkingDetails(item))
+    (item?.pending || hasToolTimeline(item) || hasThinkingDetails(item))
   );
   return { messageItem: messageItem || null, allMessages: messages };
 }

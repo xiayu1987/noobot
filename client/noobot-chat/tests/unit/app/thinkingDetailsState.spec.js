@@ -14,9 +14,9 @@ import {
 } from "../../../src/app/state/thinkingDetailsState";
 
 describe("thinking details state", () => {
-  it("counts completed tool logs before other thinking sources", () => {
+  it("counts the canonical tool timeline before other thinking sources", () => {
     expect(getThinkingDetailsCount({
-      completedToolLogs: [{ id: 1 }, { id: 2 }],
+      toolTimeline: [{ key: "call:1" }, { key: "call:2" }],
       toolCalls: [{ id: 3 }],
       realtimeLogs: [{ event: "tool_call" }],
     })).toBe(2);
@@ -26,7 +26,7 @@ describe("thinking details state", () => {
     expect(getThinkingDetailsCount({ toolCalls: [{ id: 1 }, { id: 2 }, { id: 3 }] })).toBe(3);
   });
 
-  it("counts realtime log entries that mention tool or function", () => {
+  it("does not treat legacy realtime arrays as a second tool fact source", () => {
     expect(getThinkingDetailsCount({
       realtimeLogs: [
         { event: "message.delta" },
@@ -34,7 +34,7 @@ describe("thinking details state", () => {
         { type: "function_result" },
         { event: "THINKING" },
       ],
-    })).toBe(2);
+    })).toBe(0);
   });
 
   it("counts summary thinking details when full log arrays are absent", () => {
@@ -66,7 +66,7 @@ describe("thinking details state", () => {
 
   it("resolves the latest assistant message with thinking details from the active session", () => {
     const plainAssistant = { role: "assistant", content: "done" };
-    const thinkingAssistant = { role: "assistant", turnScopeId: "turn-2", realtimeLogs: [{ event: "tool_call" }] };
+    const thinkingAssistant = { role: "assistant", turnScopeId: "turn-2", toolTimeline: [{ key: "call:1" }] };
     const pendingAssistant = { role: "assistant", turnScopeId: "turn-1", pending: true };
     const messages = [
       { role: "user", content: "hi" },

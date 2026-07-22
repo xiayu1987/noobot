@@ -5,6 +5,7 @@
  */
 import { getCurrentScope, onScopeDispose } from "vue";
 import { useLocale } from "../../shared/i18n/useLocale";
+import { applyRunStateMessageRuntimePatch } from "./chatEngine/messageRuntimePatch";
 import { createAssistantMessageHelpers } from "./chatEngine/assistantMessage";
 import { createChatEngineConversationState } from "./chatEngine/conversationState";
 import {
@@ -12,7 +13,6 @@ import {
   stopSending as requestStopSending,
 } from "./chatEngine/stop";
 import { createMonotonicMessageActions } from "./chatEngine/monotonicMessageActions";
-import { applyRunStateMessageRuntimePatch } from "./chatEngine/messageRuntimePatch";
 import { createChatEngineSender } from "./chatEngine/sendFlow";
 import { createPendingMessageOperationStore } from "./chatEngine/messageOperationStore";
 import { logStateMachineDebug } from "./debug/stateMachineLogger";
@@ -75,6 +75,7 @@ export function useChatEngine({
   ensureConnected,
   notify = () => {},
   processStore = null,
+  runtimeEventsAlreadyProjected = false,
   monotonicActionStopTimeoutMs = DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS,
   monotonicActionStopPollIntervalMs = DEFAULT_MONOTONIC_ACTION_STOP_POLL_INTERVAL_MS,
 } = {}) {
@@ -125,11 +126,17 @@ export function useChatEngine({
         messageCount: Array.isArray(activeSession?.value?.messages) ? activeSession.value.messages.length : 0,
       },
     });
-    applyRunStateMessageRuntimePatch({
-      sessions,
-      turnRuntimeRegistry,
-      event: turnResult?.turn || event,
-    });
+    // Standalone engine consumers own their projection here. The application
+    // composition root passes an already-projecting submitter and opts out, so
+    // production still has exactly one projection per Registry transition.
+    if (!runtimeEventsAlreadyProjected) {
+      applyRunStateMessageRuntimePatch({
+        sessions,
+        activeSession,
+        turnRuntimeRegistry,
+        event: turnResult?.turn || event,
+      });
+    }
     return turnResult;
   };
   const {

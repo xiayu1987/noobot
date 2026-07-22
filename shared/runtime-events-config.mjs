@@ -68,11 +68,11 @@ export const RUNTIME_EVENTS_CONFIG_DEFAULTS = deepFreeze({
     frontendReconnectTimingDebug: false,
     // Temporarily enabled by default while refreshed thinking-detail loading
     // and visibility projection are under active investigation.
-    frontendThinkingReplayDebug: true,
+    frontendThinkingReplayDebug: false,
     agentProxyRouteDebug: false,
     // Temporarily enabled by default while workflow/sub-agent projection and
     // completion-source diagnostics are under active investigation.
-    workflowDiagnosticsDebug: true,
+    workflowDiagnosticsDebug: false,
     frontendLifecycleLog: true,
     agentProxyHttpLog: true,
     agentProxyWebSocketLog: true,

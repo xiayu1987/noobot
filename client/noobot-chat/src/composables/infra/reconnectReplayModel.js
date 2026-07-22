@@ -24,6 +24,7 @@ import {
   resolveSessionRunMessageRuntimeView,
 } from "../chat/sessionRunStateMachine";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { hydrateTurnSnapshot } from "../chat/chatEngine/turnProjectionStore";
 
 function isReconnectTerminalEvent(eventName = "") {
   return [
@@ -302,25 +303,6 @@ function findReusableMessageObject(nextMessage = {}, existingMessages = []) {
     if (byTurnScopeId) return byTurnScopeId;
   }
 
-  const nextDialogProcessId = getMessageDialogProcessId(nextMessage);
-  if (nextRole === RoleEnum.ASSISTANT && nextDialogProcessId && !nextTurnScopeId) {
-    const byPendingDialogProcessId = existingMessages.find(
-      (existingMessage) =>
-        getMessageRole(existingMessage) === RoleEnum.ASSISTANT &&
-        existingMessage?.pending === true &&
-        getMessageDialogProcessId(existingMessage) === nextDialogProcessId,
-    );
-    if (byPendingDialogProcessId) return byPendingDialogProcessId;
-  }
-  if (nextRole === RoleEnum.ASSISTANT && nextDialogProcessId && nextTurnScopeId) {
-    const byDialogProcessId = existingMessages.find(
-      (existingMessage) =>
-        getMessageRole(existingMessage) === RoleEnum.ASSISTANT &&
-        getMessageDialogProcessId(existingMessage) === nextDialogProcessId &&
-        !hasMessageTurnScopeConflict(existingMessage, nextMessage),
-    );
-    if (byDialogProcessId) return byDialogProcessId;
-  }
   const nextKey = messageCompareKey(nextMessage);
   return (
     existingMessages.find((existingMessage) => messageCompareKey(existingMessage) === nextKey) ||
@@ -328,105 +310,77 @@ function findReusableMessageObject(nextMessage = {}, existingMessages = []) {
   );
 }
 
+// Unscoped history records are not Turn snapshots.  They may refresh stable
+// message facts, but must never acquire write access to projection, runtime or
+// UI state.  Keep this allow-list deliberately small; new domain fields must be
+// hydrated through hydrateTurnSnapshot instead of being added here.
+const NON_TURN_MESSAGE_PATCH_FIELDS = Object.freeze([
+  "id",
+  "messageId",
+  "role",
+  "type",
+  "sessionId",
+  "dialogProcessId",
+  "processId",
+  "content",
+  "attachments",
+  "modelRuns",
+  "tool_calls",
+  "modelAlias",
+  "modelName",
+  "createdAt",
+  "updatedAt",
+  "ts",
+]);
+
+function patchNonTurnMessageMetadata(targetMessage = {}, sourceMessage = {}) {
+  for (const field of NON_TURN_MESSAGE_PATCH_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(sourceMessage, field)) continue;
+    targetMessage[field] = sourceMessage[field];
+  }
+}
+
 function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage = {}, turnStatus = null) {
   const sourceRole = getMessageRole(sourceMessage);
   const sourceTurnScopeId = getMessageTurnScopeId(sourceMessage);
   const sourceCanUseTurnScopedAssets = canUseTurnScopedAssets(sourceMessage);
   const sourceAssistantWithoutTurnScope = sourceRole === RoleEnum.ASSISTANT && !sourceTurnScopeId;
-  const thinkingOpenNames = Array.isArray(targetMessage?.thinkingOpenNames)
-    ? targetMessage.thinkingOpenNames
-    : null;
-  const expandedDetailLogKeys = Array.isArray(targetMessage?.expandedDetailLogKeys)
-    ? targetMessage.expandedDetailLogKeys
-    : null;
+  const existingTurnScopeId = getMessageTurnScopeId(targetMessage);
+  // An unscoped snapshot cannot prove ownership of an already scoped turn.
+  // Reject it instead of guessing by dialogProcessId or clearing authoritative
+  // live projection state. Legacy unscoped history is materialized separately.
+  if (sourceAssistantWithoutTurnScope && existingTurnScopeId) return targetMessage;
   const existingContent = String(targetMessage?.content || "");
   const existingAttachments = getMessageAttachments(targetMessage);
-  const existingModelRuns = Array.isArray(targetMessage?.modelRuns)
-    ? targetMessage.modelRuns
-    : [];
-  const existingCompletedToolLogs = Array.isArray(targetMessage?.completedToolLogs)
-    ? targetMessage.completedToolLogs
-    : [];
-  const existingRealtimeLogs = Array.isArray(targetMessage?.realtimeLogs)
-    ? targetMessage.realtimeLogs
-    : [];
-  const existingMessageEventState = targetMessage?.messageEventState &&
-    typeof targetMessage.messageEventState === "object"
-    ? targetMessage.messageEventState
-    : null;
-  const existingChannelState =
-    targetMessage?.channelState &&
-    typeof targetMessage.channelState === "object" &&
-    !Array.isArray(targetMessage.channelState)
-      ? targetMessage.channelState
-      : null;
-  const existingTurnScopeId = getMessageTurnScopeId(targetMessage);
-  const existingDialogProcessId = getMessageDialogProcessId(targetMessage);
-  const sourceDialogProcessId = getMessageDialogProcessId(sourceMessage);
-  const sameDialogProcess = Boolean(
-    existingDialogProcessId &&
-    sourceDialogProcessId &&
-    existingDialogProcessId === sourceDialogProcessId,
-  );
-  const existingPending = targetMessage?.pending === true;
+  const existingModelRuns = Array.isArray(targetMessage?.modelRuns) ? targetMessage.modelRuns : [];
   const existingTransferEnvelopes = getMessageTransferEnvelopes(targetMessage);
   const sourceTransferEnvelopes = getMessageTransferEnvelopes(sourceMessage);
-  const existingRuntimeView = resolveSessionRunMessageRuntimeView(targetMessage, null, turnStatus);
-
-  Object.assign(targetMessage, sourceMessage);
-
-  if (existingContent.trim() && !String(sourceMessage?.content || "").trim()) {
-    targetMessage.content = existingContent;
-  }
-  if (
-    sourceCanUseTurnScopedAssets &&
-    existingAttachments.length &&
-    !getMessageAttachments(sourceMessage).length
-  ) {
-    targetMessage.attachments = existingAttachments;
-  }
-  if (existingModelRuns.length && !hasArrayItems(sourceMessage?.modelRuns)) {
-    targetMessage.modelRuns = existingModelRuns;
-  }
-  if (
-    sourceCanUseTurnScopedAssets &&
-    existingCompletedToolLogs.length &&
-    !hasArrayItems(sourceMessage?.completedToolLogs)
-  ) {
-    targetMessage.completedToolLogs = existingCompletedToolLogs;
-  }
-  if (sourceCanUseTurnScopedAssets && existingRealtimeLogs.length) {
-    // Reconnect snapshots and live authoritative events are delivered
-    // concurrently. Never replace logs already reduced from the live stream
-    // with an older snapshot; merge both projections and keep their order.
-    const mergedLogs = [];
-    const seenLogs = new Set();
-    for (const log of [...(sourceMessage.realtimeLogs || []), ...existingRealtimeLogs]) {
-      const key = String(log?.eventId || log?.id || log?.toolCallId || "").trim() ||
-        JSON.stringify(log);
-      if (seenLogs.has(key)) continue;
-      seenLogs.add(key);
-      mergedLogs.push(log);
+  const exactTurnSnapshot = Boolean(
+    sourceTurnScopeId &&
+    sourceTurnScopeId === getMessageTurnScopeId(targetMessage) &&
+    String(sourceMessage?.sessionId || "").trim() === String(targetMessage?.sessionId || "").trim(),
+  );
+  if (exactTurnSnapshot) {
+    hydrateTurnSnapshot({
+      targetMessage,
+      snapshot: sourceMessage,
+      throughSequence: Number(sourceMessage?.throughSequence || sourceMessage?.messageEventState?.lastSequence || 0),
+    });
+  } else {
+    patchNonTurnMessageMetadata(targetMessage, sourceMessage);
+    // Non-turn records are identity/metadata patches rather than projection
+    // snapshots. Preserve non-empty immutable display facts when a sparse
+    // transport record omits them; domain timelines and runtime state are not
+    // merged here.
+    if (existingContent.trim() && !String(sourceMessage?.content || "").trim()) {
+      targetMessage.content = existingContent;
     }
-    targetMessage.realtimeLogs = mergedLogs.slice(-EXECUTION_LOG_DISPLAY_LIMIT);
-  } else if (hasArrayItems(sourceMessage?.realtimeLogs)) {
-    targetMessage.realtimeLogs = sourceMessage.realtimeLogs.slice(-EXECUTION_LOG_DISPLAY_LIMIT);
-  }
-  if (sourceCanUseTurnScopedAssets && existingMessageEventState) {
-    const sourceState = sourceMessage?.messageEventState || {};
-    targetMessage.messageEventState = {
-      ...sourceState,
-      lastSequence: Math.max(
-        Number(sourceState.lastSequence || 0),
-        Number(existingMessageEventState.lastSequence || 0),
-      ),
-      consumedEventIds: [...new Set([
-        ...(Array.isArray(sourceState.consumedEventIds) ? sourceState.consumedEventIds : []),
-        ...(Array.isArray(existingMessageEventState.consumedEventIds)
-          ? existingMessageEventState.consumedEventIds
-          : []),
-      ])].slice(-1000),
-    };
+    if (existingAttachments.length && !getMessageAttachments(sourceMessage).length) {
+      targetMessage.attachments = existingAttachments;
+    }
+    if (existingModelRuns.length && !hasArrayItems(sourceMessage?.modelRuns)) {
+      targetMessage.modelRuns = existingModelRuns;
+    }
   }
   const mergedTransferEnvelopes = mergeTransferEnvelopes(
     existingTransferEnvelopes,
@@ -435,30 +389,9 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   if (mergedTransferEnvelopes.length) {
     targetMessage.transferEnvelopes = mergedTransferEnvelopes;
   }
-  if (thinkingOpenNames) targetMessage.thinkingOpenNames = thinkingOpenNames;
-  if (expandedDetailLogKeys) targetMessage.expandedDetailLogKeys = expandedDetailLogKeys;
-  if (existingChannelState && !sourceMessage?.channelState) {
-    targetMessage.channelState = existingChannelState;
-  }
-  if (
-    existingTurnScopeId &&
-    !getMessageTurnScopeId(sourceMessage) &&
-    (sourceCanUseTurnScopedAssets || sameDialogProcess)
-  ) {
-    targetMessage.turnScopeId = existingTurnScopeId;
-  }
-  // A snapshot that omits turnScopeId is incomplete, not proof that the
-  // existing turn-scoped projection is stale. In particular, workflow/tool
-  // snapshots can arrive while the authoritative thinking stream is active.
-  // Only clear assets when the snapshot cannot be tied to the same process;
-  // otherwise keep the authoritative Mermaid/thinking/tool projection.
-  if (sourceAssistantWithoutTurnScope && !sameDialogProcess && !existingRuntimeView.inFlightAssistant) {
+  if (sourceAssistantWithoutTurnScope) {
     clearTurnScopedAssets(targetMessage);
     delete targetMessage.turnScopeId;
-  }
-  const runtimeView = resolveSessionRunMessageRuntimeView(targetMessage, null, turnStatus);
-  if (existingPending && runtimeView.inFlightAssistant) {
-    targetMessage.pending = true;
   }
   return targetMessage;
 }

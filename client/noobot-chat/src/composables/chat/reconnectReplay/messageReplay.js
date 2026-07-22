@@ -41,7 +41,6 @@ export {
   findAssistantMessageByTurnScopeId,
   findLatestAssistantMessageForRealtimeLogs,
   hasAssistantMessageWithContent,
-  mergeRealtimeLogs,
 } from "./messageLookup";
 export {
   createFinalAssistantFromReconnectReplay,
@@ -55,8 +54,8 @@ export {
 
 export function applyAssistantFailureState({ targetAssistantMessage, errorMessage = "", translate } = {}) {
   if (!targetAssistantMessage) return;
-  targetAssistantMessage.pending = false;
-  targetAssistantMessage.statusLabel = translate("chat.failed");
+  // Runtime status is projected exclusively by sessionRunStateMachine.  This
+  // helper owns only the error payload/content associated with that state.
   targetAssistantMessage.error = _trimStr(errorMessage);
   if (!_trimStr(targetAssistantMessage.content)) {
     targetAssistantMessage.content = `> ${translate("chat.occurredError", {

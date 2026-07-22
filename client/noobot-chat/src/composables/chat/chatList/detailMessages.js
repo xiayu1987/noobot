@@ -24,6 +24,10 @@ import {
 } from "../../infra/messageIdentity";
 import { getMessageAttachments } from "../../infra/messageModel";
 import {
+  buildToolTimelineFromLegacyLogs,
+  mergeToolTimelines,
+} from "../chatEngine/toolTimeline";
+import {
   getMessageRuntimeChannelState,
   isMessageInFlightAssistant,
   resolveSessionRunMessageRuntimeView,
@@ -375,13 +379,9 @@ export function buildWorkflowMessageSignature(messageItem = {}) {
 
 export function patchExistingWorkflowMessage(existingMessage = null, workflowMessageItem = {}) {
   if (!existingMessage || !workflowMessageItem) return false;
-  const thinkingOpenNames = Array.isArray(existingMessage?.thinkingOpenNames)
-    ? existingMessage.thinkingOpenNames
-    : [];
   Object.assign(existingMessage, workflowMessageItem);
   existingMessage.pending = false;
   existingMessage.workflowMessage = true;
-  if (thinkingOpenNames.length) existingMessage.thinkingOpenNames = thinkingOpenNames;
   return true;
 }
 
@@ -421,17 +421,23 @@ export function findExistingMessageIndexForDetailMessage(existingMessages = [], 
       .map(({ index }) => index);
     if (matchingTurnIndexes.length === 1) return matchingTurnIndexes[0];
   }
+  // Session-detail hydration is the isolated migration boundary for legacy
+  // optimistic messages created before a turnScopeId was available. Reuse a
+  // unique same-role message from the same execution chain only when at least
+  // one side has no Turn identity. Never use dialogProcessId to join two
+  // explicitly identified (and potentially different) Turns.
   const detailDialogProcessId = getMessageDialogProcessId(detailMessageItem);
   if (detailDialogProcessId) {
-    const matchingDialogIndexes = existingMessages
+    const matchingLegacyDialogIndexes = existingMessages
       .map((messageItem, index) => ({ messageItem, index }))
       .filter(({ messageItem }) => {
         if (normalizeMessageRole(messageItem) !== detailRole) return false;
-        if (buildMessageIdentity(messageItem)) return false;
-        return getMessageDialogProcessId(messageItem) === detailDialogProcessId;
+        if (getMessageDialogProcessId(messageItem) !== detailDialogProcessId) return false;
+        const existingTurnScopeId = getMessageTurnScopeId(messageItem);
+        return !detailTurnScopeId || !existingTurnScopeId;
       })
       .map(({ index }) => index);
-    if (matchingDialogIndexes.length === 1) return matchingDialogIndexes[0];
+    if (matchingLegacyDialogIndexes.length === 1) return matchingLegacyDialogIndexes[0];
   }
   if (detailRole !== RoleEnum.USER) return -1;
   const matchingUserIndexes = existingMessages
@@ -482,9 +488,6 @@ export function mergePreservedDetailMessages(existingMessages = [], detailMessag
       const inlineEditingContent = keepInlineEditingContent
         ? existingMessage.content
         : undefined;
-      const thinkingOpenNames = Array.isArray(existingMessage?.thinkingOpenNames)
-        ? existingMessage.thinkingOpenNames
-        : [];
       const runtimeStateMark = existingMessage?.[SESSION_RUN_MESSAGE_RUNTIME_MARK];
       const runtimeMark = existingMessage?.runtimeMark;
       const existingAttachments = getMessageAttachments(existingMessage);
@@ -515,7 +518,6 @@ export function mergePreservedDetailMessages(existingMessages = [], detailMessag
           ? mergeAttachments(existingAttachments, detailAttachments)
           : existingAttachments;
       }
-      if (thinkingOpenNames.length) existingMessage.thinkingOpenNames = thinkingOpenNames;
       if (runtimeStateMark && !existingMessage[SESSION_RUN_MESSAGE_RUNTIME_MARK]) {
         existingMessage[SESSION_RUN_MESSAGE_RUNTIME_MARK] = runtimeStateMark;
       }
@@ -715,23 +717,16 @@ export function mergeChildTurnAttachmentsIntoRootMessages({
 }
 
 export function applySummaryToolLogs(sessionItem, sessionDocs = []) {
-  const logsByDialogProcessId = new Map();
   const logsByTurnScopeId = new Map();
-  let hasTurnScopedLogs = false;
   for (const sessionDoc of sessionDocs) {
     for (const logItem of Array.isArray(sessionDoc?.toolLogSummaries) ? sessionDoc.toolLogSummaries : []) {
       const turnScopeId = getMessageTurnScopeId(logItem);
-      if (turnScopeId) {
-        hasTurnScopedLogs = true;
-        logsByTurnScopeId.set(turnScopeId, [
-          ...(logsByTurnScopeId.get(turnScopeId) || []),
-          logItem,
-        ]);
-      }
-      const dialogProcessId = getMessageDialogProcessId(logItem);
-      if (!dialogProcessId) continue;
-      logsByDialogProcessId.set(dialogProcessId, [
-        ...(logsByDialogProcessId.get(dialogProcessId) || []),
+      // Summary documents are an isolated legacy input boundary. Unscoped
+      // records cannot be assigned to a UI turn and must never fall back to a
+      // reusable dialog execution-chain id.
+      if (!turnScopeId) continue;
+      logsByTurnScopeId.set(turnScopeId, [
+        ...(logsByTurnScopeId.get(turnScopeId) || []),
         logItem,
       ]);
     }
@@ -743,15 +738,10 @@ export function applySummaryToolLogs(sessionItem, sessionDocs = []) {
       continue;
     }
     const turnScopeId = getMessageTurnScopeId(messageItem);
-    if (logsByTurnScopeId.has(turnScopeId)) {
-      messageItem.completedToolLogs = logsByTurnScopeId.get(turnScopeId) || [];
-      continue;
-    }
-    if (hasTurnScopedLogs) {
-      messageItem.completedToolLogs = [];
-      continue;
-    }
-    const dialogProcessId = getMessageDialogProcessId(messageItem);
-    messageItem.completedToolLogs = logsByDialogProcessId.get(dialogProcessId) || [];
+    const logs = logsByTurnScopeId.get(turnScopeId) || [];
+    messageItem.toolTimeline = mergeToolTimelines(
+      messageItem.toolTimeline,
+      buildToolTimelineFromLegacyLogs(logs),
+    );
   }
 }

@@ -103,14 +103,11 @@ export function useThinkingDetailsPanel({
     const initialMessageItem = initialPayload.messageItem;
     if (isAssistantWithoutTurnScope(initialMessageItem)) return;
     const hasLocalThinkingDetails =
-      (Array.isArray(initialMessageItem?.processRealtimeLogs) &&
-        initialMessageItem.processRealtimeLogs.length > 0) ||
-      (Array.isArray(initialMessageItem?.realtimeLogs) &&
-        initialMessageItem.realtimeLogs.length > 0) ||
-      (Array.isArray(initialMessageItem?.processCompletedToolLogs) &&
-        initialMessageItem.processCompletedToolLogs.length > 0) ||
-      (Array.isArray(initialMessageItem?.completedToolLogs) &&
-        initialMessageItem.completedToolLogs.length > 0);
+      (Array.isArray(initialMessageItem?.toolTimeline) && initialMessageItem.toolTimeline.length > 0) ||
+      // Read-only historical migration boundary; runtime code does not write
+      // these legacy projections anymore.
+      (Array.isArray(initialMessageItem?.realtimeLogs) && initialMessageItem.realtimeLogs.length > 0) ||
+      (Array.isArray(initialMessageItem?.completedToolLogs) && initialMessageItem.completedToolLogs.length > 0);
     const requestFetchDetail = typeof payload?.fetchThinkingDetail === "function"
       ? payload.fetchThinkingDetail
       : null;

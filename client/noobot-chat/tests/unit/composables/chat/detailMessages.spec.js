@@ -22,6 +22,7 @@ import {
   resolveSessionRunMessageRuntimePatch,
 } from "../../../../src/composables/chat/sessionRunStateMachine";
 import { RoleEnum } from "../../../../src/shared/constants/chatConstants";
+import { selectToolTimelineLogs } from "../../../../src/composables/chat/chatEngine/toolTimeline";
 
 describe("detailMessages", () => {
   it("builds one normalized detail message list for replace and preserve inputs", () => {
@@ -233,6 +234,7 @@ describe("detailMessages", () => {
         sessionId: "session-runtime",
         dialogProcessId: "dp-runtime",
         turnScopeId: "turn-runtime",
+        authority: "authoritative_detail_applied",
       },
       messageItem: assistant,
       activeSession: { id: "session-runtime", messages: existingMessages },
@@ -418,8 +420,9 @@ describe("detailMessages", () => {
       },
     ]);
 
-    expect(sessionItem.messages[0].completedToolLogs).toHaveLength(1);
-    expect(sessionItem.messages[0].completedToolLogs[0].text).toBe("current tool");
+    const logs = selectToolTimelineLogs(sessionItem.messages[0]);
+    expect(logs).toHaveLength(1);
+    expect(logs[0].text).toBe("current tool");
   });
 
   it("collects child attachments from transfer envelopes for refreshed detail", () => {
@@ -617,7 +620,7 @@ describe("detailMessages", () => {
       "node-result-1",
       "node-session-1",
     ]);
-    expect(normalizedMessages[0].completedToolLogs[0].attachments).toEqual([
+    expect(selectToolTimelineLogs(normalizedMessages[0])[0].attachments).toEqual([
       { attachmentId: "completed-tool-1", name: "completed-tool.md" },
     ]);
   });

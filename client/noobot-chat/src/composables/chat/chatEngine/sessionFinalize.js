@@ -7,7 +7,7 @@ import { RoleEnum } from "../../../shared/constants/chatConstants";
 import { normalizeTrimmedString } from "./utils";
 import { getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity";
 import { getMessageAttachments } from "../../infra/messageModel";
-import { SESSION_RUN_EVENT, FrontendRunState } from "../sessionRunStateMachine";
+import { SESSION_RUN_EVENT } from "../sessionRunStateMachine";
 import {
   logStateMachineDebug,
   summarizeStateMachineMessage,
@@ -60,7 +60,6 @@ export async function refreshFinalSessionDetail({
     finalDoneEventData,
     finalEventData,
   });
-  const finalExecutionLogTotal = Number(botMessage?.executionLogTotal || 0);
   const finalDialogProcessId = normalizeTrimmedString(
     getMessageDialogProcessId(botMessage) ||
       finalEventData?.dialogProcessId ||
@@ -167,27 +166,14 @@ export async function refreshFinalSessionDetail({
       botMessage: summarizeFinalizeMessage(botMessage),
     });
 
+    // A successfully applied detail is the authority fact. Authority is derived
+    // solely from this event type by normalizeSessionRunEvent; never infer it
+    // from mutable message fields or from an adapter-specific return value.
     applyRunStateEvent?.({
       type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
       ...completionEventScope,
       source: "final_session_detail",
     });
-
-    if (finalExecutionLogTotal > 0 && finalDialogProcessId) {
-      const patchExecutionTotal = (messages = []) => {
-        for (const messageItem of Array.isArray(messages) ? messages : []) {
-          if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) continue;
-          if (getMessageDialogProcessId(messageItem) !== finalDialogProcessId) {
-            continue;
-          }
-          messageItem.executionLogTotal = Math.max(
-            Number(messageItem?.executionLogTotal || 0),
-            finalExecutionLogTotal,
-          );
-        }
-      };
-      patchExecutionTotal(activeSession?.value?.messages || []);
-    }
 
     refreshSessionConnectorsAsync?.(activeSession?.value?.id || doneSessionId);
     return true;
@@ -203,14 +189,15 @@ export async function refreshFinalSessionDetail({
     const currentMessages = Array.isArray(activeSession?.value?.messages)
       ? activeSession.value.messages
       : [];
-    const currentMessage = currentMessages.includes(botMessage)
-      ? botMessage
-      : currentMessages.find((messageItem) =>
-          messageItem &&
-          getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
-          normalizeTrimmedString(getMessageDialogProcessId(messageItem)) === completionEventScope.dialogProcessId &&
-          normalizeTrimmedString(messageItem.turnScopeId) === completionEventScope.turnScopeId,
-        );
+    // DONE/detail application may replace the message array while preserving
+    // the Turn. Object identity is therefore not an ownership proof. Resolve
+    // the current assistant exclusively by Turn identity; dialogProcessId is
+    // execution-chain metadata and must not provide a cross-Turn fallback.
+    const currentMessage = currentMessages.find((messageItem) =>
+      messageItem &&
+      getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
+      normalizeTrimmedString(messageItem.turnScopeId) === completionEventScope.turnScopeId,
+    );
     const activeSessionMatches =
       String(activeSession?.value?.backendSessionId || "") === completionEventScope.sessionId &&
       String(activeSession?.value?.id || "") === String(activeSessionId?.value || "");
@@ -220,11 +207,7 @@ export async function refreshFinalSessionDetail({
       // identity guards, rather than a missing message object, decide whether
       // the scoped failure still belongs to the current run.
       !botMessage ||
-      (
-        currentMessage === botMessage &&
-        normalizeTrimmedString(getMessageDialogProcessId(botMessage)) === completionEventScope.dialogProcessId &&
-        normalizeTrimmedString(botMessage?.turnScopeId) === completionEventScope.turnScopeId
-      )
+      Boolean(currentMessage)
     );
     if (!isCurrentCompletion) {
       logStateMachineDebug("stateMachine.detailRequest.failed.ignored_stale", {
@@ -239,21 +222,10 @@ export async function refreshFinalSessionDetail({
       ...completionEventScope,
       source: "final_session_detail",
     });
-    // The backend turn is already terminal at this point.  Do not leave the
-    // local assistant message pending while the authoritative detail request
-    // failure is represented by the frontend state machine.
-    if (botMessage) {
-      applyAssistantFailureState?.(botMessage, loadDetailError);
-      botMessage.channelState = {
-        ...(botMessage.channelState && typeof botMessage.channelState === "object"
-          ? botMessage.channelState
-          : {}),
-        state: FrontendRunState.COMPLETION_ERROR,
-        sessionId: completionEventScope.sessionId,
-        dialogProcessId: completionEventScope.dialogProcessId,
-        turnScopeId: completionEventScope.turnScopeId,
-        sourceEvent: "final_session_detail",
-      };
+    // Runtime state is projected by LOCAL_FRONTEND_COMPLETION_FAILED above;
+    // this callback owns only the error payload/content.
+    if (currentMessage) {
+      applyAssistantFailureState?.(currentMessage, loadDetailError);
     }
     return false;
   }

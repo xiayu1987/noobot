@@ -11,6 +11,8 @@ import {
   SESSION_RUN_EVENT,
 } from "../../../../src/composables/chat/sessionRunStateMachine";
 import { selectSessionTurnRuntime } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+import { selectToolTimelineLogs } from "../../../../src/composables/chat/chatEngine/toolTimeline";
+import { selectActivityTimelineLogs } from "../../../../src/composables/chat/chatEngine/activityTimeline";
 import {
   scheduleMissingInteractionPayloadFailure,
 } from "../../../../src/composables/chat/reconnectReplay/channelStateReplay";
@@ -85,10 +87,11 @@ describe("useReconnectReplay", () => {
     });
 
     const assistant = refs.activeSession.value.messages[1];
-    expect(assistant.pending).toBe(true);
-    expect(assistant.channelState).toMatchObject({
-      state: "sending",
-    });
+    // A channel fact without turnScopeId updates the session runtime only. It
+    // must not guess an assistant by position/dialog and create a second state
+    // mirror on the message.
+    expect(assistant.pending).toBe(false);
+    expect(assistant.channelState).toBeUndefined();
     expect(assistant.thinkingStartedAt).toBeUndefined();
   });
 
@@ -109,9 +112,7 @@ describe("useReconnectReplay", () => {
     });
 
     const assistant = refs.activeSession.value.messages[1];
-    expect(assistant.channelState).toMatchObject({
-      state: "sending",
-    });
+    expect(assistant.channelState).toBeUndefined();
     expect(assistant.thinkingStartedAt).toBeUndefined();
   });
 
@@ -132,9 +133,7 @@ describe("useReconnectReplay", () => {
     });
 
     const assistant = refs.activeSession.value.messages[1];
-    expect(assistant.channelState).toMatchObject({
-      state: "sending",
-    });
+    expect(assistant.channelState).toBeUndefined();
     expect(assistant.thinkingStartedAt).toBeUndefined();
   });
 
@@ -256,7 +255,7 @@ describe("useReconnectReplay", () => {
     });
   });
 
-  it("applies live reconnect thinking without sessionId to active process items", async () => {
+  it("projects live reconnect thinking without sessionId without writing process mirrors", async () => {
     const processStore = createFakeProcessStore();
     const { api, refs } = createFixture({ processStore });
     const hydratedLogs = Array.from({ length: 2 }, (_, index) => ({
@@ -286,13 +285,9 @@ describe("useReconnectReplay", () => {
     });
 
     const assistant = refs.activeSession.value.messages[1];
-    expect(processStore.applyEventBatch).toHaveBeenCalledTimes(1);
-    expect(assistant.executionLogTotal).toBe(3);
-    expect(assistant.processExecutionLogTotal).toBe(3);
-    expect(assistant.processRealtimeLogs).toHaveLength(3);
-    expect(assistant.processRealtimeLogs[2].text).toContain("tool still running");
-    expect(assistant.processCompletedToolLogs).toHaveLength(3);
-    expect(assistant.processCompletedToolLogs[2].text).toContain("tool still running");
+    expect(processStore.applyEventBatch).not.toHaveBeenCalled();
+    expect(selectToolTimelineLogs(assistant).some((item) => item.text.includes("tool still running"))).toBe(true);
+    expect(selectActivityTimelineLogs(assistant)).toHaveLength(0);
   });
 
   it("RT-01: applyReconnectData routes active to replay and non-active to replayCache", async () => {
@@ -560,14 +555,96 @@ describe("useReconnectReplay", () => {
     expect(selectSessionTurnRuntime(refs.turnRuntimeRegistry.value, "s-1").sending).toBe(false);
     expect(assistant.pending).toBe(false);
     expect(assistant.channelState).toMatchObject({
-      state: "completed",
+      state: "frontend_completed",
       dialogProcessId: "dp-completed",
     });
-    expect(assistant.statusLabel).toBe("chat.generated");
+    expect(assistant.statusLabelKey).toBe("chat.generated");
     expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
       sessionId: "s-1",
       dialogProcessId: "dp-completed",
     });
+  });
+
+  it("does not finalize or mutate runtime for an untrusted completed snapshot", async () => {
+    const { api, refs, mocks } = createFixture();
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "old" },
+      {
+        role: RoleEnum.ASSISTANT,
+        dialogProcessId: "shared-dialog",
+        turnScopeId: "turn-old",
+        content: "old answer",
+        pending: false,
+      },
+      { role: RoleEnum.USER, content: "current" },
+      {
+        role: RoleEnum.ASSISTANT,
+        dialogProcessId: "shared-dialog",
+        turnScopeId: "turn-current",
+        content: "partial",
+        pending: true,
+      },
+    ];
+
+    await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1",
+      dialogProcessId: "shared-dialog",
+      turnScopeId: "turn-current",
+      state: BackendChannelState.COMPLETED,
+      authoritativeSnapshot: false,
+    });
+
+    expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
+    expect(mocks.chatList.applySessionDetail).not.toHaveBeenCalled();
+    expect(refs.activeSession.value.messages[3].pending).toBe(true);
+    expect(refs.activeSession.value.messages[1].pending).toBe(false);
+    expect(selectSessionTurnRuntime(refs.turnRuntimeRegistry.value, "s-1").sending).toBe(false);
+    expect(mocks.applyTurnRuntimeEvents).not.toHaveBeenCalled();
+  });
+
+  it("finalizes an authoritative completed turn only once when the terminal fact is repeated", async () => {
+    const { api, refs, mocks } = createFixture();
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "question" },
+      {
+        role: RoleEnum.ASSISTANT,
+        dialogProcessId: "dp-repeat",
+        turnScopeId: "turn-repeat",
+        content: "answer",
+        pending: true,
+      },
+    ];
+    const terminalFact = {
+      sessionId: "s-1",
+      dialogProcessId: "dp-repeat",
+      turnScopeId: "turn-repeat",
+      state: BackendChannelState.COMPLETED,
+      seq: 21,
+      eventId: "channel-completed-repeat",
+      authoritativeSnapshot: true,
+    };
+
+    const first = await api.applyChannelState(terminalFact);
+    const repeated = await api.applyChannelState(terminalFact);
+
+    expect(first).toMatchObject({
+      requestedSessionId: "s-1",
+      canonicalSessionId: "s-1",
+      turnKey: "__turn__s-1::turn-repeat",
+      eventId: "channel-completed-repeat",
+      sequence: 21,
+      source: "reconnect_channel_state",
+      authority: "authoritative_current_run",
+      applied: true,
+    });
+    expect(repeated).toMatchObject({
+      turnKey: "__turn__s-1::turn-repeat",
+      applied: false,
+    });
+    expect(repeated.reason).not.toBe("applied");
+    expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledTimes(1);
+    expect(mocks.chatList.applySessionDetail).toHaveBeenCalledTimes(1);
+    expect(refs.activeSession.value.messages[1].pending).toBe(false);
   });
 
   it.each(["cancelled"])(

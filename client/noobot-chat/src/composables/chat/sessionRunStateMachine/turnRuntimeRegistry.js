@@ -47,7 +47,37 @@ export function sessionRuntimeId(value = {}) {
 }
 
 export function createTurnRuntimeRegistryState() {
-  return { sessions: {}, routeIndex: {}, executions: {}, executionIdByTurnScopeId: {}, childExecutionIdsByParentId: {} };
+  return { sessions: {}, sessionAliases: {}, routeIndex: {}, executions: {}, executionIdByTurnScopeId: {}, childExecutionIdsByParentId: {} };
+}
+
+function canonicalSessionId(registry, sessionId) {
+  let id = text(sessionId);
+  const visited = new Set();
+  while (id && registry?.sessionAliases?.[id] && !visited.has(id)) {
+    visited.add(id);
+    id = text(registry.sessionAliases[id]);
+  }
+  return id;
+}
+
+function promoteTurnSession(registry, turn, nextSessionId) {
+  const previousSessionId = text(turn?.sessionId);
+  const promotedSessionId = text(nextSessionId);
+  if (!previousSessionId || !promotedSessionId || previousSessionId === promotedSessionId) return turn;
+  const scope = turnKey(turn.turnScopeId);
+  const previousBucket = registry?.sessions?.[previousSessionId];
+  const nextBucket = ensureSessionBucket(registry, promotedSessionId);
+  if (nextBucket.turns?.[scope] && nextBucket.turns[scope] !== turn) return null;
+  delete previousBucket?.turns?.[scope];
+  if (previousBucket?.activeTurnScopeId === scope) previousBucket.activeTurnScopeId = "";
+  turn.sessionId = promotedSessionId;
+  nextBucket.turns[scope] = turn;
+  nextBucket.activeTurnScopeId = scope;
+  if (!registry.sessionAliases) registry.sessionAliases = {};
+  registry.sessionAliases[previousSessionId] = promotedSessionId;
+  if (turn.dialogProcessId) registry.routeIndex[turn.dialogProcessId] = { sessionId: promotedSessionId, turnScopeId: scope };
+  if (previousBucket && !Object.keys(previousBucket.turns || {}).length) delete registry.sessions[previousSessionId];
+  return turn;
 }
 
 function removeExecutionProjection(registry, executionId) {
@@ -214,6 +244,33 @@ function findTurnByScope(registry, turnScopeId, { sessionId = "" } = {}) {
   return null;
 }
 
+function findTurnsByScope(registry, turnScopeId) {
+  const scope = turnKey(turnScopeId);
+  if (!scope) return [];
+  return Object.values(registry?.sessions || {})
+    .map((bucket) => bucket?.turns?.[scope])
+    .filter(Boolean);
+}
+
+function isBackendRuntimeEvent(type) {
+  return text(type).startsWith("backend_");
+}
+
+function canPromoteOptimisticTurnSession(event = {}) {
+  return isBackendRuntimeEvent(event.type) || [
+    SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_REQUEST_STARTED,
+    SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
+    SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED,
+  ].includes(event.type);
+}
+
+function isOptimisticLocalTurn(turn) {
+  // sourceEvent is caller-defined observability metadata (for example
+  // `send_flow_start`) and is not a reliable identity discriminator. The
+  // explicit creation-time capability is the single source of truth.
+  return turn?.sessionIdentityPending === true;
+}
+
 function resolveRoute(registry, dialogProcessId) {
   const id = text(dialogProcessId);
   return id ? registry?.routeIndex?.[id] || null : null;
@@ -232,14 +289,14 @@ export function turnRuntimeDisplayState(turn = null) {
 }
 
 export function resolveSessionTurnRuntime(registry, sessionId) {
-  const bucket = registry?.sessions?.[text(sessionId)];
+  const bucket = registry?.sessions?.[canonicalSessionId(registry, sessionId)];
   const scope = text(bucket?.activeTurnScopeId);
   return scope ? bucket?.turns?.[scope] || null : null;
 }
 
 export function resolveTurnRuntimeByScope(registry, turnScopeId, { sessionId = "" } = {}) {
   const scope = turnKey(turnScopeId);
-  const id = text(sessionId);
+  const id = canonicalSessionId(registry, sessionId);
   if (!scope) return null;
   return findTurnByScope(registry, scope, { sessionId: id });
 }
@@ -312,6 +369,7 @@ export function selectTurnMessageRuntime(registry, { sessionId = "", turnScopeId
     dialogProcessId: turn.dialogProcessId || "",
     source: turn.source || "",
     sourceEvent: turn.sourceEvent || "",
+    authority: turn.authority || "none",
     seq: Number(turn.seq || 0),
     updatedAt: turn.updatedAt || "",
     updatedAtMs: Number(turn.updatedAtMs || 0),
@@ -401,27 +459,66 @@ export function pruneTerminalTurns(registry, {
 export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
   const next = registry || createTurnRuntimeRegistryState();
   if (!next.sessions) next.sessions = {};
+  if (!next.sessionAliases) next.sessionAliases = {};
   if (!next.routeIndex) next.routeIndex = {};
   const event = normalizeSessionRunEvent(rawEvent);
   let turnScopeId = turnKey(event.turnScopeId);
   const route = resolveRoute(next, event.dialogProcessId);
   if (!turnScopeId && route) turnScopeId = turnKey(route.turnScopeId);
-  if (!turnScopeId) return { registry: next, turn: null, applied: false, reason: "missing_turn_identity" };
-  const requestedSessionId = text(event.sessionId || route?.sessionId);
-  const current = findTurnByScope(next, turnScopeId, { sessionId: requestedSessionId });
+  const observation = (values = {}) => ({
+    registry: next,
+    requestedSessionId: text(event.sessionId || route?.sessionId),
+    canonicalSessionId: text(values.turn?.sessionId || values.canonicalSessionId),
+    turnKey: executionTurnKey(values.turn?.sessionId || values.canonicalSessionId, turnScopeId),
+    eventId: text(rawEvent?.eventId || rawEvent?.id),
+    sequence: Number(event.seq || rawEvent?.sequence || 0),
+    source: text(event.source || rawEvent?.source),
+    authority: text(event.authority || rawEvent?.authority || "none"),
+    aliasPromoted: false,
+    ...values,
+  });
+  if (!turnScopeId) return observation({ turn: null, applied: false, reason: "missing_turn_identity" });
+  const rawRequestedSessionId = text(event.sessionId || route?.sessionId);
+  const requestedSessionId = canonicalSessionId(next, rawRequestedSessionId);
+  let current = findTurnByScope(next, turnScopeId, { sessionId: requestedSessionId });
+  let aliasPromoted = false;
+  if (!current && requestedSessionId) {
+    const matchingTurns = findTurnsByScope(next, turnScopeId);
+    // A Turn scope may be promoted from its optimistic local Session to the
+    // backend canonical Session exactly once.  Scope uniqueness is mandatory:
+    // dialogProcessId is deliberately not used to guess ownership.
+    if (matchingTurns.length > 1) {
+      return observation({ turn: null, canonicalSessionId: requestedSessionId, applied: false, reason: "turn_scope_session_conflict" });
+    }
+    const existingTurn = matchingTurns[0];
+    // Final-detail events are local authority events, but they run after DONE
+    // may have promoted the visible Session to its backend id. They are allowed
+    // to consume the optimistic Turn's one-shot identity capability exactly as
+    // backend events do. Scope uniqueness and route/session conflict checks
+    // below still prevent cross-Session or cross-Turn promotion.
+    if (existingTurn && canPromoteOptimisticTurnSession(event) && isOptimisticLocalTurn(existingTurn)) {
+      if (route && (turnKey(route.turnScopeId) !== turnScopeId || text(route.sessionId) !== text(existingTurn.sessionId))) {
+        return observation({ turn: existingTurn, canonicalSessionId: requestedSessionId, applied: false, reason: "dialog_process_identity_conflict" });
+      }
+      current = promoteTurnSession(next, existingTurn, requestedSessionId);
+      if (!current) return observation({ turn: existingTurn, canonicalSessionId: requestedSessionId, applied: false, reason: "session_identity_conflict" });
+      aliasPromoted = true;
+    }
+  }
   const sessionId = text(requestedSessionId || current?.sessionId);
-  if (!sessionId) return { registry: next, turn: current, applied: false, reason: "missing_session_identity" };
-  if (current?.sessionId && current.sessionId !== sessionId) return { registry: next, turn: current, applied: false, reason: "session_identity_conflict" };
-  if (current?.dialogProcessId && event.dialogProcessId && current.dialogProcessId !== event.dialogProcessId) return { registry: next, turn: current, applied: false, reason: "dialog_process_identity_conflict" };
+  const result = (values = {}) => observation({ canonicalSessionId: sessionId, aliasPromoted, ...values });
+  if (!sessionId) return result({ turn: current, applied: false, reason: "missing_session_identity" });
+  if (current?.sessionId && current.sessionId !== sessionId) return result({ turn: current, applied: false, reason: "session_identity_conflict" });
+  if (current?.dialogProcessId && event.dialogProcessId && current.dialogProcessId !== event.dialogProcessId) return result({ turn: current, applied: false, reason: "dialog_process_identity_conflict" });
   if (route && (route.turnScopeId !== turnScopeId || route.sessionId !== sessionId)) {
-    return { registry: next, turn: current, applied: false, reason: "dialog_process_identity_conflict" };
+    return result({ turn: current, applied: false, reason: "dialog_process_identity_conflict" });
   }
   const activeTurn = resolveSessionTurnRuntime(next, sessionId);
   if (!current && activeTurn && !isFinalTurnState(activeTurn.state)) {
-    return { registry: next, turn: activeTurn, applied: false, reason: "active_turn_conflict" };
+    return result({ turn: activeTurn, applied: false, reason: "active_turn_conflict" });
   }
   const transition = reduceTurnRuntimeEvent(current, rawEvent);
-  if (!transition.applied) return { registry: next, turn: current, applied: false, reason: transition.reason };
+  if (!transition.applied) return result({ turn: current, applied: false, reason: transition.reason });
   const nowMs = Number(event.timestamp || Date.now());
   const terminal = transition.next.terminal;
   const backendState = text(event.backendState || current?.backendState);
@@ -441,6 +538,13 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
     updatedAt: text(event.updatedAt || current?.updatedAt),
     source: text(event.source || current?.source),
     sourceEvent: text(event.sourceEvent || event.type || current?.sourceEvent),
+    authority: text(event.authority || current?.authority || "none"),
+    // Only a Turn created by a local optimistic command may later move to the
+    // backend Session returned for that command. Backend identity binding
+    // consumes this capability; independent Sessions may reuse the same scope.
+    sessionIdentityPending: current
+      ? (aliasPromoted ? false : current.sessionIdentityPending === true)
+      : text(event.type).startsWith("local_"),
     finishedAtMs: terminal ? Number(current?.finishedAtMs || nowMs) : 0,
     // An existing Turn owns its start time. Only the event that creates a Turn
     // may derive a provisional start from its event time; later events must not
@@ -461,7 +565,7 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
   bucket.turns[turnScopeId] = turn;
   bucket.activeTurnScopeId = turnScopeId;
   if (turn.dialogProcessId) next.routeIndex[turn.dialogProcessId] = { sessionId, turnScopeId };
-  return { registry: next, turn, applied: true, reason: transition.reason };
+  return result({ turn, applied: true, reason: transition.reason });
 }
 
 /** Apply a validated Service lifecycle envelope through the only Turn reducer. */

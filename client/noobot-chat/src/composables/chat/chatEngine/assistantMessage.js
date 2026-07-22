@@ -8,8 +8,7 @@ import { mergeAttachments } from "../../infra/dialogProcessChain";
 export function createAssistantMessageHelpers({ translate, makeViewMessage }) {
   function applyAssistantFailureState(targetAssistantMessage, errorMessage = "") {
     if (!targetAssistantMessage) return;
-    targetAssistantMessage.pending = false;
-    targetAssistantMessage.statusLabel = translate("chat.failed");
+    // pending/status are derived from the scoped run-state projection.
     targetAssistantMessage.error = String(errorMessage || "").trim();
     if (!String(targetAssistantMessage.content || "").trim()) {
       targetAssistantMessage.content = `> ${translate("chat.occurredError", {

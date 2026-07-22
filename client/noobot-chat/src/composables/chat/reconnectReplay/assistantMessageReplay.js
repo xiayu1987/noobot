@@ -180,8 +180,10 @@ export function createFinalAssistantFromReconnectReplay({
   appendMessage,
   messages = [],
   dialogProcessId = "",
+  legacyDialogFallback = false,
 } = {}) {
   if (!activeSession?.value) return null;
+  if (!legacyDialogFallback) return null;
   const normalizedDpId = _trimStr(dialogProcessId);
   const replayText =
     collectReconnectDeltaText(messages) ||

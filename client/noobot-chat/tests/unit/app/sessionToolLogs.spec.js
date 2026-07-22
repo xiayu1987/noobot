@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import { applyCompletedToolLogsToMessages } from "../../../src/composables/infra/sessionToolLogs";
+import { selectToolTimelineLogs } from "../../../src/composables/chat/chatEngine/toolTimeline";
 
 describe("session tool logs", () => {
   it("attaches raw workflow node tool logs to a summary display message by turnScopeId", () => {
@@ -60,13 +61,14 @@ describe("session tool logs", () => {
 
     applyCompletedToolLogsToMessages(displayMessages, sessionDocuments);
 
-    expect(displayMessages[0].completedToolLogs).toHaveLength(2);
-    expect(displayMessages[0].completedToolLogs.map((item) => item.type)).toEqual([
+    const logs = selectToolTimelineLogs(displayMessages[0]);
+    expect(logs).toHaveLength(2);
+    expect(logs.map((item) => item.type)).toEqual([
       "tool_call",
       "tool_result",
     ]);
-    expect(displayMessages[0].completedToolLogs[1].text).toBe("search");
-    expect(displayMessages[0].completedToolLogs[1].detailText).toBe("ok");
+    expect(logs[1].text).toBe("search");
+    expect(logs[1].detailText).toBe("ok");
   });
 
   it("keeps plain-text tool results out of the summary", () => {
@@ -114,8 +116,9 @@ describe("session tool logs", () => {
 
     applyCompletedToolLogsToMessages(displayMessages, sessionDocuments);
 
-    expect(displayMessages[0].completedToolLogs[1].text).toBe("read_file");
-    expect(displayMessages[0].completedToolLogs[1].detailText).toBe(
+    const logs = selectToolTimelineLogs(displayMessages[0]);
+    expect(logs[1].text).toBe("read_file");
+    expect(logs[1].detailText).toBe(
       "the complete file content",
     );
   });
@@ -167,12 +170,13 @@ describe("session tool logs", () => {
 
     applyCompletedToolLogsToMessages(displayMessages, sessionDocuments);
 
-    expect(displayMessages[0].completedToolLogs.map((item) => item.type)).toEqual([
+    const logs = selectToolTimelineLogs(displayMessages[0]);
+    expect(logs.map((item) => item.type)).toEqual([
       "tool_call",
       "tool_result",
     ]);
-    expect(displayMessages[0].completedToolLogs[0].text).toBe('read_file({"filePath":"notes.txt"})');
-    expect(displayMessages[0].completedToolLogs[1].text).toBe("read_file ok=true");
-    expect(displayMessages[0].completedToolLogs[1].detailText).toBe("file body");
+    expect(logs[0].text).toBe('read_file({"filePath":"notes.txt"})');
+    expect(logs[1].text).toBe("read_file ok=true");
+    expect(logs[1].detailText).toBe("file body");
   });
 });

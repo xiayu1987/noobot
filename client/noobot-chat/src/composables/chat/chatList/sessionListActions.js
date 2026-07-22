@@ -16,6 +16,7 @@ import {
   revokeMessagePreviewUrls,
 } from "./sessionRecords";
 import { removeSessionRuntime, sessionRuntimeId } from "../sessionRunStateMachine/turnRuntimeRegistry";
+import { clearSessionTurnUiStates } from "../chatEngine/turnUiStore";
 
 export function createSessionListActions({
   sessions,
@@ -224,6 +225,7 @@ export function createSessionListActions({
       revokeMessagePreviewUrls(targetSession.messages || []);
       sessions.value.splice(index, 1);
       removeSessionRuntime(turnRuntimeRegistry?.value || turnRuntimeRegistry, runtimeSessionId);
+      clearSessionTurnUiStates(runtimeSessionId);
       if (!sessions.value.length) {
         createLocalSession();
       } else if (activeSessionId.value === targetSessionId) {
@@ -248,6 +250,7 @@ export function createSessionListActions({
     }
 
     removeSessionRuntime(turnRuntimeRegistry?.value || turnRuntimeRegistry, runtimeSessionId);
+    clearSessionTurnUiStates(runtimeSessionId);
 
     await fetchSessions(fallbackNextSessionId);
     return true;

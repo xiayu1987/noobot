@@ -10,6 +10,7 @@ import {
   findVisibleLastMessage,
   foldConversationMessages,
 } from "../../../../src/composables/infra/messageModel";
+import { selectActivityTimelineLogs } from "../../../../src/composables/chat/chatEngine/activityTimeline";
 
 const envelope = {
   protocol: "noobot.semantic-transfer",
@@ -35,22 +36,10 @@ const envelope = {
 };
 
 describe("messageModel semantic transfer", () => {
-  it("expands current pending assistant thinking while keeping history collapsed", () => {
-    expect(
-      buildViewMessage({ role: "assistant", pending: true }).thinkingOpenNames,
-    ).toEqual([
-      "thinking-panel",
-    ]);
-    expect(buildViewMessage({ role: "assistant" }).thinkingOpenNames).toEqual([]);
-    expect(
-      buildViewMessage({
-        role: "assistant",
-        pending: true,
-        thinkingOpenNames: [],
-      })
-        .thinkingOpenNames,
-    ).toEqual([]);
-    expect(buildViewMessage({ role: "user" }).thinkingOpenNames).toEqual([]);
+  it("keeps turn UI state out of message projections", () => {
+    expect(buildViewMessage({ role: "assistant", pending: true })).not.toHaveProperty("thinkingOpenNames");
+    expect(buildViewMessage({ role: "assistant" })).not.toHaveProperty("expandedDetailLogKeys");
+    expect(buildViewMessage({ role: "user" })).not.toHaveProperty("thinkingOpenNames");
   });
 
   it("finds the last user-visible message and skips harness injected relay messages", () => {
@@ -509,10 +498,9 @@ describe("messageModel execution logs", () => {
     expect(messages).toHaveLength(2);
     expect(messages[1].pending).toBe(true);
     expect(messages[1].attachments).toEqual([]);
-    expect(messages[1].realtimeLogs).toEqual([]);
-    expect(messages[1].completedToolLogs).toEqual([]);
+    expect(messages[1].toolTimeline).toEqual([]);
+    expect(messages[1].activityTimeline).toEqual([]);
     expect(messages[1].tool_calls).toEqual([]);
-    expect(messages[1].executionLogTotal).toBe(0);
     expect(messages[1].statusLabel).toBe("");
   });
 
@@ -543,9 +531,8 @@ describe("messageModel execution logs", () => {
     expect(messages[0].content).toContain("new continuation");
     expect(messages[0].attachments).toHaveLength(1);
     expect(messages[0].attachments[0]).toMatchObject({ attachmentId: "att-new" });
-    expect(messages[0].realtimeLogs).toHaveLength(2);
+    expect(selectActivityTimelineLogs(messages[0])).toHaveLength(2);
     expect(messages[0].tool_calls).toHaveLength(1);
-    expect(messages[0].executionLogTotal).toBe(2);
   });
 
   it("keeps the user message and merges assistant chunks even when storage ids differ", () => {
@@ -630,7 +617,7 @@ describe("messageModel execution logs", () => {
     }));
   });
 
-  it("keeps only latest 10 realtime logs when merging completed assistant messages", () => {
+  it("keeps all canonical activities when merging completed assistant messages", () => {
     const messages = foldConversationMessages([
       {
         role: "assistant",
@@ -651,10 +638,10 @@ describe("messageModel execution logs", () => {
     ], buildViewMessage);
 
     expect(messages).toHaveLength(1);
-    expect(messages[0].realtimeLogs).toHaveLength(10);
-    expect(messages[0].realtimeLogs[0].text).toBe("log-3");
-    expect(messages[0].realtimeLogs[9].text).toBe("log-12");
-    expect(messages[0].executionLogTotal).toBe(12);
+    const logs = selectActivityTimelineLogs(messages[0]);
+    expect(logs).toHaveLength(12);
+    expect(logs[0].text).toBe("log-1");
+    expect(logs[11].text).toBe("log-12");
   });
 
   it("keeps thinking intervals out of folded messages when continuing the same turn", () => {

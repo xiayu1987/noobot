@@ -8,6 +8,7 @@ import { createFixture, createFakeProcessStore } from "./helpers/useReconnectRep
 import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../src/composables/chat/sessionRunStateMachine";
 import { applyTurnRuntimeEvent } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
+import { selectActivityTimelineLogs } from "../../../../src/composables/chat/chatEngine/activityTimeline";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -33,7 +34,7 @@ describe("useReconnectReplay", () => {
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-t",
     );
     expect(assistant?.pending).toBe(true);
-    expect(assistant?.realtimeLogs?.length).toBe(1);
+    expect(selectActivityTimelineLogs(assistant)).toHaveLength(1);
   });
 
   it("EV-01: DELTA appends content and keeps pending unchanged", async () => {
@@ -115,7 +116,7 @@ describe("useReconnectReplay", () => {
     expect(refs.sending.value).toBe(true);
   });
 
-  it("EV-01f: channel_state stopping only marks the assistant and does not acquire the global lock", async () => {
+  it("EV-01f: turnless channel_state stopping does not guess an assistant or acquire the global lock", async () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
@@ -133,7 +134,8 @@ describe("useReconnectReplay", () => {
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-stop",
     );
     expect(refs.sending.value).toBe(false);
-    expect(assistant?.statusLabel).toBe("chat.stopping");
+    expect(assistant?.statusLabelKey).toBeUndefined();
+    expect(assistant?.channelState).toBeUndefined();
     expect(assistant?.pending).toBe(true);
   });
 

@@ -89,6 +89,7 @@ function createReconnectRunStateEvents(reconnectSessions = [], recoverableSessio
         source: "reconnect_data",
         sourceEvent: _trimStr(stateEntry?.sourceEvent),
         seq: Number(stateEntry?.seq || 0),
+        authoritativeSnapshot: stateEntry?.authoritativeSnapshot === true,
       });
     });
   });
@@ -153,6 +154,8 @@ export async function applyReconnectDataReplay({
   for (const sessionEntry of reconnectSessions) {
     const sessionId = _trimStr(sessionEntry?.sessionId);
     if (!sessionId) continue;
+    const currentRunMeta = normalizeTurnMeta(sessionEntry?.currentRun || {});
+    const hasAuthoritativeCurrentRun = hasValidCurrentRun(sessionEntry);
     const dialogProcesses = Array.isArray(sessionEntry?.dialogProcesses)
       ? sessionEntry.dialogProcesses
       : [];
@@ -174,10 +177,22 @@ export async function applyReconnectDataReplay({
           if (!replayCache[sessionId]) replayCache[sessionId] = {};
           replayCache[sessionId][replayKey] = messages;
         } else {
+          const replayTurnScopeId = normalizeTurnMeta(dp).turnScopeId ||
+            currentRunMeta.turnScopeId;
+          const belongsToAuthoritativeCurrentRun = Boolean(
+            hasAuthoritativeCurrentRun &&
+            replayTurnScopeId &&
+            replayTurnScopeId === currentRunMeta.turnScopeId &&
+            (!currentRunMeta.dialogProcessId || dpId === currentRunMeta.dialogProcessId),
+          );
           await applyReconnectMessagesToActiveSession(messages, dpId, {
-            allowCreate: isDialogProcessRecoverable(sessionEntry, messages),
-            turnScopeId: normalizeTurnMeta(dp).turnScopeId ||
-              normalizeTurnMeta(sessionEntry?.currentRun || {}).turnScopeId,
+            // A terminal authoritative run may still need an exact-Turn
+            // assistant to project its final delta/error. Creation does not
+            // grant lifecycle authority; currentRun remains the sole source.
+            allowCreate: isDialogProcessRecoverable(sessionEntry, messages) ||
+              belongsToAuthoritativeCurrentRun,
+            authoritativeCurrentRun: belongsToAuthoritativeCurrentRun,
+            turnScopeId: replayTurnScopeId,
           });
         }
       }

@@ -27,6 +27,9 @@ import {
 } from "./timeFields";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { initializeMessageEventState } from "./messageEventState";
+import { mergeToolTimelines } from "../chat/chatEngine/toolTimeline";
+import { mergeActivityTimelines } from "../chat/chatEngine/activityTimeline";
+import { adaptLegacyMessageTimelines } from "../chat/chatEngine/legacyTimelineAdapter";
 
 function normalizeArray(value) {
   return Array.isArray(value) ? value : [];
@@ -180,73 +183,61 @@ function normalizeMessageType(messageItem = {}) {
 }
 
 function createMessageModel(messageItem = {}) {
-  const normalizedAttachments = getMessageAttachments(messageItem);
-  const transferEnvelopes = getMessageTransferEnvelopes(messageItem);
-  const workflowMeta = normalizeWorkflowMeta(messageItem);
-  const turnScopeId = getMessageTurnScopeId(messageItem);
-  const sessionId = String(messageItem?.sessionId || messageItem?.session_id || "").trim();
-  const messageTimestamp = getMessageTimestamp(messageItem);
-  const messageRole = getMessageRole(messageItem) || "assistant";
-  const hasThinkingOpenNames = Object.prototype.hasOwnProperty.call(
-    messageItem,
-    "thinkingOpenNames",
-  );
+  // Message construction is the persisted-document boundary. Convert legacy
+  // log projections once, then expose only canonical timelines at runtime.
+  const canonicalMessage = adaptLegacyMessageTimelines(messageItem);
+  const normalizedAttachments = getMessageAttachments(canonicalMessage);
+  const transferEnvelopes = getMessageTransferEnvelopes(canonicalMessage);
+  const workflowMeta = normalizeWorkflowMeta(canonicalMessage);
+  const turnScopeId = getMessageTurnScopeId(canonicalMessage);
+  const sessionId = String(canonicalMessage?.sessionId || canonicalMessage?.session_id || "").trim();
+  const messageTimestamp = getMessageTimestamp(canonicalMessage);
+  const messageRole = getMessageRole(canonicalMessage) || "assistant";
   return initializeMessageEventState({
-    id: messageItem.id || "",
+    id: canonicalMessage.id || "",
     turnScopeId,
     sessionId,
     session_id: sessionId,
     role: messageRole,
-    content: getMessageContentIdentity(messageItem),
-    type: normalizeMessageType(messageItem),
-    tool_calls: normalizeArray(messageItem.tool_calls),
-    toolCalls: normalizeArray(messageItem.toolCalls),
-    tool_call_id: messageItem.tool_call_id || "",
+    content: getMessageContentIdentity(canonicalMessage),
+    type: normalizeMessageType(canonicalMessage),
+    tool_calls: normalizeArray(canonicalMessage.tool_calls),
+    toolCalls: normalizeArray(canonicalMessage.toolCalls),
+    tool_call_id: canonicalMessage.tool_call_id || "",
     // Child-session realtime projection stores execution facets on the
     // addressed assistant message. Keep them on the view model so the agent
     // drawer can render the same thinking/tool timeline as the main chat.
-    thinking: messageItem.thinking,
-    toolCall: messageItem.toolCall,
-    toolResult: messageItem.toolResult,
-    rawEvents: normalizeArray(messageItem.rawEvents),
-    dialogProcessId: getMessageDialogProcessId(messageItem),
-    parentDialogProcessId: getMessageParentDialogProcessId(messageItem),
-    modelAlias: messageItem.modelAlias || "",
-    modelName: messageItem.modelName || messageItem.model || "",
-    modelRuns: normalizeArray(messageItem.modelRuns),
+    thinking: canonicalMessage.thinking,
+    toolCall: canonicalMessage.toolCall,
+    toolResult: canonicalMessage.toolResult,
+    rawEvents: normalizeArray(canonicalMessage.rawEvents),
+    dialogProcessId: getMessageDialogProcessId(canonicalMessage),
+    parentDialogProcessId: getMessageParentDialogProcessId(canonicalMessage),
+    modelAlias: canonicalMessage.modelAlias || "",
+    modelName: canonicalMessage.modelName || canonicalMessage.model || "",
+    modelRuns: normalizeArray(canonicalMessage.modelRuns),
     attachments: normalizeArray(normalizedAttachments),
     transferEnvelopes,
-    realtimeLogs: normalizeArray(messageItem.realtimeLogs),
-    executionLogTotal: Number(
-      messageItem?.executionLogTotal ??
-        messageItem?.execution_log_total ??
-        normalizeArray(messageItem.realtimeLogs).length,
-    ),
-    messageEventState: messageItem.messageEventState,
-    completedToolLogs: normalizeArray(messageItem.completedToolLogs),
-    hasThinkingDetails: messageItem.hasThinkingDetails === true,
+    toolTimeline: normalizeArray(canonicalMessage.toolTimeline),
+    activityTimeline: normalizeArray(canonicalMessage.activityTimeline),
+    messageEventState: canonicalMessage.messageEventState,
+    hasThinkingDetails: canonicalMessage.hasThinkingDetails === true,
     thinkingDetailCount: Number(
-      messageItem?.thinkingDetailCount ?? messageItem?.thinking_detail_count ?? 0,
+      canonicalMessage?.thinkingDetailCount ?? canonicalMessage?.thinking_detail_count ?? 0,
     ),
-    thinkingOpenNames: hasThinkingOpenNames
-      ? normalizeArray(messageItem.thinkingOpenNames)
-      : messageRole === "assistant" && messageItem.pending === true
-        ? ["thinking-panel"]
-        : [],
-    expandedDetailLogKeys: normalizeArray(messageItem.expandedDetailLogKeys),
-    error: messageItem.error || "",
-    pending: Boolean(messageItem.pending),
-    state: messageItem.state || "",
-    status: messageItem.status || "",
-    channelState: messageItem.channelState || "",
-    statusLabel: messageItem.statusLabel || "",
-    hasFirstStreamEvent: messageItem.hasFirstStreamEvent === true,
+    error: canonicalMessage.error || "",
+    pending: Boolean(canonicalMessage.pending),
+    state: canonicalMessage.state || "",
+    status: canonicalMessage.status || "",
+    channelState: canonicalMessage.channelState || "",
+    statusLabel: canonicalMessage.statusLabel || "",
+    hasFirstStreamEvent: canonicalMessage.hasFirstStreamEvent === true,
     ts: messageTimestamp || nowIso(),
-    taskId: messageItem.taskId || "",
-    injectedMessage: messageItem.injectedMessage === true,
-    injectedBy: String(messageItem.injectedBy || "").trim(),
-    workflowMessage: isWorkflowMessageLike(messageItem),
-    pluginMessage: messageItem.pluginMessage === true,
+    taskId: canonicalMessage.taskId || "",
+    injectedMessage: canonicalMessage.injectedMessage === true,
+    injectedBy: String(canonicalMessage.injectedBy || "").trim(),
+    workflowMessage: isWorkflowMessageLike(canonicalMessage),
+    pluginMessage: canonicalMessage.pluginMessage === true,
     pluginMeta: workflowMeta,
     workflowMeta,
   });
@@ -348,19 +339,14 @@ function foldConversationMessages(messages = [], buildView) {
     }
     const previousToolCalls = normalizeArray(previousMessage?.tool_calls);
     const currentToolCalls = normalizeArray(currentMessage?.tool_calls);
-    const previousRealtimeLogs = normalizeArray(previousMessage?.realtimeLogs);
-    const currentRealtimeLogs = normalizeArray(currentMessage?.realtimeLogs);
-    previousMessage.realtimeLogs = [
-      ...previousRealtimeLogs,
-      ...currentRealtimeLogs,
-    ].slice(-EXECUTION_LOG_DISPLAY_LIMIT);
-
     previousMessage.tool_calls = [...previousToolCalls, ...currentToolCalls];
-    previousMessage.executionLogTotal = Math.max(
-      Number(previousMessage?.executionLogTotal || 0),
-      Number(currentMessage?.executionLogTotal || 0),
-      normalizeArray(previousMessage?.realtimeLogs).length,
-      normalizeArray(currentMessage?.realtimeLogs).length,
+    previousMessage.toolTimeline = mergeToolTimelines(
+      previousMessage.toolTimeline,
+      currentMessage.toolTimeline,
+    );
+    previousMessage.activityTimeline = mergeActivityTimelines(
+      previousMessage.activityTimeline,
+      currentMessage.activityTimeline,
     );
     previousMessage.hasThinkingDetails =
       previousMessage.hasThinkingDetails === true || currentMessage.hasThinkingDetails === true;
