@@ -350,6 +350,10 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   const existingRealtimeLogs = Array.isArray(targetMessage?.realtimeLogs)
     ? targetMessage.realtimeLogs
     : [];
+  const existingMessageEventState = targetMessage?.messageEventState &&
+    typeof targetMessage.messageEventState === "object"
+    ? targetMessage.messageEventState
+    : null;
   const existingChannelState =
     targetMessage?.channelState &&
     typeof targetMessage.channelState === "object" &&
@@ -391,10 +395,38 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   ) {
     targetMessage.completedToolLogs = existingCompletedToolLogs;
   }
-  if (hasArrayItems(sourceMessage?.realtimeLogs)) {
+  if (sourceCanUseTurnScopedAssets && existingRealtimeLogs.length) {
+    // Reconnect snapshots and live authoritative events are delivered
+    // concurrently. Never replace logs already reduced from the live stream
+    // with an older snapshot; merge both projections and keep their order.
+    const mergedLogs = [];
+    const seenLogs = new Set();
+    for (const log of [...(sourceMessage.realtimeLogs || []), ...existingRealtimeLogs]) {
+      const key = String(log?.eventId || log?.id || log?.toolCallId || "").trim() ||
+        JSON.stringify(log);
+      if (seenLogs.has(key)) continue;
+      seenLogs.add(key);
+      mergedLogs.push(log);
+    }
+    targetMessage.realtimeLogs = mergedLogs.slice(-EXECUTION_LOG_DISPLAY_LIMIT);
+  } else if (hasArrayItems(sourceMessage?.realtimeLogs)) {
     targetMessage.realtimeLogs = sourceMessage.realtimeLogs.slice(-EXECUTION_LOG_DISPLAY_LIMIT);
-  } else if (sourceCanUseTurnScopedAssets && existingRealtimeLogs.length) {
-    targetMessage.realtimeLogs = existingRealtimeLogs.slice(-EXECUTION_LOG_DISPLAY_LIMIT);
+  }
+  if (sourceCanUseTurnScopedAssets && existingMessageEventState) {
+    const sourceState = sourceMessage?.messageEventState || {};
+    targetMessage.messageEventState = {
+      ...sourceState,
+      lastSequence: Math.max(
+        Number(sourceState.lastSequence || 0),
+        Number(existingMessageEventState.lastSequence || 0),
+      ),
+      consumedEventIds: [...new Set([
+        ...(Array.isArray(sourceState.consumedEventIds) ? sourceState.consumedEventIds : []),
+        ...(Array.isArray(existingMessageEventState.consumedEventIds)
+          ? existingMessageEventState.consumedEventIds
+          : []),
+      ])].slice(-1000),
+    };
   }
   const mergedTransferEnvelopes = mergeTransferEnvelopes(
     existingTransferEnvelopes,

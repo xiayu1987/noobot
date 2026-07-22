@@ -61,6 +61,34 @@ export function resolveReconnectTargetAssistantMessage({
     });
     return matchedPlaceholder.pending ? matchedPlaceholder : null;
   }
+  if (normalizedTurnScopeId) {
+    const matchedTurnAssistant = messageList.find(
+      (messageItem) =>
+        _isAssistantRole(messageItem) &&
+        _trimStr(messageItem?.turnScopeId) === normalizedTurnScopeId,
+    );
+    if (matchedTurnAssistant) {
+      if (normalizedDpId && !matchedTurnAssistant.dialogProcessId) {
+        matchedTurnAssistant.dialogProcessId = normalizedDpId;
+      }
+      logResolution("turn-scope-match", matchedTurnAssistant, { accepted: true });
+      return matchedTurnAssistant;
+    }
+    // A scoped authoritative event must never fall back to another turn that
+    // happens to reuse the same dialog process (stop -> continue).
+    logResolution("turn-scope-missing", null, { accepted: false });
+    if (!allowCreate) return null;
+    const appendedMessage = createTurnPlaceholderMessage({
+      appendMessage,
+      sessionId: activeSession.value?.backendSessionId || activeSession.value?.id,
+      dialogProcessId: normalizedDpId,
+      turnScopeId: normalizedTurnScopeId,
+    });
+    logResolution("turn-scope-placeholder-created", appendedMessage, {
+      accepted: Boolean(appendedMessage),
+    });
+    return appendedMessage;
+  }
   // Reconnect payloads restored from cache may not carry turnScopeId. In that
   // case, keep dialogProcessId as the stable identity and reuse the existing
   // assistant message instead of creating a second, scope-less placeholder.
@@ -71,6 +99,7 @@ export function resolveReconnectTargetAssistantMessage({
     (messageItem) =>
       normalizedDpId &&
       _isAssistantRole(messageItem) &&
+      messageItem?.pending === true &&
       _matchesDialogProcessId(messageItem, normalizedDpId),
   );
   if (matchedAssistantMessage) {
