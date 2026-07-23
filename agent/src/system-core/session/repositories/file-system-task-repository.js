@@ -63,41 +63,50 @@ export class FileSystemTaskRepository {
   }
 
   async save(userId, sessionId, task, parentSessionId = "", persistenceContext = null) {
-    if (!persistenceContext && await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
-    const { sessionDir } = await this._resolveTaskScope(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-    );
-    await fsMkdir(sessionDir, { recursive: true });
-
-    const bundle = await this.getBundle(userId, sessionId, parentSessionId, persistenceContext);
-    const normalizedTask = this.normalizeTask(task);
-    const existingIndex = bundle.tasks.findIndex(
-      (taskItem) => taskItem.taskId === normalizedTask.taskId,
-    );
-    if (existingIndex >= 0) {
-      bundle.tasks[existingIndex] = {
-        ...bundle.tasks[existingIndex],
-        ...normalizedTask,
-      };
-    } else {
-      bundle.tasks.push(normalizedTask);
-    }
-    bundle.currentTaskId = String(normalizedTask.taskId || "").trim();
-    bundle.updatedAt = this.now();
-
-    await writeTaskArtifact({
-      storageService: this.storageService,
-      sessionDir,
-      taskPayload: {
+    if (await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
+    const save = async () => {
+      const { sessionDir } = await this._resolveTaskScope(
+        userId,
         sessionId,
-        currentTaskId: bundle.currentTaskId,
-        tasks: bundle.tasks,
-        updatedAt: bundle.updatedAt,
-      },
-    });
+        parentSessionId,
+        persistenceContext,
+      );
+      await fsMkdir(sessionDir, { recursive: true });
+
+      const bundle = await this.getBundle(userId, sessionId, parentSessionId, persistenceContext);
+      const normalizedTask = this.normalizeTask(task);
+      const existingIndex = bundle.tasks.findIndex(
+        (taskItem) => taskItem.taskId === normalizedTask.taskId,
+      );
+      if (existingIndex >= 0) {
+        bundle.tasks[existingIndex] = {
+          ...bundle.tasks[existingIndex],
+          ...normalizedTask,
+        };
+      } else {
+        bundle.tasks.push(normalizedTask);
+      }
+      bundle.currentTaskId = String(normalizedTask.taskId || "").trim();
+      bundle.updatedAt = this.now();
+
+      await writeTaskArtifact({
+        storageService: this.storageService,
+        sessionDir,
+        taskPayload: {
+          sessionId,
+          currentTaskId: bundle.currentTaskId,
+          tasks: bundle.tasks,
+          updatedAt: bundle.updatedAt,
+        },
+      });
+    };
+    if (typeof this.sessionRepository?.withSessionMutation === "function") {
+      await this.sessionRepository.withSessionMutation(
+        userId, sessionId, parentSessionId, save, persistenceContext,
+      );
+    } else {
+      await save();
+    }
     return true;
   }
 
@@ -109,49 +118,58 @@ export class FileSystemTaskRepository {
     currentTaskId = "",
     persistenceContext = null,
   ) {
-    if (!persistenceContext && await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
-    const { sessionDir } = await this._resolveTaskScope(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-    );
-    await fsMkdir(sessionDir, { recursive: true });
-
-    const bundle = await this.getBundle(userId, sessionId, parentSessionId, persistenceContext);
-    const existingTasks = Array.isArray(bundle.tasks) ? bundle.tasks : [];
-    const taskIndexMap = new Map(
-      existingTasks.map((task, index) => [task.taskId, index]),
-    );
-
-    for (const task of tasks) {
-      const normalizedTask = this.normalizeTask(task);
-      if (!normalizedTask.taskId) continue;
-      const existingIndex = taskIndexMap.get(normalizedTask.taskId);
-      if (existingIndex === undefined) {
-        existingTasks.push(normalizedTask);
-        taskIndexMap.set(normalizedTask.taskId, existingTasks.length - 1);
-      } else {
-        existingTasks[existingIndex] = {
-          ...existingTasks[existingIndex],
-          ...normalizedTask,
-        };
-      }
-    }
-
-    bundle.tasks = existingTasks;
-    bundle.currentTaskId = String(currentTaskId || "").trim();
-    bundle.updatedAt = this.now();
-    await writeTaskArtifact({
-      storageService: this.storageService,
-      sessionDir,
-      taskPayload: {
+    if (await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
+    const save = async () => {
+      const { sessionDir } = await this._resolveTaskScope(
+        userId,
         sessionId,
-        currentTaskId: bundle.currentTaskId,
-        tasks: bundle.tasks,
-        updatedAt: bundle.updatedAt,
-      },
-    });
+        parentSessionId,
+        persistenceContext,
+      );
+      await fsMkdir(sessionDir, { recursive: true });
+
+      const bundle = await this.getBundle(userId, sessionId, parentSessionId, persistenceContext);
+      const existingTasks = Array.isArray(bundle.tasks) ? bundle.tasks : [];
+      const taskIndexMap = new Map(
+        existingTasks.map((task, index) => [task.taskId, index]),
+      );
+
+      for (const task of tasks) {
+        const normalizedTask = this.normalizeTask(task);
+        if (!normalizedTask.taskId) continue;
+        const existingIndex = taskIndexMap.get(normalizedTask.taskId);
+        if (existingIndex === undefined) {
+          existingTasks.push(normalizedTask);
+          taskIndexMap.set(normalizedTask.taskId, existingTasks.length - 1);
+        } else {
+          existingTasks[existingIndex] = {
+            ...existingTasks[existingIndex],
+            ...normalizedTask,
+          };
+        }
+      }
+
+      bundle.tasks = existingTasks;
+      bundle.currentTaskId = String(currentTaskId || "").trim();
+      bundle.updatedAt = this.now();
+      await writeTaskArtifact({
+        storageService: this.storageService,
+        sessionDir,
+        taskPayload: {
+          sessionId,
+          currentTaskId: bundle.currentTaskId,
+          tasks: bundle.tasks,
+          updatedAt: bundle.updatedAt,
+        },
+      });
+    };
+    if (typeof this.sessionRepository?.withSessionMutation === "function") {
+      await this.sessionRepository.withSessionMutation(
+        userId, sessionId, parentSessionId, save, persistenceContext,
+      );
+    } else {
+      await save();
+    }
     return true;
   }
 }

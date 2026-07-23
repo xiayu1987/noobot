@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import { readJsonlArtifactFile } from "../../../src/system-core/session/session-artifact-store.js";
 import os from "node:os";
 import path from "node:path";
 
@@ -130,7 +131,7 @@ test("ScopedArtifactPersistenceHelpers persists existing sub-session snapshot fr
   assert.deepEqual(taskJson.tasks, [{ taskId: "t1" }]);
   assert.equal(taskJson.updatedAt, "2026-01-02T03:04:05.000Z");
   assert.deepEqual(executionJson.logs, [{ event: "x" }]);
-  assert.equal(await fs.readFile(persisted.files.executionEvents, "utf8"), "{\"event\":\"x\"}\n");
+  assert.deepEqual(await readJsonlArtifactFile(persisted.files.executionEvents), [{ event: "x" }]);
 });
 
 test("ScopedArtifactPersistenceHelpers generated artifact persister maps records to metas", async () => {

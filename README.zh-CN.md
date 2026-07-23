@@ -84,8 +84,7 @@ NOOBOT_MODEL_BASE_URL=https://example.com/v1 \
 - 前端：`http://127.0.0.1:10060`
 - 后端：`http://127.0.0.1:10061`
 - Agent 代理：`http://127.0.0.1:10062`
-- 模型代理（DashScope）：`http://127.0.0.1:12341` -> `https://dashscope.aliyuncs.com`
-- 模型代理（Poe）：`http://127.0.0.1:12342` -> `https://api.poe.com`
+- 模型代理地址会根据已配置的模型供应商自动生成。
 
 关闭全部服务：
 

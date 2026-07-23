@@ -70,46 +70,65 @@ export class FileSystemExecutionRepository {
   }
 
   async saveBundle(userId, sessionId, executionBundle = {}, parentSessionId = "", persistenceContext = null) {
-    if (!persistenceContext && await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
-    const { sessionDir } = await this._resolveExecutionScope(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-    );
-    await fsMkdir(sessionDir, { recursive: true });
-    await writeExecutionArtifact({
-      storageService: this.storageService,
-      sessionDir,
-      executionPayload: {
+    if (await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
+    const save = async () => {
+      const { sessionDir } = await this._resolveExecutionScope(
+        userId,
         sessionId,
-        ...(executionBundle?.dialogProcessId ? { dialogProcessId: executionBundle.dialogProcessId } : {}),
-        updatedAt: this.now(),
-      },
-    });
+        parentSessionId,
+        persistenceContext,
+      );
+      await fsMkdir(sessionDir, { recursive: true });
+      await writeExecutionArtifact({
+        storageService: this.storageService,
+        sessionDir,
+        executionPayload: {
+          sessionId,
+          ...(executionBundle?.dialogProcessId ? { dialogProcessId: executionBundle.dialogProcessId } : {}),
+          updatedAt: this.now(),
+        },
+      });
+    };
+    if (typeof this.sessionRepository?.withSessionMutation === "function") {
+      await this.sessionRepository.withSessionMutation(
+        userId, sessionId, parentSessionId, save, persistenceContext,
+      );
+    } else {
+      await save();
+    }
     return true;
   }
 
   async appendLog(userId, sessionId, executionLog = {}, executionBundle = {}, parentSessionId = "", persistenceContext = null) {
-    if (!persistenceContext && await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
-    const { sessionDir } = await this._resolveExecutionScope(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-    );
-    await fsMkdir(sessionDir, { recursive: true });
-    await appendExecutionLogArtifact({
-      storageService: this.storageService,
-      sessionDir,
-      executionLog,
-      executionPayload: {
+    if (await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
+    const append = async () => {
+      const { sessionDir } = await this._resolveExecutionScope(
+        userId,
         sessionId,
-        ...(executionBundle?.dialogProcessId ? { dialogProcessId: executionBundle.dialogProcessId } : {}),
-        updatedAt: this.now(),
-      },
-      resetExecutionLogs: executionBundle?.resetExecutionLogs === true,
-    });
+        parentSessionId,
+        persistenceContext,
+      );
+      await fsMkdir(sessionDir, { recursive: true });
+      await appendExecutionLogArtifact({
+        storageService: this.storageService,
+        sessionDir,
+        executionLog,
+        executionPayload: {
+          sessionId,
+          ...(executionBundle?.dialogProcessId ? { dialogProcessId: executionBundle.dialogProcessId } : {}),
+          updatedAt: this.now(),
+        },
+        resetExecutionLogs: executionBundle?.resetExecutionLogs === true,
+        alreadyLocked: Boolean(this.sessionRepository?.withSessionMutation),
+      });
+    };
+    if (typeof this.sessionRepository?.withSessionMutation === "function") {
+      await this.sessionRepository.withSessionMutation(
+        userId, sessionId, parentSessionId, append, persistenceContext,
+      );
+    } else {
+      await append();
+    }
     return true;
   }
 }

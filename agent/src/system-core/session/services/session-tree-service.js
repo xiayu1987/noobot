@@ -159,34 +159,41 @@ export class SessionTreeService {
       }
 
       const deletedSessionIds = [];
-      if (typeof this.sessionRepo?.markSessionsDeleted === "function") {
-        await this.sessionRepo.markSessionsDeleted(userId, toDelete);
-      }
-      for (const id of toDelete) {
-        await this.sessionRepo.delete(userId, id);
-        deletedSessionIds.push(id);
-      }
-
-      if (nodeExists) {
-        const deleteSet = new Set(deletedSessionIds);
-        const nextNodes = {};
-        for (const [id, node] of Object.entries(sessionTree?.nodes || {})) {
-          if (deleteSet.has(id)) continue;
-          nextNodes[id] = {
-            ...node,
-            children: Array.isArray(node?.children)
-              ? node.children.filter((childId) => !deleteSet.has(String(childId || "").trim()))
-              : [],
-            updatedAt: this.now(),
-          };
+      const deleteWithLifecycleLocks = async () => {
+        if (typeof this.sessionRepo?.markSessionsDeleted === "function") {
+          await this.sessionRepo.markSessionsDeleted(userId, toDelete);
         }
-        await this.treeRepo.saveTree(userId, {
-          roots: (sessionTree?.roots || []).filter(
-            (rootId) => !deleteSet.has(String(rootId || "").trim()),
-          ),
-          nodes: nextNodes,
-          updatedAt: this.now(),
-        });
+        for (const id of toDelete) {
+          await this.sessionRepo.delete(userId, id);
+          deletedSessionIds.push(id);
+        }
+
+        if (nodeExists) {
+          const deleteSet = new Set(deletedSessionIds);
+          const nextNodes = {};
+          for (const [id, node] of Object.entries(sessionTree?.nodes || {})) {
+            if (deleteSet.has(id)) continue;
+            nextNodes[id] = {
+              ...node,
+              children: Array.isArray(node?.children)
+                ? node.children.filter((childId) => !deleteSet.has(String(childId || "").trim()))
+                : [],
+              updatedAt: this.now(),
+            };
+          }
+          await this.treeRepo.saveTree(userId, {
+            roots: (sessionTree?.roots || []).filter(
+              (rootId) => !deleteSet.has(String(rootId || "").trim()),
+            ),
+            nodes: nextNodes,
+            updatedAt: this.now(),
+          });
+        }
+      };
+      if (typeof this.sessionRepo?.withSessionLifecycleMutations === "function") {
+        await this.sessionRepo.withSessionLifecycleMutations(userId, toDelete, deleteWithLifecycleLocks);
+      } else {
+        await deleteWithLifecycleLocks();
       }
 
       return {

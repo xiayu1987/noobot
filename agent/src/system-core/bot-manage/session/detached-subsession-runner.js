@@ -106,6 +106,9 @@ export function createDetachedSubSessionRunner({
 
     const relativeDir = String(strategy?.relativeDir || "").trim();
     const allowedRoot = String(strategy?.allowedRoot || "").trim();
+    const lifecycle = typeof session.getSessionLifecycle === "function"
+      ? await session.getSessionLifecycle({ userId, sessionId: subSessionId })
+      : null;
     const persistenceContext = session.createScopedPersistenceContext({
       userId,
       sessionId: subSessionId,
@@ -113,6 +116,9 @@ export function createDetachedSubSessionRunner({
       scopeId: mergedRunConfig.executionId,
       relativeDir,
       allowedRoot,
+      ...(Number.isInteger(Number(lifecycle?.generation)) && Number(lifecycle.generation) > 0
+        ? { sessionGeneration: Number(lifecycle.generation) }
+        : {}),
       metadataContributor: () => ({
         userId,
         sessionId: subSessionId,

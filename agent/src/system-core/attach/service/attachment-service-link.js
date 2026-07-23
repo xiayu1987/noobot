@@ -13,6 +13,10 @@ import { readAttachIndex, writeAttachIndex } from "../index-manager.js";
 import { attachScopedRoot, resolveBasePath } from "./attachment-scope-resolver.js";
 import { buildPublicRecord } from "./record-builder.js";
 import { buildSessionDisplaySummary } from "../../session/session-summary-builders.js";
+import {
+  readSessionArtifact,
+  writeSessionArtifact,
+} from "../../session/session-artifact-store.js";
 
 export async function linkParsedResultToAttachment(service, {
   userId,
@@ -230,17 +234,18 @@ export async function syncParsedResultToSessionSnapshots({
   const normalizedContentSha256 = safeStr(updatedSourceAttachment?.contentSha256);
 
   for (const sessionJsonFile of sessionJsonFiles) {
-    let raw = "";
+    const sessionDir = path.dirname(sessionJsonFile);
+    const sessionPayload = await readSessionArtifact({ sessionDir, fallback: null });
+    if (!sessionPayload) continue;
+    // Preserve the snapshot's existing summary depth when rewriting turn artifacts.
+    // writeSessionArtifact defaults to depth 0, which would otherwise silently
+    // downgrade runtime/plugin snapshot summaries during attachment linking.
+    let summaryDepth = 0;
     try {
-      raw = await fsReadFile(sessionJsonFile, "utf8");
+      const summary = JSON.parse(await fsReadFile(path.join(sessionDir, "session-summary.json"), "utf8"));
+      if (Number.isFinite(Number(summary?.depth))) summaryDepth = Number(summary.depth);
     } catch {
-      continue;
-    }
-    let sessionPayload = null;
-    try {
-      sessionPayload = JSON.parse(raw);
-    } catch {
-      continue;
+      summaryDepth = 0;
     }
     const messages = Array.isArray(sessionPayload?.messages) ? sessionPayload.messages : [];
     let changed = false;
@@ -282,8 +287,7 @@ export async function syncParsedResultToSessionSnapshots({
     if (!changed) continue;
     const nextSessionPayload = { ...(sessionPayload || {}), messages: nextMessages };
     try {
-      await fsWriteFile(sessionJsonFile, `${JSON.stringify(nextSessionPayload, null, 2)}\n`, "utf8");
-      await syncSessionSummaryForSessionFile(sessionJsonFile, nextSessionPayload);
+      await writeSessionArtifact({ sessionDir, sessionPayload: nextSessionPayload, depth: summaryDepth });
     } catch {
       // ignore snapshot sync failures
     }

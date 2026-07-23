@@ -95,7 +95,7 @@ test("deleted Session cannot be revived by initial provision", async () => {
     await runtime.sessionTreeService.deleteSessionBranch({ userId: "u1", sessionId: "session-1" });
     const result = await runtime.sessionMessageService.applyTurnLifecycleEvent(firstSend("revive-command"));
     assert.equal(result.applied, false);
-    assert.equal(result.reason, "session_not_found");
+    assert.equal(result.reason, "session_deleted");
     assert.equal(await exists(scope.sessionFile), false);
   });
 });

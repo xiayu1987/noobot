@@ -57,6 +57,9 @@ export function createSessionServices(globalConfig = {}, { now = null } = {}) {
   const sessionTreeRepository = new FileSystemSessionTreeRepository({
     pathResolver,
     storageService,
+    async getSessionLifecycle({ userId = "", sessionId = "", initialize = true } = {}) {
+      return sessionRepository.getSessionLifecycle(userId, sessionId, { initialize });
+    },
     now: nowFn,
   });
 
@@ -150,6 +153,7 @@ export function createSessionServices(globalConfig = {}, { now = null } = {}) {
       relativeDir = "",
       allowedRoot = "",
       metadataContributor = null,
+      sessionGeneration = null,
     } = {}) {
       if (!String(sessionId || "").trim() || !String(scopeId || "").trim()) {
         throw new TypeError("scoped persistence context requires sessionId and scopeId");
@@ -165,6 +169,7 @@ export function createSessionServices(globalConfig = {}, { now = null } = {}) {
           allowedRoot,
         }),
         metadataContributor,
+        sessionGeneration,
       });
     },
     sessionTreeService,
@@ -215,6 +220,11 @@ export function createSessionFacade(runtime = {}) {
 
     assertPersistenceContextIdentity(context = null, identity = {}) {
       return assertPersistenceContextIdentity(context, identity);
+    },
+
+    async getSessionLifecycle(payload = {}) {
+      if (typeof runtime.getSessionLifecycle !== "function") return null;
+      return runtime.getSessionLifecycle(payload);
     },
 
     async ensureRuntimeDirs(userId) {
@@ -400,6 +410,7 @@ export { FileSystemSessionTreeRepository } from "./repositories/file-system-sess
 export { FileSystemSessionRepository } from "./repositories/file-system-session-repository.js";
 export { FileSystemTaskRepository } from "./repositories/file-system-task-repository.js";
 export { FileSystemExecutionRepository } from "./repositories/file-system-execution-repository.js";
+export { SessionMutationCoordinator, sessionMutationCoordinator } from "./session-mutation-coordinator.js";
 export {
   SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
   buildSessionDisplaySummary,
@@ -413,8 +424,13 @@ export {
   appendJsonlArtifactLog,
   buildSessionArtifactFileMap,
   persistSessionArtifactSnapshot,
+  inspectSessionArtifacts,
+  repairSessionArtifacts,
+  cleanupSessionArtifacts,
   readJsonArtifactFile,
   readJsonlArtifactFile,
+  iterateExecutionLogs,
+  readRecentSessionTurns,
   readSessionArtifactSnapshot,
   readSessionDisplaySummaryArtifact,
   rebuildSessionDisplaySummaryArtifact,

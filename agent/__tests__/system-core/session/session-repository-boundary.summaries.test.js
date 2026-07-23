@@ -13,6 +13,7 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promise
 import { createSessionServices } from "../../../src/system-core/session/index.js";
 import { writeSessionArtifact } from "../../../src/system-core/session/session-artifact-store.js";
 import { buildSessionDisplaySummary } from "../../../src/system-core/session/session-summary-builders.js";
+import { readSessionArtifact } from "../../../src/system-core/session/session-artifact-store.js";
 
 async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(
@@ -329,7 +330,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
 
     const scopeB = await runtime.repositories.sessionRepository.resolveSessionScope(userId, "B", "A");
     const summaryFile = path.join(scopeB.sessionDir, "session-summary.json");
-    const persistedSession = JSON.parse(await readFile(scopeB.sessionFile, "utf8"));
+    const persistedSession = await readSessionArtifact({ sessionDir: scopeB.sessionDir });
     assert.equal(persistedSession.messages.every((item) => "turnScopeId" in item), true);
     let summary = JSON.parse(await readFile(summaryFile, "utf8"));
     assert.equal(summary.schemaVersion, 5);

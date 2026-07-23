@@ -11,7 +11,7 @@ import path from "node:path";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 
 import { createSessionServices } from "../../../src/system-core/session/index.js";
-import { writeSessionArtifact } from "../../../src/system-core/session/session-artifact-store.js";
+import { readSessionArtifact, writeSessionArtifact } from "../../../src/system-core/session/session-artifact-store.js";
 import { buildSessionDisplaySummary } from "../../../src/system-core/session/session-summary-builders.js";
 
 async function withTempWorkspace(fn) {
@@ -92,7 +92,7 @@ test("session save persists thinking timing fields to full session and display s
     await runtime.repositories.sessionRepository.save(userId, session, "");
 
     const scope = await runtime.repositories.sessionRepository.resolveSessionScope(userId, "S", "");
-    const full = JSON.parse(await readFile(scope.sessionFile, "utf8"));
+    const full = await readSessionArtifact({ sessionDir: scope.sessionDir });
     const displaySummary = JSON.parse(await readFile(path.join(scope.sessionDir, "session-summary.json"), "utf8"));
 
     const fullAssistant = full.messages.filter((item) => item.role === "assistant");

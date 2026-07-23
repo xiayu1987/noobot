@@ -23,6 +23,7 @@ import {
   validateAttachmentPolicy,
 } from "../../../src/system-core/attach/policy/policy-validator.js";
 import { getMimeTypeFromExtension, isValidMimeType } from "../../../src/system-core/attach/policy/mime-utils.js";
+import { readSessionArtifact } from "../../../src/system-core/session/session-artifact-store.js";
 
 async function withTempDir(fn) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "noobot-attach-test-"));
@@ -377,8 +378,8 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
     assert.ok(linked);
     assert.equal(linked.parsedResult?.attachmentId, parsedAttachment.attachmentId);
 
-    const runtimeSnapshot = JSON.parse(await readFile(runtimeSessionFile, "utf8"));
-    const pluginSnapshot = JSON.parse(await readFile(pluginSessionFile, "utf8"));
+    const runtimeSnapshot = await readSessionArtifact({ sessionDir: path.dirname(runtimeSessionFile) });
+    const pluginSnapshot = await readSessionArtifact({ sessionDir: path.dirname(pluginSessionFile) });
     const runtimeAttachment = runtimeSnapshot?.messages?.[0]?.attachments?.[0] || {};
     const pluginAttachment = pluginSnapshot?.messages?.[0]?.attachments?.[0] || {};
     assert.equal(runtimeAttachment.parsedResult?.attachmentId, parsedAttachment.attachmentId);
