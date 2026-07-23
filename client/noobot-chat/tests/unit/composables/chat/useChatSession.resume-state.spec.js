@@ -54,6 +54,36 @@ describe("useChatSession summary and reconnect state", () => {
     sessionLogClientMock.dispose.mockClear();
   });
 
+  it("replays an authoritative completed lifecycle snapshot after refresh", async () => {
+    const store = useChatStore();
+    store.sessions = [createSessionFixture({
+      id: "s-snapshot", backendSessionId: "s-snapshot",
+      turnStatuses: [{ status: "processing", turnScopeId: "t-snapshot", dialogProcessId: "dp-snapshot" }],
+      turnLifecycleSnapshot: {
+        protocolVersion: 1, eventType: "turn.snapshot", commandId: "summary:s-snapshot:2",
+        userId: "", sessionId: "s-snapshot", sequence: 2, activeTurnScopeId: "",
+        activeTurn: null, unchanged: false, generatedAt: "2026-07-10T00:00:00.000Z",
+        recentTerminalTurns: [{
+          turnScopeId: "t-snapshot", dialogProcessId: "dp-snapshot", state: "completed",
+          phase: "completion", sequence: 2, revision: 2,
+          createdAt: "2026-07-10T00:00:00.000Z", updatedAt: "2026-07-10T00:00:01.000Z",
+          capabilities: { canStop: false },
+        }],
+      },
+    })];
+    store.activeSessionId = "s-snapshot";
+
+    createChatSession();
+    await nextTick();
+
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-snapshot")).toMatchObject({
+      sending: false,
+      displayState: "send",
+    });
+    expect(store.turnRuntimeRegistry.sessions["s-snapshot"].protocolVersion).toBe(1);
+    expect(store.turnRuntimeRegistry.sessions["s-snapshot"].turns["t-snapshot"].terminal).toBe("completed");
+  });
+
   it("keeps dialogProcessId and turnScopeId conversation state keys separate", async () => {
     const store = useChatStore();
     store.sessions = [createSessionFixture({ id: "s-state", backendSessionId: "s-state" })];

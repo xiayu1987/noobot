@@ -5,6 +5,7 @@
  */
 
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { createTurnLifecycleSnapshot } from "@noobot/shared/turn-lifecycle-protocol";
 import {
   collectAttachmentRefsFromTransferEnvelopes,
   compactAttachmentRef,
@@ -12,7 +13,7 @@ import {
   dedupeAttachmentRefs,
 } from "./transfer-attachment-refs.js";
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 5;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 6;
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
 const SUMMARY_ARRAY_ITEM_CHARS = LENGTH_THRESHOLDS.display.sessionSummaryArrayItemChars;
 const SUMMARY_OBJECT_FIELD_CHARS = LENGTH_THRESHOLDS.display.sessionSummaryObjectFieldChars;
@@ -502,6 +503,31 @@ export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
     (count, message) => count + (Array.isArray(message?.attachments) ? message.attachments.length : 0),
     0,
   );
+  const lifecycle = session?.turnLifecycle && typeof session.turnLifecycle === "object"
+    ? session.turnLifecycle
+    : null;
+  const lifecycleTurns = lifecycle?.turns && typeof lifecycle.turns === "object"
+    ? lifecycle.turns
+    : {};
+  const activeTurnScopeId = String(lifecycle?.activeTurnScopeId || "").trim();
+  const terminalStates = new Set([
+    "completed", "stop_completed", "action_failed", "processing_failed",
+    "completion_failed", "stop_failed",
+  ]);
+  const turnLifecycleSnapshot = lifecycle
+    ? createTurnLifecycleSnapshot({
+      commandId: `session-summary:${sessionId}:${Number(lifecycle?.sequence || 0)}`,
+      sessionId,
+      sequence: Number(lifecycle?.sequence || 0),
+      activeTurnScopeId,
+      activeTurn: lifecycleTurns[activeTurnScopeId] || null,
+      recentTerminalTurns: Object.values(lifecycleTurns)
+        .filter((turn) => terminalStates.has(String(turn?.state || "").trim()))
+        .sort((left, right) => Number(right?.sequence || 0) - Number(left?.sequence || 0))
+        .slice(0, 10),
+      generatedAt: String(session?.updatedAt || "").trim(),
+    })
+    : null;
   return {
     schemaVersion: SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
     sessionId,
@@ -518,6 +544,7 @@ export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
     depth: Number.isFinite(Number(depth)) ? Number(depth) : 0,
     turnTimings,
     turnStatuses,
+    turnLifecycleSnapshot,
     messages: displayMessages,
     toolLogSummaries,
     stats: {
