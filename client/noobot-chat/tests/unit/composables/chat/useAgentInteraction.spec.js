@@ -166,4 +166,25 @@ describe("useAgentInteraction", () => {
     expect(interaction.interactionSubmitting.value).toBe(false);
     expect(interaction.pendingInteractionRequest.value).toBeNull();
   });
+
+  it("keeps an interaction pending and retryable when websocket send fails", () => {
+    const sendError = new Error("socket closed");
+    const interaction = useAgentInteraction({
+      encryptPayloadBySessionId: (payload) => payload,
+      sendJson: vi.fn(() => { throw sendError; }),
+    });
+    const request = {
+      requestId: "req-retry",
+      sessionId: "session-retry",
+      dialogProcessId: "dialog-retry",
+      turnScopeId: "turn-retry",
+    };
+    interaction.setPendingInteractionRequest(request);
+
+    expect(() => interaction.submitInteractionResponse({ approved: true })).toThrow(sendError);
+    expect(interaction.pendingInteractionRequest.value).toEqual(request);
+    expect(interaction.pendingInteractionRequests.value).toEqual([request]);
+    expect(interaction.isInteractionRequestHandled(request)).toBe(false);
+    expect(interaction.interactionSubmitting.value).toBe(false);
+  });
 });

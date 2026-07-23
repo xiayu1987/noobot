@@ -34,6 +34,14 @@ describe("harness message status renderer", () => {
 });
 
 describe("harness thinking panel renderer", () => {
+  it("does not attach to user messages", () => {
+    expect(matchesThinkingPanel({ role: "user" })).toBe(false);
+    expect(matchesThinkingPanel({
+      role: "user",
+      activityTimeline: [{ text: "model reasoning" }],
+    })).toBe(false);
+  });
+
   it("does not recursively attach to a live workflow projection", () => {
     expect(matchesThinkingPanel({
       role: "assistant",

@@ -16,6 +16,7 @@ import { normalizeTurnScopeIdKey } from "../../infra/messageIdentity";
 
 export const DEFAULT_TERMINAL_RETAIN_PER_SESSION = 10;
 export const DEFAULT_TERMINAL_MAX_AGE_MS = TIME_THRESHOLDS.client.terminalTurnRetentionMs;
+export const DEFAULT_DEFERRED_LIFECYCLE_EVENT_TTL_MS = TIME_THRESHOLDS.client.deferredLifecycleEventTtlMs;
 
 function text(value) {
   return String(value || "").trim();
@@ -46,8 +47,77 @@ export function sessionRuntimeId(value = {}) {
   return text(value?.backendSessionId || value?.sessionId || value?.id || value);
 }
 
-export function createTurnRuntimeRegistryState() {
-  return { sessions: {}, sessionAliases: {}, routeIndex: {}, executions: {}, executionIdByTurnScopeId: {}, childExecutionIdsByParentId: {} };
+export function createTurnRuntimeRegistryState({
+  now = Date.now,
+  deferredLifecycleEventTtlMs = DEFAULT_DEFERRED_LIFECYCLE_EVENT_TTL_MS,
+} = {}) {
+  return {
+    sessions: {}, sessionAliases: {}, routeIndex: {}, pendingLifecycleEvents: {},
+    executions: {}, executionIdByTurnScopeId: {}, childExecutionIdsByParentId: {},
+    lifecycleOptions: { now, deferredLifecycleEventTtlMs },
+  };
+}
+
+function pendingLifecycleKey(sessionId, turnScopeId) {
+  return executionTurnKey(sessionId, turnScopeId);
+}
+
+function lifecycleNowMs(registry) {
+  const now = registry?.lifecycleOptions?.now;
+  return Number(typeof now === "function" ? now() : Date.now());
+}
+
+function deferredLifecycleEventTtlMs(registry) {
+  const configured = Number(registry?.lifecycleOptions?.deferredLifecycleEventTtlMs);
+  return Number.isFinite(configured) && configured >= 0
+    ? configured
+    : DEFAULT_DEFERRED_LIFECYCLE_EVENT_TTL_MS;
+}
+
+export function pruneExpiredPendingLifecycleEvents(registry, { nowMs = lifecycleNowMs(registry) } = {}) {
+  const removedKeys = [];
+  for (const [key, pending] of Object.entries(registry?.pendingLifecycleEvents || {})) {
+    const expiresAtMs = Number(pending?.expiresAtMs);
+    // The expiry boundary is exclusive: an item is invalid at expiresAtMs.
+    if (!Number.isFinite(expiresAtMs) || Number(nowMs) >= expiresAtMs) {
+      delete registry.pendingLifecycleEvents[key];
+      removedKeys.push(key);
+    }
+  }
+  return { removedKeys };
+}
+
+function deferCompletionAuthorityEvent(registry, event = {}) {
+  pruneExpiredPendingLifecycleEvents(registry);
+  const key = pendingLifecycleKey(event.sessionId, event.turnScopeId);
+  if (!key) return false;
+  if (!registry.pendingLifecycleEvents) registry.pendingLifecycleEvents = {};
+  // The key is the canonical Turn identity. Repeated detail completions are
+  // idempotent; retain only the latest observation until lifecycle hydration
+  // reaches the protocol's completion-requesting phase.
+  const existing = registry.pendingLifecycleEvents[key];
+  const enqueuedAtMs = Number(existing?.enqueuedAtMs ?? lifecycleNowMs(registry));
+  // Duplicate observations may replace payload data, but never extend the
+  // original bounded lifetime.
+  registry.pendingLifecycleEvents[key] = {
+    ...event,
+    enqueuedAtMs,
+    expiresAtMs: Number(existing?.expiresAtMs ?? (enqueuedAtMs + deferredLifecycleEventTtlMs(registry))),
+  };
+  return true;
+}
+
+function takeDeferredCompletionAuthorityEvent(registry, turn) {
+  pruneExpiredPendingLifecycleEvents(registry);
+  if (turn?.state !== FrontendRunState.FRONTEND_COMPLETION_REQUESTING) return null;
+  const key = pendingLifecycleKey(turn.sessionId, turn.turnScopeId);
+  const pending = key ? registry?.pendingLifecycleEvents?.[key] : null;
+  if (!pending) return null;
+  if (pending.dialogProcessId && turn.dialogProcessId && text(pending.dialogProcessId) !== text(turn.dialogProcessId)) {
+    return null;
+  }
+  delete registry.pendingLifecycleEvents[key];
+  return pending;
 }
 
 function canonicalSessionId(registry, sessionId) {
@@ -75,6 +145,17 @@ function promoteTurnSession(registry, turn, nextSessionId) {
   nextBucket.activeTurnScopeId = scope;
   if (!registry.sessionAliases) registry.sessionAliases = {};
   registry.sessionAliases[previousSessionId] = promotedSessionId;
+  const previousPendingKey = pendingLifecycleKey(previousSessionId, scope);
+  const promotedPendingKey = pendingLifecycleKey(promotedSessionId, scope);
+  if (previousPendingKey && promotedPendingKey && registry.pendingLifecycleEvents?.[previousPendingKey]) {
+    if (!registry.pendingLifecycleEvents[promotedPendingKey]) {
+      registry.pendingLifecycleEvents[promotedPendingKey] = {
+        ...registry.pendingLifecycleEvents[previousPendingKey],
+        sessionId: promotedSessionId,
+      };
+    }
+    delete registry.pendingLifecycleEvents[previousPendingKey];
+  }
   if (turn.dialogProcessId) registry.routeIndex[turn.dialogProcessId] = { sessionId: promotedSessionId, turnScopeId: scope };
   if (previousBucket && !Object.keys(previousBucket.turns || {}).length) delete registry.sessions[previousSessionId];
   return turn;
@@ -402,6 +483,8 @@ export function removeTurnRuntime(registry, turnScopeId, { sessionId = "" } = {}
   if (!turn || (expectedSessionId && turn.sessionId !== expectedSessionId)) return false;
   const bucket = registry?.sessions?.[turn.sessionId];
   if (!bucket) return false;
+  const pendingKey = pendingLifecycleKey(turn.sessionId, scope);
+  if (pendingKey) delete registry.pendingLifecycleEvents?.[pendingKey];
   delete bucket.turns[scope];
   if (turn.dialogProcessId && registry.routeIndex?.[turn.dialogProcessId]?.turnScopeId === scope) {
     delete registry.routeIndex[turn.dialogProcessId];
@@ -418,6 +501,11 @@ export function removeSessionRuntime(registry, sessionId) {
   for (const turn of Object.values(bucket.turns || {})) {
     const route = registry.routeIndex?.[text(turn?.dialogProcessId)];
     if (route?.sessionId === id && route?.turnScopeId === turn.turnScopeId) delete registry.routeIndex[turn.dialogProcessId];
+    const pendingKey = pendingLifecycleKey(id, turn.turnScopeId);
+    if (pendingKey) delete registry.pendingLifecycleEvents?.[pendingKey];
+  }
+  for (const key of Object.keys(registry.pendingLifecycleEvents || {})) {
+    if (key.startsWith(`${id}::`)) delete registry.pendingLifecycleEvents[key];
   }
   delete registry.sessions[id];
   return true;
@@ -461,6 +549,8 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
   if (!next.sessions) next.sessions = {};
   if (!next.sessionAliases) next.sessionAliases = {};
   if (!next.routeIndex) next.routeIndex = {};
+  if (!next.pendingLifecycleEvents) next.pendingLifecycleEvents = {};
+  pruneExpiredPendingLifecycleEvents(next);
   const event = normalizeSessionRunEvent(rawEvent);
   let turnScopeId = turnKey(event.turnScopeId);
   const route = resolveRoute(next, event.dialogProcessId);
@@ -482,7 +572,7 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
   const requestedSessionId = canonicalSessionId(next, rawRequestedSessionId);
   let current = findTurnByScope(next, turnScopeId, { sessionId: requestedSessionId });
   let aliasPromoted = false;
-  if (!current && requestedSessionId) {
+  if (!current && requestedSessionId && canPromoteOptimisticTurnSession(event)) {
     const matchingTurns = findTurnsByScope(next, turnScopeId);
     // A Turn scope may be promoted from its optimistic local Session to the
     // backend canonical Session exactly once.  Scope uniqueness is mandatory:
@@ -507,6 +597,10 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
   }
   const sessionId = text(requestedSessionId || current?.sessionId);
   const result = (values = {}) => observation({ canonicalSessionId: sessionId, aliasPromoted, ...values });
+  if (!current && event.type === SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED) {
+    const deferred = deferCompletionAuthorityEvent(next, { ...rawEvent, sessionId: requestedSessionId, turnScopeId });
+    return result({ turn: null, applied: false, deferred, reason: deferred ? "awaiting_turn_hydration" : "missing_session_identity" });
+  }
   if (!sessionId) return result({ turn: current, applied: false, reason: "missing_session_identity" });
   if (current?.sessionId && current.sessionId !== sessionId) return result({ turn: current, applied: false, reason: "session_identity_conflict" });
   if (current?.dialogProcessId && event.dialogProcessId && current.dialogProcessId !== event.dialogProcessId) return result({ turn: current, applied: false, reason: "dialog_process_identity_conflict" });
@@ -514,7 +608,7 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
     return result({ turn: current, applied: false, reason: "dialog_process_identity_conflict" });
   }
   const activeTurn = resolveSessionTurnRuntime(next, sessionId);
-  if (!current && activeTurn && !isFinalTurnState(activeTurn.state)) {
+  if (!current && activeTurn && !isFinalTurnState(activeTurn.state, activeTurn)) {
     return result({ turn: activeTurn, applied: false, reason: "active_turn_conflict" });
   }
   const transition = reduceTurnRuntimeEvent(current, rawEvent);
@@ -565,6 +659,10 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
   bucket.turns[turnScopeId] = turn;
   bucket.activeTurnScopeId = turnScopeId;
   if (turn.dialogProcessId) next.routeIndex[turn.dialogProcessId] = { sessionId, turnScopeId };
+  const deferredCompletion = takeDeferredCompletionAuthorityEvent(next, turn);
+  if (deferredCompletion) {
+    return applyTurnRuntimeEvent(next, deferredCompletion);
+  }
   return result({ turn, applied: true, reason: transition.reason });
 }
 
@@ -645,10 +743,16 @@ export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
       completion_failed: FrontendRunState.COMPLETION_ERROR, stop_failed: FrontendRunState.STOP_ERROR,
     };
     const state = stateMap[text(source.state)];
-    const terminal = text(source.state) === "completed" ? "completed" : text(source.state) === "stop_completed" ? "user_stopped" : isFinalTurnState(state) ? "error" : null;
+    // Terminal lifecycle is monotonic. A reconnect snapshot may have a newer
+    // transport revision while still carrying an older non-terminal phase;
+    // it must not reopen a Turn already completed by the protocol reducer.
+    if (current && isFinalTurnState(current.state, current) && !isFinalTurnState(state, source)) continue;
+    const terminal = text(source.state) === "completed" ? "completed" : text(source.state) === "stop_completed" ? "user_stopped" : isFinalTurnState(state, source) ? "error" : null;
     const turn = { ...(current || {}), ...source, sessionId, turnScopeId, dialogProcessId: text(source.dialogProcessId), state, phase, revision, seq: Number(source.sequence || 0), backendState: text(source.executionState), canStop: source.capabilities?.canStop === true, terminal, startedAt: text(source.startedAt || source.thinkingStartedAt || current?.startedAt), finishedAt: terminal ? text(current?.finishedAt || source.finishedAt || source.thinkingFinishedAt || source.updatedAt) : text(current?.finishedAt), source: "turn_snapshot", authoritativeSnapshot: true, authoritativeLifecycle: true };
     bucket.turns[turnScopeId] = turn;
     if (turn.dialogProcessId) registry.routeIndex[turn.dialogProcessId] = { sessionId, turnScopeId };
+    const deferredCompletion = takeDeferredCompletionAuthorityEvent(registry, turn);
+    if (deferredCompletion) applyTurnRuntimeEvent(registry, deferredCompletion);
   }
   const previousActiveTurnScopeId = text(bucket.activeTurnScopeId);
   bucket.activeTurnScopeId = turnKey(snapshot.activeTurnScopeId);

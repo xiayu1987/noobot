@@ -206,11 +206,19 @@ export function useAgentInteraction({
             payload: encryptPayloadBySessionId(response || {}, sessionId),
           }
         : response || {};
-    sendJson({
-      action: "interaction_response",
-      requestId: request.requestId,
-      response: responsePayload,
-    });
+    try {
+      sendJson({
+        action: "interaction_response",
+        requestId: request.requestId,
+        response: responsePayload,
+      });
+    } catch (error) {
+      // Local websocket send is not an acknowledgement. Preserve the request
+      // and leave it retryable after reconnect; only a successful local send
+      // may retire the queue item.
+      interactionSubmitting.value = false;
+      throw error;
+    }
     markInteractionRequestHandled(request);
     clearPendingInteraction(request);
     interactionSubmitting.value = false;

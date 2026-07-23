@@ -10,6 +10,7 @@ import {
   resolveSessionTurnRuntime,
   resolveLatestStoppedTurn,
   resolveTurnRuntimeByScope,
+  removeTurnRuntime,
   removeSessionRuntime,
   pruneTerminalTurns,
   selectSessionTurnRuntime,
@@ -137,6 +138,60 @@ describe("turnRuntimeRegistry", () => {
     applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED, sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", seq: 8 });
     expect(backendState(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp2", state: BackendChannelState.SENDING, seq: 7 }).applied).toBe(false);
     expect(resolveSessionTurnRuntime(registry, "s1")).toMatchObject({ terminal: "completed", canStop: false });
+  });
+
+  it("rejects an old Turn event after a newer Turn owns the same session", () => {
+    const registry = createTurnRuntimeRegistryState();
+    sendStart(registry, { sessionId: "s1", turnScopeId: "old" });
+    applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+      eventType: "turn.action_accepted",
+      sessionId: "s1", turnScopeId: "old", dialogProcessId: "dp-old", seq: 2,
+    });
+    applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+      eventType: "turn.processing_started",
+      sessionId: "s1", turnScopeId: "old", dialogProcessId: "dp-old", seq: 3,
+    });
+    applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+      eventType: "turn.processing_completed",
+      sessionId: "s1", turnScopeId: "old", dialogProcessId: "dp-old", seq: 4,
+    });
+    applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
+      sessionId: "s1", turnScopeId: "old", dialogProcessId: "dp-old", seq: 5,
+    });
+    sendStart(registry, { sessionId: "s1", turnScopeId: "new" });
+    const before = JSON.stringify(resolveSessionTurnRuntime(registry, "s1"));
+    const late = applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      sessionId: "s1",
+      turnScopeId: "old",
+      state: BackendChannelState.SENDING,
+      seq: 99,
+    });
+    expect(late.applied).toBe(false);
+    expect(JSON.stringify(resolveSessionTurnRuntime(registry, "s1"))).toBe(before);
+  });
+
+  it("rejects a mismatched dialog identity without mutating the Turn", () => {
+    const registry = createTurnRuntimeRegistryState();
+    sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
+    applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+      eventType: "turn.action_accepted",
+      sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", seq: 2,
+    });
+    applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+      eventType: "turn.processing_started",
+      sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", seq: 3,
+    });
+    const before = JSON.stringify(resolveSessionTurnRuntime(registry, "s1"));
+    const dialogMismatch = backendState(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp-other", state: BackendChannelState.COMPLETED, seq: 3 });
+    expect(dialogMismatch).toMatchObject({ applied: false, reason: "dialog_process_identity_conflict" });
+    expect(JSON.stringify(resolveSessionTurnRuntime(registry, "s1"))).toBe(before);
   });
   it("rejects phase regression when late events have no usable sequence", () => {
     const registry = createTurnRuntimeRegistryState();
@@ -396,6 +451,106 @@ describe("turnRuntimeRegistry", () => {
     expect(registry.sessions.s1).toBeUndefined();
   });
 
+  it("hydrates an authoritative action request that arrives before any local Turn", () => {
+    const registry = createTurnRuntimeRegistryState();
+    const result = applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+      eventType: "turn.action_accepted",
+      sessionId: "s1",
+      turnScopeId: "t1",
+      dialogProcessId: "dp1",
+      action: "send",
+      revision: 1,
+      sequence: 1,
+    });
+
+    expect(result).toMatchObject({
+      applied: true,
+      turn: {
+        state: "frontend_action_requesting",
+        action: "send",
+        authoritativeLifecycle: true,
+        terminal: null,
+      },
+    });
+    expect(registry.routeIndex.dp1).toEqual({ sessionId: "s1", turnScopeId: "t1" });
+  });
+
+  it("rejects an error that arrives before Turn identity is established", () => {
+    const registry = createTurnRuntimeRegistryState();
+    const result = applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+      eventType: "turn.failed",
+      phase: "processing",
+      sessionId: "s1",
+      turnScopeId: "t1",
+      dialogProcessId: "dp1",
+      revision: 1,
+      sequence: 1,
+      error: { message: "early failure" },
+    });
+
+    expect(result).toMatchObject({ applied: false, reason: "illegal_transition" });
+    expect(registry.sessions.s1).toBeUndefined();
+    expect(registry.routeIndex.dp1).toBeUndefined();
+    expect(registry.pendingLifecycleEvents).toEqual({});
+  });
+
+  it.each([
+    {
+      name: "completion",
+      failedPhase: "completion",
+      failedState: "frontend_completion_error",
+      successEvent: "turn.completed",
+      terminal: "completed",
+      prepare(registry) {
+        sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
+        applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: "turn.action_accepted", sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", sequence: 2 });
+        applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: "turn.processing_started", sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", sequence: 3 });
+        applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: "turn.processing_completed", sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", sequence: 4 });
+      },
+    },
+    {
+      name: "stop",
+      failedPhase: "stop",
+      failedState: "frontend_stop_error",
+      successEvent: "turn.stop_completed",
+      terminal: "user_stopped",
+      prepare(registry) {
+        sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
+        applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: "turn.action_accepted", sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", sequence: 2 });
+        applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: "turn.processing_started", sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", sequence: 3 });
+        backendState(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", state: BackendChannelState.SENDING, seq: 3 });
+        applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED, sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", sequence: 4 });
+        applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: "turn.stop_processing_completed", sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", sequence: 5 });
+      },
+    },
+  ])("allows only the matching authoritative success to settle a retryable $name failure", ({ prepare, failedPhase, failedState, successEvent, terminal }) => {
+    const registry = createTurnRuntimeRegistryState();
+    prepare(registry);
+    const failed = applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+      eventType: "turn.failed",
+      phase: failedPhase,
+      sessionId: "s1",
+      turnScopeId: "t1",
+      dialogProcessId: "dp1",
+      sequence: 6,
+      finalizeIntent: { retryable: true },
+    });
+    expect(failed.turn).toMatchObject({ state: failedState, terminal: null, finalizeIntent: { retryable: true } });
+
+    const settled = applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+      eventType: successEvent,
+      sessionId: "s1",
+      turnScopeId: "t1",
+      dialogProcessId: "dp1",
+      sequence: 7,
+    });
+    expect(settled).toMatchObject({ applied: true, turn: { terminal } });
+  });
+
   it("an empty active snapshot releases routing while retaining recent terminal turns", () => {
     const registry = createTurnRuntimeRegistryState();
     applyTurnLifecycleSnapshot(registry, snapshot());
@@ -452,6 +607,127 @@ describe("turnRuntimeRegistry", () => {
     ]);
     expect(JSON.stringify(registry.sessions.s1)).toBe(before);
     expect(resolveTurnRuntimeByScope(registry, "late-legacy", { sessionId: "s1" })).toBeNull();
+  });
+
+  it("applies an authoritative detail completion that arrives before Turn hydration", () => {
+    const registry = createTurnRuntimeRegistryState();
+    const early = applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
+      sessionId: "s1",
+      turnScopeId: "t1",
+      dialogProcessId: "dp1",
+      source: "final_session_detail",
+    });
+    expect(early).toMatchObject({ applied: false, deferred: true, reason: "awaiting_turn_hydration" });
+
+    sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
+    backendState(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", state: BackendChannelState.SENDING, seq: 2 });
+    backendState(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", state: BackendChannelState.COMPLETED, seq: 3 });
+
+    expect(resolveTurnRuntimeByScope(registry, "t1", { sessionId: "s1" })).toMatchObject({
+      state: "frontend_completed",
+      terminal: "completed",
+      authority: "authoritative_detail_applied",
+    });
+    expect(registry.pendingLifecycleEvents).toEqual({});
+  });
+
+  it("migrates and replays deferred completion when an optimistic Session is promoted", () => {
+    const registry = createTurnRuntimeRegistryState();
+    applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
+      sessionId: "local-session",
+      turnScopeId: "t1",
+      dialogProcessId: "dp1",
+    });
+    sendStart(registry, { sessionId: "local-session", turnScopeId: "t1" });
+    backendState(registry, { sessionId: "backend-session", turnScopeId: "t1", dialogProcessId: "dp1", state: BackendChannelState.SENDING, seq: 2 });
+    backendState(registry, { sessionId: "backend-session", turnScopeId: "t1", dialogProcessId: "dp1", state: BackendChannelState.COMPLETED, seq: 3 });
+
+    expect(registry.sessionAliases["local-session"]).toBe("backend-session");
+    expect(registry.pendingLifecycleEvents).toEqual({});
+    expect(resolveTurnRuntimeByScope(registry, "t1", { sessionId: "backend-session" })).toMatchObject({
+      state: "frontend_completed",
+      terminal: "completed",
+    });
+  });
+
+  it("does not let a newer non-terminal snapshot reopen a completed Turn", () => {
+    const registry = createTurnRuntimeRegistryState();
+    applyTurnLifecycleSnapshot(registry, snapshot({
+      sequence: 3,
+      activeTurn: { ...snapshot().activeTurn, state: "completed", phase: "completion", executionState: "completed", revision: 3, sequence: 3 },
+    }));
+    applyTurnLifecycleSnapshot(registry, snapshot({
+      commandId: "snapshot-late",
+      sequence: 4,
+      activeTurn: { ...snapshot().activeTurn, state: "completion_requesting", phase: "completion", revision: 4, sequence: 4 },
+    }));
+
+    expect(resolveTurnRuntimeByScope(registry, "t1", { sessionId: "s1" })).toMatchObject({
+      state: "frontend_completed",
+      terminal: "completed",
+    });
+  });
+
+  it("does not consume deferred completion for a mismatched execution identity", () => {
+    const registry = createTurnRuntimeRegistryState();
+    applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
+      sessionId: "s1",
+      turnScopeId: "t1",
+      dialogProcessId: "old-dp",
+      source: "final_session_detail",
+    });
+    sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
+    backendState(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "new-dp", state: BackendChannelState.SENDING, seq: 2 });
+    backendState(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "new-dp", state: BackendChannelState.COMPLETED, seq: 3 });
+
+    expect(resolveTurnRuntimeByScope(registry, "t1", { sessionId: "s1" })).toMatchObject({
+      state: "frontend_completion_requesting",
+      terminal: null,
+    });
+    expect(Object.keys(registry.pendingLifecycleEvents)).toEqual(["s1::t1"]);
+  });
+
+  it("deduplicates repeated early completion and never completes another Turn", () => {
+    const registry = createTurnRuntimeRegistryState();
+    const confirmation = {
+      type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
+      sessionId: "s1",
+      turnScopeId: "old",
+      dialogProcessId: "old-dp",
+      source: "final_session_detail",
+    };
+    applyTurnRuntimeEvent(registry, confirmation);
+    applyTurnRuntimeEvent(registry, confirmation);
+    sendStart(registry, { sessionId: "s1", turnScopeId: "new" });
+    backendState(registry, { sessionId: "s1", turnScopeId: "new", dialogProcessId: "new-dp", state: BackendChannelState.SENDING, seq: 2 });
+    backendState(registry, { sessionId: "s1", turnScopeId: "new", dialogProcessId: "new-dp", state: BackendChannelState.COMPLETED, seq: 3 });
+
+    expect(resolveTurnRuntimeByScope(registry, "new", { sessionId: "s1" })).toMatchObject({
+      state: "frontend_completion_requesting",
+      terminal: null,
+    });
+    expect(Object.keys(registry.pendingLifecycleEvents)).toEqual(["s1::old"]);
+  });
+
+  it("clears deferred completion when its Turn or session is removed", () => {
+    const registry = createTurnRuntimeRegistryState();
+    for (const turnScopeId of ["t1", "t2"]) {
+      applyTurnRuntimeEvent(registry, {
+        type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
+        sessionId: "s1",
+        turnScopeId,
+        dialogProcessId: `dp-${turnScopeId}`,
+      });
+    }
+    sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
+    expect(removeTurnRuntime(registry, "t1", { sessionId: "s1" })).toBe(true);
+    expect(registry.pendingLifecycleEvents).toEqual({ "s1::t2": expect.any(Object) });
+    sendStart(registry, { sessionId: "s1", turnScopeId: "t2" });
+    expect(removeSessionRuntime(registry, "s1")).toBe(true);
+    expect(registry.pendingLifecycleEvents).toEqual({});
   });
 
   it("prunes old or excess terminal turns per session while protecting active, stopped, and referenced turns", () => {

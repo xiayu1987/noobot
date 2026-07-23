@@ -182,6 +182,7 @@ export const TIME_THRESHOLDS = deepFreeze({
     monotonicActionStopTimeoutMs: TIME_TIERS.hookMs,
     monotonicActionStopPollIntervalMs: 50,
     stopRequestTtlMs: TIME_TIERS.fiveMinutesMs,
+    deferredLifecycleEventTtlMs: TIME_TIERS.fiveMinutesMs,
     panelResizeThrottleMs: TIME_TIERS.uiThrottleMs,
     missingInteractionPayloadTimeoutMs: 1200,
     micMaxDurationSeconds: TIME_TIERS.micDurationSeconds,

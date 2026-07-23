@@ -83,7 +83,6 @@ export function useMessageMeta({
     });
     if (!turnRuntime) {
       const persistedState = String(messageItem?.persistedStatusStepState || "").trim().toLowerCase();
-      if (persistedState === "completed") return "completed";
       if (persistedState === "user_stopped" || persistedState === "stopped") return "stopped";
       if (["error", "failed", "expired"].includes(persistedState)) return "error";
       return ["requesting", "sending", "completing", "stopping"].includes(persistedState)

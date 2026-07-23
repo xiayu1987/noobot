@@ -75,9 +75,9 @@ const stepView = computed(() => {
 }
 
 .message-status-steps.is-running {
-  border-color: color-mix(in srgb, var(--el-color-primary) 55%, var(--noobot-panel-border));
-  background: color-mix(in srgb, var(--el-color-primary) 10%, var(--noobot-thinking-bg));
-  box-shadow: 0 4px 16px color-mix(in srgb, var(--el-color-primary) 16%, transparent);
+  border-color: color-mix(in srgb, var(--el-color-primary) 42%, var(--noobot-panel-border));
+  background: color-mix(in srgb, var(--el-color-primary) 6%, var(--noobot-thinking-bg));
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--el-color-primary) 10%, transparent);
   animation: running-card-glow 2.4s ease-in-out infinite;
 }
 .message-status-steps.is-error {
@@ -189,10 +189,10 @@ const stepView = computed(() => {
 
 @keyframes running-card-glow {
   0%, 100% {
-    border-color: color-mix(in srgb, var(--el-color-primary) 48%, var(--noobot-panel-border));
+    border-color: color-mix(in srgb, var(--el-color-primary) 34%, var(--noobot-panel-border));
   }
   50% {
-    border-color: color-mix(in srgb, var(--el-color-primary) 72%, var(--noobot-panel-border));
+    border-color: color-mix(in srgb, var(--el-color-primary) 52%, var(--noobot-panel-border));
   }
 }
 
