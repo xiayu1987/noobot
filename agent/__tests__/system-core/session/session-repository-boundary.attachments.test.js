@@ -11,7 +11,7 @@ import path from "node:path";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 
 import { createSessionServices } from "../../../src/system-core/session/index.js";
-import { writeSessionArtifact } from "../../../src/system-core/session/session-artifact-store.js";
+import { readSessionArtifact, writeSessionArtifact } from "../../../src/system-core/session/session-artifact-store.js";
 import { buildSessionDisplaySummary } from "../../../src/system-core/session/session-summary-builders.js";
 
 async function withTempWorkspace(fn) {
@@ -208,7 +208,7 @@ test("session artifact persistence should normalize attachment fields before wri
       },
     });
 
-    const persistedSession = JSON.parse(await readFile(result.files.session, "utf8"));
+    const persistedSession = await readSessionArtifact({ sessionDir });
     const persistedSummary = JSON.parse(await readFile(result.files.sessionSummary, "utf8"));
     const sessionJson = JSON.stringify(persistedSession);
     const summaryJson = JSON.stringify(persistedSummary);

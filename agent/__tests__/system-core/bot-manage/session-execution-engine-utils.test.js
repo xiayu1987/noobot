@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import { readJsonlArtifactFile, readSessionArtifact } from "../../../src/system-core/session/session-artifact-store.js";
 import os from "node:os";
 import path from "node:path";
 
@@ -237,47 +238,24 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
 
   assert.equal(persisted.outputDir, outputDir);
   const sessionPayload = JSON.parse(await fs.readFile(persisted.files.session, "utf8"));
-  assert.deepEqual(sessionPayload, {
-    sessionId: "s1",
-    parentSessionId: "p1",
-    caller: "user",
-    modelAlias: "",
-    currentTaskId: "",
-    shortMemoryCheckpoint: 0,
-    turnTimings: [],
-    turnStatuses: [],
-    turnLifecycle: {
-      activeTurnScopeId: "",
-      sequence: 0,
-      turns: {},
-      commandReceipts: [],
-    },
-    messages: [
-      {
-        role: "assistant",
-        content: "canonical attachment",
-        userName: "",
-        sessionId: "",
-        parentSessionId: "",
-        type: "",
-        dialogProcessId: "",
-        parentDialogProcessId: "",
-        turnScopeId: "",
-        taskId: "",
-        taskStatus: "",
-        modelAlias: "",
-        modelName: "",
-        summarized: false,
-        ts: "2026-05-14T00:00:00.000Z",
-        attachments: [{ attachmentId: "att-1", name: "a.txt" }],
-      },
-    ],
-    selectedConnectors: {},
-    createdAt: "2026-05-14T00:00:00.000Z",
-    updatedAt: "2026-05-14T00:00:00.000Z",
-  });
+  assert.equal(sessionPayload.sessionId, "s1");
+  assert.equal(sessionPayload.parentSessionId, "p1");
+  assert.equal(sessionPayload.schemaVersion, 2);
+  assert.equal("messages" in sessionPayload, false);
+  assert.equal(sessionPayload.turnOrder.length, 1);
+  assert.equal(sessionPayload.turnOrder[0].turnId, "turn-000001");
+  assert.equal(sessionPayload.turnOrder[0].sequence, 1);
+  assert.equal(sessionPayload.turnOrder[0].turnScopeId, "");
+  assert.equal(sessionPayload.turnOrder[0].file, "turns/turn-000001.json");
+  assert.equal(sessionPayload.turnOrder[0].messageCount, 1);
+  assert.equal(typeof sessionPayload.turnOrder[0].contentHash, "string");
+  assert.match(sessionPayload.turnOrder[0].contentHash, /^sha256:/);
+  assert.equal(typeof sessionPayload.turnOrder[0].bytes, "number");
+  assert.equal(sessionPayload.createdAt, "2026-05-14T00:00:00.000Z");
+  assert.equal(sessionPayload.updatedAt, "2026-05-14T00:00:00.000Z");
   assert.equal(JSON.stringify(sessionPayload).includes("attachmentMetas"), false);
-  assert.equal("id" in sessionPayload.messages[0].attachments[0], false);
+  const aggregatedSession = await readSessionArtifact({ sessionDir: persisted.outputDir });
+  assert.equal("id" in aggregatedSession.messages[0].attachments[0], false);
   const sessionSummary = JSON.parse(await fs.readFile(persisted.files.sessionSummary, "utf8"));
   assert.equal(sessionSummary.schemaVersion, 5);
   assert.equal(sessionSummary.sessionId, "s1");
@@ -293,7 +271,7 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
     sessionId: "s1",
     logs: [{ event: "started" }],
   });
-  assert.equal(await fs.readFile(persisted.files.executionEvents, "utf8"), "{\"event\":\"started\"}\n");
+  assert.deepEqual(await readJsonlArtifactFile(persisted.files.executionEvents), [{ event: "started" }]);
   assert.deepEqual(JSON.parse(await fs.readFile(persisted.files.meta, "utf8")), {
     node: "n1",
   });

@@ -84,8 +84,7 @@ Default endpoints:
 - Frontend: `http://127.0.0.1:10060`
 - Backend: `http://127.0.0.1:10061`
 - Agent Proxy: `http://127.0.0.1:10062`
-- Model Proxy (DashScope): `http://127.0.0.1:12341` -> `https://dashscope.aliyuncs.com`
-- Model Proxy (Poe): `http://127.0.0.1:12342` -> `https://api.poe.com`
+- Model proxy endpoints are generated from your configured providers.
 
 Stop all services:
 

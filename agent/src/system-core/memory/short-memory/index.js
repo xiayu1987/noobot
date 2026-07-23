@@ -7,6 +7,8 @@ import { readShortMemory, flattenShortItems, getSortedShortItems } from "./reade
 import { writeShortMemory, assignShortItems } from "./writer.js";
 import { compactShortMemory } from "./compactor.js";
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
+import { filePath as path } from "../../utils/path-resolver.js";
+import { readSessionArtifact } from "../../session/session-artifact-store.js";
 
 function sanitizeDialogRecordsForMemory(messages = []) {
   const out = [];
@@ -62,7 +64,11 @@ export class ShortMemoryManager {
     parentSessionId = "",
   } = {}) {
     const sessionFile = this.storage.sessionFile(basePath, sessionId, parentSessionId);
-    const sessionData = await this.storage.readJson(sessionFile, null);
+    const sessionData = await readSessionArtifact({
+      storageService: this.storage,
+      sessionDir: path.dirname(sessionFile),
+      fallback: null,
+    });
     if (!sessionData) return false;
 
     const messages = Array.isArray(sessionData.messages) ? sessionData.messages : [];

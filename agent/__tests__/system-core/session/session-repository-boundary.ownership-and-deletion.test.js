@@ -11,7 +11,7 @@ import path from "node:path";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 
 import { createSessionServices } from "../../../src/system-core/session/index.js";
-import { writeSessionArtifact } from "../../../src/system-core/session/session-artifact-store.js";
+import { readJsonlArtifactFile, writeSessionArtifact } from "../../../src/system-core/session/session-artifact-store.js";
 import { buildSessionDisplaySummary } from "../../../src/system-core/session/session-summary-builders.js";
 
 async function withTempWorkspace(fn) {
@@ -78,7 +78,7 @@ test("session/task/execution repositories should keep file ownership boundaries"
     );
     assert.equal(await exists(sessionScope.executionFile), true);
     const executionEventsFile = path.join(sessionScope.sessionDir, "execution.jsonl");
-    assert.equal(await exists(executionEventsFile), true);
+    assert.equal(await exists(path.join(sessionScope.sessionDir, "execution-events/index.json")), true);
 
     const taskBundle = JSON.parse(await readFile(sessionScope.taskFile, "utf8"));
     assert.equal(taskBundle.currentTaskId, "t1");
@@ -87,11 +87,7 @@ test("session/task/execution repositories should keep file ownership boundaries"
     );
     assert.equal("logs" in executionBundle, false);
     assert.equal(executionBundle.dialogProcessId, "dp-1");
-    const executionEvents = (await readFile(executionEventsFile, "utf8"))
-      .trim()
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => JSON.parse(line));
+    const executionEvents = await readJsonlArtifactFile(executionEventsFile);
     assert.equal(executionEvents.length, 1);
     assert.equal(executionEvents[0].event, "start");
     assert.equal(executionEvents[0].dialogProcessId, "dp-1");
@@ -264,3 +260,120 @@ test("late execution initialization should not restore a deleted session tree no
 
 
 
+
+
+test("persistenceContext writes should respect deleted-session tombstones", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u1";
+    const sessionId = "deleted-context-session";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    const runtime = createSessionServices({ workspaceRoot });
+
+    await runtime.sessionCrudService.ensureSession(userId, sessionId);
+    const scope = await runtime.repositories.sessionRepository.resolveSessionScope(userId, sessionId);
+    const persistenceContext = {
+      locationResolver: runtime.repositories.sessionRepository.sessionPathResolver,
+    };
+    await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionId });
+
+    assert.equal(await runtime.repositories.sessionRepository.ensureSession({
+      userId,
+      sessionId,
+      persistenceContext,
+    }), false);
+    assert.equal(await runtime.repositories.sessionRepository.findById(
+      userId,
+      sessionId,
+      "",
+      persistenceContext,
+    ), null);
+    assert.equal(await runtime.repositories.sessionRepository.save(
+      userId,
+      { sessionId, messages: [{ role: "user", content: "late" }] },
+      "",
+      { persistenceContext },
+    ), false);
+    assert.equal(await runtime.repositories.taskRepository.save(
+      userId,
+      sessionId,
+      { taskId: "late-task", taskName: "late", taskStatus: "start" },
+      "",
+      persistenceContext,
+    ), false);
+    assert.equal(await runtime.repositories.fileSystemExecutionRepository.saveBundle(
+      userId,
+      sessionId,
+      {},
+      "",
+      persistenceContext,
+    ), false);
+    assert.equal(await runtime.repositories.fileSystemExecutionRepository.appendLog(
+      userId,
+      sessionId,
+      { event: "late" },
+      {},
+      "",
+      persistenceContext,
+    ), false);
+    assert.equal(await exists(scope.sessionDir), false);
+    assert.deepEqual(await runtime.repositories.sessionRepository.listSessionIds(userId), []);
+  });
+});
+
+test("lifecycle lock rechecks tombstone inside mutation before creating a session", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u1";
+    const sessionId = "lock-recheck-session";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    const runtime = createSessionServices({ workspaceRoot });
+    const repo = runtime.repositories.sessionRepository;
+    const scope = await repo.resolveSessionScope(userId, sessionId);
+
+    let checked = 0;
+    const originalIsDeleted = repo.isSessionDeleted.bind(repo);
+    repo.isSessionDeleted = async (...args) => {
+      checked += 1;
+      if (checked === 1) return false;
+      return true;
+    };
+
+    await assert.rejects(repo.ensureSession({ userId, sessionId }), { code: "SESSION_DELETED" });
+    repo.isSessionDeleted = originalIsDeleted;
+    assert.equal(await exists(scope.sessionDir), false);
+  });
+});
+
+test("stale generation token blocks session, task, and execution writes without side effects", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u1";
+    const sessionId = "stale-generation-session";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    const runtime = createSessionServices({ workspaceRoot });
+    const repo = runtime.repositories.sessionRepository;
+
+    await runtime.sessionCrudService.ensureSession(userId, sessionId);
+    const lifecycle = await repo.getSessionLifecycle(userId, sessionId);
+    const scope = await repo.resolveSessionScope(userId, sessionId);
+    const staleContext = { sessionGeneration: lifecycle.generation, locationResolver: repo.sessionPathResolver };
+    await repo._writeSessionLifecycleRecord(userId, sessionId, {
+      ...lifecycle,
+      generation: lifecycle.generation + 1,
+      updatedAt: "2026-05-14T00:00:01.000Z",
+    });
+    const sessionFileBefore = await readFile(scope.sessionFile, "utf8");
+
+    await assert.rejects(repo.save(userId, { sessionId, messages: [{ role: "user", content: "late" }] }, "", {
+      persistenceContext: staleContext,
+    }), { code: "SESSION_GENERATION_STALE" });
+    await assert.rejects(runtime.repositories.taskRepository.save(userId, sessionId, {
+      taskId: "late-task", taskName: "late", taskStatus: "start",
+    }, "", staleContext), { code: "SESSION_GENERATION_STALE" });
+    await assert.rejects(runtime.repositories.fileSystemExecutionRepository.appendLog(
+      userId, sessionId, { event: "late" }, {}, "", staleContext,
+    ), { code: "SESSION_GENERATION_STALE" });
+
+    assert.equal(await readFile(scope.sessionFile, "utf8"), sessionFileBefore);
+    assert.equal(await exists(scope.taskFile), false);
+    assert.equal(await exists(scope.executionEventsDir), false);
+  });
+});

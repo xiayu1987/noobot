@@ -167,6 +167,9 @@ export async function persistSnapshotJsonFiles({
   executionPayload = {},
   metadata = null,
   now = undefined,
+  mutationCoordinator = undefined,
+  mutationLockDir = "",
+  assertSessionWritable = null,
 } = {}) {
   return persistSessionArtifactSnapshot({
     outputDir,
@@ -174,6 +177,9 @@ export async function persistSnapshotJsonFiles({
     taskPayload,
     executionPayload,
     metadata,
+    mutationCoordinator,
+    mutationLockDir,
+    assertSessionWritable,
     ...(typeof now === "function" ? { now } : {}),
   });
 }

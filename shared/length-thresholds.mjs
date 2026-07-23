@@ -206,6 +206,11 @@ export const LENGTH_THRESHOLDS = deepFreeze({
     maxPayloadBytes: LENGTH_TIERS.bytes.connectorCommandFile,
   },
 
+  artifact: {
+    // Maximum size of one execution event JSONL segment before rolling over.
+    executionEventSegmentBytes: LENGTH_TIERS.bytes.jsonlBuffer,
+  },
+
   display: {
     // Context-independent execution log/UI brief text.
     executionLogBriefChars: LENGTH_TIERS.displayChars.executionLogBrief,

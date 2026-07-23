@@ -18,6 +18,8 @@ function buildScope(sessionDir, resolvedParentSessionId = "") {
     taskFile: files.task,
     executionFile: files.execution,
     executionEventsFile: files.executionEvents,
+    executionEventsDir: files.executionEventsDir,
+    turnsDir: files.turnsDir,
     metadataFile: files.meta,
     mutationLockDir: `${sessionDir}.mutation-lock`,
   });
@@ -106,7 +108,7 @@ export class ScopedSessionLocationResolver {
   }
 }
 
-export function createPersistenceContext({ locationResolver, metadataContributor = null } = {}) {
+export function createPersistenceContext({ locationResolver, metadataContributor = null, sessionGeneration = null } = {}) {
   if (!locationResolver || typeof locationResolver.resolveSessionScope !== "function") {
     throw new TypeError("persistence context requires a locationResolver");
   }
@@ -129,6 +131,9 @@ export function createPersistenceContext({ locationResolver, metadataContributor
     parentSessionId: String(locationResolver?.parentSessionId || "").trim(),
     locationResolver,
     metadataContributor,
+    sessionGeneration: Number.isInteger(Number(sessionGeneration)) && Number(sessionGeneration) > 0
+      ? Number(sessionGeneration)
+      : null,
   });
 }
 

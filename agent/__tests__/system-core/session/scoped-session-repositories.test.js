@@ -20,6 +20,10 @@ import {
   ScopedSessionLocationResolver,
   createPersistenceContext,
 } from "../../../src/system-core/session/session-location-resolver.js";
+import {
+  readJsonlArtifactFile,
+  readSessionArtifact,
+} from "../../../src/system-core/session/session-artifact-store.js";
 
 function buildHarness() {
   let root;
@@ -133,7 +137,7 @@ test("scoped repositories keep all artifacts and metadata in their execution dir
     assert.equal((await readJson(scope.sessionFile)).parentSessionId, "parent-a");
     assert.equal((await readJson(scope.sessionSummaryFile)).sessionId, "child-a");
     assert.equal((await readJson(scope.taskFile)).tasks[0].taskId, "task-a");
-    assert.equal((await readFile(scope.executionEventsFile, "utf8")).trim().includes('"value":1'), true);
+    assert.equal((await readJsonlArtifactFile(scope.executionEventsFile))[0].value, 1);
 
     const defaultRoot = path.join(root, "alice/runtime/session");
     assert.equal(await sessionRepo.storageService.exists(path.join(defaultRoot, "child-a/session.json")), false);
@@ -209,7 +213,7 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
     });
 
     const scope = await resolver.resolveSessionScope("alice", "child-agent", "root-agent");
-    const scopedSession = await readJson(scope.sessionFile);
+    const scopedSession = await readSessionArtifact({ sessionDir: scope.sessionDir });
     assert.deepEqual(scopedSession.messages.map((message) => message.role), [
       "user",
       "assistant",
@@ -217,7 +221,7 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
       "assistant",
     ]);
     assert.equal(scopedSession.messages.at(-1).content, "done");
-    assert.equal((await readFile(scope.executionEventsFile, "utf8")).includes("session_turn_full"), true);
+    assert.equal((await readJsonlArtifactFile(scope.executionEventsFile)).some((item) => JSON.stringify(item).includes("session_turn_full")), true);
     assert.equal(
       await sessionRepo.storageService.exists(path.join(root, "alice/runtime/session/child-agent/session.json")),
       false,

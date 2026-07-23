@@ -117,15 +117,15 @@ const { translate } = useLocale();
 .base-message-content {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
+  width: 100%;
   max-width: 100%;
 }
 
-.base-message-shell.assistant .base-message-content {
-  align-items: flex-start;
-}
-
-.base-message-shell.user .base-message-content {
-  align-items: flex-end;
+.base-message-content :deep(.thinking-realtime-shell),
+.base-message-content :deep(.message-status-steps) {
+  width: 100%;
+  max-width: 100%;
 }
 
 .base-message-bubble {
@@ -144,5 +144,8 @@ const { translate } = useLocale();
 
 .base-message-shell.user .base-message-bubble {
   border-top-right-radius: var(--noobot-msg-corner-accent-radius);
+  width: calc(100% - var(--noobot-msg-bubble-pad-x) - var(--noobot-msg-bubble-pad-x));
+  margin-left: auto;
+  margin-right: auto;
 }
 </style>

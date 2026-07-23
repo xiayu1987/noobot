@@ -37,7 +37,14 @@ export class SessionMessageService {
     await previous.catch(() => {});
     try {
       if (typeof this.sessionRepo?.withSessionMutation === "function") {
-        return await this.sessionRepo.withSessionMutation(userId, sessionId, parentSessionId, operation, persistenceContext);
+        try {
+          return await this.sessionRepo.withSessionMutation(userId, sessionId, parentSessionId, operation, persistenceContext);
+        } catch (error) {
+          if (error?.code === "SESSION_DELETED" || error?.errorCode === "SESSION_DELETED") {
+            return { appended: false, applied: false, upserted: false, reason: "session_deleted" };
+          }
+          throw error;
+        }
       }
       return await operation();
     } finally {

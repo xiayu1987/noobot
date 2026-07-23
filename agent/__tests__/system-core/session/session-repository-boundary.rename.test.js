@@ -11,6 +11,7 @@ import path from "node:path";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 
 import { createSessionServices } from "../../../src/system-core/session/index.js";
+import { readSessionArtifact } from "../../../src/system-core/session/session-artifact-store.js";
 import { writeSessionArtifact } from "../../../src/system-core/session/session-artifact-store.js";
 import { buildSessionDisplaySummary } from "../../../src/system-core/session/session-summary-builders.js";
 
@@ -76,7 +77,7 @@ test("renameSession should persist custom title to full, display summary and ses
     assert.equal(renamed.updatedAt, "2026-05-14T01:02:03.000Z");
 
     const scope = await runtime.repositories.sessionRepository.resolveSessionScope(userId, "A", "");
-    const full = JSON.parse(await readFile(scope.sessionFile, "utf8"));
+    const full = await readSessionArtifact({ sessionDir: scope.sessionDir });
     const displaySummary = JSON.parse(await readFile(path.join(scope.sessionDir, "session-summary.json"), "utf8"));
     const sessionsSummary = JSON.parse(
       await readFile(path.join(workspaceRoot, userId, "runtime", "session", "sessions.json"), "utf8"),
