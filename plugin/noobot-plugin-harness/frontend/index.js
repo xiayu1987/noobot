@@ -20,7 +20,10 @@ export function matchesMessageStatusRow(messageItem = {}) {
 }
 
 export function matchesThinkingPanel(messageItem = {}) {
-  return messageItem?.__workflowLiveProjection !== true;
+  return (
+    messageItem?.role === "assistant" &&
+    messageItem?.__workflowLiveProjection !== true
+  );
 }
 
 export const FRONTEND_PLUGIN_API_VERSION = "1";

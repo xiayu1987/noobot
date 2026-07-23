@@ -46,14 +46,19 @@ function text(value) {
   return String(value || "").trim().toLowerCase();
 }
 
-export function isFinalTurnState(state = "") {
-  return FINAL_STATES.has(text(state));
+export function isFinalTurnState(state = "", turn = {}) {
+  const normalized = text(state || turn?.state);
+  if ((normalized === FrontendRunState.COMPLETION_ERROR || normalized === FrontendRunState.STOP_ERROR) &&
+      turn?.finalizeIntent?.retryable === true) {
+    return false;
+  }
+  return FINAL_STATES.has(normalized);
 }
 
-export function deriveTurnCapabilities(state = "", { backendState = "" } = {}) {
+export function deriveTurnCapabilities(state = "", { backendState = "", finalizeIntent = null } = {}) {
   const normalized = text(state);
   const normalizedBackendState = text(backendState);
-  const actionLocked = Boolean(normalized) && !isFinalTurnState(normalized);
+  const actionLocked = Boolean(normalized) && !isFinalTurnState(normalized, { finalizeIntent });
   return {
     actionLocked,
     sending: actionLocked,
@@ -62,7 +67,7 @@ export function deriveTurnCapabilities(state = "", { backendState = "" } = {}) {
     // waiting keep the action mutex but must never expose or accept stop.
     canStop: normalized === FrontendRunState.PROCESSING &&
       normalizedBackendState === BackendChannelState.SENDING,
-    terminal: isFinalTurnState(normalized),
+    terminal: isFinalTurnState(normalized, { finalizeIntent }),
   };
 }
 
@@ -143,7 +148,7 @@ function targetState(current = {}, event = {}) {
 function isAllowed(current = {}, event = {}, nextState = "") {
   const currentState = text(current.state);
   if (!currentState) return nextState === FrontendRunState.ACTION_REQUESTING || event.authoritativeSnapshot === true;
-  if (isFinalTurnState(currentState)) return false;
+  if (isFinalTurnState(currentState, current)) return false;
   if (nextState === failureStateFor(current)) return true;
   // Send, resend and continue always create a new Turn. Once this Turn owns
   // the session action mutex, another action-start event must not be treated
@@ -153,10 +158,12 @@ function isAllowed(current = {}, event = {}, nextState = "") {
   if (event.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE) {
     const lifecycleType = text(event.eventType);
     if (lifecycleType === TURN_EVENT.COMPLETED) {
-      return currentState === FrontendRunState.FRONTEND_COMPLETION_REQUESTING;
+      return currentState === FrontendRunState.FRONTEND_COMPLETION_REQUESTING ||
+        (currentState === FrontendRunState.COMPLETION_ERROR && current.finalizeIntent?.retryable === true);
     }
     if (lifecycleType === TURN_EVENT.STOP_COMPLETED) {
-      return currentState === FrontendRunState.USER_STOPPING;
+      return currentState === FrontendRunState.USER_STOPPING ||
+        (currentState === FrontendRunState.STOP_ERROR && current.finalizeIntent?.retryable === true);
     }
   }
   if (nextState === FrontendRunState.ACTION_REQUESTING) {
@@ -203,7 +210,7 @@ export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
     ? 0
     : Number(event.seq || 0);
   const eventRevision = Number(event.revision || 0);
-  if (current && isFinalTurnState(current.state)) {
+  if (current && isFinalTurnState(current.state, current)) {
     return { applied: false, reason: TURN_TRANSITION_REASON.TERMINAL_LOCKED, current, event };
   }
   if (current && eventSeq > 0 && Number(current.seq || 0) > eventSeq) {
@@ -221,12 +228,19 @@ export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
   const action = STOP_REQUEST_EVENTS.has(event.type)
     ? "stop"
     : String(event.action || current?.action || "send").trim();
-  const candidate = { ...(current || {}), action };
+  const candidate = {
+    ...(current || {}),
+    action,
+    finalizeIntent: event.finalizeIntent || event.raw?.finalizeIntent || current?.finalizeIntent || null,
+  };
   if (!isAllowed(candidate, event, state)) {
     return { applied: false, reason: TURN_TRANSITION_REASON.ILLEGAL_TRANSITION, current, event };
   }
   const backendState = text(event.backendState || current?.backendState);
-  const capabilities = deriveTurnCapabilities(state, { backendState });
+  const capabilities = deriveTurnCapabilities(state, {
+    backendState,
+    finalizeIntent: candidate.finalizeIntent,
+  });
   const terminal = state === FrontendRunState.FRONTEND_COMPLETED
     ? "completed"
     : state === FrontendRunState.USER_STOP_COMPLETED
@@ -249,6 +263,7 @@ export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
       revision: Math.max(Number(current?.revision || 0), eventRevision),
       authoritativeLifecycle: current?.authoritativeLifecycle === true ||
         event.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+      finalizeIntent: candidate.finalizeIntent,
     },
   };
 }

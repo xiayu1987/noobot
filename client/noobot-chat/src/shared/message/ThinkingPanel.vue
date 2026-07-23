@@ -35,6 +35,7 @@ const thinkingIdentity = computed(() => [
   String(props.messageItem?.dialogProcessId || props.messageItem?.id || props.messageItem?.messageId || "").trim(),
 ].join("::"));
 watch(thinkingIdentity, () => {
+  if (props.messageItem?.role !== "assistant") return;
   getTurnUiState(props.messageItem);
 });
 function updateThinkingOpenNames(value) {

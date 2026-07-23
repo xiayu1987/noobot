@@ -139,7 +139,7 @@ describe("useMessageMeta status steps", () => {
     expect(message.turnScopeId).toBe("internal-turn:child");
   });
 
-  it("restores a persisted status before Registry hydration after refresh", async () => {
+  it("does not promote persisted completed to a protocol terminal before Registry hydration", async () => {
     const message = {
       role: "assistant",
       turnScopeId: "internal-turn:child",
@@ -148,6 +148,6 @@ describe("useMessageMeta status steps", () => {
     };
     const { statusStepState } = useMessageMeta({ getMessageItem: () => message });
     await nextTick();
-    expect(statusStepState.value).toBe("completed");
+    expect(statusStepState.value).toBe("");
   });
 });
