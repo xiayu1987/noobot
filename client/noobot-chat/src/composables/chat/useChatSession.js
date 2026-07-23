@@ -126,11 +126,19 @@ export function useChatSession({
     return `client-turn:${nowMs().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
   }
 
-  // Session documents may already be present when this composable is created
-  // (initial bootstrap, tests, or a restored Pinia snapshot). Hydrate only from
-  // authoritative turnStatuses; never infer runtime state from message order.
+  function hydrateSessionLifecycle(sessionItem) {
+    const snapshot = sessionItem?.turnLifecycleSnapshot;
+    if (snapshot && typeof snapshot === "object") {
+      const result = chatStore.applyTurnLifecycleSnapshot(snapshot);
+      if (result?.applied || result?.deduplicated || result?.reason === "stale_snapshot") return result;
+    }
+    return chatStore.hydrateSessionTurnRuntime(sessionItem);
+  }
+
+  // Prefer the authoritative lifecycle snapshot. Legacy turnStatuses remain a
+  // compatibility fallback for summaries created before schema version 6.
   for (const sessionItem of sessions.value) {
-    chatStore.hydrateSessionTurnRuntime(sessionItem);
+    hydrateSessionLifecycle(sessionItem);
     chatStore.pruneTerminalTurns({
       sessionId: sessionRuntimeId(sessionItem),
       referencedTurnScopeIds: (sessionItem?.messages || []).map(getMessageTurnScopeId).filter(Boolean),
@@ -138,12 +146,12 @@ export function useChatSession({
   }
 
   // Reconcile replacements, refreshes, reconnects, and non-active sessions
-  // from authoritative turnStatuses only; message order is never consulted.
+  // from the lifecycle protocol; message order is never consulted.
   watch(
     sessions,
     (sessionItems) => {
       for (const sessionItem of Array.isArray(sessionItems) ? sessionItems : []) {
-        chatStore.hydrateSessionTurnRuntime(sessionItem);
+        hydrateSessionLifecycle(sessionItem);
         chatStore.pruneTerminalTurns({
           sessionId: sessionRuntimeId(sessionItem),
           referencedTurnScopeIds: (sessionItem?.messages || []).map(getMessageTurnScopeId).filter(Boolean),

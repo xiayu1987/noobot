@@ -53,6 +53,31 @@ test("summary projects explicit turnStatuses without message fallback", () => {
   assert.equal(summary.messages[0].stopState, undefined);
 });
 
+test("summary projects an authoritative lifecycle snapshot for refresh replay", () => {
+  const session = normalizeSessionEntity({
+    sessionId: "s-lifecycle",
+    updatedAt: now(),
+    turnLifecycle: {
+      sequence: 2,
+      activeTurnScopeId: "",
+      turns: {
+        t1: {
+          turnScopeId: "t1", dialogProcessId: "dp1", state: "completed",
+          sequence: 2, revision: 2, createdAt: now(), updatedAt: now(),
+        },
+      },
+    },
+  }, { now });
+
+  const summary = buildSessionDisplaySummary(session);
+  assert.equal(summary.schemaVersion, 6);
+  assert.equal(summary.turnLifecycleSnapshot.eventType, "turn.snapshot");
+  assert.equal(summary.turnLifecycleSnapshot.sessionId, "s-lifecycle");
+  assert.equal(summary.turnLifecycleSnapshot.sequence, 2);
+  assert.equal(summary.turnLifecycleSnapshot.recentTerminalTurns[0].state, "completed");
+  assert.ok(summary.turnLifecycleSnapshot.commandId);
+});
+
 test("parent and child sessions own independent turn status values", () => {
   const parent = normalizeSessionEntity({
     sessionId: "parent",

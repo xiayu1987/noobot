@@ -670,7 +670,7 @@ describe("turnRuntimeRegistry", () => {
     });
   });
 
-  it("does not consume deferred completion for a mismatched execution identity", () => {
+  it("uses Session + Turn scope as completion authority despite a changed dialog route", () => {
     const registry = createTurnRuntimeRegistryState();
     applyTurnRuntimeEvent(registry, {
       type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
@@ -684,10 +684,27 @@ describe("turnRuntimeRegistry", () => {
     backendState(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "new-dp", state: BackendChannelState.COMPLETED, seq: 3 });
 
     expect(resolveTurnRuntimeByScope(registry, "t1", { sessionId: "s1" })).toMatchObject({
-      state: "frontend_completion_requesting",
-      terminal: null,
+      state: "frontend_completed",
+      terminal: "completed",
     });
-    expect(Object.keys(registry.pendingLifecycleEvents)).toEqual(["s1::t1"]);
+    expect(registry.pendingLifecycleEvents).toEqual({});
+  });
+
+  it("completes a normal request when final detail carries a different dialog route", () => {
+    const registry = createTurnRuntimeRegistryState();
+    sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
+    backendState(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "runtime-dp", state: BackendChannelState.SENDING, seq: 2 });
+    backendState(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "runtime-dp", state: BackendChannelState.COMPLETED, seq: 3 });
+
+    const completed = applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
+      sessionId: "s1",
+      turnScopeId: "t1",
+      dialogProcessId: "message-dp",
+      source: "final_session_detail",
+    });
+
+    expect(completed).toMatchObject({ applied: true, turn: { state: "frontend_completed", terminal: "completed" } });
   });
 
   it("deduplicates repeated early completion and never completes another Turn", () => {

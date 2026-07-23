@@ -113,9 +113,9 @@ function takeDeferredCompletionAuthorityEvent(registry, turn) {
   const key = pendingLifecycleKey(turn.sessionId, turn.turnScopeId);
   const pending = key ? registry?.pendingLifecycleEvents?.[key] : null;
   if (!pending) return null;
-  if (pending.dialogProcessId && turn.dialogProcessId && text(pending.dialogProcessId) !== text(turn.dialogProcessId)) {
-    return null;
-  }
+  // sessionId + turnScopeId is the authoritative Turn identity. The dialog id
+  // is only a routing hint and may legitimately change when DONE/detail is
+  // projected from another execution-chain message during reconnect.
   delete registry.pendingLifecycleEvents[key];
   return pending;
 }
@@ -596,6 +596,7 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
     }
   }
   const sessionId = text(requestedSessionId || current?.sessionId);
+  const isCompletionAuthorityEvent = event.type === SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED;
   const result = (values = {}) => observation({ canonicalSessionId: sessionId, aliasPromoted, ...values });
   if (!current && event.type === SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED) {
     const deferred = deferCompletionAuthorityEvent(next, { ...rawEvent, sessionId: requestedSessionId, turnScopeId });
@@ -603,8 +604,8 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
   }
   if (!sessionId) return result({ turn: current, applied: false, reason: "missing_session_identity" });
   if (current?.sessionId && current.sessionId !== sessionId) return result({ turn: current, applied: false, reason: "session_identity_conflict" });
-  if (current?.dialogProcessId && event.dialogProcessId && current.dialogProcessId !== event.dialogProcessId) return result({ turn: current, applied: false, reason: "dialog_process_identity_conflict" });
-  if (route && (route.turnScopeId !== turnScopeId || route.sessionId !== sessionId)) {
+  if (!isCompletionAuthorityEvent && current?.dialogProcessId && event.dialogProcessId && current.dialogProcessId !== event.dialogProcessId) return result({ turn: current, applied: false, reason: "dialog_process_identity_conflict" });
+  if (!isCompletionAuthorityEvent && route && (route.turnScopeId !== turnScopeId || route.sessionId !== sessionId)) {
     return result({ turn: current, applied: false, reason: "dialog_process_identity_conflict" });
   }
   const activeTurn = resolveSessionTurnRuntime(next, sessionId);

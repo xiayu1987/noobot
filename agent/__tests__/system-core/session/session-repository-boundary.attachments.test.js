@@ -51,7 +51,7 @@ test("session display summary should keep canonical attachment fields", () => {
     ],
   });
 
-  assert.equal(summary.schemaVersion, 5);
+  assert.equal(summary.schemaVersion, 6);
   assert.equal(summary.messages[0].attachments[0].attachmentId, "att-canonical");
   assert.equal(summary.messages[0].attachments[0].name, "canonical.txt");
   assert.equal(summary.messages[1].attachments[0].attachmentId, "att-legacy");

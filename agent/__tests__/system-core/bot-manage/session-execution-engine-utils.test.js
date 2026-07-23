@@ -257,7 +257,7 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
   const aggregatedSession = await readSessionArtifact({ sessionDir: persisted.outputDir });
   assert.equal("id" in aggregatedSession.messages[0].attachments[0], false);
   const sessionSummary = JSON.parse(await fs.readFile(persisted.files.sessionSummary, "utf8"));
-  assert.equal(sessionSummary.schemaVersion, 5);
+  assert.equal(sessionSummary.schemaVersion, 6);
   assert.equal(sessionSummary.sessionId, "s1");
   assert.equal(sessionSummary.parentSessionId, "p1");
   assert.equal(sessionSummary.stats.messageCount, 1);
