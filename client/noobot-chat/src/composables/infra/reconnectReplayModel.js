@@ -114,7 +114,7 @@ function getReconnectEnvelopeSequence(envelope = {}) {
   return Number(envelope?.data?.seq || envelope?.sequence || 0);
 }
 
-function splitReconnectMessagesByDialogProcessId(
+function splitReconnectMessagesByTurnIdentity(
   messages = [],
   fallbackDialogProcessId = "",
 ) {
@@ -122,15 +122,19 @@ function splitReconnectMessagesByDialogProcessId(
   const groups = new Map();
   for (const envelope of Array.isArray(messages) ? messages : []) {
     const envelopeDpId = String(envelope?.data?.dialogProcessId || "").trim();
-    const groupKey = envelopeDpId || normalizedFallback || "__unknown__";
-    if (!groups.has(groupKey)) groups.set(groupKey, []);
-    groups.get(groupKey).push(envelope);
+    const turnScopeId = String(
+      envelope?.data?.turnScopeId || envelope?.data?.messageEvent?.turnScopeId || "",
+    ).trim();
+    const dialogProcessId = envelopeDpId || normalizedFallback;
+    const groupKey = JSON.stringify([dialogProcessId, turnScopeId]);
+    if (!groups.has(groupKey)) groups.set(groupKey, { dialogProcessId, turnScopeId, messages: [] });
+    groups.get(groupKey).messages.push(envelope);
   }
-  return Array.from(groups.entries()).map(([groupKey, groupMessages]) => ({
-    dialogProcessId: groupKey === "__unknown__" ? "" : groupKey,
-    messages: groupMessages,
-  }));
+  return Array.from(groups.values());
 }
+
+// Compatibility export for consumers not yet migrated to the canonical name.
+const splitReconnectMessagesByDialogProcessId = splitReconnectMessagesByTurnIdentity;
 
 function resolveDialogProcessIdFromReplay(messages = [], fallbackDialogProcessId = "") {
   const fallback = String(fallbackDialogProcessId || "").trim();
@@ -418,4 +422,5 @@ export {
   patchMessageObjectPreservingUiState,
   resolveDialogProcessIdFromReplay,
   splitReconnectMessagesByDialogProcessId,
+  splitReconnectMessagesByTurnIdentity,
 };

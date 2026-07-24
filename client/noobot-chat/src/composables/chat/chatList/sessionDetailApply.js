@@ -33,8 +33,13 @@ import { logReconnectTimingDebug } from "../debug/reconnectTimingDebugLogger";
 import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger";
 import { applyLatestSessionVersion } from "../chatEngine/sessionVersionManager";
 import {
+  confirmTurnRuntimeDeletion,
+  isTurnRuntimeDeleted,
+} from "../sessionRunStateMachine/turnRuntimeRegistry";
+import {
   SESSION_DETAIL_APPLY_MODE,
   hasInFlightAssistantMissingFromDetail,
+  isAuthoritativeSessionDetailApplyMode,
   normalizeSessionDetailApplyMode,
 } from "../chatEngine/messageStateGuards";
 
@@ -50,11 +55,12 @@ export function createSessionDetailApplicator({
   isSameSessionIdentity,
   onSessionDetailApplied = null,
 } = {}) {
-  function pruneMessagesFromDeletedTurn(messages = [], turnScopeId = "") {
-    const scope = String(turnScopeId || "").trim();
+  function pruneMessagesFromConfirmedDeletes(messages = [], sessionId = "") {
     const source = Array.isArray(messages) ? messages : [];
-    if (!scope) return source;
-    const index = source.findIndex((messageItem) => getMessageTurnScopeId(messageItem) === scope);
+    const index = source.findIndex((messageItem) => isTurnRuntimeDeleted(
+      turnRuntimeRegistry?.value,
+      { sessionId, turnScopeId: getMessageTurnScopeId(messageItem) },
+    ));
     return index >= 0 ? source.slice(0, index) : source;
   }
 
@@ -88,6 +94,15 @@ export function createSessionDetailApplicator({
       currentMessages: summarizeDebugMessages(sessionItem.messages),
     });
     const detailSessionId = String(detail.sessionId || "").trim();
+    const deletedTurnScopeIds = [
+      ...(Array.isArray(options.deletedTurnScopeIds) ? options.deletedTurnScopeIds : []),
+      options.deleteFromTurnScopeId,
+    ].map((value) => String(value || "").trim()).filter(Boolean);
+    if (deletedTurnScopeIds.length) {
+      confirmTurnRuntimeDeletion(turnRuntimeRegistry?.value, deletedTurnScopeIds, {
+        sessionId: detailSessionId,
+      });
+    }
     sessionItem.loaded = true;
     const previousSessionId = String(sessionItem.id || "").trim();
     const promotionResult = promoteSessionIdentityToBackendId({
@@ -135,7 +150,7 @@ export function createSessionDetailApplicator({
         // A detail response may be a sparse projection. REPLACE is only
         // authoritative for fields it actually carries; replacing a missing
         // turnTimings array with [] resets refresh-time thinking to now.
-        replaceFields: applyMode === SESSION_DETAIL_APPLY_MODE.REPLACE
+        replaceFields: isAuthoritativeSessionDetailApplyMode(applyMode)
           ? [
             ...(Array.isArray(mainSessionDoc.messages) ? ["messages"] : []),
             ...(Array.isArray(mainSessionDoc.turnStatuses) || Array.isArray(detail?.turnStatuses) ? ["turnStatuses"] : []),
@@ -144,15 +159,20 @@ export function createSessionDetailApplicator({
           : [],
       },
     );
-    const deleteFromTurnScopeId = String(options.deleteFromTurnScopeId || "").trim();
-    const detailMessages = deleteFromTurnScopeId
-      ? pruneMessagesFromDeletedTurn(canonicalDetail.messages, deleteFromTurnScopeId)
-      : canonicalDetail.messages;
-    if (deleteFromTurnScopeId && detailMessages !== canonicalDetail.messages) {
+    const detailMessages = pruneMessagesFromConfirmedDeletes(canonicalDetail.messages, detailSessionId);
+    if (detailMessages !== canonicalDetail.messages) {
       canonicalDetail.messages = detailMessages;
     }
-    const turnTimings = canonicalDetail.turnTimings;
-    const turnStatuses = canonicalDetail.turnStatuses;
+    const turnTimings = canonicalDetail.turnTimings.filter((item) => !isTurnRuntimeDeleted(
+      turnRuntimeRegistry?.value,
+      { sessionId: detailSessionId, turnScopeId: item?.turnScopeId },
+    ));
+    const turnStatuses = canonicalDetail.turnStatuses.filter((item) => !isTurnRuntimeDeleted(
+      turnRuntimeRegistry?.value,
+      { sessionId: detailSessionId, turnScopeId: item?.turnScopeId },
+    ));
+    canonicalDetail.turnTimings = turnTimings;
+    canonicalDetail.turnStatuses = turnStatuses;
     // Keep the authoritative session-level facts on the session model. View
     // messages below are a disposable projection and must not become the
     // source used by hydration, continue, or resend flows.

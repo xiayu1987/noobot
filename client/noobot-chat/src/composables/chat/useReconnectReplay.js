@@ -67,6 +67,7 @@ import {
   BackendChannelState,
   SESSION_RUN_EVENT,
 } from "./sessionRunStateMachine";
+import { isTurnRuntimeDeleted } from "./sessionRunStateMachine/turnRuntimeRegistry";
 
 export function useReconnectReplay({
   sessions,
@@ -107,6 +108,8 @@ export function useReconnectReplay({
     reconnectReplayContext;
   let { cacheExpiredRefreshTimer, replayHydrationPromise } = reconnectReplayContext;
   const protocolReconcileAttempts = new Map();
+  const isDeletedTurn = ({ sessionId = "", turnScopeId = "" } = {}) =>
+    isTurnRuntimeDeleted(turnRuntimeRegistry?.value || turnRuntimeRegistry, { sessionId, turnScopeId });
 
   const applyRunStateEvent = (event) => {
     const results = applyTurnRuntimeEvents?.([event]);
@@ -273,6 +276,7 @@ export function useReconnectReplay({
       applyChannelState,
       scheduleCacheExpiredSessionRefresh,
       reconcileSessionState,
+      isDeletedTurn,
     });
   }
 
@@ -520,6 +524,12 @@ export function useReconnectReplay({
     dialogProcessId,
     { allowCreate = true, turnScopeId = "", authoritativeCurrentRun = false } = {},
   ) {
+    const sessionId = String(
+      activeSession.value?.backendSessionId || activeSession.value?.sessionId || activeSessionId.value || "",
+    ).trim();
+    if (isDeletedTurn({ sessionId, turnScopeId })) {
+      return { applied: false, reason: "deleted_turn_tombstoned" };
+    }
     return applyReconnectMessagesToActiveSessionReplay({
       activeSession,
       activeSessionId,
@@ -579,6 +589,7 @@ export function useReconnectReplay({
       applyExecutionSnapshot,
       applyExecutionChildren,
       applyExecutionTree,
+      isDeletedTurn,
     });
   }
 

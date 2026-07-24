@@ -76,6 +76,7 @@ import {
 import { setTerminalResolutionDebugLogSink } from "./debug/terminalResolutionDebugLogger";
 import { findCanonicalTurnTiming } from "./sessionRunStateMachine/turnTiming";
 import {
+  isTurnRuntimeDeleted,
   resolveSessionTurnRuntime,
   selectSessionTurnRuntime,
   sessionRuntimeId,
@@ -865,6 +866,16 @@ export function useChatSession({
       messageEvent.dialogProcessId || data.dialogProcessId || "",
     ).trim();
     const turnScopeId = String(messageEvent.turnScopeId || data.turnScopeId || "").trim();
+    const sessionId = String(messageEvent.sessionId || data.sessionId || resolveActiveSessionIdentity()).trim();
+    if (isTurnRuntimeDeleted(turnRuntimeRegistry.value, { sessionId, turnScopeId })) {
+      logThinkingReplayDebug("frontend.messageEvent.deletedTurnRejected", {
+        sessionId,
+        dialogProcessId,
+        turnScopeId,
+        eventType: String(messageEvent.eventType || ""),
+      });
+      return true;
+    }
     const messages = Array.isArray(activeSession.value?.messages)
       ? activeSession.value.messages
       : [];

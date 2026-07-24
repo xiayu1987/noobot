@@ -22,6 +22,7 @@ import {
 } from "../sessionRunStateMachine";
 import { SESSION_DETAIL_APPLY_MODE } from "./messageStateGuards";
 import {
+  confirmTurnRuntimeDeletion,
   resolveSessionTurnRuntime,
   removeTurnRuntime,
   sessionRuntimeId,
@@ -240,6 +241,15 @@ export function createMonotonicMessageActions({
     return findMessageIdentityIndex(targetMessage, messages);
   }
 
+  function collectMessageCascadeTurnScopeIds(targetMessage = {}) {
+    const userTargetMessage = resolveMonotonicUserTarget(targetMessage);
+    const startIndex = userTargetMessage ? findMessageCascadeStartIndex(userTargetMessage) : -1;
+    if (startIndex < 0) return [];
+    return [...new Set(
+      (activeSession.value?.messages || []).slice(startIndex).map(getMessageTurnScopeId).filter(Boolean),
+    )];
+  }
+
   function cascadeDeleteMessagesFrom(targetMessage = {}) {
     const session = activeSession.value;
     if (!session) return false;
@@ -283,6 +293,7 @@ export function createMonotonicMessageActions({
       );
       const anchor = buildMessageAnchor(userTargetMessage);
       if (!Object.keys(anchor).length) return false;
+      const locallyDeletedTurnScopeIds = collectMessageCascadeTurnScopeIds(userTargetMessage);
       const deleteIdempotencyKey = `delete:${sessionId}:${anchor.turnScopeId || anchor.dialogProcessId || anchor.id || "anchor"}`;
       const sessionVersionManager = createSessionVersionManager({
         activeSession,
@@ -313,6 +324,13 @@ export function createMonotonicMessageActions({
       if (result?.ok === false || payload?.ok === false) return false;
       const sessionDetail = normalizeSessionDetailSnapshot(payload, sessionId);
       if (!sessionDetail) return false;
+      const protocolDeletedTurnScopeIds = Array.isArray(payload?.deletedTurnScopeIds)
+        ? payload.deletedTurnScopeIds.map(normalizeTrimmedString).filter(Boolean)
+        : [];
+      const confirmedDeletedTurnScopeIds = protocolDeletedTurnScopeIds.length
+        ? protocolDeletedTurnScopeIds
+        : locallyDeletedTurnScopeIds;
+      confirmTurnRuntimeDeletion(turnRuntimeRegistry?.value, confirmedDeletedTurnScopeIds, { sessionId });
       // Remove the live tail first so its runtime/UI state is released before
       // applying the server response. The response can still be stale during
       // stop finalization, so the same anchor is enforced again below.
@@ -320,7 +338,7 @@ export function createMonotonicMessageActions({
       applySessionDetail?.(sessionDetail, {
         mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
         preserveCurrentMessages: false,
-        deleteFromTurnScopeId: anchor.turnScopeId || "",
+        deletedTurnScopeIds: confirmedDeletedTurnScopeIds,
       });
       // A successful delete response may contain a stale detail snapshot while
       // the backend mutation is being materialized. Apply that snapshot first
@@ -330,6 +348,12 @@ export function createMonotonicMessageActions({
       clearPendingInteraction?.();
       return true;
     }
+    const sessionId = sessionRuntimeId(activeSession.value || activeSessionId?.value);
+    confirmTurnRuntimeDeletion(
+      turnRuntimeRegistry?.value,
+      collectMessageCascadeTurnScopeIds(userTargetMessage),
+      { sessionId },
+    );
     const cascaded = cascadeDeleteMessagesFrom(userTargetMessage);
     return cascaded;
   }

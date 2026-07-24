@@ -24,6 +24,7 @@ import {
   FrontendRunState,
   SESSION_RUN_EVENT,
 } from "../../../../src/composables/chat/sessionRunStateMachine";
+import { confirmTurnRuntimeDeletion } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 describe("useChatSession reconnect replay", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -61,6 +62,35 @@ describe("useChatSession reconnect replay", () => {
         detail: "through-session-log-client",
       }),
     }));
+  });
+
+  it("does not recreate a confirmed-deleted Turn from reconnect message replay", async () => {
+    const store = useChatStore();
+    store.sessions = [createSessionFixture({
+      id: "s-deleted",
+      backendSessionId: "s-deleted",
+      messages: [],
+    })];
+    store.activeSessionId = "s-deleted";
+    confirmTurnRuntimeDeletion(store.turnRuntimeRegistry, "turn-deleted", { sessionId: "s-deleted" });
+    wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
+      onReconnectData({
+        event: "content",
+        data: {
+          sessionId: "s-deleted",
+          dialogProcessId: "dp-deleted",
+          turnScopeId: "turn-deleted",
+          sequence: 1,
+          content: "must not reappear",
+        },
+      });
+    });
+
+    const session = createChatSession({ classifyRealtimeLog });
+    await session.handleReconnect();
+
+    expect(store.sessions[0].messages).toEqual([]);
+    expect(store.turnRuntimeRegistry.sessions["s-deleted"]?.turns?.["turn-deleted"]).toBeUndefined();
   });
 
   it("projects live tool call and result received after refresh into the restored assistant", async () => {

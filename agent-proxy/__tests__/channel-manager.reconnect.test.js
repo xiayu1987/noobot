@@ -286,6 +286,30 @@ test("reconnect should skip terminal channel replay when lastReceivedSeq is 0", 
   assert.deepEqual(sessionList[0]?.dialogProcesses || [], []);
 });
 
+test("reconnect should skip terminal conversation replay even when transport status remains open", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-stopped" });
+  const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-stopped" });
+  channel.status = "open";
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  manager.pushChannelEvent(channel, "thinking", {
+    sessionId: "session-stopped", dialogProcessId: "dp-stopped", turnScopeId: "turn-stopped", seq: 46,
+  });
+  manager.pushChannelEvent(channel, "user_stopped", {
+    sessionId: "session-stopped", dialogProcessId: "dp-stopped", turnScopeId: "turn-stopped", seq: 47,
+  });
+
+  const socket = createMockSocket();
+  socket.__agentProxyChannelKeys.add(channelKey);
+  manager.handleReconnect(socket, {
+    currentSessionId: "session-stopped",
+    lastReceivedSeqMap: { "dp-stopped": 0 },
+  });
+
+  assert.deepEqual(listReplayMessages(getReconnectDataEvent(socket)), []);
+});
+
 test("reconnect should not replay a terminal error from a failed attempt", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-retry" });

@@ -74,9 +74,51 @@ describe("applyReconnectDataReplay", () => {
     expect(fixture.applyReconnectMessagesToActiveSession).not.toHaveBeenCalled();
     expect(fixture.replayCache).toEqual({
       "s-2": {
-        "dp-2": messages,
+        "__turn__s-2::turn-2": messages,
       },
     });
+  });
+
+  it("derives Turn identity from inner replay envelopes before checking deletion", async () => {
+    const isDeletedTurn = vi.fn(({ turnScopeId }) => turnScopeId === "turn-deleted");
+    const fixture = createFixture({ isDeletedTurn });
+    const deletedMessages = [
+      { event: "thinking", data: { sessionId: "s-1", dialogProcessId: "dp-shared", turnScopeId: "turn-deleted", seq: 41 } },
+      { event: "user_stopped", data: { sessionId: "s-1", dialogProcessId: "dp-shared", turnScopeId: "turn-deleted", seq: 47 } },
+    ];
+    const currentMessages = [
+      { event: "delta", data: { sessionId: "s-1", dialogProcessId: "dp-shared", turnScopeId: "turn-current", seq: 1, text: "current" } },
+    ];
+
+    await applyReconnectDataReplay({
+      reconnectData: {
+        sessions: [{
+          sessionId: "s-1",
+          hasRunningTask: false,
+          currentRun: {
+            sessionId: "s-1",
+            dialogProcessId: "dp-shared",
+            turnScopeId: "turn-current",
+            state: "completed",
+          },
+          dialogProcesses: [{
+            // Matches the agent-proxy reconnect shape: identity is carried by
+            // each envelope, not repeated on the dialog-process container.
+            dialogProcessId: "dp-shared",
+            messages: [...deletedMessages, ...currentMessages],
+          }],
+        }],
+      },
+      ...fixture,
+    });
+
+    expect(isDeletedTurn).toHaveBeenCalledWith({ sessionId: "s-1", turnScopeId: "turn-deleted" });
+    expect(fixture.applyReconnectMessagesToActiveSession).toHaveBeenCalledTimes(1);
+    expect(fixture.applyReconnectMessagesToActiveSession).toHaveBeenCalledWith(
+      currentMessages,
+      "dp-shared",
+      expect.objectContaining({ turnScopeId: "turn-current" }),
+    );
   });
 
   it("applies currentRun and schedules cache expired refresh", async () => {

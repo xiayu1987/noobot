@@ -24,6 +24,7 @@ test("session-routes: delete-from 路由透传请求体并返回后端快照", a
             session: { id: payload.sessionId, messages: [{ id: "m1" }], version: 3 },
             deletedCount: 2,
             anchorIndex: 1,
+            deletedTurnScopeIds: ["turn-delete", "turn-tail"],
             version: 3,
           };
         },
@@ -52,6 +53,7 @@ test("session-routes: delete-from 路由透传请求体并返回后端快照", a
     assert.equal(payload.ok, true);
     assert.equal(payload.deletedCount, 2);
     assert.equal(payload.anchorIndex, 1);
+    assert.deepEqual(payload.deletedTurnScopeIds, ["turn-delete", "turn-tail"]);
     assert.deepEqual(calls[0], {
       userId: "u1",
       sessionId: "s1",

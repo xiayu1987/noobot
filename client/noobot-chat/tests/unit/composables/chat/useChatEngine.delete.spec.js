@@ -193,7 +193,7 @@ describe("useChatEngine.delete", () => {
     }), {
       mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
       preserveCurrentMessages: false,
-      deleteFromTurnScopeId: "client-turn:delete-1",
+      deletedTurnScopeIds: ["client-turn:delete-1"],
     });
     expect(activeSession.value.messages).toHaveLength(1);
   });
@@ -247,7 +247,7 @@ describe("useChatEngine.delete", () => {
     expect(applySessionDetail).toHaveBeenCalledWith(expect.any(Object), {
       mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
       preserveCurrentMessages: false,
-      deleteFromTurnScopeId: "turn-stopped-tail",
+      deletedTurnScopeIds: ["turn-stopped-tail"],
     });
     expect(activeSession.value.messages).toEqual([]);
   });

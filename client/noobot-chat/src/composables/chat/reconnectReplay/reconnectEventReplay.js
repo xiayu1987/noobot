@@ -23,7 +23,13 @@ export async function applyReconnectEventReplay({
   applyExecutionSnapshot,
   applyExecutionChildren,
   applyExecutionTree,
+  isDeletedTurn,
 } = {}) {
+  const replaySessionId = _trimStr(data?.sessionId || data?.messageEvent?.sessionId);
+  const replayTurnScopeId = _trimStr(data?.turnScopeId || data?.messageEvent?.turnScopeId);
+  if (isDeletedTurn?.({ sessionId: replaySessionId, turnScopeId: replayTurnScopeId }) === true) {
+    return { applied: false, reason: "deleted_turn_tombstoned" };
+  }
   if (_trimStr(event) === StreamEventEnum.EXECUTION_SNAPSHOT) return applyExecutionSnapshot?.(data || {});
   if (_trimStr(event) === StreamEventEnum.EXECUTION_CHILDREN) return applyExecutionChildren?.(data || {});
   if (_trimStr(event) === StreamEventEnum.EXECUTION_TREE) return applyExecutionTree?.(data || {});

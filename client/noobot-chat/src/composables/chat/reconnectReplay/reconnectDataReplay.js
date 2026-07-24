@@ -7,7 +7,7 @@ import {
   findRecoverableReconnectSessionId,
   isDialogProcessRecoverable,
   resolveDialogProcessIdFromReplay,
-  splitReconnectMessagesByDialogProcessId,
+  splitReconnectMessagesByTurnIdentity,
 } from "../../infra/reconnectReplayModel";
 import { nowMs } from "../../infra/timeFields";
 import {
@@ -21,6 +21,7 @@ import {
   resolveRememberedStopRequestedEvent,
 } from "../sessionRunStateMachine";
 import { normalizeTurnMeta } from "../../infra/messageIdentity";
+import { normalizeReplayCacheKey } from "./replayCache";
 
 function resolveAuthoritativeConversationStates(sessionEntry = {}) {
   const sessionId = _trimStr(sessionEntry?.sessionId);
@@ -107,6 +108,7 @@ export async function applyReconnectDataReplay({
   applyChannelState,
   scheduleCacheExpiredSessionRefresh,
   reconcileSessionState,
+  isDeletedTurn,
 } = {}) {
   const receivedSessions = Array.isArray(reconnectData?.sessions)
     ? reconnectData.sessions
@@ -162,7 +164,7 @@ export async function applyReconnectDataReplay({
     for (const dp of dialogProcesses) {
       const dpMessages = Array.isArray(dp?.messages) ? dp.messages : [];
       if (!dpMessages.length) continue;
-      for (const replayGroup of splitReconnectMessagesByDialogProcessId(
+      for (const replayGroup of splitReconnectMessagesByTurnIdentity(
         dpMessages,
         dp?.dialogProcessId || "",
       )) {
@@ -173,12 +175,16 @@ export async function applyReconnectDataReplay({
         );
         if (!messages.length) continue;
         if (!isCurrentActiveSession(sessionId)) {
-          const replayKey = dpId || `__unknown_${nowMs()}_${Math.random()}`;
+          const replayTurnScopeId = replayGroup.turnScopeId || normalizeTurnMeta(dp).turnScopeId ||
+            currentRunMeta.turnScopeId;
+          const replayKey = normalizeReplayCacheKey(dpId, sessionId, replayTurnScopeId) ||
+            `__unknown_${nowMs()}_${Math.random()}`;
           if (!replayCache[sessionId]) replayCache[sessionId] = {};
           replayCache[sessionId][replayKey] = messages;
         } else {
-          const replayTurnScopeId = normalizeTurnMeta(dp).turnScopeId ||
+          const replayTurnScopeId = replayGroup.turnScopeId || normalizeTurnMeta(dp).turnScopeId ||
             currentRunMeta.turnScopeId;
+          if (isDeletedTurn?.({ sessionId, turnScopeId: replayTurnScopeId }) === true) continue;
           const belongsToAuthoritativeCurrentRun = Boolean(
             hasAuthoritativeCurrentRun &&
             replayTurnScopeId &&
