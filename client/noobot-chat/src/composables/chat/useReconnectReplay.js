@@ -18,6 +18,7 @@ import {
   resolveConnectorStatusPayload,
 } from "./interactionPayload";
 import { mergeAttachments } from "../infra/dialogProcessChain";
+import { terminalResolutionMetadata } from "./terminalResolutionMetadata";
 import {
   createReconnectInteractionEnvelopeCallbacks,
   tryAutoResolveReconnectInteraction,
@@ -66,10 +67,6 @@ import {
   BackendChannelState,
   SESSION_RUN_EVENT,
 } from "./sessionRunStateMachine";
-import {
-  finalizeStoppedSessionDetail,
-  refreshFinalSessionDetail,
-} from "./chatEngine/sessionFinalize";
 
 export function useReconnectReplay({
   sessions,
@@ -100,6 +97,7 @@ export function useReconnectReplay({
   processStore,
   turnRuntimeRegistry,
   applyTurnRuntimeEvents,
+  resolveTurnTerminalState,
   applyExecutionSnapshot,
   applyExecutionChildren,
   applyExecutionTree,
@@ -114,12 +112,44 @@ export function useReconnectReplay({
     const results = applyTurnRuntimeEvents?.([event]);
     return Array.isArray(results) ? results[0] : results;
   };
-  const applyTurnLifecycleEnvelope = (envelope) => applyTurnRuntimeEvents?.([{
-    ...(envelope || {}),
-    type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
-    seq: Number(envelope?.sequence || 0),
-    source: "turn_lifecycle_replay",
-  }]);
+  const terminalLifecycleEvents = new Set([
+    "turn.completed",
+    "turn.stop_completed",
+    "turn.failed",
+  ]);
+  const terminalChannelStates = new Set([
+    "completed",
+    "user_stopped",
+    "error",
+    "cancelled",
+  ]);
+  const requestTerminalResolution = (payload = {}) => {
+    const sessionId = String(payload?.sessionId || "").trim();
+    const turnScopeId = String(payload?.turnScopeId || payload?.messageEvent?.turnScopeId || "").trim();
+    if (!sessionId || !turnScopeId) {
+      return Promise.resolve({ applied: false, reason: "missing_turn_identity" });
+    }
+    if (typeof resolveTurnTerminalState !== "function") {
+      return Promise.resolve({ applied: false, reason: "terminal_resolution_unavailable" });
+    }
+    return resolveTurnTerminalState(sessionId, turnScopeId, {
+      ...terminalResolutionMetadata(payload),
+      source: "reconnect_replay",
+    });
+  };
+  const applyTurnLifecycleEnvelope = (envelope = {}) => {
+    const eventType = String(envelope?.eventType || envelope?.event || "").trim().toLowerCase();
+    if (terminalLifecycleEvents.has(eventType)) {
+      // Replayed terminal envelopes are notifications, never terminal facts.
+      return requestTerminalResolution(envelope);
+    }
+    return applyTurnRuntimeEvents?.([{
+      ...envelope,
+      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+      seq: Number(envelope?.sequence || 0),
+      source: "turn_lifecycle_replay",
+    }]);
+  };
 
   const applyRunStateEvents = (events) => {
     const sourceEvents = Array.isArray(events) ? events : [];
@@ -297,6 +327,35 @@ export function useReconnectReplay({
   }
 
   function applyChannelState(stateData = {}) {
+    const channelState = String(stateData?.state || stateData?.channelState || "").trim().toLowerCase();
+    if (channelState === BackendChannelState.EXPIRED) {
+      // Cache expiry is a transport/cache recovery signal, not an authoritative
+      // Turn terminal fact. Preserve its refresh side effect without allowing it
+      // to settle lifecycle or unlock capabilities.
+      const turnScopeId = String(stateData?.turnScopeId || "").trim();
+      scheduleCacheExpiredSessionRefresh({
+        sessionId: String(stateData?.sessionId || "").trim(),
+        dialogProcessId: String(stateData?.dialogProcessId || "").trim(),
+        targetAssistantMessage: turnScopeId
+          ? findAssistantMessageByTurnScopeId(turnScopeId)
+          : null,
+      });
+      return Promise.resolve({ applied: false, reason: "cache_refresh_scheduled" });
+    }
+    if (channelState === BackendChannelState.NO_CONVERSATION) {
+      // No-conversation only invalidates transient interaction transport state.
+      // A business Turn terminal state still requires Terminal Resolution.
+      interactionSubmitting.value = false;
+      clearPendingInteraction();
+      return Promise.resolve({ applied: false, reason: "transient_interaction_cleared" });
+    }
+    if (terminalChannelStates.has(channelState)) {
+      // Terminal channel state is notification evidence only. In particular it
+      // must not patch message terminal presentation, release the business lock,
+      // fetch session detail, or dispatch a terminal runtime transition. The
+      // authoritative terminal response owns all of those changes atomically.
+      return requestTerminalResolution(stateData);
+    }
     return applyReconnectChannelState({
       stateData,
       onConversationState,
@@ -318,71 +377,8 @@ export function useReconnectReplay({
       terminalDialogProcessIdSet,
       chatWebSocketClient,
       scheduleCacheExpiredSessionRefresh,
-      finalizeReplayCompletedSessionDetail,
-      finalizeReplayStoppedSessionDetail,
       clearPendingInteraction,
       translate,
-    });
-  }
-
-  async function finalizeReplayCompletedSessionDetail({
-    sessionId = "",
-    dialogProcessId = "",
-    turnScopeId = "",
-    targetAssistantMessage = null,
-    stateData = {},
-  } = {}) {
-    if (typeof chatList?.fetchSessionDetail !== "function" || typeof chatList?.applySessionDetail !== "function") {
-      // A backend terminal fact is not the authoritative frontend summary.
-      // Without a detail client completion cannot be applied successfully.
-      applyRunStateEvent?.({
-        type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED,
-        sessionId,
-        dialogProcessId,
-        turnScopeId,
-        source: "reconnect_completed_detail_unavailable",
-      });
-      return false;
-    }
-    return refreshFinalSessionDetail({
-      activeSession,
-      activeSessionId,
-      botMessage: targetAssistantMessage,
-      finalDoneEventData: {
-        ...stateData,
-        sessionId,
-        dialogProcessId,
-        turnScopeId,
-      },
-      finalEventData: stateData,
-      fetchSessionDetail: chatList.fetchSessionDetail,
-      applySessionDetail: chatList.applySessionDetail,
-      applyRunStateEvent,
-      refreshSessionConnectorsAsync,
-      preserveCurrentMessages: true,
-    });
-  }
-
-  async function finalizeReplayStoppedSessionDetail({
-    sessionId = "",
-    dialogProcessId = "",
-    turnScopeId = "",
-    targetAssistantMessage = null,
-    stateData = {},
-  } = {}) {
-    return finalizeStoppedSessionDetail({
-      activeSession,
-      activeSessionId,
-      botMessage: targetAssistantMessage,
-      finalEventData: {
-        ...stateData,
-        sessionId,
-        dialogProcessId,
-        turnScopeId,
-      },
-      fetchSessionDetail: chatList?.fetchSessionDetail,
-      applySessionDetail: chatList?.applySessionDetail,
-      applyRunStateEvent,
     });
   }
 

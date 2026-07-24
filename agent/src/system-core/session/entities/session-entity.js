@@ -36,6 +36,28 @@ export function normalizeSelectedConnectors(selectedConnectors = {}) {
   );
 }
 
+function lifecycleWithLegacyTerminalStatuses(session = {}) {
+  const source = session?.turnLifecycle && typeof session.turnLifecycle === "object"
+    ? session.turnLifecycle
+    : {};
+  const turns = { ...(source.turns || {}) };
+  const commits = session?.turnTerminalCommits;
+  if (commits && typeof commits === "object" && !Array.isArray(commits)) {
+    for (const [scopeId, commit] of Object.entries(commits)) {
+      const turnScopeId = String(scopeId || commit?.turnScopeId || "").trim();
+      const current = turns[turnScopeId];
+      if (!turnScopeId || !current || !commit || typeof commit !== "object") continue;
+      turns[turnScopeId] = {
+        ...current,
+        completionCommitId: current.completionCommitId || commit.completionCommitId,
+        summaryVersion: current.summaryVersion || commit.summaryVersion,
+        terminalStatus: current.terminalStatus || commit.terminalStatus || null,
+      };
+    }
+  }
+  return { ...source, turns };
+}
+
 export function normalizeMessageEntity(
   message = {},
   now = () => new Date().toISOString(),
@@ -230,11 +252,15 @@ export function normalizeSessionEntity(
     messages: normalizeMessagesEntity(session?.messages || [], now),
     turnTimings: normalizeTurnTimingsEntity(session?.turnTimings || []),
     turnStatuses: normalizeTurnStatusesEntity(session?.turnStatuses || [], now),
-    turnLifecycle: normalizeTurnLifecycleEntity(session?.turnLifecycle || {}),
+    turnLifecycle: normalizeTurnLifecycleEntity(lifecycleWithLegacyTerminalStatuses(session)),
     selectedConnectors: normalizeSelectedConnectors(session?.selectedConnectors || {}),
     createdAt: String(session?.createdAt || "").trim() || nowValue,
     updatedAt: String(session?.updatedAt || "").trim() || nowValue,
   };
+  // Legacy terminal commits embedded complete message snapshots. Their status
+  // is migrated into the matching lifecycle Turn above; never persist the
+  // heavyweight session-level map again.
+  delete normalizedSession.turnTerminalCommits;
   if (normalizedCustomTitle) normalizedSession.customTitle = normalizedCustomTitle;
   else delete normalizedSession.customTitle;
   if (normalizedMutationReceipts.length) normalizedSession.mutationReceipts = normalizedMutationReceipts;

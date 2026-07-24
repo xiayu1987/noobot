@@ -619,15 +619,21 @@ export function useMessageFiles({
 
   const displayedAttachments = computed(() => {
     const messageItem = getMessageItem() || {};
+    const rawMessageAttachments = Array.isArray(messageItem?.attachments)
+      ? messageItem.attachments
+      : [];
     const baseAttachments = filterAttachmentsForMessage(
-      getMessageAttachments(messageItem),
+      rawMessageAttachments,
       messageItem,
     );
     const canUseAssociatedTurnArtifacts = !isAssistantWithoutTurnScope(messageItem);
     const freshPendingAssistant = isFreshPendingAssistant(messageItem);
     const toolLogAttachments = [];
+    const completedToolLogs = Array.isArray(messageItem?.completedToolLogs)
+      ? messageItem.completedToolLogs
+      : [];
     if (canUseAssociatedTurnArtifacts) {
-      for (const logItem of Array.isArray(messageItem?.completedToolLogs) ? messageItem.completedToolLogs : []) {
+      for (const logItem of completedToolLogs) {
         toolLogAttachments.push(
           ...(Array.isArray(logItem?.attachments) ? logItem.attachments : []),
         );
@@ -639,6 +645,12 @@ export function useMessageFiles({
     if (getMessageRole(messageItem) !== "assistant") {
       logDisplayedAttachmentsSummary({
         messageItem,
+        rawMessageAttachmentsCount: rawMessageAttachments.length,
+        rejectedMessageAttachmentsCount: rawMessageAttachments.length - baseAttachments.length,
+        completedToolLogCount: completedToolLogs.length,
+        completedToolLogAttachmentInputCount: completedToolLogs.reduce(
+          (count, item) => count + (Array.isArray(item?.attachments) ? item.attachments.length : 0), 0,
+        ),
         baseAttachmentsCount: baseAttachments.length,
         toolLogAttachmentsCount: toolLogAttachments.length,
         displayedAttachmentsCount: mergedBaseAttachments.length,
@@ -651,6 +663,12 @@ export function useMessageFiles({
       const pendingAttachments = withAttachmentOwners(mergedBaseAttachments);
       logDisplayedAttachmentsSummary({
         messageItem,
+        rawMessageAttachmentsCount: rawMessageAttachments.length,
+        rejectedMessageAttachmentsCount: rawMessageAttachments.length - baseAttachments.length,
+        completedToolLogCount: completedToolLogs.length,
+        completedToolLogAttachmentInputCount: completedToolLogs.reduce(
+          (count, item) => count + (Array.isArray(item?.attachments) ? item.attachments.length : 0), 0,
+        ),
         baseAttachmentsCount: baseAttachments.length,
         toolLogAttachmentsCount: toolLogAttachments.length,
         displayedAttachmentsCount: pendingAttachments.length,
@@ -737,6 +755,12 @@ export function useMessageFiles({
     }
     logDisplayedAttachmentsSummary({
       messageItem,
+      rawMessageAttachmentsCount: rawMessageAttachments.length,
+      rejectedMessageAttachmentsCount: rawMessageAttachments.length - baseAttachments.length,
+      completedToolLogCount: completedToolLogs.length,
+      completedToolLogAttachmentInputCount: completedToolLogs.reduce(
+        (count, item) => count + (Array.isArray(item?.attachments) ? item.attachments.length : 0),
+      0),
       baseAttachmentsCount: baseAttachments.length,
       toolLogAttachmentsCount: toolLogAttachments.length,
       displayedAttachmentsCount: dedupedWithOwnerType.length,

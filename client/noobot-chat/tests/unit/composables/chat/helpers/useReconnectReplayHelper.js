@@ -8,6 +8,7 @@ import { vi } from "vitest";
 import { useReconnectReplay } from "../../../../../src/composables/chat/useReconnectReplay";
 import { RoleEnum } from "../../../../../src/shared/constants/chatConstants";
 import {
+  applyTurnTerminalResolution,
   applyTurnRuntimeEvent,
   createTurnRuntimeRegistryState,
   resolveSessionTurnRuntime,
@@ -82,6 +83,23 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
       return result;
     }),
   );
+  const resolveTurnTerminalState = vi.fn(async () => ({
+    applied: false,
+    reason: "terminal_unresolved",
+  }));
+  const applyTerminalResolution = (response) => {
+    const result = applyTurnTerminalResolution(turnRuntimeRegistry.value, response);
+    if (result?.applied) {
+      turnRuntimeRegistry.value = { ...turnRuntimeRegistry.value };
+      applyRunStateMessageRuntimePatch({
+        sessions,
+        activeSession,
+        turnRuntimeRegistry,
+        event: result.turn,
+      });
+    }
+    return result;
+  };
 
   const chatList = {
     fetchSessions: vi.fn(async () => {}),
@@ -150,6 +168,7 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
     notify,
     processStore,
     applyTurnRuntimeEvents,
+    resolveTurnTerminalState,
   });
 
   return {
@@ -180,6 +199,8 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
       chatList,
       chatWebSocketClient,
       applyTurnRuntimeEvents,
+      resolveTurnTerminalState,
+      applyTerminalResolution,
     },
   };
 }

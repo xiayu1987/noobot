@@ -13,6 +13,17 @@ import { SESSION_DETAIL_APPLY_MODE } from "../../../../src/composables/chat/chat
 import {
   RoleEnum,
 } from "../../../../src/shared/constants/chatConstants";
+import {
+  applyTurnRuntimeEvent,
+  applyTurnTerminalResolution,
+  createTurnRuntimeRegistryState,
+  selectTurnMessageRuntime,
+} from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+import {
+  BackendChannelState,
+  SESSION_RUN_EVENT,
+} from "../../../../src/composables/chat/sessionRunStateMachine/constants";
+import { createTurnTerminalResolution } from "../../../../../../shared/turn-lifecycle-protocol.mjs";
 
 function createApplySessionDetailHarness({ sessionId = "s-apply-mode", messages = [] } = {}) {
   const activeSession = {
@@ -269,9 +280,67 @@ describe("useChatEngine.session-detail", () => {
     };
     const activeSessionId = ref("s-apply-same-scope-stopped");
     const sessions = ref([activeSession]);
+    const registry = createTurnRuntimeRegistryState();
+    applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
+      sessionId: activeSession.sessionId,
+      turnScopeId: freshTurnScopeId,
+      seq: 1,
+    });
+    applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      sessionId: activeSession.sessionId,
+      turnScopeId: freshTurnScopeId,
+      state: BackendChannelState.SENDING,
+      seq: 2,
+    });
+    applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED,
+      sessionId: activeSession.sessionId,
+      turnScopeId: freshTurnScopeId,
+      seq: 3,
+    });
+    applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      sessionId: activeSession.sessionId,
+      turnScopeId: freshTurnScopeId,
+      state: BackendChannelState.USER_STOPPED,
+      seq: 4,
+    });
+    const terminalResult = applyTurnTerminalResolution(registry, createTurnTerminalResolution({
+      commandId: "terminal-resolution-stopped-detail",
+      sessionId: activeSession.sessionId,
+      turnScopeId: freshTurnScopeId,
+      resolved: true,
+      turn: {
+        turnScopeId: freshTurnScopeId,
+        dialogProcessId: "dp-stale-stopped",
+        state: "stop_completed",
+        phase: "stop",
+        revision: 5,
+        sequence: 5,
+        completionCommitId: "commit-stopped-detail",
+        summaryVersion: 5,
+      },
+      materialization: {
+        completionCommitId: "commit-stopped-detail",
+        summaryVersion: 5,
+        revision: 5,
+        sequence: 5,
+        terminalStatus: { status: "stop_completed" },
+        messages: [],
+      },
+    }));
+    expect(terminalResult.applied).toBe(true);
+    const turnRuntimeRegistry = ref(registry);
+    expect(selectTurnMessageRuntime(registry, {
+      sessionId: activeSession.sessionId,
+      turnScopeId: freshTurnScopeId,
+    })).toMatchObject({ running: false, terminal: "user_stopped" });
     const { applySessionDetail } = createSessionDetailApplicator({
       sessions,
       activeSessionId,
+      turnRuntimeRegistry,
       makeViewMessage: (message) => ({ ...message }),
       foldMessagesForView: (messages) => messages.map((message) => ({ ...message })),
       sessionTitleFromMessages: () => "title",
@@ -318,6 +387,71 @@ describe("useChatEngine.session-detail", () => {
     expect(activeSession.turnStatuses).toEqual([
       expect.objectContaining({ status: "user_stopped", turnScopeId: freshTurnScopeId }),
     ]);
+  });
+
+  it("applySessionDetail does not let a legacy user_stopped status override a still-running registry turn", () => {
+    const turnScopeId = "client-turn:fresh-running-scope";
+    const sessionId = "s-apply-running-legacy-stop";
+    const activeSession = {
+      id: sessionId,
+      sessionId,
+      backendSessionId: sessionId,
+      title: "current",
+      messages: [{
+        role: RoleEnum.ASSISTANT,
+        content: "",
+        turnScopeId,
+        pending: true,
+        channelState: { state: "sending", turnScopeId },
+      }],
+    };
+    const sessions = ref([activeSession]);
+    const registry = createTurnRuntimeRegistryState();
+    applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
+      sessionId,
+      turnScopeId,
+      seq: 1,
+    });
+    applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      sessionId,
+      turnScopeId,
+      state: BackendChannelState.SENDING,
+      seq: 2,
+    });
+    expect(selectTurnMessageRuntime(registry, { sessionId, turnScopeId }))
+      .toMatchObject({ running: true, terminal: null });
+    const { applySessionDetail } = createSessionDetailApplicator({
+      sessions,
+      activeSessionId: ref(sessionId),
+      turnRuntimeRegistry: ref(registry),
+      makeViewMessage: (message) => ({ ...message }),
+      foldMessagesForView: (messages) => messages.map((message) => ({ ...message })),
+      sessionTitleFromMessages: () => "title",
+      applyCompletedToolLogsToMessages: vi.fn(),
+      scrollBottom: vi.fn(),
+      isSameSessionIdentity: (a, b) => String(a) === String(b),
+    });
+
+    applySessionDetail({
+      sessionId,
+      sessions: [{
+        sessionId,
+        turnStatuses: [{ status: "user_stopped", turnScopeId }],
+        messages: [{
+          role: RoleEnum.ASSISTANT,
+          content: "已停止",
+          turnScopeId,
+          pending: false,
+          statusLabel: "chat.stopped",
+        }],
+      }],
+    }, { preserveCurrentMessages: true });
+
+    const assistant = activeSession.messages.find((message) => message.turnScopeId === turnScopeId);
+    expect(assistant.pending).toBe(true);
+    expect(assistant.channelState).toEqual({ state: "sending", turnScopeId });
   });
 
   it("applySessionDetail still merges completed detail into an in-flight assistant with the same turnScopeId", () => {

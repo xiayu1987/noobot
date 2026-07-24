@@ -542,6 +542,7 @@ export function createMessageHandler({
       eventType: TURN_EVENT.ACTION_ACCEPTED,
       phase: TURN_PHASE.ACTION,
       action,
+      startedAt: String(normalizedRunConfig?.thinkingStartedAt || "").trim(),
       createSessionIfAbsent: action === "send",
       expectedRevision: payload?.expectedRevision ?? 0,
     };

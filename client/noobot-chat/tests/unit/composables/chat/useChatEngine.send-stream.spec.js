@@ -22,8 +22,14 @@ import { selectToolTimelineLogs } from "../../../../src/composables/chat/chatEng
 describe("useChatEngine.send-stream", () => {
   it("sends the locally recorded thinking start so refresh can hydrate the duration", async () => {
     let capturedPayload = null;
-    const stream = vi.fn(async (payload) => {
+    const stream = vi.fn(async (payload, onEvent) => {
       capturedPayload = payload;
+      // A stream return is not terminal authority. Emit the backend terminal
+      // notification so production code queries and atomically applies the
+      // authoritative Terminal Resolution response.
+      emitChannelState(onEvent, "s-thinking-start", "dp-thinking-start", "completed", {
+        turnScopeId: payload.turnScopeId,
+      });
     });
     const { engine, activeSession } = createHarness({
       sessionId: "s-thinking-start",
@@ -32,6 +38,7 @@ describe("useChatEngine.send-stream", () => {
 
     await engine.send();
 
+    await vi.waitFor(() => expect(assistantMessage(activeSession)?.channelState?.state).toBe(FrontendRunState.FRONTEND_COMPLETED));
     const assistant = assistantMessage(activeSession);
     const persistedStart = activeSession.value.turnTimingsByTurnScopeId?.[assistant.turnScopeId]?.thinkingStartedAt;
     expect(persistedStart).toEqual(expect.any(String));
@@ -185,7 +192,7 @@ describe("useChatEngine.send-stream", () => {
     expect(selectToolTimelineLogs(assistant)).toEqual([
       expect.objectContaining({ event: "tool_call", text: expect.stringContaining("running tool") }),
     ]);
-    expect(sending.value).toBe(false);
+    await vi.waitFor(() => expect(sending.value).toBe(false));
     expect(activeTurnRuntime.value?.sessionId).toBe(activeSession.value.id);
   });
 
@@ -241,13 +248,13 @@ describe("useChatEngine.send-stream", () => {
     expect(selectToolTimelineLogs(assistant)).toEqual([
       expect.objectContaining({ text: expect.stringContaining("thinking without frontend turn scope") }),
     ]);
-    expect(sending.value).toBe(false);
+    await vi.waitFor(() => expect(sending.value).toBe(false));
     expect(activeTurnRuntime.value?.sessionId).toBe(activeSession.value.id);
     expect(activeTurnRuntime.value.turnScopeId).toBeTruthy();
     expect(activeTurnRuntime.value.turnScopeId).toBeTruthy();
   });
 
-  it("DONE patches the overlay and clears the global lock when completion detail fails", async () => {
+  it("DONE stays locked until the authoritative terminal response succeeds", async () => {
     let releaseStream;
     const stream = vi.fn(async (_payload, onEvent) => {
       onEvent({
@@ -288,12 +295,12 @@ describe("useChatEngine.send-stream", () => {
 
     releaseStream();
     await sendPromise;
-    // This harness makes the completion-detail request fail. Any request
-    // failure releases the global interaction mutex back to idle.
-    expect(sending.value).toBe(false);
+    // Legacy detail failure is irrelevant to settlement. Only the independent
+    // authoritative Terminal Resolution response may release the mutex.
+    await vi.waitFor(() => expect(sending.value).toBe(false));
   });
 
-  it("DONE patches current assistant turn and promotes session identity without frontend completion", async () => {
+  it("DONE projects the resolved Turn without promoting Session identity", async () => {
     const stream = vi.fn(async (_payload, onEvent) => {
       onEvent({
         event: StreamEventEnum.DELTA,
@@ -334,21 +341,22 @@ describe("useChatEngine.send-stream", () => {
 
     await engine.send();
 
-    expect(activeSession.value.id).toBe("backend-1");
-    expect(activeSession.value.backendSessionId).toBe("backend-1");
-    expect(activeSessionId.value).toBe("backend-1");
+    expect(activeSession.value.id).toBe("local-1");
+    expect(activeSession.value.backendSessionId).toBe("local-1");
+    expect(activeSessionId.value).toBe("local-1");
     expect(activeSession.value.messages).toHaveLength(2);
     expect(activeSession.value.messages[0].role).toBe(RoleEnum.USER);
+    await vi.waitFor(() => expect(sending.value).toBe(false));
     const botMessage = activeSession.value.messages[1];
     expect(botMessage.role).toBe(RoleEnum.ASSISTANT);
     expect(botMessage.content).toBe("final answer");
     expect(botMessage.dialogProcessId).toBe("dp-new");
     expect(botMessage.modelAlias).toBe("alias-a");
     expect(botMessage.tool_calls).toEqual([{ id: "tc1" }]);
-    expect(botMessage.pending).toBe(false);
-    expect(botMessage.channelState).toMatchObject({
-      state: FrontendRunState.COMPLETION_ERROR,
-    });
+    // The backend Turn cannot settle the unreconciled local Session message.
+    // List/detail reconciliation owns that identity transition.
+    expect(botMessage.pending).toBe(true);
+    expect(botMessage.channelState?.state).not.toBe(FrontendRunState.FRONTEND_COMPLETED);
     expect(sending.value).toBe(false);
   });
 
@@ -390,7 +398,7 @@ describe("useChatEngine.send-stream", () => {
         data: { sessionId: "local-time", dialogProcessId: "dp-time" },
       });
     });
-    const { engine, activeSession } = createHarness({
+    const { engine, activeSession, sending } = createHarness({
       sessionId: "local-time",
       stream,
       deps: {
@@ -406,6 +414,7 @@ describe("useChatEngine.send-stream", () => {
       vi.useRealTimers();
     }
 
+    await vi.waitFor(() => expect(sending.value).toBe(false));
     const assistant = assistantMessage(activeSession);
     // The backend observation triggers detail hydration; once that authoritative
     // detail is applied the message exposes the committed frontend terminal.
@@ -459,6 +468,7 @@ describe("useChatEngine.send-stream", () => {
 
     await engine.send();
 
+    await vi.waitFor(() => expect(sending.value).toBe(false));
     const assistant = assistantMessage(activeSession);
     expect(applySessionDetail).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: "local-frontend-complete" }),
@@ -532,10 +542,15 @@ describe("useChatEngine.send-stream", () => {
         data: { sessionId: "local-2", dialogProcessId: "dp-state" },
       });
     });
-    const { engine, activeSession, sending } = createHarness({ sessionId: "local-2", stream });
+    const { engine, activeSession, sending } = createHarness({
+      sessionId: "local-2",
+      stream,
+      terminalResolutionState: "stop_completed",
+    });
 
     await engine.send();
 
+    await vi.waitFor(() => expect(sending.value).toBe(false));
     const assistant = assistantMessage(activeSession);
     expect(assistant?.dialogProcessId).toBe("dp-state");
     expect(assistant?.statusLabel).toBe("chat.stopped");

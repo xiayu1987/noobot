@@ -98,6 +98,7 @@ export const TIME_THRESHOLDS = deepFreeze({
     mediaToDataProbeTimeoutMs: TIME_TIERS.standardCommandMs,
     mediaToDataTranscodeTimeoutMs: TIME_TIERS.fiveMinutesMs,
     mediaToDataKillGraceMs: TIME_TIERS.hookMs,
+    processForceKillGraceMs: TIME_TIERS.flushMs,
     dockerLockWaitTimeoutMs: TIME_TIERS.oneHourMs,
   },
 

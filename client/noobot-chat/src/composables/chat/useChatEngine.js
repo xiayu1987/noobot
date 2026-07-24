@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { getCurrentScope, onScopeDispose } from "vue";
+import { getCurrentScope, onScopeDispose, toRaw } from "vue";
 import { useLocale } from "../../shared/i18n/useLocale";
 import { applyRunStateMessageRuntimePatch } from "./chatEngine/messageRuntimePatch";
 import { createAssistantMessageHelpers } from "./chatEngine/assistantMessage";
@@ -17,12 +17,49 @@ import { createChatEngineSender } from "./chatEngine/sendFlow";
 import { createPendingMessageOperationStore } from "./chatEngine/messageOperationStore";
 import { logStateMachineDebug } from "./debug/stateMachineLogger";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import { selectSessionTurnRuntime } from "./sessionRunStateMachine/turnRuntimeRegistry";
+import {
+  applyTurnTerminalResolution,
+  selectSessionTurnRuntime,
+} from "./sessionRunStateMachine/turnRuntimeRegistry";
+import { createTerminalResolutionCoordinator } from "./terminalResolutionCoordinator";
+import { logTerminalResolutionDebug } from "./debug/terminalResolutionDebugLogger";
 
 const DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS =
   TIME_THRESHOLDS.client.monotonicActionStopTimeoutMs;
 const DEFAULT_MONOTONIC_ACTION_STOP_POLL_INTERVAL_MS =
   TIME_THRESHOLDS.client.monotonicActionStopPollIntervalMs;
+
+// Build a detached draft without structuredClone: the runtime registry keeps
+// injectable functions (for example lifecycleOptions.now), which are valid
+// runtime dependencies but make the graph non-structured-cloneable. Functions
+// are immutable references here; all mutable containers are cloned recursively.
+function cloneTerminalDraft(value, seen = new WeakMap()) {
+  if (value === null || typeof value !== "object") return value;
+  const raw = toRaw(value);
+  if (seen.has(raw)) return seen.get(raw);
+  if (raw instanceof Date) return new Date(raw.getTime());
+  if (raw instanceof Map) {
+    const clone = new Map();
+    seen.set(raw, clone);
+    for (const [key, item] of raw) clone.set(cloneTerminalDraft(key, seen), cloneTerminalDraft(item, seen));
+    return clone;
+  }
+  if (raw instanceof Set) {
+    const clone = new Set();
+    seen.set(raw, clone);
+    for (const item of raw) clone.add(cloneTerminalDraft(item, seen));
+    return clone;
+  }
+  const clone = Array.isArray(raw) ? [] : {};
+  seen.set(raw, clone);
+  for (const key of Reflect.ownKeys(raw)) {
+    const descriptor = Object.getOwnPropertyDescriptor(raw, key);
+    if (!descriptor?.enumerable) continue;
+    clone[key] = cloneTerminalDraft(raw[key], seen);
+  }
+  return clone;
+}
+
 export function useChatEngine({
   userId,
   allowUserInteraction,
@@ -76,15 +113,104 @@ export function useChatEngine({
   notify = () => {},
   processStore = null,
   runtimeEventsAlreadyProjected = false,
+  terminalResolutionFetcher,
   monotonicActionStopTimeoutMs = DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS,
   monotonicActionStopPollIntervalMs = DEFAULT_MONOTONIC_ACTION_STOP_POLL_INTERVAL_MS,
 } = {}) {
   const { translate, locale } = useLocale();
+  const applyAuthoritativeTerminalResolution = (response) => {
+    const sessionId = String(response?.sessionId || "").trim();
+    const turnScopeId = String(response?.turnScopeId || "").trim();
+    const terminalStatus = response?.turn?.terminalStatus || response?.materialization?.terminalStatus;
+    if (!sessionId || !turnScopeId || !terminalStatus || typeof terminalStatus !== "object") {
+      logTerminalResolutionDebug("frontend.terminalResolution.rejected", {
+        sessionId, turnScopeId, reason: "invalid_terminal_status",
+        responseResolved: response?.resolved, hasTerminalStatus: Boolean(terminalStatus),
+      });
+      return { applied: false, reason: "invalid_terminal_status" };
+    }
+    try {
+      const nextRegistry = cloneTerminalDraft(turnRuntimeRegistry?.value || {});
+      const result = applyTurnTerminalResolution(nextRegistry, response);
+      if (result?.applied !== true) {
+        const current = result?.current || selectSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId, turnScopeId);
+        logTerminalResolutionDebug("frontend.terminalResolution.reducerRejected", {
+          sessionId, turnScopeId, reason: result?.reason || "unknown",
+          currentRevision: Number(current?.revision || 0), currentSequence: Number(current?.seq || 0),
+          terminalResolved: current?.terminalResolved === true,
+          responseRevision: Number(response?.turn?.revision || response?.revision || 0),
+          responseSequence: Number(response?.turn?.sequence || response?.sequence || 0),
+        });
+      }
+      if (result?.applied) {
+        turnRuntimeRegistry.value = nextRegistry;
+        const projected = selectSessionTurnRuntime(nextRegistry, sessionId, turnScopeId);
+        logTerminalResolutionDebug("frontend.terminalResolution.applied", {
+          sessionId,
+          turnScopeId,
+          responseState: response?.turn?.state || "",
+          responseExecutionState: response?.turn?.executionState || "",
+          responseRevision: Number(response?.turn?.revision || response?.revision || 0),
+          responseSequence: Number(response?.turn?.sequence || response?.sequence || 0),
+          startedAt: response?.turn?.startedAt || "",
+          finishedAt: response?.turn?.finishedAt || "",
+          projectedState: projected?.displayState || projected?.state || "",
+          projectedSending: projected?.sending === true,
+          projectedTerminal: projected?.terminal || null,
+          activeTurnScopeId: nextRegistry?.sessions?.[sessionId]?.activeTurnScopeId || "",
+        });
+        // TERMINAL_RESOLVED is the sole terminal write. Message fields are a
+        // read-model projection of that committed canonical Turn, not another
+        // source of terminal truth. Project exactly once, after the Registry
+        // commit, so realtime, refresh and reconnect share identical UI
+        // settlement semantics.
+        if (!runtimeEventsAlreadyProjected) {
+          applyRunStateMessageRuntimePatch({
+            sessions,
+            activeSession,
+            turnRuntimeRegistry,
+            event: {
+              ...(response?.turn || {}),
+              sessionId,
+              turnScopeId,
+            },
+          });
+        }
+      }
+      return result;
+    } catch (error) {
+      return { applied: false, retryable: true, reason: "terminal_materialization_apply_failed", error };
+    }
+  };
+  const terminalResolutionCoordinator = createTerminalResolutionCoordinator({
+    userId,
+    fetcher: terminalResolutionFetcher || authFetch,
+    // Terminal responses must pass through the registry's validated adapter.
+    // It atomically flattens the authoritative Turn and is the only path that
+    // may dispatch TERMINAL_RESOLVED to the reducer.
+    applyTurnTerminalResolution: applyAuthoritativeTerminalResolution,
+    onDiscovery: (details = {}) => logTerminalResolutionDebug(
+      "frontend.terminalResolution.discovery", details,
+    ),
+    onUnresolved: (details = {}) => logTerminalResolutionDebug(
+      "frontend.terminalResolution.unresolved", {
+        ...details,
+        responseResolved: details?.response?.resolved === true,
+        responseRetryable: details?.response?.retryable === true,
+        responseReason: details?.response?.reason || "",
+        responseRevision: Number(details?.response?.turn?.revision || details?.response?.revision || 0),
+        responseSequence: Number(details?.response?.turn?.sequence || details?.response?.sequence || 0),
+      },
+    ),
+  });
   const applyRunStateEvent = (event) => {
+    const terminalResolution = terminalResolutionCoordinator.observe(event);
+    if (terminalResolution) return terminalResolution;
     const turnResult = applyTurnRuntimeEvent?.(event);
     const runtime = selectSessionTurnRuntime(
       turnRuntimeRegistry?.value,
       turnResult?.turn?.sessionId || event?.sessionId || "",
+      turnResult?.turn?.turnScopeId || event?.turnScopeId || "",
     );
     logStateMachineDebug("stateMachine.event", {
       eventType: event?.type || "",
@@ -288,6 +414,7 @@ export function useChatEngine({
   if (getCurrentScope()) {
     onScopeDispose(() => {
       disposeConversationState();
+      terminalResolutionCoordinator.dispose();
       messageOperationStore.clearSession(activeSessionId?.value);
     });
   }
@@ -300,5 +427,6 @@ export function useChatEngine({
     cascadeDeleteMessagesFrom,
     deleteMonotonicMessage,
     resendMonotonicMessage,
+    resolveTurnTerminalState: terminalResolutionCoordinator.resolve,
   };
 }

@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/shared/turn-lifecycle-protocol";
 import { normalizeSessionEntity } from "../../../src/system-core/session/entities/session-entity.js";
 import { SessionMessageService } from "../../../src/system-core/session/services/session-message-service.js";
+import { SessionCrudService } from "../../../src/system-core/session/services/session-crud-service.js";
 
 const now = () => "2026-07-18T00:00:00.000Z";
 
@@ -115,14 +116,81 @@ test("authoritative lifecycle persists, sequences and restores the complete path
   const started = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_STARTED, "c2", 1, { phase: TURN_PHASE.PROCESSING, executionState: "sending" }));
   assert.equal(started.turn.state, TURN_STATE.PROCESSING);
   const processed = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_COMPLETED, "c3", 2, { phase: TURN_PHASE.COMPLETION }));
-  const completed = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.COMPLETED, "c4", 3, { phase: TURN_PHASE.COMPLETION, summaryVersion: 1 }));
+  const completed = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.COMPLETED, "c4", 3, {
+    phase: TURN_PHASE.COMPLETION,
+    summaryVersion: 1,
+    terminalStatus: { command: "completed" },
+  }));
   assert.equal(processed.turn.state, TURN_STATE.COMPLETION_REQUESTING);
   assert.equal(completed.turn.state, TURN_STATE.COMPLETED);
+  assert.equal(completed.turn.executionState, "completed");
   assert.equal(completed.turn.sequence, 4);
   const restored = h.reload().turnLifecycle;
   assert.equal(restored.activeTurnScopeId, "");
   assert.equal(restored.turns.t1.state, TURN_STATE.COMPLETED);
+  assert.equal(restored.turns.t1.executionState, "completed");
   assert.equal(restored.turns.t1.summaryVersion, 1);
+  assert.equal(restored.turns.t1.terminalStatus.status, "completed");
+  assert.equal(h.reload().turnTerminalCommits, undefined);
+});
+
+test("terminal resolution reads status from the Turn without returning messages", async () => {
+  const h = harness({
+    turnTimings: [{
+      turnScopeId: "t1",
+      dialogProcessId: "dp1",
+      thinkingStartedAt: "2026-07-17T23:59:30.000Z",
+      thinkingFinishedAt: "2026-07-18T00:00:00.000Z",
+    }],
+  });
+  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.ACTION_ACCEPTED, "r1", 0, {
+    action: "send",
+    phase: TURN_PHASE.ACTION,
+    startedAt: "2026-07-17T23:59:30.000Z",
+  }));
+  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_STARTED, "r2", 1, { phase: TURN_PHASE.PROCESSING, executionState: "sending" }));
+  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_COMPLETED, "r3", 2, { phase: TURN_PHASE.COMPLETION }));
+  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.COMPLETED, "r4", 3, {
+    phase: TURN_PHASE.COMPLETION,
+    terminalStatus: { command: "completed" },
+  }));
+  const crud = new SessionCrudService({
+    sessionRepo: { async findById() { return h.reload(); } },
+    treeRepo: {},
+    now,
+  });
+
+  const response = await crud.resolveTurnTerminalState({
+    userId: "u1", sessionId: "s1", turnScopeId: "t1", commandId: "resolve-1",
+  });
+  assert.equal(response.resolved, true);
+  assert.equal(response.turn.terminalStatus.status, "completed");
+  assert.equal(response.turn.executionState, "completed");
+  assert.equal(response.turn.startedAt, "2026-07-17T23:59:30.000Z");
+  assert.equal(response.turn.finishedAt, "2026-07-18T00:00:00.000Z");
+  assert.equal(response.materialization, null);
+  assert.equal(JSON.stringify(response).includes('"messages"'), false);
+});
+
+test("legacy terminal snapshots migrate onto Turns and are discarded", () => {
+  const normalized = normalizeSessionEntity({
+    sessionId: "legacy",
+    messages: [],
+    turnLifecycle: {
+      sequence: 1,
+      turns: { t1: { turnScopeId: "t1", state: "completed", revision: 1, sequence: 1 } },
+    },
+    turnTerminalCommits: {
+      t1: {
+        turnScopeId: "t1",
+        terminalStatus: { status: "completed", reason: "run_completed" },
+        messages: Array.from({ length: 100 }, (_, index) => ({ role: "assistant", content: `large-${index}` })),
+      },
+    },
+  }, { now });
+
+  assert.equal(normalized.turnLifecycle.turns.t1.terminalStatus.status, "completed");
+  assert.equal(normalized.turnTerminalCommits, undefined);
 });
 
 test("command replay is idempotent and conflicting reuse is rejected", async () => {
@@ -194,6 +262,7 @@ test("snapshot reloads authoritative state without mutating sequence and support
   assert.equal(result.found, true);
   assert.equal(result.snapshot.unchanged, true);
   assert.equal(result.snapshot.activeTurn.turnScopeId, "t1");
+  assert.equal(result.snapshot.activeTurn.sessionId, "s1");
   assert.equal(result.snapshot.activeTurn.capabilities.canStop, true);
   assert.equal(h.reload().turnLifecycle.sequence, before);
 });
@@ -208,6 +277,7 @@ test("retryable finalize failure keeps the session locked and completes idempote
     failure: { code: "summary_failed", retryable: true },
   }));
   assert.equal(failed.turn.state, TURN_STATE.COMPLETION_FAILED);
+  assert.equal(failed.turn.executionState, "error");
   assert.equal(h.reload().turnLifecycle.activeTurnScopeId, "t1");
   assert.equal(h.reload().turnLifecycle.turns.t1.finalizeIntent.commandId, "finalize:t1");
   const blocked = await h.service.applyTurnLifecycleEvent({ ...event(TURN_EVENT.ACTION_ACCEPTED, "other", 0, { action: "send", phase: TURN_PHASE.ACTION }), turnScopeId: "t2" });
@@ -233,5 +303,6 @@ test("retryable stop finalize failure keeps intent and can recover once", async 
   assert.equal(restored.turns.t1.finalizeIntent.commandId, "finalize-stop:t1");
   const completed = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.STOP_COMPLETED, "finalize-stop:t1", 5, { phase: TURN_PHASE.STOP, summaryVersion: 9 }));
   assert.equal(completed.turn.state, TURN_STATE.STOP_COMPLETED);
+  assert.equal(completed.turn.executionState, "user_stopped");
   assert.equal(h.reload().turnLifecycle.activeTurnScopeId, "");
 });

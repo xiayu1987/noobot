@@ -14,12 +14,14 @@ import {
   resolveRememberedStopRequestedEvent,
 } from "../../../../src/composables/chat/sessionRunStateMachine";
 import { reduceTurnRuntimeEvent, TURN_TRANSITION_REASON } from "../../../../src/composables/chat/sessionRunStateMachine/turnReducer";
-import { TURN_EVENT, TURN_PHASE } from "@noobot/shared/turn-lifecycle-protocol";
+import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/shared/turn-lifecycle-protocol";
 
 const processingStarted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_STARTED, phase: TURN_PHASE.PROCESSING, executionState: BackendChannelState.SENDING };
 const actionAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.ACTION_ACCEPTED, phase: TURN_PHASE.ACTION, action: "send" };
 const processingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_COMPLETED, phase: TURN_PHASE.COMPLETION };
 const stopProcessingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED, phase: TURN_PHASE.STOP };
+const completionCommit = { completionCommitId: "completion-commit-1", summaryVersion: 1 };
+const terminalResolved = (state) => ({ type: SESSION_RUN_EVENT.TERMINAL_RESOLVED, state, revision: 10, sequence: 10, ...completionCommit });
 
 function installStorage() {
   const map = new Map();
@@ -90,12 +92,13 @@ describe("sessionRunStateMachine scope separation", () => {
     let processing = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
     processing = apply(processing, processingStarted);
     let completion = apply(processing, processingCompleted);
-    completion = apply(completion, { type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED });
+    completion = apply(completion, { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.COMPLETED, phase: TURN_PHASE.COMPLETION, ...completionCommit });
+    completion = apply(completion, terminalResolved(TURN_STATE.COMPLETED));
     expect(completion).toMatchObject({ ...identity, state: FrontendRunState.FRONTEND_COMPLETED });
 
     let stopping = apply(processing, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED });
     stopping = apply(stopping, stopProcessingCompleted);
-    stopping = apply(stopping, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED });
+    stopping = apply(stopping, terminalResolved(TURN_STATE.STOP_COMPLETED));
     expect(stopping).toMatchObject({ ...identity, state: FrontendRunState.USER_STOP_COMPLETED });
   });
 

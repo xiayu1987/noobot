@@ -41,6 +41,7 @@ import {
 export function createSessionDetailApplicator({
   sessions,
   activeSessionId,
+  turnRuntimeRegistry,
   makeViewMessage,
   foldMessagesForView,
   sessionTitleFromMessages,
@@ -123,8 +124,15 @@ export function createSessionDetailApplicator({
         turnTimings: mainSessionDoc.turnTimings,
       },
       {
+        // A detail response may be a sparse projection. REPLACE is only
+        // authoritative for fields it actually carries; replacing a missing
+        // turnTimings array with [] resets refresh-time thinking to now.
         replaceFields: applyMode === SESSION_DETAIL_APPLY_MODE.REPLACE
-          ? ["messages", "turnStatuses", "turnTimings"]
+          ? [
+            ...(Array.isArray(mainSessionDoc.messages) ? ["messages"] : []),
+            ...(Array.isArray(mainSessionDoc.turnStatuses) || Array.isArray(detail?.turnStatuses) ? ["turnStatuses"] : []),
+            ...(Array.isArray(mainSessionDoc.turnTimings) || Array.isArray(detail?.turnTimings) ? ["turnTimings"] : []),
+          ]
           : [],
       },
     );
@@ -172,7 +180,8 @@ export function createSessionDetailApplicator({
       hasInFlightAssistantMissingFromDetail({
         currentMessages: currentRenderedMessages,
         detailMessages,
-        turnStatuses,
+        registry: turnRuntimeRegistry?.value,
+        sessionId: detailSessionId,
       });
     const preserveCurrentMessages =
       requestedPreserveCurrentMessages || hasCurrentInFlightTurnMissingFromDetail;
@@ -223,7 +232,10 @@ export function createSessionDetailApplicator({
         currentMessages: summarizeDebugMessages(sessionItem.messages),
       });
       const existingMessages = Array.isArray(sessionItem.messages) ? sessionItem.messages : [];
-      mergePreservedDetailMessages(existingMessages, normalizedDetailMessages, { turnStatuses });
+      mergePreservedDetailMessages(existingMessages, normalizedDetailMessages, {
+        registry: turnRuntimeRegistry?.value,
+        sessionId: detailSessionId,
+      });
       const workflowMessages = normalizedDetailMessages.filter(
         (messageItem) =>
           getMessageRole(messageItem) === RoleEnum.ASSISTANT &&

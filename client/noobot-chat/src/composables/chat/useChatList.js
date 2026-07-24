@@ -63,6 +63,7 @@ export function useChatList({
   const { applySessionDetail } = createSessionDetailApplicator({
     sessions,
     activeSessionId,
+    turnRuntimeRegistry,
     makeViewMessage,
     foldMessagesForView,
     sessionTitleFromMessages,

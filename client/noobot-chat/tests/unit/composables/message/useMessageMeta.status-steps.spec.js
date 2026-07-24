@@ -8,11 +8,28 @@ import { createPinia, setActivePinia } from "pinia";
 import { nextTick, ref } from "vue";
 import { useMessageMeta } from "../../../../src/composables/message/useMessageMeta";
 import { useChatStore } from "../../../../src/shared/stores/useChatStore";
-import { applyTurnRuntimeEvent } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+import { applyTurnRuntimeEvent, applyTurnTerminalResolution } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 import { SESSION_RUN_EVENT } from "../../../../src/composables/chat/sessionRunStateMachine/constants";
+import { createTurnTerminalResolution } from "../../../../../../shared/turn-lifecycle-protocol.mjs";
 
 function applyEvent(store, event) {
   applyTurnRuntimeEvent(store.turnRuntimeRegistry, event);
+}
+
+function settleTurn(store, { sessionId, turnScopeId, state }) {
+  const revision = 100;
+  const completionCommitId = `commit-${turnScopeId}-${state}`;
+  return applyTurnTerminalResolution(store.turnRuntimeRegistry, createTurnTerminalResolution({
+    commandId: `resolve-${turnScopeId}-${state}`,
+    sessionId,
+    turnScopeId,
+    resolved: true,
+    turn: { sessionId, turnScopeId, state, phase: state === "stop_completed" ? "stop" : "completion",
+      revision, sequence: revision, completionCommitId, summaryVersion: revision,
+      capabilities: { actionLocked: false, canStop: false } },
+    materialization: { completionCommitId, summaryVersion: revision, revision, sequence: revision,
+      terminalStatus: { status: state }, messages: [] },
+  }));
 }
 
 describe("useMessageMeta status steps", () => {
@@ -61,11 +78,7 @@ describe("useMessageMeta status steps", () => {
     await nextTick();
     expect(statusStepState.value).toBe("stopping");
 
-    applyEvent(store, {
-      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED,
-      sessionId: "session-1",
-      turnScopeId: "turn-1",
-    });
+    settleTurn(store, { sessionId: "session-1", turnScopeId: "turn-1", state: "stop_completed" });
     await nextTick();
     expect(statusStepState.value).toBe("stopped");
   });
@@ -128,11 +141,7 @@ describe("useMessageMeta status steps", () => {
       sessionId: "session-1",
       turnScopeId: "client-turn:main",
     });
-    applyEvent(store, {
-      type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
-      sessionId: "session-1",
-      turnScopeId: "client-turn:main",
-    });
+    settleTurn(store, { sessionId: "session-1", turnScopeId: "client-turn:main", state: "completed" });
     const { statusStepState } = useMessageMeta({ getMessageItem: () => message });
     await nextTick();
     expect(statusStepState.value).toBe("completed");

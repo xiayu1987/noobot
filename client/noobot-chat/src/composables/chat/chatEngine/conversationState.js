@@ -224,7 +224,6 @@ export function createChatEngineConversationState({
           interactionSubmitting.value = false;
           clearPendingInteraction();
           const expiredErrorMessage = translate("chat.expiredRefreshFailed");
-          applyAssistantFailureState(targetAssistantMessage, expiredErrorMessage);
           emitSyntheticErrorConversationState({
             sessionId: normalizeTrimmedString(sessionId || activeSession.value?.id),
             dialogProcessId,
@@ -243,7 +242,6 @@ export function createChatEngineConversationState({
           interactionSubmitting.value = false;
           clearPendingInteraction();
           const expiredErrorMessage = translate("chat.expiredRefreshFailed");
-          applyAssistantFailureState(targetAssistantMessage, expiredErrorMessage);
           emitSyntheticErrorConversationState({
             sessionId: normalizeTrimmedString(sessionId || activeSession.value?.id),
             dialogProcessId,

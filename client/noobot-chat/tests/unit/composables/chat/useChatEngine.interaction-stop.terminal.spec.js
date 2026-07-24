@@ -7,10 +7,251 @@ import { describe, expect, it, vi } from "vitest";
 import { createHarness, assistantMessage, emitChannelState } from "./helpers/useChatEngineHarness";
 import { StreamEventEnum, RoleEnum } from "../../../../src/shared/constants/chatConstants";
 import { FrontendRunState } from "../../../../src/composables/chat/sessionRunStateMachine";
-import { selectSessionTurnRuntime } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+import { createSessionListActions } from "../../../../src/composables/chat/chatList/sessionListActions";
+import {
+  applyTurnRuntimeEvent,
+  applyTurnLifecycleSnapshot,
+  selectSessionTurnRuntime,
+} from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+import { SESSION_RUN_EVENT } from "../../../../src/composables/chat/sessionRunStateMachine/constants";
 
 describe("useChatEngine.interaction-stop: terminal", () => {
-  it("channel_state stopping/reconnecting drives runtime state without persisting message terminal state", async () => {
+  it("applies the real refresh terminal payload atomically when discovery races snapshot hydration", async () => {
+    const sessionId = "3801ff60-0a8d-4dd8-903f-139febe37254";
+    const turnScopeId = "client-turn:mryihoqc:3qrncu3i";
+    const terminalTurn = {
+      executionId: `agent:${turnScopeId}`,
+      executionKind: "agent",
+      sessionId,
+      turnScopeId,
+      dialogProcessId: "a31a2316-61b9-452b-af1d-4be302fc375d",
+      commandId: `${turnScopeId}:completed`,
+      action: "send",
+      state: "completed",
+      phase: "completion",
+      executionState: "sending",
+      revision: 4,
+      sequence: 4,
+      summaryVersion: 0,
+      completionCommitId: `${turnScopeId}:completed`,
+      terminalStatus: { turnScopeId, status: "completed", reason: "run_completed" },
+      failure: null,
+      finalizeIntent: null,
+      capabilities: { actionLocked: false, canStop: false },
+    };
+    let releaseResponse;
+    const terminalResolutionFetcher = vi.fn(async () => ({
+      ok: true,
+      json: async () => new Promise((resolve) => { releaseResponse = resolve; }),
+    }));
+    const { engine, turnRuntimeRegistry, sessions } = createHarness({
+      sessionId,
+      deps: { terminalResolutionFetcher },
+    });
+
+    // Production hydration schedules the read before applying the snapshot.
+    const first = engine.resolveTurnTerminalState(sessionId, turnScopeId, terminalTurn);
+    await vi.waitFor(() => expect(releaseResponse).toBeTypeOf("function"));
+    expect(applyTurnLifecycleSnapshot(turnRuntimeRegistry.value, {
+      protocolVersion: 1,
+      eventType: "turn.snapshot",
+      commandId: "snapshot-refresh",
+      userId: "u-1",
+      sessionId,
+      sequence: 4,
+      activeTurnScopeId: "",
+      activeTurn: null,
+      recentTerminalTurns: [terminalTurn],
+      unchanged: false,
+    }).applied).toBe(true);
+    turnRuntimeRegistry.value = { ...turnRuntimeRegistry.value };
+    releaseResponse({
+      ok: true,
+      protocolVersion: 1,
+      eventType: "turn.terminal_resolved",
+      commandId: "terminal-resolution:real:1",
+      sessionId,
+      turnScopeId,
+      resolved: true,
+      retryable: false,
+      reason: "",
+      retryAfterMs: 0,
+      turn: terminalTurn,
+      materialization: null,
+    });
+    await expect(first).resolves.toMatchObject({ applied: true });
+
+    const second = await engine.resolveTurnTerminalState(sessionId, turnScopeId, terminalTurn);
+    expect(second).toMatchObject({ applied: true });
+    expect(terminalResolutionFetcher).toHaveBeenCalledTimes(1);
+    expect(sessions.value[0]).toMatchObject({ backendSessionId: sessionId });
+    expect(selectSessionTurnRuntime(turnRuntimeRegistry.value, sessionId)).toMatchObject({
+      terminal: "completed",
+      sending: false,
+      canStop: false,
+    });
+  });
+
+  it("commits backend terminal identity without promoting the optimistic Session", async () => {
+    const localSessionId = "local-refresh-session";
+    const backendSessionId = "3801ff60-0a8d-4dd8-903f-139febe37254";
+    const turnScopeId = "client-turn:mryihoqc:3qrncu3i";
+    const terminalResolutionFetcher = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        protocolVersion: 1,
+        eventType: "turn.terminal_resolved",
+        commandId: "terminal-resolution:identity-promotion",
+        sessionId: backendSessionId,
+        turnScopeId,
+        resolved: true,
+        retryable: false,
+        turn: {
+          sessionId: backendSessionId,
+          turnScopeId,
+          state: "completed",
+          revision: 4,
+          sequence: 4,
+          completionCommitId: `${turnScopeId}:completed`,
+          terminalStatus: { turnScopeId, status: "completed", reason: "run_completed" },
+          capabilities: { actionLocked: false, canStop: false },
+        },
+        materialization: null,
+      }),
+    }));
+    const { engine, activeSessionId, sessions, turnRuntimeRegistry } = createHarness({
+      sessionId: localSessionId,
+      deps: { terminalResolutionFetcher },
+    });
+    sessions.value[0].isLocal = true;
+    sessions.value[0].messages = [{ turnScopeId }];
+
+    const result = await engine.resolveTurnTerminalState(backendSessionId, turnScopeId, {
+      revision: 4,
+      sequence: 4,
+    });
+
+    expect(result).toMatchObject({ applied: true });
+    expect(activeSessionId.value).toBe(localSessionId);
+    expect(sessions.value[0]).toMatchObject({
+      id: localSessionId,
+      backendSessionId: localSessionId,
+      isLocal: true,
+    });
+    expect(selectSessionTurnRuntime(turnRuntimeRegistry.value, backendSessionId, turnScopeId)).toMatchObject({
+      terminal: "completed",
+      sending: false,
+      canStop: false,
+    });
+  });
+
+  it("reconciles an optimistic Session before committing one authoritative terminal response", async () => {
+    const localSessionId = "local-refresh-e2e";
+    const backendSessionId = "backend-refresh-e2e";
+    const turnScopeId = "client-turn:refresh-e2e";
+    const terminalResolutionFetcher = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        protocolVersion: 1,
+        eventType: "turn.terminal_resolved",
+        commandId: "terminal-resolution:refresh-e2e",
+        sessionId: backendSessionId,
+        turnScopeId,
+        resolved: true,
+        retryable: false,
+        turn: {
+          sessionId: backendSessionId,
+          turnScopeId,
+          state: "completed",
+          revision: 2,
+          sequence: 2,
+          completionCommitId: `${turnScopeId}:completed`,
+          terminalStatus: { turnScopeId, status: "completed", reason: "run_completed" },
+          capabilities: { actionLocked: false, canStop: false },
+        },
+        materialization: null,
+      }),
+    }));
+    const harness = createHarness({
+      sessionId: localSessionId,
+      deps: { terminalResolutionFetcher },
+    });
+    harness.sessions.value[0].isLocal = true;
+    harness.sessions.value[0].messages = [{ role: RoleEnum.ASSISTANT, turnScopeId, pending: true }];
+    applyTurnRuntimeEvent(harness.turnRuntimeRegistry.value, {
+      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+      sessionId: localSessionId,
+      turnScopeId,
+      dialogProcessId: "dp-refresh-e2e",
+      source: "test",
+    });
+    harness.turnRuntimeRegistry.value = { ...harness.turnRuntimeRegistry.value };
+
+    const listActions = createSessionListActions({
+      sessions: harness.sessions,
+      activeSessionId: harness.activeSessionId,
+      loadingSessions: { value: false },
+      loadingSessionDetail: { value: false },
+      turnRuntimeRegistry: harness.turnRuntimeRegistry,
+      userId: { value: "u-1" },
+      authFetch: vi.fn(),
+      ensureConnected: vi.fn(() => true),
+      getSessionsApi: vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          ok: true,
+          sessions: [{
+            sessionId: backendSessionId,
+            id: backendSessionId,
+            caller: RoleEnum.USER,
+            updatedAt: "2026-07-24T05:42:15.485Z",
+            turnLifecycleSnapshot: {
+              activeTurn: null,
+              recentTerminalTurns: [{ turnScopeId, state: "completed", revision: 2, sequence: 2 }],
+            },
+          }],
+        }),
+      })),
+      deleteSessionApi: vi.fn(),
+      renameSessionApi: vi.fn(),
+      createConnectorPanelState: vi.fn(() => ({})),
+      sessionTitleFromMessages: vi.fn(() => "refresh e2e"),
+      fetchSessionDetail: vi.fn(async () => null),
+      applySessionDetail: vi.fn(),
+      createLocalSession: vi.fn(),
+      refreshSessionConnectorsAsync: vi.fn(),
+      translate: (key) => key,
+      notify: vi.fn(),
+    });
+
+    await expect(listActions.fetchSessions(localSessionId, { silent: true })).resolves.toBe(true);
+    expect(harness.activeSessionId.value).toBe(backendSessionId);
+    expect(harness.turnRuntimeRegistry.value.sessionAliases[localSessionId]).toBe(backendSessionId);
+
+    const resolution = await harness.engine.resolveTurnTerminalState(backendSessionId, turnScopeId, {
+      revision: 2,
+      sequence: 2,
+    });
+
+    expect(resolution).toMatchObject({ applied: true });
+    expect(terminalResolutionFetcher).toHaveBeenCalledTimes(1);
+    expect(harness.turnRuntimeRegistry.value.sessions[backendSessionId]?.turns?.[turnScopeId]).toMatchObject({
+      terminalResolved: true,
+    });
+    expect(selectSessionTurnRuntime(
+      harness.turnRuntimeRegistry.value,
+      backendSessionId,
+      turnScopeId,
+    )).toMatchObject({
+      terminal: "completed",
+      sending: false,
+      canStop: false,
+    });
+  });
+
+  it("channel_state stopping/reconnecting/user_stopped remains a notification until terminal resolution", async () => {
     const stream = vi.fn(async (_payload, onEvent) => {
       emitChannelState(onEvent, "local-flight", "dp-flight", "stopping");
       emitChannelState(onEvent, "local-flight", "dp-flight", "reconnecting");
@@ -28,9 +269,9 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     await engine.send();
 
     const assistant = assistantMessage(activeSession);
-    expect(assistant?.statusLabel).toBe("chat.stopped");
-    expect(assistant?.pending).toBe(false);
-    expect(selectSessionTurnRuntime(turnRuntimeRegistry.value, "local-flight").sending).toBe(false);
+    expect(assistant?.statusLabel).toBe("");
+    expect(assistant?.pending).toBe(true);
+    expect(selectSessionTurnRuntime(turnRuntimeRegistry.value, "local-flight").sending).toBe(true);
   });
 
   it("channel_state stopping remains a message-level fact and does not replace the global action lock", async () => {
@@ -50,7 +291,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     });
   });
 
-  it("channel_state completed/error/no_conversation terminal behaviors are covered", async () => {
+  it("channel_state completed/error/no_conversation cannot overwrite terminal presentation", async () => {
     const stream = vi.fn(async (_payload, onEvent) => {
       emitChannelState(onEvent, "local-terminal", "dp-terminal", "completed");
       emitChannelState(onEvent, "local-terminal", "dp-terminal", "error");
@@ -73,7 +314,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     await engine.send();
 
     const assistant = assistantMessage(activeSession);
-    expect(assistant?.statusLabel).toBe("chat.failed");
+    expect(assistant?.statusLabel).toBe("chat.generated");
     expect(assistant?.pending).toBe(false);
     expect(sending.value).toBe(false);
     expect(canStop.value).toBe(false);
@@ -81,7 +322,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     expect(deps.clearPendingInteraction).toHaveBeenCalled();
   });
 
-  it("terminal channel_state with backend sessionId still finalizes current local turn", async () => {
+  it("does not project a backend terminal onto an unreconciled local Session", async () => {
     const stream = vi.fn(async (_payload, onEvent) => {
       emitChannelState(onEvent, "backend-x", "dp-x", "completed", { seq: 2 });
       onEvent({
@@ -96,7 +337,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
         },
       });
     });
-    const { engine, activeSession, sending, canStop } = createHarness({
+    const { engine, activeSession, sending, canStop, deps } = createHarness({
       sessionId: "local-x",
       stream,
       deps: {
@@ -108,11 +349,14 @@ describe("useChatEngine.interaction-stop: terminal", () => {
 
     await engine.send();
 
+    expect(deps.terminalResolutionFetcher).toHaveBeenCalledTimes(1);
     expect(sending.value).toBe(false);
     const assistant = assistantMessage(activeSession);
-    expect(assistant?.pending).toBe(false);
-    expect(assistant?.channelState?.state).toBe(FrontendRunState.COMPLETION_ERROR);
-    expect(assistant?.statusLabelKey || assistant?.statusLabel).toBe("chat.failed");
+    // Session identity is reconciled by the list/detail layer. The terminal
+    // committer must not guess that backend-x owns local-x or mutate its message.
+    expect(assistant?.pending).toBe(true);
+    expect(assistant?.channelState?.state).not.toBe(FrontendRunState.FRONTEND_COMPLETED);
+    expect(assistant?.statusLabelKey || assistant?.statusLabel).not.toBe("chat.generated");
   });
 
   it("terminal channel_state without DONE converges through authoritative session detail", async () => {

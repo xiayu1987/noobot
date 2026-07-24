@@ -61,6 +61,21 @@ test("projects root workflow and nested child agents from authoritative turn lif
   assert.equal(result.tree.executions["agent:root"].capabilities.canStop, true);
 });
 
+test("execution recovery uses the persisted Turn timing instead of reconnect time", async () => {
+  const reader = service([{
+    sessionId: "timed-session",
+    turnLifecycle: { turns: { root: turn({ createdAt: "2026-07-20T00:00:05.000Z" }) } },
+    turnTimings: [{
+      turnScopeId: "turn-root",
+      thinkingStartedAt: "2026-07-20T00:00:01.000Z",
+    }],
+  }]);
+
+  const result = await reader.getExecution({ userId: "u1", executionId: "agent:root" });
+  assert.equal(result.execution.startedAt, "2026-07-20T00:00:01.000Z");
+  assert.equal(result.execution.finishedAt, "");
+});
+
 test("children query returns direct children only and preserves historical attempts", async () => {
   const reader = service([
     { sessionId: "root", turnLifecycle: { turns: { root: turn() } } },

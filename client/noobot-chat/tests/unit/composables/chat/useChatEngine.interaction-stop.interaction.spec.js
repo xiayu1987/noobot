@@ -134,15 +134,19 @@ describe("useChatEngine.interaction-stop: interaction", () => {
     // pending, but it is not an actionable backend turn that can be stopped.
     expect(canStop.value).toBe(false);
     expect(assistant?.pending).toBe(true);
+    // A missing interaction payload is neutral recovery evidence: no business
+    // terminal state, no lock release, and no user-facing diagnostic yet.
     expect(notify).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1200);
 
-    expect(sending.value).toBe(false);
+    // Missing interaction payload is recovery evidence, not an authoritative
+    // terminal response. The active Turn remains locked pending resolution.
+    expect(sending.value).toBe(true);
     expect(canStop.value).toBe(false);
-    expect(assistant?.pending).toBe(false);
-    expect(assistant?.statusLabel).toBe("chat.failed");
-    expect(assistant?.error).toBe("chat.interactionPayloadMissing");
+    expect(assistant?.pending).toBe(true);
+    expect(assistant?.statusLabel).toBe("");
+    expect(notify).toHaveBeenCalledTimes(1);
     expect(notify).toHaveBeenCalledWith({
       type: "error",
       message: "chat.interactionPayloadMissing",
@@ -173,8 +177,10 @@ describe("useChatEngine.interaction-stop: interaction", () => {
     const assistant = assistantMessage(activeSession);
     expect(sending.value).toBe(false);
     expect(canStop.value).toBe(false);
-    expect(assistant?.statusLabel).toBe("chat.failed");
-    expect(assistant?.error).toBe("chat.expiredRefreshFailed");
+    // Cache refresh failure may notify the user, but cannot overwrite the
+    // business terminal projection. Only TERMINAL_RESOLVED may do that.
+    expect(assistant?.statusLabel).toBe("chat.generated");
+    expect(assistant?.error).not.toBe("chat.expiredRefreshFailed");
     expect(notify).toHaveBeenCalledWith({
       type: "error",
       message: "chat.expiredRefreshFailed",

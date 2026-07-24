@@ -13,7 +13,16 @@ export function resolveRawAttachmentFile(fileItem) {
   return null;
 }
 
-export function attachmentFileToBase64(file) {
+export async function attachmentFileToBase64(file) {
+  // FileReader is browser-only. Blob/File also expose arrayBuffer(), which
+  // keeps serialization usable in workers, SSR and the Node test runtime.
+  if (typeof FileReader === "undefined" && typeof file?.arrayBuffer === "function") {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (typeof Buffer !== "undefined") return Buffer.from(bytes).toString("base64");
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return globalThis.btoa(binary);
+  }
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");

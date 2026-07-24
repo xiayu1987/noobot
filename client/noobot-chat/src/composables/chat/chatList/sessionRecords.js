@@ -56,6 +56,14 @@ export function mapSummaryToSession(item, { sessionTitleFromMessages, createConn
     updatedAt: item.updatedAt || "",
     caller: item.caller || "",
     depth: Number(item.depth || 0),
+    // Preserve terminal discovery metadata from the list summary. Refresh
+    // hydration consumes these fields to trigger the authoritative terminal
+    // read; dropping them here loses the only completion discovery signal.
+    turnLifecycleSnapshot: item.turnLifecycleSnapshot && typeof item.turnLifecycleSnapshot === "object"
+      ? item.turnLifecycleSnapshot
+      : null,
+    turnStatuses: Array.isArray(item.turnStatuses) ? item.turnStatuses : [],
+    turnTimings: Array.isArray(item.turnTimings) ? item.turnTimings : [],
   };
 }
 
@@ -69,6 +77,15 @@ export function mergeExistingSessionState(mappedSession = {}, existingSession = 
     : [];
   return {
     ...mappedSession,
+    // Prefer fresh summary discovery metadata, while retaining an existing
+    // snapshot when an older/partial list response omits it.
+    turnLifecycleSnapshot: mappedSession.turnLifecycleSnapshot || existingSession.turnLifecycleSnapshot || null,
+    turnStatuses: mappedSession.turnStatuses?.length
+      ? mappedSession.turnStatuses
+      : (Array.isArray(existingSession.turnStatuses) ? existingSession.turnStatuses : []),
+    turnTimings: mappedSession.turnTimings?.length
+      ? mappedSession.turnTimings
+      : (Array.isArray(existingSession.turnTimings) ? existingSession.turnTimings : []),
     loaded: existingSession.loaded === true || mappedSession.loaded === true,
     // A server summary means this is no longer a purely local draft. Do not
     // keep isLocal=true from the optimistic object, otherwise later refreshes

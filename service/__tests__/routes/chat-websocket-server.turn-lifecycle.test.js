@@ -21,12 +21,21 @@ function createAuthoritativeBot({ persistSummary = true, failureAt = "" } = {}) 
   const bot = {
     async applyTurnLifecycleEvent(input) {
       commitInputs.push(structuredClone(input));
-      const result = transitionTurnLifecycle(lifecycle, input);
+      if (input.terminalStatus && !persistSummary) {
+        return { applied: false, reason: "summary_persistence_failed", lifecycle };
+      }
+      const result = transitionTurnLifecycle(lifecycle, input.terminalStatus ? {
+        ...input,
+        summaryVersion: 7,
+        completionCommitId: input.completionCommitId || input.commandId,
+      } : input);
       if (result.applied) {
         lifecycle = result.lifecycle;
         committed.push(input.eventType);
       }
-      return result;
+      return input.terminalStatus && result.applied
+        ? { ...result, turnStatus: { version: 7, status: input.terminalStatus.command } }
+        : result;
     },
     async runSession({ sessionId, runConfig, eventListener }) {
       runCount += 1;
@@ -78,7 +87,10 @@ const payload = {
   message: "hello",
   turnScopeId: "turn-authoritative",
   commandId: "command-authoritative",
-  config: { turnScopeId: "turn-authoritative" },
+  config: {
+    turnScopeId: "turn-authoritative",
+    thinkingStartedAt: "2026-07-24T05:42:07.698Z",
+  },
 };
 
 test("authoritative lifecycle follows accepted -> running -> processed -> summary completed", async () => {
@@ -103,6 +115,12 @@ test("authoritative lifecycle follows accepted -> running -> processed -> summar
     const inputs = authoritative.commitInputs();
     assert.equal(inputs[0].createSessionIfAbsent, true);
     assert.equal(inputs[0].action, "send");
+    assert.equal(inputs[0].startedAt, payload.config.thinkingStartedAt);
+    assert.equal(turn.startedAt, payload.config.thinkingStartedAt);
+    const completedEnvelope = events.find((item) =>
+      item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.COMPLETED);
+    assert.equal(completedEnvelope.data.startedAt, payload.config.thinkingStartedAt);
+    assert.equal(Boolean(completedEnvelope.data.finishedAt), true);
     assert.equal(inputs.slice(1).some((input) => "createSessionIfAbsent" in input), false);
   } finally {
     await closeServer(server);
@@ -419,22 +437,24 @@ test("finalize recovery is idempotent across repeated service recovery attempts"
   apply({ turnScopeId: "turn-recover", commandId: "start", eventType: TURN_EVENT.ACTION_ACCEPTED, action: "send" });
   apply({ turnScopeId: "turn-recover", commandId: "running", eventType: TURN_EVENT.PROCESSING_STARTED, phase: "processing", executionState: "sending" });
   apply({ turnScopeId: "turn-recover", commandId: "processed", eventType: TURN_EVENT.PROCESSING_COMPLETED, phase: "completion", finalizeCommandId: "stable-finalize" });
-  let summaryWrites = 0;
   const bot = {
     async getTurnLifecycleSnapshot({ commandId }) {
       const turn = lifecycle.turns["turn-recover"];
       return { found: true, snapshot: { commandId, activeTurn: lifecycle.activeTurnScopeId ? turn : null } };
     },
-    async upsertTurnStatus() { summaryWrites += 1; return { turnStatus: { version: 4 } }; },
   };
-  const commitTurnLifecycle = async (input) => apply(input);
+  const commitTurnLifecycle = async (input) => apply(input.terminalStatus ? {
+    ...input,
+    summaryVersion: 4,
+    completionCommitId: input.completionCommitId || input.commandId,
+  } : input);
   const request = { bot, commitTurnLifecycle, userId: "u1", sessionId: "s1", commandId: "recover" };
   const first = await recoverTurnFinalize(request);
   const second = await recoverTurnFinalize(request);
   assert.equal(first.recovered, true);
   assert.equal(second.recovered, false);
   assert.equal(second.reason, "no_recoverable_finalize");
-  assert.equal(summaryWrites, 1);
+  assert.equal(lifecycle.turns["turn-recover"].summaryVersion, 4);
   assert.equal(lifecycle.turns["turn-recover"].state, "completed");
   assert.equal(lifecycle.turns["turn-recover"].revision, 4);
   assert.equal(lifecycle.sequence, 4);

@@ -149,20 +149,13 @@ describe("reconnectReplay support modules", () => {
 
     await vi.advanceTimersByTimeAsync(1200);
 
-    expect(applyRunStateEvent).toHaveBeenCalledWith({
-      type: SESSION_RUN_EVENT.LOCAL_FAILURE,
-      state: BackendChannelState.ERROR,
-      sessionId: "failed-s",
-      dialogProcessId: "dp-failed",
-      source: "expired_refresh_failed",
-    });
+    // Refresh failure is recovery/diagnostic evidence only. It must not
+    // manufacture an authoritative Turn terminal state.
+    expect(applyRunStateEvent).not.toHaveBeenCalled();
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
     expect(clearPendingInteraction).toHaveBeenCalledTimes(1);
-    expect(applyAssistantFailureState).toHaveBeenCalledWith(
-      targetAssistantMessage,
-      "translated:chat.expiredRefreshFailed",
-    );
+    expect(applyAssistantFailureState).not.toHaveBeenCalled();
     expect(emitSyntheticErrorConversationState).toHaveBeenCalledWith({
       sessionId: "failed-s",
       dialogProcessId: "dp-failed",

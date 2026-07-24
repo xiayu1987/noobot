@@ -72,6 +72,7 @@ export function createSessionLogWebSocketClient({ resolveWebSocketUrl = () => ""
     socket = new WebSocket(url);
     socket.onopen = () => {
       logDiagnostic("open", { queueLength: queue.length, inFlightLength: inFlight.length });
+      runtimeDiagnostic("frontend.sessionLogWs.open", { queueLength: queue.length, inFlightLength: inFlight.length });
       flush();
     };
     socket.onmessage = (raw) => {
@@ -81,12 +82,14 @@ export function createSessionLogWebSocketClient({ resolveWebSocketUrl = () => ""
     socket.onclose = (event) => {
       const restored = restoreInFlight();
       logDiagnostic("close", { code: event?.code, reason: event?.reason || "", queueLength: queue.length, restored });
+      runtimeDiagnostic("frontend.sessionLogWs.close", { code: event?.code || 0, reason: event?.reason || "", queueLength: queue.length, restored });
       socket = null;
       scheduleReconnect();
     };
     socket.onerror = () => {
       const restored = restoreInFlight();
       logDiagnostic("error", { queueLength: queue.length, restored });
+      runtimeDiagnostic("frontend.sessionLogWs.error", { queueLength: queue.length, restored });
       socket = null;
       scheduleReconnect();
     };
@@ -116,6 +119,23 @@ export function createSessionLogWebSocketClient({ resolveWebSocketUrl = () => ""
     connect();
     flush();
     return true;
+  }
+
+  // Transport diagnostics intentionally use the same structured session-log
+  // path as business diagnostics. This makes dropped/queued/reconnected
+  // frontend logs observable in runtime-events instead of only DevTools.
+  function runtimeDiagnostic(event, data = {}) {
+    const record = buildSessionLogRecord({
+      category: "debug",
+      level: "debug",
+      debugType: "session-log-ws",
+      event,
+      data: { event, ...data },
+    }, { source, includeTimestamp: true });
+    queue.push(record);
+    if (queue.length > MAX_QUEUE_SIZE) queue.splice(0, queue.length - MAX_QUEUE_SIZE);
+    connect();
+    flush();
   }
 
   function status() {

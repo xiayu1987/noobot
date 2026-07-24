@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { ERROR_CODE } from "../../../error/constants.js";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { execFile } from "node:child_process";
 import { buildDockerCommand } from "../../../sandbox/docker-sandbox.js";
 import { logWarn } from "../../../tracking/console/logger.js";
@@ -19,7 +20,7 @@ import { scriptRuntimeError } from "./script-errors.js";
 import { toolExecResult } from "./result-format.js";
 import { buildScriptExecutionMeta, toolFileBackedExecResult } from "./workspace-meta.js";
 
-const DOCKER_FORCE_KILL_GRACE_MS = 2000;
+const DOCKER_FORCE_KILL_GRACE_MS = TIME_THRESHOLDS.tools.processForceKillGraceMs;
 const DOCKER_CLEANUP_SCRIPT = `
 token=$1
 signal=$2

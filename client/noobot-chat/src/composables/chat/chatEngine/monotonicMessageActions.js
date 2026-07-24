@@ -130,7 +130,20 @@ export function createMonotonicMessageActions({
 
   function activeTurnRuntime() {
     const sessionId = sessionRuntimeId(activeSession?.value || activeSessionId?.value);
-    return resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId);
+    const canonicalSessionId = normalizeTrimmedString(
+      turnRuntimeRegistry?.value?.sessionAliases?.[sessionId] || sessionId,
+    );
+    let turnScopeId = normalizeTrimmedString(
+      turnRuntimeRegistry?.value?.sessions?.[canonicalSessionId]?.activeTurnScopeId,
+    );
+    if (!turnScopeId) {
+      const messages = Array.isArray(activeSession?.value?.messages) ? activeSession.value.messages : [];
+      for (let index = messages.length - 1; index >= 0; index -= 1) {
+        turnScopeId = getMessageTurnScopeId(messages[index]);
+        if (turnScopeId) break;
+      }
+    }
+    return resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId, turnScopeId);
   }
 
   function isActiveTurnInFlight() {

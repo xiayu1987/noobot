@@ -112,15 +112,17 @@ export function createTurnFinalizer({
       rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "stop_processing_completed" });
       return;
     }
+    const completionCommitId = `${stopCommandId}:completed`;
     const completed = await commitTurnLifecycle({
       userId: state.runMeta?.userId || "",
       sessionId: stoppedPartialAssistant.sessionId || state.runMeta?.sessionId || "",
       parentSessionId: state.runMeta?.parentSessionId || "",
       turnScopeId: stoppedPartialAssistant.turnScopeId || state.turnScopeId || "",
       dialogProcessId: stoppedPartialAssistant.dialogProcessId || state.runMeta?.dialogProcessId || "",
-      commandId: `${stopCommandId}:completed`,
+      commandId: completionCommitId,
       eventType: TURN_EVENT.STOP_COMPLETED,
       phase: TURN_PHASE.STOP,
+      completionCommitId,
       summaryVersion: Number(turnStatus?.version || 0),
     });
     if (!completed?.applied && !completed?.deduplicated) {
@@ -138,50 +140,43 @@ export function createTurnFinalizer({
   };
 
   const finalizeCompleted = async (state, { result = {}, commandId = "" } = {}) => {
-    const turnStatus = await persistTurnStatus({
-      runMeta: {
-        ...state.runMeta,
-        sessionId: result.sessionId || state.runMeta?.sessionId || "",
-        dialogProcessId: result.dialogProcessId || state.runMeta?.dialogProcessId || "",
-      },
-      command: "completed",
-      description: "本轮对话已正常完成",
-    });
-    if (!turnStatus) {
-      await commitTurnLifecycle({
-        userId: state.runMeta?.userId || "",
-        sessionId: result.sessionId || state.runMeta?.sessionId || "",
-        parentSessionId: state.runMeta?.parentSessionId || "",
-        turnScopeId: state.runMeta?.turnScopeId || state.turnScopeId || "",
-        dialogProcessId: result.dialogProcessId || state.runMeta?.dialogProcessId || "",
-        commandId: `${String(commandId || state.runMeta?.turnScopeId || "turn").trim()}:failed:completion`,
-        eventType: TURN_EVENT.FAILED,
-        phase: TURN_PHASE.COMPLETION,
-        failure: {
-          phase: TURN_PHASE.COMPLETION,
-          code: "session_summary_persistence_failed",
-          message: "session summary persistence failed",
-          retryable: true,
-        },
-      });
-      rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "completed" });
-      return;
-    }
+    const completionCommitId = `${String(commandId || state.runMeta?.turnScopeId || "turn").trim()}:completed`;
     const completed = await commitTurnLifecycle({
       userId: state.runMeta?.userId || "",
       sessionId: result.sessionId || state.runMeta?.sessionId || "",
       parentSessionId: state.runMeta?.parentSessionId || "",
       turnScopeId: state.runMeta?.turnScopeId || state.turnScopeId || "",
       dialogProcessId: result.dialogProcessId || state.runMeta?.dialogProcessId || "",
-      commandId: `${String(commandId || state.runMeta?.turnScopeId || "turn").trim()}:completed`,
+      commandId: completionCommitId,
       eventType: TURN_EVENT.COMPLETED,
       phase: TURN_PHASE.COMPLETION,
-      summaryVersion: Number(turnStatus?.version || 0),
+      completionCommitId,
+      terminalStatus: {
+        command: "completed",
+        description: "本轮对话已正常完成",
+      },
     });
     if (!completed?.applied && !completed?.deduplicated) {
+      await commitTurnLifecycle({
+        userId: state.runMeta?.userId || "",
+        sessionId: result.sessionId || state.runMeta?.sessionId || "",
+        parentSessionId: state.runMeta?.parentSessionId || "",
+        turnScopeId: state.runMeta?.turnScopeId || state.turnScopeId || "",
+        dialogProcessId: result.dialogProcessId || state.runMeta?.dialogProcessId || "",
+        commandId: `${completionCommitId}:failed`,
+        eventType: TURN_EVENT.FAILED,
+        phase: TURN_PHASE.COMPLETION,
+        failure: {
+          phase: TURN_PHASE.COMPLETION,
+          code: completed?.reason || "completion_transaction_failed",
+          message: "completion transaction failed",
+          retryable: true,
+        },
+      });
       rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "completed" });
       return;
     }
+    const turnStatus = completed.turnStatus;
     sendEvent("done", {
       sessionId: result.sessionId,
       answer: result.answer,

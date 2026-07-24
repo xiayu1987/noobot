@@ -110,6 +110,11 @@ export async function refreshFinalSessionDetail({
     }
     const mainSessionDoc = matchingSessionDoc || sessionDocs[0];
     const detailMessages = Array.isArray(mainSessionDoc?.messages) ? mainSessionDoc.messages : [];
+    const lifecycleSnapshot = mainSessionDoc?.turnLifecycleSnapshot || detail?.turnLifecycleSnapshot;
+    const committedTurn = [
+      lifecycleSnapshot?.activeTurn,
+      ...(Array.isArray(lifecycleSnapshot?.recentTerminalTurns) ? lifecycleSnapshot.recentTerminalTurns : []),
+    ].find((turn) => normalizeTrimmedString(turn?.turnScopeId) === completionEventScope.turnScopeId);
     logSessionEvent?.({
       category: "debug",
       level: "debug",
@@ -166,14 +171,8 @@ export async function refreshFinalSessionDetail({
       botMessage: summarizeFinalizeMessage(botMessage),
     });
 
-    // A successfully applied detail is the authority fact. Authority is derived
-    // solely from this event type by normalizeSessionRunEvent; never infer it
-    // from mutable message fields or from an adapter-specific return value.
-    applyRunStateEvent?.({
-      type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
-      ...completionEventScope,
-      source: "final_session_detail",
-    });
+    // Detail hydration is presentation-only. It must not settle the Turn;
+    // settlement belongs exclusively to the authoritative terminal service.
 
     refreshSessionConnectorsAsync?.(activeSession?.value?.id || doneSessionId);
     return true;
@@ -217,13 +216,8 @@ export async function refreshFinalSessionDetail({
       });
       return false;
     }
-    applyRunStateEvent?.({
-      type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED,
-      ...completionEventScope,
-      source: "final_session_detail",
-    });
-    // Runtime state is projected by LOCAL_FRONTEND_COMPLETION_FAILED above;
-    // this callback owns only the error payload/content.
+    // A detail failure is not a business terminal outcome. Keep it local to the
+    // message while terminal resolution performs authoritative reconciliation.
     if (currentMessage) {
       applyAssistantFailureState?.(currentMessage, loadDetailError);
     }
@@ -258,11 +252,6 @@ export async function finalizeStoppedSessionDetail({
     turnScopeId: normalizeTrimmedString(finalEventData?.turnScopeId || botMessage?.turnScopeId),
   };
   if (!sessionId) {
-    applyRunStateEvent?.({
-      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_FAILED,
-      ...scope,
-      source: "stopped_session_detail",
-    });
     return false;
   }
   try {
@@ -277,19 +266,8 @@ export async function finalizeStoppedSessionDetail({
     // to discard the reactive placeholder and inject a second synthetic one,
     // which broke its position, status-step updates, and last-message actions.
     applySessionDetail(detail, { preserveCurrentMessages: true, scrollToBottom: false });
-    applyRunStateEvent?.({
-      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED,
-      ...scope,
-      source: "stopped_session_detail",
-    });
     return true;
   } catch (error) {
-    applyRunStateEvent?.({
-      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_FAILED,
-      ...scope,
-      source: "stopped_session_detail",
-      error,
-    });
     return false;
   }
 }

@@ -16,7 +16,7 @@ afterEach(() => {
 });
 
 describe("useReconnectReplay", () => {
-  it("EV-06/FN-01: channel_state error finalizes terminal state", async () => {
+  it("EV-06/FN-01: channel_state error only requests authoritative terminal resolution", async () => {
     const { api, refs, mocks } = createFixture({ currentRun: { turnScopeId: "turn-e" } });
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
@@ -41,19 +41,15 @@ describe("useReconnectReplay", () => {
     const assistant = refs.activeSession.value.messages.find(
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-e",
     );
-    expect(assistant?.pending).toBe(false);
-    expect(assistant?.statusLabel).toBe("chat.failed");
-    expect(assistant?.error).toBe("boom");
-    expect(refs.sending.value).toBe(false);
-    expect(refs.interactionSubmitting.value).toBe(false);
-    expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
-      sessionId: "s-1",
-      dialogProcessId: "dp-e",
-    });
-    expect(mocks.chatWebSocketClient.clearStopRequested).toHaveBeenCalledTimes(1);
+    expect(assistant?.pending).toBe(true);
+    expect(assistant?.statusLabel).toBeUndefined();
+    expect(mocks.resolveTurnTerminalState).toHaveBeenCalledWith("s-1", "turn-e", { commandId: "", sequence: 3, source: "reconnect_replay" });
+    expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
+    expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
+    expect(mocks.chatWebSocketClient.clearStopRequested).not.toHaveBeenCalled();
   });
 
-  it("EV-04a: DONE without channel_state patches overlay clears replay sending state", async () => {
+  it("EV-04a: DONE without channel_state only requests authoritative terminal resolution", async () => {
     const { api, refs, mocks } = createFixture({ currentRun: { turnScopeId: "turn-done-only" } });
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
@@ -70,21 +66,14 @@ describe("useReconnectReplay", () => {
     const assistant = refs.activeSession.value.messages.find(
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-done-only",
     );
-    expect(assistant?.pending).toBe(false);
-    expect(assistant?.statusLabel).toBe("chat.generated");
-    expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1");
-    expect(mocks.chatList.applySessionDetail).toHaveBeenCalled();
-    expect(refs.sending.value).toBe(false);
-    expect(refs.canStop.value).toBe(false);
-    expect(refs.sending.value).toBe(false);
-    expect(refs.interactionSubmitting.value).toBe(false);
-    expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
-      sessionId: "s-1",
-      dialogProcessId: "dp-done-only",
-    });
+    expect(assistant?.pending).toBe(true);
+    expect(assistant?.statusLabel).toBeUndefined();
+    expect(mocks.resolveTurnTerminalState).toHaveBeenCalledWith("s-1", "turn-done-only", { commandId: "", sequence: 2, source: "reconnect_replay" });
+    expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
+    expect(mocks.chatList.applySessionDetail).not.toHaveBeenCalled();
   });
 
-  it("EV-04: channel_state completed clears replay sending state", async () => {
+  it("EV-04: channel_state completed remains notification-only", async () => {
     const { api, refs, mocks } = createFixture({ currentRun: { turnScopeId: "turn-done" } });
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
@@ -108,18 +97,14 @@ describe("useReconnectReplay", () => {
     const assistant = refs.activeSession.value.messages.find(
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-done",
     );
-    expect(assistant?.pending).toBe(false);
-    expect(assistant?.statusLabel).toBe("chat.generated");
-    expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1");
-    expect(mocks.chatList.applySessionDetail).toHaveBeenCalled();
-    expect(refs.sending.value).toBe(false);
-    expect(refs.canStop.value).toBe(false);
-    expect(refs.sending.value).toBe(false);
-    expect(refs.interactionSubmitting.value).toBe(false);
-    expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
-      sessionId: "s-1",
-      dialogProcessId: "dp-done",
-    });
+    expect(assistant?.pending).toBe(true);
+    expect(assistant?.statusLabel).toBeUndefined();
+    // DONE and channel_state=completed are both terminal notifications; each
+    // independently schedules the authoritative read for the same Turn.
+    expect(mocks.resolveTurnTerminalState).toHaveBeenCalledTimes(2);
+    expect(mocks.resolveTurnTerminalState).toHaveBeenLastCalledWith("s-1", "turn-done", { commandId: "", sequence: 3, source: "reconnect_replay" });
+    expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
+    expect(mocks.chatList.applySessionDetail).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -166,7 +151,7 @@ describe("useReconnectReplay", () => {
     expect(refs.canStop.value).toBe(false);
   });
 
-  it("EV-05: channel_state stopped sets stopped status", async () => {
+  it("EV-05: channel_state stopped only requests authoritative terminal resolution", async () => {
     const { api, refs, mocks } = createFixture({ currentRun: { turnScopeId: "turn-stopped" } });
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
@@ -190,27 +175,15 @@ describe("useReconnectReplay", () => {
     const assistant = refs.activeSession.value.messages.find(
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-stopped",
     );
-    expect(assistant?.pending).toBe(false);
-    expect(assistant?.statusLabel).toBe("chat.stopped");
-    // Replayed backend facts update the message projection, but never own the
-    // global interaction lock. Persisted turn status comes from session detail.
-    expect(refs.sending.value).toBe(false);
-    expect(refs.interactionSubmitting.value).toBe(false);
-    expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
-      sessionId: "s-1",
-      dialogProcessId: "dp-stopped",
-    });
-    expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1", {
-      source: "userStoppedFinalStatus",
-      force: true,
-      reuseRecentlyLoaded: false,
-    });
-    expect(mocks.chatList.applySessionDetail).toHaveBeenCalledWith(
-      expect.anything(),
-      { preserveCurrentMessages: true, scrollToBottom: false },
-    );
-    expect(refs.sending.value).toBe(false);
-    expect(refs.canStop.value).toBe(false);
+    expect(assistant?.pending).toBe(true);
+    expect(assistant?.statusLabel).toBeUndefined();
+    // USER_STOPPED is transport replay data, not a terminal notification; only
+    // the terminal channel-state triggers the single authoritative read.
+    expect(mocks.resolveTurnTerminalState).toHaveBeenCalledTimes(1);
+    expect(mocks.resolveTurnTerminalState).toHaveBeenLastCalledWith("s-1", "turn-stopped", { commandId: "", sequence: 3, source: "reconnect_replay" });
+    expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
+    expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
+    expect(mocks.chatList.applySessionDetail).not.toHaveBeenCalled();
   });
 
   it("RC-04: terminal event blocks subsequent DELTA mutation", async () => {

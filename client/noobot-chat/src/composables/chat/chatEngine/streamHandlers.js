@@ -9,7 +9,6 @@ import {
   getMessageTurnScopeId,
   normalizeTurnMeta,
 } from "../../infra/messageIdentity";
-import { promoteSessionIdentityToBackendId } from "../../infra/sessionIdentity";
 import { applyDoneMessagesPatch } from "./messagePatch";
 import {
   normalizeExecutionLogForRealtime,
@@ -26,7 +25,6 @@ import { mergeAttachments } from "../../infra/dialogProcessChain";
 import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger";
 import { reduceActivityTimeline } from "./activityTimeline";
 import { buildToolTimelineFromLegacyLogs, mergeToolTimelines } from "./toolTimeline";
-import { promoteSessionTurnUiStates } from "./turnUiStore";
 
 function markFirstStreamEvent(botMessage) {
   if (!botMessage) return;
@@ -326,20 +324,10 @@ export function handleDoneStreamEvent({
       notifyFirstResponse();
     }
   }
-  const returnedId = data?.sessionId || activeSession.value.backendSessionId;
-  if (returnedId) {
-    activeSession.value.loaded = true;
-    const previousSessionId = String(activeSession.value.id || "").trim();
-    const promotionResult = promoteSessionIdentityToBackendId({
-      sessionItem: activeSession.value,
-      backendSessionId: returnedId,
-      activeSessionId: activeSessionId.value,
-    });
-    if (promotionResult.changed) {
-      promoteSessionTurnUiStates(previousSessionId, String(returnedId).trim());
-    }
-    activeSessionId.value = promotionResult.nextActiveSessionId;
-  }
+  // Stream/DONE payloads are transport observations, not Session identity
+  // reconciliation. List/detail reconciliation owns the one-time promotion
+  // from an optimistic local Session id to the canonical backend id.
+  activeSession.value.loaded = true;
   applyDoneMessagesPatch({
     data,
     botMessage,

@@ -15,7 +15,7 @@ import {
   reconcileSessionObject,
   revokeMessagePreviewUrls,
 } from "./sessionRecords";
-import { removeSessionRuntime, sessionRuntimeId } from "../sessionRunStateMachine/turnRuntimeRegistry";
+import { promoteSessionRuntimeIdentity, removeSessionRuntime, sessionRuntimeId } from "../sessionRunStateMachine/turnRuntimeRegistry";
 import { clearSessionTurnUiStates } from "../chatEngine/turnUiStore";
 
 export function createSessionListActions({
@@ -123,6 +123,14 @@ export function createSessionListActions({
       if (!data.ok) throw new Error(data.error || translate("chat.getSessionsFailed"));
 
       const existingSessionsById = buildSessionIdentityMap(sessions.value);
+      const optimisticSessionByTurnScope = new Map();
+      for (const existing of sessions.value) {
+        if (existing?.isLocal !== true) continue;
+        for (const message of [...(existing?.messages || []), ...(existing?.rawMessages || [])]) {
+          const scope = String(message?.turnScopeId || "").trim();
+          if (scope) optimisticSessionByTurnScope.set(scope, existing);
+        }
+      }
       const nextSessions = (data.sessions || [])
         .filter((sessionItem) => String(sessionItem?.caller || "") === RoleEnum.USER)
         .sort(
@@ -132,9 +140,21 @@ export function createSessionListActions({
         )
         .map((sessionItem) => {
           const mappedSession = mapSummaryToSession(sessionItem, { sessionTitleFromMessages, createConnectorPanelState });
+          const discoveryScopes = [
+            sessionItem?.turnLifecycleSnapshot?.activeTurn?.turnScopeId,
+            ...(sessionItem?.turnLifecycleSnapshot?.recentTerminalTurns || []).map((turn) => turn?.turnScopeId),
+          ].map((value) => String(value || "").trim()).filter(Boolean);
+          const optimisticMatch = discoveryScopes.map((scope) => optimisticSessionByTurnScope.get(scope)).find(Boolean) || null;
+          const existing = existingSessionsById.get(String(mappedSession.id || "")) || optimisticMatch;
+          if (optimisticMatch && turnRuntimeRegistry?.value) {
+            const previousId = sessionRuntimeId(optimisticMatch);
+            const promotion = promoteSessionRuntimeIdentity(turnRuntimeRegistry.value, previousId, mappedSession.id);
+            if (promotion.applied) turnRuntimeRegistry.value = { ...turnRuntimeRegistry.value };
+            if (String(activeSessionId.value || "") === previousId) activeSessionId.value = mappedSession.id;
+          }
           return reconcileSessionObject(
             mappedSession,
-            existingSessionsById.get(String(mappedSession.id || "")) || null,
+            existing,
             { sessionTitleFromMessages },
           );
         });

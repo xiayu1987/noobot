@@ -290,20 +290,23 @@ describe("useReconnectReplay", () => {
     expect(mocks.clearPendingInteraction).toHaveBeenCalled();
   });
 
-  it("EV-03c: channel_state completed clears obsolete interaction for same turn", async () => {
+  it("EV-03c: channel_state completed only requests authoritative terminal resolution", async () => {
     const { api, mocks } = createFixture();
 
     await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
       sessionId: "s-1",
       dialogProcessId: "dp-int3",
+      turnScopeId: "turn-int3",
       state: "completed",
       seq: 12,
     });
 
-    expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
-      sessionId: "s-1",
-      dialogProcessId: "dp-int3",
-    });
+    expect(mocks.resolveTurnTerminalState).toHaveBeenCalledWith(
+      "s-1",
+      "turn-int3",
+      { commandId: "", sequence: 12, source: "reconnect_replay" },
+    );
+    expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
   });
 
   it("EV-03d: channel_state interaction_pending restores pending interaction payload", async () => {

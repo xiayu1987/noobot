@@ -31,6 +31,20 @@ import {
   sessionRuntimeId,
 } from "../sessionRunStateMachine/turnRuntimeRegistry";
 
+function resolveStopTurnScopeId({ session, turnRuntimeRegistry, preferredTurnScopeId = "" } = {}) {
+  const preferred = normalizeTrimmedString(preferredTurnScopeId);
+  if (preferred) return preferred;
+  const messages = Array.isArray(session?.messages) ? session.messages : [];
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const scope = normalizeTrimmedString(getMessageTurnScopeId(messages[index]));
+    if (scope) return scope;
+  }
+  const sessionId = sessionRuntimeId(session);
+  const registry = turnRuntimeRegistry?.value || turnRuntimeRegistry;
+  const canonicalSessionId = normalizeTrimmedString(registry?.sessionAliases?.[sessionId] || sessionId);
+  return normalizeTrimmedString(registry?.sessions?.[canonicalSessionId]?.activeTurnScopeId);
+}
+
 function resolveStopTarget({ activeSession, turnRuntimeRegistry, executionId = "" } = {}) {
   const requestedExecutionId = normalizeTrimmedString(executionId);
   if (requestedExecutionId) {
@@ -52,9 +66,10 @@ function resolveStopTarget({ activeSession, turnRuntimeRegistry, executionId = "
   }
   const session = activeSession?.value || null;
   const sessionId = sessionRuntimeId(session);
+  const turnScopeId = resolveStopTurnScopeId({ session, turnRuntimeRegistry });
   return {
     execution: null,
-    turnRuntime: resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId),
+    turnRuntime: resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId, turnScopeId),
     session,
   };
 }
@@ -69,14 +84,24 @@ export function handleStopConfirmationTimeout({
   stopScope = {},
 } = {}) {
   const timeoutSessionId = sessionRuntimeId(activeSession?.value);
-  const timeoutTurn = resolveSessionTurnRuntime(turnRuntimeRegistry?.value, timeoutSessionId);
+  const timeoutTurnScopeId = resolveStopTurnScopeId({
+    session: activeSession?.value,
+    turnRuntimeRegistry,
+    preferredTurnScopeId: stopScope?.turnScopeId,
+  });
+  const timeoutTurn = resolveSessionTurnRuntime(
+    turnRuntimeRegistry?.value,
+    timeoutSessionId,
+    timeoutTurnScopeId,
+  );
   if (!timeoutTurn || timeoutTurn.terminal) return;
   const pendingAssistantMessage = findTargetAssistantMessage?.() ||
     [...(activeSession?.value?.messages || [])]
       .reverse()
       .find(
         (messageItem) => isInFlightAssistantMessage(messageItem, {
-          turnStatuses: activeSession?.value?.turnStatuses,
+          registry: turnRuntimeRegistry?.value,
+          sessionId: timeoutSessionId,
         }),
       );
   const expectedDialogProcessId = normalizeTrimmedString(stopScope?.dialogProcessId);
@@ -107,8 +132,7 @@ export function handleStopConfirmationTimeout({
     expectedTurnScopeId || getMessageTurnScopeId(pendingAssistantMessage);
   const finalizedAtMs = nowMs();
   applyRunStateEvent?.({
-      type: SESSION_RUN_EVENT.LOCAL_FAILURE,
-      state: BackendChannelState.ERROR,
+      type: SESSION_RUN_EVENT.LOCAL_RESET,
       sessionId: String(activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
       dialogProcessId: fallbackDialogProcessId,
       turnScopeId: fallbackTurnScopeId,
@@ -116,7 +140,7 @@ export function handleStopConfirmationTimeout({
       updatedAtMs: finalizedAtMs,
       source: "stop_request_timeout",
       sourceEvent: "stop_request_timeout",
-      error: new Error("stop request timed out before backend confirmation"),
+      reason: "stop request timed out before backend confirmation",
   });
 }
 
@@ -228,11 +252,11 @@ export function stopSending({
     applyRunStateEvent(stopEvent);
   }
   const applyStopRequestFailure = (error) => {
-    // Failure is likewise projected from the scoped LOCAL_FAILURE event.
+    // The stop command was not accepted, so release only the optimistic local
+    // stop mutex. This is not evidence that the backend Turn failed.
     if (applyRunStateEvent) {
       applyRunStateEvent({
-        type: SESSION_RUN_EVENT.LOCAL_FAILURE,
-        state: BackendChannelState.ERROR,
+        type: SESSION_RUN_EVENT.LOCAL_RESET,
         sessionId: stopPayload.sessionId,
         dialogProcessId: stopPayload.dialogProcessId,
         turnScopeId: stopPayload.turnScopeId,

@@ -357,10 +357,11 @@ describe("useChatSession reconnect replay", () => {
     expect(oldAssistant.content).toBe("old keep");
     expect(newAssistant.content).toBe("new final answer");
     expect(newAssistant.modelAlias).toBe("alias-1");
-    // A DONE message snapshot owns durable content only. Without an
-    // authoritative currentRun/detail lifecycle it must not manufacture
-    // authoritative_detail_applied or mutate runtime/pending state.
-    expect(authFetch).not.toHaveBeenCalled();
+    // DONE is only a terminal-resolution notification. It queries the single
+    // authoritative endpoint; this unresolved fixture must not manufacture a
+    // terminal registry state or clear pending presentation.
+    expect(authFetch).toHaveBeenCalledTimes(2);
+    expect(authFetch.mock.calls.every(([url]) => url.includes("/turns/turn-new/terminal"))).toBe(true);
     expect(store.turnRuntimeRegistry.sessions).toEqual({});
     expect(newAssistant.pending).toBe(true);
   });

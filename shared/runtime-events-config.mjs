@@ -33,6 +33,7 @@ export const RUNTIME_EVENTS_CONFIG_ENVS = deepFreeze({
     frontendStopContinueDebug: "NOOBOT_RUNTIME_EVENT_FRONTEND_STOP_CONTINUE_DEBUG",
     frontendReconnectTimingDebug: "NOOBOT_RUNTIME_EVENT_FRONTEND_RECONNECT_TIMING_DEBUG",
     frontendThinkingReplayDebug: "NOOBOT_RUNTIME_EVENT_FRONTEND_THINKING_REPLAY_DEBUG",
+    frontendTerminalResolutionDebug: "NOOBOT_RUNTIME_EVENT_FRONTEND_TERMINAL_RESOLUTION_DEBUG",
     agentProxyRouteDebug: "NOOBOT_RUNTIME_EVENT_AGENT_PROXY_ROUTE_DEBUG",
     workflowDiagnosticsDebug: "NOOBOT_RUNTIME_EVENT_WORKFLOW_DIAGNOSTICS_DEBUG",
     frontendLifecycleLog: "NOOBOT_RUNTIME_EVENT_FRONTEND_LIFECYCLE_LOG",
@@ -60,15 +61,19 @@ export const RUNTIME_EVENTS_CONFIG_DEFAULTS = deepFreeze({
     transportLog: true,
     agentProxyLog: true,
     systemLog: true,
-    stateMachineDebug: false,
+    stateMachineDebug: true,
     resendDebug: false,
     stopDebug: false,
-    sessionLogWsDebug: false,
+    // Keep session-log transport diagnostics available while frontend
+    // lifecycle recovery is under investigation. Environment overrides remain
+    // authoritative in deployed environments.
+    sessionLogWsDebug: true,
     frontendStopContinueDebug: false,
-    frontendReconnectTimingDebug: false,
+    frontendReconnectTimingDebug: true,
     // Temporarily enabled by default while refreshed thinking-detail loading
     // and visibility projection are under active investigation.
-    frontendThinkingReplayDebug: false,
+    frontendThinkingReplayDebug: true,
+    frontendTerminalResolutionDebug: true,
     agentProxyRouteDebug: false,
     // Temporarily enabled by default while workflow/sub-agent projection and
     // completion-source diagnostics are under active investigation.

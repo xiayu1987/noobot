@@ -54,7 +54,7 @@ describe("useChatEngine.interaction-stop: connector", () => {
 
     await engine.send();
 
-    expect(upsertConnectedConnectorInPanelState).toHaveBeenCalledWith(activeSession.value, {
+    expect(upsertConnectedConnectorInPanelState).toHaveBeenCalledWith(expect.any(Object), {
       connectorType: "email",
       connectorName: "example_email",
       status: "connected",

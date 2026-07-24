@@ -56,11 +56,12 @@ import {
 } from "../infra/messageIdentity";
 import {
   BackendChannelState,
-  BackendTerminalStates,
   clearRememberedStopRequests,
   evaluateSessionRunState,
   FrontendRunState,
   SESSION_RUN_EVENT,
+  isAuthoritativeTerminalState,
+  isLegacyTerminalDiscoveryState,
 } from "./sessionRunStateMachine";
 import { setStateMachineDebugLogSink } from "./debug/stateMachineLogger";
 import { setResendDebugLogSink } from "./debug/resendDebugLogger";
@@ -72,6 +73,8 @@ import {
   logThinkingReplayDebug,
   setThinkingReplayDebugLogSink,
 } from "./debug/thinkingReplayDebugLogger";
+import { setTerminalResolutionDebugLogSink } from "./debug/terminalResolutionDebugLogger";
+import { findCanonicalTurnTiming } from "./sessionRunStateMachine/turnTiming";
 import {
   resolveSessionTurnRuntime,
   selectSessionTurnRuntime,
@@ -116,8 +119,35 @@ export function useChatSession({
   const conversationStateSnapshot = ref({});
   const conversationStateTimeline = ref([]);
   const pendingStoppedSummaryReconciliations = new Map();
+  const pendingTerminalResolutionDiscoveries = new Map();
+  let resolveDiscoveredTerminalTurn = null;
   function resolveActiveSessionIdentity() {
-    return String(activeSession.value?.backendSessionId || activeSession.value?.sessionId || activeSession.value?.id || activeSessionId.value || "").trim();
+    // Registry, lifecycle snapshots and terminal resolution are keyed by the
+    // backend Session identity. activeSessionId may intentionally remain the
+    // optimistic/local UI key after refresh or during first-send promotion.
+    const sessionId = String(
+      activeSession.value?.backendSessionId
+      || activeSession.value?.sessionId
+      || activeSessionId.value
+      || activeSession.value?.id
+      || "",
+    ).trim();
+    return String(turnRuntimeRegistry.value?.sessionAliases?.[sessionId] || sessionId).trim();
+  }
+
+  function resolveActiveTurnScopeIdentity() {
+    const sessionId = resolveActiveSessionIdentity();
+    const canonicalSessionId = String(
+      turnRuntimeRegistry.value?.sessionAliases?.[sessionId] || sessionId,
+    ).trim();
+    const activeScope = String(
+      turnRuntimeRegistry.value?.sessions?.[canonicalSessionId]?.activeTurnScopeId || "",
+    ).trim();
+    if (activeScope) return activeScope;
+    // Message order/status is a display projection, not Turn identity.  If the
+    // canonical bucket has no active pointer there is no current runtime for the
+    // Session-level action mutex.
+    return "";
   }
 
   function createTurnScopeId() {
@@ -128,15 +158,126 @@ export function useChatSession({
 
   function hydrateSessionLifecycle(sessionItem) {
     const snapshot = sessionItem?.turnLifecycleSnapshot;
+    const sessionId = sessionRuntimeId(sessionItem);
+    logThinkingReplayDebug("frontend.lifecycle.hydrateStarted", {
+      requestedSessionId: String(sessionItem?.sessionId || "").trim(),
+      runtimeSessionId: sessionId,
+      snapshotSessionId: String(snapshot?.sessionId || "").trim(),
+      snapshotSequence: Number(snapshot?.sequence || 0),
+      activeTurnScopeId: String(snapshot?.activeTurnScopeId || "").trim(),
+      recentTerminalCount: Array.isArray(snapshot?.recentTerminalTurns) ? snapshot.recentTerminalTurns.length : 0,
+      turnTimingsCount: Array.isArray(sessionItem?.turnTimings) ? sessionItem.turnTimings.length : 0,
+    });
     if (snapshot && typeof snapshot === "object") {
+      // A snapshot is only discovery metadata for terminal Turns. Schedule the
+      // authoritative read independently of whether its non-terminal runtime
+      // projection is applicable (older snapshots may intentionally lack the
+      // complete terminal commit required by the current protocol).
+      const candidates = [snapshot.activeTurn, ...(Array.isArray(snapshot.recentTerminalTurns) ? snapshot.recentTerminalTurns : [])]
+        .filter((turn) => {
+          // Refresh has no guarantee that the snapshot was captured after the
+          // backend committed the terminal state.  The active Turn is therefore
+          // also a discovery trigger; the terminal service decides whether it
+          // is already resolved and supplies retry guidance otherwise.
+          if (!turn || !getMessageTurnScopeId(turn) && !turn?.turnScopeId) return false;
+          return turn === snapshot.activeTurn || isAuthoritativeTerminalState(turn?.state);
+        })
+        .sort((left, right) => Number(right?.sequence || right?.revision || 0) - Number(left?.sequence || left?.revision || 0));
+      // Terminal discovery must not depend on the selected Session view being
+      // ready. During refresh the summary can arrive before activeSession has
+      // resolved its backend identity; gating here would permanently lose the
+      // only trigger for the authoritative terminal read.
+      if (sessionId && candidates[0]) {
+        const turn = candidates[0];
+        scheduleTerminalResolution(sessionId, getMessageTurnScopeId(turn) || turn?.turnScopeId, {
+          ...turn,
+          source: turn === snapshot.activeTurn ? "snapshot_active_turn" : "snapshot_terminal_turn",
+        });
+      }
       const result = chatStore.applyTurnLifecycleSnapshot(snapshot);
-      if (result?.applied || result?.deduplicated || result?.reason === "stale_snapshot") return result;
+      logThinkingReplayDebug("frontend.lifecycle.hydrateApplied", {
+        requestedSessionId: String(sessionItem?.sessionId || "").trim(),
+        runtimeSessionId: sessionId,
+        snapshotSessionId: String(snapshot?.sessionId || "").trim(),
+        candidateTurnScopeId: String(candidates[0]?.turnScopeId || "").trim(),
+        candidateState: String(candidates[0]?.state || "").trim(),
+        candidateStartedAt: candidates[0]?.startedAt || "",
+        candidateFinishedAt: candidates[0]?.finishedAt || "",
+        resultApplied: result?.applied === true,
+        resultReason: result?.reason || "",
+      });
+      // Apply the snapshot before the second local observation. A terminal GET
+      // can finish while the refresh reducer is still materializing the
+      // Session bucket; the coordinator will reuse its cached response and
+      // project it now that the canonical bucket is available.
+      if (sessionId && candidates[0]) {
+        const turn = candidates[0];
+        const postHydrateMetadata = {
+          ...turn,
+          source: "snapshot_post_hydrate",
+        };
+        Promise.resolve().then(() => scheduleTerminalResolution(
+          sessionId,
+          getMessageTurnScopeId(turn) || turn?.turnScopeId,
+          postHydrateMetadata,
+        ));
+      }
+      return result;
     }
-    return chatStore.hydrateSessionTurnRuntime(sessionItem);
+    // Some refresh/detail responses contain only persisted turnStatuses. These
+    // rows are discovery metadata, never runtime facts: feed the newest terminal
+    // identity into the same authoritative resolver used by snapshots/realtime.
+    const terminalStatus = (Array.isArray(sessionItem?.turnStatuses) ? sessionItem.turnStatuses : [])
+      .filter((turn) => isLegacyTerminalDiscoveryState(turn?.status || turn?.state))
+      .sort((left, right) => {
+        const versionDelta = Number(right?.sequence || right?.revision || 0)
+          - Number(left?.sequence || left?.revision || 0);
+        if (versionDelta) return versionDelta;
+        return String(right?.updatedAt || right?.createdAt || "")
+          .localeCompare(String(left?.updatedAt || left?.createdAt || ""));
+      })[0];
+    if (sessionId && terminalStatus) {
+      scheduleTerminalResolution(
+        sessionId,
+        getMessageTurnScopeId(terminalStatus) || terminalStatus?.turnScopeId,
+        { ...terminalStatus, source: "turn_status_discovery" },
+      );
+      return { applied: false, reason: "terminal_resolution_scheduled" };
+    }
+    return { applied: false, reason: "terminal_discovery_missing" };
   }
 
-  // Prefer the authoritative lifecycle snapshot. Legacy turnStatuses remain a
-  // compatibility fallback for summaries created before schema version 6.
+  function scheduleTerminalResolution(sessionId, turnScopeId, metadata = {}) {
+    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedTurnScopeId = String(turnScopeId || "").trim();
+    if (!normalizedSessionId || !normalizedTurnScopeId) return;
+    const key = `${normalizedSessionId}::${normalizedTurnScopeId}`;
+    const resolutionMetadata = { ...metadata };
+    logThinkingReplayDebug("frontend.lifecycle.terminalDiscoveryScheduled", {
+      sessionId: normalizedSessionId,
+      turnScopeId: normalizedTurnScopeId,
+      source: resolutionMetadata.source || "",
+      revision: Number(resolutionMetadata.revision || 0),
+      sequence: Number(resolutionMetadata.sequence || 0),
+      state: resolutionMetadata.state || "",
+      executionState: resolutionMetadata.executionState || "",
+      startedAt: resolutionMetadata.startedAt || "",
+      finishedAt: resolutionMetadata.finishedAt || "",
+      resolverReady: Boolean(resolveDiscoveredTerminalTurn),
+    });
+    if (resolveDiscoveredTerminalTurn) {
+      void resolveDiscoveredTerminalTurn(normalizedSessionId, normalizedTurnScopeId, resolutionMetadata);
+      return;
+    }
+    pendingTerminalResolutionDiscoveries.set(key, {
+      sessionId: normalizedSessionId,
+      turnScopeId: normalizedTurnScopeId,
+      metadata: resolutionMetadata,
+    });
+  }
+
+  // Snapshot and persisted status rows are discovery inputs only. Both converge
+  // on the same authoritative terminal service and neither writes runtime state.
   for (const sessionItem of sessions.value) {
     hydrateSessionLifecycle(sessionItem);
     chatStore.pruneTerminalTurns({
@@ -148,8 +289,8 @@ export function useChatSession({
   // Reconcile replacements, refreshes, reconnects, and non-active sessions
   // from the lifecycle protocol; message order is never consulted.
   watch(
-    sessions,
-    (sessionItems) => {
+    [sessions, activeSessionId],
+    ([sessionItems]) => {
       for (const sessionItem of Array.isArray(sessionItems) ? sessionItems : []) {
         hydrateSessionLifecycle(sessionItem);
         chatStore.pruneTerminalTurns({
@@ -163,8 +304,9 @@ export function useChatSession({
 
   const composerActionState = computed(() => {
     const sessionId = resolveActiveSessionIdentity();
-    const turn = resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionId);
-    const runtimeView = selectSessionTurnRuntime(turnRuntimeRegistry.value, sessionId);
+    const turnScopeId = resolveActiveTurnScopeIdentity();
+    const turn = resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionId, turnScopeId);
+    const runtimeView = selectSessionTurnRuntime(turnRuntimeRegistry.value, sessionId, turnScopeId);
     const displayState = runtimeView.displayState;
     const userStopped = turn?.terminal === "user_stopped";
     const actionLocked = runtimeView.sending === true;
@@ -192,7 +334,11 @@ export function useChatSession({
 
   // UI runtime state always follows the selected session's registry projection.
   const activeSessionSending = computed(() =>
-    selectSessionTurnRuntime(turnRuntimeRegistry.value, resolveActiveSessionIdentity()).sending,
+    selectSessionTurnRuntime(
+      turnRuntimeRegistry.value,
+      resolveActiveSessionIdentity(),
+      resolveActiveTurnScopeIdentity(),
+    ).sending,
   );
   const activeSessionCanStop = computed(() => composerActionState.value.canStop === true);
 
@@ -200,7 +346,44 @@ export function useChatSession({
   // stream, reconnect and finalization) submits here so a Registry transition
   // is projected to messages exactly once.
   const submitTurnRuntimeEvent = (event) => {
-    const result = chatStore.applyTurnRuntimeEvent(event);
+    const requestedSessionId = String(event?.sessionId || "").trim();
+    const requestedTurnScopeId = String(event?.turnScopeId || "").trim();
+    const owningSession = (Array.isArray(sessions.value) ? sessions.value : []).find(
+      (item) => sessionRuntimeId(item) === requestedSessionId,
+    );
+    const canonicalTiming = findCanonicalTurnTiming(owningSession, requestedTurnScopeId);
+    // Reconnect transport events do not carry lifecycle timing. Join the
+    // persisted Session timing at the single Registry ingress so a restored
+    // Turn never derives its clock from transport createdAtMs.
+    const timedEvent = canonicalTiming
+      ? {
+        ...event,
+        startedAt: canonicalTiming.thinkingStartedAt || event?.startedAt || "",
+        finishedAt: canonicalTiming.thinkingFinishedAt || event?.finishedAt || "",
+        thinkingStartedAt: canonicalTiming.thinkingStartedAt || event?.thinkingStartedAt || "",
+        thinkingFinishedAt: canonicalTiming.thinkingFinishedAt || event?.thinkingFinishedAt || "",
+        canonicalTimingObserved: true,
+      }
+      : event;
+    const result = chatStore.applyTurnRuntimeEvent(timedEvent);
+    const selectedSessionId = resolveActiveSessionIdentity();
+    const activeBucket = turnRuntimeRegistry.value?.sessions?.[selectedSessionId] || null;
+    logThinkingReplayDebug("frontend.lifecycle.runtimeConsumed", {
+      sessionId: requestedSessionId || selectedSessionId,
+      requestedSessionId,
+      selectedSessionId,
+      eventTurnScopeId: String(event?.turnScopeId || "").trim(),
+      eventDialogProcessId: String(event?.dialogProcessId || "").trim(),
+      eventType: String(event?.type || event?.eventType || "").trim(),
+      eventState: String(event?.state || event?.backendState || "").trim(),
+      resultApplied: result?.applied === true,
+      resultReason: String(result?.reason || "").trim(),
+      canonicalSessionId: String(result?.canonicalSessionId || result?.turn?.sessionId || "").trim(),
+      canonicalTurnScopeId: String(result?.turn?.turnScopeId || "").trim(),
+      canonicalState: String(result?.turn?.state || "").trim(),
+      canonicalTerminal: result?.turn?.terminal || null,
+      activeBucketTurnScopeId: String(activeBucket?.activeTurnScopeId || "").trim(),
+    });
     // Runtime events have one projection contract regardless of whether they
     // arrive through the single-event composer/finalization path or reconnect's
     // batch path.  In particular, a backend event may atomically promote an
@@ -284,77 +467,47 @@ export function useChatSession({
         updatedAt,
     });
 
-    // The realtime event acknowledges that the backend persisted the stop; it
-    // is not a second terminal source. Re-read the authoritative turnStatuses
-    // for the exact active turn, including when this page was created by a
-    // refresh and therefore has no original send() loop left to finalize it.
+    // The realtime event is only a trigger for terminal resolution. It must
+    // never settle a Turn from the legacy turnStatuses projection.
     if (state.toLowerCase() === "user_stopped" && sessionId && (turnScopeId || dialogProcessId)) {
       const currentSessionId = resolveActiveSessionIdentity();
-      const currentTurn = resolveSessionTurnRuntime(turnRuntimeRegistry.value, currentSessionId);
+      const currentTurn = resolveSessionTurnRuntime(
+        turnRuntimeRegistry.value,
+        currentSessionId,
+        resolveActiveTurnScopeIdentity(),
+      );
       const identityMatches = sessionId === currentSessionId && Boolean(currentTurn) && (
         (turnScopeId && currentTurn.turnScopeId === turnScopeId) ||
         (!turnScopeId && dialogProcessId && currentTurn.dialogProcessId === dialogProcessId)
       );
       const reconciliationKey = `${sessionId}::${turnScopeId || dialogProcessId}`;
       if (identityMatches && !currentTurn.terminal && !pendingStoppedSummaryReconciliations.has(reconciliationKey)) {
-        const botMessage = (activeSession.value?.messages || []).find((messageItem) =>
-          getMessageRole(messageItem) === RoleEnum.ASSISTANT && (
-            (turnScopeId && getMessageTurnScopeId(messageItem) === turnScopeId) ||
-            (!turnScopeId && getMessageDialogProcessId(messageItem) === dialogProcessId)
-          ));
-        const reconciliation = finalizeStoppedSessionDetail({
-          activeSession,
-          activeSessionId,
-          botMessage,
-          finalEventData: { ...stateEntry, sessionId, turnScopeId, dialogProcessId },
-          fetchSessionDetail: chatList.fetchSessionDetail,
-          applySessionDetail: chatList.applySessionDetail,
-          applyRunStateEvent: submitTurnRuntimeEvent,
-        }).finally(() => pendingStoppedSummaryReconciliations.delete(reconciliationKey));
-        pendingStoppedSummaryReconciliations.set(reconciliationKey, reconciliation);
+        // The engine-level coordinator observes the same notification through
+        // submitTurnRuntimeEvent. This session layer must not create a second
+        // resolver or a second terminal fact source.
+        pendingStoppedSummaryReconciliations.set(reconciliationKey, Promise.resolve({
+          applied: false,
+          reason: "terminal_resolution_delegated",
+        }));
       }
     }
   }
 
   function hydrateStoppedRunStateFromSessionDetail({ sessionItem = null } = {}) {
-    if (sessionItem) chatStore.hydrateSessionTurnRuntime(sessionItem);
     const sessionId = String(
       sessionItem?.backendSessionId || sessionItem?.sessionId || sessionItem?.id || "",
     ).trim();
-    const terminalStatuses = new Set([
-      "user_stopped", "completed", "error", "failed", "expired", "cancelled", "aborted",
-    ]);
-    const terminalTurn = (Array.isArray(sessionItem?.turnStatuses) ? sessionItem.turnStatuses : [])
-      .filter((status) => terminalStatuses.has(String(status?.status || "").trim().toLowerCase()))
-      .sort((left, right) => {
-        const rightTime = Date.parse(right?.updatedAt || right?.createdAt || "") || Number(right?.revision || 0);
-        const leftTime = Date.parse(left?.updatedAt || left?.createdAt || "") || Number(left?.revision || 0);
-        return rightTime - leftTime;
-      })[0] || null;
-    const turnScopeId = String(terminalTurn?.turnScopeId || "").trim();
-    const dialogProcessId = String(terminalTurn?.dialogProcessId || "").trim();
+    // Legacy turnStatuses may be displayed as history, but cannot determine
+    // lifecycle state. Terminal state is resolved through the single service.
+    const terminalTurn = null;
     const isCurrentSession = Boolean(sessionId && sessionId === resolveActiveSessionIdentity());
 
+    // Detail hydration is the deterministic boundary at which a cached
+    // authoritative response may be projected locally. This never performs a
+    // terminal GET and therefore cannot amplify replay/discovery traffic.
     // Session detail is authoritative after a reload. Clear every frontend stop
     // lease for this exact persisted turn; otherwise a remembered request or the
     // WebSocket confirmation timer can put the new page back into "stopping".
-    if (isCurrentSession && terminalTurn && (turnScopeId || dialogProcessId)) {
-      chatWebSocketClient.clearStopRequested();
-      clearRememberedStopRequests({ sessionId, dialogProcessId, turnScopeId });
-    }
-    const terminalState = String(terminalTurn?.status || "").trim().toLowerCase();
-    if (isCurrentSession && terminalState === "user_stopped" && turnScopeId) {
-      submitTurnRuntimeEvent({
-        type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED,
-        sessionId,
-        dialogProcessId,
-        turnScopeId,
-        seq: Number(terminalTurn?.seq || terminalTurn?.revision || 0),
-        timestamp: Date.parse(terminalTurn?.updatedAt || terminalTurn?.createdAt || "") || nowMs(),
-        source: "session_detail_applied",
-      });
-      return;
-    }
     // No matching terminal turn needs an additional runtime mutation. Hydration
     // above already reconciled this session without touching other sessions.
   }
@@ -387,6 +540,45 @@ export function useChatSession({
   setReconnectTimingDebugLogSink(sessionLogWebSocketClient);
   setWorkflowDiagnosticsLogSink(sessionLogWebSocketClient);
   setThinkingReplayDebugLogSink(sessionLogWebSocketClient);
+  setTerminalResolutionDebugLogSink(sessionLogWebSocketClient);
+
+  let lastComposerRenderSignature = "";
+  watch(
+    () => {
+      const state = composerActionState.value || {};
+      return [
+        resolveActiveSessionIdentity(),
+        resolveActiveTurnScopeIdentity(),
+        state.displayState || "",
+        activeSessionSending.value === true,
+        state.canStop === true,
+        state.primaryAction || "",
+      ].join("|");
+    },
+    (signature) => {
+      if (!signature || signature === lastComposerRenderSignature) return;
+      lastComposerRenderSignature = signature;
+      const state = composerActionState.value || {};
+      sessionLogWebSocketClient.log({
+        category: "debug",
+        level: "debug",
+        debugType: "thinking-replay",
+        event: "frontend.render.composerRuntimeConsumed",
+        sessionId: resolveActiveSessionIdentity(),
+        turnScopeId: resolveActiveTurnScopeIdentity(),
+        data: {
+          event: "frontend.render.composerRuntimeConsumed",
+          selectedSessionId: resolveActiveSessionIdentity(),
+          selectedTurnScopeId: resolveActiveTurnScopeIdentity(),
+          displayState: state.displayState || "",
+          sending: activeSessionSending.value === true,
+          canStop: state.canStop === true,
+          primaryAction: state.primaryAction || "",
+        },
+      });
+    },
+    { immediate: true },
+  );
 
   function logSessionSystemEvent(event, payload = {}) {
     sessionLogWebSocketClient.log({
@@ -533,6 +725,11 @@ export function useChatSession({
     ensureConnected,
     notify,
   });
+  resolveDiscoveredTerminalTurn = chatEngine.resolveTurnTerminalState;
+  for (const discovery of pendingTerminalResolutionDiscoveries.values()) {
+    void resolveDiscoveredTerminalTurn(discovery.sessionId, discovery.turnScopeId, discovery.metadata);
+  }
+  pendingTerminalResolutionDiscoveries.clear();
 
   const reconnectReplay = useReconnectReplay({
     sessions,
@@ -563,6 +760,7 @@ export function useChatSession({
     sessionLogWebSocketClient,
     notify,
     processStore,
+    resolveTurnTerminalState: chatEngine.resolveTurnTerminalState,
     applyExecutionSnapshot: (payload) => chatStore.applyExecutionSnapshot(payload),
     applyExecutionChildren: (payload) => chatStore.applyExecutionChildren(payload),
     applyExecutionTree: (payload) => chatStore.applyExecutionTree(payload),
@@ -577,46 +775,21 @@ export function useChatSession({
           chatStore.upsertWorkflowNodeStateEvent?.(event?.data || event);
         }
       }
-      // Session detail is the persisted source of truth for terminal turns. A
-      // reconnect snapshot can race behind detail loading and still report the
-      // old sending/stopping currentRun. Remove those stale facts from the
-      // shared batch before it reaches either Registry or the global run state,
-      // otherwise a refreshed stopped turn is resurrected as "stopping".
-      for (let index = sourceEvents.length - 1; index >= 0; index -= 1) {
-        const event = sourceEvents[index] || {};
-        const eventSessionId = String(event.sessionId || "").trim();
-        const eventTurnScopeId = String(event.turnScopeId || "").trim();
-        const eventDialogProcessId = String(event.dialogProcessId || "").trim();
-        const sessionItem = sessions.value.find((item) => {
-          const id = String(item?.backendSessionId || item?.sessionId || item?.id || "").trim();
-          return id && id === eventSessionId;
-        });
-        const persistedTerminal = (Array.isArray(sessionItem?.turnStatuses) ? sessionItem.turnStatuses : [])
-          .find((status) => {
-            const sameTurn = eventTurnScopeId && String(status?.turnScopeId || "").trim() === eventTurnScopeId;
-            const sameDialog = eventDialogProcessId && String(status?.dialogProcessId || "").trim() === eventDialogProcessId;
-            return sameTurn || sameDialog;
-          });
-        const terminalStates = ["user_stopped", "completed", "error", "failed", "expired", "cancelled", "aborted"];
-        const terminalState = String(persistedTerminal?.status || "").trim().toLowerCase();
-        const incomingState = String(event.state || event.backendState || event.raw?.status || event.raw?.terminal || "")
-          .trim()
-          .toLowerCase();
-        // Persisted terminal state only invalidates an older in-flight replay.
-        // Never discard a matching real-time terminal event: it must still reach
-        // turnRuntimeRegistry so the refreshed composer's stopping state settles
-        // immediately instead of waiting for another detail reload.
-        if (terminalStates.includes(terminalState) && !terminalStates.includes(incomingState)) {
-          sourceEvents.splice(index, 1);
-        }
-      }
+      // Replay events always reach the runtime registry. Legacy turnStatuses are
+      // history/discovery metadata and are not allowed to suppress lifecycle
+      // observations; registry identity and revision/sequence guards own stale
+      // event rejection.
       return sourceEvents.map((event) => submitTurnRuntimeEvent(event));
     },
   });
 
   async function sendWithComposerActionState(...args) {
     const sessionRuntimeIdValue = resolveActiveSessionIdentity();
-    const currentTurn = resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionRuntimeIdValue);
+    const currentTurn = resolveSessionTurnRuntime(
+      turnRuntimeRegistry.value,
+      sessionRuntimeIdValue,
+      resolveActiveTurnScopeIdentity(),
+    );
     const stoppedTurn = currentTurn?.terminal === "user_stopped" ? currentTurn : null;
     const resumeDialogProcessId = String(stoppedTurn?.dialogProcessId || "").trim();
     const resumeTurnScopeId = String(stoppedTurn?.turnScopeId || "").trim();
@@ -788,7 +961,11 @@ export function useChatSession({
       },
     }).then(async () => {
       await Promise.all(pendingReconnectReplays);
-      const replayRuntime = resolveSessionTurnRuntime(turnRuntimeRegistry.value, reconnectSessionId);
+      const replayRuntime = resolveSessionTurnRuntime(
+        turnRuntimeRegistry.value,
+        reconnectSessionId,
+        resolveActiveTurnScopeIdentity(),
+      );
       logThinkingReplayDebug("frontend.thinkingReplay.reconnectReplayCommitted", {
         sessionId: reconnectSessionId,
         dialogProcessId: String(replayRuntime?.dialogProcessId || ""),
@@ -800,7 +977,11 @@ export function useChatSession({
       });
       if (typeof chatWebSocketClient.requestJson !== "function") return;
       const sessionId = String(activeSession.value?.backendSessionId || activeSessionId.value || "").trim();
-      const currentTurn = resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionId);
+      const currentTurn = resolveSessionTurnRuntime(
+        turnRuntimeRegistry.value,
+        sessionId,
+        resolveActiveTurnScopeIdentity(),
+      );
       const executionId = String(
         turnRuntimeRegistry.value?.executionIdByTurnScopeId?.[
           `${sessionId}::${currentTurn?.turnScopeId || ""}`

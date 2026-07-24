@@ -8,15 +8,6 @@ import { createPinia, setActivePinia } from "pinia";
 import { useChatStore } from "../../../../src/shared/stores/useChatStore";
 import { useChatInput } from "../../../../src/composables/chat/useChatInput";
 
-function readAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
 describe("useChatInput", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -137,7 +128,7 @@ describe("useChatInput", () => {
     const { serializeAttachments } = useChatInput({ isImageMime: () => false });
 
     const attachments = await serializeAttachments([{ ...file, name: file.name, mimeType: file.type, raw: file }]);
-    const expectedBase64 = String(await readAsDataUrl(file)).split(",")[1];
+    const expectedBase64 = Buffer.from(await file.arrayBuffer()).toString("base64");
 
     expect(attachments[0].contentBase64).toBe(expectedBase64);
     expect(attachments[0].contentBase64).not.toBe("");

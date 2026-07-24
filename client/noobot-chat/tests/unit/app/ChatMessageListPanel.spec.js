@@ -385,7 +385,7 @@ describe("ChatMessageListPanel", () => {
     expect(assistant.thinkingFinishedAt).toBeUndefined();
   });
 
-  it("does not use the global interaction lock to choose a pending assistant", () => {
+  it("does not rewrite message runtime from stale message fields", () => {
     const activeSession = {
       id: "s-1",
       backendSessionId: "s-1",
@@ -413,8 +413,8 @@ describe("ChatMessageListPanel", () => {
       },
     });
 
-    expect(activeSession.messages[1].pending).toBe(false);
-    expect(activeSession.messages[1].channelState).toMatchObject({ state: "frontend_completed" });
+    expect(activeSession.messages[1].pending).toBe(true);
+    expect(activeSession.messages[1].channelState).toMatchObject({ state: "sending" });
     expect(activeSession.messages[3].pending).toBe(false);
   });
 

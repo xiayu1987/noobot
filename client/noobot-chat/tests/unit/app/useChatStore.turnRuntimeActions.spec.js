@@ -7,8 +7,24 @@ import { describe, expect, it } from "vitest";
 import { computed, nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import { useChatStore } from "../../../src/shared/stores/useChatStore";
-import { selectTurnMessageRuntime } from "../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+import { applyTurnTerminalResolution, selectTurnMessageRuntime } from "../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 import { SESSION_RUN_EVENT } from "../../../src/composables/chat/sessionRunStateMachine/constants";
+import { createTurnTerminalResolution } from "../../../../../shared/turn-lifecycle-protocol.mjs";
+
+function settleCompleted(registry, { sessionId, turnScopeId, updatedAt }) {
+  const revision = 100;
+  const completionCommitId = `commit-${turnScopeId}`;
+  return applyTurnTerminalResolution(registry, createTurnTerminalResolution({
+    commandId: `resolve-${turnScopeId}`,
+    sessionId,
+    turnScopeId,
+    resolved: true,
+    turn: { sessionId, turnScopeId, state: "completed", phase: "completion", revision, sequence: revision,
+      completionCommitId, summaryVersion: revision, updatedAt, capabilities: { actionLocked: false, canStop: false } },
+    materialization: { completionCommitId, summaryVersion: revision, revision, sequence: revision,
+      terminalStatus: { status: "completed" }, messages: [] },
+  }));
+}
 
 describe("useChatStore turn runtime actions", () => {
   it("publishes a new registry root after the first runtime event so selectors recompute", async () => {
@@ -68,12 +84,8 @@ describe("useChatStore turn runtime actions", () => {
       turnScopeId: "client-turn:abc:def",
       updatedAt: "2026-07-21T10:00:59.000Z",
     });
-    store.applyTurnRuntimeEvent({
-      type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
-      sessionId: "session-1",
-      turnScopeId: "client-turn:abc:def",
-      updatedAt: "2026-07-21T10:01:00.000Z",
-    });
+    settleCompleted(store.turnRuntimeRegistry, { sessionId: "session-1", turnScopeId: "client-turn:abc:def",
+      updatedAt: "2026-07-21T10:01:00.000Z" });
     const afterCompleted = store.turnRuntimeRegistry;
     store.applyTurnRuntimeEvent({
       type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,

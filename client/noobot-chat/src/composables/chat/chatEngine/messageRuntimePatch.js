@@ -12,6 +12,7 @@ import {
   logStateMachineDebug,
   summarizeStateMachineMessage,
 } from "../debug/stateMachineLogger";
+import { mergeCanonicalTurnTiming } from "../sessionRunStateMachine/turnTiming";
 import { getMessageTurnScopeId } from "../../infra/messageIdentity";
 import { getMessageDialogProcessId } from "../../infra/messageIdentity";
 import { selectTurnMessageRuntime, sessionRuntimeId } from "../sessionRunStateMachine/turnRuntimeRegistry";
@@ -116,7 +117,12 @@ export function applyRunStateMessageRuntimePatch({
     const turnScopeId = getMessageTurnScopeId(message);
     const timingPatch = effect.patch || {};
     if (turnScopeId && (timingPatch.thinkingStartedAt || timingPatch.thinkingFinishedAt)) {
-      const existingTiming = session.turnTimingsByTurnScopeId?.[turnScopeId] || {};
+      const canonicalTiming = mergeCanonicalTurnTiming(session, turnScopeId);
+      // Reconnect channel state carries a transport createdAtMs fallback. It
+      // must never replace a persisted canonical Turn timing, even when the
+      // disposable projection map has not been rebuilt on the new Session
+      // object yet.
+      const existingTiming = canonicalTiming;
       session.turnTimingsByTurnScopeId = {
         ...(session.turnTimingsByTurnScopeId || {}),
         [turnScopeId]: {

@@ -38,6 +38,40 @@ export const BackendTerminalStates = Object.freeze([
   BackendChannelState.NO_CONVERSATION,
 ]);
 
+// Terminal-state vocabularies are deliberately split by authority. Only values
+// in AUTHORITATIVE_TERMINAL_STATES may be accepted from the terminal-resolution
+// service and dispatched as TERMINAL_RESOLVED. Legacy values are discovery or
+// display metadata only; they must never settle runtime capabilities.
+export const AUTHORITATIVE_TERMINAL_STATES = Object.freeze([
+  "completed",
+  "stop_completed",
+  "action_failed",
+  "processing_failed",
+  "completion_failed",
+  "stop_failed",
+]);
+
+export const LEGACY_TERMINAL_DISCOVERY_STATES = Object.freeze([
+  ...AUTHORITATIVE_TERMINAL_STATES,
+  "user_stopped",
+  "failed",
+  "error",
+  "expired",
+  "cancelled",
+  "aborted",
+]);
+
+const AUTHORITATIVE_TERMINAL_STATE_SET = new Set(AUTHORITATIVE_TERMINAL_STATES);
+const LEGACY_TERMINAL_DISCOVERY_STATE_SET = new Set(LEGACY_TERMINAL_DISCOVERY_STATES);
+
+export function isAuthoritativeTerminalState(value = "") {
+  return AUTHORITATIVE_TERMINAL_STATE_SET.has(String(value || "").trim().toLowerCase());
+}
+
+export function isLegacyTerminalDiscoveryState(value = "") {
+  return LEGACY_TERMINAL_DISCOVERY_STATE_SET.has(String(value || "").trim().toLowerCase());
+}
+
 export const FrontendRunState = Object.freeze({
   IDLE: "idle",
   ACTION_REQUESTING: "frontend_action_requesting",
@@ -81,18 +115,16 @@ export const SESSION_RUN_EVENT = Object.freeze({
   LOCAL_RESEND_COMPLETED: "local_resend_completed",
   LOCAL_RESEND_FAILED: "local_resend_failed",
   LOCAL_FRONTEND_COMPLETION_REQUEST_STARTED: "local_frontend_completion_request_started",
-  LOCAL_FRONTEND_COMPLETION_APPLIED: "local_frontend_completion_applied",
   LOCAL_FRONTEND_COMPLETION_FAILED: "local_frontend_completion_failed",
   LOCAL_USER_STOP_REQUESTED: "local_user_stop_requested",
   LOCAL_USER_STOP_REQUEST_STARTED: "local_user_stop_request_started",
   LOCAL_USER_STOP_REQUEST_SETTLED: "local_user_stop_request_settled",
   LOCAL_USER_STOP_PENDING_BACKEND_READY: "local_user_stop_pending_backend_ready",
   LOCAL_USER_STOP_PENDING_CLEARED: "local_user_stop_pending_cleared",
-  LOCAL_USER_STOP_SUMMARY_APPLIED: "local_user_stop_summary_applied",
-  LOCAL_USER_STOP_SUMMARY_FAILED: "local_user_stop_summary_failed",
   BACKEND_CONVERSATION_STATE: "backend_conversation_state",
   BACKEND_CHANNEL_STATE: "backend_channel_state",
   BACKEND_TURN_LIFECYCLE: "backend_turn_lifecycle",
+  TERMINAL_RESOLVED: "turn_terminal_resolved",
   LOCAL_FAILURE: "local_failure",
   LOCAL_RESET: "local_reset",
 });
