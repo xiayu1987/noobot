@@ -33,6 +33,7 @@ describe("drawerPanelsState", () => {
       isSuperAdmin: true,
       thinkingDetailsMessageItem: { id: "m1" },
       thinkingDetailsAllMessages: [{ id: "m1" }],
+      thinkingDetailsRuntime: { startedAt: "start", finishedAt: "finish", terminal: true },
       getThinkingDetailsTitle: (messageItem) => `thinking:${messageItem.id}`,
       handleWorkspaceReset,
     });
@@ -69,6 +70,7 @@ describe("drawerPanelsState", () => {
       props: {
         messageItem: { id: "m1" },
         allMessages: [{ id: "m1" }],
+        runtime: { startedAt: "start", finishedAt: "finish", terminal: true },
         variant: "details",
       },
     });
@@ -95,7 +97,7 @@ describe("drawerPanelsState", () => {
     expect(panels[2].props).toEqual({
       messageItem: {},
       allMessages: [],
-      turnTimingsByTurnScopeId: {},
+      runtime: null,
       variant: "details",
     });
     expect(panels[3].props.active).toBe(false);

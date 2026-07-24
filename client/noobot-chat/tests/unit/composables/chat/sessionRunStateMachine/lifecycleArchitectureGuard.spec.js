@@ -138,6 +138,27 @@ describe("lifecycle architecture guard", () => {
     expect(callers).toEqual([files.registry]);
   });
 
+  it("keeps legacy completed tool logs behind the timeline adapter", () => {
+    const renderConsumers = [
+      "src/app/useThinkingDetailsPanel.js",
+      "src/composables/chat/chatEngine/sessionFinalize.js",
+      "src/composables/infra/thinkingDetailModel.js",
+      "src/composables/message/useMessageFiles.js",
+      "src/composables/message/useMessageMeta.js",
+      "src/shared/message/useThinkingPanel.js",
+      "src/shared/message/SharedChatMessageItem.vue",
+      "src/modules/message/ChatMessageItem.vue",
+      "src/shared/message/ThinkingPanel.vue",
+    ];
+    for (const relativePath of renderConsumers) {
+      expect(source(relativePath)).not.toMatch(/messageItem\?*\.completedToolLogs/);
+      expect(source(relativePath)).not.toContain("turnStatuses");
+      expect(source(relativePath)).not.toContain("turnTimingsByTurnScopeId");
+    }
+    expect(source("src/composables/chat/chatEngine/legacyTimelineAdapter.js"))
+      .toContain("message.completedToolLogs");
+  });
+
   it("keeps interaction requests pending until websocket send returns successfully", () => {
     const code = source(files.interaction);
     const send = code.indexOf("sendJson({", code.indexOf("function submitInteractionResponse"));

@@ -123,21 +123,24 @@ export function applyRunStateMessageRuntimePatch({
       // disposable projection map has not been rebuilt on the new Session
       // object yet.
       const existingTiming = canonicalTiming;
+      const projectedTiming = {};
+      if (existingTiming.thinkingStartedAt) {
+        projectedTiming.thinkingStartedAt = existingTiming.thinkingStartedAt;
+      }
+      if (existingTiming.thinkingFinishedAt) {
+        projectedTiming.thinkingFinishedAt = existingTiming.thinkingFinishedAt;
+      }
+      if (timingPatch.thinkingStartedAt && !projectedTiming.thinkingStartedAt) {
+        projectedTiming.thinkingStartedAt = timingPatch.thinkingStartedAt;
+      }
+      if (timingPatch.thinkingFinishedAt && !projectedTiming.thinkingFinishedAt) {
+        projectedTiming.thinkingFinishedAt =
+          projectedTiming.thinkingStartedAt || timingPatch.thinkingStartedAt || timingPatch.thinkingFinishedAt;
+      }
       session.turnTimingsByTurnScopeId = {
         ...(session.turnTimingsByTurnScopeId || {}),
         [turnScopeId]: {
-          ...existingTiming,
-          ...(timingPatch.thinkingStartedAt && !existingTiming.thinkingStartedAt
-            ? { thinkingStartedAt: timingPatch.thinkingStartedAt }
-            : {}),
-          ...(timingPatch.thinkingFinishedAt && !existingTiming.thinkingFinishedAt
-            ? {
-                thinkingFinishedAt:
-                  existingTiming.thinkingStartedAt ||
-                  timingPatch.thinkingStartedAt ||
-                  timingPatch.thinkingFinishedAt,
-              }
-            : {}),
+          ...projectedTiming,
         },
       };
     }

@@ -25,8 +25,10 @@ import {
 import { getMessageAttachments } from "../../infra/messageModel";
 import {
   buildToolTimelineFromLegacyLogs,
+  countCompletedToolAttachments,
   mergeToolTimelines,
 } from "../chatEngine/toolTimeline";
+import { adaptLegacyMessageTimelines } from "../chatEngine/legacyTimelineAdapter";
 import {
   getMessageRuntimeChannelState,
   isMessageInFlightAssistant,
@@ -253,8 +255,7 @@ export function injectTurnStatusPlaceholders(messages = [], turnStatuses = []) {
 }
 
 function countCompletedToolLogAttachments(messageItem = {}) {
-  return (Array.isArray(messageItem?.completedToolLogs) ? messageItem.completedToolLogs : [])
-    .reduce((total, logItem) => total + (Array.isArray(logItem?.attachments) ? logItem.attachments.length : 0), 0);
+  return countCompletedToolAttachments(adaptLegacyMessageTimelines(messageItem));
 }
 
 function isInFlightAssistantMessage(messageItem = {}) {

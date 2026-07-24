@@ -159,6 +159,10 @@ export function useChatSession({
   function hydrateSessionLifecycle(sessionItem) {
     const snapshot = sessionItem?.turnLifecycleSnapshot;
     const sessionId = sessionRuntimeId(sessionItem);
+    const timingResult = chatStore.applyTurnTimingSnapshot({
+      sessionId,
+      turnTimings: Array.isArray(sessionItem?.turnTimings) ? sessionItem.turnTimings : [],
+    });
     logThinkingReplayDebug("frontend.lifecycle.hydrateStarted", {
       requestedSessionId: String(sessionItem?.sessionId || "").trim(),
       runtimeSessionId: sessionId,
@@ -167,6 +171,8 @@ export function useChatSession({
       activeTurnScopeId: String(snapshot?.activeTurnScopeId || "").trim(),
       recentTerminalCount: Array.isArray(snapshot?.recentTerminalTurns) ? snapshot.recentTerminalTurns.length : 0,
       turnTimingsCount: Array.isArray(sessionItem?.turnTimings) ? sessionItem.turnTimings.length : 0,
+      timingSnapshotApplied: timingResult?.applied === true,
+      timingSnapshotReason: timingResult?.reason || "",
     });
     if (snapshot && typeof snapshot === "object") {
       // A snapshot is only discovery metadata for terminal Turns. Schedule the
@@ -1082,5 +1088,6 @@ export function useChatSession({
     handleReconnect,
     conversationStateSnapshot,
     conversationStateTimeline,
+    turnRuntimeRegistry,
   };
 }

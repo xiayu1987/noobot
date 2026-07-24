@@ -19,6 +19,7 @@ import {
   hydrateSessionTurnRuntime,
   applyTurnLifecycleEnvelope,
   applyTurnLifecycleSnapshot,
+  applyTurnTimingSnapshot,
   applyTurnTerminalResolution,
   applyExecutionSnapshot,
   applyExecutionTree,
@@ -592,6 +593,38 @@ describe("turnRuntimeRegistry", () => {
 
     expect(resolveTurnRuntimeByScope(registry, "t1", { sessionId: "s1" })).toBeNull();
     expect(registry.sessions.s1).toBeUndefined();
+  });
+
+  it("hydrates every persisted turn timing without creating lifecycle authority", () => {
+    const registry = createTurnRuntimeRegistryState();
+    const result = applyTurnTimingSnapshot(registry, {
+      sessionId: "s1",
+      turnTimings: [
+        {
+          turnScopeId: "client-turn:first",
+          dialogProcessId: "dp-first",
+          thinkingStartedAt: "2026-07-21T10:00:00.000Z",
+          thinkingFinishedAt: "2026-07-21T10:00:15.000Z",
+        },
+        {
+          turnScopeId: "client-turn:second",
+          dialogProcessId: "dp-second",
+          thinkingStartedAt: "2026-07-21T11:00:00.000Z",
+          thinkingFinishedAt: "2026-07-21T11:00:09.000Z",
+        },
+      ],
+    });
+
+    expect(result).toMatchObject({ applied: true, hydratedTurnScopeIds: ["client-turn:first", "client-turn:second"] });
+    const first = resolveTurnRuntimeByScope(registry, "client-turn:first", { sessionId: "s1" });
+    expect(first).toMatchObject({
+      startedAt: "2026-07-21T10:00:00.000Z",
+      finishedAt: "2026-07-21T10:00:15.000Z",
+    });
+    expect(first).not.toHaveProperty("state");
+    expect(first).not.toHaveProperty("terminal");
+    expect(resolveTurnRuntimeByScope(registry, "client-turn:second", { sessionId: "s1" })?.finishedAt)
+      .toBe("2026-07-21T11:00:09.000Z");
   });
 
   it("strictly validates snapshots and rejects same-sequence content conflicts", () => {

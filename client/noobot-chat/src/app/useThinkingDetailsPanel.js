@@ -16,6 +16,9 @@ import {
   isAssistantWithoutTurnScope,
 } from "../composables/infra/messageIdentity";
 import { loadThinkingDetail } from "../shared/message/thinkingDetailCache";
+import { adaptLegacyMessageTimelines } from "../composables/chat/chatEngine/legacyTimelineAdapter";
+import { selectToolTimelineCount } from "../composables/chat/chatEngine/toolTimeline";
+import { selectActivityTimelineLogs } from "../composables/chat/chatEngine/activityTimeline";
 
 function getSessionDocsFromDetail(detail = {}) {
   if (Array.isArray(detail?.sessionDocs)) return detail.sessionDocs;
@@ -102,12 +105,10 @@ export function useThinkingDetailsPanel({
     const initialPayload = resolveThinkingDetailsPanelPayload(payload, fallbackPayload);
     const initialMessageItem = initialPayload.messageItem;
     if (isAssistantWithoutTurnScope(initialMessageItem)) return;
+    const canonicalInitialMessage = adaptLegacyMessageTimelines(initialMessageItem);
     const hasLocalThinkingDetails =
-      (Array.isArray(initialMessageItem?.toolTimeline) && initialMessageItem.toolTimeline.length > 0) ||
-      // Read-only historical migration boundary; runtime code does not write
-      // these legacy projections anymore.
-      (Array.isArray(initialMessageItem?.realtimeLogs) && initialMessageItem.realtimeLogs.length > 0) ||
-      (Array.isArray(initialMessageItem?.completedToolLogs) && initialMessageItem.completedToolLogs.length > 0);
+      selectToolTimelineCount(canonicalInitialMessage) > 0 ||
+      selectActivityTimelineLogs(canonicalInitialMessage).length > 0;
     const requestFetchDetail = typeof payload?.fetchThinkingDetail === "function"
       ? payload.fetchThinkingDetail
       : null;

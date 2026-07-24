@@ -118,7 +118,7 @@ export function useThinkingPanel(props, emit) {
     };
   }
 
-  function getRuntimeView() {
+  function getRuntimeView(messageItem = props.messageItem) {
     return props.runtime || { running: false, terminal: false, startedAt: "", finishedAt: "" };
   }
 
@@ -360,10 +360,10 @@ export function useThinkingPanel(props, emit) {
   }
 
   function hasLocalThinkingDetails(messageItem = {}) {
-    const timelineLogs = selectToolTimelineLogs(timelineMessage(messageItem), { completedOnly: true });
-    const completedLogs = timelineLogs.length > 0
-      ? timelineLogs
-      : (Array.isArray(messageItem?.completedToolLogs) ? messageItem.completedToolLogs : []);
+    const completedLogs = selectToolTimelineLogs(
+      timelineMessage(messageItem),
+      { completedOnly: true },
+    );
     return (
       getAllRealtimeLogs(messageItem).length > 0 ||
       completedLogs.length > 0 ||

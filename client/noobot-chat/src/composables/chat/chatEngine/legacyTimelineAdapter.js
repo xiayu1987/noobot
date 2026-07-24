@@ -5,11 +5,9 @@
  */
 import {
   buildToolTimelineFromLegacyLogs,
-  mergeToolTimelines,
 } from "./toolTimeline";
 import {
   buildActivityTimelineFromLegacyLogs,
-  mergeActivityTimelines,
 } from "./activityTimeline";
 import { createTurnKey, resolveTurnIdentity } from "./turnIdentity";
 import { createTurnObservation } from "./turnObservation";
@@ -24,12 +22,14 @@ function legacyLogStream(realtimeLogs, completedLogs) {
     // boundary. Older rows often have no event/type field, so retain that
     // classification without treating unrelated realtime activity as a tool.
     assumeTool: (_log, index) => index >= realtime.length,
+    assumeCompleted: (_log, index) => index >= realtime.length,
   };
 }
 
 function buildLegacyToolTimeline(stream) {
   return buildToolTimelineFromLegacyLogs(stream.logs, {
     assumeTool: stream.assumeTool,
+    assumeCompleted: stream.assumeCompleted,
   });
 }
 
@@ -59,16 +59,16 @@ export function adaptLegacyMessageTimelines(message = {}) {
     : messageToolTimeline;
   const selectedStream = processToolTimeline.length ? processStream : messageStream;
 
-  const toolTimeline = mergeToolTimelines(
-    array(message.toolTimeline),
+  const canonicalToolTimeline = array(message.toolTimeline);
+  const canonicalActivityTimeline = array(message.activityTimeline);
+  const toolTimeline = canonicalToolTimeline.length
+    ? canonicalToolTimeline
     // Build the selected realtime+completed stream once. Splitting the arrays
     // resets the index-based legacy identity and can collapse unrelated rows.
-    buildLegacyToolTimeline(selectedStream),
-  );
-  const activityTimeline = mergeActivityTimelines(
-    array(message.activityTimeline),
-    buildActivityTimelineFromLegacyLogs(processLogs.length ? processLogs : messageLogs),
-  );
+    : buildLegacyToolTimeline(selectedStream);
+  const activityTimeline = canonicalActivityTimeline.length
+    ? canonicalActivityTimeline
+    : buildActivityTimelineFromLegacyLogs(processLogs.length ? processLogs : messageLogs);
 
   const {
     processRealtimeLogs: _processRealtimeLogs,
