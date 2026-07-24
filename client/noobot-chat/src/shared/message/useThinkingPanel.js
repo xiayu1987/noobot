@@ -68,6 +68,7 @@ export function useThinkingPanel(props, emit) {
   }
   const detailExpansionTick = ref(0);
   let timer = null;
+  let lastRenderRuntimeSignature = "";
   const EXECUTION_LOG_DISPLAY_LIMIT =
     QUANTITY_THRESHOLDS.client.executionLogDisplayLimit;
 
@@ -827,6 +828,42 @@ export function useThinkingPanel(props, emit) {
         // overwrite a historical panel that the user opened manually.
         if (wasRunning === true) setTurnThinkingOpenNames(props.messageItem, []);
       }
+    },
+    { immediate: true },
+  );
+
+  // Final render-boundary observation: records the runtime value actually
+  // consumed by the thinking panel after Registry and message projection.
+  watch(
+    () => {
+      const runtime = getRuntimeView(props.messageItem);
+      return [
+        getMessageSessionId(props.messageItem),
+        getMessageDialogProcessId(props.messageItem),
+        getMessageTurnScopeId(props.messageItem),
+        runtime.state || "",
+        runtime.running === true,
+        runtime.terminal || "",
+        runtime.startedAt || "",
+        runtime.finishedAt || "",
+      ].join("|");
+    },
+    (signature) => {
+      if (!signature || signature === lastRenderRuntimeSignature) return;
+      lastRenderRuntimeSignature = signature;
+      const runtime = getRuntimeView(props.messageItem);
+      logThinkingReplayDebug("frontend.render.thinkingRuntimeConsumed", {
+        sessionId: getMessageSessionId(props.messageItem),
+        dialogProcessId: getMessageDialogProcessId(props.messageItem),
+        turnScopeId: getMessageTurnScopeId(props.messageItem),
+        runtimeState: runtime.state || "",
+        running: runtime.running === true,
+        terminal: runtime.terminal || null,
+        startedAt: runtime.startedAt || "",
+        finishedAt: runtime.finishedAt || "",
+        pending: props.messageItem?.pending === true,
+        messageRole: getMessageRole(props.messageItem),
+      });
     },
     { immediate: true },
   );

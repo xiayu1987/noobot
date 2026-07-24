@@ -13,12 +13,14 @@ import {
   normalizeSessionRunEvent,
 } from "../../../../src/composables/chat/sessionRunStateMachine";
 import { deriveTurnCapabilities, reduceTurnRuntimeEvent } from "../../../../src/composables/chat/sessionRunStateMachine/turnReducer";
-import { TURN_EVENT, TURN_PHASE } from "@noobot/shared/turn-lifecycle-protocol";
+import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/shared/turn-lifecycle-protocol";
 
 const processingStarted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_STARTED, phase: TURN_PHASE.PROCESSING, executionState: BackendChannelState.SENDING };
 const actionAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.ACTION_ACCEPTED, phase: TURN_PHASE.ACTION, action: "send" };
 const processingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_COMPLETED, phase: TURN_PHASE.COMPLETION };
 const stopProcessingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED, phase: TURN_PHASE.STOP };
+const completionCommit = { completionCommitId: "completion-commit-1", summaryVersion: 1 };
+const terminalResolved = (state) => ({ type: SESSION_RUN_EVENT.TERMINAL_RESOLVED, state, revision: 10, sequence: 10, ...completionCommit });
 
 function installStorage() {
   const map = new Map();
@@ -51,7 +53,9 @@ describe("sessionRunStateMachine lifecycle", () => {
     expect(turn.state).toBe(FrontendRunState.PROCESSING);
     turn = apply(turn, processingCompleted);
     expect(turn.state).toBe(FrontendRunState.FRONTEND_COMPLETION_REQUESTING);
-    turn = apply(turn, { type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED });
+    turn = apply(turn, { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.COMPLETED, phase: TURN_PHASE.COMPLETION, ...completionCommit });
+    expect(turn.state).toBe(FrontendRunState.FRONTEND_COMPLETION_REQUESTING);
+    turn = apply(turn, terminalResolved(TURN_STATE.COMPLETED));
     expect(turn.state).toBe(FrontendRunState.FRONTEND_COMPLETED);
     expect(deriveTurnCapabilities(turn.state, turn).actionLocked).toBe(false);
   });
@@ -77,7 +81,7 @@ describe("sessionRunStateMachine lifecycle", () => {
     expect(turn).toMatchObject({ state: FrontendRunState.ACTION_REQUESTING, action: "stop" });
     turn = apply(turn, stopProcessingCompleted);
     expect(turn.state).toBe(FrontendRunState.USER_STOPPING);
-    turn = apply(turn, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED });
+    turn = apply(turn, terminalResolved(TURN_STATE.STOP_COMPLETED));
     expect(turn.state).toBe(FrontendRunState.USER_STOP_COMPLETED);
     expect(deriveTurnCapabilities(turn.state, turn)).toMatchObject({ actionLocked: false, terminal: true });
   });

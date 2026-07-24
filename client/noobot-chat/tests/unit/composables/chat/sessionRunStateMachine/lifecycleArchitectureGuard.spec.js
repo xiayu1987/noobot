@@ -1,22 +1,24 @@
 /*
  * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
-import { resolve } from "node:path";
+import { clientFilePath } from "../../../../../../shared/path-resolver.js";
 
-const projectRoot = resolve(import.meta.dirname, "../../../../../");
-const source = (relativePath) => readFileSync(resolve(projectRoot, relativePath), "utf8");
+const projectRoot = clientFilePath.resolve(import.meta.dirname, "../../../../../");
+const source = (relativePath) => readFileSync(clientFilePath.resolve(projectRoot, relativePath), "utf8");
 
 const files = {
   messageMeta: "src/composables/message/useMessageMeta.js",
   reducer: "src/composables/chat/sessionRunStateMachine/turnReducer.js",
   registry: "src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js",
   interaction: "src/composables/chat/useAgentInteraction.js",
+  messageList: "src/app/ChatMessageListPanel.vue",
 };
 
-const agentRoot = resolve(projectRoot, "../../agent");
+const agentRoot = clientFilePath.resolve(projectRoot, "../../agent");
 
 const protocolWriters = new Set([
   files.reducer,
@@ -43,7 +45,7 @@ const forbiddenTurnWritePatterns = [
 ];
 
 function productionFiles(relativeDir = "src") {
-  const entries = readdirSync(resolve(projectRoot, relativeDir), { withFileTypes: true });
+  const entries = readdirSync(clientFilePath.resolve(projectRoot, relativeDir), { withFileTypes: true });
   return entries.flatMap((entry) => {
     const relativePath = `${relativeDir}/${entry.name}`;
     if (entry.isDirectory()) return productionFiles(relativePath);
@@ -65,7 +67,10 @@ describe("lifecycle architecture guard", () => {
   it("keeps all Turn transitions in the protocol reducer and registry event flow", () => {
     const reducer = source(files.reducer);
     const registry = source(files.registry);
-    expect(reducer).toMatch(/LOCAL_FRONTEND_COMPLETION_APPLIED/);
+    expect(reducer).toMatch(/TERMINAL_RESOLVED/);
+    expect(reducer).toMatch(/FINAL_STATES\.has\(nextState\)/);
+    expect(reducer).not.toMatch(/LOCAL_FRONTEND_COMPLETION_APPLIED/);
+    expect(reducer).not.toMatch(/LOCAL_USER_STOP_SUMMARY_APPLIED/);
     expect(reducer).toMatch(/FRONTEND_COMPLETED/);
     expect(reducer).toMatch(/ACTION_REQUEST_ERROR/);
     expect(reducer).toMatch(/PROCESSING_ERROR/);
@@ -97,6 +102,13 @@ describe("lifecycle architecture guard", () => {
       expect(code).not.toMatch(/(?:terminal|authority)\s*[:=]\s*["']completed["']/);
       expect(code).not.toMatch(/(?:terminal|authority)\s*[:=]\s*true/);
     }
+  });
+
+  it("keeps the message list as a Registry consumer without a message-state writeback loop", () => {
+    const code = source(files.messageList);
+    expect(code).not.toContain("resolveSessionRunMessageRuntimePatch");
+    expect(code).not.toContain("applyConversationStateRuntimeToMessages");
+    expect(code).not.toMatch(/watchEffect\([\s\S]*turnStatuses/);
   });
 
   it("rejects representative bypass patterns", () => {
@@ -139,8 +151,8 @@ describe("lifecycle architecture guard", () => {
   });
 
   it("keeps the shared protocol, service entity, reducer and registry as the cross-layer lifecycle boundary", () => {
-    const sharedProtocol = readFileSync(resolve(projectRoot, "../../shared/turn-lifecycle-protocol.mjs"), "utf8");
-    const serviceEntity = readFileSync(resolve(agentRoot, "src/system-core/session/entities/turn-lifecycle-entity.js"), "utf8");
+    const sharedProtocol = readFileSync(clientFilePath.resolve(projectRoot, "../../shared/turn-lifecycle-protocol.mjs"), "utf8");
+    const serviceEntity = readFileSync(clientFilePath.resolve(agentRoot, "src/system-core/session/entities/turn-lifecycle-entity.js"), "utf8");
     const reducer = source(files.reducer);
     const registry = source(files.registry);
     for (const symbol of ["ACTION_ACCEPTED", "PROCESSING_STARTED", "PROCESSING_COMPLETED", "STOP_ACCEPTED", "STOP_PROCESSING_COMPLETED", "COMPLETED", "STOP_COMPLETED", "FAILED"]) {

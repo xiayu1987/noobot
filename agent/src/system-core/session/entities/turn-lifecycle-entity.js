@@ -53,6 +53,10 @@ export function normalizeTurnLifecycleEntity(source = {}) {
       revision: integer(value.revision),
       sequence: integer(value.sequence),
       summaryVersion: integer(value.summaryVersion),
+      completionCommitId: clean(value.completionCommitId),
+      terminalStatus: value.terminalStatus && typeof value.terminalStatus === "object" && !Array.isArray(value.terminalStatus)
+        ? { ...value.terminalStatus }
+        : null,
       failure: value.failure && typeof value.failure === "object" && !Array.isArray(value.failure)
         ? { ...value.failure, phase: clean(value.failure.phase || value.phase) }
         : null,
@@ -65,6 +69,8 @@ export function normalizeTurnLifecycleEntity(source = {}) {
             updatedAt: clean(value.finalizeIntent.updatedAt),
           }
         : null,
+      startedAt: clean(value.startedAt),
+      finishedAt: clean(value.finishedAt),
       createdAt: clean(value.createdAt),
       updatedAt: clean(value.updatedAt),
     };
@@ -112,6 +118,13 @@ function nextState(eventType, phase) {
   return "";
 }
 
+function nextExecutionState(eventType, currentExecutionState = "") {
+  if (eventType === TURN_EVENT.COMPLETED) return "completed";
+  if (eventType === TURN_EVENT.STOP_COMPLETED) return "user_stopped";
+  if (eventType === TURN_EVENT.FAILED) return "error";
+  return clean(currentExecutionState).toLowerCase();
+}
+
 function allowed(current, eventType) {
   if (!current) return eventType === TURN_EVENT.ACTION_ACCEPTED;
   if (eventType === TURN_EVENT.PROCESSING_STARTED) return current.state === TURN_STATE.ACTION_REQUESTING && current.action !== "stop";
@@ -149,6 +162,8 @@ export function transitionTurnLifecycle(source = {}, input = {}, now = () => new
     phase,
     action: clean(input.action),
     executionState: clean(input.executionState),
+    startedAt: clean(input.startedAt),
+    finishedAt: clean(input.finishedAt),
     ...requestedExecutionIdentity,
   });
   const receipt = lifecycle.commandReceipts.find((item) => item.commandId === commandId && item.eventType === eventType);
@@ -206,12 +221,26 @@ export function transitionTurnLifecycle(source = {}, input = {}, now = () => new
     action,
     state,
     phase,
-    executionState: clean(input.executionState || current?.executionState).toLowerCase(),
+    // Lifecycle and execution projections must agree once the Turn is terminal.
+    // Retaining the processing value (usually `sending`) makes refresh clients
+    // resurrect an already-completed Turn as active work.
+    executionState: nextExecutionState(
+      eventType,
+      input.executionState || current?.executionState,
+    ),
     revision,
     sequence,
     summaryVersion: integer(input.summaryVersion, integer(current?.summaryVersion)),
+    completionCommitId: clean(input.completionCommitId || current?.completionCommitId),
+    terminalStatus: input.terminalStatus && typeof input.terminalStatus === "object" && !Array.isArray(input.terminalStatus)
+      ? { ...input.terminalStatus }
+      : current?.terminalStatus || null,
     failure: eventType === TURN_EVENT.FAILED ? { ...(input.failure || {}), phase } : null,
     finalizeIntent,
+    startedAt: clean(input.startedAt || current?.startedAt) || clean(current?.createdAt) || nowValue,
+    finishedAt: TERMINAL_STATES.has(state)
+      ? clean(input.finishedAt) || nowValue
+      : clean(current?.finishedAt),
     createdAt: clean(current?.createdAt) || nowValue,
     updatedAt: nowValue,
   };
@@ -227,4 +256,22 @@ export function transitionTurnLifecycle(source = {}, input = {}, now = () => new
 
 export function isTerminalTurnLifecycleState(state) {
   return TERMINAL_STATES.has(clean(state));
+}
+
+/** Join persisted timing to a lifecycle Turn by its canonical Session Turn key. */
+export function projectTurnLifecycleTiming(turn = {}, turnTimings = []) {
+  const turnScopeId = clean(turn?.turnScopeId);
+  const timing = turnScopeId
+    ? (Array.isArray(turnTimings) ? turnTimings : []).find(
+        (item) => clean(item?.turnScopeId) === turnScopeId,
+      ) || null
+    : null;
+  const terminal = isTerminalTurnLifecycleState(turn?.state);
+  return {
+    ...turn,
+    startedAt: clean(timing?.thinkingStartedAt || turn?.startedAt || turn?.createdAt),
+    finishedAt: terminal
+      ? clean(timing?.thinkingFinishedAt || turn?.finishedAt || turn?.updatedAt)
+      : clean(turn?.finishedAt),
+  };
 }

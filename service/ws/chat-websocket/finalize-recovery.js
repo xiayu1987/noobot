@@ -47,29 +47,22 @@ export async function recoverTurnFinalize({
   }
 
   const isStop = String(intent.type || "") === "stop";
-  const statusResult = await bot?.upsertTurnStatus?.({
-    userId,
-    sessionId,
-    parentSessionId,
-    turnScopeId: turn.turnScopeId,
-    dialogProcessId: turn.dialogProcessId,
-    command: isStop ? "user_stopped" : "completed",
-    description: isStop ? "停止流程恢复完成" : "完成流程恢复完成",
-  });
-  const turnStatus = statusResult?.turnStatus || null;
-  if (!turnStatus) return { recovered: false, reason: "summary_persistence_failed", result: initial };
-
+  const completionCommitId = String(intent.commandId || `finalize:${turn.turnScopeId}`).trim();
   const committed = await commitTurnLifecycle({
     userId,
     sessionId,
     parentSessionId,
     turnScopeId: turn.turnScopeId,
     dialogProcessId: turn.dialogProcessId,
-    commandId: String(intent.commandId || `finalize:${turn.turnScopeId}`).trim(),
+    commandId: completionCommitId,
     eventType: isStop ? TURN_EVENT.STOP_COMPLETED : TURN_EVENT.COMPLETED,
     phase: isStop ? TURN_PHASE.STOP : TURN_PHASE.COMPLETION,
     expectedRevision: turn.revision,
-    summaryVersion: Number(turnStatus.version || 0),
+    completionCommitId,
+    terminalStatus: {
+      command: isStop ? "user_stopped" : "completed",
+      description: isStop ? "停止流程恢复完成" : "完成流程恢复完成",
+    },
   });
   if (!committed?.applied && !committed?.deduplicated) {
     return { recovered: false, reason: committed?.reason || "finalize_commit_failed", result: initial };

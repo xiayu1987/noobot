@@ -22,7 +22,7 @@ afterEach(() => {
 });
 
 describe("useReconnectReplay", () => {
-  it("missing interaction payload timeout reports local failure through run state machine", async () => {
+  it("missing interaction payload timeout stays local and does not manufacture an authoritative terminal state", async () => {
     vi.useFakeTimers();
     const sending = { value: true };
     const canStop = { value: true };
@@ -55,14 +55,7 @@ describe("useReconnectReplay", () => {
 
     await vi.advanceTimersByTimeAsync(10);
 
-    expect(applyRunStateEvent).toHaveBeenCalledWith({
-      type: SESSION_RUN_EVENT.LOCAL_FAILURE,
-      state: BackendChannelState.ERROR,
-      sessionId: "s-1",
-      dialogProcessId: "dp-missing",
-      turnScopeId: "",
-      source: "interaction_payload_missing",
-    });
+    expect(applyRunStateEvent).not.toHaveBeenCalled();
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
     expect(interactionSubmitting.value).toBe(false);
@@ -477,7 +470,7 @@ describe("useReconnectReplay", () => {
     expect(mocks.setPendingInteractionRequest).not.toHaveBeenCalled();
   });
 
-  it("RT-06: expired state clears pending interaction and stops sending", async () => {
+  it("RT-06: expired discovery does not directly clear business interaction state", async () => {
     const { api, refs, mocks } = createFixture();
     refs.interactionSubmitting.value = true;
 
@@ -506,11 +499,11 @@ describe("useReconnectReplay", () => {
     });
 
     expect(selectSessionTurnRuntime(refs.turnRuntimeRegistry.value, "s-1").sending).toBe(false);
-    expect(refs.interactionSubmitting.value).toBe(false);
-    expect(mocks.clearPendingInteraction).toHaveBeenCalled();
+    expect(refs.interactionSubmitting.value).toBe(true);
+    expect(mocks.clearPendingInteraction).not.toHaveBeenCalled();
   });
 
-  it("RT-06a: backend completed replay finalizes through session detail flow", async () => {
+  it("RT-06a: backend completed replay only requests authoritative terminal resolution", async () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
@@ -550,19 +543,18 @@ describe("useReconnectReplay", () => {
     });
 
     const assistant = refs.activeSession.value.messages[1];
-    expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1");
-    expect(mocks.chatList.applySessionDetail).toHaveBeenCalledTimes(1);
+    expect(mocks.resolveTurnTerminalState).toHaveBeenCalledWith("s-1", "turn-completed", {
+      commandId: "",
+      sequence: 12,
+      source: "reconnect_replay",
+    });
+    expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
+    expect(mocks.chatList.applySessionDetail).not.toHaveBeenCalled();
     expect(selectSessionTurnRuntime(refs.turnRuntimeRegistry.value, "s-1").sending).toBe(false);
-    expect(assistant.pending).toBe(false);
-    expect(assistant.channelState).toMatchObject({
-      state: "frontend_completed",
-      dialogProcessId: "dp-completed",
-    });
-    expect(assistant.statusLabelKey).toBe("chat.generated");
-    expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
-      sessionId: "s-1",
-      dialogProcessId: "dp-completed",
-    });
+    expect(assistant.pending).toBe(true);
+    expect(assistant.channelState).toMatchObject({ state: "sending" });
+    expect(assistant.statusLabelKey).toBeUndefined();
+    expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
   });
 
   it("does not finalize or mutate runtime for an untrusted completed snapshot", async () => {
@@ -602,7 +594,7 @@ describe("useReconnectReplay", () => {
     expect(mocks.applyTurnRuntimeEvents).not.toHaveBeenCalled();
   });
 
-  it("finalizes an authoritative completed turn only once when the terminal fact is repeated", async () => {
+  it("repeated authoritative completed notifications remain query triggers and never finalize locally", async () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "question" },
@@ -627,28 +619,21 @@ describe("useReconnectReplay", () => {
     const first = await api.applyChannelState(terminalFact);
     const repeated = await api.applyChannelState(terminalFact);
 
-    expect(first).toMatchObject({
-      requestedSessionId: "s-1",
-      canonicalSessionId: "s-1",
-      turnKey: "__turn__s-1::turn-repeat",
-      eventId: "channel-completed-repeat",
+    expect(first).toMatchObject({ applied: false, reason: "terminal_unresolved" });
+    expect(repeated).toMatchObject({ applied: false, reason: "terminal_unresolved" });
+    expect(mocks.resolveTurnTerminalState).toHaveBeenCalledTimes(2);
+    expect(mocks.resolveTurnTerminalState).toHaveBeenNthCalledWith(1, "s-1", "turn-repeat", {
+      commandId: "",
       sequence: 21,
-      source: "reconnect_channel_state",
-      authority: "authoritative_current_run",
-      applied: true,
+      source: "reconnect_replay",
     });
-    expect(repeated).toMatchObject({
-      turnKey: "__turn__s-1::turn-repeat",
-      applied: false,
-    });
-    expect(repeated.reason).not.toBe("applied");
-    expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledTimes(1);
-    expect(mocks.chatList.applySessionDetail).toHaveBeenCalledTimes(1);
-    expect(refs.activeSession.value.messages[1].pending).toBe(false);
+    expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
+    expect(mocks.chatList.applySessionDetail).not.toHaveBeenCalled();
+    expect(refs.activeSession.value.messages[1].pending).toBe(true);
   });
 
   it.each(["cancelled"])(
-    "RT-06b: %s state clears pending interaction and stops sending",
+    "RT-06b: %s discovery does not directly clear business interaction state",
     async (state) => {
       const { api, refs, mocks } = createFixture();
       refs.interactionSubmitting.value = true;
@@ -678,11 +663,8 @@ describe("useReconnectReplay", () => {
       });
 
       expect(selectSessionTurnRuntime(refs.turnRuntimeRegistry.value, "s-1").sending).toBe(false);
-      expect(refs.interactionSubmitting.value).toBe(false);
-      expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
-        sessionId: "s-1",
-        dialogProcessId: `dp-${state}`,
-      });
+      expect(refs.interactionSubmitting.value).toBe(true);
+      expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
     },
   );
 });

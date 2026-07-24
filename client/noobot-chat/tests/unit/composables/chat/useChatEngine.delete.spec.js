@@ -11,10 +11,47 @@ import {
 } from "./helpers/useChatEngineHarness";
 import { BackendChannelState, FrontendRunState, SESSION_RUN_EVENT } from "../../../../src/composables/chat/sessionRunStateMachine";
 import { SESSION_DETAIL_APPLY_MODE } from "../../../../src/composables/chat/chatEngine/messageStateGuards";
-import { applyTurnRuntimeEvent, resolveSessionTurnRuntime } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+import {
+  applyTurnRuntimeEvent,
+  applyTurnTerminalResolution,
+  resolveSessionTurnRuntime,
+} from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+import { createTurnTerminalResolution } from "../../../../../../shared/turn-lifecycle-protocol.mjs";
 import {
   RoleEnum,
 } from "../../../../src/shared/constants/chatConstants";
+
+function settleStoppedTurn(turnRuntimeRegistry, { sessionId, turnScopeId, messages = [] }) {
+  const revision = 100;
+  const sequence = 100;
+  const completionCommitId = `commit-${turnScopeId}-${revision}`;
+  return applyTurnTerminalResolution(turnRuntimeRegistry.value, createTurnTerminalResolution({
+    commandId: `resolve-${turnScopeId}-${revision}`,
+    sessionId,
+    turnScopeId,
+    resolved: true,
+    turn: {
+      sessionId,
+      turnScopeId,
+      state: "stop_completed",
+      phase: "stop",
+      revision,
+      sequence,
+      completionCommitId,
+      summaryVersion: revision,
+      capabilities: { actionLocked: false, canStop: false },
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+    materialization: {
+      completionCommitId,
+      summaryVersion: revision,
+      revision,
+      sequence,
+      terminalStatus: { status: "stop_completed" },
+      messages,
+    },
+  }));
+}
 
 describe("useChatEngine.delete", () => {
   it("cascadeDeleteMessagesFrom resolves assistant target to user message and removes the user turn", () => {
@@ -71,10 +108,10 @@ describe("useChatEngine.delete", () => {
           turnScopeId: target.turnScopeId,
           dialogProcessId: target.dialogProcessId,
         };
-        applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
-          type: "local_user_stop_summary_applied",
+        settleStoppedTurn(turnRuntimeRegistry, {
           sessionId: "local-delete",
           turnScopeId: target.turnScopeId,
+          messages: [first, target],
         });
       });
       return true;
@@ -391,10 +428,10 @@ describe("useChatEngine.delete", () => {
     activeSession.value.rawMessages = [first, target];
     activeSession.value.version = 4;
     activateRuntimeTurn({ turnRuntimeRegistry, sessionId, turnScopeId });
-    applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
-      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED,
+    settleStoppedTurn(turnRuntimeRegistry, {
       sessionId,
       turnScopeId,
+      messages: [first, target],
     });
     expect(resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionId)?.terminal).toBe("user_stopped");
 

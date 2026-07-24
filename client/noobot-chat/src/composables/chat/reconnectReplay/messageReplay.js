@@ -10,7 +10,6 @@ import {
   mergeCurrentUserMessagesIntoFoldedMessages,
   patchMessageObjectPreservingUiState,
 } from "../../infra/reconnectReplayModel";
-import { findMessageTurnStatus } from "../chatEngine/messageStateGuards";
 import { getMessageDialogProcessId } from "../../infra/messageIdentity";
 import { _ensureArray, _isAssistantRole, _matchesDialogProcessId, _trimStr } from "./utils";
 import {
@@ -95,7 +94,6 @@ export function applyFoldedMessagesToActiveSession(activeSession, foldedMessages
       ? patchMessageObjectPreservingUiState(
         reusableMessage,
         nextMessage,
-        findMessageTurnStatus(reusableMessage, activeSession.value.turnStatuses),
       )
       : nextMessage;
   });
@@ -142,7 +140,6 @@ export function applyFoldedMessagesForDialogProcess(activeSession, foldedMessage
     patchMessageObjectPreservingUiState(
       reusableMessage,
       nextMessage,
-      findMessageTurnStatus(reusableMessage, activeSession.value.turnStatuses),
     );
   }
   return existingMessages;

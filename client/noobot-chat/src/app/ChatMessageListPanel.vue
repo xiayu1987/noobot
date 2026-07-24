@@ -4,15 +4,10 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, ref, watch, watchEffect } from "vue";
+import { computed, ref, watch } from "vue";
 import ChatMessageItem from "../modules/message/ChatMessageItem.vue";
 import WorkflowLiveProjectionList from "./WorkflowLiveProjectionList.vue";
 import { useLocale } from "../shared/i18n/useLocale";
-import {
-  SESSION_RUN_MESSAGE_RUNTIME_ACTION,
-  SESSION_RUN_MESSAGE_RUNTIME_MARK,
-  resolveSessionRunMessageRuntimePatch,
-} from "../composables/chat/sessionRunStateMachine";
 import {
   getMessageSessionId,
   getMessageTurnScopeId,
@@ -78,77 +73,6 @@ function getMessageRenderKey(messageItem = {}, messageIndex = 0) {
     .map((item) => String(item ?? "").replaceAll("|", "/"))
     .join("|");
 }
-
-function applyMessageRuntimePatch(messageItem = {}, patch = {}) {
-  if (!messageItem || !patch || typeof patch !== "object") return;
-  if (patch.clearRuntimeMark) {
-    delete messageItem[SESSION_RUN_MESSAGE_RUNTIME_MARK];
-  }
-  if (patch.runtimeMark !== undefined) {
-    messageItem[SESSION_RUN_MESSAGE_RUNTIME_MARK] = String(patch.runtimeMark || "");
-  }
-  const channelState =
-    messageItem.channelState &&
-    typeof messageItem.channelState === "object" &&
-    !Array.isArray(messageItem.channelState)
-      ? messageItem.channelState
-      : {};
-  if (patch.channelState && typeof patch.channelState === "object" && !Array.isArray(patch.channelState)) {
-    messageItem.channelState = {
-      ...channelState,
-      ...patch.channelState,
-    };
-  }
-  if (Object.prototype.hasOwnProperty.call(patch, "pending")) {
-    messageItem.pending = patch.pending === true;
-  }
-  const turnScopeId = getMessageTurnScopeId(messageItem);
-  if (turnScopeId && (patch.thinkingStartedAt || patch.thinkingFinishedAt)) {
-    const existingTiming = props.activeSession?.turnTimingsByTurnScopeId?.[turnScopeId] || {};
-    props.activeSession.turnTimingsByTurnScopeId = {
-      ...(props.activeSession.turnTimingsByTurnScopeId || {}),
-      [turnScopeId]: {
-        ...existingTiming,
-        ...(patch.thinkingStartedAt && !existingTiming.thinkingStartedAt
-          ? { thinkingStartedAt: patch.thinkingStartedAt }
-          : {}),
-        ...(patch.thinkingFinishedAt && !existingTiming.thinkingFinishedAt
-          ? { thinkingFinishedAt: patch.thinkingFinishedAt }
-          : {}),
-      },
-    };
-  }
-  if (
-    patch.statusLabelKey &&
-    (patch.statusLabelPolicy !== "if_empty" || !String(messageItem.statusLabel || "").trim())
-  ) {
-    messageItem.statusLabel = translate(patch.statusLabelKey);
-  }
-}
-
-function applyConversationStateRuntimeToMessages() {
-  const messageList = Array.isArray(props.activeSession?.messages)
-    ? props.activeSession.messages
-    : [];
-  messageList.forEach((messageItem) => {
-    const runtimeEffect = resolveSessionRunMessageRuntimePatch({
-      messageItem,
-      activeSession: props.activeSession,
-    });
-    if (runtimeEffect.action === SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE) {
-      applyMessageRuntimePatch(messageItem, runtimeEffect.patch);
-    }
-  });
-}
-
-watchEffect(() => {
-  props.activeSession?.id;
-  props.activeSession?.backendSessionId;
-  Array.isArray(props.activeSession?.messages) ? props.activeSession.messages.length : 0;
-  props.activeSession?.turnStatuses;
-  props.activeSession?.turnTimingsByTurnScopeId;
-  applyConversationStateRuntimeToMessages();
-});
 
 function getMessageAnchorId(messageItem = {}, messageIndex = 0) {
   return `chat-message-${getMessageRenderKey(messageItem, messageIndex)

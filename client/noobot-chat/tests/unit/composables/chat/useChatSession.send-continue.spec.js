@@ -7,6 +7,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
 import { useChatStore } from "../../../../src/shared/stores/useChatStore";
+import { applyTurnTerminalResolution } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+import { createTurnTerminalResolution } from "../../../../../../shared/turn-lifecycle-protocol.mjs";
 import {
   createChatSession,
   createSessionFixture,
@@ -31,6 +33,31 @@ function sessionWithTurn(status, overrides = {}) {
     turnStatuses: status ? [{ status, dialogProcessId, turnScopeId }] : [],
     ...overrides,
   });
+}
+
+function settleStopped(store, session) {
+  const sessionId = session.backendSessionId || session.id;
+  const status = session.turnStatuses.at(-1);
+  const turnScopeId = status.turnScopeId;
+  const revision = 100;
+  const completionCommitId = `commit-${turnScopeId}`;
+  return applyTurnTerminalResolution(store.turnRuntimeRegistry, createTurnTerminalResolution({
+    commandId: `resolve-${turnScopeId}`,
+    sessionId,
+    turnScopeId,
+    resolved: true,
+    turn: {
+      sessionId, turnScopeId, dialogProcessId: status.dialogProcessId,
+      state: "stop_completed", phase: "stop", revision, sequence: revision,
+      completionCommitId, summaryVersion: revision,
+      capabilities: { actionLocked: false, canStop: false },
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+    materialization: {
+      completionCommitId, summaryVersion: revision, revision, sequence: revision,
+      terminalStatus: { status: "stop_completed" }, messages: session.messages,
+    },
+  }));
 }
 
 describe("useChatSession send/continue actions", () => {
@@ -99,6 +126,7 @@ describe("useChatSession send/continue actions", () => {
     store.sessions = [current];
     store.activeSessionId = current.id;
     const session = createChatSession();
+    settleStopped(store, current);
     expect(session.composerActionState.value).toMatchObject({
       primaryAction: "continue",
       userStopped: true,
@@ -120,6 +148,7 @@ describe("useChatSession send/continue actions", () => {
       return {};
     });
     const session = createChatSession();
+    settleStopped(store, store.sessions[0]);
 
     expect(session.composerActionState.value.primaryAction).toBe("continue");
     expect(await session.send()).toBe(true);
@@ -178,8 +207,9 @@ describe("useChatSession send/continue actions", () => {
     store.input = "continue";
     const session = createChatSession();
 
-    expect(session.composerActionState.value.primaryAction).toBe("continue");
-    expect(await session.send()).toBe(false);
-    expect(wsClientMock.stream).not.toHaveBeenCalled();
+    expect(session.composerActionState.value.primaryAction).toBe("send");
+    expect(await session.send()).toBe(true);
+    expect(wsClientMock.stream).toHaveBeenCalledTimes(1);
+    expect(wsClientMock.stream.mock.calls[0][0].action).toBeUndefined();
   });
 });

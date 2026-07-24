@@ -11,6 +11,7 @@ import {
 } from "../../infra/messageIdentity";
 import { normalizeTrimmedString } from "./utils";
 import { resolveSessionRunMessageRuntimeView } from "../sessionRunStateMachine";
+import { selectTurnMessageRuntime } from "../sessionRunStateMachine/turnRuntimeRegistry";
 
 export const SESSION_DETAIL_APPLY_MODE = Object.freeze({
   AUTO: "auto",
@@ -27,27 +28,20 @@ export function normalizeSessionDetailApplyMode(value = "") {
     : SESSION_DETAIL_APPLY_MODE.AUTO;
 }
 
-export function findMessageTurnStatus(messageItem = {}, turnStatuses = []) {
+export function isInFlightAssistantMessage(messageItem = {}, {
+  registry = null,
+  sessionId = "",
+} = {}) {
+  if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) return false;
   const turnScopeId = getMessageTurnScopeId(messageItem);
   const dialogProcessId = getMessageDialogProcessId(messageItem);
-  return (Array.isArray(turnStatuses) ? turnStatuses : []).find((turnStatus) => {
-    if (!turnStatus || typeof turnStatus !== "object" || Array.isArray(turnStatus)) return false;
-    const statusTurnScopeId = normalizeTrimmedString(turnStatus.turnScopeId);
-    const statusDialogProcessId = normalizeTrimmedString(
-      turnStatus.dialogProcessId || getMessageDialogProcessId(turnStatus),
-    );
-    if (turnScopeId && statusTurnScopeId) return turnScopeId === statusTurnScopeId;
-    return Boolean(dialogProcessId && statusDialogProcessId && dialogProcessId === statusDialogProcessId);
-  }) || null;
-}
-
-export function isInFlightAssistantMessage(messageItem = {}, { turnStatuses = [] } = {}) {
-  if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) return false;
-  const runtimeView = resolveSessionRunMessageRuntimeView(
-    messageItem,
-    null,
-    findMessageTurnStatus(messageItem, turnStatuses),
-  );
+  const registryView = selectTurnMessageRuntime(registry, { sessionId, turnScopeId, dialogProcessId });
+  // Registry is the runtime source of truth. Message runtime projection is only
+  // a bootstrap fallback while the registry has not observed this Turn yet;
+  // legacy turnStatuses never participate in this decision.
+  const runtimeView = registryView?.source
+    ? { ...registryView, inFlightAssistant: registryView.running === true }
+    : resolveSessionRunMessageRuntimeView(messageItem);
   if (!runtimeView.inFlightAssistant) return false;
   const runtimeChannelState = runtimeView.channelState || {};
   const hasRuntimeIdentity = Boolean(
@@ -65,10 +59,12 @@ export function isMessageInRunScope(messageItem = {}, { turnScopeId = "" } = {})
   return getMessageTurnScopeId(messageItem) === normalizedTurnScopeId;
 }
 
-export function hasMatchingInFlightAssistantMessage(messages = [], { turnScopeId = "", turnStatuses = [] } = {}) {
+export function hasMatchingInFlightAssistantMessage(messages = [], {
+  turnScopeId = "", registry = null, sessionId = "",
+} = {}) {
   const sourceMessages = Array.isArray(messages) ? messages : [];
   return sourceMessages.some((messageItem) => (
-    isInFlightAssistantMessage(messageItem, { turnStatuses }) &&
+    isInFlightAssistantMessage(messageItem, { registry, sessionId }) &&
     isMessageInRunScope(messageItem, { turnScopeId })
   ));
 }
@@ -76,7 +72,8 @@ export function hasMatchingInFlightAssistantMessage(messages = [], { turnScopeId
 export function hasInFlightAssistantMissingFromDetail({
   currentMessages = [],
   detailMessages = [],
-  turnStatuses = [],
+  registry = null,
+  sessionId = "",
 } = {}) {
   const detailTurnScopeIds = new Set(
     (Array.isArray(detailMessages) ? detailMessages : [])
@@ -88,7 +85,7 @@ export function hasInFlightAssistantMissingFromDetail({
     return Boolean(
       turnScopeId &&
       !detailTurnScopeIds.has(turnScopeId) &&
-      isInFlightAssistantMessage(messageItem, { turnStatuses }),
+      isInFlightAssistantMessage(messageItem, { registry, sessionId }),
     );
   });
 }

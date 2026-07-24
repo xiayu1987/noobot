@@ -8,7 +8,7 @@ import { resolveDialogProcessIdFromContext, resolveMessageDialogProcessId } from
 import { dedupeAttachments, normalizeIncomingAttachmentsForSessionMessage } from "./attachment-helpers.js";
 import { resolveSessionVersion } from "./anchor-utils.js";
 import { upsertSessionTurnTiming } from "./turn-timing.js";
-import { normalizeTurnLifecycleEntity, transitionTurnLifecycle, isTerminalTurnLifecycleState } from "../../entities/turn-lifecycle-entity.js";
+import { normalizeTurnLifecycleEntity, transitionTurnLifecycle, isTerminalTurnLifecycleState, projectTurnLifecycleTiming } from "../../entities/turn-lifecycle-entity.js";
 import { createTurnLifecycleSnapshot, validateSessionProvisionIntent } from "@noobot/shared/turn-lifecycle-protocol";
 import { normalizeSessionEntity } from "../../entities/session-entity.js";
 
@@ -18,12 +18,15 @@ export async function getTurnLifecycleSnapshot({ userId, sessionId, parentSessio
   const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId, persistenceContext);
   if (!session) return { found: false, reason: "session_not_found" };
   const lifecycle = normalizeTurnLifecycleEntity(session.turnLifecycle || {});
-  const activeTurn = lifecycle.turns[lifecycle.activeTurnScopeId] || null;
+  const activeTurn = lifecycle.turns[lifecycle.activeTurnScopeId]
+    ? { ...projectTurnLifecycleTiming(lifecycle.turns[lifecycle.activeTurnScopeId], session.turnTimings), sessionId }
+    : null;
   const limit = Math.max(0, Math.min(100, Number(terminalLimit) || 10));
   const recentTerminalTurns = Object.values(lifecycle.turns)
     .filter((turn) => isTerminalTurnLifecycleState(turn.state))
     .sort((a, b) => Number(b.sequence) - Number(a.sequence))
-    .slice(0, limit);
+    .slice(0, limit)
+    .map((turn) => ({ ...projectTurnLifecycleTiming(turn, session.turnTimings), sessionId }));
   return {
     found: true,
     snapshot: createTurnLifecycleSnapshot({
@@ -64,13 +67,56 @@ export async function applyTurnLifecycleEvent({
     if (expectedSessionVersion !== undefined && Number(expectedSessionVersion) !== actualVersion) {
       return { applied: false, reason: "session_version_conflict", currentVersion: actualVersion };
     }
-    const result = transitionTurnLifecycle(session.turnLifecycle, event, this.now);
+    let turnStatus = null;
+    let lifecycleEvent = event;
+    const terminalStatus = event.terminalStatus && typeof event.terminalStatus === "object"
+      ? event.terminalStatus
+      : null;
+    if (terminalStatus) {
+      const nowValue = this.now();
+      const incoming = buildTurnTerminalCommand(terminalStatus.command, {
+        turnScopeId: event.turnScopeId,
+        dialogProcessId: event.dialogProcessId,
+        parentDialogProcessId: terminalStatus.parentDialogProcessId,
+        description: terminalStatus.description,
+        error: terminalStatus.error,
+        updatedAt: nowValue,
+      });
+      if (!incoming) return { applied: false, reason: "invalid_turn_status_command", session, version: actualVersion };
+      const statusResult = upsertTurnStatusEntity({
+        statuses: session.turnStatuses,
+        messages: session.messages,
+        incoming,
+        now: this.now,
+      });
+      turnStatus = statusResult.turnStatus;
+      if (!turnStatus) return { applied: false, reason: "invalid_turn_status", session, version: actualVersion };
+      session.turnStatuses = statusResult.statuses;
+      lifecycleEvent = {
+        ...event,
+        summaryVersion: Number(event.summaryVersion || turnStatus.version || 0),
+        completionCommitId: String(event.completionCommitId || event.commandId || "").trim(),
+        terminalStatus: turnStatus,
+      };
+    }
+    const result = transitionTurnLifecycle(session.turnLifecycle, lifecycleEvent, this.now);
     if (!result.applied) return { ...result, session, version: actualVersion };
     session.turnLifecycle = result.lifecycle;
+    const committedTurn = result.lifecycle?.turns?.[String(event.turnScopeId || "").trim()] || null;
+    if (committedTurn && isTerminalTurnLifecycleState(committedTurn.state)) {
+      const materializedStatus = turnStatus || {
+        turnScopeId: committedTurn.turnScopeId,
+        dialogProcessId: committedTurn.dialogProcessId,
+        status: committedTurn.state,
+        error: committedTurn.failure || null,
+        updatedAt: committedTurn.updatedAt,
+      };
+      committedTurn.terminalStatus = materializedStatus;
+    }
     session.updatedAt = this.now();
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
     await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: actualVersion, persistenceContext });
-    return { ...result, session, version: resolveSessionVersion(session) };
+    return { ...result, session, turnStatus, version: resolveSessionVersion(session) };
   }, parentSessionId, persistenceContext);
 }
 

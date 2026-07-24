@@ -13,11 +13,44 @@ import {
 } from "./helpers/useChatEngineHarness";
 import { BackendChannelState, FrontendRunState } from "../../../../src/composables/chat/sessionRunStateMachine";
 import { SESSION_RUN_EVENT } from "../../../../src/composables/chat/sessionRunStateMachine";
-import { applyTurnRuntimeEvent } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+import { applyTurnTerminalResolution } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+import { createTurnTerminalResolution } from "../../../../../../shared/turn-lifecycle-protocol.mjs";
 import {
   RoleEnum,
   StreamEventEnum,
 } from "../../../../src/shared/constants/chatConstants";
+
+function settleStoppedTurn(turnRuntimeRegistry, { sessionId, turnScopeId, messages = [] }) {
+  const revision = 100;
+  const sequence = 100;
+  const completionCommitId = `commit-${turnScopeId}-${revision}`;
+  return applyTurnTerminalResolution(turnRuntimeRegistry.value, createTurnTerminalResolution({
+    commandId: `resolve-${turnScopeId}-${revision}`,
+    sessionId,
+    turnScopeId,
+    resolved: true,
+    turn: {
+      sessionId,
+      turnScopeId,
+      state: "stop_completed",
+      phase: "stop",
+      revision,
+      sequence,
+      completionCommitId,
+      summaryVersion: revision,
+      capabilities: { actionLocked: false, canStop: false },
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+    materialization: {
+      completionCommitId,
+      summaryVersion: revision,
+      revision,
+      sequence,
+      terminalStatus: { status: "stop_completed" },
+      messages,
+    },
+  }));
+}
 
 describe("useChatEngine.resend stopped state", () => {
   it("resendMonotonicMessage rejects stale stopped replacement snapshots without the new turnScopeId", async () => {
@@ -296,10 +329,10 @@ describe("useChatEngine.resend stopped state", () => {
     firstReplacementAssistant.statusLabel = "chat.stopped";
     firstReplacementAssistant.stopState = "stopped";
     firstReplacementAssistant.channelState = { state: "user_stopped", turnScopeId: firstTurnScopeId };
-    applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
-      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED,
+    settleStoppedTurn(turnRuntimeRegistry, {
       sessionId: "local-resend-second-stopped",
       turnScopeId: firstTurnScopeId,
+      messages: activeSession.value.messages,
     });
     await expect(engine.resendMonotonicMessage(firstReplacementAssistant, "third")).resolves.toBe(true);
   
@@ -394,10 +427,10 @@ describe("useChatEngine.resend stopped state", () => {
     firstAssistant.pending = false;
     firstAssistant.statusLabel = "chat.stopped";
     firstAssistant.channelState = { state: "user_stopped", turnScopeId: firstAssistant.turnScopeId };
-    applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
-      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_SUMMARY_APPLIED,
+    settleStoppedTurn(turnRuntimeRegistry, {
       sessionId: "local-resend-stale-stop-replay",
       turnScopeId: firstAssistant.turnScopeId,
+      messages: activeSession.value.messages,
     });
 
     await expect(engine.resendMonotonicMessage(firstAssistant, "third")).resolves.toBe(true);
@@ -408,10 +441,10 @@ describe("useChatEngine.resend stopped state", () => {
     // The mocked stream resolves immediately, so the transient pending assistant
     // has already been finalized by the time resendMonotonicMessage resolves.
     expect(freshPlaceholder).toBeUndefined();
-    // A bare backend stop fact cannot become a global terminal state. The
-    // current frontend action remains the only interaction lock until detail
-    // or an error clears it.
-    expect(sending.value).toBe(true);
+    // The replacement Turn was settled by a complete authoritative terminal
+    // response, so its interaction lock is released. Stale message-level stop
+    // decoration cannot reintroduce a sending lock.
+    expect(sending.value).toBe(false);
     expect(canStop.value).toBe(false);
   });
 

@@ -279,6 +279,10 @@ export function createSessionFacade(runtime = {}) {
       return sessionCrudService.getSessionBundle(payload);
     },
 
+    async resolveTurnTerminalState(payload = {}) {
+      return sessionCrudService.resolveTurnTerminalState(payload);
+    },
+
     async appendTurn(payload = {}) {
       return sessionMessageService.appendTurn(payload);
     },

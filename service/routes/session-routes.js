@@ -7,6 +7,12 @@ import { createJsonRouteWrapper } from "./route-wrapper.js";
 import { HTTP_STATUS } from "#agent/constants";
 import { createServicePluginHost } from "../services/service-plugin-host.js";
 import { buildThinkingDetailPayload, normalizeSessionThinkingRouteText as normalizeRouteText } from "noobot-agent/session";
+import crypto from "node:crypto";
+import {
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
 
 const servicePluginHost = createServicePluginHost();
 
@@ -59,6 +65,44 @@ export function registerSessionRoutes(
       res.json({ ok: true, ...result });
     }),
   );
+
+  const resolveTurnTerminalHandler = jsonRoute(async (req, res) => {
+    const { userId, sessionId, turnScopeId } = req.params;
+    const commandId = String(req.query?.commandId || "").trim() || crypto.randomUUID();
+    const resolution = await bot.session.resolveTurnTerminalState({
+      userId, sessionId, turnScopeId, commandId,
+    });
+    void writeRoutedRuntimeEvent({
+      scope: "session",
+      source: "service",
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.DEBUG,
+      level: "debug",
+      debugType: "terminal-resolution",
+      event: "backend.terminalResolution.read",
+      userId: String(userId || "").trim(),
+      sessionId: String(sessionId || "").trim(),
+      turnScopeId: String(turnScopeId || "").trim(),
+      data: {
+        commandId,
+        resolved: resolution?.resolved === true,
+        retryable: resolution?.retryable === true,
+        reason: String(resolution?.reason || "").trim(),
+        responseSessionId: String(resolution?.sessionId || "").trim(),
+        responseTurnScopeId: String(resolution?.turnScopeId || "").trim(),
+        turnState: String(resolution?.turn?.state || "").trim(),
+        executionState: String(resolution?.turn?.executionState || "").trim(),
+        revision: Number(resolution?.turn?.revision || resolution?.revision || 0),
+        sequence: Number(resolution?.turn?.sequence || resolution?.sequence || 0),
+        startedAt: String(resolution?.turn?.startedAt || "").trim(),
+        finishedAt: String(resolution?.turn?.finishedAt || "").trim(),
+        hasTerminalStatus: Boolean(resolution?.turn?.terminalStatus),
+      },
+    });
+    res.json({ ok: true, ...resolution });
+  });
+  app.get("/internal/session/:userId/:sessionId/turns/:turnScopeId/terminal", resolveTurnTerminalHandler);
+  app.get("/api/internal/session/:userId/:sessionId/turns/:turnScopeId/terminal", resolveTurnTerminalHandler);
 
   app.get(
     "/internal/session/:userId/:sessionId/thinking-detail",

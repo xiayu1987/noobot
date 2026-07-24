@@ -12,7 +12,7 @@ afterEach(() => {
 });
 
 describe("useReconnectReplay", () => {
-  it("副作用顺序: appendMessage -> scrollBottom; terminal cleanup由channel_state触发", async () => {
+  it("终态 channel_state 只触发权威查询，不直接清理交互或结算消息", async () => {
     const { api, mocks } = createFixture();
     await api.applyReconnectData({
       sessions: [
@@ -36,11 +36,16 @@ describe("useReconnectReplay", () => {
     });
 
     expect(mocks.appendMessage).toHaveBeenCalled();
-    expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalled();
+    expect(mocks.resolveTurnTerminalState).toHaveBeenCalledWith(
+      "s-1",
+      "turn-order",
+      { commandId: "", sequence: 3, source: "reconnect_replay" },
+    );
+    expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
     expect(mocks.scrollBottom).not.toHaveBeenCalled();
   });
 
-  it("interaction_pending without pendingInteraction falls back to error state", async () => {
+  it("interaction_pending without payload reports diagnostics without settling the Turn", async () => {
     vi.useFakeTimers();
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
@@ -74,9 +79,11 @@ describe("useReconnectReplay", () => {
 
     await vi.advanceTimersByTimeAsync(1200);
 
-    expect(refs.sending.value).toBe(false);
-    expect(assistant?.statusLabel).toBe("chat.failed");
-    expect(assistant?.error).toBe("chat.interactionPayloadMissing");
+    // A local timeout may surface diagnostics, but cannot authoritatively
+    // settle the Turn or release its capability lock.
+    expect(refs.sending.value).toBe(true);
+    expect(assistant?.statusLabel).toBe("");
+    expect(assistant?.error).toBeUndefined();
     expect(mocks.notify).toHaveBeenCalledWith({
       type: "error",
       message: "chat.interactionPayloadMissing",
@@ -120,7 +127,7 @@ describe("useReconnectReplay", () => {
     vi.useRealTimers();
   });
 
-  it("expired refresh failure falls back to error state", async () => {
+  it("expired refresh failure reports diagnostics without manufacturing a Turn terminal state", async () => {
     vi.useFakeTimers();
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
@@ -152,9 +159,11 @@ describe("useReconnectReplay", () => {
     const assistant = refs.activeSession.value.messages.find(
       (message) => message.role === RoleEnum.ASSISTANT,
     );
+    // Cache refresh failure is local recovery evidence only. It must not
+    // manufacture a Turn terminal transition.
     expect(refs.sending.value).toBe(false);
-    expect(assistant?.statusLabel).toBe("chat.failed");
-    expect(assistant?.error).toBe("chat.expiredRefreshFailed");
+    expect(assistant?.statusLabel).toBe("");
+    expect(assistant?.error).toBeUndefined();
     expect(mocks.notify).toHaveBeenCalledWith({
       type: "error",
       message: "chat.expiredRefreshFailed",

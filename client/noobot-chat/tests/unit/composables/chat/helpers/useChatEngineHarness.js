@@ -19,6 +19,50 @@ import {
   selectSessionTurnRuntime,
 } from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 
+const terminalResolutionFromUrl = (url, state = "completed", messages = []) => {
+  const match = String(url).match(/\/session\/[^/]+\/([^/]+)\/turns\/([^/]+)\/terminal/);
+  const sessionId = decodeURIComponent(match?.[1] || "");
+  const turnScopeId = decodeURIComponent(match?.[2] || "");
+  const revision = 2;
+  const sequence = 2;
+  const completionCommitId = `commit:${sessionId}:${turnScopeId}:${revision}`;
+  const failure = state.endsWith("_failed")
+    ? { stage: state.slice(0, -"_failed".length), retryable: false, message: "terminal failure" }
+    : null;
+  return {
+    protocolVersion: 1,
+    eventType: "turn.terminal_resolved",
+    commandId: `resolve:${sessionId}:${turnScopeId}`,
+    sessionId,
+    turnScopeId,
+    resolved: true,
+    retryable: false,
+    reason: "",
+    retryAfterMs: 0,
+    turn: {
+      sessionId,
+      turnScopeId,
+      state,
+      phase: state === "stop_completed" ? "stop" : (failure?.stage || "completion"),
+      revision,
+      sequence,
+      completionCommitId,
+      summaryVersion: 1,
+      finalizeIntent: state === "stop_completed" ? "stop" : "complete",
+      failure,
+    },
+    materialization: {
+      sessionVersion: 1,
+      terminalStatus: { status: state },
+      messages,
+      completionCommitId,
+      summaryVersion: 1,
+      revision,
+      sequence,
+    },
+  };
+};
+
 vi.mock("../../../../../src/shared/i18n/useLocale", () => ({
   useLocale: () => ({
     locale: ref("zh-CN"),
@@ -60,10 +104,24 @@ export const createHarness = ({
   pendingInteraction = null,
   interactionSubmittingValue = false,
   autoPatchStreamTurnScopeId = true,
+  terminalResolutionState = "completed",
   deps = {},
 } = {}) => {
   const activeSessionId = ref(sessionId);
-  const activeSession = ref(makeSession(sessionId));
+  const sessions = ref([makeSession(sessionId)]);
+  // Mirror production: activeSession is a view over the sessions collection.
+  // Terminal Resolution atomically replaces the collection item, so a detached
+  // ref here would keep tests pointed at the pre-commit Session object.
+  const activeSession = computed({
+    get: () => sessions.value.find((item) =>
+      [item?.id, item?.sessionId, item?.backendSessionId].includes(activeSessionId.value)) || null,
+    set: (value) => {
+      const index = sessions.value.findIndex((item) =>
+        [item?.id, item?.sessionId, item?.backendSessionId].includes(activeSessionId.value));
+      if (index < 0) sessions.value.push(value);
+      else sessions.value[index] = value;
+    },
+  });
   const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
   const runtimeView = computed(() => selectSessionTurnRuntime(turnRuntimeRegistry.value, activeSessionId.value));
   const sending = computed(() => runtimeView.value.sending);
@@ -101,6 +159,7 @@ export const createHarness = ({
     scrollBottom: vi.fn(),
     activeSession,
     activeSessionId,
+    sessions,
     turnRuntimeRegistry,
     applyTurnRuntimeEvent: commitTurnRuntimeEvent,
     input,
@@ -158,6 +217,17 @@ export const createHarness = ({
     },
     ensureConnected: vi.fn(() => true),
     notify: vi.fn(),
+    terminalResolutionFetcher: vi.fn(async (url) => ({
+      ok: true,
+      json: async () => terminalResolutionFromUrl(
+        url,
+        terminalResolutionState,
+        // The authoritative service returns the complete committed projection,
+        // not an empty lifecycle-only payload. Clone the harness projection so
+        // the atomic apply cannot alias mutable test messages.
+        JSON.parse(JSON.stringify(activeSession.value?.rawMessages || [])),
+      ),
+    })),
   };
 
   const resolvedDeps = { ...defaultDeps, ...deps };
@@ -168,6 +238,7 @@ export const createHarness = ({
     deps: resolvedDeps,
     activeSession,
     activeSessionId,
+    sessions,
     sending,
     canStop,
     activeTurnRuntime,

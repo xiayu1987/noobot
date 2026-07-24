@@ -6,6 +6,10 @@
 export {
   BackendChannelState,
   BackendTerminalStates,
+  AUTHORITATIVE_TERMINAL_STATES,
+  LEGACY_TERMINAL_DISCOVERY_STATES,
+  isAuthoritativeTerminalState,
+  isLegacyTerminalDiscoveryState,
   FrontendRunState,
   FrontendTerminalStates,
   SESSION_RUN_EVENT,

@@ -598,17 +598,15 @@ export class FileSystemSessionRepository {
       sessionDir,
       fallback: {},
     });
-    session.sessionId = String(session.sessionId || sessionId || "").trim();
-    session.parentSessionId = String(
-      session.parentSessionId || resolvedParentSessionId || "",
-    ).trim();
-    session.caller = String(session.caller || "user").trim() || "user";
-    session.modelAlias = String(session.modelAlias || "");
-    session.messages = this.normalizeMessages(session.messages || []);
-    session.selectedConnectors = this.normalizeSelectedConnectors(
-      session.selectedConnectors || {},
-    );
-    return session;
+    return normalizeSessionEntity({
+      ...session,
+      sessionId: String(session.sessionId || sessionId || "").trim(),
+      parentSessionId: String(session.parentSessionId || resolvedParentSessionId || "").trim(),
+      caller: String(session.caller || "user").trim() || "user",
+      modelAlias: String(session.modelAlias || ""),
+      messages: this.normalizeMessages(session.messages || []),
+      selectedConnectors: this.normalizeSelectedConnectors(session.selectedConnectors || {}),
+    }, { now: this.now, sessionId, parentSessionId: resolvedParentSessionId });
   }
 
   async save(userId, session = {}, parentSessionId = "", { expectedVersion, createOnly = false, persistenceContext = null } = {}) {

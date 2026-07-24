@@ -6,6 +6,11 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createSessionListActions } from "../../../../../src/composables/chat/chatList/sessionListActions.js";
+import {
+  applyTurnRuntimeEvent,
+  createTurnRuntimeRegistryState,
+} from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
+import { SESSION_RUN_EVENT } from "../../../../../src/composables/chat/sessionRunStateMachine/constants.js";
 
 function ref(value) {
   return { value };
@@ -51,6 +56,55 @@ function createHarness(overrides = {}) {
   });
   return { actions, sessions, notify, renameSessionApi, getSessionsApi, fetchSessionDetail };
 }
+
+describe("createSessionListActions.fetchSessions identity reconciliation", () => {
+  it("atomically promotes the optimistic Session runtime when a summary reveals its canonical identity", async () => {
+    const turnScopeId = "client-turn:refresh-1";
+    const sessions = ref([{
+      id: "local-1",
+      isLocal: true,
+      caller: "user",
+      messages: [{ role: "assistant", turnScopeId, pending: true }],
+    }]);
+    const activeSessionId = ref("local-1");
+    const registry = createTurnRuntimeRegistryState();
+    applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+      sessionId: "local-1",
+      turnScopeId,
+      dialogProcessId: "dp-1",
+      source: "test",
+    });
+    const turnRuntimeRegistry = ref(registry);
+    const getSessionsApi = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        sessions: [{
+          sessionId: "backend-1",
+          id: "backend-1",
+          caller: "user",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+          turnLifecycleSnapshot: {
+            activeTurn: null,
+            recentTerminalTurns: [{ turnScopeId, state: "completed", sequence: 2 }],
+          },
+        }],
+      }),
+    });
+    const { actions } = createHarness({ sessions, activeSessionId, turnRuntimeRegistry, getSessionsApi });
+
+    await expect(actions.fetchSessions("local-1", { silent: true })).resolves.toBe(true);
+
+    expect(activeSessionId.value).toBe("backend-1");
+    expect(turnRuntimeRegistry.value.sessionAliases["local-1"]).toBe("backend-1");
+    expect(turnRuntimeRegistry.value.sessions["local-1"]).toBeUndefined();
+    expect(turnRuntimeRegistry.value.sessions["backend-1"]?.turns?.[turnScopeId]).toMatchObject({
+      sessionId: "backend-1",
+      turnScopeId,
+    });
+  });
+});
 
 describe("createSessionListActions.renameSession", () => {
   it("rejects empty titles without calling backend", async () => {

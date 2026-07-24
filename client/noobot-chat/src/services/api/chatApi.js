@@ -7,6 +7,25 @@ function resolveFetcher(fetcher) {
   return fetcher || fetch;
 }
 
+async function decodeJsonResponse(response, operation) {
+  if (response && typeof response.json === "function") {
+    const payload = await response.json();
+    if (response.ok === false || payload?.ok === false) {
+      const error = new Error(payload?.error || payload?.message || `${operation}_failed`);
+      error.status = Number(response.status || 0);
+      const retryAfter = response.headers?.get?.("retry-after");
+      const retryAfterSeconds = Number(retryAfter);
+      error.retryAfterMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+        ? retryAfterSeconds * 1000
+        : 0;
+      error.payload = payload;
+      throw error;
+    }
+    return payload;
+  }
+  return response;
+}
+
 function firstNormalizedString(...values) {
   for (const value of values) {
     const normalized = String(value || "").trim();
@@ -137,6 +156,21 @@ export async function getSessionDetailApi(
   return runFetch(
     `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
   );
+}
+
+export async function resolveTurnTerminalStateApi(
+  { userId = "", sessionId = "", turnScopeId = "", commandId = "" },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  const query = commandId ? `?commandId=${encodeURIComponent(commandId)}` : "";
+  const response = await runFetch(
+    `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnScopeId)}/terminal${query}`,
+  );
+  const payload = await decodeJsonResponse(response, "terminal_resolution");
+  // The HTTP route wraps the domain response with { ok: true }. Returning the
+  // domain object here keeps fetch/JSON concerns out of the coordinator.
+  return payload && typeof payload === "object" ? payload : {};
 }
 
 export async function getSessionFullDetailApi(

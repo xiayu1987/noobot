@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { promoteSessionIdentityToBackendId } from "../../infra/sessionIdentity";
 import { findVisibleLastMessage } from "../../infra/messageModel";
 import { nowIso } from "../../infra/timeFields";
 import { findReconnectDoneEnvelopeWithMessages } from "../../infra/reconnectReplayModel";
@@ -12,7 +11,6 @@ import { buildToolTimelineFromLegacyLogs, mergeToolTimelines } from "../chatEngi
 import { _trimStr } from "./utils";
 import { getMessageDialogProcessId, getMessageRole, getMessageTurnScopeId } from "../../infra/messageIdentity";
 import { RoleEnum } from "../../../shared/constants/chatConstants";
-import { promoteSessionTurnUiStates } from "../chatEngine/turnUiStore";
 
 function patchDoneAssistantByTurn({ activeSession, foldedSessionMessages = [], turnScopeId = "" } = {}) {
   const normalizedTurnScopeId = _trimStr(turnScopeId);
@@ -49,18 +47,6 @@ export function applyDoneMessagesFromReconnect({
   const sessionMessages = Array.isArray(eventData?.messages) ? eventData.messages : [];
   if (!sessionMessages.length) return false;
   const returnedSessionId = _trimStr(eventData?.sessionId);
-  if (returnedSessionId) {
-    const previousSessionId = _trimStr(activeSession.value.id);
-    const promotionResult = promoteSessionIdentityToBackendId({
-      sessionItem: activeSession.value,
-      backendSessionId: returnedSessionId,
-      activeSessionId: activeSessionId.value,
-    });
-    if (promotionResult.changed) {
-      promoteSessionTurnUiStates(previousSessionId, returnedSessionId);
-    }
-    activeSessionId.value = promotionResult.nextActiveSessionId;
-  }
   activeSession.value.loaded = true;
   // Reconnect DONE messages are a replay snapshot for reconciling the current
   // pending/streaming overlay.  Keep them local to this pass instead of

@@ -84,6 +84,7 @@ test('session log protocol exports stable categories and helpers from runtime-ev
   assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'state-machine' } }), 'stateMachineDebug');
   assert.equal(getSessionLogDebugControlKey({ debugType: 'stop-continue' }), 'frontendStopContinueDebug');
   assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'stop-continue' } }), 'frontendStopContinueDebug');
+  assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'terminal-resolution' } }), 'frontendTerminalResolutionDebug');
   assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'agent-proxy-route' } }), 'agentProxyRouteDebug');
 
   const record = buildSessionLogRecord({
@@ -664,7 +665,7 @@ test('runtime-events writer records normal session logs by default', async () =>
   assert.equal((await readJsonl(result.file)).length, 1);
 });
 
-test('runtime-events writer drops debug session logs by default', async () => {
+test('runtime-events writer drops debug session logs when their control is disabled', async () => {
   const root = await tempRoot();
   const result = await writeRuntimeEvent({
     source: 'frontend',
@@ -675,7 +676,7 @@ test('runtime-events writer drops debug session logs by default', async () => {
     userId: 'admin',
     sessionId: 'session-debug-default',
     data: { debugType: 'state-machine' },
-  }, { root, includeProcess: false });
+  }, { root, includeProcess: false, stateMachineDebug: false });
 
   assert.equal(result.ok, true);
   assert.equal(result.skipped, true);

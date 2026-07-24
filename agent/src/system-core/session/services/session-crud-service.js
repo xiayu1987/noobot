@@ -5,6 +5,8 @@
  */
 import { normalizeSelectedConnectors } from "../entities/session-entity.js";
 import { isSessionDisplaySummaryPayload } from "../session-summary-builders.js";
+import { normalizeTurnLifecycleEntity, isTerminalTurnLifecycleState, projectTurnLifecycleTiming } from "../entities/turn-lifecycle-entity.js";
+import { createTurnTerminalResolution } from "@noobot/shared/turn-lifecycle-protocol";
 
 export class SessionCrudService {
   constructor({
@@ -125,6 +127,36 @@ export class SessionCrudService {
       sessionId: normalizedSessionId,
       sessions,
     };
+  }
+
+  async resolveTurnTerminalState({ userId, sessionId, turnScopeId, commandId = "" }) {
+    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedTurnScopeId = String(turnScopeId || "").trim();
+    const normalizedCommandId = String(commandId || "").trim();
+    if (!userId || !normalizedSessionId || !normalizedTurnScopeId || !normalizedCommandId) {
+      return createTurnTerminalResolution({ commandId: normalizedCommandId || "invalid", sessionId: normalizedSessionId, turnScopeId: normalizedTurnScopeId, reason: "invalid_terminal_resolution_request" });
+    }
+    const bundle = await this.getSessionBundle({ userId, sessionId: normalizedSessionId });
+    if (!bundle.exists || !bundle.session) {
+      return createTurnTerminalResolution({ commandId: normalizedCommandId, sessionId: normalizedSessionId, turnScopeId: normalizedTurnScopeId, reason: "session_not_found" });
+    }
+    const session = bundle.session;
+    const lifecycle = normalizeTurnLifecycleEntity(session.turnLifecycle || {});
+    const lifecycleTurn = lifecycle.turns[normalizedTurnScopeId] || null;
+    const turn = lifecycleTurn
+      ? { ...projectTurnLifecycleTiming(lifecycleTurn, session.turnTimings), sessionId: normalizedSessionId }
+      : null;
+    if (!turn) return createTurnTerminalResolution({ commandId: normalizedCommandId, sessionId: normalizedSessionId, turnScopeId: normalizedTurnScopeId, reason: "turn_not_found", retryable: true, retryAfterMs: 250 });
+    if (!isTerminalTurnLifecycleState(turn.state)) {
+      return createTurnTerminalResolution({ commandId: normalizedCommandId, sessionId: normalizedSessionId, turnScopeId: normalizedTurnScopeId, reason: "turn_not_terminal", retryable: true, retryAfterMs: 250, turn });
+    }
+    if (!turn.terminalStatus) {
+      return createTurnTerminalResolution({ commandId: normalizedCommandId, sessionId: normalizedSessionId, turnScopeId: normalizedTurnScopeId, reason: "terminal_status_not_ready", retryable: true, retryAfterMs: 250, turn });
+    }
+    return createTurnTerminalResolution({
+      commandId: normalizedCommandId, sessionId: normalizedSessionId, turnScopeId: normalizedTurnScopeId,
+      resolved: true, turn,
+    });
   }
 
   async getSessionDisplayData({ userId, sessionId }) {

@@ -10,10 +10,11 @@ import { randomUUID } from "node:crypto";
 import { filePath as path } from "../../../utils/path-resolver.js";
 import { SCRIPT_EXECUTION_MODE } from "./constants.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const FOREGROUND_CAPTURE_BYTES = LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars;
 const FOREGROUND_PREVIEW_BYTES = LENGTH_THRESHOLDS.semanticTransfer.previewChars;
-const FORCE_KILL_GRACE_MS = 2000;
+const FORCE_KILL_GRACE_MS = TIME_THRESHOLDS.tools.processForceKillGraceMs;
 
 function appendCapture(chunks, chunk, state, maxBytes) {
   if (state.bytes >= maxBytes) return;

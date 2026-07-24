@@ -6,6 +6,7 @@
 
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { createTurnLifecycleSnapshot } from "@noobot/shared/turn-lifecycle-protocol";
+import { projectTurnLifecycleTiming } from "./entities/turn-lifecycle-entity.js";
 import {
   collectAttachmentRefsFromTransferEnvelopes,
   compactAttachmentRef,
@@ -520,11 +521,14 @@ export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
       sessionId,
       sequence: Number(lifecycle?.sequence || 0),
       activeTurnScopeId,
-      activeTurn: lifecycleTurns[activeTurnScopeId] || null,
+      activeTurn: lifecycleTurns[activeTurnScopeId]
+        ? { ...projectTurnLifecycleTiming(lifecycleTurns[activeTurnScopeId], turnTimings), sessionId }
+        : null,
       recentTerminalTurns: Object.values(lifecycleTurns)
         .filter((turn) => terminalStates.has(String(turn?.state || "").trim()))
         .sort((left, right) => Number(right?.sequence || 0) - Number(left?.sequence || 0))
-        .slice(0, 10),
+        .slice(0, 10)
+        .map((turn) => ({ ...projectTurnLifecycleTiming(turn, turnTimings), sessionId })),
       generatedAt: String(session?.updatedAt || "").trim(),
     })
     : null;

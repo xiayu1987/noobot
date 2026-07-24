@@ -5,30 +5,36 @@
  */
 import { buildExecutionTree, normalizeExecutionIdentity } from "@noobot/shared/execution-lifecycle-protocol";
 import { deriveAuthoritativeTurnCapabilities } from "@noobot/shared/turn-lifecycle-protocol";
-import { normalizeTurnLifecycleEntity } from "../entities/turn-lifecycle-entity.js";
+import { normalizeTurnLifecycleEntity, projectTurnLifecycleTiming } from "../entities/turn-lifecycle-entity.js";
 
 const clean = (value) => String(value || "").trim();
 
 function toExecutionProjection(turn = {}, session = {}) {
+  const timedTurn = {
+    ...projectTurnLifecycleTiming(turn, session.turnTimings),
+    sessionId: clean(session.sessionId),
+  };
   const identity = normalizeExecutionIdentity({
-    ...turn,
+    ...timedTurn,
     sessionId: session.sessionId,
     parentSessionId: session.parentSessionId,
   });
   return {
     ...identity,
-    commandId: clean(turn.commandId),
-    action: clean(turn.action),
-    state: clean(turn.state),
-    phase: clean(turn.phase),
-    executionState: clean(turn.executionState).toLowerCase(),
-    revision: Number(turn.revision || 0),
-    sequence: Number(turn.sequence || 0),
-    summaryVersion: Number(turn.summaryVersion || 0),
-    capabilities: deriveAuthoritativeTurnCapabilities(turn),
-    failure: turn.failure && typeof turn.failure === "object" ? { ...turn.failure } : null,
-    createdAt: clean(turn.createdAt),
-    updatedAt: clean(turn.updatedAt),
+    commandId: clean(timedTurn.commandId),
+    action: clean(timedTurn.action),
+    state: clean(timedTurn.state),
+    phase: clean(timedTurn.phase),
+    executionState: clean(timedTurn.executionState).toLowerCase(),
+    revision: Number(timedTurn.revision || 0),
+    sequence: Number(timedTurn.sequence || 0),
+    summaryVersion: Number(timedTurn.summaryVersion || 0),
+    capabilities: deriveAuthoritativeTurnCapabilities(timedTurn),
+    failure: timedTurn.failure && typeof timedTurn.failure === "object" ? { ...timedTurn.failure } : null,
+    startedAt: clean(timedTurn.startedAt),
+    finishedAt: clean(timedTurn.finishedAt),
+    createdAt: clean(timedTurn.createdAt),
+    updatedAt: clean(timedTurn.updatedAt),
   };
 }
 

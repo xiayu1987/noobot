@@ -143,9 +143,26 @@ function hasDialogProcessConflictForTurn({ activeSession, data = {}, botMessage 
   });
 }
 
+function activeTurnScopeIdForSession({ activeSession, turnRuntimeRegistry, sessionId = "" } = {}) {
+  const canonicalSessionId = normalizeTrimmedString(
+    turnRuntimeRegistry?.value?.sessionAliases?.[sessionId] || sessionId,
+  );
+  const activeScope = normalizeTrimmedString(
+    turnRuntimeRegistry?.value?.sessions?.[canonicalSessionId]?.activeTurnScopeId,
+  );
+  if (activeScope) return activeScope;
+  const messages = Array.isArray(activeSession?.value?.messages) ? activeSession.value.messages : [];
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const scope = getMessageTurnScopeId(messages[index]);
+    if (scope) return scope;
+  }
+  return "";
+}
+
 function hasActiveTurnInFlight({ activeSession, turnRuntimeRegistry } = {}) {
   const sessionId = sessionRuntimeId(activeSession?.value);
-  const turn = resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId);
+  const turnScopeId = activeTurnScopeIdForSession({ activeSession, turnRuntimeRegistry, sessionId });
+  const turn = resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId, turnScopeId);
   return ["requesting", "sending", "completing", "stopping"].includes(turnRuntimeDisplayState(turn));
 }
 
@@ -237,7 +254,7 @@ export function createChatEngineSender({
 
     const turnScopeId = normalizeTrimmedString(options?.turnScopeId) || createTurnScopeId();
     const sessionId = String(activeSession.value?.backendSessionId || activeSession.value?.id || activeSessionId?.value || "");
-    const runtimeView = () => selectSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId);
+    const runtimeView = () => selectSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId, turnScopeId);
     logSessionEvent({
       category: "message",
       event: "send.begin",
@@ -567,6 +584,18 @@ export function createChatEngineSender({
         });
         if (event === StreamEventEnum.CHANNEL_STATE) {
           const channelState = normalizeTrimmedString(data?.state);
+          if (["completed", "user_stopped", "error", "expired", "cancelled"].includes(channelState)) {
+            const terminalNotice = buildFinalDoneEventData({ data, activeSession, botMessage: botMsg });
+            // A channel terminal is only a notification. Route it through the
+            // common coordinator; never settle messages or capabilities here.
+            applyRunStateEvent?.({
+              ...terminalNotice,
+              type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+              state: channelState,
+              backendState: channelState,
+              source: "realtime_channel_terminal_notification",
+            });
+          }
           // DONE is normally the persisted completion envelope, but older or
           // interrupted streams may resolve after only the terminal channel
           // state. Keep that terminal fact as a completion input so the UI can
@@ -624,6 +653,17 @@ export function createChatEngineSender({
             data,
             activeSession,
             botMessage: botMsg,
+          });
+          // DONE is a persisted-completion notification as well. Some servers
+          // do not emit a separate terminal channel_state, so omitting this
+          // trigger would leave those Turns permanently unresolved.
+          applyRunStateEvent?.({
+            ...finalDoneEventData,
+            type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+            // Notification metadata only. The coordinator recognizes this as a
+            // query trigger; no reducer lifecycle state is written here.
+            backendState: "completed",
+            source: "realtime_done_terminal_notification",
           });
           logStateMachineDebug("stateMachine.done.finalize.detected", {
             source: "done_event",
@@ -747,10 +787,9 @@ export function createChatEngineSender({
             backendStopEventData: finalUserStopEventData,
           });
         }
-        // The websocket event only confirms that the backend persisted the
-        // terminal fact. Re-read session detail so the rendered placeholder is
-        // always derived from session.turnStatuses, not from a second frontend
-        // copy of the event payload.
+        // The websocket event is only a change notification. Re-read Session
+        // detail for the historical message projection; runtime terminal state
+        // is resolved separately by the authoritative terminal service.
         const stoppedSessionId = normalizeTrimmedString(
           finalUserStopEventData?.sessionId ||
           activeSession?.value?.backendSessionId ||

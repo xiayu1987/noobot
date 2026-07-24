@@ -33,6 +33,7 @@ import {
   resolveSessionRunMessageRuntimeView,
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
 } from "../sessionRunStateMachine";
+import { selectTurnMessageRuntime } from "../sessionRunStateMachine/turnRuntimeRegistry";
 import {
   logResendDebug,
   summarizeDebugMessage,
@@ -256,8 +257,8 @@ function countCompletedToolLogAttachments(messageItem = {}) {
     .reduce((total, logItem) => total + (Array.isArray(logItem?.attachments) ? logItem.attachments.length : 0), 0);
 }
 
-function isInFlightAssistantMessage(messageItem = {}, turnStatus = null) {
-  return resolveSessionRunMessageRuntimeView(messageItem, null, turnStatus).inFlightAssistant;
+function isInFlightAssistantMessage(messageItem = {}) {
+  return resolveSessionRunMessageRuntimeView(messageItem).inFlightAssistant;
 }
 
 function isTerminalStopAssistantDetail(messageItem = {}) {
@@ -318,23 +319,24 @@ function restoreFrozenAssistantDisplayFields(messageItem = {}, frozen = null) {
   messageItem.pending = false;
 }
 
-function conflictsWithInFlightAssistant(existingMessages = [], detailMessageItem = {}, statusMap = new Map()) {
+function conflictsWithInFlightAssistant(existingMessages = [], detailMessageItem = {}) {
   const detailTurnScopeId = getMessageTurnScopeId(detailMessageItem);
   const detailDialogProcessId = getMessageDialogProcessId(detailMessageItem);
   return (Array.isArray(existingMessages) ? existingMessages : []).some((messageItem) => {
     const existingTurnScopeId = getMessageTurnScopeId(messageItem);
     const existingDialogProcessId = getMessageDialogProcessId(messageItem);
-    const turnStatus =
-      (existingTurnScopeId ? statusMap.get(`turn:${existingTurnScopeId}`) : null) ||
-      (existingDialogProcessId ? statusMap.get(`dialog:${existingDialogProcessId}`) : null);
-    if (!isInFlightAssistantMessage(messageItem, turnStatus)) return false;
+    if (!isInFlightAssistantMessage(messageItem)) return false;
     if (detailTurnScopeId && existingTurnScopeId) return detailTurnScopeId === existingTurnScopeId;
     if (detailDialogProcessId && existingDialogProcessId) return detailDialogProcessId === existingDialogProcessId;
     return false;
   });
 }
 
-function preserveRunningThinkingState(existingMessage = {}, detailMessageItem = {}, turnStatus = null) {
+function preserveRunningThinkingState(
+  existingMessage = {},
+  detailMessageItem = {},
+  { registry = null, sessionId = "" } = {},
+) {
   const existingChannelState =
     existingMessage?.channelState &&
     typeof existingMessage.channelState === "object" &&
@@ -343,12 +345,25 @@ function preserveRunningThinkingState(existingMessage = {}, detailMessageItem = 
       : null;
   const existingPending = existingMessage?.pending === true;
   return () => {
-    const runtimeView = resolveSessionRunMessageRuntimeView(existingMessage, null, turnStatus);
+    const registryView = selectTurnMessageRuntime(registry, {
+      sessionId,
+      turnScopeId: getMessageTurnScopeId(existingMessage),
+      dialogProcessId: getMessageDialogProcessId(existingMessage),
+    });
+    const registryObservedTurn = Boolean(registryView?.source);
+    const runtimeView = registryObservedTurn
+      ? { ...registryView, inFlightAssistant: registryView.running === true }
+      : resolveSessionRunMessageRuntimeView(existingMessage);
     if (runtimeView.inFlightAssistant) {
       if (existingChannelState && !detailMessageItem?.channelState) {
         existingMessage.channelState = existingChannelState;
       }
-    } else if (runtimeView.source === "persisted") {
+    } else if (registryObservedTurn || runtimeView.source === "persisted") {
+      // Once the runtime registry has observed this Turn, its running flag owns
+      // the message projection. In particular, an authoritative terminal
+      // resolution must clear stale optimistic sending state regardless of the
+      // registry event source label. Message appearance is only a bootstrap
+      // fallback for Turns absent from the registry.
       delete existingMessage.channelState;
       existingMessage.pending = false;
     }
@@ -450,22 +465,26 @@ export function findExistingMessageIndexForDetailMessage(existingMessages = [], 
   return matchingUserIndexes.length === 1 ? matchingUserIndexes[0] : -1;
 }
 
-export function mergePreservedDetailMessages(existingMessages = [], detailMessages = [], { turnStatuses = [] } = {}) {
+export function mergePreservedDetailMessages(
+  existingMessages = [],
+  detailMessages = [],
+  { registry = null, sessionId = "" } = {},
+) {
   if (!Array.isArray(existingMessages) || !Array.isArray(detailMessages) || !detailMessages.length) {
     return;
   }
-  const statusMap = buildTurnStatusMap(turnStatuses);
   for (const detailMessageItem of detailMessages) {
     if (detailMessageItem?.workflowMessage === true) continue;
     const detailIdentity = buildMessageIdentity(detailMessageItem);
     const existingIndex = findExistingMessageIndexForDetailMessage(existingMessages, detailMessageItem);
     if (existingIndex >= 0) {
       const existingMessage = existingMessages[existingIndex];
-      const existingTurnScopeId = getMessageTurnScopeId(existingMessage);
-      const existingDialogProcessId = getMessageDialogProcessId(existingMessage);
-      const existingTurnStatus =
-        (existingTurnScopeId ? statusMap.get(`turn:${existingTurnScopeId}`) : null) ||
-        (existingDialogProcessId ? statusMap.get(`dialog:${existingDialogProcessId}`) : null);
+      const existingRuntime = selectTurnMessageRuntime(registry, {
+        sessionId,
+        turnScopeId: getMessageTurnScopeId(existingMessage),
+        dialogProcessId: getMessageDialogProcessId(existingMessage),
+      });
+      const registryConfirmsInFlight = existingRuntime?.source && existingRuntime.running === true;
       logResendDebug("detail.merge.match", {
         identity: detailIdentity,
         existingIndex,
@@ -473,7 +492,7 @@ export function mergePreservedDetailMessages(existingMessages = [], detailMessag
         detail: summarizeDebugMessage(detailMessageItem),
       });
       if (
-        isInFlightAssistantMessage(existingMessage, existingTurnStatus) &&
+        registryConfirmsInFlight &&
         (detailMessageItem?.turnStatusPlaceholder === true || isTerminalStopAssistantDetail(detailMessageItem))
       ) {
         logResendDebug("detail.merge.skipStoppedOverInFlight", {
@@ -497,7 +516,7 @@ export function mergePreservedDetailMessages(existingMessages = [], detailMessag
       const restoreRunningThinkingState = preserveRunningThinkingState(
         existingMessage,
         detailMessageItem,
-        existingTurnStatus,
+        { registry, sessionId },
       );
       const frozenAssistantDisplayFields = isFinalizedAssistantMessage(existingMessage)
         ? snapshotFrozenAssistantDisplayFields(existingMessage)
@@ -547,7 +566,7 @@ export function mergePreservedDetailMessages(existingMessages = [], detailMessag
     }
     if (
       hasReliableCompletedAssistantIdentity(detailMessageItem) &&
-      !conflictsWithInFlightAssistant(existingMessages, detailMessageItem, statusMap)
+      !conflictsWithInFlightAssistant(existingMessages, detailMessageItem, { registry, sessionId })
     ) {
       existingMessages.push(detailMessageItem);
     } else {
@@ -557,7 +576,11 @@ export function mergePreservedDetailMessages(existingMessages = [], detailMessag
         attachmentsCountDetail: getMessageAttachments(detailMessageItem).length,
         completedToolLogAttachmentsCountDetail: countCompletedToolLogAttachments(detailMessageItem),
         hasReliableCompletedAssistantIdentity: hasReliableCompletedAssistantIdentity(detailMessageItem),
-        conflictsWithInFlightAssistant: conflictsWithInFlightAssistant(existingMessages, detailMessageItem),
+        conflictsWithInFlightAssistant: conflictsWithInFlightAssistant(
+          existingMessages,
+          detailMessageItem,
+          { registry, sessionId },
+        ),
       });
     }
   }

@@ -3,8 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { findLatestPendingAssistantAfterLastUser } from "../../infra/reconnectReplayModel";
-import { BackendChannelState, SESSION_RUN_EVENT } from "../sessionRunStateMachine";
 import { _trimStr } from "./utils";
 
 export function scheduleCacheExpiredSessionRefresh({
@@ -39,20 +37,11 @@ export function scheduleCacheExpiredSessionRefresh({
       targetAssistantMessage: failedTargetAssistantMessage = null,
     } = {}) {
       const normalizedFailedSessionId = _trimStr(failedSessionId || activeSession.value?.id);
-      applyRunStateEvent?.({
-          type: SESSION_RUN_EVENT.LOCAL_FAILURE,
-          state: BackendChannelState.ERROR,
-          sessionId: normalizedFailedSessionId,
-          dialogProcessId: failedDialogProcessId,
-          source: "expired_refresh_failed",
-      });
+      // A failed cache refresh is diagnostic/recovery evidence only. It cannot
+      // manufacture a business terminal state or release the Turn lock.
       interactionSubmitting.value = false;
       clearPendingInteraction?.();
       const expiredErrorMessage = translate("chat.expiredRefreshFailed");
-      const fallbackAssistantMessage =
-        failedTargetAssistantMessage ||
-        findLatestPendingAssistantAfterLastUser(activeSession.value?.messages || []);
-      applyAssistantFailureState(fallbackAssistantMessage, expiredErrorMessage);
       emitSyntheticErrorConversationState({
         sessionId: normalizedFailedSessionId,
         dialogProcessId: failedDialogProcessId,

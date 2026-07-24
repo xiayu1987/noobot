@@ -76,21 +76,12 @@ export function scheduleMissingInteractionPayloadFailure({
   const timer = setTimeout(() => {
     missingInteractionPayloadTimers.delete(key);
     if (hasPendingInteractionForDialog(pendingInteractionRequest, dialogProcessId)) return;
-    applyRunStateEvent?.({
-        type: SESSION_RUN_EVENT.LOCAL_FAILURE,
-        state: BackendChannelState.ERROR,
-        sessionId,
-        dialogProcessId,
-        turnScopeId,
-        source: "interaction_payload_missing",
-    });
+    // Missing interaction transport data is local recovery evidence, not an
+    // authoritative Turn failure. Keep the Turn locked and let reconciliation
+    // obtain a Terminal Resolution (or a later interaction payload).
     interactionSubmitting.value = false;
     clearPendingInteraction();
     const missingInteractionError = translate("chat.interactionPayloadMissing");
-    const fallbackAssistantMessage =
-      targetAssistantMessage ||
-      (typeof findFallbackAssistantMessage === "function" ? findFallbackAssistantMessage() : null);
-    applyAssistantFailureState(fallbackAssistantMessage, missingInteractionError);
     emitSyntheticErrorConversationState({
       sessionId,
       dialogProcessId,
@@ -121,8 +112,6 @@ export async function applyReconnectChannelState({
   terminalDialogProcessIdSet,
   chatWebSocketClient,
   scheduleCacheExpiredSessionRefresh,
-  finalizeReplayCompletedSessionDetail,
-  finalizeReplayStoppedSessionDetail,
   clearPendingInteraction,
   translate,
 } = {}) {
@@ -309,109 +298,9 @@ export async function applyReconnectChannelState({
     return replayObservation();
   }
   if (isTerminalConversationState(state)) {
-    const hasLifecycleAuthority = stateData?.authoritativeSnapshot === true;
-    if (dialogProcessId) terminalDialogProcessIdSet.add(dialogProcessId);
-    if (_trimStr(stateData?.sourceEvent) !== "done") {
-      chatWebSocketClient.clearStopRequested();
-    }
-    clearRememberedStopRequests({ sessionId, dialogProcessId, turnScopeId });
-    interactionSubmitting.value = false;
-    if (state === BackendChannelState.EXPIRED) {
-      scheduleCacheExpiredSessionRefresh({ sessionId, dialogProcessId, targetAssistantMessage });
-    }
-    // A terminal channel fact can be the first runtime fact observed after a
-    // reload.  The Turn reducer deliberately rejects a terminal transition
-    // without a preceding action/processing phase.  Reconstruct that phase
-    // only when an exact Turn-scoped pending assistant proves ownership. Do
-    // not bootstrap from dialogProcessId: an execution chain may span a
-    // stopped Turn and its continuation.
-    if (
-      sessionId &&
-      turnScopeId &&
-      targetAssistantMessage?.pending === true &&
-      hasLifecycleAuthority
-    ) {
-      applyObservedRunStateEvent({
-        type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
-        action: "send",
-        sessionId,
-        dialogProcessId,
-        turnScopeId,
-        source: "reconnect_terminal_hydration",
-        sourceEvent: "terminal_turn_bootstrap",
-        authoritativeSnapshot: true,
-      }, "terminal_bootstrap_started");
-      applyObservedRunStateEvent({
-        type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-        state: BackendChannelState.SENDING,
-        sessionId,
-        dialogProcessId,
-        turnScopeId,
-        source: "reconnect_terminal_hydration",
-        sourceEvent: "terminal_processing_bootstrap",
-        authoritativeSnapshot: true,
-      }, "terminal_bootstrap_sending");
-    }
-    if (state !== BackendChannelState.COMPLETED || hasLifecycleAuthority) applyObservedRunStateEvent({
-        type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-        state,
-        sessionId,
-        dialogProcessId,
-        turnScopeId,
-          source: "reconnect",
-        sourceEvent: _trimStr(stateData?.sourceEvent),
-        seq: Number(stateData?.seq || 0),
-        createdAtMs: timing.createdAtMs,
-        updatedAtMs: timing.updatedAtMs,
-        createdAt: timing.createdAt,
-        updatedAt: timing.updatedAt,
-        // Identity routes the fact; it does not grant lifecycle authority.
-        // Only currentRun hydration may create a terminal Turn from scratch.
-        // An exact pending assistant is handled by the explicit bootstrap
-        // above, so standalone DONE snapshots remain content-only.
-        authoritativeSnapshot: stateData?.authoritativeSnapshot === true,
-    }, "terminal_state");
-    if (typeof clearPendingInteractionIfObsolete === "function") {
-      clearPendingInteractionIfObsolete({ sessionId, dialogProcessId });
-    }
-    clearMissingInteractionPayloadTimer(missingInteractionPayloadTimers, { sessionId, dialogProcessId });
-    if (state === BackendChannelState.NO_CONVERSATION || state === BackendChannelState.EXPIRED) {
-      clearPendingInteraction();
-      interactionSubmitting.value = false;
-      return replayObservation();
-    }
-    // Durable completion hydration is authorized only by the canonical
-    // currentRun snapshot produced by reconnectDataReplay. A standalone DONE
-    // payload may carry a valid Session+Turn identity for content routing, but
-    // it must not manufacture lifecycle authority, fetch final detail, or
-    // clear pending state.
-    const terminalTransitionApplied = transitionResults.some(
-      (transition) => transition?.phase === "terminal_state" && transition?.applied === true,
-    );
-    const shouldFinalizeCompletedReplay =
-      state === BackendChannelState.COMPLETED &&
-      hasLifecycleAuthority &&
-      terminalTransitionApplied;
-    // Completion/stopped/error message fields are derived by the same runtime
-    // projection used by live events. Finalization below only hydrates durable
-    // session content and must not patch runtime presentation state.
-    if (state === BackendChannelState.USER_STOPPED) {
-      await finalizeReplayStoppedSessionDetail?.({
-        sessionId,
-        dialogProcessId,
-        turnScopeId,
-        targetAssistantMessage,
-        stateData,
-      });
-    } else if (shouldFinalizeCompletedReplay) {
-      await finalizeReplayCompletedSessionDetail?.({
-        sessionId,
-        dialogProcessId,
-        turnScopeId,
-        targetAssistantMessage,
-        stateData,
-      });
-    }
+    // Defensive boundary for direct callers. Terminal channel facts are only
+    // notifications; the composition root schedules the authoritative read.
+    // This projector must not settle lifecycle, messages, or business locks.
     return replayObservation();
   }
   return replayObservation();
