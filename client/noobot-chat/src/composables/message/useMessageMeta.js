@@ -15,6 +15,8 @@ import {
   resolveTurnRuntimeByScope,
   turnRuntimeDisplayState,
 } from "../chat/sessionRunStateMachine/turnRuntimeRegistry";
+import { adaptLegacyMessageTimelines } from "../chat/chatEngine/legacyTimelineAdapter";
+import { selectCompletedToolArtifacts } from "../chat/chatEngine/toolTimeline";
 
 export function useMessageMeta({
   getMessageItem = () => ({}),
@@ -38,12 +40,12 @@ export function useMessageMeta({
     const realtimeLogs = Array.isArray(messageItem?.realtimeLogs)
       ? messageItem.realtimeLogs
       : [];
-    const completedToolLogs = Array.isArray(messageItem?.completedToolLogs)
-      ? messageItem.completedToolLogs
-      : [];
+    const completedToolResultLogs = selectCompletedToolArtifacts(
+      adaptLegacyMessageTimelines(messageItem),
+    ).logs;
     return (
       realtimeLogs.some((logItem) => Boolean(logItem?.subAgentCall)) ||
-      completedToolLogs.some((logItem) => Number(logItem?.depth || 0) > 1)
+      completedToolResultLogs.some((logItem) => Number(logItem?.depth || 0) > 1)
     );
   });
 

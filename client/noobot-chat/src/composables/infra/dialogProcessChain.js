@@ -19,7 +19,11 @@ export function mergeAttachmentMetaFields(existingItem = {}, incomingItem = {}) 
   // openAttachmentPreview cannot resolve a target URL.
   for (const field of [
     "attachmentId",
+    "url",
     "previewUrl",
+    "thumbnailUrl",
+    "contentUrl",
+    "sourceUrl",
     "downloadUrl",
     "parsedResultUrl",
     "parsedResultName",
@@ -117,6 +121,42 @@ export function mergeAttachments(existing = [], incoming = []) {
     }
   }
   return merged;
+}
+
+/**
+ * Hydrate an authoritative attachment list while retaining richer local access
+ * metadata for attachments that still exist in the snapshot.
+ */
+export function mergeAttachmentSnapshot(existing = [], snapshot = []) {
+  const existingList = Array.isArray(existing) ? existing : [];
+  const snapshotList = Array.isArray(snapshot) ? snapshot : [];
+  const normalize = (value = "") => String(value || "").trim().toLowerCase();
+  const identityKeys = (attachmentItem = {}) => {
+    const attachmentId = normalize(attachmentItem?.attachmentId || attachmentItem?.id);
+    const clientAttachmentId = normalize(attachmentItem?.clientAttachmentId);
+    const name = normalize(attachmentItem?.name);
+    const mimeType = normalize(attachmentItem?.mimeType || attachmentItem?.type);
+    const size = Number(attachmentItem?.size || 0) || 0;
+    return [
+      attachmentId ? `id:${attachmentId}` : "",
+      clientAttachmentId ? `client-id:${clientAttachmentId}` : "",
+      name ? `name:${name}|mime:${mimeType}|size:${size}` : "",
+    ].filter(Boolean);
+  };
+  const existingByKey = new Map();
+  for (const attachmentItem of existingList) {
+    for (const key of identityKeys(attachmentItem)) {
+      if (!existingByKey.has(key)) existingByKey.set(key, attachmentItem);
+    }
+  }
+  return snapshotList.map((snapshotItem) => {
+    const existingItem = identityKeys(snapshotItem)
+      .map((key) => existingByKey.get(key))
+      .find(Boolean);
+    return existingItem
+      ? mergeAttachmentMetaFields(existingItem, snapshotItem)
+      : snapshotItem;
+  });
 }
 
 export function flattenSessionMessages(sessionDocs = []) {

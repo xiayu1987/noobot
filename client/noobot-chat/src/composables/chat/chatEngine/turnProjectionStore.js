@@ -9,6 +9,7 @@ import { initializeMessageEventState } from "../../infra/messageEventState";
 import { mergeToolTimelines } from "./toolTimeline";
 import { mergeActivityTimelines } from "./activityTimeline";
 import { createTurnObservation } from "./turnObservation";
+import { mergeAttachmentSnapshot } from "../../infra/dialogProcessChain";
 
 export const TURN_PROJECTION_SOURCE = Object.freeze({
   NORMAL_LIVE: "normal_live",
@@ -134,6 +135,9 @@ export function hydrateTurnSnapshot({ targetMessage, snapshot, throughSequence =
   const pendingEnvelopes = targetMessage?.messageEventState?.pendingEnvelopes || {};
   const currentToolTimeline = targetMessage?.toolTimeline || [];
   const currentActivityTimeline = targetMessage?.activityTimeline || [];
+  const currentAttachments = Array.isArray(targetMessage?.attachments)
+    ? targetMessage.attachments
+    : [];
   const currentConsumedEventIds = targetMessage?.messageEventState?.consumedEventIds || [];
   const snapshotState = snapshot?.messageEventState || {};
   const preservedIdentity = {
@@ -144,6 +148,12 @@ export function hydrateTurnSnapshot({ targetMessage, snapshot, throughSequence =
     if (!TURN_UI_SNAPSHOT_FIELDS.has(key)) targetMessage[key] = value;
   });
   Object.assign(targetMessage, preservedIdentity);
+  if (Array.isArray(snapshot?.attachments)) {
+    targetMessage.attachments = mergeAttachmentSnapshot(
+      currentAttachments,
+      snapshot.attachments,
+    );
+  }
   targetMessage.toolTimeline = mergeToolTimelines(
     snapshot?.toolTimeline,
     currentToolTimeline,

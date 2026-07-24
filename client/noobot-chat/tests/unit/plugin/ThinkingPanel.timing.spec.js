@@ -51,6 +51,22 @@ describe("ThinkingPanel runtime timing", () => {
     expect(wrapper.find(".thinking-realtime-shell").classes()).not.toContain("is-running");
   });
 
+  it("uses the hydrated Registry timing for an older turn", () => {
+    const wrapper = mountThinkingPanel(thinkingMessage({
+      turnScopeId: "client-turn:history:1",
+      pending: false,
+    }), {
+      runtime: runtime({
+        terminal: true,
+        startedAt: "2026-07-24T10:00:00.000Z",
+        finishedAt: "2026-07-24T10:00:12.000Z",
+      }),
+    });
+
+    expect(wrapper.text()).toContain("00:12");
+    expect(wrapper.text()).not.toContain("--:--");
+  });
+
   it("reacts when the selected Runtime Store view completes", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-22T10:00:12.000Z"));

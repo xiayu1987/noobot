@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   mergeAttachmentMetaFields,
+  mergeAttachmentSnapshot,
   mergeAttachments,
 } from "../../../../src/composables/infra/dialogProcessChain";
 
@@ -22,7 +23,9 @@ describe("dialogProcessChain attachment rich-first merge", () => {
       path: "/workspace/report.docx",
       relativePath: "runtime/attach/scoped/session-a/user/att-rich/report.docx",
       sandboxPath: "/workspace/report.docx",
+      url: "/attachment/att-rich",
       previewUrl: "/preview/att-rich",
+      thumbnailUrl: "/thumbnail/att-rich",
       downloadUrl: "/download/att-rich",
       parsedResultUrl: "/download/parsed-rich",
       parsedResultName: "report.txt",
@@ -42,7 +45,9 @@ describe("dialogProcessChain attachment rich-first merge", () => {
       path: richAttachment.path,
       relativePath: richAttachment.relativePath,
       sandboxPath: richAttachment.sandboxPath,
+      url: "/attachment/att-rich",
       previewUrl: "/preview/att-rich",
+      thumbnailUrl: "/thumbnail/att-rich",
       downloadUrl: "/download/att-rich",
       parsedResultUrl: "/download/parsed-rich",
       parsedResultName: "report.txt",
@@ -55,21 +60,27 @@ describe("dialogProcessChain attachment rich-first merge", () => {
     const merged = mergeAttachmentMetaFields(
       {
         attachmentId: "att-rich",
+        url: "/attachment/att-rich",
         previewUrl: "/preview/att-rich",
+        thumbnailUrl: "/thumbnail/att-rich",
         downloadUrl: "/download/att-rich",
         parsedResultUrl: "/download/parsed-rich",
         parsedResult: { attachmentId: "parsed-rich", path: "/workspace/parsed.txt" },
       },
       {
         attachmentId: "",
+        url: "",
         previewUrl: "",
+        thumbnailUrl: "",
         downloadUrl: null,
         parsedResultUrl: undefined,
       },
     );
 
     expect(merged.attachmentId).toBe("att-rich");
+    expect(merged.url).toBe("/attachment/att-rich");
     expect(merged.previewUrl).toBe("/preview/att-rich");
+    expect(merged.thumbnailUrl).toBe("/thumbnail/att-rich");
     expect(merged.downloadUrl).toBe("/download/att-rich");
     expect(merged.parsedResultUrl).toBe("/download/parsed-rich");
     expect(merged.parsedResult).toEqual({ attachmentId: "parsed-rich", path: "/workspace/parsed.txt" });
@@ -84,5 +95,36 @@ describe("dialogProcessChain attachment rich-first merge", () => {
     expect(merged).toHaveLength(2);
     expect(merged[0].attachmentId).toBe("att-docx");
     expect(merged[1]).toEqual(incoming[0]);
+  });
+
+  it("hydrates snapshot membership without losing a surviving image preview url", () => {
+    const existing = [
+      {
+        attachmentId: "image-1",
+        clientAttachmentId: "draft-1",
+        name: "diagram.png",
+        mimeType: "image/png",
+        size: 123,
+        previewUrl: "blob:http://localhost/image-1",
+      },
+      { attachmentId: "removed", name: "removed.png", mimeType: "image/png", size: 12 },
+    ];
+    const snapshot = [{
+      attachmentId: "image-1",
+      clientAttachmentId: "draft-1",
+      name: "diagram.png",
+      mimeType: "image/png",
+      size: 123,
+      parsedResult: { attachmentId: "parsed-1", mimeType: "text/markdown" },
+    }];
+
+    const merged = mergeAttachmentSnapshot(existing, snapshot);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({
+      attachmentId: "image-1",
+      previewUrl: "blob:http://localhost/image-1",
+      parsedResult: { attachmentId: "parsed-1", mimeType: "text/markdown" },
+    });
   });
 });

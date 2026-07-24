@@ -32,6 +32,12 @@ import { useAppShellPanelActions } from "./useAppShellPanelActions";
 import { useAppShellSessionActions } from "./useAppShellSessionActions";
 import { useAppShellInteractionActions } from "./useAppShellInteractionActions";
 import {
+  getMessageDialogProcessId,
+  getMessageSessionId,
+  getMessageTurnScopeId,
+} from "../composables/infra/messageIdentity";
+import { selectTurnMessageRuntime } from "../composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+import {
   classifyRealtimeLog,
   formatFileSize,
   formatTime,
@@ -190,6 +196,7 @@ const {
   handleReconnect,
   conversationStateSnapshot,
   conversationStateTimeline,
+  turnRuntimeRegistry,
 } = useChatSession({
   userId,
   apiKey,
@@ -410,6 +417,15 @@ function onAppUnmounted() {
 onMounted(onAppMounted);
 onBeforeUnmount(onAppUnmounted);
 
+const thinkingDetailsRuntime = computed(() => {
+  const messageItem = thinkingDetailsMessageItem.value || {};
+  return selectTurnMessageRuntime(turnRuntimeRegistry.value, {
+    sessionId: getMessageSessionId(messageItem),
+    turnScopeId: getMessageTurnScopeId(messageItem),
+    dialogProcessId: getMessageDialogProcessId(messageItem),
+  });
+});
+
 function onConnectCodeUpdate(value = "") {
   connectCode.value = String(value || "");
 }
@@ -431,7 +447,7 @@ const drawerPanels = computed(() =>
     isSuperAdmin: isSuperAdmin.value,
     thinkingDetailsMessageItem: thinkingDetailsMessageItem.value || {},
     thinkingDetailsAllMessages: thinkingDetailsAllMessages.value,
-    turnTimingsByTurnScopeId: activeSession.value?.turnTimingsByTurnScopeId || {},
+    thinkingDetailsRuntime: thinkingDetailsRuntime.value,
     getThinkingDetailsTitle,
     handleWorkspaceReset,
   })

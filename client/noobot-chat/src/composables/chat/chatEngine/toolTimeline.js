@@ -39,6 +39,16 @@ export function reduceToolTimeline(timeline = [], envelope = {}, displayLog = nu
     sequence: sequenceOf(envelope),
     timestamp: text(envelope.timestamp),
     log: displayLog || undefined,
+    ...(Array.isArray(envelope?.attachments) && envelope.attachments.length
+      ? { attachments: envelope.attachments }
+      : Array.isArray(displayLog?.attachments) && displayLog.attachments.length
+        ? { attachments: displayLog.attachments }
+        : {}),
+    ...(Array.isArray(envelope?.writtenFiles) && envelope.writtenFiles.length
+      ? { writtenFiles: envelope.writtenFiles }
+      : Array.isArray(displayLog?.writtenFiles) && displayLog.writtenFiles.length
+        ? { writtenFiles: displayLog.writtenFiles }
+        : {}),
   };
   const updated = envelope.eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START
     ? { ...current, tool: text(envelope.tool || toolCall?.name || current.tool), args: toolCall?.args ?? envelope.args ?? current.args, call: eventFact, status: current.result ? "completed" : "running" }
@@ -64,6 +74,34 @@ export function selectToolTimelineLogs(message = {}, { completedOnly = false } =
   return logs;
 }
 
+/** Canonical projection for assets produced by completed tool executions. */
+export function selectCompletedToolArtifacts(message = {}) {
+  const completedEntries = selectToolTimeline(message).filter((item) => item?.resultEvent);
+  const logs = completedEntries
+    .map((item) => item.resultEvent?.log)
+    .filter(Boolean);
+  return {
+    resultCount: completedEntries.length,
+    logs,
+    attachments: completedEntries.flatMap((item) => {
+      const eventAttachments = item?.resultEvent?.attachments;
+      if (Array.isArray(eventAttachments) && eventAttachments.length) return eventAttachments;
+      const logAttachments = item?.resultEvent?.log?.attachments;
+      return Array.isArray(logAttachments) ? logAttachments : [];
+    }),
+    writtenFiles: completedEntries.flatMap((item) => {
+      const eventWrittenFiles = item?.resultEvent?.writtenFiles;
+      if (Array.isArray(eventWrittenFiles) && eventWrittenFiles.length) return eventWrittenFiles;
+      const logWrittenFiles = item?.resultEvent?.log?.writtenFiles;
+      return Array.isArray(logWrittenFiles) ? logWrittenFiles : [];
+    }),
+  };
+}
+
+export function countCompletedToolAttachments(message = {}) {
+  return selectCompletedToolArtifacts(message).attachments.length;
+}
+
 export function selectToolTimelineCount(message = {}) {
   return selectToolTimeline(message).length;
 }
@@ -73,7 +111,10 @@ export function hasToolTimeline(message = {}) {
 }
 
 /** Normalize legacy history/done logs once at the projection boundary. */
-export function buildToolTimelineFromLegacyLogs(logs = [], { assumeTool = false } = {}) {
+export function buildToolTimelineFromLegacyLogs(
+  logs = [],
+  { assumeTool = false, assumeCompleted = false } = {},
+) {
   const timeline = new Map();
   for (const [index, log] of (Array.isArray(logs) ? logs : []).entries()) {
     if (!log) continue;
@@ -81,6 +122,9 @@ export function buildToolTimelineFromLegacyLogs(logs = [], { assumeTool = false 
     const assumeCurrentLogIsTool = typeof assumeTool === "function"
       ? assumeTool(log, index)
       : assumeTool;
+    const assumeCurrentLogIsCompleted = typeof assumeCompleted === "function"
+      ? assumeCompleted(log, index)
+      : assumeCompleted;
     if (!assumeCurrentLogIsTool && !legacyEventType.includes("tool") && !legacyEventType.includes("function")) continue;
     const sequence = sequenceOf(log) || index + 1;
     const sourceEventId = text(log.eventId || log.id);
@@ -94,11 +138,32 @@ export function buildToolTimelineFromLegacyLogs(logs = [], { assumeTool = false 
     if (Array.isArray(log.attachments) && log.attachments.length) {
       fact.attachments = log.attachments;
     }
+    if (Array.isArray(log.writtenFiles) && log.writtenFiles.length) {
+      fact.writtenFiles = log.writtenFiles;
+    }
     const eventType = text(log.event || log.type).toLowerCase();
-    if (eventType.includes("result") || eventType.includes("return") || eventType.includes("end")) {
-      current.result = log.output ?? log.result ?? log.data?.output ?? log.text;
-      current.success = log.success !== false;
-      current.resultEvent = fact;
+    if (
+      (assumeCurrentLogIsCompleted && !eventType) ||
+      eventType.includes("result") ||
+      eventType.includes("return") ||
+      eventType.includes("end")
+    ) {
+      const result = log.output ?? log.result ?? log.data?.output ?? log.text;
+      const existingResultText = text(
+        current.resultEvent?.log?.text ?? current.resultEvent?.log?.output ?? current.result,
+      );
+      const incomingResultText = text(log.text ?? log.output ?? result);
+      const keepExistingUnversionedResult = Boolean(
+        current.resultEvent &&
+        !sourceEventId &&
+        sequenceOf(log) === 0 &&
+        (existingResultText || !incomingResultText),
+      );
+      if (!keepExistingUnversionedResult) {
+        current.result = result;
+        current.success = log.success !== false;
+        current.resultEvent = fact;
+      }
       current.status = "completed";
     } else {
       current.args = log.args ?? log.arguments ?? log.data?.args;

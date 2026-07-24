@@ -135,17 +135,15 @@ function buildLogsFromMessages(messageItem, messages, toolResultFallback) {
   return logs;
 }
 
-import { hasToolTimeline, selectToolTimelineLogs } from "../chat/chatEngine/toolTimeline";
+import { selectToolTimelineLogs } from "../chat/chatEngine/toolTimeline";
+import { adaptLegacyMessageTimelines } from "../chat/chatEngine/legacyTimelineAdapter";
 
 /** Single adapter from thinking-detail/raw message shapes to display-ready tool logs. */
 export function normalizeThinkingToolLogs({
   messageItem = {}, allMessages = [], sessionDocs = [], variant = "panel",
   toolResultFallback = "tool_result",
 } = {}) {
-  // completedToolLogs is accepted only as an isolated historical input. New
-  // runtime projections always provide toolTimeline and never write this field.
-  const raw = hasToolTimeline(messageItem) ? selectToolTimelineLogs(messageItem)
-    : (Array.isArray(messageItem?.completedToolLogs) ? messageItem.completedToolLogs : []);
+  const raw = selectToolTimelineLogs(adaptLegacyMessageTimelines(messageItem));
   const completed = raw.filter((item) => isLogInScope(messageItem, item));
   const scopedMessages = getScopedMessages(messageItem, allMessages, sessionDocs, variant);
   const projected = buildLogsFromMessages(messageItem, scopedMessages, toolResultFallback);

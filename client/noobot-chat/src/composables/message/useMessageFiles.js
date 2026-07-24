@@ -21,6 +21,10 @@ import { getMessageAttachments as resolveRenderableMessageAttachments } from "..
 import {
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
 } from "../chat/sessionRunStateMachine";
+import {
+  selectCompletedToolArtifacts,
+} from "../chat/chatEngine/toolTimeline";
+import { adaptLegacyMessageTimelines } from "../chat/chatEngine/legacyTimelineAdapter";
 import { logStateMachineDebug } from "../chat/debug/stateMachineLogger";
 
 function tryParseJsonContent(content = "") {
@@ -91,6 +95,10 @@ function extractCandidatePathsFromText(content = "") {
 
 function getMessageAttachments(messageItem = {}) {
   return resolveRenderableMessageAttachments(messageItem);
+}
+
+function getCompletedToolArtifacts(messageItem = {}) {
+  return selectCompletedToolArtifacts(adaptLegacyMessageTimelines(messageItem));
 }
 
 function trim(value = "") {
@@ -562,39 +570,37 @@ export function useMessageFiles({
     const messageItem = getMessageItem() || {};
     if (isFreshPendingAssistant(messageItem)) return [];
     const canUseAssociatedTurnArtifacts = !isAssistantWithoutTurnScope(messageItem);
-    const turnScopeId = getMessageTurnScopeId(messageItem);
     const out = [];
     const seen = new Set();
     if (canUseAssociatedTurnArtifacts) {
-      for (const logItem of Array.isArray(messageItem?.completedToolLogs) ? messageItem.completedToolLogs : []) {
-        for (const fileItem of Array.isArray(logItem?.writtenFiles) ? logItem.writtenFiles : []) {
-          if (!fileItem?.fileName && !fileItem?.resolvedPath) continue;
-          const normalizedFileItem = {
-            toolName: fileItem?.toolName || "write_file",
-            resolvedPath: fileItem?.resolvedPath || "",
-            fileName: fileItem?.fileName || resolveBaseName(fileItem?.resolvedPath || ""),
-            relativePath: fileItem?.relativePath || resolveRelativeWorkspacePath(fileItem?.resolvedPath || ""),
-            ...(typeof fileItem?.isSandbox === "boolean" ? { isSandbox: fileItem.isSandbox } : {}),
-            ...(typeof fileItem?.sandboxEnabled === "boolean" && typeof fileItem?.isSandbox !== "boolean" ? { isSandbox: fileItem.sandboxEnabled } : {}),
-            size: fileItem?.size,
-            mimeType: fileItem?.mimeType || fileItem?.type || "",
-            sourceType: fileItem?.sourceType || "tool",
-            recognized: fileItem?.recognized === true,
-          };
-          logGeneratedFileAccess("writtenFile.normalized", {
-            traceId: createFileAccessTraceId("written"),
-            sourceType: normalizedFileItem.sourceType,
-            hasFileName: Boolean(normalizedFileItem.fileName),
-            hasResolvedPath: Boolean(normalizedFileItem.resolvedPath),
-            hasRelativePath: Boolean(normalizedFileItem.relativePath),
-            isSandbox: normalizedFileItem.isSandbox,
-            relativePath: maskWorkspacePath(normalizedFileItem.relativePath),
-          });
-          const fileKey = toWrittenFileKey(normalizedFileItem);
-          if (fileKey && seen.has(fileKey)) continue;
-          if (fileKey) seen.add(fileKey);
-          out.push(normalizedFileItem);
-        }
+      const { writtenFiles } = getCompletedToolArtifacts(messageItem);
+      for (const fileItem of writtenFiles) {
+        if (!fileItem?.fileName && !fileItem?.resolvedPath) continue;
+        const normalizedFileItem = {
+          toolName: fileItem?.toolName || "write_file",
+          resolvedPath: fileItem?.resolvedPath || "",
+          fileName: fileItem?.fileName || resolveBaseName(fileItem?.resolvedPath || ""),
+          relativePath: fileItem?.relativePath || resolveRelativeWorkspacePath(fileItem?.resolvedPath || ""),
+          ...(typeof fileItem?.isSandbox === "boolean" ? { isSandbox: fileItem.isSandbox } : {}),
+          ...(typeof fileItem?.sandboxEnabled === "boolean" && typeof fileItem?.isSandbox !== "boolean" ? { isSandbox: fileItem.sandboxEnabled } : {}),
+          size: fileItem?.size,
+          mimeType: fileItem?.mimeType || fileItem?.type || "",
+          sourceType: fileItem?.sourceType || "tool",
+          recognized: fileItem?.recognized === true,
+        };
+        logGeneratedFileAccess("writtenFile.normalized", {
+          traceId: createFileAccessTraceId("written"),
+          sourceType: normalizedFileItem.sourceType,
+          hasFileName: Boolean(normalizedFileItem.fileName),
+          hasResolvedPath: Boolean(normalizedFileItem.resolvedPath),
+          hasRelativePath: Boolean(normalizedFileItem.relativePath),
+          isSandbox: normalizedFileItem.isSandbox,
+          relativePath: maskWorkspacePath(normalizedFileItem.relativePath),
+        });
+        const fileKey = toWrittenFileKey(normalizedFileItem);
+        if (fileKey && seen.has(fileKey)) continue;
+        if (fileKey) seen.add(fileKey);
+        out.push(normalizedFileItem);
       }
     }
     if (getMessageRole(messageItem) === "assistant") {
@@ -622,23 +628,17 @@ export function useMessageFiles({
     const rawMessageAttachments = Array.isArray(messageItem?.attachments)
       ? messageItem.attachments
       : [];
+    const renderableMessageAttachments = getMessageAttachments(messageItem);
     const baseAttachments = filterAttachmentsForMessage(
-      rawMessageAttachments,
+      renderableMessageAttachments,
       messageItem,
     );
     const canUseAssociatedTurnArtifacts = !isAssistantWithoutTurnScope(messageItem);
     const freshPendingAssistant = isFreshPendingAssistant(messageItem);
-    const toolLogAttachments = [];
-    const completedToolLogs = Array.isArray(messageItem?.completedToolLogs)
-      ? messageItem.completedToolLogs
+    const completedToolArtifacts = getCompletedToolArtifacts(messageItem);
+    const toolLogAttachments = canUseAssociatedTurnArtifacts
+      ? completedToolArtifacts.attachments
       : [];
-    if (canUseAssociatedTurnArtifacts) {
-      for (const logItem of completedToolLogs) {
-        toolLogAttachments.push(
-          ...(Array.isArray(logItem?.attachments) ? logItem.attachments : []),
-        );
-      }
-    }
     const mergedBaseAttachments = toolLogAttachments.length
       ? mergeAttachments(baseAttachments, toolLogAttachments)
       : baseAttachments;
@@ -646,11 +646,9 @@ export function useMessageFiles({
       logDisplayedAttachmentsSummary({
         messageItem,
         rawMessageAttachmentsCount: rawMessageAttachments.length,
-        rejectedMessageAttachmentsCount: rawMessageAttachments.length - baseAttachments.length,
-        completedToolLogCount: completedToolLogs.length,
-        completedToolLogAttachmentInputCount: completedToolLogs.reduce(
-          (count, item) => count + (Array.isArray(item?.attachments) ? item.attachments.length : 0), 0,
-        ),
+        rejectedMessageAttachmentsCount: renderableMessageAttachments.length - baseAttachments.length,
+        completedToolLogCount: completedToolArtifacts.resultCount,
+        completedToolLogAttachmentInputCount: completedToolArtifacts.attachments.length,
         baseAttachmentsCount: baseAttachments.length,
         toolLogAttachmentsCount: toolLogAttachments.length,
         displayedAttachmentsCount: mergedBaseAttachments.length,
@@ -664,11 +662,9 @@ export function useMessageFiles({
       logDisplayedAttachmentsSummary({
         messageItem,
         rawMessageAttachmentsCount: rawMessageAttachments.length,
-        rejectedMessageAttachmentsCount: rawMessageAttachments.length - baseAttachments.length,
-        completedToolLogCount: completedToolLogs.length,
-        completedToolLogAttachmentInputCount: completedToolLogs.reduce(
-          (count, item) => count + (Array.isArray(item?.attachments) ? item.attachments.length : 0), 0,
-        ),
+        rejectedMessageAttachmentsCount: renderableMessageAttachments.length - baseAttachments.length,
+        completedToolLogCount: completedToolArtifacts.resultCount,
+        completedToolLogAttachmentInputCount: completedToolArtifacts.attachments.length,
         baseAttachmentsCount: baseAttachments.length,
         toolLogAttachmentsCount: toolLogAttachments.length,
         displayedAttachmentsCount: pendingAttachments.length,
@@ -756,11 +752,9 @@ export function useMessageFiles({
     logDisplayedAttachmentsSummary({
       messageItem,
       rawMessageAttachmentsCount: rawMessageAttachments.length,
-      rejectedMessageAttachmentsCount: rawMessageAttachments.length - baseAttachments.length,
-      completedToolLogCount: completedToolLogs.length,
-      completedToolLogAttachmentInputCount: completedToolLogs.reduce(
-        (count, item) => count + (Array.isArray(item?.attachments) ? item.attachments.length : 0),
-      0),
+      rejectedMessageAttachmentsCount: renderableMessageAttachments.length - baseAttachments.length,
+      completedToolLogCount: completedToolArtifacts.resultCount,
+      completedToolLogAttachmentInputCount: completedToolArtifacts.attachments.length,
       baseAttachmentsCount: baseAttachments.length,
       toolLogAttachmentsCount: toolLogAttachments.length,
       displayedAttachmentsCount: dedupedWithOwnerType.length,

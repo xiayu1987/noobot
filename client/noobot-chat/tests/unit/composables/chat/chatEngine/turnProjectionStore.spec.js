@@ -154,4 +154,40 @@ describe("turnProjectionStore convergence", () => {
     expect(hydrateTurnSnapshot({ targetMessage: target, snapshot: structuredClone(target), throughSequence: 3 }).applied).toBe(true);
     expect(projection(target)).toEqual(once);
   });
+
+  it("preserves local image preview metadata when an accepted snapshot adds parsed output", () => {
+    const target = {
+      ...message(),
+      attachments: [{
+        attachmentId: "image-1",
+        name: "diagram.png",
+        mimeType: "image/png",
+        size: 123,
+        previewUrl: "blob:http://localhost/image-1",
+      }],
+    };
+    const snapshot = {
+      ...message(),
+      throughSequence: 1,
+      attachments: [{
+        attachmentId: "image-1",
+        name: "diagram.png",
+        mimeType: "image/png",
+        size: 123,
+        parsedResult: { attachmentId: "parsed-1", mimeType: "text/markdown" },
+      }],
+    };
+
+    expect(hydrateTurnSnapshot({ targetMessage: target, snapshot })).toMatchObject({
+      applied: true,
+      reason: "snapshot_accepted",
+    });
+    expect(target.attachments).toEqual([
+      expect.objectContaining({
+        attachmentId: "image-1",
+        previewUrl: "blob:http://localhost/image-1",
+        parsedResult: expect.objectContaining({ attachmentId: "parsed-1" }),
+      }),
+    ]);
+  });
 });

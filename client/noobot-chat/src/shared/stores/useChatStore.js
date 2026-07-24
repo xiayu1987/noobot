@@ -11,6 +11,7 @@ import {
   applyExecutionTree,
   applyTurnLifecycleEnvelope,
   applyTurnLifecycleSnapshot,
+  applyTurnTimingSnapshot,
   applyTurnTerminalResolution,
   applyTurnRuntimeEvent,
   createTurnRuntimeRegistryState,
@@ -237,6 +238,8 @@ export const useChatStore = defineStore("chat", () => {
     commitTurnRuntime(applyTurnLifecycleEnvelope, envelope);
   const applyTurnLifecycleSnapshotAction = (snapshot) =>
     commitTurnRuntime(applyTurnLifecycleSnapshot, snapshot);
+  const applyTurnTimingSnapshotAction = (snapshot) =>
+    commitTurnRuntime(applyTurnTimingSnapshot, snapshot);
   const applyTurnTerminalResolutionAction = (response) =>
     commitTurnRuntime(applyTurnTerminalResolution, response);
   const applyExecutionSnapshotAction = (payload) =>
@@ -532,6 +535,7 @@ export const useChatStore = defineStore("chat", () => {
     applyTurnRuntimeEvent: applyTurnRuntimeEventAction,
     applyTurnLifecycleEnvelope: applyTurnLifecycleEnvelopeAction,
     applyTurnLifecycleSnapshot: applyTurnLifecycleSnapshotAction,
+    applyTurnTimingSnapshot: applyTurnTimingSnapshotAction,
     applyTurnTerminalResolution: applyTurnTerminalResolutionAction,
     applyExecutionSnapshot: applyExecutionSnapshotAction,
     applyExecutionChildren: applyExecutionChildrenAction,

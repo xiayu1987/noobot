@@ -7,16 +7,13 @@ import { RoleEnum } from "../../../shared/constants/chatConstants";
 import { normalizeTrimmedString } from "./utils";
 import { getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity";
 import { getMessageAttachments } from "../../infra/messageModel";
+import { adaptLegacyMessageTimelines } from "./legacyTimelineAdapter";
+import { countCompletedToolAttachments } from "./toolTimeline";
 import { SESSION_RUN_EVENT } from "../sessionRunStateMachine";
 import {
   logStateMachineDebug,
   summarizeStateMachineMessage,
 } from "../debug/stateMachineLogger";
-
-function countCompletedToolLogAttachments(messageItem = {}) {
-  return (Array.isArray(messageItem?.completedToolLogs) ? messageItem.completedToolLogs : [])
-    .reduce((total, logItem) => total + (Array.isArray(logItem?.attachments) ? logItem.attachments.length : 0), 0);
-}
 
 function summarizeFinalizeMessage(messageItem = {}) {
   const summary = summarizeStateMachineMessage(messageItem);
@@ -24,7 +21,9 @@ function summarizeFinalizeMessage(messageItem = {}) {
   return {
     ...summary,
     attachmentsCount: getMessageAttachments(messageItem).length,
-    completedToolLogAttachmentsCount: countCompletedToolLogAttachments(messageItem),
+    completedToolLogAttachmentsCount: countCompletedToolAttachments(
+      adaptLegacyMessageTimelines(messageItem),
+    ),
   };
 }
 
