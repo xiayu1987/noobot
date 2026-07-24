@@ -36,6 +36,7 @@ const {
   viewerError,
   viewerState,
   selectedRuntimeNode,
+  selectedRuntimeStep,
   selectedNodeSessionId,
   selectedGraphDialogProcessId,
   semanticPreviewExpanded,
@@ -88,6 +89,7 @@ const {
     :attempt-execution-ids="attemptExecutionIds"
     :stop-execution="stopExecution"
     :selected-runtime-node="selectedRuntimeNode"
+    :selected-runtime-step="selectedRuntimeStep"
     :selected-runtime-boxes="selectedRuntimeBoxes"
     :selected-graph-dialog-process-id="selectedGraphDialogProcessId"
     :display-node-messages="displayNodeMessages"

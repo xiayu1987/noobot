@@ -314,6 +314,7 @@ export async function executeToolCall({
         source: "tool-runner",
         turn,
         tool: String(call?.name || "").trim(),
+        toolCallId: call?.id || call?.tool_call_id || call?.toolCallId || "",
         sessionId: String(sessionId || "").trim(),
         parentSessionId: normalizeParentSessionId(parentSessionId),
       },
