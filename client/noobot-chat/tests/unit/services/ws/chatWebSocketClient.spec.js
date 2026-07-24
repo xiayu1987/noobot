@@ -80,6 +80,55 @@ describe("chatWebSocketClient", () => {
     await reconnectPromise;
   });
 
+  it("reuses the bootstrap socket for the initial reconnect handshake", async () => {
+    const client = createChatWebSocketClient({
+      resolveWebSocketUrl: () => "ws://test",
+    });
+    client.connect();
+    const bootstrapSocket = MockWebSocket.instances[0];
+
+    const reconnectPromise = client.reconnect({
+      currentSessionId: "s-1",
+      userId: "u-1",
+      onReconnectData: vi.fn(),
+    });
+
+    expect(MockWebSocket.instances).toHaveLength(1);
+    expect(bootstrapSocket.sent).toHaveLength(1);
+    expect(JSON.parse(bootstrapSocket.sent[0])).toMatchObject({
+      action: "reconnect",
+      currentSessionId: "s-1",
+      userId: "u-1",
+    });
+    bootstrapSocket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 0 });
+    await reconnectPromise;
+  });
+
+  it("retires the previous stream socket when reconnect replaces it", async () => {
+    const client = createChatWebSocketClient({
+      resolveWebSocketUrl: () => "ws://test",
+    });
+    client.connect();
+    const streamSocket = MockWebSocket.instances[0];
+    const streamPromise = client.stream({ action: "chat", sessionId: "s-1" }, vi.fn())
+      .catch(() => undefined);
+
+    const reconnectPromise = client.reconnect({
+      currentSessionId: "s-1",
+      userId: "u-1",
+      onReconnectData: vi.fn(),
+    });
+    const reconnectSocket = MockWebSocket.instances[1];
+    expect(MockWebSocket.instances).toHaveLength(2);
+    reconnectSocket.onopen?.();
+    reconnectSocket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 1 });
+    await reconnectPromise;
+    await streamPromise;
+
+    expect(streamSocket.readyState).toBe(MockWebSocket.CLOSED);
+    expect(reconnectSocket.readyState).toBe(MockWebSocket.OPEN);
+  });
+
   it("delivers replayed errors without rejecting reconnect", async () => {
     const onReconnectData = vi.fn();
     const client = createChatWebSocketClient({

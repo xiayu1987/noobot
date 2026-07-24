@@ -50,6 +50,14 @@ export function createSessionDetailApplicator({
   isSameSessionIdentity,
   onSessionDetailApplied = null,
 } = {}) {
+  function pruneMessagesFromDeletedTurn(messages = [], turnScopeId = "") {
+    const scope = String(turnScopeId || "").trim();
+    const source = Array.isArray(messages) ? messages : [];
+    if (!scope) return source;
+    const index = source.findIndex((messageItem) => getMessageTurnScopeId(messageItem) === scope);
+    return index >= 0 ? source.slice(0, index) : source;
+  }
+
   function summarizeToolProjection(messageItem = {}) {
     return {
       role: getMessageRole(messageItem),
@@ -136,7 +144,13 @@ export function createSessionDetailApplicator({
           : [],
       },
     );
-    const detailMessages = canonicalDetail.messages;
+    const deleteFromTurnScopeId = String(options.deleteFromTurnScopeId || "").trim();
+    const detailMessages = deleteFromTurnScopeId
+      ? pruneMessagesFromDeletedTurn(canonicalDetail.messages, deleteFromTurnScopeId)
+      : canonicalDetail.messages;
+    if (deleteFromTurnScopeId && detailMessages !== canonicalDetail.messages) {
+      canonicalDetail.messages = detailMessages;
+    }
     const turnTimings = canonicalDetail.turnTimings;
     const turnStatuses = canonicalDetail.turnStatuses;
     // Keep the authoritative session-level facts on the session model. View

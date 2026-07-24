@@ -30,8 +30,10 @@ export function createSessionLogWebSocketClient({ resolveWebSocketUrl = () => ""
   const queue = [];
   const inFlight = [];
   let reconnectTimer = null;
+  let disposed = false;
 
   function scheduleReconnect() {
+    if (disposed) return;
     if (reconnectTimer || (!queue.length && !inFlight.length)) return;
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null;
@@ -62,6 +64,7 @@ export function createSessionLogWebSocketClient({ resolveWebSocketUrl = () => ""
   }
 
   function connect() {
+    if (disposed) return null;
     if (socket && [WebSocket.OPEN, WebSocket.CONNECTING].includes(socket.readyState)) return socket;
     const url = resolveWebSocketUrl();
     if (!url) {
@@ -70,28 +73,33 @@ export function createSessionLogWebSocketClient({ resolveWebSocketUrl = () => ""
     }
     logDiagnostic("connecting", { url, queueLength: queue.length });
     socket = new WebSocket(url);
-    socket.onopen = () => {
+    const currentSocket = socket;
+    currentSocket.onopen = () => {
+      if (socket !== currentSocket || disposed) return;
       logDiagnostic("open", { queueLength: queue.length, inFlightLength: inFlight.length });
       runtimeDiagnostic("frontend.sessionLogWs.open", { queueLength: queue.length, inFlightLength: inFlight.length });
       flush();
     };
-    socket.onmessage = (raw) => {
+    currentSocket.onmessage = (raw) => {
+      if (socket !== currentSocket || disposed) return;
       logDiagnostic("message", { payload: String(raw?.data || raw || "").slice(0, 300) });
       handleAck(raw);
     };
-    socket.onclose = (event) => {
+    currentSocket.onclose = (event) => {
+      if (socket !== currentSocket) return;
       const restored = restoreInFlight();
       logDiagnostic("close", { code: event?.code, reason: event?.reason || "", queueLength: queue.length, restored });
       runtimeDiagnostic("frontend.sessionLogWs.close", { code: event?.code || 0, reason: event?.reason || "", queueLength: queue.length, restored });
       socket = null;
-      scheduleReconnect();
+      if (!disposed) scheduleReconnect();
     };
-    socket.onerror = () => {
+    currentSocket.onerror = () => {
+      if (socket !== currentSocket) return;
       const restored = restoreInFlight();
       logDiagnostic("error", { queueLength: queue.length, restored });
       runtimeDiagnostic("frontend.sessionLogWs.error", { queueLength: queue.length, restored });
       socket = null;
-      scheduleReconnect();
+      if (!disposed) scheduleReconnect();
     };
     return socket;
   }
@@ -108,6 +116,7 @@ export function createSessionLogWebSocketClient({ resolveWebSocketUrl = () => ""
   }
 
   function log(event = {}) {
+    if (disposed) return false;
     const record = buildSessionLogRecord(event, {
       source,
       defaultCategory: SESSION_LOG_DEFAULT_CATEGORY,
@@ -125,6 +134,7 @@ export function createSessionLogWebSocketClient({ resolveWebSocketUrl = () => ""
   // path as business diagnostics. This makes dropped/queued/reconnected
   // frontend logs observable in runtime-events instead of only DevTools.
   function runtimeDiagnostic(event, data = {}) {
+    if (disposed) return false;
     const record = buildSessionLogRecord({
       category: "debug",
       level: "debug",
@@ -147,5 +157,24 @@ export function createSessionLogWebSocketClient({ resolveWebSocketUrl = () => ""
     };
   }
 
-  return { connect, log, debug: (event = {}) => log({ ...event, category: "debug" }), status };
+  function dispose() {
+    disposed = true;
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    const currentSocket = socket;
+    socket = null;
+    queue.length = 0;
+    inFlight.length = 0;
+    try { currentSocket?.close?.(1000, "dispose"); } catch {}
+  }
+
+  return {
+    connect,
+    log,
+    debug: (event = {}) => log({ ...event, category: "debug" }),
+    status,
+    dispose,
+  };
 }

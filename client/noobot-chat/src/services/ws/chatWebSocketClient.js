@@ -156,6 +156,23 @@ export function createChatWebSocketClient({
     clearStopConfirmationTimer();
   }
 
+  function cancelStreamForTurn({ sessionId = "", turnScopeId = "", dialogProcessId = "" } = {}) {
+    const context = activeStreamContext;
+    if (!context) return false;
+    const scope = context.scope || {};
+    const sameSession = !sessionId || !scope.sessionId || String(sessionId) === String(scope.sessionId);
+    const sameTurn = !turnScopeId || !scope.turnScopeId || String(turnScopeId) === String(scope.turnScopeId);
+    const sameDialog = !dialogProcessId || !scope.dialogProcessId || String(dialogProcessId) === String(scope.dialogProcessId);
+    if (!sameSession || !sameTurn || !sameDialog) return false;
+    const pending = resolveCurrentStream;
+    if (pending?.serial === context.serial && typeof pending.reject === "function") {
+      pending.reject(new Error("stream_cancelled_by_message_delete"));
+      return true;
+    }
+    activeStreamContext = null;
+    return true;
+  }
+
   function getStopRequestedTurnScopeId() {
     return stopRequestedTurnScopeId;
   }
@@ -463,9 +480,24 @@ export function createChatWebSocketClient({
       reconnectResolve = resolve;
       reconnectReject = reject;
 
+      // App bootstrap calls connect() before the initial reconnect handshake.
+      // Reuse that socket when no stream is active; creating a second socket
+      // here leaves the bootstrap transport alive and multiplies connections
+      // on every refresh/reconnect cycle.
+      const reusableSocket = !activeStreamContext && activeSocket &&
+        [WebSocket.OPEN, WebSocket.CONNECTING].includes(activeSocket.readyState)
+        ? activeSocket
+        : null;
+      const previousSocket = reusableSocket ? null : activeSocket;
       const wsUrl = resolveWebSocketUrl();
-      const ws = new WebSocket(wsUrl);
+      const ws = reusableSocket || new WebSocket(wsUrl);
       activeSocket = ws;
+      const retirePreviousSocket = () => {
+        if (!previousSocket || previousSocket === ws) return;
+        try {
+          previousSocket.close(1000, "replaced_by_reconnect");
+        } catch {}
+      };
 
       reconnectTimeout = setTimeout(() => {
         if (reconnecting) {
@@ -487,6 +519,9 @@ export function createChatWebSocketClient({
           userId: String(userId || "").trim(),
         }));
       };
+      if (reusableSocket && ws.readyState === WebSocket.OPEN) {
+        ws.onopen();
+      }
 
       ws.onmessage = (messageEvent) => {
         try {
@@ -503,6 +538,11 @@ export function createChatWebSocketClient({
           if (event === StreamEventEnum.RECONNECT_COMPLETE) {
             reconnecting = false;
             clearTimers();
+            // A reconnect during an active stream necessarily created a
+            // replacement transport. Retire the old socket after replay has
+            // completed so repeated online/focus signals cannot accumulate
+            // live sockets on the server.
+            retirePreviousSocket();
             const resolveFn = reconnectResolve;
             reconnectResolve = null;
             reconnectReject = null;
@@ -694,6 +734,7 @@ export function createChatWebSocketClient({
     stream,
     reconnect,
     requestStop,
+    cancelStreamForTurn,
     sendJson,
     requestJson,
     getActiveSocket,

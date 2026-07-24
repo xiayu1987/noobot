@@ -153,6 +153,29 @@ export async function refreshFinalSessionDetail({
         : String(doneSessionId || "") === String(activeSession?.value?.backendSessionId || "") &&
           String(activeSession?.value?.id || "") === String(activeSessionId?.value || "");
 
+    // Cancelling a stream as part of message deletion can reject sendFlow and
+    // bring execution here after the delete has already trimmed the local
+    // list. The detail request is an older snapshot in that case; applying it
+    // would resurrect the deleted Turn until the next refresh.
+    const currentSession = activeSession?.value;
+    const currentMessages = Array.isArray(currentSession?.messages)
+      ? currentSession.messages
+      : [];
+    const activeSessionMatches =
+      String(currentSession?.backendSessionId || currentSession?.sessionId || currentSession?.id || "") === doneSessionId &&
+      String(currentSession?.id || "") === String(activeSessionId?.value || "");
+    const targetTurnStillExists = !completionEventScope.turnScopeId || currentMessages.some((messageItem) =>
+      normalizeTrimmedString(messageItem?.turnScopeId) === completionEventScope.turnScopeId,
+    );
+    if (!activeSessionMatches || !targetTurnStillExists) {
+      logStateMachineDebug("stateMachine.detailApply.ignored_stale", {
+        ...completionEventScope,
+        reason: activeSessionMatches ? "turn_removed" : "session_changed",
+        activeSessionId: activeSessionId?.value || "",
+      });
+      return false;
+    }
+
     logStateMachineDebug("detailApply.apply.start", {
       ...completionEventScope,
       preserveCurrentMessages: shouldPreserveCurrentMessages,
@@ -253,6 +276,7 @@ export async function finalizeStoppedSessionDetail({
   if (!sessionId) {
     return false;
   }
+  const requestedActiveSessionId = String(activeSessionId?.value || "");
   try {
     const detail = await fetchSessionDetail(sessionId, {
       source: "userStoppedFinalStatus",
@@ -260,6 +284,25 @@ export async function finalizeStoppedSessionDetail({
       reuseRecentlyLoaded: false,
     });
     if (!detail) throw new Error("stopped session summary is empty");
+    // This snapshot may predate a deletion performed while the request was in
+    // flight. Never merge it after its owning Session or Turn has disappeared.
+    const currentSession = activeSession?.value;
+    const currentMessages = Array.isArray(currentSession?.messages) ? currentSession.messages : [];
+    const activeSessionMatches =
+      String(currentSession?.backendSessionId || currentSession?.sessionId || currentSession?.id || "") === sessionId &&
+      String(activeSessionId?.value || "") === requestedActiveSessionId &&
+      String(currentSession?.id || "") === String(activeSessionId?.value || "");
+    const targetTurnStillExists = !scope.turnScopeId || currentMessages.some((messageItem) =>
+      normalizeTrimmedString(messageItem?.turnScopeId) === scope.turnScopeId,
+    );
+    if (!activeSessionMatches || !targetTurnStillExists) {
+      logStateMachineDebug("stateMachine.stoppedDetail.ignored_stale", {
+        ...scope,
+        activeSessionId: activeSessionId?.value || "",
+        reason: activeSessionMatches ? "turn_removed" : "session_changed",
+      });
+      return false;
+    }
     // Keep the live turn placeholder and converge it with the authoritative
     // turnStatus from the summary. Replacing the whole message array here used
     // to discard the reactive placeholder and inject a second synthetic one,

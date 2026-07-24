@@ -1085,6 +1085,7 @@ export function useChatSession({
     releaseAllPreviewUrls: chatList.releaseAllPreviewUrls,
     initSessionsAfterMount: chatList.initSessionsAfterMount,
     chatWebSocketClient,
+    sessionLogWebSocketClient,
     handleReconnect,
     conversationStateSnapshot,
     conversationStateTimeline,
