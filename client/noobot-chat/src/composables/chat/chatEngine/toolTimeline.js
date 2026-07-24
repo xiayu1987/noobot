@@ -142,11 +142,15 @@ export function buildToolTimelineFromLegacyLogs(
       fact.writtenFiles = log.writtenFiles;
     }
     const eventType = text(log.event || log.type).toLowerCase();
+    const isErrorEvent = eventType.includes("error") ||
+      text(log.category || log.data?.category).toLowerCase() === "error" ||
+      text(log.type || log.data?.type).toLowerCase() === "tool_error";
     if (
       (assumeCurrentLogIsCompleted && !eventType) ||
       eventType.includes("result") ||
       eventType.includes("return") ||
-      eventType.includes("end")
+      eventType.includes("end") ||
+      isErrorEvent
     ) {
       const result = log.output ?? log.result ?? log.data?.output ?? log.text;
       const existingResultText = text(
@@ -161,7 +165,7 @@ export function buildToolTimelineFromLegacyLogs(
       );
       if (!keepExistingUnversionedResult) {
         current.result = result;
-        current.success = log.success !== false;
+        current.success = !isErrorEvent && log.success !== false;
         current.resultEvent = fact;
       }
       current.status = "completed";

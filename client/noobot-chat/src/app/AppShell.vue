@@ -193,6 +193,7 @@ const {
   releaseAllPreviewUrls,
   initSessionsAfterMount,
   chatWebSocketClient,
+  sessionLogWebSocketClient,
   handleReconnect,
   conversationStateSnapshot,
   conversationStateTimeline,
@@ -412,6 +413,8 @@ function onAppUnmounted() {
   removePseudoRoutePopStateListener();
   unbindChatMessageScrollSync();
   releaseAllPreviewUrls();
+  chatWebSocketClient?.dispose?.();
+  sessionLogWebSocketClient?.dispose?.();
 }
 
 onMounted(onAppMounted);

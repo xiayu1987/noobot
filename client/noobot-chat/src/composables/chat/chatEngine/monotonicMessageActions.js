@@ -104,6 +104,7 @@ export function createMonotonicMessageActions({
   activeSessionId,
   authFetch,
   clearPendingInteraction,
+  chatWebSocketClient,
   deleteSessionMessagesFromApi,
   replaceSessionTurnApi,
   input,
@@ -248,8 +249,15 @@ export function createMonotonicMessageActions({
     if (startIndex < 0) return false;
     const messages = Array.isArray(session.messages) ? session.messages : [];
     const removedMessages = messages.slice(startIndex);
-    session.messages = messages.slice(0, startIndex);
     const sessionId = sessionRuntimeId(session || activeSessionId?.value);
+    for (const removedMessage of removedMessages) {
+      chatWebSocketClient?.cancelStreamForTurn?.({
+        sessionId,
+        turnScopeId: getMessageTurnScopeId(removedMessage),
+        dialogProcessId: getMessageDialogProcessId(removedMessage),
+      });
+    }
+    session.messages = messages.slice(0, startIndex);
     const removedTurnScopeIds = new Set(removedMessages.map(getMessageTurnScopeId).filter(Boolean));
     removedTurnScopeIds.forEach((turnScopeId) => {
       removeTurnRuntime(turnRuntimeRegistry?.value, turnScopeId, { sessionId });
@@ -305,11 +313,20 @@ export function createMonotonicMessageActions({
       if (result?.ok === false || payload?.ok === false) return false;
       const sessionDetail = normalizeSessionDetailSnapshot(payload, sessionId);
       if (!sessionDetail) return false;
+      // Remove the live tail first so its runtime/UI state is released before
+      // applying the server response. The response can still be stale during
+      // stop finalization, so the same anchor is enforced again below.
       cascadeDeleteMessagesFrom(userTargetMessage);
       applySessionDetail?.(sessionDetail, {
         mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
         preserveCurrentMessages: false,
+        deleteFromTurnScopeId: anchor.turnScopeId || "",
       });
+      // A successful delete response may contain a stale detail snapshot while
+      // the backend mutation is being materialized. Apply that snapshot first
+      // for identity/version convergence, then enforce the confirmed delete
+      // anchor locally so the old tail cannot reappear until refresh.
+      cascadeDeleteMessagesFrom(userTargetMessage);
       clearPendingInteraction?.();
       return true;
     }

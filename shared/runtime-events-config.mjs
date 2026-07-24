@@ -67,13 +67,13 @@ export const RUNTIME_EVENTS_CONFIG_DEFAULTS = deepFreeze({
     // Keep session-log transport diagnostics available while frontend
     // lifecycle recovery is under investigation. Environment overrides remain
     // authoritative in deployed environments.
-    sessionLogWsDebug: true,
+    sessionLogWsDebug: false,
     frontendStopContinueDebug: false,
-    frontendReconnectTimingDebug: true,
+    frontendReconnectTimingDebug: false,
     // Temporarily enabled by default while refreshed thinking-detail loading
     // and visibility projection are under active investigation.
-    frontendThinkingReplayDebug: true,
-    frontendTerminalResolutionDebug: true,
+    frontendThinkingReplayDebug: false,
+    frontendTerminalResolutionDebug: false,
     agentProxyRouteDebug: false,
     // Temporarily enabled by default while workflow/sub-agent projection and
     // completion-source diagnostics are under active investigation.

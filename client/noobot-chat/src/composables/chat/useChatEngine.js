@@ -385,6 +385,7 @@ export function useChatEngine({
     activeSession,
     activeSessionId,
     authFetch,
+    chatWebSocketClient,
     clearPendingInteraction,
     deleteSessionMessagesFromApi,
     replaceSessionTurnApi,

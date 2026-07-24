@@ -474,6 +474,34 @@ describe("chatEngine streamHandlers", () => {
     expect(scrollOnFirstResponseOnce).toHaveBeenCalledTimes(12);
   });
 
+  it("projects tool_call_error as a completed failed result instead of a running call", () => {
+    const botMessage = makeBotMessage();
+
+    handleThinkingStreamEvent({
+      data: {
+        event: "tool_call_error",
+        type: "tool_error",
+        category: "error",
+        tool: "web_to_data",
+        toolCallId: "call-error-1",
+        message: "未找到可处理的 URL",
+        dialogProcessId: "dp-error",
+      },
+      botMessage,
+      classifyRealtimeLog: (data) => ({
+        ...data,
+        text: data.message,
+      }),
+    });
+
+    expect(selectToolTimeline(botMessage)).toHaveLength(1);
+    expect(selectToolTimeline(botMessage)[0]).toMatchObject({
+      status: "completed",
+      success: false,
+      resultEvent: { log: expect.objectContaining({ event: "tool_call_error" }) },
+    });
+  });
+
   it("projects execution without writing process mirrors", () => {
     const botMessage = {
       ...makeBotMessage(),

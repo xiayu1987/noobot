@@ -110,6 +110,28 @@ describe("sessionLogWebSocketClient", () => {
     expect(client.status()).toEqual(expect.objectContaining({ queueLength: 1, inFlightLength: 0, hasReconnectTimer: true }));
   });
 
+  it("ignores close/error callbacks from a superseded socket", async () => {
+    vi.useFakeTimers();
+    const { createSessionLogWebSocketClient } = await importClient();
+    const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
+
+    client.log({ category: "message", event: "message.first", sessionId: "s-stale" });
+    const firstSocket = MockWebSocket.instances[0];
+    firstSocket.readyState = MockWebSocket.OPEN;
+    firstSocket.onopen?.();
+    firstSocket.readyState = MockWebSocket.CLOSED;
+    firstSocket.onclose?.({ code: 1006, reason: "network" });
+
+    await vi.advanceTimersByTimeAsync(1000);
+    const replacementSocket = MockWebSocket.instances.at(-1);
+    replacementSocket.readyState = MockWebSocket.OPEN;
+    replacementSocket.onopen?.();
+    firstSocket.onerror?.();
+    firstSocket.onclose?.({ code: 1006, reason: "late" });
+
+    expect(client.status().readyState).toBe(MockWebSocket.OPEN);
+  });
+
   it("forwards debug logs to the log websocket so runtime-events can decide recording", async () => {
     const { createSessionLogWebSocketClient } = await importClient();
     const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });

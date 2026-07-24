@@ -5,6 +5,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import {
+  finalizeStoppedSessionDetail,
   refreshFinalSessionDetail,
 } from "../../../../src/composables/chat/chatEngine/sessionFinalize";
 import { RoleEnum } from "../../../../src/shared/constants/chatConstants";
@@ -112,5 +113,101 @@ describe("sessionFinalize", () => {
       preserveCurrentMessages: false,
       scrollToBottom: false,
     });
+  });
+
+  it("does not restore a deleted Turn when an older stopped detail arrives", async () => {
+    const turnScopeId = "client-turn:deleted-while-detail-pending";
+    const activeSessionId = { value: "local-stop-delete-race" };
+    const activeSession = {
+      value: {
+        id: activeSessionId.value,
+        backendSessionId: activeSessionId.value,
+        messages: [
+          { role: RoleEnum.USER, content: "delete me", turnScopeId },
+          { role: RoleEnum.ASSISTANT, content: "partial", turnScopeId },
+        ],
+      },
+    };
+    let resolveDetail;
+    const fetchSessionDetail = vi.fn(() => new Promise((resolve) => {
+      resolveDetail = resolve;
+    }));
+    const applySessionDetail = vi.fn();
+
+    const finalizing = finalizeStoppedSessionDetail({
+      activeSession,
+      activeSessionId,
+      botMessage: activeSession.value.messages[1],
+      finalEventData: { sessionId: activeSessionId.value, turnScopeId },
+      fetchSessionDetail,
+      applySessionDetail,
+    });
+    await vi.waitFor(() => expect(fetchSessionDetail).toHaveBeenCalledTimes(1));
+    activeSession.value.messages = [];
+    resolveDetail({
+      sessionId: activeSessionId.value,
+      sessions: [{
+        sessionId: activeSessionId.value,
+        messages: [
+          { role: RoleEnum.USER, content: "delete me", turnScopeId },
+          { role: RoleEnum.ASSISTANT, content: "stopped", turnScopeId },
+        ],
+      }],
+    });
+
+    await expect(finalizing).resolves.toBe(false);
+    expect(applySessionDetail).not.toHaveBeenCalled();
+    expect(activeSession.value.messages).toEqual([]);
+  });
+
+  it("ignores the cancelled-stream error refresh after its Turn was deleted", async () => {
+    const turnScopeId = "client-turn:cancelled-stream-delete-race";
+    const activeSessionId = { value: "view-session" };
+    const activeSession = {
+      value: {
+        id: "view-session",
+        backendSessionId: "backend-session",
+        messages: [
+          { role: RoleEnum.USER, content: "delete me", turnScopeId },
+          { role: RoleEnum.ASSISTANT, content: "stopping", turnScopeId },
+        ],
+      },
+    };
+    let resolveDetail;
+    const fetchSessionDetail = vi.fn(() => new Promise((resolve) => {
+      resolveDetail = resolve;
+    }));
+    const applySessionDetail = vi.fn();
+
+    const refresh = refreshFinalSessionDetail({
+      activeSession,
+      activeSessionId,
+      botMessage: activeSession.value.messages[1],
+      finalDoneEventData: {
+        sessionId: "backend-session",
+        turnScopeId,
+      },
+      fetchSessionDetail,
+      applySessionDetail,
+    });
+    await vi.waitFor(() => expect(fetchSessionDetail).toHaveBeenCalledTimes(1));
+
+    // cancelStreamForTurn rejects sendFlow; deletion has already removed the
+    // whole Turn by the time the error-path detail request resolves.
+    activeSession.value.messages = [];
+    resolveDetail({
+      sessionId: "backend-session",
+      sessions: [{
+        sessionId: "backend-session",
+        messages: [
+          { role: RoleEnum.USER, content: "delete me", turnScopeId },
+          { role: RoleEnum.ASSISTANT, content: "stale answer", turnScopeId },
+        ],
+      }],
+    });
+
+    await expect(refresh).resolves.toBe(false);
+    expect(applySessionDetail).not.toHaveBeenCalled();
+    expect(activeSession.value.messages).toEqual([]);
   });
 });
