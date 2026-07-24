@@ -318,7 +318,7 @@ describe("useReconnectReplay", () => {
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-a",
     );
     expect(activeAssistant?.content).toBe("A");
-    expect(api.__test.replayCache["s-2"]["dp-b"]).toHaveLength(1);
+    expect(api.__test.replayCache["s-2"]["__turn__s-2::turn-b"]).toHaveLength(1);
   });
 
   it("RT-03: non-active realtime event writes cache only", async () => {

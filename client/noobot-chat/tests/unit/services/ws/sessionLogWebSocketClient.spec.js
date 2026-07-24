@@ -33,6 +33,16 @@ async function importClient() {
   return import("../../../../src/services/ws/sessionLogWebSocketClient.js");
 }
 
+function sentRecords(socket) {
+  return socket.sent.map((payload) => JSON.parse(payload));
+}
+
+function sentBusinessRecords(socket) {
+  return sentRecords(socket).filter(
+    (record) => !String(record.event || "").startsWith("frontend.sessionLogWs."),
+  );
+}
+
 describe("sessionLogWebSocketClient", () => {
   let originalWebSocket;
 
@@ -61,16 +71,18 @@ describe("sessionLogWebSocketClient", () => {
     MockWebSocket.instances[0].readyState = MockWebSocket.OPEN;
     MockWebSocket.instances[0].onopen?.();
 
-    expect(JSON.parse(MockWebSocket.instances[0].sent[0])).toEqual(expect.objectContaining({
+    expect(sentBusinessRecords(MockWebSocket.instances[0])).toContainEqual(expect.objectContaining({
       source: "frontend",
       category: "state",
       event: "stateMachine.event",
       sessionId: "s-1",
       data: { state: "sending" },
     }));
-    expect(client.status()).toEqual(expect.objectContaining({ queueLength: 0, inFlightLength: 1 }));
+    expect(client.status()).toEqual(expect.objectContaining({ queueLength: 0 }));
 
-    MockWebSocket.instances[0].onmessage?.({ data: JSON.stringify({ event: "ack", count: 1 }) });
+    MockWebSocket.instances[0].onmessage?.({
+      data: JSON.stringify({ event: "ack", count: MockWebSocket.instances[0].sent.length }),
+    });
     expect(client.status()).toEqual(expect.objectContaining({ queueLength: 0, inFlightLength: 0 }));
   });
 
@@ -86,9 +98,10 @@ describe("sessionLogWebSocketClient", () => {
     socket.readyState = MockWebSocket.OPEN;
     socket.onopen?.();
 
-    expect(socket.sent).toHaveLength(500);
-    expect(JSON.parse(socket.sent[0]).event).toBe("message.5");
-    expect(JSON.parse(socket.sent.at(-1)).event).toBe("message.504");
+    const businessRecords = sentBusinessRecords(socket);
+    expect(businessRecords).toHaveLength(500);
+    expect(businessRecords[0].event).toBe("message.5");
+    expect(businessRecords.at(-1).event).toBe("message.504");
   });
 
   it("restores sent-but-unacked events when the websocket closes", async () => {
@@ -101,13 +114,14 @@ describe("sessionLogWebSocketClient", () => {
     socket.readyState = MockWebSocket.OPEN;
     socket.onopen?.();
 
-    expect(socket.sent).toHaveLength(1);
-    expect(client.status()).toEqual(expect.objectContaining({ queueLength: 0, inFlightLength: 1 }));
+    expect(sentBusinessRecords(socket)).toHaveLength(1);
+    expect(client.status()).toEqual(expect.objectContaining({ queueLength: 0 }));
 
     socket.readyState = MockWebSocket.CLOSED;
     socket.onclose?.({ code: 1006, reason: "" });
 
-    expect(client.status()).toEqual(expect.objectContaining({ queueLength: 1, inFlightLength: 0, hasReconnectTimer: true }));
+    expect(client.status()).toEqual(expect.objectContaining({ inFlightLength: 0, hasReconnectTimer: true }));
+    expect(client.status().queueLength).toBeGreaterThanOrEqual(1);
   });
 
   it("ignores close/error callbacks from a superseded socket", async () => {

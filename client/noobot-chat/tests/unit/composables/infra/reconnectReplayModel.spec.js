@@ -77,13 +77,15 @@ describe("reconnectReplayModel", () => {
 
   it("splitReconnectMessagesByDialogProcessId splits mixed batches", () => {
     const groups = splitReconnectMessagesByDialogProcessId([
-      { event: StreamEventEnum.DELTA, data: { dialogProcessId: "dp-1", text: "a" } },
+      { event: StreamEventEnum.DELTA, data: { dialogProcessId: "dp-1", turnScopeId: "turn-1", text: "a" } },
       { event: StreamEventEnum.DELTA, data: { dialogProcessId: "dp-2", text: "b" } },
-      { event: StreamEventEnum.THINKING, data: { dialogProcessId: "dp-1" } },
+      { event: StreamEventEnum.THINKING, data: { dialogProcessId: "dp-1", turnScopeId: "turn-1" } },
+      { event: StreamEventEnum.DELTA, data: { dialogProcessId: "dp-1", turnScopeId: "turn-2", text: "c" } },
     ]);
 
-    expect(groups).toHaveLength(2);
-    expect(groups.find((item) => item.dialogProcessId === "dp-1")?.messages).toHaveLength(2);
+    expect(groups).toHaveLength(3);
+    expect(groups.find((item) => item.turnScopeId === "turn-1")?.messages).toHaveLength(2);
+    expect(groups.find((item) => item.turnScopeId === "turn-2")?.messages).toHaveLength(1);
     expect(groups.find((item) => item.dialogProcessId === "dp-2")?.messages).toHaveLength(1);
   });
 

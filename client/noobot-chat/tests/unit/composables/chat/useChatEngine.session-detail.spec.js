@@ -550,6 +550,43 @@ describe("useChatEngine.session-detail", () => {
     expect(activeSession.lastMessage).toBe(null);
   });
 
+  it("delete-confirmed replaces stale pre-resend detail history with an authoritative empty response", () => {
+    const previousTurnScopeId = "client-turn:before-resend";
+    const deletedTurnScopeId = "client-turn:deleted-resend";
+    const { activeSession, applySessionDetail } = createApplySessionDetailHarness({
+      sessionId: "s-delete-after-second-stop",
+      messages: [
+        { role: RoleEnum.USER, content: "same question", turnScopeId: deletedTurnScopeId },
+        { role: RoleEnum.ASSISTANT, content: "stopped", turnScopeId: deletedTurnScopeId },
+      ],
+    });
+    activeSession.detailMessages = [
+      { role: RoleEnum.USER, content: "same question", turnScopeId: previousTurnScopeId },
+      { role: RoleEnum.ASSISTANT, content: "first stopped", turnScopeId: previousTurnScopeId },
+    ];
+    activeSession.turnStatuses = [{ turnScopeId: previousTurnScopeId, status: "user_stopped" }];
+    activeSession.turnTimings = [{ turnScopeId: previousTurnScopeId, thinkingStartedAt: "2026-07-24T13:55:13.000Z" }];
+
+    applySessionDetail({
+      sessionId: "s-delete-after-second-stop",
+      sessions: [{
+        sessionId: "s-delete-after-second-stop",
+        messages: [],
+        turnStatuses: [],
+        turnTimings: [],
+      }],
+    }, {
+      mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
+      preserveCurrentMessages: false,
+      deleteFromTurnScopeId: deletedTurnScopeId,
+    });
+
+    expect(activeSession.messages).toEqual([]);
+    expect(activeSession.detailMessages).toEqual([]);
+    expect(activeSession.turnStatuses).toEqual([]);
+    expect(activeSession.turnTimings).toEqual([]);
+  });
+
   it("applySessionDetail merge-preserve-inflight mode keeps missing in-flight assistant during background refresh", () => {
     const turnScopeId = "client-turn:background-preserve";
     const { activeSession, applySessionDetail } = createApplySessionDetailHarness({

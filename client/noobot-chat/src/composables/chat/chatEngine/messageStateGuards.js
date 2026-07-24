@@ -28,6 +28,14 @@ export function normalizeSessionDetailApplyMode(value = "") {
     : SESSION_DETAIL_APPLY_MODE.AUTO;
 }
 
+export function isAuthoritativeSessionDetailApplyMode(value = "") {
+  const mode = normalizeSessionDetailApplyMode(value);
+  return [
+    SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
+    SESSION_DETAIL_APPLY_MODE.REPLACE,
+  ].includes(mode);
+}
+
 export function isInFlightAssistantMessage(messageItem = {}, {
   registry = null,
   sessionId = "",

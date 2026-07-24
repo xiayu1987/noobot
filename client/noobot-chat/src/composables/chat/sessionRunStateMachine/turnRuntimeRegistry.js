@@ -56,6 +56,7 @@ export function createTurnRuntimeRegistryState() {
   return {
     sessions: {}, sessionAliases: {}, routeIndex: {},
     executions: {}, executionIdByTurnScopeId: {}, childExecutionIdsByParentId: {},
+    deletedTurnScopeIdsBySession: {},
   };
 }
 
@@ -67,6 +68,23 @@ function canonicalSessionId(registry, sessionId) {
     id = text(registry.sessionAliases[id]);
   }
   return id;
+}
+
+export function isTurnRuntimeDeleted(registry, { sessionId = "", turnScopeId = "" } = {}) {
+  const id = canonicalSessionId(registry, sessionId);
+  const scope = turnKey(turnScopeId);
+  return Boolean(id && scope && registry?.deletedTurnScopeIdsBySession?.[id]?.[scope]);
+}
+
+function tombstoneTurnRuntime(registry, sessionId, turnScopeId) {
+  const id = canonicalSessionId(registry, sessionId) || text(sessionId);
+  const scope = turnKey(turnScopeId);
+  if (!id || !scope) return false;
+  if (!registry.deletedTurnScopeIdsBySession) registry.deletedTurnScopeIdsBySession = {};
+  if (!registry.deletedTurnScopeIdsBySession[id]) registry.deletedTurnScopeIdsBySession[id] = {};
+  const added = registry.deletedTurnScopeIdsBySession[id][scope] !== true;
+  registry.deletedTurnScopeIdsBySession[id][scope] = true;
+  return added;
 }
 
 function promoteTurnSession(registry, turn, nextSessionId) {
@@ -95,20 +113,26 @@ export function promoteSessionRuntimeIdentity(registry, previousSessionId, nextS
   const nextId = canonicalSessionId(registry, nextSessionId) || text(nextSessionId);
   if (!previousId || !nextId || previousId === nextId) return { applied: false, reason: "identity_unchanged" };
   const previousBucket = registry?.sessions?.[previousId];
-  if (!previousBucket) return { applied: false, reason: "source_session_runtime_missing" };
+  const previousTombstones = registry?.deletedTurnScopeIdsBySession?.[previousId];
+  if (!previousBucket && !previousTombstones) return { applied: false, reason: "source_session_runtime_missing" };
   const targetBucket = ensureSessionBucket(registry, nextId);
-  for (const [scope, turn] of Object.entries(previousBucket.turns || {})) {
+  for (const [scope, turn] of Object.entries(previousBucket?.turns || {})) {
     const existing = targetBucket.turns?.[scope];
     if (existing && existing !== turn) return { applied: false, reason: "session_identity_conflict" };
   }
-  for (const [scope, turn] of Object.entries(previousBucket.turns || {})) {
+  for (const [scope, turn] of Object.entries(previousBucket?.turns || {})) {
     turn.sessionId = nextId;
     targetBucket.turns[scope] = turn;
     if (turn.dialogProcessId) registry.routeIndex[turn.dialogProcessId] = { sessionId: nextId, turnScopeId: scope };
   }
-  if (previousBucket.activeTurnScopeId) targetBucket.activeTurnScopeId = previousBucket.activeTurnScopeId;
-  targetBucket.authoritativeSequence = Math.max(Number(targetBucket.authoritativeSequence || 0), Number(previousBucket.authoritativeSequence || 0));
-  targetBucket.protocolVersion = Math.max(Number(targetBucket.protocolVersion || 0), Number(previousBucket.protocolVersion || 0));
+  if (previousBucket?.activeTurnScopeId) targetBucket.activeTurnScopeId = previousBucket.activeTurnScopeId;
+  targetBucket.authoritativeSequence = Math.max(Number(targetBucket.authoritativeSequence || 0), Number(previousBucket?.authoritativeSequence || 0));
+  targetBucket.protocolVersion = Math.max(Number(targetBucket.protocolVersion || 0), Number(previousBucket?.protocolVersion || 0));
+  if (previousTombstones) {
+    if (!registry.deletedTurnScopeIdsBySession[nextId]) registry.deletedTurnScopeIdsBySession[nextId] = {};
+    Object.assign(registry.deletedTurnScopeIdsBySession[nextId], previousTombstones);
+    delete registry.deletedTurnScopeIdsBySession[previousId];
+  }
   registry.sessionAliases[previousId] = nextId;
   delete registry.sessions[previousId];
   return { applied: true, previousSessionId: previousId, sessionId: nextId };
@@ -140,6 +164,10 @@ function applyExecutionProjection(registry, source = {}) {
   const current = registry.executions?.[validation.identity.executionId];
   const rawTurnScopeId = text(validation.identity?.turnScopeId || source?.turnScopeId);
   const canonicalTurnScopeId = turnKey(rawTurnScopeId);
+  if (isTurnRuntimeDeleted(registry, {
+    sessionId: validation.identity?.sessionId || source?.sessionId,
+    turnScopeId: canonicalTurnScopeId,
+  })) return { applied: false, reason: "deleted_turn_tombstoned" };
   const execution = {
     ...(current || {}),
     ...source,
@@ -433,8 +461,9 @@ export function resolveLatestStoppedTurn(registry, sessionId) {
 }
 
 export function removeTurnRuntime(registry, turnScopeId, { sessionId = "" } = {}) {
+  if (!registry) return false;
   const scope = turnKey(turnScopeId);
-  const expectedSessionId = text(sessionId);
+  const expectedSessionId = canonicalSessionId(registry, sessionId) || text(sessionId);
   const turn = resolveTurnRuntimeByScope(registry, scope, { sessionId: expectedSessionId });
   if (!turn || (expectedSessionId && turn.sessionId !== expectedSessionId)) return false;
   const bucket = registry?.sessions?.[turn.sessionId];
@@ -448,15 +477,37 @@ export function removeTurnRuntime(registry, turnScopeId, { sessionId = "" } = {}
   return true;
 }
 
+/** Commit a business deletion. Unlike runtime pruning, this rejects all later projections. */
+export function confirmTurnRuntimeDeletion(registry, turnScopeIds = [], { sessionId = "" } = {}) {
+  if (!registry) return { applied: false, confirmedTurnScopeIds: [], removedTurnScopeIds: [] };
+  const id = canonicalSessionId(registry, sessionId) || text(sessionId);
+  const scopes = [...new Set(
+    (Array.isArray(turnScopeIds) ? turnScopeIds : [turnScopeIds]).map(turnKey).filter(Boolean),
+  )];
+  const confirmedTurnScopeIds = [];
+  const removedTurnScopeIds = [];
+  for (const scope of scopes) {
+    if (tombstoneTurnRuntime(registry, id, scope)) confirmedTurnScopeIds.push(scope);
+    if (removeTurnRuntime(registry, scope, { sessionId: id })) removedTurnScopeIds.push(scope);
+  }
+  return {
+    applied: confirmedTurnScopeIds.length > 0 || removedTurnScopeIds.length > 0,
+    confirmedTurnScopeIds,
+    removedTurnScopeIds,
+  };
+}
+
 export function removeSessionRuntime(registry, sessionId) {
-  const id = text(sessionId);
+  const id = canonicalSessionId(registry, sessionId) || text(sessionId);
   const bucket = registry?.sessions?.[id];
-  if (!bucket) return false;
-  for (const turn of Object.values(bucket.turns || {})) {
+  const hadTombstones = Boolean(registry?.deletedTurnScopeIdsBySession?.[id]);
+  if (!bucket && !hadTombstones) return false;
+  for (const turn of Object.values(bucket?.turns || {})) {
     const route = registry.routeIndex?.[text(turn?.dialogProcessId)];
     if (route?.sessionId === id && route?.turnScopeId === turn.turnScopeId) delete registry.routeIndex[turn.dialogProcessId];
   }
   delete registry.sessions[id];
+  delete registry.deletedTurnScopeIdsBySession?.[id];
   return true;
 }
 
@@ -517,6 +568,9 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
   if (!turnScopeId) return observation({ turn: null, applied: false, reason: "missing_turn_identity" });
   const rawRequestedSessionId = text(event.sessionId || route?.sessionId);
   const requestedSessionId = canonicalSessionId(next, rawRequestedSessionId);
+  if (isTurnRuntimeDeleted(next, { sessionId: requestedSessionId, turnScopeId })) {
+    return observation({ turn: null, canonicalSessionId: requestedSessionId, applied: false, reason: "deleted_turn_tombstoned" });
+  }
   let current = findTurnByScope(next, turnScopeId, { sessionId: requestedSessionId });
   let aliasPromoted = false;
   if (!current && requestedSessionId && canPromoteOptimisticTurnSession(event)) {
@@ -705,6 +759,7 @@ export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
     if (!turnScopeId || !Number.isInteger(revision) || revision < 1 || Number(source.sequence || 0) > sequence) {
       return { applied: false, reason: "invalid_snapshot_turn" };
     }
+    if (isTurnRuntimeDeleted(registry, { sessionId, turnScopeId })) continue;
     const current = bucket.turns[turnScopeId];
     if (current && Number(current.revision || 0) > revision) continue;
     if (current?.dialogProcessId && source.dialogProcessId && text(current.dialogProcessId) !== text(source.dialogProcessId)) {
@@ -739,7 +794,11 @@ export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
   const previousActiveTurn = previousActiveTurnScopeId
     ? bucket.turns[previousActiveTurnScopeId]
     : null;
-  const snapshotActiveScope = turnKey(snapshot.activeTurnScopeId);
+  const candidateSnapshotActiveScope = turnKey(snapshot.activeTurnScopeId);
+  const snapshotActiveScope = isTurnRuntimeDeleted(registry, {
+    sessionId,
+    turnScopeId: candidateSnapshotActiveScope,
+  }) ? "" : candidateSnapshotActiveScope;
   const snapshotActiveState = text(snapshot.activeTurn?.state);
   const snapshotActiveIsTerminal = isAuthoritativeTerminalState(snapshotActiveState);
   // A terminal snapshot is discovery-only and cannot erase the canonical Turn
@@ -779,6 +838,7 @@ export function applyTurnTimingSnapshot(registry, snapshot = {}) {
   const bucket = ensureSessionBucket(registry, sessionId);
   const hydratedTurnScopeIds = [];
   for (const timing of timings) {
+    if (isTurnRuntimeDeleted(registry, { sessionId, turnScopeId: timing.turnScopeId })) continue;
     const current = bucket.turns[timing.turnScopeId] || {};
     if (
       current?.dialogProcessId &&

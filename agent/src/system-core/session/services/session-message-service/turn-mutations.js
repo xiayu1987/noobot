@@ -6,7 +6,7 @@
 import { normalizeMessageEntity } from "../../entities/session-entity.js";
 import { resolveMessageDialogProcessId } from "../../../context/session/dialog-process-id-resolver.js";
 import { normalizeIncomingAttachmentsForSessionMessage } from "./attachment-helpers.js";
-import { resolveSessionVersion, createMessageAnchorMatcher, resolveUserTurnStartIndex, clearReplacementUserRuntimeState } from "./anchor-utils.js";
+import { resolveSessionVersion, createMessageAnchorMatcher, resolveUserTurnStartIndex, clearReplacementUserRuntimeState, resolveTurnScopeId, uniqueValues } from "./anchor-utils.js";
 import { createRequestHash, assertIdempotencyRequestMatches, findMutationReceipt, rememberMutationReceipt, normalizeExpectedVersion } from "./idempotency-guards.js";
 import { pruneSessionTurnTimings, pruneSessionTurnStatuses, buildTurnScopeReplacement } from "./turn-timing.js";
 
@@ -74,14 +74,16 @@ export async function deleteFromMessage({
       error.statusCode = 404;
       throw error;
     }
-    const deletedCount = messages.length - anchorIndex;
+    const deletedMessages = messages.slice(anchorIndex);
+    const deletedCount = deletedMessages.length;
+    const deletedTurnScopeIds = uniqueValues(deletedMessages.map(resolveTurnScopeId));
     session.messages = messages.slice(0, anchorIndex);
     pruneSessionTurnTimings(session);
     pruneSessionTurnStatuses(session);
     session.updatedAt = this.now();
     session.version = currentVersion + 1;
     session.revision = session.version;
-    const result = { deletedCount, anchorIndex };
+    const result = { deletedCount, anchorIndex, deletedTurnScopeIds };
     if (normalizedIdempotencyKey) {
       rememberMutationReceipt(session, {
         operation: "delete_from",

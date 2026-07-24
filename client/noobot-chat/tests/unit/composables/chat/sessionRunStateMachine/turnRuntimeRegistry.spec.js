@@ -6,6 +6,7 @@
 import { describe, it, expect } from "vitest";
 import {
   createTurnRuntimeRegistryState,
+  confirmTurnRuntimeDeletion,
   applyTurnRuntimeEvent,
   resolveSessionTurnRuntime,
   resolveLatestStoppedTurn,
@@ -24,6 +25,7 @@ import {
   applyExecutionSnapshot,
   applyExecutionTree,
   executionTurnKey,
+  isTurnRuntimeDeleted,
 } from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 import { SESSION_RUN_EVENT, BackendChannelState } from "../../../../../src/composables/chat/sessionRunStateMachine/constants";
 import { createTurnTerminalResolution } from "../../../../../../../shared/turn-lifecycle-protocol.mjs";
@@ -938,6 +940,40 @@ describe("turnRuntimeRegistry", () => {
     sendStart(registry, { sessionId: "s1", turnScopeId: "t2" });
     expect(removeSessionRuntime(registry, "s1")).toBe(true);
     expect(registry.sessions.s1).toBeUndefined();
+  });
+
+  it("tombstones a confirmed deletion and rejects late replay for the same Session Turn", () => {
+    const registry = createTurnRuntimeRegistryState();
+    sendStart(registry, { sessionId: "s1", turnScopeId: "deleted-turn" });
+
+    expect(confirmTurnRuntimeDeletion(registry, "deleted-turn", { sessionId: "s1" }).applied).toBe(true);
+    expect(isTurnRuntimeDeleted(registry, {
+      sessionId: "s1",
+      turnScopeId: "deleted-turn",
+    })).toBe(true);
+
+    const replayed = backendState(registry, {
+      sessionId: "s1",
+      turnScopeId: "deleted-turn",
+      dialogProcessId: "dp-deleted",
+      state: BackendChannelState.SENDING,
+      seq: 2,
+    });
+
+    expect(replayed).toMatchObject({ applied: false, reason: "deleted_turn_tombstoned" });
+    expect(resolveTurnRuntimeByScope(registry, "deleted-turn", { sessionId: "s1" })).toBeNull();
+  });
+
+  it("does not tombstone ordinary runtime pruning", () => {
+    const registry = createTurnRuntimeRegistryState();
+    sendStart(registry, { sessionId: "s1", turnScopeId: "pruned-turn" });
+
+    expect(removeTurnRuntime(registry, "pruned-turn", { sessionId: "s1" })).toBe(true);
+    expect(isTurnRuntimeDeleted(registry, {
+      sessionId: "s1",
+      turnScopeId: "pruned-turn",
+    })).toBe(false);
+    expect(sendStart(registry, { sessionId: "s1", turnScopeId: "pruned-turn" }).applied).toBe(true);
   });
 
   it("prunes old or excess terminal turns per session while protecting active, stopped, and referenced turns", () => {

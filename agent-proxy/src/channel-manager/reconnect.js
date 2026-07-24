@@ -159,7 +159,15 @@ handleReconnect(socket, payload = {}) {
       const reconnectTurnScopeId = String(
         lastReceivedTurnScopeIdMap?.[dpId] || payload?.currentTurnScopeId || "",
       ).trim();
-      if (lastSeq <= 0 && isTerminalStatus(channel.status)) {
+      const conversationState = String(
+        channel.conversationStateByDialogProcessId?.get(dpId)?.state || "",
+      ).trim();
+      const conversationIsTerminal = [
+        CONVERSATION_STATE.COMPLETED,
+        CONVERSATION_STATE.USER_STOPPED,
+        CONVERSATION_STATE.ERROR,
+      ].includes(conversationState);
+      if (lastSeq <= 0 && (isTerminalStatus(channel.status) || conversationIsTerminal)) {
         this.logSessionEvent(channel, {
           category: "transport",
           event: "agentProxy.reconnect.replay.skipped",
@@ -172,6 +180,7 @@ handleReconnect(socket, payload = {}) {
             lastSequence: lastSeq,
             result: "skipped",
             dropReason: "terminal_without_cursor",
+            conversationState,
           },
         });
         continue;
@@ -295,12 +304,19 @@ handleReconnect(socket, payload = {}) {
       });
 
       if (replayEvents.length > 0) {
+        const replayMessages = replayEvents
+          .slice(0, config.maxReplayEvents)
+          .map((eventEnvelope) => this._withChannelSessionScope(channel, eventEnvelope));
+        const replayTurnScopeIds = new Set(
+          replayMessages
+            .map((eventEnvelope) => String(eventEnvelope?.data?.turnScopeId || "").trim())
+            .filter(Boolean),
+        );
         sessionEntry.dialogProcesses.push({
           dialogProcessId: dpId,
+          ...(replayTurnScopeIds.size === 1 ? { turnScopeId: [...replayTurnScopeIds][0] } : {}),
           parentDialogProcessId: String(payload?.parentDialogProcessId || "").trim(),
-          messages: replayEvents
-            .slice(0, config.maxReplayEvents)
-            .map((eventEnvelope) => this._withChannelSessionScope(channel, eventEnvelope)),
+          messages: replayMessages,
         });
       } else if (lastSeq > 0) {
         // DialogProcessId was known but no events found - may be expired

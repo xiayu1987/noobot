@@ -135,6 +135,10 @@ export function createSessionLogWebSocketClient({ resolveWebSocketUrl = () => ""
   // frontend logs observable in runtime-events instead of only DevTools.
   function runtimeDiagnostic(event, data = {}) {
     if (disposed) return false;
+    // Diagnostics must never evict a business record from the bounded delivery
+    // queue. Recording remains controlled by runtime-events-config on the
+    // consumer side; this only establishes transport priority under pressure.
+    if (queue.length >= MAX_QUEUE_SIZE) return false;
     const record = buildSessionLogRecord({
       category: "debug",
       level: "debug",
@@ -143,9 +147,9 @@ export function createSessionLogWebSocketClient({ resolveWebSocketUrl = () => ""
       data: { event, ...data },
     }, { source, includeTimestamp: true });
     queue.push(record);
-    if (queue.length > MAX_QUEUE_SIZE) queue.splice(0, queue.length - MAX_QUEUE_SIZE);
     connect();
     flush();
+    return true;
   }
 
   function status() {

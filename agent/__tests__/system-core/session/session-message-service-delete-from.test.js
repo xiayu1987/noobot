@@ -54,6 +54,7 @@ test("SessionMessageService.deleteFromMessage deletes from anchor message to ses
 
   assert.equal(result.deletedCount, 2);
   assert.equal(result.anchorIndex, 1);
+  assert.deepEqual(result.deletedTurnScopeIds, ["scope-delete", "scope-tail"]);
   assert.equal(result.version, 3);
   assert.equal(saved.length, 1);
   assert.deepEqual(saved[0].messages.map((message) => message.content), ["keep"]);
