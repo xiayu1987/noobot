@@ -24,6 +24,7 @@ const props = defineProps({
   attemptExecutionIds: { type: Array, default: () => [] },
   stopExecution: { type: Function, default: null },
   selectedRuntimeNode: { type: Object, default: null },
+  selectedRuntimeStep: { type: Object, default: null },
   selectedRuntimeBoxes: { type: Array, default: () => [] },
   selectedGraphDialogProcessId: { type: String, default: "" },
   displayNodeMessages: { type: Array, default: () => [] },
@@ -302,7 +303,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
           </div>
         </div>
         <AgentExecutionView
-          v-if="selectedExecutionId || selectedNodeSessionId"
+          v-if="selectedRuntimeStep && (selectedExecutionId || selectedNodeSessionId)"
           :execution-id="selectedExecutionId || selectedNodeSessionId"
           channel-context="workflow-node"
           :messages="displayNodeMessages"
@@ -321,7 +322,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
           @open-thinking-details="$emit('open-thinking-details', $event)"
         />
         <BaseEmptyHint
-          v-else-if="!viewerLoading"
+          v-else-if="selectedRuntimeStep && !viewerLoading"
           class="workflow-node-empty"
           :text="viewerState === 'pending' ? translate('workflow.nodeSessionPending') : translate('workflow.noNodeSessionContent')"
         />
