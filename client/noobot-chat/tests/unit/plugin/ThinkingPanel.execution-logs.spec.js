@@ -192,6 +192,56 @@ describe("ThinkingPanel", () => {
     expect(wrapper.find("button").text()).toContain("0");
   });
 
+  it("orders cross-domain activity and tool facts by timestamp instead of sequence", () => {
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: true,
+      turnScopeId: "client-turn:cross-domain-order",
+      activityTimeline: [
+        {
+          activityId: "activity:transport-999",
+          eventId: "transport-999",
+          sequence: 999,
+          authority: "compatibility",
+          sequenceDomain: "transport",
+          timestamp: "2026-07-25T01:00:00.000Z",
+          log: {
+            event: "thinking",
+            type: "thinking",
+            text: "earlier transport activity",
+            timestamp: "2026-07-25T01:00:00.000Z",
+          },
+        },
+      ],
+      toolTimeline: [
+        {
+          key: "call:message-30",
+          toolCallId: "message-30",
+          status: "running",
+          call: {
+            eventId: "message-30",
+            sequence: 30,
+            authority: "authoritative",
+            sequenceDomain: "message",
+            timestamp: "2026-07-25T01:00:01.000Z",
+            log: {
+              event: "tool_call",
+              type: "tool_call",
+              toolCallId: "message-30",
+              text: "later message tool",
+              timestamp: "2026-07-25T01:00:01.000Z",
+            },
+          },
+        },
+      ],
+    });
+
+    const lines = wrapper.findAll(".execution-log-line");
+    expect(lines).toHaveLength(2);
+    expect(lines[0].text()).toContain("earlier transport activity");
+    expect(lines[1].text()).toContain("later message tool");
+  });
+
   
 
   it("does not backfill previous tool logs while current assistant is pending", () => {

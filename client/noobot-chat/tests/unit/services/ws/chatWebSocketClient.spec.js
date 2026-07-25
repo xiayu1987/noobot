@@ -167,6 +167,86 @@ describe("chatWebSocketClient", () => {
     await reconnectPromise;
   });
 
+  it("keeps restored-session live events subscribed after reconnect completes", async () => {
+    const onReconnectData = vi.fn();
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const reconnectPromise = client.reconnect({
+      currentSessionId: "s-live-replay",
+      userId: "u-1",
+      onReconnectData,
+    });
+    const socket = MockWebSocket.instances[0];
+
+    socket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 1 });
+    await reconnectPromise;
+    socket.emit(StreamEventEnum.THINKING, {
+      sessionId: "s-live-replay",
+      dialogProcessId: "dp-live-replay",
+      turnScopeId: "turn-live-replay",
+      seq: 2,
+      text: "continued thinking",
+    });
+    socket.emit(StreamEventEnum.DELTA, {
+      sessionId: "s-live-replay",
+      dialogProcessId: "dp-live-replay",
+      turnScopeId: "turn-live-replay",
+      seq: 3,
+      content: "continued answer",
+    });
+
+    expect(onReconnectData).toHaveBeenNthCalledWith(1, {
+      event: StreamEventEnum.THINKING,
+      data: expect.objectContaining({ text: "continued thinking", seq: 2 }),
+    });
+    expect(onReconnectData).toHaveBeenNthCalledWith(2, {
+      event: StreamEventEnum.DELTA,
+      data: expect.objectContaining({ content: "continued answer", seq: 3 }),
+    });
+    expect(client.getLastReceivedSeqMap()).toEqual({ "dp-live-replay": 3 });
+  });
+
+  it("does not duplicate live events while an active stream owns the turn", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const onStreamEvent = vi.fn();
+    const onReconnectData = vi.fn();
+    const streamPromise = client.stream({
+      action: "chat",
+      sessionId: "s-live-owner",
+      turnScopeId: "turn-live-owner",
+    }, onStreamEvent);
+    const socket = MockWebSocket.instances[0];
+    const streamRequestId = JSON.parse(socket.sent[0]).requestId;
+    const reconnectPromise = client.reconnect({
+      currentSessionId: "s-live-owner",
+      userId: "u-1",
+      onReconnectData,
+    });
+
+    socket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 1 });
+    await reconnectPromise;
+    socket.emit(StreamEventEnum.DELTA, {
+      sessionId: "s-live-owner",
+      turnScopeId: "turn-live-owner",
+      requestId: streamRequestId,
+      seq: 2,
+      content: "owned by stream",
+    });
+
+    expect(onStreamEvent).toHaveBeenCalledWith({
+      event: StreamEventEnum.DELTA,
+      data: expect.objectContaining({ content: "owned by stream" }),
+    });
+    expect(onReconnectData).not.toHaveBeenCalled();
+
+    socket.emit(StreamEventEnum.DONE, {
+      sessionId: "s-live-owner",
+      turnScopeId: "turn-live-owner",
+      requestId: streamRequestId,
+      seq: 3,
+    });
+    await streamPromise;
+  });
+
   it("multiplexes reconnect on the active stream socket without opening another connection", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onEvent = vi.fn();

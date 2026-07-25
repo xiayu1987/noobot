@@ -74,6 +74,35 @@ test("log-websocket-server: writes session logs by category", async () => {
   }
 });
 
+test("log-websocket-server: writes tool log window debug to its dedicated file", async () => {
+  const logRoot = await withTempLogDir();
+  const logConfig = { logRoot, retentionMs: 60000, cleanupIntervalMs: 60000 };
+  const { server, registered } = await startLogServer({ logConfig });
+  try {
+    const { port } = server.address();
+    const messages = await sendLogWs({
+      port,
+      payload: {
+        source: "frontend",
+        category: "debug",
+        level: "debug",
+        debugType: "tool-log-window",
+        event: "frontend.toolLogWindow.rendererReceived",
+        sessionId: "s-tool-window",
+        data: { debugType: "tool-log-window", selectedCount: 10 },
+      },
+    });
+    assert.equal(messages[0]?.event, "ack");
+    const file = path.join(logRoot, "s-tool-window", "debug-tool-log-window.jsonl");
+    const record = JSON.parse((await fs.readFile(file, "utf8")).trim());
+    assert.equal(record.event, "frontend.toolLogWindow.rendererReceived");
+    assert.equal(record.data.selectedCount, 10);
+  } finally {
+    await closeLogServer(server, registered);
+    await fs.rm(logRoot, { recursive: true, force: true });
+  }
+});
+
 test("log-websocket-server: writes to user runtime session directory by default", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workspace-"));
   const config = resolveSessionLogConfig({ workspaceRoot, retentionMs: 60000, cleanupIntervalMs: 60000 });

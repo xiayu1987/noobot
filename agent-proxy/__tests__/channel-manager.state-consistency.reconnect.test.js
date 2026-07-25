@@ -36,6 +36,194 @@ test("authoritative lifecycle replay is session-scoped, ordered, and deduplicate
   );
 });
 
+test("reconnect derives an active run only from the authoritative lifecycle window", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const sessionId = "session-authoritative-running";
+  const turnScopeId = "turn-authoritative-running";
+  const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId }), {
+    userId: "user-1",
+    sessionId,
+    turnScopeId,
+  });
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  manager.pushChannelEvent(channel, "turn_lifecycle", {
+    protocolVersion: 1,
+    eventType: "turn.action_accepted",
+    eventId: "active-1",
+    commandId: "command-active",
+    sessionId,
+    turnScopeId,
+    dialogProcessId: "dp-authoritative-running",
+    revision: 1,
+    sequence: 1,
+    state: "action_requesting",
+    phase: "action",
+  });
+  manager.pushChannelEvent(channel, "turn_lifecycle", {
+    protocolVersion: 1,
+    eventType: "turn.processing_started",
+    eventId: "active-2",
+    commandId: "command-active",
+    sessionId,
+    turnScopeId,
+    dialogProcessId: "dp-authoritative-running",
+    revision: 2,
+    sequence: 2,
+    state: "processing",
+    phase: "processing",
+  });
+  manager.pushChannelEvent(channel, "delta", {
+    sessionId,
+    turnScopeId,
+    dialogProcessId: "dp-authoritative-running",
+    seq: 3,
+    content: "buffered after refresh",
+  });
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+
+  manager.handleReconnect(client, { currentSessionId: sessionId });
+
+  const session = getEvent(client, "reconnect_data").data.sessions[0];
+  assert.equal(session.hasRunningTask, true);
+  assert.equal(session.currentRun.sessionId, sessionId);
+  assert.equal(session.currentRun.turnScopeId, turnScopeId);
+  assert.equal(session.currentRun.dialogProcessId, "dp-authoritative-running");
+  assert.equal(session.currentRun.state, "sending");
+  assert.equal(session.currentRun.lifecycleState, "processing");
+  assert.equal(session.currentRun.authoritativeLifecycle, true);
+  assert.equal(session.dialogProcesses[0].messages.some((item) => item.event === "delta"), true);
+});
+
+test("terminal lifecycle removes the reconnect active-run projection", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const sessionId = "session-authoritative-terminal";
+  const turnScopeId = "turn-authoritative-terminal";
+  const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId }), {
+    userId: "user-1", sessionId, turnScopeId,
+  });
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  for (const envelope of [
+    { eventType: "turn.processing_started", eventId: "terminal-1", state: "processing", phase: "processing", revision: 1, sequence: 1 },
+    { eventType: "turn.completed", eventId: "terminal-2", state: "completed", phase: "completion", revision: 2, sequence: 2 },
+  ]) {
+    manager.pushChannelEvent(channel, "turn_lifecycle", {
+      protocolVersion: 1,
+      commandId: "command-terminal",
+      sessionId,
+      turnScopeId,
+      dialogProcessId: "dp-authoritative-terminal",
+      ...envelope,
+    });
+  }
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+
+  manager.handleReconnect(client, { currentSessionId: sessionId });
+
+  const session = getEvent(client, "reconnect_data").data.sessions[0];
+  assert.equal(session.hasRunningTask, false);
+  assert.equal(session.currentRun, null);
+});
+
+test("reconnect aggregates lifecycle authority across channels of the same session", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const sessionId = "session-multi-channel-active";
+  const turnScopeId = "turn-multi-channel-active";
+  const firstChannel = manager.ensureChannel(
+    createChannelKey({ userId: "user-1", sessionId, parentDialogProcessId: "parent-a" }),
+    { userId: "user-1", sessionId, parentDialogProcessId: "parent-a" },
+  );
+  const secondChannel = manager.ensureChannel(
+    createChannelKey({ userId: "user-1", sessionId, parentDialogProcessId: "parent-b" }),
+    { userId: "user-1", sessionId, parentDialogProcessId: "parent-b" },
+  );
+  for (const channel of [firstChannel, secondChannel]) {
+    channel.ownerApiKey = "api-key-1";
+    channel.ownerUserId = "user-1";
+  }
+  manager.pushChannelEvent(firstChannel, "turn_lifecycle", {
+    protocolVersion: 1,
+    eventType: "turn.action_accepted",
+    eventId: "multi-active-1",
+    commandId: "multi-active-command",
+    sessionId,
+    turnScopeId,
+    dialogProcessId: "dp-multi-active",
+    revision: 1,
+    sequence: 1,
+    state: "action_requesting",
+    phase: "action",
+  });
+  manager.pushChannelEvent(secondChannel, "turn_lifecycle", {
+    protocolVersion: 1,
+    eventType: "turn.processing_started",
+    eventId: "multi-active-2",
+    commandId: "multi-active-command",
+    sessionId,
+    turnScopeId,
+    dialogProcessId: "dp-multi-active",
+    revision: 2,
+    sequence: 2,
+    state: "processing",
+    phase: "processing",
+  });
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+
+  manager.handleReconnect(client, { currentSessionId: sessionId });
+
+  const session = getEvent(client, "reconnect_data").data.sessions[0];
+  assert.equal(session.hasRunningTask, true);
+  assert.equal(session.currentRun.eventId, "multi-active-2");
+  assert.equal(session.currentRun.turnScopeId, turnScopeId);
+  assert.deepEqual(
+    session.lifecycleEvents.map((item) => item.data.eventId),
+    ["multi-active-1", "multi-active-2"],
+  );
+});
+
+test("latest terminal lifecycle wins across channels of the same session", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const sessionId = "session-multi-channel-terminal";
+  const turnScopeId = "turn-multi-channel-terminal";
+  const activeChannel = manager.ensureChannel(
+    createChannelKey({ userId: "user-1", sessionId, parentDialogProcessId: "parent-active" }),
+    { userId: "user-1", sessionId },
+  );
+  const terminalChannel = manager.ensureChannel(
+    createChannelKey({ userId: "user-1", sessionId, parentDialogProcessId: "parent-terminal" }),
+    { userId: "user-1", sessionId },
+  );
+  for (const channel of [activeChannel, terminalChannel]) {
+    channel.ownerApiKey = "api-key-1";
+    channel.ownerUserId = "user-1";
+  }
+  for (const [channel, envelope] of [
+    [activeChannel, { eventType: "turn.processing_started", eventId: "multi-terminal-1", state: "processing", phase: "processing", revision: 1, sequence: 1 }],
+    [terminalChannel, { eventType: "turn.completed", eventId: "multi-terminal-2", state: "completed", phase: "completion", revision: 2, sequence: 2 }],
+  ]) {
+    manager.pushChannelEvent(channel, "turn_lifecycle", {
+      protocolVersion: 1,
+      commandId: "multi-terminal-command",
+      sessionId,
+      turnScopeId,
+      dialogProcessId: "dp-multi-terminal",
+      ...envelope,
+    });
+  }
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+
+  manager.handleReconnect(client, { currentSessionId: sessionId });
+
+  const session = getEvent(client, "reconnect_data").data.sessions[0];
+  assert.equal(session.hasRunningTask, false);
+  assert.equal(session.currentRun, null);
+  assert.deepEqual(
+    session.lifecycleEvents.map((item) => item.data.eventId),
+    ["multi-terminal-1", "multi-terminal-2"],
+  );
+});
+
 test("parent and parallel child lifecycle windows coexist without cross-session replay", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channel = manager.ensureChannel(

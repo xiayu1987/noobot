@@ -23,6 +23,10 @@ import {
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { logReconnectTimingDebug } from "../../composables/chat/debug/reconnectTimingDebugLogger";
 import { logThinkingReplayDebug } from "../../composables/chat/debug/thinkingReplayDebugLogger";
+import {
+  logToolLogWindowDebug,
+  summarizeToolLogWindow,
+} from "../../composables/chat/debug/toolLogWindowDebugLogger";
 import { normalizeThinkingToolLogs } from "../../composables/infra/thinkingDetailModel";
 import {
   getCachedThinkingDetail,
@@ -40,6 +44,7 @@ import {
 } from "../../composables/chat/chatEngine/toolTimeline";
 import { selectActivityTimelineLogs } from "../../composables/chat/chatEngine/activityTimeline";
 import { adaptLegacyMessageTimelines } from "../../composables/chat/chatEngine/legacyTimelineAdapter";
+import { compareTimelineFacts } from "../../composables/chat/chatEngine/timelineFact";
 
 export function useThinkingPanel(props, emit) {
   // Some detail/workflow renderers pass persisted messages directly rather
@@ -137,8 +142,13 @@ export function useThinkingPanel(props, emit) {
     const activityLogs = selectActivityTimelineLogs(canonicalMessage);
     const timelineLogs = selectToolTimelineLogs(canonicalMessage);
     if (activityLogs.length > 0 || timelineLogs.length > 0) {
-      return [...activityLogs, ...timelineLogs].sort((left, right) =>
-        Number(left?.sequence ?? left?.seq ?? 0) - Number(right?.sequence ?? right?.seq ?? 0));
+      return [...activityLogs, ...timelineLogs]
+        .map((logItem, sourceIndex) => ({ logItem, sourceIndex }))
+        .sort((left, right) => {
+          return compareTimelineFacts(left.logItem, right.logItem) ||
+            left.sourceIndex - right.sourceIndex;
+        })
+        .map(({ logItem }) => logItem);
     }
     return [];
   }
@@ -416,6 +426,20 @@ export function useThinkingPanel(props, emit) {
         source: projection.source,
         visibleLogCount: projection.visibleLogs.length,
         visibleLogs: projection.visibleLogs.slice(-10),
+      });
+      const candidateLogs = getAllRealtimeLogs(props.messageItem);
+      logToolLogWindowDebug("frontend.toolLogWindow.executionWindowSelected", {
+        ...projection.identity,
+        running: projection.running,
+        pending: projection.pending,
+        source: projection.source,
+        displayLimit: EXECUTION_LOG_DISPLAY_LIMIT,
+        activityTimelineCount: selectActivityTimelineLogs(timelineMessage(props.messageItem)).length,
+        toolTimelineEntryCount: selectToolTimelineCount(timelineMessage(props.messageItem)),
+        candidateCount: candidateLogs.length,
+        candidates: summarizeToolLogWindow(candidateLogs),
+        selectedCount: currentExecutionLogs.value.length,
+        selected: summarizeToolLogWindow(currentExecutionLogs.value),
       });
     },
     { immediate: true, deep: true },

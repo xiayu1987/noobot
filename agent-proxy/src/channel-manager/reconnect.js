@@ -64,6 +64,59 @@ handleReconnect(socket, payload = {}) {
 
   const sessionsMap = new Map();
   const expiredDialogProcessIds = [];
+  const channelsBySessionId = new Map();
+
+  for (const channelKey of reconnectChannelKeys) {
+    const channel = this.channelStore.get(channelKey);
+    const channelSessionId = this._extractSessionIdFromChannelKey(channelKey);
+    if (!channel || !channelSessionId) continue;
+    const sessionChannels = channelsBySessionId.get(channelSessionId) || [];
+    sessionChannels.push(channel);
+    channelsBySessionId.set(channelSessionId, sessionChannels);
+  }
+
+  for (const [channelSessionId, sessionChannels] of channelsBySessionId) {
+    const knownLifecycleSequence = Number(knownLifecycleSequenceMap[channelSessionId] || 0);
+    const lifecycleReplay = this.getTurnLifecycleReplayForChannels(
+      sessionChannels,
+      channelSessionId,
+      knownLifecycleSequence,
+    );
+    const activeTurnProjection = this.getActiveTurnLifecycleProjectionForChannels(
+      sessionChannels,
+      channelSessionId,
+    );
+    sessionsMap.set(channelSessionId, {
+      sessionId: channelSessionId,
+      hasRunningTask: Boolean(activeTurnProjection),
+      currentRun: activeTurnProjection,
+      dialogProcesses: [],
+      conversationStates: [],
+      lifecycleEvents: lifecycleReplay.events.map((data) => ({
+        event: CHANNEL_EVENT.TURN_LIFECYCLE,
+        data,
+      })),
+      lifecycleSnapshotRequested: lifecycleReplay.requiresSnapshot,
+    });
+    if (lifecycleReplay.requiresSnapshot) {
+      const snapshotChannel = sessionChannels
+        .filter(Boolean)
+        .sort((left, right) => Number(right?.updatedAtMs || 0) - Number(left?.updatedAtMs || 0))
+        .at(0);
+      const commandId = `proxy-snapshot:${channelSessionId}:${nowMs()}`;
+      snapshotChannel.pendingSnapshotRequests ||= new Map();
+      snapshotChannel.pendingSnapshotRequests.set(commandId, socket);
+      const forwarded = this.forwardToUpstream(snapshotChannel, {
+        action: "turn.snapshot.get",
+        commandType: "turn.snapshot.get",
+        commandId,
+        userId: String(socket?.__agentProxyUserId || "").trim(),
+        sessionId: channelSessionId,
+        knownSequence: knownLifecycleSequence,
+      });
+      if (!forwarded) snapshotChannel.pendingSnapshotRequests.delete(commandId);
+    }
+  }
 
   for (const channelKey of reconnectChannelKeys) {
     const channel = this.channelStore.get(channelKey);
@@ -73,41 +126,6 @@ handleReconnect(socket, payload = {}) {
     if (!channelSessionId) continue;
 
     this.attachSubscriber(channel, socket);
-
-    if (!sessionsMap.has(channelSessionId)) {
-      const knownLifecycleSequence = Number(knownLifecycleSequenceMap[channelSessionId] || 0);
-      const lifecycleReplay = this.getTurnLifecycleReplay(
-        channel,
-        channelSessionId,
-        knownLifecycleSequence,
-      );
-      sessionsMap.set(channelSessionId, {
-        sessionId: channelSessionId,
-        hasRunningTask: false,
-        currentRun: null,
-        dialogProcesses: [],
-        conversationStates: [],
-        lifecycleEvents: lifecycleReplay.events.map((data) => ({
-          event: CHANNEL_EVENT.TURN_LIFECYCLE,
-          data,
-        })),
-        lifecycleSnapshotRequested: lifecycleReplay.requiresSnapshot,
-      });
-      if (lifecycleReplay.requiresSnapshot) {
-        const commandId = `proxy-snapshot:${channelSessionId}:${nowMs()}`;
-        channel.pendingSnapshotRequests ||= new Map();
-        channel.pendingSnapshotRequests.set(commandId, socket);
-        const forwarded = this.forwardToUpstream(channel, {
-          action: "turn.snapshot.get",
-          commandType: "turn.snapshot.get",
-          commandId,
-          userId: String(socket?.__agentProxyUserId || "").trim(),
-          sessionId: channelSessionId,
-          knownSequence: knownLifecycleSequence,
-        });
-        if (!forwarded) channel.pendingSnapshotRequests.delete(commandId);
-      }
-    }
 
     const sessionEntry = sessionsMap.get(channelSessionId);
     const stateByDialogProcessId = new Map(

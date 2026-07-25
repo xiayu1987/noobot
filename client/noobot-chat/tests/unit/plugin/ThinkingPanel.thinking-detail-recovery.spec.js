@@ -195,4 +195,41 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       ]));
     expect(wrapper.findAll(".execution-log-line").map((item) => item.text())).toContain("restored-after-refresh");
   });
+
+  it("rotates an unsequenced tool error out of the latest ten execution logs", async () => {
+    const toolTimeline = [
+      {
+        key: "call:failed",
+        toolCallId: "failed",
+        resultEvent: {
+          sequence: 2,
+          log: { event: "tool_call_error", type: "tool_error", text: "missing file" },
+        },
+      },
+      ...Array.from({ length: 10 }, (_, index) => ({
+        key: `call:success-${index + 1}`,
+        toolCallId: `success-${index + 1}`,
+        resultEvent: {
+          sequence: index + 3,
+          log: { event: "tool_result", type: "tool_result", text: `success-${index + 1}` },
+        },
+      })),
+    ];
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      sessionId: "session-window",
+      turnScopeId: "client-turn:window",
+      toolTimeline,
+    }, {
+      runtime: { running: true, terminal: false, startedAt: "2026-07-25T00:00:00.000Z", finishedAt: "" },
+    });
+
+    await nextTick();
+
+    expect(wrapper.vm.currentExecutionLogs).toHaveLength(10);
+    expect(wrapper.vm.currentExecutionLogs.map((item) => item.text)).toEqual(
+      Array.from({ length: 10 }, (_, index) => `返回：success-${index + 1}`),
+    );
+    expect(wrapper.vm.currentExecutionLogs.some((item) => item.text.includes("missing file"))).toBe(false);
+  });
 });

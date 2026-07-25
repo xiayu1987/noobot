@@ -13,6 +13,7 @@ CLIENT_APP_NAME="noobot-client"
 SERVICE_APP_NAME="noobot-service"
 AGENT_PROXY_APP_NAME="noobot-agent-proxy"
 MODEL_PROXY_APP_NAME="noobot-model-proxy"
+PM2_PID_FILE="$PM2_HOME_DIR/pm2.pid"
 
 log() {
   echo "[$(date '+%F %T')] $*"
@@ -56,7 +57,15 @@ run_pm2() {
 }
 
 pm2_has_app() {
+  pm2_daemon_running || return 1
   run_pm2 describe "$1" >/dev/null 2>&1
+}
+
+pm2_daemon_running() {
+  local daemon_pid
+  [[ -r "$PM2_PID_FILE" ]] || return 1
+  daemon_pid="$(cat "$PM2_PID_FILE" 2>/dev/null || true)"
+  [[ "$daemon_pid" =~ ^[0-9]+$ ]] && kill -0 "$daemon_pid" 2>/dev/null
 }
 
 stop_and_delete_app() {
@@ -70,14 +79,51 @@ stop_and_delete_app() {
 }
 
 kill_pm2_daemon() {
+  if ! pm2_daemon_running; then
+    log "PM2 守护进程未运行，跳过。"
+    return 0
+  fi
   log "关闭 PM2 守护进程..."
   run_pm2 kill || true
 }
 
+collect_executable_pids() {
+  local executable="$1"
+  local proc_exe resolved_executable
+
+  for proc_exe in /proc/[0-9]*/exe; do
+    resolved_executable="$(readlink "$proc_exe" 2>/dev/null || true)"
+    if [[ "$resolved_executable" == "$executable" || "$resolved_executable" == "$executable (deleted)" ]]; then
+      basename "$(dirname "$proc_exe")"
+    fi
+  done
+}
+
+terminate_executable_processes() {
+  local label="$1"
+  local executable="$2"
+  local -a pids=()
+  local deadline
+
+  mapfile -t pids < <(collect_executable_pids "$executable")
+  ((${#pids[@]} > 0)) || return 0
+
+  log "停止遗留${label}进程: ${pids[*]}"
+  kill -TERM "${pids[@]}" 2>/dev/null || true
+  deadline=$((SECONDS + 5))
+  while ((SECONDS < deadline)); do
+    mapfile -t pids < <(collect_executable_pids "$executable")
+    ((${#pids[@]} == 0)) && return 0
+    sleep 0.1
+  done
+
+  log "${label}进程未在 5 秒内退出，强制终止: ${pids[*]}"
+  kill -KILL "${pids[@]}" 2>/dev/null || true
+}
+
 cleanup_orphaned_client_processes() {
   log "清理遗留前端进程..."
-  pkill -f "$ROOT_DIR/client/noobot-chat/deploy/bin/caddy run" || true
-  pkill -f "npm run serve:caddy" || true
+  terminate_executable_processes "Caddy" "$ROOT_DIR/client/noobot-chat/deploy/bin/caddy"
 }
 
 cleanup_orphaned_service_processes() {
@@ -112,9 +158,6 @@ main() {
   cleanup_orphaned_service_processes
   cleanup_orphaned_agent_proxy_processes
   cleanup_orphaned_model_proxy_processes
-
-  log "当前 PM2 进程列表:"
-  run_pm2 ls || true
 
   log "已完成关闭。"
 }

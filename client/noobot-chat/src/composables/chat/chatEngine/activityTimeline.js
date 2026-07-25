@@ -4,12 +4,24 @@
  * SPDX-License-Identifier: MIT
  */
 
+import {
+  compareTimelineFacts,
+  preferTimelineFact,
+  SEQUENCE_DOMAIN,
+  TIMELINE_AUTHORITY,
+} from "./timelineFact";
+
 const text = (value) => String(value || "").trim();
 const sequenceOf = (value) => Number(value?.sequence ?? value?.seq ?? 0);
 
 export function isToolActivityLog(value = {}) {
-  const type = text(value.event || value.type || value.rawEvent).toLowerCase();
-  return type.includes("tool") || type.includes("function");
+  const eventTokens = [value.event, value.type, value.rawEvent, value.eventType]
+    .map((item) => text(item).toLowerCase())
+    .filter(Boolean);
+  const toolCallId = text(value.toolCallId || value.tool_call_id);
+  return Boolean(
+    toolCallId || eventTokens.some((item) => item.includes("tool") || item.includes("function")),
+  );
 }
 
 export function isRunActivityLog(value = {}) {
@@ -40,6 +52,8 @@ export function normalizeRunActivity(value = {}, index = 0) {
     activityId: activityKey(value, index),
     eventId,
     sequence,
+    authority: text(value.authority) || TIMELINE_AUTHORITY.COMPATIBILITY,
+    sequenceDomain: text(value.sequenceDomain) || SEQUENCE_DOMAIN.LEGACY,
     type: text(value.event || value.type || value.rawEvent).toLowerCase() || "activity",
     source: text(value.source || value.category || value?.data?.source),
     status: text(value.status) || "completed",
@@ -69,9 +83,9 @@ export function mergeActivityTimelines(...timelines) {
     const normalized = activity.activityId ? activity : normalizeRunActivity(activity);
     if (!normalized) continue;
     const previous = merged.get(normalized.activityId);
-    if (!previous || normalized.sequence >= previous.sequence) merged.set(normalized.activityId, normalized);
+    merged.set(normalized.activityId, preferTimelineFact(previous, normalized));
   }
-  return [...merged.values()].sort((left, right) => left.sequence - right.sequence);
+  return [...merged.values()].sort(compareTimelineFacts);
 }
 
 export function selectActivityTimeline(message = {}) {
@@ -79,5 +93,13 @@ export function selectActivityTimeline(message = {}) {
 }
 
 export function selectActivityTimelineLogs(message = {}) {
-  return selectActivityTimeline(message).map((item) => item.log).filter(Boolean);
+  return selectActivityTimeline(message)
+    .filter((item) => item?.log)
+    .map((item) => ({
+      ...item.log,
+      sequence: sequenceOf(item) || sequenceOf(item.log),
+      authority: text(item.authority || item.log?.authority) || TIMELINE_AUTHORITY.COMPATIBILITY,
+      sequenceDomain: text(item.sequenceDomain || item.log?.sequenceDomain) || SEQUENCE_DOMAIN.LEGACY,
+      timelineTimestamp: text(item.timestamp || item.log?.timestamp || item.log?.ts),
+    }));
 }

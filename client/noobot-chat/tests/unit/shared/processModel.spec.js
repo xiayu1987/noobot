@@ -92,6 +92,33 @@ describe("process model", () => {
     expect(view.completedToolLogs[1].text).toBe("返回：ok");
   });
 
+  it("preserves ProcessEvent sequence when compat logs omit their own sequence", () => {
+    const state = createEmptyProcessState();
+    const events = [
+      createProcessEventFromLog(
+        { dialogProcessId: "dialog-window", event: "tool_call_error", text: "missing" },
+        { sequence: 1, source: ProcessEventSource.STREAM },
+      ),
+      ...Array.from({ length: 12 }, (_, index) => createProcessEventFromLog(
+        { dialogProcessId: "dialog-window", event: "tool_result", text: `success-${index + 1}` },
+        { sequence: index + 2, source: ProcessEventSource.STREAM },
+      )),
+    ];
+
+    applyProcessEvents(state, events);
+    const view = selectProcessCompatView(state, "dialog-window");
+    const latestTen = view.realtimeLogs;
+
+    expect(latestTen).toHaveLength(10);
+    expect(latestTen.some((item) => item.text.includes("missing"))).toBe(false);
+    expect(latestTen.map((item) => item.sequence)).toEqual(
+      Array.from({ length: 10 }, (_, index) => index + 4),
+    );
+    expect(view.completedToolLogs.map((item) => item.sequence)).toEqual(
+      Array.from({ length: 13 }, (_, index) => index + 1),
+    );
+  });
+
   it("keeps eventId stable for equivalent logs without explicit timestamp", () => {
     vi.useFakeTimers();
     try {

@@ -16,6 +16,7 @@ import {
   selectToolTimeline,
   selectToolTimelineLogs,
 } from "../../../../src/composables/chat/chatEngine/toolTimeline";
+import { dispatchTurnEnvelope } from "../../../../src/composables/chat/chatEngine/turnProjectionStore";
 
 describe("chatEngine streamHandlers", () => {
   const makeBotMessage = () => ({
@@ -474,24 +475,36 @@ describe("chatEngine streamHandlers", () => {
     expect(scrollOnFirstResponseOnce).toHaveBeenCalledTimes(12);
   });
 
-  it("projects tool_call_error as a completed failed result instead of a running call", () => {
-    const botMessage = makeBotMessage();
+  it("keeps a legacy tool_call_error sequenced until it rotates out of the recent window", () => {
+    const botMessage = {
+      ...makeBotMessage(),
+      messageId: "msg-error-1",
+      sessionId: "root-session",
+      turnScopeId: "client-turn:error",
+    };
+    const navigateOnFirstResponseOnce = vi.fn();
 
-    handleThinkingStreamEvent({
-      data: {
-        event: "tool_call_error",
-        type: "tool_error",
-        category: "error",
-        tool: "web_to_data",
-        toolCallId: "call-error-1",
-        message: "未找到可处理的 URL",
-        dialogProcessId: "dp-error",
+    const common = {
+      envelopeKind: "noobot.message_event",
+      envelopeVersion: 1,
+      messageId: "msg-error-1",
+      sessionId: "root-session",
+      dialogProcessId: "dp-error",
+      turnScopeId: "client-turn:error",
+      timestamp: "2026-07-25T02:00:00.000Z",
+      tool: "read_file",
+      toolCallId: "call-error-1",
+    };
+    dispatchTurnEnvelope({
+      targetMessage: botMessage,
+      envelope: {
+        ...common,
+        eventId: "evt-error-start",
+        eventType: "tool_call_start",
+        sequence: 1,
+        args: { filePath: "missing.txt" },
       },
-      botMessage,
-      classifyRealtimeLog: (data) => ({
-        ...data,
-        text: data.message,
-      }),
+      classifyRealtimeLog,
     });
 
     handleThinkingStreamEvent({
@@ -499,25 +512,119 @@ describe("chatEngine streamHandlers", () => {
         event: "tool_call_error",
         type: "tool_error",
         category: "error",
-        tool: "web_to_data",
-        toolCallId: "call-error-1",
-        message: "仍未找到可处理的 URL",
+        data: {
+          tool: "web_to_data",
+          toolCallId: "call-error-1",
+          message: "未找到可处理的 URL",
+        },
         dialogProcessId: "dp-error",
       },
       botMessage,
-      classifyRealtimeLog: (data) => ({
-        ...data,
-        text: data.message,
-      }),
+      classifyRealtimeLog,
+      navigateOnFirstResponseOnce,
     });
 
     expect(selectToolTimeline(botMessage)).toHaveLength(1);
     expect(selectToolTimeline(botMessage)[0]).toMatchObject({
       status: "completed",
       success: false,
-      resultEvent: { log: expect.objectContaining({ event: "tool_call_error" }) },
+      resultEvent: {
+        sequence: 2,
+        log: expect.objectContaining({ event: "tool_call_error" }),
+      },
     });
-    expect(selectToolTimeline(botMessage)[0].resultEvent.log.text).toBe("仍未找到可处理的 URL");
+
+    dispatchTurnEnvelope({
+      targetMessage: botMessage,
+      envelope: {
+        ...common,
+        eventId: "evt-error-end",
+        eventType: "tool_call_end",
+        sequence: 2,
+        success: false,
+        error: "文件不存在",
+        result: { error: "文件不存在" },
+      },
+      classifyRealtimeLog,
+    });
+
+    expect(selectToolTimeline(botMessage)).toHaveLength(1);
+    expect(selectToolTimeline(botMessage)[0]).toMatchObject({
+      status: "completed",
+      success: false,
+      resultEvent: { log: expect.objectContaining({ eventType: "tool_call_end" }) },
+    });
+    expect(navigateOnFirstResponseOnce).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not duplicate a late event:error tool notification after its authoritative result", () => {
+    const botMessage = {
+      ...makeBotMessage(),
+      messageId: "msg-error-late",
+      sessionId: "session-error-late",
+      turnScopeId: "client-turn:error-late",
+    };
+    const common = {
+      envelopeKind: "noobot.message_event",
+      envelopeVersion: 1,
+      messageId: "msg-error-late",
+      sessionId: "session-error-late",
+      dialogProcessId: "dp-error-late",
+      turnScopeId: "client-turn:error-late",
+      timestamp: "2026-07-25T03:36:09.000Z",
+      tool: "read_file",
+      toolCallId: "call-error-late",
+    };
+    dispatchTurnEnvelope({
+      targetMessage: botMessage,
+      envelope: {
+        ...common,
+        eventId: "evt-error-late-start",
+        eventType: "tool_call_start",
+        sequence: 1,
+        args: { filePath: "missing.txt" },
+      },
+      classifyRealtimeLog,
+    });
+    dispatchTurnEnvelope({
+      targetMessage: botMessage,
+      envelope: {
+        ...common,
+        eventId: "evt-error-late-end",
+        eventType: "tool_call_end",
+        sequence: 2,
+        success: false,
+        result: { error: "文件不存在" },
+      },
+      classifyRealtimeLog,
+    });
+
+    handleThinkingStreamEvent({
+      data: {
+        event: "error",
+        type: "tool_error",
+        category: "error",
+        sequence: 39,
+        tool: "read_file",
+        toolCallId: "call-error-late",
+        text: "tool_call_error 文件不存在: missing.txt",
+        dialogProcessId: "dp-error-late",
+        sessionId: "session-error-late",
+        turnScopeId: "client-turn:error-late",
+      },
+      botMessage,
+      classifyRealtimeLog,
+    });
+
+    expect(botMessage.activityTimeline).toEqual([]);
+    expect(selectToolTimeline(botMessage)).toHaveLength(1);
+    expect(selectToolTimeline(botMessage)[0].resultEvent).toMatchObject({
+      sequence: 2,
+      eventId: "evt-error-late-end",
+      log: expect.objectContaining({ eventType: "tool_call_end" }),
+    });
+    expect(selectToolTimelineLogs(botMessage)).toHaveLength(2);
+    expect(selectToolTimelineLogs(botMessage).some((item) => item.sequence === 39)).toBe(false);
   });
 
   it("projects execution without writing process mirrors", () => {

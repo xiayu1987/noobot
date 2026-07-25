@@ -4,9 +4,18 @@
  * SPDX-License-Identifier: MIT
  */
 import { MESSAGE_EVENT_TYPE, projectMessageEventToolFacets } from "@noobot/shared/message-event-protocol";
+import {
+  compareTimelineFacts,
+  preferTimelineFact,
+  SEQUENCE_DOMAIN,
+  TIMELINE_AUTHORITY,
+} from "./timelineFact";
 
 const text = (value) => String(value || "").trim();
 const sequenceOf = (value) => Number(value?.sequence || value?.seq || 0);
+
+export const TOOL_TIMELINE_AUTHORITY = TIMELINE_AUTHORITY;
+export const TOOL_SEQUENCE_DOMAIN = SEQUENCE_DOMAIN;
 
 function toolCallIdOf(value = {}) {
   return text(value.toolCallId || value.tool_call_id || value.id);
@@ -17,6 +26,48 @@ function timelineKey(value = {}) {
   if (callId) return `call:${callId}`;
   const eventId = text(value.eventId || value.id);
   return eventId ? `event:${eventId}` : "";
+}
+
+function isToolLog(value = {}) {
+  if (text(value.toolCallId || value.tool_call_id)) return true;
+  return [value.event, value.type, value.rawEvent, value.eventType]
+    .map((item) => text(item).toLowerCase())
+    .some((item) => item.includes("tool") || item.includes("function"));
+}
+
+function logEventTokens(value = {}) {
+  return [value.event, value.type, value.rawEvent, value.eventType]
+    .map((item) => text(item).toLowerCase())
+    .filter(Boolean);
+}
+
+function isAuthoritativeToolFacet(value = {}) {
+  if (text(value?.authority) === TOOL_TIMELINE_AUTHORITY.AUTHORITATIVE) return true;
+  const eventType = text(value?.log?.eventType || value?.eventType).toLowerCase();
+  return [MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(eventType);
+}
+
+function facetAuthority(value = {}) {
+  return isAuthoritativeToolFacet(value)
+    ? TOOL_TIMELINE_AUTHORITY.AUTHORITATIVE
+    : TOOL_TIMELINE_AUTHORITY.COMPATIBILITY;
+}
+
+function facetSequenceDomain(value = {}) {
+  const explicit = text(value?.sequenceDomain);
+  if (explicit) return explicit;
+  return isAuthoritativeToolFacet(value)
+    ? TOOL_SEQUENCE_DOMAIN.MESSAGE
+    : TOOL_SEQUENCE_DOMAIN.LEGACY;
+}
+
+function normalizeFacetMetadata(value = {}) {
+  if (!value || typeof value !== "object") return value;
+  return {
+    ...value,
+    authority: facetAuthority(value),
+    sequenceDomain: facetSequenceDomain(value),
+  };
 }
 
 /**
@@ -37,6 +88,8 @@ export function reduceToolTimeline(timeline = [], envelope = {}, displayLog = nu
   const eventFact = {
     eventId: text(envelope.eventId),
     sequence: sequenceOf(envelope),
+    authority: TOOL_TIMELINE_AUTHORITY.AUTHORITATIVE,
+    sequenceDomain: TOOL_SEQUENCE_DOMAIN.MESSAGE,
     timestamp: text(envelope.timestamp),
     log: displayLog || undefined,
     ...(Array.isArray(envelope?.attachments) && envelope.attachments.length
@@ -55,11 +108,10 @@ export function reduceToolTimeline(timeline = [], envelope = {}, displayLog = nu
     : { ...current, tool: text(envelope.tool || toolResult?.name || current.tool), result: toolResult?.output ?? envelope.result, success: toolResult?.success ?? envelope.success !== false, resultEvent: eventFact, status: "completed" };
   if (index >= 0) next[index] = updated;
   else next.push(updated);
-  return next.sort((left, right) => {
-    const leftSequence = Number(left.call?.sequence || left.resultEvent?.sequence || 0);
-    const rightSequence = Number(right.call?.sequence || right.resultEvent?.sequence || 0);
-    return leftSequence - rightSequence;
-  });
+  return next.sort((left, right) => compareTimelineFacts(
+    left.call || left.resultEvent,
+    right.call || right.resultEvent,
+  ));
 }
 
 /** Compatibility selector. New UI code reads the timeline; old components may
@@ -68,8 +120,26 @@ export function selectToolTimelineLogs(message = {}, { completedOnly = false } =
   const timeline = selectToolTimeline(message);
   const logs = [];
   for (const item of timeline) {
-    if (!completedOnly && item.call?.log) logs.push(item.call.log);
-    if (item.resultEvent?.log) logs.push(item.resultEvent.log);
+    if (!completedOnly && item.call?.log) {
+      logs.push({
+        ...item.call.log,
+        sequence: sequenceOf(item.call) || sequenceOf(item.call.log),
+        authority: facetAuthority(item.call),
+        sequenceDomain: facetSequenceDomain(item.call),
+        timelineTimestamp: text(item.call.timestamp || item.call.log?.timestamp || item.call.log?.ts),
+      });
+    }
+    if (item.resultEvent?.log) {
+      logs.push({
+        ...item.resultEvent.log,
+        sequence: sequenceOf(item.resultEvent) || sequenceOf(item.resultEvent.log),
+        authority: facetAuthority(item.resultEvent),
+        sequenceDomain: facetSequenceDomain(item.resultEvent),
+        timelineTimestamp: text(
+          item.resultEvent.timestamp || item.resultEvent.log?.timestamp || item.resultEvent.log?.ts,
+        ),
+      });
+    }
   }
   return logs;
 }
@@ -113,19 +183,23 @@ export function hasToolTimeline(message = {}) {
 /** Normalize legacy history/done logs once at the projection boundary. */
 export function buildToolTimelineFromLegacyLogs(
   logs = [],
-  { assumeTool = false, assumeCompleted = false } = {},
+  {
+    assumeTool = false,
+    assumeCompleted = false,
+    sequenceDomain = TOOL_SEQUENCE_DOMAIN.LEGACY,
+  } = {},
 ) {
   const timeline = new Map();
   for (const [index, log] of (Array.isArray(logs) ? logs : []).entries()) {
     if (!log) continue;
-    const legacyEventType = text(log.event || log.type || log.rawEvent).toLowerCase();
+    const eventTokens = logEventTokens(log);
     const assumeCurrentLogIsTool = typeof assumeTool === "function"
       ? assumeTool(log, index)
       : assumeTool;
     const assumeCurrentLogIsCompleted = typeof assumeCompleted === "function"
       ? assumeCompleted(log, index)
       : assumeCompleted;
-    if (!assumeCurrentLogIsTool && !legacyEventType.includes("tool") && !legacyEventType.includes("function")) continue;
+    if (!assumeCurrentLogIsTool && !isToolLog(log)) continue;
     const sequence = sequenceOf(log) || index + 1;
     const sourceEventId = text(log.eventId || log.id);
     const toolCallId = toolCallIdOf(log) || (sourceEventId
@@ -134,22 +208,28 @@ export function buildToolTimelineFromLegacyLogs(
     const key = `call:${toolCallId}`;
     const current = timeline.get(key) || { key, toolCallId, tool: text(log.tool || log.toolName || log.name) };
     const eventId = sourceEventId || `legacy:${toolCallId}:${sequence}`;
-    const fact = { eventId, sequence, timestamp: text(log.timestamp || log.ts), log };
+    const fact = {
+      eventId,
+      sequence,
+      authority: TOOL_TIMELINE_AUTHORITY.COMPATIBILITY,
+      sequenceDomain: text(log.sequenceDomain) || sequenceDomain,
+      timestamp: text(log.timestamp || log.ts),
+      log,
+    };
     if (Array.isArray(log.attachments) && log.attachments.length) {
       fact.attachments = log.attachments;
     }
     if (Array.isArray(log.writtenFiles) && log.writtenFiles.length) {
       fact.writtenFiles = log.writtenFiles;
     }
-    const eventType = text(log.event || log.type).toLowerCase();
-    const isErrorEvent = eventType.includes("error") ||
+    const isErrorEvent = eventTokens.some((item) => item.includes("error")) ||
       text(log.category || log.data?.category).toLowerCase() === "error" ||
       text(log.type || log.data?.type).toLowerCase() === "tool_error";
+    const isResultEvent = eventTokens.some((item) =>
+      item.includes("result") || item.includes("return") || item.includes("end"));
     if (
-      (assumeCurrentLogIsCompleted && !eventType) ||
-      eventType.includes("result") ||
-      eventType.includes("return") ||
-      eventType.includes("end") ||
+      (assumeCurrentLogIsCompleted && !eventTokens.length) ||
+      isResultEvent ||
       isErrorEvent
     ) {
       const result = log.output ?? log.result ?? log.data?.output ?? log.text;
@@ -176,9 +256,10 @@ export function buildToolTimelineFromLegacyLogs(
     }
     timeline.set(key, current);
   }
-  return [...timeline.values()].sort((left, right) =>
-    Number(left.call?.sequence || left.resultEvent?.sequence || 0) -
-    Number(right.call?.sequence || right.resultEvent?.sequence || 0));
+  return [...timeline.values()].sort((left, right) => compareTimelineFacts(
+    left.call || left.resultEvent,
+    right.call || right.resultEvent,
+  ));
 }
 
 /**
@@ -199,7 +280,11 @@ export function mergeToolTimelines(...timelines) {
     const key = text(candidate?.key) || timelineKey(candidate);
     if (!key) continue;
     const previous = merged.get(key) || {};
-    const newerFacet = (left, right) => sequenceOf(right) >= sequenceOf(left) ? right : left;
+    const newerFacet = (left, right) => {
+      const normalizedLeft = normalizeFacetMetadata(left);
+      const normalizedRight = normalizeFacetMetadata(right);
+      return preferTimelineFact(normalizedLeft, normalizedRight);
+    };
     merged.set(key, {
       ...previous,
       ...candidate,
@@ -213,8 +298,69 @@ export function mergeToolTimelines(...timelines) {
       status: previous.resultEvent || candidate?.resultEvent ? "completed" : candidate?.status || previous.status,
     });
   }
-  return [...merged.values()].sort((left, right) => {
-    const firstSequence = (item) => Number(item.call?.sequence || item.resultEvent?.sequence || 0);
-    return firstSequence(left) - firstSequence(right);
-  });
+  return [...merged.values()].sort((left, right) => compareTimelineFacts(
+    left.call || left.resultEvent,
+    right.call || right.resultEvent,
+  ));
+}
+
+function fillMissingFacet(current = null, legacy = null) {
+  if (!current) return legacy ? normalizeFacetMetadata(legacy) : current;
+  if (!legacy) return normalizeFacetMetadata(current);
+  const normalizedCurrent = normalizeFacetMetadata(current);
+  const normalizedLegacy = normalizeFacetMetadata(legacy);
+  return {
+    ...normalizedLegacy,
+    ...normalizedCurrent,
+    log: normalizedLegacy.log || normalizedCurrent.log
+      ? { ...(normalizedLegacy.log || {}), ...(normalizedCurrent.log || {}) }
+      : undefined,
+    attachments: normalizedCurrent.attachments?.length
+      ? normalizedCurrent.attachments
+      : normalizedLegacy.attachments,
+    writtenFiles: normalizedCurrent.writtenFiles?.length
+      ? normalizedCurrent.writtenFiles
+      : normalizedLegacy.writtenFiles,
+  };
+}
+
+/** Compatibility observations may fill missing facts and artifact metadata,
+ * but never replace an existing call/result facet or its ordering identity. */
+export function fillMissingToolTimelineFacets(timeline = [], legacyTimeline = []) {
+  const merged = new Map(
+    (Array.isArray(timeline) ? timeline : []).map((item) => [
+      text(item?.key) || timelineKey(item),
+      { ...item },
+    ]).filter(([key]) => key),
+  );
+  for (const legacyItem of Array.isArray(legacyTimeline) ? legacyTimeline : []) {
+    const key = text(legacyItem?.key) || timelineKey(legacyItem);
+    if (!key) continue;
+    const current = merged.get(key);
+    if (!current) {
+      merged.set(key, {
+        ...legacyItem,
+        key,
+        call: legacyItem.call ? normalizeFacetMetadata(legacyItem.call) : legacyItem.call,
+        resultEvent: legacyItem.resultEvent
+          ? normalizeFacetMetadata(legacyItem.resultEvent)
+          : legacyItem.resultEvent,
+      });
+      continue;
+    }
+    merged.set(key, {
+      ...legacyItem,
+      ...current,
+      key,
+      call: fillMissingFacet(current.call, legacyItem.call),
+      resultEvent: fillMissingFacet(current.resultEvent, legacyItem.resultEvent),
+      status: current.resultEvent || legacyItem.resultEvent
+        ? "completed"
+        : current.status || legacyItem.status,
+    });
+  }
+  return [...merged.values()].sort((left, right) => compareTimelineFacts(
+    left.call || left.resultEvent,
+    right.call || right.resultEvent,
+  ));
 }

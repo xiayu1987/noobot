@@ -24,8 +24,19 @@ import {
   resolveReconnectTargetAssistantMessage,
 } from "./assistantMessageReplay";
 import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger";
+import {
+  logToolLogWindowDebug,
+  summarizeToolLogWindow,
+  summarizeToolLogWindowItem,
+} from "../debug/toolLogWindowDebugLogger";
 import { dispatchTurnEnvelope, TURN_PROJECTION_SOURCE } from "../chatEngine/turnProjectionStore";
-import { buildToolTimelineFromLegacyLogs, mergeToolTimelines } from "../chatEngine/toolTimeline";
+import {
+  buildToolTimelineFromLegacyLogs,
+  fillMissingToolTimelineFacets,
+  selectToolTimelineLogs,
+  TOOL_SEQUENCE_DOMAIN,
+  TOOL_TIMELINE_AUTHORITY,
+} from "../chatEngine/toolTimeline";
 import { buildActivityTimelineFromLegacyLogs, mergeActivityTimelines } from "../chatEngine/activityTimeline";
 
 export function prepareReconnectReplayMessages({
@@ -204,6 +215,20 @@ export function applyReconnectEnvelopeToTargetMessage({
     targetMessage.content += String(eventData?.text || "");
   } else if (eventName === StreamEventEnum.THINKING) {
     const logItem = sanitizeExecutionLogForDisplay(classifyRealtimeLog(eventData));
+    const traceScope = {
+      sessionId: String(eventData?.sessionId || targetMessage?.sessionId || ""),
+      dialogProcessId: String(
+        eventData?.dialogProcessId || getMessageDialogProcessId(targetMessage) || normalizedDpId,
+      ),
+      turnScopeId: String(eventData?.turnScopeId || targetMessage?.turnScopeId || ""),
+    };
+    logToolLogWindowDebug("frontend.toolLogWindow.reconnectClassified", {
+      ...traceScope,
+      envelopeSequence: envelope?.sequence ?? null,
+      dataSequence: eventData?.sequence ?? eventData?.seq ?? null,
+      raw: summarizeToolLogWindowItem(eventData),
+      classified: logItem ? summarizeToolLogWindowItem(logItem) : null,
+    });
     logThinkingReplayDebug("frontend.thinkingReplay.reconnectThinkingClassified", {
       sessionId: String(eventData?.sessionId || targetMessage?.sessionId || ""),
       dialogProcessId: String(
@@ -264,14 +289,30 @@ export function applyReconnectEnvelopeToTargetMessage({
     if (logItem?.dialogProcessId && !getMessageDialogProcessId(targetMessage)) {
       targetMessage.dialogProcessId = _trimStr(logItem.dialogProcessId);
     }
-    targetMessage.toolTimeline = mergeToolTimelines(
-      targetMessage.toolTimeline || [],
-      buildToolTimelineFromLegacyLogs([logItem]),
-    );
-    targetMessage.activityTimeline = mergeActivityTimelines(
-      targetMessage.activityTimeline || [],
-      buildActivityTimelineFromLegacyLogs([logItem]),
-    );
+    const compatibilityLogItem = {
+      ...logItem,
+      authority: TOOL_TIMELINE_AUTHORITY.COMPATIBILITY,
+      sequenceDomain: TOOL_SEQUENCE_DOMAIN.TRANSPORT,
+    };
+    const toolProjection = buildToolTimelineFromLegacyLogs([compatibilityLogItem], {
+      sequenceDomain: TOOL_SEQUENCE_DOMAIN.TRANSPORT,
+    });
+    if (toolProjection.length) {
+      targetMessage.toolTimeline = fillMissingToolTimelineFacets(
+        targetMessage.toolTimeline || [],
+        toolProjection,
+      );
+    } else {
+      targetMessage.activityTimeline = mergeActivityTimelines(
+        targetMessage.activityTimeline || [],
+        buildActivityTimelineFromLegacyLogs([compatibilityLogItem]),
+      );
+    }
+    logToolLogWindowDebug("frontend.toolLogWindow.reconnectTimelineMerged", {
+      ...traceScope,
+      timelineEntryCount: targetMessage.toolTimeline?.length || 0,
+      timelineLogs: summarizeToolLogWindow(selectToolTimelineLogs(targetMessage)),
+    });
   } else if (eventName === StreamEventEnum.INTERACTION_REQUEST) {
     onInteractionRequest?.(eventData);
   } else if (eventName === StreamEventEnum.CONNECTOR_STATUS) {
@@ -294,11 +335,31 @@ export function applyReconnectEnvelopeToTargetMessage({
           classifyRealtimeLog(normalizeExecutionLogForRealtime(executionLogItem)),
         )
         .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
-        .filter((logItem) => logItem && _trimStr(logItem.text));
+        .filter((logItem) => logItem && _trimStr(logItem.text))
+        .map((logItem) => ({
+          ...logItem,
+          authority: TOOL_TIMELINE_AUTHORITY.COMPATIBILITY,
+          sequenceDomain: TOOL_SEQUENCE_DOMAIN.TRANSPORT,
+        }));
       if (doneRealtimeLogs.length) {
-        targetMessage.toolTimeline = mergeToolTimelines(
+        const doneTraceScope = {
+          sessionId: String(eventData?.sessionId || targetMessage?.sessionId || ""),
+          dialogProcessId: String(
+            eventData?.dialogProcessId || getMessageDialogProcessId(targetMessage) || normalizedDpId,
+          ),
+          turnScopeId: String(eventData?.turnScopeId || targetMessage?.turnScopeId || ""),
+        };
+        logToolLogWindowDebug("frontend.toolLogWindow.reconnectDoneClassified", {
+          ...doneTraceScope,
+          sourceCount: doneExecutionLogSource.length,
+          classifiedCount: doneRealtimeLogs.length,
+          classified: summarizeToolLogWindow(doneRealtimeLogs),
+        });
+        targetMessage.toolTimeline = fillMissingToolTimelineFacets(
           targetMessage.toolTimeline || [],
-          buildToolTimelineFromLegacyLogs(doneRealtimeLogs),
+          buildToolTimelineFromLegacyLogs(doneRealtimeLogs, {
+            sequenceDomain: TOOL_SEQUENCE_DOMAIN.TRANSPORT,
+          }),
         );
         targetMessage.activityTimeline = mergeActivityTimelines(
           targetMessage.activityTimeline || [],
@@ -313,6 +374,11 @@ export function applyReconnectEnvelopeToTargetMessage({
             targetMessage.dialogProcessId = latestDialogProcessId;
           }
         }
+        logToolLogWindowDebug("frontend.toolLogWindow.reconnectDoneTimelineMerged", {
+          ...doneTraceScope,
+          timelineEntryCount: targetMessage.toolTimeline?.length || 0,
+          timelineLogs: summarizeToolLogWindow(selectToolTimelineLogs(targetMessage)),
+        });
       }
     }
     if (Array.isArray(eventData?.messages) && eventData.messages.length) {
