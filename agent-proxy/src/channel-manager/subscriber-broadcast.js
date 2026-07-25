@@ -48,15 +48,12 @@ _withChannelSessionScope(channel, envelope = {}) {
     return envelope;
   }
   const existingSessionId = String(envelope?.data?.sessionId || "").trim();
-  const existingRequestId = String(envelope?.data?.requestId || "").trim();
   const channelSessionId = this._extractSessionIdFromChannelKey?.(channel.key);
-  const channelRequestId = String(channel?.startPayload?.requestId || "").trim();
-  if ((!channelSessionId || existingSessionId) && (!channelRequestId || existingRequestId)) return envelope;
+  if (!channelSessionId || existingSessionId) return envelope;
   return {
     ...envelope,
     data: {
       ...(channelSessionId && !existingSessionId ? { sessionId: channelSessionId } : {}),
-      ...(channelRequestId && !existingRequestId ? { requestId: channelRequestId } : {}),
       ...envelope.data,
     },
   };

@@ -63,7 +63,7 @@ export function createSessionLogWebSocketClient({
         connect();
         flush();
       },
-      suspendOnAuthenticationFailure: true,
+      suspendOnAuthenticationFailure: false,
     });
   }
 

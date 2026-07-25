@@ -13,7 +13,11 @@ import { createMockSocket } from "./channel-manager.state-consistency.test-helpe
 test("live business event broadcast should include channel sessionId without overriding upstream sessionId", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
-  const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId: "session-1",
+    requestId: "stream-command-request",
+  });
   channel.status = "running";
   channel.ownerApiKey = "api-key-1";
   channel.ownerUserId = "user-1";
@@ -37,6 +41,8 @@ test("live business event broadcast should include channel sessionId without ove
   const businessEvents = client.sentEvents.filter((item) => item?.event !== "channel_state");
   assert.equal(businessEvents[0]?.data?.sessionId, "session-1");
   assert.equal(businessEvents[1]?.data?.sessionId, "upstream-session");
+  assert.equal(businessEvents[0]?.data?.requestId, undefined);
+  assert.equal(businessEvents[1]?.data?.requestId, undefined);
   assert.equal(thinkingEnvelope?.data?.sessionId, undefined);
 });
 
@@ -167,4 +173,3 @@ test("broadcast records a delivery result for every subscriber", () => {
   assert.equal(openSocket.__agentProxyLastSequenceByChannel[channelKey], 1);
   assert.equal(closedSocket.__agentProxyLastSequenceByChannel?.[channelKey], undefined);
 });
-

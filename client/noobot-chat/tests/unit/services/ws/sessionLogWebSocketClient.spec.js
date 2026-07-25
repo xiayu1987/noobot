@@ -183,7 +183,7 @@ describe("sessionLogWebSocketClient", () => {
     expect(client.status().readyState).toBe(MockWebSocket.OPEN);
   });
 
-  it("suspends after authentication recovery fails instead of reconnecting forever", async () => {
+  it("keeps one bounded reconnect after a transient authentication recovery failure", async () => {
     vi.useFakeTimers();
     const { createSessionLogWebSocketClient } = await importClient();
     const refreshAuthentication = vi.fn(async () => false);
@@ -195,17 +195,24 @@ describe("sessionLogWebSocketClient", () => {
     client.log({ category: "message", event: "message.pending", sessionId: "s-auth" });
     const socket = MockWebSocket.instances[0];
     socket.onerror?.();
-    await vi.waitFor(() => expect(client.status().suspended).toBe(true));
+    await vi.waitFor(() => expect(client.status().hasReconnectTimer).toBe(true));
 
     expect(refreshAuthentication).toHaveBeenCalledTimes(1);
     expect(client.status()).toEqual(expect.objectContaining({
       queueLength: 1,
-      hasReconnectTimer: false,
-      suspended: true,
+      hasReconnectTimer: true,
+      suspended: false,
     }));
-    await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
-    client.log({ category: "message", event: "message.after-suspend", sessionId: "s-auth" });
-    expect(MockWebSocket.instances).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(MockWebSocket.instances).toHaveLength(2);
+
+    const recoveredSocket = MockWebSocket.instances[1];
+    recoveredSocket.readyState = MockWebSocket.OPEN;
+    recoveredSocket.onopen?.();
+    expect(sentBusinessRecords(recoveredSocket)).toContainEqual(expect.objectContaining({
+      event: "message.pending",
+      sessionId: "s-auth",
+    }));
   });
 
   it("forwards debug logs to the log websocket so runtime-events can decide recording", async () => {
