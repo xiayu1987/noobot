@@ -65,6 +65,17 @@ export function normalizeMessageEntity(
   const normalizedAttachments = Array.isArray(message?.attachments)
     ? dedupeAttachmentRefs(message.attachments.map((item) => compactAttachmentRef(item)).filter(Boolean))
     : [];
+  const messageId = String(
+    message?.messageId ||
+      message?.id ||
+      message?.additional_kwargs?.noobotMessageId ||
+      message?.additional_kwargs?.messageId ||
+      message?.lc_kwargs?.noobotMessageId ||
+      message?.lc_kwargs?.messageId ||
+      message?.lc_kwargs?.additional_kwargs?.noobotMessageId ||
+      message?.lc_kwargs?.additional_kwargs?.messageId ||
+      "",
+  ).trim();
   const normalizedMessage = {
     role: String(message?.role || "").trim(),
     content: message?.content || "",
@@ -82,6 +93,10 @@ export function normalizeMessageEntity(
     summarized: message?.summarized === true,
     ts: String(message?.ts || "").trim() || now(),
   };
+  if (messageId) {
+    normalizedMessage.id = messageId;
+    normalizedMessage.messageId = messageId;
+  }
   if (message?.turnCommit && typeof message.turnCommit === "object" && !Array.isArray(message.turnCommit)) {
     const action = String(message.turnCommit.action || "").trim().toLowerCase();
     const idempotencyKey = String(message.turnCommit.idempotencyKey || "").trim();
@@ -149,7 +164,7 @@ export function normalizeMessageEntity(
   if (Array.isArray(message?.completedToolLogs)) {
     normalizedMessage.completedToolLogs = message.completedToolLogs;
   }
-  for (const key of ["id", "done", "pending", "error"]) {
+  for (const key of ["done", "pending", "error"]) {
     if (message?.[key] !== undefined) normalizedMessage[key] = message[key];
   }
   const toolCallId = String(message?.tool_call_id || "").trim();

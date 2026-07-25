@@ -205,6 +205,9 @@ export class SessionExecutionFinalizer {
     turnScopeId = "",
     thinkingStartedAt = "",
     agentResult = {},
+    alreadyPersistedTurnMessageCount = 0,
+    persistedTurnMessages = null,
+    summaryCheckpointPromotionSources = [],
     executionStartIndex = 0,
     runtimeEventListener = null,
     userConfig = {},
@@ -212,7 +215,7 @@ export class SessionExecutionFinalizer {
     lifecycle = null,
     persistenceContext = null,
   }) {
-    const rawTurnMessages =
+    const activeTurnMessages =
       Array.isArray(agentResult?.turnMessages) && agentResult.turnMessages.length
         ? agentResult.turnMessages
         : [
@@ -221,7 +224,30 @@ export class SessionExecutionFinalizer {
               dialogProcessId,
             }),
           ];
-    const turnMessages = promoteGeneratedTransfersToFinalAssistant(rawTurnMessages);
+    const persistedActivePrefixCount = Math.min(
+      activeTurnMessages.length,
+      Math.max(0, Number(alreadyPersistedTurnMessageCount) || 0),
+    );
+    const hasRecoveredPersistedPrefix = Array.isArray(persistedTurnMessages);
+    const rawTurnMessages = hasRecoveredPersistedPrefix
+      ? [...persistedTurnMessages, ...activeTurnMessages.slice(persistedActivePrefixCount)]
+      : activeTurnMessages;
+    const promotionSourceCount = Array.isArray(summaryCheckpointPromotionSources)
+      ? summaryCheckpointPromotionSources.length
+      : 0;
+    const promotedMessages = promoteGeneratedTransfersToFinalAssistant([
+      ...(Array.isArray(summaryCheckpointPromotionSources)
+        ? summaryCheckpointPromotionSources
+        : []),
+      ...rawTurnMessages,
+    ]);
+    const turnMessages = promotedMessages.slice(promotionSourceCount);
+    const persistedResultPrefixCount = hasRecoveredPersistedPrefix
+      ? persistedTurnMessages.length
+      : persistedActivePrefixCount;
+    const messagesToPersist = promotedMessages.slice(
+      promotionSourceCount + persistedResultPrefixCount,
+    );
     const thinkingFinishedAt = this.now();
 
     lifecycle?.enterPersisting?.();
@@ -229,13 +255,22 @@ export class SessionExecutionFinalizer {
       userId,
       sessionId,
       parentSessionId,
-      messages: turnMessages,
+      messages: messagesToPersist,
       dialogProcessId,
       parentDialogProcessId,
       turnScopeId: String(turnScopeId || "").trim(),
       thinkingStartedAt,
       thinkingFinishedAt,
       eventListener: runtimeEventListener,
+      persistenceContext,
+    });
+    await this.session.upsertTurnTiming?.({
+      userId,
+      sessionId,
+      parentSessionId,
+      turnScopeId,
+      dialogProcessId,
+      thinkingFinishedAt,
       persistenceContext,
     });
     await this.session.saveCurrentTurnTasks({

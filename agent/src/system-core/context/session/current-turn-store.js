@@ -56,6 +56,12 @@ export function createCurrentTurnMessagesStore(messages = []) {
       }
       return updatedCount;
     },
+    replaceAll(messagesToKeep = []) {
+      const nextItems = (Array.isArray(messagesToKeep) ? messagesToKeep : [])
+        .map((item) => item && typeof item === "object" ? { ...item } : {});
+      items.splice(0, items.length, ...nextItems);
+      return items.length;
+    },
     toArray() {
       return items.map((item) => ({ ...item }));
     },

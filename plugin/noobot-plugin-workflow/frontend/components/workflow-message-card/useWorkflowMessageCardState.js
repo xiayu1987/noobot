@@ -8,20 +8,16 @@ import { useWorkflowMeta } from "./useWorkflowMeta";
 import { useWorkflowRuntimeState } from "./useWorkflowRuntimeState";
 import { useWorkflowNodeMessages } from "./useWorkflowNodeMessages";
 import { useWorkflowNodeSessionViewer } from "./useWorkflowNodeSessionViewer";
+import { useWorkflowViewerState } from "./useWorkflowViewerState";
 
 export function useWorkflowMessageCardState(props, emit, translate) {
-  const viewerVisible = ref(false);
   const viewerLoading = ref(false);
   const viewerError = ref("");
   const viewerState = ref("idle");
-  const selectedNode = ref(null);
-  const selectedRuntimeNode = ref(null);
-  const selectedRuntimeStep = ref(null);
   const selectedNodeMessages = ref([]);
   const selectedNodeRawMessages = ref([]);
   const selectedNodeSessionSummary = ref(null);
   const selectedNodeSessionId = ref("");
-  const selectedGraphDialogProcessId = ref("");
   const semanticPreviewExpanded = ref(false);
   const applyingWorkflowDrawerHistory = ref(false);
 
@@ -37,6 +33,14 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     semanticPreviewLineCount,
     semanticPreviewCollapsible,
   } = useWorkflowMeta(props);
+
+  const {
+    viewerVisible,
+    selectedNode,
+    selectedRuntimeNode,
+    selectedRuntimeStep,
+    selectedGraphDialogProcessId,
+  } = useWorkflowViewerState(workflowPayload, props.workflowNodeStateRegistry);
 
   const {
     nodeSessions,

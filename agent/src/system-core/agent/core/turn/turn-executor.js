@@ -52,6 +52,7 @@ import {
 import { peekMainFlowFinalNoToolsTurnInstruction } from "../main-flow-control.js";
 import { isResumeInitializingFirstModelTurn } from "../lifecycle/state-machine.js";
 import { syncStoppedModelMessageSnapshotCandidate } from "../resume/model-message-snapshot-store.js";
+import { consumeSummaryCheckpointCommand } from "../summary-checkpoint-command.js";
 import {
   applyAuthoritativeMessageId,
   beginAssistantMessageEventStream,
@@ -242,6 +243,7 @@ export async function invokeNoToolsTurn({
       agentContext: modelState?.agentContext || null,
     }),
   });
+  await consumeSummaryCheckpointCommand({ runtime, loopState, eventListener, turn });
   let responseContentText = normalizeAiTextContent(modelResponse?.content, {
     additionalKwargs: modelResponse?.additional_kwargs ?? null,
     allowReasoningFallback: false,

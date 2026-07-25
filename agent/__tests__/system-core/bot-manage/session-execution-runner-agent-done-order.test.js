@@ -25,6 +25,7 @@ function createRunner({
   runConfig = {},
   prepareAgentTurnExecution,
   runtime,
+  getSessionTurns,
 }) {
   const defaultRuntime = runtime || { attachmentMetas: [] };
   return new SessionExecutionRunner({
@@ -79,6 +80,7 @@ function createRunner({
     appendSessionTurn: async () => {
       callOrder.push("appendSessionTurn");
     },
+    getSessionTurns,
     finalizeRunSession,
     upsertParentAsyncTask: () => {
       callOrder.push("upsertParentAsyncTask");
@@ -86,6 +88,51 @@ function createRunner({
     now: () => "2026-05-21T00:00:00.000Z",
   });
 }
+
+test("runSession restores only the checkpoint-persisted agent prefix at finalization", async () => {
+  const callOrder = [];
+  const runtime = {
+    attachmentMetas: [],
+    summaryCheckpointPersistedCount: 1,
+    summaryCheckpointPersistedTotal: 2,
+  };
+  let capturedFinalizePayload = null;
+  const runner = createRunner({
+    callOrder,
+    runtime,
+    agentRunner: async () => ({
+      output: "tail",
+      traces: [],
+      turnMessages: [
+        { role: "tool", content: "retained-persisted" },
+        { role: "assistant", content: "tail" },
+      ],
+      turnTasks: [],
+    }),
+    getSessionTurns: async () => [
+      { role: "user", content: "user-input", turnScopeId: "turn-a" },
+      { role: "assistant", content: "persisted-1", turnScopeId: "turn-a" },
+      { role: "tool", content: "retained-persisted", turnScopeId: "turn-a" },
+    ],
+    finalizeRunSession: async (payload = {}) => {
+      capturedFinalizePayload = payload;
+      return { ok: true };
+    },
+  });
+
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "hello",
+    turnScopeId: "turn-a",
+  });
+
+  assert.equal(capturedFinalizePayload.alreadyPersistedTurnMessageCount, 1);
+  assert.deepEqual(
+    capturedFinalizePayload.persistedTurnMessages.map((message) => message.content),
+    ["persisted-1", "retained-persisted"],
+  );
+});
 
 function collectLifecycleStates(events) {
   return events

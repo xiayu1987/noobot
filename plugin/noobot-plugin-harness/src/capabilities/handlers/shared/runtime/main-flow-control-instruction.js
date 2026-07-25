@@ -6,6 +6,7 @@
 
 export const HARNESS_MAIN_FLOW_CONTROL_ACTION = Object.freeze({
   FINAL_NO_TOOLS_TURN: "final_no_tools_turn",
+  SUMMARY_CHECKPOINT: "summary_checkpoint",
 });
 
 export const HARNESS_MAIN_FLOW_CONTROL_REASON = Object.freeze({
@@ -63,5 +64,37 @@ export function requestFinalNoToolsMainFlowInstruction(
     detail: asObject(detail) || {},
   };
   runtime.systemRuntime.mainFlowControlInstruction = instruction;
+  return instruction;
+}
+
+export function requestSummaryCheckpointMainFlowInstruction(
+  ctx = {},
+  { source = "plugin.summary", summarizedMessages = [] } = {},
+) {
+  const runtime = resolveAgentRuntimeFromHookContext(ctx);
+  if (!runtime) return null;
+  if (!asObject(runtime.systemRuntime)) runtime.systemRuntime = {};
+  const messages = (Array.isArray(summarizedMessages) ? summarizedMessages : [])
+    .filter((message) => message && typeof message === "object");
+  const summarizedMessageIds = [...new Set(messages
+    .map((message) => String(
+      message?.additional_kwargs?.noobotMessageId ||
+        message?.lc_kwargs?.additional_kwargs?.noobotMessageId ||
+        message?.noobotMessageId ||
+        message?.messageId ||
+        "",
+    ).trim())
+    .filter(Boolean))];
+  const instruction = {
+    action: HARNESS_MAIN_FLOW_CONTROL_ACTION.SUMMARY_CHECKPOINT,
+    source: String(source || "plugin.summary").trim(),
+    summarizedMessageIds,
+    summarizedMessages: messages,
+  };
+  const pending = Array.isArray(runtime.systemRuntime.mainFlowControlInstructions)
+    ? runtime.systemRuntime.mainFlowControlInstructions
+    : [];
+  pending.push(instruction);
+  runtime.systemRuntime.mainFlowControlInstructions = pending;
   return instruction;
 }

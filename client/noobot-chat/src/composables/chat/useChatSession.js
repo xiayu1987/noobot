@@ -48,6 +48,10 @@ import { applyRunStateMessageRuntimePatch } from "./chatEngine/messageRuntimePat
 import { useReconnectReplay } from "./useReconnectReplay";
 import { useChatStore } from "../../shared/stores/useChatStore";
 import { useProcessStore } from "../../shared/stores/useProcessStore";
+import {
+  hydrateWorkflowRegistryFromSessionDetail,
+  isWorkflowThinkingPlaceholder,
+} from "./workflowSessionHydration";
 import { useLocale } from "../../shared/i18n/useLocale";
 import {
   getMessageDialogProcessId,
@@ -502,7 +506,17 @@ export function useChatSession({
     }
   }
 
-  function hydrateStoppedRunStateFromSessionDetail({ sessionItem = null } = {}) {
+  function hydrateStoppedRunStateFromSessionDetail({
+    detail = {},
+    sessionItem = null,
+    mainSessionDoc = {},
+  } = {}) {
+    hydrateWorkflowRegistryFromSessionDetail({
+      detail,
+      sessionItem,
+      mainSessionDoc,
+      upsertWorkflowPlanningEvent: chatStore.upsertWorkflowPlanningEvent,
+    });
     const sessionId = String(
       sessionItem?.backendSessionId || sessionItem?.sessionId || sessionItem?.id || "",
     ).trim();
@@ -1063,7 +1077,13 @@ export function useChatSession({
 
   function shouldRenderMessageInChat(messageItem) {
     const messageRole = getMessageRole(messageItem);
-    return messageRole !== RoleEnum.TOOL && !isHarnessInjectedMessage(messageItem);
+    return messageRole !== RoleEnum.TOOL &&
+      !isHarnessInjectedMessage(messageItem) &&
+      !isWorkflowThinkingPlaceholder(
+        messageItem,
+        chatStore.workflowNodeStateRegistry,
+        activeSession.value?.messages,
+      );
   }
 
   return {

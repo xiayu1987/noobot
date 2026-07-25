@@ -14,6 +14,7 @@ export async function appendTurn({
     sessionId,
     userName = userId,
     role,
+    messageId = "",
     content,
     type = "",
     taskId = null,
@@ -65,6 +66,7 @@ export async function appendTurn({
 
     const turn = normalizeMessageEntity({
       role,
+      messageId,
       content,
       type: type || "",
       userName: String(userName || "").trim(),
@@ -117,7 +119,22 @@ export async function appendTurn({
     }
 
     session.messages = Array.isArray(session.messages) ? session.messages : [];
-    session.messages.push(turn);
+    const existingIndex = turn.messageId
+      ? session.messages.findIndex((message = {}) =>
+          String(message?.messageId || message?.id || "").trim() === turn.messageId)
+      : -1;
+    if (existingIndex >= 0) {
+      const existing = session.messages[existingIndex] || {};
+      session.messages[existingIndex] = normalizeMessageEntity({
+        ...existing,
+        ...turn,
+        id: turn.messageId,
+        messageId: turn.messageId,
+        ts: existing.ts || turn.ts,
+      }, this.now);
+    } else {
+      session.messages.push(turn);
+    }
     upsertSessionTurnTiming(session, {
       turnScopeId: turn.turnScopeId,
       dialogProcessId: resolveMessageDialogProcessId(turn),

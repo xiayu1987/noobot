@@ -40,6 +40,7 @@ import {
   resolveStoppedResumeAttachments,
 } from "./turn-execution-preparer.js";
 import { mergeRunConfigWithPluginStrategy } from "./run-config-plugin-strategy.js";
+import { commitSummaryCheckpoint } from "./summary-checkpoint-committer.js";
 
 export class SessionExecutionEngine {
   constructor({
@@ -207,6 +208,11 @@ export class SessionExecutionEngine {
       prepareTurnInput: (payload = {}) => this._prepareTurnInput(payload),
       prepareAgentTurnExecution: (payload = {}) =>
         this._prepareAgentTurnExecution(payload),
+      commitSummaryCheckpoint: (payload = {}) => commitSummaryCheckpoint({
+        session: this.session,
+        turnPersister: this.turnPersister,
+        ...payload,
+      }),
     };
     const runnerPersistenceDeps = {
       assertPersistenceContextIdentity: typeof this.session?.assertPersistenceContextIdentity === "function"
@@ -218,6 +224,7 @@ export class SessionExecutionEngine {
         : null,
       stampReusedUserTurnDialogProcessId: (payload = {}) =>
         this._stampReusedUserTurnDialogProcessId(payload),
+      getSessionTurns: (payload = {}) => this.session?.getSessionTurns?.(payload),
       finalizeRunSession: (payload = {}) => this._finalizeRunSession(payload),
       upsertParentAsyncTask: (payload = {}) => this._upsertParentAsyncTask(payload),
     };
@@ -663,6 +670,9 @@ export class SessionExecutionEngine {
     turnScopeId = "",
     thinkingStartedAt = "",
     agentResult = {},
+    alreadyPersistedTurnMessageCount = 0,
+    persistedTurnMessages = null,
+    summaryCheckpointPromotionSources = [],
     executionStartIndex = 0,
     runtimeEventListener = null,
     userConfig = {},
@@ -680,6 +690,9 @@ export class SessionExecutionEngine {
       turnScopeId,
       thinkingStartedAt,
       agentResult,
+      alreadyPersistedTurnMessageCount,
+      persistedTurnMessages,
+      summaryCheckpointPromotionSources,
       executionStartIndex,
       runtimeEventListener,
       userConfig,

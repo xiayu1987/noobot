@@ -35,7 +35,9 @@ import {
   clearMainFlowFinalNoToolsTurnInstruction,
   consumeMainFlowFinalNoToolsTurnInstruction,
   markMainFlowFinalNoToolsTurnActive,
+  requestMainFlowSummaryCheckpoint,
 } from "../main-flow-control.js";
+import { consumeSummaryCheckpointCommand } from "../summary-checkpoint-command.js";
 
 export function createTurnOrchestrator({
   resolveLlmForTurnFn = resolveLlmForTurn,
@@ -208,6 +210,7 @@ export function createTurnOrchestrator({
       }
 
       const withToolsResult = await invokeWithToolsTurnFn({ modelState, loopState, turn });
+      await consumeSummaryCheckpointCommand({ runtime, loopState, eventListener, turn });
       if (withToolsResult?.mainFlowFinalNoToolsRequested === true) {
         const instruction =
           consumeMainFlowFinalNoToolsTurnInstruction(systemRuntime) ||
@@ -336,6 +339,17 @@ export function createTurnOrchestrator({
         markCurrentTurnStoreSummarized(turnMessageStore, {
           taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
         });
+        const summarizedMessages = loopState.messages.filter((message) =>
+          message?.summarized === true || message?.lc_kwargs?.summarized === true,
+        );
+        requestMainFlowSummaryCheckpoint(runtime, {
+          source: "task_summary",
+          summarizedMessages,
+          summarizedMessageIds: summarizedMessages.map((message) => String(
+            message?.additional_kwargs?.noobotMessageId || message?.messageId || "",
+          ).trim()).filter(Boolean),
+        });
+        await consumeSummaryCheckpointCommand({ runtime, loopState, eventListener, turn });
       }
 
       if (hasFinalAnswerCall) {

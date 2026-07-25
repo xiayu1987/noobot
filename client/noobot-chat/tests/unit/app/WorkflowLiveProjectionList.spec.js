@@ -83,6 +83,59 @@ describe("WorkflowLiveProjectionList", () => {
     expect(persistedWrapper.findAll(".workflow-live-projection-anchor")).toHaveLength(0);
   });
 
+  it("recognizes persisted workflow identity from the authoritative turn scope", () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const chatStore = useChatStore(pinia);
+    chatStore.upsertWorkflowPlanningEvent({
+      sessionId: "session-a",
+      workflowRunId: "client-turn:legacy",
+      nodeSessions: [{ nodeExecutionId: "node-a", status: "ready" }],
+    });
+    const wrapper = mount(WorkflowLiveProjectionList, {
+      props: {
+        activeSession: {
+          id: "session-a",
+          backendSessionId: "session-a",
+          messages: [{ role: "assistant", type: "workflow", turnScopeId: "client-turn:legacy" }],
+        },
+        shouldRenderMessageInChat: () => true,
+      },
+      global: { plugins: [pinia] },
+    });
+    expect(wrapper.findAll(".workflow-live-projection-anchor")).toHaveLength(0);
+  });
+
+  it("does not let a thinking placeholder retire the live workflow projection", () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const chatStore = useChatStore(pinia);
+    chatStore.upsertWorkflowPlanningEvent({
+      sessionId: "session-a",
+      dialogProcessId: "dialog-a",
+      turnScopeId: "client-turn:thinking",
+      workflowRunId: "client-turn:thinking",
+      nodeSessions: [{ nodeExecutionId: "node-a", status: "ready" }],
+    });
+    const wrapper = mount(WorkflowLiveProjectionList, {
+      props: {
+        activeSession: {
+          id: "session-a",
+          backendSessionId: "session-a",
+          messages: [{
+            role: "assistant",
+            type: "message",
+            turnScopeId: "client-turn:thinking",
+            content: "",
+          }],
+        },
+        shouldRenderMessageInChat: () => true,
+      },
+      global: { plugins: [pinia] },
+    });
+    expect(wrapper.findAll(".workflow-live-projection-anchor")).toHaveLength(1);
+  });
+
   it("does not render another session's workflow projection", async () => {
     const pinia = createPinia();
     setActivePinia(pinia);

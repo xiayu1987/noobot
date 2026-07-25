@@ -80,6 +80,31 @@ test("_finalizeRunSession preserves the child lifecycle terminal receipt", async
   assert.equal(result.lifecycle, lifecycle);
 });
 
+test("_finalizeRunSession forwards staged persistence state unchanged", async () => {
+  const engine = new SessionExecutionEngine({
+    workspaceService: createWorkspaceService("/tmp/noobot-test"),
+  });
+  let forwarded = null;
+  engine.finalizer.finalizeRunSession = async (payload = {}) => {
+    forwarded = payload;
+    return {};
+  };
+  const persistedTurnMessages = [{ role: "assistant", content: "persisted" }];
+  const summaryCheckpointPromotionSources = [{ role: "tool", attachments: [{ id: "a1" }] }];
+
+  await engine._finalizeRunSession({
+    userId: "u1",
+    sessionId: "s1",
+    alreadyPersistedTurnMessageCount: 1,
+    persistedTurnMessages,
+    summaryCheckpointPromotionSources,
+  });
+
+  assert.equal(forwarded.alreadyPersistedTurnMessageCount, 1);
+  assert.equal(forwarded.persistedTurnMessages, persistedTurnMessages);
+  assert.equal(forwarded.summaryCheckpointPromotionSources, summaryCheckpointPromotionSources);
+});
+
 test("RunConfigPluginPreparer.prepareAgentPluginRunConfig registers harness plugin and resolves basePath from user workspace", async () => {
   const tempRoot = await createTempRoot();
   const engine = new SessionExecutionEngine({

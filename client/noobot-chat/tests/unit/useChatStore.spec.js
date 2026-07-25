@@ -192,6 +192,56 @@ describe("useChatStore sub session projection", () => {
     expect(store.selectSubSessionMessages("sub-session-1")?.messages[0].content).toBe("hello");
   });
 
+  it("preserves rich realtime step state when a completion snapshot is sparse", () => {
+    const store = useChatStore();
+    store.upsertSubSessionEvent("subagent_thinking", createSubSessionEvent({
+      content: "answer",
+      thinking: {
+        steps: [{ id: "step-1", title: "Inspect", description: "Read the source", actions: [{ id: "open" }] }],
+        summary: "working",
+      },
+      message: {
+        pluginMeta: {
+          source: "harness-plugin",
+          stepEvents: [{ id: "step-1", state: "completed" }],
+          interaction: { description: "Open the completed step", buttons: [{ id: "open" }] },
+        },
+      },
+    }));
+
+    store.mergeSubSessionSnapshot({
+      sessionId: "sub-session-1",
+      status: "completed",
+      messages: [{
+        id: "msg-assistant-1",
+        messageId: "msg-assistant-1",
+        role: "assistant",
+        content: "answer",
+        status: "completed",
+        pending: false,
+        thinking: { summary: "done", steps: [] },
+        pluginMeta: { interaction: null },
+      }],
+    });
+
+    const message = store.selectSubSessionMessages("sub-session-1")?.messages?.[0];
+    expect(message).toMatchObject({
+      id: "msg-assistant-1",
+      messageId: "msg-assistant-1",
+      status: "completed",
+      pending: false,
+      thinking: {
+        summary: "done",
+        steps: [{ id: "step-1", description: "Read the source" }],
+      },
+      pluginMeta: {
+        stepEvents: [{ id: "step-1", state: "completed" }],
+        interaction: { description: "Open the completed step", buttons: [{ id: "open" }] },
+      },
+    });
+    expect(message.rawEvents).toHaveLength(1);
+  });
+
 
   it("lets authoritative snapshot message ids replace realtime temporary identities without duplicates", () => {
     const store = useChatStore();
