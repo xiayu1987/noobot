@@ -213,6 +213,36 @@ describe("webSocketTransportSupervisor", () => {
     await expect(supervisor.refreshCredentials()).resolves.toBe(null);
   });
 
+  it("backs off instead of suspending after a transient authentication recovery failure", async () => {
+    vi.useFakeTimers();
+    const reconnect = vi.fn();
+    const supervisor = createWebSocketTransportSupervisor({
+      refreshAuthentication: vi.fn(async () => false),
+      reconnectBaseDelayMs: 100,
+      reconnectMaxDelayMs: 400,
+    });
+
+    await expect(supervisor.recover({ reconnect })).resolves.toBe(true);
+    expect(supervisor.status()).toMatchObject({
+      phase: WEB_SOCKET_TRANSPORT_PHASE.IDLE,
+      hasReconnectTimer: true,
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(reconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it("still supports explicit suspension for authoritative authentication failure", async () => {
+    const supervisor = createWebSocketTransportSupervisor({
+      refreshAuthentication: vi.fn(async () => false),
+    });
+
+    await expect(supervisor.recover({
+      reconnect: vi.fn(),
+      suspendOnAuthenticationFailure: true,
+    })).resolves.toBe(false);
+    expect(supervisor.status().phase).toBe(WEB_SOCKET_TRANSPORT_PHASE.SUSPENDED);
+  });
+
   it("owns one bounded reconnect timer and invalidates stale generations", async () => {
     vi.useFakeTimers();
     const callback = vi.fn();

@@ -29,7 +29,9 @@ export function useApiConnection({
     canUseIDE: false,
   });
   const connecting = ref(false);
-  let connectPromise = null;
+  let authenticationPromise = null;
+  let connectedCallbackPromise = null;
+  let activeConnectCallCount = 0;
 
   const connected = computed(
     () =>
@@ -215,76 +217,90 @@ export function useApiConnection({
       ? true
       : await refreshAuthentication();
     if (refreshed && apiKey.value && apiKey.value !== requestApiKey) {
-      return runFetch();
+      const retryResponse = await runFetch();
+      if (retryResponse.status === 401) clearApiAuth();
+      return retryResponse;
     }
     clearApiAuth();
     return res;
   }
 
-  async function performConnect({ silent = false, runConnected = true } = {}) {
+  async function authenticate() {
+    const res = await connectApi({
+      userId: userId.value.trim(),
+      connectCode: connectCode.value.trim(),
+      locale: String(locale.value || "").trim(),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok || !data.apiKey) {
+      throw new Error(data.error || translate("infra.connectFailed"));
+    }
+    apiKey.value = String(data.apiKey || "");
+    apiKeyUserId.value = String(userId.value || "").trim();
+    apiRole.value = String(data.role || "user");
+    scenarioConfig.value = normalizeScenarioConfig({
+      ...(data?.scenarios || {}),
+      plugins: data?.plugins || data?.scenarios?.plugins || {},
+      enabledModels: data?.enabledModels || data?.models || data?.scenarios?.enabledModels || [],
+      defaultModel: data?.defaultModel || data?.scenarios?.defaultModel || null,
+      defaultModelAlias: data?.defaultModelAlias || data?.scenarios?.defaultModelAlias || "",
+    });
+    permissions.value = {
+      canUseIDE:
+        String(data?.role || "").trim() === "super_admin" ||
+        data?.permissions?.canUseIDE === true,
+    };
+    persistApiAuth();
+    persistConnectProfile();
+    return true;
+  }
+
+  function acquireAuthentication() {
+    if (authenticationPromise) return authenticationPromise;
+    authenticationPromise = authenticate().finally(() => {
+      authenticationPromise = null;
+    });
+    return authenticationPromise;
+  }
+
+  function runConnectedCallback() {
+    if (connectedCallbackPromise) return connectedCallbackPromise;
+    connectedCallbackPromise = Promise.resolve().then(() => onConnected()).finally(() => {
+      connectedCallbackPromise = null;
+    });
+    return connectedCallbackPromise;
+  }
+
+  async function connectBackend({ silent = false, runConnected = true } = {}) {
     if (!userId.value.trim()) {
       if (!silent) notify({ type: "warning", message: translate("infra.inputUserFirst") });
-      return;
+      return false;
     }
     if (!connectCode.value.trim()) {
       if (!silent) notify({ type: "warning", message: translate("infra.inputConnectCodeFirst") });
-      return;
+      return false;
     }
+    activeConnectCallCount += 1;
     connecting.value = true;
     try {
-      const res = await connectApi({
-        userId: userId.value.trim(),
-        connectCode: connectCode.value.trim(),
-        locale: String(locale.value || "").trim(),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok || !data.apiKey) {
-        throw new Error(data.error || translate("infra.connectFailed"));
-      }
-      apiKey.value = String(data.apiKey || "");
-      apiKeyUserId.value = String(userId.value || "").trim();
-      apiRole.value = String(data.role || "user");
-      scenarioConfig.value = normalizeScenarioConfig({
-        ...(data?.scenarios || {}),
-        plugins: data?.plugins || data?.scenarios?.plugins || {},
-        enabledModels: data?.enabledModels || data?.models || data?.scenarios?.enabledModels || [],
-        defaultModel: data?.defaultModel || data?.scenarios?.defaultModel || null,
-        defaultModelAlias: data?.defaultModelAlias || data?.scenarios?.defaultModelAlias || "",
-      });
-      permissions.value = {
-        canUseIDE:
-          String(data?.role || "").trim() === "super_admin" ||
-          data?.permissions?.canUseIDE === true,
-      };
-      persistApiAuth();
-      persistConnectProfile();
+      await acquireAuthentication();
       if (!silent) {
         notify({
           type: "success",
           message: `${translate("infra.connectSuccess")} (role=${apiRole.value || "user"})`,
         });
       }
-      if (runConnected) await onConnected();
+      if (runConnected) await runConnectedCallback();
       return true;
     } catch (error) {
-      // Background recovery can race a Service restart. Preserve the previous
-      // credential so the next HTTP/WS handshake can retry recovery once the
-      // Service is reachable; an authoritative 401 path clears it in authFetch.
+      // Background recovery preserves the last credential during transient
+      // Service downtime. A foreground connect or authoritative HTTP 401 clears it.
       if (runConnected) clearApiAuth();
       if (!silent) notify({ type: "error", message: error.message || translate("infra.connectFailed") });
       return false;
-    }
-  }
-
-  async function connectBackend(options = {}) {
-    if (connectPromise) return connectPromise;
-    connecting.value = true;
-    connectPromise = performConnect(options);
-    try {
-      return await connectPromise;
     } finally {
-      connectPromise = null;
-      connecting.value = false;
+      activeConnectCallCount = Math.max(0, activeConnectCallCount - 1);
+      connecting.value = activeConnectCallCount > 0;
     }
   }
 

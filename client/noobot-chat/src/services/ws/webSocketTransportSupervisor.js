@@ -76,6 +76,7 @@ export function createWebSocketTransportSupervisor({
     }
     generation += 1;
     socket = nextSocket;
+    authenticationRecoveryAttempted = false;
     serverInstanceId = "";
     lastFailureReason = "";
     phase = nextSocket?.readyState === WebSocket.OPEN
@@ -169,7 +170,7 @@ export function createWebSocketTransportSupervisor({
     return refreshCredentials().then((recovered) => {
       if (recovered === true || recovered === null) return scheduleReconnect(reconnect);
       if (suspendOnAuthenticationFailure) suspend();
-      return false;
+      return suspendOnAuthenticationFailure ? false : scheduleReconnect(reconnect);
     });
   }
 
