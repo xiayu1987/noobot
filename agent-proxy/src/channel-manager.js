@@ -9,14 +9,21 @@ import { upstreamconnectionMethods } from "./channel-manager/upstream-connection
 import { channelflowMethods } from "./channel-manager/channel-flow.js";
 import { reconnectMethods } from "./channel-manager/reconnect.js";
 import { cleanupMethods } from "./channel-manager/cleanup.js";
+import { UpstreamTransportSupervisor } from "./upstream-transport-supervisor.js";
+import { CommandRegistry } from "./command-registry.js";
+import { config } from "./config.js";
+import { ChannelEventJournal } from "./channel-event-journal.js";
 
 export class ChannelManager {
   constructor(WebSocket, { sessionLogClient = null } = {}) {
     this.WebSocket = WebSocket;
     this.sessionLogClient = sessionLogClient;
     this.channelStore = new Map();
-    this.requestChannelMap = new Map();
+    this.commandRegistry = new CommandRegistry({ defaultTtlMs: config.requestIdTtlMs });
+    this.requestChannelMap = this.commandRegistry.routes;
     this.apiKeyIdentityStore = new Map();
+    this.createUpstreamTransport = () => new UpstreamTransportSupervisor(WebSocket);
+    this.createEventJournal = () => new ChannelEventJournal({ maxEvents: config.maxChannelEvents });
   }
 
   logSessionEvent(channel, event = {}) {

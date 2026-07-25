@@ -9,6 +9,11 @@ import {
   SESSION_LOG_DEFAULT_CATEGORY,
 } from "@noobot/runtime-events/session-log-protocol";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import {
+  createWebSocketTransportSupervisor,
+  WEB_SOCKET_TRANSPORT_PHASE,
+} from "./webSocketTransportSupervisor";
 
 const MAX_QUEUE_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxQueueSize;
 
@@ -25,21 +30,58 @@ function logDiagnostic(message, data = {}) {
   console.info("[session-log-ws][frontend]", message, data);
 }
 
-export function createSessionLogWebSocketClient({ resolveWebSocketUrl = () => "", source = "frontend" } = {}) {
-  let socket = null;
+export function createSessionLogWebSocketClient({
+  resolveWebSocketUrl = () => "",
+  source = "frontend",
+  refreshAuthentication = null,
+} = {}) {
   const queue = [];
   const inFlight = [];
-  let reconnectTimer = null;
   let disposed = false;
+  const transport = createWebSocketTransportSupervisor({
+    channelId: "session-log",
+    resolveWebSocketUrl,
+    refreshAuthentication,
+    reconnectBaseDelayMs: TIME_THRESHOLDS.client.sessionLogReconnectBaseDelayMs,
+    reconnectMaxDelayMs: TIME_THRESHOLDS.client.sessionLogReconnectMaxDelayMs,
+  });
+  const isSuspended = () => transport.status().phase === WEB_SOCKET_TRANSPORT_PHASE.SUSPENDED;
 
   function scheduleReconnect() {
-    if (disposed) return;
-    if (reconnectTimer || (!queue.length && !inFlight.length)) return;
-    reconnectTimer = setTimeout(() => {
-      reconnectTimer = null;
+    if (disposed || isSuspended()) return;
+    if (!queue.length && !inFlight.length) return;
+    transport.scheduleReconnect(() => {
       connect();
       flush();
-    }, 1000);
+    });
+  }
+
+  function recoverAuthentication() {
+    void transport.recover({
+      reconnect: () => {
+        if (disposed || (!queue.length && !inFlight.length)) return;
+        connect();
+        flush();
+      },
+      suspendOnAuthenticationFailure: true,
+    });
+  }
+
+  function handleDisconnect(currentSocket, event = {}, { closeSocket = false } = {}) {
+    if (!transport.isCurrent(currentSocket)) return;
+    const restored = restoreInFlight();
+    transport.noteFailure(currentSocket);
+    if (closeSocket) {
+      try { currentSocket?.close?.(1011, "transport_error"); } catch {}
+    }
+    logDiagnostic("disconnected", {
+      code: event?.code || 0,
+      reason: event?.reason || "",
+      queueLength: queue.length,
+      restored,
+      reconnectAttempt: transport.status().reconnectAttempt,
+    });
+    if (!disposed) recoverAuthentication();
   }
 
   function restoreInFlight() {
@@ -64,53 +106,50 @@ export function createSessionLogWebSocketClient({ resolveWebSocketUrl = () => ""
   }
 
   function connect() {
-    if (disposed) return null;
-    if (socket && [WebSocket.OPEN, WebSocket.CONNECTING].includes(socket.readyState)) return socket;
-    const url = resolveWebSocketUrl();
-    if (!url) {
+    if (disposed || isSuspended()) return null;
+    const current = transport.current();
+    if (current && [WebSocket.OPEN, WebSocket.CONNECTING].includes(current.readyState)) return current;
+    const attempt = transport.acquire();
+    if (!attempt?.socket) {
       logDiagnostic("connect skipped", { reason: "empty-url", queueLength: queue.length });
       return null;
     }
-    logDiagnostic("connecting", { url, queueLength: queue.length });
-    socket = new WebSocket(url);
-    const currentSocket = socket;
+    const currentSocket = attempt.socket;
+    logDiagnostic("connecting", { queueLength: queue.length, generation: attempt.generation });
     currentSocket.onopen = () => {
-      if (socket !== currentSocket || disposed) return;
+      if (!transport.markOpen(currentSocket) || disposed) return;
       logDiagnostic("open", { queueLength: queue.length, inFlightLength: inFlight.length });
-      runtimeDiagnostic("frontend.sessionLogWs.open", { queueLength: queue.length, inFlightLength: inFlight.length });
       flush();
     };
     currentSocket.onmessage = (raw) => {
-      if (socket !== currentSocket || disposed) return;
+      if (!transport.isCurrent(currentSocket) || disposed) return;
       logDiagnostic("message", { payload: String(raw?.data || raw || "").slice(0, 300) });
       handleAck(raw);
     };
     currentSocket.onclose = (event) => {
-      if (socket !== currentSocket) return;
-      const restored = restoreInFlight();
-      logDiagnostic("close", { code: event?.code, reason: event?.reason || "", queueLength: queue.length, restored });
-      runtimeDiagnostic("frontend.sessionLogWs.close", { code: event?.code || 0, reason: event?.reason || "", queueLength: queue.length, restored });
-      socket = null;
-      if (!disposed) scheduleReconnect();
+      handleDisconnect(currentSocket, event);
     };
     currentSocket.onerror = () => {
-      if (socket !== currentSocket) return;
-      const restored = restoreInFlight();
-      logDiagnostic("error", { queueLength: queue.length, restored });
-      runtimeDiagnostic("frontend.sessionLogWs.error", { queueLength: queue.length, restored });
-      socket = null;
-      if (!disposed) scheduleReconnect();
+      handleDisconnect(currentSocket, {}, { closeSocket: true });
     };
-    return socket;
+    return currentSocket;
   }
 
   function flush() {
+    const socket = transport.current();
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
     const count = queue.length;
     while (queue.length) {
       const record = queue.shift();
       inFlight.push(record);
-      socket.send(JSON.stringify(record));
+      try {
+        socket.send(JSON.stringify(record));
+      } catch (error) {
+        logDiagnostic("send failed", { errorType: error?.name || "Error" });
+        handleDisconnect(socket, { reason: "send_failed" });
+        try { socket.close?.(1011, "send_failed"); } catch {}
+        break;
+      }
     }
     if (count) logDiagnostic("flushed", { count, inFlightLength: inFlight.length });
   }
@@ -130,48 +169,28 @@ export function createSessionLogWebSocketClient({ resolveWebSocketUrl = () => ""
     return true;
   }
 
-  // Transport diagnostics intentionally use the same structured session-log
-  // path as business diagnostics. This makes dropped/queued/reconnected
-  // frontend logs observable in runtime-events instead of only DevTools.
-  function runtimeDiagnostic(event, data = {}) {
+  function status() {
+    return {
+      queueLength: queue.length,
+      inFlightLength: inFlight.length,
+      ...transport.status(),
+      suspended: isSuspended(),
+    };
+  }
+
+  function resume() {
     if (disposed) return false;
-    // Diagnostics must never evict a business record from the bounded delivery
-    // queue. Recording remains controlled by runtime-events-config on the
-    // consumer side; this only establishes transport priority under pressure.
-    if (queue.length >= MAX_QUEUE_SIZE) return false;
-    const record = buildSessionLogRecord({
-      category: "debug",
-      level: "debug",
-      debugType: "session-log-ws",
-      event,
-      data: { event, ...data },
-    }, { source, includeTimestamp: true });
-    queue.push(record);
+    transport.resume();
     connect();
     flush();
     return true;
   }
 
-  function status() {
-    return {
-      queueLength: queue.length,
-      inFlightLength: inFlight.length,
-      readyState: socket?.readyState ?? WebSocket.CLOSED,
-      hasReconnectTimer: Boolean(reconnectTimer),
-    };
-  }
-
   function dispose() {
     disposed = true;
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer);
-      reconnectTimer = null;
-    }
-    const currentSocket = socket;
-    socket = null;
     queue.length = 0;
     inFlight.length = 0;
-    try { currentSocket?.close?.(1000, "dispose"); } catch {}
+    transport.dispose();
   }
 
   return {
@@ -179,6 +198,7 @@ export function createSessionLogWebSocketClient({ resolveWebSocketUrl = () => ""
     log,
     debug: (event = {}) => log({ ...event, category: "debug" }),
     status,
+    resume,
     dispose,
   };
 }

@@ -7,6 +7,7 @@ import { config } from "./config.js";
 import {
   AGENT_PROXY_ERROR,
   CHANNEL_EVENT,
+  CHANNEL_RETENTION_PHASE,
   CHANNEL_STATUS,
   CONVERSATION_STATE,
   CONVERSATION_SOURCE_EVENT,
@@ -72,31 +73,44 @@ export class WsRouter {
         return;
       }
 
-      const action = String(payload?.action || "").trim().toLowerCase();
-      void writeAgentProxyRouteLifecycleEvent({
-        event: action ? "agentProxy.route.actionReceived" : "agentProxy.route.channelStartReceived",
-        socket,
-        data: { action, hasSessionId: Boolean(String(payload?.sessionId || "").trim()), hasChannelKey: Boolean(String(payload?.channelKey || "").trim()) },
-      });
-      if (!action) {
-        this.channelManager.startOrJoinChannel({
+      try {
+        const action = String(payload?.action || "").trim().toLowerCase();
+        void writeAgentProxyRouteLifecycleEvent({
+          event: action ? "agentProxy.route.actionReceived" : "agentProxy.route.channelStartReceived",
           socket,
-          payload,
-          connectionApiKey,
-          connectionLocale,
+          data: { action, hasSessionId: Boolean(String(payload?.sessionId || "").trim()), hasChannelKey: Boolean(String(payload?.channelKey || "").trim()) },
         });
-        return;
-      }
+        if (!action) {
+          this.channelManager.startOrJoinChannel({
+            socket,
+            payload,
+            connectionApiKey,
+            connectionLocale,
+          });
+          return;
+        }
 
-      const handler = this._handlers[action];
-      if (handler) {
-        handler.call(this, socket, payload);
-      } else {
-        void writeAgentProxyRouteLifecycleEvent({ event: "agentProxy.route.unsupportedAction", socket, data: { action } });
-        this.channelManager.sendSocketError(
+        const handler = this._handlers[action];
+        if (handler) {
+          handler.call(this, socket, payload);
+        } else {
+          void writeAgentProxyRouteLifecycleEvent({ event: "agentProxy.route.unsupportedAction", socket, data: { action } });
+          this.channelManager.sendSocketError(
+            socket,
+            AGENT_PROXY_ERROR.UNSUPPORTED_ACTION(action),
+          );
+        }
+      } catch (error) {
+        void writeAgentProxyRouteLifecycleEvent({
+          event: "agentProxy.route.unhandledFailure",
           socket,
-          AGENT_PROXY_ERROR.UNSUPPORTED_ACTION(action),
-        );
+          data: {
+            errorType: String(error?.name || "Error"),
+            errorCode: String(error?.code || ""),
+          },
+        });
+        try { this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.ROUTE_FAILED); } catch {}
+        try { socket.close?.(1011, "route_failed"); } catch { try { socket.terminate?.(); } catch {} }
       }
     });
   }
@@ -315,10 +329,15 @@ export class WsRouter {
 
     targetChannel.startPayload = { ...(payload || {}) };
     targetChannel.startFingerprint = "";
+    targetChannel.retention ||= { phase: CHANNEL_RETENTION_PHASE.ACTIVE, terminalStatus: "", cleanupAfterMs: 0 };
+    targetChannel.activity ||= { phase: CHANNEL_STATUS.IDLE };
+    targetChannel.retention.phase = CHANNEL_RETENTION_PHASE.ACTIVE;
+    targetChannel.retention.terminalStatus = "";
+    targetChannel.retention.cleanupAfterMs = 0;
     targetChannel.cleanupAfterMs = 0;
     targetChannel.upstreamClosed = false;
     targetChannel._errorHandled = false;
-    targetChannel.status = CHANNEL_STATUS.CONNECTING;
+    targetChannel.activity.phase = CHANNEL_STATUS.IDLE;
 
     this.channelManager.closeUpstreamChannel(
       targetChannel,

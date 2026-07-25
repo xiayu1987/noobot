@@ -211,32 +211,49 @@ export function registerChatWebSocketServer(
       sessionLogConfig,
     });
 
-    webSocket.on(
-      "message",
-      createMessageHandler({
-        state,
-        authInfo,
-        webSocket,
-        sendEvent,
-        translateText,
-        normalizeLocale,
-        normalizeRunConfig,
-        isForbiddenUserScope,
-        resolveBot,
-        sessionLogConfig,
-        pendingInteractionRequests,
-        rejectAllPendingInteractions,
-        userInteractionBridge,
-        buildRunStateSnapshot,
-        finalizeTimeout,
-        finalizeUserStopped,
-        finalizeCompleted,
-        finalizeAborted,
-        finalizeGenericError,
-        commitTurnLifecycle,
-        recoverTurnFinalize: recoverPersistedTurnFinalize,
-      }),
-    );
+    const messageHandler = createMessageHandler({
+      state,
+      authInfo,
+      webSocket,
+      sendEvent,
+      translateText,
+      normalizeLocale,
+      normalizeRunConfig,
+      isForbiddenUserScope,
+      resolveBot,
+      sessionLogConfig,
+      pendingInteractionRequests,
+      rejectAllPendingInteractions,
+      userInteractionBridge,
+      buildRunStateSnapshot,
+      finalizeTimeout,
+      finalizeUserStopped,
+      finalizeCompleted,
+      finalizeAborted,
+      finalizeGenericError,
+      commitTurnLifecycle,
+      recoverTurnFinalize: recoverPersistedTurnFinalize,
+    });
+    webSocket.on("message", (rawMessage) => {
+      // EventEmitter does not consume promises returned by async listeners.
+      // Keep one process-level rejection boundary even when error finalization
+      // itself fails, so a malformed or concurrently deleted Session can only
+      // terminate this connection, never the Service process.
+      void messageHandler(rawMessage).catch((error) => {
+        void recordServiceWebSocketLifecycle({
+          sessionLogConfig,
+          event: "service.websocket.message.unhandledFailure",
+          data: { errorType: error?.name || "Error", errorCode: String(error?.code || "") },
+        });
+        sendEvent("error", {
+          error: error?.message || translateText("ws.unknownError", state.currentLocale),
+          errorCode: String(error?.errorCode || error?.code || "message_handler_failed"),
+          sessionId: state.currentRunMeta?.sessionId || "",
+          turnScopeId: state.currentRunMeta?.turnScopeId || state.currentTurnScopeId || "",
+        });
+        try { webSocket.close(1011, "message handler failed"); } catch {}
+      });
+    });
 
     webSocket.on("close", (code, reasonBuffer) => {
       // After a refresh, the active run may have rebound its output to a newer

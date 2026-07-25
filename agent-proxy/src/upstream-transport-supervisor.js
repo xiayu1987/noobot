@@ -1,0 +1,168 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+
+export const UPSTREAM_TRANSPORT_PHASE = Object.freeze({
+  IDLE: "idle",
+  CONNECTING: "connecting",
+  OPEN: "open",
+  DISPOSED: "disposed",
+});
+
+export class UpstreamTransportSupervisor {
+  constructor(WebSocketImpl) {
+    this.WebSocket = WebSocketImpl;
+    this.socket = null;
+    this.generation = 0;
+    this.phase = UPSTREAM_TRANSPORT_PHASE.IDLE;
+    this.everConnected = false;
+    this.lastSeenAtMs = 0;
+    this.awaitingPong = false;
+    this.handlers = null;
+  }
+
+  connect(url, handlers = {}) {
+    if (this.phase === UPSTREAM_TRANSPORT_PHASE.DISPOSED) return null;
+    const previousSocket = this.socket;
+    let socket = null;
+    try {
+      socket = new this.WebSocket(url);
+    } catch (error) {
+      this.invokeHandler(handlers, "error", { socket: null, generation: this.generation, error });
+      return null;
+    }
+    const generation = ++this.generation;
+    this.socket = socket;
+    this.handlers = handlers;
+    this.phase = UPSTREAM_TRANSPORT_PHASE.CONNECTING;
+    this.everConnected = true;
+    this.lastSeenAtMs = Date.now();
+    this.awaitingPong = false;
+    socket.on("open", () => {
+      if (!this.isCurrent(socket, generation)) return;
+      this.phase = UPSTREAM_TRANSPORT_PHASE.OPEN;
+      if (!this.invokeHandler(handlers, "open", { socket, generation })) {
+        this.close(1011, "handler_failure");
+      }
+    });
+    socket.on("message", (rawData) => {
+      if (!this.isCurrent(socket, generation)) return;
+      this.touch();
+      if (!this.invokeHandler(handlers, "message", { socket, generation, rawData })) {
+        this.close(1011, "handler_failure");
+      }
+    });
+    socket.on("pong", () => {
+      if (this.isCurrent(socket, generation)) this.touch();
+    });
+    socket.on("error", (error) => {
+      if (!this.isCurrent(socket, generation)) return;
+      if (!this.invokeHandler(handlers, "error", { socket, generation, error })) {
+        this.close(1011, "handler_failure");
+      }
+    });
+    socket.on("close", (code, reason) => {
+      if (!this.isCurrent(socket, generation)) return;
+      this.socket = null;
+      this.phase = UPSTREAM_TRANSPORT_PHASE.IDLE;
+      this.handlers = null;
+      this.invokeHandler(handlers, "close", { socket, generation, code, reason });
+    });
+    return { socket, generation, previousSocket };
+  }
+
+  adopt(socket) {
+    if (this.phase === UPSTREAM_TRANSPORT_PHASE.DISPOSED) return false;
+    this.generation += 1;
+    this.socket = socket || null;
+    this.handlers = null;
+    this.phase = !socket
+      ? UPSTREAM_TRANSPORT_PHASE.IDLE
+      : socket.readyState === this.WebSocket.OPEN
+        ? UPSTREAM_TRANSPORT_PHASE.OPEN
+        : UPSTREAM_TRANSPORT_PHASE.CONNECTING;
+    if (socket) this.everConnected = true;
+    return true;
+  }
+
+  isCurrent(socket, generation = this.generation) {
+    return Boolean(socket && socket === this.socket && generation === this.generation && this.phase !== UPSTREAM_TRANSPORT_PHASE.DISPOSED);
+  }
+
+  invokeHandler(handlers, handlerName, event) {
+    try {
+      handlers?.[handlerName]?.(event);
+      return true;
+    } catch (error) {
+      try {
+        handlers?.handlerError?.({
+          ...event,
+          handlerName,
+          error,
+        });
+      } catch {}
+      return false;
+    }
+  }
+
+  send(payload) {
+    if (!this.socket || this.socket.readyState !== this.WebSocket.OPEN) return false;
+    this.socket.send(payload);
+    return true;
+  }
+
+  touch(nowMs = Date.now()) {
+    this.lastSeenAtMs = Number(nowMs || Date.now());
+    this.awaitingPong = false;
+  }
+
+  sweepHeartbeat({ timeoutMs = 0, nowMs = Date.now(), onTimeout = null } = {}) {
+    const socket = this.socket;
+    if (!socket || this.phase !== UPSTREAM_TRANSPORT_PHASE.OPEN) return false;
+    if (this.awaitingPong && timeoutMs > 0 && nowMs - this.lastSeenAtMs >= timeoutMs) {
+      onTimeout?.({ socket, generation: this.generation });
+      return false;
+    }
+    this.awaitingPong = true;
+    try { socket.ping?.(); } catch { onTimeout?.({ socket, generation: this.generation }); }
+    return true;
+  }
+
+  close(code = 1000, reason = "closed") {
+    const socket = this.socket;
+    if (!socket) return false;
+    const handlers = this.handlers;
+    this.generation += 1;
+    this.socket = null;
+    this.handlers = null;
+    this.phase = UPSTREAM_TRANSPORT_PHASE.IDLE;
+    try { socket.close(code, reason); } catch {}
+    this.invokeHandler(handlers, "close", { socket, generation: this.generation, code, reason, locallyInitiated: true });
+    return true;
+  }
+
+  dispose(code = 1000, reason = "disposed") {
+    if (this.phase === UPSTREAM_TRANSPORT_PHASE.DISPOSED) return;
+    const socket = this.socket;
+    const handlers = this.handlers;
+    this.generation += 1;
+    this.socket = null;
+    this.handlers = null;
+    this.phase = UPSTREAM_TRANSPORT_PHASE.DISPOSED;
+    try { socket?.close?.(code, reason); } catch {}
+    if (socket) this.invokeHandler(handlers, "close", { socket, generation: this.generation, code, reason, locallyInitiated: true });
+  }
+
+  status() {
+    return {
+      generation: this.generation,
+      phase: this.phase,
+      hasSocket: Boolean(this.socket),
+      readyState: this.socket?.readyState ?? this.WebSocket.CLOSED,
+      everConnected: this.everConnected,
+      lastSeenAtMs: this.lastSeenAtMs,
+    };
+  }
+}

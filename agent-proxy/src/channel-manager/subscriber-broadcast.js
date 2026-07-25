@@ -9,7 +9,7 @@ import {
   CONVERSATION_STATE,
 } from "../constants.js";
 import { config } from "../config.js";
-import { ensureConnectionId, nowMs, isTerminalStatus, resolveMessageEventTrace } from "../utils.js";
+import { ensureConnectionId, nowMs, resolveMessageEventTrace } from "../utils.js";
 import { localizeAgentProxyMessage } from "noobot-i18n/agent-proxy";
 
 class SubscriberBroadcastMethods {
@@ -32,8 +32,8 @@ detachSocketFromAllChannels(socket) {
     if (!channel) continue;
     channel.subscribers.delete(socket);
     channel.updatedAtMs = nowMs();
-    if (!channel.subscribers.size && isTerminalStatus(channel.status)) {
-      channel.cleanupAfterMs = nowMs() + config.channelRetentionMs;
+  if (!channel.subscribers.size && channel.retention.terminalStatus) {
+      channel.retention.cleanupAfterMs = nowMs() + config.channelRetentionMs;
     }
   }
   socket.__agentProxyChannelKeys = new Set();
@@ -48,13 +48,15 @@ _withChannelSessionScope(channel, envelope = {}) {
     return envelope;
   }
   const existingSessionId = String(envelope?.data?.sessionId || "").trim();
-  if (existingSessionId) return envelope;
+  const existingRequestId = String(envelope?.data?.requestId || "").trim();
   const channelSessionId = this._extractSessionIdFromChannelKey?.(channel.key);
-  if (!channelSessionId) return envelope;
+  const channelRequestId = String(channel?.startPayload?.requestId || "").trim();
+  if ((!channelSessionId || existingSessionId) && (!channelRequestId || existingRequestId)) return envelope;
   return {
     ...envelope,
     data: {
-      sessionId: channelSessionId,
+      ...(channelSessionId && !existingSessionId ? { sessionId: channelSessionId } : {}),
+      ...(channelRequestId && !existingRequestId ? { requestId: channelRequestId } : {}),
       ...envelope.data,
     },
   };
@@ -227,6 +229,10 @@ sendSocketEvent(targetSocket, envelope) {
   if (!envelope) return { result: "skipped", reason: "envelope_missing" };
   if (targetSocket.readyState !== this.WebSocket.OPEN) {
     return { result: "skipped", reason: "socket_not_open" };
+  }
+  if (Number(targetSocket.bufferedAmount || 0) > config.wsMaxBufferedBytes) {
+    try { targetSocket.close(1008, "slow_consumer"); } catch {}
+    return { result: "skipped", reason: "backpressure_limit" };
   }
   try {
     targetSocket.send(

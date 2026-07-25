@@ -98,6 +98,7 @@ export function useChatSession({
   connected,
   ensureConnected,
   authFetch,
+  refreshAuthentication = null,
   isImageMime,
   classifyRealtimeLog,
   navigateToLastMessage,
@@ -535,10 +536,15 @@ export function useChatSession({
     resolveWebSocketUrl: () =>
       buildChatWebSocketUrl({ apiKey: apiKey.value || "" }),
     translateText: translate,
+    refreshAuthentication,
   });
   const sessionLogWebSocketClient = createSessionLogWebSocketClient({
     resolveWebSocketUrl: () => buildLogWebSocketUrl({ apiKey: apiKey.value || "" }),
     source: "frontend",
+    refreshAuthentication,
+  });
+  watch(apiKey, (nextApiKey, previousApiKey) => {
+    if (nextApiKey && nextApiKey !== previousApiKey) sessionLogWebSocketClient.resume();
   });
   setStateMachineDebugLogSink(sessionLogWebSocketClient);
   setResendDebugLogSink(sessionLogWebSocketClient);

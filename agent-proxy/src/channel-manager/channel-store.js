@@ -6,6 +6,7 @@
 import { config } from "../config.js";
 import {
   CHANNEL_EVENT,
+  CHANNEL_RETENTION_PHASE,
   CHANNEL_STATUS,
   CLIENT_ROLE,
   CONVERSATION_SCOPE_KEY,
@@ -22,30 +23,82 @@ ensureChannel(channelKey = "", startPayload = {}) {
   if (!normalizedChannelKey) return null;
   const existingChannel = this.channelStore.get(normalizedChannelKey);
   if (existingChannel) return existingChannel;
+  const upstreamTransport = this.createUpstreamTransport();
+  const eventJournal = this.createEventJournal();
   const nextChannel = {
     key: normalizedChannelKey,
-    status: CHANNEL_STATUS.IDLE,
     createdAtMs: nowMs(),
     updatedAtMs: nowMs(),
     subscribers: new Set(),
-    upstreamSocket: null,
-    upstreamEverConnected: false,
+    transport: upstreamTransport,
+    activity: { phase: CHANNEL_STATUS.IDLE },
+    retention: {
+      phase: CHANNEL_RETENTION_PHASE.ACTIVE,
+      terminalStatus: "",
+      cleanupAfterMs: 0,
+    },
     apiKey: "",
     locale: "",
     startPayload: null,
     startFingerprint: "",
-    eventSequence: 0,
-    eventLog: [],
+    eventJournal,
     lifecycleWindowsBySessionId: new Map(),
-    pendingSnapshotRequests: new Map(),
+    pendingSnapshotRequests: this.commandRegistry.createMapFacade(normalizedChannelKey, "turn_snapshot"),
     pendingInteractionRequests: new Map(),
-    cleanupAfterMs: 0,
     upstreamClosed: false,
     ownerApiKey: "",
     ownerUserId: "",
     _errorHandled: false,
     conversationStateByDialogProcessId: new Map(),
   };
+  Object.defineProperties(nextChannel, {
+    upstreamSocket: {
+      enumerable: false,
+      get: () => upstreamTransport.socket,
+      set: (socket) => upstreamTransport.adopt(socket),
+    },
+    upstreamEverConnected: {
+      enumerable: false,
+      get: () => upstreamTransport.everConnected,
+      set: (value) => { if (value) upstreamTransport.everConnected = true; },
+    },
+    cleanupAfterMs: {
+      enumerable: false,
+      get: () => nextChannel.retention.cleanupAfterMs,
+      set: (value) => { nextChannel.retention.cleanupAfterMs = Number(value || 0); },
+    },
+    status: {
+      enumerable: false,
+      get: () => nextChannel.retention.terminalStatus ||
+        (nextChannel.activity.phase === CHANNEL_STATUS.RUNNING ? CHANNEL_STATUS.RUNNING : upstreamTransport.phase),
+      set: (value) => {
+        const normalized = String(value || "").trim();
+        if ([CHANNEL_STATUS.DONE, CHANNEL_STATUS.USER_STOPPED, CHANNEL_STATUS.ERROR].includes(normalized)) {
+          nextChannel.retention.phase = CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED;
+          nextChannel.retention.terminalStatus = normalized;
+          return;
+        }
+        nextChannel.retention.phase = CHANNEL_RETENTION_PHASE.ACTIVE;
+        nextChannel.retention.terminalStatus = "";
+        if (normalized === CHANNEL_STATUS.RUNNING) {
+          nextChannel.activity.phase = CHANNEL_STATUS.RUNNING;
+          return;
+        }
+        nextChannel.activity.phase = CHANNEL_STATUS.IDLE;
+        upstreamTransport.phase = normalized || CHANNEL_STATUS.IDLE;
+      },
+    },
+    eventLog: {
+      enumerable: false,
+      get: () => eventJournal.events,
+      set: (events) => { eventJournal.events = Array.isArray(events) ? events : []; },
+    },
+    eventSequence: {
+      enumerable: false,
+      get: () => eventJournal.sequence,
+      set: (value) => { eventJournal.sequence = Math.max(0, Number(value || 0)); },
+    },
+  });
   if (startPayload && typeof startPayload === "object") {
     nextChannel.startPayload = { ...startPayload };
   }
@@ -80,17 +133,11 @@ get channelCount() {
 
 pushChannelEvent(channel, eventName = "", data = {}) {
   if (!channel) return null;
-  channel.eventSequence += 1;
   channel.updatedAtMs = nowMs();
-  const envelope = {
-    sequence: channel.eventSequence,
-    event: String(eventName || CHANNEL_EVENT.MESSAGE).trim() || CHANNEL_EVENT.MESSAGE,
-    data: data && typeof data === "object" ? data : {},
-  };
-  channel.eventLog.push(envelope);
-  if (channel.eventLog.length > config.maxChannelEvents) {
-    channel.eventLog = channel.eventLog.slice(-config.maxChannelEvents);
-  }
+  const envelope = channel.eventJournal.append(
+    String(eventName || CHANNEL_EVENT.MESSAGE).trim() || CHANNEL_EVENT.MESSAGE,
+    data,
+  );
   if (envelope.event === CHANNEL_EVENT.TURN_LIFECYCLE) {
     this.recordTurnLifecycleEnvelope(channel, envelope.data);
   }
@@ -112,7 +159,7 @@ pushChannelEvent(channel, eventName = "", data = {}) {
   if (String(envelope.event || "") === CHANNEL_EVENT.INTERACTION_REQUEST) {
     const requestId = String(envelope?.data?.requestId || "").trim();
     if (requestId) {
-      this.requestChannelMap.set(requestId, { channelKey: channel.key, createdAtMs: nowMs() });
+      this.commandRegistry.registerRoute(requestId, { channelKey: channel.key, createdAtMs: nowMs() });
       channel.pendingInteractionRequests.set(requestId, envelope);
     }
   }
@@ -249,9 +296,25 @@ _applyConversationStateFromEnvelope(channel, envelope = {}) {
   } else if (eventName === CHANNEL_EVENT.USER_STOPPED) {
     nextState = CONVERSATION_STATE.USER_STOPPED;
   } else if (eventName === CHANNEL_EVENT.ERROR) {
+    if (!String(eventData?.turnScopeId || "").trim() && !String(eventData?.dialogProcessId || "").trim()) {
+      return;
+    }
     nextState = CONVERSATION_STATE.ERROR;
   }
   if (!nextState) return;
+  if ([CONVERSATION_STATE.SENDING, CONVERSATION_STATE.INTERACTION_PENDING].includes(nextState)) {
+    channel.activity.phase = CHANNEL_STATUS.RUNNING;
+    channel.retention.phase = CHANNEL_RETENTION_PHASE.ACTIVE;
+    channel.retention.terminalStatus = "";
+    channel.retention.cleanupAfterMs = 0;
+  } else if ([CONVERSATION_STATE.COMPLETED, CONVERSATION_STATE.USER_STOPPED, CONVERSATION_STATE.ERROR].includes(nextState)) {
+    channel.activity.phase = CHANNEL_STATUS.IDLE;
+    channel.retention.phase = CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED;
+    channel.retention.terminalStatus = nextState === CONVERSATION_STATE.COMPLETED
+      ? CHANNEL_STATUS.DONE
+      : nextState;
+    channel.retention.cleanupAfterMs = nowMs() + config.channelRetentionMs;
+  }
   this.updateConversationState(channel, {
     dialogProcessId,
     turnScopeId,

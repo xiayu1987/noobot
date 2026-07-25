@@ -26,6 +26,11 @@ class MockWebSocket {
   send(payload) {
     this.sent.push(payload);
   }
+
+  close(code = 1000, reason = "") {
+    this.readyState = MockWebSocket.CLOSED;
+    this.closeCall = { code, reason };
+  }
 }
 
 async function importClient() {
@@ -124,6 +129,38 @@ describe("sessionLogWebSocketClient", () => {
     expect(client.status().queueLength).toBeGreaterThanOrEqual(1);
   });
 
+  it("physically closes an errored socket even when no close event follows", async () => {
+    vi.useFakeTimers();
+    const { createSessionLogWebSocketClient } = await importClient();
+    const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
+
+    client.log({ category: "message", event: "message.error", sessionId: "s-error" });
+    const socket = MockWebSocket.instances[0];
+    socket.onerror?.();
+
+    expect(socket.closeCall).toEqual({ code: 1011, reason: "transport_error" });
+    expect(client.status()).toMatchObject({ hasSocket: false, queueLength: 1 });
+  });
+
+  it("restores the complete in-flight batch when a synchronous send fails", async () => {
+    vi.useFakeTimers();
+    const { createSessionLogWebSocketClient } = await importClient();
+    const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
+
+    client.log({ category: "message", event: "message.send-failure", sessionId: "s-retry" });
+    const socket = MockWebSocket.instances[0];
+    socket.send = () => { throw new DOMException("socket closing", "InvalidStateError"); };
+    socket.readyState = MockWebSocket.OPEN;
+
+    expect(() => socket.onopen?.()).not.toThrow();
+    expect(client.status()).toMatchObject({
+      queueLength: 1,
+      inFlightLength: 0,
+      hasSocket: false,
+      hasReconnectTimer: true,
+    });
+  });
+
   it("ignores close/error callbacks from a superseded socket", async () => {
     vi.useFakeTimers();
     const { createSessionLogWebSocketClient } = await importClient();
@@ -144,6 +181,31 @@ describe("sessionLogWebSocketClient", () => {
     firstSocket.onclose?.({ code: 1006, reason: "late" });
 
     expect(client.status().readyState).toBe(MockWebSocket.OPEN);
+  });
+
+  it("suspends after authentication recovery fails instead of reconnecting forever", async () => {
+    vi.useFakeTimers();
+    const { createSessionLogWebSocketClient } = await importClient();
+    const refreshAuthentication = vi.fn(async () => false);
+    const client = createSessionLogWebSocketClient({
+      resolveWebSocketUrl: () => "ws://test/logs?apikey=stale",
+      refreshAuthentication,
+    });
+
+    client.log({ category: "message", event: "message.pending", sessionId: "s-auth" });
+    const socket = MockWebSocket.instances[0];
+    socket.onerror?.();
+    await vi.waitFor(() => expect(client.status().suspended).toBe(true));
+
+    expect(refreshAuthentication).toHaveBeenCalledTimes(1);
+    expect(client.status()).toEqual(expect.objectContaining({
+      queueLength: 1,
+      hasReconnectTimer: false,
+      suspended: true,
+    }));
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+    client.log({ category: "message", event: "message.after-suspend", sessionId: "s-auth" });
+    expect(MockWebSocket.instances).toHaveLength(1);
   });
 
   it("forwards debug logs to the log websocket so runtime-events can decide recording", async () => {

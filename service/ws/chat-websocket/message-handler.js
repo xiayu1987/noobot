@@ -756,6 +756,22 @@ export function createMessageHandler({
           });
           return started;
         });
+        // Agent event listeners are synchronous and are not required to await
+        // callback results. Observe this rejection immediately so a lifecycle
+        // persistence failure cannot become a process-level unhandled rejection
+        // while runSession is still active; handleRun awaits the same promise at
+        // the authoritative completion boundary below.
+        void processingStartedPromise.catch((error) => {
+          void recordServiceWebSocketLifecycle({
+            sessionLogConfig,
+            event: "service.websocket.processingStart.persistenceFailed",
+            userId,
+            sessionId,
+            dialogProcessId: lifecycleData?.dialogProcessId || "",
+            turnScopeId: state.currentTurnScopeId,
+            data: { errorType: error?.name || "Error", errorCode: String(error?.code || "") },
+          });
+        });
         return processingStartedPromise;
       },
     });

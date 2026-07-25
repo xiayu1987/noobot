@@ -14,6 +14,7 @@ import { WsRouter } from "./src/ws-router.js";
 import {
   AGENT_PROXY_CLOSE_REASON,
   AGENT_PROXY_ERROR,
+  CHANNEL_EVENT,
 } from "./src/constants.js";
 import {
   proxyHttpRequest,
@@ -32,6 +33,7 @@ import {
 } from "./src/security.js";
 import { resolveLocaleFromRequest } from "noobot-i18n/agent-proxy";
 import { writeAgentProxyHttpServerListenStartedEvent } from "./src/startup-events.js";
+import { DownstreamConnectionRegistry } from "./src/downstream-connection-registry.js";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -54,7 +56,8 @@ const WebSocketServer = websocketLibrary.WebSocketServer;
 const sessionLogClient = createSessionLogClient({ WebSocketImpl: WebSocket });
 const channelManager = new ChannelManager(WebSocket, { sessionLogClient });
 const wsRouter = new WsRouter(channelManager);
-let activeConnectionCount = 0;
+const downstreamConnections = new DownstreamConnectionRegistry();
+const serverInstanceId = randomUUID();
 const httpRateLimiter = createFixedWindowRateLimiter({
   windowMs: config.httpRateLimitWindowMs,
   maxRequests: config.httpRateLimitMaxRequests,
@@ -292,7 +295,7 @@ const httpServer = http.createServer((request, response) => {
         ok: true,
         service: "agentProxy",
         channelCount: channelManager.channelCount,
-        activeConnections: activeConnectionCount,
+        activeConnections: downstreamConnections.size,
       }),
     );
     return;
@@ -316,7 +319,11 @@ const httpServer = http.createServer((request, response) => {
 });
 
 // ---- WebSocket Server ----
-const websocketServer = new WebSocketServer({ noServer: true });
+const websocketServer = new WebSocketServer({
+  noServer: true,
+  maxPayload: config.wsMaxPayloadBytes,
+  perMessageDeflate: false,
+});
 
 httpServer.on("upgrade", (request, socket, head) => {
   const { pathname } = parseRequestQuery(request);
@@ -365,7 +372,7 @@ httpServer.on("upgrade", (request, socket, head) => {
       return;
     }
   }
-  if (activeConnectionCount >= config.maxConnections) {
+  if (downstreamConnections.size >= config.maxConnections) {
     socket.destroy();
     return;
   }
@@ -378,7 +385,13 @@ httpServer.on("upgrade", (request, socket, head) => {
 });
 
 websocketServer.on("connection", (socket, request) => {
-  activeConnectionCount += 1;
+  downstreamConnections.register(socket, {
+    connectionId: socket.__agentProxySocketId,
+    onFinalize: () => {
+      channelManager.commandRegistry.cancelRequester(socket);
+      channelManager.detachSocketFromAllChannels(socket);
+    },
+  });
   const requestInfo = parseRequestQuery(request);
   const connectionApiKey = normalizeApiKey(requestInfo.apiKey);
   const connectionLocale = requestInfo.locale;
@@ -400,12 +413,16 @@ websocketServer.on("connection", (socket, request) => {
     } catch {
       // ignore close errors
     }
-    activeConnectionCount = Math.max(0, activeConnectionCount - 1);
+    downstreamConnections.finalize(socket, "missing_apikey");
     return;
   }
 
   // Delegate message routing to WsRouter
   wsRouter.handle(socket, connectionApiKey, connectionLocale);
+  channelManager.sendSocketEvent(socket, {
+    event: CHANNEL_EVENT.TRANSPORT_READY,
+    data: { serverInstanceId, protocolVersion: 2 },
+  });
 
   socket.on("close", () => {
     logAgentProxyEvent(connectionApiKey, {
@@ -414,8 +431,7 @@ websocketServer.on("connection", (socket, request) => {
       sessionId: "agent-proxy",
       data: { socketId: socket.__agentProxySocketId, channels: [...(socket.__agentProxyChannelKeys || [])] },
     });
-    activeConnectionCount = Math.max(0, activeConnectionCount - 1);
-    channelManager.detachSocketFromAllChannels(socket);
+    downstreamConnections.finalize(socket, "close");
   });
 
   socket.on("error", () => {
@@ -426,9 +442,15 @@ websocketServer.on("connection", (socket, request) => {
       sessionId: "agent-proxy",
       data: { socketId: socket.__agentProxySocketId, channels: [...(socket.__agentProxyChannelKeys || [])] },
     });
-    activeConnectionCount = Math.max(0, activeConnectionCount - 1);
-    channelManager.detachSocketFromAllChannels(socket);
+    downstreamConnections.close(socket, {
+      code: 1011,
+      reason: "connection_error",
+      terminate: true,
+      finalizeReason: "error",
+    });
   });
+  socket.on("message", () => downstreamConnections.touch(socket));
+  socket.on("pong", () => downstreamConnections.touch(socket));
 });
 
 // ---- Cleanup Timer ----
@@ -441,6 +463,26 @@ const cleanupTimer = setInterval(() => {
 }, config.cleanupIntervalMs);
 
 cleanupTimer.unref?.();
+
+const heartbeatTimer = setInterval(() => {
+  downstreamConnections.sweepHeartbeat({
+    timeoutMs: config.wsHeartbeatTimeoutMs,
+    onTimeout: (record) => {
+      downstreamConnections.close(record.connectionId, {
+        code: 1001,
+        reason: "heartbeat_timeout",
+      });
+    },
+  });
+  for (const channel of channelManager.channelStore.values()) {
+    channel.transport.sweepHeartbeat({
+      timeoutMs: config.wsHeartbeatTimeoutMs,
+      onTimeout: () => channelManager.closeUpstreamChannel(channel, 1001, "heartbeat_timeout"),
+    });
+  }
+}, config.wsHeartbeatIntervalMs);
+
+heartbeatTimer.unref?.();
 
 // ---- Start ----
 httpServer.listen(config.proxyPort, config.proxyHost, () => {

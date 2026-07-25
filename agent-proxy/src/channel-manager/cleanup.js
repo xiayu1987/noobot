@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { config } from "../config.js";
-import { CHANNEL_STATUS, UPSTREAM_CLOSE_REASON } from "../constants.js";
-import { nowMs, isTerminalStatus } from "../utils.js";
+import { CHANNEL_RETENTION_PHASE, CHANNEL_STATUS, UPSTREAM_CLOSE_REASON } from "../constants.js";
+import { nowMs } from "../utils.js";
 
 class CleanupMethods {
 // ---- Cleanup ----
@@ -14,11 +14,12 @@ cleanupExpiredChannels() {
   const currentMs = nowMs();
   for (const [channelKey, channel] of this.channelStore.entries()) {
     const canCleanupTerminal =
-      isTerminalStatus(channel.status) &&
-      Number(channel.cleanupAfterMs || 0) > 0 &&
-      currentMs >= Number(channel.cleanupAfterMs || 0);
+      channel.retention.phase === CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED &&
+      Number(channel.retention.cleanupAfterMs || 0) > 0 &&
+      currentMs >= Number(channel.retention.cleanupAfterMs || 0);
     const canCleanupIdle =
-      channel.status === CHANNEL_STATUS.IDLE &&
+      channel.transport.phase === CHANNEL_STATUS.IDLE &&
+      channel.activity.phase === CHANNEL_STATUS.IDLE &&
       !channel.subscribers.size &&
       currentMs - Number(channel.updatedAtMs || currentMs) > config.channelRetentionMs;
     if (!canCleanupTerminal && !canCleanupIdle) continue;
@@ -48,6 +49,11 @@ cleanupExpiredChannels() {
       this.requestChannelMap.delete(requestId);
     }
   }
+  this.commandRegistry.cleanup({
+    channelExists: (channelKey) => this.channelStore.has(channelKey),
+    interactionPending: (channelKey, requestId) =>
+      this.channelStore.get(channelKey)?.pendingInteractionRequests?.has(requestId) === true,
+  });
 }
 }
 
