@@ -154,6 +154,65 @@ test("rejected initial provision does not start Agent execution", async () => {
   }
 });
 
+test("processing-start persistence rejection is observed while Agent execution is still active", async () => {
+  const authoritative = createAuthoritativeBot();
+  const applyLifecycle = authoritative.bot.applyTurnLifecycleEvent;
+  authoritative.bot.applyTurnLifecycleEvent = async (input) => {
+    if (input.eventType === TURN_EVENT.PROCESSING_STARTED) {
+      return { applied: false, reason: "session_not_found" };
+    }
+    return applyLifecycle(input);
+  };
+  authoritative.bot.runSession = async ({ sessionId, runConfig, eventListener }) => {
+    eventListener.onEvent({
+      event: "agent_lifecycle_state_changed",
+      data: {
+        state: "running",
+        sessionId,
+        turnScopeId: runConfig.turnScopeId,
+        dialogProcessId: "dp-processing-rejected",
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return { sessionId, dialogProcessId: "dp-processing-rejected", messages: [] };
+  };
+  const server = await startServerWithWs({ bot: authoritative.bot });
+  try {
+    const events = await callChatWs({ port: server.address().port, payload: {
+      ...payload,
+      sessionId: "s-processing-rejected",
+      turnScopeId: "turn-processing-rejected",
+      commandId: "command-processing-rejected",
+      config: { turnScopeId: "turn-processing-rejected" },
+    } });
+    assert.equal(events.some((item) => item?.event === "error"), true);
+    assert.equal(server.server.listening, true);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("message listener boundary contains failures raised by terminal error persistence", async () => {
+  const authoritative = createAuthoritativeBot({ failureAt: "action" });
+  authoritative.bot.upsertTurnStatus = async () => {
+    throw new Error("terminal_status_storage_failed");
+  };
+  const server = await startServerWithWs({ bot: authoritative.bot });
+  try {
+    const events = await callChatWs({ port: server.address().port, payload: {
+      ...payload,
+      sessionId: "s-terminal-boundary",
+      turnScopeId: "turn-terminal-boundary",
+      commandId: "command-terminal-boundary",
+      config: { turnScopeId: "turn-terminal-boundary" },
+    } });
+    assert.equal(events.some((item) => item?.event === "error"), true);
+    assert.equal(server.server.listening, true);
+  } finally {
+    await closeServer(server);
+  }
+});
+
 test("summary persistence failure never commits authoritative completed", async () => {
   const authoritative = createAuthoritativeBot({ persistSummary: false });
   const server = await startServerWithWs({ bot: authoritative.bot });

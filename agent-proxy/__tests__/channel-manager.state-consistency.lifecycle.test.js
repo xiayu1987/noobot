@@ -190,7 +190,9 @@ test("upstream close without authoritative event does not synthesize a turn term
   upstream.emit("open");
   upstream.close(1006, "network_lost");
 
-  assert.equal(channel.status, "open");
+  assert.equal(channel.transport.phase, "idle");
+  assert.equal(channel.retention.phase, "active");
+  assert.equal(channel.retention.terminalStatus, "");
   assert.equal(listEvents(client, "user_stopped").length, 0);
   assert.equal(listEvents(client, "error").length, 0);
 });
@@ -215,8 +217,9 @@ test("upstream close reason user_stopped is transport metadata, not confirmation
   upstream.emit("open");
   upstream.close(1000, "user_stopped");
 
-  assert.equal(channel.status, "open");
+  assert.equal(channel.transport.phase, "idle");
+  assert.equal(channel.retention.phase, "active");
+  assert.equal(channel.retention.terminalStatus, "");
   assert.equal(listEvents(client, "error").length, 0);
   assert.equal(listEvents(client, "user_stopped").length, 0);
 });
-

@@ -131,6 +131,7 @@ const {
   connected,
   ensureConnected,
   authFetch,
+  refreshAuthentication,
   connectBackend,
   tryAutoConnect,
 } = useApiConnection({
@@ -214,6 +215,7 @@ const {
   connected,
   ensureConnected,
   authFetch,
+  refreshAuthentication,
   isImageMime,
   classifyRealtimeLog,
   navigateToLastMessage,

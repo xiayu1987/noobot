@@ -6,13 +6,14 @@
 import { config } from "../config.js";
 import {
   CHANNEL_EVENT,
+  CHANNEL_RETENTION_PHASE,
   CHANNEL_STATUS,
   CONVERSATION_SCOPE_KEY,
   CONVERSATION_STATE,
   CONVERSATION_SOURCE_EVENT,
   RECONNECT_SUGGESTION,
 } from "../constants.js";
-import { ensureConnectionId, nowMs, isTerminalStatus } from "../utils.js";
+import { ensureConnectionId, nowMs } from "../utils.js";
 import { writeAgentProxyRouteLifecycleEvent } from "../ws-runtime-events.js";
 
 class ReconnectMethods {
@@ -22,6 +23,7 @@ handleReconnect(socket, payload = {}) {
   const lastReceivedSeqMap = payload?.lastReceivedSeqMap || {};
   const lastReceivedTurnScopeIdMap = payload?.lastReceivedTurnScopeIdMap || {};
   const currentSessionId = String(payload?.currentSessionId || "").trim();
+  const requestId = String(payload?.requestId || "").trim();
   const knownLifecycleSequenceMap = payload?.knownLifecycleSequenceMap || {};
   const reconnectChannelKeys = this._resolveReconnectChannelKeys(socket, currentSessionId, payload);
   void writeAgentProxyRouteLifecycleEvent({
@@ -41,6 +43,7 @@ handleReconnect(socket, payload = {}) {
         cacheExpired: false,
         expiredDialogProcessIds: [],
         suggestion: RECONNECT_SUGGESTION.NONE,
+        requestId,
       },
     });
     this.sendSocketEvent(socket, {
@@ -48,6 +51,7 @@ handleReconnect(socket, payload = {}) {
       data: {
         totalSessions: 0,
         cacheExpired: false,
+        requestId,
       },
     });
     void writeAgentProxyRouteLifecycleEvent({
@@ -167,7 +171,7 @@ handleReconnect(socket, payload = {}) {
         CONVERSATION_STATE.USER_STOPPED,
         CONVERSATION_STATE.ERROR,
       ].includes(conversationState);
-      if (lastSeq <= 0 && (isTerminalStatus(channel.status) || conversationIsTerminal)) {
+      if (lastSeq <= 0 && (channel.retention.phase === CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED || conversationIsTerminal)) {
         this.logSessionEvent(channel, {
           category: "transport",
           event: "agentProxy.reconnect.replay.skipped",
@@ -221,7 +225,7 @@ handleReconnect(socket, payload = {}) {
         // Keep non-terminal/live errors unchanged; only suppress historical terminal
         // error envelopes during replay.
         if (
-          isTerminalStatus(channel.status) &&
+          channel.retention.phase === CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED &&
           String(envelope?.event || "").trim() === CHANNEL_EVENT.ERROR
         ) {
           filteredCounts.terminalError += 1;
@@ -253,7 +257,7 @@ handleReconnect(socket, payload = {}) {
           .map((envelope) => String(envelope?.data?.requestId || "").trim())
           .filter(Boolean),
       );
-      const pendingInteractionEvents = isTerminalStatus(channel.status)
+      const pendingInteractionEvents = channel.retention.phase === CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED
         ? []
         : Array.from(channel.pendingInteractionRequests.values())
             .filter((envelope) => {
@@ -361,6 +365,7 @@ handleReconnect(socket, payload = {}) {
       suggestion: cacheExpired
         ? RECONNECT_SUGGESTION.RELOAD_SESSION_HISTORY
         : RECONNECT_SUGGESTION.NONE,
+      requestId,
     },
   });
 
@@ -369,6 +374,7 @@ handleReconnect(socket, payload = {}) {
     data: {
       totalSessions: sessions.length,
       cacheExpired,
+      requestId,
     },
   });
   void writeAgentProxyRouteLifecycleEvent({
@@ -397,8 +403,8 @@ _resolveReconnectChannelKeys(socket, currentSessionId = "", payload = {}) {
     if (
       normalizedCurrentSessionId &&
       this._extractSessionIdFromChannelKey(channelKey) !== normalizedCurrentSessionId &&
-      channel.status !== CHANNEL_STATUS.RUNNING &&
-      channel.status !== CHANNEL_STATUS.CONNECTING &&
+      channel.activity.phase !== CHANNEL_STATUS.RUNNING &&
+      channel.transport.phase !== CHANNEL_STATUS.CONNECTING &&
       !channel.pendingInteractionRequests?.size
     ) {
       continue;

@@ -107,6 +107,11 @@ export const TIME_THRESHOLDS = deepFreeze({
     pollIntervalMs: TIME_TIERS.fiveSecondsMs,
   },
 
+  agentProxy: {
+    webSocketHeartbeatIntervalMs: TIME_TIERS.standardCommandMs,
+    webSocketHeartbeatTimeoutMs: TIME_TIERS.startupMs,
+  },
+
   capability: {
     separateModelMinTimeoutMs: TIME_TIERS.threeMinutesMs,
   },
@@ -179,6 +184,8 @@ export const TIME_THRESHOLDS = deepFreeze({
     wsTerminalChannelStateGraceMs: 250,
     wsReconnectTimeoutMs: 15000,
     wsOpenPollIntervalMs: 100,
+    sessionLogReconnectBaseDelayMs: TIME_TIERS.oneSecondMs,
+    sessionLogReconnectMaxDelayMs: TIME_TIERS.startupMs,
     thinkingTimingTtlMs: TIME_TIERS.twoDaysMs,
     monotonicActionStopTimeoutMs: TIME_TIERS.hookMs,
     monotonicActionStopPollIntervalMs: 50,

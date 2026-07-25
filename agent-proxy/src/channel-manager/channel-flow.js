@@ -5,6 +5,7 @@
  */
 import {
   AGENT_PROXY_ERROR,
+  CHANNEL_RETENTION_PHASE,
   CHANNEL_STATUS,
   CONVERSATION_SCOPE_KEY,
   CONVERSATION_STATE,
@@ -155,10 +156,10 @@ startOrJoinChannel({ socket, payload, connectionApiKey, connectionLocale }) {
 
   const nextPayloadFingerprint = buildFingerprint(payload);
   const hasReusableUpstream =
-    channel?.upstreamSocket?.readyState === this.WebSocket.OPEN;
+    channel?.transport?.socket?.readyState === this.WebSocket.OPEN;
   const isActiveChannelStatus =
-    channel.status === CHANNEL_STATUS.RUNNING ||
-    channel.status === CHANNEL_STATUS.CONNECTING;
+    channel.activity.phase === CHANNEL_STATUS.RUNNING ||
+    channel.transport.phase === CHANNEL_STATUS.CONNECTING;
   const keepExistingRun = isActiveChannelStatus && hasReusableUpstream;
   const shouldStartNewRun = !keepExistingRun;
 
@@ -173,7 +174,8 @@ startOrJoinChannel({ socket, payload, connectionApiKey, connectionLocale }) {
       keepExistingRun,
       sessionId,
       userId,
-      channelStatus: channel.status,
+      channelActivityPhase: channel.activity.phase,
+      channelTransportPhase: channel.transport.phase,
       hasReusableUpstream,
       upstreamReadyState: channel?.upstreamSocket?.readyState,
     },
@@ -184,8 +186,9 @@ startOrJoinChannel({ socket, payload, connectionApiKey, connectionLocale }) {
 
   channel.startPayload = { ...payload };
   channel.startFingerprint = nextPayloadFingerprint;
-  channel.eventLog = [];
-  channel.eventSequence = 0;
+  const previousActivityPhase = channel.activity.phase;
+  const previousTransportPhase = channel.transport.phase;
+  channel.eventJournal.reset();
   channel.conversationStateByDialogProcessId = new Map();
   this.updateConversationState(channel, {
     dialogProcessId: "",
@@ -193,7 +196,10 @@ startOrJoinChannel({ socket, payload, connectionApiKey, connectionLocale }) {
     sourceEvent: CONVERSATION_SOURCE_EVENT.RESTART,
     seq: 0,
   });
-  channel.cleanupAfterMs = 0;
+  channel.retention.phase = CHANNEL_RETENTION_PHASE.ACTIVE;
+  channel.retention.terminalStatus = "";
+  channel.retention.cleanupAfterMs = 0;
+  channel.activity.phase = CHANNEL_STATUS.IDLE;
   channel.upstreamClosed = false;
   channel._errorHandled = false;
   if (isActiveChannelStatus && !hasReusableUpstream) {
@@ -204,7 +210,8 @@ startOrJoinChannel({ socket, payload, connectionApiKey, connectionLocale }) {
       channel,
       data: {
         reason: "active_channel_without_open_upstream",
-        previousStatus: channel.status,
+        previousActivityPhase,
+        previousTransportPhase,
         upstreamReadyState: channel?.upstreamSocket?.readyState,
       },
     });

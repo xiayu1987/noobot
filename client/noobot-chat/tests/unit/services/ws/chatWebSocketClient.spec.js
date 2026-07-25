@@ -13,10 +13,11 @@ class MockWebSocket {
   static CLOSING = 2;
   static CLOSED = 3;
   static instances = [];
+  static initialReadyState = MockWebSocket.OPEN;
 
   constructor(url) {
     this.url = url;
-    this.readyState = MockWebSocket.OPEN;
+    this.readyState = MockWebSocket.initialReadyState;
     this.sent = [];
     this.onopen = null;
     this.onmessage = null;
@@ -48,6 +49,7 @@ describe("chatWebSocketClient", () => {
     vi.useFakeTimers();
     originalWebSocket = globalThis.WebSocket;
     MockWebSocket.instances = [];
+    MockWebSocket.initialReadyState = MockWebSocket.OPEN;
     globalThis.WebSocket = MockWebSocket;
   });
 
@@ -74,10 +76,71 @@ describe("chatWebSocketClient", () => {
       action: "reconnect",
       currentSessionId: "s-1",
       userId: "u-1",
+      requestId: expect.stringMatching(/^reconnect:/),
     }));
 
     socket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 0, cacheExpired: false });
     await reconnectPromise;
+  });
+
+  it("records transport_ready without forwarding it into a business stream", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const onEvent = vi.fn();
+    const streamPromise = client.stream({ action: "chat", turnScopeId: "turn-ready" }, onEvent);
+    const socket = MockWebSocket.instances[0];
+
+    socket.emit("transport_ready", { serverInstanceId: "proxy-instance-1", protocolVersion: 2 });
+    expect(client.getTransportStatus().serverInstanceId).toBe("proxy-instance-1");
+    expect(onEvent).not.toHaveBeenCalled();
+
+    const requestId = JSON.parse(socket.sent[0]).requestId;
+    socket.emit(StreamEventEnum.DONE, { turnScopeId: "turn-ready", requestId });
+    await streamPromise;
+  });
+
+  it("physically closes an errored idle business socket without waiting for close", () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const socket = client.connect();
+
+    socket.onerror?.(new Event("error"));
+
+    expect(socket.readyState).toBe(MockWebSocket.CLOSED);
+    expect(client.getActiveSocket()).toBe(null);
+  });
+
+  it("refreshes authentication and retries a stream handshake before sending the payload", async () => {
+    MockWebSocket.initialReadyState = MockWebSocket.CONNECTING;
+    let apiKey = "stale-key";
+    const refreshAuthentication = vi.fn(async () => {
+      apiKey = "fresh-key";
+      return true;
+    });
+    const client = createChatWebSocketClient({
+      resolveWebSocketUrl: () => `ws://test?apikey=${apiKey}`,
+      refreshAuthentication,
+    });
+    const payload = { action: "chat", sessionId: "s-auth-retry", turnScopeId: "turn-auth-retry" };
+    const streamPromise = client.stream(payload, vi.fn());
+    const failedSocket = MockWebSocket.instances[0];
+
+    failedSocket.onerror?.(new Event("error"));
+    await vi.waitFor(() => expect(MockWebSocket.instances).toHaveLength(2));
+
+    expect(refreshAuthentication).toHaveBeenCalledTimes(1);
+    expect(failedSocket.sent).toEqual([]);
+    const recoveredSocket = MockWebSocket.instances[1];
+    expect(recoveredSocket.url).toContain("fresh-key");
+    recoveredSocket.readyState = MockWebSocket.OPEN;
+    recoveredSocket.onopen?.();
+    expect(recoveredSocket.sent.map((item) => JSON.parse(item))).toEqual([
+      expect.objectContaining({ ...payload, requestId: expect.stringMatching(/^stream:/) }),
+    ]);
+
+    recoveredSocket.emit(StreamEventEnum.DONE, {
+      sessionId: payload.sessionId,
+      turnScopeId: payload.turnScopeId,
+    });
+    await expect(streamPromise).resolves.toBeUndefined();
   });
 
   it("reuses the bootstrap socket for the initial reconnect handshake", async () => {
@@ -104,14 +167,59 @@ describe("chatWebSocketClient", () => {
     await reconnectPromise;
   });
 
+  it("multiplexes reconnect on the active stream socket without opening another connection", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const onEvent = vi.fn();
+    const streamPromise = client.stream({ action: "chat", sessionId: "s-1", turnScopeId: "turn-1" }, onEvent);
+    const socket = MockWebSocket.instances[0];
+    const streamRequestId = JSON.parse(socket.sent[0]).requestId;
+
+    const reconnectPromise = client.reconnect({ currentSessionId: "s-1", userId: "u-1" });
+    expect(MockWebSocket.instances).toHaveLength(1);
+    expect(JSON.parse(socket.sent[1])).toMatchObject({ action: "reconnect", currentTurnScopeId: "turn-1" });
+    socket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 1 });
+    await reconnectPromise;
+    socket.emit(StreamEventEnum.DONE, {
+      sessionId: "s-1",
+      turnScopeId: "turn-1",
+      requestId: streamRequestId,
+    });
+
+    await expect(streamPromise).resolves.toBeUndefined();
+    expect(socket.readyState).toBe(MockWebSocket.OPEN);
+  });
+
+  it("rejects stream send failures and releases the failed transport", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const socket = client.connect();
+    socket.send = () => { throw new DOMException("socket closing", "InvalidStateError"); };
+
+    await expect(client.stream({ action: "chat", turnScopeId: "turn-send-failed" }, vi.fn()))
+      .rejects.toMatchObject({ name: "InvalidStateError" });
+    expect(client.getActiveSocket()).toBe(null);
+    expect(socket.readyState).toBe(MockWebSocket.CLOSED);
+  });
+
+  it("rejects reconnect immediately when command send fails", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const socket = client.connect();
+    socket.send = () => { throw new Error("send failed"); };
+
+    await expect(client.reconnect({ currentSessionId: "s-1" })).rejects.toThrow("send failed");
+    expect(client.getActiveSocket()).toBe(null);
+    expect(socket.readyState).toBe(MockWebSocket.CLOSED);
+  });
+
   it("retires the previous stream socket when reconnect replaces it", async () => {
     const client = createChatWebSocketClient({
       resolveWebSocketUrl: () => "ws://test",
     });
     client.connect();
     const streamSocket = MockWebSocket.instances[0];
-    const streamPromise = client.stream({ action: "chat", sessionId: "s-1" }, vi.fn())
-      .catch(() => undefined);
+    const onEvent = vi.fn();
+    const streamPromise = client.stream({ action: "chat", sessionId: "s-1", turnScopeId: "turn-1" }, onEvent);
+    const streamRequestId = JSON.parse(streamSocket.sent[0]).requestId;
+    streamSocket.readyState = MockWebSocket.CLOSING;
 
     const reconnectPromise = client.reconnect({
       currentSessionId: "s-1",
@@ -123,10 +231,102 @@ describe("chatWebSocketClient", () => {
     reconnectSocket.onopen?.();
     reconnectSocket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 1 });
     await reconnectPromise;
-    await streamPromise;
 
     expect(streamSocket.readyState).toBe(MockWebSocket.CLOSED);
     expect(reconnectSocket.readyState).toBe(MockWebSocket.OPEN);
+    reconnectSocket.emit(StreamEventEnum.DELTA, {
+      sessionId: "s-1",
+      turnScopeId: "turn-1",
+      requestId: streamRequestId,
+      content: "continued",
+    });
+    reconnectSocket.emit(StreamEventEnum.DONE, {
+      sessionId: "s-1",
+      turnScopeId: "turn-1",
+      requestId: streamRequestId,
+    });
+    await expect(streamPromise).resolves.toBeUndefined();
+    expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({
+      event: StreamEventEnum.DELTA,
+      data: expect.objectContaining({ content: "continued" }),
+    }));
+  });
+
+  it("keeps the permanent transport dispatcher on a replacement socket", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const streamPromise = client.stream({ action: "chat", sessionId: "s-1", turnScopeId: "turn-1" }, vi.fn());
+    const firstSocket = MockWebSocket.instances[0];
+    const streamRequestId = JSON.parse(firstSocket.sent[0]).requestId;
+    firstSocket.readyState = MockWebSocket.CLOSING;
+    const reconnectPromise = client.reconnect({ currentSessionId: "s-1", userId: "u-1" });
+    const replacementSocket = MockWebSocket.instances[1];
+
+    replacementSocket.onopen?.();
+    replacementSocket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 1 });
+    await reconnectPromise;
+    replacementSocket.emit("transport_ready", { serverInstanceId: "proxy-after-reconnect" });
+
+    expect(client.getTransportStatus().serverInstanceId).toBe("proxy-after-reconnect");
+    replacementSocket.emit(StreamEventEnum.DONE, {
+      sessionId: "s-1",
+      turnScopeId: "turn-1",
+      requestId: streamRequestId,
+    });
+    await streamPromise;
+  });
+
+  it("resolves command responses through the permanent dispatcher after reconnect", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const streamPromise = client.stream({ action: "chat", sessionId: "s-1", turnScopeId: "turn-1" }, vi.fn());
+    const firstSocket = MockWebSocket.instances[0];
+    const streamRequestId = JSON.parse(firstSocket.sent[0]).requestId;
+    firstSocket.readyState = MockWebSocket.CLOSING;
+    const reconnectPromise = client.reconnect({ currentSessionId: "s-1", userId: "u-1" });
+    const replacementSocket = MockWebSocket.instances[1];
+
+    replacementSocket.onopen?.();
+    replacementSocket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 1 });
+    await reconnectPromise;
+    const commandPromise = client.requestJson(
+      { action: "turn.snapshot.get", commandId: "snapshot-after-reconnect" },
+      { expectedEvents: ["turn_snapshot"] },
+    );
+    replacementSocket.emit("turn_snapshot", {
+      commandId: "snapshot-after-reconnect",
+      sessionId: "s-1",
+    });
+
+    await expect(commandPromise).resolves.toEqual({
+      event: "turn_snapshot",
+      data: { commandId: "snapshot-after-reconnect", sessionId: "s-1" },
+    });
+    replacementSocket.emit(StreamEventEnum.DONE, {
+      sessionId: "s-1",
+      turnScopeId: "turn-1",
+      requestId: streamRequestId,
+    });
+    await streamPromise;
+  });
+
+  it("contains websocket constructor failures in connect and reconnect", async () => {
+    globalThis.WebSocket = class ThrowingWebSocket {
+      static OPEN = 1;
+      static CONNECTING = 0;
+      static CLOSED = 3;
+      constructor() {
+        throw new DOMException("invalid websocket url", "SyntaxError");
+      }
+    };
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "invalid" });
+
+    expect(() => client.connect()).not.toThrow();
+    expect(client.connect()).toBe(null);
+    await expect(client.reconnect({ currentSessionId: "s-1" })).rejects.toThrow();
+    expect(client.getTransportStatus()).toMatchObject({
+      phase: "idle",
+      hasSocket: false,
+      lastFailureReason: "SyntaxError",
+    });
   });
 
   it("delivers replayed errors without rejecting reconnect", async () => {
@@ -434,15 +634,17 @@ describe("chatWebSocketClient", () => {
       { onPayloadSent },
     );
 
-    expect(socket.sent.map((item) => JSON.parse(item))).toContainEqual({
+    expect(socket.sent.map((item) => JSON.parse(item))).toContainEqual(expect.objectContaining({
       action: "continue",
       turnScopeId: "turn-continue",
-    });
+      requestId: expect.stringMatching(/^stream:/),
+    }));
     expect(onPayloadSent).toHaveBeenCalledTimes(1);
-    expect(onPayloadSent).toHaveBeenCalledWith({
+    expect(onPayloadSent).toHaveBeenCalledWith(expect.objectContaining({
       action: "continue",
       turnScopeId: "turn-continue",
-    });
+      requestId: expect.stringMatching(/^stream:/),
+    }));
 
     socket.emit(StreamEventEnum.DONE, { turnScopeId: "turn-continue" });
     await streamPromise;

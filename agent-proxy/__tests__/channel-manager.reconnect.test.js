@@ -41,6 +41,19 @@ function listReplayMessages(reconnectDataEvent) {
   );
 }
 
+test("reconnect echoes requestId on data and completion envelopes", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const socket = createMockSocket();
+
+  manager.handleReconnect(socket, {
+    currentSessionId: "session-missing",
+    requestId: "reconnect-request-1",
+  });
+
+  assert.equal(getReconnectDataEvent(socket)?.data?.requestId, "reconnect-request-1");
+  assert.equal(getReconnectCompleteEvent(socket)?.data?.requestId, "reconnect-request-1");
+});
+
 test("reconnect should not replay resolved interaction_request", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });

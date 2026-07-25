@@ -206,6 +206,11 @@ export const LENGTH_THRESHOLDS = deepFreeze({
     maxPayloadBytes: LENGTH_TIERS.bytes.connectorCommandFile,
   },
 
+  agentProxy: {
+    webSocketMaxPayloadBytes: LENGTH_TIERS.bytes.attachmentFile,
+    webSocketMaxBufferedBytes: LENGTH_TIERS.bytes.jsonlBuffer,
+  },
+
   artifact: {
     // Maximum size of one execution event JSONL segment before rolling over.
     executionEventSegmentBytes: LENGTH_TIERS.bytes.jsonlBuffer,

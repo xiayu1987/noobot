@@ -29,6 +29,7 @@ export function useApiConnection({
     canUseIDE: false,
   });
   const connecting = ref(false);
+  let connectPromise = null;
 
   const connected = computed(
     () =>
@@ -197,25 +198,30 @@ export function useApiConnection({
   }
 
   async function authFetch(url, options = {}) {
-    const mergedHeaders = {
-      ...(options.headers || {}),
-      ...(apiKey.value ? { "x-api-key": apiKey.value } : {}),
-      ...(String(locale.value || "").trim()
-        ? { "x-noobot-locale": String(locale.value || "").trim() }
-        : {}),
-    };
-    const res = await fetch(url, {
+    const requestApiKey = String(apiKey.value || "");
+    const runFetch = () => fetch(url, {
       ...options,
-      headers: mergedHeaders,
+      headers: {
+        ...(options.headers || {}),
+        ...(apiKey.value ? { "x-api-key": apiKey.value } : {}),
+        ...(String(locale.value || "").trim()
+          ? { "x-noobot-locale": String(locale.value || "").trim() }
+          : {}),
+      },
     });
-    if (res.status === 401) {
-      clearApiAuth();
+    const res = await runFetch();
+    if (res.status !== 401) return res;
+    const refreshed = apiKey.value && apiKey.value !== requestApiKey
+      ? true
+      : await refreshAuthentication();
+    if (refreshed && apiKey.value && apiKey.value !== requestApiKey) {
+      return runFetch();
     }
+    clearApiAuth();
     return res;
   }
 
-  async function connectBackend({ silent = false } = {}) {
-    if (connecting.value) return;
+  async function performConnect({ silent = false, runConnected = true } = {}) {
     if (!userId.value.trim()) {
       if (!silent) notify({ type: "warning", message: translate("infra.inputUserFirst") });
       return;
@@ -258,15 +264,32 @@ export function useApiConnection({
           message: `${translate("infra.connectSuccess")} (role=${apiRole.value || "user"})`,
         });
       }
-      await onConnected();
+      if (runConnected) await onConnected();
       return true;
     } catch (error) {
-      clearApiAuth();
+      // Background recovery can race a Service restart. Preserve the previous
+      // credential so the next HTTP/WS handshake can retry recovery once the
+      // Service is reachable; an authoritative 401 path clears it in authFetch.
+      if (runConnected) clearApiAuth();
       if (!silent) notify({ type: "error", message: error.message || translate("infra.connectFailed") });
       return false;
+    }
+  }
+
+  async function connectBackend(options = {}) {
+    if (connectPromise) return connectPromise;
+    connecting.value = true;
+    connectPromise = performConnect(options);
+    try {
+      return await connectPromise;
     } finally {
+      connectPromise = null;
       connecting.value = false;
     }
+  }
+
+  function refreshAuthentication() {
+    return connectBackend({ silent: true, runConnected: false });
   }
 
   async function tryAutoConnect() {
@@ -292,6 +315,7 @@ export function useApiConnection({
     canUseIDE,
     ensureConnected,
     authFetch,
+    refreshAuthentication,
     connectBackend,
     tryAutoConnect,
   };

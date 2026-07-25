@@ -33,6 +33,10 @@ function createMockSocket() {
       const handler = handlers.get(eventName);
       if (handler) handler(data);
     },
+    closeCalls: [],
+    close(code, reason) {
+      this.closeCalls.push({ code, reason });
+    },
   };
 }
 
@@ -96,6 +100,44 @@ for (const action of ['continue', 'resume']) {
     assert.deepEqual(channelManager.calls.forward[0].payload, payload);
   });
 }
+
+test('ws router contains channel-start failures and closes only the failed connection', () => {
+  const errors = [];
+  const channelManager = {
+    startOrJoinChannel() {
+      throw Object.assign(new Error('constructor failed'), { code: 'ERR_INVALID_URL' });
+    },
+    sendSocketError(socket, message) {
+      errors.push({ socket, message });
+    },
+  };
+  const socket = createMockSocket();
+  new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
+
+  assert.doesNotThrow(() => socket.emit(CHANNEL_EVENT.MESSAGE, JSON.stringify({ sessionId: 's-1' })));
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0].message, AGENT_PROXY_ERROR.ROUTE_FAILED);
+  assert.deepEqual(socket.closeCalls, [{ code: 1011, reason: 'route_failed' }]);
+});
+
+test('ws router contains action-handler failures and does not rethrow through EventEmitter', () => {
+  const errors = [];
+  const channelManager = {
+    resolveChannelFromSocketMessage() {
+      throw new TypeError('invalid channel state');
+    },
+    sendSocketError(socket, message) {
+      errors.push({ socket, message });
+    },
+  };
+  const socket = createMockSocket();
+  new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
+
+  assert.doesNotThrow(() => socket.emit(CHANNEL_EVENT.MESSAGE, JSON.stringify({ action: 'continue' })));
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0].message, AGENT_PROXY_ERROR.ROUTE_FAILED);
+  assert.deepEqual(socket.closeCalls, [{ code: 1011, reason: 'route_failed' }]);
+});
 
 test('ws router stop forwards request without synthesizing user_stopped', () => {
   const calls = {

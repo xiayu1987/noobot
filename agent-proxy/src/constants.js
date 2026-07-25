@@ -20,6 +20,12 @@ export const CHANNEL_TERMINAL_STATUSES = Object.freeze([
   CHANNEL_STATUS.ERROR,
 ]);
 
+export const CHANNEL_RETENTION_PHASE = Object.freeze({
+  ACTIVE: "active",
+  TERMINAL_RETAINED: "terminal_retained",
+  EXPIRED: "expired",
+});
+
 export const CONVERSATION_STATE = {
   NO_CONVERSATION: "no_conversation",
   SENDING: "sending",
@@ -38,6 +44,7 @@ export const CLIENT_ROLE = {
 };
 
 export const CHANNEL_EVENT = {
+  TRANSPORT_READY: "transport_ready",
   MESSAGE: "message",
   THINKING: "thinking",
   DELTA: "delta",
@@ -108,6 +115,7 @@ export const AGENT_PROXY_ERROR = {
   UPSTREAM_URL_EMPTY: "agentProxy upstream url is empty",
   FAILED_TO_SEND_PAYLOAD: "agentProxy failed to send payload",
   INVALID_UPSTREAM_EVENT: "agentProxy invalid upstream event",
+  ROUTE_FAILED: "agentProxy websocket route failed",
   INVALID_REQUEST_URL: "agentProxy invalid request url",
   UPSTREAM_HTTP_ERROR: "agentProxy upstream http error",
   REQUEST_BODY_TOO_LARGE: "agentProxy request body too large",

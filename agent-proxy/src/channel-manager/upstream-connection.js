@@ -7,10 +7,11 @@ import { config } from "../config.js";
 import {
   AGENT_PROXY_ERROR,
   CHANNEL_EVENT,
+  CHANNEL_RETENTION_PHASE,
   CHANNEL_STATUS,
   UPSTREAM_CLOSE_REASON,
 } from "../constants.js";
-import { nowMs, isTerminalStatus, buildUpstreamUrl, resolveMessageEventTrace } from "../utils.js";
+import { nowMs, buildUpstreamUrl, resolveMessageEventTrace } from "../utils.js";
 import { writeAgentProxyRouteLifecycleEvent } from "../ws-runtime-events.js";
 
 class UpstreamConnectionMethods {
@@ -27,24 +28,21 @@ closeUpstreamChannel(
     event: "agentProxy.upstream.close.requested",
     data: { channelKey: channel.key, closeCode, reason: reasonText },
   });
-  try {
-    channel.upstreamSocket.close(closeCode, reasonText);
-  } catch {
-    // ignore close errors
-  }
-  channel.upstreamSocket = null;
+  channel.transport.close(closeCode, reasonText);
 }
 
 markChannelTerminal(channel, terminalStatus = CHANNEL_STATUS.DONE) {
   if (!channel) return;
-  channel.status = String(terminalStatus || CHANNEL_STATUS.DONE).trim();
+  channel.activity.phase = CHANNEL_STATUS.IDLE;
+  channel.retention.phase = CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED;
+  channel.retention.terminalStatus = String(terminalStatus || CHANNEL_STATUS.DONE).trim();
   channel.updatedAtMs = nowMs();
-  channel.cleanupAfterMs = nowMs() + config.channelRetentionMs;
+  channel.retention.cleanupAfterMs = nowMs() + config.channelRetentionMs;
   channel.pendingInteractionRequests.clear();
   this.logSessionEvent(channel, {
     category: "state",
     event: "agentProxy.channel.terminal",
-    data: { channelKey: channel.key, status: channel.status, cleanupAfterMs: channel.cleanupAfterMs },
+    data: { channelKey: channel.key, status: channel.retention.terminalStatus, cleanupAfterMs: channel.retention.cleanupAfterMs },
   });
 }
 
@@ -71,10 +69,6 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
     this.broadcastChannelEvent(channel, errorEnvelope);
     return;
   }
-  const upstreamSocket = new this.WebSocket(upstreamUrl);
-  channel.upstreamSocket = upstreamSocket;
-  channel.upstreamEverConnected = true;
-  channel.status = CHANNEL_STATUS.CONNECTING;
   channel.apiKey = String(apiKey || "").trim();
   channel.locale = String(locale || "").trim();
   channel.updatedAtMs = nowMs();
@@ -84,23 +78,23 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
     data: { channelKey: channel.key, locale: channel.locale },
   });
 
-  upstreamSocket.on("open", () => {
+  const connection = channel.transport.connect(upstreamUrl, {
+  open: ({ socket: upstreamSocket }) => {
     void writeAgentProxyRouteLifecycleEvent({
       event: "agentProxy.route.upstreamConnect.succeeded",
       channel,
     });
-    if (isTerminalStatus(channel.status)) {
+    if (channel.retention.phase === CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED) {
       this.closeUpstreamChannel(channel, 1000, UPSTREAM_CLOSE_REASON.CLOSED);
       return;
     }
     // OPEN is a transport fact only. Service lifecycle events are the sole
     // source of authoritative Turn processing state.
-    channel.status = CHANNEL_STATUS.OPEN;
     channel.updatedAtMs = nowMs();
     this.logSessionEvent(channel, {
       category: "transport",
       event: "agentProxy.upstream.open",
-      data: { channelKey: channel.key, status: channel.status },
+      data: { channelKey: channel.key, status: channel.transport.phase },
     });
     const payloadToSend =
       channel.startPayload && typeof channel.startPayload === "object"
@@ -123,9 +117,9 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
       this.broadcastChannelEvent(channel, errorEnvelope);
       this.closeUpstreamChannel(channel, 1011, UPSTREAM_CLOSE_REASON.SEND_FAILED);
     }
-  });
+  },
 
-  upstreamSocket.on(CHANNEL_EVENT.MESSAGE, (rawData) => {
+  message: ({ rawData }) => {
     try {
       const parsed = JSON.parse(String(rawData || "{}"));
       const eventName = String(parsed?.event || CHANNEL_EVENT.MESSAGE).trim() || CHANNEL_EVENT.MESSAGE;
@@ -182,10 +176,9 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
         UPSTREAM_CLOSE_REASON.INVALID_UPSTREAM_EVENT,
       );
     }
-  });
+  },
 
-  upstreamSocket.on("close", (closeCode, closeReasonBuffer) => {
-    channel.upstreamSocket = null;
+  close: ({ code: closeCode, reason: closeReasonBuffer }) => {
     channel.upstreamClosed = true;
     const closeReason =
       typeof closeReasonBuffer === "string"
@@ -207,9 +200,9 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
     // Socket closure is transport metadata. It must never synthesize a Turn
     // stopped/error terminal fact; reconnect or authoritative snapshot decides
     // the business lifecycle.
-  });
+  },
 
-  upstreamSocket.on(CHANNEL_EVENT.ERROR, (error) => {
+  error: ({ error }) => {
     if (channel._errorHandled) return;
     channel._errorHandled = true;
     void writeAgentProxyRouteLifecycleEvent({
@@ -228,7 +221,23 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
       transport: true,
     });
     this.broadcastChannelEvent(channel, errorEnvelope);
+  },
+  handlerError: ({ error, handlerName }) => {
+    this.logSessionEvent(channel, {
+      category: "transport",
+      level: "error",
+      event: "agentProxy.upstream.handler.error",
+      data: {
+        channelKey: channel.key,
+        handlerName: String(handlerName || "unknown"),
+        error: String(error?.message || "upstream handler error"),
+      },
+    });
+  },
   });
+  if (!connection?.socket) {
+    channel.transport.phase = CHANNEL_STATUS.IDLE;
+  }
 }
 }
 

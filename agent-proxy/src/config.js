@@ -6,6 +6,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 function loadFileConfig() {
   try {
@@ -122,6 +124,30 @@ export const config = {
     5000,
   ),
   maxConnections: envNumber("AGENT_PROXY_MAX_CONNECTIONS", "maxConnections", 1000, 10),
+  wsHeartbeatIntervalMs: envTimeMs(
+    "AGENT_PROXY_WS_HEARTBEAT_INTERVAL_MS",
+    "wsHeartbeatIntervalMs",
+    TIME_THRESHOLDS.agentProxy.webSocketHeartbeatIntervalMs,
+    1000,
+  ),
+  wsHeartbeatTimeoutMs: envTimeMs(
+    "AGENT_PROXY_WS_HEARTBEAT_TIMEOUT_MS",
+    "wsHeartbeatTimeoutMs",
+    TIME_THRESHOLDS.agentProxy.webSocketHeartbeatTimeoutMs,
+    1000,
+  ),
+  wsMaxPayloadBytes: envNumber(
+    "AGENT_PROXY_WS_MAX_PAYLOAD_BYTES",
+    "wsMaxPayloadBytes",
+    LENGTH_THRESHOLDS.agentProxy.webSocketMaxPayloadBytes,
+    1024,
+  ),
+  wsMaxBufferedBytes: envNumber(
+    "AGENT_PROXY_WS_MAX_BUFFERED_BYTES",
+    "wsMaxBufferedBytes",
+    LENGTH_THRESHOLDS.agentProxy.webSocketMaxBufferedBytes,
+    1024,
+  ),
   maxBodySize: envNumber(
     "AGENT_PROXY_MAX_BODY_SIZE",
     "maxBodySize",

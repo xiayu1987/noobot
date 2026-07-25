@@ -286,7 +286,6 @@ test("reconnect state should be consistent for all same-user clients across chan
     const dpId = `dp-${item.status}`;
     const channelKey = createChannelKey({ userId: "user-1", sessionId });
     const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId });
-    channel.status = item.status;
     channel.ownerApiKey = "api-key-1";
     channel.ownerUserId = "user-1";
     manager.pushChannelEvent(channel, "thinking", {
@@ -295,6 +294,7 @@ test("reconnect state should be consistent for all same-user clients across chan
       seq: 1,
       text: item.status,
     });
+    channel.status = item.status;
   }
 
   const clientA = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
@@ -496,4 +496,3 @@ test("reconnect reports cache expiry without deriving reconnecting business stat
   assert.equal(stateList.some((stateItem) => stateItem?.state === "reconnecting"), false);
   assert.equal(stateList.some((stateItem) => stateItem?.state === "expired"), true);
 });
-
