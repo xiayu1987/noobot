@@ -93,6 +93,20 @@ function resolveMessageAttachments(message = {}) {
   return [];
 }
 
+function resolveAuthoritativeMessageId(message = {}) {
+  return String(
+    message?.messageId ||
+      message?.id ||
+      message?.additional_kwargs?.noobotMessageId ||
+      message?.additional_kwargs?.messageId ||
+      message?.lc_kwargs?.noobotMessageId ||
+      message?.lc_kwargs?.messageId ||
+      message?.lc_kwargs?.additional_kwargs?.noobotMessageId ||
+      message?.lc_kwargs?.additional_kwargs?.messageId ||
+      "",
+  ).trim();
+}
+
 function sanitizeToolContentForSession(content = "", explicitToolName = "") {
   const parsed = parseJsonObjectSafely(content);
   if (!parsed) return String(content || "");
@@ -230,6 +244,7 @@ export class SessionTurnPersister {
     sessionId,
     userName = userId,
     role,
+    messageId = "",
     content,
     type = "",
     taskId = null,
@@ -276,6 +291,7 @@ export class SessionTurnPersister {
     const sessionTransferEnvelopes = filterSessionTransferEnvelopes(transferEnvelopes);
     const fullTurnPayload = {
       role,
+      ...(String(messageId || "").trim() ? { messageId: String(messageId || "").trim() } : {}),
       content: sessionContent,
       type: type || "",
       userName: String(userName || "").trim(),
@@ -366,6 +382,7 @@ export class SessionTurnPersister {
       sessionId,
       parentSessionId: normalizedParentSessionId,
       role,
+      messageId: String(messageId || "").trim(),
       content: sessionContent,
       type,
       userName,
@@ -421,6 +438,7 @@ export class SessionTurnPersister {
         userId,
         sessionId,
         role: messageItem.role || MESSAGE_ROLE.ASSISTANT,
+        messageId: resolveAuthoritativeMessageId(messageItem),
         content: messageItem.content || "",
         type: messageItem.type || "",
         parentSessionId,

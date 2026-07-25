@@ -34,6 +34,28 @@ test("appendAgentMessages keeps scoped persistence identity for logs and message
   assert.equal(turnPayloads[0].persistenceContext, persistenceContext);
 });
 
+test("appendAgentMessages forwards the authoritative realtime message identity", async () => {
+  const turns = [];
+  const persister = new SessionTurnPersister({
+    session: {
+      appendExecutionLog: async () => {},
+      appendTurn: async (payload = {}) => turns.push(payload),
+    },
+  });
+
+  await persister.appendAgentMessages({
+    userId: "u1",
+    sessionId: "s1",
+    messages: [{
+      role: "assistant",
+      content: "done",
+      additional_kwargs: { noobotMessageId: "message-1" },
+    }],
+  });
+
+  assert.equal(turns[0].messageId, "message-1");
+});
+
 test("SessionTurnPersister normalizes parentSessionId once for every persistence outlet", async () => {
   const appendedTurns = [];
   const executionLogs = [];

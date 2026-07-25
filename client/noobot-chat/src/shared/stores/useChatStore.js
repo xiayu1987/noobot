@@ -26,6 +26,7 @@ import {
   isMessageEventEnvelope,
   projectMessageEventToolFacets,
 } from "@noobot/shared/message-event-protocol";
+import { logWorkflowDiagnostics } from "../../composables/chat/debug/workflowDiagnosticsLogger";
 
 function text(value) {
   return String(value || "").trim();
@@ -90,7 +91,7 @@ function projectSubSessionTurnState(currentSession = {}, eventData = {}) {
 }
 
 function createWorkflowNodeStateRegistry() {
-  return { workflows: {} };
+  return { workflows: {}, viewerStates: {} };
 }
 
 function createSubSessionMessageRegistry() {
@@ -202,6 +203,42 @@ function normalizeSubSessionMessage(eventName = "", eventData = {}, currentMessa
   };
 }
 
+function mergePersistedMessageValue(realtimeValue, persistedValue) {
+  // A completion snapshot is authoritative for values it actually contains,
+  // but it is not a full replacement for the richer realtime projection.
+  // Session persistence intentionally omits transport-only facets and older
+  // documents may serialize omitted facets as null/empty containers.
+  if (persistedValue == null) return realtimeValue;
+  if (Array.isArray(persistedValue)) {
+    return persistedValue.length || !Array.isArray(realtimeValue) || !realtimeValue.length
+      ? persistedValue
+      : realtimeValue;
+  }
+  if (persistedValue && typeof persistedValue === "object") {
+    const realtimeObject = realtimeValue && typeof realtimeValue === "object" && !Array.isArray(realtimeValue)
+      ? realtimeValue
+      : {};
+    return Object.fromEntries(
+      new Set([...Object.keys(realtimeObject), ...Object.keys(persistedValue)])
+        .values()
+        .map((key) => [key, mergePersistedMessageValue(realtimeObject[key], persistedValue[key])]),
+    );
+  }
+  if (persistedValue === "" && typeof realtimeValue === "string" && realtimeValue) return realtimeValue;
+  return persistedValue;
+}
+
+function mergePersistedSubSessionMessage(realtime = {}, snapshot = {}, messageId = "") {
+  const merged = mergePersistedMessageValue(realtime, snapshot);
+  return {
+    ...merged,
+    id: messageId,
+    messageId,
+    // Event history is a realtime projection and is not part of session.json.
+    rawEvents: Array.isArray(realtime.rawEvents) ? realtime.rawEvents : merged.rawEvents,
+  };
+}
+
 export const useChatStore = defineStore("chat", () => {
   const input = ref("");
   const uploadFiles = ref([]);
@@ -285,7 +322,19 @@ export const useChatStore = defineStore("chat", () => {
   function upsertWorkflowNodeStateEvent(eventData = {}) {
     const workflowRunId = text(eventData?.workflowRunId);
     const nodeExecutionId = text(eventData?.nodeExecutionId);
-    if (!workflowRunId || !nodeExecutionId) return { applied: false, reason: "missing_identity" };
+    if (!workflowRunId || !nodeExecutionId) {
+      const result = { applied: false, reason: "missing_identity" };
+      logWorkflowDiagnostics("frontend.workflowStore.nodeStateRejected", {
+        sessionId: text(eventData?.parentSessionId || eventData?.sessionId),
+        dialogProcessId: text(eventData?.dialogProcessId),
+        turnScopeId: text(eventData?.turnScopeId),
+        workflowRunId,
+        nodeExecutionId,
+        reason: result.reason,
+        dataKeys: Object.keys(eventData || {}).sort(),
+      });
+      return result;
+    }
     const registry = workflowNodeStateRegistry.value || createWorkflowNodeStateRegistry();
     if (!registry.workflows) registry.workflows = {};
     if (!registry.workflows[workflowRunId]) registry.workflows[workflowRunId] = { workflowRunId, nodes: {}, sequence: 0 };
@@ -293,7 +342,18 @@ export const useChatStore = defineStore("chat", () => {
     if (!workflow.nodes) workflow.nodes = {};
     const current = workflow.nodes[nodeExecutionId] || null;
     if (!shouldApplyWorkflowNodeStateEvent(current, eventData)) {
-      return { applied: false, reason: "stale", current };
+      const result = { applied: false, reason: "stale", current };
+      logWorkflowDiagnostics("frontend.workflowStore.nodeStateRejected", {
+        sessionId: text(eventData?.parentSessionId || eventData?.sessionId),
+        dialogProcessId: text(eventData?.dialogProcessId),
+        turnScopeId: text(eventData?.turnScopeId),
+        workflowRunId,
+        nodeExecutionId,
+        reason: result.reason,
+        incomingRevision: Number(eventData?.revision || 0),
+        currentRevision: Number(current?.revision || 0),
+      });
+      return result;
     }
     const next = {
       ...(current || {}),
@@ -313,6 +373,18 @@ export const useChatStore = defineStore("chat", () => {
     workflow.nodes[nodeExecutionId] = next;
     workflow.sequence = Math.max(Number(workflow.sequence || 0), Number(next.sequence || 0));
     workflowNodeStateRegistry.value = { ...registry, workflows: { ...registry.workflows } };
+    logWorkflowDiagnostics("frontend.workflowStore.nodeStateApplied", {
+      sessionId: text(next.parentSessionId || next.sessionId),
+      dialogProcessId: next.dialogProcessId,
+      turnScopeId: next.turnScopeId,
+      workflowRunId,
+      nodeExecutionId,
+      status: next.status,
+      revision: next.revision,
+      sequence: next.sequence,
+      workflowCount: Object.keys(registry.workflows).length,
+      nodeCount: Object.keys(workflow.nodes).length,
+    });
     return { applied: true, node: next };
   }
 
@@ -320,7 +392,17 @@ export const useChatStore = defineStore("chat", () => {
     const workflowRunId = text(eventData?.workflowRunId);
     const nodeSessions = Array.isArray(eventData?.nodeSessions) ? eventData.nodeSessions : [];
     if (!workflowRunId || !nodeSessions.length) {
-      return { applied: false, reason: "missing_planning_nodes" };
+      const result = { applied: false, reason: "missing_planning_nodes" };
+      logWorkflowDiagnostics("frontend.workflowStore.planningRejected", {
+        sessionId: text(eventData?.sessionId),
+        dialogProcessId: text(eventData?.dialogProcessId),
+        turnScopeId: text(eventData?.turnScopeId),
+        workflowRunId,
+        nodeSessionCount: nodeSessions.length,
+        reason: result.reason,
+        dataKeys: Object.keys(eventData || {}).sort(),
+      });
+      return result;
     }
     const registry = workflowNodeStateRegistry.value || createWorkflowNodeStateRegistry();
     registry.workflows = registry.workflows || {};
@@ -354,10 +436,21 @@ export const useChatStore = defineStore("chat", () => {
       sequence: Number(nodeSession?.sequence || index + 1),
       eventId: text(nodeSession?.eventId) || `workflow-plan:${text(nodeSession?.nodeExecutionId)}`,
     }));
-    return {
+    const result = {
       applied: results.some((result) => result?.applied === true),
       results,
     };
+    logWorkflowDiagnostics("frontend.workflowStore.planningApplied", {
+      sessionId: text(eventData?.sessionId),
+      dialogProcessId: text(eventData?.dialogProcessId),
+      turnScopeId: text(eventData?.turnScopeId),
+      workflowRunId,
+      nodeSessionCount: nodeSessions.length,
+      appliedNodeCount: results.filter((item) => item?.applied === true).length,
+      applied: result.applied,
+      workflowCount: Object.keys(registry.workflows).length,
+    });
+    return result;
   }
 
   function upsertSubSessionEvent(eventName = "", eventData = {}) {
@@ -438,16 +531,7 @@ export const useChatStore = defineStore("chat", () => {
       const realtime = messageId ? realtimeById.get(messageId) : null;
       if (messageId) claimedIds.add(messageId);
       if (!realtime) return snapshot;
-      return {
-        ...realtime,
-        ...snapshot,
-        id: messageId,
-        messageId,
-        thinking: snapshot.thinking ?? realtime.thinking,
-        toolCall: snapshot.toolCall ?? realtime.toolCall,
-        toolResult: snapshot.toolResult ?? realtime.toolResult,
-        rawEvents: realtime.rawEvents,
-      };
+      return mergePersistedSubSessionMessage(realtime, snapshot, messageId);
     });
     for (const realtime of realtimeMessages) {
       const messageId = text(realtime.messageId || realtime.id);

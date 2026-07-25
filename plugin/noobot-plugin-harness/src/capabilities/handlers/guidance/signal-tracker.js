@@ -13,6 +13,7 @@ import {
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { getMessageId, resolveMessagesByIds } from "../../../core/message-store.js";
+import { requestSummaryCheckpointMainFlowInstruction } from "../shared/runtime/main-flow-control-instruction.js";
 
 const FAILURE_THRESHOLD = Object.freeze({
   CONSECUTIVE: WORKFLOW_PARAMS.guidance.failureThreshold.consecutive,
@@ -58,6 +59,13 @@ function resolveScopedMessageBlockMarkSource(ctx = {}, scopedMessages = []) {
   return blockMessages.filter((message) => scopedSet.has(message));
 }
 
+function collectSummarizedMessages(messages = []) {
+  return (Array.isArray(messages) ? messages : [])
+    .filter((message) =>
+      message?.summarized === true || message?.lc_kwargs?.summarized === true,
+    );
+}
+
 export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   const summaryCheckpointMessageCountValue =
@@ -86,14 +94,20 @@ export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
     : hasUsableSummaryCheckpoint && Array.isArray(currentMessages)
       ? currentMessages.slice(0, Math.min(currentMessages.length, summaryCheckpointMessageCount))
       : currentMessages;
+  const resolveScopedMessages = (messages = []) => {
+    if (!Array.isArray(messages)) return [];
+    if (hasUsableSummaryCheckpointIds) {
+      return messages.filter((message) => summaryCheckpointMessageIds.includes(getMessageId(message)));
+    }
+    if (hasUsableSummaryCheckpoint) {
+      return messages.slice(0, Math.min(messages.length, summaryCheckpointMessageCount));
+    }
+    return messages;
+  };
   const safeMark = async (messages = []) => {
     if (!Array.isArray(messages)) return 0;
 
-    const scopedMessages = hasUsableSummaryCheckpointIds
-      ? messages.filter((message) => summaryCheckpointMessageIds.includes(getMessageId(message)))
-      : hasUsableSummaryCheckpoint
-      ? messages.slice(0, Math.min(messages.length, summaryCheckpointMessageCount))
-      : messages;
+    const scopedMessages = resolveScopedMessages(messages);
     if (!Array.isArray(scopedMessages) || !scopedMessages.length) return 0;
 
     if (typeof injectedSummarizer === "function") {
@@ -126,6 +140,14 @@ export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
       ? resolveScopedMessageBlockMarkSource(ctx, scopedCurrentMessages)
       : resolveBlockMarkSource(ctx),
   );
+  requestSummaryCheckpointMainFlowInstruction(ctx, {
+    source: "plugin.summary",
+    summarizedMessages: [...new Set([
+      ...collectSummarizedMessages(scopedCurrentMessages),
+      ...collectSummarizedMessages(resolveScopedMessages(historyMessages)),
+      ...collectSummarizedMessages(resolveScopedMessageBlockMarkSource(ctx, scopedCurrentMessages)),
+    ])],
+  });
   if (holder?.state?.pending && (hasUsableSummaryCheckpointIds || hasUsableSummaryCheckpoint)) {
     holder.state.pending.summaryCheckpointMessageCount = null;
     holder.state.pending.summaryCheckpointMessageIds = null;

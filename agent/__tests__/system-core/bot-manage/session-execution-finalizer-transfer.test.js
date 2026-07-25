@@ -143,3 +143,88 @@ test("SessionExecutionFinalizer promotes ordinary generated attachments to final
     "att-ordinary",
   );
 });
+
+test("SessionExecutionFinalizer promotes checkpoint attachment sources without rewriting persisted prefix", async () => {
+  const appendedMessages = [];
+  const finalizer = new SessionExecutionFinalizer({
+    session: {
+      async upsertTurnTiming() {},
+      async flushSessionMessagesToArchive() {},
+      async saveCurrentTurnTasks() {},
+      async getExecutionBundle() { return { logs: [] }; },
+    },
+    turnPersister: {
+      buildDefaultAssistantTurn: () => ({}),
+      async appendAgentMessages({ messages = [] }) { appendedMessages.push(...messages); },
+    },
+    resolveMemoryPostProcessAsyncEnabled: () => true,
+    runMemoryPostProcessFlow: async () => {},
+    upsertParentAsyncTask: () => {},
+  });
+
+  const result = await finalizer.finalizeRunSession({
+    userId: "u1",
+    sessionId: "s1",
+    alreadyPersistedTurnMessageCount: 1,
+    summaryCheckpointPromotionSources: [{
+      role: "tool",
+      type: "tool_result",
+      attachments: [{
+        attachmentId: "att-checkpoint",
+        generatedByModel: true,
+        generationSource: "multimodal_generate_tool",
+      }],
+    }],
+    agentResult: {
+      turnMessages: [
+        { role: "assistant", content: "already persisted", summarized: false },
+        { role: "assistant", type: "message", content: "tail" },
+      ],
+      turnTasks: [],
+    },
+  });
+
+  assert.equal(appendedMessages.length, 1);
+  assert.equal(appendedMessages[0].content, "tail");
+  assert.equal(appendedMessages[0].attachments?.[0]?.attachmentId, "att-checkpoint");
+  assert.deepEqual(
+    result.messages.map((item) => item.content),
+    ["already persisted", "tail"],
+    "staged persistence must not change the pre-refactor finalizer result",
+  );
+});
+
+test("SessionExecutionFinalizer restores the pre-refactor full result from persisted prefix plus active tail", async () => {
+  const appendedMessages = [];
+  const finalizer = new SessionExecutionFinalizer({
+    session: {
+      async upsertTurnTiming() {},
+      async flushSessionMessagesToArchive() {},
+      async saveCurrentTurnTasks() {},
+      async getExecutionBundle() { return { logs: [] }; },
+    },
+    turnPersister: {
+      buildDefaultAssistantTurn: () => ({}),
+      async appendAgentMessages({ messages = [] }) { appendedMessages.push(...messages); },
+    },
+    resolveMemoryPostProcessAsyncEnabled: () => true,
+    runMemoryPostProcessFlow: async () => {},
+    upsertParentAsyncTask: () => {},
+  });
+
+  const result = await finalizer.finalizeRunSession({
+    userId: "u1",
+    sessionId: "s1",
+    persistedTurnMessages: [
+      { role: "assistant", content: "persisted-1" },
+      { role: "tool", content: "persisted-2" },
+    ],
+    agentResult: {
+      turnMessages: [{ role: "assistant", content: "tail" }],
+      turnTasks: [],
+    },
+  });
+
+  assert.deepEqual(appendedMessages.map((item) => item.content), ["tail"]);
+  assert.deepEqual(result.messages.map((item) => item.content), ["persisted-1", "persisted-2", "tail"]);
+});

@@ -68,10 +68,12 @@ export class SessionExecutionRunner {
     prepareRunConfig,
     prepareTurnInput,
     prepareAgentTurnExecution,
+    commitSummaryCheckpoint,
     appendSessionTurn,
     assertPersistenceContextIdentity,
     commitSessionTurn,
     stampReusedUserTurnDialogProcessId,
+    getSessionTurns,
     finalizeRunSession,
     upsertParentAsyncTask,
     now,
@@ -86,10 +88,12 @@ export class SessionExecutionRunner {
     this.prepareRunConfig = prepareRunConfig;
     this.prepareTurnInput = prepareTurnInput;
     this.prepareAgentTurnExecution = prepareAgentTurnExecution;
+    this.commitSummaryCheckpoint = commitSummaryCheckpoint;
     this.appendSessionTurn = appendSessionTurn;
     this.assertPersistenceContextIdentity = assertPersistenceContextIdentity;
     this.commitSessionTurn = commitSessionTurn;
     this.stampReusedUserTurnDialogProcessId = stampReusedUserTurnDialogProcessId;
+    this.getSessionTurns = getSessionTurns;
     this.finalizeRunSession = finalizeRunSession;
     this.upsertParentAsyncTask = upsertParentAsyncTask;
     this.now = now;
@@ -436,6 +440,19 @@ export class SessionExecutionRunner {
         applyRuntimeUserMessageAttachments(dispatchRuntime, userMessageAttachments);
         bindLifecycleToRuntime(dispatchRuntime, lifecycle);
         attachStoppedSnapshotAbortListener();
+        dispatchRuntime.commitSummaryCheckpoint = (payload = {}) =>
+          this.commitSummaryCheckpoint?.({
+            runtime: dispatchRuntime,
+            userId,
+            sessionId: usedSessionId,
+            parentSessionId,
+            dialogProcessId,
+            parentDialogProcessId,
+            turnScopeId: resolvedTurnScopeId,
+            eventListener: runtimeEventListener,
+            persistenceContext,
+            ...payload,
+          });
       }
       emitEvent(runtimeEventListener, "debug_resend_runner_prepared", {
         sessionId: usedSessionId,
@@ -663,6 +680,22 @@ export class SessionExecutionRunner {
         turnScopeId: resolvedTurnScopeId,
         resolvedThinkingStartedAt: finalizeThinkingStartedAt,
       });
+      const checkpointPersistedTotal = Math.max(
+        0,
+        Number(dispatchRuntime?.summaryCheckpointPersistedTotal) || 0,
+      );
+      const persistedSessionMessages = checkpointPersistedTotal > 0 &&
+        typeof this.getSessionTurns === "function"
+        ? await this.getSessionTurns({
+            userId,
+            sessionId: usedSessionId,
+            parentSessionId,
+            persistenceContext,
+          })
+        : [];
+      const persistedTurnMessages = persistedSessionMessages
+        .filter((message) => String(message?.turnScopeId || "").trim() === resolvedTurnScopeId)
+        .slice(-checkpointPersistedTotal);
       const finalizedResult = await this.finalizeRunSession({
         userId,
         sessionId: usedSessionId,
@@ -673,6 +706,16 @@ export class SessionExecutionRunner {
         turnScopeId: resolvedTurnScopeId,
         thinkingStartedAt: finalizeThinkingStartedAt,
         agentResult,
+        alreadyPersistedTurnMessageCount: Math.max(
+          0,
+          Number(dispatchRuntime?.summaryCheckpointPersistedCount) || 0,
+        ),
+        persistedTurnMessages,
+        summaryCheckpointPromotionSources: Array.isArray(
+          dispatchRuntime?.summaryCheckpointPromotionSources,
+        )
+          ? dispatchRuntime.summaryCheckpointPromotionSources
+          : [],
         executionStartIndex,
         runtimeEventListener,
         userConfig: {

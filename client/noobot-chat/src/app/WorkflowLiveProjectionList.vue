@@ -24,10 +24,16 @@ const activePinia = getActivePinia();
 const chatStore = activePinia ? useChatStore(activePinia) : null;
 
 function workflowRunIdFromMessage(messageItem = {}) {
+  // A turn-scoped assistant placeholder is persisted while the agent is still
+  // thinking. It is not an acknowledgement of the workflow card. Only an
+  // actual workflow entity may retire the live planning projection.
+  if (messageItem?.type !== "workflow") return "";
   return String(
     messageItem?.pluginMeta?.payload?.workflowRunId ||
     messageItem?.pluginMeta?.payload?.execution?.workflowRunId ||
     messageItem?.pluginMeta?.payload?.execution?.instanceId ||
+    messageItem?.workflowRunId ||
+    messageItem?.turnScopeId ||
     "",
   ).trim();
 }

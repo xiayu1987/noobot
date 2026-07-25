@@ -154,6 +154,7 @@ export function createStateBuilder({
       errorLogger,
     };
     canonicalizeMessageStore(loopState);
+    runtime.activeMessageContext = loopState;
     runtime.stoppedModelMessageSnapshotCandidate = {
       userId: String(runtime?.userId || sys?.userId || agentContext?.environment?.identity?.userId || "").trim(),
       sessionId: String(sys?.sessionId || runtime?.sessionId || agentContext?.session?.current?.id || "").trim(),

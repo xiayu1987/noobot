@@ -329,7 +329,23 @@ export async function appendWorkflowPlanningMessage({
     .filter(Boolean)
     .join("\n\n");
   applyWorkflowTransferPayload(baseWorkflowPayload, mergedTransferPayload);
-  const sessionWorkflowPayload = sanitizeWorkflowPayloadForSessionMessage(baseWorkflowPayload);
+  const authoritativeWorkflowRunId = String(
+    workflowRunId ||
+      baseWorkflowPayload?.workflowRunId ||
+      baseWorkflowPayload?.execution?.workflowRunId ||
+      baseWorkflowPayload?.execution?.instanceId ||
+      ctx?.workflowRunId ||
+      "",
+  ).trim();
+  const sessionWorkflowPayload = sanitizeWorkflowPayloadForSessionMessage(baseWorkflowPayload) || {};
+  if (authoritativeWorkflowRunId) {
+    sessionWorkflowPayload.workflowRunId = authoritativeWorkflowRunId;
+    sessionWorkflowPayload.execution = {
+      ...(sessionWorkflowPayload.execution || {}),
+      workflowRunId: authoritativeWorkflowRunId,
+      instanceId: authoritativeWorkflowRunId,
+    };
+  }
   const workflowMessage = {
     role: "assistant",
     type: "workflow",

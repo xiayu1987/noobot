@@ -382,6 +382,7 @@ test("guidance summary checkpoint marks matching messageBlocks instead of flat b
 });
 
 test("guidance summary checkpoint prefers message ids over checkpoint count", async () => {
+  let directCheckpointCalls = 0;
   const oldToolCall = {
     role: "assistant",
     content: "",
@@ -424,6 +425,16 @@ test("guidance summary checkpoint prefers message ids over checkpoint count", as
       ],
     },
     agentContext: {
+      execution: {
+        controllers: {
+          runtime: {
+            systemRuntime: {},
+            async notifySummaryCompleted() {
+              directCheckpointCalls += 1;
+            },
+          },
+        },
+      },
       payload: {
         harness: {
           state: {
@@ -465,4 +476,18 @@ test("guidance summary checkpoint prefers message ids over checkpoint count", as
   assert.equal(ctx.messageBlocks.incremental[3].summarized, undefined);
   assert.equal(ctx.messageBlocks.incremental[4].summarized, undefined);
   assert.equal(ctx.agentContext.payload.harness.state.pending.summaryCheckpointMessageIds, null);
+  assert.equal(directCheckpointCalls, 0);
+  assert.deepEqual(
+    new Set(ctx.agentContext.execution.controllers.runtime.systemRuntime
+      .mainFlowControlInstructions[0].summarizedMessageIds),
+    new Set([
+      oldToolCall.additional_kwargs.noobotMessageId,
+      oldToolResult.additional_kwargs.noobotMessageId,
+    ]),
+  );
+  assert.equal(
+    ctx.agentContext.execution.controllers.runtime.systemRuntime
+      .mainFlowControlInstructions[0].action,
+    "summary_checkpoint",
+  );
 });

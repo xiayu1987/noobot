@@ -15,6 +15,15 @@ import {
 // ========== 2. 字段对齐测试 ==========
 describe('2. 字段对齐测试', () => {
   describe('normalizeMessageEntity 字段对齐', () => {
+    it('应把权威 messageId 规范化为一致的 id/messageId', () => {
+      const normalized = normalizeMessageEntity({
+        role: 'assistant',
+        content: 'hello',
+        additional_kwargs: { noobotMessageId: 'message-1' },
+      });
+      assert.equal(normalized.id, 'message-1');
+      assert.equal(normalized.messageId, 'message-1');
+    });
     it('应包含 role, content, type, ts 等核心字段', () => {
       const raw = { role: 'user', content: 'hello', type: 'text' };
       const normalized = normalizeMessageEntity(raw);
