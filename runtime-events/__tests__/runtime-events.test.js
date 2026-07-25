@@ -9,7 +9,10 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { RUNTIME_EVENTS_CONFIG_ENVS } from '@noobot/shared/runtime-events-config';
+import {
+  RUNTIME_EVENTS_CONFIG_DEFAULTS,
+  RUNTIME_EVENTS_CONFIG_ENVS,
+} from '@noobot/shared/runtime-events-config';
 
 import {
   createRuntimeEventWriter,
@@ -85,6 +88,7 @@ test('session log protocol exports stable categories and helpers from runtime-ev
   assert.equal(getSessionLogDebugControlKey({ debugType: 'stop-continue' }), 'frontendStopContinueDebug');
   assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'stop-continue' } }), 'frontendStopContinueDebug');
   assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'terminal-resolution' } }), 'frontendTerminalResolutionDebug');
+  assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'tool-log-window' } }), 'frontendToolLogWindowDebug');
   assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'agent-proxy-route' } }), 'agentProxyRouteDebug');
 
   const record = buildSessionLogRecord({
@@ -107,6 +111,30 @@ test('session log protocol exports stable categories and helpers from runtime-ev
     message: 'hello',
     data: { turnScopeId: 'turn-1' },
   });
+});
+
+test('tool log window debug is enabled by default and uses its own file', async () => {
+  assert.equal(RUNTIME_EVENTS_CONFIG_DEFAULTS.sessionLogControls.frontendToolLogWindowDebug, true);
+  assert.equal(
+    RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.frontendToolLogWindowDebug,
+    'NOOBOT_RUNTIME_EVENT_FRONTEND_TOOL_LOG_WINDOW_DEBUG',
+  );
+  const root = await tempRoot();
+  const result = await writeRuntimeEvent({
+    source: 'frontend',
+    scope: 'session',
+    category: 'debug',
+    level: 'debug',
+    event: 'frontend.toolLogWindow.rendererReceived',
+    userId: 'admin',
+    sessionId: 'session-tool-window',
+    data: { debugType: 'tool-log-window', selectedCount: 10 },
+  }, { root, includeProcess: false });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.skipped, undefined);
+  assert.match(result.file, /session-tool-window\/debug-tool-log-window\.jsonl$/);
+  assert.equal((await readJsonl(result.file))[0].data.selectedCount, 10);
 });
 
 test('session log record preserves top-level debug type in data', () => {

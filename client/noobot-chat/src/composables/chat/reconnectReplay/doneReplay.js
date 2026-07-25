@@ -7,7 +7,12 @@ import { findVisibleLastMessage } from "../../infra/messageModel";
 import { nowIso } from "../../infra/timeFields";
 import { findReconnectDoneEnvelopeWithMessages } from "../../infra/reconnectReplayModel";
 import { sanitizeExecutionLogForDisplay } from "../chatEngine/utils";
-import { buildToolTimelineFromLegacyLogs, mergeToolTimelines } from "../chatEngine/toolTimeline";
+import {
+  buildToolTimelineFromLegacyLogs,
+  fillMissingToolTimelineFacets,
+  TOOL_SEQUENCE_DOMAIN,
+  TOOL_TIMELINE_AUTHORITY,
+} from "../chatEngine/toolTimeline";
 import { _trimStr } from "./utils";
 import { getMessageDialogProcessId, getMessageRole, getMessageTurnScopeId } from "../../infra/messageIdentity";
 import { RoleEnum } from "../../../shared/constants/chatConstants";
@@ -116,7 +121,12 @@ export function applyDoneRealtimeLogsFromReconnectBatch({
       classifyRealtimeLog(normalizeExecutionLogForRealtime(executionLogItem)),
     )
     .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
-    .filter((logItem) => logItem && _trimStr(logItem.text));
+    .filter((logItem) => logItem && _trimStr(logItem.text))
+    .map((logItem) => ({
+      ...logItem,
+      authority: TOOL_TIMELINE_AUTHORITY.COMPATIBILITY,
+      sequenceDomain: TOOL_SEQUENCE_DOMAIN.TRANSPORT,
+    }));
   if (!doneRealtimeLogs.length) return true;
   const targetMessage = [...(activeSession?.value?.messages || [])].reverse().find(
     (messageItem) =>
@@ -124,9 +134,11 @@ export function applyDoneRealtimeLogsFromReconnectBatch({
       getMessageTurnScopeId(messageItem) === turnScopeId,
   );
   if (targetMessage) {
-    targetMessage.toolTimeline = mergeToolTimelines(
+    targetMessage.toolTimeline = fillMissingToolTimelineFacets(
       targetMessage.toolTimeline,
-      buildToolTimelineFromLegacyLogs(doneRealtimeLogs),
+      buildToolTimelineFromLegacyLogs(doneRealtimeLogs, {
+        sequenceDomain: TOOL_SEQUENCE_DOMAIN.TRANSPORT,
+      }),
     );
   }
   return true;

@@ -26,7 +26,7 @@ import { getMessageAttachments } from "../../infra/messageModel";
 import {
   buildToolTimelineFromLegacyLogs,
   countCompletedToolAttachments,
-  mergeToolTimelines,
+  fillMissingToolTimelineFacets,
 } from "../chatEngine/toolTimeline";
 import { adaptLegacyMessageTimelines } from "../chatEngine/legacyTimelineAdapter";
 import {
@@ -763,7 +763,7 @@ export function applySummaryToolLogs(sessionItem, sessionDocs = []) {
     }
     const turnScopeId = getMessageTurnScopeId(messageItem);
     const logs = logsByTurnScopeId.get(turnScopeId) || [];
-    messageItem.toolTimeline = mergeToolTimelines(
+    messageItem.toolTimeline = fillMissingToolTimelineFacets(
       messageItem.toolTimeline,
       buildToolTimelineFromLegacyLogs(logs),
     );

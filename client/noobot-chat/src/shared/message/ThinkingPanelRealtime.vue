@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import {
   BaseEmptyHint,
   BaseMetaLabel,
@@ -16,6 +16,10 @@ import {
   BaseThinkingPanelShell,
 } from "../ui";
 import WorkflowLiveProjectionList from "../../app/WorkflowLiveProjectionList.vue";
+import {
+  logToolLogWindowDebug,
+  summarizeToolLogWindow,
+} from "../../composables/chat/debug/toolLogWindowDebugLogger";
 const props = defineProps({
   messageItem: { type: Object, required: true },
   translate: { type: Function, required: true },
@@ -35,6 +39,21 @@ const runningEmptyHintKey = computed(() =>
   props.latestPluginAnalysisLog || props.latestMainModelContentLog
     ? "message.analyzingRealtimeLog"
     : "message.waitingRealtimeLog",
+);
+watch(
+  () => props.executionLogs,
+  (executionLogs) => {
+    logToolLogWindowDebug("frontend.toolLogWindow.rendererReceived", {
+      sessionId: String(props.messageItem?.sessionId || ""),
+      dialogProcessId: String(props.messageItem?.dialogProcessId || ""),
+      turnScopeId: String(props.messageItem?.turnScopeId || ""),
+      running: props.isRunning,
+      declaredExecutionLogCount: props.executionLogCount,
+      receivedCount: Array.isArray(executionLogs) ? executionLogs.length : 0,
+      received: summarizeToolLogWindow(executionLogs),
+    });
+  },
+  { immediate: true, deep: true },
 );
 </script>
 <template>

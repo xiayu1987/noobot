@@ -8,8 +8,18 @@ import {
   validateMessageEventEnvelope,
 } from "@noobot/shared/message-event-protocol";
 import { initializeMessageEventState } from "../../infra/messageEventState";
-import { reduceToolTimeline } from "./toolTimeline";
+import {
+  reduceToolTimeline,
+  selectToolTimelineLogs,
+  TOOL_SEQUENCE_DOMAIN,
+  TOOL_TIMELINE_AUTHORITY,
+} from "./toolTimeline";
 import { reduceActivityTimeline } from "./activityTimeline";
+import {
+  logToolLogWindowDebug,
+  summarizeToolLogWindow,
+  summarizeToolLogWindowItem,
+} from "../debug/toolLogWindowDebugLogger";
 
 export { initializeMessageEventState } from "../../infra/messageEventState";
 
@@ -59,14 +69,46 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
     targetMessage.content = String(targetMessage.content || "") + event.text;
   } else {
     const log = classifyRealtimeLog?.(event);
+    if ([MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(event.eventType)) {
+      logToolLogWindowDebug("frontend.toolLogWindow.messageEventClassified", {
+        sessionId: text(event.sessionId || targetMessage.sessionId),
+        dialogProcessId: text(event.dialogProcessId || targetMessage.dialogProcessId),
+        turnScopeId: text(event.turnScopeId || targetMessage.turnScopeId),
+        envelope: summarizeToolLogWindowItem(event),
+        classified: log ? summarizeToolLogWindowItem(log) : null,
+        previousLastSequence: lastSequence,
+      });
+    }
     targetMessage.toolTimeline = reduceToolTimeline(targetMessage.toolTimeline, event, log);
     // Tool and non-tool activities are separate projections. The activity
     // normalizer rejects tool logs, so a transport fact can never be owned by
     // both timelines.
     targetMessage.activityTimeline = reduceActivityTimeline(
       targetMessage.activityTimeline,
-      log ? { ...log, eventId: event.eventId, sequence: event.sequence } : event,
+      log
+        ? {
+            ...log,
+            eventId: event.eventId,
+            sequence: event.sequence,
+            authority: TOOL_TIMELINE_AUTHORITY.AUTHORITATIVE,
+            sequenceDomain: TOOL_SEQUENCE_DOMAIN.MESSAGE,
+          }
+        : {
+            ...event,
+            authority: TOOL_TIMELINE_AUTHORITY.AUTHORITATIVE,
+            sequenceDomain: TOOL_SEQUENCE_DOMAIN.MESSAGE,
+          },
     );
+    if ([MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(event.eventType)) {
+      logToolLogWindowDebug("frontend.toolLogWindow.messageEventTimelineReduced", {
+        sessionId: text(event.sessionId || targetMessage.sessionId),
+        dialogProcessId: text(event.dialogProcessId || targetMessage.dialogProcessId),
+        turnScopeId: text(event.turnScopeId || targetMessage.turnScopeId),
+        appliedSequence: sequence,
+        timelineEntryCount: targetMessage.toolTimeline?.length || 0,
+        timelineLogs: summarizeToolLogWindow(selectToolTimelineLogs(targetMessage)),
+      });
+    }
   }
   if (event.dialogProcessId && !targetMessage.dialogProcessId) targetMessage.dialogProcessId = event.dialogProcessId;
   state.lastSequence = sequence;

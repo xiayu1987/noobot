@@ -91,6 +91,7 @@ export function createChatWebSocketClient({
   let reconnectResolve = null;
   let reconnectReject = null;
   let reconnectTimeout = null;
+  let liveEventSubscriber = null;
   const pendingJsonRequests = new Map();
   const socketHandlerStores = new WeakMap();
   const RECONNECT_TIMEOUT_MS = TIME_THRESHOLDS.client.wsReconnectTimeoutMs;
@@ -199,6 +200,15 @@ export function createChatWebSocketClient({
             removeLastReceivedSeq(data?.dialogProcessId);
           }
           settlePendingJsonRequest(event, data);
+          if (
+            !reconnecting &&
+            !activeStreamContext &&
+            typeof liveEventSubscriber === "function" &&
+            event !== StreamEventEnum.RECONNECT_DATA &&
+            event !== StreamEventEnum.RECONNECT_COMPLETE
+          ) {
+            liveEventSubscriber({ event, data });
+          }
         } catch {}
       },
       error: () => closeFailedSocket(ws),
@@ -671,6 +681,7 @@ export function createChatWebSocketClient({
             const resolveFn = reconnectResolve;
             reconnectResolve = null;
             reconnectReject = null;
+            liveEventSubscriber = onReconnectData;
             unregisterReconnectHandlers();
             if (resolveFn) resolveFn(data);
             return;
@@ -678,7 +689,7 @@ export function createChatWebSocketClient({
 
           trackIncomingEvent(data);
 
-          onReconnectData({ event, data });
+          if (!activeStreamContext) onReconnectData({ event, data });
           settlePendingJsonRequest(event, data);
         } catch (error) {
           failReconnect(error, { closeSocket: true });
@@ -829,6 +840,7 @@ export function createChatWebSocketClient({
     reconnecting = false;
     reconnectResolve = null;
     reconnectReject = null;
+    liveEventSubscriber = null;
   }
 
   return {

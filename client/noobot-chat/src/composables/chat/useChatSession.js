@@ -73,6 +73,7 @@ import {
   logThinkingReplayDebug,
   setThinkingReplayDebugLogSink,
 } from "./debug/thinkingReplayDebugLogger";
+import { setToolLogWindowDebugLogSink } from "./debug/toolLogWindowDebugLogger";
 import { setTerminalResolutionDebugLogSink } from "./debug/terminalResolutionDebugLogger";
 import { findCanonicalTurnTiming } from "./sessionRunStateMachine/turnTiming";
 import {
@@ -553,6 +554,7 @@ export function useChatSession({
   setReconnectTimingDebugLogSink(sessionLogWebSocketClient);
   setWorkflowDiagnosticsLogSink(sessionLogWebSocketClient);
   setThinkingReplayDebugLogSink(sessionLogWebSocketClient);
+  setToolLogWindowDebugLogSink(sessionLogWebSocketClient);
   setTerminalResolutionDebugLogSink(sessionLogWebSocketClient);
 
   let lastComposerRenderSignature = "";

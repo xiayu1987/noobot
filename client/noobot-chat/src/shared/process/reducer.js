@@ -110,6 +110,10 @@ export function applyProcessEvent(state, eventItem = {}) {
       ...node,
       id: nodeId,
       processId,
+      // The compatibility projection exposes node logs to legacy consumers.
+      // Keep the authoritative event order on the node so that projection does
+      // not turn an unsequenced tool error into a permanently oldest row.
+      sequence: sequence || toProcessSequence(node.sequence ?? node?.meta?.sequence, 0),
       status: nextStatus,
       updatedAt: normalizeProcessString(eventItem.timestamp) || previousNode.updatedAt || "",
     };
@@ -164,7 +168,22 @@ export function selectProcessCompatView(state, processId = {}) {
   const normalizedProcessId = normalizeProcessString(processId);
   const snapshot = selectProcessSnapshot(state, normalizedProcessId);
   if (!snapshot) return { realtimeLogs: [], completedToolLogs: [], executionLogTotal: 0, lastSequence: 0 };
-  const logs = snapshot.nodes.map((node) => node?.log || node?.payload?.log).filter(Boolean);
+  const logs = snapshot.nodes
+    .map((node, sourceIndex) => {
+      const log = node?.log || node?.payload?.log;
+      if (!log) return null;
+      const sequence = toProcessSequence(
+        node?.sequence ?? node?.meta?.sequence ?? log?.sequence ?? log?.seq,
+        0,
+      );
+      return { log: sequence ? { ...log, sequence } : log, sequence, sourceIndex };
+    })
+    .filter(Boolean)
+    .sort((left, right) => {
+      if (left.sequence !== right.sequence) return left.sequence - right.sequence;
+      return left.sourceIndex - right.sourceIndex;
+    })
+    .map((item) => item.log);
   return {
     realtimeLogs: logs.slice(-PROCESS_COMPAT_LOG_LIMIT),
     completedToolLogs: logs,

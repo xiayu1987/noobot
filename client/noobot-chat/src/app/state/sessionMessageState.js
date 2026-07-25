@@ -29,6 +29,7 @@ function formatToolLifecycleText(data = {}, toolEventType = "") {
 }
 
 export function classifyRealtimeLog(data = {}) {
+  const nestedData = data?.data && typeof data.data === "object" ? data.data : {};
   const authoritativeEventType = String(data.eventType || "").trim();
   const authoritativeToolEvent = authoritativeEventType === "tool_call_start"
     ? "tool_call"
@@ -38,7 +39,8 @@ export function classifyRealtimeLog(data = {}) {
   const eventName = String(
     authoritativeToolEvent || data.event || authoritativeEventType,
   ).trim();
-  const rawText = data.text ?? data.output ?? data.data?.text ?? data.data?.output ?? "";
+  const rawText = data.text ?? data.output ?? data.message ??
+    nestedData.text ?? nestedData.output ?? nestedData.message ?? "";
   const text = sanitizeExecutionLogText(
     rawText || formatToolLifecycleText(data, authoritativeToolEvent),
   );
@@ -53,6 +55,10 @@ export function classifyRealtimeLog(data = {}) {
     text.includes('"tool_call_id"');
   return {
     ...data,
+    toolCallId: String(
+      data.toolCallId || data.tool_call_id || nestedData.toolCallId || nestedData.tool_call_id || "",
+    ),
+    tool: String(data.tool || data.toolName || nestedData.tool || nestedData.toolName || ""),
     event: eventName || "system",
     type: authoritativeToolEvent || type ||
       (TOOL_LOG_TYPES.has(eventName) ? eventName : (isTool ? "tool_call" : "system")),

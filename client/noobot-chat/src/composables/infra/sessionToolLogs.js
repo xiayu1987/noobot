@@ -18,7 +18,10 @@ import {
 } from "./toolLogFormatting";
 import { deduplicateToolLogs } from "./toolLogIdentity";
 import { projectMessageEventToolFacets } from "@noobot/shared/message-event-protocol";
-import { buildToolTimelineFromLegacyLogs, mergeToolTimelines } from "../chat/chatEngine/toolTimeline";
+import {
+  buildToolTimelineFromLegacyLogs,
+  fillMissingToolTimelineFacets,
+} from "../chat/chatEngine/toolTimeline";
 
 function buildTurnScopeGroupKey(sessionId = "", turnScopeId = "") {
   const normalizedSessionId = String(sessionId || "").trim();
@@ -410,7 +413,7 @@ function applyCompletedToolLogsToMessages(messages = [], sessionDocuments = []) 
       return getMessageTurnScopeId(toolLogItem) === turnScopeId;
     });
     const mergedToolLogs = mergeUniqueLogs([], matchedToolLogs);
-    messageItem.toolTimeline = mergeToolTimelines(
+    messageItem.toolTimeline = fillMissingToolTimelineFacets(
       messageItem.toolTimeline,
       buildToolTimelineFromLegacyLogs(formatToolLogsTree(mergedToolLogs)),
     );

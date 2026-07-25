@@ -166,6 +166,59 @@ describe("useChatSession reconnect replay", () => {
     expect(selectToolTimeline(restoredAssistant)).toHaveLength(1);
   });
 
+  it("keeps projecting message deltas that arrive after reconnect has completed", async () => {
+    const store = useChatStore();
+    const assistant = {
+      role: RoleEnum.ASSISTANT,
+      dialogProcessId: "dp-after-reconnect",
+      turnScopeId: "turn-after-reconnect",
+      content: "",
+      pending: true,
+      realtimeLogs: [],
+    };
+    store.sessions = [createSessionFixture({
+      id: "s-after-reconnect",
+      backendSessionId: "s-after-reconnect",
+      messages: [{ role: RoleEnum.USER, content: "continue" }, assistant],
+    })];
+    store.activeSessionId = "s-after-reconnect";
+    let deliverLiveEvent = null;
+    wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
+      deliverLiveEvent = onReconnectData;
+    });
+    const session = createChatSession({ classifyRealtimeLog });
+
+    await session.handleReconnect();
+    deliverLiveEvent({
+      event: "message_event",
+      data: {
+        channelKind: "message_event",
+        channelVersion: 1,
+        route: { scope: "main_session", sessionId: "s-after-reconnect" },
+        event: {
+          envelopeKind: "noobot.message_event",
+          envelopeVersion: 1,
+          eventId: "evt-after-reconnect-delta",
+          eventType: "llm_delta",
+          sessionId: "s-after-reconnect",
+          messageId: "msg-after-reconnect",
+          dialogProcessId: "dp-after-reconnect",
+          turnScopeId: "turn-after-reconnect",
+          sequence: 1,
+          timestamp: "2026-07-25T02:30:00.000Z",
+          text: "message continued after replay",
+        },
+      },
+    });
+
+    await vi.waitFor(() => {
+      expect(assistant.content).toContain("message continued after replay");
+    });
+    expect(assistant.messageEventState.consumedEventIds).toEqual([
+      "evt-after-reconnect-delta",
+    ]);
+  });
+
   it("projects a stopped-turn continuation by turnScopeId when both assistants share a dialogProcessId", async () => {
     const store = useChatStore();
     const stoppedAssistant = {
