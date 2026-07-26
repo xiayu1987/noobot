@@ -7,6 +7,7 @@ import { StreamEventEnum } from "../../../shared/constants/chatConstants";
 import { BackendChannelState } from "../sessionRunStateMachine";
 import { normalizeReplayCacheKey } from "./replayCache";
 import { _trimStr } from "./utils";
+import { normalizeTurnTransportEnvelope } from "../chatEngine/turnTransportEnvelope";
 
 const WORKFLOW_RUNTIME_EVENT_NAMES = new Set([
   "workflow_planning_message_prepared",
@@ -14,8 +15,8 @@ const WORKFLOW_RUNTIME_EVENT_NAMES = new Set([
 ]);
 
 export async function applyReconnectEventReplay({
-  event,
-  data,
+  event: incomingEvent,
+  data: incomingData,
   replayCache,
   isCurrentActiveSession,
   isCurrentActiveDialogProcess,
@@ -30,10 +31,16 @@ export async function applyReconnectEventReplay({
   applyExecutionTree,
   applyWorkflowRuntimeEvent,
   applySubSessionReplayMessages,
-  finalizeDoneSessionDetail,
+  finalizeDoneTurnPresentation,
   isDeletedTurn,
 } = {}) {
-  const replayEvent = _trimStr(event);
+  const normalizedTransportEnvelope = normalizeTurnTransportEnvelope({
+    event: incomingEvent,
+    data: incomingData,
+    source: "reconnect",
+  });
+  const replayEvent = normalizedTransportEnvelope.event;
+  const data = normalizedTransportEnvelope.data;
   const replaySessionId = _trimStr(data?.sessionId || data?.messageEvent?.sessionId);
   const replayTurnScopeId = _trimStr(data?.turnScopeId || data?.messageEvent?.turnScopeId);
   if (isDeletedTurn?.({ sessionId: replaySessionId, turnScopeId: replayTurnScopeId }) === true) {
@@ -94,11 +101,11 @@ export async function applyReconnectEventReplay({
   const turnScopeId = _trimStr(data?.turnScopeId || data?.messageEvent?.turnScopeId);
   if (sessionId && isCurrentActiveSession(sessionId)) {
     await consumeReplayCacheForSession(sessionId);
-    await applyReconnectMessagesToActiveSession([{ event, data }], dialogProcessId, {
+    await applyReconnectMessagesToActiveSession([{ event: replayEvent, data }], dialogProcessId, {
       turnScopeId,
     });
-    if (_trimStr(event) === StreamEventEnum.DONE) {
-      await finalizeDoneSessionDetail?.(data || {});
+    if (replayEvent === StreamEventEnum.DONE) {
+      await finalizeDoneTurnPresentation?.(data || {});
       const authoritativeSnapshot = hasAuthoritativeCurrentRun?.({
         sessionId,
         turnScopeId,
@@ -116,11 +123,11 @@ export async function applyReconnectEventReplay({
   }
 
   if (!sessionId && dialogProcessId && isCurrentActiveDialogProcess?.(dialogProcessId)) {
-    await applyReconnectMessagesToActiveSession([{ event, data }], dialogProcessId, {
+    await applyReconnectMessagesToActiveSession([{ event: replayEvent, data }], dialogProcessId, {
       turnScopeId,
     });
-    if (_trimStr(event) === StreamEventEnum.DONE) {
-      await finalizeDoneSessionDetail?.(data || {});
+    if (replayEvent === StreamEventEnum.DONE) {
+      await finalizeDoneTurnPresentation?.(data || {});
       await applyChannelState({
         ...(data || {}),
         dialogProcessId,
@@ -140,6 +147,6 @@ export async function applyReconnectEventReplay({
     const replayKey = normalizeReplayCacheKey(dialogProcessId, sessionId, turnScopeId);
     if (!replayCache[sessionId]) replayCache[sessionId] = {};
     if (!replayCache[sessionId][replayKey]) replayCache[sessionId][replayKey] = [];
-    replayCache[sessionId][replayKey].push({ event, data });
+    replayCache[sessionId][replayKey].push({ event: replayEvent, data });
   }
 }

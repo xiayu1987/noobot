@@ -129,6 +129,8 @@ export function useWorkflowNodeMessages({
       sessionId: String(messageItem?.sessionId || "").trim(),
       dialogProcessId: String(messageItem?.dialogProcessId || "").trim(),
       turnScopeId: String(messageItem?.turnScopeId || "").trim(),
+      statusTurnScopeId: String(messageItem?.statusTurnScopeId || "").trim(),
+      projectedStatusStepState: String(messageItem?.projectedStatusStepState || "").trim(),
       pending: messageItem?.pending === true,
       workflowNodeRunningPlaceholder: messageItem?.workflowNodeRunningPlaceholder === true,
       contentLength: String(messageItem?.content || "").length,

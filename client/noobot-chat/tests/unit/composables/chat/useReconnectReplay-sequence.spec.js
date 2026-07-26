@@ -110,4 +110,45 @@ describe("useReconnectReplay", () => {
     expect(assistant?.content).toBe("ABC");
     expect(api.__test.appliedReconnectSeqByDialogProcessId["dp-inc"]).toBe(3);
   });
+
+  it("SQ-05: distinct protocol events at the same transport sequence are each consumed once", async () => {
+    const { api, refs } = createFixture({ processStore: createFakeProcessStore() });
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "q", turnScopeId: "turn-boundary" },
+      {
+        role: RoleEnum.ASSISTANT,
+        dialogProcessId: "dp-boundary",
+        turnScopeId: "turn-boundary",
+        content: "",
+        pending: true,
+      },
+    ];
+
+    await api.applyReconnectEvent(StreamEventEnum.THINKING, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-boundary",
+      turnScopeId: "turn-boundary",
+      seq: 9,
+      event: "execution_step",
+      text: "thinking once",
+    });
+    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-boundary",
+      turnScopeId: "turn-boundary",
+      seq: 9,
+      text: "answer",
+    });
+    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-boundary",
+      turnScopeId: "turn-boundary",
+      seq: 9,
+      text: " duplicate",
+    });
+
+    const assistant = refs.activeSession.value.messages[1];
+    expect(assistant.content).toBe("answer");
+    expect(api.__test.appliedReconnectSeqByDialogProcessId["dp-boundary"]).toBe(9);
+  });
 });

@@ -638,6 +638,79 @@ describe("messageModel execution logs", () => {
     }));
   });
 
+  it("preserves a running child execution status through the view boundary", () => {
+    const messages = foldConversationMessages([{
+      role: "assistant",
+      content: "",
+      pending: true,
+      sessionId: "child-session",
+      turnScopeId: "workflow-node:child",
+      statusTurnScopeId: "workflow-node:child",
+      projectedStatusStepState: "completing",
+      workflowNodeRunningPlaceholder: true,
+    }], buildViewMessage);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      statusTurnScopeId: "workflow-node:child",
+      projectedStatusStepState: "completing",
+    });
+  });
+
+  it("preserves terminal child execution status while folding same-turn assistant fragments", () => {
+    const messages = foldConversationMessages([
+      {
+        role: "assistant",
+        content: "part 1",
+        sessionId: "child-session",
+        turnScopeId: "workflow-node:child",
+        statusTurnScopeId: "workflow-node:child",
+        projectedStatusStepState: "completed",
+      },
+      {
+        role: "assistant",
+        content: "part 2",
+        sessionId: "child-session",
+        turnScopeId: "workflow-node:child",
+        statusTurnScopeId: "workflow-node:child",
+        projectedStatusStepState: "completing",
+      },
+    ], buildViewMessage);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      statusTurnScopeId: "workflow-node:child",
+      projectedStatusStepState: "completed",
+    });
+  });
+
+  it("does not merge child execution status across turns", () => {
+    const messages = foldConversationMessages([
+      {
+        role: "assistant",
+        content: "first turn",
+        sessionId: "child-session",
+        turnScopeId: "workflow-node:first",
+        statusTurnScopeId: "workflow-node:first",
+        projectedStatusStepState: "completed",
+      },
+      {
+        role: "assistant",
+        content: "second turn",
+        sessionId: "child-session",
+        turnScopeId: "workflow-node:second",
+        statusTurnScopeId: "workflow-node:second",
+        projectedStatusStepState: "completing",
+      },
+    ], buildViewMessage);
+
+    expect(messages).toHaveLength(2);
+    expect(messages.map((message) => message.projectedStatusStepState)).toEqual([
+      "completed",
+      "completing",
+    ]);
+  });
+
   it("keeps all canonical activities when merging completed assistant messages", () => {
     const messages = foldConversationMessages([
       {

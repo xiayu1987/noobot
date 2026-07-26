@@ -15,15 +15,13 @@ export function matchesMessageStatusRow(messageItem = {}) {
     messageItem?.pending ||
     messageItem?.statusLabel ||
     messageItem?.statusTurnScopeId ||
+    messageItem?.projectedStatusStepState ||
     messageItem?.persistedStatusStepState
   );
 }
 
 export function matchesThinkingPanel(messageItem = {}) {
-  return (
-    messageItem?.role === "assistant" &&
-    messageItem?.__workflowLiveProjection !== true
-  );
+  return messageItem?.role === "assistant";
 }
 
 export const FRONTEND_PLUGIN_API_VERSION = "1";
@@ -79,10 +77,9 @@ export function registerFrontendPlugin(ctx = {}) {
         slot: "pre",
         priority: 10,
         component: ThinkingPanel,
-        // Live workflow projections are rendered through ChatMessageItem so
-        // they can reuse the normal workflow card. Do not attach another
-        // ThinkingPanel to that synthetic message, otherwise it projects the
-        // same workflow again recursively.
+        // Every assistant Turn uses the same shell. A live workflow is merely
+        // another card on that shell, so thinking/runtime state must be
+        // selected exactly as it is for persisted assistant messages.
         match: matchesThinkingPanel,
         resolveProps: (context = {}) => ({
           messageItem: context?.messageItem || {},

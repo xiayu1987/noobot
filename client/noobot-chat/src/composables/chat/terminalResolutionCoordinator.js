@@ -253,7 +253,12 @@ export function createTerminalResolutionCoordinator({
           return retryPromise;
         }
         const result = { applied: false, reason: response?.reason || "terminal_unresolved", response };
-        if (response?.retryable === true && retry >= maxRetries) {
+        // A non-retryable unresolved response is also authoritative for this
+        // discovery generation. Cache it just like an exhausted retry series,
+        // otherwise DONE, final-detail hydration and CHANNEL_STATE each issue
+        // the same GET for one Turn. A newer version or force still clears the
+        // watermark through the normal invalidation path above.
+        if (response?.retryable !== true || retry >= maxRetries) {
           entry.exhaustedVersion = { ...entry.targetVersion };
           entry.exhaustedResult = result;
         }

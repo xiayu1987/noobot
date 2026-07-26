@@ -6,6 +6,45 @@
 import { computed } from "vue";
 import { parseWorkflowDslPayload } from "./workflowDsl";
 
+function text(value) {
+  return String(value || "").trim();
+}
+
+export function projectWorkflowMessageIdentity(payload = {}, messageItem = {}) {
+  const source = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+  const workflowRunId = text(
+    source?.workflowRunId ||
+    source?.execution?.workflowRunId ||
+    source?.execution?.instanceId ||
+    messageItem?.workflowRunId ||
+    messageItem?.turnScopeId,
+  );
+  const sessionId = text(
+    source?.planningDialog?.sessionId || source?.runMeta?.sessionId || messageItem?.sessionId,
+  );
+  const dialogProcessId = text(
+    source?.planningDialog?.dialogProcessId || source?.runMeta?.dialogProcessId || messageItem?.dialogProcessId,
+  );
+  return {
+    ...source,
+    ...(workflowRunId ? { workflowRunId } : {}),
+    execution: {
+      ...(source?.execution && typeof source.execution === "object" ? source.execution : {}),
+      ...(workflowRunId ? { workflowRunId, instanceId: workflowRunId } : {}),
+    },
+    planningDialog: {
+      ...(source?.planningDialog && typeof source.planningDialog === "object" ? source.planningDialog : {}),
+      ...(sessionId ? { sessionId } : {}),
+      ...(dialogProcessId ? { dialogProcessId } : {}),
+    },
+    runMeta: {
+      ...(source?.runMeta && typeof source.runMeta === "object" ? source.runMeta : {}),
+      ...(sessionId ? { sessionId } : {}),
+      ...(dialogProcessId ? { dialogProcessId } : {}),
+    },
+  };
+}
+
 export function useWorkflowMeta(props) {
   const parsedDslPayload = computed(() => parseWorkflowDslPayload(props.messageItem?.content) || {});
 
@@ -43,25 +82,27 @@ export function useWorkflowMeta(props) {
         ? parsedPayload.semantic
         : {};
     const hasMetaNodes = Array.isArray(metaSemantic.nodes) && metaSemantic.nodes.length > 0;
-    if (hasMetaNodes || !Object.keys(parsedPayload).length) return metaPayload;
-    return {
-      ...parsedPayload,
-      ...metaPayload,
-      semantic: {
-        ...parsedSemantic,
-        ...metaSemantic,
-        nodes: Array.isArray(metaSemantic.nodes) && metaSemantic.nodes.length
-          ? metaSemantic.nodes
-          : parsedSemantic.nodes,
-        flowtos: Array.isArray(metaSemantic.flowtos) && metaSemantic.flowtos.length
-          ? metaSemantic.flowtos
-          : parsedSemantic.flowtos,
-      },
-      interaction: {
-        ...(parsedPayload.interaction || {}),
-        ...(metaPayload.interaction || {}),
-      },
-    };
+    const mergedPayload = hasMetaNodes || !Object.keys(parsedPayload).length
+      ? metaPayload
+      : {
+          ...parsedPayload,
+          ...metaPayload,
+          semantic: {
+            ...parsedSemantic,
+            ...metaSemantic,
+            nodes: Array.isArray(metaSemantic.nodes) && metaSemantic.nodes.length
+              ? metaSemantic.nodes
+              : parsedSemantic.nodes,
+            flowtos: Array.isArray(metaSemantic.flowtos) && metaSemantic.flowtos.length
+              ? metaSemantic.flowtos
+              : parsedSemantic.flowtos,
+          },
+          interaction: {
+            ...(parsedPayload.interaction || {}),
+            ...(metaPayload.interaction || {}),
+          },
+        };
+    return projectWorkflowMessageIdentity(mergedPayload, props.messageItem);
   });
 
   const semanticFlowtos = computed(() =>

@@ -6,7 +6,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   hydrateWorkflowRegistryFromSessionDetail,
-  isWorkflowThinkingPlaceholder,
   workflowPlanningEventFromMessage,
 } from "../../../../src/composables/chat/workflowSessionHydration";
 
@@ -83,24 +82,5 @@ describe("workflow session hydration", () => {
       nodeAgentRuns: [{ nodeExecutionId: "node-a", status: "running" }],
     };
     expect(workflowPlanningEventFromMessage(message, "session-a")?.nodeSessions).toHaveLength(1);
-  });
-
-  it("hides only the empty assistant placeholder owned by the restored workflow", () => {
-    const registry = { workflows: {
-      "workflow-a": { workflowRunId: "workflow-a", turnScopeId: "turn-a", dialogProcessId: "dialog-a" },
-    } };
-    const placeholder = { role: "assistant", type: "message", content: "", turnScopeId: "turn-a" };
-    const persistedMessages = [workflowMessage()];
-    expect(isWorkflowThinkingPlaceholder(placeholder, registry, persistedMessages)).toBe(true);
-    expect(isWorkflowThinkingPlaceholder({ ...placeholder, content: "real answer" }, registry, persistedMessages)).toBe(false);
-    expect(isWorkflowThinkingPlaceholder({ ...placeholder, turnScopeId: "other-turn" }, registry, persistedMessages)).toBe(false);
-  });
-
-  it("keeps the live thinking surface until a persisted workflow entity replaces it", () => {
-    const registry = { workflows: {
-      "workflow-a": { workflowRunId: "workflow-a", turnScopeId: "turn-a", dialogProcessId: "dialog-a" },
-    } };
-    const placeholder = { role: "assistant", type: "message", content: "", turnScopeId: "turn-a" };
-    expect(isWorkflowThinkingPlaceholder(placeholder, registry, [])).toBe(false);
   });
 });

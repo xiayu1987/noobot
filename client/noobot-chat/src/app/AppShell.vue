@@ -199,6 +199,7 @@ const {
   conversationStateSnapshot,
   conversationStateTimeline,
   turnRuntimeRegistry,
+  workflowNodeStateRegistry,
 } = useChatSession({
   userId,
   apiKey,
@@ -232,6 +233,7 @@ const showConversationStateDebugPanel = computed(
 chatMessageNavigatorPanel = useChatMessageNavigatorPanel({
   activeSession,
   activeSessionId,
+  workflowNodeStateRegistry,
   shouldRenderMessageInChat,
   messageListPanelRef,
   isMobile,

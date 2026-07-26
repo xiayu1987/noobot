@@ -33,6 +33,55 @@ function resolveProjectionState(...values) {
   return states.find((state) => TERMINAL_EXECUTION_STATES.has(state)) || states[0] || "";
 }
 
+function statusStepStateFromProjection(state = "") {
+  const normalized = text(state).toLowerCase();
+  if (["completed", "succeeded"].includes(normalized)) return "completed";
+  if (["failed", "error", "expired", "timeout", "no_conversation"].includes(normalized)) return "error";
+  if (["cancelled", "aborted", "user_stopped"].includes(normalized)) return "stopped";
+  if (["requesting", "pending", "queued"].includes(normalized)) return "requesting";
+  if (["sending", "starting"].includes(normalized)) return "sending";
+  if (normalized) return "completing";
+  return "";
+}
+
+/** Attach authoritative child Turn state to its assistant display message.
+ * Session + Turn is the primary identity; dialog is legacy-only when neither
+ * side has a Turn identity. */
+export function projectTurnStatusOntoAssistant(messages = [], {
+  sessionId = "",
+  turnScopeId = "",
+  dialogProcessId = "",
+  state = "",
+} = {}) {
+  const source = Array.isArray(messages) ? messages : [];
+  const normalizedSessionId = text(sessionId);
+  const scopeId = text(turnScopeId);
+  const normalizedDialogProcessId = text(dialogProcessId);
+  const projectedStatusStepState = statusStepStateFromProjection(state);
+  if (!projectedStatusStepState) return source;
+
+  return source.map((item = {}) => {
+    if (text(item?.role).toLowerCase() !== "assistant") return item;
+    const itemSessionId = text(item?.sessionId || item?.metadata?.sessionId);
+    const itemScopeId = text(item?.turnScopeId || item?.metadata?.turnScopeId);
+    const itemDialogId = text(item?.dialogProcessId || item?.metadata?.dialogProcessId);
+    if (normalizedSessionId && itemSessionId && itemSessionId !== normalizedSessionId) return item;
+    if (scopeId && itemScopeId) {
+      if (itemScopeId !== scopeId) return item;
+    } else if (scopeId || itemScopeId) {
+      return item;
+    } else if (normalizedDialogProcessId && itemDialogId && itemDialogId !== normalizedDialogProcessId) {
+      return item;
+    }
+    return {
+      ...item,
+      sessionId: itemSessionId || normalizedSessionId,
+      statusTurnScopeId: scopeId || itemScopeId,
+      projectedStatusStepState,
+    };
+  });
+}
+
 export function withRunningAssistantPlaceholder(messages = [], {
   sessionId = "",
   turnScopeId = "",
@@ -213,12 +262,15 @@ export function buildUnifiedSessionDetail({
         nodeItem?.status,
         nodeItem?.state,
       );
-      const messages = withRunningAssistantPlaceholder(rawMessages, {
-        sessionId,
-        turnScopeId,
-        dialogProcessId,
-        state: projectionState,
-      });
+      const messages = projectTurnStatusOntoAssistant(
+        withRunningAssistantPlaceholder(rawMessages, {
+          sessionId,
+          turnScopeId,
+          dialogProcessId,
+          state: projectionState,
+        }),
+        { sessionId, turnScopeId, dialogProcessId, state: projectionState },
+      );
       if (!messages.length && !execution && !allowEmptyMessages) return null;
       return {
         executionId: text(execution.executionId || childExecutionIds[0]),
@@ -276,12 +328,15 @@ export function buildUnifiedSessionDetail({
     nodeItem?.status,
     nodeItem?.state,
   );
-  const scopedMessages = withRunningAssistantPlaceholder(scopedRawMessages, {
-    sessionId,
-    turnScopeId,
-    dialogProcessId,
-    state: projectionState,
-  });
+  const scopedMessages = projectTurnStatusOntoAssistant(
+    withRunningAssistantPlaceholder(scopedRawMessages, {
+      sessionId,
+      turnScopeId,
+      dialogProcessId,
+      state: projectionState,
+    }),
+    { sessionId, turnScopeId, dialogProcessId, state: projectionState },
+  );
   return {
     executionId: text(childExecutionIds[0]),
     attemptExecutionIds: childExecutionIds,

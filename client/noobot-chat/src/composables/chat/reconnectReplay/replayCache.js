@@ -23,7 +23,12 @@ export function markReconnectSequenceApplied(
   appliedReconnectSequenceByTurnKey,
   dialogProcessId = "",
   sequence = 0,
-  { sessionId = "", turnScopeId = "" } = {},
+  {
+    sessionId = "",
+    turnScopeId = "",
+    appliedEventKindsByTurnKey = null,
+    eventKindsAtSequence = [],
+  } = {},
 ) {
   const normalizedDpId = _trimStr(dialogProcessId);
   const replayKey = createTurnKey({ sessionId, turnScopeId }) || normalizedDpId;
@@ -33,6 +38,23 @@ export function markReconnectSequenceApplied(
   if (normalizedSequence > lastAppliedSeq) {
     appliedReconnectSequenceByTurnKey[replayKey] = normalizedSequence;
   }
+  if (appliedEventKindsByTurnKey && replayKey) {
+    const previousBoundary = appliedEventKindsByTurnKey[replayKey];
+    const previousSequence = Number(previousBoundary?.sequence || 0);
+    const previousKinds = previousSequence === normalizedSequence && Array.isArray(previousBoundary?.eventKinds)
+      ? previousBoundary.eventKinds
+      : [];
+    if (normalizedSequence >= previousSequence) {
+      appliedEventKindsByTurnKey[replayKey] = {
+        sequence: normalizedSequence,
+        sequenceDomain: "transport",
+        eventKinds: Array.from(new Set([
+          ...previousKinds,
+          ...(Array.isArray(eventKindsAtSequence) ? eventKindsAtSequence : []),
+        ].map((value) => _trimStr(value)).filter(Boolean))).sort(),
+      };
+    }
+  }
   // Legacy reconnect envelopes can omit turnScopeId even when they belong to
   // the currently active canonical turn. Keep the execution-chain cursor as a
   // read-only compatibility alias so those envelopes cannot replay facts that
@@ -41,6 +63,9 @@ export function markReconnectSequenceApplied(
     const legacySequence = Number(appliedReconnectSequenceByTurnKey?.[normalizedDpId] || 0);
     if (normalizedSequence > legacySequence) {
       appliedReconnectSequenceByTurnKey[normalizedDpId] = normalizedSequence;
+    }
+    if (appliedEventKindsByTurnKey) {
+      appliedEventKindsByTurnKey[normalizedDpId] = appliedEventKindsByTurnKey[replayKey];
     }
   }
 }

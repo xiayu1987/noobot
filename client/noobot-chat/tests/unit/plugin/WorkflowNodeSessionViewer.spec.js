@@ -204,6 +204,8 @@ describe("workflow node session view ownership", () => {
       sessionId: "child-running",
       dialogProcessId: "child-dialog-running",
       turnScopeId: "workflow-node:node-running",
+      statusTurnScopeId: "workflow-node:node-running",
+      projectedStatusStepState: "completing",
       pending: true,
       workflowNodeRunningPlaceholder: true,
     });

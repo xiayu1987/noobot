@@ -153,6 +153,21 @@ function rememberRuntimeEntryKeys(entryIndexByKey, item = {}, index = 0) {
   }
 }
 
+function findRuntimeEntryIndex(entryIndexByKey, item = {}) {
+  const keys = [
+    item?.nodeExecutionId ? `node:${item.nodeExecutionId}` : "",
+    ...collectWorkflowDialogProcessIds(item),
+    item?.sessionId,
+    item?.nodeSessionId,
+    item?.stepId,
+    item?.actionNodeStateId,
+  ].map((value) => String(value || "").trim()).filter(Boolean);
+  for (const key of keys) {
+    if (entryIndexByKey.has(key)) return entryIndexByKey.get(key);
+  }
+  return -1;
+}
+
 function mergeRuntimeEntry(base = {}, fallback = {}) {
   return {
     ...fallback,
@@ -187,9 +202,8 @@ export function createRuntimeNodeSessions({ workflowPayload, nodeSessions, execu
     for (const committedItem of Object.values(committedNodes)) {
       const committed = normalizeCommittedNodeFact(committedItem);
       if (!committed.nodeExecutionId) continue;
-      const key = `node:${committed.nodeExecutionId}`;
-      if (entryIndexByKey.has(key)) {
-        const index = entryIndexByKey.get(key);
+      const index = findRuntimeEntryIndex(entryIndexByKey, committed);
+      if (index >= 0) {
         entries[index] = mergeCommittedNodeFact(entries[index], committed);
         rememberRuntimeEntryKeys(entryIndexByKey, entries[index], index);
         continue;

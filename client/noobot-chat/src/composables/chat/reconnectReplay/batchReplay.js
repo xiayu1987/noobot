@@ -58,12 +58,18 @@ function summarizeReconnectEnvelope(envelope = {}) {
 export function prepareReconnectReplayMessages({
   messages = [],
   lastAppliedSeq = 0,
+  lastAppliedEventKinds = null,
 } = {}) {
   const normalizedLastAppliedSeq = Number(lastAppliedSeq || 0);
+  const boundaryEventKinds = Array.isArray(lastAppliedEventKinds)
+    ? new Set(lastAppliedEventKinds.map((value) => _trimStr(value)).filter(Boolean))
+    : null;
   const nextMessages = (_ensureArray(messages)).filter((envelope) => {
     if (isPendingInteractionReplay(envelope)) return true;
     const sequence = getReconnectEnvelopeSequence(envelope);
-    return !sequence || sequence > normalizedLastAppliedSeq;
+    if (!sequence || sequence > normalizedLastAppliedSeq) return true;
+    if (sequence < normalizedLastAppliedSeq || !boundaryEventKinds) return false;
+    return !boundaryEventKinds.has(_trimStr(envelope?.event));
   });
   return {
     nextMessages,
@@ -87,6 +93,7 @@ export function shouldSkipReconnectBatchAfterTerminal({
 export function prepareReconnectReplayBatchPlan({
   messages = [],
   lastAppliedSeq = 0,
+  lastAppliedEventKinds = null,
   normalizedDpId = "",
   terminalDialogProcessIdSet,
   isReconnectTerminalBatch,
@@ -96,6 +103,7 @@ export function prepareReconnectReplayBatchPlan({
   const { nextMessages, maxSequence } = prepareReconnectReplayMessages({
     messages,
     lastAppliedSeq,
+    lastAppliedEventKinds,
   });
   const shouldSkipAfterTerminal = shouldSkipReconnectBatchAfterTerminal({
     normalizedDpId,
@@ -465,11 +473,16 @@ export function finalizeReconnectReplayBatch({
   sessionId = "",
   turnScopeId = "",
   maxAppliedSeq = 0,
+  eventKindsAtSequence = [],
   markReconnectSequenceApplied,
   navigateToLastMessage,
   shouldNavigate = false,
 } = {}) {
-  markReconnectSequenceApplied?.(normalizedDpId, maxAppliedSeq, { sessionId, turnScopeId });
+  markReconnectSequenceApplied?.(normalizedDpId, maxAppliedSeq, {
+    sessionId,
+    turnScopeId,
+    eventKindsAtSequence,
+  });
   if (shouldNavigate) navigateToLastMessage?.();
 }
 
@@ -486,6 +499,7 @@ export async function applyReconnectReplayBatchToActiveSession({
   authoritativeCurrentRun = false,
   legacyDialogFallback = false,
   lastAppliedSeq = 0,
+  lastAppliedEventKinds = null,
   terminalDialogProcessIdSet,
   isReconnectTerminalBatch,
   isReconnectTerminalEvent,
@@ -517,6 +531,7 @@ export async function applyReconnectReplayBatchToActiveSession({
   } = prepareReconnectReplayBatchPlan({
     messages,
     lastAppliedSeq,
+    lastAppliedEventKinds,
     normalizedDpId,
     turnScopeId: normalizedTurnScopeId,
     terminalDialogProcessIdSet,
@@ -544,6 +559,9 @@ export async function applyReconnectReplayBatchToActiveSession({
     replayCount: nextMessages.length,
     filteredCount: Math.max(0, _ensureArray(messages).length - nextMessages.length),
     lastAppliedTransportSequence: Number(lastAppliedSeq || 0),
+    lastAppliedTransportEventKinds: Array.isArray(lastAppliedEventKinds)
+      ? lastAppliedEventKinds
+      : null,
     maxTransportSequence: maxSequence,
     terminalDialogSeen: Boolean(
       normalizedDpId && terminalDialogProcessIdSet?.has?.(normalizedDpId),
@@ -564,12 +582,19 @@ export async function applyReconnectReplayBatchToActiveSession({
     });
     return false;
   }
+  const eventKindsAtMaxSequence = Array.from(new Set(
+    nextMessages
+      .filter((envelope) => getReconnectEnvelopeSequence(envelope) === maxSequence)
+      .map((envelope) => _trimStr(envelope?.event))
+      .filter(Boolean),
+  )).sort();
   if (shouldSkipAfterTerminal) {
     finalizeReconnectReplayBatch({
       normalizedDpId,
       sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
       turnScopeId: normalizedTurnScopeId,
       maxAppliedSeq: maxSequence,
+      eventKindsAtSequence: eventKindsAtMaxSequence,
       markReconnectSequenceApplied,
       navigateToLastMessage,
       shouldNavigate: false,
@@ -610,6 +635,7 @@ export async function applyReconnectReplayBatchToActiveSession({
       sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
       turnScopeId: normalizedTurnScopeId,
       maxAppliedSeq: maxSequence,
+      eventKindsAtSequence: eventKindsAtMaxSequence,
       markReconnectSequenceApplied,
       navigateToLastMessage,
     });
@@ -639,6 +665,7 @@ export async function applyReconnectReplayBatchToActiveSession({
       sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
       turnScopeId: normalizedTurnScopeId,
       maxAppliedSeq: maxSequence,
+      eventKindsAtSequence: eventKindsAtMaxSequence,
       markReconnectSequenceApplied,
       navigateToLastMessage,
     });
@@ -661,6 +688,12 @@ export async function applyReconnectReplayBatchToActiveSession({
     sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
     turnScopeId: normalizedTurnScopeId,
     maxAppliedSeq,
+    eventKindsAtSequence: Array.from(new Set(
+      nextMessages
+        .filter((envelope) => getReconnectEnvelopeSequence(envelope) === maxAppliedSeq)
+        .map((envelope) => _trimStr(envelope?.event))
+        .filter(Boolean),
+    )).sort(),
     markReconnectSequenceApplied,
     navigateToLastMessage,
   });

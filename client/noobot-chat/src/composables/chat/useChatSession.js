@@ -50,7 +50,6 @@ import { useChatStore } from "../../shared/stores/useChatStore";
 import { useProcessStore } from "../../shared/stores/useProcessStore";
 import {
   hydrateWorkflowRegistryFromSessionDetail,
-  isWorkflowThinkingPlaceholder,
 } from "./workflowSessionHydration";
 import { useLocale } from "../../shared/i18n/useLocale";
 import {
@@ -121,6 +120,7 @@ export function useChatSession({
   const processStore = useProcessStore();
   const {
     turnRuntimeRegistry,
+    workflowNodeStateRegistry,
     sessions,
     activeSessionId,
     activeSession,
@@ -1078,17 +1078,11 @@ export function useChatSession({
     const messageRole = getMessageRole(messageItem);
     const messageTurnScopeId = getMessageTurnScopeId(messageItem);
     const childWorkflowMessage = messageTurnScopeId.startsWith("workflow-node:");
-    const workflowPlaceholder = isWorkflowThinkingPlaceholder(
-      messageItem,
-      chatStore.workflowNodeStateRegistry,
-      activeSession.value?.messages,
-    );
     const shouldRender = messageRole !== RoleEnum.TOOL &&
       !isHarnessInjectedMessage(messageItem) &&
-      !childWorkflowMessage &&
-      !workflowPlaceholder;
+      !childWorkflowMessage;
     const summary = summarizeWorkflowMessage(messageItem);
-    if (summary.type === "workflow" || summary.pluginSource === "workflow-plugin" || workflowPlaceholder || childWorkflowMessage) {
+    if (summary.type === "workflow" || summary.pluginSource === "workflow-plugin" || childWorkflowMessage) {
       logWorkflowDiagnostics("frontend.workflowRender.messageVisibilityEvaluated", {
         sessionId: String(activeSession.value?.backendSessionId || activeSessionId.value || ""),
         dialogProcessId: summary.dialogProcessId,
@@ -1096,7 +1090,6 @@ export function useChatSession({
         workflowRunId: summary.workflowRunId,
         shouldRender,
         childWorkflowMessage,
-        workflowPlaceholder,
         message: summary,
       });
     }
@@ -1146,5 +1139,6 @@ export function useChatSession({
     conversationStateSnapshot,
     conversationStateTimeline,
     turnRuntimeRegistry,
+    workflowNodeStateRegistry,
   };
 }

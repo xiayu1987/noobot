@@ -15,7 +15,6 @@ import {
   BaseThinkingLogLine,
   BaseThinkingPanelShell,
 } from "../ui";
-import WorkflowLiveProjectionList from "../../app/WorkflowLiveProjectionList.vue";
 import {
   logToolLogWindowDebug,
   summarizeToolLogWindow,
@@ -30,8 +29,6 @@ const props = defineProps({
   executionLogs: { type: Array, default: () => [] },
   executionLogCount: { type: Number, default: 0 },
   thinkingDetailLabel: { type: String, default: "" },
-  showWorkflowProjection: Boolean,
-  workflowProjectionProps: { type: Object, default: () => ({}) },
   openNames: { type: Array, default: () => [] },
 });
 const emit = defineEmits(["open-thinking-details", "collapse", "update:openNames"]);
@@ -78,9 +75,6 @@ watch(
       ></template
     >
     <BaseTabPanelBody class="thinking-realtime-body">
-      <div v-if="showWorkflowProjection" class="thinking-workflow-region">
-        <WorkflowLiveProjectionList v-bind="workflowProjectionProps" />
-      </div>
       <div v-if="latestPluginAnalysisLog" class="thinking-analysis-block">
         <BaseMetaLabel
           class="thinking-analysis-title"
@@ -172,12 +166,6 @@ watch(
 .thinking-analysis-block {
   flex: 0 0 auto;
   margin-top: 0;
-  margin-bottom: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--noobot-divider);
-}
-.thinking-workflow-region {
-  flex: 0 0 auto;
   margin-bottom: 12px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--noobot-divider);

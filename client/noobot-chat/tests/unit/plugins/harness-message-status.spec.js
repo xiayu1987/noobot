@@ -10,6 +10,13 @@ import {
 } from "../../../../../plugin/noobot-plugin-harness/frontend/index.js";
 
 describe("harness message status renderer", () => {
+  it("matches an authoritative child Execution display projection", () => {
+    expect(matchesMessageStatusRow({
+      role: "assistant",
+      projectedStatusStepState: "completed",
+    })).toBe(true);
+  });
+
   it("matches a refreshed assistant message with only persisted status", () => {
     expect(matchesMessageStatusRow({
       role: "assistant",
@@ -42,12 +49,12 @@ describe("harness thinking panel renderer", () => {
     })).toBe(false);
   });
 
-  it("does not recursively attach to a live workflow projection", () => {
+  it("attaches to a live workflow on the same assistant Turn shell", () => {
     expect(matchesThinkingPanel({
       role: "assistant",
       type: "workflow",
       __workflowLiveProjection: true,
-    })).toBe(false);
+    })).toBe(true);
   });
 
   it("continues matching normal and persisted workflow messages", () => {

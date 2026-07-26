@@ -1,0 +1,51 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import {
+  isMessageEventEnvelope,
+  MESSAGE_EVENT_SEQUENCE_DOMAIN,
+} from "@noobot/shared/message-event-protocol";
+
+export const TURN_TRANSPORT_SEQUENCE_DOMAIN = "transport";
+
+const text = (value) => String(value || "").trim();
+
+export function normalizeTurnTransportEnvelope({
+  event = "",
+  data = {},
+  source = "unknown",
+} = {}) {
+  const payload = data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  const messageEvent = isMessageEventEnvelope(payload?.event)
+    ? payload.event
+    : isMessageEventEnvelope(payload?.messageEvent)
+      ? payload.messageEvent
+      : null;
+  return {
+    event: text(event),
+    data: payload,
+    source: text(source) || "unknown",
+    identity: {
+      sessionId: text(payload?.sessionId || messageEvent?.sessionId),
+      dialogProcessId: text(payload?.dialogProcessId || messageEvent?.dialogProcessId),
+      turnScopeId: text(payload?.turnScopeId || messageEvent?.turnScopeId),
+    },
+    transportCursor: {
+      sequenceDomain: TURN_TRANSPORT_SEQUENCE_DOMAIN,
+      // Transport ordering is exclusively the outer packet sequence. Never
+      // fall back to an authoritative inner event sequence.
+      sequence: Number(payload?.seq || payload?.transportSequence || 0),
+      event: text(event),
+    },
+    messageEventCursor: messageEvent
+      ? {
+          sequenceDomain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
+          sequence: Number(messageEvent.sequence || 0),
+          eventId: text(messageEvent.eventId),
+          messageId: text(messageEvent.messageId),
+        }
+      : null,
+  };
+}

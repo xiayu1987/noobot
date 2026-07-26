@@ -128,61 +128,6 @@ const { messageModelLabel, showSubTaskActivity, subTaskStatusText, statusStepSta
 const messageMarkdownRef = ref(null);
 const { translate } = useLocale();
 const chatStore = useChatStore();
-const workflowThinkingHostEvaluation = computed(() => {
-  if (getMessageRole(props.messageItem) !== "assistant") return { matched: false, reason: "not_assistant", workflows: [] };
-  if (String(props.messageItem?.type || "").trim().toLowerCase() !== "message") {
-    return { matched: false, reason: "not_message", workflows: [] };
-  }
-  if (String(props.messageItem?.content || "").trim()) {
-    return { matched: false, reason: "has_content", workflows: [] };
-  }
-  if (props.messageItem?.workflowNodeRunningPlaceholder === true) {
-    return { matched: false, reason: "workflow_node_assistant", workflows: [] };
-  }
-  const turnScopeId = getMessageTurnScopeId(props.messageItem);
-  const dialogProcessId = getMessageDialogProcessId(props.messageItem);
-  const sessionId = getMessageSessionId(props.messageItem);
-  const isWorkflowNodeScope = turnScopeId.startsWith("workflow-node:");
-  const workflows = Object.values(chatStore.workflowNodeStateRegistry?.workflows || {});
-  const matched = workflows.some((workflow = {}) => {
-    const workflowTurnScopeId = String(workflow?.turnScopeId || "").trim();
-    const workflowDialogProcessId = String(workflow?.dialogProcessId || "").trim();
-    const workflowSessionId = String(workflow?.sessionId || "").trim();
-    return (turnScopeId && workflowTurnScopeId === turnScopeId) ||
-      (dialogProcessId && workflowDialogProcessId === dialogProcessId) ||
-      (!isWorkflowNodeScope && sessionId && workflowSessionId === sessionId && props.messageItem?.pending === true);
-  });
-  return {
-    matched,
-    reason: matched ? "workflow_owner" : "identity_not_found",
-    workflows: workflows.map((workflow = {}) => ({
-      workflowRunId: String(workflow?.workflowRunId || ""),
-      sessionId: String(workflow?.sessionId || ""),
-      dialogProcessId: String(workflow?.dialogProcessId || ""),
-      turnScopeId: String(workflow?.turnScopeId || ""),
-    })),
-  };
-});
-watch(
-  () => JSON.stringify({
-    message: summarizeWorkflowMessage(props.messageItem),
-    evaluation: workflowThinkingHostEvaluation.value,
-    explicitHideHeader: props.hideHeader,
-    effectiveHideHeader: props.hideHeader,
-  }),
-  (signature) => {
-    const snapshot = JSON.parse(signature);
-    if (snapshot.message.role !== "assistant" || snapshot.message.type !== "message" || snapshot.message.contentLength) return;
-    logWorkflowDiagnostics("frontend.workflowRender.hostHeaderEvaluated", {
-      sessionId: snapshot.message.sessionId,
-      dialogProcessId: snapshot.message.dialogProcessId,
-      turnScopeId: snapshot.message.turnScopeId,
-      workflowRunId: snapshot.message.workflowRunId,
-      ...snapshot,
-    });
-  },
-  { immediate: true },
-);
 const messageRuntime = computed(() => selectTurnMessageRuntime(chatStore.turnRuntimeRegistry, {
   sessionId: getMessageSessionId(props.messageItem),
   turnScopeId: getMessageTurnScopeId(props.messageItem),

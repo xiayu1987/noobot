@@ -132,38 +132,3 @@ export function hydrateWorkflowRegistryFromSessionDetail({
   });
   return hydrated;
 }
-
-export function isWorkflowThinkingPlaceholder(message = {}, workflowRegistry = {}, persistedMessages = []) {
-  if (text(message?.role).toLowerCase() !== "assistant") return false;
-  if (text(message?.type || message?.messageType) !== "message") return false;
-  if (text(message?.content)) return false;
-  const turnScopeId = text(message?.turnScopeId);
-  const dialogProcessId = text(message?.dialogProcessId);
-  if (!turnScopeId && !dialogProcessId) return false;
-  const matchingWorkflow = Object.values(workflowRegistry?.workflows || {}).find((workflow = {}) =>
-    (turnScopeId && text(workflow.turnScopeId) === turnScopeId) ||
-    (!turnScopeId && dialogProcessId && text(workflow.dialogProcessId) === dialogProcessId));
-  if (!matchingWorkflow) return false;
-
-  // The empty assistant entity is also the live thinking surface. Retiring it
-  // merely because a realtime planning event exists removes the entire panel
-  // while the turn is still running. It is safe to hide only after the same
-  // turn has an actual persisted workflow entity which can replace that
-  // surface (the refresh/session-detail case).
-  return (Array.isArray(persistedMessages) ? persistedMessages : []).some((candidate = {}) => {
-    if (text(candidate?.type || candidate?.messageType) !== "workflow") return false;
-    const payload = workflowPayload(candidate);
-    const execution = payload?.execution && typeof payload.execution === "object" ? payload.execution : {};
-    const candidateRunId = text(
-      payload.workflowRunId || execution.workflowRunId || execution.instanceId ||
-      candidate.workflowRunId || candidate.turnScopeId,
-    );
-    const candidateTurnScopeId = text(candidate?.turnScopeId);
-    const candidateDialogProcessId = text(candidate?.dialogProcessId || payload?.planningDialog?.dialogProcessId);
-    return Boolean(
-      (candidateRunId && candidateRunId === text(matchingWorkflow.workflowRunId)) ||
-      (turnScopeId && candidateTurnScopeId === turnScopeId) ||
-      (!turnScopeId && dialogProcessId && candidateDialogProcessId === dialogProcessId),
-    );
-  });
-}
