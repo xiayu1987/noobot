@@ -143,14 +143,14 @@ test('tool log window debug uses its own file when enabled', async () => {
   assert.equal((await readJsonl(result.file))[0].data.selectedCount, 10);
 });
 
-test('workflow diagnostics debug is enabled by default and uses its own file', async () => {
-  assert.equal(RUNTIME_EVENTS_CONFIG_DEFAULTS.sessionLogControls.workflowDiagnosticsDebug, true);
+test('workflow diagnostics debug is disabled by default and writes only when enabled', async () => {
+  assert.equal(RUNTIME_EVENTS_CONFIG_DEFAULTS.sessionLogControls.workflowDiagnosticsDebug, false);
   assert.equal(
     RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.workflowDiagnosticsDebug,
     'NOOBOT_RUNTIME_EVENT_WORKFLOW_DIAGNOSTICS_DEBUG',
   );
   const root = await tempRoot();
-  const result = await writeRuntimeEvent({
+  const event = {
     source: 'frontend',
     scope: 'session',
     category: 'debug',
@@ -159,7 +159,18 @@ test('workflow diagnostics debug is enabled by default and uses its own file', a
     userId: 'admin',
     sessionId: 'session-workflow',
     data: { debugType: 'workflow-diagnostics', workflowRunId: 'workflow-1' },
-  }, { root, includeProcess: false });
+  };
+  const skipped = await writeRuntimeEvent(event, { root, includeProcess: false });
+
+  assert.equal(skipped.ok, true);
+  assert.equal(skipped.skipped, true);
+  assert.equal(await pathExists(path.join(root, 'session-workflow', 'debug-workflow-diagnostics.jsonl')), false);
+
+  const result = await writeRuntimeEvent(event, {
+    root,
+    includeProcess: false,
+    workflowDiagnosticsDebug: true,
+  });
 
   assert.equal(result.ok, true);
   assert.equal(result.skipped, undefined);

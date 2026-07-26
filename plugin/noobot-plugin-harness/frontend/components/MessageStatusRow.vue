@@ -59,7 +59,7 @@ const stepView = computed(() => {
 </template>
 
 <style scoped>
-/* 与思考过程面板共用同一套卡片语言，仅以状态色区分运行结果。 */
+/* Share the card styling with the thinking panel; status colors distinguish outcomes. */
 .message-status-steps {
   box-sizing: border-box;
   width: 100%;
@@ -89,7 +89,7 @@ const stepView = computed(() => {
   background: color-mix(in srgb, var(--noobot-status-warning) 5%, var(--noobot-thinking-bg));
 }
 
-/* 2. 隐藏默认的粗糙元素，重塑节点为“微型圆点” */
+/* 2. Replace the default elements with compact dots. */
 .message-status-steps :deep(.el-step__icon) {
   width: 6px !important;
   height: 6px !important;
@@ -99,24 +99,24 @@ const stepView = computed(() => {
   transition: all 0.3s ease;
 }
 
-/* 隐藏图标内部的文字或勾选符号 */
+/* Hide text and check marks inside the icon. */
 .message-status-steps :deep(.el-step__icon-inner) {
   display: none !important;
 }
 
-/* 3. 调整连接线，使其与 6px 的小圆点居中对齐 */
+/* 3. Center the connector on the 6px dot. */
 .message-status-steps :deep(.el-step__line) {
-  top: 3px !important; /* (6px圆点 / 2) */
+  top: 3px !important; /* Half of the 6px dot. */
   height: 1px !important;
   background-color: var(--noobot-divider);
   left: 50% !important;
   right: -50% !important;
 }
 .message-status-steps :deep(.el-step__line-inner) {
-  border-width: 0 !important; /* 禁用默认的进度线动画，保持极简 */
+  border-width: 0 !important; /* Disable the default progress animation. */
 }
 
-/* 4. 字体排版：极简、小巧、柔和 */
+/* 4. Keep typography minimal, compact, and subtle. */
 .message-status-steps :deep(.el-step__title) {
   font-size: 11px !important;
   line-height: 1 !important;
@@ -126,9 +126,9 @@ const stepView = computed(() => {
   letter-spacing: 0.5px;
 }
 
-/* --- 状态样式定制 --- */
+/* --- Status-specific styles --- */
 
-/* 已完成的节点 */
+/* Completed nodes. */
 .message-status-steps :deep(.el-step__head.is-success .el-step__icon),
 .message-status-steps :deep(.el-step__head.is-finish .el-step__icon) {
   background-color: var(--noobot-text-muted);
@@ -138,7 +138,7 @@ const stepView = computed(() => {
   color: var(--noobot-text-secondary);
 }
 
-/* 当前进行中的节点 (高亮 + 荧光呼吸) */
+/* Active node with a highlighted glow. */
 .message-status-steps :deep(.el-step__head.is-process .el-step__icon) {
   background-color: var(--el-color-primary);
   box-shadow: 0 0 8px 1px color-mix(in srgb, var(--el-color-primary) 60%, transparent);
@@ -158,7 +158,7 @@ const stepView = computed(() => {
   text-shadow: 0 0 12px color-mix(in srgb, var(--el-color-primary) 36%, transparent);
 }
 
-/* 错误与警告状态 */
+/* Error and warning states. */
 .message-status-steps.is-error :deep(.el-step__head.is-error .el-step__icon) {
   background-color: var(--noobot-status-error);
   box-shadow: 0 0 6px color-mix(in srgb, var(--noobot-status-error) 45%, transparent);
@@ -175,7 +175,7 @@ const stepView = computed(() => {
   color: var(--noobot-status-warning);
 }
 
-/* 呼吸灯动画 */
+/* Pulsing glow animation. */
 @keyframes dot-glow {
   0% {
     box-shadow: 0 0 3px 0 color-mix(in srgb, var(--el-color-primary) 50%, transparent);
@@ -203,7 +203,7 @@ const stepView = computed(() => {
   }
 }
 
-/* 移动端微调 */
+/* Mobile adjustments. */
 @media (max-width: 560px) {
   .message-status-steps {
     padding: 10px var(--noobot-space-md) 8px;
