@@ -29,10 +29,28 @@ import {
   turnRuntimeDisplayState,
 } from "../sessionRunStateMachine/turnRuntimeRegistry";
 import { clearTurnUiState } from "./turnUiStore";
+import { logWorkflowDiagnostics } from "../debug/workflowDiagnosticsLogger";
 
 const delay = (ms) => new Promise((resolve) => {
   setTimeout(resolve, ms);
 });
+
+function summarizeDeleteMessages(messages = []) {
+  return (Array.isArray(messages) ? messages : []).map((message = {}, index) => ({
+    index,
+    id: normalizeTrimmedString(message?.id || message?.messageId),
+    role: normalizeTrimmedString(getMessageRole(message)),
+    type: normalizeTrimmedString(message?.type),
+    sessionId: normalizeTrimmedString(message?.sessionId || message?.session_id),
+    dialogProcessId: getMessageDialogProcessId(message),
+    turnScopeId: getMessageTurnScopeId(message),
+    contentLength: String(message?.content || "").length,
+    turnStatusPlaceholder: message?.turnStatusPlaceholder === true,
+    workflowMessage: message?.workflowMessage === true,
+    pluginSource: normalizeTrimmedString(message?.pluginMeta?.source),
+    pluginKind: normalizeTrimmedString(message?.pluginMeta?.kind),
+  }));
+}
 
 function isUserMessage(message = {}) {
   return getMessageRole(message).toLowerCase() === "user";
@@ -281,6 +299,18 @@ export function createMonotonicMessageActions({
   async function deleteMonotonicMessage(targetMessage = {}, options = {}) {
     const userTargetMessage = resolveMonotonicUserTarget(targetMessage);
     if (!userTargetMessage) return false;
+    const initialSessionId = normalizeTrimmedString(
+      activeSession.value?.backendSessionId || activeSession.value?.sessionId || activeSessionId.value,
+    );
+    const initialTurnScopeId = getMessageTurnScopeId(userTargetMessage);
+    logWorkflowDiagnostics("frontend.messageDelete.started", {
+      sessionId: initialSessionId,
+      dialogProcessId: getMessageDialogProcessId(userTargetMessage),
+      turnScopeId: initialTurnScopeId,
+      target: summarizeDeleteMessages([targetMessage])[0] || null,
+      resolvedUserTarget: summarizeDeleteMessages([userTargetMessage])[0] || null,
+      messagesBefore: summarizeDeleteMessages(activeSession.value?.messages),
+    });
     const prepared = await prepareMonotonicMessageAction({
       ...options,
       targetMessage: userTargetMessage,
@@ -295,6 +325,14 @@ export function createMonotonicMessageActions({
       if (!Object.keys(anchor).length) return false;
       const locallyDeletedTurnScopeIds = collectMessageCascadeTurnScopeIds(userTargetMessage);
       const deleteIdempotencyKey = `delete:${sessionId}:${anchor.turnScopeId || anchor.dialogProcessId || anchor.id || "anchor"}`;
+      logWorkflowDiagnostics("frontend.messageDelete.requestPrepared", {
+        sessionId,
+        dialogProcessId: getMessageDialogProcessId(userTargetMessage),
+        turnScopeId: getMessageTurnScopeId(userTargetMessage),
+        anchor,
+        locallyDeletedTurnScopeIds,
+        idempotencyKey: deleteIdempotencyKey,
+      });
       const sessionVersionManager = createSessionVersionManager({
         activeSession,
         fetchSessionDetail,
@@ -321,6 +359,25 @@ export function createMonotonicMessageActions({
       });
       const result = mutationResult?.result;
       const payload = mutationResult?.payload;
+      logWorkflowDiagnostics("frontend.messageDelete.responseReceived", {
+        sessionId,
+        dialogProcessId: getMessageDialogProcessId(userTargetMessage),
+        turnScopeId: getMessageTurnScopeId(userTargetMessage),
+        responseOk: result?.ok !== false && payload?.ok !== false,
+        deletedCount: Number(payload?.deletedCount || 0),
+        anchorIndex: Number(payload?.anchorIndex ?? -1),
+        deletedTurnScopeIds: Array.isArray(payload?.deletedTurnScopeIds)
+          ? payload.deletedTurnScopeIds.map(normalizeTrimmedString).filter(Boolean)
+          : [],
+        responseMessages: summarizeDeleteMessages(payload?.session?.messages),
+        responseTurnStatuses: (Array.isArray(payload?.session?.turnStatuses)
+          ? payload.session.turnStatuses
+          : []).map((status = {}) => ({
+            turnScopeId: normalizeTrimmedString(status?.turnScopeId),
+            dialogProcessId: normalizeTrimmedString(status?.dialogProcessId),
+            status: normalizeTrimmedString(status?.status),
+          })),
+      });
       if (result?.ok === false || payload?.ok === false) return false;
       const sessionDetail = normalizeSessionDetailSnapshot(payload, sessionId);
       if (!sessionDetail) return false;
@@ -335,6 +392,13 @@ export function createMonotonicMessageActions({
       // applying the server response. The response can still be stale during
       // stop finalization, so the same anchor is enforced again below.
       cascadeDeleteMessagesFrom(userTargetMessage);
+      logWorkflowDiagnostics("frontend.messageDelete.localCascadeApplied", {
+        sessionId,
+        dialogProcessId: getMessageDialogProcessId(userTargetMessage),
+        turnScopeId: getMessageTurnScopeId(userTargetMessage),
+        stage: "before-detail-apply",
+        messages: summarizeDeleteMessages(activeSession.value?.messages),
+      });
       applySessionDetail?.(sessionDetail, {
         mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
         preserveCurrentMessages: false,
@@ -345,6 +409,13 @@ export function createMonotonicMessageActions({
       // for identity/version convergence, then enforce the confirmed delete
       // anchor locally so the old tail cannot reappear until refresh.
       cascadeDeleteMessagesFrom(userTargetMessage);
+      logWorkflowDiagnostics("frontend.messageDelete.completed", {
+        sessionId,
+        dialogProcessId: getMessageDialogProcessId(userTargetMessage),
+        turnScopeId: getMessageTurnScopeId(userTargetMessage),
+        confirmedDeletedTurnScopeIds,
+        messagesAfter: summarizeDeleteMessages(activeSession.value?.messages),
+      });
       clearPendingInteraction?.();
       return true;
     }
@@ -376,6 +447,7 @@ export function createMonotonicMessageActions({
     send,
     userId,
     appendMessage,
+    turnRuntimeRegistry,
   });
 
   return {

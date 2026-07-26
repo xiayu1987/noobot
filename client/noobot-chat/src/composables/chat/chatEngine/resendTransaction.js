@@ -13,6 +13,7 @@ import {
   getMessageTurnScopeId,
 } from "../../infra/messageIdentity";
 import { getMessageRuntimeChannelState, SESSION_RUN_EVENT } from "../sessionRunStateMachine";
+import { confirmTurnRuntimeDeletion } from "../sessionRunStateMachine/turnRuntimeRegistry";
 import {
   logResendDebug,
   summarizeDebugAttachments,
@@ -22,6 +23,7 @@ import {
 import { createSessionVersionManager } from "./sessionVersionManager";
 import { serializeAttachments } from "./attachmentSerialization";
 import { mergeAttachments } from "../../infra/dialogProcessChain";
+import { nowMs } from "../../infra/timeFields";
 import {
   createTurnPlaceholderMessage,
   findTurnPlaceholderMessage,
@@ -266,7 +268,15 @@ function resolveTurnScopeReplacement(payload = {}) {
     ? payload.turnScopeReplacement
     : null;
 }
-import { nowMs } from "../../infra/timeFields";
+
+function collectReplacedTurnScopeIds(payload = {}, fallbackTurnScopeId = "", keepTurnScopeId = "") {
+  const replacement = resolveTurnScopeReplacement(payload);
+  const keepScope = normalizeTrimmedString(keepTurnScopeId);
+  return [...new Set([
+    ...(Array.isArray(replacement?.replacedTurnScopeIds) ? replacement.replacedTurnScopeIds : []),
+    fallbackTurnScopeId,
+  ].map(normalizeTrimmedString).filter((scope) => scope && scope !== keepScope))];
+}
 
 function createTurnScopeId() {
   const randomUuid = globalThis?.crypto?.randomUUID?.();
@@ -298,6 +308,7 @@ export function createResendMessageTransaction({
   send,
   userId,
   appendMessage,
+  turnRuntimeRegistry,
 } = {}) {
   function applyResendReconcile(operation, options = {}) {
     const session = activeSession?.value;
@@ -509,6 +520,23 @@ export function createResendMessageTransaction({
         input.value = snapshot.inputValue;
         return false;
       }
+      const replacedTurnScopeIds = collectReplacedTurnScopeIds(
+        payload,
+        oldTurnScopeId,
+        resendTurnScopeId,
+      );
+      const replacementDeletion = confirmTurnRuntimeDeletion(
+        turnRuntimeRegistry?.value || turnRuntimeRegistry,
+        replacedTurnScopeIds,
+        { sessionId },
+      );
+      logResendDebug("resend.replacedTurns.tombstoned", {
+        sessionId,
+        turnScopeId: resendTurnScopeId,
+        replacedTurnScopeIds,
+        confirmedTurnScopeIds: replacementDeletion.confirmedTurnScopeIds,
+        removedTurnScopeIds: replacementDeletion.removedTurnScopeIds,
+      });
       const replacementPatch = {
         status: "reconciling",
         ...(resolveTurnScopeReplacement(payload) ? { turnScopeReplacement: resolveTurnScopeReplacement(payload) } : {}),

@@ -92,3 +92,36 @@ export function workflowRuntimeEventComparable(left = {}, right = {}) {
   if (!leftDomain || !rightDomain || leftDomain !== rightDomain) return false;
   return leftDomain !== WORKFLOW_SEQUENCE_DOMAIN.TRANSPORT;
 }
+
+export function compareWorkflowRuntimeFacts(incoming = {}, current = {}, { defaultDomain = "" } = {}) {
+  const incomingDomain = text(incoming?.sequenceDomain || incoming?.data?.sequenceDomain) || text(defaultDomain);
+  const currentDomain = text(current?.sequenceDomain || current?.data?.sequenceDomain) || text(defaultDomain);
+  if (
+    !incomingDomain ||
+    !currentDomain ||
+    incomingDomain !== currentDomain ||
+    incomingDomain === WORKFLOW_SEQUENCE_DOMAIN.TRANSPORT
+  ) {
+    return Object.freeze({ comparable: false, order: 0, incomingDomain, currentDomain });
+  }
+
+  const incomingRevision = Number(incoming?.revision || incoming?.data?.revision || 0);
+  const currentRevision = Number(current?.revision || current?.data?.revision || 0);
+  if (incomingRevision !== currentRevision) {
+    return Object.freeze({
+      comparable: true,
+      order: incomingRevision > currentRevision ? 1 : -1,
+      incomingDomain,
+      currentDomain,
+    });
+  }
+
+  const incomingSequence = Number(incoming?.sequence || incoming?.seq || incoming?.data?.sequence || 0);
+  const currentSequence = Number(current?.sequence || current?.seq || current?.data?.sequence || 0);
+  return Object.freeze({
+    comparable: true,
+    order: incomingSequence === currentSequence ? 0 : (incomingSequence > currentSequence ? 1 : -1),
+    incomingDomain,
+    currentDomain,
+  });
+}

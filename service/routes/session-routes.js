@@ -89,6 +89,63 @@ async function readWorkflowRuntimeProjection({ bot = null, userId = "", sessionI
   };
 }
 
+function filterWorkflowRuntimeProjectionForSession({ result = {}, sessionId = "", events = [] } = {}) {
+  const normalizedSessionId = String(sessionId || result?.sessionId || "").trim();
+  const sessionDocs = (Array.isArray(result?.sessions) ? result.sessions : []).filter((doc = {}) => {
+    const docSessionId = String(doc?.sessionId || doc?.id || "").trim();
+    return !normalizedSessionId || !docSessionId || docSessionId === normalizedSessionId;
+  });
+  const turnScopeIds = new Set();
+  const dialogProcessIds = new Set();
+  let persistedTurnCount = 0;
+  const collectIdentity = (record = {}) => {
+    const turnScopeId = String(record?.turnScopeId || record?.turn_scope_id || "").trim();
+    const dialogProcessId = String(record?.dialogProcessId || record?.dialog_process_id || "").trim();
+    if (turnScopeId) turnScopeIds.add(turnScopeId);
+    if (dialogProcessId) dialogProcessIds.add(dialogProcessId);
+  };
+  for (const doc of sessionDocs) {
+    for (const message of Array.isArray(doc?.messages) ? doc.messages : []) {
+      persistedTurnCount += 1;
+      collectIdentity(message);
+    }
+    for (const status of Array.isArray(doc?.turnStatuses) ? doc.turnStatuses : []) {
+      persistedTurnCount += 1;
+      collectIdentity(status);
+    }
+    for (const timing of Array.isArray(doc?.turnTimings) ? doc.turnTimings : []) {
+      persistedTurnCount += 1;
+      collectIdentity(timing);
+    }
+  }
+  // execution.jsonl is immutable audit history. An empty authoritative Session
+  // document means no Turn still owns a UI projection, even though audit events
+  // remain on disk after message deletion.
+  if (!persistedTurnCount) return [];
+  // Legacy Session documents may not carry either canonical identity. Keep
+  // their historical behavior; modern Turns are filtered by exact ownership.
+  if (!turnScopeIds.size && !dialogProcessIds.size) return events;
+
+  const acceptedWorkflowRunIds = new Set();
+  for (const record of events) {
+    if (String(record?.event || record?.type || "").trim() !== WORKFLOW_RUNTIME_EVENT.PLANNING) continue;
+    const data = record?.data && typeof record.data === "object" ? record.data : record;
+    const turnScopeId = String(data?.turnScopeId || "").trim();
+    const dialogProcessId = String(data?.dialogProcessId || "").trim();
+    if (
+      (turnScopeId && turnScopeIds.has(turnScopeId)) ||
+      (dialogProcessId && dialogProcessIds.has(dialogProcessId))
+    ) {
+      const workflowRunId = String(data?.workflowRunId || "").trim();
+      if (workflowRunId) acceptedWorkflowRunIds.add(workflowRunId);
+    }
+  }
+  return events.filter((record = {}) => {
+    const data = record?.data && typeof record.data === "object" ? record.data : record;
+    return acceptedWorkflowRunIds.has(String(data?.workflowRunId || "").trim());
+  });
+}
+
 function summarizeWorkflowSessionMessages(result = {}) {
   const docs = Array.isArray(result?.sessions) ? result.sessions : [];
   return docs.flatMap((doc = {}) =>
@@ -186,6 +243,12 @@ export function registerSessionRoutes(
       const workflowRuntimeProjection = result?.exists === false
         ? { events: [], error: "session_not_found" }
         : await readWorkflowRuntimeProjection({ bot, userId, sessionId });
+      const workflowRuntimeAuditEventCount = workflowRuntimeProjection.events.length;
+      workflowRuntimeProjection.events = filterWorkflowRuntimeProjectionForSession({
+        result,
+        sessionId,
+        events: workflowRuntimeProjection.events,
+      });
       const sessionDocs = Array.isArray(result?.sessions) ? result.sessions : [];
       void writeRoutedRuntimeEvent({
         scope: "session",
@@ -207,6 +270,7 @@ export function registerSessionRoutes(
             0,
           ),
           workflowCandidates: summarizeWorkflowSessionMessages(result),
+          workflowRuntimeAuditEventCount,
           workflowRuntimeEventCount: workflowRuntimeProjection.events.length,
           workflowRuntimeProjectionError: workflowRuntimeProjection.error,
         },
@@ -287,8 +351,63 @@ export function registerSessionRoutes(
         idempotencyKey: String(req.body?.idempotencyKey || "").trim(),
       };
       if (Array.isArray(req.body?.attachments)) payload.attachments = req.body.attachments;
-      const result = await bot.session.deleteFromMessage(payload);
-      res.json({ ok: true, ...result });
+      const logDeleteMutation = (event, data = {}, level = "debug") =>
+        writeRoutedRuntimeEvent({
+          scope: "session",
+          source: "service",
+          channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+          category: RUNTIME_EVENT_CATEGORIES.DEBUG,
+          level,
+          debugType: "workflow-diagnostics",
+          event,
+          userId: String(userId || "").trim(),
+          sessionId: String(sessionId || "").trim(),
+          dialogProcessId: String(payload.anchor?.dialogProcessId || "").trim(),
+          turnScopeId: String(payload.anchor?.turnScopeId || "").trim(),
+          data,
+        });
+      void logDeleteMutation("service.messageDelete.requestReceived", {
+        parentSessionId: payload.parentSessionId,
+        anchor: payload.anchor,
+        expectedVersion: payload.expectedVersion ?? null,
+        idempotencyKey: payload.idempotencyKey,
+      });
+      try {
+        const result = await bot.session.deleteFromMessage(payload);
+        const messages = Array.isArray(result?.session?.messages) ? result.session.messages : [];
+        const turnStatuses = Array.isArray(result?.session?.turnStatuses) ? result.session.turnStatuses : [];
+        void logDeleteMutation("service.messageDelete.committed", {
+          deletedCount: Number(result?.deletedCount || 0),
+          anchorIndex: Number(result?.anchorIndex ?? -1),
+          deletedTurnScopeIds: Array.isArray(result?.deletedTurnScopeIds)
+            ? result.deletedTurnScopeIds.map((value) => String(value || "").trim()).filter(Boolean)
+            : [],
+          version: Number(result?.version || result?.session?.version || 0),
+          deduplicated: result?.deduplicated === true,
+          remainingMessages: messages.map((message = {}, index) => ({
+            index,
+            id: String(message?.id || message?.messageId || "").trim(),
+            role: String(message?.role || "").trim(),
+            type: String(message?.type || "").trim(),
+            dialogProcessId: String(message?.dialogProcessId || "").trim(),
+            turnScopeId: String(message?.turnScopeId || "").trim(),
+            contentLength: String(message?.content || "").length,
+          })),
+          remainingTurnStatuses: turnStatuses.map((status = {}) => ({
+            turnScopeId: String(status?.turnScopeId || "").trim(),
+            dialogProcessId: String(status?.dialogProcessId || "").trim(),
+            status: String(status?.status || "").trim(),
+          })),
+        });
+        res.json({ ok: true, ...result });
+      } catch (error) {
+        void logDeleteMutation("service.messageDelete.failed", {
+          error: String(error?.message || error || "delete_failed"),
+          errorCode: String(error?.errorCode || error?.code || "").trim(),
+          statusCode: Number(error?.statusCode || 0),
+        }, "error");
+        throw error;
+      }
     }),
   );
 

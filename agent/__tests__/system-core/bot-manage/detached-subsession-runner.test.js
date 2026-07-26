@@ -178,6 +178,78 @@ test("detached sub-session delegates execution and persistence to the main runne
   assert.deepEqual(result.result.turnTasks, [{ taskId: "t1" }]);
 });
 
+test("detached sub-session does not inherit parent turn transaction identity", async () => {
+  const { calls, deps } = createDeps();
+  const runner = createDetachedSubSessionRunner(deps);
+
+  await runner({
+    parentContext: createParentContext({
+      runConfig: {
+        streaming: true,
+        selectedPlugins: ["workflow"],
+        resumeFromStoppedSnapshot: true,
+        resumeDialogProcessId: "root-old-dialog",
+        resumeTurnScopeId: "root-old-turn",
+        expectedVersion: 7,
+        idempotencyKey: "root-continue-command",
+        reuseExistingUserTurn: true,
+        thinkingStartedAt: "2026-07-26T12:00:00.000Z",
+      },
+    }),
+    runConfigPatch: {
+      turnScopeId: "child-turn",
+      workflowRunId: "workflow-run-1",
+      workflowNodeExecutionId: "node-execution-1",
+    },
+    strategy: {
+      sessionId: "sub1",
+      executionId: "agent:child-turn",
+      relativeDir: "runtime/workflow/session/root/node-a",
+      allowedRoot: "runtime/workflow/session",
+    },
+  });
+
+  const runConfig = calls.runSessionPayloads[0].runConfig;
+  assert.equal(runConfig.resumeFromStoppedSnapshot, undefined);
+  assert.equal(runConfig.resumeDialogProcessId, undefined);
+  assert.equal(runConfig.resumeTurnScopeId, undefined);
+  assert.equal(runConfig.expectedVersion, undefined);
+  assert.equal(runConfig.idempotencyKey, undefined);
+  assert.equal(runConfig.reuseExistingUserTurn, undefined);
+  assert.equal(runConfig.thinkingStartedAt, undefined);
+  assert.equal(runConfig.streaming, true);
+  assert.equal(runConfig.workflowRunId, "workflow-run-1");
+  assert.equal(runConfig.workflowNodeExecutionId, "node-execution-1");
+  assert.equal(runConfig.turnScopeId, "child-turn");
+  assert.equal(runConfig.executionId, "agent:child-turn");
+  assert.deepEqual(runConfig.selectedPlugins, ["agentPlugin", "botPlugin"]);
+  assert.equal(calls.mergePayload.baseRunConfig.expectedVersion, undefined);
+  assert.equal(calls.mergePayload.baseRunConfig.idempotencyKey, undefined);
+});
+
+test("detached sub-session preserves child-owned transaction fields from its patch", async () => {
+  const { calls, deps } = createDeps();
+  const runner = createDetachedSubSessionRunner(deps);
+
+  await runner({
+    parentContext: createParentContext({
+      runConfig: { expectedVersion: 7, idempotencyKey: "root-command" },
+    }),
+    runConfigPatch: {
+      turnScopeId: "child-turn",
+      expectedVersion: 0,
+      idempotencyKey: "child-command",
+      thinkingStartedAt: "2026-07-26T12:30:00.000Z",
+    },
+    strategy: { sessionId: "sub1" },
+  });
+
+  const runConfig = calls.runSessionPayloads[0].runConfig;
+  assert.equal(runConfig.expectedVersion, 0);
+  assert.equal(runConfig.idempotencyKey, "child-command");
+  assert.equal(runConfig.thinkingStartedAt, "2026-07-26T12:30:00.000Z");
+});
+
 test("detached sub-session propagates main runner abort and failure contracts", async () => {
   const abortError = new Error("stopped");
   abortError.name = "AbortError";

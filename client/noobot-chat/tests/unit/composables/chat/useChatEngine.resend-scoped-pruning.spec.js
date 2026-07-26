@@ -14,6 +14,7 @@ import {
   RoleEnum,
   StreamEventEnum,
 } from "../../../../src/shared/constants/chatConstants";
+import { isTurnRuntimeDeleted } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 
 describe("useChatEngine.resend scoped pruning", () => {
   it("resendMonotonicMessage keeps edited content when reusing a stale user message object", async () => {
@@ -106,7 +107,7 @@ describe("useChatEngine.resend scoped pruning", () => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value = { ...activeSession.value, ...mainSession };
     });
-    const { engine, activeSession } = createHarness({
+    const { engine, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId: "local-resend-replace-mapping",
       stream,
       deps: { replaceSessionTurnApi, deleteSessionMessagesFromApi, applySessionDetail },
@@ -133,6 +134,10 @@ describe("useChatEngine.resend scoped pruning", () => {
       message.content === "edited question" &&
       /^client-turn:/.test(message.turnScopeId)
     ))).toBeTruthy();
+    expect(isTurnRuntimeDeleted(turnRuntimeRegistry.value, {
+      sessionId: "local-resend-replace-mapping",
+      turnScopeId: "client-turn:old",
+    })).toBe(true);
   });
 
   it("resendMonotonicMessage keeps previous duplicate-content turn when resending latest scoped user", async () => {

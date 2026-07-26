@@ -182,6 +182,66 @@ describe("useChatStore sub session projection", () => {
     expect(messages[1].rawEvents).toHaveLength(1);
   });
 
+  it("lets a canonical event take over a REST assistant shell without creating a duplicate", () => {
+    const store = useChatStore();
+    store.mergeSubSessionSnapshot({
+      sessionId: "sub-session-1",
+      messages: [{
+        id: "persisted-shell-id",
+        role: "assistant",
+        content: "",
+        turnScopeId: "turn-1",
+        dialogProcessId: "dialog-1",
+      }],
+    });
+
+    const result = store.upsertSubSessionEvent("llm_delta", createSubSessionEvent({
+      eventId: "canonical-event-1",
+      messageId: "canonical-message-1",
+      sequence: 1,
+      content: "answer",
+    }));
+
+    expect(result.applied).toBe(true);
+    expect(store.selectSubSessionMessages("sub-session-1").messages).toEqual([
+      expect.objectContaining({
+        id: "canonical-message-1",
+        messageId: "canonical-message-1",
+        role: "assistant",
+        content: "answer",
+      }),
+    ]);
+  });
+
+  it("keeps canonical Assistant identity when a stale REST shell arrives after realtime", () => {
+    const store = useChatStore();
+    store.upsertSubSessionEvent("llm_delta", createSubSessionEvent({
+      eventId: "canonical-event-1",
+      messageId: "canonical-message-1",
+      sequence: 1,
+      content: "answer",
+    }));
+
+    store.mergeSubSessionSnapshot({
+      sessionId: "sub-session-1",
+      messages: [{
+        id: "persisted-shell-id",
+        role: "assistant",
+        content: "",
+        turnScopeId: "turn-1",
+        dialogProcessId: "dialog-1",
+      }],
+    });
+
+    expect(store.selectSubSessionMessages("sub-session-1").messages).toEqual([
+      expect.objectContaining({
+        id: "canonical-message-1",
+        messageId: "canonical-message-1",
+        content: "answer",
+      }),
+    ]);
+  });
+
   it("keeps events ordered when realtime updates arrive out of sequence", () => {
     const store = useChatStore();
     store.upsertSubSessionEvent("subagent_delta", createSubSessionEvent({ eventId: "event-2", sequence: 2, content: "second" }));

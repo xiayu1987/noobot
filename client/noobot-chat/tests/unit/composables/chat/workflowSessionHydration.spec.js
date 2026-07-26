@@ -8,6 +8,10 @@ import {
   hydrateWorkflowRegistryFromSessionDetail,
   workflowPlanningEventFromMessage,
 } from "../../../../src/composables/chat/workflowSessionHydration";
+import {
+  confirmTurnRuntimeDeletion,
+  createTurnRuntimeRegistryState,
+} from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 
 function workflowMessage() {
   return {
@@ -82,5 +86,60 @@ describe("workflow session hydration", () => {
       nodeAgentRuns: [{ nodeExecutionId: "node-a", status: "running" }],
     };
     expect(workflowPlanningEventFromMessage(message, "session-a")?.nodeSessions).toHaveLength(1);
+  });
+
+  it("rejects planning and node replay for a deleted root Turn", () => {
+    const applyRuntimeEvent = vi.fn(() => ({ applied: true }));
+    const turnRuntimeRegistry = createTurnRuntimeRegistryState();
+    confirmTurnRuntimeDeletion(turnRuntimeRegistry, "turn-a", { sessionId: "session-a" });
+
+    expect(hydrateWorkflowRegistryFromSessionDetail({
+      detail: {
+        sessionId: "session-a",
+        workflowRuntimeEvents: [
+          {
+            event: "workflow_node_state_committed",
+            data: { workflowRunId: "workflow-a", nodeExecutionId: "node-a", status: "running" },
+          },
+          {
+            event: "workflow_planning_message_prepared",
+            data: {
+              workflowRunId: "workflow-a",
+              sessionId: "session-a",
+              turnScopeId: "turn-a",
+              nodeSessions: [{ nodeExecutionId: "node-a" }],
+            },
+          },
+        ],
+      },
+      mainSessionDoc: { messages: [workflowMessage()] },
+      applyWorkflowRuntimeEvent: applyRuntimeEvent,
+      turnRuntimeRegistry,
+    })).toBe(0);
+    expect(applyRuntimeEvent).not.toHaveBeenCalled();
+  });
+
+  it("continues hydrating an unrelated Turn", () => {
+    const applyRuntimeEvent = vi.fn(() => ({ applied: true }));
+    const turnRuntimeRegistry = createTurnRuntimeRegistryState();
+    confirmTurnRuntimeDeletion(turnRuntimeRegistry, "turn-deleted", { sessionId: "session-a" });
+
+    expect(hydrateWorkflowRegistryFromSessionDetail({
+      detail: {
+        sessionId: "session-a",
+        workflowRuntimeEvents: [{
+          event: "workflow_planning_message_prepared",
+          data: {
+            workflowRunId: "workflow-a",
+            sessionId: "session-a",
+            turnScopeId: "turn-a",
+            nodeSessions: [{ nodeExecutionId: "node-a" }],
+          },
+        }],
+      },
+      applyWorkflowRuntimeEvent: applyRuntimeEvent,
+      turnRuntimeRegistry,
+    })).toBe(1);
+    expect(applyRuntimeEvent).toHaveBeenCalledOnce();
   });
 });

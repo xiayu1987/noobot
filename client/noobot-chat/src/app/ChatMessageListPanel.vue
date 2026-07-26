@@ -42,6 +42,7 @@ const presentedMessages = computed(() => {
   const messages = selectTurnPresentations({
     activeSession: props.activeSession,
     workflowRegistry: chatStore.workflowNodeStateRegistry,
+    turnRuntimeRegistry: chatStore.turnRuntimeRegistry,
   });
   logWorkflowDiagnostics("frontend.workflowRender.turnPresentationsSelected", {
     sessionId: String(props.activeSession?.backendSessionId || props.activeSession?.id || ""),

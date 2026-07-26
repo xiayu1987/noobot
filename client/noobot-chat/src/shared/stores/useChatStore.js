@@ -27,6 +27,7 @@ import {
   projectMessageEventToolFacets,
 } from "@noobot/shared/message-event-protocol";
 import {
+  compareWorkflowRuntimeFacts,
   normalizeWorkflowRuntimeEvent,
   WORKFLOW_RUNTIME_EVENT,
   WORKFLOW_SEQUENCE_DOMAIN,
@@ -109,33 +110,21 @@ function createSubSessionMessageRegistry() {
 
 function shouldApplyWorkflowNodeStateEvent(current = null, incoming = {}) {
   if (!current) return true;
-  const currentDomain = text(current?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE;
-  const incomingDomain = text(incoming?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE;
-  if (currentDomain !== incomingDomain) return false;
-  const incomingRevision = Number(incoming?.revision || 0);
-  const currentRevision = Number(current?.revision || 0);
-  if (incomingRevision < currentRevision) return false;
-  if (incomingRevision > currentRevision) return true;
-  const incomingSequence = Number(incoming?.sequence || 0);
-  const currentSequence = Number(current?.sequence || 0);
-  if (incomingSequence < currentSequence) return false;
-  if (incomingSequence > currentSequence) return true;
+  const comparison = compareWorkflowRuntimeFacts(incoming, current, {
+    defaultDomain: WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE,
+  });
+  if (!comparison.comparable) return false;
+  if (comparison.order !== 0) return comparison.order > 0;
   return text(incoming?.eventId) === text(current?.eventId);
 }
 
 function shouldApplyOrderedEvent(current = null, incoming = {}) {
   if (!current) return true;
-  const currentDomain = text(current?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.MESSAGE;
-  const incomingDomain = text(incoming?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.MESSAGE;
-  if (currentDomain !== incomingDomain) return false;
-  const incomingRevision = Number(incoming?.revision || 0);
-  const currentRevision = Number(current?.revision || 0);
-  if (incomingRevision < currentRevision) return false;
-  if (incomingRevision > currentRevision) return true;
-  const incomingSequence = Number(incoming?.sequence || incoming?.seq || 0);
-  const currentSequence = Number(current?.sequence || current?.seq || 0);
-  if (incomingSequence < currentSequence) return false;
-  if (incomingSequence > currentSequence) return true;
+  const comparison = compareWorkflowRuntimeFacts(incoming, current, {
+    defaultDomain: WORKFLOW_SEQUENCE_DOMAIN.MESSAGE,
+  });
+  if (!comparison.comparable) return false;
+  if (comparison.order !== 0) return comparison.order > 0;
   const incomingEventId = text(incoming?.eventId || incoming?.id);
   const currentEventId = text(current?.eventId || current?.id);
   if (!incomingEventId || !currentEventId) return true;
@@ -187,8 +176,8 @@ function normalizeSubSessionMessage(eventName = "", eventData = {}, currentMessa
   return {
     ...(currentMessage || {}),
     ...(eventData?.message && typeof eventData.message === "object" ? eventData.message : {}),
-    id: text(currentMessage?.id) || authoritativeSubSessionMessageId(eventData),
-    messageId: text(currentMessage?.messageId) || authoritativeSubSessionMessageId(eventData),
+    id: authoritativeSubSessionMessageId(eventData) || text(currentMessage?.id),
+    messageId: authoritativeSubSessionMessageId(eventData) || text(currentMessage?.messageId),
     role,
     // Tool payload text belongs in the thinking/tool-log projection. Replacing
     // assistant content with it makes the assistant thinking card (including a
@@ -246,9 +235,13 @@ function mergePersistedMessageValue(realtimeValue, persistedValue) {
 
 function mergePersistedSubSessionMessage(realtime = {}, snapshot = {}, messageId = "") {
   const merged = mergePersistedMessageValue(realtime, snapshot);
+  const authoritativeRealtimeId = (
+    text(realtime.sequenceDomain) === WORKFLOW_SEQUENCE_DOMAIN.MESSAGE && text(realtime.eventId)
+  ) ? text(realtime.messageId || realtime.id) : "";
+  const canonicalMessageId = authoritativeRealtimeId || text(messageId);
   return {
     ...merged,
-    ...(messageId ? { id: messageId, messageId } : {}),
+    ...(canonicalMessageId ? { id: canonicalMessageId, messageId: canonicalMessageId } : {}),
     // Event history is a realtime projection and is not part of session.json.
     rawEvents: Array.isArray(realtime.rawEvents) ? realtime.rawEvents : merged.rawEvents,
     eventId: realtime.eventId,
@@ -611,9 +604,27 @@ export const useChatStore = defineStore("chat", () => {
     const messages = Array.isArray(currentSession.messages) ? [...currentSession.messages] : [];
     const incoming = { ...eventData, sessionId, eventId, sequenceDomain };
     const messageKey = authoritativeSubSessionMessageId(incoming);
-    const existingIndex = messageKey
+    let existingIndex = messageKey
       ? messages.findIndex((message = {}) => text(message?.messageId || message?.id) === messageKey)
       : -1;
+    // A refresh may hydrate an Assistant shell before its canonical message
+    // event is replayed. Resolve that shell through the stable Turn identity,
+    // then let the canonical messageId take ownership of the same entity.
+    if (existingIndex < 0 && messageKey) {
+      const incomingRole = text(incoming.role) || "assistant";
+      const incomingTurnScopeId = text(incoming.turnScopeId || incoming.metadata?.turnScopeId);
+      const incomingDialogProcessId = text(incoming.dialogProcessId || incoming.metadata?.dialogProcessId);
+      // Turn is the stronger ownership boundary. Dialog is only a legacy
+      // fallback when the producer cannot identify a Turn at all.
+      const fallbackIdentity = incomingTurnScopeId
+        ? `turn:${incomingTurnScopeId}:${incomingRole}`
+        : (incomingDialogProcessId ? `dialog:${incomingDialogProcessId}:${incomingRole}` : "");
+      const identityMatches = messages
+        .map((message = {}, index) => ({ message, index }))
+        .filter(({ message }) => fallbackIdentity && subSessionMessageIdentityCandidates(message)
+          .includes(fallbackIdentity));
+      if (identityMatches.length === 1) existingIndex = identityMatches[0].index;
+    }
     const currentMessage = existingIndex >= 0 ? messages[existingIndex] : null;
     let nextMessage = currentMessage;
     const hasMessagePayload = hasSubSessionMessagePayload(projectionEventName, eventData, currentMessage);

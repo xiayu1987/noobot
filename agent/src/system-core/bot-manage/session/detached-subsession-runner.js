@@ -75,8 +75,13 @@ export function createDetachedSubSessionRunner({
       turnScopeId,
     });
 
+    const inheritedRunConfig = clearParentTurnTransactionIdentity({
+      ...(sourceContext?.runConfig && typeof sourceContext.runConfig === "object"
+        ? sourceContext.runConfig
+        : {}),
+    });
     const mergedRunConfig = mergeRunConfigWithPluginStrategy({
-      baseRunConfig: sourceContext?.runConfig || {},
+      baseRunConfig: inheritedRunConfig,
       runConfigPatch,
       disabledPlugins: strategy?.disabledPlugins || [],
     });
@@ -185,6 +190,19 @@ export function createDetachedSubSessionRunner({
       },
     };
   };
+}
+
+function clearParentTurnTransactionIdentity(runConfig = {}) {
+  // A detached child owns a new session and turn. Parent command coordinates,
+  // optimistic locks, dedupe keys, and timing must never cross this boundary.
+  delete runConfig.resumeFromStoppedSnapshot;
+  delete runConfig.resumeDialogProcessId;
+  delete runConfig.resumeTurnScopeId;
+  delete runConfig.expectedVersion;
+  delete runConfig.idempotencyKey;
+  delete runConfig.reuseExistingUserTurn;
+  delete runConfig.thinkingStartedAt;
+  return runConfig;
 }
 
 export function createDetachedTerminalReceipt({ lifecycle = null, executionId = "", failed = false } = {}) {

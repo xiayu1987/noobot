@@ -522,6 +522,7 @@ export function useChatSession({
       upsertWorkflowPlanningEvent: chatStore.upsertWorkflowPlanningEvent,
       upsertWorkflowNodeStateEvent: chatStore.upsertWorkflowNodeStateEvent,
       applyWorkflowRuntimeEvent: chatStore.applyWorkflowRuntimeEvent,
+      turnRuntimeRegistry: turnRuntimeRegistry.value,
     });
     const sessionId = String(
       sessionItem?.backendSessionId || sessionItem?.sessionId || sessionItem?.id || "",
@@ -597,7 +598,7 @@ export function useChatSession({
       sessionLogWebSocketClient.log({
         category: "debug",
         level: "debug",
-        debugType: "thinking-replay",
+        debugType: "workflow-diagnostics",
         event: "frontend.render.composerRuntimeConsumed",
         sessionId: resolveActiveSessionIdentity(),
         turnScopeId: resolveActiveTurnScopeIdentity(),
@@ -608,6 +609,8 @@ export function useChatSession({
           displayState: state.displayState || "",
           sending: activeSessionSending.value === true,
           canStop: state.canStop === true,
+          stopButtonVisible: state.canStop === true,
+          stopRequesting: state.stopRequesting === true,
           primaryAction: state.primaryAction || "",
         },
       });

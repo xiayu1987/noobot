@@ -234,6 +234,7 @@ chatMessageNavigatorPanel = useChatMessageNavigatorPanel({
   activeSession,
   activeSessionId,
   workflowNodeStateRegistry,
+  turnRuntimeRegistry,
   shouldRenderMessageInChat,
   messageListPanelRef,
   isMobile,

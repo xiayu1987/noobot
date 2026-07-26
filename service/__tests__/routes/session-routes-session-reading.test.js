@@ -177,7 +177,15 @@ test("session-routes: session detail rebuilds running workflow projection from p
         exists: true,
         sessionId: "s-workflow",
         summary: true,
-        sessions: [{ sessionId: "s-workflow", messages: [{ role: "user", content: "run" }] }],
+        sessions: [{
+          sessionId: "s-workflow",
+          messages: [{
+            role: "user",
+            content: "run",
+            dialogProcessId: "dialog-1",
+            turnScopeId: "client-turn:one",
+          }],
+        }],
       }),
     },
     bot: { getWorkspacePath: () => workspaceRoot },
@@ -194,6 +202,49 @@ test("session-routes: session detail rebuilds running workflow projection from p
     assert.equal(payload.workflowRuntimeEvents[2].data.status, "succeeded");
     assert.equal(payload.workflowRuntimeEvents[2].data.revision, 3);
     assert.equal(payload.workflowRuntimeEvents[2].sequenceDomain, "workflow-node-state");
+  });
+});
+
+test("session-routes: deleted Turn audit events are not returned as workflow UI state", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-deleted-workflow-projection-"));
+  const sessionDir = path.join(workspaceRoot, "runtime/session/s-deleted-workflow");
+  await fs.mkdir(sessionDir, { recursive: true });
+  await fs.writeFile(
+    path.join(sessionDir, "execution.jsonl"),
+    `${JSON.stringify({
+      event: "workflow_planning_message_prepared",
+      data: {
+        sessionId: "s-deleted-workflow",
+        dialogProcessId: "dialog-deleted",
+        turnScopeId: "turn-deleted",
+        workflowRunId: "workflow-deleted",
+        nodeSessions: [{ nodeExecutionId: "node-deleted" }],
+      },
+    })}\n`,
+    "utf8",
+  );
+  const app = createSessionApp({
+    session: {
+      getSessionDisplayData: async () => ({
+        exists: true,
+        sessionId: "s-deleted-workflow",
+        summary: true,
+        sessions: [{
+          sessionId: "s-deleted-workflow",
+          messages: [],
+          turnStatuses: [],
+          turnTimings: [],
+        }],
+      }),
+    },
+    bot: { getWorkspacePath: () => workspaceRoot },
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/internal/session/u1/s-deleted-workflow`);
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.deepEqual(payload.workflowRuntimeEvents, []);
   });
 });
 

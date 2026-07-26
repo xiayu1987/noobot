@@ -7,6 +7,7 @@ import {
   logWorkflowDiagnostics,
   summarizeWorkflowMessages,
 } from "./debug/workflowDiagnosticsLogger";
+import { isTurnRuntimeDeleted } from "./sessionRunStateMachine/turnRuntimeRegistry";
 
 function text(value) {
   return String(value || "").trim();
@@ -48,6 +49,7 @@ export function hydrateWorkflowRegistryFromSessionDetail({
   upsertWorkflowPlanningEvent,
   upsertWorkflowNodeStateEvent,
   applyWorkflowRuntimeEvent,
+  turnRuntimeRegistry = {},
 } = {}) {
   if (typeof applyWorkflowRuntimeEvent !== "function" && typeof upsertWorkflowPlanningEvent !== "function") {
     logWorkflowDiagnostics("frontend.workflowHydration.skipped", {
@@ -69,6 +71,22 @@ export function hydrateWorkflowRegistryFromSessionDetail({
   const runtimeEvents = Array.isArray(detail?.workflowRuntimeEvents)
     ? detail.workflowRuntimeEvents
     : [];
+  const rejectedWorkflowRunIds = new Set();
+  const isDeletedPlanning = (data = {}) => isTurnRuntimeDeleted(turnRuntimeRegistry, {
+    sessionId: text(data?.sessionId || sessionId),
+    turnScopeId: text(data?.turnScopeId),
+  });
+  const rejectRuntimeEvent = (runtimeEvent = {}) => {
+    const eventName = text(runtimeEvent?.event || runtimeEvent?.type);
+    const data = runtimeEvent?.data && typeof runtimeEvent.data === "object"
+      ? runtimeEvent.data
+      : runtimeEvent;
+    const workflowRunId = text(data?.workflowRunId);
+    return (
+      (eventName === "workflow_planning_message_prepared" && isDeletedPlanning(data)) ||
+      (workflowRunId && rejectedWorkflowRunIds.has(workflowRunId))
+    );
+  };
   const reduceRuntimeEvent = (record = {}, source = "replay") => {
     if (typeof applyWorkflowRuntimeEvent === "function") {
       return applyWorkflowRuntimeEvent(record, { source });
@@ -85,6 +103,18 @@ export function hydrateWorkflowRegistryFromSessionDetail({
     workflowCandidates: summarizeWorkflowMessages(sources),
     workflowRuntimeEventCount: runtimeEvents.length,
   });
+  // Planning owns the root Session + Turn. Establish rejected workflow runs
+  // before reducing any event so a node event cannot revive a deleted Turn,
+  // even if a malformed replay batch is not in causal order.
+  for (const runtimeEvent of runtimeEvents) {
+    const eventName = text(runtimeEvent?.event || runtimeEvent?.type);
+    const data = runtimeEvent?.data && typeof runtimeEvent.data === "object"
+      ? runtimeEvent.data
+      : runtimeEvent;
+    if (eventName !== "workflow_planning_message_prepared" || !isDeletedPlanning(data)) continue;
+    const workflowRunId = text(data?.workflowRunId);
+    if (workflowRunId) rejectedWorkflowRunIds.add(workflowRunId);
+  }
   // execution.jsonl order is the causal order. Preserve it exactly; sequence
   // values are only comparable inside each event's declared domain.
   for (const runtimeEvent of runtimeEvents) {
@@ -93,6 +123,17 @@ export function hydrateWorkflowRegistryFromSessionDetail({
       ? runtimeEvent.data
       : runtimeEvent;
     if (!["workflow_planning_message_prepared", "workflow_node_state_committed", "workflow_message_event"].includes(eventName)) continue;
+    if (rejectRuntimeEvent(runtimeEvent)) {
+      logWorkflowDiagnostics("frontend.workflowHydration.runtimeEventRejected", {
+        sessionId,
+        dialogProcessId: text(data?.dialogProcessId),
+        turnScopeId: text(data?.turnScopeId),
+        workflowRunId: text(data?.workflowRunId),
+        eventName,
+        reason: "deleted_turn_tombstoned",
+      });
+      continue;
+    }
     const result = reduceRuntimeEvent(runtimeEvent, "replay");
     if (eventName !== "workflow_planning_message_prepared") continue;
     const workflowRunId = text(data?.workflowRunId);
@@ -112,6 +153,19 @@ export function hydrateWorkflowRegistryFromSessionDetail({
   for (const message of sources) {
     const event = workflowPlanningEventFromMessage(message, sessionId);
     if (!event || seen.has(event.workflowRunId)) continue;
+    if (isDeletedPlanning(event)) {
+      rejectedWorkflowRunIds.add(event.workflowRunId);
+      logWorkflowDiagnostics("frontend.workflowHydration.runtimeEventRejected", {
+        sessionId,
+        dialogProcessId: event.dialogProcessId,
+        turnScopeId: event.turnScopeId,
+        workflowRunId: event.workflowRunId,
+        eventName: "workflow_planning_message_prepared",
+        source: "persisted-message",
+        reason: "deleted_turn_tombstoned",
+      });
+      continue;
+    }
     seen.add(event.workflowRunId);
     const result = reduceRuntimeEvent({ event: "workflow_planning_message_prepared", data: event }, "persisted-message");
     logWorkflowDiagnostics("frontend.workflowHydration.candidateApplied", {
