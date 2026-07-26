@@ -288,15 +288,6 @@ export async function invokeNoToolsTurn({
     turn,
     messageId: assistantMessageId,
   });
-  if (eventListener?.onEvent && responseContentText && finalStreamResult.streamed !== true) {
-    emitMessageEvent(eventListener, runtime, "main_model_content", {
-      turn,
-      text: responseContentText,
-      output: responseContentText,
-      messageId: assistantMessageId,
-    });
-  }
-
   return {
     output: responseContentText,
     turnTaskStore,
@@ -536,7 +527,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   if (
     eventListener?.onEvent &&
     mainModelToolTurnContent &&
-    (calls.length || finalStreamResult?.streamed !== true)
+    calls.length
   ) {
     emitMessageEvent(eventListener, runtime, "main_model_content", {
       turn,

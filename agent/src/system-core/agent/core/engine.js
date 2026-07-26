@@ -30,7 +30,52 @@ import { emitEvent } from "../../event/index.js";
 import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
 import { saveStoppedModelMessageSnapshotCandidate } from "./resume/model-message-snapshot-store.js";
-import { emitMessageEvent } from "../../event/message-event-stream.js";
+import {
+  currentAssistantMessageId,
+  emitMessageEvent,
+} from "../../event/message-event-stream.js";
+
+function messageIdentity(message = {}) {
+  return String(
+    message?.messageId ||
+    message?.id ||
+    message?.additional_kwargs?.noobotMessageId ||
+    "",
+  ).trim();
+}
+
+export function commitAuthoritativeFinalOutput({ result = {}, runtime = {} } = {}) {
+  const finalOutput = String(result?.output || "");
+  const messageId = currentAssistantMessageId(runtime);
+  if (!finalOutput || !messageId) return false;
+  let committed = false;
+  for (const collection of [result?.turnMessages, result?.modelMessages]) {
+    if (!Array.isArray(collection)) continue;
+    for (const message of collection) {
+      if (!message || typeof message !== "object" || messageIdentity(message) !== messageId) continue;
+      message.content = finalOutput;
+      committed = true;
+    }
+  }
+  return committed;
+}
+
+export function emitAuthoritativeFinalMessageContent({ result = {}, runtime = {} } = {}) {
+  const eventListener = runtime?.eventListener || null;
+  const finalOutput = String(result?.output || "");
+  const messageId = currentAssistantMessageId(runtime);
+  if (!eventListener?.onEvent || !finalOutput || !messageId) return false;
+  emitMessageEvent(eventListener, runtime, "main_model_content", {
+    text: finalOutput,
+    output: finalOutput,
+    messageId,
+    dialogProcessId: resolveDialogProcessIdFromContext({ runtime }),
+    category: "model",
+    type: "main_model_content",
+    source: "before_final_output_committed",
+  });
+  return true;
+}
 
 export function emitFinalStreamingAppendDeltaAfterHooks({ result = {}, runtime = {} } = {}) {
   const meta = readFinalStreamingResultMeta(result);
@@ -110,7 +155,9 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
         result,
       }),
     });
+    commitAuthoritativeFinalOutput({ result, runtime });
     emitFinalStreamingAppendDeltaAfterHooks({ result, runtime });
+    emitAuthoritativeFinalMessageContent({ result, runtime });
     const endedAtMs = Date.now();
     await runAgentRuntimeHook({
       runtime,

@@ -84,6 +84,18 @@ export function createRunEventListener({
         }
         return;
       }
+      // Session version is committed by Agent before execution starts. Keep it
+      // as a first-class wire event so the next frontend mutation cannot reuse
+      // a stale version. Generic SSE normalization would turn this into a
+      // thinking event and silently discard the concurrency token.
+      if (eventName === "turn_committed") {
+        sendEvent("turn_committed", {
+          ...eventData,
+          sessionId: String(eventData?.sessionId || sessionId || "").trim(),
+          turnScopeId: String(eventData?.turnScopeId || resolveTurnScopeId() || "").trim(),
+        });
+        return;
+      }
       const childRunEvent = isChildRunEventData(eventData, {
         rootSessionId: sessionId,
       });
@@ -101,7 +113,6 @@ export function createRunEventListener({
       // sever message/tool identity. Transport layers may add scope aliases,
       // but the envelope itself remains the single source of truth.
       if (isMessageEventEnvelope(eventData)) {
-        if (eventName === "llm_delta" && !textStreamingEnabled) return;
         const authoritativeSessionId = String(eventData?.sessionId || "").trim();
         const rootSessionId = String(sessionId || "").trim();
         const authoritativeScope = authoritativeSessionId === rootSessionId
@@ -110,6 +121,8 @@ export function createRunEventListener({
         const routedEventName = authoritativeScope === "main_session"
           ? "message_event"
           : "subagent_message_event";
+        const authoritativeEventType = String(eventData?.eventType || eventName || "").trim();
+        const suppressed = authoritativeEventType === "llm_delta" && !textStreamingEnabled;
         onAuthoritativeMessageRouted?.({
           routedEventName,
           authoritativeScope,
@@ -119,22 +132,28 @@ export function createRunEventListener({
           dialogProcessId: String(eventData?.dialogProcessId || "").trim(),
           parentDialogProcessId: String(parentDialogProcessId || "").trim(),
           turnScopeId: String(eventData?.turnScopeId || "").trim(),
-          eventType: String(eventData?.eventType || "").trim(),
+          eventType: authoritativeEventType,
           messageId: String(eventData?.messageId || "").trim(),
+          sequence: Number(eventData?.sequence || 0),
+          sequenceDomain: String(eventData?.sequenceDomain || "").trim(),
+          textStreamingEnabled: Boolean(textStreamingEnabled),
+          delivery: suppressed ? "suppressed" : "delivered",
+          suppressionReason: suppressed ? "non_streaming_delta" : "",
           workflowRunId: String(eventData?.workflowRunId || "").trim(),
           nodeExecutionId: String(eventData?.nodeExecutionId || "").trim(),
           hasContent: Boolean(eventData?.content || eventData?.delta || eventData?.text),
           hasTool: Boolean(eventData?.tool),
           hasResult: eventData?.result !== undefined,
         });
+        if (suppressed) return;
         // The authoritative event is an immutable inner contract. Transport
         // scope lives beside it and can never overwrite message identity.
         sendEvent(
           routedEventName,
           buildAuthoritativeMessagePacket(eventData, {
-          rootSessionId: sessionId,
-          parentDialogProcessId,
-          scope: authoritativeScope,
+            rootSessionId: sessionId,
+            parentDialogProcessId,
+            scope: authoritativeScope,
           }),
         );
         return;

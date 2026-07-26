@@ -98,6 +98,28 @@ describe("chatWebSocketClient", () => {
     await streamPromise;
   });
 
+  it("extracts a readable message from structured stream errors", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const streamPromise = client.stream({
+      action: "chat",
+      sessionId: "s-error-object",
+      turnScopeId: "turn-error-object",
+    }, vi.fn());
+    const socket = MockWebSocket.instances[0];
+
+    socket.emit(StreamEventEnum.ERROR, {
+      sessionId: "s-error-object",
+      turnScopeId: "turn-error-object",
+      errorCode: "SESSION_VERSION_CONFLICT",
+      error: { message: "session version conflict" },
+    });
+
+    await expect(streamPromise).rejects.toMatchObject({
+      message: "session version conflict",
+      data: expect.objectContaining({ errorCode: "SESSION_VERSION_CONFLICT" }),
+    });
+  });
+
   it("physically closes an errored idle business socket without waiting for close", () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const socket = client.connect();

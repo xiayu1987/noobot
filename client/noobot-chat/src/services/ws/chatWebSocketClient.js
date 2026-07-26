@@ -20,6 +20,16 @@ function normalizeTrimmedString(value = "") {
   return String(value || "").trim();
 }
 
+function normalizeErrorMessage(value, fallback = "") {
+  if (typeof value === "string") return value.trim() || fallback;
+  if (!value || typeof value !== "object") return fallback;
+  for (const candidate of [value.message, value.reason, value.description, value.error]) {
+    const normalized = normalizeErrorMessage(candidate, "");
+    if (normalized) return normalized;
+  }
+  return fallback;
+}
+
 function isTerminalChannelStateEvent(event = "", data = {}) {
   return (
     normalizeTrimmedString(event) === StreamEventEnum.CHANNEL_STATE &&
@@ -306,7 +316,9 @@ export function createChatWebSocketClient({
   }
 
   function createStreamEventError(data = {}) {
-    const error = new Error(data?.error || translateText("infra.websocketStreamError"));
+    const fallback = normalizeTrimmedString(data?.message || data?.errorCode) ||
+      translateText("infra.websocketStreamError");
+    const error = new Error(normalizeErrorMessage(data?.error, fallback));
     error.event = StreamEventEnum.ERROR;
     error.data = data || {};
     return error;

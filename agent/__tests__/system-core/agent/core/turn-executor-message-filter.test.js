@@ -537,11 +537,9 @@ test("invokeWithToolsTurn does not final-stream when runConfig disables streamin
     events.some((item) => String(item?.event || "") === "llm_final_stream_start"),
     false,
   );
-  const committedContent = events.find((item) => item?.event === "main_model_content");
-  assert.equal(committedContent?.data?.envelopeKind, "noobot.message_event");
-  assert.equal(committedContent?.data?.eventType, "main_model_content");
-  assert.equal(committedContent?.data?.text, "ok-without-final-stream");
-  assert.equal(committedContent?.data?.messageId, loopState.messages.at(-1)?.messageId);
+  // Turn execution persists the model response, but the Engine owns the one
+  // terminal content commit after BEFORE_FINAL_OUTPUT hooks have completed.
+  assert.equal(events.some((item) => item?.event === "main_model_content"), false);
 });
 
 test("invokeNoToolsTurn stores reasoning-only retry prompt in incremental block", async () => {

@@ -3,17 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { computed, reactive, ref, watch } from "vue";
+import { ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { applyCompletedToolLogsToMessages } from "../infra/sessionToolLogs";
-import {
-  buildAppendMessage,
-  buildViewMessage,
-  findVisibleLastMessage,
-  foldConversationMessages,
-  isHarnessInjectedMessage,
-} from "../infra/messageModel";
-import { normalizeTimePair, nowIso, nowMs } from "../infra/timeFields";
+import { normalizeTimePair, nowMs } from "../infra/timeFields";
 import {
   buildChatWebSocketUrl,
   buildLogWebSocketUrl,
@@ -28,7 +21,7 @@ import {
   renameSessionApi,
 } from "../../services/api/chatApi";
 import { encryptPayloadBySessionId } from "../../shared/utils/sessionCrypto";
-import { RoleEnum, StreamEventEnum } from "../../shared/constants/chatConstants";
+import { RoleEnum } from "../../shared/constants/chatConstants";
 import {
   createConnectorPanelState,
   generateSessionId,
@@ -41,10 +34,7 @@ import { useAgentInteraction } from "./useAgentInteraction";
 import { useConnectorPanel } from "../infra/useConnectorPanel";
 import { useChatList } from "./useChatList";
 import { useChatEngine } from "./useChatEngine";
-import { shouldProjectMainSessionEvent } from "./chatEngine/sendFlow";
-import { dispatchTurnEnvelope, TURN_PROJECTION_SOURCE } from "./chatEngine/turnProjectionStore";
 import { finalizeStoppedSessionDetail } from "./chatEngine/sessionFinalize";
-import { applyRunStateMessageRuntimePatch } from "./chatEngine/messageRuntimePatch";
 import { useReconnectReplay } from "./useReconnectReplay";
 import { useChatStore } from "../../shared/stores/useChatStore";
 import { useProcessStore } from "../../shared/stores/useProcessStore";
@@ -72,9 +62,7 @@ import { setStopDebugLogSink } from "./debug/stopDebugLogger";
 import { setStopContinueDebugLogSink } from "./debug/stopContinueDebugLogger";
 import { setReconnectTimingDebugLogSink } from "./debug/reconnectTimingDebugLogger";
 import {
-  logWorkflowDiagnostics,
   setWorkflowDiagnosticsLogSink,
-  summarizeWorkflowMessage,
 } from "./debug/workflowDiagnosticsLogger";
 import {
   logThinkingReplayDebug,
@@ -82,14 +70,19 @@ import {
 } from "./debug/thinkingReplayDebugLogger";
 import { setToolLogWindowDebugLogSink } from "./debug/toolLogWindowDebugLogger";
 import { setTerminalResolutionDebugLogSink } from "./debug/terminalResolutionDebugLogger";
-import { findCanonicalTurnTiming } from "./sessionRunStateMachine/turnTiming";
 import {
-  isTurnRuntimeDeleted,
   resolveSessionTurnRuntime,
-  selectSessionTurnRuntime,
   sessionRuntimeId,
-  turnRuntimeDisplayState,
 } from "./sessionRunStateMachine/turnRuntimeRegistry";
+import {
+  closeMobileSidebarOnSelect,
+  createSessionMessageView,
+} from "./session/messageView";
+import { createComposerRuntimeState } from "./session/composerRuntimeState";
+import { createComposerActions } from "./session/composerActions";
+import { createReconnectCoordinator } from "./session/reconnectCoordinator";
+import { installSessionLifecycleHydration } from "./session/sessionLifecycleHydration";
+import { createRuntimeEventProjector } from "./session/runtimeEventProjector";
 
 export function useChatSession({
   userId,
@@ -161,108 +154,7 @@ export function useChatSession({
     return "";
   }
 
-  function createTurnScopeId() {
-    const randomUuid = globalThis?.crypto?.randomUUID?.();
-    if (randomUuid) return `client-turn:${randomUuid}`;
-    return `client-turn:${nowMs().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
-  }
 
-  function hydrateSessionLifecycle(sessionItem) {
-    const snapshot = sessionItem?.turnLifecycleSnapshot;
-    const sessionId = sessionRuntimeId(sessionItem);
-    const timingResult = chatStore.applyTurnTimingSnapshot({
-      sessionId,
-      turnTimings: Array.isArray(sessionItem?.turnTimings) ? sessionItem.turnTimings : [],
-    });
-    logThinkingReplayDebug("frontend.lifecycle.hydrateStarted", {
-      requestedSessionId: String(sessionItem?.sessionId || "").trim(),
-      runtimeSessionId: sessionId,
-      snapshotSessionId: String(snapshot?.sessionId || "").trim(),
-      snapshotSequence: Number(snapshot?.sequence || 0),
-      activeTurnScopeId: String(snapshot?.activeTurnScopeId || "").trim(),
-      recentTerminalCount: Array.isArray(snapshot?.recentTerminalTurns) ? snapshot.recentTerminalTurns.length : 0,
-      turnTimingsCount: Array.isArray(sessionItem?.turnTimings) ? sessionItem.turnTimings.length : 0,
-      timingSnapshotApplied: timingResult?.applied === true,
-      timingSnapshotReason: timingResult?.reason || "",
-    });
-    if (snapshot && typeof snapshot === "object") {
-      // A snapshot is only discovery metadata for terminal Turns. Schedule the
-      // authoritative read independently of whether its non-terminal runtime
-      // projection is applicable (older snapshots may intentionally lack the
-      // complete terminal commit required by the current protocol).
-      const candidates = [snapshot.activeTurn, ...(Array.isArray(snapshot.recentTerminalTurns) ? snapshot.recentTerminalTurns : [])]
-        .filter((turn) => {
-          // Refresh has no guarantee that the snapshot was captured after the
-          // backend committed the terminal state.  The active Turn is therefore
-          // also a discovery trigger; the terminal service decides whether it
-          // is already resolved and supplies retry guidance otherwise.
-          if (!turn || !getMessageTurnScopeId(turn) && !turn?.turnScopeId) return false;
-          return turn === snapshot.activeTurn || isAuthoritativeTerminalState(turn?.state);
-        })
-        .sort((left, right) => Number(right?.sequence || right?.revision || 0) - Number(left?.sequence || left?.revision || 0));
-      // Terminal discovery must not depend on the selected Session view being
-      // ready. During refresh the summary can arrive before activeSession has
-      // resolved its backend identity; gating here would permanently lose the
-      // only trigger for the authoritative terminal read.
-      if (sessionId && candidates[0]) {
-        const turn = candidates[0];
-        scheduleTerminalResolution(sessionId, getMessageTurnScopeId(turn) || turn?.turnScopeId, {
-          ...turn,
-          source: turn === snapshot.activeTurn ? "snapshot_active_turn" : "snapshot_terminal_turn",
-        });
-      }
-      const result = chatStore.applyTurnLifecycleSnapshot(snapshot);
-      logThinkingReplayDebug("frontend.lifecycle.hydrateApplied", {
-        requestedSessionId: String(sessionItem?.sessionId || "").trim(),
-        runtimeSessionId: sessionId,
-        snapshotSessionId: String(snapshot?.sessionId || "").trim(),
-        candidateTurnScopeId: String(candidates[0]?.turnScopeId || "").trim(),
-        candidateState: String(candidates[0]?.state || "").trim(),
-        candidateStartedAt: candidates[0]?.startedAt || "",
-        candidateFinishedAt: candidates[0]?.finishedAt || "",
-        resultApplied: result?.applied === true,
-        resultReason: result?.reason || "",
-      });
-      // Apply the snapshot before the second local observation. A terminal GET
-      // can finish while the refresh reducer is still materializing the
-      // Session bucket; the coordinator will reuse its cached response and
-      // project it now that the canonical bucket is available.
-      if (sessionId && candidates[0]) {
-        const turn = candidates[0];
-        const postHydrateMetadata = {
-          ...turn,
-          source: "snapshot_post_hydrate",
-        };
-        Promise.resolve().then(() => scheduleTerminalResolution(
-          sessionId,
-          getMessageTurnScopeId(turn) || turn?.turnScopeId,
-          postHydrateMetadata,
-        ));
-      }
-      return result;
-    }
-    // Some refresh/detail responses contain only persisted turnStatuses. These
-    // rows are discovery metadata, never runtime facts: feed the newest terminal
-    // identity into the same authoritative resolver used by snapshots/realtime.
-    const terminalStatus = (Array.isArray(sessionItem?.turnStatuses) ? sessionItem.turnStatuses : [])
-      .filter((turn) => isLegacyTerminalDiscoveryState(turn?.status || turn?.state))
-      .sort((left, right) => {
-        const versionDelta = Number(right?.sequence || right?.revision || 0)
-          - Number(left?.sequence || left?.revision || 0);
-        if (versionDelta) return versionDelta;
-        return String(right?.updatedAt || right?.createdAt || "")
-          .localeCompare(String(left?.updatedAt || left?.createdAt || ""));
-      })[0];
-    if (sessionId && terminalStatus) {
-      scheduleTerminalResolution(
-        sessionId,
-        getMessageTurnScopeId(terminalStatus) || terminalStatus?.turnScopeId,
-        { ...terminalStatus, source: "turn_status_discovery" },
-      );
-      return { applied: false, reason: "terminal_resolution_scheduled" };
-    }
-    return { applied: false, reason: "terminal_discovery_missing" };
-  }
 
   function scheduleTerminalResolution(sessionId, turnScopeId, metadata = {}) {
     const normalizedSessionId = String(sessionId || "").trim();
@@ -293,134 +185,33 @@ export function useChatSession({
     });
   }
 
-  // Snapshot and persisted status rows are discovery inputs only. Both converge
-  // on the same authoritative terminal service and neither writes runtime state.
-  for (const sessionItem of sessions.value) {
-    hydrateSessionLifecycle(sessionItem);
-    chatStore.pruneTerminalTurns({
-      sessionId: sessionRuntimeId(sessionItem),
-      referencedTurnScopeIds: (sessionItem?.messages || []).map(getMessageTurnScopeId).filter(Boolean),
-    });
-  }
-
-  // Reconcile replacements, refreshes, reconnects, and non-active sessions
-  // from the lifecycle protocol; message order is never consulted.
-  watch(
-    [sessions, activeSessionId],
-    ([sessionItems]) => {
-      for (const sessionItem of Array.isArray(sessionItems) ? sessionItems : []) {
-        hydrateSessionLifecycle(sessionItem);
-        chatStore.pruneTerminalTurns({
-          sessionId: sessionRuntimeId(sessionItem),
-          referencedTurnScopeIds: (sessionItem?.messages || []).map(getMessageTurnScopeId).filter(Boolean),
-        });
-      }
-    },
-    { deep: true },
-  );
-
-  const composerActionState = computed(() => {
-    const sessionId = resolveActiveSessionIdentity();
-    const turnScopeId = resolveActiveTurnScopeIdentity();
-    const turn = resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionId, turnScopeId);
-    const runtimeView = selectSessionTurnRuntime(turnRuntimeRegistry.value, sessionId, turnScopeId);
-    const displayState = runtimeView.displayState;
-    const userStopped = turn?.terminal === "user_stopped";
-    const actionLocked = runtimeView.sending === true;
-    const stopRequesting = displayState === "requesting" && turn?.action === "stop";
-    const awaitingStopSummary = displayState === "stopping";
-    return {
-      sendRequesting: displayState === "requesting" && turn?.action !== "stop",
-      continueRequesting: false,
-      stopRequesting,
-      stopPendingUntilBackendReady: false,
-      canStartNewSend: !actionLocked,
-      canRetryMessage: !actionLocked,
-      canDeleteMessage: !actionLocked,
-      stopInFlight: stopRequesting || awaitingStopSummary,
-      awaitingBackendStop: awaitingStopSummary,
-      userStopped,
-      primaryAction: userStopped ? "continue" : "send",
-      canContinue: userStopped,
-      canResend: userStopped,
-      state: displayState,
-      displayState,
-      canStop: runtimeView.canStop,
-    };
+  installSessionLifecycleHydration({
+    sessions,
+    activeSessionId,
+    chatStore,
+    scheduleTerminalResolution,
   });
 
-  // UI runtime state always follows the selected session's registry projection.
-  const activeSessionSending = computed(() =>
-    selectSessionTurnRuntime(
-      turnRuntimeRegistry.value,
-      resolveActiveSessionIdentity(),
-      resolveActiveTurnScopeIdentity(),
-    ).sending,
-  );
-  const activeSessionCanStop = computed(() => composerActionState.value.canStop === true);
+  const {
+    composerActionState,
+    activeSessionSending,
+    activeSessionCanStop,
+  } = createComposerRuntimeState({
+    turnRuntimeRegistry,
+    resolveActiveSessionIdentity,
+    resolveActiveTurnScopeIdentity,
+  });
 
   // Composition-root boundary for runtime events. Every producer (composer,
   // stream, reconnect and finalization) submits here so a Registry transition
   // is projected to messages exactly once.
-  const submitTurnRuntimeEvent = (event) => {
-    const requestedSessionId = String(event?.sessionId || "").trim();
-    const requestedTurnScopeId = String(event?.turnScopeId || "").trim();
-    const owningSession = (Array.isArray(sessions.value) ? sessions.value : []).find(
-      (item) => sessionRuntimeId(item) === requestedSessionId,
-    );
-    const canonicalTiming = findCanonicalTurnTiming(owningSession, requestedTurnScopeId);
-    // Reconnect transport events do not carry lifecycle timing. Join the
-    // persisted Session timing at the single Registry ingress so a restored
-    // Turn never derives its clock from transport createdAtMs.
-    const timedEvent = canonicalTiming
-      ? {
-        ...event,
-        startedAt: canonicalTiming.thinkingStartedAt || event?.startedAt || "",
-        finishedAt: canonicalTiming.thinkingFinishedAt || event?.finishedAt || "",
-        thinkingStartedAt: canonicalTiming.thinkingStartedAt || event?.thinkingStartedAt || "",
-        thinkingFinishedAt: canonicalTiming.thinkingFinishedAt || event?.thinkingFinishedAt || "",
-        canonicalTimingObserved: true,
-      }
-      : event;
-    const result = chatStore.applyTurnRuntimeEvent(timedEvent);
-    const selectedSessionId = resolveActiveSessionIdentity();
-    const activeBucket = turnRuntimeRegistry.value?.sessions?.[selectedSessionId] || null;
-    logThinkingReplayDebug("frontend.lifecycle.runtimeConsumed", {
-      sessionId: requestedSessionId || selectedSessionId,
-      requestedSessionId,
-      selectedSessionId,
-      eventTurnScopeId: String(event?.turnScopeId || "").trim(),
-      eventDialogProcessId: String(event?.dialogProcessId || "").trim(),
-      eventType: String(event?.type || event?.eventType || "").trim(),
-      eventState: String(event?.state || event?.backendState || "").trim(),
-      resultApplied: result?.applied === true,
-      resultReason: String(result?.reason || "").trim(),
-      canonicalSessionId: String(result?.canonicalSessionId || result?.turn?.sessionId || "").trim(),
-      canonicalTurnScopeId: String(result?.turn?.turnScopeId || "").trim(),
-      canonicalState: String(result?.turn?.state || "").trim(),
-      canonicalTerminal: result?.turn?.terminal || null,
-      activeBucketTurnScopeId: String(activeBucket?.activeTurnScopeId || "").trim(),
-    });
-    // Runtime events have one projection contract regardless of whether they
-    // arrive through the single-event composer/finalization path or reconnect's
-    // batch path.  In particular, a backend event may atomically promote an
-    // optimistic local Session; always project with the Registry's canonical
-    // Turn rather than the pre-promotion input event.
-    applyRunStateMessageRuntimePatch({
-      sessions,
-      activeSession,
-      turnRuntimeRegistry,
-      event: result?.turn || event,
-    });
-    return {
-      ...result,
-      messageEffect: {
-        projected: Boolean(result?.turn),
-        state: result?.turn?.state || "",
-        terminal: result?.turn?.terminal || "",
-      },
-    };
-  };
+  const submitTurnRuntimeEvent = createRuntimeEventProjector({
+    sessions,
+    activeSession,
+    turnRuntimeRegistry,
+    chatStore,
+    resolveActiveSessionIdentity,
+  });
 
   function trackConversationState(stateEntry = {}) {
     const state = String(stateEntry?.state || "").trim();
@@ -656,27 +447,12 @@ export function useChatSession({
     activeSession,
   });
 
-  function appendMessage(role, content = "", attachments = [], options = {}) {
-    const msg = reactive(buildAppendMessage(role, content, attachments, options));
-    activeSession.value.messages.push(msg);
-    activeSession.value.messageCount = (activeSession.value.messageCount || 0) + 1;
-    activeSession.value.lastMessage = findVisibleLastMessage(activeSession.value.messages);
-    activeSession.value.updatedAt = nowIso();
-    return msg;
-  }
-
-  function makeViewMessage(messageItem = {}) {
-    return reactive(
-      buildViewMessage(messageItem, {
-        userId: userId.value,
-        isImageMime,
-      }),
-    );
-  }
-
-  function foldMessagesForView(messages = []) {
-    return foldConversationMessages(messages, makeViewMessage);
-  }
+  const {
+    appendMessage,
+    makeViewMessage,
+    foldMessagesForView,
+    shouldRenderMessageInChat,
+  } = createSessionMessageView({ activeSession, activeSessionId, userId, isImageMime });
 
   const chatList = useChatList({
     userId,
@@ -814,290 +590,33 @@ export function useChatSession({
     },
   });
 
-  async function sendWithComposerActionState(...args) {
-    const sessionRuntimeIdValue = resolveActiveSessionIdentity();
-    const currentTurn = resolveSessionTurnRuntime(
-      turnRuntimeRegistry.value,
-      sessionRuntimeIdValue,
-      resolveActiveTurnScopeIdentity(),
-    );
-    const stoppedTurn = currentTurn?.terminal === "user_stopped" ? currentTurn : null;
-    const resumeDialogProcessId = String(stoppedTurn?.dialogProcessId || "").trim();
-    const resumeTurnScopeId = String(stoppedTurn?.turnScopeId || "").trim();
-    const resumeSessionId = resolveActiveSessionIdentity();
-    const isContinueFromUserStopped = Boolean(stoppedTurn && resumeDialogProcessId && resumeTurnScopeId);
-    if (currentTurn?.terminal === "user_stopped" && !isContinueFromUserStopped) {
-      notify?.({
-        type: "warning",
-        message: translate("chat.sessionStateOutOfSync") || "Session state is out of sync. Refresh and try again.",
-      });
-      return false;
-    }
-    const composerEventType = isContinueFromUserStopped
-      ? SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED
-      : SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED;
-    const composerSettledEventType = isContinueFromUserStopped
-      ? SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_SETTLED
-      : SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_SETTLED;
-    const continuingTurnScopeId = isContinueFromUserStopped ? createTurnScopeId() : "";
-    submitTurnRuntimeEvent({
-      type: composerEventType,
-      sessionId: isContinueFromUserStopped ? resumeSessionId : undefined,
-      turnScopeId: continuingTurnScopeId || undefined,
-      source: "use_chat_session",
-    });
-    try {
-      const [options = {}, ...restArgs] = args;
-      const sendOptions = isContinueFromUserStopped
-        ? {
-            ...(options && typeof options === "object" ? options : {}),
-            composerRequestStarted: true,
-            continueFromUserStopped: true,
-            turnScopeId: continuingTurnScopeId,
-            resumeDialogProcessId,
-            resumeTurnScopeId,
-          }
-        : {
-            ...(options && typeof options === "object" ? options : {}),
-            composerRequestStarted: true,
-          };
-      return await chatEngine.send(sendOptions, ...restArgs);
-    } finally {
-      submitTurnRuntimeEvent({
-        type: composerSettledEventType,
-        source: "use_chat_session",
-      });
-    }
-  }
+  const { sendWithComposerActionState, stopSendingWithComposerActionState } = createComposerActions({
+    composerActionState,
+    turnRuntimeRegistry,
+    resolveActiveSessionIdentity,
+    resolveActiveTurnScopeIdentity,
+    submitTurnRuntimeEvent,
+    send: chatEngine.send,
+    stopSending: chatEngine.stopSending,
+    notify,
+    translate,
+  });
 
-  function stopSendingWithComposerActionState(...args) {
-    // An explicit Execution target owns its own authoritative capabilities.
-    // The composer state only describes the currently opened root turn and
-    // must not block stopping a child/workflow execution in another channel.
-    const explicitExecutionId = String(args[0] || "").trim();
-    if (!explicitExecutionId && !composerActionState.value.canStop) return false;
-    // chatEngine.stopSending atomically records LOCAL_USER_STOP_REQUEST_STARTED
-    // after it has resolved the active assistant identity. Dispatching it here
-    // first would turn canStop off and make the engine reject its own request.
-    const requested = chatEngine.stopSending(...args);
-    return requested;
-  }
-
-  function projectReconnectedMainSessionEvent(event, data = {}) {
-    if (!shouldProjectMainSessionEvent(event, data)) return false;
-    const messageEvent = data.event || {};
-    const dialogProcessId = String(
-      messageEvent.dialogProcessId || data.dialogProcessId || "",
-    ).trim();
-    const turnScopeId = String(messageEvent.turnScopeId || data.turnScopeId || "").trim();
-    const sessionId = String(messageEvent.sessionId || data.sessionId || resolveActiveSessionIdentity()).trim();
-    if (isTurnRuntimeDeleted(turnRuntimeRegistry.value, { sessionId, turnScopeId })) {
-      logThinkingReplayDebug("frontend.messageEvent.deletedTurnRejected", {
-        sessionId,
-        dialogProcessId,
-        turnScopeId,
-        eventType: String(messageEvent.eventType || ""),
-      });
-      return true;
-    }
-    const messages = Array.isArray(activeSession.value?.messages)
-      ? activeSession.value.messages
-      : [];
-    // A stopped turn and its continuation may deliberately share a
-    // dialogProcessId while owning different turnScopeIds. The turn is the
-    // authoritative message projection identity; using the dialog first can
-    // project continuation events into the stopped assistant message.
-    const reversedAssistantMessages = [...messages].reverse().filter(
-      (message) => getMessageRole(message) === RoleEnum.ASSISTANT,
-    );
-    const botMessage = turnScopeId
-      ? reversedAssistantMessages.find(
-          (message) => getMessageTurnScopeId(message) === turnScopeId,
-        )
-      : dialogProcessId
-        ? reversedAssistantMessages.find(
-            (message) => message?.pending === true &&
-              getMessageDialogProcessId(message) === dialogProcessId,
-          )
-        : null;
-    if (!botMessage) {
-      logThinkingReplayDebug("frontend.thinkingReplay.liveProjectionTargetMissing", {
-        sessionId: resolveActiveSessionIdentity(),
-        dialogProcessId,
-        turnScopeId,
-        eventType: String(messageEvent.eventType || ""),
-      });
-      return false;
-    }
-    const reduction = dispatchTurnEnvelope({
-      targetMessage: botMessage,
-      envelope: messageEvent,
-      classifyRealtimeLog,
-      source: TURN_PROJECTION_SOURCE.RECONNECT_LIVE,
-    });
-    logThinkingReplayDebug("frontend.messageEvent.reduced", {
-      source: "reconnect_live",
-      sessionId: messageEvent.sessionId || resolveActiveSessionIdentity(),
-      dialogProcessId,
-      turnScopeId,
-      messageId: String(messageEvent.messageId || ""),
-      eventId: String(messageEvent.eventId || ""),
-      eventType: String(messageEvent.eventType || ""),
-      sequence: messageEvent.sequence ?? null,
-      result: reduction.result,
-      errors: reduction.errors || [],
-    });
-    return true;
-  }
-
-  async function handleReconnect() {
-    const pendingReconnectReplays = [];
-    let reconnectReplayQueue = Promise.resolve();
-    const directExecutionRestoreCommandIds = new Set();
-    const trackReconnectReplay = (replayPromise) => {
-      pendingReconnectReplays.push(Promise.resolve(replayPromise));
-    };
-    const reconnectSessionId = String(activeSession.value?.backendSessionId || activeSessionId.value || "");
-    logThinkingReplayDebug("frontend.thinkingReplay.reconnectStarted", {
-      sessionId: reconnectSessionId,
-      visibleMessageCount: Array.isArray(activeSession.value?.messages)
-        ? activeSession.value.messages.length
-        : 0,
-    });
-    return chatWebSocketClient.reconnect({
-      currentSessionId: reconnectSessionId,
-      userId: String(userId?.value || userId || ""),
-      onReconnectData: (reconnectPayload) => {
-        logThinkingReplayDebug("frontend.thinkingReplay.reconnectPayloadReceived", {
-          sessionId: reconnectSessionId,
-          protocolEvent: String(reconnectPayload?.event || "reconnect_data"),
-          sessionCount: Array.isArray(reconnectPayload?.sessions) ? reconnectPayload.sessions.length : 0,
-          dataSequence: reconnectPayload?.data?.sequence ?? reconnectPayload?.data?.seq ?? null,
-          dialogProcessId: String(reconnectPayload?.data?.dialogProcessId || ""),
-          turnScopeId: String(reconnectPayload?.data?.turnScopeId || ""),
-          dataKeys: Object.keys(reconnectPayload?.data || {}).sort(),
-        });
-        const replayPayload = async () => {
-          if (reconnectPayload?.sessions) {
-            await reconnectReplay.applyReconnectData(reconnectPayload);
-          }
-          if (!(reconnectPayload?.event && reconnectPayload?.data)) return;
-          // After reconnect_complete this socket remains the live transport.
-          // Authoritative main-session events must update the restored message
-          // just like events received by the original send stream.
-          if (projectReconnectedMainSessionEvent(reconnectPayload.event, reconnectPayload.data)) {
-            return;
-          }
-          if (directExecutionRestoreCommandIds.has(String(reconnectPayload.data?.commandId || "").trim())) {
-            return;
-          }
-          await reconnectReplay.applyReconnectEvent(reconnectPayload.event, reconnectPayload.data);
-        };
-        // WebSocket callbacks are synchronous but replay/hydration is not. Keep
-        // protocol arrival order across separate callback invocations so a
-        // trailing channel_state cannot race the DONE snapshot that owns its
-        // Session+Turn identity.
-        reconnectReplayQueue = reconnectReplayQueue.then(replayPayload, replayPayload);
-        trackReconnectReplay(reconnectReplayQueue);
-      },
-    }).then(async () => {
-      await Promise.all(pendingReconnectReplays);
-      const replayRuntime = resolveSessionTurnRuntime(
-        turnRuntimeRegistry.value,
-        reconnectSessionId,
-        resolveActiveTurnScopeIdentity(),
-      );
-      logThinkingReplayDebug("frontend.thinkingReplay.reconnectReplayCommitted", {
-        sessionId: reconnectSessionId,
-        dialogProcessId: String(replayRuntime?.dialogProcessId || ""),
-        turnScopeId: String(replayRuntime?.turnScopeId || ""),
-        state: String(replayRuntime?.state || ""),
-        backendState: String(replayRuntime?.backendState || ""),
-        terminal: replayRuntime?.terminal ?? null,
-        pendingReplayCount: pendingReconnectReplays.length,
-      });
-      if (typeof chatWebSocketClient.requestJson !== "function") return;
-      const sessionId = String(activeSession.value?.backendSessionId || activeSessionId.value || "").trim();
-      const currentTurn = resolveSessionTurnRuntime(
-        turnRuntimeRegistry.value,
-        sessionId,
-        resolveActiveTurnScopeIdentity(),
-      );
-      const executionId = String(
-        turnRuntimeRegistry.value?.executionIdByTurnScopeId?.[
-          `${sessionId}::${currentTurn?.turnScopeId || ""}`
-        ] ||
-        currentTurn?.executionId ||
-        "",
-      ).trim();
-      if (!executionId) return;
-      const execution = turnRuntimeRegistry.value?.executions?.[executionId] || {};
-      const rootExecutionId = String(execution?.rootExecutionId || executionId).trim();
-      const requestExecution = async (action, payload, expectedEvent) => {
-        const commandId = `reconnect:${action}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
-        directExecutionRestoreCommandIds.add(commandId);
-        try {
-          const response = await chatWebSocketClient.requestJson({
-            action,
-            commandId,
-            userId: String(userId?.value || userId || "").trim(),
-            ...payload,
-          }, { expectedEvents: [expectedEvent] });
-          await reconnectReplay.applyReconnectEvent(response?.event, response?.data || {});
-        } finally {
-          directExecutionRestoreCommandIds.delete(commandId);
-        }
-      };
-      try {
-        await requestExecution("execution.tree.get", { rootExecutionId }, StreamEventEnum.EXECUTION_TREE);
-        await requestExecution("execution.snapshot.get", { executionId }, StreamEventEnum.EXECUTION_SNAPSHOT);
-        if (typeof chatList.fetchSessionFullDetail === "function") {
-          await chatList.fetchSessionFullDetail(sessionId);
-        }
-      } catch (error) {
-        logSessionSystemEvent("reconnect.execution_restore_failed", {
-          executionId,
-          rootExecutionId,
-          error: String(error?.message || error || ""),
-        });
-      }
-    }).catch((error) => {
-      logThinkingReplayDebug("frontend.thinkingReplay.reconnectFailed", {
-        sessionId: reconnectSessionId,
-        error: String(error?.message || error || ""),
-      });
-      logSessionSystemEvent("reconnect.failed", {
-        error: String(error?.message || error || ""),
-      });
-      notify({ type: "warning", message: translate("infra.reconnectFailed") });
-    });
-  }
-
-  function closeMobileSidebarOnSelect(isMobileRef, mobileSidebarOpenRef) {
-    if (isMobileRef.value) mobileSidebarOpenRef.value = false;
-  }
-
-  function shouldRenderMessageInChat(messageItem) {
-    const messageRole = getMessageRole(messageItem);
-    const messageTurnScopeId = getMessageTurnScopeId(messageItem);
-    const childWorkflowMessage = messageTurnScopeId.startsWith("workflow-node:");
-    const shouldRender = messageRole !== RoleEnum.TOOL &&
-      !isHarnessInjectedMessage(messageItem) &&
-      !childWorkflowMessage;
-    const summary = summarizeWorkflowMessage(messageItem);
-    if (summary.type === "workflow" || summary.pluginSource === "workflow-plugin" || childWorkflowMessage) {
-      logWorkflowDiagnostics("frontend.workflowRender.messageVisibilityEvaluated", {
-        sessionId: String(activeSession.value?.backendSessionId || activeSessionId.value || ""),
-        dialogProcessId: summary.dialogProcessId,
-        turnScopeId: summary.turnScopeId,
-        workflowRunId: summary.workflowRunId,
-        shouldRender,
-        childWorkflowMessage,
-        message: summary,
-      });
-    }
-    return shouldRender;
-  }
+  const { handleReconnect } = createReconnectCoordinator({
+    activeSession,
+    activeSessionId,
+    turnRuntimeRegistry,
+    userId,
+    chatWebSocketClient,
+    reconnectReplay,
+    chatList,
+    classifyRealtimeLog,
+    resolveActiveSessionIdentity,
+    resolveActiveTurnScopeIdentity,
+    logSessionSystemEvent,
+    notify,
+    translate,
+  });
 
   return {
     input,

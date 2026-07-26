@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import {
+  MESSAGE_CONTENT_EFFECT,
   MESSAGE_EVENT_TYPE,
+  projectMessageEventContent,
   validateMessageEventEnvelope,
 } from "@noobot/shared/message-event-protocol";
 import { initializeMessageEventState } from "../../infra/messageEventState";
@@ -65,8 +67,14 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
   if (lastSequence && sequence <= lastSequence) return { result: MESSAGE_EVENT_REDUCE_RESULT.STALE };
   const gap = Boolean(lastSequence && sequence > lastSequence + 1);
 
-  if (event.eventType === MESSAGE_EVENT_TYPE.LLM_DELTA) {
-    targetMessage.content = String(targetMessage.content || "") + event.text;
+  const contentProjection = projectMessageEventContent(event);
+  if (contentProjection.effect === MESSAGE_CONTENT_EFFECT.APPEND) {
+    targetMessage.content = String(targetMessage.content || "") + contentProjection.content;
+  } else if (contentProjection.effect === MESSAGE_CONTENT_EFFECT.REPLACE) {
+    // In streaming mode this calibrates accumulated deltas. In non-streaming
+    // mode the same event materializes the complete answer in one step.
+    targetMessage.content = contentProjection.content;
+    state.finalContentSequence = sequence;
   } else {
     const log = classifyRealtimeLog?.(event);
     if ([MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(event.eventType)) {

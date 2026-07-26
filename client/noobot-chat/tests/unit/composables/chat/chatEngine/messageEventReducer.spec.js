@@ -49,6 +49,27 @@ describe("reduceMessageEvent", () => {
     expect(reduce(target, event({ eventId: "evt-gap", sequence: 3 })).result).toBe(MESSAGE_EVENT_REDUCE_RESULT.SEQUENCE_GAP);
   });
 
+  it("converges streamed deltas and non-streamed final content to the same projection", () => {
+    const streamed = message();
+    reduce(streamed, event({ eventId: "evt-1", eventType: "llm_delta", sequence: 1, text: "draft " }));
+    reduce(streamed, event({ eventId: "evt-2", eventType: "llm_delta", sequence: 2, text: "tokens" }));
+    reduce(streamed, event({
+      eventId: "evt-3", eventType: "main_model_content", sequence: 3,
+      text: "authoritative final", output: "authoritative final",
+    }));
+
+    const nonStreamed = message();
+    reduce(nonStreamed, event({
+      eventId: "evt-final", eventType: "main_model_content", sequence: 1,
+      text: "authoritative final", output: "authoritative final",
+    }));
+
+    expect(streamed.content).toBe("authoritative final");
+    expect(nonStreamed.content).toBe(streamed.content);
+    expect(streamed.messageEventState.finalContentSequence).toBe(3);
+    expect(nonStreamed.messageEventState.finalContentSequence).toBe(1);
+  });
+
   it("rejects invalid, missing targets and identity conflicts", () => {
     expect(reduce(null, event()).result).toBe(MESSAGE_EVENT_REDUCE_RESULT.TARGET_MISSING);
     expect(reduce(message(), event({ toolCallId: "" })).result).toBe(MESSAGE_EVENT_REDUCE_RESULT.INVALID);

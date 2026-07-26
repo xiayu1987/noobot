@@ -8,6 +8,39 @@ import assert from "node:assert/strict";
 
 import { createRunEventListener } from "../ws/chat-websocket/run-event-listener.js";
 
+test("run-event-listener forwards committed session version as a first-class event", () => {
+  const frames = [];
+  const listener = createRunEventListener({
+    sendEvent: (event, data) => frames.push({ event, data }),
+    sessionId: "root-session",
+    textStreamingEnabled: true,
+    registerActiveRun: () => {},
+    getCurrentRunMeta: () => ({ turnScopeId: "turn-1" }),
+    getCurrentRunHandle: () => null,
+    getCurrentTurnScopeId: () => "turn-1",
+  });
+
+  listener.onEvent({
+    event: "turn_committed",
+    data: {
+      sessionId: "root-session",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+      sessionVersion: 7,
+    },
+  });
+
+  assert.deepEqual(frames, [{
+    event: "turn_committed",
+    data: {
+      sessionId: "root-session",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+      sessionVersion: 7,
+    },
+  }]);
+});
+
 test("run-event-listener forwards workflow planning frames verbatim", () => {
   const frames = [];
   const received = [];
@@ -186,4 +219,49 @@ test("run-event-listener separates root and child authoritative message channels
   assert.equal(frames[0].data.route.scope, "main_session");
   assert.equal(frames[1].event, "subagent_message_event");
   assert.equal(frames[1].data.route.scope, "sub_session");
+});
+
+test("non-streaming delivery suppresses only deltas and preserves root and workflow child finals", () => {
+  const frames = [];
+  const routed = [];
+  const listener = createRunEventListener({
+    sendEvent: (event, data) => frames.push({ event, data }),
+    sessionId: "root-session",
+    textStreamingEnabled: false,
+    registerActiveRun: () => {},
+    onAuthoritativeMessageRouted: (data) => routed.push(data),
+  });
+  const base = {
+    envelopeKind: "noobot.message_event",
+    envelopeVersion: 1,
+    sequenceDomain: "message-event",
+    messageId: "msg-1",
+    timestamp: "2026-01-01T00:00:00.000Z",
+  };
+  listener.onEvent({ event: "llm_delta", data: {
+    ...base, eventId: "delta-root", eventType: "llm_delta",
+    sessionId: "root-session", sequence: 1, text: "hidden",
+  } });
+  listener.onEvent({ event: "main_model_content", data: {
+    ...base, eventId: "final-root", eventType: "main_model_content",
+    sessionId: "root-session", sequence: 2, text: "root final",
+  } });
+  listener.onEvent({ event: "llm_delta", data: {
+    ...base, eventId: "delta-child", eventType: "llm_delta",
+    sessionId: "child-session", parentSessionId: "root-session",
+    sequence: 1, text: "hidden child",
+  } });
+  listener.onEvent({ event: "main_model_content", data: {
+    ...base, eventId: "final-child", eventType: "main_model_content",
+    sessionId: "child-session", parentSessionId: "root-session",
+    sequence: 2, text: "child final",
+  } });
+
+  assert.deepEqual(frames.map((frame) => frame.event), ["message_event", "subagent_message_event"]);
+  assert.deepEqual(frames.map((frame) => frame.data.event.text), ["root final", "child final"]);
+  assert.deepEqual(routed.map((item) => item.delivery), [
+    "suppressed", "delivered", "suppressed", "delivered",
+  ]);
+  assert.equal(routed[0].suppressionReason, "non_streaming_delta");
+  assert.equal(routed[1].textStreamingEnabled, false);
 });

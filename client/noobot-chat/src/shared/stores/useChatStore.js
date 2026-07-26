@@ -24,6 +24,8 @@ import {
 import {
   hasMessageEventToolPayload,
   isMessageEventEnvelope,
+  MESSAGE_CONTENT_EFFECT,
+  projectMessageEventContent,
   projectMessageEventToolFacets,
 } from "@noobot/shared/message-event-protocol";
 import {
@@ -168,8 +170,23 @@ function normalizeSubSessionMessage(eventName = "", eventData = {}, currentMessa
     ? (text(currentMessage?.role) || "assistant")
     : (text(eventData?.role || currentMessage?.role) || "assistant");
   const eventId = text(eventData?.eventId);
-  const appendDelta = Boolean(eventData?.delta) || String(eventName).includes("delta");
+  const canonicalContent = projectMessageEventContent(eventData);
+  // Compatibility adapter for persisted/replayed child envelopes produced
+  // before `llm_delta.text` became mandatory. Keep this at the workflow input
+  // boundary; the shared canonical protocol remains strict.
+  const incrementalContent = canonicalContent.effect === MESSAGE_CONTENT_EFFECT.APPEND &&
+    canonicalContent.content === ""
+    ? content
+    : canonicalContent.content;
+  const appendDelta = canonicalContent.effect === MESSAGE_CONTENT_EFFECT.APPEND ||
+    Boolean(eventData?.delta) || String(eventName).includes("delta");
+  const replaceContent = canonicalContent.effect === MESSAGE_CONTENT_EFFECT.REPLACE;
   const previousContent = String(currentMessage?.content || "");
+  const nextContent = replaceContent
+    ? canonicalContent.content
+    : (appendDelta
+        ? `${previousContent}${canonicalContent.effect === MESSAGE_CONTENT_EFFECT.APPEND ? incrementalContent : content}`
+        : (content || previousContent));
   const { toolCall: canonicalToolCall, toolResult: canonicalToolResult } =
     projectMessageEventToolFacets(eventData);
   const status = text(eventData?.status || eventData?.state || currentMessage?.status);
@@ -184,7 +201,7 @@ function normalizeSubSessionMessage(eventName = "", eventData = {}, currentMessa
     // rendered workflow graph) disappear as soon as the first tool completes.
     content: toolEvent && currentMessage
       ? previousContent
-      : (appendDelta ? `${previousContent}${content}` : (content || previousContent)),
+      : nextContent,
     sessionId: text(eventData?.sessionId || currentMessage?.sessionId),
     parentSessionId: text(eventData?.parentSessionId || currentMessage?.parentSessionId),
     dialogProcessId: text(eventData?.dialogProcessId || currentMessage?.dialogProcessId),
@@ -196,6 +213,7 @@ function normalizeSubSessionMessage(eventName = "", eventData = {}, currentMessa
     revision: Number(eventData?.revision ?? currentMessage?.revision ?? 0),
     sequence: Number(eventData?.sequence ?? eventData?.seq ?? currentMessage?.sequence ?? 0),
     sequenceDomain: text(eventData?.sequenceDomain || currentMessage?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.MESSAGE,
+    ...(replaceContent ? { finalContentSequence: Number(eventData?.sequence || 0) } : {}),
     firstSequence: Number(currentMessage?.firstSequence ?? eventData?.sequence ?? eventData?.seq ?? 0),
     status,
     pending: eventData?.pending ?? currentMessage?.pending,
