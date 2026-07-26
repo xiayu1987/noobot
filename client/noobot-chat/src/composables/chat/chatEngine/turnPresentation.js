@@ -9,6 +9,7 @@ import {
   getMessageTurnScopeId,
   normalizeTurnScopeIdKey,
 } from "../../infra/messageIdentity";
+import { isTurnRuntimeDeleted } from "../sessionRunStateMachine/turnRuntimeRegistry";
 
 function text(value = "") {
   return String(value || "").trim();
@@ -165,7 +166,11 @@ function coalescePersistedWorkflowShells(messages = [], activeSessionId = "") {
  * Runtime workflow state and persisted workflow messages converge here; no
  * renderer is allowed to infer a second assistant shell from the registry.
  */
-export function selectTurnPresentations({ activeSession = {}, workflowRegistry = {} } = {}) {
+export function selectTurnPresentations({
+  activeSession = {},
+  workflowRegistry = {},
+  turnRuntimeRegistry = {},
+} = {}) {
   const activeSessionId = sessionIdFromSession(activeSession);
   const activeSessionIds = sessionIdentitySet(activeSession);
   const sourceMessages = Array.isArray(activeSession?.messages) ? activeSession.messages : [];
@@ -184,6 +189,10 @@ export function selectTurnPresentations({ activeSession = {}, workflowRegistry =
     if (!projection) continue;
     const key = messageTurnKey(projection, activeSessionId);
     if (!key || !activeSessionIds.has(getMessageSessionId(projection))) continue;
+    if (isTurnRuntimeDeleted(turnRuntimeRegistry, {
+      sessionId: getMessageSessionId(projection) || activeSessionId,
+      turnScopeId: getMessageTurnScopeId(projection),
+    })) continue;
     if (persistedRunIds.has(workflowRunIdFromMessage(projection)) || persistedTurnKeys.has(key)) continue;
     liveByTurn.set(key, projection);
   }

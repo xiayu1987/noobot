@@ -5,6 +5,10 @@
  */
 import { describe, expect, it } from "vitest";
 import { selectTurnPresentations } from "../../../../src/composables/chat/chatEngine/turnPresentation";
+import {
+  confirmTurnRuntimeDeletion,
+  createTurnRuntimeRegistryState,
+} from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
 
 function workflow({
   workflowRunId = "workflow-a",
@@ -170,5 +174,28 @@ describe("selectTurnPresentations", () => {
       turnScopeId: "turn-a",
       __workflowLiveProjection: true,
     });
+  });
+
+  it("does not resurrect a deleted workflow Turn from the live registry", () => {
+    const turnRuntimeRegistry = createTurnRuntimeRegistryState();
+    confirmTurnRuntimeDeletion(turnRuntimeRegistry, "turn-a", { sessionId: "session-a" });
+
+    expect(selectTurnPresentations({
+      activeSession: { id: "session-a", messages: [] },
+      workflowRegistry: liveRegistry(),
+      turnRuntimeRegistry,
+    })).toEqual([]);
+  });
+
+  it("does not suppress a workflow owned by another Session or Turn", () => {
+    const turnRuntimeRegistry = createTurnRuntimeRegistryState();
+    confirmTurnRuntimeDeletion(turnRuntimeRegistry, "turn-b", { sessionId: "session-a" });
+    confirmTurnRuntimeDeletion(turnRuntimeRegistry, "turn-a", { sessionId: "session-b" });
+
+    expect(selectTurnPresentations({
+      activeSession: { id: "session-a", messages: [] },
+      workflowRegistry: liveRegistry(),
+      turnRuntimeRegistry,
+    })).toHaveLength(1);
   });
 });

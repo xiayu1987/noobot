@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  compareWorkflowRuntimeFacts,
   normalizeWorkflowRuntimeEvent,
   WORKFLOW_RUNTIME_EVENT,
   WORKFLOW_SEQUENCE_DOMAIN,
@@ -50,4 +51,20 @@ test("events from different sequence domains are never comparable", () => {
     { sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE },
     { sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.MESSAGE },
   ), false);
+});
+
+test("orders facts only inside one explicit sequence domain", () => {
+  assert.deepEqual(compareWorkflowRuntimeFacts(
+    { sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.MESSAGE, revision: 2, sequence: 1 },
+    { sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.MESSAGE, revision: 1, sequence: 999 },
+  ), {
+    comparable: true,
+    order: 1,
+    incomingDomain: WORKFLOW_SEQUENCE_DOMAIN.MESSAGE,
+    currentDomain: WORKFLOW_SEQUENCE_DOMAIN.MESSAGE,
+  });
+  assert.equal(compareWorkflowRuntimeFacts(
+    { sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.MESSAGE, sequence: 999 },
+    { sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE, sequence: 1 },
+  ).comparable, false);
 });

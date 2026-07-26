@@ -17,6 +17,7 @@ export function useChatMessageNavigatorPanel({
   activeSession,
   activeSessionId,
   workflowNodeStateRegistry,
+  turnRuntimeRegistry,
   shouldRenderMessageInChat,
   messageListPanelRef,
   isMobile,
@@ -32,6 +33,7 @@ export function useChatMessageNavigatorPanel({
   const presentationMessages = computed(() => selectTurnPresentations({
     activeSession: activeSession?.value || {},
     workflowRegistry: workflowNodeStateRegistry?.value || workflowNodeStateRegistry || {},
+    turnRuntimeRegistry: turnRuntimeRegistry?.value || turnRuntimeRegistry || {},
   }));
   const chatMessageNavItems = computed(() => buildChatMessageNavItems({
     messages: presentationMessages.value,
